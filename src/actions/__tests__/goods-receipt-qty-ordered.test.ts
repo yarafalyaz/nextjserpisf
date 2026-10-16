@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => {
     }),
   }
   return {
-    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1 }),
+    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1, roles: ["super_admin"] }),
     prismaMock,
   }
 })

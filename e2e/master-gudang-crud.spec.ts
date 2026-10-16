@@ -42,7 +42,10 @@ test.describe("Master Gudang E2E CRUD Mutation", () => {
     await expect(page.locator("body")).toContainText(testWarehouseName)
 
     // Grab the ID from the list page to bypass flaky dropdown click
-    const detailLink = page.locator(`a[href^="/master/gudang/"]`).filter({
+    // `:visible` penting: di mobile tabel desktop disembunyikan dan barisnya dirender
+    // sebagai kartu (lihat table-mobile-cards.tsx), sehingga `.first()` tanpa ini
+    // mengambil anchor tersembunyi.
+    const detailLink = page.locator(`a[href^="/master/gudang/"]:visible`).filter({
       hasText: testWarehouseName,
     }).first()
     await expect(detailLink).toBeVisible({ timeout: 30000 })
@@ -74,7 +77,7 @@ test.describe("Master Gudang E2E CRUD Mutation", () => {
 
     // ─── 3. DELETE ──────────────────────────────────────────────────────────
     // Click Menu dropdown for the updated row
-    const row = page.locator("tr").filter({ hasText: updatedWarehouseName })
+    const row = page.locator("tr:visible, ul[role='list'] > li:visible").filter({ hasText: updatedWarehouseName }).first()
     await expect(row).toBeVisible({ timeout: 30000 })
 
     await row.locator("button[aria-label='Buka menu aksi']").click()

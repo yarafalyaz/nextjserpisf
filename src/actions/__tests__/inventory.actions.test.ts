@@ -327,6 +327,29 @@ describe("Material Issue Actions", () => {
     );
     expect(res?.success).toBe(true);
   });
+  // Regresi: workOrderId & projectId tidak punya input di form MI, jadi update
+  // dulu menulis `?? null` dan memutus keduanya. Hilangnya workOrderId membuat
+  // "Buat Pengeluaran Material" bisa dijalankan lagi untuk WO yang sama.
+  it("updateMaterialIssue tidak menghapus workOrderId/projectId yang tidak dikirim form", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      status: "draft",
+    });
+    const res = await actions.updateMaterialIssue(
+      1,
+      fdMap({
+        warehouseId: 1,
+        date: "2026-06-13",
+        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
+      }),
+    );
+    expect(res?.success).toBe(true);
+    const payload = mocks.prismaMock.materialIssue.update.mock.calls.at(-1)?.[0] as
+      | { data?: Record<string, unknown> }
+      | undefined;
+    expect(payload?.data && "workOrderId" in payload.data).toBe(false);
+    expect(payload?.data && "projectId" in payload.data).toBe(false);
+  });
   it("completeMaterialIssue succeeds", async () => {
     mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
       id: 1,
@@ -1029,7 +1052,7 @@ describe("Material Issue Error & Edge Paths", () => {
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
-      "Material Issue harus memiliki minimal 1 item dengan qty > 0",
+      "Pengeluaran Material harus memiliki minimal 1 item dengan kuantitas > 0",
     );
   });
 
@@ -1106,12 +1129,12 @@ describe("Material Issue Error & Edge Paths", () => {
     });
     const res = await (actions as any).completeMaterialIssue(1);
     expect(res?.success).toBe(false);
-    expect(res?.error).toContain("Material Issue sudah berstatus processed");
+    expect(res?.error).toContain("Pengeluaran Material sudah berstatus Diproses");
 
     mocks.prismaMock.materialIssue.findUnique.mockResolvedValue(null);
     const res2 = await (actions as any).completeMaterialIssue(1);
     expect(res2?.success).toBe(false);
-    expect(res2?.error).toContain("Material Issue tidak ditemukan");
+    expect(res2?.error).toContain("Pengeluaran Material tidak ditemukan");
 
     mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
       id: 1,
@@ -1121,7 +1144,7 @@ describe("Material Issue Error & Edge Paths", () => {
     const res3 = await (actions as any).completeMaterialIssue(1);
     expect(res3?.success).toBe(false);
     expect(res3?.error).toContain(
-      "Material Issue hanya bisa di-complete dari status draft",
+      "Pengeluaran Material hanya bisa diselesaikan dari status draf",
     );
   });
 

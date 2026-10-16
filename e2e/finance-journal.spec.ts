@@ -142,8 +142,9 @@ test.describe("Finance — Journal & Reports", () => {
     // Empty state before an account is chosen
     await expect(page.getByText("Pilih akun untuk melihat buku besar")).toBeVisible({ timeout: 30000 })
 
-    // Account picker (FormSelect → combobox with id="accountId")
-    const accountPicker = page.locator("#accountId")
+    // Pemilih akun kini milik `ReportPeriodFilter` (Combobox ber-id `filter-akun`);
+    // filter tetap diterapkan lewat tombol "Tampilkan".
+    const accountPicker = page.locator("#filter-akun")
     await expect(accountPicker).toBeVisible()
     await accountPicker.click()
     const options = page.getByRole("option")
@@ -167,14 +168,28 @@ test.describe("Finance — Journal & Reports", () => {
     // Report identity
     await expect(page.getByText("Neraca Saldo").first()).toBeVisible({ timeout: 30000 })
 
-    // Column headers (real th elements)
-    await expect(page.getByRole("columnheader", { name: "Kode Akun" })).toBeVisible()
-    await expect(page.getByRole("columnheader", { name: "Nama Akun" })).toBeVisible()
-    await expect(page.getByRole("columnheader", { name: /Debit/ })).toBeVisible()
-    await expect(page.getByRole("columnheader", { name: /Kredit/ })).toBeVisible()
+    // Column headers (real th elements). Case-insensitive: the report styles its
+    // headers as uppercase, so the rendered text is "KODE / NAMA AKUN" — this used
+    // to hardcode "Kode Akun", which no longer matched once the headers were
+    // restyled (the spec only failed once there was data to render, so an empty
+    // dev DB hid it).
+    await expect(page.getByRole("columnheader", { name: /kode/i })).toBeVisible()
+    await expect(page.getByRole("columnheader", { name: /nama akun/i })).toBeVisible()
+    await expect(page.getByRole("columnheader", { name: /debit/i })).toBeVisible()
+    await expect(page.getByRole("columnheader", { name: /kredit/i })).toBeVisible()
 
-    // The defining invariant of a trial balance: it states SEIMBANG or TIDAK SEIMBANG
-    await expect(page.getByText(/SEIMBANG/)).toBeVisible()
-    await expect(page.getByText(/Total Debit:/)).toBeVisible()
+    // The defining invariant of a trial balance: the totals row must balance.
+    // (This used to assert the literal text "SEIMBANG" / "Total Debit:", which the
+    // report no longer renders — it now ends with a "Total" row whose debit and
+    // credit columns must be equal. Asserting the numbers keeps the invariant.)
+    const totalRow = page.locator("tbody tr").filter({ hasText: /Total/i }).last()
+    await expect(totalRow).toBeVisible()
+    const totalCells = await totalRow.locator("td").allInnerTexts()
+    const keAngka = (teks: string) =>
+      Number(teks.replace(/\./g, "").replace(",", ".").replace(/[^\d.-]/g, "")) || 0
+    const totalDebit = keAngka(totalCells[totalCells.length - 2] ?? "")
+    const totalKredit = keAngka(totalCells[totalCells.length - 1] ?? "")
+    expect(totalDebit).toBeGreaterThan(0)
+    expect(totalKredit).toBe(totalDebit)
   })
 })

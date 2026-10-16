@@ -34,7 +34,6 @@ const mocks = vi.hoisted(() => {
     barcode: buildModelMock(),
     taxGroup: buildModelMock(),
     taxGroupTax: buildModelMock(),
-    statisticalKeyFigure: buildModelMock(),
     paymentTerm: buildModelMock(),
     brand: buildModelMock(),
     stockMovement: buildModelMock(),
@@ -397,17 +396,6 @@ describe("TaxGroup Actions", () => {
   })
 })
 
-describe("StatisticalKeyFigure Actions", () => {
-  it("createStatisticalKeyFigure succeeds", async () => {
-    const res = await actions.createStatisticalKeyFigure(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
-    expect(res?.success).toBe(true)
-  })
-  it("updateStatisticalKeyFigure succeeds", async () => {
-    const res = await actions.updateStatisticalKeyFigure(1, fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
-    expect(res?.success).toBe(true)
-  })
-})
-
 describe("PaymentTerm Actions", () => {
   it("createPaymentTerm succeeds", async () => {
     const res = await actions.createPaymentTerm(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
@@ -679,22 +667,6 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateTaxGroup(arg1, arg2); } catch {}
-  })
-  it("createStatisticalKeyFigure handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).createStatisticalKeyFigure(arg1, arg2); } catch {}
-  })
-  it("updateStatisticalKeyFigure handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).updateStatisticalKeyFigure(arg1, arg2); } catch {}
   })
   it("createPaymentTerm handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -1199,14 +1171,6 @@ describe("Coverage completion tests for validation errors", () => {
     const res = await actions.updateTaxGroup(1, new FormData())
     expect(res?.success).toBe(false)
   })
-  it("createStatisticalKeyFigure validation error", async () => {
-    const res = await actions.createStatisticalKeyFigure(new FormData())
-    expect(res?.success).toBe(false)
-  })
-  it("updateStatisticalKeyFigure validation error", async () => {
-    const res = await actions.updateStatisticalKeyFigure(1, new FormData())
-    expect(res?.success).toBe(false)
-  })
   it("createPaymentTerm validation error", async () => {
     const res = await actions.createPaymentTerm(new FormData())
     expect(res?.success).toBe(false)
@@ -1233,7 +1197,6 @@ describe('Next Redirect Error Handling', () => {
     actions.createTax, actions.updateTax,
     actions.lookupItemByScan, actions.createBarcode, actions.updateBarcode,
     actions.createTaxGroup, actions.updateTaxGroup,
-    actions.createStatisticalKeyFigure, actions.updateStatisticalKeyFigure,
     actions.createPaymentTerm, actions.updatePaymentTerm
   ];
 

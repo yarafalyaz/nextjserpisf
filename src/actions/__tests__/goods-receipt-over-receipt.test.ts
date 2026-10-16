@@ -20,7 +20,9 @@ const mocks = vi.hoisted(() => {
     }),
   }
   return {
-    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1 }),
+    // roles super_admin → scope gudang "all" (scope-nya sendiri diuji di
+    // purchase.actions.test.ts), sehingga tes ini fokus ke guard over-receipt.
+    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1, roles: ["super_admin"] }),
     prismaMock,
   }
 })

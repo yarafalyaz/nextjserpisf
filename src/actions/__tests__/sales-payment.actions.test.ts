@@ -151,3 +151,82 @@ describe("updateSalesPayment overpay guard", () => {
     expect(paymentUpdateMock).not.toHaveBeenCalled()
   })
 })
+
+describe("updateSalesPayment dengan PPh dipotong pelanggan", () => {
+  it("menghitung potongan pembayaran LAIN sebagai pelunasan saat memeriksa sisa tagihan", async () => {
+    // Pembayaran lain: kas 200 + potongan 300 = 500 terlunasi.
+    // grandTotal 1000 → sisa 500.
+    paymentAggregateMock.mockResolvedValue({ _sum: { amount: 200, withholdingAmount: 300 } })
+
+    // Kalau potongan pembayaran lain diabaikan (hanya kas 200), sisa akan
+    // terbaca 800 dan edit 400 + potongan 150 ini lolos — padahal 550 > 500.
+    const overpay = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "400", paymentDate: "2026-06-09", paymentMethod: "transfer",
+      withholdingTypeId: "7", withholdingAmount: "150",
+    }))
+    expect(overpay.success).toBe(false)
+    expect(overpay.error).toContain("melebihi sisa tagihan")
+    expect(paymentUpdateMock).not.toHaveBeenCalled()
+
+    // Kas 300 + potongan 200 = tepat 500 → boleh.
+    const allowed = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "300", paymentDate: "2026-06-09", paymentMethod: "transfer",
+      withholdingTypeId: "7", withholdingAmount: "200",
+    }))
+    expect(allowed.success).toBe(true)
+    expect(paymentAggregateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ _sum: expect.objectContaining({ withholdingAmount: true }) }),
+    )
+  })
+
+  it("menyimpan jenis PPh, nilai potongan, dan bukti potongnya", async () => {
+    const result = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "700", paymentDate: "2026-06-09", paymentMethod: "transfer",
+      withholdingTypeId: "7", withholdingAmount: "100", withholdingCertificateNo: "BP-2026-0007",
+      withholdingDate: "2026-06-10",
+    }))
+    expect(result.success).toBe(true)
+    expect(paymentUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 9 },
+        data: expect.objectContaining({
+          amount: 700,
+          withholdingTypeId: 7,
+          withholdingAmount: 100,
+          withholdingCertificateNo: "BP-2026-0007",
+          withholdingDate: new Date("2026-06-10"),
+        }),
+      }),
+    )
+  })
+
+  it("menolak potongan PPh tanpa jenisnya, sebelum menyentuh database", async () => {
+    const result = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "700", paymentDate: "2026-06-09", paymentMethod: "transfer",
+      withholdingAmount: "100",
+    }))
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("Jenis PPh wajib dipilih")
+    expect(execRawMock).not.toHaveBeenCalled()
+    expect(paymentUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("mengosongkan potongan saat edit tidak lagi memuat PPh", async () => {
+    // Operator menghapus potongannya: nilainya harus kembali 0, bukan menyisakan
+    // angka lama yang membuat pelunasan piutang tetap lebih besar dari kas.
+    const result = await updateSalesPayment(9, fd({
+      salesInvoiceId: "50", amount: "800", paymentDate: "2026-06-09", paymentMethod: "transfer",
+    }))
+    expect(result.success).toBe(true)
+    expect(paymentUpdateMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          withholdingTypeId: null,
+          withholdingAmount: 0,
+          withholdingCertificateNo: null,
+          withholdingDate: null,
+        }),
+      }),
+    )
+  })
+})

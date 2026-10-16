@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import autoTable from "jspdf-autotable"
 import { generateTransactionPDF, generateQuotationPDF } from "../generator"
 
 // Mock jspdf and jspdf-autotable
@@ -16,6 +17,9 @@ const { mockDoc } = vi.hoisted(() => ({
     getTextWidth: vi.fn(() => 50),
     splitTextToSize: vi.fn((text: unknown) => Array.isArray(text) ? text : [text]),
     addImage: vi.fn(),
+    // jsPDF asli punya keduanya — dipakai untuk footer "Halaman x dari y".
+    getNumberOfPages: vi.fn(() => 1),
+    setPage: vi.fn(),
     output: vi.fn(() => "mock-blob-url"),
     lastAutoTable: { finalY: 120 }
   }
@@ -98,9 +102,74 @@ describe("PDF Generator Flows", () => {
     total: 99000
   }
 
-  it("generates transaction PDF successfully", () => {
-    generateTransactionPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
+  it("generates transaction PDF successfully", async () => {
+    await generateTransactionPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
+  })
+
+  it("menulis baris Terbilang berisi kata-kata nominal total", async () => {
+    await generateTransactionPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
+    const texts = mockDoc.text.mock.calls.map((call) => String(call[0]))
+    expect(texts.some((t) => t.startsWith("Terbilang:"))).toBe(true)
+    // terbilangLabel() mengapitalkan huruf pertama.
+    expect(texts.join(" ").toLowerCase()).toContain("sembilan puluh sembilan ribu rupiah")
+  })
+
+  it("mencetak footer nomor halaman di setiap halaman", async () => {
+    await generateTransactionPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
+    const texts = mockDoc.text.mock.calls.map((call) => String(call[0]))
+    expect(texts.some((t) => /^Halaman \d+ dari \d+$/.test(t))).toBe(true)
+    expect(texts.some((t) => t.startsWith("Dicetak:"))).toBe(true)
+  })
+
+  it("menambahkan kolom Satuan saat item punya unit", async () => {
+    await generateTransactionPDF(
+      mockCompany,
+      mockDocInfo,
+      [{ ...mockItems[0], unit: "Pcs" }],
+      mockSummary,
+    )
+    const head = (autoTable as unknown as { mock: { calls: unknown[][] } }).mock.calls.at(-1)?.[1]
+    expect(JSON.stringify(head)).toContain("Satuan")
+  })
+
+  it("tidak menambah kolom Satuan bila tidak ada unit", async () => {
+    await generateTransactionPDF(mockCompany, mockDocInfo, mockItems, mockSummary)
+    const head = (autoTable as unknown as { mock: { calls: unknown[][] } }).mock.calls.at(-1)?.[1]
+    expect(JSON.stringify(head)).not.toContain("Satuan")
+  })
+
+  // Regresi: potongan baris pada faktur/PO adalah NOMINAL (Decimal rupiah),
+  // tetapi generator selalu menambahkan "%" — potongan Rp 25.000 tercetak
+  // "25000%" di dokumen yang dikirim ke pelanggan.
+  it("mencetak potongan nominal sebagai rupiah tanpa akhiran persen", async () => {
+    await generateTransactionPDF(
+      mockCompany,
+      mockDocInfo,
+      [{ ...mockItems[0], discount: 25000 }],
+      mockSummary,
+    )
+    const options = (autoTable as unknown as { mock: { calls: unknown[][] } }).mock.calls.at(-1)?.[1] as
+      | { body?: unknown[][] }
+      | undefined
+    const body = JSON.stringify(options?.body ?? [])
+    expect(body).toContain("25.000")
+    expect(body).not.toContain("25000%")
+  })
+
+  // Tagihan vendor menyimpan persen per baris (discount_percent), jadi akhiran
+  // "%" di sana memang benar dan tidak boleh ikut berubah.
+  it("tetap memakai akhiran persen bila nilainya memang persen", async () => {
+    await generateTransactionPDF(
+      mockCompany,
+      mockDocInfo,
+      [{ ...mockItems[0], discount: 10, discountIsPercent: true }],
+      mockSummary,
+    )
+    const options = (autoTable as unknown as { mock: { calls: unknown[][] } }).mock.calls.at(-1)?.[1] as
+      | { body?: unknown[][] }
+      | undefined
+    expect(JSON.stringify(options?.body ?? [])).toContain("10%")
   })
 
   it("generates quotation PDF successfully with logo and signature images", async () => {
@@ -196,50 +265,50 @@ describe("PDF Generator Flows", () => {
     expect(mockDoc.addImage).toHaveBeenCalled()
   })
 
-  it("transaction PDF handles company without address/phone/email/website (line 100-110 branches)", () => {
+  it("transaction PDF handles company without address/phone/email/website (line 100-110 branches)", async () => {
     const bareCompany = { name: "PTCo" }
-    const r = generateTransactionPDF(bareCompany, mockDocInfo, mockItems, mockSummary)
+    const r = await generateTransactionPDF(bareCompany, mockDocInfo, mockItems, mockSummary)
     expect(r).toBeUndefined()
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
-  it("transaction PDF without dueDate skips jatuh tempo line (line 131 false branch)", () => {
+  it("transaction PDF without dueDate skips jatuh tempo line (line 131 false branch)", async () => {
     const docInfoNoDue = { ...mockDocInfo }
     delete (docInfoNoDue as { dueDate?: string }).dueDate
-    generateTransactionPDF(mockCompany, docInfoNoDue, mockItems, mockSummary)
+    await generateTransactionPDF(mockCompany, docInfoNoDue, mockItems, mockSummary)
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
-  it("transaction PDF without customerAddress skips address line (line 152 false branch)", () => {
+  it("transaction PDF without customerAddress skips address line (line 152 false branch)", async () => {
     const docInfoNoAddr = { ...mockDocInfo }
     delete (docInfoNoAddr as { customerAddress?: string }).customerAddress
-    generateTransactionPDF(mockCompany, docInfoNoAddr, mockItems, mockSummary)
+    await generateTransactionPDF(mockCompany, docInfoNoAddr, mockItems, mockSummary)
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
-  it("transaction PDF without customerPhone skips telp line (line 158 false branch)", () => {
+  it("transaction PDF without customerPhone skips telp line (line 158 false branch)", async () => {
     const docInfoNoPhone = { ...mockDocInfo }
     delete (docInfoNoPhone as { customerPhone?: string }).customerPhone
-    generateTransactionPDF(mockCompany, docInfoNoPhone, mockItems, mockSummary)
+    await generateTransactionPDF(mockCompany, docInfoNoPhone, mockItems, mockSummary)
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
-  it("transaction PDF without notes skips catatan block (line 214 false branch)", () => {
+  it("transaction PDF without notes skips catatan block (line 214 false branch)", async () => {
     const docInfoNoNotes = { ...mockDocInfo }
     delete (docInfoNoNotes as { notes?: string }).notes
-    generateTransactionPDF(mockCompany, docInfoNoNotes, mockItems, mockSummary)
+    await generateTransactionPDF(mockCompany, docInfoNoNotes, mockItems, mockSummary)
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
-  it("transaction PDF with discount 0 skips discount line (line 229 false branch)", () => {
+  it("transaction PDF with discount 0 skips discount line (line 229 false branch)", async () => {
     const summaryNoDiscount = { ...mockSummary, discount: 0 }
-    generateTransactionPDF(mockCompany, mockDocInfo, mockItems, summaryNoDiscount)
+    await generateTransactionPDF(mockCompany, mockDocInfo, mockItems, summaryNoDiscount)
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
-  it("transaction PDF with tax 0 skips tax line (line 239 false branch)", () => {
+  it("transaction PDF with tax 0 skips tax line (line 239 false branch)", async () => {
     const summaryNoTax = { ...mockSummary, tax: 0 }
-    generateTransactionPDF(mockCompany, mockDocInfo, mockItems, summaryNoTax)
+    await generateTransactionPDF(mockCompany, mockDocInfo, mockItems, summaryNoTax)
     expect(global.window.open).toHaveBeenCalledWith("mock-blob-url", "_blank")
   })
 
@@ -304,9 +373,9 @@ describe("PDF Generator Flows", () => {
     expect(mockDoc.addImage).toHaveBeenCalled()
   })
 
-  it("transaction PDF item without discount uses dash branch (line 171 false branch)", () => {
+  it("transaction PDF item without discount uses dash branch (line 171 false branch)", async () => {
     const itemsNoDiscount = [{ no: 1, description: "A", qty: 1, price: 100, total: 100 }]
-    generateTransactionPDF(mockCompany, mockDocInfo, itemsNoDiscount, mockSummary)
+    await generateTransactionPDF(mockCompany, mockDocInfo, itemsNoDiscount, mockSummary)
     expect(mockDoc.text).toHaveBeenCalled()
   })
 

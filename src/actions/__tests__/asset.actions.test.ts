@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => {
   const logActivityMock = vi.fn()
   const assertApprovedMock = vi.fn()
   const requestApprovalMock = vi.fn().mockResolvedValue(false)
+  const assertPeriodOpenMock = vi.fn()
   const generateDocNumMock = vi.fn()
   const prismaMock = {
     assetCategory: {
@@ -66,6 +67,7 @@ const mocks = vi.hoisted(() => {
     logActivityMock,
     assertApprovedMock,
     requestApprovalMock,
+    assertPeriodOpenMock,
     generateDocNumMock,
     prismaMock,
   }
@@ -76,12 +78,19 @@ const {
   revalidateMock,
   logActivityMock,
   requestApprovalMock,
+  assertPeriodOpenMock,
   generateDocNumMock,
   prismaMock,
 } = mocks
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => mocks.requirePermissionMock(...a),
+}))
+
+// Jurnal perolehan/pelepasan aset bertanggal dokumen, jadi wajib melewati kunci
+// periode akuntansi. Di-mock supaya bisa diuji untuk periode tertutup.
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: (...a: unknown[]) => mocks.assertPeriodOpenMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -638,6 +647,18 @@ describe("createAsset / updateAsset", () => {
     }))
     expect(res.success).toBe(true)
     expect(prismaMock.journal.create).toHaveBeenCalled()
+  })
+
+  it("tidak memposting perolehan aset bila periode akuntansi sudah ditutup", async () => {
+    process.env.FIXED_ASSET_ACCOUNT_ID = "200"
+    process.env.ASSET_CASH_ACCOUNT_ID = "201"
+    const sebelum = prismaMock.journal.create.mock.calls.length
+    assertPeriodOpenMock.mockRejectedValueOnce(new Error("Periode akuntansi sudah ditutup"))
+    const res = await createAsset(fd({ name: "Laptop Tutup Buku", purchasePrice: "1000" }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("sudah ditutup")
+    // Jurnal tidak boleh terbentuk sama sekali — dulu tidak ada cek periode di sini.
+    expect(prismaMock.journal.create.mock.calls.length).toBe(sebelum)
   })
 
   it("posts acquisition to the CATEGORY fixed-asset account over env", async () => {

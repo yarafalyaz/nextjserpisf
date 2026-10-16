@@ -27,9 +27,7 @@ const mocks = vi.hoisted(() => {
     pettyCash: buildModelMock(),
     bankReconciliation: buildModelMock(),
     bankReconciliationLine: buildModelMock(),
-    budget: buildModelMock(),
     costCenter: buildModelMock(),
-    statisticalKeyFigure: buildModelMock(),
     account: buildModelMock(),
     accountingPeriod: buildModelMock(),
     transactionAttachment: buildModelMock(),
@@ -385,79 +383,6 @@ describe("Bank Reconciliation Actions", () => {
   })
 })
 
-describe("Budget Actions", () => {
-  it("createBudget succeeds", async () => {
-    const res = await (actions as any).createBudget(fdMap({
-      name: "Budget 2026",
-      accountId: 1,
-      amount: 100000,
-      startDate: "2026-01-01",
-      endDate: "2026-12-31"
-    }))
-    expect(res?.success).toBe(true)
-  })
-  it("createBudget fails if endDate is before startDate", async () => {
-    const res = await (actions as any).createBudget(fdMap({
-      name: "Budget 2026",
-      accountId: 1,
-      amount: 100000,
-      startDate: "2026-12-31",
-      endDate: "2026-01-01"
-    }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toMatch(/endDate harus sama atau setelah startDate/i)
-  })
-  it("updateBudget succeeds", async () => {
-    mocks.prismaMock.budget.findUniqueOrThrow.mockResolvedValue({ id: 1 })
-    const res = await (actions as any).updateBudget(1, fdMap({
-      name: "Budget 2026 v2",
-      accountId: 1,
-      amount: 120000,
-      startDate: "2026-01-01",
-      endDate: "2026-12-31"
-    }))
-    expect(res?.success).toBe(true)
-    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_budgets")
-  })
-  it("updateBudget does not overwrite createdBy (audit-trail immutability)", async () => {
-    // Original creator was user 42; editor is user 1 (from beforeEach mock).
-    // updateBudget must NOT touch createdBy, otherwise every edit silently
-    // re-attributes the budget to whoever last saved it and erases the real
-    // creator from the audit trail.
-    mocks.prismaMock.budget.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      createdBy: 42,
-    })
-    const res = await (actions as any).updateBudget(1, fdMap({
-      name: "Budget 2026 v2",
-      accountId: 1,
-      amount: 120000,
-      startDate: "2026-01-01",
-      endDate: "2026-12-31",
-    }))
-    expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.budget.update).toHaveBeenCalledTimes(1)
-    const updateData = mocks.prismaMock.budget.update.mock.calls[0][0].data
-    expect(updateData).not.toHaveProperty("createdBy")
-  })
-
-  it("updateBudget fails if endDate is before startDate", async () => {
-    mocks.prismaMock.budget.findUniqueOrThrow.mockResolvedValue({ id: 1 })
-    const res = await (actions as any).updateBudget(1, fdMap({
-      name: "Budget 2026 v2",
-      accountId: 1,
-      amount: 120000,
-      startDate: "2026-12-31",
-      endDate: "2026-01-01"
-    }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toMatch(/endDate harus sama atau setelah startDate/i)
-  })
-  it("deleteBudget succeeds", async () => {
-    const res = await (actions as any).deleteBudget(1)
-    expect(res?.success).toBe(true)
-  })
-})
 
 describe("Cost Center Actions", () => {
   it("createCostCenter succeeds", async () => {
@@ -479,14 +404,6 @@ describe("Cost Center Actions", () => {
   it("deleteCostCenter succeeds", async () => {
     const res = await (actions as any).deleteCostCenter(1)
     expect(res?.success).toBe(true)
-  })
-})
-
-describe("Statistical Key Figure Actions", () => {
-  it("deleteStatisticalKeyFigure succeeds", async () => {
-    const res = await (actions as any).deleteStatisticalKeyFigure(1)
-    expect(res?.success).toBe(true)
-    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("delete_statistical_key_figures")
   })
 })
 
@@ -611,27 +528,6 @@ describe('Finance Actions Error Paths', () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
-  it("createBudget handles error", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    mocks.prismaMock.budget.create.mockRejectedValueOnce(new Error("db err"))
-    const res = await (actions as any).createBudget(1, fdMap({}))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toBeDefined()
-  })
-  it("updateBudget handles error", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    mocks.prismaMock.budget.findUniqueOrThrow.mockRejectedValueOnce(new Error("db err"))
-    const res = await (actions as any).updateBudget(1, fdMap({}))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toBeDefined()
-  })
-  it("deleteBudget handles error", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    mocks.prismaMock.budget.delete.mockRejectedValueOnce(new Error("db err"))
-    const res = await (actions as any).deleteBudget(1)
-    expect(res?.success).toBe(false)
-    expect(res?.error).toBeDefined()
-  })
   it("createCostCenter handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.costCenter.create.mockRejectedValueOnce(new Error("db err"))
@@ -654,13 +550,6 @@ describe('Finance Actions Error Paths', () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.costCenter.delete.mockRejectedValueOnce(new Error("db err"))
     const res = await (actions as any).deleteCostCenter(1)
-    expect(res?.success).toBe(false)
-    expect(res?.error).toBeDefined()
-  })
-  it("deleteStatisticalKeyFigure handles error", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    mocks.prismaMock.statisticalKeyFigure.delete.mockRejectedValueOnce(new Error("db err"))
-    const res = await (actions as any).deleteStatisticalKeyFigure(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toBeDefined()
   })
@@ -716,16 +605,6 @@ describe("Additional Branches", () => {
   it("createPettyCash validation error", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     expect((await actions.createPettyCash(new FormData())).success).toBe(false)
-  })
-
-  it("createBudget validation error", async () => {
-    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
-    expect((await actions.createBudget(new FormData())).success).toBe(false)
-  })
-
-  it("updateBudget validation error", async () => {
-    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
-    expect((await actions.updateBudget(1, new FormData())).success).toBe(false)
   })
 
   it("createCostCenter validation error", async () => {
@@ -938,20 +817,16 @@ describe("Next.js redirect error handling", () => {
     { name: "createBankReconciliation", fn: () => actions.createBankReconciliation(new FormData()) },
     { name: "matchReconciliationLine", fn: () => actions.matchReconciliationLine(1, 1, 1) },
     { name: "completeReconciliation", fn: () => actions.completeReconciliation(1) },
-    { name: "createBudget", fn: () => actions.createBudget(new FormData()) },
     { name: "createCostCenter", fn: () => actions.createCostCenter(new FormData()) },
     { name: "updateCostCenter", fn: () => actions.updateCostCenter(1, new FormData()) },
     { name: "deleteJournal", fn: () => actions.deleteJournal(1) },
     { name: "deleteExpense", fn: () => actions.deleteExpense(1) },
     { name: "deletePettyCash", fn: () => actions.deletePettyCash(1) },
-    { name: "deleteBudget", fn: () => actions.deleteBudget(1) },
     { name: "deleteCostCenter", fn: () => actions.deleteCostCenter(1) },
-    { name: "deleteStatisticalKeyFigure", fn: () => actions.deleteStatisticalKeyFigure(1) },
     { name: "updateJournal", fn: () => actions.updateJournal(1, new FormData()) },
     { name: "reverseJournal", fn: () => actions.reverseJournal(1) },
     { name: "updateExpense", fn: () => actions.updateExpense(1, new FormData()) },
     { name: "updatePettyCash", fn: () => actions.updatePettyCash(1, new FormData()) },
-    { name: "updateBudget", fn: () => actions.updateBudget(1, new FormData()) },
   ]
 
   it("should rethrow NEXT_REDIRECT errors", async () => {

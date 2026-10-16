@@ -267,6 +267,17 @@ describe("Project Actions", () => {
     const res = await actions.updateProject(1, fdMap({ customerId: 1, name: "Test Project", value: "1000", status: "draft" }))
     expect(res?.success).toBe(true)
   })
+  // Regresi: workOrderId tidak punya input di form proyek (tautan sistem), jadi
+  // update dulu menulis `?? null` dan memutus tautan ke perintah kerja setiap
+  // kali proyek disimpan — padahal sinkronisasi status WO bergantung padanya.
+  it("updateProject tidak menulis workOrderId yang tidak dikirim form", async () => {
+    const res = await actions.updateProject(1, fdMap({ customerId: 1, name: "Test Project", value: "1000", status: "draft" }))
+    expect(res?.success).toBe(true)
+    const payload = mocks.prismaMock.project.update.mock.calls.at(-1)?.[0] as
+      | { data?: Record<string, unknown> }
+      | undefined
+    expect(payload?.data && "workOrderId" in payload.data).toBe(false)
+  })
   it("deleteProject succeeds", async () => {
     mocks.prismaMock.project.findUnique.mockResolvedValue({
       id: 1,

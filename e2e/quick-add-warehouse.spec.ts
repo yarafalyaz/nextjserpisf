@@ -27,7 +27,7 @@ test.describe("Quick add gudang dari form rak", () => {
     const warehouseBox = page.locator("#warehouseIdSelect")
     await warehouseBox.click()
 
-    await page.getByRole("option", { name: /Tambah baru/i }).first().click()
+    await page.getByRole("button", { name: /Tambah baru/i }).first().click()
 
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible()

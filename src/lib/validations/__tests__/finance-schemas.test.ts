@@ -5,7 +5,6 @@ import {
   expenseSchema,
   pettyCashSchema,
   bankReconciliationSchema,
-  budgetSchema,
   costCenterSchema,
 } from "@/lib/validations/finance.schemas";
 
@@ -126,34 +125,6 @@ describe("validations/finance.schemas", () => {
     });
     it("rejects missing statementBalance", () => {
       expect(bankReconciliationSchema.safeParse({ accountId: 1, statementDate: "2026-06-09" }).success).toBe(false);
-    });
-  });
-
-  describe("budgetSchema", () => {
-    it("accepts a valid budget", () => {
-      expect(budgetSchema.safeParse({
-        name: "Budget Q3", accountId: 1, amount: 5000000, startDate: "2026-07-01", endDate: "2026-09-30",
-      }).success).toBe(true);
-    });
-    it("rejects empty name", () => {
-      expect(budgetSchema.safeParse({
-        name: "", accountId: 1, amount: 100, startDate: "2026-07-01", endDate: "2026-09-30",
-      }).success).toBe(false);
-    });
-    it("rejects zero amount", () => {
-      expect(budgetSchema.safeParse({
-        name: "B", accountId: 1, amount: 0, startDate: "2026-07-01", endDate: "2026-09-30",
-      }).success).toBe(false);
-    });
-    it("rejects endDate before startDate", () => {
-      expect(budgetSchema.safeParse({
-        name: "B", accountId: 1, amount: 100, startDate: "2026-09-30", endDate: "2026-07-01",
-      }).success).toBe(false);
-    });
-    it("accepts endDate equal to startDate", () => {
-      expect(budgetSchema.safeParse({
-        name: "B", accountId: 1, amount: 100, startDate: "2026-07-01", endDate: "2026-07-01",
-      }).success).toBe(true);
     });
   });
 

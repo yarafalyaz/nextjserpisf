@@ -15,6 +15,21 @@ function collectCreateRoutes(): string[] {
       routes.add(route)
     }
 
+    // A route whose LIST page is a pure legacy redirect (e.g. /kendaraan/model →
+    // /kendaraan/merek) has no list surface to walk. Its "list" step starts a
+    // redirect that races the next `page.goto`, which surfaces as
+    // `net::ERR_ABORTED` on the slower mobile project. The create page keeps
+    // getting covered through the canonical route that owns the list.
+    const listPage = path.join(dir, "page.tsx")
+    if (hasCreatePage && fs.existsSync(listPage)) {
+      const source = fs.readFileSync(listPage, "utf8")
+      const isPureRedirect = source.split("\n").length < 15 && source.includes("redirect(")
+      if (isPureRedirect) {
+        const route = `/${rel}`.replace(/\/+/g, "/").replace(/\/$/, "")
+        routes.delete(route)
+      }
+    }
+
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
       if (entry.name.startsWith("_")) continue

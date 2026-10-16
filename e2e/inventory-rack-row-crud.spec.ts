@@ -1,6 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
+import { openCombobox } from "./utils/combobox"
 
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")

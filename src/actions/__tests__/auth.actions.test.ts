@@ -36,6 +36,9 @@ vi.mock("@/lib/db/prisma", () => ({
     },
   },
 }))
+
+vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
+
 vi.mock("bcryptjs", () => ({
   default: {
     compare: (...a: unknown[]) => bcryptCompareMock(...a),
@@ -173,7 +176,7 @@ describe("changePassword", () => {
 })
 
 describe("createUser", () => {
-  it("enforces the manage_users permission before creating", async () => {
+  it("enforces the manage_users guard before creating", async () => {
     userCreateMock.mockResolvedValue({ id: 1 })
     await createUser(fd({ name: "X", email: "x@y.z", password: "passval12" }))
     expect(requirePermissionMock).toHaveBeenCalledWith("manage_users")

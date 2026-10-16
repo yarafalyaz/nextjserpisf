@@ -18,6 +18,13 @@ function collectDashboardRoutes(): string[] {
     for (const entry of entries) {
       if (!entry.isDirectory()) continue
       if (entry.name.startsWith("_")) continue
+      // `[[...segments]]` bukan segmen alamat: setiap laporan menaruh page.tsx di
+      // sana (periode + filter opsional), dan alamat tanpa periode tetap folder
+      // induknya. Tanpa cabang ini seluruh halaman laporan hilang dari smoke.
+      if (entry.name === "[[...segments]]") {
+        walk(path.join(dir, entry.name), rel)
+        continue
+      }
       if (entry.name.startsWith("[")) continue // skip dynamic segments
       walk(path.join(dir, entry.name), rel ? `${rel}/${entry.name}` : entry.name)
     }

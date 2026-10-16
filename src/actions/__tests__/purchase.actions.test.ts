@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
     item: buildModelMock(),
     uomConversion: buildModelMock(),
     transactionAttachment: buildModelMock(),
+    userWarehouse: buildModelMock(),
     approvalWorkflow: buildModelMock(),
     approval: buildModelMock(),
     
@@ -119,13 +120,57 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  // roles super_admin → scope gudang "all", sehingga tes-tes di bawah fokus ke
+  // aturan bisnisnya. Cek scope gudangnya sendiri diuji terpisah.
+  mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
   mocks.generateDocNumMock.mockResolvedValue("DOC-001")
 })
 
 describe("Purchase Actions Smoke Tests", () => {
   it("exports everything", () => {
     expect(actions.createPurchaseRequest).toBeDefined()
+  })
+})
+
+// Penerimaan barang menerima warehouseId dari input user, jadi scope gudang wajib
+// dicek (header DAN tiap baris) — dulu tidak ada, sehingga user yang hanya ditugaskan
+// ke gudang A bisa menerima stok ke gudang B.
+describe("Scope gudang penerimaan barang", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
+    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 1 }])
+    mocks.generateDocNumMock.mockResolvedValue("DOC-001")
+  })
+
+  it("menolak GR ke gudang di luar wewenang user", async () => {
+    const res = await actions.createGoodsReceipt(fdMap({
+      purchaseOrderId: "1", warehouseId: "2", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitCost: 100 }]),
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses ke gudang")
+    expect(mocks.prismaMock.goodsReceipt.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak baris GR yang menyasar gudang lain walau header-nya diizinkan", async () => {
+    const res = await actions.createGoodsReceipt(fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitCost: 100, warehouseId: 3 }]),
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses ke gudang")
+  })
+
+  it("mengizinkan GR ke gudang yang ditugaskan", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "ordered", items: [{ itemId: 1, qty: 10 }],
+    })
+    const res = await actions.createGoodsReceipt(fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitCost: 100 }]),
+    }))
+    expect(res?.success).toBe(true)
   })
 })
 
@@ -429,6 +474,86 @@ describe("Vendor Bill Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createVendorBill persists the item lines (goods stay recorded)", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS" },
+    ])
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "100000",
+      tax: "0",
+      grandTotal: "100000",
+      items: JSON.stringify([
+        { itemId: 7, qty: 2, unitPrice: 50000, discountPercent: 0, taxPercent: 0 },
+      ]),
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBillItem.createMany.mock.calls.at(-1)![0]
+    expect(arg.data).toHaveLength(1)
+    expect(arg.data[0]).toMatchObject({
+      vendorBillId: 1,
+      itemId: 7,
+      description: "BRG-01 - Baut",
+      unit: "PCS",
+      qty: 2,
+      unitPrice: 50000,
+      total: 100000,
+    })
+  })
+
+  it("createVendorBill without items writes no item line", async () => {
+    mocks.prismaMock.vendorBillItem.createMany.mockClear()
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "500",
+      tax: "0",
+      grandTotal: "500",
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorBillItem.createMany).not.toHaveBeenCalled()
+  })
+
+  it("createVendorBill computes each line total as subtotal + tax", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 9, sku: "S", name: "Item", unitOfMeasure: null },
+    ])
+    await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "100000",
+      tax: "11000",
+      grandTotal: "111000",
+      items: JSON.stringify([
+        { itemId: 9, qty: 1, unitPrice: 100000, discountPercent: 0, taxPercent: 11 },
+      ]),
+    }))
+    const arg = mocks.prismaMock.vendorBillItem.createMany.mock.calls.at(-1)![0]
+    expect(arg.data[0].taxAmount).toBe(11000)
+    expect(arg.data[0].total).toBe(111000)
+  })
+
+  it("updateVendorBill replaces the item lines", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 7, sku: "BRG-01", name: "Baut", unitOfMeasure: "PCS" },
+    ])
+    const res = await actions.updateVendorBill(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "50000",
+      tax: "0",
+      grandTotal: "50000",
+      items: JSON.stringify([{ itemId: 7, qty: 1, unitPrice: 50000 }]),
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorBillItem.deleteMany).toHaveBeenCalledWith({
+      where: { vendorBillId: 1 },
+    })
+    const arg = mocks.prismaMock.vendorBillItem.createMany.mock.calls.at(-1)![0]
+    expect(arg.data[0]).toMatchObject({ vendorBillId: 1, itemId: 7, total: 50000 })
+  })
+
   it("createVendorBill rejects a bill whose vendor does not match the PO vendor", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
@@ -589,6 +714,26 @@ describe("Vendor Payment Actions", () => {
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.vendorPayment.create).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ vendorBillId: 7 }) }),
+    )
+  })
+
+  // Regresi: input "No. Referensi"/"No. Rekening" ada di form dan kolomnya ada di
+  // DB, tetapi keduanya tidak ada di skema — parseFormData membuang nilainya
+  // sehingga yang tersimpan selalu null.
+  it("createVendorPayment menyimpan nomor referensi & nomor rekening", async () => {
+    const res = await actions.createVendorPayment(fdMap({
+      vendorId: "1",
+      amount: "1000",
+      paymentDate: "2026-06-12",
+      paymentMethod: "transfer",
+      referenceNumber: "TRF-001",
+      bankAccount: "1234567890",
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.vendorPayment.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ referenceNumber: "TRF-001", bankAccount: "1234567890" }),
+      }),
     )
   })
 
@@ -974,7 +1119,7 @@ describe('Global Error Paths (Permission Reject)', () => {
 describe("Purchase Actions Additional Branch Coverage", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
     mocks.generateDocNumMock.mockResolvedValue("DOC-001")
     mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, vendorId: 1, documentNo: "PO-001", isService: false })
   })
@@ -1099,7 +1244,7 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "verified" })
     const res = await actions.verifyGoodsReceipt(1)
     expect(res?.success).toBe(false)
-    expect(res?.error).toContain("hanya bisa di-verify dari status draft")
+    expect(res?.error).toContain("hanya bisa diverifikasi dari status draf")
   })
 
   it("createVendorBill associates attachments", async () => {
@@ -1358,7 +1503,7 @@ describe("Purchase Actions Additional Branch Coverage", () => {
 describe("Purchase Actions Redirect and Validation Gaps", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] })
     mocks.generateDocNumMock.mockResolvedValue("DOC-001")
   })
 

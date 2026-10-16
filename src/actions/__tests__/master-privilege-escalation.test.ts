@@ -35,7 +35,6 @@ const mocks = vi.hoisted(() => {
     barcode: buildModelMock(),
     taxGroup: buildModelMock(),
     taxGroupTax: buildModelMock(),
-    statisticalKeyFigure: buildModelMock(),
     paymentTerm: buildModelMock(),
     brand: buildModelMock(),
     stockMovement: buildModelMock(),
@@ -90,11 +89,14 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 
 beforeEach(() => {
   vi.clearAllMocks()
-  // Default: a non-super_admin caller (e.g. an HR manager with edit_employees).
+  // Default: a non-super_admin caller (e.g. General Affairs, yang memang punya
+  // akses lintas-karyawan + edit_employees). Dulu di sini memakai "hr_manager" —
+  // nama role yang tidak pernah di-seed, sehingga tanpa sengaja menguji cabang
+  // mati di hr-scope.ts.
   mocks.requirePermissionMock.mockResolvedValue({
     id: 2,
     permissions: ["create_employees", "edit_employees"],
-    roles: ["hr_manager"],
+    roles: ["ga"],
   })
   // By default, the role table returns the requested role names as-is.
   // For the "super_admin escalation" tests we override this to return a

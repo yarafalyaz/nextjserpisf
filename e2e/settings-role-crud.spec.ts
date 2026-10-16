@@ -75,11 +75,14 @@ test.describe("Pengaturan Peran CRUD", () => {
     const updatedRow = page.locator("tr").filter({ hasText: updated })
     await expect(updatedRow).toBeVisible({ timeout: 30000 })
 
-    const hapusButton = updatedRow.locator("button[type='submit']", { hasText: "Hapus" })
+    // Hapus memakai dialog konfirmasi (`DeleteButton` → `ConfirmDialog`/AlertDialog):
+    // tombolnya `type="button"` ber-aria-label "Hapus", bukan form submit.
+    const hapusButton = updatedRow.getByRole("button", { name: "Hapus" })
     await expect(hapusButton).toBeVisible({ timeout: 30000 })
 
-    // Click Hapus — server action POSTs internally, deletes, revalidates, redirects
+    // Click Hapus → konfirmasi di dialog → server action menghapus & revalidasi
     await hapusButton.click()
+    await page.getByRole("alertdialog").getByRole("button", { name: "Hapus" }).click()
     await page.waitForLoadState("networkidle")
 
     // Reload and verify — retry up to 3x for resilience under parallel load
@@ -92,9 +95,10 @@ test.describe("Pengaturan Peran CRUD", () => {
       if (gone) break
       // Role still exists — retry the delete
       const retryRow = page.locator("tr").filter({ hasText: updated })
-      const retryBtn = retryRow.locator("button[type='submit']", { hasText: "Hapus" })
+      const retryBtn = retryRow.getByRole("button", { name: "Hapus" })
       if (await retryBtn.isVisible().catch(() => false)) {
         await retryBtn.click()
+        await page.getByRole("alertdialog").getByRole("button", { name: "Hapus" }).click()
         await page.waitForLoadState("networkidle")
       }
     }

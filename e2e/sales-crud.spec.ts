@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test"
-import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
+import { openCombobox } from "./utils/combobox"
 
 
 async function waitForHydration(page: Page) {

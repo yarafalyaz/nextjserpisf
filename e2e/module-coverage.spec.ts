@@ -1,5 +1,5 @@
 import { test, expect, type Page } from "@playwright/test"
-import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
+import { selectFirstComboboxOption } from "./utils/combobox"
 
 
 async function waitForHydration(page: Page) {
@@ -85,7 +85,7 @@ test.describe("Inventaris - Rak CRUD", () => {
     await expect(page.locator("body")).toContainText(name, { timeout: 10000 })
 
     // Delete via menu
-    const row = page.locator("tr").filter({ hasText: name }).first()
+    const row = page.locator("tr:visible, ul[role='list'] > li:visible").filter({ hasText: name }).first()
     await expect(row).toBeVisible({ timeout: 10000 })
     await row.locator("button[aria-label='Buka menu aksi']").click()
     await page.locator("[role='menuitem']").filter({ hasText: "Hapus" }).first().click()
@@ -204,16 +204,6 @@ test.describe("Keuangan - Pengeluaran CRUD", () => {
   })
 })
 
-test.describe("Keuangan - Anggaran CRUD", () => {
-  test("list loads + create form loads", async ({ page }) => {
-    await page.goto("/keuangan/anggaran", { waitUntil: "domcontentloaded" })
-    await expect(page.locator("body")).toContainText("Anggaran")
-
-    await page.goto("/keuangan/anggaran/tambah", { waitUntil: "domcontentloaded" })
-    await waitForHydration(page)
-    await expect(page.locator("body")).toContainText("Anggaran")
-  })
-})
 
 test.describe("SDM - Cuti CRUD", () => {
   test("list loads + create form loads", async ({ page }) => {

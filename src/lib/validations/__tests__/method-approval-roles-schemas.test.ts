@@ -13,7 +13,6 @@ import {
   workflowStepsSchema,
 } from "@/lib/validations/approval.schemas";
 import { createRoleSchema, updateRoleSchema } from "@/lib/validations/roles.schemas";
-import { selfAttendanceLocationSchema } from "@/lib/validations/self-attendance.schemas";
 
 describe("validations/method.schemas", () => {
   it("createPaymentMethodSchema accepts valid (code optional, default isActive false)", () => {
@@ -128,19 +127,3 @@ describe("validations/roles.schemas", () => {
   });
 });
 
-describe("validations/self-attendance.schemas", () => {
-  it("accepts valid coordinates", () => {
-    expect(selfAttendanceLocationSchema.safeParse({ latitude: -6.2, longitude: 106.8 }).success).toBe(true);
-  });
-  it("accepts empty object (GPS optional)", () => {
-    expect(selfAttendanceLocationSchema.safeParse({}).success).toBe(true);
-  });
-  it("rejects latitude out of range", () => {
-    expect(selfAttendanceLocationSchema.safeParse({ latitude: 91 }).success).toBe(false);
-    expect(selfAttendanceLocationSchema.safeParse({ latitude: -91 }).success).toBe(false);
-  });
-  it("rejects longitude out of range", () => {
-    expect(selfAttendanceLocationSchema.safeParse({ longitude: 181 }).success).toBe(false);
-    expect(selfAttendanceLocationSchema.safeParse({ longitude: -181 }).success).toBe(false);
-  });
-});

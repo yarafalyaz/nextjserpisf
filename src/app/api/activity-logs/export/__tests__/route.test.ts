@@ -43,7 +43,7 @@ describe("GET /api/activity-logs/export", () => {
     expect(res.status).toBe(401)
   })
 
-  it("returns 403 when authenticated but missing manage_settings permission", async () => {
+  it("returns 403 when authenticated but without manage_settings", async () => {
     // Authenticated, but a regular non-admin user (no roles/permissions).
     mocks.authFn.mockResolvedValue({ user: { id: 1, roles: [], permissions: [] } })
     mocks.hasPermissionFn.mockResolvedValue(false)

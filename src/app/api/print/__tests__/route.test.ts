@@ -1,4 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+
+// document-scope (dipakai route cetak) memakai `import "server-only"`.
+vi.mock("server-only", () => ({}))
+
+// Route cetak menegakkan batas gudang untuk dokumen yang dibatasi. Berkas ini
+// fokus pada izin + rendering PDF, jadi cakupan gudang di-stub "all"; perilaku
+// batasnya diuji tersendiri di src/lib/auth/__tests__/document-scope.test.ts.
+vi.mock("@/lib/auth/warehouse-scope", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/auth/warehouse-scope")>()
+  return { ...actual, getWarehouseScope: vi.fn(async () => ({ kind: "all" })) }
+})
+
 import { GET } from "../route"
 
 const mocks = vi.hoisted(() => ({
@@ -9,6 +21,17 @@ const mocks = vi.hoisted(() => ({
   quotationFindUnique: vi.fn(),
   salesOrderFindUnique: vi.fn(),
   workOrderFindUnique: vi.fn(),
+  purchaseOrderFindUnique: vi.fn(),
+  deliveryOrderFindUnique: vi.fn(),
+  downPaymentFindUnique: vi.fn(),
+  salesPaymentFindUnique: vi.fn(),
+  vendorPaymentFindUnique: vi.fn(),
+  salesReturnFindUnique: vi.fn(),
+  purchaseReturnFindUnique: vi.fn(),
+  goodsReceiptFindUnique: vi.fn(),
+  purchaseRequestFindUnique: vi.fn(),
+  vendorBillFindUnique: vi.fn(),
+  expenseFindUnique: vi.fn(),
   paymentMethodFindUnique: vi.fn(),
   shippingMethodFindUnique: vi.fn(),
   itemFindMany: vi.fn(),
@@ -37,6 +60,17 @@ vi.mock("@/lib/db/prisma", () => ({
     quotation: { findUnique: (...a: unknown[]) => mocks.quotationFindUnique(...a) },
     salesOrder: { findUnique: (...a: unknown[]) => mocks.salesOrderFindUnique(...a) },
     workOrder: { findUnique: (...a: unknown[]) => mocks.workOrderFindUnique(...a) },
+    purchaseOrder: { findUnique: (...a: unknown[]) => mocks.purchaseOrderFindUnique(...a) },
+    deliveryOrder: { findUnique: (...a: unknown[]) => mocks.deliveryOrderFindUnique(...a) },
+    downPayment: { findUnique: (...a: unknown[]) => mocks.downPaymentFindUnique(...a) },
+    salesPayment: { findUnique: (...a: unknown[]) => mocks.salesPaymentFindUnique(...a) },
+    vendorPayment: { findUnique: (...a: unknown[]) => mocks.vendorPaymentFindUnique(...a) },
+    salesReturn: { findUnique: (...a: unknown[]) => mocks.salesReturnFindUnique(...a) },
+    purchaseReturn: { findUnique: (...a: unknown[]) => mocks.purchaseReturnFindUnique(...a) },
+    goodsReceipt: { findUnique: (...a: unknown[]) => mocks.goodsReceiptFindUnique(...a) },
+    purchaseRequest: { findUnique: (...a: unknown[]) => mocks.purchaseRequestFindUnique(...a) },
+    vendorBill: { findUnique: (...a: unknown[]) => mocks.vendorBillFindUnique(...a) },
+    expense: { findUnique: (...a: unknown[]) => mocks.expenseFindUnique(...a) },
     paymentMethod: { findUnique: (...a: unknown[]) => mocks.paymentMethodFindUnique(...a) },
     shippingMethod: { findUnique: (...a: unknown[]) => mocks.shippingMethodFindUnique(...a) },
     item: { findMany: (...a: unknown[]) => mocks.itemFindMany(...a) },
@@ -52,6 +86,11 @@ function makeReq(url: string): Request {
 const baseSettings = {
   companyName: "PT Test",
   companyAddress: "Jl. Test 1",
+  companyVillage: "Kenanga",
+  companyDistrict: "Cipondoh",
+  companyCity: "Kota Tangerang",
+  companyProvince: "Banten",
+  companyPostalCode: "15146",
   companyPhone: "08123",
   companyEmail: "a@b.com",
   companyWebsite: "https://test",
@@ -121,9 +160,19 @@ describe("GET /api/print", () => {
       const res = await GET(makeReq("http://localhost/api/print?tipe=invoice&id=1"))
       const json = await res.json()
       expect(json.docInfo.documentNo).toBe("INV-1")
-      expect(json.docInfo.title).toBe("FAKTUR PENJUALAN / INVOICE")
+      expect(json.docInfo.title).toBe("FAKTUR PENJUALAN")
       expect(json.items[0].description).toBe("Besi")
       expect(json.summary.total).toBe(1050)
+    })
+
+    it("kop PDF memuat wilayah lengkap (desa/kecamatan/kota/provinsi + kode pos)", async () => {
+      const res = await GET(makeReq("http://localhost/api/print?tipe=invoice&id=1"))
+      const json = await res.json()
+      // Regresi: kop dulu hanya `companyAddress` + kode pos, sehingga baris
+      // Desa/Kecamatan/Kota/Provinsi tidak pernah muncul walau sudah diisi.
+      expect(json.company.address).toBe(
+        "Jl. Test 1\nKenanga, Cipondoh, Kota Tangerang, Banten 15146",
+      )
     })
 
     it("returns 404 when invoice not found", async () => {
@@ -212,7 +261,7 @@ describe("GET /api/print", () => {
       })
       const res = await GET(makeReq("http://localhost/api/print?tipe=order&id=1"))
       const json = await res.json()
-      expect(json.docInfo.title).toBe("PESANAN PENJUALAN / SALES ORDER")
+      expect(json.docInfo.title).toBe("PESANAN PENJUALAN")
     })
 
     it("returns 404 when order not found", async () => {
@@ -250,6 +299,260 @@ describe("GET /api/print", () => {
   it("returns 400 for unsupported type", async () => {
     const res = await GET(makeReq("http://localhost/api/print?tipe=random&id=1"))
     expect(res.status).toBe(400)
+  })
+
+  describe("dokumen uang (kuitansi)", () => {
+    it("uang muka: satu baris sebesar nominal, tanpa alokasi", async () => {
+      mocks.downPaymentFindUnique.mockResolvedValue({
+        documentNo: "DP-1",
+        paymentDate: new Date("2026-10-02"),
+        amount: 5_000_000,
+        paymentMethod: "Transfer",
+        notes: "DP 30%",
+        customer: { name: "CV Maju", address: "Jl. M", street: null, phone: "081" },
+      })
+      const res = await GET(makeReq("http://localhost/api/print?tipe=down-payment&id=1"))
+      const json = await res.json()
+      expect(json.docInfo.title).toBe("KUITANSI UANG MUKA")
+      expect(json.items).toHaveLength(1)
+      expect(json.summary.total).toBe(5_000_000)
+    })
+
+    it("pembayaran penjualan: pelanggan diambil dari faktur (model tak punya relasi customer)", async () => {
+      mocks.salesPaymentFindUnique.mockResolvedValue({
+        documentNo: "PAY-1",
+        paymentDate: new Date("2026-10-03"),
+        amount: 1_500_000,
+        referenceNo: "TRF-9",
+        notes: null,
+        salesInvoice: {
+          documentNo: "INV-1",
+          grandTotal: 4_000_000,
+          customer: { name: "CV Pelanggan", address: "Jl. P", street: null, phone: "082" },
+        },
+      })
+      const res = await GET(makeReq("http://localhost/api/print?tipe=sales-payment&id=1"))
+      const json = await res.json()
+      expect(json.docInfo.customerName).toBe("CV Pelanggan")
+      expect(json.items[0].description).toContain("INV-1")
+      expect(json.docInfo.notes).toContain("TRF-9")
+    })
+
+    it("pembayaran vendor: rincian per tagihan saat ada alokasi", async () => {
+      mocks.vendorPaymentFindUnique.mockResolvedValue({
+        documentNo: "VP-1",
+        paymentDate: new Date("2026-10-04"),
+        amount: 3_000_000,
+        paymentMethod: "Transfer",
+        notes: null,
+        vendor: { name: "PT Vendor", address: "Jl. V", street: null, phone: "083" },
+        allocations: [
+          { amount: 2_000_000, vendorBill: { documentNo: "BILL-1" } },
+          { amount: 1_000_000, vendorBill: { documentNo: "BILL-2" } },
+        ],
+      })
+      const res = await GET(makeReq("http://localhost/api/print?tipe=vendor-payment&id=1"))
+      const json = await res.json()
+      expect(json.items).toHaveLength(2)
+      expect(json.items[0].description).toContain("BILL-1")
+      expect(json.summary.total).toBe(3_000_000)
+    })
+  })
+
+  describe("retur & penerimaan", () => {
+    it("retur penjualan: total dihitung qty × harga", async () => {
+      mocks.salesReturnFindUnique.mockResolvedValue({
+        documentNo: "SR-1",
+        date: new Date("2026-10-07"),
+        reason: "Barang rusak",
+        customer: { name: "CV X", address: "Jl. X", street: null, phone: "" },
+        salesInvoice: { documentNo: "INV-9" },
+        items: [{ itemId: 3, qty: 2, price: 100_000, cost: 60_000 }],
+      })
+      mocks.itemFindMany.mockResolvedValue([{ id: 3, name: "Bracket", unitOfMeasure: "Pcs" }])
+
+      const res = await GET(makeReq("http://localhost/api/print?tipe=sales-return&id=1"))
+      const json = await res.json()
+      expect(json.items[0]).toMatchObject({ description: "Bracket", unit: "Pcs", total: 200_000 })
+      expect(json.summary.total).toBe(200_000)
+      expect(json.docInfo.notes).toContain("INV-9")
+    })
+
+    it("penerimaan barang: nilai = qty × unit cost, vendor dari pesanan", async () => {
+      mocks.goodsReceiptFindUnique.mockResolvedValue({
+        documentNo: "GR-1",
+        date: new Date("2026-10-08"),
+        notes: null,
+        purchaseOrder: {
+          documentNo: "PO-7",
+          vendor: { name: "PT Vendor", address: "Jl. V", street: null, phone: "084" },
+        },
+        warehouse: { name: "Gudang Utama" },
+        // Skalar ini yang dibaca penjaga batas gudang (document-scope);
+        // record nyata selalu punya, mock-nya saja yang tadinya belum lengkap.
+        warehouseId: 1,
+        items: [{ itemId: 5, qty: 4, unitCost: 25_000 }],
+      })
+      mocks.itemFindMany.mockResolvedValue([{ id: 5, name: "Pelat", unitOfMeasure: "Lembar" }])
+
+      const res = await GET(makeReq("http://localhost/api/print?tipe=goods-receipt&id=1"))
+      const json = await res.json()
+      expect(json.items[0]).toMatchObject({ description: "Pelat", total: 100_000 })
+      expect(json.summary.total).toBe(100_000)
+      expect(json.docInfo.notes).toContain("Gudang Utama")
+    })
+
+    it("permintaan pembelian: tanpa harga", async () => {
+      mocks.purchaseRequestFindUnique.mockResolvedValue({
+        documentNo: "PR-1",
+        date: new Date("2026-10-09"),
+        requestDate: null,
+        title: "Kebutuhan produksi",
+        notes: null,
+        vendor: null,
+        items: [{ itemId: 9, qty: 6, notes: "Segera" }],
+      })
+      mocks.itemFindMany.mockResolvedValue([{ id: 9, name: "Baut", unitOfMeasure: "Pcs" }])
+
+      const res = await GET(makeReq("http://localhost/api/print?tipe=purchase-request&id=1"))
+      const json = await res.json()
+      expect(json.items[0]).toMatchObject({ description: "Baut", note: "Segera", price: 0, total: 0 })
+      expect(json.docInfo.customerName).toBe("Belum ditentukan")
+    })
+
+    it("tagihan vendor: total yang dibayarkan dikurangi PPh dipotong", async () => {
+      mocks.vendorBillFindUnique.mockResolvedValue({
+        documentNo: "BILL-9",
+        date: new Date("2026-10-10"),
+        dueDate: new Date("2026-11-10"),
+        vendorInvoiceNumber: "VINV-1",
+        subtotal: 1_000_000,
+        discountAmount: 0,
+        tax: 0,
+        grandTotal: 1_000_000,
+        withholdingAmount: 20_000,
+        notes: null,
+        vendor: { name: "PT Vendor", address: "Jl. V", street: null, phone: "085" },
+        withholdingType: { name: "PPh 23", rate: 2 },
+        items: [{ itemId: 4, description: "Jasa", qty: 1, unitPrice: 1_000_000, discountPercent: 0, total: 1_000_000 }],
+      })
+      mocks.itemFindMany.mockResolvedValue([])
+
+      const res = await GET(makeReq("http://localhost/api/print?tipe=vendor-bill&id=1"))
+      const json = await res.json()
+      expect(json.summary.total).toBe(980_000)
+      expect(json.docInfo.notes).toContain("PPh 23")
+    })
+
+    it("bukti pengeluaran: satu nominal + kategori di keterangan", async () => {
+      mocks.expenseFindUnique.mockResolvedValue({
+        documentNo: "EXP-1",
+        date: new Date("2026-10-11"),
+        amount: 250_000,
+        referenceNo: "KW-7",
+        description: "Beli air minum kantor",
+        vendor: { name: "Toko Sembako", address: "Jl. T", street: null, phone: "086" },
+        category: { label: "Konsumsi Kantor" },
+      })
+      const res = await GET(makeReq("http://localhost/api/print?tipe=expense&id=1"))
+      const json = await res.json()
+      expect(json.docInfo.title).toBe("BUKTI PENGELUARAN")
+      expect(json.docInfo.customerName).toBe("Toko Sembako")
+      expect(json.summary.total).toBe(250_000)
+      expect(json.docInfo.notes).toContain("Konsumsi Kantor")
+      expect(json.docInfo.notes).toContain("KW-7")
+    })
+
+    it("bukti pengeluaran tanpa vendor terbaca 'Biaya internal'", async () => {
+      mocks.expenseFindUnique.mockResolvedValue({
+        documentNo: "EXP-2",
+        date: new Date(),
+        amount: 50_000,
+        referenceNo: null,
+        description: null,
+        vendor: null,
+        category: { label: "Lain-lain" },
+      })
+      const res = await GET(makeReq("http://localhost/api/print?tipe=expense&id=2"))
+      const json = await res.json()
+      expect(json.docInfo.customerName).toBe("Biaya internal")
+      expect(json.items[0].description).toBe("Lain-lain")
+    })
+  })
+
+  describe("purchase-order", () => {
+    it("memakai vendor sebagai pihak tujuan dan unit dari master barang", async () => {
+      mocks.purchaseOrderFindUnique.mockResolvedValue({
+        documentNo: "PO-1",
+        date: new Date("2026-10-01"),
+        expectedDate: new Date("2026-10-10"),
+        subtotal: 2000,
+        discount: 100,
+        tax: 0,
+        grandTotal: 1900,
+        notes: "Kirim pagi",
+        vendor: { name: "PT Vendor", address: "Jl. V", street: null, phone: "081" },
+        items: [{ itemId: 7, qty: 2, unitPrice: 1000, discount: 50, total: 1950 }],
+      })
+      mocks.itemFindMany.mockResolvedValue([{ id: 7, name: "Baut M8", unitOfMeasure: "Pcs" }])
+
+      const res = await GET(makeReq("http://localhost/api/print?tipe=purchase-order&id=1"))
+      const json = await res.json()
+      expect(json.docInfo.title).toBe("PESANAN PEMBELIAN")
+      expect(json.docInfo.customerName).toBe("PT Vendor")
+      expect(json.items[0]).toMatchObject({ description: "Baut M8", unit: "Pcs", qty: 2 })
+      expect(json.summary.total).toBe(1900)
+    })
+
+    it("returns 404 when purchase order not found", async () => {
+      mocks.purchaseOrderFindUnique.mockResolvedValue(null)
+      const res = await GET(makeReq("http://localhost/api/print?tipe=purchase-order&id=99"))
+      expect(res.status).toBe(404)
+    })
+  })
+
+  describe("delivery-order", () => {
+    it("mengambil pelanggan dari pesanan penjualan dan tanpa harga", async () => {
+      mocks.deliveryOrderFindUnique.mockResolvedValue({
+        documentNo: "SJ-1",
+        date: new Date("2026-10-05"),
+        deliveryDate: new Date("2026-10-06"),
+        shippingAddress: "Gudang Bandung",
+        notes: "Titip tetangga",
+        salesOrder: { customer: { name: "CV Pembeli", address: "Jl. P", street: null, phone: "0899" } },
+        items: [{ qty: 3, unit: "Box", notes: "Fragile", item: { name: "Panel", unitOfMeasure: "Pcs" } }],
+      })
+
+      const res = await GET(makeReq("http://localhost/api/print?tipe=delivery-order&id=1"))
+      const json = await res.json()
+      expect(json.docInfo.title).toBe("SURAT JALAN")
+      expect(json.docInfo.customerName).toBe("CV Pembeli")
+      expect(json.docInfo.customerAddress).toBe("Gudang Bandung")
+      expect(json.items[0]).toMatchObject({ description: "Panel", qty: 3, unit: "Box", note: "Fragile", price: 0 })
+      expect(json.summary.total).toBe(0)
+    })
+
+    it("memakai satuan master barang bila item tidak punya unit", async () => {
+      mocks.deliveryOrderFindUnique.mockResolvedValue({
+        documentNo: "SJ-2",
+        date: new Date(),
+        deliveryDate: null,
+        shippingAddress: null,
+        notes: null,
+        salesOrder: { customer: { name: "X", address: "Jl X", street: null, phone: "" } },
+        items: [{ qty: 1, unit: null, notes: null, item: { name: "Bracket", unitOfMeasure: "Pcs" } }],
+      })
+      const res = await GET(makeReq("http://localhost/api/print?tipe=delivery-order&id=2"))
+      const json = await res.json()
+      expect(json.items[0].unit).toBe("Pcs")
+      expect(json.docInfo.customerAddress).toBe("Jl X")
+    })
+
+    it("returns 404 when delivery order not found", async () => {
+      mocks.deliveryOrderFindUnique.mockResolvedValue(null)
+      const res = await GET(makeReq("http://localhost/api/print?tipe=delivery-order&id=99"))
+      expect(res.status).toBe(404)
+    })
   })
 
   it("returns 500 on internal error", async () => {

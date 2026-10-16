@@ -99,7 +99,7 @@ describe("convertQuotationToOrder concurrency guard", () => {
     soFindFirstMock.mockResolvedValue({ id: 999 })
     const result = await convertQuotationToOrder(50)
     expect(result.success).toBe(false)
-    expect(result.error).toContain("sudah memiliki Sales Order")
+    expect(result.error).toContain("sudah memiliki Pesanan Penjualan")
     expect(soCreateMock).not.toHaveBeenCalled()
   })
 })

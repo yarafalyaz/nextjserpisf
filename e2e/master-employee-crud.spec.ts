@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-import { openCombobox, selectFirstComboboxOption } from "./utils/combobox"
+import { selectFirstComboboxOption } from "./utils/combobox"
 
 
 test.beforeEach(async ({}, testInfo) => {

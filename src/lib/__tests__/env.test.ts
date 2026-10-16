@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
 const DB_VAL = "mariadb://user:pass@localhost:3306/testdb"
-const CRED_VAL = "test-cred-value-123"
+// ≥32 karakter: AUTH_SECRET di bawah ambang itu ditolak oleh skema.
+const CRED_VAL = "test-cred-value-1234567890-abcdefghij"
 // Build the env var name dynamically to avoid redactor
 const CRED_ENV = ["AUTH", "SECRET"].join("_")
 
@@ -36,6 +37,22 @@ describe("env validation", () => {
     process.env = { ...originalEnv, DATABASE_URL: DB_VAL, NODE_ENV: "production" } as NodeJS.ProcessEnv
     delete (process.env as unknown as Record<string, unknown>).CI
     delete (process.env as unknown as Record<string, unknown>)[CRED_ENV]
+    await expect(import("@/lib/env")).rejects.toThrow("Invalid environment variables")
+  })
+
+  // Sesi Auth.js adalah JWE bertanda-tangan AUTH_SECRET: nilai contoh dari
+  // .env.example membuat siapa pun bisa mencetak token super_admin.
+  it("menolak AUTH_SECRET berupa nilai contoh", async () => {
+    process.env = { ...originalEnv, DATABASE_URL: DB_VAL, NODE_ENV: "production" } as NodeJS.ProcessEnv
+    process.env[CRED_ENV] = "your-secret-key-change-in-production"
+    delete (process.env as unknown as Record<string, unknown>).CI
+    await expect(import("@/lib/env")).rejects.toThrow("Invalid environment variables")
+  })
+
+  it("menolak AUTH_SECRET yang terlalu pendek", async () => {
+    process.env = { ...originalEnv, DATABASE_URL: DB_VAL, NODE_ENV: "production" } as NodeJS.ProcessEnv
+    process.env[CRED_ENV] = "terlalu-pendek"
+    delete (process.env as unknown as Record<string, unknown>).CI
     await expect(import("@/lib/env")).rejects.toThrow("Invalid environment variables")
   })
 

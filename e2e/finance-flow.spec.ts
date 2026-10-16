@@ -31,9 +31,4 @@ test.describe("Finance module flows", () => {
     await expect(page.locator("form, [data-testid='form']")).toBeVisible({ timeout: 30000 })
   })
 
-  test("Budget list loads", async ({ page }) => {
-    await page.goto("/keuangan/anggaran")
-    await page.waitForLoadState("networkidle")
-    await expect(page.locator("body")).toContainText("Anggaran")
-  })
 })

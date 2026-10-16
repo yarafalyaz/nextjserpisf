@@ -3,14 +3,15 @@ import { readFileSync, readdirSync, statSync } from "node:fs"
 import { join } from "node:path"
 import { ROUTE_PERMS } from "@/lib/auth/action-perms"
 import { APPROVAL_REFERENCE_PERMISSIONS } from "@/lib/auth/approval-permissions"
+import { navigation } from "@/components/layout/navigation"
 import {
   ATTACHMENT_PERMISSION,
   ATTACHMENT_WRITE_PERMISSION,
 } from "@/lib/auth/attachment-permission-maps"
 
 /**
- * Guard for the bug class behind the "Key Figure Statistik is dead for every
- * non-super-admin" defect (and the 4 hidden row-action buttons): a permission
+ * Guard for the bug class behind the "feature is dead for every non-super-admin"
+ * defect (and the 4 hidden row-action buttons): a permission
  * string that code enforces but prisma/seed.ts never inserts can never be held by
  * any role. `requirePermission()` then redirects the user out of the feature and
  * `hasPermission()` returns false forever - a silent, fail-closed regression that
@@ -22,6 +23,7 @@ import {
 
 const ROOT = process.cwd()
 const SEED_PATH = join(ROOT, "prisma", "seed.ts")
+const BASE_DATA_PATH = join(ROOT, "src", "lib", "setup", "base-data.ts")
 
 /** Extract the string literals of an array declaration in seed.ts (comments stripped). */
 function extractArray(source: string, declaration: string): string[] {
@@ -63,8 +65,12 @@ function collect(pattern: RegExp): Map<string, string[]> {
 }
 
 const seedSource = readFileSync(SEED_PATH, "utf8")
-const seededPermissions = new Set(extractArray(seedSource, "const permissions = ["))
-const seededRoles = new Set(extractArray(seedSource, "const roles = ["))
+// The permission/role catalogue lives in src/lib/setup/base-data.ts, shared by
+// prisma/seed.ts and the first-run setup wizard (src/lib/setup/install.ts).
+// Parity is checked against that single source.
+const baseDataSource = readFileSync(BASE_DATA_PATH, "utf8")
+const seededPermissions = new Set(extractArray(baseDataSource, "const PERMISSIONS = ["))
+const seededRoles = new Set(extractArray(baseDataSource, "const ROLES = ["))
 
 describe("permission/role parity between src and prisma/seed.ts", () => {
   it("seeds a non-trivial permission and role catalogue", () => {
@@ -104,6 +110,24 @@ describe("permission/role parity between src and prisma/seed.ts", () => {
         }
       }
     }
+
+    // Sejak #53 halaman hub memakai `requireAnyPermission(groupPermissions("/modul"))`,
+    // jadi daftar izinnya berasal dari NAVIGASI (bukan array literal di halaman).
+    // Navigasi adalah sumber yang harus tetap ada di seed — kalau tidak, menu/hub
+    // menuntut izin yang tak pernah dibuat.
+    const collectNav = (items: typeof navigation) => {
+      for (const item of items) {
+        for (const permission of [
+          ...(item.permission ? [item.permission] : []),
+          ...(item.permissions ?? []),
+        ]) {
+          found.set(permission, [...(found.get(permission) ?? []), "src/components/layout/navigation.ts"])
+        }
+        if (item.children) collectNav(item.children)
+      }
+    }
+    collectNav(navigation)
+
     expect(found.size).toBeGreaterThan(10)
 
     const missing = [...found.entries()]
@@ -124,8 +148,8 @@ describe("permission/role parity between src and prisma/seed.ts", () => {
   })
 
   it("permission and role catalogues contain no duplicates", () => {
-    const permissions = extractArray(seedSource, "const permissions = [")
-    const roles = extractArray(seedSource, "const roles = [")
+    const permissions = extractArray(baseDataSource, "const PERMISSIONS = [")
+    const roles = extractArray(baseDataSource, "const ROLES = [")
     const duplicates = (values: string[]) =>
       [...new Set(values.filter((value, index) => values.indexOf(value) !== index))]
 

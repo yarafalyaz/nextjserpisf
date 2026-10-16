@@ -344,7 +344,7 @@ describe("Quotation Actions", () => {
     mocks.prismaMock.salesOrder.findFirst.mockResolvedValue({ id: 2 }) // existing SO
     const res = await actions.convertQuotationToOrder(1)
     expect(res?.success).toBe(false)
-    expect(res?.error).toContain("sudah memiliki Sales Order")
+    expect(res?.error).toContain("sudah memiliki Pesanan Penjualan")
   })
 
   // === updateQuotation ===
@@ -580,6 +580,28 @@ describe("Sales Invoice Actions", () => {
     const res = await actions.updateSalesInvoice(1, fdMap(payload))
     expect(res?.success).toBe(true)
   })
+  // Regresi kehilangan tautan: form faktur tidak punya input quotationId, jadi
+  // payload tidak pernah memuatnya — `?? null` dulu menghapus tautan penawaran
+  // setiap kali faktur disimpan.
+  it("updateSalesInvoice mempertahankan quotationId yang tidak dikirim form", async () => {
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", quotationId: 77, paidAmount: 0, grandTotal: 0,
+    })
+    const payload = {
+      customerId: 1, date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 1, unitPrice: 100, discount: 0 }]),
+      taxRate: 0,
+      discount: 0,
+    }
+    const res = await actions.updateSalesInvoice(1, fdMap(payload))
+    expect(res?.success).toBe(true)
+    // Aksi memanggil salesInvoice.update dua kali (header, lalu total/status),
+    // jadi ambil call yang memang memuat quotationId — bukan yang terakhir.
+    const headerUpdate = mocks.prismaMock.salesInvoice.update.mock.calls
+      .map(([arg]) => arg as { data?: Record<string, unknown> } | undefined)
+      .find((arg) => arg?.data && "quotationId" in arg.data)
+    expect(headerUpdate?.data?.quotationId).toBe(77)
+  })
   it("updateSalesInvoice reverse+reposts a posted invoice on edit", async () => {
     const posting = await import("@/lib/services/sales-invoice-posting.service")
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "posted" })
@@ -773,6 +795,17 @@ describe("Sales Return Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Validasi gagal")
     expect(findSpy).not.toHaveBeenCalled()
+  })
+  // Regresi kehilangan data: payload yang tersaring HABIS (bukan string kosong —
+  // kasus itu sudah ditangkap Zod) dulu membuat aksi menghapus seluruh item retur
+  // lalu menulis nol baris, sehingga item hilang tanpa pesan.
+  it("updateSalesReturn menolak payload yang tersaring habis tanpa menghapus item", async () => {
+    mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ status: "draft" })
+    const items = JSON.stringify([{ itemId: 0, qty: 1 }])
+    const res = await actions.updateSalesReturn(1, fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("minimal satu barang")
+    expect(mocks.prismaMock.salesReturnItem.deleteMany).not.toHaveBeenCalled()
   })
   it("updateSalesReturn fails on over-return violation", async () => {
     mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ status: "draft" })

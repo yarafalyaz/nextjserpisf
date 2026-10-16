@@ -97,6 +97,44 @@ describe("validations/sales.schemas", () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it("menerima PPh yang dipotong pelanggan beserta bukti potongnya", () => {
+      const result = createSalesPaymentSchema.safeParse({
+        salesInvoiceId: 1,
+        amount: 10_670_000,
+        paymentDate: "2026-10-12",
+        paymentMethod: "transfer",
+        withholdingTypeId: "7",
+        withholdingAmount: "330000",
+        withholdingCertificateNo: "BP-2026-0001",
+        withholdingDate: "2026-10-12",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        // Koersi: nilainya datang sebagai string dari FormData.
+        expect(result.data.withholdingTypeId).toBe(7);
+        expect(result.data.withholdingAmount).toBe(330_000);
+      }
+    });
+
+    it("menolak potongan PPh negatif", () => {
+      const result = createSalesPaymentSchema.safeParse({
+        salesInvoiceId: 1,
+        amount: 10_670_000,
+        paymentDate: "2026-10-12",
+        paymentMethod: "transfer",
+        withholdingAmount: -1,
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("masih menerima pembayaran tanpa potongan PPh (kolom opsional)", () => {
+      const result = createSalesPaymentSchema.safeParse({
+        salesInvoiceId: 1, amount: 500_000, paymentDate: "2026-10-12", paymentMethod: "cash",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.withholdingAmount).toBeUndefined();
+    });
   });
 
   describe("updateQuotationSchema", () => {

@@ -26,7 +26,7 @@ test.describe("Quick add kategori pelanggan", () => {
     await categoryBox.click()
 
     // The create-new row is always offered at the bottom of the list.
-    await page.getByRole("option", { name: /Tambah baru/i }).click()
+    await page.getByRole("button", { name: /Tambah baru/i }).click()
 
     const dialog = page.getByRole("dialog")
     await expect(dialog).toBeVisible()

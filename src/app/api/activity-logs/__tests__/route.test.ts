@@ -35,7 +35,7 @@ function makeReq(url: string): NextRequest {
 describe("GET /api/activity-logs", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    // Default: caller has the required permission. Individual tests override.
+    // Default: pemanggil adalah super_admin. Tes masing-masing bisa menimpanya.
     mocks.hasPermissionFn.mockResolvedValue(true)
   })
 
@@ -45,7 +45,7 @@ describe("GET /api/activity-logs", () => {
     expect(res.status).toBe(401)
   })
 
-  it("returns 403 when authenticated but missing manage_settings permission", async () => {
+  it("returns 403 when authenticated but without manage_settings", async () => {
     // Authenticated, but a regular non-admin user (no roles/permissions).
     mocks.authFn.mockResolvedValue({ user: { id: 1, roles: [], permissions: [] } })
     mocks.hasPermissionFn.mockResolvedValue(false)

@@ -1,8 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
-import {
-  selectFirstComboboxOption,
-} from "./utils/combobox"
+import { selectComboboxOptionBySearch } from "./utils/combobox"
 
 
 test.beforeEach(async ({}, testInfo) => {
@@ -30,20 +28,32 @@ test.describe("Kendaraan CRUD", () => {
     await waitForHydration(page)
 
     // Cascading comboboxes: brand enables model, model enables variant.
-    const brandPicked = await selectFirstComboboxOption(page, {
-      placeholder: "Cari merek...",
-    })
-    if (!brandPicked) test.skip(true, "no vehicle brand seeded")
+    // Sengaja memilih merek/model/varian SEED milik E2E lewat pencarian, bukan opsi pertama:
+    // opsi pertama bisa milik spec merek/model yang berjalan paralel, dan kendaraan yang
+    // kita buat akan mengunci merek itu sehingga spec itu gagal menghapusnya.
+    const brandPicked = await selectComboboxOptionBySearch(
+      page,
+      { placeholder: "Cari merek..." },
+      "E2E Kendaraan",
+      /E2E Kendaraan/i,
+    )
+    if (!brandPicked) test.skip(true, "merek E2E tidak ada di seed")
 
-    const modelPicked = await selectFirstComboboxOption(page, {
-      placeholder: "Cari model...",
-    })
-    if (!modelPicked) test.skip(true, "no vehicle model seeded")
+    const modelPicked = await selectComboboxOptionBySearch(
+      page,
+      { placeholder: "Cari model..." },
+      "E2E Model",
+      /E2E Model/i,
+    )
+    if (!modelPicked) test.skip(true, "model E2E tidak ada di seed")
 
-    const variantPicked = await selectFirstComboboxOption(page, {
-      placeholder: "Cari tipe/varian...",
-    })
-    if (!variantPicked) test.skip(true, "no vehicle variant seeded")
+    const variantPicked = await selectComboboxOptionBySearch(
+      page,
+      { placeholder: "Cari tipe/varian..." },
+      "E2E Varian",
+      /E2E Varian/i,
+    )
+    if (!variantPicked) test.skip(true, "varian E2E tidak ada di seed")
 
     await page.locator("#name").first().fill(typeName)
     await page.locator("#year").first().fill("2024")

@@ -13,7 +13,9 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: any) => mocks.requirePermissionMock(...a) }))
+vi.mock("@/lib/auth/permissions", () => ({
+  requirePermission: (...a: any) => mocks.requirePermissionMock(...a),
+}))
 vi.mock("next/cache", () => ({ revalidatePath: mocks.revalidateMock }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: mocks.logActivityMock }))
 vi.mock("@/lib/db/backup", () => ({
