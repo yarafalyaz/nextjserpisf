@@ -57,21 +57,6 @@ const REQUIRED_CALLERS: Array<{ action: string; definedIn: string; callersIn: st
  */
 const ALLOWED_UNWIRED: Array<{ action: string; definedIn: string; reason: string }> = [
   {
-    action: "confirmSalesOrder",
-    definedIn: "src/actions/sales.actions.ts",
-    reason: "rantai draft→confirmed→processing→completed tak punya tombol; rute status generik\n      menetapkan 'approved' (dipakai gerbang surat jalan), bukan rantai ini",
-  },
-  {
-    action: "processSalesOrder",
-    definedIn: "src/actions/sales.actions.ts",
-    reason: "digantikan rute status generik /api/workflow (fall-through → 'approved')",
-  },
-  {
-    action: "completeSalesOrder",
-    definedIn: "src/actions/sales.actions.ts",
-    reason: "digantikan rute status generik",
-  },
-  {
     action: "deleteSalesOrder",
     definedIn: "src/actions/sales.actions.ts",
     reason: "hapus SO tidak tersedia di UI (bukan mesin status)",

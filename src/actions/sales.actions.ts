@@ -794,56 +794,6 @@ export async function createSalesOrder(formData: FormData) {
 }
 
 
-export async function confirmSalesOrder(id: number) {
-  try {
-  await requirePermission("edit_sales_orders")
-  const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
-  if (so.status !== "draft") throw new Error("Sales Order hanya bisa dikonfirmasi dari status draft")
-  await prisma.salesOrder.update({ where: { id }, data: { status: "confirmed" } })
-  await logActivity("confirm", "SalesOrder", id, `Konfirmasi pesanan penjualan #${id}`)
-  revalidatePath("/penjualan/pesanan")
-  return { success: true }
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e
-    console.error("[confirmSalesOrder]", getErrorMessage(e) || e)
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
-  }
-}
-
-export async function processSalesOrder(id: number) {
-  try {
-  await requirePermission("edit_sales_orders")
-  const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
-  if (so.status !== "confirmed") throw new Error("Sales Order hanya bisa diproses dari status confirmed")
-  await prisma.salesOrder.update({ where: { id }, data: { status: "processing" } })
-  await logActivity("process", "SalesOrder", id, `Memproses pesanan penjualan #${id}`)
-  revalidatePath("/penjualan/pesanan")
-  return { success: true }
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e
-    console.error("[processSalesOrder]", getErrorMessage(e) || e)
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
-  }
-}
-
-export async function completeSalesOrder(id: number) {
-  try {
-  await requirePermission("edit_sales_orders")
-  const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
-  if (so.status !== "processing") throw new Error("Sales Order hanya bisa diselesaikan dari status processing")
-  await prisma.salesOrder.update({ where: { id }, data: { status: "completed" } })
-  await logActivity("complete", "SalesOrder", id, `Menyelesaikan pesanan penjualan #${id}`)
-  revalidatePath("/penjualan/pesanan")
-  return { success: true }
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e
-    console.error("[completeSalesOrder]", getErrorMessage(e) || e)
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
-  }
-}
-
-// ==================== INVOICE ACTIONS ====================
-
 export async function postInvoice(invoiceId: number) {
   try {
   const user = await requirePermission("post_sales_invoices")

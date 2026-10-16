@@ -492,21 +492,6 @@ describe("Sales Order Actions", () => {
   })
 
   // === guards ===
-  it("confirmSalesOrder fails if not draft", async () => {
-    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "confirmed" })
-    const res = await actions.confirmSalesOrder(1)
-    expect(res?.success).toBe(false)
-  })
-  it("processSalesOrder fails if not confirmed", async () => {
-    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processing" })
-    const res = await actions.processSalesOrder(1)
-    expect(res?.success).toBe(false)
-  })
-  it("completeSalesOrder fails if not processing", async () => {
-    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed" })
-    const res = await actions.completeSalesOrder(1)
-    expect(res?.success).toBe(false)
-  })
   it("updateSalesOrder allows editing a confirmed order when unpaid (custom fabrication)", async () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "confirmed" })
     const res = await actions.updateSalesOrder(1, fdMap({ customerId: 1, date: "2026-06-12" }))
@@ -905,21 +890,6 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(res?.success).toBe(true)
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_sales_orders")
   })
-  it("confirmSalesOrder succeeds", async () => {
-    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
-    const res = await actions.confirmSalesOrder(1)
-    expect(res?.success).toBe(true)
-  })
-  it("processSalesOrder succeeds", async () => {
-    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "confirmed" })
-    const res = await actions.processSalesOrder(1)
-    expect(res?.success).toBe(true)
-  })
-  it("completeSalesOrder succeeds", async () => {
-    mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "processing" })
-    const res = await actions.completeSalesOrder(1)
-    expect(res?.success).toBe(true)
-  })
   it("deleteSalesOrder succeeds", async () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.deleteSalesOrder(1)
@@ -1176,30 +1146,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg2 = new FormData()
     try { await (actions as any).createSalesOrder(arg1, arg2); } catch {}
   })
-  it("confirmSalesOrder handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData()
-    const arg2 = new FormData()
-    try { await (actions as any).confirmSalesOrder(arg1, arg2); } catch {}
-  })
-  it("processSalesOrder handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData()
-    const arg2 = new FormData()
-    try { await (actions as any).processSalesOrder(arg1, arg2); } catch {}
-  })
-  it("completeSalesOrder handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData()
-    const arg2 = new FormData()
-    try { await (actions as any).completeSalesOrder(arg1, arg2); } catch {}
-  })
   it("postInvoice handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
@@ -1378,9 +1324,6 @@ describe("Next.js redirect error handling", () => {
     { name: "createDownPayment", fn: () => actions.createDownPayment(new FormData()) },
     { name: "confirmDownPayment", fn: () => actions.confirmDownPayment(1) },
     { name: "createSalesOrder", fn: () => actions.createSalesOrder(new FormData()) },
-    { name: "confirmSalesOrder", fn: () => actions.confirmSalesOrder(1) },
-    { name: "processSalesOrder", fn: () => actions.processSalesOrder(1) },
-    { name: "completeSalesOrder", fn: () => actions.completeSalesOrder(1) },
     { name: "postInvoice", fn: () => actions.postInvoice(1) },
     { name: "createSalesInvoice", fn: () => actions.createSalesInvoice(new FormData()) },
     { name: "createSalesPayment", fn: () => actions.createSalesPayment(new FormData()) },
