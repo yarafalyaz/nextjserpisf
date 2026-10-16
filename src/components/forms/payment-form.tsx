@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition, type BaseSyntheticEvent } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { salesPaymentSchema, type SalesPaymentInput } from "@/lib/validators";
+import { salesPaymentSchema, type SalesPaymentInput } from "@/lib/validations/form.schemas"
 import {
   createSalesPayment,
   updateSalesPayment,
@@ -45,8 +45,14 @@ interface PaymentFormProps {
     paymentMethod?: string;
     referenceNo?: string;
     notes?: string;
+    withholdingTypeId?: number;
+    withholdingAmount?: number;
+    withholdingCertificateNo?: string;
+    withholdingDate?: string;
   };
   paymentMethods?: { code: string; name: string }[];
+  /** Jenis PPh potong-putut untuk sisi penjualan (Pengaturan → Pajak Potong). */
+  withholdingTypes?: { id: number; code: string; name: string; rate: number | null }[];
 }
 
 export function PaymentForm({
@@ -55,6 +61,7 @@ export function PaymentForm({
   defaultInvoiceId,
   payment,
   paymentMethods = [],
+  withholdingTypes = [],
 }: PaymentFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -86,6 +93,10 @@ export function PaymentForm({
       paymentMethod: payment?.paymentMethod ?? "",
       referenceNo: payment?.referenceNo ?? "",
       notes: payment?.notes ?? "",
+      withholdingTypeId: payment?.withholdingTypeId,
+      withholdingAmount: payment?.withholdingAmount ?? 0,
+      withholdingCertificateNo: payment?.withholdingCertificateNo ?? "",
+      withholdingDate: payment?.withholdingDate ?? "",
     },
   });
 
@@ -96,6 +107,12 @@ export function PaymentForm({
   const remaining = selectedInvoice
     ? Number(selectedInvoice.grandTotal) - Number(selectedInvoice.paidAmount)
     : 0;
+
+  // Pelunasan piutang = kas diterima + PPh yang dipotong pelanggan. Ditampilkan
+  // terang-terangan supaya operator tidak mengira faktur masih bersisa.
+  const withholdingAmount = Number(watch("withholdingAmount") ?? 0);
+  const cashAmount = Number(watch("amount") ?? 0);
+  const settledAmount = cashAmount + withholdingAmount;
 
   function onSubmit(data: SalesPaymentInput, event?: BaseSyntheticEvent) {
     startTransition(async () => {
@@ -281,6 +298,79 @@ export function PaymentForm({
               )}
             />
           </div>
+        </FormSection>
+        <FormSection title="PPh Dipotong Pelanggan (opsional)">
+          <div className="flex flex-col gap-1.5">
+            <Controller
+              name="withholdingTypeId"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <Label htmlFor="withholdingTypeId">Jenis PPh</Label>
+                  <Combobox
+                    id="withholdingTypeId"
+                    value={field.value ? String(field.value) : null}
+                    onChange={(v) => field.onChange(v ? Number(v) : undefined)}
+                    placeholder="Tidak dipotong"
+                    options={withholdingTypes.map((type) => ({
+                      value: String(type.id),
+                      label:
+                        type.rate !== null && type.rate > 0
+                          ? `${type.code} - ${type.name} (${type.rate}%)`
+                          : `${type.code} - ${type.name}`,
+                    }))}
+                  />
+                </>
+              )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="withholdingAmount">Nilai Potongan (Rp)</Label>
+            <Controller
+              name="withholdingAmount"
+              control={control}
+              render={({ field }) => (
+                <CurrencyInput
+                  id="withholdingAmount"
+                  value={field.value ?? 0}
+                  onChange={field.onChange}
+                  onBlur={field.onBlur}
+                  placeholder="0"
+                  prefix="Rp"
+                />
+              )}
+            />
+            {errors.withholdingAmount && (
+              <span className="text-xs text-danger mt-1">
+                {errors.withholdingAmount.message}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="withholdingCertificateNo">No. Bukti Potong</Label>
+            <input
+              id="withholdingCertificateNo"
+              {...register("withholdingCertificateNo")}
+              className="form-input"
+              placeholder="Nomor bukti potong dari pelanggan..."
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <AppDatePicker
+              label="Tanggal Bukti Potong"
+              name="withholdingDate"
+              value={watch("withholdingDate") ?? ""}
+              onChange={(val) => setValue("withholdingDate", val)}
+            />
+          </div>
+          {withholdingAmount > 0 && (
+            <p className="text-xs text-muted-foreground sm:col-span-2">
+              Kas diterima Rp {cashAmount.toLocaleString("id-ID")} + potongan PPh Rp{" "}
+              {withholdingAmount.toLocaleString("id-ID")} = pelunasan piutang Rp{" "}
+              {settledAmount.toLocaleString("id-ID")}. Jurnalnya: kas + PPh dibayar dimuka
+              / piutang usaha.
+            </p>
+          )}
         </FormSection>
         <FormSection title="Lainnya" columns={1}>
           <div className="flex flex-col gap-1.5">

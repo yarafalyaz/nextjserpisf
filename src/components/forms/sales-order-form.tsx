@@ -20,6 +20,9 @@ const salesOrderSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
   date: z.string().min(1, "Tanggal wajib diisi"),
   deliveryDate: z.string().optional(),
+  // Tautan ke penawaran asal. Tidak ada inputnya, tetapi harus ikut terkirim —
+  // tanpanya pesanan hasil konversi Penawaran kehilangan tautannya.
+  quotationId: z.number().optional(),
   notes: z.string().optional(),
 })
 
@@ -28,12 +31,12 @@ type SalesOrderInput = z.infer<typeof salesOrderSchema>
 interface SalesOrderFormProps {
   customers: { id: number; name: string
 }[]
-  order?: { id: number; customerId: number; quotationId?: number | null; date: string; notes?: string | null; items?: Array<{ itemId: number; qty: number; unitPrice: number; discount?: number }> }
+  order?: { id: number; customerId: number; quotationId?: number | null; deliveryDate?: string | null; date: string; notes?: string | null; items?: Array<{ itemId: number; qty: number; unitPrice: number; discount?: number }> }
   quotationId?: number
   defaultCustomerId?: number
 }
 
-export function SalesOrderForm({ customers, order, quotationId: _quotationId, defaultCustomerId: _defaultCustomerId }: SalesOrderFormProps) {
+export function SalesOrderForm({ customers, order, quotationId, defaultCustomerId }: SalesOrderFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [customerOptions, setCustomerOptions] = useState(customers)
@@ -41,9 +44,14 @@ export function SalesOrderForm({ customers, order, quotationId: _quotationId, de
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesOrderInput>({
     resolver: zodResolver(salesOrderSchema),
     defaultValues: {
-      customerId: order?.customerId,
+      // `defaultCustomerId`/`quotationId` datang dari konversi Penawaran → Pesanan.
+      // Sebelumnya keduanya diabaikan (prop di-prefix "_") sehingga pelanggan tidak
+      // terisi dan tautan penawaran hilang. `deliveryDate` harus di-seed saat edit,
+      // kalau tidak tanggal pengiriman terhapus setiap kali pesanan disimpan.
+      customerId: order?.customerId ?? defaultCustomerId,
+      quotationId: order?.quotationId ?? quotationId,
       date: order?.date ?? toLocalDateOnly(new Date()),
-      deliveryDate: "",
+      deliveryDate: order?.deliveryDate ?? "",
       notes: order?.notes ?? "",
     },
   })

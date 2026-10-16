@@ -50,7 +50,7 @@ export async function createPaymentMethod(formData: FormData) {
 
 export async function updatePaymentMethod(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_payment_methods")
+    const user = await requirePermission("edit_payment_methods")
 
     const parsed = parseFormData(updatePaymentMethodSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -58,6 +58,7 @@ export async function updatePaymentMethod(id: number, formData: FormData) {
     await prisma.paymentMethod.update({
       where: { id },
       data: {
+        updatedBy: Number(user.id),
         code: parsed.data.code,
         name: parsed.data.name,
         slug: await nextSlug("paymentMethod", parsed.data.name, { excludeId: id }),
@@ -122,7 +123,7 @@ export async function createShippingMethod(formData: FormData) {
 
 export async function updateShippingMethod(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_shipping_methods")
+    const user = await requirePermission("edit_shipping_methods")
 
     const parsed = parseFormData(updateShippingMethodSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -130,6 +131,7 @@ export async function updateShippingMethod(id: number, formData: FormData) {
     await prisma.shippingMethod.update({
       where: { id },
       data: {
+        updatedBy: Number(user.id),
         code: parsed.data.code,
         name: parsed.data.name,
         slug: await nextSlug("shippingMethod", parsed.data.name, { excludeId: id }),

@@ -399,7 +399,7 @@ export async function convertQuotationToOrder(quotationId: number) {
     await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`;
     const existing = await tx.salesOrder.findFirst({ where: { quotationId } })
     if (existing) {
-      throw new Error("Penawaran ini sudah memiliki Sales Order")
+      throw new Error("Penawaran ini sudah memiliki Pesanan Penjualan")
     }
 
     const so = await tx.salesOrder.create({
@@ -443,7 +443,7 @@ export async function convertQuotationToOrder(quotationId: number) {
     return so
   })
 
-  await logActivity("convert", "Quotation", quotationId, `Konversi penawaran #${quotationId} ke Sales Order #${salesOrder.id}`)
+  await logActivity("convert", "Quotation", quotationId, `Konversi penawaran #${quotationId} ke Pesanan Penjualan #${salesOrder.id}`)
   revalidatePath("/penjualan/penawaran")
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id }
@@ -773,7 +773,7 @@ export async function createSalesOrder(formData: FormData) {
         slug,
         customerId: v.customerId,
         quotationId: v.quotationId ?? null,
-        date: new Date(v.date),
+                date: new Date(v.date),
         deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
         notes: v.notes ?? null,
         status: "draft" as const,
@@ -782,7 +782,7 @@ export async function createSalesOrder(formData: FormData) {
     })
   })
 
-  await logActivity("create", "SalesOrder", salesOrder.id, `Membuat sales order #${salesOrder.id}`)
+  await logActivity("create", "SalesOrder", salesOrder.id, `Membuat pesanan penjualan #${salesOrder.id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id, slug }
 
@@ -800,7 +800,7 @@ export async function confirmSalesOrder(id: number) {
   const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (so.status !== "draft") throw new Error("Sales Order hanya bisa dikonfirmasi dari status draft")
   await prisma.salesOrder.update({ where: { id }, data: { status: "confirmed" } })
-  await logActivity("confirm", "SalesOrder", id, `Konfirmasi sales order #${id}`)
+  await logActivity("confirm", "SalesOrder", id, `Konfirmasi pesanan penjualan #${id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true }
   } catch (e: unknown) {
@@ -816,7 +816,7 @@ export async function processSalesOrder(id: number) {
   const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (so.status !== "confirmed") throw new Error("Sales Order hanya bisa diproses dari status confirmed")
   await prisma.salesOrder.update({ where: { id }, data: { status: "processing" } })
-  await logActivity("process", "SalesOrder", id, `Memproses sales order #${id}`)
+  await logActivity("process", "SalesOrder", id, `Memproses pesanan penjualan #${id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true }
   } catch (e: unknown) {
@@ -832,7 +832,7 @@ export async function completeSalesOrder(id: number) {
   const so = await prisma.salesOrder.findUniqueOrThrow({ where: { id } })
   if (so.status !== "processing") throw new Error("Sales Order hanya bisa diselesaikan dari status processing")
   await prisma.salesOrder.update({ where: { id }, data: { status: "completed" } })
-  await logActivity("complete", "SalesOrder", id, `Menyelesaikan sales order #${id}`)
+  await logActivity("complete", "SalesOrder", id, `Menyelesaikan pesanan penjualan #${id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true }
   } catch (e: unknown) {
@@ -962,6 +962,13 @@ export async function createSalesPayment(formData: FormData) {
   const idempotencyKey = formData.get("idempotencyKey") as string | null
   const salesInvoiceId = v.salesInvoiceId
   const amount = v.amount
+  // PPh yang dipotong pelanggan (opsional): kas yang diterima tetap `amount`,
+  // sedangkan `withholdingAmount` menambah pelunasan piutang lewat jurnal
+  // Dr PPh dibayar dimuka. Tanpa jenis PPh, potongannya tidak punya akun tujuan.
+  const withholdingAmount = v.withholdingAmount ?? 0
+  if (withholdingAmount > 0 && !v.withholdingTypeId) {
+    return { success: false, error: "Jenis PPh wajib dipilih bila ada potongan PPh" }
+  }
   const documentNo = await generateDocumentNumber("PAY")
   const slug = await nextSlug("salesPayment", documentNo)
 
@@ -982,8 +989,14 @@ export async function createSalesPayment(formData: FormData) {
       throw new Error("Pembayaran hanya bisa dibuat untuk invoice posted/partial")
     }
     const remaining = safeSubtract(invoice.grandTotal, invoice.paidAmount, 0)
-    if (amount > remaining) {
-      throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
+    // Faktur lunas bila kas diterima + PPh dipotong pelanggan menutup sisanya.
+    const settled = safeAdd(amount, withholdingAmount)
+    if (settled > remaining) {
+      throw new Error(
+        withholdingAmount > 0
+          ? `Jumlah pembayaran + potongan PPh (${settled}) melebihi sisa tagihan (${remaining})`
+          : `Jumlah pembayaran melebihi sisa tagihan (${remaining})`,
+      )
     }
 
     const created = await tx.salesPayment.create({
@@ -996,6 +1009,10 @@ export async function createSalesPayment(formData: FormData) {
         paymentDate: new Date(v.paymentDate),
         paymentMethod: v.paymentMethod,
         accountId: v.accountId ?? null,
+        withholdingTypeId: v.withholdingTypeId ?? null,
+        withholdingAmount,
+        withholdingCertificateNo: v.withholdingCertificateNo ?? null,
+        withholdingDate: v.withholdingDate ? new Date(v.withholdingDate) : null,
         referenceNo: v.referenceNo ?? null,
         notes: v.notes ?? null,
         createdBy: Number(user.id),
@@ -1396,7 +1413,7 @@ export async function deleteDownPayment(id: number) {
     }
     const dp = await tx.downPayment.findUniqueOrThrow({ where: { id } })
     if (dp.status !== "draft") {
-      throw new Error("Hanya down payment draft yang bisa dihapus")
+      throw new Error("Hanya uang muka berstatus draf yang bisa dihapus")
     }
 
     // Reverse any journal posted at draft creation before removing the record.
@@ -1454,11 +1471,14 @@ export async function updateSalesOrder(id: number, formData: FormData) {
       data: {
         slug,
         customerId: v.customerId,
-        quotationId: v.quotationId ?? null,
-        date: new Date(v.date),
+        // Pertahankan tautan penawaran bila payload tidak memuatnya — menulis
+        // `?? null` menghapus tautan itu pada setiap penyimpanan.
+        quotationId: v.quotationId ?? existing.quotationId,
+                date: new Date(v.date),
         deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
         notes: v.notes ?? null,
       },
+      include: { items: true },
     })
 
     // If items provided, replace them and recompute totals. Per-line values are
@@ -1506,7 +1526,7 @@ export async function updateSalesOrder(id: number, formData: FormData) {
     return updated
   })
 
-  await logActivity("update", "SalesOrder", salesOrder.id, `Memperbarui sales order #${salesOrder.id}`)
+  await logActivity("update", "SalesOrder", salesOrder.id, `Memperbarui pesanan penjualan #${salesOrder.id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true, id: salesOrder.id, slug }
 
@@ -1560,7 +1580,11 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         slug,
         customerId: v.customerId,
         salesOrderId: v.salesOrderId ?? null,
-        quotationId: v.quotationId ?? null,
+        // quotationId tidak punya input di form faktur (ia tautan sistem dari
+        // konversi Penawaran). Menulis `?? null` di sini menghapus tautan itu
+        // setiap kali faktur diedit, jadi nilai lama dipertahankan bila payload
+        // tidak memuatnya.
+        quotationId: v.quotationId ?? existingInvoice.quotationId,
         date: new Date(v.date),
         dueDate: v.dueDate ? new Date(v.dueDate) : null,
         // Persist notes: the sales-invoice form exposes a notes textarea
@@ -1700,6 +1724,10 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true, documentNo: true } })
   const newInvoiceId = v.salesInvoiceId
   const newAmount = v.amount
+  const newWithholdingAmount = v.withholdingAmount ?? 0
+  if (newWithholdingAmount > 0 && !v.withholdingTypeId) {
+    return { success: false, error: "Jenis PPh wajib dipilih bila ada potongan PPh" }
+  }
 
   const slug = await nextSlug("salesPayment", oldPayment.documentNo, { excludeId: id })
 
@@ -1733,14 +1761,22 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     }
 
     // Sum of all OTHER payments already allocated to the target invoice.
+    // Potongan PPh pelanggan ikut melunasi piutang, jadi jumlahnya harus masuk
+    // hitungan — kalau hanya `amount`, faktur yang dipotong PPh bisa terlihat
+    // masih punya sisa padahal sudah lunas (dan sebaliknya, edit bisa melebihi).
     const others = await tx.salesPayment.aggregate({
       where: { salesInvoiceId: newInvoiceId, id: { not: id } },
-      _sum: { amount: true },
+      _sum: { amount: true, withholdingAmount: true },
     })
-    const otherPaid = Number(others._sum.amount ?? 0)
+    const otherPaid = safeAdd(Number(others._sum.amount ?? 0), Number(others._sum.withholdingAmount ?? 0))
     const remaining = safeSubtract(invoice.grandTotal, otherPaid, 0)
-    if (newAmount > remaining) {
-      throw new Error(`Jumlah pembayaran melebihi sisa tagihan (${remaining})`)
+    const settled = safeAdd(newAmount, newWithholdingAmount)
+    if (settled > remaining) {
+      throw new Error(
+        newWithholdingAmount > 0
+          ? `Jumlah pembayaran + potongan PPh (${settled}) melebihi sisa tagihan (${remaining})`
+          : `Jumlah pembayaran melebihi sisa tagihan (${remaining})`,
+      )
     }
 
     const updated = await tx.salesPayment.update({
@@ -1752,6 +1788,10 @@ export async function updateSalesPayment(id: number, formData: FormData) {
         paymentDate: new Date(v.paymentDate),
         paymentMethod: v.paymentMethod,
         accountId: v.accountId ?? null,
+        withholdingTypeId: v.withholdingTypeId ?? null,
+        withholdingAmount: newWithholdingAmount,
+        withholdingCertificateNo: v.withholdingCertificateNo ?? null,
+        withholdingDate: v.withholdingDate ? new Date(v.withholdingDate) : null,
         referenceNo: v.referenceNo ?? null,
         notes: v.notes ?? null,
       },
@@ -1855,6 +1895,15 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   const updMasterPriceMap = new Map([...baseUpdMasterPriceMap].map(([itemId, price]) => [itemId, price * (updFactorByItem.get(itemId) ?? 1)]))
   const resolveUpdPrice = (itemId: number) =>
     updInvoicePriceMap.get(itemId) ?? (updMasterPriceMap.get(itemId) || updReturnCostMap.get(itemId) || 0)
+
+  // Retur tanpa barang tidak sah — dan menolaknya di sini juga mencegah kehilangan
+  // data: blok di bawah menghapus SELURUH item lalu menulis ulang dari daftar ini,
+  // jadi daftar kosong akan menghapus semua baris secara senyap (pernah terjadi
+  // ketika halaman Ubah tidak mengirim `items` sehingga form jatuh ke satu baris
+  // kosong yang tersaring habis oleh filter itemId > 0).
+  if (validReturnItems.length === 0) {
+    throw new Error("Retur harus memiliki minimal satu barang")
+  }
 
   // Over-return guard (mirrors createSalesReturn). Must run INSIDE the locked
   // transaction to prevent TOCTOU: two concurrent draft edits (or an edit
@@ -2057,7 +2106,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
 
   const existingDp = await prisma.downPayment.findUniqueOrThrow({ where: { id } })
   if (existingDp.status !== "draft") {
-    throw new Error("Hanya Down Payment draft yang bisa diubah")
+    throw new Error("Hanya uang muka berstatus draf yang bisa diubah")
   }
   const slug = await nextSlug("downPayment", existingDp.documentNo, { excludeId: id })
   const quotationId = v.quotationId
@@ -2136,7 +2185,7 @@ export async function deleteSalesOrder(id: number) {
     await tx.salesOrderItem.deleteMany({ where: { salesOrderId: id } })
     await tx.salesOrder.delete({ where: { id } })
   })
-  await logActivity("delete", "SalesOrder", id, `Menghapus sales order #${id}`)
+  await logActivity("delete", "SalesOrder", id, `Menghapus pesanan penjualan #${id}`)
   revalidatePath("/penjualan/pesanan")
   return { success: true }
 

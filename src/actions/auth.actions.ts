@@ -3,6 +3,7 @@
 import { signIn, signOut } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
 import { requireAuth, requirePermission } from "@/lib/auth/permissions"
+import { nextSlug } from "@/lib/utils/slug-db"
 import { isNextRedirectError } from "@/lib/utils/error"
 import bcrypt from "bcryptjs"
 import { revalidatePath } from "next/cache"
@@ -138,7 +139,8 @@ export async function changePassword(formData: FormData) {
 
 export async function createUser(formData: FormData) {
   try {
-    // Fix #19: Add permission check
+    // Halaman /pengaturan/pengguna dijaga izin `manage_users` (proxy + halaman +
+    // action memakai aturan yang sama); super_admin bypass.
     const actor = await requirePermission("manage_users")
 
     // Validate name/email/password via Zod. The boolean-coercion concern in
@@ -180,6 +182,7 @@ export async function createUser(formData: FormData) {
       data: {
         name,
         email,
+        slug: await nextSlug("user", name),
         password: hashedPassword,
         isActive: true,
         roles: {

@@ -188,6 +188,9 @@ export function AssetTransferForm({
               name="notes"
               rows={3}
               placeholder="Catatan transfer..."
+              // Tanpa ini, membuka transfer aset untuk diubah menampilkan catatan
+              // kosong dan menyimpannya menghapus catatan yang sudah ada.
+              defaultValue={transfer?.notes ?? ""}
             />
           </div>
         </FormSection>

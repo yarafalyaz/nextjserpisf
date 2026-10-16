@@ -19,7 +19,7 @@ export async function updateSystemSettings(formData: FormData) {
   }
 
   const settings = await prisma.systemSetting.findFirst()
-  if (!settings) throw new Error("System settings not found")
+  if (!settings) throw new Error("Pengaturan sistem tidak ditemukan")
 
   function has(key: string): boolean {
     return formData.has(key)
@@ -278,7 +278,7 @@ export async function updateStorageSettings(formData: FormData) {
     }
 
     const settings = await prisma.systemSetting.findFirst()
-    if (!settings) throw new Error("System settings not found")
+    if (!settings) throw new Error("Pengaturan sistem tidak ditemukan")
 
     const get = (key: string) => {
       const v = formData.get(key)

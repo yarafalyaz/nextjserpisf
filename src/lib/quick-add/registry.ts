@@ -13,9 +13,11 @@ import {
   createUom,
   createVendor,
   createWarehouse,
+  listCustomerCategoryOptions,
 } from "@/actions/master.actions"
 import { createPaymentMethod, createShippingMethod } from "@/actions/method.actions"
 import { createCostCenter } from "@/actions/finance.actions"
+import { createCustomerVehicle, listVehicleVariantOptions } from "@/actions/vehicle.actions"
 import type { QuickAddAction, QuickAddField } from "@/components/ui/quick-add-select"
 
 const ACCOUNT_TYPE_OPTIONS = [
@@ -29,6 +31,17 @@ const ACCOUNT_TYPE_OPTIONS = [
 const NORMAL_BALANCE_OPTIONS = [
   { value: "DEBIT", label: "Debit" },
   { value: "CREDIT", label: "Kredit" },
+]
+
+/**
+ * Jenis kelamin — nilai mengikuti enum `male|female` di
+ * `src/lib/validations/schemas.ts`, sama dengan `GENDER_CHOICES` pada form Pelanggan
+ * penuh (kesamaan itu dikunci tes registry). Didefinisikan di sini, bukan diimpor dari
+ * komponen klien, supaya modul deklaratif ini tetap aman dipakai komponen server.
+ */
+const GENDER_OPTIONS = [
+  { value: "male", label: "Laki-laki" },
+  { value: "female", label: "Perempuan" },
 ]
 
 /**
@@ -215,8 +228,44 @@ export const QUICK_ADD = {
     action: createCustomer,
     fields: [
       { name: "name", label: "Nama Pelanggan", required: true, placeholder: "Nama pelanggan" },
-      { name: "phone", label: "Telepon", placeholder: "Opsional" },
+      {
+        name: "customerCategoryId",
+        label: "Kategori Pelanggan",
+        type: "select",
+        loadOptions: listCustomerCategoryOptions,
+        placeholder: "-- Tanpa kategori --",
+      },
       { name: "email", label: "Email", type: "email", placeholder: "Opsional" },
+      {
+        name: "phone",
+        label: "Telepon",
+        type: "text",
+        required: true,
+        placeholder: "08xxxxxxxxxx",
+        hint: "Boleh angka, +, -, dan tanda kurung",
+      },
+      { name: "taxId", label: "NPWP", placeholder: "Opsional" },
+      {
+        name: "gender",
+        label: "Jenis Kelamin",
+        type: "select",
+        options: GENDER_OPTIONS,
+        placeholder: "-- Pilih --",
+      },
+      {
+        name: "address",
+        label: "Alamat Jalan",
+        type: "textarea",
+        span: "full",
+        placeholder: "Alamat jalan lengkap",
+      },
+      {
+        name: "region",
+        label: "Wilayah",
+        type: "region",
+        span: "full",
+        hint: "Provinsi → Kota/Kabupaten → Kecamatan → Desa/Kelurahan, mengikuti alamat pengiriman dokumen.",
+      },
     ],
   },
 
@@ -252,6 +301,47 @@ export const QUICK_ADD = {
         defaultValue: "DEBIT",
         options: NORMAL_BALANCE_OPTIONS,
       },
+    ],
+  },
+
+  /**
+   * Kendaraan milik pelanggan. `customerId` disuntik form pemanggil lewat
+   * `extraValues` (nilainya = pelanggan yang sedang dipilih di dokumen), dan tipe
+   * kendaraan dipilih dari katalog varian memakai combobox yang bisa dicari karena
+   * daftarnya panjang.
+   */
+  customerVehicle: {
+    title: "Kendaraan Pelanggan",
+    action: createCustomerVehicle,
+    getLabel: (formData) =>
+      String(formData.get("plateNumber") ?? "").trim() || "Kendaraan baru",
+    fields: [
+      // Label tidak dirender (field hidden); wajib ada karena tipe field menuntutnya.
+      { name: "customerId", type: "hidden", label: "Pelanggan" },
+      {
+        name: "variantId",
+        label: "Tipe Kendaraan",
+        type: "combobox",
+        required: true,
+        loadOptions: listVehicleVariantOptions,
+        placeholder: "Cari merek / model / varian…",
+        span: "full",
+        emptyHint:
+          "Katalog tipe kendaraan masih kosong — tambahkan Merek, Model, dan Varian di Data Master → Kendaraan dulu.",
+      },
+      { name: "plateNumber", label: "Plat Nomor", placeholder: "mis. B 1234 XYZ" },
+      {
+        name: "year",
+        label: "Tahun",
+        type: "number",
+        placeholder: "mis. 2020",
+        min: "1900",
+        max: "2100",
+      },
+      { name: "color", label: "Warna", placeholder: "Opsional" },
+      { name: "chassisNumber", label: "No. Rangka", placeholder: "Opsional" },
+      { name: "engineNumber", label: "No. Mesin", placeholder: "Opsional" },
+      { name: "notes", label: "Catatan", type: "textarea", span: "full", placeholder: "Opsional" },
     ],
   },
 } satisfies Record<string, QuickAddDefinition>

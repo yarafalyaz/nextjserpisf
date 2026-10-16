@@ -8,7 +8,6 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { Combobox } from "@/components/ui/combobox"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
@@ -52,10 +51,18 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
   const [costCenterOptions, setCostCenterOptions] = useState(costCenters)
   const [costCenterId, setCostCenterId] = useState(project?.costCenterId ? String(project.costCenterId) : "")
 
-  // Filter vehicles by selected customer (reactive to customerId state)
+  // Filter vehicles by selected customer (reactive to customerId state). Disimpan di
+  // state supaya kendaraan yang baru dibuat lewat quick-add langsung muncul.
+  const [vehicleOptions, setVehicleOptions] = useState(() =>
+    customerVehicles.map((v) => ({
+      id: v.id,
+      customerId: v.customerId,
+      label: `${v.licensePlate || "-"} - ${v.vehicleName}`,
+    })),
+  )
   const filteredVehicles = customerId
-    ? customerVehicles.filter((v) => v.customerId === Number(customerId))
-    : customerVehicles
+    ? vehicleOptions.filter((v) => v.customerId === Number(customerId))
+    : vehicleOptions
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -105,13 +112,27 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
         </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="customerVehicleId">Kendaraan Pelanggan</Label>
-          <Combobox
+          <QuickAddSelect
             id="customerVehicleId"
             name="customerVehicleId"
             value={customerVehicleId || null}
             onChange={(key) => setCustomerVehicleId(key ?? "")}
-            placeholder="Pilih kendaraan..."
-            options={filteredVehicles.map((v) => ({ value: String(v.id), label: `${v.licensePlate || "-"} - ${v.vehicleName}` }))}
+            disabled={!customerId}
+            placeholder={customerId ? "Pilih kendaraan..." : "Pilih pelanggan dulu"}
+            options={filteredVehicles.map((v) => ({ value: String(v.id), label: v.label }))}
+            title={QUICK_ADD.customerVehicle.title}
+            fields={QUICK_ADD.customerVehicle.fields}
+            action={QUICK_ADD.customerVehicle.action}
+            getLabel={QUICK_ADD.customerVehicle.getLabel}
+            extraValues={{ customerId }}
+            onCreated={(created) => {
+              if (!customerId) return
+              setVehicleOptions((prev) => [
+                ...prev,
+                { id: created.id, customerId: Number(customerId), label: created.label },
+              ])
+              setCustomerVehicleId(String(created.id))
+            }}
           />
         </div>
         <div className="flex flex-col gap-1.5">

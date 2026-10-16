@@ -2,6 +2,7 @@
 import { jsPDF } from "jspdf"
 import autoTable from "jspdf-autotable"
 import { formatCurrency } from "@/lib/utils/format"
+import { terbilangLabel } from "@/lib/utils/terbilang"
 
 export interface CompanyInfo {
   name: string
@@ -29,7 +30,30 @@ export interface DocumentItem {
   qty: number
   price: number
   discount?: number
+  /**
+   * `discount` adalah PERSEN bila true, RUPIAH bila tidak.
+   *
+   * Semantiknya berbeda per dokumen: SalesInvoiceItem/PurchaseOrderItem menyimpan
+   * nominal (`Decimal(15,2)`), sedangkan VendorBillItem menyimpan persen
+   * (`discount_percent`). Tanpa penanda ini, potongan Rp 25.000 tercetak
+   * "25000%".
+   */
+  discountIsPercent?: boolean
   total: number
+  /** Satuan (mis. "Pcs", "Box") — kolom Satuan muncul bila ada isinya. */
+  unit?: string | null
+  /** Keterangan baris (mis. catatan pada surat jalan). */
+  note?: string | null
+}
+
+/** Opsi tampilan dokumen transaksi. */
+export interface TransactionPdfOptions {
+  /** Ukuran asli logo (bila diketahui) agar rasionya tidak terdistorsi. */
+  logoSize?: { width: number; height: number }
+  /** Surat jalan: tanpa kolom harga/total dan tanpa blok ringkasan nominal. */
+  hidePrices?: boolean
+  /** Label tanda tangan kanan (default "Hormat Kami,"). */
+  signatureRight?: string
 }
 
 export interface DocumentSummary {
@@ -54,11 +78,16 @@ export interface QuotationPDFItem extends DocumentItem {
   unit?: string | null
 }
 
-export function generateTransactionPDF(
+/**
+ * Menggambar dokumen transaksi dan mengembalikan objek jsPDF-nya (tanpa efek
+ * samping) sehingga hasilnya bisa diuji/diperiksa tanpa membuka tab baru.
+ */
+export function buildTransactionPdf(
   company: CompanyInfo,
   docInfo: DocumentInfo,
   items: DocumentItem[],
-  summary: DocumentSummary
+  summary: DocumentSummary,
+  options: TransactionPdfOptions = {}
 ) {
   // A4 size: 210 x 297 mm
   const doc = new jsPDF({
@@ -76,11 +105,26 @@ export function generateTransactionPDF(
   const ml = 15
   let y = 20
 
-  // 1. Header (Company Info)
+  // 1. Header (Company Info) — logo di kiri, blok perusahaan mengikuti.
+  const logoWidth = 26
+  let textLeft = ml
+  if (company.logo) {
+    try {
+      const logoSize = options.logoSize
+      const aspect = logoSize && logoSize.width > 0 ? logoSize.height / logoSize.width : 0.7
+      const height = Math.min(logoWidth * aspect, 18)
+      const width = aspect > 0 ? height / aspect : logoWidth
+      doc.addImage(company.logo, imgFormat(company.logo), ml, y - 7, width, height)
+      textLeft = ml + width + 6
+    } catch {
+      textLeft = ml
+    }
+  }
+
   doc.setFont("Helvetica", "bold")
   doc.setFontSize(18)
   doc.setTextColor(primaryColor)
-  doc.text(company.name, ml, y)
+  doc.text(company.name, textLeft, y)
 
   doc.setFont("Helvetica", "normal")
   doc.setFontSize(9)
@@ -89,7 +133,7 @@ export function generateTransactionPDF(
   if (company.address) {
     y += 5
     const addrLines = doc.splitTextToSize(company.address, 100)
-    doc.text(addrLines, ml, y)
+    doc.text(addrLines, textLeft, y)
     y += (addrLines.length - 1) * 4
   }
 
@@ -98,7 +142,7 @@ export function generateTransactionPDF(
   if (company.phone) contactInfo.push(`T: ${company.phone}`)
   if (company.email) contactInfo.push(`E: ${company.email}`)
   if (company.website) contactInfo.push(`W: ${company.website}`)
-  doc.text(contactInfo.join("   |   "), ml, y)
+  doc.text(contactInfo.join("   |   "), textLeft, y)
 
   // Decorative header line
   y += 3
@@ -163,39 +207,82 @@ export function generateTransactionPDF(
   // Set cursor past billing info
   y = Math.max(customerY + 12, y + 16)
 
-  // 4. AutoTable for Items
-  const tableBody = items.map((item) => [
-    item.no,
-    item.description,
-    item.qty,
-    formatCurrency(item.price),
-    item.discount ? `${item.discount}%` : "-",
-    formatCurrency(item.total),
-  ])
+  // 4. AutoTable for Items — gaya dokumen: tanpa blok warna, hanya garis judul.
+  // Kolom disusun dari spesifikasi sehingga surat jalan (tanpa harga) memakai
+  // tabel yang sama tanpa cabang terpisah.
+  const hidePrices = Boolean(options.hidePrices)
+  const hasUnit = items.some((item) => Boolean(item.unit))
+  const hasNote = hidePrices && items.some((item) => Boolean(item.note))
+
+  const columns: { key: string; header: string; width: number | "auto"; halign?: "center" | "right" }[] = [
+    { key: "no", header: "No", width: 10, halign: "center" },
+    { key: "description", header: "Deskripsi / Nama Barang", width: "auto" },
+    ...(hasUnit ? [{ key: "unit", header: "Satuan", width: 18, halign: "center" as const }] : []),
+    { key: "qty", header: "Kuantitas", width: 15, halign: "center" },
+    ...(hidePrices
+      ? hasNote
+        ? [{ key: "note", header: "Keterangan", width: 52 }]
+        : []
+      : [
+          { key: "price", header: "Harga", width: 30, halign: "right" as const },
+          { key: "discount", header: "Potongan", width: 20, halign: "center" as const },
+          { key: "total", header: "Total", width: 32, halign: "right" as const },
+        ]),
+  ]
+
+  const cellValue = (key: string, item: DocumentItem): string | number => {
+    switch (key) {
+      case "no":
+        return item.no
+      case "description":
+        return item.description
+      case "unit":
+        return item.unit ?? "-"
+      case "qty":
+        return item.qty
+      case "note":
+        return item.note ?? ""
+      case "price":
+        return formatCurrency(item.price)
+      case "discount":
+        if (!item.discount) return "-"
+        // Dokumen yang menyimpan persen (tagihan vendor) memakai akhiran "%";
+        // sisanya nominal rupiah — mencetak nominal dengan "%" memberi angka
+        // yang salah arti di dokumen pelanggan.
+        return item.discountIsPercent ? `${item.discount}%` : formatCurrency(item.discount)
+      default:
+        return formatCurrency(item.total)
+    }
+  }
+
+  const tableBody = items.map((item) => columns.map((column) => cellValue(column.key, item)))
+
+  const columnStyles: Record<number, { cellWidth: number | "auto"; halign?: "center" | "right" }> = {}
+  columns.forEach((column, index) => {
+    columnStyles[index] = column.halign
+      ? { cellWidth: column.width, halign: column.halign }
+      : { cellWidth: column.width }
+  })
 
   autoTable(doc, {
     startY: y,
-    head: [["No", "Deskripsi / Nama Barang", "Qty", "Harga", "Potongan", "Total"]],
+    head: [columns.map((column) => column.header)],
     body: tableBody,
-    theme: "striped",
+    theme: "plain",
     headStyles: {
-      fillColor: [2, 132, 199], // primaryColor sky blue
-      textColor: [255, 255, 255],
+      fillColor: undefined,
+      textColor: [17, 24, 39],
       fontSize: 9,
       fontStyle: "bold",
+      lineWidth: { bottom: 0.4, top: 0, left: 0, right: 0 },
+      lineColor: [17, 24, 39],
     },
     bodyStyles: {
       fontSize: 8.5,
       textColor: [31, 41, 55],
+      lineWidth: 0,
     },
-    columnStyles: {
-      0: { cellWidth: 10, halign: "center" },
-      1: { cellWidth: "auto" },
-      2: { cellWidth: 15, halign: "center" },
-      3: { cellWidth: 30, halign: "right" },
-      4: { cellWidth: 20, halign: "center" },
-      5: { cellWidth: 35, halign: "right" },
-    },
+    columnStyles,
     margin: { left: ml, right: ml },
   })
 
@@ -220,63 +307,119 @@ export function generateTransactionPDF(
     doc.text(noteLines, ml, y + 4)
   }
 
-  // Summary list on the right
-  doc.text("Subtotal", summaryStartX, y)
-  doc.setFont("Helvetica", "bold")
-  doc.setTextColor(darkGray)
-  doc.text(formatCurrency(summary.subtotal), 210 - ml, y, { align: "right" })
+  // Summary list on the right — dilewati pada dokumen tanpa harga (surat jalan),
+  // yang hanya butuh kolom Catatan.
+  if (!hidePrices) {
+    doc.text("Subtotal", summaryStartX, y)
+    doc.setFont("Helvetica", "bold")
+    doc.setTextColor(darkGray)
+    doc.text(formatCurrency(summary.subtotal), 210 - ml, y, { align: "right" })
+  }
 
   let currentY = y + rowH
-  if (summary.discount && summary.discount > 0) {
-    doc.setFont("Helvetica", "normal")
-    doc.setTextColor(midGray)
-    doc.text("Potongan / Diskon", summaryStartX, currentY)
+  if (!hidePrices) {
+    if (summary.discount && summary.discount > 0) {
+      doc.setFont("Helvetica", "normal")
+      doc.setTextColor(midGray)
+      doc.text("Potongan / Diskon", summaryStartX, currentY)
+      doc.setFont("Helvetica", "bold")
+      doc.setTextColor(darkGray)
+      doc.text(`-${formatCurrency(summary.discount)}`, 210 - ml, currentY, { align: "right" })
+      currentY += rowH
+    }
+
+    if (summary.tax && summary.tax > 0) {
+      doc.setFont("Helvetica", "normal")
+      doc.setTextColor(midGray)
+      doc.text("Pajak (PPN)", summaryStartX, currentY)
+      doc.setFont("Helvetica", "bold")
+      doc.setTextColor(darkGray)
+      doc.text(formatCurrency(summary.tax), 210 - ml, currentY, { align: "right" })
+      currentY += rowH
+    }
+
+    // Total Line
+    currentY += 2 // add space before the line
+    doc.setDrawColor(226, 232, 240)
+    doc.line(summaryStartX, currentY, 210 - ml, currentY)
+
+    currentY += 6 // add space after the line
     doc.setFont("Helvetica", "bold")
+    doc.setFontSize(11)
+    doc.setTextColor(primaryColor)
+    doc.text("Total", summaryStartX, currentY)
+    doc.text(formatCurrency(summary.total), 210 - ml, currentY, { align: "right" })
+
+    // 5b. Terbilang — pengaman salah baca nominal, kelaziman dokumen Indonesia.
+    currentY += 7
+    doc.setFont("Helvetica", "italic")
+    doc.setFontSize(9)
     doc.setTextColor(darkGray)
-    doc.text(`-${formatCurrency(summary.discount)}`, 210 - ml, currentY, { align: "right" })
-    currentY += rowH
+    const terbilangLines = doc.splitTextToSize(`Terbilang: ${terbilangLabel(summary.total)}`, 210 - ml * 2)
+    doc.text(terbilangLines, ml, currentY)
+    currentY += (terbilangLines.length - 1) * 4
+  } else {
+    currentY = Math.max(currentY, y)
   }
 
-  if (summary.tax && summary.tax > 0) {
-    doc.setFont("Helvetica", "normal")
-    doc.setTextColor(midGray)
-    doc.text("Pajak (PPN)", summaryStartX, currentY)
-    doc.setFont("Helvetica", "bold")
-    doc.setTextColor(darkGray)
-    doc.text(formatCurrency(summary.tax), 210 - ml, currentY, { align: "right" })
-    currentY += rowH
-  }
-
-  // Total Line
-  currentY += 2 // add space before the line
-  doc.setDrawColor(226, 232, 240)
-  doc.line(summaryStartX, currentY, 210 - ml, currentY)
-
-  currentY += 6 // add space after the line
-  doc.setFont("Helvetica", "bold")
-  doc.setFontSize(11)
-  doc.setTextColor(primaryColor)
-  doc.text("Total", summaryStartX, currentY)
-  doc.text(formatCurrency(summary.total), 210 - ml, currentY, { align: "right" })
-
-  // 6. Signatures (Bottom)
+  // 6. Signatures (Bottom) — surat jalan memakai "Penerima/Pengirim".
   y = Math.max(currentY + 25, 245) // ensure it's towards the bottom
 
   doc.setFont("Helvetica", "normal")
   doc.setFontSize(9)
   doc.setTextColor(midGray)
 
+  const signatureRight = options.signatureRight ?? "Hormat Kami,"
+
   // Customer signature
   doc.text("Penerima,", ml + 10, y)
   doc.line(ml, y + 20, ml + 45, y + 20)
 
   // Company signature
-  doc.text("Hormat Kami,", 155, y)
+  doc.text(signatureRight, 155, y)
   doc.line(145, y + 20, 190, y + 20)
 
-  // Output to new tab window
-  const pdfData = doc.output("bloburl")
-  window.open(pdfData, "_blank")
+  // 8. Footer setiap halaman: waktu cetak + nomor halaman.
+  const pageCount = doc.getNumberOfPages()
+  for (let page = 1; page <= pageCount; page += 1) {
+    doc.setPage(page)
+    doc.setFont("Helvetica", "normal")
+    doc.setFontSize(7.5)
+    doc.setTextColor(midGray)
+    doc.setDrawColor(226, 232, 240)
+    doc.setLineWidth(0.2)
+    doc.line(ml, 282, 210 - ml, 282)
+    doc.text(`Dicetak: ${new Date().toLocaleString("id-ID")}`, ml, 286)
+    doc.text(`Halaman ${page} dari ${pageCount}`, 210 - ml, 286, { align: "right" })
+  }
+
+  return doc
+}
+
+/**
+ * Menggambar dokumen lalu membukanya di tab baru (dipakai tombol Cetak).
+ * Logo diambil lebih dulu dan diubah menjadi data URL — jsPDF hanya bisa
+ * menanamkan gambar secara sinkron, sedangkan logo tersimpan sebagai path/URL.
+ */
+export async function generateTransactionPDF(
+  company: CompanyInfo,
+  docInfo: DocumentInfo,
+  items: DocumentItem[],
+  summary: DocumentSummary,
+  options: TransactionPdfOptions = {}
+) {
+  const logo = company.logo ? await loadImageData(company.logo) : null
+  const doc = buildTransactionPdf(
+    { ...company, logo: logo?.dataUrl ?? null },
+    docInfo,
+    items,
+    summary,
+    {
+      ...options,
+      logoSize: logo ? { width: logo.width, height: logo.height } : undefined,
+    },
+  )
+  window.open(doc.output("bloburl"), "_blank")
 }
 
 // Exported for unit testing — pure formatting/parsing helpers with branch logic.
@@ -357,13 +500,14 @@ export async function generateQuotationPDF(
       }
       doc.addImage(logo.dataUrl, imgFormat(logo.dataUrl), ml, 8, w, h)
       
-      // Print company address below logo
+      // Print company address below logo (bisa beberapa baris: jalan + wilayah)
       if (company.address) {
         doc.setFont("Helvetica", "normal")
         doc.setFontSize(7.5)
         doc.setTextColor("#4b5563")
-        doc.text(company.address, ml, 8 + h + 3.2)
-        metaTop = 8 + h + 7.5
+        const addrLines = doc.splitTextToSize(company.address, pageW - ml * 2)
+        doc.text(addrLines, ml, 8 + h + 3.2)
+        metaTop = 8 + h + 3.2 + addrLines.length * 3.2 + 0.8
       } else {
         metaTop = 8 + h + 4
       }
@@ -490,7 +634,7 @@ export async function generateQuotationPDF(
     margin: { left: ml, right: ml },
     tableWidth: 182,
     theme: "grid",
-    head: [["NO", "NAMA BARANG/JASA", "QTY", "UNIT", "HARGA", "SUB TOTAL"]],
+    head: [["NO", "NAMA BARANG/JASA", "KUANTITAS", "SATUAN", "HARGA", "SUBTOTAL"]],
     body: tableBody,
     styles: { 
       font: "Helvetica", 

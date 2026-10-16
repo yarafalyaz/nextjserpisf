@@ -58,6 +58,7 @@ export const itemSchema = z.object({
   description: optionalString(500),
   sku: optionalString(50),
   categoryId: optionalNumber(),
+  groupId: optionalNumber(),
   brandId: optionalNumber(),
   vendorId: optionalNumber(),
   defaultWarehouseId: optionalNumber(),
@@ -78,7 +79,7 @@ export const itemSchema = z.object({
 })
 
 // Server-action variants of the master data schemas. They mirror the form
-// schemas in @/lib/validators/index.ts but add z.coerce.number() for the
+// schemas in @/lib/validations/form.schemas.ts but add z.coerce.number() for the
 // numeric fields, because FormData entries arrive as strings and the shared
 // form schemas assume react-hook-form has already coerced the values. Using
 // these in the server actions closes the Zod validation bypass (e.g. an
@@ -116,3 +117,47 @@ export type VendorInput = z.infer<typeof vendorSchema>
 export type ItemInput = z.infer<typeof itemSchema>
 export type WarehouseServerInput = z.infer<typeof warehouseServerSchema>
 export type AccountServerInput = z.infer<typeof accountServerSchema>
+
+// ==================== KARYAWAN (form) ====================
+export const employeeSchema = z.object({
+  employeeNo: z.string().optional(),
+  name: z.string().min(1, "Nama wajib diisi"),
+  email: z.string().email("Email tidak valid").optional().or(z.literal("")),
+  phone: z.string().optional(),
+  gender: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  maritalStatus: z.string().optional(),
+  departmentId: z.number().optional(),
+  positionId: z.number().optional(),
+  joinDate: z.string().min(1, "Tanggal masuk wajib diisi"),
+  paymentFrequency: z.string().default("MONTHLY"),
+  baseSalary: z.number().min(0).default(0).or(z.string().transform((val) => Number(val.replace(/\D/g, '')) || 0)),
+  idNumber: z.string().optional(),
+  npwp: z.string().optional(),
+  bankName: z.string().optional(),
+  bankAccountNumber: z.string().optional(),
+  bankAccountHolder: z.string().optional(),
+  bpjsKetenagakerjaan: z.string().optional(),
+  bpjsKesehatan: z.string().optional(),
+  street: z.string().optional(),
+  province: z.string().optional(),
+  city: z.string().optional(),
+  district: z.string().optional(),
+  village: z.string().optional(),
+  postalCode: z.string().optional(),
+  // Optional login account — when enabled, the employee gets a User account
+  // (email + password + roles) so they can sign in (e.g. for self-attendance).
+  createLoginAccount: z.boolean().optional(),
+  loginPassword: z.string().optional(),
+}).superRefine((data, ctx) => {
+  if (data.createLoginAccount) {
+    if (!data.email || data.email.trim() === "") {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["email"], message: "Email wajib diisi untuk akun login" })
+    }
+    if (!data.loginPassword || data.loginPassword.length < 8) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["loginPassword"], message: "Kata sandi minimal 8 karakter" })
+    }
+  }
+})
+
+export type EmployeeInput = z.infer<typeof employeeSchema>

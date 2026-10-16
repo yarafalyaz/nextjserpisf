@@ -511,6 +511,28 @@ export async function deleteVehicle(id: number) {
 
 // ==================== CUSTOMER VEHICLE ACTIONS ====================
 
+/**
+ * Opsi varian kendaraan untuk dialog quick-add ("Toyota Avanza 1.3 G"). Dipakai saat
+ * menambah kendaraan pelanggan langsung dari form Penawaran/Proyek tanpa pindah halaman.
+ */
+export async function listVehicleVariantOptions(): Promise<{ value: string; label: string }[]> {
+  await requirePermission("view_vehicles");
+  const variants = await prisma.vehicleVariant.findMany({
+    select: {
+      id: true,
+      name: true,
+      model: { select: { name: true, brand: { select: { name: true } } } },
+    },
+    orderBy: { name: "asc" },
+  });
+  return variants.map((variant) => ({
+    value: String(variant.id),
+    label: [variant.model?.brand?.name, variant.model?.name, variant.name]
+      .filter(Boolean)
+      .join(" "),
+  }));
+}
+
 export async function createCustomerVehicle(formData: FormData) {
   try {
     await requirePermission("create_customers");
@@ -563,6 +585,10 @@ export async function createCustomerVehicle(formData: FormData) {
         data: {
           customerId,
           vehicleId,
+          // Pelat nomor paling terbaca di URL; unit tanpa pelat memakai fallback.
+          slug: await nextSlug("customerVehicle", plateNumber, {
+            fallback: `kendaraan-${customerId}-${vehicleId}`,
+          }),
           plateNumber: plateNumber ?? null,
           color: color ?? null,
           chassisNumber: chassisNumber ?? null,

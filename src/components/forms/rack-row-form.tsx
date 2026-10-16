@@ -164,6 +164,9 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
                 name="code"
                 readOnly={enableAutoCode}
                 value={enableAutoCode ? autoCode : undefined}
+                // Mode manual tidak punya nilai terkendali, jadi tanpa defaultValue
+                // halaman Ubah menampilkan kode kosong dan menyimpan menghapusnya.
+                defaultValue={enableAutoCode ? undefined : rackRow?.code ?? ""}
                 onChange={() => {}}
                 className={enableAutoCode ? "bg-muted font-mono" : undefined}
                 placeholder={enableAutoCode ? "Pilih rak dulu..." : "Masukkan kode manual"}

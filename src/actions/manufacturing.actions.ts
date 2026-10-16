@@ -1081,13 +1081,13 @@ export async function startWorkOrder(workOrderId: number) {
 
     if (wo.status !== "pending" && wo.status !== "draft") {
       throw new Error(
-        `Work Order tidak bisa dimulai dari status '${wo.status}'. Status harus pending/draft.`,
+        `Perintah Kerja tidak bisa dimulai dari status '${wo.status}'. Status harus pending/draft.`,
       );
     }
 
     if (wo.items.length === 0) {
       throw new Error(
-        "Work Order tidak bisa dimulai tanpa item. Tambahkan item terlebih dahulu.",
+        "Perintah Kerja tidak bisa dimulai tanpa item. Tambahkan item terlebih dahulu.",
       );
     }
 
@@ -1163,7 +1163,7 @@ export async function completeWorkOrder(workOrderId: number) {
       );
     }
     if (wo.items.length === 0) {
-      throw new Error("Work Order tidak bisa diselesaikan tanpa item.");
+      throw new Error("Perintah Kerja tidak bisa diselesaikan tanpa item.");
     }
 
     // Guard: check if MaterialIssue exists and is completed for this WO
@@ -1212,7 +1212,7 @@ export async function completeWorkOrder(workOrderId: number) {
         },
       });
       if (claim.count === 0) {
-        throw new Error("Work Order sudah diselesaikan atau sedang diproses.");
+        throw new Error("Perintah Kerja sudah diselesaikan atau sedang diproses.");
       }
 
       // Update all WO items to completed
@@ -1356,6 +1356,11 @@ export async function createMaterialIssueFromWorkOrder(
 ) {
   try {
     const user = await requirePermission("create_material_issues");
+
+    // Scope gudang: MI hanya boleh dibuat untuk gudang yang boleh diakses user. Jalur
+    // ini tidak lewat `issueMaterial` (yang sudah ter-scope), jadi tanpa cek di sini
+    // draft MI bisa menunjuk gudang di luar wewenang pembuatnya.
+    assertWarehouseAccess(await getWarehouseScope(user), warehouseId);
 
     const wo = await prisma.workOrder.findUniqueOrThrow({
       where: { id: workOrderId },
@@ -1569,7 +1574,7 @@ export async function deleteProductionOrder(id: number) {
     });
     if (po.status !== "draft" && po.status !== "pending") {
       throw new Error(
-        `Tidak bisa menghapus Production Order dengan status '${po.status}'. Hanya status 'draft' atau 'pending' yang bisa dihapus.`,
+        `Tidak bisa menghapus Perintah Produksi dengan status '${po.status}'. Hanya status 'draft' atau 'pending' yang bisa dihapus.`,
       );
     }
 
@@ -1607,7 +1612,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
     if (po.status !== "draft" && po.status !== "pending") {
       return {
         success: false,
-        error: `Tidak bisa memperbarui Production Order dengan status '${po.status}'. Hanya status 'draft' atau 'pending' yang bisa diubah.`,
+        error: `Tidak bisa memperbarui Perintah Produksi dengan status '${po.status}'. Hanya status 'draft' atau 'pending' yang bisa diubah.`,
       };
     }
 
@@ -1640,7 +1645,7 @@ export async function updateProductionOrder(id: number, formData: FormData) {
       });
       if (current.status !== "draft" && current.status !== "pending") {
         throw new Error(
-          `Tidak bisa memperbarui Production Order dengan status '${current.status}'. Hanya status 'draft' atau 'pending' yang bisa diubah.`,
+          `Tidak bisa memperbarui Perintah Produksi dengan status '${current.status}'. Hanya status 'draft' atau 'pending' yang bisa diubah.`,
         );
       }
 

@@ -34,6 +34,7 @@ interface ItemFormProps {
     description: string | null
     image: string | null
     categoryId: number | null
+    groupId?: number | null
     brandId: number | null
     vendorId: number | null
     defaultWarehouseId: number | null
@@ -53,6 +54,7 @@ interface ItemFormProps {
     uomConversions?: { code: string; factorToBase: number | string }[]
   }
   categories: { id: number; name: string }[]
+  groups: { id: number; name: string }[]
   brands: { id: number; name: string }[]
   vendors: { id: number; name: string }[]
   warehouses: { id: number; name: string }[]
@@ -65,7 +67,7 @@ interface ItemFormProps {
   baseUrl?: string
 }
 
-export function ItemForm({ item, categories, brands, vendors, warehouses, racks, rackRows, unitOptions = [], generatedCode, enableAutoCode = true, baseUrl = "" }: ItemFormProps) {
+export function ItemForm({ item, categories, groups, brands, vendors, warehouses, racks, rackRows, unitOptions = [], generatedCode, enableAutoCode = true, baseUrl = "" }: ItemFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [uploading, setUploading] = useState(false)
@@ -109,6 +111,7 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
       description: item?.description || "",
       image: item?.image || "",
       categoryId: item?.categoryId || undefined,
+      groupId: item?.groupId || undefined,
       brandId: item?.brandId || undefined,
       vendorId: item?.vendorId || undefined,
       defaultWarehouseId: item?.defaultWarehouseId || undefined,
@@ -334,6 +337,25 @@ export function ItemForm({ item, categories, brands, vendors, warehouses, racks,
                     }}
                   />
                   {errors.categoryId && <span className="text-xs text-danger mt-1">{errors.categoryId.message}</span>}
+                </>
+              )}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Controller
+              name="groupId"
+              control={control}
+              render={({ field }) => (
+                <>
+                  <Label htmlFor="groupId">Grup Barang</Label>
+                  <Combobox
+                    id="groupId"
+                    options={groups.map((g) => ({ value: String(g.id), label: g.name }))}
+                    value={field.value ? String(field.value) : null}
+                    onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                    placeholder="Pilih grup (opsional)..."
+                  />
+                  {errors.groupId && <span className="text-xs text-danger mt-1">{errors.groupId.message}</span>}
                 </>
               )}
             />

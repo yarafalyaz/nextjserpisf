@@ -82,7 +82,11 @@ export async function updateProject(projectId: number, formData: FormData) {
       description: data.description ?? null,
       customerId: data.customerId,
       customerVehicleId: data.customerVehicleId ?? null,
-      workOrderId: data.workOrderId ?? null,
+      // workOrderId tidak punya input di form proyek (ia tautan sistem dari alur
+      // perintah kerja), jadi menulis `?? null` menghapus tautan itu setiap kali
+      // proyek disimpan — dan sinkronisasi status WO bergantung pada kolom ini.
+      // Hanya tulis bila payload memang memuatnya.
+      ...(data.workOrderId !== undefined ? { workOrderId: data.workOrderId } : {}),
       // Cost center must be written here too: the edit form renders the
       // "Pusat Biaya" select (project-form.tsx) and the create path already
       // persists it. Omitting it made the change silently no-op while the UI

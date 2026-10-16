@@ -4,13 +4,13 @@ import { useRouter } from "next/navigation"
 import { useTransition, useState, type FormEvent } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { customerSchema, type CustomerInput } from "@/lib/validators"
+import { customerSchema, type CustomerInput } from "@/lib/validations/form.schemas"
 import { createCustomer, updateCustomer } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/shadcn/radio-group"
+import { GENDER_CHOICES, OptionGroup } from "@/components/ui/option-group"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
 import { Button } from "@/components/ui/button"
@@ -146,25 +146,20 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
               <Input id="taxId" {...register("taxId")} placeholder="Nomor Pokok Wajib Pajak" />
               {errors.taxId && <span className="text-xs text-danger mt-1">{errors.taxId.message}</span>}
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Controller
-                name="gender"
-                control={control}
-                render={({ field }) => (
-                  <>
-                    <Label>Jenis Kelamin</Label>
-                    <RadioGroup value={field.value ? String(field.value) : ""} onValueChange={field.onChange} className="flex flex-wrap gap-x-6 gap-y-2 pt-1.5">
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <RadioGroupItem value="male" /> Laki-laki
-                      </label>
-                      <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <RadioGroupItem value="female" /> Perempuan
-                      </label>
-                    </RadioGroup>
-                  </>
-                )}
-              />
-            </div>
+            <Controller
+              name="gender"
+              control={control}
+              render={({ field }) => (
+                <OptionGroup
+                  id="gender"
+                  label="Jenis Kelamin"
+                  value={field.value ? String(field.value) : ""}
+                  onChange={field.onChange}
+                  options={GENDER_CHOICES}
+                  optional
+                />
+              )}
+            />
           </FormSection>
           <FormSection title="Alamat" columns={1}>
             <div className="flex flex-col gap-1.5">

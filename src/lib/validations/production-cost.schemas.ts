@@ -30,7 +30,6 @@ export const OVERHEAD_DRIVERS = [
   "machine_hours",
   "labor_hours",
   "quantity",
-  "skf",
 ] as const
 
 export type OverheadDriver = (typeof OVERHEAD_DRIVERS)[number]
@@ -39,7 +38,6 @@ export const OVERHEAD_DRIVER_LABELS: Record<OverheadDriver, string> = {
   machine_hours: "Jam Mesin",
   labor_hours: "Jam Tenaga Kerja",
   quantity: "Kuantitas",
-  skf: "Nilai SKF",
 }
 
 export const applyOverheadSchema = z.object({

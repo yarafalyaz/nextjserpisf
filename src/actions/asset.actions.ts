@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { safeAdd, safeSubtract } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
 import { revalidatePath } from "next/cache";
@@ -91,6 +92,8 @@ export async function createAssetCategory(formData: FormData) {
         code: data.code ?? null,
         depreciationRate: data.depreciationRate ?? null,
         usefulLife: data.usefulLife ?? null,
+        taxDepreciationRate: data.taxDepreciationRate ?? null,
+        taxUsefulLife: data.taxUsefulLife ?? null,
         assetAccountId: data.assetAccountId ?? null,
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
@@ -383,6 +386,8 @@ export async function updateAssetCategory(id: number, formData: FormData) {
         code: data.code ?? null,
         depreciationRate: data.depreciationRate ?? null,
         usefulLife: data.usefulLife ?? null,
+        taxDepreciationRate: data.taxDepreciationRate ?? null,
+        taxUsefulLife: data.taxUsefulLife ?? null,
         assetAccountId: data.assetAccountId ?? null,
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
@@ -561,6 +566,9 @@ export async function createAsset(formData: FormData) {
       // Depreciation) have an offsetting gross asset balance on the balance sheet,
       // and lets disposal reverse a complete, balanced asset lifecycle.
       if (purchaseCost > 0 && gl.fixedAsset && gl.cashBank) {
+        // Periode akuntansi harus masih terbuka: perolehan aset memposting jurnal GL
+        // bertanggal `acquisitionDate`, jadi tidak boleh masuk periode yang sudah ditutup.
+        await assertPeriodOpen(acquisitionDate, tx);
         const journalNumber = await nextAssetJournalNumber(tx, acquisitionDate);
         const amount = new Prisma.Decimal(purchaseCost.toFixed(2));
         await tx.journal.create({
@@ -810,6 +818,9 @@ export async function disposeAsset(formData: FormData) {
         const totalDebit = built.reduce((s, e) => safeAdd(s, e.debit, 0), 0);
         const totalCredit = built.reduce((s, e) => safeAdd(s, e.credit, 0), 0);
 
+        // Pelepasan juga memposting jurnal GL bertanggal `disposalDate` — tolak bila
+        // periodenya sudah ditutup (perilaku sama dengan perolehan di atas).
+        await assertPeriodOpen(disposalDate, tx);
         const journalNumber = await nextAssetJournalNumber(tx, disposalDate);
         await tx.journal.create({
           data: {

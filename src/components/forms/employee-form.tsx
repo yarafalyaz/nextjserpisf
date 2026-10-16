@@ -5,14 +5,14 @@ import { useRouter } from "next/navigation"
 import { useTransition, useState, type FormEvent } from "react"
 import { useForm, Controller, type Resolver } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { employeeSchema, type EmployeeInput } from "@/lib/validators"
+import { employeeSchema, type EmployeeInput } from "@/lib/validations/form.schemas"
 import { createEmployee, updateEmployee } from "@/actions/master.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/shadcn/radio-group"
+import { GENDER_CHOICES, OptionGroup } from "@/components/ui/option-group"
 import { AddressPicker } from "@/components/ui/address-picker"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { FormCard, FormSection, FormActions } from "@/components/ui/form-section"
@@ -20,6 +20,22 @@ import { Button } from "@/components/ui/button"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+
+/**
+ * Nilai `maritalStatus` sengaja tetap "Single"/"Married"/"Divorced": payroll
+ * (`ptkpFor` di services/payroll-statutory.service.ts) mencocokkan token bahasa
+ * Inggris itu untuk menentukan PTKP. Yang diterjemahkan hanya tampilannya.
+ */
+const MARITAL_CHOICES = [
+  { value: "Single", label: "Belum Menikah" },
+  { value: "Married", label: "Menikah" },
+  { value: "Divorced", label: "Cerai" },
+]
+
+const PAYMENT_FREQUENCY_CHOICES = [
+  { value: "MONTHLY", label: "Bulanan" },
+  { value: "WEEKLY", label: "Mingguan" },
+]
 
 interface EmployeeFormProps {
   employee?: {
@@ -167,25 +183,20 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
             <Label htmlFor="phone">Telepon</Label>
             <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Controller
-              name="gender"
-              control={control}
-              render={({ field }) => (
-                <>
-                  <Label>Jenis Kelamin</Label>
-                  <RadioGroup value={field.value || ""} onValueChange={field.onChange} className="flex flex-wrap gap-x-6 gap-y-2 pt-1.5">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <RadioGroupItem value="M" /> Laki-laki
-                    </label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <RadioGroupItem value="F" /> Perempuan
-                    </label>
-                  </RadioGroup>
-                </>
-              )}
-            />
-          </div>
+          <Controller
+            name="gender"
+            control={control}
+            render={({ field }) => (
+              <OptionGroup
+                id="gender"
+                label="Jenis Kelamin"
+                value={field.value || ""}
+                onChange={field.onChange}
+                options={GENDER_CHOICES}
+                optional
+              />
+            )}
+          />
           <div className="flex flex-col gap-1.5">
             <AppDatePicker
               label="Tanggal Lahir"
@@ -194,28 +205,20 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
               onChange={(val) => setValue("dateOfBirth", val)}
             />
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Controller
-              name="maritalStatus"
-              control={control}
-              render={({ field }) => (
-                <>
-                  <Label>Status Pernikahan</Label>
-                  <RadioGroup value={field.value || ""} onValueChange={field.onChange} className="flex flex-wrap gap-x-6 gap-y-2 pt-1.5">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <RadioGroupItem value="Single" /> Belum Menikah
-                    </label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <RadioGroupItem value="Married" /> Menikah
-                    </label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <RadioGroupItem value="Divorced" /> Cerai
-                    </label>
-                  </RadioGroup>
-                </>
-              )}
-            />
-          </div>
+          <Controller
+            name="maritalStatus"
+            control={control}
+            render={({ field }) => (
+              <OptionGroup
+                id="maritalStatus"
+                label="Status Pernikahan"
+                value={field.value || ""}
+                onChange={field.onChange}
+                options={MARITAL_CHOICES}
+                optional
+              />
+            )}
+          />
         </FormSection>
 
         <FormSection title="Informasi Pekerjaan & Gaji">
@@ -277,25 +280,19 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
             />
             {errors.joinDate && <span className="text-xs text-danger mt-1">{errors.joinDate.message}</span>}
           </div>
-          <div className="flex flex-col gap-1.5">
-            <Controller
-              name="paymentFrequency"
-              control={control}
-              render={({ field }) => (
-                <>
-                  <Label>Tipe Pembayaran</Label>
-                  <RadioGroup value={field.value || "MONTHLY"} onValueChange={field.onChange} className="flex flex-wrap gap-x-6 gap-y-2 pt-1.5">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <RadioGroupItem value="MONTHLY" /> Bulanan
-                    </label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                      <RadioGroupItem value="WEEKLY" /> Mingguan
-                    </label>
-                  </RadioGroup>
-                </>
-              )}
-            />
-          </div>
+          <Controller
+            name="paymentFrequency"
+            control={control}
+            render={({ field }) => (
+              <OptionGroup
+                id="paymentFrequency"
+                label="Tipe Pembayaran"
+                value={field.value || "MONTHLY"}
+                onChange={field.onChange}
+                options={PAYMENT_FREQUENCY_CHOICES}
+              />
+            )}
+          />
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="baseSalary">Gaji Pokok ({paymentFrequency === "WEEKLY" ? "Per Minggu" : "Per Bulan"})</Label>
             <Controller name="baseSalary" control={control} render={({ field }) => <CurrencyInput id="baseSalary" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" prefix="Rp" />} />

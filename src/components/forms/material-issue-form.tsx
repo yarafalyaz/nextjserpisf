@@ -90,7 +90,7 @@ export function MaterialIssueForm({
       try {
         const formData = new FormData();
         formData.append("warehouseId", warehouseId);
-        formData.append("date", toLocalDateOnly(new Date()));
+        formData.append("date", issue?.date ?? toLocalDateOnly(new Date()));
         formData.append("items", JSON.stringify(miItems));
         const result = issue?.id
           ? await updateMaterialIssue(issue.id, formData)

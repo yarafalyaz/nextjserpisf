@@ -23,6 +23,8 @@ import { logActivity } from "@/lib/services/activity-log.service"
  * how many rows") is permanent.
  */
 export async function clearActivityLog() {
+  // Izin `manage_settings`, sama dengan proxy + halaman /pengaturan/log-aktivitas
+  // (super_admin bypass).
   await requirePermission("manage_settings")
 
   const count = await prisma.activityLog.count()

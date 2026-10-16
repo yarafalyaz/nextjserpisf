@@ -15,6 +15,12 @@ import {
 
 export type BackupResult = { success: boolean; message: string }
 
+/**
+ * Semua action di file ini dijaga izin `manage_settings` — SAMA dengan aturan di
+ * `proxy.ts` + halaman `/pengaturan/database` (super_admin bypass), sehingga delegasi
+ * ke role lain tetap satu aturan dan tidak ada lagi ketidakcocokan label vs penegakan.
+ */
+
 /** Sanitize filename to prevent path traversal */
 function sanitizeFilename(filename: string): string {
   // Strip any directory components — only allow base filename

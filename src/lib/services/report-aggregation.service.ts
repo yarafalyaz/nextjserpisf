@@ -23,6 +23,12 @@ export type ReportEntryFilter = {
   costCenterIds?: number[]
   /** Applied to journal.transactionDate. */
   date?: { gte?: Date; lte?: Date; lt?: Date }
+  /**
+   * Status jurnal yang dihitung. Bawaannya `REPORT_JOURNAL_STATUSES` (POSTED +
+   * REVERSED). Laporan Terealisasi/Tidak Terealisasi menggantinya (DRAFT) supaya
+   * "belum dibukukan" benar-benar berarti jurnal yang belum diposting.
+   */
+  statuses?: readonly string[]
 }
 
 export type AccountSums = { debit: number; credit: number }
@@ -33,7 +39,7 @@ function buildWhere(filter: ReportEntryFilter): Prisma.JournalEntryWhereInput {
     ...(filter.accountIds?.length ? { accountId: { in: filter.accountIds } } : {}),
     ...(filter.costCenterIds?.length ? { costCenterId: { in: filter.costCenterIds } } : {}),
     journal: {
-      status: { in: [...REPORT_JOURNAL_STATUSES] },
+      status: { in: [...(filter.statuses ?? REPORT_JOURNAL_STATUSES)] },
       // Defensive: journals are hard-deleted today, but if a soft-delete path is
       // ever added, reports must not silently count deleted GL.
       deletedAt: null,

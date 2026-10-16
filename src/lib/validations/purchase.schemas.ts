@@ -72,6 +72,8 @@ export type GoodsReceiptInput = z.infer<typeof goodsReceiptSchema>
 export const vendorBillSchema = z.object({
   vendorId: z.coerce.number().min(1, "Vendor wajib dipilih"),
   purchaseOrderId: optionalNumber(),
+  withholdingTypeId: optionalNumber(),
+  withholdingAmount: optionalNumber(0),
   date: dateString,
   dueDate: optionalDateString,
   vendorInvoiceNumber: optionalString(100),
@@ -81,6 +83,7 @@ export const vendorBillSchema = z.object({
   tax: z.coerce.number().min(0, "Pajak minimal 0").default(0),
   grandTotal: z.coerce.number().min(0, "Grand total minimal 0").default(0),
   attachmentIds: optionalString(5000), // JSON string
+  items: optionalString(50000), // JSON string, parsed separately
 })
 
 export type VendorBillInput = z.infer<typeof vendorBillSchema>
@@ -100,6 +103,11 @@ export const vendorPaymentSchema = z.object({
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(50),
   accountId: optionalNumber(),
   notes: optionalString(1000),
+  // Keduanya sudah ada kolomnya di DB dan inputnya di form pembayaran vendor.
+  // Tanpa entri di sini, parseFormData membuang nilainya dan yang tersimpan
+  // selalu null — nomor referensi & nomor rekening yang diketik operator hilang.
+  referenceNumber: optionalString(100),
+  bankAccount: optionalString(100),
   attachmentIds: optionalString(5000), // JSON string
 })
 

@@ -1,0 +1,171 @@
+"use server"
+
+import { Prisma } from "@prisma/client"
+import { revalidatePath } from "next/cache"
+
+import { prisma } from "@/lib/db/prisma"
+import { requirePermission } from "@/lib/auth/permissions"
+import { logActivity } from "@/lib/services/activity-log.service"
+import { generateDocumentNumber } from "@/lib/utils/document-number"
+import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
+import { nextSlug } from "@/lib/utils/slug-db"
+
+const REVALIDATE = "/penjualan/tukar-faktur"
+
+/** Faktur yang boleh diserahkan: sudah diposting (bukan draft) dan belum lunas. */
+const EXCHANGEABLE_STATUSES = ["posted", "partial", "paid"] as const
+
+export interface InvoiceExchangeActionResult {
+  success: boolean
+  error?: string
+  id?: number
+}
+
+function parseId(raw: FormDataEntryValue | string | null): number | null {
+  const value = Number(String(raw ?? ""))
+  return Number.isInteger(value) && value > 0 ? value : null
+}
+
+function parseDate(raw: string | null): Date | null {
+  const text = (raw ?? "").trim()
+  if (!text) return null
+  const date = new Date(`${text}T00:00:00`)
+  return Number.isNaN(date.getTime()) ? null : date
+}
+
+/**
+ * Mencatat penyerahan faktur (tukar faktur) untuk satu pelanggan.
+ *
+ * **Tanpa jurnal** — piutang sudah tercatat oleh fakturnya. Yang dijaga di sini:
+ * satu faktur tidak boleh diserahkan dua kali (ditolak bila sudah ada di dokumen
+ * tukar faktur lain), dan hanya faktur milik pelanggan itu yang diterima.
+ */
+export async function createInvoiceExchange(formData: FormData): Promise<InvoiceExchangeActionResult> {
+  try {
+    const user = await requirePermission("create_invoice_exchanges")
+
+    const rawDate = String(formData.get("date") ?? "").trim()
+    const date = parseDate(rawDate)
+    if (!date) return { success: false, error: "Tanggal penyerahan tidak valid." }
+
+    const customerId = parseId(formData.get("customerId"))
+    if (!customerId) return { success: false, error: "Pelanggan wajib dipilih." }
+
+    const dueDateRaw = String(formData.get("dueDate") ?? "").trim()
+    const dueDate = dueDateRaw ? parseDate(dueDateRaw) : null
+    if (dueDateRaw && !dueDate) return { success: false, error: "Tanggal jatuh tempo tidak valid." }
+
+    const receiptNumber = String(formData.get("receiptNumber") ?? "").trim() || null
+    const notes = String(formData.get("notes") ?? "").trim() || null
+
+    const invoiceIds = [...new Set(formData.getAll("invoiceIds").map((value) => parseId(value)).filter((id): id is number => id !== null))]
+    if (invoiceIds.length === 0) {
+      return { success: false, error: "Pilih minimal satu faktur yang diserahkan." }
+    }
+
+    const customer = await prisma.customer.findFirst({ where: { id: customerId, deletedAt: null }, select: { id: true, name: true } })
+    if (!customer) return { success: false, error: "Pelanggan tidak ditemukan." }
+
+    const invoices = await prisma.salesInvoice.findMany({
+      where: { id: { in: invoiceIds }, deletedAt: null },
+      select: { id: true, documentNo: true, customerId: true, grandTotal: true, status: true },
+    })
+
+    if (invoices.length !== invoiceIds.length) {
+      return { success: false, error: "Ada faktur yang tidak ditemukan." }
+    }
+
+    const wrongCustomer = invoices.filter((invoice) => invoice.customerId !== customerId)
+    if (wrongCustomer.length > 0) {
+      return {
+        success: false,
+        error: `Faktur berikut bukan milik pelanggan ini: ${wrongCustomer.map((invoice) => invoice.documentNo).join(", ")}.`,
+      }
+    }
+
+    const notExchangeable = invoices.filter((invoice) => !(EXCHANGEABLE_STATUSES as readonly string[]).includes(invoice.status))
+    if (notExchangeable.length > 0) {
+      return {
+        success: false,
+        error: `Faktur berikut belum diposting sehingga belum bisa diserahkan: ${notExchangeable.map((invoice) => invoice.documentNo).join(", ")}.`,
+      }
+    }
+
+    const alreadyExchanged = await prisma.invoiceExchangeItem.findMany({
+      where: { salesInvoiceId: { in: invoiceIds }, exchange: { deletedAt: null } },
+      select: { salesInvoiceId: true },
+    })
+    if (alreadyExchanged.length > 0) {
+      const ids = new Set(alreadyExchanged.map((item) => item.salesInvoiceId))
+      const numbers = invoices.filter((invoice) => ids.has(invoice.id)).map((invoice) => invoice.documentNo)
+      return { success: false, error: `Faktur berikut sudah pernah diserahkan: ${numbers.join(", ")}.` }
+    }
+
+    const documentNo = await generateDocumentNumber("TKF", "simple")
+
+    const created = await prisma.$transaction(async (tx) => {
+      const exchange = await tx.invoiceExchange.create({
+        data: {
+          slug: await nextSlug("invoiceExchange", documentNo),
+          documentNo,
+          date,
+          customerId,
+          receiptNumber,
+          dueDate,
+          notes,
+          createdBy: Number(user.id),
+        },
+      })
+
+      await tx.invoiceExchangeItem.createMany({
+        data: invoices.map((invoice) => ({
+          exchangeId: exchange.id,
+          salesInvoiceId: invoice.id,
+          amount: new Prisma.Decimal(Number(invoice.grandTotal).toFixed(2)),
+        })),
+      })
+
+      return exchange
+    })
+
+    await logActivity(
+      "create",
+      "InvoiceExchange",
+      created.id,
+      `Tukar faktur ${documentNo} — ${invoices.length} faktur (${customer.name})`,
+    )
+    revalidatePath(REVALIDATE)
+
+    return { success: true, id: created.id }
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error
+    console.error("createInvoiceExchange failed:", error)
+    return { success: false, error: getErrorMessage(error, "Gagal menyimpan tukar faktur.") }
+  }
+}
+
+/**
+ * Menghapus dokumen tukar faktur (soft delete). Tidak ada jurnal yang perlu
+ * dibalik, jadi faktur-fakturnya otomatis bisa diserahkan lagi.
+ */
+export async function deleteInvoiceExchange(id: number): Promise<InvoiceExchangeActionResult> {
+  try {
+    await requirePermission("delete_invoice_exchanges")
+
+    const exchange = await prisma.invoiceExchange.findFirst({
+      where: { id, deletedAt: null },
+      select: { id: true, documentNo: true },
+    })
+    if (!exchange) return { success: false, error: "Tukar faktur tidak ditemukan." }
+
+    await prisma.invoiceExchange.update({ where: { id }, data: { deletedAt: new Date() } })
+    await logActivity("delete", "InvoiceExchange", id, `Menghapus tukar faktur ${exchange.documentNo}`)
+    revalidatePath(REVALIDATE)
+
+    return { success: true, id }
+  } catch (error) {
+    if (isNextRedirectError(error)) throw error
+    console.error("deleteInvoiceExchange failed:", error)
+    return { success: false, error: getErrorMessage(error, "Gagal menghapus tukar faktur.") }
+  }
+}

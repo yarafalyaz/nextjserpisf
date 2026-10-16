@@ -8,6 +8,8 @@ import {
 } from "@/components/ui/shadcn/sheet"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import Link from "next/link"
+import { activityEntityHref } from "@/lib/utils/activity-href"
 
 interface DetailDrawerProps {
   open: boolean
@@ -18,6 +20,10 @@ interface DetailDrawerProps {
     action: string
     modelType: string
     modelId: number | null
+    /** Label manusiawi entitas (nomor dokumen / kode / nama). */
+    refLabel?: string | null
+    /** true bila entitas dilacak tetapi recordnya sudah tidak ada (terhapus). */
+    refMissing?: boolean
     description: string
     createdAt: string
     ipAddress: string
@@ -134,6 +140,12 @@ export function DetailDrawer({
   if (!row) return null
 
   const actionText = actionLabel[row.action] || row.action
+  const entityHref = activityEntityHref(row.modelType, row.modelId)
+  // Utamakan nomor dokumen/kode supaya entri terbaca jelas; id mentah hanya
+  // fallback ketika labelnya tak bisa diresolusi (mis. record sudah dihapus).
+  const entityLabel =
+    (row.refLabel ?? `${row.modelType}${row.modelId ? ` #${row.modelId}` : ""}`) +
+    (row.refMissing ? " (sudah dihapus)" : "")
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
@@ -160,7 +172,15 @@ export function DetailDrawer({
             />
             <DetailField
               label="Model"
-              value={row.modelType + (row.modelId ? ` #${row.modelId}` : "")}
+              value={
+                entityHref ? (
+                  <Link href={entityHref} className="text-primary hover:underline">
+                    {entityLabel}
+                  </Link>
+                ) : (
+                  entityLabel
+                )
+              }
             />
             <DetailField label="Deskripsi" value={row.description} colSpan="full" />
             <DetailField label="Alamat IP" value={row.ipAddress} colSpan="full" />

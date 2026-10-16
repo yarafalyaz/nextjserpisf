@@ -25,6 +25,7 @@ type ModelName =
   | "vendor"
   | "item"
   | "itemCategory"
+  | "itemGroup"
   | "brand"
   | "warehouse"
   | "employee"
@@ -38,9 +39,7 @@ type ModelName =
   | "expense"
   | "expenseCategory"
   | "pettyCash"
-  | "budget"
   | "costCenter"
-  | "statisticalKeyFigure"
   | "leave"
   | "overtime"
   | "holiday"
@@ -89,6 +88,7 @@ const modelPermissionMap: Record<ModelName, string> = {
   vendor: "delete_vendors",
   item: "delete_items",
   itemCategory: "delete_item_categories",
+  itemGroup: "delete_item_groups",
   brand: "delete_brands",
   warehouse: "delete_warehouses",
   employee: "delete_employees",
@@ -102,9 +102,7 @@ const modelPermissionMap: Record<ModelName, string> = {
   expense: "delete_expenses",
   expenseCategory: "manage_expense_categories",
   pettyCash: "delete_petty_cash",
-  budget: "delete_budgets",
   costCenter: "delete_cost_centers",
-  statisticalKeyFigure: "delete_statistical_key_figures",
   leave: "delete_leave_requests",
   overtime: "delete_overtime_requests",
   holiday: "delete_holidays",
@@ -157,6 +155,7 @@ const modelRevalidateMap: Record<ModelName, string | null> = {
   vendor: "/master/vendor",
   item: "/master/barang",
   itemCategory: "/master/kategori-barang",
+  itemGroup: "/master/grup-barang",
   brand: "/master/merek",
   warehouse: "/master/gudang",
   employee: "/master/karyawan",
@@ -169,9 +168,7 @@ const modelRevalidateMap: Record<ModelName, string | null> = {
   expense: "/keuangan/pengeluaran",
   expenseCategory: "/master/kategori-pengeluaran",
   pettyCash: "/keuangan/kas-kecil",
-  budget: "/keuangan/anggaran",
   costCenter: "/keuangan/pusat-biaya",
-  statisticalKeyFigure: "/keuangan/angka-kunci-statistik",
   leave: "/sdm/cuti",
   overtime: "/sdm/lembur",
   loan: "/sdm/pinjaman",
@@ -270,6 +267,9 @@ const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
   // Rack deletion has a reference guard to preserve item and stock locations
   "rack",
   "rackRow",
+  // Item group deletion has a reference guard: items.group_id is ON DELETE SET NULL,
+  // so a raw bulk delete would silently detach every item from its group.
+  "itemGroup",
   // Fixed assets and vehicles — have GL or dependent records guards
   "asset",
   "vehicle",

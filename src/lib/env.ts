@@ -5,9 +5,26 @@ import { z } from "zod"
  * Crashes early at import time if required vars are missing.
  */
 
+/**
+ * Nilai contoh yang beredar di `.env.example` dan `docker-compose.yml`. Kalau
+ * salah satunya terpakai, tanda tangan sesi bisa dihitung siapa pun.
+ */
+const PLACEHOLDER_AUTH_SECRETS = new Set([
+  "your-secret-key-change-in-production",
+  "generate-with-openssl-rand-base64-32",
+])
+
 const serverSchema = z.object({
   DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
-  AUTH_SECRET: z.string().min(1, "AUTH_SECRET is required"),
+  // Sesi Auth.js adalah JWE yang ditandatangani AUTH_SECRET. Secret yang pendek
+  // atau masih berupa nilai contoh berarti siapa pun dapat mencetak token
+  // `super_admin` tanpa kredensial — jadi keduanya ditolak di sini.
+  AUTH_SECRET: z
+    .string()
+    .min(32, "AUTH_SECRET minimal 32 karakter — buat dengan `openssl rand -base64 32`")
+    .refine((value) => !PLACEHOLDER_AUTH_SECRETS.has(value.trim()), {
+      message: "AUTH_SECRET masih memakai nilai contoh — buat dengan `openssl rand -base64 32`",
+    }),
   NEXTAUTH_URL: z.string().url().optional(),
   CRON_SECRET: z.string().optional(),
   STORAGE_DRIVER: z.enum(["local", "r2"]).default("local"),

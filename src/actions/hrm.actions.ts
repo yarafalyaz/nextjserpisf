@@ -521,7 +521,7 @@ async function computePayrollEstimation(
       calculateAttendanceSummary(employeeId, startDate, endDate),
     ]);
 
-  if (!employee) throw new Error("Employee not found");
+  if (!employee) throw new Error("Karyawan tidak ditemukan");
 
   const baseSalary = Number(employee.baseSalary);
   // Loan deduction capped to what each loan actually still owes (remaining), so the

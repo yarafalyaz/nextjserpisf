@@ -21,6 +21,8 @@ export interface AssetCategoryFormValue {
   code?: string | null
   depreciationRate?: number | null
   usefulLife?: number | null
+  taxDepreciationRate?: number | null
+  taxUsefulLife?: number | null
   assetAccountId?: number | null
   accumulatedDepreciationAccountId?: number | null
   depreciationExpenseAccountId?: number | null
@@ -74,6 +76,22 @@ export function AssetCategoryForm({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="usefulLife">Umur Manfaat (tahun)</Label>
             <Input id="usefulLife" name="usefulLife" type="number" min="0" placeholder="0" defaultValue={category?.usefulLife ?? ""} />
+          </div>
+        </FormSection>
+
+        <FormSection title="Penyusutan Fiskal (Pajak)">
+          <p className="text-xs text-muted-foreground">
+            Dipakai laporan Perbedaan Penyusutan untuk membandingkan penyusutan akuntansi dengan
+            penyusutan fiskal. Kosongkan bila kategori ini belum dihitung secara fiskal — asetnya
+            tetap tampil di laporan, tetapi tidak ikut dihitung selisihnya.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="taxDepreciationRate">Tarif Fiskal (%)</Label>
+            <Input id="taxDepreciationRate" name="taxDepreciationRate" type="number" step="0.01" min="0" placeholder="0" defaultValue={category?.taxDepreciationRate ?? ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="taxUsefulLife">Umur Fiskal (tahun)</Label>
+            <Input id="taxUsefulLife" name="taxUsefulLife" type="number" min="0" placeholder="0" defaultValue={category?.taxUsefulLife ?? ""} />
           </div>
         </FormSection>
 

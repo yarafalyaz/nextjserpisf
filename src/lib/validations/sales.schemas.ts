@@ -103,6 +103,13 @@ export const createSalesPaymentSchema = z.object({
   paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(200),
   accountId: optionalId,
+  // PPh yang dipotong pelanggan (opsional) — `amount` di atas tetap berarti kas
+  // yang diterima. Batas "amount + potongan tidak boleh melebihi sisa tagihan"
+  // diperiksa di action, karena hanya di sana sisa tagihannya diketahui.
+  withholdingTypeId: optionalId,
+  withholdingAmount: z.coerce.number().min(0, "Potongan PPh tidak boleh negatif").optional(),
+  withholdingCertificateNo: optionalString(100),
+  withholdingDate: optionalString(50),
   referenceNo: optionalString(100),
   notes: optionalString(500),
   attachmentIds: optionalString(2000),
@@ -114,6 +121,10 @@ export const updateSalesPaymentSchema = z.object({
   paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(200),
   accountId: optionalId,
+  withholdingTypeId: optionalId,
+  withholdingAmount: z.coerce.number().min(0, "Potongan PPh tidak boleh negatif").optional(),
+  withholdingCertificateNo: optionalString(100),
+  withholdingDate: optionalString(50),
   referenceNo: optionalString(100),
   notes: optionalString(500),
   attachmentIds: optionalString(2000),
@@ -170,3 +181,39 @@ export const updateDeliveryOrderSchema = z.object({
   vehicleNumber: optionalString(200),
   notes: optionalString(500),
 });
+
+// ==================== PENAWARAN (form) ====================
+export const quotationItemSchema = z.object({
+  itemId: z.number().nullable().optional(),
+  isCustom: z.boolean().optional().default(false),
+  description: z.string().optional().default(""),
+  qty: z.number().min(0.01, "Qty harus lebih dari 0"),
+  uom: z.string().default("PCS"),
+  unitPrice: z.number().min(0, "Harga tidak boleh negatif"),
+  discountType: z.enum(["fixed", "percent"]).default("fixed"),
+  discount: z.number().min(0).default(0),
+  total: z.number().min(0).default(0),
+})
+
+export const quotationSectionSchema = z.object({
+  name: z.string().default(""),
+  items: z.array(quotationItemSchema).min(1, "Minimal 1 item per section"),
+})
+
+export const quotationSchema = z.object({
+  customerId: z.number().min(1, "Customer wajib dipilih"),
+  customerVehicleId: z.number().optional(),
+  date: z.string().min(1, "Tanggal wajib diisi"),
+  validUntil: z.string().optional(),
+  subtotal: z.number().default(0),
+  discount: z.number().min(0).default(0),
+  tax: z.number().min(0).default(0),
+  grandTotal: z.number().default(0),
+  paymentMethod: z.string().optional(),
+  shippingMethod: z.string().optional(),
+  notes: z.string().optional(),
+  sections: z.array(quotationSectionSchema).min(1, "Minimal 1 section"),
+})
+
+export type QuotationInput = z.infer<typeof quotationSchema>
+export type SalesPaymentInput = z.infer<typeof createSalesPaymentSchema>

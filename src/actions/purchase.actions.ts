@@ -3,6 +3,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
+import { getWarehouseScope, assertWarehouseAccess } from "@/lib/auth/warehouse-scope";
 import {
   safeAdd,
   safeSubtract,
@@ -300,7 +301,7 @@ export async function createPurchaseOrder(formData: FormData) {
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
           workOrderId: v.workOrderId ?? null,
-          isService: v.isService,
+                    isService: v.isService,
           date: new Date(v.date),
           expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,
@@ -650,6 +651,16 @@ export async function createGoodsReceipt(formData: FormData) {
         }[]
       >(v.items ?? null) ?? [];
 
+    // Scope gudang: header DAN setiap baris harus berada di gudang yang boleh diakses
+    // user. Tanpa cek ini, pemegang create_goods_receipts yang hanya ditugaskan ke
+    // gudang A bisa menerima stok ke gudang B (termasuk membuat layer FIFO/batch/serial
+    // di gudang yang bukan wewenangnya).
+    const scope = await getWarehouseScope(user);
+    assertWarehouseAccess(scope, v.warehouseId);
+    for (const item of items) {
+      if (item.warehouseId) assertWarehouseAccess(scope, Number(item.warehouseId));
+    }
+
     const gr = await prisma.$transaction(async (tx) => {
       // Lock + validate the PO status before creating the receipt. Without this a
       // GR could be created against a PO that is still draft (bypassing approval),
@@ -785,7 +796,7 @@ export async function verifyGoodsReceipt(grId: number) {
     });
 
     if (gr.status !== "draft") {
-      throw new Error("Goods Receipt hanya bisa di-verify dari status draft");
+      throw new Error("Penerimaan Barang hanya bisa diverifikasi dari status draf");
     }
 
     // Hook: auto-number, PO status update, Stock Move IN
@@ -814,6 +825,89 @@ export async function verifyGoodsReceipt(grId: number) {
 }
 
 // ==================== VENDOR BILL ACTIONS ====================
+
+type VendorBillItemInput = {
+  itemId?: number | string | null;
+  qty?: number;
+  unitPrice?: number;
+  discountPercent?: number;
+  taxPercent?: number;
+};
+
+type ItemMeta = { sku: string; name: string; unitOfMeasure: string | null };
+
+/** Map the form's item rows to `vendor_bill_items` rows (totals computed server-side). */
+function mapVendorBillItems(rows: VendorBillItemInput[], metaById: Map<number, ItemMeta>) {
+  return rows
+    .filter((r) => safeRound(r.qty ?? 0, 2) > 0)
+    .map((r) => {
+      const itemId =
+        r.itemId != null && r.itemId !== "" ? Number(r.itemId) : null;
+      const meta = itemId != null ? metaById.get(itemId) : undefined;
+      const qty = safeRound(r.qty ?? 0, 2);
+      const unitPrice = safeRound(r.unitPrice ?? 0, 2);
+      const discountPercent = safeRound(r.discountPercent ?? 0, 2);
+      const taxPercent = safeRound(r.taxPercent ?? 0, 2);
+      const gross = safeMultiply(qty, unitPrice, 2);
+      const discountAmount = safeMultiply(gross, discountPercent / 100, 2);
+      const subtotal = safeSubtract(gross, discountAmount, 2);
+      const taxAmount = safeMultiply(subtotal, taxPercent / 100, 2);
+      return {
+        itemId,
+        description: meta ? `${meta.sku} - ${meta.name}` : null,
+        unit: meta?.unitOfMeasure ?? null,
+        qty,
+        unitPrice,
+        discountPercent,
+        discountAmount,
+        taxPercent,
+        taxAmount,
+        subtotal,
+        total: safeAdd(subtotal, taxAmount, 2),
+      };
+    });
+}
+
+/**
+ * Persist a vendor bill's item lines from the form's `items` JSON. The goods are
+ * recorded on the document itself (description + qty + price + totals) so a bill
+ * that settles already-sold stock still shows what was bought, independent of
+ * inventory. Called inside the caller's transaction.
+ */
+async function persistVendorBillItems(
+  tx: Prisma.TransactionClient,
+  vendorBillId: number,
+  itemsJson: string | null | undefined,
+): Promise<void> {
+  const rows = safeJsonParse<VendorBillItemInput[]>(itemsJson ?? null) ?? [];
+  if (rows.length === 0) return;
+
+  const ids = Array.from(
+    new Set(
+      rows
+        .map((r) => Number(r.itemId))
+        .filter((n) => Number.isFinite(n) && n > 0),
+    ),
+  );
+  const meta = ids.length
+    ? await tx.item.findMany({
+        where: { id: { in: ids } },
+        select: { id: true, sku: true, name: true, unitOfMeasure: true },
+      })
+    : [];
+  const metaById = new Map<number, ItemMeta>(
+    meta.map((i) => [
+      i.id,
+      { sku: i.sku, name: i.name, unitOfMeasure: i.unitOfMeasure },
+    ]),
+  );
+
+  const data = mapVendorBillItems(rows, metaById);
+  if (data.length === 0) return;
+  await tx.vendorBillItem.createMany({
+    data: data.map((r) => ({ ...r, vendorBillId })),
+  });
+}
 
 export async function createVendorBill(formData: FormData) {
   try {
@@ -867,6 +961,8 @@ export async function createVendorBill(formData: FormData) {
           slug,
           vendorId: v.vendorId,
           purchaseOrderId: v.purchaseOrderId ?? null,
+          withholdingTypeId: v.withholdingTypeId ?? null,
+          withholdingAmount: v.withholdingAmount ?? 0,
           date: new Date(v.date),
           dueDate: v.dueDate ? new Date(v.dueDate) : null,
           vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
@@ -879,6 +975,10 @@ export async function createVendorBill(formData: FormData) {
           createdBy: Number(user.id),
         },
       });
+
+      // Persist the item lines so the goods stay recorded on the document even
+      // when they settle stock that is already gone (bill without a PO link).
+      await persistVendorBillItems(tx, created.id, v.items);
 
       // Associate uploaded attachments with the new vendor bill
       const attachmentIds = v.attachmentIds;
@@ -963,6 +1063,8 @@ export async function createVendorPayment(formData: FormData) {
           accountId: v.accountId ?? null,
           adminFee: v.adminFee ?? 0,
           vendorBillId: targetBillId,
+          referenceNumber: v.referenceNumber ?? null,
+          bankAccount: v.bankAccount ?? null,
           notes: v.notes ?? null,
           createdBy: Number(user.id),
         },
@@ -1040,7 +1142,9 @@ export async function confirmVendorBill(billId: number) {
           status: "posted",
           approvedBy: Number(user.id),
           approvedAt: new Date(),
-          balanceDue: fresh.grandTotal,
+          // PPh yang dipotong belum dibayar ke vendor — ia menjadi utang pajak,
+          // jadi sisa tagihan berkurang sebesar pemotongan tersebut.
+          balanceDue: Number(fresh.grandTotal) - Number(fresh.withholdingAmount ?? 0),
         },
       });
 
@@ -1915,7 +2019,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           slug,
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
-          date: new Date(v.date),
+                    date: new Date(v.date),
           expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,
           shippingCost,
@@ -2027,6 +2131,8 @@ export async function updateVendorBill(id: number, formData: FormData) {
           slug,
           vendorId: v.vendorId,
           purchaseOrderId: v.purchaseOrderId ?? null,
+          withholdingTypeId: v.withholdingTypeId ?? null,
+          withholdingAmount: v.withholdingAmount ?? 0,
           date: new Date(v.date),
           dueDate: v.dueDate ? new Date(v.dueDate) : null,
           // Persist the free-text fields the form sends. The previous data
@@ -2043,6 +2149,11 @@ export async function updateVendorBill(id: number, formData: FormData) {
           status: "draft",
         },
       });
+
+      // Replace the item lines with the submitted set so an edit round-trips the
+      // goods (delete + recreate keeps the simple "last write wins" semantics).
+      await tx.vendorBillItem.deleteMany({ where: { vendorBillId: id } });
+      await persistVendorBillItems(tx, id, v.items);
 
       // Associate uploaded attachments with the vendor bill
       const attachmentIds = v.attachmentIds;
@@ -2088,7 +2199,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
   "use server";
 
   try {
-    await requirePermission("edit_goods_receipts");
+    const user = await requirePermission("edit_goods_receipts");
 
     const parsed = parseFormData(goodsReceiptSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -2118,6 +2229,13 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
           serialNumbers?: string[] | null;
         }[]
       >(v.items ?? null) ?? [];
+
+    // Scope gudang (header + tiap baris) — lihat catatan di createGoodsReceipt.
+    const scope = await getWarehouseScope(user);
+    assertWarehouseAccess(scope, v.warehouseId);
+    for (const item of items) {
+      if (item.warehouseId) assertWarehouseAccess(scope, Number(item.warehouseId));
+    }
 
     const gr = await prisma.$transaction(async (tx) => {
       const latestStatus = await tx.goodsReceipt.findUnique({
@@ -2438,6 +2556,8 @@ export async function updateVendorPayment(id: number, formData: FormData) {
           accountId: v.accountId ?? null,
           adminFee: v.adminFee ?? 0,
           vendorBillId: v.vendorBillId ?? null,
+          referenceNumber: v.referenceNumber ?? null,
+          bankAccount: v.bankAccount ?? null,
           notes: v.notes ?? null,
         },
       });

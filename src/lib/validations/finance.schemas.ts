@@ -106,27 +106,6 @@ export const bankReconciliationSchema = z.object({
   notes: optionalString(1000),
 });
 
-// ==================== BUDGET ====================
-
-export const budgetSchema = z
-  .object({
-    name: z.string().min(1, "Nama wajib diisi").max(200),
-    accountId: z.coerce
-      .number({ message: "accountId wajib diisi" })
-      .int()
-      .positive(),
-    costCenterId: optionalNumber(),
-    amount: z.coerce
-      .number({ message: "amount wajib diisi" })
-      .positive("amount harus lebih dari 0"),
-    startDate: requiredDate,
-    endDate: requiredDate,
-  })
-  .refine((v) => v.endDate.getTime() >= v.startDate.getTime(), {
-    message: "endDate harus sama atau setelah startDate",
-    path: ["endDate"],
-  });
-
 // ==================== COST CENTER ====================
 
 export const costCenterSchema = z.object({
@@ -137,6 +116,8 @@ export const costCenterSchema = z.object({
   parentId: optionalNumber(),
 });
 
+export type CostCenterInput = z.infer<typeof costCenterSchema>;
+
 // ==================== UPDATE JOURNAL ====================
 
 export const updateJournalSchema = z.object({
@@ -146,13 +127,6 @@ export const updateJournalSchema = z.object({
   attachmentIds: optionalString(5000),
 });
 
-// ==================== TYPE EXPORTS ====================
-
-export type BankStatementInput = z.infer<typeof bankStatementSchema>;
-export type JournalInput = z.infer<typeof journalSchema>;
-export type ExpenseInput = z.infer<typeof expenseSchema>;
-export type PettyCashInput = z.infer<typeof pettyCashSchema>;
-export type BankReconciliationInput = z.infer<typeof bankReconciliationSchema>;
-export type BudgetInput = z.infer<typeof budgetSchema>;
-export type CostCenterInput = z.infer<typeof costCenterSchema>;
 export type UpdateJournalInput = z.infer<typeof updateJournalSchema>;
+
+export type ExpenseInput = z.infer<typeof expenseSchema>;

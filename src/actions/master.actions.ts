@@ -185,7 +185,7 @@ export async function createCustomer(formData: FormData) {
 
 export async function updateCustomer(customerId: number, formData: FormData) {
   try {
-    await requirePermission("edit_customers");
+    const user = await requirePermission("edit_customers");
 
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -194,6 +194,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     await prisma.customer.update({
       where: { id: customerId },
       data: {
+        updatedBy: Number(user.id),
         name: v.name,
         slug: await nextSlug("customer", v.name, { excludeId: customerId }),
         email: v.email ?? null,
@@ -230,14 +231,15 @@ export async function updateCustomer(customerId: number, formData: FormData) {
 
 export async function deleteCustomer(customerId: number) {
   try {
-    await requirePermission("delete_customers");
+    const user = await requirePermission("delete_customers");
 
     await hardDeleteOrSoftDelete(
       () => prisma.customer.delete({ where: { id: customerId } }),
       () =>
         prisma.customer.update({
           where: { id: customerId },
-          data: { deletedAt: new Date(), isActive: false },
+          data: {
+        updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
         }),
     );
 
@@ -304,7 +306,7 @@ export async function createVendor(formData: FormData) {
 
 export async function updateVendor(vendorId: number, formData: FormData) {
   try {
-    await requirePermission("edit_vendors");
+    const user = await requirePermission("edit_vendors");
 
     const parsed = parseFormData(vendorSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -313,6 +315,7 @@ export async function updateVendor(vendorId: number, formData: FormData) {
     await prisma.vendor.update({
       where: { id: vendorId },
       data: {
+        updatedBy: Number(user.id),
         name: v.name,
         slug: await nextSlug("vendor", v.name, { excludeId: vendorId }),
         email: v.email ?? null,
@@ -397,6 +400,7 @@ export async function createItem(formData: FormData) {
           description: v.description ?? null,
           image: v.image ?? null,
           categoryId: v.categoryId ?? null,
+          groupId: v.groupId ?? null,
           brandId: v.brandId ?? null,
           vendorId: v.vendorId ?? null,
           defaultWarehouseId: v.defaultWarehouseId ?? null,
@@ -482,6 +486,7 @@ export async function updateItem(itemId: number, formData: FormData) {
           description: v.description ?? null,
           image: v.image ?? null,
           categoryId: v.categoryId ?? null,
+          groupId: v.groupId ?? null,
           brandId: v.brandId ?? null,
           vendorId: v.vendorId ?? null,
           defaultWarehouseId: v.defaultWarehouseId ?? null,
@@ -728,6 +733,7 @@ export async function createEmployee(formData: FormData) {
           data: {
             name: employeeData.name,
             email: email.trim(),
+            slug: await nextSlug("user", employeeData.name),
             password: hashedPassword,
             isActive: true,
             ...(loginRoleIds.length > 0
@@ -902,6 +908,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
           data: {
             name: updateData.name,
             email: email.trim(),
+            slug: await nextSlug("user", updateData.name),
             password: hashedPassword,
             isActive: true,
             ...(loginRoleIds.length > 0
@@ -1026,7 +1033,7 @@ export async function createItemCategory(formData: FormData) {
 
 export async function updateItemCategory(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_item_categories");
+    const user = await requirePermission("edit_item_categories");
 
     // Only write the hierarchy/valuation fields when the form actually submits
     // them. The edit form renders only name + description, so blindly writing
@@ -1034,6 +1041,7 @@ export async function updateItemCategory(id: number, formData: FormData) {
     // the category's parent (flattening the tree) and flip a FIFO category to
     // "average" on every save — silently changing HPP valuation for its items.
     const data: Record<string, unknown> = {
+      updatedBy: Number(user.id),
       name: requireString(formData.get("name"), "name"),
       slug: await nextSlug(
         "itemCategory",
@@ -1109,11 +1117,12 @@ export async function createDepartment(formData: FormData) {
 
 export async function updateDepartment(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_departments");
+    const user = await requirePermission("edit_departments");
 
     await prisma.department.update({
       where: { id },
       data: {
+        updatedBy: Number(user.id),
         name: requireString(formData.get("name"), "name"),
         slug: await nextSlug("department", requireString(formData.get("name"), "name"), { excludeId: id }),
         code: formData.get("code") as string | null,
@@ -1188,11 +1197,12 @@ export async function createPosition(formData: FormData) {
 
 export async function updatePosition(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_positions");
+    const user = await requirePermission("edit_positions");
 
     await prisma.position.update({
       where: { id },
       data: {
+        updatedBy: Number(user.id),
         name: requireString(formData.get("name"), "name"),
         slug: await nextSlug("position", requireString(formData.get("name"), "name"), { excludeId: id }),
         departmentId: safeId(formData.get("departmentId")),
@@ -1363,11 +1373,12 @@ export async function createBank(formData: FormData) {
 
 export async function updateBank(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_banks");
+    const user = await requirePermission("edit_banks");
 
     await prisma.bank.update({
       where: { id },
       data: {
+        updatedBy: Number(user.id),
         name: requireString(formData.get("name"), "name"),
         slug: await nextSlug("bank", requireString(formData.get("name"), "name"), { excludeId: id }),
         code: formData.get("code") as string,
@@ -1624,71 +1635,6 @@ export async function updateTaxGroup(id: number, formData: FormData) {
   }
 }
 
-// ==================== STATISTICAL KEY FIGURE ACTIONS ====================
-
-export async function createStatisticalKeyFigure(formData: FormData) {
-  try {
-    await requirePermission("create_accounts");
-
-    const figure = await prisma.statisticalKeyFigure.create({
-      data: {
-        name: requireString(formData.get("name"), "name"),
-        slug: await nextSlug("statisticalKeyFigure", requireString(formData.get("name"), "name")),
-        code: (formData.get("code") as string) || null,
-        unit: formData.get("unit") as string,
-        type: (formData.get("type") as string) || null,
-        value: safeNumber(formData.get("value")) ?? 0,
-      },
-    });
-
-    revalidatePath("/keuangan/angka-kunci-statistik");
-    await logActivity(
-      "create",
-      "StatisticalKeyFigure",
-      figure.id,
-      "Membuat angka kunci statistik",
-    );
-    return { success: true, id: figure.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[createStatisticalKeyFigure]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function updateStatisticalKeyFigure(
-  id: number,
-  formData: FormData,
-) {
-  try {
-    await requirePermission("edit_accounts");
-    await prisma.statisticalKeyFigure.update({
-      where: { id },
-      data: {
-        name: requireString(formData.get("name"), "name"),
-        slug: await nextSlug("statisticalKeyFigure", requireString(formData.get("name"), "name"), { excludeId: id }),
-        code: (formData.get("code") as string) || null,
-        unit: formData.get("unit") as string,
-        type: (formData.get("type") as string) || null,
-        value: safeNumber(formData.get("value")) ?? 0,
-        isActive: formData.get("isActive") === "on",
-      },
-    });
-    revalidatePath("/keuangan/angka-kunci-statistik");
-    await logActivity(
-      "update",
-      "StatisticalKeyFigure",
-      id,
-      "Memperbarui angka kunci statistik",
-    );
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[updateStatisticalKeyFigure]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
 // ==================== PAYMENT TERM ACTIONS ====================
 
 export async function createPaymentTerm(formData: FormData) {
@@ -1723,11 +1669,12 @@ export async function createPaymentTerm(formData: FormData) {
 
 export async function updatePaymentTerm(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_payment_terms");
+    const user = await requirePermission("edit_payment_terms");
 
     await prisma.paymentTerm.update({
       where: { id },
       data: {
+        updatedBy: Number(user.id),
         name: requireString(formData.get("name"), "name"),
         slug: await nextSlug("paymentTerm", requireString(formData.get("name"), "name"), { excludeId: id }),
         code: formData.get("code") as string,
@@ -1790,14 +1737,15 @@ export async function deletePaymentTerm(id: number) {
 
 export async function deleteVendor(id: number) {
   try {
-    await requirePermission("delete_vendors");
+    const user = await requirePermission("delete_vendors");
 
     await hardDeleteOrSoftDelete(
       () => prisma.vendor.delete({ where: { id } }),
       () =>
         prisma.vendor.update({
           where: { id },
-          data: { deletedAt: new Date(), isActive: false },
+          data: {
+        updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
         }),
     );
 
@@ -1992,7 +1940,7 @@ export async function deleteBank(id: number) {
 
 export async function deleteTax(id: number) {
   try {
-    await requirePermission("delete_taxes");
+    const user = await requirePermission("delete_taxes");
 
     // tax_group_taxes.tax_id has NO foreign key (only tax_group_id does), so a
     // hard delete would NOT raise P2003 and would leave the group row pointing at
@@ -2018,7 +1966,8 @@ export async function deleteTax(id: number) {
       () =>
         prisma.tax.update({
           where: { id },
-          data: { deletedAt: new Date(), isActive: false },
+          data: {
+        updatedBy: Number(user.id), deletedAt: new Date(), isActive: false },
         }),
     );
 
@@ -2103,6 +2052,95 @@ export async function deleteItemCategory(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteItemCategory]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== ITEM GROUP ACTIONS ====================
+
+export async function createItemGroup(formData: FormData) {
+  try {
+    const user = await requirePermission("create_item_groups");
+
+    const name = requireString(formData.get("name"), "name");
+    // Kode wajib unik; kalau dikosongkan, pakai nama supaya baris tetap bisa dibuat.
+    const code = ((formData.get("code") as string) || "").trim() || name;
+
+    const group = await prisma.itemGroup.create({
+      data: {
+        code,
+        name,
+        description: (formData.get("description") as string) || null,
+        slug: await nextSlug("itemGroup", name),
+        createdBy: Number(user.id),
+      },
+    });
+
+    revalidatePath("/master/grup-barang");
+    await logActivity("create", "ItemGroup", group.id, "Membuat grup barang");
+    return { success: true, id: group.id, slug: group.slug };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createItemGroup]", getErrorMessage(e) || e);
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return { success: false, error: "Kode atau nama grup tersebut sudah dipakai." };
+    }
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateItemGroup(id: number, formData: FormData) {
+  try {
+    const user = await requirePermission("edit_item_groups");
+
+    const name = requireString(formData.get("name"), "name");
+    const code = ((formData.get("code") as string) || "").trim() || name;
+
+    await prisma.itemGroup.update({
+      where: { id },
+      data: {
+        updatedBy: Number(user.id),
+        code,
+        name,
+        description: (formData.get("description") as string) || null,
+        slug: await nextSlug("itemGroup", name, { excludeId: id }),
+      },
+    });
+
+    revalidatePath("/master/grup-barang");
+    await logActivity("update", "ItemGroup", id, "Memperbarui grup barang");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateItemGroup]", getErrorMessage(e) || e);
+    if (e && typeof e === "object" && "code" in e && e.code === "P2002") {
+      return { success: false, error: "Kode atau nama grup tersebut sudah dipakai." };
+    }
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteItemGroup(id: number) {
+  try {
+    await requirePermission("delete_item_groups");
+
+    // `items.group_id` ON DELETE SET NULL, jadi menghapus grup tanpa penjaga akan
+    // diam-diam melepas barang dari grupnya (kehilangan data tanpa error FK).
+    const itemCount = await prisma.item.count({ where: { groupId: id } });
+    if (itemCount > 0) {
+      throw new Error(
+        `Grup masih dipakai oleh ${itemCount} barang. Pindahkan barang ke grup lain terlebih dahulu.`,
+      );
+    }
+
+    await prisma.itemGroup.delete({ where: { id } });
+
+    revalidatePath("/master/grup-barang");
+    await logActivity("delete", "ItemGroup", id, "Menghapus grup barang");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteItemGroup]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -2207,7 +2245,7 @@ export async function createBrand(formData: FormData) {
 
 export async function updateBrand(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_brands");
+    const user = await requirePermission("edit_brands");
 
     const categoryIds = (formData.get("categoryIds") as string || "")
       .split(",")
@@ -2217,6 +2255,7 @@ export async function updateBrand(id: number, formData: FormData) {
     await prisma.brand.update({
       where: { id },
       data: {
+        updatedBy: Number(user.id),
         name: requireString(formData.get("name"), "name"),
         slug: await nextSlug("brand", requireString(formData.get("name"), "name"), { excludeId: id }),
         description: (formData.get("description") as string) || null,
@@ -2348,6 +2387,21 @@ export async function deleteUom(id: number) {
   }
 }
 
+/**
+ * Opsi kategori pelanggan untuk dialog quick-add (dipakai form Penawaran, Faktur
+ * Penjualan, Retur Penjualan, dan Tiket). Dibaca saat dialog dibuka supaya daftarnya
+ * tidak pernah kedaluwarsa dan form pemanggil tidak perlu menyiapkannya.
+ */
+export async function listCustomerCategoryOptions(): Promise<{ value: string; label: string }[]> {
+  await requirePermission("view_customers");
+  const rows = await prisma.customerCategory.findMany({
+    where: { deletedAt: null, isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((row) => ({ value: String(row.id), label: row.name }));
+}
+
 export async function createCustomerCategory(formData: FormData) {
   try {
     await requirePermission("create_customers");
@@ -2404,12 +2458,13 @@ export async function updateCustomerCategory(id: number, formData: FormData) {
 
 export async function deleteCustomerCategory(id: number) {
   try {
-    await requirePermission("delete_customers");
+    const user = await requirePermission("delete_customers");
 
     await prisma.$transaction([
       prisma.customer.updateMany({
         where: { customerCategoryId: id },
-        data: { customerCategoryId: null },
+        data: {
+        updatedBy: Number(user.id), customerCategoryId: null },
       }),
       prisma.customerCategory.update({
         where: { id },

@@ -36,6 +36,8 @@ export const assetCategorySchema = z.object({
   code: optionalStr(50),
   depreciationRate: optionalNum(0),
   usefulLife: optionalNum(0),
+  taxDepreciationRate: optionalNum(0),
+  taxUsefulLife: optionalNum(0),
   assetAccountId: optionalRefId,
   accumulatedDepreciationAccountId: optionalRefId,
   depreciationExpenseAccountId: optionalRefId,

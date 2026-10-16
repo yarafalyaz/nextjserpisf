@@ -59,7 +59,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         const formData = new FormData()
         formData.append("sourceWarehouseId", sourceId)
         formData.append("destinationWarehouseId", destId)
-        formData.append("date", toLocalDateOnly(new Date()))
+        formData.append("date", transfer?.date ?? toLocalDateOnly(new Date()))
         if (notes) formData.append("notes", notes)
         formData.append("items", JSON.stringify(transferItems.filter((it) => it.itemId > 0 && it.qty > 0)))
         const result = transfer?.id ? await updateInventoryTransfer(transfer.id, formData) : await createInventoryTransfer(formData)

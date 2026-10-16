@@ -19,7 +19,6 @@ import {
   expenseSchema,
   pettyCashSchema,
   bankReconciliationSchema,
-  budgetSchema,
   costCenterSchema,
 } from "@/lib/validations/finance.schemas";
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -833,37 +832,6 @@ export async function completeReconciliation(reconciliationId: number) {
 
 // ==================== BUDGET ACTIONS ====================
 
-export async function createBudget(formData: FormData) {
-  try {
-    const user = await requirePermission("create_budgets");
-
-    const parsed = parseFormData(budgetSchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    const budget = await prisma.budget.create({
-      data: {
-        name: v.name,
-        slug: await nextSlug("budget", v.name),
-        accountId: v.accountId,
-        costCenterId: v.costCenterId ?? null,
-        amount: v.amount,
-        startDate: v.startDate,
-        endDate: v.endDate,
-        createdBy: Number(user.id),
-      },
-    });
-
-    await logActivity("create", "Budget", budget.id, "Membuat anggaran");
-    revalidatePath("/keuangan/anggaran");
-    return { success: true, id: budget.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[createBudget]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
 
 // ==================== COST CENTER ACTIONS ====================
 
@@ -1034,21 +1002,6 @@ export async function deletePettyCash(id: number) {
   }
 }
 
-export async function deleteBudget(id: number) {
-  try {
-    await requirePermission("delete_budgets");
-
-    await prisma.budget.delete({ where: { id } });
-
-    await logActivity("delete", "Budget", id, "Menghapus anggaran");
-    revalidatePath("/keuangan/anggaran");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[deleteBudget]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
 
 export async function deleteCostCenter(id: number) {
   try {
@@ -1062,27 +1015,6 @@ export async function deleteCostCenter(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteCostCenter]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}
-
-export async function deleteStatisticalKeyFigure(id: number) {
-  try {
-    await requirePermission("delete_statistical_key_figures");
-
-    await prisma.statisticalKeyFigure.delete({ where: { id } });
-
-    await logActivity(
-      "delete",
-      "StatisticalKeyFigure",
-      id,
-      "Menghapus angka kunci statistik",
-    );
-    revalidatePath("/keuangan/angka-kunci-statistik");
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[deleteStatisticalKeyFigure]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -1473,40 +1405,3 @@ export async function updatePettyCash(id: number, formData: FormData) {
   }
 }
 
-export async function updateBudget(id: number, formData: FormData) {
-  "use server";
-
-  try {
-    await requirePermission("edit_budgets");
-
-    const parsed = parseFormData(budgetSchema, formData);
-    if (!parsed.success)
-      return { success: false, error: `Validasi gagal: ${parsed.error}` };
-    const v = parsed.data;
-
-    const budget = await prisma.budget.update({
-      where: { id },
-      data: {
-        name: v.name,
-        slug: await nextSlug("budget", v.name, { excludeId: id }),
-        accountId: v.accountId,
-        costCenterId: v.costCenterId ?? null,
-        amount: v.amount,
-        startDate: v.startDate,
-        endDate: v.endDate,
-        // NOTE: createdBy is intentionally NOT updated here. It records the
-        // original author and must remain immutable across edits — overwriting it
-        // with the current editor erases the audit trail (every save would
-        // re-attribute the budget to whoever last touched it).
-      },
-    });
-
-    await logActivity("update", "Budget", budget.id, "Memperbarui anggaran");
-    revalidatePath("/keuangan/anggaran");
-    return { success: true, id: budget.id };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[updateBudget]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
-}

@@ -1,6 +1,7 @@
 "use server";
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
+import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeSubtract, safeMultiply } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
@@ -12,7 +13,7 @@ import {
 } from "@/lib/hooks/inventory-transfer.hook";
 import { onMaterialIssueCompleted as onMaterialIssueStock } from "@/lib/hooks/material-issue.hook";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
-import { revalidatePath } from "next/cache";
+import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
@@ -471,7 +472,7 @@ export async function createMaterialIssue(formData: FormData) {
 
     if (miItems.length === 0) {
       throw new Error(
-        "Material Issue harus memiliki minimal 1 item dengan qty > 0",
+        "Pengeluaran Material harus memiliki minimal 1 item dengan kuantitas > 0",
       );
     }
 
@@ -525,7 +526,7 @@ export async function completeMaterialIssue(issueId: number) {
 
     if (issue.status !== "draft") {
       throw new Error(
-        "Material Issue hanya bisa di-complete dari status draft",
+        "Pengeluaran Material hanya bisa diselesaikan dari status draf",
       );
     }
 
@@ -542,8 +543,8 @@ export async function completeMaterialIssue(issueId: number) {
       });
       throw new Error(
         current
-          ? `Material Issue sudah berstatus ${current.status}`
-          : "Material Issue tidak ditemukan",
+          ? `Pengeluaran Material sudah berstatus ${statusLabel(current.status)}`
+          : "Pengeluaran Material tidak ditemukan",
       );
     }
 
@@ -669,7 +670,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
     const wo = await prisma.workOrder.findUniqueOrThrow({ where: { id } });
     if (wo.status !== "draft" && wo.status !== "pending") {
       throw new Error(
-        `Work Order tidak bisa diperbarui dengan status '${wo.status}'. Hanya status 'draft' atau 'pending' yang dapat diperbarui.`,
+        `Perintah Kerja tidak bisa diperbarui dengan status '${wo.status}'. Hanya status 'draft' atau 'pending' yang dapat diperbarui.`,
       );
     }
 
@@ -703,7 +704,9 @@ export async function updateWorkOrder(id: number, formData: FormData) {
           slug: await nextSlug("workOrder", wo.documentNo, { excludeId: id }),
           customerId: v.customerId,
           quotationId: v.quotationId ?? null,
-          projectId: v.projectId ?? null,
+          // projectId tidak punya input di form WO (ia tautan dari alur proyek),
+          // jadi menulis `?? null` memutus tautan itu setiap kali WO disimpan.
+          ...(v.projectId !== undefined ? { projectId: v.projectId } : {}),
           date: new Date(v.date),
           // Persist optional schedule dates the form sends. Previously dropped
           // silently — the column was nullable but the action never read it.
@@ -714,7 +717,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       });
       if (claim.count === 0) {
         throw new Error(
-          `Work Order tidak bisa diperbarui: status sudah berubah menjadi '${wo.status === "draft" || wo.status === "pending" ? "tidak valid" : wo.status}'.`,
+          `Perintah Kerja tidak bisa diperbarui: status sudah berubah menjadi '${wo.status === "draft" || wo.status === "pending" ? "tidak valid" : wo.status}'.`,
         );
       }
 
@@ -1199,8 +1202,13 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
         data: {
           slug: await nextSlug("materialIssue", mi.documentNo, { excludeId: id }),
           warehouseId: v.warehouseId,
-          projectId: v.projectId ?? null,
-          workOrderId: v.workOrderId ?? null,
+          // projectId & workOrderId tidak punya input di form MI: keduanya tautan
+          // yang dipasang alur lain (buat-dari-WO / proyek). Menulis `?? null` di
+          // sini memutus tautan itu setiap kali MI disimpan — dan hilangnya
+          // workOrderId membuat "Buat Pengeluaran Material" bisa dijalankan lagi
+          // untuk WO yang sama (stok keluar dua kali).
+          ...(v.projectId !== undefined ? { projectId: v.projectId } : {}),
+          ...(v.workOrderId !== undefined ? { workOrderId: v.workOrderId } : {}),
           costCenterId: v.costCenterId ?? null,
           date: new Date(v.date),
           notes: v.notes ?? null,

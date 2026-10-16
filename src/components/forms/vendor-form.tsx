@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation"
 import { useTransition, type FormEvent } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
-import { vendorSchema, type VendorInput } from "@/lib/validators"
+import { vendorSchema, type VendorInput } from "@/lib/validations/form.schemas"
 import { createVendor, updateVendor } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
@@ -64,11 +64,21 @@ export function VendorForm({ vendor, generatedCode, enableAutoCode = true, payme
         // Append/overwrite address fields from AddressPicker hidden inputs
         const form = event?.target as HTMLFormElement | null
         if (form) {
-          const addressFields = ["province", "city", "district", "village", "postalCode", "address"]
-          addressFields.forEach(field => {
+          // AddressPicker menulis input bernama district/village, tetapi skema vendor
+          // memakai districtVendor/villageVendor — tanpa pemetaan ini kecamatan & desa
+          // vendor tidak pernah tersimpan.
+          const addressFields: [string, string][] = [
+            ["province", "province"],
+            ["city", "city"],
+            ["district", "districtVendor"],
+            ["village", "villageVendor"],
+            ["postalCode", "postalCode"],
+            ["address", "address"],
+          ]
+          addressFields.forEach(([field, formKey]) => {
             const input = form.querySelector(`input[name="${field}"]`) as HTMLInputElement | null
             if (input?.value) {
-              formData.set(field, input.value)
+              formData.set(formKey, input.value)
             }
           })
         }
