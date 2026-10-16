@@ -12,10 +12,14 @@
  *
  * Idempotent: safe to run before every server start.
  */
-import { cpSync, existsSync, mkdirSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, statSync } from "node:fs"
 import path from "node:path"
 
 const root = process.cwd()
+const schemaPrisma = path.join(root, "prisma", "schema.prisma")
+const buildMarker = existsSync(path.join(root, ".next", "BUILD_ID"))
+  ? path.join(root, ".next", "BUILD_ID")
+  : path.join(root, ".next", "standalone", "server.js")
 const nextDir = path.join(root, ".next")
 const standalone = path.join(nextDir, "standalone")
 
@@ -36,6 +40,22 @@ function sync(source, target, label) {
   mkdirSync(path.dirname(target), { recursive: true })
   cpSync(source, target, { recursive: true, force: true })
   console.log(`[prepare-standalone] ${label} -> ${path.relative(root, target)}`)
+}
+
+// Bundle terpasang memuat Prisma Client hasil build. Kalau skema lebih baru, klien itu
+// sudah basi dan halaman gagal dengan `driverAdapterError: ColumnNotFound` — yang tampak
+// seperti bug kode. Gagalkan lebih awal dengan penuntun (lihat AGENTS.md).
+if (
+  existsSync(schemaPrisma) && existsSync(buildMarker) &&
+  statSync(schemaPrisma).mtimeMs > statSync(buildMarker).mtimeMs
+) {
+  console.error(
+    "[prepare-standalone] prisma/schema.prisma lebih baru daripada build terakhir.\n" +
+      "E2E menyajikan bundle TERPASANG, jadi Prisma Client di dalamnya masih dari skema lama —\n" +
+      "halaman akan gagal dengan `driverAdapterError: ColumnNotFound` yang tampak seperti bug kode.\n" +
+      "Jalankan `npm run build` lebih dulu.",
+  )
+  process.exit(1)
 }
 
 sync(path.join(nextDir, "static"), path.join(standalone, ".next", "static"), "static assets")
