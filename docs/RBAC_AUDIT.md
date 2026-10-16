@@ -394,3 +394,87 @@ Sumber data: tabel `roles`, `permissions`, `_RolePermissions`, `_UserRoles` di M
 | units | view |
 | work_orders | view |
 | work_schedules | view |
+
+---
+
+## Penutupan lubang otorisasi — 2026-10-12
+
+Hasil audit ulang: penegakan intinya sudah fail-closed (301 permission, 9 role, ~317
+pemanggilan `requirePermission` di 29 berkas action, multi-role, scope gudang + HR).
+Yang ditutup pada batch ini:
+
+| Lubang | Bukti sebelum | Perbaikan |
+|---|---|---|
+| Scope gudang bocor di Penerimaan Barang | `purchase.actions.ts` **0** pemanggilan scope (vs `inventory.actions.ts` 30); `warehouseId` diambil dari input user | `getWarehouseScope` + `assertWarehouseAccess` di `createGoodsReceipt` & `updateGoodsReceipt` (header **dan** tiap baris) |
+| Scope gudang bocor saat membuat draft MI dari Perintah Kerja | `createMaterialIssueFromWorkOrder` (manufacturing) tanpa cek scope | `assertWarehouseAccess` sebelum draft dibuat |
+| Label "super_admin only" tidak ditegakkan di action | `proxy.ts:221-236` memblokir 5 halaman, tapi actionnya cukup `manage_settings`/`manage_users` → bisa dipanggil langsung via POST | `requireRole("super_admin")` di action peran, pengguna, backup/restore DB, dan `clearActivityLog`; API `GET /api/activity-logs(+export)` pakai `hasRole("super_admin")` |
+| Jurnal aset bisa masuk periode tertutup | `asset.actions.ts` **0** `assertPeriodOpen`; cron depresiasi juga tidak | `assertPeriodOpen` di `createAsset`, `disposeAsset`, dan `api/cron/asset-depreciation` |
+| API identitas perusahaan tanpa cek izin | `GET /api/system-settings` hanya butuh sesi | `hasPermission("view_dashboard")` (semua role punya) |
+| Scope berbasis nama role yang mati | `ALL_ACCESS_ROLES` memuat `warehouse_manager`, `logistics`, `hr`, `hr_manager` yang tidak pernah di-seed | Satu sumber `src/lib/auth/role-names.ts`; daftar dibersihkan; `createRole` menolak `RESERVED_ROLE_NAMES` |
+| Tidak ada penjaga otomatis "setiap action wajib punya guard" | 317/319 hanya hasil hitung manual | `src/actions/__tests__/action-guard-coverage.test.ts` (3 pengecualian terdokumentasi) + `src/lib/auth/__tests__/role-names.test.ts` |
+
+### Delegasi pengaturan sensitif (satu aturan di tiga lapisan)
+
+Daftar route sensitif tidak lagi hardcode nama role. `src/lib/auth/sensitive-routes.ts`
+memetakan route → permission, dan **proxy, halaman, serta action memakai permission yang sama**:
+
+| Route | Permission | Siapa yang memegangnya |
+|---|---|---|
+| `/pengaturan/pengguna` | `manage_users` | super_admin (bypass), admin |
+| `/pengaturan/peran` | `manage_roles` | super_admin (bypass), admin |
+| `/pengaturan/database` | `manage_settings` | super_admin (bypass), admin |
+| `/pengaturan/log-aktivitas` | `manage_settings` | super_admin (bypass), admin |
+
+- `/pengaturan/system` dihapus dari daftar: tidak ada halamannya (route hantu).
+- **Cara mendelegasikan**: berikan/lepaskan `manage_users` / `manage_roles` /
+  `manage_settings` pada role lewat matriks izin (Pengaturan → Peran → Izin) — tidak perlu
+  mengubah kode.
+- **Batas keamanan yang tetap berlaku**: super_admin selalu bypass; hanya super_admin yang
+  boleh mengubah/menghapus role `super_admin`; dan `assertCanGrantPermissions` menolak
+  pemegang `manage_roles` non-super-admin yang mencoba memberi izin yang tidak ia miliki
+  (mencegah eskalasi lewat pembuatan role baru).
+- Dikunci `src/__tests__/sensitive-route-parity.test.ts`: permission di peta harus ada di
+  seed, halaman + action wajib memakai permission yang sama, dan action tersebut tidak boleh
+  kembali memakai `requireRole()`.
+
+Ditemukan & diperbaiki saat verifikasi live: `updateRole` dulu **selalu** menghitung ulang
+slug peran, jadi menyimpan daftar izin saja (mis. dari matriks) bisa mengubah URL peran dan
+mematikan tautan lama (terbukti: slug `uji_lp` → `uji-lp` membuat `/pengaturan/peran/uji_lp/modul`
+mendadak 404). Sekarang slug hanya dihitung ulang saat **nama** peran berubah — dikunci dua tes
+di `src/actions/__tests__/roles.actions.test.ts`.
+
+
+## Satu registri izin — 2026-10-12
+
+Kesenjangan "katalog dekoratif" sudah ditutup. Keadaannya sekarang:
+
+| Aspek | Sebelum | Sesudah |
+|---|---|---|
+| Sumber yang ditegakkan | `Role.permissions` (301) | **sama** — tidak berubah, 317 pemanggilan `requirePermission` tetap utuh |
+| Katalog Modul×Aksi | 80 dari 301 permission; `@@unique([moduleId, key])` membuat seed **collapse** → hanya **17 baris** nyata di DB | **301 baris** di `module_actions` (14 modul), satu baris per permission |
+| Halaman `/pengaturan/peran/[slug]/modul` | Menulis `role_module_access` yang **tidak pernah dibaca** jalur penegakan | Matriks (baris = entitas, kolom = verba) yang menulis **`Role.permissions`** lewat action `updateRole` |
+| `RoleModuleAccess` | Tabel zombie | **dihapus** (schema + migrasi `20261012120000_permission_matrix_single_source`) |
+| Jalur seed demo (`prisma/seed.ts`) | Tidak pernah mengisi katalog | Ikut memanggil `seedModules` |
+
+Arsitektur: `PERMISSIONS` (`src/lib/setup/base-data.ts`) → `scripts/generate-module-catalog.mjs`
+→ `src/lib/auth/module-catalog.generated.ts` → `MODULES` (`src/lib/auth/modules.ts`) →
+`seedModules` (tabel `modules` + `module_actions`) → matriks UI → `updateRole` →
+`_RolePermissions` → `session.user.permissions` → `requirePermission()`.
+
+Penjaga otomatisnya:
+- `src/lib/auth/__tests__/modules-catalog.test.ts` — paritas **dua arah** katalog ↔ `PERMISSIONS`,
+  tanpa duplikat, invarian `permissionKey = verba + "_" + entitas`, label unik per modul.
+- `src/lib/auth/__tests__/permission-matrix.test.ts` — pengelompokan baris/kolom + pelaporan
+  permission yang belum ada di database.
+- `src/lib/setup/modules.ts` mem-**prune** baris katalog yang permissionnya sudah tidak ada,
+  jadi katalog DB tidak bisa drift.
+
+**Cara menambah permission baru:** tambahkan ke `PERMISSIONS` → jalankan
+`node scripts/generate-module-catalog.mjs` → `npm run db:seed` (atau `npx tsx prisma/seed-modules.ts`).
+Entitas baru yang belum punya modul akan membuat skrip gagal dengan daftar nama — itu disengaja
+(fail-closed), tambahkan pemetaannya di skrip.
+
+Catatan kebersihan data (ditemukan saat verifikasi): 3 permission yatim
+(`view/edit/delete_statistical_key_figures`) masih ada di DB padahal fitur Angka Kunci Statistik
+sudah dihapus — sudah dibersihkan, sehingga `permissions` = 301 = isi kode.
+

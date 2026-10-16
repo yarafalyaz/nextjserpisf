@@ -1,0 +1,256 @@
+# Audit: janji skema & alur vs yang benar-benar dipakai kode
+
+**Status (akhir sesi):** sebagian temuan sudah **ditutup** (lihat §0). Sisanya menunggu
+keputusan pemilik produk, didaftarkan di bagian **Keputusan yang menunggu**.
+
+**Cara memeriksa:** setiap nama field/kolom dicari sebagai kata utuh di `src/`, `scripts/`,
+`e2e/`, dan `prisma/` (termasuk seed). Positif-palsu yang diketahui — FK skalar yang dipakai
+Prisma lewat `connect` tidak pernah disebut namanya — **diperiksa satu per satu**, bukan
+diabaikan. Untuk aksi server, "dipanggil" berarti namanya muncul di luar berkas definisinya
+(`StatusActions` hanya menangani approve/reject dan tak ada registri transisi, sehingga "nol
+rujukan" sungguh berarti tak terjangkau).
+
+---
+
+## 0. Sudah ditutup (bukan lagi temuan)
+
+| Temuan | Penyelesaian | Bukti |
+| --- | --- | --- |
+| `SalesInvoice.amountPaid` — duplikat `paidAmount`, selalu 0 | dibuang (migrasi `…drop_sales_invoice_amount_paid`) | drift 0, suite hijau |
+| **4 kolom penaut rekonsiliasi duplikat** | dibuang (migrasi `20261016210000_drop_duplicate_reconciliation_links`) | 0 baris di DB; jejak audit yang sah ada di `BankReconciliationItem.journalEntryId` |
+| **`updatedBy` (12 model, 0 penulisan)** | kini ditulis di 16 titik / 2 berkas + 15 penangkapan `user` | diuji lewat UI: `updated_by = 1`; allowlist guard dipangkas 12 entri |
+| `postJournal` tak tersambung → jurnal manual tak pernah masuk pembukuan | disambungkan + dikunci di guard | E2E: DB `DRAFT 1/POSTED 5` → `POSTED 6` |
+| `confirmVendorPayment` tak tersambung | disambungkan + dikunci di guard | E2E: pembayaran `completed`, tagihan `paid`, **1 alokasi** |
+| **Tiga gerbang status buntu** | halaman kini menjelaskan syaratnya (bukan buntu senyap) + tes invarian | §5d |
+| **7 `.catch()` menyesatkan** (fetch gagal tampak seperti "tidak ada data") | menampilkan pesan; guard diperluas ke promise-senyap | typecheck, suite unit, E2E penuh hijau |
+| Rantai migrasi gagal dari DB kosong | 8 tabel yang tak pernah dibuat ditambahkan + rekonsiliasi | `migrate deploy` dari nol ✓, drift 0 |
+| `<h1>` hilang di semua halaman laporan | `ReportSheet`/`ReportLetterhead` merender `<h1>` | diverifikasi di browser |
+
+## 1. Model tanpa pemakaian kode (1 + 1 catatan)
+
+- **`QcInspectionResult`** — 0 rujukan kode; hanya muncul sebagai relasi di `schema.prisma`.
+  Ditemukan oleh **pemeriksaan tingkat-model** yang ditambahkan setelah pemeriksaan per-kolom
+  terbukti melewatkannya (nama field-nya muncul di kode lain).
+- **`ProductionGenealogyMaterial`** — 0 rujukan.
+
+> **Koreksi:** draf awal dokumen ini menyebut dua model mati termasuk **`CrmTicketComment`**.
+> Itu **salah** — model itu dirujuk `scripts/clear-all-data.ts`. Karena penjaga menghitung
+> rujukan di `scripts/` sebagai pemakaian, ia tak bisa ditandai; keterbatasan definisi ini
+> ditulis di berkas guard-nya.
+
+**Keputusan:** keduanya bagian dari fitur yang halamannya **sudah ada** (inspeksi QC, genealogi
+produksi) → implementasikan atau buang.
+
+## 2. (riwayat) Kolom penaut rekonsiliasi yang dulu diduga hilang
+
+Pencocokan rekonsiliasi **sudah mencatat dokumen sumbernya** lewat
+`BankReconciliationItem.journalEntryId` (ditulis `matchReconciliationLine()`, terindeks).
+
+> **Koreksi:** draf pertama menyebut empat kolom (`BankStatementLine.matchedJournalId`/
+  `matchedPaymentId`, `BankReconciliationItem.relatedJournalId`/`relatedPaymentId`) sebagai
+> "jejak audit yang tidak pernah diisi". Itu **salah** — saya belum memeriksa `journalEntryId`.
+> Setelah diperiksa: keempatnya **duplikat**, sekelas `amountPaid`, dan sudah **dibuang** (§0).
+> `BankStatementLine.matchedType` juga tak ditulis aplikasi (1 rujukan, di skrip seed lama).
+
+## 3. Kolom skalar tanpa rujukan (11) — mayoritas hook fitur yang UI-nya sudah ada
+
+| Model | Kolom | Catatan |
+| --- | --- | --- |
+| `UnitOfMeasure` | `conversionFactor` | **berisi data (6/6 baris)** — diisi SQL migrasi; di kode digantikan tabel `uom_conversions` |
+| `WorkSchedule` | `lateToleranceMinutes` | fitur jadwal kerja ada; kolom tak pernah diekspos |
+| `BankStatementLine` | `valueDate` | tak pernah diisi; mungkin hook impor rekening koran |
+| `Holiday` / `DepartmentHoliday` | `isNationalHoliday` / `isRecurring` | fitur hari libur ada |
+| `OvertimeRequest` | `approvedBySupervisor` | fitur lembur ada |
+| `PurchaseRequest` | `requesterId` | skalar biasa **tanpa relasi**; pemohon belum tertaut |
+| `ApprovalWorkflow` | `isParallel` | fitur alur persetujuan ada (`/pengaturan/workflow`) |
+| `ApprovalWorkflowStep` | `autoApproveAfterTimeout`, `timeoutHours` | idem |
+| `Tax` | `displayOrder` | fitur pajak ada |
+
+> **Koreksi:** saya sempat menggolongkan `conversionFactor` sebagai "mati/tergantikan → boleh
+> dibuang". Setelah **memeriksa data**, kolom itu **terisi di 6 dari 6 baris** — jadi bukan mati.
+> Prinsip yang berlaku: *"tak dirujuk kode" ≠ "tak berisi data"*.
+
+Daftar ini **dibekukan di `src/__tests__/schema-usage.test.ts`** (dua arah: kolom mati baru
+memerahkan tes, dan menambal salah satunya juga memerahkannya).
+
+## 4. (riwayat) `updatedBy`
+
+Dulu: 12 model mendeklarasikan `updatedBy`/`updated_by` tetapi **tak ada kode yang menulisnya**
+(`createdBy` justru dipakai). Kini **ditulis di semua 16 titik update** — lihat §0.
+
+---
+
+## 5. Aksi transisi server tanpa pemanggil UI
+
+> **⚠ DITARIK (koreksi besar).** Seluruh klaim "celah / gerbang buntu" di §5–§5d **SALAH**, dan
+> saya cabut. Rute generik `src/app/api/workflow/[...path]/route.ts` punya jalur **fall-through**:
+> bila tak ada workflow aktif, tombol **Setujui** di halaman detail menjalankan
+> `updateMany({ where: { id, status: { in: ["pending","draft","sent"] } }, data: { status: "approved" } })`
+> — untuk **setiap** modul di `MODULE_MAP` (quotation, salesOrder, purchaseOrder, salesInvoice,
+> purchaseRequest, vendorBill, leaveRequest, overtimeRequest, employeeLoan).
+> **Dibuktikan di browser**: tiga dokumen `draft` (SO, PO, Penawaran) → setelah klik **Setujui**,
+> ketiganya menjadi `approved` di DB. Gerbang "approved" **terjangkau**, sehingga form penerimaan,
+> surat jalan, dan uang muka **bisa dipakai**.
+>
+> **Akar kesalahan saya**: saya mencari rujukan ke nama aksi **spesifik** (`confirmSalesOrder`,
+> `acceptQuotation`, …) lalu menyimpulkan "tak ada yang bisa menghasilkan status ini" — tanpa
+> bertanya **"apa lagi yang menulis status ini?"**. Saya bahkan sudah melihat `StatusActions` di
+> halaman detail SO dan **mengabaikannya** dengan alasan "itu hanya approve/reject, bukan mesin
+> status" — padahal `approve` menghasilkan status `approved` yang **justru** diterima gerbang itu.
+>
+> **Yang tetap berlaku**: `postJournal` dan `confirmVendorPayment` **memang** celah nyata — modul
+> jurnal dan pembayaran vendor **tidak** ada di `MODULE_MAP`, jadi tak ada fall-through untuk
+> keduanya. Daftar 17 aksi nol-rujukan juga tetap fakta; yang salah adalah **penafsirannya**
+> sebagai "alur mati" — aksi-aksi itu tak terpakai karena rute status generik menggantikannya.
+
+**Metode:** memindai 331 aksi (`src/actions/*.ts`) untuk rujukan di luar berkas definisinya.
+Helper query murni (`getCronLogs`, `getProjectProgress`, …) dan aksi auth legacy dikecualikan.
+Guard `wired-transition-actions` mengonfirmasi independen: seluruh 17 entri memang nol rujukan.
+
+**Sudah ditutup:** `postJournal`, `confirmVendorPayment` (§0).
+
+**Celah nyata yang belum diputuskan — rantai Sales Order:**
+`confirmSalesOrder` → `processSalesOrder` → `completeSalesOrder`. SO dibuat `draft`; hanya
+ketiga aksi ini yang menaikkan statusnya, dan **tak ada tombol di `/penjualan/pesanan/`**.
+Alur persetujuan tidak menutupnya (hanya `SalesInvoice` lewat `requestApprovalIfConfigured`),
+dan surat jalan/faktur tidak menuntut maupun menaikkan status SO.
+
+### §5b. (DITARIK) Pengadilan lanjutan (penawaran, cuti, pengeluaran)
+
+- **Celah — rantai Penawaran**: `sendQuotation`/`acceptQuotation`/`rejectQuotation` tak punya
+  tombol; penawaran **tidak** lewat approval-workflow. Akibatnya `convertQuotationToOrder` —
+  yang menuntut `accepted`/`approved` — **selalu gagal**; rujukan tunggal ke aksi itu hanyalah
+  sebuah **komentar**. Jalur penawaran→SO buntu.
+- **Bukan celah (koreksi)**: `approveLeave`/`rejectLeave` **usang** — HR memakai
+  `requestApprovalIfConfigured`, jadi `approved` terjangkau. (Kecurigaan awal saya bahwa cuti
+  "macet pending" **saya cabut**.)
+- **Minor**: `markExpensePaid` — `approveExpense`/`rejectExpense` **sudah tersambung**; `paid`
+  hanya menggerbangi penghapusan.
+- **Belum diadili dampaknya**: `markPurchaseOrderOrdered`, `cancelPurchaseOrder`,
+  `processPurchaseReturn`, `deleteSalesOrder`, `updateProductionCost`.
+
+### §5c. (DITARIK) Penerimaan barang "terblokir"
+
+`createGoodsReceipt` **menuntut PO `approved`/`ordered`** (guard-nya berkomentar *"Lock + validate
+the PO status before creating the receipt"*), tetapi PO lahir **`draft`**; penulis `approved`
+hanya `approvePurchaseOrder` (nol pemanggil UI) dan approval-workflow (yang **tidak di-seed**);
+`markPurchaseOrderOrdered` juga nol pemanggil.
+
+**Bukti browser itu hanya membuktikan PENYARINGAN, bukan ketakterjangkauan** — saya salah
+membacanya: dengan 1 PO draft di DB dan tanpa alur
+persetujuan, form penerimaan menawarkan **0 opsi**; query-nya
+`where: { status: { in: ["ordered","approved"] } }` — jadi peng-exclude-an memang **karena
+status**. Baru bisa dipakai bila pengguna mengonfigurasi alur persetujuan `PurchaseOrder` di
+`/pengaturan/workflow`.
+
+### §5d. (DITARIK) Sisiran gerbang status
+
+| Form | Menuntut | Status |
+| --- | --- | --- |
+| `/pembelian/penerimaan/tambah` | PO `approved`/`ordered` | **Buntu bahkan di DB ber-seed** (seed tak membuat PO) — terbukti di browser |
+| `/penjualan/surat-jalan/tambah` | SO `approved`/`confirmed` | Buntu bagi SO buatan UI; **tertutupi seed** (§5e) |
+| `/penjualan/uang-muka/tambah` | **Quotation** `accepted`/`approved` | Buntu lewat rantai penawaran (§5b) |
+
+Ketiganya kini **menjelaskan syaratnya** alih-alih buntu senyap, dan invariannya dijaga tes
+(halaman wajib tetap menyediakan form — sesuai guard `crud-surface` — **dan** menjelaskan bila
+pemilihnya kosong). Pesannya **tidak menyebut jalan keluar yang belum terverifikasi**.
+
+**Diperiksa dan tidak berdampak**: `billed` & `partial` tak punya penulis, tetapi tak ada gerbang
+yang menuntutnya.
+
+### §5e. Kenapa kelas ini lolos dari 1000+ tes: seed memalsukan status — **SUDAH DITUTUP**
+
+`scripts/seed-remaining-e2e.ts` dulu membuat entitas **langsung pada status yang tak bisa dicapai
+UI**: `salesOrder.create({ status: "confirmed" })` dan `journal` yang di-`update` jadi `POSTED`
+secara manual. Lingkungan ber-seed — dev maupun E2E — karena itu **menyembunyikan** gerbang §5d.
+
+**Ditutup.** Kedua fabrikasi itu sudah dibuang (SO kini `draft`, jurnal dibiarkan `DRAFT`), masing-
+masing disertai komentar **di tempat kejadian** agar tak dipulihkan tanpa sengaja. Diukur sebelum
+memutuskan: dengan kedua perubahan itu, **suite E2E penuh tetap 1063 lulus / 0 gagal** — dan tak
+ada spec yang membuat surat jalan, jadi status palsu itu memang tak memberi manfaat apa pun.
+
+> **Koreksi (kekhawatiran saya sendiri):** saya sempat memperingatkan bahwa un-posting jurnal bisa
+> membuat tes laporan **lulus hampa**. Itu **tidak terbukti**: spec neraca-saldo sudah punya
+> penjaga non-vakum (`expect(totalDebit).toBeGreaterThan(0)`) dan tetap lolos setelah un-posting —
+> karena laporan tetap berisi posting otomatis dari hook. Jadi menukar "masking" dengan "vakum"
+> tidak terjadi.
+
+**Batas kejujuran yang masih berlaku:**
+- Klaim §5d untuk **uang muka** hanya terverifikasi lewat kode (pengukuran browser saya salah
+  sasaran: combobox pertama form itu pencari **pelanggan**, bukan penawaran).
+- Daftar lengkap pasangan (entitas, status) yang dipalsukan seed **belum** disusun. Pemeriksaan
+  kasar ("apakah status X punya penulis?") **tidak memadai** karena tak membedakan entitas
+  (`confirmed` punya 2 penulis; untuk `SalesOrder` hanya satu — dan itu aksi tak tersambung).
+  Yang terverifikasi baru dua instance: `SalesOrder = "confirmed"`, `Journal` DRAFT→POSTED.
+
+---
+
+## 6. Metode & pemeriksaan ulang (setelah pencabutan §5)
+
+Pencabutan besar di §5 memaksa saya memeriksa **semua** keluarga klaim dengan pertanyaan yang
+sama: *"keadaan ini bisa dihasilkan/diakses oleh apa saja?"* — bukan hanya "apakah nama X muncul?".
+
+| Keluarga klaim | Metode | Hasil pemeriksaan ulang |
+| --- | --- | --- |
+| Gerbang status "buntu" (§5b–§5d) | rujukan ke **aksi spesifik** | **GAGAL** — jalur generik `/api/workflow` (fall-through) menghasilkan `approved`. **Dicabut.** |
+| Model tanpa pemakaian (§1) | nama model + delegate **dan** jalur relasi (`include`/`select`) | **Lolos** — `QcInspectionResult`: relasi `results` tak pernah dibaca; `ProductionGenealogyMaterial`: pemiliknya dipakai, tetapi `include: { materials }` **nol**. |
+| Kolom skalar tanpa rujukan (§3) | nama field **dan** nama kolom `@map`, plus `$queryRaw` | **Lolos** — tak ada SQL mentah yang menyebut kolom-kolom itu; spread `data: x` yang ada tidak berkaitan. |
+| `postJournal`/`confirmVendorPayment` (§0) | rujukan aksi **dan** keberadaan rute generik | **Lolos** — modul **jurnal** & **pembayaran vendor** tidak ada di `MODULE_MAP`, jadi tak ada fall-through; sebelum perbaikan, jurnal memang tetap `DRAFT` di DB. |
+
+**Pelajaran**: "tak ada rujukan ke aksi bernama X" **bukan** bukti "alur mati". Untuk menyatakan
+sesuatu tak terjangkau, harus diperiksa juga **jalur generik** (rute, registry, dispatch) — dan
+lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
+
+## Keputusan yang menunggu
+
+1. **Alur PO · SO · Penawaran** — sambungkan transisinya, atau hapus sebagai kode mati; untuk
+   penerimaan, alternatif termurah: wajibkan/dokumentasikan konfigurasi alur persetujuan PO.
+2. ~~**Seed memalsukan status** (§5e)~~ — **sudah ditutup** (lihat §5e).
+3. **Skema tak terpakai** — `QcInspectionResult`, `ProductionGenealogyMaterial`, dan 11 kolom §3
+   (mayoritas hook fitur yang halamannya sudah ada) → implementasikan atau buang. Catatan:
+   `conversionFactor` berisi data; `valueDate` ambigu.
+4. ~~**Usulan `ci.yml`**~~ — **sudah diterapkan** (`db push` → `migrate deploy`, dua job).
+   Terbukti: migrasi jalan dari DB kosong, `migrate status` up-to-date, drift 0, seed jalan,
+   **suite E2E penuh hijau di skema hasil migrasi** (1063 lulus).
+   **Tersisa (lebih penting dari ini):** `Dockerfile` **produksi** masih
+   `CMD … npx prisma db push && node server.js` — jadi migrasi belum dipakai di produksi.
+   `docs/AUDIT-REPORT.md` sendiri menyatakan produksi seharusnya `migrate deploy` (= niat dan kode
+   tidak sepakat), dan baseline `migrate resolve` yang diklaimnya untuk **31** migrasi kini basi
+   (migrasi sudah 52+).
+
+   **Apa yang akan dihancurkan `db push` di produksi** (inventaris dari migrasi; 16 tabel,
+   17 kolom): `allocation_rules`, `approval_delegations`, `budgets`, `crm_pipelines`,
+   `crm_pipeline_stages`, `currencies`, `exchange_rates`, `fob_terms`, `price_list_items`,
+   `price_lists`, `product_vehicle_models`, `role_module_access`, `sales_targets`, `salespersons`,
+   `skf_values`, `statistical_key_figures`; kolom termasuk `amount_paid`, `matched_journal_id`,
+   `matched_payment_id`, `related_journal_id`, `related_payment_id`, `salesperson_id`, `npkh`… *
+
+   > **Koreksi (peringatan saya sendiri):** saya sempat menyiratkan bahwa `db push` khususnya
+   > berbahaya karena akan menghapus `amountPaid` + 4 kolom penaut rekonsiliasi. Itu **tidak
+   > akurat**: keduanya **punya migrasi**, jadi `migrate deploy` pun akan menghapusnya.
+   >
+   > **Koreksi kedua (menurunkan risiko peralihan):** saya juga berspekulasi produksi mungkin
+   > menyimpan objek sisa yang tak tercakup migrasi mana pun. Itu **kemungkinan besar tidak
+   > berlaku**: karena `Dockerfile` menjalankan `db push` di **setiap boot**, skema produksi
+   > **dijaga terus sama dengan `schema.prisma`** — jadi tidak ada objek tersembunyi, dan
+   > **kedua jalur (db push ↔ migrate deploy) konvergen ke skema yang sama**. Itu membuat pilihan
+   > (a) di atas **aman dari sisi skema**; yang tersisa hanyalah soal tinjauan/jejak, dan satu
+   > prasyarat teknis: produksi harus di-**baseline** dulu.
+   >
+   > **Langkah konkret untuk beralih** (perintah teks — butuh akses produksi, tidak saya jalankan):
+   > ```sh
+   > # 1) Diff dulu: pastikan produksi == skema (harus KOSONG). Tidak mengubah apa pun.
+   > DATABASE_URL=<prod> npx prisma migrate diff --from-config-datasource \
+   >     --to-schema prisma/schema.prisma --script
+   > # 2) Baseline: tandai migrasi yang belum tercatat di _prisma_migrations sebagai applied
+   > DATABASE_URL=<prod> npx prisma migrate resolve --applied <nama-migrasi>   # ulangi per migrasi
+   > # 3) Verifikasi
+   > DATABASE_URL=<prod> npx prisma migrate status        # harus "up to date"
+   > # 4) Baru ubah Dockerfile
+   > #    CMD ["sh", "-c", "npx prisma migrate deploy && node server.js"]
+   > ```
+
+   Juga `scripts/ci-local.sh` masih `db push`, sehingga mirror CI lokal kini berbeda dari CI asli
+   — menyamakannya **tidak boleh** dilakukan tanpa DB scratch, sebab skrip itu berjalan di DB dev
+   yang tak punya `_prisma_migrations` dan pernyataan migrasi yang tak idempoten bisa gagal.
+5. **Commit sesi ini.**

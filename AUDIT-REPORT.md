@@ -14,6 +14,23 @@ serial/batch transfer, `uom-options.ts`) **tidak disentuh dan tidak di-stage**.
 
 ---
 
+## ⚠ Pembaruan (sesi berikutnya) — dua klaim di atas sudah tidak berlaku
+
+1. **Jumlah migrasi & kesehatan rantai.** Saat laporan ini ditulis: "~31 migrasi".
+   Sekarang **52+**, dan rantai itu ternyata **tidak bisa jalan dari nol** (8 tabel tak pernah
+   dibuat; `add_slug_columns` menulis ALTER tanpa penjaga). Sudah **diperbaiki**: `migrate deploy`
+   dari DB kosong berhasil dan **drift = 0**. Verifikasi ulang: `npm run db:check-migrations`.
+2. **"`prisma migrate deploy` produksi kini tervalidasi" — tidak berlaku pada runtime.**
+   `Dockerfile` masih menjalankan **`prisma db push`** setiap kali container boot, jadi produksi
+   **tidak** memakai migrasi (dan `db push` menyelaraskan skema secara senyap, termasuk DROP).
+   Prosedur peralihannya (diff → baseline → verifikasi → ubah CMD) ada di
+   `docs/AUDIT-SCHEMA.md`, bagian (A).
+3. **Angka tes**: 3067 → **3798** unit + **1063** E2E (lulus, di dua jalur skema).
+
+Catatan ini bersifat tambahan; narasi asli laporan tidak diubah.
+
+---
+
 ## Daftar Commit Sesi
 
 | Commit | Ringkasan |
