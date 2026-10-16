@@ -70,6 +70,11 @@ of off-by-one-day bugs (report presets, the "today" default of every create form
   npm run build   # the webServer serves .next/standalone, not the dev server
   E2E_EMAIL=admin@isf.co.id E2E_PASSWORD=Yara1234 npx playwright test --project=chromium
   ```
+- **E2E serves a PREBUILT bundle**: Playwright runs `.next/standalone`, not the dev server, so after
+  any change to `prisma/schema.prisma` you must `npm run build` **before** running the suite — otherwise
+  the bundled Prisma Client is stale and pages fail with `driverAdapterError: ColumnNotFound` for
+  columns that no longer exist. That looks exactly like a code bug (pajak/approval screens plus the
+  status route) and cost a full debugging round; the fix is one rebuild.
 - Four specs read **demo data** and fail (not flake) on an empty/dev DB: `/produksi/qc/inspeksi`
   (needs a `released` QC checklist with items), `customer-vehicle-registry` (vehicle variants),
   `data-table-mobile-cards` (`items`), `finance-journal` trial balance (posted journals). CI creates
