@@ -10,6 +10,7 @@ model User {
   id             Int             @id @default(autoincrement())
   name           String
   email          String          @unique
+  slug           String?         @unique
   password       String
   avatar         String?         @db.Text
   isActive       Boolean         @default(true) @map("is_active")
@@ -20,6 +21,7 @@ model User {
   roles          Role[]          @relation("UserRoles")
   employee       Employee[]
   userWarehouses UserWarehouse[]
+  favorites      FavoriteTransaction[]
 
   @@index([createdAt])
   @@map("users")
@@ -34,14 +36,17 @@ model Role {
   updatedAt    DateTime           @updatedAt @map("updated_at")
   permissions  Permission[]       @relation("RolePermissions")
   users        User[]             @relation("UserRoles")
-  moduleAccess RoleModuleAccess[]
 
   @@index([createdAt])
   @@map("roles")
 }
 
-/// A logical feature area (Inventory, Sales, etc.) used for nav + admin
-/// permission checklist. Each Module groups a set of ModuleActions.
+/// A logical feature area (Inventory, Sales, etc.) used for nav + the admin
+/// permission matrix. Each Module groups a set of ModuleActions.
+///
+/// The catalog is a VIEW of the `permissions` table: `Role.permissions` stays the
+/// single enforced store (read by `auth.ts` → `session.user.permissions`), and this
+/// catalog only groups/labels it for the UI. `permissionKey` is the identity.
 model Module {
   id        Int      @id @default(autoincrement())
   key       String   @unique // e.g. "inventory", "sales", "master.brands"
@@ -55,52 +60,35 @@ model Module {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   actions ModuleAction[]
-  access  RoleModuleAccess[]
 
   @@index([parentKey])
   @@index([order])
   @@map("modules")
 }
 
-/// An action exposed by a Module (view, create, update, delete, approve, ...).
-/// `permissionKey` maps to the legacy permission name so existing can() checks
-/// keep working unchanged.
+/// One permission of a Module. `key` is the ACTION verb (matrix column) and may
+/// repeat inside a module (e.g. several `view` rows for different resources), so
+/// the unique key is `permissionKey` — the old `@@unique([moduleId, key])` collapsed
+/// `master`'s 19 view permissions into a single surviving row.
 model ModuleAction {
   id            Int    @id @default(autoincrement())
   moduleId      Int    @map("module_id")
-  key           String // "view" | "create" | "update" | "delete" | "approve"
-  permissionKey String @map("permission_key") // e.g. "view_inventory"
-  label         String // "Lihat", "Buat", ...
+  key           String // verb: "view" | "create" | "edit" | "delete" | "approve" | ...
+  resource      String // entitas/baris matriks: "customers", "sales_invoices", ...
+  permissionKey String @map("permission_key") // e.g. "view_customers" = key + "_" + resource
+  label         String // resource label, e.g. "Pelanggan"
   order         Int    @default(0)
 
-  module Module             @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  access RoleModuleAccess[]
+  module Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
 
-  @@unique([moduleId, key])
+  @@unique([moduleId, permissionKey])
   @@index([moduleId])
   @@map("module_actions")
 }
 
-/// Per-role grant for a (module, action) pair. Absence of a row = inherit.
-model RoleModuleAccess {
-  id             Int      @id @default(autoincrement())
-  roleId         Int      @map("role_id")
-  moduleId       Int      @map("module_id")
-  moduleActionId Int      @map("module_action_id")
-  allowed        Boolean  @default(true)
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  role   Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  module Module       @relation(fields: [moduleId], references: [id], onDelete: Cascade)
-  action ModuleAction @relation(fields: [moduleActionId], references: [id], onDelete: Cascade)
-
-  @@unique([roleId, moduleId, moduleActionId])
-  @@index([roleId])
-  @@index([moduleId])
-  @@map("role_module_access")
-}
-
+/// Permission catalog row. `name` is the string every `requirePermission()` call
+/// uses; roles reference these rows through `Role.permissions` (pivot
+/// `_RolePermissions`), which is what the session and enforcement read.
 model Permission {
   id        Int      @id @default(autoincrement())
   name      String   @unique
@@ -259,6 +247,25 @@ model DocumentSequence {
   @@map("document_sequences")
 }
 
+/// Transaksi favorit per pengguna (Accurate: "Transaksi Favorit") — pintasan ke
+/// halaman/dokumen yang sering dibuka. Milik satu pengguna, jadi tidak ber-slug.
+model FavoriteTransaction {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  label     String
+  /** Jalur internal aplikasi, mis. "/penjualan/faktur/tambah". */
+  href      String
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, href])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("favorite_transactions")
+}
+
 model Notification {
   id        Int       @id @default(autoincrement())
   userId    Int       @map("user_id")
@@ -304,6 +311,7 @@ model Customer {
   projects           Project[]
   quotations         Quotation[]
   salesInvoices      SalesInvoice[]
+  invoiceExchanges   InvoiceExchange[]
   salesReturns       SalesReturn[]
   salesOrders        SalesOrder[]
   workOrders         WorkOrder[]
@@ -367,12 +375,74 @@ model Vendor {
   productionCosts   ProductionCost[]
   expenses          Expense[]
   pettyCash         PettyCash[]
+  purchaseAdvances  PurchaseAdvance[]
+  vendorPrices      VendorItemPrice[]
   paymentTerm       PaymentTerm?      @relation(fields: [paymentTermId], references: [id])
 
   @@index([paymentTermId], map: "vendors_payment_term_id_fkey")
   @@index([isActive, deletedAt])
   @@index([createdAt])
   @@map("vendors")
+}
+
+/// Uang muka pembelian (down payment ke vendor). Murni sisi akuntansi: menambah
+/// saldo Uang Muka (aset) dan mengurangi kas/bank lewat satu jurnal.
+///
+/// **Penerapan ke tagihan vendor belum diotomatiskan** — dokumen ini mencatat
+/// uang muka yang dibayarkan, bukan saldo yang belum terpakai; laporan yang
+/// mengaku "sisa uang muka" tidak boleh dibuat dari tabel ini.
+model PurchaseAdvance {
+  slug              String?   @unique
+  id                Int       @id @default(autoincrement())
+  documentNo        String    @unique @map("document_no")
+  date              DateTime
+  vendorId          Int       @map("vendor_id")
+  amount            Decimal   @db.Decimal(15, 2)
+  paymentAccountId  Int       @map("payment_account_id")
+  advanceAccountId  Int       @map("advance_account_id")
+  description       String?   @db.Text
+  status            String    @default("posted")
+  journalId         Int?      @map("journal_id")
+  createdBy         Int?      @map("created_by")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+  vendor            Vendor    @relation(fields: [vendorId], references: [id])
+
+  @@index([vendorId], map: "purchase_advances_vendor_id_fkey")
+  @@index([date])
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("purchase_advances")
+}
+
+/// Daftar harga pemasok per barang (Accurate: "Harga Pemasok").
+///
+/// **Murni rujukan** — dokumen pembelian (pesanan/penerimaan/tagihan) belum
+/// mengambil harga dari sini; ini catatan harga hasil kesepakatan, bukan harga
+/// yang otomatis mengikat transaksi.
+model VendorItemPrice {
+  id            Int       @id @default(autoincrement())
+  vendorId      Int       @map("vendor_id")
+  itemId        Int       @map("item_id")
+  price         Decimal   @db.Decimal(15, 2)
+  minQty        Decimal   @default(1.00) @map("min_qty") @db.Decimal(15, 2)
+  effectiveDate DateTime? @map("effective_date")
+  notes         String?   @db.Text
+  isActive      Boolean   @default(true) @map("is_active")
+  createdBy     Int?      @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  vendor        Vendor    @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  item          Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorId, itemId, minQty], map: "uq_vendor_item_price")
+  @@index([vendorId], map: "vendor_item_prices_vendor_id_fkey")
+  @@index([itemId], map: "vendor_item_prices_item_id_fkey")
+  @@index([createdAt])
+  @@map("vendor_item_prices")
 }
 
 model Brand {
@@ -412,6 +482,26 @@ model ItemCategory {
   @@map("item_categories")
 }
 
+/// Grup barang — pengelompokan barang sejajar Kategori, dipakai sebagai dimensi
+/// tambahan di laporan/master barang (Accurate: "Barang Grup").
+model ItemGroup {
+  slug        String?  @unique
+  id          Int      @id @default(autoincrement())
+  code        String   @unique
+  name        String
+  description String?  @db.Text
+  isActive    Boolean  @default(true) @map("is_active")
+  createdBy   Int?     @map("created_by")
+  updatedBy   Int?     @map("updated_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  items       Item[]
+
+  @@index([isActive])
+  @@index([createdAt])
+  @@map("item_groups")
+}
+
 model Item {
   id                   Int                  @id @default(autoincrement())
   slug                 String?              @unique
@@ -420,6 +510,7 @@ model Item {
   description          String?              @db.Text
   image                String?              @db.Text
   categoryId           Int?                 @map("category_id")
+  groupId              Int?                 @map("group_id")
   brandId              Int?                 @map("brand_id")
   vendorId             Int?                 @map("vendor_id")
   defaultWarehouseId   Int?                 @map("default_warehouse_id")
@@ -448,6 +539,7 @@ model Item {
   itemSerials          ItemSerial[]
   brand                Brand?               @relation(fields: [brandId], references: [id])
   category             ItemCategory?        @relation(fields: [categoryId], references: [id])
+  group                ItemGroup?           @relation(fields: [groupId], references: [id], onDelete: SetNull)
   rack                 Rack?                @relation(fields: [defaultRackId], references: [id], onDelete: SetNull)
   rackRow              RackRow?             @relation(fields: [defaultRackRowId], references: [id], onDelete: SetNull)
   warehouse            Warehouse?           @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
@@ -456,9 +548,11 @@ model Item {
   manufacturedProducts Product[]            @relation("ProductInventoryItem")
   uomConversions       UomConversion[]
   fitmentRules         VehicleFitmentRule[]
+  vendorPrices         VendorItemPrice[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
+  @@index([groupId], map: "items_group_id_fkey")
   @@index([defaultRackId], map: "items_default_rack_id_fkey")
   @@index([defaultRackRowId], map: "items_default_rack_row_id_fkey")
   @@index([defaultWarehouseId], map: "items_default_warehouse_id_fkey")
@@ -631,6 +725,8 @@ model Account {
   code            String           @unique
   name            String
   type            AccountType
+  /** Tipe akun gaya Accurate (BANK, AREC, INTR, OCAS, FASS, DEPR, APAY, OCLY, LTLY, EQTY, REVE, OINC, COGS, EXPS, OEXP) — dasar pengelompokan laporan. */
+  reportGroup     String?          @map("report_group")
   parentId        Int?             @map("parent_id")
   normalBalance   String?          @map("normal_balance")
   description     String?          @db.Text
@@ -641,7 +737,6 @@ model Account {
   parent          Account?         @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
   children        Account[]        @relation("AccountTree")
   journalEntries  JournalEntry[]
-  allocationRules AllocationRule[]
 
   @@index([parentId], map: "accounts_parent_id_fkey")
   @@index([isActive, deletedAt])
@@ -695,6 +790,98 @@ model ShippingMethod {
   @@index([isActive])
   @@index([createdAt])
   @@map("shipping_methods")
+}
+
+
+/// Jenis pemotongan PPh (mis. PPh 23 jasa 2%, PPh 4(2) 10%).
+model WithholdingTaxType {
+  slug                String?         @unique
+  id                  Int             @id @default(autoincrement())
+  code                String          @unique
+  name                String
+  rate                Decimal         @default(0.00) @db.Decimal(5, 2)
+  /** Akun Hutang PPh (kita memotong vendor). */
+  liabilityAccountId  Int?            @map("liability_account_id")
+  /** Akun PPh dibayar dimuka (dipotong pelanggan). */
+  receivableAccountId Int?            @map("receivable_account_id")
+  isActive            Boolean         @default(true) @map("is_active")
+  deletedAt           DateTime?       @map("deleted_at")
+  createdBy           Int?            @map("created_by")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  vendorBills         VendorBill[]
+  salesPayments       SalesPayment[]
+  taxPayments         TaxPayment[]
+
+  @@index([isActive, deletedAt])
+  @@map("withholding_tax_types")
+}
+
+/// Penyetoran pajak (PPh) ke kas negara. Jurnal: **Dr akun utang pajak, Cr kas/bank**.
+///
+/// Menyetor bukan beban baru — ini melunasi utang pajak yang sudah dipotong pada
+/// dokumen (mis. tagihan vendor). Karena itu sisi debit masuk akun **utang pajak**,
+/// bukan akun beban.
+model TaxPayment {
+  slug             String?             @unique
+  id               Int                 @id @default(autoincrement())
+  documentNo       String              @unique @map("document_no")
+  date             DateTime
+  /** Masa pajak, mis. "2026-09". */
+  period           String?
+  taxTypeId        Int?                @map("tax_type_id")
+  taxAccountId     Int                 @map("tax_account_id")
+  paymentAccountId Int                 @map("payment_account_id")
+  amount           Decimal             @db.Decimal(15, 2)
+  /** Nomor SSP/MPN sebagai bukti setor. */
+  reference        String?
+  notes            String?             @db.Text
+  status           String              @default("posted")
+  journalId        Int?                @map("journal_id")
+  createdBy        Int?                @map("created_by")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+  deletedAt        DateTime?           @map("deleted_at")
+  taxType          WithholdingTaxType? @relation(fields: [taxTypeId], references: [id], onDelete: SetNull)
+
+  @@index([taxTypeId])
+  @@index([taxAccountId])
+  @@index([paymentAccountId])
+  @@index([date])
+  @@index([period])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("tax_payments")
+}
+
+/// Template dokumen berulang (faktur/tagihan/beban/jurnal) yang dijalankan berkala.
+model RecurringTransaction {
+  slug         String?   @unique
+  id           Int       @id @default(autoincrement())
+  name         String
+  /** "sales_invoice" | "purchase_bill" | "expense" | "journal" */
+  type         String
+  /** "daily" | "weekly" | "monthly" | "quarterly" | "yearly" */
+  frequency    String
+  interval     Int       @default(1)
+  startDate    DateTime  @map("start_date")
+  endDate      DateTime? @map("end_date")
+  nextRunDate  DateTime  @map("next_run_date")
+  lastRunAt    DateTime? @map("last_run_at")
+  runCount     Int       @default(0) @map("run_count")
+  /** Template payload (JSON) untuk dokumen yang dihasilkan. */
+  template     String    @db.Text
+  /** Ringkasan dokumen terakhir yang dihasilkan. */
+  lastResult   String?   @map("last_result") @db.Text
+  isActive     Boolean   @default(true) @map("is_active")
+  deletedAt    DateTime? @map("deleted_at")
+  createdBy    Int?      @map("created_by")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([isActive, deletedAt, nextRunDate])
+  @@map("recurring_transactions")
 }
 
 model Quotation {
@@ -876,7 +1063,6 @@ model SalesInvoice {
   id                Int                @id @default(autoincrement())
   customerVehicleId Int?               @map("customer_vehicle_id")
   projectId         Int?               @map("project_id")
-  amountPaid        Decimal            @default(0.00) @map("amount_paid") @db.Decimal(15, 2)
   documentNo        String             @unique @map("document_no")
   customerId        Int                @map("customer_id")
   salesOrderId      Int?               @map("sales_order_id")
@@ -903,6 +1089,7 @@ model SalesInvoice {
   salesOrder        SalesOrder?        @relation(fields: [salesOrderId], references: [id])
   salesReturns      SalesReturn[]
   payments          SalesPayment[]
+  invoiceExchangeItems InvoiceExchangeItem[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
   @@index([quotationId], map: "sales_invoices_quotation_id_fkey")
@@ -917,6 +1104,51 @@ model SalesInvoice {
   @@index([paymentStatus])
   @@index([deletedAt, paymentStatus, dueDate])
   @@map("sales_invoices")
+}
+
+/// Tukar faktur = penyerahan faktur penjualan ke pelanggan dan penerimaan tanda
+/// terima resmi sebagai dasar jatuh tempo + pemantauan pelunasan.
+///
+/// **Tanpa jurnal.** Ini dokumen operasional penagihan, bukan transaksi GL —
+/// piutang sudah tercatat oleh fakturnya sendiri, jadi membuat jurnal di sini akan
+/// menggandakan piutang.
+model InvoiceExchange {
+  slug          String?   @unique
+  id            Int       @id @default(autoincrement())
+  documentNo    String    @unique @map("document_no")
+  date          DateTime
+  customerId    Int       @map("customer_id")
+  /** Nomor tanda terima dari pelanggan. */
+  receiptNumber String?   @map("receipt_number")
+  dueDate       DateTime? @map("due_date")
+  notes         String?   @db.Text
+  createdBy     Int?      @map("created_by")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  deletedAt     DateTime? @map("deleted_at")
+  customer      Customer  @relation(fields: [customerId], references: [id])
+  items         InvoiceExchangeItem[]
+
+  @@index([customerId])
+  @@index([date])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("invoice_exchanges")
+}
+
+model InvoiceExchangeItem {
+  id             Int             @id @default(autoincrement())
+  exchangeId     Int             @map("exchange_id")
+  salesInvoiceId Int             @map("sales_invoice_id")
+  /** Nilai faktur saat diserahkan (grandTotal) — dasar penagihan. */
+  amount         Decimal         @db.Decimal(15, 2)
+  exchange       InvoiceExchange @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
+  salesInvoice   SalesInvoice    @relation(fields: [salesInvoiceId], references: [id])
+
+  @@index([exchangeId])
+  @@index([salesInvoiceId])
+  @@map("invoice_exchange_items")
 }
 
 model SalesInvoiceItem {
@@ -943,7 +1175,17 @@ model SalesPayment {
   documentNo     String       @unique @map("document_no")
   customerId     Int?         @map("customer_id")
   salesInvoiceId Int          @map("sales_invoice_id")
+  /** Kas yang benar-benar diterima — BUKAN termasuk PPh yang dipotong pelanggan. */
   amount         Decimal      @db.Decimal(15, 2)
+  // PPh yang dipotong pelanggan saat membayar (mis. PPh 23). Disimpan di
+  // pembayaran, bukan di faktur, karena bukti potong baru ada saat pelanggan
+  // membayar — dan yang dipotong bukan bagian dari kas yang diterima.
+  // Pelunasan piutang dihitung dari `amount + withholdingAmount`, dan jurnalnya
+  // Dr Kas (amount) + Dr PPh dibayar dimuka (withholdingAmount) / Cr Piutang.
+  withholdingTypeId        Int?      @map("withholding_type_id")
+  withholdingAmount        Decimal   @default(0.00) @map("withholding_amount") @db.Decimal(15, 2)
+  withholdingCertificateNo String?   @map("withholding_certificate_no")
+  withholdingDate          DateTime? @map("withholding_date")
   paymentDate    DateTime     @map("payment_date")
   paymentMethod  String       @map("payment_method")
   accountId      Int?         @map("account_id")
@@ -953,10 +1195,12 @@ model SalesPayment {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
   salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+  withholdingType WithholdingTaxType? @relation(fields: [withholdingTypeId], references: [id], onDelete: SetNull)
 
   @@index([salesInvoiceId], map: "sales_payments_sales_invoice_id_fkey")
   @@index([customerId])
   @@index([accountId])
+  @@index([withholdingTypeId])
   @@index([createdBy])
   @@index([createdAt])
   @@map("sales_payments")
@@ -999,6 +1243,7 @@ model SalesReturnItem {
   @@index([itemId])
   @@map("sales_return_items")
 }
+
 
 model PurchaseRequest {
   slug            String?               @unique
@@ -1214,6 +1459,8 @@ model VendorBill {
   balanceDue          Decimal                   @default(0.00) @map("balance_due") @db.Decimal(15, 2)
   terms               String?                   @map("terms") @db.Text
   costCenterId        Int?                      @map("cost_center_id")
+  withholdingTypeId   Int?                      @map("withholding_type_id")
+  withholdingAmount   Decimal                   @default(0.00) @map("withholding_amount") @db.Decimal(15, 2)
   approvedBy          Int?                      @map("approved_by")
   approvedAt          DateTime?                 @map("approved_at")
   deletedAt           DateTime?                 @map("deleted_at")
@@ -1235,6 +1482,7 @@ model VendorBill {
   purchaseOrder       PurchaseOrder?            @relation(fields: [purchaseOrderId], references: [id])
   goodsReceipt        GoodsReceipt?             @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
   vendor              Vendor                    @relation(fields: [vendorId], references: [id])
+  withholdingType     WithholdingTaxType?       @relation(fields: [withholdingTypeId], references: [id], onDelete: SetNull)
   allocations         VendorPaymentAllocation[]
   vendorPayments      VendorPayment[]
 
@@ -1304,6 +1552,11 @@ model VendorPayment {
   // (murni oldest-first).
   vendorBillId    Int?                      @map("vendor_bill_id")
   notes           String?                   @db.Text
+  // Penanda eksekusi "Transfer Pemasok": kapan transfer bank ke pemasok benar-benar
+  // dikirim, dan referensi bukti transfernya. Sifatnya operasional — jurnal kas/bank
+  // sudah dibuat oleh pembayaran ini, jadi menandai transfer TIDAK membuat jurnal baru.
+  transferredAt     DateTime?                 @map("transferred_at")
+  transferReference String?                   @map("transfer_reference")
   createdBy       Int?                      @map("created_by")
   createdAt       DateTime                  @default(now()) @map("created_at")
   updatedAt       DateTime                  @updatedAt @map("updated_at")
@@ -1318,6 +1571,7 @@ model VendorPayment {
   @@index([accountId])
   @@index([createdBy])
   @@index([paymentDate])
+  @@index([transferredAt])
   @@index([deletedAt])
   @@index([vendorBillId])
   @@map("vendor_payments")
@@ -1475,6 +1729,7 @@ model StockAdjustmentItem {
   batchId           Int?            @map("batch_id")
   unit              String?
   unitCost          Decimal         @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
+  totalCost         Decimal         @default(0.00) @map("total_cost") @db.Decimal(15, 2)
   serialNumbers     Json?           @map("serial_numbers")
   notes             String?
   stockAdjustment   StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
@@ -2356,25 +2611,6 @@ model PettyCash {
   @@map("petty_cash")
 }
 
-model Budget {
-  slug         String?  @unique
-  id           Int      @id @default(autoincrement())
-  name         String
-  accountId    Int      @map("account_id")
-  costCenterId Int?     @map("cost_center_id")
-  amount       Decimal  @db.Decimal(15, 2)
-  startDate    DateTime @map("start_date")
-  endDate      DateTime @map("end_date")
-  createdBy    Int?     @map("created_by")
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @updatedAt @map("updated_at")
-
-  @@index([accountId], map: "budgets_account_id_idx")
-  @@index([costCenterId], map: "budgets_cost_center_id_idx")
-  @@index([createdBy])
-  @@index([createdAt])
-  @@map("budgets")
-}
 
 model CostCenter {
   slug              String?                @unique
@@ -2390,11 +2626,9 @@ model CostCenter {
   children          CostCenter[]           @relation("CostCenterTree")
   createdAt         DateTime               @default(now()) @map("created_at")
   updatedAt         DateTime               @updatedAt @map("updated_at")
-  skfValues         SkfValue[]
   payrolls          Payroll[]
   materialIssues    MaterialIssue[]
   projects          Project[]
-  allocationTargets AllocationRuleTarget[]
 
   @@index([departmentId])
   @@index([profitCenterId])
@@ -2409,10 +2643,73 @@ model ProfitCenter {
   name      String
   createdAt DateTime   @default(now()) @map("created_at")
   updatedAt DateTime   @updatedAt @map("updated_at")
-  skfValues SkfValue[]
 
   @@index([createdAt])
   @@map("profit_centers")
+}
+
+/// Transfer antar rekening kas/bank (Accurate: "Transfer Bank").
+///
+/// Rekening disimpan sebagai id akun biasa (tanpa relasi), sama seperti
+/// `Bank.accountId` — supaya tidak perlu menambah relasi balik di `Account`.
+/// Jurnalnya dibuat sekali saat dokumen dibuat dan DI-POSTING langsung
+/// (transfer uang nyata), dengan `referenceType`/`referenceId` ke transfer ini.
+model BankTransfer {
+  slug         String?   @unique
+  id           Int       @id @default(autoincrement())
+  documentNo   String    @unique @map("document_no")
+  date         DateTime
+  fromAccountId Int      @map("from_account_id")
+  toAccountId   Int      @map("to_account_id")
+  amount       Decimal   @db.Decimal(15, 2)
+  adminFee     Decimal   @default(0.00) @map("admin_fee") @db.Decimal(15, 2)
+  feeAccountId Int?      @map("fee_account_id")
+  description  String?   @db.Text
+  journalId    Int?      @map("journal_id")
+  createdBy    Int?      @map("created_by")
+  deletedAt    DateTime? @map("deleted_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+
+  @@index([fromAccountId])
+  @@index([toAccountId])
+  @@index([date])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("bank_transfers")
+}
+
+/// Giro/cek (Accurate: "Giro Mundur") — register giro & cek beserta tanggal
+/// jatuh temponya, dasar laporan "Giro Mundur (Belum Jatuh Tempo)".
+model Cheque {
+  id         Int       @id @default(autoincrement())
+  documentNo String    @unique @map("document_no")
+  /** "giro" | "cek". */
+  type       String    @default("giro")
+  /** "in" = diterima dari pelanggan, "out" = dikeluarkan ke pemasok. */
+  direction  String    @default("in")
+  /** Nomor giro/cek yang tercetak di lembar bank. */
+  number     String?
+  accountId  Int?      @map("account_id")
+  party      String?
+  amount     Decimal   @db.Decimal(15, 2)
+  dueDate    DateTime  @map("due_date")
+  /** "pending" (belum cair) | "cleared" | "cancelled". */
+  status     String    @default("pending")
+  notes      String?   @db.Text
+  createdBy  Int?      @map("created_by")
+  deletedAt  DateTime? @map("deleted_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  updatedAt  DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([dueDate])
+  @@index([direction])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@index([deletedAt])
+  @@map("cheques")
 }
 
 model BankStatement {
@@ -2459,14 +2756,10 @@ model BankStatementLine {
   type             String
   reference        String?
   status           String        @default("unmatched")
-  matchedJournalId Int?          @map("matched_journal_id")
-  matchedPaymentId Int?          @map("matched_payment_id")
   matchedType      String?       @map("matched_type")
   bankStatement    BankStatement @relation(fields: [bankStatementId], references: [id], onDelete: Cascade)
 
   @@index([bankStatementId], map: "bank_statement_lines_bank_statement_id_fkey")
-  @@index([matchedJournalId])
-  @@index([matchedPaymentId])
   @@map("bank_statement_lines")
 }
 
@@ -2520,15 +2813,11 @@ model BankReconciliationItem {
   matched              Boolean            @default(false)
   cleared              Boolean            @default(false)
   clearedDate          DateTime?          @map("cleared_date")
-  relatedJournalId     Int?               @map("related_journal_id")
-  relatedPaymentId     Int?               @map("related_payment_id")
   bankReconciliation   BankReconciliation @relation(fields: [bankReconciliationId], references: [id], onDelete: Cascade)
 
   @@index([bankReconciliationId], map: "bank_reconciliation_items_bank_reconciliation_id_fkey")
   @@index([bankStatementLineId])
   @@index([journalEntryId])
-  @@index([relatedJournalId])
-  @@index([relatedPaymentId])
   @@map("bank_reconciliation_items")
 }
 
@@ -2646,6 +2935,10 @@ model AssetCategory {
   code                             String?
   depreciationRate                 Decimal? @map("depreciation_rate") @db.Decimal(5, 2)
   usefulLife                       Int?     @map("useful_life")
+  /// Penyusutan fiskal (pajak) — dipakai laporan "Perbedaan Penyusutan".
+  /// Terpisah dari tarif/umur akuntansi supaya keduanya bisa dibandingkan.
+  taxDepreciationRate              Decimal? @map("tax_depreciation_rate") @db.Decimal(5, 2)
+  taxUsefulLife                    Int?     @map("tax_useful_life")
   assetAccountId                   Int?     @map("asset_account_id")
   accumulatedDepreciationAccountId Int?     @map("accumulated_depreciation_account_id")
   depreciationExpenseAccountId     Int?     @map("depreciation_expense_account_id")
@@ -2850,6 +3143,7 @@ model CustomerVehicle {
   id            Int         @id @default(autoincrement())
   customerId    Int         @map("customer_id")
   vehicleId     Int         @map("vehicle_id")
+  slug          String?     @unique
   plateNumber   String?     @map("plate_number")
   color         String?     @map("color")
   chassisNumber String?     @map("chassis_number")
@@ -3143,57 +3437,6 @@ model TaxGroupTax {
   @@map("tax_group_taxes")
 }
 
-model StatisticalKeyFigure {
-  slug            String?          @unique
-  id              Int              @id @default(autoincrement())
-  name            String
-  code            String?
-  unit            String
-  type            String?
-  value           Decimal          @default(0.00) @db.Decimal(15, 2)
-  isActive        Boolean          @default(true) @map("is_active")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  skfValues       SkfValue[]
-  allocationRules AllocationRule[]
-
-  @@index([createdAt])
-  @@map("statistical_key_figures")
-}
-
-model AllocationRule {
-  slug            String?                @unique
-  id              Int                    @id @default(autoincrement())
-  name            String
-  sourceAccountId Int                    @map("source_account_id")
-  skfId           Int                    @map("skf_id")
-  description     String?                @db.Text
-  isActive        Boolean                @default(true) @map("is_active")
-  createdAt       DateTime               @default(now()) @map("created_at")
-  updatedAt       DateTime               @updatedAt @map("updated_at")
-  sourceAccount   Account                @relation(fields: [sourceAccountId], references: [id])
-  skf             StatisticalKeyFigure   @relation(fields: [skfId], references: [id])
-  targets         AllocationRuleTarget[]
-
-  @@index([sourceAccountId])
-  @@index([skfId])
-  @@map("allocation_rules")
-}
-
-model AllocationRuleTarget {
-  id           Int            @id @default(autoincrement())
-  ruleId       Int            @map("rule_id")
-  costCenterId Int            @map("cost_center_id")
-  percentage   Decimal?       @db.Decimal(5, 2)
-  createdAt    DateTime       @default(now()) @map("created_at")
-  rule         AllocationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
-  costCenter   CostCenter     @relation(fields: [costCenterId], references: [id])
-
-  @@unique([ruleId, costCenterId])
-  @@index([costCenterId])
-  @@map("allocation_rule_targets")
-}
-
 model ActivityLog {
   id          Int      @id @default(autoincrement())
   userId      Int?     @map("user_id")
@@ -3314,27 +3557,6 @@ model UomConversion {
   @@index([itemId], map: "uom_conversions_item_id_fkey")
   @@index([createdAt])
   @@map("uom_conversions")
-}
-
-model SkfValue {
-  id                     Int                  @id @default(autoincrement())
-  statisticalKeyFigureId Int                  @map("statistical_key_figure_id")
-  costCenterId           Int?                 @map("cost_center_id")
-  profitCenterId         Int?                 @map("profit_center_id")
-  period                 String
-  value                  Decimal              @db.Decimal(15, 4)
-  createdAt              DateTime             @default(now()) @map("created_at")
-  updatedAt              DateTime             @updatedAt @map("updated_at")
-  costCenter             CostCenter?          @relation(fields: [costCenterId], references: [id])
-  profitCenter           ProfitCenter?        @relation(fields: [profitCenterId], references: [id])
-  statisticalKeyFigure   StatisticalKeyFigure @relation(fields: [statisticalKeyFigureId], references: [id])
-
-  @@unique([statisticalKeyFigureId, period, costCenterId], map: "skf_value_period_cc_unique")
-  @@index([costCenterId], map: "skf_values_cost_center_id_fkey")
-  @@index([profitCenterId], map: "skf_values_profit_center_id_fkey")
-  @@index([statisticalKeyFigureId], map: "skf_values_statistical_key_figure_id_fkey")
-  @@index([createdAt])
-  @@map("skf_values")
 }
 
 model UnitOfMeasure {
