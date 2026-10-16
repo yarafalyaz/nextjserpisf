@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting, formatDate } from '@/lib/utils/format'
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
@@ -13,6 +12,8 @@ import { RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 import { AGING_BUCKETS, agingBucket, daysOverdue } from "@/lib/reports/aging"
 
 import type { Metadata } from "next"
+import { ReportPageShell } from "@/components/reports/report-page-shell"
+import { AgingChart } from "@/components/lazy/aging-chart"
 
 export const metadata: Metadata = { title: "Hutang Jatuh Tempo" }
 
@@ -59,18 +60,10 @@ export default async function AgingPayablesPage() {
   const period = `Per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="print:hidden">
-        <AppBreadcrumbs items={[
-          { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Hutang Jatuh Tempo" },
-        ]} />
-      </div>
+    <ReportPageShell title="Hutang Jatuh Tempo" sheet={false} wide actions={<><ExportButtons title="Hutang_Jatuh_Tempo" /></>}>
 
-      <div className="flex items-center justify-end print:hidden">
-        <ExportButtons title="Hutang_Jatuh_Tempo" />
-      </div>
+
+
 
       <ReportLetterhead title="Hutang Jatuh Tempo" subtitle="Aging Payables" periodLabel={period} />
       <ReportNarration text="Laporan Utang Jatuh Tempo mengelompokkan utang usaha berdasarkan umur jatuh temponya. Informasi ini penting untuk mengelola jadwal pembayaran, menjaga hubungan baik dengan vendor, dan mengoptimalkan arus kas perusahaan." />
@@ -101,6 +94,19 @@ export default async function AgingPayablesPage() {
             </DetailTableRow>
           </DetailTableBody>
         </DetailTable>
+      </ReportSection>
+
+      <ReportSection title="Grafik Umur Hutang">
+        {/* Grafik memakai `agingGroups` yang sama dengan tabel di atas — satu sumber. */}
+        <AgingChart
+          data={agingGroups.map((group) => ({
+            label: group.key,
+            total: group.total,
+            count: group.count,
+          }))}
+          label="Nilai Hutang"
+          ariaLabel="Grafik umur hutang per kategori umur"
+        />
       </ReportSection>
 
       <ReportSection title="Detail Hutang">
@@ -134,6 +140,6 @@ export default async function AgingPayablesPage() {
           </DetailTableBody>
         </DetailTable>
       </ReportSection>
-    </div>
+    </ReportPageShell>
   )
 }

@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting } from '@/lib/utils/format'
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
@@ -11,6 +10,7 @@ import { ReportSection, ReportKpiCard } from "@/components/reports/report-sectio
 import { ReportNarration } from "@/components/reports/report-narration"
 
 import type { Metadata } from "next"
+import { ReportPageShell } from "@/components/reports/report-page-shell"
 
 export const metadata: Metadata = { title: "Ringkasan Stok" }
 
@@ -118,18 +118,14 @@ export default async function InventorySummaryPage() {
   const periodLabel = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="print:hidden">
-        <AppBreadcrumbs items={[
-          { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Ringkasan Persediaan" },
-        ]} />
-      </div>
-
-      <div className="flex items-center justify-end print:hidden">
+    <ReportPageShell title="Ringkasan Stok" sheet={false} wide actions={<>
+<div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Ringkasan_Persediaan" />
       </div>
+</>}>
+
+
+
 
       <ReportLetterhead title="Ringkasan Persediaan" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Ringkasan Stok menyajikan saldo dan nilai persediaan per gudang atau per kategori barang secara ringkas. Informasi ini memberikan gambaran cepat tentang posisi persediaan perusahaan secara keseluruhan." />
@@ -229,6 +225,6 @@ export default async function InventorySummaryPage() {
           </DetailTable>
         </ReportSection>
       )}
-    </div>
+    </ReportPageShell>
   )
 }

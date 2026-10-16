@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting, formatDate } from '@/lib/utils/format'
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
@@ -13,6 +12,8 @@ import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { AGING_BUCKETS, agingBucket, daysOverdue } from "@/lib/reports/aging"
 
 import type { Metadata } from "next"
+import { ReportPageShell } from "@/components/reports/report-page-shell"
+import { AgingChart } from "@/components/lazy/aging-chart"
 
 export const metadata: Metadata = { title: "Piutang Jatuh Tempo" }
 
@@ -61,18 +62,14 @@ export default async function AgingReceivablesPage() {
   const period = `Per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="print:hidden">
-        <AppBreadcrumbs items={[
-          { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Piutang Jatuh Tempo" },
-        ]} />
-      </div>
-
-      <div className="flex items-center justify-end print:hidden">
+    <ReportPageShell title="Piutang Jatuh Tempo" sheet={false} wide actions={<>
+<div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Piutang_Jatuh_Tempo" />
       </div>
+</>}>
+
+
+
 
       <ReportLetterhead title="Piutang Jatuh Tempo" subtitle="Aging Receivables" periodLabel={period} />
       <ReportNarration text="Laporan Piutang Jatuh Tempo mengelompokkan piutang usaha berdasarkan umur jatuh temponya. Analisis aging piutang membantu mengidentifikasi risiko keterlambatan pembayaran dan mengevaluasi efektivitas penagihan kepada pelanggan." />
@@ -103,6 +100,19 @@ export default async function AgingReceivablesPage() {
             </DetailTableRow>
           </DetailTableBody>
         </DetailTable>
+      </ReportSection>
+
+      <ReportSection title="Grafik Umur Piutang">
+        {/* Grafik memakai `agingGroups` yang sama dengan tabel di atas — satu sumber. */}
+        <AgingChart
+          data={agingGroups.map((group) => ({
+            label: group.key,
+            total: group.total,
+            count: group.count,
+          }))}
+          label="Nilai Piutang"
+          ariaLabel="Grafik umur piutang per kategori umur"
+        />
       </ReportSection>
 
       <ReportSection title="Detail Piutang">
@@ -136,6 +146,6 @@ export default async function AgingReceivablesPage() {
           </DetailTableBody>
         </DetailTable>
       </ReportSection>
-    </div>
+    </ReportPageShell>
   )
 }

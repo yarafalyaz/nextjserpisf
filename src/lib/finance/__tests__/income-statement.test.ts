@@ -19,7 +19,8 @@ function acc(
   debit: number,
   credit: number
 ): IncomeStatementAccountInput {
-  return { id, code, name: `Acc ${code}`, type, debit, credit }
+  // COA lama tanpa reportGroup = jalur cadangan rentang kode.
+  return { id, code, name: `Acc ${code}`, type, reportGroup: null, debit, credit }
 }
 
 describe("computeIncomeStatement", () => {
@@ -107,5 +108,87 @@ describe("computeIncomeStatement", () => {
     ]
     const r = computeIncomeStatement(accounts)
     expect(r.totalRevenue).toBeCloseTo(800, 2) // 1000 + (-200)
+  })
+})
+
+/**
+ * COA standar (ekspor Accurate) memakai penomoran yang tidak bisa ditebak dari
+ * kode: HPP ada di 5101, beban operasional di 6xxx, non-operasional di 71xx/72xx.
+ * Karena itu pengelompokan HARUS ikut `reportGroup` (tipe akun), bukan rentang kode.
+ */
+describe("computeIncomeStatement - COA Accurate (reportGroup)", () => {
+  const accounts: IncomeStatementAccountInput[] = [
+    { id: 1, code: "400001", name: "Penjualan", type: "REVENUE", reportGroup: "REVE", debit: 0, credit: 100_000_000 },
+    { id: 2, code: "5101", name: "Beban Pokok Penjualan", type: "EXPENSE", reportGroup: "COGS", debit: 60_000_000, credit: 0 },
+    { id: 3, code: "600004", name: "Beban Gaji, Upah & Honorer", type: "EXPENSE", reportGroup: "EXPS", debit: 6_000_000, credit: 0 },
+    { id: 4, code: "710001", name: "Pendapatan Jasa Giro", type: "REVENUE", reportGroup: "OINC", debit: 0, credit: 2_000_000 },
+    { id: 5, code: "720002", name: "Beban Adm. Bank", type: "EXPENSE", reportGroup: "OEXP", debit: 500_000, credit: 0 },
+  ]
+
+  it("menempatkan 5101 sebagai HPP walaupun kodenya di luar rentang 5000-5099", () => {
+    const r = computeIncomeStatement(accounts)
+    expect(r.cogsData.map((a) => a.code)).toEqual(["5101"])
+    expect(r.expenseData.map((a) => a.code)).toEqual(["600004"])
+    expect(r.grossProfit).toBeCloseTo(40_000_000, 2)
+    expect(r.operatingProfit).toBeCloseTo(34_000_000, 2)
+  })
+
+  it("mengelompokkan 71xx/72xx sebagai non-operasional", () => {
+    const r = computeIncomeStatement(accounts)
+    expect(r.otherIncomeData.map((a) => a.code)).toEqual(["710001"])
+    expect(r.otherExpenseData.map((a) => a.code)).toEqual(["720002"])
+    expect(r.netProfit).toBeCloseTo(35_500_000, 2) // 34M + 1.5M
+  })
+
+  it("tetap memakai rentang kode saat reportGroup tidak ada (COA kustom)", () => {
+    const r = computeIncomeStatement([
+      { id: 1, code: "4-1000", name: "Pendapatan", type: "REVENUE", reportGroup: null, debit: 0, credit: 1_000 },
+      { id: 2, code: "5-1500", name: "HPP", type: "EXPENSE", reportGroup: null, debit: 400, credit: 0 },
+    ])
+    expect(r.totalCogs).toBeCloseTo(400, 2)
+  })
+})
+
+/**
+ * The seeded chart of accounts uses 4-digit codes. Before this was handled,
+ * `code.startsWith("5-1")` matched nothing, so HPP was never deducted and
+ * "LABA KOTOR" silently equalled total revenue.
+ */
+describe("computeIncomeStatement - 4-digit seeded COA", () => {
+  const seedAccounts: IncomeStatementAccountInput[] = [
+    { id: 1, code: "4000", name: "Pendapatan Penjualan", type: "REVENUE", reportGroup: null, debit: 0, credit: 100_000_000 },
+    { id: 2, code: "5000", name: "Harga Pokok Penjualan", type: "EXPENSE", reportGroup: null, debit: 60_000_000, credit: 0 },
+    { id: 3, code: "5100", name: "Beban Operasional", type: "EXPENSE", reportGroup: null, debit: 9_000_000, credit: 0 },
+    { id: 4, code: "5200", name: "Beban Gaji", type: "EXPENSE", reportGroup: null, debit: 6_000_000, credit: 0 },
+    { id: 5, code: "1600", name: "Penyesuaian Persediaan", type: "EXPENSE", reportGroup: null, debit: 1_000_000, credit: 0 },
+  ]
+
+  it("treats 5000-5099 as HPP and the rest of 5xxx as operating expense", () => {
+    const r = computeIncomeStatement(seedAccounts)
+    expect(r.cogsData.map((a) => a.code)).toEqual(["5000"])
+    expect(r.expenseData.map((a) => a.code).sort()).toEqual(["1600", "5100", "5200"])
+    expect(r.totalCogs).toBeCloseTo(60_000_000, 2)
+    expect(r.grossProfit).toBeCloseTo(40_000_000, 2)
+    expect(r.totalExpense).toBeCloseTo(16_000_000, 2)
+    expect(r.operatingProfit).toBeCloseTo(24_000_000, 2)
+  })
+
+  it("keeps 5100 out of HPP (a 51xx operational account must not be deducted as HPP)", () => {
+    const r = computeIncomeStatement(seedAccounts)
+    expect(r.cogsData.some((a) => a.code === "5100")).toBe(false)
+  })
+
+  it("classifies 8xxx / 9xxx as non-operating", () => {
+    const r = computeIncomeStatement([
+      ...seedAccounts,
+      { id: 6, code: "8000", name: "Pendapatan Bunga", type: "REVENUE", reportGroup: null, debit: 0, credit: 2_000_000 },
+      { id: 7, code: "9000", name: "Beban Bunga", type: "EXPENSE", reportGroup: null, debit: 500_000, credit: 0 },
+    ])
+    expect(r.totalOtherIncome).toBeCloseTo(2_000_000, 2)
+    expect(r.totalOtherExpense).toBeCloseTo(500_000, 2)
+    // 8xxx is carved out of operating revenue, 9xxx out of operating expense.
+    expect(r.totalRevenue).toBeCloseTo(100_000_000, 2)
+    expect(r.totalExpense).toBeCloseTo(16_000_000, 2)
+    expect(r.netProfit).toBeCloseTo(25_500_000, 2) // 24M + 1.5M
   })
 })

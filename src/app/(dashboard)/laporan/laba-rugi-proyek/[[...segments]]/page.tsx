@@ -2,16 +2,14 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting } from '@/lib/utils/format'
+import { formatAccounting } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
-import { ReportLetterhead } from "@/components/reports/report-letterhead"
-import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
-import { ReportNarration } from "@/components/reports/report-narration"
+import { ReportSection } from "@/components/reports/report-section"
 import { statusLabel } from "@/lib/utils/status-labels"
 
 import type { Metadata } from "next"
@@ -93,28 +91,27 @@ export default async function ProjectPnLPage({
   })
 
   const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0)
-  const totalCost = rows.reduce((s, r) => s + r.totalCost, 0)
   const totalProfit = rows.reduce((s, r) => s + r.profit, 0)
   const avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0
   const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="print:hidden">
-        <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Laporan", href: "/laporan" }, { label: "Laba Rugi per Proyek" }]} />
-      </div>
-      <div className="flex items-center justify-end print:hidden"><ExportButtons title="Laba_Rugi_per_Proyek" /></div>
-      <div className="print:hidden">
-        <ReportPeriodFilter basePath="/laporan/laba-rugi-proyek" mode="range" defaultStartDate={toLocalDateOnly(startDate)} defaultEndDate={toLocalDateOnly(endDate)} />
-      </div>
-      <ReportLetterhead title="Laba Rugi per Proyek / Perintah Kerja" periodLabel={periodLabel} />
-      <ReportNarration text="Laporan Laba Rugi Proyek menyajikan kinerja keuangan setiap proyek yang sedang berjalan. Laporan ini menampilkan pendapatan, biaya langsung, dan laba bersih per proyek, sehingga manajemen dapat mengevaluasi profitabilitas dan efisiensi masing-masing proyek." />
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Pendapatan" value={formatCurrency(totalRevenue)} valueClassName="text-success" />
-        <ReportKpiCard label="Total Biaya" value={formatCurrency(totalCost)} valueClassName="text-danger" />
-        <ReportKpiCard label="Total Laba" value={formatCurrency(totalProfit)} valueClassName={totalProfit >= 0 ? 'text-success' : 'text-danger'} />
-        <ReportKpiCard label="Rata-rata Margin" value={`${avgMargin.toFixed(1)}%`} valueClassName={avgMargin >= 0 ? 'text-success' : 'text-danger'} />
-      </div>
+    <ReportPageShell
+      title="Laba Rugi per Proyek"
+      sheetTitle="Laba Rugi per Proyek / Perintah Kerja"
+      subtitle="Rincian Pendapatan, Biaya, dan Laba per Proyek"
+      periodLabel={periodLabel}
+      periodCaption={periodLabel}
+      filter={
+        <ReportPeriodFilter
+          basePath="/laporan/laba-rugi-proyek"
+          mode="range"
+          defaultStartDate={toLocalDateOnly(startDate)}
+          defaultEndDate={toLocalDateOnly(endDate)}
+        />
+      }
+      actions={<ExportButtons title="Laba_Rugi_per_Proyek" />}
+    >
       <ReportSection title={`Detail per Proyek (${rows.length} proyek)`}>
         <DetailTable data-report-table="P&L by Project">
           <DetailTableHead>
@@ -154,6 +151,6 @@ export default async function ProjectPnLPage({
           </DetailTableBody>
         </DetailTable>
       </ReportSection>
-    </div>
+    </ReportPageShell>
   )
 }

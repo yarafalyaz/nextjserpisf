@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting } from '@/lib/utils/format'
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
@@ -15,6 +14,7 @@ import {
 } from "@/lib/inventory/stock-reconciliation"
 
 import type { Metadata } from "next"
+import { ReportPageShell } from "@/components/reports/report-page-shell"
 
 export const metadata: Metadata = { title: "Rekonsiliasi Stok" }
 
@@ -73,18 +73,14 @@ export default async function StockReconciliationPage() {
   const periodLabel = `Per ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="print:hidden">
-        <AppBreadcrumbs items={[
-          { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Rekonsiliasi Stok" },
-        ]} />
-      </div>
-
-      <div className="flex items-center justify-end print:hidden">
+    <ReportPageShell title="Rekonsiliasi Stok" sheet={false} wide actions={<>
+<div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Rekonsiliasi_Stok" />
       </div>
+</>}>
+
+
+
 
       <ReportLetterhead title="Rekonsiliasi Stok" subtitle="Stock Reconciliation" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Rekonsiliasi Stok membandingkan jumlah stok pada data induk barang (qty on-hand) dengan jumlah pada lapisan FIFO (lot per gudang). Keduanya seharusnya selalu sama; selisih menandakan ada mutasi yang memperbarui salah satu saja, sehingga angka stok bisa menyesatkan. Gunakan laporan ini sebagai alat kontrol integritas persediaan." />
@@ -106,8 +102,8 @@ export default async function StockReconciliationPage() {
           <DetailTableHead>
             <DetailTableTh>SKU</DetailTableTh>
             <DetailTableTh>Nama Item</DetailTableTh>
-            <DetailTableTh align="right">Qty Induk</DetailTableTh>
-            <DetailTableTh align="right">Qty FIFO</DetailTableTh>
+            <DetailTableTh align="right">Kuantitas Induk</DetailTableTh>
+            <DetailTableTh align="right">Kuantitas FIFO</DetailTableTh>
             <DetailTableTh align="right">Selisih</DetailTableTh>
             <DetailTableTh align="right">Nilai FIFO</DetailTableTh>
           </DetailTableHead>
@@ -137,6 +133,6 @@ export default async function StockReconciliationPage() {
           </DetailTableBody>
         </DetailTable>
       </ReportSection>
-    </div>
+    </ReportPageShell>
   )
 }

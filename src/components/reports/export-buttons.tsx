@@ -59,6 +59,17 @@ function openPdf(href: string, download: boolean) {
   window.open(url.toString(), "_blank", "noopener,noreferrer")
 }
 
+function downloadCsv(csv: string, title: string) {
+  const content = csv.startsWith("\ufeff") ? csv : `\ufeff${csv}`
+  const blob = new Blob([content], { type: "text/csv;charset=utf-8;" })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement("a")
+  link.href = url
+  link.download = `${title.replace(/\\s+/g, "_")}_${toLocalDateOnly(new Date())}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 /**
  * jsPDF + autoTable berat dan hanya dibutuhkan saat tombol PDF ditekan, jadi
  * dimuat di sini agar tidak ikut bundel awal halaman laporan.
@@ -76,7 +87,15 @@ async function loadPdfLibs() {
   }
 }
 
-export function ExportButtons({ title, pdfHref }: { title: string; pdfHref?: string }) {
+export function ExportButtons({
+  title,
+  pdfHref,
+  csvData,
+}: {
+  title: string
+  pdfHref?: string
+  csvData?: string
+}) {
   // Ekspor PDF/CSV membangun dokumen di main thread (impor jsPDF + tabel). Tanpa
   // penjaga ini tombol tetap bisa diklik saat proses berjalan: UI tampak hang dan
   // klik berulang membuka banyak tab/unduhan.
@@ -107,6 +126,11 @@ export function ExportButtons({ title, pdfHref }: { title: string; pdfHref?: str
   }
 
   const exportCsv = () => {
+    if (csvData) {
+      downloadCsv(csvData, title)
+      return
+    }
+
     const tables = document.querySelectorAll('[data-report-table]')
     if (tables.length === 0) {
       showError('Tidak ada data untuk di-export')
@@ -130,13 +154,7 @@ export function ExportButtons({ title, pdfHref }: { title: string; pdfHref?: str
       csv += '\n'
     })
 
-    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${title.replace(/\s+/g, '_')}_${toLocalDateOnly(new Date())}.csv`
-    link.click()
-    URL.revokeObjectURL(url)
+    downloadCsv(csv, title)
   }
 
   const handleExportPDF = async () => {

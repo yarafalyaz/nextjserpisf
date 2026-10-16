@@ -3,7 +3,6 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting } from '@/lib/utils/format'
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
@@ -12,6 +11,7 @@ import { ReportNarration } from "@/components/reports/report-narration"
 import { RECOGNISED_AR_STATUSES, RECOGNISED_AP_STATUSES } from "@/lib/reports/document-status"
 
 import type { Metadata } from "next"
+import { ReportPageShell } from "@/components/reports/report-page-shell"
 
 export const metadata: Metadata = { title: "Ringkasan AR/AP" }
 
@@ -61,18 +61,14 @@ export default async function ArApSummaryPage() {
   const period = `Per ${new Date().toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta', day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="print:hidden">
-        <AppBreadcrumbs items={[
-          { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Ringkasan AR/AP" },
-        ]} />
-      </div>
-
-      <div className="flex items-center justify-end print:hidden">
+    <ReportPageShell title="Ringkasan AR/AP" sheet={false} wide actions={<>
+<div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Ringkasan_AR_AP" />
       </div>
+</>}>
+
+
+
 
       <ReportLetterhead title="Ringkasan Piutang & Hutang" periodLabel={period} />
       <ReportNarration text="Laporan Ringkasan Piutang dan Utang menyajikan ikhtisar saldo piutang usaha dan utang usaha perusahaan. Informasi ini penting untuk mengelola arus kas dan memastikan kewajiban pembayaran kepada vendor serta tagihan kepada pelanggan terpantau dengan baik." />
@@ -156,6 +152,6 @@ export default async function ArApSummaryPage() {
           </DetailTableBody>
         </DetailTable>
       </ReportSection>
-    </div>
+    </ReportPageShell>
   )
 }

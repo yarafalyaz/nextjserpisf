@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
@@ -10,6 +9,7 @@ import { ReportSection } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
 
 import type { Metadata } from "next"
+import { ReportPageShell } from "@/components/reports/report-page-shell"
 
 export const metadata: Metadata = { title: "Umur Stok" }
 
@@ -52,13 +52,9 @@ export default async function StockAgingPage() {
   const periodLabel = `Per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="print:hidden">
-        <AppBreadcrumbs items={[
-          { label: "Dasbor", href: "/" }, { label: "Laporan", href: "/laporan" }, { label: "Umur Stok" },
-        ]} />
-      </div>
-      <div className="flex items-center justify-end print:hidden"><ExportButtons title="Umur_Stok" /></div>
+    <ReportPageShell title="Umur Stok" sheet={false} wide actions={<><ExportButtons title="Umur_Stok" /></>}>
+
+
       <ReportLetterhead title="Umur Stok" subtitle="Analisis Umur Persediaan" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Umur Stok mengelompokkan persediaan barang berdasarkan lama penyimpanan di gudang. Analisis umur stok membantu mengidentifikasi barang yang lambat bergerak (slow-moving) atau berpotensi usang (obsolete) sehingga dapat dilakukan tindakan penjualan atau write-off." />
       <ReportSection title="Ringkasan Umur Stok">
@@ -81,7 +77,7 @@ export default async function StockAgingPage() {
         <DetailTable data-report-table="Detail Umur Stok">
           <DetailTableHead>
             <DetailTableTh>SKU</DetailTableTh><DetailTableTh>Nama Item</DetailTableTh><DetailTableTh>Kategori</DetailTableTh>
-            <DetailTableTh>Satuan</DetailTableTh><DetailTableTh align="right">Qty</DetailTableTh><DetailTableTh align="right">Umur (Hari)</DetailTableTh><DetailTableTh>Kelompok</DetailTableTh>
+            <DetailTableTh>Satuan</DetailTableTh><DetailTableTh align="right">Kuantitas</DetailTableTh><DetailTableTh align="right">Umur (Hari)</DetailTableTh><DetailTableTh>Kelompok</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
             {rows.map((r, i) => (
@@ -108,6 +104,6 @@ export default async function StockAgingPage() {
           </DetailTableBody>
         </DetailTable>
       </ReportSection>
-    </div>
+    </ReportPageShell>
   )
 }

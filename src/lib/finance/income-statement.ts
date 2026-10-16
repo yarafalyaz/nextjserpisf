@@ -3,12 +3,19 @@
  * page (`src/app/(dashboard)/laporan/laba-rugi/page.tsx`) so the P&L
  * computation can be unit-tested without Prisma.
  *
- * Account categorization (matches the report page):
- *   - REVENUE type            -> operating revenue (credit-normal)
- *   - code starts with "5-1"  -> COGS / HPP (debit-normal)
- *   - EXPENSE type, not 5-1   -> operating expense (debit-normal)
- *   - code starts with "8-"   -> other income (credit-normal)
- *   - code starts with "9-"   -> other expense (debit-normal)
+ * Account categorization supports BOTH chart-of-account conventions:
+ *   - 4-digit codes (our seeded COA: "5000", "5100", "1600", …)
+ *   - hyphenated codes ("5-1000", "8-1000", "9-1000")
+ *
+ *   - type REVENUE, not 8xxx            -> operating revenue (credit-normal)
+ *   - 5-1xxx or 5000–5099               -> COGS / HPP (debit-normal)
+ *   - 8-xxxx or 8000–8999               -> other (non-operating) income
+ *   - 9-xxxx or 9000–9999               -> other (non-operating) expense
+ *   - remaining EXPENSE type            -> operating expense (debit-normal)
+ *
+ * The 4-digit ranges were added because the seeded COA uses "5000"/"5100"
+ * style codes: the old "5-1" only test classified nothing, so HPP was never
+ * deducted and "LABA KOTOR" silently equalled total revenue.
  *
  * Multi-step waterfall:
  *   gross   = revenue - cogs
@@ -24,6 +31,19 @@ export interface IncomeStatementAccountInput {
   type: string
   debit: number
   credit: number
+  /**
+   * Tipe akun gaya Accurate (REVE/OINC/COGS/EXPS/OEXP). Bila ada, inilah yang
+   * menentukan pengelompokan — jauh lebih andal daripada menebak dari rentang
+   * kode, karena COA bisa memakai penomoran apa pun (mis. HPP di 5101 sedangkan
+   * beban operasional di 6000).
+   *
+   * WAJIB diisi (boleh `null`) dan sengaja tidak opsional: pemanggil yang lupa
+   * mengirimnya diam-diam jatuh ke tebakan rentang kode, sehingga HPP berhenti
+   * terhitung sebagai HPP — Laba Kotor berubah menjadi sama dengan Pendapatan
+   * tanpa error apa pun. Dengan wajib-diisi, kelalaian itu ketahuan saat
+   * `tsc`, bukan saat membaca laporan.
+   */
+  reportGroup: string | null
 }
 
 export interface IncomeStatementLine {
@@ -51,46 +71,97 @@ export interface IncomeStatementResult {
   margin: number
 }
 
+/** First four digits of a code, so "5000" and "5-1000" both normalise. */
+function codeBlock(code: string): number {
+  const digits = code.replace(/[^0-9]/g, "")
+  return digits ? Number(digits.slice(0, 4)) : Number.NaN
+}
+
+function inRange(code: string, from: number, to: number): boolean {
+  const block = codeBlock(code)
+  return Number.isFinite(block) && block >= from && block <= to
+}
+
+type ClassifiableAccount = Pick<IncomeStatementAccountInput, "code" | "type" | "reportGroup">
+
+const isCogs = (a: ClassifiableAccount) =>
+  /^5-1/.test(a.code) || inRange(a.code, 5000, 5099)
+const isOtherIncome = (a: ClassifiableAccount) =>
+  /^8-/.test(a.code) || inRange(a.code, 8000, 8999)
+const isOtherExpense = (a: ClassifiableAccount) =>
+  /^9-/.test(a.code) || inRange(a.code, 9000, 9999)
+
+/** Tipe akun Accurate → bagian laporan laba rugi. */
+const REPORT_GROUP_SECTION: Record<string, IncomeStatementSection> = {
+  REVE: "revenue",
+  OINC: "other_income",
+  COGS: "cogs",
+  EXPS: "operating_expense",
+  OEXP: "other_expense",
+}
+
+/** Section of the income statement an account belongs to (null = not in the P&L). */
+export type IncomeStatementSection =
+  | "revenue"
+  | "cogs"
+  | "operating_expense"
+  | "other_income"
+  | "other_expense"
+
+/**
+ * Single source of truth for the P&L grouping, shared by the totals waterfall
+ * and the report page's hierarchical rows so both can never disagree.
+ */
+export function classifyIncomeStatementAccount(
+  account: ClassifiableAccount
+): IncomeStatementSection | null {
+  // 1. Tipe akun (paling andal) — dipakai COA standar yang menyimpan reportGroup.
+  const byGroup = account.reportGroup ? REPORT_GROUP_SECTION[account.reportGroup] : undefined
+  if (byGroup) return byGroup
+
+  // 2. Cadangan: COA kustom tanpa reportGroup → tebak dari rentang kode.
+  if (isOtherIncome(account)) return "other_income"
+  if (isOtherExpense(account)) return "other_expense"
+  if (isCogs(account)) return "cogs"
+  if (account.type === "REVENUE") return "revenue"
+  if (account.type === "EXPENSE") return "operating_expense"
+  return null
+}
+
+/** Credit-normal sections show credit − debit; the rest show debit − credit. */
+export function isCreditNormalSection(section: IncomeStatementSection): boolean {
+  return section === "revenue" || section === "other_income"
+}
+
 export function computeIncomeStatement(
   accounts: IncomeStatementAccountInput[]
 ): IncomeStatementResult {
-  const isCogs = (a: IncomeStatementAccountInput) => a.code.startsWith("5-1")
-  const isOtherIncome = (a: IncomeStatementAccountInput) => a.code.startsWith("8-")
-  const isOtherExpense = (a: IncomeStatementAccountInput) => a.code.startsWith("9-")
+  // Setiap akun dikelompokkan lewat SATU fungsi klasifikasi, sehingga subtotal di
+  // laporan tidak mungkin berbeda dengan baris-barisnya. Utang: reportGroup
+  // (tipe akun Accurate) bila ada, kalau tidak jatuh ke rentang kode lama.
+  const buckets: Record<IncomeStatementSection, IncomeStatementLine[]> = {
+    revenue: [],
+    cogs: [],
+    operating_expense: [],
+    other_income: [],
+    other_expense: [],
+  }
 
-  // Categories are mutually exclusive so no account is counted twice. Other
-  // income (8-) / other expense (9-) are carved OUT of the main revenue/expense
-  // buckets even when they carry REVENUE/EXPENSE types, otherwise an 8-xxxx
-  // REVENUE account would be summed into both totalRevenue and totalOther.
-  const revenueAccounts = accounts.filter(
-    (a) => a.type === "REVENUE" && !isOtherIncome(a)
-  )
-  const cogsAccounts = accounts.filter(isCogs)
-  const expenseAccounts = accounts.filter(
-    (a) => a.type === "EXPENSE" && !isCogs(a) && !isOtherExpense(a)
-  )
-  const otherIncomeAccounts = accounts.filter(isOtherIncome)
-  const otherExpenseAccounts = accounts.filter(isOtherExpense)
+  for (const account of accounts) {
+    const section = classifyIncomeStatementAccount(account)
+    if (!section) continue
+    const balance = isCreditNormalSection(section)
+      ? account.credit - account.debit
+      : account.debit - account.credit
+    if (balance === 0) continue
+    buckets[section].push({ id: account.id, code: account.code, name: account.name, balance })
+  }
 
-  // isRevenue=true -> credit-normal (credit - debit); else debit-normal.
-  const calcBalance = (
-    accs: IncomeStatementAccountInput[],
-    isRevenue: boolean
-  ): IncomeStatementLine[] =>
-    accs
-      .map((acc) => {
-        const balance = isRevenue
-          ? acc.credit - acc.debit
-          : acc.debit - acc.credit
-        return { id: acc.id, code: acc.code, name: acc.name, balance }
-      })
-      .filter((a) => a.balance !== 0)
-
-  const revenueData = calcBalance(revenueAccounts, true)
-  const cogsData = calcBalance(cogsAccounts, false)
-  const expenseData = calcBalance(expenseAccounts, false)
-  const otherIncomeData = calcBalance(otherIncomeAccounts, true)
-  const otherExpenseData = calcBalance(otherExpenseAccounts, false)
+  const revenueData = buckets.revenue
+  const cogsData = buckets.cogs
+  const expenseData = buckets.operating_expense
+  const otherIncomeData = buckets.other_income
+  const otherExpenseData = buckets.other_expense
 
   const totalRevenue = revenueData.reduce((s, a) => s + a.balance, 0)
   const totalCogs = cogsData.reduce((s, a) => s + a.balance, 0)
