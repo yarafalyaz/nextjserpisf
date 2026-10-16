@@ -203,8 +203,10 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
 
 ## Keputusan yang menunggu
 
-1. **Alur PO · SO · Penawaran** — sambungkan transisinya, atau hapus sebagai kode mati; untuk
-   penerimaan, alternatif termurah: wajibkan/dokumentasikan konfigurasi alur persetujuan PO.
+1. **Higienitas kode: 17 nama aksi tanpa pemanggil UI** — hapus atau biarkan. Setelah
+   koreksi §5, **gerbang dokumennya terbukti berfungsi** (rute status generik
+   `/api/workflow`), jadi ini murni soal higienitas. Menghapusnya kini **berisik**:
+   penjaga `wired-transition-actions` memerah dan menyebut entri basi yang harus dibuang.
 2. ~~**Seed memalsukan status** (§5e)~~ — **sudah ditutup** (lihat §5e).
 3. **Skema tak terpakai** — `QcInspectionResult`, `ProductionGenealogyMaterial`, dan 11 kolom §3
    (mayoritas hook fitur yang halamannya sudah ada) → implementasikan atau buang. Catatan:
@@ -212,11 +214,6 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
 4. ~~**Usulan `ci.yml`**~~ — **sudah diterapkan** (`db push` → `migrate deploy`, dua job).
    Terbukti: migrasi jalan dari DB kosong, `migrate status` up-to-date, drift 0, seed jalan,
    **suite E2E penuh hijau di skema hasil migrasi** (1063 lulus).
-   **Tersisa (lebih penting dari ini):** `Dockerfile` **produksi** masih
-   `CMD … npx prisma db push && node server.js` — jadi migrasi belum dipakai di produksi.
-   `docs/AUDIT-REPORT.md` sendiri menyatakan produksi seharusnya `migrate deploy` (= niat dan kode
-   tidak sepakat), dan baseline `migrate resolve` yang diklaimnya untuk **31** migrasi kini basi
-   (migrasi sudah 52+).
 
    **Apa yang akan dihancurkan `db push` di produksi** (inventaris dari migrasi; 16 tabel,
    17 kolom): `allocation_rules`, `approval_delegations`, `budgets`, `crm_pipelines`,
@@ -253,4 +250,15 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
    Juga `scripts/ci-local.sh` masih `db push`, sehingga mirror CI lokal kini berbeda dari CI asli
    — menyamakannya **tidak boleh** dilakukan tanpa DB scratch, sebab skrip itu berjalan di DB dev
    yang tak punya `_prisma_migrations` dan pernyataan migrasi yang tak idempoten bisa gagal.
-5. **Commit sesi ini.**
+5. ~~**Commit sesi ini**~~ — **sudah dikerjakan**: 15 commit bertema di `main`, **belum
+   di-push** (push = keputusan Anda). Artefak yang sengaja dikecualikan: `SS/` (tangkapan
+   layar), `.commandcode/taste/taste.md` (dikelola otomatis), `skills-lock.json` +
+   `.commandcode/skills/` (belum terlacak).
+
+6. **Provisioning produksi — paling berdampak, dan satu-satunya yang butuh akses di luar
+   repo ini.** `Dockerfile` masih menjalankan `prisma db push` di setiap boot, sehingga
+   migrasi tidak dipakai produksi. Prosedur 4 langkahnya ada di §5 (mulai dari `migrate diff`,
+   yang tidak mengubah apa pun). `docs/AUDIT-REPORT.md` sendiri menyatakan produksi seharusnya
+   `migrate deploy` (niat dan kode tidak sepakat), dan baseline `migrate resolve` yang diklaimnya
+   untuk **31** migrasi kini basi — migrasinya sudah 52+. Catatan pembaruan bertanggal sudah
+   ditambahkan di kepala laporan itu.
