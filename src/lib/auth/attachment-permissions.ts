@@ -2,7 +2,7 @@ import "server-only"
 import { hasPermission } from "@/lib/auth/permissions"
 import { auth } from "@/lib/auth/auth"
 import { prisma } from "@/lib/db/prisma"
-import { assertWarehouseAccessMulti, getWarehouseScope } from "@/lib/auth/warehouse-scope"
+import { canAccessWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import {
   ATTACHMENT_CREATE_PERMISSION,
   ATTACHMENT_PERMISSION,
@@ -37,13 +37,6 @@ const ATTACHMENT_MODEL: Record<string, string> = {
   petty_cash: "pettyCash",
 }
 
-const WAREHOUSE_FIELDS: Record<string, string[]> = {
-  material_issue: ["warehouseId"],
-  goods_receipt: ["warehouseId"],
-  inventory_transfer: ["sourceWarehouseId", "destinationWarehouseId"],
-  stock_adjustment: ["warehouseId"],
-}
-
 // Maps a transaction-attachment referenceType to the view-permission required
 // to access documents of that type. Used to gate attachment upload/list/serve
 // so that being logged in is not sufficient — the caller must also be allowed
@@ -68,26 +61,13 @@ async function canAccessAttachmentWithPermission(
 
   const model = (prisma as any)[modelKey]
   if (!model?.findUnique) return false
-  const warehouseFields = WAREHOUSE_FIELDS[referenceType] ?? []
-  const select = Object.fromEntries([["id", true], ...warehouseFields.map((field) => [field, true])])
-  const document = await model.findUnique({ where: { id: referenceId }, select })
+  const document = await model.findUnique({ where: { id: referenceId }, select: { id: true } })
   if (!document) return false
 
-  if (warehouseFields.length === 0) return true
+  // Dokumen yang dibatasi gudang memakai penjagaan bersama dengan route cetak,
+  // sehingga lampiran dan cetak tidak bisa berbeda aturan. Dokumen lain lolos.
   const session = await auth()
-  if (!session?.user?.id) return false
-  try {
-    const scope = await getWarehouseScope({
-      id: String(session.user.id),
-      roles: Array.isArray(session.user.roles) ? session.user.roles : [],
-    })
-    const warehouseIds = warehouseFields.map((field) => document[field]).filter(Number.isInteger)
-    if (warehouseIds.length !== warehouseFields.length) return false
-    assertWarehouseAccessMulti(scope, warehouseIds)
-    return true
-  } catch {
-    return false
-  }
+  return canAccessWarehouseScopedDocument(referenceType, referenceId, session)
 }
 
 export async function canAccessAttachment(referenceType: string, referenceId: number): Promise<boolean> {

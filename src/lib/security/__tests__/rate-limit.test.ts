@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { takeRateLimit, peekRateLimit, getClientIp } from "../rate-limit"
+import { takeRateLimit, peekRateLimit, getClientIp, canBlockOnClientIp, clientRateLimitKey } from "../rate-limit"
 
 describe("takeRateLimit (in-memory fallback)", () => {
   beforeEach(() => {
@@ -333,5 +333,63 @@ describe("peekRateLimit (in-memory fallback)", () => {
     vi.setSystemTime(new Date("2026-03-01T00:02:00Z"))
     const afterWindow = await peekRateLimit("peek-window", config)
     expect(afterWindow.allowed).toBe(true)
+  })
+})
+
+describe("getClientIp / canBlockOnClientIp", () => {
+  const originalTrusted = process.env.TRUSTED_PROXY
+
+  afterEach(() => {
+    if (originalTrusted === undefined) delete process.env.TRUSTED_PROXY
+    else process.env.TRUSTED_PROXY = originalTrusted
+  })
+
+  function makeReq(headers: Record<string, string> = {}) {
+    return { headers: new Headers(headers) } as Request
+  }
+
+  it("mengembalikan kunci bersama saat TRUSTED_PROXY belum diset", () => {
+    delete process.env.TRUSTED_PROXY
+    const ip = getClientIp(makeReq({ "x-forwarded-for": "1.2.3.4", "cf-connecting-ip": "5.6.7.8" }))
+    expect(ip).toBe("unknown")
+  })
+
+  // Regresi DoS: bucket bersama hanya boleh menghitung, tidak boleh memblokir —
+  // kalau boleh, satu klien anonim mengunci login semua orang.
+  it("melarang pemblokiran saat IP tidak tepercaya", () => {
+    expect(canBlockOnClientIp("unknown")).toBe(false)
+  })
+
+  it("mengizinkan pemblokiran saat IP tepercaya tersedia", () => {
+    expect(canBlockOnClientIp("1.2.3.4")).toBe(true)
+  })
+
+  it("memakai header hanya saat TRUSTED_PROXY=1", () => {
+    process.env.TRUSTED_PROXY = "1"
+    expect(getClientIp(makeReq({ "cf-connecting-ip": "5.6.7.8" }))).toBe("5.6.7.8")
+    expect(getClientIp(makeReq({ "x-real-ip": "9.9.9.9" }))).toBe("9.9.9.9")
+    // X-Forwarded-For: entri paling kanan (proxy terakhir dalam rantai).
+    expect(getClientIp(makeReq({ "x-forwarded-for": "1.1.1.1, 2.2.2.2" }))).toBe("2.2.2.2")
+    expect(getClientIp(makeReq())).toBe("unknown")
+  })
+})
+
+describe("clientRateLimitKey", () => {
+  it("memakai IP saat kunci per-klien tersedia", () => {
+    expect(clientRateLimitKey("1.2.3.4", "7")).toBe("1.2.3.4")
+    expect(clientRateLimitKey("1.2.3.4", null)).toBe("1.2.3.4")
+  })
+
+  // Inti perbaikan DoS: permintaan ber-sesi memakai bucket milik pengguna, jadi
+  // klien anonim yang menghabiskan bucket bersama tidak ikut memblokirnya.
+  it("memakai identitas pengguna saat IP tidak tepercaya", () => {
+    expect(clientRateLimitKey("unknown", "7")).toBe("user:7")
+    expect(clientRateLimitKey("unknown", 7)).toBe("user:7")
+  })
+
+  it("menjatuh ke bucket bersama hanya untuk anonim tanpa IP", () => {
+    expect(clientRateLimitKey("unknown", null)).toBe("unknown")
+    expect(clientRateLimitKey("unknown", "")).toBe("unknown")
+    expect(clientRateLimitKey("unknown", undefined)).toBe("unknown")
   })
 })

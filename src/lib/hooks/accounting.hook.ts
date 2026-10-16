@@ -508,7 +508,7 @@ export async function onSalesPaymentCreated(
 
   const payment = await db.salesPayment.findUniqueOrThrow({
     where: { id: paymentId },
-    include: { salesInvoice: true },
+    include: { salesInvoice: true, withholdingType: true },
   });
 
   // Idempotency check
@@ -516,6 +516,22 @@ export async function onSalesPaymentCreated(
     where: { referenceType: "SalesPayment", referenceId: paymentId },
   });
   if (existing) return;
+
+  // PPh yang dipotong pelanggan: kas yang diterima (amount) lebih kecil dari
+  // pelunasan piutang (amount + potongan), dan selisihnya menjadi PPh dibayar
+  // dimuka. Fail-closed seperti sisi pembelian: jenis PPh tanpa akun piutang pajak
+  // akan membuat jurnal tidak seimbang, jadi lebih baik gagal terang-terangan
+  // daripada memposting pelunasan yang salah.
+  const withholdingAmount = Number(payment.withholdingAmount ?? 0);
+  const withholdingAccountId = payment.withholdingType?.receivableAccountId ?? null;
+  if (withholdingAmount > 0 && !withholdingAccountId) {
+    throw new Error(
+      `Potongan PPh ${payment.withholdingType?.code ?? "-"} tidak bisa dijurnal: jenis PPh itu belum punya ` +
+        `akun "PPh dibayar dimuka". Lengkapi di Pengaturan → Pajak Potong.`,
+    );
+  }
+
+  const settledAmount = Number(payment.amount) + withholdingAmount;
 
   await assertPeriodOpen(payment.paymentDate ?? new Date(), txClient);
 
@@ -539,16 +555,19 @@ export async function onSalesPaymentCreated(
         transactionDate: payment.paymentDate ?? new Date(),
         referenceType: "SalesPayment",
         referenceId: payment.id,
-        description: `Pembayaran Invoice ${payment.salesInvoice?.documentNo ?? ""}`,
+        description:
+          `Pembayaran Invoice ${payment.salesInvoice?.documentNo ?? ""}` +
+          (withholdingAmount > 0 ? ` (dipotong PPh ${withholdingAmount.toLocaleString("id-ID")})` : ""),
         type: "GENERAL",
         status: "POSTED",
-        totalDebit: payment.amount,
-        totalCredit: payment.amount,
+        totalDebit: settledAmount,
+        totalCredit: settledAmount,
         createdBy: userId ?? null,
       },
     });
 
-    // Dr. Kas/Bank + Cr. Piutang Usaha
+    // Dr. Kas/Bank (kas diterima) [+ Dr. PPh dibayar dimuka] / Cr. Piutang Usaha
+    // (nilai pelunasan penuh = kas + potongan).
     await tx.journalEntry.createMany({
       data: [
         {
@@ -558,11 +577,22 @@ export async function onSalesPaymentCreated(
           credit: 0,
           memo: "Penerimaan Kas/Bank",
         },
+        ...(withholdingAmount > 0 && withholdingAccountId
+          ? [
+              {
+                journalId: journal.id,
+                accountId: withholdingAccountId,
+                debit: withholdingAmount,
+                credit: 0,
+                memo: `PPh dipotong pelanggan${payment.withholdingCertificateNo ? ` (bukti ${payment.withholdingCertificateNo})` : ""}`,
+              },
+            ]
+          : []),
         {
           journalId: journal.id,
           accountId: settings.salesReceivableAccountId!,
           debit: 0,
-          credit: payment.amount,
+          credit: settledAmount,
           memo: "Pelunasan Piutang",
         },
       ],
@@ -1301,7 +1331,7 @@ export async function onVendorBillPosted(
     // while the payable stays at grandTotal. Fail closed instead.
     if (taxAmount > grandTotal) {
       throw new Error(
-        `Pajak tagihan (${taxAmount}) melebihi grand total (${grandTotal}) — periksa data tagihan vendor`,
+        `Pajak tagihan (${taxAmount}) melebihi total keseluruhan (${grandTotal}) — periksa data tagihan vendor`,
       );
     }
     const clearingAmount = grandTotal - taxAmount;
@@ -1355,6 +1385,8 @@ export async function onVendorBillPosted(
         tax: true,
         date: true,
         documentNo: true,
+        withholdingAmount: true,
+        withholdingType: { select: { name: true, liabilityAccountId: true } },
       },
     });
     if (!b) throw new Error("Bill tidak ditemukan");
@@ -1363,6 +1395,23 @@ export async function onVendorBillPosted(
     const latestTaxAmount = settings.purchaseTaxAccountId
       ? Number(b.tax ?? 0)
       : 0;
+
+    // PPh potong-putut: only the net amount is owed to the vendor; the withheld
+    // part becomes a tax liability. Fail closed when the type carries no
+    // liability account — silently crediting AP with the full total would hide
+    // the liability and overstate what the vendor is owed.
+    const latestWithholding = Number(b.withholdingAmount ?? 0);
+    if (latestWithholding > latestGrandTotal) {
+      throw new Error(
+        `Pemotongan PPh (${latestWithholding}) melebihi total keseluruhan tagihan (${latestGrandTotal}) — periksa data tagihan vendor`,
+      );
+    }
+    const withholdingAccountId = b.withholdingType?.liabilityAccountId ?? null;
+    if (latestWithholding > 0 && !withholdingAccountId) {
+      throw new Error(
+        "Jenis PPh pada tagihan ini belum memiliki akun Hutang PPh — lengkapi di Pengaturan → Pajak Potong",
+      );
+    }
 
     const journalNumber = await generateJournalNumber(tx, "BILL", billId);
 
@@ -1375,7 +1424,7 @@ export async function onVendorBillPosted(
     if (goodsBased) {
       if (latestTaxAmount > latestGrandTotal) {
         throw new Error(
-          `Pajak tagihan (${latestTaxAmount}) melebihi grand total (${latestGrandTotal}) — periksa data tagihan vendor`,
+          `Pajak tagihan (${latestTaxAmount}) melebihi total keseluruhan (${latestGrandTotal}) — periksa data tagihan vendor`,
         );
       }
       const clearingAmount = latestGrandTotal - latestTaxAmount;
@@ -1422,10 +1471,20 @@ export async function onVendorBillPosted(
         entries: {
           create: [
             ...latestDebitEntries,
+            ...(latestWithholding > 0 && withholdingAccountId
+              ? [
+                  {
+                    accountId: withholdingAccountId,
+                    debit: 0,
+                    credit: latestWithholding,
+                    memo: `PPh dipotong — ${b.withholdingType?.name ?? "PPh"}`,
+                  },
+                ]
+              : []),
             {
               accountId: settings.purchasePayableAccountId!,
               debit: 0,
-              credit: latestGrandTotal,
+              credit: latestGrandTotal - latestWithholding,
               memo: "Accounts Payable",
             },
           ],

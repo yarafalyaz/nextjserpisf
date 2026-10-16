@@ -7,6 +7,19 @@ import {
 } from "../navigation"
 
 describe("navigation single source of truth", () => {
+  it("grup Laporan ditandai sidebarLinkOnly dan anaknya tetap lengkap", () => {
+    const group = navigation.find((item) => item.href === "/laporan")
+
+    // Sidebar menautkan ke katalog saja: 47 laporan sebagai submenu menenggelamkan
+    // menu modul lain dan tidak bisa dicari.
+    expect(group?.sidebarLinkOnly).toBe(true)
+
+    // Tapi `children` TIDAK boleh ikut dihapus: label, ikon, izin, deskripsi
+    // katalog, breadcrumb, dan command palette semuanya membaca dari sini.
+    expect(group?.children?.length ?? 0).toBeGreaterThan(30)
+    expect((group?.children ?? []).every((child) => child.permission === "view_reports")).toBe(true)
+  })
+
   it("includes every menu the sidebar used to hardcode (no drift)", () => {
     const labels = flattenNavigation().map((e) => e.label)
     // A representative sample of menus that the old hardcoded command palette
@@ -21,14 +34,12 @@ describe("navigation single source of truth", () => {
       "Scan Barang",
       "Baris Rak",
       "Revisi BOM",
-      "Quality Control",
+      "Pengendalian Mutu",
       "Saldo Cuti",
       "Apresiasi",
-      "Key Figure Statistik",
       "Fitment",
       "Tugas",
-      "Laba Rugi per CC",
-      "Anggaran vs Realisasi",
+      "Laba Rugi per Pusat Biaya",
       "Harga Beli Multi-Sumber",
       "Serapan Overhead",
     ]) {
@@ -45,8 +56,22 @@ describe("navigation single source of truth", () => {
       for (const entry of fs.readdirSync(current, { withFileTypes: true })) {
         if (entry.isDirectory()) {
           if (entry.name.startsWith("_")) continue
+          // Dynamic segments cannot be linked statically. An OPTIONAL catch-all
+          // ([[...x]]) also serves its own parent path — that is the URL the
+          // navigation must expose (e.g. /laporan/laba-rugi, /laporan/neraca).
+          if (entry.name.startsWith("[[")) {
+            const parent = `/laporan/${rel}`.replace(/\/$/, "")
+            if (!routes.includes(parent)) routes.push(parent)
+            continue
+          }
+          if (entry.name.startsWith("[")) continue
           walk(path.join(current, entry.name), rel ? `${rel}/${entry.name}` : entry.name)
         } else if (entry.name === "page.tsx" && rel) {
+          // Halaman alias lama hanya mengalihkan ke laporan kanoniknya (mis.
+          // /laporan/keuangan → /laporan/neraca-saldo) — bukan laporan, jadi tidak
+          // perlu muncul di menu; yang wajib ada di menu adalah laporan tujuan.
+          const source = fs.readFileSync(path.join(current, entry.name), "utf8")
+          if (/\bredirect\(/.test(source)) continue
           routes.push(`/laporan/${rel}`)
         }
       }
@@ -80,7 +105,10 @@ describe("navigation single source of truth", () => {
 
   it("assigns every entry a permission (so the palette can filter)", () => {
     for (const entry of flattenNavigation()) {
-      expect(entry.permission, `${entry.href} tanpa permission`).toBeTruthy()
+      // `permission` (tunggal) atau `permissions` (any-of, mis. Perintah Pembayaran
+      // yang isinya turunan dari tagihan/pembayaran vendor).
+      const hasPermission = entry.permission || (entry.permissions?.length ?? 0) > 0
+      expect(hasPermission, `${entry.href} tanpa permission`).toBeTruthy()
     }
   })
 

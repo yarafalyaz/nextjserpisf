@@ -17,7 +17,7 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
 
   const payments = await db.salesPayment.findMany({
     where: { salesInvoiceId: invoiceId },
-    select: { amount: true },
+    select: { amount: true, withholdingAmount: true },
   });
 
   // safeSum() runs each value through safeRound() and accumulates with
@@ -27,7 +27,15 @@ async function recalcCore(db: Db, invoiceId: number): Promise<void> {
   // stuck on "partial" forever (breaking AR aging + paymentStatus reports).
   // Match the 2-decimal precision of `Decimal(15, 2)` on SalesPayment.amount /
   // SalesInvoice.grandTotal in the Prisma schema.
-  const totalPaid = safeSum(payments.map((p) => p.amount), 2);
+  //
+  // Yang melunasi piutang adalah `amount + withholdingAmount`: PPh yang dipotong
+  // pelanggan tidak masuk kas, tetapi tetap menghapus piutang (jurnalnya
+  // Dr PPh dibayar dimuka). Menghitung `amount` saja membuat faktur yang dipotong
+  // PPh tidak pernah lunas.
+  const totalPaid = safeSum(
+    payments.map((p) => Number(p.amount) + Number(p.withholdingAmount ?? 0)),
+    2,
+  );
   const grandTotal = Number(invoice.grandTotal ?? 0);
 
   let status: SalesInvoiceStatus = "posted";

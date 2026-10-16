@@ -1,5 +1,6 @@
 "use client"
 
+import { showError } from "@/lib/utils/toast"
 import { useState, useEffect } from "react"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -55,7 +56,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
     fetch("/api/address?tipe=provinces")
       .then(res => res.json())
       .then(data => setProvinces(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(() => showError("Gagal memuat data provinsi", "Periksa koneksi lalu coba lagi."))
   }, [])
 
   useEffect(() => {
@@ -63,7 +64,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
     fetch(`/api/address?tipe=regencies&kodeInduk=${provinceCode}`)
       .then(res => res.json())
       .then(data => setCities(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(() => showError("Gagal memuat data kabupaten/kota", "Periksa koneksi lalu coba lagi."))
   }, [provinceCode])
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
     fetch(`/api/address?tipe=districts&kodeInduk=${cityCode}`)
       .then(res => res.json())
       .then(data => setDistricts(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(() => showError("Gagal memuat data kecamatan", "Periksa koneksi lalu coba lagi."))
   }, [cityCode])
 
   useEffect(() => {
@@ -79,7 +80,7 @@ export function AddressPicker({ defaultValues, defaultProvince, defaultCity, def
     fetch(`/api/address?tipe=villages&kodeInduk=${districtCode}`)
       .then(res => res.json())
       .then(data => setVillages(Array.isArray(data) ? data : []))
-      .catch(() => {})
+      .catch(() => showError("Gagal memuat data kelurahan/desa", "Periksa koneksi lalu coba lagi."))
   }, [districtCode])
 
   const toOptions = (regions: Region[], withPostal = false) =>

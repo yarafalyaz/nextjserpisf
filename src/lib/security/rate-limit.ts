@@ -222,6 +222,14 @@ export async function peekRateLimit(
  * in that deployment so per-client limits work.
  */
 
+/**
+ * Nilai kembalian getClientIp() saat tidak ada identitas klien yang bisa
+ * dipercaya: TRUSTED_PROXY belum diset dan runtime tidak menyediakan req.ip.
+ * Semua klien berbagi kunci ini, jadi bucket-nya tidak boleh dipakai untuk
+ * memblokir permintaan — lihat canBlockOnClientIp().
+ */
+export const UNKNOWN_CLIENT_KEY = "unknown"
+
 let warnedAboutUntrustedProxy = false
 
 /**
@@ -239,7 +247,7 @@ function warnUntrustedOnce(): string {
         "behind a reverse proxy / Cloudflare so per-client limits work.",
     )
   }
-  return "unknown"
+  return UNKNOWN_CLIENT_KEY
 }
 
 export function getClientIp(req: Request & { ip?: string }): string {
@@ -266,5 +274,44 @@ export function getClientIp(req: Request & { ip?: string }): string {
   }
 
   // 5. Nothing
-  return "unknown"
+  return UNKNOWN_CLIENT_KEY
+}
+
+/**
+ * Bolehkah bucket per-IP dipakai untuk MEMBLOKIR permintaan?
+ *
+ * Saat identitas klien tidak tepercaya, semua klien berbagi satu bucket
+ * (UNKNOWN_CLIENT_KEY). Memblokir berdasarkan bucket bersama itu memberi satu
+ * klien anonim senjata DoS: begitu bucket habis, permintaan semua pengguna lain
+ * ikut ditolak — pada /login, artinya tidak ada seorang pun yang bisa masuk.
+ * Limit seperti itu juga tidak menambah proteksi brute-force, sebab penyerang
+ * adalah satu-satunya konsumen bucket tersebut sampai semua orang terkunci.
+ * Proteksi login yang sebenarnya ada di limit per-email (`authorize()`), yang
+ * kuncinya berasal dari body request dan tidak bisa dipalsukan lewat header.
+ *
+ * Saat TRUSTED_PROXY=1 (atau runtime menyediakan req.ip) kunci per-klien nyata
+ * tersedia, sehingga pemblokiran per-IP tetap berlaku.
+ */
+export function canBlockOnClientIp(ip: string): boolean {
+  return ip !== UNKNOWN_CLIENT_KEY
+}
+
+/**
+ * Pilih kunci bucket untuk lalu lintas non-auth (API/upload).
+ *
+ * Saat kunci per-klien tersedia (IP tepercaya), pakai itu seperti semula. Saat
+ * IP tidak tepercaya, semua klien berbagi satu bucket — dan itu memberi klien
+ * anonim senjata DoS. Untuk permintaan BER-SESI itu tidak perlu: identitas
+ * pengguna adalah kunci per-klien yang nyata dan tidak bisa dipalsukan, sehingga
+ * bucket bersama hanya menampung permintaan anonim.
+ *
+ * `userId` boleh string atau number: `token.id` diisi lewat `String(user.id)`.
+ */
+export function clientRateLimitKey(
+  ip: string,
+  userId: string | number | null | undefined,
+): string {
+  if (canBlockOnClientIp(ip)) return ip
+  if (userId === null || userId === undefined || userId === "") return UNKNOWN_CLIENT_KEY
+  return `user:${userId}`
 }

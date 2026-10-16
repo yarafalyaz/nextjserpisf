@@ -1,4 +1,4 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import Script from "next/script"
 
 export const dynamic = "force-dynamic"
@@ -27,6 +27,18 @@ export const metadata: Metadata = {
     template: "%s | YaraERP",
   },
   description: "Sistem ERP terintegrasi untuk manajemen bisnis - Penjualan, Pembelian, Inventaris, SDM, Keuangan",
+}
+
+/**
+ * `interactiveWidget: "resizes-content"` membuat keyboard layar HP MENGECILKAN layout
+ * viewport (default Next/browser hanya mengecilkan visual viewport). Tanpa ini, dialog
+ * yang diposisikan `fixed` tetap dihitung terhadap layar penuh, sehingga bagian bawah
+ * (termasuk tombol Simpan) tertutup keyboard dan terasa "tidak bisa di-scroll".
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  interactiveWidget: "resizes-content",
 }
 
 export default async function RootLayout({

@@ -19,7 +19,7 @@ export const ROUTE_PERMS: ReadonlyArray<{
   edit?: string
   delete?: string
 }> = [
-  // Master Data
+  // Data Master
   { prefix: "/master/barang", edit: "edit_items", delete: "delete_items" },
   { prefix: "/master/kategori-barang", edit: "edit_item_categories", delete: "delete_item_categories" },
   { prefix: "/master/merek", edit: "edit_brands", delete: "delete_brands" },
@@ -103,22 +103,13 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/keuangan/jurnal", edit: "edit_journals", delete: "delete_journals" },
   { prefix: "/keuangan/pengeluaran", edit: "edit_expenses", delete: "delete_expenses" },
   { prefix: "/keuangan/kas-kecil", edit: "edit_petty_cash", delete: "delete_petty_cash" },
-  { prefix: "/keuangan/anggaran", edit: "edit_budgets", delete: "delete_budgets" },
   { prefix: "/keuangan/pusat-biaya", edit: "edit_cost_centers", delete: "delete_cost_centers" },
   { prefix: "/master/kategori-pengeluaran", edit: "manage_expense_categories", delete: "manage_expense_categories" },
-  { prefix: "/anggaran/alokasi-skf", edit: "edit_accounts", delete: "delete_accounts" },
   { prefix: "/pengaturan/workflow", edit: "manage_settings", delete: "manage_settings" },
   // Rekening koran (laporan-bank) hanya lihat + tambah (createBankStatement
   // memakai create_journals) sehingga tak punya aksi baris. Rekonsiliasi bank
   // ditulis memakai manage_bank_reconciliation, sama dengan halaman "tambah"-nya.
   { prefix: "/keuangan/rekonsiliasi-bank", edit: "manage_bank_reconciliation" },
-  // SKF master (angka kunci statistik) is gated by the account permissions the
-  // edit page + updateStatisticalKeyFigure action enforce (create_accounts /
-  // edit_accounts); only its Delete uses delete_statistical_key_figures. The
-  // registry previously pointed edit at edit_statistical_key_figures, so the row
-  // Edit button was hidden from every accountant who could actually open the page.
-  { prefix: "/keuangan/angka-kunci-statistik", edit: "edit_accounts", delete: "delete_statistical_key_figures" },
-
   // CRM
   { prefix: "/crm/leads", edit: "edit_leads", delete: "delete_leads" },
   { prefix: "/crm/tickets", edit: "edit_tickets", delete: "delete_tickets" },

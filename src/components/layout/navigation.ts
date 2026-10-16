@@ -2,14 +2,16 @@ import {
   LayoutDashboard, ClipboardList, Users, Factory, Package, Building2,
   UserCircle, BookOpen, DollarSign, FileText, Wallet, ShoppingCart,
   Receipt, CreditCard, RotateCcw, ShoppingBag, FileCheck, PackageCheck,
-  Undo2, BarChart3, Scale, ArrowLeftRight, Wrench, Settings2, Hammer,
+  Undo2, BarChart3, Scale, Columns3, ArrowLeftRight, Wrench, Settings2, Hammer,
   Clock, Palmtree, Timer, Banknote, Landmark, BookOpenCheck, Coins,
   CircleDollarSign, Handshake, Target, Ticket, HardDrive, TrendingUp,
   Cog, Truck, FileSpreadsheet, Car, FolderKanban,
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
-  ListOrdered, Layers, BadgeDollarSign, Gift, ListTodo, GitBranch, ShieldCheck,
+  ListOrdered, Layers, BadgeDollarSign, Gift, ListTodo, GitBranch, ShieldCheck, ClipboardCheck, Percent,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
+
+import { settingsPermissions } from "./settings-sections"
 
 export interface NavItem {
   label: string
@@ -17,6 +19,24 @@ export interface NavItem {
   icon: LucideIcon
   /** Permission key required to see this item. Omit = always visible. */
   permission?: string
+  /**
+   * Alternatif `permission`: item tampil bila pengguna punya SALAH SATU izin ini.
+   * Dipakai untuk menu yang isinya turunan dari beberapa modul (mis. Perintah
+   * Pembayaran: pemegang izin tagihan ATAU pembayaran vendor) — sama dengan aturan
+   * `requireAnyPermission` di halamannya.
+   */
+  permissions?: string[]
+  /**
+   * Grup yang isinya sebuah KATALOG, bukan daftar menu: sidebar cukup menautkan
+   * ke halaman grupnya, sedangkan daftar isinya dibaca di halaman katalog itu.
+   *
+   * Dipakai `/laporan` (47 laporan). Submenu 47 baris bukan cara memilih laporan —
+   * ia menenggelamkan menu modul lain dan tidak bisa dicari — sementara katalog
+   * `/laporan` sudah punya kategori + kotak Cari. `children` tetap ada di sini
+   * karena dialah satu sumber untuk label, ikon, izin, deskripsi katalog, dan
+   * jejak breadcrumb; yang berubah hanya cara sidebar merendernya.
+   */
+  sidebarLinkOnly?: boolean
   children?: NavItem[]
 }
 
@@ -32,7 +52,7 @@ export interface NavItem {
 export const navigation: NavItem[] = [
   { label: "Dasbor", href: "/", icon: LayoutDashboard, permission: "view_dashboard" },
   {
-    label: "Master Data",
+    label: "Data Master",
     href: "/master",
     icon: ClipboardList,
     children: [
@@ -41,6 +61,7 @@ export const navigation: NavItem[] = [
       { label: "Vendor", href: "/master/vendor", icon: Factory, permission: "view_vendors" },
       { label: "Barang", href: "/master/barang", icon: Package, permission: "view_items" },
       { label: "Kategori Barang", href: "/master/kategori-barang", icon: Tag, permission: "view_item_categories" },
+      { label: "Grup Barang", href: "/master/grup-barang", icon: Layers, permission: "view_item_groups" },
       { label: "Merek", href: "/master/merek", icon: Layers, permission: "view_brands" },
       { label: "Gudang", href: "/master/gudang", icon: Building2, permission: "view_warehouses" },
       { label: "Karyawan", href: "/master/karyawan", icon: UserCircle, permission: "view_employees" },
@@ -70,6 +91,7 @@ export const navigation: NavItem[] = [
       { label: "Faktur", href: "/penjualan/faktur", icon: Receipt, permission: "view_sales_invoices" },
       { label: "Pembayaran", href: "/penjualan/pembayaran", icon: CreditCard, permission: "view_sales_payments" },
       { label: "Retur", href: "/penjualan/retur", icon: RotateCcw, permission: "view_sales_returns" },
+      { label: "Tukar Faktur", href: "/penjualan/tukar-faktur", icon: FileCheck, permission: "view_invoice_exchanges" },
     ],
   },
   {
@@ -78,10 +100,14 @@ export const navigation: NavItem[] = [
     icon: ShoppingBag,
     children: [
       { label: "Permintaan", href: "/pembelian/permintaan", icon: ClipboardList, permission: "view_purchase_requests" },
-      { label: "Pesanan", href: "/pembelian/pesanan", icon: FileCheck, permission: "view_purchase_orders" },
+      { label: "Pesanan Pembelian", href: "/pembelian/pesanan", icon: FileCheck, permission: "view_purchase_orders" },
       { label: "Penerimaan Barang", href: "/pembelian/penerimaan", icon: PackageCheck, permission: "view_goods_receipts" },
       { label: "Tagihan Vendor", href: "/pembelian/tagihan", icon: FileSpreadsheet, permission: "view_vendor_bills" },
       { label: "Pembayaran Vendor", href: "/pembelian/pembayaran-vendor", icon: Banknote, permission: "view_vendor_payments" },
+      { label: "Perintah Pembayaran", href: "/pembelian/perintah-pembayaran", icon: Banknote, permissions: ["view_vendor_bills", "view_vendor_payments"] },
+      { label: "Uang Muka Pembelian", href: "/pembelian/uang-muka", icon: Banknote, permission: "view_purchase_advances" },
+      { label: "Harga Pemasok", href: "/pembelian/harga-pemasok", icon: BadgeDollarSign, permission: "view_vendor_prices" },
+      { label: "Transfer Pemasok", href: "/pembelian/transfer-pemasok", icon: Banknote, permission: "view_vendor_payments" },
       { label: "Retur", href: "/pembelian/retur", icon: Undo2, permission: "view_purchase_returns" },
     ],
   },
@@ -91,12 +117,13 @@ export const navigation: NavItem[] = [
     icon: Package,
     children: [
       { label: "Scan Barang", href: "/inventaris/scan", icon: ScanBarcode, permission: "view_inventory" },
-      { label: "Pergerakan Stok", href: "/inventaris/mutasi-stok", icon: BarChart3, permission: "view_stock_moves" },
+      { label: "Mutasi Stok", href: "/inventaris/mutasi-stok", icon: BarChart3, permission: "view_stock_moves" },
       { label: "Penyesuaian", href: "/inventaris/penyesuaian", icon: Scale, permission: "view_stock_adjustments" },
+      { label: "Stok Opname", href: "/inventaris/opname", icon: ClipboardCheck, permission: "view_stock_opname" },
       { label: "Transfer", href: "/inventaris/transfer", icon: ArrowLeftRight, permission: "view_inventory_transfers" },
       { label: "Pengeluaran Material", href: "/inventaris/pengeluaran-material", icon: Wrench, permission: "view_material_issues" },
-      { label: "Rak", href: "/inventaris/rak", icon: Grid3X3, permission: "view_inventory" },
-      { label: "Baris Rak", href: "/inventaris/baris-rak", icon: Layers, permission: "view_inventory" },
+      { label: "Rak", href: "/inventaris/rak", icon: Grid3X3, permission: "view_racks" },
+      { label: "Baris Rak", href: "/inventaris/baris-rak", icon: Layers, permission: "view_racks" },
     ],
   },
   {
@@ -107,8 +134,8 @@ export const navigation: NavItem[] = [
       { label: "Produk (BOM)", href: "/produksi/products", icon: Package, permission: "view_production" },
       { label: "Revisi BOM", href: "/produksi/bom-revisi", icon: GitBranch, permission: "view_bom_revisions" },
       { label: "Perintah Kerja", href: "/produksi/perintah-kerja", icon: Wrench, permission: "view_work_orders" },
-      { label: "Perintah Produksi", href: "/produksi/production-orders", icon: Hammer, permission: "view_production" },
-      { label: "Quality Control", href: "/produksi/qc", icon: ShieldCheck, permission: "view_qc" },
+      { label: "Perintah Produksi", href: "/produksi/production-orders", icon: Hammer, permission: "view_production_orders" },
+      { label: "Pengendalian Mutu", href: "/produksi/qc", icon: ShieldCheck, permission: "view_qc" },
     ],
   },
   {
@@ -120,7 +147,7 @@ export const navigation: NavItem[] = [
       { label: "Saldo Cuti", href: "/sdm/cuti/saldo", icon: Palmtree, permission: "view_leave_requests" },
       { label: "Lembur", href: "/sdm/lembur", icon: Timer, permission: "view_overtime" },
       { label: "Penggajian", href: "/sdm/penggajian", icon: Banknote, permission: "view_payroll" },
-      { label: "Timesheet", href: "/sdm/lembar-waktu", icon: Clock, permission: "view_timesheets" },
+      { label: "Lembar Waktu", href: "/sdm/lembar-waktu", icon: Clock, permission: "view_timesheets" },
       { label: "Pinjaman", href: "/sdm/pinjaman", icon: PiggyBank, permission: "view_employee_loans" },
       { label: "Apresiasi", href: "/sdm/apresiasi", icon: Gift, permission: "view_appreciations" },
     ],
@@ -133,13 +160,12 @@ export const navigation: NavItem[] = [
       { label: "Jurnal", href: "/keuangan/jurnal", icon: BookOpenCheck, permission: "view_journals" },
       { label: "Biaya", href: "/keuangan/pengeluaran", icon: CircleDollarSign, permission: "view_expenses" },
       { label: "Kas Kecil", href: "/keuangan/kas-kecil", icon: Coins, permission: "view_petty_cash" },
-      { label: "Anggaran", href: "/keuangan/anggaran", icon: PiggyBank, permission: "view_budgets" },
-      { label: "Alokasi Key Figure", href: "/anggaran/alokasi-skf", icon: PiggyBank, permission: "view_statistical_key_figures" },
       { label: "Pusat Biaya", href: "/keuangan/pusat-biaya", icon: Target, permission: "view_cost_centers" },
       { label: "Rekening Koran", href: "/keuangan/laporan-bank", icon: FileSpreadsheet, permission: "view_bank_statements" },
       { label: "Rekonsiliasi Bank", href: "/keuangan/rekonsiliasi-bank", icon: Landmark, permission: "view_bank_reconciliation" },
-      { label: "Key Figure Statistik", href: "/keuangan/angka-kunci-statistik", icon: BarChart3, permission: "view_statistical_key_figures" },
-      { label: "Nilai Key Figure", href: "/keuangan/angka-kunci-statistik/nilai", icon: BarChart3, permission: "view_statistical_key_figures" },
+      { label: "Transfer Bank", href: "/keuangan/transfer-bank", icon: ArrowLeftRight, permission: "view_bank_transfers" },
+      { label: "Penyetoran Pajak", href: "/keuangan/penyetoran-pajak", icon: BadgeDollarSign, permission: "view_tax_payments" },
+      { label: "Giro & Cek", href: "/keuangan/giro", icon: Banknote, permission: "view_cheques" },
     ],
   },
   {
@@ -186,32 +212,83 @@ export const navigation: NavItem[] = [
     label: "Laporan",
     href: "/laporan",
     icon: TrendingUp,
+    sidebarLinkOnly: true,
     children: [
       { label: "Laba Rugi", href: "/laporan/laba-rugi", icon: TrendingUp, permission: "view_reports" },
+      { label: "Laba Rugi Terealisasi", href: "/laporan/laba-rugi-terealisasi", icon: TrendingUp, permission: "view_reports" },
+      { label: "Laba Rugi Tidak Terealisasi", href: "/laporan/laba-rugi-tidak-terealisasi", icon: TrendingUp, permission: "view_reports" },
+      { label: "Profitabilitas & HPP", href: "/laporan/profitabilitas", icon: TrendingUp, permission: "view_reports" },
+      { label: "Histori Proses Penjualan", href: "/laporan/histori-penjualan", icon: TrendingUp, permission: "view_reports" },
+      { label: "Histori Proses Pembelian", href: "/laporan/histori-pembelian", icon: TrendingUp, permission: "view_reports" },
+      { label: "Pembelian per Kelompok", href: "/laporan/pembelian", icon: TrendingUp, permission: "view_reports" },
+      { label: "Gaji Karyawan", href: "/laporan/gaji-karyawan", icon: Users, permission: "view_reports" },
+      { label: "PPh 21 Karyawan", href: "/laporan/pph-21", icon: Users, permission: "view_reports" },
+      { label: "Porsi Gaji", href: "/laporan/porsi-gaji", icon: Users, permission: "view_reports" },
+      { label: "Grafik Keuangan", href: "/laporan/grafik-keuangan", icon: TrendingUp, permission: "view_reports" },
+      { label: "Uang Muka Pembelian", href: "/laporan/uang-muka-pembelian", icon: TrendingUp, permission: "view_reports" },
+      { label: "Harga Pemasok", href: "/laporan/harga-pemasok", icon: TrendingUp, permission: "view_reports" },
+      { label: "Penyetoran Pajak", href: "/laporan/penyetoran-pajak", icon: BadgeDollarSign, permission: "view_reports" },
+      { label: "Tukar Faktur", href: "/laporan/tukar-faktur", icon: FileCheck, permission: "view_reports" },
       { label: "Laba Rugi per Proyek", href: "/laporan/laba-rugi-proyek", icon: FolderKanban, permission: "view_reports" },
-      { label: "Laba Rugi per CC", href: "/laporan/laba-rugi-per-pusat-biaya", icon: TrendingUp, permission: "view_reports" },
-      { label: "Keuangan", href: "/laporan/keuangan", icon: FileSpreadsheet, permission: "view_reports" },
+      { label: "Laba Rugi per Pusat Biaya", href: "/laporan/laba-rugi-per-pusat-biaya", icon: TrendingUp, permission: "view_reports" },
       { label: "Neraca Saldo", href: "/laporan/neraca-saldo", icon: Scale, permission: "view_reports" },
       { label: "Neraca", href: "/laporan/neraca", icon: BookOpen, permission: "view_reports" },
+      { label: "Neraca Skontro", href: "/laporan/neraca-skontro", icon: Columns3, permission: "view_reports" },
+      { label: "Rasio Keuangan", href: "/laporan/rasio-keuangan", icon: Percent, permission: "view_reports" },
+      { label: "Perubahan Ekuitas", href: "/laporan/perubahan-ekuitas", icon: BarChart3, permission: "view_reports" },
+      { label: "Laba Ditahan", href: "/laporan/laba-ditahan", icon: PiggyBank, permission: "view_reports" },
+      { label: "Daftar Aset Tetap", href: "/laporan/aset-tetap", icon: HardDrive, permission: "view_reports" },
+      { label: "Mutasi Aset Tetap", href: "/laporan/mutasi-aset", icon: ArrowLeftRight, permission: "view_reports" },
+      { label: "Daftar Disposisi Aset", href: "/laporan/disposisi-aset", icon: Undo2, permission: "view_reports" },
+      { label: "Jurnal Aset Tetap", href: "/laporan/jurnal-aset", icon: BookOpen, permission: "view_reports" },
+      { label: "Histori Aset Tetap", href: "/laporan/histori-aset", icon: Clock, permission: "view_reports" },
+      { label: "Perbedaan Penyusutan", href: "/laporan/perbedaan-penyusutan", icon: Scale, permission: "view_reports" },
       { label: "Arus Kas", href: "/laporan/arus-kas", icon: Coins, permission: "view_reports" },
+      { label: "Proyeksi Kas", href: "/laporan/proyeksi-kas", icon: Coins, permission: "view_reports" },
+      { label: "Perbandingan Periode", href: "/laporan/perbandingan-periode", icon: Scale, permission: "view_reports" },
+      { label: "Multi Periode", href: "/laporan/multi-periode", icon: Columns3, permission: "view_reports" },
       { label: "Buku Besar", href: "/laporan/buku-besar", icon: BookOpen, permission: "view_reports" },
       { label: "Buku Bank", href: "/laporan/buku-bank", icon: Landmark, permission: "view_reports" },
-      { label: "Anggaran vs Realisasi", href: "/laporan/anggaran-vs-realisasi", icon: Target, permission: "view_reports" },
+      { label: "Pembayaran & Penerimaan per Bank", href: "/laporan/pembayaran-per-bank", icon: Landmark, permission: "view_reports" },
+      { label: "Rincian Beban Pembayaran", href: "/laporan/beban-pembayaran", icon: Wallet, permission: "view_reports" },
       { label: "Ringkasan AR/AP", href: "/laporan/ringkasan-ar-ap", icon: Users, permission: "view_reports" },
       { label: "Pajak", href: "/laporan/pajak", icon: Receipt, permission: "view_reports" },
+      { label: "Bukti Potong PPh", href: "/laporan/bukti-potong-pph", icon: BadgeDollarSign, permission: "view_reports" },
+      { label: "Rekonsiliasi PPN", href: "/laporan/rekonsiliasi-ppn", icon: Receipt, permission: "view_reports" },
       { label: "Valuasi Stok", href: "/laporan/valuasi-stok", icon: Package, permission: "view_reports" },
       { label: "Mutasi Stok", href: "/laporan/mutasi-stok", icon: ArrowLeftRight, permission: "view_reports" },
+      { label: "Kartu Stok", href: "/laporan/kartu-stok", icon: Package, permission: "view_reports" },
       { label: "Ringkasan Persediaan", href: "/laporan/ringkasan-stok", icon: BarChart3, permission: "view_reports" },
       { label: "Rekonsiliasi Stok", href: "/laporan/rekonsiliasi-stok", icon: Scale, permission: "view_reports" },
-      { label: "Piutang Aging", href: "/laporan/piutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
-      { label: "Hutang Aging", href: "/laporan/hutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
-      { label: "Aging Inventaris", href: "/laporan/umur-stok", icon: Package, permission: "view_reports" },
-      { label: "Profit Center", href: "/laporan/pusat-laba", icon: TrendingUp, permission: "view_reports" },
+      { label: "Selisih Saldo Persediaan", href: "/laporan/selisih-persediaan", icon: Scale, permission: "view_reports" },
+      { label: "Barang Diterima Belum Ditagih", href: "/laporan/penerimaan-belum-ditagih", icon: PackageCheck, permission: "view_reports" },
+      { label: "Persediaan Terkirim Belum Diterima", href: "/laporan/transfer-terkirim", icon: ArrowLeftRight, permission: "view_reports" },
+      { label: "Barang Stok Minimum", href: "/laporan/stok-minimum", icon: Package, permission: "view_reports" },
+      { label: "Barang Diterima Sebagian", href: "/laporan/penerimaan-sebagian", icon: PackageCheck, permission: "view_reports" },
+      { label: "Pemenuhan Pesanan", href: "/laporan/pemenuhan-pesanan", icon: ShoppingCart, permission: "view_reports" },
+      { label: "Piutang Jatuh Tempo", href: "/laporan/piutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
+      { label: "Piutang per Pelanggan", href: "/laporan/piutang-pelanggan", icon: Users, permission: "view_reports" },
+      { label: "Buku Pembantu Piutang", href: "/laporan/buku-pembantu-piutang", icon: Users, permission: "view_reports" },
+      { label: "Buku Pembantu Utang", href: "/laporan/buku-pembantu-utang", icon: Building2, permission: "view_reports" },
+      { label: "Hutang Jatuh Tempo", href: "/laporan/hutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
+      { label: "Total Hutang", href: "/laporan/total-hutang", icon: Banknote, permission: "view_reports" },
+      { label: "Umur Stok", href: "/laporan/umur-stok", icon: Package, permission: "view_reports" },
+      { label: "Lembar Penghitungan Stok", href: "/laporan/penghitungan-stok", icon: ClipboardList, permission: "view_reports" },
+      { label: "Pusat Laba", href: "/laporan/pusat-laba", icon: TrendingUp, permission: "view_reports" },
       { label: "Harga Beli Multi-Sumber", href: "/laporan/analisis-harga-beli", icon: Package, permission: "view_reports" },
+      { label: "Analisis Penjualan", href: "/laporan/analisis-penjualan", icon: BarChart3, permission: "view_reports" },
       { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, permission: "view_reports" },
+      { label: "Bahan & Biaya Pekerjaan", href: "/laporan/biaya-pekerjaan", icon: Hammer, permission: "view_reports" },
+      { label: "Penyelesaian Pesanan", href: "/laporan/penyelesaian-pekerjaan", icon: PackageCheck, permission: "view_reports" },
+      { label: "Jurnal Pekerjaan Pesanan", href: "/laporan/jurnal-pekerjaan", icon: Factory, permission: "view_reports" },
+      { label: "Transaksi Bank Terekonsiliasi vs Belum", href: "/laporan/transaksi-bank", icon: Landmark, permission: "view_reports" },
+      { label: "Faktur SPT Masa PPN", href: "/laporan/faktur-ppn", icon: Receipt, permission: "view_reports" },
+      { label: "Stok Nomor Seri/Batch", href: "/laporan/nomor-seri-batch", icon: Package, permission: "view_reports" },
+      { label: "Giro Mundur", href: "/laporan/giro-mundur", icon: Banknote, permission: "view_reports" },
     ],
   },
-  { label: "Pengaturan", href: "/pengaturan", icon: Cog, permission: "manage_settings" },
+  { label: "Pengaturan", href: "/pengaturan", icon: Cog, permissions: settingsPermissions() },
+  { label: "Kalender", href: "/kalender", icon: CalendarDays, permission: "view_calendar" },
 ]
 
 /** True when the user may see a nav item (super_admin sees everything). */
@@ -221,6 +298,10 @@ export function canSeeNavItem(
   isSuperAdmin: boolean,
 ): boolean {
   if (isSuperAdmin) return true
+  // `permissions` = any-of (lihat NavItem). Item tanpa keduanya selalu tampil.
+  if (item.permissions && item.permissions.length > 0) {
+    return item.permissions.some((permission) => permissions.includes(permission))
+  }
   if (!item.permission) return true
   return permissions.includes(item.permission)
 }
@@ -231,6 +312,8 @@ export interface FlatNavEntry {
   icon: LucideIcon
   group: string
   permission?: string
+  /** Any-of (lihat NavItem.permissions). */
+  permissions?: string[]
 }
 
 /**
@@ -248,7 +331,9 @@ export function flattenNavigation(nav: NavItem[] = navigation): FlatNavEntry[] {
           href: child.href,
           icon: child.icon,
           group: item.label,
-          permission: child.permission ?? item.permission,
+          // Anak yang punya any-of sendiri tidak mewarisi izin tunggal induknya.
+          permission: child.permissions ? undefined : (child.permission ?? item.permission),
+          permissions: child.permissions,
         })
       }
     } else {
@@ -258,6 +343,7 @@ export function flattenNavigation(nav: NavItem[] = navigation): FlatNavEntry[] {
         icon: item.icon,
         group: item.label === "Dasbor" ? "Navigasi" : "Lainnya",
         permission: item.permission,
+        permissions: item.permissions,
       })
     }
   }

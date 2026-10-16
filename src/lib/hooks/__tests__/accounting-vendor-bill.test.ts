@@ -121,3 +121,89 @@ describe("onVendorBillPosted - service/expense branch", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 })
+
+describe("onVendorBillPosted - PPh withholding", () => {
+  const PPH_LIABILITY = 920
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.goodsReceiptCount.mockResolvedValue(0)
+    mocks.assertPeriodOpen.mockResolvedValue(undefined)
+    mocks.journalCreate.mockResolvedValue({ id: 1 })
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      purchasePayableAccountId: PAYABLE,
+      purchaseExpenseAccountId: EXPENSE,
+      purchaseInventoryAccountId: null,
+      purchaseTaxAccountId: null,
+    })
+    mocks.transaction.mockImplementation(async (cb: (tx: TxClient) => unknown) =>
+      cb({
+        journal: { create: mocks.journalCreate, findFirst: mocks.journalFindFirst },
+        vendorBill: { findUnique: mocks.vendorBillFindUniqueOrThrow },
+      } as unknown as TxClient)
+    )
+  })
+
+  it("credits the PPh liability and only the net amount to AP", async () => {
+    const bill = {
+      ...SERVICE_BILL,
+      withholdingAmount: 20_000,
+      withholdingType: { name: "PPh 23", liabilityAccountId: PPH_LIABILITY },
+    }
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue(bill)
+
+    await onVendorBillPosted(1, 42)
+
+    const entries = mocks.journalCreate.mock.calls[0][0].data.entries.create as {
+      accountId: number
+      debit: number
+      credit: number
+    }[]
+    // Vendor is owed the bill total minus the withheld tax, which becomes a tax liability.
+    expect(entries).toEqual([
+      expect.objectContaining({ accountId: EXPENSE, debit: 1_000_000, credit: 0 }),
+      expect.objectContaining({ accountId: PPH_LIABILITY, debit: 0, credit: 20_000 }),
+      expect.objectContaining({ accountId: PAYABLE, debit: 0, credit: 980_000 }),
+    ])
+    const totalDebit = entries.reduce((s, e) => s + e.debit, 0)
+    const totalCredit = entries.reduce((s, e) => s + e.credit, 0)
+    expect(totalDebit).toBe(totalCredit)
+  })
+
+  it("FAILS CLOSED when the withholding type has no liability account", async () => {
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      ...SERVICE_BILL,
+      withholdingAmount: 20_000,
+      withholdingType: { name: "PPh 23", liabilityAccountId: null },
+    })
+
+    await expect(onVendorBillPosted(1, 42)).rejects.toThrow(/akun Hutang PPh/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("rejects a withholding larger than the bill total", async () => {
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      ...SERVICE_BILL,
+      withholdingAmount: 2_000_000,
+      withholdingType: { name: "PPh 23", liabilityAccountId: PPH_LIABILITY },
+    })
+
+    await expect(onVendorBillPosted(1, 42)).rejects.toThrow(/melebihi total keseluruhan/)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("posts the plain AP entry when nothing is withheld", async () => {
+    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
+      ...SERVICE_BILL,
+      withholdingAmount: 0,
+      withholdingType: null,
+    })
+
+    await onVendorBillPosted(1, 42)
+
+    const entries = mocks.journalCreate.mock.calls[0][0].data.entries.create as { accountId: number; credit: number }[]
+    expect(entries).toHaveLength(2)
+    expect(entries[1]).toMatchObject({ accountId: PAYABLE, credit: 1_000_000 })
+  })
+})

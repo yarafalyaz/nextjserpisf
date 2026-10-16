@@ -1,18 +1,11 @@
 import { cn } from "@/lib/utils"
 import type { ReactNode, TableHTMLAttributes } from "react"
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-  TableFooter,
-} from "@/components/ui/shadcn/table"
 
-/* ── DetailTable (formal accounting style) ────────────────────────────────
-   Matches the Accurate / Jurnal / Zahir printed-statement look.
-   Built on shadcn/ui Table primitives.
+/* ── DetailTable (gaya dokumen laporan) ────────────────────────────────────
+   Memakai kelas `.stmt` (lihat globals.css): hanya garis horizontal — tanpa
+   kotak sel, tanpa latar abu pada header — angka rata kanan bertabular.
+   Sengaja TIDAK memakai primitif shadcn `Table` supaya gaya kotak milik tabel
+   aplikasi tidak melekat ke laporan, dan agar hasil cetak = tampilan layar.
    ──────────────────────────────────────────────────────────────────────── */
 
 interface DetailTableProps extends TableHTMLAttributes<HTMLTableElement> {
@@ -23,18 +16,23 @@ interface DetailTableProps extends TableHTMLAttributes<HTMLTableElement> {
 export function DetailTable({ children, className, ...rest }: DetailTableProps) {
   return (
     <div className={cn("overflow-x-auto", className)}>
-      <Table {...rest}>{children}</Table>
+      <table className="stmt" {...rest}>
+        {children}
+      </table>
     </div>
   )
 }
 
+/**
+ * Header tabel. `<tr>` disediakan di sini karena seluruh pemakaian (87 file)
+ * menulis `<DetailTableTh>` langsung — `<th>` tanpa `<tr>` di dalam `<thead>`
+ * adalah HTML tidak valid dan memicu hydration error React.
+ */
 export function DetailTableHead({ children }: { children: React.ReactNode }) {
   return (
-    <TableHeader>
-      <TableRow className="border-b border-default hover:bg-transparent">
-        {children}
-      </TableRow>
-    </TableHeader>
+    <thead>
+      <tr>{children}</tr>
+    </thead>
   )
 }
 
@@ -52,23 +50,22 @@ export function DetailTableTh({
   scope?: "col" | "row" | "colgroup" | "rowgroup"
 }) {
   return (
-    <TableHead
+    <th
       scope={scope}
       colSpan={colSpan}
       className={cn(
-        "py-2.5 px-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide",
-        align === "right" && "text-right",
+        align === "right" && "num",
         align === "center" && "text-center",
-        className
+        className,
       )}
     >
       {children}
-    </TableHead>
+    </th>
   )
 }
 
 export function DetailTableBody({ children }: { children: React.ReactNode }) {
-  return <TableBody>{children}</TableBody>
+  return <tbody>{children}</tbody>
 }
 
 export function DetailTableRow({
@@ -78,7 +75,7 @@ export function DetailTableRow({
   children: React.ReactNode
   className?: string
 }) {
-  return <TableRow className={cn("hover:bg-transparent", className)}>{children}</TableRow>
+  return <tr className={className}>{children}</tr>
 }
 
 export function DetailTableTd({
@@ -93,22 +90,21 @@ export function DetailTableTd({
   colSpan?: number
 }) {
   return (
-    <TableCell
+    <td
       colSpan={colSpan}
       className={cn(
-        "py-2.5 px-3 text-[0.8125rem] text-foreground",
-        align === "right" && "text-right",
+        align === "right" && "num",
         align === "center" && "text-center",
-        className
+        className,
       )}
     >
       {children}
-    </TableCell>
+    </td>
   )
 }
 
 export function DetailTableFoot({ children }: { children: React.ReactNode }) {
-  return <TableFooter className="border-t border-default">{children}</TableFooter>
+  return <tfoot>{children}</tfoot>
 }
 
 export function DetailTableFootRow({
@@ -118,5 +114,5 @@ export function DetailTableFootRow({
   children: React.ReactNode
   className?: string
 }) {
-  return <TableRow className={cn("hover:bg-transparent", className)}>{children}</TableRow>
+  return <tr className={className}>{children}</tr>
 }

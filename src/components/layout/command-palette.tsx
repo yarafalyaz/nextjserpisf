@@ -37,7 +37,7 @@ const quickActions: { label: string; href: string; permission?: string }[] = [
 const groupOrder = [
   "Aksi Cepat",
   "Navigasi",
-  "Master Data",
+  "Data Master",
   "Penjualan",
   "Pembelian",
   "Inventaris",
@@ -81,7 +81,13 @@ export function CommandPalette() {
     () =>
       flattenNavigation().filter((entry) =>
         canSeeNavItem(
-          { label: entry.label, href: entry.href, icon: entry.icon, permission: entry.permission },
+          {
+            label: entry.label,
+            href: entry.href,
+            icon: entry.icon,
+            permission: entry.permission,
+            permissions: entry.permissions,
+          },
           permissions,
           isSuperAdmin,
         ),

@@ -139,27 +139,28 @@ export function Combobox({
                   </CommandItem>
                 ))}
               </CommandGroup>
-              {onCreateNew && (
-                <>
-                  <CommandSeparator />
-                  <CommandGroup>
-                    <CommandItem
-                      // A stable, non-colliding value; `cmdk` filters on this so
-                      // it must always survive the active search term.
-                      value={`__create_new__ ${search}`}
-                      onSelect={() => {
-                        onCreateNew(search.trim());
-                        setOpen(false);
-                      }}
-                      className="text-primary"
-                    >
-                      <Plus className="mr-2 size-4" aria-hidden="true" />
-                      {createNewLabel}
-                    </CommandItem>
-                  </CommandGroup>
-                </>
-              )}
             </CommandList>
+            {onCreateNew && (
+              <>
+                <CommandSeparator />
+                {/* Aksi, bukan pilihan. Sebelumnya baris ini adalah CommandItem, sehingga
+                    ikut menjadi opsi listbox: memilih opsi pertama (panah + Enter, atau
+                    skrip E2E yang mengambil `[role=option]` pertama) membuka dialog ini
+                    alih-alih memilih baris data. Sebagai <button> ia tidak lagi menjadi
+                    bagian navigasi listbox. */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    onCreateNew(search.trim());
+                    setOpen(false);
+                  }}
+                  className="text-primary flex w-full items-center px-2 py-1.5 text-sm"
+                >
+                  <Plus className="mr-2 size-4" aria-hidden="true" />
+                  {createNewLabel}
+                </button>
+              </>
+            )}
           </Command>
         </PopoverContent>
       </Popover>

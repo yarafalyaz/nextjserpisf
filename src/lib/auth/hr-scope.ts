@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/db/prisma"
+import { HR_ALL_ACCESS_ROLES } from "@/lib/auth/role-names"
 
 /**
  * Self-service scoping untuk data HR sensitif (cuti, lembur, pinjaman, gaji,
@@ -13,9 +14,12 @@ import { prisma } from "@/lib/db/prisma"
  */
 
 // Role yang boleh melihat SEMUA data HR. 'ga' (general affairs) di-include karena
-// pada matriks RBAC ia ikut meng-approve cuti, jadi wajib bisa melihat semuanya.
-// 'hr' disertakan untuk forward-compat bila role itu dibuat nanti.
-const ALL_ACCESS_ROLES = ["super_admin", "admin", "hr", "hr_manager", "finance", "ga"]
+// pada matriks RBAC ia ikut meng-approve cuti, jadi wajib bisa melihat semuanya;
+// 'finance' karena memproses penggajian. Daftarnya tinggal di `role-names.ts` —
+// dulu ada 'hr'/'hr_manager' di sini yang belum pernah di-seed sehingga cabangnya
+// mati. Bila role itu dibuat nanti, tambahkan ke `HR_ALL_ACCESS_ROLES` **dan** ke
+// seed role (nama istimewa sengaja tidak bisa dibuat lewat UI Pengaturan → Peran).
+const ALL_ACCESS_ROLES: readonly string[] = HR_ALL_ACCESS_ROLES
 // Role yang dibatasi ke departemennya sendiri.
 const DEPARTMENT_ACCESS_ROLES = ["kepala_bengkel"]
 

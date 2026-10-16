@@ -13,8 +13,13 @@ export const getSystemSettings = cache(async () => {
     settings = await prisma.systemSetting.findFirst();
 
     if (!settings) {
-      settings = await prisma.systemSetting.create({
-        data: {
+      // Upsert on the fixed singleton id so two parallel renders cannot each
+      // insert a row (which left duplicate "Yara ERP" settings behind).
+      settings = await prisma.systemSetting.upsert({
+        where: { id: 1 },
+        update: {},
+        create: {
+          id: 1,
           companyName: "Yara ERP",
           companyEmail: "admin@erp.yarasoft.net",
           companyPhone: null,

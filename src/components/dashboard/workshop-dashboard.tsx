@@ -104,7 +104,7 @@ export default async function WorkshopDashboard() {
 
   const quickLinks = [
     { label: "Proyek", href: "/proyek", icon: FolderKanban, desc: "Kelola proyek" },
-    { label: "Work Order", href: "/produksi/perintah-kerja", icon: Wrench, desc: "Perintah kerja" },
+    { label: "Perintah Kerja", href: "/produksi/perintah-kerja", icon: Wrench, desc: "Perintah kerja" },
     { label: "Produk (BOM)", href: "/produksi/products", icon: Settings2, desc: "Daftar material" },
     { label: "Manufaktur", href: "/produksi/production-orders", icon: Settings2, desc: "Perintah produksi" },
     { label: "Timesheet", href: "/sdm/lembar-waktu", icon: Clock, desc: "Jam kerja" },
@@ -126,7 +126,7 @@ export default async function WorkshopDashboard() {
               icon={<FolderKanban className="size-5" />}
             />
             <StatCard
-              label="Work Order"
+              label="Perintah Kerja"
               value={data.totalWO}
               icon={<Wrench className="size-5" />}
             />

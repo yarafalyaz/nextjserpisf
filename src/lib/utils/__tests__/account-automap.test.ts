@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest"
-import { resolveInventoryAccounts } from "../account-automap"
+import {
+  ACCOUNT_MAPPING_FIELDS,
+  resolveAllAccountMappings,
+  resolveAssetAccounts,
+  resolveInventoryAccounts,
+} from "../account-automap"
 
 // Real-ish COA fragment (mirrors the seed's codes/names).
 const COA = [
@@ -55,5 +60,108 @@ describe("resolveInventoryAccounts", () => {
     const { inventoryAccountId, purchaseInventoryAccountId } = resolveInventoryAccounts([])
     expect(inventoryAccountId).toBe("")
     expect(purchaseInventoryAccountId).toBe("")
+  })
+})
+
+describe("resolveAssetAccounts", () => {
+  // Seed COA fragment, ordered by code like the settings page feeds it.
+  const ASSET_COA = [
+    { id: 5, code: "1300", name: "Aset Tetap" },
+    { id: 21, code: "2400", name: "Akumulasi Penyusutan" },
+    { id: 40, code: "5300", name: "Beban Penyusutan" },
+  ]
+
+  it("maps Beban Penyusutan and Akumulasi Penyusutan to their own accounts", () => {
+    const { depreciationExpenseAccountId, accumulatedDepreciationAccountId } =
+      resolveAssetAccounts(ASSET_COA)
+
+    expect(accumulatedDepreciationAccountId).toBe("21")
+    expect(depreciationExpenseAccountId).toBe("40")
+  })
+
+  it("never assigns the accumulated account to the expense field", () => {
+    // Regression: both names contain "penyusutan"; the bare ["penyusutan"]
+    // fallback would otherwise grab "Akumulasi Penyusutan" (code 2400 < 5300)
+    // and the depreciation journal would debit the contra-asset account.
+    const onlyAccumulated = [{ id: 21, code: "2400", name: "Akumulasi Penyusutan" }]
+    const { depreciationExpenseAccountId, accumulatedDepreciationAccountId } =
+      resolveAssetAccounts(onlyAccumulated)
+
+    expect(accumulatedDepreciationAccountId).toBe("21")
+    expect(depreciationExpenseAccountId).toBe("")
+  })
+
+  it("matches the English account names", () => {
+    const english = [
+      { id: 50, code: "2400", name: "Accumulated Depreciation" },
+      { id: 51, code: "5300", name: "Depreciation Expense" },
+    ]
+    const { depreciationExpenseAccountId, accumulatedDepreciationAccountId } =
+      resolveAssetAccounts(english)
+
+    expect(accumulatedDepreciationAccountId).toBe("50")
+    expect(depreciationExpenseAccountId).toBe("51")
+  })
+
+  it("returns empty strings when no asset accounts exist", () => {
+    const { depreciationExpenseAccountId, accumulatedDepreciationAccountId } =
+      resolveAssetAccounts([])
+    expect(depreciationExpenseAccountId).toBe("")
+    expect(accumulatedDepreciationAccountId).toBe("")
+  })
+})
+
+describe("resolveAllAccountMappings", () => {
+  // A slice of the seed COA.
+  const COA = [
+    { id: 1, code: "1000", name: "Kas & Bank" },
+    { id: 2, code: "1100", name: "Piutang Usaha" },
+    { id: 3, code: "1200", name: "Persediaan" },
+    { id: 4, code: "1400", name: "PPN Masukan" },
+    { id: 5, code: "2000", name: "Hutang Usaha" },
+    { id: 7, code: "2200", name: "PPN Keluaran" },
+    { id: 8, code: "2300", name: "Hutang Gaji" },
+    { id: 9, code: "2400", name: "Akumulasi Penyusutan" },
+    { id: 10, code: "4000", name: "Pendapatan Penjualan" },
+    { id: 11, code: "5000", name: "Harga Pokok Penjualan" },
+    { id: 12, code: "5300", name: "Beban Penyusutan" },
+    { id: 13, code: "5500", name: "Kas Kecil" },
+  ]
+
+  it("resolves the core accounting fields from the COA", () => {
+    const mapping = resolveAllAccountMappings(COA)
+
+    expect(mapping.salesReceivableAccountId).toBe("2")
+    expect(mapping.salesRevenueAccountId).toBe("10")
+    expect(mapping.salesTaxAccountId).toBe("7")
+    expect(mapping.purchasePayableAccountId).toBe("5")
+    expect(mapping.purchaseTaxAccountId).toBe("4")
+    expect(mapping.cashBankAccountId).toBe("1")
+    expect(mapping.pettyCashAccountId).toBe("13")
+    expect(mapping.salariesPayableAccountId).toBe("8")
+    expect(mapping.cogsAccountId).toBe("11")
+    expect(mapping.depreciationExpenseAccountId).toBe("12")
+    expect(mapping.accumulatedDepreciationAccountId).toBe("9")
+  })
+
+  it("returns a value (possibly empty) for every known account field", () => {
+    const mapping = resolveAllAccountMappings(COA)
+    expect(Object.keys(mapping).sort()).toEqual([...ACCOUNT_MAPPING_FIELDS].sort())
+  })
+
+  it("keeps Persediaan and the clearing account distinct", () => {
+    const withGrni = [
+      ...COA,
+      { id: 99, code: "2150", name: "Hutang Pembelian Belum Ditagih (GRNI)" },
+    ]
+    const mapping = resolveAllAccountMappings(withGrni)
+    expect(mapping.inventoryAccountId).toBe("3")
+    expect(mapping.purchaseInventoryAccountId).toBe("99")
+  })
+
+  it("returns empty strings when there are no accounts", () => {
+    const mapping = resolveAllAccountMappings([])
+    expect(mapping.purchasePayableAccountId).toBe("")
+    expect(mapping.cogsAccountId).toBe("")
   })
 })

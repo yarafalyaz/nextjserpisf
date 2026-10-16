@@ -20,17 +20,29 @@ const normalize = (value: string) =>
     .replace(/\s+/g, " ")
     .trim();
 
-/** First account whose `code name` contains every keyword of the earliest matching group. */
+/**
+ * First account whose `code name` contains every keyword of the earliest matching group.
+ *
+ * Pencocokan dilakukan PER KATA (token), bukan substring: dengan substring,
+ * kata kunci "utang" ikut cocok dengan "pi-UTANG usaha" sehingga akun Utang
+ * Usaha dan Piutang Usaha bisa tertukar. Kode akun ikut menjadi token sehingga
+ * aturan bisa menjangkar ke kode standar (mis. "2101") secara tepat.
+ */
 function findAccountId(
   accounts: AutomapAccount[],
   keywordGroups: string[][],
   exclude?: Set<string>,
 ): string {
+  const tokensOf = (value: string) => normalize(value).split(" ").filter(Boolean);
+
   for (const keywords of keywordGroups) {
     const match = accounts.find((account) => {
       if (exclude?.has(String(account.id))) return false;
-      const haystack = normalize(`${account.code} ${account.name}`);
-      return keywords.every((keyword) => haystack.includes(normalize(keyword)));
+      const tokens = tokensOf(`${account.code} ${account.name}`);
+      return keywords.every((keyword) => {
+        const needle = normalize(keyword);
+        return tokens.some((token) => token === needle || token.startsWith(needle));
+      });
     });
     if (match) return String(match.id);
   }
@@ -89,4 +101,125 @@ export function resolveInventoryAccounts(accounts: AutomapAccount[]): {
   }
 
   return { inventoryAccountId, purchaseInventoryAccountId };
+}
+
+// ── Fixed assets ────────────────────────────────────────────────────────────
+// "Beban Penyusutan" (P&L) and "Akumulasi Penyusutan" (contra-asset) both
+// contain the word "penyusutan", so the accumulated account is resolved FIRST
+// and excluded from the expense lookup — otherwise the bare ["penyusutan"]
+// fallback would assign the accumulated account (code 2400) to the expense
+// field and the depreciation journal would debit the wrong account.
+const ACCUMULATED_DEPRECIATION_GROUPS = [
+  ["akumulasi", "penyusutan"],
+  ["akumulasi"],
+  ["accumulated", "depreciation"],
+];
+
+const DEPRECIATION_EXPENSE_GROUPS = [
+  ["beban", "penyusutan"],
+  ["beban", "depresiasi"],
+  ["penyusutan"],
+  ["depreciation", "expense"],
+];
+
+/**
+ * Resolve the two asset-depreciation accounts that are stored on SystemSetting
+ * (Beban Penyusutan + Akumulasi Penyusutan). The fixed-asset control account has
+ * no system-settings field — it is set per asset category — so it is not
+ * resolved here.
+ */
+export function resolveAssetAccounts(accounts: AutomapAccount[]): {
+  depreciationExpenseAccountId: string;
+  accumulatedDepreciationAccountId: string;
+} {
+  const accumulatedDepreciationAccountId = findAccountId(
+    accounts,
+    ACCUMULATED_DEPRECIATION_GROUPS,
+  );
+  const excludeAccumulated = new Set(
+    accumulatedDepreciationAccountId ? [accumulatedDepreciationAccountId] : [],
+  );
+  const depreciationExpenseAccountId = findAccountId(
+    accounts,
+    DEPRECIATION_EXPENSE_GROUPS,
+    excludeAccumulated,
+  );
+
+  return { depreciationExpenseAccountId, accumulatedDepreciationAccountId };
+}
+
+/**
+ * Keyword rules for every account field on SystemSetting, in priority order.
+ * Moved verbatim from the settings form's "Auto-Map Akun" handler so the
+ * first-run install and the form share one implementation.
+ *
+ * Pairs that must never resolve to the same account (Persediaan vs GRNI/clearing,
+ * Beban vs Akumulasi Penyusutan) are excluded here and handled below.
+ */
+export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
+  { key: "salesReceivableAccountId", groups: [["piutang", "usaha"], ["1103"], ["piutang", "dagang"], ["receivable"]] },
+  { key: "salesRevenueAccountId", groups: [["pendapatan", "penjualan"], ["400001"], ["pendapatan", "jasa"], ["revenue"], ["penjualan"]] },
+  { key: "salesTaxAccountId", groups: [["ppn", "keluaran"], ["210201"], ["ppn", "keluar"], ["tax", "out"]] },
+  { key: "salesReturnAccountId", groups: [["retur", "penjualan"], ["400003"], ["sales", "return"]] },
+  { key: "salesAccountId", groups: [["pendapatan", "penjualan"], ["400001"], ["akun", "penjualan"], ["sales", "account"], ["penjualan"]] },
+  { key: "purchasePayableAccountId", groups: [["hutang", "usaha"], ["utang", "usaha"], ["2101"], ["hutang", "dagang"], ["payable"]] },
+  { key: "purchaseTaxAccountId", groups: [["ppn", "masukan"], ["110504"], ["ppn", "masuk"], ["tax", "in"]] },
+  // COA Accurate tidak punya akun khusus "beban pembelian" → pakai Beban
+  // Operasional Lainnya (600020) sebagai akun beban jasa/biaya pembelian.
+  { key: "purchaseExpenseAccountId", groups: [["beban", "pembelian"], ["beban", "operasional", "lainnya"], ["600020"], ["purchase", "expense"]] },
+  { key: "purchaseDiscountAccountId", groups: [["diskon", "pembelian"], ["600025"], ["purchase", "discount"]] },
+  { key: "purchaseShippingAccountId", groups: [["ongkos", "kirim"], ["ekspedisi"], ["600014"], ["shipping"], ["ongkir"]] },
+  { key: "purchaseAdminFeeAccountId", groups: [["admin", "bank"], ["adm", "bank"], ["720002"], ["admin", "transfer"], ["bank", "fee"]] },
+  { key: "purchaseReturnAccountId", groups: [["retur", "pembelian"], ["600026"], ["purchase", "return"]] },
+  { key: "inventoryAdjustmentAccountId", groups: [["penyesuaian", "persediaan"], ["510103"], ["inventory", "adj"]] },
+  { key: "stockAdjustmentAccountId", groups: [["penyesuaian", "persediaan"], ["510103"], ["inventory", "adj"], ["stock", "adjustment"]] },
+  // Nama standar Accurate: "Beban Pokok Penjualan" (5101), bukan "Harga Pokok Penjualan".
+  { key: "cogsAccountId", groups: [["beban", "pokok", "penjualan"], ["5101"], ["harga", "pokok", "penjualan"], ["hpp"], ["cogs"]] },
+  { key: "wipAccountId", groups: [["barang", "dalam", "proses"], ["110404"], ["wip"], ["work", "progress"]] },
+  { key: "materialExpenseAccountId", groups: [["beban", "material"], ["510102"], ["material", "expense"]] },
+  { key: "materialIssueExpenseAccountId", groups: [["beban", "material"], ["510102"], ["material", "issue"], ["consumables"]] },
+  { key: "pettyCashAccountId", groups: [["kas", "kecil"], ["110101"], ["petty", "cash"]] },
+  { key: "cashBankAccountId", groups: [["kas", "bank"], ["1101"], ["bank"], ["kas", "utama"], ["kas"]] },
+  { key: "generalExpenseAccountId", groups: [["beban", "umum"], ["beban", "operasional", "lainnya"], ["600020"], ["administrasi"], ["general", "expense"]] },
+  { key: "defaultCashAccountId", groups: [["kas", "utama"], ["kas", "bank"], ["1101"], ["bank"], ["kas"]] },
+  { key: "salaryExpenseAccountId", groups: [["beban", "gaji"], ["600004"], ["salary", "expense"]] },
+  { key: "salariesPayableAccountId", groups: [["hutang", "gaji"], ["utang", "gaji"], ["210204"], ["salaries", "payable"]] },
+  // Bank payroll didahulukan ke akun "Bank" (110102), bukan "Kas & Bank".
+  { key: "payrollBankAccountId", groups: [["110102"], ["bank", "buku"], ["bank"], ["kas", "bank"], ["kas", "utama"]] },
+  { key: "employeeReceivableAccountId", groups: [["piutang", "karyawan"], ["110506"], ["employee", "receivable"]] },
+  { key: "payrollJournalTypeId", groups: [["beban", "gaji"], ["hutang", "gaji"], ["jurnal", "payroll"], ["payroll", "journal"]] },
+];
+
+/**
+ * Every account field auto-mapping can fill — used by the settings checklist to
+ * report how many mappings are still empty.
+ */
+export const ACCOUNT_MAPPING_FIELDS: string[] = [
+  ...ACCOUNT_MAPPING_RULES.map((rule) => rule.key),
+  "inventoryAccountId",
+  "purchaseInventoryAccountId",
+  "depreciationExpenseAccountId",
+  "accumulatedDepreciationAccountId",
+];
+
+/**
+ * Resolve EVERY account field on SystemSetting at once — the whole "Auto-Map
+ * Akun" result, keyed by the exact Prisma field name. Empty string means no
+ * match was found (the caller keeps the field unset).
+ */
+export function resolveAllAccountMappings(accounts: AutomapAccount[]): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  for (const rule of ACCOUNT_MAPPING_RULES) {
+    mapping[rule.key] = findAccountId(accounts, rule.groups);
+  }
+
+  const inventory = resolveInventoryAccounts(accounts);
+  mapping.inventoryAccountId = inventory.inventoryAccountId;
+  mapping.purchaseInventoryAccountId = inventory.purchaseInventoryAccountId;
+
+  const assets = resolveAssetAccounts(accounts);
+  mapping.depreciationExpenseAccountId = assets.depreciationExpenseAccountId;
+  mapping.accumulatedDepreciationAccountId = assets.accumulatedDepreciationAccountId;
+
+  return mapping;
 }

@@ -159,6 +159,28 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
               const visibleChildren = filterChildren(item.children)
               if (visibleChildren.length === 0) return null
 
+              // Grup berkatalog (`sidebarLinkOnly`): sidebar menautkan ke halaman
+              // grupnya saja. 47 laporan sebagai submenu menenggelamkan modul lain
+              // dan tidak bisa dicari; daftarnya dibaca di katalog `/laporan`
+              // (kategori + kotak Cari). `children` tetap dipakai sebagai sumber
+              // label/ikon/izin untuk katalog, breadcrumb, dan command palette.
+              if (item.sidebarLinkOnly) {
+                return (
+                  <SidebarMenuItem key={item.href}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={isActive(item.href) || isGroupActive(item)}
+                      tooltip={item.label}
+                    >
+                      <Link href={item.href} onClick={handleNav}>
+                        <Icon />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                )
+              }
+
               return (
                 <Collapsible
                   key={item.href}
@@ -170,7 +192,21 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
                     <CollapsibleTrigger asChild>
                       <SidebarMenuButton tooltip={item.label} isActive={isGroupActive(item)}>
                         <Icon />
-                        <span>{item.label}</span>
+                        {/*
+                          Label grup bisa diklik menuju halaman ringkasan modul (hub),
+                          sedangkan klik di area lain tetap membuka/menutup daftar anak
+                          — `stopPropagation` mencegah keduanya terjadi sekaligus.
+                        */}
+                        <Link
+                          href={item.href}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            handleNav?.()
+                          }}
+                          className="truncate hover:underline"
+                        >
+                          {item.label}
+                        </Link>
                         <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>

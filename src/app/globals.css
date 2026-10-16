@@ -2686,6 +2686,7 @@ html.dark [cmdk-group-heading] {
  * dan nyaris tak terbaca. Saat DICETAK tetap dipaksa hitam-putih (lihat @media print).
  */
 .report-sheet,
+.report-paper,
 .app-content > div:has(.report-letterhead) {
   --doc-paper: var(--card, #ffffff);
   --doc-ink: var(--card-foreground, #111827);
@@ -2708,13 +2709,65 @@ html.dark [cmdk-group-heading] {
 
 /* ---- kop dokumen ---- */
 .doc-head { text-align: center; }
-.doc-company { font-size: 12.5pt; font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
+
+.report-sheet-wide,
+.report-paper-wide {
+  max-width: 297mm;
+}
+
+/* Kertas untuk laporan yang menggambar kopnya sendiri (`sheet={false}`).
+   Sebelumnya isi 23 laporan itu mengambang langsung di latar aplikasi, jadi
+   tidak terbaca sebagai dokumen; kini punya lembar putih sendiri. */
+.report-paper {
+  background: var(--doc-paper);
+  color: var(--doc-ink);
+  width: 100%;
+  max-width: 210mm;
+  margin-inline: auto;
+  padding: 14mm 12mm;
+  border-radius: 2px;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 28%), 0 24px 48px -28px rgb(0 0 0 / 55%);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Sebagian laporan menggambar lembarnya sendiri di dalam `sheet={false}`
+   (Arus Kas, Buku Besar). Kertas pembungkus dinetralkan supaya tidak dobel. */
+.report-paper:has(.report-sheet) {
+  background: none;
+  box-shadow: none;
+  border-radius: 0;
+  padding: 0;
+  max-width: none;
+  margin: 0;
+}
+
+/* Kanvas dokumen: kertas putih di atas latar gelap, seperti penampil PDF.
+   Hanya di layar — saat dicetak kanvasnya hilang dan yang keluar kertasnya. */
+@media screen {
+  .report-canvas {
+    background: var(--report-canvas, #3f3f46);
+    border-radius: 12px;
+    padding: 20px 16px;
+    overflow-x: auto;
+  }
+}
+
+@media print {
+  .app-content > div:has(.report-page-shell-wide) {
+    page: report-wide;
+  }
+}
+.doc-company { font-size: 11pt; font-weight: 600; letter-spacing: 0.16em; text-transform: uppercase; color: var(--doc-muted); }
 .doc-lines { margin-top: 2px; font-size: 8.5pt; color: var(--doc-muted); line-height: 1.45; }
 .doc-logo { height: 46px; width: auto; object-fit: contain; margin-bottom: 4px; }
 .doc-rule { border: 0; border-top: 1.5px solid var(--doc-rule); margin: 10px 0; }
-.doc-title { font-size: 13pt; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; }
+/* Judul lembar dirender sebagai <h1> (satu per halaman laporan) supaya tiap
+   halaman punya heading dokumen yang benar untuk pembaca layar/outline. Margin
+   bawaan <h1> dinolkan agar tampilannya tetap sama seperti sebelumnya (dulu <div>). */
+.doc-title { font-size: 16pt; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; margin: 0; }
 .doc-subtitle { font-size: 9pt; color: var(--doc-muted); }
 .doc-meta { display: flex; justify-content: space-between; gap: 16px; font-size: 8.5pt; color: var(--doc-muted); margin-top: 2px; }
+.doc-meta > span:last-child { font-style: italic; }
 .doc-period { font-size: 9pt; font-weight: 600; color: var(--doc-ink); }
 
 /* ---- tabel pernyataan: hanya garis horizontal, angka rata kanan ---- */
@@ -2736,7 +2789,10 @@ html.dark [cmdk-group-heading] {
 .stmt thead th:last-child,
 .stmt tbody td:last-child { padding-inline-end: 0; }
 .stmt tbody tr.group td { padding-top: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; }
-.stmt tbody tr.subtotal td { border-top: 1px solid #9ca3af; padding-top: 3px; font-weight: 700; }
+.stmt tbody tr.subtotal td { padding-top: 3px; font-weight: 700; }
+/* Garis subtotal hanya di atas kolom angka (seperti Accurate), bukan melintang
+   seluruh baris — labelnya tetap menempel pada akun yang dijumlahkan. */
+.stmt tbody tr.subtotal td.num { border-top: 1px solid var(--doc-rule); }
 .stmt tbody tr.total td { border-top: 1px solid var(--doc-rule); border-bottom: 3px double var(--doc-rule); padding: 3px 0; font-weight: 700; }
 .stmt tbody tr.grand td { border-top: 3px double var(--doc-rule); padding-top: 4px; font-weight: 700; font-size: 10.5pt; }
 .stmt tbody tr.row-parent td { font-weight: 600; }
@@ -2825,6 +2881,7 @@ html.dark [cmdk-group-heading] {
   .app-content > div:has(.report-letterhead) { page: report-wide; }
   /* Kertas selalu hitam-putih, apa pun tema layar yang sedang aktif. */
   .report-sheet,
+  .report-paper,
   .app-content > div:has(.report-letterhead) {
     --doc-paper: #ffffff;
     --doc-ink: #000000;
@@ -2836,7 +2893,8 @@ html.dark [cmdk-group-heading] {
   .report-kpi-card { border-left: 0; padding-left: 0; }
   .report-section-title { color: #000 !important; }
   .report-section-desc { color: #333 !important; }
-  .report-sheet {
+  .report-sheet,
+  .report-paper {
     /* `margin-inline: auto` (screen) makes this flex item shrink-to-fit on
        paper; zeroing it lets the sheet fill the printable width. */
     max-width: none;
@@ -2878,10 +2936,20 @@ html.dark [cmdk-group-heading] {
   .stmt thead th:last-child,
   .stmt tbody td:last-child { padding-inline-end: 0 !important; }
   .stmt thead th { border-bottom: 1px solid #000 !important; }
-  .stmt tbody tr.subtotal td { border-top: 1px solid #9ca3af !important; }
+  .stmt tbody tr.subtotal td.num { border-top: 1px solid #9ca3af !important; }
   .stmt tbody tr.total td {
     border-top: 1px solid #000 !important;
     border-bottom: 3px double #000 !important;
   }
   .stmt tbody tr.grand td { border-top: 3px double #000 !important; }
+}
+
+/* Kanvas dokumen hanya ada di layar; saat dicetak yang keluar murni kertasnya. */
+@media print {
+  .report-canvas {
+    background: none !important;
+    border-radius: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
 }

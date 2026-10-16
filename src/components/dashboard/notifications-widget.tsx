@@ -1,5 +1,6 @@
 "use client"
 
+import { showError } from "@/lib/utils/toast"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Bell, Clock, ClipboardCheck, FileText, Package } from "lucide-react"
@@ -44,7 +45,7 @@ export function NotificationsWidget() {
     fetch("/api/dashboard/notifications")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setData(d))
-      .catch(() => {})
+      .catch(() => showError("Gagal memuat notifikasi"))
       .finally(() => setLoading(false))
   }, [])
 

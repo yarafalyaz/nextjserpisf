@@ -27,6 +27,17 @@ export function toLocalDateOnly(date: Date): string {
 }
 
 /**
+ * Inverse of `toLocalDateOnly`: local midnight for a `YYYY-MM-DD` string.
+ *
+ * The explicit `T00:00:00` matters — `new Date("2026-09-01")` is spec'd as UTC
+ * midnight, which in WIB is 07:00 on the same day but a day earlier west of
+ * UTC, so the round-trip through `toLocalDateOnly` would not be exact.
+ */
+export function parseLocalDateOnly(value: string): Date {
+  return new Date(`${value}T00:00:00`)
+}
+
+/**
  * Exclusive upper bound for a range over UTC-midnight date values: the UTC
  * midnight that starts the day after `date`'s UTC calendar day.
  *

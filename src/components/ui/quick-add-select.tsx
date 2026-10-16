@@ -1,11 +1,12 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useEffect, useState, useTransition } from "react"
 import { Combobox, type ComboboxOption } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
+import { AddressPicker } from "@/components/ui/address-picker"
 import {
   Select,
   SelectContent,
@@ -27,18 +28,38 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 export interface QuickAddField {
   name: string
   label: string
-  /** Input type. `select` renders a dropdown from `options`. */
-  type?: "text" | "number" | "email" | "textarea" | "select" | "date" | "hidden"
+  /**
+   * Input type. `select` renders a dropdown from `options`/`optionsFrom`;
+   * `region` renders the cascading province → village picker (nama field:
+   * province/city/district/village/postalCode).
+   */
+  type?: "text" | "number" | "email" | "textarea" | "select" | "date" | "hidden" | "region" | "combobox"
   required?: boolean
   placeholder?: string
+  /**
+   * Di dialog lebar: `full` membuat field memakai satu baris penuh (mis. alamat &
+   * pemilih wilayah). Default: setengah baris, berdampingan dengan field berikutnya.
+   */
+  span?: "full"
   /** For `select`: the allowed choices. */
   options?: { value: string; label: string }[]
+  /**
+   * For `select`: pilihan yang dibaca dari database saat dialog dibuka. Loader-nya
+   * disediakan pemanggil (registry memegang action-nya), sehingga komponen generik ini
+   * tidak perlu tahu entitas apa pun — dan tidak menarik server action ke dalamnya.
+   */
+  loadOptions?: () => Promise<{ value: string; label: string }[]>
   defaultValue?: string | number
   step?: string
   min?: string
   max?: string
   /** Helper text shown under the field. */
   hint?: string
+  /**
+   * Ditampilkan menggantikan `hint` ketika pilihan dari database kosong — supaya
+   * jalan buntu (tidak ada yang bisa dipilih) dijelaskan, bukan dibiarkan hening.
+   */
+  emptyHint?: string
 }
 
 /** Server action shape the quick-add relies on: returns the new row's id. */
@@ -63,6 +84,11 @@ export interface QuickAddSelectProps {
   description?: string
   /** Fields rendered in the dialog, in order. */
   fields: QuickAddField[]
+  /**
+   * Nilai tambahan yang ikut dikirim saat menyimpan — dipakai untuk konteks yang hanya
+   * diketahui form pemanggil, mis. `customerId` saat menambah kendaraan pelanggan.
+   */
+  extraValues?: Record<string, string | number | null | undefined>
   /** Server action invoked with the assembled FormData. */
   action: QuickAddAction
   /**
@@ -100,18 +126,71 @@ export function QuickAddSelect({
   action,
   getLabel,
   onCreated,
+  extraValues,
 }: QuickAddSelectProps) {
   const [openDialog, setOpenDialog] = useState(false)
   const [search, setSearch] = useState("")
   const [isPending, startTransition] = useTransition()
+  const [dynamicOptions, setDynamicOptions] = useState<Record<string, ComboboxOption[]>>({})
+
+  // Kunci stabil (bukan array) supaya efek tidak berjalan ulang tiap render.
+  const loaderKey = fields
+    .filter((field) => field.loadOptions)
+    .map((field) => field.name)
+    .sort()
+    .join(",")
+
+  // Dialog ber-field banyak (mis. Pelanggan: 8 field + pemilih wilayah) memakai lebar
+  // dua kolom supaya tidak memakan ruang layar; dialog ringkas tidak berubah.
+  const wide = fields.length > 4
+
+  useEffect(() => {
+    if (!openDialog || !loaderKey) return
+    let active = true
+    Promise.all(
+      fields
+        .filter((field) => field.loadOptions)
+        .map(async (field) => {
+          try {
+            return [field.name, await field.loadOptions!()] as const
+          } catch {
+            // Gagal memuat pilihan tidak boleh memblokir pengisian field lain.
+            return [field.name, [] as ComboboxOption[]] as const
+          }
+        }),
+    ).then((pairs) => {
+      if (active) setDynamicOptions(Object.fromEntries(pairs))
+    })
+    return () => {
+      active = false
+    }
+    // `fields` sengaja tidak jadi dependency: identitasnya stabil (konstanta registry)
+    // dan yang menentukan pemuatan adalah daftar field ber-loader + status dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openDialog, loaderKey])
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
+    // Dialog ini hidup di dalam form dokumen (Penawaran/Faktur/…). Tanpa stopPropagation,
+    // event submit naik ke form induk sehingga menyimpan quick-add sekaligus MENGIRIM
+    // dokumennya — dulu itu membuat penawaran kosong tanpa disadari.
+    e.stopPropagation()
     const form = e.currentTarget
     const formData = new FormData(form)
     // Signals redirect-based create actions (e.g. createTax, createBrand) to
     // return their new id instead of navigating away from the current form.
     formData.set("__quickAdd", "1")
+    for (const [key, value] of Object.entries(extraValues ?? {})) {
+      if (value !== null && value !== undefined && value !== "") formData.set(key, String(value))
+    }
+    // Combobox mengirim nilainya lewat input hidden, yang tidak ikut validasi `required`
+    // bawaan browser — jadi field wajib diperiksa di sini.
+    for (const field of fields) {
+      if (field.type === "combobox" && field.required && !formData.get(field.name)) {
+        showError(`${field.label} wajib dipilih`)
+        return
+      }
+    }
     startTransition(async () => {
       try {
         const result = await action(formData)
@@ -159,24 +238,43 @@ export function QuickAddSelect({
           setOpenDialog(next)
         }}
       >
-        <DialogContent className="sm:max-w-lg">
+        {/*
+          Tinggi dibatasi `dvh` (bukan `vh`) supaya ikut mengecil saat keyboard HP
+          muncul, dan hanya AREA ISI yang di-scroll — tombol Simpan selalu menempel
+          di bawah dialog, jadi tidak perlu men-scroll untuk menyimpan.
+        */}
+        <DialogContent
+          className={`flex max-h-[90dvh] flex-col overflow-hidden ${wide ? "sm:max-w-2xl" : "sm:max-w-lg"}`}
+        >
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
             {description && <DialogDescription>{description}</DialogDescription>}
           </DialogHeader>
-          <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-            {fields.map((field) => (
-              <QuickAddFieldControl
-                key={field.name}
-                field={field}
-                prefill={
-                  field.name === "name" && search && !field.defaultValue
-                    ? search
-                    : undefined
-                }
-              />
-            ))}
-            <DialogFooter>
+          <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col gap-4">
+            <div
+              className={
+                wide
+                  ? // Dua kolom: entitas ber-field banyak (mis. Pelanggan) tidak jadi kolom
+                    // panjang yang memakan ruang layar. Dialog ringkas tetap satu kolom.
+                    "grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch] sm:grid-cols-2"
+                  : "flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto overscroll-contain touch-pan-y [-webkit-overflow-scrolling:touch]"
+              }
+            >
+              {fields.map((field) => (
+                <div key={field.name} className={wide && field.span === "full" ? "sm:col-span-2" : undefined}>
+                  <QuickAddFieldControl
+                    field={field}
+                    dynamicOptions={dynamicOptions}
+                    prefill={
+                      field.name === "name" && search && !field.defaultValue
+                        ? search
+                        : undefined
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <DialogFooter className="shrink-0">
               <Button
                 type="button"
                 onPress={() => setOpenDialog(false)}
@@ -198,15 +296,33 @@ export function QuickAddSelect({
 function QuickAddFieldControl({
   field,
   prefill,
+  dynamicOptions,
 }: {
   field: QuickAddField
   prefill?: string
+  dynamicOptions: Record<string, ComboboxOption[]>
 }) {
   if (field.type === "hidden") {
     return <input type="hidden" name={field.name} defaultValue={field.defaultValue} />
   }
 
   const inputId = `quick-add-${field.name}`
+
+  // Wilayah: pakai pemilih bertingkat yang sama dengan form Pelanggan penuh, supaya
+  // hasilnya identik (province/city/district/village/postalCode).
+  if (field.type === "region") {
+    return (
+      <div className="flex flex-col gap-1.5">
+        <Label>{field.label}</Label>
+        <AddressPicker />
+        {field.hint && <span className="text-xs text-muted-foreground">{field.hint}</span>}
+      </div>
+    )
+  }
+
+  const selectOptions = field.loadOptions
+    ? (dynamicOptions[field.name] ?? [])
+    : (field.options ?? [])
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -223,13 +339,16 @@ function QuickAddFieldControl({
           placeholder={field.placeholder}
           defaultValue={(field.defaultValue as string) ?? ""}
         />
+      ) : field.type === "combobox" ? (
+        // Combobox = pilihan yang bisa dicari (mis. tipe kendaraan dari ratusan varian).
+        <QuickAddComboboxControl field={field} inputId={inputId} options={selectOptions} />
       ) : field.type === "select" ? (
         <Select name={field.name} defaultValue={String(field.defaultValue ?? "")}>
           <SelectTrigger id={inputId} className="w-full">
             <SelectValue placeholder={field.placeholder ?? "-- Pilih --"} />
           </SelectTrigger>
           <SelectContent>
-            {(field.options ?? []).map((opt) => (
+            {selectOptions.map((opt) => (
               <SelectItem key={opt.value} value={opt.value}>
                 {opt.label}
               </SelectItem>
@@ -250,9 +369,39 @@ function QuickAddFieldControl({
           autoFocus={field.name === "name"}
         />
       )}
-      {field.hint && (
+      {field.emptyHint && selectOptions.length === 0 && (field.type === "combobox" || field.type === "select") ? (
+        <span className="text-xs text-warning">{field.emptyHint}</span>
+      ) : field.hint ? (
         <span className="text-xs text-muted-foreground">{field.hint}</span>
-      )}
+      ) : null}
     </div>
+  )
+}
+
+/**
+ * Kontrol combobox untuk dialog quick-add. Dipisah supaya punya state sendiri —
+ * `QuickAddFieldControl` melakukan early-return untuk beberapa tipe field, dan hook
+ * tidak boleh dipanggil sesudahnya.
+ */
+function QuickAddComboboxControl({
+  field,
+  inputId,
+  options,
+}: {
+  field: QuickAddField
+  inputId: string
+  options: ComboboxOption[]
+}) {
+  const [value, setValue] = useState<string | null>(null)
+  return (
+    <Combobox
+      id={inputId}
+      name={field.name}
+      options={options}
+      value={value}
+      onChange={setValue}
+      placeholder={field.placeholder ?? "Cari…"}
+      emptyText="Tidak ditemukan"
+    />
   )
 }

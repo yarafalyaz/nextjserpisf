@@ -1736,7 +1736,7 @@ describe("onVendorBillPosted", () => {
     });
     mocks.goodsReceiptCount.mockResolvedValue(1);
     mocks.journalFindFirst.mockResolvedValue(null);
-    await expect(onVendorBillPosted(1)).rejects.toThrow("melebihi grand total");
+    await expect(onVendorBillPosted(1)).rejects.toThrow("melebihi total keseluruhan");
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 });

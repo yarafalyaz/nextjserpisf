@@ -7,7 +7,6 @@ import {
   BookOpenCheck,
   CircleDollarSign,
   Coins,
-  PiggyBank,
   ArrowUpRight,
   AlertTriangle,
   TrendingUp,
@@ -101,7 +100,6 @@ export default async function FinanceDashboard() {
     { label: "Pembayaran", href: "/penjualan/pembayaran", icon: CreditCard, desc: "Pembayaran masuk" },
     { label: "Biaya", href: "/keuangan/pengeluaran", icon: CircleDollarSign, desc: "Catat biaya" },
     { label: "Kas Kecil", href: "/keuangan/kas-kecil", icon: Coins, desc: "Kas kecil" },
-    { label: "Anggaran", href: "/keuangan/anggaran", icon: PiggyBank, desc: "Penganggaran" },
   ]
 
   return (

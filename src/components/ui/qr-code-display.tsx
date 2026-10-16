@@ -5,7 +5,7 @@ import { QRCodeSVG } from "qrcode.react"
 interface QrCodeDisplayProps {
   /** The data encoded in the QR (typically a URL to the item detail/scan page). */
   value: string
-  /** Human-readable caption shown under the QR (e.g. the item code). */
+  /** Human-readable caption shown under the QR (e.g. the kode barang). */
   caption?: string
   size?: number
   className?: string

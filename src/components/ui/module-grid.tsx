@@ -11,6 +11,8 @@ export interface ModuleItem {
   desc: string
   /** Permission required to view this module card. Omit to always show. */
   permission?: string
+  /** Alternatif `permission`: kartu tampil bila pengguna punya salah satu izin ini. */
+  permissions?: string[]
 }
 
 export interface ModuleGridProps {
@@ -61,7 +63,13 @@ export function ModuleGrid({
   const visibleItems = isSuperAdmin
     ? items
     : userPermissions
-      ? items.filter((item) => !item.permission || userPermissions.includes(item.permission))
+      ? items.filter((item) => {
+          // Sama seperti canSeeNavItem: any-of menang atas izin tunggal.
+          if (item.permissions && item.permissions.length > 0) {
+            return item.permissions.some((permission) => userPermissions.includes(permission))
+          }
+          return !item.permission || userPermissions.includes(item.permission)
+        })
       : items
 
   return (

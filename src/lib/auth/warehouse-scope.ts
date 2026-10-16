@@ -1,7 +1,10 @@
 import { prisma } from "@/lib/db/prisma"
+import { WAREHOUSE_ALL_ACCESS_ROLES } from "@/lib/auth/role-names"
 
-// Role yang memiliki akses ke semua gudang
-const ALL_ACCESS_ROLES = ["super_admin", "admin", "warehouse_manager", "logistics"]
+// Role yang memiliki akses ke semua gudang. Daftarnya ada di `role-names.ts` — dulu di
+// sini tertulis `warehouse_manager`/`logistics` yang tidak pernah di-seed (cabang mati).
+// Role `warehouse` BUKAN all-access: aksesnya ditentukan dari penugasan `UserWarehouse`.
+const ALL_ACCESS_ROLES: readonly string[] = WAREHOUSE_ALL_ACCESS_ROLES
 
 export type WarehouseScope =
   | { kind: "all" }

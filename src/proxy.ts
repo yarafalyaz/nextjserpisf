@@ -1,8 +1,14 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { takeRateLimit, getClientIp } from "@/lib/security/rate-limit";
+import { takeRateLimit, getClientIp, canBlockOnClientIp, clientRateLimitKey } from "@/lib/security/rate-limit";
 import { isSecureRequest } from "@/lib/security/secure-request";
+import { SENSITIVE_ROUTE_PERMISSIONS } from "@/lib/auth/sensitive-routes";
+import { isSameOriginRequest } from "@/lib/security/same-origin";
+
+// Cookie sesi Auth.js dipecah saat tokennya panjang (`…session-token.0`, `.1`, …),
+// jadi pembersihan harus mencakup semua potongan, bukan hanya nama dasarnya.
+const SESSION_COOKIE_PATTERN = /^(__Secure-)?authjs\.session-token(\.\d+)?$/;
 
 // Fix #24: Only allow actual static file extensions, not any URL with a dot
 const STATIC_EXTENSIONS =
@@ -81,8 +87,17 @@ export async function proxy(req: NextRequest) {
 
   const ip = getClientIp(req);
 
+  // Saat identitas klien tidak tepercaya (TRUSTED_PROXY belum diset), semua
+  // klien berbagi satu bucket. Kalau bucket bersama itu dipakai untuk
+  // memblokir, satu klien anonim bisa melumpuhkan login SEMUA pengguna — dan
+  // itu tidak menambah proteksi brute-force, karena limit per-email di
+  // authorize() yang menjadi penjaganya (15 gagal/30 menit, kunci dari body
+  // request sehingga tidak bisa dipalsukan header). Jadi pemblokiran berbasis
+  // IP hanya dilakukan saat kunci per-klien benar-benar tersedia.
+  const mayBlockOnIp = canBlockOnClientIp(ip);
+
   // Rate limit login attempts
-  if (pathname === "/login" && req.method === "POST") {
+  if (pathname === "/login" && req.method === "POST" && mayBlockOnIp) {
     const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
     if (!result.allowed) {
       return addSecurityHeaders(req, 
@@ -94,12 +109,36 @@ export async function proxy(req: NextRequest) {
     }
   }
 
+  // Sesi dibaca SEKALI di sini (sebelumnya di dua tempat terpisah): nilainya
+  // dipakai untuk memilih kunci rate limit di bawah sekaligus untuk aturan
+  // routing/otorisasi setelahnya.
+  //
+  // `secureCookie` harus mengikuti SKEMA REQUEST, sama seperti Auth.js saat
+  // memilih antara `authjs.session-token` dan `__Secure-authjs.session-token`.
+  // Menurunkannya dari NODE_ENV membuat build produksi yang disajikan lewat HTTP
+  // polos (server e2e/CI, atau instalasi on-prem tanpa TLS) selalu gagal membaca
+  // cookie → semua halaman memantul ke /login.
+  const secureCookie = isSecureRequest(req);
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
+
+  // Saat IP tidak tepercaya, semua klien berbagi satu bucket sehingga satu klien
+  // anonim bisa menghabiskan kuota milik semua orang (DoS). Untuk permintaan yang
+  // BER-SESI itu tidak perlu: identitas pengguna adalah kunci per-klien yang
+  // nyata dan tidak bisa dipalsukan. Dengan begitu bucket bersama hanya menampung
+  // permintaan anonim — dampaknya kecil karena /login dikecualikan (lihat di atas)
+  // dan endpoint publik sudah di-allowlist di bawah.
+  const rawUserId = (token as { id?: unknown } | null)?.id;
+  const clientKey = clientRateLimitKey(
+    ip,
+    typeof rawUserId === "string" || typeof rawUserId === "number" ? rawUserId : null,
+  );
+
   // Fix #25: API routes still need to pass through (they handle their own auth),
   // but we validate auth for sensitive API paths
   if (pathname.startsWith("/api")) {
     // NextAuth must stay reachable before a user has a session.
     if (pathname.startsWith("/api/auth")) {
-      if (req.method === "POST") {
+      if (req.method === "POST" && mayBlockOnIp) {
         const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
         if (!result.allowed) {
           return addSecurityHeaders(req, 
@@ -125,9 +164,16 @@ export async function proxy(req: NextRequest) {
       return addSecurityHeaders(req, NextResponse.next());
     }
 
+    // Public reference data (Indonesian region list from bundled CSVs). Used by
+    // the address pickers, including the first-run setup wizard which runs
+    // before any session exists.
+    if (pathname === "/api/address") {
+      return addSecurityHeaders(req, NextResponse.next());
+    }
+
     // Rate limit upload endpoints more strictly
     if (pathname.startsWith("/api/upload")) {
-      const result = await takeRateLimit(`upload:${ip}`, RATE_LIMITS.upload);
+      const result = await takeRateLimit(`upload:${clientKey}`, RATE_LIMITS.upload);
       if (!result.allowed) {
         return addSecurityHeaders(req, 
           NextResponse.json(
@@ -138,7 +184,7 @@ export async function proxy(req: NextRequest) {
       }
     } else {
       // General API rate limit
-      const result = await takeRateLimit(`api:${ip}`, RATE_LIMITS.api);
+      const result = await takeRateLimit(`api:${clientKey}`, RATE_LIMITS.api);
       if (!result.allowed) {
         return addSecurityHeaders(req, 
           NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 }),
@@ -149,16 +195,6 @@ export async function proxy(req: NextRequest) {
     // All other API routes: check auth at proxy level
     // Fix C1: also enforce isActive — deactivated users must be blocked here so
     // they cannot use a still-valid JWT to hit routes that only call auth().
-    //
-    // `secureCookie` must follow the REQUEST SCHEME, exactly like Auth.js does
-    // when it decides between `authjs.session-token` and
-    // `__Secure-authjs.session-token`. Deriving it from NODE_ENV instead meant a
-    // production build served over plain HTTP (the e2e/CI server, or an on-prem
-    // install without TLS) wrote non-prefixed cookies while this code looked for
-    // the `__Secure-` ones: getToken always returned null, every page bounced
-    // back to /login and the app was unusable behind a login loop.
-    const secureCookie = isSecureRequest(req);
-    const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
     if (!token || (token as { isActive?: boolean }).isActive === false) {
       return addSecurityHeaders(req, 
         NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 }),
@@ -167,10 +203,6 @@ export async function proxy(req: NextRequest) {
     return addSecurityHeaders(req, NextResponse.next());
   }
 
-  // Same request-scheme rule as above: NODE_ENV does not tell us whether Auth.js
-  // prefixed the session cookie with `__Secure-`.
-  const secureCookie = isSecureRequest(req);
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie });
   // Treat a deactivated user as not-logged-in for page routing. Otherwise the
   // dashboard layout redirects them to /login (deactivated), but the "logged-in
   // -> away from /login" rule below would bounce them back to / -> infinite loop.
@@ -179,6 +211,7 @@ export async function proxy(req: NextRequest) {
   const isAuthPage = pathname.startsWith("/login");
   const isPublicPage =
     isAuthPage ||
+    pathname === "/setup" ||
     pathname === "/ketentuan-layanan" ||
     pathname === "/kebijakan-privasi";
 
@@ -188,13 +221,23 @@ export async function proxy(req: NextRequest) {
   // decodes here may still report isActive=true (re-sync only runs inside the
   // jwt callback, not in getToken). Bouncing such a "logged-in" user back to /
   // creates an infinite redirect loop (ERR_TOO_MANY_REDIRECTS). When /login
-  // carries an explicit reason, clear the stale session cookie and render login
-  // instead of redirecting away.
+  // carries an explicit reason, render login instead of redirecting away — dan
+  // bersihkan cookie sesinya hanya bila navigasinya dari aplikasi sendiri
+  // (lihat isSameOriginRequest).
   const reason = req.nextUrl.searchParams.get("reason");
   if (isAuthPage && isLoggedIn && reason) {
+    // Halaman login selalu dirender di sini (itu yang memutus loop redirect),
+    // tetapi cookie sesi hanya dihapus kalau navigasinya memang berasal dari
+    // aplikasi sendiri. Tanpa syarat itu, satu tautan lintas-situs ber-`?reason`
+    // yang diklik korban dapat mengeluarkannya dari sesi (logout CSRF).
     const res = addSecurityHeaders(req, NextResponse.next());
-    res.cookies.delete("authjs.session-token");
-    res.cookies.delete("__Secure-authjs.session-token");
+    if (isSameOriginRequest(req)) {
+      for (const cookie of req.cookies.getAll()) {
+        if (SESSION_COOKIE_PATTERN.test(cookie.name)) {
+          res.cookies.delete(cookie.name);
+        }
+      }
+    }
     return res;
   }
 
@@ -210,20 +253,17 @@ export async function proxy(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  // Sensitive route protection — super_admin only
+  // Pengaturan sensitif — dijaga dengan PERMISSION yang sama seperti halaman &
+  // action-nya (bukan nama role), supaya delegasi ke role lain tetap satu aturan.
   if (isLoggedIn) {
     const userRoles = (token?.roles as string[] | undefined) ?? [];
+    const userPermissions = (token?.permissions as string[] | undefined) ?? [];
     const isSuperAdmin = userRoles.includes("super_admin");
-    const sensitiveRoutes = [
-      "/pengaturan/peran",
-      "/pengaturan/pengguna",
-      "/pengaturan/database",
-      "/pengaturan/system",
-      "/pengaturan/log-aktivitas",
-    ];
-    for (const pattern of sensitiveRoutes) {
-      if (pathname.startsWith(pattern) && !isSuperAdmin) {
-        return NextResponse.redirect(new URL("/", req.url));
+    if (!isSuperAdmin) {
+      for (const [pattern, permission] of SENSITIVE_ROUTE_PERMISSIONS) {
+        if (pathname.startsWith(pattern) && !userPermissions.includes(permission)) {
+          return NextResponse.redirect(new URL("/", req.url));
+        }
       }
     }
   }
