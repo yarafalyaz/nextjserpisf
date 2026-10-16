@@ -281,3 +281,19 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
    `migrate deploy` (niat dan kode tidak sepakat), dan baseline `migrate resolve` yang diklaimnya
    untuk **31** migrasi kini basi — migrasinya sudah 52+. Catatan pembaruan bertanggal sudah
    ditambahkan di kepala laporan itu.
+
+### Status falsifikasi penjaga (kapan terakhir diuji benar-benar menangkap)
+
+| Penjaga / asersi | Difalsifikasi | Catatan |
+| --- | --- | --- |
+| `schema-usage` — kolom | ✓ | kolom disuntikkan tanpa rujukan → memerah |
+| `schema-usage` — model | ✓ | **dulu MATI**: regex nama-relasi ikut menangkap kata kunci `model` (dan `model:` ada di objek lain di kode) sehingga **selalu hijau**; ketahuan justru saat difalsifikasi, kini diperbaiki |
+| `navigation-targets` | ✓ | entri nav tanpa halaman → memerah |
+| `silent-failure` — catch kosong | ✓ | disuntikkan → memerah; daftar pengecualian kini **self-pruning** |
+| `silent-failure` — promise senyap | ✓ | menangkap pelanggaran **nyata** di `verify-migrations.mjs` |
+| `wired-transition-actions` | ✓ | wiring `postJournal` dilepas → memerah ("tidak dipanggil dari mana pun") |
+| `check-migrations.mjs` (drift) | ✓ | kolom skema tanpa migrasi → memerah dan menyebut DDL yang kurang |
+
+**Pelajaran**: penjaga yang **tidak pernah difalsifikasi** bisa hampa — dan dua di antaranya
+memang hampa saat ditemukan. Falsifikasi bukan formalitas; ia satu-satunya cara membedakan
+penjaga yang bekerja dari penjaga yang hanya tampak hijau.
