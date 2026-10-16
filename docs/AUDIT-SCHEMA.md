@@ -320,6 +320,15 @@ tercapai lewat rute generik, dan halaman detail **menerima** `approved`
 untuk status itu (`statusChips = ["", "draft", "sent", "accepted", "converted", "cancelled"]`),
 jadi setelah aksinya dibuang **filter itu menjadi mati** — tak akan pernah cocok.
 
+**[3] 11 kolom hook — kelas yang BERBEDA dari (1b): tanpa jejak UI.** Diperiksa di halaman fiturnya
+(karena 0 rujukan kode berarti tak ada form/daftar/filter yang membacanya), dan hasilnya konsisten:
+**tidak ada UI yang menunggu kolom-kolom itu**, jadi membuangnya tidak meninggalkan tombol/filter mati.
+Contoh yang diperiksa: `WorkSchedule.lateToleranceMinutes` — keterlambatan kini diatur lewat setelan
+**lain** ("Denda Keterlambatan per Menit" di `/pengaturan/ubah`), jadi kolom ini sisa desain lama;
+`Tax.displayOrder` — 0 rujukan; dan `ApprovalWorkflow.isParallel`/`autoApproveAfterTimeout`/
+`timeoutHours` — halaman `/pengaturan/workflow` **tidak mengeksposnya**. Keputusan (3) karena itu
+murni soal **niat fitur** ("masih berencana atau tidak"), bukan soal UI — jauh lebih murah dari (1b).
+
 **Kesimpulan yang konsisten untuk kesembilannya**: tidak ada satu pun yang bisa "dibuang begitu saja";
 selalu ada **jejak UI yang menunggunya** (tombol, filter, label, atau bagian riwayat). Jadi pilihannya
 selalu salah satu dari dua, per fitur: **sambungkan**, atau **buang aksi beserta jejak UI-nya**. Itu
