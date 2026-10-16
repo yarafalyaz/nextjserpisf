@@ -122,16 +122,6 @@ const ALLOWED_UNWIRED: Array<{ action: string; definedIn: string; reason: string
     reason: "retur pembelian: proses (stok+GL) hanya dari status draft, tanpa tombol",
   },
   {
-    action: "approveLeave",
-    definedIn: "src/actions/hrm.actions.ts",
-    reason: "usang: cuti lewat approval-workflow (requestApprovalIfConfigured)",
-  },
-  {
-    action: "rejectLeave",
-    definedIn: "src/actions/hrm.actions.ts",
-    reason: "usang: idem alur persetujuan",
-  },
-  {
     action: "markExpensePaid",
     definedIn: "src/actions/finance.actions.ts",
     reason: "minor: approve/reject pengeluaran sudah tersambung; 'paid' hanya menggerbangi penghapusan",

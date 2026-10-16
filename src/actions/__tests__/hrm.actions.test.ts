@@ -139,7 +139,7 @@ function fd(entries: Record<string, string | string[]>): FormData {
 import * as actions from "../hrm.actions"
 
 const EXPORTED_FN_NAMES = [
-  "createLeaveRequest", "approveLeave", "rejectLeave",
+  "createLeaveRequest",
   "createOvertimeRequest", "approveOvertime",
   "createEmployeeLoan", "createTimesheet",
   "deleteLeaveRequest", "deleteOvertimeRequest", "deleteTimesheet",
@@ -265,37 +265,8 @@ describe("Leave Request Actions", () => {
     expect(res?.error).toContain("bentrok")
   })
 
-  it("approveLeave updates status", async () => {
-    const res = await actions.approveLeave(1)
-    expect(res?.success).toBe(true)
-    expect(assertApprovedMock).toHaveBeenCalledWith("LeaveRequest", 1)
-    expect(prismaMock.leaveRequest.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 1, status: "pending" } }),
-    )
-  })
 
-  it("approveLeave is an idempotent success for a workflow-approved request", async () => {
-    // The approval engine flips status to "approved" before this action runs.
-    // LeaveRequest has no post-approval side-effect, so that is already the
-    // desired end state; throwing "not pending" here only confused the final
-    // approver. It must succeed without a second status write.
-    prismaMock.leaveRequest.findUniqueOrThrow.mockResolvedValueOnce({
-      id: 1, employeeId: 1, status: "approved",
-    })
-    const res = await actions.approveLeave(1)
-    expect(res?.success).toBe(true)
-    expect(prismaMock.leaveRequest.updateMany).not.toHaveBeenCalled()
-  })
 
-  it("rejectLeave updates status with reason", async () => {
-    const res = await actions.rejectLeave(1, "Tidak cukup karyawan")
-    expect(res?.success).toBe(true)
-    expect(assertApprovedMock).toHaveBeenCalledWith("LeaveRequest", 1)
-    expect(prismaMock.leaveRequest.updateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 1, status: "pending" } }),
-    )
-    expect(requirePermissionMock).toHaveBeenCalledWith("approve_leave_requests")
-  })
 
   it("updateLeaveRequest updates record", async () => {
     const res = await actions.updateLeaveRequest(1, fd({
@@ -701,22 +672,6 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg2 = new FormData();
     try { await (actions as any).createLeaveRequest(arg1, arg2); } catch {} 
   })
-  it("approveLeave handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).approveLeave(arg1, arg2); } catch {} 
-  })
-  it("rejectLeave handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).rejectLeave(arg1, arg2); } catch {} 
-  })
   it("createOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
@@ -1082,8 +1037,6 @@ describe("Next.js redirect error handling", () => {
 
   const fnsToTest = [
     { name: "createLeaveRequest", fn: () => actions.createLeaveRequest(new FormData()) },
-    { name: "approveLeave", fn: () => actions.approveLeave(1) },
-    { name: "rejectLeave", fn: () => actions.rejectLeave(1) },
     { name: "createOvertimeRequest", fn: () => actions.createOvertimeRequest(new FormData()) },
     { name: "approveOvertime", fn: () => actions.approveOvertime(1) },
     { name: "processPayroll", fn: () => actions.processPayroll(new FormData()) },
