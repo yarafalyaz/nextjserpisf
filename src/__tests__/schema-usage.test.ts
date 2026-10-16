@@ -31,17 +31,7 @@ const KNOWN_UNUSED = [
   // Skalar tanpa rujukan — mayoritas adalah hook fitur yang halamannya SUDAH ada
   // (alur persetujuan, hari libur, lembur, pajak, permintaan pembelian), jadi keputusannya
   // per fitur: implementasikan atau buang. Lihat docs/AUDIT-SCHEMA.md §3.
-  "ApprovalWorkflow.isParallel",
-  "ApprovalWorkflowStep.autoApproveAfterTimeout",
-  "ApprovalWorkflowStep.timeoutHours",
-  "BankStatementLine.valueDate",
-  "DepartmentHoliday.isRecurring",
-  "Holiday.isNationalHoliday",
-  "OvertimeRequest.approvedBySupervisor",
-  "PurchaseRequest.requesterId",
-  "Tax.displayOrder",
   "UnitOfMeasure.conversionFactor",
-  "WorkSchedule.lateToleranceMinutes",
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")

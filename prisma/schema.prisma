@@ -1252,7 +1252,6 @@ model PurchaseRequest {
   title           String?               @map("title")
   requestDate     DateTime?             @map("request_date")
   requestedBy     Int                   @map("requested_by")
-  requesterId     Int?                  @map("requester_id")
   vendorId        Int?                  @map("vendor_id")
   date            DateTime
   description     String?               @db.Text
@@ -1270,7 +1269,6 @@ model PurchaseRequest {
 
   @@index([status], map: "idx_purchase_requests_status")
   @@index([requestedBy])
-  @@index([requesterId])
   @@index([vendorId])
   @@index([approvedBy])
   @@index([createdBy])
@@ -2250,7 +2248,6 @@ model Holiday {
   name              String
   date              DateTime
   description       String?  @db.Text
-  isNationalHoliday Boolean  @default(true) @map("is_national_holiday")
   createdAt         DateTime @default(now()) @map("created_at")
   updatedAt         DateTime @updatedAt @map("updated_at")
 
@@ -2292,7 +2289,6 @@ model WorkSchedule {
   workDays             String       @default("") @map("work_days")
   startTime            String       @map("start_time")
   endTime              String       @map("end_time")
-  lateToleranceMinutes Int          @default(0) @map("late_tolerance_minutes")
   isActive             Boolean      @default(true) @map("is_active")
   createdAt            DateTime     @default(now()) @map("created_at")
   updatedAt            DateTime     @updatedAt @map("updated_at")
@@ -2308,7 +2304,6 @@ model DepartmentHoliday {
   departmentId Int        @map("department_id")
   name         String
   date         DateTime
-  isRecurring  Boolean    @default(false) @map("is_recurring")
   createdAt    DateTime   @default(now()) @map("created_at")
   updatedAt    DateTime   @updatedAt @map("updated_at")
   department   Department @relation(fields: [departmentId], references: [id], onDelete: Cascade)
@@ -2356,7 +2351,6 @@ model OvertimeRequest {
   rejectionReason      String?   @map("rejection_reason") @db.Text
   status               String    @default("pending")
   approvedBy           Int?      @map("approved_by")
-  approvedBySupervisor Int?      @map("approved_by_supervisor")
   approvedAt           DateTime? @map("approved_at")
   supervisorApprovedAt DateTime? @map("supervisor_approved_at")
   createdAt            DateTime  @default(now()) @map("created_at")
@@ -2368,7 +2362,6 @@ model OvertimeRequest {
   @@index([projectId], map: "overtime_requests_project_id_fkey")
   @@index([status])
   @@index([approvedBy])
-  @@index([approvedBySupervisor])
   @@index([createdAt])
   @@map("overtime_requests")
 }
@@ -2747,7 +2740,6 @@ model BankStatementLine {
   id               Int           @id @default(autoincrement())
   bankStatementId  Int           @map("bank_statement_id")
   date             DateTime
-  valueDate        DateTime?     @map("value_date")
   description      String?
   amount           Decimal       @db.Decimal(15, 2)
   debit            Decimal       @default(0.00) @db.Decimal(15, 2)
@@ -3276,7 +3268,6 @@ model ApprovalWorkflow {
   code        String?
   modelType   String                 @map("model_type")
   description String?                @db.Text
-  isParallel  Boolean                @default(false) @map("is_parallel")
   priority    Int                    @default(0)
   isActive    Boolean                @default(true) @map("is_active")
   deletedAt   DateTime?              @map("deleted_at")
@@ -3298,8 +3289,6 @@ model ApprovalWorkflowStep {
   userId                  Int?             @map("user_id")
   approverType            String?          @map("approver_type")
   canSkip                 Boolean          @default(false) @map("can_skip")
-  autoApproveAfterTimeout Boolean          @default(false) @map("auto_approve_after_timeout")
-  timeoutHours            Int?             @map("timeout_hours")
   conditions              Json?
   createdAt               DateTime         @default(now()) @map("created_at")
   updatedAt               DateTime         @updatedAt @map("updated_at")
@@ -3387,7 +3376,6 @@ model Tax {
   accountId     Int?      @map("account_id")
   effectiveFrom DateTime? @map("effective_from")
   effectiveTo   DateTime? @map("effective_to")
-  displayOrder  Int       @default(0) @map("display_order")
   isActive      Boolean   @default(true) @map("is_active")
   deletedAt     DateTime? @map("deleted_at")
   createdBy     Int?      @map("created_by")
