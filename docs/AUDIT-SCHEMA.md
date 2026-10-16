@@ -26,20 +26,26 @@ rujukan" sungguh berarti tak terjangkau).
 | Rantai migrasi gagal dari DB kosong | 8 tabel yang tak pernah dibuat ditambahkan + rekonsiliasi | `migrate deploy` dari nol ✓, drift 0 |
 | `<h1>` hilang di semua halaman laporan | `ReportSheet`/`ReportLetterhead` merender `<h1>` | diverifikasi di browser |
 
-## 1. Model tanpa pemakaian kode (1 + 1 catatan)
+## 1. Model tanpa pemakaian kode — **DITARIK: tidak ada**
 
-- **`QcInspectionResult`** — 0 rujukan kode; hanya muncul sebagai relasi di `schema.prisma`.
-  Ditemukan oleh **pemeriksaan tingkat-model** yang ditambahkan setelah pemeriksaan per-kolom
-  terbukti melewatkannya (nama field-nya muncul di kode lain).
-- **`ProductionGenealogyMaterial`** — 0 rujukan.
+Dua model yang dulu saya sebut "mati" ternyata **DIPAKAI**, lewat **nested write/read Prisma**
+yang menyebut **nama relasi**, bukan nama model:
+- `QcInspectionResult` — `results: { … }` di `src/actions/qc.actions.ts:269`,
+  `src/lib/services/qc.service.ts:82`, dan halaman detail QC (`inspeksi/[slug]/page.tsx`);
+  halaman daftar bahkan menghitungnya (`_count: { select: { results: true } }`) dan form
+  inspeksi mengumpulkan hasil per item.
+- `ProductionGenealogyMaterial` — `materials: { create: … }` di
+  `src/lib/services/production-genealogy.service.ts:43`, dan dibaca di
+  `src/lib/reports/job-order-data.ts:145`.
 
-> **Koreksi:** draf awal dokumen ini menyebut dua model mati termasuk **`CrmTicketComment`**.
-> Itu **salah** — model itu dirujuk `scripts/clear-all-data.ts`. Karena penjaga menghitung
-> rujukan di `scripts/` sebagai pemakaian, ia tak bisa ditandai; keterbatasan definisi ini
-> ditulis di berkas guard-nya.
+**Kesalahan metodenya**: pemeriksaan saya mencari **nama model** dan **delegate**, sehingga
+penggunaan lewat relasi tak terlihat. **Pelajaran**: "tak ada rujukan ke nama model" != "model mati".
 
-**Keputusan:** keduanya bagian dari fitur yang halamannya **sudah ada** (inspeksi QC, genealogi
-produksi) → implementasikan atau buang.
+**Penjaga yang seharusnya menangkap ini justru mati**: versi pertamanya selalu melaporkan
+"dipakai", karena regex nama relasi ikut menangkap **kata kunci `model`** dari baris header
+(`model X {` → relasi bernama "model"), dan `model:` hampir pasti ada di suatu objek di kode.
+Ditemukan hanya karena saya **memfalsifikasi** penjaganya (menyuntikkan model mati → ia tetap
+hijau). Sesudah diperbaiki, falsifikasi itu **memerah** seperti seharusnya.
 
 ## 2. (riwayat) Kolom penaut rekonsiliasi yang dulu diduga hilang
 
@@ -221,7 +227,7 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
    Menghapus apa pun di daftar ini kini **berisik**: penjaga `wired-transition-actions`
    memerah dan menyebut entri basi yang harus dibuang dari daftarnya.
 2. ~~**Seed memalsukan status** (§5e)~~ — **sudah ditutup** (lihat §5e).
-3. **Skema tak terpakai** — `QcInspectionResult`, `ProductionGenealogyMaterial`, dan 11 kolom §3
+3. **Skema tak terpakai** — 11 kolom §3 — **dua model yang dulu saya sebut mati ternyata dipakai** (§1)
    (mayoritas hook fitur yang halamannya sudah ada) → implementasikan atau buang. Catatan:
    `conversionFactor` berisi data; `valueDate` ambigu.
 4. ~~**Usulan `ci.yml`**~~ — **sudah diterapkan** (`db push` → `migrate deploy`, dua job).

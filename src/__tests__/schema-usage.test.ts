@@ -124,19 +124,17 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
 /** Model yang sama sekali tak dipakai kode. Diperiksa di tingkat MODEL karena
  *  pemeriksaan per-kolom bisa meleset: nama field sebuah model mati bisa muncul di
  *  kode lain (mis. `content`, `comment`), sehingga seluruh modelnya lolos. */
-const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string }> = [
-  {
-    model: "ProductionGenealogyMaterial",
-    reason: "genealogi material produksi belum diimplementasikan",
-  },
-  {
-    model: "QcInspectionResult",
-    reason: "hasil inspeksi QC belum pernah ditulis kode (hanya relasi di skema)",
-  },
-  // Catatan: `CrmTicketComment` TIDAK masuk daftar ini meski fiturnya belum ada —
-  // ia dirujuk `scripts/clear-all-data.ts`, jadi penjaga ini (yang menganggap
-  // rujukan di scripts/ sebagai pemakaian) tidak boleh menandainya mati.
-]
+/**
+ * Model yang benar-benar tak dipakai kode.
+ *
+ * KOSONG — dan itu hasil koreksi: dua model yang dulu terdaftar di sini
+ * (`QcInspectionResult`, `ProductionGenealogyMaterial`) TIDAK mati. Keduanya dipakai
+ * lewat **nama relasi** di dalam nested write/read Prisma
+ * (`results: { … }`, `materials: { create: … }`), yang tidak pernah menyebut nama
+ * modelnya. Pelajaran: "tak ada rujukan ke nama model" != "model mati" — pemeriksaan
+ * harus ikut melihat nama relasi (lihat `dipakai()` di bawah).
+ */
+const KNOWN_UNUSED_MODELS: Array<{ model: string; reason: string }> = []
 
 describe("skema: setiap model dipakai kode", () => {
   const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
@@ -146,10 +144,28 @@ describe("skema: setiap model dipakai kode", () => {
     return parts.join("\n")
   })()
   const namaModel = [...schema.matchAll(/^model (\w+) \{/gm)].map((m) => m[1])
+  // Nama relasi yang menunjuk ke model ini, mis. `results QcInspectionResult[]`.
+  const namaRelasi = (model: string) =>
+    [
+      ...schema.matchAll(new RegExp(`^  +(\\w+)\\s+${model}\\[?\\]?\\??.*$`, "gm")),
+    ]
+      .map((m) => m[1])
+      // Minimal 2 spasi indentasi + bukan kata kunci `model`: tanpa ini, baris header
+      // `model X {` ikut tertangkap sebagai "relasi bernama model", dan karena `model:`
+      // hampir pasti ada di suatu objek di kode, pemeriksaan ini SELALU menganggap
+      // "dipakai" — penjaganya mati tanpa ketahuan (ditemukan lewat falsifikasi).
+      .filter((nama) => nama !== "model")
+
   const dipakai = (model: string) => {
     const delegate = model[0].toLowerCase() + model.slice(1)
-    return (
-      new RegExp(`\\b${model}\\b`).test(code) || new RegExp(`\\b${delegate}\\b`).test(code)
+    if (new RegExp(`\\b${model}\\b`).test(code)) return true
+    if (new RegExp(`\\b${delegate}\\b`).test(code)) return true
+    // Nested write/read memakai NAMA RELASI, bukan nama model — inilah yang dulu
+    // membuat `QcInspectionResult` & `ProductionGenealogyMaterial` keliru disebut mati.
+    // Dibatasi ke posisi khas Prisma (`nama: {`, `nama: true`, `nama: [`) agar kata
+    // umum seperti `results`/`materials` di variabel lokal tidak menjadi positif-palsu.
+    return namaRelasi(model).some((rel) =>
+      new RegExp(`\\b${rel}\\b\\s*:\\s*(\\{|true|false|\\[)`).test(code),
     )
   }
   const modelMati = namaModel.filter((model) => !dipakai(model)).sort()
