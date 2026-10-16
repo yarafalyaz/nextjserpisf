@@ -302,6 +302,16 @@ per halaman menunjukkan **UI memang menuntutnya** — menghapus aksinya akan men
   (`// 2. Database histories (revisions)`), padahal tak ada yang bisa membuat revisi.
 
 Rekomendasi untuk dua ini: **sambungkan**, bukan hapus (menghapus berarti ikut membuang UI-nya).
+
+Tujuh sisanya kini **sudah diukur per modul** (aksi apa yang disambungkan UI + affordance apa yang ada):
+
+| Aksi | Yang disambungkan UI | Affordance yang ada | Vonis |
+| --- | --- | --- | --- |
+| `deleteSalesOrder` | — | hanya "Ubah"; `StatusActions` (approve/reject generik) | tak ada jalan menghapus SO, padahal modul lain punya → sambungkan atau buang |
+| `send`/`accept`/`rejectQuotation` | `deleteQuotation` | `StatusActions` (generik) | **tergantikan**: rute generik menetapkan `approved`, dan konversi ke SO menerima `approved` → status `sent`/`accepted`/`rejected` tak dipakai siapa pun → paling aman dibuang |
+| `cancelPurchaseOrder` | `deletePurchaseOrder` | hanya "Ubah" | tak ada jalan membatalkan PO (menghapus tersedia) → sambungkan atau buang |
+| `processPurchaseReturn` | `deletePurchaseReturn` | hanya "Ubah"; `StatusActions` = 0 | tak ada jalan memproses retur (padahal efeknya stok + GL) → sambungkan atau buang |
+| `updateProductionCost` | — | bagian biaya produksi **read-only** (`production-cost-section.tsx`) | biaya produksi tak bisa diisi/diubah dari UI (aksinya punya unit test) → sambungkan atau buang |
 Tujuh sisanya **belum diukur per halaman**: `deleteSalesOrder`, `send`/`accept`/`rejectQuotation`,
 `cancelPurchaseOrder`, `processPurchaseReturn`, `updateProductionCost`.
 
