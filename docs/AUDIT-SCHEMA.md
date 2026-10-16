@@ -290,6 +290,21 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
    untuk **31** migrasi kini basi — migrasinya sudah 52+. Catatan pembaruan bertanggal sudah
    ditambahkan di kepala laporan itu.
 
+### (1b) 9 aksi berperilaku — per fitur, dan dua sudah diukur
+
+Menghapus kelompok ini **menghilangkan kemampuan**, jadi bukan higienitas. Dua yang sudah diperiksa
+per halaman menunjukkan **UI memang menuntutnya** — menghapus aksinya akan meninggalkan UI cacat:
+
+- **`markExpensePaid`** — UI pengeluaran **tidak punya affordance "lunas"** sama sekali (0 rujukan);
+  yang tersambung hanya `approveExpense`/`rejectExpense`/`deleteExpense`/`updateExpense`. Aksi ini
+  juga **memposting jurnal**, jadi tanpa UI-nya pembayaran pengeluaran tak bisa dicatat.
+- **`reviseQuotation`** — halaman detail penawaran **sudah merender riwayat revisi**
+  (`// 2. Database histories (revisions)`), padahal tak ada yang bisa membuat revisi.
+
+Rekomendasi untuk dua ini: **sambungkan**, bukan hapus (menghapus berarti ikut membuang UI-nya).
+Tujuh sisanya **belum diukur per halaman**: `deleteSalesOrder`, `send`/`accept`/`rejectQuotation`,
+`cancelPurchaseOrder`, `processPurchaseReturn`, `updateProductionCost`.
+
 ### Status falsifikasi penjaga (kapan terakhir diuji benar-benar menangkap)
 
 | Penjaga / asersi | Difalsifikasi | Catatan |
