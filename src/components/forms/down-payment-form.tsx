@@ -119,12 +119,13 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
     <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label>Pelanggan *</Label>
+          <Label htmlFor="customerId">Pelanggan *</Label>
           <Controller
             name="customerId"
             control={control}
             render={({ field }) => (
               <QuickAddSelect
+                id="customerId"
                 value={field.value ? String(field.value) : null}
                 onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                 placeholder="Cari pelanggan..."
@@ -143,12 +144,13 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label>Penawaran *</Label>
+          <Label htmlFor="quotationId">Penawaran *</Label>
           <Controller
             name="quotationId"
             control={control}
             render={({ field }) => (
               <Combobox
+                id="quotationId"
                 value={field.value ? String(field.value) : null}
                 onChange={(key) => field.onChange(key ? Number(key) : undefined)}
                 placeholder="Cari penawaran..."
@@ -171,7 +173,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
             <div className="col-span-full bg-default/10 rounded-xl border border-default p-5 flex flex-col gap-4">
               <div className="flex flex-wrap justify-between items-center gap-3 pb-3 border-b border-default">
                 <div>
-                  <h4 className="font-semibold text-foreground text-sm">Ringkasan Penawaran</h4>
+                  <h2 className="font-semibold text-foreground text-sm">Ringkasan Penawaran</h2>
                   <p className="text-xs text-muted-foreground">{quo.documentNo}</p>
                 </div>
                 <div className="text-right">
@@ -185,7 +187,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
               {/* Item List */}
               {quo.sections && quo.sections.length > 0 && (
                 <div className="flex flex-col gap-3">
-                  <h5 className="font-medium text-foreground text-xs">Daftar Item:</h5>
+                  <h3 className="font-medium text-foreground text-xs">Daftar Item:</h3>
                   <div className="max-h-60 overflow-y-auto border border-default rounded-lg bg-surface">
                     <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs border-collapse">

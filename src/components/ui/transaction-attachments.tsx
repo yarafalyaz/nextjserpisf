@@ -216,7 +216,9 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
               )}
               <div className="attachment-info">
                 <span className="attachment-name" title={att.originalName}>{att.originalName}</span>
-                <span className="attachment-size" aria-label={`Ukuran file ${formatFileSize(att.fileSize)}`}>
+                {/* `.attachment-size` memakai --text-muted = 2.56:1; timpa inline dengan
+                    --muted-foreground (7.58:1 terang / 6.72:1 gelap). */}
+                <span className="attachment-size" style={{ color: "var(--muted-foreground)" }} aria-label={`Ukuran file ${formatFileSize(att.fileSize)}`}>
                   {formatFileSize(att.fileSize)}
                 </span>
               </div>

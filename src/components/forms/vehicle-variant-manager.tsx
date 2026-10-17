@@ -85,8 +85,9 @@ export function VehicleVariantManager({ modelId, variants }: VehicleVariantManag
           />
         </div>
         <div className="flex flex-col gap-1.5 sm:w-32">
-          <Label>Penggerak</Label>
+          <Label htmlFor="variant-drivetrain">Penggerak</Label>
           <Combobox
+            id="variant-drivetrain"
             options={DRIVETRAIN_OPTIONS}
             value={drivetrain}
             onChange={setDrivetrain}
@@ -94,8 +95,9 @@ export function VehicleVariantManager({ modelId, variants }: VehicleVariantManag
           />
         </div>
         <div className="flex flex-col gap-1.5 sm:w-40">
-          <Label>Transmisi</Label>
+          <Label htmlFor="variant-transmission">Transmisi</Label>
           <Combobox
+            id="variant-transmission"
             options={TRANSMISSION_OPTIONS}
             value={transmission}
             onChange={setTransmission}

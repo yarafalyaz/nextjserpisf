@@ -128,7 +128,10 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
           />
           <div className="profile-top-info">
             <h2 className="profile-name">{user.name}</h2>
-            <p className="profile-email">{user.email}</p>
+            {/* `.profile-email` (globals.css) memakai --text-muted = 2.56:1 di latar putih.
+                Kelas legacy unlayered tak bisa dikalahkan utility Tailwind, jadi warna
+                ditimpa inline dengan --muted-foreground (7.58:1 terang / 6.72:1 gelap). */}
+            <p className="profile-email" style={{ color: "var(--muted-foreground)" }}>{user.email}</p>
             <div style={{ display: "flex", gap: "6px", marginTop: "8px" }}>
               {roles.map((role) => (
                 <span key={role} className="role-badge">{role}</span>

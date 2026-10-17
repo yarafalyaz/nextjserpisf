@@ -30,6 +30,8 @@ function Calendar({
       showOutsideDays={showOutsideDays}
       locale={idLocale}
       captionLayout="dropdown"
+      // Nama aksesibel untuk dropdown bulan/tahun (dipakai komponen Dropdown di bawah).
+      labels={{ labelMonthDropdown: () => "Bulan", labelYearDropdown: () => "Tahun" }}
       startMonth={new Date(2000, 0)}
       endMonth={new Date(2099, 11)}
       className={cn("p-3", className)}
@@ -79,7 +81,7 @@ function Calendar({
           ) : (
             <ChevronRight className="size-4" {...chevronProps} />
           ),
-        Dropdown: ({ value, onChange, options }: DropdownProps) => {
+        Dropdown: ({ value, onChange, options, "aria-label": ariaLabel }: DropdownProps) => {
           const selected = options?.find((option) => option.value === value)
           const handleChange = (newValue: string) => {
             const changeEvent = {
@@ -90,7 +92,10 @@ function Calendar({
 
           return (
             <Select value={value?.toString()} onValueChange={handleChange}>
-              <SelectTrigger className="h-7 pr-1.5 focus:ring-0 text-xs min-w-[70px] bg-transparent border-none font-medium hover:bg-accent hover:text-accent-foreground [&_svg]:size-3">
+              <SelectTrigger
+                aria-label={ariaLabel}
+                className="h-7 pr-1.5 focus:ring-0 text-xs min-w-[70px] bg-transparent border-none font-medium hover:bg-accent hover:text-accent-foreground [&_svg]:size-3"
+              >
                 <SelectValue>{selected?.label}</SelectValue>
               </SelectTrigger>
               <SelectContent position="popper" className="max-h-60 overflow-y-auto">

@@ -36,7 +36,7 @@ function PrefixItem({ label, value, auto }: { label: string; value: string | nul
 function PrefixGroup({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="space-y-3">
-      <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-2">
         {children}
       </div>

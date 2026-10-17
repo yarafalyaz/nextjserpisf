@@ -236,7 +236,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
           </div>
           <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
             <div className="flex flex-col gap-1.5">
-            <Label>Gambar Item *</Label>
+            <Label htmlFor="item-image">Gambar Item *</Label>
             <input type="hidden" {...register("image")} />
             <div className="image-upload-area">
               {imagePreview ? (
@@ -254,14 +254,16 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                   </Button>
                 </div>
               ) : (
-                <div
+                <button
+                  id="item-image"
+                  type="button"
                   className="image-upload-dropzone"
                   onClick={() => fileInputRef.current?.click()}
                 >
-                  <Upload className="size-8 text-muted-foreground" />
+                  <Upload className="size-8 text-muted-foreground" aria-hidden="true" />
                   <span className="text-sm text-secondary">Klik untuk unggah gambar</span>
                   <span className="text-xs text-muted-foreground">JPG, PNG, WebP, GIF (maks 5MB)</span>
-                </div>
+                </button>
               )}
               {uploading && <div className="image-upload-loading">Mengunggah...</div>}
             </div>
@@ -613,6 +615,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                             type="text"
                             value={u.code}
                             onChange={(e) => updateUom(i, "code", e.target.value)}
+                            aria-label={`Kode satuan alternatif ${i + 1}`}
                             className="form-input"
                             style={{ fontSize: "0.8125rem", padding: "6px" }}
                             placeholder="cth. BOX"
@@ -626,6 +629,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
                               min="0.001"
                               value={u.factorToBase}
                               onChange={(e) => updateUom(i, "factorToBase", e.target.value)}
+                              aria-label={`Faktor konversi satuan alternatif ${i + 1}`}
                               className="form-input"
                               style={{ fontSize: "0.8125rem", padding: "6px", width: "120px" }}
                               placeholder="cth. 12"

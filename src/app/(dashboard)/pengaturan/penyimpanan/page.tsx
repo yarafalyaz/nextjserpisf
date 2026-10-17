@@ -106,7 +106,7 @@ export default async function StorageSettingsPage() {
                 )}
               </div>
               <Separator />
-              <h4 className="text-sm font-semibold text-foreground">Kredensial Cloudflare R2</h4>
+              <h2 className="text-sm font-semibold text-foreground">Kredensial Cloudflare R2</h2>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="ID Akun" value={settings?.r2AccountId} mono />
                 <Field label="Bucket" value={settings?.r2Bucket} mono />

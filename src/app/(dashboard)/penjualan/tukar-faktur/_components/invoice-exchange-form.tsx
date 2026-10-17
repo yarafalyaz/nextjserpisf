@@ -141,8 +141,10 @@ export function InvoiceExchangeForm({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <Label>Faktur yang Diserahkan *</Label>
+      {/* Grup checkbox: <fieldset>+<legend> memberi nama grup ke pembaca layar;
+          <label> lepas tanpa kontrol sebelumnya adalah label yatim. */}
+      <fieldset className="flex flex-col gap-2">
+        <legend className="text-sm leading-none font-medium">Faktur yang Diserahkan *</legend>
         {!customerId ? (
           <p className="rounded-lg border border-default bg-muted/40 p-4 text-sm text-muted-foreground">
             Pilih pelanggan dulu untuk melihat faktur yang belum lunas.
@@ -178,7 +180,7 @@ export function InvoiceExchangeForm({
             sisa {formatCurrency(totals.outstanding)}
           </p>
         ) : null}
-      </div>
+      </fieldset>
 
       <div className="flex items-center justify-between gap-3 border-t border-default pt-5">
         <p className="text-xs text-muted-foreground">

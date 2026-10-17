@@ -32,10 +32,12 @@ interface CalendarEvent {
 
 const KIND_STYLES: Record<EventKind, { chip: string; label: string }> = {
   invoice: { chip: "bg-primary/12 text-primary border-primary/25", label: "Faktur" },
-  "invoice-due": { chip: "bg-warning/12 text-warning border-warning/25", label: "Jth Tempo AR" },
-  bill: { chip: "bg-danger/12 text-danger border-danger/25", label: "Tagihan" },
-  "bill-due": { chip: "bg-danger/12 text-danger border-danger/25", label: "Jth Tempo AP" },
-  delivery: { chip: "bg-success/12 text-success border-success/25", label: "Kirim" },
+  // Teks chip memakai shade 700 (4.58:1 / 5.55:1 / 4.91:1 di latar chip 12%)
+  // supaya lolos WCAG 1.4.3; di mode gelap dipakai shade 400 yang terang.
+  "invoice-due": { chip: "bg-warning/12 text-amber-700 border-warning/25 dark:text-amber-400", label: "Jth Tempo AR" },
+  bill: { chip: "bg-danger/12 text-red-700 border-danger/25 dark:text-red-400", label: "Tagihan" },
+  "bill-due": { chip: "bg-danger/12 text-red-700 border-danger/25 dark:text-red-400", label: "Jth Tempo AP" },
+  delivery: { chip: "bg-success/12 text-emerald-700 border-success/25 dark:text-emerald-400", label: "Kirim" },
   expected: { chip: "bg-surface-muted text-muted-foreground border-default", label: "Terima" },
   recurring: { chip: "bg-accent/12 text-accent-foreground border-accent/25", label: "Berulang" },
 }

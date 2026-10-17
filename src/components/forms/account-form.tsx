@@ -73,8 +73,9 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Akun Induk (Opsional)</Label>
+          <Label htmlFor="parentId">Akun Induk (Opsional)</Label>
           <QuickAddSelect
+            id="parentId"
             name="parentId"
             value={parentId || null}
             onChange={(key) => setParentId(key ?? "")}

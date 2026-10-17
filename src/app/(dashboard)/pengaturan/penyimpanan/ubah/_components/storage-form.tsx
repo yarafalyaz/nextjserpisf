@@ -169,7 +169,11 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
                   Disarankan aktif. File fallback diakses lewat path lokal (/uploads/...).
                 </p>
               </div>
-              <Switch checked={fallback} onCheckedChange={setFallback} />
+              <Switch
+                aria-label="Simpan ke lokal jika R2 gagal"
+                checked={fallback}
+                onCheckedChange={setFallback}
+              />
             </div>
           </CardContent>
         </Card>

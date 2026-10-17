@@ -28,7 +28,7 @@ function AccountSection({ title, items }: { title: string; items: { label: strin
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-foreground">{title}</h4>
+        <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         <Badge variant="outline">{mapped}/{items.length}</Badge>
       </div>
       <div className="grid grid-cols-1 gap-2 xl:grid-cols-2">

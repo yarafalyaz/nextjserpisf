@@ -176,8 +176,9 @@ export function StockAdjustmentForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Tipe *</Label>
+            <Label htmlFor="type">Tipe *</Label>
             <Combobox
+              id="type"
               name="type"
               value={type}
               onChange={(key) => setType(key ?? "")}
@@ -263,6 +264,7 @@ export function StockAdjustmentForm({
                           onChange={(key) => updateItem(i, "itemId", key ?? "")}
                           placeholder="Pilih Item"
                           className="w-full"
+                          aria-label={`Item baris ${i + 1}`}
                           options={items.map((it) => ({
                             value: String(it.id),
                             label: `${it.sku} - ${it.name}`,
@@ -279,6 +281,7 @@ export function StockAdjustmentForm({
                           onChange={(e) =>
                             updateItem(i, "newQty", Number(e.target.value))
                           }
+                          aria-label={`Stok baru baris ${i + 1}`}
                           className="form-input"
                           style={{
                             fontSize: "0.8125rem",
@@ -298,6 +301,7 @@ export function StockAdjustmentForm({
                           type="text"
                           value={item.reason}
                           onChange={(e) => updateItem(i, "reason", e.target.value)}
+                          aria-label={`Alasan baris ${i + 1}`}
                           className="form-input"
                           style={{ fontSize: "0.8125rem", padding: "6px" }}
                           placeholder="Alasan"
@@ -308,6 +312,7 @@ export function StockAdjustmentForm({
                           <Textarea
                             value={item.serialNumbers}
                             onChange={(e) => updateItem(i, "serialNumbers", e.target.value)}
+                            aria-label={`Nomor seri baris ${i + 1}`}
                             placeholder="Satu nomor seri per baris"
                             rows={2}
                           />

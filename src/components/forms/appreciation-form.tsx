@@ -57,8 +57,9 @@ export function AppreciationForm({ employees, appreciation }: AppreciationFormPr
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label>Karyawan *</Label>
+          <Label htmlFor="employeeId">Karyawan *</Label>
           <QuickAddSelect
+            id="employeeId"
             name="employeeId"
             value={employeeId || null}
             onChange={(key) => setEmployeeId(key ?? "")}

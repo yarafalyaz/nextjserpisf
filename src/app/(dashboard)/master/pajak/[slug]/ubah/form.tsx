@@ -29,12 +29,12 @@ export function TaxEditForm({ tax }: TaxEditFormProps) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label>Nama *</Label>
-          <Input name="name" required defaultValue={tax.name} placeholder="Nama pajak" />
+          <Label htmlFor="name">Nama *</Label>
+          <Input id="name" name="name" required defaultValue={tax.name} placeholder="Nama pajak" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Rate (%) *</Label>
-          <Input name="rate" type="number" step="0.01" required defaultValue={tax.rate} placeholder="0.00" />
+          <Label htmlFor="rate">Rate (%) *</Label>
+          <Input id="rate" name="rate" type="number" step="0.01" required defaultValue={tax.rate} placeholder="0.00" />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

@@ -88,8 +88,9 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
       <div className="p-4 px-5 flex flex-col gap-4">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <div className="flex flex-col gap-1.5">
-            <Label>Merek</Label>
+            <Label htmlFor="fitment-brand">Merek</Label>
             <Combobox
+              id="fitment-brand"
               options={brands.map((b) => ({ value: String(b.id), label: b.name }))}
               value={brandId}
               onChange={(v) => { setBrandId(v); setModelId(null); setVariantId(null) }}
@@ -97,8 +98,9 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Model</Label>
+            <Label htmlFor="fitment-model">Model</Label>
             <Combobox
+              id="fitment-model"
               options={modelOptions.map((m) => ({ value: String(m.id), label: m.name }))}
               value={modelId}
               onChange={(v) => { setModelId(v); setVariantId(null) }}
@@ -106,8 +108,9 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Varian</Label>
+            <Label htmlFor="fitment-variant">Varian</Label>
             <Combobox
+              id="fitment-variant"
               options={variantOptions.map((v) => ({ value: String(v.id), label: v.name }))}
               value={variantId}
               onChange={setVariantId}
@@ -115,12 +118,13 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Tahun</Label>
-            <Input type="number" value={year} onChange={(e) => setYear(e.target.value)} placeholder="mis. 2018" />
+            <Label htmlFor="fitment-year">Tahun</Label>
+            <Input id="fitment-year" type="number" value={year} onChange={(e) => setYear(e.target.value)} placeholder="mis. 2018" />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Penggerak</Label>
+            <Label htmlFor="fitment-drivetrain">Penggerak</Label>
             <Combobox
+              id="fitment-drivetrain"
               options={DRIVETRAIN_OPTIONS}
               value={drivetrain || null}
               onChange={(v) => setDrivetrain(v ?? "")}
@@ -128,8 +132,9 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>Transmisi</Label>
+            <Label htmlFor="fitment-transmission">Transmisi</Label>
             <Combobox
+              id="fitment-transmission"
               options={TRANSMISSION_OPTIONS}
               value={transmission || null}
               onChange={(v) => setTransmission(v ?? "")}

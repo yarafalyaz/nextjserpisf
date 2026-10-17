@@ -88,8 +88,8 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Deskripsi</Label>
-          <Input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full" placeholder="Deskripsi jurnal" required />
+          <Label htmlFor="description">Deskripsi</Label>
+          <Input id="description" type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full" placeholder="Deskripsi jurnal" required />
         </div>
       </div>
 
@@ -121,7 +121,7 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
                 </td>
                 <td><CurrencyInput value={entry.debit} onChange={(v) => updateEntry(i, "debit", v)} className="form-input" /></td>
                 <td><CurrencyInput value={entry.credit} onChange={(v) => updateEntry(i, "credit", v)} className="form-input" /></td>
-                <td><input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Memo" /></td>
+                <td><input type="text" value={entry.memo} onChange={(e) => updateEntry(i, "memo", e.target.value)} aria-label={`Memo baris ${i + 1}`} className="form-input" style={{ fontSize: "0.8125rem", padding: "6px" }} placeholder="Memo" /></td>
                 <td>{entries.length > 2 && <Button type="button" onPress={() => removeEntry(i)} aria-label={`Hapus baris ${i + 1}`} variant="danger-soft" size="sm">×</Button>}</td>
               </tr>
             ))}

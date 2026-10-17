@@ -29,12 +29,12 @@ export function ItemCategoryEditForm({ category }: ItemCategoryEditFormProps) {
     <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label>Nama *</Label>
-          <Input name="name" required defaultValue={category.name} placeholder="Nama kategori" />
+          <Label htmlFor="name">Nama *</Label>
+          <Input id="name" name="name" required defaultValue={category.name} placeholder="Nama kategori" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label>Deskripsi</Label>
-          <Input name="description" defaultValue={category.description || ""} placeholder="Deskripsi kategori" />
+          <Label htmlFor="description">Deskripsi</Label>
+          <Input id="description" name="description" defaultValue={category.description || ""} placeholder="Deskripsi kategori" />
         </div>
       </div>
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

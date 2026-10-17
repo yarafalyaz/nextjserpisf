@@ -45,8 +45,9 @@ export function DeliveryOrderForm({ salesOrders, deliveryOrder }: DeliveryOrderF
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label>Pesanan Penjualan *</Label>
+          <Label htmlFor="salesOrderId">Pesanan Penjualan *</Label>
           <Combobox
+            id="salesOrderId"
             name="salesOrderId"
             value={salesOrderId || null}
             onChange={(key) => setSalesOrderId(key ?? "")}
