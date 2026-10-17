@@ -39,6 +39,8 @@ yarn-error.log*
 
 # playwright results
 playwright-report/
+playwright-report-shard-*/
+playwright-report-shard-*
 test-results/
 e2e/.auth/
 
@@ -48,12 +50,13 @@ e2e/.auth/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-e2e/.auth/
-test-results/
-playwright-report/
-playwright-report-shard-*/
-playwright-report-shard-*
 memory/
+
+# local skill CLI lock (auto-generated; no code or CI consumer)
+skills-lock.json
+
+# manual audit screenshots (tens of MB — never commit)
+/SS/
 
 # database backups (contain all data — never commit)
 /backups/
