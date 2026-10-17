@@ -91,6 +91,17 @@ skrip yatim dibuang — hanya saja skrip seed-nya masih ada, jadi kolomnya tetap
   celah itu sebagai **sinyal**, bukan tes — vonis palsunya sudah dipetakan di §4b.
 - Penjaga itu juga menghitung berkas seed sebagai pemakaian; karena itu
   pemeriksaan terpisah `SEED_ONLY_COLUMNS` ditambahkan (§4b).
+- **Penjaga yang tidak bisa menyala.** `deleteUom` (`master.actions.ts`) menolak
+  penghapusan bila ada satuan lain yang menurunkan diri darinya
+  (`count({ where: { baseUnitId: id } })`) — tetapi `UnitOfMeasure.baseUnitId`
+  tidak pernah ditulis kode mana pun, jadi hitungannya selalu 0 dan cabang itu
+  tidak pernah tercapai. Bandingkan penjaga di sebelahnya (`usedByItems`) yang
+  benar-benar bekerja. Tidak ada bahaya hari ini karena memang tidak ada yang bisa
+  bergantung pada kolom itu; keputusan produk: bangun hierarki satuan (isi
+  `baseUnitId` dari UI) atau buang kolom + penjaganya lewat migrasi. Pola umumnya
+  sama dengan `OvertimeRequest.approvedAt`: **elemen yang tidak bisa pernah
+  aktif lebih menyesatkan daripada elemen yang tidak ada**, karena ia tampak
+  seperti jaminan.
 
 Vonis PALSU yang dipetakan (kandidat detektor yang ternyata terisi — jangan
 dijadikan tes): `QuotationItem.sectionId` (terisi otomatis oleh nested create
