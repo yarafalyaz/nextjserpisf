@@ -557,6 +557,8 @@ export async function createAsset(formData: FormData) {
           name: data.name,
           code: code,
           categoryId: data.categoryId ?? null,
+          assetBrandId: data.assetBrandId ?? null,
+          groupId: data.groupId ?? null,
           purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
           purchaseCost,
           // Book value starts at acquisition cost so depreciation can run.
@@ -688,6 +690,8 @@ export async function updateAsset(id: number, formData: FormData) {
       data: {
         slug: await nextSlug("asset", data.name, { excludeId: id }),
         name: data.name,
+        assetBrandId: data.assetBrandId ?? null,
+        groupId: data.groupId ?? null,
         categoryId: data.categoryId ?? null,
         purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
         purchaseCost,

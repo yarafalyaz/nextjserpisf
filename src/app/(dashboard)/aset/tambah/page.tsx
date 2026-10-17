@@ -13,9 +13,10 @@ export const metadata: Metadata = { title: "Tambah Aset" }
 export default async function CreateAssetPage() {
   await requirePermission("create_assets")
 
-  const [categories, brands, generatedCode] = await Promise.all([
+  const [categories, brands, groups, generatedCode] = await Promise.all([
     prisma.assetCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.assetBrand.findMany({ orderBy: { name: "asc" } }),
+    prisma.assetGroup.findMany({ orderBy: { name: "asc" } }),
     peekNextDocumentNumber("AST", "simple"),
   ])
 
@@ -29,7 +30,7 @@ export default async function CreateAssetPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tambah Aset</h1>
       </div>
-      <AssetForm categories={categories} brands={brands} generatedCode={generatedCode} />
+      <AssetForm categories={categories} brands={brands} groups={groups} generatedCode={generatedCode} />
     </div>
   )
 }

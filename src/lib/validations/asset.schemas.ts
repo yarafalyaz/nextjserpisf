@@ -98,6 +98,13 @@ export const assetSchema = z.object({
   name: requiredStr("Nama aset wajib diisi"),
   code: optionalStr(100),
   categoryId: optionalId,
+  // `assetBrandId` dan `groupId` WAJIB ada di sini: zod membuang kunci yang tidak
+  // dideklarasikan, sehingga pilihan "Merek" di form aset selama ini sampai ke
+  // aksi lalu DIBUANG DIAM-DIAM — `Asset.assetBrandId` tidak pernah terisi dan
+  // halaman aset selalu menampilkan "-" walau pengguna memilih mereknya.
+  // Catatan nama: field-nya `assetBrandId` (bukan `brandId`).
+  assetBrandId: optionalId,
+  groupId: optionalId,
   purchaseDate: optionalDate,
   purchasePrice: optionalNum(0),
   residualValue: optionalNum(0),

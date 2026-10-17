@@ -16,15 +16,17 @@ import { Button } from "@/components/ui/button"
 interface AssetFormProps {
   categories: { id: number; name: string }[]
   brands: { id: number; name: string }[]
+  groups?: { id: number; name: string }[]
   asset?: {
     id?: number
     name?: string | null
     code?: string | null
     categoryId?: number | null
-    brandId?: number | null
+    assetBrandId?: number | null
+    groupId?: number | null
     purchaseDate?: string | null
-    purchasePrice?: number | string | null
-    residualValue?: number | string | null
+    purchasePrice?: number | null
+    residualValue?: number | null
     depreciationMethod?: string | null
     location?: string | null
     status?: string | null
@@ -33,7 +35,7 @@ interface AssetFormProps {
   generatedCode: string
 }
 
-export function AssetForm({ categories, brands, asset, generatedCode }: AssetFormProps) {
+export function AssetForm({ categories, brands, groups = [], asset, generatedCode }: AssetFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
@@ -75,13 +77,23 @@ export function AssetForm({ categories, brands, asset, generatedCode }: AssetFor
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="brandId">Merek</Label>
+          <Label htmlFor="assetBrandId">Merek</Label>
           <FormSelect
-            id="brandId"
-            name="brandId"
-            defaultValue={asset?.brandId ? String(asset.brandId) : undefined}
+            id="assetBrandId"
+            name="assetBrandId"
+            defaultValue={asset?.assetBrandId ? String(asset.assetBrandId) : undefined}
             placeholder="Pilih Merek"
             options={brands.map(b => ({ value: String(b.id), label: b.name }))}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="groupId">Grup Aset</Label>
+          <FormSelect
+            id="groupId"
+            name="groupId"
+            defaultValue={asset?.groupId ? String(asset.groupId) : undefined}
+            placeholder="Pilih Grup"
+            options={groups.map(g => ({ value: String(g.id), label: g.name }))}
           />
         </div>
         <div className="flex flex-col gap-1.5">

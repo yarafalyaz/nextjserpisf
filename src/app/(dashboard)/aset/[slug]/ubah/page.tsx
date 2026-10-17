@@ -19,7 +19,7 @@ export default async function EditAssetPage({
   await requirePermission("edit_assets")
   const { slug } = await params
 
-  const [asset, categories, brands] = await Promise.all([
+  const [asset, categories, brands, groups] = await Promise.all([
     resolveEntity(
       { segment: slug, fallbackWhere: {} },
       {
@@ -29,6 +29,7 @@ export default async function EditAssetPage({
     ),
     prisma.assetCategory.findMany({ orderBy: { name: "asc" } }),
     prisma.assetBrand.findMany({ orderBy: { name: "asc" } }),
+    prisma.assetGroup.findMany({ orderBy: { name: "asc" } }),
   ])
 
   if (!asset) notFound()
@@ -46,12 +47,15 @@ export default async function EditAssetPage({
       <AssetForm
         categories={categories}
         brands={brands}
+        groups={groups}
         generatedCode={asset.code}
         asset={{
           id: asset.id,
           name: asset.name,
           code: asset.code,
           categoryId: asset.categoryId,
+          assetBrandId: asset.assetBrandId,
+          groupId: asset.groupId,
           purchaseDate: asset.purchaseDate ? asset.purchaseDate.toISOString() : null,
           purchasePrice: Number(asset.purchaseCost),
           residualValue: Number(asset.residualValue),

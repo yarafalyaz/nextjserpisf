@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { assetSchema } from "@/lib/validations/asset.schemas"
 
 const mocks = vi.hoisted(() => {
   const requirePermissionMock = vi.fn()
@@ -25,6 +26,7 @@ const mocks = vi.hoisted(() => {
       delete: vi.fn(),
       update: vi.fn(),
       findFirst: vi.fn().mockResolvedValue(null),
+      findUnique: vi.fn().mockResolvedValue(null),
     },
     assetTransfer: {
       create: vi.fn(),
@@ -227,6 +229,30 @@ describe("Asset Brand Actions", () => {
     const arg = prismaMock.assetBrand.create.mock.calls[0][0]
     // "L3110" dan "l3110" dianggap sama (tanpa peduli besar-kecil huruf).
     expect(arg.data.models.create).toEqual([{ name: "L3110" }, { name: "L3210" }])
+  })
+
+  /**
+   * `brandId` dan `groupId` pada aset.
+   *
+   * Selama ini form aset punya dropdown "Merek" tetapi `assetSchema` TIDAK memuat
+   * `brandId`, sehingga zod membuang nilainya dan aksi menulis `null` — pengguna
+   * memilih merek, halaman aset tetap menampilkan "-", tanpa error apa pun.
+   */
+  it("skema aset MENERIMA assetBrandId dan groupId (bukan dibuang diam-diam)", async () => {
+    // Invarian yang paling penting: SELAMA INI `assetSchema` tidak memuat
+    // `assetBrandId`, sehingga zod membuang nilai dropdown "Merek" sebelum sampai
+    // ke aksi — pengguna memilih merek, halaman aset tetap "-", tanpa error.
+    const parsed = assetSchema.safeParse({ name: "Aset", assetBrandId: "3", groupId: "4" })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.assetBrandId).toBe(3)
+      expect(parsed.data.groupId).toBe(4)
+    }
+  })
+
+  it("skema aset tetap menolak id yang tidak masuk akal", async () => {
+    expect(assetSchema.safeParse({ name: "Aset", assetBrandId: "-1" }).success).toBe(false)
+    expect(assetSchema.safeParse({ name: "Aset", groupId: "0" }).success).toBe(false)
   })
 
   it("deletes brand and redirects", async () => {
