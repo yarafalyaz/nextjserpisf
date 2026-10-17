@@ -686,6 +686,44 @@ describe("createAsset / updateAsset", () => {
     expect(prismaMock.journal.create).not.toHaveBeenCalled()
   })
 
+  /**
+   * Merek & grup aset — sisi PENULISAN.
+   *
+   * `assetSchema` dulu tidak memuat `assetBrandId`, sehingga zod membuang nilai
+   * dropdown "Merek" SEBELUM aksi melihatnya: pengguna memilih merek dan halaman
+   * aset tetap menampilkan "-". Tes skema mengunci penerimaannya; tes ini mengunci
+   * bahwa nilainya benar-benar sampai ke Prisma (dua sisi, keduanya perlu).
+   */
+  it("menulis assetBrandId dan groupId ke aset baru", async () => {
+    prismaMock.assetBrand.findUnique.mockResolvedValue({
+      id: 3,
+      name: "Dell",
+      assetAccountId: null,
+      accumulatedDepreciationAccountId: null,
+    })
+
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-02",
+      purchasePrice: "1000",
+      assetBrandId: "3",
+      groupId: "4",
+    }))
+
+    expect(res.success).toBe(true)
+    const arg = prismaMock.asset.create.mock.calls[0][0]
+    expect(arg.data.assetBrandId).toBe(3)
+    expect(arg.data.groupId).toBe(4)
+  })
+
+  it("menulis null bila merek dan grup tidak dipilih", async () => {
+    await createAsset(fd({ name: "Tanpa Merek", code: "LAP-03", purchasePrice: "1000" }))
+
+    const arg = prismaMock.asset.create.mock.calls[0][0]
+    expect(arg.data.assetBrandId).toBeNull()
+    expect(arg.data.groupId).toBeNull()
+  })
+
   it("routes the new asset through the approval workflow if configured", async () => {
     // Without this request, disposeAsset's assertApproved("Asset", id) can never
     // block (no Approval row exists), so a configured disposal gate silently passes.
