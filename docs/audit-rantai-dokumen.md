@@ -55,7 +55,18 @@ diperiksa ulang oleh orkestrator pada kode, bukan hanya dilaporkan subagent.
 | Celah | Bukti celah | Perbaikan |
 | --- | --- | --- |
 | **Uang keluar berstatus `paid` tanpa satu pun jurnal** | `onExpenseApproved` kembali senyap bila `paidFromAccountId` kosong, status tetap `paid` | `markExpensePaid` menolak lebih dulu saat akun sumber dana kosong; hook melempar kesalahan yang terlihat. Status `paid` dan jurnal tidak bisa berpisah lagi |
+| **DPP laporan pajak terlalu besar** | `VendorBill.subtotal` yang dikirim form adalah angka BRUTO (Σ qty × harga, sebelum diskon baris), sementara `VendorBill.discountAmount` (level dokumen) **tidak pernah diisi sama sekali** — padahal tiga tempat menghitung `DPP = subtotal − discountAmount`. Jadi setiap tagihan yang punya diskon baris dilaporkan dengan dasar pemotongan PPh lebih besar daripada yang sebenarnya, bertentangan dengan `withholdingAmount` yang tersimpan | Diskon level dokumen diisi dari Σ diskon baris saat tagihan **dibuat dan diubah**, memakai satu sumber matematika (`src/lib/finance/vendor-bill.ts`) yang juga dipakai penulisan barisnya, sehingga keduanya tidak bisa berselisih. Penjaga `vendor-bill-discount-wiring` (berarah dua) mengunci kesepakatan penulis ↔ pembaca |
 | Jurnal transaksi berulang tak bisa ditelusuri dan tanpa kunci periode | `DRAFT` tanpa `referenceType`/`referenceId` | Merujuk balik ke jadwalnya (`RecurringTransaction_YYYYMMDD`, pola `ASSET_DEPRECIATION_*`) dan memakai `assertPeriodOpen`: periode tertutup gagal terlihat dan jadwal tetap jatuh tempo (bisa diulang) |
+
+Cara bug DPP di atas ditemukan: detektor kolom "dibaca tapi tak pernah ditulis"
+(`/tmp/readonly-cols*.py`, gaya yang sama dengan `knip` — **sinyal, bukan penjaga**).
+Detektor itu punya vonis palsu yang sudah dipetakan, jadi ia tidak dijadikan tes:
+penulisan lewat notasi singkat `field,` (kini ditangani), lewat spread/variabel
+payload (`data: parsed.data`), lewat `createMany({ data: variabel })`, dan FK anak
+yang terisi otomatis oleh nested create. Karena itu setiap kandidat **diverifikasi
+manual di jalur penulisannya sebelum dinyatakan celah** — persis seperti kasus ini:
+`VendorBillItem.discountAmount` ternyata ditulis (di dalam `.map()` di luar blok
+`data:`), sedangkan `VendorBill.discountAmount` benar-benar tidak pernah ditulis.
 
 ## 5. Keputusan desain yang TERVERIFIKASI: kapan stok keluar saat penjualan
 

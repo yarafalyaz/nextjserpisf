@@ -29,6 +29,7 @@ import { nextSlug } from "@/lib/utils/slug-db";
 import { revalidatePath } from "next/cache";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
+import { computeBillLineAmounts, sumBillItemDiscount } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
 import {
@@ -786,17 +787,19 @@ function mapVendorBillItems(
     .map((r) => {
       const itemId =
         r.itemId != null && r.itemId !== "" ? Number(r.itemId) : null;
-      const meta = itemId != null ? metaById.get(itemId) : undefined;
-      const qty = safeRound(r.qty ?? 0, 2);
-      const unitPrice = safeRound(r.unitPrice ?? 0, 2);
-      const discountPercent = safeRound(r.discountPercent ?? 0, 2);
-      const taxPercent = safeRound(r.taxPercent ?? 0, 2);
-      const gross = safeMultiply(qty, unitPrice, 2);
-      const discountAmount = safeMultiply(gross, discountPercent / 100, 2);
-      const subtotal = safeSubtract(gross, discountAmount, 2);
-      const taxAmount = safeMultiply(subtotal, taxPercent / 100, 2);
+      const meta = itemId != null ? metaById.get(itemId) : undefined
+      const {
+        qty,
+        unitPrice,
+        discountPercent,
+        taxPercent,
+        discountAmount,
+        subtotal,
+        taxAmount,
+        total,
+      } = computeBillLineAmounts(r)
       const goodsReceiptItemId =
-        itemId != null ? (grLineQueues?.get(itemId)?.shift() ?? null) : null;
+        itemId != null ? (grLineQueues?.get(itemId)?.shift() ?? null) : null
       return {
         itemId,
         goodsReceiptItemId,
@@ -809,7 +812,7 @@ function mapVendorBillItems(
         taxPercent,
         taxAmount,
         subtotal,
-        total: safeAdd(subtotal, taxAmount, 2),
+        total,
       };
     });
 }
@@ -988,6 +991,12 @@ export async function createVendorBill(formData: FormData) {
           terms: v.terms ?? null,
           notes: v.notes ?? null,
           subtotal: v.subtotal,
+          // Diskon level DOKUMEN = Σ diskon baris. `v.subtotal` dari form adalah
+          // angka BRUTO (sebelum diskon baris), sedangkan laporan menghitung
+          // DPP = subtotal − discountAmount. Tanpa baris ini kolomnya selalu 0
+          // sehingga DPP (dasar PPh) dilaporkan lebih besar daripada dasar
+          // pemotongan yang sebenarnya.
+          discountAmount: sumBillItemDiscount(v.items),
           tax: v.tax,
           grandTotal: v.grandTotal,
           status: "draft",
@@ -2207,6 +2216,8 @@ export async function updateVendorBill(id: number, formData: FormData) {
           terms: v.terms ?? null,
           notes: v.notes ?? null,
           subtotal: v.subtotal,
+          // Sama seperti saat membuat: DPP = subtotal (bruto) − Σ diskon baris.
+          discountAmount: sumBillItemDiscount(v.items),
           tax: v.tax,
           grandTotal: v.grandTotal,
           status: "draft",
