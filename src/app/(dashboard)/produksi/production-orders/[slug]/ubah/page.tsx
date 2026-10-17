@@ -32,7 +32,10 @@ export default async function EditPage({
 
   const order = {
     id: data.id,
-    workOrderId: 0,
+    // Tautan WO dokumen ini (dulu di-hardcode 0) — form memakainya sebagai nilai
+    // awal Combobox "Perintah Kerja"; 0/null berarti form tampil tanpa tautan dan
+    // menyimpan null (menghapus tautan) saat disimpan.
+    workOrderId: data.workOrderId,
     itemId: 0,
     productId: data.productId,
     qty: Number(data.qty),
@@ -41,7 +44,15 @@ export default async function EditPage({
     notes: data.notes,
   }
 
-  const products = await prisma.product.findMany({ orderBy: { name: "asc" } })
+  const [products, workOrders] = await Promise.all([
+    prisma.product.findMany({ orderBy: { name: "asc" } }),
+    // Daftar pilihan perintah kerja untuk Combobox "Perintah Kerja" di form.
+    prisma.workOrder.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 500,
+      select: { id: true, documentNo: true },
+    }),
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -53,7 +64,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <ProductionOrderForm order={order} products={products}/>
+      <ProductionOrderForm order={order} products={products} workOrders={workOrders}/>
     </div>
   )
 }

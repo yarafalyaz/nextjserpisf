@@ -9,13 +9,59 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Tambah Production Orders" }
 
-export default async function CreateProductionOrderPage() {
+/**
+ * Jalur "buat dari": `/produksi/production-orders/tambah?workOrderId=N` (plus
+ * `&productId=M` bila produk jadinya sudah jelas) — dipakai tombol
+ * "+ Perintah Produksi" di detail Perintah Kerja. Tanpa ini satu-satunya cara
+ * membuat order adalah form manual tanpa input WO, sehingga
+ * `ProductionOrder.workOrderId` selalu null dan backlink WO serta laporan Job
+ * Order ikut kosong.
+ */
+const positiveId = (raw: string | undefined): number | null => {
+  if (!raw) return null
+  const value = Number(raw)
+  return Number.isSafeInteger(value) && value > 0 ? value : null
+}
+
+export default async function CreateProductionOrderPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ workOrderId?: string; productId?: string }>
+}) {
   await requirePermission("create_production_orders")
 
-  const products = await prisma.product.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true, sku: true },
-  })
+  const { workOrderId, productId } = await searchParams
+  const defaultWorkOrderId = positiveId(workOrderId)
+  const requestedProductId = positiveId(productId)
+
+  const [products, workOrders] = await Promise.all([
+    prisma.product.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, sku: true },
+    }),
+    prisma.workOrder.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 500,
+      select: { id: true, documentNo: true },
+    }),
+  ])
+
+  // WO/produk yang diminta lewat URL wajib tetap bisa dipilih walau di luar 500
+  // terbaru — kalau tidak, tautannya tampak kosong di form dan tersimpan null.
+  const [linkedWorkOrder, linkedProduct] = await Promise.all([
+    defaultWorkOrderId && !workOrders.some((wo) => wo.id === defaultWorkOrderId)
+      ? prisma.workOrder.findUnique({
+          where: { id: defaultWorkOrderId },
+          select: { id: true, documentNo: true },
+        })
+      : null,
+    requestedProductId && !products.some((p) => p.id === requestedProductId)
+      ? prisma.product.findUnique({
+          where: { id: requestedProductId },
+          select: { id: true, name: true, sku: true },
+        })
+      : null,
+  ])
 
   return (
     <div className="flex flex-col gap-6">
@@ -28,7 +74,12 @@ export default async function CreateProductionOrderPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Perintah Produksi</h1>
       </div>
-      <ProductionOrderForm products={products} />
+      <ProductionOrderForm
+        products={linkedProduct ? [linkedProduct, ...products] : products}
+        workOrders={linkedWorkOrder ? [linkedWorkOrder, ...workOrders] : workOrders}
+        defaultWorkOrderId={defaultWorkOrderId}
+        defaultProductId={requestedProductId}
+      />
     </div>
   )
 }

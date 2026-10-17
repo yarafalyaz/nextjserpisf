@@ -216,10 +216,25 @@ export async function processStockAdjustment(adjustmentId: number) {
         // Hook creates Stock Moves IN/OUT per item + Accounting journal
         await onStockAdjustmentStock(adjustmentId, Number(user.id), tx);
 
+        // Hook memposting jurnal dengan referenceType/referenceId=StockAdjustment
+        // tetapi tak mengembalikan id-nya, sehingga `StockAdjustment.journalId`
+        // (kolomnya ada di skema) tak pernah terisi dan dokumen tak bisa menautkan
+        // jurnalnya. Ambil jurnal yang baru dibuat di dalam transaksi yang sama,
+        // lalu simpan; kalau hook tidak membuat jurnal (nilai net 0 / akun belum
+        // dipetakan) `journalId` dibiarkan apa adanya, bukan ditulis null.
+        const journal = await tx.journal.findFirst({
+          where: { referenceType: "StockAdjustment", referenceId: adjustmentId, deletedAt: null },
+          orderBy: { id: "desc" },
+          select: { id: true },
+        });
+
         // Update status from processing → processed
         await tx.stockAdjustment.update({
           where: { id: adjustmentId },
-          data: { status: "processed" },
+          data: {
+            status: "processed",
+            ...(journal ? { journalId: journal.id } : {}),
+          },
         });
       });
     } catch (e) {

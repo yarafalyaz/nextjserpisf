@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => {
   const prismaMock: any = {
     stockAdjustment: buildModelMock(),
     stockAdjustmentItem: buildModelMock(),
+    // processStockAdjustment sekarang membaca id jurnal penyesuaian
+    // (referenceType/referenceId) untuk mengisi StockAdjustment.journalId.
+    journal: buildModelMock(),
     inventoryTransfer: buildModelMock(),
     inventoryTransferItem: buildModelMock(),
     materialIssue: buildModelMock(),

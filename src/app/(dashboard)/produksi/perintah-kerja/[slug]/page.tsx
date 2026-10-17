@@ -114,7 +114,7 @@ export default async function WorkOrderDetailPage({
     orderBy: { name: "asc" },
   });
 
-  const [completedMi, defaultWarehouse] = await Promise.all([
+  const [completedMi, defaultWarehouse, linkedProducts] = await Promise.all([
     prisma.materialIssue.findFirst({
       where: { workOrderId: wo.id, status: "completed" },
       select: { id: true },
@@ -124,7 +124,17 @@ export default async function WorkOrderDetailPage({
       select: { id: true },
       orderBy: { id: "asc" },
     }),
+    // Produk manufaktur yang item jadinya dipakai WO ini: kalau tepat satu, produk
+    // itu ikut dibawa ke form perintah produksi ("buat dari" jadi satu klik).
+    wo.items.length > 0
+      ? prisma.product.findMany({
+          where: { inventoryItemId: { in: wo.items.map((i) => i.itemId) } },
+          select: { id: true },
+        })
+      : Promise.resolve([] as { id: number }[]),
   ]);
+
+  const suggestedProductId = linkedProducts.length === 1 ? linkedProducts[0].id : null;
 
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
@@ -149,6 +159,16 @@ export default async function WorkOrderDetailPage({
               variant="primary"
             >
               Ubah
+            </Button>
+            {/* WO -> Perintah Produksi: satu-satunya jalur yang mengisi
+                `ProductionOrder.workOrderId` (form manual tak punya input WO).
+                Selalu tampil — satu WO boleh punya beberapa perintah produksi
+                (produksi parsial), jadi turunannya bukan tunggal. */}
+            <Button
+              href={`/produksi/production-orders/tambah?workOrderId=${wo.id}${suggestedProductId ? `&productId=${suggestedProductId}` : ""}`}
+              variant="secondary"
+            >
+              + Perintah Produksi
             </Button>
             <WorkOrderActions
               workOrderId={wo.id}

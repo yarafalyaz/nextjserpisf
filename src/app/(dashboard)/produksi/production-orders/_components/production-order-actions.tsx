@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
-import { CheckCircle2, PackageMinus, Flag } from "lucide-react"
+import { CheckCircle2, PackageMinus, Play, Flag } from "lucide-react"
 import { Button } from "@/components/ui/shadcn/button"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -14,6 +14,7 @@ import {
   confirmProductionOrder,
   issueMaterial,
   completeProductionOrder,
+  startProductionOrder,
 } from "@/actions/manufacturing.actions"
 
 interface Props {
@@ -45,6 +46,15 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       if (!res.success) return showError(res.error || "Gagal mengonfirmasi")
       showSuccess("Perintah produksi dikonfirmasi")
       setConfirmOpen(false)
+      router.refresh()
+    })
+  }
+
+  function doStart() {
+    startTransition(async () => {
+      const res = await startProductionOrder(orderId)
+      if (!res.success) return showError(res.error || "Gagal memulai")
+      showSuccess("Perintah produksi dimulai")
       router.refresh()
     })
   }
@@ -106,6 +116,11 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       {(status === "confirmed" || status === "in_progress") && (
         <Button type="button" size="sm" variant="secondary" onClick={() => setIssueOpen(true)} disabled={isPending}>
           <PackageMinus size={14} aria-hidden="true" /> Keluarkan Material
+        </Button>
+      )}
+      {status === "confirmed" && (
+        <Button type="button" size="sm" onClick={doStart} disabled={isPending}>
+          <Play size={14} aria-hidden="true" /> Mulai Produksi
         </Button>
       )}
       {status === "in_progress" && (

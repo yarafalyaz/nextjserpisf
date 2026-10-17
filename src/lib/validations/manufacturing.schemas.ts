@@ -9,6 +9,19 @@ const optionalPositiveId = () => z.preprocess(
   z.coerce.number().int().positive().optional(),
 )
 
+/**
+ * Tautan ke dokumen sumber (`workOrderId`) yang datang dari form/URL.
+ *
+ * Sebelumnya `workOrderId` divalidasi sebagai string bebas: nilai `"abc"` lolos
+ * zod, lalu `Number("abc")` menjadi NaN dan hanya meledak sebagai galat FK di
+ * Prisma (pesan tak berguna bagi pengguna). Sekarang nilai kosong → undefined
+ * dan nilai lain wajib id positif; `"abc"` ditolak sebelum menyentuh database.
+ */
+const optionalSourceId = () => z.preprocess(
+  (value) => (value === "" || value === null || value === undefined ? undefined : value),
+  z.coerce.number().int().positive("Dokumen sumber tidak valid").optional(),
+)
+
 // ==================== PRODUCT (BOM) ====================
 
 export const createProductSchema = z.object({
@@ -34,7 +47,7 @@ export const updateProductSchema = z.object({
 export const createProductionOrderSchema = z.object({
   productId: z.coerce.number().int().min(1, "Produk wajib dipilih"),
   qty: z.coerce.number().min(1, "Qty minimal 1"),
-  workOrderId: optionalString(30),
+  workOrderId: optionalSourceId(),
   startDate: optionalString(30),
   endDate: optionalString(30),
   notes: optionalString(1000),
@@ -43,7 +56,7 @@ export const createProductionOrderSchema = z.object({
 export const updateProductionOrderSchema = z.object({
   productId: z.coerce.number().int().min(1, "Produk wajib dipilih"),
   qty: z.coerce.number().min(1, "Qty minimal 1"),
-  workOrderId: optionalString(30),
+  workOrderId: optionalSourceId(),
   startDate: optionalString(30),
   endDate: optionalString(30),
   notes: optionalString(1000),

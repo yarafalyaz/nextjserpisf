@@ -13,13 +13,24 @@ import { Button } from "@/components/ui/button"
 
 interface ProductionOrderFormProps {
   products: { id: number; name: string; sku: string | null }[]
-  order?: { id: number; workOrderId: number; itemId: number; productId?: number | null; qty: number; startDate?: string | null; endDate?: string | null; notes?: string | null }
+  /** Pilihan dokumen sumber (perintah kerja) — tautan `workOrderId`. */
+  workOrders?: { id: number; documentNo: string }[]
+  /** Terisi dari `?workOrderId=` saat masuk lewat "Buat Perintah Produksi" dari WO. */
+  defaultWorkOrderId?: number | null
+  /** Terisi dari `?productId=` (produk jadi yang cocok dengan item WO). */
+  defaultProductId?: number | null
+  order?: { id: number; workOrderId?: number | null; itemId?: number; productId?: number | null; qty: number; startDate?: string | null; endDate?: string | null; notes?: string | null }
 }
 
-export function ProductionOrderForm({ products, order }: ProductionOrderFormProps) {
+export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrderId = null, defaultProductId = null, order }: ProductionOrderFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
-  const [productId, setProductId] = useState(order?.productId ? String(order.productId) : "")
+  const [productId, setProductId] = useState(
+    order?.productId ? String(order.productId) : defaultProductId ? String(defaultProductId) : "",
+  )
+  const [workOrderId, setWorkOrderId] = useState(
+    order?.workOrderId ? String(order.workOrderId) : defaultWorkOrderId ? String(defaultWorkOrderId) : "",
+  )
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -57,6 +68,17 @@ export function ProductionOrderForm({ products, order }: ProductionOrderFormProp
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="qty">Jumlah Produksi *</Label>
           <Input id="qty" name="qty" type="number" placeholder="Jml" min={1} required defaultValue={order?.qty ?? ""} />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="workOrderId">Perintah Kerja</Label>
+          <Combobox
+            id="workOrderId"
+            name="workOrderId"
+            value={workOrderId || null}
+            onChange={(key) => setWorkOrderId(key ?? "")}
+            placeholder="— Tanpa perintah kerja —"
+            options={workOrders.map((wo) => ({ value: String(wo.id), label: wo.documentNo }))}
+          />
         </div>
         <div className="flex flex-col gap-1.5">
           <AppDatePicker

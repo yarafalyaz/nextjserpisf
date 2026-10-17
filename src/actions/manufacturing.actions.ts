@@ -458,6 +458,22 @@ export async function createProductionOrder(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("MO");
 
+    // Dokumen sumber: FK `ProductionOrder.workOrderId` ada di skema tetapi tak
+    // pernah diisi karena form-nya tak punya input WO — akibatnya backlink
+    // `workOrder.productionOrders` selalu kosong dan laporan Job Order tak pernah
+    // menghitung perintah produksi. Nilainya di sini divalidasi ke baris nyata
+    // (bukan hanya `Number()`), supaya WO salah/typo ditolak dengan pesan yang
+    // berguna alih-alih galat FK.
+    const workOrder = v.workOrderId
+      ? await prisma.workOrder.findUnique({
+          where: { id: v.workOrderId },
+          select: { id: true, documentNo: true, bomRevisionId: true },
+        })
+      : null;
+    if (v.workOrderId && !workOrder) {
+      return { success: false, error: `Perintah Kerja #${v.workOrderId} tidak ditemukan.` };
+    }
+
     // Snapshot the BOM in force right now. Prefer the latest *released* revision
     // (frozen lines) and fall back to the working BOM for products that have no
     // released revision yet. Pinning bomRevisionId means later edits to the
@@ -499,7 +515,7 @@ export async function createProductionOrder(formData: FormData) {
         slug: await nextSlug("productionOrder", documentNo),
         productId: v.productId,
         bomRevisionId: effectiveBom.revisionId,
-        workOrderId: v.workOrderId ? Number(v.workOrderId) : null,
+        workOrderId: workOrder?.id ?? null,
         qty: v.qty,
         startDate: v.startDate ? new Date(v.startDate) : null,
         endDate: v.endDate ? new Date(v.endDate) : null,
@@ -524,6 +540,19 @@ export async function createProductionOrder(formData: FormData) {
       productionOrder.id,
       `Membuat perintah produksi #${productionOrder.id}`,
     );
+
+    // WO ← BOM: `WorkOrder.bomRevisionId` tak pernah diisi jalur mana pun (form WO
+    // tidak punya pilihan BOM) padahal detail WO sudah menampilkan kolomnya.
+    // Revisi BOM yang baru di-snapshot order ini dipinjamkan ke WO-nya — hanya
+    // bila WO belum punya revisi, supaya pilihan yang sudah ada tidak ditimpa.
+    if (workOrder && workOrder.bomRevisionId == null && effectiveBom.revisionId != null) {
+      await prisma.workOrder.updateMany({
+        where: { id: workOrder.id, bomRevisionId: null },
+        data: { bomRevisionId: effectiveBom.revisionId },
+      });
+      revalidatePath("/produksi/perintah-kerja");
+    }
+
     revalidatePath("/produksi/production-orders");
     return { success: true, id: productionOrder.id, slug: productionOrder.slug };
   } catch (e: unknown) {
@@ -561,6 +590,46 @@ export async function confirmProductionOrder(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[confirmProductionOrder]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Start a confirmed production order (confirmed → in_progress) WITHOUT issuing
+ * material.
+ *
+ * Gate buntu yang ditutup di sini: `in_progress` dulu hanya bisa dicapai lewat
+ * `issueMaterial`, dan daftar item issue diambil dari material BOM. Order tanpa
+ * material BOM (jasa/impor kosong) karena itu tersangkut permanen di `confirmed`
+ * — tak bisa di-issue (tak ada item) sekaligus tak bisa diselesaikan
+ * (`completeProductionOrder` hanya menerima `in_progress`). Aksi ini memberi
+ * jalan maju yang eksplisit tanpa memaksa pengeluaran material.
+ */
+export async function startProductionOrder(id: number) {
+  try {
+    await requirePermission("edit_production_orders");
+    // Claim atomik: hanya satu request yang boleh memindahkan confirmed → in_progress.
+    const claim = await prisma.productionOrder.updateMany({
+      where: { id, status: "confirmed" },
+      data: { status: "in_progress" },
+    });
+    if (claim.count === 0) {
+      const cur = await prisma.productionOrder.findUnique({
+        where: { id },
+        select: { status: true },
+      });
+      throw new Error(
+        cur
+          ? `Perintah produksi berstatus '${cur.status}', hanya 'confirmed' yang bisa dimulai`
+          : "Perintah produksi tidak ditemukan",
+      );
+    }
+    await logActivity("start", "ProductionOrder", id, `Memulai perintah produksi #${id}`);
+    revalidatePath("/produksi/production-orders");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[startProductionOrder]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
@@ -1655,7 +1724,11 @@ export async function updateProductionOrder(id: number, formData: FormData) {
           slug: await nextSlug("productionOrder", poDocumentNo, { excludeId: id }),
           productId: v.productId,
           qty: v.qty,
-          workOrderId: v.workOrderId ? Number(v.workOrderId) : null,
+          // Field ini kini muncul di form (Combobox "Perintah Kerja"), jadi nilainya
+          // adalah maksud pengguna: kosong berarti tautan dilepas sengaja. Sebelumnya
+          // form tak pernah mengirimnya sehingga setiap penyimpanan menghapus tautan
+          // WO yang sudah ada.
+          workOrderId: v.workOrderId ?? null,
           startDate: v.startDate ? new Date(v.startDate) : null,
           endDate: v.endDate ? new Date(v.endDate) : null,
           notes: v.notes ?? null,

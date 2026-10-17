@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useTransition } from "react";
 import {
   createMaterialIssue,
@@ -19,9 +19,14 @@ import { nextItemUid } from "@/lib/utils/item-uid"
 interface MaterialIssueFormProps {
   warehouses: { id: number; name: string }[];
   costCenters?: { id: number; code: string; name: string }[];
+  /** Pilihan dokumen sumber (perintah kerja) — kolom `workOrderId` sudah ada di skema. */
+  workOrders?: { id: number; documentNo: string }[];
+  /** Pilihan proyek — kolom `projectId` sudah ada di skema. */
+  projects?: { id: number; name: string }[];
   issue?: {
     id: number;
-    workOrderId: number;
+    workOrderId?: number | null;
+    projectId?: number | null;
     warehouseId?: number;
     date: string;
     notes?: string | null;
@@ -45,13 +50,60 @@ interface MIItem {
   uid: string;
 }
 
+export interface MaterialIssuePayload {
+  warehouseId: string;
+  date: string;
+  costCenterId?: string | null;
+  workOrderId?: string | null;
+  projectId?: string | null;
+  items: Array<{ itemId: number; qty: number; unitCost: number }>;
+}
+
+/**
+ * FormData yang dikirim ke server action, dipisah dari `onSubmit` supaya bisa
+ * diuji langsung tanpa DOM.
+ *
+ * Kolom penaut (workOrderId/projectId/costCenterId) hanya dikirim bila terisi.
+ * Mengirim string kosong berbahaya: `parseFormData` mengubahnya menjadi
+ * `undefined`, dan `updateMaterialIssue` memperlakukan `undefined` sebagai
+ * "jangan sentuh" — jadi nilai kosong tidak menghapus apa pun, sedangkan pada
+ * create ia memang berarti "tanpa tautan".
+ */
+export function buildMaterialIssueFormData(input: MaterialIssuePayload): FormData {
+  const formData = new FormData();
+  formData.append("warehouseId", input.warehouseId);
+  formData.append("date", input.date);
+  formData.append(
+    "items",
+    JSON.stringify(
+      input.items.map(({ itemId, qty, unitCost }) => ({ itemId, qty, unitCost })),
+    ),
+  );
+  const links: Array<[string, string | null | undefined]> = [
+    ["costCenterId", input.costCenterId],
+    ["workOrderId", input.workOrderId],
+    ["projectId", input.projectId],
+  ];
+  for (const [field, value] of links) {
+    if (value) formData.append(field, value);
+  }
+  return formData;
+}
+
 export function MaterialIssueForm({
   warehouses,
   costCenters = [],
+  workOrders = [],
+  projects = [],
   items,
   issue,
 }: MaterialIssueFormProps) {
   const router = useRouter();
+  // Jalur "buat dari": `/inventaris/pengeluaran-material/tambah?workOrderId=N`
+  // (pola yang sama dengan form rak/baris rak). Tanpa membaca URL, pengeluaran
+  // material dari form Inventaris selalu orphan: `workOrderId`/`projectId`
+  // tertinggal null walau kolomnya sudah ada di skema.
+  const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses);
   const [warehouseId, setWarehouseId] = useState(
@@ -60,6 +112,12 @@ export function MaterialIssueForm({
   const [costCenterOptions, setCostCenterOptions] = useState(costCenters);
   const [costCenterId, setCostCenterId] = useState(
     issue?.costCenterId ? String(issue.costCenterId) : "",
+  );
+  const [workOrderId, setWorkOrderId] = useState(
+    issue?.workOrderId ? String(issue.workOrderId) : searchParams.get("workOrderId") ?? "",
+  );
+  const [projectId, setProjectId] = useState(
+    issue?.projectId ? String(issue.projectId) : searchParams.get("projectId") ?? "",
   );
   const [miItems, setMiItems] = useState<MIItem[]>(
     issue?.items && issue.items.length > 0
@@ -92,10 +150,14 @@ export function MaterialIssueForm({
     e.preventDefault();
     startTransition(async () => {
       try {
-        const formData = new FormData();
-        formData.append("warehouseId", warehouseId);
-        formData.append("date", issue?.date ?? toLocalDateOnly(new Date()));
-        formData.append("items", JSON.stringify(miItems.map(({ uid: _uid, ...rest }) => rest)));
+        const formData = buildMaterialIssueFormData({
+          warehouseId,
+          date: issue?.date ?? toLocalDateOnly(new Date()),
+          costCenterId,
+          workOrderId,
+          projectId,
+          items: miItems.map(({ uid: _uid, ...rest }) => rest),
+        });
         const result = issue?.id
           ? await updateMaterialIssue(issue.id, formData)
           : await createMaterialIssue(formData);
@@ -160,6 +222,49 @@ export function MaterialIssueForm({
               setCostCenterId(String(created.id));
             }}
           />
+        </div>
+        )}
+        {(workOrders.length > 0 || workOrderId) && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="workOrderId">Perintah Kerja</Label>
+          {workOrders.length > 0 ? (
+            <Combobox
+              id="workOrderId"
+              name="workOrderId"
+              options={workOrders.map((wo) => ({ value: String(wo.id), label: wo.documentNo }))}
+              value={workOrderId || null}
+              onChange={(key) => setWorkOrderId(key ?? "")}
+              placeholder="— Tanpa perintah kerja —"
+            />
+          ) : (
+            <>
+              {/* Halaman pemanggil belum mengirim daftar perintah kerja; tautan
+                  yang sudah menempel (dari URL ?workOrderId= atau dokumen yang
+                  diubah) tetap harus ikut tersimpan apa adanya. */}
+              <input type="hidden" name="workOrderId" value={workOrderId} />
+              <p className="text-sm text-foreground">Perintah Kerja #{workOrderId}</p>
+            </>
+          )}
+        </div>
+        )}
+        {(projects.length > 0 || projectId) && (
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="projectId">Proyek</Label>
+          {projects.length > 0 ? (
+            <Combobox
+              id="projectId"
+              name="projectId"
+              options={projects.map((p) => ({ value: String(p.id), label: p.name }))}
+              value={projectId || null}
+              onChange={(key) => setProjectId(key ?? "")}
+              placeholder="— Tanpa proyek —"
+            />
+          ) : (
+            <>
+              <input type="hidden" name="projectId" value={projectId} />
+              <p className="text-sm text-foreground">Proyek #{projectId}</p>
+            </>
+          )}
         </div>
         )}
       </div>
