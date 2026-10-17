@@ -11,6 +11,7 @@ const userFindUniqueMock = vi.fn()
 const userCreateMock = vi.fn()
 const userUpdateMock = vi.fn()
 const roleFindManyMock = vi.fn()
+const warehouseCountMock = vi.fn()
 
 const bcryptCompareMock = vi.fn()
 const bcryptHashMock = vi.fn()
@@ -33,6 +34,9 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     role: {
       findMany: (...a: unknown[]) => roleFindManyMock(...a),
+    },
+    warehouse: {
+      count: (...a: unknown[]) => warehouseCountMock(...a),
     },
   },
 }))
@@ -60,6 +64,7 @@ import {
   createUser,
   updateUserRoles,
   toggleUserActive,
+  updateUserWarehouses,
   updateProfile,
 } from "../auth.actions"
 
@@ -79,7 +84,7 @@ beforeEach(() => {
   for (const m of [
     signInMock, signOutMock, requireAuthMock, requirePermissionMock,
     revalidateMock, userFindMock, userFindUniqueMock, userCreateMock, userUpdateMock,
-    roleFindManyMock, bcryptCompareMock, bcryptHashMock,
+    roleFindManyMock, warehouseCountMock, bcryptCompareMock, bcryptHashMock,
   ]) m.mockReset()
   bcryptHashMock.mockResolvedValue("hashed-value")
   // requirePermission resolves to the acting user (default: a plain admin
@@ -456,5 +461,88 @@ describe("updateProfile", () => {
     expect(res).toEqual({ success: true })
     expect(revalidateMock).toHaveBeenCalledWith("/profil")
     expect(revalidateMock).toHaveBeenCalledWith("/")
+  })
+})
+
+/**
+ * Penugasan gudang per pengguna — satu-satunya jalur tulis `user_warehouses`.
+ *
+ * Tanpa aksi ini tabel itu tidak punya penulis sama sekali, sementara
+ * `getWarehouseScope` menentukan cakupan gudang peran `warehouse` dari sana dan
+ * MENOLAK bila kosong: peran `warehouse` tidak bisa diberi akses gudang mana pun.
+ */
+describe("updateUserWarehouses", () => {
+  it("mengganti himpunan penugasan dalam SATU penulisan bertingkat", async () => {
+    warehouseCountMock.mockResolvedValue(2)
+    userUpdateMock.mockResolvedValue({ id: 3 })
+
+    const res = await updateUserWarehouses(3, [5, 2])
+
+    expect(res).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("manage_users")
+    const arg = userUpdateMock.mock.calls[0][0]
+    // Ganti-himpunan: hapus semua lalu buat yang baru dalam satu tulisan, supaya
+    // tidak ada saat pengguna kehilangan seluruh akses karena dua tulisan terpisah.
+    expect(arg.data.userWarehouses.deleteMany).toEqual({})
+    expect(arg.data.userWarehouses.create).toEqual([{ warehouseId: 5 }, { warehouseId: 2 }])
+  })
+
+  it("membuang id ganda sebelum menulis", async () => {
+    warehouseCountMock.mockResolvedValue(2)
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    await updateUserWarehouses(3, [5, 5, 2])
+    expect(warehouseCountMock).toHaveBeenCalledWith({ where: { id: { in: [5, 2] } } })
+    const arg = userUpdateMock.mock.calls[0][0]
+    expect(arg.data.userWarehouses.create).toEqual([{ warehouseId: 5 }, { warehouseId: 2 }])
+  })
+
+  it("menolak id yang tidak valid tanpa menyentuh basis data", async () => {
+    for (const bad of [[NaN], [-1], [0], ["abc"]]) {
+      const res = await updateUserWarehouses(3, bad as number[])
+      expect(res.error).toBeTruthy()
+      expect(userUpdateMock).not.toHaveBeenCalled()
+      expect(warehouseCountMock).not.toHaveBeenCalled()
+    }
+  })
+
+  it("menolak bila ada gudang yang tidak ditemukan (penugasan hampa)", async () => {
+    // Dua id diminta, hanya satu yang ada: menulisnya akan membuat baris penugasan
+    // yang tampil di halaman pengguna tetapi tidak memberi akses apa pun.
+    warehouseCountMock.mockResolvedValue(1)
+    const res = await updateUserWarehouses(3, [5, 999])
+    expect(res).toEqual({ error: "Ada gudang yang tidak ditemukan" })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("mengizinkan pengosongan penugasan (mencabut seluruh akses gudang)", async () => {
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    const res = await updateUserWarehouses(3, [])
+    expect(res).toEqual({ success: true })
+    const arg = userUpdateMock.mock.calls[0][0]
+    expect(arg.data.userWarehouses.create).toEqual([])
+    // Tidak ada id untuk diperiksa, jadi tidak perlu menanyakan gudang ke db.
+    expect(warehouseCountMock).not.toHaveBeenCalled()
+  })
+
+  it("mencatat jejak audit berisi daftar gudang sebelum/sesudah", async () => {
+    warehouseCountMock.mockResolvedValue(2)
+    userUpdateMock.mockResolvedValue({ id: 3 })
+    await updateUserWarehouses(3, [5, 2])
+    expect(logActivityMock).toHaveBeenCalledWith(
+      "update",
+      "User",
+      3,
+      expect.stringContaining("5, 2"),
+    )
+    expect(revalidateMock).toHaveBeenCalledWith("/pengaturan/pengguna")
+  })
+
+  it("tidak menulis apa pun bila izin ditolak", async () => {
+    const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {})
+    requirePermissionMock.mockRejectedValue(new Error("Tidak punya izin"))
+    const res = await updateUserWarehouses(3, [5])
+    expect(res.error).toBeTruthy()
+    expect(userUpdateMock).not.toHaveBeenCalled()
+    consoleSpy.mockRestore()
   })
 })

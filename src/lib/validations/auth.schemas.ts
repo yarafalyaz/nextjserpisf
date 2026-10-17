@@ -125,3 +125,21 @@ export const updateUserRolesSchema = z
       .positive("Role ID harus positif"),
   )
   .transform((ids) => Array.from(new Set(ids)))
+
+/**
+ * Penugasan gudang per pengguna. Bentuknya sama ketatnya dengan peran: id harus
+ * bilangan bulat positif, dan duplikat dibuang supaya penulisan tidak berulang.
+ *
+ * Ini yang membuat `getWarehouseScope` punya isi: cakupan gudang peran `warehouse`
+ * ditentukan dari tabel `user_warehouses`, dan bila kosong pengguna DITOLAK
+ * (`{ kind: "none" }`). Sebelum ada aksi ini, tabelnya tidak punya jalur tulis
+ * sama sekali sehingga peran `warehouse` tidak bisa diberi akses gudang mana pun.
+ */
+export const updateUserWarehousesSchema = z
+  .array(
+    z.coerce
+      .number({ error: "Gudang tidak valid" })
+      .int("Id gudang harus bilangan bulat")
+      .positive("Id gudang harus positif"),
+  )
+  .transform((ids) => Array.from(new Set(ids)))

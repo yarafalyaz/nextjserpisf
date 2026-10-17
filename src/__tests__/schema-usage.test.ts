@@ -129,12 +129,10 @@ const SEED_ONLY_MODELS: string[] = [
   // aplikasi; ditambah `JournalEntry.profitCenterId` yang tidak pernah diisi,
   // seluruh laporan selalu menumpuk di "Tanpa Pusat Laba".
   "ProfitCenter",
-  // KEAMANAN (fail-closed, bukan lubang): `getWarehouseScope` menetapkan cakupan
-  // gudang peran `warehouse` dari penugasan di tabel ini, dan mengembalikan
-  // `{ kind: "none" }` bila kosong. Karena tidak ada jalur tulis di produk, peran
-  // `warehouse` yang sudah di-seed TIDAK BISA diberi akses gudang mana pun —
-  // pemegangnya selalu ditolak (aman, tetapi perannya tidak terpakai).
-  "UserWarehouse",
+  // Ditutup: `UserWarehouse` SUDAH punya jalur tulis — `updateUserWarehouses`
+  // (aksi + panel akses gudang di halaman detail pengguna), sehingga peran
+  // `warehouse` bisa diberi akses gudang. Karena itu ia TIDAK lagi di daftar ini:
+  // penjaga berarah dua akan memerahkan tes bila entri basi tetap dibiarkan.
 ].sort()
 
 const SCALAR_TYPES = new Set([
@@ -351,12 +349,20 @@ function productIndex(teks: string) {
   for (const m of teks.matchAll(/(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+`?(\w+)`?/gi)) {
     tabelSql.add(m[1].toLowerCase())
   }
-  // Nested write: `rel: { ... create: ... }` dalam jarak dekat.
+  // Nested write: `rel: { ... create: ... }` dalam jarak dekat. Kuncinya diperiksa
+  // SATU PER SATU lewat jendela setelah `key: {` — bukan satu regex yang menelan
+  // jendela, karena `data: {` akan menyerap `userWarehouses: {` di dalamnya dan
+  // relasinya tidak pernah tercatat (terbukti: penjaga memvonis `UserWarehouse`
+  // tanpa jalur tulis padahal aksinya menulis lewat nested write).
   const relNested = new Set<string>()
-  for (const m of teks.matchAll(
-    /(\w+)\s*:\s*\{[\s\S]{0,200}?\b(?:create|createMany|connectOrCreate|upsert|deleteMany)\b\s*:/g,
-  )) {
-    relNested.add(m[1])
+  const keyRe = /(\w+)\s*:\s*\{/g
+  let keyMatch: RegExpExecArray | null
+  while ((keyMatch = keyRe.exec(teks)) !== null) {
+    const from = keyMatch.index + keyMatch[0].length
+    const window = teks.slice(from, from + 200)
+    if (/\b(?:create|createMany|connectOrCreate|upsert|deleteMany)\b\s*:/.test(window)) {
+      relNested.add(keyMatch[1])
+    }
   }
   // Relasi yang dipakai sebagai pembacaan (`rel: {`, `rel: true`, `rel: [`).
   const relRead = new Set<string>()

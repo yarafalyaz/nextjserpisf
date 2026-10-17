@@ -14,6 +14,7 @@ import {
   loginSchema,
   updateProfileSchema,
   updateUserRolesSchema,
+  updateUserWarehousesSchema,
 } from "@/lib/validations/auth.schemas"
 
 // Privilege-escalation guard: a non-super-admin (even one holding manage_users)
@@ -278,6 +279,68 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
     if (isNextRedirectError(e)) throw e
     console.error("[updateUserRoles]", e)
     return { error: "Terjadi kesalahan saat memperbarui role" }
+  }
+}
+
+/**
+ * Menetapkan gudang yang boleh diakses pengguna (tabel `user_warehouses`).
+ *
+ * Ini SATU-SATUNYA jalur tulis tabel tersebut. `getWarehouseScope` menetapkan
+ * cakupan gudang peran `warehouse` dari sini dan mengembalikan `{ kind: "none" }`
+ * bila kosong — artinya sebelum aksi ini ada, peran `warehouse` yang sudah
+ * di-seed TIDAK BISA diberi akses gudang mana pun (fail-closed, jadi bukan lubang
+ * keamanan, tetapi perannya tidak terpakai).
+ *
+ * Semantiknya "ganti himpunan" seperti `updateUserRoles`: penugasan lama dihapus
+ * dan diganti yang baru dalam SATU penulisan bertingkat, sehingga tidak ada saat
+ * pengguna kehilangan semua akses karena dua penulisan terpisah.
+ */
+export async function updateUserWarehouses(userId: number, warehouseIds: number[]) {
+  try {
+    await requirePermission("manage_users")
+
+    const parsed = updateUserWarehousesSchema.safeParse(warehouseIds)
+    if (!parsed.success) {
+      return { error: parsed.error.issues[0]?.message ?? "Validasi gagal" }
+    }
+    const cleanIds = parsed.data
+
+    // Setiap id harus gudang yang benar-benar ada. Tanpa pemeriksaan ini, id
+    // asing (mis. permintaan yang dibuat tangan) akan menulis baris penugasan
+    // yang tidak memberi akses apa pun: halaman pengguna menampilkan gudangnya,
+    // tetapi `getWarehouseScope` tetap menolak — tampak diatur padahal tidak.
+    if (cleanIds.length > 0) {
+      const found = await prisma.warehouse.count({ where: { id: { in: cleanIds } } })
+      if (found !== cleanIds.length) {
+        return { error: "Ada gudang yang tidak ditemukan" }
+      }
+    }
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        userWarehouses: {
+          deleteMany: {},
+          create: cleanIds.map((warehouseId) => ({ warehouseId })),
+        },
+      },
+    })
+
+    // Security-relevant: penugasan gudang menentukan dokumen gudang mana yang
+    // boleh dibaca/ditulis. Catat sebelum/sesudah agar pemberian akses tertelusuri.
+    await logActivity(
+      "update",
+      "User",
+      userId,
+      `Mengubah akses gudang pengguna #${userId} menjadi: ${cleanIds.join(", ") || "tidak ada"}`,
+    )
+
+    revalidatePath("/pengaturan/pengguna")
+    return { success: true }
+  } catch (e) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateUserWarehouses]", e)
+    return { error: "Terjadi kesalahan saat memperbarui akses gudang" }
   }
 }
 

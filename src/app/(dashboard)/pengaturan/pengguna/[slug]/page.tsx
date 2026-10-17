@@ -8,6 +8,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { UserAccessPanel } from "./_components/user-access-panel"
+import { WAREHOUSE_ALL_ACCESS_ROLES } from "@/lib/auth/role-names"
 
 import type { Metadata } from "next"
 
@@ -26,16 +27,37 @@ export default async function UserDetailPage({
   const user = await resolveEntity(
     { segment: slug },
     {
-      bySlug: (s) => prisma.user.findFirst({ where: { slug: s }, include: { roles: true } }),
-      byId: (id) => prisma.user.findUnique({ where: { id }, include: { roles: true } }),
+      bySlug: (s) =>
+        prisma.user.findFirst({
+          where: { slug: s },
+          include: { roles: true, userWarehouses: { select: { warehouseId: true } } },
+        }),
+      byId: (id) =>
+        prisma.user.findUnique({
+          where: { id },
+          include: { roles: true, userWarehouses: { select: { warehouseId: true } } },
+        }),
     },
   )
   if (!user) notFound()
 
-  const roles = await prisma.role.findMany({
-    orderBy: { name: "asc" },
-    select: { id: true, name: true },
-  })
+  const [roles, warehouses] = await Promise.all([
+    prisma.role.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+    prisma.warehouse.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
+  ])
+
+  // Peran ber-akses-semua-gudang (mis. admin) tidak terpengaruh penugasan gudang —
+  // panel menjelaskannya alih-alih menawarkan pilihan yang tidak berpengaruh.
+  const allWarehouseAccess = user.roles.some((r) =>
+    (WAREHOUSE_ALL_ACCESS_ROLES as readonly string[]).includes(r.name),
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -67,6 +89,9 @@ export default async function UserDetailPage({
         isActive={user.isActive}
         roles={roles}
         currentRoleIds={user.roles.map((r) => r.id)}
+        warehouses={warehouses}
+        currentWarehouseIds={user.userWarehouses.map((w) => w.warehouseId)}
+        allWarehouseAccess={allWarehouseAccess}
       />
     </div>
   )
