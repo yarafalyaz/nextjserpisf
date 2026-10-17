@@ -19,23 +19,10 @@ async function waitForHydration(page: Page) {
   await page.waitForTimeout(1500)
 }
 
-async function closeMobileSidebarIfOpen(page: Page) {
-  const overlay = page.locator(".sidebar-overlay")
-  if (!(await overlay.isVisible().catch(() => false))) return
-  const closeBtn = page.locator(".sidebar-close-btn")
-  if (await closeBtn.isVisible().catch(() => false)) {
-    await closeBtn.click({ force: true })
-  } else {
-    await page.keyboard.press("Escape")
-  }
-  await expect(overlay).toBeHidden()
-}
-
 test.describe("Finance — Journal & Reports", () => {
   test("journal list renders heading, create button and table surface", async ({ page }) => {
     await page.goto("/keuangan/jurnal", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
 
     // Real DOM assertions (not just body text)
     await expect(page.getByRole("heading", { name: "Jurnal" })).toBeVisible({ timeout: 30000 })
@@ -59,7 +46,6 @@ test.describe("Finance — Journal & Reports", () => {
   test("journal create form exposes date, description and entry rows", async ({ page }) => {
     await page.goto("/keuangan/jurnal/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
 
     await expect(page.getByRole("heading", { name: "Buat Entri Jurnal" })).toBeVisible({ timeout: 30000 })
 
@@ -90,7 +76,6 @@ test.describe("Finance — Journal & Reports", () => {
 
     await page.goto("/keuangan/jurnal/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading", { name: "Buat Entri Jurnal" })).toBeVisible({ timeout: 30000 })
 
     await page.getByPlaceholder("Deskripsi jurnal").fill(description)
@@ -137,7 +122,6 @@ test.describe("Finance — Journal & Reports", () => {
 
     await page.goto("/laporan/buku-besar", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
 
     // Empty state before an account is chosen
     await expect(page.getByText("Pilih akun untuk melihat buku besar")).toBeVisible({ timeout: 30000 })
@@ -163,7 +147,6 @@ test.describe("Finance — Journal & Reports", () => {
   test("trial balance (neraca saldo) — table columns and balance invariant", async ({ page }) => {
     await page.goto("/laporan/neraca-saldo", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
 
     // Report identity
     await expect(page.getByText("Neraca Saldo").first()).toBeVisible({ timeout: 30000 })

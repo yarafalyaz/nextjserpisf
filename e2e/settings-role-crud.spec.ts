@@ -2,21 +2,6 @@ import { expect, test, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 
-async function closeMobileSidebarIfOpen(page: Page) {
-  const overlay = page.locator(".sidebar-overlay")
-  if (!(await overlay.isVisible().catch(() => false))) return
-
-  const closeBtn = page.locator(".sidebar-close-btn")
-  if (await closeBtn.isVisible().catch(() => false)) {
-    await closeBtn.click({ force: true })
-  } else {
-    await page.keyboard.press("Escape")
-  }
-
-  await expect(overlay).toBeHidden({ timeout: 5000 })
-}
-
-
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
   await page.waitForTimeout(2000)
@@ -36,7 +21,6 @@ test.describe("Pengaturan Peran CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/pengaturan/peran/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading", { name: "Tambah Peran" })).toBeVisible({ timeout: 30000 })
     await page.locator("#name").first().fill(name)
     await waitForHydration(page)
@@ -44,7 +28,6 @@ test.describe("Pengaturan Peran CRUD", () => {
 
     await page.waitForURL("**/pengaturan/peran", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
     // ─── DETAIL ───────────────────────────────────────────────
@@ -53,20 +36,17 @@ test.describe("Pengaturan Peran CRUD", () => {
     await createdRow.locator("a").filter({ hasText: "Detail" }).click({ force: true })
 
     await page.waitForURL(/\/pengaturan\/peran\/[^/]+$/, { timeout: 30000 })
-    await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading").filter({ hasText: name }).first()).toBeVisible({ timeout: 30000 })
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.getByRole("link", { name: "Ubah Peran" }).click({ force: true })
     await page.waitForURL(/\/pengaturan\/peran\/[^/]+\/ubah$/, { timeout: 30000 })
-    await closeMobileSidebarIfOpen(page)
     await page.locator("#name").first().fill(updated)
     await waitForHydration(page)
     await page.locator("button[type='submit']").click()
 
     await page.waitForURL("**/pengaturan/peran", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────

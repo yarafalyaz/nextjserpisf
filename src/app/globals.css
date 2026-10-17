@@ -1560,7 +1560,7 @@ html.dark [cmdk-group-heading] {
   flex: 1;
 }
 
-/* Mobile sidebar overlay */
+/* Mobile sidebar */
 @media (max-width: 1024px) {
   .app-main {
     margin-left: 0;
@@ -1572,14 +1572,6 @@ html.dark [cmdk-group-heading] {
     height: 100vh;
     box-shadow: var(--shadow-xl);
     transition: transform 0.3s ease;
-  }
-
-  .sidebar-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 999;
-    background: rgba(0, 0, 0, 0.4);
-    backdrop-filter: blur(2px);
   }
 }
 
@@ -1684,31 +1676,7 @@ html.dark [cmdk-group-heading] {
   padding-left: 12px;
 }
 
-/* Sidebar close button (mobile only) */
-.sidebar-close-btn {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: var(--bg-tertiary);
-  border-radius: var(--border-radius);
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: var(--transition);
-}
-
-.sidebar-close-btn:hover {
-  background: var(--border-color);
-  color: var(--text-primary);
-}
-
 @media (max-width: 1024px) {
-  .sidebar-close-btn {
-    display: flex;
-  }
-
   .sidebar-header {
     display: flex;
     align-items: center;
@@ -2475,7 +2443,6 @@ html.dark [cmdk-group-heading] {
   .sidebar,
   .header,
   .sidebar-toggle,
-  .sidebar-overlay,
   .no-print,
   [data-slot="backdrop"] {
     display: none !important;

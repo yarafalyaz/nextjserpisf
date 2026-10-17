@@ -2,21 +2,6 @@ import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 
-async function closeMobileSidebarIfOpen(page: Page) {
-  const overlay = page.locator(".sidebar-overlay")
-  if (!(await overlay.isVisible().catch(() => false))) return
-
-  const closeBtn = page.locator(".sidebar-close-btn")
-  if (await closeBtn.isVisible().catch(() => false)) {
-    await closeBtn.click({ force: true })
-  } else {
-    await page.keyboard.press("Escape")
-  }
-
-  await expect(overlay).toBeHidden()
-}
-
-
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
   await page.waitForTimeout(2000)
@@ -39,7 +24,6 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
     })
     await waitForHydration(page)
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
 
     await expect(
       page.getByRole("heading", { name: "Tambah Termin Pembayaran" })
@@ -54,7 +38,6 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
 
     await page.waitForURL("**/master/syarat-pembayaran", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
 
     // Verify row exists in table — try getByRole first, fallback to getByText
     let row = page.getByRole("row", { name: new RegExp(name) })

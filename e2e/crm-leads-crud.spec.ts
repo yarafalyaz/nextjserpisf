@@ -1,21 +1,6 @@
 import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
-async function closeMobileSidebarIfOpen(page: Page) {
-  const overlay = page.locator(".sidebar-overlay")
-  if (!(await overlay.isVisible().catch(() => false))) return
-
-  const closeBtn = page.locator(".sidebar-close-btn")
-  if (await closeBtn.isVisible().catch(() => false)) {
-    await closeBtn.click({ force: true })
-  } else {
-    await page.keyboard.press("Escape")
-  }
-
-  await expect(overlay).toBeHidden({ timeout: 5000 })
-}
-
-
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
   await page.waitForTimeout(2000)
@@ -36,7 +21,6 @@ test.describe("CRM Leads CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/crm/leads/tambah", { waitUntil: "domcontentloaded" })
-    await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading", { name: "Tambah Prospek" })).toBeVisible({ timeout: 30000 })
     await waitForHydration(page)
 
@@ -49,7 +33,6 @@ test.describe("CRM Leads CRUD", () => {
     await page.locator("button[type='submit']").click()
     await page.waitForURL("**/crm/leads", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
     // ─── DETAIL ───────────────────────────────────────────────
@@ -61,7 +44,6 @@ test.describe("CRM Leads CRUD", () => {
     await page.goto(href, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
     await expect(page.locator("body")).toContainText(email)
 
@@ -69,7 +51,6 @@ test.describe("CRM Leads CRUD", () => {
     // Go back to list, open edit from dropdown
     await page.goto("/crm/leads", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
 
     const row = page.getByRole("row", { name: new RegExp(name) }).first()
     await expect(row).toBeVisible({ timeout: 30000 })
@@ -77,13 +58,11 @@ test.describe("CRM Leads CRUD", () => {
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/crm\/leads\/[^/]+\/ubah$/, { timeout: 30000 })
-    await closeMobileSidebarIfOpen(page)
     await waitForHydration(page)
     await page.locator("#name").fill(updated)
     await page.locator("button[type='submit']").click()
     await page.waitForURL("**/crm/leads", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE via detail page ──────────────────────────────
@@ -96,7 +75,6 @@ test.describe("CRM Leads CRUD", () => {
     await page.goto(updatedHref, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
 
     // Hapus via tombol dengan aria-label (komponen DeleteButton)
     const triggerHapus = page.locator("button[aria-label='Hapus'], button:has-text('Hapus')").last()
@@ -117,7 +95,6 @@ test.describe("CRM Leads CRUD", () => {
     await page.goto("/crm/leads", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).not.toContainText(email, { timeout: 30000 })
   })
 })

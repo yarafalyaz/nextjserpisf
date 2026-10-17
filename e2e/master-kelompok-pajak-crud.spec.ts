@@ -2,21 +2,6 @@ import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 
-async function closeMobileSidebarIfOpen(page: Page) {
-  const overlay = page.locator(".sidebar-overlay")
-  if (!(await overlay.isVisible().catch(() => false))) return
-
-  const closeBtn = page.locator(".sidebar-close-btn")
-  if (await closeBtn.isVisible().catch(() => false)) {
-    await closeBtn.click({ force: true })
-  } else {
-    await page.keyboard.press("Escape")
-  }
-
-  await expect(overlay).toBeHidden()
-}
-
-
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
   await page.waitForTimeout(2000)
@@ -36,7 +21,6 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await page.goto("/master/kelompok-pajak/tambah", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading", { name: "Tambah Grup Pajak" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)
@@ -45,7 +29,6 @@ test.describe("Master Kelompok Pajak CRUD", () => {
 
     await page.waitForURL("**/master/kelompok-pajak", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
 
     // Search dulu supaya item baru pasti muncul
     await page.locator("input[placeholder*='Cari nama grup pajak']").fill(name)

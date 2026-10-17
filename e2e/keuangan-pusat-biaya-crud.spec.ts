@@ -2,21 +2,6 @@ import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 
-async function closeMobileSidebarIfOpen(page: Page) {
-  const overlay = page.locator(".sidebar-overlay")
-  if (!(await overlay.isVisible().catch(() => false))) return
-
-  const closeBtn = page.locator(".sidebar-close-btn")
-  if (await closeBtn.isVisible().catch(() => false)) {
-    await closeBtn.click({ force: true })
-  } else {
-    await page.keyboard.press("Escape")
-  }
-
-  await expect(overlay).toBeHidden()
-}
-
-
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
   await page.waitForTimeout(2000)
@@ -36,7 +21,6 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/keuangan/pusat-biaya/tambah", { waitUntil: "domcontentloaded" })
-    await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading", { name: "Buat Pusat Biaya" })).toBeVisible({ timeout: 30000 })
 
     await waitForHydration(page)
@@ -50,7 +34,6 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
 
     await page.waitForURL("**/keuangan/pusat-biaya", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
     await expect(page.locator("body")).toContainText(code)
 
@@ -64,13 +47,11 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     if (!detailHref) throw new Error("Could not get detail href")
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })
 
-    await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.goto("/keuangan/pusat-biaya", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
 
     // Filter dulu agar item baru pasti muncul
     await page.locator("input[placeholder*='Cari kode atau nama']").fill(name)
@@ -84,14 +65,12 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
     await page.getByRole("menuitem", { name: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/keuangan\/pusat-biaya\/[^/]+\/ubah$/, { timeout: 30000 })
-    await closeMobileSidebarIfOpen(page)
 
     await page.locator("#name").fill(updated)
     await page.getByRole("button", { name: /Update|Perbarui/ }).click()
 
     await page.waitForURL("**/keuangan/pusat-biaya", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
     await page.locator("input[placeholder*='Cari kode atau nama']").fill(code)
     await page.waitForTimeout(400)
 
@@ -100,7 +79,6 @@ test.describe("Keuangan Pusat Biaya (Cost Center) CRUD", () => {
       waitUntil: "domcontentloaded",
     })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
 
     const updatedRow = page.locator("tr").filter({ hasText: new RegExp(code) }).first()
     await expect(updatedRow).toBeVisible({ timeout: 30000 })

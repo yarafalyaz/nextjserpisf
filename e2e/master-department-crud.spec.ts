@@ -2,21 +2,6 @@ import { test, expect, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 
 
-async function closeMobileSidebarIfOpen(page: Page) {
-  const overlay = page.locator(".sidebar-overlay")
-  if (!(await overlay.isVisible().catch(() => false))) return
-
-  const closeBtn = page.locator(".sidebar-close-btn")
-  if (await closeBtn.isVisible().catch(() => false)) {
-    await closeBtn.click({ force: true })
-  } else {
-    await page.keyboard.press("Escape")
-  }
-
-  await expect(overlay).toBeHidden({ timeout: 5000 })
-}
-
-
 async function waitForHydration(page: Page) {
   await page.waitForLoadState("networkidle")
   await page.waitForTimeout(2000)
@@ -37,7 +22,6 @@ test.describe("Master Departemen CRUD", () => {
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/departemen/tambah", { waitUntil: "domcontentloaded" })
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading", { name: "Tambah Departemen" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)
@@ -47,7 +31,6 @@ test.describe("Master Departemen CRUD", () => {
 
     await page.waitForURL("**/master/departemen", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
     await page.goto(`/master/departemen?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
@@ -63,13 +46,11 @@ test.describe("Master Departemen CRUD", () => {
     await page.goto(detailHref, { waitUntil: "domcontentloaded" })
 
     await waitForHydration(page)
-    await closeMobileSidebarIfOpen(page)
     await expect(page.locator("body")).toContainText(name)
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.goto(`/master/departemen?cari=${encodeURIComponent(name)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
 
     const rowForEdit = page.locator("tr").filter({ hasText: name }).first()
     await expect(rowForEdit).toBeVisible({ timeout: 30000 })
@@ -78,14 +59,12 @@ test.describe("Master Departemen CRUD", () => {
     await page.locator("[role='menuitem']").filter({ hasText: /Edit|Ubah/ }).first().click()
 
     await page.waitForURL(/\/master\/departemen\/[^/]+\/ubah$/, { timeout: 30000 })
-    await closeMobileSidebarIfOpen(page)
     await waitForHydration(page)
     await page.locator("#name").fill(updated)
     await page.locator("button[type='submit']").click()
 
     await page.waitForURL("**/master/departemen", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
-    await closeMobileSidebarIfOpen(page)
     await page.goto(`/master/departemen?cari=${encodeURIComponent(updated)}`, { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(updated)

@@ -7,20 +7,6 @@ async function waitForHydration(page: Page) {
   await page.waitForTimeout(2000)
 }
 
-async function closeMobileSidebarIfOpen(page: Page) {
-  const overlay = page.locator(".sidebar-overlay")
-  if (!(await overlay.isVisible().catch(() => false))) return
-
-  const closeBtn = page.locator(".sidebar-close-btn")
-  if (await closeBtn.isVisible().catch(() => false)) {
-    await closeBtn.click({ force: true })
-  } else {
-    await page.keyboard.press("Escape")
-  }
-
-  await expect(overlay).toBeHidden({ timeout: 10000 })
-}
-
 async function selectOptionBySearch(page: Page, placeholder: string, query: string, optionPattern: RegExp) {
   const search = await openCombobox(page, { placeholder })
   await search.fill(query)
@@ -53,7 +39,6 @@ test.describe("Inventaris Baris Rak CRUD", () => {
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/inventaris/baris-rak/tambah", { waitUntil: "domcontentloaded" })
-    await closeMobileSidebarIfOpen(page)
     await expect(page.getByRole("heading", { name: "Tambah Baris Rak" })).toBeVisible({ timeout: 30000 })
     await waitForHydration(page)
 
@@ -91,7 +76,6 @@ test.describe("Inventaris Baris Rak CRUD", () => {
 
     // ─── UPDATE ───────────────────────────────────────────────
     await page.goto(`/inventaris/baris-rak/${key}/ubah`, { waitUntil: "domcontentloaded" })
-    await closeMobileSidebarIfOpen(page)
 
     await page.locator("#name").first().fill(updated)
     await submitAndWaitForListPage(page, /^Update$|^Perbarui$/)
@@ -101,7 +85,6 @@ test.describe("Inventaris Baris Rak CRUD", () => {
     await expect(page.locator("body")).toContainText(updated)
 
     // ─── DELETE ───────────────────────────────────────────────
-    await closeMobileSidebarIfOpen(page)
     // Re-derive the row's link from the DOM by its (updated) name — the slug
     // may have changed when the row was edited, so a captured key is stale.
     const updatedRow = page.locator("tr").filter({ hasText: updated }).first()
