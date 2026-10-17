@@ -20,6 +20,7 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { initializeProjectStages } from "@/actions/project.actions"
 import { ProjectStages } from "../_components/project-stages"
+import { ProjectLogForm } from "./_components/project-log-form"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
@@ -418,6 +419,7 @@ export default async function ProjectDetailPage({
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Log Aktivitas</h2>
                 </div>
+                <ProjectLogForm projectId={project.id} />
                 <div className="p-4 px-5">
                   {project.logs.length === 0 ? (
                     <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada log</p>

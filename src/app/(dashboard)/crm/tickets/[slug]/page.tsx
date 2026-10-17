@@ -8,6 +8,7 @@ import Link from "next/link";
 import { StatusChip } from "@/components/ui/status-chip";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteTicket } from "@/actions/crm.actions";
+import { TicketCommentForm } from "./_components/ticket-comment-form";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
@@ -162,6 +163,7 @@ export default async function CrmTicketDetailPage({
             Komentar
           </h2>
         </div>
+        <TicketCommentForm ticketId={ticket.id} />
         <div className="p-4 px-5">
           {ticket.comments.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
@@ -183,7 +185,16 @@ export default async function CrmTicketDetailPage({
                           `User #${comment.userId}`)
                         : "-"}
                     </DetailTableTd>
-                    <DetailTableTd>{comment.body}</DetailTableTd>
+                    <DetailTableTd>
+                      {/* Tanda catatan internal: kolom `isInternal` kini benar-benar
+                          dipakai, bukan hanya tersimpan tanpa terlihat. */}
+                      {comment.isInternal && (
+                        <span className="mr-2 inline-block align-middle text-[0.6875rem] font-medium px-2 py-0.5 rounded-full border border-default text-muted-foreground">
+                          Internal
+                        </span>
+                      )}
+                      {comment.body}
+                    </DetailTableTd>
                     <DetailTableTd>
                       {formatDate(comment.createdAt)}
                     </DetailTableTd>

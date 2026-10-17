@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
 
   const prismaMock: any = {
     project: buildModelMock(),
+    projectLog: buildModelMock(),
     projectStage: buildModelMock(),
     projectStageProgress: buildModelMock(),
     task: buildModelMock(),
@@ -869,5 +870,72 @@ describe("Task status ?? pending coverage", () => {
         data: expect.objectContaining({ status: "pending" }),
       })
     )
+  })
+})
+
+/**
+ * Log aktivitas proyek — satu-satunya jalur tulis `project_logs`.
+ *
+ * Sebelum aksi ini ada, tab "Log" di halaman proyek merender 10 log terakhir
+ * beserta keadaan kosongnya, tetapi tidak ada yang bisa menuliskannya.
+ */
+describe("addProjectLog", () => {
+  it("menulis log dengan penulis dari SESI, bukan dari form", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValueOnce({ id: 4 })
+    mocks.prismaMock.projectLog.create.mockResolvedValueOnce({ id: 21 })
+
+    const res = await actions.addProjectLog(
+      4,
+      // `userId` di form adalah upaya menulis atas nama orang lain — aksi harus
+      // memakai id pengguna sesi (1 pada mock ini).
+      fdMap({ action: "Progres", notes: "Pondasi selesai", userId: "999" }),
+    )
+
+    expect(res).toEqual({ success: true, id: 21 })
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_projects")
+    const arg = mocks.prismaMock.projectLog.create.mock.calls[0][0]
+    expect(arg.data.userId).toBe(1)
+    expect(arg.data.projectId).toBe(4)
+    expect(arg.data.action).toBe("Progres")
+    expect(arg.data.notes).toBe("Pondasi selesai")
+  })
+
+  it("mengizinkan log tanpa catatan", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValueOnce({ id: 4 })
+    mocks.prismaMock.projectLog.create.mockResolvedValueOnce({ id: 22 })
+
+    await actions.addProjectLog(4, fdMap({ action: "Kunjungan" }))
+
+    const arg = mocks.prismaMock.projectLog.create.mock.calls[0][0]
+    expect(arg.data.notes).toBeNull()
+  })
+
+  it("menolak log tanpa jenis aksi, tanpa menyentuh basis data", async () => {
+    const res = await actions.addProjectLog(4, fdMap({ notes: "tanpa aksi" }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Jenis aksi wajib dipilih")
+    expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak proyek yang tidak ada dengan pesan yang terbaca", async () => {
+    // findUnique default mock mengembalikan null.
+    const res = await actions.addProjectLog(404, fdMap({ action: "Catatan" }))
+    expect(res).toEqual({ success: false, error: "Proyek tidak ditemukan" })
+    expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
+  })
+
+  it("mencatat jejak audit dan menyegarkan daftar proyek", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValueOnce({ id: 4 })
+    mocks.prismaMock.projectLog.create.mockResolvedValueOnce({ id: 23 })
+
+    await actions.addProjectLog(4, fdMap({ action: "Kendala" }))
+
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "create",
+      "ProjectLog",
+      23,
+      expect.stringContaining("#4"),
+    )
+    expect(mocks.revalidateMock).toHaveBeenCalledWith("/proyek")
   })
 })

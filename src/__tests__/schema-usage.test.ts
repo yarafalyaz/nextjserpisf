@@ -75,7 +75,6 @@ const SEED_ONLY_COLUMNS: string[] = [
   "Attendance.overtimeMinutes",
   "CrmTicket.firstResponseAt",
   "CrmTicket.resolvedAt",
-  "CrmTicketComment.isInternal",
 ].sort()
 
 /**
@@ -120,11 +119,9 @@ const SEED_ONLY_MODELS: string[] = [
   // rekening koran belum ada (kolom `BankStatement.totalCredits/totalDebits` dan
   // `BankStatementLine.matchedType` juga mati).
   "BankStatementLine",
-  // CRM: komentar tiket DIBACA (`include: { comments: ... }`) tetapi tidak ada aksi
-  // yang menambahkannya — daftar komentar yang tidak bisa diisi.
-  "CrmTicketComment",
-  // Proyek: halaman proyek membaca 10 log terakhir, tetapi tidak ada yang menulisnya.
-  "ProjectLog",
+  // CRM: komentar tiket dibaca lewat nested read — ditutup bersama aksinya
+  // (`addTicketComment` + form di detail tiket), lihat catatan di bawah.
+  // Proyek: log proyek ditutup bersama aksinya (`addProjectLog` + form di tab Log).
   // Laporan pusat laba membaca master ini, tetapi master tidak bisa dibuat dari
   // aplikasi; ditambah `JournalEntry.profitCenterId` yang tidak pernah diisi,
   // seluruh laporan selalu menumpuk di "Tanpa Pusat Laba".

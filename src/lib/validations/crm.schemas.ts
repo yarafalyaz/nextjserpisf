@@ -102,3 +102,24 @@ export const leadActivitySchema = z.object({
   description: optionalString(2000),
   scheduledAt: z.coerce.date().optional(),
 });
+
+/**
+ * Komentar pada tiket CRM.
+ *
+ * Penulis komentar TIDAK diambil dari form: `userId` diisi dari sesi di aksinya,
+ * supaya komentar tidak bisa ditulis atas nama orang lain.
+ */
+export const ticketCommentSchema = z.object({
+  // `parseFormData` mengubah string kosong/spasi menjadi `undefined`, jadi pesan
+  // "wajib diisi" harus dipasang di tingkat tipe string — bukan hanya di `.min(1)`
+  // yang tidak pernah tersentuh untuk masukan kosong.
+  body: z
+    .string({ error: "Komentar wajib diisi" })
+    .trim()
+    .min(1, "Komentar wajib diisi")
+    .max(5000, "Komentar terlalu panjang (maksimal 5000 karakter)"),
+  isInternal: z
+    .union([z.boolean(), z.literal("true"), z.literal("false"), z.literal("on")])
+    .optional()
+    .transform((v) => v === true || v === "true" || v === "on"),
+});

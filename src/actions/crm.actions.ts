@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { createTicketSchema, updateTicketSchema, leadActivitySchema, CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
+import { createTicketSchema, updateTicketSchema, leadActivitySchema, ticketCommentSchema, CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
 import { nextSlug } from "@/lib/utils/slug-db"
 
 // Soft-delete helper, mirrors the convention in master.actions.ts: try hard
@@ -261,6 +261,56 @@ export async function convertLead(leadId: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[convertLead]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * Menambahkan komentar pada tiket CRM.
+ *
+ * Sebelum ini tabel `crm_ticket_comments` TIDAK punya jalur tulis sama sekali:
+ * halaman detail tiket merender `include: { comments: … }` beserta keadaan
+ * kosongnya, tetapi tidak ada aksi yang bisa menambahkannya — sebuah daftar yang
+ * tidak bisa diisi.
+ */
+export async function addTicketComment(ticketId: number, formData: FormData) {
+  try {
+    const user = await requirePermission("edit_tickets")
+
+    const parsed = parseFormData(ticketCommentSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
+
+    // Tiket harus ada dan belum dihapus. Tanpa pemeriksaan ini, id yang salah
+    // berakhir sebagai galat kunci asing Prisma yang tidak terbaca pemakai.
+    const ticket = await prisma.crmTicket.findFirst({
+      where: { id: ticketId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!ticket) return { success: false, error: "Tiket tidak ditemukan" }
+
+    const comment = await prisma.crmTicketComment.create({
+      data: {
+        ticketId,
+        // Penulis dari SESI, bukan dari form: kalau id penulis datang dari form,
+        // komentar bisa ditulis atas nama orang lain.
+        userId: Number(user.id),
+        body: v.body,
+        isInternal: v.isInternal,
+      },
+    })
+
+    revalidatePath("/crm/tickets")
+    await logActivity(
+      "create",
+      "CrmTicketComment",
+      comment.id,
+      `Menambahkan komentar pada tiket #${ticketId}`,
+    )
+    return { success: true, id: comment.id }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[addTicketComment]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

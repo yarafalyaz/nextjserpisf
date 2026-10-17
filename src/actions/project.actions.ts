@@ -16,6 +16,7 @@ import {
   updateProjectSchema,
   createTaskSchema,
   updateTaskSchema,
+  projectLogSchema,
 } from "@/lib/validations/project.schemas"
 
 // ==================== PROJECT ACTIONS ====================
@@ -676,6 +677,52 @@ export async function deleteTask(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[deleteTask]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * Menambahkan entri log aktivitas pada proyek.
+ *
+ * Sebelum ini tabel `project_logs` tidak punya jalur tulis sama sekali: tab "Log"
+ * di halaman proyek merender 10 log terakhir beserta keadaan kosongnya, tetapi
+ * tidak ada yang bisa menuliskannya — log proyek selalu kosong.
+ *
+ * Penulis (`userId`) diambil dari SESI, bukan dari form: kalau datang dari form,
+ * entri log bisa dibuat atas nama orang lain, dan seluruh gunanya sebagai jejak
+ * aktivitas proyek hilang.
+ */
+export async function addProjectLog(projectId: number, formData: FormData) {
+  try {
+    const user = await requirePermission("edit_projects")
+
+    const parsed = parseFormData(projectLogSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
+
+    // Proyek harus ada. Tanpa pemeriksaan ini, id yang salah berakhir sebagai
+    // galat kunci asing Prisma yang tidak terbaca pemakai.
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { id: true },
+    })
+    if (!project) return { success: false, error: "Proyek tidak ditemukan" }
+
+    const log = await prisma.projectLog.create({
+      data: {
+        projectId,
+        action: v.action,
+        notes: v.notes ?? null,
+        userId: Number(user.id),
+      },
+    })
+
+    revalidatePath("/proyek")
+    await logActivity("create", "ProjectLog", log.id, `Menambahkan log proyek #${projectId}`)
+    return { success: true, id: log.id }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[addProjectLog]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

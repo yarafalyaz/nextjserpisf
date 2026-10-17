@@ -17,6 +17,24 @@ const optionalDate = z.string().optional()
 
 // ==================== Project ====================
 
+/**
+ * Entri log aktivitas proyek.
+ *
+ * Sebelum ini tabel `project_logs` tidak punya jalur tulis sama sekali: tab "Log"
+ * di halaman proyek merender 10 log terakhir beserta keadaan kosongnya, tetapi
+ * tidak ada yang bisa menuliskannya — log selalu kosong.
+ *
+ * `userId` (penulis) TIDAK diambil dari form: aksinya mengisinya dari sesi.
+ */
+export const projectLogSchema = z.object({
+  action: z
+    .string({ error: "Jenis aksi wajib dipilih" })
+    .trim()
+    .min(1, "Jenis aksi wajib dipilih")
+    .max(100),
+  notes: optionalStr(2000),
+})
+
 export const createProjectSchema = z.object({
   name: requiredStr("Nama proyek wajib diisi"),
   description: optionalStr(1000),

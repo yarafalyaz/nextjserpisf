@@ -109,7 +109,7 @@ seksinya), `UomConversion.factorToBase` (`createMany({ data: … })` dari JSON f
 `Employee.dateOfBirth` (ditulis di `master.actions.ts`), dan
 `VendorBillItem.discountAmount` (ditulis di dalam `.map()` di luar blok `data:`).
 
-## 4d. Model yang dibaca produk tetapi tidak punya jalur tulis (11 model)
+## 4d. Model yang dibaca produk tetapi tidak punya jalur tulis (11 model → 8)
 
 Kelas yang lebih besar dari §4b: bukan sekadar kolom, melainkan **seluruh modelnya
 tidak bisa diisi dari aplikasi**. Terdeteksi lewat pemeriksaan baru di penjaga
@@ -122,14 +122,19 @@ tulis: delegate Prisma langsung, raw SQL, dan nested write dari model induk.
 | `Holiday`, `DepartmentHoliday`, `WorkSchedule` | perhitungan hari kerja / cuti | hari libur & jadwal kerja tidak bisa didefinisikan dari aplikasi |
 | `AssetBrandModel`, `AssetGroup` | halaman aset | master merek-tipe & kelompok aset tidak bisa dibuat |
 | `BankStatementLine` | halaman rekonsiliasi bank | baris rekening koran hanya dari seed (impor belum ada) |
-| `CrmTicketComment` | `include: { comments: … }` di detail tiket | daftar komentar yang **tidak bisa diisi** dari UI |
-| `ProjectLog` | 10 log terakhir di halaman proyek | log proyek selalu kosong |
 | `ProfitCenter` | laporan pusat laba | master pusat laba tidak bisa dibuat; digabung `JournalEntry.profitCenterId` yang tidak pernah diisi, laporan selalu menumpuk di "Tanpa Pusat Laba" |
-| `UserWarehouse` | `getWarehouseScope` (pembatasan gudang per pengguna) | **fail-closed**, bukan lubang: cakupan kosong → `{ kind: "none" }`, jadi peran `warehouse` yang sudah di-seed selalu ditolak dan tidak bisa diberi akses gudang mana pun |
 
-Semuanya keputusan produk: bangun jalur tulisnya (halaman + aksi) atau buang
-modelnya lewat migrasi. Yang **tidak** masuk daftar ini sudah diverifikasi punya
-jalur tulis meski tidak terlihat dari delegate — mis. `ActivityLog` ditulis
+### Sudah ditutup
+
+| Model | Perbaikan |
+| --- | --- |
+| `UserWarehouse` | `updateUserWarehouses` + panel "Akses Gudang" di detail pengguna. Ini menyangkut pembatasan akses, jadi `getWarehouseScope` tetap **fail-closed** (`{ kind: "none" }` bila kosong) — pemberian aksesnya kini lewat izin `manage_users`, id gudang divalidasi ada, dan perubahan dicatat di jejak audit |
+| `CrmTicketComment` | `addTicketComment` + form di kartu Komentar. Kolom `isInternal` kini benar-benar dipakai (kotak "Catatan internal" — sebelumnya hanya tersimpan tanpa terlihat). Penulis komentar diisi dari SESI, bukan dari form |
+| `ProjectLog` | `addProjectLog` + form "Tambah Log" di tab Log. Penulis dari SESI, bukan dari form |
+
+Semuanya keputusan produk untuk yang tersisa: bangun jalur tulisnya (halaman + aksi)
+atau buang modelnya lewat migrasi. Yang **tidak** masuk daftar ini sudah diverifikasi
+punya jalur tulis meski tidak terlihat dari delegate — mis. `ActivityLog` ditulis
 `INSERT INTO activity_logs` (raw SQL) dan `SalesReturnItem`/`PurchaseOrderItem`
 ditulis lewat nested create.
 

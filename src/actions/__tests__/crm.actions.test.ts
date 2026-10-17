@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
 
   const prismaMock: any = {
     crmTicket: buildModelMock(),
+    crmTicketComment: buildModelMock(),
     lead: buildModelMock(),
     leadActivity: buildModelMock(),
     customer: buildModelMock(),
@@ -178,5 +179,83 @@ describe("CRM Actions - Next redirect errors are re-thrown", () => {
     const res = await actions.convertLead(1)
 
     expect(res.success).toBe(true)
+  })
+})
+
+/**
+ * Komentar tiket CRM — satu-satunya jalur tulis `crm_ticket_comments`.
+ *
+ * Sebelum aksi ini ada, halaman detail tiket merender daftar komentar beserta
+ * keadaan kosongnya, tetapi tidak ada cara menambahkan komentar sama sekali.
+ */
+describe("addTicketComment", () => {
+  it("menulis komentar dengan penulis dari SESI, bukan dari form", async () => {
+    mocks.prismaMock.crmTicket.findFirst.mockResolvedValueOnce({ id: 7 })
+    mocks.prismaMock.crmTicketComment.create.mockResolvedValueOnce({ id: 55 })
+
+    const res = await actions.addTicketComment(
+      7,
+      // `userId` di form adalah upaya menulis atas nama orang lain — aksi harus
+      // mengabaikannya dan memakai id pengguna sesi (1 pada mock ini).
+      fdMap({ body: "Tindak lanjut via telepon", userId: "999" }),
+    )
+
+    expect(res).toEqual({ success: true, id: 55 })
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_tickets")
+    const arg = mocks.prismaMock.crmTicketComment.create.mock.calls[0][0]
+    expect(arg.data.userId).toBe(1)
+    expect(arg.data.ticketId).toBe(7)
+    expect(arg.data.body).toBe("Tindak lanjut via telepon")
+    expect(arg.data.isInternal).toBe(false)
+  })
+
+  it("menandai catatan internal bila kotaknya dicentang", async () => {
+    mocks.prismaMock.crmTicket.findFirst.mockResolvedValueOnce({ id: 7 })
+    mocks.prismaMock.crmTicketComment.create.mockResolvedValueOnce({ id: 56 })
+
+    await actions.addTicketComment(7, fdMap({ body: "Catatan untuk tim", isInternal: "on" }))
+
+    const arg = mocks.prismaMock.crmTicketComment.create.mock.calls[0][0]
+    expect(arg.data.isInternal).toBe(true)
+  })
+
+  it("menolak komentar kosong tanpa menyentuh basis data", async () => {
+    for (const body of ["   ", ""]) {
+      const res = await actions.addTicketComment(7, fdMap({ body }))
+      expect(res.success).toBe(false)
+      expect(res.error).toContain("Komentar wajib diisi")
+    }
+    expect(mocks.prismaMock.crmTicket.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.crmTicketComment.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak tiket yang tidak ada dengan pesan yang terbaca", async () => {
+    // findFirst default pada mock mengembalikan null (tiket tidak ada/dihapus).
+    const res = await actions.addTicketComment(404, fdMap({ body: "Halo" }))
+    expect(res).toEqual({ success: false, error: "Tiket tidak ditemukan" })
+    expect(mocks.prismaMock.crmTicketComment.create).not.toHaveBeenCalled()
+  })
+
+  it("mencatat jejak audit dan menyegarkan daftar tiket", async () => {
+    mocks.prismaMock.crmTicket.findFirst.mockResolvedValueOnce({ id: 7 })
+    mocks.prismaMock.crmTicketComment.create.mockResolvedValueOnce({ id: 57 })
+
+    await actions.addTicketComment(7, fdMap({ body: "Selesai" }))
+
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "create",
+      "CrmTicketComment",
+      57,
+      expect.stringContaining("#7"),
+    )
+    expect(mocks.revalidateMock).toHaveBeenCalledWith("/crm/tickets")
+  })
+
+  it("memetakan galat basis data menjadi pesan umum", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.crmTicket.findFirst.mockResolvedValueOnce({ id: 7 })
+    mocks.prismaMock.crmTicketComment.create.mockRejectedValueOnce(new Error("db err"))
+    const res = await actions.addTicketComment(7, fdMap({ body: "Halo" }))
+    expect(res).toEqual({ success: false, error: "db err" })
   })
 })
