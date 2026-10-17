@@ -88,7 +88,11 @@ test.describe("Finance — Journal & Reports", () => {
     // --- Row 0: debit account ---
     const combo0 = rows.nth(0).getByRole("combobox")
     await combo0.click()
-    const options0 = page.getByRole("option")
+    // DIBATASI ke listbox yang terbuka: `<option>` pada <select> native juga ber-role
+    // "option", jadi `page.getByRole("option")` global ikut menangkap pilihan
+    // "Pusat Laba" di header form (muncul lebih dulu di DOM, dan tidak terlihat) —
+    // itu membuat tes ini merah padahal alur jurnalnya sendiri sehat.
+    const options0 = page.getByRole("listbox").getByRole("option")
     await expect(options0.first()).toBeVisible({ timeout: 10000 })
     await options0.first().click()
     // Input debit = textbox pertama di baris ini (akun memakai role combobox).
@@ -97,7 +101,7 @@ test.describe("Finance — Journal & Reports", () => {
     // --- Row 1: credit account (pick a different option) ---
     const combo1 = rows.nth(1).getByRole("combobox")
     await combo1.click()
-    const options1 = page.getByRole("option")
+    const options1 = page.getByRole("listbox").getByRole("option")
     await expect(options1.first()).toBeVisible({ timeout: 10000 })
     // second option so debit/credit hit distinct accounts when available
     const optCount = await options1.count()
@@ -133,7 +137,7 @@ test.describe("Finance — Journal & Reports", () => {
     const accountPicker = page.locator("#filter-akun")
     await expect(accountPicker).toBeVisible()
     await accountPicker.click()
-    const options = page.getByRole("option")
+    const options = page.getByRole("listbox").getByRole("option")
     await expect(options.first()).toBeVisible({ timeout: 10000 })
     await options.first().click()
 
