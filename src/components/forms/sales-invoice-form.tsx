@@ -32,9 +32,13 @@ interface SalesInvoiceFormProps {
 }[]
   invoice?: { id: number; customerId: number; salesOrderId?: number | null; date: string; dueDate?: string | null; notes?: string | null; items?: Array<{ itemId: number; qty: number; unitPrice: number; discount?: number }> }
   salesOrders: { id: number; documentNo: string }[]
+  /** Sumber dari tautan "buat dari" (mis. dari Perintah Kerja/penawaran lewat
+   *  pesanan penjualannya) supaya faktur baru sudah tertaut ke pesanan itu. */
+  defaultSalesOrderId?: number
+  defaultCustomerId?: number
 }
 
-export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoiceFormProps) {
+export function SalesInvoiceForm({ customers, salesOrders, invoice, defaultSalesOrderId, defaultCustomerId }: SalesInvoiceFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [customerOptions, setCustomerOptions] = useState(customers)
@@ -42,8 +46,8 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice }: SalesInvoi
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesInvoiceInput>({
     resolver: zodResolver(salesInvoiceSchema),
     defaultValues: {
-      customerId: invoice?.customerId,
-      salesOrderId: invoice?.salesOrderId ?? undefined,
+      customerId: invoice?.customerId ?? defaultCustomerId,
+      salesOrderId: invoice?.salesOrderId ?? defaultSalesOrderId ?? undefined,
       date: invoice?.date ?? toLocalDateOnly(new Date()),
       dueDate: invoice?.dueDate ?? "",
       notes: invoice?.notes ?? "",

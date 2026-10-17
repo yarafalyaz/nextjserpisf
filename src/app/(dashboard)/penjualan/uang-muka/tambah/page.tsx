@@ -19,9 +19,20 @@ export default async function CreateDownPaymentPage({
   await requirePermission("edit_sales_orders");
 
   const params = await searchParams;
-  const quotationId = params.quotationId
+  let quotationId = params.quotationId
     ? Number(params.quotationId)
     : undefined;
+
+  // Tautan dari detail Pesanan Penjualan mengirim ?salesOrderId=. Uang muka
+  // tertaut ke PENAWARAN, jadi pesanan itu diterjemahkan ke penawarannya.
+  // Sebelumnya parameter ini ada di tipe tapi diabaikan — tautan mati.
+  if (!quotationId && params.salesOrderId) {
+    const so = await prisma.salesOrder.findUnique({
+      where: { id: Number(params.salesOrderId) },
+      select: { quotationId: true },
+    });
+    if (so?.quotationId) quotationId = so.quotationId;
+  }
 
   const [customersList, quotationsList, paymentMethods] = await Promise.all([
     prisma.customer.findMany({

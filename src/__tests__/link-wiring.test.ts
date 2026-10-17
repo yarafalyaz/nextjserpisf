@@ -94,11 +94,11 @@ function parameterizedLinks(): Array<{ from: string; line: number; base: string;
 // Hanya berisi pelanggaran yang BELUM diperbaiki. Entri di sini wajib dibuang
 // begitu perbaikannya mendarat — kalau tidak, tes "tidak membusuk" memerahkan.
 const LINKS_PENDING: Record<string, string> = {
-  // `?fakturPenjualanId=` (faktur → surat jalan) sudah dibaca
-  // `penjualan/surat-jalan/tambah/page.tsx`; entrinya dibuang bersama perbaikan
-  // itu. Tersisa satu tautan mati di bawah.
-  "/penjualan/faktur/tambah|quotationId":
-    "produksi/perintah-kerja/[slug].tsx:166 mengirim ?quotationId= tetapi faktur/tambah belum membacanya — sedang dikerjakan (satu paket dengan jalur Surat Jalan dari Faktur)",
+  // Dua tautan yang dulu tercatat di sini sudah ditutup: `?fakturPenjualanId=`
+  // (faktur → surat jalan) kini dibaca surat-jalan/tambah, dan `?quotationId=`
+  // (perintah kerja → faktur) kini dibaca faktur/tambah dengan menerjemahkan
+  // penawaran ke pesanan penjualannya. Daftar kosong = tidak ada tautan
+  // "buat dari" yang mati.
 }
 
 // Entri daftar-beku untuk pemeriksaan mode server.
