@@ -156,6 +156,39 @@ describe("Journal Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+
+  /**
+   * Pusat laba pada jurnal: masternya ada, tetapi tanpa penulisan per entri laporan
+   * pusat laba selalu menumpuk di "Tanpa Pusat Laba".
+   */
+  it("createJournal menulis pusat laba ke SETIAP entri", async () => {
+    const res = await (actions as any).createJournal(fdMap({
+      transactionDate: "2026-06-13",
+      entries: JSON.stringify([
+        { accountId: 1, debit: 1000, credit: 0, profitCenterId: 9 },
+        { accountId: 2, debit: 0, credit: 1000, profitCenterId: 9 },
+      ]),
+    }))
+    expect(res?.success).toBe(true)
+
+    const calls = mocks.prismaMock.journalEntry.createMany.mock.calls
+    const data = calls[calls.length - 1][0].data
+    expect(data.map((entry: { profitCenterId: number }) => entry.profitCenterId)).toEqual([9, 9])
+  })
+
+  it("createJournal menulis null bila pusat laba tidak dipilih", async () => {
+    await (actions as any).createJournal(fdMap({
+      transactionDate: "2026-06-13",
+      entries: JSON.stringify([
+        { accountId: 1, debit: 1000, credit: 0 },
+        { accountId: 2, debit: 0, credit: 1000 },
+      ]),
+    }))
+
+    const calls = mocks.prismaMock.journalEntry.createMany.mock.calls
+    const data = calls[calls.length - 1][0].data
+    expect(data.map((entry: { profitCenterId: number | null }) => entry.profitCenterId)).toEqual([null, null])
+  })
   it("updateJournal succeeds", async () => {
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", entries: [{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }] })
     const res = await (actions as any).updateJournal(1, fdMap({

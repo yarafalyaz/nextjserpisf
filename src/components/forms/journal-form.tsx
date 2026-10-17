@@ -15,14 +15,15 @@ import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 interface JournalFormProps {
-  accounts: { id: number; code: string; name: string
-}[]
-  journal?: { id: number; date: string; description?: string | null; type?: string | null; entries?: Array<{ accountId: number; debit: number; credit: number; memo?: string }> }
+  accounts: { id: number; code: string; name: string }[]
+  /** Master pusat laba; dipakai untuk mengisi entri jurnal (opsional). */
+  profitCenters?: { id: number; code: string; name: string }[]
+  journal?: { id: number; date: string; description?: string | null; type?: string | null; entries?: Array<{ accountId: number; debit: number; credit: number; memo?: string; profitCenterId?: number | null }> }
 }
 
-interface JournalEntry { accountId: number; debit: number; credit: number; memo: string }
+interface JournalEntry { accountId: number; debit: number; credit: number; memo: string; profitCenterId?: number }
 
-export function JournalForm({ accounts, journal }: JournalFormProps) {
+export function JournalForm({ accounts, profitCenters = [], journal }: JournalFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [entries, setEntries] = useState<JournalEntry[]>(
@@ -41,6 +42,11 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
   const [description, setDescription] = useState(journal?.description ?? "")
   const [date, setDate] = useState(journal?.date ?? toLocalDateOnly(new Date()))
   const [accountOptions, setAccountOptions] = useState(accounts)
+  // Pusat laba dipilih sekali per jurnal dan ditulis ke SETIAP entri. Tanpa ini
+  // laporan pusat laba selalu menumpuk di "Tanpa Pusat Laba" walau masternya ada.
+  const [profitCenterId, setProfitCenterId] = useState<string>(
+    journal?.entries?.find((entry) => entry.profitCenterId)?.profitCenterId?.toString() ?? "",
+  )
 
   function addEntry() { setEntries([...entries, { accountId: 0, debit: 0, credit: 0, memo: "" }]) }
   function removeEntry(i: number) { setEntries(entries.filter((_, idx) => idx !== i)) }
@@ -60,7 +66,15 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
         const formData = new FormData()
         formData.append("description", description)
         formData.append("transactionDate", date)
-        formData.append("entries", JSON.stringify(entries))
+        formData.append(
+          "entries",
+          JSON.stringify(
+            entries.map((entry) => ({
+              ...entry,
+              profitCenterId: profitCenterId ? Number(profitCenterId) : undefined,
+            })),
+          ),
+        )
         const nativeFormData = new FormData(e.currentTarget)
         const attachmentIdsValue = nativeFormData.get("attachmentIds")
         if (attachmentIdsValue) formData.append("attachmentIds", attachmentIdsValue as string)
@@ -90,6 +104,22 @@ export function JournalForm({ accounts, journal }: JournalFormProps) {
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="description">Deskripsi</Label>
           <Input id="description" type="text" value={description} onChange={(e) => setDescription(e.target.value)} className="w-full" placeholder="Deskripsi jurnal" required />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="profitCenterId">Pusat Laba</Label>
+          <select
+            id="profitCenterId"
+            value={profitCenterId}
+            onChange={(e) => setProfitCenterId(e.target.value)}
+            className="h-9 w-full rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
+          >
+            <option value="">-- Tanpa pusat laba --</option>
+            {profitCenters.map((center) => (
+              <option key={center.id} value={center.id}>
+                {center.code} — {center.name}
+              </option>
+            ))}
+          </select>
         </div>
       </div>
 

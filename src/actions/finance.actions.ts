@@ -102,6 +102,7 @@ export async function createJournal(formData: FormData) {
           credit: number;
           memo: string;
           costCenterId?: number;
+          profitCenterId?: number;
         }[]
       >(entriesJson) ?? [];
 
@@ -166,6 +167,9 @@ export async function createJournal(formData: FormData) {
           credit: entry.credit || 0,
           memo: entry.memo || null,
           costCenterId: entry.costCenterId || null,
+          // Pusat laba: tanpa baris ini laporan pusat laba selalu menumpuk di
+          // "Tanpa Pusat Laba" walau masternya sudah ada.
+          profitCenterId: entry.profitCenterId || null,
         })),
       });
 
@@ -1138,6 +1142,7 @@ export async function updateJournal(id: number, formData: FormData) {
           credit: number;
           memo: string;
           costCenterId?: number;
+          profitCenterId?: number;
         }[]
       >(entriesJson) ?? [];
     const validEntries = entries.filter(
@@ -1209,6 +1214,9 @@ export async function updateJournal(id: number, formData: FormData) {
           credit: entry.credit || 0,
           memo: entry.memo || null,
           costCenterId: entry.costCenterId || null,
+          // Sama seperti jalur buat: pusat laba harus ikut tersimpan saat entri
+          // diganti, kalau tidak mengubah jurnal akan menghapus pusat labanya.
+          profitCenterId: entry.profitCenterId || null,
         })),
       });
 

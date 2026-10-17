@@ -89,9 +89,9 @@ const SEED_ONLY_COLUMNS: string[] = [
  *   tidak ada halaman maupun aksi yang menulisnya di seluruh repo. Jadi dasbor
  *   absensi dan perhitungan hari kerja hanya bisa benar pada basis data yang
  *   di-seed, dan tidak bisa dipakai di produksi.
- * - `ProfitCenter` — SUDAH DITUTUP: master `/keuangan/pusat-laba` + aksi
- *   create/update/delete. Catatan sisa: `JournalEntry.profitCenterId` masih belum
- *   diisi form jurnal, jadi pusat laba belum terhubung ke jurnal.
+ * - `ProfitCenter` — SUDAH DITUTUP dan TERHUBUNG: master `/keuangan/pusat-laba` +
+ *   aksi create/update/delete, dan form jurnal menulis `profitCenterId` ke setiap
+ *   entri (buat & ubah).
  *
  * Yang TIDAK masuk daftar ini (dan tidak boleh dimasukkan tanpa verifikasi):
  * model yang ditulis lewat nested write (`items: { create: [...] }`), lewat raw

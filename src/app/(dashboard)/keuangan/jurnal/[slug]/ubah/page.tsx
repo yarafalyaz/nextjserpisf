@@ -40,10 +40,16 @@ export default async function EditPage({
       debit: Number(e.debit),
       credit: Number(e.credit),
       memo: e.memo ?? "",
+      profitCenterId: e.profitCenterId ?? undefined,
     })),
   }
 
   const accounts = await prisma.account.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, name: true, type: true } })
+
+  const profitCenters = await prisma.profitCenter.findMany({
+    orderBy: { code: "asc" },
+    select: { id: true, code: true, name: true },
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -55,7 +61,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <JournalForm journal={journal} accounts={accounts}/>
+      <JournalForm journal={journal} accounts={accounts} profitCenters={profitCenters}/>
     </div>
   )
 }

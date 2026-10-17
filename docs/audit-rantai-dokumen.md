@@ -131,7 +131,7 @@ tulis: delegate Prisma langsung, raw SQL, dan nested write dari model induk.
 | `ProjectLog` | `addProjectLog` + form "Tambah Log" di tab Log. Penulis dari SESI |
 | `AssetBrandModel` | kolom "Tipe / Model" pada form merek aset (tanpa modul baru): kolom "Jumlah Model" di tabel merek akhirnya berisi |
 | `Holiday`, `DepartmentHoliday`, `WorkSchedule` | halaman `/sdm/kalender-kerja` + 9 aksi (buat/ubah/hapus untuk ketiganya). Izinnya **sudah di-seed sejak dulu** (`create/edit/delete/manage_holidays`, `view/create/delete_work_schedules`) — hanya halaman & aksinya yang tidak pernah dibangun. `edit_work_schedules` ditambahkan ke `PERMISSIONS` + katalog (prosedur generator) |
-| `ProfitCenter` | master `/keuangan/pusat-laba` + aksi create/update/delete dan izin `view/create/edit/delete_profit_centers`. **Sisa yang belum ditutup**: `JournalEntry.profitCenterId` masih tidak diisi form jurnal, jadi pusat laba belum terhubung ke jurnal |
+| `ProfitCenter` | master `/keuangan/pusat-laba` + aksi create/update/delete dan izin `view/create/edit/delete_profit_centers`. **TERHUBUNG KE JURNAL**: form jurnal punya pilihan "Pusat Laba" yang ditulis ke setiap entri di kedua jalur (buat & ubah), dan jalur pembalikan jurnal ikut menyalinnya — jadi laporan pusat laba berhenti menumpuk di "Tanpa Pusat Laba" |
 
 Catatan prosedur yang terbukti: menambah permission baru menuntut EMPAT suntingan,
 bukan dua — `PERMISSIONS`, `RESOURCE_MODULE`, `RESOURCE_LABEL`
