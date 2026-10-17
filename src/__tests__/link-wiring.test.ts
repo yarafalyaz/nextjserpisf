@@ -94,6 +94,8 @@ function parameterizedLinks(): Array<{ from: string; line: number; base: string;
 // Hanya berisi pelanggaran yang BELUM diperbaiki. Entri di sini wajib dibuang
 // begitu perbaikannya mendarat — kalau tidak, tes "tidak membusuk" memerahkan.
 const LINKS_PENDING: Record<string, string> = {
+  "/penjualan/surat-jalan/tambah|fakturPenjualanId":
+    "faktur/[slug]/page.tsx:124 mengirim ?fakturPenjualanId= tetapi surat-jalan/tambah belum membacanya — sedang dikerjakan (jalur Surat Jalan dari Faktur)",
   "/penjualan/faktur/tambah|quotationId":
     "produksi/perintah-kerja/[slug].tsx:166 mengirim ?quotationId= tetapi faktur/tambah belum membacanya — sedang dikerjakan (satu paket dengan jalur Surat Jalan dari Faktur)",
 }
