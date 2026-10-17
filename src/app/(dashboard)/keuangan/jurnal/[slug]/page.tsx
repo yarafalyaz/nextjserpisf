@@ -60,7 +60,7 @@ export default async function JournalDetailPage({
       <DetailCard>
         <DetailField label="No. Jurnal" value={journal.journalNumber} mono />
         <DetailField label="Tanggal Transaksi" value={formatDate(journal.transactionDate)} />
-        <DetailField label="Tipe" value={journal.type} />
+        <DetailField label="Tipe" value={{ GENERAL: "Umum", AUTO: "Otomatis" }[journal.type] ?? journal.type} />
         <DetailField label="Status" value={<StatusChip status={journal.status.toLowerCase()} />} />
         {journal.referenceType && <DetailField label="Referensi" value={`${formatReferenceType(journal.referenceType)} #${journal.referenceId}`} />}
         {journal.creator && <DetailField label="Dibuat Oleh" value={journal.creator.name} />}

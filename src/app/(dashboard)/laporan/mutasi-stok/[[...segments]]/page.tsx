@@ -127,7 +127,7 @@ export default async function StockMovementPage({
                 <DetailTableTd className="font-mono text-xs">{r.sku}</DetailTableTd>
                 <DetailTableTd className="font-medium">{r.itemName}</DetailTableTd>
                 <DetailTableTd>{r.warehouse}</DetailTableTd>
-                <DetailTableTd>{r.type}</DetailTableTd>
+                <DetailTableTd>{{ production_issue: "Pengeluaran Produksi", production_receipt: "Penerimaan Produksi" }[r.type] ?? r.type}</DetailTableTd>
                 <DetailTableTd align="right" className={r.impact === 'IN' ? 'text-success font-semibold' : 'text-danger font-semibold'}>
                   {r.impact === 'IN' ? '+' : '-'}{r.qty.toLocaleString('id-ID')}
                 </DetailTableTd>

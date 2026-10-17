@@ -171,7 +171,7 @@ export default async function StockValuationPage({
                 <DetailTableTd>{row.category}</DetailTableTd>
                 <DetailTableTd>{row.warehouseCode}</DetailTableTd>
                 <DetailTableTd>{row.uom}</DetailTableTd>
-                <DetailTableTd className="text-xs font-semibold text-muted-foreground">{row.costingMethod}</DetailTableTd>
+                <DetailTableTd className="text-xs font-semibold text-muted-foreground">{{ FIFO: "FIFO (First-In, First-Out)", AVERAGE: "Rata-rata Bergerak" }[row.costingMethod] ?? row.costingMethod}</DetailTableTd>
                 <DetailTableTd align="right">{row.qty.toLocaleString('id-ID')}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(row.qty > 0 ? row.value / row.qty : 0)}</DetailTableTd>
                 <DetailTableTd align="right" className="font-semibold">{formatAccounting(row.value)}</DetailTableTd>

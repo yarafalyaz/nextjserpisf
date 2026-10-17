@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
+import { statusLabel } from "@/lib/utils/status-labels";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/ui/delete-button";
@@ -417,7 +418,7 @@ export default async function GoodsReceiptDetailPage({
                 Status
               </span>
               <span className="text-[0.9375rem] text-foreground font-medium">
-                {journal.status}
+                {statusLabel(journal.status)}
               </span>
             </div>
           </div>

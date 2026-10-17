@@ -6,6 +6,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deletePettyCash } from "@/actions/finance.actions"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
+import { statusLabel } from "@/lib/utils/status-labels"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
@@ -40,7 +41,7 @@ const columns = [
   }),
   columnHelper.accessor("type", {
     header: "Tipe",
-    cell: (info) => info.getValue(),
+    cell: (info) => statusLabel(info.getValue()),
   }),
   columnHelper.accessor("description", {
     header: "Deskripsi",

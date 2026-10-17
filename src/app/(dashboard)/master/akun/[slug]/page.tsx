@@ -55,7 +55,18 @@ export default async function DetailPage({
       <DetailCard>
         <DetailField label="Kode" value={String(data.code ?? "-")} mono />
         <DetailField label="Nama" value={String(data.name ?? "-")} />
-        <DetailField label="Tipe" value={String(data.type ?? "-")} />
+        <DetailField
+          label="Tipe"
+          value={
+            {
+              ASSET: "Aset",
+              LIABILITY: "Kewajiban",
+              EQUITY: "Ekuitas",
+              REVENUE: "Pendapatan",
+              EXPENSE: "Beban",
+            }[data.type] ?? String(data.type ?? "-")
+          }
+        />
         <DetailField
           label="Status"
           value={data.isActive ? "Aktif" : "Nonaktif"}

@@ -306,6 +306,8 @@ export function formatReferenceType(refType: string | null | undefined): string 
     InventoryTransfer: "Transfer Stok",
     SalesReturn: "Retur Penjualan",
     PurchaseReturn: "Retur Pembelian",
+    ProductionOrder: "Perintah Produksi",
+    SalesInvoiceReversal: "Pembalikan Faktur Penjualan",
     ManufacturingOrder: "Perintah Produksi",
     WorkOrder: "Perintah Kerja",
   };

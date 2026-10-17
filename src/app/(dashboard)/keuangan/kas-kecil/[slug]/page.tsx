@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { formatDate, formatCurrency } from "@/lib/utils/format";
+import { statusLabel } from "@/lib/utils/status-labels";
 import { notFound } from "next/navigation";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deletePettyCash } from "@/actions/finance.actions";
@@ -84,7 +85,7 @@ export default async function PettyCashDetailPage({
 
       <DetailCard>
         <DetailField label="No. Dokumen" value={pettyCash.documentNo} mono />
-        <DetailField label="Tipe" value={pettyCash.type} />
+        <DetailField label="Tipe" value={statusLabel(pettyCash.type)} />
         <DetailField
           label="Jumlah"
           value={formatCurrency(Number(pettyCash.amount))}
