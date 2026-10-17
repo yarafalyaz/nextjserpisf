@@ -105,10 +105,20 @@ tak pernah ada, ia selalu keluar lebih awal — **penjaga mati, bukan gagal kera
 | Kelas C `knip` (re-export sengaja) | **3** | **sengaja tidak disentuh** — permukaan publik yang dikomentari | `/tmp/t1-export-audit.md` |
 
 Temuan audit lanjutan (belum dieksekusi, bukan kode mati — kandidat kualitas):
-ukuran bundle (zod 382 kB first-load di 26 rute form; rantai jsPDF 757 kB terunduh
-di 87 rute laporan padahal `/api/pdf` merender di server), 30 temuan a11y, 14
-anti-pola React 19, dan 51 temuan efisiensi akses Prisma (18 N+1, 12 `findMany`
-tanpa `select`, 10 kolom tanpa index). Bahan: `/tmp/w4-*.md`.
+ukuran bundle, 30 temuan a11y, 14 anti-pola React 19, dan 51 temuan efisiensi
+akses Prisma (18 N+1, 12 `findMany` tanpa `select`, 10 kolom tanpa index).
+Bahan: `/tmp/w4-*.md`.
+
+**Koreksi atas audit bundle** (`/tmp/w4-bundle.md`): klaim "rantai jsPDF 756,8 kB
+terunduh di 87 rute laporan" ternyata keliru menyebut *first-load*. Diukur dari
+`.next/diagnostics/route-bundle-stats.json`, 0 dari 429 rute mencantumkan chunk
+jspdf/html2canvas/canvg pada `firstLoadChunkPaths` dan 0 pemuatan eager — keduanya
+sudah impor dinamis, jadi 756,8 kB itu sisi *lazy* graf rute. Build produksi
+sebelum vs sesudah: p50 933,0 kB -> 933,0 kB, rute laporan 802,8 -> 802,8 kB.
+Yang benar-benar dieksekusi di jalur ini hanya `Promise.all` untuk dua await yang
+tidak saling bergantung (`a26e76b2`). Sisa temuan bundle (zod 382,1 kB di 26 rute
+form; `@tanstack/table-core` 111 kB; react-day-picker+date-fns 65,1 kB) belum
+dieksekusi.
 
 ---
 
