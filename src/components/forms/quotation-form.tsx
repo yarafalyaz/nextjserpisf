@@ -264,6 +264,7 @@ function SectionItemRow({
           {isCustomMode ? (
             <input
               {...register(`${prefix}.description`)}
+              aria-label={`Nama item baris ${itemIndex + 1}`}
               className="form-input w-full font-medium"
               style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
               placeholder="Ketik nama jasa bebas..."
@@ -299,6 +300,7 @@ function SectionItemRow({
       <td>
         <input
           {...register(`${prefix}.description`)}
+          aria-label={`Deskripsi baris ${itemIndex + 1}`}
           className="form-input"
           style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
           placeholder="Catatan / spek tambahan..."
@@ -310,6 +312,7 @@ function SectionItemRow({
           type="number"
           step="0.01"
           min="0.01"
+          aria-label={`Jumlah baris ${itemIndex + 1}`}
           {...register(`${prefix}.qty`, { valueAsNumber: true })}
           className="form-input"
           style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right" }}
@@ -322,6 +325,7 @@ function SectionItemRow({
       <td>
         <input
           {...register(`${prefix}.uom`)}
+          aria-label={`Satuan baris ${itemIndex + 1}`}
           className="form-input"
           style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
           placeholder="pcs"
@@ -393,6 +397,7 @@ function SectionItemRow({
       </td>
       <td>
         <input
+          aria-label={`Total baris ${itemIndex + 1}`}
           value={formatCurrency(watchedItem?.total || 0)}
           className="form-input"
           style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right", background: "var(--color-surface-alt)", fontWeight: 600 }}
@@ -462,7 +467,10 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
         <div className="totals-row">
           <span className="totals-label">Diskon</span>
           <div className="totals-input">
-            <span className="totals-prefix">Rp</span>
+            {/* `.totals-prefix` memakai --text-muted (2.56:1 di latar putih); warnanya
+                ditimpa inline dengan --muted-foreground (7.58:1 terang / 6.72:1 gelap).
+                Berlaku untuk kedua prefix "Rp" di blok Total ini. */}
+            <span className="totals-prefix" style={{ color: "var(--muted-foreground)" }}>Rp</span>
             <CurrencyInput
               value={discount}
               onChange={(v) => setValue("discount", v)}
@@ -474,7 +482,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
         <div className="totals-row">
           <span className="totals-label">Pajak</span>
           <div className="totals-input">
-            <span className="totals-prefix">Rp</span>
+            <span className="totals-prefix" style={{ color: "var(--muted-foreground)" }}>Rp</span>
             <CurrencyInput
               value={tax}
               onChange={(v) => setValue("tax", v)}
@@ -608,8 +616,9 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
         <FormSection title="Informasi Penawaran">
         {/* Document Number (read-only) */}
         <div className="flex flex-col gap-1.5">
-          <Label>No. Dokumen</Label>
+          <Label htmlFor="documentNo">No. Dokumen</Label>
           <Input
+            id="documentNo"
             value={String(quotation?.documentNo || generatedCode || "Dibuat otomatis")}
             readOnly
             className="bg-muted"
@@ -791,6 +800,7 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
             <div className="section-flex items-center justify-between p-4 px-5 border-b border-default">
               <input
                 {...register(`sections.${sectionIndex}.name`)}
+                aria-label={`Nama bagian ${sectionIndex + 1}`}
                 className="form-input section-name-input"
                 placeholder={`Nama Section (opsional)`}
               />

@@ -14,6 +14,7 @@ import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { nextItemUid } from "@/lib/utils/item-uid"
 
 interface TransferFormProps {
   warehouses: { id: number; name: string }[]
@@ -27,11 +28,6 @@ interface TransferItem {
   /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
   uid: string;
 }
-
-// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
-// baris yang salah begitu satu baris di tengah daftar dihapus.
-let itemUidSeq = 0;
-const nextItemUid = () => `row-${++itemUidSeq}`;
 
 export function InventoryTransferForm({ warehouses, items, transfer }: TransferFormProps) {
   const router = useRouter()
@@ -154,6 +150,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
                       <Input
                         type="number"
                         min="1"
+                        aria-label={`Jumlah baris ${i + 1}`}
                         value={item.qty}
                         onChange={(e) => updateItem(i, "qty", Number(e.target.value))}
                         placeholder="Jml"

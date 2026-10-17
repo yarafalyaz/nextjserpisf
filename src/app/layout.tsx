@@ -64,6 +64,19 @@ export default async function RootLayout({
         `}</Script>
       </head>
       <body suppressHydrationWarning>
+        {/*
+          Skip-link — landmark pertama di <body> supaya pengguna keyboard/pembaca
+          layar bisa melompati menu dan langsung ke konten. Target `#konten-utama`
+          dipasang pada <main> di src/app/(dashboard)/layout.tsx.
+          Pola Tailwind: `sr-only` (tersembunyi) → `focus:not-sr-only` (tampil saat
+          fokus keyboard) + gaya fokus yang terlihat.
+        */}
+        <a
+          href="#konten-utama"
+          className="sr-only focus:not-sr-only focus:z-50 focus:bg-card focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-card-foreground focus:shadow-md focus:ring-2 focus:ring-ring"
+        >
+          Lewati ke konten utama
+        </a>
         <AuthProvider>
           <ThemeProvider>
             <UIProvider>{children}</UIProvider>

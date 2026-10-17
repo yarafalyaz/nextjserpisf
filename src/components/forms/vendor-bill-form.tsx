@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { nextItemUid } from "@/lib/utils/item-uid"
 
 interface BillItem {
   itemId: string;
@@ -30,11 +31,6 @@ interface BillItem {
   /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
   uid: string;
 }
-
-// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
-// baris yang salah begitu satu baris di tengah daftar dihapus.
-let itemUidSeq = 0;
-const nextItemUid = () => `row-${++itemUidSeq}`;
 
 interface VendorBillFormProps {
   vendors: { id: number; name: string }[];
@@ -399,6 +395,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
                       <td className="py-2 px-2">
                         <Input
                           type="number"
+                          aria-label={`Jumlah baris ${idx + 1}`}
                           value={String(item.qty)}
                           onChange={(e) =>
                             updateItem(
@@ -424,6 +421,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
                       <td className="py-2 px-2">
                         <Input
                           type="number"
+                          aria-label={`Diskon persen baris ${idx + 1}`}
                           value={String(item.discountPercent)}
                           onChange={(e) =>
                             updateItem(
@@ -443,6 +441,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
                       <td className="py-2 px-2">
                         <Input
                           type="number"
+                          aria-label={`Pajak persen baris ${idx + 1}`}
                           value={String(item.taxPercent)}
                           onChange={(e) =>
                             updateItem(

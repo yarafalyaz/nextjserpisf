@@ -16,11 +16,7 @@ import {
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-
-// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
-// baris yang salah begitu satu baris di tengah daftar dihapus.
-let itemUidSeq = 0;
-const nextItemUid = () => `row-${++itemUidSeq}`;
+import { nextItemUid } from "@/lib/utils/item-uid"
 
 export function WorkOrderForm({
   customers,
@@ -281,6 +277,7 @@ export function WorkOrderForm({
                         <input
                           type="number"
                           min={1}
+                          aria-label={`Jumlah baris ${i + 1}`}
                           value={item.qty}
                           onChange={(e) =>
                             updateItem(i, "qty", Number(e.target.value))
@@ -296,6 +293,7 @@ export function WorkOrderForm({
                       <td className="py-2 px-2">
                         <input
                           type="text"
+                          aria-label={`Deskripsi baris ${i + 1}`}
                           value={item.description}
                           onChange={(e) =>
                             updateItem(i, "description", e.target.value)

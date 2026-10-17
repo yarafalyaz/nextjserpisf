@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { nextItemUid } from "@/lib/utils/item-uid"
 
 interface PurchaseReturnFormProps {
   purchaseOrders: { id: number; documentNo: string
@@ -24,11 +25,6 @@ interface ReturnItem {
   /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
   uid: string;
 }
-
-// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
-// baris yang salah begitu satu baris di tengah daftar dihapus.
-let itemUidSeq = 0;
-const nextItemUid = () => `row-${++itemUidSeq}`;
 
 export function PurchaseReturnForm({ purchaseOrders, items, returnData }: PurchaseReturnFormProps) {
   const router = useRouter()
@@ -141,6 +137,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
                   <input
                     type="number"
                     min={1}
+                    aria-label={`Jumlah baris ${index + 1}`}
                     value={ri.qty}
                     onChange={(e) => updateItem(index, "qty", Math.max(1, Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 1))}
                     className="form-input"

@@ -12,6 +12,7 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { nextItemUid } from "@/lib/utils/item-uid"
 
 interface SalesReturnFormProps {
   invoices: { id: number; documentNo: string
@@ -27,11 +28,6 @@ interface ReturnItem {
   /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
   uid: string;
 }
-
-// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
-// baris yang salah begitu satu baris di tengah daftar dihapus.
-let itemUidSeq = 0;
-const nextItemUid = () => `row-${++itemUidSeq}`;
 
 export function SalesReturnForm({ invoices, customers, items, returnData }: SalesReturnFormProps) {
   const router = useRouter()
@@ -165,6 +161,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
                   <input
                     type="number"
                     min={1}
+                    aria-label={`Jumlah baris ${index + 1}`}
                     value={ri.qty}
                     onChange={(e) => updateItem(index, "qty", Math.max(1, Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 1))}
                     className="form-input"

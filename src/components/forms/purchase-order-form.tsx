@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { nextItemUid } from "@/lib/utils/item-uid"
 
 interface PurchaseOrderFormProps {
   vendors: {
@@ -86,11 +87,6 @@ interface POItem {
   /** Kunci baris untuk React; tidak ikut dikirim ke server (dibuang saat submit). */
   uid: string;
 }
-
-// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
-// baris yang salah begitu satu baris di tengah daftar dihapus.
-let itemUidSeq = 0;
-const nextItemUid = () => `row-${++itemUidSeq}`;
 
 export function PurchaseOrderForm({
   vendors,
@@ -554,6 +550,7 @@ export function PurchaseOrderForm({
                     <td>
                       <input
                         type="number"
+                        aria-label={`Jumlah baris ${index + 1}`}
                         value={poItem.qty}
                         onChange={(e) =>
                           updateItem(index, "qty", Number(e.target.value))
@@ -573,6 +570,7 @@ export function PurchaseOrderForm({
                     <td>
                       <input
                         type="number"
+                        aria-label={`Diskon baris ${index + 1}`}
                         value={poItem.discount}
                         onChange={(e) =>
                           updateItem(index, "discount", Number(e.target.value))
