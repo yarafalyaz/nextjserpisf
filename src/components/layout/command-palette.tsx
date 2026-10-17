@@ -52,16 +52,21 @@ const groupOrder = [
   "Lainnya",
 ]
 
+// Shared empty fallback so `permissions` keeps a stable identity when the
+// session carries none — a fresh array each render would invalidate the memos
+// that depend on it.
+const NO_PERMISSIONS: string[] = []
+
 export function CommandPalette() {
   const router = useRouter()
   const { data: session } = useSession()
   const [open, setOpen] = useState(false)
 
   const isSuperAdmin = session?.user?.roles?.includes("super_admin") ?? false
-  const permissions = useMemo(
-    () => session?.user?.permissions ?? [],
-    [session?.user?.permissions],
-  )
+  // Stable empty fallback: a fresh `[]` per render would invalidate the memos
+  // below on every render, so the fallback is hoisted to module scope instead of
+  // being wrapped in a memo of its own.
+  const permissions = session?.user?.permissions ?? NO_PERMISSIONS
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {

@@ -21,7 +21,17 @@ interface TransferFormProps {
   items: { id: number; sku: string; name: string; qtyOnHand: string }[]
 }
 
-interface TransferItem { itemId: number; qty: number }
+interface TransferItem {
+  itemId: number
+  qty: number
+  /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
+  uid: string;
+}
+
+// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
+// baris yang salah begitu satu baris di tengah daftar dihapus.
+let itemUidSeq = 0;
+const nextItemUid = () => `row-${++itemUidSeq}`;
 
 export function InventoryTransferForm({ warehouses, items, transfer }: TransferFormProps) {
   const router = useRouter()
@@ -32,8 +42,8 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
   const [notes, setNotes] = useState(transfer?.notes ?? "")
   const [transferItems, setTransferItems] = useState<TransferItem[]>(
     transfer?.items && transfer.items.length > 0
-      ? transfer.items.map((it) => ({ itemId: it.itemId, qty: it.qty }))
-      : [{ itemId: 0, qty: 1 }]
+      ? transfer.items.map((it) => ({ itemId: it.itemId, qty: it.qty, uid: nextItemUid() }))
+      : [{ itemId: 0, qty: 1, uid: nextItemUid() }]
   )
 
   const itemOptions = useMemo(
@@ -46,7 +56,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
     return map
   }, [items])
 
-  function addItem() { setTransferItems([...transferItems, { itemId: 0, qty: 1 }]) }
+  function addItem() { setTransferItems([...transferItems, { itemId: 0, qty: 1, uid: nextItemUid() }]) }
   function removeItem(i: number) { setTransferItems(transferItems.filter((_, idx) => idx !== i)) }
   function updateItem(i: number, field: keyof TransferItem, value: string | number) {
     const updated = [...transferItems]; updated[i] = { ...updated[i], [field]: value }; setTransferItems(updated)
@@ -61,7 +71,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         formData.append("destinationWarehouseId", destId)
         formData.append("date", transfer?.date ?? toLocalDateOnly(new Date()))
         if (notes) formData.append("notes", notes)
-        formData.append("items", JSON.stringify(transferItems.filter((it) => it.itemId > 0 && it.qty > 0)))
+        formData.append("items", JSON.stringify(transferItems.filter((it) => it.itemId > 0 && it.qty > 0).map(({ uid: _uid, ...rest }) => rest)))
         const result = transfer?.id ? await updateInventoryTransfer(transfer.id, formData) : await createInventoryTransfer(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
         showSuccess(transfer?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
@@ -131,7 +141,7 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
               {transferItems.map((item, i) => {
                 const stock = item.itemId ? stockById.get(item.itemId) : undefined
                 return (
-                  <DetailTableRow key={i}>
+                  <DetailTableRow key={item.uid}>
                     <DetailTableTd>
                       <Combobox
                         value={item.itemId ? String(item.itemId) : null}

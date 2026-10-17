@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useTransition, useCallback, useMemo, useEffect, useState } from "react"
+import { useTransition, useMemo, useState } from "react"
 import { useForm, useFieldArray, useWatch, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { quotationSchema, type QuotationInput } from "@/lib/validations/form.schemas"
@@ -87,34 +87,32 @@ function SectionItems({
     name: `sections.${sectionIndex}.items`,
   })
 
-  const handleItemSelect = useCallback(
-    (itemIndex: number, itemId: number) => {
-      const selected = items.find((i) => i.id === itemId)
-      if (selected) {
-        setValue(`sections.${sectionIndex}.items.${itemIndex}.itemId`, itemId)
-        setValue(`sections.${sectionIndex}.items.${itemIndex}.unitPrice`, selected.price)
-        setValue(`sections.${sectionIndex}.items.${itemIndex}.uom`, selected.unitOfMeasure)
-        // Recalculate total
-        const qty = control._formValues?.sections?.[sectionIndex]?.items?.[itemIndex]?.qty || 1
-        const discount = control._formValues?.sections?.[sectionIndex]?.items?.[itemIndex]?.discount || 0
-        const discountType = control._formValues?.sections?.[sectionIndex]?.items?.[itemIndex]?.discountType || "fixed"
-        const total = calculateItemTotal(qty, selected.price, discountType, discount)
-        setValue(`sections.${sectionIndex}.items.${itemIndex}.total`, total)
-      }
-    },
-    [items, sectionIndex, setValue, control]
-  )
+  // Plain functions: `SectionItemRow` is not memoized, so a stable identity from
+  // useCallback bought nothing while costing a hook on every render.
+  function handleItemSelect(itemIndex: number, itemId: number) {
+    const selected = items.find((i) => i.id === itemId)
+    if (selected) {
+      setValue(`sections.${sectionIndex}.items.${itemIndex}.itemId`, itemId)
+      setValue(`sections.${sectionIndex}.items.${itemIndex}.unitPrice`, selected.price)
+      setValue(`sections.${sectionIndex}.items.${itemIndex}.uom`, selected.unitOfMeasure)
+      // Recalculate total
+      const qty = control._formValues?.sections?.[sectionIndex]?.items?.[itemIndex]?.qty || 1
+      const discount = control._formValues?.sections?.[sectionIndex]?.items?.[itemIndex]?.discount || 0
+      const discountType = control._formValues?.sections?.[sectionIndex]?.items?.[itemIndex]?.discountType || "fixed"
+      const total = calculateItemTotal(qty, selected.price, discountType, discount)
+      setValue(`sections.${sectionIndex}.items.${itemIndex}.total`, total)
+    }
+  }
 
-  const recalcItem = useCallback(
-    (itemIndex: number) => {
-      const item = control._formValues?.sections?.[sectionIndex]?.items?.[itemIndex]
-      if (item) {
-        const total = calculateItemTotal(item.qty, item.unitPrice, item.discountType, item.discount)
-        setValue(`sections.${sectionIndex}.items.${itemIndex}.total`, total)
-      }
-    },
-    [sectionIndex, setValue, control]
-  )
+  // No setTimeout needed: react-hook-form's setValue writes `_formValues`
+  // synchronously, so the recalc below already sees the value just set.
+  function recalcItem(itemIndex: number) {
+    const item = control._formValues?.sections?.[sectionIndex]?.items?.[itemIndex]
+    if (item) {
+      const total = calculateItemTotal(item.qty, item.unitPrice, item.discountType, item.discount)
+      setValue(`sections.${sectionIndex}.items.${itemIndex}.total`, total)
+    }
+  }
 
   return (
     <div className="quotation-items">
@@ -317,7 +315,7 @@ function SectionItemRow({
           style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right" }}
           onChange={(e) => {
             setValue(`${prefix}.qty`, (Number.isFinite((Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0)) ? (Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0) : 0))
-            setTimeout(() => onRecalc(itemIndex), 0)
+            onRecalc(itemIndex)
           }}
         />
       </td>
@@ -335,7 +333,7 @@ function SectionItemRow({
             value={watchedItem?.unitPrice || 0}
             onChange={(val) => {
               setValue(`${prefix}.unitPrice`, val)
-              setTimeout(() => onRecalc(itemIndex), 0)
+              onRecalc(itemIndex)
             }}
             className="form-input"
             style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right" }}
@@ -353,7 +351,7 @@ function SectionItemRow({
                 value={field.value ?? "fixed"}
                 onChange={(key) => {
                   field.onChange(key ?? "")
-                  setTimeout(() => onRecalc(itemIndex), 0)
+                  onRecalc(itemIndex)
                 }}
                 options={[
                   { value: "fixed", label: "Rp" },
@@ -376,7 +374,7 @@ function SectionItemRow({
                 const raw = Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 0
                 const clamped = Math.min(100, Math.max(0, raw))
                 setValue(`${prefix}.discount`, clamped)
-                setTimeout(() => onRecalc(itemIndex), 0)
+                onRecalc(itemIndex)
               }}
             />
           ) : (
@@ -384,7 +382,7 @@ function SectionItemRow({
               value={watchedItem?.discount ?? 0}
               onChange={(v) => {
                 setValue(`${prefix}.discount`, v)
-                setTimeout(() => onRecalc(itemIndex), 0)
+                onRecalc(itemIndex)
               }}
               min={0}
               className="text-right"
@@ -438,6 +436,10 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
   const discount = useWatch({ control, name: "discount" }) || 0
   const tax = useWatch({ control, name: "tax" }) || 0
 
+  // Display-only derivation. The header totals are computed from the line items
+  // here for rendering and again in `onSubmit` for the payload, so no effect
+  // mirrors them into form state on every keystroke (react-hook-form's setValue
+  // re-renders the whole form).
   const subtotal = useMemo(() => {
     if (!sections) return 0
     return sections.reduce((acc: number, section: any) => {
@@ -449,12 +451,6 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
   const grandTotal = useMemo(() => {
     return Math.max(0, subtotal - discount + tax)
   }, [subtotal, discount, tax])
-
-  // Sync calculated values to form
-  useEffect(() => {
-    setValue("subtotal", subtotal, { shouldDirty: false })
-    setValue("grandTotal", grandTotal, { shouldDirty: false })
-  }, [subtotal, grandTotal, setValue])
 
   return (
     <div className="quotation-totals">
@@ -572,15 +568,25 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
   function onSubmit(data: QuotationInput) {
     startTransition(async () => {
       try {
+        // Header totals are derived at submit time rather than mirrored into form
+        // state by an effect on every keystroke. The server recomputes both from
+        // the line items regardless, so the request payload is unchanged.
+        const subtotal = (data.sections ?? []).reduce(
+          (acc, section) =>
+            acc + (section.items ?? []).reduce((itemAcc, item) => itemAcc + (item?.total || 0), 0),
+          0,
+        )
+        const grandTotal = Math.max(0, subtotal - (data.discount || 0) + (data.tax || 0))
+        const payload = { ...data, subtotal, grandTotal }
         const formData = new FormData()
         let result: { success: boolean; id?: number; slug?: string | null; error?: string }
         if (quotation?.id) {
           // Send the full section tree (same shape as create) so edited line
           // items/qty/prices are persisted and re-synced to linked SO/Invoice.
-          formData.set("data", JSON.stringify(data))
+          formData.set("data", JSON.stringify(payload))
           result = await updateQuotation(Number(quotation.id), formData)
         } else {
-          formData.set("data", JSON.stringify(data))
+          formData.set("data", JSON.stringify(payload))
           result = await createQuotation(formData)
         }
         if (result.success) {

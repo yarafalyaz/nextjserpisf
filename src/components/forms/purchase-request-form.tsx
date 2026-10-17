@@ -45,7 +45,14 @@ interface PRItem {
   itemId: number;
   qty: number;
   notes: string;
+  /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
+  uid: string;
 }
+
+// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
+// baris yang salah begitu satu baris di tengah daftar dihapus.
+let itemUidSeq = 0;
+const nextItemUid = () => `row-${++itemUidSeq}`;
 
 export function PurchaseRequestForm({
   items,
@@ -82,12 +89,13 @@ export function PurchaseRequestForm({
         itemId: i.itemId,
         qty: Number(i.qty),
         notes: i.notes || "",
+        uid: nextItemUid(),
       }),
-    ) || [{ itemId: 0, qty: 1, notes: "" }],
+    ) || [{ itemId: 0, qty: 1, notes: "", uid: nextItemUid() }],
   );
 
   function addItem() {
-    setPrItems([...prItems, { itemId: 0, qty: 1, notes: "" }]);
+    setPrItems([...prItems, { itemId: 0, qty: 1, notes: "", uid: nextItemUid() }]);
   }
   function removeItem(i: number) {
     setPrItems(prItems.filter((_, idx) => idx !== i));
@@ -114,7 +122,7 @@ export function PurchaseRequestForm({
         formData.append("notes", notes);
         formData.append("requestDate", requestDate);
         formData.append("description", description);
-        formData.append("items", JSON.stringify(prItems));
+        formData.append("items", JSON.stringify(prItems.map(({ uid: _uid, ...rest }) => rest)));
         const result = request?.id
           ? await updatePurchaseRequest(request.id, formData)
           : await createPurchaseRequest(formData);
@@ -275,7 +283,7 @@ export function PurchaseRequestForm({
                 </thead>
                 <tbody>
                   {prItems.map((item, i) => (
-                    <tr key={i} className="border-b border-default/50">
+                    <tr key={item.uid} className="border-b border-default/50">
                       <td className="py-2 px-2">
                         <Combobox
                           value={item.itemId ? String(item.itemId) : null}

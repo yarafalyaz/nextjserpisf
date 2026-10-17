@@ -153,24 +153,29 @@ export function DataTable<TData extends { id: number | string }>({
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  // Sync server search term from URL query parameter
-  const initialSearch = isServer ? searchParams.get(searchParam) ?? "" : ""
-  const [serverSearch, setServerSearch] = useState(initialSearch)
+  // The URL search param is the source of truth for the server-side search box.
+  // The input keeps one local copy so typing stays responsive while the
+  // debounced navigation is in flight; that copy is re-derived during render
+  // (React's "adjust state when a prop changes" pattern) whenever the URL itself
+  // moves, which is what keeps forward/backward navigation in sync — no effect
+  // and therefore no extra commit per navigation.
+  const urlSearch = isServer ? searchParams.get(searchParam) ?? "" : ""
+  const [serverSearch, setServerSearch] = useState(urlSearch)
+  const [prevUrlSearch, setPrevUrlSearch] = useState(urlSearch)
+  if (urlSearch !== prevUrlSearch) {
+    setPrevUrlSearch(urlSearch)
+    setServerSearch(urlSearch)
+  }
   const debounceRef = useRef<NodeJS.Timeout | null>(null)
 
-  // Sync local input value when URL changes (e.g. forward/backward navigation)
+  // A URL change means the navigation already happened; drop any pending
+  // debounced push so it can't override a newer navigation.
   useEffect(() => {
-    if (isServer) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Keep controlled search input synchronized with browser navigation.
-      setServerSearch(searchParams.get(searchParam) ?? "")
-      // A URL change means the navigation already happened; drop any pending
-      // debounced push so it can't override a newer navigation.
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current)
-        debounceRef.current = null
-      }
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current)
+      debounceRef.current = null
     }
-  }, [isServer, searchParams, searchParam])
+  }, [searchParams, searchParam])
 
   // Cancel any pending debounced push on unmount so a late timer can't
   // call router.push after the component is gone.
@@ -195,10 +200,11 @@ export function DataTable<TData extends { id: number | string }>({
     navigateWithParams({ pageSize: newSize, halaman: undefined })
   }
 
-  const serverPageCount = useMemo(
-    () => (isServer ? Math.max(1, Math.ceil((serverPagination!.total || 0) / serverPagination!.pageSize)) : 1),
-    [isServer, serverPagination],
-  )
+  // Plain arithmetic: Math.ceil + Math.max on two numbers is cheaper than the
+  // hook's dependency bookkeeping, so it is not memoized.
+  const serverPageCount = isServer
+    ? Math.max(1, Math.ceil((serverPagination!.total || 0) / serverPagination!.pageSize))
+    : 1
 
   // Compute effective pagination state
   const effectivePagination = useMemo(() => {

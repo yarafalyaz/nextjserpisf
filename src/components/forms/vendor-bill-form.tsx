@@ -27,7 +27,14 @@ interface BillItem {
   unitPrice: number;
   discountPercent: number;
   taxPercent: number;
+  /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
+  uid: string;
 }
+
+// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
+// baris yang salah begitu satu baris di tengah daftar dihapus.
+let itemUidSeq = 0;
+const nextItemUid = () => `row-${++itemUidSeq}`;
 
 interface VendorBillFormProps {
   vendors: { id: number; name: string }[];
@@ -102,6 +109,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
           unitPrice: it.unitPrice,
           discountPercent: it.discountPercent ?? 0,
           taxPercent: it.taxPercent ?? 0,
+          uid: nextItemUid(),
         }))
       : [
           {
@@ -110,6 +118,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
             unitPrice: 0,
             discountPercent: 0,
             taxPercent: 0,
+            uid: nextItemUid(),
           },
         ],
   );
@@ -117,7 +126,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
   function addItem() {
     setBillItems([
       ...billItems,
-      { itemId: "", qty: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0 },
+      { itemId: "", qty: 1, unitPrice: 0, discountPercent: 0, taxPercent: 0, uid: nextItemUid() },
     ]);
   }
 
@@ -183,7 +192,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
         formData.set("tax", String(totalTax));
         formData.set("grandTotal", String(grandTotal));
         formData.set("withholdingAmount", String(withholdingAmount || 0));
-        formData.set("items", JSON.stringify(billItems));
+        formData.set("items", JSON.stringify(billItems.map(({ uid: _uid, ...rest }) => rest)));
         const { createVendorBill, updateVendorBill } =
           await import("@/actions/purchase.actions");
         const result = bill?.id
@@ -373,7 +382,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
                 </thead>
                 <tbody>
                   {billItems.map((item, idx) => (
-                    <tr key={idx} className="border-b border-default/50">
+                    <tr key={item.uid} className="border-b border-default/50">
                       <td className="py-2 px-2">
                         <Combobox
                           options={items.map((i) => ({

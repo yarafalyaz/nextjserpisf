@@ -83,7 +83,14 @@ interface POItem {
   qty: number;
   unitPrice: number;
   discount: number;
+  /** Kunci baris untuk React; tidak ikut dikirim ke server (dibuang saat submit). */
+  uid: string;
 }
+
+// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
+// baris yang salah begitu satu baris di tengah daftar dihapus.
+let itemUidSeq = 0;
+const nextItemUid = () => `row-${++itemUidSeq}`;
 
 export function PurchaseOrderForm({
   vendors,
@@ -126,6 +133,7 @@ export function PurchaseOrderForm({
           qty: it.qty,
           unitPrice: it.unitPrice,
           discount: it.discount ?? 0,
+          uid: nextItemUid(),
         }))
       : preselectedPR && preselectedPR.items.length > 0
         ? preselectedPR.items.map((it) => {
@@ -135,9 +143,10 @@ export function PurchaseOrderForm({
               qty: it.qty,
               unitPrice: master ? Number(master.cost) : 0,
               discount: 0,
+              uid: nextItemUid(),
             };
           })
-        : [{ itemId: 0, qty: 1, unitPrice: 0, discount: 0 }],
+        : [{ itemId: 0, qty: 1, unitPrice: 0, discount: 0, uid: nextItemUid() }],
   );
 
   const {
@@ -208,6 +217,7 @@ export function PurchaseOrderForm({
             qty: it.qty,
             unitPrice: master ? Number(master.cost) : 0,
             discount: 0,
+            uid: nextItemUid(),
           };
         }),
       );
@@ -215,7 +225,7 @@ export function PurchaseOrderForm({
   }
 
   function addItem() {
-    setPoItems([...poItems, { itemId: 0, qty: 1, unitPrice: 0, discount: 0 }]);
+    setPoItems([...poItems, { itemId: 0, qty: 1, unitPrice: 0, discount: 0, uid: nextItemUid() }]);
   }
 
   function removeItem(index: number) {
@@ -251,7 +261,7 @@ export function PurchaseOrderForm({
           if (value !== undefined && value !== null)
             formData.append(key, String(value));
         });
-        formData.append("items", JSON.stringify(poItems));
+        formData.append("items", JSON.stringify(poItems.map(({ uid: _uid, ...rest }) => rest)));
         formData.append("isService", isService ? "true" : "false");
         const result = order?.id
           ? await updatePurchaseOrder(order.id, formData)
@@ -526,7 +536,7 @@ export function PurchaseOrderForm({
               </thead>
               <tbody>
                 {poItems.map((poItem, index) => (
-                  <tr key={index}>
+                  <tr key={poItem.uid}>
                     <td>
                       <Combobox
                         value={poItem.itemId ? String(poItem.itemId) : null}

@@ -40,7 +40,14 @@ interface MIItem {
   itemId: number;
   qty: number;
   unitCost: number;
+  /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
+  uid: string;
 }
+
+// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
+// baris yang salah begitu satu baris di tengah daftar dihapus.
+let itemUidSeq = 0;
+const nextItemUid = () => `row-${++itemUidSeq}`;
 
 export function MaterialIssueForm({
   warehouses,
@@ -64,12 +71,13 @@ export function MaterialIssueForm({
           itemId: it.itemId,
           qty: it.qty,
           unitCost: Number(items.find((x) => x.id === it.itemId)?.cost ?? 0),
+          uid: nextItemUid(),
         }))
-      : [{ itemId: 0, qty: 1, unitCost: 0 }],
+      : [{ itemId: 0, qty: 1, unitCost: 0, uid: nextItemUid() }],
   );
 
   function addItem() {
-    setMiItems([...miItems, { itemId: 0, qty: 1, unitCost: 0 }]);
+    setMiItems([...miItems, { itemId: 0, qty: 1, unitCost: 0, uid: nextItemUid() }]);
   }
   function removeItem(i: number) {
     setMiItems(miItems.filter((_, idx) => idx !== i));
@@ -91,7 +99,7 @@ export function MaterialIssueForm({
         const formData = new FormData();
         formData.append("warehouseId", warehouseId);
         formData.append("date", issue?.date ?? toLocalDateOnly(new Date()));
-        formData.append("items", JSON.stringify(miItems));
+        formData.append("items", JSON.stringify(miItems.map(({ uid: _uid, ...rest }) => rest)));
         const result = issue?.id
           ? await updateMaterialIssue(issue.id, formData)
           : await createMaterialIssue(formData);
@@ -190,7 +198,7 @@ export function MaterialIssueForm({
             </thead>
             <tbody>
               {miItems.map((item, i) => (
-                <tr key={i}>
+                <tr key={item.uid}>
                   <td>
                     <Combobox
                       options={items.map((it) => ({

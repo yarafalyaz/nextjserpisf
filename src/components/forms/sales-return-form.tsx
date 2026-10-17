@@ -24,7 +24,14 @@ interface SalesReturnFormProps {
 interface ReturnItem {
   itemId: number
   qty: number
+  /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
+  uid: string;
 }
+
+// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
+// baris yang salah begitu satu baris di tengah daftar dihapus.
+let itemUidSeq = 0;
+const nextItemUid = () => `row-${++itemUidSeq}`;
 
 export function SalesReturnForm({ invoices, customers, items, returnData }: SalesReturnFormProps) {
   const router = useRouter()
@@ -37,12 +44,12 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
   // silently wipe all existing line items to a single empty row.
   const [returnItems, setReturnItems] = useState<ReturnItem[]>(
     returnData?.items && returnData.items.length > 0
-      ? returnData.items.map((it) => ({ itemId: it.itemId, qty: it.qty }))
-      : [{ itemId: 0, qty: 1 }],
+      ? returnData.items.map((it) => ({ itemId: it.itemId, qty: it.qty, uid: nextItemUid() }))
+      : [{ itemId: 0, qty: 1, uid: nextItemUid() }],
   )
 
   function addItem() {
-    setReturnItems([...returnItems, { itemId: 0, qty: 1 }])
+    setReturnItems([...returnItems, { itemId: 0, qty: 1, uid: nextItemUid() }])
   }
 
   function removeItem(index: number) {
@@ -61,7 +68,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
       try {
         const formData = new FormData(e.currentTarget)
         formData.set("date", date)
-        formData.append("items", JSON.stringify(returnItems))
+        formData.append("items", JSON.stringify(returnItems.map(({ uid: _uid, ...rest }) => rest)))
         const result = returnData?.id ? await updateSalesReturn(returnData.id, formData) : await createSalesReturn(formData)
         if (result.success) {
           showSuccess(returnData?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
@@ -144,7 +151,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
           </thead>
           <tbody>
             {returnItems.map((ri, index) => (
-              <tr key={index}>
+              <tr key={ri.uid}>
                 <td>
                   <Combobox
                     options={items.map((item) => ({ value: String(item.id), label: `${item.sku} - ${item.name}` }))}

@@ -17,6 +17,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
+// Kunci baris stabil: memakai indeks array membuat nilai/fokus baris melekat ke
+// baris yang salah begitu satu baris di tengah daftar dihapus.
+let itemUidSeq = 0;
+const nextItemUid = () => `row-${++itemUidSeq}`;
+
 export function WorkOrderForm({
   customers,
   items,
@@ -84,16 +89,17 @@ export function WorkOrderForm({
           cost: it.cost,
           description: it.description ?? "",
           status: it.status ?? "pending",
+          uid: nextItemUid(),
         }))
       : defaultItems && defaultItems.length > 0
-      ? defaultItems
-      : [{ itemId: 0, qty: 1, cost: 0, description: "", status: "pending" }],
+      ? defaultItems.map((it) => ({ ...it, uid: nextItemUid() }))
+      : [{ itemId: 0, qty: 1, cost: 0, description: "", status: "pending", uid: nextItemUid() }],
   );
 
   function addItem() {
     setWoItems([
       ...woItems,
-      { itemId: 0, qty: 1, cost: 0, description: "", status: "pending" },
+      { itemId: 0, qty: 1, cost: 0, description: "", status: "pending", uid: nextItemUid() },
     ]);
   }
   function removeItem(i: number) {
@@ -114,7 +120,7 @@ export function WorkOrderForm({
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget);
-        formData.append("items", JSON.stringify(woItems));
+        formData.append("items", JSON.stringify(woItems.map(({ uid: _uid, ...rest }) => rest)));
         const { createWorkOrder, updateWorkOrder } =
           await import("@/actions/inventory.actions");
         const result = workOrder?.id
@@ -247,7 +253,7 @@ export function WorkOrderForm({
                 </thead>
                 <tbody>
                   {woItems.map((item, i) => (
-                    <tr key={i} className="border-b border-default/50">
+                    <tr key={item.uid} className="border-b border-default/50">
                       <td className="py-2 px-2">
                         <Combobox
                           value={item.itemId ? String(item.itemId) : "0"}
