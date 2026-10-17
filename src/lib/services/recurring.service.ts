@@ -14,8 +14,6 @@ export interface RecurringTemplate {
   lines?: { accountId: number; debit: number; credit: number; memo?: string }[]
 }
 
-export type RecurringType = "journal" | "expense"
-
 export function parseRecurringTemplate(raw: string | null): RecurringTemplate {
   if (!raw) return {}
   try {

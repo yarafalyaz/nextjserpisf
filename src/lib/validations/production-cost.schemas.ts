@@ -23,8 +23,6 @@ export const PRODUCTION_COST_CATEGORIES = [
   "other",
 ] as const
 
-export type ProductionCostCategory = (typeof PRODUCTION_COST_CATEGORIES)[number]
-
 // Overhead drivers (PRD FAB-07: an auditable basis for overhead allocation).
 export const OVERHEAD_DRIVERS = [
   "machine_hours",
@@ -48,8 +46,6 @@ export const applyOverheadSchema = z.object({
   description: optionalString(2000),
 })
 
-export type ApplyOverheadInput = z.infer<typeof applyOverheadSchema>
-
 export const createProductionCostSchema = z.object({
   productionOrderId: optionalPositiveId(),
   workOrderId: optionalPositiveId(),
@@ -61,8 +57,6 @@ export const createProductionCostSchema = z.object({
   vendorId: optionalPositiveId(),
   referenceNo: optionalString(200),
 })
-
-export type CreateProductionCostInput = z.infer<typeof createProductionCostSchema>
 
 export const updateProductionCostSchema = z.object({
   category: z.enum(PRODUCTION_COST_CATEGORIES, { message: "Kategori biaya tidak valid" }),

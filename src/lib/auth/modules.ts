@@ -39,9 +39,6 @@ import { MODULE_ACTIONS, type CatalogAction, type CatalogVerb } from "./module-c
 
 export type { CatalogAction, CatalogVerb }
 
-/** Verba aksi = kolom matriks. Definisi tinggal di katalog hasil generate. */
-export type ActionKey = CatalogVerb
-
 /** Satu baris matriks: permission + tempatnya (modul, entitas, verba). */
 export type ModuleActionDef = CatalogAction
 

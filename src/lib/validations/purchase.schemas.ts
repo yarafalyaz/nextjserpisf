@@ -24,8 +24,6 @@ export const purchaseRequestSchema = z.object({
   items: optionalString(10000), // JSON string, parsed separately
 })
 
-export type PurchaseRequestInput = z.infer<typeof purchaseRequestSchema>
-
 // ==================== PURCHASE ORDER ====================
 
 export const purchaseOrderSchema = z.object({
@@ -45,8 +43,6 @@ export const purchaseOrderSchema = z.object({
   items: optionalString(50000), // JSON string, parsed separately
 })
 
-export type PurchaseOrderInput = z.infer<typeof purchaseOrderSchema>
-
 // ==================== GOODS RECEIPT ====================
 
 export const goodsReceiptSchema = z.object({
@@ -64,8 +60,6 @@ export const goodsReceiptSchema = z.object({
   adminFee: optionalNumber(0),
   items: optionalString(50000), // JSON string, parsed separately
 })
-
-export type GoodsReceiptInput = z.infer<typeof goodsReceiptSchema>
 
 // ==================== VENDOR BILL ====================
 
@@ -85,8 +79,6 @@ export const vendorBillSchema = z.object({
   attachmentIds: optionalString(5000), // JSON string
   items: optionalString(50000), // JSON string, parsed separately
 })
-
-export type VendorBillInput = z.infer<typeof vendorBillSchema>
 
 // ==================== VENDOR PAYMENT ====================
 
@@ -111,8 +103,6 @@ export const vendorPaymentSchema = z.object({
   attachmentIds: optionalString(5000), // JSON string
 })
 
-export type VendorPaymentInput = z.infer<typeof vendorPaymentSchema>
-
 // ==================== PURCHASE RETURN ====================
 
 export const purchaseReturnSchema = z.object({
@@ -122,4 +112,3 @@ export const purchaseReturnSchema = z.object({
   items: optionalString(50000), // JSON string, parsed separately
 })
 
-export type PurchaseReturnInput = z.infer<typeof purchaseReturnSchema>

@@ -35,8 +35,6 @@ export const ASSET_HISTORY_TYPES = {
   DISPOSAL: "disposal",
 } as const
 
-export type AssetHistoryKind = "Perolehan" | "Penyusutan" | "Pelepasan" | "Pindah Lokasi"
-
 export interface AssetHistoryAssetInput {
   id: number
   code: string

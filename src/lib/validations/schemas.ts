@@ -112,12 +112,6 @@ export const accountServerSchema = z.object({
     .optional(),
 })
 
-export type CustomerInput = z.infer<typeof customerSchema>
-export type VendorInput = z.infer<typeof vendorSchema>
-export type ItemInput = z.infer<typeof itemSchema>
-export type WarehouseServerInput = z.infer<typeof warehouseServerSchema>
-export type AccountServerInput = z.infer<typeof accountServerSchema>
-
 // ==================== KARYAWAN (form) ====================
 export const employeeSchema = z.object({
   employeeNo: z.string().optional(),
@@ -160,4 +154,3 @@ export const employeeSchema = z.object({
   }
 })
 
-export type EmployeeInput = z.infer<typeof employeeSchema>

@@ -14,4 +14,3 @@ export const withholdingTaxTypeSchema = z.object({
     .transform((v) => v === true || v === "true" || v === "on"),
 })
 
-export type WithholdingTaxTypeInput = z.infer<typeof withholdingTaxTypeSchema>

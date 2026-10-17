@@ -112,9 +112,3 @@ export const payrollSchema = z.object({
 
 // ==================== Inferred Types ====================
 
-export type LeaveRequestInput = z.infer<typeof leaveRequestSchema>
-export type OvertimeRequestInput = z.infer<typeof overtimeRequestSchema>
-export type EmployeeLoanInput = z.infer<typeof employeeLoanSchema>
-export type TimesheetInput = z.infer<typeof timesheetSchema>
-export type AppreciationInput = z.infer<typeof appreciationSchema>
-export type PayrollInput = z.infer<typeof payrollSchema>

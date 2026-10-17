@@ -55,6 +55,3 @@ export const checkFitmentSchema = z.object({
   transmission: optionalString(100),
 });
 
-export type CreateVehicleFitmentInput = z.infer<typeof createVehicleFitmentSchema>;
-export type UpdateVehicleFitmentInput = z.infer<typeof updateVehicleFitmentSchema>;
-export type CheckFitmentInput = z.infer<typeof checkFitmentSchema>;

@@ -269,6 +269,3 @@ export function buildFinancialTrendTable(trend: FinancialTrend): { columns: Tabl
   return { columns, rows }
 }
 
-export function financialTrendSummary(trend: FinancialTrend): string {
-  return trend.verdict
-}

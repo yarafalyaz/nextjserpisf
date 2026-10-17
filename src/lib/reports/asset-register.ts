@@ -39,8 +39,6 @@ const COLUMNS: TableColumn[] = [
 ]
 
 export type AssetRegisterAsset = AssetLedgerAsset
-/** Riwayat penyusutan per aset (`AssetHistory` type "depreciation"). */
-export type AssetDepreciationEntry = AssetLedgerEntry
 
 export interface AssetRegisterInput {
   assets: AssetLedgerAsset[]

@@ -116,8 +116,6 @@ export const costCenterSchema = z.object({
   parentId: optionalNumber(),
 });
 
-export type CostCenterInput = z.infer<typeof costCenterSchema>;
-
 // ==================== UPDATE JOURNAL ====================
 
 export const updateJournalSchema = z.object({
@@ -127,6 +125,3 @@ export const updateJournalSchema = z.object({
   attachmentIds: optionalString(5000),
 });
 
-export type UpdateJournalInput = z.infer<typeof updateJournalSchema>;
-
-export type ExpenseInput = z.infer<typeof expenseSchema>;

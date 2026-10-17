@@ -36,4 +36,3 @@ export const setupSchema = z
     path: ["confirmPassword"],
   })
 
-export type SetupInput = z.infer<typeof setupSchema>

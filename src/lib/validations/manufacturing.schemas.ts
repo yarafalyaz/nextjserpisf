@@ -20,8 +20,6 @@ export const createProductSchema = z.object({
   inventoryItemId: optionalPositiveId(),
 })
 
-export type CreateProductInput = z.infer<typeof createProductSchema>
-
 export const updateProductSchema = z.object({
   name: z.string().min(1, "Nama produk wajib diisi").max(255),
   code: optionalString(100),
@@ -30,8 +28,6 @@ export const updateProductSchema = z.object({
   vehicleModelId: optionalNumber(),
   inventoryItemId: optionalPositiveId(),
 })
-
-export type UpdateProductInput = z.infer<typeof updateProductSchema>
 
 // ==================== PRODUCTION ORDER ====================
 
@@ -44,8 +40,6 @@ export const createProductionOrderSchema = z.object({
   notes: optionalString(1000),
 })
 
-export type CreateProductionOrderInput = z.infer<typeof createProductionOrderSchema>
-
 export const updateProductionOrderSchema = z.object({
   productId: z.coerce.number().int().min(1, "Produk wajib dipilih"),
   qty: z.coerce.number().min(1, "Qty minimal 1"),
@@ -54,8 +48,6 @@ export const updateProductionOrderSchema = z.object({
   endDate: optionalString(30),
   notes: optionalString(1000),
 })
-
-export type UpdateProductionOrderInput = z.infer<typeof updateProductionOrderSchema>
 
 // ==================== BOM REVISION ====================
 // A revision is a frozen snapshot of the product's working BOM

@@ -16,8 +16,6 @@ export const Status = {
   INACTIVE: "inactive",
 } as const;
 
-export type StatusValue = (typeof Status)[keyof typeof Status];
-
 // ─── Sales ─────────────────────────────────────────────────────────────────
 export const SalesStatus = {
   ...Status,
@@ -30,8 +28,6 @@ export const SalesStatus = {
   PARTIAL: "partial",
 } as const;
 
-export type SalesStatusValue = (typeof SalesStatus)[keyof typeof SalesStatus];
-
 // ─── Purchase ──────────────────────────────────────────────────────────────
 export const PurchaseStatus = {
   ...Status,
@@ -39,8 +35,6 @@ export const PurchaseStatus = {
   RECEIVED: "received",
   VERIFIED: "verified",
 } as const;
-
-export type PurchaseStatusValue = (typeof PurchaseStatus)[keyof typeof PurchaseStatus];
 
 // ─── Manufacturing / Work Order ────────────────────────────────────────────
 export const WorkOrderStatus = {
@@ -51,8 +45,6 @@ export const WorkOrderStatus = {
   CANCELLED: "cancelled",
 } as const;
 
-export type WorkOrderStatusValue = (typeof WorkOrderStatus)[keyof typeof WorkOrderStatus];
-
 // ─── Inventory ─────────────────────────────────────────────────────────────
 export const InventoryStatus = {
   DRAFT: "draft",
@@ -60,8 +52,6 @@ export const InventoryStatus = {
   CANCELLED: "cancelled",
   ISSUED: "issued",
 } as const;
-
-export type InventoryStatusValue = (typeof InventoryStatus)[keyof typeof InventoryStatus];
 
 // ─── Delivery ──────────────────────────────────────────────────────────────
 export const DeliveryStatus = {
@@ -71,8 +61,6 @@ export const DeliveryStatus = {
   DELIVERED: "delivered",
   RETURNED: "returned",
 } as const;
-
-export type DeliveryStatusValue = (typeof DeliveryStatus)[keyof typeof DeliveryStatus];
 
 // ─── HRM / Attendance ──────────────────────────────────────────────────────
 export const AttendanceStatus = {
@@ -85,8 +73,6 @@ export const AttendanceStatus = {
   OVERTIME: "overtime",
 } as const;
 
-export type AttendanceStatusValue = (typeof AttendanceStatus)[keyof typeof AttendanceStatus];
-
 // ─── Leave / Approval ──────────────────────────────────────────────────────
 export const ApprovalStatus = {
   PENDING: "pending",
@@ -94,16 +80,12 @@ export const ApprovalStatus = {
   REJECTED: "rejected",
 } as const;
 
-export type ApprovalStatusValue = (typeof ApprovalStatus)[keyof typeof ApprovalStatus];
-
 // ─── Payment ───────────────────────────────────────────────────────────────
 export const PaymentStatus = {
   UNPAID: "unpaid",
   PARTIAL: "partial",
   PAID: "paid",
 } as const;
-
-export type PaymentStatusValue = (typeof PaymentStatus)[keyof typeof PaymentStatus];
 
 // ─── CRM ───────────────────────────────────────────────────────────────────
 export const CrmStatus = {
@@ -119,8 +101,6 @@ export const CrmStatus = {
   CLOSED: "closed",
 } as const;
 
-export type CrmStatusValue = (typeof CrmStatus)[keyof typeof CrmStatus];
-
 // ─── Bank Reconciliation ───────────────────────────────────────────────────
 export const ReconciliationStatus = {
   UNMATCHED: "unmatched",
@@ -128,4 +108,3 @@ export const ReconciliationStatus = {
   RECONCILED: "reconciled",
 } as const;
 
-export type ReconciliationStatusValue = (typeof ReconciliationStatus)[keyof typeof ReconciliationStatus];

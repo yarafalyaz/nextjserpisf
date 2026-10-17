@@ -18,7 +18,6 @@ import { formatCurrency } from "@/lib/utils/format"
 import {
   buildOutstandingLines,
   type OutstandingDocument,
-  type OutstandingLineItem,
   type OutstandingWording,
 } from "@/lib/reports/outstanding-lines"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -30,7 +29,6 @@ const WORDING: OutstandingWording = {
   emptyNotice: "Tidak ada pesanan penjualan dengan sisa pengiriman pada periode ini.",
 }
 
-export type OrderFulfillmentItemInput = OutstandingLineItem
 export type SalesOrderFulfillmentInput = OutstandingDocument
 
 export interface OrderFulfillmentTotals {

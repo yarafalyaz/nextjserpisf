@@ -28,8 +28,6 @@ export const updateQcChecklistSchema = z.object({
   productId: optionalPositiveId(),
 })
 
-export type CreateQcChecklistInput = z.infer<typeof createQcChecklistSchema>
-
 // ==================== QC CHECKLIST ITEMS (dynamic rows) ====================
 
 const checklistItemRowSchema = z.object({

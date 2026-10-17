@@ -346,4 +346,3 @@ export const QUICK_ADD = {
   },
 } satisfies Record<string, QuickAddDefinition>
 
-export type QuickAddKey = keyof typeof QUICK_ADD

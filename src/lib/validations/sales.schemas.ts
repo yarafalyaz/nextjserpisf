@@ -215,5 +215,3 @@ export const quotationSchema = z.object({
   sections: z.array(quotationSectionSchema).min(1, "Minimal 1 section"),
 })
 
-export type QuotationInput = z.infer<typeof quotationSchema>
-export type SalesPaymentInput = z.infer<typeof createSalesPaymentSchema>

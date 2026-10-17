@@ -6,10 +6,8 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
  */
 
 export const QC_INSPECTION_TYPES = ["incoming", "in_process", "final", "safety"] as const
-export type QcInspectionType = (typeof QC_INSPECTION_TYPES)[number]
 
 export const NONCONFORMANCE_STATUSES = ["open", "rework", "rework_done", "rejected", "closed"] as const
-export type NonconformanceStatus = (typeof NONCONFORMANCE_STATUSES)[number]
 
 /** Terminal, no-longer-blocking NCR statuses. `open`/`rework` block handover. */
 const OPEN_NCR_STATUSES = ["open", "rework", "rejected"]

@@ -36,8 +36,6 @@ export const stockAdjustmentSchema = z.object({
   items: optionalString(50000), // JSON string, parsed separately
 })
 
-export type StockAdjustmentInput = z.infer<typeof stockAdjustmentSchema>
-
 // ==================== INVENTORY TRANSFER ====================
 
 export const inventoryTransferSchema = z.object({
@@ -51,8 +49,6 @@ export const inventoryTransferSchema = z.object({
   path: ["destinationWarehouseId"],
 })
 
-export type InventoryTransferInput = z.infer<typeof inventoryTransferSchema>
-
 // ==================== MATERIAL ISSUE ====================
 
 export const materialIssueSchema = z.object({
@@ -64,8 +60,6 @@ export const materialIssueSchema = z.object({
   notes: optionalString(1000),
   items: optionalString(50000), // JSON string, parsed separately
 })
-
-export type MaterialIssueInput = z.infer<typeof materialIssueSchema>
 
 // ==================== WORK ORDER ====================
 
@@ -80,8 +74,6 @@ export const workOrderSchema = z.object({
   items: optionalStr(50000), // JSON string, parsed separately
 })
 
-export type WorkOrderInput = z.infer<typeof workOrderSchema>
-
 // ==================== RACK ====================
 
 export const rackSchema = z.object({
@@ -89,8 +81,6 @@ export const rackSchema = z.object({
   name: requiredStr("Nama rak wajib diisi", 100),
   warehouseId: requiredId("Gudang"),
 })
-
-export type RackInput = z.infer<typeof rackSchema>
 
 // ==================== RACK ROW ====================
 
@@ -100,4 +90,3 @@ export const rackRowSchema = z.object({
   name: requiredStr("Nama baris rak wajib diisi", 100),
 })
 
-export type RackRowInput = z.infer<typeof rackRowSchema>
