@@ -188,12 +188,24 @@ export default async function QuotationDetailPage({
                 >
                   + Uang Muka
                 </Button>
-                <Button
-                  href={`/penjualan/pesanan/tambah?quotationId=${quotation.id}`}
-                  variant="primary"
-                >
-                  + Pesanan Penjualan
-                </Button>
+                {quotation.salesOrders.length === 0 ? (
+                  <Button
+                    href={`/penjualan/pesanan/tambah?quotationId=${quotation.id}`}
+                    variant="primary"
+                  >
+                    + Pesanan Penjualan
+                  </Button>
+                ) : (
+                  /* Penawaran ini sudah dikonversi: tampilkan tautan ke pesanan
+                     yang sudah ada, bukan tombol yang bisa membuat pesanan kedua
+                     (penjagaan keduanya ada di createSalesOrder). */
+                  <Button
+                    href={entityHref("/penjualan/pesanan", quotation.salesOrders[0])}
+                    variant="secondary"
+                  >
+                    Pesanan {quotation.salesOrders[0].documentNo}
+                  </Button>
+                )}
               </>
             )}
             <BackButton href="/penjualan/penawaran" />

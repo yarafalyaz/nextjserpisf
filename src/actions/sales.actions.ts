@@ -767,6 +767,25 @@ export async function createSalesOrder(formData: FormData) {
   const salesOrder = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
 
+    // Satu penawaran hanya boleh menghasilkan SATU pesanan penjualan. Tanpa
+    // penjagaan ini, tombol "+ Pesanan Penjualan" di halaman penawaran bisa
+    // diklik dua kali (atau URL ?quotationId= dipakai ulang) dan lahir dua SO
+    // dari satu penawaran. Kunci baris penawaran membuat cek-lalu-buat ini
+    // atomik — sama seperti convertQuotationToOrder, yang sekarang memakai
+    // aturan yang sama supaya kedua jalur tidak berbeda perilaku.
+    if (v.quotationId) {
+      await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${v.quotationId} FOR UPDATE`
+      const sudahAda = await tx.salesOrder.findFirst({
+        where: { quotationId: v.quotationId },
+        select: { documentNo: true },
+      })
+      if (sudahAda) {
+        throw new Error(
+          `Penawaran ini sudah memiliki Pesanan Penjualan ${sudahAda.documentNo}`,
+        )
+      }
+    }
+
     return tx.salesOrder.create({
       data: {
         documentNo,
