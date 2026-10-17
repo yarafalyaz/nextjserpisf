@@ -342,7 +342,11 @@ describe("stockJournalService", () => {
       await stockJournalService.onServiceGoodsReceipt(tx, [{ qty: 1, cost: 500000 }], "GR-9", 9, 42);
 
       const arg = mocks.createJournal.mock.calls[0][0];
-      expect(arg.referenceType).toBe("GoodsReceipt");
+      // Penanda WAJIB berbeda dari jurnal barang ("GoodsReceipt"): tabel journals
+      // unik pada (reference_type, reference_id), sehingga penanda yang sama
+      // membuat jurnal jasa ditolak dan verifikasi penerimaan campuran
+      // barang+jasa selalu rollback.
+      expect(arg.referenceType).toBe("GoodsReceiptService");
       expect(arg.referenceId).toBe(9);
       expect(arg.type).toBe("GR");
       // Debits the expense account (500), NOT inventory (100); credits clearing (600).

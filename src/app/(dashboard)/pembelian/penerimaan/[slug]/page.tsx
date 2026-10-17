@@ -24,6 +24,10 @@ import {
 import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
+import {
+  GOODS_RECEIPT_JOURNAL_REF_TYPE,
+  GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE,
+} from "@/lib/services/stock-journal.service";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
@@ -48,6 +52,10 @@ export default async function GoodsReceiptDetailPage({
             purchaseOrder: { include: { vendor: true, items: true } },
             warehouse: true,
             items: true,
+            vendorBills: {
+              where: { status: { notIn: ["cancelled"] } },
+              select: { id: true, slug: true, documentNo: true, grandTotal: true, status: true },
+            },
           },
         }),
       byId: (id, where) =>
@@ -57,6 +65,10 @@ export default async function GoodsReceiptDetailPage({
             purchaseOrder: { include: { vendor: true, items: true } },
             warehouse: true,
             items: true,
+            vendorBills: {
+              where: { status: { notIn: ["cancelled"] } },
+              select: { id: true, slug: true, documentNo: true, grandTotal: true, status: true },
+            },
           },
         }),
     },
@@ -85,12 +97,28 @@ export default async function GoodsReceiptDetailPage({
   const rackRowMap = new Map(rackRows.map((rr) => [rr.id, rr]));
   const itemMap = new Map(receiptItems.map((i) => [i.id, i]));
 
-  // The GL journal posted when this receipt was verified (Dr Persediaan /
-  // Cr clearing). Rendered as a link so users can jump from the receipt to the
-  // books — a receipt stuck in draft has none.
-  const journal = await prisma.journal.findFirst({
-    where: { referenceType: "GoodsReceipt", referenceId: receipt.id },
-    select: { id: true, slug: true, journalNumber: true, totalDebit: true, status: true },
+  // Jurnal GL yang diposting saat penerimaan diverifikasi. Penerimaan CAMPURAN
+  // (barang + jasa) memposting DUA jurnal untuk penerimaan yang sama: persediaan
+  // (penanda "GoodsReceipt") dan beban jasa (penanda "GoodsReceiptService") — lihat
+  // stock-journal.service; penandanya wajib berbeda karena `journals` unik pada
+  // (reference_type, reference_id). Keduanya diambil supaya halaman ini tidak
+  // menyembunyikan jurnal jasa. Penerimaan draft belum punya jurnal.
+  const journals = await prisma.journal.findMany({
+    where: {
+      referenceType: {
+        in: [GOODS_RECEIPT_JOURNAL_REF_TYPE, GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE],
+      },
+      referenceId: receipt.id,
+    },
+    select: {
+      id: true,
+      slug: true,
+      journalNumber: true,
+      totalDebit: true,
+      status: true,
+      referenceType: true,
+    },
+    orderBy: { id: "asc" },
   });
 
   // GoodsReceiptItem.stockMoveId hanya FK skalar (tanpa relasi), jadi slug mutasi
@@ -140,6 +168,19 @@ export default async function GoodsReceiptDetailPage({
               </>
             )}
             <PrintButton documentType="goods-receipt" documentId={receipt.id} />
+            {/* "Buat Tagihan dari Penerimaan" — jalur yang mengisi
+                VendorBill.goodsReceiptId + VendorBillItem.goodsReceiptItemId,
+                sehingga laporan Diterima Belum Ditagih mengenali penerimaan ini.
+                Hanya untuk penerimaan yang sudah diverifikasi (draft belum
+                menambah stok / membersihkan clearing, jadi tak bisa ditagih). */}
+            {receipt.status !== "draft" && receipt.vendorBills.length === 0 && (
+              <Link
+                href={`/pembelian/tagihan/tambah?grId=${receipt.id}`}
+                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+              >
+                Buat Tagihan
+              </Link>
+            )}
             <BackButton href="/pembelian/penerimaan" />
           </>
         }
@@ -385,42 +426,88 @@ export default async function GoodsReceiptDetailPage({
         </div>
       </div>
 
-      {/* Jurnal — posted on verification (Dr Persediaan / Cr clearing). */}
-      {journal ? (
+      {/* Tagihan yang menagih penerimaan ini — sisi balik dari
+          VendorBill.goodsReceiptId, supaya rantai penerimaan → tagihan terlihat
+          dari penerimaannya juga. */}
+      {receipt.vendorBills.length > 0 && (
+        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">
+              Tagihan Vendor
+            </h2>
+          </div>
+          <div className="p-4 px-5">
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>No. Dokumen</DetailTableTh>
+                <DetailTableTh align="right">Total</DetailTableTh>
+                <DetailTableTh>Status</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
+                {receipt.vendorBills.map((bill) => (
+                  <DetailTableRow key={bill.id}>
+                    <DetailTableTd className="font-mono">
+                      <Link href={entityHref("/pembelian/tagihan", bill)} className="text-primary hover:underline">
+                        {bill.documentNo}
+                      </Link>
+                    </DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(Number(bill.grandTotal))}</DetailTableTd>
+                    <DetailTableTd><StatusChip status={bill.status} /></DetailTableTd>
+                  </DetailTableRow>
+                ))}
+              </DetailTableBody>
+            </DetailTable>
+          </div>
+        </div>
+      )}
+
+      {/* Jurnal — posted on verification (Dr Persediaan / Cr clearing, plus a
+          separate Dr Beban Jasa journal for the service lines of a mixed
+          goods+service receipt). */}
+      {journals.length > 0 ? (
         <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
           <h2 className="mb-4 text-[0.9375rem] font-semibold text-foreground">
             Jurnal Akuntansi
           </h2>
-          <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                No. Jurnal
-              </span>
-              <span className="text-[0.9375rem] font-medium">
-                <Link
-                  href={entityHref("/keuangan/jurnal", journal)}
-                  className="text-primary hover:underline font-mono"
-                >
-                  {journal.journalNumber}
-                </Link>
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Nilai Persediaan
-              </span>
-              <span className="text-[0.9375rem] text-foreground font-medium tabular-nums">
-                {formatCurrency(Number(journal.totalDebit))}
-              </span>
-            </div>
-            <div className="flex flex-col gap-1">
-              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Status
-              </span>
-              <span className="text-[0.9375rem] text-foreground font-medium">
-                {statusLabel(journal.status)}
-              </span>
-            </div>
+          <div className="flex flex-col gap-4">
+            {journals.map((journal) => (
+              <div
+                key={journal.id}
+                className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4"
+              >
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    No. Jurnal
+                  </span>
+                  <span className="text-[0.9375rem] font-medium">
+                    <Link
+                      href={entityHref("/keuangan/jurnal", journal)}
+                      className="text-primary hover:underline font-mono"
+                    >
+                      {journal.journalNumber}
+                    </Link>
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    {journal.referenceType === GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE
+                      ? "Nilai Beban Jasa"
+                      : "Nilai Persediaan"}
+                  </span>
+                  <span className="text-[0.9375rem] text-foreground font-medium tabular-nums">
+                    {formatCurrency(Number(journal.totalDebit))}
+                  </span>
+                </div>
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Status
+                  </span>
+                  <span className="text-[0.9375rem] text-foreground font-medium">
+                    {statusLabel(journal.status)}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       ) : receipt.status === "draft" ? (

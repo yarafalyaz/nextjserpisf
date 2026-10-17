@@ -301,6 +301,10 @@ export function formatReferenceType(refType: string | null | undefined): string 
     SalesInvoice: "Faktur Penjualan",
     PurchaseOrder: "Pesanan Pembelian",
     GoodsReceipt: "Penerimaan Barang",
+    // Jurnal beban jasa dari penerimaan campuran barang+jasa (penanda terpisah
+    // karena `journals` unik pada (reference_type, reference_id) — lihat
+    // stock-journal.service). Tanpa label ini tabel jurnal menampilkan enum mentah.
+    GoodsReceiptService: "Penerimaan Barang (Jasa)",
     MaterialIssue: "Pengeluaran Bahan",
     StockAdjustment: "Penyesuaian Stok",
     InventoryTransfer: "Transfer Stok",
@@ -338,6 +342,7 @@ export function referenceHref(
     PurchaseRequest: "/pembelian/permintaan",
     PurchaseReturn: "/pembelian/retur",
     GoodsReceipt: "/pembelian/penerimaan",
+    GoodsReceiptService: "/pembelian/penerimaan",
     GR: "/pembelian/penerimaan",
     ProductionOrder: "/produksi/production-orders",
     ManufacturingOrder: "/produksi/production-orders",

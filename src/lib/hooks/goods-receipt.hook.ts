@@ -204,9 +204,9 @@ export async function onGoodsReceiptVerified(
       // inventory (which also raises the 3-way-match bill ceiling and lets
       // the vendor over-bill). Hard cap with no tolerance, mirroring
       // findOverReturn's qty guard (the value-based 3-way match keeps its
-      // rounding tolerance; a qty count does not). PurchaseOrderItem.receivedQty
-      // is a dead column (never written), so cumulative received is summed
-      // from verified GR items here, converted to base units via toBaseQty.
+      // rounding tolerance; a qty count does not). Cumulative received is
+      // summed from verified GR items here, converted to base units via
+      // toBaseQty.
       for (const poItem of poItems) {
         const received = receivedMap.get(poItem.itemId) ?? 0;
         if (received > Number(poItem.qty)) {
@@ -216,6 +216,18 @@ export async function onGoodsReceiptVerified(
             `Sesuaikan qty penerimaan atau ubah PO.`
           );
         }
+      }
+
+      // Persist the accumulator `PurchaseOrderItem.receivedQty` from the SAME
+      // base-unit cumulative map the guard above used, so the PO page ("Diterima")
+      // and the PO Outstanding report read a value that agrees with the over-
+      // receipt guard. It is written as an ABSOLUTE value (not an increment):
+      // receivedMap is recomputed from the verified GR lines on every verify, so
+      // the column also self-heals from any drift. Raw SQL mirrors the qty_on_hand
+      // write below and keeps the write to one statement per PO line.
+      for (const poItem of poItems) {
+        const received = receivedMap.get(poItem.itemId) ?? 0;
+        await tx.$executeRaw`UPDATE purchase_order_items SET received_qty = ${received} WHERE id = ${poItem.id}`;
       }
 
       // Determine if fully received

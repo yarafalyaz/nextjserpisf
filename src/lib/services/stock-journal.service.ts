@@ -52,6 +52,20 @@ function sumValue(items: JournalItemInput[]): number {
   return items.reduce((s, i) => s + Number(i.qty) * Number(i.cost), 0)
 }
 
+/**
+ * `Journal.referenceType` untuk jurnal yang lahir dari satu penerimaan barang.
+ *
+ * SATU penerimaan bisa menghasilkan DUA jurnal: jurnal persediaan (barang) dan
+ * jurnal beban (baris jasa/subkontrak). `journals` punya unique
+ * `(reference_type, reference_id)`, jadi memakai penanda yang sama untuk
+ * keduanya membuat jurnal kedua gagal (duplicate entry) dan seluruh transaksi
+ * verifikasi ter-rollback — penerimaan campuran barang+jasa tidak pernah bisa
+ * diverifikasi. Penanda jasa karena itu dibedakan; keduanya tetap menunjuk
+ * `reference_id` = id penerimaan yang sama.
+ */
+export const GOODS_RECEIPT_JOURNAL_REF_TYPE = "GoodsReceipt"
+export const GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE = "GoodsReceiptService"
+
 // ────────────────────────────────────────────────────────────────────────────
 // Stock Journal Service
 // ────────────────────────────────────────────────────────────────────────────
@@ -166,7 +180,7 @@ export const stockJournalService = {
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: transactionDate ?? new Date(),
-      referenceType: 'GoodsReceipt',
+      referenceType: GOODS_RECEIPT_JOURNAL_REF_TYPE,
       referenceId: grId,
       type: 'GR',
       description: `Penerimaan Barang ${grDocumentNo}`,
@@ -211,7 +225,10 @@ export const stockJournalService = {
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: transactionDate ?? new Date(),
-      referenceType: 'GoodsReceipt',
+      // Penanda KHUSUS jasa: penerimaan campuran barang+jasa memposting dua
+      // jurnal untuk GR yang sama, dan unique (reference_type, reference_id)
+      // akan menolak yang kedua bila penandanya sama (lihat konstanta di atas).
+      referenceType: GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE,
       referenceId: grId,
       type: 'GR',
       description: `Penerimaan Jasa ${grDocumentNo}`,

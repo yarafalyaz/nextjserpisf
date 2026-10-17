@@ -32,6 +32,10 @@ import { findOverReturn } from "@/lib/sales/return-validation";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
 import {
+  GOODS_RECEIPT_JOURNAL_REF_TYPE,
+  GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE,
+} from "@/lib/services/stock-journal.service";
+import {
   requestApprovalIfConfigured,
 } from "@/lib/services/approval-workflow.service";
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
@@ -734,8 +738,49 @@ type VendorBillItemInput = {
 
 type ItemMeta = { sku: string; name: string; unitOfMeasure: string | null };
 
+/**
+ * Baris penerimaan (`GoodsReceiptItem.id`) yang masih tersedia untuk ditautkan,
+ * dikelompokkan per `itemId` dan berurut id menaik. Satu baris tagihan mengonsumsi
+ * satu entri (`shift`), sehingga dua baris tagihan untuk item yang sama tertaut ke
+ * DUA baris penerimaan yang berbeda — bukan dua kali ke baris pertama.
+ */
+type GrLineQueues = Map<number, number[]>;
+
+/**
+ * Tautkan tagihan ke penerimaannya (`VendorBill.goodsReceiptId` +
+ * `VendorBillItem.goodsReceiptItemId`) supaya backlink "Penerimaan Barang" dan
+ * laporan Diterima Belum Ditagih (GR/IR) tidak lagi selalu kosong.
+ *
+ * Baris tagihan TIDAK membawa id baris penerimaan dari form (form tagihan hanya
+ * mengirim itemId/qty/harga), jadi pemetaannya dilakukan di sini: baris penerimaan
+ * dikelompokkan per item dan dikonsumsi berurutan sesuai urutan baris tagihan yang
+ * dikirim — yang bila datang dari "Buat Tagihan dari Penerimaan" persis mengikuti
+ * urutan baris penerimaan.
+ */
+async function loadGrLineQueues(
+  tx: Prisma.TransactionClient,
+  goodsReceiptId: number,
+): Promise<GrLineQueues> {
+  const lines = await tx.goodsReceiptItem.findMany({
+    where: { goodsReceiptId },
+    select: { id: true, itemId: true },
+    orderBy: { id: "asc" },
+  });
+  const queues: GrLineQueues = new Map();
+  for (const line of lines) {
+    const bucket = queues.get(line.itemId);
+    if (bucket) bucket.push(line.id);
+    else queues.set(line.itemId, [line.id]);
+  }
+  return queues;
+}
+
 /** Map the form's item rows to `vendor_bill_items` rows (totals computed server-side). */
-function mapVendorBillItems(rows: VendorBillItemInput[], metaById: Map<number, ItemMeta>) {
+function mapVendorBillItems(
+  rows: VendorBillItemInput[],
+  metaById: Map<number, ItemMeta>,
+  grLineQueues?: GrLineQueues,
+) {
   return rows
     .filter((r) => safeRound(r.qty ?? 0, 2) > 0)
     .map((r) => {
@@ -750,8 +795,11 @@ function mapVendorBillItems(rows: VendorBillItemInput[], metaById: Map<number, I
       const discountAmount = safeMultiply(gross, discountPercent / 100, 2);
       const subtotal = safeSubtract(gross, discountAmount, 2);
       const taxAmount = safeMultiply(subtotal, taxPercent / 100, 2);
+      const goodsReceiptItemId =
+        itemId != null ? (grLineQueues?.get(itemId)?.shift() ?? null) : null;
       return {
         itemId,
+        goodsReceiptItemId,
         description: meta ? `${meta.sku} - ${meta.name}` : null,
         unit: meta?.unitOfMeasure ?? null,
         qty,
@@ -771,11 +819,15 @@ function mapVendorBillItems(rows: VendorBillItemInput[], metaById: Map<number, I
  * recorded on the document itself (description + qty + price + totals) so a bill
  * that settles already-sold stock still shows what was bought, independent of
  * inventory. Called inside the caller's transaction.
+ *
+ * `grLineQueues` (see loadGrLineQueues) fills `goodsReceiptItemId` per line when
+ * the bill is tied to a goods receipt.
  */
 async function persistVendorBillItems(
   tx: Prisma.TransactionClient,
   vendorBillId: number,
   itemsJson: string | null | undefined,
+  grLineQueues?: GrLineQueues,
 ): Promise<void> {
   const rows = safeJsonParse<VendorBillItemInput[]>(itemsJson ?? null) ?? [];
   if (rows.length === 0) return;
@@ -800,7 +852,7 @@ async function persistVendorBillItems(
     ]),
   );
 
-  const data = mapVendorBillItems(rows, metaById);
+  const data = mapVendorBillItems(rows, metaById, grLineQueues);
   if (data.length === 0) return;
   await tx.vendorBillItem.createMany({
     data: data.map((r) => ({ ...r, vendorBillId })),
@@ -853,12 +905,81 @@ export async function createVendorBill(formData: FormData) {
 
       await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, v.subtotal);
 
+      // "Buat Tagihan dari Penerimaan" (`?grId=`): tautkan tagihan ke penerimaan
+      // yang ditagih. Tanpa ini `VendorBill.goodsReceiptId` /
+      // `VendorBillItem.goodsReceiptItemId` tidak pernah terisi, sehingga backlink
+      // "Penerimaan Barang" di halaman tagihan selalu "—" dan laporan Diterima
+      // Belum Ditagih (GR/IR) membaca 0 untuk setiap baris penerimaan.
+      let grLineQueues: GrLineQueues | undefined;
+      if (v.goodsReceiptId) {
+        const gr = await tx.goodsReceipt.findUnique({
+          where: { id: v.goodsReceiptId },
+          select: {
+            id: true,
+            documentNo: true,
+            status: true,
+            purchaseOrder: { select: { vendorId: true } },
+          },
+        });
+        if (!gr) {
+          throw new Error("Penerimaan barang yang ditagih tidak ditemukan.");
+        }
+        // Penerimaan draft belum menambah stok maupun membersihkan akun clearing,
+        // jadi menagihnya akan mencocokkan tagihan dengan penerimaan yang tidak ada.
+        if (gr.status !== PurchaseStatus.VERIFIED && gr.status !== Status.COMPLETED) {
+          throw new Error(
+            `Penerimaan ${gr.documentNo} belum diverifikasi, jadi belum bisa ditagih.`,
+          );
+        }
+        // Sama seperti penjagaan vendor PO di atas: AP tidak boleh diakui untuk
+        // vendor lain daripada yang menerima barangnya.
+        if (gr.purchaseOrder.vendorId !== v.vendorId) {
+          throw new Error(
+            `Vendor tagihan tidak sesuai dengan vendor penerimaan ${gr.documentNo}.`,
+          );
+        }
+
+        grLineQueues = await loadGrLineQueues(tx, gr.id);
+
+        // Guard tagih-ganda: nilai tagihan yang sudah ada (non-cancelled) untuk
+        // baris penerimaan ini tidak boleh melebihi nilai barang yang diterima;
+        // tagihan berbasis GR yang sudah lunas ditagih ulang hanya akan
+        // menggandakan AP. Toleransi 1 sen untuk pembulatan.
+        const lineIds = [...grLineQueues.values()].flat();
+        const grLines = lineIds.length
+          ? await tx.goodsReceiptItem.findMany({
+              where: { id: { in: lineIds } },
+              select: { qty: true, unitCost: true },
+            })
+          : [];
+        const receivedValue = grLines.reduce(
+          (s, line) => safeAdd(s, safeMultiply(line.qty, line.unitCost ?? 0, 2), 2),
+          0,
+        );
+        const billed = lineIds.length
+          ? await tx.vendorBillItem.aggregate({
+              where: {
+                goodsReceiptItemId: { in: lineIds },
+                vendorBill: { status: { notIn: ["cancelled"] } },
+              },
+              _sum: { subtotal: true },
+            })
+          : null;
+        const billedValue = Number(billed?._sum.subtotal ?? 0);
+        if (receivedValue > 0 && billedValue >= receivedValue - 0.01) {
+          throw new Error(
+            `Penerimaan ${gr.documentNo} sudah ditagih penuh (${billedValue.toLocaleString("id-ID")} dari ${receivedValue.toLocaleString("id-ID")}).`,
+          );
+        }
+      }
+
       const created = await tx.vendorBill.create({
         data: {
           documentNo,
           slug,
           vendorId: v.vendorId,
           purchaseOrderId: v.purchaseOrderId ?? null,
+          goodsReceiptId: v.goodsReceiptId ?? null,
           withholdingTypeId: v.withholdingTypeId ?? null,
           withholdingAmount: v.withholdingAmount ?? 0,
           date: new Date(v.date),
@@ -876,7 +997,9 @@ export async function createVendorBill(formData: FormData) {
 
       // Persist the item lines so the goods stay recorded on the document even
       // when they settle stock that is already gone (bill without a PO link).
-      await persistVendorBillItems(tx, created.id, v.items);
+      // Each line also links back to its goods-receipt line when the bill came
+      // from a receipt.
+      await persistVendorBillItems(tx, created.id, v.items, grLineQueues);
 
       // Associate uploaded attachments with the new vendor bill
       const attachmentIds = v.attachmentIds;
@@ -1526,8 +1649,15 @@ export async function deletePurchaseOrder(id: number) {
         await tx.goodsReceiptItem.deleteMany({
           where: { goodsReceiptId: gr.id },
         });
-        // Reverse the GR posting journal (Dr Inventory / Cr clearing) to avoid orphaned GL.
-        await deleteJournalByReferenceTx(tx, "GoodsReceipt", gr.id);
+        // Reverse the GR posting journals (Dr Inventory / Cr clearing and, for a
+        // mixed goods+service receipt, Dr Beban Jasa / Cr clearing) to avoid
+        // orphaned GL. Both reference types are reversed: the service journal
+        // uses its own marker (see stock-journal.service).
+        await deleteJournalByReferenceTx(
+          tx,
+          [GOODS_RECEIPT_JOURNAL_REF_TYPE, GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE],
+          gr.id,
+        );
         // Delete the GR
         await tx.goodsReceipt.delete({ where: { id: gr.id } });
       }
@@ -1676,14 +1806,49 @@ export async function deleteGoodsReceipt(id: number) {
         where: { goodsReceiptId: id },
       });
 
-      // 3. Reverse the GR posting journal (Dr Inventory / Cr clearing) to avoid orphaned GL.
-      await deleteJournalByReferenceTx(tx, "GoodsReceipt", id);
+      // 3. Reverse the GR posting journal(s) (Dr Inventory / Cr clearing, plus the
+      // separate service journal of a mixed goods+service receipt) to avoid
+      // orphaned GL.
+      await deleteJournalByReferenceTx(
+        tx,
+        [GOODS_RECEIPT_JOURNAL_REF_TYPE, GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE],
+        id,
+      );
 
       // 4. Delete the GR
       await tx.goodsReceipt.delete({ where: { id } });
 
-      // 5. Parity GoodsReceiptObserver(deleting): revert PO status to ordered if this was last GR
+      // 5. Parity GoodsReceiptObserver(deleting): recompute the PO line accumulator,
+      // then revert the PO status when this was the last GR. `receivedQty` is read
+      // by the PO page ("Diterima") and the PO Outstanding report, so deleting a
+      // verified receipt must lower it — otherwise stock that no longer exists
+      // keeps counting as received. Recomputed (not decremented) from the receipts
+      // that remain, so a delete/re-verify cycle also heals any drift, and in ONE
+      // statement so every PO line is written together. UoM rule mirrors the hook's
+      // toBaseQty clamp: no UoM or UoM == item base unit → factor 1, missing or
+      // non-positive conversion factor → also 1 (never silently drop a receipt line).
       if (gr.purchaseOrderId) {
+        await tx.$executeRaw`
+          UPDATE purchase_order_items poi
+          LEFT JOIN (
+            SELECT gri.item_id,
+                   SUM(gri.qty * CASE
+                       WHEN gri.uom IS NULL OR gri.uom = i.unit_of_measure THEN 1
+                       WHEN uc.factor_to_base > 0 THEN uc.factor_to_base
+                       ELSE 1
+                   END) AS received_qty
+            FROM goods_receipt_items gri
+            JOIN goods_receipts gr ON gr.id = gri.goods_receipt_id
+            JOIN items i ON i.id = gri.item_id
+            LEFT JOIN uom_conversions uc ON uc.item_id = gri.item_id AND uc.code = gri.uom
+            WHERE gr.purchase_order_id = ${gr.purchaseOrderId}
+              AND gr.status IN (${PurchaseStatus.VERIFIED}, ${Status.COMPLETED})
+            GROUP BY gri.item_id
+          ) agg ON agg.item_id = poi.item_id
+          SET poi.received_qty = COALESCE(agg.received_qty, 0)
+          WHERE poi.purchase_order_id = ${gr.purchaseOrderId}
+        `;
+
         const remainingCount = await tx.goodsReceipt.count({
           where: { purchaseOrderId: gr.purchaseOrderId },
         });
@@ -2050,8 +2215,14 @@ export async function updateVendorBill(id: number, formData: FormData) {
 
       // Replace the item lines with the submitted set so an edit round-trips the
       // goods (delete + recreate keeps the simple "last write wins" semantics).
+      // The GR linkage is re-derived from the bill's own `goodsReceiptId`
+      // (unchanged by an edit) so recreating the lines does not silently detach
+      // the bill from its receipt and zero the GR/IR report again.
       await tx.vendorBillItem.deleteMany({ where: { vendorBillId: id } });
-      await persistVendorBillItems(tx, id, v.items);
+      const grLineQueues = existingBill.goodsReceiptId
+        ? await loadGrLineQueues(tx, existingBill.goodsReceiptId)
+        : undefined;
+      await persistVendorBillItems(tx, id, v.items, grLineQueues);
 
       // Associate uploaded attachments with the vendor bill
       const attachmentIds = v.attachmentIds;

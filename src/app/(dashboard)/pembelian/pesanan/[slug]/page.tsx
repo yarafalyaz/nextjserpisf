@@ -42,7 +42,7 @@ export default async function PurchaseOrderDetailPage({
             purchaseRequest: true,
             items: true,
             goodsReceipts: { include: { items: true } },
-            purchaseReturns: true,
+            purchaseReturns: { include: { items: true } },
             workOrder: { select: { id: true, slug: true, documentNo: true } },
             vendorBills: { where: { status: { notIn: ["cancelled"] } }, select: { id: true, slug: true, documentNo: true, grandTotal: true } },
           },
@@ -55,7 +55,7 @@ export default async function PurchaseOrderDetailPage({
             purchaseRequest: true,
             items: true,
             goodsReceipts: { include: { items: true } },
-            purchaseReturns: true,
+            purchaseReturns: { include: { items: true } },
             workOrder: { select: { id: true, slug: true, documentNo: true } },
             vendorBills: { where: { status: { notIn: ["cancelled"] } }, select: { id: true, slug: true, documentNo: true, grandTotal: true } },
           },
@@ -212,6 +212,46 @@ export default async function PurchaseOrderDetailPage({
                             <DetailTableTd>{formatDate(gr.date)}</DetailTableTd>
                             <DetailTableTd>{gr.items.length} item</DetailTableTd>
                             <DetailTableTd><StatusChip status={gr.status} /></DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  )}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "retur",
+            label: "Retur",
+            content: (
+              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Retur Pembelian</h2>
+                  {/* "Buat Retur dari PO" — PO-nya ikut ter-prefill (dan barisnya
+                      dari qty yang sudah diterima) lewat ?poId= di halaman retur. */}
+                  {po.status !== "cancelled" && (
+                    <Link href={`/pembelian/retur/tambah?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
+                  )}
+                </div>
+                <div className="p-4 px-5">
+                  {po.purchaseReturns.length === 0 ? (
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada retur</p>
+                  ) : (
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh>Barang</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {po.purchaseReturns.map((retur) => (
+                          <DetailTableRow key={retur.id}>
+                            <DetailTableTd className="font-mono"><Link href={entityHref("/pembelian/retur", retur)}>{retur.documentNo}</Link></DetailTableTd>
+                            <DetailTableTd>{formatDate(retur.date)}</DetailTableTd>
+                            <DetailTableTd>{retur.items.length} item</DetailTableTd>
+                            <DetailTableTd><StatusChip status={retur.status} /></DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>

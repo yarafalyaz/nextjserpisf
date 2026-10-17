@@ -9,9 +9,14 @@
  *    memasukkan PPN ke perbandingan dan memunculkan selisih palsu sebesar pajak.
  * 2. **Hanya baris penerimaan dari penerimaan yang benar-benar masuk** (`verified`/`completed`).
  *    Penerimaan draft belum mengubah persediaan maupun GRNI.
- * 3. **Tagihan draft tidak dikurangkan** (`status: { not: "draft" }`) karena belum
- *    membersihkan apa pun di buku besar; kalau ikut dikurangkan, sisa dokumen akan
- *    tampak lebih kecil daripada saldo akun dan selisihnya menyesatkan.
+ * 3. **Tagihan yang sudah membatalkan (cancelled) tidak dikurangkan**, sementara
+ *    tagihan **draft IKUT** dihitung. Alasannya ada di `createVendorBill`: AP
+ *    journal (Dr Clearing / Cr Hutang) sudah diposting SAAT tagihan dibuat
+ *    (`onVendorBillPosted` dipanggil di dalam transaksi yang sama), jadi draft
+ *    sudah membersihkan akun GRNI di buku besar — mengabaikannya membuat sisa
+ *    dokumen terlihat lebih besar daripada saldo akun. Perlakuan yang sama dipakai
+ *    penjagaan 3-way match (`assertThreeWayMatch` menghitung semua tagihan
+ *    non-cancelled).
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -68,7 +73,9 @@ export async function loadReceivedNotBilled(period: {
     ? await prisma.vendorBillItem.findMany({
         where: {
           goodsReceiptItemId: { in: lineIds },
-          vendorBill: { status: { not: "draft" } },
+          // Lihat catatan 3 di atas: tagihan draft sudah menjurnal AP-nya, jadi
+          // hanya tagihan yang dibatalkan yang tidak dikurangkan.
+          vendorBill: { status: { not: "cancelled" } },
         },
         select: { goodsReceiptItemId: true, subtotal: true },
       })
