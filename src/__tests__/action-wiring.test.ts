@@ -90,7 +90,7 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   "src/actions/manufacturing.actions.ts::getWorkOrderWithCustomerInfo":
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
-    "tanpa pemanggil UI; BELUM diverifikasi apakah ada pengganti di halaman penggajian, jadi jangan dihapus tanpa memastikan dulu",
+    "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
 }
 
 describe("keterhubungan aksi server", () => {
