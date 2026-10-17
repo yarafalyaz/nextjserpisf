@@ -132,6 +132,7 @@ function fd(entries: Record<string, string | string[]>): FormData {
 }
 
 import * as actions from "../hrm.actions"
+import { normalizeWorkDays } from "@/lib/validations/hrm.schemas"
 
 const EXPORTED_FN_NAMES = [
   "createLeaveRequest",
@@ -142,6 +143,9 @@ const EXPORTED_FN_NAMES = [
   "updateLeaveRequest", "updateOvertimeRequest", "updateEmployeeLoan",
   "updateTimesheet",
   "createAppreciation", "updateAppreciation", "deleteAppreciation",
+  "createHoliday", "updateHoliday", "deleteHoliday",
+  "createDepartmentHoliday", "updateDepartmentHoliday", "deleteDepartmentHoliday",
+  "createWorkSchedule", "updateWorkSchedule", "deleteWorkSchedule",
 ]
 
 describe("HRM Actions exports smoke test", () => {
@@ -1064,3 +1068,147 @@ describe("Next.js redirect error handling", () => {
     }
   })
 })
+
+describe("normalizeWorkDays", () => {
+  it("menyusun urut, membuang duplikat, dan menyaring nilai tak sah", () => {
+    expect(normalizeWorkDays("5,1,1,3")).toBe("1,3,5")
+    expect(normalizeWorkDays(" 1 , 2 ")).toBe("1,2")
+    expect(normalizeWorkDays("7,9,-1,abc")).toBe("")
+    expect(normalizeWorkDays("")).toBe("")
+    expect(normalizeWorkDays(undefined)).toBe("")
+    // 0 = Minggu, 6 = Sabtu — keduanya sah (mis. shift mingguan penuh).
+    expect(normalizeWorkDays("0,6")).toBe("0,6")
+  })
+})
+
+/**
+ * Kalender kerja: hari libur, hari libur departemen, dan jadwal kerja.
+ *
+ * Ketiga tabel ini dibaca perhitungan absensi dan sisa cuti, tetapi sebelumnya
+ * hanya bisa diisi skrip seed.
+ */
+describe("Kalender Kerja", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+  })
+
+  it("createHoliday menulis nama, tanggal, dan keterangan", async () => {
+    prismaMock.holiday.create.mockResolvedValue({ id: 11 })
+    const res = await actions.createHoliday(
+      fd({ name: "Hari Kemerdekaan", date: "2026-08-17", description: "Libur nasional" }),
+    )
+
+    expect(res).toEqual({ success: true, id: 11 })
+    expect(requirePermissionMock).toHaveBeenCalledWith("create_holidays")
+    const arg = prismaMock.holiday.create.mock.calls[0][0]
+    expect(arg.data.name).toBe("Hari Kemerdekaan")
+    expect(arg.data.date).toBeInstanceOf(Date)
+    expect(arg.data.description).toBe("Libur nasional")
+  })
+
+  it("createHoliday menolak nama kosong tanpa menyentuh basis data", async () => {
+    const res = await actions.createHoliday(fd({ name: "", date: "2026-08-17" }))
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Nama hari libur wajib diisi")
+    expect(prismaMock.holiday.create).not.toHaveBeenCalled()
+  })
+
+  it("updateHoliday memakai izin edit_holidays dan menolak id tidak valid", async () => {
+    prismaMock.holiday.update.mockResolvedValue({})
+    const res = await actions.updateHoliday(
+      5,
+      fd({ name: "Cuti bersama", date: "2026-12-24" }),
+    )
+    expect(res).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("edit_holidays")
+
+    const bad = await actions.updateHoliday(0, fd({ name: "Cuti bersama", date: "2026-12-24" }))
+    expect(bad.success).toBe(false)
+    expect(prismaMock.holiday.update).toHaveBeenCalledTimes(1)
+  })
+
+  it("deleteHoliday memakai izin delete_holidays", async () => {
+    prismaMock.holiday.delete.mockResolvedValue({})
+    expect(await actions.deleteHoliday(5)).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("delete_holidays")
+    expect(prismaMock.holiday.delete).toHaveBeenCalledWith({ where: { id: 5 } })
+  })
+
+  it("createWorkSchedule menormalkan hari kerja dan menandai aktif", async () => {
+    prismaMock.workSchedule.create.mockResolvedValue({ id: 3 })
+    const res = await actions.createWorkSchedule(
+      fd({
+        name: "Shift Pagi",
+        // Formulir menggabungkan checkbox hari menjadi SATU nilai sebelum memanggil
+        // aksi (lihat penjaga `work-calendar-form-wiring`): `parseFormData` hanya
+        // menyimpan nilai terakhir bila field dikirim berulang.
+        workDays: "5,1,1,3",
+        startTime: "08:00",
+        endTime: "17:00",
+        isActive: "on",
+      }),
+    )
+
+    expect(res).toEqual({ success: true, id: 3 })
+    expect(requirePermissionMock).toHaveBeenCalledWith("create_work_schedules")
+    const arg = prismaMock.workSchedule.create.mock.calls[0][0]
+    // Bentuk yang diurai layanan absensi: angka hari urut dipisah koma.
+    expect(arg.data.workDays).toBe("1,3,5")
+    expect(arg.data.isActive).toBe(true)
+  })
+
+  it("createWorkSchedule menolak jadwal tanpa hari kerja (fallback Senin-Jumat tidak boleh diam-diam)", async () => {
+    const res = await actions.createWorkSchedule(
+      fd({ name: "Tanpa Hari", startTime: "08:00", endTime: "17:00" }),
+    )
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Pilih minimal satu hari kerja")
+    expect(prismaMock.workSchedule.create).not.toHaveBeenCalled()
+  })
+
+  it("createWorkSchedule menolak jam yang bukan HH:MM", async () => {
+    const res = await actions.createWorkSchedule(
+      fd({ name: "Jam Salah", workDays: ["1"], startTime: "8 pagi", endTime: "17:00" }),
+    )
+    expect(res.success).toBe(false)
+    expect(prismaMock.workSchedule.create).not.toHaveBeenCalled()
+  })
+
+  it("updateWorkSchedule memakai izin edit_work_schedules", async () => {
+    prismaMock.workSchedule.update.mockResolvedValue({})
+    const res = await actions.updateWorkSchedule(
+      3,
+      fd({ name: "Shift Pagi", workDays: ["1", "2"], startTime: "07:00", endTime: "15:00" }),
+    )
+    expect(res).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("edit_work_schedules")
+  })
+
+  it("createDepartmentHoliday wajib memilih departemen", async () => {
+    const bad = await actions.createDepartmentHoliday(
+      fd({ name: "Cuti pabrik", date: "2026-12-24" }),
+    )
+    expect(bad.success).toBe(false)
+    expect(prismaMock.departmentHoliday.create).not.toHaveBeenCalled()
+
+    prismaMock.departmentHoliday.create.mockResolvedValue({ id: 9 })
+    const ok = await actions.createDepartmentHoliday(
+      fd({ departmentId: "2", name: "Cuti pabrik", date: "2026-12-24" }),
+    )
+    expect(ok).toEqual({ success: true, id: 9 })
+    const arg = prismaMock.departmentHoliday.create.mock.calls[0][0]
+    expect(arg.data.departmentId).toBe(2)
+  })
+
+  it("aksi hapus memakai izin hapus masing-masing", async () => {
+    prismaMock.workSchedule.delete.mockResolvedValue({})
+    prismaMock.departmentHoliday.delete.mockResolvedValue({})
+
+    expect(await actions.deleteWorkSchedule(3)).toEqual({ success: true })
+    expect(await actions.deleteDepartmentHoliday(9)).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("delete_work_schedules")
+    expect(requirePermissionMock).toHaveBeenCalledWith("delete_holidays")
+  })
+})
+

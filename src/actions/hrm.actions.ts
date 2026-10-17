@@ -23,6 +23,9 @@ import {
   timesheetSchema,
   appreciationSchema,
   payrollSchema,
+  holidaySchema,
+  departmentHolidaySchema,
+  workScheduleSchema,
 } from "@/lib/validations/hrm.schemas";
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service";
 import { calculateAttendanceSummary } from "@/lib/services/attendance-summary.service";
@@ -1743,6 +1746,243 @@ export async function getAllLeaveBalances(year?: number) {
       success: false as const,
       error: getErrorMessage(e, "Terjadi kesalahan"),
     };
+  }
+}
+
+// ==================== KALENDER KERJA (hari libur & jadwal kerja) ====================
+
+/**
+ * Hari libur (nasional/perusahaan), hari libur per departemen, dan jadwal kerja.
+ *
+ * Ketiga tabel ini adalah satu-satunya sumber yang dibaca perhitungan absensi dan
+ * sisa cuti (`daily-attendance.service`, `attendance-summary.service`,
+ * `leave-quota.service`, `hrm.actions` sendiri), tetapi sebelumnya TIDAK punya
+ * jalur tulis sama sekali — hanya skrip seed. Akibatnya absensi dan hari kerja
+ * hanya benar pada basis data yang di-seed.
+ *
+ * Ironi yang perlu dicatat: penghapusan massalnya sudah ada sejak dulu
+ * (`bulk.actions.ts` memetakan `holiday`, `departmentHoliday`, dan `workSchedule`
+ * ke `delete_holidays`/`delete_work_schedules`) — jadi aplikasi bisa menghapus
+ * baris yang tidak bisa dibuat.
+ */
+
+/** Id numerik (dari pemanggilan aksi, bukan FormData) yang harus bilangan positif. */
+function requirePositiveId(id: number, label: string): number {
+  if (!Number.isInteger(id) || id <= 0) {
+    throw new Error(`Id ${label} tidak valid`);
+  }
+  return id;
+}
+
+export async function createHoliday(formData: FormData) {
+  try {
+    await requirePermission("create_holidays");
+    const parsed = parseFormData(holidaySchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    const holiday = await prisma.holiday.create({
+      data: {
+        name: v.name,
+        date: new Date(v.date),
+        description: v.description ?? null,
+      },
+    });
+
+    await logActivity("create", "Holiday", holiday.id, `Menambah hari libur ${v.name}`);
+    revalidatePath("/sdm/kalender-kerja");
+    return { success: true as const, id: holiday.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createHoliday]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateHoliday(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_holidays");
+    const parsed = parseFormData(holidaySchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    await prisma.holiday.update({
+      where: { id: requirePositiveId(id, "hari libur") },
+      data: {
+        name: v.name,
+        date: new Date(v.date),
+        description: v.description ?? null,
+      },
+    });
+
+    await logActivity("update", "Holiday", id, `Mengubah hari libur ${v.name}`);
+    revalidatePath("/sdm/kalender-kerja");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateHoliday]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteHoliday(id: number) {
+  try {
+    await requirePermission("delete_holidays");
+    await prisma.holiday.delete({ where: { id: requirePositiveId(id, "hari libur") } });
+    await logActivity("delete", "Holiday", id, `Menghapus hari libur #${id}`);
+    revalidatePath("/sdm/kalender-kerja");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteHoliday]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function createDepartmentHoliday(formData: FormData) {
+  try {
+    await requirePermission("create_holidays");
+    const parsed = parseFormData(departmentHolidaySchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    const holiday = await prisma.departmentHoliday.create({
+      data: {
+        departmentId: v.departmentId,
+        name: v.name,
+        date: new Date(v.date),
+      },
+    });
+
+    await logActivity(
+      "create",
+      "DepartmentHoliday",
+      holiday.id,
+      `Menambah hari libur departemen ${v.name}`,
+    );
+    revalidatePath("/sdm/kalender-kerja");
+    return { success: true as const, id: holiday.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createDepartmentHoliday]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateDepartmentHoliday(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_holidays");
+    const parsed = parseFormData(departmentHolidaySchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    await prisma.departmentHoliday.update({
+      where: { id: requirePositiveId(id, "hari libur departemen") },
+      data: {
+        departmentId: v.departmentId,
+        name: v.name,
+        date: new Date(v.date),
+      },
+    });
+
+    await logActivity(
+      "update",
+      "DepartmentHoliday",
+      id,
+      `Mengubah hari libur departemen ${v.name}`,
+    );
+    revalidatePath("/sdm/kalender-kerja");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateDepartmentHoliday]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteDepartmentHoliday(id: number) {
+  try {
+    await requirePermission("delete_holidays");
+    await prisma.departmentHoliday.delete({
+      where: { id: requirePositiveId(id, "hari libur departemen") },
+    });
+    await logActivity("delete", "DepartmentHoliday", id, `Menghapus hari libur departemen #${id}`);
+    revalidatePath("/sdm/kalender-kerja");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteDepartmentHoliday]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function createWorkSchedule(formData: FormData) {
+  try {
+    await requirePermission("create_work_schedules");
+    const parsed = parseFormData(workScheduleSchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    const schedule = await prisma.workSchedule.create({
+      data: {
+        name: v.name,
+        // Bentuk "0-6 dipisah koma" — sama dengan yang diurai layanan absensi.
+        workDays: v.workDays,
+        startTime: v.startTime,
+        endTime: v.endTime,
+        isActive: v.isActive ?? true,
+      },
+    });
+
+    await logActivity("create", "WorkSchedule", schedule.id, `Menambah jadwal kerja ${v.name}`);
+    revalidatePath("/sdm/kalender-kerja");
+    return { success: true as const, id: schedule.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createWorkSchedule]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateWorkSchedule(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_work_schedules");
+    const parsed = parseFormData(workScheduleSchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    await prisma.workSchedule.update({
+      where: { id: requirePositiveId(id, "jadwal kerja") },
+      data: {
+        name: v.name,
+        workDays: v.workDays,
+        startTime: v.startTime,
+        endTime: v.endTime,
+        isActive: v.isActive ?? true,
+      },
+    });
+
+    await logActivity("update", "WorkSchedule", id, `Mengubah jadwal kerja ${v.name}`);
+    revalidatePath("/sdm/kalender-kerja");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateWorkSchedule]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteWorkSchedule(id: number) {
+  try {
+    await requirePermission("delete_work_schedules");
+    await prisma.workSchedule.delete({ where: { id: requirePositiveId(id, "jadwal kerja") } });
+    await logActivity("delete", "WorkSchedule", id, `Menghapus jadwal kerja #${id}`);
+    revalidatePath("/sdm/kalender-kerja");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteWorkSchedule]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
 

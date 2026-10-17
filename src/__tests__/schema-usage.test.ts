@@ -108,13 +108,12 @@ const SEED_ONLY_MODELS: string[] = [
   // KNOWN_UNUSED). `AssetBrandModel` sudah ditutup lewat form merek aset, jadi ia
   // TIDAK ada lagi di daftar ini.
   "AssetGroup",
-  // SDM: penggajian, lembar waktu, dan perhitungan cuti/absensi MEMBACA data induk
-  // ini, tetapi tidak ada halaman maupun aksi yang menulisnya. Dasbor absensi dan
-  // perhitungan hari kerja hanya benar pada basis data yang di-seed.
+  // Kehadiran: dasbor dan notifikasi keterlambatan membacanya, tetapi tidak ada
+  // halaman maupun aksi absensi di seluruh repo — hanya skrip seed.
   "Attendance",
-  "DepartmentHoliday",
-  "Holiday",
-  "WorkSchedule",
+  // SDM: hari libur, hari libur departemen, dan jadwal kerja ditutup bersama
+  // halamannya (`/sdm/kalender-kerja`) — lihat catatan di bawah.
+  // (sebelumnya tiga entri di sini, kini TIDAK ada lagi)
   // Rekening koran: baris rekening koran hanya bisa berasal dari seed karena impor
   // rekening koran belum ada (kolom `BankStatement.totalCredits/totalDebits` dan
   // `BankStatementLine.matchedType` juga mati).

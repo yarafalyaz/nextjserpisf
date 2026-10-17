@@ -110,5 +110,72 @@ export const payrollSchema = z.object({
   costCenterId: optionalId,
 })
 
+// ==================== Kalender Kerja (hari libur & jadwal kerja) ====================
+
+/**
+ * Menormalkan hari kerja ke bentuk yang dibaca layanan absensi: angka hari
+ * `0–6` (0 = Minggu) dipisah koma. Format ini DIVERIFIKASI dari pembacanya
+ * (`daily-attendance.service.ts`, `attendance-summary.service.ts`,
+ * `leave-quota.service.ts` yang memakai `workDays.split(",")` lalu menyaring
+ * `0 <= hari <= 6`), bukan ditebak.
+ *
+ * Token kosong WAJIB dibuang sebelum `Number()`: `Number("")` bernilai 0, dan 0
+ * adalah hari Minggu yang sah — sehingga teks dengan spasi/koma berlebih
+ * ("1, 2") akan menyuntikkan hari Minggu secara diam-diam (terbukti: " 1 , 2 "
+ * menghasilkan "0,1,2"). Hari yang salah = perhitungan absensi yang salah.
+ */
+export function normalizeWorkDays(raw: string | undefined | null): string {
+  if (!raw) return ""
+  const days = new Set<number>()
+  for (const part of raw.split(/[\s,]+/)) {
+    const token = part.trim()
+    if (!token) continue
+    const day = Number(token)
+    if (Number.isInteger(day) && day >= 0 && day <= 6) days.add(day)
+  }
+  return [...days].sort((a, b) => a - b).join(",")
+}
+
+const timeString = (msg: string) =>
+  z.string({ error: msg }).regex(/^([01]\d|2[0-3]):[0-5]\d$/, msg)
+
+/**
+ * Teks wajib dengan pesan yang terbaca pemakai.
+ *
+ * `parseFormData` mengubah string kosong menjadi `undefined`, sehingga pesan di
+ * `.min(1)` tidak pernah tersentuh untuk masukan kosong dan pemakai melihat pesan
+ * zod mentah ("expected string, received undefined"). Karena itu pesannya dipasang
+ * di tingkat tipe string.
+ */
+const requiredText = (msg: string, max = 200) =>
+  z.string({ error: msg }).trim().min(1, msg).max(max)
+
+export const holidaySchema = z.object({
+  name: requiredText("Nama hari libur wajib diisi", 150),
+  date: requiredDate("Tanggal"),
+  description: optionalStr(500),
+})
+
+export const departmentHolidaySchema = z.object({
+  departmentId: requiredId("Departemen"),
+  name: requiredText("Nama hari libur wajib diisi", 150),
+  date: requiredDate("Tanggal"),
+})
+
+export const workScheduleSchema = z.object({
+  name: requiredText("Nama jadwal wajib diisi", 150),
+  // Minimal satu hari: hari kosong akan membuat layanan absensi memakai fallback
+  // Senin–Jumat secara DIAM-DIAM, sehingga jadwal yang sengaja dikosongkan tampak
+  // berlaku sebagai hari kerja biasa. Lebih baik ditolak dengan pesan.
+  workDays: z
+    .string({ error: "Hari kerja tidak valid" })
+    .optional()
+    .transform((raw) => normalizeWorkDays(raw))
+    .refine((value) => value.length > 0, "Pilih minimal satu hari kerja"),
+  startTime: timeString("Jam mulai harus format HH:MM"),
+  endTime: timeString("Jam selesai harus format HH:MM"),
+  isActive: optionalBool,
+})
+
 // ==================== Inferred Types ====================
 

@@ -147,6 +147,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/sdm/cuti/saldo": "Saldo cuti karyawan per periode",
   "/sdm/lembar-waktu": "Lembar waktu",
   "/sdm/lembur": "Lembur",
+  "/sdm/kalender-kerja": "Hari libur & jadwal kerja",
   "/sdm/penggajian": "Penggajian",
   "/sdm/pinjaman": "Pinjaman karyawan",
 }

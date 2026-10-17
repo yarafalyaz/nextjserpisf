@@ -109,7 +109,7 @@ seksinya), `UomConversion.factorToBase` (`createMany({ data: … })` dari JSON f
 `Employee.dateOfBirth` (ditulis di `master.actions.ts`), dan
 `VendorBillItem.discountAmount` (ditulis di dalam `.map()` di luar blok `data:`).
 
-## 4d. Model yang dibaca produk tetapi tidak punya jalur tulis (11 model → 8)
+## 4d. Model yang dibaca produk tetapi tidak punya jalur tulis (11 model → 4)
 
 Kelas yang lebih besar dari §4b: bukan sekadar kolom, melainkan **seluruh modelnya
 tidak bisa diisi dari aplikasi**. Terdeteksi lewat pemeriksaan baru di penjaga
@@ -119,8 +119,7 @@ tulis: delegate Prisma langsung, raw SQL, dan nested write dari model induk.
 | Model | Yang dibaca produk | Akibatnya |
 | --- | --- | --- |
 | `Attendance` | metrik absensi dasbor + notifikasi keterlambatan | absensi tidak bisa dicatat siapa pun; dasbor hanya berisi pada basis data yang di-seed |
-| `Holiday`, `DepartmentHoliday`, `WorkSchedule` | perhitungan hari kerja / cuti | hari libur & jadwal kerja tidak bisa didefinisikan dari aplikasi |
-| `AssetBrandModel`, `AssetGroup` | halaman aset | master merek-tipe & kelompok aset tidak bisa dibuat |
+| `AssetGroup` | halaman aset (`asset.group?.name`) | kelompok aset tidak bisa dibuat, dan `Asset.groupId` tidak pernah ditulis |
 | `BankStatementLine` | halaman rekonsiliasi bank | baris rekening koran hanya dari seed (impor belum ada) |
 | `ProfitCenter` | laporan pusat laba | master pusat laba tidak bisa dibuat; digabung `JournalEntry.profitCenterId` yang tidak pernah diisi, laporan selalu menumpuk di "Tanpa Pusat Laba" |
 
@@ -128,9 +127,15 @@ tulis: delegate Prisma langsung, raw SQL, dan nested write dari model induk.
 
 | Model | Perbaikan |
 | --- | --- |
-| `UserWarehouse` | `updateUserWarehouses` + panel "Akses Gudang" di detail pengguna. Ini menyangkut pembatasan akses, jadi `getWarehouseScope` tetap **fail-closed** (`{ kind: "none" }` bila kosong) — pemberian aksesnya kini lewat izin `manage_users`, id gudang divalidasi ada, dan perubahan dicatat di jejak audit |
-| `CrmTicketComment` | `addTicketComment` + form di kartu Komentar. Kolom `isInternal` kini benar-benar dipakai (kotak "Catatan internal" — sebelumnya hanya tersimpan tanpa terlihat). Penulis komentar diisi dari SESI, bukan dari form |
-| `ProjectLog` | `addProjectLog` + form "Tambah Log" di tab Log. Penulis dari SESI, bukan dari form |
+| `UserWarehouse` | `updateUserWarehouses` + panel "Akses Gudang" di detail pengguna. Menyangkut pembatasan akses, jadi `getWarehouseScope` tetap **fail-closed** (`{ kind: "none" }` bila kosong); pemberian aksesnya lewat izin `manage_users`, id gudang divalidasi ada, dan perubahan dicatat |
+| `CrmTicketComment` | `addTicketComment` + form di kartu Komentar; kolom `isInternal` kini dipakai (kotak "Catatan internal"). Penulis dari SESI |
+| `ProjectLog` | `addProjectLog` + form "Tambah Log" di tab Log. Penulis dari SESI |
+| `AssetBrandModel` | kolom "Tipe / Model" pada form merek aset (tanpa modul baru): kolom "Jumlah Model" di tabel merek akhirnya berisi |
+| `Holiday`, `DepartmentHoliday`, `WorkSchedule` | halaman `/sdm/kalender-kerja` + 9 aksi (buat/ubah/hapus untuk ketiganya). Izinnya **sudah di-seed sejak dulu** (`create/edit/delete/manage_holidays`, `view/create/delete_work_schedules`) — hanya halaman & aksinya yang tidak pernah dibangun. `edit_work_schedules` ditambahkan ke `PERMISSIONS` + katalog (prosedur generator) |
+
+Ironi yang tercatat pada kelompok SDM: `bulk.actions.ts` **sudah** memetakan hapus
+massal untuk `holiday`, `departmentHoliday`, dan `workSchedule` — jadi aplikasi bisa
+menghapus baris yang tidak bisa dibuat.
 
 Semuanya keputusan produk untuk yang tersisa: bangun jalur tulisnya (halaman + aksi)
 atau buang modelnya lewat migrasi. Yang **tidak** masuk daftar ini sudah diverifikasi

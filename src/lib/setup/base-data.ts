@@ -163,6 +163,7 @@ export const PERMISSIONS = [
       "delete_work_orders",
       "view_work_schedules",
       "create_work_schedules",
+      "edit_work_schedules",
       "delete_work_schedules",
       "view_attendance",
       "create_attendance",
