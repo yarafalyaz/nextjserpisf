@@ -82,7 +82,17 @@ export async function loadBalanceSheetParts(
           transactionDate: { lte: asOfDate },
         },
       },
-      include: { account: true },
+      // Hanya kolom yang benar-benar dipakai di bawah ini. Tanpa `select`, neraca
+      // menarik seluruh kolom journalEntry (termasuk memo/createdAt/dll) untuk
+      // setiap baris jurnal sejak awal buku — pemborosan I/O tanpa manfaat.
+      // `include` tidak bisa dipakai bersama `select`, jadi relasi akun ikut
+      // dipilih sebagai `select` bersarang (name/code/type saja).
+      select: {
+        accountId: true,
+        debit: true,
+        credit: true,
+        account: { select: { name: true, code: true, type: true } },
+      },
     }),
     prisma.account.findMany({
       where: { isActive: true },
