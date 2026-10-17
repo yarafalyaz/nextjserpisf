@@ -44,7 +44,7 @@ export default async function EditPage({
   // memuat nilai dokumen, jadi tidak boleh lebih longgar.
   if (!(await canViewWarehouseScopedDocument("material_issue", data.id))) notFound();
 
-  const [warehouses, items, costCenters] = await Promise.all([
+  const [warehouses, items, costCenters, workOrders, projects] = await Promise.all([
     prisma.warehouse.findMany({ orderBy: { name: "asc" } }),
     prisma.item
       .findMany({
@@ -66,6 +66,18 @@ export default async function EditPage({
         })),
       ),
     prisma.costCenter.findMany({ where: { isActive: true }, select: { id: true, code: true, name: true }, orderBy: { code: "asc" } }),
+    // Sama seperti halaman tambah: tanpa daftar ini kolom penaut perintah kerja
+    // dan proyek tampil kosong, dan menyimpan ulang akan menghapus tautan lama.
+    prisma.workOrder.findMany({
+      where: { status: { in: ["confirmed", "released", "in_progress"] } },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, documentNo: true },
+    }),
+    prisma.project.findMany({
+      where: { status: "active" },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true },
+    }),
   ]);
 
   return (
@@ -88,6 +100,8 @@ export default async function EditPage({
         warehouses={warehouses as any}
         costCenters={JSON.parse(JSON.stringify(costCenters))}
         items={items as any}
+        workOrders={workOrders}
+        projects={projects}
       />
     </div>
   );

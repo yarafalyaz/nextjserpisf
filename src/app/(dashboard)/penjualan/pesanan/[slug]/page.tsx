@@ -9,6 +9,7 @@ import { StatusActions } from "@/components/ui/status-actions";
 import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
+import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { InvoiceItemsEditor } from "@/components/ui/invoice-items-editor";
 import {
@@ -245,15 +246,30 @@ export default async function SalesOrderDetailPage({
         />
       </DetailCard>
 
-      {/* Delivery Orders */}
-      {order.deliveryOrders.length > 0 && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">
-              Surat Jalan
-            </h2>
-          </div>
-          <div className="p-4 px-5">
+      {/* Surat Jalan yang lahir dari pesanan ini. Kartunya SELALU tampil (dengan
+          keadaan kosong) supaya jalan membuat surat jalan terlihat dari sini:
+          dulu kartunya hilang sama sekali saat belum ada surat jalan, sehingga
+          satu-satunya jalan adalah menu Surat Jalan dan tautannya tidak ada. */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between gap-3 p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Surat Jalan</h2>
+          {DELIVERABLE_ORDER_STATUSES.includes(
+            order.status as (typeof DELIVERABLE_ORDER_STATUSES)[number]
+          ) && (
+            <Button
+              href={`/penjualan/surat-jalan/tambah?salesOrderId=${order.id}`}
+              variant="primary"
+            >
+              + Surat Jalan
+            </Button>
+          )}
+        </div>
+        <div className="p-4 px-5">
+          {order.deliveryOrders.length === 0 ? (
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+              Belum ada surat jalan untuk pesanan ini
+            </p>
+          ) : (
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>No. Dokumen</DetailTableTh>
@@ -276,9 +292,9 @@ export default async function SalesOrderDetailPage({
                 ))}
               </DetailTableBody>
             </DetailTable>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Invoices */}
       {order.salesInvoices.length > 0 && (

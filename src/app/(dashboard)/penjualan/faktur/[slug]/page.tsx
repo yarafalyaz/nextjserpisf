@@ -11,6 +11,7 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
+import { entityHref } from "@/lib/utils/entity-url"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteSalesInvoice, postInvoice, voidSalesInvoice } from "@/actions/sales.actions"
@@ -48,6 +49,12 @@ export default async function InvoiceDetailPage({
             quotation: { include: { downPayments: { orderBy: { paymentDate: "asc" } } } },
             items: true,
             payments: true,
+            // Retur penjualan yang menunjuk faktur ini — rantai balik faktur ->
+            // retur supaya pemakai tidak perlu mencari di menu Retur.
+            salesReturns: {
+              orderBy: { date: "desc" },
+              select: { id: true, documentNo: true, date: true, status: true },
+            },
           },
         }),
       byId: (id, where) =>
@@ -59,6 +66,12 @@ export default async function InvoiceDetailPage({
             quotation: { include: { downPayments: { orderBy: { paymentDate: "asc" } } } },
             items: true,
             payments: true,
+            // Retur penjualan yang menunjuk faktur ini — rantai balik faktur ->
+            // retur supaya pemakai tidak perlu mencari di menu Retur.
+            salesReturns: {
+              orderBy: { date: "desc" },
+              select: { id: true, documentNo: true, date: true, status: true },
+            },
           },
         }),
     },
@@ -296,6 +309,46 @@ export default async function InvoiceDetailPage({
                             <DetailTableTd>{formatDate(pay.paymentDate)}</DetailTableTd>
                             <DetailTableTd>{resolvePaymentMethodName(pay.paymentMethod, pmMap)}</DetailTableTd>
                             <DetailTableTd align="right">{formatCurrency(Number(pay.amount))}</DetailTableTd>
+                          </DetailTableRow>
+                        ))}
+                      </DetailTableBody>
+                    </DetailTable>
+                  )}
+                </div>
+              </div>
+            ),
+          },
+          {
+            id: "retur",
+            label: "Retur",
+            content: (
+              <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+                <div className="flex items-center justify-between gap-3 p-4 px-5 border-b border-default">
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Retur Penjualan</h2>
+                  {(invoice.status === "posted" || invoice.status === "partial") && (
+                    <Link href={`/penjualan/retur/tambah?invoiceId=${invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
+                  )}
+                </div>
+                <div className="p-4 px-5">
+                  {invoice.salesReturns.length === 0 ? (
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada retur untuk faktur ini</p>
+                  ) : (
+                    <DetailTable>
+                      <DetailTableHead>
+                        <DetailTableTh>No. Dokumen</DetailTableTh>
+                        <DetailTableTh>Tanggal</DetailTableTh>
+                        <DetailTableTh>Status</DetailTableTh>
+                      </DetailTableHead>
+                      <DetailTableBody>
+                        {invoice.salesReturns.map((r) => (
+                          <DetailTableRow key={r.id}>
+                            <DetailTableTd className="font-mono">
+                              <Link href={entityHref("/penjualan/retur", r)}>{r.documentNo}</Link>
+                            </DetailTableTd>
+                            <DetailTableTd>{formatDate(r.date)}</DetailTableTd>
+                            <DetailTableTd>
+                              <StatusChip status={r.status} />
+                            </DetailTableTd>
                           </DetailTableRow>
                         ))}
                       </DetailTableBody>
