@@ -78,6 +78,65 @@ const SEED_ONLY_COLUMNS: string[] = [
   "CrmTicketComment.isInternal",
 ].sort()
 
+/**
+ * Model yang DIBACA kode produk tetapi TIDAK punya jalur tulis di produk sama
+ * sekali (hanya skrip seed yang bisa mengisinya).
+ *
+ * Ini kelas yang sama dengan SEED_ONLY_COLUMNS, tetapi di tingkat model, dan
+ * akibatnya lebih besar: seluruh fiturnya tidak bisa dipakai. Contoh:
+ *
+ * - `Attendance`, `Holiday`, `WorkSchedule`, `DepartmentHoliday` — penggajian,
+ *   lembar waktu, dan perhitungan cuti/absensi MEMBACA data induk ini, tetapi
+ *   tidak ada halaman maupun aksi yang menulisnya di seluruh repo. Jadi dasbor
+ *   absensi dan perhitungan hari kerja hanya bisa benar pada basis data yang
+ *   di-seed, dan tidak bisa dipakai di produksi.
+ * - `ProfitCenter` — laporan pusat laba membaca master ini, tetapi master tidak
+ *   bisa dibuat dari aplikasi; ditambah `JournalEntry.profitCenterId` yang juga
+ *   tidak pernah diisi, seluruh laporan selalu menumpuk di "Tanpa Pusat Laba".
+ *
+ * Yang TIDAK masuk daftar ini (dan tidak boleh dimasukkan tanpa verifikasi):
+ * model yang ditulis lewat nested write (`items: { create: [...] }`), lewat raw
+ * SQL (`ActivityLog` ditulis `INSERT INTO activity_logs` di
+ * `activity-log.service.ts`), atau lewat lembar tersendiri. Pemeriksaannya
+ * karena itu menyertakan tiga jalur tulis tersebut.
+ *
+ * Berarah dua: model baru yang hanya bisa diisi seed memerahkan tes, dan entri
+ * yang sudah punya jalur tulis produk (atau modelnya dibuang) juga memerahkan.
+ */
+const SEED_ONLY_MODELS: string[] = [
+  // Aset: master merek-tipe dan kelompok aset dibaca halaman aset, tetapi tidak
+  // bisa dibuat dari aplikasi (kolom `Asset.assetBrandModelId` juga sudah tercatat
+  // mati di KNOWN_UNUSED).
+  "AssetBrandModel",
+  "AssetGroup",
+  // SDM: penggajian, lembar waktu, dan perhitungan cuti/absensi MEMBACA data induk
+  // ini, tetapi tidak ada halaman maupun aksi yang menulisnya. Dasbor absensi dan
+  // perhitungan hari kerja hanya benar pada basis data yang di-seed.
+  "Attendance",
+  "DepartmentHoliday",
+  "Holiday",
+  "WorkSchedule",
+  // Rekening koran: baris rekening koran hanya bisa berasal dari seed karena impor
+  // rekening koran belum ada (kolom `BankStatement.totalCredits/totalDebits` dan
+  // `BankStatementLine.matchedType` juga mati).
+  "BankStatementLine",
+  // CRM: komentar tiket DIBACA (`include: { comments: ... }`) tetapi tidak ada aksi
+  // yang menambahkannya — daftar komentar yang tidak bisa diisi.
+  "CrmTicketComment",
+  // Proyek: halaman proyek membaca 10 log terakhir, tetapi tidak ada yang menulisnya.
+  "ProjectLog",
+  // Laporan pusat laba membaca master ini, tetapi master tidak bisa dibuat dari
+  // aplikasi; ditambah `JournalEntry.profitCenterId` yang tidak pernah diisi,
+  // seluruh laporan selalu menumpuk di "Tanpa Pusat Laba".
+  "ProfitCenter",
+  // KEAMANAN (fail-closed, bukan lubang): `getWarehouseScope` menetapkan cakupan
+  // gudang peran `warehouse` dari penugasan di tabel ini, dan mengembalikan
+  // `{ kind: "none" }` bila kosong. Karena tidak ada jalur tulis di produk, peran
+  // `warehouse` yang sudah di-seed TIDAK BISA diberi akses gudang mana pun —
+  // pemegangnya selalu ditolak (aman, tetapi perannya tidak terpakai).
+  "UserWarehouse",
+].sort()
+
 const SCALAR_TYPES = new Set([
   "String",
   "Int",
@@ -232,7 +291,9 @@ function scalarFields(schema: string): Array<{ entry: string; names: string[] }>
 }
 
 describe("skema: kolom yang hanya dipakai skrip seed", () => {
-  it("kolom seed-only terdaftar, dan daftarnya tidak membusuk", () => {
+  it(
+    "kolom seed-only terdaftar, dan daftarnya tidak membusuk",
+    () => {
     const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
     const produk: string[] = []
     for (const dir of ["src", "e2e"]) readCode(dir, produk)
@@ -260,5 +321,91 @@ describe("skema: kolom yang hanya dipakai skrip seed", () => {
           "sudah dirujuk kode produk (atau kolomnya sudah dibuang) harus " +
           "dikeluarkan dari daftar supaya tidak membusuk.",
     ).toEqual(SEED_ONLY_COLUMNS)
-  })
+    },
+    20_000,
+  )
+})
+
+/**
+ * Indeks sekali-jalan atas korpus: penjaga yang memindai seluruh repo WAJIB cepat.
+ * Versi pertama pemeriksaan ini mengompilasi ulang regex per model x per relasi
+ * (147 model) atas korpus besar; dijalankan sendiri 7 detik, dan saat suite penuh
+ * berjalan paralel (`--maxWorkers=4`) ia melewati batas 5 detik default vitest dan
+ * gagal sebagai "flaky" — lulus/gagal bergantung beban mesin, bukan isi repo.
+ * Dengan indeks ini pemeriksaannya satu lintasan per kelas pola.
+ */
+function productIndex(teks: string) {
+  const tulisDelegate = new Set<string>()
+  const bacaDelegate = new Set<string>()
+  for (const m of teks.matchAll(
+    /\.(\w+)\.(create|createMany|update|updateMany|upsert|delete|deleteMany)\s*\(/g,
+  )) {
+    tulisDelegate.add(m[1])
+  }
+  for (const m of teks.matchAll(
+    /\.(\w+)\.(findMany|findFirst|findUnique|findUniqueOrThrow|count|aggregate|groupBy)\s*\(/g,
+  )) {
+    bacaDelegate.add(m[1])
+  }
+  const tabelSql = new Set<string>()
+  for (const m of teks.matchAll(/(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+`?(\w+)`?/gi)) {
+    tabelSql.add(m[1].toLowerCase())
+  }
+  // Nested write: `rel: { ... create: ... }` dalam jarak dekat.
+  const relNested = new Set<string>()
+  for (const m of teks.matchAll(
+    /(\w+)\s*:\s*\{[\s\S]{0,200}?\b(?:create|createMany|connectOrCreate|upsert|deleteMany)\b\s*:/g,
+  )) {
+    relNested.add(m[1])
+  }
+  // Relasi yang dipakai sebagai pembacaan (`rel: {`, `rel: true`, `rel: [`).
+  const relRead = new Set<string>()
+  for (const m of teks.matchAll(/(\w+)\s*:\s*(?:\{|true|\[)/g)) {
+    relRead.add(m[1])
+  }
+  return { tulisDelegate, bacaDelegate, tabelSql, relNested, relRead }
+}
+
+describe("skema: model yang dibaca tetapi tidak punya jalur tulis di produk", () => {
+  it(
+    "model seed-only terdaftar, dan daftarnya tidak membusuk",
+    () => {
+      const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
+      const produk: string[] = []
+      for (const dir of ["src", "e2e"]) readCode(dir, produk)
+      const idx = productIndex(produk.join("\n"))
+
+      const seedOnly: string[] = []
+      for (const [, model, body] of schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+        const delegate = model[0].toLowerCase() + model.slice(1)
+        const table = (/@@map\("([^"]+)"\)/.exec(body)?.[1] ?? model).toLowerCase()
+
+        const tulisDelegate = idx.tulisDelegate.has(delegate)
+        const tulisSql = idx.tabelSql.has(table) || idx.tabelSql.has(model.toLowerCase())
+        const namaRelasi = [
+          ...schema.matchAll(new RegExp(`^  +(\\w+)\\s+${model}\\[?\\]?\\??.*$`, "gm")),
+        ]
+          .map((m) => m[1])
+          .filter((nama) => nama !== "model")
+        const tulisNested = namaRelasi.some((rel) => idx.relNested.has(rel))
+        const dibaca =
+          idx.bacaDelegate.has(delegate) || namaRelasi.some((rel) => idx.relRead.has(rel))
+
+        if (dibaca && !tulisDelegate && !tulisSql && !tulisNested) seedOnly.push(model)
+      }
+
+      seedOnly.sort()
+      expect(
+        seedOnly,
+        seedOnly.length === SEED_ONLY_MODELS.length
+          ? undefined
+          : "Ada model yang DIBACA kode produk tetapi tidak punya jalur tulis di " +
+            "produk: seluruh fiturnya hanya bisa benar pada basis data yang " +
+            "di-seed. Implementasikan jalur tulisnya (halaman + aksi), atau catat " +
+            "di SEED_ONLY_MODELS dengan alasan. Entri yang sudah punya jalur tulis " +
+            "harus dikeluarkan supaya daftarnya tidak membusuk.",
+      ).toEqual(SEED_ONLY_MODELS)
+    },
+    20_000,
+  )
 })

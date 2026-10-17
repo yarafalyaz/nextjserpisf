@@ -109,6 +109,30 @@ seksinya), `UomConversion.factorToBase` (`createMany({ data: … })` dari JSON f
 `Employee.dateOfBirth` (ditulis di `master.actions.ts`), dan
 `VendorBillItem.discountAmount` (ditulis di dalam `.map()` di luar blok `data:`).
 
+## 4d. Model yang dibaca produk tetapi tidak punya jalur tulis (11 model)
+
+Kelas yang lebih besar dari §4b: bukan sekadar kolom, melainkan **seluruh modelnya
+tidak bisa diisi dari aplikasi**. Terdeteksi lewat pemeriksaan baru di penjaga
+`schema-usage` (`SEED_ONLY_MODELS`, berarah dua) yang memperhitungkan TIGA jalur
+tulis: delegate Prisma langsung, raw SQL, dan nested write dari model induk.
+
+| Model | Yang dibaca produk | Akibatnya |
+| --- | --- | --- |
+| `Attendance` | metrik absensi dasbor + notifikasi keterlambatan | absensi tidak bisa dicatat siapa pun; dasbor hanya berisi pada basis data yang di-seed |
+| `Holiday`, `DepartmentHoliday`, `WorkSchedule` | perhitungan hari kerja / cuti | hari libur & jadwal kerja tidak bisa didefinisikan dari aplikasi |
+| `AssetBrandModel`, `AssetGroup` | halaman aset | master merek-tipe & kelompok aset tidak bisa dibuat |
+| `BankStatementLine` | halaman rekonsiliasi bank | baris rekening koran hanya dari seed (impor belum ada) |
+| `CrmTicketComment` | `include: { comments: … }` di detail tiket | daftar komentar yang **tidak bisa diisi** dari UI |
+| `ProjectLog` | 10 log terakhir di halaman proyek | log proyek selalu kosong |
+| `ProfitCenter` | laporan pusat laba | master pusat laba tidak bisa dibuat; digabung `JournalEntry.profitCenterId` yang tidak pernah diisi, laporan selalu menumpuk di "Tanpa Pusat Laba" |
+| `UserWarehouse` | `getWarehouseScope` (pembatasan gudang per pengguna) | **fail-closed**, bukan lubang: cakupan kosong → `{ kind: "none" }`, jadi peran `warehouse` yang sudah di-seed selalu ditolak dan tidak bisa diberi akses gudang mana pun |
+
+Semuanya keputusan produk: bangun jalur tulisnya (halaman + aksi) atau buang
+modelnya lewat migrasi. Yang **tidak** masuk daftar ini sudah diverifikasi punya
+jalur tulis meski tidak terlihat dari delegate — mis. `ActivityLog` ditulis
+`INSERT INTO activity_logs` (raw SQL) dan `SalesReturnItem`/`PurchaseOrderItem`
+ditulis lewat nested create.
+
 ## 5. Keputusan desain yang TERVERIFIKASI: kapan stok keluar saat penjualan
 
 Ini bukan celah kode, tetapi keputusan yang harus dipahami sebelum ada yang
