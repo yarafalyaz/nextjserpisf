@@ -722,7 +722,18 @@ export async function onExpenseApproved(
     where: { id: expenseId },
   });
 
-  if (!expense.accountId || !expense.paidFromAccountId) return;
+  // Fail loudly instead of returning silently. `markExpensePaid` flips the expense
+  // to "paid" as soon as this resolves, so a silent return means money leaves the
+  // cash/bank account with NO journal at all and no error anywhere — the worst kind
+  // of accounting gap (uang keluar tanpa jejak GL). `accountId` is NOT NULL in the
+  // schema, so the reachable gap is a missing `paidFromAccountId` (source of funds).
+  if (!expense.accountId || !expense.paidFromAccountId) {
+    const missing = !expense.accountId ? "akun beban" : "akun sumber dana (kas/bank)"
+    throw new Error(
+      `Pengeluaran ${expense.documentNo} tidak dapat dijurnal: ${missing} belum diisi. ` +
+        `Lengkapi ${missing} lebih dulu, baru tandai pengeluaran sebagai lunas.`,
+    )
+  }
 
   // Idempotency check
   const existing = await db.journal.findFirst({

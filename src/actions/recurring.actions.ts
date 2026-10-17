@@ -10,13 +10,15 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
 import {
   parseRecurringTemplate,
+  recurringJournalLines,
+  recurringJournalReference,
   runDueRecurring,
   validateRecurringTemplate,
   type RecurringTemplate,
 } from "@/lib/services/recurring.service"
+import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { isRecurrenceFrequency, nextRunAfter } from "@/lib/reports/recurring-schedule"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
-import { safeAdd } from "@/lib/utils/math"
 
 /** Turn the flat form fields into the JSON template stored on the schedule. */
 function buildTemplate(v: RecurringTransactionInput): RecurringTemplate {
@@ -158,30 +160,49 @@ export async function runRecurringNow(id: number) {
     const label = await prisma.$transaction(async (tx) => {
       let summary: string
       if (schedule.type === "journal") {
-        const lines = (template.lines ?? []).filter((line) => line.accountId && (line.debit > 0 || line.credit > 0))
-        const journalNumber = await generateDocumentNumber("JRN")
-        const journal = await tx.journal.create({
-          data: {
-            journalNumber,
-            slug: await nextSlug("journal", journalNumber),
-            transactionDate: runDate,
-            description: template.description ?? `Transaksi berulang: ${schedule.name}`,
-            type: "GENERAL",
-            status: "DRAFT",
-            totalDebit: lines.reduce((sum, line) => safeAdd(sum, line.debit, 2), 0),
-            totalCredit: lines.reduce((sum, line) => safeAdd(sum, line.credit, 2), 0),
-            createdBy: Number(user.id),
-            entries: {
-              create: lines.map((line) => ({
-                accountId: line.accountId,
-                debit: line.debit || 0,
-                credit: line.credit || 0,
-                memo: line.memo ?? template.description ?? null,
-              })),
-            },
-          },
+        const { lines, totalDebit, totalCredit } = recurringJournalLines(template)
+        const { referenceType, referenceId } = recurringJournalReference(schedule.id, runDate)
+
+        // Period key — same rule as the cron path (recurring.service): a journal must
+        // not be dated inside a closed period, because it could never be posted.
+        await assertPeriodOpen(runDate, tx)
+
+        // One schedule = one journal per document date; a repeated "jalankan sekarang"
+        // on the same day reuses the existing journal instead of tripping the unique
+        // (referenceType, referenceId) pair.
+        const existing = await tx.journal.findFirst({
+          where: { referenceType, referenceId },
+          select: { journalNumber: true },
         })
-        summary = `Jurnal ${journal.journalNumber}`
+        if (existing) {
+          summary = `Jurnal ${existing.journalNumber} (sudah ada, dilewati)`
+        } else {
+          const journalNumber = await generateDocumentNumber("JRN")
+          const journal = await tx.journal.create({
+            data: {
+              journalNumber,
+              slug: await nextSlug("journal", journalNumber),
+              transactionDate: runDate,
+              referenceType,
+              referenceId,
+              description: template.description ?? `Transaksi berulang: ${schedule.name}`,
+              type: "GENERAL",
+              status: "DRAFT",
+              totalDebit,
+              totalCredit,
+              createdBy: Number(user.id),
+              entries: {
+                create: lines.map((line) => ({
+                  accountId: line.accountId,
+                  debit: line.debit || 0,
+                  credit: line.credit || 0,
+                  memo: line.memo ?? template.description ?? null,
+                })),
+              },
+            },
+          })
+          summary = `Jurnal ${journal.journalNumber}`
+        }
       } else {
         const documentNo = await generateDocumentNumber("EXP")
         await tx.expense.create({

@@ -895,15 +895,33 @@ describe("onExpenseApproved", () => {
     );
   });
 
-  it("returns early if expense has no accountId or paidFromAccountId", async () => {
+  it("fails loudly when the expense has no source-of-funds account (no silent unpaid-to-paid)", async () => {
+    // Previously this returned silently, and markExpensePaid flipped the expense to
+    // "paid" anyway — money out of the bank with no GL entry and no error at all.
     mocks.expenseFindUniqueOrThrow.mockResolvedValue({
       id: 1,
       amount: 100,
       accountId: null,
       paidFromAccountId: 200,
+      documentNo: "EXP-1",
     });
-    await onExpenseApproved(1);
+    await expect(onExpenseApproved(1)).rejects.toThrow(/tidak dapat dijurnal/);
     expect(mocks.journalFindFirst).not.toHaveBeenCalled();
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("fails loudly when paidFromAccountId is missing (the reachable gap)", async () => {
+    // accountId is NOT NULL in the schema, so this is the case that actually used to
+    // slip through: status "paid", zero journals.
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      amount: 100,
+      accountId: 600,
+      paidFromAccountId: null,
+      documentNo: "EXP-2",
+    });
+    await expect(onExpenseApproved(1)).rejects.toThrow(/akun sumber dana/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
   it("returns early if journal exists (idempotency)", async () => {

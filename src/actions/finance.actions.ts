@@ -404,6 +404,17 @@ export async function markExpensePaid(expenseId: number) {
       );
     }
 
+    // Refuse to settle an expense that has no source of funds. `onExpenseApproved`
+    // cannot post Dr. Beban / Cr. Kas-Bank without `paidFromAccountId`, and the old
+    // silent early-return there flipped the expense to "paid" anyway — cash out with
+    // zero GL trace. Reject it here (status untouched, retryable after the account is
+    // filled in) instead of banking on that hook never staying silent again.
+    if (!expense.paidFromAccountId) {
+      throw new Error(
+        "Pengeluaran belum punya akun sumber dana (kas/bank). Isi akun sumber dana sebelum menandai lunas — tanpa itu tidak ada jurnal yang bisa diposting.",
+      );
+    }
+
     // Post the accounting journal FIRST (Laravel parity: GL created when paid).
     // Posting before the status flip means a journal failure (e.g. closed period)
     // leaves the expense at "approved" and retryable, instead of stranding it as

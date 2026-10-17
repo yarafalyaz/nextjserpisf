@@ -258,15 +258,24 @@ describe("Expense Actions", () => {
     expect(res?.success).toBe(true)
   })
   it("markExpensePaid succeeds", async () => {
-    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved" })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved", paidFromAccountId: 200 })
     const res = await (actions as any).markExpensePaid(1)
     expect(res?.success).toBe(true)
+  })
+  it("markExpensePaid rejects an expense without a source account and never flips it to paid", async () => {
+    // The old flow posted nothing (onExpenseApproved returned early) yet still set
+    // status = "paid": cash out with no GL trace. Now it refuses up front.
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "approved", paidFromAccountId: null })
+    const res = await (actions as any).markExpensePaid(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/akun sumber dana/i)
+    expect(mocks.prismaMock.expense.update).not.toHaveBeenCalled()
   })
   it("markExpensePaid succeeds with unchanged balance (line 378)", async () => {
     // Return expense in approved state
     mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValueOnce({
       id: 1, amount: 100, status: "approved",
-      paymentMethodId: 1
+      paymentMethodId: 1, paidFromAccountId: 200
     })
     mocks.prismaMock.paymentMethod.findUniqueOrThrow.mockResolvedValueOnce({
       id: 1, type: "PETTY_CASH"

@@ -9,6 +9,9 @@ import { apiError } from "@/lib/api-response"
  *
  * Documents are created as DRAFTS on purpose — the scheduler must never post to
  * stock or the general ledger without a human reviewing the generated document.
+ * Journal-type drafts are written with referenceType/referenceId pointing back to
+ * the schedule (Journal > Jurnal menampilkan asalnya) and are refused inside a
+ * closed accounting period; the schedule stays due so it retries after reopening.
  */
 export async function GET(request: Request) {
   if (!isValidCronRequest(request)) {
