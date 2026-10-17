@@ -724,6 +724,34 @@ describe("createAsset / updateAsset", () => {
     expect(arg.data.groupId).toBeNull()
   })
 
+  it("updateAsset juga menulis assetBrandId dan groupId", async () => {
+    // updateAsset memakai `findUniqueOrThrow` (bukan `findUnique`), dan purchaseCost
+    // harus SAMA supaya jalur "harga berubah -> tulis jurnal akuisisi" tidak diambil.
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
+      id: 100,
+      purchaseCost: 1000,
+      status: "active",
+    })
+    prismaMock.assetBrand.findUnique.mockResolvedValue({
+      id: 5,
+      name: "HP",
+      assetAccountId: null,
+      accumulatedDepreciationAccountId: null,
+    })
+
+    await updateAsset(100, fd({
+      name: "Laptop Ubah",
+      code: "LAP-04",
+      purchasePrice: "1000",
+      assetBrandId: "5",
+      groupId: "6",
+    }))
+
+    const arg = prismaMock.asset.update.mock.calls[0][0]
+    expect(arg.data.assetBrandId).toBe(5)
+    expect(arg.data.groupId).toBe(6)
+  })
+
   it("routes the new asset through the approval workflow if configured", async () => {
     // Without this request, disposeAsset's assertApproved("Asset", id) can never
     // block (no Approval row exists), so a configured disposal gate silently passes.
