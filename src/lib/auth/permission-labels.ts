@@ -34,6 +34,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   accounts: "Akun",
   appreciations: "Apresiasi",
   asset_brands: "Merek Aset",
+  asset_groups: "Grup Aset",
   asset_categories: "Kategori Aset",
   asset_transfers: "Transfer Aset",
   assets: "Aset",

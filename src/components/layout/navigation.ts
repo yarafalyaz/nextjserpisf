@@ -8,6 +8,7 @@ import {
   Cog, Truck, FileSpreadsheet, Car, FolderKanban,
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
   ListOrdered, Layers, BadgeDollarSign, Gift, ListTodo, GitBranch, ShieldCheck, ClipboardCheck, Percent,
+  Boxes,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -207,6 +208,7 @@ export const navigation: NavItem[] = [
       { label: "Semua Aset", href: "/aset", icon: HardDrive, permission: "view_assets" },
       { label: "Kategori", href: "/aset/kategori", icon: Tag, permission: "view_asset_categories" },
       { label: "Merek", href: "/aset/merek", icon: Layers, permission: "view_asset_brands" },
+      { label: "Grup Aset", href: "/aset/grup", icon: Boxes, permission: "view_asset_groups" },
       { label: "Transfer", href: "/aset/transfer", icon: ArrowLeftRight, permission: "view_asset_transfers" },
     ],
   },

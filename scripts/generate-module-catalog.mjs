@@ -153,6 +153,7 @@ const RESOURCE_MODULE = {
   // Aset
   assets: "assets",
   asset_brands: "assets",
+  asset_groups: "assets",
   asset_categories: "assets",
   asset_transfers: "assets",
   // Laporan
@@ -255,6 +256,7 @@ const RESOURCE_LABEL = {
   projects: "Proyek",
   assets: "Aset",
   asset_brands: "Merek Aset",
+  asset_groups: "Grup Aset",
   asset_categories: "Kategori Aset",
   asset_transfers: "Transfer Aset",
   reports: "Laporan",

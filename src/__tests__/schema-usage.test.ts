@@ -103,11 +103,6 @@ const SEED_ONLY_COLUMNS: string[] = [
  * yang sudah punya jalur tulis produk (atau modelnya dibuang) juga memerahkan.
  */
 const SEED_ONLY_MODELS: string[] = [
-  // Aset: kelompok aset dibaca halaman aset, tetapi tidak bisa dibuat dari
-  // aplikasi (kolom `Asset.assetBrandModelId` juga sudah tercatat mati di
-  // KNOWN_UNUSED). `AssetBrandModel` sudah ditutup lewat form merek aset, jadi ia
-  // TIDAK ada lagi di daftar ini.
-  "AssetGroup",
   // Kehadiran: dasbor dan notifikasi keterlambatan membacanya, tetapi tidak ada
   // halaman maupun aksi absensi di seluruh repo — hanya skrip seed.
   "Attendance",

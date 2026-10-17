@@ -46,6 +46,12 @@ export const assetCategorySchema = z.object({
 
 // ==================== Asset Brand ====================
 
+export const assetGroupSchema = z.object({
+  // Model `AssetGroup` hanya punya `name` (tanpa kode/slug/deskripsi), jadi skemanya
+  // memang sesederhana ini — bukan disederhanakan supaya cepat.
+  name: requiredStr("Nama grup aset wajib diisi"),
+})
+
 export const assetBrandSchema = z.object({
   name: requiredStr("Nama merek wajib diisi"),
   // Tipe/model di bawah merek ini, satu per baris (koma juga diterima). Kolom ini

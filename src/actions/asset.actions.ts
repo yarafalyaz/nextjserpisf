@@ -14,6 +14,7 @@ import { assertApproved, requestApprovalIfConfigured } from "@/lib/services/appr
 import {
   assetCategorySchema,
   assetBrandSchema,
+  assetGroupSchema,
   assetTransferSchema,
   assetSchema,
   assetDisposalSchema,
@@ -117,6 +118,77 @@ export async function createAssetCategory(formData: FormData) {
 }
 
 // ==================== ASSET BRAND ACTIONS ====================
+
+/**
+ * Grup aset — satu-satunya jalur tulis `asset_groups`.
+ *
+ * Sebelumnya model ini tidak punya penulis sama sekali (hanya skrip seed), padahal
+ * `Asset.groupId` dibaca halaman aset dan form aset sudah menyediakan pilihannya.
+ */
+export async function createAssetGroup(formData: FormData) {
+  try {
+    await requirePermission("create_asset_groups");
+
+    const parsed = parseFormData(assetGroupSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+
+    const group = await prisma.assetGroup.create({ data: { name: parsed.data.name } });
+
+    await logActivity("create", "AssetGroup", group.id, `Menambah grup aset ${parsed.data.name}`);
+    revalidatePath("/aset/grup");
+    return { success: true, id: group.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createAssetGroup]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateAssetGroup(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_asset_groups");
+
+    const parsed = parseFormData(assetGroupSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+
+    await prisma.assetGroup.update({ where: { id }, data: { name: parsed.data.name } });
+
+    await logActivity("update", "AssetGroup", id, `Mengubah grup aset ${parsed.data.name}`);
+    revalidatePath("/aset/grup");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateAssetGroup]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteAssetGroup(id: number) {
+  try {
+    await requirePermission("delete_asset_groups");
+
+    // Penghapusan DITOLAK bila masih dipakai. Relasi `Asset.groupId` opsional, dan
+    // tanpa penjagaan ini Prisma melepas asetnya secara DIAM-DIAM (SetNull) —
+    // pengelompokan aset hilang tanpa satu pun pesan.
+    const usedByAssets = await prisma.asset.count({ where: { groupId: id } });
+    if (usedByAssets > 0) {
+      return {
+        success: false,
+        error: `Grup aset masih dipakai ${usedByAssets} aset. Pindahkan asetnya dulu.`,
+      };
+    }
+
+    await prisma.assetGroup.delete({ where: { id } });
+
+    await logActivity("delete", "AssetGroup", id, `Menghapus grup aset #${id}`);
+    revalidatePath("/aset/grup");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteAssetGroup]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
 
 export async function createAssetBrand(formData: FormData) {
   try {

@@ -123,6 +123,9 @@ export const ROUTE_PERMS: ReadonlyArray<{
   // Aset
   { prefix: "/aset/kategori", edit: "edit_asset_categories", delete: "delete_asset_categories" },
   { prefix: "/aset/merek", edit: "edit_asset_brands", delete: "delete_asset_brands" },
+  // Harus SEBELUM prefix "/aset" yang luas, kalau tidak halaman grup dianggap
+  // memakai izin edit_assets dan paritas izin halaman↔registry memerah.
+  { prefix: "/aset/grup", edit: "edit_asset_groups", delete: "delete_asset_groups" },
   { prefix: "/aset/transfer", edit: "edit_asset_transfers", delete: "delete_asset_transfers" },
   { prefix: "/aset", edit: "edit_assets", delete: "delete_assets" },
 ]

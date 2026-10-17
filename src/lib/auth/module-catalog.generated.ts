@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 321 permission dikelompokkan per modul (15 modul). */
+/** 325 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -379,6 +379,10 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "assets", permissionKey: "edit_assets", label: "Aset" },
     { key: "delete", resource: "assets", permissionKey: "delete_assets", label: "Aset" },
     { key: "manage", resource: "assets", permissionKey: "manage_assets", label: "Aset" },
+    { key: "view", resource: "asset_groups", permissionKey: "view_asset_groups", label: "Grup Aset" },
+    { key: "create", resource: "asset_groups", permissionKey: "create_asset_groups", label: "Grup Aset" },
+    { key: "edit", resource: "asset_groups", permissionKey: "edit_asset_groups", label: "Grup Aset" },
+    { key: "delete", resource: "asset_groups", permissionKey: "delete_asset_groups", label: "Grup Aset" },
     { key: "view", resource: "asset_categories", permissionKey: "view_asset_categories", label: "Kategori Aset" },
     { key: "create", resource: "asset_categories", permissionKey: "create_asset_categories", label: "Kategori Aset" },
     { key: "edit", resource: "asset_categories", permissionKey: "edit_asset_categories", label: "Kategori Aset" },

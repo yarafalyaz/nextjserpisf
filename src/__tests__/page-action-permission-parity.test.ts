@@ -64,6 +64,7 @@ const MIRRORED_MODULES = ["/penjualan", "/pembelian", "/inventaris", "/produksi"
 const CREATE_PAGE_CASES: Array<[string, string]> = [
   ["aset/kategori/tambah/page.tsx", "create_asset_categories"],
   ["aset/merek/tambah/page.tsx", "create_asset_brands"],
+  ["aset/grup/tambah/page.tsx", "create_asset_groups"],
   ["aset/transfer/tambah/page.tsx", "create_asset_transfers"],
   ["kendaraan/merek/tambah/page.tsx", "create_vehicle_brands"],
 ]
