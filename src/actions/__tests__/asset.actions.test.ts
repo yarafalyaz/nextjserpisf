@@ -39,10 +39,18 @@ const mocks = vi.hoisted(() => {
       update: vi.fn(),
       delete: vi.fn(),
       create: vi.fn(),
+      // Dipakai deleteAssetGroup untuk menolak hapus grup yang masih dipakai aset.
+      count: vi.fn().mockResolvedValue(0),
       findUnique: vi.fn(),
       findUniqueOrThrow: vi.fn(),
       findFirst: vi.fn().mockResolvedValue(null),
       updateMany: vi.fn(),
+    },
+    assetGroup: {
+      create: vi.fn(),
+      update: vi.fn(),
+      delete: vi.fn(),
+      findUnique: vi.fn(),
     },
     assetHistory: {
       create: vi.fn(),
@@ -146,6 +154,9 @@ import {
   updateAsset,
   deleteAsset,
   disposeAsset,
+  createAssetGroup,
+  updateAssetGroup,
+  deleteAssetGroup,
 } from "../asset.actions"
 
 function fd(entries: Record<string, string | string[]>): FormData {
@@ -156,6 +167,61 @@ function fd(entries: Record<string, string | string[]>): FormData {
   }
   return f
 }
+
+describe("Asset Group Actions", () => {
+  /**
+   * `AssetGroup` tidak punya jalur tulis sama sekali sebelum modul `/aset/grup`
+   * ditambahkan — hanya skrip seed — padahal `Asset.groupId` dibaca halaman aset.
+   */
+  it("createAssetGroup menulis nama dan memakai izin tambah", async () => {
+    prismaMock.assetGroup.create.mockResolvedValue({ id: 11 })
+
+    const res = await createAssetGroup(fd({ name: "Kendaraan Operasional" }))
+
+    expect(res).toEqual({ success: true, id: 11 })
+    expect(requirePermissionMock).toHaveBeenCalledWith("create_asset_groups")
+    expect(prismaMock.assetGroup.create.mock.calls[0][0].data).toEqual({
+      name: "Kendaraan Operasional",
+    })
+  })
+
+  it("createAssetGroup menolak nama kosong tanpa menyentuh basis data", async () => {
+    const res = await createAssetGroup(fd({ name: "   " }))
+
+    expect(res.success).toBe(false)
+    expect(prismaMock.assetGroup.create).not.toHaveBeenCalled()
+  })
+
+  it("updateAssetGroup memakai izin ubah", async () => {
+    prismaMock.assetGroup.update.mockResolvedValue({})
+    const res = await updateAssetGroup(11, fd({ name: "Kendaraan" }))
+
+    expect(res).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("edit_asset_groups")
+  })
+
+  it("deleteAssetGroup MENOLAK menghapus grup yang masih dipakai aset", async () => {
+    // Relasi opsional: tanpa penjagaan ini Prisma melepas asetnya diam-diam (SetNull).
+    prismaMock.asset.count.mockResolvedValue(3)
+
+    const res = await deleteAssetGroup(11)
+
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("masih dipakai 3 aset")
+    expect(prismaMock.assetGroup.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteAssetGroup menghapus grup yang tidak dipakai dan memakai izin hapus", async () => {
+    prismaMock.asset.count.mockResolvedValue(0)
+    prismaMock.assetGroup.delete.mockResolvedValue({})
+
+    const res = await deleteAssetGroup(11)
+
+    expect(res).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("delete_asset_groups")
+    expect(prismaMock.assetGroup.delete).toHaveBeenCalledWith({ where: { id: 11 } })
+  })
+})
 
 describe("Asset Brand Actions", () => {
   beforeEach(() => {
