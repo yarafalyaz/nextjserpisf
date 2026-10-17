@@ -182,8 +182,9 @@ export function ExportButtons({
       return
     }
 
-    const settings = await fetchSettings()
-    const libs = await loadPdfLibs()
+    // Setelan kop dan modul PDF tidak saling bergantung, jadi dimulai
+    // bersamaan — tidak perlu menunggu dua kali berturut-turut.
+    const [settings, libs] = await Promise.all([fetchSettings(), loadPdfLibs()])
     if (!libs) return
     const { jsPDF, autoTable } = libs
     const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' })

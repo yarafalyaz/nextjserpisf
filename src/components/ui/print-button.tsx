@@ -49,20 +49,24 @@ export function PrintButton({ title = "Cetak", documentType, documentId, disable
   async function handlePrint() {
     try {
       setIsPrinting(true)
-      const res = await fetch(`/api/print?tipe=${documentType}&id=${documentId}`)
+
+      // Data cetak dan mesin PDF (jsPDF + autoTable) tidak saling bergantung,
+      // jadi keduanya dimulai bersamaan. Modul PDF tetap diimpor dinamis di
+      // sini — berat dan hanya dipakai saat tombol ditekan, sehingga tidak ikut
+      // bundel awal halaman.
+      //
+      // Logo diubah menjadi data URL di dalam generator PDF (butuh data URL
+      // agar jsPDF bisa menanamkannya secara sinkron).
+      const [res, { generateQuotationPDF, generateTransactionPDF, generateWorkOrderPDF }] =
+        await Promise.all([
+          fetch(`/api/print?tipe=${documentType}&id=${documentId}`),
+          import("@/lib/pdf/generator"),
+        ])
       const data = await res.json()
 
       if (!res.ok) {
         throw new Error(data.error || "Gagal mengambil data cetak")
       }
-
-      // Logo diubah menjadi data URL di dalam generator PDF (butuh data URL
-      // agar jsPDF bisa menanamkannya secara sinkron).
-
-      // Mesin PDF (jsPDF + autoTable) berat dan hanya dipakai saat tombol ini
-      // ditekan, jadi dimuat di sini alih-alih ikut bundel awal halaman.
-      const { generateQuotationPDF, generateTransactionPDF, generateWorkOrderPDF } =
-        await import("@/lib/pdf/generator")
 
       if (documentType === "quotation") {
         await generateQuotationPDF(data.company, data.docInfo, data.items, data.summary, data.sections)
