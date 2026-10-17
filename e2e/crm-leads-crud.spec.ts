@@ -81,15 +81,18 @@ test.describe("CRM Leads CRUD", () => {
     await expect(triggerHapus).toBeVisible({ timeout: 30000 })
     await triggerHapus.click()
 
-    // Tunggu dialog muncul, lalu klik tombol Hapus di dalamnya
-    await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
+    // Tunggu dialog muncul, lalu klik tombol Hapus di dalamnya.
+    // `.first()`: judul yang sama juga dipakai oleh ConfirmDialog di
+    // `delete-button.tsx` dan `action-dropdown.tsx`, jadi tanpa ini locator
+    // bisa kena strict-mode violation saat keduanya sempat ter-mount.
+    await expect(page.getByText("Hapus data ini?").first()).toBeVisible({ timeout: 5000 })
     // Dialog punya confirm button “Hapus” (HeroUI AlertDialog)
     const confirmDelete = page.getByRole("button", { name: "Hapus" }).last()
     await expect(confirmDelete).toBeVisible({ timeout: 5000 })
     await confirmDelete.click({ force: true })
 
     // Tunggu dialog tertutup + server action selesai
-    await expect(page.getByText("Hapus data ini?")).toBeHidden({ timeout: 10000 })
+    await expect(page.getByText("Hapus data ini?").first()).toBeHidden({ timeout: 10000 })
 
     // Force refresh list + verifikasi data unik (email) sudah hilang
     await page.goto("/crm/leads", { waitUntil: "domcontentloaded" })

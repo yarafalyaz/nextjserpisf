@@ -46,8 +46,9 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await page.waitForTimeout(2000)
     // 3. Click Hapus menu item
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
-    // 4. Wait for confirm dialog to appear
-    await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
+    // 4. Wait for confirm dialog to appear (`.first()` — teks judul ini juga
+    //    muncul di ConfirmDialog delete-button.tsx / action-dropdown.tsx).
+    await expect(page.getByText("Hapus data ini?").first()).toBeVisible({ timeout: 5000 })
     // 5. Click confirm Hapus button (inside AlertDialog footer)
     const confirmDialog = page.locator('[role="alertdialog"], [role="dialog"]').filter({ hasText: 'Hapus data ini?' }).first()
     await expect(confirmDialog).toBeVisible({ timeout: 5000 })

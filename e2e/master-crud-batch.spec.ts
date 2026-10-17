@@ -279,8 +279,9 @@ test.describe("Master Akun Mutation", () => {
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).toContainText(name)
 
-    // More reliable: find the edit link in the row containing our name
-    const row = page.locator(".font-mono").filter({ hasText: /ACC-/ }).last()
+    // Lebih andal: cari sel kode akun (role cell) yang memuat kode ACC-,
+    // bukan bergantung pada kelas styling `.font-mono`.
+    const row = page.getByRole("cell", { name: /ACC-/ }).last()
     await expect(row).toBeVisible({ timeout: 30000 })
 
     // Navigate directly to the edit URL by finding the record's code

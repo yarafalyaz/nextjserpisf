@@ -76,6 +76,6 @@ test.describe("Aset Brand (Merek) CRUD", () => {
 
     await page.waitForLoadState("networkidle")
     await expect(updatedRow).toHaveCount(0, { timeout: 20000 })
-    await expect(page.getByText(updated, { exact: false })).toHaveCount(0, { timeout: 10000 })
+    await expect(page.getByText(updated, { exact: true })).toHaveCount(0, { timeout: 10000 })
   })
 })

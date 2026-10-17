@@ -38,7 +38,9 @@ test.describe("Finance — Journal & Reports", () => {
     if (await drawerTrigger.isVisible().catch(() => false)) {
       await drawerTrigger.click()
     }
-    const semuaChip = page.getByRole("link", { name: "Semua" }).first()
+    // `exact: true`: nama chip adalah tepat "Semua", jadi jangan biarkan
+    // pencocokan substring menangkap teks lain yang memuat kata itu.
+    const semuaChip = page.getByRole("link", { name: "Semua", exact: true }).first()
     await expect(semuaChip).toBeAttached()
     await expect(semuaChip).toBeVisible()
   })
@@ -89,8 +91,8 @@ test.describe("Finance — Journal & Reports", () => {
     const options0 = page.getByRole("option")
     await expect(options0.first()).toBeVisible({ timeout: 10000 })
     await options0.first().click()
-    // debit input is the first numeric "form-input" in the row
-    await rows.nth(0).locator("input.form-input").first().fill("150000")
+    // Input debit = textbox pertama di baris ini (akun memakai role combobox).
+    await rows.nth(0).getByRole("textbox").first().fill("150000")
 
     // --- Row 1: credit account (pick a different option) ---
     const combo1 = rows.nth(1).getByRole("combobox")
@@ -100,8 +102,8 @@ test.describe("Finance — Journal & Reports", () => {
     // second option so debit/credit hit distinct accounts when available
     const optCount = await options1.count()
     await options1.nth(optCount > 1 ? 1 : 0).click()
-    // credit input is the second numeric "form-input" in the row
-    await rows.nth(1).locator("input.form-input").nth(1).fill("150000")
+    // Input kredit = textbox kedua di baris ini (index 0 = debit).
+    await rows.nth(1).getByRole("textbox").nth(1).fill("150000")
 
     // Balance indicator should flip to "Seimbang"
     await expect(page.getByText("Seimbang", { exact: true })).toBeVisible({ timeout: 10000 })

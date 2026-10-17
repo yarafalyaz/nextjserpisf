@@ -26,17 +26,28 @@ test.describe("Grafik umur piutang & utang", () => {
       // elemennya memang tidak ada.
       await expect(page.getByRole("heading", { name: judul })).toBeVisible()
 
-      // recharts menggambar SVG di dalam container ber-role img.
+      // Grafik menggambar satu elemen SVG di dalam container ber-role img.
       const grafik = page.getByRole("img", { name: /Grafik umur/ })
       await expect(grafik).toBeVisible({ timeout: 15_000 })
-      await expect(grafik.locator(".recharts-surface")).toHaveCount(1, { timeout: 15_000 })
+      // `<svg>` adalah elemen standar, bukan kelas internal recharts
+      // (`.recharts-surface`), jadi versi pustaka boleh berubah tanpa
+      // memerahkan tes.
+      await expect(grafik.locator("svg")).toHaveCount(1, { timeout: 15_000 })
 
       // Lima kategori umur (AGING_BUCKETS) harus muncul sebagai label sumbu.
       // Batangnya TIDAK dihitung: recharts tidak menggambar batang bernilai nol,
       // jadi di database kosong jumlahnya 0 dan tes akan gagal tanpa alasan.
-      await expect(grafik.locator(".recharts-cartesian-axis-tick")).toHaveCount(5, { timeout: 15_000 })
-      await expect(grafik).toContainText("Belum Jatuh Tempo")
-      await expect(grafik).toContainText("31–60 Hari")
+      // Dipatok lewat teks labelnya, bukan kelas internal tick recharts
+      // (`.recharts-cartesian-axis-tick`) yang bisa berubah antar versi.
+      for (const label of [
+        "Belum Jatuh Tempo",
+        "1–30 Hari",
+        "31–60 Hari",
+        "61–90 Hari",
+        "> 90 Hari",
+      ]) {
+        await expect(grafik).toContainText(label, { timeout: 15_000 })
+      }
     })
   }
 })

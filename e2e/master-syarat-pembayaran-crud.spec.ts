@@ -34,7 +34,10 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
     await page.locator("#days").fill("14")
 
     await waitForHydration(page)
-    await page.getByRole("button", { name: "Simpan" }).click()
+    // `.first()`: nama "Simpan" dicocokkan sebagai substring oleh getByRole,
+    // jadi locator dipersempit ke tombol submit pertama agar tahan terhadap
+    // tombol lain ber-label serupa.
+    await page.getByRole("button", { name: "Simpan" }).first().click()
 
     await page.waitForURL("**/master/syarat-pembayaran", { timeout: 30000 })
     await page.waitForLoadState("networkidle")
@@ -52,8 +55,9 @@ test.describe("Master Syarat Pembayaran CRUD", () => {
     await row.getByRole("button", { name: "Buka menu aksi" }).click()
     await page.getByRole("menuitem", { name: "Hapus" }).first().click()
 
-    // Confirm dialog
-    await expect(page.getByText("Hapus data ini?")).toBeVisible({ timeout: 5000 })
+    // Confirm dialog (`.first()` — judul ini juga dipakai ConfirmDialog di
+    // delete-button.tsx / action-dropdown.tsx).
+    await expect(page.getByText("Hapus data ini?").first()).toBeVisible({ timeout: 5000 })
     await page.getByRole("button", { name: "Hapus" }).click({ timeout: 10000 })
 
     await page.waitForLoadState("networkidle")

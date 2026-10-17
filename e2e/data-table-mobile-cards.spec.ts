@@ -25,7 +25,8 @@ test.describe("DataTable mobile card layout", () => {
     expect(overflow).toBeLessThanOrEqual(0)
 
     // The detail lines keep their labels (e.g. "Stok", "Posisi").
-    await expect(cards.first().getByText("Stok", { exact: true })).toBeVisible()
+    // `.first()`: label ini bisa muncul lebih dari sekali dalam satu kartu.
+    await expect(cards.first().getByText("Stok", { exact: true }).first()).toBeVisible()
 
     // Row actions are carried into the card footer.
     await expect(
