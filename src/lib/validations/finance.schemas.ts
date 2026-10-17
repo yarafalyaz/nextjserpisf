@@ -116,6 +116,18 @@ export const costCenterSchema = z.object({
   parentId: optionalNumber(),
 });
 
+/**
+ * Pusat laba (profit center) — datar: hanya kode + nama.
+ *
+ * Model `ProfitCenter` sebelumnya TIDAK punya jalur tulis sama sekali, padahal
+ * laporan pusat laba membacanya dan `JournalEntry.profitCenterId` ada di skema.
+ * Akibatnya laporan selalu menumpuk di "Tanpa Pusat Laba".
+ */
+export const profitCenterSchema = z.object({
+  code: z.string({ error: "Kode wajib diisi" }).trim().min(1, "Kode wajib diisi").max(50),
+  name: z.string({ error: "Nama wajib diisi" }).trim().min(1, "Nama wajib diisi").max(200),
+});
+
 // ==================== UPDATE JOURNAL ====================
 
 export const updateJournalSchema = z.object({

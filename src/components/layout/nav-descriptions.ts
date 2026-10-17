@@ -23,6 +23,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/keuangan/laporan-bank": "Mutasi bank",
   "/keuangan/pengeluaran": "Pengeluaran",
   "/keuangan/pusat-biaya": "Pusat biaya",
+  "/keuangan/pusat-laba": "Pusat laba",
   "/keuangan/rekonsiliasi-bank": "Rekonsiliasi bank",
   "/keuangan/transfer-bank": "Transfer dana antar rekening kas/bank",
   "/keuangan/giro": "Register giro dan cek beserta jatuh temponya",

@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => {
     bankReconciliation: buildModelMock(),
     bankReconciliationLine: buildModelMock(),
     costCenter: buildModelMock(),
+    profitCenter: buildModelMock(),
     account: buildModelMock(),
     accountingPeriod: buildModelMock(),
     transactionAttachment: buildModelMock(),
@@ -401,6 +402,60 @@ describe("Cost Center Actions", () => {
       isActive: "true"
     }))
     expect(res?.success).toBe(true)
+  })
+
+  /**
+   * Pusat laba: model `ProfitCenter` sebelumnya tidak punya jalur tulis sama sekali
+   * (hanya skrip seed), padahal laporan pusat laba membacanya.
+   */
+  describe("Profit Center Actions", () => {
+    it("createProfitCenter menulis kode dan nama", async () => {
+      mocks.prismaMock.profitCenter.create.mockResolvedValue({ id: 7 })
+      const res = await (actions as any).createProfitCenter(
+        fdMap({ code: "PC-01", name: "Pusat Laba Jakarta" }),
+      )
+
+      expect(res).toEqual({ success: true, id: 7 })
+      expect(mocks.requirePermissionMock).toHaveBeenCalledWith("create_profit_centers")
+      const arg = mocks.prismaMock.profitCenter.create.mock.calls[0][0]
+      expect(arg.data).toEqual({ code: "PC-01", name: "Pusat Laba Jakarta" })
+    })
+
+    it("createProfitCenter menolak kode/nama kosong tanpa menyentuh basis data", async () => {
+      const res = await (actions as any).createProfitCenter(fdMap({ code: "", name: "" }))
+      expect(res.success).toBe(false)
+      expect(String(res.error)).toContain("Kode wajib diisi")
+      expect(mocks.prismaMock.profitCenter.create).not.toHaveBeenCalled()
+    })
+
+    it("createProfitCenter memetakan kode duplikat ke pesan yang terbaca", async () => {
+      vi.spyOn(console, "error").mockImplementation(() => {})
+      mocks.prismaMock.profitCenter.create.mockRejectedValue(
+        new Error("Unique constraint failed on the fields: (`code`)"),
+      )
+      const res = await (actions as any).createProfitCenter(
+        fdMap({ code: "PC-01", name: "Duplikat" }),
+      )
+      expect(res).toEqual({ success: false, error: "Kode pusat laba sudah digunakan" })
+    })
+
+    it("updateProfitCenter memakai izin edit_profit_centers", async () => {
+      mocks.prismaMock.profitCenter.update.mockResolvedValue({})
+      const res = await (actions as any).updateProfitCenter(
+        7,
+        fdMap({ code: "PC-01", name: "Pusat Laba Bandung" }),
+      )
+      expect(res).toEqual({ success: true })
+      expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_profit_centers")
+    })
+
+    it("deleteProfitCenter memakai izin delete_profit_centers", async () => {
+      mocks.prismaMock.profitCenter.delete.mockResolvedValue({})
+      const res = await (actions as any).deleteProfitCenter(7)
+      expect(res).toEqual({ success: true })
+      expect(mocks.requirePermissionMock).toHaveBeenCalledWith("delete_profit_centers")
+      expect(mocks.prismaMock.profitCenter.delete).toHaveBeenCalledWith({ where: { id: 7 } })
+    })
   })
   it("updateCostCenter succeeds", async () => {
     mocks.prismaMock.costCenter.findUniqueOrThrow.mockResolvedValue({ id: 1 })

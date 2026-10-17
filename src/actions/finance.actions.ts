@@ -20,6 +20,7 @@ import {
   pettyCashSchema,
   bankReconciliationSchema,
   costCenterSchema,
+  profitCenterSchema,
 } from "@/lib/validations/finance.schemas";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { getSystemSettings } from "@/lib/utils/settings";
@@ -845,6 +846,85 @@ export async function completeReconciliation(reconciliationId: number) {
 
 
 // ==================== COST CENTER ACTIONS ====================
+
+/**
+ * Pusat laba (profit center) — satu-satunya jalur tulis `profit_centers`.
+ *
+ * Model ini tidak punya jalur tulis sama sekali sebelumnya (hanya skrip seed),
+ * padahal laporan pusat laba membacanya dan skema sudah punya
+ * `JournalEntry.profitCenterId`. Akibatnya laporan selalu menumpuk di "Tanpa
+ * Pusat Laba" — angka yang terlihat wajar tetapi tidak berguna.
+ */
+
+export async function createProfitCenter(formData: FormData) {
+  try {
+    await requirePermission("create_profit_centers");
+
+    const parsed = parseFormData(profitCenterSchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    const center = await prisma.profitCenter.create({
+      data: { code: v.code, name: v.name },
+    });
+
+    await logActivity("create", "ProfitCenter", center.id, `Menambah pusat laba ${v.code}`);
+    revalidatePath("/keuangan/pusat-laba");
+    return { success: true as const, id: center.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    // `code` unik di skema: kegagalan paling sering adalah kode terpakai.
+    const message = getErrorMessage(e) || "";
+    if (message.includes("Unique constraint") || message.includes("1062")) {
+      return { success: false as const, error: "Kode pusat laba sudah digunakan" };
+    }
+    console.error("[createProfitCenter]", message || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateProfitCenter(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_profit_centers");
+
+    const parsed = parseFormData(profitCenterSchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    await prisma.profitCenter.update({
+      where: { id },
+      data: { code: v.code, name: v.name },
+    });
+
+    await logActivity("update", "ProfitCenter", id, `Mengubah pusat laba ${v.code}`);
+    revalidatePath("/keuangan/pusat-laba");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    const message = getErrorMessage(e) || "";
+    if (message.includes("Unique constraint") || message.includes("1062")) {
+      return { success: false as const, error: "Kode pusat laba sudah digunakan" };
+    }
+    console.error("[updateProfitCenter]", message || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteProfitCenter(id: number) {
+  try {
+    await requirePermission("delete_profit_centers");
+
+    await prisma.profitCenter.delete({ where: { id } });
+
+    await logActivity("delete", "ProfitCenter", id, `Menghapus pusat laba #${id}`);
+    revalidatePath("/keuangan/pusat-laba");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteProfitCenter]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
 
 export async function createCostCenter(formData: FormData) {
   try {

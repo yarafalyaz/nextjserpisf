@@ -89,9 +89,9 @@ const SEED_ONLY_COLUMNS: string[] = [
  *   tidak ada halaman maupun aksi yang menulisnya di seluruh repo. Jadi dasbor
  *   absensi dan perhitungan hari kerja hanya bisa benar pada basis data yang
  *   di-seed, dan tidak bisa dipakai di produksi.
- * - `ProfitCenter` — laporan pusat laba membaca master ini, tetapi master tidak
- *   bisa dibuat dari aplikasi; ditambah `JournalEntry.profitCenterId` yang juga
- *   tidak pernah diisi, seluruh laporan selalu menumpuk di "Tanpa Pusat Laba".
+ * - `ProfitCenter` — SUDAH DITUTUP: master `/keuangan/pusat-laba` + aksi
+ *   create/update/delete. Catatan sisa: `JournalEntry.profitCenterId` masih belum
+ *   diisi form jurnal, jadi pusat laba belum terhubung ke jurnal.
  *
  * Yang TIDAK masuk daftar ini (dan tidak boleh dimasukkan tanpa verifikasi):
  * model yang ditulis lewat nested write (`items: { create: [...] }`), lewat raw
@@ -121,10 +121,8 @@ const SEED_ONLY_MODELS: string[] = [
   // CRM: komentar tiket dibaca lewat nested read — ditutup bersama aksinya
   // (`addTicketComment` + form di detail tiket), lihat catatan di bawah.
   // Proyek: log proyek ditutup bersama aksinya (`addProjectLog` + form di tab Log).
-  // Laporan pusat laba membaca master ini, tetapi master tidak bisa dibuat dari
-  // aplikasi; ditambah `JournalEntry.profitCenterId` yang tidak pernah diisi,
-  // seluruh laporan selalu menumpuk di "Tanpa Pusat Laba".
-  "ProfitCenter",
+  // Pusat laba ditutup bersama halamannya (`/keuangan/pusat-laba`: master + aksi
+  // create/update/delete), jadi entri ini TIDAK ada lagi di daftar.
   // Ditutup: `UserWarehouse` SUDAH punya jalur tulis — `updateUserWarehouses`
   // (aksi + panel akses gudang di halaman detail pengguna), sehingga peran
   // `warehouse` bisa diberi akses gudang. Karena itu ia TIDAK lagi di daftar ini:

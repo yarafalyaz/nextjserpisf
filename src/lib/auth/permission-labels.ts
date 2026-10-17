@@ -48,6 +48,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   brands: "Merek",
   calendar: "Kalender",
   cost_centers: "Pusat Biaya",
+  profit_centers: "Pusat Laba",
   currencies: "Mata Uang",
   customers: "Pelanggan",
   dashboard: "Dasbor",

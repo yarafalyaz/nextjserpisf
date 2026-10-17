@@ -162,6 +162,7 @@ export const navigation: NavItem[] = [
       { label: "Biaya", href: "/keuangan/pengeluaran", icon: CircleDollarSign, permission: "view_expenses" },
       { label: "Kas Kecil", href: "/keuangan/kas-kecil", icon: Coins, permission: "view_petty_cash" },
       { label: "Pusat Biaya", href: "/keuangan/pusat-biaya", icon: Target, permission: "view_cost_centers" },
+      { label: "Pusat Laba", href: "/keuangan/pusat-laba", icon: TrendingUp, permission: "view_profit_centers" },
       { label: "Rekening Koran", href: "/keuangan/laporan-bank", icon: FileSpreadsheet, permission: "view_bank_statements" },
       { label: "Rekonsiliasi Bank", href: "/keuangan/rekonsiliasi-bank", icon: Landmark, permission: "view_bank_reconciliation" },
       { label: "Transfer Bank", href: "/keuangan/transfer-bank", icon: ArrowLeftRight, permission: "view_bank_transfers" },

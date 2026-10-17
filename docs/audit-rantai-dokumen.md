@@ -109,7 +109,7 @@ seksinya), `UomConversion.factorToBase` (`createMany({ data: … })` dari JSON f
 `Employee.dateOfBirth` (ditulis di `master.actions.ts`), dan
 `VendorBillItem.discountAmount` (ditulis di dalam `.map()` di luar blok `data:`).
 
-## 4d. Model yang dibaca produk tetapi tidak punya jalur tulis (11 model → 4)
+## 4d. Model yang dibaca produk tetapi tidak punya jalur tulis (11 model → 3)
 
 Kelas yang lebih besar dari §4b: bukan sekadar kolom, melainkan **seluruh modelnya
 tidak bisa diisi dari aplikasi**. Terdeteksi lewat pemeriksaan baru di penjaga
@@ -121,7 +121,6 @@ tulis: delegate Prisma langsung, raw SQL, dan nested write dari model induk.
 | `Attendance` | metrik absensi dasbor + notifikasi keterlambatan | absensi tidak bisa dicatat siapa pun; dasbor hanya berisi pada basis data yang di-seed |
 | `AssetGroup` | halaman aset (`asset.group?.name`) | kelompok aset tidak bisa dibuat, dan `Asset.groupId` tidak pernah ditulis |
 | `BankStatementLine` | halaman rekonsiliasi bank | baris rekening koran hanya dari seed (impor belum ada) |
-| `ProfitCenter` | laporan pusat laba | master pusat laba tidak bisa dibuat; digabung `JournalEntry.profitCenterId` yang tidak pernah diisi, laporan selalu menumpuk di "Tanpa Pusat Laba" |
 
 ### Sudah ditutup
 
@@ -132,6 +131,13 @@ tulis: delegate Prisma langsung, raw SQL, dan nested write dari model induk.
 | `ProjectLog` | `addProjectLog` + form "Tambah Log" di tab Log. Penulis dari SESI |
 | `AssetBrandModel` | kolom "Tipe / Model" pada form merek aset (tanpa modul baru): kolom "Jumlah Model" di tabel merek akhirnya berisi |
 | `Holiday`, `DepartmentHoliday`, `WorkSchedule` | halaman `/sdm/kalender-kerja` + 9 aksi (buat/ubah/hapus untuk ketiganya). Izinnya **sudah di-seed sejak dulu** (`create/edit/delete/manage_holidays`, `view/create/delete_work_schedules`) — hanya halaman & aksinya yang tidak pernah dibangun. `edit_work_schedules` ditambahkan ke `PERMISSIONS` + katalog (prosedur generator) |
+| `ProfitCenter` | master `/keuangan/pusat-laba` + aksi create/update/delete dan izin `view/create/edit/delete_profit_centers`. **Sisa yang belum ditutup**: `JournalEntry.profitCenterId` masih tidak diisi form jurnal, jadi pusat laba belum terhubung ke jurnal |
+
+Catatan prosedur yang terbukti: menambah permission baru menuntut EMPAT suntingan,
+bukan dua — `PERMISSIONS`, `RESOURCE_MODULE`, `RESOURCE_LABEL`
+(`scripts/generate-module-catalog.mjs`), dan `permission-labels.ts`. Entri yang hanya
+masuk `PERMISSIONS` + `RESOURCE_MODULE` akan tercetak sebagai "unmapped" oleh
+generator, lalu memerahkan tes katalog DAN tes label izin.
 
 Ironi yang tercatat pada kelompok SDM: `bulk.actions.ts` **sudah** memetakan hapus
 massal untuk `holiday`, `departmentHoliday`, dan `workSchedule` — jadi aplikasi bisa
