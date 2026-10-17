@@ -68,6 +68,20 @@ manual di jalur penulisannya sebelum dinyatakan celah** — persis seperti kasus
 `VendorBillItem.discountAmount` ternyata ditulis (di dalam `.map()` di luar blok
 `data:`), sedangkan `VendorBill.discountAmount` benar-benar tidak pernah ditulis.
 
+## 4b. Temuan lain dari detektor kolom "dibaca tapi tak pernah ditulis"
+
+| Kolom | Verdict | Tindakan |
+| --- | --- | --- |
+| `OvertimeRequest.approvedAt` | **BUG — diperbaiki.** Aksi `approveOvertime` menulis `status`/`approvedBy` tanpa cap waktu, padahal halaman detail lembur hanya merender baris "Disetujui Pada" bila kolom itu terisi. Jadi pengajuan yang sudah disetujui tampil tanpa tanggal persetujuan, dan komentar di `hrm.actions.ts` yang menjanjikan jejak audit `approvedAt` tidak benar | Cap `approvedAt: new Date()` di klaim atomik persetujuan (pengesahan ulang tidak menimpa karena berhenti lebih awal di jalur idempotensi). Tes lama diperketat dengan asersi cap waktu |
+| `OvertimeRequest.supervisorApprovedAt`, `OvertimeRequest.rejectionReason` | Kolom MATI: tidak ada aksi persetujuan supervisor maupun aksi penolakan lembur di seluruh repo | Keputusan produk: implementasikan tahapnya, atau buang kolomnya (butuh migrasi) — **bukan** diisi asal agar UI-nya terisi |
+| `PettyCash.sourceAccountId`, `PettyCash.expenseAccountId` | Kolom MATI: payload `pettyCash.create` hanya menulis `accountId`/`projectId`/`vendorId`/`categoryId`. Perilakunya tetap benar karena hook memakai `pettyCash.sourceAccountId ?? settings.cashBankAccountId` dan MELEMPAR bila keduanya kosong — jadi tidak ada uang tanpa akun, hanya saja akun per transaksi tidak bisa dipilih dari UI | Keputusan produk (tambahkan pilihan akun, atau buang kolomnya lewat migrasi) |
+
+Vonis PALSU yang dipetakan (kandidat detektor yang ternyata terisi — jangan
+dijadikan tes): `QuotationItem.sectionId` (terisi otomatis oleh nested create
+seksinya), `UomConversion.factorToBase` (`createMany({ data: … })` dari JSON form),
+`Employee.dateOfBirth` (ditulis di `master.actions.ts`), dan
+`VendorBillItem.discountAmount` (ditulis di dalam `.map()` di luar blok `data:`).
+
 ## 5. Keputusan desain yang TERVERIFIKASI: kapan stok keluar saat penjualan
 
 Ini bukan celah kode, tetapi keputusan yang harus dipahami sebelum ada yang

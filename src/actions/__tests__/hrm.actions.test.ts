@@ -333,6 +333,10 @@ describe("Overtime Request Actions", () => {
     const arg = prismaMock.overtimeRequest.updateMany.mock.calls[0][0]
     expect(arg.data.calculatedValue).toBeGreaterThan(0)
     expect(arg.data.status).toBe("approved")
+    // Jejak audit: cap waktu persetujuan harus benar-benar distempel. Tanpa ini
+    // halaman detail tidak pernah menampilkan "Disetujui Pada" (barisnya
+    // dikurung oleh approvedAt) walau statusnya sudah disetujui.
+    expect(arg.data.approvedAt).toBeInstanceOf(Date)
   })
 
   it("computes calculatedValue for a workflow-approved overtime (status already 'approved')", async () => {

@@ -285,6 +285,14 @@ export async function approveOvertime(overtimeId: number) {
       data: {
         status: "approved",
         approvedBy: Number(user.id),
+        // Cap waktu persetujuan WAJIB distempel di sini. Sebelumnya hanya
+        // approvedBy yang ditulis, sehingga kolom approvedAt selalu kosong:
+        // halaman detail lembur hanya merender baris "Disetujui Pada" bila kolom
+        // itu terisi, jadi pengajuan yang sudah disetujui tampil TANPA tanggal
+        // persetujuan dan jejak audit tidak bisa dibuktikan. Pengesahan ulang
+        // tidak menimpa cap ini karena perhitungan yang sudah ada berhenti lebih
+        // awal (idempotensi di atas).
+        approvedAt: new Date(),
         calculatedValue,
       },
     });
