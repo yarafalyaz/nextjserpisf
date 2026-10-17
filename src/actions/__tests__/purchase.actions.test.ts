@@ -104,12 +104,6 @@ vi.mock("@/lib/finance/payment-allocation", () => ({ allocatePaymentToBills: vi.
 
 import * as actions from "../purchase.actions"
 
-function fdQuotation(payload: any): FormData {
-  const f = new FormData()
-  f.append("data", JSON.stringify(payload))
-  return f
-}
-
 function fdMap(payload: Record<string, string | number | null | undefined>): FormData {
   const f = new FormData()
   for (const [k, v] of Object.entries(payload)) {

@@ -58,7 +58,6 @@ vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
 vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
 
 import { updateSalesReturn } from "../sales.actions"
-import { findOverReturn } from "@/lib/sales/return-validation"
 
 function fdMap(obj: Record<string, string>) {
   const fd = new FormData()

@@ -71,17 +71,12 @@ const mocks = vi.hoisted(() => {
   }
 })
 
+// Hanya alias yang benar-benar dipakai di badan tes di-destructure; mock lain
+// tetap ada di `mocks` karena dipakai oleh pabrik `vi.mock` di bawah.
 const {
   requirePermissionMock,
-  revalidateMock,
-  logActivityMock,
   assertApprovedMock,
-  requestApprovalMock,
-  notifyAdminsMock,
-  createNotificationMock,
-  sendEmailMock,
   generateDocNumMock,
-  generateDocNumBatchMock,
   prismaMock,
 } = mocks
 

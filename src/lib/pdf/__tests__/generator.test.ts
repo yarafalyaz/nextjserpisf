@@ -65,7 +65,7 @@ describe("PDF Generator Flows", () => {
       naturalWidth = 100
       naturalHeight = 50
       onload: any = null
-      set src(v: string) {
+      set src(_v: string) {
         if (this.onload) this.onload()
       }
     } as any

@@ -131,7 +131,7 @@ describe("Approval Progression Actions", () => {
     // Function uses `throw e` in catch — wrap to catch
     try {
       await actions.approveStep(1, fdMap({ notes: "OK" }));
-    } catch (e: any) {
+    } catch {
       // Throws production error; success path runs first
     }
   });
@@ -148,7 +148,7 @@ describe("Approval Progression Actions", () => {
     });
     try {
       await actions.rejectStep(1, fdMap({ notes: "NO" }));
-    } catch (e: any) {
+    } catch {
       // Throws production error
     }
   });

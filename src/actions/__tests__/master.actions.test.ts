@@ -264,7 +264,7 @@ describe("Lead Actions", () => {
   it("createLead succeeds", async () => {
     try {
       await actions.createLead(fdMap({ name: "test", estimatedValue: "100" }))
-    } catch (e) { /* redirect */ }
+    } catch { /* redirect */ }
     expect(mocks.prismaMock.lead.create).toHaveBeenCalled()
   })
   it("createLead fails validation on negative estimatedValue", async () => {
@@ -276,7 +276,7 @@ describe("Lead Actions", () => {
     mocks.prismaMock.lead.findUniqueOrThrow.mockResolvedValue({ id: 1, activities: "[]", assignedTo: 1 })
     try {
       await actions.updateLead(1, fdMap({ name: "test", estimatedValue: "100" }))
-    } catch (e) { /* redirect */ }
+    } catch { /* redirect */ }
     expect(mocks.prismaMock.lead.update).toHaveBeenCalled()
   })
   it("updateLead fails validation on invalid date", async () => {
@@ -306,14 +306,14 @@ describe("Tax Actions", () => {
   it("createTax succeeds", async () => {
     try {
       await actions.createTax(fdMap({ name: "Tax Test", rate: "10" }))
-    } catch (e) { /* redirect throws */ }
+    } catch { /* redirect throws */ }
     expect(mocks.prismaMock.tax.create).toHaveBeenCalled()
   })
   it("updateTax succeeds", async () => {
     mocks.prismaMock.tax.findUniqueOrThrow.mockResolvedValue({ id: 1 })
     try {
       await actions.updateTax(1, fdMap({ name: "Tax Test", rate: "10" }))
-    } catch (e) { /* redirect throws */ }
+    } catch { /* redirect throws */ }
     expect(mocks.prismaMock.tax.update).toHaveBeenCalled()
   })
 
@@ -322,7 +322,7 @@ describe("Tax Actions", () => {
     // unconditionally would force them false, silently downgrading the tax.
     try {
       await actions.updateTax(1, fdMap({ name: "PPN", rate: "11" }))
-    } catch (e) { /* redirect throws */ }
+    } catch { /* redirect throws */ }
     const arg = mocks.prismaMock.tax.update.mock.calls.at(-1)?.[0]
     expect(arg.data).not.toHaveProperty("isInclusive")
     expect(arg.data).not.toHaveProperty("isCompound")
@@ -331,7 +331,7 @@ describe("Tax Actions", () => {
   it("updateTax writes isInclusive/isCompound when the form submits them", async () => {
     try {
       await actions.updateTax(1, fdMap({ name: "PPN", rate: "11", isInclusive: "on" }))
-    } catch (e) { /* redirect throws */ }
+    } catch { /* redirect throws */ }
     const arg = mocks.prismaMock.tax.update.mock.calls.at(-1)?.[0]
     expect(arg.data.isInclusive).toBe(true)
     // isCompound was not submitted → preserved (not forced false).
@@ -341,7 +341,7 @@ describe("Tax Actions", () => {
   it("createTax clamps an out-of-range rate into 0..100", async () => {
     try {
       await actions.createTax(fdMap({ name: "Neg", rate: "-5" }))
-    } catch (e) { /* redirect throws */ }
+    } catch { /* redirect throws */ }
     const arg = mocks.prismaMock.tax.create.mock.calls.at(-1)?.[0]
     expect(arg.data.rate).toBe(0)
   })
@@ -349,7 +349,7 @@ describe("Tax Actions", () => {
     mocks.prismaMock.tax.findUniqueOrThrow.mockResolvedValue({ id: 1, usages: 0 })
     try {
       await actions.deleteTax(1)
-    } catch (e) { /* redirect throws */ }
+    } catch { /* redirect throws */ }
     expect(mocks.prismaMock.tax.delete).toHaveBeenCalled()
   })
 })
@@ -415,20 +415,20 @@ describe("Brand Actions", () => {
   it("createBrand succeeds", async () => {
     try {
       await actions.createBrand(fdMap({ name: "BrandTest" }))
-    } catch (e) { /* redirect throws */ }
+    } catch { /* redirect throws */ }
     expect(mocks.prismaMock.brand.create).toHaveBeenCalled()
   })
   it("updateBrand succeeds", async () => {
     mocks.prismaMock.brand.findUniqueOrThrow.mockResolvedValue({ id: 1 })
     try {
       await actions.updateBrand(1, fdMap({ name: "BrandTest" }))
-    } catch (e) { /* redirect throws */ }
+    } catch { /* redirect throws */ }
     expect(mocks.prismaMock.brand.update).toHaveBeenCalled()
   })
   it("deleteBrand succeeds", async () => {
     try {
       await actions.deleteBrand(1)
-    } catch (e) { /* redirect throws */ }
+    } catch { /* redirect throws */ }
     expect(mocks.prismaMock.brand.delete).toHaveBeenCalled()
   })
 })

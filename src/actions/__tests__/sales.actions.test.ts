@@ -1360,7 +1360,7 @@ describe("Next.js redirect error handling", () => {
     // For actions like createX that parse schema first
     mocks.safeJsonParseMock.mockImplementation(() => { throw redirectErr })
     
-    for (const { name, fn } of fnsToTest) {
+    for (const { fn } of fnsToTest) {
       await expect(fn()).rejects.toThrow(redirectErr)
     }
   })

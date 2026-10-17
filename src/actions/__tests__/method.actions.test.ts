@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { getSystemSettings } from "@/lib/utils/settings"
 
 const mocks = vi.hoisted(() => {
   const buildModelMock = () => ({
