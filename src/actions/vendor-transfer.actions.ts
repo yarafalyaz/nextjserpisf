@@ -32,7 +32,7 @@ function parseDate(raw: string): Date | null {
  */
 export async function markVendorPaymentsTransferred(formData: FormData): Promise<VendorTransferActionResult> {
   try {
-    const user = await requirePermission("edit_vendor_payments")
+    await requirePermission("edit_vendor_payments")
 
     const selection = normalizeTransferSelection(formData.getAll("paymentIds").map((value) => String(value)))
     if (selection.error) return { success: false, error: selection.error }

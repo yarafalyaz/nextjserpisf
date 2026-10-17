@@ -33,7 +33,6 @@ import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
 import {
   requestApprovalIfConfigured,
-  assertApproved,
 } from "@/lib/services/approval-workflow.service";
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 import { parseFormData } from "@/lib/validations/parse-form";

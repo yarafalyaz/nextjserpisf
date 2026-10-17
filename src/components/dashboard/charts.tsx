@@ -689,7 +689,7 @@ export function TopCustomersChart({ data }: { data: CustomerData[] }) {
                 cursor={{ fill: "var(--muted)", opacity: 0.25 }}
                 content={
                   <ChartTooltipContent
-                    formatter={(value, name, item) => (
+                    formatter={(value, _name, item) => (
                       <div className="flex flex-col gap-1 w-full">
                         <div className="flex items-center justify-between gap-4">
                           <span className="text-muted-foreground text-xs">Peringkat:</span>
