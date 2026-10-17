@@ -89,6 +89,19 @@ const REQUIRED_CALLERS: Array<{ action: string; definedIn: string; callersIn: st
     callersIn: ["penjualan/penawaran"],
   },
   {
+    // Surat jalan hanya dihitung laporan Pemenuhan Pesanan saat berstatus
+    // shipped/delivered. Tanpa tombol ini semua surat jalan tersangkut di konsep
+    // dan "terkirim" selalu 0 — persis keluhan yang memicu perbaikan rantai ini.
+    action: "shipDeliveryOrder",
+    definedIn: "src/actions/sales.actions.ts",
+    callersIn: ["penjualan/surat-jalan"],
+  },
+  {
+    action: "deliverDeliveryOrder",
+    definedIn: "src/actions/sales.actions.ts",
+    callersIn: ["penjualan/surat-jalan"],
+  },
+  {
     // Pengeluaran berstatus `approved` tak punya jalan ke `paid`; aksi ini memposting
     // jurnal kas/bank-nya (dan `paid` juga menggerbangi penghapusan).
     action: "markExpensePaid",

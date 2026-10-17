@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
+import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { completeSalesReturn, deleteSalesReturn } from "@/actions/sales.actions"
@@ -17,7 +18,7 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-import { entityEditHref } from "@/lib/utils/entity-url"
+import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Retur" }
 
 export default async function SalesReturnDetailPage({
@@ -37,6 +38,8 @@ export default async function SalesReturnDetailPage({
           where: { slug: s, ...where },
           include: {
             items: true,
+            salesInvoice: { select: { id: true, slug: true, documentNo: true } },
+            customer: { select: { id: true, slug: true, name: true } },
           },
         }),
       byId: (id, where) =>
@@ -44,12 +47,22 @@ export default async function SalesReturnDetailPage({
           where: { id, ...where },
           include: {
             items: true,
+            salesInvoice: { select: { id: true, slug: true, documentNo: true } },
+            customer: { select: { id: true, slug: true, name: true } },
           },
         }),
     },
   )
 
   if (!salesReturn) notFound()
+
+  // `SalesReturnItem` tidak punya relasi ke `Item` di skema (hanya `itemId`),
+  // jadi nama barangnya diambil lewat satu kueri terpisah.
+  const itemIds = [...new Set(salesReturn.items.map((item) => item.itemId))]
+  const itemRows = itemIds.length
+    ? await prisma.item.findMany({ where: { id: { in: itemIds } }, select: { id: true, name: true, sku: true } })
+    : []
+  const itemById = new Map(itemRows.map((item) => [item.id, item]))
 
   return (
     <div className="flex flex-col gap-6">
@@ -86,6 +99,26 @@ export default async function SalesReturnDetailPage({
         <DetailField label="No. Dokumen" value={salesReturn.documentNo} mono />
         <DetailField label="Tanggal" value={formatDate(salesReturn.date)} />
         <DetailField label="Dibuat" value={formatDate(salesReturn.createdAt)} />
+        <DetailField
+          label="Pelanggan"
+          value={
+            <Link href={entityHref("/master/pelanggan", salesReturn.customer)}>
+              {salesReturn.customer.name}
+            </Link>
+          }
+        />
+        <DetailField
+          label="Faktur"
+          value={
+            salesReturn.salesInvoice ? (
+              <Link href={entityHref("/penjualan/faktur", salesReturn.salesInvoice)}>
+                {salesReturn.salesInvoice.documentNo}
+              </Link>
+            ) : (
+              "-"
+            )
+          }
+        />
         <DetailField label="Alasan" value={salesReturn.reason || "-"} colSpan="full" />
       </DetailCard>
 
@@ -100,14 +133,16 @@ export default async function SalesReturnDetailPage({
           ) : (
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>ID Barang</DetailTableTh>
+                <DetailTableTh>Barang</DetailTableTh>
+                <DetailTableTh>SKU</DetailTableTh>
                 <DetailTableTh align="right">Jml</DetailTableTh>
                 <DetailTableTh align="right">Biaya</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {salesReturn.items.map((item) => (
                   <DetailTableRow key={item.id}>
-                    <DetailTableTd>{item.itemId}</DetailTableTd>
+                    <DetailTableTd>{itemById.get(item.itemId)?.name ?? `Item #${item.itemId}`}</DetailTableTd>
+                    <DetailTableTd className="font-mono">{itemById.get(item.itemId)?.sku ?? "-"}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>
                   </DetailTableRow>

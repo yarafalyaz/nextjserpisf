@@ -15,6 +15,9 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 import { statusLabel } from "@/lib/utils/status-labels";
+import { ProcessButton } from "@/components/ui/process-button";
+import { shipDeliveryOrder, deliverDeliveryOrder } from "@/actions/sales.actions";
+import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table";
 export const metadata: Metadata = { title: "Surat Jalan" };
 
 export default async function DeliveryOrderDetailPage({
@@ -34,6 +37,7 @@ export default async function DeliveryOrderDetailPage({
           where: { slug: s, ...where },
           include: {
             salesOrder: { include: { customer: true } },
+            items: { orderBy: { id: "asc" }, include: { item: { select: { name: true, sku: true, unitOfMeasure: true } } } },
           },
         }),
       byId: (id, where) =>
@@ -41,6 +45,7 @@ export default async function DeliveryOrderDetailPage({
           where: { id, ...where },
           include: {
             salesOrder: { include: { customer: true } },
+            items: { orderBy: { id: "asc" }, include: { item: { select: { name: true, sku: true, unitOfMeasure: true } } } },
           },
         }),
     },
@@ -73,6 +78,29 @@ export default async function DeliveryOrderDetailPage({
             >
               Ubah
             </Link>
+            {/* Transisi status: hanya surat jalan berstatus shipped/delivered yang
+                dihitung laporan Pemenuhan Pesanan, jadi tanpa tombol ini semua
+                surat jalan tersangkut di konsep dan "terkirim" selalu 0. */}
+            {deliveryOrder.status === "draft" && (
+              <ProcessButton
+                id={deliveryOrder.id}
+                action={shipDeliveryOrder}
+                label="Tandai Dikirim"
+                confirmTitle="Tandai surat jalan ini dikirim?"
+                confirmBody="Barang keluar dari gudang dan baris surat jalan mulai dihitung sebagai terkirim di laporan Pemenuhan Pesanan. Setelah dikirim, surat jalan ini tidak bisa dihapus."
+                successMessage="Surat jalan ditandai dikirim"
+              />
+            )}
+            {deliveryOrder.status === "shipped" && (
+              <ProcessButton
+                id={deliveryOrder.id}
+                action={deliverDeliveryOrder}
+                label="Tandai Terkirim"
+                confirmTitle="Tandai surat jalan ini terkirim?"
+                confirmBody="Pelanggan sudah menerima barang. Tanggal terkirim dicatat dan baris surat jalan ini tetap dihitung sebagai terkirim di laporan Pemenuhan Pesanan."
+                successMessage="Surat jalan ditandai terkirim"
+              />
+            )}
             <PrintButton documentType="delivery-order" documentId={deliveryOrder.id} />
             <DeleteButton id={deliveryOrder.id} action={deleteDeliveryOrder} />
             <Link
@@ -207,6 +235,39 @@ export default async function DeliveryOrderDetailPage({
               {formatDate(deliveryOrder.createdAt)}
             </span>
           </div>
+        </div>
+      </div>
+
+      {/* Barang yang dikirim */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang Dikirim</h2>
+        </div>
+        <div className="p-4 px-5">
+          {deliveryOrder.items.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Surat jalan ini belum punya baris barang, jadi belum ikut menghitung pemenuhan pesanan.
+            </p>
+          ) : (
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Barang</DetailTableTh>
+                <DetailTableTh>SKU</DetailTableTh>
+                <DetailTableTh align="right">Jumlah</DetailTableTh>
+                <DetailTableTh>Satuan</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
+                {deliveryOrder.items.map((item) => (
+                  <DetailTableRow key={item.id}>
+                    <DetailTableTd>{item.item.name}</DetailTableTd>
+                    <DetailTableTd className="font-mono">{item.item.sku}</DetailTableTd>
+                    <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                    <DetailTableTd>{item.item.unitOfMeasure}</DetailTableTd>
+                  </DetailTableRow>
+                ))}
+              </DetailTableBody>
+            </DetailTable>
+          )}
         </div>
       </div>
 

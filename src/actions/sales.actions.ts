@@ -19,7 +19,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema } from "@/lib/validations/sales.schemas"
+import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema, DELIVERABLE_ORDER_STATUSES, DELIVERABLE_ORDER_STATUS_LABELS } from "@/lib/validations/sales.schemas"
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
@@ -1180,6 +1180,30 @@ export async function createSalesReturn(formData: FormData) {
 
 // ==================== DELIVERY ORDER ACTIONS ====================
 
+/**
+ * Baca `items` (JSON string dari editor item form surat jalan) menjadi baris yang
+ * layak ditulis: `{ salesOrderItemId, qty }` dengan id bulat positif dan qty > 0.
+ * Baris yang tidak lolos saring dibuang di sini; pemanggil menolak bila hasilnya
+ * kosong, jadi payload yang seluruhnya rusak tidak pernah lahir sebagai surat
+ * jalan tanpa baris.
+ */
+function parseDeliveryOrderLines(raw: string): Array<{ salesOrderItemId: number; qty: number }> {
+  const parsed = safeJsonParse<unknown>(raw)
+  if (!Array.isArray(parsed)) return []
+  return parsed
+    .map((line) => ({
+      salesOrderItemId: Number((line as { salesOrderItemId?: unknown })?.salesOrderItemId),
+      qty: Number((line as { qty?: unknown })?.qty),
+    }))
+    .filter(
+      (line) =>
+        Number.isInteger(line.salesOrderItemId) &&
+        line.salesOrderItemId > 0 &&
+        Number.isFinite(line.qty) &&
+        line.qty > 0,
+    )
+}
+
 export async function createDeliveryOrder(formData: FormData) {
   try {
   const user = await requirePermission("create_delivery_orders")
@@ -1188,20 +1212,77 @@ export async function createDeliveryOrder(formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
-  const documentNo = await generateDocumentNumber("DO")
-  const slug = await nextSlug("deliveryOrder", documentNo)
   const salesOrderId = v.salesOrderId
+
+  // Gerbang status di SERVER, bukan hanya di pemilih pesanan pada halaman: form
+  // bisa dikirim dari URL/payload mana pun. Tanpa penjagaan ini, surat jalan bisa
+  // dipasang ke pesanan konsep/dibatalkan — melahirkan dokumen logistik atas
+  // komitmen pelanggan yang belum ada.
   const salesOrder = await prisma.salesOrder.findUnique({
     where: { id: salesOrderId },
-    select: { customerId: true },
+    select: { id: true, documentNo: true, status: true, customerId: true },
   })
+  if (!salesOrder) {
+    return { success: false, error: "Pesanan penjualan tidak ditemukan." }
+  }
+  if (!(DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(salesOrder.status)) {
+    return {
+      success: false,
+      error:
+        `Surat jalan hanya bisa dibuat dari Pesanan Penjualan berstatus ${DELIVERABLE_ORDER_STATUS_LABELS}. ` +
+        `Pesanan ${salesOrder.documentNo} masih berstatus "${salesOrder.status}".`,
+    }
+  }
+
+  // Baris barang wajib. Tanpa `salesOrderItemId` yang terisi, laporan Pemenuhan
+  // Pesanan tak punya cara mengaitkan barang yang keluar ke baris pesanan
+  // (terkirim = 0 selamanya). Baris yang dikirim juga harus baris MILIK pesanan
+  // ini: nomor baris pesanan lain akan menaikkan pemenuhan pesanan orang lain.
+  const requestedLines = parseDeliveryOrderLines(v.items)
+  if (requestedLines.length === 0) {
+    return {
+      success: false,
+      error: "Surat jalan harus punya minimal satu baris barang dengan jumlah lebih dari 0.",
+    }
+  }
+
+  const lines = await prisma.salesOrderItem.findMany({
+    where: { id: { in: requestedLines.map((line) => line.salesOrderItemId) }, salesOrderId },
+    select: { id: true, itemId: true },
+  })
+  const lineById = new Map(lines.map((line) => [line.id, line]))
+
+  const bukanMilikPesanan = requestedLines.filter((line) => !lineById.has(line.salesOrderItemId))
+  if (bukanMilikPesanan.length > 0) {
+    return {
+      success: false,
+      error: `Baris pesanan #${bukanMilikPesanan.map((line) => line.salesOrderItemId).join(", #")} bukan milik pesanan ini.`,
+    }
+  }
+  const tanpaBarangKatalog = [...lineById.values()].filter((line) => line.itemId === null)
+  if (tanpaBarangKatalog.length > 0) {
+    return {
+      success: false,
+      error: `Baris pesanan #${tanpaBarangKatalog.map((line) => line.id).join(", #")} tidak menunjuk barang katalog, jadi tidak bisa dikirim.`,
+    }
+  }
+
+  // Dua baris untuk baris pesanan yang sama digabung supaya tidak ada dua baris
+  // surat jalan yang menunjuk baris pesanan identik.
+  const qtyByLine = new Map<number, number>()
+  for (const line of requestedLines) {
+    qtyByLine.set(line.salesOrderItemId, (qtyByLine.get(line.salesOrderItemId) ?? 0) + line.qty)
+  }
+
+  const documentNo = await generateDocumentNumber("DO")
+  const slug = await nextSlug("deliveryOrder", documentNo)
 
   const deliveryOrder = await prisma.deliveryOrder.create({
     data: {
       documentNo,
       slug,
       doNumber: v.doNumber ?? null,
-      customerId: salesOrder?.customerId ?? null,
+      customerId: salesOrder.customerId,
       salesOrderId,
       date: new Date(v.date),
       deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
@@ -1216,6 +1297,13 @@ export async function createDeliveryOrder(formData: FormData) {
       notes: v.notes ?? null,
       status: "draft",
       createdBy: Number(user.id),
+      items: {
+        create: [...qtyByLine.entries()].map(([salesOrderItemId, qty]) => ({
+          salesOrderItemId,
+          itemId: lineById.get(salesOrderItemId)!.itemId!,
+          qty,
+        })),
+      },
     },
   })
 
@@ -1226,6 +1314,87 @@ export async function createDeliveryOrder(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createDeliveryOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * draft → shipped. Surat jalan yang berstatus `shipped`/`delivered` inilah yang
+ * dihitung laporan Pemenuhan Pesanan (`SHIPPED_DELIVERY_STATUSES`); tanpa aksi
+ * ini semua surat jalan tersangkut di konsep dan laporan selalu 0 terkirim.
+ */
+export async function shipDeliveryOrder(id: number) {
+  try {
+  const user = await requirePermission("edit_delivery_orders")
+
+  const existing = await prisma.deliveryOrder.findUniqueOrThrow({
+    where: { id },
+    select: { status: true, documentNo: true },
+  })
+  if (existing.status !== "draft") {
+    throw new Error(
+      `Surat jalan ${existing.documentNo} berstatus "${existing.status}" — hanya surat jalan konsep yang bisa ditandai dikirim.`,
+    )
+  }
+
+  // Mengirim surat jalan TANPA baris barang hanya mengubah label: tak satu pun
+  // baris pesanan bertambah terkirim dan sisa kirim tetap salah. Tolak lebih awal
+  // dengan sebab yang bisa ditindaklanjuti.
+  const itemCount = await prisma.deliveryOrderItem.count({ where: { deliveryOrderId: id } })
+  if (itemCount === 0) {
+    throw new Error(
+      "Surat jalan ini tidak punya baris barang, jadi belum bisa ditandai dikirim. Isi barisnya lebih dulu.",
+    )
+  }
+
+  // Klaim atomik dari `draft` supaya dua klik beruntun tidak memproses dua kali.
+  const claim = await prisma.deliveryOrder.updateMany({
+    where: { id, status: "draft" },
+    data: { status: "shipped", confirmedBy: Number(user.id), confirmedAt: new Date() },
+  })
+  if (claim.count === 0) throw new Error("Surat jalan sudah diproses.")
+
+  await logActivity("ship", "DeliveryOrder", id, `Menandai surat jalan #${id} dikirim`)
+  revalidatePath("/penjualan/surat-jalan")
+  revalidatePath("/laporan/pemenuhan-pesanan")
+  return { success: true }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[shipDeliveryOrder]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/** shipped → delivered, menstempel `deliveredAt` (barang sudah diterima pelanggan). */
+export async function deliverDeliveryOrder(id: number) {
+  try {
+  await requirePermission("edit_delivery_orders")
+
+  const existing = await prisma.deliveryOrder.findUniqueOrThrow({
+    where: { id },
+    select: { status: true, documentNo: true },
+  })
+  if (existing.status !== "shipped") {
+    throw new Error(
+      `Surat jalan ${existing.documentNo} berstatus "${existing.status}" — tandai dikirim dulu sebelum ditandai terkirim.`,
+    )
+  }
+
+  const claim = await prisma.deliveryOrder.updateMany({
+    where: { id, status: "shipped" },
+    data: { status: "delivered", deliveredAt: new Date() },
+  })
+  if (claim.count === 0) throw new Error("Surat jalan sudah diproses.")
+
+  await logActivity("deliver", "DeliveryOrder", id, `Menandai surat jalan #${id} terkirim`)
+  revalidatePath("/penjualan/surat-jalan")
+  revalidatePath("/laporan/pemenuhan-pesanan")
+  return { success: true }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deliverDeliveryOrder]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

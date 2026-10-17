@@ -150,6 +150,26 @@ export const updateSalesReturnSchema = z.object({
 
 // ==================== DELIVERY ORDER ====================
 
+/**
+ * Status Pesanan Penjualan yang boleh dibuatkan Surat Jalan.
+ *
+ * Satu sumber untuk tiga tempat: gerbang di halaman `surat-jalan/tambah`,
+ * penjagaan di server action `createDeliveryOrder` (UI bisa dilewati lewat URL /
+ * form yang ditempel), dan — lewat uji paritas — daftar status laporan
+ * Pemenuhan Pesanan.
+ *
+ * - `approved`: jalur `/api/workflow` **tanpa** workflow terkonfigurasi menaikkan
+ *   SO draft→approved, dan tombol **Setujui** di halaman detail pesanan memakai
+ *   jalur itu. Tanpa status ini, pesanan yang baru disetujui tak bisa dikirim.
+ * - `confirmed`, `processing`, `completed`: kosakata laporan Pemenuhan Pesanan
+ *   (`FULFILLABLE_ORDER_STATUSES`). Pesanan yang sudah dikonfirmasi/diproses/
+ *   selesai tapi barnya belum habis dikirim tetap harus bisa disurat-jalankan.
+ */
+export const DELIVERABLE_ORDER_STATUSES = ["approved", "confirmed", "processing", "completed"] as const;
+
+/** Daftar status di atas dalam bahasa layar, untuk pesan penolakan. */
+export const DELIVERABLE_ORDER_STATUS_LABELS = "Disetujui, Dikonfirmasi, Diproses, atau Selesai";
+
 export const createDeliveryOrderSchema = z.object({
   salesOrderId: requiredId,
   date: z.string().min(1, "Tanggal wajib diisi").max(50),
@@ -164,6 +184,11 @@ export const createDeliveryOrderSchema = z.object({
   shippingPhone: optionalString(30),
   vehicleNumber: optionalString(200),
   notes: optionalString(500),
+  // Baris barang yang dikirim, JSON dari editor item form surat jalan:
+  // [{ salesOrderItemId, itemId, qty }]. Tanpa baris, surat jalan tak bisa
+  // dicocokkan ke baris pesanan (DeliveryOrderItem.salesOrderItemId null) dan
+  // laporan Pemenuhan Pesanan selalu membaca 0 terkirim — jadi barisnya wajib.
+  items: z.string().min(1, "Minimal satu barang yang dikirim").max(50000),
 });
 
 export const updateDeliveryOrderSchema = z.object({

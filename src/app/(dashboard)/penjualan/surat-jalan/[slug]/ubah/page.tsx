@@ -9,6 +9,7 @@ import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
+import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas";
 export const metadata: Metadata = { title: "Ubah Surat Jalan" };
 
 export default async function EditPage({
@@ -23,8 +24,16 @@ export default async function EditPage({
   const data = await resolveEntity(
     { segment: slug, fallbackWhere: {} },
     {
-      bySlug: (s, where) => prisma.deliveryOrder.findFirst({ where: { slug: s, ...where } }),
-      byId: (id, where) => prisma.deliveryOrder.findUnique({ where: { id, ...where } }),
+      bySlug: (s, where) =>
+        prisma.deliveryOrder.findFirst({
+          where: { slug: s, ...where },
+          include: { items: { orderBy: { id: "asc" }, include: { item: { select: { name: true } } } } },
+        }),
+      byId: (id, where) =>
+        prisma.deliveryOrder.findUnique({
+          where: { id, ...where },
+          include: { items: { orderBy: { id: "asc" }, include: { item: { select: { name: true } } } } },
+        }),
     },
   );
 
@@ -45,10 +54,17 @@ export default async function EditPage({
     shippingPostalCode: data.shippingPostalCode,
     shippingPhone: data.shippingPhone,
     vehicleNumber: data.vehicleNumber,
+    // Baris barang ditampilkan apa adanya (tidak disunting di sini): mengubah
+    // baris surat jalan yang sudah jalan akan memutus hitungan Pemenuhan Pesanan.
+    items: data.items.map((item) => ({
+      itemId: item.itemId,
+      qty: Number(item.qty),
+      description: item.item.name,
+    })),
   };
 
   const salesOrders = await prisma.salesOrder.findMany({
-    where: { status: { in: ["confirmed", "processing", "completed"] } },
+    where: { status: { in: [...DELIVERABLE_ORDER_STATUSES] } },
     orderBy: { createdAt: "desc" },
     include: { customer: { select: { name: true } } },
   });

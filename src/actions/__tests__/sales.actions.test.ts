@@ -1001,8 +1001,22 @@ describe("Delivery Order Actions (legacy happy paths)", () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("DO-001")
   })
+  // Kontrak baru (rantai penjualan): surat jalan wajib punya baris barang yang
+  // menunjuk baris pesanan (`salesOrderItemId`) dan pesanannya wajib berstatus
+  // yang bisa dikirim. Sebelumnya surat jalan lahir tanpa baris dan laporan
+  // Pemenuhan Pesanan selalu membaca 0 terkirim.
   it("createDeliveryOrder succeeds", async () => {
-    const res = await actions.createDeliveryOrder(fdMap({ salesOrderId: "1", date: "2026-06-12" }))
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({
+      id: 1, documentNo: "SO-001", status: "confirmed", customerId: 1,
+    })
+    mocks.prismaMock.salesOrderItem.findMany.mockResolvedValue([{ id: 11, itemId: 5 }])
+    const res = await actions.createDeliveryOrder(
+      fdMap({
+        salesOrderId: "1",
+        date: "2026-06-12",
+        items: JSON.stringify([{ salesOrderItemId: 11, itemId: 5, qty: 2 }]),
+      }),
+    )
     expect(res?.success).toBe(true)
   })
   it("updateDeliveryOrder succeeds", async () => {
