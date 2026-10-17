@@ -46,6 +46,38 @@ const KNOWN_UNUSED: string[] = [
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")
+
+/**
+ * Kolom yang HANYA dirujuk skrip seed / prisma seed — tidak oleh kode produk.
+ *
+ * Kelas ini lolos dari pemeriksaan "kolom mati" di atas karena seed ikut dipindai
+ * sebagai kode. Padahal dari sudut pandang produk kolomnya mati: UI dan laporan
+ * tidak pernah mengisinya, sehingga basis data demo menampilkan nilai yang TIDAK
+ * BISA dihasilkan alur nyata — dan itu justru lebih menyesatkan daripada kolom
+ * kosong, karena angkanya terlihat masuk akal.
+ *
+ * Contoh nyata: model `Attendance` dibaca dasbor/cron (metrik absensi, notifikasi
+ * terlambat) tetapi TIDAK ADA halaman maupun aksi yang menulis absensi di seluruh
+ * repo — hanya `scripts/seed-hrm-crm-e2e.ts`. Jadi GPS check-in/check-out, jam
+ * pulang, dan menit lembur absensi semuanya berasal dari seed.
+ *
+ * Berarah dua: menambah kolom baru yang hanya dipakai seed memerahkan tes, dan
+ * entri yang sudah dirujuk kode produk juga memerahkan tes (daftar tidak membusuk).
+ * Keputusan per kolom: implementasikan fiturnya, atau buang kolomnya lewat migrasi.
+ */
+const SEED_ONLY_COLUMNS: string[] = [
+  "Attendance.checkInLatitude",
+  "Attendance.checkInLongitude",
+  "Attendance.checkOut",
+  "Attendance.checkOutLatitude",
+  "Attendance.checkOutLongitude",
+  "Attendance.overtimeApproved",
+  "Attendance.overtimeMinutes",
+  "CrmTicket.firstResponseAt",
+  "CrmTicket.resolvedAt",
+  "CrmTicketComment.isInternal",
+].sort()
+
 const SCALAR_TYPES = new Set([
   "String",
   "Int",
@@ -178,5 +210,55 @@ describe("skema: setiap model dipakai kode", () => {
   it("daftar model mati tidak membusuk (yang sudah dipakai harus dikeluarkan)", () => {
     const basi = KNOWN_UNUSED_MODELS.map((x) => x.model).filter((model) => dipakai(model))
     expect(basi, `model ini sudah dipakai — keluarkan dari daftar: ${basi.join(", ")}`).toEqual([])
+  })
+})
+
+/** Kolom skalar: entri `Model.field` + semua nama yang mungkin muncul di kode. */
+function scalarFields(schema: string): Array<{ entry: string; names: string[] }> {
+  const fkScalars = foreignKeyScalars(schema)
+  const out: Array<{ entry: string; names: string[] }> = []
+  for (const [, model, body] of schema.matchAll(/^model (\w+) \{([\s\S]*?)^\}/gm)) {
+    for (const line of body.split("\n")) {
+      const field = /^\s{2}([a-z]\w*)\s+([A-Z]\w*)(\[\])?\??\s*(.*)$/.exec(line)
+      if (!field) continue
+      const [, name, type, array, rest] = field
+      if (!SCALAR_TYPES.has(type) || array || rest.includes("@relation")) continue
+      if (fkScalars.has(name)) continue
+      const column = /@map\("([^"]+)"\)/.exec(rest)?.[1]
+      out.push({ entry: `${model}.${name}`, names: column ? [name, column] : [name] })
+    }
+  }
+  return out
+}
+
+describe("skema: kolom yang hanya dipakai skrip seed", () => {
+  it("kolom seed-only terdaftar, dan daftarnya tidak membusuk", () => {
+    const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
+    const produk: string[] = []
+    for (const dir of ["src", "e2e"]) readCode(dir, produk)
+    const seed: string[] = []
+    for (const dir of ["scripts", "prisma"]) readCode(dir, seed)
+
+    const teksProduk = produk.join("\n")
+    const teksSeed = seed.join("\n")
+    const dirujuk = (text: string, names: string[]) =>
+      names.some((name) => new RegExp(`\\b${name}\\b`).test(text))
+
+    const seedOnly = scalarFields(schema)
+      .filter((f) => !dirujuk(teksProduk, f.names) && dirujuk(teksSeed, f.names))
+      .map((f) => f.entry)
+      .sort()
+
+    expect(
+      seedOnly,
+      seedOnly.length === SEED_ONLY_COLUMNS.length
+        ? undefined
+        : "Ada kolom yang HANYA diisi skrip seed: kode produk tidak pernah " +
+          "menulis/membacanya, sehingga basis data demo menampilkan nilai yang " +
+          "tidak bisa dihasilkan alur nyata. Implementasikan fiturnya, atau " +
+          "catat di SEED_ONLY_COLUMNS dengan alasan. Sebaliknya, entri yang " +
+          "sudah dirujuk kode produk (atau kolomnya sudah dibuang) harus " +
+          "dikeluarkan dari daftar supaya tidak membusuk.",
+    ).toEqual(SEED_ONLY_COLUMNS)
   })
 })

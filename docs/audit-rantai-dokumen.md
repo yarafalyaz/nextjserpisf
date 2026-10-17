@@ -75,6 +75,22 @@ manual di jalur penulisannya sebelum dinyatakan celah** — persis seperti kasus
 | `OvertimeRequest.approvedAt` | **BUG — diperbaiki.** Aksi `approveOvertime` menulis `status`/`approvedBy` tanpa cap waktu, padahal halaman detail lembur hanya merender baris "Disetujui Pada" bila kolom itu terisi. Jadi pengajuan yang sudah disetujui tampil tanpa tanggal persetujuan, dan komentar di `hrm.actions.ts` yang menjanjikan jejak audit `approvedAt` tidak benar | Cap `approvedAt: new Date()` di klaim atomik persetujuan (pengesahan ulang tidak menimpa karena berhenti lebih awal di jalur idempotensi). Tes lama diperketat dengan asersi cap waktu |
 | `OvertimeRequest.supervisorApprovedAt`, `OvertimeRequest.rejectionReason` | Kolom MATI: tidak ada aksi persetujuan supervisor maupun aksi penolakan lembur di seluruh repo | Keputusan produk: implementasikan tahapnya, atau buang kolomnya (butuh migrasi) — **bukan** diisi asal agar UI-nya terisi |
 | `PettyCash.sourceAccountId`, `PettyCash.expenseAccountId` | Kolom MATI: payload `pettyCash.create` hanya menulis `accountId`/`projectId`/`vendorId`/`categoryId`. Perilakunya tetap benar karena hook memakai `pettyCash.sourceAccountId ?? settings.cashBankAccountId` dan MELEMPAR bila keduanya kosong — jadi tidak ada uang tanpa akun, hanya saja akun per transaksi tidak bisa dipilih dari UI | Keputusan produk (tambahkan pilihan akun, atau buang kolomnya lewat migrasi) |
+| **10 kolom yang hanya diisi skrip seed** (`Attendance.checkIn/outLatitude`, `checkIn/outLongitude`, `checkOut`, `overtimeApproved`, `overtimeMinutes`, `CrmTicket.firstResponseAt`, `resolvedAt`, `CrmTicketComment.isInternal`) | Model `Attendance` DIBACA produk (metrik absensi dasbor + notifikasi terlambat di `api/cron/route.ts`) tetapi **tidak ada satu pun halaman maupun aksi yang menulis absensi di seluruh repo** — hanya `scripts/seed-hrm-crm-e2e.ts`. Jadi dasbor absensi hanya bisa terisi dari seed, dan basis data demo menampilkan GPS serta menit lembur yang tidak bisa dihasilkan alur nyata | Penjaga skema DIPERKETAT: kelas ini kini dideteksi terpisah dan dicatat di `SEED_ONLY_COLUMNS` (berarah dua). Keputusan produk: bangun modul input absensi (check-in/out, GPS, lembur) atau buang kolomnya lewat migrasi |
+
+Mengapa kelas "hanya seed" penting: ia **lolos** dari pemeriksaan kolom mati biasa
+karena berkas seed ikut dipindai sebagai kode, sehingga berminggu-minggu tidak
+terlihat. Ini kelas yang sama dengan enam kolom yang baru terdeteksi setelah 11
+skrip yatim dibuang — hanya saja skrip seed-nya masih ada, jadi kolomnya tetap
+"terpakai" secara palsu.
+
+## 4c. Lubang penjaga yang diketahui (jangan diulang)
+
+- Penjaga `schema-usage` memeriksa "ada rujukan", **bukan** "ada penulisan". Kolom
+  yang dibaca laporan tetapi tidak pernah ditulis (kelas bug DPP di §4) lolos.
+  Detektor "dibaca tapi tak pernah ditulis" (`/tmp/readonly-cols*.py`) menutup
+  celah itu sebagai **sinyal**, bukan tes — vonis palsunya sudah dipetakan di §4b.
+- Penjaga itu juga menghitung berkas seed sebagai pemakaian; karena itu
+  pemeriksaan terpisah `SEED_ONLY_COLUMNS` ditambahkan (§4b).
 
 Vonis PALSU yang dipetakan (kandidat detektor yang ternyata terisi — jangan
 dijadikan tes): `QuotationItem.sectionId` (terisi otomatis oleh nested create
