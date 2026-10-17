@@ -15,14 +15,28 @@ export const metadata: Metadata = { title: "Faktur" }
 export default async function InvoicesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_sales_invoices")
 
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
+  const cari = params.cari?.trim()
+
+  // InvoiceTable berjalan dalam mode server dan kotak carinya menulis ?cari=,
+  // jadi filternya WAJIB di sini — kalau tidak, kotak cari tidak menyaring
+  // apa pun, termasuk saat tiba dari tautan ?cari= di halaman pelanggan/proyek.
+  const where = cari
+    ? {
+        OR: [
+          { documentNo: { contains: cari } },
+          { customer: { name: { contains: cari } } },
+        ],
+      }
+    : {}
 
   const rawInvoices = await prisma.salesInvoice.findMany({
+    where,
     include: { customer: true },
     take,
     skip: (page - 1) * pageSize,
@@ -41,7 +55,7 @@ export default async function InvoicesPage({
     customer: inv.customer,
   }))
 
-  const total = await prisma.salesInvoice.count()
+  const total = await prisma.salesInvoice.count({ where })
 
   const tableData = toPlain(invoices)
 

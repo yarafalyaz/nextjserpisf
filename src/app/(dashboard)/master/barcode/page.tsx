@@ -16,21 +16,33 @@ export const metadata: Metadata = { title: "Barcode" }
 export default async function BarcodesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_barcodes")
 
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
+  const cari = params.cari?.trim()
+  // Kotak cari DataTable menulis ?cari= (mode server) — terjemahkan ke query.
+  const where = cari
+    ? {
+        OR: [
+          { barcode: { contains: cari } },
+          { type: { contains: cari } },
+          { item: { name: { contains: cari } } },
+        ],
+      }
+    : {}
 
   const barcodes = await prisma.barcode.findMany({
+    where,
     orderBy: { createdAt: "desc" },
     include: { item: { select: { name: true } } },
     take,
     skip: (page - 1) * pageSize,
   })
 
-  const total = await prisma.barcode.count()
+  const total = await prisma.barcode.count({ where })
 
   const tableData = toPlain(barcodes)
 

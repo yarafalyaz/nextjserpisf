@@ -14,20 +14,31 @@ export const metadata: Metadata = { title: "Kategori Pengeluaran" }
 export default async function ExpenseCategoryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("manage_expense_categories")
 
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
+  const cari = params.cari?.trim()
+  // Kotak cari DataTable menulis ?cari= (mode server) — terjemahkan ke query.
+  const where = cari
+    ? {
+        OR: [
+          { name: { contains: cari } },
+          { label: { contains: cari } },
+        ],
+      }
+    : {}
 
   const categories = await prisma.expenseCategory.findMany({
+    where,
     orderBy: { sortOrder: "asc" },
     take,
     skip: (page - 1) * pageSize,
   })
 
-  const total = await prisma.expenseCategory.count()
+  const total = await prisma.expenseCategory.count({ where })
 
   return (
     <div className="flex flex-col gap-6">

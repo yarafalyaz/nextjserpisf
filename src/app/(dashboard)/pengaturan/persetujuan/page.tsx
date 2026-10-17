@@ -15,16 +15,25 @@ export const metadata: Metadata = { title: "Persetujuan" }
 export default async function ApprovalsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; halaman?: string; pageSize?: string }>
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string }>
 }) {
   // This list spans approvals from every module and exposes request metadata.
   await requirePermission("approve_workflows")
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
+  const cari = params.cari?.trim()
 
   const where = {
     ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    // Kotak cari DataTable menulis ?cari= (mode server) — terjemahkan ke query.
+    ...(cari && {
+      OR: [
+        { referenceType: { contains: cari } },
+        { notes: { contains: cari } },
+        { workflow: { name: { contains: cari } } },
+      ],
+    }),
   }
 
   const approvals = await prisma.approval.findMany({

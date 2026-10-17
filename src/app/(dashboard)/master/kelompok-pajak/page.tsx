@@ -14,15 +14,19 @@ export const metadata: Metadata = { title: "Kelompok Pajak" }
 export default async function TaxGroupsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_tax_groups")
 
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
+  const cari = params.cari?.trim()
+  // Kotak cari DataTable menulis ?cari= (mode server) — terjemahkan ke query.
+  const where = cari ? { name: { contains: cari } } : {}
 
   const [taxGroups, allTaxes, total] = await Promise.all([
     prisma.taxGroup.findMany({
+      where,
       include: { taxes: true },
       orderBy: { createdAt: "desc" },
       take,
@@ -31,7 +35,7 @@ export default async function TaxGroupsPage({
     // deletedAt guard covers rows soft-deleted before the delete path started
     // clearing isActive as well.
     prisma.tax.findMany({ where: { isActive: true, deletedAt: null } }),
-    prisma.taxGroup.count(),
+    prisma.taxGroup.count({ where }),
   ])
 
   const taxMap = new Map(allTaxes.map((t) => [t.id, t.name]))

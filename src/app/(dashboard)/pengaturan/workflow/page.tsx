@@ -14,14 +14,25 @@ export const metadata: Metadata = { title: "Workflow" }
 export default async function WorkflowPage({
   searchParams,
 }: {
-  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("manage_settings")
 
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
+  const cari = params.cari?.trim()
 
-  const where = { deletedAt: null }
+  const where = {
+    deletedAt: null,
+    // Kotak cari DataTable menulis ?cari= (mode server) — terjemahkan ke query.
+    ...(cari && {
+      OR: [
+        { name: { contains: cari } },
+        { code: { contains: cari } },
+        { modelType: { contains: cari } },
+      ],
+    }),
+  }
 
   const workflows = await prisma.approvalWorkflow.findMany({
     where,

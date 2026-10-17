@@ -16,21 +16,33 @@ export const metadata: Metadata = { title: "Jabatan" }
 export default async function PositionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_positions")
 
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
+  const cari = params.cari?.trim()
+  // Kotak cari DataTable menulis ?cari= (mode server) — terjemahkan ke query.
+  const where = cari
+    ? {
+        OR: [
+          { name: { contains: cari } },
+          { code: { contains: cari } },
+          { department: { name: { contains: cari } } },
+        ],
+      }
+    : {}
 
   const positions = await prisma.position.findMany({
+    where,
     include: { department: true },
     orderBy: { createdAt: "desc" },
     take,
     skip: (page - 1) * pageSize,
   })
 
-  const total = await prisma.position.count()
+  const total = await prisma.position.count({ where })
 
   const tableData = toPlain(positions)
 

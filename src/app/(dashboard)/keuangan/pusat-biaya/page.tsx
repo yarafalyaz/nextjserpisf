@@ -14,14 +14,23 @@ export const metadata: Metadata = { title: "Pusat Biaya" }
 export default async function CostCentersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ halaman?: string; pageSize?: string }>
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
 }) {
   await requirePermission("view_cost_centers")
 
   const params = await searchParams
   const { page, pageSize, take } = parsePagination(params)
+  const cari = params.cari?.trim()
 
-  const where = { parentId: null }
+  // Kotak cari DataTable menulis ?cari= ke URL (mode server), jadi nilainya
+  // harus diterjemahkan ke query — tanpa ini mengetik di kotak cari tidak
+  // menyaring apa pun sehingga terlihat rusak.
+  const where = {
+    parentId: null,
+    ...(cari && {
+      OR: [{ code: { contains: cari } }, { name: { contains: cari } }],
+    }),
+  }
 
   const all = await prisma.costCenter.findMany({
     include: { children: { include: { children: { include: { children: true } } } } },
