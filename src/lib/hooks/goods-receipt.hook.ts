@@ -499,7 +499,6 @@ export async function onGoodsReceiptVerified(
         goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`,
         goodsReceiptId,
         userId,
-        null,
         goodsReceipt.date,
         // Component split for the journal breakdown (goods + ongkir + admin).
         // `undefined` slices fall back to a single blended inventory debit.
@@ -517,7 +516,6 @@ export async function onGoodsReceiptVerified(
         goodsReceipt.documentNo ?? `GR-${goodsReceiptId}`,
         goodsReceiptId,
         userId,
-        null,
         goodsReceipt.date
       );
     }

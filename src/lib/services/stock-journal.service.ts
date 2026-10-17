@@ -79,7 +79,6 @@ export const stockJournalService = {
     grDocumentNo: string,
     grId: number,
     userId?: number,
-    costCenterId?: number | null,
     transactionDate?: Date,
     goodsOnlyLines?: JournalItemInput[],
     shippingLines?: JournalItemInput[],
@@ -194,7 +193,6 @@ export const stockJournalService = {
     grDocumentNo: string,
     grId: number,
     userId?: number,
-    costCenterId?: number | null,
     transactionDate?: Date
   ) {
     const accounts = await getAccountIds()
@@ -252,7 +250,6 @@ export const stockJournalService = {
     adjDocumentNo: string,
     adjId: number,
     userId?: number,
-    costCenterId?: number | null,
     transactionDate?: Date
   ) {
     const accounts = await getAccountIds()

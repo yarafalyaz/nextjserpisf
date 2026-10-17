@@ -197,7 +197,7 @@ describe("stockJournalService", () => {
 
     it("uses passed transactionDate when provided", async () => {
       const customDate = new Date("2026-05-15T00:00:00Z");
-      await stockJournalService.onGoodsReceipt(tx, [{ qty: 10, cost: 5 }], "GR-1", 1, 42, null, customDate);
+      await stockJournalService.onGoodsReceipt(tx, [{ qty: 10, cost: 5 }], "GR-1", 1, 42, customDate);
 
       expect(mocks.createJournal).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -238,7 +238,6 @@ describe("stockJournalService", () => {
         "GR-1",
         1,
         42,
-        null,
         undefined,
         [{ qty: 1, cost: 130000 }], // goods only
         [{ qty: 1, cost: 20000 }],  // ongkir
@@ -271,7 +270,6 @@ describe("stockJournalService", () => {
         "GR-1",
         1,
         42,
-        null,
         undefined,
         [{ qty: 1, cost: 130000 }],
         [{ qty: 1, cost: 20000 }],
@@ -297,7 +295,6 @@ describe("stockJournalService", () => {
         "GR-1",
         1,
         42,
-        null,
         undefined,
         [{ qty: 1, cost: 100 }],
         [{ qty: 1, cost: 3.333 }],
@@ -326,7 +323,6 @@ describe("stockJournalService", () => {
         "GR-1",
         1,
         42,
-        null,
         undefined,
         undefined,
         undefined,

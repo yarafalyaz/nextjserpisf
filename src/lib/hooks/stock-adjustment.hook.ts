@@ -217,7 +217,6 @@ export async function onStockAdjustmentProcessed(
       adjustment.documentNo ?? `ADJ-${adjustmentId}`,
       adjustmentId,
       userId,
-      null,
       adjustment.date
     );
 
