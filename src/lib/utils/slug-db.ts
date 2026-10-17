@@ -6,7 +6,8 @@
  * Prisma model delegate's `findFirst`, so actions only pass a logical model
  * name (the Prisma model key, lowerCamelCase) plus the source text.
  *
- * A `slug` column exists only on routed models (see scripts/add-slug-columns.mjs).
+ * A `slug` column exists only on routed models (migration
+ * `20261011100000_add_slug_columns`; backfill lewat `src/lib/setup/slug-backfill.ts`).
  * For models without one, `nextSlug` returns `null` and callers should omit it.
  */
 import { prisma } from "@/lib/db/prisma"

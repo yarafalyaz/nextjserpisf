@@ -31,6 +31,18 @@ const KNOWN_UNUSED: string[] = [
   // Skalar tanpa rujukan — mayoritas adalah hook fitur yang halamannya SUDAH ada
   // (alur persetujuan, hari libur, lembur, pajak, permintaan pembelian), jadi keputusannya
   // per fitur: implementasikan atau buang. Lihat docs/AUDIT-SCHEMA.md §3.
+
+  // Enam kolom berikut baru terdeteksi mati setelah 11 skrip yatim dibuang: selama ini
+  // satu-satunya "pemakaian"-nya ada di skrip seed yang sudah rusak/tak terpakai, jadi
+  // tidak ada kode aplikasi yang menulis atau membacanya. Keputusan per kolom:
+  // implementasikan (impor rekening koran / rekonsiliasi bank, model aset per merek) atau
+  // buang lewat migrasi.
+  "ApprovalWorkflowStep.canSkip",
+  "Asset.assetBrandModelId",
+  "BankReconciliationItem.clearedDate",
+  "BankStatement.totalCredits",
+  "BankStatement.totalDebits",
+  "BankStatementLine.matchedType",
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")
