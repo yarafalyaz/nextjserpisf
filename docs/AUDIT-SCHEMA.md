@@ -362,8 +362,39 @@ terjangkau — `["", "draft", "sent", "accepted", "rejected", "converted", "appr
 **Verifikasi**: 3 tes unit baru (**difalsifikasi**: melonggarkan syarat `draft` → memerah, karena
 tombol muncul pada `accepted`), `tsc` bersih, suite utuh, dan E2E dijalankan **setelah rebuild**.
 
-**Sisa (1b), belum diadili**: `deleteSalesOrder`, `cancelPurchaseOrder`, `processPurchaseReturn`,
-`markExpensePaid`, `reviseQuotation`, `updateProductionCost`.
+### [1b-2] Enam sisanya — semuanya **SAMBUNGKAN** (dilaksanakan)
+
+Tata caranya sama seperti [1b-1]: ukur dulu (jejak UI · status yang bisa ditulis · apakah tergantikan),
+baru putuskan. Dua kali saya menduga "buang", dan dua kali **pengukuran membalikkannya**:
+
+- **`deleteSalesOrder`** — dugaan: tergantikan bulk delete. **Salah.** `bulk.actions.ts:302-314` menolak
+  bulk delete untuk model ber-efek GL/stok (dan `salesOrder` ada di daftar itu), dengan pesan yang
+  mengarahkan pengguna ke *"per-row delete action, which handles reversal + guards correctly"* —
+  padahal jalan itu tak pernah ada. Jadi UI menyarankan sesuatu yang mustahil dilakukan; dropdown
+  tabel SO kini menyediakannya.
+- **`updateProductionCost`** — klaim dokumen lama ("bagian biaya produksi read-only") **keliru**:
+  `production-cost-section.tsx` sudah memanggil `createProductionCost` dan `deleteProductionCost`.
+  Yang hilang hanya kemampuan membetulkan salah input. Aksi itu menulis **semua** field dengan
+  `?? null`, sedangkan baris di UI tidak membawa `vendorId` — jadi menyunting sembarangan akan
+  menghapus tautan vendor secara senyap. Karena itu `vendorId` kini ikut di baris dan dibawa apa
+  adanya lewat field tersembunyi.
+
+Vonis dan buktinya:
+
+| Aksi | Bukti jejak UI | Vonis |
+| --- | --- | --- |
+| `cancelPurchaseOrder` | chip daftar PO menawarkan `cancelled` (`pembelian/pesanan/page.tsx:60`) | sambungkan (`VoidButton`) |
+| `processPurchaseReturn` | chip daftar retur menawarkan `returned`, yang hanya lahir dari aksi ini (stok + jurnal) | sambungkan (`ProcessButton`) |
+| `markExpensePaid` | siklus `draft → approved → paid` tak punya jalan ke `paid`; aksinya memposting jurnal kas/bank | sambungkan (+ chip `paid`) |
+| `reviseQuotation` | timeline detail sudah merender baris "Revisi" dari `quotationHistory` (butuh alasan; hanya dari `sent`) | sambungkan (dialog ber-alasan) |
+| `deleteSalesOrder` | pesan bulk delete mengarahkan ke hapus per-baris yang tak ada | sambungkan (dropdown tabel) |
+| `updateProductionCost` | seksi biaya bisa menambah & menghapus, tak bisa membetulkan | sambungkan (sunting per baris) |
+
+**Akibatnya `ALLOWED_UNWIRED` di penjaga `wired-transition-actions` kini KOSONG**, dan itu dijadikan
+asersi: "tak ada aksi transisi yang dibiarkan tanpa pemanggil UI". Setiap pengecualian berikutnya harus
+disengaja — menghapus asersi itu dan menulis alasannya.
+
+**Verifikasi**: `tsc` bersih · suite 3771 lulus · E2E dijalankan setelah rebuild.
 
 ### Status falsifikasi penjaga (kapan terakhir diuji benar-benar menangkap)
 

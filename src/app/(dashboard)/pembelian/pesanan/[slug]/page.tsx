@@ -10,7 +10,8 @@ import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deletePurchaseOrder } from "@/actions/purchase.actions"
+import { VoidButton } from "@/components/ui/void-button"
+import { cancelPurchaseOrder, deletePurchaseOrder } from "@/actions/purchase.actions"
 import { StatusActions } from "@/components/ui/status-actions"
 import { PrintButton } from "@/components/ui/print-button"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -92,6 +93,11 @@ export default async function PurchaseOrderDetailPage({
               </Button>
             )}
             <PrintButton documentType="purchase-order" documentId={po.id} />
+            {/* Status yang sama dengan penjagaan di cancelPurchaseOrder: tombol tak
+                muncul di tempat yang aksinya pasti menolak. */}
+            {!["received", "cancelled", "partial_received"].includes(po.status) && (
+              <VoidButton id={po.id} action={cancelPurchaseOrder} />
+            )}
             <DeleteButton id={po.id} action={deletePurchaseOrder} />
             <BackButton href="/pembelian/pesanan" />
           </>

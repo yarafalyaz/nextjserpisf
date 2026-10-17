@@ -50,7 +50,7 @@ export default async function ExpensesPage({
       : null,
   }))
 
-  const statusChips = ["", "draft", "pending", "approved", "rejected"].map((dbStatus) => {
+  const statusChips = ["", "draft", "pending", "approved", "paid", "rejected"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
     return (
       <Link

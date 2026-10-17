@@ -7,6 +7,7 @@ import { DataTable } from "@/components/ui/data-table"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
+import { deleteSalesOrder } from "@/actions/sales.actions"
 import { entityHref } from "@/lib/utils/entity-url"
 
 interface SalesOrder {
@@ -57,6 +58,8 @@ const columns = [
     cell: (info) => (
       <ActionDropdown
         viewHref={entityHref("/penjualan/pesanan", info.row.original)}
+        deleteAction={deleteSalesOrder}
+        deleteId={info.row.original.id}
         editPermission="edit_sales_orders"
         deletePermission="delete_sales_orders"
       />

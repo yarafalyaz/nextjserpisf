@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { Plus, Trash2 } from "lucide-react"
+import { Pencil } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatCurrency } from "@/lib/utils/format"
 import { Label } from "@/components/ui/shadcn/label"
@@ -19,6 +20,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { Button } from "@/components/ui/button"
 import {
   createProductionCost,
+  updateProductionCost,
   deleteProductionCost,
   pullLaborCostFromTimesheets,
   applyOverheadToProductionOrder,
@@ -50,6 +52,7 @@ export interface ProductionCostRow {
   rate: number | null
   amount: number
   referenceNo: string | null
+  vendorId: number | null
   sourceTimesheetId: number | null
   vendorName: string | null
   purchaseOrderId?: number | null
@@ -78,6 +81,9 @@ export function ProductionCostSection({
   const [hours, setHours] = useState("")
   const [rate, setRate] = useState("")
   const [amount, setAmount] = useState("")
+  // Baris yang sedang disunting; null = mode tambah. Wajib diisi lengkap saat menyimpan,
+  // karena updateProductionCost menulis SEMUA field (yang kosong menjadi null).
+  const [editing, setEditing] = useState<ProductionCostRow | null>(null)
 
   // Driver-based overhead application (PRD FAB-07).
   const [overheadOpen, setOverheadOpen] = useState(false)
@@ -111,13 +117,16 @@ export function ProductionCostSection({
     }
 
     startTransition(async () => {
-      const result = await createProductionCost(formData)
+      const result = editing
+        ? await updateProductionCost(editing.id, formData)
+        : await createProductionCost(formData)
       if (result && !result.success) {
         showError(result.error || "Gagal menyimpan biaya")
         return
       }
-      showSuccess("Biaya produksi ditambahkan")
+      showSuccess(editing ? "Biaya produksi diperbarui" : "Biaya produksi ditambahkan")
       setOpen(false)
+      setEditing(null)
       setCategory("labor")
       setHours("")
       setRate("")
@@ -136,6 +145,15 @@ export function ProductionCostSection({
       showSuccess("Biaya produksi dihapus")
       router.refresh()
     })
+  }
+
+  function startEdit(c: ProductionCostRow) {
+    setEditing(c)
+    setOpen(true)
+    setCategory(c.category)
+    setHours(c.hours != null ? String(c.hours) : "")
+    setRate(c.rate != null ? String(c.rate) : "")
+    setAmount(String(c.amount))
   }
 
   function handleApplyOverhead(e: React.FormEvent<HTMLFormElement>) {
@@ -242,7 +260,8 @@ export function ProductionCostSection({
       )}
 
       {open && canManage && (
-        <form onSubmit={handleSubmit} className="p-4 px-5 border-b border-default bg-surface-secondary">
+        <form key={editing?.id ?? "new"} onSubmit={handleSubmit} className="p-4 px-5 border-b border-default bg-surface-secondary">
+          <input type="hidden" name="vendorId" defaultValue={editing?.vendorId ?? ""} />
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="category">Kategori *</Label>
@@ -278,11 +297,11 @@ export function ProductionCostSection({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="referenceNo">No. Referensi</Label>
-              <Input id="referenceNo" name="referenceNo" placeholder="mis. tagihan vendor" />
+              <Input id="referenceNo" name="referenceNo" defaultValue={editing?.referenceNo ?? ""} placeholder="mis. tagihan vendor" />
             </div>
             <div className="flex flex-col gap-1.5 col-span-full">
               <Label htmlFor="description">Deskripsi</Label>
-              <Textarea id="description" name="description" rows={2} placeholder="Keterangan biaya (opsional)" />
+              <Textarea id="description" name="description" rows={2} defaultValue={editing?.description ?? ""} placeholder="Keterangan biaya (opsional)" />
             </div>
           </div>
           <div className="flex justify-end gap-3 mt-4">
@@ -296,8 +315,13 @@ export function ProductionCostSection({
                 Tarik dari Timesheet
               </Button>
             )}
+            {editing && (
+              <Button type="button" isDisabled={isPending} onPress={() => { setEditing(null); setOpen(false) }}>
+                Batal
+              </Button>
+            )}
             <Button type="submit" variant="primary" isDisabled={isPending} id="submit-production-cost">
-              {isPending ? "Menyimpan..." : "Simpan Biaya"}
+              {isPending ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Simpan Biaya"}
             </Button>
           </div>
         </form>
@@ -349,6 +373,14 @@ export function ProductionCostSection({
                   </DetailTableTd>
                   {canManage && (
                     <DetailTableTd>
+                      <Button
+                        onPress={() => startEdit(c)}
+                        aria-label="Ubah biaya"
+                        type="button"
+                        isDisabled={isPending}
+                      >
+                        <Pencil size={14} />
+                      </Button>
                       <Button
                         onPress={() => handleDelete(c.id)}
                         aria-label="Hapus biaya"

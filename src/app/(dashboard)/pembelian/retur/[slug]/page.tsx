@@ -5,7 +5,8 @@ import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
-import { deletePurchaseReturn } from "@/actions/purchase.actions"
+import { ProcessButton } from "@/components/ui/process-button"
+import { deletePurchaseReturn, processPurchaseReturn } from "@/actions/purchase.actions"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PrintButton } from "@/components/ui/print-button"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -68,6 +69,17 @@ export default async function PurchaseReturnDetailPage({
           <>
             <Button href={entityEditHref("/pembelian/retur", purchaseReturn)} variant="primary">Ubah</Button>
             <PrintButton documentType="purchase-return" documentId={purchaseReturn.id} />
+            {/* processPurchaseReturn hanya menerima status draft (stok + jurnal). */}
+            {purchaseReturn.status === "draft" && (
+              <ProcessButton
+                id={purchaseReturn.id}
+                action={processPurchaseReturn}
+                label="Proses Retur"
+                confirmTitle="Proses retur ini?"
+                confirmBody="Stok akan dikembalikan ke pemasok dan jurnal pembaliknya diposting. Jalankan setelah barang benar-benar dikirim."
+                successMessage="Retur berhasil diproses"
+              />
+            )}
             <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
             <BackButton href="/pembelian/retur" />
           </>

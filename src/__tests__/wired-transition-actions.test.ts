@@ -60,6 +60,48 @@ const REQUIRED_CALLERS: Array<{ action: string; definedIn: string; callersIn: st
     definedIn: "src/actions/sales.actions.ts",
     callersIn: ["penjualan/penawaran"],
   },
+  {
+    // PO: chip daftar menawarkan status `cancelled` (pembelian/pesanan/page.tsx) tetapi
+    // penyebabnya tak pernah bisa dipakai dari UI sebelum tombol ini ada.
+    action: "cancelPurchaseOrder",
+    definedIn: "src/actions/purchase.actions.ts",
+    callersIn: ["pembelian/pesanan"],
+  },
+  {
+    // Retur: chip daftar menawarkan `returned`, dan status itu hanya lahir dari aksi ini
+    // (stok + jurnal pembalik).
+    action: "processPurchaseReturn",
+    definedIn: "src/actions/purchase.actions.ts",
+    callersIn: ["pembelian/retur"],
+  },
+  {
+    // Pesan bulk delete menolak menghapus SO massal dan mengarahkan ke hapus per-baris,
+    // tetapi jalan itu tak pernah ada; dropdown tabel kini menyediakannya.
+    action: "deleteSalesOrder",
+    definedIn: "src/actions/sales.actions.ts",
+    callersIn: ["penjualan/pesanan"],
+  },
+  {
+    // Timeline detail sudah merender baris "Revisi" dari quotationHistory yang hanya
+    // ditulis aksi ini (butuh alasan; hanya dari status sent).
+    action: "reviseQuotation",
+    definedIn: "src/actions/sales.actions.ts",
+    callersIn: ["penjualan/penawaran"],
+  },
+  {
+    // Pengeluaran berstatus `approved` tak punya jalan ke `paid`; aksi ini memposting
+    // jurnal kas/bank-nya (dan `paid` juga menggerbangi penghapusan).
+    action: "markExpensePaid",
+    definedIn: "src/actions/finance.actions.ts",
+    callersIn: ["keuangan/pengeluaran"],
+  },
+  {
+    // Seksi biaya produksi sudah bisa menambah dan menghapus, tetapi tak bisa membetulkan
+    // salah input; kini tiap baris bisa disunting di tempat (vendorId dibawa apa adanya).
+    action: "updateProductionCost",
+    definedIn: "src/actions/production-cost.actions.ts",
+    callersIn: ["produksi/production-orders"],
+  },
 ]
 
 /**
@@ -74,36 +116,6 @@ const REQUIRED_CALLERS: Array<{ action: string; definedIn: string; callersIn: st
  * (`getCronLogs`, `getProjectProgress`, …) atau aksi auth legacy.
  */
 const ALLOWED_UNWIRED: Array<{ action: string; definedIn: string; reason: string }> = [
-  {
-    action: "deleteSalesOrder",
-    definedIn: "src/actions/sales.actions.ts",
-    reason: "hapus SO tidak tersedia di UI (bukan mesin status)",
-  },
-  {
-    action: "reviseQuotation",
-    definedIn: "src/actions/sales.actions.ts",
-    reason: "tak ada padanan di rute status generik (revisi bukan approve/reject)",
-  },
-  {
-    action: "cancelPurchaseOrder",
-    definedIn: "src/actions/purchase.actions.ts",
-    reason: "tak ada tombol batal di UI PO",
-  },
-  {
-    action: "processPurchaseReturn",
-    definedIn: "src/actions/purchase.actions.ts",
-    reason: "retur pembelian: proses (stok+GL) hanya dari status draft, tanpa tombol",
-  },
-  {
-    action: "markExpensePaid",
-    definedIn: "src/actions/finance.actions.ts",
-    reason: "minor: approve/reject pengeluaran sudah tersambung; 'paid' hanya menggerbangi penghapusan",
-  },
-  {
-    action: "updateProductionCost",
-    definedIn: "src/actions/production-cost.actions.ts",
-    reason: "biaya produksi tak bisa diubah setelah dibuat; dampak belum ditelusuri",
-  },
 ]
 
 function walk(dir: string, acc: string[] = []): string[] {
@@ -148,6 +160,16 @@ describe("aksi transisi wajib tersambung ke UI", () => {
  * ada yang menyambungkannya, test memerahkan dan memaksa daftar diperbarui.
  */
 describe("aksi transisi tanpa pemanggil UI terdaftar & tetap tak tersambung", () => {
+  // Sejak (1b) dikerjakan, daftar ini kosong: tak ada lagi aksi transisi yang boleh tak
+  // tersambung. Setiap pengecualian berikutnya harus disengaja — hapus asersi ini dan
+  // tulis alasannya di ALLOWED_UNWIRED, supaya "tak terjangkau" kembali menjadi keadaan
+  // yang diketahui, bukan senyap.
+  it("tak ada aksi transisi yang dibiarkan tanpa pemanggil UI", () => {
+    expect(
+      ALLOWED_UNWIRED,
+      `Masih ada aksi tak tersambung: ${ALLOWED_UNWIRED.map((e) => e.action).join(", ")}`,
+    ).toHaveLength(0)
+  })
   const repoRoot = process.cwd()
   const files = walk(path.join(repoRoot, "src"))
 

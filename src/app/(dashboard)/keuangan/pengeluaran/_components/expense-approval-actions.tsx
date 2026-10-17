@@ -6,7 +6,7 @@ import { CheckCircle, XCircle, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { statusLabel } from "@/lib/utils/status-labels"
-import { approveExpense, rejectExpense } from "@/actions/finance.actions"
+import { approveExpense, rejectExpense, markExpensePaid } from "@/actions/finance.actions"
 
 /**
  * Expense approval actions.
@@ -26,6 +26,9 @@ export function ExpenseApprovalActions({ status, id }: { status: string; id: num
 
   const canApprove = status === "draft" || status === "pending"
   const canReject = status === "draft" || status === "pending"
+  // markExpensePaid hanya menerima status approved (draft -> approved -> paid) dan
+  // memposting jurnal kas/bank; `paid` juga menggerbangi penghapusan pengeluaran.
+  const canMarkPaid = status === "approved"
 
   function handleAction(action: "approve" | "reject") {
     startTransition(async () => {
@@ -39,8 +42,20 @@ export function ExpenseApprovalActions({ status, id }: { status: string; id: num
     })
   }
 
+  function handleMarkPaid() {
+    startTransition(async () => {
+      const result = await markExpensePaid(id)
+      if (result && result.success === false) {
+        showError(result.error || "Gagal menandai dibayar")
+        return
+      }
+      showSuccess("Pengeluaran ditandai dibayar")
+      router.refresh()
+    })
+  }
+
   const colorClass =
-    status === "approved"
+    status === "approved" || status === "paid"
       ? "bg-success/20 text-success-600"
       : status === "rejected"
         ? "bg-danger/20 text-danger-600"
@@ -53,7 +68,7 @@ export function ExpenseApprovalActions({ status, id }: { status: string; id: num
         <span
           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold capitalize ${colorClass}`}
         >
-          {status === "approved" ? (
+          {status === "approved" || status === "paid" ? (
             <CheckCircle size={12} aria-hidden="true" />
           ) : status === "rejected" ? (
             <XCircle size={12} aria-hidden="true" />
@@ -63,8 +78,19 @@ export function ExpenseApprovalActions({ status, id }: { status: string; id: num
           {statusLabel(status)}
         </span>
       </div>
-      {(canApprove || canReject) && (
+      {(canApprove || canReject || canMarkPaid) && (
         <div className="flex gap-2">
+          {canMarkPaid && (
+            <Button
+              variant="success"
+              size="sm"
+              onPress={handleMarkPaid}
+              isDisabled={isPending}
+            >
+              <CheckCircle size={14} aria-hidden="true" />
+              Tandai Dibayar
+            </Button>
+          )}
           {canApprove && (
             <Button
               variant="success"

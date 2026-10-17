@@ -112,6 +112,7 @@ export default async function ProductionOrderDetailPage({
     referenceNo: c.referenceNo,
     sourceTimesheetId: c.sourceTimesheetId,
     vendorName: c.vendor?.name ?? null,
+    vendorId: c.vendorId ?? null,
     purchaseOrderId: c.purchaseOrderId,
     purchaseOrderNo: c.purchaseOrder?.documentNo ?? null,
     purchaseOrderSlug: c.purchaseOrder?.slug ?? null,
