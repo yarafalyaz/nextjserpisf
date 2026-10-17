@@ -48,7 +48,37 @@ export const assetCategorySchema = z.object({
 
 export const assetBrandSchema = z.object({
   name: requiredStr("Nama merek wajib diisi"),
+  // Tipe/model di bawah merek ini, satu per baris (koma juga diterima). Kolom ini
+  // adalah satu-satunya jalur tulis `asset_brand_models`: sebelumnya tabel itu tidak
+  // punya penulis sama sekali, sehingga tipe aset per merek tidak bisa dicatat.
+  models: z
+    .string({ error: "Daftar tipe tidak valid" })
+    .optional()
+    .transform((raw) => parseBrandModelNames(raw)),
 })
+
+/**
+ * Memecah masukan teks menjadi daftar nama tipe: baris baru atau koma sebagai
+ * pemisah, spasi dipangkas, baris kosong dibuang, duplikat (tanpa peduli besar
+ * kecil huruf) dibuang, dan panjang tiap nama dibatasi.
+ *
+ * Dipisah dari skema supaya bisa diuji langsung tanpa lewat FormData.
+ */
+export function parseBrandModelNames(raw: string | undefined | null): string[] {
+  if (!raw) return []
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const part of raw.split(/[\n,]+/)) {
+    const name = part.trim().slice(0, 100)
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(name)
+    if (out.length >= 60) break
+  }
+  return out
+}
 
 // ==================== Asset Transfer ====================
 

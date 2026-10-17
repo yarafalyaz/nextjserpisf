@@ -183,6 +183,52 @@ describe("Asset Brand Actions", () => {
     expect(prismaMock.assetBrand.update).toHaveBeenCalled()
   })
 
+  /**
+   * Tipe/model merek — satu-satunya jalur tulis `asset_brand_models`.
+   *
+   * Sebelum ini tidak ada jalur tulisnya, sehingga kolom "Jumlah Model" pada tabel
+   * merek selalu 0 walau halamannya ada sejak awal.
+   */
+  it("menulis tipe merek sebagai nested create saat membuat", async () => {
+    await expect(
+      createAssetBrand(fd({ name: "Dell", models: "Latitude 5420\nPrecision 3560" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    const arg = prismaMock.assetBrand.create.mock.calls[0][0]
+    expect(arg.data.models.create).toEqual([
+      { name: "Latitude 5420" },
+      { name: "Precision 3560" },
+    ])
+  })
+
+  it("membuat merek tanpa tipe bila kolomnya kosong", async () => {
+    await expect(createAssetBrand(fd({ name: "Tanpa Tipe" }))).rejects.toThrow("NEXT_REDIRECT")
+    const arg = prismaMock.assetBrand.create.mock.calls[0][0]
+    expect(arg.data.models.create).toEqual([])
+  })
+
+  it("mengganti himpunan tipe saat mengubah merek", async () => {
+    await expect(
+      updateAssetBrand(20, fd({ name: "HP", models: "ProBook 450" })),
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    const arg = prismaMock.assetBrand.update.mock.calls[0][0]
+    expect(arg.data.models.deleteMany).toEqual({})
+    expect(arg.data.models.create).toEqual([{ name: "ProBook 450" }])
+  })
+
+  it("memangkas, membuang baris kosong, dan membuang duplikat tipe", async () => {
+    await expect(
+      createAssetBrand(
+        fd({ name: "Epson", models: "  L3110 \n\n, l3110 ,L3210\n   " }),
+      ),
+    ).rejects.toThrow("NEXT_REDIRECT")
+
+    const arg = prismaMock.assetBrand.create.mock.calls[0][0]
+    // "L3110" dan "l3110" dianggap sama (tanpa peduli besar-kecil huruf).
+    expect(arg.data.models.create).toEqual([{ name: "L3110" }, { name: "L3210" }])
+  })
+
   it("deletes brand and redirects", async () => {
     prismaMock.assetBrand.delete.mockResolvedValue({})
     await expect(deleteAssetBrand(20)).rejects.toThrow("NEXT_REDIRECT")

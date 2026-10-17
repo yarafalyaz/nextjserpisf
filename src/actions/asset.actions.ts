@@ -130,6 +130,9 @@ export async function createAssetBrand(formData: FormData) {
       data: {
         slug: await nextSlug("assetBrand", data.name),
         name: data.name,
+        // Tipe/model merek — tanpa ini tabel `asset_brand_models` tidak punya
+        // penulis sama sekali, sehingga tipe aset per merek tidak bisa dicatat.
+        models: { create: data.models.map((name) => ({ name })) },
       },
     });
 
@@ -355,6 +358,13 @@ export async function updateAssetBrand(id: number, formData: FormData) {
       data: {
         slug: await nextSlug("assetBrand", data.name, { excludeId: id }),
         name: data.name,
+        // Ganti-himpunan seperti daftar baris dokumen lain: yang dikirim form
+        // menjadi daftar tipe yang berlaku. Mengosongkan kolom di form berarti
+        // merek itu memang tidak punya tipe.
+        models: {
+          deleteMany: {},
+          create: data.models.map((name) => ({ name })),
+        },
       },
     });
 

@@ -23,8 +23,16 @@ export default async function EditPage({
   const data = await resolveEntity(
     { segment: slug, fallbackWhere: {} },
     {
-      bySlug: (s) => prisma.assetBrand.findFirst({ where: { slug: s } }),
-      byId: (id) => prisma.assetBrand.findUnique({ where: { id } }),
+      bySlug: (s) =>
+        prisma.assetBrand.findFirst({
+          where: { slug: s },
+          include: { models: { select: { name: true }, orderBy: { name: "asc" } } },
+        }),
+      byId: (id) =>
+        prisma.assetBrand.findUnique({
+          where: { id },
+          include: { models: { select: { name: true }, orderBy: { name: "asc" } } },
+        }),
     },
   );
 
@@ -42,7 +50,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <AssetBrandForm brand={{ id: data.id, name: data.name }} />
+      <AssetBrandForm brand={{ id: data.id, name: data.name, models: data.models }} />
     </div>
   );
 }

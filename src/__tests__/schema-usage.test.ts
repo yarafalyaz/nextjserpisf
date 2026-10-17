@@ -103,10 +103,10 @@ const SEED_ONLY_COLUMNS: string[] = [
  * yang sudah punya jalur tulis produk (atau modelnya dibuang) juga memerahkan.
  */
 const SEED_ONLY_MODELS: string[] = [
-  // Aset: master merek-tipe dan kelompok aset dibaca halaman aset, tetapi tidak
-  // bisa dibuat dari aplikasi (kolom `Asset.assetBrandModelId` juga sudah tercatat
-  // mati di KNOWN_UNUSED).
-  "AssetBrandModel",
+  // Aset: kelompok aset dibaca halaman aset, tetapi tidak bisa dibuat dari
+  // aplikasi (kolom `Asset.assetBrandModelId` juga sudah tercatat mati di
+  // KNOWN_UNUSED). `AssetBrandModel` sudah ditutup lewat form merek aset, jadi ia
+  // TIDAK ada lagi di daftar ini.
   "AssetGroup",
   // SDM: penggajian, lembar waktu, dan perhitungan cuti/absensi MEMBACA data induk
   // ini, tetapi tidak ada halaman maupun aksi yang menulisnya. Dasbor absensi dan

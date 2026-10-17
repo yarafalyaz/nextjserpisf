@@ -5,6 +5,7 @@ import { useTransition } from "react";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { Label } from "@/components/ui/shadcn/label";
 import { Input } from "@/components/ui/shadcn/input";
+import { Textarea } from "@/components/ui/shadcn/textarea";
 import {
   FormCard,
   FormSection,
@@ -14,7 +15,7 @@ import { Button } from "@/components/ui/button";
 
 export function AssetBrandForm({
   brand,
-}: { brand?: { id: number; name: string } } = {}) {
+}: { brand?: { id: number; name: string; models?: { name: string }[] } } = {}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -57,6 +58,20 @@ export function AssetBrandForm({
               required
               defaultValue={brand?.name ?? ""}
             />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="models">Tipe / Model</Label>
+            <Textarea
+              id="models"
+              name="models"
+              rows={4}
+              placeholder={"Satu tipe per baris, mis.\nLatitude 5420\nPrecision 3560"}
+              defaultValue={brand?.models?.map((m) => m.name).join("\n") ?? ""}
+            />
+            <p className="text-xs text-muted-foreground">
+              Satu tipe per baris (koma juga boleh). Kosongkan bila merek ini tidak
+              punya daftar tipe. Menyimpan akan menggantikan daftar tipe merek ini.
+            </p>
           </div>
         </FormSection>
         <FormActions>
