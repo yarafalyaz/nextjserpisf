@@ -336,6 +336,35 @@ keputusan produk — dan itulah kenapa kelompok ini terpisah dari (1a), yang ben
 Tujuh sisanya **belum diukur per halaman**: `deleteSalesOrder`, `send`/`accept`/`rejectQuotation`,
 `cancelPurchaseOrder`, `processPurchaseReturn`, `updateProductionCost`.
 
+### [1b-1] Kelompok penawaran — diputuskan **SAMBUNGKAN** (dilaksanakan)
+
+Tiga aksi (`sendQuotation`, `acceptQuotation`, `rejectQuotation`) diadili sebagai **satu rantai**:
+`send` menuntut `draft`, `accept`/`reject` menuntut `sent` (`sales.actions.ts:186,235,280`), jadi
+memutus satu simpul meninggalkan status terminal tanpa jalan keluar.
+
+**Alasan memilih sambungkan, bukan buang** — mengikuti preseden `expense-approval-actions.tsx`:
+rute generik `/api/workflow` hanya membalik status lewat `updateMany` **tanpa efek domain**,
+sedangkan ketiga aksi ini menulis `quotationHistory` (dirender sebagai timeline di halaman detail,
+`[slug]/page.tsx:108-116`) dan `acceptQuotation` juga menotifikasi admin. Membuangnya berarti
+kehilangan efek itu — bukan higienitas.
+
+**Bukti lain yang diukur sebelum memutuskan**:
+
+- Status terjangkau sebelum perubahan hanya `draft`, `converted`, `approved` → chip `sent`/`accepted` mati.
+- `cancelled` **tak pernah ditulis** untuk quotation: satu-satunya tulisan `cancelled` di
+  `sales.actions.ts:2206` milik **SalesInvoice** → chip `cancelled` mati sejak awal (bukan akibat aksi mana pun).
+
+**Yang dikerjakan**: komponen `quotation-flow-actions.tsx` (tombol *Tandai Terkirim* / *Terima* / *Tolak*
+sesuai status) di area aksi halaman detail; chip daftar disetarakan dengan status yang benar-benar
+terjangkau — `["", "draft", "sent", "accepted", "rejected", "converted", "approved"]`; penjaga
+`wired-transition-actions` memindahkan ketiganya dari `ALLOWED_UNWIRED` ke `REQUIRED_CALLERS`.
+
+**Verifikasi**: 3 tes unit baru (**difalsifikasi**: melonggarkan syarat `draft` → memerah, karena
+tombol muncul pada `accepted`), `tsc` bersih, suite utuh, dan E2E dijalankan **setelah rebuild**.
+
+**Sisa (1b), belum diadili**: `deleteSalesOrder`, `cancelPurchaseOrder`, `processPurchaseReturn`,
+`markExpensePaid`, `reviseQuotation`, `updateProductionCost`.
+
 ### Status falsifikasi penjaga (kapan terakhir diuji benar-benar menangkap)
 
 | Penjaga / asersi | Difalsifikasi | Catatan |

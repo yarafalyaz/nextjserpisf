@@ -42,6 +42,24 @@ const REQUIRED_CALLERS: Array<{ action: string; definedIn: string; callersIn: st
     definedIn: "src/actions/purchase.actions.ts",
     callersIn: ["pembelian/pembayaran-vendor"],
   },
+  {
+    // Alur penawaran sendiri: draft -> terkirim -> diterima/ditolak. Ketiganya menulis
+    // quotationHistory (dirender timeline detail) dan accept juga menotifikasi admin —
+    // efek yang tak dimiliki rute status generik.
+    action: "sendQuotation",
+    definedIn: "src/actions/sales.actions.ts",
+    callersIn: ["penjualan/penawaran"],
+  },
+  {
+    action: "acceptQuotation",
+    definedIn: "src/actions/sales.actions.ts",
+    callersIn: ["penjualan/penawaran"],
+  },
+  {
+    action: "rejectQuotation",
+    definedIn: "src/actions/sales.actions.ts",
+    callersIn: ["penjualan/penawaran"],
+  },
 ]
 
 /**
@@ -60,21 +78,6 @@ const ALLOWED_UNWIRED: Array<{ action: string; definedIn: string; reason: string
     action: "deleteSalesOrder",
     definedIn: "src/actions/sales.actions.ts",
     reason: "hapus SO tidak tersedia di UI (bukan mesin status)",
-  },
-  {
-    action: "sendQuotation",
-    definedIn: "src/actions/sales.actions.ts",
-    reason: "digantikan rute status generik (Setujui → 'approved'; konversi menerima approved)",
-  },
-  {
-    action: "acceptQuotation",
-    definedIn: "src/actions/sales.actions.ts",
-    reason: "digantikan rute status generik",
-  },
-  {
-    action: "rejectQuotation",
-    definedIn: "src/actions/sales.actions.ts",
-    reason: "digantikan rute status generik",
   },
   {
     action: "reviseQuotation",

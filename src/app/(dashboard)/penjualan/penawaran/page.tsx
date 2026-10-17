@@ -65,7 +65,7 @@ export default async function QuotationsPage({
 
   const tableData = toPlain(quotations)
 
-  const statusChips = ["", "draft", "sent", "accepted", "converted", "cancelled"].map((dbStatus) => {
+  const statusChips = ["", "draft", "sent", "accepted", "rejected", "converted", "approved"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] || dbStatus : ""
     return (
       <Link

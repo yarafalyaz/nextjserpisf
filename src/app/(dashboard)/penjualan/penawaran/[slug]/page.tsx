@@ -12,6 +12,7 @@ import { Pencil } from "lucide-react";
 import { StatusChip } from "@/components/ui/status-chip";
 import { DetailTabs } from "@/components/ui/detail-tabs";
 import { StatusActions } from "@/components/ui/status-actions";
+import { QuotationFlowActions } from "./_components/quotation-flow-actions";
 import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -178,6 +179,7 @@ export default async function QuotationDetailPage({
               <Pencil size={14} /> Ubah
             </Button>
             <PrintButton documentType="quotation" documentId={quotation.id} />
+            <QuotationFlowActions status={quotation.status} id={quotation.id} />
             {["accepted", "approved"].includes(quotation.status) && (
               <>
                 <Button
