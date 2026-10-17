@@ -7,6 +7,7 @@ import { formatDate } from "@/lib/utils/format"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { UserAccessPanel } from "./_components/user-access-panel"
 
 import type { Metadata } from "next"
 
@@ -30,6 +31,11 @@ export default async function UserDetailPage({
     },
   )
   if (!user) notFound()
+
+  const roles = await prisma.role.findMany({
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -55,6 +61,13 @@ export default async function UserDetailPage({
         <DetailField label="Peran" value={user.roles.map((r) => r.name).join(", ") || "-"} />
         <DetailField label="Dibuat" value={formatDate(user.createdAt)} />
       </DetailCard>
+
+      <UserAccessPanel
+        userId={user.id}
+        isActive={user.isActive}
+        roles={roles}
+        currentRoleIds={user.roles.map((r) => r.id)}
+      />
     </div>
   )
 }
