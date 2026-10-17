@@ -36,10 +36,13 @@ async function fetchSettings(): Promise<Settings> {
   try {
     const res = await fetch('/api/system-settings')
     if (res.ok) return (await res.json()) as Settings
-    return DEFAULT_SETTINGS
-  } catch {
-    return DEFAULT_SETTINGS
+    // Jatuh ke pesan kegagalan di bawah — jangan diam-diam pakai kop default.
+    console.error('[export-buttons] /api/system-settings merespons', res.status)
+  } catch (error) {
+    console.error('[export-buttons] gagal memuat setelan perusahaan:', error)
   }
+  showError('Identitas perusahaan gagal dimuat — kop PDF memakai data default, bukan data tersimpan')
+  return DEFAULT_SETTINGS
 }
 
 // Colour palette — professional near-black + muted blue

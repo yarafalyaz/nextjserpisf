@@ -20,6 +20,7 @@ export function NotificationDropdown() {
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [loading, setLoading] = useState(false)
+  const [loadFailed, setLoadFailed] = useState(false)
   const [now] = useState(() => Date.now())
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -35,15 +36,20 @@ export function NotificationDropdown() {
 
   async function fetchNotifications() {
     setLoading(true)
+    setLoadFailed(false)
     try {
       const res = await fetch("/api/notifications")
-      if (res.ok) {
-        const data = await res.json()
-        setNotifications(data.notifications || [])
-        setUnreadCount(data.unreadCount || 0)
+      if (!res.ok) {
+        // Gagal memuat tidak boleh tampil sebagai "Tidak ada notifikasi".
+        setLoadFailed(true)
+        return
       }
+      const data = await res.json()
+      setNotifications(data.notifications || [])
+      setUnreadCount(data.unreadCount || 0)
     } catch {
-      // silent
+      // Kegagalan fetch = "gagal memuat", bukan daftar kosong.
+      setLoadFailed(true)
     } finally {
       setLoading(false)
     }
@@ -113,6 +119,11 @@ export function NotificationDropdown() {
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              </div>
+            ) : loadFailed ? (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <Bell size={24} className="mb-2 opacity-40" />
+                <p className="text-sm">Gagal memuat notifikasi</p>
               </div>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">

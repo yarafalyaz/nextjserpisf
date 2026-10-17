@@ -77,8 +77,16 @@ export async function loginAction(formData: FormData) {
       redirect: false,
     })
     return { success: true }
-  } catch {
-    return { error: "Email atau password salah" }
+  } catch (error) {
+    const e = error as { type?: string; name?: string; message?: string } | null
+    // "CredentialsSignin" = kredensial salah. `message` ikut dicek karena tes
+    // melempar `new Error("CredentialsSignin")`. Error lain = masalah server,
+    // bukan salah password — jangan menyesatkan pengguna.
+    if (e?.type === "CredentialsSignin" || e?.name === "CredentialsSignin" || e?.message === "CredentialsSignin") {
+      return { error: "Email atau password salah" }
+    }
+    console.error("[loginAction] signIn gagal:", error)
+    return { error: "Gagal masuk karena masalah server. Coba lagi beberapa saat lagi." }
   }
 }
 

@@ -59,10 +59,14 @@ export default async function ProjectDetailPage({
 
   // Auto-initialize stages on detail view if empty and user has edit permission
   let stages = project.stages
+  let stagesInitError: string | null = null
   const canEdit = await hasPermission("edit_projects")
   if (stages.length === 0 && canEdit) {
     try {
-      await initializeProjectStages(project.id)
+      const init = await initializeProjectStages(project.id)
+      // Hasilnya dulu dibuang; kegagalan pun tampil sebagai "belum ada tahapan"
+      // tanpa cara mengulang. Simpan pesannya supaya terlihat di UI.
+      if (!init.success) stagesInitError = "error" in init ? init.error : "Tahapan default gagal dibuat."
       stages = await prisma.projectStage.findMany({
         where: { projectId: project.id },
         orderBy: { sortOrder: "asc" },
@@ -70,6 +74,7 @@ export default async function ProjectDetailPage({
       })
     } catch (e) {
       console.error("[ProjectDetailPage] Failed to auto-initialize stages:", e)
+      stagesInitError ??= "Gagal memuat tahapan proyek."
     }
   }
 
@@ -278,11 +283,22 @@ export default async function ProjectDetailPage({
             id: "stages",
             label: "Tahapan & Progres",
             content: (
-              <ProjectStages
-                projectId={project.id}
-                stages={stages}
-                canEdit={canEdit}
-              />
+              <>
+                {stagesInitError && (
+                  <Alert variant="destructive">
+                    <AlertCircle />
+                    <AlertTitle>Tahapan default gagal dibuat otomatis</AlertTitle>
+                    <AlertDescription>
+                      {stagesInitError} Buka ulang halaman ini atau buat tahapan manual.
+                    </AlertDescription>
+                  </Alert>
+                )}
+                <ProjectStages
+                  projectId={project.id}
+                  stages={stages}
+                  canEdit={canEdit}
+                />
+              </>
             ),
           },
           {

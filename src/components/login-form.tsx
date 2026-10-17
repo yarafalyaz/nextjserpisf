@@ -70,7 +70,15 @@ export function LoginForm({
     });
 
     if (result?.error) {
-      setError("Email atau password salah");
+      // "CredentialsSignin" = kredensial salah (authorize mengembalikan null).
+      // Kegagalan server (mis. DB tak terjangkau) sampai ke klien sebagai tipe
+      // error berbeda; menyamakannya dengan salah password membuat pengguna
+      // mengulang ketik selamanya padahal masalahnya di server.
+      setError(
+        result.error === "CredentialsSignin"
+          ? "Email atau password salah"
+          : "Gagal masuk karena masalah server. Coba lagi beberapa saat lagi."
+      );
       setLoading(false);
     } else {
       router.push(callbackUrl);

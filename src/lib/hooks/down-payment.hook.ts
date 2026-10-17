@@ -332,6 +332,10 @@ export async function onDownPaymentConfirmed(
       }
     } catch (err) {
       console.error("Gagal men-generate catatan stok BOM:", err);
+      // Paritas #8: catatan kekurangan stok adalah bagian deliverable hook ini.
+      // Senyap di sini membuat WO terbit dengan info stok/BOM bolong tanpa ada
+      // yang tahu — tandai di catatan WO supaya terlihat saat diperiksa.
+      bomNotes += "\n[PERINGATAN] Catatan stok/BOM gagal dibuat otomatis — periksa ketersediaan material secara manual.\n";
     }
 
     // ─── 1. Create Work Order ─────────────────────────────────────────

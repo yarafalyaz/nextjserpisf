@@ -27,19 +27,13 @@ export async function GET() {
       companyLogo: settings.companyLogo,
       companyPostalCode: settings.companyPostalCode,
     })
-  } catch {
-    return NextResponse.json({
-      companyName: "Perusahaan",
-      companyAddress: null,
-      companyVillage: null,
-      companyDistrict: null,
-      companyCity: null,
-      companyProvince: null,
-      companyPhone: null,
-      companyEmail: null,
-      companyWebsite: null,
-      companyLogo: null,
-      companyPostalCode: null,
-    })
+  } catch (error) {
+    // Jangan balas 200 berisi identitas palsu: konsumennya memakainya sebagai
+    // kop PDF, sehingga laporan tampak sah padahal setelannya gagal dibaca.
+    console.error("[api/system-settings] gagal memuat pengaturan:", error)
+    return NextResponse.json(
+      { error: "Gagal memuat pengaturan sistem" },
+      { status: 500 }
+    )
   }
 }

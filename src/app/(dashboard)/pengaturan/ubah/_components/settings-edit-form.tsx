@@ -447,6 +447,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
           }
         } catch (error) {
           console.error("Gagal get address dari koordinat", error);
+          showError("Lokasi tersimpan, tapi alamat gagal diambil otomatis. Isi alamat manual.");
         }
       },
       (err) => {
@@ -464,7 +465,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       if (!res.ok) return null
       const data = await res.json()
       return data.url || data.path || null
-    } catch {
+    } catch (error) {
+      console.error("Upload berkas gagal:", error)
       return null
     }
   }
@@ -473,21 +475,26 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
     const file = e.target.files?.[0]
     if (!file) return
     const url = await uploadFile(file, "logos")
-    if (url) setLogoPreview(url)
+    // Gagal unggah = preview tak berubah. Tanpa pesan, Simpan tetap melapor
+    // "Berhasil disimpan" sementara logo lama yang tersimpan.
+    if (!url) { showError("Gagal mengunggah logo. Logo tidak berubah."); return }
+    setLogoPreview(url)
   }
 
   async function handleLogoDarkChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     const url = await uploadFile(file, "logos")
-    if (url) setLogoDarkPreview(url)
+    if (!url) { showError("Gagal mengunggah logo mode gelap. Logo tidak berubah."); return }
+    setLogoDarkPreview(url)
   }
 
   async function handleSignatureChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
     const url = await uploadFile(file, "signatures")
-    if (url) setSignaturePreview(url)
+    if (!url) { showError("Gagal mengunggah tanda tangan. Tanda tangan tidak berubah."); return }
+    setSignaturePreview(url)
   }
 
   function isRedirectError(error: unknown): error is { digest: string } {
