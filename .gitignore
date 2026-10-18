@@ -77,6 +77,12 @@ silengkap-autopilot.log
 .mcp.json
 opencode.json
 /skills/
+.claude/
+.hermes/
+.kiro/
+.opencode/
+.codex/
+.vscode/
 
 # Ad-hoc one-off debug/diagnostic scripts (not part of the app)
 /scripts/tmp-*
