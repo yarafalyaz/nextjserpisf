@@ -1180,6 +1180,13 @@ export async function createCostCenter(formData: FormData) {
   try {
     await requirePermission("create_cost_centers");
 
+    const rawNameCC2 = (formData.get("name") as string | null)?.trim()
+    if (rawNameCC2) {
+      const existing = await prisma.costCenter.findFirst({ where: { name: rawNameCC2 }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
+
     const parsed = parseFormData(costCenterSchema, formData);
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };

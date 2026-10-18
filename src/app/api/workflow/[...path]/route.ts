@@ -132,7 +132,28 @@ export async function POST(
           return apiError("INTERNAL_ERROR", "Gagal menginisiasi alur persetujuan")
         }
 
-        if (approval.status === "approved" || approval.status === "rejected") {
+        // Buka approval kalau ditolak: reset doc ke draft/pending + buat approval baru
+        if (approval.status === "rejected") {
+          const delegateReopen = prisma[config.model as keyof typeof prisma] as any
+          try {
+            await delegateReopen.updateMany({
+              where: { id, status: "rejected" },
+              data: { status: "draft" },
+            })
+          } catch {}
+          await requestApprovalIfConfigured(modelType, id, Number(session.user.id))
+          const fresh = await prisma.approval.findFirst({
+            where: { referenceType: modelType, referenceId: id },
+            orderBy: { id: "desc" },
+          })
+          if (!fresh || fresh.status !== "pending") {
+            return apiError("CONFLICT", `Alur persetujuan ditolak — gagal membuka ulang`)
+          }
+          approval = fresh
+          // continue to approve/reject below as new flow
+        }
+
+        if (approval.status === "approved") {
           return apiError("CONFLICT", `Alur persetujuan sudah selesai dengan status '${approval.status}'`)
         }
 

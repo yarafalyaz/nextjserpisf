@@ -314,6 +314,15 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
   try {
   const user = await requirePermission("edit_quotations")
 
+  // Validasi Zod: changeAlasan diteruskan mentah setelah trim, max 2000.
+  const { reviseQuotationSchema } = await import("@/lib/validations/sales.schemas")
+  const parsed = reviseQuotationSchema.safeParse({ changeReason })
+  if (!parsed.success) {
+    const msg = parsed.error.issues[0]?.message ?? "Alasan perubahan wajib diisi"
+    throw new Error(msg)
+  }
+  const cleanReason = parsed.data.changeReason
+
   const quotation = await prisma.quotation.findUniqueOrThrow({
     where: { id: quotationId },
     include: { sections: { include: { items: true } } },
@@ -321,10 +330,6 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
 
   if (quotation.status !== "sent") {
     throw new Error("Hanya penawaran terkirim yang dapat direvisi")
-  }
-
-  if (!changeReason?.trim()) {
-    throw new Error("Alasan perubahan wajib diisi")
   }
 
   const snapshot = {
@@ -342,9 +347,9 @@ export async function reviseQuotation(quotationId: number, changeReason: string)
         revisionNumber: quotation.revisionNumber,
         statusAtSnapshot: quotation.status,
         dataSnapshot: snapshot,
-        changeReason: changeReason.trim(),
+        changeReason: cleanReason,
         action: "revised",
-        description: `Revisi #${quotation.revisionNumber} — ${changeReason.trim()}`,
+        description: `Revisi #${quotation.revisionNumber} — ${cleanReason}`,
         userId: Number(user.id),
       },
     })

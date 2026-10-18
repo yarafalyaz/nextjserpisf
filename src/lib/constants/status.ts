@@ -108,3 +108,10 @@ export const ReconciliationStatus = {
   RECONCILED: "reconciled",
 } as const;
 
+// ─── Shared discount semantics ─────────────────────────────────────────
+// dipakai di form.schemas.ts + sales.schemas.ts (dua tempat) supaya enum-nya
+// tidak duplikat dan drift (fixed/percent vs amount/percent). Single source of
+// truth; validasi client & server pakai nilai yang sama.
+export const DISCOUNT_TYPES = ["fixed", "percent"] as const;
+export type DiscountType = (typeof DISCOUNT_TYPES)[number];
+

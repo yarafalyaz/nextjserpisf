@@ -140,6 +140,15 @@ export async function createCustomer(formData: FormData) {
   try {
     const user = await requirePermission("create_customers");
 
+    // quick-add upsert: if name + phone matches an active non-deleted customer, reuse it
+    const rawNameCust = (formData.get("name") as string | null)?.trim()
+    const rawPhoneCust = (formData.get("phone") as string | null)?.trim() || (formData.get("phone") as string | null)
+    if (rawNameCust) {
+      const existing = await prisma.customer.findFirst({ where: { name: rawNameCust, deletedAt: null, isActive: true }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
+
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
@@ -258,6 +267,13 @@ export async function deleteCustomer(customerId: number) {
 export async function createVendor(formData: FormData) {
   try {
     const user = await requirePermission("create_vendors");
+
+    const rawNameVendor = (formData.get("name") as string | null)?.trim()
+    if (rawNameVendor) {
+      const existing = await prisma.vendor.findFirst({ where: { name: rawNameVendor, deletedAt: null }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
 
     const parsed = parseFormData(vendorSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
@@ -542,6 +558,13 @@ export async function createWarehouse(formData: FormData) {
   try {
     await requirePermission("create_warehouses");
 
+    const rawNameWh = (formData.get("name") as string | null)?.trim()
+    if (rawNameWh) {
+      const existing = await prisma.warehouse.findFirst({ where: { name: rawNameWh, deletedAt: null }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
+
     const parsed = parseFormData(warehouseServerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
@@ -639,6 +662,14 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
 export async function createEmployee(formData: FormData) {
   try {
     const actor = await requirePermission("create_employees");
+
+    // quick-add upsert: name match active (HR-scope checked below). Only applied when __quickAdd flag
+    const rawNameEmp = (formData.get("name") as string | null)?.trim()
+    if (rawNameEmp && formData.get("__quickAdd") === "1") {
+      const existingEmp = await prisma.employee.findFirst({ where: { name: rawNameEmp, deletedAt: null }, select: { id: true, slug: true } })
+      if (existingEmp) return { success: true as const, id: existingEmp.id, slug: existingEmp.slug ?? undefined }
+    }
+
 
     const scope = await getHrScope(actor);
     if (scope.kind === "self") {
@@ -964,6 +995,13 @@ export async function createAccount(formData: FormData) {
   try {
     await requirePermission("create_accounts");
 
+    const rawNameAcc = (formData.get("name") as string | null)?.trim()
+    if (rawNameAcc) {
+      const existing = await prisma.account.findFirst({ where: { name: rawNameAcc, deletedAt: null }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
+
     const parsed = parseFormData(accountServerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
@@ -1001,6 +1039,13 @@ export async function createAccount(formData: FormData) {
 export async function createItemCategory(formData: FormData) {
   try {
     const user = await requirePermission("create_item_categories");
+
+    const rawName = (formData.get("name") as string | null)?.trim()
+    if (rawName) {
+      const existing = await prisma.itemCategory.findFirst({ where: { name: rawName }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
 
     const category = await prisma.itemCategory.create({
       data: {
@@ -1086,6 +1131,13 @@ export async function createDepartment(formData: FormData) {
   try {
     await requirePermission("create_departments");
 
+    const rawNameDept = (formData.get("name") as string | null)?.trim()
+    if (rawNameDept) {
+      const existing = await prisma.department.findFirst({ where: { name: rawNameDept }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
+
     let code = (formData.get("code") as string) || null;
     if (!code) {
       code = await generateDocumentNumber("DEPT", "simple");
@@ -1145,6 +1197,13 @@ export async function updateDepartment(id: number, formData: FormData) {
 export async function createPosition(formData: FormData) {
   try {
     await requirePermission("create_positions");
+
+    const rawNamePos = (formData.get("name") as string | null)?.trim()
+    if (rawNamePos) {
+      const existing = await prisma.position.findFirst({ where: { name: rawNamePos }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
 
     const submittedCode = (formData.get("code") as string) || null;
     let code = submittedCode;
@@ -1349,6 +1408,13 @@ export async function createBank(formData: FormData) {
   try {
     const user = await requirePermission("create_banks");
 
+    const rawNameBank = (formData.get("name") as string | null)?.trim()
+    if (rawNameBank) {
+      const existing = await prisma.bank.findFirst({ where: { name: rawNameBank }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
+
     const bank = await prisma.bank.create({
       data: {
         name: requireString(formData.get("name"), "name"),
@@ -1408,6 +1474,13 @@ function clampTaxRate(rate: number): number {
 export async function createTax(formData: FormData) {
   try {
     const user = await requirePermission("create_taxes");
+
+    const rawNameTax = (formData.get("name") as string | null)?.trim()
+    if (rawNameTax) {
+      const existing = await prisma.tax.findFirst({ where: { name: rawNameTax, deletedAt: null }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
 
     const tax = await prisma.tax.create({
       data: {
@@ -1640,6 +1713,13 @@ export async function updateTaxGroup(id: number, formData: FormData) {
 export async function createPaymentTerm(formData: FormData) {
   try {
     const user = await requirePermission("create_payment_terms");
+
+    const rawNamePT = (formData.get("name") as string | null)?.trim()
+    if (rawNamePT) {
+      const existing = await prisma.paymentTerm.findFirst({ where: { name: rawNamePT }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
 
     const paymentTerm = await prisma.paymentTerm.create({
       data: {
@@ -2209,6 +2289,13 @@ export async function createBrand(formData: FormData) {
   try {
     const user = await requirePermission("create_brands");
 
+    const rawNameBrand = (formData.get("name") as string | null)?.trim()
+    if (rawNameBrand) {
+      const existing = await prisma.brand.findFirst({ where: { name: rawNameBrand }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
+
     // categoryIds is a comma-separated string of category IDs e.g. "1,3,5"
     const categoryIds = (formData.get("categoryIds") as string || "")
       .split(",")
@@ -2298,6 +2385,13 @@ export async function deleteBrand(id: number) {
 export async function createUom(formData: FormData) {
   try {
     await requirePermission("edit_units");
+
+    const rawNameUom = String(formData.get("name") ?? "").trim()
+    if (rawNameUom) {
+      const existing = await prisma.unitOfMeasure.findFirst({ where: { name: rawNameUom }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
     const name = String(formData.get("name") ?? "").trim();
     const symbol = String(formData.get("symbol") ?? "").trim();
     if (!name) return { success: false, error: "Nama satuan wajib diisi" };
@@ -2405,6 +2499,14 @@ export async function listCustomerCategoryOptions(): Promise<{ value: string; la
 export async function createCustomerCategory(formData: FormData) {
   try {
     await requirePermission("create_customers");
+
+    // upsert: return existing active category with same name
+    const rawNameCC = (formData.get("name") as string | null)?.trim()
+    if (rawNameCC) {
+      const existing = await prisma.customerCategory.findFirst({ where: { name: rawNameCC, deletedAt: null }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
 
     const parsed = parseFormData(customerCategorySchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };

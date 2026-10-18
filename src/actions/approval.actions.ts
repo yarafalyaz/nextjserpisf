@@ -368,6 +368,73 @@ export async function rejectStep(approvalId: number, formData: FormData) {
 
 // ==================== APPROVAL WORKFLOW CRUD ====================
 
+
+/**
+ * Buka approval kalau ditolak: reset doc ke draft + buat approval baru.
+ * Dipanggil dari UI detail dokumen ketika status `rejected`.
+ */
+export async function reopenApproval(approvalId: number) {
+  try {
+    await assertCSRF();
+    const session = await auth();
+    const user = session?.user;
+    if (!user) throw new Error("Unauthorized");
+
+    let refType = "";
+    let refId = 0;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM approvals WHERE id = ${approvalId} FOR UPDATE`;
+      const approval = await tx.approval.findUnique({
+        where: { id: approvalId },
+        include: { workflow: { include: { steps: true } } },
+      });
+      if (!approval) throw new Error("Approval tidak ditemukan");
+      if (approval.status !== "rejected") throw new Error("Hanya approval yang ditolak yang bisa dibuka ulang");
+      refType = approval.referenceType;
+      refId = approval.referenceId;
+
+      assertApprovalPermission(user, refType);
+
+      // Reset source document status to draft/prior
+      const modelKey = refType.charAt(0).toLowerCase() + refType.slice(1);
+      const docModel = (tx as any)[modelKey];
+      if (docModel?.updateMany) {
+        await docModel.updateMany({
+          where: { id: refId, status: "rejected" },
+          data: { status: "draft" },
+        });
+      }
+
+      // Import here to avoid circular dep top-level
+      const { requestApprovalIfConfigured } = await import("@/lib/services/approval-workflow.service");
+      await requestApprovalIfConfigured(refType, refId, Number(user.id), tx);
+    });
+
+    // Log + revalidate outside tx
+    await logActivity("reopen", "Approval", approvalId, `Membuka ulang approval ${refType} #${refId}`);
+    revalidatePath("/pengaturan/persetujuan");
+    if (refType && refId) {
+      const slugMap: Record<string, string> = {
+        Quotation: "penjualan/penawaran",
+        SalesOrder: "penjualan/pesanan",
+        SalesInvoice: "penjualan/faktur",
+        PurchaseRequest: "pembelian/permintaan",
+        PurchaseOrder: "pembelian/pesanan",
+        VendorBill: "pembelian/tagihan",
+      };
+      const base = slugMap[refType];
+      if (base) revalidatePath(`/${base}`);
+    }
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[reopenApproval]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+
 export async function createApprovalWorkflow(formData: FormData) {
   try {
     await requirePermission("manage_settings");

@@ -22,6 +22,13 @@ export async function createPaymentMethod(formData: FormData) {
   try {
     await requirePermission("create_payment_methods")
 
+    const rawNamePM = (formData.get("name") as string | null)?.trim()
+    if (rawNamePM) {
+      const existing = await prisma.paymentMethod.findFirst({ where: { name: rawNamePM }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
+
     const parsed = parseFormData(createPaymentMethodSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
 
@@ -94,6 +101,13 @@ export async function deletePaymentMethod(id: number) {
 export async function createShippingMethod(formData: FormData) {
   try {
     await requirePermission("create_shipping_methods")
+
+    const rawNameSM = (formData.get("name") as string | null)?.trim()
+    if (rawNameSM) {
+      const existing = await prisma.shippingMethod.findFirst({ where: { name: rawNameSM }, select: { id: true, slug: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+    }
+
 
     const parsed = parseFormData(createShippingMethodSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }

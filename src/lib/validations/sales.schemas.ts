@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DISCOUNT_TYPES } from "@/lib/constants/status";
 
 const optionalString = (max: number) =>
   z
@@ -216,6 +217,12 @@ export const updateDeliveryOrderSchema = z.object({
   notes: optionalString(500),
 });
 
+
+// ==================== REVISI PENAWARAN ====================
+export const reviseQuotationSchema = z.object({
+  changeReason: z.string().trim().min(1, "Alasan perubahan wajib diisi").max(2000, "Alasan perubahan maksimal 2000 karakter"),
+});
+
 // ==================== PENAWARAN (form) ====================
 export const quotationItemSchema = z.object({
   itemId: z.number().nullable().optional(),
@@ -224,7 +231,7 @@ export const quotationItemSchema = z.object({
   qty: z.number().min(0.01, "Qty harus lebih dari 0"),
   uom: z.string().default("PCS"),
   unitPrice: z.number().min(0, "Harga tidak boleh negatif"),
-  discountType: z.enum(["fixed", "percent"]).default("fixed"),
+  discountType: z.enum(DISCOUNT_TYPES).default("fixed"),
   discount: z.number().min(0).default(0),
   total: z.number().min(0).default(0),
 })

@@ -167,6 +167,8 @@ export const purchaseOrderSchema = z.object({
   notes: z.string().optional(),
 })
 
+import { DISCOUNT_TYPES } from "@/lib/constants/status"
+
 export const quotationItemSchema = z.object({
   itemId: z.number().nullable().optional(),
   isCustom: z.boolean().optional().default(false),
@@ -174,7 +176,7 @@ export const quotationItemSchema = z.object({
   qty: z.number().min(0.01, "Qty harus lebih dari 0"),
   uom: z.string().default("PCS"),
   unitPrice: z.number().min(0, "Harga tidak boleh negatif"),
-  discountType: z.enum(["fixed", "percent"]).default("fixed"),
+  discountType: z.enum(DISCOUNT_TYPES).default("fixed"),
   discount: z.number().min(0).default(0),
   total: z.number().min(0).default(0),
 })

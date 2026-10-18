@@ -22,6 +22,8 @@ import {
 export interface ComboboxOption {
   value: string;
   label: string;
+  /** Record soft-deleted: renderer coret + disabled (bare Record → strikethrough deleted). */
+  disabled?: boolean;
 }
 
 interface ComboboxProps {
@@ -124,10 +126,13 @@ export function Combobox({
                   <CommandItem
                     key={opt.value}
                     value={opt.label}
+                    disabled={!!opt.disabled}
                     onSelect={() => {
+                      if (opt.disabled) return;
                       onChange?.(opt.value);
                       setOpen(false);
                     }}
+                    className={cn(opt.disabled && "opacity-60 line-through")}
                   >
                     <Check
                       className={cn(
@@ -136,6 +141,7 @@ export function Combobox({
                       )}
                     />
                     {opt.label}
+                    {opt.disabled && <span className="ml-2 text-xs text-muted-foreground">(dihapus)</span>}
                   </CommandItem>
                 ))}
               </CommandGroup>
