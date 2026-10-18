@@ -39,6 +39,10 @@ const mocks = vi.hoisted(() => {
       aggregate: vi.fn().mockResolvedValue({ _max: { id: 0 } }),
     },
     systemSetting: buildModelMock(),
+    remnant: buildModelMock(),
+    stocktakeSession: buildModelMock(),
+    stocktakeLine: buildModelMock(),
+    inventoryLayer: { ...buildModelMock(), groupBy: vi.fn().mockResolvedValue([]) },
     warehouse: buildModelMock(),
     userWarehouse: buildModelMock(),
     item: buildModelMock(),
@@ -1517,4 +1521,87 @@ describe("Catch block throw e for NextRedirectError", () => {
       await expect((actions as any)[fn](arg)).rejects.toThrow();
     });
   }
+});
+
+describe("stocktake session (P1-5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["admin"] });
+    // Scope: admin penuh — getWarehouseScope default mock? Set akses dilalui
+    // dengan warehouse scope "all".
+  });
+
+  it("approveStocktakeSession refuses self-approval (independence)", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      warehouseId: 2,
+      status: "review",
+      countedBy: 7,
+    });
+    const res = await actions.approveStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/independen/);
+    expect(mocks.prismaMock.stocktakeSession.update).not.toHaveBeenCalled();
+  });
+
+  it("approveStocktakeSession allows an independent approver", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      warehouseId: 2,
+      status: "review",
+      countedBy: 9,
+    });
+    const res = await actions.approveStocktakeSession(1);
+    expect(res.success).toBe(true);
+    expect(mocks.prismaMock.stocktakeSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 } }),
+    );
+  });
+
+  it("postStocktakeSession refuses unapproved sessions", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      warehouseId: 2,
+      status: "review",
+      documentNo: "STK-1",
+      lines: [],
+    });
+    const res = await actions.postStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("remnant (P1-5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["admin"] });
+  });
+
+  it("consumeRemnant only claims usable rows (atomic)", async () => {
+    const fd = new FormData();
+    fd.set("consumedBy", "WO-9");
+    mocks.prismaMock.remnant.updateMany.mockResolvedValue({ count: 1 });
+    const res = await actions.consumeRemnant(4, fd);
+    expect(res.success).toBe(true);
+    expect(mocks.prismaMock.remnant.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 4, status: "usable" } }),
+    );
+  });
+
+  it("consumeRemnant refuses an already-consumed row", async () => {
+    const fd = new FormData();
+    fd.set("consumedBy", "WO-9");
+    mocks.prismaMock.remnant.updateMany.mockResolvedValue({ count: 0 });
+    mocks.prismaMock.remnant.findUnique.mockResolvedValue({ status: "consumed" });
+    const res = await actions.consumeRemnant(4, fd);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/consumed/);
+  });
+
+  it("scrapRemnant requires a reason", async () => {
+    const res = await actions.scrapRemnant(4, new FormData());
+    expect(res.success).toBe(false);
+    expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
+  });
 });

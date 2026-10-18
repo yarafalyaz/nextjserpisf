@@ -13,6 +13,8 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/inventaris/baris-rak": "Baris rak di dalam gudang",
   "/inventaris/mutasi-stok": "Pergerakan stok",
   "/inventaris/opname": "Lembar penghitungan fisik stok",
+  "/inventaris/opname/sesi": "Sesi opname bertahap dengan recount & approval",
+  "/inventaris/sisa": "Sisa potong usable & scrap",
   "/inventaris/pengeluaran-material": "Pengeluaran material",
   "/inventaris/penyesuaian": "Penyesuaian stok",
   "/inventaris/rak": "Kelola rak gudang",

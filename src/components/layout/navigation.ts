@@ -121,6 +121,8 @@ export const navigation: NavItem[] = [
       { label: "Mutasi Stok", href: "/inventaris/mutasi-stok", icon: BarChart3, permission: "view_stock_moves" },
       { label: "Penyesuaian", href: "/inventaris/penyesuaian", icon: Scale, permission: "view_stock_adjustments" },
       { label: "Stok Opname", href: "/inventaris/opname", icon: ClipboardCheck, permission: "view_stock_opname" },
+      { label: "Sesi Opname", href: "/inventaris/opname/sesi", icon: ClipboardCheck, permission: "view_stock_opname" },
+      { label: "Sisa Material", href: "/inventaris/sisa", icon: Scale, permission: "view_material_issues" },
       { label: "Transfer", href: "/inventaris/transfer", icon: ArrowLeftRight, permission: "view_inventory_transfers" },
       { label: "Pengeluaran Material", href: "/inventaris/pengeluaran-material", icon: Wrench, permission: "view_material_issues" },
       { label: "Rak", href: "/inventaris/rak", icon: Grid3X3, permission: "view_racks" },

@@ -545,6 +545,8 @@ model Item {
   warehouse            Warehouse?           @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
   vendor               Vendor?              @relation(fields: [vendorId], references: [id])
   stockMoves           StockMove[]
+  stocktakeLines       StocktakeLine[]
+  remnants             Remnant[]
   manufacturedProducts Product[]            @relation("ProductInventoryItem")
   uomConversions       UomConversion[]
   fitmentRules         VehicleFitmentRule[]
@@ -584,6 +586,8 @@ model Warehouse {
   stockAdjustments StockAdjustment[]
   stockMoves       StockMove[]
   userWarehouses   UserWarehouse[]
+  stocktakeSessions StocktakeSession[]
+  remnants             Remnant[]
 
   @@index([isActive, deletedAt])
   @@index([name])
@@ -2373,6 +2377,81 @@ model OvertimeRequest {
   @@index([approvedBy])
   @@index([createdAt])
   @@map("overtime_requests")
+}
+
+/// P1-5: sesi opname bertahap — snapshot sistem, hitung 1+2 (recount),
+/// final, approval independen, lalu posting variance jadi adjustment.
+/// Movement concurrent selama sesi dicatat (delta snapshot vs live saat posting).
+model StocktakeSession {
+  id           Int             @id @default(autoincrement())
+  documentNo   String          @unique @map("document_no")
+  slug         String?         @unique
+  warehouseId  Int             @map("warehouse_id")
+  date         DateTime        @db.Date
+  status       String          @default("draft") @db.VarChar(32)
+  snapshotAt   DateTime?       @map("snapshot_at")
+  notes        String?         @db.Text
+  countedBy    Int?            @map("counted_by")
+  approvedBy   Int?            @map("approved_by")
+  approvedAt   DateTime?       @map("approved_at")
+  adjustmentId Int?            @map("adjustment_id")
+  createdBy    Int?            @map("created_by")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  warehouse    Warehouse       @relation(fields: [warehouseId], references: [id])
+  lines        StocktakeLine[]
+
+  @@index([warehouseId])
+  @@index([status])
+  @@map("stocktake_sessions")
+}
+
+/// P1-5: sisa potong usable/scrap. Remnant BUKAN stok gudang ganda — ia
+/// mencatat sisa dari material yang sudah keluar (issue/produksi). Konsumsi =
+/// status consumed (tanpa movement); scrap = alasan + biaya terpisah.
+model Remnant {
+  id          Int       @id @default(autoincrement())
+  documentNo  String    @unique @map("document_no")
+  itemId      Int       @map("item_id")
+  warehouseId Int       @map("warehouse_id")
+  qty         Decimal   @db.Decimal(15, 2)
+  uom         String?   @db.VarChar(32)
+  dimensions  String?   @db.VarChar(255)
+  sourceType  String?   @map("source_type") @db.VarChar(32)
+  sourceId    Int?      @map("source_id")
+  unitCost    Decimal   @default(0) @map("unit_cost") @db.Decimal(15, 2)
+  status      String    @default("usable") @db.VarChar(32)
+  scrapReason String?   @map("scrap_reason") @db.VarChar(500)
+  consumedBy  String?   @map("consumed_by") @db.VarChar(128)
+  consumedAt  DateTime? @map("consumed_at")
+  createdBy   Int?      @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  item        Item      @relation(fields: [itemId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([itemId])
+  @@index([warehouseId])
+  @@index([status])
+  @@map("remnants")
+}
+
+model StocktakeLine {
+  id         Int              @id @default(autoincrement())
+  sessionId  Int              @map("session_id")
+  itemId     Int              @map("item_id")
+  systemQty  Decimal          @default(0) @db.Decimal(15, 2)
+  count1     Decimal?         @db.Decimal(15, 2)
+  count2     Decimal?         @db.Decimal(15, 2)
+  finalCount Decimal?         @map("final_count") @db.Decimal(15, 2)
+  variance   Decimal?         @map("variance") @db.Decimal(15, 2)
+  note       String?          @db.VarChar(500)
+  session    StocktakeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  item       Item             @relation(fields: [itemId], references: [id])
+
+  @@index([sessionId])
+  @@index([itemId])
+  @@map("stocktake_lines")
 }
 
 /// P1-6: ruleset statutori payroll berperiode. Tarif jangan diedit diam-diam:
