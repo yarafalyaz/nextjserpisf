@@ -79,8 +79,8 @@ export default async function LeaveBalancePage({
         ]}
       />
 
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Saldo Cuti Karyawan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Saldo Cuti Karyawan</h1>
         <div className="flex flex-wrap gap-1.5">
           {yearOptions.map((y) => (
             <Link

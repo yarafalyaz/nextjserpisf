@@ -77,8 +77,8 @@ export default async function ApprovalsPage({
   { label: "Pengaturan", href: "/pengaturan" },
   { label: "Persetujuan" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Alur Persetujuan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Alur Persetujuan</h1>
       </div>
 
       <ApprovalTable data={data} total={total} page={page} pageSize={pageSize} filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>} />

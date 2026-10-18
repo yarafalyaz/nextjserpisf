@@ -60,8 +60,8 @@ export default async function ApprovalDetailPage({
           { label: `#${approval.id}` },
         ]}
       />
-      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">
           Detail Persetujuan
         </h1>
         <span className={`status-badge status-${approval.status}`}>
@@ -207,7 +207,6 @@ export default async function ApprovalDetailPage({
             Riwayat Persetujuan
           </h2>
         </div>
-        <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Langkah</DetailTableTh>
@@ -243,7 +242,6 @@ export default async function ApprovalDetailPage({
               )}
             </DetailTableBody>
           </DetailTable>
-        </div>
       </div>
     </div>
   );
