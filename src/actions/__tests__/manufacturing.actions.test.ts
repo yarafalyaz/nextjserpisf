@@ -303,6 +303,38 @@ describe("Production Order Actions", () => {
     expect(mocks.prismaMock.$executeRaw).toHaveBeenCalledOnce()
   })
 
+  it("refuses PO issue when the linked WO was already consumed via MI (P1-4)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 0, workOrderId: 42,
+    })
+    mocks.prismaMock.materialIssue.count.mockResolvedValue(1)
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Pengeluaran Material")
+    expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled()
+  })
+
+  it("allows PO issue when the linked WO has no completed MI (P1-4)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0, workOrderId: 42,
+    })
+    mocks.prismaMock.materialIssue.count.mockResolvedValue(0)
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+    mocks.consumeFifoLayersMock.mockResolvedValue({ consumedCost: 42, shortfall: 0 })
+    mocks.prismaMock.productionOrderMaterial.findFirst.mockResolvedValue(null)
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+
+    expect(res.success).toBe(true)
+  })
+
   it("rejects non-positive or invalid issued quantities", async () => {
     const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 0 }])
     expect(res.success).toBe(false)

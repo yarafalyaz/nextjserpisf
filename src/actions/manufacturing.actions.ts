@@ -666,7 +666,7 @@ export async function issueMaterial(
       await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`;
       const order = await tx.productionOrder.findUniqueOrThrow({
         where: { id: productionOrderId },
-        select: { id: true, documentNo: true, status: true, totalActualCost: true },
+        select: { id: true, documentNo: true, status: true, totalActualCost: true, workOrderId: true },
       });
       if (order.status !== "confirmed" && order.status !== "in_progress") {
         throw new Error(
@@ -678,6 +678,24 @@ export async function issueMaterial(
           where: { id: productionOrderId },
           data: { status: "in_progress" },
         });
+      }
+
+      // P1-4: guard silang antar-jalur konsumsi. PO tertaut WO yang sudah
+      // dikonsumsi via Material Issue resmi (completed/processing) tidak
+      // boleh dikonsumsi lagi via issueMaterial — material sama keluar dua
+      // kali tanpa guard ini. Pilih satu jalur per WO.
+      if (order.workOrderId != null) {
+        const consumedViaMI = await tx.materialIssue.count({
+          where: {
+            workOrderId: order.workOrderId,
+            status: { in: ["processing", "completed"] },
+          },
+        });
+        if (consumedViaMI > 0) {
+          throw new Error(
+            `WO ${order.documentNo} sudah dikonsumsi via Pengeluaran Material — gunakan jalur itu, bukan pengeluaran PO langsung.`,
+          );
+        }
       }
 
       const itemIds = [...requested.keys()].sort((a, b) => a - b);

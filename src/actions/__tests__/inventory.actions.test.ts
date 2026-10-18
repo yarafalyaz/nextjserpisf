@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     inventoryTransferItem: buildModelMock(),
     materialIssue: buildModelMock(),
     materialIssueItem: buildModelMock(),
+    productionOrderMaterial: buildModelMock(),
     workOrder: buildModelMock(),
     workOrderItem: buildModelMock(),
     rack: {
@@ -397,6 +398,22 @@ describe("Material Issue Actions", () => {
     });
     const res = await actions.completeMaterialIssue(1);
     expect(res?.success).toBe(true);
+  });
+  it("completeMaterialIssue refuses when the WO was already consumed via PO (P1-4)", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [], workOrderId: 42,
+    });
+    mocks.prismaMock.productionOrderMaterial.aggregate.mockResolvedValue({
+      _sum: { actualQty: 5 },
+    });
+    const res = await actions.completeMaterialIssue(1);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("perintah produksi");
+    expect(matIssueHook).not.toHaveBeenCalled();
+    // Klaim dikembalikan ke draft agar bisa dicoba lagi.
+    expect(mocks.prismaMock.materialIssue.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "draft" } }),
+    );
   });
   it("completeMaterialIssue does not duplicate journal (stock hook owns it)", async () => {
     vi.clearAllMocks();

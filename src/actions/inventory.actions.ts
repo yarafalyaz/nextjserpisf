@@ -599,6 +599,34 @@ export async function completeMaterialIssue(issueId: number) {
       );
     }
 
+    // P1-4: guard silang arah sebaliknya. MI tertaut WO yang PO-nya sudah
+    // mengonsumsi material (actualQty > 0) tidak boleh diselesaikan — jalur
+    // PO sudah mengeluarkan material yang sama. Dicek setelah klaim agar
+    // serial dengan complete konkuren. Klaim dikembalikan ke draft sebelum
+    // menolak agar bisa dicoba lagi setelah jalur diluruskan.
+    const issueWo = await prisma.materialIssue.findUniqueOrThrow({
+      where: { id: issueId },
+      select: { workOrderId: true },
+    });
+    if (issueWo.workOrderId != null) {
+      const poConsumed = await prisma.productionOrderMaterial.aggregate({
+        where: {
+          productionOrder: { workOrderId: issueWo.workOrderId },
+          actualQty: { gt: 0 },
+        },
+        _sum: { actualQty: true },
+      });
+      if (Number(poConsumed._sum.actualQty ?? 0) > 0) {
+        await prisma.materialIssue.updateMany({
+          where: { id: issueId, status: "processing" },
+          data: { status: "draft" },
+        });
+        throw new Error(
+          "WO ini sudah dikonsumsi via perintah produksi — batalkan/void MI ini dan gunakan jalur PO.",
+        );
+      }
+    }
+
     try {
       await prisma.$transaction(async (tx) => {
         // Hook creates Stock Moves OUT per item + Accounting journal
