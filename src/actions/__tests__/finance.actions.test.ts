@@ -690,6 +690,14 @@ describe("Petty Cash Actions", () => {
 })
 
 describe("Bank Reconciliation Actions", () => {
+  it("match/create/complete menegakkan manage_bank_reconciliation (bukan post_journals)", async () => {
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", accountId: 10, periodStart: null, periodEnd: null })
+    mocks.prismaMock.bankStatementLine.findUniqueOrThrow.mockResolvedValue({ date: new Date("2026-06-13"), bankStatement: { accountId: 10 } })
+    mocks.prismaMock.journalEntry.findUniqueOrThrow.mockResolvedValue({ accountId: 10, journal: { status: "POSTED", deletedAt: null, transactionDate: new Date("2026-06-13") } })
+    await (actions.matchReconciliationLine as any)(1, 1, 1)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("manage_bank_reconciliation")
+    expect(mocks.requirePermissionMock).not.toHaveBeenCalledWith("post_journals")
+  })
   it("createBankReconciliation succeeds", async () => {
     const res = await (actions as any).createBankReconciliation(fdMap({
       accountId: 1,

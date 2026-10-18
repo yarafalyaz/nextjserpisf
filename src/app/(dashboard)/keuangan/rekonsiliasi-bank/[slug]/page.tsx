@@ -35,8 +35,8 @@ export const metadata: Metadata = { title: "Rekonsiliasi Bank" }
  *
  * Izin baca = `view_bank_reconciliation`; izin tulis (match/unmatch/adjust) =
  * `manage_bank_reconciliation`, dan tombol hanya tampil bila rekonsiliasi masih
- * draft. Aksi server tetap menegakkan izin (`post_journals`) + status draft,
- * jadi halaman yang menampilkan tombol bukan garis pertahanan satu-satunya.
+ * draft. Aksi server menegakkan izin yang SAMA + status draft, jadi halaman
+ * yang menampilkan tombol bukan garis pertahanan satu-satunya.
  */
 export default async function BankReconciliationDetailPage({
   params,

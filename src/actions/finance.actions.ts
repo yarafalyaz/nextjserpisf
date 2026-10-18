@@ -919,7 +919,7 @@ export async function matchReconciliationLine(
   journalEntryId: number,
 ) {
   try {
-    await requirePermission("post_journals");
+    await requirePermission("manage_bank_reconciliation");
 
     // Semua ID datang dari klien (Server Action tetap bisa dipanggil langsung),
     // jadi hubungan akun/periode/jurnal wajib diperiksa di sini, bukan dipercaya
@@ -1013,7 +1013,7 @@ export async function createReconciliationAdjustment(
   formData: FormData,
 ) {
   try {
-    await requirePermission("post_journals");
+    await requirePermission("manage_bank_reconciliation");
 
     const rawType = String(formData.get("type") ?? "").trim();
     if (rawType !== "outstanding_deposit" && rawType !== "outstanding_check") {
@@ -1080,7 +1080,7 @@ export async function unmatchReconciliationLine(
   itemId: number,
 ) {
   try {
-    await requirePermission("post_journals");
+    await requirePermission("manage_bank_reconciliation");
 
     await prisma.$transaction(async (tx) => {
       const recon = await tx.bankReconciliation.findUniqueOrThrow({
@@ -1119,7 +1119,7 @@ export async function unmatchReconciliationLine(
 
 export async function completeReconciliation(reconciliationId: number) {
   try {
-    await requirePermission("post_journals");
+    await requirePermission("manage_bank_reconciliation");
 
     // Laravel parity: only draft reconciliations can be completed
     const reconciliation = await prisma.bankReconciliation.findUniqueOrThrow({
