@@ -42,6 +42,27 @@ describe("deployment tidak mendorong skema saat boot", () => {
     expect(compose).not.toMatch(/^\s+-\s+"?\d[^"]*:3306"?\s*$/m)
   })
 
+  it("versi Node konsisten: README, engines, Dockerfile (P2-5)", () => {
+    const readme = read("README.md")
+    const pkg = JSON.parse(read("package.json")) as { engines?: { node?: string } }
+    const dockerfile = read("Dockerfile")
+    // engines ^26 + Dockerfile node:26 + README 26+: satu suara. Mismatch
+    // (mis. README 20+) membuat dev jalan di versi yang tak diuji.
+    expect(pkg.engines?.node ?? "").toContain("26")
+    expect(dockerfile).toContain("node:26")
+    expect(readme).toMatch(/Node\.js 26\+/)
+    expect(readme).not.toMatch(/Node\.js 20\+/)
+  })
+
+  it("tanpa script db:push — migrasi hanya via migrate deploy (P2-5)", () => {
+    const pkg = JSON.parse(read("package.json")) as { scripts?: Record<string, string> }
+    const scripts = Object.values(pkg.scripts ?? {}).join("\n")
+    // Script npm `db push` adalah jalan pintas yang menutupi drift; rantai
+    // migrasi hanya lewat `migrate deploy` (layanan migrate compose prod).
+    expect(Object.keys(pkg.scripts ?? {})).not.toContain("db:push")
+    expect(scripts).not.toContain("prisma db push")
+  })
+
   it("compose prod tanpa password default (P2-4)", () => {
     const compose = read("docker-compose.prod.yml")
     // Kredensial wajib dari .env produksi via `:?`; default `:-...` di compose

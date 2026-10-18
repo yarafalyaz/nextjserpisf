@@ -18,7 +18,7 @@ Sistem ERP terintegrasi yang dibangun dengan Next.js 16 App Router, Prisma 7, da
 
 ### Prasyarat
 
-- Node.js 20+
+- Node.js 26+ (lihat `engines` di `package.json`; Docker memakai `node:26-alpine`)
 - MySQL 8.0+
 - npm
 
