@@ -66,13 +66,13 @@ export default async function BankReconciliationPage({
           { label: "Rekonsiliasi Bank" },
         ]}
       />
-      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">
           Rekonsiliasi Bank
         </h1>
         <Link
           href="/keuangan/rekonsiliasi-bank/tambah"
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+          className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
           id="create-recon-btn"
         >
           + Buat Rekonsiliasi
@@ -99,7 +99,6 @@ export default async function BankReconciliationPage({
           </div>
         </div>
 
-        <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Tanggal Laporan</DetailTableTh>
@@ -147,7 +146,6 @@ export default async function BankReconciliationPage({
               )}
             </DetailTableBody>
           </DetailTable>
-        </div>
 
         {totalPages > 1 && (
           <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">

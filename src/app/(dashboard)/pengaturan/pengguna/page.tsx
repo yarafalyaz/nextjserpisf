@@ -49,10 +49,10 @@ export default async function UsersPage({
   { label: "Pengaturan", href: "/pengaturan" },
   { label: "Pengguna" },
 ]} />
-      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Pengguna & Peran</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Pengguna & Peran</h1>
         <CanCreate permission="manage_users">
-          <Link href="/pengaturan/pengguna/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-user-btn">
+          <Link href="/pengaturan/pengguna/tambah" className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-user-btn">
           + Tambah Pengguna
         </Link>
         </CanCreate>
@@ -63,7 +63,6 @@ export default async function UsersPage({
         <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Pengguna ({totalUsers})</h2>
         </div>
-        <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Nama</DetailTableTh>
@@ -94,7 +93,6 @@ export default async function UsersPage({
               ))}
             </DetailTableBody>
           </DetailTable>
-        </div>
 
         {totalPages > 1 && (
           <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">

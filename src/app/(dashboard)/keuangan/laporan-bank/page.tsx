@@ -42,12 +42,11 @@ export default async function BankStatementsPage({
   { label: "Keuangan", href: "/keuangan" },
   { label: "Rekening Koran" },
 ]} />
-      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Laporan Bank</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Laporan Bank</h1>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>ID</DetailTableTh>
@@ -74,7 +73,6 @@ export default async function BankStatementsPage({
               )}
             </DetailTableBody>
           </DetailTable>
-        </div>
 
         {totalPages > 1 && (
           <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">

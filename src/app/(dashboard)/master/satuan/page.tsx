@@ -49,18 +49,17 @@ export default async function UomPage({
           { label: "Satuan" },
         ]}
       />
-      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Satuan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl sm:text-2xl font-bold text-foreground">Satuan</h1>
         <Link
           href="/master/satuan/tambah"
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+          className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
         >
           + Tambah Satuan
         </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Nama</DetailTableTh>
@@ -99,7 +98,6 @@ export default async function UomPage({
               )}
             </DetailTableBody>
           </DetailTable>
-        </div>
 
         {totalPages > 1 && (
           <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">
