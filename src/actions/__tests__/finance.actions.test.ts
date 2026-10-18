@@ -148,6 +148,207 @@ describe("Bank Statement Actions", () => {
   })
 })
 
+/**
+ * Baris rekening koran (`BankStatementLine`).
+ *
+ * Kelas cacat yang ditutup di sini: model ini dulu hanya punya penulis SEED,
+ * sehingga halaman detail rekening koran tidak pernah punya isi dan kolom
+ * `BankStatement.totalDebits`/`totalCredits` selalu 0 (dibaca tetapi tak punya
+ * jalur tulis). Blok ini mengunci sisi tulisnya: pemetaan debit/kredit yang
+ * saling eksklusif, perhitungan ulang total header dari barisnya, izin yang
+ * SAMA dengan penulis header (`create_journals`), dan tanggal tengah malam UTC.
+ */
+describe("Bank Statement Line Actions", () => {
+  const lastCreateData = () => {
+    const calls = mocks.prismaMock.bankStatementLine.create.mock.calls
+    return calls[calls.length - 1][0].data
+  }
+  const lastUpdateData = () => {
+    const calls = mocks.prismaMock.bankStatementLine.update.mock.calls
+    return calls[calls.length - 1][0].data
+  }
+
+  it("createBankStatementLine memetakan type credit ke kolom credit saja", async () => {
+    mocks.prismaMock.bankStatementLine.create.mockResolvedValue({ id: 11 })
+
+    const res = await (actions as any).createBankStatementLine(
+      fdMap({
+        bankStatementId: 3,
+        date: "2026-06-13",
+        description: "Bunga bank",
+        amount: "250000",
+        type: "credit",
+        reference: "TRF-1",
+      }),
+    )
+
+    expect(res).toEqual({ success: true, id: 11 })
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("create_journals")
+
+    const data = lastCreateData()
+    expect(data.credit).toBe(250000)
+    expect(data.debit).toBe(0)
+    expect(data.amount).toBe(250000)
+    expect(data.type).toBe("credit")
+    expect(data.bankStatementId).toBe(3)
+    expect(data.description).toBe("Bunga bank")
+    expect(data.reference).toBe("TRF-1")
+    expect(data.status).toBe("unmatched")
+  })
+
+  it("createBankStatementLine memetakan type debit ke kolom debit saja (amount bergaya id-ID)", async () => {
+    await (actions as any).createBankStatementLine(
+      fdMap({
+        bankStatementId: 3,
+        date: "2026-06-13",
+        // "2.000.000" lewat parseMoneyAmount; `Number("2.000.000")` bernilai 2.
+        amount: "2.000.000",
+        type: "debit",
+      }),
+    )
+
+    const data = lastCreateData()
+    expect(data.debit).toBe(2000000)
+    expect(data.credit).toBe(0)
+    expect(data.amount).toBe(2000000)
+  })
+
+  it("createBankStatementLine menyimpan date sebagai tengah malam UTC", async () => {
+    await (actions as any).createBankStatementLine(
+      fdMap({ bankStatementId: 3, date: "2026-12-31", amount: "1000", type: "debit" }),
+    )
+
+    expect(lastCreateData().date.toISOString()).toBe("2026-12-31T00:00:00.000Z")
+  })
+
+  it("createBankStatementLine menghitung ulang totalDebits/totalCredits header dari barisnya", async () => {
+    mocks.prismaMock.bankStatementLine.aggregate.mockResolvedValue({
+      _sum: { debit: 1500.5, credit: 250.25 },
+    })
+
+    const res = await (actions as any).createBankStatementLine(
+      fdMap({ bankStatementId: 42, date: "2026-06-13", amount: "1000", type: "debit" }),
+    )
+
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.bankStatementLine.aggregate).toHaveBeenCalledWith({
+      where: { bankStatementId: 42 },
+      _sum: { debit: true, credit: true },
+    })
+    expect(mocks.prismaMock.bankStatement.update).toHaveBeenCalledWith({
+      where: { id: 42 },
+      data: { totalDebits: 1500.5, totalCredits: 250.25 },
+    })
+  })
+
+  it("updateBankStatementLine memetakan ulang kolom dan menghitung ulang total header", async () => {
+    mocks.prismaMock.bankStatementLine.findUniqueOrThrow.mockResolvedValue({
+      id: 11,
+      bankStatementId: 3,
+    })
+    mocks.prismaMock.bankStatementLine.aggregate.mockResolvedValue({
+      _sum: { debit: 0, credit: 900 },
+    })
+
+    const res = await (actions as any).updateBankStatementLine(
+      11,
+      fdMap({ bankStatementId: 3, date: "2026-07-01", amount: "900", type: "credit" }),
+    )
+
+    expect(res).toEqual({ success: true })
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("create_journals")
+
+    const data = lastUpdateData()
+    expect(data.debit).toBe(0)
+    expect(data.credit).toBe(900)
+    expect(data.amount).toBe(900)
+    expect(data.date.toISOString()).toBe("2026-07-01T00:00:00.000Z")
+    expect(mocks.prismaMock.bankStatement.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { totalDebits: 0, totalCredits: 900 },
+    })
+  })
+
+  it("updateBankStatementLine menghitung ulang header LAMA bila barisnya pindah rekening koran", async () => {
+    mocks.prismaMock.bankStatementLine.findUniqueOrThrow.mockResolvedValue({
+      id: 11,
+      bankStatementId: 3,
+    })
+
+    await (actions as any).updateBankStatementLine(
+      11,
+      fdMap({ bankStatementId: 4, date: "2026-07-01", amount: "900", type: "credit" }),
+    )
+
+    const ids = mocks.prismaMock.bankStatement.update.mock.calls.map(
+      (call: any[]) => call[0].where.id,
+    )
+    expect(ids).toEqual([4, 3])
+  })
+
+  it("deleteBankStatementLine menolak baris yang tidak ada, bukan sukses palsu", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.bankStatementLine.findUnique.mockResolvedValue(null)
+
+    const res = await (actions as any).deleteBankStatementLine(99)
+
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("tidak ditemukan")
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("create_journals")
+    expect(mocks.prismaMock.bankStatementLine.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.bankStatement.update).not.toHaveBeenCalled()
+  })
+
+  it("deleteBankStatementLine menghapus lalu menghitung ulang total header", async () => {
+    mocks.prismaMock.bankStatementLine.findUnique.mockResolvedValue({
+      id: 11,
+      bankStatementId: 3,
+    })
+    mocks.prismaMock.bankStatementLine.aggregate.mockResolvedValue({
+      _sum: { debit: 0, credit: 0 },
+    })
+
+    const res = await (actions as any).deleteBankStatementLine(11)
+
+    expect(res).toEqual({ success: true })
+    expect(mocks.prismaMock.bankStatementLine.delete).toHaveBeenCalledWith({
+      where: { id: 11 },
+    })
+    expect(mocks.prismaMock.bankStatement.update).toHaveBeenCalledWith({
+      where: { id: 3 },
+      data: { totalDebits: 0, totalCredits: 0 },
+    })
+  })
+
+  it("tidak menulis baris bila izin create_journals tidak dimiliki", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.requirePermissionMock.mockRejectedValue(new Error("Akses ditolak"))
+
+    const res = await (actions as any).createBankStatementLine(
+      fdMap({ bankStatementId: 3, date: "2026-06-13", amount: "1000", type: "debit" }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(mocks.prismaMock.bankStatementLine.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak amount yang tidak positif dan tanggal kosong tanpa menyentuh basis data", async () => {
+    const zero = await (actions as any).createBankStatementLine(
+      fdMap({ bankStatementId: 3, date: "2026-06-13", amount: "0", type: "debit" }),
+    )
+    expect(zero.success).toBe(false)
+    expect(String(zero.error)).toContain("amount harus lebih dari 0")
+
+    const noDate = await (actions as any).createBankStatementLine(
+      fdMap({ bankStatementId: 3, amount: "1000", type: "debit" }),
+    )
+    expect(noDate.success).toBe(false)
+    expect(String(noDate.error)).toContain("Tanggal wajib diisi")
+
+    expect(mocks.prismaMock.bankStatementLine.create).not.toHaveBeenCalled()
+  })
+})
+
 describe("Journal Actions", () => {
   it("createJournal succeeds", async () => {
     const res = await (actions as any).createJournal(fdMap({

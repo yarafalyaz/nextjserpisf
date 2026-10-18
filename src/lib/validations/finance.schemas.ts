@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseMoneyAmount } from "@/lib/utils/parse-money";
 
 const optionalString = (max: number) =>
   z
@@ -37,6 +38,63 @@ export const bankStatementSchema = z.object({
   openingBalance: z.coerce.number().default(0),
   closingBalance: z.coerce.number().default(0),
   notes: optionalString(1000),
+});
+
+/**
+ * `YYYY-MM-DD` yang benar-benar ada di kalender.
+ *
+ * Sengaja tetap berupa STRING (bukan `z.coerce.date()` seperti `date` di
+ * `bankStatementSchema`): aksinya harus mengonversinya lewat
+ * `wibDateToUtcMidnight` agar tanggal tersimpan sebagai TENGAH MALAM UTC untuk
+ * hari kalender WIB — `new Date("YYYY-MM-DD")` tidak boleh dipakai karena
+ * hasilnya bergantung pada zona waktu proses. Refine-nya menolak tanggal yang
+ * tidak ada (mis. `2026-13-45`) karena `Date.UTC` akan menggulirkannya diam-diam
+ * ke tanggal lain.
+ */
+const dateOnly = z
+  .string({ error: "Tanggal wajib diisi" })
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal tidak valid (format YYYY-MM-DD)")
+  .refine((value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return (
+      date.getUTCFullYear() === year &&
+      date.getUTCMonth() === month - 1 &&
+      date.getUTCDate() === day
+    );
+  }, "Tanggal tidak valid");
+
+/**
+ * Satu baris rekening koran.
+ *
+ * Model `BankStatementLine` sebelumnya TIDAK punya jalur tulis sama sekali —
+ * hanya skrip seed yang pernah mengisinya — sehingga halaman detail rekening
+ * koran tak punya isi dan `BankStatement.totalDebits`/`totalCredits` selalu 0.
+ * Skema ini melengkapi sisi tulisnya (`createBankStatementLine`,
+ * `updateBankStatementLine`, `deleteBankStatementLine`).
+ *
+ * `amount` adalah BESAR MUTASI dan selalu positif; `type` yang menentukan ke
+ * kolom mana ia dipetakan (`debit` atau `credit`). Jangan mengisi kedua kolom
+ * sekaligus: saat rekonsiliasi itu ambigu. `amount` di-parse dengan
+ * `parseMoneyAmount`, bukan `Number()` — "2.000.000" bernilai 2 bagi `Number`.
+ */
+export const bankStatementLineSchema = z.object({
+  bankStatementId: z.coerce
+    .number({ message: "bankStatementId wajib diisi" })
+    .int()
+    .positive(),
+  date: dateOnly,
+  description: optionalString(1000),
+  amount: z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce
+      .number({ message: "amount wajib diisi" })
+      .positive("amount harus lebih dari 0"),
+  ),
+  type: z.enum(["debit", "credit"], {
+    message: "type wajib diisi (debit/credit)",
+  }),
+  reference: optionalString(200),
 });
 
 // ==================== JOURNAL ====================

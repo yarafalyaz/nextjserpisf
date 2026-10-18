@@ -2,7 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
-import { safeAdd, safeSubtract, compareAmounts } from "@/lib/utils/math";
+import { safeAdd, safeSubtract, compareAmounts, safeRound } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import {
@@ -16,6 +16,7 @@ import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   bankStatementSchema,
+  bankStatementLineSchema,
   expenseSchema,
   pettyCashSchema,
   bankReconciliationSchema,
@@ -35,6 +36,7 @@ import {
 } from "@/lib/finance/petty-cash-chain";
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 // ==================== BANK STATEMENT ACTIONS ====================
 
@@ -77,6 +79,179 @@ export async function createBankStatement(formData: FormData) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createBankStatement]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== BANK STATEMENT LINE ACTIONS ====================
+
+type BankStatementTx = Parameters<Parameters<typeof prisma.$transaction>[0]>[0];
+
+/**
+ * Hitung ulang `totalDebits`/`totalCredits` header dari SELURUH barisnya.
+ *
+ * Wajib dipanggil di dalam transaksi yang SAMA dengan penulisan/penghapusan
+ * barisnya: nilai total dihitung dari agregat baris (nilai ABSOLUT, bukan
+ * penambahan bertahap), jadi kolom itu konsisten secara konstruksi dan tidak
+ * bisa menjadi angka basi yang "terlihat wajar" tetapi tidak cocok dengan
+ * barisnya.
+ */
+async function recalcBankStatementTotals(
+  tx: BankStatementTx,
+  bankStatementId: number,
+) {
+  const totals = await tx.bankStatementLine.aggregate({
+    where: { bankStatementId },
+    _sum: { debit: true, credit: true },
+  });
+
+  await tx.bankStatement.update({
+    where: { id: bankStatementId },
+    data: {
+      totalDebits: safeRound(totals._sum?.debit ?? 0, 2),
+      totalCredits: safeRound(totals._sum?.credit ?? 0, 2),
+    },
+  });
+}
+
+/**
+ * Izin baris rekening koran = izin header-nya (`create_journals`).
+ *
+ * Jangan mengarang izin baru di sini: `edit_bank_statements` /
+ * `delete_bank_statements` tidak pernah di-seed dan tidak ada halaman ubah
+ * rekening koran, sehingga memakainya berarti tak seorang pun bisa menulis baris.
+ * Alasan yang sama sudah dicatat di `src/lib/auth/attachment-permission-maps.ts`
+ * (kunci `bank_statement`).
+ */
+export async function createBankStatementLine(formData: FormData) {
+  try {
+    await requirePermission("create_journals");
+
+    const parsed = parseFormData(bankStatementLineSchema, formData);
+    if (!parsed.success)
+      return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    const line = await prisma.$transaction(async (tx) => {
+      const created = await tx.bankStatementLine.create({
+        data: {
+          bankStatementId: v.bankStatementId,
+          // Tengah malam UTC untuk hari kalender WIB — bukan `new Date(...)`
+          // yang bergantung pada zona waktu proses.
+          date: wibDateToUtcMidnight(v.date),
+          description: v.description ?? null,
+          // `type` memilih kolomnya dan `amount` selalu ikut terisi, supaya arah
+          // mutasi bisa dibaca dari barisnya. Kedua kolom terisi sekaligus
+          // membuat rekonsiliasi ambigu.
+          amount: v.amount,
+          debit: v.type === "debit" ? v.amount : 0,
+          credit: v.type === "credit" ? v.amount : 0,
+          type: v.type,
+          reference: v.reference ?? null,
+          status: "unmatched",
+        },
+      });
+      await recalcBankStatementTotals(tx, v.bankStatementId);
+      return created;
+    });
+
+    await logActivity(
+      "create",
+      "BankStatementLine",
+      line.id,
+      `Menambah baris rekening koran #${v.bankStatementId}`,
+    );
+    revalidatePath("/keuangan/laporan-bank");
+    return { success: true as const, id: line.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createBankStatementLine]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateBankStatementLine(id: number, formData: FormData) {
+  try {
+    await requirePermission("create_journals");
+
+    const parsed = parseFormData(bankStatementLineSchema, formData);
+    if (!parsed.success)
+      return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    await prisma.$transaction(async (tx) => {
+      // Baris lama dibaca lebih dulu: baris yang tidak ada harus GAGAL (bukan
+      // "sukses" palsu), dan bila barisnya berpindah rekening koran, header
+      // LAMA juga wajib dihitung ulang — kalau tidak totalnya tertinggal.
+      const existing = await tx.bankStatementLine.findUniqueOrThrow({
+        where: { id },
+        select: { bankStatementId: true },
+      });
+
+      await tx.bankStatementLine.update({
+        where: { id },
+        data: {
+          bankStatementId: v.bankStatementId,
+          date: wibDateToUtcMidnight(v.date),
+          description: v.description ?? null,
+          amount: v.amount,
+          debit: v.type === "debit" ? v.amount : 0,
+          credit: v.type === "credit" ? v.amount : 0,
+          type: v.type,
+          reference: v.reference ?? null,
+        },
+      });
+
+      await recalcBankStatementTotals(tx, v.bankStatementId);
+      if (existing.bankStatementId !== v.bankStatementId) {
+        await recalcBankStatementTotals(tx, existing.bankStatementId);
+      }
+    });
+
+    await logActivity(
+      "update",
+      "BankStatementLine",
+      id,
+      `Mengubah baris rekening koran #${id}`,
+    );
+    revalidatePath("/keuangan/laporan-bank");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateBankStatementLine]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteBankStatementLine(id: number) {
+  try {
+    await requirePermission("create_journals");
+
+    await prisma.$transaction(async (tx) => {
+      // Dibaca dulu supaya baris yang tidak ada ditolak berisik: `delete`
+      // langsung akan melempar galat Prisma yang tak terbaca, dan menelan
+      // galat itu membuat pengguna melihat "berhasil" padahal barisnya masih ada.
+      const line = await tx.bankStatementLine.findUnique({
+        where: { id },
+        select: { bankStatementId: true },
+      });
+      if (!line) throw new Error("Baris rekening koran tidak ditemukan");
+
+      await tx.bankStatementLine.delete({ where: { id } });
+      await recalcBankStatementTotals(tx, line.bankStatementId);
+    });
+
+    await logActivity(
+      "delete",
+      "BankStatementLine",
+      id,
+      `Menghapus baris rekening koran #${id}`,
+    );
+    revalidatePath("/keuangan/laporan-bank");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteBankStatementLine]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
 

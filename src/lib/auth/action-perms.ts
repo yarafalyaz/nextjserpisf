@@ -110,9 +110,15 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/keuangan/pusat-biaya", edit: "edit_cost_centers", delete: "delete_cost_centers" },
   { prefix: "/master/kategori-pengeluaran", edit: "manage_expense_categories", delete: "manage_expense_categories" },
   { prefix: "/pengaturan/workflow", edit: "manage_settings", delete: "manage_settings" },
-  // Rekening koran (laporan-bank) hanya lihat + tambah (createBankStatement
-  // memakai create_journals) sehingga tak punya aksi baris. Rekonsiliasi bank
-  // ditulis memakai manage_bank_reconciliation, sama dengan halaman "tambah"-nya.
+  // Rekening koran: aksi barisnya (createBankStatementLine/updateBankStatementLine/
+  // deleteBankStatementLine) memakai `create_journals`, izin yang sama dengan
+  // penulis header rekening koran (`createBankStatement`). Tombol baris di halaman
+  // detail mengirim href ber-query (`?editBaris=<id>`) sehingga izinnya diteruskan
+  // eksplisit; entri ini tetap didaftarkan supaya rutenya punya padanan di registry
+  // dan tidak ada baris yang jatuh ke perilaku lama "selalu tampil".
+  { prefix: "/keuangan/laporan-bank", edit: "create_journals", delete: "create_journals" },
+  // Rekonsiliasi bank ditulis memakai manage_bank_reconciliation, sama dengan
+  // halaman "tambah"-nya.
   { prefix: "/keuangan/rekonsiliasi-bank", edit: "manage_bank_reconciliation" },
   // CRM
   { prefix: "/crm/leads", edit: "edit_leads", delete: "delete_leads" },

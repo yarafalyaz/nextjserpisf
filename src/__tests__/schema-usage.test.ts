@@ -37,11 +37,16 @@ const KNOWN_UNUSED: string[] = [
   // tidak ada kode aplikasi yang menulis atau membacanya. Keputusan per kolom:
   // implementasikan (impor rekening koran / rekonsiliasi bank, model aset per merek) atau
   // buang lewat migrasi.
+  //
+  // `BankStatement.totalDebits`/`totalCredits` SUDAH TIDAK ada di daftar ini: keduanya kini
+  // dihitung ulang dari baris rekening korannya di dalam transaksi yang sama
+  // (`recalcBankStatementTotals` di `src/actions/finance.actions.ts`, lewat
+  // create/update/deleteBankStatementLine) dan dikunci penjaga di
+  // `src/actions/__tests__/finance.actions.test.ts`. Yang masih mati tinggal
+  // `BankStatementLine.matchedType` — rekonsiliasi belum menandai jenis kecocokannya.
   "ApprovalWorkflowStep.canSkip",
   "Asset.assetBrandModelId",
   "BankReconciliationItem.clearedDate",
-  "BankStatement.totalCredits",
-  "BankStatement.totalDebits",
   "BankStatementLine.matchedType",
 ].sort()
 
@@ -118,10 +123,14 @@ const SEED_ONLY_MODELS: string[] = [
   // SDM: hari libur, hari libur departemen, dan jadwal kerja ditutup bersama
   // halamannya (`/sdm/kalender-kerja`) — lihat catatan di atas.
   // (sebelumnya tiga entri di sini, kini TIDAK ada lagi)
-  // Rekening koran: baris rekening koran hanya bisa berasal dari seed karena impor
-  // rekening koran belum ada (kolom `BankStatement.totalCredits/totalDebits` dan
-  // `BankStatementLine.matchedType` juga mati).
-  "BankStatementLine",
+  // Rekening koran: SUDAH DITUTUP — entri `BankStatementLine` TIDAK ada lagi di
+  // daftar ini. `createBankStatementLine`/`updateBankStatementLine`/
+  // `deleteBankStatementLine` (`src/actions/finance.actions.ts`, izin
+  // `create_journals` — sama dengan penulis header `createBankStatement`) menulis
+  // barisnya dan menghitung ulang `BankStatement.totalDebits/totalCredits` header
+  // di dalam transaksi yang sama, sehingga halaman detail rekening koran akhirnya
+  // punya isi. Yang masih seed-only tinggal `BankStatementLine.matchedType`
+  // (lihat KNOWN_UNUSED): rekonsiliasi belum menandai jenis kecocokannya.
   // CRM: komentar tiket dibaca lewat nested read — ditutup bersama aksinya
   // (`addTicketComment` + form di detail tiket), lihat catatan di bawah.
   // Proyek: log proyek ditutup bersama aksinya (`addProjectLog` + form di tab Log).
@@ -174,7 +183,9 @@ function foreignKeyScalars(schema: string): Set<string> {
 }
 
 describe("skema: setiap kolom skalar dipakai kode", () => {
-  it("tidak ada kolom mati di luar daftar-beku", () => {
+  it(
+    "tidak ada kolom mati di luar daftar-beku",
+    () => {
     const schema = fs.readFileSync(path.join(ROOT, "prisma/schema.prisma"), "utf8")
     const code = (() => {
       const parts: string[] = []
@@ -206,7 +217,13 @@ describe("skema: setiap kolom skalar dipakai kode", () => {
       kolomMatiBaru: [],
       daftarBekuUsang: [],
     })
-  })
+    },
+    // Pemindaian korpus besar ini ~2 detik saat sendirian, tetapi melewati batas
+    // bawaan 5 detik vitest saat suite penuh berjalan paralel (`--maxWorkers=4`) —
+    // pernah terlihat gagal pada 5046ms. Timeout eksplisit menyamakannya dengan
+    // dua tes seed-only di bawah, supaya kegagalannya berarti isi repo, bukan beban mesin.
+    20_000,
+  )
 })
 
 /** Model yang sama sekali tak dipakai kode. Diperiksa di tingkat MODEL karena
