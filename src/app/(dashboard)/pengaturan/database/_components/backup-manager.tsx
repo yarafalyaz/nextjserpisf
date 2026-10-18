@@ -108,8 +108,8 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
               <TableHeader>
                 <TableRow>
                   <TableHead className="px-4 lg:px-6">Nama File</TableHead>
-                  <TableHead className="px-4 lg:px-6">Ukuran</TableHead>
-                  <TableHead className="px-4 lg:px-6">Lokasi</TableHead>
+                  <TableHead className="hidden px-4 sm:table-cell lg:px-6">Ukuran</TableHead>
+                  <TableHead className="hidden px-4 md:table-cell lg:px-6">Lokasi</TableHead>
                   <TableHead className="px-4 lg:px-6">Dibuat</TableHead>
                   <TableHead className="px-4 text-right lg:px-6">Aksi</TableHead>
                 </TableRow>
@@ -125,8 +125,8 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
                   initialBackups.map((b) => (
                     <TableRow key={b.filename}>
                       <TableCell className="px-4 font-mono text-xs lg:px-6">{b.filename}</TableCell>
-                      <TableCell className="px-4 tabular-nums lg:px-6">{formatSize(b.size)}</TableCell>
-                      <TableCell className="px-4 lg:px-6">
+                      <TableCell className="hidden px-4 tabular-nums sm:table-cell lg:px-6">{formatSize(b.size)}</TableCell>
+                      <TableCell className="hidden px-4 md:table-cell lg:px-6">
                         <div className="flex flex-wrap gap-1">
                           {b.local && (
                             <Badge variant="outline" className="gap-1">
