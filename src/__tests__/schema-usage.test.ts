@@ -73,8 +73,9 @@ const SEED_ONLY_COLUMNS: string[] = [
   "Attendance.checkInLongitude",
   "Attendance.checkOutLatitude",
   "Attendance.checkOutLongitude",
-  "CrmTicket.firstResponseAt",
-  "CrmTicket.resolvedAt",
+  // (CrmTicket.firstResponseAt/resolvedAt PERNAH di sini — ditutup bersama
+  // `updateTicket` yang mengisinya otomatis saat status berubah; guard
+  // berarah dua memerah saat perbaikan ini mendarat, lalu entri dibuang.)
 ].sort()
 
 /**
