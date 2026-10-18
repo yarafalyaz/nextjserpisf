@@ -7,7 +7,7 @@ import { ArrowRight } from "lucide-react"
 import { createBankTransfer } from "@/actions/bank-transfer.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/shadcn/input"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
@@ -33,8 +33,8 @@ export function BankTransferForm({
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
   const [fromAccountId, setFromAccountId] = useState("")
   const [toAccountId, setToAccountId] = useState("")
-  const [amount, setAmount] = useState("")
-  const [adminFee, setAdminFee] = useState("")
+  const [amount, setAmount] = useState<number | null>(null)
+  const [adminFee, setAdminFee] = useState<number | null>(null)
   const [feeAccountId, setFeeAccountId] = useState("")
   const [description, setDescription] = useState("")
 
@@ -47,7 +47,7 @@ export function BankTransferForm({
     label: `${account.code} - ${account.name}`,
   }))
 
-  const feeNumber = Number((adminFee || "0").replace(",", ".")) || 0
+  const feeNumber = adminFee ?? 0
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -57,8 +57,8 @@ export function BankTransferForm({
         formData.set("date", date)
         formData.set("fromAccountId", fromAccountId)
         formData.set("toAccountId", toAccountId)
-        formData.set("amount", amount)
-        formData.set("adminFee", adminFee || "0")
+        formData.set("amount", amount === null ? "" : String(amount))
+        formData.set("adminFee", adminFee === null ? "0" : String(adminFee))
         formData.set("feeAccountId", feeAccountId)
         formData.set("description", description)
 
@@ -86,12 +86,10 @@ export function BankTransferForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="amount">Nominal Transfer *</Label>
-          <Input
+          <CurrencyInput
             id="amount"
-            name="amount"
-            inputMode="decimal"
             value={amount}
-            onChange={(event) => setAmount(event.target.value)}
+            onChange={setAmount}
             placeholder="0"
             required
           />
@@ -121,12 +119,10 @@ export function BankTransferForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="adminFee">Biaya Admin</Label>
-          <Input
+          <CurrencyInput
             id="adminFee"
-            name="adminFee"
-            inputMode="decimal"
             value={adminFee}
-            onChange={(event) => setAdminFee(event.target.value)}
+            onChange={setAdminFee}
             placeholder="0"
           />
         </div>

@@ -12,6 +12,7 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { parseMoneyAmount } from "@/lib/utils/parse-money"
 
 const REVALIDATE = "/keuangan/penyetoran-pajak"
 
@@ -26,8 +27,7 @@ function toMoney(value: number): Prisma.Decimal {
 }
 
 function parseAmount(raw: FormDataEntryValue | null): number | null {
-  const value = Number(String(raw ?? "").replace(",", "."))
-  return Number.isFinite(value) ? value : null
+  return parseMoneyAmount(raw)
 }
 
 function parseId(raw: FormDataEntryValue | null): number | null {

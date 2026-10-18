@@ -7,6 +7,7 @@ import { ArrowRight } from "lucide-react"
 import { createTaxPayment } from "@/actions/tax-payment.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -36,7 +37,7 @@ export function TaxPaymentForm({
   const [taxTypeId, setTaxTypeId] = useState("")
   const [taxAccountId, setTaxAccountId] = useState("")
   const [paymentAccountId, setPaymentAccountId] = useState("")
-  const [amount, setAmount] = useState("")
+  const [amount, setAmount] = useState<number | null>(null)
   const [reference, setReference] = useState("")
   const [notes, setNotes] = useState("")
 
@@ -50,7 +51,7 @@ export function TaxPaymentForm({
         formData.set("taxTypeId", taxTypeId)
         formData.set("taxAccountId", taxAccountId)
         formData.set("paymentAccountId", paymentAccountId)
-        formData.set("amount", amount)
+        formData.set("amount", amount === null ? "" : String(amount))
         formData.set("reference", reference)
         formData.set("notes", notes)
 
@@ -101,15 +102,7 @@ export function TaxPaymentForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="amount">Jumlah Setor *</Label>
-          <Input
-            id="amount"
-            name="amount"
-            inputMode="decimal"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            placeholder="0"
-            required
-          />
+          <CurrencyInput id="amount" value={amount} onChange={setAmount} placeholder="0" required />
         </div>
 
         <div className="flex flex-col gap-1.5">

@@ -11,21 +11,13 @@ import { nextSlug } from "@/lib/utils/slug-db"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { DocumentSequenceService } from "@/lib/services/document-sequence.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { parseMoneyAmount } from "@/lib/utils/parse-money"
 
 const REVALIDATE = "/keuangan/transfer-bank"
 
 function parseId(raw: FormDataEntryValue | null): number | null {
   const value = Number(String(raw ?? ""))
   return Number.isSafeInteger(value) && value > 0 ? value : null
-}
-
-/** Terima "1.000,50" maupun "1000.50"; kosong → null. */
-function parseAmount(raw: FormDataEntryValue | null): number | null {
-  const text = String(raw ?? "").trim()
-  if (!text) return null
-  const normalized = text.includes(",") ? text.replace(/\./g, "").replace(",", ".") : text
-  const value = Number(normalized)
-  return Number.isFinite(value) ? value : null
 }
 
 function decimal(value: number): Prisma.Decimal {
@@ -63,12 +55,12 @@ export async function createBankTransfer(formData: FormData) {
       return { success: false, error: "Rekening asal dan tujuan tidak boleh sama." }
     }
 
-    const amount = parseAmount(formData.get("amount"))
+    const amount = parseMoneyAmount(formData.get("amount"))
     if (amount === null || amount <= 0) {
       return { success: false, error: "Nominal transfer harus lebih dari 0." }
     }
 
-    const adminFee = parseAmount(formData.get("adminFee")) ?? 0
+    const adminFee = parseMoneyAmount(formData.get("adminFee")) ?? 0
     if (adminFee < 0) {
       return { success: false, error: "Biaya admin tidak boleh negatif." }
     }

@@ -8,17 +8,10 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
+import { parseMoneyAmount } from "@/lib/utils/parse-money"
 
 const REVALIDATE = "/keuangan/giro"
 const STATUSES = new Set(["pending", "cleared", "cancelled"])
-
-function parseAmount(raw: FormDataEntryValue | null): number | null {
-  const text = String(raw ?? "").trim()
-  if (!text) return null
-  const normalized = text.includes(",") ? text.replace(/\./g, "").replace(",", ".") : text
-  const value = Number(normalized)
-  return Number.isFinite(value) ? value : null
-}
 
 export async function createCheque(formData: FormData) {
   try {
@@ -32,7 +25,7 @@ export async function createCheque(formData: FormData) {
     const accountIdRaw = Number(formData.get("accountId"))
     const accountId = Number.isSafeInteger(accountIdRaw) && accountIdRaw > 0 ? accountIdRaw : null
 
-    const amount = parseAmount(formData.get("amount"))
+    const amount = parseMoneyAmount(formData.get("amount"))
     if (amount === null || amount <= 0) {
       return { success: false, error: "Nominal giro/cek harus lebih dari 0." }
     }

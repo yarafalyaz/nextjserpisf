@@ -7,6 +7,7 @@ import { BadgeCheck, Ban, Trash2 } from "lucide-react"
 import { createCheque, deleteCheque, updateChequeStatus } from "@/actions/cheque.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -57,7 +58,7 @@ export function ChequeManager({
   const [number, setNumber] = useState("")
   const [party, setParty] = useState("")
   const [accountId, setAccountId] = useState("")
-  const [amount, setAmount] = useState("")
+  const [amount, setAmount] = useState<number | null>(null)
   const [dueDate, setDueDate] = useState(toLocalDateOnly(new Date()))
   const [notes, setNotes] = useState("")
 
@@ -76,7 +77,7 @@ export function ChequeManager({
         formData.set("number", number)
         formData.set("party", party)
         formData.set("accountId", accountId)
-        formData.set("amount", amount)
+        formData.set("amount", amount === null ? "" : String(amount))
         formData.set("dueDate", dueDate)
         formData.set("notes", notes)
 
@@ -88,7 +89,7 @@ export function ChequeManager({
         showSuccess("Giro/cek dicatat")
         setNumber("")
         setParty("")
-        setAmount("")
+        setAmount(null)
         setNotes("")
         router.refresh()
       } catch (error) {
@@ -182,7 +183,7 @@ export function ChequeManager({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="cheque-amount">Nominal *</Label>
-            <Input id="cheque-amount" inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} placeholder="0" required />
+            <CurrencyInput id="cheque-amount" value={amount} onChange={setAmount} placeholder="0" required />
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker label="Jatuh Tempo *" name="dueDate" value={dueDate} onChange={setDueDate} />
