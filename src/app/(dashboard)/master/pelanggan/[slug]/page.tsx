@@ -84,17 +84,17 @@ export default async function CustomerDetailPage({
       />
 
       <DetailTabs
-        ariaLabel="Customer detail tabs"
+        ariaLabel="Tab detail pelanggan"
         tabs={[
           {
             id: "info",
             label: "Info",
             content: (
               <DetailCard>
-                <DetailField label="Email" value={customer.email || "-"} />
+                <DetailField label="Surel" value={customer.email || "-"} />
                 <DetailField label="Telepon" value={customer.phone || "-"} />
                 <DetailField label="Kota" value={customer.city || "-"} />
-                <DetailField label="Contact Person" value={customer.contactPerson || "-"} />
+                <DetailField label="Narahubung" value={customer.contactPerson || "-"} />
                 <DetailField label="Terdaftar" value={formatDate(customer.createdAt)} />
                 <DetailField label="Alamat" value={customer.address || "-"} colSpan="full" />
               </DetailCard>
@@ -102,16 +102,16 @@ export default async function CustomerDetailPage({
           },
           {
             id: "quotations",
-            label: `Quotations (${customer.quotations.length})`,
+            label: `Penawaran (${customer.quotations.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Quotation Terbaru</h2>
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Penawaran Terbaru</h2>
                   <Link href={`/penjualan/penawaran?cari=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {customer.quotations.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada quotation</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada penawaran</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -138,16 +138,16 @@ export default async function CustomerDetailPage({
           },
           {
             id: "invoices",
-            label: `Invoices (${customer.salesInvoices.length})`,
+            label: `Faktur (${customer.salesInvoices.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Invoice Terbaru</h2>
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Faktur Terbaru</h2>
                   <Link href={`/penjualan/faktur?cari=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
                 <div className="p-4 px-5">
                   {customer.salesInvoices.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada invoice</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada faktur</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -176,7 +176,7 @@ export default async function CustomerDetailPage({
           },
           {
             id: "projects",
-            label: `Projects (${customer.projects.length})`,
+            label: `Proyek (${customer.projects.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -212,7 +212,7 @@ export default async function CustomerDetailPage({
           },
           {
             id: "vehicles",
-            label: `Vehicles (${customer.customerVehicles.length})`,
+            label: `Kendaraan (${customer.customerVehicles.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -233,7 +233,7 @@ export default async function CustomerDetailPage({
                       <DetailTableBody>
                         {customer.customerVehicles.map((cv) => (
                           <DetailTableRow key={cv.id}>
-                            <DetailTableTd>{cv.vehicle?.variant?.name || `Vehicle #${cv.vehicleId}`}</DetailTableTd>
+                            <DetailTableTd>{cv.vehicle?.variant?.name || `Kendaraan #${cv.vehicleId}`}</DetailTableTd>
                             <DetailTableTd className="font-mono">{cv.plateNumber || "-"}</DetailTableTd>
                             <DetailTableTd>{cv.vehicle?.year || "-"}</DetailTableTd>
                             <DetailTableTd>{cv.color || "-"}</DetailTableTd>

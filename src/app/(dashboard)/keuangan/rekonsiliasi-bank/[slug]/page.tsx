@@ -63,7 +63,6 @@ export default async function BankReconciliationDetailPage({
           </span>
         } />
         <DetailField label="Item Tercocok" value={`${matched} / ${recon.items.length}`} />
-        <DetailField label="Status" value={<StatusChip status={recon.status} />} />
         <DetailField label="Dibuat" value={formatDate(recon.createdAt)} />
       </DetailCard>
     </div>

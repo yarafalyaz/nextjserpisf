@@ -122,7 +122,7 @@ export default async function BankStatementDetailPage({
       />
 
       <DetailCard>
-        <DetailField label="Akun Bank" value={account ? `${account.code} - ${account.name}` : `Account #${stmt.accountId}`} />
+        <DetailField label="Akun Bank" value={account ? `${account.code} - ${account.name}` : `No. Rekening ${stmt.accountId}`} />
         <DetailField label="Tanggal" value={formatDate(stmt.date)} />
         <DetailField label="Referensi" value={stmt.reference || "-"} />
         <DetailField label="Dibuat" value={formatDate(stmt.createdAt)} />

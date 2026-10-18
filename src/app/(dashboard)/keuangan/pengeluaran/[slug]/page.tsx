@@ -113,10 +113,6 @@ export default async function ExpenseDetailPage({
         <DetailField label="Kategori" value={expense.category?.label || "-"} />
         <DetailField label="Vendor" value={expense.vendor?.name || "-"} />
         <DetailField
-          label="Status"
-          value={<StatusChip status={expense.status} />}
-        />
-        <DetailField
           label="Akun Biaya"
           value={
             expense.accountId != null

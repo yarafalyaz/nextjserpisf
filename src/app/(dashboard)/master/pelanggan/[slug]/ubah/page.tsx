@@ -48,7 +48,20 @@ export default async function EditCustomerPage({
       </div>
       <CustomerForm
         customer={{
-          ...customer,
+          id: customer.id,
+          name: customer.name,
+          email: customer.email,
+          phone: customer.phone,
+          address: customer.address,
+          city: customer.city,
+          province: customer.province,
+          district: customer.district,
+          village: customer.village,
+          postalCode: customer.postalCode,
+          contactPerson: customer.contactPerson,
+          gender: customer.gender,
+          code: customer.code,
+          taxId: customer.taxId,
           customerCategoryId: customer.customerCategoryId,
         }}
         categories={categories}
