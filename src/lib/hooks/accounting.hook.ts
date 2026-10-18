@@ -615,7 +615,12 @@ export async function onSalesPaymentCreated(
   const existing = await db.journal.findFirst({
     where: { referenceType: "SalesPayment", referenceId: paymentId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pembayaran jual #${paymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   // PPh yang dipotong pelanggan: kas yang diterima (amount) lebih kecil dari
   // pelunasan piutang (amount + potongan), dan selisihnya menjadi PPh dibayar
@@ -640,7 +645,12 @@ export async function onSalesPaymentCreated(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesPayment", referenceId: paymentId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pembayaran jual #${paymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PAY", paymentId);
 
@@ -731,7 +741,12 @@ export async function onPurchaseOrderReceived(
   const existing = await db.journal.findFirst({
     where: { referenceType: "PurchaseOrder", referenceId: orderId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pesanan beli #${orderId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(order.date, txClient);
 
@@ -745,7 +760,12 @@ export async function onPurchaseOrderReceived(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "PurchaseOrder", referenceId: orderId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pesanan beli #${orderId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PO-RCV", orderId);
 
@@ -846,7 +866,12 @@ export async function onExpenseApproved(
   const existing = await db.journal.findFirst({
     where: { referenceType: "Expense", referenceId: expenseId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pengeluaran #${expenseId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(expense.date ?? new Date(), txClient);
 
@@ -860,7 +885,12 @@ export async function onExpenseApproved(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "Expense", referenceId: expenseId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pengeluaran #${expenseId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "EXP", expenseId);
 
@@ -929,7 +959,12 @@ export async function onPettyCashCreated(
   const existing = await db.journal.findFirst({
     where: { referenceType: "PettyCash", referenceId: pettyCashId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] kas kecil #${pettyCashId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   // Use the authoritative transaction date. `date` is the user-input transaction
   // date and is always populated; `transactionDate` is an optional legacy field
@@ -950,7 +985,12 @@ export async function onPettyCashCreated(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "PettyCash", referenceId: pettyCashId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] kas kecil #${pettyCashId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PC", pettyCashId);
     const isInflow = pettyCash.type === "IN";
@@ -1075,7 +1115,12 @@ export async function onSalesReturnCompleted(
   const existing = await db.journal.findFirst({
     where: { referenceType: "SalesReturn", referenceId: returnId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   // Revenue side valued at the selling price (reduces A/R by what was invoiced);
   // goods come back into inventory at cost. The margin nets into the Sales Return
@@ -1100,7 +1145,12 @@ export async function onSalesReturnCompleted(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesReturn", referenceId: returnId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "SR", returnId);
 
@@ -1200,7 +1250,12 @@ export async function onPurchaseReturnProcessed(
   const existing = await db.journal.findFirst({
     where: { referenceType: "PurchaseReturn", referenceId: returnId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] retur beli #${returnId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   // AP relief = agreed return price (what the vendor credits back).
   const totalAmount = purchaseReturn.items.reduce(
@@ -1233,7 +1288,12 @@ export async function onPurchaseReturnProcessed(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "PurchaseReturn", referenceId: returnId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] retur beli #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PR", returnId);
 
@@ -1361,7 +1421,12 @@ export async function onDownPaymentReceived(
   const existing = await db.journal.findFirst({
     where: { referenceType: "DownPayment", referenceId: dpId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] uang muka #${dpId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(dp.paymentDate || new Date(), txClient);
 
@@ -1375,7 +1440,12 @@ export async function onDownPaymentReceived(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "DownPayment", referenceId: dpId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] uang muka #${dpId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "DP", dpId);
 
@@ -1440,7 +1510,12 @@ export async function onVendorBillPosted(
   const existing = await db.journal.findFirst({
     where: { referenceType: "VendorBill", referenceId: billId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] tagihan vendor #${billId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(bill.date, txClient);
 
@@ -1518,7 +1593,12 @@ export async function onVendorBillPosted(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "VendorBill", referenceId: billId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] tagihan vendor #${billId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     // Fix: Re-fetch the bill inside the transaction under a lock to prevent
     // stale data from being used in the journal.
@@ -1684,7 +1764,12 @@ export async function onVendorPaymentCreated(
   const existing = await db.journal.findFirst({
     where: { referenceType: "VendorPayment", referenceId: paymentId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pembayaran vendor #${paymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(payment.paymentDate || new Date(), txClient);
 
@@ -1693,7 +1778,12 @@ export async function onVendorPaymentCreated(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "VendorPayment", referenceId: paymentId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pembayaran vendor #${paymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "VP", paymentId);
 
@@ -1772,7 +1862,12 @@ export async function onPayrollPaid(
   const existing = await db.journal.findFirst({
     where: { referenceType: "Payroll", referenceId: payrollId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   const payroll = await db.payroll.findUniqueOrThrow({
     where: { id: payrollId },
@@ -1843,7 +1938,12 @@ export async function onPayrollPaid(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "Payroll", referenceId: payrollId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PAY", payrollId);
 
@@ -1967,7 +2067,12 @@ export async function onEmployeeLoanDisbursed(
   const existing = await db.journal.findFirst({
     where: { referenceType: "EmployeeLoan", referenceId: loanId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pinjaman karyawan #${loanId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(loan.loanDate || new Date(), txClient);
 
@@ -1975,7 +2080,12 @@ export async function onEmployeeLoanDisbursed(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "EmployeeLoan", referenceId: loanId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pinjaman karyawan #${loanId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "LOAN", loanId);
 

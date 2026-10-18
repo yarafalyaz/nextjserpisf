@@ -41,14 +41,24 @@ export async function onExpenseApprovedSyncPettyCash(
   const existing = await prisma.pettyCash.findFirst({
     where: { referenceNo: expense.documentNo },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[expense.hook] expense ${expense.documentNo ?? expenseId} sudah punya kas kecil ${existing.documentNo} — sinkron dilewati`,
+    );
+    return;
+  }
 
   const documentNo = await generateDocumentNumber("PC");
 
   await prisma.$transaction(async (tx) => {
     // Re-check inside the transaction to avoid a duplicate under concurrency.
     const dup = await tx.pettyCash.findFirst({ where: { referenceNo: expense.documentNo }, select: { id: true } });
-    if (dup) return;
+    if (dup) {
+      console.info(
+        `[expense.hook] expense ${expense.documentNo ?? expenseId} sudah punya kas kecil di dalam transaksi — sinkron dilewati`,
+      );
+      return;
+    }
 
     await tx.pettyCash.create({
       data: {
