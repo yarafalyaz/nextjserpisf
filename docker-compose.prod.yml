@@ -1,6 +1,24 @@
 services:
+  # One-shot migration step: run explicitly on every release BEFORE starting
+  # app (`docker compose -f docker-compose.prod.yml up migrate`), never as
+  # part of the app boot. `migrate deploy` fails the release when the chain
+  # cannot apply — the app never boots on a half-migrated schema.
+  # IMAGE_TAG is pinned per release (see scripts/build-amd64.sh); it must
+  # never be `latest` so a release can always roll back to an exact build.
+  migrate:
+    image: yekristanto/silengkap:${IMAGE_TAG}
+    container_name: silengkap_migrate
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Jakarta
+      - DATABASE_URL=mysql://${DB_USER:-silengkap_user}@db:3306/${DB_NAME:-silengkap}
+    command: ["sh", "-c", "npx prisma migrate deploy"]
+    depends_on:
+      db:
+        condition: service_healthy
   app:
-    image: yekristanto/silengkap:latest
+    image: yekristanto/silengkap:${IMAGE_TAG}
     container_name: silengkap_app
     restart: unless-stopped
     env_file:

@@ -2,7 +2,10 @@
 
 # Configuration
 IMAGE_NAME="yekristanto/silengkap"
-TAG="latest"
+# Immutable per-release tag (date + short SHA) so production can pin an exact
+# build and roll back to it. `latest` keeps moving and is never referenced
+# by docker-compose.prod.yml.
+TAG="$(date +%Y%m%d)-$(git rev-parse --short HEAD)"
 
 echo "============================================="
 echo "Building & Pushing Docker Image for linux/amd64 (SumoPod)"

@@ -55,5 +55,8 @@ USER nextjs
 
 EXPOSE 3000
 
-# Start the application running migrations first
-CMD ["sh", "-c", "npx prisma db push && node server.js"]
+# Start the application only. Schema changes run in the one-shot `migrate`
+# service (docker-compose.prod.yml), never on every container boot — a
+# restart must not rewrite the production schema, and a failed migration
+# must stop the release instead of booting a half-migrated app.
+CMD ["sh", "-c", "node server.js"]
