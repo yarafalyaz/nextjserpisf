@@ -86,3 +86,14 @@ describe("halaman penerimaan menautkan ke tagihannya", () => {
     expect(page).toMatch(/referenceType:\s*\{\s*in:/);
   });
 });
+
+describe("halaman tagihan bisa dikonfirmasi dari detail (bukan cuma dari tabel)", () => {
+  const page = read("src/app/(dashboard)/pembelian/tagihan/[slug]/page.tsx");
+
+  it("menawarkan tombol Konfirmasi saat draft", () => {
+    // confirmVendorBill memposting jurnal utang — sebelumnya hanya ada di
+    // tabel daftar, sehingga detail tagihan draft adalah jalan buntu.
+    expect(page).toMatch(/confirmVendorBill/);
+    expect(page).toMatch(/bill\.status === "draft"/);
+  });
+});
