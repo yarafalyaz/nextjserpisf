@@ -46,7 +46,7 @@ function assertApprovalPermission(
   user: { roles?: string[]; permissions?: string[]; isActive?: boolean },
   referenceType: string,
 ): void {
-  if (user.isActive === false) throw new Error("Unauthorized");
+  if (user.isActive === false) throw new Error("Sesi berakhir. Silakan masuk kembali.");
   if (user.roles?.includes("super_admin")) return;
   const permissions = user.permissions ?? [];
   const referencePermission = APPROVAL_REFERENCE_PERMISSIONS[referenceType];
@@ -137,7 +137,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
     await assertCSRF();
     const session = await auth();
     const user = session?.user;
-    if (!user) throw new Error("Unauthorized");
+    if (!user) throw new Error("Sesi berakhir. Silakan masuk kembali.");
 
     const parsed = parseFormData(approveStepSchema, formData);
     if (!parsed.success) throw new Error(parsed.error);
@@ -272,7 +272,7 @@ export async function rejectStep(approvalId: number, formData: FormData) {
     await assertCSRF();
     const session = await auth();
     const user = session?.user;
-    if (!user) throw new Error("Unauthorized");
+    if (!user) throw new Error("Sesi berakhir. Silakan masuk kembali.");
 
     const parsed = parseFormData(rejectStepSchema, formData);
     if (!parsed.success) throw new Error(parsed.error);
@@ -378,7 +378,7 @@ export async function reopenApproval(approvalId: number) {
     await assertCSRF();
     const session = await auth();
     const user = session?.user;
-    if (!user) throw new Error("Unauthorized");
+    if (!user) throw new Error("Sesi berakhir. Silakan masuk kembali.");
 
     let refType = "";
     let refId = 0;

@@ -34,7 +34,7 @@ export async function createQuotation(formData: FormData) {
 
   const raw = formData.get("data") as string
   const data = safeJsonParse(raw) as any
-  if (!data) throw new Error("Invalid quotation data")
+  if (!data) throw new Error("Data penawaran tidak valid")
 
   const documentNo = await generateDocumentNumber("QUO")
   const slug = await nextSlug("quotation", documentNo)
