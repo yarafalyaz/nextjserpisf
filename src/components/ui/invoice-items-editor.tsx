@@ -537,16 +537,22 @@ export function InvoiceItemsEditor({
                     <span className="block text-sm font-semibold text-foreground">{formatCurrency(item.total)}</span>
                   </div>
                   <div>
-                    <span className="block text-xs text-muted-foreground mb-1">Harga</span>
+                    <label className="block text-xs text-muted-foreground mb-1" htmlFor={`m-invoice-item-price-${i}`}>
+                      Harga
+                    </label>
                     <CurrencyInput
+                      id={`m-invoice-item-price-${i}`}
                       value={item.unitPrice}
                       onChange={(v) => updateItem(i, "unitPrice", v)}
                       className="form-input w-full text-right text-sm"
                     />
                   </div>
                   <div>
-                    <span className="block text-xs text-muted-foreground mb-1">Diskon</span>
+                    <label className="block text-xs text-muted-foreground mb-1" htmlFor={`m-invoice-item-discount-${i}`}>
+                      Diskon
+                    </label>
                     <CurrencyInput
+                      id={`m-invoice-item-discount-${i}`}
                       value={item.discount}
                       onChange={(v) => updateItem(i, "discount", v)}
                       className="form-input w-full text-right text-sm"
@@ -697,6 +703,7 @@ export function InvoiceItemsEditor({
                     </td>
                     <td className="py-2 px-1 align-top">
                       <CurrencyInput
+                        aria-label={`Harga satuan baris ${i + 1}`}
                         value={item.unitPrice}
                         onChange={(v) => updateItem(i, "unitPrice", v)}
                         className="form-input w-full text-right text-sm"
@@ -704,6 +711,7 @@ export function InvoiceItemsEditor({
                     </td>
                     <td className="py-2 px-1 align-top">
                       <CurrencyInput
+                        aria-label={`Diskon baris ${i + 1}`}
                         value={item.discount}
                         onChange={(v) => updateItem(i, "discount", v)}
                         className="form-input w-full text-right text-sm"
@@ -775,6 +783,7 @@ export function InvoiceItemsEditor({
           <div className="flex items-center gap-3 text-sm">
             <span className="text-muted-foreground">Diskon Total:</span>
             <CurrencyInput
+              aria-label="Diskon total"
               value={discount}
               onChange={setDiscount}
               className="form-input w-32 text-right text-sm"

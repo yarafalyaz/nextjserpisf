@@ -94,4 +94,28 @@ describe("resolveCostingMethodForItem (receive vs sell must agree)", () => {
       await resolveCostingMethodForItem({ costingMethod: null, category: { costingMethod: null } }),
     ).toBe("average")
   })
+
+  it("nilai global tak dikenal MENOLAK dengan pesan Indonesia (fail-closed, bukan diam-diam fifo)", async () => {
+    const aksis = ["LIFO", "standar"]
+    for (const costingMethod of aksis) {
+      findFirst.mockResolvedValue({ costingMethod })
+      await expect(resolveCostingMethodForItem(null)).rejects.toThrow(
+        /Metode penetapan biaya global .* tidak dikenal/,
+      )
+      await expect(
+        resolveCostingMethodForItem({ costingMethod: null, category: { costingMethod: null } }),
+      ).rejects.toThrow(/harus "FIFO" atau "Average"/)
+    }
+  })
+
+  it("nilai global kosong tetap jatuh ke fifo (belum diset, bukan rusak)", async () => {
+    const aksis = ["", "  ", null]
+    for (const costingMethod of aksis) {
+      findFirst.mockResolvedValue({ costingMethod })
+      expect(await resolveCostingMethodForItem(null)).toBe("fifo")
+      expect(
+        await resolveCostingMethodForItem({ costingMethod: null, category: { costingMethod: null } }),
+      ).toBe("fifo")
+    }
+  })
 })

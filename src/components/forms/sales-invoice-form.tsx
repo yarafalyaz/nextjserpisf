@@ -292,12 +292,14 @@ export function SalesInvoiceForm({
                       <CurrencyInput
                         value={row.unitPrice}
                         onChange={(val) => updateRow(row.key, { unitPrice: Number(val) || 0 })}
+                        aria-label={`Harga satuan baris ${index + 1}`}
                       />
                     </td>
                     <td className="py-2 pr-3">
                       <CurrencyInput
                         value={row.discount}
                         onChange={(val) => updateRow(row.key, { discount: Number(val) || 0 })}
+                        aria-label={`Diskon baris ${index + 1}`}
                       />
                     </td>
                     <td className="py-2 pr-3 text-right tabular-nums">{formatCurrency(lineTotal(row))}</td>

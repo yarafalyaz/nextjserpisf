@@ -180,6 +180,39 @@ describe("inventory-fifo", () => {
       expect(result.consumedCost).toBe(130);
     });
 
+    it("jalur posting faktur MEMBACA pengaturan global: global average dipakai saat item/kategori kosong", async () => {
+      const tx = mockTx({
+        costingMethod: null,
+        categoryMethod: null,
+        globalMethod: "average",
+        layers: [
+          { id: 1, remaining: 10, unitCost: 4, batchNumber: null },
+          { id: 2, remaining: 30, unitCost: 6, batchNumber: null },
+        ],
+      });
+
+      const result = await consumeFifoLayers(tx, { itemId: 1, qty: 20 });
+
+      // Rata-rata tertimbang: (10*4 + 30*6) / 40 = 5,5 → 20*5,5 = 110.
+      // FIFO menghasilkan 10*4 + 10*6 = 100 — bila tes ini merah dengan 100,
+      // jalur posting mengabaikan pengaturan global (hardcode FIFO).
+      expect(result.consumedCost).toBe(110);
+      expect(result.shortfall).toBe(0);
+    });
+
+    it("jalur posting faktur MENOLAK saat pengaturan global tak dikenal (fail-closed, pesan Indonesia)", async () => {
+      const tx = mockTx({
+        costingMethod: null,
+        categoryMethod: null,
+        globalMethod: "LIFO",
+        layers: [{ id: 1, remaining: 100, unitCost: 5, batchNumber: null }],
+      });
+
+      await expect(consumeFifoLayers(tx, { itemId: 1, qty: 10 })).rejects.toThrow(
+        /Metode penetapan biaya global .* tidak dikenal/,
+      );
+    });
+
     it("throws when insufficient stock and allowShortfall is false", async () => {
       const tx = mockTx({
         layers: [{ id: 1, remaining: 5, unitCost: 10, batchNumber: null }],

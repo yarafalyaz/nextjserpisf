@@ -64,20 +64,38 @@ export interface CostingSettingsClient {
  * DB helper: read the company-wide default costing method. Callers that already
  * hold a transaction client should pass it so the read happens inside the same
  * transaction.
+ *
+ * Fail-closed on a CORRUPT value: `null`/blank means "unset" (fall back to
+ * `"fifo"`), but a non-blank value that is neither `"fifo"` nor `"average"`
+ * throws in Indonesian instead of silently valuing stock the wrong way. The
+ * invoice-posting path (`onSalesInvoicePosted` → `consumeFifoLayers`) resolves
+ * through here, so an unknown global setting aborts the posting loudly rather
+ * than booking HPP under the wrong method. Only a DB read failure falls back
+ * to `"fifo"` (degraded, deliberate — see the silent-failure allowlist).
  */
 export async function getGlobalCostingMethod(
   client: CostingSettingsClient = prisma as unknown as CostingSettingsClient,
 ): Promise<CostingMethod> {
+  let raw: string | null | undefined
   try {
     const settings = await client.systemSetting.findFirst({
       select: { costingMethod: true },
     })
-    return normalize(settings?.costingMethod) ?? "fifo"
+    raw = settings?.costingMethod
   } catch {
     // Settings table unavailable → fall back to the hard default rather than
     // failing an inventory movement.
     return "fifo"
   }
+  const hit = normalize(raw)
+  if (hit) return hit
+  if (raw != null && raw.trim() !== "") {
+    throw new Error(
+      `Metode penetapan biaya global "${raw}" tidak dikenal — harus "FIFO" atau "Average". ` +
+        `Perbaiki di Pengaturan → Umum sebelum memposting transaksi stok.`,
+    )
+  }
+  return "fifo"
 }
 
 /**

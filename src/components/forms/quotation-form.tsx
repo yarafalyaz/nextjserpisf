@@ -334,6 +334,7 @@ function SectionItemRow({
       <td>
         <div style={{ width: "130px" }}>
           <CurrencyInput
+            aria-label={`Harga satuan baris ${itemIndex + 1}`}
             value={watchedItem?.unitPrice || 0}
             onChange={(val) => {
               setValue(`${prefix}.unitPrice`, val)
@@ -371,6 +372,7 @@ function SectionItemRow({
               step="0.01"
               min="0"
               max="100"
+              aria-label={`Diskon persen baris ${itemIndex + 1}`}
               {...register(`${prefix}.discount`, { valueAsNumber: true })}
               className="form-input"
               style={{ fontSize: "0.8125rem", padding: "6px 8px", textAlign: "right", flex: 1 }}
@@ -383,6 +385,7 @@ function SectionItemRow({
             />
           ) : (
             <CurrencyInput
+              aria-label={`Diskon nominal baris ${itemIndex + 1}`}
               value={watchedItem?.discount ?? 0}
               onChange={(v) => {
                 setValue(`${prefix}.discount`, v)
@@ -472,6 +475,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
                 Berlaku untuk kedua prefix "Rp" di blok Total ini. */}
             <span className="totals-prefix" style={{ color: "var(--muted-foreground)" }}>Rp</span>
             <CurrencyInput
+              aria-label="Diskon total penawaran"
               value={discount}
               onChange={(v) => setValue("discount", v)}
               className="text-right"
@@ -484,6 +488,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
           <div className="totals-input">
             <span className="totals-prefix" style={{ color: "var(--muted-foreground)" }}>Rp</span>
             <CurrencyInput
+              aria-label="Pajak total penawaran"
               value={tax}
               onChange={(v) => setValue("tax", v)}
               className="text-right"

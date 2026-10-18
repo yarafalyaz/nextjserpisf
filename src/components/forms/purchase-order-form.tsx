@@ -555,6 +555,7 @@ export function PurchaseOrderForm({
                     </td>
                     <td>
                       <CurrencyInput
+                        aria-label={`Harga satuan baris ${index + 1}`}
                         value={poItem.unitPrice}
                         onChange={(v) => updateItem(index, "unitPrice", v)}
                         className="form-input"
