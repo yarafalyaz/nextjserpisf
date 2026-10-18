@@ -1154,6 +1154,31 @@ export async function completeSalesReturn(returnId: number) {
     throw new Error("Sales return sudah completed")
   }
 
+  // P1-1: identitas fisik wajib untuk item tracked. Tanpa serial/batch
+  // eksplisit, hook merevive serial "terbaru" dan layer tanpa batch — bukan
+  // identitas yang benar-benar kembali. Tolak di sini (sebelum mutasi) agar
+  // pesan jelas; hook memvalidasi ulang dalam tx.
+  const trackedIds = [...new Set(salesReturn.items.map((it) => it.itemId))]
+  if (trackedIds.length > 0) {
+    const trackedRows = await prisma.item.findMany({
+      where: { id: { in: trackedIds } },
+      select: { id: true, trackSerial: true, trackBatch: true },
+    })
+    const trackByItem = new Map(trackedRows.map((r) => [r.id, r]))
+    for (const it of salesReturn.items) {
+      const t = trackByItem.get(it.itemId)
+      if (!t) continue
+      const serials = Array.isArray(it.serialNumbers) ? (it.serialNumbers as unknown[]).filter((v) => String(v ?? "").trim()).length : 0
+      const batches = Array.isArray(it.batchNumbers) ? (it.batchNumbers as unknown[]).filter((v) => String(v ?? "").trim()).length : 0
+      if (t.trackSerial && serials === 0) {
+        throw new Error(`Item #${it.itemId} memakai pelacakan serial — sebutkan nomor seri yang benar-benar kembali.`)
+      }
+      if (t.trackBatch && batches === 0) {
+        throw new Error(`Item #${it.itemId} memakai pelacakan batch — sebutkan nomor batch yang benar-benar kembali.`)
+      }
+    }
+  }
+
   // Atomically process stock adjustment and post GL journal in a single transaction.
   await prisma.$transaction(async (tx) => {
     // Stock Move IN — the stock hook sets status to "completed" at the end. Do NOT
@@ -1174,6 +1199,21 @@ export async function completeSalesReturn(returnId: number) {
     console.error("[completeSalesReturn]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
+}
+
+/**
+ * P1-1: parse identitas fisik retur dari payload baris. Form mengirim
+ * `serialNumbers`/`batchNumbers` sebagai array string atau string koma-pisah.
+ * Kembalikan array bersih (unik, trim, tanpa kosong) atau undefined bila tak ada.
+ */
+function parseReturnIdentity(value: unknown): string[] | undefined {
+  const raw: unknown[] = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  const clean = [...new Set(raw.map((v) => String(v ?? "").trim()).filter((v) => v.length > 0))];
+  return clean.length ? clean : undefined;
 }
 
 export async function createSalesReturn(formData: FormData) {
@@ -1280,6 +1320,9 @@ export async function createSalesReturn(formData: FormData) {
             qty: Math.max(0.01, Number(item.qty) || 0),
             cost: returnCostMap.get(Number(item.itemId)) ?? 0,
             price: resolvePrice(Number(item.itemId)),
+            // P1-1: identitas fisik yang benar-benar kembali.
+            serialNumbers: parseReturnIdentity(item.serialNumbers),
+            batchNumbers: parseReturnIdentity(item.batchNumbers),
           })),
         },
       },
@@ -2256,6 +2299,9 @@ export async function updateSalesReturn(id: number, formData: FormData) {
               qty: Math.max(0.01, Number(item.qty) || 0),
               cost: updReturnCostMap.get(Number(item.itemId)) ?? 0,
               price: resolveUpdPrice(Number(item.itemId)),
+              // P1-1: identitas fisik yang benar-benar kembali.
+              serialNumbers: parseReturnIdentity(item.serialNumbers),
+              batchNumbers: parseReturnIdentity(item.batchNumbers),
             })),
         },
       },

@@ -1237,6 +1237,8 @@ model SalesReturnItem {
   qty           Decimal     @db.Decimal(15, 2)
   cost          Decimal     @default(0.00) @db.Decimal(15, 2)
   price         Decimal     @default(0.00) @db.Decimal(15, 2)
+  serialNumbers Json?       @map("serial_numbers")
+  batchNumbers  Json?       @map("batch_numbers")
   salesReturn   SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
 
   @@index([salesReturnId], map: "sales_return_items_sales_return_id_fkey")
@@ -1733,6 +1735,7 @@ model StockAdjustmentItem {
   unitCost          Decimal         @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
   totalCost         Decimal         @default(0.00) @map("total_cost") @db.Decimal(15, 2)
   serialNumbers     Json?           @map("serial_numbers")
+  batchNumbers      Json?           @map("batch_numbers")
   notes             String?
   stockAdjustment   StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
 

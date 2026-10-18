@@ -17,7 +17,7 @@ import { nextItemUid } from "@/lib/utils/item-uid"
 interface SalesReturnFormProps {
   invoices: { id: number; documentNo: string
 }[]
-  returnData?: { id: number; customerId?: number; salesInvoiceId: number; date: string; reason?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string }> }
+  returnData?: { id: number; customerId?: number; salesInvoiceId: number; date: string; reason?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string; serialNumbers?: string[]; batchNumbers?: string[] }> }
   customers: { id: number; name: string }[]
   items: { id: number; sku: string; name: string }[]
 }
@@ -25,6 +25,9 @@ interface SalesReturnFormProps {
 interface ReturnItem {
   itemId: number
   qty: number
+  /** Nomor seri/batch yang benar-benar kembali (koma-pisah). Wajib bila item tracked. */
+  serialNumbers: string
+  batchNumbers: string
   /** Kunci baris untuk React; dibuang sebelum dikirim ke server. */
   uid: string;
 }
@@ -40,21 +43,27 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
   // silently wipe all existing line items to a single empty row.
   const [returnItems, setReturnItems] = useState<ReturnItem[]>(
     returnData?.items && returnData.items.length > 0
-      ? returnData.items.map((it) => ({ itemId: it.itemId, qty: it.qty, uid: nextItemUid() }))
-      : [{ itemId: 0, qty: 1, uid: nextItemUid() }],
+      ? returnData.items.map((it) => ({
+          itemId: it.itemId,
+          qty: it.qty,
+          serialNumbers: (it.serialNumbers ?? []).join(", "),
+          batchNumbers: (it.batchNumbers ?? []).join(", "),
+          uid: nextItemUid(),
+        }))
+      : [{ itemId: 0, qty: 1, serialNumbers: "", batchNumbers: "", uid: nextItemUid() }],
   )
 
   function addItem() {
-    setReturnItems([...returnItems, { itemId: 0, qty: 1, uid: nextItemUid() }])
+    setReturnItems([...returnItems, { itemId: 0, qty: 1, serialNumbers: "", batchNumbers: "", uid: nextItemUid() }])
   }
 
   function removeItem(index: number) {
     setReturnItems(returnItems.filter((_, i) => i !== index))
   }
 
-  function updateItem(index: number, field: keyof ReturnItem, value: number) {
+  function updateItem(index: number, field: "itemId" | "qty" | "serialNumbers" | "batchNumbers", value: number | string) {
     const updated = [...returnItems]
-    updated[index] = { ...updated[index], [field]: value }
+    updated[index] = { ...updated[index], [field]: value } as ReturnItem
     setReturnItems(updated)
   }
 
@@ -142,6 +151,8 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
             <tr>
               <th>Item</th>
               <th style={{ width: "100px" }}>Jml</th>
+              <th>Serial (koma-pisah)</th>
+              <th>Batch (koma-pisah)</th>
               <th style={{ width: "40px" }}></th>
             </tr>
           </thead>
@@ -164,6 +175,28 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
                     aria-label={`Jumlah baris ${index + 1}`}
                     value={ri.qty}
                     onChange={(e) => updateItem(index, "qty", Math.max(1, Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 1))}
+                    className="form-input"
+                    style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    aria-label={`Serial baris ${index + 1}`}
+                    value={ri.serialNumbers}
+                    onChange={(e) => updateItem(index, "serialNumbers", e.target.value)}
+                    placeholder="SN-001, SN-002"
+                    className="form-input"
+                    style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="text"
+                    aria-label={`Batch baris ${index + 1}`}
+                    value={ri.batchNumbers}
+                    onChange={(e) => updateItem(index, "batchNumbers", e.target.value)}
+                    placeholder="LOT-1"
                     className="form-input"
                     style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
                   />

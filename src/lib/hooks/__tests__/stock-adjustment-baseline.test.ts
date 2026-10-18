@@ -37,9 +37,10 @@ vi.mock("@/lib/db/prisma", () => ({
 import { onStockAdjustmentProcessed } from "@/lib/hooks/stock-adjustment.hook"
 
 function wireTx(opts: {
-  items: Array<{ itemId: number; systemQty: number; actualQty: number; difference: number; unitCost: number; serialNumbers?: string[] }>
+  items: Array<{ itemId: number; systemQty: number; actualQty: number; difference: number; unitCost: number; serialNumbers?: string[]; batchNumbers?: string[] }>
   liveQty: Record<number, number>
   trackSerialItemIds?: number[]
+  trackBatchItemIds?: number[]
 }) {
   const spies = {
     queryRaw: vi.fn().mockResolvedValue([]),
@@ -56,9 +57,16 @@ function wireTx(opts: {
       Promise.resolve({ qtyOnHand: opts.liveQty[where.id] ?? 0 }),
     ),
     itemFindMany: vi.fn().mockImplementation(async ({ where }: { where: { id: { in: number[] } } }) =>
-      where.id.in.filter((id) => opts.trackSerialItemIds?.includes(id)).map((id) => ({ id, trackSerial: true })),
+      where.id.in.map((id: number) => ({
+        id,
+        trackSerial: opts.trackSerialItemIds?.includes(id) ?? false,
+        trackBatch: opts.trackBatchItemIds?.includes(id) ?? false,
+      })),
     ),
     serialCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    batchFindFirst: vi.fn().mockResolvedValue(null),
+    batchCreate: vi.fn().mockResolvedValue({}),
+    batchUpdate: vi.fn().mockResolvedValue({}),
     moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
     executeRaw: vi.fn().mockResolvedValue(1),
     adjUpdate: vi.fn().mockResolvedValue({ id: 50 }),
@@ -73,6 +81,7 @@ function wireTx(opts: {
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
     item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany },
     itemSerial: { createMany: spies.serialCreateMany },
+    itemBatch: { findFirst: spies.batchFindFirst, create: spies.batchCreate, update: spies.batchUpdate },
     inventoryLayer: {
       groupBy: vi.fn().mockImplementation(async ({ where }: { where?: { itemId?: { in?: number[] } } }) => {
         const ids: number[] = where?.itemId?.in ?? []
@@ -115,6 +124,34 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
       ],
     });
   });
+  it("creates the lot for a positive adjustment of a batch-tracked item (P1-1)", async () => {
+    const spies = wireTx({
+      items: [{ itemId: 9, systemQty: 0, actualQty: 6, difference: 6, unitCost: 50, batchNumbers: ["LOT-A"] }],
+      liveQty: { 9: 0 },
+      trackBatchItemIds: [9],
+    })
+
+    await onStockAdjustmentProcessed(50, 1)
+
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ batchNumber: "LOT-A", qty: 6 })
+    )
+    expect(spies.batchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ batchNumber: "LOT-A", qty: 6 }) })
+    )
+  })
+
+  it("rejects a positive adjustment of a batch-tracked item without a lot (P1-1)", async () => {
+    wireTx({
+      items: [{ itemId: 9, systemQty: 0, actualQty: 6, difference: 6, unitCost: 50 }],
+      liveQty: { 9: 0 },
+      trackBatchItemIds: [9],
+    })
+
+    await expect(onStockAdjustmentProcessed(50, 1)).rejects.toThrow(/batch/)
+  })
+
   it("applies delta against LIVE qtyOnHand, not the stored client baseline", async () => {
     // Client claimed systemQty=0 and difference=10 (actualQty=10). But the LIVE
     // on-hand is 8 (stock moved since the form was loaded). The real delta is
