@@ -7,7 +7,6 @@ import { createVendorPrice, updateVendorPrice } from "@/actions/vendor-price.act
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
-import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
@@ -119,15 +118,14 @@ export function VendorPriceForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="minQty">Minimal Jml *</Label>
-          <Input
+          <CurrencyInput
             id="minQty"
-            name="minQty"
-            inputMode="decimal"
-            value={minQty}
-            onChange={(event) => setMinQty(event.target.value)}
+            value={minQty === "" ? null : Number(minQty)}
+            onChange={(nilai) => setMinQty(String(nilai))}
             placeholder="1"
             required
           />
+          <input type="hidden" name="minQty" value={minQty} />
           <span className="text-xs text-muted-foreground">
             Harga berlaku untuk pembelian dengan jumlah minimal ini.
           </span>
