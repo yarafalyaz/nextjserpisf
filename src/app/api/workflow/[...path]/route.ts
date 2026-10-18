@@ -132,7 +132,10 @@ export async function POST(
           return apiError("INTERNAL_ERROR", "Gagal menginisiasi alur persetujuan")
         }
 
-        // Buka approval kalau ditolak: reset doc ke draft/pending + buat approval baru
+        // Buka approval kalau ditolak: reset doc ke draft + buat approval baru.
+        // catch mencatat konteks lalu menelan: updateMany ke model dinamis
+        // boleh gagal (model tak dikenal / kolom status beda) dan alur tetap
+        // lanjut — yang menentukan adalah fresh berstatus pending di bawah.
         if (approval.status === "rejected") {
           const delegateReopen = prisma[config.model as keyof typeof prisma] as any
           try {
@@ -140,7 +143,9 @@ export async function POST(
               where: { id, status: "rejected" },
               data: { status: "draft" },
             })
-          } catch {}
+          } catch (err) {
+            console.error(`[workflow] reset status ${config.model} #${id} gagal:`, err)
+          }
           await requestApprovalIfConfigured(modelType, id, Number(session.user.id))
           const fresh = await prisma.approval.findFirst({
             where: { referenceType: modelType, referenceId: id },

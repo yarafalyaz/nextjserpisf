@@ -142,9 +142,9 @@ export async function createCustomer(formData: FormData) {
 
     // quick-add upsert: if name + phone matches an active non-deleted customer, reuse it
     const rawNameCust = (formData.get("name") as string | null)?.trim()
-    const rawPhoneCust = (formData.get("phone") as string | null)?.trim() || (formData.get("phone") as string | null)
+    const rawPhoneCust = (formData.get("phone") as string | null)?.trim() || ""
     if (rawNameCust) {
-      const existing = await prisma.customer.findFirst({ where: { name: rawNameCust, deletedAt: null, isActive: true }, select: { id: true, slug: true } })
+      const existing = await prisma.customer.findFirst({ where: { name: rawNameCust, phone: rawPhoneCust || undefined, deletedAt: null, isActive: true }, select: { id: true, slug: true } })
       if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
     }
 

@@ -272,6 +272,7 @@ const ALLOWED_COMMENT_ONLY: Record<string, string> = {
 const ALLOWED_CONSOLE_ONLY: Record<string, string> = {
   "src/actions/purchase.actions.ts": "notifikasi admin bersifat eksternal dan tidak boleh menggagalkan PO — niatnya ada di komentar di atas try",
   "src/app/api/cron/route.ts": "penulisan log cron tidak boleh menggagalkan handler (niatnya tertulis di blok)",
+  "src/app/api/workflow/[...path]/route.ts": "reset status dokumen best-effort saat membuka ulang approval yang ditolak; yang menentukan adalah fresh berstatus pending tepat di bawahnya — kegagalan dilaporkan via console.error berkonteks",
   "src/components/reports/export-buttons.tsx": "kegagalan dilaporkan: console.error di dalam catch + showError tepat sesudahnya — pengguna diberi tahu, kop default tidak dipakai diam-diam",
   "src/lib/db/backup.ts": "unggah cloud best-effort; kegagalan cukup dilaporkan sebagai peringatan",
   "src/lib/services/activity-log.service.ts": "logging tidak boleh memutus alur utama (niatnya tertulis di blok)",

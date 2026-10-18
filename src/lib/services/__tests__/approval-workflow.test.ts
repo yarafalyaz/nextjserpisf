@@ -89,13 +89,24 @@ describe("approval-workflow.service", () => {
       expect(mocks.createApproval).not.toHaveBeenCalled();
     });
 
-    it("returns false when existing approval is rejected", async () => {
+    it("returns true and requeues when existing approval is rejected", async () => {
       mocks.findFirstWorkflow.mockResolvedValue({ id: 10 });
       mocks.findFirstApproval.mockResolvedValue({ id: 1, status: "rejected" });
+      mocks.createApproval.mockResolvedValue({ id: 2, status: "pending" });
 
       const result = await requestApprovalIfConfigured("Quotation", 5);
 
-      expect(result).toBe(false);
+      // Penolakan bukan akhir: layanan membuka ulang dengan membuat approval
+      // pending baru (dipakai jalur reopenApproval + route workflow).
+      expect(result).toBe(true);
+      expect(mocks.createApproval).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          workflowId: 10,
+          referenceType: "Quotation",
+          referenceId: 5,
+          status: "pending",
+        }),
+      });
     });
 
     it("sets requestedBy to null when not provided", async () => {

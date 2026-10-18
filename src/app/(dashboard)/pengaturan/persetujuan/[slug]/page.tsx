@@ -13,7 +13,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table";
-import { approveStep, rejectStep } from "@/actions/approval.actions";
+import { approveStep, rejectStep, reopenApproval } from "@/actions/approval.actions";
 import { APPROVAL_MODEL_LABELS } from "@/lib/constants/approval";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { SubmitButton } from "@/components/ui/submit-button";
@@ -49,6 +49,7 @@ export default async function ApprovalDetailPage({
 
   const approveWithId = approveStep.bind(null, approval.id);
   const rejectWithId = rejectStep.bind(null, approval.id);
+  const reopenWithId = reopenApproval.bind(null, approval.id);
 
   return (
     <div className="flex flex-col gap-6">
@@ -195,6 +196,33 @@ export default async function ApprovalDetailPage({
               >
                 Tolak
               </SubmitButton>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Reopen — hanya untuk approval yang ditolak.
+          reopenApproval mengembalikan { success } bukan void, jadi tidak bisa
+          dipakai sebagai formAction langsung: bungkus agar tipenya Promise<void>. */}
+      {approval.status === "rejected" && (
+        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden p-6">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground mb-4">
+            Tindakan
+          </h2>
+          <form
+            className="flex flex-col gap-4"
+            action={async () => {
+              "use server"
+              const result = await reopenWithId()
+              if (!result.success) throw new Error(result.error || "Gagal membuka ulang")
+            }}
+          >
+            <p className="text-sm text-muted-foreground">
+              Persetujuan ini ditolak. Buka ulang untuk mengembalikan dokumen ke
+              draf dan mengajukan persetujuan baru.
+            </p>
+            <div className="flex items-center gap-3">
+              <SubmitButton pendingLabel="Membuka...">Buka Ulang</SubmitButton>
             </div>
           </form>
         </div>
