@@ -139,8 +139,17 @@ export async function onSalesInvoicePosted(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.salesReceivableAccountId || !settings.salesRevenueAccountId)
-    return;
+  // JANGAN diam-diam menyerah di sini. Sebelumnya `return` polos, dan akibatnya
+  // terbukti pada basis data nyata: faktur berubah status menjadi POSTED sementara
+  // buku besar tidak menerima satu pun entri — tanpa error, tanpa peringatan, dan
+  // tidak terlihat dari UI. Posting yang gagal harus berisik.
+  if (!settings.salesReceivableAccountId || !settings.salesRevenueAccountId) {
+    throw new Error(
+      "Akun penjualan belum dipetakan (Piutang / Pendapatan). " +
+        "Atur di Pengaturan → Akun sebelum memposting faktur — tanpa itu faktur akan " +
+        "berstatus terposting tanpa entri buku sama sekali.",
+    );
+  }
 
   const invoice = await db.salesInvoice.findUniqueOrThrow({
     where: { id: invoiceId },

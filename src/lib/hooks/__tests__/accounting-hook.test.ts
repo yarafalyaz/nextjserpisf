@@ -378,10 +378,20 @@ describe("onSalesInvoicePosted", () => {
     );
   });
 
-  it("returns early if system settings are missing account mappings", async () => {
+  it("MELEMPAR galat bila mapping akun penjualan belum lengkap (dulu: diam-diam menyerah)", async () => {
+    // Perilaku lama: `return` polos. Akibatnya terbukti pada basis data nyata —
+    // faktur berubah status menjadi POSTED sementara buku besar TIDAK menerima entri
+    // apa pun, tanpa error dan tanpa peringatan. Posting yang gagal harus berisik.
     (mocks.systemSettings as any).salesReceivableAccountId = null;
-    await onSalesInvoicePosted(1);
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/Akun penjualan belum dipetakan/);
     expect(mocks.invoiceFindUniqueOrThrow).not.toHaveBeenCalled();
+  });
+
+  it("MELEMPAR galat juga bila hanya AKUN PENDAPATAN yang belum dipetakan", async () => {
+    // Kasus inilah yang benar-benar terjadi di basis data hasil seed: piutang ada,
+    // pendapatan BUKAN — sehingga seluruh posting faktur diam-diam tidak membukukan apa pun.
+    (mocks.systemSettings as any).salesRevenueAccountId = null;
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/Akun penjualan belum dipetakan/);
   });
 
   it("returns early if journal already exists (idempotency)", async () => {

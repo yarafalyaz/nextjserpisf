@@ -291,23 +291,46 @@ lalu faktur diposting ulang, jalur itu **gagal keras** dan status faktur tetap `
 — jadi aplikasi ini memang bisa gagal dengan berisik; yang salah adalah satu cabang
 yang memilih diam.
 
-**Rencana perbaikan (BELUM dikerjakan, sengaja):**
+**SUDAH DIPERBAIKI — dengan bukti dari aplikasi yang berjalan.**
 
-1. Isi mapping akun penjualan di setup/seed supaya posting benar-benar membukukan.
-2. Ganti `return` polos itu menjadi galat yang jelas (posting yang gagal harus berisik),
-   sekaligus membalik tes lama yang MENGUNCI perilaku diam itu
-   (`accounting-hook.test.ts`: "returns early if system settings are missing account mappings").
-3. Verifikasi: `onSalesInvoicePosted` dipanggil dari **lima tempat** —
-   `sales.actions.ts:857` (posting manual) dan `:1832` (ubah faktur yang sudah posted),
-   `down-payment.hook.ts:83` dan `:489`, serta `quotation-sync.service.ts:173`.
-   Membuatnya melempar galat TANPA mengisi mapping lebih dulu berarti kelima alur itu
-   bisa gagal di lingkungan yang belum dikonfigurasi. Perbaikan langkah 1 dan 2 harus
-   berjalan bersama, dan bukti "posting berhasil saat mapping lengkap" harus ada dulu
-   sebelum langkah 2 di-commit.
+Perbaikan yang dipasang:
 
-Bahan yang sudah siap (belum masuk repo): spec E2E `e2e/penjualan-posting-faktur.spec.ts`
-yang memposting faktur draft lewat UI, plus fixture blok 11 di
-`scripts/seed-remaining-e2e.ts` (produk berstok + faktur draft berslug tetap).
+1. **Seed E2E mengisi seluruh mapping**: `scripts/seed-remaining-e2e.ts` dulu hanya menulis
+   `salesReceivableAccountId` (itulah sebabnya pendapatan NULL). Kini juga menulis
+   `salesRevenueAccountId`, `cogsAccountId`, `inventoryAccountId`, dan
+   `purchaseInventoryAccountId` — dengan akun E2E-nya sendiri (E2E-4000, E2E-5103, E2E-1104).
+2. **`onSalesInvoicePosted` gagal berisik** bila piutang/pendapatan belum dipetakan,
+   bukan `return` senyap. Dua tes di `accounting-hook.test.ts` yang dulu MENGUNCI
+   perilaku diam itu kini menuntut galatnya (satu untuk piutang hilang, satu untuk
+   pendapatan hilang — kasus yang benar-benar terjadi).
+3. **Fixture posting** (blok 11 seed): produk berstok dengan **penerimaan barang (IN) +
+   lapisan FIFO**, lalu faktur draft berslug tetap `e2e-post-invoice-draft`.
+4. **Spec E2E** `penjualan-posting-faktur.spec.ts` menekan "Posting faktur ini?" — jalur
+   uang kini terjaga otomatis, bukan hanya cerita di dokumen.
+
+**Bukti setelah perbaikan** (aplikasi + MariaDB nyata, posting lewat UI):
+
+| Yang diperiksa | Hasil |
+|---|---|
+| Status faktur | `draft` → **`posted`** |
+| Jurnal `SalesInvoice` | 200.000 / 200.000, 2 baris — Dr Piutang, Cr Pendapatan |
+| Jurnal `SalesInvoiceCOGS` | 200.000 / 200.000, 2 baris — Dr HPP, Cr Persediaan |
+| `qty_on_hand` | 10 → **8** |
+| Lapisan FIFO | 10 → **8** |
+| Pergerakan stok | lahir, `OUT`, qty 2, status `posted` |
+
+### Jebakan kedua yang ditemukan: stok berasal dari LAPISAN, bukan `qty_on_hand`
+
+Percobaan pertama dengan mapping lengkap DITOLAK dengan pesan:
+*"Stok tidak mencukupi untuk 2 di gudang 2: butuh 2, tersedia 0"* — padahal item
+menampilkan stok 10. Sebabnya: ketersediaan dihitung dari `inventory_layers` (costing
+method FIFO), dan lapisan hanya lahir dari pergerakan stok yang nyata.
+
+Konsekuensi praktisnya penting: kalau stok pernah diisi dengan menulis `qty_on_hand`
+langsung (impor, seed, migrasi) tanpa penerimaan barang, penjualan akan ditolak sebagai
+"stok tidak mencukupi" meski item terlihat ada stoknya. Penjaganya benar; yang menjebak
+adalah cara stok masuk. Fixture E2E karena itu membuat **penerimaan barang + lapisan**,
+bukan sekadar menulis `qty_on_hand`.
 
 ## 8. Cara memverifikasi ulang
 

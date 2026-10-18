@@ -23,6 +23,14 @@ async function main() {
   const receivable = await ensureAccount("E2E-1100", "E2E Accounts Receivable", AccountType.ASSET);
   const payable = await ensureAccount("E2E-2100", "E2E Accounts Payable", AccountType.LIABILITY);
   const expenseAccount = await ensureAccount("E2E-5100", "E2E General Expense", AccountType.EXPENSE);
+  // Tiga akun ini WAJIB ada supaya posting faktur benar-benar membukukan.
+  // Sebelumnya seed hanya mengisi piutang, sementara `onSalesInvoicePosted` memerlukan
+  // piutang DAN pendapatan — kalau kurang, hook-nya berhenti diam-diam dan faktur
+  // berstatus `posted` tanpa satu pun entri buku. HPP & persediaan diperlukan supaya
+  // jurnal HPP + pengurangan stok ikut terbentuk.
+  const revenueAccount = await ensureAccount("E2E-4000", "E2E Sales Revenue", AccountType.REVENUE);
+  const cogsAccount = await ensureAccount("E2E-5103", "E2E Cost of Goods Sold", AccountType.EXPENSE);
+  const inventoryAccount = await ensureAccount("E2E-1104", "E2E Inventory", AccountType.ASSET);
 
   const settings = await prisma.systemSetting.findFirst();
   if (settings) {
@@ -31,7 +39,11 @@ async function main() {
       data: {
         cashBankAccountId: cash.id,
         salesReceivableAccountId: receivable.id,
+        salesRevenueAccountId: revenueAccount.id,
+        cogsAccountId: cogsAccount.id,
+        inventoryAccountId: inventoryAccount.id,
         purchasePayableAccountId: payable.id,
+        purchaseInventoryAccountId: inventoryAccount.id,
         purchaseExpenseAccountId: expenseAccount.id,
         generalExpenseAccountId: expenseAccount.id,
       },
@@ -42,7 +54,11 @@ async function main() {
         companyName: "Yara ERP",
         cashBankAccountId: cash.id,
         salesReceivableAccountId: receivable.id,
+        salesRevenueAccountId: revenueAccount.id,
+        cogsAccountId: cogsAccount.id,
+        inventoryAccountId: inventoryAccount.id,
         purchasePayableAccountId: payable.id,
+        purchaseInventoryAccountId: inventoryAccount.id,
         purchaseExpenseAccountId: expenseAccount.id,
         generalExpenseAccountId: expenseAccount.id,
       },
@@ -397,6 +413,98 @@ async function main() {
   }) ?? await prisma.vehicleVariant.create({
     data: { vehicleModelId: e2eModel.id, name: "E2E Varian", drivetrain: "FWD", transmission: "Manual" },
   });
+  // ─── 11. Produk BERSTOK + faktur DRAFT — prasyarat spec POSTING FAKTUR ───
+  // Jalur uang (piutang/pendapatan/HPP + pengurangan stok) baru berjalan saat faktur
+  // DIPOSTING, dan faktur bernilai tidak bisa dibuat lewat UI karena form faktur
+  // penjualan belum punya baris item. Ditaruh di sini (bukan blok 2) karena butuh
+  // gudang & rak dari blok 8.
+  const stockedItem = await prisma.item.upsert({
+    where: { sku: "E2E-POST-ITEM" },
+    update: {
+      qtyOnHand: 10,
+      defaultWarehouseId: e2eWarehouse.id,
+      defaultRackId: e2eRack.id,
+    },
+    create: {
+      sku: "E2E-POST-ITEM",
+      name: "E2E Produk Berstok",
+      unitOfMeasure: "PCS",
+      isProduct: true,
+      isService: false,
+      costingMethod: "average",
+      qtyOnHand: 10,
+      cost: 100000,
+      price: 200000,
+      isActive: true,
+      defaultWarehouseId: e2eWarehouse.id,
+      defaultRackId: e2eRack.id,
+    },
+  });
+
+  // Penerimaan barang (IN) + LAPISAN FIFO. Ini bukan pelengkap: ketersediaan stok
+  // dihitung dari `inventory_layers`, bukan dari `qtyOnHand`. Tanpa lapisan, posting
+  // menolak dengan "stok tidak mencukupi ... tersedia 0" walaupun item menampilkan
+  // stok 10 — dan itu benar, karena lapisan itulah yang mewakili stok yang benar-benar
+  // pernah diterima.
+  const receiptDocNo = "E2E-GR-POSTING";
+  let receipt = await prisma.stockMove.findUnique({ where: { documentNo: receiptDocNo } });
+  if (!receipt) {
+    receipt = await prisma.stockMove.create({
+      data: {
+        documentNo: receiptDocNo,
+        date: new Date("2026-06-01"),
+        moveType: "IN",
+        itemId: stockedItem.id,
+        warehouseId: e2eWarehouse.id,
+        qty: 10,
+        cost: 100000,
+        impact: "IN",
+        status: "posted",
+      },
+    });
+    await prisma.inventoryLayer.create({
+      data: {
+        itemId: stockedItem.id,
+        stockMoveId: receipt.id,
+        qtyIn: 10,
+        qtyOut: 0,
+        remaining: 10,
+        unitCost: 100000,
+        warehouseId: e2eWarehouse.id,
+      },
+    });
+  } else {
+    // Idempoten untuk basis data yang dipakai ulang: posting sebelumnya sudah
+    // memakan sebagian lapisan, jadi dipulihkan ke 10 supaya spec bisa diulang.
+    await prisma.inventoryLayer.updateMany({
+      where: { stockMoveId: receipt.id },
+      data: { qtyIn: 10, qtyOut: 0, remaining: 10 },
+    });
+    await prisma.item.update({ where: { id: stockedItem.id }, data: { qtyOnHand: 10 } });
+  }
+
+  // Idempoten: seed dijalankan berkali-kali tetap menyisakan SATU fixture draft.
+  await prisma.salesInvoice.deleteMany({ where: { slug: "e2e-post-invoice-draft" } });
+  const draftInvoice = await prisma.salesInvoice.create({
+    data: {
+      slug: "e2e-post-invoice-draft",
+      documentNo: await generateDocumentNumber("INV"),
+      customerId: customer.id,
+      date: new Date("2026-06-01"),
+      subtotal: 200000,
+      grandTotal: 200000,
+      totalAmount: 200000,
+      status: "draft",
+      paymentStatus: "unpaid",
+      items: {
+        create: [{ itemId: stockedItem.id, qty: 2, unitPrice: 100000, total: 200000, uom: "PCS" }],
+      },
+    },
+  });
+  console.log(
+    `11. Faktur DRAFT berstok siap diposting: ${draftInvoice.documentNo} (slug e2e-post-invoice-draft; stok 10 + lapisan FIFO 10, posting harus menyisakan 8) ✓`,
+  );
+
   console.log(`10. Kendaraan: ${e2eBrand.name} / ${e2eModel.name} / ${e2eVariant.name} ✓`);
   console.log("\n=== REMAINING CORE FLOWS E2E COMPLETE ===");
 }
