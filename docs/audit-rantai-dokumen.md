@@ -229,6 +229,39 @@ Diusulkan, **belum dikerjakan** (mengubah skema produksi bukan keputusan sepihak
 - **Jurnal transaksi berulang tetap `DRAFT`**: mengubahnya menjadi `POSTED` akan
   menambah angka buku besar tanpa bukti; jalur posting manusia ada di `postJournal`.
 
+## 8a. Bukti kelas-baru: aplikasi + basis data NYATA (bukan mock)
+
+Seluruh audit di atas dilakukan dengan membaca kode dan menjalankan tes satuan — itu
+membuktikan *sambungan ada*, bukan *sistem berjalan*. Bukti kelas berikutnya diambil
+dengan meniru resep CI secara lokal: MariaDB 10.11 bersih, `prisma migrate deploy`,
+kedua seed, build produksi, lalu **seluruh suite E2E** terhadap aplikasi yang benar-benar
+berjalan.
+
+Hasil (2026-10-18, satu mesin, satu basis data):
+
+- **1075 lulus, 0 gagal**, 3 flaky (lulus saat retry; semuanya kegagalan waktu di bawah
+  beban 2 worker, bukan logika — terbukti karena lulus saat diulang), 65 dilewati.
+- Jurnal hasil alur aplikasi (mis. `002/JRN/YAR/10/2026` yang tadinya DRAFT lalu
+  diposting lewat UI) **seimbang**: 250.000 debit = 250.000 kredit, 2 baris.
+- Audit integritas basis data sesudah suite: **nol pelanggaran** pada sembilan cek
+  (buku tidak seimbang, total tersimpan beda dari jumlah baris, jurnal POSTED tanpa
+  baris, entri yatim, stok beda dari pergerakan, faktur tanpa jurnal, total faktur
+  tidak konsisten, jurnal nol yang diposting, pergerakan menunjuk item hilang).
+
+### DUA CELAH BUKTI YANG TERSISA (temuan dari run ini, belum ditutup)
+
+1. **Posting faktur penjualan tidak pernah diuji end-to-end.** Tidak ada satu pun spec
+   yang menekan "Posting faktur ini?" — `sales-flow.spec.ts` hanya memastikan halaman
+   terbuka. Jalur uang (piutang, pendapatan, HPP) dan `onSalesInvoicePosted` hanya
+   terbukti oleh tes satuan dengan mock. Seed pun tidak menutupinya: seed menulis
+   `status: "posted"` LANGSUNG lewat Prisma, melewati hook, sehingga tidak ada jurnal
+   `SalesInvoice` di basis data mana pun.
+2. **Tidak ada alur E2E yang menghasilkan pergerakan stok.** Setelah seluruh suite,
+   `stock_moves` tetap **0 baris**. Jadi pengurangan stok, HPP, dan lapisan persediaan
+   belum pernah dilihat berjalan pada basis data nyata.
+
+Keduanya tentang rantai uang/persediaan — bagian yang paling mahal bila salah.
+
 ## 8. Cara memverifikasi ulang
 
 ```bash
