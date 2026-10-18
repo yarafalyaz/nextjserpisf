@@ -7,7 +7,7 @@ import { ArrowRight } from "lucide-react"
 import { createPurchaseAdvance } from "@/actions/purchase-advance.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/shadcn/input"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
@@ -36,7 +36,7 @@ export function PurchaseAdvanceForm({
 
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
   const [vendorId, setVendorId] = useState("")
-  const [amount, setAmount] = useState("")
+  const [amount, setAmount] = useState<number | null>(null)
   const [advanceAccountId, setAdvanceAccountId] = useState(
     defaultAdvanceAccountId ? String(defaultAdvanceAccountId) : "",
   )
@@ -60,7 +60,7 @@ export function PurchaseAdvanceForm({
         const formData = new FormData()
         formData.set("date", date)
         formData.set("vendorId", vendorId)
-        formData.set("amount", amount)
+        formData.set("amount", amount === null ? "" : String(amount))
         formData.set("advanceAccountId", advanceAccountId)
         formData.set("paymentAccountId", paymentAccountId)
         formData.set("description", description)
@@ -89,15 +89,7 @@ export function PurchaseAdvanceForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="amount">Jumlah Uang Muka *</Label>
-          <Input
-            id="amount"
-            name="amount"
-            inputMode="decimal"
-            value={amount}
-            onChange={(event) => setAmount(event.target.value)}
-            placeholder="0"
-            required
-          />
+          <CurrencyInput id="amount" value={amount} onChange={setAmount} placeholder="0" required />
         </div>
 
         <div className="flex flex-col gap-1.5">

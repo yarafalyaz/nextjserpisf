@@ -7,6 +7,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
+import { parseMoneyAmount } from "@/lib/utils/parse-money"
 
 const REVALIDATE = "/pembelian/harga-pemasok"
 
@@ -25,6 +26,11 @@ function parseNumber(raw: FormDataEntryValue | null, fallback: number | null = n
   if (text === "") return fallback
   const value = Number(text.replace(",", "."))
   return Number.isFinite(value) ? value : null
+}
+
+/** Money fields accept the id-ID shapes ("2.000.000", "2.000.000,50"). */
+function parseMoney(raw: FormDataEntryValue | null): number | null {
+  return parseMoneyAmount(raw)
 }
 
 function parseId(raw: FormDataEntryValue | null): number | null {
@@ -54,7 +60,7 @@ export async function createVendorPrice(formData: FormData): Promise<VendorPrice
     if (!vendorId) return { success: false, error: "Pemasok wajib dipilih." }
     if (!itemId) return { success: false, error: "Barang wajib dipilih." }
 
-    const price = parseNumber(formData.get("price"))
+    const price = parseMoney(formData.get("price"))
     if (price === null || price <= 0) return { success: false, error: "Harga harus lebih dari 0." }
 
     const minQty = parseNumber(formData.get("minQty"), 1) ?? 1
@@ -111,7 +117,7 @@ export async function updateVendorPrice(id: number, formData: FormData): Promise
     if (!vendorId) return { success: false, error: "Pemasok wajib dipilih." }
     if (!itemId) return { success: false, error: "Barang wajib dipilih." }
 
-    const price = parseNumber(formData.get("price"))
+    const price = parseMoney(formData.get("price"))
     if (price === null || price <= 0) return { success: false, error: "Harga harus lebih dari 0." }
 
     const minQty = parseNumber(formData.get("minQty"), 1) ?? 1

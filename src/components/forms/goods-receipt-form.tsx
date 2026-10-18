@@ -19,6 +19,7 @@ import {
   FormActions,
 } from "@/components/ui/form-section";
 import { Button } from "@/components/ui/button";
+import { CurrencyInput } from "@/components/ui/currency-input";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { allocateLandedCost } from "@/lib/services/landed-cost.service"
 import { formatCurrency } from "@/lib/utils/format"
@@ -253,14 +254,14 @@ export function GoodsReceiptForm({
     receipt?.date ?? toLocalDateOnly(new Date()),
   );
   // Actual landed costs for this receipt. Empty/0 → derive from the PO estimate.
-  const [shippingCost, setShippingCost] = useState<string>(
-    receipt?.shippingCost ? String(receipt.shippingCost) : "",
+  const [shippingCost, setShippingCost] = useState<number | null>(
+    receipt?.shippingCost ?? null,
   );
-  const [otherCost, setOtherCost] = useState<string>(
-    receipt?.otherCost ? String(receipt.otherCost) : "",
+  const [otherCost, setOtherCost] = useState<number | null>(
+    receipt?.otherCost ?? null,
   );
-  const [adminFee, setAdminFee] = useState<string>(
-    receipt?.adminFee ? String(receipt.adminFee) : "",
+  const [adminFee, setAdminFee] = useState<number | null>(
+    receipt?.adminFee ?? null,
   );
 
   // Landed-cost preview. Uses the SAME allocator as the verify hook so the
@@ -287,9 +288,9 @@ export function GoodsReceiptForm({
       poCostPool,
       poNetValue,
       poDiscount: Number(po?.discount ?? 0),
-      shippingCost: Number(shippingCost) || 0,
-      otherCost: Number(otherCost) || 0,
-      adminFee: Number(adminFee) || 0,
+      shippingCost: shippingCost ?? 0,
+      otherCost: otherCost ?? 0,
+      adminFee: adminFee ?? 0,
     });
   }, [grItems, selectedPO, shippingCost, otherCost, adminFee]);
 
@@ -309,9 +310,9 @@ export function GoodsReceiptForm({
         // form never appended it, so any saved notes were silently dropped.
         if (notes) formData.append("notes", notes);
         // Actual landed costs (blank → 0 → hook derives the PO-estimate share).
-        formData.append("shippingCost", String(Number(shippingCost) || 0));
-        formData.append("otherCost", String(Number(otherCost) || 0));
-        formData.append("adminFee", String(Number(adminFee) || 0));
+        formData.append("shippingCost", String(shippingCost ?? 0));
+        formData.append("otherCost", String(otherCost ?? 0));
+        formData.append("adminFee", String(adminFee ?? 0));
         const items = grItems.map((item) => {
           const serials = item.serialNumbers
             .split(/\r?\n/)
@@ -430,16 +431,12 @@ export function GoodsReceiptForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="shippingCost">Ongkir Aktual</Label>
-            <input
+            <CurrencyInput
               id="shippingCost"
-              type="number"
-              min="0"
-              step="any"
-              inputMode="decimal"
               value={shippingCost}
-              onChange={(e) => setShippingCost(e.target.value)}
+              onChange={setShippingCost}
               placeholder="Kosongkan untuk pakai estimasi PO"
-              className="form-input"
+              prefix="Rp"
             />
             <p className="text-xs text-muted-foreground">
               Ongkir nyata penerimaan ini. Kosong / 0 = pakai porsi estimasi PO.
@@ -447,16 +444,12 @@ export function GoodsReceiptForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="otherCost">Biaya Lain</Label>
-            <input
+            <CurrencyInput
               id="otherCost"
-              type="number"
-              min="0"
-              step="any"
-              inputMode="decimal"
               value={otherCost}
-              onChange={(e) => setOtherCost(e.target.value)}
+              onChange={setOtherCost}
               placeholder="Packing, dll."
-              className="form-input"
+              prefix="Rp"
             />
             <p className="text-xs text-muted-foreground">
               Biaya tambahan lain yang masuk HPP (bukan PPN masukan).
@@ -464,16 +457,12 @@ export function GoodsReceiptForm({
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="adminFee">Biaya Admin Bank</Label>
-            <input
+            <CurrencyInput
               id="adminFee"
-              type="number"
-              min="0"
-              step="any"
-              inputMode="decimal"
               value={adminFee}
-              onChange={(e) => setAdminFee(e.target.value)}
+              onChange={setAdminFee}
               placeholder="Mis. admin transfer BCA"
-              className="form-input"
+              prefix="Rp"
             />
             <p className="text-xs text-muted-foreground">
               Biaya admin/transfer (mis. dari struk Tokopedia/Shopee). Masuk HPP,

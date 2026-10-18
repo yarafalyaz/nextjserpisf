@@ -6,6 +6,7 @@ import { resolveNonconformance } from "@/actions/qc.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import {
   Select,
@@ -86,7 +87,7 @@ export function NonconformanceResolveForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="reworkCost">Biaya Rework</Label>
-          <Input id="reworkCost" name="reworkCost" type="number" step="0.01" min="0" defaultValue={String(reworkCost)} />
+          <CurrencyInput id="reworkCost" name="reworkCost" prefix="Rp" defaultValue={reworkCost} />
         </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">

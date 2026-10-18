@@ -8,6 +8,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatCurrency } from "@/lib/utils/format"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import {
   Select,
@@ -79,8 +80,8 @@ export function ProductionCostSection({
   const [open, setOpen] = useState(false)
   const [category, setCategory] = useState("labor")
   const [hours, setHours] = useState("")
-  const [rate, setRate] = useState("")
-  const [amount, setAmount] = useState("")
+  const [rate, setRate] = useState<number | null>(null)
+  const [amount, setAmount] = useState<number | null>(null)
   // Baris yang sedang disunting; null = mode tambah. Wajib diisi lengkap saat menyimpan,
   // karena updateProductionCost menulis SEMUA field (yang kosong menjadi null).
   const [editing, setEditing] = useState<ProductionCostRow | null>(null)
@@ -89,21 +90,20 @@ export function ProductionCostSection({
   const [overheadOpen, setOverheadOpen] = useState(false)
   const [driverType, setDriverType] = useState("machine_hours")
   const [driverQty, setDriverQty] = useState("")
-  const [driverRate, setDriverRate] = useState("")
+  const [driverRate, setDriverRate] = useState<number | null>(null)
 
   const total = costs.reduce((s, c) => s + c.amount, 0)
   const overheadPreview =
-    Number.isFinite(Number(driverQty)) && Number.isFinite(Number(driverRate))
-      ? Math.round(Number(driverQty) * Number(driverRate) * 100) / 100
+    Number.isFinite(Number(driverQty)) && driverRate !== null && driverQty !== ""
+      ? Math.round(Number(driverQty) * driverRate * 100) / 100
       : 0
 
   // Auto-derive amount from hours × rate while the user types, unless they
   // typed an explicit amount (which always wins).
-  function derivedAmount(): string {
+  function derivedAmount(): number | null {
     const h = Number(hours)
-    const r = Number(rate)
-    if (hours === "" || rate === "" || !Number.isFinite(h) || !Number.isFinite(r)) return amount
-    return String(Math.round(h * r * 100) / 100)
+    if (hours === "" || rate === null || !Number.isFinite(h)) return amount
+    return Math.round(h * rate * 100) / 100
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -112,8 +112,8 @@ export function ProductionCostSection({
     formData.set("productionOrderId", String(productionOrderId))
     formData.set("category", category)
     if (workOrderId) formData.set("workOrderId", String(workOrderId))
-    if (amount === "" && hours !== "" && rate !== "") {
-      formData.set("amount", derivedAmount())
+    if (amount === null && hours !== "" && rate !== null) {
+      formData.set("amount", String(derivedAmount() ?? 0))
     }
 
     startTransition(async () => {
@@ -129,8 +129,8 @@ export function ProductionCostSection({
       setEditing(null)
       setCategory("labor")
       setHours("")
-      setRate("")
-      setAmount("")
+      setRate(null)
+      setAmount(null)
       router.refresh()
     })
   }
@@ -152,8 +152,8 @@ export function ProductionCostSection({
     setOpen(true)
     setCategory(c.category)
     setHours(c.hours != null ? String(c.hours) : "")
-    setRate(c.rate != null ? String(c.rate) : "")
-    setAmount(String(c.amount))
+    setRate(c.rate ?? null)
+    setAmount(c.amount)
   }
 
   function handleApplyOverhead(e: React.FormEvent<HTMLFormElement>) {
@@ -162,7 +162,7 @@ export function ProductionCostSection({
     formData.set("productionOrderId", String(productionOrderId))
     formData.set("driverType", driverType)
     formData.set("driverQty", driverQty)
-    formData.set("rate", driverRate)
+    formData.set("rate", driverRate === null ? "" : String(driverRate))
     startTransition(async () => {
       const result = await applyOverheadToProductionOrder(formData)
       if (result && !result.success) {
@@ -172,7 +172,7 @@ export function ProductionCostSection({
       showSuccess(`Overhead ${formatCurrency((result as { amount?: number }).amount ?? 0)} diterapkan`)
       setOverheadOpen(false)
       setDriverQty("")
-      setDriverRate("")
+      setDriverRate(null)
       router.refresh()
     })
   }
@@ -182,8 +182,8 @@ export function ProductionCostSection({
       showError("Perintah produksi belum tertaut ke perintah kerja.")
       return
     }
-    const rateNum = Number(rate)
-    if (rate === "" || !Number.isFinite(rateNum) || rateNum <= 0) {
+    const rateNum = rate ?? 0
+    if (rate === null || rateNum <= 0) {
       showError("Isi tarif per jam terlebih dahulu.")
       return
     }
@@ -239,7 +239,7 @@ export function ProductionCostSection({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="driverRate">Tarif per Driver (Rp) *</Label>
-              <Input id="driverRate" name="rate" type="number" step="0.01" min="0" value={driverRate} onChange={(e) => setDriverRate(e.target.value)} />
+              <CurrencyInput id="driverRate" name="rate" prefix="Rp" value={driverRate} onChange={setDriverRate} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label>Overhead Applied</Label>
@@ -280,18 +280,16 @@ export function ProductionCostSection({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="rate">Tarif / Jam</Label>
-              <Input id="rate" name="rate" type="number" step="0.01" min="0" value={rate} onChange={(e) => setRate(e.target.value)} />
+              <CurrencyInput id="rate" name="rate" prefix="Rp" value={rate} onChange={setRate} />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="amount">Jumlah (Rp) *</Label>
-              <Input
+              <CurrencyInput
                 id="amount"
                 name="amount"
-                type="number"
-                step="0.01"
-                min="0"
-                value={amount || derivedAmount()}
-                onChange={(e) => setAmount(e.target.value)}
+                prefix="Rp"
+                value={amount ?? derivedAmount()}
+                onChange={setAmount}
               />
               <p className="text-xs text-muted-foreground">Terisi otomatis dari Jam × Tarif bila dikosongkan.</p>
             </div>

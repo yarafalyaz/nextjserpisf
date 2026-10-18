@@ -6,6 +6,7 @@ import { useState, useTransition } from "react"
 import { createVendorPrice, updateVendorPrice } from "@/actions/vendor-price.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -41,7 +42,7 @@ export function VendorPriceForm({
 
   const [vendorId, setVendorId] = useState(initial?.vendorId ?? "")
   const [itemId, setItemId] = useState(initial?.itemId ?? "")
-  const [price, setPrice] = useState(initial?.price ?? "")
+  const [price, setPrice] = useState<number | null>(initial?.price ? Number(initial.price) : null)
   const [minQty, setMinQty] = useState(initial?.minQty ?? "1")
   const [effectiveDate, setEffectiveDate] = useState(initial?.effectiveDate ?? "")
   const [notes, setNotes] = useState(initial?.notes ?? "")
@@ -55,7 +56,7 @@ export function VendorPriceForm({
         const formData = new FormData()
         formData.set("vendorId", vendorId)
         formData.set("itemId", itemId)
-        formData.set("price", price)
+        formData.set("price", price === null ? "" : String(price))
         formData.set("minQty", minQty)
         formData.set("effectiveDate", effectiveDate)
         formData.set("notes", notes)
@@ -107,12 +108,10 @@ export function VendorPriceForm({
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="price">Harga *</Label>
-          <Input
+          <CurrencyInput
             id="price"
-            name="price"
-            inputMode="decimal"
             value={price}
-            onChange={(event) => setPrice(event.target.value)}
+            onChange={setPrice}
             placeholder="0"
             required
           />
