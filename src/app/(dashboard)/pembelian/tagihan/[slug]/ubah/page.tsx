@@ -62,6 +62,7 @@ export default async function EditPage({
     id: data.id,
     vendorId: data.vendorId,
     purchaseOrderId: data.purchaseOrderId,
+    projectId: data.projectId,
     withholdingTypeId: data.withholdingTypeId,
     withholdingAmount: Number(data.withholdingAmount ?? 0),
     date: data.date.toISOString().split("T")[0],
@@ -78,7 +79,7 @@ export default async function EditPage({
     })),
   };
 
-  const [vendors, withholdingTypes, items] = await Promise.all([
+  const [vendors, withholdingTypes, items, projects] = await Promise.all([
     prisma.vendor.findMany({ where: { deletedAt: null }, orderBy: { name: "asc" } }),
     prisma.withholdingTaxType.findMany({
       where: { isActive: true, deletedAt: null },
@@ -98,6 +99,10 @@ export default async function EditPage({
         },
       })
       .then((items) => items.map((i) => ({ ...i, cost: Number(i.cost) }))),
+    prisma.project.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, documentNo: true },
+    }),
   ]);
 
   return (
@@ -113,7 +118,7 @@ export default async function EditPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
       </div>
-      <VendorBillForm bill={bill} vendors={vendors} items={items} withholdingTypes={withholdingTypes.map((t) => ({ id: t.id, name: t.name, rate: Number(t.rate) }))} />
+      <VendorBillForm bill={bill} vendors={vendors} projects={projects} items={items} withholdingTypes={withholdingTypes.map((t) => ({ id: t.id, name: t.name, rate: Number(t.rate) }))} />
     </div>
   );
 }

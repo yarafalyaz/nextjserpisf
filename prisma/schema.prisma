@@ -1476,8 +1476,11 @@ model VendorBill {
   createdBy           Int?                      @map("created_by")
   createdAt           DateTime                  @default(now()) @map("created_at")
   updatedAt           DateTime                  @updatedAt @map("updated_at")
+  // Jasa maklon per proyek (coating/bending): tagihan vendor ikut HPP proyek.
+  projectId           Int?                      @map("project_id")
   items               VendorBillItem[]
   purchaseOrder       PurchaseOrder?            @relation(fields: [purchaseOrderId], references: [id])
+  project             Project?                  @relation(fields: [projectId], references: [id])
   goodsReceipt        GoodsReceipt?             @relation(fields: [goodsReceiptId], references: [id], onDelete: SetNull)
   vendor              Vendor                    @relation(fields: [vendorId], references: [id])
   withholdingType     WithholdingTaxType?       @relation(fields: [withholdingTypeId], references: [id], onDelete: SetNull)
@@ -1485,6 +1488,7 @@ model VendorBill {
   vendorPayments      VendorPayment[]
 
   @@index([purchaseOrderId], map: "vendor_bills_purchase_order_id_fkey")
+  @@index([projectId])
   @@index([vendorId], map: "vendor_bills_vendor_id_fkey")
   @@index([status], map: "idx_vendor_bills_status")
   @@index([dueDate], map: "idx_vendor_bills_due_date")
@@ -3184,6 +3188,7 @@ model Project {
   timesheets        Timesheet[]
   workOrders        WorkOrder[]
   pettyCash         PettyCash[]
+  vendorBills       VendorBill[]
   costCenter        CostCenter?       @relation(fields: [costCenterId], references: [id])
   costCenterId      Int?              @map("cost_center_id")
 

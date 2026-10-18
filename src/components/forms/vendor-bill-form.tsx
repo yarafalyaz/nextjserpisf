@@ -34,6 +34,7 @@ interface BillItem {
 
 interface VendorBillFormProps {
   vendors: { id: number; name: string }[];
+  projects?: { id: number; name: string; documentNo: string | null }[];
   /** Purchase orders selectable to settle. Service POs are tagged "Jasa". */
   purchaseOrders?: {
     id: number;
@@ -48,6 +49,7 @@ interface VendorBillFormProps {
     id: number;
     vendorId: number;
     purchaseOrderId?: number | null;
+    projectId?: number | null;
     withholdingTypeId?: number | null;
     withholdingAmount?: number | null;
     date: string;
@@ -72,7 +74,7 @@ interface VendorBillFormProps {
   }[];
 }
 
-export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdingTypes = [], bill }: VendorBillFormProps) {
+export function VendorBillForm({ vendors, projects = [], items, purchaseOrders = [], withholdingTypes = [], bill }: VendorBillFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [vendorOptions, setVendorOptions] = useState(vendors);
@@ -85,6 +87,10 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
   );
   const [purchaseOrderId, setPurchaseOrderId] = useState<string | null>(
     bill?.purchaseOrderId ? String(bill.purchaseOrderId) : null,
+  );
+  // Jasa maklon per proyek (coating/bending): tagihan ikut HPP proyek.
+  const [projectId, setProjectId] = useState<string | null>(
+    bill?.projectId ? String(bill.projectId) : null,
   );
   const [withholdingTypeId, setWithholdingTypeId] = useState<string | null>(
     bill?.withholdingTypeId ? String(bill.withholdingTypeId) : null,
@@ -269,6 +275,20 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
             <p className="text-xs text-muted-foreground">
               Kaitkan tagihan ke PO agar pencocokan tiga arah berjalan. PO jasa ditandai &quot;Jasa&quot;
               dan bebannya masuk ke akun beban (bukan persediaan).
+            </p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="projectId">Project (opsional — isi bila untuk proyek)</Label>
+            <Combobox
+              id="projectId"
+              options={projects.map((p) => ({ value: String(p.id), label: `${p.documentNo ? `${p.documentNo} - ` : ""}${p.name}` }))}
+              value={projectId}
+              onChange={setProjectId}
+              placeholder="Kosongkan bila bukan biaya proyek..."
+            />
+            <input type="hidden" name="projectId" value={projectId ?? ""} />
+            <p className="text-xs text-muted-foreground">
+              Jasa maklon (coating/bending) untuk proyek ikut hitung HPP proyek.
             </p>
           </div>
           <div className="flex flex-col gap-1.5">

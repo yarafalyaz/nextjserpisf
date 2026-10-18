@@ -921,6 +921,7 @@ export const EXPENSE_CATEGORIES: { name: string; label: string; sort: number }[]
   { name: "supporting_part", label: "Supporting Part", sort: 480 },
   { name: "merchandise", label: "Merchandise", sort: 490 },
   { name: "biaya_admin_bank", label: "Biaya Admin Bank", sort: 500 },
+  { name: "upah_harian_lepas", label: "Upah Harian Lepas", sort: 510 },
   { name: "lainnya", label: "Lainnya", sort: 999 },
 ];
 

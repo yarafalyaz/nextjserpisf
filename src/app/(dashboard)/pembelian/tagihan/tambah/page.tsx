@@ -21,7 +21,7 @@ export default async function CreateVendorBillPage({
   const preselectedPoId = params.poId ? Number(params.poId) : null
   const preselectedGrId = params.grId ? Number(params.grId) : null
 
-  const [vendors, items, purchaseOrders, withholdingTypes] = await Promise.all([
+  const [vendors, items, purchaseOrders, withholdingTypes, projects] = await Promise.all([
     prisma.vendor.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -47,6 +47,10 @@ export default async function CreateVendorBillPage({
       where: { isActive: true, deletedAt: null },
       orderBy: { code: "asc" },
       select: { id: true, name: true, rate: true },
+    }),
+    prisma.project.findMany({
+      orderBy: { createdAt: "desc" },
+      select: { id: true, name: true, documentNo: true },
     }),
   ])
 
@@ -123,6 +127,7 @@ export default async function CreateVendorBillPage({
         grandTotal: Number(po.grandTotal),
       }))}
       withholdingTypes={withholdingTypes.map((t) => ({ id: t.id, name: t.name, rate: Number(t.rate) }))}
+      projects={projects}
       bill={billPrefill}
     />
   )

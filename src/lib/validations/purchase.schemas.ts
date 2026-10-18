@@ -71,6 +71,8 @@ export const vendorBillSchema = z.object({
   // jadi VendorBill.goodsReceiptId & VendorBillItem.goodsReceiptItemId tak pernah
   // terisi dan laporan Diterima Belum Ditagih selalu 0.
   goodsReceiptId: optionalNumber(),
+  // Jasa maklon per proyek (coating/bending): tagihan ikut HPP proyek.
+  projectId: optionalNumber(),
   withholdingTypeId: optionalNumber(),
   withholdingAmount: optionalNumber(0),
   date: dateString,

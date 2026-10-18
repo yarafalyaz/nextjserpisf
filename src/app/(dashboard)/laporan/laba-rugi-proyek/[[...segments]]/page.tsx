@@ -31,7 +31,7 @@ export default async function ProjectPnLPage({
   }))
   endDate.setHours(23, 59, 59, 999)
 
-  const [invoices, materialIssues, expenses] = await Promise.all([
+  const [invoices, materialIssues, expenses, pettyOut, vendorBills] = await Promise.all([
     // Revenue recognised on the invoice = subtotal − discount (excl. tax), i.e.
     // what the customer actually owes net of any header discount. Using bare
     // `subtotal` overstated project revenue whenever a discount was applied.
@@ -46,6 +46,18 @@ export default async function ProjectPnLPage({
     prisma.expense.findMany({
       where: { projectId: { not: null }, status: 'approved', date: { gte: startDate, lte: endDate } },
       select: { projectId: true, amount: true },
+    }),
+    // Kas kecil KELUAR berproyek (bayar coating/bending tunai, upah harian
+    // tunai): PettyCash tanpa status, jadi saring type OUT saja.
+    prisma.pettyCash.findMany({
+      where: { projectId: { not: null }, type: 'OUT', date: { gte: startDate, lte: endDate } },
+      select: { projectId: true, amount: true },
+    }),
+    // Tagihan vendor berproyek (jasa maklon coating/bending): hitung saat
+    // confirmed/posted/partial/paid — draft belum beban.
+    prisma.vendorBill.findMany({
+      where: { projectId: { not: null }, status: { in: ['confirmed', 'posted', 'partial', 'paid'] }, date: { gte: startDate, lte: endDate } },
+      select: { projectId: true, grandTotal: true },
     }),
   ])
 
@@ -67,8 +79,18 @@ export default async function ProjectPnLPage({
   for (const exp of expenses) {
     if (exp.projectId) expenseByProject.set(exp.projectId, (expenseByProject.get(exp.projectId) || 0) + Number(exp.amount))
   }
+  // Kas kecil keluar berproyek + tagihan vendor berproyek = beban proyek juga
+  // (sebelumnya tak dihitung sehingga HPP understated).
+  const pettyByProject = new Map<number, number>()
+  for (const pc of pettyOut) {
+    if (pc.projectId) pettyByProject.set(pc.projectId, (pettyByProject.get(pc.projectId) || 0) + Number(pc.amount))
+  }
+  const billByProject = new Map<number, number>()
+  for (const bill of vendorBills) {
+    if (bill.projectId) billByProject.set(bill.projectId, (billByProject.get(bill.projectId) || 0) + Number(bill.grandTotal))
+  }
 
-  const activeProjectIds = [...new Set<number>([...revenueByProject.keys(), ...cogsByProject.keys(), ...expenseByProject.keys()])]
+  const activeProjectIds = [...new Set<number>([...revenueByProject.keys(), ...cogsByProject.keys(), ...expenseByProject.keys(), ...pettyByProject.keys(), ...billByProject.keys()])]
 
   const projects = activeProjectIds.length
     ? await prisma.project.findMany({
@@ -81,7 +103,8 @@ export default async function ProjectPnLPage({
   const rows = projects.map(project => {
     const revenue = revenueByProject.get(project.id) || 0
     const cogs = cogsByProject.get(project.id) || 0
-    const expense = expenseByProject.get(project.id) || 0
+    // Beban = expense approved + kas kecil keluar + tagihan vendor jasa.
+    const expense = (expenseByProject.get(project.id) || 0) + (pettyByProject.get(project.id) || 0) + (billByProject.get(project.id) || 0)
     const totalCost = cogs + expense
     const profit = revenue - totalCost
     const margin = revenue > 0 ? (profit / revenue) * 100 : 0
