@@ -84,6 +84,15 @@ opencode.json
 .codex/
 .vscode/
 
+# Local agent identity/memory (per-developer, not product code)
+AGENTS.md
+CLAUDE.md
+HEARTBEAT.md
+IDENTITY.md
+SOUL.md
+TOOLS.md
+USER.md
+
 # Ad-hoc one-off debug/diagnostic scripts (not part of the app)
 /scripts/tmp-*
 /scripts/check-*
