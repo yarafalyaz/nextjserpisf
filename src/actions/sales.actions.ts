@@ -24,7 +24,7 @@ import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSc
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
-import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service"
+import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
 
@@ -2522,13 +2522,15 @@ export async function deleteSalesInvoice(id: number) {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_invoices")
   await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
+  let removedFiles: { fileUrl: string; referenceType: string }[] = [];
   await prisma.$transaction(async (tx) => {
     await reverseSalesInvoicePostingTx(tx, id)
-    await tx.transactionAttachment.deleteMany({ where: { referenceType: "sales_invoice", referenceId: id } })
+    removedFiles = await deleteTransactionAttachmentsTx(tx, { referenceType: "sales_invoice", referenceId: id })
     await tx.salesPayment.deleteMany({ where: { salesInvoiceId: id } })
     await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } })
     await tx.salesInvoice.delete({ where: { id } })
   })
+  await removeAttachmentFiles(removedFiles)
   await logActivity("delete", "SalesInvoice", id, `Menghapus faktur penjualan #${id}`)
   revalidatePath("/penjualan/faktur")
   return { success: true }

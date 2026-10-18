@@ -13,6 +13,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 
 const REVALIDATE = "/pembelian/uang-muka"
 
@@ -164,14 +165,16 @@ export async function deletePurchaseAdvance(id: number): Promise<PurchaseAdvance
 
     await assertPeriodOpen(advance.date)
 
+    let removedFiles: { fileUrl: string; referenceType: string }[] = []
     await prisma.$transaction(async (tx) => {
       if (advance.journalId) {
         await tx.journalEntry.deleteMany({ where: { journalId: advance.journalId } })
-        await tx.transactionAttachment.deleteMany({ where: { referenceType: "Journal", referenceId: advance.journalId } })
+        removedFiles = await deleteTransactionAttachmentsTx(tx, { referenceType: "Journal", referenceId: advance.journalId })
         await tx.journal.delete({ where: { id: advance.journalId } })
       }
       await tx.purchaseAdvance.delete({ where: { id } })
     })
+    await removeAttachmentFiles(removedFiles)
 
     await logActivity("delete", "PurchaseAdvance", id, `Menghapus uang muka pembelian ${advance.documentNo}`)
     revalidatePath(REVALIDATE)

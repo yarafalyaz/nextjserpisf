@@ -348,14 +348,15 @@ async function taskSweepOrphanAttachments(): Promise<string> {
 
   const uploadsRoot = path.join(process.cwd(), "private", "uploads", "attachments")
   for (const orphan of orphans) {
-    const filename = orphan.fileUrl.split("/").pop() ?? ""
+    const match = /^\/api\/attachments\/[^/]+\/([^/]+)$/.exec(orphan.fileUrl)
+    const filename = match?.[1] ?? ""
+    if (!filename || filename.includes("..")) continue
     const safeRefType = orphan.referenceType.replace(/[^a-zA-Z0-9_-]/g, "")
-    if (filename && safeRefType) {
-      const filepath = path.resolve(uploadsRoot, safeRefType, filename)
-      const relative = path.relative(uploadsRoot, filepath)
-      if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
-        await unlink(filepath).catch(() => undefined)
-      }
+    if (!safeRefType) continue
+    const filepath = path.resolve(uploadsRoot, safeRefType, filename)
+    const relative = path.relative(uploadsRoot, filepath)
+    if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
+      await unlink(filepath).catch(() => undefined)
     }
   }
 

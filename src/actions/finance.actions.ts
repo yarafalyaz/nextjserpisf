@@ -34,7 +34,7 @@ import {
   computePettyCashChain,
   findFirstNegativeBalance,
 } from "@/lib/finance/petty-cash-chain";
-import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
+import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
@@ -1264,13 +1264,15 @@ export async function deleteJournal(id: number) {
     }
 
     // Laravel parity: cascade delete entries then journal
+    let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
       await tx.journalEntry.deleteMany({ where: { journalId: id } });
-      await tx.transactionAttachment.deleteMany({
-        where: { referenceType: "Journal", referenceId: id },
+      removedFiles = await deleteTransactionAttachmentsTx(tx, {
+        referenceType: "Journal", referenceId: id,
       });
       await tx.journal.delete({ where: { id } });
     });
+    await removeAttachmentFiles(removedFiles);
 
     await logActivity("delete", "Journal", id, "Menghapus jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -1300,15 +1302,17 @@ export async function deleteExpense(id: number) {
     // deleted expense) — the user retries and the receipts are gone, or the
     // expense vanishes but the receipts persist with referenceId pointing at
     // a row that no longer exists.
+    let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
-      await tx.transactionAttachment.deleteMany({
-        where: { referenceType: "Expense", referenceId: id },
+      removedFiles = await deleteTransactionAttachmentsTx(tx, {
+        referenceType: "Expense", referenceId: id,
       });
       await tx.expense.delete({ where: { id } });
       await tx.approval.deleteMany({
         where: { referenceType: "Expense", referenceId: id },
       });
     });
+    await removeAttachmentFiles(removedFiles);
 
     await logActivity("delete", "Expense", id, "Menghapus pengeluaran");
     revalidatePath("/keuangan/pengeluaran");
@@ -1324,16 +1328,18 @@ export async function deletePettyCash(id: number) {
   try {
     await requirePermission("delete_petty_cash");
 
+    let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
       // Remove the linked journal (avoid orphaned GL entries), delete the record,
       // then recompute the running balance for all remaining records.
       await deletePettyCashJournal(tx, id);
-      await tx.transactionAttachment.deleteMany({
-        where: { referenceType: "PettyCash", referenceId: id },
+      removedFiles = await deleteTransactionAttachmentsTx(tx, {
+        referenceType: "PettyCash", referenceId: id,
       });
       await tx.pettyCash.delete({ where: { id } });
       await recalcPettyCashChain(tx, { guardNegative: true });
     });
+    await removeAttachmentFiles(removedFiles);
 
     await logActivity(
       "delete",

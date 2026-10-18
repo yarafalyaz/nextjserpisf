@@ -12,6 +12,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { DocumentSequenceService } from "@/lib/services/document-sequence.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 
 const REVALIDATE = "/keuangan/transfer-bank"
 
@@ -187,16 +188,18 @@ export async function deleteBankTransfer(id: number) {
 
     await assertPeriodOpen(transfer.date)
 
+    let removedFiles: { fileUrl: string; referenceType: string }[] = []
     await prisma.$transaction(async (tx) => {
       if (transfer.journalId) {
-        await tx.transactionAttachment.deleteMany({
-          where: { referenceType: "Journal", referenceId: transfer.journalId },
+        removedFiles = await deleteTransactionAttachmentsTx(tx, {
+          referenceType: "Journal", referenceId: transfer.journalId,
         })
         await tx.journalEntry.deleteMany({ where: { journalId: transfer.journalId } })
         await tx.journal.delete({ where: { id: transfer.journalId } })
       }
       await tx.bankTransfer.delete({ where: { id: transfer.id } })
     })
+    await removeAttachmentFiles(removedFiles)
 
     await logActivity("delete", "BankTransfer", id, `Menghapus transfer antar rekening ${transfer.documentNo}`)
     revalidatePath(REVALIDATE)
