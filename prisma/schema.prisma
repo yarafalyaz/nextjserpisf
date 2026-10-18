@@ -1930,6 +1930,7 @@ model ProductionOrder {
   // carries its equivalent share of cost, the remainder stays as WIP.
   completedQty      Decimal                   @default(0.00) @map("completed_qty") @db.Decimal(15, 2)
   variance          Decimal                   @default(0.00) @db.Decimal(15, 2)
+  releasedCost      Decimal                   @default(0.00) @map("released_cost") @db.Decimal(15, 2)
   createdBy         Int?                      @map("created_by")
   createdAt         DateTime                  @default(now()) @map("created_at")
   updatedAt         DateTime                  @updatedAt @map("updated_at")

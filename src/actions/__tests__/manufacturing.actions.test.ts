@@ -398,6 +398,7 @@ describe("Production Order Actions", () => {
     })
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+    mocks.prismaMock.itemBatch.findMany.mockResolvedValue([{ batchNumber: "MO-008" }])
 
     const res = await actions.completeProductionOrder(8)
 
@@ -533,6 +534,39 @@ describe("Production Order Actions", () => {
     expect(update.data.totalActualCost).toBe(0)
     // Genealogy is recorded on the final release.
     expect(mocks.prismaMock.productionGenealogy.create).toHaveBeenCalled()
+  })
+
+  it("genealogy final aggregates ALL releases, not the last slice (P1-3)", async () => {
+    // Order 10: release pertama 4 (biaya 40000) sudah lewat; release final 6.
+    // Genealogi harus: qty 10, total = 40000+60000 = 100000 (bukan slice 60000),
+    // batch gabungan kedua release.
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 10, completedQty: 4,
+      totalActualCost: 60000, totalStandardCost: 90000, releasedCost: 40000,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: true, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+    mocks.prismaMock.itemBatch.findMany.mockResolvedValue([
+      { batchNumber: "MO-008-R4" },
+      { batchNumber: "MO-008" },
+    ])
+    mocks.prismaMock.productionOrderMaterial.findMany.mockResolvedValue([])
+
+    const res = await actions.completeProductionOrder(8, [], 6)
+
+    expect(res).toMatchObject({ success: true, isFinal: true })
+    const gen = mocks.prismaMock.productionGenealogy.create.mock.calls.at(-1)[0]
+    expect(gen.data.outputQty).toBe(10)
+    expect(Number(gen.data.totalCost)).toBe(100000)
+    expect(Number(gen.data.unitCost)).toBe(10000)
+    expect(gen.data.outputBatch).toBe("MO-008-R4, MO-008")
+    // Akumulasi biaya di order ikut bertambah.
+    const update = mocks.prismaMock.productionOrder.update.mock.calls.at(-1)[0]
+    expect(Number(update.data.releasedCost)).toBe(100000)
   })
 
   it("accumulates production variance across partial releases (not the remaining-slice vs full-standard)", async () => {

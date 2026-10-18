@@ -867,6 +867,7 @@ export async function completeProductionOrder(
           totalActualCost: true,
           totalStandardCost: true,
           variance: true,
+          releasedCost: true,
           workOrderId: true,
           product: {
             select: {
@@ -1078,13 +1079,19 @@ export async function completeProductionOrder(
           completedQty: newCompleted,
           totalActualCost: isFinal ? 0 : remainingCost,
           variance,
+          // P1-3: akumulasi biaya aktual yang di-release — sumber total biaya
+          // genealogi final (totalActualCost di-nol-kan saat final).
+          releasedCost: safeAdd(Number(order.releasedCost ?? 0), releaseCost, 2),
           ...(isFinal ? { status: "completed", endDate: new Date() } : {}),
         },
       });
 
       // Production genealogy (PRD line 369 / REP-13) is recorded once, on the
       // FINAL release, so the unique-per-order record still holds under partial
-      // completion.
+      // completion. P1-3: record final adalah AGREGAT semua release — bukan
+      // slice terakhir. Sebelumnya outputQty=orderQty dipasangkan serial
+      // final saja + batch documentNo + biaya slice final (urutan 4 lalu 6:
+      // qty catat 10, serial hanya 6 terakhir, biaya hanya slice 6).
       if (isFinal) {
         const materialRows = await tx.productionOrderMaterial.findMany({
           where: { productionOrderId: id },
@@ -1096,15 +1103,41 @@ export async function completeProductionOrder(
             batchNumbers: true,
           },
         });
+        // Semua serial/batch hasil order ini (semua release), bukan hanya
+        // release final. Dicatat dengan notes persis per order.
+        const releaseNote = `Hasil perintah produksi ${order.documentNo}`;
+        const allSerials = outputItem.trackSerial
+          ? (
+              await tx.itemSerial.findMany({
+                where: { itemId: outputItem.id, notes: releaseNote },
+                select: { serialNumber: true },
+                orderBy: { id: "asc" },
+              })
+            ).map((r) => r.serialNumber)
+          : [];
+        const allBatches = outputItem.trackBatch
+          ? (
+              await tx.itemBatch.findMany({
+                where: { itemId: outputItem.id, notes: releaseNote },
+                select: { batchNumber: true },
+                orderBy: { id: "asc" },
+              })
+            ).map((r) => r.batchNumber)
+          : [];
+        // Total biaya aktual = akumulasi release sebelumnya + release ini.
+        // (totalActualCost sudah di-nol-kan untuk final, jadi tak bisa jadi
+        // sumber.)
+        const totalReleasedCost = safeAdd(Number(order.releasedCost ?? 0), releaseCost, 2);
+        const genealogyUnitCost = orderQty > 0 ? Math.round((totalReleasedCost / orderQty) * 100) / 100 : 0;
         await recordProductionGenealogy(tx, {
           productionOrderId: id,
           documentNo: order.documentNo,
           outputItemId: outputItem.id,
           outputQty: orderQty,
-          outputSerials: serials,
-          outputBatch: outputItem.trackBatch ? order.documentNo : null,
-          unitCost,
-          totalCost: releaseCost,
+          outputSerials: allSerials,
+          outputBatch: outputItem.trackBatch ? allBatches.join(", ") : null,
+          unitCost: genealogyUnitCost,
+          totalCost: totalReleasedCost,
           completedBy: Number(user.id),
           materials: materialRows.map((m) => {
             const mq = Number(m.actualQty ?? 0);
