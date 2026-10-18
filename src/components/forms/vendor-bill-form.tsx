@@ -190,6 +190,11 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget);
+        // Lampiran diunggah sebagai baris sementara (referenceId=0) oleh
+        // FormAttachmentUpload; ID-nya dibawa lewat hidden input "attachmentIds"
+        // di dalam form yang sama — tanpa ini berkasnya yatim permanen.
+        const attachmentIdsValue = formData.get("attachmentIds");
+        if (attachmentIdsValue) formData.set("attachmentIds", attachmentIdsValue as string);
         formData.set("subtotal", String(subtotal));
         formData.set("tax", String(totalTax));
         formData.set("grandTotal", String(grandTotal));

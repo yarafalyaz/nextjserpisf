@@ -45,6 +45,10 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
     startTransition(async () => {
       try {
         const formData = new FormData(e.currentTarget)
+        // Teruskan attachmentIds (hidden input FormAttachmentUpload) — tanpa ini
+        // lampiran kas kecil yatim permanen (pola sama vendor-bill-form).
+        const attachmentIdsValue = formData.get("attachmentIds")
+        if (attachmentIdsValue) formData.set("attachmentIds", attachmentIdsValue as string)
         const { createPettyCash, updatePettyCash } = await import("@/actions/finance.actions")
 
         const result = pettyCash?.id ? await updatePettyCash(pettyCash.id, formData) : await createPettyCash(formData)

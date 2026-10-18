@@ -18,11 +18,29 @@ describe("attachPendingTransactionAttachments", () => {
       where: {
         id: { in: [10, 11] },
         referenceType: "vendor_bill",
+        // Jangkar guard: klaim HANYA baris sementara milik pengunggah. Mutasi
+        // referenceId 0 -> milik dokumen lain, mutasi uploadedBy -> milik orang
+        // lain — keduanya harus memerahkan tes ini.
         referenceId: 0,
         uploadedBy: 4,
       },
       data: { referenceId: 27 },
     })
+  })
+
+  it("tidak merebut lampiran milik pengguna lain (uploadedBy dijaga)", async () => {
+    const updateMany = vi.fn().mockResolvedValue({ count: 1 })
+    const tx = { transactionAttachment: { updateMany } } as unknown as TxClient
+
+    await attachPendingTransactionAttachments(tx, {
+      attachmentIds: "[10]",
+      referenceType: "vendor_bill",
+      referenceId: 27,
+      uploadedBy: 4,
+    })
+
+    const where = updateMany.mock.calls[0][0].where as Record<string, unknown>
+    expect(where.uploadedBy).toBe(4)
   })
 
   it("rejects malformed attachment ID lists", async () => {
