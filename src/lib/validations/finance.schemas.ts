@@ -186,12 +186,3 @@ export const profitCenterSchema = z.object({
   name: z.string({ error: "Nama wajib diisi" }).trim().min(1, "Nama wajib diisi").max(200),
 });
 
-// ==================== UPDATE JOURNAL ====================
-
-export const updateJournalSchema = z.object({
-  transactionDate: requiredDate,
-  description: optionalString(1000),
-  type: z.string().default("GENERAL"),
-  attachmentIds: optionalString(5000),
-});
-
