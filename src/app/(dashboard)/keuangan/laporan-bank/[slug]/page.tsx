@@ -7,7 +7,6 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
-import { StatusChip } from "@/components/ui/status-chip"
 import { ActionDropdown } from "@/components/ui/action-dropdown"
 import {
   DetailTable,
@@ -21,11 +20,7 @@ import {
 } from "@/components/ui/detail-table"
 import { deleteBankStatementLine } from "@/actions/finance.actions"
 import { BankStatementLineForm } from "./_components/bank-statement-line-form"
-import {
-  BANK_STATEMENT_LINE_STATUS_TONES,
-  bankStatementLineStatusLabel,
-  bankStatementLineTypeLabel,
-} from "./_components/bank-statement-line-labels"
+import { bankStatementLineTypeLabel } from "./_components/bank-statement-line-labels"
 
 import type { Metadata } from "next"
 
@@ -123,7 +118,6 @@ export default async function BankStatementDetailPage({
           { label: "Laporan Bank", href: "/keuangan/laporan-bank" },
           { label: "Detail" },
         ]}
-        badge={<StatusChip status={stmt.status} />}
         actions={<BackButton href="/keuangan/laporan-bank" />}
       />
 
@@ -155,7 +149,7 @@ export default async function BankStatementDetailPage({
           </div>
         </div>
 
-        {canWrite || editingLineItem ? (
+        {canWrite ? (
           <BankStatementLineForm
             // `key` WAJIB: tanpa itu React memakai ulang formulir yang sudah ter-mount saat
             // berpindah dari "Tambah" ke "Ubah" (navigasi klien `?editBaris=N`), sehingga
@@ -186,7 +180,6 @@ export default async function BankStatementDetailPage({
                 <DetailTableTh>Arah</DetailTableTh>
                 <DetailTableTh align="right">Debit</DetailTableTh>
                 <DetailTableTh align="right">Kredit</DetailTableTh>
-                <DetailTableTh>Status</DetailTableTh>
                 {canWrite && <DetailTableTh align="right">Aksi</DetailTableTh>}
               </DetailTableHead>
               <DetailTableBody>
@@ -198,13 +191,6 @@ export default async function BankStatementDetailPage({
                     <DetailTableTd>{bankStatementLineTypeLabel(line.type)}</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(Number(line.debit))}</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(Number(line.credit))}</DetailTableTd>
-                    <DetailTableTd>
-                      <StatusChip
-                        status={line.status}
-                        customLabel={bankStatementLineStatusLabel(line.status)}
-                        customTone={BANK_STATEMENT_LINE_STATUS_TONES[line.status]}
-                      />
-                    </DetailTableTd>
                     {canWrite && (
                       <DetailTableTd align="right">
                         <div className="flex items-center justify-end">
@@ -235,9 +221,7 @@ export default async function BankStatementDetailPage({
                   <DetailTableTd align="right">
                     <strong>{formatCurrency(Number(stmt.totalCredits))}</strong>
                   </DetailTableTd>
-                  {/* Sel kosong penyeimbang kolom Status (+ Aksi) — `colSpan` menjaga
-                      jumlah kolom baris total sama dengan baris datanya. */}
-                  <DetailTableTd colSpan={canWrite ? 2 : 1}>{null}</DetailTableTd>
+                  {canWrite && <DetailTableTd>{null}</DetailTableTd>}
                 </DetailTableFootRow>
               </DetailTableFoot>
             </DetailTable>

@@ -49,6 +49,8 @@ export async function createBankStatement(formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
+    await assertPeriodOpen(v.date);
+
     const bankStatement = await prisma.bankStatement.create({
       data: {
         accountId: v.accountId,
@@ -130,6 +132,9 @@ export async function createBankStatementLine(formData: FormData) {
     if (!parsed.success)
       return { success: false as const, error: parsed.error };
     const v = parsed.data;
+    const lineDate = wibDateToUtcMidnight(v.date);
+
+    await assertPeriodOpen(lineDate);
 
     const line = await prisma.$transaction(async (tx) => {
       const created = await tx.bankStatementLine.create({
@@ -137,7 +142,7 @@ export async function createBankStatementLine(formData: FormData) {
           bankStatementId: v.bankStatementId,
           // Tengah malam UTC untuk hari kalender WIB — bukan `new Date(...)`
           // yang bergantung pada zona waktu proses.
-          date: wibDateToUtcMidnight(v.date),
+          date: lineDate,
           description: v.description ?? null,
           // `type` memilih kolomnya dan `amount` selalu ikut terisi, supaya arah
           // mutasi bisa dibaca dari barisnya. Kedua kolom terisi sekaligus
@@ -184,14 +189,33 @@ export async function updateBankStatementLine(id: number, formData: FormData) {
       // LAMA juga wajib dihitung ulang — kalau tidak totalnya tertinggal.
       const existing = await tx.bankStatementLine.findUniqueOrThrow({
         where: { id },
-        select: { bankStatementId: true },
+        select: { bankStatementId: true, date: true },
       });
+
+      // Baik tanggal lama maupun baru harus terbuka. Tanpa pemeriksaan tanggal
+      // lama, baris periode yang sudah ditutup dapat "dipindahkan" ke periode
+      // terbuka lalu diubah diam-diam.
+      await assertPeriodOpen(existing.date, tx);
+      const lineDate = wibDateToUtcMidnight(v.date);
+      await assertPeriodOpen(lineDate, tx);
+
+      const completedMatch = await tx.bankReconciliationItem.findFirst({
+        where: {
+          bankStatementLineId: id,
+          matched: true,
+          bankReconciliation: { status: "completed" },
+        },
+        select: { id: true },
+      });
+      if (completedMatch) {
+        throw new Error("Baris yang sudah masuk rekonsiliasi selesai tidak dapat diubah");
+      }
 
       await tx.bankStatementLine.update({
         where: { id },
         data: {
           bankStatementId: v.bankStatementId,
-          date: wibDateToUtcMidnight(v.date),
+          date: lineDate,
           description: v.description ?? null,
           amount: v.amount,
           debit: v.type === "debit" ? v.amount : 0,
@@ -232,9 +256,22 @@ export async function deleteBankStatementLine(id: number) {
       // galat itu membuat pengguna melihat "berhasil" padahal barisnya masih ada.
       const line = await tx.bankStatementLine.findUnique({
         where: { id },
-        select: { bankStatementId: true },
+        select: { bankStatementId: true, date: true },
       });
       if (!line) throw new Error("Baris rekening koran tidak ditemukan");
+
+      await assertPeriodOpen(line.date, tx);
+      const completedMatch = await tx.bankReconciliationItem.findFirst({
+        where: {
+          bankStatementLineId: id,
+          matched: true,
+          bankReconciliation: { status: "completed" },
+        },
+        select: { id: true },
+      });
+      if (completedMatch) {
+        throw new Error("Baris yang sudah masuk rekonsiliasi selesai tidak dapat dihapus");
+      }
 
       await tx.bankStatementLine.delete({ where: { id } });
       await recalcBankStatementTotals(tx, line.bankStatementId);
@@ -883,24 +920,54 @@ export async function matchReconciliationLine(
   try {
     await requirePermission("post_journals");
 
-    // Only draft reconciliations may be matched.
-    const recon = await prisma.bankReconciliation.findUniqueOrThrow({
-      where: { id: reconciliationId },
-      select: { status: true },
-    });
-    if (recon.status !== "draft") {
-      throw new Error(
-        "Hanya rekonsiliasi dengan status draft yang dapat dicocokkan",
-      );
-    }
-
-    // Dedupe: a statement line already matched in this reconciliation is updated in
-    // place instead of inserting a duplicate match row. Wrap the check +
-    // create-or-update in a single $transaction so a double-clicked "Match"
-    // button (or two concurrent requests) cannot both pass the findFirst and
-    // create two match rows for the same bank statement line — which would
-    // double-count the line in the matched-totals aggregate.
+    // Semua ID datang dari klien (Server Action tetap bisa dipanggil langsung),
+    // jadi hubungan akun/periode/jurnal wajib diperiksa di sini, bukan dipercaya
+    // dari pilihan UI.
     await prisma.$transaction(async (tx) => {
+      const recon = await tx.bankReconciliation.findUniqueOrThrow({
+        where: { id: reconciliationId },
+        select: { status: true, accountId: true, periodStart: true, periodEnd: true },
+      });
+      if (recon.status !== "draft") {
+        throw new Error("Hanya rekonsiliasi dengan status draft yang dapat dicocokkan");
+      }
+
+      const line = await tx.bankStatementLine.findUniqueOrThrow({
+        where: { id: lineId },
+        select: { date: true, bankStatement: { select: { accountId: true } } },
+      });
+      if (line.bankStatement.accountId !== recon.accountId) {
+        throw new Error("Baris rekening koran bukan milik akun rekonsiliasi ini");
+      }
+      if (recon.periodStart && line.date < recon.periodStart) {
+        throw new Error("Tanggal baris rekening koran berada di luar periode rekonsiliasi");
+      }
+      if (recon.periodEnd && line.date > recon.periodEnd) {
+        throw new Error("Tanggal baris rekening koran berada di luar periode rekonsiliasi");
+      }
+
+      const journalEntry = await tx.journalEntry.findUniqueOrThrow({
+        where: { id: journalEntryId },
+        select: {
+          accountId: true,
+          journal: { select: { status: true, deletedAt: true, transactionDate: true } },
+        },
+      });
+      if (journalEntry.accountId !== recon.accountId) {
+        throw new Error("Baris jurnal bukan milik akun rekonsiliasi ini");
+      }
+      if (journalEntry.journal.status !== "POSTED" || journalEntry.journal.deletedAt) {
+        throw new Error("Hanya baris jurnal posted yang dapat dicocokkan");
+      }
+      if (
+        (recon.periodStart && journalEntry.journal.transactionDate < recon.periodStart) ||
+        (recon.periodEnd && journalEntry.journal.transactionDate > recon.periodEnd)
+      ) {
+        throw new Error("Tanggal jurnal berada di luar periode rekonsiliasi");
+      }
+
+      // Dedupe: satu baris rekening hanya dapat memiliki satu kecocokan pada
+      // rekonsiliasi yang sama.
       const existing = await tx.bankReconciliationItem.findFirst({
         where: {
           bankReconciliationId: reconciliationId,
@@ -956,7 +1023,11 @@ export async function completeReconciliation(reconciliationId: number) {
       );
     }
 
-    // Laravel parity: all lines must be matched before completing
+    if (reconciliation.items.length === 0) {
+      throw new Error("Rekonsiliasi belum memiliki baris yang dicocokkan");
+    }
+
+    // Semua baris yang telah dimasukkan ke rekonsiliasi wajib sudah matched.
     const unmatchedItems = reconciliation.items.filter((item) => !item.matched);
     if (unmatchedItems.length > 0) {
       throw new Error(
