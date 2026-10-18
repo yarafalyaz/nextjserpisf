@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { parseMoneyAmount, parseLocaleNumber } from "@/lib/utils/parse-money"
 
 const REVALIDATE = "/pembelian/harga-pemasok"
 
@@ -22,24 +22,7 @@ function toMoney(value: number): Prisma.Decimal {
 }
 
 function parseNumber(raw: FormDataEntryValue | null, fallback: number | null = null): number | null {
-  const text = String(raw ?? "").trim()
-  if (text === "") return fallback
-  // Qty memakai konvensi id-ID yang sama dengan nominal: titik ribuan, koma
-  // desimal ("1.000", "1,5"). Number("1.000") = 1 tanpa error — tanpa normalisasi
-  // ini minQty 1000 tersimpan sebagai 1 dan keunikan (vendor,item,minQty) rusak.
-  let normalized = text
-  if (text.includes(",")) {
-    normalized = text.replace(/\./g, "").replace(",", ".")
-  } else {
-    const dots = (text.match(/\./g) || []).length
-    if (dots > 1) {
-      normalized = text.replace(/\./g, "")
-    } else if (dots === 1 && /\.\d{3}$/.test(text)) {
-      normalized = text.replace(/\./g, "")
-    }
-  }
-  const value = Number(normalized)
-  return Number.isFinite(value) ? value : null
+  return parseLocaleNumber(raw, fallback)
 }
 
 /** Money fields accept the id-ID shapes ("2.000.000", "2.000.000,50"). */

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest"
 
-import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { parseMoneyAmount, parseLocaleNumber } from "@/lib/utils/parse-money"
 
 describe("parseMoneyAmount", () => {
   it("parses plain digits", () => {
@@ -37,5 +37,18 @@ describe("parseMoneyAmount", () => {
 
   it("accepts numbers directly", () => {
     expect(parseMoneyAmount(1500)).toBe(1500)
+  })
+})
+
+describe("parseLocaleNumber", () => {
+  it("parses id-ID qty shapes like money", () => {
+    expect(parseLocaleNumber("1.000")).toBe(1000)
+    expect(parseLocaleNumber("1,5")).toBe(1.5)
+  })
+
+  it("returns the fallback for empty input", () => {
+    expect(parseLocaleNumber("", 1)).toBe(1)
+    expect(parseLocaleNumber(null, 1)).toBe(1)
+    expect(parseLocaleNumber("", null)).toBeNull()
   })
 })

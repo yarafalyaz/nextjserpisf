@@ -16,14 +16,21 @@
  * after the dot, id-ID thousands), while "2.5" stays a decimal. Before this
  * helper, "2.000.000" fell through to `Number("2.000.000") === 2`.
  */
-export function parseMoneyAmount(raw: FormDataEntryValue | string | number | null | undefined): number | null {
+/**
+ * Parse a user-typed quantity/number with the same id-ID shapes as
+ * parseMoneyAmount, plus a fallback for empty input (e.g. minQty defaults to
+ * 1 when the field is left blank). Before this helper, local copies of the
+ * normalization lived in each action file and drifted apart.
+ */
+export function parseLocaleNumber(
+  raw: FormDataEntryValue | string | number | null | undefined,
+  fallback: number | null = null,
+): number | null {
   const text = String(raw ?? "").trim()
-  if (!text) return null
+  if (!text) return fallback
 
   let normalized = text
   if (text.includes(",")) {
-    // Comma is present, so it is the decimal separator and every dot is a
-    // thousands separator: "2.000.000,50" -> "2000000.50".
     normalized = text.replace(/\./g, "").replace(",", ".")
   } else {
     const dots = (text.match(/\./g) || []).length
@@ -36,4 +43,8 @@ export function parseMoneyAmount(raw: FormDataEntryValue | string | number | nul
 
   const value = Number(normalized)
   return Number.isFinite(value) ? value : null
+}
+
+export function parseMoneyAmount(raw: FormDataEntryValue | string | number | null | undefined): number | null {
+  return parseLocaleNumber(raw)
 }
