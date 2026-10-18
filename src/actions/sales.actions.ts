@@ -712,14 +712,11 @@ export async function createDownPayment(formData: FormData) {
         },
       })
 
-      // GL hook inside the same tx (was previously called after commit).
-      // onDownPaymentReceived accepts an optional txClient as the 3rd arg, so
-      // we join the atomic unit. Its internal executeInTx() will use this tx
-      // rather than opening a nested one.
-      await onDownPaymentReceived(created.id, Number(user.id), tx)
-
-      // Auto-confirm the Down Payment immediately after creation (now inside the same tx!)
-      await onDownPaymentConfirmed(created.id, Number(user.id), tx)
+      // P0-1: pencatatan DP berhenti di `draft`. Verifikasi penerimaan
+      // (jurnal kas) + konfirmasi (WO/SO/Project, invoice bila ambang 50%)
+      // terjadi eksplisit lewat confirmDownPayment — bukan otomatis di sini.
+      // Sebelumnya kedua hook dipanggil dalam tx yang sama sehingga DP
+      // sekecil apa pun langsung menjadi invoice POSTED + stock-out.
 
       return created
     })
@@ -739,7 +736,14 @@ export async function confirmDownPayment(dpId: number) {
   try {
   const user = await requirePermission("confirm_down_payments")
 
-  await onDownPaymentConfirmed(dpId, Number(user.id))
+  // P0-1: dua tahap verifikasi dalam satu transaksi atomik —
+  // (1) terima: jurnal kas/bank vs uang muka (idempoten, gagal = rollback);
+  // (2) konfirmasi: WO/SO/Project + invoice bila kumulatif terverifikasi
+  // mencapai 50% nilai quotation.
+  await prisma.$transaction(async (tx) => {
+    await onDownPaymentReceived(dpId, Number(user.id), tx)
+    await onDownPaymentConfirmed(dpId, Number(user.id), tx)
+  })
 
   await logActivity("confirm", "DownPayment", dpId, `Konfirmasi uang muka #${dpId}`)
   revalidatePath("/penjualan/uang-muka")

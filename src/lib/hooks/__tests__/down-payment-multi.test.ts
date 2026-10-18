@@ -105,12 +105,14 @@ function buildTx(dp: ReturnType<typeof buildDp>, existingInvoiceId: number) {
     $executeRaw: vi.fn().mockResolvedValue(undefined),
     downPayment: {
       findUniqueOrThrow: vi.fn().mockResolvedValue(dp),
+      findMany: vi.fn().mockResolvedValue([]),
       update: mocks.downPaymentUpdate,
     },
-    workOrder: { findFirst: mocks.workOrderFindFirst },
-    salesOrder: { findFirst: mocks.salesOrderFindFirst },
+    workOrder: { findFirst: mocks.workOrderFindFirst, create: vi.fn().mockResolvedValue({ id: 11, documentNo: "WO-1" }) },
+    salesOrder: { findFirst: mocks.salesOrderFindFirst, create: vi.fn().mockResolvedValue({ id: 12, documentNo: "SO-1" }) },
     salesInvoice: {
       findFirst: mocks.salesInvoiceFindFirst,
+      create: vi.fn().mockResolvedValue({ id: 101, documentNo: "INV-1" }),
       update: mocks.salesInvoiceUpdate,
     },
     salesPayment: {
@@ -219,13 +221,15 @@ describe("onDownPaymentConfirmed — ready-document notification batching", () =
 
   it("sends one batched notification call with all 3 ready documents, not a per-doc loop", async () => {
     // First-DP branch: quotation is ACCEPTED, no existing invoice, no existing WO/SO.
-    const dp = buildDp({ id: 1, amount: 100, status: "draft", docNo: "DP-1" })
+    // DP 600/1000 = 60% ≥ ambang 50% sehingga invoice ikut lahir (3 dokumen).
+    const dp = buildDp({ id: 1, amount: 600, status: "draft", docNo: "DP-1" })
     const tx = buildTx(dp, 100) as any
     // The first-DP branch also needs the existing-invoice lookup to return null,
     // the WO/SO idempotency lookups to return null, and a few create mocks.
     tx.salesInvoice.findFirst = vi.fn().mockResolvedValue(null) // no existing invoice
     tx.workOrder.findFirst = mocks.workOrderFindFirst.mockResolvedValue(null)
     tx.salesOrder.findFirst = mocks.salesOrderFindFirst.mockResolvedValue(null)
+    tx.downPayment.findMany = vi.fn().mockResolvedValue([{ amount: 600 }])
     tx.product = { findMany: vi.fn().mockResolvedValue([]) }
     tx.item = { findMany: vi.fn().mockResolvedValue([]) }
     tx.workOrder.create = vi.fn().mockResolvedValue({ id: 1, documentNo: "WO-X" })
