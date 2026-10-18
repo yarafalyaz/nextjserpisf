@@ -33,7 +33,8 @@ const ALLOWED: Record<string, string> = {
  * Analog promise-level dari catch kosong: `.catch(() => {})`, `() => undefined`,
  * `() => null`. Ini juga kegagalan senyap — operasi tampak selesai padahal gagal —
  * dan sama-sama tak tertangkap tsc/lint/tes. Yang MENYESATKAN PENGGUNA sudah
- * diperbaiki (address-picker, notifikasi, daftar merek/model: kini menampilkan pesan);
+ * diperbaiki (address-picker, notifikasi, daftar merek/model, hapus lampiran
+ * vendor-payment-form: kini menampilkan pesan + mengembalikan barisnya);
  * yang tersisa di daftar ini memang pembersihan best-effort atau setelan opsional.
  *
  * Catatan jujur soal kelebaran: daftar ini mengecualikan per BERKAS, jadi penyisipan
@@ -44,7 +45,6 @@ const SILENT_PROMISE_CATCH = /\.catch\(\s*\(\s*\)\s*=>\s*(\{\s*\}|undefined|null
 
 const ALLOWED_PROMISE_CATCH: Record<string, string> = {
   "src/app/api/upload/attachments/route.ts": "hapus berkas sementara — gagal pun tak berdampak",
-  "src/components/forms/vendor-payment-form.tsx": "hapus lampiran best-effort setelah simpan",
   "src/components/reports/report-letterhead.tsx": "setelan opsional; null berarti pakai default",
   "src/lib/db/backup.ts": "pembersihan berkas / cloud best-effort",
 }
