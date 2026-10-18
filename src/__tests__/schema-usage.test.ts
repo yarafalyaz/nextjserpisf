@@ -28,22 +28,14 @@ const KNOWN_UNUSED: string[] = [
   // daftar ini — keduanya sudah ditutup (updatedBy kini benar-benar ditulis; kolom
   // duplikat sudah dibuang). Ringkasan temuan yang sudah ditutup: docs/AUDIT-SCHEMA.md §0.
   //
-  // Skalar tanpa rujukan — mayoritas adalah hook fitur yang halamannya SUDAH ada
-  // (alur persetujuan, hari libur, lembur, pajak, permintaan pembelian), jadi keputusannya
-  // per fitur: implementasikan atau buang. Lihat docs/AUDIT-SCHEMA.md §3.
-
-  // Enam kolom berikut baru terdeteksi mati setelah 11 skrip yatim dibuang: selama ini
-  // satu-satunya "pemakaian"-nya ada di skrip seed yang sudah rusak/tak terpakai, jadi
-  // tidak ada kode aplikasi yang menulis atau membacanya. Keputusan per kolom:
-  // implementasikan (impor rekening koran / rekonsiliasi bank, model aset per merek) atau
-  // buang lewat migrasi.
-  //
-  // `BankStatement.totalDebits`/`totalCredits` SUDAH TIDAK ada di daftar ini: keduanya kini
-  // dihitung ulang dari baris rekening korannya di dalam transaksi yang sama
+  // Sisa "gelombang 2" — enam kolom yang baru terdeteksi mati setelah 11 skrip yatim
+  // dibuang (satu-satunya "pemakaian"-nya ada di skrip seed yang sudah rusak/tak terpakai).
+  // Dua di antaranya sudah ditutup: `BankStatement.totalDebits`/`totalCredits` kini
+  // dihitung ulang dari baris rekening koran di dalam transaksi yang sama
   // (`recalcBankStatementTotals` di `src/actions/finance.actions.ts`, lewat
-  // create/update/deleteBankStatementLine) dan dikunci penjaga di
-  // `src/actions/__tests__/finance.actions.test.ts`. Yang masih mati tinggal
-  // `BankStatementLine.matchedType` — rekonsiliasi belum menandai jenis kecocokannya.
+  // create/update/deleteBankStatementLine) dan dikunci penjaga `finance.actions.test.ts`.
+  // Empat sisanya (di bawah) menunggu keputusan produk: implementasikan atau buang lewat
+  // migrasi. Lihat docs/AUDIT-SCHEMA.md §3.
   "ApprovalWorkflowStep.canSkip",
   "Asset.assetBrandModelId",
   "BankReconciliationItem.clearedDate",
@@ -129,8 +121,9 @@ const SEED_ONLY_MODELS: string[] = [
   // `create_journals` — sama dengan penulis header `createBankStatement`) menulis
   // barisnya dan menghitung ulang `BankStatement.totalDebits/totalCredits` header
   // di dalam transaksi yang sama, sehingga halaman detail rekening koran akhirnya
-  // punya isi. Yang masih seed-only tinggal `BankStatementLine.matchedType`
-  // (lihat KNOWN_UNUSED): rekonsiliasi belum menandai jenis kecocokannya.
+  // punya isi. Yang masih tanpa rujukan (dan tak ditulis siapa pun) tinggal
+  // `BankStatementLine.matchedType` — lihat KNOWN_UNUSED: rekonsiliasi belum
+  // menandai jenis kecocokannya.
   // CRM: komentar tiket dibaca lewat nested read — ditutup bersama aksinya
   // (`addTicketComment` + form di detail tiket), lihat catatan di bawah.
   // Proyek: log proyek ditutup bersama aksinya (`addProjectLog` + form di tab Log).

@@ -124,18 +124,20 @@ dieksekusi.
 
 ## 3. Keputusan yang menunggu pemilik repo
 
-**6 kolom skema yang kini tanpa rujukan** — muncul sebagai mati setelah 11 skrip yatim dibuang
+**4 kolom skema yang kini tanpa rujukan** — muncul sebagai mati setelah 11 skrip yatim dibuang
 (satu-satunya "pemakaian" ada di skrip yang sudah rusak). Terdaftar di daftar-beku
-`src/__tests__/schema-usage.test.ts:40-45`. Keputusan per kolom: **implementasikan atau buang lewat migrasi**:
+`src/__tests__/schema-usage.test.ts:39-42`. Keputusan per kolom: **implementasikan atau buang lewat migrasi**:
 
 | Model | Kolom | Bukti |
 | --- | --- | --- |
 | `ApprovalWorkflowStep` | `canSkip` | `prisma/schema.prisma:3291` |
 | `Asset` | `assetBrandModelId` | `prisma/schema.prisma:3000` |
 | `BankReconciliationItem` | `clearedDate` | `prisma/schema.prisma:2807` |
-| `BankStatement` | `totalCredits` | `prisma/schema.prisma:2721` |
-| `BankStatement` | `totalDebits` | `prisma/schema.prisma:2720` |
 | `BankStatementLine` | `matchedType` | `prisma/schema.prisma:2751` |
+
+> **Dua kolom yang dulu ikut terdaftar sudah ditutup (2026-10-18):** `BankStatement.totalDebits`/
+> `totalCredits` kini dihitung ulang dari baris rekening koran (`recalcBankStatementTotals` di
+> `src/actions/finance.actions.ts`) dan dikunci `finance.actions.test.ts`.
 
 **`.commandcode/taste/taste.md`** — **terlacak padahal di-ignore**: `.commandcode/` ada di
 `.gitignore:76`, tetapi git tidak menerapkan pola abaikan pada berkas yang sudah terlacak

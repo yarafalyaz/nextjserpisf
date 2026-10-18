@@ -12,7 +12,8 @@ Metode: dua gelombang audit **read-only** (peta foreign key di `prisma/schema.pr
 7/7 termasuk seluruh shard E2E. Klaim di bawah yang berbunyi "terverifikasi" sudah
 diperiksa ulang oleh orkestrator pada kode, bukan hanya dilaporkan subagent.
 
-- **Ujung rantai commit:** `27c28fa7` (lihat riwayat di bagian per rantai)
+- **Ujung audit:** commit `6e60965e` (2026-10-18) — bagian per rantai mencantumkan commit
+  awalnya; kelas "seed-only" (§4b–§4d) dan bukti E2E (§8a–§8b) ditutup sesudahnya
 - **Penjaga terkait:** `src/__tests__/link-wiring.test.ts`,
   `src/__tests__/action-wiring.test.ts`, `src/__tests__/chain-ui-wiring.test.ts`,
   `src/__tests__/stock-out-single-path.test.ts`
@@ -73,9 +74,10 @@ manual di jalur penulisannya sebelum dinyatakan celah** — persis seperti kasus
 | Kolom | Verdict | Tindakan |
 | --- | --- | --- |
 | `OvertimeRequest.approvedAt` | **BUG — diperbaiki.** Aksi `approveOvertime` menulis `status`/`approvedBy` tanpa cap waktu, padahal halaman detail lembur hanya merender baris "Disetujui Pada" bila kolom itu terisi. Jadi pengajuan yang sudah disetujui tampil tanpa tanggal persetujuan, dan komentar di `hrm.actions.ts` yang menjanjikan jejak audit `approvedAt` tidak benar | Cap `approvedAt: new Date()` di klaim atomik persetujuan (pengesahan ulang tidak menimpa karena berhenti lebih awal di jalur idempotensi). Tes lama diperketat dengan asersi cap waktu |
-| `OvertimeRequest.supervisorApprovedAt`, `OvertimeRequest.rejectionReason` | Kolom MATI: tidak ada aksi persetujuan supervisor maupun aksi penolakan lembur di seluruh repo | Keputusan produk: implementasikan tahapnya, atau buang kolomnya (butuh migrasi) — **bukan** diisi asal agar UI-nya terisi |
+| `OvertimeRequest.supervisorApprovedAt` | **Kolom MATI**: halaman detail merender "Disetujui Supervisor" bila terisi, tetapi tidak ada penulis di seluruh repo — tahap persetujuan supervisor belum dibangun | Keputusan produk: bangun tahapnya, atau buang kolomnya (butuh migrasi) |
+| `OvertimeRequest.rejectionReason` | **Bukan kolom mati (koreksi).** Ditulis langkah penolakan approval generik — `rejectStep` di `src/actions/approval.actions.ts` (`REJECTION_REASON_MODELS`) dengan catatan dari form di `/pengaturan/persetujuan/[slug]` | Tidak ada — alasan penolakan tampil di halaman detail lembur |
 | `PettyCash.sourceAccountId`, `PettyCash.expenseAccountId` | Kolom MATI: payload `pettyCash.create` hanya menulis `accountId`/`projectId`/`vendorId`/`categoryId`. Perilakunya tetap benar karena hook memakai `pettyCash.sourceAccountId ?? settings.cashBankAccountId` dan MELEMPAR bila keduanya kosong — jadi tidak ada uang tanpa akun, hanya saja akun per transaksi tidak bisa dipilih dari UI | Keputusan produk (tambahkan pilihan akun, atau buang kolomnya lewat migrasi) |
-| **10 kolom yang hanya diisi skrip seed** (`Attendance.checkIn/outLatitude`, `checkIn/outLongitude`, `checkOut`, `overtimeApproved`, `overtimeMinutes`, `CrmTicket.firstResponseAt`, `resolvedAt`, `CrmTicketComment.isInternal`) | Model `Attendance` DIBACA produk (metrik absensi dasbor + notifikasi terlambat di `api/cron/route.ts`) tetapi **tidak ada satu pun halaman maupun aksi yang menulis absensi di seluruh repo** — hanya `scripts/seed-hrm-crm-e2e.ts`. Jadi dasbor absensi hanya bisa terisi dari seed, dan basis data demo menampilkan GPS serta menit lembur yang tidak bisa dihasilkan alur nyata | Penjaga skema DIPERKETAT: kelas ini kini dideteksi terpisah dan dicatat di `SEED_ONLY_COLUMNS` (berarah dua). Keputusan produk: bangun modul input absensi (check-in/out, GPS, lembur) atau buang kolomnya lewat migrasi |
+| **10 kolom yang hanya diisi skrip seed** — **sebagian besar sudah ditutup.** `/sdm/absensi` (commit `2cb1d7da`) kini menulis `Attendance.checkOut`, `overtimeApproved`, `overtimeMinutes` dari jam dinding WIB, dan `addTicketComment` menulis `CrmTicketComment.isInternal` | Model `Attendance` DIBACA produk (metrik absensi dasbor + notifikasi terlambat di `api/cron/route.ts`) dan kini juga DITULIS (halaman + aksi absensi, izin `create/edit/manage_attendance`). Sisa yang masih seed-only: GPS absensi (`checkIn/outLatitude`, `checkIn/outLongitude`) + `CrmTicket.firstResponseAt`/`resolvedAt` | Penjaga skema DIPERKETAT: kelas ini dideteksi terpisah dan dicatat di `SEED_ONLY_COLUMNS` (berarah dua). Keputusan produk untuk enam sisanya: tangkap lokasi di form absensi, tandai waktu respons/penyelesaian tiket, atau buang kolomnya lewat migrasi |
 
 Mengapa kelas "hanya seed" penting: ia **lolos** dari pemeriksaan kolom mati biasa
 karena berkas seed ikut dipindai sebagai kode, sehingga berminggu-minggu tidak
@@ -109,18 +111,18 @@ seksinya), `UomConversion.factorToBase` (`createMany({ data: … })` dari JSON f
 `Employee.dateOfBirth` (ditulis di `master.actions.ts`), dan
 `VendorBillItem.discountAmount` (ditulis di dalam `.map()` di luar blok `data:`).
 
-## 4d. Model yang dibaca produk tetapi tidak punya jalur tulis (11 model → 2)
+## 4d. Model yang dibaca produk tetapi tidak punya jalur tulis (11 model → 0)
 
 Kelas yang lebih besar dari §4b: bukan sekadar kolom, melainkan **seluruh modelnya
 tidak bisa diisi dari aplikasi**. Terdeteksi lewat pemeriksaan baru di penjaga
 `schema-usage` (`SEED_ONLY_MODELS`, berarah dua) yang memperhitungkan TIGA jalur
 tulis: delegate Prisma langsung, raw SQL, dan nested write dari model induk.
 
-| Model | Yang dibaca produk | Akibatnya |
-| --- | --- | --- |
-| `Attendance` | metrik absensi dasbor + notifikasi keterlambatan | absensi tidak bisa dicatat siapa pun; dasbor hanya berisi pada basis data yang di-seed |
-| `AssetGroup` | halaman aset (`asset.group?.name`) | kelompok aset tidak bisa dibuat, dan `Asset.groupId` tidak pernah ditulis |
-| `BankStatementLine` | halaman rekonsiliasi bank | baris rekening koran hanya dari seed (impor belum ada) |
+| Model | Yang dibaca produk | Akibatnya (dulu) | Status |
+| --- | --- | --- | --- |
+| `Attendance` | metrik absensi dasbor + notifikasi keterlambatan | absensi tidak bisa dicatat siapa pun; dasbor hanya berisi pada basis data yang di-seed | **DITUTUP** — `/sdm/absensi` (commit `2cb1d7da`) |
+| `AssetGroup` | halaman aset (`asset.group?.name`) | kelompok aset tidak bisa dibuat, dan `Asset.groupId` tidak pernah ditulis | **DITUTUP** — master `/aset/grup`; `Asset.groupId` & `assetBrandId` ditulis form aset |
+| `BankStatementLine` | halaman rekonsiliasi bank | baris rekening koran hanya dari seed (impor belum ada) | **DITUTUP** — `/keuangan/laporan-bank/[slug]` (commit `6e60965e`) |
 
 ### Sudah ditutup
 
@@ -133,6 +135,8 @@ tulis: delegate Prisma langsung, raw SQL, dan nested write dari model induk.
 | `Holiday`, `DepartmentHoliday`, `WorkSchedule` | halaman `/sdm/kalender-kerja` + 9 aksi (buat/ubah/hapus untuk ketiganya). Izinnya **sudah di-seed sejak dulu** (`create/edit/delete/manage_holidays`, `view/create/delete_work_schedules`) — hanya halaman & aksinya yang tidak pernah dibangun. `edit_work_schedules` ditambahkan ke `PERMISSIONS` + katalog (prosedur generator) |
 | `AssetGroup` | master `/aset/grup` + aksi create/update/delete + izin `view/create/edit/delete_asset_groups`. Sekaligus menutup lingkaran: `Asset.assetBrandId` dan `Asset.groupId` kini benar-benar ditulis form aset (lihat catatan cacat skema di bawah). **Hapus ditolak** bila grup masih dipakai aset — relasi `Asset.groupId` opsional, dan tanpa penjagaan itu Prisma melepas asetnya diam-diam (SetNull) |
 | `ProfitCenter` | master `/keuangan/pusat-laba` + aksi create/update/delete dan izin `view/create/edit/delete_profit_centers`. **TERHUBUNG KE JURNAL**: form jurnal punya pilihan "Pusat Laba" yang ditulis ke setiap entri di kedua jalur (buat & ubah), dan jalur pembalikan jurnal ikut menyalinnya — jadi laporan pusat laba berhenti menumpuk di "Tanpa Pusat Laba" |
+| `Attendance` | halaman `/sdm/absensi` + aksi `createAttendance`/`updateAttendance`/`deleteAttendance` (izin `create/edit/manage_attendance`), menulis absensi dari jam dinding WIB lewat `src/lib/utils/attendance-time.ts`; kolom GPS sengaja tetap seed-only (§4b) |
+| `BankStatementLine` | halaman detail `/keuangan/laporan-bank/[slug]` + aksi `createBankStatementLine`/`updateBankStatementLine`/`deleteBankStatementLine` (izin `create_journals` — sama dengan penulis header `createBankStatement`). `totalDebits`/`totalCredits` header dihitung ulang (`_sum`) di dalam transaksi yang sama; kolom `matchedType` sengaja tetap mati — rekonsiliasi belum menandai jenis kecocokan |
 
 Catatan prosedur yang terbukti: menambah permission baru menuntut EMPAT suntingan,
 bukan dua — `PERMISSIONS`, `RESOURCE_MODULE`, `RESOURCE_LABEL`
@@ -171,10 +175,11 @@ Ironi yang tercatat pada kelompok SDM: `bulk.actions.ts` **sudah** memetakan hap
 massal untuk `holiday`, `departmentHoliday`, dan `workSchedule` — jadi aplikasi bisa
 menghapus baris yang tidak bisa dibuat.
 
-Semuanya keputusan produk untuk yang tersisa: bangun jalur tulisnya (halaman + aksi)
-atau buang modelnya lewat migrasi. Yang **tidak** masuk daftar ini sudah diverifikasi
-punya jalur tulis meski tidak terlihat dari delegate — mis. `ActivityLog` ditulis
-`INSERT INTO activity_logs` (raw SQL) dan `SalesReturnItem`/`PurchaseOrderItem`
+Tidak ada sisa keputusan di tingkat model: kesebelas model kelas ini sudah punya jalur
+tulis produk, dan `SEED_ONLY_MODELS` (berarah dua) kini **kosong** — model baru yang
+hanya bisa diisi seed akan langsung memerahkannya. Yang **tidak** masuk daftar ini sudah
+diverifikasi punya jalur tulis meski tidak terlihat dari delegate — mis. `ActivityLog`
+ditulis `INSERT INTO activity_logs` (raw SQL) dan `SalesReturnItem`/`PurchaseOrderItem`
 ditulis lewat nested create.
 
 ## 5. Keputusan desain yang TERVERIFIKASI: kapan stok keluar saat penjualan
@@ -248,7 +253,7 @@ Hasil (2026-10-18, satu mesin, satu basis data):
   baris, entri yatim, stok beda dari pergerakan, faktur tanpa jurnal, total faktur
   tidak konsisten, jurnal nol yang diposting, pergerakan menunjuk item hilang).
 
-### DUA CELAH BUKTI YANG TERSISA (temuan dari run ini, belum ditutup)
+### DUA CELAH BUKTI YANG TERSISA — **keduanya sudah ditutup** (§8b)
 
 1. **Posting faktur penjualan tidak pernah diuji end-to-end.** Tidak ada satu pun spec
    yang menekan "Posting faktur ini?" — `sales-flow.spec.ts` hanya memastikan halaman
@@ -261,6 +266,9 @@ Hasil (2026-10-18, satu mesin, satu basis data):
    belum pernah dilihat berjalan pada basis data nyata.
 
 Keduanya tentang rantai uang/persediaan — bagian yang paling mahal bila salah.
+Ditutup pada 2026-10-18: spec `penjualan-posting-faktur.spec.ts` menekan tombol posting
+lewat UI, dan fixture penerimaan barang + lapisan FIFO membuat jalur stok berjalan nyata
+(pergerakan stok `OUT`, `qty_on_hand` 10 → 8 — tabel bukti §8b).
 
 ## 8b. CACAT DITEMUKAN: posting faktur bisa "berhasil" tanpa membukukan apa pun
 

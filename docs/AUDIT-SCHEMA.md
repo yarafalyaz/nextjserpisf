@@ -3,6 +3,11 @@
 **Status (akhir sesi):** sebagian temuan sudah **ditutup** (lihat §0). Sisanya menunggu
 keputusan pemilik produk, didaftarkan di bagian **Keputusan yang menunggu**.
 
+> **Pembaruan 2026-10-18.** Dua keluarga temuan besar sudah **tuntas**: (a) §3 gelombang 1 —
+> kesebelas kolom skalar sudah dibuang, gelombang 2 menyisakan **empat** kolom; (b) §5 —
+> "17 aksi tanpa pemanggil UI" ditindaklanjuti habis (8 dihapus, 9 disambungkan).
+> Rincian per item ada di bagian masing-masing dan di **Keputusan yang menunggu**.
+
 **Cara memeriksa:** setiap nama field/kolom dicari sebagai kata utuh di `src/`, `scripts/`,
 `e2e/`, dan `prisma/` (termasuk seed). Positif-palsu yang diketahui — FK skalar yang dipakai
 Prisma lewat `connect` tidak pernah disebut namanya — **diperiksa satu per satu**, bukan
@@ -35,8 +40,9 @@ yang menyebut **nama relasi**, bukan nama model:
   halaman daftar bahkan menghitungnya (`_count: { select: { results: true } }`) dan form
   inspeksi mengumpulkan hasil per item.
 - `ProductionGenealogyMaterial` — `materials: { create: … }` di
-  `src/lib/services/production-genealogy.service.ts:43`, dan dibaca di
-  `src/lib/reports/job-order-data.ts:145`.
+  `src/lib/services/production-genealogy.service.ts:55`; **pembacanya belum ada** —
+  `materials` tidak pernah di-`include`/`select` di mana pun (laporan Job Order membaca
+  induk `productionGenealogy`-nya), jadi barisnya ditulis tetapi belum pernah ditampilkan.
 
 **Kesalahan metodenya**: pemeriksaan saya mencari **nama model** dan **delegate**, sehingga
 penggunaan lewat relasi tak terlihat. **Pelajaran**: "tak ada rujukan ke nama model" != "model mati".
@@ -56,28 +62,44 @@ Pencocokan rekonsiliasi **sudah mencatat dokumen sumbernya** lewat
   `matchedPaymentId`, `BankReconciliationItem.relatedJournalId`/`relatedPaymentId`) sebagai
 > "jejak audit yang tidak pernah diisi". Itu **salah** — saya belum memeriksa `journalEntryId`.
 > Setelah diperiksa: keempatnya **duplikat**, sekelas `amountPaid`, dan sudah **dibuang** (§0).
-> `BankStatementLine.matchedType` juga tak ditulis aplikasi (1 rujukan, di skrip seed lama).
+> `BankStatementLine.matchedType` juga tak ditulis aplikasi — kini 0 rujukan kode (lihat §3).
 
-## 3. Kolom skalar tanpa rujukan (11) — mayoritas hook fitur yang UI-nya sudah ada
+## 3. (riwayat) Kolom skalar tanpa rujukan — gelombang 1 tuntas, gelombang 2 sisa 4
 
-| Model | Kolom | Catatan |
+### Gelombang 1: 11 kolom — **semuanya sudah dibuang**
+
+| Model | Kolom | Nasib |
 | --- | --- | --- |
-| `UnitOfMeasure` | `conversionFactor` | **berisi data (6/6 baris)** — diisi SQL migrasi; di kode digantikan tabel `uom_conversions` |
-| `WorkSchedule` | `lateToleranceMinutes` | fitur jadwal kerja ada; kolom tak pernah diekspos |
-| `BankStatementLine` | `valueDate` | tak pernah diisi; mungkin hook impor rekening koran |
-| `Holiday` / `DepartmentHoliday` | `isNationalHoliday` / `isRecurring` | fitur hari libur ada |
-| `OvertimeRequest` | `approvedBySupervisor` | fitur lembur ada |
-| `PurchaseRequest` | `requesterId` | skalar biasa **tanpa relasi**; pemohon belum tertaut |
-| `ApprovalWorkflow` | `isParallel` | fitur alur persetujuan ada (`/pengaturan/workflow`) |
-| `ApprovalWorkflowStep` | `autoApproveAfterTimeout`, `timeoutHours` | idem |
-| `Tax` | `displayOrder` | fitur pajak ada |
+| `UnitOfMeasure` | `conversionFactor` | dibuang (migrasi `20261016230000_drop_uom_conversion_factor`) — setelah data diperiksa, 6 barisnya semuanya bernilai `1.000000` (default tanpa informasi) |
+| `WorkSchedule` | `lateToleranceMinutes` | dibuang (migrasi `20261016220000_drop_unused_hook_columns`); keterlambatan kini diatur "Denda Keterlambatan per Menit" di `/pengaturan/ubah` |
+| `BankStatementLine` | `valueDate` | dibuang (migrasi yang sama) |
+| `Holiday` | `isNationalHoliday` | dibuang (migrasi yang sama) |
+| `DepartmentHoliday` | `isRecurring` | dibuang (migrasi yang sama) |
+| `OvertimeRequest` | `approvedBySupervisor` | dibuang (migrasi yang sama) |
+| `PurchaseRequest` | `requesterId` | dibuang (migrasi yang sama) |
+| `ApprovalWorkflow` | `isParallel` | dibuang (migrasi yang sama) |
+| `ApprovalWorkflowStep` | `autoApproveAfterTimeout`, `timeoutHours` | dibuang (migrasi yang sama) |
+| `Tax` | `displayOrder` | dibuang (migrasi yang sama) |
 
-> **Koreksi:** saya sempat menggolongkan `conversionFactor` sebagai "mati/tergantikan → boleh
-> dibuang". Setelah **memeriksa data**, kolom itu **terisi di 6 dari 6 baris** — jadi bukan mati.
-> Prinsip yang berlaku: *"tak dirujuk kode" ≠ "tak berisi data"*.
+> **Koreksi yang tetap berlaku:** `conversionFactor` sempat saya pertahankan karena **berisi
+> data (6/6 baris)** — *"tak dirujuk kode" ≠ "tak berisi data"* tetap benar. Setelah nilainya
+> diperiksa, keenam baris ternyata hanya default `1.000000` (tanpa informasi), jadi kolomnya
+> menyusul dibuang. Prinsipnya: periksa datanya dulu sebelum membuang.
 
-Daftar ini **dibekukan di `src/__tests__/schema-usage.test.ts`** (dua arah: kolom mati baru
-memerahkan tes, dan menambal salah satunya juga memerahkannya).
+Semua di atas sudah hilang dari `schema.prisma` dan tidak lagi muncul di daftar-beku penjaga.
+
+### Gelombang 2: 6 kolom (terdeteksi setelah 11 skrip yatim dibuang) — sisa **4**
+
+| Model | Kolom | Status |
+| --- | --- | --- |
+| `BankStatement` | `totalDebits`, `totalCredits` | **DITUTUP (2026-10-18)**: dihitung ulang dari barisnya (`recalcBankStatementTotals`, `src/actions/finance.actions.ts`) di dalam transaksi yang sama dengan create/update/delete `BankStatementLine`; dikunci `finance.actions.test.ts` |
+| `ApprovalWorkflowStep` | `canSkip` | mati — `/pengaturan/workflow` belum mengeksposnya |
+| `Asset` | `assetBrandModelId` | mati — form aset hanya memilih `assetBrandId` (merek); tautan aset → model belum ada di UI |
+| `BankReconciliationItem` | `clearedDate` | mati — pencocokan menulis `matched: true`, belum ada "tanggal clear" |
+| `BankStatementLine` | `matchedType` | mati — rekonsiliasi belum menandai jenis kecocokan |
+
+Empat kolom gelombang 2 itulah isi `KNOWN_UNUSED` di `src/__tests__/schema-usage.test.ts`
+(dua arah: kolom mati baru memerahkan tes, dan menambal/membuang salah satunya juga).
 
 ## 4. (riwayat) `updatedBy`
 
@@ -106,20 +128,25 @@ Dulu: 12 model mendeklarasikan `updatedBy`/`updated_by` tetapi **tak ada kode ya
 >
 > **Yang tetap berlaku**: `postJournal` dan `confirmVendorPayment` **memang** celah nyata — modul
 > jurnal dan pembayaran vendor **tidak** ada di `MODULE_MAP`, jadi tak ada fall-through untuk
-> keduanya. Daftar 17 aksi nol-rujukan juga tetap fakta; yang salah adalah **penafsirannya**
-> sebagai "alur mati" — aksi-aksi itu tak terpakai karena rute status generik menggantikannya.
+> keduanya; keduanya sudah ditutup (§0). Daftar 17 aksi nol-rujukan itu benar sebagai daftar,
+> dan sudah **ditindaklanjuti tuntas**: 8 aksi murni pembalik status **dihapus** (`a194d31c`,
+> `8f9a9dbe`, `c174a183`), 9 aksi berperilaku nyata **disambungkan** ke UI ([1b-1]/[1b-2]).
+> Penjaga `wired-transition-actions` kini menuntut setiap aksi transisi punya pemanggil UI.
 
 **Metode:** memindai 331 aksi (`src/actions/*.ts`) untuk rujukan di luar berkas definisinya.
 Helper query murni (`getCronLogs`, `getProjectProgress`, …) dan aksi auth legacy dikecualikan.
-Guard `wired-transition-actions` mengonfirmasi independen: seluruh 17 entri memang nol rujukan.
+Saat audit, guard `wired-transition-actions` mengonfirmasi 17 entri memang nol rujukan; kini
+guard itu **dibalik** menjadi tuntutan: `ALLOWED_UNWIRED` kosong dan setiap aksi transisi wajib
+punya pemanggil UI.
 
-**Sudah ditutup:** `postJournal`, `confirmVendorPayment` (§0).
+**Sudah ditutup:** `postJournal`, `confirmVendorPayment` (§0); 8 aksi pembalik status
+**dihapus**, 9 aksi berperilaku **disambungkan** (lihat [1b-1], [1b-2], dan keputusan #1).
 
-**Celah nyata yang belum diputuskan — rantai Sales Order:**
-`confirmSalesOrder` → `processSalesOrder` → `completeSalesOrder`. SO dibuat `draft`; hanya
-ketiga aksi ini yang menaikkan statusnya, dan **tak ada tombol di `/penjualan/pesanan/`**.
-Alur persetujuan tidak menutupnya (hanya `SalesInvoice` lewat `requestApprovalIfConfigured`),
-dan surat jalan/faktur tidak menuntut maupun menaikkan status SO.
+**Rantai Sales Order — SUDAH DITUTUP (`a194d31c`):** ketiga aksi pembalik status
+(`confirmSalesOrder` → `processSalesOrder` → `completeSalesOrder`) **dihapus** karena tak
+terjangkau dan digantikan rute generik. Status SO naik lewat tombol **Setujui** di halaman
+detail (`StatusActions` → `/api/workflow`; `salesOrder` ada di `MODULE_MAP`), dan halaman
+detail pesanan kini punya kartu + tombol "+ Surat Jalan" untuk status yang boleh dikirim.
 
 ### §5b. (DITARIK) Pengadilan lanjutan (penawaran, cuti, pengeluaran)
 
@@ -207,7 +234,7 @@ sama: *"keadaan ini bisa dihasilkan/diakses oleh apa saja?"* — bukan hanya "ap
 | Keluarga klaim | Metode | Hasil pemeriksaan ulang |
 | --- | --- | --- |
 | Gerbang status "buntu" (§5b–§5d) | rujukan ke **aksi spesifik** | **GAGAL** — jalur generik `/api/workflow` (fall-through) menghasilkan `approved`. **Dicabut.** |
-| Model tanpa pemakaian (§1) | nama model + delegate **dan** jalur relasi (`include`/`select`) | **Lolos** — `QcInspectionResult`: relasi `results` tak pernah dibaca; `ProductionGenealogyMaterial`: pemiliknya dipakai, tetapi `include: { materials }` **nol**. |
+| Model tanpa pemakaian (§1) | nama model + delegate **dan** jalur relasi (`include`/`select`) | **Lolos** — `QcInspectionResult`: `results` ditulis nested **dan** dibaca (halaman detail + `_count` di daftar); `ProductionGenealogyMaterial`: ditulis nested, tetapi `include: { materials }` **nol** di seluruh kode — ditulis, belum pernah dibaca. |
 | Kolom skalar tanpa rujukan (§3) | nama field **dan** nama kolom `@map`, plus `$queryRaw` | **Lolos** — tak ada SQL mentah yang menyebut kolom-kolom itu; spread `data: x` yang ada tidak berkaitan. |
 | `postJournal`/`confirmVendorPayment` (§0) | rujukan aksi **dan** keberadaan rute generik | **Lolos** — modul **jurnal** & **pembayaran vendor** tidak ada di `MODULE_MAP`, jadi tak ada fall-through; sebelum perbaikan, jurnal memang tetap `DRAFT` di DB. |
 
@@ -217,27 +244,22 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
 
 ## Keputusan yang menunggu
 
-1. **Higienitas kode: 17 aksi tanpa pemanggil UI** — diperiksa isinya, dan terbagi **dua
-   kelompok** yang konsekuensinya berbeda:
-   - **(a) 8 aksi murni membalik status** (`confirmSalesOrder`, `processSalesOrder`,
-     `completeSalesOrder`, `approvePurchaseRequest`, `approvePurchaseOrder`,
-     `markPurchaseOrderOrdered`, `approveLeave`, `rejectLeave`): hanya `update`/`updateMany`
-     pada kolom status, tanpa menulis kolom lain. Statusnya digantikan rute generik
-     `/api/workflow` (yang menetapkan `approved`) → **hapus = aman**, sekaligus tak lagi
-     memelihara rantai status yang tak bisa dicapai UI.
-   - **(b) 9 aksi berperilaku nyata** — bukan kode mati, melainkan **fitur yang belum punya
-     UI**: `reviseQuotation` (menyimpan `revisionNumber` + `dataSnapshot` = versi penawaran),
-     `send/accept/rejectQuotation` + `cancelPurchaseOrder` + `processPurchaseReturn` (lewat
-     helper alur status), `deleteSalesOrder`, `markExpensePaid` (**memposting jurnal** dan
-     menulis `balanceBefore`/`balanceAfter`), dan `updateProductionCost` (**punya unit test
-     sendiri**). Menghapus kelompok ini = **menghilangkan kemampuan** → keputusan produk,
-     bukan higienitas.
-   Menghapus apa pun di daftar ini kini **berisik**: penjaga `wired-transition-actions`
-   memerah dan menyebut entri basi yang harus dibuang dari daftarnya.
+1. ~~**Higienitas kode: 17 aksi tanpa pemanggil UI**~~ — **sudah tuntas.** Kelompok
+   **(a) 8 aksi murni membalik status** (`confirmSalesOrder`, `processSalesOrder`,
+   `completeSalesOrder`, `approvePurchaseRequest`, `approvePurchaseOrder`,
+   `markPurchaseOrderOrdered`, `approveLeave`, `rejectLeave`) **dihapus** — statusnya
+   digantikan rute generik `/api/workflow` (`a194d31c`, `8f9a9dbe`, `c174a183`). Kelompok
+   **(b) 9 aksi berperilaku nyata** (`reviseQuotation`, `send`/`accept`/`rejectQuotation`,
+   `cancelPurchaseOrder`, `processPurchaseReturn`, `deleteSalesOrder`, `markExpensePaid`,
+   `updateProductionCost`) **disambungkan ke UI** ([1b-1]/[1b-2]). Penjaga
+   `wired-transition-actions` kini menuntut setiap aksi transisi punya pemanggil UI
+   (`ALLOWED_UNWIRED` kosong + asersi) — jadi "tak terjangkau" tak bisa kembali diam-diam.
 2. ~~**Seed memalsukan status** (§5e)~~ — **sudah ditutup** (lihat §5e).
-3. **Skema tak terpakai** — 11 kolom §3 — **dua model yang dulu saya sebut mati ternyata dipakai** (§1)
-   (mayoritas hook fitur yang halamannya sudah ada) → implementasikan atau buang. Catatan:
-   `conversionFactor` berisi data; `valueDate` ambigu.
+3. **Skema tak terpakai** — ~~11 kolom §3~~ — **gelombang 1 tuntas** (kesebelasnya dibuang
+   lewat `20261016220000_drop_unused_hook_columns` + `20261016230000_drop_uom_conversion_factor`).
+   Sisa keputusan tinggal **empat kolom gelombang 2** (§3): `ApprovalWorkflowStep.canSkip`,
+   `Asset.assetBrandModelId`, `BankReconciliationItem.clearedDate`, `BankStatementLine.matchedType`
+   — implementasikan atau buang lewat migrasi; daftar-bekunya (`KNOWN_UNUSED`) berarah dua.
 4. ~~**Usulan `ci.yml`**~~ — **sudah diterapkan** (`db push` → `migrate deploy`, dua job).
    Terbukti: migrasi jalan dari DB kosong, `migrate status` up-to-date, drift 0, seed jalan,
    **suite E2E penuh hijau di skema hasil migrasi** (1063 lulus).
@@ -328,6 +350,11 @@ Contoh yang diperiksa: `WorkSchedule.lateToleranceMinutes` — keterlambatan kin
 `Tax.displayOrder` — 0 rujukan; dan `ApprovalWorkflow.isParallel`/`autoApproveAfterTimeout`/
 `timeoutHours` — halaman `/pengaturan/workflow` **tidak mengeksposnya**. Keputusan (3) karena itu
 murni soal **niat fitur** ("masih berencana atau tidak"), bukan soal UI — jauh lebih murah dari (1b).
+
+**Tindak lanjut (2026-10-16): diputuskan BUANG** — kesebelasnya sudah hilang dari `schema.prisma`
+lewat `20261016220000_drop_unused_hook_columns` (10 kolom) +
+`20261016230000_drop_uom_conversion_factor` (`conversionFactor`, setelah 6 barisnya terbukti
+hanya default `1.000000`). Sisa keputusan pindah ke empat kolom gelombang 2 (§3).
 
 **Kesimpulan yang konsisten untuk kesembilannya**: tidak ada satu pun yang bisa "dibuang begitu saja";
 selalu ada **jejak UI yang menunggunya** (tombol, filter, label, atau bagian riwayat). Jadi pilihannya

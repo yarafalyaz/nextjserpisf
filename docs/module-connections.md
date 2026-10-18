@@ -185,11 +185,17 @@ AssetCategory ──► AssetGroup ──► Asset (brand/model) ──► Asset
 - `ProfitCenter` terhubung ke jurnal: form jurnal punya pilihan "Pusat Laba" yang
   ditulis ke setiap entri (buat & ubah + jalur pembalikan).
 
-### 4.6 SDM (kelas "seed-only" yang sudah ditutup)
-Model `Attendance`, `AssetGroup`, `BankStatementLine` awalnya hanya bisa diisi seed.
-Sudah ditutup: `UserWarehouse`, `CrmTicketComment`, `ProjectLog`,
-`AssetBrandModel`, `Holiday`/`DepartmentHoliday`/`WorkSchedule`, `AssetGroup`,
-`ProfitCenter`. Masih seed-only: `Attendance`, `BankStatementLine`.
+### 4.6 Kelas "seed-only" — sudah tuntas
+Dulu 11 model **dibaca produk tetapi hanya bisa diisi seed**; kini semuanya punya jalur
+tulis dan `SEED_ONLY_MODELS` di `src/__tests__/schema-usage.test.ts` **kosong** (berarah
+dua: model baru yang hanya bisa diisi seed langsung memerahkan tes). Ditutup bertahap:
+`UserWarehouse` (panel "Akses Gudang"), `CrmTicketComment` (`addTicketComment`),
+`ProjectLog` (`addProjectLog`), `AssetBrandModel` ("Tipe / Model" di form merek),
+`Holiday`/`DepartmentHoliday`/`WorkSchedule` (`/sdm/kalender-kerja`), `AssetGroup`
+(`/aset/grup`), `ProfitCenter` (`/keuangan/pusat-laba`, terhubung ke jurnal), `Attendance`
+(`/sdm/absensi`, commit `2cb1d7da`), dan `BankStatementLine`
+(`/keuangan/laporan-bank/[slug]`, commit `6e60965e`). Yang tersisa di tingkat KOLOM
+(GPS absensi, `CrmTicket.firstResponseAt`/`resolvedAt`, dan 4 kolom tanpa rujukan) ada di §8.
 
 ### 4.7 Proyek / CRM / Kendaraan
 - `Project` ↔ `ProjectItem` (barang), `ProjectStage`/`Progress`, `ProjectLog`.
@@ -255,11 +261,22 @@ Sudah ditutup: `UserWarehouse`, `CrmTicketComment`, `ProjectLog`,
 
 ## 8. Catatan "belum ditutup" (keputusan produk)
 
-- `Attendance`, `BankStatementLine` masih seed-only (modul input belum dibangun).
-- `PettyCash.sourceAccountId/expenseAccountId` kolom mati (akun per transaksi
-  tidak bisa dipilih dari UI).
-- `OvertimeRequest.supervisorApprovedAt`, `rejectionReason` kolom mati.
-- `UnitOfMeasure.baseUnitId` tidak pernah ditulis (hierarki satuan belum ada).
+Tingkat MODEL sudah bersih — lihat §4.6. Yang tersisa di tingkat kolom & migrasi:
+
+- Kolom **seed-only** (`SEED_ONLY_COLUMNS`, 6): GPS absensi
+  (`Attendance.checkIn/outLatitude`, `checkIn/outLongitude`) +
+  `CrmTicket.firstResponseAt`/`resolvedAt` — tangkap lokasi di form absensi, tandai waktu
+  respons/penyelesaian tiket, atau buang lewat migrasi.
+- Kolom **tanpa rujukan** (`KNOWN_UNUSED`, 4): `ApprovalWorkflowStep.canSkip`,
+  `Asset.assetBrandModelId`, `BankReconciliationItem.clearedDate`, dan
+  `BankStatementLine.matchedType` (rekonsiliasi belum menandai jenis kecocokan).
+- `PettyCash.sourceAccountId/expenseAccountId` kolom mati (akun per transaksi tidak bisa
+  dipilih dari UI; hook memakai `sourceAccountId ?? cashBankAccountId` setelan).
+- `OvertimeRequest.supervisorApprovedAt` kolom mati (halaman detail membacanya, belum ada
+  penulis). `rejectionReason` **bukan** mati — ditulis langkah penolakan approval generik
+  (`src/actions/approval.actions.ts`, `REJECTION_REASON_MODELS`).
+- `UnitOfMeasure.baseUnitId` tidak pernah ditulis (hierarki satuan belum ada; penjaga hapus
+  di `deleteUom` karena itu tidak pernah menyala).
 - `MaterialIssue ↔ ProductionOrder` FK belum ada (migrasi).
 - `Cheque → payment` FK + akun kliring belum ada (migrasi).
 - Stok keluar di surat jalan vs faktur: keputusan bisnis belum diputuskan
