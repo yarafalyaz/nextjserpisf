@@ -215,7 +215,7 @@ export function InvoiceItemsEditor({
   if (!editing) {
     return (
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">
             Barang
           </h2>
@@ -229,126 +229,196 @@ export function InvoiceItemsEditor({
             </Button>
           )}
         </div>
-        <div className="p-4 px-5 overflow-x-auto">
-          <table className="w-full min-w-[520px] border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-default">
-                <th
-                  scope="col"
-                  className="text-left py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
-                >
-                  Item
-                </th>
-                <th
-                  scope="col"
-                  className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
-                >
-                  Jml
-                </th>
-                <th
-                  scope="col"
-                  className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
-                >
-                  Harga
-                </th>
-                <th
-                  scope="col"
-                  className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
-                >
-                  Diskon
-                </th>
-                <th
-                  scope="col"
-                  className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
-                >
-                  Total
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item, i) => (
-                <tr key={i} className="border-b border-default/50">
-                  <td className="py-2 px-2">
+        <div className="p-4 px-5 space-y-3">
+          {/* Mobile cards */}
+          <ul role="list" className="md:hidden flex flex-col gap-3">
+            {items.map((item, i) => (
+              <li key={i} className="rounded-lg border border-default bg-card p-3 min-w-0">
+                <div className="flex items-start justify-between gap-2 min-w-0">
+                  <span className="text-sm font-medium text-foreground min-w-0 break-words">
                     {item.description || `Item #${item.itemId}`}
-                  </td>
-                  <td className="text-right py-2 px-2">
-                    {item.qty}
-                    {item.uom ? ` ${item.uom}` : ""}
-                  </td>
-                  <td className="text-right py-2 px-2">
-                    {formatCurrency(item.unitPrice)}
-                  </td>
-                  <td className="text-right py-2 px-2">
-                    {formatCurrency(item.discount)}
-                  </td>
-                  <td className="text-right py-2 px-2">
+                  </span>
+                  <span className="text-sm font-semibold text-foreground shrink-0">
                     {formatCurrency(item.total)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr>
-                <td colSpan={4} className="text-right py-1 px-2 font-medium">
-                  Subtotal
-                </td>
-                <td className="text-right py-1 px-2 font-medium">
-                  {formatCurrency(subtotal)}
-                </td>
-              </tr>
-              {discount > 0 && (
-                <tr>
-                  <td colSpan={4} className="text-right py-1 px-2">
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
+                  <div className="min-w-0">
+                    <span className="block text-muted-foreground">Jml</span>
+                    <span className="font-medium text-foreground">
+                      {item.qty}
+                      {item.uom ? ` ${item.uom}` : ""}
+                    </span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="block text-muted-foreground">Harga</span>
+                    <span className="font-medium text-foreground break-all">{formatCurrency(item.unitPrice)}</span>
+                  </div>
+                  <div className="min-w-0">
+                    <span className="block text-muted-foreground">Diskon</span>
+                    <span className="font-medium text-foreground break-all">{formatCurrency(item.discount)}</span>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full min-w-[520px] border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-default">
+                  <th
+                    scope="col"
+                    className="text-left py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
+                  >
+                    Item
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
+                  >
+                    Jml
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
+                  >
+                    Harga
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
+                  >
                     Diskon
-                  </td>
-                  <td className="text-right py-1 px-2">
-                    -{formatCurrency(discount)}
-                  </td>
+                  </th>
+                  <th
+                    scope="col"
+                    className="text-right py-2 px-2 text-xs font-medium text-muted-foreground uppercase"
+                  >
+                    Total
+                  </th>
                 </tr>
-              )}
-              {taxAmount > 0 && (
+              </thead>
+              <tbody>
+                {items.map((item, i) => (
+                  <tr key={i} className="border-b border-default/50">
+                    <td className="py-2 px-2">
+                      {item.description || `Item #${item.itemId}`}
+                    </td>
+                    <td className="text-right py-2 px-2">
+                      {item.qty}
+                      {item.uom ? ` ${item.uom}` : ""}
+                    </td>
+                    <td className="text-right py-2 px-2">
+                      {formatCurrency(item.unitPrice)}
+                    </td>
+                    <td className="text-right py-2 px-2">
+                      {formatCurrency(item.discount)}
+                    </td>
+                    <td className="text-right py-2 px-2">
+                      {formatCurrency(item.total)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
                 <tr>
-                  <td colSpan={4} className="text-right py-1 px-2">
-                    Pajak ({tax}%)
+                  <td colSpan={4} className="text-right py-1 px-2 font-medium">
+                    Subtotal
                   </td>
-                  <td className="text-right py-1 px-2">
-                    {formatCurrency(taxAmount)}
+                  <td className="text-right py-1 px-2 font-medium">
+                    {formatCurrency(subtotal)}
                   </td>
                 </tr>
-              )}
-              <tr>
-                <td colSpan={4} className="text-right py-1 px-2 font-bold">
-                  Total Keseluruhan
-                </td>
-                <td className="text-right py-1 px-2 font-bold">
-                  {formatCurrency(grandTotal)}
-                </td>
-              </tr>
-              {variant === "invoice" && (
-                <>
+                {discount > 0 && (
                   <tr>
-                    <td colSpan={4} className="text-right py-1 px-2 text-success">
-                      Terbayar
+                    <td colSpan={4} className="text-right py-1 px-2">
+                      Diskon
                     </td>
-                    <td className="text-right py-1 px-2 text-success">
-                      {formatCurrency(paidAmount)}
+                    <td className="text-right py-1 px-2">
+                      -{formatCurrency(discount)}
                     </td>
                   </tr>
+                )}
+                {taxAmount > 0 && (
                   <tr>
-                    <td
-                      colSpan={4}
-                      className="text-right py-1 px-2 text-danger font-bold"
-                    >
-                      Sisa
+                    <td colSpan={4} className="text-right py-1 px-2">
+                      Pajak ({tax}%)
                     </td>
-                    <td className="text-right py-1 px-2 text-danger font-bold">
-                      {formatCurrency(sisa)}
+                    <td className="text-right py-1 px-2">
+                      {formatCurrency(taxAmount)}
                     </td>
                   </tr>
-                </>
-              )}
-            </tfoot>
-          </table>
+                )}
+                <tr>
+                  <td colSpan={4} className="text-right py-1 px-2 font-bold">
+                    Total Keseluruhan
+                  </td>
+                  <td className="text-right py-1 px-2 font-bold">
+                    {formatCurrency(grandTotal)}
+                  </td>
+                </tr>
+                {variant === "invoice" && (
+                  <>
+                    <tr>
+                      <td colSpan={4} className="text-right py-1 px-2 text-success">
+                        Terbayar
+                      </td>
+                      <td className="text-right py-1 px-2 text-success">
+                        {formatCurrency(paidAmount)}
+                      </td>
+                    </tr>
+                    <tr>
+                      <td
+                        colSpan={4}
+                        className="text-right py-1 px-2 text-danger font-bold"
+                      >
+                        Sisa
+                      </td>
+                      <td className="text-right py-1 px-2 text-danger font-bold">
+                        {formatCurrency(sisa)}
+                      </td>
+                    </tr>
+                  </>
+                )}
+              </tfoot>
+            </table>
+          </div>
+          {/* Summary for mobile (tfoot duplicate) */}
+          <div className="md:hidden rounded-lg border border-default bg-surface-secondary p-3 space-y-1.5 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-medium">{formatCurrency(subtotal)}</span>
+            </div>
+            {discount > 0 && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Diskon</span>
+                <span>-{formatCurrency(discount)}</span>
+              </div>
+            )}
+            {taxAmount > 0 && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">Pajak ({tax}%)</span>
+                <span>{formatCurrency(taxAmount)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2 font-bold border-t border-default pt-2 mt-2">
+              <span>Total Keseluruhan</span>
+              <span>{formatCurrency(grandTotal)}</span>
+            </div>
+            {variant === "invoice" && (
+              <>
+                <div className="flex items-center justify-between gap-2 text-success">
+                  <span>Terbayar</span>
+                  <span>{formatCurrency(paidAmount)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-2 text-danger font-bold">
+                  <span>Sisa</span>
+                  <span>{formatCurrency(sisa)}</span>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -357,7 +427,7 @@ export function InvoiceItemsEditor({
   // Edit mode
   return (
     <div className="bg-surface rounded-xl border border-primary/30 shadow-sm overflow-hidden">
-      <div className="flex items-center justify-between p-4 px-5 border-b border-default bg-primary/5">
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default bg-primary/5">
         <h2 className="text-[0.9375rem] font-semibold text-foreground">
           Ubah Item Faktur
         </h2>
@@ -382,8 +452,133 @@ export function InvoiceItemsEditor({
           </Button>
         </div>
       </div>
-      <div className="p-4 px-5 overflow-x-auto">
-        <table className="w-full min-w-[560px] border-collapse text-sm">
+      <div className="p-4 px-5 space-y-4">
+        {/* Mobile edit cards */}
+        <ul role="list" className="md:hidden flex flex-col gap-4">
+          {items.map((item, i) => {
+            const selectedMeta = availableItems.find((ai) => ai.id === item.itemId);
+            const conversions = selectedMeta?.uomConversions ?? [];
+            const baseUom = selectedMeta?.unitOfMeasure;
+            const uomOptions = baseUom
+              ? [baseUom, ...conversions.map((c) => c.code), ...extraUoms]
+              : [];
+            const uniqueUomOptions = [...new Set(uomOptions)];
+            const showUomSelect = uniqueUomOptions.length > 1;
+            const tracksSerial = selectedMeta?.trackSerial === true;
+            const serialText = (item.serialNumbers ?? []).join("\n");
+            const serialCount = item.serialNumbers?.length ?? 0;
+            return (
+              <li key={i} className="rounded-lg border border-default bg-card p-3 min-w-0 space-y-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Combobox
+                      options={availableItems.map((ai) => ({
+                        value: String(ai.id),
+                        label: `${ai.name} (${ai.sku})`,
+                      }))}
+                      value={item.itemId ? String(item.itemId) : null}
+                      onChange={(key) => updateItem(i, "itemId", key ?? "")}
+                      placeholder="Cari item..."
+                      className="w-full"
+                    />
+                    {item.itemId && baseUom && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        <span className="text-xs text-muted-foreground">Satuan:</span>
+                        {showUomSelect ? (
+                          <QuickAddSelect
+                            options={uniqueUomOptions.map((code) => ({ value: code, label: code }))}
+                            value={item.uom ?? baseUom}
+                            onChange={(key) => updateItem(i, "uom", key ?? "")}
+                            placeholder="Cari satuan..."
+                            title={QUICK_ADD.uom.title}
+                            fields={QUICK_ADD.uom.fields}
+                            action={QUICK_ADD.uom.action}
+                            getLabel={(formData) =>
+                              String(formData.get("symbol") ?? "").trim() ||
+                              String(formData.get("name") ?? "").trim()
+                            }
+                            onCreated={(created) => {
+                              setExtraUoms((prev) => [...prev, created.label]);
+                              updateItem(i, "uom", created.label);
+                            }}
+                          />
+                        ) : (
+                          <span className="text-xs font-medium text-foreground">{item.uom ?? baseUom}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    onPress={() => removeItem(i)}
+                    className="shrink-0 text-danger hover:text-danger/80 text-lg min-h-10 min-w-10"
+                    title="Hapus item"
+                    aria-label={`Hapus item baris ${i + 1}`}
+                  >
+                    ×
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-muted-foreground mb-1" htmlFor={`m-invoice-item-qty-${i}`}>
+                      Jml
+                    </label>
+                    <input
+                      id={`m-invoice-item-qty-${i}`}
+                      type="number"
+                      min={1}
+                      value={item.qty}
+                      onChange={(e) => updateItem(i, "qty", e.target.value)}
+                      className="form-input w-full text-right text-sm"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-xs text-muted-foreground mb-1">Total</span>
+                    <span className="block text-sm font-semibold text-foreground">{formatCurrency(item.total)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-xs text-muted-foreground mb-1">Harga</span>
+                    <CurrencyInput
+                      value={item.unitPrice}
+                      onChange={(v) => updateItem(i, "unitPrice", v)}
+                      className="form-input w-full text-right text-sm"
+                    />
+                  </div>
+                  <div>
+                    <span className="block text-xs text-muted-foreground mb-1">Diskon</span>
+                    <CurrencyInput
+                      value={item.discount}
+                      onChange={(v) => updateItem(i, "discount", v)}
+                      className="form-input w-full text-right text-sm"
+                    />
+                  </div>
+                </div>
+                {item.itemId && tracksSerial && (
+                  <div>
+                    <label className="block text-xs font-medium text-muted-foreground mb-1" htmlFor={`m-invoice-item-serial-${i}`}>
+                      Nomor Seri (satu per baris)
+                    </label>
+                    <textarea
+                      id={`m-invoice-item-serial-${i}`}
+                      value={serialText}
+                      onChange={(e) => updateItemSerialNumbers(i, e.target.value)}
+                      rows={Math.max(2, Math.min(serialCount + 1, 4))}
+                      placeholder="Kosongkan untuk FIFO otomatis"
+                      className="form-input w-full text-sm font-mono"
+                    />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {serialCount} seri{item.qty > 0 ? ` (saran ${item.qty})` : ""}
+                      {serialCount > 0 && serialCount !== item.qty ? " — belum sama qty" : ""}
+                    </p>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {/* Desktop table */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full min-w-[560px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-default">
               <th
@@ -564,7 +759,8 @@ export function InvoiceItemsEditor({
               );
             })}
           </tbody>
-        </table>
+          </table>
+        </div>
 
         <Button
           type="button"

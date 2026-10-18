@@ -591,7 +591,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
 
         <FormSection title="Satuan Alternatif (Multi-UoM)" columns={1}>
           <div>
-            <div className="flex justify-between items-center mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <span className="text-xs text-muted-foreground">Satuan dasar: <strong>{watch("unitOfMeasure") || "PCS"}</strong>. Tentukan satuan alternatif beserta faktor konversi ke satuan dasar.</span>
               <Button type="button" onPress={addUom} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-all">+ Tambah Satuan</Button>
             </div>

@@ -107,7 +107,7 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
 
       {/* Items */}
       <div style={{ marginTop: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Item Retur</h3>
           <Button type="button" onPress={addItem} variant="secondary" size="sm">+ Tambah Item</Button>
         </div>

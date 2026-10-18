@@ -243,7 +243,7 @@ export function PurchaseRequestForm({
 
         <FormSection title="Item" columns={1}>
           <div>
-            <div className="flex justify-between items-center mb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <h3 className="text-base font-semibold text-foreground">
                 Item yang Dibutuhkan
               </h3>

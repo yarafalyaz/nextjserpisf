@@ -51,9 +51,9 @@ export function StatusActions({ status, id, module }: StatusActionsProps) {
   const colorClass = STATUS_COLORS[status] || "bg-default/20 text-default-600"
 
   return (
-    <div className="flex items-center justify-between p-4 bg-surface rounded-xl border border-default shadow-sm">
-      <div className="flex items-center gap-3">
-        <span className="text-sm font-medium text-muted-foreground">Status:</span>
+    <div className="flex flex-wrap items-center justify-between gap-3 p-4 bg-surface rounded-xl border border-default shadow-sm">
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="text-sm font-medium text-muted-foreground shrink-0">Status:</span>
         <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold capitalize ${colorClass}`}>
           {status === "draft" && <Clock size={12} aria-hidden="true" />}
           {status === "pending" && <Clock size={12} aria-hidden="true" />}
@@ -63,7 +63,7 @@ export function StatusActions({ status, id, module }: StatusActionsProps) {
         </span>
       </div>
       {(canApprove || canReject) && (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {canApprove && (
             <Button
               variant="success"

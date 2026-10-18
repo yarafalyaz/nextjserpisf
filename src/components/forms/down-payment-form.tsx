@@ -223,7 +223,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
 
               {/* DP Info */}
               {dpPercent > 0 && (
-                <div className="bg-primary/5 rounded-lg border border-primary/20 p-3 text-xs text-primary flex items-center justify-between">
+                <div className="bg-primary/5 rounded-lg border border-primary/20 p-3 text-xs text-primary flex flex-wrap items-center justify-between gap-2">
                   <span>Kategori Pelanggan menetapkan uang muka default sebesar <strong>{dpPercent}%</strong></span>
                   <span className="font-semibold">
                     Default DP: {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Math.round((quo.grandTotal || 0) * (dpPercent / 100)))}

@@ -325,7 +325,7 @@ export default async function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 items-stretch gap-4 px-4 xl:grid-cols-3 lg:px-6">
-            <Card className="xl:col-span-2">
+            <Card className="xl:col-span-2 min-w-0 overflow-x-clip">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Car className="size-4 text-primary" />
@@ -342,8 +342,99 @@ export default async function DashboardPage() {
                   </Button>
                 </CardAction>
               </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto border-t">
+              <CardContent className="min-w-0 p-0">
+                {/* Mobile cards — fallback at 390px */}
+                <div className="border-t md:hidden">
+                  {data.cars.length === 0 ? (
+                    <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      Belum ada mobil yang sedang dikerjakan
+                    </p>
+                  ) : (
+                    <ul className="divide-y">
+                      {data.cars.map((car) => (
+                        <li
+                          key={car.id}
+                          className="flex min-w-0 flex-col gap-2.5 px-4 py-3"
+                        >
+                          <div className="flex min-w-0 items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex min-w-0 items-center gap-1.5">
+                                <span className="min-w-0 truncate break-all font-mono text-xs font-semibold">
+                                  {car.plate}
+                                </span>
+                                {car.overdue ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="shrink-0 border-transparent bg-red-100 text-[10px] text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                                  >
+                                    Lewat
+                                  </Badge>
+                                ) : null}
+                              </div>
+                              <p className="min-w-0 truncate break-words text-sm font-medium">
+                                {car.customer}
+                              </p>
+                              <p className="min-w-0 truncate break-words text-xs text-muted-foreground">
+                                {car.name}
+                              </p>
+                            </div>
+                            <Badge
+                              variant="outline"
+                              className="max-w-[110px] shrink-0 truncate"
+                              title={car.currentStage}
+                            >
+                              {car.currentStage}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="h-1.5 w-full min-w-0 overflow-hidden rounded-full bg-muted">
+                              <div
+                                className="h-full rounded-full bg-primary"
+                                style={{ width: `${car.progress}%` }}
+                              />
+                            </div>
+                            <span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                              {car.progress}%
+                            </span>
+                          </div>
+                          <div className="flex min-w-0 items-center justify-between gap-2">
+                            <div className="min-w-0 text-xs">
+                              {car.endDate ? (
+                                car.overdue ? (
+                                  <Badge
+                                    variant="outline"
+                                    className="border-transparent bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400"
+                                  >
+                                    {formatDate(car.endDate, {
+                                      format: "short",
+                                    })}
+                                  </Badge>
+                                ) : (
+                                  <span className="text-muted-foreground">
+                                    Target{" "}
+                                    {formatDate(car.endDate, {
+                                      format: "short",
+                                    })}
+                                  </span>
+                                )
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </div>
+                            <Link
+                              href={`/proyek/${car.id}`}
+                              className="shrink-0 text-xs font-medium text-primary hover:underline"
+                            >
+                              Detail
+                            </Link>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {/* Desktop table */}
+                <div className="hidden overflow-x-auto border-t md:block">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -351,14 +442,16 @@ export default async function DashboardPage() {
                         <TableHead className="px-4 lg:px-6">
                           Pelanggan
                         </TableHead>
-                        <TableHead className="px-4 lg:px-6">
+                        <TableHead className="hidden px-4 sm:table-cell lg:px-6">
                           Pekerjaan
                         </TableHead>
                         <TableHead className="px-4 lg:px-6">Tahap</TableHead>
                         <TableHead className="w-[170px] px-4 lg:px-6">
                           Progres
                         </TableHead>
-                        <TableHead className="px-4 lg:px-6">Target</TableHead>
+                        <TableHead className="hidden px-4 sm:table-cell lg:px-6">
+                          Target
+                        </TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -380,7 +473,7 @@ export default async function DashboardPage() {
                             <TableCell className="max-w-[160px] truncate px-4 lg:px-6">
                               {car.customer}
                             </TableCell>
-                            <TableCell className="max-w-[220px] truncate px-4 text-muted-foreground lg:px-6">
+                            <TableCell className="hidden max-w-[220px] truncate px-4 text-muted-foreground sm:table-cell lg:px-6">
                               {car.name}
                             </TableCell>
                             <TableCell className="px-4 lg:px-6">
@@ -401,7 +494,7 @@ export default async function DashboardPage() {
                                 </span>
                               </div>
                             </TableCell>
-                            <TableCell className="px-4 lg:px-6">
+                            <TableCell className="hidden px-4 sm:table-cell lg:px-6">
                               {car.endDate ? (
                                 car.overdue ? (
                                   <Badge
@@ -475,7 +568,7 @@ export default async function DashboardPage() {
           </div>
 
           <div className="grid grid-cols-1 items-stretch gap-4 px-4 lg:grid-cols-2 lg:px-6">
-            <Card>
+            <Card className="min-w-0 overflow-x-clip">
               <CardHeader>
                 <CardTitle>Pembayaran Terbaru</CardTitle>
                 <CardDescription>
@@ -489,8 +582,43 @@ export default async function DashboardPage() {
                   </Button>
                 </CardAction>
               </CardHeader>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto border-t">
+              <CardContent className="min-w-0 p-0">
+                {/* Mobile cards — fallback at 390px */}
+                <div className="border-t md:hidden">
+                  {data.recentPayments.length === 0 ? (
+                    <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                      Belum ada pembayaran
+                    </p>
+                  ) : (
+                    <ul className="divide-y">
+                      {data.recentPayments.map((payment) => (
+                        <li
+                          key={payment.id}
+                          className="flex min-w-0 flex-col gap-1.5 px-4 py-3"
+                        >
+                          <div className="flex min-w-0 items-start justify-between gap-2">
+                            <span className="min-w-0 truncate break-all font-mono text-xs font-medium">
+                              {payment.documentNo}
+                            </span>
+                            <span className="shrink-0 text-xs text-muted-foreground">
+                              {formatDate(payment.paymentDate, {
+                                format: "short",
+                              })}
+                            </span>
+                          </div>
+                          <p className="min-w-0 truncate break-words text-sm">
+                            {payment.salesInvoice?.customer?.name || "-"}
+                          </p>
+                          <p className="min-w-0 break-words text-sm font-medium tabular-nums">
+                            {formatCurrency(Number(payment.amount))}
+                          </p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+                {/* Desktop table */}
+                <div className="hidden overflow-x-auto border-t md:block">
                   <Table>
                     <TableHeader>
                       <TableRow>

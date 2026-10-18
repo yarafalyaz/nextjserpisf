@@ -767,7 +767,7 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
 
       <FormSection title="Item Penawaran" columns={1}>
         <div>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <Button
             type="button"
             onPress={() =>
@@ -797,7 +797,7 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
 
         {sectionFields.map((sectionField, sectionIndex) => (
           <div key={sectionField.id} className="quotation-section-card">
-            <div className="section-flex items-center justify-between p-4 px-5 border-b border-default">
+            <div className="flex flex-wrap items-center justify-between gap-2 p-4 px-5 border-b border-default">
               <input
                 {...register(`sections.${sectionIndex}.name`)}
                 aria-label={`Nama bagian ${sectionIndex + 1}`}

@@ -392,7 +392,7 @@ export function PurchaseOrderForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <Label htmlFor="paymentTerm">Termin Pembayaran</Label>
               {vendorTerm && termLocked && (
                 <button
@@ -497,14 +497,7 @@ export function PurchaseOrderForm({
 
         <FormSection title="Item" columns={1}>
           <div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "12px",
-              }}
-            >
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
               <h3 style={{ margin: 0, fontSize: "1rem" }}>Barang</h3>
               <Button
                 type="button"

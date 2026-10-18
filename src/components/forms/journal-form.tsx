@@ -148,7 +148,7 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
       </div>
 
       <div style={{ marginTop: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
           <h3 style={{ margin: 0, fontSize: "1rem" }}>Entri</h3>
           <Button type="button" onPress={addEntry} variant="secondary" size="sm">+ Tambah Baris</Button>
         </div>

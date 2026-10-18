@@ -114,7 +114,7 @@ export function VehicleVariantManager({ modelId, variants }: VehicleVariantManag
           <p className="px-4 py-6 text-center text-sm text-muted-foreground">Belum ada varian</p>
         ) : (
           variants.map((v) => (
-            <div key={v.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+            <div key={v.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                 <span className="font-medium">{v.name}</span>
                 {v.drivetrain && (

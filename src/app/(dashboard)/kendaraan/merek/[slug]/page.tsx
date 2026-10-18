@@ -84,7 +84,7 @@ export default async function VehicleBrandDetailPage({
 
       {/* Models → the second layer of the brand → model → variant flow */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between gap-4 p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <div>
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Model</h2>
             <p className="text-sm text-muted-foreground">
