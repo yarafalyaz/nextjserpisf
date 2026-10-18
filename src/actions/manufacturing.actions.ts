@@ -1261,13 +1261,9 @@ export async function completeWorkOrder(workOrderId: number) {
     // three sequential non-transactional calls — a mid-sequence failure (e.g.
     // DO creation error) would leave a "completed" WO with no DeliveryOrder
     // for downstream shipping, and the project's status flip would be missing
-    // even though the WO says it is done. Wrapping all four in one tx closes
-    // that gap. (autoCreateDeliveryOrder and syncProjectStatus don't accept
-    // a txClient parameter — they internally use the global prisma client, so
-    // this transaction still wraps their writes (the in-flight claim update
-    // is rolled back on a later failure) but the nested writes themselves
-    // run as separate auto-commits. Documented as a known limitation; the
-    // most important invariant — the claim + item flip — IS atomic.)
+    // even though the WO says it is done. Both helpers accept an optional
+    // txClient and are called below with this transaction's `tx`, so all
+    // four writes commit or roll back together.
     await prisma.$transaction(async (tx) => {
       // Atomically claim completion: only the request that flips status away from
       // in_progress/pending wins. Without this, two concurrent "selesai" clicks

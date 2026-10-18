@@ -352,9 +352,6 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
   test("proses akhir bulan: kunci lalu buka kembali", async ({ page }, testInfo) => {
     skipOnMobile(testInfo.project.name, "Panel tutup buku dirancang untuk layar besar")
 
-    // Kedua aksi memakai window.confirm — terima supaya aksinya benar-benar dijalankan.
-    page.on("dialog", (dialog) => dialog.accept())
-
     await page.goto("/pengaturan/proses-akhir-bulan", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
 
@@ -362,12 +359,20 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await expect(tombolKunci).toBeEnabled({ timeout: 30_000 })
     await tombolKunci.click()
 
+    // Dialog konfirmasi standar aplikasi (ConfirmDialog), bukan window.confirm.
+    const dialogKunci = page.getByRole("alertdialog")
+    await expect(dialogKunci.getByText(/Kunci periode sampai/)).toBeVisible({ timeout: 10_000 })
+    await dialogKunci.getByRole("button", { name: "Kunci periode" }).click()
+
     // Terkunci: panel menyebut tanggal kunci yang berlaku.
     await expect(page.getByText(/Kunci periode berlaku sampai/)).toBeVisible({ timeout: 30_000 })
 
     // Dan bisa dibuka lagi — supaya tes ini tidak meninggalkan DB dalam keadaan terkunci
     // (periode yang dikunci bisa menghalangi spec lain yang membuat dokumen bertanggal).
     await page.getByRole("button", { name: "Buka kunci periode" }).click()
+    const dialogBuka = page.getByRole("alertdialog")
+    await expect(dialogBuka.getByText(/Buka kunci periode/)).toBeVisible({ timeout: 10_000 })
+    await dialogBuka.getByRole("button", { name: "Buka kunci" }).click()
     await expect(page.getByText("Periode belum pernah dikunci.")).toBeVisible({ timeout: 30_000 })
   })
 })

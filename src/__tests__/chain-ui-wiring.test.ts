@@ -32,6 +32,7 @@ const FAKTUR_TAMBAH = "src/app/(dashboard)/penjualan/faktur/tambah/page.tsx"
 const WO_DETAIL = "src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx"
 const MI_TAMBAH = "src/app/(dashboard)/inventaris/pengeluaran-material/tambah/page.tsx"
 const MI_UBAH = "src/app/(dashboard)/inventaris/pengeluaran-material/[slug]/ubah/page.tsx"
+const DP_TAMBAH = "src/app/(dashboard)/penjualan/uang-muka/tambah/page.tsx"
 
 describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
   it("detail Pesanan Penjualan selalu menampilkan kartu Surat Jalan beserta jalan membuatnya", () => {
@@ -138,5 +139,15 @@ describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
     const payloadBuilder = form.slice(form.indexOf("buildMaterialIssueFormData"))
     expect(payloadBuilder).toMatch(/workOrderId/)
     expect(payloadBuilder).toMatch(/projectId/)
+  })
+
+  it("halaman tambah uang muka dijaga izin buat, bukan izin edit pesanan", () => {
+    // Pola §9 laporan rekonsiliasi: guard halaman tambah WAJIB izin create aksi
+    // yang di-submit, bukan izin edit dokumen induk. `createDownPayment` menuntut
+    // `create_down_payments`; guard `edit_sales_orders` mematikan tombol
+    // "+ Uang Muka" untuk peran Finance yang sah.
+    const src = read(DP_TAMBAH)
+    expect(src).toContain('requirePermission("create_down_payments")')
+    expect(src).not.toContain('requirePermission("edit_sales_orders")')
   })
 })

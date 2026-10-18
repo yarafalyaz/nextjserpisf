@@ -26,6 +26,7 @@ interface ChecklistStep {
   description: string
   href: string
   done: boolean
+  /** Label status Indonesia yang tampil (dihitung per langkah). */
   status: string
 }
 

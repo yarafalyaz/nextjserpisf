@@ -16,7 +16,7 @@ export default async function CreateDownPaymentPage({
 }: {
   searchParams: Promise<{ quotationId?: string; salesOrderId?: string }>;
 }) {
-  await requirePermission("edit_sales_orders");
+  await requirePermission("create_down_payments");
 
   const params = await searchParams;
   let quotationId = params.quotationId

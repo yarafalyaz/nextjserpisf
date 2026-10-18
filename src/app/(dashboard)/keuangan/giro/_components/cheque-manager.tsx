@@ -37,6 +37,11 @@ interface AccountOption {
   name: string
 }
 
+const TYPE_LABEL: Record<string, string> = {
+  giro: "Giro",
+  cek: "Cek",
+}
+
 const STATUS_LABEL: Record<string, string> = {
   pending: "Belum Cair",
   cleared: "Sudah Cair",
@@ -221,7 +226,7 @@ export function ChequeManager({
               {/* Nomor giro/cek milik bank harus terlihat: sebelumnya kolom Pihak memakai
                   `party ?? number`, jadi nomor yang diisi pengguna tak pernah tampil. */}
               <DetailTableTd className="font-mono text-sm">{cheque.number ?? "–"}</DetailTableTd>
-              <DetailTableTd className="capitalize">{cheque.type}</DetailTableTd>
+              <DetailTableTd>{TYPE_LABEL[cheque.type] ?? cheque.type}</DetailTableTd>
               <DetailTableTd>{cheque.direction === "in" ? "Diterima" : "Dikeluarkan"}</DetailTableTd>
               <DetailTableTd>{cheque.party ?? "–"}</DetailTableTd>
               <DetailTableTd>{cheque.accountLabel ?? "–"}</DetailTableTd>

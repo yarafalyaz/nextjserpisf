@@ -6,6 +6,7 @@ import { Lock, LockOpen } from "lucide-react"
 
 import { closeAccountingPeriod, reopenAccountingPeriod } from "@/actions/period-close.actions"
 import { Button } from "@/components/ui/shadcn/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { showError, showSuccess } from "@/lib/utils/toast"
@@ -30,6 +31,7 @@ export function PeriodClosePanel({
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [busy, setBusy] = useState<"close" | "reopen" | null>(null)
+  const [confirming, setConfirming] = useState<"close" | "reopen" | null>(null)
 
   function changeMonth(value: string) {
     if (!/^\d{4}-\d{2}$/.test(value)) return
@@ -37,7 +39,11 @@ export function PeriodClosePanel({
   }
 
   function handleClose() {
-    if (!window.confirm(`Kunci periode sampai ${monthLabel}? Setelah dikunci, jurnal bertanggal pada/sebelum tanggal itu tidak bisa diposting atau diubah.`)) return
+    setConfirming("close")
+  }
+
+  function doClose() {
+    setConfirming(null)
     setBusy("close")
     startTransition(async () => {
       const formData = new FormData()
@@ -54,7 +60,11 @@ export function PeriodClosePanel({
   }
 
   function handleReopen() {
-    if (!window.confirm("Buka kunci periode? Jurnal pada periode yang tadinya terkunci akan bisa diubah lagi.")) return
+    setConfirming("reopen")
+  }
+
+  function doReopen() {
+    setConfirming(null)
     setBusy("reopen")
     startTransition(async () => {
       const result = await reopenAccountingPeriod()
@@ -102,6 +112,27 @@ export function PeriodClosePanel({
           : "Periode belum pernah dikunci."}
         {alreadyClosed ? " Bulan ini sudah tercakup kunci yang berlaku, jadi menutupnya lagi tidak mengubah apa pun." : ""}
       </p>
+
+      <ConfirmDialog
+        isOpen={confirming === "close"}
+        onOpenChange={(open) => { if (!open) setConfirming(null) }}
+        title={`Kunci periode sampai ${monthLabel}?`}
+        body="Setelah dikunci, jurnal bertanggal pada/sebelum tanggal itu tidak bisa diposting atau diubah."
+        confirmLabel="Kunci periode"
+        variant="warning"
+        isPending={busy === "close"}
+        onConfirm={doClose}
+      />
+      <ConfirmDialog
+        isOpen={confirming === "reopen"}
+        onOpenChange={(open) => { if (!open) setConfirming(null) }}
+        title="Buka kunci periode?"
+        body="Jurnal pada periode yang tadinya terkunci akan bisa diubah lagi."
+        confirmLabel="Buka kunci"
+        variant="warning"
+        isPending={busy === "reopen"}
+        onConfirm={doReopen}
+      />
     </div>
   )
 }
