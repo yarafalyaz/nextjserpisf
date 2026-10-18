@@ -1,4 +1,4 @@
-import { test, expect, type Page } from "@playwright/test"
+import { test, expect } from "@playwright/test"
 
 test.describe("Master Gudang E2E CRUD Mutation", () => {
   const testWarehouseName = `Gudang E2E Test - ${Date.now()}`

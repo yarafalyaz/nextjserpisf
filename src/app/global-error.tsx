@@ -1,6 +1,7 @@
 'use client';
 
 import { Inter } from 'next/font/google';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { AlertCircle } from 'lucide-react';
 
@@ -13,6 +14,8 @@ export default function GlobalError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Sama seperti error.tsx: navigasi internal lewat router, bukan `window.location.href`.
+  const router = useRouter();
   return (
     <html lang="id">
       <body className={inter.className}>
@@ -33,7 +36,7 @@ export default function GlobalError({
               <Button onClick={() => reset()} className="w-full">
                 Coba Lagi
               </Button>
-              <Button variant="outline" onClick={() => window.location.href = '/'} className="w-full">
+              <Button variant="outline" onClick={() => router.push('/')} className="w-full">
                 Kembali ke Beranda
               </Button>
             </div>

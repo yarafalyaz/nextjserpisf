@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/shadcn/button';
 import { AlertTriangle } from 'lucide-react';
 
@@ -11,6 +12,10 @@ export default function DashboardError({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  // Navigasi internal lewat router, bukan `window.location.href`: menetapkan
+  // `location.href` ke tujuan relatif memaksa muat ulang penuh dan membuang
+  // state aplikasi — dan dilarang oleh `@next/next/no-location-assign-relative-destination`.
+  const router = useRouter();
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -36,7 +41,7 @@ export default function DashboardError({
         ) : null}
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <Button onClick={() => reset()}>Muat Ulang Modul</Button>
-          <Button variant="outline" onClick={() => { window.location.href = '/' }}>
+          <Button variant="outline" onClick={() => router.push('/')}>
             Ke Dashboard
           </Button>
         </div>
