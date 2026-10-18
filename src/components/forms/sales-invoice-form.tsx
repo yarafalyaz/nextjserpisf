@@ -282,13 +282,9 @@ export function SalesInvoiceForm({
                       />
                     </td>
                     <td className="py-2 pr-3">
-                      <input
-                        type="number"
-                        min={0}
-                        step="any"
-                        className="w-full rounded-lg border border-default bg-surface px-2 py-1.5"
+                      <CurrencyInput
                         value={row.qty}
-                        onChange={(e) => updateRow(row.key, { qty: Number(e.target.value) })}
+                        onChange={(val) => updateRow(row.key, { qty: Number(val) || 0 })}
                         aria-label={`Jumlah baris ${index + 1}`}
                       />
                     </td>
@@ -329,14 +325,11 @@ export function SalesInvoiceForm({
           </div>
           <div className="flex items-center gap-3">
             <Label htmlFor="taxRate">PPN (%)</Label>
-            <input
+            <CurrencyInput
               id="taxRate"
-              type="number"
-              min={0}
-              step="any"
-              className="w-24 rounded-lg border border-default bg-surface px-2 py-1.5 text-right"
               value={taxRate}
-              onChange={(e) => setTaxRate(Number(e.target.value))}
+              onChange={(val) => setTaxRate(Number(val) || 0)}
+              className="w-24 text-right"
             />
             <span className="tabular-nums w-32 text-right">{formatCurrency(taxAmount)}</span>
           </div>

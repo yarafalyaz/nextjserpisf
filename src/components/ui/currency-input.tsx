@@ -13,6 +13,8 @@ interface CurrencyInputProps {
   placeholder?: string
   className?: string
   id?: string
+  /** Label aksesibilitas saat input tanpa <Label> terasosiasi (mis. sel tabel). */
+  "aria-label"?: string
   required?: boolean
   disabled?: boolean
   min?: number
@@ -35,6 +37,7 @@ export function CurrencyInput({
   placeholder = "0",
   className = "",
   id,
+  "aria-label": ariaLabel,
   required,
   disabled,
   min,
@@ -146,6 +149,7 @@ export function CurrencyInput({
         type="text"
         inputMode="numeric"
         id={id}
+        aria-label={ariaLabel}
         value={displayValue}
         onChange={handleChange}
         onBlur={handleBlur}

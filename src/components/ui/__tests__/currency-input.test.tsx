@@ -200,6 +200,18 @@ describe("CurrencyInput uncontrolled mode", () => {
     container.remove()
   })
 
+  it("meneruskan aria-label ke input agar sel tabel tetap bernama", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+    act(() => {
+      root.render(<CurrencyInput value={3} onChange={() => {}} aria-label="Jumlah baris 1" />)
+    })
+    const input = getInput(container)
+    expect(input.getAttribute("aria-label")).toBe("Jumlah baris 1")
+    unmount(root)
+    container.remove()
+  })
   it("stays in its local state and never falls back to 0 when the user clears the field", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
