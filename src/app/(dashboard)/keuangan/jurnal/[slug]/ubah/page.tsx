@@ -41,11 +41,16 @@ export default async function EditPage({
       credit: Number(e.credit),
       memo: e.memo ?? "",
       profitCenterId: e.profitCenterId ?? undefined,
+      costCenterId: e.costCenterId ?? undefined,
     })),
   }
 
   const accounts = await prisma.account.findMany({ orderBy: { code: "asc" }, select: { id: true, code: true, name: true, type: true } })
 
+  const costCenters = await prisma.costCenter.findMany({
+    orderBy: { code: "asc" },
+    select: { id: true, code: true, name: true },
+  })
   const profitCenters = await prisma.profitCenter.findMany({
     orderBy: { code: "asc" },
     select: { id: true, code: true, name: true },
@@ -61,7 +66,7 @@ export default async function EditPage({
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
       </div>
-      <JournalForm journal={journal} accounts={accounts} profitCenters={profitCenters}/>
+      <JournalForm journal={journal} accounts={accounts} profitCenters={profitCenters} costCenters={costCenters}/>
     </div>
   )
 }

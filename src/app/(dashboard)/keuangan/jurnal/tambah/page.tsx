@@ -19,6 +19,10 @@ export default async function CreateJournalPage() {
 
   // Master pusat laba untuk pilihan di form; tanpa daftar ini jurnal tidak bisa
   // ditandai pusat laba, sehingga laporan pusat laba selalu kosong.
+  const costCenters = await prisma.costCenter.findMany({
+    orderBy: { code: "asc" },
+    select: { id: true, code: true, name: true },
+  })
   const profitCenters = await prisma.profitCenter.findMany({
     orderBy: { code: "asc" },
     select: { id: true, code: true, name: true },
@@ -29,7 +33,7 @@ export default async function CreateJournalPage() {
       <div className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Buat Entri Jurnal</h1>
       </div>
-      <JournalForm accounts={accounts} profitCenters={profitCenters} />
+      <JournalForm accounts={accounts} profitCenters={profitCenters} costCenters={costCenters} />
     </div>
   )
 }

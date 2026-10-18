@@ -18,12 +18,13 @@ interface JournalFormProps {
   accounts: { id: number; code: string; name: string }[]
   /** Master pusat laba; dipakai untuk mengisi entri jurnal (opsional). */
   profitCenters?: { id: number; code: string; name: string }[]
-  journal?: { id: number; date: string; description?: string | null; type?: string | null; entries?: Array<{ accountId: number; debit: number; credit: number; memo?: string; profitCenterId?: number | null }> }
+  costCenters?: { id: number; code: string; name: string }[]
+  journal?: { id: number; date: string; description?: string | null; type?: string | null; entries?: Array<{ accountId: number; debit: number; credit: number; memo?: string; profitCenterId?: number | null; costCenterId?: number | null }> }
 }
 
-interface JournalEntry { accountId: number; debit: number; credit: number; memo: string; profitCenterId?: number }
+interface JournalEntry { accountId: number; debit: number; credit: number; memo: string; profitCenterId?: number; costCenterId?: number }
 
-export function JournalForm({ accounts, profitCenters = [], journal }: JournalFormProps) {
+export function JournalForm({ accounts, profitCenters = [], costCenters = [], journal }: JournalFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [entries, setEntries] = useState<JournalEntry[]>(
@@ -46,6 +47,12 @@ export function JournalForm({ accounts, profitCenters = [], journal }: JournalFo
   // laporan pusat laba selalu menumpuk di "Tanpa Pusat Laba" walau masternya ada.
   const [profitCenterId, setProfitCenterId] = useState<string>(
     journal?.entries?.find((entry) => entry.profitCenterId)?.profitCenterId?.toString() ?? "",
+  )
+  // Pusat biaya: aksi jurnal SUDAH menulis `costCenterId` di kedua jalur sejak dulu,
+  // tetapi form ini tidak pernah mengirimnya — jadi laporan pusat biaya melewatkan
+  // seluruh jurnal manual. Sama persis dengan celah pusat laba sebelumnya.
+  const [costCenterId, setCostCenterId] = useState<string>(
+    journal?.entries?.find((entry) => entry.costCenterId)?.costCenterId?.toString() ?? "",
   )
 
   function addEntry() { setEntries([...entries, { accountId: 0, debit: 0, credit: 0, memo: "" }]) }
@@ -72,6 +79,7 @@ export function JournalForm({ accounts, profitCenters = [], journal }: JournalFo
             entries.map((entry) => ({
               ...entry,
               profitCenterId: profitCenterId ? Number(profitCenterId) : undefined,
+              costCenterId: costCenterId ? Number(costCenterId) : undefined,
             })),
           ),
         )
@@ -115,6 +123,22 @@ export function JournalForm({ accounts, profitCenters = [], journal }: JournalFo
           >
             <option value="">-- Tanpa pusat laba --</option>
             {profitCenters.map((center) => (
+              <option key={center.id} value={center.id}>
+                {center.code} — {center.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="costCenterId">Pusat Biaya</Label>
+          <select
+            id="costCenterId"
+            value={costCenterId}
+            onChange={(e) => setCostCenterId(e.target.value)}
+            className="h-9 w-full rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
+          >
+            <option value="">-- Tanpa pusat biaya --</option>
+            {costCenters.map((center) => (
               <option key={center.id} value={center.id}>
                 {center.code} — {center.name}
               </option>

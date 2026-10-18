@@ -56,7 +56,7 @@ export async function selectFirstComboboxOption(
 ): Promise<boolean> {
   await openCombobox(page, identify)
 
-  const option = page.getByRole("option").first()
+  const option = page.getByRole("listbox").getByRole("option").first()
   const appeared = await option
     .waitFor({ state: "visible", timeout: 10_000 })
     .then(() => true)
@@ -79,7 +79,7 @@ export async function selectComboboxOptionBySearch(
 
   const option = optionPattern
     ? page.getByRole("option", { name: optionPattern }).first()
-    : page.getByRole("option").first()
+    : page.getByRole("listbox").getByRole("option").first()
   const appeared = await option
     .waitFor({ state: "visible", timeout: 10_000 })
     .then(() => true)
