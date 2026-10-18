@@ -46,6 +46,7 @@
 | R-4 | Risiko | `parse-money.ts` `parseLocaleNumber` + `vendor-price.actions.ts` `parseNumber` | FIXED (`53a0567f`, branch kerja) | Salinan normalisasi id-ID lokal (warisan R-3) — salinan ganda menyimpang seiring waktu | `parseLocaleNumber(raw, fallback)` di `parse-money.ts`; `parseMoneyAmount` delegasi; `parseNumber` lokal jadi delegasi satu baris | `parse-money` +2 (terfalsifikasi: fallback→null memerahkan 1 tes, pulihkan → 14/14 HIJAU) |
 | R-5 | Risiko | `vendor-price-form.tsx` `inputMode="decimal"` | FIXED (`d9de19dc`, branch kerja) | Input Minimal Jml mentah: "1.000" tampil tanpa pemisah; nilai mentah sampai ke server (hanya selamat karena R-3/R-4). Terakhir dari `grep inputMode="decimal"` di `src` — kini nol | `CurrencyInput` + hidden input angka polos; parse server tak berubah | vendor-price 4/4 + parse-money 10/10 + form-field-wiring 2/2; E2E `operational-crud` fill `#minQty` pola sama dengan `#price` |
 | R-6 | Risiko | `master/departemen\|jabatan\|kelompok-pajak/tambah/page.tsx` + `page-action-permission-parity.test.ts` | FIXED (`c34deb98`, branch kerja) | 3 halaman tambah memakai guard `edit_*` padahal aksi create menuntut `create_*` (pola sama temuan §4 #1) — peran sah (create tanpa edit) ditolak di form | Guard = izin create aksi (`create_departments`, `create_positions`, `create_taxes`); CREATE_PAGE_CASES 5→9 | parity 6/6 (terfalsifikasi: kembalikan 1 guard → 1 MERAH, pulihkan → HIJAU) |
+| R-7 | Risiko | `sales.actions.ts` proofImage (create+update DP) + `storage.ts` `assertMagicBytes` | FIXED (`ad97b38e`, branch kerja) | 2 callsite bukti DP hanya validasi ekstensi/nama kiriman klien — skrip berekstensi .jpg lolos ke `public/uploads/proofs` (stored-XSS satu origin; celah kelas P2-4 yang terlewat di jalur lokal ini) | `assertMagicBytes` terpusat SEBELUM `writeFile` di kedua jalur (MIME dari ekstensi whitelist) | sales.actions 137/137 (+2 tolak php-berekstensi-jpg dan script-berekstensi-png; terfalsifikasi: cabut cek jadi 1 MERAH, pulihkan jadi HIJAU) |
 | R-1 | Risiko | `accounting.hook.ts` 11 hook + `expense.hook.ts` + `inventory-transfer.hook.ts` + `purchase-return.hook.ts` | FIXED (`25cfff10`) | Rekomendasi audit rekonsiliasi §6: skip idempotensi diam — pemanggil tak bedakan "sudah diproses" vs "baru diproses" di log produksi | 26 cabang catat console.info (dokumen + nomor jurnal); guard `idempotency-logging` 3/3 berarah dua | guard 3/3 + hook terkait 76/76 (terfalsifikasi) |
 
 ## C. Perubahan berkas
@@ -93,6 +94,7 @@
 | `c59e8229` | `README.md` + `package.json` + `deployment-safety.test.ts` | Node konsisten + tanpa db:push |
 | `bb51d5ca` | `e2e/purchase-chain.spec.ts` + seed blok 12 + tambah GR | rantai beli E2E (2 passed DB nyata) |
 | `0456c2e2` | `e2e/sales-chain.spec.ts` + seed akun retur E2E-4100 | rantai jual E2E (2 passed DB nyata) |
+|| `ad97b38e` | `src/actions/sales.actions.ts` + `src/actions/__tests__/sales.actions.test.ts` | magic-byte bukti DP |
 | (uncommitted) | `docs/HERMES-EXECUTION-REPORT.md` | laporan ini |
 
 ## D. Migrasi/perbaikan data
