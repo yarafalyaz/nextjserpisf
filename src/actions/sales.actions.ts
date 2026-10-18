@@ -786,6 +786,49 @@ export async function createSalesOrder(formData: FormData) {
       }
     }
 
+    // Item penawaran disalin sebagai NILAI AWAL, bukan dikunci. Produksi ini
+    // fabrikasi: spesifikasi bisa berubah setelah DP masuk/keluar dan pesanan
+    // tetap boleh direvisi lewat InvoiceItemsEditor di halaman detail.
+    // Sebelum ini pesanan hasil konversi lahir dengan tabel item KOSONG.
+    let quotationItems: Array<{
+      itemId: number | null
+      description: string | null
+      qty: number
+      unitPrice: number
+      discount: number
+      total: number
+    }> = []
+    let quotationTaxRate = 0
+
+    if (v.quotationId) {
+      const quotation = await tx.quotation.findUnique({
+        where: { id: v.quotationId },
+        include: { sections: { include: { items: true } } },
+      })
+      if (quotation) {
+        quotationItems = quotation.sections.flatMap((section) =>
+          section.items.map((item) => ({
+            itemId: item.itemId,
+            description: item.description,
+            qty: Number(item.qty),
+            unitPrice: Number(item.unitPrice),
+            discount: Number(item.discount),
+            total: Number(item.total),
+          })),
+        )
+        const dasarPengenaan = safeSubtract(Number(quotation.subtotal), Number(quotation.discount), 0)
+        quotationTaxRate = dasarPengenaan > 0
+          ? safeDivide(safeMultiply(Number(quotation.tax), 100, 4), dasarPengenaan, 4)
+          : 0
+      }
+    }
+
+    const subtotal = quotationItems.reduce((sum, item) => safeAdd(sum, item.total, 0), 0)
+    const discountTotal = Math.min(Math.max(0, Number(v.discount ?? 0)), subtotal)
+    const taxRate = Math.max(0, Number(v.taxRate ?? quotationTaxRate) || 0)
+    const taxAmount = safeRound(safeDivide(safeMultiply(safeSubtract(subtotal, discountTotal, 0), taxRate, 4), 100, 4), 0)
+    const grandTotal = safeSubtract(safeAdd(subtotal, taxAmount, 0), discountTotal, 0)
+
     return tx.salesOrder.create({
       data: {
         documentNo,
@@ -797,6 +840,25 @@ export async function createSalesOrder(formData: FormData) {
         notes: v.notes ?? null,
         status: "draft" as const,
         createdBy: Number(user.id),
+        subtotal,
+        discount: discountTotal,
+        tax: taxAmount,
+        grandTotal,
+        totalAmount: grandTotal,
+        ...(quotationItems.length > 0
+          ? {
+              items: {
+                create: quotationItems.map((item) => ({
+                  itemId: item.itemId,
+                  description: item.description,
+                  qty: item.qty,
+                  unitPrice: item.unitPrice,
+                  discount: item.discount,
+                  total: item.total,
+                })),
+              },
+            }
+          : {}),
       },
     })
   })
@@ -881,8 +943,34 @@ export async function createSalesInvoice(formData: FormData) {
   const documentNo = await generateDocumentNumber("INV")
   const slug = await nextSlug("salesInvoice", documentNo)
 
+  // Item boleh datang langsung dari form (hasil konversi Pesanan Penjualan).
+  // Faktur yang lahir hanya dengan header memaksa kasir mengetik ulang seluruh
+  // baris. Nilai di-clamp seperti updateSalesInvoice: baris negatif tak tersimpan.
+  const itemsJson = v.items
+  const items = itemsJson
+    ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; description?: string | null }>>(itemsJson) ?? [])
+    : null
+
   const invoice = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
+
+    let subtotal = 0
+    let discountTotal = 0
+    let taxAmount = 0
+    let grandTotal = 0
+
+    if (items !== null && items.length > 0) {
+      subtotal = items.reduce((sum, item) => {
+        const safeQty = Math.max(0, Number(item.qty) || 0)
+        const safePrice = Math.max(0, Number(item.unitPrice) || 0)
+        const safeDiscount = Math.max(0, Number(item.discount) || 0)
+        return safeAdd(sum, Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)), 0)
+      }, 0)
+      discountTotal = Math.min(Math.max(0, Number(v.discount ?? 0)), subtotal)
+      const taxRate = Math.max(0, Number(v.taxRate ?? 0) || 0)
+      taxAmount = safeRound(safeDivide(safeMultiply(safeSubtract(subtotal, discountTotal, 0), taxRate, 4), 100, 4), 0)
+      grandTotal = safeSubtract(safeAdd(subtotal, taxAmount, 0), discountTotal, 0)
+    }
 
     return tx.salesInvoice.create({
       data: {
@@ -893,15 +981,34 @@ export async function createSalesInvoice(formData: FormData) {
         quotationId: v.quotationId ?? null,
         date: new Date(v.date),
         dueDate: v.dueDate ? new Date(v.dueDate) : null,
-        subtotal: 0,
-        discount: 0,
-        tax: 0,
-        grandTotal: 0,
+        subtotal,
+        discount: discountTotal,
+        tax: taxAmount,
+        grandTotal,
         paidAmount: 0,
-        totalAmount: 0,
-        taxAmount: 0,
+        totalAmount: grandTotal,
+        taxAmount,
         status: "draft",
         createdBy: Number(user.id),
+        ...(items && items.length > 0
+          ? {
+              items: {
+                create: items.map((item) => {
+                  const safeQty = Math.max(0, Number(item.qty) || 0)
+                  const safePrice = Math.max(0, Number(item.unitPrice) || 0)
+                  const safeDiscount = Math.max(0, Number(item.discount) || 0)
+                  return {
+                    itemId: item.itemId,
+                    description: item.description ?? null,
+                    qty: safeQty,
+                    unitPrice: safePrice,
+                    discount: safeDiscount,
+                    total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),
+                  }
+                }),
+              },
+            }
+          : {}),
       },
     })
   })

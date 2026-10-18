@@ -48,6 +48,10 @@ export const createSalesOrderSchema = z.object({
   date: z.string().min(1, "Tanggal wajib diisi").max(50),
   deliveryDate: optionalString(50),
   notes: optionalString(500),
+  // Item disalin dari penawaran di dalam aksi; taxRate/discount hanya dipakai
+  // bila pengguna menimpanya lewat form.
+  taxRate: z.coerce.number().optional(),
+  discount: z.coerce.number().optional(),
 });
 
 export const updateSalesOrderSchema = z.object({
@@ -73,6 +77,11 @@ export const createSalesInvoiceSchema = z.object({
   date: z.string().min(1, "Tanggal wajib diisi").max(50),
   dueDate: optionalString(50),
   notes: optionalString(500),
+  // Item boleh ikut saat pembuatan: faktur hasil konversi Pesanan Penjualan
+  // harus lahir dengan baris itemnya, bukan header kosong bertotal 0.
+  items: optionalString(50000),
+  taxRate: z.coerce.number().optional(),
+  discount: z.coerce.number().optional(),
 });
 
 export const updateSalesInvoiceSchema = z.object({

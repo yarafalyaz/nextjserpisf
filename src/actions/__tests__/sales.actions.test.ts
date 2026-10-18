@@ -877,6 +877,11 @@ describe("Quotation Actions (legacy happy paths)", () => {
 describe("Sales Order Actions (legacy happy paths)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    // clearAllMocks tidak reset implementasi mock — mockResolvedValue({id:2})
+    // dari "already converted" bisa bocor ke suite berikutnya.
+    mocks.prismaMock.salesOrder.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue(null)
+    mocks.prismaMock.salesOrder.create.mockResolvedValue({ id: 1 })
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("SO-001")
   })
@@ -884,6 +889,82 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     const res = await actions.createSalesOrder(fdMap({ customerId: "1", date: "2026-06-12" }))
     expect(res?.success).toBe(true)
   })
+
+  // Konversi Penawaran -> Pesanan harus MEMBAWA itemnya. Sebelumnya header dibuat
+  // tanpa satu pun baris item, jadi pesanan hasil konversi lahir kosong dan kasir
+  // mengetik ulang seluruh penawaran.
+  it("createSalesOrder menyalin item penawaran (bukan hanya header)", async () => {
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({
+      id: 50,
+      customerId: 7,
+      subtotal: 1000,
+      discount: 0,
+      tax: 110,
+      grandTotal: 1110,
+      sections: [
+        {
+          items: [
+            { itemId: 11, description: "Rangka", qty: 2, unitPrice: 300, discount: 0, total: 600 },
+            { itemId: 12, description: "Cat", qty: 1, unitPrice: 400, discount: 0, total: 400 },
+          ],
+        },
+      ],
+    })
+
+    const res = await actions.createSalesOrder(fdMap({ customerId: "7", date: "2026-06-12", quotationId: "50" }))
+    expect(res?.success).toBe(true)
+
+    const arg = mocks.prismaMock.salesOrder.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.items.create).toHaveLength(2)
+    expect(arg.data.items.create[0]).toMatchObject({ itemId: 11, qty: 2, unitPrice: 300 })
+    expect(Number(arg.data.subtotal)).toBe(1000)
+    expect(Number(arg.data.tax)).toBe(110)
+    expect(Number(arg.data.grandTotal)).toBe(1110)
+  })
+
+  // Tanpa penawaran, pesanan tetap boleh dibuat kosong (item diisi belakangan).
+  it("createSalesOrder tanpa penawaran tidak membuat item", async () => {
+    const res = await actions.createSalesOrder(fdMap({ customerId: "1", date: "2026-06-12" }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesOrder.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.items).toBeUndefined()
+  })
+
+  // Konversi Pesanan -> Faktur: faktur harus lahir dengan item dan totalnya,
+  // bukan header bertotal 0 yang harus diketik ulang.
+  it("createSalesInvoice menyimpan item dan menghitung totalnya", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-001")
+    const items = JSON.stringify([
+      { itemId: 11, qty: 2, unitPrice: 300, discount: 0 },
+      { itemId: 12, qty: 1, unitPrice: 400, discount: 50 },
+    ])
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: "7", date: "2026-06-12", salesOrderId: "9", items, taxRate: "11" }),
+    )
+    expect(res?.success).toBe(true)
+
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(arg.data.items.create).toHaveLength(2)
+    // subtotal = 600 + 350 = 950
+    expect(Number(arg.data.subtotal)).toBe(950)
+    expect(arg.data.salesOrderId).toBe(9)
+  })
+
+  // Baris negatif hasil iseng klien tidak boleh tersimpan sebagai nilai negatif.
+  it("createSalesInvoice meng-clamp qty/harga negatif ke nol", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-002")
+    const items = JSON.stringify([{ itemId: 11, qty: -5, unitPrice: -100, discount: -7 }])
+    const res = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", items }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(Number(arg.data.items.create[0].qty)).toBe(0)
+    expect(Number(arg.data.items.create[0].unitPrice)).toBe(0)
+    expect(Number(arg.data.items.create[0].discount)).toBe(0)
+  })
+
+  // Konversi Penawaran -> Pesanan harus MEMBAWA itemnya. Sebelumnya header dibuat
+  // tanpa satu pun baris item, jadi pesanan hasil konversi lahir kosong dan kasir
+  // mengetik ulang seluruh penawaran.
   it("updateSalesOrder succeeds", async () => {
     mocks.prismaMock.salesOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.updateSalesOrder(1, fdMap({ customerId: "1", date: "2026-06-12" }))

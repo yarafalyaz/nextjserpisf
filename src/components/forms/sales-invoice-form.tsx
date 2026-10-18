@@ -15,7 +15,9 @@ import { Combobox } from "@/components/ui/combobox"
 import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
+import { CurrencyInput } from "@/components/ui/currency-input"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { formatCurrency } from "@/lib/utils/format"
 
 const salesInvoiceSchema = z.object({
   customerId: z.number({ error: "Pelanggan wajib dipilih" }).min(1, "Pelanggan wajib dipilih"),
@@ -36,12 +38,74 @@ interface SalesInvoiceFormProps {
    *  pesanan penjualannya) supaya faktur baru sudah tertaut ke pesanan itu. */
   defaultSalesOrderId?: number
   defaultCustomerId?: number
+  /** Item pesanan penjualan sebagai NILAI AWAL — boleh diubah/dihapus.
+   *  Fabrikasi: spesifikasi bisa berubah setelah faktur dibuat. */
+  initialItems?: InitialItem[]
+  /** Tarif PPN awal, diturunkan dari pesanan/penawaran asal bila ada. */
+  initialTaxRate?: number
+  availableItems?: AvailableItem[]
 }
 
-export function SalesInvoiceForm({ customers, salesOrders, invoice, defaultSalesOrderId, defaultCustomerId }: SalesInvoiceFormProps) {
+interface AvailableItem {
+  id: number
+  name: string
+  sku?: string | null
+  price?: number | null
+}
+
+interface InitialItem {
+  itemId: number | null
+  description?: string | null
+  qty: number
+  unitPrice: number
+  discount: number
+}
+
+interface LineItem {
+  key: string
+  itemId: number | null
+  qty: number
+  unitPrice: number
+  discount: number
+}
+
+let rowSeq = 0
+function newRow(): LineItem {
+  rowSeq += 1
+  return { key: `baris-${rowSeq}`, itemId: null, qty: 1, unitPrice: 0, discount: 0 }
+}
+
+function toRow(item: InitialItem): LineItem {
+  rowSeq += 1
+  return {
+    key: `baris-${rowSeq}`,
+    itemId: item.itemId,
+    qty: Number(item.qty) || 0,
+    unitPrice: Number(item.unitPrice) || 0,
+    discount: Number(item.discount) || 0,
+  }
+}
+
+function lineTotal(row: LineItem): number {
+  const gross = (Number(row.qty) || 0) * (Number(row.unitPrice) || 0)
+  return Math.max(0, gross - (Number(row.discount) || 0))
+}
+
+export function SalesInvoiceForm({
+  customers,
+  salesOrders,
+  invoice,
+  defaultSalesOrderId,
+  defaultCustomerId,
+  initialItems,
+  initialTaxRate,
+  availableItems = [],
+}: SalesInvoiceFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [customerOptions, setCustomerOptions] = useState(customers)
+  const [rows, setRows] = useState<LineItem[]>(() => (initialItems ?? []).map(toRow))
+  const [taxRate, setTaxRate] = useState<number>(() => Number(initialTaxRate ?? 0) || 0)
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesInvoiceInput>({
     resolver: zodResolver(salesInvoiceSchema),
@@ -54,6 +118,14 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice, defaultSales
     },
   })
 
+  const subtotal = rows.reduce((sum, row) => sum + lineTotal(row), 0)
+  const taxAmount = Math.round((subtotal * (Number(taxRate) || 0)) / 100)
+  const grandTotal = subtotal + taxAmount
+
+  function updateRow(key: string, patch: Partial<LineItem>) {
+    setRows((prev) => prev.map((row) => (row.key === key ? { ...row, ...patch } : row)))
+  }
+
   function onSubmit(data: SalesInvoiceInput) {
     startTransition(async () => {
       try {
@@ -61,6 +133,20 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice, defaultSales
         Object.entries(data).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== "") formData.append(key, String(value))
         })
+        // Hanya baris yang benar-benar punya barang yang dikirim. Baris kosong
+        // sisa klik "Tambah Baris" tidak boleh menjadi item tanpa id.
+        const payload = rows
+          .filter((row) => row.itemId !== null)
+          .map((row) => ({
+            itemId: row.itemId,
+            qty: Number(row.qty) || 0,
+            unitPrice: Number(row.unitPrice) || 0,
+            discount: Number(row.discount) || 0,
+          }))
+        if (payload.length > 0) {
+          formData.append("items", JSON.stringify(payload))
+          formData.append("taxRate", String(Number(taxRate) || 0))
+        }
         const result = invoice?.id ? await updateSalesInvoice(invoice.id, formData) : await createSalesInvoice(formData)
         if (result.success) {
           showSuccess(invoice?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
@@ -146,16 +232,127 @@ export function SalesInvoiceForm({ customers, salesOrders, invoice, defaultSales
         </div>
       </div>
 
+      {/* Item faktur — nilai awal dari pesanan penjualan, tetap bisa diubah */}
+      <div className="mt-6 pt-5 border-t border-default">
+        <div className="flex items-center justify-between flex-wrap gap-3 mb-3">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Item Faktur</h2>
+          <Button type="button" onPress={() => setRows((prev) => [...prev, newRow()])} id="tambah-baris-faktur">
+            + Tambah Baris
+          </Button>
+        </div>
+
+        {rows.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Belum ada item. Tambahkan baris di sini, atau simpan dulu lalu isi di halaman detail.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-muted-foreground border-b border-default">
+                  <th className="py-2 pr-3 font-medium">Barang</th>
+                  <th className="py-2 pr-3 font-medium w-24">Jml</th>
+                  <th className="py-2 pr-3 font-medium w-36">Harga</th>
+                  <th className="py-2 pr-3 font-medium w-32">Diskon</th>
+                  <th className="py-2 pr-3 font-medium w-32 text-right">Total</th>
+                  <th className="py-2 w-14" />
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, index) => (
+                  <tr key={row.key} className="border-b border-default last:border-0 align-top">
+                    <td className="py-2 pr-3">
+                      <Combobox
+                        id={`item-${row.key}`}
+                        value={row.itemId ? String(row.itemId) : null}
+                        onChange={(key) => {
+                          const picked = key ? availableItems.find((a) => String(a.id) === key) : undefined
+                          updateRow(row.key, {
+                            itemId: picked ? picked.id : null,
+                            // Harga dasar hanya mengisi bila baris belum punya harga,
+                            // supaya nilai dari pesanan tidak tertimpa diam-diam.
+                            unitPrice: row.unitPrice > 0 ? row.unitPrice : Number(picked?.price ?? 0),
+                          })
+                        }}
+                        placeholder="Pilih barang..."
+                        options={availableItems.map((a) => ({
+                          value: String(a.id),
+                          label: a.sku ? `${a.name} (${a.sku})` : a.name,
+                        }))}
+                      />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <input
+                        type="number"
+                        min={0}
+                        step="any"
+                        className="w-full rounded-lg border border-default bg-surface px-2 py-1.5"
+                        value={row.qty}
+                        onChange={(e) => updateRow(row.key, { qty: Number(e.target.value) })}
+                        aria-label={`Jumlah baris ${index + 1}`}
+                      />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <CurrencyInput
+                        value={row.unitPrice}
+                        onChange={(val) => updateRow(row.key, { unitPrice: Number(val) || 0 })}
+                      />
+                    </td>
+                    <td className="py-2 pr-3">
+                      <CurrencyInput
+                        value={row.discount}
+                        onChange={(val) => updateRow(row.key, { discount: Number(val) || 0 })}
+                      />
+                    </td>
+                    <td className="py-2 pr-3 text-right tabular-nums">{formatCurrency(lineTotal(row))}</td>
+                    <td className="py-2">
+                      <button
+                        type="button"
+                        onClick={() => setRows((prev) => prev.filter((r) => r.key !== row.key))}
+                        className="text-danger text-xs"
+                        aria-label={`Hapus baris ${index + 1}`}
+                      >
+                        Hapus
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <div className="mt-4 flex flex-col items-end gap-1.5 text-sm">
+          <div className="flex items-center gap-3">
+            <span className="text-muted-foreground">Subtotal</span>
+            <span className="tabular-nums w-32 text-right">{formatCurrency(subtotal)}</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <Label htmlFor="taxRate">PPN (%)</Label>
+            <input
+              id="taxRate"
+              type="number"
+              min={0}
+              step="any"
+              className="w-24 rounded-lg border border-default bg-surface px-2 py-1.5 text-right"
+              value={taxRate}
+              onChange={(e) => setTaxRate(Number(e.target.value))}
+            />
+            <span className="tabular-nums w-32 text-right">{formatCurrency(taxAmount)}</span>
+          </div>
+          <div className="flex items-center gap-3 font-semibold">
+            <span>Total</span>
+            <span className="tabular-nums w-32 text-right">{formatCurrency(grandTotal)}</span>
+          </div>
+        </div>
+      </div>
+
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>
         <Button type="submit" isDisabled={isPending}  id="submit-sales-invoice">
           {isPending ? "Menyimpan..." : invoice?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
-
-      <p className="text-muted-foreground" style={{ marginTop: "12px", fontSize: "0.8125rem" }}>
-        Setelah faktur dibuat, Anda bisa menambahkan item di halaman detail.
-      </p>
     </form>
   )
 }

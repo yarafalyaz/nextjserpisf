@@ -56,6 +56,57 @@ export default async function CreateSalesInvoicePage({
     }
   }
 
+  // Item pesanan dibawa sebagai NILAI AWAL faktur. Sebelumnya halaman ini hanya
+  // mengoper id pesanan + pelanggan, jadi faktur hasil konversi lahir dengan
+  // tabel item kosong dan kasir harus mengetik ulang seluruh baris. Nilainya
+  // tetap boleh diubah di form (fabrikasi: spesifikasi bisa berubah).
+  let initialItems: Array<{
+    itemId: number | null
+    description: string | null
+    qty: number
+    unitPrice: number
+    discount: number
+  }> = []
+  let initialTaxRate = 0
+
+  if (defaultSalesOrderId) {
+    const order = await prisma.salesOrder.findUnique({
+      where: { id: defaultSalesOrderId },
+      select: {
+        customerId: true,
+        subtotal: true,
+        discount: true,
+        tax: true,
+        items: {
+          orderBy: { id: "asc" },
+          select: { itemId: true, description: true, qty: true, unitPrice: true, discount: true },
+        },
+      },
+    })
+    if (order) {
+      defaultCustomerId = defaultCustomerId ?? order.customerId
+      initialItems = order.items.map((item) => ({
+        itemId: item.itemId,
+        description: item.description,
+        qty: Number(item.qty),
+        unitPrice: Number(item.unitPrice),
+        discount: Number(item.discount),
+      }))
+      const dasarPengenaan = Number(order.subtotal) - Number(order.discount)
+      initialTaxRate = dasarPengenaan > 0
+        ? Math.round((Number(order.tax) / dasarPengenaan) * 100 * 100) / 100
+        : 0
+    }
+  }
+
+  // Daftar barang untuk editor item: tanpa ini baris hasil konversi tidak bisa
+  // diganti ke barang lain dan baris baru tidak punya pilihan.
+  const items = await prisma.item.findMany({
+    where: { isActive: true, deletedAt: null },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true, sku: true, price: true },
+  })
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{label:"Faktur",href:"/penjualan/faktur"},{label:"Tambah"}]} />
@@ -67,6 +118,14 @@ export default async function CreateSalesInvoicePage({
         salesOrders={salesOrders}
         defaultSalesOrderId={defaultSalesOrderId}
         defaultCustomerId={defaultCustomerId}
+        initialItems={initialItems}
+        initialTaxRate={initialTaxRate}
+        availableItems={items.map((item) => ({
+          id: item.id,
+          name: item.name,
+          sku: item.sku,
+          price: Number(item.price),
+        }))}
       />
     </div>
   )
