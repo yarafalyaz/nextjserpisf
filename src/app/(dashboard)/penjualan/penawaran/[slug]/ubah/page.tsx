@@ -32,7 +32,7 @@ export default async function EditQuotationPage({
 
   if (!data) notFound()
 
-  const [customers, customerVehicles, itemsList, paymentMethods, shippingMethods, productsList] = await Promise.all([
+  const [customers, customerVehicles, itemsList, paymentMethods, shippingMethods, productsList, unitOptions] = await Promise.all([
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -64,6 +64,7 @@ export default async function EditQuotationPage({
       orderBy: { name: "asc" },
       include: { materials: true },
     }),
+    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true } }),
   ])
 
   const quotation = {
@@ -155,6 +156,7 @@ export default async function EditQuotationPage({
         customerVehicles={customerVehicleOptions}
         items={itemOptions}
         products={products}
+        unitOptions={unitOptions}
         paymentMethods={paymentMethods}
         shippingMethods={shippingMethods}
       />

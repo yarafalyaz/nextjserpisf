@@ -13,7 +13,7 @@ export const metadata: Metadata = { title: "Tambah Penawaran" }
 export default async function CreateQuotationPage() {
   await requirePermission("create_quotations")
 
-  const [customers, customerVehicles, itemsList, generatedCode, paymentMethods, shippingMethods, productsList] = await Promise.all([
+  const [customers, customerVehicles, itemsList, generatedCode, paymentMethods, shippingMethods, productsList, unitOptions] = await Promise.all([
     prisma.customer.findMany({
       where: { isActive: true, deletedAt: null },
       orderBy: { name: "asc" },
@@ -46,6 +46,7 @@ export default async function CreateQuotationPage() {
       orderBy: { name: "asc" },
       include: { materials: true },
     }),
+    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true } }),
   ])
 
   // Transform customerVehicles to a simpler shape for the form
@@ -109,6 +110,7 @@ export default async function CreateQuotationPage() {
         customerVehicles={vehicles}
         items={items}
         products={products}
+        unitOptions={unitOptions}
         generatedCode={generatedCode}
         paymentMethods={paymentMethods}
         shippingMethods={shippingMethods}

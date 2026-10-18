@@ -870,6 +870,7 @@ export const UNITS_OF_MEASURE: { name: string; symbol: string }[] = [
   { name: "Liter", symbol: "LTR" },
   { name: "Meter", symbol: "MTR" },
   { name: "Box", symbol: "BOX" },
+  { name: "Jasa", symbol: "JASA" },
 ];
 
 /** Default expense categories. */
