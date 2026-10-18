@@ -99,13 +99,14 @@ describe("onVendorBillPosted - service/expense branch", () => {
     expect(totalDebit).toBe(totalCredit)
   })
 
-  it("early-returns (no posting) when payable account is unset", async () => {
+  it("rejects (no posting) when payable account is unset", async () => {
     mocks.systemSettingFindFirst.mockResolvedValue({
       purchasePayableAccountId: null,
       purchaseExpenseAccountId: EXPENSE,
     })
 
-    await onVendorBillPosted(1, 42)
+    // Posting tidak boleh diam-diam "berhasil" tanpa membukukan apa pun.
+    await expect(onVendorBillPosted(1, 42)).rejects.toThrow("Hutang Usaha")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.vendorBillFindUniqueOrThrow).not.toHaveBeenCalled()
   })

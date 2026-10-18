@@ -575,6 +575,9 @@ describe("Payroll Actions", () => {
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValue(defaultPayroll)
     prismaMock.systemSetting.findFirst.mockResolvedValue({
       bpjsKesehatanPrc: 1, bpjsKetenagakerjaanPrc: 2, defaultWorkingDays: 22,
+      // onPayrollPaid menolak posting tanpa akun ini (tidak lagi melewatinya
+      // diam-diam), jadi lingkungan payroll harus terkonfigurasi.
+      salaryExpenseAccountId: 601, payrollBankAccountId: 602,
     })
   })
 
@@ -657,12 +660,20 @@ describe("Payroll Actions", () => {
   })
 
   it("markPayrollPaid updates status and posts journal", async () => {
+    // Gaji positif + akun terkonfigurasi: baris ini harus benar-benar
+    // membukukan jurnal, bukan berhenti di pemeriksaan akun yang baru.
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "approved", netPay: 5000000, employeeId: 1, period: "2026-05",
+      id: 1, status: "approved", netPay: 5000000, netSalary: 5000000,
+      grossSalary: 5000000, employeeId: 1, period: "2026-05",
       loanDeduction: 0, employee: { name: "A", code: "A1" }
     })
     const res = await actions.markPayrollPaid(1)
     expect(res?.success).toBe(true)
+    expect(prismaMock.payroll.updateMany).toHaveBeenCalledWith({
+      where: { id: 1, status: "approved" },
+      data: expect.objectContaining({ status: "paid" }),
+    })
+    expect(prismaMock.journal.create).toHaveBeenCalled()
   })
 })
 
@@ -896,6 +907,9 @@ describe("markPayrollPaid edge cases", () => {
 
     prismaMock.$transaction.mockImplementationOnce(async (ops: any) => {
       return ops(prismaMock)
+    })
+    prismaMock.systemSetting.findFirst.mockResolvedValue({
+      salaryExpenseAccountId: 601, payrollBankAccountId: 602,
     })
 
     const res = await actions.markPayrollPaid(1)

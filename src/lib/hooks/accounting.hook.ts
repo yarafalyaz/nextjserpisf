@@ -513,7 +513,11 @@ export async function onSalesPaymentCreated(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.salesReceivableAccountId) return;
+  if (!settings.salesReceivableAccountId) {
+    throw new Error(
+      "Akun Piutang Usaha belum dikonfigurasi untuk penerimaan pembayaran penjualan",
+    );
+  }
 
   const payment = await db.salesPayment.findUniqueOrThrow({
     where: { id: paymentId },
@@ -556,7 +560,11 @@ export async function onSalesPaymentCreated(
     // Determine cash/bank account from payment method or default
     const cashAccountId = payment.accountId ?? settings.cashBankAccountId;
 
-    if (!cashAccountId) return;
+    if (!cashAccountId) {
+      throw new Error(
+        "Akun kas/bank belum dikonfigurasi untuk penerimaan pembayaran penjualan",
+      );
+    }
 
     const journal = await tx.journal.create({
       data: {
@@ -622,8 +630,11 @@ export async function onPurchaseOrderReceived(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.inventoryAccountId || !settings.purchasePayableAccountId)
-    return;
+  if (!settings.inventoryAccountId || !settings.purchasePayableAccountId) {
+    throw new Error(
+      "Akun Persediaan dan Hutang Usaha harus dikonfigurasi sebelum penerimaan pembelian diposting",
+    );
+  }
 
   const order = await db.purchaseOrder.findUniqueOrThrow({
     where: { id: orderId },
@@ -817,7 +828,11 @@ export async function onPettyCashCreated(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.pettyCashAccountId) return;
+  if (!settings.pettyCashAccountId) {
+    throw new Error(
+      "Akun Kas Kecil belum dikonfigurasi sebelum transaksi kas kecil diposting",
+    );
+  }
 
   const pettyCash = await db.pettyCash.findUniqueOrThrow({
     where: { id: pettyCashId },
@@ -946,7 +961,11 @@ export async function onSalesReturnCompleted(
   // Sales-return + inventory mappings are always needed. The AR mapping is only
   // needed when the return is tied to an invoice (see below) — resolved after we
   // know whether there is a linked invoice.
-  if (!settings.salesReturnAccountId || !settings.inventoryAccountId) return;
+  if (!settings.salesReturnAccountId || !settings.inventoryAccountId) {
+    throw new Error(
+      "Akun Retur Penjualan dan Persediaan harus dikonfigurasi sebelum retur diposting",
+    );
+  }
 
   const salesReturn = await db.salesReturn.findUniqueOrThrow({
     where: { id: returnId },
@@ -959,7 +978,11 @@ export async function onSalesReturnCompleted(
   // book only the inventory/cost legs (goods physically come back) and skip the
   // price/AR legs entirely.
   const linkedToInvoice = salesReturn.salesInvoiceId != null;
-  if (linkedToInvoice && !settings.salesReceivableAccountId) return;
+  if (linkedToInvoice && !settings.salesReceivableAccountId) {
+    throw new Error(
+      "Akun Piutang Usaha belum dikonfigurasi untuk retur penjualan yang terkait faktur",
+    );
+  }
 
   // Idempotency check
   const existing = await db.journal.findFirst({
@@ -1075,8 +1098,11 @@ export async function onPurchaseReturnProcessed(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.purchasePayableAccountId || !settings.inventoryAccountId)
-    return;
+  if (!settings.purchasePayableAccountId || !settings.inventoryAccountId) {
+    throw new Error(
+      "Akun Hutang Usaha dan Persediaan harus dikonfigurasi sebelum retur pembelian diposting",
+    );
+  }
 
   const purchaseReturn = await db.purchaseReturn.findUniqueOrThrow({
     where: { id: returnId },
@@ -1235,8 +1261,11 @@ export async function onDownPaymentReceived(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  // Fix #27: Harus punya cashBankAccountId untuk Dr. Bank/Cash
-  if (!settings.cashBankAccountId || !settings.salesReceivableAccountId) return;
+  if (!settings.cashBankAccountId || !settings.salesReceivableAccountId) {
+    throw new Error(
+      "Akun kas/bank dan uang muka penjualan harus dikonfigurasi sebelum uang muka diterima",
+    );
+  }
 
   const dp = await db.downPayment.findUniqueOrThrow({
     where: { id: dpId },
@@ -1311,7 +1340,11 @@ export async function onVendorBillPosted(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.purchasePayableAccountId) return;
+  if (!settings.purchasePayableAccountId) {
+    throw new Error(
+      "Akun Hutang Usaha belum dikonfigurasi untuk tagihan vendor",
+    );
+  }
 
   const bill = await db.vendorBill.findUniqueOrThrow({
     where: { id: billId },
@@ -1331,12 +1364,17 @@ export async function onVendorBillPosted(
   // and the clearing account is never relieved. Service/expense bills (no GR) keep
   // debiting the expense account.
   const grandTotal = Number(bill.grandTotal);
-  const goodsBased =
+  const hasGoodsReceipt =
     bill.purchaseOrderId != null &&
-    settings.purchaseInventoryAccountId != null &&
     (await db.goodsReceipt.count({
       where: { purchaseOrderId: bill.purchaseOrderId },
     })) > 0;
+  if (hasGoodsReceipt && !settings.purchaseInventoryAccountId) {
+    throw new Error(
+      "Akun clearing penerimaan barang belum dikonfigurasi untuk tagihan vendor berbasis penerimaan barang",
+    );
+  }
+  const goodsBased = hasGoodsReceipt;
 
   const debitEntries: {
     accountId: number;
@@ -1527,8 +1565,11 @@ export async function onVendorPaymentCreated(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  // Fix #28: Harus punya cashBankAccountId untuk Cr. Bank/Cash
-  if (!settings.purchasePayableAccountId || !settings.cashBankAccountId) return;
+  if (!settings.purchasePayableAccountId) {
+    throw new Error(
+      "Akun Hutang Usaha belum dikonfigurasi untuk pembayaran vendor",
+    );
+  }
 
   const payment = await db.vendorPayment.findUniqueOrThrow({
     where: { id: paymentId },
@@ -1536,13 +1577,22 @@ export async function onVendorPaymentCreated(
 
   // Bank/transfer admin fee is a real cost on top of the bill amount. It is NOT
   // allocated to any bill (the payment settles bills with `amount` only); it is
-  // expensed to the purchase admin-fee account. When the account is not
-  // configured, the fee is dropped from the journal (a fee must never unbalance
-  // it) — the bank still pays amount + fee only when we can book the debit.
+  // expensed to the purchase admin-fee account. A fee without its debit account
+  // must stop the posting: omitting it would understate the bank outflow.
   const fee = Number(payment.adminFee ?? 0);
   const feeAccount = settings.purchaseAdminFeeAccountId;
-  const bookableFee = fee > 0 && !!feeAccount ? fee : 0;
-  const bankOut = Number(payment.amount) + bookableFee;
+  if (fee > 0 && !feeAccount) {
+    throw new Error(
+      "Akun beban admin bank belum dikonfigurasi untuk pembayaran vendor yang memiliki biaya admin",
+    );
+  }
+  const bankAccountId = payment.accountId ?? settings.cashBankAccountId;
+  if (!bankAccountId) {
+    throw new Error(
+      "Akun kas/bank belum dikonfigurasi untuk pembayaran vendor",
+    );
+  }
+  const bankOut = Number(payment.amount) + fee;
 
   const existing = await db.journal.findFirst({
     where: { referenceType: "VendorPayment", referenceId: paymentId },
@@ -1574,18 +1624,18 @@ export async function onVendorPaymentCreated(
         memo: "Accounts Payable",
       },
     ];
-    if (bookableFee > 0) {
+    if (fee > 0) {
       // Dr. Beban Admin Bank (fee of paying)
       entries.push({
         accountId: feeAccount!,
-        debit: bookableFee,
+        debit: fee,
         credit: 0,
         memo: "Beban Admin Bank",
       });
     }
     // Fix #28: Cr. Bank/Cash (bukan salesReceivableAccountId!)
     entries.push({
-      accountId: payment.accountId ?? settings.cashBankAccountId!,
+      accountId: bankAccountId,
       debit: 0,
       credit: bankOut,
       memo: "Bank/Cash paid",
@@ -1625,8 +1675,11 @@ export async function onPayrollPaid(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.salaryExpenseAccountId || !settings.payrollBankAccountId)
-    return;
+  if (!settings.salaryExpenseAccountId || !settings.payrollBankAccountId) {
+    throw new Error(
+      "Akun beban gaji dan bank payroll harus dikonfigurasi sebelum payroll diposting",
+    );
+  }
 
   // Idempotency
   const existing = await db.journal.findFirst({
@@ -1670,6 +1723,27 @@ export async function onPayrollPaid(
 
   if (debitTotal <= 0) return;
 
+  const otherWithheld = safeAdd(
+    safeAdd(lateDeduction, absentDeduction, 2),
+    otherDeductions,
+    2,
+  );
+  if (statutory > 0 && !settings.salariesPayableAccountId) {
+    throw new Error(
+      "Akun hutang gaji belum dikonfigurasi untuk potongan BPJS/PPh21 payroll",
+    );
+  }
+  if (loanDeduction > 0 && !settings.employeeReceivableAccountId) {
+    throw new Error(
+      "Akun piutang karyawan belum dikonfigurasi untuk angsuran pinjaman payroll",
+    );
+  }
+  if (otherWithheld > 0 && !settings.salariesPayableAccountId) {
+    throw new Error(
+      "Akun hutang gaji belum dikonfigurasi untuk potongan payroll",
+    );
+  }
+
   await assertPeriodOpen(payroll.paymentDate ?? new Date(), txClient);
 
   await executeInTx(txClient, async (tx) => {
@@ -1710,62 +1784,37 @@ export async function onPayrollPaid(
       },
     ];
 
-    // Cr. Salaries Payable for statutory (BPJS+PPh) if account configured
-    if (statutory > 0 && settings.salariesPayableAccountId) {
+    // Cr. Salaries Payable for statutory (BPJS+PPh).
+    if (statutory > 0) {
       entries.push({
-        accountId: settings.salariesPayableAccountId,
+        accountId: settings.salariesPayableAccountId!,
         debit: 0,
         credit: statutory,
         memo: "BPJS + PPh21 karyawan",
       });
-    } else if (statutory > 0) {
-      // Fallback: credit to same bank account
-      entries[1].credit += statutory;
     }
 
     // Cr. Piutang Karyawan for the loan instalment withheld from pay — this is
     // the repayment side of onEmployeeLoanDisbursed (Dr Piutang / Cr Bank).
     // Without it the receivable grows forever and is never collected.
-    if (loanDeduction > 0 && settings.employeeReceivableAccountId) {
+    if (loanDeduction > 0) {
       entries.push({
-        accountId: settings.employeeReceivableAccountId,
+        accountId: settings.employeeReceivableAccountId!,
         debit: 0,
         credit: loanDeduction,
         memo: "Angsuran Pinjaman Karyawan",
       });
-    } else if (loanDeduction > 0) {
-      // No receivable account configured — park it on payable so the entry
-      // still balances instead of silently dropping the leg.
-      if (settings.salariesPayableAccountId) {
-        entries.push({
-          accountId: settings.salariesPayableAccountId,
-          debit: 0,
-          credit: loanDeduction,
-          memo: "Angsuran Pinjaman Karyawan (tanpa akun piutang)",
-        });
-      } else {
-        entries[1].credit += loanDeduction;
-      }
     }
 
     // Cr. Potongan (late / absent / manual deductions) — withheld, not paid as
     // cash, so they reduce the salary expense via a payable leg.
-    const otherWithheld = safeAdd(
-      safeAdd(lateDeduction, absentDeduction, 2),
-      otherDeductions,
-      2,
-    );
     if (otherWithheld > 0) {
-      if (settings.salariesPayableAccountId) {
-        entries.push({
-          accountId: settings.salariesPayableAccountId,
-          debit: 0,
-          credit: otherWithheld,
-          memo: "Potongan (terlambat/absen/lainnya)",
-        });
-      } else {
-        entries[1].credit += otherWithheld;
-      }
+      entries.push({
+        accountId: settings.salariesPayableAccountId!,
+        debit: 0,
+        credit: otherWithheld,
+        memo: "Potongan (terlambat/absen/lainnya)",
+      });
     }
 
     // Balance assertion: the journal must have Σdebit == Σcredit. The debit is
@@ -1818,9 +1867,11 @@ export async function onEmployeeLoanDisbursed(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  // Need both legs configured; otherwise skip GL (loan row still created).
-  if (!settings.employeeReceivableAccountId || !settings.payrollBankAccountId)
-    return;
+  if (!settings.employeeReceivableAccountId || !settings.payrollBankAccountId) {
+    throw new Error(
+      "Akun piutang karyawan dan bank payroll harus dikonfigurasi sebelum pinjaman dicairkan",
+    );
+  }
 
   const loan = await db.employeeLoan.findUniqueOrThrow({ where: { id: loanId } });
   const amount = Number(loan.totalAmount);
