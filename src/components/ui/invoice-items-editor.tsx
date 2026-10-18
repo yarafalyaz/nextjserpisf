@@ -230,7 +230,7 @@ export function InvoiceItemsEditor({
           )}
         </div>
         <div className="p-4 px-5 overflow-x-auto">
-          <table className="w-full border-collapse text-sm">
+          <table className="w-full min-w-[520px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-default">
                 <th
@@ -383,7 +383,7 @@ export function InvoiceItemsEditor({
         </div>
       </div>
       <div className="p-4 px-5 overflow-x-auto">
-        <table className="w-full border-collapse text-sm">
+        <table className="w-full min-w-[560px] border-collapse text-sm">
           <thead>
             <tr className="border-b border-default">
               <th

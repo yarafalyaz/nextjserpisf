@@ -154,7 +154,7 @@ export function Combobox({
                     onCreateNew(search.trim());
                     setOpen(false);
                   }}
-                  className="text-primary flex w-full items-center px-2 py-1.5 text-sm"
+                  className="text-primary flex w-full items-center px-2 py-2.5 text-sm min-h-11"
                 >
                   <Plus className="mr-2 size-4" aria-hidden="true" />
                   {createNewLabel}

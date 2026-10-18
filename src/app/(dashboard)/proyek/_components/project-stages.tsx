@@ -153,7 +153,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
           <h2 className="text-base font-bold text-foreground">Lini Masa &amp; Tahapan Pengerjaan Fisik</h2>
           <p className="text-xs text-muted-foreground mt-0.5">Pantau dan kelola tahapan pengerjaan karoseri kendaraan pelanggan</p>
         </div>
-        <div className="flex items-center gap-4 min-w-[240px]">
+        <div className="flex items-center gap-4 w-full sm:w-auto sm:min-w-[240px]">
           <div className="text-right shrink-0">
             <span className="text-xs text-muted-foreground font-semibold block">Total Progres</span>
             <span className="text-2xl font-black text-primary">{overallProgress}%</span>

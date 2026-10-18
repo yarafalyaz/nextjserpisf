@@ -138,7 +138,7 @@ export default async function EmployeeDashboard() {
                       Sedang cuti aktif
                     </div>
                   )}
-                  <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-sm">
                     <div>
                       <span className="text-xs text-muted-foreground">
                         Tahun ini

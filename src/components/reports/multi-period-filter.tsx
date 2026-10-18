@@ -35,10 +35,10 @@ export function MultiPeriodFilter({ basePath, periodSlug, statement, mode, count
 
   return (
     <div role="search" aria-label="Filter multi periode" className="flex items-end gap-4 flex-wrap print:hidden">
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 w-full sm:w-[180px]">
         <span className="text-sm font-medium text-foreground">Jenis Laporan</span>
         <Select value={jenis} onValueChange={(value) => setJenis(value as "laba-rugi" | "neraca")}>
-          <SelectTrigger className="w-[180px]" aria-label="Jenis laporan">
+          <SelectTrigger className="w-full sm:w-[180px]" aria-label="Jenis laporan">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -48,10 +48,10 @@ export function MultiPeriodFilter({ basePath, periodSlug, statement, mode, count
         </Select>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 w-full sm:w-[160px]">
         <span className="text-sm font-medium text-foreground">Interval</span>
         <Select value={periode} onValueChange={(value) => setPeriode(value as "bulan" | "kuartal" | "tahun")}>
-          <SelectTrigger className="w-[160px]" aria-label="Interval periode">
+          <SelectTrigger className="w-full sm:w-[160px]" aria-label="Interval periode">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -62,10 +62,10 @@ export function MultiPeriodFilter({ basePath, periodSlug, statement, mode, count
         </Select>
       </div>
 
-      <div className="flex flex-col gap-1.5">
+      <div className="flex flex-col gap-1.5 w-full sm:w-[150px]">
         <span className="text-sm font-medium text-foreground">Jumlah Periode</span>
         <Select value={jumlah} onValueChange={setJumlah}>
-          <SelectTrigger className="w-[150px]" aria-label="Jumlah periode">
+          <SelectTrigger className="w-full sm:w-[150px]" aria-label="Jumlah periode">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>

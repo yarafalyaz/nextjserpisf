@@ -12,7 +12,7 @@ export function TableSkeleton({ columns = 5, rows = 8 }: { columns?: number; row
       <Skeleton className="h-4 w-48" />
 
       {/* Header skeleton */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <Skeleton className="h-8 w-64" />
         <div className="flex gap-2">
           <Skeleton className="h-10 w-28 rounded-lg" />
@@ -53,7 +53,7 @@ export function FormSkeleton({ fields = 6 }: { fields?: number } = {}) {
       <Skeleton className="h-4 w-48" />
 
       {/* Header skeleton */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <Skeleton className="h-8 w-56" />
         <div className="flex gap-2">
           <Skeleton className="h-10 w-24 rounded-lg" />
@@ -62,7 +62,7 @@ export function FormSkeleton({ fields = 6 }: { fields?: number } = {}) {
       </div>
 
       {/* Form skeleton */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {[...Array(fields)].map((_, i) => (
             <div key={i} className="flex flex-col gap-2">
@@ -88,7 +88,7 @@ export function DetailSkeleton() {
       <Skeleton className="h-4 w-48" />
 
       {/* Header skeleton */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <Skeleton className="h-8 w-56" />
           <Skeleton className="h-6 w-20 rounded-full" />
@@ -100,7 +100,7 @@ export function DetailSkeleton() {
       </div>
 
       {/* Detail card skeleton */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[...Array(9)].map((_, i) => (
             <div key={i} className="flex flex-col gap-2">
@@ -152,7 +152,7 @@ export function DashboardSkeleton() {
       </div>
 
       {/* Chart area */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <Skeleton className="h-5 w-32 mb-4" />
         <Skeleton className="h-64 w-full rounded-lg" />
       </div>
@@ -172,7 +172,7 @@ export function ReportSkeleton() {
       <Skeleton className="h-4 w-48" />
 
       {/* Header skeleton */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <Skeleton className="h-8 w-56" />
         <div className="flex gap-2">
           <Skeleton className="h-10 w-32 rounded-lg" />
@@ -218,7 +218,7 @@ export function SimplePageSkeleton() {
       <Skeleton className="h-8 w-48" />
 
       {/* Content skeleton */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="flex flex-col gap-4">
           {[...Array(5)].map((_, i) => (
             <Skeleton key={i} className="h-4" style={{ width: `${80 - i * 10}%` }} />

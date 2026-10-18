@@ -711,15 +711,29 @@ body {
 
 .app-content {
   flex: 1;
-  padding: 24px;
+  padding: 16px;
   max-width: 1400px;
   width: 100%;
+  min-width: 0;
+  overflow-x: clip;
   margin: 0 auto;
+}
+
+@media (min-width: 768px) {
+  .app-content {
+    padding: 24px;
+  }
 }
 
 .app-content:has(> [data-dashboard-page="true"]) {
   padding: 0;
   max-width: none;
+}
+
+/* Cegah wide child escape dari sidebar inset */
+[data-slot="sidebar-inset"] {
+  min-width: 0;
+  overflow-x: clip;
 }
 
 /* ==================== SIDEBAR ==================== */

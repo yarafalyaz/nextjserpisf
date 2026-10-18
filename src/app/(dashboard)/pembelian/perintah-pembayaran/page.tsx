@@ -96,7 +96,7 @@ export default async function PaymentOrderPage({
       </div>
 
       <form className="mb-2 flex items-end gap-4 flex-wrap print:hidden">
-        <div className="flex flex-col gap-1.5 w-[260px]">
+        <div className="flex flex-col gap-1.5 w-full sm:w-[260px]">
           <Label htmlFor="vendorId">Pemasok</Label>
           <FormSelect
             id="vendorId"
@@ -106,7 +106,7 @@ export default async function PaymentOrderPage({
             options={vendors.map((v) => ({ value: String(v.id), label: `${v.code ? `${v.code} — ` : ""}${v.name}` }))}
           />
         </div>
-        <AppDatePicker label="Jatuh Tempo s/d" name="sampaiTanggal" defaultValue={toLocalDateOnly(dueThrough)} className="w-[200px]" />
+        <AppDatePicker label="Jatuh Tempo s/d" name="sampaiTanggal" defaultValue={toLocalDateOnly(dueThrough)} className="w-full sm:w-[200px]" />
         <Button type="submit" variant="primary" size="sm">Tampilkan</Button>
       </form>
 

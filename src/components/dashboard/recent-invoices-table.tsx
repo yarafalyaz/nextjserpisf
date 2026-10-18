@@ -298,7 +298,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
             </TabsList>
 
             <div className="flex items-center gap-2">
-              <div className="relative w-full lg:w-[260px]">
+              <div className="relative w-full sm:w-[260px] lg:w-[260px]">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
                 <Input
                   value={query}

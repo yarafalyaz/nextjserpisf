@@ -126,7 +126,7 @@ export default async function EmployeeDetailPage({
                 {/* Sisa Cuti Tahunan (tahun berjalan) */}
                 <DetailSection title={`Saldo Cuti Tahunan ${leaveQuota.year}`}>
                   {leaveQuota.eligible ? (
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div className="rounded-lg border border-default bg-surface-secondary p-4">
                         <div className="text-xs text-muted-foreground">Jatah</div>
                         <div className="text-xl font-bold text-foreground">{leaveQuota.entitled} hari</div>

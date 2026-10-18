@@ -110,7 +110,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
             </div>
 
             {!isManual ? (
-              <div className="grid grid-cols-2 gap-4 bg-default-100/50 p-3 rounded-lg border border-default/50 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-default-100/50 p-3 rounded-lg border border-default/50 text-xs">
                 <div>
                   <span className="text-muted-foreground block mb-0.5">Mulai Cut-off</span>
                   <span className="font-semibold text-foreground text-sm">{startDate ? new Date(startDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Asia/Jakarta' }) : "-"}</span>
@@ -121,7 +121,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
                 </div>
               </div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
                   <AppDatePicker
                     label="Tanggal Mulai Cut-off *"

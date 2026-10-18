@@ -44,11 +44,11 @@ function Calendar({
         nav: "absolute top-0 inset-x-0 flex items-center justify-between px-1 h-9",
         button_previous: cn(
           buttonVariants({ variant: "outline" }),
-          "size-7 p-0 opacity-60 hover:opacity-100"
+          "size-10 p-0 opacity-80 hover:opacity-100"
         ),
         button_next: cn(
           buttonVariants({ variant: "outline" }),
-          "size-7 p-0 opacity-60 hover:opacity-100"
+          "size-10 p-0 opacity-80 hover:opacity-100"
         ),
         month_grid: "w-full border-collapse",
         weekdays: "flex",
@@ -94,7 +94,7 @@ function Calendar({
             <Select value={value?.toString()} onValueChange={handleChange}>
               <SelectTrigger
                 aria-label={ariaLabel}
-                className="h-7 pr-1.5 focus:ring-0 text-xs min-w-[70px] bg-transparent border-none font-medium hover:bg-accent hover:text-accent-foreground [&_svg]:size-3"
+                className="h-8 pr-1.5 focus:ring-0 text-xs min-w-[70px] bg-transparent border-none font-medium hover:bg-accent hover:text-accent-foreground [&_svg]:size-3"
               >
                 <SelectValue>{selected?.label}</SelectValue>
               </SelectTrigger>

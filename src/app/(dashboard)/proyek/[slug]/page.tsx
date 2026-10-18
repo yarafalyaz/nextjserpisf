@@ -225,7 +225,7 @@ export default async function ProjectDetailPage({
             </div>
             <p className="text-xs text-muted-foreground mt-0.5">Estimasi Keuntungan Bersih Proyek</p>
           </div>
-          <div className="grid grid-cols-2 gap-2 text-xs border-t border-default/50 pt-2">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-default/50 pt-2">
             <div>
               <span className="text-muted-foreground block">Penawaran:</span>
               <span className="font-semibold text-foreground">{formatCurrency(totalQuotation)}</span>

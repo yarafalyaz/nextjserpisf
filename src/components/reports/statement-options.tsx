@@ -127,11 +127,11 @@ export function StatementOptions({
     <div role="search" aria-label="Parameter laporan" className="rounded-xl border border-default bg-surface p-4 flex flex-col gap-3 print:hidden">
       <div className="flex flex-wrap items-end gap-4">
         {singleDate ? (
-          <AppDatePicker label="Per tanggal" name="periode" value={startDate} onChange={setStartDate} className="w-[180px]" />
+          <AppDatePicker label="Per tanggal" name="periode" value={startDate} onChange={setStartDate} className="w-full sm:w-[180px]" />
         ) : (
           <>
-            <AppDatePicker label="Dari" name="periodeMulai" value={startDate} onChange={setStartDate} className="w-[180px]" />
-            <AppDatePicker label="s/d" name="periodeSelesai" value={endDate} onChange={setEndDate} className="w-[180px]" />
+            <AppDatePicker label="Dari" name="periodeMulai" value={startDate} onChange={setStartDate} className="w-full sm:w-[180px]" />
+            <AppDatePicker label="s/d" name="periodeSelesai" value={endDate} onChange={setEndDate} className="w-full sm:w-[180px]" />
           </>
         )}
         <Button variant="primary" size="sm" onPress={handleGenerate}>Tampilkan</Button>
@@ -141,7 +141,7 @@ export function StatementOptions({
             name={extraDate.param}
             value={extraDateValue}
             onChange={setExtraDateValue}
-            className="w-[220px]"
+            className="w-full sm:w-[220px]"
           />
         ) : null}
       </div>

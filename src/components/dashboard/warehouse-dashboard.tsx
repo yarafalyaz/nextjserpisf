@@ -186,7 +186,7 @@ export default async function WarehouseDashboard() {
           {/* Quick Links */}
           <div className="px-4 lg:px-6">
             <h2 className="mb-3 text-sm font-semibold">Menu Cepat</h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
               {quickLinks.map((link) => (
                 <Link
                   key={link.href}

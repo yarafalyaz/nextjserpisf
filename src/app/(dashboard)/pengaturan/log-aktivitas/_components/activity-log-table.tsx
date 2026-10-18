@@ -296,7 +296,7 @@ export function ActivityLogTable({
         </div>
 
         {/* User filter */}
-        <div className="min-w-[180px] flex-1">
+        <div className="w-full sm:w-auto sm:min-w-[180px] flex-1">
           <Combobox
             options={[
               { value: "all", label: "Semua pengguna" },
@@ -309,7 +309,7 @@ export function ActivityLogTable({
         </div>
 
         {/* Action filter */}
-        <div className="min-w-[160px] flex-1">
+        <div className="w-full sm:w-auto sm:min-w-[160px] flex-1">
           <Combobox
             options={[
               { value: "all", label: "Semua aksi" },
@@ -322,7 +322,7 @@ export function ActivityLogTable({
         </div>
 
         {/* Model filter */}
-        <div className="min-w-[160px] flex-1">
+        <div className="w-full sm:w-auto sm:min-w-[160px] flex-1">
           <Combobox
             options={[
               { value: "all", label: "Semua model" },

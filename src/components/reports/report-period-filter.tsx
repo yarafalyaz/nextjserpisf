@@ -140,20 +140,20 @@ export function ReportPeriodFilter({
 
       {mode === "range" ? (
         <>
-          <AppDatePicker label="Dari" name="periodeMulai" value={startDate} onChange={setStartDate} className="w-[180px]" />
-          <AppDatePicker label="s/d" name="periodeSelesai" value={endDate} onChange={setEndDate} className="w-[180px]" />
+          <AppDatePicker label="Dari" name="periodeMulai" value={startDate} onChange={setStartDate} className="w-full sm:w-[180px]" />
+          <AppDatePicker label="s/d" name="periodeSelesai" value={endDate} onChange={setEndDate} className="w-full sm:w-[180px]" />
         </>
       ) : mode === "as-of" ? (
-        <AppDatePicker label="Per tanggal" name="periode" value={startDate} onChange={setStartDate} className="w-[180px]" />
+        <AppDatePicker label="Per tanggal" name="periode" value={startDate} onChange={setStartDate} className="w-full sm:w-[180px]" />
       ) : mode === "month" ? (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 w-full sm:w-[180px]">
           <Label htmlFor="filter-periode">Bulan</Label>
-          <Input id="filter-periode" type="month" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="w-[180px]" />
+          <Input id="filter-periode" type="month" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="w-full sm:w-[180px]" />
         </div>
       ) : null}
 
       {numberField ? (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col gap-1.5 w-full sm:w-[140px]">
           <Label htmlFor={`filter-${numberField.param}`}>{numberField.label}</Label>
           <Input
             id={`filter-${numberField.param}`}
@@ -162,7 +162,7 @@ export function ReportPeriodFilter({
             max={numberField.max}
             value={numberValue}
             onChange={(event) => setNumberValue(event.target.value)}
-            className="w-[140px]"
+            className="w-full sm:w-[140px]"
           />
         </div>
       ) : null}
@@ -173,7 +173,7 @@ export function ReportPeriodFilter({
           name={extraDate.param}
           value={extraDateValue}
           onChange={setExtraDateValue}
-          className="w-[220px]"
+          className="w-full sm:w-[220px]"
         />
       ) : null}
 

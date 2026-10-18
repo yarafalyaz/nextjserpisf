@@ -164,7 +164,7 @@ export default async function VendorBillDetailPage({
 
       {/* Summary */}
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subtotal</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(Number(bill.subtotal))}</span>

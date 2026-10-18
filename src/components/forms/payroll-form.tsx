@@ -126,7 +126,7 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
 
   return (
     <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-      <div className="p-6 border-b border-default bg-surface-secondary/30 flex justify-between items-center">
+      <div className="p-4 sm:p-6 border-b border-default bg-surface-secondary/30 flex flex-wrap justify-between items-center gap-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <CheckCircle className="text-primary" size={18} />
           Informasi Utama
@@ -138,7 +138,7 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
         )}
       </div>
 
-      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="employeeId">Karyawan *</Label>
           <QuickAddSelect
@@ -203,12 +203,12 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
         </div>
       </div>
 
-      <div className="p-6 border-y border-default bg-surface-secondary/30">
+      <div className="p-4 sm:p-6 border-y border-default bg-surface-secondary/30">
         <h2 className="text-lg font-semibold text-foreground">Komponen Pendapatan</h2>
         <p className="text-sm text-muted-foreground">Akan ditarik otomatis sesuai data master karyawan.</p>
       </div>
 
-      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="baseSalary">Gaji Pokok *</Label>
           <CurrencyInput id="baseSalary" name="baseSalary" placeholder="0" required value={baseSalary} onChange={(v) => setBaseSalary(Number(v) || 0)} prefix="Rp" />
@@ -227,12 +227,12 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
         </div>
       </div>
 
-      <div className="p-6 border-y border-default bg-surface-secondary/30">
+      <div className="p-4 sm:p-6 border-y border-default bg-surface-secondary/30">
         <h2 className="text-lg font-semibold text-foreground">Komponen Potongan</h2>
         <p className="text-sm text-muted-foreground">Akan ditarik otomatis dari pinjaman aktif dan absensi keterlambatan.</p>
       </div>
 
-      <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="deductions">Potongan Lainnya</Label>
           <CurrencyInput id="deductions" name="deductions" placeholder="0" value={deductions} onChange={(v) => setDeductions(Number(v) || 0)} prefix="Rp" />
@@ -280,7 +280,7 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
       </div>
 
       {/* Summary Box */}
-      <div className="p-6 m-6 mt-0 bg-primary/5 rounded-xl border border-primary/20 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="p-4 sm:p-6 m-4 sm:m-6 mt-0 bg-primary/5 rounded-xl border border-primary/20 flex flex-col md:flex-row justify-between items-center gap-4">
         <div>
           <h3 className="font-semibold text-primary">Estimasi Gaji Bersih</h3>
           <p className="text-sm text-muted-foreground">Total otomatis terhitung dari data di atas</p>
@@ -290,7 +290,7 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 p-6 border-t border-default bg-surface">
+      <div className="flex flex-col-reverse sm:flex-row justify-end gap-3 p-4 sm:p-6 border-t border-default bg-surface">
         <Button type="button" onPress={() => router.back()} variant="secondary">Batal</Button>
         <Button type="submit" isDisabled={isPending || isEstimating} variant="primary">
           {isPending ? "Memproses..." : initialData ? "Simpan Perubahan" : "Proses Penggajian"}

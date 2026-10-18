@@ -41,7 +41,7 @@ interface FormCardProps {
  */
 export function FormCard({ children, className = "" }: FormCardProps) {
   return (
-    <div className={`bg-surface rounded-xl border border-default shadow-sm p-6 space-y-8 ${className}`}>
+    <div className={`bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6 space-y-8 ${className}`}>
       {children}
     </div>
   )
@@ -56,7 +56,7 @@ interface FormActionsProps {
  */
 export function FormActions({ children }: FormActionsProps) {
   return (
-    <div className="flex justify-end gap-3 pt-5 border-t border-default">
+    <div className="flex flex-col-reverse sm:flex-row sm:justify-end flex-wrap gap-3 pt-5 border-t border-default">
       {children}
     </div>
   )
