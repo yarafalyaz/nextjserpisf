@@ -33,4 +33,22 @@ describe("deployment tidak mendorong skema saat boot", () => {
     // bila kosong) — yang dilarang hanya literal `:latest`.
     expect(compose).not.toContain(":latest")
   })
+
+  it("compose prod tidak mempublish port database (P2-4)", () => {
+    const compose = read("docker-compose.prod.yml")
+    // MySQL hanya untuk service di network compose; akses admin via tunnel.
+    // Baris publish mapping host ("3309:3306", "127.0.0.1:3306:3306") dilarang;
+    // DATABASE_URL internal (db:3306) tetap boleh.
+    expect(compose).not.toMatch(/^\s+-\s+"?\d[^"]*:3306"?\s*$/m)
+  })
+
+  it("compose prod tanpa password default (P2-4)", () => {
+    const compose = read("docker-compose.prod.yml")
+    // Kredensial wajib dari .env produksi via `:?`; default `:-...` di compose
+    // (termasuk untuk MYSQL_*) = bocor di repo. Default non-kredensial
+    // (DB_NAME, DB_USER, IMAGE_TAG) tetap boleh.
+    expect(compose).not.toMatch(/MYSQL_.*PASSWORD.*:-[^}]*\w/)
+    expect(compose).not.toMatch(/MYSQL_PASSWORD.*:-[^}]*\w/)
+    expect(compose).toContain("DB_ROOT_PASSWORD")
+  })
 })

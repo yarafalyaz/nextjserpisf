@@ -50,11 +50,11 @@ services:
     environment:
       - MYSQL_DATABASE=${DB_NAME:-silengkap}
       - MYSQL_USER=${DB_USER:-silengkap_user}
-      - MYSQL_PASSWORD=${DB_PASSWORD:-silengkap_pass123}
-      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root_password_change_me}
+      - MYSQL_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD di .env produksi}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD di .env produksi}
       - TZ=Asia/Jakarta
-    ports:
-      - "3309:3306"
+    # P2-4: port DB TIDAK dipublish — hanya app di network compose yang boleh
+    # bicara ke MySQL. Akses admin via tunnel/ssh, bukan port publik.
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:
