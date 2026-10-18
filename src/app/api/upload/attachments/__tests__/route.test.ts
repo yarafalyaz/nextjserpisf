@@ -37,12 +37,14 @@ vi.mock("fs/promises", () => ({
   unlink: (...a: unknown[]) => mocks.unlink(...a),
 }))
 
-function makeFile(name: string, type: string, size = 1024): File {
+function makeFile(name: string, type: string, size = 1024, bytes?: number[]): File {
   const f = new File(["x"], name, { type })
   // Override size getter (File from small content is tiny)
   Object.defineProperty(f, "size", { value: size })
-  // Provide arrayBuffer
-  f.arrayBuffer = async () => new ArrayBuffer(8)
+  // Provide arrayBuffer: default ke signature PNG yang sah supaya tes yang
+  // sudah ada ("upload sukses") tidak ikut merah oleh cek magic bytes.
+  const sig = bytes ?? [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]
+  f.arrayBuffer = async () => new Uint8Array(sig).buffer as ArrayBuffer
   return f
 }
 
@@ -153,6 +155,15 @@ describe("POST /api/upload/attachments", () => {
     const file = makeFile("noext", "image/png")
     const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "5" }))
     expect(res.status).toBe(200)
+  })
+
+  it("returns 400 when content bytes do not match the declared type", async () => {
+    // Serangan pola P2-2: header Content-Type image/png di atas isi skrip PHP.
+    const evil = [0x3c, 0x3f, 0x70, 0x68, 0x70, 0x20, 0x65, 0x63, 0x68, 0x6f, 0x20, 0x31]
+    const file = makeFile("evil.png", "image/png", 1024, evil)
+    const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "5" }))
+    expect(res.status).toBe(400)
+    expect(mocks.writeFile).not.toHaveBeenCalled()
   })
 
   it("returns 500 on internal error", async () => {

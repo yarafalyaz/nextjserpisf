@@ -58,6 +58,24 @@ export async function POST(req: NextRequest) {
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
 
+  // Jangan percaya `file.type` (header Content-Type kiriman klien): periksa
+  // signature binernya. Tanpa ini, skrip .php/.svg yang di-header-kan
+  // `image/png` lolos sebagai gambar dan tersimpan di server.
+  const signature = buffer.subarray(0, 12)
+  const looksImage =
+    // JPEG: FF D8 FF
+    (signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff) ||
+    // PNG: 89 50 4E 47 0D 0A 1A 0A
+    (signature[0] === 0x89 && signature[1] === 0x50 && signature[2] === 0x4e && signature[3] === 0x47) ||
+    // GIF: "GIF87a" / "GIF89a"
+    (signature[0] === 0x47 && signature[1] === 0x49 && signature[2] === 0x46) ||
+    // WebP: "RIFF"...."WEBP"
+    (signature.toString("ascii", 0, 4) === "RIFF" && signature.toString("ascii", 8, 12) === "WEBP")
+  const looksPdf = signature.toString("ascii", 0, 5) === "%PDF-"
+  if (!looksImage && !looksPdf) {
+    return apiError("BAD_REQUEST", "Isi berkas tidak sesuai format. Gunakan JPG, PNG, WebP, GIF, atau PDF.")
+  }
+
   // Sanitize referenceType to prevent path traversal
   const safeRefType = referenceType.replace(/[^a-zA-Z0-9_-]/g, "")
   if (!safeRefType || safeRefType !== referenceType) {
