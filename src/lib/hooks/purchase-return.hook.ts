@@ -30,20 +30,30 @@ export async function onPurchaseReturnProcessed(
       include: { items: true, purchaseOrder: true },
     });
 
-    // Idempotency: return silently if stock moves already exist
+    // Idempotency: skip when stock moves already exist
     const existingMoves = await tx.stockMove.findFirst({
       where: {
         referenceType: "PurchaseReturn",
         referenceId: returnId,
       },
     });
-    if (existingMoves) return;
+    if (existingMoves) {
+      console.info(
+        `[purchase-return.hook] retur beli #${returnId} sudah diproses — pergerakan stok dilewati`
+      );
+      return;
+    }
 
     // Enforce period lock — return date must fall in an open period.
     await assertPeriodOpen(purchaseReturn.date, tx);
 
     // Guard: already returned
-    if (purchaseReturn.status === "returned") return;
+    if (purchaseReturn.status === "returned") {
+      console.info(
+        `[purchase-return.hook] retur beli #${returnId} sudah berstatus returned — pemrosesan dilewati`
+      );
+      return;
+    }
 
     // Use each item's receipt line: one PO can receive different items into different warehouses.
     const receiptLines = await tx.goodsReceiptItem.findMany({

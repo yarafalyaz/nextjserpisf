@@ -156,11 +156,16 @@ export async function onSalesInvoicePosted(
     include: { items: true },
   });
 
-  // Idempotency: check if journal already exists
+  // Idempotency: skip when journal already exists
   const existing = await db.journal.findFirst({
     where: { referenceType: "SalesInvoice", referenceId: invoiceId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] faktur #${invoiceId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`
+    );
+    return;
+  }
 
   await assertPeriodOpen(invoice.date, txClient);
 
@@ -182,7 +187,12 @@ export async function onSalesInvoicePosted(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesInvoice", referenceId: invoiceId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] faktur #${invoiceId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "INV", invoiceId);
 

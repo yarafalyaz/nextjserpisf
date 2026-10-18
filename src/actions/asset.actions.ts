@@ -296,6 +296,18 @@ export async function deleteAssetCategory(id: number) {
   try {
     await requirePermission("delete_asset_categories");
 
+    // Penghapusan DITOLAK bila masih dipakai. `Asset.categoryId` opsional
+    // (SET NULL), jadi tanpa penjagaan ini hapus kategori diam-diam melepas
+    // aset dari kategorinya — pengelompokan hilang tanpa satu pun pesan.
+    // Kolomnya memang ditulis createAsset/updateAsset, jadi hitungan ini hidup.
+    const usedByAssets = await prisma.asset.count({ where: { categoryId: id } });
+    if (usedByAssets > 0) {
+      return {
+        success: false,
+        error: `Kategori aset masih dipakai ${usedByAssets} aset. Pindahkan asetnya dulu.`,
+      };
+    }
+
     await prisma.assetCategory.delete({ where: { id } });
 
     await logActivity("delete", "AssetCategory", id, "Menghapus kategori aset");
@@ -311,6 +323,17 @@ export async function deleteAssetCategory(id: number) {
 export async function deleteAssetBrand(id: number) {
   try {
     await requirePermission("delete_asset_brands");
+
+    // Penghapusan DITOLAK bila masih dipakai. `Asset.assetBrandId` opsional dan
+    // form aset memang menulisnya (createAsset/updateAsset), jadi tanpa penjagaan
+    // ini hapus merek diam-diam melepas merek dari asetnya (SetNull).
+    const usedByAssets = await prisma.asset.count({ where: { assetBrandId: id } });
+    if (usedByAssets > 0) {
+      return {
+        success: false,
+        error: `Merek aset masih dipakai ${usedByAssets} aset. Pindahkan asetnya dulu.`,
+      };
+    }
 
     await prisma.assetBrand.delete({ where: { id } });
 

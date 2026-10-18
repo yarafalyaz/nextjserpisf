@@ -2368,6 +2368,17 @@ export async function deleteBrand(id: number) {
   try {
     await requirePermission("delete_brands");
 
+    // Penghapusan DITOLAK bila masih dipakai. `Item.brandId` opsional (SET NULL
+    // di DB), jadi tanpa penjagaan ini hapus merek diam-diam melepas barang dari
+    // mereknya. Kolomnya memang ditulis createItem/updateItem, jadi hitungan hidup.
+    const usedByItems = await prisma.item.count({ where: { brandId: id } });
+    if (usedByItems > 0) {
+      return {
+        success: false,
+        error: `Merek masih dipakai oleh ${usedByItems} barang. Pindahkan barang ke merek lain terlebih dahulu.`,
+      };
+    }
+
     await prisma.brand.delete({ where: { id } });
 
     revalidatePath("/master/merek");

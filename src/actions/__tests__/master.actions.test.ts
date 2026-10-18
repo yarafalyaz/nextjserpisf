@@ -426,10 +426,20 @@ describe("Brand Actions", () => {
     expect(mocks.prismaMock.brand.update).toHaveBeenCalled()
   })
   it("deleteBrand succeeds", async () => {
+    // Tes kategori di atas mengunci `item.count` ke nilai permanen via
+    // mockResolvedValue — reset eksplisit supaya penjagaan melihat 0.
+    mocks.prismaMock.item.count.mockResolvedValue(0)
     try {
       await actions.deleteBrand(1)
     } catch { /* redirect throws */ }
     expect(mocks.prismaMock.brand.delete).toHaveBeenCalled()
+  })
+  it("deleteBrand MENOLAK bila masih dipakai barang", async () => {
+    mocks.prismaMock.item.count.mockResolvedValueOnce(5)
+    const res = await actions.deleteBrand(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/dipakai oleh 5 barang/)
+    expect(mocks.prismaMock.brand.delete).not.toHaveBeenCalled()
   })
 })
 

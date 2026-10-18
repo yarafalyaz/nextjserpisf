@@ -145,18 +145,22 @@ export async function deleteVehicleBrand(id: number) {
     // referenced it — no error, no warning. VehicleModel.vehicleBrandId is
     // ON DELETE RESTRICT (a raw delete errors if models exist), and now
     // VehicleFitmentRule.vehicleBrandId is SET NULL too. Mirrors
-    // deletePosition/deletePaymentTerm's guard: refuse with an Indonesian error
-    // listing the count, let the operator reassign/detach products first.
-    const productCount = await prisma.product.count({
-      where: { vehicleBrandId: id },
-    });
-    if (productCount > 0) {
+    // ditolak pola deletePosition/deletePaymentTerm — dengan pesan Indonesia yang
+    // menyebut jumlahnya. Hanya relasi opsional SetNull yang bermasalah: tautan
+    // kendaraan (yang malah MELEBAR jadi wildcard saat induknya hilang) dan
+    // tautan kompatibilitas produk. Varian→Kendaraan Restrict, jadi tidak perlu.
+    const [productCount, ruleCount] = await Promise.all([
+      prisma.product.count({ where: { vehicleBrandId: id } }),
+      prisma.vehicleFitmentRule.count({ where: { vehicleBrandId: id } }),
+    ]);
+    const totalCount = productCount + ruleCount;
+    if (totalCount > 0) {
       return {
         success: false,
         error:
-          `Merek kendaraan ini masih dipakai oleh ${productCount} produk ` +
+          `Merek kendaraan ini masih dipakai oleh ${totalCount} data (produk: ${productCount}, aturan kompatibilitas: ${ruleCount}) ` +
           `dan tidak bisa dihapus karena akan menghilangkan informasi kompatibilitas merek. ` +
-          `Lepas asosiasi merek dari produk terlebih dahulu.`,
+          `Lepas asosiasi merek dari produk dan aturan terlebih dahulu.`,
       };
     }
 
@@ -195,16 +199,21 @@ export async function deleteVehicleModel(id: number) {
     // delete of a model still in use errors generically. Mirrors
     // deletePosition/deletePaymentTerm's guard — refuse with an Indonesian
     // error listing the count, let the operator detach products first.
-    const productCount = await prisma.product.count({
-      where: { vehicleModelId: id },
-    });
-    if (productCount > 0) {
+    // Hanya relasi opsional SetNull yang bermasalah: aturan kendaraan (yang
+    // malah MELEBAR jadi wildcard saat induknya hilang) dan tautan
+    // kompatibilitas produk. Varian→Model Restrict, jadi tidak perlu.
+    const [productCount, ruleCount] = await Promise.all([
+      prisma.product.count({ where: { vehicleModelId: id } }),
+      prisma.vehicleFitmentRule.count({ where: { vehicleModelId: id } }),
+    ]);
+    const totalCount = productCount + ruleCount;
+    if (totalCount > 0) {
       return {
         success: false,
         error:
-          `Model kendaraan ini masih dipakai oleh ${productCount} produk ` +
+          `Model kendaraan ini masih dipakai oleh ${totalCount} data (produk: ${productCount}, aturan kompatibilitas: ${ruleCount}) ` +
           `dan tidak bisa dihapus karena akan menghilangkan informasi kompatibilitas model. ` +
-          `Lepas asosiasi model dari produk terlebih dahulu.`,
+          `Lepas asosiasi model dari produk dan aturan terlebih dahulu.`,
       };
     }
 
@@ -283,14 +292,19 @@ export async function deleteVehicleVariant(id: number) {
   try {
     await requirePermission("edit_vehicle_models");
 
-    // Guard: refuse if vehicles are using this variant
-    const inUseCount = await prisma.vehicle.count({
-      where: { vehicleVariantId: id },
-    });
+    // Guard: refuse if vehicles are using this variant. Vehicle.vehicleVariantId
+    // is Restrict (aman), tapi VehicleFitmentRule.vehicleVariantId opsional
+    // SetNull — hapus varian tanpa penjagaan diam-diam MELEBARkan aturan itu
+    // jadi wildcard varian. Kolomnya memang ditulis fitment actions, jadi hidup.
+    const [vehicleCount, ruleCount] = await Promise.all([
+      prisma.vehicle.count({ where: { vehicleVariantId: id } }),
+      prisma.vehicleFitmentRule.count({ where: { vehicleVariantId: id } }),
+    ]);
+    const inUseCount = vehicleCount + ruleCount;
     if (inUseCount > 0) {
       return {
         success: false,
-        error: `Tidak bisa menghapus varian — masih dipakai oleh ${inUseCount} kendaraan.`,
+        error: `Tidak bisa menghapus varian — masih dipakai oleh ${inUseCount} data (kendaraan: ${vehicleCount}, aturan kompatibilitas: ${ruleCount}).`,
       };
     }
 

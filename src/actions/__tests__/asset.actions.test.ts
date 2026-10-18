@@ -327,6 +327,14 @@ describe("Asset Brand Actions", () => {
     expect(prismaMock.assetBrand.delete).toHaveBeenCalledWith({ where: { id: 20 } })
   })
 
+  it("deleteAssetBrand MENOLAK bila masih dipakai aset", async () => {
+    prismaMock.asset.count.mockResolvedValueOnce(2)
+    const res = await deleteAssetBrand(20)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/masih dipakai 2 aset/)
+    expect(prismaMock.assetBrand.delete).not.toHaveBeenCalled()
+  })
+
   it("handles error on create brand", async () => {
     prismaMock.assetBrand.create.mockRejectedValue(new Error("db err"))
     const res = await createAssetBrand(fd({ name: "Dell" }))
@@ -401,6 +409,14 @@ describe("Asset Category Actions", () => {
     prismaMock.assetCategory.delete.mockResolvedValue({})
     await expect(deleteAssetCategory(10)).rejects.toThrow("NEXT_REDIRECT")
     expect(prismaMock.assetCategory.delete).toHaveBeenCalledWith({ where: { id: 10 } })
+  })
+
+  it("deleteAssetCategory MENOLAK bila masih dipakai aset", async () => {
+    prismaMock.asset.count.mockResolvedValueOnce(4)
+    const res = await deleteAssetCategory(10)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/masih dipakai 4 aset/)
+    expect(prismaMock.assetCategory.delete).not.toHaveBeenCalled()
   })
 
   it("handles error on delete category", async () => {

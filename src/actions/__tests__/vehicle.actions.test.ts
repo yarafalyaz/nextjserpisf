@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => {
     vehicle: buildModelMock(),
     customerVehicle: buildModelMock(),
     product: buildModelMock(),
+    vehicleFitmentRule: buildModelMock(),
     salesOrder: buildModelMock(),
     salesInvoice: buildModelMock(),
 
@@ -435,6 +436,14 @@ describe("Vehicle Actions Remaining Branches", () => {
     mocks.prismaMock.vehicleVariant.findUnique.mockResolvedValueOnce({ id: 1, vehicleModelId: 3 })
     const res = await actions.deleteVehicleVariant(1)
     expect(res?.success).toBe(true)
+  })
+  it("deleteVehicleVariant refuses when only fitment rules reference the variant", async () => {
+    mocks.prismaMock.vehicle.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.vehicleFitmentRule.count.mockResolvedValueOnce(2)
+    const res = await actions.deleteVehicleVariant(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/aturan kompatibilitas: 2/)
+    expect(mocks.prismaMock.vehicleVariant.delete).not.toHaveBeenCalled()
   })
 })
 

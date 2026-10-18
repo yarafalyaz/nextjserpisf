@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/prisma"
 import { toBaseFactor } from "@/lib/services/uom.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
 import { onSalesInvoicePosted, onSalesPaymentCreated, onSalesReturnCompleted, onDownPaymentReceived, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
+import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { onDownPaymentConfirmed } from "@/lib/hooks/down-payment.hook"
 import { onSalesPaymentCreated as onSalesPaymentRecalculate, onSalesPaymentUpdated, onSalesPaymentDeleted } from "@/lib/hooks/sales-payment.hook"
 import { onSalesReturnCompleted as onSalesReturnStock } from "@/lib/hooks/sales-return.hook"
@@ -945,6 +946,11 @@ export async function createSalesInvoice(formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
+  // Lapis-2: tanggal faktur harus di periode terbuka, sebelum mutasi apa pun.
+  // (Lapis-1 tinggal di hook posting; faktur draft belum memposting jadi hook
+  // tidak menyala — penjagaan di sini menutup celah back-date draft.)
+  await assertPeriodOpen(new Date(v.date))
+
   const documentNo = await generateDocumentNumber("INV")
   const slug = await nextSlug("salesInvoice", documentNo)
 
@@ -1797,6 +1803,10 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
   const parsed = parseFormData(updateSalesInvoiceSchema, formData)
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
+
+  // Lapis-2: tanggal baru harus di periode terbuka, sebelum mutasi apa pun —
+  // termasuk sebelum reverse+repost jalur wasPosted di dalam transaksi.
+  await assertPeriodOpen(new Date(v.date))
 
   const itemsJson = v.items
   const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null; description?: string | null }>>(itemsJson) ?? []) : null

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeSubtract, safeMultiply } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { getWarehouseScope, assertWarehouseAccess, assertWarehouseAccessMulti } from "@/lib/auth/warehouse-scope";
 import { onStockAdjustmentProcessed as onStockAdjustmentStock } from "@/lib/hooks/stock-adjustment.hook";
 import {
@@ -83,6 +84,9 @@ export async function createStockAdjustment(formData: FormData) {
     const parsed = parseFormData(stockAdjustmentSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    // Lapis-2: tanggal penyesuaian harus di periode terbuka, sebelum mutasi.
+    await assertPeriodOpen(new Date(v.date));
 
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, v.warehouseId);
@@ -184,6 +188,9 @@ export async function processStockAdjustment(adjustmentId: number) {
       include: { items: true },
     });
 
+    // Lapis-2: gagal terlihat bila tanggal dokumen di periode tertutup.
+    await assertPeriodOpen(adjustment.date);
+
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, adjustment.warehouseId);
 
@@ -276,6 +283,9 @@ export async function createInventoryTransfer(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // Lapis-2: tanggal transfer harus di periode terbuka, sebelum mutasi.
+    await assertPeriodOpen(new Date(v.date));
+
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccessMulti(warehouseScope, [v.sourceWarehouseId, v.destinationWarehouseId]);
 
@@ -326,6 +336,9 @@ export async function processInventoryTransfer(transferId: number) {
     const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({
       where: { id: transferId },
     });
+
+    // Lapis-2: gagal terlihat bila tanggal dokumen di periode tertutup.
+    await assertPeriodOpen(transfer.date);
 
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, transfer.sourceWarehouseId);
@@ -397,6 +410,9 @@ export async function receiveInventoryTransfer(transferId: number) {
     const transfer = await prisma.inventoryTransfer.findUniqueOrThrow({
       where: { id: transferId },
     });
+
+    // Lapis-2: gagal terlihat bila tanggal dokumen di periode tertutup.
+    await assertPeriodOpen(transfer.date);
 
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, transfer.destinationWarehouseId);
@@ -474,6 +490,9 @@ export async function createMaterialIssue(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // Lapis-2: tanggal pengeluaran harus di periode terbuka, sebelum mutasi.
+    await assertPeriodOpen(new Date(v.date));
+
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, v.warehouseId);
 
@@ -535,6 +554,9 @@ export async function completeMaterialIssue(issueId: number) {
     const issue = await prisma.materialIssue.findUniqueOrThrow({
       where: { id: issueId },
     });
+
+    // Lapis-2: gagal terlihat bila tanggal dokumen di periode tertutup.
+    await assertPeriodOpen(issue.date);
 
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, issue.warehouseId);
@@ -1065,6 +1087,9 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // Lapis-2: tanggal baru harus di periode terbuka, sebelum mutasi.
+    await assertPeriodOpen(new Date(v.date));
+
     const adj = await prisma.stockAdjustment.findUniqueOrThrow({
       where: { id },
     });
@@ -1186,6 +1211,9 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // Lapis-2: tanggal baru harus di periode terbuka, sebelum mutasi.
+    await assertPeriodOpen(new Date(v.date));
+
     const mi = await prisma.materialIssue.findUniqueOrThrow({ where: { id } });
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccessMulti(warehouseScope, [mi.warehouseId, v.warehouseId]);
@@ -1261,6 +1289,9 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     const parsed = parseFormData(inventoryTransferSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    // Lapis-2: tanggal baru harus di periode terbuka, sebelum mutasi.
+    await assertPeriodOpen(new Date(v.date));
 
     const tf = await prisma.inventoryTransfer.findUniqueOrThrow({
       where: { id },

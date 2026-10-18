@@ -17,7 +17,12 @@ export async function onExpenseApprovedSyncPettyCash(
   });
 
   // Only sync if paid from a petty cash type account
-  if (!expense.paidFromAccountId) return;
+  if (!expense.paidFromAccountId) {
+    console.warn(
+      `[expense.hook] expense ${expense.documentNo ?? expenseId} tanpa paidFromAccountId — sinkron kas kecil dilewati`
+    );
+    return;
+  }
 
   const paidFromAccount = await prisma.account.findUnique({
     where: { id: expense.paidFromAccountId },
@@ -25,7 +30,12 @@ export async function onExpenseApprovedSyncPettyCash(
 
   // AccountType enum: ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
   // Petty cash accounts are typically ASSET type with specific naming
-  if (!paidFromAccount || (!paidFromAccount.name.toLowerCase().includes("petty cash") && !paidFromAccount.name.toLowerCase().includes("kas kecil"))) return;
+  if (!paidFromAccount || (!paidFromAccount.name.toLowerCase().includes("petty cash") && !paidFromAccount.name.toLowerCase().includes("kas kecil"))) {
+    console.warn(
+      `[expense.hook] expense ${expense.documentNo ?? expenseId} bukan dari akun kas kecil (akun: ${paidFromAccount?.name ?? expense.paidFromAccountId}) — sinkron dilewati`
+    );
+    return;
+  }
 
   // Idempotency: check if PettyCash record already exists for this expense
   const existing = await prisma.pettyCash.findFirst({

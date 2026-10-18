@@ -1,13 +1,14 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { updateExpenseCategory, deleteExpenseCategory } from "@/actions/expense-category.actions"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Switch } from "@/components/ui/shadcn/switch"
 import { Button } from "@/components/ui/button"
+import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 
 interface Props {
   category: { id: number; slug: string | null; name: string; label: string; sortOrder: number; isActive: boolean }
@@ -16,9 +17,14 @@ interface Props {
 export function EditForm({ category }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  const [confirmDelete, setConfirmDelete] = useState(false)
 
-  async function handleDelete() {
-    if (!confirm("Hapus kategori ini?")) return
+  function handleDelete() {
+    setConfirmDelete(true)
+  }
+
+  function doDelete() {
+    setConfirmDelete(false)
     startTransition(async () => {
       const result = await deleteExpenseCategory(category.id)
       if (result && !result.success) { showError(result.error || "Gagal menghapus"); return }
@@ -73,6 +79,17 @@ export function EditForm({ category }: Props) {
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={confirmDelete}
+        onOpenChange={(open) => { if (!open) setConfirmDelete(false) }}
+        title={`Hapus kategori "${category.label}"?`}
+        body="Kategori yang dihapus tidak dapat dikembalikan. Data pengeluaran yang memakai kategori ini akan kehilangan tautannya."
+        confirmLabel="Hapus"
+        variant="danger"
+        isPending={isPending}
+        onConfirm={doDelete}
+      />
     </form>
   )
 }

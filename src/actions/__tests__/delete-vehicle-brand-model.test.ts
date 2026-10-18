@@ -6,6 +6,9 @@ const mocks = vi.hoisted(() => ({
     product: {
       count: vi.fn(),
     },
+    vehicleFitmentRule: {
+      count: vi.fn(),
+    },
     vehicleBrand: {
       delete: vi.fn(),
     },
@@ -27,6 +30,7 @@ import { deleteVehicleBrand, deleteVehicleModel } from "../vehicle.actions"
 describe("deleteVehicleBrand / deleteVehicleModel — in-use guard", () => {
   it("deleteVehicleBrand refuses when products reference the brand", async () => {
     mocks.prisma.product.count.mockResolvedValueOnce(3)
+    mocks.prisma.vehicleFitmentRule.count.mockResolvedValueOnce(0)
     const res = await deleteVehicleBrand(1)
     expect(res.success).toBe(false)
     expect(String(res.error)).toMatch(/merek/i)
@@ -34,8 +38,18 @@ describe("deleteVehicleBrand / deleteVehicleModel — in-use guard", () => {
     expect(mocks.prisma.vehicleBrand.delete).not.toHaveBeenCalled()
   })
 
+  it("deleteVehicleBrand refuses when only fitment rules reference the brand", async () => {
+    mocks.prisma.product.count.mockResolvedValueOnce(0)
+    mocks.prisma.vehicleFitmentRule.count.mockResolvedValueOnce(2)
+    const res = await deleteVehicleBrand(1)
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/aturan kompatibilitas: 2/)
+    expect(mocks.prisma.vehicleBrand.delete).not.toHaveBeenCalled()
+  })
+
   it("deleteVehicleBrand deletes when 0 products reference it", async () => {
     mocks.prisma.product.count.mockResolvedValueOnce(0)
+    mocks.prisma.vehicleFitmentRule.count.mockResolvedValueOnce(0)
     mocks.prisma.vehicleBrand.delete.mockResolvedValueOnce({} as never)
     const res = await deleteVehicleBrand(1)
     expect(res.success).toBe(true)
@@ -44,6 +58,7 @@ describe("deleteVehicleBrand / deleteVehicleModel — in-use guard", () => {
 
   it("deleteVehicleModel refuses when products reference the model", async () => {
     mocks.prisma.product.count.mockResolvedValueOnce(2)
+    mocks.prisma.vehicleFitmentRule.count.mockResolvedValueOnce(0)
     const res = await deleteVehicleModel(1)
     expect(res.success).toBe(false)
     expect(String(res.error)).toMatch(/model/i)
@@ -51,8 +66,18 @@ describe("deleteVehicleBrand / deleteVehicleModel — in-use guard", () => {
     expect(mocks.prisma.vehicleModel.delete).not.toHaveBeenCalled()
   })
 
+  it("deleteVehicleModel refuses when only fitment rules reference the model", async () => {
+    mocks.prisma.product.count.mockResolvedValueOnce(0)
+    mocks.prisma.vehicleFitmentRule.count.mockResolvedValueOnce(1)
+    const res = await deleteVehicleModel(1)
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/aturan kompatibilitas: 1/)
+    expect(mocks.prisma.vehicleModel.delete).not.toHaveBeenCalled()
+  })
+
   it("deleteVehicleModel deletes when 0 products reference it", async () => {
     mocks.prisma.product.count.mockResolvedValueOnce(0)
+    mocks.prisma.vehicleFitmentRule.count.mockResolvedValueOnce(0)
     mocks.prisma.vehicleModel.delete.mockResolvedValueOnce({} as never)
     const res = await deleteVehicleModel(1)
     expect(res.success).toBe(true)
