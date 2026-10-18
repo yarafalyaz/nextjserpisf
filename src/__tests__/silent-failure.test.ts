@@ -44,6 +44,7 @@ const ALLOWED: Record<string, string> = {
 const SILENT_PROMISE_CATCH = /\.catch\(\s*\(\s*\)\s*=>\s*(\{\s*\}|undefined|null)\s*\)/g
 
 const ALLOWED_PROMISE_CATCH: Record<string, string> = {
+  "src/app/api/cron/route.ts": "sapu berkas lampiran yatim best-effort (R-9); unlink gagal = berkas memang sudah hilang, deleteMany tetap jalan",
   "src/app/api/upload/attachments/route.ts": "hapus berkas sementara — gagal pun tak berdampak",
   "src/components/reports/report-letterhead.tsx": "setelan opsional; null berarti pakai default",
   "src/lib/db/backup.ts": "pembersihan berkas / cloud best-effort",
@@ -277,6 +278,7 @@ const ALLOWED_CONSOLE_ONLY: Record<string, string> = {
   "src/lib/db/backup.ts": "unggah cloud best-effort; kegagalan cukup dilaporkan sebagai peringatan",
   "src/lib/services/activity-log.service.ts": "logging tidak boleh memutus alur utama (niatnya tertulis di blok)",
   "src/lib/services/activity-reference.service.ts": "label referensi yang hilang tak boleh menggagalkan seluruh halaman log; sengaja dicatat agar ada jejak (niatnya tertulis di blok)",
+  "src/lib/services/transaction-attachment.service.ts": "hapus berkas disk best-effort (R-10); kegagalan dicatat berkonteks dengan path, baris DB tetap terhapus agar referensi tak menggantung",
   "scripts/clear-all-data.ts": "skrip sekali-jalan; error dilaporkan ke console sebelum proses keluar",
   "scripts/verify-migrations.mjs": "pembersihan DB scratch best-effort; kegagalan dilaporkan plus instruksi hapus manual",
 }

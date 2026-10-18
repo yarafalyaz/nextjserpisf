@@ -1191,6 +1191,117 @@ describe("More Action Branches", () => {
     expect(res.error).toMatch(/Semua baris harus di-match/i)
   })
 
+  it("createReconciliationAdjustment menulis item penyesuaian (R-11)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft",
+    })
+    mocks.prismaMock.bankReconciliationItem.create.mockResolvedValue({ id: 7 })
+    const res = await actions.createReconciliationAdjustment(1, fdMap({
+      type: "outstanding_deposit",
+      amount: "1500000",
+      date: "2026-06-13",
+      description: "Setoran beredar",
+    }))
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.bankReconciliationItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        bankReconciliationId: 1,
+        bankStatementLineId: null,
+        journalEntryId: null,
+        type: "outstanding_deposit",
+        amount: 1500000,
+        cleared: false,
+        matched: false,
+      }),
+    })
+  })
+
+  it("createReconciliationAdjustment menolak nominal id-ID yang salah parse", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft",
+    })
+    // "1.500.000" = satu koma lima juta via parseMoneyAmount, bukan 1.
+    const res = await actions.createReconciliationAdjustment(1, fdMap({
+      type: "outstanding_check",
+      amount: "1.500.000",
+      date: "2026-06-13",
+    }))
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.bankReconciliationItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({ amount: 1500000 }),
+    })
+  })
+
+  it("createReconciliationAdjustment menolak jenis tak dikenal", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    const res = await actions.createReconciliationAdjustment(1, fdMap({
+      type: "fiktif",
+      amount: "1000",
+      date: "2026-06-13",
+    }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("Jenis penyesuaian")
+    expect(mocks.prismaMock.bankReconciliationItem.create).not.toHaveBeenCalled()
+  })
+
+  it("createReconciliationAdjustment menolak recon completed", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "completed",
+    })
+    const res = await actions.createReconciliationAdjustment(1, fdMap({
+      type: "outstanding_deposit",
+      amount: "1000",
+      date: "2026-06-13",
+    }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/draft/i)
+    expect(mocks.prismaMock.bankReconciliationItem.create).not.toHaveBeenCalled()
+  })
+
+  it("unmatchReconciliationLine menghapus item recon draft", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft",
+    })
+    mocks.prismaMock.bankReconciliationItem.findUniqueOrThrow.mockResolvedValue({
+      id: 9, bankReconciliationId: 1,
+    })
+    mocks.prismaMock.bankReconciliationItem.delete.mockResolvedValue({ id: 9 })
+    const res = await actions.unmatchReconciliationLine(1, 9)
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.bankReconciliationItem.delete).toHaveBeenCalledWith({
+      where: { id: 9 },
+    })
+  })
+
+  it("unmatchReconciliationLine menolak recon completed", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "completed",
+    })
+    const res = await actions.unmatchReconciliationLine(1, 9)
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/draft/i)
+    expect(mocks.prismaMock.bankReconciliationItem.delete).not.toHaveBeenCalled()
+  })
+
+  it("unmatchReconciliationLine menolak item milik recon lain", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.bankReconciliation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft",
+    })
+    mocks.prismaMock.bankReconciliationItem.findUniqueOrThrow.mockResolvedValue({
+      id: 9, bankReconciliationId: 2,
+    })
+    const res = await actions.unmatchReconciliationLine(1, 9)
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("bukan milik rekonsiliasi ini")
+    expect(mocks.prismaMock.bankReconciliationItem.delete).not.toHaveBeenCalled()
+  })
+
   it("deleteJournal rejects POSTED journal", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })

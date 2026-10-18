@@ -36,6 +36,7 @@ import {
 } from "@/lib/finance/petty-cash-chain";
 import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 // ==================== BANK STATEMENT ACTIONS ====================
@@ -1004,6 +1005,115 @@ export async function matchReconciliationLine(
     if (isNextRedirectError(e)) throw e;
     console.error("[matchReconciliationLine]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function createReconciliationAdjustment(
+  reconciliationId: number,
+  formData: FormData,
+) {
+  try {
+    await requirePermission("post_journals");
+
+    const rawType = String(formData.get("type") ?? "").trim();
+    if (rawType !== "outstanding_deposit" && rawType !== "outstanding_check") {
+      return {
+        success: false as const,
+        error: "Jenis penyesuaian harus setoran beredar atau cek beredar",
+      };
+    }
+
+    const amount = parseMoneyAmount(formData.get("amount"));
+    if (amount === null || !(amount > 0)) {
+      return {
+        success: false as const,
+        error: "Nominal penyesuaian harus lebih dari 0",
+      };
+    }
+
+    const rawDate = String(formData.get("date") ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      return { success: false as const, error: "Tanggal penyesuaian wajib diisi" };
+    }
+
+    const description = String(formData.get("description") ?? "").trim() || null;
+
+    const recon = await prisma.bankReconciliation.findUniqueOrThrow({
+      where: { id: reconciliationId },
+      select: { status: true },
+    });
+    if (recon.status !== "draft") {
+      throw new Error("Hanya rekonsiliasi dengan status draft yang dapat ditambah penyesuaian");
+    }
+
+    const item = await prisma.bankReconciliationItem.create({
+      data: {
+        bankReconciliationId: reconciliationId,
+        bankStatementLineId: null,
+        journalEntryId: null,
+        type: rawType,
+        amount,
+        date: wibDateToUtcMidnight(rawDate),
+        description,
+        cleared: false,
+        matched: false,
+      },
+    });
+
+    await logActivity(
+      "create",
+      "BankReconciliation",
+      reconciliationId,
+      "Menambah item penyesuaian rekonsiliasi bank",
+    );
+    revalidatePath("/keuangan/rekonsiliasi-bank");
+    return { success: true as const, id: item.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createReconciliationAdjustment]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function unmatchReconciliationLine(
+  reconciliationId: number,
+  itemId: number,
+) {
+  try {
+    await requirePermission("post_journals");
+
+    await prisma.$transaction(async (tx) => {
+      const recon = await tx.bankReconciliation.findUniqueOrThrow({
+        where: { id: reconciliationId },
+        select: { status: true },
+      });
+      if (recon.status !== "draft") {
+        throw new Error("Hanya rekonsiliasi dengan status draft yang dapat dibatalkan cocoknya");
+      }
+
+      const item = await tx.bankReconciliationItem.findUniqueOrThrow({
+        where: { id: itemId },
+        select: { bankReconciliationId: true },
+      });
+      if (item.bankReconciliationId !== reconciliationId) {
+        throw new Error("Item bukan milik rekonsiliasi ini");
+      }
+
+      await tx.bankReconciliationItem.delete({ where: { id: itemId } });
+    });
+
+    await logActivity(
+      "unmatch",
+      "BankReconciliation",
+      reconciliationId,
+      "Membatalkan kecocokan baris rekonsiliasi bank",
+    );
+    revalidatePath("/keuangan/rekonsiliasi-bank");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[unmatchReconciliationLine]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
 

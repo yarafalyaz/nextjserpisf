@@ -2901,7 +2901,7 @@ model BankReconciliation {
 model BankReconciliationItem {
   id                   Int                @id @default(autoincrement())
   bankReconciliationId Int                @map("bank_reconciliation_id")
-  bankStatementLineId  Int                @map("bank_statement_line_id")
+  bankStatementLineId  Int?               @map("bank_statement_line_id")
   journalEntryId       Int?               @map("journal_entry_id")
   type                 String?
   reference            String?
