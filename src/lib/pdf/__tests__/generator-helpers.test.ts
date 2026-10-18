@@ -25,8 +25,10 @@ describe("formatPdfCurrency", () => {
 })
 
 describe("formatPdfDate", () => {
-  it("formats a valid ISO date as DD-Mon-YY", () => {
+  it("formats a valid ISO date as DD-Mon-YY in Indonesian", () => {
     expect(formatPdfDate("2026-06-09")).toBe("09-Jun-26")
+    // Bulan Indonesia, bukan Inggris (D9): Mei, bukan May.
+    expect(formatPdfDate("2024-05-15")).toBe("15-Mei-24")
   })
 
   it("returns the raw value when the date is invalid", () => {

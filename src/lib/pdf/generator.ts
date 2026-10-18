@@ -431,7 +431,8 @@ export function formatPdfCurrency(value: number, showSymbol = true) {
 export function formatPdfDate(value: string) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return value || "-"
-  return date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "2-digit" }).replace(/ /g, "-")
+  // id-ID: bulan Indonesia ("Jun" bukan "Jun"/"May") — D9 audit-ui-ux.
+  return date.toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "2-digit" }).replace(/ /g, "-").replace(/\./g, "")
 }
 
 /** Derive jsPDF image format from a dataURL mime type. */
@@ -518,7 +519,7 @@ export async function generateQuotationPDF(
   doc.setTextColor("#ef4444")
   doc.setFont("Helvetica", "bold")
   doc.setFontSize(18)
-  doc.text("QUOTATION", pageW - ml, 14, { align: "right" })
+  doc.text("PENAWARAN HARGA", pageW - ml, 14, { align: "right" })
 
   // Thin separator line below company header
   doc.setDrawColor(209, 213, 219)
@@ -682,7 +683,7 @@ export async function generateQuotationPDF(
   doc.setFont("Helvetica", "bold")
   doc.setFontSize(8.5)
   doc.setTextColor(black)
-  doc.text("NOTE :", ml, y)
+  doc.text("CATATAN :", ml, y)
 
   doc.setFont("Helvetica", "normal")
   doc.setFontSize(8)
