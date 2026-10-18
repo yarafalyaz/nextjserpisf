@@ -262,6 +262,53 @@ Hasil (2026-10-18, satu mesin, satu basis data):
 
 Keduanya tentang rantai uang/persediaan — bagian yang paling mahal bila salah.
 
+## 8b. CACAT DITEMUKAN: posting faktur bisa "berhasil" tanpa membukukan apa pun
+
+Ditemukan justru karena menjalankan sistemnya, bukan karena membacanya.
+
+**Fakta dari basis data nyata.** `system_settings.id=1` berisi
+`sales_receivable_account_id = 101` tetapi **`sales_revenue_account_id = NULL`**.
+`onSalesInvoicePosted` (`src/lib/hooks/accounting.hook.ts`) dibuka dengan:
+
+```ts
+const settings = await getSystemSettings(db);
+if (!settings.salesReceivableAccountId || !settings.salesRevenueAccountId)
+  return;   // <— diam-diam menyerah, tanpa galat, tanpa peringatan
+```
+
+Akibatnya, saat sebuah faktur DIPOSTING lewat UI: **status faktur berubah menjadi
+`posted`** (bukti: `007/INV/YAR/10/2026`, grand total 200.000) sementara
+**nol jurnal `SalesInvoice`** lahir, **nol pergerakan stok**, dan `qty_on_hand`
+item TIDAK berkurang. Pembukuan tampak benar padahal kosong — dan tidak ada satu pun
+tanda di UI, log, atau tes.
+
+Ini juga menjelaskan temuan §8a: tidak ada jurnal `SalesInvoice` di basis data mana
+pun, karena mapping pendapatan memang tidak pernah ada — **CI pun belum pernah
+menjalankan posting faktur yang benar-benar membukukan.**
+
+**Bukti pembanding (uji pembeda).** Ketika mapping piutang+pendapatan dipasang manual
+lalu faktur diposting ulang, jalur itu **gagal keras** dan status faktur tetap `draft`
+— jadi aplikasi ini memang bisa gagal dengan berisik; yang salah adalah satu cabang
+yang memilih diam.
+
+**Rencana perbaikan (BELUM dikerjakan, sengaja):**
+
+1. Isi mapping akun penjualan di setup/seed supaya posting benar-benar membukukan.
+2. Ganti `return` polos itu menjadi galat yang jelas (posting yang gagal harus berisik),
+   sekaligus membalik tes lama yang MENGUNCI perilaku diam itu
+   (`accounting-hook.test.ts`: "returns early if system settings are missing account mappings").
+3. Verifikasi: `onSalesInvoicePosted` dipanggil dari **lima tempat** —
+   `sales.actions.ts:857` (posting manual) dan `:1832` (ubah faktur yang sudah posted),
+   `down-payment.hook.ts:83` dan `:489`, serta `quotation-sync.service.ts:173`.
+   Membuatnya melempar galat TANPA mengisi mapping lebih dulu berarti kelima alur itu
+   bisa gagal di lingkungan yang belum dikonfigurasi. Perbaikan langkah 1 dan 2 harus
+   berjalan bersama, dan bukti "posting berhasil saat mapping lengkap" harus ada dulu
+   sebelum langkah 2 di-commit.
+
+Bahan yang sudah siap (belum masuk repo): spec E2E `e2e/penjualan-posting-faktur.spec.ts`
+yang memposting faktur draft lewat UI, plus fixture blok 11 di
+`scripts/seed-remaining-e2e.ts` (produk berstok + faktur draft berslug tetap).
+
 ## 8. Cara memverifikasi ulang
 
 ```bash
