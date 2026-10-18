@@ -5,6 +5,8 @@ import { isValidCronRequest } from "@/lib/security/cron"
 import { notificationService } from "@/lib/services/notification.service"
 import { apiError } from "@/lib/api-response"
 import { pruneIdempotencyKeys } from "@/lib/utils/idempotency"
+import { unlink } from "node:fs/promises"
+import path from "node:path"
 
 const TASKS = [
   "lock-period",
@@ -13,6 +15,7 @@ const TASKS = [
   "late-checkin",
   "recover-stuck-reversals",
   "cleanup",
+  "sweep-orphan-attachments",
 ] as const
 
 type Task = (typeof TASKS)[number]
@@ -95,6 +98,8 @@ async function runTask(task: Task): Promise<string> {
       return await taskRecoverStuckReversals()
     case "cleanup":
       return await taskCleanup()
+    case "sweep-orphan-attachments":
+      return await taskSweepOrphanAttachments()
   }
 }
 
@@ -315,4 +320,48 @@ async function taskCleanup(): Promise<string> {
   const prunedKeys = await pruneIdempotencyKeys()
 
   return `${result.count} log activity (>${retentionDays} hari) dihapus, ${prunedKeys} kunci idempotency kedaluwarsa dihapus`
+}
+
+// 7. Sweep lampiran sementara yang yatim.
+//
+// Unggahan dari form tambah ditulis dengan referenceId=0 lalu diklaim saat
+// create/update lewat attachPendingTransactionAttachments. Baris yang tidak
+// pernah diklaim (form dibatalkan/diabaikan) menumpuk selamanya: berkas di
+// disk + baris DB referenceId=0 tanpa penyapu. Hapus yang lebih tua dari
+// ambang agar unggahan yang masih dipakai form terbuka tak ikut tersapu.
+const ORPHAN_ATTACHMENT_TTL_MS = 24 * 60 * 60 * 1000
+const ORPHAN_ATTACHMENT_BATCH = 500
+
+async function taskSweepOrphanAttachments(): Promise<string> {
+  const cutoff = new Date(Date.now() - ORPHAN_ATTACHMENT_TTL_MS)
+
+  const orphans = await prisma.transactionAttachment.findMany({
+    where: { referenceId: 0, createdAt: { lt: cutoff } },
+    select: { id: true, referenceType: true, fileUrl: true },
+    orderBy: { id: "asc" },
+    take: ORPHAN_ATTACHMENT_BATCH,
+  })
+
+  if (orphans.length === 0) {
+    return "Tidak ada lampiran yatim kedaluwarsa"
+  }
+
+  const uploadsRoot = path.join(process.cwd(), "private", "uploads", "attachments")
+  for (const orphan of orphans) {
+    const filename = orphan.fileUrl.split("/").pop() ?? ""
+    const safeRefType = orphan.referenceType.replace(/[^a-zA-Z0-9_-]/g, "")
+    if (filename && safeRefType) {
+      const filepath = path.resolve(uploadsRoot, safeRefType, filename)
+      const relative = path.relative(uploadsRoot, filepath)
+      if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
+        await unlink(filepath).catch(() => undefined)
+      }
+    }
+  }
+
+  const deleted = await prisma.transactionAttachment.deleteMany({
+    where: { id: { in: orphans.map((o) => o.id) }, referenceId: 0 },
+  })
+
+  return `${deleted.count} lampiran yatim kedaluwarsa disapu`
 }

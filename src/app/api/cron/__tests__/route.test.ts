@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   activityLogDeleteMany: vi.fn(),
   journalUpdateMany: vi.fn(),
   idempotencyKeyDeleteMany: vi.fn(),
+  attachmentFindMany: vi.fn(),
+  attachmentDeleteMany: vi.fn(),
   notificationLowStock: vi.fn(),
   notificationNotifyAdmins: vi.fn(),
   notificationLateCheckIn: vi.fn(),
@@ -36,6 +38,10 @@ vi.mock("@/lib/db/prisma", () => ({
     activityLog: { deleteMany: (...a: unknown[]) => mocks.activityLogDeleteMany(...a) },
     journal: { updateMany: (...a: unknown[]) => mocks.journalUpdateMany(...a) },
     idempotencyKey: { deleteMany: (...a: unknown[]) => mocks.idempotencyKeyDeleteMany(...a) },
+    transactionAttachment: {
+      findMany: (...a: unknown[]) => mocks.attachmentFindMany(...a),
+      deleteMany: (...a: unknown[]) => mocks.attachmentDeleteMany(...a),
+    },
   },
 }))
 
@@ -72,6 +78,8 @@ describe("GET /api/cron", () => {
     mocks.journalUpdateMany.mockResolvedValue({ count: 0 })
     mocks.idempotencyKeyDeleteMany.mockResolvedValue({ count: 0 })
     mocks.activityLogDeleteMany.mockResolvedValue({ count: 0 })
+    mocks.attachmentFindMany.mockResolvedValue([])
+    mocks.attachmentDeleteMany.mockResolvedValue({ count: 0 })
   })
 
   it("rejects request without valid auth", async () => {
@@ -384,6 +392,51 @@ describe("GET /api/cron", () => {
       const res = await GET(makeCronRequest("http://localhost/api/cron"))
       const json = await res.json()
       expect(json.results["recover-stuck-reversals"]).toBeDefined()
+    })
+  })
+
+  describe("sweep-orphan-attachments task", () => {
+    it("hanya menyapu referenceId=0 yang lebih tua dari ambang, bukan unggahan baru", async () => {
+      mocks.attachmentFindMany.mockResolvedValue([
+        { id: 7, referenceType: "vendor_bill", fileUrl: "/api/attachments/vendor_bill/vendor_bill-0-x.pdf" },
+      ])
+      mocks.attachmentDeleteMany.mockResolvedValue({ count: 1 })
+
+      const res = await GET(makeCronRequest("http://localhost/api/cron?task=sweep-orphan-attachments"))
+      const json = await res.json()
+
+      expect(json.results["sweep-orphan-attachments"].status).toBe("success")
+      const findArgs = mocks.attachmentFindMany.mock.calls[0][0] as {
+        where: { referenceId: number; createdAt: { lt: Date } }
+      }
+      // Kunci anti-salah-sapu: hanya baris sementara (0) DAN kedaluwarsa.
+      expect(findArgs.where.referenceId).toBe(0)
+      expect(findArgs.where.createdAt.lt).toBeInstanceOf(Date)
+      const ageMs = Date.now() - findArgs.where.createdAt.lt.getTime()
+      expect(ageMs).toBeGreaterThan(20 * 60 * 60 * 1000)
+      // Hapus memakai id yang sama + dikunci referenceId=0 (klaim balap tak ikut terhapus).
+      const delArgs = mocks.attachmentDeleteMany.mock.calls[0][0] as {
+        where: { id: { in: number[] }; referenceId: number }
+      }
+      expect(delArgs.where.id).toEqual({ in: [7] })
+      expect(delArgs.where.referenceId).toBe(0)
+    })
+
+    it("reports success when nothing is orphaned", async () => {
+      mocks.attachmentFindMany.mockResolvedValue([])
+
+      const res = await GET(makeCronRequest("http://localhost/api/cron?task=sweep-orphan-attachments"))
+      const json = await res.json()
+
+      expect(json.results["sweep-orphan-attachments"].status).toBe("success")
+      expect(json.results["sweep-orphan-attachments"].message).toMatch(/Tidak ada lampiran yatim/)
+      expect(mocks.attachmentDeleteMany).not.toHaveBeenCalled()
+    })
+
+    it("is part of the default task set", async () => {
+      const res = await GET(makeCronRequest("http://localhost/api/cron"))
+      const json = await res.json()
+      expect(json.results["sweep-orphan-attachments"]).toBeDefined()
     })
   })
 
