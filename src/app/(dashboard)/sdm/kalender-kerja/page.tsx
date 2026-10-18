@@ -106,6 +106,11 @@ export default async function WorkCalendarPage({
           </div>
         </div>
         <HolidayForm
+          // `key` wajib: tanpa itu React memakai ulang form yang sudah ter-mount saat
+          // berpindah dari "Tambah" ke "Ubah" (navigasi klien `?editHoliday=N`), sehingga
+          // `defaultValue` tidak pernah diterapkan lagi — form tampil kosong dan
+          // menyimpan akan menimpa data lama dengan nilai kosong.
+          key={editingHoliday?.id ?? "baru"}
           holiday={
             editingHoliday
               ? {
@@ -168,6 +173,8 @@ export default async function WorkCalendarPage({
           </div>
         </div>
         <DepartmentHolidayForm
+          // Lihat catatan `key` pada HolidayForm di atas.
+          key={editingDeptHoliday?.id ?? "baru"}
           departments={departments}
           item={
             editingDeptHoliday
@@ -230,6 +237,8 @@ export default async function WorkCalendarPage({
           </div>
         </div>
         <WorkScheduleForm
+          // Lihat catatan `key` pada HolidayForm di atas.
+          key={editingSchedule?.id ?? "baru"}
           schedule={
             editingSchedule
               ? {
