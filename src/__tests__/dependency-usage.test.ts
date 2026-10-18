@@ -22,14 +22,12 @@ import { describe, expect, it } from "vitest"
  */
 
 /** Dependensi runtime yang memang tidak pernah diimpor langsung. Bertambah hanya
- *  dengan alasan yang bisa diperiksa, bukan untuk membungkam temuan. */
-const IMPLICIT_RUNTIME_DEPS: Array<{ name: string; reason: string }> = [
-  {
-    name: "sharp",
-    reason:
-      "Dipanggil implisit oleh next/image untuk optimasi avif/webp (next.config images.formats). Tidak pernah diimpor kode aplikasi.",
-  },
-]
+ *  dengan alasan yang bisa diperiksa, bukan untuk membungkam temuan.
+ *
+ *  Saat ini kosong: `sharp` pernah di sini selagi hanya `next/image` yang
+ *  memanggilnya, lalu dihapus begitu `scripts/generate-brand-icons.mjs`
+ *  mengimpornya langsung — guard ini memang memeriksa daftar dari dua arah. */
+const IMPLICIT_RUNTIME_DEPS: Array<{ name: string; reason: string }> = []
 
 const ROOT = path.resolve(__dirname, "../..")
 const SELF = "dependency-usage.test.ts"
