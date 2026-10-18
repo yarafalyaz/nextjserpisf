@@ -125,6 +125,82 @@ export async function deleteJournalByReferenceTx(
   await tx.journal.deleteMany({ where: { id: { in: journalIds } } });
 }
 
+/**
+ * P1-7: reversal jurnal per dokumen — histori dipertahankan, bukan dihapus.
+ * Untuk tiap jurnal POSTED yang merujuk (referenceType, referenceId): buat
+ * jurnal lawan (debit↔kredit, tanggal = tanggal asli, referenceType "Journal"
+ * → id asli) lalu tandai asli REVERSED. Idempoten: jurnal yang sudah punya
+ * reversal (atau sudah REVERSED) dilewati. Jurnal non-POSTED (draft) dihapus
+ * — belum menyentuh GL sehingga tak ada histori GL yang hilang; dokumen
+ * sumber (faktur/pembayaran) tetap ada sebagai audit trail.
+ * Period lock: reversal bertanggal asli → assertPeriodOpen(tanggal asli).
+ */
+export async function reverseJournalsByReferenceTx(
+  tx: TxClient,
+  referenceType: string | string[],
+  referenceId: number | number[],
+  reason: string,
+  userId?: number | null,
+): Promise<void> {
+  const journals = await tx.journal.findMany({
+    where: {
+      referenceType: Array.isArray(referenceType)
+        ? { in: referenceType }
+        : referenceType,
+      referenceId: Array.isArray(referenceId)
+        ? { in: referenceId }
+        : referenceId,
+    },
+    include: { entries: true },
+  });
+  if (journals.length === 0) return;
+
+  for (const j of journals) {
+    if (j.status !== "POSTED") {
+      // Belum GL: hapus aman (dokumen sumber tetap ada).
+      await tx.journalEntry.deleteMany({ where: { journalId: j.id } });
+      await tx.journal.delete({ where: { id: j.id } });
+      continue;
+    }
+    const existingReversal = await tx.journal.findFirst({
+      where: { referenceType: "Journal", referenceId: j.id },
+      select: { id: true },
+    });
+    if (existingReversal || (j as { status: string }).status === "REVERSED") continue;
+
+    // Koreksi periode asal — tolak bila periode sudah dikunci.
+    await assertPeriodOpen(j.transactionDate, tx);
+
+    const reversalNumber = await generateJournalNumber(tx, "JRN-RV", j.id);
+    const reversal = await tx.journal.create({
+      data: {
+        journalNumber: reversalNumber,
+        transactionDate: j.transactionDate,
+        description: `Pembalikan ${j.journalNumber}: ${reason}`,
+        type: j.type,
+        status: "POSTED",
+        referenceType: "Journal",
+        referenceId: j.id,
+        totalDebit: j.totalDebit,
+        totalCredit: j.totalCredit,
+        createdBy: userId ?? null,
+      },
+    });
+    await tx.journalEntry.createMany({
+      data: j.entries.map((e) => ({
+        journalId: reversal.id,
+        accountId: e.accountId,
+        debit: e.credit,
+        credit: e.debit,
+        memo: `Pembalikan: ${e.memo ?? ""}`,
+        costCenterId: e.costCenterId,
+        profitCenterId: e.profitCenterId,
+      })),
+    });
+    await tx.journal.update({ where: { id: j.id }, data: { status: "REVERSED" } });
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. onSalesInvoicePosted
 //    Dr. Receivable (total_amount)
@@ -156,9 +232,10 @@ export async function onSalesInvoicePosted(
     include: { items: true },
   });
 
-  // Idempotency: skip when journal already exists
+  // Idempotency: skip when an ACTIVE journal already exists. A REVERSED journal
+  // is history (void/edit), not a block — the edit flow reverses then re-posts.
   const existing = await db.journal.findFirst({
-    where: { referenceType: "SalesInvoice", referenceId: invoiceId },
+    where: { referenceType: "SalesInvoice", referenceId: invoiceId, status: { not: "REVERSED" } },
   });
   if (existing) {
     console.info(
@@ -185,7 +262,7 @@ export async function onSalesInvoicePosted(
     if (!inv) throw new Error("Invoice tidak ditemukan");
 
     const existingInTx = await tx.journal.findFirst({
-      where: { referenceType: "SalesInvoice", referenceId: invoiceId },
+      where: { referenceType: "SalesInvoice", referenceId: invoiceId, status: { not: "REVERSED" } },
     });
     if (existingInTx) {
       console.info(
