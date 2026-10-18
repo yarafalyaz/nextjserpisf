@@ -178,7 +178,7 @@ export default async function EmployeeDetailPage({
             label: `Leave (${employee.leaveRequests.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Cuti</h2>
                   <Link href={`/sdm/cuti?cari=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
@@ -216,7 +216,7 @@ export default async function EmployeeDetailPage({
             label: `Overtime (${employee.overtimeRequests.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Lembur</h2>
                   <Link href={`/sdm/lembur?cari=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
@@ -252,7 +252,7 @@ export default async function EmployeeDetailPage({
             label: `Penggajian (${employee.payrolls.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Penggajian</h2>
                   <Link href={`/sdm/penggajian?cari=${employee.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>

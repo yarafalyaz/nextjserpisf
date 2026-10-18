@@ -307,7 +307,7 @@ export default async function ProjectDetailPage({
             label: "Bahan & Komponen",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Bahan & Komponen Fisik Terpakai</h2>
                 </div>
                 <div className="p-4 px-5">
@@ -342,7 +342,7 @@ export default async function ProjectDetailPage({
             label: `Penawaran (${quotations.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Penawaran</h2>
                   <Link href={`/penjualan/penawaran?cari=${project.customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
@@ -378,7 +378,7 @@ export default async function ProjectDetailPage({
             label: `Faktur (${invoices.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Tagihan & Pembayaran</h2>
                   <Link href={`/penjualan/faktur?cari=${project.customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
@@ -416,7 +416,7 @@ export default async function ProjectDetailPage({
             label: "Log",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Log Aktivitas</h2>
                 </div>
                 <ProjectLogForm projectId={project.id} />

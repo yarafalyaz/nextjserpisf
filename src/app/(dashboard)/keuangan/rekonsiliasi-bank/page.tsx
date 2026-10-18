@@ -66,7 +66,7 @@ export default async function BankReconciliationPage({
           { label: "Rekonsiliasi Bank" },
         ]}
       />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">
           Rekonsiliasi Bank
         </h1>
@@ -150,7 +150,7 @@ export default async function BankReconciliationPage({
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between p-3 px-5 border-t border-default">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">
             <span className="text-[0.8125rem] text-muted-foreground">
               Hal {page} dari {totalPages} ({total} data)
             </span>

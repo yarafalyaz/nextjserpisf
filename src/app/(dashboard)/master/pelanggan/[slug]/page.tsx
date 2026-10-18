@@ -105,7 +105,7 @@ export default async function CustomerDetailPage({
             label: `Penawaran (${customer.quotations.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Penawaran Terbaru</h2>
                   <Link href={`/penjualan/penawaran?cari=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
@@ -141,7 +141,7 @@ export default async function CustomerDetailPage({
             label: `Faktur (${customer.salesInvoices.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Faktur Terbaru</h2>
                   <Link href={`/penjualan/faktur?cari=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
@@ -179,7 +179,7 @@ export default async function CustomerDetailPage({
             label: `Proyek (${customer.projects.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Proyek</h2>
                   <Link href={`/proyek?cari=${customer.name}`} className="text-[0.8125rem] text-primary font-medium hover:underline">Lihat Semua →</Link>
                 </div>
@@ -215,7 +215,7 @@ export default async function CustomerDetailPage({
             label: `Kendaraan (${customer.customerVehicles.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Kendaraan</h2>
                   <Link href={`${entityHref("/master/pelanggan", customer)}/kendaraan`} className="text-[0.8125rem] text-primary font-medium hover:underline">Kelola Kendaraan →</Link>
                 </div>

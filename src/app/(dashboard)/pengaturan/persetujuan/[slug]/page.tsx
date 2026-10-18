@@ -60,7 +60,7 @@ export default async function ApprovalDetailPage({
           { label: `#${approval.id}` },
         ]}
       />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">
           Detail Persetujuan
         </h1>
@@ -202,7 +202,7 @@ export default async function ApprovalDetailPage({
 
       {/* History */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">
             Riwayat Persetujuan
           </h2>

@@ -138,7 +138,7 @@ export function PurchaseAdvanceForm({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 border-t border-default pt-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-default pt-5">
         <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
           Jurnal: Dr akun uang muka <ArrowRight size={12} aria-hidden="true" /> Cr kas/bank
         </p>

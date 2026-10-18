@@ -16,7 +16,7 @@ export const metadata: Metadata = { title: "Penomoran" }
 
 function PrefixItem({ label, value, auto }: { label: string; value: string | null | undefined; auto?: boolean }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card px-3 py-2.5">
       <div className="flex flex-col gap-0.5 min-w-0">
         <span className="text-xs text-muted-foreground">{label}</span>
         <span className="text-sm font-semibold font-mono text-foreground">{value || "-"}</span>

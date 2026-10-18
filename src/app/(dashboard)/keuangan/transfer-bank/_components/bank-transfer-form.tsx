@@ -155,7 +155,7 @@ export function BankTransferForm({
         </div>
       </div>
 
-      <div className="flex items-center justify-between gap-3 pt-5 border-t border-default">
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-5 border-t border-default">
         <p className="text-xs text-muted-foreground inline-flex items-center gap-1.5">
           Jurnal: Dr {toAccountId ? "rekening tujuan" : "…"} <ArrowRight size={12} aria-hidden="true" /> Cr
           {" "}rekening asal{feeNumber > 0 ? " + biaya admin" : ""}

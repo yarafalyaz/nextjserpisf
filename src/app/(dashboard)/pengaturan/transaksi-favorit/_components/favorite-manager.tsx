@@ -136,7 +136,7 @@ export function FavoriteManager({
           </p>
         ) : (
           favorites.map((favorite) => (
-            <div key={favorite.id} className="flex items-center justify-between gap-4 p-4">
+            <div key={favorite.id} className="flex flex-wrap items-center justify-between gap-4 p-4">
               <div className="min-w-0">
                 <Link
                   href={favorite.href}

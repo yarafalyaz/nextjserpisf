@@ -80,7 +80,7 @@ export default async function CostCenterDetailPage({
           </h2>
           <div className="divide-y border-t">
             {costCenter.children.map((child) => (
-              <Link key={child.id} href={entityHref("/keuangan/pusat-biaya", child)} className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-accent transition-colors">
+              <Link key={child.id} href={entityHref("/keuangan/pusat-biaya", child)} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 hover:bg-accent transition-colors">
                 <div className="flex items-center gap-2 min-w-0">
                   <ChevronRight className="size-3.5 text-muted-foreground shrink-0" />
                   <span className="font-mono text-xs text-muted-foreground">{child.code}</span>

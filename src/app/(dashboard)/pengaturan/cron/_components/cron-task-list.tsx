@@ -55,7 +55,7 @@ export function CronTaskList({ tasks, logs }: { tasks: TaskStatus[]; logs: CronL
         </div>
         <div className="divide-y divide-default">
           {tasks.map((task) => (
-            <div key={task.key} className="flex items-center justify-between px-5 py-4">
+            <div key={task.key} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-semibold text-foreground">{task.name}</h3>

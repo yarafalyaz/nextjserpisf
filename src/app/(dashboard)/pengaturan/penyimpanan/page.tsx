@@ -57,7 +57,7 @@ export default async function StorageSettingsPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Driver status */}
-          <div className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4">
+          <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-4">
             <div className="flex items-center gap-3">
               <span className="flex size-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 {isR2 ? <Cloud className="size-5" /> : <HardDrive className="size-5" />}
@@ -94,7 +94,7 @@ export default async function StorageSettingsPage() {
           {isR2 && (
             <>
               <Separator />
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <p className="text-sm font-medium text-foreground">Mode Hibrida (Cadangan Lokal)</p>
                   <p className="text-xs text-muted-foreground">Simpan ke lokal jika upload R2 gagal</p>

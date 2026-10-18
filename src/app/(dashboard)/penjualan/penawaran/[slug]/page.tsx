@@ -288,7 +288,7 @@ export default async function QuotationDetailPage({
                 {/* Down Payments */}
                 {quotation.downPayments.length > 0 && (
                   <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                    <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                       <h2 className="text-[0.9375rem] font-semibold text-foreground">
                         Riwayat Pembayaran Uang Muka
                       </h2>
@@ -344,7 +344,7 @@ export default async function QuotationDetailPage({
                     key={section.id}
                     className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
                   >
-                    <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                    <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                       <h2 className="text-[0.9375rem] font-semibold text-foreground">
                         {section.name}
                       </h2>
@@ -407,7 +407,7 @@ export default async function QuotationDetailPage({
             label: "Riwayat",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">
                     Riwayat
                   </h2>

@@ -49,7 +49,7 @@ export default async function UomPage({
           { label: "Satuan" },
         ]}
       />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Satuan</h1>
         <Link
           href="/master/satuan/tambah"
@@ -102,7 +102,7 @@ export default async function UomPage({
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between p-3 px-5 border-t border-default">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">
             <span className="text-[0.8125rem] text-muted-foreground">
               Hal {page} dari {totalPages} ({total} data)
             </span>

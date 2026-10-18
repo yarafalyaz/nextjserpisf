@@ -49,7 +49,7 @@ export default async function UsersPage({
   { label: "Pengaturan", href: "/pengaturan" },
   { label: "Pengguna" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pengguna & Peran</h1>
         <CanCreate permission="manage_users">
           <Link href="/pengaturan/pengguna/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-user-btn">
@@ -60,7 +60,7 @@ export default async function UsersPage({
 
       {/* Users Table */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Pengguna ({totalUsers})</h2>
         </div>
         <div className="overflow-x-auto">
@@ -97,7 +97,7 @@ export default async function UsersPage({
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between p-3 px-5 border-t border-default">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">
             <span className="text-[0.8125rem] text-muted-foreground">
               Hal {page} dari {totalPages} ({totalUsers} pengguna)
             </span>
@@ -119,7 +119,7 @@ export default async function UsersPage({
 
       {/* Roles */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Peran ({roles.length})</h2>
         </div>
         <div className="p-4 px-5">

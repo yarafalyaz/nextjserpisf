@@ -139,7 +139,7 @@ export default async function AccountMappingPage() {
         <CardContent className="space-y-6">
           {/* Progress */}
           <div className="rounded-lg border bg-card p-4">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 {unmappedCount === 0 ? (
                   <CheckCircle2 className="size-5 text-emerald-500" />

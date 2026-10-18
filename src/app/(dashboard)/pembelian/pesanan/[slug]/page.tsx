@@ -149,7 +149,7 @@ export default async function PurchaseOrderDetailPage({
             label: "Item",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang</h2>
                 </div>
                 <div className="p-4 px-5">
@@ -188,7 +188,7 @@ export default async function PurchaseOrderDetailPage({
             label: "Penerimaan",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Penerimaan Barang</h2>
                   {po.status === "ordered" && (
                     <Link href={`/pembelian/penerimaan/tambah?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Penerimaan</Link>
@@ -226,7 +226,7 @@ export default async function PurchaseOrderDetailPage({
             label: "Retur",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Retur Pembelian</h2>
                   {/* "Buat Retur dari PO" — PO-nya ikut ter-prefill (dan barisnya
                       dari qty yang sudah diterima) lewat ?poId= di halaman retur. */}
@@ -266,7 +266,7 @@ export default async function PurchaseOrderDetailPage({
             label: "Tagihan",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Tagihan Pemasok</h2>
                 </div>
                 <div className="p-4 px-5">

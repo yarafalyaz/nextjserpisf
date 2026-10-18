@@ -144,7 +144,7 @@ export default async function ProductionOrderDetailPage({
   { label: "Perintah Produksi", href: "/produksi/production-orders" },
   { label: "Detail" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Perintah Produksi {order.documentNo}</h1>
         <div className="flex gap-2 items-center">
           <StatusChip status={order.status} />
@@ -225,7 +225,7 @@ export default async function ProductionOrderDetailPage({
 
       {/* Materials */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Bahan yang Dibutuhkan</h2>
         </div>
         <div className="p-4 px-5">
@@ -267,7 +267,7 @@ export default async function ProductionOrderDetailPage({
 
       {/* Production genealogy (PRD line 369 / REP-13) */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Genealogi Produksi</h2>
         </div>
         <div className="p-4 px-5">

@@ -162,7 +162,7 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center justify-between gap-4 rounded-lg border bg-card p-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-4">
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">Simpan ke lokal jika R2 gagal</p>
                 <p className="text-xs text-muted-foreground">

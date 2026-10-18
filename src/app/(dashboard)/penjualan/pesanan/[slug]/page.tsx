@@ -251,7 +251,7 @@ export default async function SalesOrderDetailPage({
           dulu kartunya hilang sama sekali saat belum ada surat jalan, sehingga
           satu-satunya jalan adalah menu Surat Jalan dan tautannya tidak ada. */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between gap-3 p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Surat Jalan</h2>
           {DELIVERABLE_ORDER_STATUSES.includes(
             order.status as (typeof DELIVERABLE_ORDER_STATUSES)[number]
@@ -299,7 +299,7 @@ export default async function SalesOrderDetailPage({
       {/* Invoices */}
       {order.salesInvoices.length > 0 && (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">
               Faktur
             </h2>

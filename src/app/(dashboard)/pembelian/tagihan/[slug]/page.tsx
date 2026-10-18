@@ -61,7 +61,7 @@ export default async function VendorBillDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/pembelian"},{ label: "Tagihan Pemasok", href: "/pembelian/tagihan" },{label:"Detail"}]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Tagihan {bill.documentNo}</h1>
         <div className="flex gap-2 items-center">
           <span className={`status-badge status-${bill.status}`}>{statusLabel(bill.status)}</span>
@@ -137,7 +137,7 @@ export default async function VendorBillDetailPage({
 
       {/* Items */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Item</h2>
         </div>
         <div className="p-4 px-5">

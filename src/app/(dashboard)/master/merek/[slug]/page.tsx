@@ -56,7 +56,7 @@ export default async function BrandDetailPage({
         { label: "Merek", href: "/master/merek" },
         { label: "Detail" },
       ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">{brand.name}</h1>
         <div className="flex gap-2">
           <Link href={entityEditHref("/master/merek", brand)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Ubah</Link>
@@ -98,7 +98,7 @@ export default async function BrandDetailPage({
 
       {brand.items.length > 0 && (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang dengan Merek Ini</h2>
           </div>
           <div className="p-4 px-5">

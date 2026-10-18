@@ -42,7 +42,7 @@ export default async function BankStatementsPage({
   { label: "Keuangan", href: "/keuangan" },
   { label: "Rekening Koran" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Laporan Bank</h1>
       </div>
 
@@ -77,7 +77,7 @@ export default async function BankStatementsPage({
         </div>
 
         {totalPages > 1 && (
-          <div className="flex items-center justify-between p-3 px-5 border-t border-default">
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-5 border-t border-default">
             <span className="text-[0.8125rem] text-muted-foreground">Hal {page} dari {totalPages} ({total} data)</span>
             <div className="flex gap-1">
               {page > 1 && <Link href={`/keuangan/laporan-bank?halaman=${page - 1}`} className="button button--ghost button--sm">← Sebelumnya</Link>}

@@ -129,7 +129,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
           Buat ulang walau sudah ada PO jasa aktif untuk perintah kerja ini
         </label>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <span className="text-sm text-muted-foreground">
             Total: {new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(total)}
           </span>

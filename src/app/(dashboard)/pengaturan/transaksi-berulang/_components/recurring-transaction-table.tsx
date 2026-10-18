@@ -129,7 +129,7 @@ export function RecurringTransactionTable({ data }: { data: RecurringRow[] }) {
   return (
     <div className="flex flex-col gap-4">
       {dueCount > 0 && (
-        <div className="flex items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3">
           <span className="text-sm">
             <strong>{dueCount}</strong> jadwal sudah jatuh tempo dan belum dijalankan.
           </span>

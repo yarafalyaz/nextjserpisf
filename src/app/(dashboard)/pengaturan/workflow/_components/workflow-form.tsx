@@ -196,7 +196,7 @@ export function WorkflowForm({
 
       {/* Langkah Persetujuan */}
       <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Langkah Persetujuan</h2>
             <p className="text-xs text-muted-foreground mt-1">Urutan langkah dari atas ke bawah menentukan urutan persetujuan.</p>
@@ -212,7 +212,7 @@ export function WorkflowForm({
               key={step.key}
               className="rounded-lg border border-default bg-surface-secondary/40 p-4"
             >
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-wrap items-center justify-between gap-4 mb-3">
                 <div className="flex items-center gap-2 text-sm font-medium text-foreground">
                   <GripVertical className="size-4 text-muted-foreground" />
                   Langkah {index + 1}

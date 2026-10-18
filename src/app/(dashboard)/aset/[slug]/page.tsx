@@ -86,7 +86,7 @@ export default async function AssetDetailPage({
 
       {/* History */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Aset</h2>
         </div>
         <div className="p-4 px-5">
@@ -118,7 +118,7 @@ export default async function AssetDetailPage({
       {/* Transfers */}
       {asset.transfers.length > 0 && (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+          <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Transfer</h2>
           </div>
           <div className="p-4 px-5">

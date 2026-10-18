@@ -97,7 +97,7 @@ export default async function LeadDetailPage({
             label: "Aktivitas",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Aktivitas Terbaru</h2>
                 </div>
                 <AddLeadActivityForm leadId={lead.id} />

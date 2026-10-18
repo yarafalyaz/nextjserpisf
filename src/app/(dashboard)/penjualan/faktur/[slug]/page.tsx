@@ -232,7 +232,7 @@ export default async function InvoiceDetailPage({
             label: "Uang Muka",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Uang Muka</h2>
                 </div>
                 <div className="p-4 px-5">
@@ -285,7 +285,7 @@ export default async function InvoiceDetailPage({
             label: "Pembayaran",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Pembayaran</h2>
                   {(invoice.status === "posted" || invoice.status === "partial") && (
                     <Link href={`/penjualan/pembayaran/tambah?invoiceId=${invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Terima Bayar</Link>
@@ -323,7 +323,7 @@ export default async function InvoiceDetailPage({
             label: "Retur",
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between gap-3 p-4 px-5 border-b border-default">
+                <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Retur Penjualan</h2>
                   {(invoice.status === "posted" || invoice.status === "partial") && (
                     <Link href={`/penjualan/retur/tambah?invoiceId=${invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>

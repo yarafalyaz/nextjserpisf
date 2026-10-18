@@ -195,7 +195,7 @@ function MappingSectionCard({ title, items, accounts, onAccountCreated }: { titl
 
   return (
     <section className="rounded-xl border border-default bg-surface-secondary/40 p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h3 className="text-sm font-semibold text-foreground">{title}</h3>
         <span className="inline-flex rounded-full border border-default bg-surface px-2.5 py-1 text-[0.6875rem] font-semibold uppercase tracking-wide text-muted-foreground">
           {mappedCount}/{items.length} terisi
@@ -569,14 +569,14 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 col-span-full">
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
                     <Label htmlFor="companyLatitude">Lintang</Label>
                     <Button type="button" onClick={handleGetLocation} variant="tertiary" className="text-xs font-semibold text-primary hover:underline h-auto p-0" data-print-keep>Ambil Lokasi</Button>
                   </div>
                   <Input id="companyLatitude" name="companyLatitude" type="number" step="any" placeholder="-6.xxxxx" value={latitude} onChange={(e) => setLatitude((e.target as HTMLInputElement).value)} className="w-full" />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-wrap items-center justify-between gap-4">
                     <Label htmlFor="companyLongitude">Bujur</Label>
                   </div>
                   <Input id="companyLongitude" name="companyLongitude" type="number" step="any" placeholder="106.xxxxx" value={longitude} onChange={(e) => setLongitude((e.target as HTMLInputElement).value)} className="w-full" />
@@ -592,7 +592,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                       Inner swatch pakai literal zinc-50/zinc-900 biar preview kontras selalu sama
                       apapun tema aplikasi. */}
                   <div className="flex flex-col gap-2 rounded-lg border border-default bg-card p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
                       <span className="text-xs font-semibold text-foreground">Mode Terang</span>
                       <span className="text-[10px] uppercase tracking-wide text-muted-foreground">default</span>
                     </div>
@@ -609,7 +609,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                     <input type="hidden" name="companyLogo" value={logoPreview || ""} />
                   </div>
                   <div className="flex flex-col gap-2 rounded-lg border border-default bg-card p-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-wrap items-center justify-between gap-4">
                       <span className="text-xs font-semibold text-foreground">Mode Gelap</span>
                       <span className="text-[10px] uppercase tracking-wide text-muted-foreground">opsional</span>
                     </div>

@@ -182,7 +182,7 @@ export function InvoiceExchangeForm({
         ) : null}
       </fieldset>
 
-      <div className="flex items-center justify-between gap-3 border-t border-default pt-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-default pt-5">
         <p className="text-xs text-muted-foreground">
           Tukar faktur tidak membuat jurnal — piutang sudah tercatat oleh fakturnya.
         </p>

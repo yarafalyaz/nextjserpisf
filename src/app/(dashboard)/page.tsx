@@ -548,7 +548,7 @@ export default async function DashboardPage() {
                     {data.lowStockItems.map((item) => (
                       <li
                         key={item.id}
-                        className="flex items-center justify-between gap-3 px-5 py-3"
+                        className="flex flex-wrap items-center justify-between gap-3 px-5 py-3"
                       >
                         <span className="min-w-0 truncate text-sm">
                           {item.name}
