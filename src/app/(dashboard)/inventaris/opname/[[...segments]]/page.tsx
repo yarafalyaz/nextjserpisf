@@ -97,7 +97,7 @@ export default async function StockOpnamePage({
         <h1 className="text-2xl font-bold text-foreground">Stok Opname</h1>
         <p className="text-sm text-muted-foreground">
           Isi hasil penghitungan fisik per barang. Selisih terhadap stok sistem akan dibuat sebagai
-          <strong> Penyesuaian Stok (draft)</strong> yang tinggal diposting di menu Penyesuaian.
+          <strong> Penyesuaian Stok (draf)</strong> yang tinggal diposting di menu Penyesuaian.
         </p>
       </div>
 

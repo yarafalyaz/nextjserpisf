@@ -214,7 +214,7 @@ export default async function QuotationDetailPage({
       />
 
       <DetailTabs
-        ariaLabel="Quotation detail tabs"
+        ariaLabel="Tab detail penawaran"
         tabs={[
           {
             id: "info",

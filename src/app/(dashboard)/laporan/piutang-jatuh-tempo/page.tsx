@@ -119,7 +119,7 @@ export default async function AgingReceivablesPage() {
         <DetailTable data-report-table="Detail Piutang">
           <DetailTableHead>
             <DetailTableTh>Pelanggan</DetailTableTh>
-            <DetailTableTh>No. Invoice</DetailTableTh>
+            <DetailTableTh>No. Faktur</DetailTableTh>
             <DetailTableTh>Jatuh Tempo</DetailTableTh>
             <DetailTableTh>Umur</DetailTableTh>
             <DetailTableTh align="right">Sisa (Rp)</DetailTableTh>

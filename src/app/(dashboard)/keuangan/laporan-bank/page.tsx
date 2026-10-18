@@ -63,7 +63,7 @@ export default async function BankStatementsPage({
                 statements.map((stmt) => (
                   <DetailTableRow key={stmt.id}>
                     <DetailTableTd className="font-mono">{stmt.id}</DetailTableTd>
-                    <DetailTableTd>Account #{stmt.accountId}</DetailTableTd>
+                    <DetailTableTd>No. Rekening{stmt.accountId}</DetailTableTd>
                     <DetailTableTd>{formatDate(stmt.date)}</DetailTableTd>
                     <DetailTableTd>{stmt.reference || "-"}</DetailTableTd>
                     <DetailTableTd>

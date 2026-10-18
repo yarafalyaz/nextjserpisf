@@ -51,7 +51,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
       try {
         const res = await createServicePurchaseOrderFromWorkOrder(workOrderId, Number(vendorId), { force })
         if (res?.success) {
-          showSuccess(`PO jasa ${res.documentNo ?? ""} dibuat (draft)`)
+          showSuccess(`PO jasa ${res.documentNo ?? ""} dibuat (draf)`)
           setOpen(false)
           router.refresh()
         } else {
@@ -77,7 +77,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
         <div className="flex flex-col gap-1">
           <h2 className="text-base font-semibold text-foreground">Buat PO Jasa/Subkontrak</h2>
           <p className="text-xs text-muted-foreground">
-            Item jasa pada perintah kerja ini akan digabung menjadi satu PO jasa (draft) tertaut
+            Item jasa pada perintah kerja ini akan digabung menjadi satu PO jasa (draf) tertaut
             ke perintah kerja. Penerimaannya tidak menggerakkan stok — biaya langsung dibebankan.
           </p>
         </div>

@@ -88,7 +88,7 @@ export default async function VendorDetailPage({
       />
 
       <DetailTabs
-        ariaLabel="Vendor detail tabs"
+        ariaLabel="Tab detail vendor"
         tabs={[
           {
             id: "info",

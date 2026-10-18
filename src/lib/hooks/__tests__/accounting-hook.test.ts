@@ -703,9 +703,9 @@ describe("onSalesPaymentCreated", () => {
     );
   });
 
-  it("returns early if no salesReceivableAccountId", async () => {
+  it("rejects if no salesReceivableAccountId", async () => {
     (mocks.systemSettings as any).salesReceivableAccountId = null;
-    await onSalesPaymentCreated(1);
+    await expect(onSalesPaymentCreated(1)).rejects.toThrow("Piutang Usaha");
     expect(mocks.paymentFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
@@ -716,7 +716,7 @@ describe("onSalesPaymentCreated", () => {
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
-  it("returns early if cash account cannot be determined", async () => {
+  it("rejects if cash account cannot be determined", async () => {
     (mocks.systemSettings as any).cashBankAccountId = null;
     mocks.paymentFindUniqueOrThrow.mockResolvedValue({
       id: 1,
@@ -724,7 +724,7 @@ describe("onSalesPaymentCreated", () => {
       accountId: null,
     });
     mocks.journalFindFirst.mockResolvedValue(null);
-    await onSalesPaymentCreated(1);
+    await expect(onSalesPaymentCreated(1)).rejects.toThrow("kas/bank");
     expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
@@ -800,9 +800,9 @@ describe("onPurchaseOrderReceived", () => {
     );
   });
 
-  it("returns early if required account mappings are missing", async () => {
+  it("rejects if required account mappings are missing", async () => {
     (mocks.systemSettings as any).inventoryAccountId = null;
-    await onPurchaseOrderReceived(1);
+    await expect(onPurchaseOrderReceived(1)).rejects.toThrow("Persediaan");
     expect(mocks.orderFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
@@ -1049,9 +1049,9 @@ describe("onPettyCashCreated", () => {
     );
   });
 
-  it("returns early if pettyCashAccountId is not configured", async () => {
+  it("rejects if pettyCashAccountId is not configured", async () => {
     (mocks.systemSettings as any).pettyCashAccountId = null;
-    await onPettyCashCreated(1);
+    await expect(onPettyCashCreated(1)).rejects.toThrow("Kas Kecil");
     expect(mocks.pettyCashFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
@@ -1235,9 +1235,9 @@ describe("onSalesReturnCompleted", () => {
     );
   });
 
-  it("returns early if required settings are missing", async () => {
+  it("rejects if required settings are missing", async () => {
     (mocks.systemSettings as any).salesReturnAccountId = null;
-    await onSalesReturnCompleted(1);
+    await expect(onSalesReturnCompleted(1)).rejects.toThrow("Retur Penjualan");
     expect(mocks.salesReturnFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
@@ -1383,9 +1383,9 @@ describe("onPurchaseReturnProcessed", () => {
     );
   });
 
-  it("returns early if required settings missing", async () => {
+  it("rejects if required settings missing", async () => {
     (mocks.systemSettings as any).purchasePayableAccountId = null;
-    await onPurchaseReturnProcessed(1);
+    await expect(onPurchaseReturnProcessed(1)).rejects.toThrow("Hutang Usaha");
     expect(mocks.purchaseReturnFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
@@ -1556,9 +1556,9 @@ describe("onDownPaymentReceived", () => {
     );
   });
 
-  it("returns early if cashBankAccountId missing", async () => {
+  it("rejects if cashBankAccountId missing", async () => {
     (mocks.systemSettings as any).cashBankAccountId = null;
-    await onDownPaymentReceived(1);
+    await expect(onDownPaymentReceived(1)).rejects.toThrow("kas/bank");
     expect(mocks.downPaymentFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
@@ -1624,9 +1624,9 @@ describe("onVendorBillPosted", () => {
     );
   });
 
-  it("returns early if purchasePayableAccountId missing", async () => {
+  it("rejects if purchasePayableAccountId missing", async () => {
     (mocks.systemSettings as any).purchasePayableAccountId = null;
-    await onVendorBillPosted(1);
+    await expect(onVendorBillPosted(1)).rejects.toThrow("Hutang Usaha");
     expect(mocks.vendorBillFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
@@ -1790,10 +1790,14 @@ describe("onVendorPaymentCreated", () => {
     );
   });
 
-  it("returns early if required settings missing", async () => {
+  it("rejects if required settings missing", async () => {
     (mocks.systemSettings as any).cashBankAccountId = null;
-    await onVendorPaymentCreated(1);
-    expect(mocks.vendorPaymentFindUniqueOrThrow).not.toHaveBeenCalled();
+    mocks.vendorPaymentFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      amount: 200,
+      accountId: null,
+    });
+    await expect(onVendorPaymentCreated(1)).rejects.toThrow("kas/bank");
   });
 
   it("returns early if journal already exists (idempotency)", async () => {
@@ -1887,7 +1891,7 @@ describe("onVendorPaymentCreated", () => {
     ]);
   });
 
-  it("drops the fee from the journal when no admin-fee account is configured (stays balanced)", async () => {
+  it("rejects a fee when no admin-fee account is configured", async () => {
     (mocks.systemSettings as any).purchaseAdminFeeAccountId = null;
     mocks.vendorPaymentFindUniqueOrThrow.mockResolvedValue({
       id: 1,
@@ -1898,15 +1902,8 @@ describe("onVendorPaymentCreated", () => {
       accountId: 100,
     });
     mocks.journalFindFirst.mockResolvedValue(null);
-    await onVendorPaymentCreated(1);
-
-    const call = mocks.journalCreate.mock.calls[0][0];
-    // No fee debit; bank pays only the bill amount → still balanced.
-    expect(call.data.totalDebit).toBe(150000);
-    expect(call.data.entries.create).toEqual([
-      expect.objectContaining({ accountId: 210, debit: 150000, credit: 0 }),
-      expect.objectContaining({ accountId: 100, debit: 0, credit: 150000 }),
-    ]);
+    await expect(onVendorPaymentCreated(1)).rejects.toThrow("beban admin bank");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
   it("is unchanged (2 entries) when adminFee is zero", async () => {
@@ -1948,9 +1945,9 @@ describe("onPayrollPaid", () => {
     );
   });
 
-  it("returns early if required settings missing", async () => {
+  it("rejects if required settings missing", async () => {
     (mocks.systemSettings as any).salaryExpenseAccountId = null;
-    await onPayrollPaid(1);
+    await expect(onPayrollPaid(1)).rejects.toThrow("beban gaji");
     expect(mocks.payrollFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
@@ -2021,7 +2018,7 @@ describe("onPayrollPaid", () => {
     );
   });
 
-  it("falls back to crediting bank for statutory when salariesPayableAccountId is null", async () => {
+  it("rejects statutory deductions when salariesPayableAccountId is null", async () => {
     (mocks.systemSettings as any).salariesPayableAccountId = null;
     mocks.payrollFindUniqueOrThrow.mockResolvedValue({
       id: 1,
@@ -2033,24 +2030,8 @@ describe("onPayrollPaid", () => {
       documentNo: "PAY-1",
     });
     mocks.journalFindFirst.mockResolvedValue(null);
-    await onPayrollPaid(1);
-
-    expect(mocks.journalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          entries: {
-            create: expect.arrayContaining([
-              // Cr. Bank fallback includes statutory 100
-              expect.objectContaining({
-                accountId: 105,
-                debit: 0,
-                credit: 1100,
-              }),
-            ]),
-          },
-        }),
-      }),
-    );
+    await expect(onPayrollPaid(1)).rejects.toThrow("hutang gaji");
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
   });
 
   it("debits FULL gross salary and relieves withholding legs (loan / late / absent)", async () => {

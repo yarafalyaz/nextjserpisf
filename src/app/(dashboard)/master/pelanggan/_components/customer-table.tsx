@@ -72,7 +72,7 @@ export function CustomerTable({ data, total, page, pageSize }: CustomerTableProp
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar customer"
+      ariaLabel="Daftar pelanggan"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"

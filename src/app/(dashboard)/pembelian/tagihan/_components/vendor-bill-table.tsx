@@ -126,7 +126,7 @@ export function VendorBillTable({ data, total, page, pageSize, toolbar, filters 
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar vendor bill"
+      ariaLabel="Daftar tagihan vendor"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}

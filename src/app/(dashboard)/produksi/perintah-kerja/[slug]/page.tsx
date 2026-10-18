@@ -186,7 +186,7 @@ export default async function WorkOrderDetailPage({
                 href={`/penjualan/faktur/tambah?quotationId=${wo.quotationId}`}
                 variant="primary"
               >
-                + Sales Invoice
+                + Faktur Penjualan
               </Button>
             )}
             <PrintButton documentType="work-order" documentId={wo.id} />

@@ -81,7 +81,7 @@ export function BrandTable({ data, total, page, pageSize }: BrandTableProps) {
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar brand"
+      ariaLabel="Daftar merek"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"

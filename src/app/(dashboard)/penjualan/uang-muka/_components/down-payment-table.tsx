@@ -81,7 +81,7 @@ export function DownPaymentTable({ data, total, page, pageSize, toolbar, filters
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar down payment"
+      ariaLabel="Daftar uang muka"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}

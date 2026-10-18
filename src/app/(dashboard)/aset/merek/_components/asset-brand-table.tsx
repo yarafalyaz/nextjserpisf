@@ -59,7 +59,7 @@ export function AssetBrandTable({ data, total, page, pageSize }: AssetBrandTable
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar brand aset"
+      ariaLabel="Daftar merek aset"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"

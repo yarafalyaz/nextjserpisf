@@ -97,7 +97,7 @@ export function JournalTable({ data, toolbar, filters }: JournalTableProps) {
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar journal"
+      ariaLabel="Daftar jurnal"
       pageSize={20}
       selectable={true}
       toolbar={toolbar}

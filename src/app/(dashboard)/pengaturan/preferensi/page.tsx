@@ -63,7 +63,7 @@ export default async function PreferencesPage() {
             <Field label="Simbol Mata Uang" value={settings?.currencySymbol} />
             <Field label="Locale" value={settings?.currencyLocale} />
             <Field label="Tanggal Kunci Periode" value={settings?.periodLockDate ? formatDate(settings.periodLockDate) : null} />
-            <BoolBadge label="Tampilkan Is Active" value={settings?.showIsActiveField !== false} />
+            <BoolBadge label="Tampilkan Status Aktif" value={settings?.showIsActiveField !== false} />
             <BoolBadge label="Tampilkan NPWP" value={settings?.showTaxId !== false} />
             <div className="flex flex-col gap-1 sm:col-span-2 lg:col-span-3 border-t border-default/50 pt-4 mt-2">
               <span className="text-xs text-muted-foreground">Tahapan Proyek Default</span>

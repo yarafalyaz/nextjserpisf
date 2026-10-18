@@ -93,7 +93,7 @@ export function PettyCashTable({ data, toolbar, filters }: PettyCashTableProps) 
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar petty cash"
+      ariaLabel="Daftar kas kecil"
       pageSize={20}
       selectable={true}
       toolbar={toolbar}

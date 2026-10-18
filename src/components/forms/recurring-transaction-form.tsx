@@ -115,8 +115,8 @@ export function RecurringTransactionForm({ accounts, expenseCategories, schedule
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="journal">Jurnal Umum (draft)</SelectItem>
-                <SelectItem value="expense">Beban (draft)</SelectItem>
+                <SelectItem value="journal">Jurnal Umum (draf)</SelectItem>
+                <SelectItem value="expense">Beban (draf)</SelectItem>
               </SelectContent>
             </Select>
           </div>

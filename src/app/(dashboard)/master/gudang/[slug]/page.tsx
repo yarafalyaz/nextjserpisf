@@ -76,7 +76,7 @@ export default async function WarehouseDetailPage({
       />
 
       <DetailTabs
-        ariaLabel="Warehouse detail tabs"
+        ariaLabel="Tab detail gudang"
         tabs={[
           {
             id: "info",

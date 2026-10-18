@@ -52,7 +52,7 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
           <Button
             variant="secondary"
             isDisabled={isPending || !defaultWarehouseId}
-            onPress={() => run(() => createMaterialIssueFromWorkOrder(workOrderId, defaultWarehouseId as number), "Pengeluaran material dibuat (draft) — selesaikan di menu Inventaris")}
+            onPress={() => run(() => createMaterialIssueFromWorkOrder(workOrderId, defaultWarehouseId as number), "Pengeluaran material dibuat (draf) — selesaikan di menu Inventaris")}
           >
             Buat Pengeluaran Material
           </Button>

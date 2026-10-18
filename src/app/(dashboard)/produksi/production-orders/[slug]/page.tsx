@@ -302,7 +302,7 @@ export default async function ProductionOrderDetailPage({
 
               {(order.genealogy.outputSerials as string[] | null)?.length ? (
                 <div className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Serial Hasil</span>
+                  <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nomor Seri Hasil</span>
                   <span className="text-sm text-foreground font-mono">
                     {((order.genealogy.outputSerials as string[]) ?? []).join(", ")}
                   </span>

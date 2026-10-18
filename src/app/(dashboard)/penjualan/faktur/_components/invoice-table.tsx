@@ -95,7 +95,7 @@ export function InvoiceTable({ data, total, page, pageSize }: InvoiceTableProps)
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar invoice"
+      ariaLabel="Daftar faktur"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="documentNo"

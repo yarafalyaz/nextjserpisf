@@ -172,7 +172,7 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
           </div>
           {outputTracksSerial && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="productionSerials">Serial number ({(completeQty === "" ? remainingQty : Number(completeQty)) || 0} baris)</Label>
+              <Label htmlFor="productionSerials">Nomor seri ({(completeQty === "" ? remainingQty : Number(completeQty)) || 0} baris)</Label>
               <Textarea
                 id="productionSerials"
                 value={serialNumbersText}

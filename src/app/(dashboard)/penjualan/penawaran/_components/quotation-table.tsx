@@ -87,7 +87,7 @@ export function QuotationTable({ data, total, page, pageSize, toolbar, filters }
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar quotation"
+      ariaLabel="Daftar penawaran"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}

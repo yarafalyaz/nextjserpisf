@@ -81,7 +81,7 @@ export function OrderTable({ data, total, page, pageSize, toolbar, filters }: Or
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar sales order"
+      ariaLabel="Daftar pesanan penjualan"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}

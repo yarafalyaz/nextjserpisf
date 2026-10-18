@@ -96,7 +96,7 @@ export default async function EmployeeDetailPage({
       />
 
       <DetailTabs
-        ariaLabel="Employee detail tabs"
+        ariaLabel="Tab detail karyawan"
         tabs={[
           {
             id: "info",

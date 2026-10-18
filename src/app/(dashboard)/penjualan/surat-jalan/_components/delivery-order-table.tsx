@@ -87,7 +87,7 @@ export function DeliveryOrderTable({ data, total, page, pageSize, toolbar, filte
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar delivery order"
+      ariaLabel="Daftar surat jalan"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}
