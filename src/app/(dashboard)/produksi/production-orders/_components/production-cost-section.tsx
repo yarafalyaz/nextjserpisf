@@ -248,11 +248,11 @@ export function ProductionCostSection({
               </div>
             </div>
           </div>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button type="button" isDisabled={isPending} onPress={() => setOverheadOpen(false)}>
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-4">
+            <Button className="w-full sm:w-auto" type="button" isDisabled={isPending} onPress={() => setOverheadOpen(false)}>
               Batal
             </Button>
-            <Button type="submit" variant="primary" isDisabled={isPending || overheadPreview <= 0} id="submit-overhead">
+            <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending || overheadPreview <= 0} id="submit-overhead">
               {isPending ? "Menyimpan..." : "Terapkan Overhead"}
             </Button>
           </div>
@@ -302,9 +302,9 @@ export function ProductionCostSection({
               <Textarea id="description" name="description" rows={2} defaultValue={editing?.description ?? ""} placeholder="Keterangan biaya (opsional)" />
             </div>
           </div>
-          <div className="flex justify-end gap-3 mt-4">
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-4">
             {category === "labor" && workOrderId && (
-              <Button
+              <Button className="w-full sm:w-auto"
                 type="button"
                 isDisabled={isPending || !hasProject}
                 onPress={handlePullLabor}
@@ -314,11 +314,11 @@ export function ProductionCostSection({
               </Button>
             )}
             {editing && (
-              <Button type="button" isDisabled={isPending} onPress={() => { setEditing(null); setOpen(false) }}>
+              <Button className="w-full sm:w-auto" type="button" isDisabled={isPending} onPress={() => { setEditing(null); setOpen(false) }}>
                 Batal
               </Button>
             )}
-            <Button type="submit" variant="primary" isDisabled={isPending} id="submit-production-cost">
+            <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-production-cost">
               {isPending ? "Menyimpan..." : editing ? "Simpan Perubahan" : "Simpan Biaya"}
             </Button>
           </div>

@@ -136,9 +136,9 @@ export function NonconformanceForm({ inspections }: { inspections: InspectionOpt
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button onPress={() => router.back()} type="button">Batal</Button>
-        <Button type="submit" variant="primary" isDisabled={isPending} id="submit-ncr">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+        <Button className="w-full sm:w-auto" onPress={() => router.back()} type="button">Batal</Button>
+        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} id="submit-ncr">
           {isPending ? "Menyimpan..." : "Simpan NCR"}
         </Button>
       </div>

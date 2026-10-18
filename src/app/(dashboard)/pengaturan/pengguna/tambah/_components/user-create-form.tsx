@@ -83,11 +83,11 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
           </div>
         </div>
       </div>
-      <div className="flex justify-end gap-3 mt-8 pt-6 border-t border-default">
-        <Button type="button" variant="ghost" onPress={() => router.back()} isDisabled={isPending} size="lg">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-8 pt-6 border-t border-default">
+        <Button className="w-full sm:w-auto" type="button" variant="ghost" onPress={() => router.back()} isDisabled={isPending} size="lg">
           Batal
         </Button>
-        <Button type="submit" variant="primary" isDisabled={isPending} size="lg">
+        <Button className="w-full sm:w-auto" type="submit" variant="primary" isDisabled={isPending} size="lg">
           {isPending ? "Menyimpan..." : "Simpan Pengguna"}
         </Button>
       </div>

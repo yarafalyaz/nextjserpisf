@@ -290,11 +290,11 @@ export function WorkflowForm({
         </div>
       </div>
 
-      <div className="flex justify-end gap-3">
-        <Button type="button" variant="ghost" onPress={() => router.push("/pengaturan/workflow")}>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3">
+        <Button className="w-full sm:w-auto" type="button" variant="ghost" onPress={() => router.push("/pengaturan/workflow")}>
           Batal
         </Button>
-        <Button type="submit" variant="primary" isPending={isPending} isDisabled={isPending}>
+        <Button className="w-full sm:w-auto" type="submit" variant="primary" isPending={isPending} isDisabled={isPending}>
           {isPending ? "Menyimpan..." : workflow?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
