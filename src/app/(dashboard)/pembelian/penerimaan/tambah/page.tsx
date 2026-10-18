@@ -20,7 +20,7 @@ export default async function CreateGoodsReceiptPage({
 
   const [purchaseOrders, warehouses, racks, rackRows, itemRecords, receivedGrItems] = await Promise.all([
     prisma.purchaseOrder.findMany({
-      where: { status: { in: ["ordered", "approved"] } },
+      where: { status: { in: ["ordered", "approved", "partial_received"] } },
       include: { vendor: true, items: true },
       orderBy: { createdAt: "desc" },
     }),
