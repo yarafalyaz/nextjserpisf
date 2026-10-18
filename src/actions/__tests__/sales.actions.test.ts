@@ -222,6 +222,21 @@ vi.mock("fs/promises", () => ({
   mkdir: vi.fn().mockResolvedValue(undefined),
 }))
 
+// storage asli menarik prisma + aws-sdk; mock assertMagicBytes dengan semantik
+// nyata: tolak bila header tak cocok (agar mutasi "cabut cek" memerah).
+vi.mock("@/lib/storage/storage", () => ({
+  assertMagicBytes: vi.fn((buffer: Buffer, mimeType: string) => {
+    const head = Array.from(buffer.subarray(0, 12))
+    const ok =
+      (mimeType === "image/jpeg" && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) ||
+      (mimeType === "image/png" && head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47) ||
+      (mimeType === "image/gif" && head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46) ||
+      (mimeType === "image/webp" && head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46) ||
+      (mimeType === "application/pdf" && head[0] === 0x25 && head[1] === 0x50 && head[2] === 0x44 && head[3] === 0x46 && head[4] === 0x2d)
+    if (!ok) throw new Error("Isi file tidak sesuai dengan format yang diklaim (kemungkinan file palsu)")
+  }),
+}))
+
 import * as actions from "../sales.actions"
 
 function fdQuotation(payload: any): FormData {
@@ -418,9 +433,17 @@ describe("Down Payment Actions", () => {
   it("createDownPayment succeeds with proofImage", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "accepted", grandTotal: 1000 })
     mocks.prismaMock.downPayment.aggregate.mockResolvedValue({ _sum: { amount: 0 } })
-    const file = new File(["dummy"], "proof.jpg", { type: "image/jpeg" })
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], "proof.jpg", { type: "image/jpeg" })
     const res = await actions.createDownPayment(fdMap({ quotationId: 1, amount: 100, paymentDate: "2026-06-12", proofImage: file }))
     expect(res?.success).toBe(true)
+  })
+  it("createDownPayment rejects proofImage whose bytes mismatch the claimed type", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "accepted", grandTotal: 1000 })
+    mocks.prismaMock.downPayment.aggregate.mockResolvedValue({ _sum: { amount: 0 } })
+    const file = new File([new TextEncoder().encode("<?php echo 1;")], "proof.jpg", { type: "image/jpeg" })
+    const res = await actions.createDownPayment(fdMap({ quotationId: 1, amount: 100, paymentDate: "2026-06-12", proofImage: file }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak sesuai")
   })
 
   // === updateDownPayment ===
@@ -451,9 +474,17 @@ describe("Down Payment Actions", () => {
   it("updateDownPayment succeeds with proofImage", async () => {
     mocks.prismaMock.downPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "accepted", grandTotal: 1000 })
-    const file = new File(["dummy"], "proof.jpg", { type: "image/jpeg" })
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], "proof.jpg", { type: "image/jpeg" })
     const res = await actions.updateDownPayment(1, fdMap({ quotationId: 1, amount: 100, paymentDate: "2026-06-12", proofImage: file }))
     expect(res?.success).toBe(true)
+  })
+  it("updateDownPayment rejects proofImage whose bytes mismatch the claimed type", async () => {
+    mocks.prismaMock.downPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "accepted", grandTotal: 1000 })
+    const file = new File([new TextEncoder().encode("<script>alert(1)</script>")], "proof.png", { type: "image/png" })
+    const res = await actions.updateDownPayment(1, fdMap({ quotationId: 1, amount: 100, paymentDate: "2026-06-12", proofImage: file }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak sesuai")
   })
 
   // === Zod validation (regression: Zod bypass) ===

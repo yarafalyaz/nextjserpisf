@@ -25,6 +25,7 @@ import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service"
+import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
 
 // ==================== QUOTATION ACTIONS ====================
@@ -663,7 +664,12 @@ export async function createDownPayment(formData: FormData) {
     const filename = `proof-dp-${Date.now()}.${ext}`
     const filepath = path.join(uploadDir, filename)
     const bytes = await proofFile.arrayBuffer()
-    await writeFile(filepath, Buffer.from(bytes))
+    const buffer = Buffer.from(bytes)
+    // Bukti DP boleh jpg/png/webp/pdf (lihat allowedExts di atas): tolak isi
+    // yang tak cocok dengan ekstensinya SEBELUM tulis — `File.type`/nama
+    // kiriman klien bisa dipalsukan untuk menyimpan skrip di public/.
+    assertMagicBytes(buffer, ext === "pdf" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`)
+    await writeFile(filepath, buffer)
     proofImage = `/uploads/proofs/${filename}`
   }
 
@@ -2406,7 +2412,10 @@ export async function updateDownPayment(id: number, formData: FormData) {
     const filename = `proof-dp-${Date.now()}.${ext}`
     const filepath = path.join(uploadDir, filename)
     const bytes = await proofFile.arrayBuffer()
-    await writeFile(filepath, Buffer.from(bytes))
+    const buffer = Buffer.from(bytes)
+    // Sama seperti jalur create di atas: tolak isi tak cocok SEBELUM tulis.
+    assertMagicBytes(buffer, ext === "pdf" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`)
+    await writeFile(filepath, buffer)
     proofImage = `/uploads/proofs/${filename}`
   }
 
