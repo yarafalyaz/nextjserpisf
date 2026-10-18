@@ -45,6 +45,9 @@ vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn() 
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unknown[]) => logActivityMock(...a) }))
 vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { updateDownPayment } from "../sales.actions"
 

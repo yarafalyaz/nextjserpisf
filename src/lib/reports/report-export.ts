@@ -47,6 +47,26 @@ export type ReportPdfKey =
   | "tukar-faktur"
   | "transaksi-bank"
   | "faktur-ppn"
+  | "ringkasan-ar-ap"
+  | "piutang-jatuh-tempo"
+  | "hutang-jatuh-tempo"
+  | "total-hutang"
+  | "piutang-pelanggan"
+  | "umur-stok"
+  | "ringkasan-stok"
+  | "rekonsiliasi-stok"
+  | "mutasi-stok"
+  | "valuasi-stok"
+  | "kartu-stok"
+  | "pajak"
+  | "rekonsiliasi-ppn"
+  | "bukti-potong-pph"
+  | "analisis-penjualan"
+  | "buku-besar"
+  | "buku-bank"
+  | "buku-pembantu-piutang"
+  | "buku-pembantu-utang"
+  | "arus-kas"
 
 /** Blok tanda tangan standar laporan keuangan — sama di layar dan di PDF. */
 export const STATEMENT_SIGNATURES = ["Dibuat oleh", "Diperiksa oleh", "Disetujui oleh"]
@@ -105,6 +125,26 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "tukar-faktur": "Rincian-Tukar-Faktur",
     "transaksi-bank": "Transaksi-Bank-Terekonsiliasi",
     "faktur-ppn": "Faktur-SPT-Masa-PPN",
+    "ringkasan-ar-ap": "Ringkasan-AR-AP",
+    "piutang-jatuh-tempo": "Piutang-Jatuh-Tempo",
+    "hutang-jatuh-tempo": "Hutang-Jatuh-Tempo",
+    "total-hutang": "Total-Hutang",
+    "piutang-pelanggan": "Piutang-per-Pelanggan",
+    "umur-stok": "Umur-Stok",
+    "ringkasan-stok": "Ringkasan-Persediaan",
+    "rekonsiliasi-stok": "Rekonsiliasi-Stok",
+    "mutasi-stok": "Mutasi-Stok",
+    "valuasi-stok": "Valuasi-Stok",
+    "kartu-stok": "Kartu-Stok",
+    pajak: "Laporan-Pajak-PPN",
+    "rekonsiliasi-ppn": "Rekonsiliasi-PPN",
+    "bukti-potong-pph": "Bukti-Potong-PPh",
+    "analisis-penjualan": "Analisis-Penjualan",
+    "buku-besar": "Buku-Besar",
+    "buku-bank": "Buku-Bank",
+    "buku-pembantu-piutang": "Buku-Pembantu-Piutang",
+    "buku-pembantu-utang": "Buku-Pembantu-Utang",
+    "arus-kas": "Arus-Kas",
   }
   return `${base[report]}-${periodSlug}.pdf`
 }

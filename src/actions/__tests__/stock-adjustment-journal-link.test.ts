@@ -54,6 +54,9 @@ vi.mock("@/lib/hooks/inventory-transfer.hook", () => ({
   onTransferReceived: vi.fn(),
 }))
 vi.mock("@/lib/hooks/material-issue.hook", () => ({ onMaterialIssueCompleted: vi.fn() }))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock("@/lib/auth/warehouse-scope", () => ({
   getWarehouseScope: vi.fn().mockResolvedValue({ kind: "all" }),
   assertWarehouseAccess: vi.fn(),

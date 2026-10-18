@@ -59,6 +59,9 @@ vi.mock("@/lib/hooks/sales-return.hook", () => ({ onSalesReturnCompleted: vi.fn(
 vi.mock("@/lib/services/notification.service", () => ({ notificationService: {} }))
 vi.mock("@/lib/services/quotation-sync.service", () => ({ resyncOnEdit: vi.fn() }))
 vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn(async () => "X-1") }))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("@/lib/services/activity-log.service", () => ({
   logActivity: (...a: unknown[]) => logActivityMock(...a),

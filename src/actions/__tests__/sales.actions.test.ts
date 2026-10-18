@@ -192,6 +192,10 @@ vi.mock("@/lib/hooks/sales-return.hook", () => ({
   onSalesReturnCompleted: (...a: unknown[]) => mocks.onSalesReturnCompletedMock(...a),
 }))
 
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
+
 vi.mock("@/lib/services/quotation-sync.service", () => ({
   resyncOnEdit: (...a: unknown[]) => mocks.resyncOnEditMock(...a),
 }))

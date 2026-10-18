@@ -82,6 +82,9 @@ vi.mock("@/lib/hooks/inventory-transfer.hook", () => ({
 vi.mock("@/lib/hooks/material-issue.hook", () => ({
   onMaterialIssueCompleted: vi.fn().mockResolvedValue({}),
 }));
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}));
 
 import * as actions from "../inventory.actions";
 import { onStockAdjustmentProcessed as stockAdjHook } from "@/lib/hooks/stock-adjustment.hook";

@@ -169,6 +169,9 @@ vi.mock("@/lib/services/sales-invoice-posting.service", () => ({
   reverseSalesInvoicePostingTx: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock("@/lib/sales/return-validation", () => ({ findOverReturn: vi.fn().mockReturnValue(null) }))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
 vi.mock("fs/promises", () => ({
   writeFile: vi.fn().mockResolvedValue(undefined),
   mkdir: vi.fn().mockResolvedValue(undefined),

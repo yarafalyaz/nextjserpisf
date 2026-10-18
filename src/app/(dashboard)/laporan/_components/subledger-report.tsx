@@ -13,6 +13,8 @@ import {
 } from "@/lib/reports/subledger"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
+import { buildReportPeriodSlug } from "@/lib/reports/report-period"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
@@ -239,7 +241,14 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
       ) : (
         <>
           <div className="flex items-center justify-end print:hidden">
-            <ExportButtons title={isAr ? "Buku_Pembantu_Piutang" : "Buku_Pembantu_Utang"} />
+            <ExportButtons
+              title={isAr ? "Buku_Pembantu_Piutang" : "Buku_Pembantu_Utang"}
+              pdfHref={buildReportPdfHref(
+                isAr ? "buku-pembantu-piutang" : "buku-pembantu-utang",
+                buildReportPeriodSlug(startDate, endDate),
+                { pihak: selected ? (selected.slug ?? String(selected.id)) : "" },
+              )}
+            />
           </div>
 
           <ReportLetterhead

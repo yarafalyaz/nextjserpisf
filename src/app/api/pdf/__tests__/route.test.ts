@@ -361,7 +361,7 @@ describe("GET /api/pdf", () => {
   })
 
   it("menolak laporan yang tidak didukung sebelum menyentuh data", async () => {
-    const res = await GET(request("laporan=mutasi-stok&periode=2026-10"))
+    const res = await GET(request("laporan=kunci-tak-ada&periode=2026-10"))
     expect(res.status).toBe(400)
     expect(mocks.loadAssetRegister).not.toHaveBeenCalled()
     expect(mocks.loadAssetMovement).not.toHaveBeenCalled()

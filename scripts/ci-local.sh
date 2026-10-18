@@ -213,12 +213,16 @@ else
   DB_OK=false
 fi
 
-# Prisma db push (sync schema to DB without migration)
+# Terapkan migrasi yang sudah ada (bukan `db push`): rantai migrasi
+# diverifikasi mereproduksi skema dari DB kosong (drift 0, lihat
+# `npm run db:check-migrations`), sama seperti job CI di
+# `.github/workflows/ci.yml`. `db push` menutupi ketidaksesuaian skema vs
+# migrasi; `migrate deploy` membuatnya GAGAL KERAS.
 if $DB_OK; then
-  if npx prisma db push --accept-data-loss >> "$DB_LOG" 2>&1; then
-    pass "DB schema synced"
+  if npx prisma migrate deploy >> "$DB_LOG" 2>&1; then
+    pass "DB migrated"
   else
-    echo -e "  ${YELLOW}⚠ DB push failed (mungkin DB belum running)${NC}"
+    echo -e "  ${YELLOW}⚠ DB migrate failed (mungkin DB belum running)${NC}"
     echo -e "  ${YELLOW}  E2E tests mungkin akan error.${NC}"
   fi
 fi

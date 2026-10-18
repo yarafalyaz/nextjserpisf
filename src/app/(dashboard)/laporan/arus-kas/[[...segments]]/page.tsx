@@ -6,7 +6,8 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service";
 import { formatAccounting, formatPeriod } from "@/lib/utils/format";
 import { toLocalDateOnly } from "@/lib/utils/date-only";
-import { ExportButtons } from "@/components/reports/export-buttons";
+import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export";
 import { StatementOptions } from "@/components/reports/statement-options";
 import { ReportSheet } from "@/components/reports/report-sheet";
 import {
@@ -168,7 +169,7 @@ export default async function CashFlowPage({
           currentOptions={options}
         />
         <div className="flex items-center justify-end">
-          <ExportButtons title="Arus Kas" />
+          <ExportButtons title="Arus Kas" pdfHref={buildReportPdfHref("arus-kas", period.slug)} />
         </div>
       </div>
 </>}>

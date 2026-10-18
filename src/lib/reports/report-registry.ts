@@ -79,6 +79,37 @@ import { loadMinStock } from "@/lib/reports/min-stock-data"
 import { loadBankTransactionReconciliation } from "@/lib/reports/bank-transaction-reconciliation-data"
 import { loadVatInvoices } from "@/lib/reports/vat-invoices-data"
 import { loadPurchaseOutstanding } from "@/lib/reports/purchase-outstanding-data"
+import { loadArApSummary } from "@/lib/reports/ar-ap-summary-data"
+import {
+  loadPayablesAging,
+  loadPayablesTotal,
+  loadReceivablesAging,
+} from "@/lib/reports/aging-reports-data"
+import {
+  loadStockAging,
+  loadStockReconciliation,
+  loadStockSummary,
+} from "@/lib/reports/stock-simple-data"
+import {
+  loadTaxSummary,
+  loadVatReconciliation,
+  loadWithholdingSummary,
+} from "@/lib/reports/tax-summary-data"
+import {
+  loadSalesAnalytics,
+  loadStockCard,
+  loadStockMovements,
+  loadStockValuation,
+} from "@/lib/reports/stock-flow-data"
+import {
+  loadBankLedger,
+  loadCashFlow,
+  loadCustomerReceivables,
+  loadGeneralLedger,
+  loadPayableSubledger,
+  loadReceivableSubledger,
+} from "@/lib/reports/ledger-cash-data"
+import { SALES_DIMENSIONS, type SalesDimension } from "@/lib/reports/sales-analytics"
 
 /** Isi lembar: statement bergaya kode/nama/kolom angka, atau tabel kolom bebas. */
 export type ReportPayload =
@@ -665,6 +696,187 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     async load({ period }) {
       const report = await loadInvoiceExchanges(period)
       return { kind: "table", table: report.result.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "ringkasan-ar-ap": {
+    title: "Ringkasan Piutang & Hutang",
+    subtitle: "Ikhtisar Saldo AR/AP",
+    async load() {
+      const report = await loadArApSummary()
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "piutang-jatuh-tempo": {
+    title: "Piutang Jatuh Tempo",
+    subtitle: "Umur Piutang",
+    async load() {
+      const report = await loadReceivablesAging()
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "hutang-jatuh-tempo": {
+    title: "Hutang Jatuh Tempo",
+    subtitle: "Umur Utang",
+    async load() {
+      const report = await loadPayablesAging()
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "total-hutang": {
+    title: "Total Hutang",
+    subtitle: "Utang Usaha",
+    async load() {
+      const report = await loadPayablesTotal()
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "piutang-pelanggan": {
+    title: "Piutang per Pelanggan",
+    subtitle: "Umur Piutang, Limit Kredit & Rata-rata Pembayaran",
+    defaultPeriod: startOfYear,
+    async load({ period }) {
+      const report = await loadCustomerReceivables(period)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "umur-stok": {
+    title: "Umur Stok",
+    subtitle: "Analisis Umur Persediaan",
+    async load() {
+      const report = await loadStockAging()
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "ringkasan-stok": {
+    title: "Ringkasan Persediaan",
+    subtitle: "Posisi per Gudang",
+    async load() {
+      const report = await loadStockSummary()
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "rekonsiliasi-stok": {
+    title: "Rekonsiliasi Stok",
+    subtitle: "Rekonsiliasi Persediaan",
+    async load() {
+      const report = await loadStockReconciliation()
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "mutasi-stok": {
+    title: "Mutasi Stok",
+    subtitle: "Pergerakan Stok",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period, search }) {
+      const warehouseId = search.gudang && /^\d+$/.test(search.gudang) ? Number(search.gudang) : null
+      const report = await loadStockMovements(period, warehouseId)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "valuasi-stok": {
+    title: "Valuasi Stok per Gudang",
+    subtitle: "Valuasi Persediaan",
+    async load({ search }) {
+      const warehouseId = search.gudang && /^\d+$/.test(search.gudang) ? Number(search.gudang) : null
+      const report = await loadStockValuation(warehouseId)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "kartu-stok": {
+    title: "Kartu Stok",
+    subtitle: "Riwayat Pergerakan per Barang",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period, search }) {
+      const itemId = search.barang && /^\d+$/.test(search.barang) ? Number(search.barang) : null
+      const warehouseId = search.gudang && /^\d+$/.test(search.gudang) ? Number(search.gudang) : null
+      const report = await loadStockCard(period, itemId, warehouseId)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  pajak: {
+    title: "Laporan Pajak (PPN)",
+    subtitle: "PPN Keluaran & Masukan",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period }) {
+      const report = await loadTaxSummary(period)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "rekonsiliasi-ppn": {
+    title: "Rekonsiliasi PPN",
+    subtitle: "Per Buku (Jurnal) vs Per Dokumen",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period }) {
+      const report = await loadVatReconciliation(period)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "bukti-potong-pph": {
+    title: "Daftar Bukti Potong PPh",
+    subtitle: "Pemotongan PPh atas Tagihan Pemasok",
+    defaultPeriod: startOfYear,
+    async load({ period }) {
+      const report = await loadWithholdingSummary(period)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "analisis-penjualan": {
+    title: "Analisis Penjualan",
+    subtitle: "Penjualan per Kelompok",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period, search }) {
+      const dimension = (SALES_DIMENSIONS as readonly { value: string }[]).some(
+        (d) => d.value === search.dimensi,
+      )
+        ? (search.dimensi as SalesDimension)
+        : "barang"
+      const report = await loadSalesAnalytics(period, dimension)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "buku-besar": {
+    title: "Buku Besar",
+    subtitle: "Mutasi & Saldo per Akun",
+    defaultPeriod: startOfYear,
+    async load({ period, search }) {
+      const report = await loadGeneralLedger(period, search.akun ?? null)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "buku-bank": {
+    title: "Buku Bank",
+    subtitle: "Mutasi Rekening Kas & Bank",
+    defaultPeriod: startOfYear,
+    async load({ period, search }) {
+      const report = await loadBankLedger(period, search.akun ?? null)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "buku-pembantu-piutang": {
+    title: "Buku Besar Pembantu Piutang",
+    subtitle: "Mutasi per Pelanggan",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period, search }) {
+      const report = await loadReceivableSubledger(period, search.pihak ?? null)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "buku-pembantu-utang": {
+    title: "Buku Besar Pembantu Utang",
+    subtitle: "Mutasi per Pemasok",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period, search }) {
+      const report = await loadPayableSubledger(period, search.pihak ?? null)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "arus-kas": {
+    title: "Laporan Arus Kas",
+    subtitle: "Per Aktivitas",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
+    async load({ period }) {
+      const report = await loadCashFlow(period)
+      return { kind: "statement", table: report.statement, periodCaption: report.periodCaption }
     },
   },
 }

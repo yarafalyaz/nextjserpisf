@@ -11,6 +11,7 @@ import { RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
 import { SALES_DIMENSIONS, aggregateSales, monthlySales, type SalesDimension, type SalesLine } from '@/lib/reports/sales-analytics'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
 import { ExportButtons } from '@/components/reports/export-buttons'
+import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
 import { ReportSection, ReportKpiCard } from '@/components/reports/report-section'
 import { ReportNarration } from '@/components/reports/report-narration'
@@ -95,7 +96,7 @@ export default async function SalesAnalyticsPage({
   const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
-    <ReportPageShell title="Analisis Penjualan" sheet={false} wide actions={<><ExportButtons title="Analisis_Penjualan" /></>}>
+    <ReportPageShell title="Analisis Penjualan" sheet={false} wide actions={<><ExportButtons title="Analisis_Penjualan" pdfHref={buildReportPdfHref("analisis-penjualan", period.slug, { dimensi: dimension })} /></>}>
 
 
       <ReportPeriodFilter

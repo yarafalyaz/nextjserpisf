@@ -54,6 +54,9 @@ vi.mock("@/lib/utils/document-number", () => ({ generateDocumentNumber: vi.fn(as
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unknown[]) => logActivityMock(...a) }))
 vi.mock("@/lib/sales/return-validation", () => ({ findOverReturn: vi.fn(() => null) }))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { postInvoice } from "../sales.actions"
 

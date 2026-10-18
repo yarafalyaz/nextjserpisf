@@ -1,0 +1,171 @@
+/**
+ * Pemuatan data laporan stok (umur, ringkasan, rekonsiliasi) — satu sumber layar & PDF.
+ *
+ * - Umur stok: lapisan FIFO bersisa, umur = hari sejak lapisan dibuat.
+ * - Ringkasan stok: agregasi lapisan per gudang + per kategori (basis FIFO yang
+ *   sama dengan Valuasi Stok — jangan memakai `qtyOnHand` untuk nilai).
+ * - Rekonsiliasi stok: bandingkan master `qtyOnHand` vs total lapisan FIFO.
+ */
+
+import { prisma } from "@/lib/db/prisma"
+import { rangePeriodLabels } from "@/lib/reports/period-label"
+import { reconcileInventory } from "@/lib/inventory/stock-reconciliation"
+import { formatAccounting } from "@/lib/utils/format"
+import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
+
+export interface StockSimpleReport {
+  table: { columns: TableColumn[]; rows: TableRow[] }
+  periodLabel: string
+  periodCaption: string
+}
+
+const money = (value: number) => formatAccounting(value, { zeroDash: false })
+const qty = (value: number) => new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(value)
+const nowLabels = () => {
+  const now = new Date()
+  return rangePeriodLabels({ start: now, end: now })
+}
+
+function ageGroup(days: number): string {
+  if (days <= 30) return "0–30 Hari"
+  if (days <= 60) return "31–60 Hari"
+  if (days <= 90) return "61–90 Hari"
+  return "> 90 Hari"
+}
+
+const AGING_COLUMNS: TableColumn[] = [
+  { header: "SKU", align: "left", width: 36 },
+  { header: "Nama Item", align: "left", width: 70 },
+  { header: "Kategori", align: "left", width: 36 },
+  { header: "Satuan", align: "left", width: 18 },
+  { header: "Kuantitas", align: "right", width: 24 },
+  { header: "Umur (Hari)", align: "right", width: 22 },
+  { header: "Kelompok", align: "left", width: 26 },
+]
+
+export async function loadStockAging(): Promise<StockSimpleReport> {
+  const layers = await prisma.inventoryLayer.findMany({
+    where: { remaining: { gt: 0 } },
+    include: {
+      item: { select: { sku: true, name: true, unitOfMeasure: true, category: { select: { name: true } } } },
+    },
+  })
+  const now = new Date()
+  const rows: TableRow[] = layers
+    .map((layer) => {
+      const ageDays = Math.ceil((now.getTime() - new Date(layer.createdAt).getTime()) / 86_400_000)
+      return {
+        sku: layer.item.sku,
+        name: layer.item.name,
+        category: layer.item.category?.name ?? "-",
+        uom: layer.item.unitOfMeasure ?? "-",
+        qty: Number(layer.remaining),
+        ageDays,
+        group: ageGroup(ageDays),
+      }
+    })
+    .sort((a, b) => b.ageDays - a.ageDays)
+    .map((r) => ({
+      kind: "data" as const,
+      cells: [r.sku, r.name, r.category, r.uom, qty(r.qty), String(r.ageDays), r.group],
+    }))
+  if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada stok." })
+  else {
+    const total = layers.reduce((s, l) => s + Number(l.remaining), 0)
+    rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", "", "", qty(total), "", ""] })
+  }
+  return { table: { columns: AGING_COLUMNS, rows }, ...nowLabels() }
+}
+
+const SUMMARY_COLUMNS: TableColumn[] = [
+  { header: "Gudang", align: "left", width: 60 },
+  { header: "Jenis Item", align: "right", width: 26 },
+  { header: "Total Qty", align: "right", width: 30 },
+  { header: "Total Nilai", align: "right", width: 44 },
+]
+
+export async function loadStockSummary(): Promise<StockSimpleReport> {
+  const [warehouses, layers] = await Promise.all([
+    prisma.warehouse.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { code: "asc" } }),
+    prisma.inventoryLayer.findMany({
+      where: { remaining: { gt: 0 } },
+      select: { itemId: true, warehouseId: true, remaining: true, unitCost: true },
+    }),
+  ])
+  const byWarehouse = new Map<number, { qty: number; value: number; items: Set<number> }>()
+  for (const layer of layers) {
+    const id = layer.warehouseId ?? 0
+    const agg = byWarehouse.get(id) ?? { qty: 0, value: 0, items: new Set<number>() }
+    const remaining = Number(layer.remaining)
+    agg.qty += remaining
+    agg.value += remaining * Number(layer.unitCost)
+    agg.items.add(layer.itemId)
+    byWarehouse.set(id, agg)
+  }
+  const rows: TableRow[] = []
+  let totalQty = 0
+  let totalValue = 0
+  for (const wh of warehouses) {
+    const agg = byWarehouse.get(wh.id)
+    if (!agg) continue
+    totalQty += agg.qty
+    totalValue += agg.value
+    rows.push({
+      kind: "data",
+      cells: [`${wh.code} - ${wh.name}`, String(agg.items.size), qty(agg.qty), money(agg.value)],
+    })
+  }
+  if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada stok." })
+  else rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", qty(totalQty), money(totalValue)] })
+  return { table: { columns: SUMMARY_COLUMNS, rows }, ...nowLabels() }
+}
+
+const RECON_COLUMNS: TableColumn[] = [
+  { header: "SKU", align: "left", width: 36 },
+  { header: "Nama Item", align: "left", width: 70 },
+  { header: "Kuantitas Induk", align: "right", width: 30 },
+  { header: "Kuantitas FIFO", align: "right", width: 30 },
+  { header: "Selisih", align: "right", width: 26 },
+  { header: "Nilai FIFO", align: "right", width: 40 },
+]
+
+export async function loadStockReconciliation(): Promise<StockSimpleReport> {
+  const [items, layers] = await Promise.all([
+    prisma.item.findMany({
+      where: { deletedAt: null },
+      select: { id: true, sku: true, name: true, qtyOnHand: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.inventoryLayer.findMany({
+      where: { remaining: { gt: 0 } },
+      select: { itemId: true, remaining: true, unitCost: true },
+    }),
+  ])
+  const layerTotals = new Map<number, { layerQty: number; layerValue: number }>()
+  for (const layer of layers) {
+    const agg = layerTotals.get(layer.itemId) ?? { layerQty: 0, layerValue: 0 }
+    const remaining = Number(layer.remaining)
+    agg.layerQty += remaining
+    agg.layerValue += remaining * Number(layer.unitCost)
+    layerTotals.set(layer.itemId, agg)
+  }
+  const summary = reconcileInventory(
+    items.map((i) => ({ itemId: i.id, sku: i.sku, name: i.name, masterQty: Number(i.qtyOnHand) })),
+    layerTotals,
+  )
+  const rows: TableRow[] = summary.mismatches.map((row) => ({
+    kind: "data" as const,
+    cells: [
+      row.sku,
+      row.name,
+      qty(row.masterQty),
+      qty(row.layerQty),
+      `${row.variance > 0 ? "+" : ""}${qty(row.variance)}`,
+      money(row.layerValue),
+    ],
+  }))
+  if (rows.length === 0) {
+    rows.push({ kind: "notice", text: "Semua item seimbang — jumlah induk sama dengan total lapisan FIFO." })
+  }
+  return { table: { columns: RECON_COLUMNS, rows }, ...nowLabels() }
+}

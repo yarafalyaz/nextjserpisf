@@ -26,6 +26,10 @@ vi.mock("@/lib/services/activity-log.service", () => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
+
 beforeEach(() => {
   requirePermissionMock.mockReset().mockResolvedValue({ id: 5 })
   woFindUniqueOrThrowMock.mockReset()

@@ -12,6 +12,13 @@ vi.mock("@/lib/auth/permissions", () => ({
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 
+// Lapis-2 assertPeriodOpen memanggil prisma.systemSetting.findFirst — Proxy
+// prisma di berkas ini tidak menyediakan model itu, jadi guard asli melempar
+// TypeError SEBELUM claim jalan dan tes rollback mengira claim hilang.
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
+
 // Hooks that throw mid-transaction.
 vi.mock("@/lib/hooks/material-issue.hook", () => ({
   onMaterialIssueCompleted: vi.fn().mockRejectedValue(new Error("Simulated hook failure")),

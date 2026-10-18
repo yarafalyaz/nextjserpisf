@@ -61,6 +61,9 @@ vi.mock("@/lib/auth/warehouse-scope", () => ({
   assertWarehouseAccess: vi.fn(),
   assertWarehouseAccessMulti: vi.fn(),
 }))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+}))
 
 import { createMaterialIssue, updateMaterialIssue } from "../inventory.actions"
 
