@@ -91,9 +91,9 @@ export default async function BomRevisionDetailPage({
         {revision.notes && <DetailField label="Catatan" value={revision.notes} colSpan="full" />}
       </DetailCard>
 
-      <DetailSection title="Material (BOM Revisi)">
+      <DetailSection title="Bahan (BOM Revisi)">
         {revision.materials.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada material</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada bahan</p>
         ) : (
           <DetailTable>
             <DetailTableHead>
@@ -111,7 +111,7 @@ export default async function BomRevisionDetailPage({
                           <span className="font-mono text-muted-foreground">{it.sku}</span> — {it.name}
                         </Link>
                       ) : (
-                        `Item #${mat.itemId}`
+                        `Barang #${mat.itemId}`
                       )}
                     </DetailTableTd>
                     <DetailTableTd align="right">{Number(mat.qty)} {it?.unitOfMeasure ?? ""}</DetailTableTd>

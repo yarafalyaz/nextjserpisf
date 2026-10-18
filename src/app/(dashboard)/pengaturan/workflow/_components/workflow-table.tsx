@@ -84,7 +84,7 @@ export function WorkflowTable({ data, total, page, pageSize }: { data: WorkflowR
       serverPagination={{ total, page, pageSize }}
       selectable={false}
       searchColumn="name"
-      searchPlaceholder="Cari nama workflow..."
+      searchPlaceholder="Cari nama alur persetujuan..."
     />
   )
 }

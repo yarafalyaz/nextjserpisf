@@ -38,7 +38,7 @@ const columns = [
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("amount", {
-    header: "Jumlah DP",
+    header: "Jumlah Uang Muka",
     cell: (info) => <span className="text-right">{formatCurrency(Number(info.getValue()))}</span>,
   }),
   columnHelper.accessor("status", {

@@ -118,12 +118,12 @@ export function NotificationsWidget() {
           <Bell className="size-4" />
           Notifikasi Aktif
         </CardTitle>
-        <CardDescription>Ringkasan alert, notifikasi, dan aktivitas terbaru</CardDescription>
+        <CardDescription>Ringkasan peringatan, notifikasi, dan aktivitas terbaru</CardDescription>
       </CardHeader>
       <CardContent className="p-0">
         <div
           role="region"
-          aria-label="Alert operasional"
+          aria-label="Peringatan operasional"
           className="grid grid-cols-2 divide-x divide-y border-t md:grid-cols-4 md:divide-y-0"
         >
           {alerts.map((alert) => (

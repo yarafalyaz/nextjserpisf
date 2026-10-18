@@ -95,7 +95,7 @@ export default async function QcInspectionDetailPage({
       <DetailSection title="Hasil Pemeriksaan">
         <DetailTable>
           <DetailTableHead>
-            <DetailTableTh>Item</DetailTableTh>
+            <DetailTableTh>Butir</DetailTableTh>
             <DetailTableTh>Spesifikasi</DetailTableTh>
             <DetailTableTh>Hasil</DetailTableTh>
             <DetailTableTh>Nilai Ukur</DetailTableTh>
@@ -128,7 +128,7 @@ export default async function QcInspectionDetailPage({
       </DetailSection>
 
       {inspection.nonconformances.length > 0 && (
-        <DetailSection title="Nonconformance Terkait">
+        <DetailSection title="Ketidaksesuaian Terkait">
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>No. NCR</DetailTableTh>

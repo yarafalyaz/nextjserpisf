@@ -127,7 +127,7 @@ export default async function ItemDetailPage({
           const gr = grMap.get(sm.referenceId)
           if (gr?.purchaseOrderId) {
             const po = poMap.get(gr.purchaseOrderId)
-            if (po?.vendor) { party = po.vendor.name; partyLabel = "Vendor" }
+            if (po?.vendor) { party = po.vendor.name; partyLabel = "Pemasok" }
           }
           docLink = `/pembelian/penerimaan/${sm.referenceId}`
           break
@@ -139,10 +139,10 @@ export default async function ItemDetailPage({
             if (proj?.customer) {
               party = proj.customer.name
               if (proj.customerVehicle) party += ` (${proj.customerVehicle.plateNumber || ''})`
-              partyLabel = "Customer"
+              partyLabel = "Pelanggan"
             } else if (proj) {
               party = proj.name
-              partyLabel = "Project"
+              partyLabel = "Proyek"
             }
           } else if (mi?.workOrderId) {
             const wo = woMap.get(mi.workOrderId)
@@ -151,7 +151,7 @@ export default async function ItemDetailPage({
               if (proj?.customer) {
                 party = proj.customer.name
                 if (proj.customerVehicle) party += ` (${proj.customerVehicle.plateNumber || ''})`
-                partyLabel = "Customer"
+                partyLabel = "Pelanggan"
               }
             }
           }
@@ -162,7 +162,7 @@ export default async function ItemDetailPage({
           const sr = srMap.get(sm.referenceId)
           if (sr?.customerId) {
             const cust = custMap.get(sr.customerId)
-            if (cust) { party = cust.name; partyLabel = "Customer" }
+            if (cust) { party = cust.name; partyLabel = "Pelanggan" }
           }
           docLink = `/penjualan/retur/${sm.referenceId}`
           break
@@ -171,7 +171,7 @@ export default async function ItemDetailPage({
           const pr = prMap.get(sm.referenceId)
           if (pr?.purchaseOrderId) {
             const po = poMap.get(pr.purchaseOrderId)
-            if (po?.vendor) { party = po.vendor.name; partyLabel = "Vendor" }
+            if (po?.vendor) { party = po.vendor.name; partyLabel = "Pemasok" }
           }
           docLink = `/pembelian/retur/${sm.referenceId}`
           break
@@ -192,10 +192,10 @@ export default async function ItemDetailPage({
           const wo = woMap.get(sm.referenceId)
           if (wo?.projectId) {
             const proj = projMap.get(wo.projectId)
-            if (proj) { party = proj.name; partyLabel = "Project" }
+            if (proj) { party = proj.name; partyLabel = "Proyek" }
           } else {
             partyLabel = "Produksi"
-            party = "Work Order"
+            party = "Perintah Kerja"
           }
           docLink = `/produksi/perintah-kerja/${sm.referenceId}`
           break
@@ -208,8 +208,8 @@ export default async function ItemDetailPage({
       // Try to extract "dari X" or "untuk X" or "dari X - reason"
       const dariMatch = sm.description.match(/(?:dari|from)\s+(.+?)(?:\s*[-–]|$)/i)
       const untukMatch = sm.description.match(/(?:untuk|to|for)\s+(.+?)(?:\s*[-–]|$)/i)
-      if (dariMatch) { party = dariMatch[1].trim(); partyLabel = "Vendor" }
-      else if (untukMatch) { party = untukMatch[1].trim(); partyLabel = "Customer" }
+      if (dariMatch) { party = dariMatch[1].trim(); partyLabel = "Pemasok" }
+      else if (untukMatch) { party = untukMatch[1].trim(); partyLabel = "Pelanggan" }
       else { party = sm.description }
     }
 
@@ -223,7 +223,7 @@ export default async function ItemDetailPage({
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Data Master", href: "/master" },
-          { label: "Item", href: "/master/barang" },
+          { label: "Barang", href: "/master/barang" },
           { label: "Detail" },
         ]}
         badge={item.isProduct ? (
@@ -249,7 +249,7 @@ export default async function ItemDetailPage({
       )}
 
       <DetailTabs
-        ariaLabel="Item detail tabs"
+        ariaLabel="Tab detail barang"
         tabs={[
           {
             id: "info",
@@ -273,7 +273,7 @@ export default async function ItemDetailPage({
                       {isLowStock && " (Stok Menipis)"}
                     </span>
                   } />
-                  <DetailField label="Minimum Stok" value={String(Number(item.minStock))} />
+                  <DetailField label="Stok Minimum" value={String(Number(item.minStock))} />
                   <DetailField label="Harga Beli" value={formatCurrency(Number(item.cost))} />
                   <DetailField label="Harga Jual" value={formatCurrency(Number(item.price))} />
                   <DetailField label="Nilai Stok" value={formatCurrency(Number(item.qtyOnHand) * Number(item.cost))} />
@@ -285,9 +285,9 @@ export default async function ItemDetailPage({
                   <DetailField label="Baris" value={item.rackRow?.name || "-"} />
                 </DetailCard>
 
-                <DetailSection title="QR Code">
+                <DetailSection title="Kode QR">
                   <QrCodeDisplay value={qrUrl} size={148} />
-                  <p className="text-xs text-muted-foreground mt-2">Scan QR ini untuk membuka data barang (akses sesuai hak login).</p>
+                  <p className="text-xs text-muted-foreground mt-2">Pindai QR ini untuk membuka data barang (akses sesuai hak login).</p>
                 </DetailSection>
                 {item.description && (
                   <DetailCard>
@@ -357,17 +357,17 @@ export default async function ItemDetailPage({
             id: "stok",
             label: "Stok",
             content: (
-              <DetailSection title="FIFO Layers (Sisa)">
+              <DetailSection title="Lapisan FIFO (Sisa)">
                 {item.inventoryLayers.length === 0 ? (
-                  <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada layer aktif</p>
+                  <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada lapisan aktif</p>
                 ) : (
                   <DetailTable>
                     <DetailTableHead>
                       <DetailTableTh>Masuk</DetailTableTh>
-                      <DetailTableTh align="right">Kuantitas In</DetailTableTh>
-                      <DetailTableTh align="right">Kuantitas Out</DetailTableTh>
+                      <DetailTableTh align="right">Kuantitas Masuk</DetailTableTh>
+                      <DetailTableTh align="right">Kuantitas Keluar</DetailTableTh>
                       <DetailTableTh align="right">Sisa</DetailTableTh>
-                      <DetailTableTh align="right">Unit Cost</DetailTableTh>
+                      <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
                     </DetailTableHead>
                     <DetailTableBody>
                       {item.inventoryLayers.map((layer) => (

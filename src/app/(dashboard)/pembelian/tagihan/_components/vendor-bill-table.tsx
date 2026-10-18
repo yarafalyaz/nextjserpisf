@@ -34,7 +34,7 @@ const columns = [
   }),
   columnHelper.display({
     id: "vendorName",
-    header: "Vendor",
+    header: "Pemasok",
     cell: (info) => info.row.original.vendor.name,
   }),
   columnHelper.display({
@@ -126,7 +126,7 @@ export function VendorBillTable({ data, total, page, pageSize, toolbar, filters 
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar tagihan vendor"
+      ariaLabel="Daftar tagihan pemasok"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}

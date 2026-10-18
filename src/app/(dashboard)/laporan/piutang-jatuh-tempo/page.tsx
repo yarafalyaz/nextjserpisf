@@ -71,7 +71,7 @@ export default async function AgingReceivablesPage() {
 
 
 
-      <ReportLetterhead title="Piutang Jatuh Tempo" subtitle="Aging Receivables" periodLabel={period} />
+      <ReportLetterhead title="Piutang Jatuh Tempo" subtitle="Umur Piutang" periodLabel={period} />
       <ReportNarration text="Laporan Piutang Jatuh Tempo mengelompokkan piutang usaha berdasarkan umur jatuh temponya. Analisis aging piutang membantu mengidentifikasi risiko keterlambatan pembayaran dan mengevaluasi efektivitas penagihan kepada pelanggan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">

@@ -6,7 +6,7 @@ import { getSystemSettings } from "@/lib/utils/settings"
 import { SafeImage } from "@/components/ui/safe-image"
 
 export const dynamic = "force-dynamic"
-export const metadata: Metadata = { title: "Login" }
+export const metadata: Metadata = { title: "Masuk" }
 
 export default async function LoginPage() {
   const settings = await getSystemSettings()

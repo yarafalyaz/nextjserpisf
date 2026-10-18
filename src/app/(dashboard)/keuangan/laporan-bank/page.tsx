@@ -58,7 +58,7 @@ export default async function BankStatementsPage({
             </DetailTableHead>
             <DetailTableBody>
               {statements.length === 0 ? (
-                <DetailTableRow><DetailTableTd colSpan={5} className="text-center py-10 px-4 text-muted-foreground">Tidak ada data bank statement</DetailTableTd></DetailTableRow>
+                <DetailTableRow><DetailTableTd colSpan={5} className="text-center py-10 px-4 text-muted-foreground">Tidak ada data rekening koran</DetailTableTd></DetailTableRow>
               ) : (
                 statements.map((stmt) => (
                   <DetailTableRow key={stmt.id}>

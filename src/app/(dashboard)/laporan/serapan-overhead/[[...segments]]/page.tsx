@@ -55,7 +55,7 @@ export default async function OverheadAbsorptionPage({
   })
 
   return (
-    <ReportPageShell title="Serapan Overhead (Under/Over-Absorption)" sheet={false} wide filter={<>
+    <ReportPageShell title="Serapan Overhead (Kurang/Lebih Serap)" sheet={false} wide filter={<>
 <ReportPeriodFilter basePath="/laporan/serapan-overhead" mode="month" defaultStartDate={period} />
 </>} actions={<>
 <div className="flex items-center justify-end print:hidden"><ExportButtons title="Serapan_Overhead" /></div>
@@ -64,8 +64,8 @@ export default async function OverheadAbsorptionPage({
 
 
 
-      <ReportLetterhead title="Serapan Overhead" subtitle="Overhead Applied vs Actual (Under/Over-Absorption)" periodLabel={`Periode ${periodLabel}`} />
-      <ReportNarration text="Overhead produksi dibebankan ke job memakai dasar yang dapat diaudit (jam mesin, jam tenaga kerja, kuantitas, atau SKF): applied = kuantitas driver × tarif. Laporan ini membandingkan overhead yang sudah dibebankan ke job (applied) dengan overhead aktual pada akun beban terkait, dan menampilkan selisihnya. Applied > aktual berarti over-absorbed (job dibebani lebih dari biaya nyata); applied < aktual berarti under-absorbed (ada biaya nyata yang belum terbawa ke HPP job). Jangan membebankan listrik/depresiasi dua kali (FAB-07)." />
+      <ReportLetterhead title="Serapan Overhead" subtitle="Overhead Dibebankan vs Aktual (Kurang/Lebih Serap)" periodLabel={`Periode ${periodLabel}`} />
+      <ReportNarration text="Overhead produksi dibebankan ke perintah produksi memakai dasar yang dapat diaudit (jam mesin, jam tenaga kerja, kuantitas, atau SKF): dibebankan = kuantitas dasar × tarif. Laporan ini membandingkan overhead yang sudah dibebankan ke perintah produksi dengan overhead aktual pada akun beban terkait, dan menampilkan selisihnya. Dibebankan > aktual berarti kelebihan serap (perintah produksi dibebani lebih dari biaya nyata); dibebankan < aktual berarti kekurangan serap (ada biaya nyata yang belum terbawa ke HPP perintah produksi). Jangan membebankan listrik/depresiasi dua kali (FAB-07)." />
 
       {result.accountUnconfigured && (
         <div className="rounded-lg border border-warning bg-warning/10 p-3 text-sm text-foreground print:hidden">
@@ -74,7 +74,7 @@ export default async function OverheadAbsorptionPage({
       )}
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Overhead Applied" value={formatCurrency(result.appliedTotal)} />
+        <ReportKpiCard label="Overhead Dibebankan" value={formatCurrency(result.appliedTotal)} />
         <ReportKpiCard label="Overhead Aktual" value={formatCurrency(result.actualTotal)} />
         <ReportKpiCard
           label={`Selisih (${varianceLabel})`}
@@ -84,12 +84,12 @@ export default async function OverheadAbsorptionPage({
         <ReportKpiCard label="Diantaranya Manual" value={formatCurrency(result.manualOverheadTotal)} />
       </div>
 
-      <ReportSection title="Rincian Overhead Applied per Perintah Produksi">
+      <ReportSection title="Rincian Overhead Dibebankan per Perintah Produksi">
         <DetailTable data-report-table="Serapan Overhead">
           <DetailTableHead>
             <DetailTableTh>Perintah Produksi</DetailTableTh>
             <DetailTableTh>Dasar Alokasi</DetailTableTh>
-            <DetailTableTh align="right">Applied</DetailTableTh>
+            <DetailTableTh align="right">Dibebankan</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
             {result.lines.map((l) => (
@@ -102,7 +102,7 @@ export default async function OverheadAbsorptionPage({
               </DetailTableRow>
             ))}
             {result.lines.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={3} className="text-center text-muted-foreground py-6">Tidak ada overhead applied pada periode ini</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={3} className="text-center text-muted-foreground py-6">Tidak ada overhead dibebankan pada periode ini</DetailTableTd></DetailTableRow>
             )}
           </DetailTableBody>
         </DetailTable>

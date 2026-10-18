@@ -265,7 +265,7 @@ export function WorkflowForm({
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`${step.key}-role`}>Peran (Role)</Label>
+                  <Label htmlFor={`${step.key}-role`}>Peran</Label>
                   <Combobox
                     id={`${step.key}-role`}
                     options={roleOptions}
@@ -276,7 +276,7 @@ export function WorkflowForm({
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <Label htmlFor={`${step.key}-approver-type`}>Tipe Approver</Label>
+                  <Label htmlFor={`${step.key}-approver-type`}>Tipe Penyetuju</Label>
                   <Input
                     id={`${step.key}-approver-type`}
                     value={step.approverType}

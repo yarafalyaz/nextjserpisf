@@ -14,10 +14,10 @@ export default function KebijakanPrivasiPage() {
       <div className="flex w-full max-w-2xl flex-col gap-6">
         <Link 
           href="/login" 
-          aria-label="Kembali ke halaman login"
+          aria-label="Kembali ke halaman masuk"
           className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors self-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 rounded"
         >
-          <ArrowLeft size={16} /> Kembali ke Login
+          <ArrowLeft size={16} /> Kembali ke Halaman Masuk
         </Link>
         <Card className="border border-default/40 shadow-xl bg-card/90 backdrop-blur-sm">
           <CardHeader className="border-b border-default pb-6">

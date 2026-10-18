@@ -107,7 +107,7 @@ export function PurchaseRequestTable({ data, total, page, pageSize, toolbar, fil
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar purchase request"
+      ariaLabel="Daftar permintaan pembelian"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}

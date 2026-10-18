@@ -23,7 +23,7 @@ const columnHelper = createColumnHelper<WorkOrder>()
 
 const columns = [
   columnHelper.accessor("documentNo", {
-    header: "No. WO",
+    header: "No. Dokumen",
     cell: (info) => (
       <Link href={entityHref("/produksi/perintah-kerja", info.row.original)} className="text-foreground hover:underline font-mono">
         {info.getValue()}

@@ -225,13 +225,13 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
             control={control}
             render={({ field }) => (
               <>
-                <Label htmlFor="vendorId">Vendor</Label>
+                <Label htmlFor="vendorId">Pemasok</Label>
                 <QuickAddSelect
                   id="vendorId"
                   options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
                   value={field.value ? String(field.value) : null}
                   onChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                  placeholder="Cari vendor/toko..."
+                  placeholder="Cari pemasok/toko..."
                   title={QUICK_ADD.vendor.title}
                   fields={QUICK_ADD.vendor.fields}
                   action={QUICK_ADD.vendor.action}

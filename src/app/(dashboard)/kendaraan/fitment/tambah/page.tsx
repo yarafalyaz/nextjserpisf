@@ -7,7 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Tambah Aturan Fitment" }
+export const metadata: Metadata = { title: "Tambah Aturan Kompatibilitas" }
 
 export default async function CreateVehicleFitmentPage() {
   await requirePermission("create_vehicle_fitments")
@@ -28,11 +28,11 @@ export default async function CreateVehicleFitmentPage() {
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
         { label: "Kendaraan", href: "/kendaraan" },
-        { label: "Fitment", href: "/kendaraan/fitment" },
+        { label: "Kompatibilitas", href: "/kendaraan/fitment" },
         { label: "Tambah" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Aturan Fitment</h1>
+        <h1 className="text-2xl font-bold text-foreground">Tambah Aturan Kompatibilitas</h1>
       </div>
       <VehicleFitmentForm items={items} brands={brands} models={models} variants={variants} />
     </div>

@@ -204,7 +204,7 @@ export default async function SalesOrderDetailPage({
           // generic label only when the item was deleted / has no master row.
           description:
             item.description ||
-            (item.itemId ? itemMap.get(item.itemId)?.name ?? `Item #${item.itemId}` : null),
+            (item.itemId ? itemMap.get(item.itemId)?.name ?? `Barang #${item.itemId}` : null),
           qty: Number(item.qty),
           unitPrice: Number(item.unitPrice),
           discount: Number(item.discount ?? 0),

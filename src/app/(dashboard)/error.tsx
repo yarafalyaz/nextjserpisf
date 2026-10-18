@@ -34,7 +34,7 @@ export default function DashboardError({
         </div>
         <h2 className="mb-2 text-xl font-semibold text-foreground">Gagal Memuat Halaman</h2>
         <p className="mb-6 text-sm text-muted-foreground">
-          Terjadi kesalahan saat memuat data di modul ini. Silakan coba muat ulang atau kembali ke dashboard utama.
+          Terjadi kesalahan saat memuat data di modul ini. Silakan coba muat ulang atau kembali ke dasbor utama.
         </p>
         {error.digest ? (
           <p className="mb-6 text-xs text-muted-foreground/70">Kode Ref: {error.digest}</p>
@@ -42,7 +42,7 @@ export default function DashboardError({
         <div className="flex flex-col justify-center gap-3 sm:flex-row">
           <Button onClick={() => reset()}>Muat Ulang Modul</Button>
           <Button variant="outline" onClick={() => router.push('/')}>
-            Ke Dashboard
+            Ke Dasbor
           </Button>
         </div>
       </div>

@@ -40,7 +40,7 @@ const columns = [
   }),
   columnHelper.accessor((row) => row.salesOrder.documentNo, {
     id: "soDocumentNo",
-    header: "SO Ref",
+    header: "Ref. Pesanan",
     cell: (info) => <span className="font-mono">{info.getValue()}</span>,
   }),
   columnHelper.accessor((row) => row.salesOrder.customer.name, {

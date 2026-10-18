@@ -153,12 +153,12 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
         {lines && (
           <div className="overflow-x-auto">
             {lines.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-4">BOM produk belum memiliki material.</p>
+              <p className="text-sm text-muted-foreground py-4">BOM produk belum memiliki bahan.</p>
             ) : (
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="border-b border-default">
-                    <th className="text-left py-2 px-2 font-medium text-secondary">Material</th>
+                    <th className="text-left py-2 px-2 font-medium text-secondary">Bahan</th>
                     <th className="text-left py-2 px-2 font-medium text-secondary">Hasil</th>
                     <th className="text-left py-2 px-2 font-medium text-secondary">Sumber / Alasan</th>
                   </tr>
@@ -169,7 +169,7 @@ export function FitmentChecker({ productId, itemNameMap, brands, models, variant
                     const Icon = meta.Icon
                     return (
                       <tr key={line.itemId} className="border-b border-default/50">
-                        <td className="py-2 px-2">{itemNameMap[line.itemId] ?? `Item #${line.itemId}`}</td>
+                        <td className="py-2 px-2">{itemNameMap[line.itemId] ?? `Barang #${line.itemId}`}</td>
                         <td className="py-2 px-2">
                           <span className={`inline-flex items-center gap-1.5 font-medium ${meta.className}`}>
                             <Icon size={14} aria-hidden="true" /> {meta.label}

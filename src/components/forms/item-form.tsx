@@ -368,13 +368,13 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="vendorId">Vendor *</Label>
+                  <Label htmlFor="vendorId">Pemasok *</Label>
                   <QuickAddSelect
                     id="vendorId"
                     options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                    placeholder="Cari vendor..."
+                    placeholder="Cari pemasok..."
                     title={QUICK_ADD.vendor.title}
                     fields={QUICK_ADD.vendor.fields}
                     action={QUICK_ADD.vendor.action}
@@ -442,13 +442,13 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="costingMethod">Metode Costing (Penilaian HPP)</Label>
+                  <Label htmlFor="costingMethod">Metode Penilaian HPP</Label>
                   <FormSelect
                     id="costingMethod"
                     value={field.value || "average"}
                     onValueChange={field.onChange}
                     options={[
-                      { value: "average", label: "Moving Average (Rata-rata Bergerak)" },
+                      { value: "average", label: "Rata-rata Bergerak" },
                       { value: "fifo", label: "FIFO (First-In, First-Out)" },
                     ]}
                   />

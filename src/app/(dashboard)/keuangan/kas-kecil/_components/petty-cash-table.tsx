@@ -48,11 +48,11 @@ const columns = [
     cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("projectName", {
-    header: "Nama Project",
+    header: "Nama Proyek",
     cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("vendorName", {
-    header: "Vendor",
+    header: "Pemasok",
     cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("categoryName", {

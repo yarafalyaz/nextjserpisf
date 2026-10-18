@@ -541,7 +541,7 @@ export function DataTable<TData extends { id: number | string }>({
 
         {/* Pagination (shadcn DataTablePagination layout) */}
         <nav
-          aria-label="Pagination tabel"
+          aria-label="Navigasi halaman tabel"
           className="flex flex-col items-start gap-3 py-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
         >
           <div className="text-sm text-muted-foreground sm:flex-1" aria-live="polite">

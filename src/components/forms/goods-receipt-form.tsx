@@ -492,7 +492,7 @@ export function GoodsReceiptForm({
                       Sisa<span className="block text-[0.625rem] font-normal text-muted-foreground">belum diterima</span>
                     </th>
                     <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>
-                      Qty Terima<span className="block text-[0.625rem] font-normal text-muted-foreground">kali ini</span>
+                      Jml Terima<span className="block text-[0.625rem] font-normal text-muted-foreground">kali ini</span>
                     </th>
                     <th className="py-2.5 px-3 text-left font-medium text-secondary" style={{ width: "110px" }}>Satuan</th>
                     <th className="py-2.5 px-3 text-right font-medium text-secondary" style={{ width: "120px" }}>Harga Beli</th>

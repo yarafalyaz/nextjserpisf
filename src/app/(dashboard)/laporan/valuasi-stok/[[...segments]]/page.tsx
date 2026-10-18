@@ -125,7 +125,7 @@ export default async function StockValuationPage({
 
 
 
-      <ReportLetterhead title="Valuasi Stok per Gudang" subtitle="Stock Valuation" periodLabel={periodLabel} />
+      <ReportLetterhead title="Valuasi Stok per Gudang" subtitle="Valuasi Persediaan" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Valuasi Stok menunjukkan nilai persediaan barang berdasarkan metode penilaian yang digunakan perusahaan. Informasi ini membantu dalam pengendalian persediaan, perencanaan pembelian, dan penilaian aset lancar perusahaan." />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Item" value={rows.length.toLocaleString('id-ID')} />
@@ -156,7 +156,7 @@ export default async function StockValuationPage({
         </ReportSection>
       )}
       <ReportSection title={`Detail Valuasi Stok (${rows.length} baris)`}>
-        <DetailTable data-report-table="Stock Valuation">
+        <DetailTable data-report-table="Valuasi Stok">
           <DetailTableHead>
             <DetailTableTh>SKU</DetailTableTh><DetailTableTh>Nama Item</DetailTableTh><DetailTableTh>Kategori</DetailTableTh>
             <DetailTableTh>Gudang</DetailTableTh><DetailTableTh>Satuan</DetailTableTh><DetailTableTh>Metode</DetailTableTh>

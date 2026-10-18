@@ -33,7 +33,7 @@ export default async function WithholdingTaxTypesPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Jenis Pemotongan PPh</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Tarif dan akun hutang pajak yang dipakai saat memotong PPh pada tagihan vendor.
+            Tarif dan akun hutang pajak yang dipakai saat memotong PPh pada tagihan pemasok.
           </p>
         </div>
         <CanCreate permission="manage_withholding_tax">
@@ -68,7 +68,7 @@ export default async function WithholdingTaxTypesPage() {
           {types.length === 0 && (
             <DetailTableRow>
               <DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">
-                Belum ada jenis PPh. Tambahkan agar pemotongan PPh pada tagihan vendor bisa dijurnal.
+                Belum ada jenis PPh. Tambahkan agar pemotongan PPh pada tagihan pemasok bisa dijurnal.
               </DetailTableTd>
             </DetailTableRow>
           )}

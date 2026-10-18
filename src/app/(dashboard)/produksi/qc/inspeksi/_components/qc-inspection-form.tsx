@@ -191,7 +191,7 @@ export function QcInspectionForm({ checklists }: { checklists: ChecklistOption[]
           <div className="overflow-x-auto">
             <DetailTable>
               <DetailTableHead>
-                <DetailTableTh>Item</DetailTableTh>
+                <DetailTableTh>Butir</DetailTableTh>
                 <DetailTableTh>Spesifikasi</DetailTableTh>
                 <DetailTableTh>Hasil</DetailTableTh>
                 <DetailTableTh>Nilai Ukur</DetailTableTh>
@@ -242,7 +242,7 @@ export function QcInspectionForm({ checklists }: { checklists: ChecklistOption[]
           </div>
           {!allRequiredAnswered && (
             <p className="text-xs text-warning-600 mt-2">
-              Semua item wajib (*) harus dinilai sebelum menyimpan.
+              Semua butir wajib (*) harus dinilai sebelum menyimpan.
             </p>
           )}
         </div>

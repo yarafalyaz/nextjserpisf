@@ -48,7 +48,7 @@ const columns = [
     cell: (info) => formatDate(info.getValue()),
   }),
   columnHelper.accessor("items", {
-    header: "Item",
+    header: "Barang",
     cell: (info) => `${info.getValue().length} item`,
   }),
   columnHelper.accessor("status", {

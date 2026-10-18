@@ -125,7 +125,7 @@ describe("PurchaseOrderForm — Permintaan Pembelian linkage", () => {
     expect(termInput?.value).toBe("NET30")
     expect(termInput?.readOnly).toBe(true)
     expect(termInput?.disabled).toBe(true)
-    expect(container.textContent).toContain("Otomatis dari vendor")
+    expect(container.textContent).toContain("Otomatis dari pemasok")
 
     unmount(root)
     container.remove()

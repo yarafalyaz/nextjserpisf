@@ -88,7 +88,7 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
               options={accountOptions}
             />
             <span className="text-xs text-muted-foreground">
-              Wajib diisi bila PPh ini dipotong dari tagihan vendor — jurnal pemotongan mengkredit akun ini.
+              Wajib diisi bila PPh ini dipotong dari tagihan pemasok — jurnal pemotongan mengkredit akun ini.
             </span>
           </div>
           <div className="flex flex-col gap-1.5">

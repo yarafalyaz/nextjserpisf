@@ -50,7 +50,7 @@ const columns = [
     },
   }),
   columnHelper.accessor("_count.items", {
-    header: "Jumlah Item",
+    header: "Jumlah Barang",
     cell: (info) => info.getValue() || 0,
   }),
   columnHelper.display({

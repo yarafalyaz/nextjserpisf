@@ -71,7 +71,7 @@ export default async function BrandDetailPage({
             <span className="text-[0.9375rem] text-foreground font-medium">{brand.name}</span>
           </div>
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Jumlah Item</span>
+            <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Jumlah Barang</span>
             <span className="text-[0.9375rem] text-foreground font-medium">{brand.items.length}</span>
           </div>
           <div className="flex flex-col gap-1">
@@ -99,13 +99,13 @@ export default async function BrandDetailPage({
       {brand.items.length > 0 && (
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">Item dengan Merek ini</h2>
+            <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang dengan Merek Ini</h2>
           </div>
           <div className="p-4 px-5">
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>SKU</DetailTableTh>
-                <DetailTableTh>Nama Item</DetailTableTh>
+                <DetailTableTh>Nama Barang</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {brand.items.map((item) => (

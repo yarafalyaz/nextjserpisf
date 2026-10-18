@@ -70,7 +70,7 @@ export default async function NonconformanceDetailPage({
 
       <DetailCard>
         <DetailField label="Status" value={<StatusChip status={ncr.status} />} />
-        <DetailField label="Severity" value={SEVERITY_LABELS[ncr.severity] ?? ncr.severity} />
+        <DetailField label="Tingkat Keparahan" value={SEVERITY_LABELS[ncr.severity] ?? ncr.severity} />
         <DetailField label="Penanggung" value={ncr.responsibility} />
         <DetailField label="Referensi" value={`${ncr.referenceType} #${ncr.referenceId}`} />
         <DetailField
@@ -86,8 +86,8 @@ export default async function NonconformanceDetailPage({
           }
         />
         <DetailField label="Dibuat" value={formatDate(ncr.createdAt)} />
-        <DetailField label="Jam Rework" value={String(Number(ncr.reworkHours))} />
-        <DetailField label="Biaya Rework" value={String(Number(ncr.reworkCost))} />
+        <DetailField label="Jam Pengerjaan Ulang" value={String(Number(ncr.reworkHours))} />
+        <DetailField label="Biaya Pengerjaan Ulang" value={String(Number(ncr.reworkCost))} />
         <DetailField label="Deskripsi Cacat" value={ncr.defectDescription} colSpan="full" />
         {ncr.cause && <DetailField label="Penyebab" value={ncr.cause} colSpan="full" />}
         {ncr.resolution && <DetailField label="Resolusi" value={ncr.resolution} colSpan="full" />}

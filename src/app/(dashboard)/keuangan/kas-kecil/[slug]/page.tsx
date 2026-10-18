@@ -118,12 +118,12 @@ export default async function PettyCashDetailPage({
         )}
         {pettyCash.project && (
           <DetailField
-            label="Nama Project"
+            label="Nama Proyek"
             value={`${pettyCash.project.documentNo ? `${pettyCash.project.documentNo} - ` : ""}${pettyCash.project.name}`}
           />
         )}
         {pettyCash.vendor && (
-          <DetailField label="Vendor" value={pettyCash.vendor.name} />
+          <DetailField label="Pemasok" value={pettyCash.vendor.name} />
         )}
         {pettyCash.category && (
           <DetailField label="Kategori" value={pettyCash.category.label} />

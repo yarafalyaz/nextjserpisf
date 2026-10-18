@@ -77,7 +77,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
       if (result.error) {
         showError(result.error)
       } else {
-        showSuccess("Password berhasil diubah!")
+        showSuccess("Kata sandi berhasil diubah!")
         ;(e.target as HTMLFormElement).reset()
       }
     })
@@ -164,21 +164,21 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
 
       <form onSubmit={onSubmitPassword} className="bg-surface rounded-xl border border-default shadow-sm p-6">
         <h3 style={{ margin: "0 0 16px", fontSize: "0.9375rem", display: "flex", alignItems: "center", gap: "8px" }}>
-          <Lock size={16} /> Ubah Password
+          <Lock size={16} /> Ubah Kata Sandi
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="currentPassword">Password Lama</Label>
+            <Label htmlFor="currentPassword">Kata Sandi Lama</Label>
             <Input id="currentPassword" name="currentPassword" type="password" placeholder="••••••••" required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="newPassword">Password Baru</Label>
+            <Label htmlFor="newPassword">Kata Sandi Baru</Label>
             <Input id="newPassword" name="newPassword" type="password" placeholder="Minimal 8 karakter" required minLength={8} />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
           <Button type="submit" isDisabled={isPasswordPending}>
-            {isPasswordPending ? "Mengubah..." : "Ubah Password"}
+            {isPasswordPending ? "Mengubah..." : "Ubah Kata Sandi"}
           </Button>
         </div>
       </form>

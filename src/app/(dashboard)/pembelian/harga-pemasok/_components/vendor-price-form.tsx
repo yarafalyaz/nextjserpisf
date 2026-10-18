@@ -118,7 +118,7 @@ export function VendorPriceForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="minQty">Minimal Qty *</Label>
+          <Label htmlFor="minQty">Minimal Jml *</Label>
           <Input
             id="minQty"
             name="minQty"
@@ -129,7 +129,7 @@ export function VendorPriceForm({
             required
           />
           <span className="text-xs text-muted-foreground">
-            Harga berlaku untuk pembelian dengan qty minimal ini.
+            Harga berlaku untuk pembelian dengan jumlah minimal ini.
           </span>
         </div>
 

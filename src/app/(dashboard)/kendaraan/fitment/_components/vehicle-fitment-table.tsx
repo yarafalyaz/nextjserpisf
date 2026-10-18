@@ -48,7 +48,7 @@ const columnHelper = createColumnHelper<VehicleFitmentData>()
 
 const columns = [
   columnHelper.accessor("itemName", {
-    header: "Item",
+    header: "Barang",
     cell: (info) => (
       <Link href={entityHref("/kendaraan/fitment", info.row.original)} className="text-foreground hover:underline font-medium">
         <span className="font-mono text-xs text-muted-foreground mr-1.5">{info.row.original.itemSku}</span>
@@ -121,7 +121,7 @@ export function VehicleFitmentTable({ data, total, page, pageSize }: VehicleFitm
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar aturan fitment kendaraan"
+      ariaLabel="Daftar aturan kompatibilitas kendaraan"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       onBulkDelete={(ids) => bulkDelete("vehicleFitmentRule", ids)}

@@ -29,7 +29,7 @@ export function ApprovePayrollButton({ payrollId }: { payrollId: number }) {
   return (
     <>
       <PageHeaderButton onPress={() => setIsOpen(true)} className="bg-success text-success-foreground hover:bg-success-600 transition-colors">
-        <CheckCircle size={14} /> Finalisasi (Approve)
+        <CheckCircle size={14} /> Finalisasi
       </PageHeaderButton>
 
       <ConfirmDialog
@@ -43,9 +43,9 @@ export function ApprovePayrollButton({ payrollId }: { payrollId: number }) {
         onConfirm={handleApprove}
         body={
           <span>
-            Apakah Anda yakin ingin menyetujui (approve) slip gaji ini?
+            Apakah Anda yakin ingin menyetujui slip gaji ini?
             <br /><br />
-            <strong>Perhatian:</strong> Data yang sudah disetujui tidak dapat diubah (edit) lagi dan siap untuk ditandai sebagai dibayar.
+            <strong>Perhatian:</strong> Data yang sudah disetujui tidak dapat diubah lagi dan siap untuk ditandai sebagai dibayar.
           </span>
         }
       />

@@ -94,11 +94,11 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
   function doIssue() {
     const itemId = Number(issueItemId)
     const qty = Number(issueQty)
-    if (!itemId || qty <= 0) return showError("Pilih item dan isi qty > 0")
+    if (!itemId || qty <= 0) return showError("Pilih barang dan isi qty > 0")
     startTransition(async () => {
       const res = await issueMaterial(orderId, [{ itemId, qty }])
-      if (!res.success) return showError(res.error || "Gagal mengeluarkan material")
-      showSuccess("Material dikeluarkan")
+      if (!res.success) return showError(res.error || "Gagal mengeluarkan bahan")
+      showSuccess("Bahan dikeluarkan")
       setIssueOpen(false)
       setIssueItemId(null)
       setIssueQty("")
@@ -115,7 +115,7 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       )}
       {(status === "confirmed" || status === "in_progress") && (
         <Button type="button" size="sm" variant="secondary" onClick={() => setIssueOpen(true)} disabled={isPending}>
-          <PackageMinus size={14} aria-hidden="true" /> Keluarkan Material
+          <PackageMinus size={14} aria-hidden="true" /> Keluarkan Bahan
         </Button>
       )}
       {status === "confirmed" && (
@@ -177,7 +177,7 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
                 id="productionSerials"
                 value={serialNumbersText}
                 onChange={(event) => setSerialNumbersText(event.target.value)}
-                placeholder="Satu serial number per baris"
+                placeholder="Satu nomor seri per baris"
                 rows={Math.min(Math.max(outputQty, 3), 8)}
               />
             </div>
@@ -189,7 +189,7 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       <ConfirmDialog
         isOpen={issueOpen}
         onOpenChange={setIssueOpen}
-        title="Keluarkan Material"
+        title="Keluarkan Bahan"
         confirmLabel="Keluarkan"
         cancelLabel="Batal"
         variant="accent"
@@ -198,13 +198,13 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       >
         <div className="flex flex-col gap-3 pt-1">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="issueItem">Item</Label>
+            <Label htmlFor="issueItem">Barang</Label>
             <Combobox
               id="issueItem"
               options={items.map((i) => ({ value: String(i.id), label: i.label }))}
               value={issueItemId}
               onChange={setIssueItemId}
-              placeholder="Pilih item..."
+              placeholder="Pilih barang..."
             />
           </div>
           <div className="flex flex-col gap-1.5">

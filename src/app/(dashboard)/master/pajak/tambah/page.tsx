@@ -46,7 +46,7 @@ export default function CreateTaxPage() {
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tax-rate">Rate (%)</Label>
+            <Label htmlFor="tax-rate">Tarif (%)</Label>
             <Input id="tax-rate" name="rate" type="number" step="0.01" placeholder="Contoh: 11" required className="w-full" />
           </div>
 
@@ -62,8 +62,8 @@ export default function CreateTaxPage() {
               name="type"
               placeholder="Pilih Tipe"
               options={[
-                { value: "percentage", label: "Percentage" },
-                { value: "fixed", label: "Fixed" },
+                { value: "percentage", label: "Persentase" },
+                { value: "fixed", label: "Nominal Tetap" },
               ]}
             />
           </div>
@@ -77,7 +77,7 @@ export default function CreateTaxPage() {
               options={[
                 { value: "sales", label: "Penjualan" },
                 { value: "purchase", label: "Pembelian" },
-                { value: "both", label: "Both" },
+                { value: "both", label: "Keduanya" },
               ]}
             />
           </div>
@@ -96,11 +96,11 @@ export default function CreateTaxPage() {
           <div className="sm:col-span-2 flex flex-wrap gap-6">
             <div className="flex items-center gap-2">
               <Checkbox id="tax-is-inclusive" name="isInclusive" value="on" />
-              <Label htmlFor="tax-is-inclusive">Inclusive</Label>
+              <Label htmlFor="tax-is-inclusive">Termasuk Pajak</Label>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox id="tax-is-compound" name="isCompound" value="on" />
-              <Label htmlFor="tax-is-compound">Compound</Label>
+              <Label htmlFor="tax-is-compound">Majemuk</Label>
             </div>
           </div>
         </div>

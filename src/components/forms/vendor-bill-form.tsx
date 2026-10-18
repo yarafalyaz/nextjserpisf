@@ -216,7 +216,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorId">Vendor *</Label>
+            <Label htmlFor="vendorId">Pemasok *</Label>
             <QuickAddSelect
               id="vendorId"
               name="vendorId"
@@ -241,7 +241,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
                   setPurchaseOrderId(null);
                 }
               }}
-              placeholder="Cari vendor..."
+              placeholder="Cari pemasok..."
               title={QUICK_ADD.vendor.title}
               fields={QUICK_ADD.vendor.fields}
               action={QUICK_ADD.vendor.action}
@@ -267,7 +267,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
             />
             <input type="hidden" name="purchaseOrderId" value={purchaseOrderId ?? ""} />
             <p className="text-xs text-muted-foreground">
-              Kaitkan tagihan ke PO agar 3-way match berjalan. PO jasa ditandai &quot;Jasa&quot;
+              Kaitkan tagihan ke PO agar pencocokan tiga arah berjalan. PO jasa ditandai &quot;Jasa&quot;
               dan bebannya masuk ke akun beban (bukan persediaan).
             </p>
           </div>
@@ -289,11 +289,11 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorInvoiceNumber">No. Faktur Vendor</Label>
+            <Label htmlFor="vendorInvoiceNumber">No. Faktur Pemasok</Label>
             <Input
               id="vendorInvoiceNumber"
               name="vendorInvoiceNumber"
-              placeholder="No. faktur dari vendor"
+              placeholder="No. faktur dari pemasok"
               defaultValue={bill?.vendorInvoiceNumber ?? ""}
             />
           </div>
@@ -561,7 +561,7 @@ export function VendorBillForm({ vendors, items, purchaseOrders = [], withholdin
               onChange={(value) => setWithholdingAmount(value)}
             />
             <span className="text-xs text-muted-foreground">
-              Dibayarkan ke vendor: {netPayable.toLocaleString("id-ID")} (total − PPh)
+              Dibayarkan ke pemasok: {netPayable.toLocaleString("id-ID")} (total − PPh)
             </span>
           </div>
         </FormSection>

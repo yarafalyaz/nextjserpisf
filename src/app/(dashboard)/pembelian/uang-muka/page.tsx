@@ -46,7 +46,7 @@ export default async function PurchaseAdvancesPage() {
           <h1 className="text-2xl font-bold text-foreground">Uang Muka Pembelian</h1>
           <p className="mt-1 text-sm text-muted-foreground">
             Pembayaran di muka ke pemasok. Setiap dokumen membuat satu jurnal: uang muka bertambah
-            (aset), kas/bank berkurang. Penerapan ke tagihan vendor dilakukan manual.
+            (aset), kas/bank berkurang. Penerapan ke tagihan pemasok dilakukan manual.
           </p>
         </div>
         <CanCreate permission="create_purchase_advances">

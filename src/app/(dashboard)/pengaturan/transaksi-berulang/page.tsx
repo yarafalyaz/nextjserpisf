@@ -48,7 +48,7 @@ export default async function RecurringTransactionsPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Transaksi Berulang</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Dokumen dibuat sebagai <strong>draft</strong> (jurnal umum atau beban) agar ditinjau dulu sebelum diposting.
+            Dokumen dibuat sebagai <strong>draf</strong> (jurnal umum atau beban) agar ditinjau dulu sebelum diposting.
             Penjadwalan otomatis berjalan harian lewat cron <code>/api/cron/recurring-transactions</code>.
           </p>
         </div>

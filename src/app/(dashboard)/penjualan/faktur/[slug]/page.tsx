@@ -143,7 +143,7 @@ export default async function InvoiceDetailPage({
                 action={postInvoice}
                 label="Posting"
                 confirmTitle="Posting faktur ini?"
-                confirmBody="Faktur akan berstatus terposting: piutang diakui di jurnal dan stok barang berkurang sesuai item. Pastikan data sudah benar."
+                confirmBody="Faktur akan diposting: piutang diakui di jurnal dan stok barang berkurang sesuai barang pada faktur. Pastikan data sudah benar."
                 successMessage="Faktur berhasil diposting"
               />
             )}
@@ -189,7 +189,7 @@ export default async function InvoiceDetailPage({
           },
           {
             id: "items",
-            label: "Item",
+            label: "Barang",
             content: (
               <InvoiceItemsEditor
                 invoiceId={invoice.id}
@@ -203,7 +203,7 @@ export default async function InvoiceDetailPage({
                 items={invoice.items.map((item) => ({
                   id: item.id,
                   itemId: item.itemId,
-                  description: item.description || `Item #${item.itemId}`,
+                  description: item.description || `Barang #${item.itemId}`,
                   qty: Number(item.qty),
                   unitPrice: Number(item.unitPrice),
                   discount: Number(item.discount ?? 0),
@@ -261,7 +261,7 @@ export default async function InvoiceDetailPage({
                         </DetailTableBody>
                         <DetailTableFoot>
                           <DetailTableFootRow>
-                            <DetailTableTd colSpan={4} align="right" className="font-bold">Total DP</DetailTableTd>
+                            <DetailTableTd colSpan={4} align="right" className="font-bold">Total Uang Muka</DetailTableTd>
                             <DetailTableTd align="right" className="font-bold">{formatCurrency(invoice.quotation.downPayments.reduce((sum: number, dp: any) => sum + Number(dp.amount), 0))}</DetailTableTd>
                           </DetailTableFootRow>
                           <DetailTableFootRow>
@@ -269,7 +269,7 @@ export default async function InvoiceDetailPage({
                             <DetailTableTd align="right">{formatCurrency(Number(invoice.grandTotal))}</DetailTableTd>
                           </DetailTableFootRow>
                           <DetailTableFootRow>
-                            <DetailTableTd colSpan={4} align="right" className="text-danger font-bold">Sisa Setelah DP</DetailTableTd>
+                            <DetailTableTd colSpan={4} align="right" className="text-danger font-bold">Sisa Setelah Uang Muka</DetailTableTd>
                             <DetailTableTd align="right" className="text-danger font-bold">{formatCurrency(Number(invoice.grandTotal) - invoice.quotation.downPayments.reduce((sum: number, dp: any) => sum + Number(dp.amount), 0))}</DetailTableTd>
                           </DetailTableFootRow>
                         </DetailTableFoot>

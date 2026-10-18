@@ -62,10 +62,10 @@ export default function ScanItemPage() {
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
         { label: "Inventaris", href: "/inventaris" },
-        { label: "Scan Barang" },
+        { label: "Pindai Barang" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Scan Barang</h1>
+        <h1 className="text-2xl font-bold text-foreground">Pindai Barang</h1>
       </div>
 
       <div className="flex justify-center pt-4">
@@ -75,7 +75,7 @@ export default function ScanItemPage() {
               <ScanLine className="size-10" />
             </div>
             <p className="text-base text-muted-foreground text-center max-w-md">
-              Scan barcode barang atau ketik <strong>barcode</strong> / <strong>SKU</strong>, lalu tekan Enter.
+              Pindai barcode barang atau ketik <strong>barcode</strong> / <strong>SKU</strong>, lalu tekan Enter.
               Sistem akan membuka detail barang beserta lokasi (gudang/rak/baris) dan riwayat aktivitasnya.
             </p>
             <form onSubmit={submit} className="w-full flex flex-col gap-4 mt-2">
@@ -85,7 +85,7 @@ export default function ScanItemPage() {
                   id="scan-code"
                   autoFocus
                   inputMode="numeric"
-                  placeholder="Scan atau ketik di sini..."
+                  placeholder="Pindai atau ketik di sini..."
                   value={code}
                   onChange={(e) => setCode(e.target.value)}
                   className="text-center font-mono text-xl tracking-wider h-14"

@@ -18,10 +18,10 @@ export default async function DatabaseBackupPage() {
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
         { label: "Pengaturan", href: "/pengaturan" },
-        { label: "Backup & Restore Database" },
+        { label: "Cadangkan & Pulihkan Basis Data" },
       ]} />
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Backup &amp; Restore Database</h1>
+        <h1 className="text-2xl font-bold text-foreground">Cadangkan &amp; Pulihkan Basis Data</h1>
         <p className="text-sm text-muted-foreground">
           Buat cadangan database, unduh, atau pulihkan dari backup sebelumnya.
         </p>

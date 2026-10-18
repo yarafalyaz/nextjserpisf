@@ -115,7 +115,7 @@ export default async function PeriodComparisonPage({
 
 
 
-      <ReportLetterhead title={title} subtitle="Current vs Previous" periodLabel={`${currentLabel} vs ${previousLabel}`} />
+      <ReportLetterhead title={title} subtitle="Periode Ini vs Pembanding" periodLabel={`${currentLabel} vs ${previousLabel}`} />
       <ReportNarration text={`Laporan ini membandingkan ${isBalance ? "posisi neraca" : "kinerja laba rugi"} periode berjalan dengan pembandingnya. Kolom Selisih menunjukkan perubahan nominal dan kolom % menunjukkan perubahan relatif; sel kosong berarti pembandingnya nol sehingga persentase tidak bermakna.`} />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">

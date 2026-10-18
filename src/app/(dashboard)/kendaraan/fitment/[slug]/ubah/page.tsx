@@ -9,7 +9,7 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Ubah Aturan Fitment" }
+export const metadata: Metadata = { title: "Ubah Aturan Kompatibilitas" }
 
 export default async function EditVehicleFitmentPage({
   params,
@@ -47,11 +47,11 @@ export default async function EditVehicleFitmentPage({
       <AppBreadcrumbs items={[
         { label: "Dasbor", href: "/" },
         { label: "Kendaraan", href: "/kendaraan" },
-        { label: "Fitment", href: "/kendaraan/fitment" },
+        { label: "Kompatibilitas", href: "/kendaraan/fitment" },
         { label: "Ubah" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Ubah Aturan Fitment</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Aturan Kompatibilitas</h1>
       </div>
       <VehicleFitmentForm
         items={items}

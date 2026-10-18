@@ -110,7 +110,7 @@ export function OvertimeForm({ employees, projects, overtime }: { employees: { i
             <Input id="mealHours" name="mealHours" type="number" min="0" step="0.5" placeholder="0" defaultValue={overtime?.mealHours != null ? Number(overtime.mealHours) : ""} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="billableHours">Jam Billable</Label>
+            <Label htmlFor="billableHours">Jam Dapat Ditagih</Label>
             <Input id="billableHours" name="billableHours" type="number" min="0" step="0.5" placeholder="0" defaultValue={overtime?.billableHours != null ? Number(overtime.billableHours) : ""} />
           </div>
         </FormSection>

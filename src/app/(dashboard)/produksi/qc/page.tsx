@@ -40,7 +40,7 @@ export default async function QcPage() {
         Pengendalian Mutu
       </h1>
       <p className="text-sm text-muted-foreground -mt-4">
-        Checklist inspeksi ber-versi, hasil inspeksi per dokumen, dan nonconformance (NCR) yang memblokir serah terima sampai diselesaikan.
+        Checklist inspeksi ber-versi, hasil inspeksi per dokumen, dan ketidaksesuaian (NCR) yang memblokir serah terima sampai diselesaikan.
       </p>
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">

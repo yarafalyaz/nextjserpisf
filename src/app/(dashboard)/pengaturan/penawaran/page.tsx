@@ -44,7 +44,7 @@ export default async function QuotationSettingsPage() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Field label="Nama Tanda Tangan" value={settings?.quotationSignatureName} />
-            <Field label="Catatan Footer" value={settings?.quotationFooterNotes} />
+            <Field label="Catatan Kaki" value={settings?.quotationFooterNotes} />
           </div>
           {settings?.quotationSignatureImage && (
             <>

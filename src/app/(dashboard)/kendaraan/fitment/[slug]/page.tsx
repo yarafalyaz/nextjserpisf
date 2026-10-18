@@ -16,7 +16,7 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 
-export const metadata: Metadata = { title: "Fitment Kendaraan" }
+export const metadata: Metadata = { title: "Kompatibilitas Kendaraan" }
 
 const RESULT_LABEL: Record<string, string> = {
   compatible: "Cocok",
@@ -64,11 +64,11 @@ export default async function VehicleFitmentDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Aturan Fitment #${rule.id}`}
+        title={`Aturan Kompatibilitas #${rule.id}`}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Kendaraan", href: "/kendaraan" },
-          { label: "Fitment", href: "/kendaraan/fitment" },
+          { label: "Kompatibilitas", href: "/kendaraan/fitment" },
           { label: "Detail" },
         ]}
         badge={
@@ -89,14 +89,14 @@ export default async function VehicleFitmentDetailPage({
 
       <DetailCard>
         <DetailField
-          label="Item / SKU"
+          label="Barang / SKU"
           value={
             item ? (
               <Link href={entityHref("/master/barang", item)} className="hover:underline">
                 <span className="font-mono text-xs text-muted-foreground mr-1.5">{item.sku}</span>
                 {item.name}
               </Link>
-            ) : `Item #${rule.itemId}`
+            ) : `Barang #${rule.itemId}`
           }
         />
         <DetailField

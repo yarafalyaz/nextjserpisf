@@ -1,7 +1,7 @@
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
-  title: "Setup Awal",
+  title: "Penyiapan Awal",
   description: "Instalasi awal YaraERP",
 }
 

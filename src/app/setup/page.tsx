@@ -6,7 +6,7 @@ import { SetupForm } from "./_components/setup-form"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Setup Awal" }
+export const metadata: Metadata = { title: "Penyiapan Awal" }
 
 export default async function SetupPage() {
   if (await isInstalled()) {
@@ -16,7 +16,7 @@ export default async function SetupPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-1 text-center">
-        <h1 className="text-2xl font-bold text-foreground">Setup Awal YaraERP</h1>
+        <h1 className="text-2xl font-bold text-foreground">Penyiapan Awal YaraERP</h1>
         <p className="text-sm text-muted-foreground">
           Database masih kosong. Lengkapi data di bawah untuk menyiapkan aplikasi dan akun
           administrator pertama.

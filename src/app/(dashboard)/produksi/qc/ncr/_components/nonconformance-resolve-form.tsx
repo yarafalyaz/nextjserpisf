@@ -18,8 +18,8 @@ import {
 import { Button } from "@/components/ui/button"
 
 const STATUS_OPTIONS = [
-  { value: "rework", label: "Dikerjakan ulang (rework)" },
-  { value: "rework_done", label: "Rework selesai" },
+  { value: "rework", label: "Dikerjakan ulang" },
+  { value: "rework_done", label: "Pengerjaan ulang selesai" },
   { value: "rejected", label: "Ditolak" },
   { value: "closed", label: "Ditutup (selesai)" },
 ]
@@ -81,12 +81,12 @@ export function NonconformanceResolveForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="reworkHours">Jam Rework</Label>
+          <Label htmlFor="reworkHours">Jam Pengerjaan Ulang</Label>
           <Input id="reworkHours" name="reworkHours" type="number" step="0.01" min="0" defaultValue={String(reworkHours)} />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="reworkCost">Biaya Rework</Label>
+          <Label htmlFor="reworkCost">Biaya Pengerjaan Ulang</Label>
           <CurrencyInput id="reworkCost" name="reworkCost" prefix="Rp" defaultValue={reworkCost} />
         </div>
 

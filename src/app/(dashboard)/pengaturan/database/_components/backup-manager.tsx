@@ -151,7 +151,7 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
                           <Button
                             variant="ghost"
                             size="icon-sm"
-                            title="Restore"
+                            title="Pulihkan"
                             onClick={() => setRestoreTarget(b.filename)}
                             disabled={actionPending}
                           >
@@ -180,9 +180,9 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
       <ConfirmDialog
         isOpen={!!restoreTarget}
         onOpenChange={(o) => !o && setRestoreTarget(null)}
-        title="Restore Database?"
+        title="Pulihkan Database?"
         variant="danger"
-        confirmLabel={actionPending ? "Memproses..." : "Ya, Restore"}
+        confirmLabel={actionPending ? "Memproses..." : "Ya, Pulihkan"}
         isPending={actionPending}
         onConfirm={onRestore}
         body={
@@ -194,7 +194,7 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
                 checked={withSnapshot}
                 onCheckedChange={(v) => setWithSnapshot(v === true)}
               />
-              Buat snapshot otomatis dulu (cuma simpan 1 yang terbaru)
+              Buat cadangan otomatis dulu (hanya menyimpan 1 yang terbaru)
             </label>
           </span>
         }

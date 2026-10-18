@@ -47,7 +47,7 @@ export default async function PeriodClosePage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Checklist {month.label}</CardTitle>
+          <CardTitle>Daftar Periksa {month.label}</CardTitle>
           <CardDescription>{result.verdict}</CardDescription>
           <CardAction>
             {result.warningCount === 0 ? (

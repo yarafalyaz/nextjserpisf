@@ -37,11 +37,11 @@ const columns = [
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("rackRowQty", {
-    header: "Qty di Baris Ini",
+    header: "Jumlah di Baris Ini",
     cell: (info) => Number(info.getValue()),
   }),
   columnHelper.accessor("qtyOnHand", {
-    header: "Total Qty Sistem",
+    header: "Total Jumlah Sistem",
     cell: (info) => Number(info.getValue()),
   }),
 ]

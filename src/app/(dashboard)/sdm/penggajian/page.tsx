@@ -202,7 +202,7 @@ export default async function PayrollPage({
                   href={`/sdm/penggajian${params.status ? `?status=${params.status}` : ""}`}
                   className="text-xs text-primary hover:underline"
                 >
-                  Reset bulan
+                  Atur ulang bulan
                 </Link>
               )}
             </div>

@@ -345,10 +345,10 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
         </FormSection>
 
         {isEdit && employee?.hasLoginAccount && (
-          <FormSection title="Akun Login" columns={1}>
+          <FormSection title="Akun Pengguna" columns={1}>
             <div className="flex items-center gap-2 text-sm mb-3">
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-success/10 text-success border border-success/20 font-medium">
-                ✓ Karyawan ini memiliki akun login
+                ✓ Karyawan ini memiliki akun pengguna
               </span>
             </div>
             <div className="flex flex-col gap-1.5">
@@ -384,7 +384,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
         )}
 
         {canOfferLogin && (
-          <FormSection title="Akun Login" columns={1}>
+          <FormSection title="Akun Pengguna" columns={1}>
             <label className="flex items-center gap-2.5 text-sm cursor-pointer">
               <input
                 type="checkbox"
@@ -392,10 +392,10 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
                 onChange={(e) => setCreateLogin(e.target.checked)}
                 className="h-4 w-4 rounded border-default accent-primary cursor-pointer"
               />
-              <span>Buatkan akun login untuk karyawan ini</span>
+              <span>Buatkan akun pengguna untuk karyawan ini</span>
             </label>
             <p className="text-xs text-muted-foreground -mt-1">
-              Karyawan dengan akun login bisa masuk ke sistem (mis. untuk absensi mandiri). Email di atas dipakai sebagai email login.
+              Karyawan dengan akun pengguna bisa masuk ke sistem (mis. untuk absensi mandiri). Email di atas dipakai untuk masuk ke sistem.
             </p>
 
             {createLogin && (

@@ -58,10 +58,10 @@ export default async function SettingsCompletionPage() {
     },
     {
       title: "Penomoran Dokumen",
-      description: "Prefix dan format nomor dokumen otomatis (barang, faktur, pesanan, dst).",
+      description: "Awalan dan format nomor dokumen otomatis (barang, faktur, pesanan, dst).",
       href: "/pengaturan/penomoran/ubah",
       done: allSet(["documentNumberFormat", "itemCodePrefix", "salesInvoicePrefix", "purchaseOrderPrefix"]),
-      status: "Format & prefix nomor dokumen",
+      status: "Format & awalan nomor dokumen",
     },
     {
       title: "Lembur & Kehadiran",

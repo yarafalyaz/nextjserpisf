@@ -46,7 +46,7 @@ const columns = [
   }),
   columnHelper.display({
     id: "vendorName",
-    header: "Vendor",
+    header: "Pemasok",
     cell: (info) => info.row.original.purchaseOrder.vendor.name,
   }),
   columnHelper.display({

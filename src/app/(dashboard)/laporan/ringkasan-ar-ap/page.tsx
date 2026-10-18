@@ -71,7 +71,7 @@ export default async function ArApSummaryPage() {
 
 
       <ReportLetterhead title="Ringkasan Piutang & Hutang" periodLabel={period} />
-      <ReportNarration text="Laporan Ringkasan Piutang dan Utang menyajikan ikhtisar saldo piutang usaha dan utang usaha perusahaan. Informasi ini penting untuk mengelola arus kas dan memastikan kewajiban pembayaran kepada vendor serta tagihan kepada pelanggan terpantau dengan baik." />
+      <ReportNarration text="Laporan Ringkasan Piutang dan Utang menyajikan ikhtisar saldo piutang usaha dan utang usaha perusahaan. Informasi ini penting untuk mengelola arus kas dan memastikan kewajiban pembayaran kepada pemasok serta tagihan kepada pelanggan terpantau dengan baik." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Piutang (AR)" value={formatCurrency(totalAR)} valueClassName="text-primary" />
@@ -84,7 +84,7 @@ export default async function ArApSummaryPage() {
       </div>
 
       <ReportSection title="Piutang Usaha">
-        <DetailTable data-report-table="Accounts Receivable">
+        <DetailTable data-report-table="Piutang Usaha">
           <DetailTableHead>
             <DetailTableTh>Pelanggan</DetailTableTh>
             <DetailTableTh align="right">Jumlah Faktur</DetailTableTh>
@@ -119,9 +119,9 @@ export default async function ArApSummaryPage() {
       </ReportSection>
 
       <ReportSection title="Hutang Usaha">
-        <DetailTable data-report-table="Accounts Payable">
+        <DetailTable data-report-table="Hutang Usaha">
           <DetailTableHead>
-            <DetailTableTh>Vendor</DetailTableTh>
+            <DetailTableTh>Pemasok</DetailTableTh>
             <DetailTableTh align="right">Jumlah Tagihan</DetailTableTh>
             <DetailTableTh align="right">Total Tagihan</DetailTableTh>
             <DetailTableTh align="right">Sudah Dibayar</DetailTableTh>

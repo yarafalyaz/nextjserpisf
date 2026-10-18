@@ -18,7 +18,7 @@ export const metadata: Metadata = { title: "Apresiasi" }
 
 const typeLabels: Record<string, string> = {
   bonus: "Bonus",
-  reward: "Reward",
+  reward: "Imbalan",
   incentive: "Insentif",
 }
 

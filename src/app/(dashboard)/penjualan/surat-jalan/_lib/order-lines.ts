@@ -63,7 +63,7 @@ export function buildDeliveryOrderLines(params: {
     lines.push({
       salesOrderItemId: item.id,
       itemId: item.itemId,
-      description: item.description?.trim() || itemNameById.get(item.itemId) || `Item #${item.itemId}`,
+      description: item.description?.trim() || itemNameById.get(item.itemId) || `Barang #${item.itemId}`,
       orderedQty,
       shippedQty,
       remainingQty,

@@ -339,7 +339,7 @@ export default async function ProjectDetailPage({
           },
           {
             id: "quotations",
-            label: `Quotations (${quotations.length})`,
+            label: `Penawaran (${quotations.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -375,7 +375,7 @@ export default async function ProjectDetailPage({
           },
           {
             id: "invoices",
-            label: `Invoices (${invoices.length})`,
+            label: `Faktur (${invoices.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -384,7 +384,7 @@ export default async function ProjectDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {invoices.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada invoice</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada faktur</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

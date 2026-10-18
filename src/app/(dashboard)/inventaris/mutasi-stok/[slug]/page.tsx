@@ -54,7 +54,7 @@ export default async function StockMoveDetailPage({
 
       <DetailCard>
         <DetailField label="No. Dokumen" value={move.documentNo} mono />
-        <DetailField label="Barang" value={<Link href={`/master/barang/${move.itemId}`} className="hover:underline">{move.item?.name || `Item #${move.itemId}`}</Link>} />
+        <DetailField label="Barang" value={<Link href={`/master/barang/${move.itemId}`} className="hover:underline">{move.item?.name || `Barang #${move.itemId}`}</Link>} />
         <DetailField label="Gudang" value={move.warehouse?.name || "-"} />
         <DetailField label="Arah" value={<StatusChip status={move.impact === "IN" ? "received" : "returned"} />} />
         <DetailField label="Jumlah" value={`${Number(move.qty)} ${move.item?.unitOfMeasure ?? ""}`} />

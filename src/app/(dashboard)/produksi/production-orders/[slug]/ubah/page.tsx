@@ -9,7 +9,7 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
-export const metadata: Metadata = { title: "Ubah Production Orders" }
+export const metadata: Metadata = { title: "Ubah Perintah Produksi" }
 
 export default async function EditPage({
   params,

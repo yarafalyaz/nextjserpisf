@@ -35,7 +35,7 @@ const CATEGORY_OPTIONS = [
   { value: "overhead", label: "Overhead" },
   { value: "subcontract", label: "Subkontrak" },
   { value: "service", label: "Jasa" },
-  { value: "rework", label: "Rework" },
+  { value: "rework", label: "Pengerjaan Ulang" },
   { value: "other", label: "Lain-lain" },
 ]
 
@@ -190,10 +190,10 @@ export function ProductionCostSection({
     startTransition(async () => {
       const result = await pullLaborCostFromTimesheets(workOrderId, productionOrderId, rateNum)
       if (result && !result.success) {
-        showError(result.error || "Gagal menarik timesheet")
+        showError(result.error || "Gagal menarik lembar waktu")
         return
       }
-      showSuccess(`Ditarik ${result.count} timesheet → ${formatCurrency(result.added ?? 0)}`)
+      showSuccess(`Ditarik ${result.count} lembar waktu → ${formatCurrency(result.added ?? 0)}`)
       router.refresh()
     })
   }
@@ -202,7 +202,7 @@ export function ProductionCostSection({
     <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
       <div className="flex items-center justify-between p-4 px-5 border-b border-default">
         <h2 className="text-[0.9375rem] font-semibold text-foreground">
-          Biaya Non-Material (Tenaga Kerja / Overhead / Subkontrak)
+          Biaya Non-Bahan (Tenaga Kerja / Overhead / Subkontrak)
         </h2>
         {canManage && (
           <div className="flex items-center gap-2">
@@ -219,7 +219,7 @@ export function ProductionCostSection({
       {overheadOpen && canManage && (
         <form onSubmit={handleApplyOverhead} className="p-4 px-5 border-b border-default bg-surface-secondary">
           <p className="mb-3 text-xs text-muted-foreground">
-            Overhead applied = kuantitas driver × tarif. Dasar alokasi dicatat untuk audit (FAB-07).
+            Overhead yang diterapkan = kuantitas pemicu × tarif. Dasar alokasi dicatat untuk audit (FAB-07).
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
             <div className="flex flex-col gap-1.5">
@@ -234,15 +234,15 @@ export function ProductionCostSection({
               </Select>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="driverQty">Kuantitas Driver *</Label>
+              <Label htmlFor="driverQty">Kuantitas Pemicu *</Label>
               <Input id="driverQty" name="driverQty" type="number" step="0.01" min="0" value={driverQty} onChange={(e) => setDriverQty(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="driverRate">Tarif per Driver (Rp) *</Label>
+              <Label htmlFor="driverRate">Tarif per Pemicu (Rp) *</Label>
               <CurrencyInput id="driverRate" name="rate" prefix="Rp" value={driverRate} onChange={setDriverRate} />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label>Overhead Applied</Label>
+              <Label>Overhead Diterapkan</Label>
               <div className="flex h-9 items-center rounded-md border border-default px-3 text-sm font-semibold">
                 {formatCurrency(overheadPreview)}
               </div>
@@ -295,7 +295,7 @@ export function ProductionCostSection({
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="referenceNo">No. Referensi</Label>
-              <Input id="referenceNo" name="referenceNo" defaultValue={editing?.referenceNo ?? ""} placeholder="mis. tagihan vendor" />
+              <Input id="referenceNo" name="referenceNo" defaultValue={editing?.referenceNo ?? ""} placeholder="mis. tagihan pemasok" />
             </div>
             <div className="flex flex-col gap-1.5 col-span-full">
               <Label htmlFor="description">Deskripsi</Label>
@@ -308,9 +308,9 @@ export function ProductionCostSection({
                 type="button"
                 isDisabled={isPending || !hasProject}
                 onPress={handlePullLabor}
-                aria-label="Tarik dari timesheet"
+                aria-label="Tarik dari lembar waktu"
               >
-                Tarik dari Timesheet
+                Tarik dari Lembar Waktu
               </Button>
             )}
             {editing && (
@@ -328,7 +328,7 @@ export function ProductionCostSection({
       <div className="p-4 px-5">
         {costs.length === 0 ? (
           <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-            Belum ada biaya non-material. HPP saat ini hanya dari material.
+            Belum ada biaya non-bahan. HPP saat ini hanya dari bahan.
           </p>
         ) : (
           <DetailTable>
@@ -352,7 +352,7 @@ export function ProductionCostSection({
                   <DetailTableTd>
                     <span className="inline-flex flex-wrap items-center gap-2">
                       {c.sourceTimesheetId ? (
-                        <span>Timesheet</span>
+                        <span>Lembar Waktu</span>
                       ) : c.vendorName ? (
                         <span>{c.vendorName}</span>
                       ) : null}
@@ -392,7 +392,7 @@ export function ProductionCostSection({
                 </DetailTableRow>
               ))}
               <DetailTableRow>
-                <DetailTableTd><span className="font-semibold">Total non-material</span></DetailTableTd>
+                <DetailTableTd><span className="font-semibold">Total non-bahan</span></DetailTableTd>
                 <DetailTableTd>{" "}</DetailTableTd>
                 <DetailTableTd align="right">{" "}</DetailTableTd>
                 <DetailTableTd align="right">{" "}</DetailTableTd>

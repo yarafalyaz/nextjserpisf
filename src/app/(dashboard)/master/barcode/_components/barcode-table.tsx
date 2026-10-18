@@ -21,7 +21,7 @@ const columns = [
   }),
   columnHelper.display({
     id: "itemName",
-    header: "Item",
+    header: "Barang",
     cell: (info) => info.row.original.item?.name ?? "-",
   }),
   columnHelper.accessor("type", {

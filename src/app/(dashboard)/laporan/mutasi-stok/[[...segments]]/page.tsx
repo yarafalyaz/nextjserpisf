@@ -104,7 +104,7 @@ export default async function StockMovementPage({
 
 
 
-      <ReportLetterhead title="Mutasi Stok" subtitle="Stock Movement" periodLabel={periodLabel} />
+      <ReportLetterhead title="Mutasi Stok" subtitle="Pergerakan Stok" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Mutasi Stok mencatat seluruh pergerakan persediaan barang selama periode tertentu, termasuk penerimaan, pengeluaran, dan penyesuaian. Laporan ini berguna untuk memantau perputaran stok dan mengidentifikasi potensi kelebihan atau kekurangan persediaan." />
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Masuk (Qty)" value={totalIn.toLocaleString('id-ID')} valueClassName="text-success" />
@@ -117,7 +117,7 @@ export default async function StockMovementPage({
           <DetailTableHead>
             <DetailTableTh>Tanggal</DetailTableTh><DetailTableTh>Dokumen</DetailTableTh><DetailTableTh>SKU</DetailTableTh>
             <DetailTableTh>Nama Item</DetailTableTh><DetailTableTh>Gudang</DetailTableTh><DetailTableTh>Jenis</DetailTableTh>
-            <DetailTableTh align="right">Qty</DetailTableTh><DetailTableTh>Ref</DetailTableTh><DetailTableTh>Keterangan</DetailTableTh>
+            <DetailTableTh align="right">Qty</DetailTableTh><DetailTableTh>Referensi</DetailTableTh><DetailTableTh>Keterangan</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>
             {rows.map((r, i) => (

@@ -134,7 +134,7 @@ export function BomRevisionForm({
           )}
           <p className="text-xs text-muted-foreground">
             {revision
-              ? `Revisi #${revision.revisionNo} — draft`
+              ? `Revisi #${revision.revisionNo} — draf`
               : "BOM yang sedang berlaku akan disalin sebagai titik awal revisi ini."}
           </p>
         </div>
@@ -159,9 +159,9 @@ export function BomRevisionForm({
 
       <div className="form-section">
         <div className="form-section-header">
-          <h3 className="form-section-title">Material (BOM Revisi)</h3>
-          <Button onPress={addLine} aria-label="Tambah material" type="button">
-            <Plus size={14} /> Tambah Material
+          <h3 className="form-section-title">Bahan (BOM Revisi)</h3>
+          <Button onPress={addLine} aria-label="Tambah bahan" type="button">
+            <Plus size={14} /> Tambah Bahan
           </Button>
         </div>
 
@@ -200,7 +200,7 @@ export function BomRevisionForm({
                   <DetailTableTd>
                     <Button
                       onPress={() => removeLine(index)}
-                      aria-label="Hapus material"
+                      aria-label="Hapus bahan"
                       type="button"
                       isDisabled={lines.length === 1}
                     >

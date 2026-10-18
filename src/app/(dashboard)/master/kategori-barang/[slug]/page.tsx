@@ -107,9 +107,9 @@ export default async function ItemCategoryDetailPage({
       )}
 
       {/* Items */}
-      <DetailSection title="Item">
+      <DetailSection title="Barang">
         {category.items.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada item</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada barang</p>
         ) : (
           <DetailTable>
             <DetailTableHead>
@@ -137,7 +137,7 @@ export default async function ItemCategoryDetailPage({
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Nama Merek</DetailTableTh>
-              <DetailTableTh>Jumlah Item</DetailTableTh>
+              <DetailTableTh>Jumlah Barang</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {category.brands.map((brand) => (

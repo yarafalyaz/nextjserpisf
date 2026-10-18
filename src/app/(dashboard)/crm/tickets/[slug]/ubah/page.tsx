@@ -9,7 +9,7 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Ubah Tickets" }
+export const metadata: Metadata = { title: "Ubah Tiket" }
 
 export default async function EditPage({
   params,

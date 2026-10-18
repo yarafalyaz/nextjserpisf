@@ -9,7 +9,7 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Ubah Workflow" }
+export const metadata: Metadata = { title: "Ubah Alur Persetujuan" }
 
 export default async function EditWorkflowPage({
   params,
@@ -48,10 +48,10 @@ export default async function EditWorkflowPage({
         { label: "Dasbor", href: "/" },
         { label: "Pengaturan", href: "/pengaturan" },
         { label: "Alur Persetujuan", href: "/pengaturan/workflow" },
-        { label: "Ubah Workflow" },
+        { label: "Ubah Alur Persetujuan" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Ubah Workflow</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Alur Persetujuan</h1>
       </div>
 
       <WorkflowForm

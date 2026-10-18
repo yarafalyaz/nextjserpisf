@@ -39,7 +39,7 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
 
   if (status === "draft" || status === "pending") {
     return (
-      <Button variant="primary" isDisabled={isPending} onPress={() => run(() => startWorkOrder(workOrderId), "Work Order dimulai")}>
+      <Button variant="primary" isDisabled={isPending} onPress={() => run(() => startWorkOrder(workOrderId), "Perintah Kerja dimulai")}>
         Mulai Pengerjaan
       </Button>
     )
@@ -60,7 +60,7 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
         <Button
           variant="primary"
           isDisabled={isPending || !hasCompletedMaterialIssue}
-          onPress={() => run(() => completeWorkOrder(workOrderId), "Work Order selesai")}
+          onPress={() => run(() => completeWorkOrder(workOrderId), "Perintah Kerja selesai")}
         >
           Selesaikan
         </Button>

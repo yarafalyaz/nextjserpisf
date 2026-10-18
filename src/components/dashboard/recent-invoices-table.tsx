@@ -405,7 +405,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
             </span>
             <nav
               id={paginationId}
-              aria-label="Pagination tabel faktur"
+              aria-label="Navigasi halaman tabel faktur"
               className="flex items-center justify-between gap-3 sm:justify-end"
             >
               <span aria-live="polite" aria-atomic="true">

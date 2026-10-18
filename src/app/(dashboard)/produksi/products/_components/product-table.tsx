@@ -27,8 +27,8 @@ const columns = [
     ),
   }),
   columnHelper.accessor("materialsCount", {
-    header: "Material",
-    cell: (info) => `${info.getValue()} material`,
+    header: "Bahan",
+    cell: (info) => `${info.getValue()} bahan`,
   }),
   columnHelper.display({
     id: "actions",

@@ -133,7 +133,7 @@ export default async function ProductionOrderDetailPage({
   // Items selectable for material issue = the BOM materials of this order.
   const issuableItems = order.materials.map((m) => ({
     id: m.itemId,
-    label: `${itemNameMap.get(m.itemId) ?? `Item #${m.itemId}`}`,
+    label: `${itemNameMap.get(m.itemId) ?? `Barang #${m.itemId}`}`,
   }))
 
   return (
@@ -226,11 +226,11 @@ export default async function ProductionOrderDetailPage({
       {/* Materials */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Material yang Dibutuhkan</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Bahan yang Dibutuhkan</h2>
         </div>
         <div className="p-4 px-5">
           {order.materials.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada material</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada bahan</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -243,7 +243,7 @@ export default async function ProductionOrderDetailPage({
               <DetailTableBody>
                 {order.materials.map((mat) => (
                   <DetailTableRow key={mat.id}>
-                    <DetailTableTd>{itemNameMap.get(mat.itemId) ?? `Item #${mat.itemId}`}</DetailTableTd>
+                    <DetailTableTd>{itemNameMap.get(mat.itemId) ?? `Barang #${mat.itemId}`}</DetailTableTd>
                     <DetailTableTd align="right">{Number(mat.qty)}</DetailTableTd>
                     <DetailTableTd align="right">{Number(mat.actualQty ?? 0)}</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(Number(mat.standardCost))}</DetailTableTd>
@@ -273,7 +273,7 @@ export default async function ProductionOrderDetailPage({
         <div className="p-4 px-5">
           {!order.genealogy ? (
             <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-              Genealogi tercatat saat perintah produksi diselesaikan — unit hasil beserta material yang dipakai.
+              Genealogi tercatat saat perintah produksi diselesaikan — unit hasil beserta bahan yang dipakai.
             </p>
           ) : (
             <div className="flex flex-col gap-4">
@@ -310,15 +310,15 @@ export default async function ProductionOrderDetailPage({
               ) : null}
 
               <div>
-                <h3 className="text-sm font-semibold text-foreground mb-2">Material yang Dipakai</h3>
+                <h3 className="text-sm font-semibold text-foreground mb-2">Bahan yang Dipakai</h3>
                 {order.genealogy.materials.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Tidak ada material tercatat.</p>
+                  <p className="text-sm text-muted-foreground">Tidak ada bahan tercatat.</p>
                 ) : (
                   <DetailTable>
                     <DetailTableHead>
                       <DetailTableTh>Barang</DetailTableTh>
                       <DetailTableTh align="right">Kuantitas</DetailTableTh>
-                      <DetailTableTh>Lot/Serial</DetailTableTh>
+                      <DetailTableTh>Lot/Nomor Seri</DetailTableTh>
                       <DetailTableTh align="right">Biaya Satuan</DetailTableTh>
                       <DetailTableTh align="right">Total</DetailTableTh>
                     </DetailTableHead>
@@ -331,7 +331,7 @@ export default async function ProductionOrderDetailPage({
                             <DetailTableTd>
                               {geneItemMap.get(m.itemId)
                                 ? `${geneItemMap.get(m.itemId)!.sku} — ${geneItemMap.get(m.itemId)!.name}`
-                                : `Item #${m.itemId}`}
+                                : `Barang #${m.itemId}`}
                             </DetailTableTd>
                             <DetailTableTd align="right">{Number(m.qty)}</DetailTableTd>
                             <DetailTableTd>

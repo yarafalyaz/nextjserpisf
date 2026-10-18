@@ -13,7 +13,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import type { Metadata } from "next"
 import { CanCreate } from "@/components/auth/can-create"
 
-export const metadata: Metadata = { title: "Prospek (Leads)" }
+export const metadata: Metadata = { title: "Prospek" }
 
 export default async function LeadsPage({
   searchParams,

@@ -132,8 +132,8 @@ export default async function WithholdingTaxReportPage({
 
 
 
-      <ReportLetterhead title="Daftar Bukti Potong PPh" subtitle="Pemotongan PPh atas Tagihan Vendor" periodLabel={periodLabel} />
-      <ReportNarration text="Daftar Bukti Potong PPh memuat dua sisi. Sisi pembelian: pemotongan PPh yang dilakukan perusahaan atas tagihan vendor, dikelompokkan per jenis potongan — nilainya diambil dari tagihan yang sudah diposting, sehingga sama dengan jurnal Hutang PPh. Sisi penjualan: PPh yang dipotong pelanggan atas pembayaran kita, tercatat saat pembayaran diterima dan berpasangan dengan jurnal PPh dibayar dimuka; nilainya bukan kas yang diterima, melainkan bagian pelunasan piutang yang ditahan pelanggan." />
+      <ReportLetterhead title="Daftar Bukti Potong PPh" subtitle="Pemotongan PPh atas Tagihan Pemasok" periodLabel={periodLabel} />
+      <ReportNarration text="Daftar Bukti Potong PPh memuat dua sisi. Sisi pembelian: pemotongan PPh yang dilakukan perusahaan atas tagihan pemasok, dikelompokkan per jenis potongan — nilainya diambil dari tagihan yang sudah diposting, sehingga sama dengan jurnal Hutang PPh. Sisi penjualan: PPh yang dipotong pelanggan atas pembayaran kita, tercatat saat pembayaran diterima dan berpasangan dengan jurnal PPh dibayar dimuka; nilainya bukan kas yang diterima, melainkan bagian pelunasan piutang yang ditahan pelanggan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Jumlah Bukti Potong" value={rows.length.toLocaleString('id-ID')} />
@@ -178,7 +178,7 @@ export default async function WithholdingTaxReportPage({
           <DetailTableHead>
             <DetailTableTh>Tanggal</DetailTableTh>
             <DetailTableTh>No. Tagihan</DetailTableTh>
-            <DetailTableTh>Vendor</DetailTableTh>
+            <DetailTableTh>Pemasok</DetailTableTh>
             <DetailTableTh>Jenis PPh</DetailTableTh>
             <DetailTableTh align="right">Tarif</DetailTableTh>
             <DetailTableTh align="right">Dasar Pengenaan</DetailTableTh>
@@ -199,7 +199,7 @@ export default async function WithholdingTaxReportPage({
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={7} className="text-center text-muted-foreground py-6">Tidak ada tagihan vendor dengan pemotongan PPh pada periode ini</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={7} className="text-center text-muted-foreground py-6">Tidak ada tagihan pemasok dengan pemotongan PPh pada periode ini</DetailTableTd></DetailTableRow>
             )}
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">

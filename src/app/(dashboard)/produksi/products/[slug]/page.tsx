@@ -108,7 +108,7 @@ export default async function ProductDetailPage({
         <DetailField label="Merek Kendaraan" value={product.vehicleBrand?.name || "-"} />
         <DetailField label="Model Kendaraan" value={product.vehicleModel?.name || "-"} />
         <DetailField
-          label="Item Persediaan Hasil Produksi"
+          label="Barang Persediaan Hasil Produksi"
           value={product.inventoryItem ? `${product.inventoryItem.sku} — ${product.inventoryItem.name}` : "Belum dihubungkan"}
         />
         <DetailField label="Dibuat" value={formatDate(product.createdAt)} />
@@ -120,7 +120,7 @@ export default async function ProductDetailPage({
       {/* Rincian Bahan Baku (BOM) */}
       <DetailSection title="Rincian Bahan Baku (BOM)">
         {product.materials.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada material</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada bahan</p>
         ) : (
           <DetailTable>
             <DetailTableHead>
@@ -138,7 +138,7 @@ export default async function ProductDetailPage({
                           <span className="font-mono text-muted-foreground">{it.sku}</span> — {it.name}
                         </Link>
                       ) : (
-                        `Item #${mat.itemId}`
+                        `Barang #${mat.itemId}`
                       )}
                     </DetailTableTd>
                     <DetailTableTd align="right">{Number(mat.qty)} {it?.unitOfMeasure ?? ""}</DetailTableTd>
@@ -165,7 +165,7 @@ export default async function ProductDetailPage({
       <DetailSection title="Revisi BOM">
         {product.bomRevisions.length === 0 ? (
           <p className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
-            Belum ada revisi. Revisi membekukan BOM saat ini agar order produksi yang dirilis tidak berubah bila BOM master disunting.
+            Belum ada revisi. Revisi membekukan BOM saat ini agar perintah produksi yang dirilis tidak berubah bila BOM master disunting.
           </p>
         ) : (
           <DetailTable>

@@ -33,7 +33,7 @@ export function TaxEditForm({ tax }: TaxEditFormProps) {
           <Input id="name" name="name" required defaultValue={tax.name} placeholder="Nama pajak" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="rate">Rate (%) *</Label>
+          <Label htmlFor="rate">Tarif (%) *</Label>
           <Input id="rate" name="rate" type="number" step="0.01" required defaultValue={tax.rate} placeholder="0.00" />
         </div>
       </div>

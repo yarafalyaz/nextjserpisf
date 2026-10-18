@@ -134,7 +134,7 @@ export default async function CreateWorkOrderPage({
     )
 
     // Build BOM breakdown
-    notes += `\n[DAFTAR ITEM PERINTAH KERJA]\n`
+    notes += `\n[DAFTAR BARANG PERINTAH KERJA]\n`
 
     for (const qItem of allQItems) {
       const desc = qItem.description.trim()
@@ -151,11 +151,11 @@ export default async function CreateWorkOrderPage({
       if (matchedProduct && matchedProduct.materials.length > 0) {
         // This is a BOM product — show breakdown
         notes += `\n● ${desc} (Qty: ${qItem.qty})\n`
-        notes += `  Breakdown Material:\n`
+        notes += `  Rincian Bahan:\n`
 
         for (const mat of matchedProduct.materials) {
           const stockItem = stockById.get(mat.itemId)
-          const matName = stockItem?.name ?? `Item #${mat.itemId}`
+          const matName = stockItem?.name ?? `Barang #${mat.itemId}`
           const uom = stockItem?.unitOfMeasure ?? "PCS"
           const qtyNeeded = Number(mat.qty) * qItem.qty
           const stock = stockItem ? Number(stockItem.qtyOnHand) : 0

@@ -7,7 +7,7 @@ import { WorkflowForm } from "../_components/workflow-form"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Tambah Workflow" }
+export const metadata: Metadata = { title: "Tambah Alur Persetujuan" }
 
 export default async function CreateWorkflowPage() {
   await requirePermission("manage_settings")
@@ -23,10 +23,10 @@ export default async function CreateWorkflowPage() {
         { label: "Dasbor", href: "/" },
         { label: "Pengaturan", href: "/pengaturan" },
         { label: "Alur Persetujuan", href: "/pengaturan/workflow" },
-        { label: "Tambah Workflow" },
+        { label: "Tambah Alur Persetujuan" },
       ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Workflow</h1>
+        <h1 className="text-2xl font-bold text-foreground">Tambah Alur Persetujuan</h1>
       </div>
 
       <WorkflowForm roles={roles} />

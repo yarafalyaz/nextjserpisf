@@ -240,7 +240,7 @@ export default async function QuotationDetailPage({
                     value={formatDate(quotation.date)}
                   />
                   <DetailField
-                    label="Valid Sampai"
+                    label="Berlaku Sampai"
                     value={formatDate(quotation.validUntil)}
                   />
                   <DetailField
@@ -268,7 +268,7 @@ export default async function QuotationDetailPage({
                     value={formatCurrency(Number(quotation.grandTotal))}
                   />
                   <DetailField
-                    label="Uang Muka (DP) Terbayar"
+                    label="Uang Muka Terbayar"
                     value={
                       <span className="text-emerald-600 font-semibold">
                         {formatCurrency(totalDP)}
@@ -335,7 +335,7 @@ export default async function QuotationDetailPage({
           },
           {
             id: "items",
-            label: "Item",
+            label: "Barang",
             content: (
               <>
                 {/* Sections & Items */}
@@ -372,7 +372,7 @@ export default async function QuotationDetailPage({
                                       <span className="text-xs text-muted-foreground">{matchedItem.sku}</span>
                                     </div>
                                   ) : (
-                                    `Item #${item.itemId}`
+                                    `Barang #${item.itemId}`
                                   )}
                                 </DetailTableTd>
                                 <DetailTableTd>

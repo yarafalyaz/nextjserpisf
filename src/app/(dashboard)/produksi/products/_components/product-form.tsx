@@ -184,15 +184,15 @@ export function ProductForm({
         </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">
-          <Label htmlFor="inventory-item">Item Persediaan Hasil Produksi</Label>
+          <Label htmlFor="inventory-item">Barang Persediaan Hasil Produksi</Label>
           <Combobox
             id="inventory-item"
             value={inventoryItemId ? String(inventoryItemId) : null}
             onChange={(key) => setInventoryItemId(key ? Number(key) : null)}
-            placeholder="Pilih item produk jadi (opsional)"
+            placeholder="Pilih barang produk jadi (opsional)"
             options={outputItemOptions}
           />
-          <p className="text-xs text-muted-foreground">Hubungkan ke item persediaan bertanda Produk agar penyelesaian order dapat menambah stok barang jadi.</p>
+          <p className="text-xs text-muted-foreground">Hubungkan ke barang persediaan bertanda Produk agar penyelesaian perintah produksi dapat menambah stok barang jadi.</p>
         </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">
@@ -203,9 +203,9 @@ export function ProductForm({
 
       <div className="form-section">
         <div className="form-section-header">
-          <h3 className="form-section-title">Material (BOM)</h3>
-          <Button onPress={addMaterialRow} aria-label="Tambah material" type="button">
-            <Plus size={14} /> Tambah Material
+          <h3 className="form-section-title">Bahan (BOM)</h3>
+          <Button onPress={addMaterialRow} aria-label="Tambah bahan" type="button">
+            <Plus size={14} /> Tambah Bahan
           </Button>
         </div>
 
@@ -242,7 +242,7 @@ export function ProductForm({
                     </div>
                   </DetailTableTd>
                   <DetailTableTd>
-                    <Button onPress={() => removeMaterialRow(index)} aria-label="Hapus material" type="button" isDisabled={materials.length === 1}>
+                    <Button onPress={() => removeMaterialRow(index)} aria-label="Hapus bahan" type="button" isDisabled={materials.length === 1}>
                       <Trash2 size={14} />
                     </Button>
                   </DetailTableTd>

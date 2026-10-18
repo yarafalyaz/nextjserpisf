@@ -58,7 +58,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
 
   const handleGenerate = () => {
     if (!period || !startDate || !endDate) {
-      showError("Semua field wajib diisi!")
+      showError("Semua kolom wajib diisi!")
       return
     }
 
@@ -66,12 +66,12 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
       try {
         const res = await generateBulkPayroll(period, startDate, endDate)
         if (res.success) {
-          showSuccess(`Berhasil men-generate ${res.count} draf slip gaji untuk periode ${period}!`)
+          showSuccess(`Berhasil membuat ${res.count} draf slip gaji untuk periode ${period}!`)
           setIsOpen(false)
           router.refresh()
         }
       } catch (error) {
-        showError(error instanceof Error ? error.message : "Gagal generate slip gaji")
+        showError(error instanceof Error ? error.message : "Gagal membuat slip gaji")
       }
     })
   }
@@ -84,13 +84,13 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
         className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white hover:-translate-y-px hover:shadow-md transition-all h-auto"
       >
         <Sparkles size={16} />
-        Generate Gaji Bulanan
+        Buat Gaji Bulanan
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold">Generate Gaji Bulanan (Bulk)</DialogTitle>
+            <DialogTitle className="text-xl font-bold">Buat Gaji Bulanan (Massal)</DialogTitle>
           </DialogHeader>
 
           <div className="flex flex-col gap-4 py-4">
@@ -166,9 +166,9 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
               {isPending ? (
                 <>
                   <Loader2 size={16} className="animate-spin mr-1" />
-                  Generating...
+                  Memproses...
                 </>
-              ) : "Mulai Generate"}
+              ) : "Mulai Buat"}
             </Button>
           </DialogFooter>
         </DialogContent>

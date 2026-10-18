@@ -106,7 +106,7 @@ export default async function EditPage({
         items={[
           { label: "Dasbor", href: "/" },
           { label: "Pembelian", href: "/pembelian" },
-          { label: "Tagihan Vendor", href: "/pembelian/tagihan" },
+          { label: "Tagihan Pemasok", href: "/pembelian/tagihan" },
           { label: "Ubah" },
         ]}
       />

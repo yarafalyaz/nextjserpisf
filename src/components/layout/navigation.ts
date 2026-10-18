@@ -59,7 +59,7 @@ export const navigation: NavItem[] = [
     children: [
       { label: "Pelanggan", href: "/master/pelanggan", icon: Users, permission: "view_customers" },
       { label: "Kategori Pelanggan", href: "/master/kategori-pelanggan", icon: Tag, permission: "view_customers" },
-      { label: "Vendor", href: "/master/vendor", icon: Factory, permission: "view_vendors" },
+      { label: "Pemasok", href: "/master/vendor", icon: Factory, permission: "view_vendors" },
       { label: "Barang", href: "/master/barang", icon: Package, permission: "view_items" },
       { label: "Kategori Barang", href: "/master/kategori-barang", icon: Tag, permission: "view_item_categories" },
       { label: "Grup Barang", href: "/master/grup-barang", icon: Layers, permission: "view_item_groups" },
@@ -103,8 +103,8 @@ export const navigation: NavItem[] = [
       { label: "Permintaan", href: "/pembelian/permintaan", icon: ClipboardList, permission: "view_purchase_requests" },
       { label: "Pesanan Pembelian", href: "/pembelian/pesanan", icon: FileCheck, permission: "view_purchase_orders" },
       { label: "Penerimaan Barang", href: "/pembelian/penerimaan", icon: PackageCheck, permission: "view_goods_receipts" },
-      { label: "Tagihan Vendor", href: "/pembelian/tagihan", icon: FileSpreadsheet, permission: "view_vendor_bills" },
-      { label: "Pembayaran Vendor", href: "/pembelian/pembayaran-vendor", icon: Banknote, permission: "view_vendor_payments" },
+      { label: "Tagihan Pemasok", href: "/pembelian/tagihan", icon: FileSpreadsheet, permission: "view_vendor_bills" },
+      { label: "Pembayaran Pemasok", href: "/pembelian/pembayaran-vendor", icon: Banknote, permission: "view_vendor_payments" },
       { label: "Perintah Pembayaran", href: "/pembelian/perintah-pembayaran", icon: Banknote, permissions: ["view_vendor_bills", "view_vendor_payments"] },
       { label: "Uang Muka Pembelian", href: "/pembelian/uang-muka", icon: Banknote, permission: "view_purchase_advances" },
       { label: "Harga Pemasok", href: "/pembelian/harga-pemasok", icon: BadgeDollarSign, permission: "view_vendor_prices" },
@@ -117,7 +117,7 @@ export const navigation: NavItem[] = [
     href: "/inventaris",
     icon: Package,
     children: [
-      { label: "Scan Barang", href: "/inventaris/scan", icon: ScanBarcode, permission: "view_inventory" },
+      { label: "Pindai Barang", href: "/inventaris/scan", icon: ScanBarcode, permission: "view_inventory" },
       { label: "Mutasi Stok", href: "/inventaris/mutasi-stok", icon: BarChart3, permission: "view_stock_moves" },
       { label: "Penyesuaian", href: "/inventaris/penyesuaian", icon: Scale, permission: "view_stock_adjustments" },
       { label: "Stok Opname", href: "/inventaris/opname", icon: ClipboardCheck, permission: "view_stock_opname" },
@@ -189,7 +189,7 @@ export const navigation: NavItem[] = [
       { label: "Kendaraan", href: "/kendaraan", icon: Car, permission: "view_vehicles" },
       { label: "Kendaraan Pelanggan", href: "/kendaraan/pelanggan", icon: Car, permission: "view_vehicles" },
       { label: "Merek & Model", href: "/kendaraan/merek", icon: Tag, permission: "view_vehicle_brands" },
-      { label: "Fitment", href: "/kendaraan/fitment", icon: Wrench, permission: "view_vehicle_fitments" },
+      { label: "Kompatibilitas", href: "/kendaraan/fitment", icon: Wrench, permission: "view_vehicle_fitments" },
     ],
   },
   {

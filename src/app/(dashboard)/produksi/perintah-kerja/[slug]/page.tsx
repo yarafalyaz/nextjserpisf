@@ -220,7 +220,7 @@ export default async function WorkOrderDetailPage({
           mono
         />
         <DetailField
-          label="Total Biaya Material"
+          label="Total Biaya Bahan"
           value={formatCurrency(totalCost)}
         />
         {wo.customerVehicle && (
@@ -310,13 +310,13 @@ export default async function WorkOrderDetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">
-            Materials ({wo.items.length} item)
+            Bahan ({wo.items.length} barang)
           </h2>
         </div>
         <div className="p-4 px-5">
           {wo.items.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-              Belum ada material
+              Belum ada bahan
             </p>
           ) : (
             <DetailTable>
@@ -331,7 +331,7 @@ export default async function WorkOrderDetailPage({
               <DetailTableBody>
                 {wo.items.map((item) => (
                   <DetailTableRow key={item.id}>
-                    <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
+                    <DetailTableTd>{itemNameMap.get(item.itemId) || `Barang #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd>{item.description || "-"}</DetailTableTd>
                     <DetailTableTd>
                       <StatusChip status={item.status || "pending"} />

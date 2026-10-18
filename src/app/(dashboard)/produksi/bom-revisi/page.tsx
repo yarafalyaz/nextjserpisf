@@ -71,7 +71,7 @@ export default async function BomRevisionsPage({
         <div>
           <h1 className="text-2xl font-bold text-foreground">Revisi BOM</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            Snapshot BOM ber-versi. Order produksi yang dirilis memakai revisi yang sedang berlaku, sehingga mengubah BOM master tidak mengubah dasar order lama.
+            Cuplikan BOM ber-versi. Perintah produksi yang dirilis memakai revisi yang sedang berlaku, sehingga mengubah BOM master tidak mengubah dasar perintah lama.
           </p>
         </div>
         <CanCreate permission="manage_bom_revisions">

@@ -9,7 +9,7 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Ubah Leads" }
+export const metadata: Metadata = { title: "Ubah Prospek" }
 
 export default async function EditLeadPage({
   params,
@@ -38,7 +38,7 @@ export default async function EditLeadPage({
   { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Ubah Lead: {lead.name}</h1>
+        <h1 className="text-2xl font-bold text-foreground">Ubah Prospek: {lead.name}</h1>
       </div>
       <LeadForm lead={{
         ...lead,

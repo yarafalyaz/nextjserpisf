@@ -97,8 +97,8 @@ export default async function CashProjectionPage({
 
 
 
-      <ReportLetterhead title="Proyeksi Kas" subtitle="Cash Projection" periodLabel={periodLabel} />
-      <ReportNarration text="Proyeksi Kas memperkirakan posisi kas ke depan dari saldo kas/bank saat ini ditambah tagihan penjualan yang belum dibayar (masuk) dan tagihan vendor yang belum dibayar (keluar), dikelompokkan menurut tanggal jatuh tempo. Dokumen tanpa tanggal jatuh tempo tidak ikut diproyeksikan." />
+      <ReportLetterhead title="Proyeksi Kas" subtitle="Proyeksi Arus Kas" periodLabel={periodLabel} />
+      <ReportNarration text="Proyeksi Kas memperkirakan posisi kas ke depan dari saldo kas/bank saat ini ditambah tagihan penjualan yang belum dibayar (masuk) dan tagihan pemasok yang belum dibayar (keluar), dikelompokkan menurut tanggal jatuh tempo. Dokumen tanpa tanggal jatuh tempo tidak ikut diproyeksikan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Kas Saat Ini" value={formatCurrency(opening)} />
@@ -117,7 +117,7 @@ export default async function CashProjectionPage({
             <DetailTableTh>Bulan</DetailTableTh>
             <DetailTableTh align="right">Masuk</DetailTableTh>
             <DetailTableTh align="right">Keluar</DetailTableTh>
-            <DetailTableTh align="right">Net</DetailTableTh>
+            <DetailTableTh align="right">Bersih</DetailTableTh>
             <DetailTableTh align="right">Saldo Proyeksi</DetailTableTh>
           </DetailTableHead>
           <DetailTableBody>

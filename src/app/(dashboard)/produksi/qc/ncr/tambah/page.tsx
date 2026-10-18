@@ -31,7 +31,7 @@ export default async function CreateNonconformancePage() {
         ]}
       />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Nonconformance (NCR)</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Ketidaksesuaian (NCR)</h1>
       </div>
 
       <NonconformanceForm inspections={inspections} />

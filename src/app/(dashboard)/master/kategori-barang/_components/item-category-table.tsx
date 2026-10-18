@@ -58,7 +58,7 @@ export function ItemCategoryTable({ data, total, page, pageSize }: ItemCategoryT
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar kategori item"
+      ariaLabel="Daftar kategori barang"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"

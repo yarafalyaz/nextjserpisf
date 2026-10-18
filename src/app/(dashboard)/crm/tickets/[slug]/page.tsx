@@ -27,7 +27,7 @@ import type { Metadata } from "next";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 
-export const metadata: Metadata = { title: "Tickets" };
+export const metadata: Metadata = { title: "Tiket" };
 
 export default async function CrmTicketDetailPage({
   params,
@@ -143,7 +143,7 @@ export default async function CrmTicketDetailPage({
         {ticket.assignedTo && (
           <DetailField
             label="Ditugaskan ke"
-            value={assignee?.name ?? `User #${ticket.assignedTo}`}
+            value={assignee?.name ?? `Pengguna #${ticket.assignedTo}`}
           />
         )}
         <DetailField label="Dibuat" value={formatDate(ticket.createdAt)} />
@@ -182,7 +182,7 @@ export default async function CrmTicketDetailPage({
                     <DetailTableTd>
                       {comment.userId
                         ? (commentUserMap.get(comment.userId) ??
-                          `User #${comment.userId}`)
+                          `Pengguna #${comment.userId}`)
                         : "-"}
                     </DetailTableTd>
                     <DetailTableTd>

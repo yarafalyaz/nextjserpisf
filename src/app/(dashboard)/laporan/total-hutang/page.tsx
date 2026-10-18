@@ -52,7 +52,7 @@ export default async function TotalPayablesPage() {
 
 
       <ReportLetterhead title="Total Hutang" subtitle="Utang Usaha" periodLabel={period} />
-      <ReportNarration text="Laporan Total Hutang menyajikan seluruh utang usaha perusahaan yang belum lunas, termasuk tagihan yang belum memiliki tanggal jatuh tempo. Laporan ini menampilkan total kewajiban beserta rinciannya per vendor, sehingga arus kas keluar dan jadwal pembayaran kepada vendor dapat dikelola dengan baik." />
+      <ReportNarration text="Laporan Total Hutang menyajikan seluruh utang usaha perusahaan yang belum lunas, termasuk tagihan yang belum memiliki tanggal jatuh tempo. Laporan ini menampilkan total kewajiban beserta rinciannya per pemasok, sehingga arus kas keluar dan jadwal pembayaran kepada pemasok dapat dikelola dengan baik." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
         <ReportKpiCard label="Total Hutang" value={formatCurrency(summary.totalOutstanding)} valueClassName="text-danger" />
@@ -86,10 +86,10 @@ export default async function TotalPayablesPage() {
         </DetailTable>
       </ReportSection>
 
-      <ReportSection title="Hutang per Vendor">
-        <DetailTable data-report-table="Hutang per Vendor">
+      <ReportSection title="Hutang per Pemasok">
+        <DetailTable data-report-table="Hutang per Pemasok">
           <DetailTableHead>
-            <DetailTableTh>Vendor</DetailTableTh>
+            <DetailTableTh>Pemasok</DetailTableTh>
             <DetailTableTh align="right">Jumlah Tagihan</DetailTableTh>
             <DetailTableTh align="right">Total Tagihan</DetailTableTh>
             <DetailTableTh align="right">Sudah Dibayar</DetailTableTh>
@@ -124,7 +124,7 @@ export default async function TotalPayablesPage() {
       <ReportSection title="Rincian Tagihan">
         <DetailTable data-report-table="Rincian Tagihan">
           <DetailTableHead>
-            <DetailTableTh>Vendor</DetailTableTh>
+            <DetailTableTh>Pemasok</DetailTableTh>
             <DetailTableTh>No. Tagihan</DetailTableTh>
             <DetailTableTh>Jatuh Tempo</DetailTableTh>
             <DetailTableTh>Umur</DetailTableTh>

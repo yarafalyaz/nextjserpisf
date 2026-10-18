@@ -83,7 +83,7 @@ export function LeadTable({ data, total, page, pageSize, toolbar, filters }: Lea
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar leads"
+      ariaLabel="Daftar prospek"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}

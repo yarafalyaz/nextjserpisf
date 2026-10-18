@@ -290,7 +290,7 @@ export default async function AttendancePage({
             Terapkan
           </Button>
           <Link href="/sdm/absensi" className="text-sm text-primary hover:underline pb-2.5">
-            Reset filter
+            Atur ulang filter
           </Link>
         </form>
 

@@ -72,7 +72,7 @@ export function VendorTable({ data, total, page, pageSize }: VendorTableProps) {
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar vendor"
+      ariaLabel="Daftar pemasok"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="name"

@@ -45,7 +45,7 @@ const columns = [
     cell: (info) => `${info.row.original.referenceType} #${info.row.original.referenceId}`,
   }),
   columnHelper.accessor("severity", {
-    header: "Severity",
+    header: "Tingkat Keparahan",
     cell: (info) => SEVERITY_LABELS[info.getValue()] ?? info.getValue(),
   }),
   columnHelper.accessor("responsibility", {
@@ -67,7 +67,7 @@ export function NonconformanceTable({ data, total, page, pageSize }: { data: Non
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar nonconformance"
+      ariaLabel="Daftar ketidaksesuaian"
       serverPagination={{ total, page, pageSize }}
       searchColumn="documentNo"
       searchPlaceholder="Cari no. NCR..."

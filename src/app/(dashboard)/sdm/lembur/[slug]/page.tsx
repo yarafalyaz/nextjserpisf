@@ -84,7 +84,7 @@ export default async function OvertimeRequestDetailPage({
           <DetailField label="Jam Makan" value={`${Number(overtime.mealHours)} jam`} />
         )}
         {overtime.billableHours != null && (
-          <DetailField label="Jam Billable" value={`${Number(overtime.billableHours)} jam`} />
+          <DetailField label="Jam Dapat Ditagih" value={`${Number(overtime.billableHours)} jam`} />
         )}
         {overtime.calculatedValue != null && (
           <DetailField label="Nilai Kalkulasi" value={formatCurrency(Number(overtime.calculatedValue))} />

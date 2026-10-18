@@ -151,7 +151,7 @@ export default async function TaxReportPage({
           <DetailTableHead>
             <DetailTableTh>Tanggal</DetailTableTh>
             <DetailTableTh>No. Faktur</DetailTableTh>
-            <DetailTableTh>Vendor</DetailTableTh>
+            <DetailTableTh>Pemasok</DetailTableTh>
             <DetailTableTh align="right">DPP</DetailTableTh>
             <DetailTableTh align="right">PPN</DetailTableTh>
           </DetailTableHead>

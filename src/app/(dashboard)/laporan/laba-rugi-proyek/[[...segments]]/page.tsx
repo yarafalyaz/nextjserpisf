@@ -113,7 +113,7 @@ export default async function ProjectPnLPage({
       actions={<ExportButtons title="Laba_Rugi_per_Proyek" />}
     >
       <ReportSection title={`Detail per Proyek (${rows.length} proyek)`}>
-        <DetailTable data-report-table="P&L by Project">
+        <DetailTable data-report-table="Laba Rugi per Proyek">
           <DetailTableHead>
             <DetailTableTh>No. Dok</DetailTableTh><DetailTableTh>Proyek</DetailTableTh><DetailTableTh>Pelanggan</DetailTableTh>
             <DetailTableTh>Kendaraan</DetailTableTh><DetailTableTh>Status</DetailTableTh>

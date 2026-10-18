@@ -36,7 +36,7 @@ const SEVERITY_OPTIONS = [
 
 const RESPONSIBILITY_OPTIONS = [
   { value: "internal", label: "Internal" },
-  { value: "vendor", label: "Vendor" },
+  { value: "vendor", label: "Pemasok" },
   { value: "customer", label: "Pelanggan" },
 ]
 
@@ -91,7 +91,7 @@ export function NonconformanceForm({ inspections }: { inspections: InspectionOpt
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="severity">Severity *</Label>
+          <Label htmlFor="severity">Tingkat Keparahan *</Label>
           <Select value={severity} onValueChange={setSeverity}>
             <SelectTrigger id="severity"><SelectValue /></SelectTrigger>
             <SelectContent>

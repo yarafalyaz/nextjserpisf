@@ -86,7 +86,7 @@ export default async function PurchaseOrdersPage({
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari no. dokumen atau vendor..." action="/pembelian/pesanan" />}
+        toolbar={<AppSearchField placeholder="Cari no. dokumen atau pemasok..." action="/pembelian/pesanan" />}
         filters={
           <>
             <FilterDrawer>

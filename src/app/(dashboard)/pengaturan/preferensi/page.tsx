@@ -57,11 +57,11 @@ export default async function PreferencesPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Metode Costing" value={settings?.costingMethod} />
+            <Field label="Metode Penetapan Biaya" value={settings?.costingMethod} />
             <Field label="Awal Tahun Fiskal" value={`Bulan ${settings?.fiscalYearStartMonth || 1}`} />
             <Field label="Kode Mata Uang" value={settings?.currencyCode} />
             <Field label="Simbol Mata Uang" value={settings?.currencySymbol} />
-            <Field label="Locale" value={settings?.currencyLocale} />
+            <Field label="Format Lokal" value={settings?.currencyLocale} />
             <Field label="Tanggal Kunci Periode" value={settings?.periodLockDate ? formatDate(settings.periodLockDate) : null} />
             <BoolBadge label="Tampilkan Status Aktif" value={settings?.showIsActiveField !== false} />
             <BoolBadge label="Tampilkan NPWP" value={settings?.showTaxId !== false} />

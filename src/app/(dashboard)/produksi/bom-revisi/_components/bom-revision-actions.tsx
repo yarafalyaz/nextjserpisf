@@ -113,7 +113,7 @@ export function BomRevisionActions({ revision }: { revision: BomRevisionRow }) {
         isOpen={dialog === "release"}
         onOpenChange={(open) => !open && setDialog(null)}
         title="Rilis revisi BOM ini?"
-        body="Setelah dirilis, revisi menjadi acuan order produksi baru dan tidak dapat diubah. Revisi yang sedang berlaku akan ditandai superseded."
+        body="Setelah dirilis, revisi menjadi acuan order produksi baru dan tidak dapat diubah. Revisi yang sedang berlaku akan ditandai sebagai digantikan."
         confirmLabel="Rilis"
         cancelLabel="Batal"
         isPending={isPending}
@@ -124,7 +124,7 @@ export function BomRevisionActions({ revision }: { revision: BomRevisionRow }) {
         isOpen={dialog === "delete"}
         onOpenChange={(open) => !open && setDialog(null)}
         title="Hapus revisi BOM ini?"
-        body="Revisi draft yang dihapus tidak dapat dikembalikan."
+        body="Revisi draf yang dihapus tidak dapat dikembalikan."
         confirmLabel="Hapus"
         cancelLabel="Batal"
         variant="danger"

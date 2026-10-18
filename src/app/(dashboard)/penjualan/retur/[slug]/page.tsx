@@ -125,11 +125,11 @@ export default async function SalesReturnDetailPage({
       {/* Items */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-          <h2 className="text-[0.9375rem] font-semibold text-foreground">Item Retur</h2>
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Barang Retur</h2>
         </div>
         <div className="p-4 px-5">
           {salesReturn.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada barang</p>
           ) : (
             <DetailTable>
               <DetailTableHead>
@@ -141,7 +141,7 @@ export default async function SalesReturnDetailPage({
               <DetailTableBody>
                 {salesReturn.items.map((item) => (
                   <DetailTableRow key={item.id}>
-                    <DetailTableTd>{itemById.get(item.itemId)?.name ?? `Item #${item.itemId}`}</DetailTableTd>
+                    <DetailTableTd>{itemById.get(item.itemId)?.name ?? `Barang #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd className="font-mono">{itemById.get(item.itemId)?.sku ?? "-"}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(Number(item.cost))}</DetailTableTd>

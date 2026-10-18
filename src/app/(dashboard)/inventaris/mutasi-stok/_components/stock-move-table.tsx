@@ -52,7 +52,7 @@ const columns = [
     },
   }),
   columnHelper.accessor("item.name", {
-    header: "Item",
+    header: "Barang",
     cell: (info) => info.getValue(),
   }),
   columnHelper.accessor("qty", {

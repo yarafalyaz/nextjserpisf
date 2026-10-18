@@ -26,7 +26,7 @@ function PrefixItem({ label, value, auto }: { label: string; value: string | nul
           ? "border-transparent bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
           : ""
         }>
-          {auto ? "Auto" : "Manual"}
+          {auto ? "Otomatis" : "Manual"}
         </Badge>
       )}
     </div>
@@ -55,7 +55,7 @@ export default async function NumberingPage() {
       <Card>
         <CardHeader>
           <CardTitle>Penomoran Otomatis</CardTitle>
-          <CardDescription>Prefix dan format kode dokumen yang dihasilkan sistem.</CardDescription>
+          <CardDescription>Awalan dan format kode dokumen yang dihasilkan sistem.</CardDescription>
           <CardAction>
             <Button asChild variant="outline" size="sm">
               <Link href="/pengaturan/penomoran/ubah"><Pencil className="size-3.5" /> Ubah</Link>
@@ -70,7 +70,7 @@ export default async function NumberingPage() {
             <PrefixItem label="Baris" value={settings?.rowCodePrefix} auto={settings?.enableAutoRowCode !== false} />
             <PrefixItem label="Pelanggan" value={settings?.customerCodePrefix} auto={settings?.enableAutoCustomerCode !== false} />
             <PrefixItem label="Karyawan" value={settings?.employeeCodePrefix} auto={settings?.enableAutoEmployeeCode !== false} />
-            <PrefixItem label="Vendor" value={settings?.vendorCodePrefix} auto={settings?.enableAutoVendorCode !== false} />
+            <PrefixItem label="Pemasok" value={settings?.vendorCodePrefix} auto={settings?.enableAutoVendorCode !== false} />
           </PrefixGroup>
           <Separator />
           <PrefixGroup title="Dokumen Penjualan">

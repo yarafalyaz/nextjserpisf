@@ -10,7 +10,7 @@ import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
-export const metadata: Metadata = { title: "Ubah Pembayaran Vendor" }
+export const metadata: Metadata = { title: "Ubah Pembayaran Pemasok" }
 
 export default async function EditPage({
   params,
@@ -59,7 +59,7 @@ export default async function EditPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
-  { label: "Pembayaran Vendor", href: "/pembelian/pembayaran-vendor" },
+  { label: "Pembayaran Pemasok", href: "/pembelian/pembayaran-vendor" },
   { label: "Ubah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">

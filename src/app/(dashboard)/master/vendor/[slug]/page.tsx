@@ -17,7 +17,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
-export const metadata: Metadata = { title: "Vendor" }
+export const metadata: Metadata = { title: "Pemasok" }
 
 export default async function VendorDetailPage({
   params,
@@ -76,7 +76,7 @@ export default async function VendorDetailPage({
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Data Master", href: "/master" },
-          { label: "Vendor", href: "/master/vendor" },
+          { label: "Pemasok", href: "/master/vendor" },
           { label: "Detail" },
         ]}
         actions={
@@ -88,7 +88,7 @@ export default async function VendorDetailPage({
       />
 
       <DetailTabs
-        ariaLabel="Tab detail vendor"
+        ariaLabel="Tab detail pemasok"
         tabs={[
           {
             id: "info",
@@ -115,7 +115,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {vendor.purchaseOrders.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada purchase order</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada pesanan pembelian</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>
@@ -157,7 +157,7 @@ export default async function VendorDetailPage({
                       <DetailTableHead>
                         <DetailTableTh>No. Dokumen</DetailTableTh>
                         <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>No. PO</DetailTableTh>
+                        <DetailTableTh>No. Pesanan</DetailTableTh>
                         <DetailTableTh>Gudang</DetailTableTh>
                         <DetailTableTh>Status</DetailTableTh>
                       </DetailTableHead>
@@ -180,7 +180,7 @@ export default async function VendorDetailPage({
           },
           {
             id: "returns",
-            label: `Returns (${purchaseReturns.length})`,
+            label: `Retur (${purchaseReturns.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -195,7 +195,7 @@ export default async function VendorDetailPage({
                       <DetailTableHead>
                         <DetailTableTh>No. Dokumen</DetailTableTh>
                         <DetailTableTh>Tanggal</DetailTableTh>
-                        <DetailTableTh>No. PO</DetailTableTh>
+                        <DetailTableTh>No. Pesanan</DetailTableTh>
                         <DetailTableTh>Status</DetailTableTh>
                       </DetailTableHead>
                       <DetailTableBody>
@@ -216,7 +216,7 @@ export default async function VendorDetailPage({
           },
           {
             id: "bills",
-            label: `Bills (${vendor.vendorBills.length})`,
+            label: `Tagihan (${vendor.vendorBills.length})`,
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
@@ -263,7 +263,7 @@ export default async function VendorDetailPage({
                 </div>
                 <div className="p-4 px-5">
                   {vendor.items.length === 0 ? (
-                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada barang dari vendor ini</p>
+                    <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Belum ada barang dari pemasok ini</p>
                   ) : (
                     <DetailTable>
                       <DetailTableHead>

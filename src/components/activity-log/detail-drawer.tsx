@@ -36,7 +36,7 @@ const actionLabel: Record<string, string> = {
   create: "Buat", CREATE: "Buat",
   update: "Ubah", UPDATE: "Ubah",
   delete: "Hapus", DELETE: "Hapus",
-  login: "Login", LOGIN: "Login",
+  login: "Masuk", LOGIN: "Masuk",
 }
 
 function DiffBlock({

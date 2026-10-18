@@ -96,7 +96,7 @@ export function LoginForm({
         <CardHeader className="text-center">
           <CardTitle className="text-xl">Selamat Datang Kembali</CardTitle>
           <CardDescription>
-            Masuk dengan email dan password Anda
+            Masuk dengan email dan kata sandi Anda
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -48,8 +48,8 @@ const columns = [
     cell: (info) => <StatusChip status={info.getValue()} />,
   }),
   columnHelper.accessor("materialsCount", {
-    header: "Material",
-    cell: (info) => `${info.getValue()} material`,
+    header: "Bahan",
+    cell: (info) => `${info.getValue()} bahan`,
   }),
   columnHelper.accessor("effectiveDate", {
     header: "Berlaku",

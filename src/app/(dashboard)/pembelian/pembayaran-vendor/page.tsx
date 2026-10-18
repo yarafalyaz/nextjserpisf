@@ -11,7 +11,7 @@ import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/me
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Pembayaran Vendor" }
+export const metadata: Metadata = { title: "Pembayaran Pemasok" }
 
 export default async function VendorPaymentsPage({
   searchParams,
@@ -60,10 +60,10 @@ export default async function VendorPaymentsPage({
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
   { label: "Pembelian", href: "/pembelian" },
-  { label: "Pembayaran Vendor" },
+  { label: "Pembayaran Pemasok" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Pembayaran Vendor</h1>
+        <h1 className="text-2xl font-bold text-foreground">Pembayaran Pemasok</h1>
         <Link href="/pembelian/pembayaran-vendor/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-vpay-btn">
           + Buat Pembayaran
         </Link>

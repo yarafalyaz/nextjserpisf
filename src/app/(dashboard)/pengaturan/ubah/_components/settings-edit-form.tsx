@@ -570,14 +570,14 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 col-span-full">
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="companyLatitude">Latitude</Label>
+                    <Label htmlFor="companyLatitude">Lintang</Label>
                     <Button type="button" onClick={handleGetLocation} variant="tertiary" className="text-xs font-semibold text-primary hover:underline h-auto p-0" data-print-keep>Ambil Lokasi</Button>
                   </div>
                   <Input id="companyLatitude" name="companyLatitude" type="number" step="any" placeholder="-6.xxxxx" value={latitude} onChange={(e) => setLatitude((e.target as HTMLInputElement).value)} className="w-full" />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="companyLongitude">Longitude</Label>
+                    <Label htmlFor="companyLongitude">Bujur</Label>
                   </div>
                   <Input id="companyLongitude" name="companyLongitude" type="number" step="any" placeholder="106.xxxxx" value={longitude} onChange={(e) => setLongitude((e.target as HTMLInputElement).value)} className="w-full" />
                 </div>
@@ -639,14 +639,14 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Umum</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="costingMethod">Metode Costing</Label>
+                <Label htmlFor="costingMethod">Metode Penetapan Biaya</Label>
                 <FormSelect
                   id="costingMethod"
                   name="costingMethod"
                   defaultValue={settings.costingMethod || "FIFO"}
                   options={[
                     { value: "FIFO", label: "FIFO (per lapisan pembelian)" },
-                    { value: "Average", label: "Average (rata-rata bergerak)" },
+                    { value: "Average", label: "Rata-rata bergerak" },
                   ]}
                 />
                 <p className="text-xs text-muted-foreground">
@@ -671,11 +671,11 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                 <Input id="currencySymbol" name="currencySymbol" placeholder="Rp" defaultValue={settings.currencySymbol || "Rp"} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="currencyLocale">Locale Mata Uang</Label>
+                <Label htmlFor="currencyLocale">Format Lokal Mata Uang</Label>
                 <Input id="currencyLocale" name="currencyLocale" placeholder="id_ID" defaultValue={settings.currencyLocale || "id_ID"} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5 hidden">
-                <Label htmlFor="documentNumberFormat">Format Nomor Dokumen (legacy)</Label>
+                <Label htmlFor="documentNumberFormat">Format Nomor Dokumen (lama)</Label>
                 <Input id="documentNumberFormat" name="documentNumberFormat" placeholder="(tidak dipakai)" defaultValue={settings.documentNumberFormat || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -683,7 +683,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
               </div>
               <div className="flex flex-col gap-3 justify-end">
                 <div className="flex items-center gap-3">
-                  <SettingSwitch name="showIsActiveField" label="Tampilkan Field Is Active" defaultSelected={settings.showIsActiveField !== false} />
+                  <SettingSwitch name="showIsActiveField" label="Tampilkan Kolom Status Aktif" defaultSelected={settings.showIsActiveField !== false} />
                 </div>
                 <div className="flex items-center gap-3">
                   <SettingSwitch name="showTaxId" label="Tampilkan NPWP" defaultSelected={settings.showTaxId !== false} />
@@ -735,60 +735,60 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         </div>
         )}
 
-        {/* Section: Prefix Kode Otomatis */}
+        {/* Section: Awalan Kode Otomatis */}
         {show("prefixes") && (
         <div>
           <div className="rounded-xl border bg-card p-6">
-            <h2 className="text-base font-semibold text-foreground mb-4">Prefix Kode Entitas</h2>
+            <h2 className="text-base font-semibold text-foreground mb-4">Awalan Kode Entitas</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="itemCodePrefix">Prefix Barang</Label>
+                <Label htmlFor="itemCodePrefix">Awalan Barang</Label>
                 <Input id="itemCodePrefix" name="itemCodePrefix" defaultValue={settings.itemCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoItemCode" label="Kode Otomatis Barang" defaultSelected={settings.enableAutoItemCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="warehouseCodePrefix">Prefix Gudang</Label>
+                <Label htmlFor="warehouseCodePrefix">Awalan Gudang</Label>
                 <Input id="warehouseCodePrefix" name="warehouseCodePrefix" defaultValue={settings.warehouseCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoWarehouseCode" label="Kode Otomatis Gudang" defaultSelected={settings.enableAutoWarehouseCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="rackCodePrefix">Prefix Rak</Label>
+                <Label htmlFor="rackCodePrefix">Awalan Rak</Label>
                 <Input id="rackCodePrefix" name="rackCodePrefix" defaultValue={settings.rackCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoRackCode" label="Kode Otomatis Rak" defaultSelected={settings.enableAutoRackCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="rowCodePrefix">Prefix Baris</Label>
+                <Label htmlFor="rowCodePrefix">Awalan Baris</Label>
                 <Input id="rowCodePrefix" name="rowCodePrefix" defaultValue={settings.rowCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoRowCode" label="Kode Otomatis Baris" defaultSelected={settings.enableAutoRowCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="customerCodePrefix">Prefix Pelanggan</Label>
+                <Label htmlFor="customerCodePrefix">Awalan Pelanggan</Label>
                 <Input id="customerCodePrefix" name="customerCodePrefix" defaultValue={settings.customerCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoCustomerCode" label="Kode Otomatis Pelanggan" defaultSelected={settings.enableAutoCustomerCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="employeeCodePrefix">Prefix Karyawan</Label>
+                <Label htmlFor="employeeCodePrefix">Awalan Karyawan</Label>
                 <Input id="employeeCodePrefix" name="employeeCodePrefix" defaultValue={settings.employeeCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoEmployeeCode" label="Kode Otomatis Karyawan" defaultSelected={settings.enableAutoEmployeeCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorCodePrefix">Prefix Vendor</Label>
+                <Label htmlFor="vendorCodePrefix">Awalan Pemasok</Label>
                 <Input id="vendorCodePrefix" name="vendorCodePrefix" defaultValue={settings.vendorCodePrefix || ""} className="w-full" />
-                <SettingSwitch name="enableAutoVendorCode" label="Kode Otomatis Vendor" defaultSelected={settings.enableAutoVendorCode !== false} />
+                <SettingSwitch name="enableAutoVendorCode" label="Kode Otomatis Pemasok" defaultSelected={settings.enableAutoVendorCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="paymentMethodCodePrefix">Prefix Metode Pembayaran</Label>
+                <Label htmlFor="paymentMethodCodePrefix">Awalan Metode Pembayaran</Label>
                 <Input id="paymentMethodCodePrefix" name="paymentMethodCodePrefix" defaultValue={settings.paymentMethodCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoPaymentMethodCode" label="Kode Otomatis Metode Pembayaran" defaultSelected={settings.enableAutoPaymentMethodCode !== false} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="shippingMethodCodePrefix">Prefix Metode Pengiriman</Label>
+                <Label htmlFor="shippingMethodCodePrefix">Awalan Metode Pengiriman</Label>
                 <Input id="shippingMethodCodePrefix" name="shippingMethodCodePrefix" defaultValue={settings.shippingMethodCodePrefix || ""} className="w-full" />
                 <SettingSwitch name="enableAutoShippingMethodCode" label="Kode Otomatis Metode Pengiriman" defaultSelected={settings.enableAutoShippingMethodCode !== false} />
               </div>
             </div>
 
-            <h2 className="text-base font-semibold text-foreground mb-4 mt-8">Prefix Dokumen</h2>
+            <h2 className="text-base font-semibold text-foreground mb-4 mt-8">Awalan Dokumen</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="quotationCodePrefix">Penawaran</Label>
@@ -851,7 +851,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                 <Input id="journalPrefix" name="journalPrefix" defaultValue={settings.journalPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="expensePrefix">Biaya</Label>
+                <Label htmlFor="expensePrefix">Pengeluaran</Label>
                 <Input id="expensePrefix" name="expensePrefix" defaultValue={settings.expensePrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -875,11 +875,11 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                 <Input id="goodsReceiptPrefix" name="goodsReceiptPrefix" defaultValue={settings.goodsReceiptPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorBillPrefix">Tagihan Vendor</Label>
+                <Label htmlFor="vendorBillPrefix">Tagihan Pemasok</Label>
                 <Input id="vendorBillPrefix" name="vendorBillPrefix" defaultValue={settings.vendorBillPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="vendorPaymentPrefix">Pembayaran Vendor</Label>
+                <Label htmlFor="vendorPaymentPrefix">Pembayaran Pemasok</Label>
                 <Input id="vendorPaymentPrefix" name="vendorPaymentPrefix" defaultValue={settings.vendorPaymentPrefix || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -974,8 +974,8 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <h2 className="text-base font-semibold text-foreground mb-4">Pengaturan Penawaran</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <Label htmlFor="quotationFooterNotes">Catatan Footer</Label>
-                <Textarea id="quotationFooterNotes" name="quotationFooterNotes" placeholder="Catatan footer penawaran..." defaultValue={settings.quotationFooterNotes || ""} className="w-full" />
+                <Label htmlFor="quotationFooterNotes">Catatan Kaki</Label>
+                <Textarea id="quotationFooterNotes" name="quotationFooterNotes" placeholder="Catatan kaki penawaran..." defaultValue={settings.quotationFooterNotes || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="quotationSignatureName">Nama Tanda Tangan</Label>
@@ -1052,7 +1052,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                   size="sm"
                   data-print-keep
                 >
-                  Auto-Map Akun
+                  Pemetaan Otomatis Akun
                 </Button>
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full border border-default bg-surface">

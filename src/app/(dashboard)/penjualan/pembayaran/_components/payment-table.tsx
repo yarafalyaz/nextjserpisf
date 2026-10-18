@@ -78,7 +78,7 @@ export function PaymentTable({ data, total, page, pageSize }: PaymentTableProps)
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar pembayaran sales"
+      ariaLabel="Daftar pembayaran penjualan"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="documentNo"

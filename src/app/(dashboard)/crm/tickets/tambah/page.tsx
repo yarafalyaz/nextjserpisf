@@ -7,7 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Tambah Tickets" }
+export const metadata: Metadata = { title: "Tambah Tiket" }
 
 export default async function CreateTicketPage() {
   await requirePermission("create_tickets")

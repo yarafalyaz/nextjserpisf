@@ -93,7 +93,7 @@ export default async function PurchaseReturnDetailPage({
           value={<Link href={entityHref("/pembelian/pesanan", purchaseReturn.purchaseOrder)}>{purchaseReturn.purchaseOrder.documentNo}</Link>}
         />
         <DetailField
-          label="Vendor"
+          label="Pemasok"
           value={<Link href={entityHref("/master/vendor", purchaseReturn.purchaseOrder.vendor)}>{purchaseReturn.purchaseOrder.vendor.name}</Link>}
         />
         <DetailField label="Tanggal" value={formatDate(purchaseReturn.date)} />

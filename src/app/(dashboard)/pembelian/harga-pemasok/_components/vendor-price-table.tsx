@@ -23,7 +23,7 @@ const columns = [
   columnHelper.accessor("vendorName", { header: "Pemasok" }),
   columnHelper.accessor("itemLabel", { header: "Barang" }),
   columnHelper.accessor("minQty", {
-    header: "Min. Qty",
+    header: "Min. Jml",
     cell: (info) => <span className="tabular-nums">{formatAccounting(info.getValue())}</span>,
   }),
   columnHelper.accessor("price", {

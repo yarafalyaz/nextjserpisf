@@ -208,7 +208,7 @@ export default async function GoodsReceiptDetailPage({
           </div>
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Vendor
+              Pemasok
             </span>
             <span className="text-[0.9375rem] text-foreground font-medium">
               {receipt.purchaseOrder.vendor ? (
@@ -292,7 +292,7 @@ export default async function GoodsReceiptDetailPage({
         Number(receipt.purchaseOrder.discount) > 0) && (
         <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
           <h2 className="mb-4 text-[0.9375rem] font-semibold text-foreground">
-            Komponen Landed Cost (estimasi PO)
+            Komponen Biaya Perolehan (estimasi PO)
           </h2>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
             <div className="flex flex-col gap-1">
@@ -433,7 +433,7 @@ export default async function GoodsReceiptDetailPage({
         <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
           <div className="flex items-center justify-between p-4 px-5 border-b border-default">
             <h2 className="text-[0.9375rem] font-semibold text-foreground">
-              Tagihan Vendor
+              Tagihan Pemasok
             </h2>
           </div>
           <div className="p-4 px-5">

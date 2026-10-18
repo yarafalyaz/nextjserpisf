@@ -87,7 +87,7 @@ export default async function ItemsPage({
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari SKU atau nama item..." action="/master/barang" />}
+        toolbar={<AppSearchField placeholder="Cari SKU atau nama barang..." action="/master/barang" />}
         filters={
           <form className="flex gap-2 flex-wrap" action="/master/barang">
             <FormSelect

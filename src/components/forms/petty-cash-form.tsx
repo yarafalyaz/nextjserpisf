@@ -121,14 +121,14 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="vendorId">Vendor</Label>
+              <Label htmlFor="vendorId">Pemasok</Label>
               <QuickAddSelect
                 id="vendorId"
                 name="vendorId"
                 options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
                 value={vendorId}
                 onChange={setVendorId}
-                placeholder="Cari vendor/toko..."
+                placeholder="Cari pemasok/toko..."
                 title={QUICK_ADD.vendor.title}
                 fields={QUICK_ADD.vendor.fields}
                 action={QUICK_ADD.vendor.action}

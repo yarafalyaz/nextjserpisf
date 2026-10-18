@@ -88,7 +88,7 @@ export default async function StockMovesPage({
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari no. dokumen, item, atau gudang..." action="/inventaris/mutasi-stok" />}
+        toolbar={<AppSearchField placeholder="Cari no. dokumen, barang, atau gudang..." action="/inventaris/mutasi-stok" />}
         filters={<div className="flex gap-1.5 flex-wrap">{dampakFilter}</div>}
       />
     </div>

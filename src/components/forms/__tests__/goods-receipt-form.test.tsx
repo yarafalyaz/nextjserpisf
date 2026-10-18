@@ -77,7 +77,7 @@ const mockPO = {
 }
 
 describe("GoodsReceiptForm — item row layout", () => {
-  it("shows SKU, keeps unit in a single column, and offers an editable Qty Terima", () => {
+  it("shows SKU, keeps unit in a single column, and offers an editable Jml Terima", () => {
     const container = document.createElement("div")
     document.body.appendChild(container)
     const { root } = mountInto(container)
@@ -99,7 +99,7 @@ describe("GoodsReceiptForm — item row layout", () => {
     expect(text).toContain("Baut M8")
     expect(text).toContain("BOLT-M8")
 
-    // Qty Terima is an editable number input carrying the arrival qty (10-4=6).
+    // Jml Terima is an editable number input carrying the arrival qty (10-4=6).
     const qtyInputs = Array.from(
       container.querySelectorAll<HTMLInputElement>('input[type="number"]'),
     ).filter((i) => i.closest("tbody"))
@@ -109,7 +109,7 @@ describe("GoodsReceiptForm — item row layout", () => {
 
     // "PCS" should appear but not awkwardly doubled in one cell; the unit cell
     // holds the single unit label. We assert the header set is sane.
-    expect(text).toContain("Qty Terima")
+    expect(text).toContain("Jml Terima")
     expect(text).toContain("Dipesan")
     expect(text).toContain("Sisa")
 
@@ -117,7 +117,7 @@ describe("GoodsReceiptForm — item row layout", () => {
     container.remove()
   })
 
-  it("shows a zero sisa and locks Qty Terima when the line is already fully received", () => {
+  it("shows a zero sisa and locks Jml Terima when the line is already fully received", () => {
     const po = {
       ...mockPO,
       items: [

@@ -109,14 +109,14 @@ export default async function QcChecklistDetailPage({
         <DetailField label="Dibuat" value={formatDate(checklist.createdAt)} />
       </DetailCard>
 
-      <DetailSection title="Item Checklist">
+      <DetailSection title="Butir Checklist">
         {checklist.items.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada butir</p>
         ) : (
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>#</DetailTableTh>
-              <DetailTableTh>Item</DetailTableTh>
+              <DetailTableTh>Butir</DetailTableTh>
               <DetailTableTh>Metode</DetailTableTh>
               <DetailTableTh>Spesifikasi</DetailTableTh>
               <DetailTableTh>Wajib</DetailTableTh>

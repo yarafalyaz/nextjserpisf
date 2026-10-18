@@ -7,7 +7,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Tambah Production Orders" }
+export const metadata: Metadata = { title: "Tambah Perintah Produksi" }
 
 /**
  * Jalur "buat dari": `/produksi/production-orders/tambah?workOrderId=N` (plus

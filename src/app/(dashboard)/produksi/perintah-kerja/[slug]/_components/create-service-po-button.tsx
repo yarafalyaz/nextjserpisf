@@ -44,7 +44,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
 
   function submit() {
     if (!vendorId) {
-      showError("Pilih vendor jasa terlebih dahulu")
+      showError("Pilih pemasok jasa terlebih dahulu")
       return
     }
     startTransition(async () => {
@@ -77,20 +77,20 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
         <div className="flex flex-col gap-1">
           <h2 className="text-base font-semibold text-foreground">Buat PO Jasa/Subkontrak</h2>
           <p className="text-xs text-muted-foreground">
-            Item jasa pada perintah kerja ini akan digabung menjadi satu PO jasa (draf) tertaut
+            Barang jasa pada perintah kerja ini akan digabung menjadi satu PO jasa (draf) tertaut
             ke perintah kerja. Penerimaannya tidak menggerakkan stok — biaya langsung dibebankan.
           </p>
         </div>
 
         <div className="flex flex-col gap-2">
           <label className="text-sm font-medium text-foreground" htmlFor="service-po-vendor">
-            Vendor Jasa *
+            Pemasok Jasa *
           </label>
           <QuickAddSelect
             options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
             value={vendorId || null}
             onChange={(v) => setVendorId(v ?? "")}
-            placeholder="Cari vendor..."
+            placeholder="Cari pemasok..."
             title={QUICK_ADD.vendor.title}
             fields={QUICK_ADD.vendor.fields}
             action={QUICK_ADD.vendor.action}
@@ -105,7 +105,7 @@ export function CreateServicePoButton({ workOrderId, serviceItems, vendors }: Pr
           <table className="w-full text-sm">
             <thead>
               <tr className="text-muted-foreground text-xs">
-                <th className="text-left font-medium">Item Jasa</th>
+                <th className="text-left font-medium">Barang Jasa</th>
                 <th className="text-right font-medium">Kuantitas</th>
                 <th className="text-right font-medium">Biaya/Unit</th>
               </tr>

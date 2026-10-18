@@ -49,7 +49,7 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
 
   const driverOptions = [
     { value: "local", label: "Penyimpanan Lokal", desc: "File disimpan di server (public/uploads)", icon: HardDrive },
-    { value: "r2", label: "Cloudflare R2", desc: "Object storage S3-compatible + CDN", icon: Cloud },
+    { value: "r2", label: "Cloudflare R2", desc: "Penyimpanan objek kompatibel S3 + CDN", icon: Cloud },
   ]
 
   return (
@@ -123,7 +123,7 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
           <CardContent>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="r2AccountId">Account ID</Label>
+                <Label htmlFor="r2AccountId">ID Akun</Label>
                 <Input id="r2AccountId" name="r2AccountId" defaultValue={r2AccountId} placeholder="abc123..." />
               </div>
               <div className="flex flex-col gap-1.5">
@@ -131,16 +131,16 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
                 <Input id="r2Bucket" name="r2Bucket" defaultValue={r2Bucket} placeholder="yara-assets" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="r2AccessKeyId">Access Key ID</Label>
+                <Label htmlFor="r2AccessKeyId">ID Kunci Akses</Label>
                 <Input id="r2AccessKeyId" name="r2AccessKeyId" defaultValue={r2AccessKeyId} placeholder="..." />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="r2SecretAccessKey">Secret Access Key</Label>
+                <Label htmlFor="r2SecretAccessKey">Kunci Akses Rahasia</Label>
                 <Input
                   id="r2SecretAccessKey"
                   name="r2SecretAccessKey"
                   type="password"
-                  placeholder={hasSecret ? "•••••••• (biarkan kosong jika tidak diubah)" : "Masukkan secret key"}
+                  placeholder={hasSecret ? "•••••••• (biarkan kosong jika tidak diubah)" : "Masukkan kunci akses rahasia"}
                 />
                 <p className="text-xs text-muted-foreground">
                   {hasSecret ? "Sudah tersimpan. Isi hanya jika ingin mengganti." : "Belum diset."}
@@ -155,7 +155,7 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
       {selectedDriver === "r2" && (
         <Card>
           <CardHeader>
-            <CardTitle>Mode Hybrid (Fallback Lokal)</CardTitle>
+            <CardTitle>Mode Hibrida (Cadangan Lokal)</CardTitle>
             <CardDescription>
               Kalau upload ke Cloudflare R2 gagal atau tidak bisa diakses, file otomatis disimpan ke server lokal
               supaya proses upload tetap berhasil.
@@ -166,7 +166,7 @@ export function StorageForm({ driver, fallbackLocal, assetBaseUrl, r2AccountId, 
               <div className="min-w-0">
                 <p className="text-sm font-medium text-foreground">Simpan ke lokal jika R2 gagal</p>
                 <p className="text-xs text-muted-foreground">
-                  Disarankan aktif. File fallback diakses lewat path lokal (/uploads/...).
+                  Disarankan aktif. File cadangan diakses lewat path lokal (/uploads/...).
                 </p>
               </div>
               <Switch

@@ -22,7 +22,7 @@ import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 
-export const metadata: Metadata = { title: "Leads" }
+export const metadata: Metadata = { title: "Prospek" }
 
 export default async function LeadDetailPage({
   params,
@@ -53,11 +53,11 @@ export default async function LeadDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Lead: ${lead.name}`}
+        title={`Prospek: ${lead.name}`}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "CRM", href: "/crm" },
-          { label: "Leads", href: "/crm/leads" },
+          { label: "Prospek", href: "/crm/leads" },
           { label: lead.name },
         ]}
         badge={<StatusChip status={lead.status} />}
@@ -73,7 +73,7 @@ export default async function LeadDetailPage({
       />
 
       <DetailTabs
-        ariaLabel="Lead detail tabs"
+        ariaLabel="Tab detail prospek"
         tabs={[
           {
             id: "info",

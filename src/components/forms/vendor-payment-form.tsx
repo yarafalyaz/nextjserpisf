@@ -140,14 +140,14 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorId">Vendor *</Label>
+            <Label htmlFor="vendorId">Pemasok *</Label>
             <QuickAddSelect
               id="vendorId"
               name="vendorId"
               options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
               value={vendorId || null}
               onChange={(key) => setVendorId(key ?? "")}
-              placeholder="Cari vendor..."
+              placeholder="Cari pemasok..."
               title={QUICK_ADD.vendor.title}
               fields={QUICK_ADD.vendor.fields}
               action={QUICK_ADD.vendor.action}
@@ -297,7 +297,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
             ) : (
               <p className="text-xs text-muted-foreground">
                 Belum dipilih tagihan. Pembayaran akan otomatis dialokasikan ke tagihan
-                tertua vendor ini saat dikonfirmasi.
+                tertua pemasok ini saat dikonfirmasi.
               </p>
             )}
             <div className="flex flex-col gap-1.5">

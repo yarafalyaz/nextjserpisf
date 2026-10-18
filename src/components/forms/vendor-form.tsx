@@ -101,13 +101,13 @@ export function VendorForm({ vendor, generatedCode, enableAutoCode = true, payme
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="code">ID Vendor</Label>
+            <Label htmlFor="code">ID Pemasok</Label>
             <Input id="code" {...register("code")} readOnly={isEdit || enableAutoCode} className={isEdit || enableAutoCode ? "bg-muted" : undefined} placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan kode manual"} />
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Vendor *</Label>
-            <Input id="name" {...register("name")} placeholder="Nama vendor" />
+            <Label htmlFor="name">Nama Pemasok *</Label>
+            <Input id="name" {...register("name")} placeholder="Nama pemasok" />
             {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
           </div>
 

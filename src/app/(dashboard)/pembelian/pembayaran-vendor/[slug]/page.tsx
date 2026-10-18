@@ -19,7 +19,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
-export const metadata: Metadata = { title: "Pembayaran Vendor" }
+export const metadata: Metadata = { title: "Pembayaran Pemasok" }
 
 export default async function VendorPaymentDetailPage({
   params,
@@ -59,11 +59,11 @@ export default async function VendorPaymentDetailPage({
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
-        title={`Pembayaran Vendor ${payment.documentNo}`}
+        title={`Pembayaran Pemasok ${payment.documentNo}`}
         breadcrumbs={[
           { label: "Dasbor", href: "/" },
           { label: "Pembelian", href: "/pembelian" },
-          { label: "Pembayaran Vendor", href: "/pembelian/pembayaran-vendor" },
+          { label: "Pembayaran Pemasok", href: "/pembelian/pembayaran-vendor" },
           { label: "Detail" },
         ]}
         actions={

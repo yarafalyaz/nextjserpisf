@@ -34,7 +34,7 @@ const columns = [
   }),
   columnHelper.display({
     id: "vendorName",
-    header: "Vendor",
+    header: "Pemasok",
     cell: (info) => info.row.original.vendor.name,
   }),
   columnHelper.accessor("paymentDate", {
@@ -89,11 +89,11 @@ export function VendorPaymentTable({ data, total, page, pageSize }: VendorPaymen
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar pembayaran vendor"
+      ariaLabel="Daftar pembayaran pemasok"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       searchColumn="documentNo"
-      searchPlaceholder="Cari no. dokumen atau vendor..."
+      searchPlaceholder="Cari no. dokumen atau pemasok..."
       onBulkDelete={(ids) => bulkDelete("vendorPayment", ids)}
     />
   )

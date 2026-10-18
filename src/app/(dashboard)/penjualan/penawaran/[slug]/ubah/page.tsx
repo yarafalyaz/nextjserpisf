@@ -130,7 +130,7 @@ export default async function EditQuotationPage({
         return {
           itemId: m.itemId,
           qty: Number(m.qty),
-          name: item?.name || "Unknown Item",
+          name: item?.name || "Barang Tidak Dikenal",
           price: item ? Number(item.price) : 0,
           unitOfMeasure: item?.unitOfMeasure || "PCS",
         }

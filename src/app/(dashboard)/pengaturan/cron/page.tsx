@@ -7,7 +7,7 @@ import { CronTaskList } from "./_components/cron-task-list"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Cron" }
+export const metadata: Metadata = { title: "Jadwal Tugas" }
 
 const CRON_TASKS = [
   {
@@ -60,12 +60,12 @@ export default async function CronPage() {
       <AppBreadcrumbs
         items={[
           { label: "Pengaturan", href: "/pengaturan" },
-          { label: "Cron Jobs" },
+          { label: "Jadwal Tugas" },
         ]}
       />
 
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Cron Jobs</h1>
+        <h1 className="text-2xl font-bold text-foreground">Jadwal Tugas</h1>
         <p className="text-sm text-muted-foreground mt-1">
           Kelola tugas terjadwal otomatis sistem
         </p>

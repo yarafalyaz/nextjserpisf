@@ -150,7 +150,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
       {/* Header & Overall Progress */}
       <div className="flex flex-col md:flex-row md:items-center justify-between p-5 border-b border-default bg-surface-secondary/30 gap-4">
         <div>
-          <h2 className="text-base font-bold text-foreground">Timeline & Tahapan Pengerjaan Fisik</h2>
+          <h2 className="text-base font-bold text-foreground">Lini Masa &amp; Tahapan Pengerjaan Fisik</h2>
           <p className="text-xs text-muted-foreground mt-0.5">Pantau dan kelola tahapan pengerjaan karoseri kendaraan pelanggan</p>
         </div>
         <div className="flex items-center gap-4 min-w-[240px]">
@@ -331,7 +331,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                             onClick={() => handleActionClick(stage, "pending")}
                             className="w-full sm:w-auto hover:bg-warning-soft"
                           >
-                            <RotateCcw className="size-3 mr-1.5" /> Reset ke Antrean
+                            <RotateCcw className="size-3 mr-1.5" /> Kembalikan ke Antrean
                           </Button>
                         )}
 
@@ -368,7 +368,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
           targetStatus === "in_progress" ? "Mulai" :
           targetStatus === "completed" ? "Selesaikan" :
           targetStatus === "skipped" ? "Lewati" :
-          "Reset"
+          "Kembalikan"
         }
         cancelLabel="Batal"
         variant={
@@ -423,7 +423,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
                 />
               </div>
               <p className="text-[10px] text-muted-foreground leading-normal">
-                *Mengatur progres ke 100% akan otomatis memindahkan status tahapan ini menjadi Selesai (Completed).
+                *Mengatur progres ke 100% akan otomatis memindahkan status tahapan ini menjadi Selesai.
               </p>
             </div>
           )}

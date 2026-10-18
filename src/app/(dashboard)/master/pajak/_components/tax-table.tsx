@@ -27,7 +27,7 @@ const columns = [
     ),
   }),
   columnHelper.accessor("rate", {
-    header: "Rate (%)",
+    header: "Tarif (%)",
     cell: (info) => `${Number(info.getValue())}%`,
   }),
   columnHelper.display({

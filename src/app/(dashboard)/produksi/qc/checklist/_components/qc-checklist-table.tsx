@@ -52,8 +52,8 @@ const columns = [
     cell: (info) => `v${info.getValue()}`,
   }),
   columnHelper.accessor("itemsCount", {
-    header: "Item",
-    cell: (info) => `${info.getValue()} item`,
+    header: "Butir",
+    cell: (info) => `${info.getValue()} butir`,
   }),
   columnHelper.accessor("status", {
     header: "Status",

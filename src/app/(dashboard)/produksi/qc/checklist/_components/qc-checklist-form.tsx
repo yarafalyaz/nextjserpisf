@@ -40,10 +40,10 @@ interface QcChecklistEdit {
 }
 
 const TYPE_OPTIONS = [
-  { value: "incoming", label: "Penerimaan (incoming)" },
-  { value: "in_process", label: "Proses (in-process)" },
-  { value: "final", label: "Akhir (final)" },
-  { value: "safety", label: "Keselamatan (safety/K3)" },
+  { value: "incoming", label: "Penerimaan" },
+  { value: "in_process", label: "Proses" },
+  { value: "final", label: "Akhir" },
+  { value: "safety", label: "Keselamatan (K3)" },
 ]
 
 const METHOD_OPTIONS = [
@@ -163,16 +163,16 @@ export function QcChecklistForm({
 
       <div className="form-section">
         <div className="form-section-header">
-          <h3 className="form-section-title">Item Checklist</h3>
-          <Button onPress={addRow} aria-label="Tambah item" type="button">
-            <Plus size={14} /> Tambah Item
+          <h3 className="form-section-title">Butir Checklist</h3>
+          <Button onPress={addRow} aria-label="Tambah butir" type="button">
+            <Plus size={14} /> Tambah Butir
           </Button>
         </div>
 
         <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
-              <DetailTableTh>Item</DetailTableTh>
+              <DetailTableTh>Butir</DetailTableTh>
               <DetailTableTh>Metode</DetailTableTh>
               <DetailTableTh>Spesifikasi</DetailTableTh>
               <DetailTableTh>Wajib</DetailTableTh>
@@ -185,7 +185,7 @@ export function QcChecklistForm({
                     <Input
                       value={r.itemName}
                       onChange={(e) => updateRow(index, "itemName", e.target.value)}
-                      placeholder="Nama item"
+                      placeholder="Nama butir"
                     />
                   </DetailTableTd>
                   <DetailTableTd>
@@ -212,14 +212,14 @@ export function QcChecklistForm({
                       type="checkbox"
                       checked={r.isRequired}
                       onChange={(e) => updateRow(index, "isRequired", e.target.checked)}
-                      aria-label="Item wajib"
+                      aria-label="Butir wajib"
                       className="size-4"
                     />
                   </DetailTableTd>
                   <DetailTableTd>
                     <Button
                       onPress={() => removeRow(index)}
-                      aria-label="Hapus item"
+                      aria-label="Hapus butir"
                       type="button"
                       isDisabled={rows.length === 1}
                     >

@@ -25,11 +25,11 @@ export function ConvertLeadButton({ leadId, canConvert }: { leadId: number; canC
     startTransition(async () => {
       const res = await convertLead(leadId)
       if (!res.success) {
-        showError(res.error || "Gagal mengonversi lead")
+        showError(res.error || "Gagal mengonversi prospek")
         setOpen(false)
         return
       }
-      showSuccess("Lead berhasil dikonversi menjadi pelanggan")
+      showSuccess("Prospek berhasil dikonversi menjadi pelanggan")
       setOpen(false)
       router.push(`/master/pelanggan/${res.customerId}`)
       router.refresh()
@@ -44,8 +44,8 @@ export function ConvertLeadButton({ leadId, canConvert }: { leadId: number; canC
       <ConfirmDialog
         isOpen={open}
         onOpenChange={setOpen}
-        title="Konversi lead menjadi pelanggan?"
-        body="Lead akan ditandai 'won' dan pelanggan baru dibuat dari data lead ini. Tindakan ini tidak dapat dibatalkan."
+        title="Konversi prospek menjadi pelanggan?"
+        body="Prospek akan ditandai 'Menang' dan pelanggan baru dibuat dari data prospek ini. Tindakan ini tidak dapat dibatalkan."
         confirmLabel="Konversi"
         cancelLabel="Batal"
         isPending={isPending}

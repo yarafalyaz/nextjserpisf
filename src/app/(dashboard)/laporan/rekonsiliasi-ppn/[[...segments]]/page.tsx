@@ -100,7 +100,7 @@ export default async function VatReconciliationPage({
 
 
       <ReportLetterhead title="Rekonsiliasi PPN" subtitle="Per Buku (Jurnal) vs Per Dokumen" periodLabel={periodLabel} />
-      <ReportNarration text="Laporan Rekonsiliasi PPN membandingkan PPN yang tercatat di buku besar (jurnal pada akun PPN) dengan PPN yang tercantum di dokumen (faktur penjualan dan tagihan vendor). Selisih yang muncul menandakan ada dokumen yang belum dijurnal atau jurnal manual yang tidak punya dokumen — kolom selisih sengaja tidak dinolkan supaya perbedaan itu terlihat." />
+      <ReportNarration text="Laporan Rekonsiliasi PPN membandingkan PPN yang tercatat di buku besar (jurnal pada akun PPN) dengan PPN yang tercantum di dokumen (faktur penjualan dan tagihan pemasok). Selisih yang muncul menandakan ada dokumen yang belum dijurnal atau jurnal manual yang tidak punya dokumen — kolom selisih sengaja tidak dinolkan supaya perbedaan itu terlihat." />
 
       {mappingMissing && (
         <ReportSection title="Peringatan Pemetaan Akun">

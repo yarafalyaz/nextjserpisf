@@ -37,7 +37,7 @@ const columns = [
   }),
   columnHelper.display({
     id: "vendorName",
-    header: "Vendor",
+    header: "Pemasok",
     cell: (info) => info.row.original.vendor.name,
   }),
   columnHelper.accessor("grandTotal", {

@@ -11,7 +11,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 
-export const metadata: Metadata = { title: "Nonconformance (NCR)" }
+export const metadata: Metadata = { title: "Ketidaksesuaian (NCR)" }
 
 export default async function NonconformancesPage({
   searchParams,
@@ -71,7 +71,7 @@ export default async function NonconformancesPage({
       />
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Nonconformance (NCR)</h1>
+          <h1 className="text-2xl font-bold text-foreground">Ketidaksesuaian (NCR)</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Cacat dan pengerjaan ulang. NCR terbuka memblokir serah terima dokumen terkait sampai ditutup.
           </p>

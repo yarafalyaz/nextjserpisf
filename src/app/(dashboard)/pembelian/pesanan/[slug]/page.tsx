@@ -118,10 +118,10 @@ export default async function PurchaseOrderDetailPage({
                   module="pembelian/pesanan"
                 />
                 <DetailCard>
-                  <DetailField label="Vendor" value={po.vendor.name} />
+                  <DetailField label="Pemasok" value={po.vendor.name} />
                   <DetailField label="Tanggal" value={formatDate(po.date)} />
                   <DetailField label="Tanggal Diharapkan" value={formatDate(po.expectedDate)} />
-                  <DetailField label="Ref. PR" value={po.purchaseRequest?.documentNo || "-"} mono />
+                  <DetailField label="No. PR" value={po.purchaseRequest?.documentNo || "-"} mono />
                   <DetailField
                     label={po.isService ? "Perintah Kerja (Jasa)" : "Perintah Kerja"}
                     value={
@@ -267,7 +267,7 @@ export default async function PurchaseOrderDetailPage({
             content: (
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between p-4 px-5 border-b border-default">
-                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Tagihan Vendor</h2>
+                  <h2 className="text-[0.9375rem] font-semibold text-foreground">Tagihan Pemasok</h2>
                 </div>
                 <div className="p-4 px-5">
                   {po.vendorBills.length === 0 ? (

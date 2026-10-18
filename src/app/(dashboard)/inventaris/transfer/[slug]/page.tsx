@@ -125,7 +125,7 @@ export default async function InventoryTransferDetailPage({
         </div>
         <div className="p-4 px-5">
           {transfer.items.length === 0 ? (
-            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada item</p>
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada barang</p>
           ) : (
             <DetailTable>
               <DetailTableHead>

@@ -301,7 +301,7 @@ export function PurchaseOrderForm({
                   ) : null}
                 </div>
                 <p className="mt-1.5 text-xs text-muted-foreground">
-                  Item &amp; vendor di bawah terisi dari permintaan ini (vendor masih bisa diganti).
+                  Item &amp; pemasok di bawah terisi dari permintaan ini (pemasok masih bisa diganti).
                   Setelah PO disimpan, permintaan otomatis ditandai dipesan.
                 </p>
               </div>
@@ -333,7 +333,7 @@ export function PurchaseOrderForm({
 
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorId">Vendor *</Label>
+            <Label htmlFor="vendorId">Pemasok *</Label>
             <Controller
               name="vendorId"
               control={control}
@@ -347,7 +347,7 @@ export function PurchaseOrderForm({
                     field.onChange(vid);
                     applyVendorTerm(vid);
                   }}
-                  placeholder="Cari vendor..."
+                  placeholder="Cari pemasok..."
                   options={vendorOptions.map((v) => ({
                     value: String(v.id),
                     label: v.name,
@@ -412,7 +412,7 @@ export function PurchaseOrderForm({
                   }}
                   className="text-xs font-medium text-muted-foreground hover:underline"
                 >
-                  Pakai termin vendor
+                  Pakai termin pemasok
                 </button>
               )}
             </div>
@@ -426,7 +426,7 @@ export function PurchaseOrderForm({
             />
             {vendorTerm && termLocked && (
               <p className="text-xs text-muted-foreground">
-                Otomatis dari vendor: <span className="font-medium">{vendorTerm.name || vendorTerm.code}</span>
+                Otomatis dari pemasok: <span className="font-medium">{vendorTerm.name || vendorTerm.code}</span>
                 {vendorTerm.days ? ` (${vendorTerm.days} hari)` : ""}. Klik &quot;Ubah&quot; bila perlu termin khusus.
               </p>
             )}

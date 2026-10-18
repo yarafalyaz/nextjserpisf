@@ -46,7 +46,7 @@ const columns = [
     cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("vendorName", {
-    header: "Vendor",
+    header: "Pemasok",
     cell: (info) => info.getValue() || "-",
   }),
   columnHelper.accessor("amount", {
@@ -104,7 +104,7 @@ export function ExpenseTable({ data, toolbar, filters }: ExpenseTableProps) {
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar expense"
+      ariaLabel="Daftar pengeluaran"
       pageSize={20}
       selectable={true}
       toolbar={toolbar}

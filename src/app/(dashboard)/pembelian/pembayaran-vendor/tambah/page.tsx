@@ -8,7 +8,7 @@ import { getActivePaymentMethods } from "@/lib/services/method.service"
 
 import type { Metadata } from "next"
 
-export const metadata: Metadata = { title: "Tambah Pembayaran Vendor" }
+export const metadata: Metadata = { title: "Tambah Pembayaran Pemasok" }
 
 export default async function CreateVendorPaymentPage({
   searchParams,
@@ -39,11 +39,11 @@ export default async function CreateVendorPaymentPage({
       <AppBreadcrumbs items={[
   { label: "Dasbor", href: "/" },
   { label: "Pembelian", href: "/pembelian" },
-  { label: "Pembayaran Vendor", href: "/pembelian/pembayaran-vendor" },
+  { label: "Pembayaran Pemasok", href: "/pembelian/pembayaran-vendor" },
   { label: "Tambah" },
 ]} />
       <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Pembayaran Vendor</h1>
+        <h1 className="text-2xl font-bold text-foreground">Buat Pembayaran Pemasok</h1>
       </div>
       <VendorPaymentForm
         vendors={vendors}

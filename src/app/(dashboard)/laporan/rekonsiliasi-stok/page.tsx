@@ -82,7 +82,7 @@ export default async function StockReconciliationPage() {
 
 
 
-      <ReportLetterhead title="Rekonsiliasi Stok" subtitle="Stock Reconciliation" periodLabel={periodLabel} />
+      <ReportLetterhead title="Rekonsiliasi Stok" subtitle="Rekonsiliasi Persediaan" periodLabel={periodLabel} />
       <ReportNarration text="Laporan Rekonsiliasi Stok membandingkan jumlah stok pada data induk barang (qty on-hand) dengan jumlah pada lapisan FIFO (lot per gudang). Keduanya seharusnya selalu sama; selisih menandakan ada mutasi yang memperbarui salah satu saja, sehingga angka stok bisa menyesatkan. Gunakan laporan ini sebagai alat kontrol integritas persediaan." />
 
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">

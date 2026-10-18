@@ -83,7 +83,7 @@ const columns = [
         processLabel="Posting"
         processPermission="post_sales_invoices"
         processConfirmTitle="Posting faktur ini?"
-        processConfirmBody="Faktur akan berstatus terposting: piutang diakui di jurnal dan stok barang berkurang sesuai item. Pastikan data sudah benar."
+        processConfirmBody="Faktur akan diposting: piutang diakui di jurnal dan stok barang berkurang sesuai barang pada faktur. Pastikan data sudah benar."
         processSuccessMessage="Faktur berhasil diposting"
       />
     ),

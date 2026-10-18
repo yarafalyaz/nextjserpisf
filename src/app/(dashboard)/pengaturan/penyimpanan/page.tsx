@@ -67,7 +67,7 @@ export default async function StorageSettingsPage() {
                   {isR2 ? "Cloudflare R2" : "Penyimpanan Lokal"}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  {isR2 ? "File diunggah ke object storage Cloudflare R2" : "File disimpan di server (public/uploads)"}
+                  {isR2 ? "File diunggah ke penyimpanan objek Cloudflare R2" : "File disimpan di server (public/uploads)"}
                 </p>
               </div>
             </div>
@@ -96,7 +96,7 @@ export default async function StorageSettingsPage() {
               <Separator />
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-medium text-foreground">Mode Hybrid (Fallback Lokal)</p>
+                  <p className="text-sm font-medium text-foreground">Mode Hibrida (Cadangan Lokal)</p>
                   <p className="text-xs text-muted-foreground">Simpan ke lokal jika upload R2 gagal</p>
                 </div>
                 {settings?.storageFallbackLocal ? (
@@ -110,8 +110,8 @@ export default async function StorageSettingsPage() {
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <Field label="ID Akun" value={settings?.r2AccountId} mono />
                 <Field label="Bucket" value={settings?.r2Bucket} mono />
-                <Field label="Access Key ID" value={settings?.r2AccessKeyId} mono />
-                <Field label="Secret Access Key" value={maskSecret(settings?.r2SecretAccessKey)} mono />
+                <Field label="ID Kunci Akses" value={settings?.r2AccessKeyId} mono />
+                <Field label="Kunci Akses Rahasia" value={maskSecret(settings?.r2SecretAccessKey)} mono />
               </div>
             </>
           )}

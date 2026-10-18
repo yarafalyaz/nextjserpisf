@@ -142,7 +142,7 @@ export function ItemTable({ data, total, page, pageSize, toolbar, filters }: Ite
     <DataTable
       data={data}
       columns={columns}
-      ariaLabel="Daftar item"
+      ariaLabel="Daftar barang"
       serverPagination={{ total, page, pageSize }}
       selectable={true}
       toolbar={toolbar}

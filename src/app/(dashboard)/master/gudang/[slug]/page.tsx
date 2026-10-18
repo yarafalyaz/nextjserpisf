@@ -156,7 +156,7 @@ export default async function WarehouseDetailPage({
                     <DetailTable>
                       <DetailTableHead>
                         <DetailTableTh>No. Dokumen</DetailTableTh>
-                        <DetailTableTh>Item</DetailTableTh>
+                        <DetailTableTh>Barang</DetailTableTh>
                         <DetailTableTh>Dampak</DetailTableTh>
                         <DetailTableTh align="right">Jml</DetailTableTh>
                         <DetailTableTh>Tanggal</DetailTableTh>

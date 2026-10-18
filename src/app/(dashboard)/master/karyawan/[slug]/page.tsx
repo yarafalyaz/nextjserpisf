@@ -118,7 +118,7 @@ export default async function EmployeeDetailPage({
                   } />
                   <DetailField label="Status" value={
                     <span className={`status-badge ${employee.isActive ? "status-active" : "status-cancelled"}`}>
-                      {employee.isActive ? "Active" : "Inactive"}
+                      {employee.isActive ? "Aktif" : "Nonaktif"}
                     </span>
                   } />
                 </DetailCard>

@@ -24,7 +24,7 @@ const columnHelper = createColumnHelper<AppreciationData>()
 
 const typeLabels: Record<string, string> = {
   bonus: "Bonus",
-  reward: "Reward",
+  reward: "Imbalan",
   incentive: "Insentif",
 }
 
