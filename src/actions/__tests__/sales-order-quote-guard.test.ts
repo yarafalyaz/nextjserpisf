@@ -21,6 +21,10 @@ const checkIdempotencyMock = vi.fn()
 const queryRawMock = vi.fn()
 const soFindFirstMock = vi.fn()
 const soCreateMock = vi.fn()
+// `createSalesOrder` juga membaca item penawaran lewat tx (untuk menyalinnya ke
+// pesanan baru). Tiruan tx di sini harus mencakupnya, kalau tidak aksi gagal
+// sebelum sempat memanggil create.
+const quotationFindUniqueMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -68,6 +72,7 @@ function wireTransaction() {
   const tx = {
     $queryRaw: queryRawMock,
     salesOrder: { findFirst: soFindFirstMock, create: soCreateMock },
+    quotation: { findUnique: quotationFindUniqueMock },
   }
   transactionMock.mockImplementation(async (fn: (t: unknown) => unknown) => fn(tx))
   return tx
@@ -80,6 +85,7 @@ beforeEach(() => {
   checkIdempotencyMock.mockResolvedValue(undefined)
   logActivityMock.mockResolvedValue(undefined)
   soCreateMock.mockResolvedValue({ id: 99 })
+  quotationFindUniqueMock.mockResolvedValue(null)
 })
 
 describe("createSalesOrder — penjagaan konversi penawaran", () => {
