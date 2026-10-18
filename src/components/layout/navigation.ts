@@ -8,7 +8,7 @@ import {
   Cog, Truck, FileSpreadsheet, Car, FolderKanban,
   CalendarDays, Briefcase, PiggyBank, ScanBarcode, Grid3X3, Tag,
   ListOrdered, Layers, BadgeDollarSign, Gift, ListTodo, GitBranch, ShieldCheck, ClipboardCheck, Percent,
-  Boxes,
+  Boxes, CalendarCheck,
 } from "lucide-react"
 import type { LucideIcon } from "lucide-react"
 
@@ -144,6 +144,7 @@ export const navigation: NavItem[] = [
     href: "/sdm",
     icon: Users,
     children: [
+      { label: "Absensi", href: "/sdm/absensi", icon: CalendarCheck, permission: "view_attendance" },
       { label: "Cuti", href: "/sdm/cuti", icon: Palmtree, permission: "view_leave_requests" },
       { label: "Saldo Cuti", href: "/sdm/cuti/saldo", icon: Palmtree, permission: "view_leave_requests" },
       { label: "Lembur", href: "/sdm/lembur", icon: Timer, permission: "view_overtime" },

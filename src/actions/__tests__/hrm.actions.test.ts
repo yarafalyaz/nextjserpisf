@@ -146,6 +146,7 @@ const EXPORTED_FN_NAMES = [
   "createHoliday", "updateHoliday", "deleteHoliday",
   "createDepartmentHoliday", "updateDepartmentHoliday", "deleteDepartmentHoliday",
   "createWorkSchedule", "updateWorkSchedule", "deleteWorkSchedule",
+  "createAttendance", "updateAttendance", "deleteAttendance",
 ]
 
 describe("HRM Actions exports smoke test", () => {
@@ -1209,6 +1210,251 @@ describe("Kalender Kerja", () => {
     expect(await actions.deleteDepartmentHoliday(9)).toEqual({ success: true })
     expect(requirePermissionMock).toHaveBeenCalledWith("delete_work_schedules")
     expect(requirePermissionMock).toHaveBeenCalledWith("delete_holidays")
+  })
+})
+
+/**
+ * Absensi: satu-satunya jalur tulis `Attendance` di kode produk.
+ *
+ * Aturan yang dijaga blok ini:
+ * - `date` = tengah malam UTC untuk hari kalender WIB; `checkIn`/`checkOut` =
+ *   instan UTC dari jam dinding WIB (08:05 WIB = 01:05Z).
+ * - Karyawan tanpa jadwal kerja aktif yang jam masuknya diisi DITOLAK. Mencatat
+ *   `lateMinutes` 0 secara senyap dianggap cacat: kolom itulah yang dibaca
+ *   `calculateLatePenalty` dan `getDailyAttendanceMetrics`, jadi keterlambatan
+ *   akan hilang tanpa satu pun tanda.
+ * - Jadwal efektif berurutan karyawan → departemen → jadwal global tanpa penugasan.
+ * - Status pilihan pengguna TIDAK ditimpa (pembaca memperlakukan "status late ATAU
+ *   lateMinutes > 0" sebagai terlambat, jadi menandai "present" tetap terbaca terlambat).
+ */
+describe("Absensi Actions", () => {
+  const JADWAL_PAGI = { startTime: "08:00", endTime: "17:00" }
+  const dataAbsensi = { employeeId: "1", date: "2026-08-17", status: "present" }
+
+  const karyawanDengan = (workSchedules: unknown[], department: unknown = null) => ({
+    id: 1,
+    workSchedules,
+    department,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    prismaMock.employee.findUnique.mockResolvedValue(karyawanDengan([JADWAL_PAGI]))
+    prismaMock.employee.findFirst.mockResolvedValue(null)
+    prismaMock.workSchedule.findFirst.mockResolvedValue(null)
+    prismaMock.attendance.create.mockResolvedValue({ id: 7 })
+    prismaMock.attendance.findUniqueOrThrow.mockResolvedValue({ employeeId: 1 })
+    prismaMock.attendance.update.mockResolvedValue({})
+    prismaMock.attendance.delete.mockResolvedValue({})
+  })
+
+  it("createAttendance menyimpan tanggal tengah malam UTC dan jam sebagai instan UTC", async () => {
+    const res = await actions.createAttendance(
+      fd({ ...dataAbsensi, checkIn: "08:05", checkOut: "17:10", notes: "WFO" }),
+    )
+
+    expect(res).toEqual({ success: true, id: 7 })
+    expect(requirePermissionMock).toHaveBeenCalledWith("create_attendance")
+
+    const arg = prismaMock.attendance.create.mock.calls[0][0]
+    expect(arg.data.employeeId).toBe(1)
+    // Hari kalender WIB → tengah malam UTC hari itu juga.
+    expect(arg.data.date.toISOString()).toBe("2026-08-17T00:00:00.000Z")
+    // Jam dinding WIB → instan UTC yang sama dengan seed absensi.
+    expect(arg.data.checkIn.toISOString()).toBe("2026-08-17T01:05:00.000Z")
+    expect(arg.data.checkOut.toISOString()).toBe("2026-08-17T10:10:00.000Z")
+    expect(arg.data.lateMinutes).toBe(5)
+    expect(arg.data.overtimeMinutes).toBe(10)
+    expect(arg.data.status).toBe("present")
+    expect(arg.data.notes).toBe("WFO")
+  })
+
+  it("createAttendance tidak menggeser tanggal absensi untuk jam masuk subuh", async () => {
+    // 05:30 WIB tersimpan sebagai instan hari UTC sebelumnya, sedangkan `date`
+    // tetap hari WIB-nya. Mencampur keduanya menggeser absensi satu hari.
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "05:30" }))
+
+    expect(res.success).toBe(true)
+    const arg = prismaMock.attendance.create.mock.calls[0][0]
+    expect(arg.data.date.toISOString()).toBe("2026-08-17T00:00:00.000Z")
+    expect(arg.data.checkIn.toISOString()).toBe("2026-08-16T22:30:00.000Z")
+    expect(arg.data.lateMinutes).toBe(0)
+  })
+
+  it("createAttendance memakai jadwal KARYAWAN lebih dulu daripada jadwal departemen", async () => {
+    prismaMock.employee.findUnique.mockResolvedValueOnce(
+      karyawanDengan([JADWAL_PAGI], { workSchedules: [{ startTime: "09:00", endTime: "18:00" }] }),
+    )
+
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "08:05" }))
+
+    expect(res.success).toBe(true)
+    const arg = prismaMock.attendance.create.mock.calls[0][0]
+    expect(arg.data.lateMinutes).toBe(5)
+    // Jadwal karyawan sudah cukup — jadwal global tidak boleh digantung harapan.
+    expect(prismaMock.workSchedule.findFirst).not.toHaveBeenCalled()
+  })
+
+  it("createAttendance jatuh ke jadwal DEPARTEMEN bila karyawan belum punya jadwal", async () => {
+    prismaMock.employee.findUnique.mockResolvedValueOnce(
+      karyawanDengan([], { workSchedules: [{ startTime: "09:00", endTime: "18:00" }] }),
+    )
+
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "09:10" }))
+
+    expect(res.success).toBe(true)
+    const arg = prismaMock.attendance.create.mock.calls[0][0]
+    expect(arg.data.lateMinutes).toBe(10)
+  })
+
+  it("createAttendance jatuh ke jadwal GLOBAL tanpa penugasan bila karyawan dan departemen kosong", async () => {
+    prismaMock.employee.findUnique.mockResolvedValueOnce(karyawanDengan([], null))
+    prismaMock.workSchedule.findFirst.mockResolvedValueOnce({
+      startTime: "07:00",
+      endTime: "16:00",
+    })
+
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "07:30" }))
+
+    expect(res.success).toBe(true)
+    const arg = prismaMock.attendance.create.mock.calls[0][0]
+    expect(arg.data.lateMinutes).toBe(30)
+  })
+
+  it("createAttendance MENOLAK bila belum ada jadwal kerja aktif padahal jam masuk diisi", async () => {
+    prismaMock.employee.findUnique.mockResolvedValueOnce(karyawanDengan([], null))
+    prismaMock.workSchedule.findFirst.mockResolvedValueOnce(null)
+
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "08:05" }))
+
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toBe(
+      "Karyawan ini belum punya jadwal kerja aktif — buat jadwal kerja lebih dulu " +
+        "supaya keterlambatan bisa dihitung dari jam masuk.",
+    )
+    // Kesalahan senyap yang mencatat 0 keterlambatan justru yang harus dicegah.
+    expect(prismaMock.attendance.create).not.toHaveBeenCalled()
+  })
+
+  it("createAttendance tetap boleh mencatat absensi tanpa jam masuk meski jadwal belum ada", async () => {
+    // Tanpa jam masuk tidak ada yang bisa dihitung (0 memang benar), jadi ini bukan
+    // kesalahan senyap: keterlambatan tidak diklaim sama sekali.
+    prismaMock.employee.findUnique.mockResolvedValueOnce(karyawanDengan([], null))
+    prismaMock.workSchedule.findFirst.mockResolvedValueOnce(null)
+
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, status: "sick" }))
+
+    expect(res).toEqual({ success: true, id: 7 })
+    const arg = prismaMock.attendance.create.mock.calls[0][0]
+    expect(arg.data.checkIn).toBeNull()
+    expect(arg.data.lateMinutes).toBe(0)
+    expect(arg.data.overtimeMinutes).toBe(0)
+    expect(arg.data.status).toBe("sick")
+  })
+
+  it("createAttendance tidak menimpa status pilihan pengguna walau terlambat", async () => {
+    const res = await actions.createAttendance(
+      fd({ ...dataAbsensi, checkIn: "08:45", status: "present" }),
+    )
+
+    expect(res.success).toBe(true)
+    const arg = prismaMock.attendance.create.mock.calls[0][0]
+    expect(arg.data.lateMinutes).toBe(45)
+    // Pembaca memperlakukan "status late ATAU lateMinutes > 0" sebagai terlambat,
+    // jadi status milik pengguna tidak boleh diubah diam-diam.
+    expect(arg.data.status).toBe("present")
+  })
+
+  it("createAttendance menolak jam keluar sebelum jam masuk tanpa menyentuh basis data", async () => {
+    const res = await actions.createAttendance(
+      fd({ ...dataAbsensi, checkIn: "17:00", checkOut: "08:00" }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Jam keluar harus setelah jam masuk")
+    expect(prismaMock.attendance.create).not.toHaveBeenCalled()
+  })
+
+  it("createAttendance menolak jam dan status di luar format sebelum menyentuh basis data", async () => {
+    const jam = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "8 pagi" }))
+    expect(jam.success).toBe(false)
+    expect(String((jam as { error?: string }).error)).toContain("Jam masuk harus format HH:MM")
+
+    const status = await actions.createAttendance(fd({ ...dataAbsensi, status: "bolos" }))
+    expect(status.success).toBe(false)
+    expect(String((status as { error?: string }).error)).toContain("Status absensi tidak dikenal")
+
+    expect(prismaMock.attendance.create).not.toHaveBeenCalled()
+  })
+
+  it("createAttendance menerjemahkan pelanggaran batasan unik (P2002) jadi pesan yang terbaca", async () => {
+    const duplikat = Object.assign(new Error("Unique constraint failed"), { code: "P2002" })
+    prismaMock.attendance.create.mockRejectedValueOnce(duplikat)
+
+    const res = await actions.createAttendance(fd({ ...dataAbsensi, checkIn: "08:05" }))
+
+    expect(res.success).toBe(false)
+    expect((res as { error?: string }).error).toBe(
+      "Absensi karyawan untuk tanggal itu sudah ada — ubah yang sudah tercatat.",
+    )
+  })
+
+  it("updateAttendance memakai izin edit_attendance dan menghitung ulang keterlambatan", async () => {
+    const res = await actions.updateAttendance(
+      7,
+      fd({ ...dataAbsensi, checkIn: "08:20", checkOut: "17:30", status: "late" }),
+    )
+
+    expect(res).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("edit_attendance")
+    const arg = prismaMock.attendance.update.mock.calls[0][0]
+    expect(arg.where).toEqual({ id: 7 })
+    expect(arg.data.lateMinutes).toBe(20)
+    expect(arg.data.overtimeMinutes).toBe(30)
+    expect(arg.data.status).toBe("late")
+  })
+
+  it("updateAttendance menolak bila jadwal kerja hilang dan jam masuk diisi", async () => {
+    prismaMock.employee.findUnique.mockResolvedValueOnce(karyawanDengan([], null))
+    prismaMock.workSchedule.findFirst.mockResolvedValueOnce(null)
+
+    const res = await actions.updateAttendance(7, fd({ ...dataAbsensi, checkIn: "08:05" }))
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("belum punya jadwal kerja aktif")
+    expect(prismaMock.attendance.update).not.toHaveBeenCalled()
+  })
+
+  it("updateAttendance memakai karyawan TERCATAT untuk pemeriksaan cakupan", async () => {
+    // Pemanggil hanya boleh menyentuh absensi miliknya sendiri; karyawan pencatatnya
+    // dibaca dari baris yang ada, bukan dari FormData.
+    requirePermissionMock.mockResolvedValue({ id: 11, roles: ["employee"] })
+    prismaMock.employee.findFirst.mockResolvedValueOnce(null)
+
+    const res = await actions.updateAttendance(7, fd(dataAbsensi))
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("tidak memiliki akses")
+    expect(prismaMock.attendance.update).not.toHaveBeenCalled()
+  })
+
+  it("updateAttendance menolak id tidak valid tanpa menyentuh basis data", async () => {
+    const res = await actions.updateAttendance(0, fd(dataAbsensi))
+
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("Id absensi tidak valid")
+    expect(prismaMock.attendance.update).not.toHaveBeenCalled()
+  })
+
+  it("deleteAttendance memakai izin manage_attendance dan menolak id tidak valid", async () => {
+    expect(await actions.deleteAttendance(7)).toEqual({ success: true })
+    expect(requirePermissionMock).toHaveBeenCalledWith("manage_attendance")
+    expect(prismaMock.attendance.delete).toHaveBeenCalledWith({ where: { id: 7 } })
+
+    const bad = await actions.deleteAttendance(0)
+    expect(bad.success).toBe(false)
+    expect(prismaMock.attendance.delete).toHaveBeenCalledTimes(1)
   })
 })
 

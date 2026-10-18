@@ -84,6 +84,10 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/proyek", edit: "edit_projects", delete: "delete_projects" },
 
   // SDM
+  // Absensi: ubah lewat `?editAbsensi=` (formulir inline), hapus memakai
+  // manage_attendance — TIDAK ada izin `delete_attendance` di katalog, dan
+  // `deleteAttendance` memang menuntut `manage_attendance`.
+  { prefix: "/sdm/absensi", edit: "edit_attendance", delete: "manage_attendance" },
   { prefix: "/sdm/cuti", edit: "edit_leave_requests", delete: "delete_leave_requests" },
   { prefix: "/sdm/lembur", edit: "edit_overtime_requests", delete: "delete_overtime_requests" },
   // Payroll hanya punya aksi ubah (tidak ada deletePayroll), jadi tanpa delete.

@@ -56,10 +56,16 @@ const ROOT = path.resolve(__dirname, "../..")
  * BISA dihasilkan alur nyata — dan itu justru lebih menyesatkan daripada kolom
  * kosong, karena angkanya terlihat masuk akal.
  *
- * Contoh nyata: model `Attendance` dibaca dasbor/cron (metrik absensi, notifikasi
- * terlambat) tetapi TIDAK ADA halaman maupun aksi yang menulis absensi di seluruh
- * repo — hanya `scripts/seed-hrm-crm-e2e.ts`. Jadi GPS check-in/check-out, jam
- * pulang, dan menit lembur absensi semuanya berasal dari seed.
+ * Contoh nyata: kolom GPS absensi (`Attendance.checkInLatitude`,
+ * `checkInLongitude`, `checkOutLatitude`, `checkOutLongitude`) HANYA diisi
+ * `scripts/seed-hrm-crm-e2e.ts` — formulir absensi `/sdm/absensi` dan aksinya
+ * belum menangkap lokasi, jadi dasbor absensi menampilkan GPS check-in/check-out
+ * yang tidak bisa dihasilkan alur nyata mana pun.
+ *
+ * Sebaliknya `Attendance.checkOut`, `Attendance.overtimeMinutes`, dan
+ * `Attendance.overtimeApproved` SUDAH TIDAK di daftar ini: `createAttendance` dan
+ * `updateAttendance` (halaman `/sdm/absensi`) menulisnya dari jam dinding WIB —
+ * dikunci penjaga di `src/actions/__tests__/hrm.actions.test.ts`.
  *
  * Berarah dua: menambah kolom baru yang hanya dipakai seed memerahkan tes, dan
  * entri yang sudah dirujuk kode produk juga memerahkan tes (daftar tidak membusuk).
@@ -68,11 +74,8 @@ const ROOT = path.resolve(__dirname, "../..")
 const SEED_ONLY_COLUMNS: string[] = [
   "Attendance.checkInLatitude",
   "Attendance.checkInLongitude",
-  "Attendance.checkOut",
   "Attendance.checkOutLatitude",
   "Attendance.checkOutLongitude",
-  "Attendance.overtimeApproved",
-  "Attendance.overtimeMinutes",
   "CrmTicket.firstResponseAt",
   "CrmTicket.resolvedAt",
 ].sort()
@@ -84,11 +87,16 @@ const SEED_ONLY_COLUMNS: string[] = [
  * Ini kelas yang sama dengan SEED_ONLY_COLUMNS, tetapi di tingkat model, dan
  * akibatnya lebih besar: seluruh fiturnya tidak bisa dipakai. Contoh:
  *
- * - `Attendance`, `Holiday`, `WorkSchedule`, `DepartmentHoliday` — penggajian,
- *   lembar waktu, dan perhitungan cuti/absensi MEMBACA data induk ini, tetapi
- *   tidak ada halaman maupun aksi yang menulisnya di seluruh repo. Jadi dasbor
- *   absensi dan perhitungan hari kerja hanya bisa benar pada basis data yang
- *   di-seed, dan tidak bisa dipakai di produksi.
+ * - `Holiday`, `WorkSchedule`, `DepartmentHoliday` — SUDAH DITUTUP, ketiganya
+ *   TIDAK ada lagi di daftar: halaman `/sdm/kalender-kerja` + aksi
+ *   `createHoliday`/`updateHoliday`/`deleteHoliday`,
+ *   `createDepartmentHoliday`/…, `createWorkSchedule`/… menulisnya, dan
+ *   perhitungan hari kerja kini bisa benar tanpa seed.
+ * - `Attendance` — SUDAH DITUTUP, entri ini TIDAK ada lagi di daftar: halaman
+ *   `/sdm/absensi` memanggil `createAttendance`/`updateAttendance`/
+ *   `deleteAttendance` (izin `create_attendance`/`edit_attendance`/
+ *   `manage_attendance`), mengonversi jam dinding WIB lewat `attendance-time.ts`.
+ *   Yang masih seed-only tinggal kolom GPS-nya (lihat SEED_ONLY_COLUMNS).
  * - `ProfitCenter` — SUDAH DITUTUP dan TERHUBUNG: master `/keuangan/pusat-laba` +
  *   aksi create/update/delete, dan form jurnal menulis `profitCenterId` ke setiap
  *   entri (buat & ubah).
@@ -103,11 +111,12 @@ const SEED_ONLY_COLUMNS: string[] = [
  * yang sudah punya jalur tulis produk (atau modelnya dibuang) juga memerahkan.
  */
 const SEED_ONLY_MODELS: string[] = [
-  // Kehadiran: dasbor dan notifikasi keterlambatan membacanya, tetapi tidak ada
-  // halaman maupun aksi absensi di seluruh repo — hanya skrip seed.
-  "Attendance",
+  // Kehadiran: SUDAH DITUTUP — halaman `/sdm/absensi` + `createAttendance`,
+  // `updateAttendance`, `deleteAttendance` (izin create/edit/manage_attendance)
+  // menulis absensi dari jam dinding WIB, jadi entri `Attendance` TIDAK lagi di
+  // daftar ini.
   // SDM: hari libur, hari libur departemen, dan jadwal kerja ditutup bersama
-  // halamannya (`/sdm/kalender-kerja`) — lihat catatan di bawah.
+  // halamannya (`/sdm/kalender-kerja`) — lihat catatan di atas.
   // (sebelumnya tiga entri di sini, kini TIDAK ada lagi)
   // Rekening koran: baris rekening koran hanya bisa berasal dari seed karena impor
   // rekening koran belum ada (kolom `BankStatement.totalCredits/totalDebits` dan

@@ -177,5 +177,37 @@ export const workScheduleSchema = z.object({
   isActive: optionalBool,
 })
 
+/**
+ * Status absensi. Nilai "late" khusus: `getDailyAttendanceMetrics` dan
+ * `calculateLatePenalty` memperlakukannya sebagai terlambat, jadi jangan
+ * mengganti ejaannya tanpa menyesuaikan kedua pembaca itu.
+ */
+export const ATTENDANCE_STATUSES = [
+  "present",
+  "late",
+  "absent",
+  "sick",
+  "leave",
+  "permission",
+] as const
+
+export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number]
+
+export const attendanceSchema = z
+  .object({
+    employeeId: z.coerce.number({ error: "Karyawan wajib dipilih" }).int().positive(),
+    date: z
+      .string({ error: "Tanggal wajib diisi" })
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal harus format YYYY-MM-DD"),
+    checkIn: timeString("Jam masuk harus format HH:MM").optional(),
+    checkOut: timeString("Jam keluar harus format HH:MM").optional(),
+    status: z.enum(ATTENDANCE_STATUSES, { error: "Status absensi tidak dikenal" }),
+    notes: z.string().max(500, "Catatan paling panjang 500 karakter").optional(),
+  })
+  .refine((v) => !v.checkIn || !v.checkOut || v.checkIn < v.checkOut, {
+    error: "Jam keluar harus setelah jam masuk",
+    path: ["checkOut"],
+  })
+
 // ==================== Inferred Types ====================
 

@@ -26,7 +26,14 @@ import {
   holidaySchema,
   departmentHolidaySchema,
   workScheduleSchema,
+  attendanceSchema,
 } from "@/lib/validations/hrm.schemas";
+import {
+  computeLateMinutes,
+  computeOvertimeMinutes,
+  wibDateToUtcMidnight,
+  wibTimeToUtcInstant,
+} from "@/lib/utils/attendance-time";
 import { calculateLatePenalty } from "@/lib/services/late-penalty.service";
 import { calculateAttendanceSummary } from "@/lib/services/attendance-summary.service";
 import {
@@ -1982,6 +1989,177 @@ export async function deleteWorkSchedule(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteWorkSchedule]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Jadwal kerja efektif seorang karyawan: milik karyawan sendiri, lalu milik
+ * departemennya, lalu jadwal global tanpa penugasan — urutan yang sama dengan
+ * `getDailyAttendanceMetrics`. Tanpa jadwal, keterlambatan tidak bisa dihitung,
+ * dan itu harus dikatakan — bukan diam-diam dicatat sebagai 0.
+ */
+async function resolveEffectiveSchedule(employeeId: number) {
+  const select = { startTime: true, endTime: true } as const
+  const employee = await prisma.employee.findUnique({
+    where: { id: employeeId },
+    select: {
+      id: true,
+      workSchedules: { where: { isActive: true }, orderBy: { id: "asc" }, take: 1, select },
+      department: {
+        select: {
+          workSchedules: { where: { isActive: true }, orderBy: { id: "asc" }, take: 1, select },
+        },
+      },
+    },
+  })
+  if (!employee) return null
+  return (
+    employee.workSchedules[0] ??
+    employee.department?.workSchedules[0] ??
+    (await prisma.workSchedule.findFirst({
+      where: { isActive: true, employees: { none: {} }, departments: { none: {} } },
+      orderBy: { id: "asc" },
+      select,
+    }))
+  )
+}
+
+type AttendanceInput = {
+  employeeId: number
+  date: string
+  checkIn?: string
+  checkOut?: string
+  status: string
+  notes?: string
+}
+
+/**
+ * Menyusun nilai yang DISIMPAN. `lateMinutes` adalah kolom yang dibaca
+ * `calculateLatePenalty` dan `getDailyAttendanceMetrics`, jadi perhitungannya
+ * memakai satu jalur: `computeLateMinutes` dari `attendance-time`.
+ *
+ * Status TIDAK ditimpa dari hasil hitungan: pembaca memperlakukan
+ * "status late ATAU lateMinutes > 0" sebagai terlambat, sehingga menandai
+ * seorang karyawan "present" dengan lateMinutes 60 tetap terbaca terlambat —
+ * dan pilihan status milik pengguna tidak diubah diam-diam.
+ */
+async function buildAttendanceData(input: AttendanceInput) {
+  const schedule = await resolveEffectiveSchedule(input.employeeId)
+  if (!schedule && input.checkIn) {
+    throw new Error(
+      "Karyawan ini belum punya jadwal kerja aktif — buat jadwal kerja lebih dulu " +
+        "supaya keterlambatan bisa dihitung dari jam masuk.",
+    )
+  }
+  const checkIn = input.checkIn ? wibTimeToUtcInstant(input.date, input.checkIn) : null
+  const checkOut = input.checkOut ? wibTimeToUtcInstant(input.date, input.checkOut) : null
+  return {
+    date: wibDateToUtcMidnight(input.date),
+    checkIn,
+    checkOut,
+    lateMinutes: schedule ? computeLateMinutes(schedule.startTime, checkIn) : 0,
+    overtimeMinutes: schedule ? computeOvertimeMinutes(schedule.endTime, checkOut) : 0,
+    status: input.status,
+    notes: input.notes ?? null,
+    overtimeApproved: false,
+  }
+}
+
+export async function createAttendance(formData: FormData) {
+  try {
+    const user = await requirePermission("create_attendance");
+    const parsed = parseFormData(attendanceSchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+
+    const scope = await getHrScope(user);
+    await assertHrEmployeeAccess(scope, v.employeeId);
+
+    const data = await buildAttendanceData(v);
+    const attendance = await prisma.attendance.create({
+      data: { employeeId: v.employeeId, ...data },
+    });
+
+    await logActivity(
+      "create",
+      "Attendance",
+      attendance.id,
+      `Mencatat absensi karyawan #${v.employeeId} tanggal ${v.date} (${v.status}, terlambat ${data.lateMinutes} menit)`,
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const, id: attendance.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    // Batasan unik (karyawan, tanggal): absensi hari yang sama tidak boleh dobel.
+    if ((e as { code?: string })?.code === "P2002") {
+      return {
+        success: false as const,
+        error: "Absensi karyawan untuk tanggal itu sudah ada — ubah yang sudah tercatat.",
+      };
+    }
+    console.error("[createAttendance]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateAttendance(id: number, formData: FormData) {
+  try {
+    const user = await requirePermission("edit_attendance");
+    const parsed = parseFormData(attendanceSchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+    const attendanceId = requirePositiveId(id, "absensi");
+
+    const existing = await prisma.attendance.findUniqueOrThrow({
+      where: { id: attendanceId },
+      select: { employeeId: true },
+    });
+
+    const scope = await getHrScope(user);
+    await assertHrEmployeeAccess(scope, existing.employeeId);
+    // Karyawan baru (bila dipindah) juga harus dalam jangkauan akses.
+    if (v.employeeId !== existing.employeeId) {
+      await assertHrEmployeeAccess(scope, v.employeeId);
+    }
+
+    const data = await buildAttendanceData(v);
+    await prisma.attendance.update({
+      where: { id: attendanceId },
+      data: { employeeId: v.employeeId, ...data },
+    });
+
+    await logActivity(
+      "update",
+      "Attendance",
+      attendanceId,
+      `Mengubah absensi karyawan #${v.employeeId} tanggal ${v.date} (${v.status}, terlambat ${data.lateMinutes} menit)`,
+    );
+    revalidatePath("/sdm/absensi");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    if ((e as { code?: string })?.code === "P2002") {
+      return {
+        success: false as const,
+        error: "Karyawan itu sudah punya absensi pada tanggal tersebut.",
+      };
+    }
+    console.error("[updateAttendance]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteAttendance(id: number) {
+  try {
+    await requirePermission("manage_attendance");
+    await prisma.attendance.delete({ where: { id: requirePositiveId(id, "absensi") } });
+    await logActivity("delete", "Attendance", id, `Menghapus absensi #${id}`);
+    revalidatePath("/sdm/absensi");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteAttendance]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
