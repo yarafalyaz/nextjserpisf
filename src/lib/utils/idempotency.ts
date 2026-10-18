@@ -28,7 +28,10 @@ type IdempotencyDb = {
       where: { key: string }
       select: { createdAt: true }
     }) => Promise<{ createdAt: Date } | null>
-    update: (args: { where: { key: string }; data: { createdAt: Date } }) => Promise<unknown>
+    updateMany: (args: {
+      where: { key: string; createdAt: { lt: Date } }
+      data: { createdAt: Date }
+    }) => Promise<{ count: number }>
   }
 }
 
@@ -65,7 +68,18 @@ export async function checkIdempotency(
     }
 
     // Stale entry: the earlier attempt is long gone, so re-claim the key.
-    await db.idempotencyKey.update({ where: { key: scopedKey }, data: { createdAt: new Date() } })
+    // P1-8: reclaim ATOMIK via updateMany bersyarat (key + masih stale).
+    // findUnique-lalu-update berlomba: dua request bersamaan sama-sama baca
+    // stale lalu sama-sama update dan lolos. Di sini hanya SATU pemenang
+    // (count 1); yang kalah (count 0 — direbut duluan) ditolak sebagai
+    // duplikat.
+    const reclaimed = await db.idempotencyKey.updateMany({
+      where: { key: scopedKey, createdAt: { lt: staleBefore } },
+      data: { createdAt: new Date() },
+    })
+    if (reclaimed.count === 0) {
+      throw new Error("Permintaan duplikat terdeteksi. Transaksi ini sedang atau telah diproses.")
+    }
     return
   }
 
