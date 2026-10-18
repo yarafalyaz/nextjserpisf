@@ -41,8 +41,8 @@ export default async function EditPage({
   { label: "Cuti", href: "/sdm/cuti" },
   { label: "Ubah" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
       </div>
       <LeaveForm leave={{ id: data.id, employeeId: data.employeeId, leaveType: data.type, startDate: data.startDate.toISOString().split('T')[0], endDate: data.endDate.toISOString().split('T')[0], reason: data.reason }} employees={employees} scopeKind={scope.kind} />
     </div>

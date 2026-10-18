@@ -31,8 +31,8 @@ export default async function CreateEmployeePage() {
   { label: "Karyawan", href: "/master/karyawan" },
   { label: "Buat" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Karyawan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Karyawan</h1>
       </div>
       <EmployeeForm departments={departments} positions={positions} generatedCode={generatedCode} enableAutoCode={enableAutoCode} roles={roles} />
     </div>

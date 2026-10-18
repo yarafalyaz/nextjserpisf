@@ -28,8 +28,8 @@ export default async function CreateBankReconciliationPage() {
           { label: "Buat" },
         ]}
       />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Rekonsiliasi Bank</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Buat Rekonsiliasi Bank</h1>
       </div>
       <BankReconciliationForm accounts={accounts} />
     </div>

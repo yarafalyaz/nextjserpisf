@@ -35,9 +35,9 @@ export default async function FavoriteTransactionsPage() {
           { label: "Transaksi Favorit" },
         ]}
       />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Transaksi Favorit</h1>
+          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Transaksi Favorit</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Pintasan pribadi ke halaman transaksi yang sering dibuka. Favorit hanya terlihat oleh
             pengguna yang membuatnya.

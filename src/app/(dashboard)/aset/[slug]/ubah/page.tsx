@@ -41,8 +41,8 @@ export default async function EditAssetPage({
         { label: "Aset", href: "/aset" },
         { label: "Ubah" },
       ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Ubah Aset</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Aset</h1>
       </div>
       <AssetForm
         categories={categories}

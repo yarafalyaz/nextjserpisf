@@ -103,7 +103,7 @@ export function UserAccessPanel({
   }
 
   return (
-    <div className="bg-surface rounded-xl border border-default shadow-sm p-6 flex flex-col gap-4">
+    <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6 flex flex-col gap-4">
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold text-foreground">Akses &amp; Peran</h2>
         <p className="text-sm text-muted-foreground">

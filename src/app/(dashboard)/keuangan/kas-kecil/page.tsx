@@ -128,7 +128,7 @@ export default async function PettyCashPage({
     <div className="flex flex-col gap-6">
       {/* Balance + stats cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-5">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
             Saldo Kas Kecil
           </p>
@@ -136,7 +136,7 @@ export default async function PettyCashPage({
             {formatCurrency(currentBalance)}
           </p>
         </div>
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-5">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
             Pemasukan Bulan Ini
           </p>
@@ -145,7 +145,7 @@ export default async function PettyCashPage({
           </p>
           <p className="text-xs text-muted-foreground mt-1">{monthRecords.filter(r => r.type === "IN").length} transaksi</p>
         </div>
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-5">
           <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-1">
             Pengeluaran Bulan Ini
           </p>

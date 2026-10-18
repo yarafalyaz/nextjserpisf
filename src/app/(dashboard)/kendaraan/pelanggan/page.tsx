@@ -81,9 +81,9 @@ export default async function CustomerVehiclesPage({
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Kendaraan", href: "/kendaraan" }, { label: "Kendaraan Pelanggan" }]} />
 
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Kendaraan Pelanggan</h1>
+          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Kendaraan Pelanggan</h1>
           <p className="text-sm text-muted-foreground mt-1">Daftar semua unit kendaraan pelanggan — cari berdasarkan plat, rangka, mesin, model, atau nama pelanggan.</p>
         </div>
         <CanCreate permission="create_customers">

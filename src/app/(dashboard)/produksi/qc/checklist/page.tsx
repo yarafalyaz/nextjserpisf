@@ -67,9 +67,9 @@ export default async function QcChecklistsPage({
           { label: "Checklist" },
         ]}
       />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Checklist QC</h1>
+          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Checklist QC</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Master checklist inspeksi ber-versi. Checklist yang sudah dirilis dibekukan dan dipakai sebagai acuan inspeksi.
           </p>

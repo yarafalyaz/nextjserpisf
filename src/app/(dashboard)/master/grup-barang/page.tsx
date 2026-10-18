@@ -48,8 +48,8 @@ export default async function ItemGroupsPage({
           { label: "Grup Barang" },
         ]}
       />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Grup Barang</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Grup Barang</h1>
         <CanCreate permission="create_item_groups">
           <Link
             href="/master/grup-barang/tambah"

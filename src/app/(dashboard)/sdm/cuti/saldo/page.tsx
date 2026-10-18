@@ -98,7 +98,7 @@ export default async function LeaveBalancePage({
         {stats.map((s) => (
           <div
             key={s.label}
-            className="bg-surface rounded-xl border border-default shadow-sm p-5 flex flex-col gap-1"
+            className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-5 flex flex-col gap-1"
           >
             <span className="text-sm text-muted-foreground">{s.label}</span>
             <span className="text-2xl font-bold text-foreground">{s.value}</span>

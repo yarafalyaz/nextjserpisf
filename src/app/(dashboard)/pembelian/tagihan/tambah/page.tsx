@@ -130,8 +130,8 @@ export default async function CreateVendorBillPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/pembelian"},{ label: "Tagihan Pemasok", href: "/pembelian/tagihan" },{label:"Tambah"}]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Tagihan Pemasok</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Buat Tagihan Pemasok</h1>
       </div>
       {billableGr ? (
         <GoodsReceiptLinkFields goodsReceiptId={billableGr.id}>{form}</GoodsReceiptLinkFields>

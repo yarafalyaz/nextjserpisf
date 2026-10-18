@@ -113,7 +113,7 @@ export default async function DeliveryOrderDetailPage({
         </div>
       </div>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -273,7 +273,7 @@ export default async function DeliveryOrderDetailPage({
 
       {/* Notes */}
       {deliveryOrder.notes && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Catatan

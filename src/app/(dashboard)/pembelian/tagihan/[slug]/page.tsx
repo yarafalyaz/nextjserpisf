@@ -85,7 +85,7 @@ export default async function VendorBillDetailPage({
         id={bill.id}
         module="pembelian/tagihan"
       />
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">No. Dokumen</span>
@@ -163,7 +163,7 @@ export default async function VendorBillDetailPage({
       </div>
 
       {/* Summary */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Subtotal</span>

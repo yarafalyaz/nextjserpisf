@@ -49,8 +49,8 @@ export default async function EditPage({
   { label: "Merek & Model", href: "/kendaraan/merek" },
   { label: "Ubah Model" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Ubah Model Kendaraan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Model Kendaraan</h1>
       </div>
       <VehicleModelForm model={{ id: data.id, name: data.name, vehicleBrandId: data.vehicleBrandId ?? undefined }} brands={brands}/>
       <VehicleVariantManager modelId={data.id} variants={data.variants.map((v) => ({ id: v.id, name: v.name, drivetrain: v.drivetrain, transmission: v.transmission }))} />

@@ -74,7 +74,7 @@ export default async function CostCenterDetailPage({
       </DetailCard>
 
       {costCenter.children.length > 0 && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
           <h2 className="text-[0.9375rem] font-semibold text-foreground mb-4">
             Sub Pusat Biaya ({costCenter.children.length})
           </h2>

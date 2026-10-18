@@ -37,8 +37,8 @@ export default async function CreateRolePage() {
         { label: "Peran", href: "/pengaturan/peran" },
         { label: "Tambah Peran" },
       ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Peran</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Peran</h1>
       </div>
 
       <ActionForm action={createRole} className="flex flex-col gap-6">

@@ -25,8 +25,8 @@ export default async function CreateWorkflowPage() {
         { label: "Alur Persetujuan", href: "/pengaturan/workflow" },
         { label: "Tambah Alur Persetujuan" },
       ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Alur Persetujuan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Alur Persetujuan</h1>
       </div>
 
       <WorkflowForm roles={roles} />

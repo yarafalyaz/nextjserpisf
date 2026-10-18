@@ -26,8 +26,8 @@ export default async function CreatePositionPage() {
   { label: "Jabatan", href: "/master/jabatan" },
   { label: "Buat" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Jabatan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Jabatan</h1>
       </div>
       <PositionCreateForm departments={departments} generatedCode={generatedCode} />
     </div>

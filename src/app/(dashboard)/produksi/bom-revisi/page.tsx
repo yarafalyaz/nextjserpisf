@@ -67,9 +67,9 @@ export default async function BomRevisionsPage({
           { label: "Revisi BOM" },
         ]}
       />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Revisi BOM</h1>
+          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Revisi BOM</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Cuplikan BOM ber-versi. Perintah produksi yang dirilis memakai revisi yang sedang berlaku, sehingga mengubah BOM master tidak mengubah dasar perintah lama.
           </p>

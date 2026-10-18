@@ -26,14 +26,14 @@ export default async function NotificationsPage() {
   { label: "Dasbor", href: "/" },
   { label: "Notifikasi" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Notifikasi</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Notifikasi</h1>
         <span className="text-muted-foreground">{unread.length} belum dibaca</span>
       </div>
 
       <div className="grid grid-cols-1 gap-5">
         {notifications.length === 0 ? (
-          <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+          <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
             <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">Tidak ada notifikasi</p>
           </div>
         ) : (

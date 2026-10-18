@@ -106,7 +106,7 @@ export default async function PayrollDetailPage({
         )}
       </DetailCard>
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <h2 className="text-base font-semibold text-foreground mb-4 pb-3 border-b border-default">
           Rincian Gaji
         </h2>

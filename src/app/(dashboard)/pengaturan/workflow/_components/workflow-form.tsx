@@ -151,7 +151,7 @@ export function WorkflowForm({
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-6">
       {/* Informasi Workflow */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <h2 className="text-[0.9375rem] font-semibold text-foreground mb-4">Informasi Alur</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
@@ -195,7 +195,7 @@ export function WorkflowForm({
       </div>
 
       {/* Langkah Persetujuan */}
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
           <div>
             <h2 className="text-[0.9375rem] font-semibold text-foreground">Langkah Persetujuan</h2>

@@ -30,8 +30,8 @@ export default async function CreateRackPage() {
         { label: "Rak", href: "/inventaris/rak" },
         { label: "Tambah" },
       ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Rak</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Rak</h1>
       </div>
       <Suspense fallback={<div className="h-48 animate-pulse bg-muted/30 rounded-xl" />}>
         <RackCreateForm enableAutoCode={enableAutoCode} warehouses={warehouses} />

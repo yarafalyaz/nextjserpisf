@@ -38,8 +38,8 @@ export default async function CreateItemPage() {
   { label: "Barang", href: "/master/barang" },
   { label: "Buat" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Barang</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Barang</h1>
       </div>
       <ItemForm
         categories={categories}

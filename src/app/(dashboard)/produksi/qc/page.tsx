@@ -45,7 +45,7 @@ export default async function QcPage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {stats.map((s) => (
-          <div key={s.label} className="bg-surface rounded-xl border border-default shadow-sm p-5">
+          <div key={s.label} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-5">
             <p className="text-sm text-muted-foreground">{s.label}</p>
             <p className="text-2xl font-bold text-foreground mt-1">{s.value}</p>
           </div>

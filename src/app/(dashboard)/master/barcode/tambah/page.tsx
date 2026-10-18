@@ -32,10 +32,10 @@ export default function CreateBarcodePage() {
   { label: "Barcode", href: "/master/barcode" },
   { label: "Buat" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Barcode</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Barcode</h1>
       </div>
-      <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="barcode">Barcode *</Label>

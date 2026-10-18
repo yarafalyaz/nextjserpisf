@@ -36,8 +36,8 @@ export default async function CreatePettyCashPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Transaksi Kas Kecil</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Buat Transaksi Kas Kecil</h1>
       </div>
       <PettyCashForm accounts={accounts} projects={projects} vendors={vendors} categories={categories} />
     </div>

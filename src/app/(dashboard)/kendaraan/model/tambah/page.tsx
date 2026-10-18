@@ -32,8 +32,8 @@ export default async function CreateVehicleModelPage({
   { label: "Merek & Model", href: "/kendaraan/merek" },
   { label: "Tambah Model" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Model Kendaraan</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Model Kendaraan</h1>
       </div>
       <VehicleModelForm brands={brands} defaultBrandId={Number.isFinite(defaultBrandId) ? defaultBrandId : undefined} />
     </div>

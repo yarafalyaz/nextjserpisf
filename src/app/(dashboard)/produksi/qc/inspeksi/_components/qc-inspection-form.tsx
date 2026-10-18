@@ -126,7 +126,7 @@ export function QcInspectionForm({ checklists }: { checklists: ChecklistOption[]
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="checklist">Checklist *</Label>

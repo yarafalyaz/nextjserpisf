@@ -26,8 +26,8 @@ export default async function CreateAssetTransferPage() {
   { label: "Transfer", href: "/aset/transfer" },
   { label: "Tambah" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Buat Transfer Aset</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Buat Transfer Aset</h1>
       </div>
       <AssetTransferForm assets={assets} />
     </div>

@@ -110,8 +110,8 @@ export default async function EditPage({
           { label: "Ubah" },
         ]}
       />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Ubah</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah</h1>
       </div>
       <VendorBillForm bill={bill} vendors={vendors} items={items} withholdingTypes={withholdingTypes.map((t) => ({ id: t.id, name: t.name, rate: Number(t.rate) }))} />
     </div>

@@ -86,8 +86,8 @@ export default async function QuotationsPage({
   { label: "Penjualan", href: "/penjualan" },
   { label: "Penawaran" },
 ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Penawaran</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Penawaran</h1>
 <Link href="/penjualan/penawaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-quotation-btn">
           + Buat Penawaran
         </Link>

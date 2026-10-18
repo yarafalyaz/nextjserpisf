@@ -53,9 +53,9 @@ export default async function VehicleCatalogPage({
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[{ label: "Dasbor", href: "/" }, { label: "Kendaraan", href: "/kendaraan" }, { label: "Merek & Model" }]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Merek &amp; Model Kendaraan</h1>
+          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Merek &amp; Model Kendaraan</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Katalog merek kendaraan. Buka satu merek untuk melihat dan mengelola model serta variannya.
           </p>

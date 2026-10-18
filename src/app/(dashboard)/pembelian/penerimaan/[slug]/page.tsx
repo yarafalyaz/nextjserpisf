@@ -186,7 +186,7 @@ export default async function GoodsReceiptDetailPage({
         }
       />
 
-      <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -290,7 +290,7 @@ export default async function GoodsReceiptDetailPage({
       {(Number(receipt.purchaseOrder.shippingCost) > 0 ||
         Number(receipt.purchaseOrder.serviceFee) > 0 ||
         Number(receipt.purchaseOrder.discount) > 0) && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
           <h2 className="mb-4 text-[0.9375rem] font-semibold text-foreground">
             Komponen Biaya Perolehan (estimasi PO)
           </h2>
@@ -465,7 +465,7 @@ export default async function GoodsReceiptDetailPage({
           separate Dr Beban Jasa journal for the service lines of a mixed
           goods+service receipt). */}
       {journals.length > 0 ? (
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
           <h2 className="mb-4 text-[0.9375rem] font-semibold text-foreground">
             Jurnal Akuntansi
           </h2>
@@ -525,7 +525,7 @@ export default async function GoodsReceiptDetailPage({
 
       {/* Notes */}
       {receipt.notes && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm p-6">
+        <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Catatan

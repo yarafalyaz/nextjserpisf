@@ -31,8 +31,8 @@ export default async function CreateVehicleFitmentPage() {
         { label: "Kompatibilitas", href: "/kendaraan/fitment" },
         { label: "Tambah" },
       ]} />
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold text-foreground">Tambah Aturan Kompatibilitas</h1>
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tambah Aturan Kompatibilitas</h1>
       </div>
       <VehicleFitmentForm items={items} brands={brands} models={models} variants={variants} />
     </div>

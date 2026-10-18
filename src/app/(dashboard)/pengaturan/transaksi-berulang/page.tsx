@@ -44,9 +44,9 @@ export default async function RecurringTransactionsPage() {
         { label: "Transaksi Berulang" },
       ]} />
 
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Transaksi Berulang</h1>
+          <h1 className="text-xl font-bold text-foreground sm:text-2xl">Transaksi Berulang</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Dokumen dibuat sebagai <strong>draf</strong> (jurnal umum atau beban) agar ditinjau dulu sebelum diposting.
             Penjadwalan otomatis berjalan harian lewat cron <code>/api/cron/recurring-transactions</code>.
