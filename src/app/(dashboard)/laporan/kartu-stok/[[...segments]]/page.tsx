@@ -10,6 +10,7 @@ import { reportPeriodFromRoute } from '@/lib/reports/report-period'
 import { parseReportFilters } from '@/lib/reports/report-href'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
 import { ExportButtons } from '@/components/reports/export-buttons'
+import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
 import { ReportSection, ReportKpiCard } from '@/components/reports/report-section'
 import { ReportNarration } from '@/components/reports/report-narration'
@@ -163,7 +164,13 @@ export default async function StockCardPage({
       ) : (
         <>
           <div className="flex items-center justify-end print:hidden">
-            <ExportButtons title="Kartu_Stok" />
+            <ExportButtons
+              title="Kartu_Stok"
+              pdfHref={buildReportPdfHref("kartu-stok", period.slug, {
+                barang: selectedItem ? (selectedItem.slug ?? String(selectedItem.id)) : "",
+                ...(selectedWarehouse ? { gudang: selectedWarehouse.slug ?? String(selectedWarehouse.id) } : {}),
+              })}
+            />
           </div>
 
           <ReportLetterhead title="Kartu Stok" subtitle={eyebrow} periodLabel={periodLabel} />

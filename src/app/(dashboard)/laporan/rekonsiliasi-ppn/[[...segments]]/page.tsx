@@ -10,6 +10,7 @@ import { buildVatPosition, VAT_STATUS_LABELS } from "@/lib/reports/vat-reconcili
 import { getSystemSettings } from "@/lib/utils/settings"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
@@ -94,7 +95,7 @@ export default async function VatReconciliationPage({
         defaultEndDate={toLocalDateOnly(endDate)}
       />
 </>} actions={<>
-<div className="flex items-center justify-end print:hidden"><ExportButtons title="Rekonsiliasi_PPN" /></div>
+<div className="flex items-center justify-end print:hidden"><ExportButtons title="Rekonsiliasi_PPN" pdfHref={buildReportPdfHref("rekonsiliasi-ppn", period.slug)} /></div>
 </>}>
 
 

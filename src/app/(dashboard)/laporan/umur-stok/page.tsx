@@ -3,6 +3,8 @@ export const dynamic = 'force-dynamic'
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
+import { buildReportPeriodSlug } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection } from "@/components/reports/report-section"
@@ -52,7 +54,7 @@ export default async function StockAgingPage() {
   const periodLabel = `Per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
-    <ReportPageShell title="Umur Stok" sheet={false} wide actions={<><ExportButtons title="Umur_Stok" /></>}>
+    <ReportPageShell title="Umur Stok" sheet={false} wide actions={<><ExportButtons title="Umur_Stok" pdfHref={buildReportPdfHref("umur-stok", buildReportPeriodSlug(new Date(), new Date()))} /></>}>
 
 
       <ReportLetterhead title="Umur Stok" subtitle="Analisis Umur Persediaan" periodLabel={periodLabel} />

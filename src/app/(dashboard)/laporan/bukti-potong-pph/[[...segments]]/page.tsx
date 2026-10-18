@@ -7,6 +7,7 @@ import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
@@ -127,7 +128,7 @@ export default async function WithholdingTaxReportPage({
         defaultEndDate={toLocalDateOnly(endDate)}
       />
 </>} actions={<>
-<div className="flex items-center justify-end print:hidden"><ExportButtons title="Bukti_Potong_PPh" /></div>
+<div className="flex items-center justify-end print:hidden"><ExportButtons title="Bukti_Potong_PPh" pdfHref={buildReportPdfHref("bukti-potong-pph", period.slug)} /></div>
 </>}>
 
 

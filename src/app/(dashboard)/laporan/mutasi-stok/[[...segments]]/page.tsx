@@ -8,6 +8,7 @@ import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
@@ -99,7 +100,7 @@ export default async function StockMovementPage({
         ]}
       />
 </>} actions={<>
-<div className="flex items-center justify-end print:hidden"><ExportButtons title="Mutasi_Stok" /></div>
+<div className="flex items-center justify-end print:hidden"><ExportButtons title="Mutasi_Stok" pdfHref={buildReportPdfHref("mutasi-stok", period.slug, warehouseRow ? { gudang: warehouseRow.slug ?? String(warehouseRow.id) } : {})} /></div>
 </>}>
 
 

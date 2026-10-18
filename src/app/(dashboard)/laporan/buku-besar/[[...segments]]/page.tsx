@@ -7,6 +7,7 @@ import { formatAccounting } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { BookOpen } from 'lucide-react'
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportSheet } from "@/components/reports/report-sheet"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
@@ -127,7 +128,7 @@ export default async function GeneralLedgerPage({
       />
 </>} actions={<>
 <div className="flex items-center justify-end print:hidden">
-        <ExportButtons title="Buku Besar" />
+        <ExportButtons title="Buku Besar" pdfHref={buildReportPdfHref("buku-besar", period.slug, accountKey ? { akun: accountKey } : {})} />
       </div>
 </>}>
 

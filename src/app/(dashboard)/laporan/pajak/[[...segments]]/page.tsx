@@ -4,9 +4,10 @@ import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
+import { buildReportPeriodSlug, reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
@@ -91,7 +92,7 @@ export default async function TaxReportPage({
       </div>
 </>} actions={<>
 <div className="flex items-center justify-end print:hidden">
-        <ExportButtons title="Laporan_Pajak" />
+        <ExportButtons title="Laporan_Pajak" pdfHref={buildReportPdfHref("pajak", buildReportPeriodSlug(startDate, endDate))} />
       </div>
 </>}>
 

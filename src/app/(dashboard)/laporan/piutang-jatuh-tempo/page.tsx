@@ -4,6 +4,8 @@ import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatCurrency, formatAccounting, formatDate } from '@/lib/utils/format'
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
+import { buildReportPeriodSlug } from "@/lib/reports/report-period"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
@@ -64,7 +66,7 @@ export default async function AgingReceivablesPage() {
   return (
     <ReportPageShell title="Piutang Jatuh Tempo" sheet={false} wide actions={<>
 <div className="flex items-center justify-end print:hidden">
-        <ExportButtons title="Piutang_Jatuh_Tempo" />
+        <ExportButtons title="Piutang_Jatuh_Tempo" pdfHref={buildReportPdfHref("piutang-jatuh-tempo", buildReportPeriodSlug(new Date(), new Date()))} />
       </div>
 </>}>
 

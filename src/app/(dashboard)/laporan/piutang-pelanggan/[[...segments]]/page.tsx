@@ -9,6 +9,7 @@ import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { averagePaymentDays, buildCustomerReceivables } from "@/lib/reports/customer-receivables"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
@@ -120,7 +121,7 @@ export default async function CustomerReceivablesPage({
         defaultEndDate={toLocalDateOnly(endDate)}
       />
 </>} actions={<>
-<div className="flex items-center justify-end print:hidden"><ExportButtons title="Piutang_per_Pelanggan" /></div>
+<div className="flex items-center justify-end print:hidden"><ExportButtons title="Piutang_per_Pelanggan" pdfHref={buildReportPdfHref("piutang-pelanggan", period.slug)} /></div>
 </>}>
 
 
