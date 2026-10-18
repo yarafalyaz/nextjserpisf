@@ -114,7 +114,7 @@ export default async function WorkOrderDetailPage({
     orderBy: { name: "asc" },
   });
 
-  const [completedMi, defaultWarehouse, linkedProducts] = await Promise.all([
+  const [completedMi, defaultWarehouse, linkedProducts, materialIssues] = await Promise.all([
     prisma.materialIssue.findFirst({
       where: { workOrderId: wo.id, status: "completed" },
       select: { id: true },
@@ -132,6 +132,15 @@ export default async function WorkOrderDetailPage({
           select: { id: true },
         })
       : Promise.resolve([] as { id: number }[]),
+    // Semua pengeluaran material yang lahir dari WO ini. Tombol "Buat
+    // Pengeluaran Material" menulis MI langsung lewat aksi (tanpa lewat
+    // halaman tambah), jadi tanpa daftar ini hasilnya tak terlihat dari sini —
+    // pengguna harus menebak lewat menu Inventaris.
+    prisma.materialIssue.findMany({
+      where: { workOrderId: wo.id },
+      orderBy: { createdAt: "desc" },
+      select: { id: true, documentNo: true, status: true, slug: true },
+    }),
   ]);
 
   const suggestedProductId = linkedProducts.length === 1 ? linkedProducts[0].id : null;
@@ -305,6 +314,52 @@ export default async function WorkOrderDetailPage({
           </div>
         </div>
       )}
+
+      {/* Pengeluaran material yang lahir dari WO ini. SELALU tampil: tombol
+          "Buat Pengeluaran Material" menulis MI langsung lewat aksi (tanpa
+          lewat halaman tambah), jadi tanpa kartu ini hasilnya tak terlihat
+          dari sini. */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Pengeluaran Material</h2>
+          {wo.status === "in_progress" && !completedMi && (
+            <Button
+              href={`/inventaris/pengeluaran-material/tambah?workOrderId=${wo.id}`}
+              variant="secondary"
+            >
+              + Pengeluaran Material
+            </Button>
+          )}
+        </div>
+        <div className="p-4 px-5">
+          {materialIssues.length === 0 ? (
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+              Belum ada pengeluaran material untuk perintah kerja ini
+            </p>
+          ) : (
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>No. Dokumen</DetailTableTh>
+                <DetailTableTh>Status</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
+                {materialIssues.map((mi) => (
+                  <DetailTableRow key={mi.id}>
+                    <DetailTableTd className="font-mono">
+                      <Link href={entityHref("/inventaris/pengeluaran-material", mi)}>
+                        {mi.documentNo}
+                      </Link>
+                    </DetailTableTd>
+                    <DetailTableTd>
+                      <StatusChip status={mi.status} />
+                    </DetailTableTd>
+                  </DetailTableRow>
+                ))}
+              </DetailTableBody>
+            </DetailTable>
+          )}
+        </div>
+      </div>
 
       {/* Items / Materials */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

@@ -29,6 +29,7 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8")
 const PESANAN_DETAIL = "src/app/(dashboard)/penjualan/pesanan/[slug]/page.tsx"
 const FAKTUR_DETAIL = "src/app/(dashboard)/penjualan/faktur/[slug]/page.tsx"
 const FAKTUR_TAMBAH = "src/app/(dashboard)/penjualan/faktur/tambah/page.tsx"
+const WO_DETAIL = "src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx"
 const MI_TAMBAH = "src/app/(dashboard)/inventaris/pengeluaran-material/tambah/page.tsx"
 const MI_UBAH = "src/app/(dashboard)/inventaris/pengeluaran-material/[slug]/ubah/page.tsx"
 
@@ -100,6 +101,18 @@ describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
     const tambah = read(FAKTUR_TAMBAH)
     expect(tambah).toContain("params.salesOrderId")
     expect(tambah).toContain("initialItems")
+  })
+
+  it("detail Perintah Kerja selalu menampilkan kartu Pengeluaran Material", () => {
+    const src = read(WO_DETAIL)
+
+    // Tombol "Buat Pengeluaran Material" menulis MI langsung lewat aksi —
+    // tanpa kartu ini hasilnya tak terlihat dari halaman LO. Sebelum ini
+    // halaman hanya membaca satu MI selesai (untuk gerbang tombol) dan tidak
+    // pernah merender daftarnya.
+    expect(src).toContain("Belum ada pengeluaran material untuk perintah kerja ini")
+    expect(src).toContain("/inventaris/pengeluaran-material/tambah?workOrderId=${wo.id}")
+    expect(src).toContain("prisma.materialIssue.findMany")
   })
 
   it("halaman Inventaris meneruskan pilihan perintah kerja & proyek ke form pengeluaran material", () => {
