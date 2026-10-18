@@ -24,6 +24,9 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
   const [type, setType] = useState(pettyCash?.type ?? "IN")
   const [accountId, setAccountId] = useState<string | null>(pettyCash?.accountId ? String(pettyCash.accountId) : null)
   const [projectId, setProjectId] = useState<string | null>(pettyCash?.projectId ? String(pettyCash.projectId) : null)
+  // Checkbox "Untuk project": detail proyek (Nama Project) hanya muncul bila
+  // dicentang — bayar listrik/umum tak lagi disodori kolom proyek.
+  const [forProject, setForProject] = useState<boolean>(Boolean(pettyCash?.projectId))
   const [vendorId, setVendorId] = useState<string | null>(pettyCash?.vendorId ? String(pettyCash.vendorId) : null)
   const [categoryId, setCategoryId] = useState<string | null>(pettyCash?.categoryId ? String(pettyCash.categoryId) : null)
   const [accountList, setAccountList] = useState(accounts)
@@ -110,15 +113,32 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
         <FormSection title="Detail" columns={1}>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="projectId">Nama Project</Label>
-              <Combobox
-                id="projectId"
-                name="projectId"
-                options={projects.map((p) => ({ value: String(p.id), label: `${p.documentNo ? `${p.documentNo} - ` : ""}${p.name}` }))}
-                value={projectId}
-                onChange={setProjectId}
-                placeholder="Cari project..."
-              />
+              <label className="flex items-center gap-2 text-sm font-medium text-foreground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={forProject}
+                  onChange={(e) => {
+                    setForProject(e.target.checked)
+                    if (!e.target.checked) setProjectId(null)
+                  }}
+                  aria-label="Untuk project"
+                  className="h-4 w-4 accent-primary"
+                />
+                Untuk project
+              </label>
+              {forProject && (
+                <>
+                  <Label htmlFor="projectId">Nama Project</Label>
+                  <Combobox
+                    id="projectId"
+                    name="projectId"
+                    options={projects.map((p) => ({ value: String(p.id), label: `${p.documentNo ? `${p.documentNo} - ` : ""}${p.name}` }))}
+                    value={projectId}
+                    onChange={setProjectId}
+                    placeholder="Cari project..."
+                  />
+                </>
+              )}
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="vendorId">Pemasok</Label>
