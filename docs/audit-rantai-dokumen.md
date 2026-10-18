@@ -155,6 +155,18 @@ sampai ke aksi lalu HILANG: pengguna memilih merek, halaman aset tetap menampilk
 ini karena kolomnya memang DIBACA — yang hilang penulisnya, dan sebabnya di skema.
 Verifikasi wajib dua sisi: skema MENERIMA nilainya, DAN aksi MENULISKAN-nya.
 
+**Kelas ini sekarang dijaga otomatis** oleh `src/__tests__/form-field-wiring.test.ts`:
+setiap nama field yang dikirim formulir (`name="..."`, `fd.set/append("...")`) harus
+terbukti dibaca di luar berkas form — entah sebagai kunci skema validasi, entah sebagai
+literal di sisi server. Nama yang hanya dirujuk formulirnya sendiri selalu bug.
+
+Penyisiran perdana atas 94 formulir: **nol pelanggaran nyata**. Satu kandidat, `modelId`
+di form kendaraan, ternyata sah (tabel `Vehicle` tidak punya kolom model; model
+kendaraan tersirat dari variannya, field itu murni state cascade di klien). Tiga
+kandidat lain dibaca lewat jalur yang detektor pertama lewatkan — `formData.getAll("x")`
+yang terpecah baris dan helper `strNull("x")` — sehingga aturan "dibaca"-nya dilonggarkan
+secara sadar, dengan batasnya dituliskan di berkas penjaganya.
+
 Ironi yang tercatat pada kelompok SDM: `bulk.actions.ts` **sudah** memetakan hapus
 massal untuk `holiday`, `departmentHoliday`, dan `workSchedule` — jadi aplikasi bisa
 menghapus baris yang tidak bisa dibuat.
