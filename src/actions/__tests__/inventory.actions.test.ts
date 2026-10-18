@@ -85,6 +85,10 @@ vi.mock("@/lib/hooks/material-issue.hook", () => ({
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/services/approval-workflow.service", () => ({
+  assertApproved: vi.fn().mockResolvedValue(undefined),
+  requestApprovalIfConfigured: vi.fn().mockResolvedValue(false),
+}));
 
 import * as actions from "../inventory.actions";
 import { onStockAdjustmentProcessed as stockAdjHook } from "@/lib/hooks/stock-adjustment.hook";
@@ -226,6 +230,35 @@ describe("Stock Adjustment Actions", () => {
     });
     const res = await actions.processStockAdjustment(1);
     expect(res?.success).toBe(true);
+  });
+  it("processStockAdjustment ditolak bila approval pending (P0-3)", async () => {
+    const { assertApproved } = await import("@/lib/services/approval-workflow.service");
+    vi.mocked(assertApproved).mockRejectedValueOnce(
+      new Error("Dokumen masih menunggu persetujuan (approval workflow) sebelum dapat dilanjutkan."),
+    );
+    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      status: "draft",
+      items: [],
+    });
+    const res = await actions.processStockAdjustment(1);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("menunggu persetujuan");
+    // Hook stok tak boleh jalan — tak ada mutasi tanpa persetujuan.
+    expect(stockAdjHook).not.toHaveBeenCalled();
+  });
+  it("createStockAdjustment mengajukan approval bila workflow ada (P0-3)", async () => {
+    const { requestApprovalIfConfigured } = await import("@/lib/services/approval-workflow.service");
+    const res = await actions.createStockAdjustment(
+      fdMap({
+        warehouseId: 1,
+        date: "2026-06-13",
+        reason: "Test",
+        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
+      }),
+    );
+    expect(res?.success).toBe(true);
+    expect(requestApprovalIfConfigured).toHaveBeenCalledWith("StockAdjustment", expect.any(Number), 1);
   });
   it("processStockAdjustment does not duplicate journal (stock hook owns it)", async () => {
     vi.clearAllMocks();

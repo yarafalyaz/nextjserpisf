@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { safeSubtract, safeMultiply } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import {
+  assertApproved,
+  requestApprovalIfConfigured,
+} from "@/lib/services/approval-workflow.service";
 import { getWarehouseScope, assertWarehouseAccess, assertWarehouseAccessMulti } from "@/lib/auth/warehouse-scope";
 import { onStockAdjustmentProcessed as onStockAdjustmentStock } from "@/lib/hooks/stock-adjustment.hook";
 import {
@@ -170,6 +174,10 @@ export async function createStockAdjustment(formData: FormData) {
       adjustment.id,
       `Membuat penyesuaian stok #${adjustment.id}`,
     );
+    // P0-3: ajukan ke alur persetujuan bila workflow StockAdjustment
+    // dikonfigurasi. Tanpa baris ini assertApproved di bawah tak pernah
+    // bisa menahan (tanpa record = lolos) — pola sama dengan Expense/Asset.
+    await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
     revalidatePath("/inventaris/penyesuaian");
     return { success: true, id: adjustment.id, slug: adjustment.slug };
   } catch (e: unknown) {
@@ -197,6 +205,12 @@ export async function processStockAdjustment(adjustmentId: number) {
     if (adjustment.status !== "draft") {
       throw new Error("Adjustment hanya bisa diproses dari status draft");
     }
+
+    // P0-3: proses menuntut persetujuan eksplisit. Tanpa workflow yang
+    // dikonfigurasi ini no-op (mundur kompatibel); bila workflow ada dan
+    // belum approved → tolak. Menutup lubang self-approve: sebelumnya siapa
+    // pun berizin process bisa menulis stok + jurnal tanpa pemeriksa kedua.
+    await assertApproved("StockAdjustment", adjustmentId);
 
     // Atomic conditional claim — serialize concurrent process requests so only
     // one caller creates stock moves and journal; duplicates get a clean error

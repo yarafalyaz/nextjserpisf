@@ -216,11 +216,18 @@ describe("onStockAdjustmentProcessed live-qty baseline", () => {
     expect(journalCall[2]).toBe("ADJ-001") // documentNo
     expect(journalCall[3]).toBe(50) // adjustmentId
     expect(journalCall[4]).toBe(7) // userId
-    // Status update
+    // Status update — P0-3: hook TIDAK self-approve. approvedBy/approvedAt
+    // hanya diisi mesin workflow; pemroses tak boleh jadi penyetuju sendiri.
     expect(spies.adjUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: 50 },
-        data: expect.objectContaining({ status: "processed", approvedBy: 7 }),
+        data: expect.not.objectContaining({ approvedBy: expect.anything(), approvedAt: expect.anything() }),
+      })
+    )
+    expect(spies.adjUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 50 },
+        data: expect.objectContaining({ status: "processed" }),
       })
     )
   })

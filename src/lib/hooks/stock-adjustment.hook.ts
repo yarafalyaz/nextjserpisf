@@ -220,13 +220,14 @@ export async function onStockAdjustmentProcessed(
       adjustment.date
     );
 
-    // Update Stock Adjustment status
+    // Update Stock Adjustment status. P0-3: TANPA self-approve — approvedBy/
+    // approvedAt hanya diisi mesin workflow (approval.actions.ts) saat
+    // persetujuan selesai. Sebelumnya hook menulis pemroses sebagai
+    // penyetuju dirinya sendiri, mengalahkan seluruh alur approval.
     await tx.stockAdjustment.update({
       where: { id: adjustmentId },
       data: {
         status: InventoryStatus.PROCESSED,
-        approvedBy: userId ?? null,
-        approvedAt: new Date(),
       },
     });
   });
