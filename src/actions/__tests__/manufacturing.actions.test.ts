@@ -93,6 +93,7 @@ vi.mock("@/lib/services/period-lock.service", () => ({
 // prisma models and fail every completeWorkOrder case.
 vi.mock("@/lib/services/qc.service", () => ({
   assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+  assertProductionOrderQcCleared: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock("@/lib/auth/warehouse-scope", () => ({
   getWarehouseScope: (...args: any[]) => mocks.warehouseScopeMock(...args),
@@ -432,6 +433,43 @@ describe("Production Order Actions", () => {
         }),
       }),
     )
+  })
+
+  it("checks the QC gate before completing a production order (P1-2)", async () => {
+    const qc = await import("@/lib/services/qc.service")
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 2,
+      totalActualCost: 20, totalStandardCost: 18, workOrderId: 42,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: true, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    const res = await actions.completeProductionOrder(8)
+    expect(res?.success).toBe(true)
+    // Gate PO sendiri + WO induk bila tertaut.
+    expect(vi.mocked(qc.assertProductionOrderQcCleared)).toHaveBeenCalledWith(8, expect.anything())
+    expect(vi.mocked(qc.assertWorkOrderQcCleared)).toHaveBeenCalledWith(42, expect.anything())
+  })
+
+  it("refuses production completion when QC gate rejects (P1-2)", async () => {
+    const qc = await import("@/lib/services/qc.service")
+    vi.mocked(qc.assertProductionOrderQcCleared).mockRejectedValueOnce(
+      new Error("Tidak dapat menyelesaikan PO: masih ada 1 nonconformance (NCR) terbuka yang harus diselesaikan."),
+    )
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 2,
+      totalActualCost: 20, totalStandardCost: 18, workOrderId: null,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    const res = await actions.completeProductionOrder(8)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("nonconformance")
+    expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled()
   })
 
   it("does not complete an order without a linked finished-goods inventory item", async () => {

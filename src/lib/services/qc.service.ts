@@ -26,14 +26,37 @@ export async function assertWorkOrderQcCleared(
   workOrderId: number,
   client: TxClient | typeof prisma = prisma,
 ): Promise<void> {
-  const referenceFilter = { referenceType: "WorkOrder", referenceId: workOrderId }
+  return assertQcCleared("WorkOrder", workOrderId, "WO", client)
+}
+
+/**
+ * P1-2: gate yang sama untuk Production Order. Release FG tanpa cek
+ * inspeksi/NCR adalah lubang: completeProductionOrder tak merujuk QC sama
+ * sekali. Inspeksi/NCR dirujuk per (referenceType, referenceId) sehingga PO
+ * yang diinspeksi langsung ikut terjaga; PO tertaut WO dicek keduanya oleh
+ * pemanggil (lihat completeProductionOrder).
+ */
+export async function assertProductionOrderQcCleared(
+  productionOrderId: number,
+  client: TxClient | typeof prisma = prisma,
+): Promise<void> {
+  return assertQcCleared("ProductionOrder", productionOrderId, "PO", client)
+}
+
+async function assertQcCleared(
+  referenceType: string,
+  referenceId: number,
+  label: string,
+  client: TxClient | typeof prisma,
+): Promise<void> {
+  const referenceFilter = { referenceType, referenceId }
 
   const openNcr = await client.nonconformance.count({
     where: { ...referenceFilter, status: { in: OPEN_NCR_STATUSES } },
   })
   if (openNcr > 0) {
     throw new Error(
-      `Tidak dapat menyelesaikan WO: masih ada ${openNcr} nonconformance (NCR) terbuka yang harus diselesaikan.`,
+      `Tidak dapat menyelesaikan ${label}: masih ada ${openNcr} nonconformance (NCR) terbuka yang harus diselesaikan.`,
     )
   }
 
@@ -46,7 +69,7 @@ export async function assertWorkOrderQcCleared(
   // If any final inspection exists, the latest one must be `passed`.
   if (inspections.length > 0 && inspections[0].status !== "passed") {
     throw new Error(
-      `Tidak dapat menyelesaikan WO: inspeksi akhir berstatus '${inspections[0].status}', harus 'passed' sebelum serah terima.`,
+      `Tidak dapat menyelesaikan ${label}: inspeksi akhir berstatus '${inspections[0].status}', harus 'passed' sebelum serah terima.`,
     )
   }
 }

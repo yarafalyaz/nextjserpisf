@@ -20,7 +20,7 @@ import {
 } from "@/lib/validations/manufacturing.schemas";
 import { computeProjectStatus } from "@/lib/services/project-status";
 import { resolveEffectiveBom } from "@/lib/services/bom-revision.service";
-import { assertWorkOrderQcCleared } from "@/lib/services/qc.service";
+import { assertWorkOrderQcCleared, assertProductionOrderQcCleared } from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
@@ -867,6 +867,7 @@ export async function completeProductionOrder(
           totalActualCost: true,
           totalStandardCost: true,
           variance: true,
+          workOrderId: true,
           product: {
             select: {
               inventoryItem: {
@@ -886,6 +887,16 @@ export async function completeProductionOrder(
       });
       if (order.status !== "in_progress") {
         throw new Error(`Perintah produksi berstatus '${order.status}', hanya 'in_progress' yang bisa diselesaikan`);
+      }
+
+      // P1-2: gate QC konsisten dengan Work Order. PO yang diinspeksi
+      // langsung (referenceType ProductionOrder) dicek; bila tertaut WO,
+      // WO induk ikut dicek — FG tak boleh release dengan NCR terbuka atau
+      // inspeksi akhir gagal di kedua sisi. Tanpa QC records = lolos
+      // (opt-in, sama seperti WO).
+      await assertProductionOrderQcCleared(id, tx);
+      if (order.workOrderId != null) {
+        await assertWorkOrderQcCleared(order.workOrderId, tx);
       }
       const outputItem = order.product.inventoryItem;
       if (!outputItem || !outputItem.isProduct || !outputItem.isActive || outputItem.deletedAt) {

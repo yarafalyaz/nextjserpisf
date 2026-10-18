@@ -30,6 +30,7 @@ const client = {
 
 import {
   assertWorkOrderQcCleared,
+  assertProductionOrderQcCleared,
   raiseNonconformanceFromInspection,
 } from "@/lib/services/qc.service"
 
@@ -99,6 +100,32 @@ describe("assertWorkOrderQcCleared", () => {
     expect(arg.where.inspectionType).toBe("final")
     expect(arg.where.referenceType).toBe("WorkOrder")
     expect(arg.where.referenceId).toBe(7)
+  })
+})
+
+describe("assertProductionOrderQcCleared (P1-2)", () => {
+  it("blocks when an open NCR exists on the production order", async () => {
+    nonconformanceCountMock.mockResolvedValue(1)
+
+    await expect(assertProductionOrderQcCleared(9, client as never)).rejects.toThrow(/nonconformance/i)
+
+    const arg = nonconformanceCountMock.mock.calls[0][0]
+    expect(arg.where.referenceType).toBe("ProductionOrder")
+    expect(arg.where.referenceId).toBe(9)
+  })
+
+  it("blocks when the latest final inspection failed", async () => {
+    nonconformanceCountMock.mockResolvedValue(0)
+    qcInspectionFindManyMock.mockResolvedValue([{ id: 5, status: "failed" }])
+
+    await expect(assertProductionOrderQcCleared(9, client as never)).rejects.toThrow(/failed|passed/i)
+  })
+
+  it("passes when there are no QC records at all (opt-in QC)", async () => {
+    nonconformanceCountMock.mockResolvedValue(0)
+    qcInspectionFindManyMock.mockResolvedValue([])
+
+    await expect(assertProductionOrderQcCleared(9, client as never)).resolves.toBeUndefined()
   })
 })
 
