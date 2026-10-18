@@ -154,5 +154,5 @@ tidak menyentuh HRM/CRM) dan `scripts/seed-item-transactions.ts` (masih jalan, u
 ## Catatan
 
 - Tidak ada `src/`, `e2e/`, atau `globals.css` yang diubah oleh penulisan dokumen ini.
-- Dokumen ini tidak mengubah `AUDIT-REPORT.md`, `docs/AUDIT-SCHEMA.md`, `docs/RBAC_AUDIT.md`.
+- Dokumen ini tidak mengubah `docs/AUDIT-REPORT.md`, `docs/AUDIT-SCHEMA.md`, `docs/RBAC_AUDIT.md`.
 - Angka "belum" bersifat **statis** (tanpa node_modules/.next); verifikasi runtime-nya milik pekerjaan lanjutan.

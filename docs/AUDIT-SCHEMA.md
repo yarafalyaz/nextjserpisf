@@ -307,7 +307,7 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
 6. **Provisioning produksi — paling berdampak, dan satu-satunya yang butuh akses di luar
    repo ini.** `Dockerfile` masih menjalankan `prisma db push` di setiap boot, sehingga
    migrasi tidak dipakai produksi. Prosedur 4 langkahnya ada di §5 (mulai dari `migrate diff`,
-   yang tidak mengubah apa pun). `AUDIT-REPORT.md` sendiri menyatakan produksi seharusnya
+   yang tidak mengubah apa pun). `docs/AUDIT-REPORT.md` sendiri menyatakan produksi seharusnya
    `migrate deploy` (niat dan kode tidak sepakat), dan baseline `migrate resolve` yang diklaimnya
    untuk **31** migrasi kini basi — migrasinya sudah 52+. Catatan pembaruan bertanggal sudah
    ditambahkan di kepala laporan itu.
