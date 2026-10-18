@@ -61,7 +61,8 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
 
   const apByVendor = new Map<string, { count: number; billed: number; paid: number; outstanding: number }>()
   for (const bill of bills) {
-    const billed = Number(bill.grandTotal)
+    // P0-2: utang supplier = NETO (grandTotal − withholding), bukan bruto.
+    const billed = Number(bill.grandTotal) - Number(bill.withholdingAmount ?? 0)
     const paid = Number(bill.paidAmount)
     const existing = apByVendor.get(bill.vendor.name) ?? { count: 0, billed: 0, paid: 0, outstanding: 0 }
     existing.count += 1

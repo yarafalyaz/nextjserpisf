@@ -597,6 +597,37 @@ describe("Vendor Bill Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createVendorBill tidak mem-posting jurnal (draft murni, P0-2)", async () => {
+    const hook = (await import("@/lib/hooks/accounting.hook")).onVendorBillPosted as any
+    hook.mockClear()
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "0",
+      grandTotal: "1000",
+    }))
+    expect(res?.success).toBe(true)
+    // Satu titik pengakuan = posting; draft tanpa jurnal (selaras laporan AP
+    // yang mengecualikan draft).
+    expect(hook).not.toHaveBeenCalled()
+  })
+
+  it("confirmVendorBill isi balanceDue NETO (grandTotal − withholding, P0-2)", async () => {
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: null, vendorId: 3,
+      grandTotal: 1000000, withholdingAmount: 100000,
+    })
+    const res = await actions.confirmVendorBill(1)
+    expect(res?.success).toBe(true)
+    const update = mocks.prismaMock.vendorBill.update.mock.calls.at(-1)![0]
+    expect(Number(update.data.balanceDue)).toBe(900000)
+  })
+
   it("confirmVendorBill rolls a service PO's value into the work order's production HPP", async () => {
     // 3-way match
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])

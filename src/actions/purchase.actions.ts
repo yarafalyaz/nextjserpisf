@@ -1019,13 +1019,10 @@ export async function createVendorBill(formData: FormData) {
         });
       }
 
-      // Post the AP journal in the same transaction (idempotent; no-op if a
-      // journal for this bill already exists).
-      await onVendorBillPosted(created.id, Number(user.id), tx);
-
-      // Roll the newly-billed service PO value into the work order's production
-      // HPP (subcontract cost).
-      await syncServicePoCostFromBills(tx, created.purchaseOrderId, Number(user.id));
+      // P0-2: draft MURNI — tanpa jurnal, tanpa HPP. Satu titik pengakuan
+      // adalah posting (confirmVendorBill): di sanalah jurnal AP + HPP jasa
+      // dibuat. Sebelumnya jurnal lahir saat draft sementara laporan AP
+      // mengecualikan draft → selisih AP vs GL.
 
       return created;
     });
@@ -1301,8 +1298,10 @@ export async function confirmVendorPayment(paymentId: number) {
             `Vendor bill #${alloc.vendorBillId} tidak ditemukan dalam tagihan terkunci`,
           );
         }
+        // P0-2: batas alokasi = NETO (bukan grandTotal) — konsisten dengan sisa.
+        const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 0);
         const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0);
-        if (nextPaid > Number(bill.grandTotal)) {
+        if (nextPaid > netPayable) {
           throw new Error(
             `Alokasi melebihi sisa tagihan vendor bill #${bill.id}`,
           );
@@ -1325,11 +1324,16 @@ export async function confirmVendorPayment(paymentId: number) {
       //    there are no write-write conflicts between these updates. Mirrors the
       //    parallel-update pattern used in onExpenseApprovedSyncPettyCash and the
       //    inventory-fifo batch-update refactors.
+      // P0-2: sisa = NETO (grandTotal − withholding) − terbayar, konsisten
+      // dengan jurnal (Cr AP neto) dan balanceDue saat confirm. Sebelumnya
+      // memakai grandTotal sehingga tagihan ber-PPh tak pernah lunas sekali
+      // bayar (sisa palsu sebesar withholding selamanya).
       await Promise.all(
         allocations.map((alloc) => {
           const bill = openBillMap.get(alloc.vendorBillId)!;
+          const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 0);
           const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0);
-          const nextBalance = safeSubtract(bill.grandTotal, nextPaid, 0);
+          const nextBalance = safeSubtract(netPayable, nextPaid, 0);
 
           return tx.vendorBill.update({
             where: { id: bill.id },
