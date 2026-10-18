@@ -25,6 +25,7 @@ export const DEFAULT_UOM_OPTIONS = ["PCS", "SET", "KG", "LTR", "MTR", "BOX"] as 
 export interface UomMasterEntry {
   name: string
   symbol: string
+  category?: string | null
 }
 
 export interface UomOption {
@@ -35,6 +36,7 @@ export interface UomOption {
 export function buildUomOptions(
   units: readonly UomMasterEntry[] | null | undefined,
   current?: string | null,
+  kind?: "barang" | "jasa" | null,
 ): UomOption[] {
   const options: UomOption[] = []
   const seen = new Set<string>()
@@ -46,6 +48,10 @@ export function buildUomOptions(
   const normalize = (raw: unknown): string => String(raw ?? "").trim().toUpperCase()
 
   for (const unit of units ?? []) {
+    // Filter jenis: baris jasa hanya lihat satuan jasa, baris barang hanya
+    // satuan barang. Tanpa kind (form barang) semua tampil.
+    if (kind === "jasa" && (unit?.category ?? "barang") !== "jasa") continue
+    if (kind === "barang" && (unit?.category ?? "barang") !== "barang") continue
     const value = normalize(unit?.symbol)
     if (!value || seen.has(value)) continue
     seen.add(value)
@@ -56,7 +62,7 @@ export function buildUomOptions(
     })
   }
 
-  if (options.length === 0) {
+  if (options.length === 0 && !kind) {
     for (const symbol of DEFAULT_UOM_OPTIONS) {
       options.push({ value: symbol, label: symbol })
       seen.add(symbol)

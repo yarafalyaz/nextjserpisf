@@ -516,8 +516,8 @@ async function main() {
       );
       if (existing.length > 0) continue;
       await conn.query(
-        "INSERT INTO unit_of_measures (name, symbol, is_active, created_at, updated_at) VALUES (?, ?, 1, NOW(), NOW())",
-        [uom.name, uom.symbol],
+        "INSERT INTO unit_of_measures (name, symbol, category, is_active, created_at, updated_at) VALUES (?, ?, ?, 1, NOW(), NOW())",
+        [uom.name, uom.symbol, uom.category ?? "barang"],
       );
     }
     console.log(`✅ ${unitsOfMeasure.length} units of measure seeded/checked`);

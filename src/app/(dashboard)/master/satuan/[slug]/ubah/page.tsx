@@ -40,7 +40,7 @@ export default async function EditUomPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Satuan</h1>
       </div>
-      <UomForm uom={{ id: uom.id, name: uom.name, symbol: uom.symbol }} />
+      <UomForm uom={{ id: uom.id, name: uom.name, symbol: uom.symbol, category: uom.category }} />
     </div>
   )
 }

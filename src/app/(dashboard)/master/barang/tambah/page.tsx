@@ -23,7 +23,7 @@ export default async function CreateItemPage() {
     prisma.rackRow.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true, rackId: true } }),
     peekNextDocumentNumber("ITM", "simple"),
     // Master satuan → the "Satuan" dropdown (previously a hard-coded list).
-    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true } }),
+    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true, category: true } }),
     prisma.itemGroup.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
   ])
   const settings = await getSystemSettings()

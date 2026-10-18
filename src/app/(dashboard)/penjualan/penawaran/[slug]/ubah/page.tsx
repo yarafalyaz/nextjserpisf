@@ -64,7 +64,7 @@ export default async function EditQuotationPage({
       orderBy: { name: "asc" },
       include: { materials: true },
     }),
-    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true } }),
+    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true, category: true } }),
   ])
 
   const quotation = {

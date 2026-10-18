@@ -2407,12 +2407,15 @@ export async function createUom(formData: FormData) {
     const symbol = String(formData.get("symbol") ?? "").trim();
     if (!name) return { success: false, error: "Nama satuan wajib diisi" };
     if (!symbol) return { success: false, error: "Simbol wajib diisi" };
+    const rawCategory = String(formData.get("category") ?? "").trim().toLowerCase();
+    const category = rawCategory === "jasa" ? "jasa" : "barang";
 
     const uom = await prisma.unitOfMeasure.create({
       data: {
         name,
         slug: await nextSlug("unitOfMeasure", name),
         symbol,
+        category,
         isActive: true,
       },
     });
@@ -2433,6 +2436,8 @@ export async function updateUom(id: number, formData: FormData) {
     const symbol = String(formData.get("symbol") ?? "").trim();
     if (!name) return { success: false, error: "Nama satuan wajib diisi" };
     if (!symbol) return { success: false, error: "Simbol wajib diisi" };
+    const rawCategory = String(formData.get("category") ?? "").trim().toLowerCase();
+    const category = rawCategory === "jasa" ? "jasa" : "barang";
 
     await prisma.unitOfMeasure.update({
       where: { id },
@@ -2440,6 +2445,7 @@ export async function updateUom(id: number, formData: FormData) {
         name,
         slug: await nextSlug("unitOfMeasure", name, { excludeId: id }),
         symbol,
+        category,
       },
     });
     await logActivity("update", "UnitOfMeasure", id, "Memperbarui satuan");

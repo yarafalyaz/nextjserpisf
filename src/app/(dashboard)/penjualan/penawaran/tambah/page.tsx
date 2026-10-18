@@ -46,7 +46,7 @@ export default async function CreateQuotationPage() {
       orderBy: { name: "asc" },
       include: { materials: true },
     }),
-    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true } }),
+    prisma.unitOfMeasure.findMany({ where: { isActive: true }, orderBy: { name: "asc" }, select: { name: true, symbol: true, category: true } }),
   ])
 
   // Transform customerVehicles to a simpler shape for the form

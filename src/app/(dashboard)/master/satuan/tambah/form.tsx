@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 export function UomForm({
   uom,
 }: {
-  uom?: { id?: number; name?: string | null; symbol?: string | null };
+  uom?: { id?: number; name?: string | null; symbol?: string | null; category?: string | null };
 } = {}) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -66,6 +66,19 @@ export function UomForm({
             placeholder="Contoh: kg"
             defaultValue={uom?.symbol || ""}
           />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="category">Jenis *</Label>
+          <select
+            id="category"
+            name="category"
+            required
+            defaultValue={uom?.category || "barang"}
+            className="form-input"
+          >
+            <option value="barang">Barang</option>
+            <option value="jasa">Jasa</option>
+          </select>
         </div>
       </div>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">

@@ -863,14 +863,14 @@ export const DOCUMENT_SEQUENCE_KEYS = [
 ];
 
 /** Baseline units of measure (the item form's "Satuan" dropdown reads this). */
-export const UNITS_OF_MEASURE: { name: string; symbol: string }[] = [
-  { name: "Pieces", symbol: "PCS" },
-  { name: "Set", symbol: "SET" },
-  { name: "Kilogram", symbol: "KG" },
-  { name: "Liter", symbol: "LTR" },
-  { name: "Meter", symbol: "MTR" },
-  { name: "Box", symbol: "BOX" },
-  { name: "Jasa", symbol: "JASA" },
+export const UNITS_OF_MEASURE: { name: string; symbol: string; category: string }[] = [
+  { name: "Pieces", symbol: "PCS", category: "barang" },
+  { name: "Set", symbol: "SET", category: "barang" },
+  { name: "Kilogram", symbol: "KG", category: "barang" },
+  { name: "Liter", symbol: "LTR", category: "barang" },
+  { name: "Meter", symbol: "MTR", category: "barang" },
+  { name: "Box", symbol: "BOX", category: "barang" },
+  { name: "Jasa", symbol: "JASA", category: "jasa" },
 ];
 
 /** Default expense categories. */

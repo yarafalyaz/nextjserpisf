@@ -94,3 +94,36 @@ describe("buildUomOptions", () => {
     expect(options.map((o) => o.value)).toEqual([...DEFAULT_UOM_OPTIONS])
   })
 })
+
+describe("buildUomOptions filter jenis barang/jasa", () => {
+  const master = [
+    { name: "Pieces", symbol: "PCS", category: "barang" },
+    { name: "Box", symbol: "BOX", category: "barang" },
+    { name: "Jasa", symbol: "JASA", category: "jasa" },
+  ]
+
+  it("baris barang hanya lihat satuan barang", () => {
+    const options = buildUomOptions(master, null, "barang")
+    expect(options.map((o) => o.value).sort()).toEqual(["BOX", "PCS"])
+  })
+
+  it("baris jasa hanya lihat satuan jasa", () => {
+    const options = buildUomOptions(master, null, "jasa")
+    expect(options.map((o) => o.value)).toEqual(["JASA"])
+  })
+
+  it("tanpa kind semua tampil (form barang)", () => {
+    const options = buildUomOptions(master)
+    expect(options.map((o) => o.value).sort()).toEqual(["BOX", "JASA", "PCS"])
+  })
+
+  it("baris jasa tanpa master jasa -> kosong, bukan bocor fallback barang", () => {
+    const options = buildUomOptions([{ name: "Pieces", symbol: "PCS", category: "barang" }], null, "jasa")
+    expect(options).toEqual([])
+  })
+
+  it("nilai warisan beda jenis tetap tampil (baris lama tak blank)", () => {
+    const options = buildUomOptions(master, "RIM", "barang")
+    expect(options[0]).toEqual({ value: "RIM", label: "RIM" })
+  })
+})

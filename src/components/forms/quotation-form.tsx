@@ -63,7 +63,7 @@ interface QuotationFormProps {
   generatedCode?: string
   paymentMethods?: { code: string; name: string }[]
   shippingMethods?: { code: string; name: string }[]
-  unitOptions?: { name: string; symbol: string }[]
+  unitOptions?: { name: string; symbol: string; category?: string | null }[]
   quotation?: Record<string, unknown> // for edit mode
 }
 
@@ -77,8 +77,8 @@ function SectionItems({
   register,
   products,
   unitOptions,
-  uomOptionsState,
-  setUomOptionsState,
+  uomExtra,
+  setUomExtra,
 }: {
   sectionIndex: number
   control: any
@@ -86,24 +86,10 @@ function SectionItems({
   setValue: any
   register: any
   products?: ProductOption[]
-  unitOptions?: { name: string; symbol: string }[]
-  uomOptionsState: { code: string; label: string }[]
-  setUomOptionsState: React.Dispatch<React.SetStateAction<{ code: string; label: string }[]>>
+  unitOptions: { name: string; symbol: string; category?: string | null }[]
+  uomExtra: { code: string; label: string; category: string }[]
+  setUomExtra: React.Dispatch<React.SetStateAction<{ code: string; label: string; category: string }[]>>
 }) {
-  // Nilai warisan per baris (mis. JASA) yg tak ada di master ikut opsi agar
-  // baris lama tetap tampil, bukan blank.
-  const mergedUomState = useMemo(() => {
-    const seen = new Set(uomOptionsState.map((o) => o.code.toUpperCase()))
-    const extra: { code: string; label: string }[] = []
-    for (const u of unitOptions ?? []) {
-      const code = String(u.symbol ?? "").trim().toUpperCase()
-      if (code && !seen.has(code)) {
-        seen.add(code)
-        extra.push({ code, label: u.name && u.name.toUpperCase() !== code ? `${code} — ${u.name}` : code })
-      }
-    }
-    return [...uomOptionsState, ...extra]
-  }, [unitOptions, uomOptionsState])
   const { fields, append, remove } = useFieldArray({
     control,
     name: `sections.${sectionIndex}.items`,
@@ -165,8 +151,9 @@ function SectionItems({
               onRecalc={recalcItem}
               onRemove={() => remove(itemIndex)}
               canRemove={fields.length > 1}
-              uomOptionsState={mergedUomState}
-              setUomOptionsState={setUomOptionsState}
+              unitOptions={unitOptions}
+              uomExtra={uomExtra}
+              setUomExtra={setUomExtra}
             />
           ))}
         </tbody>
@@ -239,8 +226,9 @@ function SectionItemRow({
   onRecalc,
   onRemove,
   canRemove,
-  uomOptionsState,
-  setUomOptionsState,
+  unitOptions,
+  uomExtra,
+  setUomExtra,
 }: {
   sectionIndex: number
   itemIndex: number
@@ -252,8 +240,9 @@ function SectionItemRow({
   onRecalc: (itemIndex: number) => void
   onRemove: () => void
   canRemove: boolean
-  uomOptionsState: { code: string; label: string }[]
-  setUomOptionsState: React.Dispatch<React.SetStateAction<{ code: string; label: string }[]>>
+  unitOptions: { name: string; symbol: string; category?: string | null }[]
+  uomExtra: { code: string; label: string; category: string }[]
+  setUomExtra: React.Dispatch<React.SetStateAction<{ code: string; label: string; category: string }[]>>
 }) {
   const prefix = `sections.${sectionIndex}.items.${itemIndex}`
   const watchedItem = useWatch({ control, name: prefix })
@@ -354,11 +343,27 @@ function SectionItemRow({
         <Controller
           name={`${prefix}.uom`}
           control={control}
-          render={({ field }) => (
+          render={({ field }) => {
+            // Baris jasa (custom) hanya lihat satuan jasa; baris barang hanya
+            // satuan barang. Nilai warisan yg tak ada di master ikut tampil
+            // agar baris lama tak blank; quick-add masuk uomExtra sesuai jenis.
+            const kind = isCustomMode ? "jasa" : "barang"
+            const base = buildUomOptions(unitOptions, field.value, kind).map((o) => ({
+              value: o.value,
+              label: o.label,
+            }))
+            const seen = new Set(base.map((o) => o.value.toUpperCase()))
+            for (const x of uomExtra) {
+              if (x.category === kind && x.code && !seen.has(x.code.toUpperCase())) {
+                seen.add(x.code.toUpperCase())
+                base.push({ value: x.code, label: x.label })
+              }
+            }
+            return (
             <QuickAddSelect
               value={field.value || null}
               onChange={(key) => field.onChange(key ?? "")}
-              options={uomOptionsState.map((u) => ({ value: u.code, label: u.label }))}
+              options={base}
               placeholder="Pilih satuan..."
               title={QUICK_ADD.uom.title}
               fields={QUICK_ADD.uom.fields}
@@ -368,11 +373,12 @@ function SectionItemRow({
                 String(formData.get("name") ?? "").trim()
               }
               onCreated={(created) => {
-                setUomOptionsState((prev) => [...prev, { code: created.label, label: created.label }])
+                setUomExtra((prev) => [...prev, { code: created.label, label: created.label, category: kind }])
                 field.onChange(created.label)
               }}
             />
-          )}
+            )
+          }}
         />
       </td>
       <td>
@@ -555,11 +561,9 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [customerOptions, setCustomerOptions] = useState(customers)
-  // Opsi satuan dari master (/master/satuan) + nilai warisan (JASA/dll) agar
-  // baris lama tak pecah; quick-add menambah ke state ini tanpa reload.
-  const [uomOptionsState, setUomOptionsState] = useState<{ code: string; label: string }[]>(() =>
-    buildUomOptions(unitOptions).map((o) => ({ code: o.value, label: o.label })),
-  )
+  // Satuan baru dari quick-add (tanpa pindah halaman); digabung dgn master
+  // + nilai warisan baris saat render per baris di SectionItemRow.
+  const [uomExtra, setUomExtra] = useState<{ code: string; label: string; category: string }[]>([])
 
   const {
     register,
@@ -877,8 +881,8 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
               register={register}
               products={products}
               unitOptions={unitOptions}
-              uomOptionsState={uomOptionsState}
-              setUomOptionsState={setUomOptionsState}
+              uomExtra={uomExtra}
+              setUomExtra={setUomExtra}
             />
           </div>
         ))}
