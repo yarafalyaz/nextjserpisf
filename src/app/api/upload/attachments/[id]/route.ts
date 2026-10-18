@@ -52,14 +52,18 @@ export async function DELETE(
       // sumber bila tak cocok pola (split/pop meruntuhkan traversal).
       const match = /^\/api\/attachments\/[^/]+\/([^/]+)$/.exec(attachment.fileUrl)
       const filename = match?.[1] ?? ""
-      if (!filename || filename.includes("..")) return
-      const refType = attachment.referenceType || "general"
-      const privateRoot = path.join(process.cwd(), "private", "uploads", "attachments", refType)
-      const filepath = path.resolve(privateRoot, filename)
-      const relative = path.relative(path.join(process.cwd(), "private", "uploads"), filepath)
+      // fileUrl tak cocok pola (mis. "/") atau mengandung traversal: lewati
+      // unlink tapi LANJUT ke hapus baris DB — return telanjang di sini
+      // membuat handler mengembalikan undefined (respons 500 tanpa badan).
+      if (filename && !filename.includes("..")) {
+        const refType = attachment.referenceType || "general"
+        const privateRoot = path.join(process.cwd(), "private", "uploads", "attachments", refType)
+        const filepath = path.resolve(privateRoot, filename)
+        const relative = path.relative(path.join(process.cwd(), "private", "uploads"), filepath)
 
-      if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
-        await unlink(filepath)
+        if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
+          await unlink(filepath)
+        }
       }
     } catch {
       // File might already be deleted or on R2, continue

@@ -220,6 +220,7 @@ vi.mock("@/lib/sales/return-validation", () => ({
 vi.mock("fs/promises", () => ({
   writeFile: vi.fn().mockResolvedValue(undefined),
   mkdir: vi.fn().mockResolvedValue(undefined),
+  unlink: vi.fn().mockResolvedValue(undefined),
 }))
 
 // storage asli menarik prisma + aws-sdk; mock assertMagicBytes dengan semantik
