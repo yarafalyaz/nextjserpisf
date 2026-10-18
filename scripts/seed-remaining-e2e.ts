@@ -29,6 +29,7 @@ async function main() {
   // berstatus `posted` tanpa satu pun entri buku. HPP & persediaan diperlukan supaya
   // jurnal HPP + pengurangan stok ikut terbentuk.
   const revenueAccount = await ensureAccount("E2E-4000", "E2E Sales Revenue", AccountType.REVENUE);
+  const salesReturnAccount = await ensureAccount("E2E-4100", "E2E Sales Return", AccountType.REVENUE);
   const cogsAccount = await ensureAccount("E2E-5103", "E2E Cost of Goods Sold", AccountType.EXPENSE);
   const inventoryAccount = await ensureAccount("E2E-1104", "E2E Inventory", AccountType.ASSET);
 
@@ -40,6 +41,7 @@ async function main() {
         cashBankAccountId: cash.id,
         salesReceivableAccountId: receivable.id,
         salesRevenueAccountId: revenueAccount.id,
+        salesReturnAccountId: salesReturnAccount.id,
         cogsAccountId: cogsAccount.id,
         inventoryAccountId: inventoryAccount.id,
         purchasePayableAccountId: payable.id,
@@ -55,6 +57,7 @@ async function main() {
         cashBankAccountId: cash.id,
         salesReceivableAccountId: receivable.id,
         salesRevenueAccountId: revenueAccount.id,
+        salesReturnAccountId: salesReturnAccount.id,
         cogsAccountId: cogsAccount.id,
         inventoryAccountId: inventoryAccount.id,
         purchasePayableAccountId: payable.id,
