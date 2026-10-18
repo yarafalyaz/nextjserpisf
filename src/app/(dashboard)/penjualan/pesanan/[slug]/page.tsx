@@ -296,15 +296,32 @@ export default async function SalesOrderDetailPage({
         </div>
       </div>
 
-      {/* Invoices */}
-      {order.salesInvoices.length > 0 && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
-            <h2 className="text-[0.9375rem] font-semibold text-foreground">
-              Faktur
-            </h2>
-          </div>
-          <div className="p-4 px-5">
+      {/* Faktur yang lahir dari pesanan ini. Kartunya SELALU tampil (dengan
+          keadaan kosong) supaya jalan membuat faktur terlihat dari sini —
+          tanpa ini pengguna harus menebak lewat menu, persis celah kartu Surat
+          Jalan yang sudah ditutup di atas. */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">
+            Faktur
+          </h2>
+          {DELIVERABLE_ORDER_STATUSES.includes(
+            order.status as (typeof DELIVERABLE_ORDER_STATUSES)[number]
+          ) && (
+            <Button
+              href={`/penjualan/faktur/tambah?salesOrderId=${order.id}`}
+              variant="primary"
+            >
+              + Faktur
+            </Button>
+          )}
+        </div>
+        <div className="p-4 px-5">
+          {order.salesInvoices.length === 0 ? (
+            <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+              Belum ada faktur untuk pesanan ini
+            </p>
+          ) : (
             <DetailTable>
               <DetailTableHead>
                 <DetailTableTh>No. Dokumen</DetailTableTh>
@@ -331,9 +348,9 @@ export default async function SalesOrderDetailPage({
                 ))}
               </DetailTableBody>
             </DetailTable>
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
       {/* Notes */}
       {order.notes && (

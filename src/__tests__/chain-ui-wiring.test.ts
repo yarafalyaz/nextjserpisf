@@ -28,6 +28,7 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8")
 
 const PESANAN_DETAIL = "src/app/(dashboard)/penjualan/pesanan/[slug]/page.tsx"
 const FAKTUR_DETAIL = "src/app/(dashboard)/penjualan/faktur/[slug]/page.tsx"
+const FAKTUR_TAMBAH = "src/app/(dashboard)/penjualan/faktur/tambah/page.tsx"
 const MI_TAMBAH = "src/app/(dashboard)/inventaris/pengeluaran-material/tambah/page.tsx"
 const MI_UBAH = "src/app/(dashboard)/inventaris/pengeluaran-material/[slug]/ubah/page.tsx"
 
@@ -74,6 +75,31 @@ describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
     expect(read("src/app/(dashboard)/penjualan/retur/tambah/page.tsx")).toContain(
       "params.invoiceId"
     )
+  })
+
+  it("detail Pesanan Penjualan selalu menampilkan kartu Faktur beserta jalan membuatnya", () => {
+    const src = read(PESANAN_DETAIL)
+
+    // Kartunya tidak boleh lagi dikurung oleh `length > 0`: jalan membuat
+    // faktur harus terlihat justru saat belum ada faktur. Sebelum ini kartu
+    // Faktur hilang sama sekali dan "+ Faktur" hanya bisa ditebak lewat menu —
+    // persis celah kartu Surat Jalan yang sudah ditutup di atas.
+    expect(src).not.toContain("salesInvoices.length > 0")
+
+    // Jalan membuatnya harus ada dan menunjuk halaman yang membaca parameternya.
+    expect(src).toContain("/penjualan/faktur/tambah?salesOrderId=${order.id}")
+
+    // Keadaan kosong yang terlihat, bukan kartu kosong tanpa penjelasan.
+    expect(src).toContain("Belum ada faktur untuk pesanan ini")
+
+    // Tombolnya hanya untuk status yang boleh difakturkan — daftar statusnya
+    // dipakai bersama dengan aksi server, bukan disalin ulang secara manual.
+    expect(src).toContain("DELIVERABLE_ORDER_STATUSES.includes(")
+
+    // Halaman tujuan benar-benar membaca parameternya dan mem-prefill item.
+    const tambah = read(FAKTUR_TAMBAH)
+    expect(tambah).toContain("params.salesOrderId")
+    expect(tambah).toContain("initialItems")
   })
 
   it("halaman Inventaris meneruskan pilihan perintah kerja & proyek ke form pengeluaran material", () => {
