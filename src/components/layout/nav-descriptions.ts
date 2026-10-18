@@ -151,5 +151,6 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/sdm/lembur": "Lembur",
   "/sdm/kalender-kerja": "Hari libur & jadwal kerja",
   "/sdm/penggajian": "Penggajian",
+  "/sdm/aturan-statutori": "Tarif BPJS, PTKP & PPh21 berperiode",
   "/sdm/pinjaman": "Pinjaman karyawan",
 }

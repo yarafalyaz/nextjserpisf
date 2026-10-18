@@ -689,6 +689,7 @@ model Employee {
   gender              String?
   dateOfBirth         DateTime?         @map("date_of_birth")
   maritalStatus       String?           @map("marital_status")
+  dependents          Int               @default(0)
   departmentId        Int?              @map("department_id")
   positionId          Int?              @map("position_id")
   joinDate            DateTime          @map("join_date")
@@ -2374,6 +2375,23 @@ model OvertimeRequest {
   @@map("overtime_requests")
 }
 
+/// P1-6: ruleset statutori payroll berperiode. Tarif jangan diedit diam-diam:
+/// perubahan aturan = baris baru dengan effectiveFrom baru (+ tutup baris lama
+/// via effectiveTo). Seed awal = parameter 2024 yang sebelumnya hardcoded.
+/// Angka 2026+ NEEDS ACCOUNTANT/LEGAL CONFIRMATION sebelum dimasukkan.
+model PayrollStatutoryRule {
+  id            Int       @id @default(autoincrement())
+  key           String    @db.VarChar(64)
+  value         Decimal   @db.Decimal(20, 6)
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  source        String?   @db.VarChar(255)
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@unique([key, effectiveFrom], map: "payroll_statutory_rules_key_effective_from_unique")
+  @@map("payroll_statutory_rules")
+}
+
 model Payroll {
   slug                   String?     @unique
   id                     Int         @id @default(autoincrement())
@@ -2394,6 +2412,7 @@ model Payroll {
   bpjsHealthEmployee     Decimal     @default(0.00) @map("bpjs_health_employee") @db.Decimal(15, 2)
   bpjsEmploymentEmployee Decimal     @default(0.00) @map("bpjs_employment_employee") @db.Decimal(15, 2)
   pph21                  Decimal     @default(0.00) @map("pph21") @db.Decimal(15, 2)
+  statutorySnapshot      Json?       @map("statutory_snapshot")
   lateMinutes            Int         @default(0) @map("late_minutes")
   workingDays            Int         @default(0) @map("working_days")
   presentDays            Int         @default(0) @map("present_days")

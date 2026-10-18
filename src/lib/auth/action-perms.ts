@@ -92,6 +92,9 @@ export const ROUTE_PERMS: ReadonlyArray<{
   { prefix: "/sdm/lembur", edit: "edit_overtime_requests", delete: "delete_overtime_requests" },
   // Payroll hanya punya aksi ubah (tidak ada deletePayroll), jadi tanpa delete.
   { prefix: "/sdm/penggajian", edit: "edit_payroll" },
+  // Aturan statutori: tambah/tutup/hapus lewat create_payroll/edit_payroll
+  // (tidak ada izin delete_payroll di katalog).
+  { prefix: "/sdm/aturan-statutori", edit: "edit_payroll" },
 
   // Timesheet/appreciation edits are enforced server-side by
   // updateTimesheet/updateAppreciation with create_timesheets /

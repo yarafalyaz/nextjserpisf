@@ -734,6 +734,8 @@ export async function createEmployee(formData: FormData) {
         ? new Date(formData.get("dateOfBirth") as string)
         : null,
       maritalStatus: (formData.get("maritalStatus") as string | null) || null,
+      // P1-6: jumlah tanggungan untuk PTKP (0-3). Clamp server-side.
+      dependents: Math.min(3, Math.max(0, Math.floor(Number(formData.get("dependents")) || 0))),
       departmentId: safeId(formData.get("departmentId")),
       positionId: safeId(formData.get("positionId")),
       joinDate: new Date(requireString(formData.get("joinDate"), "joinDate")),
@@ -912,6 +914,8 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
         ? new Date(formData.get("dateOfBirth") as string)
         : null,
       maritalStatus: (formData.get("maritalStatus") as string | null) || null,
+      // P1-6: jumlah tanggungan untuk PTKP (0-3). Clamp server-side.
+      dependents: Math.min(3, Math.max(0, Math.floor(Number(formData.get("dependents")) || 0))),
       departmentId: safeId(formData.get("departmentId")),
       positionId: safeId(formData.get("positionId")),
       paymentFrequency:

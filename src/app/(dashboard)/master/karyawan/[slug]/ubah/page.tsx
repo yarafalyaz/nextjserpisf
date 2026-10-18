@@ -58,6 +58,7 @@ export default async function EditEmployeePage({
     gender: data.gender,
     dateOfBirth: data.dateOfBirth?.toISOString().split("T")[0] ?? null,
     maritalStatus: data.maritalStatus,
+    dependents: data.dependents ?? 0,
     departmentId: data.departmentId,
     positionId: data.positionId,
     joinDate: data.joinDate.toISOString().split("T")[0],

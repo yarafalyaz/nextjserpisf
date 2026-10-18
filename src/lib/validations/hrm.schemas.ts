@@ -162,6 +162,21 @@ export const departmentHolidaySchema = z.object({
   date: requiredDate("Tanggal"),
 })
 
+/**
+ * P1-6: aturan statutori payroll berperiode. Perubahan tarif = baris BARU
+ * dengan effectiveFrom baru (+ tutup baris lama via effectiveTo) — JANGAN
+ * edit value baris lama (histori slip bergantung padanya via snapshot).
+ * Key bebas; key dikenal mesin ada di RULE_KEYS (payroll-statutory.service).
+ */
+export const statutoryRuleSchema = z.object({
+  key: z.string().trim().min(1, "Kunci wajib diisi").max(64)
+    .regex(/^[a-z0-9_]+$/, "Kunci hanya huruf kecil, angka, garis bawah"),
+  value: z.coerce.number({ error: "Nilai wajib diisi" }).finite(),
+  effectiveFrom: requiredDate("Berlaku sejak"),
+  effectiveTo: optionalDate,
+  source: optionalStr(255),
+})
+
 export const workScheduleSchema = z.object({
   name: requiredText("Nama jadwal wajib diisi", 150),
   // Minimal satu hari: hari kosong akan membuat layanan absensi memakai fallback

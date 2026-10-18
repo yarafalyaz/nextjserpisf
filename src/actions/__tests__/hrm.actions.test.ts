@@ -36,6 +36,7 @@ const mocks = vi.hoisted(() => {
     overtimeRequest: buildModelMock(),
     appreciation: buildModelMock(),
     payroll: buildModelMock(),
+    payrollStatutoryRule: buildModelMock(),
     employee: buildModelMock(),
     attendance: buildModelMock(),
     workSchedule: buildModelMock(),
@@ -591,6 +592,21 @@ describe("Payroll Actions", () => {
     const res = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
     expect(res).toBeDefined()
     if (!res || "error" in res) throw new Error("Expected success, got error: " + (res && "error" in res ? res.error : "undefined"))
+  })
+
+  it("estimation and bulk share one statutory engine with snapshot (P1-6)", async () => {
+    requirePermissionMock.mockResolvedValueOnce({ id: "1", roles: ["hr_admin"] } as any)
+    prismaMock.employee.findUnique.mockResolvedValue({
+      baseSalary: 5000000, maritalStatus: "single", dependents: 0,
+      employeeLoans: [],
+    })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+    const single = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
+    if (!single || "error" in single) throw new Error("single failed")
+    const snap = (single as unknown as { statutorySnapshot: { fromFallback: boolean; asOf: string } }).statutorySnapshot
+    // Tabel kosong di mock → fallback 2024 tercatat jujur.
+    expect(snap.fromFallback).toBe(true)
+    expect(snap.asOf).toBe("2026-05-31")
   })
 
   it("generateBulkPayroll succeeds", async () => {
