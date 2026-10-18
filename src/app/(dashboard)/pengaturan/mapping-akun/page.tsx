@@ -27,7 +27,7 @@ function AccountSection({ title, items }: { title: string; items: { label: strin
   const mapped = items.filter((i) => i.value !== "Belum diset").length
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-sm font-semibold text-foreground">{title}</h2>
         <Badge variant="outline">{mapped}/{items.length}</Badge>
       </div>

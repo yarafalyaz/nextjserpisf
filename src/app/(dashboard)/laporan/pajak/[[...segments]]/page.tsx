@@ -180,7 +180,7 @@ export default async function TaxReportPage({
       </ReportSection>
 
       <div className={`report-section ${netTax >= 0 ? 'border-danger' : 'border-success'}`} style={{ borderLeft: '4px solid', paddingLeft: 16 }}>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="text-sm font-bold">PPN {netTax >= 0 ? 'KURANG BAYAR' : 'LEBIH BAYAR'}</span>
           <span className={`text-base font-bold ${netTax >= 0 ? 'text-danger' : 'text-success'}`}>{formatCurrency(Math.abs(netTax))}</span>
         </div>

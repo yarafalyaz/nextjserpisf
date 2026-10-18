@@ -154,7 +154,7 @@ export default async function ProjectDetailPage({
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <Activity className="size-28 text-foreground" />
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <span className="text-sm font-semibold text-muted-foreground">Progres Pengerjaan</span>
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-primary/10 text-primary">Fisik Mobil</span>
           </div>
@@ -175,7 +175,7 @@ export default async function ProjectDetailPage({
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <Wrench className="size-28 text-foreground" />
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <span className="text-sm font-semibold text-muted-foreground">Profil Mobil Target</span>
             {project.customerVehicle?.plateNumber && (
               <span className="font-mono text-xs font-bold px-2.5 py-0.5 rounded-md border border-foreground bg-foreground text-background shadow-sm">
@@ -214,7 +214,7 @@ export default async function ProjectDetailPage({
           <div className="absolute top-0 right-0 p-8 opacity-5">
             <DollarSign className="size-28 text-foreground" />
           </div>
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-4">
             <span className="text-sm font-semibold text-muted-foreground">Ringkasan Finansial</span>
             <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-success-soft text-success-soft-foreground">Margin Langsung</span>
           </div>

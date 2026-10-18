@@ -390,7 +390,7 @@ export function ProjectStages({ projectId, stages, canEdit }: ProjectStagesProps
           {/* Progress Percentage Configurator */}
           {targetStatus === "in_progress" && (
             <div className="bg-surface-secondary/60 border border-default p-3.5 rounded-xl flex flex-col gap-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <label htmlFor="stage-percent" className="text-xs font-bold text-foreground">Persentase Capaian Progres:</label>
                 <span className="text-sm font-black text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-md">
                   {percentage}%
