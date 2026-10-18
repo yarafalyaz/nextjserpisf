@@ -67,6 +67,13 @@ const CREATE_PAGE_CASES: Array<[string, string]> = [
   ["aset/grup/tambah/page.tsx", "create_asset_groups"],
   ["aset/transfer/tambah/page.tsx", "create_asset_transfers"],
   ["kendaraan/merek/tambah/page.tsx", "create_vehicle_brands"],
+  // Guard halaman tambah mengikuti izin create aksi yang di-submit form-nya
+  // (audit §4 #1: uang-muka memakai edit_sales_orders padahal aksi menuntut
+  // create_down_payments; departemen/jabatan/kelompok-pajak pola yang sama).
+  ["penjualan/uang-muka/tambah/page.tsx", "create_down_payments"],
+  ["master/departemen/tambah/page.tsx", "create_departments"],
+  ["master/jabatan/tambah/page.tsx", "create_positions"],
+  ["master/kelompok-pajak/tambah/page.tsx", "create_taxes"],
 ]
 
 /** Client pages whose permission check lives in a parent layout. */

@@ -11,7 +11,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Tambah Jabatan" }
 
 export default async function CreatePositionPage() {
-  await requirePermission("edit_positions")
+  await requirePermission("create_positions")
 
   const [departments, generatedCode] = await Promise.all([
     prisma.department.findMany({ orderBy: { name: "asc" } }),
