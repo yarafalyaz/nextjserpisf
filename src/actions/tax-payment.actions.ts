@@ -35,6 +35,19 @@ function parseId(raw: FormDataEntryValue | null): number | null {
   return Number.isInteger(value) && value > 0 ? value : null
 }
 
+/**
+ * Masa pajak `YYYY-MM` yang benar-benar ada di kalender.
+ *
+ * Regex saja tidak cukup: `/^\d{4}-\d{2}$/` meloloskan "2026-13"/"2026-00"
+ * yang lalu tersimpan sebagai masa pajak fiktif dan tercetak mentah di
+ * laporan penyetoran pajak. Bulan wajib 01–12.
+ */
+export function isValidTaxPeriod(raw: string): boolean {
+  if (!/^\d{4}-\d{2}$/.test(raw)) return false
+  const month = Number(raw.slice(5, 7))
+  return month >= 1 && month <= 12
+}
+
 export async function createTaxPayment(formData: FormData): Promise<TaxPaymentActionResult> {
   try {
     const user = await requirePermission("create_tax_payments")
@@ -59,7 +72,7 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
 
     const taxTypeId = parseId(formData.get("taxTypeId"))
     const rawPeriod = String(formData.get("period") ?? "").trim()
-    if (rawPeriod && !/^\d{4}-\d{2}$/.test(rawPeriod)) {
+    if (rawPeriod && !isValidTaxPeriod(rawPeriod)) {
       return { success: false, error: "Masa pajak harus dalam format YYYY-MM, mis. 2026-09." }
     }
     const reference = String(formData.get("reference") ?? "").trim() || null
