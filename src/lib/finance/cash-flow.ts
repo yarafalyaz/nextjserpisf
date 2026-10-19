@@ -12,6 +12,8 @@
  * asset), drawing a loan attributes to financing (counterpart liability/equity).
  */
 
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
+
 export type CashFlowActivity = "operating" | "investing" | "financing"
 
 export interface JournalLine {
@@ -90,7 +92,7 @@ export function classifyJournal(
     const d = Number(e.debit) || 0
     const c = Number(e.credit) || 0
     if (isCashAccount(e.accountId)) {
-      cashDelta += d - c
+      cashDelta = safeAdd(cashDelta, safeSubtract(d, c, 2), 2)
     } else {
       counterparts.push({ type: e.type, code: e.code, name: e.name, weight: Math.abs(d - c) })
     }
@@ -108,7 +110,7 @@ export function foldActivities(
 ): ActivityTotals {
   const totals: ActivityTotals = { operating: 0, investing: 0, financing: 0 }
   for (const c of classified) {
-    if (c) totals[c.activity] += c.cashDelta
+    if (c) totals[c.activity] = safeAdd(totals[c.activity], c.cashDelta, 2)
   }
   return totals
 }

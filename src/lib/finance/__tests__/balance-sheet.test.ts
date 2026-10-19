@@ -111,6 +111,20 @@ describe("computeBalanceSheet", () => {
     expect(result.isBalanced).toBe(true)
   })
 
+  it("regresi sen: akumulasi float tidak drift (pola PR #25)", () => {
+    // 3 x 10.000.000,10 mentah = 30000000.299999997, bukan 30000000.3.
+    const entries: BalanceSheetEntryInput[] = [
+      entry(1, "ASSET", 10000000.1, 0),
+      entry(1, "ASSET", 10000000.1, 0),
+      entry(1, "ASSET", 10000000.1, 0),
+      entry(2, "EQUITY", 0, 30000000.3),
+    ]
+    const result = computeBalanceSheet(entries)
+    expect(result.totalAssets).toBe(30000000.3)
+    expect(result.assets[0].balance).toBe(30000000.3)
+    expect(result.isBalanced).toBe(true)
+  })
+
   it("aggregates multiple entries for the same account", () => {
     const entries: BalanceSheetEntryInput[] = [
       entry(1, "ASSET", 300, 0),
