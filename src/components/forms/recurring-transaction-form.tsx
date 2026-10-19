@@ -101,17 +101,17 @@ export function RecurringTransactionForm({ accounts, expenseCategories, schedule
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={schedule?.id ? "Formulir ubah transaksi berulang" : "Formulir tambah transaksi berulang"}>
       <FormCard>
         <FormSection title="Jadwal">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Jadwal *</Label>
+            <Label htmlFor="name">Nama Jadwal <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Input id="name" name="name" required defaultValue={schedule?.name ?? ""} placeholder="mis. Sewa kantor bulanan" />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="type">Jenis Dokumen *</Label>
+            <Label htmlFor="type">Jenis Dokumen <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Select value={type} onValueChange={setType}>
-              <SelectTrigger id="type" aria-label="Jenis dokumen">
+              <SelectTrigger id="type" aria-label="Jenis dokumen" aria-required="true">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -121,9 +121,9 @@ export function RecurringTransactionForm({ accounts, expenseCategories, schedule
             </Select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="frequency">Frekuensi *</Label>
+            <Label htmlFor="frequency">Frekuensi <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Select value={frequency} onValueChange={setFrequency}>
-              <SelectTrigger id="frequency" aria-label="Frekuensi">
+              <SelectTrigger id="frequency" aria-label="Frekuensi" aria-required="true">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -135,8 +135,8 @@ export function RecurringTransactionForm({ accounts, expenseCategories, schedule
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="interval">Setiap</Label>
-            <Input id="interval" name="interval" type="number" min="1" max="60" defaultValue={schedule?.interval ?? 1} />
-            <span className="text-xs text-muted-foreground">1 = setiap periode, 2 = tiap 2 periode, dst.</span>
+            <Input id="interval" name="interval" type="number" min="1" max="60" defaultValue={schedule?.interval ?? 1} aria-describedby="interval-hint" />
+            <span id="interval-hint" className="text-xs text-muted-foreground">1 = setiap periode, 2 = tiap 2 periode, dst.</span>
           </div>
           <div className="flex flex-col gap-1.5">
             <AppDatePicker label="Mulai" name="startDate" value={startDate} onChange={setStartDate} required />
@@ -156,26 +156,26 @@ export function RecurringTransactionForm({ accounts, expenseCategories, schedule
             <Input id="description" name="description" defaultValue={schedule?.description ?? ""} placeholder="mis. Sewa kantor Oktober" />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="amount">Nominal *</Label>
+            <Label htmlFor="amount">Nominal <span className="text-destructive" aria-hidden="true">*</span></Label>
             <CurrencyInput id="amount" value={amount} onChange={setAmount} />
           </div>
 
           {type === "journal" ? (
             <>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="debitAccountId">Akun Debit *</Label>
-                <Combobox id="debitAccountId" value={debitAccountId} onChange={setDebitAccountId} placeholder="Pilih akun debit..." options={accountOptions} />
+                <Label htmlFor="debitAccountId">Akun Debit <span className="text-destructive" aria-hidden="true">*</span></Label>
+                <Combobox id="debitAccountId" required value={debitAccountId} onChange={setDebitAccountId} placeholder="Pilih akun debit..." options={accountOptions} />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="creditAccountId">Akun Kredit *</Label>
-                <Combobox id="creditAccountId" value={creditAccountId} onChange={setCreditAccountId} placeholder="Pilih akun kredit..." options={accountOptions} />
+                <Label htmlFor="creditAccountId">Akun Kredit <span className="text-destructive" aria-hidden="true">*</span></Label>
+                <Combobox id="creditAccountId" required value={creditAccountId} onChange={setCreditAccountId} placeholder="Pilih akun kredit..." options={accountOptions} />
               </div>
             </>
           ) : (
             <>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="accountId">Akun Beban *</Label>
-                <Combobox id="accountId" value={accountId} onChange={setAccountId} placeholder="Pilih akun beban..." options={accountOptions} />
+                <Label htmlFor="accountId">Akun Beban <span className="text-destructive" aria-hidden="true">*</span></Label>
+                <Combobox id="accountId" required value={accountId} onChange={setAccountId} placeholder="Pilih akun beban..." options={accountOptions} />
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="paidFromAccountId">Dibayar Dari</Label>
