@@ -464,90 +464,32 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     );
   }
 
-  it("createStockAdjustment handles error globally", async () => {
-    await expectPermissionReject("createStockAdjustment");
+  async function expectGlobalReject(fnName: string) {
+    await expectPermissionReject(fnName);
     expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("processStockAdjustment handles error globally", async () => {
-    await expectPermissionReject("processStockAdjustment");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("createInventoryTransfer handles error globally", async () => {
-    await expectPermissionReject("createInventoryTransfer");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("processInventoryTransfer handles error globally", async () => {
-    await expectPermissionReject("processInventoryTransfer");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("receiveInventoryTransfer handles error globally", async () => {
-    await expectPermissionReject("receiveInventoryTransfer");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("createMaterialIssue handles error globally", async () => {
-    await expectPermissionReject("createMaterialIssue");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("completeMaterialIssue handles error globally", async () => {
-    await expectPermissionReject("completeMaterialIssue");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("createWorkOrder handles error globally", async () => {
-    await expectPermissionReject("createWorkOrder");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("updateWorkOrder handles error globally", async () => {
-    await expectPermissionReject("updateWorkOrder");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("createRack handles error globally", async () => {
-    await expectPermissionReject("createRack");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("updateRack handles error globally", async () => {
-    await expectPermissionReject("updateRack");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("deleteStockAdjustment handles error globally", async () => {
-    await expectPermissionReject("deleteStockAdjustment");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("deleteInventoryTransfer handles error globally", async () => {
-    await expectPermissionReject("deleteInventoryTransfer");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("deleteMaterialIssue handles error globally", async () => {
-    await expectPermissionReject("deleteMaterialIssue");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("deleteRack handles error globally", async () => {
-    await expectPermissionReject("deleteRack");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("updateStockAdjustment handles error globally", async () => {
-    await expectPermissionReject("updateStockAdjustment");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("updateMaterialIssue handles error globally", async () => {
-    await expectPermissionReject("updateMaterialIssue");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("updateInventoryTransfer handles error globally", async () => {
-    await expectPermissionReject("updateInventoryTransfer");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("createRackRow handles error globally", async () => {
-    await expectPermissionReject("createRackRow");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("updateRackRow handles error globally", async () => {
-    await expectPermissionReject("updateRackRow");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
-  it("deleteRackRow handles error globally", async () => {
-    await expectPermissionReject("deleteRackRow");
-    expect(mocks.requirePermissionMock).toHaveBeenCalled();
-  });
+  }
+
+  it("createStockAdjustment handles error globally", () => expectGlobalReject("createStockAdjustment"));
+  it("processStockAdjustment handles error globally", () => expectGlobalReject("processStockAdjustment"));
+  it("createInventoryTransfer handles error globally", () => expectGlobalReject("createInventoryTransfer"));
+  it("processInventoryTransfer handles error globally", () => expectGlobalReject("processInventoryTransfer"));
+  it("receiveInventoryTransfer handles error globally", () => expectGlobalReject("receiveInventoryTransfer"));
+  it("createMaterialIssue handles error globally", () => expectGlobalReject("createMaterialIssue"));
+  it("completeMaterialIssue handles error globally", () => expectGlobalReject("completeMaterialIssue"));
+  it("createWorkOrder handles error globally", () => expectGlobalReject("createWorkOrder"));
+  it("updateWorkOrder handles error globally", () => expectGlobalReject("updateWorkOrder"));
+  it("createRack handles error globally", () => expectGlobalReject("createRack"));
+  it("updateRack handles error globally", () => expectGlobalReject("updateRack"));
+  it("deleteStockAdjustment handles error globally", () => expectGlobalReject("deleteStockAdjustment"));
+  it("deleteInventoryTransfer handles error globally", () => expectGlobalReject("deleteInventoryTransfer"));
+  it("deleteMaterialIssue handles error globally", () => expectGlobalReject("deleteMaterialIssue"));
+  it("deleteRack handles error globally", () => expectGlobalReject("deleteRack"));
+  it("updateStockAdjustment handles error globally", () => expectGlobalReject("updateStockAdjustment"));
+  it("updateMaterialIssue handles error globally", () => expectGlobalReject("updateMaterialIssue"));
+  it("updateInventoryTransfer handles error globally", () => expectGlobalReject("updateInventoryTransfer"));
+  it("createRackRow handles error globally", () => expectGlobalReject("createRackRow"));
+  it("updateRackRow handles error globally", () => expectGlobalReject("updateRackRow"));
+  it("deleteRackRow handles error globally", () => expectGlobalReject("deleteRackRow"));
 });
 
 describe("Inventory Transfer Error & Edge Paths", () => {

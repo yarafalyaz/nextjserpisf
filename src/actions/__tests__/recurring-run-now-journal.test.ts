@@ -52,18 +52,12 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prisma }))
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: unknown[]) => mocks.requirePermission(...a),
-}))
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: (...a: unknown[]) => mocks.logActivity(...a),
-}))
-vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => mocks.revalidatePath(...a) }))
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
-}))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: (...a: unknown[]) => mocks.nextSlug(...a) }))
+vi.mock("@/lib/db/prisma", async () => (await import("./validation-mock-helpers")).prismaFactory(mocks))
+vi.mock("@/lib/auth/permissions", async () => (await import("./validation-mock-helpers")).permissionFactory(mocks))
+vi.mock("@/lib/services/activity-log.service", async () => (await import("./validation-mock-helpers")).activityLogFactory(mocks))
+vi.mock("next/cache", async () => (await import("./validation-mock-helpers")).revalidateFactory(mocks))
+vi.mock("@/lib/utils/document-number", async () => (await import("./validation-mock-helpers")).docNumberFactory(mocks))
+vi.mock("@/lib/utils/slug-db", async () => (await import("./validation-mock-helpers")).slugMockFactory(mocks))
 
 import { runRecurringNow } from "../recurring.actions"
 

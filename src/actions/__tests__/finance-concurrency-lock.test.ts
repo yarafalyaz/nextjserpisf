@@ -3,6 +3,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
   buildLockTx,
   expectLockOrder,
+  financeAccountingHookFactory,
+  financeActivityLogFactory,
+  financeApprovalFactory,
+  financeDocumentNumberFactory,
+  financeExpenseHookFactory,
+  financeJournalPrismaFactory,
+  financeNextCacheFactory,
+  financePeriodLockFactory,
+  financePermissionsFactory,
+  financeSlugFactory,
   journalDraftFixture,
   reconDraftFixture,
   resetMockFns,
@@ -16,62 +26,44 @@ import {
 // issued BEFORE any status check / mutation inside the transaction, so nobody
 // can silently drop or reorder it (which would re-open the TOCTOU window).
 
-const requirePermissionMock = vi.fn()
-const revalidateMock = vi.fn()
-const logActivityMock = vi.fn()
-const assertPeriodOpenMock = vi.fn()
+const holder = vi.hoisted(() => ({ set: null as any, include: {
+  requirePermissionMock: true, revalidateMock: true, logActivityMock: true,
+  assertPeriodOpenMock: true, journalFindUniqueOrThrowMock: true,
+  journalUpdateManyMock: true, journalUpdateMock: true,
+  entryDeleteManyMock: true, entryCreateManyMock: true, executeRawMock: true,
+  transactionMock: true, reconFindUniqueOrThrowMock: true,
+  reconUpdateManyMock: true, reconItemCreateMock: true,
+} }))
+let requirePermissionMock: any
+let revalidateMock: any
+let logActivityMock: any
+let assertPeriodOpenMock: any
+let journalFindUniqueOrThrowMock: any
+let journalUpdateManyMock: any
+let journalUpdateMock: any
+let entryDeleteManyMock: any
+let entryCreateManyMock: any
+let executeRawMock: any
+let transactionMock: any
+let reconFindUniqueOrThrowMock: any
+let reconUpdateManyMock: any
+let reconItemCreateMock: any
 
-const journalFindUniqueOrThrowMock = vi.fn()
-const journalUpdateManyMock = vi.fn()
-const journalUpdateMock = vi.fn()
-const entryDeleteManyMock = vi.fn()
-const entryCreateManyMock = vi.fn()
-const executeRawMock = vi.fn()
-const transactionMock = vi.fn()
-
-const reconFindUniqueOrThrowMock = vi.fn()
-const reconUpdateManyMock = vi.fn()
-const reconItemCreateMock = vi.fn()
-
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
-}))
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    journal: {
-      findUniqueOrThrow: (...a: unknown[]) => journalFindUniqueOrThrowMock(...a),
-    },
-    $transaction: (...a: unknown[]) => transactionMock(...a),
-  },
-}))
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: (...a: unknown[]) => assertPeriodOpenMock(...a),
-}))
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: (...a: unknown[]) => logActivityMock(...a),
-}))
-vi.mock("@/lib/services/approval-workflow.service", () => ({
-  requestApprovalIfConfigured: vi.fn(),
-  assertApproved: vi.fn(),
-}))
-vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onExpenseApproved: vi.fn(),
-  onPettyCashCreated: vi.fn(),
-}))
-vi.mock("@/lib/hooks/expense.hook", () => ({
-  onExpenseApprovedSyncPettyCash: vi.fn(),
-}))
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: vi.fn(async () => "JRN-0001"),
-}))
-vi.mock("next/cache", () => ({
-  revalidatePath: (...a: unknown[]) => revalidateMock(...a),
-}))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug") }))
+vi.mock("@/lib/auth/permissions", () => financePermissionsFactory(holder))
+vi.mock("@/lib/db/prisma", () => financeJournalPrismaFactory(holder))
+vi.mock("@/lib/services/period-lock.service", () => financePeriodLockFactory(holder))
+vi.mock("@/lib/services/activity-log.service", () => financeActivityLogFactory(holder))
+vi.mock("@/lib/services/approval-workflow.service", () => financeApprovalFactory())
+vi.mock("@/lib/hooks/accounting.hook", () => financeAccountingHookFactory())
+vi.mock("@/lib/hooks/expense.hook", () => financeExpenseHookFactory())
+vi.mock("@/lib/utils/document-number", () => financeDocumentNumberFactory("JRN-0001"))
+vi.mock("next/cache", () => financeNextCacheFactory(holder))
+vi.mock("@/lib/utils/slug-db", () => financeSlugFactory("test-slug"))
 
 import { postJournal, completeReconciliation } from "../finance.actions"
 
 beforeEach(() => {
+  ;({ requirePermissionMock, revalidateMock, logActivityMock, assertPeriodOpenMock, journalFindUniqueOrThrowMock, journalUpdateManyMock, journalUpdateMock, entryDeleteManyMock, entryCreateManyMock, executeRawMock, transactionMock, reconFindUniqueOrThrowMock, reconUpdateManyMock, reconItemCreateMock } = holder.set)
   resetMockFns([
     requirePermissionMock, revalidateMock, logActivityMock, assertPeriodOpenMock,
     journalFindUniqueOrThrowMock, journalUpdateManyMock, journalUpdateMock,

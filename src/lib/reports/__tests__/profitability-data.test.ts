@@ -105,6 +105,17 @@ beforeEach(() => {
   mocks.itemFindMany.mockResolvedValue([STOCK_ITEM, SERVICE_ITEM])
 })
 
+async function seedAndLoad(
+  items: { itemId: number | null; qty: number; total: number }[],
+  moves: MoveFixture[],
+  dimension: "faktur" | "barang" | "pelanggan" = "faktur",
+) {
+  mocks.salesInvoiceFindMany.mockResolvedValue([invoice({ items })])
+  ALL_MOVES.push(...moves)
+  const { result } = await loadProfitability(PERIOD, dimension)
+  return result
+}
+
 describe("loadProfitability — cakupan HPP berbasis qty (R-13)", () => {
   it("epsilon eksplisit dan di bawah presisi qty Decimal(15,2)", () => {
     expect(QTY_EPSILON).toBe(1e-9)
@@ -157,12 +168,10 @@ describe("loadProfitability — cakupan HPP berbasis qty (R-13)", () => {
   })
 
   it("parsial: jual 10 keluar 3 → 70% revenue masuk missing, HPP dari 3 unit", async () => {
-    mocks.salesInvoiceFindMany.mockResolvedValue([
-      invoice({ items: [{ itemId: 5, qty: 10, total: 1_000_000 }] }),
-    ])
-    ALL_MOVES.push(move({ referenceId: 1, itemId: 5, qty: 3, cost: 100 }))
-
-    const { result } = await loadProfitability(PERIOD, "faktur")
+    const result = await seedAndLoad(
+      [{ itemId: 5, qty: 10, total: 1_000_000 }],
+      [move({ referenceId: 1, itemId: 5, qty: 3, cost: 100 })],
+    )
 
     expect(result.totals.cogs).toBe(300)
     expect(result.totals.revenueMissingCogs).toBeCloseTo(700_000)
@@ -170,12 +179,10 @@ describe("loadProfitability — cakupan HPP berbasis qty (R-13)", () => {
   })
 
   it("penuh: keluar = jual → tidak ada missing", async () => {
-    mocks.salesInvoiceFindMany.mockResolvedValue([
-      invoice({ items: [{ itemId: 5, qty: 10, total: 1_000_000 }] }),
-    ])
-    ALL_MOVES.push(move({ referenceId: 1, itemId: 5, qty: 4, cost: 100 }), move({ referenceId: 1, itemId: 5, qty: 6, cost: 100 }))
-
-    const { result } = await loadProfitability(PERIOD, "faktur")
+    const result = await seedAndLoad(
+      [{ itemId: 5, qty: 10, total: 1_000_000 }],
+      [move({ referenceId: 1, itemId: 5, qty: 4, cost: 100 }), move({ referenceId: 1, itemId: 5, qty: 6, cost: 100 })],
+    )
 
     expect(result.totals.cogs).toBe(1_000)
     expect(result.totals.revenueMissingCogs).toBe(0)
@@ -183,12 +190,10 @@ describe("loadProfitability — cakupan HPP berbasis qty (R-13)", () => {
   })
 
   it("kelebihan keluar tidak menghasilkan missing negatif", async () => {
-    mocks.salesInvoiceFindMany.mockResolvedValue([
-      invoice({ items: [{ itemId: 5, qty: 10, total: 1_000_000 }] }),
-    ])
-    ALL_MOVES.push(move({ referenceId: 1, itemId: 5, qty: 12, cost: 100 }))
-
-    const { result } = await loadProfitability(PERIOD, "faktur")
+    const result = await seedAndLoad(
+      [{ itemId: 5, qty: 10, total: 1_000_000 }],
+      [move({ referenceId: 1, itemId: 5, qty: 12, cost: 100 })],
+    )
 
     expect(result.totals.cogs).toBe(1_200)
     expect(result.totals.revenueMissingCogs).toBe(0)
@@ -219,19 +224,16 @@ describe("loadProfitability — cakupan HPP berbasis qty (R-13)", () => {
   })
 
   it("SKU berulang ter-cover gabungan baris: keluar menjumlah terhadap total qty faktur", async () => {
-    mocks.salesInvoiceFindMany.mockResolvedValue([
-      invoice({
-        items: [
-          { itemId: 5, qty: 4, total: 400_000 },
-          { itemId: 5, qty: 6, total: 600_000 },
-        ],
-      }),
-    ])
     // 4 + 6 keluar dalam dua move — masing-masing move < qty satu baris,
     // tapi gabungan = total qty faktur → penuh.
-    ALL_MOVES.push(move({ referenceId: 1, itemId: 5, qty: 4, cost: 100 }), move({ referenceId: 1, itemId: 5, qty: 6, cost: 100 }))
-
-    const { result } = await loadProfitability(PERIOD, "barang")
+    const result = await seedAndLoad(
+      [
+        { itemId: 5, qty: 4, total: 400_000 },
+        { itemId: 5, qty: 6, total: 600_000 },
+      ],
+      [move({ referenceId: 1, itemId: 5, qty: 4, cost: 100 }), move({ referenceId: 1, itemId: 5, qty: 6, cost: 100 })],
+      "barang",
+    )
 
     expect(result.totals.cogs).toBe(1_000)
     expect(result.totals.revenueMissingCogs).toBe(0)
@@ -239,18 +241,16 @@ describe("loadProfitability — cakupan HPP berbasis qty (R-13)", () => {
   })
 
   it("reversal & IN tidak dihitung: hanya move OUT posted dari query", async () => {
-    mocks.salesInvoiceFindMany.mockResolvedValue([
-      invoice({ items: [{ itemId: 5, qty: 10, total: 1_000_000 }] }),
-    ])
-    ALL_MOVES.push(
-      // Reversal: stok kembali — status bukan posted, tersaring query.
-      move({ referenceId: 1, itemId: 5, qty: 10, cost: 100, status: "reversed" }),
-      move({ referenceId: 1, itemId: 5, qty: 10, cost: 100, status: "draft" }),
-      // Pembalikan arah: impact IN, tersaring query.
-      move({ referenceId: 1, itemId: 5, qty: 10, cost: 100, impact: "IN" }),
+    const result = await seedAndLoad(
+      [{ itemId: 5, qty: 10, total: 1_000_000 }],
+      [
+        // Reversal: stok kembali — status bukan posted, tersaring query.
+        move({ referenceId: 1, itemId: 5, qty: 10, cost: 100, status: "reversed" }),
+        move({ referenceId: 1, itemId: 5, qty: 10, cost: 100, status: "draft" }),
+        // Pembalikan arah: impact IN, tersaring query.
+        move({ referenceId: 1, itemId: 5, qty: 10, cost: 100, impact: "IN" }),
+      ],
     )
-
-    const { result } = await loadProfitability(PERIOD, "faktur")
 
     expect(result.totals.cogs).toBe(0)
     expect(result.totals.revenueMissingCogs).toBe(1_000_000)
@@ -258,16 +258,14 @@ describe("loadProfitability — cakupan HPP berbasis qty (R-13)", () => {
   })
 
   it("reversal parsial: OUT posted tetap dihitung, sisanya yang reversed tidak menutup kekurangan", async () => {
-    mocks.salesInvoiceFindMany.mockResolvedValue([
-      invoice({ items: [{ itemId: 5, qty: 10, total: 1_000_000 }] }),
-    ])
-    ALL_MOVES.push(
-      move({ referenceId: 1, itemId: 5, qty: 3, cost: 100 }),
-      move({ referenceId: 1, itemId: 5, qty: 7, cost: 100, status: "reversed" }),
-      move({ referenceId: 1, itemId: 5, qty: 7, cost: 100, impact: "IN" }),
+    const result = await seedAndLoad(
+      [{ itemId: 5, qty: 10, total: 1_000_000 }],
+      [
+        move({ referenceId: 1, itemId: 5, qty: 3, cost: 100 }),
+        move({ referenceId: 1, itemId: 5, qty: 7, cost: 100, status: "reversed" }),
+        move({ referenceId: 1, itemId: 5, qty: 7, cost: 100, impact: "IN" }),
+      ],
     )
-
-    const { result } = await loadProfitability(PERIOD, "faktur")
 
     expect(result.totals.cogs).toBe(300)
     expect(result.totals.revenueMissingCogs).toBeCloseTo(700_000)
@@ -275,11 +273,7 @@ describe("loadProfitability — cakupan HPP berbasis qty (R-13)", () => {
   })
 
   it("garis qty nol tidak menghasilkan missing (tidak ada dasar proporsi)", async () => {
-    mocks.salesInvoiceFindMany.mockResolvedValue([
-      invoice({ items: [{ itemId: 5, qty: 0, total: 100_000 }] }),
-    ])
-
-    const { result } = await loadProfitability(PERIOD, "faktur")
+    const result = await seedAndLoad([{ itemId: 5, qty: 0, total: 100_000 }], [])
 
     expect(result.totals.revenueMissingCogs).toBe(0)
     expect(result.totals.missingCogsLines).toBe(0)

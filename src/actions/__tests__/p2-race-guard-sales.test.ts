@@ -123,6 +123,14 @@ function fdMap(payload: Record<string, string | number>): FormData {
   return f
 }
 
+function dpFd(): FormData {
+  return fdMap({ quotationId: 50, amount: 100, paymentDate: "2024-01-01" })
+}
+
+function paymentFd(salesInvoiceId: number): FormData {
+  return fdMap({ salesInvoiceId, amount: 100, paymentDate: "2024-01-01", paymentMethod: "cash" })
+}
+
 beforeEach(() => {
   for (const m of allMocks) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
@@ -164,7 +172,7 @@ describe("P2-3 DP quotation re-read guard", () => {
     const order: string[] = []
     wireDpTx(order, { status: "accepted", grandTotal: 1000 })
 
-    const result = await createDownPayment(fdMap({ quotationId: 50, amount: 100, paymentDate: "2024-01-01" }))
+    const result = await createDownPayment(dpFd())
 
     expect(result.success).toBe(true)
     expect(quotationFindUniqueOrThrowMock).not.toHaveBeenCalled() // no outer read
@@ -174,7 +182,7 @@ describe("P2-3 DP quotation re-read guard", () => {
   it("createDownPayment: rejects when the in-tx re-read is no longer eligible", async () => {
     wireDpTx([], { status: "draft", grandTotal: 1000 })
 
-    const result = await createDownPayment(fdMap({ quotationId: 50, amount: 100, paymentDate: "2024-01-01" }))
+    const result = await createDownPayment(dpFd())
 
     expect(result.success).toBe(false)
     expect(result.error).toContain("approved/accepted/converted")
@@ -185,7 +193,7 @@ describe("P2-3 DP quotation re-read guard", () => {
     const order: string[] = []
     wireDpTx(order, { status: "accepted", grandTotal: 1000 })
 
-    const result = await updateDownPayment(99, fdMap({ quotationId: 50, amount: 100, paymentDate: "2024-01-01" }))
+    const result = await updateDownPayment(99, dpFd())
 
     expect(result.success).toBe(true)
     expect(quotationFindUniqueOrThrowMock).not.toHaveBeenCalled() // no outer read
@@ -195,7 +203,7 @@ describe("P2-3 DP quotation re-read guard", () => {
   it("updateDownPayment: rejects when the in-tx re-read is no longer eligible", async () => {
     wireDpTx([], { status: "cancelled", grandTotal: 1000 })
 
-    const result = await updateDownPayment(99, fdMap({ quotationId: 50, amount: 100, paymentDate: "2024-01-01" }))
+    const result = await updateDownPayment(99, dpFd())
 
     expect(result.success).toBe(false)
     expect(dpUpdateMock).not.toHaveBeenCalled()
@@ -237,9 +245,7 @@ describe("P2-4 updateSalesPayment dual-invoice lock guard", () => {
     // Old invoice 9 → new invoice 3: must lock [3, 9] (sorted), not [9, 3]
     paymentFindUniqueOrThrowMock.mockResolvedValue({ salesInvoiceId: 9, documentNo: "PAY-1" })
 
-    const result = await updateSalesPayment(5, fdMap({
-      salesInvoiceId: 3, amount: 100, paymentDate: "2024-01-01", paymentMethod: "cash",
-    }))
+    const result = await updateSalesPayment(5, paymentFd(3))
 
     expect(result.success).toBe(true)
     expect(locks).toEqual([3, 9])
@@ -252,9 +258,7 @@ describe("P2-4 updateSalesPayment dual-invoice lock guard", () => {
     wirePaymentTx(locks)
     paymentFindUniqueOrThrowMock.mockResolvedValue({ salesInvoiceId: 3, documentNo: "PAY-1" })
 
-    const result = await updateSalesPayment(5, fdMap({
-      salesInvoiceId: 3, amount: 100, paymentDate: "2024-01-01", paymentMethod: "cash",
-    }))
+    const result = await updateSalesPayment(5, paymentFd(3))
 
     expect(result.success).toBe(true)
     expect(locks).toEqual([3])
@@ -265,9 +269,7 @@ describe("P2-4 updateSalesPayment dual-invoice lock guard", () => {
     wirePaymentTx(locks)
     paymentFindUniqueOrThrowMock.mockResolvedValue({ salesInvoiceId: 9, documentNo: "PAY-1" })
 
-    await updateSalesPayment(5, fdMap({
-      salesInvoiceId: 3, amount: 100, paymentDate: "2024-01-01", paymentMethod: "cash",
-    }))
+    await updateSalesPayment(5, paymentFd(3))
 
     const recalced = onSalesPaymentUpdatedMock.mock.calls.map((c) => c[0])
     expect(recalced).toContain(3)

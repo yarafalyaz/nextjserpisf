@@ -72,6 +72,109 @@ export function resetMockFns(mocks: readonly any[]) {
   for (const m of mocks) m.mockReset()
 }
 
+/** vi.mock factories bersama (dipakai sebagai identifier terimpor di berkas tes). */
+export function financePermissionsFactory(holder: any) {
+  return {
+    requirePermission: (...a: any[]) => (holder.guards ?? holder.set ?? holder).requirePermissionMock(...a),
+  }
+}
+export function financeNextCacheFactory(holder: any) {
+  return {
+    revalidatePath: (...a: any[]) => (holder.guards ?? holder.set ?? holder).revalidateMock(...a),
+  }
+}
+export function financeActivityLogFactory(holder: any) {
+  return {
+    logActivity: (...a: any[]) => (holder.guards ?? holder.set ?? holder).logActivityMock(...a),
+  }
+}
+export function financePeriodLockFactory(holder: any) {
+  return {
+    assertPeriodOpen: (...a: any[]) => (holder.guards ?? holder.set ?? holder).assertPeriodOpenMock(...a),
+  }
+}
+export function financePrismaFactory(holder: any) {
+  holder.guards = buildFinanceGuardMocks(holder.models)
+  return { prisma: holder.guards.prismaMock }
+}
+export function financeDocumentNumberFactory(docNo = "DOC-001") {
+  return { generateDocumentNumber: vi.fn(async () => docNo) }
+}
+export function financeSlugFactory(slug = "s") {
+  return { nextSlug: vi.fn(async () => slug) }
+}
+export function financeApprovalFactory() {
+  return { requestApprovalIfConfigured: vi.fn(), assertApproved: vi.fn() }
+}
+export function financeAccountingHookFactory() {
+  return { onExpenseApproved: vi.fn(), onPettyCashCreated: vi.fn() }
+}
+export function financeExpenseHookFactory() {
+  return { onExpenseApprovedSyncPettyCash: vi.fn() }
+}
+export function financeSettingsFactory() {
+  return { getSystemSettings: vi.fn(async () => ({})) }
+}
+
+/** Holder mock mentah journal/concurrency (bukan FinanceGuardMocks). */
+export interface JournalMockSet {
+  requirePermissionMock: any
+  revalidateMock: any
+  logActivityMock: any
+  assertPeriodOpenMock: any
+  journalFindUniqueOrThrowMock: any
+  journalUpdateManyMock: any
+  journalUpdateMock: any
+  journalCreateMock: any
+  entryDeleteManyMock: any
+  entryCreateManyMock: any
+  attachmentUpdateManyMock: any
+  transactionMock: any
+  executeRawMock: any
+  reconFindUniqueOrThrowMock: any
+  reconUpdateManyMock: any
+  reconItemCreateMock: any
+  generateDocumentNumberMock: any
+}
+
+export function buildJournalMockSet(
+  include: Partial<Record<keyof JournalMockSet, boolean>> = {},
+): JournalMockSet {
+  const set: Record<string, any> = {}
+  for (const k of Object.keys(include)) set[k] = vi.fn()
+  return set as JournalMockSet
+}
+
+export interface JournalMockHolder {
+  include: Partial<Record<keyof JournalMockSet, boolean>>
+  set: JournalMockSet
+}
+
+export function financeJournalPrismaFactory(holder: JournalMockHolder) {
+  holder.set = buildJournalMockSet(holder.include)
+  const m = holder.set
+  const journal: Record<string, any> = {
+    findUniqueOrThrow: (...a: any[]) => m.journalFindUniqueOrThrowMock(...a),
+  }
+  if (m.journalUpdateMock) journal.update = (...a: any[]) => m.journalUpdateMock(...a)
+  if (m.journalCreateMock) journal.create = (...a: any[]) => m.journalCreateMock(...a)
+  if (!m.journalUpdateManyMock)
+    journal.findFirst = vi.fn().mockResolvedValue(null)
+  const prisma: Record<string, any> = { journal }
+  if (!m.journalUpdateManyMock && (m.entryCreateManyMock || m.entryDeleteManyMock)) {
+    const journalEntry: Record<string, any> = {}
+    if (m.entryCreateManyMock) journalEntry.createMany = (...a: any[]) => m.entryCreateManyMock(...a)
+    if (m.entryDeleteManyMock) journalEntry.deleteMany = (...a: any[]) => m.entryDeleteManyMock(...a)
+    prisma.journalEntry = journalEntry
+  }
+  if (m.attachmentUpdateManyMock)
+    prisma.transactionAttachment = {
+      updateMany: (...a: any[]) => m.attachmentUpdateManyMock(...a),
+    }
+  prisma.$transaction = (...a: any[]) => m.transactionMock(...a)
+  return { prisma }
+}
+
 /** Reset semua model + raw + izin/periode ke default sebelum tiap tes. */
 export function resetFinanceGuardMocks(mocks: FinanceGuardMocks) {
   for (const m of Object.values(mocks.prismaMock) as any[]) {

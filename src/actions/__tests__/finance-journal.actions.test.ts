@@ -1,56 +1,44 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
-const requirePermissionMock = vi.fn()
-const revalidateMock = vi.fn()
-const logActivityMock = vi.fn()
-const assertPeriodOpenMock = vi.fn()
+import {
+  financeAccountingHookFactory,
+  financeActivityLogFactory,
+  financeApprovalFactory,
+  financeDocumentNumberFactory,
+  financeExpenseHookFactory,
+  financeJournalPrismaFactory,
+  financeNextCacheFactory,
+  financePeriodLockFactory,
+  financePermissionsFactory,
+} from "./finance-lock-fixtures"
 
-const journalFindUniqueOrThrowMock = vi.fn()
-const journalUpdateMock = vi.fn()
-const entryDeleteManyMock = vi.fn()
-const entryCreateManyMock = vi.fn()
-const attachmentUpdateManyMock = vi.fn()
-const transactionMock = vi.fn()
-const executeRawMock = vi.fn()
+const holder = vi.hoisted(() => ({ set: null as any, include: {
+  requirePermissionMock: true, revalidateMock: true, logActivityMock: true,
+  assertPeriodOpenMock: true, journalFindUniqueOrThrowMock: true,
+  journalUpdateMock: true, entryDeleteManyMock: true, entryCreateManyMock: true,
+  attachmentUpdateManyMock: true, transactionMock: true, executeRawMock: true,
+} }))
+let requirePermissionMock: any
+let revalidateMock: any
+let logActivityMock: any
+let assertPeriodOpenMock: any
+let journalFindUniqueOrThrowMock: any
+let journalUpdateMock: any
+let entryDeleteManyMock: any
+let entryCreateManyMock: any
+let attachmentUpdateManyMock: any
+let transactionMock: any
+let executeRawMock: any
 
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
-}))
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    journal: {
-      findUniqueOrThrow: (...a: unknown[]) => journalFindUniqueOrThrowMock(...a),
-      findFirst: vi.fn().mockResolvedValue(null),
-    },
-    transactionAttachment: {
-      updateMany: (...a: unknown[]) => attachmentUpdateManyMock(...a),
-    },
-    $transaction: (...a: unknown[]) => transactionMock(...a),
-  },
-}))
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: (...a: unknown[]) => assertPeriodOpenMock(...a),
-}))
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: (...a: unknown[]) => logActivityMock(...a),
-}))
-vi.mock("@/lib/services/approval-workflow.service", () => ({
-  requestApprovalIfConfigured: vi.fn(),
-  assertApproved: vi.fn(),
-}))
-vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onExpenseApproved: vi.fn(),
-  onPettyCashCreated: vi.fn(),
-}))
-vi.mock("@/lib/hooks/expense.hook", () => ({
-  onExpenseApprovedSyncPettyCash: vi.fn(),
-}))
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: vi.fn(async () => "JRN-0001"),
-}))
-vi.mock("next/cache", () => ({
-  revalidatePath: (...a: unknown[]) => revalidateMock(...a),
-}))
+vi.mock("@/lib/auth/permissions", () => financePermissionsFactory(holder))
+vi.mock("@/lib/db/prisma", () => financeJournalPrismaFactory(holder))
+vi.mock("@/lib/services/period-lock.service", () => financePeriodLockFactory(holder))
+vi.mock("@/lib/services/activity-log.service", () => financeActivityLogFactory(holder))
+vi.mock("@/lib/services/approval-workflow.service", () => financeApprovalFactory())
+vi.mock("@/lib/hooks/accounting.hook", () => financeAccountingHookFactory())
+vi.mock("@/lib/hooks/expense.hook", () => financeExpenseHookFactory())
+vi.mock("@/lib/utils/document-number", () => financeDocumentNumberFactory("JRN-0001"))
+vi.mock("next/cache", () => financeNextCacheFactory(holder))
 
 import { updateJournal } from "../finance.actions"
 
@@ -75,6 +63,7 @@ function wireTransaction() {
 }
 
 beforeEach(() => {
+  ;({ requirePermissionMock, revalidateMock, logActivityMock, assertPeriodOpenMock, journalFindUniqueOrThrowMock, journalUpdateMock, entryDeleteManyMock, entryCreateManyMock, attachmentUpdateManyMock, transactionMock, executeRawMock } = holder.set)
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, assertPeriodOpenMock,
     journalFindUniqueOrThrowMock, journalUpdateMock, entryDeleteManyMock,
@@ -173,7 +162,7 @@ describe("updateJournal", () => {
     expect(assertPeriodOpenMock.mock.calls[1][1]).toBeUndefined()
     // Cek ulang dalam tx sesudah lock: tanggal lama (fresh) + tanggal baru,
     // keduanya dengan tx client agar baca lock-date serial dengan tulis.
-    const txCalls = assertPeriodOpenMock.mock.calls.filter((c) => c[1] !== undefined)
+    const txCalls = assertPeriodOpenMock.mock.calls.filter((c: any[]) => c[1] !== undefined)
     expect(txCalls).toHaveLength(2)
     expect(txCalls[0][0]).toEqual(new Date("2026-06-01"))
     expect(txCalls[1][0]).toEqual(new Date("2026-06-02"))
