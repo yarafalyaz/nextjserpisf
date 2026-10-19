@@ -104,7 +104,9 @@ export function buildPayablesSummary(bills: PayableBill[], asOf: Date): Payables
       outstanding: 0,
     }
     agg.billCount += 1
-    agg.totalBilled = safeAdd(agg.totalBilled, row.grandTotal, 2)
+    // P0-2: per-vendor billed juga NETO — sama dengan totalBilled summary di atas
+    // (grandTotal − withholding); bruto membuat billed − paid != outstanding.
+    agg.totalBilled = safeAdd(agg.totalBilled, safeSubtract(row.grandTotal, row.withholdingAmount ?? 0, 2), 2)
     agg.totalPaid = safeAdd(agg.totalPaid, row.paidAmount, 2)
     agg.outstanding = safeAdd(agg.outstanding, row.outstanding, 2)
     vendorsById.set(row.vendorId, agg)
