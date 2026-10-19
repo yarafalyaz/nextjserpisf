@@ -41,6 +41,7 @@ import {
 } from "@/lib/services/approval-workflow.service";
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 import { parseFormData } from "@/lib/validations/parse-form";
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { PurchaseStatus, Status } from "@/lib/constants";
 import {
   purchaseRequestSchema,
@@ -164,6 +165,28 @@ async function syncServicePoCostFromBills(
 
 import { logActivity } from "@/lib/services/activity-log.service";
 
+type PurchaseOrderLine = { itemId: number; qty: number; unitPrice: number; discount: number };
+
+function buildPurchaseOrderTotals(lines: PurchaseOrderLine[], shippingCost: number, serviceFee: number) {
+  const subtotal = lines.reduce((s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0), 0);
+  const discount = lines.reduce((s, it) => safeAdd(s, it.discount || 0, 0), 0);
+  return {
+    subtotal,
+    discount,
+    grandTotal: safeAdd(safeSubtract(subtotal, discount, 0), safeAdd(shippingCost, serviceFee, 0), 0),
+  };
+}
+
+function purchaseOrderItemData(it: PurchaseOrderLine) {
+  return {
+    itemId: Number(it.itemId),
+    qty: Number(it.qty),
+    unitPrice: Number(it.unitPrice),
+    discount: Number(it.discount || 0),
+    total: safeSubtract(safeMultiply(it.qty, it.unitPrice, 0), it.discount || 0, 0),
+  };
+}
+
 // ==================== PURCHASE REQUEST ACTIONS ====================
 
 export async function createPurchaseRequest(formData: FormData) {
@@ -192,8 +215,8 @@ export async function createPurchaseRequest(formData: FormData) {
         title: v.title ?? null,
         requestedBy,
         vendorId: v.vendorId ?? null,
-        date: new Date(v.date),
-        requestDate: requestDateRaw ? new Date(requestDateRaw) : null,
+        date: wibDateToUtcMidnight(v.date),
+        requestDate: requestDateRaw ? wibDateToUtcMidnight(requestDateRaw) : null,
         description,
         notes: v.notes ?? null,
         status: "draft",
@@ -245,21 +268,9 @@ export async function createPurchaseOrder(formData: FormData) {
       >(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
 
-    const subtotal = poItems.reduce(
-      (s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0),
-      0,
-    );
-    const discountTotal = poItems.reduce(
-      (s, it) => safeAdd(s, it.discount || 0, 0),
-      0,
-    );
     const shippingCost = v.shippingCost ?? 0;
     const serviceFee = v.serviceFee ?? 0;
-    const grandTotal = safeAdd(
-      safeSubtract(subtotal, discountTotal, 0),
-      safeAdd(shippingCost, serviceFee, 0),
-      0
-    );
+    const { subtotal, discount: discountTotal, grandTotal } = buildPurchaseOrderTotals(poItems, shippingCost, serviceFee);
 
     const po = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
@@ -272,8 +283,8 @@ export async function createPurchaseOrder(formData: FormData) {
           purchaseRequestId: v.purchaseRequestId ?? null,
           workOrderId: v.workOrderId ?? null,
                     isService: v.isService,
-          date: new Date(v.date),
-          expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
+          date: wibDateToUtcMidnight(v.date),
+          expectedDate: v.expectedDate ? wibDateToUtcMidnight(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,
           shippingCost,
           serviceFee,
@@ -285,17 +296,7 @@ export async function createPurchaseOrder(formData: FormData) {
           status: "draft",
           createdBy: Number(user.id),
           items: {
-            create: poItems.map((it) => ({
-              itemId: Number(it.itemId),
-              qty: Number(it.qty),
-              unitPrice: Number(it.unitPrice),
-              discount: Number(it.discount || 0),
-              total: safeSubtract(
-                safeMultiply(it.qty, it.unitPrice, 0),
-                it.discount || 0,
-                0,
-              ),
-            })),
+            create: poItems.map(purchaseOrderItemData),
           },
         },
       });
@@ -632,7 +633,7 @@ export async function createGoodsReceipt(formData: FormData) {
           slug,
           purchaseOrderId: v.purchaseOrderId,
           warehouseId: v.warehouseId,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           referenceNumber: v.referenceNumber ?? null,
           notes: v.notes ?? null,
           shippingCost: v.shippingCost ?? 0,
@@ -986,8 +987,8 @@ export async function createVendorBill(formData: FormData) {
           projectId: v.projectId ?? null,
           withholdingTypeId: v.withholdingTypeId ?? null,
           withholdingAmount: v.withholdingAmount ?? 0,
-          date: new Date(v.date),
-          dueDate: v.dueDate ? new Date(v.dueDate) : null,
+          date: wibDateToUtcMidnight(v.date),
+          dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
           vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
           terms: v.terms ?? null,
           notes: v.notes ?? null,
@@ -1091,7 +1092,7 @@ export async function createVendorPayment(formData: FormData) {
           slug,
           vendorId: v.vendorId,
           amount: v.amount,
-          paymentDate: new Date(v.paymentDate),
+          paymentDate: wibDateToUtcMidnight(v.paymentDate),
           paymentMethod: v.paymentMethod,
           accountId: v.accountId ?? null,
           adminFee: v.adminFee ?? 0,
@@ -1480,7 +1481,7 @@ export async function createPurchaseReturn(formData: FormData) {
           documentNo,
           slug,
           purchaseOrderId: v.purchaseOrderId,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           reason: v.reason ?? null,
           status: "draft",
           createdBy: Number(user.id),
@@ -2007,6 +2008,8 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
       });
       const requestDateRaw = v.requestDate;
       const description = v.description ?? null;
+      const date = wibDateToUtcMidnight(v.date);
+      const requestDate = requestDateRaw ? wibDateToUtcMidnight(requestDateRaw) : null;
       return tx.purchaseRequest.update({
         where: { id },
         data: {
@@ -2014,8 +2017,8 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
           title: v.title ?? null,
           requestedBy,
           vendorId: v.vendorId ?? null,
-          date: new Date(v.date),
-          requestDate: requestDateRaw ? new Date(requestDateRaw) : null,
+          date,
+          requestDate,
           description,
           notes: v.notes ?? null,
           items: {
@@ -2071,21 +2074,9 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
       >(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
 
-    const subtotal = poItems.reduce(
-      (s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0),
-      0,
-    );
-    const discountTotal = poItems.reduce(
-      (s, it) => safeAdd(s, it.discount || 0, 0),
-      0,
-    );
     const shippingCost = v.shippingCost ?? 0;
     const serviceFee = v.serviceFee ?? 0;
-    const grandTotal = safeAdd(
-      safeSubtract(subtotal, discountTotal, 0),
-      safeAdd(shippingCost, serviceFee, 0),
-      0
-    );
+    const { subtotal, discount: discountTotal, grandTotal } = buildPurchaseOrderTotals(poItems, shippingCost, serviceFee);
 
     // Keep existing documentNo (do not regenerate on edit)
     const po = await prisma.$transaction(async (tx) => {
@@ -2102,8 +2093,8 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           slug,
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
-                    date: new Date(v.date),
-          expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
+                    date: wibDateToUtcMidnight(v.date),
+          expectedDate: v.expectedDate ? wibDateToUtcMidnight(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,
           shippingCost,
           serviceFee,
@@ -2113,17 +2104,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           tax: 0,
           grandTotal,
           items: {
-            create: poItems.map((it) => ({
-              itemId: Number(it.itemId),
-              qty: Number(it.qty),
-              unitPrice: Number(it.unitPrice),
-              discount: Number(it.discount || 0),
-              total: safeSubtract(
-                safeMultiply(it.qty, it.unitPrice, 0),
-                it.discount || 0,
-                0,
-              ),
-            })),
+            create: poItems.map(purchaseOrderItemData),
           },
         },
       });
@@ -2208,6 +2189,8 @@ export async function updateVendorBill(id: number, formData: FormData) {
         id,
       );
 
+      const date = wibDateToUtcMidnight(v.date);
+      const dueDate = v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null;
       const updated = await tx.vendorBill.update({
         where: { id },
         data: {
@@ -2217,8 +2200,8 @@ export async function updateVendorBill(id: number, formData: FormData) {
           projectId: v.projectId ?? null,
           withholdingTypeId: v.withholdingTypeId ?? null,
           withholdingAmount: v.withholdingAmount ?? 0,
-          date: new Date(v.date),
-          dueDate: v.dueDate ? new Date(v.dueDate) : null,
+          date,
+          dueDate,
           // Persist the free-text fields the form sends. The previous data
           // block dropped vendorInvoiceNumber / terms / notes, so editing a
           // draft bill to fix a vendor's invoice reference number (or to
@@ -2376,13 +2359,14 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
           );
         }
       }
+      const date = wibDateToUtcMidnight(v.date);
       const updated = await tx.goodsReceipt.update({
         where: { id },
         data: {
           slug,
           purchaseOrderId: v.purchaseOrderId,
           warehouseId: v.warehouseId,
-          date: new Date(v.date),
+          date,
           referenceNumber: v.referenceNumber ?? null,
           notes: v.notes ?? null,
           shippingCost: v.shippingCost ?? 0,
@@ -2575,12 +2559,13 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
       await tx.purchaseReturnItem.deleteMany({
         where: { purchaseReturnId: id },
       });
+      const date = wibDateToUtcMidnight(v.date);
       return tx.purchaseReturn.update({
         where: { id },
         data: {
           slug,
           purchaseOrderId: v.purchaseOrderId,
-          date: new Date(v.date),
+          date,
           reason: v.reason ?? null,
           items: {
             create: validPrItems.map((item: any) => ({
@@ -2642,13 +2627,14 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     // operator would see a stale/empty attachment list and not know that the
     // new files were never attached. Wrapping both in one tx closes that gap.
     const payment = await prisma.$transaction(async (tx) => {
+      const paymentDate = wibDateToUtcMidnight(v.paymentDate);
       const updated = await tx.vendorPayment.update({
         where: { id },
         data: {
           slug,
           vendorId: v.vendorId,
           amount: v.amount,
-          paymentDate: new Date(v.paymentDate),
+          paymentDate,
           paymentMethod: v.paymentMethod,
           accountId: v.accountId ?? null,
           adminFee: v.adminFee ?? 0,

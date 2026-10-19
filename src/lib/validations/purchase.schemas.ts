@@ -10,8 +10,10 @@ const optionalNumber = (min?: number) => {
   return base.optional()
 }
 
-const dateString = z.string().min(1, "Tanggal wajib diisi")
-const optionalDateString = optionalString(30)
+const optionalDateOnly = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  dateOnly.optional(),
+)
 
 // ==================== PURCHASE REQUEST ====================
 
@@ -19,8 +21,8 @@ export const purchaseRequestSchema = z.object({
   title: optionalString(200),
   requestedBy: optionalNumber(),
   vendorId: optionalNumber(),
-  date: dateString,
-  requestDate: optionalDateString,
+  date: dateOnly,
+  requestDate: optionalDateOnly,
   description: optionalString(1000),
   notes: optionalString(1000),
   items: optionalString(10000), // JSON string, parsed separately
@@ -36,8 +38,8 @@ export const purchaseOrderSchema = z.object({
     .union([z.boolean(), z.literal("true"), z.literal("false"), z.literal("on")])
     .optional()
     .transform((v) => v === true || v === "true" || v === "on"),
-  date: dateString,
-  expectedDate: optionalDateString,
+  date: dateOnly,
+  expectedDate: optionalDateOnly,
   paymentTerm: optionalString(200),
   shippingCost: optionalNumber(0),
   serviceFee: optionalNumber(0),
@@ -50,7 +52,7 @@ export const purchaseOrderSchema = z.object({
 export const goodsReceiptSchema = z.object({
   purchaseOrderId: z.coerce.number().min(1, "PO wajib dipilih"),
   warehouseId: z.coerce.number().min(1, "Gudang wajib dipilih"),
-  date: dateString,
+  date: dateOnly,
   referenceNumber: optionalString(100),
   notes: optionalString(1000),
   // Actual landed costs for this receipt. Optional: when omitted/0 the hook
@@ -77,8 +79,8 @@ export const vendorBillSchema = z.object({
   projectId: optionalNumber(),
   withholdingTypeId: optionalNumber(),
   withholdingAmount: optionalNumber(0),
-  date: dateString,
-  dueDate: optionalDateString,
+  date: dateOnly,
+  dueDate: optionalDateOnly,
   vendorInvoiceNumber: optionalString(100),
   terms: optionalString(200),
   notes: optionalString(1000),
@@ -100,7 +102,7 @@ export const vendorPaymentSchema = z.object({
   // Tagihan spesifik yang dibayar (dipilih lewat tombol "Bayar" di tagihan).
   // Opsional: bila kosong, alokasi konfirmasi murni oldest-first seperti semula.
   vendorBillId: optionalNumber(),
-  paymentDate: dateString,
+  paymentDate: dateOnly,
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(50),
   accountId: optionalNumber(),
   notes: optionalString(1000),
@@ -116,7 +118,7 @@ export const vendorPaymentSchema = z.object({
 
 export const purchaseReturnSchema = z.object({
   purchaseOrderId: z.coerce.number().min(1, "PO wajib dipilih"),
-  date: dateString,
+  date: dateOnly,
   reason: optionalString(1000),
   items: optionalString(50000), // JSON string, parsed separately
 })
@@ -137,11 +139,6 @@ export const purchaseReturnSchema = z.object({
  * `effectiveDate` tetap string `dateOnly` (kalender-valid), dikonversi via
  * `wibDateToUtcMidnight` di action.
  */
-const optionalDateOnly = z.preprocess(
-  (v) => (v === "" || v == null ? undefined : v),
-  dateOnly.optional(),
-)
-
 export const vendorPriceSchema = z.object({
   vendorId: z.coerce
     .number({ message: "Pemasok wajib dipilih" })
