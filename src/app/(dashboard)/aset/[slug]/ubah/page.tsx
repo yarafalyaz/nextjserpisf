@@ -28,7 +28,10 @@ export default async function EditAssetPage({
       },
     ),
     prisma.assetCategory.findMany({ orderBy: { name: "asc" } }),
-    prisma.assetBrand.findMany({ orderBy: { name: "asc" } }),
+    prisma.assetBrand.findMany({
+      orderBy: { name: "asc" },
+      include: { models: { select: { id: true, name: true }, orderBy: { name: "asc" } } },
+    }),
     prisma.assetGroup.findMany({ orderBy: { name: "asc" } }),
   ])
 
@@ -55,6 +58,7 @@ export default async function EditAssetPage({
           code: asset.code,
           categoryId: asset.categoryId,
           assetBrandId: asset.assetBrandId,
+          assetBrandModelId: asset.assetBrandModelId,
           groupId: asset.groupId,
           purchaseDate: asset.purchaseDate ? asset.purchaseDate.toISOString() : null,
           purchasePrice: Number(asset.purchaseCost),

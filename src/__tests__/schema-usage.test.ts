@@ -36,8 +36,10 @@ const KNOWN_UNUSED: string[] = [
   // create/update/deleteBankStatementLine) dan dikunci penjaga `finance.actions.test.ts`.
   // Empat sisanya (di bawah) menunggu keputusan produk: implementasikan atau buang lewat
   // migrasi. Lihat docs/AUDIT-SCHEMA.md §3.
+  // (`Asset.assetBrandModelId` PERNAH di sini — ditutup bersama dropdown
+  // "Tipe / Model" berjenjang di form aset + tulis create/update + penjagaan
+  // model↔merek di aksi; guard berarah dua memerah saat perbaikan mendarat.)
   "ApprovalWorkflowStep.canSkip",
-  "Asset.assetBrandModelId",
   "BankReconciliationItem.clearedDate",
   "BankStatementLine.matchedType",
 ].sort()

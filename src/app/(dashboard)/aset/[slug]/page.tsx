@@ -48,6 +48,18 @@ export default async function AssetDetailPage({
 
   const depreciation = Number(asset.purchaseCost) - Number(asset.currentValue)
 
+  // `assetBrandModelId` bare int tanpa relasi — resolve manual. Dua query
+  // paralel, masing-masing nullable (merek/tipe bisa dihapus guardnya... merek
+  // justru DITOLAK hapusnya bila dipakai, jadi ini murni defensif).
+  const [brand, brandModel] = await Promise.all([
+    asset.assetBrandId
+      ? prisma.assetBrand.findUnique({ where: { id: asset.assetBrandId }, select: { name: true } })
+      : null,
+    asset.assetBrandModelId
+      ? prisma.assetBrandModel.findUnique({ where: { id: asset.assetBrandModelId }, select: { name: true } })
+      : null,
+  ])
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -71,6 +83,8 @@ export default async function AssetDetailPage({
       <DetailCard>
         <DetailField label="Kode Aset" value={asset.code} mono />
         <DetailField label="Kategori" value={asset.category?.name || "-"} />
+        <DetailField label="Merek" value={brand?.name || "-"} />
+        <DetailField label="Tipe / Model" value={brandModel?.name || "-"} />
         <DetailField label="Grup" value={asset.group?.name || "-"} />
         <DetailField label="Lokasi" value={asset.location || "-"} />
         <DetailField label="Tanggal Beli" value={formatDate(asset.purchaseDate)} />
