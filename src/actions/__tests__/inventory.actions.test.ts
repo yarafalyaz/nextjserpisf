@@ -1094,6 +1094,7 @@ describe("remnant (P1-5)", () => {
   it("consumeRemnant only claims usable rows (atomic)", async () => {
     const fd = new FormData();
     fd.set("consumedBy", "WO-9");
+    mocks.prismaMock.remnant.findUnique.mockResolvedValue({ warehouseId: 1 });
     mocks.prismaMock.remnant.updateMany.mockResolvedValue({ count: 1 });
     const res = await actions.consumeRemnant(4, fd);
     expect(res.success).toBe(true);
@@ -1105,16 +1106,31 @@ describe("remnant (P1-5)", () => {
   it("consumeRemnant refuses an already-consumed row", async () => {
     const fd = new FormData();
     fd.set("consumedBy", "WO-9");
+    mocks.prismaMock.remnant.findUnique
+      .mockResolvedValueOnce({ warehouseId: 1 })
+      .mockResolvedValue({ status: "consumed" });
     mocks.prismaMock.remnant.updateMany.mockResolvedValue({ count: 0 });
-    mocks.prismaMock.remnant.findUnique.mockResolvedValue({ status: "consumed" });
     const res = await actions.consumeRemnant(4, fd);
     expect(res.success).toBe(false);
     expect(String((res as { error?: string }).error ?? "")).toMatch(/consumed/);
   });
 
   it("scrapRemnant requires a reason", async () => {
+    mocks.prismaMock.remnant.findUnique.mockResolvedValue({ warehouseId: 1 });
     const res = await actions.scrapRemnant(4, new FormData());
     expect(res.success).toBe(false);
+    expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("consumeRemnant/scrapRemnant menolak gudang di luar scope user", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["warehouse"] });
+    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 1 }]);
+    mocks.prismaMock.remnant.findUnique.mockResolvedValue({ warehouseId: 2 });
+    const fd = new FormData();
+    fd.set("consumedBy", "WO-9");
+    fd.set("scrapReason", "rusak");
+    expect((await actions.consumeRemnant(4, fd)).success).toBe(false);
+    expect((await actions.scrapRemnant(4, fd)).success).toBe(false);
     expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
   });
 });

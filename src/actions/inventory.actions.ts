@@ -1854,7 +1854,10 @@ export async function createRemnant(formData: FormData) {
 /** Pakai remnant usable untuk kebutuhan berikut (klaim atomik — tanpa movement ganda). */
 export async function consumeRemnant(id: number, formData: FormData) {
   try {
-    await requirePermission("create_material_issues");
+    const user = await requirePermission("create_material_issues");
+    const remnant = await prisma.remnant.findUnique({ where: { id }, select: { warehouseId: true } });
+    if (!remnant) throw new Error("Sisa tidak ditemukan");
+    await assertWarehouseIdInScope(user, remnant.warehouseId);
     const consumedBy = ((formData.get("consumedBy") as string | null) ?? "").slice(0, 128);
     if (!consumedBy) throw new Error("Tujuan pemakaian wajib diisi");
     const updated = await prisma.remnant.updateMany({
@@ -1880,7 +1883,10 @@ export async function consumeRemnant(id: number, formData: FormData) {
 /** Tandai remnant sebagai scrap (alasan wajib — scrap bukan stok usable). */
 export async function scrapRemnant(id: number, formData: FormData) {
   try {
-    await requirePermission("create_material_issues");
+    const user = await requirePermission("create_material_issues");
+    const remnant = await prisma.remnant.findUnique({ where: { id }, select: { warehouseId: true } });
+    if (!remnant) throw new Error("Sisa tidak ditemukan");
+    await assertWarehouseIdInScope(user, remnant.warehouseId);
     const reason = ((formData.get("scrapReason") as string | null) ?? "").trim();
     if (!reason) throw new Error("Alasan scrap wajib diisi");
     const updated = await prisma.remnant.updateMany({
