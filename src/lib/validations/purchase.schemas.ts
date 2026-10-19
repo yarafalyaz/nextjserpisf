@@ -1,4 +1,6 @@
 import { z } from "zod"
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money"
+import { dateOnly } from "@/lib/validations/finance.schemas"
 
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
@@ -117,5 +119,54 @@ export const purchaseReturnSchema = z.object({
   date: dateString,
   reason: optionalString(1000),
   items: optionalString(50000), // JSON string, parsed separately
+})
+
+// ==================== VENDOR PRICE ====================
+
+/**
+ * Satu baris harga pemasok (`createVendorPrice`/`updateVendorPrice`).
+ *
+ * Sebelumnya kedua action parse manual tanpa batas panjang: `notes` (`@db.Text`)
+ * bisa dikirim 5MB ke DB, `minQty` tak berplafon (Decimal(15,2) meledak jadi
+ * P2023 mentah), dan `effectiveDate` di-parse `new Date("<text>T00:00:00")` —
+ * hasil bergantung TZ proses, padahal form mengirim YYYY-MM-DD hari kalender
+ * WIB. Angka di-parse `parseMoneyAmount`/`parseLocaleNumber`, BUKAN
+ * `z.coerce.number()` — "2.000.000" akan dibaca `Number()` sebagai 2 dan
+ * "1.000" sebagai 1, merusak keunikan (vendorId, itemId, minQty) diam-diam.
+ * Plafon 1e12/1e9 menjaga nilai di dalam rentang Decimal(15,2) DB.
+ * `effectiveDate` tetap string `dateOnly` (kalender-valid), dikonversi via
+ * `wibDateToUtcMidnight` di action.
+ */
+const optionalDateOnly = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  dateOnly.optional(),
+)
+
+export const vendorPriceSchema = z.object({
+  vendorId: z.coerce
+    .number({ message: "Pemasok wajib dipilih" })
+    .int()
+    .positive("Pemasok wajib dipilih"),
+  itemId: z.coerce
+    .number({ message: "Barang wajib dipilih" })
+    .int()
+    .positive("Barang wajib dipilih"),
+  price: z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce
+      .number({ message: "Harga wajib diisi" })
+      .positive("Harga harus lebih dari 0")
+      .max(1_000_000_000_000, "Harga melebihi batas"),
+  ),
+  // Kosong/tak-terbaca → 1 (fallback historis, dipertahankan).
+  minQty: z.preprocess(
+    (v) => (typeof v === "string" ? (parseLocaleNumber(v) ?? 1) : v),
+    z.coerce
+      .number({ message: "Minimal qty tidak valid" })
+      .positive("Minimal qty harus lebih dari 0")
+      .max(1_000_000_000, "Minimal qty melebihi batas"),
+  ),
+  effectiveDate: optionalDateOnly,
+  notes: optionalString(2000),
 })
 

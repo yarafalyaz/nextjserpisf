@@ -93,3 +93,44 @@ describe("Vendor Price minQty id-ID", () => {
     expect(Number(data.minQty)).toBe(2500)
   })
 })
+
+describe("Vendor Price validasi Zod", () => {
+  it("createVendorPrice menolak notes > 2000 char, tanpa menyentuh DB", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.createVendorPrice(fdMap({ ...base, minQty: "1", notes: "x".repeat(2001) }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(mocks.prismaMock.vendorItemPrice.create).not.toHaveBeenCalled()
+  })
+
+  it("createVendorPrice menolak harga 0", async () => {
+    const res = await actions.createVendorPrice(fdMap({ ...base, price: "0", minQty: "1" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.vendorItemPrice.create).not.toHaveBeenCalled()
+  })
+
+  it("createVendorPrice menolak tanggal fiktif 2026-02-30", async () => {
+    const res = await actions.createVendorPrice(
+      fdMap({ ...base, minQty: "1", effectiveDate: "2026-02-30" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Validasi gagal")
+    expect(mocks.prismaMock.vendorItemPrice.create).not.toHaveBeenCalled()
+  })
+
+  it("createVendorPrice menyimpan effectiveDate sebagai tengah malam UTC", async () => {
+    const res = await actions.createVendorPrice(
+      fdMap({ ...base, minQty: "1", effectiveDate: "2026-10-26" }),
+    )
+    expect(res?.success).toBe(true)
+    const data = mocks.prismaMock.vendorItemPrice.create.mock.calls.at(-1)![0].data
+    expect((data.effectiveDate as Date).toISOString()).toBe("2026-10-26T00:00:00.000Z")
+  })
+
+  it("updateVendorPrice menolak minQty 0, tanpa menyentuh DB", async () => {
+    mocks.prismaMock.vendorItemPrice.findUnique.mockResolvedValueOnce({ id: 1 })
+    const res = await actions.updateVendorPrice(1, fdMap({ ...base, minQty: "0" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.vendorItemPrice.update).not.toHaveBeenCalled()
+  })
+})

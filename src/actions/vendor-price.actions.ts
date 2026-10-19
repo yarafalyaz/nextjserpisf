@@ -7,7 +7,9 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { parseMoneyAmount, parseLocaleNumber } from "@/lib/utils/parse-money"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { vendorPriceSchema } from "@/lib/validations/purchase.schemas"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 const REVALIDATE = "/pembelian/harga-pemasok"
 
@@ -21,27 +23,6 @@ function toMoney(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
 }
 
-function parseNumber(raw: FormDataEntryValue | null, fallback: number | null = null): number | null {
-  return parseLocaleNumber(raw, fallback)
-}
-
-/** Money fields accept the id-ID shapes ("2.000.000", "2.000.000,50"). */
-function parseMoney(raw: FormDataEntryValue | null): number | null {
-  return parseMoneyAmount(raw)
-}
-
-function parseId(raw: FormDataEntryValue | null): number | null {
-  const value = Number(String(raw ?? ""))
-  return Number.isInteger(value) && value > 0 ? value : null
-}
-
-function parseDate(raw: FormDataEntryValue | null): Date | null {
-  const text = String(raw ?? "").trim()
-  if (!text) return null
-  const date = new Date(`${text}T00:00:00`)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
 /**
  * Menyimpan satu baris harga pemasok.
  *
@@ -52,25 +33,12 @@ export async function createVendorPrice(formData: FormData): Promise<VendorPrice
   try {
     const user = await requirePermission("create_vendor_prices")
 
-    const vendorId = parseId(formData.get("vendorId"))
-    const itemId = parseId(formData.get("itemId"))
-    if (!vendorId) return { success: false, error: "Pemasok wajib dipilih." }
-    if (!itemId) return { success: false, error: "Barang wajib dipilih." }
-
-    const price = parseMoney(formData.get("price"))
-    if (price === null || price <= 0) return { success: false, error: "Harga harus lebih dari 0." }
-
-    const minQty = parseNumber(formData.get("minQty"), 1) ?? 1
-    if (minQty <= 0) return { success: false, error: "Minimal qty harus lebih dari 0." }
-
-    const notes = String(formData.get("notes") ?? "").trim() || null
-    const effectiveDate = parseDate(formData.get("effectiveDate"))
-    if (String(formData.get("effectiveDate") ?? "").trim() && !effectiveDate) {
-      return { success: false, error: "Tanggal berlaku tidak valid." }
-    }
+    const parsed = parseFormData(vendorPriceSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
 
     const duplicate = await prisma.vendorItemPrice.findFirst({
-      where: { vendorId, itemId, minQty: toMoney(minQty) },
+      where: { vendorId: v.vendorId, itemId: v.itemId, minQty: toMoney(v.minQty) },
       select: { id: true },
     })
     if (duplicate) {
@@ -82,12 +50,12 @@ export async function createVendorPrice(formData: FormData): Promise<VendorPrice
 
     const created = await prisma.vendorItemPrice.create({
       data: {
-        vendorId,
-        itemId,
-        price: toMoney(price),
-        minQty: toMoney(minQty),
-        effectiveDate,
-        notes,
+        vendorId: v.vendorId,
+        itemId: v.itemId,
+        price: toMoney(v.price),
+        minQty: toMoney(v.minQty),
+        effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null,
+        notes: v.notes ?? null,
         createdBy: Number(user.id),
       },
     })
@@ -109,22 +77,12 @@ export async function updateVendorPrice(id: number, formData: FormData): Promise
     const existing = await prisma.vendorItemPrice.findUnique({ where: { id }, select: { id: true } })
     if (!existing) return { success: false, error: "Harga pemasok tidak ditemukan." }
 
-    const vendorId = parseId(formData.get("vendorId"))
-    const itemId = parseId(formData.get("itemId"))
-    if (!vendorId) return { success: false, error: "Pemasok wajib dipilih." }
-    if (!itemId) return { success: false, error: "Barang wajib dipilih." }
-
-    const price = parseMoney(formData.get("price"))
-    if (price === null || price <= 0) return { success: false, error: "Harga harus lebih dari 0." }
-
-    const minQty = parseNumber(formData.get("minQty"), 1) ?? 1
-    if (minQty <= 0) return { success: false, error: "Minimal qty harus lebih dari 0." }
-
-    const notes = String(formData.get("notes") ?? "").trim() || null
-    const effectiveDate = parseDate(formData.get("effectiveDate"))
+    const parsed = parseFormData(vendorPriceSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
 
     const duplicate = await prisma.vendorItemPrice.findFirst({
-      where: { vendorId, itemId, minQty: toMoney(minQty), id: { not: id } },
+      where: { vendorId: v.vendorId, itemId: v.itemId, minQty: toMoney(v.minQty), id: { not: id } },
       select: { id: true },
     })
     if (duplicate) {
@@ -133,7 +91,14 @@ export async function updateVendorPrice(id: number, formData: FormData): Promise
 
     await prisma.vendorItemPrice.update({
       where: { id },
-      data: { vendorId, itemId, price: toMoney(price), minQty: toMoney(minQty), effectiveDate, notes },
+      data: {
+        vendorId: v.vendorId,
+        itemId: v.itemId,
+        price: toMoney(v.price),
+        minQty: toMoney(v.minQty),
+        effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null,
+        notes: v.notes ?? null,
+      },
     })
 
     await logActivity("update", "VendorItemPrice", id, "Mengubah harga pemasok")
