@@ -534,6 +534,14 @@ export async function createExpense(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("EXP");
 
+    // Akun bare-int tanpa FK: tolak ID basi sebelum tulis (fail-closed).
+    for (const aid of [v.accountId, v.paidFromAccountId]) {
+      if (aid != null) {
+        const ok = await prisma.account.count({ where: { id: aid } });
+        if (!ok) return { success: false, error: `Akun tidak ditemukan (id: ${aid}). Pilih ulang akun sebelum menyimpan.` };
+      }
+    }
+
     const expense = await prisma.expense.create({
       data: {
         documentNo,
@@ -853,6 +861,12 @@ export async function createPettyCash(formData: FormData) {
     }
 
     const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
+    // Akun bare-int tanpa FK (PettyCash.accountId): tolak ID basi (fail-closed).
+    if (v.accountId != null) {
+      const ok = await prisma.account.count({ where: { id: v.accountId } });
+      if (!ok) return { success: false, error: `Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.` };
+    }
 
     const pettyCash = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
@@ -1923,6 +1937,14 @@ export async function updateExpense(id: number, formData: FormData) {
       );
     }
 
+    // Akun bare-int tanpa FK: tolak ID basi sebelum tulis (fail-closed).
+    for (const aid of [v.accountId, v.paidFromAccountId]) {
+      if (aid != null) {
+        const ok = await prisma.account.count({ where: { id: aid } });
+        if (!ok) throw new Error(`Akun tidak ditemukan (id: ${aid}). Pilih ulang akun sebelum menyimpan.`);
+      }
+    }
+
     const expense = await prisma.expense.update({
       where: { id },
       data: {
@@ -1982,6 +2004,12 @@ export async function updatePettyCash(id: number, formData: FormData) {
 
     const type = v.type;
     const amount = v.amount;
+
+    // Akun bare-int tanpa FK (PettyCash.accountId): tolak ID basi (fail-closed).
+    if (v.accountId != null) {
+      const ok = await prisma.account.count({ where: { id: v.accountId } });
+      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`);
+    }
 
     const pettyCash = await prisma.$transaction(async (tx) => {
       // Existing documentNo is preserved across edits; reuse it to keep the slug

@@ -86,6 +86,11 @@ jobs:
       - run: ./node_modules/.bin/tsx prisma/seed.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+          # Seed guard: demo users (9 akun) hanya dibuat bila eksplisit
+          # diizinkan + password admin disediakan. CI butuh akun demo untuk
+          # login E2E (E2E_PASSWORD), jadi guard ON di sini.
+          ALLOW_DEMO_SEED: "true"
+          SEED_ADMIN_PASSWORD: Yara1234
       - run: ./node_modules/.bin/tsx scripts/seed-remaining-e2e.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
@@ -162,6 +167,9 @@ jobs:
       - run: ./node_modules/.bin/tsx prisma/seed.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+          # Seed guard ON: E2E butuh akun demo (E2E_PASSWORD).
+          ALLOW_DEMO_SEED: "true"
+          SEED_ADMIN_PASSWORD: Yara1234
       - run: ./node_modules/.bin/tsx scripts/seed-remaining-e2e.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp

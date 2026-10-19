@@ -297,8 +297,17 @@ async function main() {
     console.log("✅ Positions created");
 
     // === SEED 9 DEMO USERS AND EMPLOYEES ===
+    // Guard: kredensial demo berkekuatan rendah — hanya jalan bila operator
+    // eksplisit mengizinkan (ALLOW_DEMO_SEED=true) DAN memberi password admin
+    // via SEED_ADMIN_PASSWORD. Tanpa guard = gagal keras sebelum user apapun
+    // dibuat/diubah; user yang sudah ada tak disentuh bila guard off.
     console.log("🌱 Seeding demo users and employees...");
-    const DEMO_PASSWORD_HASH = "$2b$12$sFW/aCo/PeREiRgcDO4CSuU8ZhgoTQ4ZxWTS94vNNhuTYpb6dO3bW"; // 'Yara1234'
+    if (process.env.ALLOW_DEMO_SEED !== "true") {
+      console.log("⏭️ Demo-user seeding dilewati (ALLOW_DEMO_SEED != true) — password yang ada tidak diubah.");
+    } else if (!process.env.SEED_ADMIN_PASSWORD) {
+      throw new Error("SEED_ADMIN_PASSWORD wajib diisi bila ALLOW_DEMO_SEED=true.");
+    } else {
+    const DEMO_PASSWORD_HASH = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD, 12);
 
     const demoUsers = [
       {
@@ -385,10 +394,7 @@ async function main() {
     ];
 
     for (const demo of demoUsers) {
-      let hashedPassword = DEMO_PASSWORD_HASH;
-      if (demo.email === (process.env.SEED_ADMIN_EMAIL || "admin@erp.yarasoft.net") && process.env.SEED_ADMIN_PASSWORD) {
-        hashedPassword = await bcrypt.hash(process.env.SEED_ADMIN_PASSWORD, 12);
-      }
+      const hashedPassword = DEMO_PASSWORD_HASH;
 
       const existingUser = await conn.query("SELECT id FROM users WHERE email = ? LIMIT 1", [demo.email]);
       let userId: number;
@@ -433,6 +439,7 @@ async function main() {
       }
     }
     console.log(`✅ ${demoUsers.length} demo users and employee mappings seeded successfully`);
+    }
 
     // Create default payment methods (codes follow the auto-generated MTP- scheme)
     for (const [code, name] of PAYMENT_METHODS) {

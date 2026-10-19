@@ -158,6 +158,7 @@ const RESOURCE_MODULE = {
   asset_transfers: "assets",
   // Laporan
   reports: "reports",
+  payroll_reports: "reports",
   // Administrasi sistem
   settings: "settings",
   users: "settings",
@@ -260,6 +261,7 @@ const RESOURCE_LABEL = {
   asset_categories: "Kategori Aset",
   asset_transfers: "Transfer Aset",
   reports: "Laporan",
+  payroll_reports: "Laporan Gaji",
   settings: "Pengaturan Sistem",
   users: "Pengguna",
   roles: "Peran",

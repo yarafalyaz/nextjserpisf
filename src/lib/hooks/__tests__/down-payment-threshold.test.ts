@@ -98,6 +98,8 @@ function buildTx(dp: ReturnType<typeof buildDp>) {
       update: vi.fn(),
     },
     salesPayment: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null), create: mocks.salesPaymentCreate },
+    systemSetting: { findFirst: vi.fn().mockResolvedValue({ customerDownPaymentAccountId: 210102, salesReceivableAccountId: 110 }) },
+    journal: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({ id: 77 }) },
     product: { findMany: vi.fn().mockResolvedValue([]) },
     item: { findMany: vi.fn().mockResolvedValue([]) },
     workOrderItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -178,6 +180,67 @@ describe("ambang 50% konversi DP ke invoice", () => {
       expect.objectContaining({ where: expect.objectContaining({ status: "confirmed" }) })
     )
     expect(mocks.salesInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("DP lanjutan ke invoice existing: SalesPayment + jurnal Dr 210102 / Cr Piutang (AUD-FIN-04)", async () => {
+    const inv = { id: 101, documentNo: "INV-1", grandTotal: 1000, paidAmount: 600, paymentStatus: "partial" }
+    const dp = buildDp({ id: 9, amount: 300, status: "draft", docNo: "DP-9" })
+    const tx = buildTx(dp)
+    ;(tx.salesInvoice as any).findFirst = vi.fn().mockResolvedValue(inv)
+    const paymentFindFirst = vi.fn().mockResolvedValue(null)
+    ;(tx.salesPayment as any).findFirst = paymentFindFirst
+    const prePaid = vi.fn().mockResolvedValue([{ amount: 600, withholdingAmount: 0 }])
+    const postPaid = vi.fn().mockResolvedValue([{ amount: 600, withholdingAmount: 0 }, { amount: 300, withholdingAmount: 0 }])
+    ;(tx.salesPayment as any).findMany = vi.fn()
+      .mockResolvedValueOnce([{ amount: 600, withholdingAmount: 0 }])
+      .mockResolvedValueOnce([{ amount: 600, withholdingAmount: 0 }, { amount: 300, withholdingAmount: 0 }])
+    void prePaid
+    void postPaid
+    const invoiceUpdate = vi.fn()
+    ;(tx.salesInvoice as any).update = invoiceUpdate
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(9, 1)
+
+    // allocSen = min(300, 1000-600) = 300 → payment alokasi 300.
+    expect(mocks.salesPaymentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ amount: 300, paymentMethod: "down_payment" }) }),
+    )
+    // Jurnal reklas dalam tx sama: Dr 210102 / Cr Piutang 110, TANPA kas.
+    expect((tx.journal.create as any)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          referenceType: "SalesPayment",
+          referenceId: 555,
+          totalDebit: 300,
+          totalCredit: 300,
+          entries: {
+            create: [
+              expect.objectContaining({ accountId: 210102, debit: 300, credit: 0 }),
+              expect.objectContaining({ accountId: 110, debit: 0, credit: 300 }),
+            ],
+          },
+        }),
+      }),
+    )
+    // paidAmount = 900 → partial.
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paidAmount: 900, paymentStatus: "partial" }) }),
+    )
+  })
+
+  it("DP lanjutan retry (payment sudah ada): payment + jurnal TIDAK ganda", async () => {
+    const inv = { id: 101, documentNo: "INV-1", grandTotal: 1000, paidAmount: 600, paymentStatus: "partial" }
+    const dp = buildDp({ id: 9, amount: 300, status: "draft", docNo: "DP-9" })
+    const tx = buildTx(dp)
+    ;(tx.salesInvoice as any).findFirst = vi.fn().mockResolvedValue(inv)
+    ;(tx.salesPayment as any).findFirst = vi.fn().mockResolvedValue({ id: 555 })
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(9, 1)
+
+    expect(mocks.salesPaymentCreate).not.toHaveBeenCalled()
+    expect((tx.journal.create as any)).not.toHaveBeenCalled()
   })
 
   it("SalesPayment memakai tanggal bayar DP aktual, bukan hari ini", async () => {

@@ -79,6 +79,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   payment_methods: "Metode Pembayaran",
   payment_terms: "Termin Pembayaran",
   payroll: "Penggajian",
+  payroll_reports: "Laporan Gaji",
   petty_cash: "Kas Kecil",
   positions: "Jabatan",
   production: "Produksi",

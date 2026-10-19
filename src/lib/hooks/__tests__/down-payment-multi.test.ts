@@ -22,6 +22,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   transaction: vi.fn(),
+  systemSettingFindFirst: vi.fn(),
+  journalFindFirst: vi.fn(),
+  journalCreate: vi.fn(),
+  accountFindMany: vi.fn(),
+  assertPeriodOpen: vi.fn(),
   queryRaw: vi.fn(),
   downPaymentFindUnique: vi.fn(),
   downPaymentUpdate: vi.fn(),
@@ -45,6 +50,10 @@ vi.mock("@/lib/db/prisma", () => ({
 
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
+}))
+
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: (...a: unknown[]) => mocks.assertPeriodOpen(...a),
 }))
 
 vi.mock("@/lib/services/notification.service", () => ({
@@ -120,6 +129,9 @@ function buildTx(dp: ReturnType<typeof buildDp>, existingInvoiceId: number) {
       findFirst: vi.fn().mockResolvedValue(null),
       create: mocks.salesPaymentCreate,
     },
+    systemSetting: { findFirst: mocks.systemSettingFindFirst },
+    journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+    account: { findMany: mocks.accountFindMany },
     product: { findFirst: vi.fn().mockResolvedValue(null) },
     productMaterial: { findMany: vi.fn().mockResolvedValue([]) },
     item: { findMany: vi.fn().mockResolvedValue([]), findUnique: vi.fn().mockResolvedValue(null) },
@@ -146,6 +158,11 @@ describe("onDownPaymentConfirmed — multi-DP support", () => {
     mocks.workOrderFindFirst.mockResolvedValue({ id: 1 })
     mocks.salesOrderFindFirst.mockResolvedValue({ id: 1 })
     mocks.salesInvoiceFindFirst.mockResolvedValue({ id: 100, grandTotal: 1000 })
+    mocks.systemSettingFindFirst.mockResolvedValue({ customerDownPaymentAccountId: 210, salesReceivableAccountId: 110 })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({ id: 9 })
+    mocks.accountFindMany.mockImplementation(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id })))
+    mocks.assertPeriodOpen.mockResolvedValue(undefined)
   })
 
   it("records a subsequent DP as SalesPayment on the existing invoice", async () => {

@@ -1191,22 +1191,38 @@ export async function processPayroll(formData: FormData) {
     // it negative) and over-withhold pay. Mirror the estimator's cap.
     const loanDeduction = await capLoanDeduction(prisma, employeeId, v.loanDeduction ?? 0);
 
-    // Statutory: BPJS (employee) + PPh21, computed server-side from base salary.
+    // Statutory: BPJS (employee) + PPh21, computed server-side.
+    // P1-6: params berperiode dari ruleset + snapshot tersimpan.
     const empForTax = employeeId
       ? await prisma.employee.findUnique({
           where: { id: employeeId },
-          select: { maritalStatus: true },
+          select: { maritalStatus: true, dependents: true },
         })
       : null;
     const grossSalary = safeSum(
       [baseSalary, allowances, overtimeTotal, appreciationTotal],
       0,
     );
-    const bpjs = computeBpjsEmployee(baseSalary);
+    const statutoryParams = await getStatutoryParams(prisma, endDate);
+    // AUD-R3-02: single-create sama — tolak fallback di sumber.
+    if (statutoryParams.fromFallback) {
+      throw new Error(
+        "Ruleset statutori periode ini belum lengkap/valid — pembuatan slip ditolak. " +
+          "Minta accountant melengkapi ruleset, lalu hitung ulang.",
+      );
+    }
+    const bpjs = computeBpjsEmployee(baseSalary, statutoryParams);
     const pph21 = computePph21Monthly(
       grossSalary,
       empForTax?.maritalStatus,
       bpjs.total,
+      empForTax?.dependents ?? 0,
+      statutoryParams,
+    );
+    const statutorySnapshot = buildStatutorySnapshot(
+      statutoryParams,
+      empForTax?.maritalStatus,
+      empForTax?.dependents ?? 0,
     );
     const statutory = safeAdd(bpjs.total, pph21, 0);
 
@@ -1252,6 +1268,7 @@ export async function processPayroll(formData: FormData) {
         bpjsHealthEmployee: bpjs.health,
         bpjsEmploymentEmployee: bpjs.employment,
         pph21,
+        statutorySnapshot: statutorySnapshot as Prisma.InputJsonValue,
         netSalary,
         totalAmount,
         paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,

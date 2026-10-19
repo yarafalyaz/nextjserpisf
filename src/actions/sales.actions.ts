@@ -1093,6 +1093,11 @@ export async function createSalesPayment(formData: FormData) {
       )
     }
 
+    if (v.accountId != null) {
+      const ok = await tx.account.count({ where: { id: v.accountId } })
+      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`)
+    }
+
     const created = await tx.salesPayment.create({
       data: {
         documentNo,
@@ -2087,6 +2092,11 @@ export async function updateSalesPayment(id: number, formData: FormData) {
           ? `Jumlah pembayaran + potongan PPh (${settled}) melebihi sisa tagihan (${remaining})`
           : `Jumlah pembayaran melebihi sisa tagihan (${remaining})`,
       )
+    }
+
+    if (v.accountId != null) {
+      const ok = await tx.account.count({ where: { id: v.accountId } })
+      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`)
     }
 
     const updated = await tx.salesPayment.update({

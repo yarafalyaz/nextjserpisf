@@ -13,6 +13,8 @@ import {
   onVendorBillPosted,
   onVendorPaymentCreated,
   onPayrollPaid,
+  assertJournalClaimRef,
+  assertAccountsExist,
 } from "../accounting.hook";
 
 const mocks = vi.hoisted(() => ({
@@ -48,6 +50,7 @@ const mocks = vi.hoisted(() => ({
   invoiceFindUniqueOrThrow: vi.fn(),
   invoiceFindUnique: vi.fn(),
   journalFindFirst: vi.fn(),
+  accountFindMany: vi.fn(),
   journalCreate: vi.fn(),
   journalEntryCreate: vi.fn(),
   journalEntryCreateMany: vi.fn(),
@@ -157,9 +160,22 @@ vi.mock("@/lib/utils/document-number", () => ({
     mocks.generateDocumentNumberBatch(...a),
 }));
 
+beforeEach(() => {
+  // assertAccountsExist: default semua akun dianggap ada; tiap describe boleh
+  // override untuk kasus akun-hilang.
+  mocks.accountFindMany.mockImplementation(async (args: any) => {
+    const ids: number[] = args?.where?.id?.in ?? [];
+    return ids.map((id) => ({ id }));
+  });
+});
+
 describe("deleteJournalByReference", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.transaction.mockImplementation((fn: any) =>
       fn({
         journal: {
@@ -323,6 +339,10 @@ describe("deleteJournalByReference", () => {
 describe("onSalesInvoicePosted", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     // Reset systemSettings to valid mappings (a prior test may have nulled one).
     mocks.systemSettings.salesReceivableAccountId = 110;
     mocks.systemSettings.salesRevenueAccountId = 410;
@@ -336,6 +356,9 @@ describe("onSalesInvoicePosted", () => {
         salesInvoice: {
           findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
           findUnique: mocks.invoiceFindUnique,
+        },
+        account: {
+          findMany: mocks.accountFindMany,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -678,6 +701,10 @@ describe("onSalesInvoicePosted", () => {
 describe("onSalesPaymentCreated", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.systemSettings.salesReceivableAccountId = 110;
     mocks.systemSettings.cashBankAccountId = 100;
     mocks.transaction.mockImplementation((fn: any) =>
@@ -686,6 +713,9 @@ describe("onSalesPaymentCreated", () => {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
         salesPayment: { findUniqueOrThrow: mocks.paymentFindUniqueOrThrow },
+        account: {
+          findMany: mocks.accountFindMany,
+        },
         journal: {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
@@ -774,6 +804,10 @@ describe("onSalesPaymentCreated", () => {
 describe("onPurchaseOrderReceived", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.systemSettings.inventoryAccountId = 130;
     mocks.systemSettings.purchasePayableAccountId = 210;
     mocks.systemSettings.purchaseTaxAccountId = 150;
@@ -783,6 +817,9 @@ describe("onPurchaseOrderReceived", () => {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
         purchaseOrder: { findUniqueOrThrow: mocks.orderFindUniqueOrThrow },
+        account: {
+          findMany: mocks.accountFindMany,
+        },
         journal: {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
@@ -882,12 +919,19 @@ describe("onPurchaseOrderReceived", () => {
 describe("onExpenseApproved", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.transaction.mockImplementation((fn: any) =>
       fn({
         systemSetting: {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
         expense: { findUniqueOrThrow: mocks.expenseFindUniqueOrThrow },
+        account: {
+          findMany: mocks.accountFindMany,
+        },
         journal: {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
@@ -1023,6 +1067,10 @@ describe("onPettyCashCreated", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.systemSettings.pettyCashAccountId = 115;
     mocks.systemSettings.cashBankAccountId = 100;
     mocks.systemSettings.generalExpenseAccountId = 610;
@@ -1032,6 +1080,9 @@ describe("onPettyCashCreated", () => {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
         pettyCash: { findUniqueOrThrow: mocks.pettyCashFindUniqueOrThrow },
+        account: {
+          findMany: mocks.accountFindMany,
+        },
         journal: {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
@@ -1209,6 +1260,10 @@ describe("onPettyCashCreated", () => {
 describe("onSalesReturnCompleted", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.systemSettings.salesReturnAccountId = 420;
     mocks.systemSettings.salesReceivableAccountId = 110;
     mocks.systemSettings.inventoryAccountId = 130;
@@ -1218,6 +1273,9 @@ describe("onSalesReturnCompleted", () => {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
         salesReturn: { findUniqueOrThrow: mocks.salesReturnFindUniqueOrThrow },
+        account: {
+          findMany: mocks.accountFindMany,
+        },
         journal: {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
@@ -1354,6 +1412,10 @@ describe("onSalesReturnCompleted", () => {
 describe("onPurchaseReturnProcessed", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.systemSettings.purchasePayableAccountId = 210;
     mocks.systemSettings.inventoryAccountId = 130;
     mocks.systemSettings.purchaseReturnAccountId = 220;
@@ -1366,6 +1428,9 @@ describe("onPurchaseReturnProcessed", () => {
           findUniqueOrThrow: mocks.purchaseReturnFindUniqueOrThrow,
         },
         stockMove: { findMany: mocks.stockMoveFindMany },
+        account: {
+          findMany: mocks.accountFindMany,
+        },
         journal: {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
@@ -1540,6 +1605,10 @@ describe("onPurchaseReturnProcessed", () => {
 describe("onDownPaymentReceived", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.systemSettings.cashBankAccountId = 100;
     (mocks.systemSettings as any).customerDownPaymentAccountId = 210102;
     mocks.transaction.mockImplementation((fn: any) =>
@@ -1548,6 +1617,9 @@ describe("onDownPaymentReceived", () => {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
         downPayment: { findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow },
+        account: {
+          findMany: mocks.accountFindMany,
+        },
         journal: {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
@@ -1609,6 +1681,10 @@ describe("onDownPaymentReceived", () => {
 describe("onVendorBillPosted", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.systemSettings.purchasePayableAccountId = 210;
     mocks.systemSettings.purchaseInventoryAccountId = 135;
     mocks.systemSettings.purchaseTaxAccountId = 150;
@@ -1623,6 +1699,9 @@ describe("onVendorBillPosted", () => {
           findUnique: mocks.vendorBillFindUnique,
         },
         goodsReceipt: { count: mocks.goodsReceiptCount },
+        account: {
+          findMany: mocks.accountFindMany,
+        },
         journal: {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
@@ -1779,6 +1858,10 @@ describe("onVendorBillPosted", () => {
 describe("onVendorPaymentCreated", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.systemSettings.purchasePayableAccountId = 210;
     mocks.systemSettings.cashBankAccountId = 100;
     mocks.transaction.mockImplementation((fn: any) =>
@@ -1788,6 +1871,9 @@ describe("onVendorPaymentCreated", () => {
         },
         vendorPayment: {
           findUniqueOrThrow: mocks.vendorPaymentFindUniqueOrThrow,
+        },
+        account: {
+          findMany: mocks.accountFindMany,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -1934,6 +2020,10 @@ describe("onVendorPaymentCreated", () => {
 describe("onPayrollPaid", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mocks.accountFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? [];
+      return ids.map((id) => ({ id }));
+    });
     mocks.systemSettings.salaryExpenseAccountId = 630;
     mocks.systemSettings.payrollBankAccountId = 105;
     mocks.systemSettings.salariesPayableAccountId = 230;
@@ -1944,6 +2034,9 @@ describe("onPayrollPaid", () => {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
         payroll: { findUniqueOrThrow: mocks.payrollFindUniqueOrThrow },
+        account: {
+          findMany: mocks.accountFindMany,
+        },
         journal: {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
@@ -2129,5 +2222,51 @@ describe("onPayrollPaid", () => {
     expect(call.data.totalDebit).toBe(creditSum);
     expect(call.data.totalCredit).toBe(creditSum);
     expect(call.data.totalDebit).toBe(2000);
+  });
+});
+
+describe("assertJournalClaimRef (UNIQUE NULL-bypass gate)", () => {
+  it("menolak referenceType null/kosong sebelum klaim", () => {
+    expect(() => assertJournalClaimRef(null, 1)).toThrow(/referenceType/);
+    expect(() => assertJournalClaimRef("  ", 1)).toThrow(/referenceType/);
+  });
+  it("menolak referenceId non-positif sebelum klaim", () => {
+    expect(() => assertJournalClaimRef("Expense", 0)).toThrow(/referenceId/);
+    expect(() => assertJournalClaimRef("Expense", -3)).toThrow(/referenceId/);
+  });
+  it("lolos untuk klaim valid", () => {
+    expect(() => assertJournalClaimRef("Expense", 7)).not.toThrow();
+  });
+  it("falsifikasi: hapus gate = duplikat NULL lolos (dokumentasi bahaya)", async () => {
+    // MySQL: UNIQUE (NULL, x) tidak konflik — tanpa gate, dua jurnal
+    // referenceType NULL bisa kasuk tanpa error. Gate di atas menutupnya.
+    const { default: _nope } = { default: null as unknown };
+    void _nope;
+    expect(() => assertJournalClaimRef(undefined, 7)).toThrow();
+  });
+});
+
+describe("assertAccountsExist (akun bare-int fail-closed)", () => {
+  const fakeDb = (existing: number[]) => ({
+    account: {
+      findMany: async (args: any) => existing.filter((id) => args.where.id.in.includes(id)).map((id) => ({ id })),
+    },
+  });
+  it("lolos bila semua akun ada", async () => {
+    await expect(assertAccountsExist(fakeDb([10, 20]) as any, [10, 20], "Uji")).resolves.toBeUndefined();
+  });
+  it("menolak bila satu akun hilang", async () => {
+    await expect(assertAccountsExist(fakeDb([10]) as any, [10, 99], "Uji")).rejects.toThrow(/99/);
+  });
+  it("hook menolak posting expense bila akun basi", async () => {
+    const { onExpenseApproved: fn } = await import("../accounting.hook");
+    void fn;
+    mocks.accountFindMany.mockResolvedValueOnce([{ id: 600 }]);
+    mocks.expenseFindUniqueOrThrow.mockResolvedValue({
+      id: 1, amount: 100, accountId: 600, paidFromAccountId: 999,
+      documentNo: "EXP-9", date: new Date(),
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    await expect(onExpenseApproved(1)).rejects.toThrow(/tidak ditemukan/);
   });
 });

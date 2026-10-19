@@ -458,21 +458,22 @@ describe("stockJournalService", () => {
       );
     });
 
-    it("returns null when stockAdjustmentAccountId and inventoryAdjustmentAccountId are both null", async () => {
+    it("fails closed when stockAdjustmentAccountId and inventoryAdjustmentAccountId are both null", async () => {
       mocks.getSystemSettings.mockResolvedValue({
         ...FULL_ACCOUNTS,
         stockAdjustmentAccountId: null,
         inventoryAdjustmentAccountId: null,
       });
 
-      const result = await stockJournalService.onStockAdjustment(
-        tx,
-        [{ qty: 10, cost: 5, difference: 2 }],
-        "ADJ-1",
-        1
-      );
+      await expect(
+        stockJournalService.onStockAdjustment(
+          tx,
+          [{ qty: 10, cost: 5, difference: 2 }],
+          "ADJ-1",
+          1
+        )
+      ).rejects.toThrow("Penyesuaian Stok");
 
-      expect(result).toBeNull();
       expect(mocks.createJournal).not.toHaveBeenCalled();
     });
   });
@@ -511,7 +512,7 @@ describe("stockJournalService", () => {
       );
     });
 
-    it("returns null when no expense account configured", async () => {
+    it("fails closed when no expense account configured", async () => {
       mocks.getSystemSettings.mockResolvedValue({
         ...FULL_ACCOUNTS,
         materialIssueExpenseAccountId: null,
@@ -519,8 +520,10 @@ describe("stockJournalService", () => {
         cogsAccountId: null,
       });
 
-      const result = await stockJournalService.onMaterialIssue(tx, [{ qty: 5, cost: 8 }], "MI-1", 1);
-      expect(result).toBeNull();
+      await expect(
+        stockJournalService.onMaterialIssue(tx, [{ qty: 5, cost: 8 }], "MI-1", 1)
+      ).rejects.toThrow("Beban Material");
+      expect(mocks.createJournal).not.toHaveBeenCalled();
     });
 
     it("falls back to materialExpense when materialIssueExpense is null", async () => {

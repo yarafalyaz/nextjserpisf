@@ -63,12 +63,14 @@ vi.mock("@/lib/utils/document-number", () => ({
 
 vi.mock("@/lib/hooks/accounting.hook", () => ({
   onSalesPaymentCreated: vi.fn().mockResolvedValue(undefined),
+  onSalesInvoicePosted: vi.fn().mockResolvedValue(undefined),
 }))
 
 vi.mock("@/lib/utils/settings", () => ({
   getSystemSettings: vi.fn().mockResolvedValue({
     cashBankAccountId: 100,
     customerDownPaymentAccountId: 210102,
+    salesReceivableAccountId: 110,
   }),
 }))
 
@@ -100,7 +102,7 @@ function buildTx() {
       findFirst: mocks.paymentFindFirst,
       findMany: mocks.paymentFindMany,
     },
-    journal: { create: mocks.journalCreate },
+    journal: { create: mocks.journalCreate, findFirst: vi.fn().mockResolvedValue(null) },
     systemSetting: { findFirst: mocks.settingFindFirst },
     financialIdempotencyKey: {
       create: (...a: unknown[]) => mocks.idemCreate(...a),
@@ -127,13 +129,13 @@ describe("customer-credit.service", () => {
     mocks.journalCreate.mockResolvedValue({ id: 1 })
   })
 
-  it("alokasi normal: kurangi saldo + lunasi faktur", async () => {
+  it("alokasi normal: kurangi saldo + lunasi faktur + jurnal Dr 210102 / Cr Piutang TANPA kas", async () => {
     mocks.creditFindUnique.mockResolvedValue({
       id: 1, documentNo: "CC-1", customerId: 9,
       receivedAmount: 3000, allocatedAmount: 0, refundedAmount: 0, status: "open",
     })
     mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
+      id: 101, customerId: 9, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000, status: "posted",
     })
     const r = await allocateCreditToInvoice(1, 101, 2000, 7, "11111111-1111-4111-8111-111111111111")
     expect(r.success).toBe(true)
@@ -149,6 +151,20 @@ describe("customer-credit.service", () => {
         }),
       }),
     )
+    // AUD-FIN-03: jurnal alokasi = Dr kewajiban UMP 210102 / Cr Piutang —
+    // BUKAN Dr Kas. Kas sudah dijurnal saat terima DP/kredit.
+    const allocCall = mocks.journalCreate.mock.calls.find(
+      (c: any) => c?.[0]?.data?.referenceType === "SalesPayment" && c?.[0]?.data?.referenceId === 999,
+    )
+    expect(allocCall).toBeDefined()
+    const allocEntries = allocCall![0].data.entries.create as Array<{ accountId: number; debit: number; credit: number }>
+    expect(allocEntries).toHaveLength(2)
+    // Falsifikasi kas double-count: satu-satunya baris DEBIT = 210102.
+    const debitLines = allocEntries.filter((e) => Number(e.debit) > 0)
+    expect(debitLines).toHaveLength(1)
+    expect(debitLines[0].accountId).toBe(210102)
+    expect(debitLines[0].debit).toBe(2000)
+    expect(allocEntries.find((e) => Number(e.credit) > 0)?.credit).toBe(2000)
     expect(mocks.creditUpdate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ allocatedAmount: 2000, status: "open" }),
@@ -546,6 +562,17 @@ describe("customer-credit.service", () => {
     expect(a).toBe(b)
     expect(a).not.toBe(c)
     expect(a).toMatch(/^[0-9a-f]{64}$/)
+  })
+
+  it("alokasi tanpa akun 210102: DITOLAK sebelum mutasi (fail-closed AUD-FIN-03)", async () => {
+    const { getSystemSettings } = await import("@/lib/utils/settings")
+    vi.mocked(getSystemSettings).mockResolvedValueOnce({ customerDownPaymentAccountId: null } as never)
+    const r = await allocateCreditToInvoice(1, 101, 1000, 7, "99999999-9999-4999-8999-999999999999")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("210102")
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 
   it("creditBalance = received - allocated - refunded", async () => {

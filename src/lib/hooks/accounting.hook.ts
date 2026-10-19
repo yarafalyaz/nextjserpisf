@@ -28,6 +28,46 @@ const executeInTx = async (
   return txClient ? callback(txClient) : prisma.$transaction(callback);
 };
 
+/**
+ * UNIQUE (referenceType, referenceId) di MySQL lolos bila referenceType NULL
+ * (NULL ≠ NULL) — dua jurnal tanpa klaim bisa duplikat diam-diam. Validasi
+ * ini fail-closed SEBELUM klaim: referenceType kosong/null = tolak, bukan
+ * tulis. Tanpa ubah UNIQUE lama; semua pemanggil existing kirim string
+ * non-empty (dicek via grep), jadi gate ini no-op di jalur normal.
+ */
+export function assertJournalClaimRef(referenceType: unknown, referenceId: unknown): void {
+  if (typeof referenceType !== "string" || referenceType.trim() === "") {
+    throw new Error(
+      "Klaim jurnal ditolak: referenceType wajib non-empty sebelum klaim (UNIQUE bypass via NULL).",
+    );
+  }
+  if (typeof referenceId !== "number" || !Number.isInteger(referenceId) || referenceId <= 0) {
+    throw new Error(
+      "Klaim jurnal ditolak: referenceId wajib integer positif sebelum klaim (UNIQUE bypass via NULL).",
+    );
+  }
+}
+
+/**
+ * Akun jurnal bare-int tanpa FK fisik (tax/transfer/expense/petty/payment):
+ * ID basi (akun dihapus) lolos FK lalu jurnal menunjuk akun hantu. Guard ini
+ * fail-closed di action/hook: tiap accountId yang dipakai entri dicek
+ * existensinya via prisma.account; hilang satu = tolak sebelum tulis.
+ */
+export async function assertAccountsExist(
+  db: TxClient,
+  accountIds: (number | null | undefined)[],
+  label: string,
+): Promise<void> {
+  const ids = [...new Set(accountIds.filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0))];
+  if (ids.length === 0) return;
+  const found = await db.account.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  if (found.length !== ids.length) {
+    const missing = ids.filter((id) => !found.some((f) => f.id === id));
+    throw new Error(`${label}: akun tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang akun sebelum posting.`);
+  }
+}
+
 async function generateJournalNumber(
   _tx: TxClient,
   prefix: string,
@@ -214,6 +254,7 @@ export async function onSalesInvoicePosted(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("SalesInvoice", invoiceId);
   const settings = await getSystemSettings(db);
   // JANGAN diam-diam menyerah di sini. Sebelumnya `return` polos, dan akibatnya
   // terbukti pada basis data nyata: faktur berubah status menjadi POSTED sementara
@@ -599,6 +640,7 @@ export async function onSalesPaymentCreated(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("SalesPayment", paymentId);
   const settings = await getSystemSettings(db);
   if (!settings.salesReceivableAccountId) {
     throw new Error(
@@ -662,6 +704,7 @@ export async function onSalesPaymentCreated(
         "Akun kas/bank belum dikonfigurasi untuk penerimaan pembayaran penjualan",
       );
     }
+    await assertAccountsExist(tx, [cashAccountId, withholdingAccountId, settings.salesReceivableAccountId], "Pembayaran penjualan");
 
     const journal = await tx.journal.create({
       data: {
@@ -726,6 +769,7 @@ export async function onPurchaseOrderReceived(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("PurchaseOrder", orderId);
   const settings = await getSystemSettings(db);
   if (!settings.inventoryAccountId || !settings.purchasePayableAccountId) {
     throw new Error(
@@ -845,6 +889,7 @@ export async function onExpenseApproved(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("Expense", expenseId);
   const expense = await db.expense.findUniqueOrThrow({
     where: { id: expenseId },
   });
@@ -893,6 +938,7 @@ export async function onExpenseApproved(
     }
 
     const journalNumber = await generateJournalNumber(tx, "EXP", expenseId);
+    await assertAccountsExist(tx, [expense.accountId, expense.paidFromAccountId], "Pengeluaran");
 
     const journal = await tx.journal.create({
       data: {
@@ -944,6 +990,7 @@ export async function onPettyCashCreated(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("PettyCash", pettyCashId);
   const settings = await getSystemSettings(db);
   if (!settings.pettyCashAccountId) {
     throw new Error(
@@ -994,6 +1041,13 @@ export async function onPettyCashCreated(
 
     const journalNumber = await generateJournalNumber(tx, "PC", pettyCashId);
     const isInflow = pettyCash.type === "IN";
+    await assertAccountsExist(
+      tx,
+      isInflow
+        ? [settings.pettyCashAccountId, pettyCash.sourceAccountId ?? settings.cashBankAccountId]
+        : [pettyCash.expenseAccountId ?? settings.generalExpenseAccountId, settings.pettyCashAccountId],
+      "Kas kecil",
+    );
 
     const journal = await tx.journal.create({
       data: {
@@ -1084,6 +1138,7 @@ export async function onSalesReturnCompleted(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("SalesReturn", returnId);
   const settings = await getSystemSettings(db);
   // Sales-return + inventory mappings are always needed. The AR mapping is only
   // needed when the return is tied to an invoice (see below) — resolved after we
@@ -1234,6 +1289,7 @@ export async function onPurchaseReturnProcessed(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("PurchaseReturn", returnId);
   const settings = await getSystemSettings(db);
   if (!settings.purchasePayableAccountId || !settings.inventoryAccountId) {
     throw new Error(
@@ -1407,6 +1463,7 @@ export async function onDownPaymentReceived(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("DownPayment", dpId);
   const settings = await getSystemSettings(db);
   // AUD-FIN-01 (putusan akuntan): DP yang belum jadi pendapatan = KEWAJIBAN
   // (CoA 210102 Uang Muka Penjualan), BUKAN Piutang 1103. Kredit ke Piutang
@@ -1502,6 +1559,7 @@ export async function onVendorBillPosted(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("VendorBill", billId);
   const settings = await getSystemSettings(db);
   if (!settings.purchasePayableAccountId) {
     throw new Error(
@@ -1737,6 +1795,7 @@ export async function onVendorPaymentCreated(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("VendorPayment", paymentId);
   const settings = await getSystemSettings(db);
   if (!settings.purchasePayableAccountId) {
     throw new Error(
@@ -1792,6 +1851,7 @@ export async function onVendorPaymentCreated(
     }
 
     const journalNumber = await generateJournalNumber(tx, "VP", paymentId);
+    await assertAccountsExist(tx, [settings.purchasePayableAccountId, feeAccount, bankAccountId], "Pembayaran vendor");
 
     const entries: {
       accountId: number;
@@ -1857,6 +1917,7 @@ export async function onPayrollPaid(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("Payroll", payrollId);
   const settings = await getSystemSettings(db);
   if (!settings.salaryExpenseAccountId || !settings.payrollBankAccountId) {
     throw new Error(
@@ -2059,6 +2120,7 @@ export async function onEmployeeLoanDisbursed(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("EmployeeLoan", loanId);
   const settings = await getSystemSettings(db);
   if (!settings.employeeReceivableAccountId || !settings.payrollBankAccountId) {
     throw new Error(

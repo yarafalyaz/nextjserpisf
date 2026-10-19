@@ -2,6 +2,7 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { notificationService } from "@/lib/services/notification.service";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { Status, WorkOrderStatus, SalesStatus } from "@/lib/constants";
 
 /**
@@ -137,7 +138,7 @@ export async function onDownPaymentConfirmed(
         const invGrandSen = Math.round(Number(existingInv.grandTotal ?? 0) * 100);
         const allocSen = Math.max(Math.min(Math.round(Number(dp.amount) * 100), invGrandSen - prePaidSen), 0);
         const payDocNo = await generateDocumentNumber("PAY");
-        await tx.salesPayment.create({
+        const allocPayment = await tx.salesPayment.create({
           data: {
             documentNo: payDocNo,
             salesInvoiceId: existingInv.id,
@@ -149,6 +150,52 @@ export async function onDownPaymentConfirmed(
             createdBy: userId ?? null,
           },
         });
+
+        // AUD-FIN-04 (putusan akuntan): alokasi DP lanjutan = reklas kewajiban
+        // 210102 → piutang sebesar allocSen, DALAM tx sama. Kas PENUH sudah
+        // dijurnal saat terima DP (onDownPaymentReceived: Dr Kas / Cr 210102)
+        // — tanpa jurnal di sini AR tak turun + kewajiban tak lunas.
+        // Idempoten: cek jurnal existing via referenceType/referenceId (pola
+        // hook lain); zero-alloc (allocSen = 0) = tak ada jurnal.
+        if (allocSen > 0) {
+          const dpSettings = await tx.systemSetting.findFirst();
+          const dpLiabilityId = (dpSettings as { customerDownPaymentAccountId?: number | null } | null)?.customerDownPaymentAccountId ?? null;
+          const dpArId = (dpSettings as { salesReceivableAccountId?: number | null } | null)?.salesReceivableAccountId ?? null;
+          if (!dpLiabilityId || !dpArId) {
+            throw new Error(
+              "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi — alokasi DP lanjutan ditolak",
+            );
+          }
+          const allocDate = dp.paymentDate ?? new Date();
+          await assertPeriodOpen(allocDate, tx);
+          const existingAllocJournal = await tx.journal.findFirst({
+            where: { referenceType: "SalesPayment", referenceId: allocPayment.id },
+          });
+          if (!existingAllocJournal) {
+            const allocJournalNo = await generateDocumentNumber("JRN");
+            const allocAmount = allocSen / 100;
+            await tx.journal.create({
+              data: {
+                journalNumber: allocJournalNo,
+                transactionDate: allocDate,
+                referenceType: "SalesPayment",
+                referenceId: allocPayment.id,
+                description: `Alokasi DP ${dp.documentNo} ke faktur ${existingInv.documentNo ?? existingInv.id}`,
+                type: "AUTO",
+                status: "POSTED",
+                totalDebit: allocAmount,
+                totalCredit: allocAmount,
+                createdBy: userId ?? null,
+                entries: {
+                  create: [
+                    { accountId: dpLiabilityId, debit: allocAmount, credit: 0, memo: "Alokasi kewajiban UMP" },
+                    { accountId: dpArId, debit: 0, credit: allocAmount, memo: "Pelunasan piutang via uang muka" },
+                  ],
+                },
+              },
+            });
+          }
+        }
 
         // Recalculate invoice paid amount & status inside the same transaction
         const payments = await tx.salesPayment.findMany({

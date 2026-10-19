@@ -22,6 +22,11 @@ const mocks = vi.hoisted(() => ({
   salesPaymentCreate: vi.fn(),
   salesPaymentFindFirst: vi.fn(),
   salesPaymentFindMany: vi.fn(),
+  systemSettingFindFirst: vi.fn(),
+  journalFindFirst: vi.fn(),
+  journalCreate: vi.fn(),
+  accountFindMany: vi.fn(),
+  assertPeriodOpen: vi.fn(),
   generateDocumentNumber: vi.fn(),
   notifyDocumentsReadyBatch: vi.fn(),
   onSalesInvoicePosted: vi.fn(),
@@ -36,6 +41,10 @@ vi.mock("@/lib/db/prisma", () => ({
 
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
+}))
+
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: (...a: unknown[]) => mocks.assertPeriodOpen(...a),
 }))
 
 vi.mock("@/lib/services/notification.service", () => ({
@@ -105,6 +114,9 @@ function buildTx(dp: ReturnType<typeof buildDp>) {
       findFirst: mocks.salesPaymentFindFirst,
       create: mocks.salesPaymentCreate,
     },
+    systemSetting: { findFirst: mocks.systemSettingFindFirst },
+    journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+    account: { findMany: mocks.accountFindMany },
     customerCredit: {
       create: vi.fn().mockResolvedValue({ id: 777, documentNo: "CC-1" }),
       findFirst: vi.fn().mockResolvedValue(null),
@@ -128,6 +140,11 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
     mocks.notifyDocumentsReadyBatch.mockResolvedValue(undefined)
     mocks.onSalesInvoicePosted.mockResolvedValue(undefined)
     mocks.downPaymentUpdate.mockResolvedValue({})
+    mocks.systemSettingFindFirst.mockResolvedValue({ customerDownPaymentAccountId: 210, salesReceivableAccountId: 110 })
+    mocks.journalFindFirst.mockResolvedValue(null)
+    mocks.journalCreate.mockResolvedValue({ id: 9 })
+    mocks.accountFindMany.mockImplementation(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id })))
+    mocks.assertPeriodOpen.mockResolvedValue(undefined)
     mocks.salesPaymentCreate.mockResolvedValue({ id: 555 })
     mocks.salesPaymentFindFirst.mockResolvedValue(null)
     mocks.salesPaymentFindMany.mockResolvedValue([])

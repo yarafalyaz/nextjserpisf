@@ -1079,6 +1079,11 @@ export async function createVendorPayment(formData: FormData) {
     // (or worse, the attachments stay orphaned with referenceId=0 and never get
     // cleaned up). Wrapping both in one tx ties payment existence to the
     // attachment linkage.
+    if (v.accountId != null) {
+      const ok = await prisma.account.count({ where: { id: v.accountId } })
+      if (!ok) return { success: false, error: `Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.` }
+    }
+
     const payment = await prisma.$transaction(async (tx) => {
       const created = await tx.vendorPayment.create({
         data: {
@@ -2621,6 +2626,11 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     });
     if (existingPayment.status !== "draft") {
       throw new Error("Hanya pembayaran draft yang dapat diedit");
+    }
+
+    if (v.accountId != null) {
+      const ok = await prisma.account.count({ where: { id: v.accountId } })
+      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`)
     }
 
     const slug = await nextSlug("vendorPayment", existingPayment.documentNo, { excludeId: id });

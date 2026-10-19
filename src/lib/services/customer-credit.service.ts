@@ -10,7 +10,6 @@
  */
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
-import { onSalesPaymentCreated } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { getErrorMessage } from "@/lib/utils/error";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
@@ -51,6 +50,14 @@ export async function allocateCreditToInvoice(
       salesInvoiceId,
       amount,
     });
+    // AUD-FIN-03: settings dibaca SEBELUM tx agar fail-closed akun 210102/
+    // piutang diputus sebelum mutasi apa pun (bukan setengah jalan).
+    const settings = await getSystemSettings();
+    const dpAccountId = (settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId ?? null;
+    const arAccountId = (settings as { salesReceivableAccountId?: number | null }).salesReceivableAccountId ?? null;
+    if (!dpAccountId || !arAccountId) {
+      return { success: false, error: "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi — alokasi kredit ditolak" };
+    }
     await prisma.$transaction(async (tx) => {
       // AUD-R7-02/03: claim validasi scope+hasil. Replay = return + teruskan
       // ref payment awal ke caller (bukti operasi pertama, bukan sukses generik).
@@ -122,7 +129,39 @@ export async function allocateCreditToInvoice(
           paymentStatus: totalPaid >= Number(invoice.grandTotal) ? "paid" : "partial",
         },
       });
-      await onSalesPaymentCreated(payment.id, userId, tx as never);
+      // AUD-FIN-03 (putusan akuntan): alokasi kredit = reklas antar-subledger
+      // kewajiban 210102 → piutang, NOL-NET tanpa kas. Kas penuh SUDAH dijurnal
+      // saat terima DP/kredit — panggil onSalesPaymentCreated generik (Dr Kas /
+      // Cr Piutang) = kas double-count. Fail-closed (cek di atas) bila akun
+      // 210102/piutang belum mapping.
+      const allocateDate = new Date();
+      await assertPeriodOpen(allocateDate, tx as never);
+      const existingAllocateJournal = await tx.journal.findFirst({
+        where: { referenceType: "SalesPayment", referenceId: payment.id },
+      });
+      if (!existingAllocateJournal) {
+        const allocJournalNo = await generateDocumentNumber("JRN");
+        await tx.journal.create({
+          data: {
+            journalNumber: allocJournalNo,
+            transactionDate: allocateDate,
+            referenceType: "SalesPayment",
+            referenceId: payment.id,
+            description: `Alokasi kredit pelanggan ${credit.documentNo} ke faktur ${(invoice as { documentNo?: string }).documentNo ?? salesInvoiceId}`,
+            type: "AUTO",
+            status: "POSTED",
+            totalDebit: amount,
+            totalCredit: amount,
+            createdBy: userId ?? null,
+            entries: {
+              create: [
+                { accountId: dpAccountId, debit: amount, credit: 0, memo: "Alokasi kewajiban UMP" },
+                { accountId: arAccountId, debit: 0, credit: amount, memo: "Pelunasan piutang via kredit pelanggan" },
+              ],
+            },
+          },
+        });
+      }
       replayPaymentId = payment.id;
     });
     // AUD-R7-03: replay = sukses + flag + ID payment awal (UI tahu ini hasil

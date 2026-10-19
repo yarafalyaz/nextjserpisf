@@ -136,6 +136,9 @@ beforeEach(() => {
   vi.mocked(findFirstNegativeBalance).mockReset().mockReturnValue(null)
   vi.mocked(computePettyCashChain).mockReset().mockReturnValue([])
   mocks.prismaMock.journalEntry.findMany.mockResolvedValue([{ debit: 9999999, credit: 0 }])
+  // Guard akun bare-int: default semua account.count = ada (1); tiap tes boleh
+  // override ke 0 untuk kasus akun-hilang.
+  mocks.prismaMock.account.count.mockReset().mockResolvedValue(1)
 })
 
 describe("Bank Statement Actions", () => {
