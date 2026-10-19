@@ -8,7 +8,8 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
-import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { chequeSchema } from "@/lib/validations/finance.schemas"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 
 const REVALIDATE = "/keuangan/giro"
@@ -18,24 +19,18 @@ export async function createCheque(formData: FormData) {
   try {
     const user = await requirePermission("create_cheques")
 
-    const type = formData.get("type") === "cek" ? "cek" : "giro"
-    const direction = formData.get("direction") === "out" ? "out" : "in"
-    const number = (formData.get("number") as string)?.trim() || null
-    const party = (formData.get("party") as string)?.trim() || null
-    const notes = (formData.get("notes") as string)?.trim() || null
-    const accountIdRaw = Number(formData.get("accountId"))
-    const accountId = Number.isSafeInteger(accountIdRaw) && accountIdRaw > 0 ? accountIdRaw : null
+    const parsed = parseFormData(chequeSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
 
-    const amount = parseMoneyAmount(formData.get("amount"))
-    if (amount === null || amount <= 0) {
-      return { success: false, error: "Nominal giro/cek harus lebih dari 0." }
-    }
-
-    const dueRaw = String(formData.get("dueDate") ?? "")
-    const dueDate = new Date(dueRaw)
-    if (!dueRaw || Number.isNaN(dueDate.getTime())) {
-      return { success: false, error: "Tanggal jatuh tempo tidak valid." }
-    }
+    const type = v.type
+    const direction = v.direction
+    const number = v.number ?? null
+    const party = v.party ?? null
+    const notes = v.notes ?? null
+    const accountId = v.accountId ?? null
+    const amount = v.amount
+    const dueDate = v.dueDate
 
     await assertPeriodOpen(dueDate)
 

@@ -12,7 +12,9 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
-import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { purchaseAdvanceSchema } from "@/lib/validations/finance.schemas"
 import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 
 const REVALIDATE = "/pembelian/uang-muka"
@@ -28,15 +30,6 @@ function toMoney(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
 }
 
-function parseAmount(raw: FormDataEntryValue | null): number | null {
-  return parseMoneyAmount(raw)
-}
-
-function parseId(raw: FormDataEntryValue | null): number | null {
-  const value = Number(String(raw ?? ""))
-  return Number.isInteger(value) && value > 0 ? value : null
-}
-
 /**
  * Mencatat uang muka pembelian + jurnalnya (Dr Uang Muka, Cr Kas/Bank).
  *
@@ -48,28 +41,19 @@ export async function createPurchaseAdvance(formData: FormData): Promise<Purchas
   try {
     const user = await requirePermission("create_purchase_advances")
 
-    const rawDate = String(formData.get("date") ?? "").trim()
-    const date = new Date(`${rawDate}T00:00:00`)
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate) || Number.isNaN(date.getTime())) {
-      return { success: false, error: "Tanggal uang muka tidak valid." }
-    }
+    const parsed = parseFormData(purchaseAdvanceSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
 
-    const vendorId = parseId(formData.get("vendorId"))
-    if (!vendorId) return { success: false, error: "Pemasok wajib dipilih." }
+    // Tengah malam UTC untuk hari kalender WIB — bukan `new Date(...)`
+    // yang bergantung pada zona waktu proses.
+    const date = wibDateToUtcMidnight(v.date)
 
-    const amount = parseAmount(formData.get("amount"))
-    if (amount === null || amount <= 0) return { success: false, error: "Jumlah uang muka harus lebih dari 0." }
-
-    const paymentAccountId = parseId(formData.get("paymentAccountId"))
-    const advanceAccountId = parseId(formData.get("advanceAccountId"))
-    if (!paymentAccountId || !advanceAccountId) {
-      return { success: false, error: "Akun kas/bank dan akun uang muka wajib dipilih." }
-    }
-    if (paymentAccountId === advanceAccountId) {
-      return { success: false, error: "Akun kas/bank dan akun uang muka tidak boleh sama." }
-    }
-
-    const description = String(formData.get("description") ?? "").trim() || null
+    const vendorId = v.vendorId
+    const amount = v.amount
+    const paymentAccountId = v.paymentAccountId
+    const advanceAccountId = v.advanceAccountId
+    const description = v.description ?? null
 
     await assertPeriodOpen(date)
 

@@ -51,7 +51,7 @@ export const bankStatementSchema = z.object({
  * tidak ada (mis. `2026-13-45`) karena `Date.UTC` akan menggulirkannya diam-diam
  * ke tanggal lain.
  */
-const dateOnly = z
+export const dateOnly = z
   .string({ error: "Tanggal wajib diisi" })
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal tidak valid (format YYYY-MM-DD)")
   .refine((value) => {
@@ -199,4 +199,171 @@ export const profitCenterSchema = z.object({
   code: z.string({ error: "Kode wajib diisi" }).trim().min(1, "Kode wajib diisi").max(50),
   name: z.string({ error: "Nama wajib diisi" }).trim().min(1, "Nama wajib diisi").max(200),
 });
+
+// ==================== BANK TRANSFER ====================
+
+/**
+ * Server-side schema untuk createBankTransfer: hand-parse sebelumnya tanpa
+ * max-length — description 5MB lolos ke DB. `date` wajib YYYY-MM-DD yang
+ * benar-benar ada di kalender (pakai refine Date.UTC seperti `dateOnly` di
+ * atas, bukan `z.coerce.date()`) dan dikonversi via wibDateToUtcMidnight.
+ * adminFee 0 = tidak ada biaya (feeAccountId opsional); > 0 wajib feeAccountId.
+ */
+export const bankTransferSchema = z
+  .object({
+    date: dateOnly,
+    fromAccountId: z.coerce
+      .number({ message: "Rekening asal wajib dipilih" })
+      .int()
+      .positive(),
+    toAccountId: z.coerce
+      .number({ message: "Rekening tujuan wajib dipilih" })
+      .int()
+      .positive(),
+    amount: z.preprocess(
+      (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+      z.coerce
+        .number({ message: "Nominal transfer wajib diisi" })
+        .positive("Nominal transfer harus lebih dari 0"),
+    ),
+    adminFee: z.preprocess(
+      (v) =>
+        v === "" || v == null
+          ? 0
+          : typeof v === "string"
+            ? (parseMoneyAmount(v) ?? 0)
+            : v,
+      z.coerce.number().min(0, "Biaya admin tidak boleh negatif"),
+    ),
+    feeAccountId: z.preprocess(
+      (v) => (v === "" || v == null ? undefined : v),
+      z.coerce.number().int().positive().optional(),
+    ),
+    description: optionalString(2000),
+  })
+  .refine((v) => v.fromAccountId !== v.toAccountId, {
+    message: "Rekening asal dan tujuan tidak boleh sama",
+    path: ["toAccountId"],
+  })
+  .refine((v) => v.adminFee <= 0 || v.feeAccountId !== undefined, {
+    message:
+      "Akun beban biaya admin wajib dipilih bila biaya admin lebih dari 0",
+    path: ["feeAccountId"],
+  });
+
+// ==================== TAX PAYMENT ====================
+
+/**
+ * Masa pajak `YYYY-MM` yang benar-benar ada di kalender.
+ *
+ * Regex saja tidak cukup: `/^\d{4}-\d{2}$/` meloloskan "2026-13"/"2026-00"
+ * yang lalu tersimpan sebagai masa pajak fiktif dan tercetak mentah di
+ * laporan penyetoran pajak.
+ */
+const taxPeriod = z
+  .string()
+  .regex(/^\d{4}-\d{2}$/, "Masa pajak harus dalam format YYYY-MM, mis. 2026-09")
+  .refine((v) => {
+    const month = Number(v.slice(5, 7));
+    return month >= 1 && month <= 12;
+  }, "Masa pajak harus dalam format YYYY-MM, mis. 2026-09");
+
+/**
+ * Server-side schema untuk createTaxPayment: hand-parse sebelumnya tanpa
+ * max-length — reference/notes 5MB lolos ke DB. taxTypeId opsional
+ * (tanpa jenis = setor umum); period opsional (tanpa masa = setor umum).
+ */
+export const taxPaymentSchema = z.object({
+  date: dateOnly,
+  period: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    taxPeriod.optional(),
+  ),
+  taxTypeId: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.coerce.number().int().positive().optional(),
+  ),
+  taxAccountId: z.coerce
+    .number({ message: "Akun utang pajak wajib dipilih" })
+    .int()
+    .positive(),
+  paymentAccountId: z.coerce
+    .number({ message: "Akun kas/bank wajib dipilih" })
+    .int()
+    .positive(),
+  amount: z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce
+      .number({ message: "Jumlah setor wajib diisi" })
+      .positive("Jumlah setor harus lebih dari 0"),
+  ),
+  reference: optionalString(200),
+  notes: optionalString(2000),
+});
+
+// ==================== CHEQUE / GIRO ====================
+
+/**
+ * Server-side schema untuk createCheque: hand-parse sebelumnya tanpa
+ * max-length — number/party/notes 5MB lolos ke DB, type/direction arbitrary
+ * string diam-diam jadi "giro"/"in", amount 0/negatif hanya dicek manual.
+ */
+export const chequeSchema = z.object({
+  type: z.enum(["giro", "cek"], {
+    message: "type wajib diisi (giro/cek)",
+  }),
+  direction: z.enum(["in", "out"], {
+    message: "direction wajib diisi (in/out)",
+  }),
+  number: optionalString(100),
+  party: optionalString(200),
+  accountId: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.coerce.number().int().positive().optional(),
+  ),
+  amount: z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce
+      .number({ message: "amount wajib diisi" })
+      .positive("Nominal giro/cek harus lebih dari 0"),
+  ),
+  dueDate: requiredDate,
+  notes: optionalString(2000),
+});
+
+// ==================== PURCHASE ADVANCE ====================
+
+/**
+ * Server-side schema untuk createPurchaseAdvance: hand-parse sebelumnya tanpa
+ * max-length — description 5MB lolos ke DB, tanggal via `new Date()` yang
+ * bergantung zona waktu proses. `date` wajib YYYY-MM-DD yang benar-benar ada
+ * di kalender, dikonversi via wibDateToUtcMidnight di action.
+ */
+export const purchaseAdvanceSchema = z
+  .object({
+    date: dateOnly,
+    vendorId: z.coerce
+      .number({ message: "Pemasok wajib dipilih" })
+      .int()
+      .positive("Pemasok wajib dipilih"),
+    amount: z.preprocess(
+      (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+      z.coerce
+        .number({ message: "Jumlah uang muka harus lebih dari 0" })
+        .positive("Jumlah uang muka harus lebih dari 0"),
+    ),
+    paymentAccountId: z.coerce
+      .number({ message: "Akun kas/bank wajib dipilih" })
+      .int()
+      .positive(),
+    advanceAccountId: z.coerce
+      .number({ message: "Akun uang muka wajib dipilih" })
+      .int()
+      .positive(),
+    description: optionalString(2000),
+  })
+  .refine((v) => v.paymentAccountId !== v.advanceAccountId, {
+    message: "Akun kas/bank dan akun uang muka tidak boleh sama",
+    path: ["advanceAccountId"],
+  });
 
