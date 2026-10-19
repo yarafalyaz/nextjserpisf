@@ -748,7 +748,8 @@ export async function allocateCustomerCredit(creditId: number, salesInvoiceId: n
   try {
     const user = await requirePermission("confirm_down_payments");
     const result = await allocateCreditToInvoice(creditId, salesInvoiceId, amount, Number(user.id), idempotencyKey);
-    if (!result.success) return { success: false as const, error: result.error };
+    // AUD-R8-01: teruskan flag ambigu — UI buang key HANYA bila definitif.
+    if (!result.success) return { success: false as const, error: result.error, ambiguous: result.ambiguous === true };
     // AUD-R5-03: finansial SUDAH commit. Kegagalan audit dicatat via helper
     // (baris AUDIT_FAILURE + console berkonteks) — transaksi tetap success.
     let auditWarning: string | undefined;
@@ -778,7 +779,7 @@ export async function refundCustomerCredit(creditId: number, amount: number, ide
   try {
     const user = await requirePermission("confirm_down_payments");
     const result = await refundCredit(creditId, amount, Number(user.id), idempotencyKey);
-    if (!result.success) return { success: false as const, error: result.error };
+    if (!result.success) return { success: false as const, error: result.error, ambiguous: result.ambiguous === true };
     // AUD-R5-03: sama — refund sudah commit; audit gagal = jejak, bukan error.
     let refundAuditWarning: string | undefined;
     try {

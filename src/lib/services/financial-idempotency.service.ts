@@ -14,9 +14,45 @@ export type IdemScope = "customer_credit_allocate" | "customer_credit_refund"
 
 export type IdemExisting = {
   scope: string
+  payloadHash: string | null
   resultRefType: string | null
   resultRefId: number | null
   createdBy: number | null
+}
+
+/**
+ * AUD-R8-01: bedakan error DEFINITIF (aman ganti key) vs AMBIGU (pertahankan
+ * key, retry sama). Definitif = validasi yang terjadi SEBELUM mutasi apa pun:
+ * key invalid, nominal, saldo, pelanggan, periode, scope-beda, payload-beda.
+ * AMBIGU = exception setelah klaim/insert (koneksi putus, deadlock, timeout,
+ * crash) — status commit tak pasti. Marker: prefix "[DEFINITIF] ".
+ */
+export function isDefinitiveError(e: unknown): boolean {
+  const msg = e instanceof Error ? e.message : String(e)
+  return msg.startsWith("[DEFINITIF] ")
+}
+
+export function definitive(msg: string): Error {
+  return new Error(`[DEFINITIF] ${msg}`)
+}
+
+/**
+ * AUD-R8-02: fingerprint kanonis payload operasi. Scope sama + key sama +
+ * payload beda = konflik (bukan replay). Format: scope|field=v|... (stabil,
+ * tanpa secret).
+ */
+export function payloadFingerprint(parts: Record<string, string | number>): string {
+  return Object.keys(parts)
+    .sort()
+    .map((k) => `${k}=${parts[k]}`)
+    .join("|")
+    .slice(0, 191)
+}
+
+/** AUD-R8-03: tipe hasil yang sah per scope. Replay dengan tipe salah = error. */
+const EXPECTED_REF_TYPE: Record<IdemScope, string> = {
+  customer_credit_allocate: "SalesPayment",
+  customer_credit_refund: "Journal",
 }
 
 export type IdemTx = {
@@ -63,14 +99,17 @@ export async function claimIdempotencyKey(
   scope: IdemScope,
   key: string,
   userId?: number,
+  /** AUD-R8-02: fingerprint payload intent ini. Disimpan saat klaim menang;
+   * dicocokkan saat replay. */
+  fingerprint?: string,
 ): Promise<
   | { replayed: false }
   | { replayed: true; resultRefType: string | null; resultRefId: number | null }
 > {
-  if (!isValidIdempotencyKey(key)) throw new Error("Idempotency key tidak valid")
+  if (!isValidIdempotencyKey(key)) throw definitive("Idempotency key tidak valid")
   try {
     await tx.financialIdempotencyKey.create({
-      data: { key, scope, createdBy: userId ?? null },
+      data: { key, scope, payloadHash: fingerprint ?? null, createdBy: userId ?? null },
     })
     return { replayed: false }
   } catch (e) {
@@ -92,8 +131,16 @@ export async function claimIdempotencyKey(
     }
     // AUD-R6-02: scope beda = konflik nyata, BUKAN sukses.
     if (existing.scope !== scope) {
-      throw new Error(
+      throw definitive(
         `Idempotency key dipakai untuk operasi lain (${existing.scope}) — kirim key baru`,
+      )
+    }
+    // AUD-R8-02: payload beda = konflik nyata, BUKAN replay. Key sama untuk
+    // scope sama tapi kredit/faktur/nominal beda = intent BERBEDA yang
+    // kebetulan pakai key sama (bug client/duplikat) — tolak tegas.
+    if (fingerprint && existing.payloadHash && existing.payloadHash !== fingerprint) {
+      throw definitive(
+        "Idempotency key dipakai untuk nominal/target berbeda — kirim key baru untuk intent baru",
       )
     }
     if (!existing.resultRefType || !existing.resultRefId) {
@@ -102,6 +149,14 @@ export async function claimIdempotencyKey(
       // manual, lalu submit key baru.
       throw new Error(
         "Operasi dengan key ini belum selesai (tanpa hasil final) — jangan retry buta, cek jurnal/saldo lalu submit baru",
+      )
+    }
+    // AUD-R8-03: tipe hasil harus cocok scope (data rusak/salah bind =
+    // error, bukan ID palsu ke UI).
+    const expected = EXPECTED_REF_TYPE[scope]
+    if (existing.resultRefType !== expected || !existing.resultRefId) {
+      throw definitive(
+        `Hasil tersimpan key ini tidak valid (harus ${expected}) — hubungi admin, jangan retry buta`,
       )
     }
     return {

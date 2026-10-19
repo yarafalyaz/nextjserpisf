@@ -14,7 +14,14 @@ import { onSalesPaymentCreated } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { getErrorMessage } from "@/lib/utils/error";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
-import { claimIdempotencyKey, bindIdempotencyKey, isValidIdempotencyKey } from "@/lib/services/financial-idempotency.service";
+import {
+  claimIdempotencyKey,
+  bindIdempotencyKey,
+  isValidIdempotencyKey,
+  isDefinitiveError,
+  definitive,
+  payloadFingerprint,
+} from "@/lib/services/financial-idempotency.service";
 
 export async function creditBalance(creditId: number): Promise<number> {
   const c = await prisma.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
@@ -29,7 +36,7 @@ export async function allocateCreditToInvoice(
   /** AUD-R7-01: alokasi WAJIB key — semua jalur (UI maupun internal),
    * sama seperti refund. Tanpa key/format cacat = ditolak sebelum mutasi. */
   idempotencyKey?: string,
-): Promise<{ success: boolean; error?: string; replayed?: boolean; paymentId?: number }> {
+): Promise<{ success: boolean; error?: string; ambiguous?: boolean; replayed?: boolean; paymentId?: number }> {
   try {
     if (!(amount > 0)) return { success: false, error: "Nominal alokasi harus > 0" };
     if (!isValidIdempotencyKey(idempotencyKey)) {
@@ -37,10 +44,17 @@ export async function allocateCreditToInvoice(
     }
     let replayPaymentId: number | undefined;
     let isReplay = false;
+    // AUD-R8-02: fingerprint intent ini — replay payload beda = konflik.
+    const fp = payloadFingerprint({
+      scope: "customer_credit_allocate",
+      creditId,
+      salesInvoiceId,
+      amount,
+    });
     await prisma.$transaction(async (tx) => {
       // AUD-R7-02/03: claim validasi scope+hasil. Replay = return + teruskan
       // ref payment awal ke caller (bukti operasi pertama, bukan sukses generik).
-      const claim = await claimIdempotencyKey(tx as never, "customer_credit_allocate", idempotencyKey, userId);
+      const claim = await claimIdempotencyKey(tx as never, "customer_credit_allocate", idempotencyKey, userId, fp);
       if (claim.replayed) {
         isReplay = true;
         replayPaymentId = claim.resultRefId ?? undefined;
@@ -55,22 +69,22 @@ export async function allocateCreditToInvoice(
       const credit = await tx.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
       const balance = Number(credit.receivedAmount) - Number(credit.allocatedAmount) - Number(credit.refundedAmount);
       if (amount > balance) {
-        throw new Error(`Saldo kredit tidak cukup (sisa ${balance}, diminta ${amount})`);
+        throw definitive(`Saldo kredit tidak cukup (sisa ${balance}, diminta ${amount})`);
       }
       const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } });
-      if (invoice.status === "cancelled") throw new Error("Faktur batal tidak bisa dialokasi kredit");
+      if (invoice.status === "cancelled") throw definitive("Faktur batal tidak bisa dialokasi kredit");
       // AUD-R4-02: kredit pelanggan A tak boleh melunasi faktur pelanggan B.
       // customerId payment = credit.customerId — tanpa gate ini piutang/kredit
       // tercampur dan saldo sengketa.
       if (Number(invoice.customerId) !== Number(credit.customerId)) {
-        throw new Error(
+        throw definitive(
           `Kredit milik pelanggan #${credit.customerId} tidak bisa dialokasikan ke faktur pelanggan #${invoice.customerId}`,
         );
       }
       // Jejak audit: nomor kredit + key (bila ada) di notes.
       const owing = Number(invoice.grandTotal) - Number(invoice.paidAmount);
       if (amount > owing) {
-        throw new Error(`Alokasi melebihi sisa faktur (sisa ${owing}, diminta ${amount})`);
+        throw definitive(`Alokasi melebihi sisa faktur (sisa ${owing}, diminta ${amount})`);
       }
       const payDocNo = await generateDocumentNumber("PAY");
       const payment = await tx.salesPayment.create({
@@ -115,7 +129,10 @@ export async function allocateCreditToInvoice(
     // lama, bukan operasi baru). Operasi baru = replayed:false + ID baru.
     return { success: true, replayed: isReplay, paymentId: replayPaymentId };
   } catch (e) {
-    return { success: false, error: getErrorMessage(e) };
+    // AUD-R8-01: bedakan definitif (aman ganti key) vs ambigu (tahan key!).
+    // getErrorMessage strip prefix? Tidak — prefix [DEFINITIF] dipertahankan
+    // di pesan agar action/UI bisa bedakan tanpa parsing rapuh.
+    return { success: false, error: getErrorMessage(e), ambiguous: !isDefinitiveError(e) };
   }
 }
 
@@ -127,7 +144,7 @@ export async function refundCredit(
    * Tanpa key = ditolak mentah. Kas keluar ganda = kerugian nyata; tak ada
    * pengecualian "pemanggil lama". */
   idempotencyKey?: string,
-): Promise<{ success: boolean; error?: string; replayed?: boolean; journalId?: number }> {
+): Promise<{ success: boolean; error?: string; ambiguous?: boolean; replayed?: boolean; journalId?: number }> {
   try {
     if (!(amount > 0)) return { success: false, error: "Nominal refund harus > 0" };
     const settings = await getSystemSettings();
@@ -142,8 +159,13 @@ export async function refundCredit(
     let replayJournalId: number | undefined;
     let isReplay = false;
     await prisma.$transaction(async (tx) => {
+      const fpRefund = payloadFingerprint({
+        scope: "customer_credit_refund",
+        creditId,
+        amount,
+      });
       // AUD-R7-02/03: replay = return + teruskan ref jurnal awal.
-      const claim = await claimIdempotencyKey(tx as never, "customer_credit_refund", idempotencyKey, userId);
+      const claim = await claimIdempotencyKey(tx as never, "customer_credit_refund", idempotencyKey, userId, fpRefund);
       if (claim.replayed) {
         isReplay = true;
         replayJournalId = claim.resultRefId ?? undefined;
@@ -153,7 +175,7 @@ export async function refundCredit(
       const credit = await tx.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
       const balance = Number(credit.receivedAmount) - Number(credit.allocatedAmount) - Number(credit.refundedAmount);
       if (amount > balance) {
-        throw new Error(`Saldo kredit tidak cukup (sisa ${balance}, diminta ${amount})`);
+        throw definitive(`Saldo kredit tidak cukup (sisa ${balance}, diminta ${amount})`);
       }
       // AUD-R4-05: refund memposting jurnal POSTED — periode tutup = tolak
       // SEBELUM saldo berubah (tanpa ini kontrol period-lock bisa dilewati).
@@ -196,6 +218,7 @@ export async function refundCredit(
     });
     return { success: true, replayed: isReplay, journalId: replayJournalId };
   } catch (e) {
-    return { success: false, error: getErrorMessage(e) };
+    // AUD-R8-01: sama — ambigu (timeout/deadlock/koneksi) = tahan key.
+    return { success: false, error: getErrorMessage(e), ambiguous: !isDefinitiveError(e) };
   }
 }

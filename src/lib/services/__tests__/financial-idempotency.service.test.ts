@@ -50,6 +50,35 @@ describe("financial-idempotency.service", () => {
     ).rejects.toThrow("connection lost")
   })
 
+  it("replay payload beda: konflik definitif (AUD-R8-02)", async () => {
+    const dup = Object.assign(new Error("dup"), { code: "P2002", meta: { target: "key" } })
+    const tx = buildTx({
+      create: vi.fn().mockRejectedValue(dup),
+      findUnique: vi.fn().mockResolvedValue({
+        scope: "customer_credit_refund", payloadHash: "scope=customer_credit_refund|amount=1000|creditId=1",
+        resultRefType: "Journal", resultRefId: 42, createdBy: 7,
+      }),
+    })
+    await expect(
+      claimIdempotencyKey(tx, "customer_credit_refund", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaab3", 7,
+        "scope=customer_credit_refund|amount=2000|creditId=1"),
+    ).rejects.toThrow("nominal/target berbeda")
+  })
+
+  it("replay tipe salah: ditolak (AUD-R8-03)", async () => {
+    const dup = Object.assign(new Error("dup"), { code: "P2002", meta: { target: "key" } })
+    const tx = buildTx({
+      create: vi.fn().mockRejectedValue(dup),
+      findUnique: vi.fn().mockResolvedValue({
+        scope: "customer_credit_refund", payloadHash: null,
+        resultRefType: "SalesPayment", resultRefId: 9, createdBy: 7,
+      }),
+    })
+    await expect(
+      claimIdempotencyKey(tx, "customer_credit_refund", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaab4", 7),
+    ).rejects.toThrow("tidak valid")
+  })
+
   it("bind menulis ref hasil", async () => {
     const update = vi.fn().mockResolvedValue({})
     await bindIdempotencyKey(buildTx({ update }), "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaab2", "Journal", 42)

@@ -75,19 +75,44 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
     storageOK.current = ok
     return ok
   }
+  // AUD-R8-04: SETIAP operasi storage dilindungi sendiri (probe bisa basi:
+  // kuota berubah/penuh antar probe dan tulis nyata). Kegagalan storage =
+  // fallback key sesi-komponen + pesan konsisten — key finansial TAK PERNAH
+  // diganti diam-diam; submit tetap pakai key sesi yang sama.
+  function storageFail(op: string): void {
+    console.warn(`[customer-credit] sessionStorage ${op} gagal — key intent hanya sesi-komponen`)
+    showError("Penyimpanan sesi browser gagal — jangan refresh; klik lagi untuk retry aman")
+  }
   function loadIntentKey(intent: string): string | null {
     if (keyRef.current !== null && intentRef.current === intent) return keyRef.current
     if (!storageAvailable()) return null
-    return sessionStorage.getItem(intentKeyName(intent))
+    try {
+      return sessionStorage.getItem(intentKeyName(intent))
+    } catch {
+      storageFail("baca")
+      return keyRef.current
+    }
   }
   function saveIntentKey(intent: string, key: string): void {
     keyRef.current = key
     intentRef.current = intent
-    if (storageAvailable()) sessionStorage.setItem(intentKeyName(intent), key)
+    if (!storageAvailable()) return
+    try {
+      sessionStorage.setItem(intentKeyName(intent), key)
+    } catch {
+      // Key sesi-komponen SUDAH tersimpan di atas — submit tetap pakai key
+      // yang sama (bukan key baru). Hanya ketahanan lintas-refresh hilang.
+      storageFail("tulis")
+    }
   }
   function clearIntentKey(intent: string): void {
     keyRef.current = null
-    if (storageAvailable()) sessionStorage.removeItem(intentKeyName(intent))
+    if (!storageAvailable()) return
+    try {
+      sessionStorage.removeItem(intentKeyName(intent))
+    } catch {
+      storageFail("hapus")
+    }
   }
 
   function run(creditId: number) {
@@ -109,10 +134,16 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
             ? await allocateCustomerCredit(creditId, Number(invoiceId), nominal, key)
             : await refundCustomerCredit(creditId, nominal, key)
         if (result && !result.success) {
-          // Gagal definitif (validasi/saldo/periode/key): intent selesai,
-          // key dibuang agar submit koreksi = intent baru.
-          clearIntentKey(intent)
-          showError(result.error || "Gagal memproses kredit")
+          // AUD-R8-01: key dibuang HANYA bila gagal DEFINITIF (validasi
+          // sebelum mutasi). Gagal AMBIGU (timeout/deadlock/commit tak pasti)
+          // = key DIPERTAHANKAN — klik ulang = retry aman key sama, bukan
+          // operasi baru. Rekonsiliasi: cek mutasi/saldo sebelum intent baru.
+          if (!("ambiguous" in result && result.ambiguous === true)) {
+            clearIntentKey(intent)
+            showError(result.error || "Gagal memproses kredit")
+          } else {
+            showError(`${result.error || "Hasil belum pasti"} — JANGAN buat intent baru; klik lagi untuk retry aman`)
+          }
           return
         }
         // Sukses (termasuk replay retry): intent selesai, key dibuang.

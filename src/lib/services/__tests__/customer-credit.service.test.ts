@@ -459,6 +459,72 @@ describe("customer-credit.service", () => {
     expect(mocks.paymentCreate).not.toHaveBeenCalled()
   })
 
+  it("key sama payload BEDA (nominal lain): KONFLIK bukan replay (AUD-R8-02)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
+    })
+    const dupErr = Object.assign(
+      new Error("Unique constraint failed on the fields: (`key`)"),
+      { code: "P2002", meta: { target: "key" } },
+    )
+    mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    // Key milik intent nominal 1000 dipakai untuk nominal 2000.
+    mocks.idemFindUnique.mockResolvedValueOnce({
+      scope: "customer_credit_allocate",
+      payloadHash: "scope=customer_credit_allocate|amount=1000|creditId=1|salesInvoiceId=101",
+      resultRefType: "SalesPayment", resultRefId: 555, createdBy: 7,
+    })
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "dddddddd-dddd-4ddd-8ddd-dddddddddddd")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("nominal/target berbeda")
+    expect(r.ambiguous).toBe(false)
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+  })
+
+  it("replay tipe hasil SALAH: DITOLAK bukan ID palsu (AUD-R8-03)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
+    })
+    const dupErr = Object.assign(
+      new Error("Unique constraint failed on the fields: (`key`)"),
+      { code: "P2002", meta: { target: "key" } },
+    )
+    mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    mocks.idemFindUnique.mockResolvedValueOnce({
+      scope: "customer_credit_allocate", payloadHash: null,
+      resultRefType: "Journal", resultRefId: 42, createdBy: 7,
+    })
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("tidak valid")
+    expect(r.ambiguous).toBe(false)
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+  })
+
+  it("gagal AMBIGU (koneksi putus): flag ambiguous true = UI tahan key (AUD-R8-01)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
+    })
+    mocks.idemCreate.mockRejectedValueOnce(new Error("connection lost"))
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "ffffffff-ffff-4fff-8fff-ffffffffffff")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("connection lost")
+    expect(r.ambiguous).toBe(true)
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+  })
+
   it("creditBalance = received - allocated - refunded", async () => {
     mocks.creditFindUnique.mockResolvedValue({
       receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 500,

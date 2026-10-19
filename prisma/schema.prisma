@@ -367,6 +367,7 @@ model FinancialIdempotencyKey {
   id            Int      @id @default(autoincrement())
   key           String   @unique
   scope         String
+  payloadHash   String?  @map("payload_hash")
   resultRefType String?  @map("result_ref_type")
   resultRefId   Int?     @map("result_ref_id")
   createdBy     Int?     @map("created_by")
