@@ -52,47 +52,7 @@ export async function createQuotation(formData: FormData) {
     }
   }
 
-  // Server-side recompute of totals — never trust client-sent subtotal /
-  // grandTotal / per-line total. A tampered or buggy client could otherwise
-  // persist a Rp 0 grandTotal that flows downstream into DP and invoicing.
-  // Mirrors the client formula (calculateItemTotal + grandTotal in the form).
-  // Header discount is clamped to [0, computedSubtotal] and header tax to >= 0
-  // so a tampered negative or oversize value can't persist in the DB row and
-  // resurface in PDF/UI downstream — mirrors the updateSalesInvoice clamp.
-  const rawHeaderDiscount = Number(data.discount) || 0
-  const headerTax = Math.max(0, Number(data.tax) || 0)
-  const computeLine = (item: any) => {
-    // Clamp to the schema's minimum (quotationItemSchema.qty: min(0.01)) rather
-    // than silently coercing a tampered 0/undefined qty to 1. Coercing to 1
-    // bills the customer for an item they did not order; clamping to 0.01 makes
-    // the line essentially zero so the parent totals stay correct. The Zod
-    // schema is the real guard — this is the defensive backstop for routes
-    // (createQuotation / updateQuotation) that bypass parseFormData and read
-    // safeJsonParse(raw) directly.
-    const qty = Math.max(0.01, Number(item.qty) || 0)
-    const unitPrice = Number(item.unitPrice) || 0
-    const lineSubtotal = safeMultiply(qty, unitPrice, 0)
-    let discountAmount = Number(item.discount) || 0
-    if (item.discountType === "percent") {
-      // Clamp percent to [0, 100] so a tampered >100 or negative value can't
-      // produce a discount larger than the line subtotal and persist invalid
-      // data in the row. The per-line total is already clamped to >= 0 below.
-      const percent = Math.min(100, Math.max(0, discountAmount))
-      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
-    }
-    return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
-  }
-  const computedSubtotal = (data.sections || []).reduce(
-    (acc: number, section: any) =>
-      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeLine(it).total, 0), 0), 0),
-    0,
-  )
-  // Clamp the persisted headerDiscount to [0, computedSubtotal] so the value
-  // we store matches the value used in the grandTotal recompute. A discount
-  // > subtotal in the row would otherwise show up in the PDF/UI as a discount
-  // larger than the line total (confusing for the customer).
-  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
-  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
+  const { computedSubtotal, headerDiscount, headerTax, computedGrandTotal } = computeQuotationTotals(data)
 
   const quotation = await prisma.$transaction(async (tx) => {
     // Create sections and items in a single nested write (eliminates loop + N+1 inserts)
@@ -124,31 +84,7 @@ export async function createQuotation(formData: FormData) {
         notes: data.notes || null,
         status: "draft",
         createdBy: Number(user.id),
-        sections: {
-          create: (data.sections || []).map((section: any, si: number) => ({
-            name: section.name || `Section ${si + 1}`,
-            sortOrder: si,
-            items: {
-              create: (section.items || []).map((item: any, ii: number) => {
-                const { discountAmount, total } = computeLine(item)
-                return {
-                  // itemId arrives as a string from safeJsonParse; the items table
-                  // expects a number foreign key. Cast at the boundary so a tampered
-                  // "abc" / null doesn't quietly write a string to the Int column
-                  // and crash the Prisma insert with a "Invalid value" error.
-                  itemId: item.itemId ? Number(item.itemId) : null,
-                  description: item.description || null,
-                  qty: Number(item.qty) || 1,
-                  uom: item.uom || null,
-                  unitPrice: Number(item.unitPrice) || 0,
-                  discount: discountAmount,
-                  total,
-                  sortOrder: ii,
-                }
-              }),
-            },
-          })),
-        },
+        sections: quotationSectionsCreate(data, computeQuotationLine),
       },
     })
 
@@ -500,47 +436,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     }
   }
 
-  // Server-side recompute of totals — never trust client-sent subtotal /
-  // grandTotal / per-line total. A tampered or buggy client could otherwise
-  // persist a Rp 0 grandTotal that flows downstream into DP and invoicing.
-  // Mirrors the client formula (calculateItemTotal + grandTotal in the form).
-  // Header discount is clamped to [0, computedSubtotal] and header tax to >= 0
-  // so a tampered negative or oversize value can't persist in the DB row and
-  // resurface in PDF/UI downstream — mirrors the updateSalesInvoice clamp.
-  const rawHeaderDiscount = Number(data.discount) || 0
-  const headerTax = Math.max(0, Number(data.tax) || 0)
-  const computeLine = (item: any) => {
-    // Clamp to the schema's minimum (quotationItemSchema.qty: min(0.01)) rather
-    // than silently coercing a tampered 0/undefined qty to 1. Coercing to 1
-    // bills the customer for an item they did not order; clamping to 0.01 makes
-    // the line essentially zero so the parent totals stay correct. The Zod
-    // schema is the real guard — this is the defensive backstop for routes
-    // (createQuotation / updateQuotation) that bypass parseFormData and read
-    // safeJsonParse(raw) directly.
-    const qty = Math.max(0.01, Number(item.qty) || 0)
-    const unitPrice = Number(item.unitPrice) || 0
-    const lineSubtotal = safeMultiply(qty, unitPrice, 0)
-    let discountAmount = Number(item.discount) || 0
-    if (item.discountType === "percent") {
-      // Clamp percent to [0, 100] so a tampered >100 or negative value can't
-      // produce a discount larger than the line subtotal and persist invalid
-      // data in the row. The per-line total is already clamped to >= 0 below.
-      const percent = Math.min(100, Math.max(0, discountAmount))
-      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
-    }
-    return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
-  }
-  const computedSubtotal = (data.sections || []).reduce(
-    (acc: number, section: any) =>
-      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeLine(it).total, 0), 0), 0),
-    0,
-  )
-  // Clamp the persisted headerDiscount to [0, computedSubtotal] so the value
-  // we store matches the value used in the grandTotal recompute. A discount
-  // > subtotal in the row would otherwise show up in the PDF/UI as a discount
-  // larger than the line total (confusing for the customer).
-  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
-  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
+  const { computedSubtotal, headerDiscount, headerTax, computedGrandTotal } = computeQuotationTotals(data)
 
   await prisma.$transaction(async (tx) => {
     // Replace sections + items wholesale: the edit form sends the full section
@@ -582,31 +478,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
         paymentMethod: data.paymentMethod || null,
         shippingMethod: data.shippingMethod || null,
         notes: data.notes || null,
-        sections: {
-          create: (data.sections || []).map((section: any, si: number) => ({
-            name: section.name || `Section ${si + 1}`,
-            sortOrder: si,
-            items: {
-              create: (section.items || []).map((item: any, ii: number) => {
-                const { discountAmount, total } = computeLine(item)
-                return {
-                  // itemId arrives as a string from safeJsonParse; the items table
-                  // expects a number foreign key. Cast at the boundary so a tampered
-                  // "abc" / null doesn't quietly write a string to the Int column
-                  // and crash the Prisma insert with a "Invalid value" error.
-                  itemId: item.itemId ? Number(item.itemId) : null,
-                  description: item.description || null,
-                  qty: Number(item.qty) || 1,
-                  uom: item.uom || null,
-                  unitPrice: Number(item.unitPrice) || 0,
-                  discount: discountAmount,
-                  total,
-                  sortOrder: ii,
-                }
-              }),
-            },
-          })),
-        },
+        sections: quotationSectionsCreate(data, computeQuotationLine),
       },
     })
   })
@@ -638,40 +510,7 @@ export async function createDownPayment(formData: FormData) {
   const documentNo = await generateDocumentNumber("DP")
   const slug = await nextSlug("downPayment", documentNo)
 
-  let proofImage: string | null = null
-  const proofFile = formData.get("proofImage")
-  if (proofFile && proofFile instanceof File && proofFile.size > 0) {
-    // Cap proof uploads at 5 MB — these are payment screenshots/photos, not raw
-    // images. Without a cap, a hostile client can OOM the server by streaming
-    // an arbitrarily large file before we ever look at the type.
-    const MAX_PROOF_BYTES = 5 * 1024 * 1024
-    if (proofFile.size > MAX_PROOF_BYTES) {
-      throw new Error(`Ukuran bukti bayar melebihi batas maksimum ${MAX_PROOF_BYTES / 1024 / 1024}MB.`)
-    }
-
-    // Whitelist safe extensions for files served from `public/`. If a raw
-    // attacker-renamed `.html`/`.svg` lands here, Next will serve it from
-    // `public/uploads/proofs/` and execute its JS in the user's session
-    // (Stored XSS in the app's own origin).
-    const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
-    const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "pdf"])
-    const ext = allowedExts.has(rawExt.toLowerCase()) ? rawExt.toLowerCase() : "jpg"
-
-    const { writeFile, mkdir } = await import("fs/promises")
-    const path = await import("path")
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "proofs")
-    await mkdir(uploadDir, { recursive: true })
-    const filename = `proof-dp-${Date.now()}.${ext}`
-    const filepath = path.join(uploadDir, filename)
-    const bytes = await proofFile.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    // Bukti DP boleh jpg/png/webp/pdf (lihat allowedExts di atas): tolak isi
-    // yang tak cocok dengan ekstensinya SEBELUM tulis — `File.type`/nama
-    // kiriman klien bisa dipalsukan untuk menyimpan skrip di public/.
-    assertMagicBytes(buffer, ext === "pdf" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`)
-    await writeFile(filepath, buffer)
-    proofImage = `/uploads/proofs/${filename}`
-  }
+  const proofImage: string | null = await saveDownPaymentProof(formData)
 
   const quotationId = v.quotationId
   const amount = v.amount
@@ -743,6 +582,106 @@ export async function createDownPayment(formData: FormData) {
  * Izin = confirm_down_payments (gerbang yang sama dengan konfirmasi DP —
  * kredit lahir dari DP). Service mengunci baris + tolak over-saldo/sisa.
  */
+/**
+ * AUD-R10-03: helper upload bukti bayar DP (dedup 2 blok identik create/update).
+ * Cap 5MB + whitelist ekstensi + magic-bytes SEBELUM tulis (anti Stored XSS
+ * via public/uploads). Return path public atau null bila tak ada file.
+ */
+/**
+ * AUD-R10-03: recompute total quotation server-side (dedup create/update).
+ * Jangan percaya subtotal/grandTotal kiriman klien — hitung ulang + clamp.
+ */
+function computeQuotationTotals(data: any): {
+  computedSubtotal: number
+  headerDiscount: number
+  headerTax: number
+  computedGrandTotal: number
+} {
+  const rawHeaderDiscount = Number(data.discount) || 0
+  const headerTax = Math.max(0, Number(data.tax) || 0)
+  const computedSubtotal = (data.sections || []).reduce(
+    (acc: number, section: any) =>
+      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeQuotationLine(it).total, 0), 0), 0),
+    0,
+  )
+  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
+  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
+  return { computedSubtotal, headerDiscount, headerTax, computedGrandTotal }
+}
+
+/**
+ * AUD-R10-03: computeLine quotation di module-scope (dedup create/update).
+ * Murni: clamp qty/diskon anti-tamper, hitung via safe* decimal-safe.
+ */
+function computeQuotationLine(item: any): { discountAmount: number; total: number } {
+  const qty = Math.max(0.01, Number(item.qty) || 0)
+  const unitPrice = Number(item.unitPrice) || 0
+  const lineSubtotal = safeMultiply(qty, unitPrice, 0)
+  let discountAmount = Number(item.discount) || 0
+  if (item.discountType === "percent") {
+    const percent = Math.min(100, Math.max(0, discountAmount))
+    discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
+  }
+  return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
+}
+
+/**
+ * AUD-R10-03: helper sections-create quotation (dedup create/update).
+ * Cast itemId string→number di boundary + clamp via computeLine pemanggil.
+ */
+function quotationSectionsCreate(data: any, computeLine: (item: any) => { discountAmount: number; total: number }) {
+  return {
+    create: (data.sections || []).map((section: any, si: number) => ({
+      name: section.name || `Section ${si + 1}`,
+      sortOrder: si,
+      items: {
+        create: (section.items || []).map((item: any, ii: number) => {
+          const { discountAmount, total } = computeLine(item)
+          return {
+            // itemId string dari safeJsonParse → number FK; "abc"/null tak
+            // boleh tulis string ke kolom Int.
+            itemId: item.itemId ? Number(item.itemId) : null,
+            description: item.description || null,
+            qty: Number(item.qty) || 1,
+            uom: item.uom || null,
+            unitPrice: Number(item.unitPrice) || 0,
+            discount: discountAmount,
+            total,
+            sortOrder: ii,
+          }
+        }),
+      },
+    })),
+  }
+}
+
+async function saveDownPaymentProof(formData: FormData): Promise<string | null> {
+  const proofFile = formData.get("proofImage")
+  if (!(proofFile && proofFile instanceof File && proofFile.size > 0)) return null
+  // Cap proof uploads at 5 MB — payment screenshots/photos, bukan raw images.
+  const MAX_PROOF_BYTES = 5 * 1024 * 1024
+  if (proofFile.size > MAX_PROOF_BYTES) {
+    throw new Error(`Ukuran bukti bayar melebihi batas maksimum ${MAX_PROOF_BYTES / 1024 / 1024}MB.`)
+  }
+  // Whitelist ekstensi aman untuk public/ (tolak .html/.svg → Stored XSS).
+  const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
+  const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "pdf"])
+  const ext = allowedExts.has(rawExt.toLowerCase()) ? rawExt.toLowerCase() : "jpg"
+
+  const { writeFile, mkdir } = await import("fs/promises")
+  const path = await import("path")
+  const uploadDir = path.join(process.cwd(), "public", "uploads", "proofs")
+  await mkdir(uploadDir, { recursive: true })
+  const filename = `proof-dp-${Date.now()}.${ext}`
+  const filepath = path.join(uploadDir, filename)
+  const bytes = await proofFile.arrayBuffer()
+  const buffer = Buffer.from(bytes)
+  // Tolak isi tak cocok ekstensi SEBELUM tulis (File.type/nama bisa dipalsukan).
+  assertMagicBytes(buffer, ext === "pdf" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`)
+  await writeFile(filepath, buffer)
+  return `/uploads/proofs/${filename}`
+}
+
 export async function allocateCustomerCredit(creditId: number, salesInvoiceId: number, amount: number, idempotencyKey?: string) {
   const { allocateCreditToInvoice } = await import("@/lib/services/customer-credit.service");
   try {
@@ -2450,32 +2389,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
   await requirePermission("edit_down_payments")
 
   // Fix #2: Jangan generate documentNo baru
-  let proofImage: string | null | undefined = undefined
-  const proofFile = formData.get("proofImage")
-  if (proofFile && proofFile instanceof File && proofFile.size > 0) {
-    // Same cap as the down-payment proof path above. See comment there.
-    const MAX_PROOF_BYTES = 5 * 1024 * 1024
-    if (proofFile.size > MAX_PROOF_BYTES) {
-      throw new Error(`Ukuran bukti bayar melebihi batas maksimum ${MAX_PROOF_BYTES / 1024 / 1024}MB.`)
-    }
-
-    const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
-    const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "pdf"])
-    const ext = allowedExts.has(rawExt.toLowerCase()) ? rawExt.toLowerCase() : "jpg"
-
-    const { writeFile, mkdir } = await import("fs/promises")
-    const path = await import("path")
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "proofs")
-    await mkdir(uploadDir, { recursive: true })
-    const filename = `proof-dp-${Date.now()}.${ext}`
-    const filepath = path.join(uploadDir, filename)
-    const bytes = await proofFile.arrayBuffer()
-    const buffer = Buffer.from(bytes)
-    // Sama seperti jalur create di atas: tolak isi tak cocok SEBELUM tulis.
-    assertMagicBytes(buffer, ext === "pdf" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`)
-    await writeFile(filepath, buffer)
-    proofImage = `/uploads/proofs/${filename}`
-  }
+  const proofImage: string | null | undefined = (await saveDownPaymentProof(formData)) ?? undefined
 
   const parsed = parseFormData(updateDownPaymentSchema, formData)
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }

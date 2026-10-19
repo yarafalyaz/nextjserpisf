@@ -455,22 +455,33 @@ test("gerbang dokumen: form tetap tampil, dan sebabnya dijelaskan bila kosong", 
   // tampil — skip bagian itu (pola sama dengan tes "menjelaskan sebab" di atas).
   await page.goto("/pembelian/penerimaan/tambah", { waitUntil: "domcontentloaded" })
   await page.waitForLoadState("networkidle")
-  // Combobox kustom (bukan <select>): deteksi via teks pesan dengan timeout
-  // pendek — bila tak muncul, berarti ada opsi PO layak (form tampil).
-  const teksPO = await page.getByText(/Belum ada PO yang bisa diterima/i).count()
-  if (teksPO === 0) {
-    const muncul = await page.getByText(/Belum ada PO yang bisa diterima/i).first()
-      .isVisible({ timeout: 3_000 }).catch(() => false)
-    test.skip(!muncul, "Shard paralel membuat PO layak; halaman menampilkan form")
+  // R10-01: expect().toBeVisible MENUNGGU (bukan isVisible instan yang tak
+  // menunggu). Timeout pendek 3 dtk: bila pesan tak muncul, WAJIB ada bukti
+  // data layak (opsi PO di combobox) baru boleh skip; tanpa bukti = fail.
+  const pesanPO = page.getByText(/Belum ada PO yang bisa diterima/i).first()
+  const poKosong = await expect(pesanPO).toBeVisible({ timeout: 3_000 }).then(
+    () => true,
+    () => false,
+  )
+  if (!poKosong) {
+    // Bukti data layak: combobox PO punya opsi (button/option/listbox item).
+    const buktiPO = await page.locator('[role="option"], [role="listbox"] [role="option"], ul li').count()
+      .catch(() => 0)
+    test.skip(buktiPO > 0, "Shard paralel membuat PO layak; halaman menampilkan form")
+    // Tanpa bukti = kondisi aneh (bukan pesan, bukan opsi) → fail jujur.
+    await expect(pesanPO).toBeVisible({ timeout: 15_000 })
   }
-  await expect(page.getByText(/Belum ada PO yang bisa diterima/i).first()).toBeVisible({ timeout: 15_000 })
   await page.goto("/penjualan/uang-muka/tambah", { waitUntil: "domcontentloaded" })
   await page.waitForLoadState("networkidle")
-  const teksQ = await page.getByText(/Belum ada penawaran yang bisa dipakai/i).count()
-  if (teksQ === 0) {
-    const munculQ = await page.getByText(/Belum ada penawaran yang bisa dipakai/i).first()
-      .isVisible({ timeout: 3_000 }).catch(() => false)
-    test.skip(!munculQ, "Shard paralel membuat penawaran layak; halaman menampilkan form")
+  const pesanQ = page.getByText(/Belum ada penawaran yang bisa dipakai/i).first()
+  const qKosong = await expect(pesanQ).toBeVisible({ timeout: 3_000 }).then(
+    () => true,
+    () => false,
+  )
+  if (!qKosong) {
+    const buktiQ = await page.locator('[role="option"], [role="listbox"] [role="option"], ul li').count()
+      .catch(() => 0)
+    test.skip(buktiQ > 0, "Shard paralel membuat penawaran layak; halaman menampilkan form")
+    await expect(pesanQ).toBeVisible({ timeout: 15_000 })
   }
-  await expect(page.getByText(/Belum ada penawaran yang bisa dipakai/i).first()).toBeVisible({ timeout: 15_000 })
 })
