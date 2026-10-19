@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateOnly } from "@/lib/validations/finance.schemas";
 
 const optionalString = (max: number) =>
   z
@@ -66,7 +67,13 @@ export const createLeadSchema = z.object({
   position: optionalString(255),
   industry: optionalString(255),
   estimatedValue: optionalNonNegative(),
-  expectedCloseDate: z.coerce.date().optional(),
+  // Date-only kalender (form kirim YYYY-MM-DD): z.coerce.date terima
+  // "2026-02-30" lalu menggulir ke 2 Mar; dateOnly menolak pra-tulis-DB.
+  // Aksi konversi via wibDateToUtcMidnight.
+  expectedCloseDate: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    dateOnly.optional(),
+  ),
   address: optionalString(1000),
   source: optionalString(255),
   notes: optionalString(2000),
