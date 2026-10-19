@@ -3,13 +3,13 @@ import { Prisma, PrismaClient } from "@prisma/client"
 import { afterAll, beforeAll, describe, expect, it } from "vitest"
 
 // ============================================================================
-// Tes konkurensi MariaDB NYATA (audit v5 gate 1-3, audit v6 poin 3-4) —
+// Tes konkurensi MySQL 8 NYATA (audit v5 gate 1-3, audit v6 poin 3-4) —
 // bukan mock.
 //
 // DUA LAPIS BUKTI, jangan tertukar:
 // 1. FILE INI (DB nyata): transaksi di bawah adalah TIRUAN yang pola urutan
 //    lock-nya ditiru dari produksi (pemetaan jalur di bawah). File ini
-//    membuktikan pola urutan itu aman di MariaDB sungguhan: serialisasi,
+//    membuktikan pola urutan itu aman di MySQL 8 sungguhan: serialisasi,
 //    tanpa deadlock 1213, dan total header = agregat baris sesudah
 //    transaksi konkuren commit. Mock Prisma tidak bisa memberlakukan
 //    SELECT ... FOR UPDATE (lihat finance-concurrency-lock.test.ts:
@@ -53,10 +53,14 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest"
 // menyentuh header/baris/setting, jadi tidak ditiru di sini.
 //
 // Env: INTEGRATION_DB_URL wajib diset eksplisit, mis.
-//   INTEGRATION_DB_URL='mysql://root@127.0.0.1:3310/yara_erp' \
+//   INTEGRATION_DB_URL='mysql://root@127.0.0.1:3310/yara_erp?allowPublicKeyRetrieval=true' \
 //     npx vitest run src/actions/__tests__/bank-statement-concurrency.integration.test.ts
 // Tanpa env itu seluruh suite SKIP (CI unit biasa tidak boleh gagal, dan
-// skip TIDAK dihitung lulus). DB harus sudah termigrasi (tabel e2e).
+// skip TIDAK dihitung lulus). DB harus sudah termigrasi + terseed minimal
+// (fixture butuh >=1 accounts dan >=1 system_settings; `prisma/seed.ts`
+// memenuhinya). Engine target: MySQL 8 (container lokal `silengkap-e2e-db`
+// = mysql:8.0 port 3310). `allowPublicKeyRetrieval=true` wajib untuk auth
+// caching_sha2_password MySQL 8 lewat adapter-mariadb di koneksi pertama.
 // ============================================================================
 
 const INTEGRATION_DB_URL = process.env.INTEGRATION_DB_URL
@@ -66,7 +70,7 @@ const describeIntegration = INTEGRATION_DB_URL ? describe : describe.skip
 if (!INTEGRATION_DB_URL) {
   console.warn(
     "[bank-statement-concurrency] SKIP: INTEGRATION_DB_URL tidak diset — " +
-      "tes konkurensi MariaDB nyata tidak dijalankan (bukan lulus). " +
+      "tes konkurensi MySQL 8 nyata tidak dijalankan (bukan lulus). " +
       "Set INTEGRATION_DB_URL ke DB tes termigrasi untuk menjalankannya.",
   )
 }
@@ -95,8 +99,8 @@ const isDeadlock = (e: unknown): boolean => {
   return msg.includes("1213") || /deadlock/i.test(msg)
 }
 
-describeIntegration("konkurensi MariaDB nyata: bank statement line", () => {
-  // Client terpisah per "transaksi" supaya pool koneksi / sesi MariaDB
+describeIntegration("konkurensi MySQL 8 nyata: bank statement line", () => {
+  // Client terpisah per "transaksi" supaya pool koneksi / sesi MySQL
   // benar-benar berbeda. $transaction interaktif Prisma meminjam satu
   // koneksi per transaksi, jadi dua $transaction bersamaan = dua koneksi.
   let admin: PrismaClient
