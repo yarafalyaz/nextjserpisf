@@ -11,6 +11,7 @@
  */
 
 import { formatCurrency } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 
 export interface TransferInstruction {
   vendorName: string
@@ -30,8 +31,8 @@ export function splitInstructions(lines: TransferInstruction[]): {
   return {
     pending,
     transferred,
-    pendingAmount: pending.reduce((sum, line) => sum + line.amount, 0),
-    transferredAmount: transferred.reduce((sum, line) => sum + line.amount, 0),
+    pendingAmount: pending.reduce((sum, line) => safeAdd(sum, line.amount, 2), 0),
+    transferredAmount: transferred.reduce((sum, line) => safeAdd(sum, line.amount, 2), 0),
   }
 }
 
