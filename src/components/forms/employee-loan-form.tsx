@@ -65,12 +65,12 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={loan?.id ? "Formulir ubah pinjaman karyawan" : "Formulir tambah pinjaman karyawan"}>
       <FormCard>
         <FormSection title="Informasi Umum">
           {employees.length === 1 ? (
             <div className="flex flex-col gap-1.5">
-              <Label>Karyawan *</Label>
+              <Label>Karyawan <span className="text-destructive" aria-hidden="true">*</span></Label>
               <div className="px-3 py-2.5 rounded-lg border border-default bg-default/10 text-foreground font-medium text-sm">
                 {employees[0].name}
               </div>
@@ -78,9 +78,10 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
             </div>
           ) : (
             <div className="flex flex-col gap-1.5">
-              <Label>Karyawan *</Label>
+              <Label>Karyawan <span className="text-destructive" aria-hidden="true">*</span></Label>
               <QuickAddSelect
                 name="employeeId"
+                required
                 value={employeeId || null}
                 onChange={(key) => setEmployeeId(key ?? "")}
                 placeholder="Cari karyawan..."
@@ -110,7 +111,7 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
         </FormSection>
         <FormSection title="Keuangan">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="totalAmount">Jumlah Pinjaman (Rp) *</Label>
+            <Label htmlFor="totalAmount">Jumlah Pinjaman (Rp) <span className="text-destructive" aria-hidden="true">*</span></Label>
             <CurrencyInput
               id="totalAmount"
               name="totalAmount"
@@ -121,7 +122,7 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="monthlyInstallment">Cicilan per Bulan (Rp) *</Label>
+            <Label htmlFor="monthlyInstallment">Cicilan per Bulan (Rp) <span className="text-destructive" aria-hidden="true">*</span></Label>
             <CurrencyInput
               id="monthlyInstallment"
               name="monthlyInstallment"
