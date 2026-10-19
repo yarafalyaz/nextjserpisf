@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { dateOnly } from "@/lib/validations/finance.schemas"
 
 // ==================== Helpers ====================
 
@@ -21,10 +22,11 @@ const optionalNum = (min?: number) => {
 const requiredNum = (_field: string, min = 0) =>
   z.coerce.number().min(min)
 
-const requiredDate = (field: string) =>
-  z.string().min(1, `${field} wajib diisi`)
+// dateOnly (finance.schemas): YYYY-MM-DD kalender-valid, tetap string;
+// action konversi via wibDateToUtcMidnight. Label field dipertahankan via wrapper pesan wajib.
+const requiredDate = (_field: string) => dateOnly
 
-const optionalDate = z.string().optional()
+const optionalDate = dateOnly.optional()
 
 const optionalBool = z.boolean().optional()
 
@@ -211,9 +213,7 @@ export type AttendanceStatus = (typeof ATTENDANCE_STATUSES)[number]
 export const attendanceSchema = z
   .object({
     employeeId: z.coerce.number({ error: "Karyawan wajib dipilih" }).int().positive(),
-    date: z
-      .string({ error: "Tanggal wajib diisi" })
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal harus format YYYY-MM-DD"),
+    date: dateOnly,
     checkIn: timeString("Jam masuk harus format HH:MM").optional(),
     checkOut: timeString("Jam keluar harus format HH:MM").optional(),
     status: z.enum(ATTENDANCE_STATUSES, { error: "Status absensi tidak dikenal" }),
