@@ -24,6 +24,7 @@ import {
   warehouseServerSchema,
   accountServerSchema,
   taxServerSchema,
+  bankServerSchema,
 } from "@/lib/validations/schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseFormData } from "@/lib/validations/parse-form";
@@ -1401,14 +1402,23 @@ export async function createBank(formData: FormData) {
       if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
     }
 
+    const parsed = parseFormData(bankServerSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
+
+    // Bank.accountId plain Int tanpa FK; cek akun ada agar jurnal kas/bank tak yatim.
+    if (v.accountId != null) {
+      const account = await prisma.account.findFirst({ where: { id: v.accountId, deletedAt: null }, select: { id: true } })
+      if (!account) return { success: false, error: "Akun (COA) tidak ditemukan" }
+    }
 
     const bank = await prisma.bank.create({
       data: {
-        name: requireString(formData.get("name"), "name"),
-        slug: await nextSlug("bank", requireString(formData.get("name"), "name")),
-        code: formData.get("code") as string,
-        accountId: safeId(formData.get("accountId")),
-        type: (formData.get("type") as string) || "bank",
+        name: v.name,
+        slug: await nextSlug("bank", v.name),
+        code: v.code,
+        accountId: v.accountId ?? null,
+        type: v.type,
         isActive: true,
         createdBy: Number(user.id),
       },
@@ -1428,15 +1438,24 @@ export async function updateBank(id: number, formData: FormData) {
   try {
     const user = await requirePermission("edit_banks");
 
+    const parsed = parseFormData(bankServerSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
+
+    if (v.accountId != null) {
+      const account = await prisma.account.findFirst({ where: { id: v.accountId, deletedAt: null }, select: { id: true } })
+      if (!account) return { success: false, error: "Akun (COA) tidak ditemukan" }
+    }
+
     await prisma.bank.update({
       where: { id },
       data: {
         updatedBy: Number(user.id),
-        name: requireString(formData.get("name"), "name"),
-        slug: await nextSlug("bank", requireString(formData.get("name"), "name"), { excludeId: id }),
-        code: formData.get("code") as string,
-        accountId: safeId(formData.get("accountId")),
-        type: (formData.get("type") as string) || "bank",
+        name: v.name,
+        slug: await nextSlug("bank", v.name, { excludeId: id }),
+        code: v.code,
+        accountId: v.accountId ?? null,
+        type: v.type,
       },
     });
 
