@@ -18,6 +18,7 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
+import { FormGrid, FormGroup } from "@/components/ui/form-layout"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 // P2 idempotency UI: generator key murni di luar render (pola customer-credit-panel).
@@ -100,17 +101,19 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div className="flex flex-col gap-1.5">
+    <form onSubmit={handleSubmit(onSubmit)} aria-busy={isPending} aria-label={expense?.id ? "Formulir ubah pengeluaran" : "Formulir tambah pengeluaran"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <FormGrid>
+        <FormGroup>
           <Controller
             name="accountId"
             control={control}
             render={({ field }) => (
               <>
-                <Label htmlFor="accountId">Akun Beban *</Label>
+                <Label htmlFor="accountId">Akun Beban <span className="text-destructive" aria-hidden="true">*</span></Label>
                 <QuickAddSelect
                   id="accountId"
+                  required
+                  aria-describedby={errors.accountId ? "accountId-error" : undefined}
                   options={expenseAccountOptions.map((acc) => ({ value: String(acc.id), label: acc.code ? `${acc.code} - ${acc.name}` : acc.name }))}
                   value={field.value ? String(field.value) : null}
                   onChange={(key) => field.onChange(key ? Number(key) : undefined)}
@@ -126,10 +129,10 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
               </>
             )}
           />
-          {errors.accountId && <span className="text-xs text-danger mt-1">{errors.accountId.message}</span>}
-        </div>
+          {errors.accountId && <span id="accountId-error" role="alert" className="text-xs text-danger mt-1">{errors.accountId.message}</span>}
+        </FormGroup>
 
-        <div className="flex flex-col gap-1.5">
+        <FormGroup>
           <Controller
             name="paidFromAccountId"
             control={control}
@@ -153,15 +156,15 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
               </>
             )}
           />
-        </div>
+        </FormGroup>
 
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="amount">Jumlah (Rp) *</Label>
-          <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" prefix="Rp" />} />
-          {errors.amount && <span className="text-xs text-danger mt-1">{errors.amount.message}</span>}
-        </div>
+        <FormGroup>
+          <Label htmlFor="amount">Jumlah (Rp) <span className="text-destructive" aria-hidden="true">*</span></Label>
+          <Controller name="amount" control={control} render={({ field }) => <CurrencyInput id="amount" required aria-describedby={errors.amount ? "amount-error" : undefined} value={field.value} onChange={field.onChange} onBlur={field.onBlur} placeholder="0" prefix="Rp" />} />
+          {errors.amount && <span id="amount-error" role="alert" className="text-xs text-danger mt-1">{errors.amount.message}</span>}
+        </FormGroup>
 
-        <div className="flex flex-col gap-1.5">
+        <FormGroup>
           <AppDatePicker
             label="Tanggal"
             name="date"
@@ -169,10 +172,10 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
             onChange={(val) => setValue("date", val)}
             required
           />
-          {errors.date && <span className="text-xs text-danger mt-1">{errors.date.message}</span>}
-        </div>
+          {errors.date && <span role="alert" className="text-xs text-danger mt-1">{errors.date.message}</span>}
+        </FormGroup>
 
-        <div className="flex flex-col gap-1.5">
+        <FormGroup>
           <Controller
             name="categoryId"
             control={control}
@@ -189,10 +192,10 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
               </>
             )}
           />
-        </div>
+        </FormGroup>
 
         {costCenters.length > 0 && (
-          <div className="flex flex-col gap-1.5">
+          <FormGroup>
             <Label htmlFor="costCenterId">Pusat Biaya</Label>
             <QuickAddSelect
               id="costCenterId"
@@ -209,10 +212,10 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
                 setCostCenterId(String(created.id))
               }}
             />
-          </div>
+          </FormGroup>
         )}
 
-        <div className="flex flex-col gap-1.5">
+        <FormGroup>
           <Controller
             name="projectId"
             control={control}
@@ -229,9 +232,9 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
               </>
             )}
           />
-        </div>
+        </FormGroup>
 
-        <div className="flex flex-col gap-1.5">
+        <FormGroup>
           <Controller
             name="vendorId"
             control={control}
@@ -255,22 +258,22 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
               </>
             )}
           />
-        </div>
+        </FormGroup>
 
-        <div className="flex flex-col gap-1.5">
+        <FormGroup>
           <Label htmlFor="referenceNo">No. Referensi</Label>
           <Input id="referenceNo" {...register("referenceNo")} placeholder="Nomor referensi..." />
-        </div>
+        </FormGroup>
 
-        <div className="flex flex-col gap-1.5 [&_section]:col-span-1">
+        <FormGroup className="[&_section]:col-span-1">
           <FormAttachmentUpload referenceType="expense" />
-        </div>
+        </FormGroup>
 
-        <div className="flex flex-col gap-1.5 col-span-full">
+        <FormGroup full>
           <Label htmlFor="description">Deskripsi</Label>
           <Textarea id="description" {...register("description")} rows={3} placeholder="Deskripsi pengeluaran..." />
-        </div>
-      </div>
+        </FormGroup>
+      </FormGrid>
 
       <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
         <Button type="button" onPress={() => router.back()} >Batal</Button>

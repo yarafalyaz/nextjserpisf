@@ -15,6 +15,7 @@ interface CurrencyInputProps {
   id?: string
   /** Label aksesibilitas saat input tanpa <Label> terasosiasi (mis. sel tabel). */
   "aria-label"?: string
+  "aria-describedby"?: string
   required?: boolean
   disabled?: boolean
   min?: number
@@ -38,6 +39,7 @@ export function CurrencyInput({
   className = "",
   id,
   "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedBy,
   required,
   disabled,
   min,
@@ -150,6 +152,7 @@ export function CurrencyInput({
         inputMode="numeric"
         id={id}
         aria-label={ariaLabel}
+        aria-describedby={ariaDescribedBy}
         value={displayValue}
         onChange={handleChange}
         onBlur={handleBlur}
