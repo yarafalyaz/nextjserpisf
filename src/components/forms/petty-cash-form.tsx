@@ -76,14 +76,15 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={pettyCash?.id ? "Formulir ubah kas kecil" : "Formulir tambah kas kecil"}>
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="type">Tipe *</Label>
+            <Label htmlFor="type">Tipe <span className="text-destructive" aria-hidden="true">*</span></Label>
             <FormSelect
               id="type"
               name="type"
+              required
               value={type}
               onValueChange={setType}
               options={[
@@ -122,7 +123,7 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
         </FormSection>
         <FormSection title="Keuangan">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="amount">Jumlah (Rp) *</Label>
+            <Label htmlFor="amount">Jumlah (Rp) <span className="text-destructive" aria-hidden="true">*</span></Label>
             <CurrencyInput id="amount" name="amount" placeholder="0" required defaultValue={pettyCash?.amount} prefix="Rp" />
           </div>
         </FormSection>
