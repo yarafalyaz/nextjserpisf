@@ -98,6 +98,24 @@ jobs:
         run: RUN_DB_INTEGRATION=1 ./node_modules/.bin/vitest run src/lib/services/__tests__/inventory-integration.test.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+      - name: Run DB integration tests (bank statement concurrency, MariaDB nyata)
+        # Anti-skip: suite ini SKIP seluruhnya (exit 0) bila INTEGRATION_DB_URL
+        # kosong, jadi hijau CI bisa berarti 0 tes jalan. Log di-tee lalu
+        # digrep: output mengandung 'skipped' (atau tanpa 'passed') = GAGAL.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/actions/__tests__/bank-statement-concurrency.integration.test.ts 2>&1 | tee bank-statement-concurrency.log
+          if grep -qi 'skipped' bank-statement-concurrency.log; then
+            echo "::error::bank-statement-concurrency.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' bank-statement-concurrency.log; then
+            echo "::error::bank-statement-concurrency.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: ./node_modules/.bin/playwright install --with-deps chromium
       - run: npm run build
         env:
