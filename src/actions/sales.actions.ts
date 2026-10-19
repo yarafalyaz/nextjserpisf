@@ -749,7 +749,14 @@ export async function allocateCustomerCredit(creditId: number, salesInvoiceId: n
     const user = await requirePermission("confirm_down_payments");
     const result = await allocateCreditToInvoice(creditId, salesInvoiceId, amount, Number(user.id));
     if (!result.success) return { success: false as const, error: result.error };
-    await logActivity("allocate", "CustomerCredit", creditId, `Alokasi kredit ${amount} ke faktur #${salesInvoiceId}`);
+    // AUD-R4-04: finansial SUDAH commit di service. logActivity = best-effort:
+    // gagal log JANGAN laporkan transaksi gagal (picu retry ganda — service
+    // idempoten menahan duplikat, tapi UX tak boleh suruh coba lagi).
+    try {
+      await logActivity("allocate", "CustomerCredit", creditId, `Alokasi kredit ${amount} ke faktur #${salesInvoiceId}`);
+    } catch (e) {
+      console.error("[allocateCustomerCredit] log gagal (alokasi tetap sah):", e);
+    }
     revalidatePath("/penjualan/faktur");
     return { success: true as const };
   } catch (e: unknown) {
@@ -768,7 +775,12 @@ export async function refundCustomerCredit(creditId: number, amount: number) {
     const user = await requirePermission("confirm_down_payments");
     const result = await refundCredit(creditId, amount, Number(user.id));
     if (!result.success) return { success: false as const, error: result.error };
-    await logActivity("refund", "CustomerCredit", creditId, `Refund kredit ${amount} ke kas`);
+    // AUD-R4-04: sama — refund sudah commit; log best-effort.
+    try {
+      await logActivity("refund", "CustomerCredit", creditId, `Refund kredit ${amount} ke kas`);
+    } catch (e) {
+      console.error("[refundCustomerCredit] log gagal (refund tetap sah):", e);
+    }
     revalidatePath("/penjualan/faktur");
     return { success: true as const };
   } catch (e: unknown) {

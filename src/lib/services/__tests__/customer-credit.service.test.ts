@@ -16,9 +16,11 @@ const mocks = vi.hoisted(() => ({
   invoiceFindUnique: vi.fn(),
   invoiceUpdate: vi.fn(),
   paymentCreate: vi.fn(),
+  paymentFindFirst: vi.fn(),
   paymentFindMany: vi.fn(),
   journalCreate: vi.fn(),
   docNo: vi.fn(),
+  settingFindFirst: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({
@@ -37,9 +39,13 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     salesPayment: {
       create: (...a: unknown[]) => mocks.paymentCreate(...a),
+      findFirst: (...a: unknown[]) => mocks.paymentFindFirst(...a),
       findMany: (...a: unknown[]) => mocks.paymentFindMany(...a),
     },
     journal: { create: (...a: unknown[]) => mocks.journalCreate(...a) },
+    systemSetting: {
+      findFirst: (...a: unknown[]) => mocks.settingFindFirst(...a),
+    },
   },
 }))
 
@@ -83,9 +89,11 @@ function buildTx() {
     },
     salesPayment: {
       create: mocks.paymentCreate,
+      findFirst: mocks.paymentFindFirst,
       findMany: mocks.paymentFindMany,
     },
     journal: { create: mocks.journalCreate },
+    systemSetting: { findFirst: mocks.settingFindFirst },
   }
 }
 
@@ -95,6 +103,8 @@ describe("customer-credit.service", () => {
     mocks.docNo.mockImplementation((p: string) => Promise.resolve(`${p}-1`))
     mocks.transaction.mockImplementation(async (fn: any) => fn(buildTx()))
     mocks.paymentCreate.mockResolvedValue({ id: 999 })
+    mocks.paymentFindFirst.mockResolvedValue(null)
+    mocks.settingFindFirst.mockResolvedValue({ periodLockDate: null })
     mocks.paymentFindMany.mockResolvedValue([{ amount: 8000 }, { amount: 2000 }])
     mocks.invoiceUpdate.mockResolvedValue({})
     mocks.creditUpdate.mockResolvedValue({})
@@ -107,7 +117,7 @@ describe("customer-credit.service", () => {
       receivedAmount: 3000, allocatedAmount: 0, refundedAmount: 0, status: "open",
     })
     mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, grandTotal: 10000, paidAmount: 8000, status: "posted",
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
     })
     const r = await allocateCreditToInvoice(1, 101, 2000, 7)
     expect(r.success).toBe(true)
@@ -142,7 +152,7 @@ describe("customer-credit.service", () => {
       receivedAmount: 3000, allocatedAmount: 0, refundedAmount: 0, status: "open",
     })
     mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, grandTotal: 10000, paidAmount: 7000, status: "posted",
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 7000, status: "posted",
     })
     mocks.paymentFindMany.mockResolvedValue([{ amount: 7000 }, { amount: 3000 }])
     const r = await allocateCreditToInvoice(1, 101, 3000, 7)
@@ -170,7 +180,7 @@ describe("customer-credit.service", () => {
       receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
     })
     mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, grandTotal: 10000, paidAmount: 8000, status: "posted",
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
     })
     const r = await allocateCreditToInvoice(1, 101, 5000, 7)
     expect(r.success).toBe(false)
@@ -183,7 +193,7 @@ describe("customer-credit.service", () => {
       receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
     })
     mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, grandTotal: 10000, paidAmount: 0, status: "cancelled",
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 0, status: "cancelled",
     })
     const r = await allocateCreditToInvoice(1, 101, 1000, 7)
     expect(r.success).toBe(false)
@@ -226,6 +236,50 @@ describe("customer-credit.service", () => {
     expect(r.success).toBe(false)
     expect(r.error).toContain("tidak cukup")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("alokasi ke faktur pelanggan LAIN: DITOLAK tanpa payment (AUD-R4-02)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({
+      id: 101, customerId: 77, grandTotal: 10000, paidAmount: 0, status: "posted",
+    })
+    const r = await allocateCreditToInvoice(1, 101, 1000, 7)
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("tidak bisa dialokasikan")
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+  })
+
+  it("retry alokasi sama: idempoten, payment kedua TIDAK dibuat (AUD-R4-04)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
+    })
+    mocks.paymentFindFirst.mockResolvedValue({ id: 555 })
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7)
+    expect(r.success).toBe(true)
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+    expect(mocks.invoiceUpdate).not.toHaveBeenCalled()
+  })
+
+  it("refund saat periode ditutup: DITOLAK tanpa jurnal/saldo (AUD-R4-05)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
+    })
+    // Lock = "ditutup SAMPAI tanggal ini": lock hari ini → refund hari ini ditolak.
+    mocks.settingFindFirst.mockResolvedValue({ periodLockDate: new Date() })
+    const r = await refundCredit(1, 1000, 7)
+    expect(r.success).toBe(false)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
   })
 
   it("creditBalance = received - allocated - refunded", async () => {

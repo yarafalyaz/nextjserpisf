@@ -13,6 +13,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { onSalesPaymentCreated } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { getErrorMessage } from "@/lib/utils/error";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 
 export async function creditBalance(creditId: number): Promise<number> {
   const c = await prisma.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
@@ -29,6 +30,11 @@ export async function allocateCreditToInvoice(
     if (!(amount > 0)) return { success: false, error: "Nominal alokasi harus > 0" };
     await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM customer_credits WHERE id = ${creditId} FOR UPDATE`;
+      // AUD-R4-03: kunci baris FAKTUR juga — dua kredit paralel ke faktur yang
+      // sama tanpa ini membaca owing yang sama → over-allocate. Urutan lock
+      // selalu kredit-dulu-faktur-kemudian (konsisten dengan refund: hanya
+      // kredit) agar tak ada deadlock silang.
+      await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${salesInvoiceId} FOR UPDATE`;
       const credit = await tx.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
       const balance = Number(credit.receivedAmount) - Number(credit.allocatedAmount) - Number(credit.refundedAmount);
       if (amount > balance) {
@@ -36,6 +42,22 @@ export async function allocateCreditToInvoice(
       }
       const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: salesInvoiceId } });
       if (invoice.status === "cancelled") throw new Error("Faktur batal tidak bisa dialokasi kredit");
+      // AUD-R4-02: kredit pelanggan A tak boleh melunasi faktur pelanggan B.
+      // customerId payment = credit.customerId — tanpa gate ini piutang/kredit
+      // tercampur dan saldo sengketa.
+      if (Number(invoice.customerId) !== Number(credit.customerId)) {
+        throw new Error(
+          `Kredit milik pelanggan #${credit.customerId} tidak bisa dialokasikan ke faktur pelanggan #${invoice.customerId}`,
+        );
+      }
+      // AUD-R4-04: idempotency retry — marker unik per permintaan. Retry klik
+      // ganda / logActivity gagal pasca-commit tak boleh gandakan payment.
+      const idemMarker = `kredit:${credit.documentNo}->inv:${invoice.documentNo}:${amount}`;
+      const dup = await tx.salesPayment.findFirst({
+        where: { salesInvoiceId, paymentMethod: "customer_credit", notes: { contains: idemMarker } },
+        select: { id: true },
+      });
+      if (dup) return;
       const owing = Number(invoice.grandTotal) - Number(invoice.paidAmount);
       if (amount > owing) {
         throw new Error(`Alokasi melebihi sisa faktur (sisa ${owing}, diminta ${amount})`);
@@ -49,7 +71,7 @@ export async function allocateCreditToInvoice(
           amount,
           paymentDate: new Date(),
           paymentMethod: "customer_credit",
-          notes: `Alokasi kredit pelanggan ${credit.documentNo}`,
+          notes: `Alokasi kredit pelanggan ${credit.documentNo} [${idemMarker}]`,
           createdBy: userId ?? null,
         },
       });
@@ -101,6 +123,10 @@ export async function refundCredit(
       if (amount > balance) {
         throw new Error(`Saldo kredit tidak cukup (sisa ${balance}, diminta ${amount})`);
       }
+      // AUD-R4-05: refund memposting jurnal POSTED — periode tutup = tolak
+      // SEBELUM saldo berubah (tanpa ini kontrol period-lock bisa dilewati).
+      const refundDate = new Date();
+      await assertPeriodOpen(refundDate, tx as never);
       await tx.customerCredit.update({
         where: { id: creditId },
         data: {
@@ -116,7 +142,7 @@ export async function refundCredit(
       const journal = await tx.journal.create({
         data: {
           journalNumber,
-          transactionDate: new Date(),
+          transactionDate: refundDate,
           referenceType: "CustomerCredit",
           referenceId: creditId,
           description: `Refund kredit pelanggan ${credit.documentNo}`,

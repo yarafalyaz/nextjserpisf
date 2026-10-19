@@ -13,6 +13,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { ConfirmDownPaymentButton } from "../_components/confirm-dp-button";
+import { CustomerCreditPanel } from "../_components/customer-credit-panel";
 import {
   getPaymentMethodMap,
   resolvePaymentMethodName,
@@ -60,10 +61,21 @@ export default async function DownPaymentDetailPage({
 
   const pmMap = await getPaymentMethodMap();
 
-  // AUD-R3-03: kredit yang lahir dari DP ini (kelebihan → saldo operasional).
+  // AUD-R4-01: kredit dari DP ini + faktur terbuka pelanggan yang sama
+  // (panel memanggil allocate/refund — rujukan nyata aksi→UI).
   const dpCredits = await prisma.customerCredit.findMany({
     where: { OR: [{ sourceType: "DownPayment", sourceId: dp.id }] },
     orderBy: { id: "desc" },
+  });
+  const openInvoices = await prisma.salesInvoice.findMany({
+    where: {
+      customerId: dp.customerId,
+      status: { not: "cancelled" },
+      paymentStatus: { not: "paid" },
+    },
+    select: { id: true, documentNo: true, grandTotal: true, paidAmount: true },
+    orderBy: { id: "desc" },
+    take: 20,
   });
 
   return (
@@ -159,21 +171,10 @@ export default async function DownPaymentDetailPage({
         </DetailCard>
       )}
 
-      {/* AUD-R3-03: kredit dari kelebihan DP ini — saldo operasional. */}
+      {/* AUD-R4-01: panel operasional kredit (alokasi/refund). */}
       {dpCredits.length > 0 && (
         <DetailCard title="Kredit Pelanggan dari DP ini">
-          {dpCredits.map((c) => {
-            const saldo =
-              Number(c.receivedAmount) - Number(c.allocatedAmount) - Number(c.refundedAmount);
-            return (
-              <DetailField
-                key={c.id}
-                label={c.documentNo}
-                value={`${formatCurrency(saldo)} tersisa dari ${formatCurrency(Number(c.receivedAmount))} (${c.status}) — alokasi/refund via faktur.`}
-                colSpan="full"
-              />
-            );
-          })}
+          <CustomerCreditPanel credits={dpCredits} invoices={openInvoices} />
         </DetailCard>
       )}
 
