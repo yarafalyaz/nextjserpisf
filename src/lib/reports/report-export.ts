@@ -24,6 +24,7 @@ export type ReportPdfKey =
   | "jurnal-aset"
   | "histori-aset"
   | "biaya-pekerjaan"
+  | "varians-produksi"
   | "penyelesaian-pekerjaan"
   | "jurnal-pekerjaan"
   | "pembayaran-per-bank"
@@ -102,6 +103,7 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "jurnal-aset": "Jurnal-Aset-Tetap",
     "histori-aset": "Histori-Aset-Tetap",
     "biaya-pekerjaan": "Bahan-dan-Biaya-Pekerjaan",
+    "varians-produksi": "Varians-Produksi",
     "penyelesaian-pekerjaan": "Penyelesaian-Pesanan",
     "jurnal-pekerjaan": "Jurnal-Pekerjaan-Pesanan",
     "pembayaran-per-bank": "Pembayaran-dan-Penerimaan-per-Bank",

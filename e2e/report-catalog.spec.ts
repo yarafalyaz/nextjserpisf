@@ -48,6 +48,7 @@ test.describe("Katalog laporan", () => {
     // Kategori Produksi → laporan pekerjaan pesanan yang baru ditambahkan.
     await rail.getByRole("button", { name: /Produksi/ }).click()
     await expect(panel.getByRole("link", { name: /Bahan & Biaya Pekerjaan/ })).toBeVisible()
+    await expect(panel.getByRole("link", { name: /Varians Produksi/ })).toBeVisible()
     await expect(panel.getByRole("link", { name: /Penyelesaian Pesanan/ })).toBeVisible()
     await expect(panel.getByRole("link", { name: /Jurnal Pekerjaan Pesanan/ })).toBeVisible()
   })

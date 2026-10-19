@@ -174,6 +174,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
     icon: Hammer,
     reports: [
       { href: "/laporan/biaya-pekerjaan" },
+      { href: "/laporan/varians-produksi" },
       { href: "/laporan/penyelesaian-pekerjaan" },
       { href: "/laporan/jurnal-pekerjaan" },
       { href: "/laporan/serapan-overhead" },
