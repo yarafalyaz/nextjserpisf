@@ -2850,7 +2850,6 @@ model BankStatementLine {
   amount           Decimal       @db.Decimal(15, 2)
   debit            Decimal       @default(0.00) @db.Decimal(15, 2)
   credit           Decimal       @default(0.00) @db.Decimal(15, 2)
-  balance          Decimal       @default(0.00) @db.Decimal(15, 2)
   type             String
   reference        String?
   status           String        @default("unmatched")
