@@ -25,6 +25,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface ReceivedNotBilledLineInput {
@@ -143,8 +144,8 @@ export function buildReceivedNotBilled(input: ReceivedNotBilledInput): ReceivedN
     const first = receiptLines[0]
     const outstandingLines = receiptLines
       .map((line) => {
-        const receivedValue = line.receivedQty * line.unitCost
-        return { line, receivedValue, outstanding: receivedValue - line.billedValue }
+        const receivedValue = safeMultiply(line.receivedQty, line.unitCost, 2)
+        return { line, receivedValue, outstanding: safeSubtract(receivedValue, line.billedValue, 2) }
       })
       .filter(({ outstanding }) => outstanding > BALANCE_TOLERANCE)
 
@@ -181,11 +182,11 @@ export function buildReceivedNotBilled(input: ReceivedNotBilledInput): ReceivedN
         ],
       })
       totals.lines += 1
-      totals.receivedValue += receivedValue
-      totals.billedValue += line.billedValue
-      receiptOutstanding += outstanding
-      receiptReceived += receivedValue
-      receiptBilled += line.billedValue
+      totals.receivedValue = safeAdd(totals.receivedValue, receivedValue, 2)
+      totals.billedValue = safeAdd(totals.billedValue, line.billedValue, 2)
+      receiptOutstanding = safeAdd(receiptOutstanding, outstanding, 2)
+      receiptReceived = safeAdd(receiptReceived, receivedValue, 2)
+      receiptBilled = safeAdd(receiptBilled, line.billedValue, 2)
     }
 
     detailRows.push({
@@ -195,8 +196,8 @@ export function buildReceivedNotBilled(input: ReceivedNotBilledInput): ReceivedN
     })
 
     totals.receipts += 1
-    totals.outstandingValue += receiptOutstanding
-    if (bucket) bucket.value += receiptOutstanding
+    totals.outstandingValue = safeAdd(totals.outstandingValue, receiptOutstanding, 2)
+    if (bucket) bucket.value = safeAdd(bucket.value, receiptOutstanding, 2)
   }
 
   if (totals.receipts === 0) {
@@ -218,7 +219,7 @@ export function buildReceivedNotBilled(input: ReceivedNotBilledInput): ReceivedN
     })
   }
 
-  const difference = ledger === null ? null : ledger.balance - totals.outstandingValue
+  const difference = ledger === null ? null : safeSubtract(ledger.balance, totals.outstandingValue, 2)
   const isBalanced = difference !== null && Math.abs(difference) < BALANCE_TOLERANCE
   totals.difference = difference
   totals.isBalanced = isBalanced
