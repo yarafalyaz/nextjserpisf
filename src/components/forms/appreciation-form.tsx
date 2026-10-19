@@ -54,13 +54,14 @@ export function AppreciationForm({ employees, appreciation }: AppreciationFormPr
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={appreciation?.id ? "Formulir ubah apresiasi" : "Formulir tambah apresiasi"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="employeeId">Karyawan *</Label>
+          <Label htmlFor="employeeId">Karyawan <span className="text-destructive" aria-hidden="true">*</span></Label>
           <QuickAddSelect
             id="employeeId"
             name="employeeId"
+            required
             value={employeeId || null}
             onChange={(key) => setEmployeeId(key ?? "")}
             placeholder="Cari karyawan..."
@@ -84,7 +85,7 @@ export function AppreciationForm({ employees, appreciation }: AppreciationFormPr
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="type">Tipe *</Label>
+          <Label htmlFor="type">Tipe <span className="text-destructive" aria-hidden="true">*</span></Label>
           <FormSelect
             id="type"
             name="type"
@@ -98,7 +99,7 @@ export function AppreciationForm({ employees, appreciation }: AppreciationFormPr
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="amount">Jumlah (Rp) *</Label>
+          <Label htmlFor="amount">Jumlah (Rp) <span className="text-destructive" aria-hidden="true">*</span></Label>
           <CurrencyInput id="amount" name="amount" placeholder="0" required defaultValue={appreciation?.amount} prefix="Rp" />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
