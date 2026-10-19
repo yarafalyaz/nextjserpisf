@@ -135,6 +135,24 @@ describe("buildReceivedNotBilled", () => {
     expect(notices).toContain("ongkos angkut")
   })
 
+  it("total uang presisi sen: 10 baris Rp10.000.000,10 tidak drift float", () => {
+    const cents = 10_000_000.10
+    const result = buildReceivedNotBilled({
+      lines: Array.from({ length: 10 }, (_, i) =>
+        line({ goodsReceiptId: i + 1, receiptNo: `GR-${i + 1}`, receivedQty: 1, unitCost: cents, billedValue: 0 }),
+      ),
+      ledger: { accountLabel: "2-1300 GRNI", balance: 100_000_001 },
+      asOf,
+      periodEndIsToday: true,
+    })
+
+    // Tanpa safe-math: akumulasi 10000000.1 x10 di-float = 100000000.99999999.
+    expect(result.totals.receivedValue).toBe(100_000_001)
+    expect(result.totals.outstandingValue).toBe(100_000_001)
+    expect(result.totals.difference).toBe(0)
+    expect(result.totals.isBalanced).toBe(true)
+  })
+
   it("menyatakan cocok dan memberi catatan tautan tagihan manual", () => {
     const result = buildReceivedNotBilled({
       lines: [line()],

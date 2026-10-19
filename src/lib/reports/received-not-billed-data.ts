@@ -20,6 +20,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { safeAdd } from "@/lib/utils/math"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { sumNetForAccount } from "@/lib/services/report-aggregation.service"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
@@ -85,7 +86,7 @@ export async function loadReceivedNotBilled(period: {
   for (const billed of billedItems) {
     if (billed.goodsReceiptItemId === null) continue
     const previous = billedByLine.get(billed.goodsReceiptItemId) ?? 0
-    billedByLine.set(billed.goodsReceiptItemId, previous + Number(billed.subtotal))
+    billedByLine.set(billed.goodsReceiptItemId, safeAdd(previous, billed.subtotal, 2))
   }
 
   const itemIds = [...new Set(receiptItems.map((item) => item.itemId))]
