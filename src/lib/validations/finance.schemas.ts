@@ -164,20 +164,6 @@ export const bankReconciliationSchema = z.object({
   notes: optionalString(1000),
 });
 
-// ==================== EXPENSE CATEGORY ====================
-
-/**
- * Server-side schema untuk createExpenseCategory/updateExpenseCategory:
- * hand-parse sebelumnya tanpa max-length (name/label 5MB lolos ke DB) dan
- * `Number(...) || 0` yang diam-diam mengubah garbage ("abc", NaN) jadi 0.
- */
-export const expenseCategorySchema = z.object({
-  name: z.string().min(1, "Nama wajib diisi").max(100),
-  label: z.string().min(1, "Label wajib diisi").max(200),
-  sortOrder: z.coerce.number().int().default(0),
-  isActive: z.boolean().optional().default(false),
-});
-
 // ==================== COST CENTER ====================
 
 export const costCenterSchema = z.object({
@@ -199,6 +185,16 @@ export const profitCenterSchema = z.object({
   code: z.string({ error: "Kode wajib diisi" }).trim().min(1, "Kode wajib diisi").max(50),
   name: z.string({ error: "Nama wajib diisi" }).trim().min(1, "Nama wajib diisi").max(200),
 });
+
+// ==================== UPDATE JOURNAL ====================
+
+export const updateJournalSchema = z.object({
+  transactionDate: requiredDate,
+  description: optionalString(1000),
+  type: z.string().default("GENERAL"),
+  attachmentIds: optionalString(5000),
+});
+
 
 // ==================== BANK TRANSFER ====================
 
@@ -301,6 +297,20 @@ export const taxPaymentSchema = z.object({
   notes: optionalString(2000),
 });
 
+// ==================== EXPENSE CATEGORY ====================
+
+/**
+ * Server-side schema untuk createExpenseCategory/updateExpenseCategory:
+ * hand-parse sebelumnya tanpa max-length (name/label 5MB lolos ke DB) dan
+ * `Number(...) || 0` yang diam-diam mengubah garbage ("abc", NaN) jadi 0.
+ */
+export const expenseCategorySchema = z.object({
+  name: z.string().min(1, "Nama wajib diisi").max(100),
+  label: z.string().min(1, "Label wajib diisi").max(200),
+  sortOrder: z.coerce.number().int().default(0),
+  isActive: z.boolean().optional().default(false),
+});
+
 // ==================== CHEQUE / GIRO ====================
 
 /**
@@ -366,4 +376,3 @@ export const purchaseAdvanceSchema = z
     message: "Akun kas/bank dan akun uang muka tidak boleh sama",
     path: ["advanceAccountId"],
   });
-

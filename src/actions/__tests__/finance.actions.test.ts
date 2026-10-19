@@ -24,6 +24,9 @@ const mocks = vi.hoisted(() => {
     journal: buildModelMock(),
     journalEntry: buildModelMock(),
     expense: buildModelMock(),
+    payroll: buildModelMock(),
+    materialIssue: buildModelMock(),
+    project: buildModelMock(),
     pettyCash: buildModelMock(),
     bankReconciliation: buildModelMock(),
     bankReconciliationLine: buildModelMock(),
@@ -921,6 +924,31 @@ describe("Cost Center Actions", () => {
   it("deleteCostCenter succeeds", async () => {
     const res = await (actions as any).deleteCostCenter(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("deleteCostCenter menolak bila ada pusat biaya anak tanpa menghapus", async () => {
+    mocks.prismaMock.costCenter.count.mockResolvedValueOnce(2)
+    const res = await (actions as any).deleteCostCenter(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("2 pusat biaya anak")
+    expect(mocks.prismaMock.costCenter.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteCostCenter menolak bila dirujuk dokumen operasional tanpa menghapus", async () => {
+    mocks.prismaMock.costCenter.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.payroll.count.mockResolvedValueOnce(3)
+    const res = await (actions as any).deleteCostCenter(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("3 penggajian")
+    expect(mocks.prismaMock.costCenter.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteProfitCenter menolak bila dipakai pusat biaya tanpa menghapus", async () => {
+    mocks.prismaMock.costCenter.count.mockResolvedValueOnce(4)
+    const res = await (actions as any).deleteProfitCenter(7)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("4 pusat biaya")
+    expect(mocks.prismaMock.profitCenter.delete).not.toHaveBeenCalled()
   })
 })
 

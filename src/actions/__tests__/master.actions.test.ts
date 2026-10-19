@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => {
     position: buildModelMock(),
     lead: buildModelMock(),
     bank: buildModelMock(),
+    bankStatement: buildModelMock(),
     tax: buildModelMock(),
     barcode: buildModelMock(),
     taxGroup: buildModelMock(),
@@ -300,6 +301,13 @@ describe("Bank Actions", () => {
     const res = await actions.deleteBank(1)
     expect(res?.success).toBe(true)
   })
+  it("deleteBank menolak bila dipakai rekening koran tanpa menghapus", async () => {
+    mocks.prismaMock.bankStatement.count.mockResolvedValueOnce(3)
+    const res = await actions.deleteBank(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("3 rekening koran")
+    expect(mocks.prismaMock.bank.delete).not.toHaveBeenCalled()
+  })
 })
 
 describe("Tax Actions", () => {
@@ -393,6 +401,13 @@ describe("TaxGroup Actions", () => {
   it("deleteTaxGroup succeeds", async () => {
     const res = await actions.deleteTaxGroup(1)
     expect(res?.success).toBe(true)
+  })
+  it("deleteTaxGroup menolak bila masih berisi pajak tanpa menghapus", async () => {
+    mocks.prismaMock.taxGroupTax.count.mockResolvedValueOnce(2)
+    const res = await actions.deleteTaxGroup(1)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("2 pajak")
+    expect(mocks.prismaMock.taxGroup.delete).not.toHaveBeenCalled()
   })
 })
 

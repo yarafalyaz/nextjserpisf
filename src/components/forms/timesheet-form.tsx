@@ -17,6 +17,7 @@ import {
   FormSection,
   FormActions,
 } from "@/components/ui/form-section";
+import { FormGroup } from "@/components/ui/form-layout";
 import { Button } from "@/components/ui/button";
 
 interface TimesheetFormProps {
@@ -127,14 +128,21 @@ export function TimesheetForm({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={timesheet?.id ? "Formulir ubah lembar waktu" : "Formulir tambah lembar waktu"}
+    >
       <FormCard>
         <FormSection title="Informasi Umum">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="employeeId">Karyawan *</Label>
+          <FormGroup>
+            <Label htmlFor="employeeId">
+              Karyawan <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <QuickAddSelect
               id="employeeId"
               name="employeeId"
+              required
               options={employeeOptions.map((e) => ({
                 value: String(e.id),
                 label: e.name,
@@ -150,12 +158,15 @@ export function TimesheetForm({
                 setEmployeeId(String(created.id));
               }}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="projectId">Proyek *</Label>
+          </FormGroup>
+          <FormGroup>
+            <Label htmlFor="projectId">
+              Proyek <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Combobox
               id="projectId"
               name="projectId"
+              required
               options={projects.map((p) => ({
                 value: String(p.id),
                 label: p.name,
@@ -164,9 +175,9 @@ export function TimesheetForm({
               onChange={setProjectId}
               placeholder="Cari proyek..."
             />
-          </div>
+          </FormGroup>
           {tasks.length > 0 && (
-            <div className="flex flex-col gap-1.5">
+            <FormGroup>
               <Label htmlFor="taskId">Tugas</Label>
               <Combobox
                 id="taskId"
@@ -179,9 +190,9 @@ export function TimesheetForm({
                 onChange={setTaskId}
                 placeholder="Cari tugas..."
               />
-            </div>
+            </FormGroup>
           )}
-          <div className="flex flex-col gap-1.5">
+          <FormGroup>
             <AppDatePicker
               label="Tanggal *"
               name="date"
@@ -189,10 +200,10 @@ export function TimesheetForm({
               onChange={() => {}}
               required
             />
-          </div>
+          </FormGroup>
         </FormSection>
         <FormSection title="Detail Jam">
-          <div className="flex flex-col gap-1.5">
+          <FormGroup>
             <Label htmlFor="startTime">Jam Mulai</Label>
             <AppTimePicker
               id="startTime"
@@ -200,8 +211,8 @@ export function TimesheetForm({
               value={startTime}
               onChange={handleStartChange}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
+          </FormGroup>
+          <FormGroup>
             <Label htmlFor="endTime">Jam Selesai</Label>
             <AppTimePicker
               id="endTime"
@@ -209,9 +220,11 @@ export function TimesheetForm({
               value={endTime}
               onChange={handleEndChange}
             />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="hours">Total Jam *</Label>
+          </FormGroup>
+          <FormGroup>
+            <Label htmlFor="hours">
+              Total Jam <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Input
               id="hours"
               name="hours"
@@ -225,10 +238,10 @@ export function TimesheetForm({
               placeholder="Otomatis dari jam mulai & selesai"
               className="bg-muted"
             />
-          </div>
+          </FormGroup>
         </FormSection>
         <FormSection title="Lainnya" columns={1}>
-          <div className="flex flex-col gap-1.5">
+          <FormGroup>
             <Label htmlFor="description">Deskripsi Pekerjaan</Label>
             <Textarea
               id="description"
@@ -237,7 +250,7 @@ export function TimesheetForm({
               placeholder="Deskripsi pekerjaan yang dilakukan..."
               defaultValue={timesheet?.description ?? ""}
             />
-          </div>
+          </FormGroup>
         </FormSection>
         <FormActions>
           <Button type="button" onPress={() => router.back()}>
