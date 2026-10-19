@@ -70,3 +70,14 @@ describe("buildTaxPaymentListing", () => {
     expect(taxPaymentSummary(result)).toContain("Tidak ada penyetoran pajak")
   })
 })
+
+describe("buildTaxPaymentListing presisi sen", () => {
+  it("total 3 setoran bersen eksak tanpa drift float", () => {
+    const result = buildTaxPaymentListing([
+      { date: new Date("2026-10-10T00:00:00"), period: "2026-09", typeLabel: "PPh 23 Pembelian", reference: null, documentNo: "PAJAK-A", amount: 10_000_000.10 },
+      { date: new Date("2026-10-10T00:00:00"), period: "2026-09", typeLabel: "PPh 23 Pembelian", reference: null, documentNo: "PAJAK-B", amount: 10_000_000.10 },
+      { date: new Date("2026-10-10T00:00:00"), period: "2026-09", typeLabel: "PPh 23 Pembelian", reference: null, documentNo: "PAJAK-C", amount: 10_000_000.10 },
+    ])
+    expect(result.totals.amount).toBe(30_000_000.30)
+  })
+})

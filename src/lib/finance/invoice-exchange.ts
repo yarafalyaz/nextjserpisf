@@ -14,6 +14,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export type SettlementStatus = "settled" | "partial" | "outstanding"
@@ -81,9 +82,9 @@ export function buildInvoiceExchangeListing(lines: ExchangeReportLine[]): Exchan
 
   const rows: TableRow[] = sorted.map((line) => {
     const status = settlementStatus(line.amount, line.paid)
-    totals.amount += line.amount
-    totals.paid += line.paid
-    totals.outstanding += line.amount - line.paid
+    totals.amount = safeAdd(totals.amount, line.amount, 2)
+    totals.paid = safeAdd(totals.paid, line.paid, 2)
+    totals.outstanding = safeAdd(totals.outstanding, safeSubtract(line.amount, line.paid, 2), 2)
     if (status === "settled") totals.settled += 1
     else if (status === "partial") totals.partial += 1
     else totals.outstandingDocs += 1
@@ -99,7 +100,7 @@ export function buildInvoiceExchangeListing(lines: ExchangeReportLine[]): Exchan
         String(line.invoiceCount),
         formatAccounting(line.amount, { zeroDash: false }),
         formatAccounting(line.paid, { zeroDash: false }),
-        formatAccounting(line.amount - line.paid, { zeroDash: false }),
+        formatAccounting(safeSubtract(line.amount, line.paid, 2), { zeroDash: false }),
         SETTLEMENT_LABEL[status],
       ],
     }

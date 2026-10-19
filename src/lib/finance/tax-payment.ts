@@ -10,6 +10,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { buildMoneyListing } from "@/lib/finance/money-listing"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface TaxPaymentEntry {
@@ -68,53 +69,25 @@ export interface TaxPaymentReportResult {
 }
 
 export function buildTaxPaymentListing(lines: TaxPaymentReportLine[]): TaxPaymentReportResult {
-  const sorted = [...lines].sort((a, b) => {
-    const byDate = b.date.getTime() - a.date.getTime()
-    return byDate !== 0 ? byDate : a.documentNo.localeCompare(b.documentNo, "id-ID")
-  })
-
-  let amount = 0
-  const rows: TableRow[] = sorted.map((line) => {
-    amount += line.amount
-    return {
-      kind: "data",
-      cells: [
-        line.date.toLocaleDateString("id-ID"),
-        line.documentNo,
-        line.period ?? "—",
-        line.typeLabel,
-        line.reference ?? "—",
-        formatAccounting(line.amount, { zeroDash: false }),
-      ],
-    }
-  })
-
-  if (sorted.length === 0) {
-    rows.push({ kind: "notice", text: "Tidak ada penyetoran pajak pada periode ini." })
-  } else {
-    rows.push({
-      kind: "total",
-      grand: true,
-      label: "Jumlah",
-      cells: [String(sorted.length), "", "", "", "", formatAccounting(amount, { zeroDash: false })],
-    })
-  }
-
-  rows.push({
-    kind: "notice",
-    text:
+  return buildMoneyListing({
+    lines,
+    columns: COLUMNS,
+    cells: (line) => [
+      line.date.toLocaleDateString("id-ID"),
+      line.documentNo,
+      line.period ?? "—",
+      line.typeLabel,
+      line.reference ?? "—",
+      formatAccounting(line.amount, { zeroDash: false }),
+    ],
+    emptyNotice: "Tidak ada penyetoran pajak pada periode ini.",
+    verdictNotice:
       "Penyetoran melunasi utang pajak yang sudah dipotong (jurnal: Dr utang pajak, Cr kas/bank), " +
       "bukan menambah beban pajak.",
+    emptyVerdict: "Tidak ada penyetoran pajak pada periode ini",
+    verdict: (count, amount) => `${count} penyetoran · total ${formatCurrency(amount)}`,
+    totalCells: (count, amount) => [String(count), "", "", "", "", formatAccounting(amount, { zeroDash: false })],
   })
-
-  return {
-    table: { columns: COLUMNS, rows },
-    totals: { count: sorted.length, amount },
-    verdict:
-      sorted.length === 0
-        ? "Tidak ada penyetoran pajak pada periode ini"
-        : `${sorted.length} penyetoran · total ${formatCurrency(amount)}`,
-  }
 }
 
 export function taxPaymentSummary(result: TaxPaymentReportResult): string {

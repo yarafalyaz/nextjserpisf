@@ -13,6 +13,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { buildMoneyListing } from "@/lib/finance/money-listing"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface AdvanceJournalEntry {
@@ -75,52 +76,24 @@ export interface AdvanceReportResult {
 }
 
 export function buildAdvanceListing(lines: AdvanceReportLine[]): AdvanceReportResult {
-  const sorted = [...lines].sort((a, b) => {
-    const byDate = b.date.getTime() - a.date.getTime()
-    return byDate !== 0 ? byDate : a.documentNo.localeCompare(b.documentNo, "id-ID")
-  })
-
-  let amount = 0
-  const rows: TableRow[] = sorted.map((line) => {
-    amount += line.amount
-    return {
-      kind: "data",
-      cells: [
-        line.date.toLocaleDateString("id-ID"),
-        line.documentNo,
-        line.vendorName,
-        line.description ?? "—",
-        formatAccounting(line.amount, { zeroDash: false }),
-      ],
-    }
-  })
-
-  if (sorted.length === 0) {
-    rows.push({ kind: "notice", text: "Tidak ada uang muka pembelian pada periode ini." })
-  } else {
-    rows.push({
-      kind: "total",
-      grand: true,
-      label: "Jumlah",
-      cells: [String(sorted.length), "", "", "", formatAccounting(amount, { zeroDash: false })],
-    })
-  }
-
-  rows.push({
-    kind: "notice",
-    text:
+  return buildMoneyListing({
+    lines,
+    columns: COLUMNS,
+    cells: (line) => [
+      line.date.toLocaleDateString("id-ID"),
+      line.documentNo,
+      line.vendorName,
+      line.description ?? "—",
+      formatAccounting(line.amount, { zeroDash: false }),
+    ],
+    emptyNotice: "Tidak ada uang muka pembelian pada periode ini.",
+    verdictNotice:
       "Angka ini adalah uang muka yang **dibayarkan** pada periode, bukan saldo yang belum terpakai — " +
       "penerapan uang muka ke tagihan vendor belum diotomatiskan.",
+    emptyVerdict: "Tidak ada uang muka pembelian pada periode ini",
+    verdict: (count, amount) => `${count} uang muka · total dibayar ${formatCurrency(amount)}`,
+    totalCells: (count, amount) => [String(count), "", "", "", formatAccounting(amount, { zeroDash: false })],
   })
-
-  return {
-    table: { columns: COLUMNS, rows },
-    totals: { count: sorted.length, amount },
-    verdict:
-      sorted.length === 0
-        ? "Tidak ada uang muka pembelian pada periode ini"
-        : `${sorted.length} uang muka · total dibayar ${formatCurrency(amount)}`,
-  }
 }
 
 export function advanceListingSummary(result: AdvanceReportResult): string {
