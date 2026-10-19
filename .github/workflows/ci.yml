@@ -48,10 +48,70 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
 
+  build:
+    name: Build Next.js
+    runs-on: ubuntu-latest
+    needs: lint
+    # Pilihan paling aman: build tetap memakai service MySQL + `migrate deploy`
+    # (tanpa seed), sama seperti alur lama di job e2e. Tidak semua halaman
+    # terbukti `force-dynamic`, jadi halaman yang di-prerender masih bisa
+    # mengakses DB saat build; tanpa DB nyata build bisa gagal atau menghasilkan
+    # output yang berbeda dari alur lama. `migrate deploy` murah (~30 dtk) dan
+    # manfaatnya tetap besar: build hanya 1x, bukan 5x (e2e-setup + 4 shard).
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: yara_erp
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+          --tmpfs /var/lib/mysql:rw
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci
+      - name: Cache Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'prisma/**', 'next.config.ts', 'tsconfig*.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
+            ${{ runner.os }}-nextjs-
+      - run: ./node_modules/.bin/prisma generate
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - run: ./node_modules/.bin/prisma migrate deploy
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - run: npm run build
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Upload build Next.js
+        uses: actions/upload-artifact@v7
+        with:
+          name: next-build
+          # Negasi: .next/cache tidak ikut artifact (sudah ditangani actions/cache
+          # di atas); sisanya utuh (.next/standalone, .next/static, BUILD_ID, dll)
+          # karena prepare-standalone.mjs membutuhkannya.
+          path: |
+            .next
+            !.next/cache/**
+          retention-days: 1
+
   e2e-setup:
     name: E2E Auth Setup
     runs-on: ubuntu-latest
-    needs: lint
+    needs: [lint, build]
     services:
       mysql:
         image: mysql:8.0
@@ -120,10 +180,26 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-      - run: ./node_modules/.bin/playwright install --with-deps chromium
-      - run: npm run build
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+      - name: Install Playwright chromium (browser dari cache, --with-deps tetap untuk apt deps)
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Download build Next.js (hasil job build, tidak build ulang)
+        uses: actions/download-artifact@v7
+        with:
+          name: next-build
+          path: .next
+      # Artifact membawa mtime BUILD_ID dari job build, sedangkan checkout di
+      # job ini lebih baru; tanpa touch, prepare-standalone.mjs salah membaca
+      # schema.prisma sebagai "lebih baru dari build" lalu gagal. Isi build
+      # tidak berubah, hanya penanda waktunya disegarkan.
+      - name: Segarkan penanda build artifact
+        run: touch .next/BUILD_ID
       - name: Run Auth Setup
         run: ./node_modules/.bin/playwright test --project=setup --workers=1
         env:
@@ -141,7 +217,7 @@ jobs:
     name: "E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})"
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    needs: [lint, unit, e2e-setup]
+    needs: [lint, unit, build, e2e-setup]
     strategy:
       fail-fast: false
       matrix:
@@ -193,10 +269,26 @@ jobs:
           # Sama seperti job e2e-setup: env.ts (R-11) wajibkan secret 32+ char.
           NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
           AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
-      - run: ./node_modules/.bin/playwright install --with-deps chromium
-      - run: npm run build
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+      - name: Install Playwright chromium (browser dari cache, --with-deps tetap untuk apt deps)
+        run: ./node_modules/.bin/playwright install --with-deps chromium
+      - name: Download build Next.js (hasil job build, tidak build ulang)
+        uses: actions/download-artifact@v7
+        with:
+          name: next-build
+          path: .next
+      # Artifact membawa mtime BUILD_ID dari job build, sedangkan checkout di
+      # job ini lebih baru; tanpa touch, prepare-standalone.mjs salah membaca
+      # schema.prisma sebagai "lebih baru dari build" lalu gagal. Isi build
+      # tidak berubah, hanya penanda waktunya disegarkan.
+      - name: Segarkan penanda build artifact
+        run: touch .next/BUILD_ID
       - name: Run Auth Setup
         # Login HARUS di job ini, bukan diambil dari artifact job e2e-setup:
         # token sesi mengikat 12 karakter awal hash password (src/lib/auth/auth.ts)
