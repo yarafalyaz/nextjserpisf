@@ -44,17 +44,26 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
       showError("Nominal harus lebih dari 0")
       return
     }
+    // AUD-R5: satu submit = satu key. Retry (klik ganda/timeout) pakai key
+    // yang SAMA bila tombol ditekan ulang sebelum refresh? Tidak — key dibuat
+    // per klik; double-click ditahan isPending. Key menahan retry jaringan /
+    // resubmit halaman yang sama (browser ulang kirim argumen sama).
+    const key = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
     startTransition(async () => {
       try {
         const result =
           mode === "allocate"
-            ? await allocateCustomerCredit(creditId, Number(invoiceId), nominal)
-            : await refundCustomerCredit(creditId, nominal)
+            ? await allocateCustomerCredit(creditId, Number(invoiceId), nominal, key)
+            : await refundCustomerCredit(creditId, nominal, key)
         if (result && !result.success) {
           showError(result.error || "Gagal memproses kredit")
           return
         }
-        showSuccess(mode === "allocate" ? "Kredit berhasil dialokasikan" : "Kredit berhasil di-refund")
+        if (result && "warning" in result && typeof result.warning === "string") {
+          showError(result.warning)
+        } else {
+          showSuccess(mode === "allocate" ? "Kredit berhasil dialokasikan" : "Kredit berhasil di-refund")
+        }
         setAmount("")
         router.refresh()
       } catch (e) {

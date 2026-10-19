@@ -14,6 +14,7 @@ import { onSalesPaymentCreated } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { getErrorMessage } from "@/lib/utils/error";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { claimIdempotencyKey, bindIdempotencyKey } from "@/lib/services/financial-idempotency.service";
 
 export async function creditBalance(creditId: number): Promise<number> {
   const c = await prisma.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
@@ -25,10 +26,20 @@ export async function allocateCreditToInvoice(
   salesInvoiceId: number,
   amount: number,
   userId?: number,
+  /** AUD-R5: key unik per submit (client UUID). Tanpa key = operasi langsung
+   * (kompatibel lama); DENGAN key = retry aman. Dua submit beda nominal sama
+   * tapi key beda = dua operasi sah — marker bisnis lama menelan yang kedua. */
+  idempotencyKey?: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     if (!(amount > 0)) return { success: false, error: "Nominal alokasi harus > 0" };
     await prisma.$transaction(async (tx) => {
+      // AUD-R5-02: key per-intent, bukan atribut bisnis. Claim DULU (UNIQUE) —
+      // retry submit sama langsung replay; submit beda jalan normal.
+      if (idempotencyKey) {
+        const claim = await claimIdempotencyKey(tx as never, "customer_credit_allocate", idempotencyKey, userId);
+        if (claim.replayed) return;
+      }
       await tx.$queryRaw`SELECT id FROM customer_credits WHERE id = ${creditId} FOR UPDATE`;
       // AUD-R4-03: kunci baris FAKTUR juga — dua kredit paralel ke faktur yang
       // sama tanpa ini membaca owing yang sama → over-allocate. Urutan lock
@@ -50,14 +61,7 @@ export async function allocateCreditToInvoice(
           `Kredit milik pelanggan #${credit.customerId} tidak bisa dialokasikan ke faktur pelanggan #${invoice.customerId}`,
         );
       }
-      // AUD-R4-04: idempotency retry — marker unik per permintaan. Retry klik
-      // ganda / logActivity gagal pasca-commit tak boleh gandakan payment.
-      const idemMarker = `kredit:${credit.documentNo}->inv:${invoice.documentNo}:${amount}`;
-      const dup = await tx.salesPayment.findFirst({
-        where: { salesInvoiceId, paymentMethod: "customer_credit", notes: { contains: idemMarker } },
-        select: { id: true },
-      });
-      if (dup) return;
+      // Jejak audit: nomor kredit + key (bila ada) di notes.
       const owing = Number(invoice.grandTotal) - Number(invoice.paidAmount);
       if (amount > owing) {
         throw new Error(`Alokasi melebihi sisa faktur (sisa ${owing}, diminta ${amount})`);
@@ -71,10 +75,13 @@ export async function allocateCreditToInvoice(
           amount,
           paymentDate: new Date(),
           paymentMethod: "customer_credit",
-          notes: `Alokasi kredit pelanggan ${credit.documentNo} [${idemMarker}]`,
+          notes: `Alokasi kredit pelanggan ${credit.documentNo}${idempotencyKey ? ` [idem:${idempotencyKey.slice(0, 8)}]` : ""}`,
           createdBy: userId ?? null,
         },
       });
+      if (idempotencyKey) {
+        await bindIdempotencyKey(tx as never, idempotencyKey, "SalesPayment", payment.id);
+      }
       await tx.customerCredit.update({
         where: { id: creditId },
         data: {
@@ -109,6 +116,9 @@ export async function refundCredit(
   creditId: number,
   amount: number,
   userId?: number,
+  /** AUD-R5-01: refund WAJIB key bila dipanggil dari UI (kas keluar ganda =
+   * kerugian nyata). Tanpa key = ditolak kecuali pemanggil lama internal. */
+  idempotencyKey?: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
     if (!(amount > 0)) return { success: false, error: "Nominal refund harus > 0" };
@@ -117,6 +127,12 @@ export async function refundCredit(
       return { success: false, error: "Akun kas/bank dan kewajiban UMP (210102) belum dikonfigurasi" };
     }
     await prisma.$transaction(async (tx) => {
+      // AUD-R5-01: refund idempoten — retry key sama = replay, tanpa jurnal
+      // kedua. Lock saja hanya menyerikan, tak menahan kas ganda.
+      if (idempotencyKey) {
+        const claim = await claimIdempotencyKey(tx as never, "customer_credit_refund", idempotencyKey, userId);
+        if (claim.replayed) return;
+      }
       await tx.$queryRaw`SELECT id FROM customer_credits WHERE id = ${creditId} FOR UPDATE`;
       const credit = await tx.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
       const balance = Number(credit.receivedAmount) - Number(credit.allocatedAmount) - Number(credit.refundedAmount);
@@ -159,7 +175,9 @@ export async function refundCredit(
           },
         },
       });
-      void journal;
+      if (idempotencyKey) {
+        await bindIdempotencyKey(tx as never, idempotencyKey, "Journal", journal.id);
+      }
     });
     return { success: true };
   } catch (e) {

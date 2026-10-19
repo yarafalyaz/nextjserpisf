@@ -22,7 +22,7 @@ import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema, DELIVERABLE_ORDER_STATUSES, DELIVERABLE_ORDER_STATUS_LABELS } from "@/lib/validations/sales.schemas"
 import { findOverReturn } from "@/lib/sales/return-validation"
-import { logActivity } from "@/lib/services/activity-log.service"
+import { logActivity, reportPostCommitAuditFailure } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
 import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 import { assertMagicBytes } from "@/lib/storage/storage"
@@ -743,22 +743,25 @@ export async function createDownPayment(formData: FormData) {
  * Izin = confirm_down_payments (gerbang yang sama dengan konfirmasi DP —
  * kredit lahir dari DP). Service mengunci baris + tolak over-saldo/sisa.
  */
-export async function allocateCustomerCredit(creditId: number, salesInvoiceId: number, amount: number) {
+export async function allocateCustomerCredit(creditId: number, salesInvoiceId: number, amount: number, idempotencyKey?: string) {
   const { allocateCreditToInvoice } = await import("@/lib/services/customer-credit.service");
   try {
     const user = await requirePermission("confirm_down_payments");
-    const result = await allocateCreditToInvoice(creditId, salesInvoiceId, amount, Number(user.id));
+    const result = await allocateCreditToInvoice(creditId, salesInvoiceId, amount, Number(user.id), idempotencyKey);
     if (!result.success) return { success: false as const, error: result.error };
-    // AUD-R4-04: finansial SUDAH commit di service. logActivity = best-effort:
-    // gagal log JANGAN laporkan transaksi gagal (picu retry ganda — service
-    // idempoten menahan duplikat, tapi UX tak boleh suruh coba lagi).
+    // AUD-R5-03: finansial SUDAH commit. Kegagalan audit dicatat via helper
+    // (baris AUDIT_FAILURE + console berkonteks) — transaksi tetap success.
+    let auditWarning: string | undefined;
     try {
       await logActivity("allocate", "CustomerCredit", creditId, `Alokasi kredit ${amount} ke faktur #${salesInvoiceId}`);
     } catch (e) {
-      console.error("[allocateCustomerCredit] log gagal (alokasi tetap sah):", e);
+      const r = await reportPostCommitAuditFailure("allocate", "CustomerCredit", creditId, e instanceof Error ? e.message : String(e));
+      // Penanda dikonsumsi: kegagalan jejak MUNCUL di respons (warning),
+      // bukan hilang. Transaksi uang tetap sah.
+      if (!r.auditPersisted) auditWarning = "Alokasi sah, tetapi jejak audit gagal dicatat — hubungi admin.";
     }
     revalidatePath("/penjualan/faktur");
-    return { success: true as const };
+    return { success: true as const, warning: auditWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
@@ -769,20 +772,22 @@ export async function allocateCustomerCredit(creditId: number, salesInvoiceId: n
  * AUD-R3-03: refund sisa kredit pelanggan ke kas (Dr 210102 / Cr Kas).
  * Izin = confirm_down_payments. Service menolak melebihi saldo.
  */
-export async function refundCustomerCredit(creditId: number, amount: number) {
+export async function refundCustomerCredit(creditId: number, amount: number, idempotencyKey?: string) {
   const { refundCredit } = await import("@/lib/services/customer-credit.service");
   try {
     const user = await requirePermission("confirm_down_payments");
-    const result = await refundCredit(creditId, amount, Number(user.id));
+    const result = await refundCredit(creditId, amount, Number(user.id), idempotencyKey);
     if (!result.success) return { success: false as const, error: result.error };
-    // AUD-R4-04: sama — refund sudah commit; log best-effort.
+    // AUD-R5-03: sama — refund sudah commit; audit gagal = jejak, bukan error.
+    let refundAuditWarning: string | undefined;
     try {
       await logActivity("refund", "CustomerCredit", creditId, `Refund kredit ${amount} ke kas`);
     } catch (e) {
-      console.error("[refundCustomerCredit] log gagal (refund tetap sah):", e);
+      const r = await reportPostCommitAuditFailure("refund", "CustomerCredit", creditId, e instanceof Error ? e.message : String(e));
+      if (!r.auditPersisted) refundAuditWarning = "Refund sah, tetapi jejak audit gagal dicatat — hubungi admin.";
     }
     revalidatePath("/penjualan/faktur");
-    return { success: true as const };
+    return { success: true as const, warning: refundAuditWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
