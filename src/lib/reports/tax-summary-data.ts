@@ -10,6 +10,12 @@
 import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { buildVatPosition } from "@/lib/reports/vat-reconciliation"
+import {
+  buildTaxSummaryTotals,
+  buildVatReconciliationTotals,
+  buildWithholdingTotal,
+  taxDocumentBase,
+} from "@/lib/reports/tax-summary"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { REPORT_JOURNAL_STATUSES } from "@/lib/services/report-aggregation.service"
 import { formatAccounting } from "@/lib/utils/format"
@@ -67,12 +73,16 @@ export async function loadTaxSummary(period: Period): Promise<TaxSimpleReport> {
         shortDate(inv.date),
         inv.documentNo,
         inv.customer.name,
-        money(Number(inv.subtotal) - Number(inv.discount)),
+        money(taxDocumentBase(inv.subtotal, inv.discount)),
         money(Number(inv.taxAmount)),
       ],
     })
   }
-  const totalOutput = salesInvoices.reduce((s, inv) => s + Number(inv.taxAmount), 0)
+  const taxTotals = buildTaxSummaryTotals(
+    salesInvoices.map((inv) => inv.taxAmount),
+    vendorBills.map((bill) => bill.tax),
+  )
+  const totalOutput = taxTotals.totalOutput
   rows.push({ kind: "total", label: "Jumlah PPN Keluaran", cells: ["", "", "", "", money(totalOutput)] })
   rows.push({ kind: "group", label: "PPN Masukan" })
   for (const bill of vendorBills) {
@@ -82,18 +92,18 @@ export async function loadTaxSummary(period: Period): Promise<TaxSimpleReport> {
         shortDate(bill.date),
         bill.documentNo,
         bill.vendor.name,
-        money(Number(bill.subtotal) - Number(bill.discountAmount ?? 0)),
+        money(taxDocumentBase(bill.subtotal, bill.discountAmount ?? 0)),
         money(Number(bill.tax)),
       ],
     })
   }
-  const totalInput = vendorBills.reduce((s, bill) => s + Number(bill.tax), 0)
+  const totalInput = taxTotals.totalInput
   rows.push({ kind: "total", label: "Jumlah PPN Masukan", cells: ["", "", "", "", money(totalInput)] })
   rows.push({
     kind: "total",
     grand: true,
-    label: totalOutput - totalInput >= 0 ? "PPN Kurang Bayar" : "PPN Lebih Bayar",
-    cells: ["", "", "", "", money(Math.abs(totalOutput - totalInput))],
+    label: taxTotals.kurangBayar ? "PPN Kurang Bayar" : "PPN Lebih Bayar",
+    cells: ["", "", "", "", money(Math.abs(taxTotals.difference))],
   })
   return { table: { columns: TAX_COLUMNS, rows }, ...periodOf(period) }
 }
@@ -153,10 +163,13 @@ export async function loadVatReconciliation(period: Period): Promise<TaxSimpleRe
       select: { tax: true },
     }),
   ])
-  const bookOutput = outputEntries.reduce((s, e) => s + Number(e.credit) - Number(e.debit), 0)
-  const bookInput = inputEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0)
-  const docOutput = salesInvoices.reduce((s, inv) => s + Number(inv.taxAmount), 0)
-  const docInput = vendorBills.reduce((s, bill) => s + Number(bill.tax), 0)
+  const recon = buildVatReconciliationTotals({
+    outputEntries,
+    inputEntries,
+    docOutputAmounts: salesInvoices.map((inv) => inv.taxAmount),
+    docInputAmounts: vendorBills.map((bill) => bill.tax),
+  })
+  const { bookOutput, bookInput, docOutput, docInput } = recon
   const position = buildVatPosition(bookOutput, bookInput)
   void position
   const rows: TableRow[] = [
@@ -214,14 +227,14 @@ export async function loadWithholdingSummary(period: Period): Promise<TaxSimpleR
       bill.documentNo,
       bill.vendor.name,
       bill.withholdingType?.code ?? "-",
-      money(Number(bill.subtotal) - Number(bill.discountAmount ?? 0)),
+      money(taxDocumentBase(bill.subtotal, bill.discountAmount ?? 0)),
       money(Number(bill.withholdingAmount)),
     ],
   }))
   if (rows.length === 0) {
     rows.push({ kind: "notice", text: "Tidak ada bukti potong PPh pada periode ini." })
   } else {
-    const total = bills.reduce((s, b) => s + Number(b.withholdingAmount), 0)
+    const total = buildWithholdingTotal(bills.map((b) => b.withholdingAmount))
     rows.push({ kind: "total", grand: true, label: "Jumlah Dipotong", cells: ["", "", "", "", "", money(total)] })
   }
   return { table: { columns: WHT_COLUMNS, rows }, ...periodOf(period) }
