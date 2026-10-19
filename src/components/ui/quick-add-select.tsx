@@ -307,15 +307,30 @@ function QuickAddFieldControl({
   }
 
   const inputId = `quick-add-${field.name}`
+  // Hint dikaitkan via aria-describedby supaya SR mengumumkan helper text saat
+  // fokus masuk ke field — sebelumnya <span> hint melayang tanpa asosiasi.
+  const hintId = field.hint || field.emptyHint ? `${inputId}-hint` : undefined
+  const emptyHintId =
+    field.emptyHint && (field.type === "combobox" || field.type === "select")
+      ? `${inputId}-empty-hint`
+      : undefined
 
   // Wilayah: pakai pemilih bertingkat yang sama dengan form Pelanggan penuh, supaya
   // hasilnya identik (province/city/district/village/postalCode).
   if (field.type === "region") {
     return (
       <div className="flex flex-col gap-1.5">
-        <Label>{field.label}</Label>
-        <AddressPicker />
-        {field.hint && <span className="text-xs text-muted-foreground">{field.hint}</span>}
+        <span id={`${inputId}-label`} className="text-sm leading-none font-medium">
+          {field.label}
+        </span>
+        <div role="group" aria-labelledby={`${inputId}-label`}>
+          <AddressPicker />
+        </div>
+        {field.hint && (
+          <span id={hintId} className="text-xs text-muted-foreground">
+            {field.hint}
+          </span>
+        )}
       </div>
     )
   }
@@ -323,12 +338,24 @@ function QuickAddFieldControl({
   const selectOptions = field.loadOptions
     ? (dynamicOptions[field.name] ?? [])
     : (field.options ?? [])
+  // Hint yang aktif (empty-hint saat opsi kosong, biasa jika tidak) dikaitkan
+  // via aria-describedby supaya SR mengumumkannya saat fokus masuk.
+  const activeDescribedBy =
+    field.emptyHint && selectOptions.length === 0
+      ? emptyHintId
+      : field.hint
+        ? hintId
+        : undefined
 
   return (
     <div className="flex flex-col gap-1.5">
       <Label htmlFor={inputId}>
         {field.label}
-        {field.required && " *"}
+        {field.required && (
+          <span aria-hidden="true" className="text-destructive">
+            {" *"}
+          </span>
+        )}
       </Label>
       {field.type === "textarea" ? (
         <Textarea
@@ -338,13 +365,29 @@ function QuickAddFieldControl({
           required={field.required}
           placeholder={field.placeholder}
           defaultValue={(field.defaultValue as string) ?? ""}
+          aria-required={field.required || undefined}
+          aria-describedby={activeDescribedBy}
         />
       ) : field.type === "combobox" ? (
         // Combobox = pilihan yang bisa dicari (mis. tipe kendaraan dari ratusan varian).
-        <QuickAddComboboxControl field={field} inputId={inputId} options={selectOptions} />
+        <QuickAddComboboxControl
+          field={field}
+          inputId={inputId}
+          options={selectOptions}
+          describedByIds={activeDescribedBy}
+        />
       ) : field.type === "select" ? (
-        <Select name={field.name} defaultValue={String(field.defaultValue ?? "")}>
-          <SelectTrigger id={inputId} className="w-full">
+        <Select
+          name={field.name}
+          defaultValue={String(field.defaultValue ?? "")}
+          required={field.required}
+        >
+          <SelectTrigger
+            id={inputId}
+            className="w-full"
+            aria-required={field.required || undefined}
+            aria-describedby={activeDescribedBy}
+          >
             <SelectValue placeholder={field.placeholder ?? "-- Pilih --"} />
           </SelectTrigger>
           <SelectContent>
@@ -361,6 +404,8 @@ function QuickAddFieldControl({
           name={field.name}
           type={field.type ?? "text"}
           required={field.required}
+          aria-required={field.required || undefined}
+          aria-describedby={activeDescribedBy}
           placeholder={field.placeholder}
           step={field.step}
           min={field.min}
@@ -370,9 +415,13 @@ function QuickAddFieldControl({
         />
       )}
       {field.emptyHint && selectOptions.length === 0 && (field.type === "combobox" || field.type === "select") ? (
-        <span className="text-xs text-warning">{field.emptyHint}</span>
+        <span id={emptyHintId} className="text-xs text-warning">
+          {field.emptyHint}
+        </span>
       ) : field.hint ? (
-        <span className="text-xs text-muted-foreground">{field.hint}</span>
+        <span id={hintId} className="text-xs text-muted-foreground">
+          {field.hint}
+        </span>
       ) : null}
     </div>
   )
@@ -387,10 +436,12 @@ function QuickAddComboboxControl({
   field,
   inputId,
   options,
+  describedByIds,
 }: {
   field: QuickAddField
   inputId: string
   options: ComboboxOption[]
+  describedByIds?: string
 }) {
   const [value, setValue] = useState<string | null>(null)
   return (
@@ -402,6 +453,9 @@ function QuickAddComboboxControl({
       onChange={setValue}
       placeholder={field.placeholder ?? "Cari…"}
       emptyText="Tidak ditemukan"
+      required={field.required}
+      aria-label={`${field.label}${field.required ? " (wajib)" : ""}`}
+      aria-describedby={describedByIds}
     />
   )
 }
