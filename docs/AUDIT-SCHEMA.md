@@ -93,12 +93,15 @@ Semua di atas sudah hilang dari `schema.prisma` dan tidak lagi muncul di daftar-
 | Model | Kolom | Status |
 | --- | --- | --- |
 | `BankStatement` | `totalDebits`, `totalCredits` | **DITUTUP (2026-10-18)**: dihitung ulang dari barisnya (`recalcBankStatementTotals`, `src/actions/finance.actions.ts`) di dalam transaksi yang sama dengan create/update/delete `BankStatementLine`; dikunci `finance.actions.test.ts` |
-| `ApprovalWorkflowStep` | `canSkip` | mati — `/pengaturan/workflow` belum mengeksposnya |
+| `ApprovalWorkflowStep` | `canSkip` | **DIBUANG (2026-10-19, branch kerja)**: 0 rujukan kode produk — form `/pengaturan/workflow` tak mengeksposnya, `workflowStepSchema` tak punya field itu, engine `approveStep` tak membacanya; mengarang semantik skip = data audit palsu (migrasi `20261019001000_drop_wave2_dead_columns`) |
 | `Asset` | `assetBrandModelId` | **DITUTUP (2026-10-19, branch kerja)**: form aset kini punya dropdown "Tipe / Model" berjenjang dari merek (`AssetForm` + query `models` di halaman tambah/ubah), `assetSchema` menerima + `createAsset`/`updateAsset` menulis + MENOLAK model bukan milik merek terpilih; detail aset menampilkan Merek + Tipe; `deleteAssetBrand` menolak bila merek masih dipakai aset langsung/lewat tipe atau masih punya tipe (`assetBrandModelId` bare int tanpa FK — hapus diam-diam = ID yatim); dikunci `asset.actions.test.ts` 9 tes baru + prune `KNOWN_UNUSED` |
-| `BankReconciliationItem` | `clearedDate` | mati — pencocokan menulis `matched: true`, belum ada "tanggal clear" |
-| `BankStatementLine` | `matchedType` | mati — rekonsiliasi belum menandai jenis kecocokan |
+| `BankReconciliationItem` | `clearedDate` | **DIBUANG (2026-10-19, branch kerja)**: 0 rujukan kode produk — tak satu pun aksi menulisnya; aksi `match` hanya menulis `matched` boolean di item; `cleared` tetap (matematika outstanding `completeReconciliation`) (migrasi `20261019001000_drop_wave2_dead_columns`) |
+| `BankStatementLine` | `matchedType` | **DIBUANG (2026-10-19, branch kerja)**: 0 rujukan kode produk — jenis kecocokan derivable dari `BankReconciliationItem.type` + `journalEntryId` (migrasi `20261019001000_drop_wave2_dead_columns`) |
 
-Empat kolom gelombang 2 itulah isi `KNOWN_UNUSED` di `src/__tests__/schema-usage.test.ts`
+Gelombang 2 kini **tuntas**: `KNOWN_UNUSED` di `src/__tests__/schema-usage.test.ts` kosong
+(tersisa hanya komentar riwayat), dan tak ada lagi kolom mati yang menunggu keputusan.
+
+Keenam kolom gelombang 2 itulah yang PERNAH mengisi `KNOWN_UNUSED` di `src/__tests__/schema-usage.test.ts`
 (dua arah: kolom mati baru memerahkan tes, dan menambal/membuang salah satunya juga).
 
 ## 4. (riwayat) `updatedBy`

@@ -2853,7 +2853,6 @@ model BankStatementLine {
   type             String
   reference        String?
   status           String        @default("unmatched")
-  matchedType      String?       @map("matched_type")
   bankStatement    BankStatement @relation(fields: [bankStatementId], references: [id], onDelete: Cascade)
 
   @@index([bankStatementId], map: "bank_statement_lines_bank_statement_id_fkey")
@@ -2909,7 +2908,6 @@ model BankReconciliationItem {
   date                 DateTime?
   matched              Boolean            @default(false)
   cleared              Boolean            @default(false)
-  clearedDate          DateTime?          @map("cleared_date")
   bankReconciliation   BankReconciliation @relation(fields: [bankReconciliationId], references: [id], onDelete: Cascade)
 
   @@index([bankReconciliationId], map: "bank_reconciliation_items_bank_reconciliation_id_fkey")
@@ -3394,7 +3392,6 @@ model ApprovalWorkflowStep {
   roleId                  Int?             @map("role_id")
   userId                  Int?             @map("user_id")
   approverType            String?          @map("approver_type")
-  canSkip                 Boolean          @default(false) @map("can_skip")
   conditions              Json?
   createdAt               DateTime         @default(now()) @map("created_at")
   updatedAt               DateTime         @updatedAt @map("updated_at")
