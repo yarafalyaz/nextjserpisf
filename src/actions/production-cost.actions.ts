@@ -128,6 +128,20 @@ export async function updateProductionCost(id: number, formData: FormData) {
       if (!vendor) return { success: false, error: "Vendor tidak ditemukan" }
     }
 
+    if (existing.productionOrderId) {
+      const order = await prisma.productionOrder.findUnique({
+        where: { id: existing.productionOrderId },
+        select: { id: true, status: true },
+      })
+      if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
+      if (order.status === "completed" || order.status === "cancelled") {
+        return {
+          success: false,
+          error: `Biaya tidak dapat diubah pada perintah berstatus '${order.status}'.`,
+        }
+      }
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.productionCost.update({
         where: { id },
@@ -171,6 +185,20 @@ export async function deleteProductionCost(id: number) {
       select: { id: true, productionOrderId: true, amount: true },
     })
     if (!existing) return { success: false, error: "Biaya tidak ditemukan" }
+
+    if (existing.productionOrderId) {
+      const order = await prisma.productionOrder.findUnique({
+        where: { id: existing.productionOrderId },
+        select: { id: true, status: true },
+      })
+      if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
+      if (order.status === "completed" || order.status === "cancelled") {
+        return {
+          success: false,
+          error: `Biaya tidak dapat dihapus pada perintah berstatus '${order.status}'.`,
+        }
+      }
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.productionCost.delete({ where: { id } })
@@ -224,9 +252,21 @@ export async function pullLaborCostFromTimesheets(
     }
     const order = await prisma.productionOrder.findUnique({
       where: { id: productionOrderId },
-      select: { id: true },
+      select: { id: true, status: true, workOrderId: true },
     })
     if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
+    if (order.status === "completed" || order.status === "cancelled") {
+      return {
+        success: false,
+        error: `Biaya tidak dapat ditambahkan ke perintah berstatus '${order.status}'.`,
+      }
+    }
+    if (order.workOrderId != null && order.workOrderId !== workOrderId) {
+      return {
+        success: false,
+        error: "Perintah produksi tidak termasuk dalam perintah kerja ini.",
+      }
+    }
 
     const timesheets = await prisma.timesheet.findMany({
       where: { projectId: wo.projectId },
