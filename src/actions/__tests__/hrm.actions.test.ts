@@ -570,6 +570,7 @@ describe("Payroll Actions", () => {
     const defaultPayroll = {
       id: 1, status: "draft", netPay: 5000000, employeeId: 1, period: "2026-05",
       loanDeduction: 0,
+      statutorySnapshot: { fromFallback: false },
       employee: { name: "A", code: "A1" }
     }
     prismaMock.payroll.findUnique.mockResolvedValue(defaultPayroll)
@@ -1022,6 +1023,15 @@ describe("Payroll extra branches", () => {
     const r = await actions.approvePayroll(1)
     expect(r?.success).toBe(false)
     expect(r?.error).toContain("Payroll hanya bisa di-approve dari status draft")
+  })
+
+  it("approvePayroll menolak slip fallback 2024 (AUD-HRM-01)", async () => {
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "draft", statutorySnapshot: { fromFallback: true },
+    })
+    const r = await actions.approvePayroll(1)
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("cadangan (2024)")
   })
 
   it("markPayrollPaid on non-approved rejects", async () => {

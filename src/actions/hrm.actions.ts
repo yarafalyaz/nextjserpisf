@@ -1458,6 +1458,19 @@ export async function approvePayroll(payrollId: number) {
       throw new Error("Payroll hanya bisa di-approve dari status draft");
     }
 
+    // AUD-HRM-01: tolak approve bila slip dihitung dengan fallback 2024.
+    // Fallback = tabel kosong/gagal baca = ruleset belum tervalidasi untuk
+    // periode ini. Approve = finalisasi angka pajak/BPJS — angka 2024 yang
+    // lolos diam-diam adalah kesalahan gaji massal. Snapshot menyimpan
+    // fromFallback persis untuk gate ini.
+    const snapshot = payroll.statutorySnapshot as { fromFallback?: boolean } | null;
+    if (snapshot?.fromFallback) {
+      throw new Error(
+        "Penggajian ini dihitung dengan parameter statutori cadangan (2024). " +
+          "Minta accountant memvalidasi ruleset periode ini dulu, lalu hitung ulang sebelum approve.",
+      );
+    }
+
     const claim = await prisma.payroll.updateMany({
       where: { id: payrollId, status: "draft" },
       data: { status: "approved", approvedBy: Number(user.id) },

@@ -93,8 +93,12 @@ export async function onDownPaymentConfirmed(
     // ─── Multi-DP & Idempotency Check ─────────────────────────────────
     // If the invoice already exists, this quotation has already been converted
     // (e.g. by a previous DP). This is a subsequent down payment.
+    // AUD-SAL-01: kecualikan invoice cancelled — DP baru tidak boleh
+    // teralokasi ke dokumen batal (void menuntut payments kosong, jadi
+    // invoice cancelled tak punya payment; DP yang masuk harus memicu
+    // invoice pengganti, bukan menempel ke yang batal).
     const existingInv = await tx.salesInvoice.findFirst({
-      where: { quotationId: quotation.id },
+      where: { quotationId: quotation.id, status: { not: "cancelled" } },
     });
 
     // P0-1: DP lanjutan tanpa invoice (ambang 50% belum tercapai saat DP
