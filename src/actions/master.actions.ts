@@ -2006,6 +2006,17 @@ export async function deleteBank(id: number) {
   try {
     await requirePermission("delete_banks");
 
+    // Guard: BankStatement.bankId menunjuk ke sini (plain Int?, tanpa FK di
+    // skema) dan form mutasi bank memvalidasi bankId via bankStatementSchema —
+    // hapus mentah meninggalkan bank_id yatim yang tak bisa direkonstruksi.
+    const usedByStatements = await prisma.bankStatement.count({ where: { bankId: id } });
+    if (usedByStatements > 0) {
+      return {
+        success: false,
+        error: `Bank masih dipakai oleh ${usedByStatements} rekening koran. Hapus atau pindahkan dulu sebelum menghapus.`,
+      };
+    }
+
     await prisma.bank.delete({ where: { id } });
 
     revalidatePath("/master/bank");
@@ -2064,6 +2075,17 @@ export async function deleteTax(id: number) {
 export async function deleteTaxGroup(id: number) {
   try {
     await requirePermission("delete_taxes");
+
+    // Guard: TaxGroupTax.taxGroupId ON DELETE CASCADE — hapus mentah ikut
+    // menghapus seluruh baris keanggotaan tanpa jejak. Tolak bila grup masih
+    // punya anggota pajak.
+    const memberCount = await prisma.taxGroupTax.count({ where: { taxGroupId: id } });
+    if (memberCount > 0) {
+      return {
+        success: false,
+        error: `Kelompok pajak masih berisi ${memberCount} pajak. Keluarkan pajak dari kelompok terlebih dahulu.`,
+      };
+    }
 
     await prisma.taxGroup.delete({ where: { id } });
 
