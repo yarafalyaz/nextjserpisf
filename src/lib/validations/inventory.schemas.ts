@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { dateOnly } from "@/lib/validations/finance.schemas"
 
 // ==================== Helpers ====================
 
@@ -10,7 +11,9 @@ const optionalNumber = (min?: number) => {
   return base.optional()
 }
 
-const dateString = z.string().min(1, "Tanggal wajib diisi")
+// Tetap string `dateOnly` (kalender-valid); action konversi via
+// `wibDateToUtcMidnight`. `new Date("2026-02-30")` menggulir ke 2 Mar.
+const dateString = dateOnly
 
 const optionalStr = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
@@ -23,7 +26,11 @@ const requiredId = (field: string) =>
 
 const optionalId = z.coerce.number().int().positive().optional()
 
-const optionalDateString = z.string().optional()
+// Kosong/tak-terisi -> undefined; non-kosong wajib `dateOnly` kalender-valid.
+const optionalDateOnly = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  dateOnly.optional(),
+)
 
 // ==================== STOCK ADJUSTMENT ====================
 
@@ -68,8 +75,8 @@ export const workOrderSchema = z.object({
   projectId: optionalId,
   quotationId: optionalId,
   date: dateString,
-  startDate: optionalDateString,
-  endDate: optionalDateString,
+  startDate: optionalDateOnly,
+  endDate: optionalDateOnly,
   notes: optionalStr(2000),
   items: optionalStr(50000), // JSON string, parsed separately
 })
