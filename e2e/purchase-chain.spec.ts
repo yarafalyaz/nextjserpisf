@@ -28,8 +28,20 @@ test.describe("Pembelian — rantai penuh", () => {
     await prisma.vendorPayment.deleteMany({})
     await prisma.vendorBillItem.deleteMany({})
     await prisma.vendorBill.deleteMany({})
-    await prisma.purchaseOrder.update({
+    // Idempoten penuh: GR run paralel/sisa bisa verified (PO ikut received).
+    // Terima butuh PO approved/ordered/partial + GR draft. Kembalikan SEMUA
+    // GR PO ini ke draft + PO ke approved — run ini selalu mulai dari nol.
+    // (Verify ulang GR lama = stok ganda, jadi GR lama diverify-ulang di
+    // langkah 2 run ini; stok direset qtyOnHand 0 di bawah + layer dibersihkan.)
+    const poRow = await prisma.purchaseOrder.findUniqueOrThrow({
       where: { documentNo: "E2E-PO-CHAIN" },
+    })
+    await prisma.goodsReceipt.updateMany({
+      where: { purchaseOrderId: poRow.id },
+      data: { status: "draft" },
+    })
+    await prisma.purchaseOrder.update({
+      where: { id: poRow.id },
       data: { status: "approved" },
     })
     await prisma.item.updateMany({
@@ -38,6 +50,11 @@ test.describe("Pembelian — rantai penuh", () => {
     })
     const po = await prisma.purchaseOrder.findUniqueOrThrow({
       where: { documentNo: "E2E-PO-CHAIN" },
+    })
+    // Snapshot SEBELUM goto /tambah: reset di atas sudah hapus semua GR, jadi
+    // GR apa pun yang lahir sesudah ini = milik run ini (anti sisa run paralel).
+    const maxGrBefore = await prisma.goodsReceipt.aggregate({
+      _max: { id: true },
     })
     expect(["approved", "ordered", "partial_received"]).toContain(po.status)
 
@@ -69,11 +86,20 @@ test.describe("Pembelian — rantai penuh", () => {
       `${afterUrl} :: ${toastText.slice(0, 200)}`,
     ).not.toContain("/pembelian/penerimaan/tambah")
 
-    // GR terbaru untuk PO fixture = yang baru saja dibuat (nomor dokumen naik).
-    const gr = await prisma.goodsReceipt.findFirstOrThrow({
-      where: { purchaseOrderId: po.id },
-      orderBy: { id: "desc" },
-    })
+    // GR terbaru untuk PO fixture = yang baru saja dibuat (id > id tertinggi
+    // SEBELUM klik Terima — kunci poId saja tak cukup: run paralel / sisa run
+    // lain di PO yang sama bisa menyodorkan GR verified basi → klik Verifikasi
+    // ditolak "hanya dari status draf" + teks Terverifikasi tak muncul.
+    // Poll hingga GR run ini lahir (klik Terima async di server).
+    let gr = null
+    for (let i = 0; i < 20 && !gr; i++) {
+      gr = await prisma.goodsReceipt.findFirst({
+        where: { id: { gt: maxGrBefore._max.id ?? 0 } },
+        orderBy: { id: "desc" },
+      })
+      if (!gr) await new Promise((r) => setTimeout(r, 1000))
+    }
+    if (!gr) throw new Error("GR run ini tak lahir — Terima Barang gagal di server (cek toast/log)")
     expect(gr.status).toBe("draft")
     expect(gr.purchaseOrderId).toBe(po.id)
 
@@ -163,7 +189,8 @@ test.describe("Pembelian — rantai penuh", () => {
     await expect(amountBox).toHaveValue(/500[\.\s]?000/)
     await page.getByRole("button", { name: "Simpan", exact: true }).click()
     // Sukses = redirect ke daftar; gagal = tetap di tambah + toast galat.
-    await page.waitForTimeout(10_000)
+    // Poll URL (bukan sleep buta — sleep flaky di CI lambat).
+    await page.waitForURL(/\/pembelian\/pembayaran-vendor(\?|$)/, { timeout: 30_000 }).catch(() => {})
     const payToast = page.locator("li", { hasText: /gagal|wajib|tidak|kurang/i }).first()
     if (page.url().includes("/pembayaran-vendor/tambah")) {
       const msg = (await payToast.count()) > 0 ? await payToast.textContent() : "(tanpa toast)"

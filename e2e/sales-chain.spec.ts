@@ -37,10 +37,51 @@ test.describe("Penjualan — rantai penuh", () => {
     await prisma.stockMove.deleteMany({
       where: { referenceType: "SalesInvoice", referenceId: fixture.id },
     })
-    const layer = await prisma.inventoryLayer.findFirstOrThrow({
+    // Bersihkan SEMUA layer item fixture: run paralel/sisa run lain menumpuk
+    // layer (FIFO 10 per run) — posting ambil layer tertua, qtyOnHand akhir
+    // meleset (6 bukan 8) walau reset layer terbaru = 10.
+    const staleMoves = await prisma.stockMove.findMany({
+      where: { itemId: stockedItem.id },
+      select: { id: true },
+    })
+    const staleMoveIds = staleMoves.map((m) => m.id)
+    if (staleMoveIds.length) {
+      await prisma.inventoryLayer.deleteMany({ where: { stockMoveId: { in: staleMoveIds } } })
+    }
+    await prisma.stockMove.deleteMany({ where: { itemId: stockedItem.id } })
+    // Layer ikut hilang bersama move induknya → buat ulang FIFO 10 bila absen.
+    let layer = await prisma.inventoryLayer.findFirst({
       where: { itemId: stockedItem.id },
       orderBy: { id: "desc" },
     })
+    if (!layer) {
+      const wh = await prisma.warehouse.findFirstOrThrow()
+      const move = await prisma.stockMove.create({
+        data: {
+          documentNo: `E2E-SEED-${Date.now()}`,
+          itemId: stockedItem.id,
+          warehouseId: stockedItem.defaultWarehouseId ?? wh.id,
+          moveType: "IN",
+          impact: "IN",
+          status: "posted",
+          qty: 10,
+          cost: 100000,
+          referenceType: "E2ESeed",
+          referenceId: 0,
+        },
+      })
+      layer = await prisma.inventoryLayer.create({
+        data: {
+          itemId: stockedItem.id,
+          warehouseId: stockedItem.defaultWarehouseId ?? wh.id,
+          stockMoveId: move.id,
+          qtyIn: 10,
+          qtyOut: 0,
+          remaining: 10,
+          unitCost: 100000,
+        },
+      })
+    }
     await prisma.inventoryLayer.update({
       where: { id: layer.id },
       data: { qtyIn: 10, qtyOut: 0, remaining: 10 },

@@ -528,7 +528,18 @@ async function main() {
       defaultWarehouseId: e2eWarehouse.id, defaultRackId: e2eRack.id,
     },
   });
-  await prisma.purchaseOrder.deleteMany({ where: { documentNo: "E2E-PO-CHAIN" } });
+  // Hapus anak (GR + item) dulu: FK goods_receipts.purchase_order_id
+  // menolak hapus PO induk selagi GR rantai E2E masih menunjuknya.
+  const oldPo = await prisma.purchaseOrder.findFirst({ where: { documentNo: "E2E-PO-CHAIN" } });
+  if (oldPo) {
+    const oldGrs = await prisma.goodsReceipt.findMany({ where: { purchaseOrderId: oldPo.id }, select: { id: true } });
+    const oldGrIds = oldGrs.map((g) => g.id);
+    if (oldGrIds.length) {
+      await prisma.goodsReceiptItem.deleteMany({ where: { goodsReceiptId: { in: oldGrIds } } });
+      await prisma.goodsReceipt.deleteMany({ where: { id: { in: oldGrIds } } });
+    }
+    await prisma.purchaseOrder.deleteMany({ where: { id: oldPo.id } });
+  }
   const chainPo = await prisma.purchaseOrder.create({
     data: {
       documentNo: "E2E-PO-CHAIN", slug: "e2e-po-chain", vendorId: buyVendor.id,
