@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { dateOnly } from "@/lib/validations/finance.schemas"
 
 const optionalId = z.coerce.number().int().min(1).optional()
 
@@ -7,12 +8,9 @@ export const recurringTransactionSchema = z.object({
   type: z.enum(["journal", "expense"], { message: "Jenis transaksi wajib dipilih" }),
   frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"], { message: "Frekuensi wajib dipilih" }),
   interval: z.coerce.number().int().min(1, "Interval minimal 1").max(60, "Interval maksimal 60").default(1),
-  startDate: z.string().min(1, "Tanggal mulai wajib diisi").max(50),
-  endDate: z
-    .string()
-    .max(50)
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+  // String YYYY-MM-DD kalender-valid; aksi konversi via wibDateToUtcMidnight.
+  startDate: dateOnly,
+  endDate: dateOnly.optional().or(z.literal("").transform(() => undefined)),
   description: z
     .string()
     .max(500)

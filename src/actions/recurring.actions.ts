@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { recurringTransactionSchema, type RecurringTransactionInput } from "@/lib/validations/recurring.schemas"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
 import {
@@ -60,9 +61,9 @@ export async function createRecurringTransaction(formData: FormData) {
         type: v.type,
         frequency: v.frequency,
         interval: v.interval,
-        startDate: new Date(v.startDate),
-        endDate: v.endDate ? new Date(v.endDate) : null,
-        nextRunDate: new Date(v.startDate),
+        startDate: wibDateToUtcMidnight(v.startDate),
+        endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
+        nextRunDate: wibDateToUtcMidnight(v.startDate),
         template: JSON.stringify(template),
         isActive: v.isActive,
         createdBy: Number(user.id),
@@ -97,7 +98,7 @@ export async function updateRecurringTransaction(id: number, formData: FormData)
 
     // Only re-anchor the schedule when the start date actually moved — otherwise
     // editing the amount would silently reset a schedule that is already running.
-    const startChanged = existing.startDate.getTime() !== new Date(v.startDate).getTime()
+    const startChanged = existing.startDate.getTime() !== wibDateToUtcMidnight(v.startDate).getTime()
 
     await prisma.recurringTransaction.update({
       where: { id },
@@ -107,9 +108,9 @@ export async function updateRecurringTransaction(id: number, formData: FormData)
         type: v.type,
         frequency: v.frequency,
         interval: v.interval,
-        startDate: new Date(v.startDate),
-        endDate: v.endDate ? new Date(v.endDate) : null,
-        nextRunDate: startChanged ? new Date(v.startDate) : existing.nextRunDate,
+        startDate: wibDateToUtcMidnight(v.startDate),
+        endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
+        nextRunDate: startChanged ? wibDateToUtcMidnight(v.startDate) : existing.nextRunDate,
         template: JSON.stringify(template),
         isActive: v.isActive,
       },
