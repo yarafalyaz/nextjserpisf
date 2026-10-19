@@ -14,6 +14,23 @@ function revalidatePeriodConsumers(): void {
   revalidatePath("/pengaturan/ubah")
 }
 
+function normalizePeriodCloseDate(raw: string): Date | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null
+  const date = new Date(`${raw}T23:59:59`)
+  const [year, month, day] = raw.split("-").map(Number)
+  // `new Date("2026-02-30T23:59:59")` silently rolls to Mar 2 local.
+  // Reject non-existent calendar date instead of locking 2 days later.
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null
+  }
+  return date
+}
+
 /**
  * R-09: kunci baris tunggal `system_settings` (FOR UPDATE), baca ulang di
  * dalam tx yang sama. Protokol identik dengan cabang `tx` pada
@@ -62,8 +79,8 @@ export async function closeAccountingPeriod(formData: FormData): Promise<PeriodC
     await requirePermission("manage_settings")
 
     const raw = String(formData.get("date") ?? "").trim()
-    const date = new Date(`${raw}T23:59:59`)
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(raw) || Number.isNaN(date.getTime())) {
+    const date = normalizePeriodCloseDate(raw)
+    if (!date) {
       return { success: false, error: "Tanggal kunci periode tidak valid." }
     }
 

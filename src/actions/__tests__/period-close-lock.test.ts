@@ -142,6 +142,25 @@ describe("R-09 period-close: satu transaksi + kunci baris setting", () => {
     expect(mocks.update).not.toHaveBeenCalled()
   })
 
+  it("close: tanggal kalender tidak ada 2026-02-30 ditolak, tanpa transaksi/update", async () => {
+    const res = await closeAccountingPeriod(fdDate("2026-02-30"))
+
+    expect(res).toEqual({ success: false, error: "Tanggal kunci periode tidak valid." })
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
+  it("close: format bukan YYYY-MM-DD dan tanggal kosong ditolak", async () => {
+    for (const bad of ["2026/05/31", "2026-2-3", "2026-13-01"]) {
+      const res = await closeAccountingPeriod(fdDate(bad))
+      expect(res).toEqual({ success: false, error: "Tanggal kunci periode tidak valid." })
+    }
+    const empty = await closeAccountingPeriod(new FormData())
+    expect(empty).toEqual({ success: false, error: "Tanggal kunci periode tidak valid." })
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+    expect(mocks.update).not.toHaveBeenCalled()
+  })
+
   it("reopen: $transaction -> lock setting FOR UPDATE -> update null di tx sama", async () => {
     mocks.queryRaw.mockImplementation(async (strings: unknown) => {
       const sql = (strings as unknown as string[]).join(" ")
