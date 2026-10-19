@@ -35,8 +35,6 @@ services:
       # brute-force, uploads, API). Do NOT set this on a deployment that is
       # exposed directly - the headers would then be spoofable.
       - TRUSTED_PROXY=1
-    ports:
-      - "3003:3000"
     volumes:
       - ./public/uploads:/app/public/uploads
     depends_on:

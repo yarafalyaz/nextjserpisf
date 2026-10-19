@@ -53,6 +53,17 @@ describe("deployment tidak mendorong skema saat boot", () => {
     expect(compose).not.toMatch(/^\s+-\s+"?\d[^"]*:3306"?\s*$/m)
   })
 
+  it("compose prod tak publish port app saat TRUSTED_PROXY=1 (AUD-SEC-01)", () => {
+    const compose = read("docker-compose.prod.yml")
+    // getClientIp() percaya cf-connecting-ip/x-real-ip/x-forwarded-for bila
+    // TRUSTED_PROXY=1. Bila port app dipublish ke host ("3003:3000"), klien
+    // bisa akses langsung + kirim header IP palsu → pindah bucket rate limit
+    // (bypass throttling login/upload). Akses wajib lewat tunnel/proxy yang
+    // menimpa header; loopback "127.0.0.1:3000:3000" untuk debug lokal boleh.
+    expect(compose).toContain("TRUSTED_PROXY=1")
+    expect(compose).not.toMatch(/^\s+-\s+"?\d{2,}:[^\n]*3000"?\s*$/m)
+  })
+
   it("versi Node konsisten: README, engines, Dockerfile (P2-5)", () => {
     const readme = read("README.md")
     const pkg = JSON.parse(read("package.json")) as { engines?: { node?: string } }
