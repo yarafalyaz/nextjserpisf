@@ -219,7 +219,7 @@ describe("R-04 parent lock sebelum cek completedMatch", () => {
     ]))
     const res = await updateJournal(7, f)
     expect(res.success).toBe(false)
-    expect(String(res.error)).toContain("Tanggal transaksi tidak valid")
+    expect(String(res.error)).toContain("Tanggal tidak valid")
     // Gagal SEBELUM tulis: tidak ada transaksi = tidak ada lock, tidak ada update.
     expect(mocks.guards.prismaMock.$transaction).not.toHaveBeenCalled()
   })

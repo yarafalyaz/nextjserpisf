@@ -100,7 +100,7 @@ export const bankStatementLineSchema = z.object({
 // ==================== JOURNAL ====================
 
 export const journalSchema = z.object({
-  transactionDate: requiredDate,
+  transactionDate: dateOnly,
   description: optionalString(1000),
   type: z.string().default("GENERAL"),
   entries: z.string().min(1, "Entries wajib diisi"),
@@ -189,7 +189,7 @@ export const profitCenterSchema = z.object({
 // ==================== UPDATE JOURNAL ====================
 
 export const updateJournalSchema = z.object({
-  transactionDate: requiredDate,
+  transactionDate: dateOnly,
   description: optionalString(1000),
   type: z.string().default("GENERAL"),
   attachmentIds: optionalString(5000),
