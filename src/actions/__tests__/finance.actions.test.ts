@@ -1491,6 +1491,18 @@ describe("More Action Branches", () => {
     })
   })
 
+  it("createReconciliationAdjustment menolak tanggal kalender fiktif", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    const res = await actions.createReconciliationAdjustment(1, fdMap({
+      type: "outstanding_deposit",
+      amount: "1000",
+      date: "2026-02-30",
+    }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("Tanggal penyesuaian tidak valid")
+    expect(mocks.prismaMock.bankReconciliationItem.create).not.toHaveBeenCalled()
+  })
+
   it("createReconciliationAdjustment menolak jenis tak dikenal", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     const res = await actions.createReconciliationAdjustment(1, fdMap({

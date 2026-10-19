@@ -25,6 +25,7 @@ import {
   profitCenterSchema,
   journalSchema,
   updateJournalSchema,
+  dateOnly,
 } from "@/lib/validations/finance.schemas";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { getSystemSettings } from "@/lib/utils/settings";
@@ -1335,8 +1336,10 @@ export async function createReconciliationAdjustment(
     }
 
     const rawDate = String(formData.get("date") ?? "").trim();
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
-      return { success: false as const, error: "Tanggal penyesuaian wajib diisi" };
+    // Regex saja meloloskan tanggal fiktif (2026-02-30 -> 2 Mar via Date);
+    // dateOnly refine kalender menangkapnya.
+    if (!dateOnly.safeParse(rawDate).success) {
+      return { success: false as const, error: "Tanggal penyesuaian tidak valid" };
     }
 
     const description = String(formData.get("description") ?? "").trim() || null;
