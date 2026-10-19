@@ -16,6 +16,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 const NO_ACCOUNT_KEY = "__tanpa_rekening__"
@@ -130,20 +131,20 @@ export function buildBankMovements(input: {
     }
 
     if (movement.kind === "Penerimaan") {
-      bucket.inflow += movement.amount
-      totals.inflow += movement.amount
+      bucket.inflow = safeAdd(bucket.inflow, movement.amount, 2)
+      totals.inflow = safeAdd(totals.inflow, movement.amount, 2)
     } else {
-      bucket.outflow += movement.amount
-      totals.outflow += movement.amount
+      bucket.outflow = safeAdd(bucket.outflow, movement.amount, 2)
+      totals.outflow = safeAdd(totals.outflow, movement.amount, 2)
     }
 
-    bucket.net = bucket.inflow - bucket.outflow
+    bucket.net = safeSubtract(bucket.inflow, bucket.outflow, 2)
     bucket.count += 1
     byAccount.set(key, bucket)
     totals.count += 1
   }
 
-  totals.net = totals.inflow - totals.outflow
+  totals.net = safeSubtract(totals.inflow, totals.outflow, 2)
 
   // Tanpa rekening diletakkan paling akhir: ia anomali, bukan rekening.
   const summary = [...byAccount.values()].sort((a, b) => {
