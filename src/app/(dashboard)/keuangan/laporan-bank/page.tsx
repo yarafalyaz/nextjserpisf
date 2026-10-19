@@ -1,4 +1,4 @@
-import { Eye } from "lucide-react"
+import { Eye, Plus } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
@@ -44,6 +44,9 @@ export default async function BankStatementsPage({
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Laporan Bank</h1>
+        <Link href="/keuangan/laporan-bank/tambah" className="button button--primary w-full sm:w-auto">
+          <Plus size={16} /> Tambah Rekening Koran
+        </Link>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
@@ -62,7 +65,7 @@ export default async function BankStatementsPage({
                 statements.map((stmt) => (
                   <DetailTableRow key={stmt.id}>
                     <DetailTableTd className="font-mono">{stmt.id}</DetailTableTd>
-                    <DetailTableTd>No. Rekening{stmt.accountId}</DetailTableTd>
+                    <DetailTableTd>No. Rekening {stmt.accountNumber ? stmt.accountNumber : stmt.accountId}</DetailTableTd>
                     <DetailTableTd>{formatDate(stmt.date)}</DetailTableTd>
                     <DetailTableTd>{stmt.reference || "-"}</DetailTableTd>
                     <DetailTableTd>

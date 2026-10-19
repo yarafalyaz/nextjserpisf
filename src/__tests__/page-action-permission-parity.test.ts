@@ -74,6 +74,8 @@ const CREATE_PAGE_CASES: Array<[string, string]> = [
   ["master/departemen/tambah/page.tsx", "create_departments"],
   ["master/jabatan/tambah/page.tsx", "create_positions"],
   ["master/kelompok-pajak/tambah/page.tsx", "create_taxes"],
+  // Rekening koran: guard halaman tambah = izin aksi `createBankStatement`.
+  ["keuangan/laporan-bank/tambah/page.tsx", "create_journals"],
 ]
 
 /** Client pages whose permission check lives in a parent layout. */
