@@ -46,6 +46,18 @@ function isKeyConflict(e: unknown): boolean {
   return true
 }
 
+/**
+ * AUD-R7-01: validasi format key di server (satu pintu untuk semua scope).
+ * Terima UUID v4 atau token aman 8-191 char [A-Za-z0-9_-]. Tak percaya buta
+ * pada generator client.
+ */
+export function isValidIdempotencyKey(key: unknown): key is string {
+  if (typeof key !== "string") return false
+  if (key.length < 8 || key.length > 191) return false
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(key)) return true
+  return /^[A-Za-z0-9_-]+$/.test(key)
+}
+
 export async function claimIdempotencyKey(
   tx: IdemTx,
   scope: IdemScope,
@@ -55,7 +67,7 @@ export async function claimIdempotencyKey(
   | { replayed: false }
   | { replayed: true; resultRefType: string | null; resultRefId: number | null }
 > {
-  if (!key || key.length > 191) throw new Error("Idempotency key tidak valid")
+  if (!isValidIdempotencyKey(key)) throw new Error("Idempotency key tidak valid")
   try {
     await tx.financialIdempotencyKey.create({
       data: { key, scope, createdBy: userId ?? null },
@@ -70,8 +82,13 @@ export async function claimIdempotencyKey(
       where: { key },
     })
     if (!existing) {
-      // Balapan sempit (komit antar claim): anggap replay, hasil menyusul.
-      return { replayed: true, resultRefType: null, resultRefId: null }
+      // AUD-R7-02: konflik UNIQUE tapi baris tak terbaca (rollback transaksi
+      // pertama antar claim, atau anomali isolasi). JANGAN sukses palsu —
+      // gagal eksplisit: client retry dengan key SAMA aman (bila tx pertama
+      // rollback, key bebas → klaim ulang menang; bila commit, replay sah).
+      throw new Error(
+        "Konflik idempotency key tanpa hasil terbaca — ulangi dengan key yang sama",
+      )
     }
     // AUD-R6-02: scope beda = konflik nyata, BUKAN sukses.
     if (existing.scope !== scope) {

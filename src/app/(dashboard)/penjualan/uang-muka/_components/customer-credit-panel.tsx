@@ -43,12 +43,52 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
   const [invoiceId, setInvoiceId] = useState<string>(invoices[0] ? String(invoices[0].id) : "")
   const [amount, setAmount] = useState<string>("")
   const [mode, setMode] = useState<"allocate" | "refund">("allocate")
-  // AUD-R6-01: key stabil per intent. Dibuat sekali saat submit pertama,
-  // dipakai ULANG untuk retry intent yang sama (timeout/respons hilang/
-  // error jaringan). Key BARU hanya bila: hasil definitif (sukses atau gagal
-  // validasi jelas) ATAU intent berubah (mode/invoice/nominal/kredit beda).
+  // AUD-R7-04: key stabil per intent + TAHAN REFRESH. useRef untuk sesi
+  // komponen; sessionStorage untuk retry lintas reload (timeout lalu refresh
+  // sebelum respons tiba). Kunci: key dihapus HANYA saat hasil definitif —
+  // refresh di tengah intent pending = key sama = retry aman, bukan operasi baru.
   const keyRef = useRef<string | null>(null)
   const intentRef = useRef<string>("")
+
+  function intentKeyName(intent: string): string {
+    return `cc-idem:${intent}`
+  }
+  // sessionStorage = opsional progresif: bila tak tersedia, key sesi-komponen
+  // (useRef) tetap melindungi retry selama komponen hidup. Satu probe di
+  // awal menulis flag — tanpa try/catch berulang di tiap helper.
+  const storageOK = useRef<boolean | null>(null)
+  function storageAvailable(): boolean {
+    if (storageOK.current !== null) return storageOK.current
+    let ok = false
+    try {
+      const probe = "__cc_probe"
+      sessionStorage.setItem(probe, "1")
+      sessionStorage.removeItem(probe)
+      ok = true
+    } catch {
+      // Storage diblokir/penuh: beri tahu pengguna SEKALI (pola yang sama
+      // dengan export-buttons: console + showError = bukan senyap). Retry
+      // sesi-komponen tetap jalan tanpa lintas-refresh.
+      console.warn("[customer-credit] sessionStorage tak tersedia — retry lintas refresh nonaktif")
+      showError("Penyimpanan sesi browser diblokir — ulangi dari halaman ini bila timeout (jangan refresh)")
+    }
+    storageOK.current = ok
+    return ok
+  }
+  function loadIntentKey(intent: string): string | null {
+    if (keyRef.current !== null && intentRef.current === intent) return keyRef.current
+    if (!storageAvailable()) return null
+    return sessionStorage.getItem(intentKeyName(intent))
+  }
+  function saveIntentKey(intent: string, key: string): void {
+    keyRef.current = key
+    intentRef.current = intent
+    if (storageAvailable()) sessionStorage.setItem(intentKeyName(intent), key)
+  }
+  function clearIntentKey(intent: string): void {
+    keyRef.current = null
+    if (storageAvailable()) sessionStorage.removeItem(intentKeyName(intent))
+  }
 
   function run(creditId: number) {
     const nominal = Number(amount)
@@ -57,11 +97,11 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
       return
     }
     const intent = `${mode}:${creditId}:${mode === "allocate" ? invoiceId : "-"}:${nominal}`
-    if (keyRef.current === null || intentRef.current !== intent) {
-      keyRef.current = newOperationKey()
-      intentRef.current = intent
+    let key = loadIntentKey(intent)
+    if (key === null) {
+      key = newOperationKey()
+      saveIntentKey(intent, key)
     }
-    const key = keyRef.current
     startTransition(async () => {
       try {
         const result =
@@ -69,16 +109,20 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
             ? await allocateCustomerCredit(creditId, Number(invoiceId), nominal, key)
             : await refundCustomerCredit(creditId, nominal, key)
         if (result && !result.success) {
-          // Gagal definitif (validasi/saldo/periode): intent selesai, key
-          // dibuang agar submit koreksi berikutnya = intent baru.
-          keyRef.current = null
+          // Gagal definitif (validasi/saldo/periode/key): intent selesai,
+          // key dibuang agar submit koreksi = intent baru.
+          clearIntentKey(intent)
           showError(result.error || "Gagal memproses kredit")
           return
         }
         // Sukses (termasuk replay retry): intent selesai, key dibuang.
-        keyRef.current = null
+        clearIntentKey(intent)
         if (result && "warning" in result && typeof result.warning === "string") {
           showError(result.warning)
+        } else if (result && "replayed" in result && result.replayed === true) {
+          // AUD-R7-03: retry retry = hasil operasi PERTAMA (tanpa mutasi baru).
+          const ref = ("paymentId" in result && result.paymentId) || ("journalId" in result && result.journalId) || "?";
+          showSuccess(`Sudah diproses sebelumnya (ref #${ref}) — tidak ada mutasi baru`)
         } else {
           showSuccess(mode === "allocate" ? "Kredit berhasil dialokasikan" : "Kredit berhasil di-refund")
         }

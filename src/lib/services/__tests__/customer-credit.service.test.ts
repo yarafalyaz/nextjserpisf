@@ -135,7 +135,7 @@ describe("customer-credit.service", () => {
     mocks.invoiceFindUnique.mockResolvedValue({
       id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
     })
-    const r = await allocateCreditToInvoice(1, 101, 2000, 7)
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "11111111-1111-4111-8111-111111111111")
     expect(r.success).toBe(true)
     // Lock baris dulu (suntik race ditolak antre di sini).
     const txCalls: string[] = []
@@ -171,7 +171,7 @@ describe("customer-credit.service", () => {
       id: 101, customerId: 9, grandTotal: 10000, paidAmount: 7000, status: "posted",
     })
     mocks.paymentFindMany.mockResolvedValue([{ amount: 7000 }, { amount: 3000 }])
-    const r = await allocateCreditToInvoice(1, 101, 3000, 7)
+    const r = await allocateCreditToInvoice(1, 101, 3000, 7, "22222222-2222-4222-8222-222222222222")
     expect(r.success).toBe(true)
     expect(mocks.creditUpdate).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "used" }) }),
@@ -183,7 +183,7 @@ describe("customer-credit.service", () => {
       id: 1, documentNo: "CC-1", customerId: 9,
       receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
     })
-    const r = await allocateCreditToInvoice(1, 101, 2500, 7)
+    const r = await allocateCreditToInvoice(1, 101, 2500, 7, "33333333-3333-4333-8333-333333333333")
     expect(r.success).toBe(false)
     expect(r.error).toContain("tidak cukup")
     expect(mocks.paymentCreate).not.toHaveBeenCalled()
@@ -198,7 +198,7 @@ describe("customer-credit.service", () => {
     mocks.invoiceFindUnique.mockResolvedValue({
       id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
     })
-    const r = await allocateCreditToInvoice(1, 101, 5000, 7)
+    const r = await allocateCreditToInvoice(1, 101, 5000, 7, "44444444-4444-4444-8444-444444444444")
     expect(r.success).toBe(false)
     expect(r.error).toContain("sisa faktur")
   })
@@ -211,7 +211,7 @@ describe("customer-credit.service", () => {
     mocks.invoiceFindUnique.mockResolvedValue({
       id: 101, customerId: 9, grandTotal: 10000, paidAmount: 0, status: "cancelled",
     })
-    const r = await allocateCreditToInvoice(1, 101, 1000, 7)
+    const r = await allocateCreditToInvoice(1, 101, 1000, 7, "55555555-5555-4555-8555-555555555555")
     expect(r.success).toBe(false)
     expect(r.error).toContain("batal")
   })
@@ -221,7 +221,7 @@ describe("customer-credit.service", () => {
       id: 1, documentNo: "CC-1", customerId: 9,
       receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
     })
-    const r = await refundCredit(1, 2000, 7, "key-t1")
+    const r = await refundCredit(1, 2000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1")
     expect(r.success).toBe(true)
     expect(mocks.journalCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -248,7 +248,7 @@ describe("customer-credit.service", () => {
       id: 1, documentNo: "CC-1", customerId: 9,
       receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
     })
-    const r = await refundCredit(1, 2500, 7, "key-t2")
+    const r = await refundCredit(1, 2500, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2")
     expect(r.success).toBe(false)
     expect(r.error).toContain("tidak cukup")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
@@ -262,24 +262,18 @@ describe("customer-credit.service", () => {
     mocks.invoiceFindUnique.mockResolvedValue({
       id: 101, customerId: 77, grandTotal: 10000, paidAmount: 0, status: "posted",
     })
-    const r = await allocateCreditToInvoice(1, 101, 1000, 7)
+    const r = await allocateCreditToInvoice(1, 101, 1000, 7, "66666666-6666-4666-8666-666666666666")
     expect(r.success).toBe(false)
     expect(r.error).toContain("tidak bisa dialokasikan")
     expect(mocks.paymentCreate).not.toHaveBeenCalled()
     expect(mocks.creditUpdate).not.toHaveBeenCalled()
   })
 
-  it("tanpa key: operasi langsung tetap jalan (kompatibel lama)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
+  it("tanpa key: DITOLAK mentah (AUD-R7-01, kompatibel lama dicabut)", async () => {
     const r = await allocateCreditToInvoice(1, 101, 2000, 7)
-    expect(r.success).toBe(true)
-    expect(mocks.paymentCreate).toHaveBeenCalledTimes(1)
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("wajib idempotency key")
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
     expect(mocks.idemCreate).not.toHaveBeenCalled()
   })
 
@@ -290,7 +284,7 @@ describe("customer-credit.service", () => {
     })
     // Lock = "ditutup SAMPAI tanggal ini": lock hari ini → refund hari ini ditolak.
     mocks.settingFindFirst.mockResolvedValue({ periodLockDate: new Date() })
-    const r = await refundCredit(1, 1000, 7, "key-t4")
+    const r = await refundCredit(1, 1000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4")
     expect(r.success).toBe(false)
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.creditUpdate).not.toHaveBeenCalled()
@@ -305,9 +299,13 @@ describe("customer-credit.service", () => {
       id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
     })
     // Klaim kedua = UNIQUE violation = replay.
-    const dupErr = Object.assign(new Error("Unique constraint failed on the fields: (`key`)"), { code: "P2002" })
+    const dupErr = Object.assign(new Error("Unique constraint failed on the fields: (`key`)"), { code: "P2002", meta: { target: "key" } })
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
-    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "key-submit-1")
+    mocks.idemFindUnique.mockResolvedValueOnce({
+      scope: "customer_credit_allocate", resultRefType: "SalesPayment",
+      resultRefId: 555, createdBy: 7,
+    })
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "cccccccc-cccc-4ccc-8ccc-ccccccccccc1")
     expect(r.success).toBe(true)
     expect(mocks.paymentCreate).not.toHaveBeenCalled()
     expect(mocks.creditUpdate).not.toHaveBeenCalled()
@@ -321,8 +319,8 @@ describe("customer-credit.service", () => {
     mocks.invoiceFindUnique.mockResolvedValue({
       id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
     })
-    const r1 = await allocateCreditToInvoice(1, 101, 1000, 7, "key-A")
-    const r2 = await allocateCreditToInvoice(1, 101, 1000, 7, "key-B")
+    const r1 = await allocateCreditToInvoice(1, 101, 1000, 7, "cccccccc-cccc-4ccc-8ccc-ccccccccccc2")
+    const r2 = await allocateCreditToInvoice(1, 101, 1000, 7, "cccccccc-cccc-4ccc-8ccc-ccccccccccc3")
     expect(r1.success).toBe(true)
     expect(r2.success).toBe(true)
     expect(mocks.paymentCreate).toHaveBeenCalledTimes(2)
@@ -333,13 +331,19 @@ describe("customer-credit.service", () => {
       id: 1, documentNo: "CC-1", customerId: 9,
       receivedAmount: 5000, allocatedAmount: 0, refundedAmount: 0, status: "open",
     })
-    const r1 = await refundCredit(1, 1000, 7, "key-R1")
+    const r1 = await refundCredit(1, 1000, 7, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1")
     expect(r1.success).toBe(true)
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
-    const dupErr = Object.assign(new Error("Unique constraint failed on the fields: (`key`)"), { code: "P2002" })
+    const dupErr = Object.assign(new Error("Unique constraint failed on the fields: (`key`)"), { code: "P2002", meta: { target: "key" } })
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
-    const r2 = await refundCredit(1, 1000, 7, "key-R1")
+    mocks.idemFindUnique.mockResolvedValueOnce({
+      scope: "customer_credit_refund", resultRefType: "Journal",
+      resultRefId: 42, createdBy: 7,
+    })
+    const r2 = await refundCredit(1, 1000, 7, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1")
     expect(r2.success).toBe(true)
+    expect(r2.replayed).toBe(true)
+    expect(r2.journalId).toBe(42)
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
     expect(mocks.creditUpdate).toHaveBeenCalledTimes(1)
   })
@@ -359,7 +363,7 @@ describe("customer-credit.service", () => {
       scope: "customer_credit_allocate", resultRefType: "SalesPayment",
       resultRefId: 999, createdBy: 7,
     })
-    const r = await refundCredit(1, 1000, 7, "key-milik-alokasi")
+    const r = await refundCredit(1, 1000, 7, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2")
     expect(r.success).toBe(false)
     expect(r.error).toContain("operasi lain")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
@@ -380,7 +384,7 @@ describe("customer-credit.service", () => {
       scope: "customer_credit_refund", resultRefType: null,
       resultRefId: null, createdBy: 7,
     })
-    const r = await refundCredit(1, 1000, 7, "key-gantung")
+    const r = await refundCredit(1, 1000, 7, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3")
     expect(r.success).toBe(false)
     expect(r.error).toContain("belum selesai")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
@@ -392,6 +396,67 @@ describe("customer-credit.service", () => {
     expect(r.error).toContain("wajib idempotency key")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.creditUpdate).not.toHaveBeenCalled()
+  })
+
+  it("alokasi TANPA key: DITOLAK sebelum mutasi (AUD-R7-01)", async () => {
+    const r = await allocateCreditToInvoice(1, 101, 1000, 7)
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("wajib idempotency key")
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+    expect(mocks.invoiceUpdate).not.toHaveBeenCalled()
+  })
+
+  it("alokasi key CACAT: DITOLAK (AUD-R7-01)", async () => {
+    const r = await allocateCreditToInvoice(1, 101, 1000, 7, "x!!")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("wajib idempotency key")
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+  })
+
+  it("konflik key tapi baris tak terbaca: ERROR eksplisit bukan sukses (AUD-R7-02)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
+    })
+    const dupErr = Object.assign(
+      new Error("Unique constraint failed on the fields: (`key`)"),
+      { code: "P2002", meta: { target: "key" } },
+    )
+    mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    mocks.idemFindUnique.mockResolvedValueOnce(null)
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "550e8400-e29b-41d4-a716-446655440000")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("tanpa hasil terbaca")
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+  })
+
+  it("replay alokasi kembalikan paymentId awal (AUD-R7-03)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    })
+    mocks.invoiceFindUnique.mockResolvedValue({
+      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
+    })
+    const dupErr = Object.assign(
+      new Error("Unique constraint failed on the fields: (`key`)"),
+      { code: "P2002", meta: { target: "key" } },
+    )
+    mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    mocks.idemFindUnique.mockResolvedValueOnce({
+      scope: "customer_credit_allocate", resultRefType: "SalesPayment",
+      resultRefId: 777, createdBy: 7,
+    })
+    const r = await allocateCreditToInvoice(1, 101, 2000, 7, "550e8400-e29b-41d4-a716-446655440001")
+    expect(r.success).toBe(true)
+    expect(r.replayed).toBe(true)
+    expect(r.paymentId).toBe(777)
+    expect(mocks.paymentCreate).not.toHaveBeenCalled()
   })
 
   it("creditBalance = received - allocated - refunded", async () => {

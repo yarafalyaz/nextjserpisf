@@ -21,7 +21,8 @@ RUN npx prisma generate
 
 # Build the Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN NODE_ENV=production npm run build
+RUN NODE_ENV=production npm run build \
+  && npm prune --omit=dev
 
 # Use a smaller Node.js image for production
 FROM node:26-alpine AS runner

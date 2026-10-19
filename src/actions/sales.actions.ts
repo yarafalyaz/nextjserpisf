@@ -761,7 +761,8 @@ export async function allocateCustomerCredit(creditId: number, salesInvoiceId: n
       if (!r.auditPersisted) auditWarning = "Alokasi sah, tetapi jejak audit gagal dicatat — hubungi admin.";
     }
     revalidatePath("/penjualan/faktur");
-    return { success: true as const, warning: auditWarning };
+    // AUD-R7-03: bedakan operasi baru vs replay retry (UI tampilkan bukti ID).
+    return { success: true as const, warning: auditWarning, replayed: result.replayed === true, paymentId: result.paymentId };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
@@ -787,7 +788,7 @@ export async function refundCustomerCredit(creditId: number, amount: number, ide
       if (!r.auditPersisted) refundAuditWarning = "Refund sah, tetapi jejak audit gagal dicatat — hubungi admin.";
     }
     revalidatePath("/penjualan/faktur");
-    return { success: true as const, warning: refundAuditWarning };
+    return { success: true as const, warning: refundAuditWarning, replayed: result.replayed === true, journalId: result.journalId };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };

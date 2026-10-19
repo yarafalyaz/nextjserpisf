@@ -14,7 +14,7 @@ import { onSalesPaymentCreated } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { getErrorMessage } from "@/lib/utils/error";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
-import { claimIdempotencyKey, bindIdempotencyKey } from "@/lib/services/financial-idempotency.service";
+import { claimIdempotencyKey, bindIdempotencyKey, isValidIdempotencyKey } from "@/lib/services/financial-idempotency.service";
 
 export async function creditBalance(creditId: number): Promise<number> {
   const c = await prisma.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
@@ -26,20 +26,25 @@ export async function allocateCreditToInvoice(
   salesInvoiceId: number,
   amount: number,
   userId?: number,
-  /** AUD-R5: key unik per submit (client UUID). Tanpa key = operasi langsung
-   * (kompatibel lama); DENGAN key = retry aman. Dua submit beda nominal sama
-   * tapi key beda = dua operasi sah — marker bisnis lama menelan yang kedua. */
+  /** AUD-R7-01: alokasi WAJIB key — semua jalur (UI maupun internal),
+   * sama seperti refund. Tanpa key/format cacat = ditolak sebelum mutasi. */
   idempotencyKey?: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; replayed?: boolean; paymentId?: number }> {
   try {
     if (!(amount > 0)) return { success: false, error: "Nominal alokasi harus > 0" };
+    if (!isValidIdempotencyKey(idempotencyKey)) {
+      return { success: false, error: "Alokasi wajib idempotency key valid (submit via panel kredit)" };
+    }
+    let replayPaymentId: number | undefined;
+    let isReplay = false;
     await prisma.$transaction(async (tx) => {
-      // AUD-R5-02: key per-intent, bukan atribut bisnis. Claim DULU (UNIQUE) —
-      // retry submit sama langsung replay; submit beda jalan normal.
-      // AUD-R6: claim validasi scope+hasil (lihat financial-idempotency.service).
-      if (idempotencyKey) {
-        const claim = await claimIdempotencyKey(tx as never, "customer_credit_allocate", idempotencyKey, userId);
-        if (claim.replayed) return;
+      // AUD-R7-02/03: claim validasi scope+hasil. Replay = return + teruskan
+      // ref payment awal ke caller (bukti operasi pertama, bukan sukses generik).
+      const claim = await claimIdempotencyKey(tx as never, "customer_credit_allocate", idempotencyKey, userId);
+      if (claim.replayed) {
+        isReplay = true;
+        replayPaymentId = claim.resultRefId ?? undefined;
+        return;
       }
       await tx.$queryRaw`SELECT id FROM customer_credits WHERE id = ${creditId} FOR UPDATE`;
       // AUD-R4-03: kunci baris FAKTUR juga — dua kredit paralel ke faktur yang
@@ -80,9 +85,7 @@ export async function allocateCreditToInvoice(
           createdBy: userId ?? null,
         },
       });
-      if (idempotencyKey) {
-        await bindIdempotencyKey(tx as never, idempotencyKey, "SalesPayment", payment.id);
-      }
+      await bindIdempotencyKey(tx as never, idempotencyKey as string, "SalesPayment", payment.id);
       await tx.customerCredit.update({
         where: { id: creditId },
         data: {
@@ -106,8 +109,11 @@ export async function allocateCreditToInvoice(
         },
       });
       await onSalesPaymentCreated(payment.id, userId, tx as never);
+      replayPaymentId = payment.id;
     });
-    return { success: true };
+    // AUD-R7-03: replay = sukses + flag + ID payment awal (UI tahu ini hasil
+    // lama, bukan operasi baru). Operasi baru = replayed:false + ID baru.
+    return { success: true, replayed: isReplay, paymentId: replayPaymentId };
   } catch (e) {
     return { success: false, error: getErrorMessage(e) };
   }
@@ -121,21 +127,28 @@ export async function refundCredit(
    * Tanpa key = ditolak mentah. Kas keluar ganda = kerugian nyata; tak ada
    * pengecualian "pemanggil lama". */
   idempotencyKey?: string,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; replayed?: boolean; journalId?: number }> {
   try {
     if (!(amount > 0)) return { success: false, error: "Nominal refund harus > 0" };
     const settings = await getSystemSettings();
     if (!settings.cashBankAccountId || !(settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId) {
       return { success: false, error: "Akun kas/bank dan kewajiban UMP (210102) belum dikonfigurasi" };
     }
-    // AUD-R6-05: gate key SEBELUM transaksi — tanpa key langsung tolak.
-    if (!idempotencyKey) {
-      return { success: false, error: "Refund wajib idempotency key (submit via panel kredit)" };
+    // AUD-R7-01: gate key + format SEBELUM transaksi — tanpa key/format
+    // cacat langsung tolak (validasi server, tak percaya browser).
+    if (!isValidIdempotencyKey(idempotencyKey)) {
+      return { success: false, error: "Refund wajib idempotency key valid (submit via panel kredit)" };
     }
+    let replayJournalId: number | undefined;
+    let isReplay = false;
     await prisma.$transaction(async (tx) => {
-      // AUD-R6: claim validasi scope+hasil. Replay = return (hasil awal sah).
+      // AUD-R7-02/03: replay = return + teruskan ref jurnal awal.
       const claim = await claimIdempotencyKey(tx as never, "customer_credit_refund", idempotencyKey, userId);
-      if (claim.replayed) return;
+      if (claim.replayed) {
+        isReplay = true;
+        replayJournalId = claim.resultRefId ?? undefined;
+        return;
+      }
       await tx.$queryRaw`SELECT id FROM customer_credits WHERE id = ${creditId} FOR UPDATE`;
       const credit = await tx.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
       const balance = Number(credit.receivedAmount) - Number(credit.allocatedAmount) - Number(credit.refundedAmount);
@@ -178,11 +191,10 @@ export async function refundCredit(
           },
         },
       });
-      if (idempotencyKey) {
-        await bindIdempotencyKey(tx as never, idempotencyKey, "Journal", journal.id);
-      }
+      await bindIdempotencyKey(tx as never, idempotencyKey as string, "Journal", journal.id);
+      replayJournalId = journal.id;
     });
-    return { success: true };
+    return { success: true, replayed: isReplay, journalId: replayJournalId };
   } catch (e) {
     return { success: false, error: getErrorMessage(e) };
   }
