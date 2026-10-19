@@ -77,6 +77,22 @@ describe("buildPurchasesByDimension", () => {
     expect(purchaseByDimensionSummary(result)).toContain("Tidak ada pembelian")
   })
 
+  it("presisi sen: 3x DPP 10.000.000,10 total persis 30.000.000,30", () => {
+    const result = buildPurchasesByDimension({
+      lines: [
+        line({ key: "a", dpp: 10_000_000.1, tax: 1_100_000.01 }),
+        line({ key: "b", dpp: 10_000_000.1, tax: 1_100_000.01 }),
+        line({ key: "c", dpp: 10_000_000.1, tax: 1_100_000.01 }),
+      ],
+      dimension: "pemasok",
+      documentCount: 3,
+    })
+
+    expect(result.totals.dpp).toBe(30_000_000.3)
+    expect(result.totals.tax).toBe(3_300_000.03)
+    expect(result.totals.total).toBe(33_300_000.33)
+  })
+
   it("menyatakan DPP sebelum pajak, dokumen unik, dan dimensi", () => {
     const result = buildPurchasesByDimension({ lines: [line()], dimension: "barang", documentCount: 1 })
 
