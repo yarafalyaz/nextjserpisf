@@ -559,11 +559,32 @@ export async function onDownPaymentConfirmed(
       allocatedSen += Math.round(Number(vdp.amount) * 100)
     }
     const createdSen = Math.round(Number(quotation.grandTotal) * 100)
-    if (allocatedSen > createdSen) {
+    // AUD-FIN-02 (putusan akuntan): KELEBIHAN DP = KREDIT PELANGGAN
+    // terstruktur (customer_credits), BUKAN pelunasan, BUKAN catatan teks.
+    // paidAmount dibatasi grandTotal (tak boleh overstate); selisih masuk
+    // ledger per DP sumber. Idempoten: satu baris per quotation (sourceType
+    // Quotation + sourceId), retry hanya menambah bila selisih bertambah.
+    // Jurnal nol-net di kewajiban 210102 (reklas antar subledger pelanggan):
+    // kas SUDAH masuk saat terima DP — jurnal di sini ganda bila Dr. Kas.
+    const overSen = allocatedSen - createdSen
+    if (overSen > 0) {
+      const overAmount = overSen / 100
+      const creditDocNo = await generateDocumentNumber("CC")
+      await tx.customerCredit.create({
+        data: {
+          documentNo: creditDocNo,
+          customerId: quotation.customerId,
+          sourceType: "Quotation",
+          sourceId: quotation.id,
+          receivedAmount: overAmount,
+          notes: `Kelebihan DP atas quotation ${quotation.documentNo} (teralokasi ${allocatedSen / 100} > grandTotal ${createdSen / 100}). Bisa dipakai ulang / di-refund.`,
+          createdBy: userId ?? null,
+        },
+      })
       await tx.salesInvoice.update({
         where: { id: created.id },
         data: {
-          notes: `Otomatis dibuat dari DP ${dp.documentNo}. KELEBIHAN DP: teralokasi ${allocatedSen / 100} melebihi grandTotal ${createdSen / 100} — selisih menjadi kredit pelanggan, bukan pelunasan.`,
+          notes: `Otomatis dibuat dari DP ${dp.documentNo}. KELEBIHAN DP ${overAmount} dicatat sebagai kredit pelanggan ${creditDocNo} — bukan pelunasan.`,
         },
       })
     }
@@ -571,8 +592,10 @@ export async function onDownPaymentConfirmed(
     // revenue/COGS/stock-out terjadi saat posting manual (postInvoice).
     // WO/SO/Project di atas tetap dibuat agar kerja bengkel bisa mulai
     // tanpa menunggu ambang 50% (keputusan bisnis #7).
-    // paidAmount = total teralokasi (semua verified DP), bukan cuma DP pemicu.
-    const allocatedTotal = allocatedSen / 100
+    // paidAmount DIBATASI grandTotal — kelebihan sudah pindah ke ledger
+    // (di atas), jadi paidAmount > grandTotal = overstate AR + double-count
+    // (sekali di paidAmount, sekali di kredit). Cap di sini = satu sumber.
+    const allocatedTotal = Math.min(allocatedSen / 100, Number(quotation.grandTotal))
     await tx.salesInvoice.update({
       where: { id: created.id },
       data: {

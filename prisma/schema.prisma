@@ -314,6 +314,7 @@ model Customer {
   updatedAt          DateTime          @updatedAt @map("updated_at")
   customerVehicles   CustomerVehicle[]
   downPayments       DownPayment[]
+  customerCredits    CustomerCredit[]
   projects           Project[]
   quotations         Quotation[]
   salesInvoices      SalesInvoice[]
@@ -329,6 +330,36 @@ model Customer {
   @@index([code], map: "idx_customers_code")
   @@index([createdAt])
   @@map("customers")
+}
+
+
+// AUD-FIN-02 (putusan akuntan): KREDIT PELANGGAN terstruktur. Kelebihan DP di
+// atas grandTotal BUKAN pelunasan — dicatat di sini sebagai saldo yang bisa
+// dipakai ulang / di-refund, bukan catatan teks di notes. Satu baris = satu
+// sumber dana (DP / lebih-bayar). allocated + refunded tak boleh > received
+// (ditegakkan di kode + guard tes; DB tak punya CHECK lintas kolom portabel).
+// Jurnal: saat dibentuk Dr. Kewajiban UMP 210102 / Cr. Kewajiban UMP 210102
+// (reklas antar subledger pelanggan, nol-net di GL); saat dipakai
+// Dr. 210102 / Cr. Piutang; saat refund Dr. 210102 / Cr. Kas.
+model CustomerCredit {
+  id              Int       @id @default(autoincrement())
+  documentNo      String    @unique @map("document_no")
+  customerId      Int       @map("customer_id")
+  sourceType      String    @map("source_type")
+  sourceId        Int       @map("source_id")
+  receivedAmount  Decimal   @db.Decimal(15, 2) @map("received_amount")
+  allocatedAmount Decimal   @default(0.00) @db.Decimal(15, 2) @map("allocated_amount")
+  refundedAmount  Decimal   @default(0.00) @db.Decimal(15, 2) @map("refunded_amount")
+  status          String    @default("open")
+  notes           String?   @db.Text
+  createdBy       Int?      @map("created_by")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  customer        Customer  @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, status], map: "idx_customer_credits_cust_status")
+  @@index([sourceType, sourceId], map: "idx_customer_credits_source")
+  @@map("customer_credits")
 }
 
 model CustomerCategory {

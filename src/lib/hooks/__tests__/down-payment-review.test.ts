@@ -105,6 +105,9 @@ function buildTx(dp: ReturnType<typeof buildDp>) {
       findFirst: mocks.salesPaymentFindFirst,
       create: mocks.salesPaymentCreate,
     },
+    customerCredit: {
+      create: vi.fn().mockResolvedValue({ id: 777, documentNo: "CC-1" }),
+    },
     product: { findMany: vi.fn().mockResolvedValue([]) },
     item: { findMany: vi.fn().mockResolvedValue([]) },
     workOrderItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -167,6 +170,63 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
       expect.objectContaining({ data: expect.objectContaining({ status: "draft" }) }),
     )
     expect(mocks.onSalesInvoicePosted).not.toHaveBeenCalled()
+  })
+
+  it("kelebihan DP jadi kredit pelanggan + paidAmount dibatasi grandTotal (AUD-FIN-02)", async () => {
+    // DP1 600 + DP2 600 = 1200 > grandTotal 1000 → selisih 200 = kredit.
+    const dp = buildDp({ id: 2, amount: 600, status: "draft", docNo: "DP-2" })
+    const tx = buildTx(dp)
+    mocks.downPaymentFindMany.mockImplementation(async (args: any) => {
+      if (args?.where?.status === "confirmed") {
+        return [
+          { documentNo: "DP-1", amount: 600, paymentDate: new Date("2026-09-01T00:00:00Z") },
+          { documentNo: "DP-2", amount: 600, paymentDate: new Date("2026-10-01T00:00:00Z") },
+        ]
+      }
+      return []
+    })
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(2, 1)
+
+    // Kredit terbentuk: sumber Quotation 10, selisih 200.
+    expect(tx.customerCredit.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          customerId: 99,
+          sourceType: "Quotation",
+          sourceId: 10,
+          receivedAmount: 200,
+        }),
+      }),
+    )
+    // paidAmount DIBATASI 1000 (grandTotal) — bukan 1200. Tanpa cap, AR
+    // overstate + double-count (sekali di paidAmount, sekali di kredit).
+    expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paidAmount: 1000, paymentStatus: "paid" }) }),
+    )
+    expect(mocks.salesInvoiceUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paidAmount: 1200 }) }),
+    )
+  })
+
+  it("DP pas (tanpa kelebihan): kredit TIDAK terbentuk", async () => {
+    const dp = buildDp({ id: 2, amount: 200, status: "draft", docNo: "DP-2" })
+    const tx = buildTx(dp)
+    mocks.downPaymentFindMany.mockImplementation(async (args: any) => {
+      if (args?.where?.status === "confirmed") {
+        return [
+          { documentNo: "DP-1", amount: 300, paymentDate: new Date("2026-09-01T00:00:00Z") },
+          { documentNo: "DP-2", amount: 200, paymentDate: new Date("2026-10-01T00:00:00Z") },
+        ]
+      }
+      return []
+    })
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(2, 1)
+
+    expect(tx.customerCredit.create).not.toHaveBeenCalled()
   })
 
   it("retry DP lanjutan yang sudah teralokasi: tidak buat SalesPayment kedua", async () => {
