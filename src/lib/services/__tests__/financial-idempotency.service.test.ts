@@ -104,6 +104,30 @@ describe("financial-idempotency.service", () => {
     expect(isDefinitiveError(new Error("connection lost"))).toBe(false)
   })
 
+  it("klaim menang MENYIMPAN fingerprint; replay cocok = sukses (AUD-R10-05)", async () => {
+    const { payloadFingerprint } = await import("../financial-idempotency.service")
+    const fp = payloadFingerprint({ scope: "customer_credit_allocate", creditId: 1, salesInvoiceId: 101, amount: 2000 })
+    const create = vi.fn().mockResolvedValue({ id: 1 })
+    const tx = buildTx({ create })
+    const r = await claimIdempotencyKey(tx, "customer_credit_allocate", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaab6", 7, fp)
+    expect(r).toEqual({ replayed: false })
+    // Bukti simpan: create dipanggil dengan payloadHash = digest yang sama.
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ payloadHash: fp }) }),
+    )
+    // Replay fingerprint SAMA + scope sama + tipe+hasil valid = sukses + ref.
+    const dup = Object.assign(new Error("dup"), { code: "P2002", meta: { target: "key" } })
+    const tx2 = buildTx({
+      create: vi.fn().mockRejectedValue(dup),
+      findUnique: vi.fn().mockResolvedValue({
+        scope: "customer_credit_allocate", payloadHash: fp,
+        resultRefType: "SalesPayment", resultRefId: 777, createdBy: 7,
+      }),
+    })
+    const r2 = await claimIdempotencyKey(tx2, "customer_credit_allocate", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaab6", 7, fp)
+    expect(r2).toEqual({ replayed: true, resultRefType: "SalesPayment", resultRefId: 777 })
+  })
+
   it("bind menulis ref hasil", async () => {
     const update = vi.fn().mockResolvedValue({})
     await bindIdempotencyKey(buildTx({ update }), "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaab2", "Journal", 42)
