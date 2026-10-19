@@ -353,6 +353,28 @@ describe("Tax Actions", () => {
     const arg = mocks.prismaMock.tax.create.mock.calls.at(-1)?.[0]
     expect(arg.data.rate).toBe(0)
   })
+  it("createTax rejects fictitious effectiveFrom without creating", async () => {
+    const res = await actions.createTax(fdMap({ name: "Fiktif", rate: "11", effectiveFrom: "2026-02-30" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.tax.create).not.toHaveBeenCalled()
+  })
+  it("createTax rejects oversize description without creating", async () => {
+    const res = await actions.createTax(fdMap({ name: "Besar", rate: "11", description: "x".repeat(2001) }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.tax.create).not.toHaveBeenCalled()
+  })
+  it("createTax stores effectiveFrom as UTC midnight", async () => {
+    try {
+      await actions.createTax(fdMap({ name: "PPN", rate: "11", effectiveFrom: "2026-10-20" }))
+    } catch { /* redirect throws */ }
+    const arg = mocks.prismaMock.tax.create.mock.calls.at(-1)?.[0]
+    expect(arg.data.effectiveFrom.toISOString()).toBe("2026-10-20T00:00:00.000Z")
+  })
+  it("updateTax rejects fictitious effectiveTo without updating", async () => {
+    const res = await actions.updateTax(1, fdMap({ name: "PPN", rate: "11", effectiveTo: "2026-13-01" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.tax.update).not.toHaveBeenCalled()
+  })
   it("deleteTax succeeds", async () => {
     mocks.prismaMock.tax.findUniqueOrThrow.mockResolvedValue({ id: 1, usages: 0 })
     try {
