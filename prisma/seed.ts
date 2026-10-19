@@ -47,17 +47,28 @@ function isLoopbackHost(host: string): boolean {
   return host === "127.0.0.1" || host === "localhost" || host === "::1";
 }
 
+const DATABASE_SOCKET_PATH = process.env.DATABASE_SOCKET_PATH
+// S5443: tidak ada fallback socket /tmp yang dapat ditulis publik. Socket hanya
+// dari DATABASE_SOCKET_PATH (env operator) atau dari query
+// `socketPath`/`socket` di DATABASE_URL. Tanpa keduanya, DATABASE_URL wajib ada.
 function buildPoolConfig() {
-  const fallback = {
-    socketPath: "/tmp/mysql.sock",
-    user: "root",
-    password: "",
-    database: "yara_erp",
-    connectionLimit: 5,
-  };
+  const fallback = DATABASE_SOCKET_PATH
+    ? {
+        socketPath: DATABASE_SOCKET_PATH,
+        user: "root",
+        password: "",
+        database: "yara_erp",
+        connectionLimit: 5,
+      }
+    : null;
 
   const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) return fallback;
+  if (!databaseUrl) {
+    if (fallback) return fallback;
+    throw new Error(
+      "DATABASE_URL wajib diisi (atau set DATABASE_SOCKET_PATH ke socket MySQL lokal)",
+    );
+  }
 
   try {
     const parsed = new URL(databaseUrl);
@@ -94,7 +105,10 @@ function buildPoolConfig() {
       allowPublicKeyRetrieval,
     };
   } catch {
-    return fallback;
+    if (fallback) return fallback;
+    throw new Error(
+      "DATABASE_URL wajib diisi (atau set DATABASE_SOCKET_PATH ke socket MySQL lokal)",
+    );
   }
 }
 

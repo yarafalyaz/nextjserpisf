@@ -78,11 +78,16 @@ const TABLE_SOURCES = {
 }
 
 function sql(query) {
-  // S4036: docker tidak dicari lewat PATH pemanggil; cek lokasi tetap dulu.
-  const dockerBin =
-    ["/usr/local/bin/docker", "/usr/bin/docker", "/opt/homebrew/bin/docker"].find((p) =>
-      existsSync(p),
-    ) ?? "docker"
+  // S4036: docker tidak dicari lewat PATH pemanggil; hanya lokasi tetap.
+  const dockerBin = [
+    "/usr/local/bin/docker",
+    "/usr/bin/docker",
+    "/opt/homebrew/bin/docker",
+    "/Applications/Docker.app/Contents/Resources/bin/docker",
+  ].find((p) => existsSync(p))
+  if (!dockerBin) {
+    throw new Error("docker tidak ditemukan di lokasi tetap — install Docker Desktop / docker CLI.")
+  }
   return execFileSync(
     dockerBin,
     ["exec", "-i", DB, "mysql", `-u${DB_USER}`, `-p${DB_PASS}`, DB_NAME, "-N", "-B", "-e", query],

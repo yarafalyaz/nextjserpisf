@@ -48,7 +48,7 @@ export async function updateSystemSettings(formData: FormData) {
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return undefined
     const n = Number.parseInt(String(v), 10)
-    return isNaN(n) ? undefined : n
+    return Number.isNaN(n) ? undefined : n
   }
 
   function intDefault(key: string, fallback: number): number | undefined {
@@ -61,7 +61,7 @@ export async function updateSystemSettings(formData: FormData) {
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return null
     const n = Number.parseInt(String(v), 10)
-    return isNaN(n) ? null : n
+    return Number.isNaN(n) ? null : n
   }
 
   function decimal(key: string): number | undefined {
@@ -69,7 +69,7 @@ export async function updateSystemSettings(formData: FormData) {
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return undefined
     const n = Number.parseFloat(String(v))
-    return isNaN(n) ? undefined : n
+    return Number.isNaN(n) ? undefined : n
   }
 
   function decimalDefault(key: string, fallback: number): number | undefined {
@@ -82,7 +82,7 @@ export async function updateSystemSettings(formData: FormData) {
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return null
     const n = Number.parseFloat(String(v))
-    return isNaN(n) ? null : n
+    return Number.isNaN(n) ? null : n
   }
 
   function bool(key: string): boolean | undefined {

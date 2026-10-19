@@ -20,7 +20,7 @@ export async function attachPendingTransactionAttachments(
   if (!Array.isArray(parsed)) throw new Error("Daftar lampiran tidak valid")
 
   const ids = [...new Set(parsed.map((value) => {
-    const id = typeof value === "number" || typeof value === "string" ? Number(value) : NaN
+    const id = typeof value === "number" || typeof value === "string" ? Number(value) : Number.NaN
     if (!Number.isSafeInteger(id) || id <= 0) throw new Error("ID lampiran tidak valid")
     return id
   }))]

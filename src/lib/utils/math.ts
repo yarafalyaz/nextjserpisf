@@ -37,7 +37,7 @@ export function safeRound(
   decimals: number = 0
 ): number {
   const num = parseNumber(value);
-  if (isNaN(num) || !isFinite(num)) return 0;
+  if (Number.isNaN(num) || !Number.isFinite(num)) return 0;
   
   // Use exponential notation to avoid JS floating-point inaccuracies
   // e.g. safeRound(1.005, 2) -> 1.01

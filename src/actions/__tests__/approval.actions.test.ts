@@ -284,7 +284,12 @@ describe("approveStep / rejectStep branches", () => {
     });
     seedApprovalObj({ referenceType: "SalesOrder", referenceId: 8, requestedBy: 1 }, { userId: 2 });
     await actions.approveStep(1, fdMap({ notes: "OK" }));
-    expectApprovalStatus("approved");
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 }, data: expect.objectContaining({ status: "approved" }) }),
+    );
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ approvalId: 1, action: "approve" }) }),
+    );
   });
 
   it("rejects a specific approver who lacks permission for the document type", async () => {
@@ -342,8 +347,15 @@ describe("approveStep / rejectStep branches", () => {
       },
     });
     await actions.approveStep(1, fdMap({ notes: "OK" }));
-    expectApprovalStatus(undefined, { currentStep: 2 });
-    expectHistory("approve");
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 }, data: expect.objectContaining({ currentStep: 2 }) }),
+    );
+    expect(mocks.prismaMock.approval.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "approved" }) }),
+    );
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ approvalId: 1, action: "approve" }) }),
+    );
   });
   it("approveStep rejects non-approver (roleId path)", async () => {
     silenceConsole();
@@ -383,8 +395,12 @@ describe("approveStep / rejectStep branches", () => {
   it("rejectStep succeeds with non-approver (super_admin bypass)", async () => {
     seedApprovalObj({}, { roleId: 1, approverType: "role" });
     await actions.rejectStep(1, fdMap({ notes: "NO" }));
-    expectApprovalStatus("rejected");
-    expectHistory("reject");
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 }, data: expect.objectContaining({ status: "rejected" }) }),
+    );
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ approvalId: 1, action: "reject" }) }),
+    );
   });
 
   it("approveStep fails due to Maker-Checker SoD constraint", async () => {
@@ -409,16 +425,24 @@ describe("approveStep / rejectStep branches", () => {
     asUser(7, ["user"], ["approve_workflows"]);
     seedApprovalObj({}, { userId: 7 });
     await actions.approveStep(1, fdMap({ notes: "OK" }));
-    expectHistory("approve");
-    expectApprovalStatus("approved");
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ approvalId: 1, action: "approve" }) }),
+    );
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 }, data: expect.objectContaining({ status: "approved" }) }),
+    );
   });
 
   it("approveStep succeeds when stepDef not found (assertStepApprover)", async () => {
     asUser(7, ["user"], ["approve_workflows"]);
     seedApprovalObj();
     await actions.approveStep(1, fdMap({ notes: "OK" }));
-    expectApprovalStatus("approved");
-    expectHistory("approve");
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 }, data: expect.objectContaining({ status: "approved" }) }),
+    );
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ approvalId: 1, action: "approve" }) }),
+    );
   });
 
   it("approveStep fails real validation when notes > 2000 chars", async () => {

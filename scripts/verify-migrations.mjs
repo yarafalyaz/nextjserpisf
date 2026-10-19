@@ -19,9 +19,10 @@ import { execFileSync } from "node:child_process"
 import { existsSync } from "node:fs"
 import mariadb from "mariadb"
 
-// S4036: jangan andalkan PATH pemanggil untuk menemukan npx. Cari biner
-// node/npm pada lokasi tetap; bila tak ada, pakai process.execPath agar
-// npx dijalankan lewat node yang sama dengan skrip ini.
+// S4036: CLI lokal project, tanpa npx/PATH. prisma terpasang di
+// node_modules (exact dari lockfile) — dijalankan lewat node yang sama
+// dengan skrip ini (process.execPath, path absolut).
+import { fileURLToPath } from "node:url"
 
 /**
  * URL yang dipakai untuk SEMUA langkah (buat DB scratch → migrate deploy → diff → hapus).
@@ -56,14 +57,19 @@ const urlScratch = (() => {
   return u.toString()
 })()
 
+const proyekRoot = fileURLToPath(new URL("..", import.meta.url))
+const prismaCli = `${proyekRoot}node_modules/prisma/build/index.js`
+if (!existsSync(prismaCli)) {
+  console.error("Prisma CLI lokal tidak ditemukan (node_modules/prisma). Jalankan npm ci lebih dulu.")
+  process.exit(2)
+}
+
 function jalankan(args) {
-  const npxBin =
-    ["/usr/local/bin/npx", "/usr/bin/npx", "/opt/homebrew/bin/npx"].find((p) => existsSync(p)) ??
-    "npx"
-  return execFileSync(npxBin, args, {
+  return execFileSync(process.execPath, [prismaCli, ...args], {
+    cwd: proyekRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, DATABASE_URL: urlScratch },
+    env: { ...process.env, DATABASE_URL: urlScratch, PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin" },
   })
 }
 
@@ -90,11 +96,10 @@ try {
   scratchMilikSendiri = true
   console.log(`• DB scratch siap: ${namaScratch}`)
 
-  jalankan(["prisma", "migrate", "deploy"])
+  jalankan(["migrate", "deploy"])
   console.log("• migrate deploy: seluruh migrasi diterapkan")
 
   const diff = jalankan([
-    "prisma",
     "migrate",
     "diff",
     "--from-config-datasource",

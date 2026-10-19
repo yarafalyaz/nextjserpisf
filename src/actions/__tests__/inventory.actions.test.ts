@@ -127,7 +127,8 @@ beforeEach(() => {
 describe("Stock Adjustment Actions", () => {
   it("createStockAdjustment succeeds", async () => {
     const res = await actions.createStockAdjustment(saFd());
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.stockAdjustment.create).toHaveBeenCalledTimes(1);
   });
 
   it("rejects duplicate item rows instead of saving conflicting physical counts", async () => {
@@ -186,12 +187,14 @@ describe("Stock Adjustment Actions", () => {
   it("updateStockAdjustment succeeds", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment);
     const res = await actions.updateStockAdjustment(1, saFd());
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.stockAdjustment.update).toHaveBeenCalledTimes(1);
   });
   it("processStockAdjustment succeeds", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     const res = await actions.processStockAdjustment(1);
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.stockAdjustment.update).toHaveBeenCalled();
   });
   it("processStockAdjustment ditolak bila approval pending (P0-3)", async () => {
     const { assertApproved } = await import("@/lib/services/approval-workflow.service");
@@ -222,46 +225,54 @@ describe("Stock Adjustment Actions", () => {
   it("deleteStockAdjustment succeeds", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment);
     const res = await actions.deleteStockAdjustment(1);
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.stockAdjustment.delete).toHaveBeenCalled();
   });
 });
 
 describe("Inventory Transfer Actions", () => {
   it("createInventoryTransfer succeeds", async () => {
     const res = await actions.createInventoryTransfer(transferFd());
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.create).toHaveBeenCalledTimes(1);
   });
   it("updateInventoryTransfer succeeds", async () => {
     seedDraft(mocks.prismaMock.inventoryTransfer);
     const res = await actions.updateInventoryTransfer(1, transferFd());
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.update).toHaveBeenCalledTimes(1);
   });
   it("processInventoryTransfer succeeds", async () => {
     seedDraft(mocks.prismaMock.inventoryTransfer, { items: [] });
     const res = await actions.processInventoryTransfer(1);
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.update).toHaveBeenCalled();
   });
   it("receiveInventoryTransfer succeeds", async () => {
     seedDoc(mocks.prismaMock.inventoryTransfer, "processed", { items: [] });
     const res = await actions.receiveInventoryTransfer(1);
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.update).toHaveBeenCalled();
   });
   it("deleteInventoryTransfer succeeds", async () => {
     seedDraft(mocks.prismaMock.inventoryTransfer);
     const res = await actions.deleteInventoryTransfer(1);
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.delete).toHaveBeenCalled();
   });
 });
 
 describe("Material Issue Actions", () => {
   it("createMaterialIssue succeeds", async () => {
     const res = await actions.createMaterialIssue(miFd());
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.materialIssue.create).toHaveBeenCalledTimes(1);
   });
   it("updateMaterialIssue succeeds", async () => {
     seedDraft(mocks.prismaMock.materialIssue);
     const res = await actions.updateMaterialIssue(1, miFd());
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.materialIssue.update).toHaveBeenCalledTimes(1);
   });
   // Regresi: workOrderId & projectId tidak punya input di form MI, jadi update
   // dulu menulis `?? null` dan memutus keduanya. Hilangnya workOrderId membuat
@@ -279,7 +290,10 @@ describe("Material Issue Actions", () => {
   it("completeMaterialIssue succeeds", async () => {
     seedDraft(mocks.prismaMock.materialIssue, { items: [] });
     const res = await actions.completeMaterialIssue(1);
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.materialIssue.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "draft" } }),
+    );
   });
   it("completeMaterialIssue refuses when the WO was already consumed via PO (P1-4)", async () => {
     mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
@@ -308,7 +322,8 @@ describe("Material Issue Actions", () => {
   it("deleteMaterialIssue succeeds", async () => {
     seedDraft(mocks.prismaMock.materialIssue);
     const res = await actions.deleteMaterialIssue(1);
-    expectSuccess(res);
+    expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.materialIssue.delete).toHaveBeenCalled();
   });
 });
 
@@ -443,71 +458,95 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any)[fnName](arg1, arg2);
     } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled();
+    expect((mocks as any).requirePermissionMock.mock.calls[0]?.[0]).toEqual(
+      expect.any(String),
+    );
   }
 
   it("createStockAdjustment handles error globally", async () => {
     await expectPermissionReject("createStockAdjustment");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("processStockAdjustment handles error globally", async () => {
     await expectPermissionReject("processStockAdjustment");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createInventoryTransfer handles error globally", async () => {
     await expectPermissionReject("createInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("processInventoryTransfer handles error globally", async () => {
     await expectPermissionReject("processInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("receiveInventoryTransfer handles error globally", async () => {
     await expectPermissionReject("receiveInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createMaterialIssue handles error globally", async () => {
     await expectPermissionReject("createMaterialIssue");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("completeMaterialIssue handles error globally", async () => {
     await expectPermissionReject("completeMaterialIssue");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createWorkOrder handles error globally", async () => {
     await expectPermissionReject("createWorkOrder");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateWorkOrder handles error globally", async () => {
     await expectPermissionReject("updateWorkOrder");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createRack handles error globally", async () => {
     await expectPermissionReject("createRack");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateRack handles error globally", async () => {
     await expectPermissionReject("updateRack");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteStockAdjustment handles error globally", async () => {
     await expectPermissionReject("deleteStockAdjustment");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteInventoryTransfer handles error globally", async () => {
     await expectPermissionReject("deleteInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteMaterialIssue handles error globally", async () => {
     await expectPermissionReject("deleteMaterialIssue");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteRack handles error globally", async () => {
     await expectPermissionReject("deleteRack");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateStockAdjustment handles error globally", async () => {
     await expectPermissionReject("updateStockAdjustment");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateMaterialIssue handles error globally", async () => {
     await expectPermissionReject("updateMaterialIssue");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateInventoryTransfer handles error globally", async () => {
     await expectPermissionReject("updateInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createRackRow handles error globally", async () => {
     await expectPermissionReject("createRackRow");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateRackRow handles error globally", async () => {
     await expectPermissionReject("updateRackRow");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteRackRow handles error globally", async () => {
     await expectPermissionReject("deleteRackRow");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
 });
 

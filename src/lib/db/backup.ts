@@ -32,6 +32,7 @@ const resolveBin = (names: string[]): string => {
 }
 const MYSQLDUMP_BIN = resolveBin(["/usr/bin/mysqldump", "/usr/local/bin/mysqldump", "/opt/homebrew/bin/mysqldump", "mysqldump"])
 const MYSQL_BIN = resolveBin(["/usr/bin/mysql", "/usr/local/bin/mysql", "/opt/homebrew/bin/mysql", "mysql"])
+const SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin"
 
 /**
  * Database backup/restore via mysqldump / mysql CLI.
@@ -138,7 +139,8 @@ export function createBackup(label?: string): Promise<BackupFile> {
         conn.database,
       ]
 
-      const env = { ...process.env }
+      // S4036: spawn dgn PATH tetap, bukan PATH dari pemanggil.
+      const env = { ...process.env, PATH: SAFE_PATH } as NodeJS.ProcessEnv
       if (conn.password) env.MYSQL_PWD = conn.password
 
       const out = createWriteStream(filepath)
@@ -205,7 +207,8 @@ export async function restoreBackup(filename: string): Promise<void> {
       `-u${conn.user}`,
       conn.database,
     ]
-    const env = { ...process.env }
+    // S4036: spawn dgn PATH tetap, bukan PATH dari pemanggil.
+    const env = { ...process.env, PATH: SAFE_PATH } as NodeJS.ProcessEnv
     if (conn.password) env.MYSQL_PWD = conn.password
 
     const input = createReadStream(filepath)

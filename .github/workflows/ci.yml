@@ -56,12 +56,12 @@ jobs:
     name: Build Next.js
     runs-on: ubuntu-latest
     needs: lint
-    # Pilihan paling aman: build tetap memakai service MySQL + `migrate deploy`
-    # (tanpa seed), sama seperti alur lama di job e2e. Tidak semua halaman
-    # terbukti `force-dynamic`, jadi halaman yang di-prerender masih bisa
-    # mengakses DB saat build; tanpa DB nyata build bisa gagal atau menghasilkan
-    # output yang berbeda dari alur lama. `migrate deploy` murah (~30 dtk) dan
-    # manfaatnya tetap besar: build hanya 1x, bukan 5x (e2e-setup + 4 shard).
+    # Keputusan pemilik: E2E browser dijalankan lokal, GitHub Actions hanya
+    # lint + unit + integrasi DB + build produksi. Build tetap memakai service
+    # MySQL + `migrate deploy` (tanpa seed). Tidak semua halaman terbukti
+    # `force-dynamic`, jadi halaman yang di-prerender masih bisa mengakses DB
+    # saat build; tanpa DB nyata build bisa gagal atau menghasilkan output
+    # berbeda. `migrate deploy` murah (~30 dtk).
     services:
       mysql:
         image: mysql:8.0
@@ -105,31 +105,11 @@ jobs:
       - run: npm run build
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-      - name: Upload build Next.js
-        uses: actions/upload-artifact@v7
-        with:
-          name: next-build
-          # S8262: upload folder `.next` utuh bisa ikut membawa berkas kredensial
-          # dari workspace. Upload EKSPLISIT hanya yang dibutuhkan runtime:
-          # standalone server + static. `prepare-standalone.mjs` menyalin
-          # `.next/static` -> standalone/.next/static dan `public/` dari repo
-          # sendiri, jadi tanpa folder .next lain server tetap jalan.
-          # Penanda mtime direkonstruksi di job konsumen (touch BUILD_ID di
-          # standalone + dibuat ulang .next/BUILD_ID untuk pranala skrip).
-          # include-hidden-files WAJIB: path diawali `.next` cocok pola dotfile,
-          # upload-artifact v4+ melewatinya diam-diam (upload sukses, 0 berkas)
-          # sehingga download-artifact gagal 'Artifact not found'.
-          include-hidden-files: true
-          if-no-files-found: error
-          path: |
-            .next/standalone
-            .next/static
-          retention-days: 1
 
-  e2e-setup:
-    name: E2E Auth Setup
+  db-integration:
+    name: DB Integration Tests
     runs-on: ubuntu-latest
-    needs: [lint, build]
+    needs: lint
     services:
       mysql:
         image: mysql:8.0
@@ -170,15 +150,14 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           # Seed guard: demo users (9 akun) hanya dibuat bila eksplisit
-          # diizinkan + password admin disediakan. CI butuh akun demo untuk
-          # login E2E (E2E_PASSWORD), jadi guard ON di sini.
+          # diizinkan + password admin disediakan. Integrasi DB butuh data seed.
           ALLOW_DEMO_SEED: "true"
           SEED_ADMIN_PASSWORD: Yara1234
       - run: ./node_modules/.bin/tsx scripts/seed-remaining-e2e.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           # Skrip ini impor env.ts; sesudah R-11 bypass CI=true dicabut, secret
-          # wajib ada (32+ char). Nilai tes sama seperti langkah build/auth.
+          # wajib ada (32+ char). Nilai tes khusus CI.
           NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
           AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
       - name: Run DB integration tests (FIFO/multi-UoM/batch/serial engine)
@@ -203,173 +182,3 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-      - name: Install Playwright chromium (browser dari cache, --with-deps tetap untuk apt deps)
-        run: ./node_modules/.bin/playwright install --with-deps chromium
-      - name: Download build Next.js (hasil job build, tidak build ulang)
-        uses: actions/download-artifact@v7
-        with:
-          name: next-build
-          path: .next
-      # Artifact cuma membawa standalone+static (tanpa `.next/BUILD_ID` utuh).
-      # `prepare-standalone.mjs` menentukan penanda build dari
-      # `.next/BUILD_ID`, kalau tak ada baru `standalone/server.js`, lalu
-      # membandingkan mtime-nya lawan `prisma/schema.prisma` checkout yang
-      # lebih baru dari build. Rekonstruksi penanda dengan mtime SEKARANG
-      # agar skrip tak salah menuduh build basi; isi build tidak berubah.
-      - name: Segarkan penanda build artifact
-        run: |
-          mkdir -p .next
-          touch .next/BUILD_ID .next/standalone/server.js
-      - name: Run Auth Setup
-        run: ./node_modules/.bin/playwright test --project=setup --workers=1
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-          # 32+ char: di GitHub Actions env.ts melewati validasi (CI="true"),
-          # tapi run lokal/mirror tidak — secret 9 char gagal start di sana.
-          # Nilai ini sah di kedua tempat.
-          NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
-          AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
-          NEXTAUTH_URL: http://localhost:4101
-          AUTH_TRUST_HOST: "true"
-          E2E_PORT: "4101"
-
-  e2e:
-    name: "E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})"
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    needs: [lint, unit, build, e2e-setup]
-    strategy:
-      fail-fast: false
-      matrix:
-        shardIndex: [1, 2, 3, 4]
-        shardTotal: [4]
-    services:
-      mysql:
-        image: mysql:8.0
-        env:
-          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
-          MYSQL_DATABASE: yara_erp
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-          --tmpfs /var/lib/mysql:rw
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: npm
-      - run: npm ci --ignore-scripts
-      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
-      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
-      - run: ./node_modules/.bin/prisma generate
-        env:
-          DATABASE_URL: mysql://root@localhost:3306/dummy
-      - name: Tune MySQL
-        run: |
-          mysql -h 127.0.0.1 -u root -e "SET GLOBAL max_connections=200; SET GLOBAL wait_timeout=600; SET GLOBAL interactive_timeout=600;" 
-      - run: ./node_modules/.bin/prisma generate
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-      # `migrate deploy`, bukan `db push`: rantai migrasi sudah diverifikasi bisa
-      # mereproduksi skema dari DB kosong (drift 0). Dengan ini ketidaksesuaian skema vs
-      # migrasi GAGAL KERAS, bukan tertutupi — konsekuensinya setiap perubahan skema
-      # wajib menyertakan migrasinya.
-      - run: ./node_modules/.bin/prisma migrate deploy
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-      - run: ./node_modules/.bin/tsx prisma/seed.ts
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-          # Seed guard ON: E2E butuh akun demo (E2E_PASSWORD).
-          ALLOW_DEMO_SEED: "true"
-          SEED_ADMIN_PASSWORD: Yara1234
-      - run: ./node_modules/.bin/tsx scripts/seed-remaining-e2e.ts
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-          # Sama seperti job e2e-setup: env.ts (R-11) wajibkan secret 32+ char.
-          NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
-          AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
-      - name: Cache Playwright browsers
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
-      - name: Install Playwright chromium (browser dari cache, --with-deps tetap untuk apt deps)
-        run: ./node_modules/.bin/playwright install --with-deps chromium
-      - name: Download build Next.js (hasil job build, tidak build ulang)
-        uses: actions/download-artifact@v7
-        with:
-          name: next-build
-          path: .next
-      # Artifact cuma membawa standalone+static (tanpa `.next/BUILD_ID` utuh).
-      # `prepare-standalone.mjs` menentukan penanda build dari
-      # `.next/BUILD_ID`, kalau tak ada baru `standalone/server.js`, lalu
-      # membandingkan mtime-nya lawan `prisma/schema.prisma` checkout yang
-      # lebih baru dari build. Rekonstruksi penanda dengan mtime SEKARANG
-      # agar skrip tak salah menuduh build basi; isi build tidak berubah.
-      - name: Segarkan penanda build artifact
-        run: |
-          mkdir -p .next
-          touch .next/BUILD_ID .next/standalone/server.js
-      - name: Run Auth Setup
-        # Login HARUS di job ini, bukan diambil dari artifact job e2e-setup:
-        # token sesi mengikat 12 karakter awal hash password (src/lib/auth/auth.ts)
-        # dan bcrypt memakai salt acak, jadi tiap job yang men-seed DB sendiri
-        # menghasilkan hash berbeda. Cookie dari job lain langsung dicabut ->
-        # semua halaman dashboard redirect /login?reason=deactivated.
-        run: ./node_modules/.bin/playwright test --project=setup --workers=1
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-          NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
-          AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
-          NEXTAUTH_URL: http://localhost:4101
-          AUTH_TRUST_HOST: "true"
-          E2E_PORT: "4101"
-      - name: Run E2E Tests
-        # Both viewports: the mobile project guards a whole surface (drawers,
-        # card lists, `lg:hidden` toolbars) that chromium alone never touches -
-        # 331 mobile tests were previously never executed anywhere.
-        run: ./node_modules/.bin/playwright test --project=chromium --project=mobile-chrome --no-deps --workers=1 --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
-          # 32+ char: di GitHub Actions env.ts melewati validasi (CI="true"),
-          # tapi run lokal/mirror tidak — secret 9 char gagal start di sana.
-          # Nilai ini sah di kedua tempat.
-          NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
-          AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
-          NEXTAUTH_URL: http://localhost:4101
-          AUTH_TRUST_HOST: "true"
-          E2E_PORT: "4101"
-          PW_WORKERS: 1
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: playwright-report-shard-${{ matrix.shardIndex }}
-          path: playwright-report/
-          retention-days: 30
-          # Shard yang hijau tidak menghasilkan direktori ini; tanpa baris ini CI
-          # menandai "No files were found" sebagai anotasi yang menyamarkan
-          # kegagalan sungguhan.
-          if-no-files-found: ignore
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-results-shard-${{ matrix.shardIndex }}
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore

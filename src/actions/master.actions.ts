@@ -581,7 +581,7 @@ export async function createWarehouse(formData: FormData) {
       let maxNum = 0;
       for (const w of existingCodes) {
         const num = Number.parseInt(w.code.slice(prefix.length), 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
+        if (!Number.isNaN(num) && num > maxNum) maxNum = num;
       }
       let nextId = maxNum + 1;
       while (

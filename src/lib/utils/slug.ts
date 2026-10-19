@@ -31,8 +31,7 @@ export function slugify(input: string | null | undefined): string {
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-/, "").replace(/-$/, "")
-    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "")
 }
 
 /**

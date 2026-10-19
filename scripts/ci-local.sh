@@ -2,16 +2,38 @@
 # =============================================================================
 # Local CI/CD Pipeline — silengkap (YaraERP Next.js)
 # =============================================================================
-# Menjalankan seluruh pipeline secara lokal tanpa GitHub Actions.
-# Usage:
-#   ./scripts/ci-local.sh          # Full pipeline (lint → type → unit → build → e2e)
-#   ./scripts/ci-local.sh --skip-e2e   # Skip E2E (tidak butuh DB/server running)
-#   ./scripts/ci-local.sh --e2e-only   # Hanya E2E tests
+# Menjalankan pipeline pra-merge secara lokal (lint → type → unit → build →
+# DB → E2E). Gate E2E akhir pra-merge: GitHub Actions hanya menjalankan
+# lint, unit, build produksi, dan DB integration di MySQL — E2E browser
+# (Playwright) TIDAK jalan di GitHub Actions, jadi hasil lokal inilah
+# bukti E2E untuk PR. Lampirkan SHA + status tree di bawah ke PR.
 #
-# Prerequisites:
-#   - Node.js ≥ 20
-#   - MySQL running dengan DATABASE_URL di .env
+# Usage:
+#   DATABASE_URL='mysql://USER:PASSWORD@HOST:3306/DB_TES' ./scripts/ci-local.sh
+#   DATABASE_URL='mysql://USER:PASSWORD@HOST:3306/DB_TES' npm run ci
+#   ./scripts/ci-local.sh --skip-e2e   # Skip E2E (tidak butuh DATABASE_URL)
+#   DATABASE_URL='mysql://USER:PASSWORD@HOST:3306/DB_TES' ./scripts/ci-local.sh --e2e-only
+#
+# Prerequisites (mode E2E / full):
+#   - Node.js ≥ 20 (lihat `engines` di package.json untuk versi yang dipakai repo)
+#   - MySQL 8 berjalan, dengan database KHUSUS tes yang boleh di-reset
+#     (migrate + seed menulis ulang isinya). Jangan pakai database dev/prod.
+#   - DATABASE_URL wajib diset eksplisit di environment sebelum menjalankan
+#     skrip (lihat contoh di atas). Skrip ini TIDAK membaca `.env` untuk
+#     dirinya sendiri; nilai dari `.env` saja tidak cukup. Prisma memang
+#     membaca `.env` lewat prisma.config.ts, tetapi server standalone dan
+#     langkah lain di skrip ini memakai environment proses. Jangan hardcode
+#     kredensial di skrip/command yang dicommit.
+#   - Database bernama persis `silengkap` ditolak (diduga DB dev/prod).
+#   - Tree bersih TIDAK diwajibkan; skrip mencatat commit SHA
+#     (`git rev-parse --short HEAD`) dan status dirty
+#     (`git status --porcelain`) di awal dan di summary supaya hasil bisa
+#     dilampirkan ke PR dan tahu persis kode apa yang dites.
 #   - Playwright browsers terinstall (npx playwright install chromium)
+#
+# Perintah Playwright standar (`playwright test`) menjalankan auth setup
+# (project `setup`, e2e/auth.setup.ts) lalu project `chromium` dan
+# `mobile-chrome` sesuai playwright.config.ts — tanpa shard lokal.
 # =============================================================================
 
 set -euo pipefail
@@ -95,6 +117,40 @@ trap cleanup EXIT
 cd "$PROJECT_DIR"
 mkdir -p "$LOG_DIR"
 
+# Informasi commit yang dites — laporkan apa adanya (tree bersih tidak
+# diwajibkan) supaya log bisa dilampirkan ke PR.
+GIT_SHA="$(git rev-parse --short HEAD 2>/dev/null || echo 'tidak-diketahui')"
+GIT_DIRTY=false
+GIT_STATUS="$(git status --porcelain 2>/dev/null || true)"
+if [[ -n "$GIT_STATUS" ]]; then GIT_DIRTY=true; fi
+
+# ── Guard DATABASE_URL (hanya mode yang menyentuh DB/E2E) ────────────────────
+# `--skip-e2e` tidak butuh DB. Mode lain wajib DATABASE_URL eksplisit dari
+# environment; skrip tidak membaca `.env` untuk dirinya (lihat header).
+if ! $SKIP_E2E; then
+  if [[ -z "${DATABASE_URL:-}" ]]; then
+    echo -e "${RED}✖ DATABASE_URL belum diset.${NC}" >&2
+    echo "  E2E lokal wajib memakai database khusus tes yang boleh di-reset (MySQL 8)." >&2
+    echo "  Jangan pakai database dev/prod. Contoh:" >&2
+    echo "    DATABASE_URL='mysql://USER:PASSWORD@HOST:3306/DB_TES' ./scripts/ci-local.sh" >&2
+    echo "  Atau jalankan tanpa E2E: ./scripts/ci-local.sh --skip-e2e" >&2
+    exit 1
+  fi
+  # Nama database = segmen path URL setelah host:port, sebelum `?`.
+  if [[ "$DATABASE_URL" =~ ^[a-zA-Z][a-zA-Z0-9+.-]*://[^/]+/([^/?]+) ]]; then
+    DB_NAME="${BASH_REMATCH[1]}"
+  else
+    echo -e "${RED}✖ DATABASE_URL tidak memuat nama database.${NC}" >&2
+    echo "  Format wajib: mysql://USER:PASSWORD@HOST:3306/DB_TES" >&2
+    exit 1
+  fi
+  if [[ "$DB_NAME" == "silengkap" ]]; then
+    echo -e "${RED}✖ DATABASE_URL menunjuk database 'silengkap' — ditolak.${NC}" >&2
+    echo "  Diduga database dev/prod. Pakai database khusus tes yang boleh di-reset." >&2
+    exit 1
+  fi
+fi
+
 echo ""
 echo -e "${CYAN}╔══════════════════════════════════════════════════════════╗${NC}"
 echo -e "${CYAN}║     🚀 Local CI/CD Pipeline — silengkap (YaraERP)      ║${NC}"
@@ -103,6 +159,17 @@ echo -e "${CYAN}║  Timestamp : ${TIMESTAMP}                        ║${NC}"
 echo -e "${CYAN}║  Node      : $(node -v | tr -d '\n')                              ║${NC}"
 echo -e "${CYAN}║  Mode      : $(if $SKIP_E2E; then echo 'Skip E2E'; elif $E2E_ONLY; then echo 'E2E Only'; else echo 'Full Pipeline'; fi)                          ║${NC}"
 echo -e "${CYAN}╚══════════════════════════════════════════════════════════╝${NC}"
+echo -e "  Commit     : ${GIT_SHA}"
+if $GIT_DIRTY; then
+  echo -e "  Tree       : ${YELLOW}dirty (ada perubahan belum commit)${NC}"
+  echo "$GIT_STATUS" | sed 's/^/    /'
+else
+  echo -e "  Tree       : bersih"
+fi
+if ! $SKIP_E2E; then
+  # Hanya nama database — jangan pernah cetak kredensial/host dari URL.
+  echo -e "  Database   : ${DB_NAME} (khusus tes, boleh di-reset)"
+fi
 
 PIPELINE_START=$(date +%s)
 RESULTS=()
@@ -215,19 +282,45 @@ fi
 
 # Terapkan migrasi yang sudah ada (bukan `db push`): rantai migrasi
 # diverifikasi mereproduksi skema dari DB kosong (drift 0, lihat
-# `npm run db:check-migrations`), sama seperti job CI di
-# `.github/workflows/ci.yml`. `db push` menutupi ketidaksesuaian skema vs
-# migrasi; `migrate deploy` membuatnya GAGAL KERAS.
+# `npm run db:check-migrations`). `db push` menutupi ketidaksesuaian skema vs
+# migrasi; `migrate deploy` membuatnya GAGAL KERAS. Urutan di mode full:
+# build produksi (stage 4) jalan lebih dulu, baru DB/E2E di sini.
 if $DB_OK; then
   if node_modules/.bin/prisma migrate deploy >> "$DB_LOG" 2>&1; then
     pass "DB migrated"
   else
-    echo -e "  ${YELLOW}⚠ DB migrate failed (mungkin DB belum running)${NC}"
-    echo -e "  ${YELLOW}  E2E tests mungkin akan error.${NC}"
+    fail "DB migrate failed" "$DB_LOG"
+    DB_OK=false
   fi
 fi
 
-RESULTS+=("${GREEN}✔ DB Check${NC}")
+# Seed fixture E2E — tanpa ini auth setup (e2e/auth.setup.ts) dan spec yang
+# butuh data seed gagal sebelum tes apa pun jalan. Sama seperti alur CI
+# lama: seed utama lalu seed-remaining-e2e. Database khusus tes boleh
+# di-reset, jadi seed di sini aman; jangan arahkan ke DB dev/prod.
+# `SEED_ADMIN_PASSWORD` default `Yara1234` harus sama dengan default
+# `E2E_PASSWORD` di e2e/auth.setup.ts; sesuaikan keduanya bila mengubah.
+if $DB_OK; then
+  if ALLOW_DEMO_SEED=true SEED_ADMIN_PASSWORD="${SEED_ADMIN_PASSWORD:-Yara1234}" node_modules/.bin/tsx prisma/seed.ts >> "$DB_LOG" 2>&1 \
+     && node_modules/.bin/tsx scripts/seed-remaining-e2e.ts >> "$DB_LOG" 2>&1; then
+    pass "DB seeded (fixture E2E)"
+  else
+    fail "DB seed failed" "$DB_LOG"
+    DB_OK=false
+  fi
+fi
+
+if $DB_OK; then
+  RESULTS+=("${GREEN}✔ DB Check${NC}")
+else
+  RESULTS+=("${RED}✖ DB Check${NC}")
+  echo -e "  ${RED}DB tidak siap — E2E tests di-skip.${NC}"
+  SKIP_E2E=true
+fi
+
+fi # end of DB stage (!SKIP_E2E)
+
+if ! $SKIP_E2E; then
 
 # ══════════════════════════════════════════════════════════════════════════════
 # STAGE 6: E2E Tests (Playwright)
@@ -242,7 +335,10 @@ if ! node_modules/.bin/playwright install --dry-run chromium > /dev/null 2>&1; t
   node_modules/.bin/playwright install chromium >> "$E2E_LOG" 2>&1
 fi
 
-# Run E2E
+# Run E2E — satu perintah standar tanpa shard lokal. Sesuai
+# playwright.config.ts, ini menjalankan project `setup` (auth,
+# e2e/auth.setup.ts, dependency dari project lain) lalu `chromium` dan
+# `mobile-chrome`.
 export E2E_PORT
 export CI=true
 
@@ -275,6 +371,14 @@ for result in "${RESULTS[@]}"; do
 done
 
 echo ""
+# SHA + status tree tercatat di summary juga, supaya log di .ci-logs bisa
+# dilampirkan ke PR sebagai bukti gate untuk commit persis ini.
+echo -e "  Commit     : ${GIT_SHA}"
+if $GIT_DIRTY; then
+  echo -e "  Tree       : ${YELLOW}dirty (ada perubahan belum commit)${NC}"
+else
+  echo -e "  Tree       : bersih"
+fi
 echo -e "  ${BLUE}Logs: ${LOG_DIR}/${NC}"
 echo ""
 

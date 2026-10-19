@@ -297,7 +297,6 @@ const ALLOWED_DEFAULT_RETURN: Record<string, string> = {
   "src/lib/setup/install-state.ts": "tabel tak ada / DB tak terjangkau → dianggap belum terpasang (degradasi disengaja, beralasan)",
   "src/lib/utils/idempotency.ts": "pembersihan best-effort; kegagalan dicatat dan dianggap \"tak ada yang dihapus\"",
   "src/lib/utils/safe-parse.ts": "parse JSON gagal → null; kontrak fungsi memang mengembalikan null",
-  "scripts/migrate-coa-accurate.mjs": "parsing URL koneksi gagal → konfigurasi fallback; skrip perbaikan sekali-jalan",
 }
 
 function collectViolations(

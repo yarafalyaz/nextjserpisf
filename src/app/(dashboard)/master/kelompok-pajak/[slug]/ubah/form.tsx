@@ -39,8 +39,8 @@ export function TaxGroupEditForm({ id, name, selectedTaxIds, taxes }: Props) {
           <Label htmlFor="name">Nama Grup *</Label>
           <Input id="name" name="name" required defaultValue={name} />
         </div>
-        <fieldset className="flex flex-col gap-1.5">
-          <legend className="text-sm font-medium text-foreground">Pajak</legend>
+        <fieldset aria-labelledby="tax-options-label" className="flex flex-col gap-1.5">
+          <span id="tax-options-label" className="text-sm font-medium text-foreground">Pajak</span>
           <div className="flex flex-col gap-2">
             {taxes.map((tax) => (
               <label key={tax.id} htmlFor={`tax-${tax.id}`} className="flex items-center gap-2 cursor-pointer">

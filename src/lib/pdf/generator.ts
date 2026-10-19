@@ -1065,7 +1065,7 @@ export function generateWorkOrderPDF(
       }
 
       // Key-value lines: "Nama Proyek  : xxx", "Pelanggan    : xxx"
-      const kvMatch = line.match(/^(\S[^:]{0,500})\s*:\s*(.{1,2000})$/)
+      const kvMatch = line.match(/^(\S[^:]{0,500}?)\s*:\s*(.{1,2000})$/)
       if (kvMatch) {
         doc.setFont("Helvetica", "normal")
         doc.setFontSize(8.5)

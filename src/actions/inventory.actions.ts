@@ -850,7 +850,7 @@ export async function getNextRackCode(warehouseId: number) {
   let maxNum = 0;
   for (const r of existingCodes) {
     const num = Number.parseInt(r.code.slice(prefix.length), 10);
-    if (!isNaN(num) && num > maxNum) maxNum = num;
+    if (!Number.isNaN(num) && num > maxNum) maxNum = num;
   }
   let nextId = maxNum + 1;
 
@@ -927,7 +927,7 @@ export async function createRack(formData: FormData) {
       let maxNum = 0;
       for (const r of existingCodes) {
         const num = Number.parseInt(r.code.slice(prefix.length), 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
+        if (!Number.isNaN(num) && num > maxNum) maxNum = num;
       }
       let nextId = maxNum + 1;
 
