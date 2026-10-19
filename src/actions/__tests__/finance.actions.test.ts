@@ -526,6 +526,27 @@ describe("Journal Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it.each([
+    ["fictitious calendar date 2026-02-30 (no silent roll to March)", "2026-02-30"],
+    ["unparseable date instead of letting Invalid Date bypass period lock", "bukan-tanggal"],
+  ])("createJournal rejects %s", async (_label, transactionDate) => {
+    const res = await (actions as any).createJournal(fdMap({
+      transactionDate,
+      entries: JSON.stringify([{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.journal.create).not.toHaveBeenCalled()
+  })
+
+  it("updateJournal rejects fictitious calendar date 2026-02-30", async () => {
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", transactionDate: new Date("2026-06-13"), type: "GENERAL", journalNumber: "JRN-1" })
+    const res = await (actions as any).updateJournal(1, fdMap({
+      transactionDate: "2026-02-30",
+      entries: JSON.stringify([{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }])
+    }))
+    expect(res?.success).toBe(false)
+  })
+
   /**
    * Pusat laba pada jurnal: masternya ada, tetapi tanpa penulisan per entri laporan
    * pusat laba selalu menumpuk di "Tanpa Pusat Laba".

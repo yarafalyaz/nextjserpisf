@@ -23,6 +23,8 @@ import {
   bankReconciliationSchema,
   costCenterSchema,
   profitCenterSchema,
+  journalSchema,
+  updateJournalSchema,
 } from "@/lib/validations/finance.schemas";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { getSystemSettings } from "@/lib/utils/settings";
@@ -507,13 +509,19 @@ export async function createJournal(formData: FormData) {
   try {
     const user = await requirePermission("create_journals");
 
+    // Tanggal wajib YYYY-MM-DD kalender-nyata (dateOnly) lalu WIB-midnight:
+    // `new Date("2026-02-30")` geser diam-diam ke 2 Mar dan Invalid Date
+    // lolos assertPeriodOpen (NaN <= lock = false).
+    const parsedJournal = parseFormData(journalSchema, formData);
+    if (!parsedJournal.success) return { success: false as const, error: parsedJournal.error };
+    const txDate = wibDateToUtcMidnight(parsedJournal.data.transactionDate);
+
     const documentNo = await generateDocumentNumber("JRN");
 
     // Block posting/creating into a closed accounting period.
     // Cek luar-tx hanya fast-fail; keputusan final diulang di dalam tx
     // dengan tx di bawah (R-09) — tanpa itu tutup-periode bisa menyelip
     // di antara cek ini dan tulis jurnal.
-    const txDate = new Date(formData.get("transactionDate") as string);
     await assertPeriodOpen(txDate);
 
     // Laravel parity: parse and validate entries before creating journal
@@ -526,9 +534,9 @@ export async function createJournal(formData: FormData) {
         data: {
           journalNumber: documentNo,
           slug: await nextSlug("journal", documentNo),
-          transactionDate: new Date(formData.get("transactionDate") as string),
-          description: formData.get("description") as string | null,
-          type: (formData.get("type") as string) || "GENERAL",
+          transactionDate: txDate,
+          description: parsedJournal.data.description ?? null,
+          type: parsedJournal.data.type,
           status: "DRAFT",
           totalDebit,
           totalCredit,
@@ -1880,11 +1888,9 @@ export async function updateJournal(id: number, formData: FormData) {
     // "bukan-tanggal") harus DITOLAK berisik, bukan lolos sebagai Invalid
     // Date ke assertPeriodOpen/tulis.
     await assertPeriodOpen(existing.transactionDate);
-    const rawNewTxDate = String(formData.get("transactionDate") ?? "");
-    const newTxDate = new Date(rawNewTxDate);
-    if (!rawNewTxDate || Number.isNaN(newTxDate.getTime())) {
-      throw new Error("Tanggal transaksi tidak valid");
-    }
+    const parsedUpdate = parseFormData(updateJournalSchema, formData);
+    if (!parsedUpdate.success) return { success: false as const, error: parsedUpdate.error };
+    const newTxDate = wibDateToUtcMidnight(parsedUpdate.data.transactionDate);
     await assertPeriodOpen(newTxDate);
 
     // Parse and validate entries with the same rigor as createJournal —
@@ -1928,7 +1934,7 @@ export async function updateJournal(id: number, formData: FormData) {
         where: { id },
         data: {
           transactionDate: newTxDate,
-          description: formData.get("description") as string | null,
+          description: parsedUpdate.data.description ?? null,
           type: journalType,
           totalDebit,
           totalCredit,

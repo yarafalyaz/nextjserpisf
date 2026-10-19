@@ -35,6 +35,10 @@ describe("validations/finance.schemas", () => {
     it("rejects empty entries", () => {
       expect(journalSchema.safeParse({ transactionDate: "2026-06-09", entries: "" }).success).toBe(false);
     });
+    it("rejects fictitious calendar dates (2026-02-30 must not roll to March)", () => {
+      expect(journalSchema.safeParse({ transactionDate: "2026-02-30", entries: "[]" }).success).toBe(false);
+      expect(journalSchema.safeParse({ transactionDate: "bukan-tanggal", entries: "[]" }).success).toBe(false);
+    });
   });
 
   describe("expenseSchema", () => {
