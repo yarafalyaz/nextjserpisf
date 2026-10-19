@@ -29,10 +29,28 @@ const CRON_TASKS = [
     schedule: "Setiap hari",
   },
   {
+    key: "late-checkin",
+    name: "Peringatan Keterlambatan Check-in",
+    description: "Cek karyawan terlambat check-in hari ini",
+    schedule: "Setiap hari",
+  },
+  {
+    key: "recover-stuck-reversals",
+    name: "Pulihkan Jurnal Tertahan",
+    description: "Kembalikan jurnal tertahan di REVERSING > 15 menit ke POSTED",
+    schedule: "Setiap hari",
+  },
+  {
     key: "cleanup",
     name: "Bersihkan Log Lama",
-    description: "Hapus log aktivitas > 90 hari",
+    description: "Hapus log aktivitas lama & kunci idempotency kedaluwarsa",
     schedule: "Mingguan",
+  },
+  {
+    key: "sweep-orphan-attachments",
+    name: "Sapu Lampiran Yatim",
+    description: "Hapus lampiran sementara belum diklaim > 24 jam",
+    schedule: "Setiap hari",
   },
 ]
 
