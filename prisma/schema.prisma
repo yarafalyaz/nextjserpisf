@@ -201,6 +201,12 @@ model SystemSetting {
   purchaseShippingAccountId        Int?    @map("purchase_shipping_account_id")
   purchaseAdminFeeAccountId        Int?    @map("purchase_admin_fee_account_id")
   purchaseReturnAccountId          Int?    @map("purchase_return_account_id")
+  // AUD-FIN-01: akun kewajiban Uang Muka Penjualan (CoA 210102). Sebelumnya
+  // jurnal terima DP mengkredit salesReceivableAccountId (Piutang 1103) —
+  // salah klasifikasi: DP yang belum jadi pendapatan adalah KEWAJIBAN,
+  // bukan pengurang piutang. Null = instalasi lama; hook menolak posting DP
+  // sampai dimapping (fail-closed), automap menebak dari nama "uang muka".
+  customerDownPaymentAccountId   Int?    @map("customer_down_payment_account_id")
   inventoryAccountId               Int?    @map("inventory_account_id")
   inventoryAdjustmentAccountId     Int?    @map("inventory_adjustment_account_id")
   stockAdjustmentAccountId         Int?    @map("stock_adjustment_account_id")

@@ -161,6 +161,9 @@ export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   { key: "salesRevenueAccountId", groups: [["pendapatan", "penjualan"], ["400001"], ["pendapatan", "jasa"], ["revenue"], ["penjualan"]] },
   { key: "salesTaxAccountId", groups: [["ppn", "keluaran"], ["210201"], ["ppn", "keluar"], ["tax", "out"]] },
   { key: "salesReturnAccountId", groups: [["retur", "penjualan"], ["400003"], ["sales", "return"]] },
+  // AUD-FIN-01: kewajiban Uang Muka Penjualan (CoA 210102). Grup "uang","muka"
+  // duluan agar tak tertukar Piutang ("1103"/"piutang") maupun Utang Usaha.
+  { key: "customerDownPaymentAccountId", groups: [["uang", "muka", "penjualan"], ["210102"], ["uang", "muka"], ["down", "payment"]] },
   { key: "salesAccountId", groups: [["pendapatan", "penjualan"], ["400001"], ["akun", "penjualan"], ["sales", "account"], ["penjualan"]] },
   { key: "purchasePayableAccountId", groups: [["hutang", "usaha"], ["utang", "usaha"], ["2101"], ["hutang", "dagang"], ["payable"]] },
   { key: "purchaseTaxAccountId", groups: [["ppn", "masukan"], ["110504"], ["ppn", "masuk"], ["tax", "in"]] },

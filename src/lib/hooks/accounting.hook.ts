@@ -1408,9 +1408,14 @@ export async function onDownPaymentReceived(
 ): Promise<void> {
   const db = txClient || prisma;
   const settings = await getSystemSettings(db);
-  if (!settings.cashBankAccountId || !settings.salesReceivableAccountId) {
+  // AUD-FIN-01 (putusan akuntan): DP yang belum jadi pendapatan = KEWAJIBAN
+  // (CoA 210102 Uang Muka Penjualan), BUKAN Piutang 1103. Kredit ke Piutang
+  // mengecilkan AR palsu + menyembunyikan kewajiban. Null = instalasi lama
+  // belum mapping → TOLAK posting (fail-closed), jangan salah catat diam-diam.
+  const dpLiabilityAccountId = (settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId ?? null;
+  if (!settings.cashBankAccountId || !dpLiabilityAccountId) {
     throw new Error(
-      "Akun kas/bank dan uang muka penjualan harus dikonfigurasi sebelum uang muka diterima",
+      "Akun kas/bank dan akun kewajiban Uang Muka Penjualan (210102) harus dikonfigurasi sebelum uang muka diterima",
     );
   }
 
@@ -1470,9 +1475,10 @@ export async function onDownPaymentReceived(
               credit: 0,
               memo: "Bank/Cash received",
             },
-            // Fix #27: Cr. Uang Muka Penjualan (bukan Revenue)
+            // AUD-FIN-01: Cr. Kewajiban Uang Muka Penjualan 210102 (bukan
+            // Piutang 1103, bukan Revenue). DP = kewajiban sampai faktur posting.
             {
-              accountId: settings.salesReceivableAccountId!,
+              accountId: dpLiabilityAccountId!,
               debit: 0,
               credit: dp.amount,
               memo: "Uang Muka Penjualan",

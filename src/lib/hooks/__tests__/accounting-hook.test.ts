@@ -1541,7 +1541,7 @@ describe("onDownPaymentReceived", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.systemSettings.cashBankAccountId = 100;
-    mocks.systemSettings.salesReceivableAccountId = 110;
+    (mocks.systemSettings as any).customerDownPaymentAccountId = 210102;
     mocks.transaction.mockImplementation((fn: any) =>
       fn({
         systemSetting: {
@@ -1559,6 +1559,12 @@ describe("onDownPaymentReceived", () => {
   it("rejects if cashBankAccountId missing", async () => {
     (mocks.systemSettings as any).cashBankAccountId = null;
     await expect(onDownPaymentReceived(1)).rejects.toThrow("kas/bank");
+    expect(mocks.downPaymentFindUniqueOrThrow).not.toHaveBeenCalled();
+  });
+
+  it("rejects if customerDownPaymentAccountId missing (AUD-FIN-01 fail-closed)", async () => {
+    (mocks.systemSettings as any).customerDownPaymentAccountId = null;
+    await expect(onDownPaymentReceived(1)).rejects.toThrow("210102");
     expect(mocks.downPaymentFindUniqueOrThrow).not.toHaveBeenCalled();
   });
 
@@ -1581,7 +1587,8 @@ describe("onDownPaymentReceived", () => {
     mocks.journalFindFirst.mockResolvedValue(null);
     await onDownPaymentReceived(1);
 
-    // note that downPayment uses nested entries inside journal.create
+    // AUD-FIN-01: kredit ke KEWAJIBAN uang muka 210102, bukan Piutang 110.
+    // DP belum jadi pendapatan; kredit ke Piutang mengecilkan AR palsu.
     expect(mocks.journalCreate).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
@@ -1590,7 +1597,7 @@ describe("onDownPaymentReceived", () => {
           entries: {
             create: [
               expect.objectContaining({ accountId: 100, debit: 500 }),
-              expect.objectContaining({ accountId: 110, credit: 500 }),
+              expect.objectContaining({ accountId: 210102, credit: 500 }),
             ],
           },
         }),

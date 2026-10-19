@@ -116,6 +116,7 @@ describe("resolveAllAccountMappings", () => {
   const COA = [
     { id: 1, code: "1000", name: "Kas & Bank" },
     { id: 2, code: "1100", name: "Piutang Usaha" },
+    { id: 14, code: "210102", name: "Uang Muka Penjualan IDR" },
     { id: 3, code: "1200", name: "Persediaan" },
     { id: 4, code: "1400", name: "PPN Masukan" },
     { id: 5, code: "2000", name: "Hutang Usaha" },
@@ -137,6 +138,8 @@ describe("resolveAllAccountMappings", () => {
     expect(mapping.purchasePayableAccountId).toBe("5")
     expect(mapping.purchaseTaxAccountId).toBe("4")
     expect(mapping.cashBankAccountId).toBe("1")
+    // AUD-FIN-01: kewajiban UMP — bukan Piutang (2), bukan Utang Usaha (5).
+    expect(mapping.customerDownPaymentAccountId).toBe("14")
     expect(mapping.pettyCashAccountId).toBe("13")
     expect(mapping.salariesPayableAccountId).toBe("8")
     expect(mapping.cogsAccountId).toBe("11")
