@@ -1,50 +1,10 @@
 import { z } from "zod";
 import { parseMoneyAmount } from "@/lib/utils/parse-money";
 
-const optionalString = (max: number) =>
-  z
-    .string()
-    .max(max)
-    .optional()
-    .or(z.literal("").transform(() => undefined));
-
-const optionalNumber = (min?: number) => {
-  const base =
-    min !== undefined ? z.coerce.number().min(min) : z.coerce.number();
-  return base.optional();
-};
-
-const requiredDate = z.coerce.date({
-  message: "Tanggal wajib diisi / tidak valid",
-});
-const optionalDate = z.preprocess(
-  (v) => (v === "" || v == null ? undefined : v),
-  z.coerce.date().optional(),
-);
-
-// ==================== BANK STATEMENT ====================
-
-export const bankStatementSchema = z.object({
-  accountId: z.coerce
-    .number({ message: "accountId wajib diisi" })
-    .int()
-    .positive(),
-  bankId: optionalNumber(),
-  accountNumber: optionalString(100),
-  date: requiredDate,
-  reference: optionalString(200),
-  periodStart: optionalDate,
-  periodEnd: optionalDate,
-  openingBalance: z.coerce.number().default(0),
-  closingBalance: z.coerce.number().default(0),
-  notes: optionalString(1000),
-});
-
 /**
  * `YYYY-MM-DD` yang benar-benar ada di kalender.
  *
- * Sengaja tetap berupa STRING (bukan `z.coerce.date()` seperti `date` di
- * `bankStatementSchema`): aksinya harus mengonversinya lewat
+ * Sengaja tetap berupa STRING (bukan `z.coerce.date()`): aksinya harus mengonversinya lewat
  * `wibDateToUtcMidnight` agar tanggal tersimpan sebagai TENGAH MALAM UTC untuk
  * hari kalender WIB — `new Date("YYYY-MM-DD")` tidak boleh dipakai karena
  * hasilnya bergantung pada zona waktu proses. Refine-nya menolak tanggal yang
@@ -63,6 +23,43 @@ export const dateOnly = z
       date.getUTCDate() === day
     );
   }, "Tanggal tidak valid");
+
+const optionalDateOnly = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  dateOnly.optional(),
+);
+
+const optionalString = (max: number) =>
+  z
+    .string()
+    .max(max)
+    .optional()
+    .or(z.literal("").transform(() => undefined));
+
+const optionalNumber = (min?: number) => {
+  const base =
+    min !== undefined ? z.coerce.number().min(min) : z.coerce.number();
+  return base.optional();
+};
+
+// ==================== BANK STATEMENT ====================
+
+export const bankStatementSchema = z.object({
+  accountId: z.coerce
+    .number({ message: "accountId wajib diisi" })
+    .int()
+    .positive(),
+  bankId: optionalNumber(),
+  accountNumber: optionalString(100),
+  date: dateOnly,
+  reference: optionalString(200),
+  periodStart: optionalDateOnly,
+  periodEnd: optionalDateOnly,
+  openingBalance: z.coerce.number().default(0),
+  closingBalance: z.coerce.number().default(0),
+  notes: optionalString(1000),
+});
+
 
 /**
  * Satu baris rekening koran.
@@ -121,7 +118,7 @@ export const expenseSchema = z.object({
   amount: z.coerce
     .number({ message: "amount wajib diisi" })
     .positive("amount harus lebih dari 0"),
-  date: requiredDate,
+  date: dateOnly,
   referenceNo: optionalString(100),
   description: optionalString(1000),
   categoryId: optionalNumber(),
@@ -137,7 +134,7 @@ export const pettyCashSchema = z.object({
   amount: z.coerce
     .number({ message: "amount wajib diisi" })
     .positive("amount harus lebih dari 0"),
-  date: requiredDate,
+  date: dateOnly,
   accountId: optionalNumber(),
   referenceNo: optionalString(100),
   description: optionalString(1000),
@@ -154,12 +151,12 @@ export const bankReconciliationSchema = z.object({
     .number({ message: "accountId wajib diisi" })
     .int()
     .positive(),
-  statementDate: requiredDate,
+  statementDate: dateOnly,
   statementBalance: z.coerce.number({
     message: "statementBalance wajib diisi",
   }),
-  periodStart: optionalDate,
-  periodEnd: optionalDate,
+  periodStart: optionalDateOnly,
+  periodEnd: optionalDateOnly,
   bookBalance: z.coerce.number().default(0),
   notes: optionalString(1000),
 });
@@ -337,7 +334,7 @@ export const chequeSchema = z.object({
       .number({ message: "amount wajib diisi" })
       .positive("Nominal giro/cek harus lebih dari 0"),
   ),
-  dueDate: requiredDate,
+  dueDate: dateOnly,
   notes: optionalString(2000),
 });
 

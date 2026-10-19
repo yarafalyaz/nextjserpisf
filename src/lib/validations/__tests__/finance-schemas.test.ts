@@ -6,6 +6,7 @@ import {
   pettyCashSchema,
   bankReconciliationSchema,
   costCenterSchema,
+  chequeSchema,
 } from "@/lib/validations/finance.schemas";
 
 describe("validations/finance.schemas", () => {
@@ -14,7 +15,8 @@ describe("validations/finance.schemas", () => {
       const r = bankStatementSchema.safeParse({ accountId: 1, date: "2026-06-09" });
       expect(r.success).toBe(true);
       if (r.success) {
-        expect(r.data.date).toBeInstanceOf(Date);
+        // dateOnly tetap STRING: konversi ke Date UTC-midnight di action.
+        expect(r.data.date).toBe("2026-06-09");
         expect(r.data.openingBalance).toBe(0);
       }
     });
@@ -129,6 +131,30 @@ describe("validations/finance.schemas", () => {
     });
     it("rejects missing statementBalance", () => {
       expect(bankReconciliationSchema.safeParse({ accountId: 1, statementDate: "2026-06-09" }).success).toBe(false);
+    });
+  });
+
+describe("dateOnly calendar validation (regression: z.coerce.date rollover)", () => {
+    it("rejects fictitious dates on every coerce-backed field", () => {
+      expect(bankStatementSchema.safeParse({ accountId: 1, date: "2026-02-30" }).success).toBe(false);
+      expect(expenseSchema.safeParse({ accountId: 1, amount: 100, date: "2026-02-30" }).success).toBe(false);
+      expect(pettyCashSchema.safeParse({ type: "IN", amount: 100, date: "2026-02-30" }).success).toBe(false);
+      expect(bankReconciliationSchema.safeParse({ accountId: 1, statementDate: "2026-02-30", statementBalance: 1 }).success).toBe(false);
+      expect(chequeSchema.safeParse({ type: "giro", direction: "in", amount: 100, dueDate: "2026-02-30" }).success).toBe(false);
+    });
+    it("rejects fictitious optional period bounds", () => {
+      expect(bankStatementSchema.safeParse({ accountId: 1, date: "2026-06-09", periodStart: "2026-02-30" }).success).toBe(false);
+      expect(bankReconciliationSchema.safeParse({ accountId: 1, statementDate: "2026-06-09", statementBalance: 1, periodEnd: "2026-04-31" }).success).toBe(false);
+    });
+    it("rejects datetime strings: conversion stays pinned to WIB calendar day", () => {
+      expect(expenseSchema.safeParse({ accountId: 1, amount: 100, date: "2026-06-09T15:00:00" }).success).toBe(false);
+      expect(bankStatementSchema.safeParse({ accountId: 1, date: "2026-06-09T01:00:00Z" }).success).toBe(false);
+    });
+  });
+
+  describe("chequeSchema", () => {
+    it("accepts a valid cheque", () => {
+      expect(chequeSchema.safeParse({ type: "cek", direction: "out", amount: 1000, dueDate: "2026-10-01" }).success).toBe(true);
     });
   });
 
