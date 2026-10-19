@@ -78,8 +78,8 @@ export async function createLeaveRequest(formData: FormData) {
         throw new Error("Anda hanya diperbolehkan membuat pengajuan cuti untuk karyawan se-departemen");
       }
     }
-    const startDate = new Date(v.startDate);
-    const endDate = new Date(v.endDate);
+    const startDate = wibDateToUtcMidnight(v.startDate);
+    const endDate = wibDateToUtcMidnight(v.endDate);
 
     // Guard: a leave period must not start after it ends. Without this, an
     // inverted range (startDate > endDate) silently bypasses the overlap check
@@ -215,7 +215,7 @@ export async function createOvertimeRequest(formData: FormData) {
           slug: await nextSlug("overtimeRequest", "lembur"),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           hours: v.hours,
           totalHours: v.totalHours ?? null,
           mealHours: v.mealHours ?? null,
@@ -1127,8 +1127,8 @@ export async function processPayroll(formData: FormData) {
     const documentNo = await generateDocumentNumber("PAYROLL");
     const employeeId = v.employeeId ?? null;
     const period = v.period;
-    const startDate = new Date(v.startDate);
-    const endDate = new Date(v.endDate);
+    const startDate = wibDateToUtcMidnight(v.startDate);
+    const endDate = wibDateToUtcMidnight(v.endDate);
 
     // Guard: employeeId is required — without it, payroll has no linkage
     if (!employeeId) {
@@ -1271,7 +1271,7 @@ export async function processPayroll(formData: FormData) {
         statutorySnapshot: statutorySnapshot as Prisma.InputJsonValue,
         netSalary,
         totalAmount,
-        paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,
+        paymentDate: paymentDateRaw ? wibDateToUtcMidnight(paymentDateRaw) : null,
         status: "draft",
         createdBy: Number(user.id),
         },
@@ -1330,8 +1330,8 @@ export async function updatePayroll(id: number, formData: FormData) {
     const v = parsed.data;
 
     const employeeId = v.employeeId ?? null;
-    const startDate = new Date(v.startDate);
-    const endDate = new Date(v.endDate);
+    const startDate = wibDateToUtcMidnight(v.startDate);
+    const endDate = wibDateToUtcMidnight(v.endDate);
 
     // Auto-calculate late penalty if not manually provided
     let lateDeduction = v.lateDeduction ?? 0;
@@ -1459,7 +1459,7 @@ export async function updatePayroll(id: number, formData: FormData) {
         statutorySnapshot: updStatutorySnapshot as Prisma.InputJsonValue,
         netSalary,
         totalAmount,
-        paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,
+        paymentDate: paymentDateRaw ? wibDateToUtcMidnight(paymentDateRaw) : null,
       },
     });
 
@@ -1652,7 +1652,7 @@ export async function createEmployeeLoan(formData: FormData) {
         data: {
           slug: await nextSlug("employeeLoan", "pinjaman"),
           employeeId: v.employeeId,
-          loanDate: new Date(v.loanDate),
+          loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,
           monthlyInstallment: v.monthlyInstallment,
           remainingAmount: totalAmount,
@@ -1704,7 +1704,7 @@ export async function createTimesheet(formData: FormData) {
         employeeId: v.employeeId,
         projectId: v.projectId,
         taskId: v.taskId ?? null,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         startTime: v.startTime ?? null,
         endTime: v.endTime ?? null,
         hours: v.hours,
@@ -1905,7 +1905,7 @@ export async function createHoliday(formData: FormData) {
     const holiday = await prisma.holiday.create({
       data: {
         name: v.name,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         description: v.description ?? null,
       },
     });
@@ -1931,7 +1931,7 @@ export async function updateHoliday(id: number, formData: FormData) {
       where: { id: requirePositiveId(id, "hari libur") },
       data: {
         name: v.name,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         description: v.description ?? null,
       },
     });
@@ -1971,7 +1971,7 @@ export async function createDepartmentHoliday(formData: FormData) {
       data: {
         departmentId: v.departmentId,
         name: v.name,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
       },
     });
 
@@ -2002,7 +2002,7 @@ export async function updateDepartmentHoliday(id: number, formData: FormData) {
       data: {
         departmentId: v.departmentId,
         name: v.name,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
       },
     });
 
@@ -2446,8 +2446,8 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       }
     }
 
-    const startDate = new Date(v.startDate);
-    const endDate = new Date(v.endDate);
+    const startDate = wibDateToUtcMidnight(v.startDate);
+    const endDate = wibDateToUtcMidnight(v.endDate);
 
     if (startDate > endDate) {
       throw new Error("Tanggal mulai tidak boleh melebihi tanggal selesai");
@@ -2601,7 +2601,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
           slug: await nextSlug("overtimeRequest", "lembur", { excludeId: id }),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           hours: v.hours,
           totalHours: v.totalHours ?? null,
           mealHours: v.mealHours ?? null,
@@ -2698,7 +2698,7 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
         data: {
           slug: await nextSlug("employeeLoan", "pinjaman", { excludeId: id }),
           employeeId: v.employeeId,
-          loanDate: new Date(v.loanDate),
+          loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,
           monthlyInstallment: v.monthlyInstallment,
           remainingAmount: newRemaining,
@@ -2756,7 +2756,7 @@ export async function updateTimesheet(id: number, formData: FormData) {
         employeeId: v.employeeId,
         projectId: v.projectId,
         taskId: v.taskId ?? null,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         startTime: v.startTime ?? null,
         endTime: v.endTime ?? null,
         hours: v.hours,
@@ -2795,7 +2795,7 @@ export async function createAppreciation(formData: FormData) {
       data: {
         slug: await nextSlug("appreciation", "apresiasi"),
         employeeId: v.employeeId,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         type: v.type,
         amount: v.amount ?? 0,
         notes: v.notes ?? null,
@@ -2836,7 +2836,7 @@ export async function updateAppreciation(formData: FormData) {
       data: {
         slug: await nextSlug("appreciation", "apresiasi", { excludeId: id }),
         employeeId: v.employeeId,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         type: v.type,
         amount: v.amount ?? 0,
         notes: v.notes ?? null,
@@ -2888,8 +2888,8 @@ export async function createStatutoryRule(formData: FormData) {
     const parsed = parseFormData(statutoryRuleSchema, formData);
     if (!parsed.success) return { success: false as const, error: parsed.error };
     const v = parsed.data;
-    const from = new Date(v.effectiveFrom);
-    const to = v.effectiveTo ? new Date(v.effectiveTo) : null;
+    const from = wibDateToUtcMidnight(v.effectiveFrom);
+    const to = v.effectiveTo ? wibDateToUtcMidnight(v.effectiveTo) : null;
     if (to && to <= from) {
       return { success: false as const, error: "Berlaku sampai harus setelah berlaku sejak" };
     }

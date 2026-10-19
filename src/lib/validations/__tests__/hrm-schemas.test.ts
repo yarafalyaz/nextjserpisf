@@ -110,3 +110,12 @@ describe("validations/hrm.schemas", () => {
     });
   });
 });
+
+describe("hrm dateOnly kalender", () => {
+  it("rejects fictional dates in leave/overtime/loan/payroll", () => {
+    expect(leaveRequestSchema.safeParse({ employeeId: 1, type: "Cuti", startDate: "2026-02-30", endDate: "2026-03-01" }).success).toBe(false);
+    expect(overtimeRequestSchema.safeParse({ employeeId: 1, date: "2026-02-30", hours: 2 }).success).toBe(false);
+    expect(employeeLoanSchema.safeParse({ employeeId: 1, loanDate: "2026-02-30", totalAmount: 1000, monthlyInstallment: 100 }).success).toBe(false);
+    expect(payrollSchema.safeParse({ period: "Feb", startDate: "2026-02-30", endDate: "2026-02-28" }).success).toBe(false);
+  });
+});

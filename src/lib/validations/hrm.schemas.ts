@@ -24,6 +24,8 @@ const requiredNum = (_field: string, min = 0) =>
 
 // Tanggal kalender ketat (YYYY-MM-DD nyata): `new Date("2026-02-30")` di aksi
 // menggulir diam-diam ke 2 Mar, jadi wajib ditolak di skema (pola dateOnly).
+// optionalDate terima "" (form kosong) lewat refine — beda dari dateOnly.optional()
+// murni yang akan menolak ""; perilaku itu dipakai skema payroll/refine di bawah.
 const requiredDate = (_field: string) => dateOnly
 
 const optionalDate = z
