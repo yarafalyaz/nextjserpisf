@@ -174,6 +174,15 @@ export async function deleteRole(id: number) {
     throw new Error(`Role "${role.name}" masih digunakan oleh ${role.users.length} user. Hapus assignment terlebih dahulu.`)
   }
 
+  // ApprovalWorkflowStep.roleId bare Int, no FK/relation to Role — raw delete
+  // leaves dangling approver. assertStepApprover then finds no role, throws
+  // "bukan approver" for everyone: pending approvals at that step deadlock
+  // permanently (only super_admin bypass). Refuse while steps reference it.
+  const usedBySteps = await prisma.approvalWorkflowStep.count({ where: { roleId: id } })
+  if (usedBySteps > 0) {
+    throw new Error(`Role "${role.name}" masih digunakan oleh ${usedBySteps} langkah persetujuan. Ubah approver langkah tersebut terlebih dahulu.`)
+  }
+
   await prisma.role.delete({ where: { id } })
 
   revalidatePath("/pengaturan/peran")

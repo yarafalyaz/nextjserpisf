@@ -14,6 +14,7 @@ vi.mock("@/lib/auth/permissions", () => ({
 }))
 const roleDeleteMock = vi.fn()
 const roleFindUniqueMock = vi.fn()
+const approvalWorkflowStepCountMock = vi.fn()
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
@@ -26,6 +27,9 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     permission: {
       findMany: (...a: unknown[]) => permissionFindManyMock(...a),
+    },
+    approvalWorkflowStep: {
+      count: (...a: unknown[]) => approvalWorkflowStepCountMock(...a),
     },
   },
 }))
@@ -67,8 +71,9 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, redirectMock, logActivityMock,
     roleCreateMock, roleUpdateMock, permissionFindManyMock,
-    roleDeleteMock, roleFindUniqueMock,
+    roleDeleteMock, roleFindUniqueMock, approvalWorkflowStepCountMock,
   ]) m.mockReset()
+  approvalWorkflowStepCountMock.mockResolvedValue(0)
   roleCreateMock.mockResolvedValue({ id: 1 })
   roleUpdateMock.mockResolvedValue({ id: 1 })
   // Default actor: holds manage_settings only, NOT super_admin.
@@ -228,6 +233,14 @@ describe("deleteRole", () => {
       users: [{ id: 101 }],
     })
     await expect(deleteRole(1)).rejects.toThrow(/masih digunakan/)
+    expect(roleDeleteMock).not.toHaveBeenCalled()
+  })
+
+  it("throws error when role is still referenced by approval workflow steps", async () => {
+    roleFindUniqueMock.mockResolvedValue({ id: 1, name: "Staff", users: [] })
+    approvalWorkflowStepCountMock.mockResolvedValue(2)
+    await expect(deleteRole(1)).rejects.toThrow(/langkah persetujuan/)
+    expect(approvalWorkflowStepCountMock).toHaveBeenCalledWith({ where: { roleId: 1 } })
     expect(roleDeleteMock).not.toHaveBeenCalled()
   })
 
