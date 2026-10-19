@@ -486,6 +486,27 @@ describe("Asset Transfer Actions", () => {
     expect(res?.success).toBe(false)
   })
 
+  it("menolak transferDate tak-kalender 2026-02-30 tanpa menyentuh basis data", async () => {
+    const res = await createAssetTransfer(fd({
+      assetId: "5",
+      toLocation: "HQ",
+      transferDate: "2026-02-30",
+    }))
+    expect(res?.success).toBe(false)
+    expect(prismaMock.assetTransfer.create).not.toHaveBeenCalled()
+  })
+
+  it("menyimpan transferDate sah sebagai tengah malam UTC hari kalender WIB", async () => {
+    const res = await createAssetTransfer(fd({
+      assetId: "5",
+      toLocation: "HQ",
+      transferDate: "2026-06-12",
+    }))
+    expect(res.success).toBe(true)
+    const arg = prismaMock.assetTransfer.create.mock.calls.at(-1)![0]
+    expect(arg.data.transferDate.toISOString()).toBe("2026-06-12T00:00:00.000Z")
+  })
+
   it("handles error on create transfer", async () => {
     prismaMock.assetTransfer.create.mockRejectedValue(new Error("db err"))
     const res = await createAssetTransfer(fd({
@@ -794,6 +815,29 @@ describe("createAsset / updateAsset", () => {
       purchasePrice: "1000",
     }))
     expect(generateDocNumMock).toHaveBeenCalled()
+  })
+
+  it("menolak purchaseDate tak-kalender 2026-02-30 tanpa membuat aset", async () => {
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-99",
+      purchasePrice: "1000",
+      purchaseDate: "2026-02-30",
+    }))
+    expect(res?.success).toBe(false)
+    expect(prismaMock.asset.create).not.toHaveBeenCalled()
+  })
+
+  it("menyimpan purchaseDate sah sebagai tengah malam UTC hari kalender WIB", async () => {
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-98",
+      purchasePrice: "1000",
+      purchaseDate: "2026-06-12",
+    }))
+    expect(res.success).toBe(true)
+    const arg = prismaMock.asset.create.mock.calls.at(-1)![0]
+    expect(arg.data.purchaseDate.toISOString()).toBe("2026-06-12T00:00:00.000Z")
   })
 
   it("creates asset without GL posting when env vars missing", async () => {
@@ -1189,6 +1233,16 @@ describe("disposeAsset", () => {
   it("fails validation with empty form", async () => {
     const res = await disposeAsset(fd({}))
     expect(res?.success).toBe(false)
+  })
+
+  it("menolak disposalDate tak-kalender 2026-02-30 tanpa melepas aset", async () => {
+    const res = await disposeAsset(fd({
+      assetId: "100",
+      proceeds: "700",
+      disposalDate: "2026-02-30",
+    }))
+    expect(res?.success).toBe(false)
+    expect(prismaMock.asset.updateMany).not.toHaveBeenCalled()
   })
 
   it("disposes asset and records gain (proceeds > book value)", async () => {
