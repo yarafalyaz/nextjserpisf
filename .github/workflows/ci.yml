@@ -24,7 +24,9 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
+      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate
         env:
           DATABASE_URL: mysql://root@localhost:3306/dummy
@@ -40,7 +42,9 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
+      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate
         env:
           DATABASE_URL: mysql://root@localhost:3306/dummy
@@ -78,7 +82,12 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
+      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
+      - run: ./node_modules/.bin/prisma generate
+        env:
+          DATABASE_URL: mysql://root@localhost:3306/dummy
       - name: Cache Next.js build cache
         uses: actions/cache@v4
         with:
@@ -132,7 +141,12 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
+      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
+      - run: ./node_modules/.bin/prisma generate
+        env:
+          DATABASE_URL: mysql://root@localhost:3306/dummy
       - run: ./node_modules/.bin/prisma generate
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
@@ -243,7 +257,12 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
+      - run: npm ci --ignore-scripts
+      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
+      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
+      - run: ./node_modules/.bin/prisma generate
+        env:
+          DATABASE_URL: mysql://root@localhost:3306/dummy
       - name: Tune MySQL
         run: |
           mysql -h 127.0.0.1 -u root -e "SET GLOBAL max_connections=200; SET GLOBAL wait_timeout=600; SET GLOBAL interactive_timeout=600;" 
