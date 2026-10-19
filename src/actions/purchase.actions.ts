@@ -92,6 +92,10 @@ function goodsReceiptItemData(i: GrItemInput, orderedQtyByItem: Map<number, numb
   };
 }
 
+function parseGrItems(items: string | null | undefined) {
+  return safeJsonParse<GrItemInput[]>(items ?? null) ?? [];
+}
+
 /**
  * 3-way match guard (PO ↔ Goods Receipt ↔ Vendor Bill).
  * When a vendor bill is linked to a PO, ensure: (1) goods were actually received
@@ -579,21 +583,7 @@ export async function createGoodsReceipt(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("GR");
     const slug = await nextSlug("goodsReceipt", documentNo);
-    const items =
-      safeJsonParse<
-        {
-          itemId: number;
-          qty: number;
-          unitCost: number;
-          warehouseId?: number | null;
-          rackId?: number | null;
-          rackRowId?: number | null;
-          uom?: string | null;
-          batchNumber?: string | null;
-          expiryDate?: string | null;
-          serialNumbers?: string[] | null;
-        }[]
-      >(v.items ?? null) ?? [];
+    const items = parseGrItems(v.items);
 
     assertGrItemExpiryDates(items);
 
@@ -2316,21 +2306,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
 
     const slug = await nextSlug("goodsReceipt", existingGr.documentNo, { excludeId: id });
 
-    const items =
-      safeJsonParse<
-        {
-          itemId: number;
-          qty: number;
-          unitCost: number;
-          warehouseId?: number | null;
-          rackId?: number | null;
-          rackRowId?: number | null;
-          uom?: string | null;
-          batchNumber?: string | null;
-          expiryDate?: string | null;
-          serialNumbers?: string[] | null;
-        }[]
-      >(v.items ?? null) ?? [];
+    const items = parseGrItems(v.items);
 
     assertGrItemExpiryDates(items);
 
