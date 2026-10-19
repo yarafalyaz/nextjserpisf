@@ -45,6 +45,7 @@ export const updateSystemSettingsSchema = z.object({
   companyWebsite: optionalNullString(),
   companyTaxId: optionalNullString(50),
   companyLogo: optionalNullString(500),
+  companyLogoDark: optionalNullString(500),
   companyLatitude: optionalDecimal(),
   companyLongitude: optionalDecimal(),
 
@@ -171,6 +172,10 @@ export const updateSystemSettingsSchema = z.object({
   payrollBankAccountId: optionalInt(),
   employeeReceivableAccountId: optionalInt(),
   payrollJournalTypeId: optionalInt(),
+
+  // Accounting - Fixed Assets
+  depreciationExpenseAccountId: optionalInt(),
+  accumulatedDepreciationAccountId: optionalInt(),
 
   // Internal
   _redirectTo: optionalString(500),
