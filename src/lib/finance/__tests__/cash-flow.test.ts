@@ -116,6 +116,15 @@ describe("foldActivities", () => {
     expect(foldActivities([null, null])).toEqual({ operating: 0, investing: 0, financing: 0 })
   })
 
+  it("regresi sen: foldActivities tidak drift float (pola PR #25)", () => {
+    const totals = foldActivities([
+      { activity: "operating", cashDelta: 10000000.1 },
+      { activity: "operating", cashDelta: 10000000.1 },
+      { activity: "operating", cashDelta: 10000000.1 },
+    ])
+    expect(totals.operating).toBe(30000000.3)
+  })
+
   it("per-activity totals sum to the net cash flow", () => {
     const totals = foldActivities([
       { activity: "operating", cashDelta: 500 },

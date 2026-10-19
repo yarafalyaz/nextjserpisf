@@ -12,6 +12,8 @@
  * convention above, so the identity closes.
  */
 
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
+
 export interface BalanceSheetEntryInput {
   accountId: number
   accountName: string
@@ -64,9 +66,9 @@ export function computeBalanceSheet(
     // balances. Using the natural sign per type keeps net income and the
     // balancing identity correct.
     if (isDebitNormal(entry.accountType)) {
-      existing.balance += Number(entry.debit) - Number(entry.credit)
+      existing.balance = safeAdd(existing.balance, safeSubtract(entry.debit, entry.credit, 2), 2)
     } else {
-      existing.balance += Number(entry.credit) - Number(entry.debit)
+      existing.balance = safeAdd(existing.balance, safeSubtract(entry.credit, entry.debit, 2), 2)
     }
     accountBalances.set(entry.accountId, existing)
   }
@@ -84,13 +86,13 @@ export function computeBalanceSheet(
     if (acc.type === "ASSET") assets.push(item)
     else if (acc.type === "LIABILITY") liabilities.push(item)
     else if (acc.type === "EQUITY") equity.push(item)
-    else if (acc.type === "REVENUE") revenueTotal += acc.balance
-    else if (acc.type === "EXPENSE") expenseTotal += acc.balance
+    else if (acc.type === "REVENUE") revenueTotal = safeAdd(revenueTotal, acc.balance, 2)
+    else if (acc.type === "EXPENSE") expenseTotal = safeAdd(expenseTotal, acc.balance, 2)
   }
 
   // Both totals are positive magnitudes (revenue credit-normal, expense
   // debit-normal), so net income is a straight subtraction.
-  const netIncome = revenueTotal - expenseTotal
+  const netIncome = safeSubtract(revenueTotal, expenseTotal, 2)
   if (Math.abs(netIncome) >= 0.01) {
     equity.push({ name: "Laba/Rugi Berjalan", code: "NI", balance: netIncome })
   }
@@ -99,10 +101,10 @@ export function computeBalanceSheet(
   liabilities.sort((a, b) => a.code.localeCompare(b.code))
   equity.sort((a, b) => a.code.localeCompare(b.code))
 
-  const totalAssets = assets.reduce((s, a) => s + a.balance, 0)
-  const totalLiabilities = liabilities.reduce((s, a) => s + a.balance, 0)
-  const totalEquity = equity.reduce((s, a) => s + a.balance, 0)
-  const isBalanced = Math.abs(totalAssets - totalLiabilities - totalEquity) < 0.01
+  const totalAssets = assets.reduce((s, a) => safeAdd(s, a.balance, 2), 0)
+  const totalLiabilities = liabilities.reduce((s, a) => safeAdd(s, a.balance, 2), 0)
+  const totalEquity = equity.reduce((s, a) => safeAdd(s, a.balance, 2), 0)
+  const isBalanced = Math.abs(safeSubtract(safeSubtract(totalAssets, totalLiabilities, 2), totalEquity, 2)) < 0.01
 
   return {
     assets,
