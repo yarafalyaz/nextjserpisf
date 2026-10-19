@@ -10,6 +10,7 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createTicketSchema, updateTicketSchema, leadActivitySchema, ticketCommentSchema, CONVERTIBLE_STATUSES } from "@/lib/validations/crm.schemas"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 // Soft-delete helper, mirrors the convention in master.actions.ts: try hard
 // delete first; if a FK constraint blocks it, fall back to stamping deletedAt.
@@ -350,7 +351,9 @@ export async function addLeadActivity(leadId: number, formData: FormData) {
         type: v.type,
         subject: v.subject,
         description: v.description ?? null,
-        scheduledAt: v.scheduledAt ?? null,
+        // scheduledAt kini string dateOnly tervalidasi; konversi tengah-malam
+        // UTC ala WIB (pola expectedCloseDate) supaya tanggal tak bergantung TZ.
+        scheduledAt: v.scheduledAt ? wibDateToUtcMidnight(v.scheduledAt) : null,
       },
     })
 
