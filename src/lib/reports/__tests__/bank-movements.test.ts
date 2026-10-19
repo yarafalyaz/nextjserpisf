@@ -134,3 +134,25 @@ describe("buildBankMovements", () => {
     ])
   })
 })
+
+describe("buildBankMovements presisi sen", () => {
+  it("tidak melayang saat menjumlah sen berulang (3 x 10.000.000,10)", () => {
+    const result = buildBankMovements({
+      movements: [
+        movement({ documentNo: "PAY-A", amount: 10_000_000.1 }),
+        movement({ documentNo: "PAY-B", amount: 10_000_000.1 }),
+        movement({ documentNo: "PAY-C", amount: 10_000_000.1 }),
+        movement({ documentNo: "VP-A", kind: "Pengeluaran", amount: 0.1 }),
+        movement({ documentNo: "VP-B", kind: "Pengeluaran", amount: 0.2 }),
+      ],
+      start: period.start,
+      end: period.end,
+    })
+    expect(result.summary[0]?.inflow).toBe(30_000_000.3)
+    expect(result.summary[0]?.outflow).toBe(0.3)
+    expect(result.summary[0]?.net).toBe(30_000_000)
+    expect(result.totals.inflow).toBe(30_000_000.3)
+    expect(result.totals.outflow).toBe(0.3)
+    expect(result.totals.net).toBe(30_000_000)
+  })
+})
