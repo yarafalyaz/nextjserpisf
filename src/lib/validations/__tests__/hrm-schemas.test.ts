@@ -5,6 +5,8 @@ import {
   employeeLoanSchema,
   timesheetSchema,
   payrollSchema,
+  holidaySchema,
+  statutoryRuleSchema,
 } from "@/lib/validations/hrm.schemas";
 
 describe("validations/hrm.schemas", () => {
@@ -64,6 +66,47 @@ describe("validations/hrm.schemas", () => {
       expect(payrollSchema.safeParse({
         period: "", startDate: "2026-06-01", endDate: "2026-06-30",
       }).success).toBe(false);
+    });
+  });
+
+  describe("fictitious calendar dates rejected (no silent JS rollover)", () => {
+    it("leaveRequestSchema rejects 2026-02-30 start/end", () => {
+      expect(leaveRequestSchema.safeParse({
+        employeeId: 1, type: "Cuti Tahunan", startDate: "2026-02-30", endDate: "2026-03-02",
+      }).success).toBe(false);
+      expect(leaveRequestSchema.safeParse({
+        employeeId: 1, type: "Cuti Tahunan", startDate: "2026-06-09", endDate: "2026-02-30",
+      }).success).toBe(false);
+    });
+    it("overtimeRequestSchema rejects 2026-02-30", () => {
+      expect(overtimeRequestSchema.safeParse({ employeeId: 1, date: "2026-02-30", hours: 2 }).success).toBe(false);
+    });
+    it("employeeLoanSchema rejects 2026-02-30 loanDate", () => {
+      expect(employeeLoanSchema.safeParse({
+        employeeId: 1, loanDate: "2026-02-30", totalAmount: 1000000, monthlyInstallment: 100000,
+      }).success).toBe(false);
+    });
+    it("timesheetSchema rejects 2026-13-01", () => {
+      expect(timesheetSchema.safeParse({
+        employeeId: 1, projectId: 2, date: "2026-13-01", hours: 8,
+      }).success).toBe(false);
+    });
+    it("payrollSchema rejects 2026-02-30 startDate", () => {
+      expect(payrollSchema.safeParse({
+        period: "Feb 2026", startDate: "2026-02-30", endDate: "2026-03-01",
+      }).success).toBe(false);
+    });
+    it("holidaySchema rejects non-date text", () => {
+      expect(holidaySchema.safeParse({ name: "Libur", date: "bukan-tanggal" }).success).toBe(false);
+    });
+    it("statutoryRuleSchema rejects 2026-02-30 effectiveFrom and effectiveTo", () => {
+      expect(statutoryRuleSchema.safeParse({ key: "ptkp_tk0", value: 54000000, effectiveFrom: "2026-02-30" }).success).toBe(false);
+      expect(statutoryRuleSchema.safeParse({ key: "ptkp_tk0", value: 54000000, effectiveFrom: "2026-01-01", effectiveTo: "2026-02-30" }).success).toBe(false);
+    });
+    it("attendance-free valid dates still pass", () => {
+      expect(leaveRequestSchema.safeParse({
+        employeeId: 1, type: "Cuti Tahunan", startDate: "2026-02-28", endDate: "2026-03-01",
+      }).success).toBe(true);
     });
   });
 });
