@@ -196,6 +196,20 @@ export const updateJournalSchema = z.object({
 });
 
 
+// ==================== EXPENSE CATEGORY ====================
+
+/**
+ * Server-side schema untuk createExpenseCategory/updateExpenseCategory:
+ * hand-parse sebelumnya tanpa max-length (name/label 5MB lolos ke DB) dan
+ * `Number(...) || 0` yang diam-diam mengubah garbage ("abc", NaN) jadi 0.
+ */
+export const expenseCategorySchema = z.object({
+  name: z.string().min(1, "Nama wajib diisi").max(100),
+  label: z.string().min(1, "Label wajib diisi").max(200),
+  sortOrder: z.coerce.number().int().default(0),
+  isActive: z.boolean().optional().default(false),
+});
+
 // ==================== CHEQUE / GIRO ====================
 
 /**
