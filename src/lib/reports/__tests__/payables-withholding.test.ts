@@ -50,6 +50,19 @@ describe("sisa tagihan neto setelah withholding (P0-2)", () => {
     expect(row?.outstanding).toBe(500_000)
   })
 
+  it("per-vendor totalBilled neto: billed − paid = outstanding, konsisten summary", () => {
+    const bills = [
+      bill({ documentNo: "VB-001", grandTotal: 1_000_000, withholdingAmount: 100_000, paidAmount: 400_000 }),
+    ]
+    const summary = buildPayablesSummary(bills, asOf)
+    expect(summary.totalBilled).toBe(900_000)
+    expect(summary.vendors).toHaveLength(1)
+    expect(summary.vendors[0].totalBilled).toBe(900_000)
+    expect(summary.vendors[0].totalPaid).toBe(400_000)
+    expect(summary.vendors[0].outstanding).toBe(500_000)
+    expect(summary.vendors[0].totalBilled - summary.vendors[0].totalPaid).toBe(summary.vendors[0].outstanding)
+  })
+
   it("tanpa withholding: perilaku lama tetap (sisa = grandTotal − paid)", () => {
     const bills = [
       bill({ documentNo: "VB-002", grandTotal: 500_000, paidAmount: 200_000 }),
