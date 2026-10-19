@@ -27,6 +27,7 @@ import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { assertWarehouseAccess, getWarehouseScope } from "@/lib/auth/warehouse-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { Prisma } from "@prisma/client";
 
 // ==================== PRODUCT (BOM) ACTIONS ====================
@@ -272,7 +273,7 @@ export async function createBomRevision(formData: FormData) {
           revisionNo: nextNo,
           slug: await nextSlug("bomRevision", String(nextNo)),
           status: "draft",
-          effectiveDate: v.effectiveDate ? new Date(v.effectiveDate) : new Date(),
+          effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : new Date(),
           notes: v.notes ?? null,
           createdBy: Number(user.id),
           materials: {
@@ -332,7 +333,7 @@ export async function updateBomRevision(id: number, formData: FormData) {
       await tx.bomRevision.update({
         where: { id },
         data: {
-          effectiveDate: v.effectiveDate ? new Date(v.effectiveDate) : undefined,
+          effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : undefined,
           notes: v.notes ?? null,
           materials: {
             deleteMany: {},
@@ -530,8 +531,8 @@ export async function createProductionOrder(formData: FormData) {
         bomRevisionId: effectiveBom.revisionId,
         workOrderId: workOrder?.id ?? null,
         qty: v.qty,
-        startDate: v.startDate ? new Date(v.startDate) : null,
-        endDate: v.endDate ? new Date(v.endDate) : null,
+        startDate: v.startDate ? wibDateToUtcMidnight(v.startDate) : null,
+        endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
         notes: v.notes ?? null,
         status: "draft",
         // total_standard_cost = product standard cost × order qty
@@ -1804,8 +1805,8 @@ export async function updateProductionOrder(id: number, formData: FormData) {
           // form tak pernah mengirimnya sehingga setiap penyimpanan menghapus tautan
           // WO yang sudah ada.
           workOrderId: v.workOrderId ?? null,
-          startDate: v.startDate ? new Date(v.startDate) : null,
-          endDate: v.endDate ? new Date(v.endDate) : null,
+          startDate: v.startDate ? wibDateToUtcMidnight(v.startDate) : null,
+          endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
           notes: v.notes ?? null,
           totalStandardCost: safeMultiply(updProductStdCost, v.qty, 2),
         },

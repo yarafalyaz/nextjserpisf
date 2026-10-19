@@ -1,7 +1,21 @@
 import { z } from "zod"
+import { dateOnly } from "@/lib/validations/finance.schemas";
 
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
+
+/**
+ * Tanggal date-only opsional untuk jadwal produksi / revisi BOM.
+ *
+ * Sebelumnya `optionalString(30)`: "2026-02-30" lolos zod lalu
+ * `new Date(...)` di aksi menggulirkannya diam-diam ke 2 Mar. Kini
+ * `dateOnly` menolak tanggal tak-kalender; aksi mengonversi lewat
+ * `wibDateToUtcMidnight`.
+ */
+const optionalDate = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  dateOnly.optional(),
+);
 
 const optionalNumber = () => z.coerce.number().optional()
 const optionalPositiveId = () => z.preprocess(
@@ -48,8 +62,8 @@ export const createProductionOrderSchema = z.object({
   productId: z.coerce.number().int().min(1, "Produk wajib dipilih"),
   qty: z.coerce.number().min(1, "Qty minimal 1"),
   workOrderId: optionalSourceId(),
-  startDate: optionalString(30),
-  endDate: optionalString(30),
+  startDate: optionalDate,
+  endDate: optionalDate,
   notes: optionalString(1000),
 })
 
@@ -57,8 +71,8 @@ export const updateProductionOrderSchema = z.object({
   productId: z.coerce.number().int().min(1, "Produk wajib dipilih"),
   qty: z.coerce.number().min(1, "Qty minimal 1"),
   workOrderId: optionalSourceId(),
-  startDate: optionalString(30),
-  endDate: optionalString(30),
+  startDate: optionalDate,
+  endDate: optionalDate,
   notes: optionalString(1000),
 })
 
@@ -75,12 +89,12 @@ const bomRevisionLineSchema = z.object({
 
 export const createBomRevisionSchema = z.object({
   productId: z.coerce.number().int().positive("Produk wajib dipilih"),
-  effectiveDate: optionalString(30),
+  effectiveDate: optionalDate,
   notes: optionalString(1000),
 })
 
 export const updateBomRevisionSchema = z.object({
-  effectiveDate: optionalString(30),
+  effectiveDate: optionalDate,
   notes: optionalString(1000),
 })
 
