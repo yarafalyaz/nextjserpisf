@@ -99,6 +99,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/ringkasan-stok": "Menampilkan ringkasan persediaan dan daftar item kritis",
   "/laporan/serapan-overhead": "Menampilkan overhead dibebankan vs aktual beserta selisih kurang/lebih serap",
   "/laporan/biaya-pekerjaan": "Menampilkan bahan terpakai, biaya produksi, dan biaya per unit tiap perintah kerja",
+  "/laporan/varians-produksi": "Menampilkan varians produksi per perintah produksi: selisih harga bahan, pemakaian, dan tenaga kerja",
   "/laporan/penyelesaian-pekerjaan": "Menampilkan barang jadi yang diselesaikan tiap pekerjaan beserta biaya satuannya",
   "/laporan/jurnal-pekerjaan": "Menampilkan jurnal pekerjaan pesanan: pengeluaran bahan, penyerapan biaya, penyelesaian",
   "/laporan/total-hutang": "Menampilkan saldo seluruh utang usaha",

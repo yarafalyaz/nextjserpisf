@@ -69,6 +69,7 @@ import {
   loadJobOrderJournal,
 } from "@/lib/reports/job-order-data"
 import { loadBankMovements } from "@/lib/reports/bank-movements-data"
+import { loadProductionVariance } from "@/lib/reports/production-variance-data"
 import { loadStockCount } from "@/lib/reports/stock-count-data"
 import { loadPaymentExpenses } from "@/lib/reports/payment-expenses-data"
 import { loadOrderFulfillment } from "@/lib/reports/order-fulfillment-data"
@@ -375,6 +376,21 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
       return {
         kind: "table",
         table: report.cost.table,
+        periodCaption: report.periodCaption,
+        landscape: true,
+      }
+    },
+  },
+
+  "varians-produksi": {
+    title: "Varians Produksi",
+    subtitle: "Selisih Harga Bahan, Pemakaian, Tenaga Kerja & Lainnya",
+    defaultPeriod: startOfYear,
+    async load({ period }) {
+      const report = await loadProductionVariance(period)
+      return {
+        kind: "table",
+        table: report.variance.table,
         periodCaption: report.periodCaption,
         landscape: true,
       }
