@@ -13,7 +13,7 @@ services:
     environment:
       - TZ=Asia/Jakarta
       - DATABASE_URL=mysql://${DB_USER:-silengkap_user}@db:3306/${DB_NAME:-silengkap}
-    command: ["sh", "-c", "npx prisma migrate deploy"]
+    command: ["sh", "-c", "bash scripts/pre-migrate-column-audit.sh && npx prisma migrate deploy"]
     depends_on:
       db:
         condition: service_healthy

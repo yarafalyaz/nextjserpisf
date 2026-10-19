@@ -26,6 +26,14 @@ describe("deployment tidak mendorong skema saat boot", () => {
     expect(compose).toContain("migrate deploy")
   })
 
+  it("layanan migrate mengaudit kolom drop dulu (gagal = rilis gagal)", () => {
+    const compose = read("docker-compose.prod.yml")
+    // Migrasi DROP kolom (20261019000900/1000) hanya aman bila kolom target
+    // kosong di DB ITU. Audit baca-only jalan SEBELUM migrate deploy; tanpa
+    // ini, rilis bisa menghapus data produksi yang tak terlihat di kode.
+    expect(compose).toContain("pre-migrate-column-audit.sh")
+  })
+
   it("compose prod memaku image berversi, bukan latest mengambang", () => {
     const compose = read("docker-compose.prod.yml")
     // Image harus rilis berversi/immutable; latest = tak bisa rollback pasti.
