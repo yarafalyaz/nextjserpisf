@@ -11,6 +11,7 @@ const entryDeleteManyMock = vi.fn()
 const entryCreateManyMock = vi.fn()
 const attachmentUpdateManyMock = vi.fn()
 const transactionMock = vi.fn()
+const executeRawMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -62,7 +63,11 @@ function fd(entries: Record<string, string>): FormData {
 // A fake tx client wired into prisma.$transaction
 function wireTransaction() {
   const tx = {
-    journal: { update: journalUpdateMock },
+    $executeRaw: (...a: unknown[]) => executeRawMock(...a),
+    journal: {
+      findUniqueOrThrow: (...a: unknown[]) => journalFindUniqueOrThrowMock(...a),
+      update: journalUpdateMock,
+    },
     journalEntry: { deleteMany: entryDeleteManyMock, createMany: entryCreateManyMock },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
@@ -72,10 +77,11 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, assertPeriodOpenMock,
     journalFindUniqueOrThrowMock, journalUpdateMock, entryDeleteManyMock,
-    entryCreateManyMock, attachmentUpdateManyMock, transactionMock,
+    entryCreateManyMock, attachmentUpdateManyMock, transactionMock, executeRawMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
   assertPeriodOpenMock.mockResolvedValue(undefined)
+  executeRawMock.mockResolvedValue([])
   journalFindUniqueOrThrowMock.mockResolvedValue({ id: 7, status: "DRAFT", transactionDate: new Date("2026-06-01") })
   journalUpdateMock.mockResolvedValue({ id: 7 })
   entryDeleteManyMock.mockResolvedValue({ count: 2 })

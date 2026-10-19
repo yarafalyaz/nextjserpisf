@@ -411,45 +411,80 @@ export async function postJournal(journalId: number) {
   try {
     await requirePermission("post_journals");
 
-    const journal = await prisma.journal.findUniqueOrThrow({
+    // F-01: baca awal hanya untuk validasi cepat (UX). Kebenaran
+    // diputus di dalam transaksi terkunci di bawah — snapshot ini tak
+    // boleh jadi dasar klaim status.
+    const preview = await prisma.journal.findUniqueOrThrow({
       where: { id: journalId },
       include: { entries: true },
     });
 
-    if (journal.status !== "DRAFT") {
+    if (preview.status !== "DRAFT") {
       throw new Error("Journal hanya bisa di-post dari status DRAFT");
     }
 
     // Block posting into a closed accounting period
-    await assertPeriodOpen(journal.transactionDate);
+    await assertPeriodOpen(preview.transactionDate);
 
-    // Validate double-entry balance
-    const totalDebit = journal.entries.reduce(
+    // Validate double-entry balance on preview (fast-fail before locking).
+    const previewDebit = preview.entries.reduce(
       (sum, e) => safeAdd(sum, Number(e.debit), 2),
       0,
     );
-    const totalCredit = journal.entries.reduce(
+    const previewCredit = preview.entries.reduce(
       (sum, e) => safeAdd(sum, Number(e.credit), 2),
       0,
     );
 
-    if (!compareAmounts(totalDebit, totalCredit, 0)) {
+    if (!compareAmounts(previewDebit, previewCredit, 0)) {
       throw new Error(
-        `Journal tidak balance: Debit ${totalDebit} vs Credit ${totalCredit}`,
+        `Journal tidak balance: Debit ${previewDebit} vs Credit ${previewCredit}`,
       );
     }
 
-    const claim = await prisma.journal.updateMany({
-      where: { id: journalId, status: "DRAFT" },
-      data: {
-        status: "POSTED",
-        totalDebit,
-        totalCredit,
-      },
+    // F-01: lock baris jurnal, baca ulang status+entri, validasi ulang,
+    // lalu klaim DRAFT→POSTED dalam transaksi yang sama. Edit bersamaan
+    // (updateJournal) ikut antre di lock yang sama — hasil serial.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM journals WHERE id = ${journalId} FOR UPDATE`;
+
+      const journal = await tx.journal.findUniqueOrThrow({
+        where: { id: journalId },
+        include: { entries: true },
+      });
+      if (journal.status !== "DRAFT") {
+        throw new Error("Jurnal sudah diposting atau sedang diproses");
+      }
+
+      await assertPeriodOpen(journal.transactionDate);
+
+      const totalDebit = journal.entries.reduce(
+        (sum, e) => safeAdd(sum, Number(e.debit), 2),
+        0,
+      );
+      const totalCredit = journal.entries.reduce(
+        (sum, e) => safeAdd(sum, Number(e.credit), 2),
+        0,
+      );
+
+      if (!compareAmounts(totalDebit, totalCredit, 0)) {
+        throw new Error(
+          `Journal tidak balance: Debit ${totalDebit} vs Credit ${totalCredit}`,
+        );
+      }
+
+      const claim = await tx.journal.updateMany({
+        where: { id: journalId, status: "DRAFT" },
+        data: {
+          status: "POSTED",
+          totalDebit,
+          totalCredit,
+        },
+      });
+      if (claim.count === 0) {
+        throw new Error("Jurnal sudah diposting atau sedang diproses");
+      }
     });
-    if (claim.count === 0) {
-      throw new Error("Jurnal sudah diposting atau sedang diproses");
-    }
 
     await logActivity("post", "Journal", journalId, "Posting jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -925,6 +960,10 @@ export async function matchReconciliationLine(
     // jadi hubungan akun/periode/jurnal wajib diperiksa di sini, bukan dipercaya
     // dari pilihan UI.
     await prisma.$transaction(async (tx) => {
+      // F-02: kunci induk dulu — urutan lock konsisten di semua jalur
+      // (match/unmatch/adjustment/complete) agar tak deadlock.
+      await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconciliationId} FOR UPDATE`;
+
       const recon = await tx.bankReconciliation.findUniqueOrThrow({
         where: { id: reconciliationId },
         select: { status: true, accountId: true, periodStart: true, periodEnd: true },
@@ -1038,26 +1077,32 @@ export async function createReconciliationAdjustment(
 
     const description = String(formData.get("description") ?? "").trim() || null;
 
-    const recon = await prisma.bankReconciliation.findUniqueOrThrow({
-      where: { id: reconciliationId },
-      select: { status: true },
-    });
-    if (recon.status !== "draft") {
-      throw new Error("Hanya rekonsiliasi dengan status draft yang dapat ditambah penyesuaian");
-    }
+    // F-02: cek draft + tulis item dalam SATU transaksi terkunci agar
+    // tak selip di antara baca complete dan klaim completed.
+    const item = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconciliationId} FOR UPDATE`;
 
-    const item = await prisma.bankReconciliationItem.create({
-      data: {
-        bankReconciliationId: reconciliationId,
-        bankStatementLineId: null,
-        journalEntryId: null,
-        type: rawType,
-        amount,
-        date: wibDateToUtcMidnight(rawDate),
-        description,
-        cleared: false,
-        matched: false,
-      },
+      const recon = await tx.bankReconciliation.findUniqueOrThrow({
+        where: { id: reconciliationId },
+        select: { status: true },
+      });
+      if (recon.status !== "draft") {
+        throw new Error("Hanya rekonsiliasi dengan status draft yang dapat ditambah penyesuaian");
+      }
+
+      return tx.bankReconciliationItem.create({
+        data: {
+          bankReconciliationId: reconciliationId,
+          bankStatementLineId: null,
+          journalEntryId: null,
+          type: rawType,
+          amount,
+          date: wibDateToUtcMidnight(rawDate),
+          description,
+          cleared: false,
+          matched: false,
+        },
+      });
     });
 
     await logActivity(
@@ -1083,6 +1128,9 @@ export async function unmatchReconciliationLine(
     await requirePermission("manage_bank_reconciliation");
 
     await prisma.$transaction(async (tx) => {
+      // F-02: kunci induk dulu — urutan lock konsisten dengan match/complete.
+      await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconciliationId} FOR UPDATE`;
+
       const recon = await tx.bankReconciliation.findUniqueOrThrow({
         where: { id: reconciliationId },
         select: { status: true },
@@ -1121,77 +1169,91 @@ export async function completeReconciliation(reconciliationId: number) {
   try {
     await requirePermission("manage_bank_reconciliation");
 
-    // Laravel parity: only draft reconciliations can be completed
-    const reconciliation = await prisma.bankReconciliation.findUniqueOrThrow({
-      where: { id: reconciliationId },
-      include: { items: true },
-    });
+    // F-02: seluruh baca-validasi-tulis dalam SATU transaksi terkunci.
+    // Baris induk dikunci dulu agar match/unmatch/adjustment bersamaan
+    // antre di lock yang sama — complete selalu hitung dari data terbaru.
+    const figures = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconciliationId} FOR UPDATE`;
 
-    if (reconciliation.status !== "draft") {
-      throw new Error(
-        "Hanya rekonsiliasi dengan status draft yang dapat diselesaikan",
-      );
-    }
+      // Laravel parity: only draft reconciliations can be completed
+      const reconciliation = await tx.bankReconciliation.findUniqueOrThrow({
+        where: { id: reconciliationId },
+        include: { items: true },
+      });
 
-    if (reconciliation.items.length === 0) {
-      throw new Error("Rekonsiliasi belum memiliki baris yang dicocokkan");
-    }
+      if (reconciliation.status !== "draft") {
+        throw new Error(
+          "Hanya rekonsiliasi dengan status draft yang dapat diselesaikan",
+        );
+      }
 
-    // Semua baris yang telah dimasukkan ke rekonsiliasi wajib sudah matched.
-    const unmatchedItems = reconciliation.items.filter((item) => !item.matched);
-    if (unmatchedItems.length > 0) {
-      throw new Error(
-        `${unmatchedItems.length} baris belum di-match. Semua baris harus di-match sebelum menyelesaikan rekonsiliasi.`,
-      );
-    }
+      if (reconciliation.items.length === 0) {
+        throw new Error("Rekonsiliasi belum memiliki baris yang dicocokkan");
+      }
 
-    // Numeric balance gate (Laravel BankReconciliation::calculateDifference + isBalanced).
-    // Only UNCLEARED outstanding deposits/payments adjust the book balance.
-    //   adjusted_book_balance = book_balance + outstanding_deposits − outstanding_payments
-    //   difference            = statement_ending_balance − adjusted_book_balance
-    // Block completion unless |difference| < 0.01. Persist the computed figures
-    // so the report reflects the reconciliation math (these columns existed in
-    // the schema but were never populated before).
-    const outstandingDeposits = reconciliation.items
-      .filter((i) => !i.cleared && i.type === "outstanding_deposit")
-      .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
-    const outstandingPayments = reconciliation.items
-      .filter((i) => !i.cleared && i.type === "outstanding_check")
-      .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
-    const adjustedBookBalance = safeSubtract(
-      safeAdd(Number(reconciliation.bookBalance), outstandingDeposits, 2),
-      outstandingPayments,
-      2,
-    );
-    const difference = safeSubtract(
-      Number(reconciliation.statementBalance),
-      adjustedBookBalance,
-      2,
-    );
-    if (Math.abs(difference) >= 0.01) {
-      throw new Error(
-        `Rekonsiliasi belum seimbang. Selisih: ${difference.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. ` +
-          `Tambahkan item penyesuaian (setoran/cek beredar) atau periksa saldo sebelum menyelesaikan.`,
-      );
-    }
+      // Semua baris yang telah dimasukkan ke rekonsiliasi wajib sudah matched.
+      const unmatchedItems = reconciliation.items.filter((item) => !item.matched);
+      if (unmatchedItems.length > 0) {
+        throw new Error(
+          `${unmatchedItems.length} baris belum di-match. Semua baris harus di-match sebelum menyelesaikan rekonsiliasi.`,
+        );
+      }
 
-    await prisma.bankReconciliation.update({
-      where: { id: reconciliationId },
-      data: {
-        status: "completed",
-        completedAt: new Date(),
-        outstandingDeposits,
+      // Numeric balance gate (Laravel BankReconciliation::calculateDifference + isBalanced).
+      // Only UNCLEARED outstanding deposits/payments adjust the book balance.
+      //   adjusted_book_balance = book_balance + outstanding_deposits − outstanding_payments
+      //   difference            = statement_ending_balance − adjusted_book_balance
+      // Block completion unless |difference| < 0.01. Persist the computed figures
+      // so the report reflects the reconciliation math (these columns existed in
+      // the schema but were never populated before).
+      const outstandingDeposits = reconciliation.items
+        .filter((i) => !i.cleared && i.type === "outstanding_deposit")
+        .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
+      const outstandingPayments = reconciliation.items
+        .filter((i) => !i.cleared && i.type === "outstanding_check")
+        .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
+      const adjustedBookBalance = safeSubtract(
+        safeAdd(Number(reconciliation.bookBalance), outstandingDeposits, 2),
         outstandingPayments,
+        2,
+      );
+      const difference = safeSubtract(
+        Number(reconciliation.statementBalance),
         adjustedBookBalance,
-        difference,
-      },
+        2,
+      );
+      if (Math.abs(difference) >= 0.01) {
+        throw new Error(
+          `Rekonsiliasi belum seimbang. Selisih: ${difference.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. ` +
+            `Tambahkan item penyesuaian (setoran/cek beredar) atau periksa saldo sebelum menyelesaikan.`,
+        );
+      }
+
+      // Klaim bersyarat draft→completed di dalam transaksi yang sama:
+      // complete ganda serentak hanya satu yang menang.
+      const claim = await tx.bankReconciliation.updateMany({
+        where: { id: reconciliationId, status: "draft" },
+        data: {
+          status: "completed",
+          completedAt: new Date(),
+          outstandingDeposits,
+          outstandingPayments,
+          adjustedBookBalance,
+          difference,
+        },
+      });
+      if (claim.count === 0) {
+        throw new Error("Rekonsiliasi sudah diselesaikan atau sedang diproses");
+      }
+
+      return { outstandingDeposits, outstandingPayments, adjustedBookBalance, difference };
     });
 
     await logActivity(
       "complete",
       "BankReconciliation",
       reconciliationId,
-      "Menyelesaikan rekonsiliasi bank",
+      `Menyelesaikan rekonsiliasi bank (selisih ${figures.difference})`,
     );
     revalidatePath("/keuangan/rekonsiliasi-bank");
     return { success: true };
@@ -1562,6 +1624,18 @@ export async function updateJournal(id: number, formData: FormData) {
       : existing.type;
 
     const journal = await prisma.$transaction(async (tx) => {
+      // F-01: lock baris jurnal dulu — protokol sama dengan postJournal.
+      // Cek DRAFT di luar hanya fast-fail; keputusan final ada di sini,
+      // sesudah lock, agar edit-vs-posting serial.
+      await tx.$executeRaw`SELECT id FROM journals WHERE id = ${id} FOR UPDATE`;
+
+      const fresh = await tx.journal.findUniqueOrThrow({ where: { id } });
+      if (fresh.status !== "DRAFT") {
+        throw new Error("Journal yang sudah diposting tidak dapat diubah");
+      }
+
+      await assertPeriodOpen(fresh.transactionDate);
+
       const j = await tx.journal.update({
         where: { id },
         data: {
