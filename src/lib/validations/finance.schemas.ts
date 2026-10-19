@@ -195,3 +195,33 @@ export const updateJournalSchema = z.object({
   attachmentIds: optionalString(5000),
 });
 
+
+// ==================== CHEQUE / GIRO ====================
+
+/**
+ * Server-side schema untuk createCheque: hand-parse sebelumnya tanpa
+ * max-length — number/party/notes 5MB lolos ke DB, type/direction arbitrary
+ * string diam-diam jadi "giro"/"in", amount 0/negatif hanya dicek manual.
+ */
+export const chequeSchema = z.object({
+  type: z.enum(["giro", "cek"], {
+    message: "type wajib diisi (giro/cek)",
+  }),
+  direction: z.enum(["in", "out"], {
+    message: "direction wajib diisi (in/out)",
+  }),
+  number: optionalString(100),
+  party: optionalString(200),
+  accountId: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.coerce.number().int().positive().optional(),
+  ),
+  amount: z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce
+      .number({ message: "amount wajib diisi" })
+      .positive("Nominal giro/cek harus lebih dari 0"),
+  ),
+  dueDate: requiredDate,
+  notes: optionalString(2000),
+});
