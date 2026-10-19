@@ -599,6 +599,27 @@ describe("Payroll Actions", () => {
     })
   })
 
+  it("rejects a fictitious calendar end date instead of rolling it over", async () => {
+    // `new Date("2026-02-30")` rolls to Mar 2: the 2026-02-01..2026-02-30
+    // range reads as 29 valid days and the estimation silently computes
+    // against the rolled-over date. The range guard must reject the date.
+    requirePermissionMock.mockResolvedValueOnce({ id: "1", roles: ["hr_admin"] } as any)
+    const res = await actions.getPayrollEstimation(1, "2026-02-01", "2026-02-30")
+    if (!res || !("error" in res)) throw new Error("Expected error result for fictitious date")
+    expect(res.error).toMatch(/tanggal/i)
+    expect(prismaMock.payroll.createMany).not.toHaveBeenCalled()
+    expect(prismaMock.payroll.create).not.toHaveBeenCalled()
+  })
+
+  it("rejects a fictitious bulk payroll end date instead of rolling it over", async () => {
+    requirePermissionMock.mockResolvedValueOnce({ id: "1", roles: ["hr_admin"] } as any)
+    const res = await actions.generateBulkPayroll("2026-02", "2026-02-01", "2026-02-30")
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/tanggal/i)
+    expect(prismaMock.payroll.createMany).not.toHaveBeenCalled()
+    expect(prismaMock.payroll.create).not.toHaveBeenCalled()
+  })
+
   it("getPayrollEstimation returns components", async () => {
     requirePermissionMock.mockResolvedValueOnce({ id: "1", roles: ["hr_admin"] } as any)
     prismaMock.employee.findUnique.mockResolvedValue({
