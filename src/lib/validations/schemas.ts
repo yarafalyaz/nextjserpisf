@@ -93,6 +93,41 @@ export const warehouseServerSchema = z.object({
   address: optionalString(500),
 })
 
+export const taxServerSchema = z.object({
+  name: z.string().min(1, "Nama wajib diisi").max(200),
+  // Tetap di-clamp 0..100 di action (perilaku historis); skema hanya menolak non-angka.
+  rate: z.coerce.number({ message: "Tarif harus berupa angka" }),
+  code: optionalString(50),
+  description: optionalString(2000),
+  type: optionalString(50),
+  scope: optionalString(50),
+  effectiveFrom: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    // String YYYY-MM-DD kalender-valid; action konversi via wibDateToUtcMidnight.
+    z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal tidak valid (format YYYY-MM-DD)")
+      .refine((value) => {
+        const [y, m, d] = value.split("-").map(Number)
+        const dt = new Date(Date.UTC(y, m - 1, d))
+        return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+      }, "Tanggal tidak valid")
+      .optional(),
+  ),
+  effectiveTo: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z
+      .string()
+      .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal tidak valid (format YYYY-MM-DD)")
+      .refine((value) => {
+        const [y, m, d] = value.split("-").map(Number)
+        const dt = new Date(Date.UTC(y, m - 1, d))
+        return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+      }, "Tanggal tidak valid")
+      .optional(),
+  ),
+})
+
 export const accountServerSchema = z.object({
   code: optionalString(50),
   name: z.string().min(1, "Nama akun wajib diisi").max(200),

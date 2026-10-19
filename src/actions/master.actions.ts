@@ -23,7 +23,9 @@ import {
   itemSchema,
   warehouseServerSchema,
   accountServerSchema,
+  taxServerSchema,
 } from "@/lib/validations/schemas";
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   createLeadSchema,
@@ -1466,24 +1468,23 @@ export async function createTax(formData: FormData) {
       if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
     }
 
+    const parsed = parseFormData(taxServerSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
 
     const tax = await prisma.tax.create({
       data: {
-        name: requireString(formData.get("name"), "name"),
-        slug: await nextSlug("tax", requireString(formData.get("name"), "name")),
-        rate: clampTaxRate(safeNumber(formData.get("rate")) ?? 0),
-        code: (formData.get("code") as string) || undefined,
-        description: (formData.get("description") as string) || undefined,
-        type: (formData.get("type") as string) || undefined,
-        scope: (formData.get("scope") as string) || undefined,
+        name: v.name,
+        slug: await nextSlug("tax", v.name),
+        rate: clampTaxRate(v.rate),
+        code: v.code,
+        description: v.description,
+        type: v.type,
+        scope: v.scope,
         isInclusive: formData.get("isInclusive") === "on",
         isCompound: formData.get("isCompound") === "on",
-        effectiveFrom: formData.get("effectiveFrom")
-          ? new Date(formData.get("effectiveFrom") as string)
-          : undefined,
-        effectiveTo: formData.get("effectiveTo")
-          ? new Date(formData.get("effectiveTo") as string)
-          : undefined,
+        effectiveFrom: v.effectiveFrom ? wibDateToUtcMidnight(v.effectiveFrom) : undefined,
+        effectiveTo: v.effectiveTo ? wibDateToUtcMidnight(v.effectiveTo) : undefined,
         isActive: true,
         createdBy: Number(user.id),
       },
@@ -1506,6 +1507,10 @@ export async function updateTax(id: number, formData: FormData) {
   try {
     await requirePermission("edit_taxes");
 
+    const parsed = parseFormData(taxServerSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
+
     // The edit form renders only `name` and `rate`. Writing `isInclusive`/
     // `isCompound` unconditionally would force them to false on every save
     // (formData.get returns null for an unchecked/absent box), silently
@@ -1513,19 +1518,15 @@ export async function updateTax(id: number, formData: FormData) {
     // submit the field — same class as the account.normalBalance / itemCategory
     // parentId preservation fixes.
     const data: Prisma.TaxUpdateInput = {
-      name: requireString(formData.get("name"), "name"),
-      slug: await nextSlug("tax", requireString(formData.get("name"), "name"), { excludeId: id }),
-      rate: clampTaxRate(safeNumber(formData.get("rate")) ?? 0),
-      code: (formData.get("code") as string) || undefined,
-      description: (formData.get("description") as string) || undefined,
-      type: (formData.get("type") as string) || undefined,
-      scope: (formData.get("scope") as string) || undefined,
-      effectiveFrom: formData.get("effectiveFrom")
-        ? new Date(formData.get("effectiveFrom") as string)
-        : undefined,
-      effectiveTo: formData.get("effectiveTo")
-        ? new Date(formData.get("effectiveTo") as string)
-        : undefined,
+      name: v.name,
+      slug: await nextSlug("tax", v.name, { excludeId: id }),
+      rate: clampTaxRate(v.rate),
+      code: v.code,
+      description: v.description,
+      type: v.type,
+      scope: v.scope,
+      effectiveFrom: v.effectiveFrom ? wibDateToUtcMidnight(v.effectiveFrom) : undefined,
+      effectiveTo: v.effectiveTo ? wibDateToUtcMidnight(v.effectiveTo) : undefined,
     };
     if (formData.has("isInclusive")) {
       data.isInclusive = formData.get("isInclusive") === "on";
