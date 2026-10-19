@@ -52,14 +52,14 @@ export function CostCenterForm({
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={costCenter?.id ? "Formulir ubah pusat biaya" : "Formulir tambah pusat biaya"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="code">Kode *</Label>
+          <Label htmlFor="code">Kode <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="code" name="code" placeholder="Contoh: CC-001" required defaultValue={costCenter?.code ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nama *</Label>
+          <Label htmlFor="name">Nama <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="name" name="name" placeholder="Nama pusat biaya" required defaultValue={costCenter?.name ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
