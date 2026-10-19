@@ -8,7 +8,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { createRoleSchema, updateRoleSchema } from "@/lib/validations/roles.schemas"
+import { createRoleSchema, updateRoleSchema, rolePermissionIdsSchema } from "@/lib/validations/roles.schemas"
 import { nextSlug } from "@/lib/utils/slug-db"
 
 // Kontrak galat modul ini sengaja dibagi dua:
@@ -44,6 +44,12 @@ async function assertCanGrantPermissions(
   return null
 }
 
+// Checkbox field berulang: getAll pertahankan nilai penuh; string kosong
+// (field absen/tak dicentang) berarti tanpa izin, bukan ID tidak valid.
+function permissionValues(formData: FormData): string[] {
+  return formData.getAll("permissions").map((v) => String(v)).filter((v) => v.trim() !== "")
+}
+
 /** Kegagalan yang bisa diperbaiki pengguna, dikembalikan ke form (lihat catatan di atas). */
 export type RoleFormError = { success: false; error: string }
 
@@ -64,7 +70,11 @@ export async function createRole(formData: FormData): Promise<RoleFormError> {
   if (isReservedRoleName(name)) {
     return { success: false, error: `Nama peran "${name}" dicadangkan sistem dan tidak dapat dibuat.` }
   }
-  const permissionIds = formData.getAll("permissions").map((id) => Number(id)).filter(Boolean)
+  const idsParsed = rolePermissionIdsSchema.safeParse(permissionValues(formData))
+  if (!idsParsed.success) {
+    return { success: false, error: "Validasi gagal: permissions: Izin tidak valid" }
+  }
+  const permissionIds = [...new Set(idsParsed.data)]
 
   const grantErr = await assertCanGrantPermissions(actor, permissionIds)
   if (grantErr) {
@@ -103,7 +113,11 @@ export async function updateRole(id: number, formData: FormData): Promise<RoleFo
   }
 
   const { name } = parsed.data
-  const permissionIds = formData.getAll("permissions").map((pid) => Number(pid)).filter(Boolean)
+  const idsParsed = rolePermissionIdsSchema.safeParse(permissionValues(formData))
+  if (!idsParsed.success) {
+    return { success: false, error: "Validasi gagal: permissions: Izin tidak valid" }
+  }
+  const permissionIds = [...new Set(idsParsed.data)]
 
   // Protect the built-in super_admin role: only a super_admin may modify it.
   // Otherwise a manage_settings holder could strip its permissions or rename it,
