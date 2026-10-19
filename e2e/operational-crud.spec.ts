@@ -464,9 +464,17 @@ test("gerbang dokumen: form tetap tampil, dan sebabnya dijelaskan bila kosong", 
     () => false,
   )
   if (!poKosong) {
-    // Bukti data layak: combobox PO punya opsi (button/option/listbox item).
-    const buktiPO = await page.locator('[role="option"], [role="listbox"] [role="option"], ul li').count()
-      .catch(() => 0)
+    // R10-01(2): bukti TERIKAT combobox PO spesifik — buka dropdown
+    // "Cari pesanan pembelian..." lalu hitung [role=option] di listbox-nya.
+    // Bukan 'ul li' global (nav/daftar lain bisa false-positive).
+    let buktiPO = 0
+    try {
+      // Jangkar: button#purchaseOrderId (id stabil, tanpa ubah UI).
+      await page.locator('button#purchaseOrderId[role="combobox"]').click({ timeout: 3_000 })
+      buktiPO = await page.locator('[role="listbox"] [role="option"]').count()
+    } catch {
+      buktiPO = 0
+    }
     test.skip(buktiPO > 0, "Shard paralel membuat PO layak; halaman menampilkan form")
     // Tanpa bukti = kondisi aneh (bukan pesan, bukan opsi) → fail jujur.
     await expect(pesanPO).toBeVisible({ timeout: 15_000 })
@@ -479,8 +487,14 @@ test("gerbang dokumen: form tetap tampil, dan sebabnya dijelaskan bila kosong", 
     () => false,
   )
   if (!qKosong) {
-    const buktiQ = await page.locator('[role="option"], [role="listbox"] [role="option"], ul li').count()
-      .catch(() => 0)
+    let buktiQ = 0
+    try {
+      // Jangkar: button#quotationId (id stabil, tanpa ubah UI).
+      await page.locator('button#quotationId[role="combobox"]').click({ timeout: 3_000 })
+      buktiQ = await page.locator('[role="listbox"] [role="option"]').count()
+    } catch {
+      buktiQ = 0
+    }
     test.skip(buktiQ > 0, "Shard paralel membuat penawaran layak; halaman menampilkan form")
     await expect(pesanQ).toBeVisible({ timeout: 15_000 })
   }
