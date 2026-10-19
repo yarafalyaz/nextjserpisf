@@ -46,11 +46,17 @@ export function AssetBrandForm({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={brand?.id ? "Formulir ubah merek aset" : "Formulir tambah merek aset"}
+    >
       <FormCard>
         <FormSection title="Informasi Umum" columns={1}>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Merek *</Label>
+            <Label htmlFor="name">
+              Nama Merek <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Input
               id="name"
               name="name"
