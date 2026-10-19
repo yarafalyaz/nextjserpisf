@@ -1288,6 +1288,28 @@ describe("More Action Branches", () => {
     expect(mocks.prismaMock.transactionAttachment.updateMany).toHaveBeenCalled()
   })
 
+  it("ISF-01 sekelas: updateExpense gagal total bila klaim lampiran gagal", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.expense.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.expense.update.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.transactionAttachment.updateMany.mockRejectedValueOnce(new Error("klaim lampiran gagal"))
+    const fd = fdMap({ amount: 100, date: "2024-01-01", accountId: 1, attachmentIds: "[10, 20]" })
+    const res = await actions.updateExpense(1, fd)
+    expect(res.success).toBe(false)
+    expect(mocks.logActivityMock).not.toHaveBeenCalledWith("update", "Expense", 1, "Memperbarui pengeluaran")
+  })
+
+  it("ISF-01 sekelas: updatePettyCash gagal total bila klaim lampiran gagal", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "PC-01" })
+    mocks.prismaMock.pettyCash.update.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.transactionAttachment.updateMany.mockRejectedValueOnce(new Error("klaim lampiran gagal"))
+    const fd = fdMap({ amount: 100, type: "IN", date: "2024-01-01", accountId: 1, attachmentIds: "[9, 10]" })
+    const res = await actions.updatePettyCash(1, fd)
+    expect(res.success).toBe(false)
+    expect(mocks.logActivityMock).not.toHaveBeenCalledWith("update", "PettyCash", 1, "Memperbarui transaksi kas kecil")
+  })
+
   it("reverseJournal concurrent claim rejection (REVERSED)", async () => {
     // In-tx re-read sees REVERSED → reject before any claim; no second lookup.
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
