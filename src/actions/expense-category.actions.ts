@@ -5,15 +5,15 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { expenseCategorySchema } from "@/lib/validations/finance.schemas"
 
 export async function createExpenseCategory(formData: FormData) {
   await requirePermission("manage_expense_categories")
 
-  const name = (formData.get("name") as string)?.trim()
-  const label = (formData.get("label") as string)?.trim()
-  const sortOrder = Number(formData.get("sortOrder")) || 0
-
-  if (!name || !label) return { success: false, error: "Nama dan label wajib diisi" }
+  const parsed = parseFormData(expenseCategorySchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { name, label, sortOrder } = parsed.data
 
   try {
     const created = await prisma.expenseCategory.create({ data: { name, label, sortOrder, slug: await nextSlug("expenseCategory", name) } })
@@ -30,12 +30,9 @@ export async function createExpenseCategory(formData: FormData) {
 export async function updateExpenseCategory(id: number, formData: FormData) {
   await requirePermission("manage_expense_categories")
 
-  const name = (formData.get("name") as string)?.trim()
-  const label = (formData.get("label") as string)?.trim()
-  const sortOrder = Number(formData.get("sortOrder")) || 0
-  const isActive = formData.get("isActive") === "on"
-
-  if (!name || !label) return { success: false, error: "Nama dan label wajib diisi" }
+  const parsed = parseFormData(expenseCategorySchema, formData)
+  if (!parsed.success) return { success: false, error: parsed.error }
+  const { name, label, sortOrder, isActive } = parsed.data
 
   try {
     await prisma.expenseCategory.update({

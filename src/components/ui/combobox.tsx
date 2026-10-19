@@ -49,6 +49,7 @@ interface ComboboxProps {
   /** Label of the create-new row. Default "Tambah baru...". */
   createNewLabel?: string;
   "aria-label"?: string;
+  "aria-describedby"?: string;
 }
 
 /**
@@ -72,6 +73,7 @@ export function Combobox({
   onCreateNew,
   createNewLabel = "Tambah baru...",
   "aria-label": ariaLabel,
+  "aria-describedby": ariaDescribedBy,
 }: ComboboxProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -93,6 +95,7 @@ export function Combobox({
             id={id}
             role="combobox"
             aria-label={ariaLabel}
+            aria-describedby={ariaDescribedBy}
             aria-expanded={open}
             aria-required={required || undefined}
             isDisabled={disabled}
