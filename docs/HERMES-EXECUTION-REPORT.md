@@ -110,6 +110,7 @@
 | `0456c2e2` | `e2e/sales-chain.spec.ts` + seed akun retur E2E-4100 | rantai jual E2E (2 passed DB nyata) |
 || `ad97b38e` | `src/actions/sales.actions.ts` + `src/actions/__tests__/sales.actions.test.ts` | magic-byte bukti DP |
 | (uncommitted) | `docs/HERMES-EXECUTION-REPORT.md` | laporan ini |
+| PORT-2 | Sinkron | `finance.schemas.ts` + 4 aksi keuangan + `button.tsx`/`process-button.tsx`/`safe-image.tsx` | FIXED (`a8c6a85e`, branch kerja) | Branch audit ketinggalan 4 commit main: purchaseAdvance/bankTransfer/taxPayment tanpa max-length + tanggal `new Date()` zona-proses + tanggal kalender fiktif lolos; cheque type/direction sampah diam-diam jadi giro/in; Button/ProcessButton tanpa aria-busy, SafeImage tanpa prop responsive | Gabung: port 4 skema Zod + parseFormData + WIB-midnight; TIGA assertPeriodOpen cheque DIPERTAHANKAN (main menghapusnya = regresi, port mentah ditolak); isValidTaxPeriod diganti taxPeriod setara | 28 tes port + suite penuh 367 file/4392 tes; tsc 0; lint 0 error (4 warning pre-existing); grep e2e nihil |
 
 ## D. Migrasi/perbaikan data
 
