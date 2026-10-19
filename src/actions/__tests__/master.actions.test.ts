@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
     itemStock: buildModelMock(),
     user: buildModelMock(),
     uomConversion: buildModelMock(),
+    unitOfMeasure: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -356,6 +357,34 @@ describe("Bank Actions", () => {
     expect(res?.success).toBe(false)
     expect(String(res?.error)).toContain("3 rekening koran")
     expect(mocks.prismaMock.bank.delete).not.toHaveBeenCalled()
+  })
+})
+
+describe("Uom Actions", () => {
+  it("createUom rejects arbitrary category before DB write", async () => {
+    const res = await actions.createUom(fdMap({ name: "Piece", symbol: "PCS", category: "crypto" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.unitOfMeasure.create).not.toHaveBeenCalled()
+  })
+  it("createUom rejects missing symbol before DB write", async () => {
+    const res = await actions.createUom(fdMap({ name: "Piece" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.unitOfMeasure.create).not.toHaveBeenCalled()
+  })
+  it("createUom rejects overlong symbol before DB write", async () => {
+    const res = await actions.createUom(fdMap({ name: "Piece", symbol: "X".repeat(51) }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.unitOfMeasure.create).not.toHaveBeenCalled()
+  })
+  it("createUom accepts jasa category", async () => {
+    const res = await actions.createUom(fdMap({ name: "Jam Kerja", symbol: "jam", category: "jasa" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.unitOfMeasure.create).toHaveBeenCalled()
+  })
+  it("updateUom rejects arbitrary category before DB write", async () => {
+    const res = await actions.updateUom(1, fdMap({ name: "Piece", symbol: "PCS", category: "crypto" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.unitOfMeasure.update).not.toHaveBeenCalled()
   })
 })
 

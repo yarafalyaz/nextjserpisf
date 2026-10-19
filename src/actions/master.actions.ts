@@ -25,6 +25,7 @@ import {
   accountServerSchema,
   taxServerSchema,
   bankServerSchema,
+  uomServerSchema,
 } from "@/lib/validations/schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseFormData } from "@/lib/validations/parse-form";
@@ -2432,12 +2433,9 @@ export async function createUom(formData: FormData) {
       if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
     }
 
-    const name = String(formData.get("name") ?? "").trim();
-    const symbol = String(formData.get("symbol") ?? "").trim();
-    if (!name) return { success: false, error: "Nama satuan wajib diisi" };
-    if (!symbol) return { success: false, error: "Simbol wajib diisi" };
-    const rawCategory = String(formData.get("category") ?? "").trim().toLowerCase();
-    const category = rawCategory === "jasa" ? "jasa" : "barang";
+    const parsed = parseFormData(uomServerSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const { name, symbol, category } = parsed.data
 
     const uom = await prisma.unitOfMeasure.create({
       data: {
@@ -2461,12 +2459,9 @@ export async function createUom(formData: FormData) {
 export async function updateUom(id: number, formData: FormData) {
   try {
     await requirePermission("edit_units");
-    const name = String(formData.get("name") ?? "").trim();
-    const symbol = String(formData.get("symbol") ?? "").trim();
-    if (!name) return { success: false, error: "Nama satuan wajib diisi" };
-    if (!symbol) return { success: false, error: "Simbol wajib diisi" };
-    const rawCategory = String(formData.get("category") ?? "").trim().toLowerCase();
-    const category = rawCategory === "jasa" ? "jasa" : "barang";
+    const parsed = parseFormData(uomServerSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const { name, symbol, category } = parsed.data
 
     await prisma.unitOfMeasure.update({
       where: { id },
