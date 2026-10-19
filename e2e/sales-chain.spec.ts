@@ -27,7 +27,8 @@ test.describe.serial("Penjualan — rantai penuh", () => {
     const stockedItem = await prisma.item.findUniqueOrThrow({
       where: { sku: "E2E-POST-ITEM" },
     })
-    await prisma.$executeRaw`DELETE je FROM journal_entries je JOIN journals j ON j.id = je.journal_id WHERE j.reference_type IN ('SalesInvoice', 'SalesInvoiceCOGS', 'SalesPayment') AND j.reference_id NOT IN (SELECT id FROM sales_invoices)`
+    // AUD-R13-01: jurnal yatim scoping fixture.id (bukan global).
+    await prisma.$executeRaw`DELETE je FROM journal_entries je JOIN journals j ON j.id = je.journal_id WHERE j.reference_type IN ('SalesInvoice', 'SalesInvoiceCOGS', 'SalesPayment') AND j.reference_id = ${fixture.id} AND j.reference_id NOT IN (SELECT id FROM sales_invoices)`
     await prisma.salesPayment.deleteMany({ where: { salesInvoiceId: fixture.id } })
     await prisma.salesReturnItem.deleteMany({
       where: { salesReturn: { salesInvoiceId: fixture.id } },

@@ -16,13 +16,10 @@ import { Prisma } from "@prisma/client"
 test.describe.serial("Pembelian — rantai penuh", () => {
   test("PO → terima → tagih → bayar, stok & jurnal & sisa terbukti di DB", async ({ page }) => {
     // 0. PO fixture: reset ke approved + bersihkan sisa run sebelumnya supaya
-    // run idempoten (qty absolut, bukan akumulasi antar run). Jurnal + movement
-    // yatim dari run lama ikut dibersihkan (unik referenceType+referenceId
-    // membuat verify/confirm ulang gagal 1062 bila sisa).
-    await prisma.$executeRaw`DELETE je FROM journal_entries je JOIN journals j ON j.id = je.journal_id WHERE j.reference_type = 'GoodsReceipt' AND j.reference_id NOT IN (SELECT id FROM goods_receipts)`
-    await prisma.$executeRaw`DELETE FROM journals WHERE reference_type = 'GoodsReceipt' AND reference_id NOT IN (SELECT id FROM goods_receipts)`
-    await prisma.$executeRaw`DELETE je FROM journal_entries je JOIN journals j ON j.id = je.journal_id WHERE j.reference_type = 'VendorBill' AND j.reference_id NOT IN (SELECT id FROM vendor_bills)`
-    await prisma.$executeRaw`DELETE FROM journals WHERE reference_type = 'VendorBill' AND reference_id NOT IN (SELECT id FROM vendor_bills)`
+    // run idempoten (qty absolut, bukan akumulasi antar run).
+    // AUD-R13-01: SEMUA cleanup scoping fixture — orphan-yatim global pun
+    // dibatasi ke reference_id fixture (NOT IN + IN fixture = hanya yatim MILIK
+    // fixture ini; yatim shard lain tak tersentuh).
     // AUD-R12-01: poRow DULU — semua cleanup di bawah scoping fixture ini.
     const poRow = await prisma.purchaseOrder.findUniqueOrThrow({
       where: { documentNo: "E2E-PO-CHAIN" },
@@ -41,13 +38,20 @@ test.describe.serial("Pembelian — rantai penuh", () => {
       await prisma.$executeRaw`DELETE il FROM inventory_layers il JOIN stock_moves sm ON sm.id = il.stock_move_id WHERE sm.reference_type = 'GoodsReceipt' AND sm.reference_id IN (${Prisma.join(fixtureGrIds)})`
       await prisma.$executeRaw`DELETE FROM stock_moves WHERE reference_type = 'GoodsReceipt' AND reference_id IN (${Prisma.join(fixtureGrIds)})`
     }
-    await prisma.$executeRaw`DELETE il FROM inventory_layers il LEFT JOIN stock_moves sm ON sm.id = il.stock_move_id WHERE sm.id IS NULL`
+    // (Layer yatim global DIBUANG R13-01: urutan hapus layer-sebelum-move sudah
+    // benar → tak ada yatim baru. Sapu yatim lama = manual sekali, bukan tiap run.)
     const fixtureBillIds = (
       await prisma.vendorBill.findMany({
         where: { purchaseOrderId: poRow.id },
         select: { id: true },
       })
     ).map((b) => b.id)
+    // Jurnal yatim MILIK fixture: reference GoodsReceipt/Bill yang id-nya fixture
+    // tapi baris induknya sudah hilang (sisa run lama fixture SAMA).
+    if (fixtureGrIds.length > 0) {
+      await prisma.$executeRaw`DELETE je FROM journal_entries je JOIN journals j ON j.id = je.journal_id WHERE j.reference_type = 'GoodsReceipt' AND j.reference_id IN (${Prisma.join(fixtureGrIds)}) AND j.reference_id NOT IN (SELECT id FROM goods_receipts)`
+      await prisma.$executeRaw`DELETE FROM journals WHERE reference_type = 'GoodsReceipt' AND reference_id IN (${Prisma.join(fixtureGrIds)}) AND reference_id NOT IN (SELECT id FROM goods_receipts)`
+    }
     if (fixtureBillIds.length > 0) {
       await prisma.vendorPaymentAllocation.deleteMany({ where: { vendorBillId: { in: fixtureBillIds } } })
       // AUD-R12-03: payment via vendorBillId = bill fixture (penanda eksplisit).
@@ -55,6 +59,9 @@ test.describe.serial("Pembelian — rantai penuh", () => {
       await prisma.vendorPayment.deleteMany({ where: { vendorBillId: { in: fixtureBillIds } } })
       await prisma.vendorBillItem.deleteMany({ where: { vendorBillId: { in: fixtureBillIds } } })
       await prisma.vendorBill.deleteMany({ where: { id: { in: fixtureBillIds } } })
+      // Jurnal yatim bill fixture (induk hilang, sisa run lama fixture sama).
+      await prisma.$executeRaw`DELETE je FROM journal_entries je JOIN journals j ON j.id = je.journal_id WHERE j.reference_type = 'VendorBill' AND j.reference_id IN (${Prisma.join(fixtureBillIds)}) AND j.reference_id NOT IN (SELECT id FROM vendor_bills)`
+      await prisma.$executeRaw`DELETE FROM journals WHERE reference_type = 'VendorBill' AND reference_id NOT IN (SELECT id FROM vendor_bills) AND reference_id IN (${Prisma.join(fixtureBillIds)})`
     }
     await prisma.goodsReceiptItem.deleteMany({ where: { goodsReceipt: { purchaseOrderId: poRow.id } } })
     await prisma.goodsReceipt.deleteMany({ where: { purchaseOrderId: poRow.id } })
