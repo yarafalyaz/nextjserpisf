@@ -148,3 +148,16 @@ export const accountServerSchema = z.object({
     .optional(),
 })
 
+// Form barcode (tambah + ubah) cuma render 6 tipe ini; dulu action pakai
+// `String(formData.get("type")) || "EAN13"` sehingga tipe arbitrer dan barcode
+// tanpa batas panjang lolos ke DB. Samakan dengan produsen UI.
+export const barcodeServerSchema = z.object({
+  barcode: z.string().min(1, "Barcode wajib diisi").max(200),
+  itemId: z.coerce.number().int("ID barang tidak valid").positive("ID barang tidak valid"),
+  type: z
+    .enum(["EAN13", "EAN8", "UPC", "CODE128", "CODE39", "QR"], {
+      message: "Tipe barcode harus salah satu dari EAN13, EAN8, UPC, CODE128, CODE39, QR",
+    })
+    .default("EAN13"),
+})
+

@@ -445,10 +445,12 @@ describe("ItemByScan Actions", () => {
 
 describe("Barcode Actions", () => {
   it("createBarcode succeeds", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1 })
     const res = await actions.createBarcode(fdMap({ barcode: "1234567890", itemId: "1" }))
     expect(res?.success).toBe(true)
   })
   it("updateBarcode succeeds", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1 })
     mocks.prismaMock.barcode.findUniqueOrThrow.mockResolvedValue({ id: 1 })
     const res = await actions.updateBarcode(1, fdMap({ barcode: "1234567890", itemId: "1" }))
     expect(res?.success).toBe(true)
@@ -456,6 +458,29 @@ describe("Barcode Actions", () => {
   it("deleteBarcode succeeds", async () => {
     const res = await actions.deleteBarcode(1)
     expect(res?.success).toBe(true)
+  })
+  it("createBarcode menolak tipe arbitrer tanpa menulis", async () => {
+    const res = await actions.createBarcode(fdMap({ barcode: "1234567890", itemId: "1", type: "FREEFORM" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Tipe barcode")
+    expect(mocks.prismaMock.barcode.create).not.toHaveBeenCalled()
+  })
+  it("createBarcode menolak barcode terlalu panjang tanpa menulis", async () => {
+    const res = await actions.createBarcode(fdMap({ barcode: "x".repeat(201), itemId: "1" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.barcode.create).not.toHaveBeenCalled()
+  })
+  it("createBarcode menolak itemId non-int/tidak ada tanpa menulis", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue(null)
+    const res = await actions.createBarcode(fdMap({ barcode: "1234567890", itemId: "999" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Barang")
+    expect(mocks.prismaMock.barcode.create).not.toHaveBeenCalled()
+  })
+  it("updateBarcode menolak tipe arbitrer tanpa menulis", async () => {
+    const res = await actions.updateBarcode(1, fdMap({ barcode: "1234567890", itemId: "1", type: "FREEFORM" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.barcode.update).not.toHaveBeenCalled()
   })
 })
 

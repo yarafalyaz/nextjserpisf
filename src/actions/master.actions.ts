@@ -10,7 +10,6 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import {
   safeId,
-  requireNumber,
   safeNumber,
   safeJsonParse,
   requireString,
@@ -23,6 +22,7 @@ import {
   itemSchema,
   warehouseServerSchema,
   accountServerSchema,
+  barcodeServerSchema,
   taxServerSchema,
   bankServerSchema,
 } from "@/lib/validations/schemas";
@@ -1612,12 +1612,22 @@ export async function createBarcode(formData: FormData) {
   try {
     await requirePermission("create_barcodes");
 
+    const parsed = parseFormData(barcodeServerSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const item = await prisma.item.findUnique({
+      where: { id: v.itemId },
+      select: { id: true },
+    });
+    if (!item) return { success: false, error: "Barang tidak ditemukan" };
+
     const barcodeEntry = await prisma.barcode.create({
       data: {
-        barcode: requireString(formData.get("barcode"), "barcode"),
-        slug: await nextSlug("barcode", requireString(formData.get("barcode"), "barcode")),
-        itemId: requireNumber(formData.get("itemId"), "itemId"),
-        type: (formData.get("type") as string) || "EAN13",
+        barcode: v.barcode,
+        slug: await nextSlug("barcode", v.barcode),
+        itemId: v.itemId,
+        type: v.type,
       },
     });
 
@@ -1634,13 +1644,24 @@ export async function createBarcode(formData: FormData) {
 export async function updateBarcode(id: number, formData: FormData) {
   try {
     await requirePermission("edit_barcodes");
+
+    const parsed = parseFormData(barcodeServerSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const item = await prisma.item.findUnique({
+      where: { id: v.itemId },
+      select: { id: true },
+    });
+    if (!item) return { success: false, error: "Barang tidak ditemukan" };
+
     await prisma.barcode.update({
       where: { id },
       data: {
-        barcode: requireString(formData.get("barcode"), "barcode"),
-        slug: await nextSlug("barcode", requireString(formData.get("barcode"), "barcode"), { excludeId: id }),
-        itemId: requireNumber(formData.get("itemId"), "itemId"),
-        type: (formData.get("type") as string) || "EAN13",
+        barcode: v.barcode,
+        slug: await nextSlug("barcode", v.barcode, { excludeId: id }),
+        itemId: v.itemId,
+        type: v.type,
       },
     });
     revalidatePath("/master/barcode");
