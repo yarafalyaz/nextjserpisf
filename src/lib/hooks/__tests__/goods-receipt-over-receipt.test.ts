@@ -28,6 +28,7 @@ vi.mock("@/lib/db/prisma", () => ({
 }))
 
 import { onGoodsReceiptVerified } from "@/lib/hooks/goods-receipt.hook"
+import { buildGoodsReceiptTx } from "./goods-receipt-fixtures"
 
 interface GrItem {
   itemId: number
@@ -92,20 +93,7 @@ function wireTx(opts: {
     systemSettingFindFirst: vi.fn().mockResolvedValue({ periodLockDate: null }),
     itemUpdate: vi.fn().mockResolvedValue({}),
   }
-  const tx = {
-    $queryRaw: spies.queryRaw,
-    $executeRaw: spies.executeRaw,
-    goodsReceipt: { findUniqueOrThrow: spies.grFindUniqueOrThrow, update: spies.grUpdate },
-    stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
-    purchaseOrderItem: { findMany: spies.poItemFindMany },
-    goodsReceiptItem: { findMany: spies.grItemFindMany },
-    purchaseOrder: { update: spies.poUpdate },
-    item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany, update: spies.itemUpdate },
-    uomConversion: { findMany: spies.uomConversionFindMany },
-    itemBatch: { findFirst: spies.itemBatchFindFirst, create: spies.itemBatchCreate, update: spies.itemBatchUpdate },
-    itemSerial: { create: spies.itemSerialCreate, createMany: spies.itemSerialCreateMany },
-    systemSetting: { findFirst: spies.systemSettingFindFirst },
-  }
+  const tx = buildGoodsReceiptTx(spies)
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
   return { spies, tx }
 }

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dateOnly } from "@/lib/validations/finance.schemas";
 
 const optionalString = (max: number) =>
   z
@@ -182,4 +183,33 @@ export const updateDeliveryOrderSchema = z.object({
 // ==================== REVISI PENAWARAN ====================
 export const reviseQuotationSchema = z.object({
   changeReason: z.string().trim().min(1, "Alasan perubahan wajib diisi").max(2000, "Alasan perubahan maksimal 2000 karakter"),
+});
+
+// ==================== TUKAR FAKTUR ====================
+
+const optionalDateOnly = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  dateOnly.optional(),
+);
+
+/**
+ * Satu dokumen tukar faktur (`createInvoiceExchange`).
+ *
+ * Sebelumnya action parse manual: `receiptNumber` (String tanpa batas) dan
+ * `notes` (`@db.Text`) bisa 5MB ke DB, tanggal di-parse
+ * `new Date("<text>T00:00:00")` — hasil bergantung TZ proses, padahal form
+ * mengirim YYYY-MM-DD hari kalender WIB. Kini `dateOnly` (kalender-valid)
+ * dikonversi via `wibDateToUtcMidnight` di action. `invoiceIds` di-parse
+ * terpisah di action (parseFormData hanya simpan nilai terakhir per key).
+ */
+export const invoiceExchangeSchema = z.object({
+  date: dateOnly,
+  dueDate: optionalDateOnly,
+  customerId: z.coerce
+    .number({ message: "Pelanggan wajib dipilih" })
+    .int()
+    .positive("Pelanggan wajib dipilih")
+    .max(2_147_483_647, "Pelanggan tidak valid"),
+  receiptNumber: optionalString(255),
+  notes: optionalString(2000),
 });

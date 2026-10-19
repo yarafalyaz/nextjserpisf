@@ -12,6 +12,7 @@ const ALLOWED_CRON_TASKS = [
   "late-checkin",
   "recover-stuck-reversals",
   "cleanup",
+  "sweep-orphan-attachments",
 ] as const
 
 export async function runCronTask(task: string) {

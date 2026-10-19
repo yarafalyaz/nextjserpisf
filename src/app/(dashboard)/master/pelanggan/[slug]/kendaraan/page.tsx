@@ -3,14 +3,13 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import Link from "next/link"
-import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteCustomerVehicle } from "@/actions/vehicle.actions"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Eye, Pencil, Plus } from "lucide-react"
-import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { loadCustomerBySlug } from "./_components/load-customer-vehicle"
 
 import type { Metadata } from "next"
 
@@ -24,18 +23,7 @@ export default async function CustomerVehiclesPage({
   await requirePermission("view_customers")
   const { slug } = await params
 
-  const customer = await resolveEntity(
-    { segment: slug, fallbackWhere: { deletedAt: null } },
-    {
-      bySlug: (s, where) => prisma.customer.findFirst({ where: { slug: s, ...where } }),
-      byId: (id, where) => prisma.customer.findUnique({ where: { id, ...where } }),
-    },
-  )
-
-  if (!customer) notFound()
-
-  const customerId = customer.id
-  const customerKey = customer.slug ?? customer.id
+  const { customer, customerId, customerKey } = await loadCustomerBySlug(slug)
 
   const vehicles = await prisma.customerVehicle.findMany({
     where: { customerId },

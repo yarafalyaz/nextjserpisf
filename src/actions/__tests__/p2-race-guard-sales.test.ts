@@ -29,6 +29,24 @@ const onSalesPaymentUpdatedMock = vi.fn()
 const deleteJournalByReferenceTxMock = vi.fn()
 const attachMock = vi.fn()
 
+// Cabang delegasi salesPayment/salesInvoice/account yang sama untuk factory
+// `vi.mock` prisma dan objek `tx` wirePaymentTx. Fungsi lokal biasa yang
+// dipanggil di dalam factory — pola yang sama dengan delegasi inline
+// sebelumnya, jadi tidak menyentuh hoisting vi.mock.
+function paymentBranches() {
+  return {
+    salesPayment: {
+      findUniqueOrThrow: (...a: unknown[]) => paymentFindUniqueOrThrowMock(...a),
+      aggregate: (...a: unknown[]) => paymentAggregateMock(...a),
+      update: (...a: unknown[]) => paymentUpdateMock(...a),
+    },
+    salesInvoice: {
+      findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a),
+    },
+    account: { count: (...a: unknown[]) => accountCountMock(...a) },
+  }
+}
+
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
 }))
@@ -41,15 +59,7 @@ vi.mock("@/lib/db/prisma", () => ({
       create: (...a: unknown[]) => dpCreateMock(...a),
       update: (...a: unknown[]) => dpUpdateMock(...a),
     },
-    salesPayment: {
-      findUniqueOrThrow: (...a: unknown[]) => paymentFindUniqueOrThrowMock(...a),
-      aggregate: (...a: unknown[]) => paymentAggregateMock(...a),
-      update: (...a: unknown[]) => paymentUpdateMock(...a),
-    },
-    salesInvoice: {
-      findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a),
-    },
-    account: { count: (...a: unknown[]) => accountCountMock(...a) },
+    ...paymentBranches(),
     $transaction: (...a: unknown[]) => transactionMock(...a),
     $executeRaw: (...a: unknown[]) => txExecuteRawMock(...a),
   },
@@ -218,15 +228,7 @@ describe("P2-4 updateSalesPayment dual-invoice lock guard", () => {
         if (a.length > 1) locks.push(Number(a[1]))
         return txExecuteRawMock(...a)
       },
-      salesPayment: {
-        findUniqueOrThrow: (...a: unknown[]) => paymentFindUniqueOrThrowMock(...a),
-        aggregate: (...a: unknown[]) => paymentAggregateMock(...a),
-        update: (...a: unknown[]) => paymentUpdateMock(...a),
-      },
-      salesInvoice: {
-        findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a),
-      },
-      account: { count: (...a: unknown[]) => accountCountMock(...a) },
+      ...paymentBranches(),
     }
     transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
   }

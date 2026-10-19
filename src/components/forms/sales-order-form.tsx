@@ -10,9 +10,8 @@ import { createSalesOrder, updateSalesOrder } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
-import { CustomerSelectField } from "@/components/forms/customer-select-field"
+import { SalesCustomerFormShell } from "@/components/forms/sales-customer-form-shell"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 const salesOrderSchema = z.object({
@@ -77,15 +76,17 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <CustomerSelectField
-          control={control}
-          name="customerId"
-          options={customerOptions}
-          onCustomerCreated={(created) => setCustomerOptions((prev) => [...prev, created])}
-          error={errors.customerId?.message}
-        />
+    <SalesCustomerFormShell
+      onSubmit={handleSubmit(onSubmit)}
+      control={control}
+      name="customerId"
+      options={customerOptions}
+      onCustomerCreated={(created) => setCustomerOptions((prev) => [...prev, created])}
+      error={errors.customerId?.message}
+      submitId="submit-sales-order"
+      isPending={isPending}
+      isEditing={Boolean(order?.id)}
+    >
 
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
@@ -111,14 +112,6 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
           <Label htmlFor="notes">Catatan</Label>
           <Textarea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk pesanan penjualan ini..." />
         </div>
-      </div>
-
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending}  id="submit-sales-order">
-          {isPending ? "Menyimpan..." : order?.id ? "Perbarui" : "Simpan"}
-        </Button>
-      </div>
-    </form>
+    </SalesCustomerFormShell>
   )
 }
