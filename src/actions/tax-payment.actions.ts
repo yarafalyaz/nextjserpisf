@@ -12,7 +12,9 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
-import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { taxPaymentSchema } from "@/lib/validations/finance.schemas"
 
 const REVALIDATE = "/keuangan/penyetoran-pajak"
 
@@ -26,57 +28,30 @@ function toMoney(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
 }
 
-function parseAmount(raw: FormDataEntryValue | null): number | null {
-  return parseMoneyAmount(raw)
-}
-
-function parseId(raw: FormDataEntryValue | null): number | null {
-  const value = Number(String(raw ?? ""))
-  return Number.isInteger(value) && value > 0 ? value : null
-}
-
-/**
- * Masa pajak `YYYY-MM` yang benar-benar ada di kalender.
- *
- * Regex saja tidak cukup: `/^\d{4}-\d{2}$/` meloloskan "2026-13"/"2026-00"
- * yang lalu tersimpan sebagai masa pajak fiktif dan tercetak mentah di
- * laporan penyetoran pajak. Bulan wajib 01–12.
- */
-export function isValidTaxPeriod(raw: string): boolean {
-  if (!/^\d{4}-\d{2}$/.test(raw)) return false
-  const month = Number(raw.slice(5, 7))
-  return month >= 1 && month <= 12
-}
-
 export async function createTaxPayment(formData: FormData): Promise<TaxPaymentActionResult> {
   try {
     const user = await requirePermission("create_tax_payments")
 
-    const rawDate = String(formData.get("date") ?? "").trim()
-    const date = new Date(`${rawDate}T00:00:00`)
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate) || Number.isNaN(date.getTime())) {
-      return { success: false, error: "Tanggal setor tidak valid." }
-    }
+    const parsed = parseFormData(taxPaymentSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
 
-    const amount = parseAmount(formData.get("amount"))
-    if (amount === null || amount <= 0) return { success: false, error: "Jumlah setor harus lebih dari 0." }
+    // Tengah malam UTC untuk hari kalender WIB — bukan `new Date(...)`
+    // yang bergantung pada zona waktu proses.
+    const date = wibDateToUtcMidnight(v.date)
 
-    const taxAccountId = parseId(formData.get("taxAccountId"))
-    const paymentAccountId = parseId(formData.get("paymentAccountId"))
-    if (!taxAccountId || !paymentAccountId) {
-      return { success: false, error: "Akun utang pajak dan akun kas/bank wajib dipilih." }
-    }
+    const amount = v.amount
+
+    const taxAccountId = v.taxAccountId
+    const paymentAccountId = v.paymentAccountId
     if (taxAccountId === paymentAccountId) {
       return { success: false, error: "Akun utang pajak dan kas/bank tidak boleh sama." }
     }
 
-    const taxTypeId = parseId(formData.get("taxTypeId"))
-    const rawPeriod = String(formData.get("period") ?? "").trim()
-    if (rawPeriod && !isValidTaxPeriod(rawPeriod)) {
-      return { success: false, error: "Masa pajak harus dalam format YYYY-MM, mis. 2026-09." }
-    }
-    const reference = String(formData.get("reference") ?? "").trim() || null
-    const notes = String(formData.get("notes") ?? "").trim() || null
+    const taxTypeId = v.taxTypeId
+    const rawPeriod = v.period
+    const reference = v.reference ?? null
+    const notes = v.notes ?? null
 
     await assertPeriodOpen(date)
 

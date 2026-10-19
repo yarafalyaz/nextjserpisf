@@ -109,6 +109,26 @@ describe("createTaxPayment masa pajak", () => {
     expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
   })
 
+  it("menolak reference > 200 char tanpa menyentuh DB", async () => {
+    const res = await createTaxPayment(form({ ...base, reference: "R".repeat(201) }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("Validasi gagal")
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak notes > 2000 char tanpa menyentuh DB", async () => {
+    const res = await createTaxPayment(form({ ...base, notes: "N".repeat(2001) }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("Validasi gagal")
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+  })
+
+  it("menolak tanggal kalender fiktif (2026-02-30) tanpa menyentuh DB", async () => {
+    const res = await createTaxPayment(form({ ...base, date: "2026-02-30" }))
+    expect(res.success).toBe(false)
+    expect(mocks.taxPaymentCreate).not.toHaveBeenCalled()
+  })
+
   it("menerima masa valid dan masa kosong", async () => {
     const ok = await createTaxPayment(form({ ...base, period: "2026-09" }))
     expect(ok.success).toBe(true)
@@ -116,5 +136,11 @@ describe("createTaxPayment masa pajak", () => {
     void period
     const empty = await createTaxPayment(form({ ...noPeriod, period: "" }))
     expect(empty.success).toBe(true)
+  })
+
+  it("happy path: tanggal tersimpan sebagai tengah malam UTC", async () => {
+    await createTaxPayment(form(base))
+    const data = mocks.taxPaymentCreate.mock.calls[0][0].data
+    expect(data.date).toEqual(new Date(Date.UTC(2026, 8, 15)))
   })
 })

@@ -11,14 +11,11 @@ import { nextSlug } from "@/lib/utils/slug-db"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { DocumentSequenceService } from "@/lib/services/document-sequence.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
-import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { bankTransferSchema } from "@/lib/validations/finance.schemas"
 
 const REVALIDATE = "/keuangan/transfer-bank"
-
-function parseId(raw: FormDataEntryValue | null): number | null {
-  const value = Number(String(raw ?? ""))
-  return Number.isSafeInteger(value) && value > 0 ? value : null
-}
 
 function decimal(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
@@ -40,40 +37,24 @@ export async function createBankTransfer(formData: FormData) {
   try {
     const user = await requirePermission("create_bank_transfers")
 
-    const dateRaw = String(formData.get("date") ?? "")
-    const date = new Date(dateRaw)
-    if (!dateRaw || Number.isNaN(date.getTime())) {
-      return { success: false, error: "Tanggal transfer tidak valid." }
-    }
+    const parsed = parseFormData(bankTransferSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
 
-    const fromAccountId = parseId(formData.get("fromAccountId"))
-    const toAccountId = parseId(formData.get("toAccountId"))
-    if (!fromAccountId || !toAccountId) {
-      return { success: false, error: "Rekening asal dan rekening tujuan wajib dipilih." }
-    }
-    if (fromAccountId === toAccountId) {
-      return { success: false, error: "Rekening asal dan tujuan tidak boleh sama." }
-    }
+    // Tengah malam UTC untuk hari kalender WIB — bukan `new Date(...)`
+    // yang bergantung pada zona waktu proses.
+    const date = wibDateToUtcMidnight(v.date)
 
-    const amount = parseMoneyAmount(formData.get("amount"))
-    if (amount === null || amount <= 0) {
-      return { success: false, error: "Nominal transfer harus lebih dari 0." }
-    }
+    const fromAccountId = v.fromAccountId
+    const toAccountId = v.toAccountId
 
-    const adminFee = parseMoneyAmount(formData.get("adminFee")) ?? 0
-    if (adminFee < 0) {
-      return { success: false, error: "Biaya admin tidak boleh negatif." }
-    }
+    const amount = v.amount
 
-    const feeAccountId = parseId(formData.get("feeAccountId"))
-    if (adminFee > 0 && !feeAccountId) {
-      return {
-        success: false,
-        error: "Akun beban biaya admin wajib dipilih bila biaya admin lebih dari 0.",
-      }
-    }
+    const adminFee = v.adminFee
 
-    const description = (formData.get("description") as string)?.trim() || null
+    const feeAccountId = v.feeAccountId
+
+    const description = v.description ?? null
 
     await assertPeriodOpen(date)
 
