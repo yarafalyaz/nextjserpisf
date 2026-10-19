@@ -135,6 +135,23 @@ describe("runRecurringNow — journal reference", () => {
   })
 })
 
+describe("runRecurringNow — expense period gate", () => {
+  it("refuses to generate an expense dated inside a closed period", async () => {
+    mocks.scheduleFindUnique.mockResolvedValue({
+      ...schedule,
+      type: "expense",
+      template: JSON.stringify({ accountId: 620, paidFromAccountId: 110, amount: 500000 }),
+    })
+    mocks.settingsFindFirst.mockResolvedValue({ periodLockDate: new Date(2020, 0, 31) })
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(false)
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+  })
+})
+
 describe("runRecurringNow — jadwal terhapus/nonaktif", () => {
   it("refuses a soft-deleted schedule and generates nothing", async () => {
     mocks.scheduleFindUnique.mockResolvedValue({ ...schedule, deletedAt: new Date(2026, 0, 1), isActive: false })

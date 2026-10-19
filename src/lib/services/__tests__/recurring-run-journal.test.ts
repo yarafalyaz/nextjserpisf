@@ -112,6 +112,41 @@ describe("recurringJournalLines", () => {
   })
 })
 
+function expenseSchedule(overrides: Record<string, unknown> = {}) {
+  const runDate = new Date(2026, 9, 17)
+  return journalSchedule({
+    type: "expense",
+    name: "Listrik bulanan",
+    template: JSON.stringify({ accountId: 620, paidFromAccountId: 110, amount: 500000, description: "Listrik" }),
+    ...overrides,
+  })
+}
+
+describe("runDueRecurring — expense output", () => {
+  it("refuses to create an expense inside a closed period and keeps the schedule due", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([expenseSchedule()])
+    mocks.settingsFindFirst.mockResolvedValue({ periodLockDate: new Date(2026, 9, 31) })
+    mocks.expenseCreate.mockResolvedValue({ id: 7 })
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
+    expect(result.errors[0]).toMatch(/Periode akuntansi sudah ditutup/)
+    const lastWrite = mocks.scheduleUpdate.mock.calls.at(-1)![0]
+    expect(lastWrite.data).not.toHaveProperty("nextRunDate")
+  })
+
+  it("creates the expense when the period is open", async () => {
+    mocks.scheduleFindMany.mockResolvedValue([expenseSchedule()])
+    mocks.expenseCreate.mockResolvedValue({ id: 7 })
+
+    const result = await runDueRecurring(new Date(2026, 9, 17), 1)
+
+    expect(result.errors).toEqual([])
+    expect(mocks.expenseCreate).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe("runDueRecurring — journal output", () => {
   it("writes the schedule reference on the generated journal", async () => {
     mocks.scheduleFindMany.mockResolvedValue([journalSchedule()])

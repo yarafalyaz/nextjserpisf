@@ -210,6 +210,10 @@ export async function runRecurringNow(id: number) {
           summary = `Jurnal ${journal.journalNumber}`
         }
       } else {
+        // Sama seperti jalur cron/jurnal: draft di periode tertutup takkan bisa
+        // dijurnal onExpenseApproved, jadi gagal keras sebelum menulis apa pun.
+        await assertPeriodOpen(runDate, tx)
+
         const documentNo = await generateDocumentNumber("EXP")
         await tx.expense.create({
           data: {
