@@ -21,6 +21,7 @@ import {
 } from "@/lib/validations/asset.schemas";
 import { Prisma } from "@prisma/client";
 import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { nextSlug } from "@/lib/utils/slug-db";
 
 // ==================== ASSET GL HELPERS ====================
@@ -249,7 +250,7 @@ export async function createAssetTransfer(formData: FormData) {
             toLocation: data.toLocation,
             fromEmployeeId: data.fromEmployeeId ?? null,
             toEmployeeId: data.toEmployeeId ?? null,
-            transferDate: new Date(data.transferDate),
+            transferDate: wibDateToUtcMidnight(data.transferDate),
             notes: data.notes ?? null,
             createdBy: Number(user.id),
           },
@@ -602,7 +603,7 @@ export async function updateAssetTransfer(id: number, formData: FormData) {
             toLocation: data.toLocation,
             fromEmployeeId: data.fromEmployeeId ?? null,
             toEmployeeId: data.toEmployeeId ?? null,
-            transferDate: new Date(data.transferDate),
+            transferDate: wibDateToUtcMidnight(data.transferDate),
             notes: data.notes ?? null,
           },
         });
@@ -662,7 +663,7 @@ export async function createAsset(formData: FormData) {
 
     const purchaseCost = data.purchasePrice ?? 0;
     const acquisitionDate = data.purchaseDate
-      ? new Date(data.purchaseDate)
+      ? wibDateToUtcMidnight(data.purchaseDate)
       : new Date();
     // Tipe/model harus milik merek yang dipilih: tanpa cek ini ID model merek
     // lain bisa dikirim manual (form dirancang berjenjang, tapi aksi yang
@@ -699,7 +700,7 @@ export async function createAsset(formData: FormData) {
           assetBrandId: data.assetBrandId ?? null,
           assetBrandModelId: data.assetBrandModelId ?? null,
           groupId: data.groupId ?? null,
-          purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
+          purchaseDate: data.purchaseDate ? wibDateToUtcMidnight(data.purchaseDate) : null,
           purchaseCost,
           // Book value starts at acquisition cost so depreciation can run.
           currentValue: purchaseCost,
@@ -849,7 +850,7 @@ export async function updateAsset(id: number, formData: FormData) {
         assetBrandModelId: data.assetBrandModelId ?? null,
         groupId: data.groupId ?? null,
         categoryId: data.categoryId ?? null,
-        purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
+        purchaseDate: data.purchaseDate ? wibDateToUtcMidnight(data.purchaseDate) : null,
         purchaseCost,
         residualValue: data.residualValue ?? 0,
         depreciationMethod: data.depreciationMethod || "straight_line",
@@ -891,7 +892,7 @@ export async function disposeAsset(formData: FormData) {
 
     const proceeds = data.proceeds ?? 0;
     const disposalDate = data.disposalDate
-      ? new Date(data.disposalDate)
+      ? wibDateToUtcMidnight(data.disposalDate)
       : new Date();
     const reason = data.reason || null;
 

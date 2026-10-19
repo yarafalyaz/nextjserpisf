@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { dateOnly } from "@/lib/validations/finance.schemas"
 
 // ==================== Helpers ====================
 
@@ -24,10 +25,16 @@ const optionalNum = (min?: number) => {
   return base.optional()
 }
 
-const optionalDate = z.string().optional()
+// Tanggal dokumen aset wajib YYYY-MM-DD hari kalender WIB yang benar-benar ada:
+// `z.string().optional()` menerima "2026-02-30"/bebas dan `new Date(...)` menggulirkannya
+// diam-diam ke tanggal lain bergantung zona waktu proses. `dateOnly` menolak tanggal
+// tak-kalender; aksi mengonversi via `wibDateToUtcMidnight`.
+const optionalDate = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  dateOnly.optional(),
+)
 
-const requiredDate = (field: string) =>
-  z.string().min(1, `${field} wajib diisi`)
+const requiredDate = (_field: string) => dateOnly
 
 // ==================== Asset Category ====================
 
