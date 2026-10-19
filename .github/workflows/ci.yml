@@ -109,17 +109,21 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: next-build
-          # Negasi: .next/cache tidak ikut artifact (sudah ditangani actions/cache
-          # di atas); sisanya utuh (.next/standalone, .next/static, BUILD_ID, dll)
-          # karena prepare-standalone.mjs membutuhkannya.
-          # include-hidden-files WAJIB: folder `.next` cocok pola dotfile,
+          # S8262: upload folder `.next` utuh bisa ikut membawa berkas kredensial
+          # dari workspace. Upload EKSPLISIT hanya yang dibutuhkan runtime:
+          # standalone server + static. `prepare-standalone.mjs` menyalin
+          # `.next/static` -> standalone/.next/static dan `public/` dari repo
+          # sendiri, jadi tanpa folder .next lain server tetap jalan.
+          # Penanda mtime direkonstruksi di job konsumen (touch BUILD_ID di
+          # standalone + dibuat ulang .next/BUILD_ID untuk pranala skrip).
+          # include-hidden-files WAJIB: path diawali `.next` cocok pola dotfile,
           # upload-artifact v4+ melewatinya diam-diam (upload sukses, 0 berkas)
           # sehingga download-artifact gagal 'Artifact not found'.
           include-hidden-files: true
           if-no-files-found: error
           path: |
-            .next
-            !.next/cache/**
+            .next/standalone
+            .next/static
           retention-days: 1
 
   e2e-setup:
@@ -213,12 +217,16 @@ jobs:
         with:
           name: next-build
           path: .next
-      # Artifact membawa mtime BUILD_ID dari job build, sedangkan checkout di
-      # job ini lebih baru; tanpa touch, prepare-standalone.mjs salah membaca
-      # schema.prisma sebagai "lebih baru dari build" lalu gagal. Isi build
-      # tidak berubah, hanya penanda waktunya disegarkan.
+      # Artifact cuma membawa standalone+static (tanpa `.next/BUILD_ID` utuh).
+      # `prepare-standalone.mjs` menentukan penanda build dari
+      # `.next/BUILD_ID`, kalau tak ada baru `standalone/server.js`, lalu
+      # membandingkan mtime-nya lawan `prisma/schema.prisma` checkout yang
+      # lebih baru dari build. Rekonstruksi penanda dengan mtime SEKARANG
+      # agar skrip tak salah menuduh build basi; isi build tidak berubah.
       - name: Segarkan penanda build artifact
-        run: touch .next/BUILD_ID
+        run: |
+          mkdir -p .next
+          touch .next/BUILD_ID .next/standalone/server.js
       - name: Run Auth Setup
         run: ./node_modules/.bin/playwright test --project=setup --workers=1
         env:
@@ -307,12 +315,16 @@ jobs:
         with:
           name: next-build
           path: .next
-      # Artifact membawa mtime BUILD_ID dari job build, sedangkan checkout di
-      # job ini lebih baru; tanpa touch, prepare-standalone.mjs salah membaca
-      # schema.prisma sebagai "lebih baru dari build" lalu gagal. Isi build
-      # tidak berubah, hanya penanda waktunya disegarkan.
+      # Artifact cuma membawa standalone+static (tanpa `.next/BUILD_ID` utuh).
+      # `prepare-standalone.mjs` menentukan penanda build dari
+      # `.next/BUILD_ID`, kalau tak ada baru `standalone/server.js`, lalu
+      # membandingkan mtime-nya lawan `prisma/schema.prisma` checkout yang
+      # lebih baru dari build. Rekonstruksi penanda dengan mtime SEKARANG
+      # agar skrip tak salah menuduh build basi; isi build tidak berubah.
       - name: Segarkan penanda build artifact
-        run: touch .next/BUILD_ID
+        run: |
+          mkdir -p .next
+          touch .next/BUILD_ID .next/standalone/server.js
       - name: Run Auth Setup
         # Login HARUS di job ini, bukan diambil dari artifact job e2e-setup:
         # token sesi mengikat 12 karakter awal hash password (src/lib/auth/auth.ts)
