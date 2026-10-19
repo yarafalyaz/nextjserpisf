@@ -76,4 +76,38 @@ describe("ISF-01: klaim lampiran jurnal atomik dengan mutasi jurnal", () => {
     ).toBe(false)
     expect(body).toContain("attachPendingTransactionAttachments(tx")
   })
+
+  it("tidak ada klaim lampiran lewat transaksi terpisah di seluruh repo (ISF-01 sekelas)", () => {
+    // Pola terlarang: prisma.$transaction((tx) => attachPending...) — klaim
+    // berjalan sesudah mutasi dokumen commit. Semua pemanggil wajib memakai
+    // tx mutasinya sendiri.
+    for (const file of ["src/actions/finance.actions.ts", "src/actions/sales.actions.ts", "src/actions/purchase.actions.ts"]) {
+      expect(
+        read(file).includes("$transaction((tx) => attachPendingTransactionAttachments"),
+        `${file} masih mengklaim lampiran lewat transaksi terpisah`,
+      ).toBe(false)
+    }
+  })
+
+  it("updateExpense mengklaim lampiran di dalam $transaction yang sama", () => {
+    const body = functionBody(read(FINANCE), "updateExpense")
+    const txOpen = body.indexOf("$transaction(async (tx)")
+    expect(txOpen, "updateExpense harus membuka $transaction callback").toBeGreaterThan(-1)
+    const attach = body.indexOf("attachPendingTransactionAttachments(tx")
+    expect(
+      attach,
+      "klaim lampiran updateExpense harus memakai tx mutasi yang sama",
+    ).toBeGreaterThan(txOpen)
+  })
+
+  it("updatePettyCash mengklaim lampiran di dalam $transaction yang sama", () => {
+    const body = functionBody(read(FINANCE), "updatePettyCash")
+    const txOpen = body.indexOf("$transaction(async (tx)")
+    expect(txOpen, "updatePettyCash harus membuka $transaction callback").toBeGreaterThan(-1)
+    const attach = body.indexOf("attachPendingTransactionAttachments(tx")
+    expect(
+      attach,
+      "klaim lampiran updatePettyCash harus memakai tx mutasi yang sama",
+    ).toBeGreaterThan(txOpen)
+  })
 })

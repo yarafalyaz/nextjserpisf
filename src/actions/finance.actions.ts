@@ -2082,32 +2082,36 @@ export async function updateExpense(id: number, formData: FormData) {
       }
     }
 
-    const expense = await prisma.expense.update({
-      where: { id },
-      data: {
-        accountId: v.accountId,
-        paidFromAccountId: v.paidFromAccountId ?? null,
-        projectId: v.projectId ?? null,
-        costCenterId: v.costCenterId ?? null,
-        amount: v.amount,
-        date: v.date,
-        referenceNo: v.referenceNo ?? null,
-        description: v.description ?? null,
-        categoryId: v.categoryId ?? null,
-        vendorId: v.vendorId ?? null,
-        receiptImage: v.receiptImage ?? null,
-        status: "draft",
-        slug: await nextSlug("expense", existingExpense.documentNo, { excludeId: id }),
-      },
+    // ISF-01 sekelas: update + klaim lampiran dalam SATU tx. Dulu update
+    // berjalan tanpa tx lalu klaim di tx terpisah — klaim gagal = perubahan
+    // sudah commit tapi action menjawab gagal.
+    const expense = await prisma.$transaction(async (tx) => {
+      const updated = await tx.expense.update({
+        where: { id },
+        data: {
+          accountId: v.accountId,
+          paidFromAccountId: v.paidFromAccountId ?? null,
+          projectId: v.projectId ?? null,
+          costCenterId: v.costCenterId ?? null,
+          amount: v.amount,
+          date: v.date,
+          referenceNo: v.referenceNo ?? null,
+          description: v.description ?? null,
+          categoryId: v.categoryId ?? null,
+          vendorId: v.vendorId ?? null,
+          receiptImage: v.receiptImage ?? null,
+          status: "draft",
+          slug: await nextSlug("expense", existingExpense.documentNo, { excludeId: id }),
+        },
+      });
+      const attachmentIds = v.attachmentIds as string | undefined;
+      if (attachmentIds) {
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "expense", referenceId: updated.id, uploadedBy: Number(user.id),
+        });
+      }
+      return updated;
     });
-
-    // Associate uploaded attachments with the new expense
-    const attachmentIds = v.attachmentIds as string | undefined;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "expense", referenceId: expense.id, uploadedBy: Number(user.id),
-      }));
-    }
 
     await logActivity(
       "update",
@@ -2192,16 +2196,17 @@ export async function updatePettyCash(id: number, formData: FormData) {
       // posting failure (closed period, missing account) rolls back the delete
       // too, instead of leaving the row with NO journal (GL/subledger drift).
       await onPettyCashCreated(updated.id, Number(user.id), tx);
+
+      // ISF-01 sekelas: klaim lampiran dalam tx yang sama (dulu tx terpisah
+      // sesudah commit — klaim gagal = perubahan commit dilaporkan gagal).
+      const attachmentIds = v.attachmentIds as string | undefined;
+      if (attachmentIds) {
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "petty_cash", referenceId: updated.id, uploadedBy: Number(user.id),
+        });
+      }
       return updated;
     });
-
-    // Associate uploaded attachments with the new petty cash record
-    const attachmentIds = v.attachmentIds as string | undefined;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "petty_cash", referenceId: pettyCash.id, uploadedBy: Number(user.id),
-      }));
-    }
 
     await logActivity(
       "update",
