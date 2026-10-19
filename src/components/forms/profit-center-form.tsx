@@ -45,11 +45,17 @@ export function ProfitCenterForm({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={center?.id ? "Formulir ubah pusat laba" : "Formulir tambah pusat laba"}
+    >
       <FormCard>
         <FormSection title="Informasi Umum" columns={1}>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="code">Kode *</Label>
+            <Label htmlFor="code">
+              Kode <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Input
               id="code"
               name="code"
@@ -59,7 +65,9 @@ export function ProfitCenterForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama *</Label>
+            <Label htmlFor="name">
+              Nama <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Input
               id="name"
               name="name"
