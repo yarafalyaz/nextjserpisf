@@ -3,9 +3,12 @@
 **Status (akhir sesi):** sebagian temuan sudah **ditutup** (lihat §0). Sisanya menunggu
 keputusan pemilik produk, didaftarkan di bagian **Keputusan yang menunggu**.
 
-> **Pembaruan 2026-10-18.** Dua keluarga temuan besar sudah **tuntas**: (a) §3 gelombang 1 —
-> kesebelas kolom skalar sudah dibuang, gelombang 2 menyisakan **empat** kolom; (b) §5 —
-> "17 aksi tanpa pemanggil UI" ditindaklanjuti habis (8 dihapus, 9 disambungkan).
+> **Pembaruan 2026-10-19 (branch kerja).** Gelombang 2 §3 kini **tuntas**: keenam kolom
+> sudah ditutup — `BankStatement.totalDebits`/`totalCredits` dihitung ulang dari
+> barisnya, `Asset.assetBrandModelId` tersambung ke form aset, dan
+> `ApprovalWorkflowStep.canSkip` / `BankReconciliationItem.clearedDate` /
+> `BankStatementLine.matchedType` dibuang lewat migrasi
+> `20261019001000_drop_wave2_dead_columns`. `KNOWN_UNUSED` kosong.
 > Rincian per item ada di bagian masing-masing dan di **Keputusan yang menunggu**.
 
 **Cara memeriksa:** setiap nama field/kolom dicari sebagai kata utuh di `src/`, `scripts/`,
@@ -260,9 +263,8 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
 2. ~~**Seed memalsukan status** (§5e)~~ — **sudah ditutup** (lihat §5e).
 3. **Skema tak terpakai** — ~~11 kolom §3~~ — **gelombang 1 tuntas** (kesebelasnya dibuang
    lewat `20261016220000_drop_unused_hook_columns` + `20261016230000_drop_uom_conversion_factor`).
-   Sisa keputusan tinggal **empat kolom gelombang 2** (§3): `ApprovalWorkflowStep.canSkip`,
-   `Asset.assetBrandModelId`, `BankReconciliationItem.clearedDate`, `BankStatementLine.matchedType`
-   — implementasikan atau buang lewat migrasi; daftar-bekunya (`KNOWN_UNUSED`) berarah dua.
+   Sisa keputusan gelombang 2: **tidak ada** — gelombang 2 tuntas (2026-10-19,
+   branch kerja): keempat kolom di bawah sudah ditutup/dibuang, lihat §3.
 4. ~~**Usulan `ci.yml`**~~ — **sudah diterapkan** (`db push` → `migrate deploy`, dua job).
    Terbukti: migrasi jalan dari DB kosong, `migrate status` up-to-date, drift 0, seed jalan,
    **suite E2E penuh hijau di skema hasil migrasi** (1063 lulus).
@@ -357,7 +359,8 @@ murni soal **niat fitur** ("masih berencana atau tidak"), bukan soal UI — jauh
 **Tindak lanjut (2026-10-16): diputuskan BUANG** — kesebelasnya sudah hilang dari `schema.prisma`
 lewat `20261016220000_drop_unused_hook_columns` (10 kolom) +
 `20261016230000_drop_uom_conversion_factor` (`conversionFactor`, setelah 6 barisnya terbukti
-hanya default `1.000000`). Sisa keputusan pindah ke empat kolom gelombang 2 (§3).
+hanya default `1.000000`). Gelombang 2 (§3) kini tuntas — tak ada sisa keputusan
+di kelompok ini.
 
 **Kesimpulan yang konsisten untuk kesembilannya**: tidak ada satu pun yang bisa "dibuang begitu saja";
 selalu ada **jejak UI yang menunggunya** (tombol, filter, label, atau bagian riwayat). Jadi pilihannya
