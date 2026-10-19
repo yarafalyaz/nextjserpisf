@@ -53,6 +53,45 @@ import {
   grItemExpiryDate,
 } from "@/lib/validations/purchase.schemas";
 
+type GrItemInput = {
+  itemId: number;
+  qty: number;
+  unitCost: number;
+  warehouseId?: number | null;
+  rackId?: number | null;
+  rackRowId?: number | null;
+  uom?: string | null;
+  batchNumber?: string | null;
+  expiryDate?: string | null;
+  serialNumbers?: string[] | null;
+};
+
+// expiryDate baris lolos JSON tanpa validasi kalender: "2026-02-30"
+// bergulir ke 2 Mar oleh new Date, string acak jadi Invalid Date.
+function assertGrItemExpiryDates(items: GrItemInput[]) {
+  for (const i of items) {
+    if (!grItemExpiryDate.safeParse(i.expiryDate).success)
+      throw new Error("Tanggal kedaluwarsa tidak valid");
+  }
+}
+
+function goodsReceiptItemData(i: GrItemInput, orderedQtyByItem: Map<number, number>) {
+  return {
+    itemId: i.itemId,
+    qty: i.qty,
+    qtyOrdered: orderedQtyByItem.get(i.itemId) ?? 0,
+    unitCost: i.unitCost || 0,
+    warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
+    rackId: i.rackId ? Number(i.rackId) : null,
+    rackRowId: i.rackRowId ? Number(i.rackRowId) : null,
+    uom: i.uom || null,
+    batchNumber: i.batchNumber || null,
+    expiryDate: i.expiryDate ? wibDateToUtcMidnight(i.expiryDate) : null,
+    serialNumbers:
+      i.serialNumbers && i.serialNumbers.length > 0 ? i.serialNumbers : undefined,
+  };
+}
+
 /**
  * 3-way match guard (PO ↔ Goods Receipt ↔ Vendor Bill).
  * When a vendor bill is linked to a PO, ensure: (1) goods were actually received
@@ -556,12 +595,7 @@ export async function createGoodsReceipt(formData: FormData) {
         }[]
       >(v.items ?? null) ?? [];
 
-    // expiryDate baris lolos JSON tanpa validasi kalender: "2026-02-30"
-    // bergulir ke 2 Mar oleh new Date, string acak jadi Invalid Date.
-    for (const i of items) {
-      if (!grItemExpiryDate.safeParse(i.expiryDate).success)
-        throw new Error("Tanggal kedaluwarsa tidak valid");
-    }
+    assertGrItemExpiryDates(items);
 
     // Scope gudang: header DAN setiap baris harus berada di gudang yang boleh diakses
     // user. Tanpa cek ini, pemegang create_goods_receipts yang hanya ditugaskan ke
@@ -590,7 +624,7 @@ export async function createGoodsReceipt(formData: FormData) {
       // detail page's "Qty Dipesan" reads the (always 0) column and the receipt
       // looks like it was ordered for nothing. `poQtyMap` is reused below for
       // the over-receive guard.
-      const orderedQtyByItem = new Map(
+      const orderedQtyByItem = new Map<number, number>(
         po.items.map((i) => [i.itemId, Number(i.qty)]),
       );
       if (
@@ -652,22 +686,7 @@ export async function createGoodsReceipt(formData: FormData) {
           items: {
             create: items
               .filter((i) => i.itemId > 0 && i.qty > 0)
-              .map((i) => ({
-                itemId: i.itemId,
-                qty: i.qty,
-                qtyOrdered: orderedQtyByItem.get(i.itemId) ?? 0,
-                unitCost: i.unitCost || 0,
-                warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
-                rackId: i.rackId ? Number(i.rackId) : null,
-                rackRowId: i.rackRowId ? Number(i.rackRowId) : null,
-                uom: i.uom || null,
-                batchNumber: i.batchNumber || null,
-                expiryDate: i.expiryDate ? wibDateToUtcMidnight(i.expiryDate) : null,
-                serialNumbers:
-                  i.serialNumbers && i.serialNumbers.length > 0
-                    ? i.serialNumbers
-                    : undefined,
-              })),
+              .map((i) => goodsReceiptItemData(i, orderedQtyByItem)),
           },
         },
       });
@@ -2313,10 +2332,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
         }[]
       >(v.items ?? null) ?? [];
 
-    for (const i of items) {
-      if (!grItemExpiryDate.safeParse(i.expiryDate).success)
-        throw new Error("Tanggal kedaluwarsa tidak valid");
-    }
+    assertGrItemExpiryDates(items);
 
     // Scope gudang (header + tiap baris) — lihat catatan di createGoodsReceipt.
     const scope = await getWarehouseScope(user);
@@ -2352,7 +2368,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
           `Penerimaan barang hanya bisa dibuat dari PO berstatus 'approved', 'ordered', atau 'partial_received' (status saat ini: '${poForItems.status}').`,
         );
       }
-      const orderedQtyByItem = new Map(
+      const orderedQtyByItem = new Map<number, number>(
         poForItems.items.map((i) => [i.itemId, Number(i.qty)]),
       );
       // Membership check: aggregate per item so a duplicate line can't pass two
@@ -2396,20 +2412,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
             .filter((i) => i.itemId > 0 && i.qty > 0)
             .map((i) => ({
               goodsReceiptId: id,
-              itemId: i.itemId,
-              qty: i.qty,
-              qtyOrdered: orderedQtyByItem.get(i.itemId) ?? 0,
-              unitCost: i.unitCost || 0,
-              warehouseId: i.warehouseId ? Number(i.warehouseId) : null,
-              rackId: i.rackId ? Number(i.rackId) : null,
-              rackRowId: i.rackRowId ? Number(i.rackRowId) : null,
-              uom: i.uom || null,
-              batchNumber: i.batchNumber || null,
-              expiryDate: i.expiryDate ? wibDateToUtcMidnight(i.expiryDate) : null,
-              serialNumbers:
-                i.serialNumbers && i.serialNumbers.length > 0
-                  ? i.serialNumbers
-                  : undefined,
+              ...goodsReceiptItemData(i, orderedQtyByItem),
             })),
         });
       }
