@@ -112,6 +112,11 @@ jobs:
           # Negasi: .next/cache tidak ikut artifact (sudah ditangani actions/cache
           # di atas); sisanya utuh (.next/standalone, .next/static, BUILD_ID, dll)
           # karena prepare-standalone.mjs membutuhkannya.
+          # include-hidden-files WAJIB: folder `.next` cocok pola dotfile,
+          # upload-artifact v4+ melewatinya diam-diam (upload sukses, 0 berkas)
+          # sehingga download-artifact gagal 'Artifact not found'.
+          include-hidden-files: true
+          if-no-files-found: error
           path: |
             .next
             !.next/cache/**
