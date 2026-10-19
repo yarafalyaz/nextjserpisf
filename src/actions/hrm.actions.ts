@@ -52,44 +52,71 @@ import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
 
-
-
-// Worker tunggal buildPayrollWrite: cap pinjaman, gross, ruleset statutori
-// (tolak fallback AUD-R3-02), BPJS/PPh21/snapshot, net digarong 0, total=net.
+// Single payroll write builder shared by create/update slips: loan-deduction
+// cap, statutory ruleset gate (reject fallback, AUD-R3-02), BPJS/PPh21 with
+// snapshot, net floored at 0 (total mirrors net).
 async function buildPayrollWrite(o: {
-  employeeId: number | null; endDate: Date; fallbackLabel: string;
-  v: { baseSalary?: number; allowances?: number; deductions?: number; overtimeTotal?: number; appreciationTotal?: number; loanDeduction?: number; paymentDate?: string | null };
-  lateDeduction: number; lateMinutes: number; workingDays: number; presentDays: number; absentDays: number; absentDeduction: number;
+  employeeId: number | null;
+  endDate: Date;
+  fallbackLabel: "pembuatan slip" | "update slip";
+  v: {
+    baseSalary?: number;
+    allowances?: number;
+    deductions?: number;
+    overtimeTotal?: number;
+    appreciationTotal?: number;
+    loanDeduction?: number;
+    paymentDate?: string | null;
+    lateDeduction: number;
+    lateMinutes: number;
+    workingDays: number;
+    presentDays: number;
+    absentDays: number;
+    absentDeduction: number;
+  };
 }) {
   const { v } = o;
-  const loanDeduction = await capLoanDeduction(prisma, o.employeeId, v.loanDeduction ?? 0);
-  const emp = o.employeeId
-    ? await prisma.employee.findUnique({ where: { id: o.employeeId }, select: { maritalStatus: true, dependents: true } })
+  const cappedLoan = await capLoanDeduction(prisma, o.employeeId, v.loanDeduction ?? 0);
+  const taxProfile = o.employeeId
+    ? await prisma.employee.findUnique({
+        where: { id: o.employeeId },
+        select: { maritalStatus: true, dependents: true },
+      })
     : null;
-  const baseSalary = v.baseSalary ?? 0;
-  const grossSalary = safeSum([baseSalary, v.allowances ?? 0, v.overtimeTotal ?? 0, v.appreciationTotal ?? 0], 0);
-  const params = await getStatutoryParams(prisma, o.endDate);
-  if (params.fromFallback) {
+  const base = v.baseSalary ?? 0;
+  const gross = safeSum([base, v.allowances ?? 0, v.overtimeTotal ?? 0, v.appreciationTotal ?? 0], 0);
+  const ruleset = await getStatutoryParams(prisma, o.endDate);
+  if (ruleset.fromFallback) {
     throw new Error(
-      "Ruleset statutori periode ini belum lengkap/valid — " + o.fallbackLabel + " ditolak. " +
-        "Minta accountant melengkapi ruleset, lalu hitung ulang.",
+      `Ruleset statutori periode ini belum lengkap/valid — ${o.fallbackLabel} ditolak. Minta accountant melengkapi ruleset, lalu hitung ulang.`,
     );
   }
-  const bpjs = computeBpjsEmployee(baseSalary, params);
-  const pph21 = computePph21Monthly(grossSalary, emp?.maritalStatus, bpjs.total, emp?.dependents ?? 0, params);
-  const statutorySnapshot = buildStatutorySnapshot(params, emp?.maritalStatus, emp?.dependents ?? 0);
-  const statutory = safeAdd(bpjs.total, pph21, 0);
-  const deductionsSum = safeSum([v.deductions ?? 0, loanDeduction, o.lateDeduction, o.absentDeduction, statutory], 0);
-  // Floor net 0: potongan melebihi bruto -> kredit bank negatif bila lolos.
-  const netSalary = Math.max(0, safeSubtract(grossSalary, deductionsSum, 0));
+  const bpjsParts = computeBpjsEmployee(base, ruleset);
+  const pph = computePph21Monthly(gross, taxProfile?.maritalStatus, bpjsParts.total, taxProfile?.dependents ?? 0, ruleset);
+  const snapshot = buildStatutorySnapshot(ruleset, taxProfile?.maritalStatus, taxProfile?.dependents ?? 0);
+  const statutoryTotal = safeAdd(bpjsParts.total, pph, 0);
+  const withheld = safeSum([v.deductions ?? 0, cappedLoan, v.lateDeduction, v.absentDeduction, statutoryTotal], 0);
+  const net = Math.max(0, safeSubtract(gross, withheld, 0));
   return {
-    baseSalary, allowances: v.allowances ?? 0, deductions: v.deductions ?? 0,
-    overtimeTotal: v.overtimeTotal ?? 0, appreciationTotal: v.appreciationTotal ?? 0,
-    loanDeduction, lateDeduction: o.lateDeduction, lateMinutes: o.lateMinutes,
-    workingDays: o.workingDays, presentDays: o.presentDays, absentDays: o.absentDays, absentDeduction: o.absentDeduction,
-    grossSalary, bpjsHealthEmployee: bpjs.health, bpjsEmploymentEmployee: bpjs.employment,
-    pph21, statutorySnapshot: statutorySnapshot as Prisma.InputJsonValue,
-    netSalary, totalAmount: netSalary,
+    baseSalary: base,
+    allowances: v.allowances ?? 0,
+    deductions: v.deductions ?? 0,
+    overtimeTotal: v.overtimeTotal ?? 0,
+    appreciationTotal: v.appreciationTotal ?? 0,
+    loanDeduction: cappedLoan,
+    lateDeduction: v.lateDeduction,
+    lateMinutes: v.lateMinutes,
+    workingDays: v.workingDays,
+    presentDays: v.presentDays,
+    absentDays: v.absentDays,
+    absentDeduction: v.absentDeduction,
+    grossSalary: gross,
+    bpjsHealthEmployee: bpjsParts.health,
+    bpjsEmploymentEmployee: bpjsParts.employment,
+    pph21: pph,
+    statutorySnapshot: snapshot as Prisma.InputJsonValue,
+    netSalary: net,
+    totalAmount: net,
     paymentDate: v.paymentDate ? wibDateToUtcMidnight(v.paymentDate) : null,
   };
 }
@@ -1220,7 +1247,12 @@ export async function processPayroll(formData: FormData) {
       absentDeduction = att.absentDeduction;
     }
 
-    const w = await buildPayrollWrite({ employeeId, endDate, fallbackLabel: "pembuatan slip", v, lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction });
+    const w = await buildPayrollWrite({
+      employeeId,
+      endDate,
+      fallbackLabel: "pembuatan slip",
+      v: { ...v, lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction },
+    });
 
     const payroll = await prisma.$transaction(async (tx) => {
       const created = await tx.payroll.create({
@@ -1330,7 +1362,12 @@ export async function updatePayroll(id: number, formData: FormData) {
       absentDeduction = att.absentDeduction;
     }
 
-    const w = await buildPayrollWrite({ employeeId, endDate, fallbackLabel: "update slip", v, lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction });
+    const w = await buildPayrollWrite({
+      employeeId,
+      endDate,
+      fallbackLabel: "update slip",
+      v: { ...v, lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction },
+    });
 
     const payroll = await prisma.payroll.update({
       where: { id },
