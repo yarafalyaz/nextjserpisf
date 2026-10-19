@@ -461,13 +461,45 @@ describe("Barcode Actions", () => {
 
 describe("TaxGroup Actions", () => {
   it("createTaxGroup succeeds", async () => {
-    const res = await actions.createTaxGroup(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+    const fd = new FormData()
+    fd.set("name", "test")
+    fd.append("taxIds", "1")
+    const res = await actions.createTaxGroup(fd)
     expect(res?.success).toBe(true)
   })
   it("updateTaxGroup succeeds", async () => {
     mocks.prismaMock.taxGroup.findUniqueOrThrow.mockResolvedValue({ id: 1, taxes: [] })
-    const res = await actions.updateTaxGroup(1, fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+    const fd = new FormData()
+    fd.set("name", "test")
+    fd.append("taxIds", "1")
+    const res = await actions.updateTaxGroup(1, fd)
     expect(res?.success).toBe(true)
+  })
+
+  it("createTaxGroup menolak taxIds tidak valid tanpa menulis taxGroupTax", async () => {
+    const fd = new FormData()
+    fd.set("name", "Grup tidak valid")
+    fd.append("taxIds", "1")
+    fd.append("taxIds", "abc")
+    const res = await actions.createTaxGroup(fd)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("pajak yang valid")
+    expect(mocks.prismaMock.taxGroup.create).not.toHaveBeenCalled()
+  })
+  it("createTaxGroup menolak tanpa pajak terpilih", async () => {
+    const res = await actions.createTaxGroup(fdMap({ name: "Grup kosong" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("pajak yang valid")
+    expect(mocks.prismaMock.taxGroup.create).not.toHaveBeenCalled()
+  })
+  it("updateTaxGroup menolak taxIds tidak valid tanpa menghapus keanggotaan", async () => {
+    const fd = new FormData()
+    fd.set("name", "Grup tidak valid")
+    fd.append("taxIds", "abc")
+    const res = await actions.updateTaxGroup(1, fd)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("pajak yang valid")
+    expect(mocks.prismaMock.taxGroupTax.deleteMany).not.toHaveBeenCalled()
   })
   it("deleteTaxGroup succeeds", async () => {
     const res = await actions.deleteTaxGroup(1)
