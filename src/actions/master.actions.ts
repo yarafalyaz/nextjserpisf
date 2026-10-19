@@ -1277,6 +1277,12 @@ export async function updatePosition(id: number, formData: FormData) {
   }
 }
 
+function leadExpectedCloseDate(
+  value: string | undefined,
+): Date | null | undefined {
+  return value ? wibDateToUtcMidnight(value) : null;
+}
+
 export async function createLead(formData: FormData) {
   try {
     await requirePermission("create_leads");
@@ -1300,7 +1306,7 @@ export async function createLead(formData: FormData) {
       position: v.position ?? null,
       industry: v.industry ?? null,
       estimatedValue: v.estimatedValue ?? null,
-      expectedCloseDate: v.expectedCloseDate ? wibDateToUtcMidnight(v.expectedCloseDate) : null,
+      expectedCloseDate: leadExpectedCloseDate(v.expectedCloseDate),
       address: v.address ?? null,
       source: v.source ?? null,
       notes: v.notes ?? null,
@@ -1368,7 +1374,7 @@ export async function updateLead(id: number, formData: FormData) {
           position: v.position ?? null,
           industry: v.industry ?? null,
           estimatedValue: v.estimatedValue ?? null,
-          expectedCloseDate: v.expectedCloseDate ? wibDateToUtcMidnight(v.expectedCloseDate) : null,
+          expectedCloseDate: leadExpectedCloseDate(v.expectedCloseDate),
           address: v.address ?? null,
           source: v.source ?? null,
           notes: v.notes ?? null,
