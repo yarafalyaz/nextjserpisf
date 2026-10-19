@@ -94,6 +94,7 @@ export async function loadProfitability(
       cogs: 0,
       revenueLinesWithoutCogs: 0,
       serviceLinesWithoutCogs: 0,
+      stockRevenueWithoutCogs: 0,
     }
     buckets.set(key, created)
     return created
@@ -103,6 +104,10 @@ export async function loadProfitability(
     const invoiceKey = `invoice-${invoice.id}`
     const customerKey = `customer-${invoice.customerId}`
     const customerName = invoice.customer.name
+    // HPP per (faktur, barang) hanya boleh dihitung sekali per bucket:
+    // satu SKU bisa muncul di 2+ baris faktur, lineCogs agregat per (invoice,item)
+    // jadi penambahan per baris akan menggandakan HPP.
+    const cogsApplied = new Set<string>()
 
     for (const line of invoice.items) {
       const revenue = Number(line.total)
@@ -127,17 +132,37 @@ export async function loadProfitability(
         target.revenue += revenue
         if (revenue !== 0 && !moved) {
           target.revenueLinesWithoutCogs += 1
-          if (isService) target.serviceLinesWithoutCogs += 1
+          if (isService) {
+            target.serviceLinesWithoutCogs += 1
+          } else {
+            // Akumulasi per-baris stok tanpa HPP (jasa dikecualikan).
+            target.stockRevenueWithoutCogs = (target.stockRevenueWithoutCogs ?? 0) + revenue
+          }
         }
       }
 
-      // HPP dialokasikan ke dimensi yang sesuai.
-      if (dimension === "barang") {
-        const itemKey = line.itemId !== null ? `item-${line.itemId}` : "item-none"
-        buckets.get(itemKey)!.cogs += lineCogs
+      // HPP dialokasikan ke dimensi yang sesuai — tepat sekali per (bucket, cogsKey).
+      // Baris jasa/tanpa-barang (cogsKey null) punya lineCogs 0 → lewati.
+      if (cogsKey !== null) {
+        if (dimension === "barang") {
+          const itemKey = `item-${line.itemId}`
+          const appliedKey = `${itemKey}|${cogsKey}`
+          if (!cogsApplied.has(appliedKey)) {
+            cogsApplied.add(appliedKey)
+            buckets.get(itemKey)!.cogs += lineCogs
+          }
+        }
+        const invoiceAppliedKey = `${invoiceKey}|${cogsKey}`
+        if (!cogsApplied.has(invoiceAppliedKey)) {
+          cogsApplied.add(invoiceAppliedKey)
+          bucketFor(invoiceKey, `${invoice.documentNo} · ${customerName}`).cogs += lineCogs
+        }
+        const customerAppliedKey = `${customerKey}|${cogsKey}`
+        if (!cogsApplied.has(customerAppliedKey)) {
+          cogsApplied.add(customerAppliedKey)
+          buckets.get(customerKey)!.cogs += lineCogs
+        }
       }
-      bucketFor(invoiceKey, `${invoice.documentNo} · ${customerName}`).cogs += lineCogs
-      buckets.get(customerKey)!.cogs += lineCogs
     }
   }
 

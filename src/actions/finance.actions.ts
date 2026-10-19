@@ -185,9 +185,16 @@ export async function updateBankStatementLine(id: number, formData: FormData) {
     const v = parsed.data;
 
     await prisma.$transaction(async (tx) => {
-      // Baris lama dibaca lebih dulu: baris yang tidak ada harus GAGAL (bukan
-      // "sukses" palsu), dan bila barisnya berpindah rekening koran, header
-      // LAMA juga wajib dihitung ulang — kalau tidak totalnya tertinggal.
+      // R-04: kunci BARIS dulu, baru baca — tanpa lock, match bersamaan bisa
+      // selip di antara baca dan tulis (TOCTOU), dan daftar induk dari item
+      // bisa kosong (= nol lock) tepat saat match+complete menyerbu.
+      // Urutan lock konsisten di semua jalur (baris dulu, baru induk) agar
+      // tak deadlock dengan match/unmatch/complete.
+      await tx.$executeRaw`SELECT id FROM bank_statement_lines WHERE id = ${id} FOR UPDATE`;
+
+      // Baris dibaca ulang sesudah lock: baris yang tidak ada harus GAGAL
+      // (bukan "sukses" palsu), dan bila barisnya berpindah rekening koran,
+      // header LAMA juga wajib dihitung ulang — kalau tidak totalnya tertinggal.
       const existing = await tx.bankStatementLine.findUniqueOrThrow({
         where: { id },
         select: { bankStatementId: true, date: true },
@@ -200,9 +207,9 @@ export async function updateBankStatementLine(id: number, formData: FormData) {
       const lineDate = wibDateToUtcMidnight(v.date);
       await assertPeriodOpen(lineDate, tx);
 
-      // R-04: kunci induk dulu sebelum cek completedMatch — tanpa lock,
-      // complete bersamaan bisa selip di antara cek dan update (TOCTOU).
-      // Urutan lock konsisten dengan match/unmatch/complete (induk dulu).
+      // Induk dikunci (terurut) lalu hubungan+status dibaca ulang — tanpa
+      // lock, complete bersamaan bisa selip di antara cek dan update.
+      // Urutan lock konsisten dengan match/unmatch/complete (baris dulu).
       const matchedRecons = await tx.bankReconciliationItem.findMany({
         where: { bankStatementLineId: id, matched: true },
         select: { bankReconciliationId: true },
@@ -265,9 +272,15 @@ export async function deleteBankStatementLine(id: number) {
     await requirePermission("create_journals");
 
     await prisma.$transaction(async (tx) => {
-      // Dibaca dulu supaya baris yang tidak ada ditolak berisik: `delete`
-      // langsung akan melempar galat Prisma yang tak terbaca, dan menelan
-      // galat itu membuat pengguna melihat "berhasil" padahal barisnya masih ada.
+      // R-04: kunci BARIS dulu, baru baca — tanpa lock, delete bersamaan
+      // match bisa selip di antara baca dan hapus (TOCTOU).
+      // Urutan lock konsisten dengan match/unmatch/complete (baris dulu).
+      await tx.$executeRaw`SELECT id FROM bank_statement_lines WHERE id = ${id} FOR UPDATE`;
+
+      // Dibaca ulang sesudah lock supaya baris yang tidak ada ditolak
+      // berisik: `delete` langsung akan melempar galat Prisma yang tak
+      // terbaca, dan menelan galat itu membuat pengguna melihat "berhasil"
+      // padahal barisnya masih ada.
       const line = await tx.bankStatementLine.findUnique({
         where: { id },
         select: { bankStatementId: true, date: true },
@@ -275,8 +288,9 @@ export async function deleteBankStatementLine(id: number) {
       if (!line) throw new Error("Baris rekening koran tidak ditemukan");
 
       await assertPeriodOpen(line.date, tx);
-      // R-04: kunci induk dulu sebelum cek completedMatch (lihat update di
-      // atas — urutan lock yang sama agar tak deadlock dengan match/complete).
+      // Induk dikunci (terurut) lalu hubungan+status dibaca ulang — urutan
+      // lock sama dengan update di atas agar tak deadlock dengan
+      // match/complete.
       const matchedRecons = await tx.bankReconciliationItem.findMany({
         where: { bankStatementLineId: id, matched: true },
         select: { bankReconciliationId: true },
@@ -481,7 +495,9 @@ export async function postJournal(journalId: number) {
         throw new Error("Jurnal sudah diposting atau sedang diproses");
       }
 
-      await assertPeriodOpen(journal.transactionDate);
+      // R-09: baca lock-date dalam tx yang sama (tanpa tx, tutup periode bisa
+      // selip di antara cek dan klaim).
+      await assertPeriodOpen(journal.transactionDate, tx);
 
       const totalDebit = journal.entries.reduce(
         (sum, e) => safeAdd(sum, Number(e.debit), 2),
@@ -544,11 +560,12 @@ export async function createExpense(formData: FormData) {
       }
     }
 
+    const attachmentIds = formData.get("attachmentIds") as string | null;
     const expense = await prisma.$transaction(async (tx) => {
       // P2 idempotency UI: guard dalam transaksi yang sama (pola createPettyCash).
       await checkIdempotency(idempotencyKey, tx, user.id);
 
-      return tx.expense.create({
+      const created = await tx.expense.create({
       data: {
         documentNo,
         slug: await nextSlug("expense", documentNo),
@@ -567,15 +584,15 @@ export async function createExpense(formData: FormData) {
         createdBy: Number(user.id),
       },
       });
+      // R-10: attach dalam tx utama yang sama — gagal attach = rollback expense,
+      // tanpa baris expense yatim atau lampiran menggantung referenceId=0.
+      if (attachmentIds) {
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "expense", referenceId: created.id, uploadedBy: Number(user.id),
+        });
+      }
+      return created;
     });
-
-    // Associate uploaded attachments with the new expense
-    const attachmentIds = formData.get("attachmentIds") as string | null;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "expense", referenceId: expense.id, uploadedBy: Number(user.id),
-      }));
-    }
 
     await logActivity("create", "Expense", expense.id, "Membuat pengeluaran");
     // Route through approval workflow if one is configured for Expense.
@@ -948,16 +965,16 @@ export async function createPettyCash(formData: FormData) {
       // period, unconfigured account) rolls back the subledger row instead of
       // leaving a committed petty-cash row with no journal (subledger/GL drift).
       await onPettyCashCreated(created.id, Number(user.id), tx);
+      // R-10: attach dalam tx utama yang sama — gagal attach = rollback
+      // petty-cash + jurnalnya, tanpa baris yatim atau lampiran menggantung.
+      const attachmentIds = v.attachmentIds as string | undefined;
+      if (attachmentIds) {
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "petty_cash", referenceId: created.id, uploadedBy: Number(user.id),
+        });
+      }
       return created;
     });
-
-    // Associate uploaded attachments with the new petty cash record
-    const attachmentIds = v.attachmentIds as string | undefined;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "petty_cash", referenceId: pettyCash.id, uploadedBy: Number(user.id),
-      }));
-    }
 
     await logActivity(
       "create",
@@ -1030,8 +1047,11 @@ export async function matchReconciliationLine(
     // jadi hubungan akun/periode/jurnal wajib diperiksa di sini, bukan dipercaya
     // dari pilihan UI.
     await prisma.$transaction(async (tx) => {
-      // F-02: kunci induk dulu — urutan lock konsisten di semua jalur
-      // (match/unmatch/adjustment/complete) agar tak deadlock.
+      // R-04 + F-02: kunci BARIS dulu, baru induk — urutan lock konsisten di
+      // semua jalur (match/unmatch/adjustment/complete/update/delete) agar
+      // tak deadlock. Tanpa lock baris, update/delete bersamaan bisa selip
+      // di antara baca line dan tulis item (TOCTOU).
+      await tx.$executeRaw`SELECT id FROM bank_statement_lines WHERE id = ${lineId} FOR UPDATE`;
       await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconciliationId} FOR UPDATE`;
 
       const recon = await tx.bankReconciliation.findUniqueOrThrow({
@@ -1042,6 +1062,8 @@ export async function matchReconciliationLine(
         throw new Error("Hanya rekonsiliasi dengan status draft yang dapat dicocokkan");
       }
 
+      // Hubungan+status dibaca ulang sesudah lock: baris bisa dipindah/dihapus
+      // pesaing tepat sebelum match mengunci induk.
       const line = await tx.bankStatementLine.findUniqueOrThrow({
         where: { id: lineId },
         select: {
@@ -1710,9 +1732,17 @@ export async function updateJournal(id: number, formData: FormData) {
       throw new Error("Journal yang sudah diposting tidak dapat diubah");
     }
 
-    // Block editing into a closed accounting period (both old and new dates)
+    // Block editing into a closed accounting period (both old and new dates).
+    // Tanggal BARU divalidasi formatnya dulu: string tak-terparse (mis.
+    // "bukan-tanggal") harus DITOLAK berisik, bukan lolos sebagai Invalid
+    // Date ke assertPeriodOpen/tulis.
     await assertPeriodOpen(existing.transactionDate);
-    await assertPeriodOpen(new Date(formData.get("transactionDate") as string));
+    const rawNewTxDate = String(formData.get("transactionDate") ?? "");
+    const newTxDate = new Date(rawNewTxDate);
+    if (!rawNewTxDate || Number.isNaN(newTxDate.getTime())) {
+      throw new Error("Tanggal transaksi tidak valid");
+    }
+    await assertPeriodOpen(newTxDate);
 
     // Parse and validate entries with the same rigor as createJournal —
     // previously the edit path ignored line entries entirely, so edited lines
@@ -1787,12 +1817,17 @@ export async function updateJournal(id: number, formData: FormData) {
         throw new Error("Journal yang sudah diposting tidak dapat diubah");
       }
 
-      await assertPeriodOpen(fresh.transactionDate);
+      // R-09: kedua tanggal dicek ulang dalam tx sesudah lock (tanpa tx,
+      // tutup periode bisa selip di antara cek luar dan tulis). Cek luar-tx
+      // di atas hanya fast-fail agar boros lock terhindar. newTxDate adalah
+      // tanggal yang SUDAH tervalidasi di atas (bukan parse mentah).
+      await assertPeriodOpen(fresh.transactionDate, tx);
+      await assertPeriodOpen(newTxDate, tx);
 
       const j = await tx.journal.update({
         where: { id },
         data: {
-          transactionDate: new Date(formData.get("transactionDate") as string),
+          transactionDate: newTxDate,
           description: formData.get("description") as string | null,
           type: journalType,
           totalDebit,

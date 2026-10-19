@@ -117,6 +117,7 @@ function wireJournalTx(order: string[]) {
         return journalUpdateManyMock(...a)
       },
     },
+    systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }

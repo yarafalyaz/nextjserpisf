@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => {
     journalEntry: buildModelMock(),
     bankReconciliation: buildModelMock(),
     bankReconciliationItem: buildModelMock(),
+    journal: buildModelMock(),
+    journalEntry: buildModelMock(),
     $transaction: vi.fn(async (cb: any) =>
       typeof cb === "function" ? cb(prismaMock) : Promise.all(cb),
     ),
@@ -226,7 +228,7 @@ describe("R-04 parent lock sebelum cek completedMatch", () => {
     })
   }
 
-  it("update: FOR UPDATE induk jalan sebelum cek completedMatch", async () => {
+  it("update: kunci BARIS jalan sebelum baca ulang + cek completedMatch", async () => {
     wireLineGuards()
     mocks.prismaMock.bankReconciliationItem.findMany.mockResolvedValue([
       { bankReconciliationId: 9 },
@@ -235,10 +237,20 @@ describe("R-04 parent lock sebelum cek completedMatch", () => {
     const txExec = mocks.prismaMock.$executeRaw
     // $executeRaw di mock level prisma — transaksi meneruskan prismaMock yang
     // sama, jadi bungkus untuk rekam urutan vs findFirst completedMatch.
+    // Baris (bank_statement_lines) harus dikunci SEBELUM baca ulang line
+    // (findUniqueOrThrow) dan sebelum lock induk + cek completedMatch —
+    // kalau tidak match bersamaan bisa selip di antara baca dan tulis.
     const origExec = txExec.getMockImplementation()
     txExec.mockImplementation(async (...a: any[]) => {
-      order.push("lock")
+      const sql = String(a[0]?.[0] ?? a[0] ?? "")
+      order.push(sql.includes("bank_statement_lines") ? "lock-line" : "lock-parent")
       return origExec ? origExec(...a) : 0
+    })
+    const lineRead = mocks.prismaMock.bankStatementLine.findUniqueOrThrow
+    const origRead = lineRead.getMockImplementation()
+    lineRead.mockImplementation(async (...a: any[]) => {
+      order.push("reread-line")
+      return origRead ? origRead(...a) : null
     })
     const itemFindFirst = mocks.prismaMock.bankReconciliationItem.findFirst
     itemFindFirst.mockImplementation(async () => {
@@ -250,10 +262,10 @@ describe("R-04 parent lock sebelum cek completedMatch", () => {
       11,
       fdMap({ bankStatementId: 3, date: "2026-07-01", amount: "900", type: "credit" }),
     )
-    expect(order).toEqual(["lock", "check"])
+    expect(order).toEqual(["lock-line", "reread-line", "lock-parent", "check"])
   })
 
-  it("delete: FOR UPDATE induk jalan sebelum cek completedMatch", async () => {
+  it("delete: kunci BARIS jalan sebelum baca ulang + cek completedMatch", async () => {
     wireLineGuards()
     mocks.prismaMock.bankReconciliationItem.findMany.mockResolvedValue([
       { bankReconciliationId: 9 },
@@ -262,8 +274,17 @@ describe("R-04 parent lock sebelum cek completedMatch", () => {
     const txExec = mocks.prismaMock.$executeRaw
     const origExec = txExec.getMockImplementation()
     txExec.mockImplementation(async (...a: any[]) => {
-      order.push("lock")
+      const sql = String(a[0]?.[0] ?? a[0] ?? "")
+      order.push(sql.includes("bank_statement_lines") ? "lock-line" : "lock-parent")
       return origExec ? origExec(...a) : 0
+    })
+    const lineRead = mocks.prismaMock.bankStatementLine.findUnique
+    const origRead = lineRead.getMockImplementation()
+    lineRead.mockImplementation(async (...a: any[]) => {
+      order.push("reread-line")
+      return origRead
+        ? origRead(...a)
+        : { id: 11, bankStatementId: 3, date: new Date("2026-06-01") }
     })
     mocks.prismaMock.bankReconciliationItem.findFirst.mockImplementation(async () => {
       order.push("check")
@@ -271,7 +292,48 @@ describe("R-04 parent lock sebelum cek completedMatch", () => {
     })
 
     await deleteBankStatementLine(11)
-    expect(order).toEqual(["lock", "check"])
+    expect(order).toEqual(["lock-line", "reread-line", "lock-parent", "check"])
+  })
+
+  it("match: kunci BARIS sebelum induk, hubungan dibaca ulang sesudah lock", async () => {
+    wireMatchOk(baseLine, baseEntry)
+    const order: string[] = []
+    const txExec = mocks.prismaMock.$executeRaw
+    const origExec = txExec.getMockImplementation()
+    txExec.mockImplementation(async (...a: any[]) => {
+      const sql = String(a[0]?.[0] ?? a[0] ?? "")
+      order.push(sql.includes("bank_statement_lines") ? "lock-line" : "lock-parent")
+      return origExec ? origExec(...a) : 0
+    })
+    const lineRead = mocks.prismaMock.bankStatementLine.findUniqueOrThrow
+    const origRead = lineRead.getMockImplementation()
+    lineRead.mockImplementation(async (...a: any[]) => {
+      order.push("reread-line")
+      return origRead ? origRead(...a) : null
+    })
+
+    const res = await matchReconciliationLine(9, 11, 77)
+    expect(res.success).toBe(true)
+    expect(order).toEqual(["lock-line", "lock-parent", "reread-line"])
+  })
+
+  it("updateJournal: tanggal BARU tak-terparse ditolak berisik (bukan Invalid Date)", async () => {
+    const { updateJournal } = await import("../finance.actions")
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({
+      id: 7, status: "DRAFT", transactionDate: new Date("2026-06-01"), journalNumber: "JRN-1", type: "GENERAL",
+    })
+    const f = new FormData()
+    f.append("transactionDate", "bukan-tanggal")
+    f.append("description", "x")
+    f.append("entries", JSON.stringify([
+      { accountId: 1, debit: 100, credit: 0, memo: "" },
+      { accountId: 2, debit: 0, credit: 100, memo: "" },
+    ]))
+    const res = await updateJournal(7, f)
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("Tanggal transaksi tidak valid")
+    // Gagal SEBELUM tulis: tidak ada transaksi = tidak ada lock, tidak ada update.
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
   })
 
   it("cek completedMatch tetap memblokir baris rekonsiliasi selesai", async () => {
