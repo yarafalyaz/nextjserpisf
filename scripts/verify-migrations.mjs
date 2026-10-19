@@ -36,7 +36,15 @@ if (!LANTAI) {
 
 const url = new URL(LANTAI)
 const namaAsli = url.pathname.replace(/^\//, "")
-const namaScratch = `${namaAsli}_migrasi_check` // sengaja tetap: hanya DB ini yang dihapus
+// AUD-TOOL-01: nama scratch unik per run (PID + timestamp), BUKAN nama tetap.
+// Nama tetap + DROP IF EXISTS = run ini bisa menghapus DB milik run lain
+// (atau data beneran bila seseorang menamai DB-nya begitu). Unik = tabrakan
+// praktis mustahil; guard di bawah menolak bila nama sudah terpakai.
+const namaScratch = `${namaAsli}_migrasi_check_${process.pid}_${Date.now().toString(36)}`
+if (!/^[A-Za-z0-9_]+$/.test(namaScratch)) {
+  console.error("Nama scratch tidak sah — batal.")
+  process.exit(2)
+}
 const urlScratch = (() => {
   const u = new URL(LANTAI)
   u.pathname = `/${namaScratch}`
@@ -60,6 +68,7 @@ const pernyataan = (skrip) =>
 
 let conn
 let gagal = false
+let scratchMilikSendiri = false
 try {
   conn = await mariadb.createConnection({
     host: url.hostname,
@@ -67,10 +76,10 @@ try {
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
   })
-  await conn.query(`DROP DATABASE IF EXISTS \`${namaScratch}\``)
   await conn.query(
     `CREATE DATABASE \`${namaScratch}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
   )
+  scratchMilikSendiri = true
   console.log(`• DB scratch siap: ${namaScratch}`)
 
   jalankan(["prisma", "migrate", "deploy"])
@@ -107,7 +116,10 @@ try {
     )
   }
 } finally {
-  if (conn) {
+  // AUD-TOOL-01: hapus hanya bila CREATE di run ini yang membuatnya. Bila
+  // CREATE gagal (nama tabrakan / DB sudah ada), DROP di sini akan menghapus
+  // milik orang lain — jadi hapus hanya bila run ini pemiliknya.
+  if (conn && scratchMilikSendiri) {
     try {
       await conn.query(`DROP DATABASE IF EXISTS \`${namaScratch}\``)
       console.log(`• DB scratch dihapus: ${namaScratch}`)
