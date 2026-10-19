@@ -97,6 +97,18 @@ describe("statutory rule actions (P1-6)", () => {
     )
   })
 
+  it("rejects a fictitious close date instead of rolling to March", async () => {
+    mocks.ruleFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      key: "bpjs_jp_ceiling",
+      effectiveFrom: new Date("2024-01-01"),
+    })
+    const res = await closeStatutoryRule(1, fd({ effectiveTo: "2026-02-30" }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("Tanggal tutup tidak valid")
+    expect(mocks.ruleUpdate).not.toHaveBeenCalled()
+  })
+
   it("refuses to delete an active/historical row", async () => {
     mocks.ruleFindUniqueOrThrow.mockResolvedValue({
       id: 1,
