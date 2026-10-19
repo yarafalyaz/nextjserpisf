@@ -10,6 +10,9 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { invoiceExchangeSchema } from "@/lib/validations/sales.schemas"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 const REVALIDATE = "/penjualan/tukar-faktur"
 
@@ -27,13 +30,6 @@ function parseId(raw: FormDataEntryValue | string | null): number | null {
   return Number.isInteger(value) && value > 0 ? value : null
 }
 
-function parseDate(raw: string | null): Date | null {
-  const text = (raw ?? "").trim()
-  if (!text) return null
-  const date = new Date(`${text}T00:00:00`)
-  return Number.isNaN(date.getTime()) ? null : date
-}
-
 /**
  * Mencatat penyerahan faktur (tukar faktur) untuk satu pelanggan.
  *
@@ -45,19 +41,15 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
   try {
     const user = await requirePermission("create_invoice_exchanges")
 
-    const rawDate = String(formData.get("date") ?? "").trim()
-    const date = parseDate(rawDate)
-    if (!date) return { success: false, error: "Tanggal penyerahan tidak valid." }
+    const parsed = parseFormData(invoiceExchangeSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const v = parsed.data
 
-    const customerId = parseId(formData.get("customerId"))
-    if (!customerId) return { success: false, error: "Pelanggan wajib dipilih." }
-
-    const dueDateRaw = String(formData.get("dueDate") ?? "").trim()
-    const dueDate = dueDateRaw ? parseDate(dueDateRaw) : null
-    if (dueDateRaw && !dueDate) return { success: false, error: "Tanggal jatuh tempo tidak valid." }
-
-    const receiptNumber = String(formData.get("receiptNumber") ?? "").trim() || null
-    const notes = String(formData.get("notes") ?? "").trim() || null
+    const date = wibDateToUtcMidnight(v.date)
+    const dueDate = v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null
+    const customerId = v.customerId
+    const receiptNumber = v.receiptNumber?.trim() || null
+    const notes = v.notes?.trim() || null
 
     const invoiceIds = [...new Set(formData.getAll("invoiceIds").map((value) => parseId(value)).filter((id): id is number => id !== null))]
     if (invoiceIds.length === 0) {
