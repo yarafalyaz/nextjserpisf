@@ -41,6 +41,7 @@ import {
 } from "@/lib/services/approval-workflow.service";
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 import { parseFormData } from "@/lib/validations/parse-form";
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { PurchaseStatus, Status } from "@/lib/constants";
 import {
   purchaseRequestSchema,
@@ -192,8 +193,8 @@ export async function createPurchaseRequest(formData: FormData) {
         title: v.title ?? null,
         requestedBy,
         vendorId: v.vendorId ?? null,
-        date: new Date(v.date),
-        requestDate: requestDateRaw ? new Date(requestDateRaw) : null,
+        date: wibDateToUtcMidnight(v.date),
+        requestDate: requestDateRaw ? wibDateToUtcMidnight(requestDateRaw) : null,
         description,
         notes: v.notes ?? null,
         status: "draft",
@@ -272,8 +273,8 @@ export async function createPurchaseOrder(formData: FormData) {
           purchaseRequestId: v.purchaseRequestId ?? null,
           workOrderId: v.workOrderId ?? null,
                     isService: v.isService,
-          date: new Date(v.date),
-          expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
+          date: wibDateToUtcMidnight(v.date),
+          expectedDate: v.expectedDate ? wibDateToUtcMidnight(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,
           shippingCost,
           serviceFee,
@@ -632,7 +633,7 @@ export async function createGoodsReceipt(formData: FormData) {
           slug,
           purchaseOrderId: v.purchaseOrderId,
           warehouseId: v.warehouseId,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           referenceNumber: v.referenceNumber ?? null,
           notes: v.notes ?? null,
           shippingCost: v.shippingCost ?? 0,
@@ -986,8 +987,8 @@ export async function createVendorBill(formData: FormData) {
           projectId: v.projectId ?? null,
           withholdingTypeId: v.withholdingTypeId ?? null,
           withholdingAmount: v.withholdingAmount ?? 0,
-          date: new Date(v.date),
-          dueDate: v.dueDate ? new Date(v.dueDate) : null,
+          date: wibDateToUtcMidnight(v.date),
+          dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
           vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
           terms: v.terms ?? null,
           notes: v.notes ?? null,
@@ -1091,7 +1092,7 @@ export async function createVendorPayment(formData: FormData) {
           slug,
           vendorId: v.vendorId,
           amount: v.amount,
-          paymentDate: new Date(v.paymentDate),
+          paymentDate: wibDateToUtcMidnight(v.paymentDate),
           paymentMethod: v.paymentMethod,
           accountId: v.accountId ?? null,
           adminFee: v.adminFee ?? 0,
@@ -1480,7 +1481,7 @@ export async function createPurchaseReturn(formData: FormData) {
           documentNo,
           slug,
           purchaseOrderId: v.purchaseOrderId,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           reason: v.reason ?? null,
           status: "draft",
           createdBy: Number(user.id),
@@ -2014,8 +2015,8 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
           title: v.title ?? null,
           requestedBy,
           vendorId: v.vendorId ?? null,
-          date: new Date(v.date),
-          requestDate: requestDateRaw ? new Date(requestDateRaw) : null,
+          date: wibDateToUtcMidnight(v.date),
+          requestDate: requestDateRaw ? wibDateToUtcMidnight(requestDateRaw) : null,
           description,
           notes: v.notes ?? null,
           items: {
@@ -2102,8 +2103,8 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
           slug,
           vendorId: v.vendorId,
           purchaseRequestId: v.purchaseRequestId ?? null,
-                    date: new Date(v.date),
-          expectedDate: v.expectedDate ? new Date(v.expectedDate) : null,
+                    date: wibDateToUtcMidnight(v.date),
+          expectedDate: v.expectedDate ? wibDateToUtcMidnight(v.expectedDate) : null,
           paymentTerm: v.paymentTerm ?? null,
           shippingCost,
           serviceFee,
@@ -2217,8 +2218,8 @@ export async function updateVendorBill(id: number, formData: FormData) {
           projectId: v.projectId ?? null,
           withholdingTypeId: v.withholdingTypeId ?? null,
           withholdingAmount: v.withholdingAmount ?? 0,
-          date: new Date(v.date),
-          dueDate: v.dueDate ? new Date(v.dueDate) : null,
+          date: wibDateToUtcMidnight(v.date),
+          dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
           // Persist the free-text fields the form sends. The previous data
           // block dropped vendorInvoiceNumber / terms / notes, so editing a
           // draft bill to fix a vendor's invoice reference number (or to
@@ -2382,7 +2383,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
           slug,
           purchaseOrderId: v.purchaseOrderId,
           warehouseId: v.warehouseId,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           referenceNumber: v.referenceNumber ?? null,
           notes: v.notes ?? null,
           shippingCost: v.shippingCost ?? 0,
@@ -2580,7 +2581,7 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
         data: {
           slug,
           purchaseOrderId: v.purchaseOrderId,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           reason: v.reason ?? null,
           items: {
             create: validPrItems.map((item: any) => ({
@@ -2648,7 +2649,7 @@ export async function updateVendorPayment(id: number, formData: FormData) {
           slug,
           vendorId: v.vendorId,
           amount: v.amount,
-          paymentDate: new Date(v.paymentDate),
+          paymentDate: wibDateToUtcMidnight(v.paymentDate),
           paymentMethod: v.paymentMethod,
           accountId: v.accountId ?? null,
           adminFee: v.adminFee ?? 0,
