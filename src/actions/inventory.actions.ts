@@ -92,7 +92,7 @@ export async function createStockAdjustment(formData: FormData) {
     const v = parsed.data;
 
     // Lapis-2: tanggal penyesuaian harus di periode terbuka, sebelum mutasi.
-    await assertPeriodOpen(new Date(v.date));
+    await assertPeriodOpen(wibDateToUtcMidnight(v.date));
 
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, v.warehouseId);
@@ -142,7 +142,7 @@ export async function createStockAdjustment(formData: FormData) {
         documentNo,
         slug: await nextSlug("stockAdjustment", documentNo),
         warehouseId: v.warehouseId,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         reason: v.reason ?? null,
         type: v.type || "increase",
         notes: v.notes ?? null,
@@ -300,7 +300,7 @@ export async function createInventoryTransfer(formData: FormData) {
     const v = parsed.data;
 
     // Lapis-2: tanggal transfer harus di periode terbuka, sebelum mutasi.
-    await assertPeriodOpen(new Date(v.date));
+    await assertPeriodOpen(wibDateToUtcMidnight(v.date));
 
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccessMulti(warehouseScope, [v.sourceWarehouseId, v.destinationWarehouseId]);
@@ -317,7 +317,7 @@ export async function createInventoryTransfer(formData: FormData) {
         slug: await nextSlug("inventoryTransfer", documentNo),
         sourceWarehouseId: v.sourceWarehouseId,
         destinationWarehouseId: v.destinationWarehouseId,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         notes: v.notes ?? null,
         status: "draft",
         createdBy: Number(user.id),
@@ -507,7 +507,7 @@ export async function createMaterialIssue(formData: FormData) {
     const v = parsed.data;
 
     // Lapis-2: tanggal pengeluaran harus di periode terbuka, sebelum mutasi.
-    await assertPeriodOpen(new Date(v.date));
+    await assertPeriodOpen(wibDateToUtcMidnight(v.date));
 
     const warehouseScope = await getWarehouseScope(user);
     assertWarehouseAccess(warehouseScope, v.warehouseId);
@@ -534,7 +534,7 @@ export async function createMaterialIssue(formData: FormData) {
         projectId: v.projectId ?? null,
         workOrderId: v.workOrderId ?? null,
         costCenterId: v.costCenterId ?? null,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         notes: v.notes ?? null,
         status: "draft",
         createdBy: Number(user.id),
@@ -698,11 +698,11 @@ export async function createWorkOrder(formData: FormData) {
         quotationId: v.quotationId ?? null,
         projectId: v.projectId ?? null,
         customerId: v.customerId,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         // Persist optional schedule dates the form sends. Previously dropped
         // silently — the column was nullable but the action never read it.
-        startDate: v.startDate ? new Date(v.startDate) : null,
-        endDate: v.endDate ? new Date(v.endDate) : null,
+        startDate: v.startDate ? wibDateToUtcMidnight(v.startDate) : null,
+        endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
         notes: v.notes ?? null,
         status: "draft",
         createdBy: Number(user.id),
@@ -788,11 +788,11 @@ export async function updateWorkOrder(id: number, formData: FormData) {
           // projectId tidak punya input di form WO (ia tautan dari alur proyek),
           // jadi menulis `?? null` memutus tautan itu setiap kali WO disimpan.
           ...(v.projectId !== undefined ? { projectId: v.projectId } : {}),
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           // Persist optional schedule dates the form sends. Previously dropped
           // silently — the column was nullable but the action never read it.
-          startDate: v.startDate ? new Date(v.startDate) : null,
-          endDate: v.endDate ? new Date(v.endDate) : null,
+          startDate: v.startDate ? wibDateToUtcMidnight(v.startDate) : null,
+          endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
           notes: v.notes ?? null,
         },
       });
@@ -1132,7 +1132,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
     const v = parsed.data;
 
     // Lapis-2: tanggal baru harus di periode terbuka, sebelum mutasi.
-    await assertPeriodOpen(new Date(v.date));
+    await assertPeriodOpen(wibDateToUtcMidnight(v.date));
 
     const adj = await prisma.stockAdjustment.findUniqueOrThrow({
       where: { id },
@@ -1194,7 +1194,7 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
         data: {
           slug: await nextSlug("stockAdjustment", adj.documentNo, { excludeId: id }),
           warehouseId,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           reason: v.reason ?? null,
           type: v.type || "increase",
           notes: v.notes ?? null,
@@ -1256,7 +1256,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
     const v = parsed.data;
 
     // Lapis-2: tanggal baru harus di periode terbuka, sebelum mutasi.
-    await assertPeriodOpen(new Date(v.date));
+    await assertPeriodOpen(wibDateToUtcMidnight(v.date));
 
     const mi = await prisma.materialIssue.findUniqueOrThrow({ where: { id } });
     const warehouseScope = await getWarehouseScope(user);
@@ -1297,7 +1297,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
           ...(v.projectId !== undefined ? { projectId: v.projectId } : {}),
           ...(v.workOrderId !== undefined ? { workOrderId: v.workOrderId } : {}),
           costCenterId: v.costCenterId ?? null,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           notes: v.notes ?? null,
           items: {
             create: miItems.map((it) => ({
@@ -1335,7 +1335,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     const v = parsed.data;
 
     // Lapis-2: tanggal baru harus di periode terbuka, sebelum mutasi.
-    await assertPeriodOpen(new Date(v.date));
+    await assertPeriodOpen(wibDateToUtcMidnight(v.date));
 
     const tf = await prisma.inventoryTransfer.findUniqueOrThrow({
       where: { id },
@@ -1376,7 +1376,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
           slug: await nextSlug("inventoryTransfer", tf.documentNo, { excludeId: id }),
           sourceWarehouseId: v.sourceWarehouseId,
           destinationWarehouseId: v.destinationWarehouseId,
-          date: new Date(v.date),
+          date: wibDateToUtcMidnight(v.date),
           notes: v.notes ?? null,
           items: {
             create: transferItems.map((it) => ({
