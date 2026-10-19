@@ -3,7 +3,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
-import { getWarehouseScope, assertWarehouseAccess } from "@/lib/auth/warehouse-scope";
+import { getWarehouseScope, assertWarehouseAccess, assertWarehouseAccessMulti } from "@/lib/auth/warehouse-scope";
 import {
   safeAdd,
   safeSubtract,
@@ -714,7 +714,14 @@ export async function verifyGoodsReceipt(grId: number) {
 
     const gr = await prisma.goodsReceipt.findUniqueOrThrow({
       where: { id: grId },
+      include: { items: { select: { warehouseId: true } } },
     });
+
+    // Scope gudang (header + baris): verifikasi menulis stok/jurnal di gudang GR.
+    assertWarehouseAccessMulti(await getWarehouseScope(user), [
+      gr.warehouseId,
+      ...gr.items.map((i) => i.warehouseId).filter((w): w is number => w != null),
+    ]);
 
     if (gr.status !== "draft") {
       throw new Error("Penerimaan Barang hanya bisa diverifikasi dari status draf");
@@ -1734,7 +1741,7 @@ export async function deletePurchaseOrder(id: number) {
 
 export async function deleteGoodsReceipt(id: number) {
   try {
-    await requirePermission("delete_goods_receipts");
+    const user = await requirePermission("delete_goods_receipts");
 
     const gr = await prisma.goodsReceipt.findUniqueOrThrow({
       where: { id },
@@ -1743,6 +1750,13 @@ export async function deleteGoodsReceipt(id: number) {
         items: true,
       },
     });
+
+    // Scope gudang (header + baris): hapus membalik stok/jurnal di gudang GR.
+    // Create/update sudah assert; tanpa ini user gudang A hapus GR gudang B via id.
+    assertWarehouseAccessMulti(await getWarehouseScope(user), [
+      gr.warehouseId,
+      ...gr.items.map((i) => i.warehouseId).filter((w): w is number => w != null),
+    ]);
 
     // Guard: refuse deletion when a non-cancelled Vendor Bill references this GR's
     // PO. A goods-based Vendor Bill posts Dr Clearing / Cr AP against the receipt;
