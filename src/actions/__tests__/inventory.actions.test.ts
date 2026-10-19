@@ -987,6 +987,28 @@ describe("stocktake session (P1-5)", () => {
     // dengan warehouse scope "all".
   });
 
+  it("createStocktakeSession menolak tanggal kalender fiktif", async () => {
+    const fd = new FormData();
+    fd.set("warehouseId", "1");
+    fd.set("date", "2026-02-30");
+    const res = await actions.createStocktakeSession(fd);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/Tanggal tidak valid/);
+    expect(mocks.prismaMock.stocktakeSession.create).not.toHaveBeenCalled();
+  });
+
+  it("createStocktakeSession menyimpan tanggal sebagai tengah malam UTC WIB", async () => {
+    const fd = new FormData();
+    fd.set("warehouseId", "1");
+    fd.set("date", "2026-06-13");
+    fd.set("notes", "x".repeat(1500));
+    const res = await actions.createStocktakeSession(fd);
+    expect(res.success).toBe(true);
+    const arg = mocks.prismaMock.stocktakeSession.create.mock.calls[0][0];
+    expect(arg.data.date.toISOString()).toBe("2026-06-13T00:00:00.000Z");
+    expect(arg.data.notes).toHaveLength(1000);
+  });
+
   it("approveStocktakeSession refuses self-approval (independence)", async () => {
     mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
       id: 1,
@@ -1032,6 +1054,41 @@ describe("remnant (P1-5)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["admin"] });
+  });
+
+  it("createRemnant menolak unitCost negatif bukan diam-diam 0", async () => {
+    const fd = new FormData();
+    fd.set("itemId", "1");
+    fd.set("warehouseId", "1");
+    fd.set("qty", "2");
+    fd.set("unitCost", "-5");
+    const res = await actions.createRemnant(fd);
+    expect(res.success).toBe(false);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
+  });
+
+  it("createRemnant menolak sourceId non-integer dan memotong teks panjang", async () => {
+    const bad = new FormData();
+    bad.set("itemId", "1");
+    bad.set("warehouseId", "1");
+    bad.set("qty", "2");
+    bad.set("sourceId", "abc");
+    const badRes = await actions.createRemnant(bad);
+    expect(badRes.success).toBe(false);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
+
+    const fd = new FormData();
+    fd.set("itemId", "1");
+    fd.set("warehouseId", "1");
+    fd.set("qty", "2");
+    fd.set("uom", "u".repeat(50));
+    fd.set("unitCost", "1500");
+    const res = await actions.createRemnant(fd);
+    expect(res.success).toBe(true);
+    const arg = mocks.prismaMock.remnant.create.mock.calls[0][0];
+    expect(arg.data.uom).toHaveLength(32);
+    expect(arg.data.unitCost).toBe(1500);
+    expect(arg.data.sourceId).toBeNull();
   });
 
   it("consumeRemnant only claims usable rows (atomic)", async () => {

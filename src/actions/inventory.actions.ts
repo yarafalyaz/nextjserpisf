@@ -31,6 +31,8 @@ import {
   rackRowSchema,
 } from "@/lib/validations/inventory.schemas";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { dateOnly } from "@/lib/validations/finance.schemas";
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 type WarehouseActionUser = { id: number | string; roles: string[] };
 
@@ -1557,10 +1559,13 @@ export async function createStocktakeSession(formData: FormData) {
     const user = await requirePermission("create_stock_adjustments");
     const warehouseId = Number(formData.get("warehouseId"));
     const dateRaw = (formData.get("date") as string | null) ?? "";
-    const notes = (formData.get("notes") as string | null) ?? null;
+    const notesRaw = (formData.get("notes") as string | null) ?? null;
+    const notes = notesRaw ? notesRaw.slice(0, 1000) : null;
     await assertWarehouseIdInScope(user, warehouseId);
-    if (!dateRaw) throw new Error("Tanggal wajib diisi");
-    await assertPeriodOpen(new Date(dateRaw));
+    const parsedDate = dateOnly.safeParse(dateRaw);
+    if (!parsedDate.success) throw new Error("Tanggal tidak valid");
+    const sessionDate = wibDateToUtcMidnight(parsedDate.data);
+    await assertPeriodOpen(sessionDate);
 
     const documentNo = await generateDocumentNumber("STK");
     const slug = await nextSlug("stocktakeSession", documentNo);
@@ -1569,7 +1574,7 @@ export async function createStocktakeSession(formData: FormData) {
         documentNo,
         slug,
         warehouseId,
-        date: new Date(dateRaw),
+        date: sessionDate,
         status: "draft",
         notes,
         createdBy: Number(user.id),
@@ -1809,6 +1814,17 @@ export async function createRemnant(formData: FormData) {
     await assertWarehouseIdInScope(user, warehouseId);
     if (!Number.isSafeInteger(itemId) || itemId <= 0) throw new Error("Item tidak valid");
     if (!Number.isFinite(qty) || qty <= 0) throw new Error("Qty sisa harus > 0");
+    const unitCostRaw = Number(formData.get("unitCost"));
+    if (!Number.isFinite(unitCostRaw) || unitCostRaw < 0) throw new Error("Biaya satuan tidak valid");
+    const sourceIdRaw = formData.get("sourceId");
+    const sourceId = sourceIdRaw ? Number(sourceIdRaw) : null;
+    if (sourceId !== null && (!Number.isSafeInteger(sourceId) || sourceId <= 0)) {
+      throw new Error("Sumber tidak valid");
+    }
+    const cap = (v: FormDataEntryValue | null, n: number) => {
+      const s = ((v as string | null) ?? "").trim().slice(0, n);
+      return s || null;
+    };
     const documentNo = await generateDocumentNumber("RMN");
     const remnant = await prisma.remnant.create({
       data: {
@@ -1816,11 +1832,11 @@ export async function createRemnant(formData: FormData) {
         itemId,
         warehouseId,
         qty,
-        uom: (formData.get("uom") as string | null) || null,
-        dimensions: (formData.get("dimensions") as string | null) || null,
-        sourceType: (formData.get("sourceType") as string | null) || null,
-        sourceId: Number(formData.get("sourceId")) || null,
-        unitCost: Number(formData.get("unitCost")) || 0,
+        uom: cap(formData.get("uom"), 32),
+        dimensions: cap(formData.get("dimensions"), 255),
+        sourceType: cap(formData.get("sourceType"), 64),
+        sourceId,
+        unitCost: unitCostRaw,
         status: "usable",
         createdBy: Number(user.id),
       },
