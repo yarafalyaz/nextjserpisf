@@ -1164,6 +1164,17 @@ export async function deleteProfitCenter(id: number) {
   try {
     await requirePermission("delete_profit_centers");
 
+    // Guard: CostCenter.profitCenterId menunjuk ke sini. FK-nya TIDAK punya
+    // onDelete (relasi implisit di skema), jadi hapus mentah melempar P2003
+    // mentah ke UI. Tolak dulu dengan pesan yang menyebut jumlah pemakai.
+    const usedByCostCenters = await prisma.costCenter.count({ where: { profitCenterId: id } });
+    if (usedByCostCenters > 0) {
+      return {
+        success: false as const,
+        error: `Pusat laba masih digunakan oleh ${usedByCostCenters} pusat biaya. Lepaskan dulu sebelum menghapus.`,
+      };
+    }
+
     await prisma.profitCenter.delete({ where: { id } });
 
     await logActivity("delete", "ProfitCenter", id, `Menghapus pusat laba #${id}`);
@@ -1354,6 +1365,32 @@ export async function deletePettyCash(id: number) {
 export async function deleteCostCenter(id: number) {
   try {
     await requirePermission("delete_cost_centers");
+
+    // Guard: pusat biaya dirujuk banyak dokumen operasional. Kolom-kolom di
+    // bawah TIDAK punya FK di skema (plain Int?) — hapus mentah meninggalkan
+    // int yatim yang tak bisa direkonstruksi. Yang ber-FK pun ON DELETE
+    // SET NULL — hapus mentah diam-diam mencabut tag pusat biaya dari riwayat.
+    // Tolak dulu dengan pesan yang menyebut jumlah pemakai per area.
+    const [children, payrolls, materialIssues, projects, expenses] = await Promise.all([
+      prisma.costCenter.count({ where: { parentId: id } }),
+      prisma.payroll.count({ where: { costCenterId: id } }),
+      prisma.materialIssue.count({ where: { costCenterId: id } }),
+      prisma.project.count({ where: { costCenterId: id } }),
+      prisma.expense.count({ where: { costCenterId: id } }),
+    ]);
+    const usages = [
+      children > 0 ? `${children} pusat biaya anak` : null,
+      payrolls > 0 ? `${payrolls} penggajian` : null,
+      materialIssues > 0 ? `${materialIssues} pengeluaran material` : null,
+      projects > 0 ? `${projects} proyek` : null,
+      expenses > 0 ? `${expenses} pengeluaran` : null,
+    ].filter((u): u is string => u !== null);
+    if (usages.length > 0) {
+      return {
+        success: false,
+        error: `Pusat biaya masih digunakan (${usages.join(", ")}). Lepaskan dulu sebelum menghapus.`,
+      };
+    }
 
     await prisma.costCenter.delete({ where: { id } });
 
