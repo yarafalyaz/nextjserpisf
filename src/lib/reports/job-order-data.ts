@@ -22,6 +22,7 @@ import {
 import {
   buildJobOrderJournal,
   JOB_JOURNAL_REFERENCE_TYPES,
+  jobJournalBaseReference,
   type JobOrderJournalResult,
 } from "@/lib/reports/job-order-journal"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
@@ -218,7 +219,13 @@ export async function loadJobOrderJournal(period: {
       deletedAt: null,
       status: "POSTED",
       transactionDate: { gte: period.start, lte: period.end },
-      referenceType: { in: [...JOB_JOURNAL_REFERENCE_TYPES] },
+      // Jurnal penyelesaian/varians per-rilis parsial memakai suffix
+      // `_<stockMoveId>`; tangkap keduanya lewat awalan jenis dasarnya.
+      OR: [
+        { referenceType: { in: [...JOB_JOURNAL_REFERENCE_TYPES] } },
+        { referenceType: { startsWith: "ProductionOrder_" } },
+        { referenceType: { startsWith: "ProductionOrderCostVariance_" } },
+      ],
     },
     select: {
       id: true,
@@ -236,7 +243,11 @@ export async function loadJobOrderJournal(period: {
 
   const idsOf = (referenceType: string) =>
     journals
-      .filter((journal) => journal.referenceType === referenceType && journal.referenceId !== null)
+      .filter(
+        (journal) =>
+          jobJournalBaseReference(journal.referenceType ?? "") === referenceType &&
+          journal.referenceId !== null,
+      )
       .map((journal) => journal.referenceId as number)
 
   const orderIds = [...new Set(idsOf("ProductionOrder"))]
@@ -319,7 +330,7 @@ export async function loadJobOrderJournal(period: {
       journals: journals.map((journal) => {
         const referenceId = journal.referenceId
         const jobLabel =
-          journal.referenceType === "ProductionOrder"
+          jobJournalBaseReference(journal.referenceType ?? "") === "ProductionOrder"
             ? (referenceId !== null ? (orderLabel.get(referenceId) ?? null) : null)
             : journal.referenceType === "MaterialIssue"
               ? (referenceId !== null ? (issueLabel.get(referenceId) ?? null) : null)

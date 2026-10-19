@@ -34,14 +34,27 @@ const REFERENCE_LABELS: Record<string, string> = {
   MaterialIssue: "Pengeluaran Bahan",
 }
 
+/**
+ * Normalisasi referenceType jurnal produksi per-rilis: penyelesaian parsial
+ * memakai `ProductionOrder_<stockMoveId>` / `ProductionOrderCostVariance_<id>`
+ * (unik per rilis, lihat stock-journal.service) — laporan mengelompokkannya
+ * di bawah jenis dasarnya.
+ */
+export function jobJournalBaseReference(referenceType: string): string {
+  const match = /^(ProductionOrder|ProductionOrderCostVariance)_\d+$/.exec(referenceType)
+  return match ? match[1] : referenceType
+}
+
 /** Label jenis dokumen pemicu jurnal; `null` bila bukan jurnal pekerjaan. */
 export function jobJournalLabel(referenceType: string): string | null {
-  return REFERENCE_LABELS[referenceType] ?? null
+  return REFERENCE_LABELS[jobJournalBaseReference(referenceType)] ?? null
 }
 
 /** Apakah referenceType ini termasuk jurnal pekerjaan pesanan? */
 export function isJobJournalReference(referenceType: string): boolean {
-  return (JOB_JOURNAL_REFERENCE_TYPES as readonly string[]).includes(referenceType)
+  return (JOB_JOURNAL_REFERENCE_TYPES as readonly string[]).includes(
+    jobJournalBaseReference(referenceType),
+  )
 }
 
 export interface JobOrderJournalLineInput {
@@ -84,17 +97,18 @@ export function buildJobOrderJournal(input: { journals: JobOrderJournalInput[] }
 
   const byReference = new Map<string, JobOrderJournalReferenceSummary>()
   for (const journal of journals) {
+    const baseReference = jobJournalBaseReference(journal.referenceType)
     const label = jobJournalLabel(journal.referenceType) ?? journal.referenceType
     const debit = journal.lines.reduce((sum, line) => sum + line.debit, 0)
-    const bucket = byReference.get(journal.referenceType) ?? {
-      referenceType: journal.referenceType,
+    const bucket = byReference.get(baseReference) ?? {
+      referenceType: baseReference,
       label,
       count: 0,
       amount: 0,
     }
     bucket.count += 1
     bucket.amount += debit
-    byReference.set(journal.referenceType, bucket)
+    byReference.set(baseReference, bucket)
   }
 
   const listing = buildJournalListing({

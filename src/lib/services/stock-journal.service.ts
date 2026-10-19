@@ -66,6 +66,27 @@ function sumValue(items: JournalItemInput[]): number {
 export const GOODS_RECEIPT_JOURNAL_REF_TYPE = "GoodsReceipt"
 export const GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE = "GoodsReceiptService"
 
+/**
+ * `Journal.referenceType` untuk jurnal yang lahir dari SATU rilis penyelesaian
+ * produksi. Satu perintah produksi bisa dirilis berkali-kali (parsial), sementara
+ * `journals` unik pada `(reference_type, reference_id)`, jadi memakai penanda
+ * telanjang yang sama untuk tiap rilis membuat rilis kedua gagal (duplicate
+ * entry) dan seluruh transaksinya ter-rollback — perintah produksi parsial tidak
+ * pernah bisa diselesaikan lewat UI. Karena itu id rilis (`StockMove.id` yang
+ * unik per rilis) masuk ke `referenceType`, sedangkan `referenceId` tetap
+ * menunjuk perintah produksi sumbernya agar pelacakan balik tetap bekerja.
+ */
+export const PRODUCTION_ORDER_COMPLETION_JOURNAL_REF_PREFIX = "ProductionOrder_"
+export const PRODUCTION_ORDER_COST_VARIANCE_JOURNAL_REF_PREFIX = "ProductionOrderCostVariance_"
+
+export function productionOrderCompletionJournalRef(stockMoveId: number): string {
+  return `${PRODUCTION_ORDER_COMPLETION_JOURNAL_REF_PREFIX}${stockMoveId}`
+}
+
+export function productionOrderCostVarianceJournalRef(stockMoveId: number): string {
+  return `${PRODUCTION_ORDER_COST_VARIANCE_JOURNAL_REF_PREFIX}${stockMoveId}`
+}
+
 // ────────────────────────────────────────────────────────────────────────────
 // Stock Journal Service
 // ────────────────────────────────────────────────────────────────────────────
@@ -579,6 +600,7 @@ export const stockJournalService = {
     productionOrderId: number,
     userId?: number,
     transactionDate?: Date,
+    stockMoveId?: number,
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.wip) {
@@ -592,7 +614,7 @@ export const stockJournalService = {
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: transactionDate ?? new Date(),
-      referenceType: 'ProductionOrder',
+      referenceType: stockMoveId != null ? productionOrderCompletionJournalRef(stockMoveId) : 'ProductionOrder',
       referenceId: productionOrderId,
       type: 'PROD',
       description: `Penerimaan Hasil Produksi ${productionOrderNo}`,
@@ -622,6 +644,7 @@ export const stockJournalService = {
     productionOrderId: number,
     userId?: number,
     transactionDate?: Date,
+    stockMoveId?: number,
   ) {
     if (Math.abs(variance) < 0.005) return null
     const accounts = await getAccountIds()
@@ -636,7 +659,7 @@ export const stockJournalService = {
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: transactionDate ?? new Date(),
-      referenceType: 'ProductionOrderCostVariance',
+      referenceType: stockMoveId != null ? productionOrderCostVarianceJournalRef(stockMoveId) : 'ProductionOrderCostVariance',
       referenceId: productionOrderId,
       type: 'PROD',
       description: `Selisih pembulatan biaya produksi ${productionOrderNo}`,
