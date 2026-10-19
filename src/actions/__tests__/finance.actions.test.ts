@@ -1209,6 +1209,33 @@ describe("Additional Branches", () => {
     expect(mocks.prismaMock.transactionAttachment.updateMany).toHaveBeenCalled()
   })
 
+  it("ISF-01: createJournal gagal total bila klaim lampiran gagal (tidak ada jurnal yatim)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    // $transaction menangkap error callback sebagai rollback: produksi Prisma
+    // mengembalikan tx yang dibatalkan. Mock mereplikasi itu — bila klaim
+    // berjalan DI LUAR tx (kode lama), callback tx sukses dan action sukses.
+    mocks.prismaMock.$transaction.mockImplementationOnce(async (fn: any) => {
+      mocks.prismaMock.journal.create.mockResolvedValue({ id: 1 })
+      return fn(mocks.prismaMock)
+    })
+    mocks.prismaMock.transactionAttachment.updateMany.mockRejectedValueOnce(new Error("klaim lampiran gagal"))
+    const fd = fdMap({ transactionDate: "2024-01-01", entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }, { accountId: 2, debit: 0, credit: 100 }]), attachmentIds: "[1, 2]" })
+    const res = await actions.createJournal(fd)
+    expect(res.success).toBe(false)
+    expect(mocks.logActivityMock).not.toHaveBeenCalledWith("create", "Journal", 1, "Membuat jurnal")
+  })
+
+  it("ISF-01: updateJournal gagal total bila klaim lampiran gagal (perubahan tidak dilaporkan sukses)", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.update.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT", transactionDate: new Date("2024-01-01") })
+    mocks.prismaMock.transactionAttachment.updateMany.mockRejectedValueOnce(new Error("klaim lampiran gagal"))
+    const fd = fdMap({ transactionDate: "2024-01-01", entries: JSON.stringify([{ accountId: 1, debit: 100, credit: 0 }, { accountId: 2, debit: 0, credit: 100 }]), attachmentIds: "[7, 8]" })
+    const res = await actions.updateJournal(1, fd)
+    expect(res.success).toBe(false)
+    expect(mocks.logActivityMock).not.toHaveBeenCalledWith("update", "Journal", 1, "Memperbarui jurnal")
+  })
+
   it("updatePettyCash covers attachment update", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.pettyCash.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "PC-01" })
