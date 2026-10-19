@@ -11,6 +11,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { chequeSchema } from "@/lib/validations/finance.schemas"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 const REVALIDATE = "/keuangan/giro"
 const STATUSES = new Set(["pending", "cleared", "cancelled"])
@@ -30,7 +31,9 @@ export async function createCheque(formData: FormData) {
     const notes = v.notes ?? null
     const accountId = v.accountId ?? null
     const amount = v.amount
-    const dueDate = v.dueDate
+    // dateOnly mengembalikan string; konversi WIB-midnight di sini agar
+    // assertPeriodOpen menerima Date, bukan string polos.
+    const dueDate = wibDateToUtcMidnight(v.dueDate)
 
     await assertPeriodOpen(dueDate)
 

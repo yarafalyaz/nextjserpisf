@@ -58,17 +58,18 @@ export async function createBankStatement(formData: FormData) {
     // header tertulis. Baris header lahir draft; tanggal header tetap
     // tanggal dokumen keuangan.
     const bankStatement = await prisma.$transaction(async (tx) => {
-      await assertPeriodOpen(v.date, tx);
+      const stmtDate = wibDateToUtcMidnight(v.date);
+      await assertPeriodOpen(stmtDate, tx);
       return tx.bankStatement.create({
         data: {
           accountId: v.accountId,
           bankId: v.bankId ?? null,
           accountNumber: v.accountNumber ?? null,
-          date: v.date,
+          date: stmtDate,
           reference: v.reference ?? null,
           slug: await nextSlug("bankStatement", v.reference),
-          periodStart: v.periodStart ?? null,
-          periodEnd: v.periodEnd ?? null,
+          periodStart: v.periodStart ? wibDateToUtcMidnight(v.periodStart) : null,
+          periodEnd: v.periodEnd ? wibDateToUtcMidnight(v.periodEnd) : null,
           openingBalance: v.openingBalance,
           closingBalance: v.closingBalance,
           notes: v.notes ?? null,
@@ -688,7 +689,7 @@ export async function createExpense(formData: FormData) {
         projectId: v.projectId ?? null,
         costCenterId: v.costCenterId ?? null,
         amount: v.amount,
-        date: v.date,
+        date: wibDateToUtcMidnight(v.date),
         referenceNo: v.referenceNo ?? null,
         description: v.description ?? null,
         categoryId: v.categoryId ?? null,
@@ -1063,7 +1064,7 @@ export async function createPettyCash(formData: FormData) {
           amount,
           balanceBefore,
           balanceAfter,
-          date: v.date,
+          date: wibDateToUtcMidnight(v.date),
           accountId: v.accountId ?? null,
           referenceNo: v.referenceNo ?? null,
           description: v.description ?? null,
@@ -1123,10 +1124,10 @@ export async function createBankReconciliation(formData: FormData) {
         reconciliationNumber,
         slug: await nextSlug("bankReconciliation", reconciliationNumber),
         accountId: v.accountId,
-        statementDate: v.statementDate,
+        statementDate: wibDateToUtcMidnight(v.statementDate),
         statementBalance: v.statementBalance,
-        periodStart: v.periodStart ?? null,
-        periodEnd: v.periodEnd ?? null,
+        periodStart: v.periodStart ? wibDateToUtcMidnight(v.periodStart) : null,
+        periodEnd: v.periodEnd ? wibDateToUtcMidnight(v.periodEnd) : null,
         bookBalance: v.bookBalance,
         notes: v.notes ?? null,
         status: "draft",
@@ -2110,7 +2111,7 @@ export async function updateExpense(id: number, formData: FormData) {
           projectId: v.projectId ?? null,
           costCenterId: v.costCenterId ?? null,
           amount: v.amount,
-          date: v.date,
+          date: wibDateToUtcMidnight(v.date),
           referenceNo: v.referenceNo ?? null,
           description: v.description ?? null,
           categoryId: v.categoryId ?? null,
@@ -2193,7 +2194,7 @@ export async function updatePettyCash(id: number, formData: FormData) {
         data: {
           type,
           amount,
-          date: v.date,
+          date: wibDateToUtcMidnight(v.date),
           accountId: v.accountId ?? null,
           referenceNo: v.referenceNo ?? null,
           description: v.description ?? null,
