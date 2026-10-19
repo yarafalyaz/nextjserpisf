@@ -132,3 +132,5 @@
 
 1. Lanjut hardening domain berikut (satu commit per domain).
 2. Push branch kerja + buka PR review bila pemilik izinkan.
+
+| PORT-1 | Sinkron | `expense-category.actions.ts` + `finance.schemas.ts` + `tax-payment.actions.ts` + `quick-add-select.tsx`/`combobox.tsx` | FIXED (`d32df23b`, branch kerja) | Branch audit ketinggalan 5 commit main: expenseCategory tanpa max-length + `Number\|\|0` garbage→0; masa pajak fiktif 2026-13/2026-00; quick-add a11y orphan label/hint | Port 4 commit (overtime-form skip: identik; cheque 7ed1c8d1 SENGAJA skip — audit pakai hand-parse + assertPeriodOpen, Zod tanpa period lock = regresi) | 15/15 (expense 5 + tax-period 3 + QAS 7); tsc 0; lint 0 error (4 warning pre-existing) |
