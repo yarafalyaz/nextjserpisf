@@ -1070,6 +1070,8 @@ export async function completeProductionOrder(
         order.documentNo,
         id,
         Number(user.id),
+        undefined,
+        move.id,
       );
       // Rounding variance for THIS release: what we carried into inventory
       // (qty × unitCost) vs the slice of WIP cost released (releaseCost).
@@ -1079,6 +1081,8 @@ export async function completeProductionOrder(
         order.documentNo,
         id,
         Number(user.id),
+        undefined,
+        move.id,
       );
 
       // Advance the completed quantity and release the equivalent share of WIP

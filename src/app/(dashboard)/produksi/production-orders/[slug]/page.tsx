@@ -17,6 +17,7 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { buildProductionVariance } from "@/lib/reports/production-variance"
 export const metadata: Metadata = { title: "Perintah Produksi" }
 
 export default async function ProductionOrderDetailPage({
@@ -136,6 +137,32 @@ export default async function ProductionOrderDetailPage({
     label: `${itemNameMap.get(m.itemId) ?? `Barang #${m.itemId}`}`,
   }))
 
+  const productionVariance = buildProductionVariance({
+    orders: [
+      {
+        id: order.id,
+        documentNo: order.documentNo,
+        date: order.createdAt,
+        status: order.status,
+        productName: order.product.name,
+        totalStandardCost: Number(order.totalStandardCost),
+        totalActualCost: Number(order.totalActualCost),
+        releasedCost: Number(order.releasedCost),
+        recordedVariance: Number(order.variance),
+        materials: order.materials.map((m) => ({
+          itemId: m.itemId,
+          qty: Number(m.qty),
+          actualQty: m.actualQty === null ? null : Number(m.actualQty),
+          standardCost: Number(m.standardCost),
+          actualCost: Number(m.actualCost),
+        })),
+        costs: order.costs.map((c) => ({ category: c.category, amount: Number(c.amount) })),
+      },
+    ],
+    start: order.createdAt,
+    end: order.createdAt,
+  }).orders[0]
+
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[
@@ -222,6 +249,37 @@ export default async function ProductionOrderDetailPage({
           </div>
         </div>
       </div>
+
+      {productionVariance ? (
+        <section aria-labelledby="varians-produksi-heading" className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
+          <h2 id="varians-produksi-heading" className="text-[0.9375rem] font-semibold text-foreground">Varians Produksi</h2>
+          <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Selisih Harga Bahan</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(productionVariance.materialPriceVariance)}</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Selisih Pemakaian</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(productionVariance.materialUsageVariance)}</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tenaga Kerja & Lainnya</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">{formatCurrency(productionVariance.laborAndOtherCost)}</span>
+            </div>
+            <div className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Varians %</span>
+              <span className="text-[0.9375rem] text-foreground font-medium">
+                {productionVariance.variancePct === null ? "–" : `${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2 }).format(productionVariance.variancePct)}%`}
+              </span>
+            </div>
+          </div>
+          {productionVariance.uncalibratedLines > 0 ? (
+            <p className="mt-3 text-sm text-muted-foreground">
+              {productionVariance.uncalibratedLines} baris bahan tanpa standar terkalibrasi — selisihnya tidak dijurnalkan sebagai disposisi.
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {/* Materials */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

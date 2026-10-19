@@ -20,7 +20,11 @@ vi.mock("@/lib/services/journal.service", () => ({
   },
 }));
 
-import { stockJournalService } from "@/lib/services/stock-journal.service";
+import {
+  stockJournalService,
+  productionOrderCompletionJournalRef,
+  productionOrderCostVarianceJournalRef,
+} from "@/lib/services/stock-journal.service";
 
 const tx = {} as never;
 
@@ -153,6 +157,34 @@ describe("stockJournalService", () => {
         9,
       )).rejects.toThrow("Akun Persediaan dan Barang Dalam Proses");
     });
+
+    it("keys each partial release by its stock move so the 2nd release cannot trip the journal unique index", async () => {
+      await stockJournalService.onProductionOrderCompleted(
+        tx,
+        [{ qty: 4, cost: 100 }],
+        "MO-9",
+        9,
+        42,
+        undefined,
+        456,
+      );
+      await stockJournalService.onProductionOrderCompleted(
+        tx,
+        [{ qty: 6, cost: 100 }],
+        "MO-9",
+        9,
+        42,
+        undefined,
+        457,
+      );
+
+      const keys = mocks.createJournal.mock.calls.map((call) => {
+        const arg = call[0];
+        return `${String(arg.referenceType)}|${String(arg.referenceId)}`;
+      });
+      expect(keys).toEqual(["ProductionOrder_456|9", "ProductionOrder_457|9"]);
+      expect(new Set(keys).size).toBe(keys.length);
+    });
   });
 
   describe("onProductionOrderCostRoundingVariance", () => {
@@ -176,6 +208,19 @@ describe("stockJournalService", () => {
           expect.objectContaining({ accountId: 500, debit: 0, credit: 0.01 }),
         ],
       }));
+    });
+
+    it("keys each partial release variance by its stock move so the 2nd release cannot trip the journal unique index", async () => {
+      await stockJournalService.onProductionOrderCostRoundingVariance(tx, 0.01, "MO-9", 9, 42, undefined, 456);
+      await stockJournalService.onProductionOrderCostRoundingVariance(tx, -0.01, "MO-9", 9, 42, undefined, 457);
+
+      const keys = mocks.createJournal.mock.calls.map((call) => {
+        const arg = call[0];
+        return `${String(arg.referenceType)}|${String(arg.referenceId)}`;
+      });
+      expect(keys).toEqual(["ProductionOrderCostVariance_456|9", "ProductionOrderCostVariance_457|9"]);
+      expect(new Set(keys).size).toBe(keys.length);
+      expect(productionOrderCostVarianceJournalRef(457)).toBe("ProductionOrderCostVariance_457");
     });
   });
 

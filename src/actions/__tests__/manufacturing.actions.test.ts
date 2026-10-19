@@ -449,10 +449,10 @@ describe("Production Order Actions", () => {
       where: { id: 10 }, data: { qtyOnHand: { increment: 2 } },
     }))
     expect(mocks.productionCompletionJournalMock).toHaveBeenCalledWith(
-      mocks.prismaMock, [{ qty: 2, cost: 10 }], "MO-008", 8, 1,
+      mocks.prismaMock, [{ qty: 2, cost: 10 }], "MO-008", 8, 1, undefined, 456,
     )
     expect(mocks.productionRoundingJournalMock).toHaveBeenCalledWith(
-      mocks.prismaMock, 0, "MO-008", 8, 1,
+      mocks.prismaMock, 0, "MO-008", 8, 1, undefined, 456,
     )
     // Production genealogy (REP-13) is recorded in the same transaction.
     expect(mocks.prismaMock.productionGenealogy.create).toHaveBeenCalledWith(
