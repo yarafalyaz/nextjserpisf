@@ -89,20 +89,22 @@ describe("env validation", () => {
     expect(mod.env).toBeDefined()
   })
 
-  it("skips validation in CI", async () => {
-    process.env = { ...originalEnv, CI: "true" } as NodeJS.ProcessEnv
-    delete (process.env as unknown as Record<string, unknown>).DATABASE_URL
-    delete (process.env as unknown as Record<string, unknown>)[CRED_ENV]
-    const mod = await import("@/lib/env")
-    expect(mod.env).toBeDefined()
-  })
-
   it("skips validation in test env", async () => {
     process.env = { ...originalEnv, NODE_ENV: "test" } as NodeJS.ProcessEnv
     delete (process.env as unknown as Record<string, unknown>).DATABASE_URL
     delete (process.env as unknown as Record<string, unknown>)[CRED_ENV]
     const mod = await import("@/lib/env")
     expect(mod.env).toBeDefined()
+  })
+
+  // R-11: CI=true SAJA bukan alasan lewati validasi — runner CI unit/build
+  // menyetel DATABASE_URL, jadi env basi harus tertangkap. NODE_ENV=test
+  // tetap satu-satunya bypass non-build yang sah.
+  it("R-11: CI=true saja tidak melewati validasi", async () => {
+    process.env = { ...originalEnv, CI: "true", NODE_ENV: "production" } as NodeJS.ProcessEnv
+    delete (process.env as unknown as Record<string, unknown>).DATABASE_URL
+    delete (process.env as unknown as Record<string, unknown>)[CRED_ENV]
+    await expect(import("@/lib/env")).rejects.toThrow("Invalid environment variables")
   })
 
   it("throws Error if client validation fails", async () => {
