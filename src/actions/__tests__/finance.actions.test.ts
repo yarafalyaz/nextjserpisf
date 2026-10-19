@@ -526,18 +526,12 @@ describe("Journal Actions", () => {
     expect(res?.success).toBe(true)
   })
 
-  it("createJournal rejects fictitious calendar date 2026-02-30 (no silent roll to March)", async () => {
+  it.each([
+    ["fictitious calendar date 2026-02-30 (no silent roll to March)", "2026-02-30"],
+    ["unparseable date instead of letting Invalid Date bypass period lock", "bukan-tanggal"],
+  ])("createJournal rejects %s", async (_label, transactionDate) => {
     const res = await (actions as any).createJournal(fdMap({
-      transactionDate: "2026-02-30",
-      entries: JSON.stringify([{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }])
-    }))
-    expect(res?.success).toBe(false)
-    expect(mocks.prismaMock.journal.create).not.toHaveBeenCalled()
-  })
-
-  it("createJournal rejects unparseable date instead of letting Invalid Date bypass period lock", async () => {
-    const res = await (actions as any).createJournal(fdMap({
-      transactionDate: "bukan-tanggal",
+      transactionDate,
       entries: JSON.stringify([{ accountId: 1, debit: 1000, credit: 0 }, { accountId: 2, debit: 0, credit: 1000 }])
     }))
     expect(res?.success).toBe(false)
