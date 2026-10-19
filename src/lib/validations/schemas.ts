@@ -119,6 +119,14 @@ export const taxServerSchema = z.object({
   effectiveTo: optionalDateOnly,
 })
 
+export const uomServerSchema = z.object({
+  name: z.string().min(1, "Nama satuan wajib diisi").max(200),
+  // Quick-add hanya kirim name+symbol; form master kirim barang/jasa.
+  // Nilai lain = tamper klien, tolak sebelum DB (dulu senyap jadi barang).
+  symbol: z.string().min(1, "Simbol wajib diisi").max(50),
+  category: z.enum(["barang", "jasa"], { message: "Jenis harus barang atau jasa" }).default("barang"),
+})
+
 export const bankServerSchema = z.object({
   name: z.string().min(1, "Nama wajib diisi").max(200),
   // `banks.code` kolom @unique wajib di schema (NOT NULL); dulu hand-parse lolos null -> P2011/P2002 mentah.
