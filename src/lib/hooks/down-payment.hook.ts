@@ -2,7 +2,6 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { notificationService } from "@/lib/services/notification.service";
-import { onSalesInvoicePosted } from "@/lib/hooks/accounting.hook";
 import { Status, WorkOrderStatus, SalesStatus } from "@/lib/constants";
 
 /**
@@ -70,18 +69,11 @@ export async function onDownPaymentConfirmed(
     await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${dp.quotationId} FOR UPDATE`;
 
     // Guard: already confirmed — silent skip (idempotency).
-    // Recovery: if a prior confirm committed the invoice but the process died
-    // before the post-commit onSalesInvoicePosted call (revenue/COGS/stock-out),
-    // re-capture the invoice id so the idempotent posting hook below completes
-    // it on retry instead of leaving a "posted" invoice with no GL revenue.
+    // P0-2 (review): retry TIDAK boleh memanggil onSalesInvoicePosted tanpa
+    // gate. Posting resmi (postInvoice) menegakkan izin + approval +
+    // period-lock; hook retry tak punya ketiganya. Retry hanya melengkapi
+    // alokasi DP yang terlewat (lihat existingInv di atas) — bukan posting.
     if (dp.status === SalesStatus.CONFIRMED) {
-      const orphanInv = await tx.salesInvoice.findFirst({
-        where: { quotationId: dp.quotationId },
-        select: { id: true },
-      });
-      if (orphanInv) {
-        await onSalesInvoicePosted(orphanInv.id, userId, tx);
-      }
       return;
     }
 
@@ -118,8 +110,16 @@ export async function onDownPaymentConfirmed(
     }
 
     if (existingInv) {
+      // P0-1 (review): DP lanjutan hanya boleh menambah SalesPayment untuk DP
+      // INI — dan idempoten: DP yang sama di-retry tidak boleh membuat baris
+      // kedua. Penandanya = notes berisi nomor dokumen DP (relasi otoritatif
+      // DP→payment belum ada di skema; cocok amount/tanggal rapuh).
+      const marker = `Uang muka dari DP ${dp.documentNo}`
+      const alreadyAllocated = await tx.salesPayment.findFirst({
+        where: { salesInvoiceId: existingInv.id, notes: { contains: marker } },
+      })
       // Create SalesPayment for this subsequent DP linked to the existing invoice
-      if (Number(dp.amount) > 0) {
+      if (Number(dp.amount) > 0 && !alreadyAllocated) {
         const payDocNo = await generateDocumentNumber("PAY");
         await tx.salesPayment.create({
           data: {
@@ -127,9 +127,9 @@ export async function onDownPaymentConfirmed(
             salesInvoiceId: existingInv.id,
             customerId: quotation.customerId,
             amount: dp.amount,
-            paymentDate: new Date(),
+            paymentDate: dp.paymentDate ?? new Date(),
             paymentMethod: "down_payment",
-            notes: `Uang muka dari DP ${dp.documentNo}`,
+            notes: marker,
             createdBy: userId ?? null,
           },
         });
@@ -144,20 +144,22 @@ export async function onDownPaymentConfirmed(
         // which would cause a fully paid invoice to stick at "partial" status.
         const totalPaid = safeSum(payments.map((p) => p.amount), 2);
         const grandTotal = Number(existingInv.grandTotal ?? 0);
-        
-        let invStatus: "posted" | "partial" | "paid" = "posted";
-        let paymentStatus: "posted" | "partial" | "paid" = "posted";
+
+        // P0-2 (review): status DOKUMEN bukan status BAYAR. DP confirmation
+        // hanya boleh menyentuh paymentStatus; status lifecycle (draft /
+        // posted / approved) milik jalur posting resmi (postInvoice +
+        // gate izin/approval/period-lock). Tanpa ini, faktur draft berubah
+        // "posted" tanpa posting — stok-out + revenue/COGS lewat tanpa gate.
+        let paymentStatus: "posted" | "partial" | "paid" = existingInv.paymentStatus as "posted" | "partial" | "paid";
         if (totalPaid >= grandTotal) {
-          invStatus = "paid";
           paymentStatus = "paid";
         } else if (totalPaid > 0) {
-          invStatus = "partial";
           paymentStatus = "partial";
         }
 
         await tx.salesInvoice.update({
           where: { id: existingInv.id },
-          data: { paidAmount: totalPaid, status: invStatus, paymentStatus },
+          data: { paidAmount: totalPaid, paymentStatus },
         });
       }
 
@@ -489,9 +491,9 @@ export async function onDownPaymentConfirmed(
         grandTotal: quotation.grandTotal,
         totalAmount: quotation.grandTotal,
         taxAmount: quotation.tax ?? 0,
-        paidAmount: dp.amount,
+        paidAmount: 0,
         status: "draft",
-        paymentStatus: Number(dp.amount) >= Number(quotation.grandTotal) ? "paid" : "partial",
+        paymentStatus: "partial",
         notes: `Otomatis dibuat dari DP ${dp.documentNo}`,
         createdBy: userId ?? null,
       },
@@ -515,26 +517,65 @@ export async function onDownPaymentConfirmed(
     // (recalc sums SalesPayment rows; without this, paidAmount would be overwritten
     // and the DP "lost"). No payment journal here — the cash was already journaled
     // at down-payment receipt (onDownPaymentReceived), so adding one would double cash.
-    // Tanggal bayar = tanggal bayar DP aktual, bukan hari ini.
-    if (Number(dp.amount) > 0) {
+    // P0-1 (review): alokasi SEMUA verified DP yang belum teralokasi — bukan
+    // cuma DP pemicu. Skenario: DP1 300 confirmed (di bawah ambang), DP2 200
+    // confirmed → ambang tercapai → invoice lahir. Tanpa loop ini, 300 milik
+    // DP1 hilang dari paidAmount dan AR overstate selamanya. Idempoten via
+    // marker notes per nomor DP (retry aman; kelebihan di atas grandTotal
+    // dicatat di notes, bukan dialokasi diam-diam).
+    const allocatedMarkers = new Set(
+      (
+        await tx.salesPayment.findMany({
+          where: { salesInvoiceId: created.id },
+          select: { notes: true },
+        })
+      ).map((p) => p.notes ?? ""),
+    )
+    const verifiedForAllocation = await tx.downPayment.findMany({
+      where: { quotationId: quotation.id, status: SalesStatus.CONFIRMED },
+    })
+    let allocatedSen = 0
+    for (const vdp of verifiedForAllocation) {
+      const vmarker = `Uang muka dari DP ${vdp.documentNo}`
+      if ([...allocatedMarkers].some((n) => n.includes(vmarker))) continue
+      if (Number(vdp.amount) <= 0) continue
       const payDocNo = await generateDocumentNumber("PAY");
       await tx.salesPayment.create({
         data: {
           documentNo: payDocNo,
           salesInvoiceId: created.id,
           customerId: quotation.customerId,
-          amount: dp.amount,
-          paymentDate: dp.paymentDate ?? new Date(),
+          amount: vdp.amount,
+          paymentDate: vdp.paymentDate ?? new Date(),
           paymentMethod: "down_payment",
-          notes: `Uang muka dari DP ${dp.documentNo}`,
+          notes: vmarker,
           createdBy: userId ?? null,
         },
       });
+      allocatedSen += Math.round(Number(vdp.amount) * 100)
+    }
+    const createdSen = Math.round(Number(quotation.grandTotal) * 100)
+    if (allocatedSen > createdSen) {
+      await tx.salesInvoice.update({
+        where: { id: created.id },
+        data: {
+          notes: `Otomatis dibuat dari DP ${dp.documentNo}. KELEBIHAN DP: teralokasi ${allocatedSen / 100} melebihi grandTotal ${createdSen / 100} — selisih menjadi kredit pelanggan, bukan pelunasan.`,
+        },
+      })
     }
     // TIDAK ada onSalesInvoicePosted di sini: invoice konversi lahir draft;
     // revenue/COGS/stock-out terjadi saat posting manual (postInvoice).
     // WO/SO/Project di atas tetap dibuat agar kerja bengkel bisa mulai
     // tanpa menunggu ambang 50% (keputusan bisnis #7).
+    // paidAmount = total teralokasi (semua verified DP), bukan cuma DP pemicu.
+    const allocatedTotal = allocatedSen / 100
+    await tx.salesInvoice.update({
+      where: { id: created.id },
+      data: {
+        paidAmount: allocatedTotal,
+        paymentStatus: allocatedTotal >= Number(quotation.grandTotal) ? "paid" : "partial",
+      },
+    })
     }
 
     // ─── 5. Update Down Payment status ───────────────────────────────

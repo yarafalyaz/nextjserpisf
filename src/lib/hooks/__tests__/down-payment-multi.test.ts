@@ -117,6 +117,7 @@ function buildTx(dp: ReturnType<typeof buildDp>, existingInvoiceId: number) {
     },
     salesPayment: {
       findMany: mocks.salesPaymentFindMany,
+      findFirst: vi.fn().mockResolvedValue(null),
       create: mocks.salesPaymentCreate,
     },
     product: { findFirst: vi.fn().mockResolvedValue(null) },

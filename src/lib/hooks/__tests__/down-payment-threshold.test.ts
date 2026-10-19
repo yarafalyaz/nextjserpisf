@@ -97,7 +97,7 @@ function buildTx(dp: ReturnType<typeof buildDp>) {
       create: mocks.salesInvoiceCreate,
       update: vi.fn(),
     },
-    salesPayment: { findMany: vi.fn().mockResolvedValue([]), create: mocks.salesPaymentCreate },
+    salesPayment: { findMany: vi.fn().mockResolvedValue([]), findFirst: vi.fn().mockResolvedValue(null), create: mocks.salesPaymentCreate },
     product: { findMany: vi.fn().mockResolvedValue([]) },
     item: { findMany: vi.fn().mockResolvedValue([]) },
     workOrderItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
@@ -184,7 +184,8 @@ describe("ambang 50% konversi DP ke invoice", () => {
     const payDate = new Date("2026-09-15T00:00:00Z")
     const dp = buildDp({ id: 4, amount: 600, status: "draft", docNo: "DP-4", paymentDate: payDate })
     const tx = buildTx(dp)
-    mocks.downPaymentFindMany.mockResolvedValue([{ amount: 600 }])
+    // findMany CONFIRMED kembalikan DP-4 sendiri (lengkap documentNo+paymentDate).
+    mocks.downPaymentFindMany.mockResolvedValue([{ documentNo: "DP-4", amount: 600, paymentDate: payDate }])
     mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
 
     await onDownPaymentConfirmed(4, 1)
