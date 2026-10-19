@@ -131,9 +131,9 @@ export async function onDownPaymentConfirmed(
         // menjumlah SalesPayment.amount sebagai pelunasan faktur.
         const prePaid = await tx.salesPayment.findMany({
           where: { salesInvoiceId: existingInv.id },
-          select: { amount: true },
+          select: { amount: true, withholdingAmount: true },
         });
-        const prePaidSen = Math.round(safeSum(prePaid.map((p) => p.amount), 2) * 100);
+        const prePaidSen = Math.round(safeSum(prePaid.map((p) => Number(p.amount) + Number(p.withholdingAmount ?? 0)), 2) * 100);
         const invGrandSen = Math.round(Number(existingInv.grandTotal ?? 0) * 100);
         const allocSen = Math.max(Math.min(Math.round(Number(dp.amount) * 100), invGrandSen - prePaidSen), 0);
         const payDocNo = await generateDocumentNumber("PAY");
@@ -153,7 +153,7 @@ export async function onDownPaymentConfirmed(
         // Recalculate invoice paid amount & status inside the same transaction
         const payments = await tx.salesPayment.findMany({
           where: { salesInvoiceId: existingInv.id },
-          select: { amount: true },
+          select: { amount: true, withholdingAmount: true },
         });
         
         // safeSum avoids JavaScript floating point drift (e.g. 0.1 + 0.7 = 0.7999999)
@@ -184,7 +184,10 @@ export async function onDownPaymentConfirmed(
             });
           }
         }
-        const totalPaid = Math.min(safeSum(payments.map((p) => p.amount), 2), grandTotal);
+        // PPh dipotong pelanggan tetap melunasi piutang (parity sales-payment.hook:
+        // total = amount + withholdingAmount). Basis sen integer agar tak drift.
+        const totalPaidSen = Math.round(safeSum(payments.map((p) => Number(p.amount) + Number(p.withholdingAmount ?? 0)), 2) * 100);
+        const totalPaid = Math.min(totalPaidSen / 100, grandTotal);
 
         // P0-2 (review): status DOKUMEN bukan status BAYAR. DP confirmation
         // hanya boleh menyentuh paymentStatus; status lifecycle (draft /

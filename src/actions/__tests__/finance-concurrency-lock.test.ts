@@ -72,7 +72,7 @@ function balancedEntries() {
 
 function balancedReconItems() {
   return [
-    { id: 1, matched: true, cleared: true, type: "match", amount: 1000 },
+    { id: 1, matched: true, cleared: true, bankStatementLineId: 1, journalEntryId: 1, type: "match", amount: 1000 },
   ]
 }
 

@@ -200,6 +200,19 @@ export async function updateBankStatementLine(id: number, formData: FormData) {
       const lineDate = wibDateToUtcMidnight(v.date);
       await assertPeriodOpen(lineDate, tx);
 
+      // R-04: kunci induk dulu sebelum cek completedMatch — tanpa lock,
+      // complete bersamaan bisa selip di antara cek dan update (TOCTOU).
+      // Urutan lock konsisten dengan match/unmatch/complete (induk dulu).
+      const matchedRecons = await tx.bankReconciliationItem.findMany({
+        where: { bankStatementLineId: id, matched: true },
+        select: { bankReconciliationId: true },
+      });
+      const reconIds = [...new Set(matchedRecons.map((m) => m.bankReconciliationId))].sort(
+        (a, b) => a - b,
+      );
+      for (const reconId of reconIds) {
+        await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconId} FOR UPDATE`;
+      }
       const completedMatch = await tx.bankReconciliationItem.findFirst({
         where: {
           bankStatementLineId: id,
@@ -262,6 +275,18 @@ export async function deleteBankStatementLine(id: number) {
       if (!line) throw new Error("Baris rekening koran tidak ditemukan");
 
       await assertPeriodOpen(line.date, tx);
+      // R-04: kunci induk dulu sebelum cek completedMatch (lihat update di
+      // atas — urutan lock yang sama agar tak deadlock dengan match/complete).
+      const matchedRecons = await tx.bankReconciliationItem.findMany({
+        where: { bankStatementLineId: id, matched: true },
+        select: { bankReconciliationId: true },
+      });
+      const reconIds = [...new Set(matchedRecons.map((m) => m.bankReconciliationId))].sort(
+        (a, b) => a - b,
+      );
+      for (const reconId of reconIds) {
+        await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconId} FOR UPDATE`;
+      }
       const completedMatch = await tx.bankReconciliationItem.findFirst({
         where: {
           bankStatementLineId: id,
@@ -974,7 +999,14 @@ export async function matchReconciliationLine(
 
       const line = await tx.bankStatementLine.findUniqueOrThrow({
         where: { id: lineId },
-        select: { date: true, bankStatement: { select: { accountId: true } } },
+        select: {
+          date: true,
+          amount: true,
+          type: true,
+          debit: true,
+          credit: true,
+          bankStatement: { select: { accountId: true } },
+        },
       });
       if (line.bankStatement.accountId !== recon.accountId) {
         throw new Error("Baris rekening koran bukan milik akun rekonsiliasi ini");
@@ -990,6 +1022,8 @@ export async function matchReconciliationLine(
         where: { id: journalEntryId },
         select: {
           accountId: true,
+          debit: true,
+          credit: true,
           journal: { select: { status: true, deletedAt: true, transactionDate: true } },
         },
       });
@@ -1004,6 +1038,49 @@ export async function matchReconciliationLine(
         (recon.periodEnd && journalEntry.journal.transactionDate > recon.periodEnd)
       ) {
         throw new Error("Tanggal jurnal berada di luar periode rekonsiliasi");
+      }
+
+      // R-03: nominal + arah wajib cocok. Tanpa ini, baris Rp100 ribu bisa
+      // "dicocokkan" dengan jurnal Rp1 (match palsu menutup selisih).
+      // Toleransi 0.01 untuk sisa pembulatan Decimal(15,2).
+      const lineAmount = Number(line.amount);
+      const entryDebit = Number(journalEntry.debit);
+      const entryCredit = Number(journalEntry.credit);
+      const entryHasDebit = entryDebit > 0;
+      const entryHasCredit = entryCredit > 0;
+      if (entryHasDebit === entryHasCredit) {
+        throw new Error("Entri jurnal tidak memiliki arah debit/kredit yang jelas");
+      }
+      const entryAmount = entryHasDebit ? entryDebit : entryCredit;
+      // Epsilon 1e-9 lawan noise biner float (1000.01-1000 = 0.0099999...).
+      if (Math.abs(lineAmount - entryAmount) >= 0.01 - 1e-9) {
+        throw new Error(
+          `Nominal tidak sama: baris rekening koran ${lineAmount} vs entri jurnal ${entryAmount}`,
+        );
+      }
+      // Arah: kolom debit = kas masuk (lihat createBankStatementLine),
+      // sama seperti sisi debit akun bank di jurnal. Debit lawan kredit
+      // berarti arus berlawanan — tolak.
+      const lineIsDebit = Number(line.debit) > 0 || line.type === "debit";
+      if (lineIsDebit !== entryHasDebit) {
+        throw new Error("Arah tidak sama: baris debit hanya dapat cocok dengan entri debit (dan sebaliknya)");
+      }
+
+      // R-03: satu entri jurnal hanya boleh dipakai sekali per rekonsiliasi.
+      // Tanpa ini, satu jurnal Rp1 jt bisa "menutup" banyak baris sekaligus.
+      // findFirst dikecualikan baris ini sendiri agar match ulang yang sama
+      // tetap idempoten; UNIQUE(bank_reconciliation_id, journal_entry_id)
+      // menutup balapan antar-transaksi (P2002 di bawah).
+      const journalReuse = await tx.bankReconciliationItem.findFirst({
+        where: {
+          bankReconciliationId: reconciliationId,
+          journalEntryId,
+          NOT: { bankStatementLineId: lineId },
+        },
+        select: { id: true },
+      });
+      if (journalReuse) {
+        throw new Error("Entri jurnal sudah dipakai di rekonsiliasi ini");
       }
 
       // Dedupe: satu baris rekening hanya dapat memiliki satu kecocokan pada
@@ -1042,6 +1119,11 @@ export async function matchReconciliationLine(
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
+    // R-03: balapan dua match jurnal-sama lolos cek findFirst lalu tabrakan
+    // di UNIQUE(bank_reconciliation_id, journal_entry_id) — pesan ramah.
+    if ((e as { code?: string })?.code === "P2002") {
+      return { success: false, error: "Entri jurnal sudah dipakai di rekonsiliasi ini" };
+    }
     console.error("[matchReconciliationLine]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
@@ -1191,21 +1273,37 @@ export async function completeReconciliation(reconciliationId: number) {
         throw new Error("Rekonsiliasi belum memiliki baris yang dicocokkan");
       }
 
-      // Semua baris yang telah dimasukkan ke rekonsiliasi wajib sudah matched.
-      const unmatchedItems = reconciliation.items.filter((item) => !item.matched);
-      if (unmatchedItems.length > 0) {
+      // R-01: gate matched hanya untuk item pencocokan (punya
+      // bankStatementLineId/journalEntryId). Item penyesuaian (keduanya null)
+      // tidak perlu matched — wajib cleared:false + amount>0.
+      const unmatchedMatchItems = reconciliation.items.filter(
+        (item) =>
+          (item.bankStatementLineId != null || item.journalEntryId != null) &&
+          !item.matched,
+      );
+      if (unmatchedMatchItems.length > 0) {
         throw new Error(
-          `${unmatchedItems.length} baris belum di-match. Semua baris harus di-match sebelum menyelesaikan rekonsiliasi.`,
+          `${unmatchedMatchItems.length} baris belum di-match. Semua baris harus di-match sebelum menyelesaikan rekonsiliasi.`,
+        );
+      }
+      const invalidAdjustments = reconciliation.items.filter(
+        (item) =>
+          item.bankStatementLineId == null &&
+          item.journalEntryId == null &&
+          (item.cleared || !(Number(item.amount) > 0)),
+      );
+      if (invalidAdjustments.length > 0) {
+        throw new Error(
+          `${invalidAdjustments.length} item penyesuaian tidak valid. Penyesuaian wajib belum cleared dan nominal lebih dari 0.`,
         );
       }
 
-      // Numeric balance gate (Laravel BankReconciliation::calculateDifference + isBalanced).
-      // Only UNCLEARED outstanding deposits/payments adjust the book balance.
-      //   adjusted_book_balance = book_balance + outstanding_deposits − outstanding_payments
-      //   difference            = statement_ending_balance − adjusted_book_balance
-      // Block completion unless |difference| < 0.01. Persist the computed figures
-      // so the report reflects the reconciliation math (these columns existed in
-      // the schema but were never populated before).
+      // Numeric balance gate — standar rekonsiliasi bank (sisi bank disesuaikan):
+      //   adjusted_bank = statement_balance + outstanding_deposits − outstanding_payments
+      //   difference    = adjusted_bank − book_balance
+      // Block completion unless |difference| < 0.01. Kolom `adjustedBookBalance`
+      // SUDAH ADA dan dipakai laporan — nama dipertahankan (warisan = adjusted
+      // bank balance), diisi nilai sisi-bank yang benar.
       const outstandingDeposits = reconciliation.items
         .filter((i) => !i.cleared && i.type === "outstanding_deposit")
         .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
@@ -1213,13 +1311,13 @@ export async function completeReconciliation(reconciliationId: number) {
         .filter((i) => !i.cleared && i.type === "outstanding_check")
         .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
       const adjustedBookBalance = safeSubtract(
-        safeAdd(Number(reconciliation.bookBalance), outstandingDeposits, 2),
+        safeAdd(Number(reconciliation.statementBalance), outstandingDeposits, 2),
         outstandingPayments,
         2,
       );
       const difference = safeSubtract(
-        Number(reconciliation.statementBalance),
         adjustedBookBalance,
+        Number(reconciliation.bookBalance),
         2,
       );
       if (Math.abs(difference) >= 0.01) {

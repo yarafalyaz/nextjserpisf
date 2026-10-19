@@ -2998,6 +2998,10 @@ model BankReconciliationItem {
   @@index([bankReconciliationId], map: "bank_reconciliation_items_bank_reconciliation_id_fkey")
   @@index([bankStatementLineId])
   @@index([journalEntryId])
+  // R-03: satu entri jurnal hanya boleh dipakai sekali per rekonsiliasi.
+  // MySQL memperlakukan NULL berbeda (banyak NULL di journal_entry_id
+  // tetap boleh — item penyesuaian tidak terpengaruh).
+  @@unique([bankReconciliationId, journalEntryId], map: "uq_recon_items_recon_journal")
   @@map("bank_reconciliation_items")
 }
 
