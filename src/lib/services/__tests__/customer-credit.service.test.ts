@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   docNo: vi.fn(),
   settingFindFirst: vi.fn(),
   idemCreate: vi.fn(),
+  idemFindUnique: vi.fn(),
   idemUpdate: vi.fn(),
 }))
 
@@ -50,6 +51,7 @@ vi.mock("@/lib/db/prisma", () => ({
     },
     financialIdempotencyKey: {
       create: (...a: unknown[]) => mocks.idemCreate(...a),
+      findUnique: (...a: unknown[]) => mocks.idemFindUnique(...a),
       update: (...a: unknown[]) => mocks.idemUpdate(...a),
     },
   },
@@ -102,6 +104,7 @@ function buildTx() {
     systemSetting: { findFirst: mocks.settingFindFirst },
     financialIdempotencyKey: {
       create: (...a: unknown[]) => mocks.idemCreate(...a),
+      findUnique: (...a: unknown[]) => mocks.idemFindUnique(...a),
       update: (...a: unknown[]) => mocks.idemUpdate(...a),
     },
   }
@@ -117,6 +120,7 @@ describe("customer-credit.service", () => {
     mocks.settingFindFirst.mockResolvedValue({ periodLockDate: null })
     mocks.paymentFindMany.mockResolvedValue([{ amount: 8000 }, { amount: 2000 }])
     mocks.idemCreate.mockResolvedValue({ id: 1 })
+    mocks.idemFindUnique.mockResolvedValue(null)
     mocks.idemUpdate.mockResolvedValue({})
     mocks.invoiceUpdate.mockResolvedValue({})
     mocks.creditUpdate.mockResolvedValue({})
@@ -217,7 +221,7 @@ describe("customer-credit.service", () => {
       id: 1, documentNo: "CC-1", customerId: 9,
       receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
     })
-    const r = await refundCredit(1, 2000, 7)
+    const r = await refundCredit(1, 2000, 7, "key-t1")
     expect(r.success).toBe(true)
     expect(mocks.journalCreate).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -244,7 +248,7 @@ describe("customer-credit.service", () => {
       id: 1, documentNo: "CC-1", customerId: 9,
       receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
     })
-    const r = await refundCredit(1, 2500, 7)
+    const r = await refundCredit(1, 2500, 7, "key-t2")
     expect(r.success).toBe(false)
     expect(r.error).toContain("tidak cukup")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
@@ -286,7 +290,7 @@ describe("customer-credit.service", () => {
     })
     // Lock = "ditutup SAMPAI tanggal ini": lock hari ini → refund hari ini ditolak.
     mocks.settingFindFirst.mockResolvedValue({ periodLockDate: new Date() })
-    const r = await refundCredit(1, 1000, 7)
+    const r = await refundCredit(1, 1000, 7, "key-t4")
     expect(r.success).toBe(false)
     expect(mocks.journalCreate).not.toHaveBeenCalled()
     expect(mocks.creditUpdate).not.toHaveBeenCalled()
@@ -338,6 +342,56 @@ describe("customer-credit.service", () => {
     expect(r2.success).toBe(true)
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
     expect(mocks.creditUpdate).toHaveBeenCalledTimes(1)
+  })
+
+  it("key dipakai scope LAIN: DITOLAK bukan sukses palsu (AUD-R6-02)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 5000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    })
+    const dupErr = Object.assign(
+      new Error("Unique constraint failed on the fields: (`key`)"),
+      { code: "P2002", meta: { target: "key" } },
+    )
+    mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    // Key milik alokasi dipakai untuk refund → konflik.
+    mocks.idemFindUnique.mockResolvedValueOnce({
+      scope: "customer_credit_allocate", resultRefType: "SalesPayment",
+      resultRefId: 999, createdBy: 7,
+    })
+    const r = await refundCredit(1, 1000, 7, "key-milik-alokasi")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("operasi lain")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
+  })
+
+  it("key tanpa hasil final: DITOLAK bukan sukses palsu (AUD-R6-02)", async () => {
+    mocks.creditFindUnique.mockResolvedValue({
+      id: 1, documentNo: "CC-1", customerId: 9,
+      receivedAmount: 5000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    })
+    const dupErr = Object.assign(
+      new Error("Unique constraint failed on the fields: (`key`)"),
+      { code: "P2002", meta: { target: "key" } },
+    )
+    mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    mocks.idemFindUnique.mockResolvedValueOnce({
+      scope: "customer_credit_refund", resultRefType: null,
+      resultRefId: null, createdBy: 7,
+    })
+    const r = await refundCredit(1, 1000, 7, "key-gantung")
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("belum selesai")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("refund TANPA key: DITOLAK mentah (AUD-R6-05)", async () => {
+    const r = await refundCredit(1, 1000, 7)
+    expect(r.success).toBe(false)
+    expect(r.error).toContain("wajib idempotency key")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.creditUpdate).not.toHaveBeenCalled()
   })
 
   it("creditBalance = received - allocated - refunded", async () => {

@@ -36,6 +36,7 @@ export async function allocateCreditToInvoice(
     await prisma.$transaction(async (tx) => {
       // AUD-R5-02: key per-intent, bukan atribut bisnis. Claim DULU (UNIQUE) —
       // retry submit sama langsung replay; submit beda jalan normal.
+      // AUD-R6: claim validasi scope+hasil (lihat financial-idempotency.service).
       if (idempotencyKey) {
         const claim = await claimIdempotencyKey(tx as never, "customer_credit_allocate", idempotencyKey, userId);
         if (claim.replayed) return;
@@ -116,8 +117,9 @@ export async function refundCredit(
   creditId: number,
   amount: number,
   userId?: number,
-  /** AUD-R5-01: refund WAJIB key bila dipanggil dari UI (kas keluar ganda =
-   * kerugian nyata). Tanpa key = ditolak kecuali pemanggil lama internal. */
+  /** AUD-R6-05: refund WAJIB key — SEMUA jalur (UI maupun internal).
+   * Tanpa key = ditolak mentah. Kas keluar ganda = kerugian nyata; tak ada
+   * pengecualian "pemanggil lama". */
   idempotencyKey?: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
@@ -126,13 +128,14 @@ export async function refundCredit(
     if (!settings.cashBankAccountId || !(settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId) {
       return { success: false, error: "Akun kas/bank dan kewajiban UMP (210102) belum dikonfigurasi" };
     }
+    // AUD-R6-05: gate key SEBELUM transaksi — tanpa key langsung tolak.
+    if (!idempotencyKey) {
+      return { success: false, error: "Refund wajib idempotency key (submit via panel kredit)" };
+    }
     await prisma.$transaction(async (tx) => {
-      // AUD-R5-01: refund idempoten — retry key sama = replay, tanpa jurnal
-      // kedua. Lock saja hanya menyerikan, tak menahan kas ganda.
-      if (idempotencyKey) {
-        const claim = await claimIdempotencyKey(tx as never, "customer_credit_refund", idempotencyKey, userId);
-        if (claim.replayed) return;
-      }
+      // AUD-R6: claim validasi scope+hasil. Replay = return (hasil awal sah).
+      const claim = await claimIdempotencyKey(tx as never, "customer_credit_refund", idempotencyKey, userId);
+      if (claim.replayed) return;
       await tx.$queryRaw`SELECT id FROM customer_credits WHERE id = ${creditId} FOR UPDATE`;
       const credit = await tx.customerCredit.findUniqueOrThrow({ where: { id: creditId } });
       const balance = Number(credit.receivedAmount) - Number(credit.allocatedAmount) - Number(credit.refundedAmount);

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -31,12 +31,24 @@ interface CustomerCreditPanelProps {
  * bukan allowlist). Alokasi/refund butuh faktur tujuan + nominal; service
  * menolak over-saldo/sisa/beda-pelanggan/bedaperiode di dalam transaksi.
  */
+// AUD-R6-01: generator key di luar render (lint purity) — crypto murni,
+// tanpa Date.now/Math.random.
+function newOperationKey(): string {
+  return crypto.randomUUID()
+}
+
 export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [invoiceId, setInvoiceId] = useState<string>(invoices[0] ? String(invoices[0].id) : "")
   const [amount, setAmount] = useState<string>("")
   const [mode, setMode] = useState<"allocate" | "refund">("allocate")
+  // AUD-R6-01: key stabil per intent. Dibuat sekali saat submit pertama,
+  // dipakai ULANG untuk retry intent yang sama (timeout/respons hilang/
+  // error jaringan). Key BARU hanya bila: hasil definitif (sukses atau gagal
+  // validasi jelas) ATAU intent berubah (mode/invoice/nominal/kredit beda).
+  const keyRef = useRef<string | null>(null)
+  const intentRef = useRef<string>("")
 
   function run(creditId: number) {
     const nominal = Number(amount)
@@ -44,11 +56,12 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
       showError("Nominal harus lebih dari 0")
       return
     }
-    // AUD-R5: satu submit = satu key. Retry (klik ganda/timeout) pakai key
-    // yang SAMA bila tombol ditekan ulang sebelum refresh? Tidak — key dibuat
-    // per klik; double-click ditahan isPending. Key menahan retry jaringan /
-    // resubmit halaman yang sama (browser ulang kirim argumen sama).
-    const key = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`
+    const intent = `${mode}:${creditId}:${mode === "allocate" ? invoiceId : "-"}:${nominal}`
+    if (keyRef.current === null || intentRef.current !== intent) {
+      keyRef.current = newOperationKey()
+      intentRef.current = intent
+    }
+    const key = keyRef.current
     startTransition(async () => {
       try {
         const result =
@@ -56,9 +69,14 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
             ? await allocateCustomerCredit(creditId, Number(invoiceId), nominal, key)
             : await refundCustomerCredit(creditId, nominal, key)
         if (result && !result.success) {
+          // Gagal definitif (validasi/saldo/periode): intent selesai, key
+          // dibuang agar submit koreksi berikutnya = intent baru.
+          keyRef.current = null
           showError(result.error || "Gagal memproses kredit")
           return
         }
+        // Sukses (termasuk replay retry): intent selesai, key dibuang.
+        keyRef.current = null
         if (result && "warning" in result && typeof result.warning === "string") {
           showError(result.warning)
         } else {
@@ -67,6 +85,8 @@ export function CustomerCreditPanel({ credits, invoices }: CustomerCreditPanelPr
         setAmount("")
         router.refresh()
       } catch (e) {
+        // Error jaringan/timeout: key DIPERTAHANKAN — klik ulang = retry aman
+        // dengan key sama, bukan operasi baru.
         showError(e instanceof Error ? e.message : "Gagal memproses kredit")
       }
     })
