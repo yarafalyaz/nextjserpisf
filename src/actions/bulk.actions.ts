@@ -277,6 +277,25 @@ const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
   // the ProductVehicleModel junction. (Variants have no bulk path of their own.)
   "vehicleBrand",
   "vehicleModel",
+  // Master/config rows whose single-delete actions refuse while still
+  // referenced (SET NULL / bare-Int / cascade side effects). Raw bulk delete
+  // would silently detach the referencing rows instead of refusing.
+  "assetBrand",
+  "assetCategory",
+  "assetTransfer",
+  "bank",
+  "brand",
+  "costCenter",
+  "department",
+  "employee",
+  "expenseCategory",
+  "itemCategory",
+  "paymentTerm",
+  "position",
+  "tax",
+  // Approval rows are workflow state, not master data: bulk-deleting a
+  // pending approval would erase an in-flight decision with no per-row guard.
+  "approval",
 ])
 
 export async function bulkDelete(model: ModelName, ids: number[]) {
