@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest"
 import {
   buildJobOrderJournal,
   isJobJournalReference,
+  jobJournalBaseReference,
   jobJournalLabel,
   type JobOrderJournalInput,
 } from "@/lib/reports/job-order-journal"
@@ -37,6 +38,27 @@ describe("referenceType jurnal pekerjaan", () => {
     }
     expect(isJobJournalReference("SALES_INVOICE")).toBe(false)
     expect(jobJournalLabel("SALES_INVOICE")).toBeNull()
+  })
+
+  it("jurnal per-rilis parsial (suffix stockMoveId) dinormalisasi ke jenis dasar", () => {
+    expect(jobJournalBaseReference("ProductionOrder_456")).toBe("ProductionOrder")
+    expect(jobJournalBaseReference("ProductionOrderCostVariance_456")).toBe(
+      "ProductionOrderCostVariance",
+    )
+    expect(jobJournalBaseReference("ProductionOrder")).toBe("ProductionOrder")
+    expect(isJobJournalReference("ProductionOrder_456")).toBe(true)
+    expect(jobJournalLabel("ProductionOrder_456")).toBe("Penyelesaian Produksi")
+    expect(jobJournalLabel("ProductionOrderCostVariance_456")).toBe("Selisih Biaya Produksi")
+
+    const result = buildJobOrderJournal({
+      journals: [
+        journal({ id: 2, journalNumber: "JU-0002", referenceType: "ProductionOrder_456", jobLabel: "WO-0001" }),
+        journal({ id: 3, journalNumber: "JU-0003", referenceType: "ProductionOrder_457", jobLabel: "WO-0001" }),
+      ],
+    })
+    expect(result.byReference).toEqual([
+      { referenceType: "ProductionOrder", label: "Penyelesaian Produksi", count: 2, amount: 6_000_000 },
+    ])
   })
 })
 
