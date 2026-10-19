@@ -5,6 +5,8 @@ import {
   employeeLoanSchema,
   timesheetSchema,
   payrollSchema,
+  holidaySchema,
+  statutoryRuleSchema,
 } from "@/lib/validations/hrm.schemas";
 
 describe("validations/hrm.schemas", () => {
@@ -69,10 +71,15 @@ describe("validations/hrm.schemas", () => {
 });
 
 describe("hrm dateOnly kalender", () => {
-  it("rejects fictional dates in leave/overtime/loan/payroll", () => {
+  it("rejects fictional dates in leave/overtime/loan/payroll/holiday/statutory", () => {
     expect(leaveRequestSchema.safeParse({ employeeId: 1, type: "Cuti", startDate: "2026-02-30", endDate: "2026-03-01" }).success).toBe(false);
     expect(overtimeRequestSchema.safeParse({ employeeId: 1, date: "2026-02-30", hours: 2 }).success).toBe(false);
     expect(employeeLoanSchema.safeParse({ employeeId: 1, loanDate: "2026-02-30", totalAmount: 1000, monthlyInstallment: 100 }).success).toBe(false);
     expect(payrollSchema.safeParse({ period: "Feb", startDate: "2026-02-30", endDate: "2026-02-28" }).success).toBe(false);
+    expect(timesheetSchema.safeParse({ employeeId: 1, projectId: 2, date: "2026-13-01", hours: 8 }).success).toBe(false);
+    expect(holidaySchema.safeParse({ name: "Libur", date: "bukan-tanggal" }).success).toBe(false);
+    expect(statutoryRuleSchema.safeParse({ key: "ptkp_tk0", value: 1, effectiveFrom: "2026-02-30" }).success).toBe(false);
+    expect(statutoryRuleSchema.safeParse({ key: "ptkp_tk0", value: 1, effectiveFrom: "2026-01-01", effectiveTo: "2026-02-30" }).success).toBe(false);
+    expect(leaveRequestSchema.safeParse({ employeeId: 1, type: "Cuti", startDate: "2026-02-28", endDate: "2026-03-01" }).success).toBe(true);
   });
 });

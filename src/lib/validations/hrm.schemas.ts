@@ -26,7 +26,13 @@ const requiredNum = (_field: string, min = 0) =>
 // action konversi via wibDateToUtcMidnight. Label field dipertahankan via wrapper pesan wajib.
 const requiredDate = (_field: string) => dateOnly
 
-const optionalDate = dateOnly.optional()
+const optionalDate = z
+  .string()
+  .optional()
+  .refine(
+    (v) => v === undefined || v === "" || dateOnly.safeParse(v).success,
+    "Tanggal tidak valid",
+  )
 
 const optionalBool = z.boolean().optional()
 
