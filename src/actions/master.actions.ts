@@ -1660,7 +1660,8 @@ export async function createTaxGroup(formData: FormData) {
     await requirePermission("create_taxes");
 
     const name = requireString(formData.get("name"), "name");
-    const taxIds = formData.getAll("taxIds").map((id) => Number(id));
+    const taxIds = formData.getAll("taxIds").map((id) => safeId(id)).filter((id): id is number => id !== null);
+    if (taxIds.length !== formData.getAll("taxIds").length || taxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
 
     const taxGroup = await prisma.taxGroup.create({
       data: {
@@ -1691,7 +1692,8 @@ export async function updateTaxGroup(id: number, formData: FormData) {
   try {
     await requirePermission("edit_taxes");
     const name = requireString(formData.get("name"), "name");
-    const taxIds = formData.getAll("taxIds").map((t) => Number(t));
+    const taxIds = formData.getAll("taxIds").map((t) => safeId(t)).filter((id): id is number => id !== null);
+    if (taxIds.length !== formData.getAll("taxIds").length || taxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
     await prisma.$transaction([
       prisma.taxGroupTax.deleteMany({ where: { taxGroupId: id } }),
       prisma.taxGroup.update({
