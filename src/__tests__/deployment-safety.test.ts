@@ -31,7 +31,10 @@ describe("deployment tidak mendorong skema saat boot", () => {
     // Migrasi DROP kolom (20261019000900/1000) hanya aman bila kolom target
     // kosong di DB ITU. Audit baca-only jalan SEBELUM migrate deploy; tanpa
     // ini, rilis bisa menghapus data produksi yang tak terlihat di kode.
-    expect(compose).toContain("pre-migrate-column-audit.sh")
+    // Auditnya Node murni (.mjs) — image runner tak punya bash/python3/klien
+    // mariadb, jadi skrip shell (.sh) gagal di rilis walau lolos di laptop.
+    expect(compose).toContain("pre-migrate-column-audit.mjs")
+    expect(compose).not.toContain("pre-migrate-column-audit.sh")
   })
 
   it("compose prod memaku image berversi, bukan latest mengambang", () => {

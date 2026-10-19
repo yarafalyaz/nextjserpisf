@@ -17,7 +17,7 @@ password terpisah per layanan).
 ## Urutan rilis
 
 1. Backup DB + uploads; verifikasi restore di environment disposable.
-2. `bash scripts/pre-migrate-column-audit.sh` — GAGAL = STOP, jangan lanjut.
+2. `node scripts/pre-migrate-column-audit.mjs` — GAGAL = STOP, jangan lanjut.
 3. `docker compose -f docker-compose.prod.yml up migrate` — gagal = rilis gagal.
 4. Verifikasi skema + smoke app.
 5. `docker compose -f docker-compose.prod.yml up -d app`.
