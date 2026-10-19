@@ -38,6 +38,12 @@ function pageSources(): { href: string; source: string }[] {
     )
     componentSources["/laporan/buku-pembantu-utang"] =
       componentSources["/laporan/buku-pembantu-piutang"]
+    // Halaman tipis mendelegasikan tombol PDF ke komponen laporan bersama.
+    const sharedDir = path.resolve(__dirname, "../../../components/reports")
+    componentSources["/laporan/hutang-jatuh-tempo"] = readFileSync(path.join(sharedDir, "aging-report-view.tsx"), "utf8")
+    componentSources["/laporan/piutang-jatuh-tempo"] = componentSources["/laporan/hutang-jatuh-tempo"]
+    componentSources["/laporan/laba-rugi-terealisasi"] = readFileSync(path.join(sharedDir, "income-statement-page.tsx"), "utf8")
+    componentSources["/laporan/laba-rugi-tidak-terealisasi"] = componentSources["/laporan/laba-rugi-terealisasi"]
   } catch {
     // Halaman membaca langsung; abaikan bila komponen tidak ada.
   }

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { BomRevisionForm } from "../../_components/bom-revision-form"
+import { loadBomRevisionFormData } from "../../_components/bom-revision-form-data"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 
 import type { Metadata } from "next"
@@ -37,20 +38,7 @@ export default async function EditBomRevisionPage({
   if (!revision) notFound()
   if (revision.status !== "draft") notFound()
 
-  const [products, items] = await Promise.all([
-    prisma.product.findMany({
-      where: {},
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-      take: 500,
-    }),
-    prisma.item.findMany({
-      where: { isActive: true, deletedAt: null },
-      select: { id: true, sku: true, name: true, unitOfMeasure: true },
-      orderBy: { name: "asc" },
-      take: 2000,
-    }),
-  ])
+  const { products, items } = await loadBomRevisionFormData()
 
   return (
     <div className="flex flex-col gap-6">

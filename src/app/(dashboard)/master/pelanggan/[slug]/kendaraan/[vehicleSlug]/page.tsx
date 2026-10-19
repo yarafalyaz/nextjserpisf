@@ -2,14 +2,13 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { Pencil } from "lucide-react"
-import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref } from "@/lib/utils/entity-url"
+import { loadCustomerVehicleContext } from "../_components/load-customer-vehicle"
 
 import type { Metadata } from "next"
 
@@ -23,45 +22,7 @@ export default async function CustomerVehicleDetailPage({
   await requirePermission("view_customers")
   const { slug, vehicleSlug } = await params
 
-  const customer = await resolveEntity(
-    { segment: slug, fallbackWhere: { deletedAt: null } },
-    {
-      bySlug: (s, where) => prisma.customer.findFirst({ where: { slug: s, ...where } }),
-      byId: (id, where) => prisma.customer.findUnique({ where: { id, ...where } }),
-    },
-  )
-
-  if (!customer) notFound()
-
-  const customerId = customer.id
-  const customerKey = customer.slug ?? customer.id
-
-  const cvInclude = {
-    vehicle: {
-      include: {
-        variant: {
-          include: {
-            model: {
-              include: { brand: true },
-            },
-          },
-        },
-      },
-    },
-  } as const
-
-  // Slug lebih dulu; id numerik tetap diterima untuk tautan lama. Cakupannya
-  // dibatasi ke pelanggan di slug induk, supaya satu unit tidak bisa dibuka
-  // lewat pelanggan lain.
-  const cv = await resolveEntity(
-    { segment: vehicleSlug, fallbackWhere: { customerId: customer.id } },
-    {
-      bySlug: (s, where) => prisma.customerVehicle.findFirst({ where: { slug: s, ...where }, include: cvInclude }),
-      byId: (id, where) => prisma.customerVehicle.findFirst({ where: { id, ...where }, include: cvInclude }),
-    },
-  )
-
-  if (!cv || cv.customerId !== customerId) notFound()
+  const { customer, customerKey, cv } = await loadCustomerVehicleContext(slug, vehicleSlug)
 
   const [workOrders, quotations] = await Promise.all([
     prisma.workOrder.findMany({

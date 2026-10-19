@@ -60,7 +60,19 @@ async function resolvePrefix(key: string): Promise<string> {
   const field = PREFIX_FIELD_MAP[key]
   // Normalize: strip any trailing separator/space so the caller can always append
   // its own "-" without producing a double dash (e.g. default "CUST-" -> "CUST").
-  const normalize = (p: string) => p.trim().replace(/[-\s]+$/, '')
+  // Manual trailing trim avoids S8786: trim() already removes trailing
+  // whitespace, so this effectively strips trailing "-" and any whitespace
+  // mixed with it, matching the old /[-\s]+$/ behaviour.
+  const normalize = (p: string) => {
+    const trimmed = p.trim()
+    let end = trimmed.length
+    while (end > 0) {
+      const char = trimmed.charAt(end - 1)
+      if (char === "-" || char.trim() === "") end -= 1
+      else break
+    }
+    return trimmed.slice(0, end)
+  }
   if (!field) return normalize(key)
   const settings = await getSystemSettings()
   const value = (settings as Record<string, unknown>)[field]

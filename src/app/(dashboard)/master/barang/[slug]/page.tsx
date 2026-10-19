@@ -24,6 +24,40 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Barang" }
 
+function isDescriptionWhitespace(char: string): boolean {
+  return char !== "" && char.trim() === ""
+}
+
+/**
+ * Manual replacement for the old lazy dari/from and untuk/to/for regexes.
+ * Finds the leftmost keyword followed by whitespace, then takes the text
+ * after it up to the first "-" / "–" separator (or end of string), trimmed.
+ * Returns null when no keyword pattern is present.
+ */
+function extractPartyFromDescription(description: string, keywords: readonly string[]): string | null {
+  const lower = description.toLowerCase()
+  for (let index = 0; index < description.length; index += 1) {
+    const keyword = keywords.find((candidate) => lower.startsWith(candidate, index))
+    if (!keyword) continue
+    let start = index + keyword.length
+    if (start >= description.length || !isDescriptionWhitespace(description.charAt(start))) continue
+    while (start < description.length && isDescriptionWhitespace(description.charAt(start))) start += 1
+    if (start >= description.length) continue
+    let end = description.length
+    // The old capture required at least one character before the separator.
+    for (let cursor = start + 1; cursor < description.length; cursor += 1) {
+      const char = description.charAt(cursor)
+      if (char === "-" || char === "–") {
+        end = cursor
+        break
+      }
+    }
+    const party = description.slice(start, Math.min(end, start + 500)).trim()
+    if (party) return party
+  }
+  return null
+}
+
 export default async function ItemDetailPage({
   params,
 }: {
@@ -206,10 +240,10 @@ export default async function ItemDetailPage({
     // Fallback: extract party info from description if not resolved
     if (party === "-" && sm.description) {
       // Try to extract "dari X" or "untuk X" or "dari X - reason"
-      const dariMatch = sm.description.match(/(?:dari|from)\s+(.{1,500}?)(?:\s*[-–]|$)/i)
-      const untukMatch = sm.description.match(/(?:untuk|to|for)\s+(.{1,500}?)(?:\s*[-–]|$)/i)
-      if (dariMatch) { party = dariMatch[1].trim(); partyLabel = "Pemasok" }
-      else if (untukMatch) { party = untukMatch[1].trim(); partyLabel = "Pelanggan" }
+      const dariParty = extractPartyFromDescription(sm.description, ["dari", "from"])
+      const untukParty = dariParty === null ? extractPartyFromDescription(sm.description, ["untuk", "to", "for"]) : null
+      if (dariParty !== null) { party = dariParty; partyLabel = "Pemasok" }
+      else if (untukParty !== null) { party = untukParty; partyLabel = "Pelanggan" }
       else { party = sm.description }
     }
 

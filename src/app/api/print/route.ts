@@ -44,6 +44,22 @@ async function loadItemInfo(ids: number[]): Promise<Map<number, { name: string; 
   return info
 }
 
+/** Nama barang (id -> nama) untuk baris dokumen yang hanya menyimpan itemId. */
+async function loadItemNames(ids: (number | null)[]): Promise<Map<number, string>> {
+  const names = new Map<number, string>()
+  const itemIds = ids.filter((id): id is number => id !== null && id > 0)
+  if (itemIds.length > 0) {
+    const dbItems = await prisma.item.findMany({
+      where: { id: { in: itemIds } },
+      select: { id: true, name: true },
+    })
+    for (const di of dbItems) {
+      names.set(di.id, di.name)
+    }
+  }
+  return names
+}
+
 export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user) {
@@ -106,17 +122,7 @@ export async function GET(request: Request) {
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
-      const itemIds = doc.items.map((it) => it.itemId).filter((id): id is number => id !== null && id > 0)
-      const itemsMap = new Map<number, string>()
-      if (itemIds.length > 0) {
-        const dbItems = await prisma.item.findMany({
-          where: { id: { in: itemIds } },
-          select: { id: true, name: true },
-        })
-        for (const di of dbItems) {
-          itemsMap.set(di.id, di.name)
-        }
-      }
+      const itemsMap = await loadItemNames(doc.items.map((it) => it.itemId))
 
       return NextResponse.json({
         company: companyInfo,
@@ -183,17 +189,7 @@ export async function GET(request: Request) {
       const paymentMethodText = pmRow?.name ?? paymentMethodLabel(doc.paymentMethod)
       const shippingMethodText = smRow?.name ?? shippingMethodLabel(doc.shippingMethod)
 
-      const itemIds = allItems.map((it) => it.itemId).filter((id): id is number => id !== null && id > 0)
-      const itemsMap = new Map<number, string>()
-      if (itemIds.length > 0) {
-        const dbItems = await prisma.item.findMany({
-          where: { id: { in: itemIds } },
-          select: { id: true, name: true },
-        })
-        for (const di of dbItems) {
-          itemsMap.set(di.id, di.name)
-        }
-      }
+      const itemsMap = await loadItemNames(allItems.map((it) => it.itemId))
 
       return NextResponse.json({
         company: companyInfo,
@@ -252,17 +248,7 @@ export async function GET(request: Request) {
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
-      const itemIds = doc.items.map((it) => it.itemId).filter((id): id is number => id !== null && id > 0)
-      const itemsMap = new Map<number, string>()
-      if (itemIds.length > 0) {
-        const dbItems = await prisma.item.findMany({
-          where: { id: { in: itemIds } },
-          select: { id: true, name: true },
-        })
-        for (const di of dbItems) {
-          itemsMap.set(di.id, di.name)
-        }
-      }
+      const itemsMap = await loadItemNames(doc.items.map((it) => it.itemId))
 
       return NextResponse.json({
         company: companyInfo,
