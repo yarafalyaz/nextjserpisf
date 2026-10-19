@@ -138,6 +138,11 @@ async function generateDocument(
   }
 
   if (schedule.type === "expense") {
+    // Gated seperti jalur journal & createExpense biasa: draft tanggal tertutup
+    // takkan bisa diproses onExpenseApproved (assertPeriodOpen lagi di hook),
+    // jadi gagal keras di sini dan jadwal tetap due untuk retry.
+    await assertPeriodOpen(date)
+
     const documentNo = await generateDocumentNumber("EXP")
     await prisma.expense.create({
       data: {
