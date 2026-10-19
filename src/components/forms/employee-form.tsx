@@ -69,6 +69,64 @@ interface EmployeeFormProps {
   roles?: { id: number; name: string }[]
 }
 
+function RoleButtonGroup({
+  roleOptions,
+  loginRoleIds,
+  toggleLoginRole,
+}: {
+  roleOptions: { id: string; label: string }[]
+  loginRoleIds: string[]
+  toggleLoginRole: (id: string) => void
+}) {
+  return (
+    <div className="flex flex-wrap gap-3">
+      {roleOptions.map((role) => {
+        const selected = loginRoleIds.includes(role.id)
+        return (
+          <button
+            key={role.id}
+            type="button"
+            onClick={() => toggleLoginRole(role.id)}
+            className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
+              selected
+                ? "bg-primary text-primary-foreground border-primary"
+                : "bg-surface border-default hover:border-primary/50 text-foreground"
+            }`}
+          >
+            {role.label}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function RolePicker({
+  roleOptions,
+  loginRoleIds,
+  toggleLoginRole,
+  hint,
+}: {
+  roleOptions: { id: string; label: string }[]
+  loginRoleIds: string[]
+  toggleLoginRole: (id: string) => void
+  hint: string
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label>Peran</Label>
+      <div className="p-3 border border-default rounded-lg bg-background min-h-[64px]">
+        {roleOptions.length === 0 ? (
+          <span className="text-sm text-muted-foreground">Belum ada peran. Buat di Pengaturan &gt; Peran.</span>
+        ) : (
+          <RoleButtonGroup roleOptions={roleOptions} loginRoleIds={loginRoleIds} toggleLoginRole={toggleLoginRole} />
+        )}
+      </div>
+      <span className="text-xs text-muted-foreground">{hint}</span>
+    </div>
+  )
+}
+
 export function EmployeeForm({ employee, departments, positions, generatedCode, enableAutoCode = true, roles = [] }: EmployeeFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -364,35 +422,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
                 ✓ Karyawan ini memiliki akun pengguna
               </span>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <Label>Peran</Label>
-              <div className="p-3 border border-default rounded-lg bg-background min-h-[64px]">
-                {roleOptions.length === 0 ? (
-                  <span className="text-sm text-muted-foreground">Belum ada peran. Buat di Pengaturan &gt; Peran.</span>
-                ) : (
-                  <div className="flex flex-wrap gap-3">
-                    {roleOptions.map((role) => {
-                      const selected = loginRoleIds.includes(role.id)
-                      return (
-                        <button
-                          key={role.id}
-                          type="button"
-                          onClick={() => toggleLoginRole(role.id)}
-                          className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
-                            selected
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "bg-surface border-default hover:border-primary/50 text-foreground"
-                          }`}
-                        >
-                          {role.label}
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-              <span className="text-xs text-muted-foreground">Pilih satu atau lebih peran untuk menentukan hak akses akun karyawan.</span>
-            </div>
+            <RolePicker roleOptions={roleOptions} loginRoleIds={loginRoleIds} toggleLoginRole={toggleLoginRole} hint="Pilih satu atau lebih peran untuk menentukan hak akses akun karyawan." />
           </FormSection>
         )}
 
@@ -418,35 +448,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
                   <Input id="loginPassword" name="loginPassword" type="password" placeholder="Minimal 8 karakter" minLength={8} autoComplete="new-password" />
                   <span className="text-xs text-muted-foreground">Minimal 8 karakter. Pastikan email pada bagian atas sudah terisi.</span>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <Label>Peran</Label>
-                  <div className="p-3 border border-default rounded-lg bg-background min-h-[64px]">
-                    {roleOptions.length === 0 ? (
-                      <span className="text-sm text-muted-foreground">Belum ada peran. Buat di Pengaturan &gt; Peran.</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-3">
-                        {roleOptions.map((role) => {
-                          const selected = loginRoleIds.includes(role.id)
-                          return (
-                            <button
-                              key={role.id}
-                              type="button"
-                              onClick={() => toggleLoginRole(role.id)}
-                              className={`px-4 py-2 rounded-lg text-sm font-medium border transition-all cursor-pointer ${
-                                selected
-                                  ? "bg-primary text-primary-foreground border-primary"
-                                  : "bg-surface border-default hover:border-primary/50 text-foreground"
-                              }`}
-                            >
-                              {role.label}
-                            </button>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-xs text-muted-foreground">Pilih satu atau lebih peran untuk menentukan hak akses.</span>
-                </div>
+                <RolePicker roleOptions={roleOptions} loginRoleIds={loginRoleIds} toggleLoginRole={toggleLoginRole} hint="Pilih satu atau lebih peran untuk menentukan hak akses." />
               </div>
             )}
           </FormSection>

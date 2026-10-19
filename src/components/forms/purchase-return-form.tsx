@@ -3,14 +3,12 @@
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { createPurchaseReturn, updatePurchaseReturn } from "@/actions/purchase.actions"
-import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
-import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
-import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
+import { ReturnItemsSection, ReturnFormActions, ReturnDateAndReason } from "@/components/forms/return-items-section"
 
 interface PurchaseReturnFormProps {
   purchaseOrders: { id: number; documentNo: string
@@ -89,79 +87,20 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
           />
         </div>
 
-        <div className="flex flex-col gap-1.5">
-          <AppDatePicker
-            label="Tanggal"
-            name="date"
-            value={date}
-            onChange={(val) => setDate(val)}
-            required
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5 col-span-full">
-          <Label htmlFor="reason">Alasan Retur</Label>
-          <Textarea id="reason" name="reason" rows={3} placeholder="Alasan pengembalian barang ke pemasok..." defaultValue={returnData?.reason ?? ""} />
-        </div>
+        <ReturnDateAndReason date={date} setDate={setDate} reasonPlaceholder="Alasan pengembalian barang ke pemasok..." reasonDefault={returnData?.reason ?? ""} />
       </div>
 
-      {/* Items */}
-      <div style={{ marginTop: "24px" }}>
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>Item Retur</h3>
-          <Button type="button" onPress={addItem} variant="secondary" size="sm">+ Tambah Item</Button>
-        </div>
+      <ReturnItemsSection
+        items={items}
+        returnItems={returnItems}
+        addItem={addItem}
+        removeItem={removeItem}
+        updateItem={(index, field, value) => {
+          if (field === "itemId" || field === "qty") updateItem(index, field, value as number)
+        }}
+      />
 
-        <div className="overflow-x-auto">
-        <table className="w-full border-collapse" style={{ fontSize: "0.8125rem" }}>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th style={{ width: "100px" }}>Jml</th>
-              <th style={{ width: "40px" }}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {returnItems.map((ri, index) => (
-              <tr key={ri.uid}>
-                <td>
-                  <Combobox
-                    options={items.map((item) => ({ value: String(item.id), label: `${item.sku} - ${item.name}` }))}
-                    value={ri.itemId ? String(ri.itemId) : null}
-                    onChange={(key) => updateItem(index, "itemId", key ? Number(key) : 0)}
-                    placeholder="Cari item..."
-                    className="w-full"
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    min={1}
-                    aria-label={`Jumlah baris ${index + 1}`}
-                    value={ri.qty}
-                    onChange={(e) => updateItem(index, "qty", Math.max(1, Number.isFinite(Number(e.target.value)) ? Number(e.target.value) : 1))}
-                    className="form-input"
-                    style={{ fontSize: "0.8125rem", padding: "6px 8px" }}
-                  />
-                </td>
-                <td>
-                  {returnItems.length > 1 && (
-                    <Button type="button" onPress={() => removeItem(index)} aria-label={`Hapus baris ${index + 1}`} variant="danger-soft" size="sm">×</Button>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      </div>
-
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending}  id="submit-purchase-return">
-          {isPending ? "Menyimpan..." : returnData?.id ? "Perbarui" : "Simpan"}
-        </Button>
-      </div>
+      <ReturnFormActions isPending={isPending} isEdit={!!returnData?.id} submitId="submit-purchase-return" onCancel={() => router.back()} />
     </form>
   )
 }

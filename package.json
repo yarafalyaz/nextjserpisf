@@ -81,7 +81,7 @@
   },
   "overrides": {
     "@hono/node-server": "1.19.13",
-    "postcss": "8.5.15"
+    "postcss": "8.5.31"
   },
   "allowScripts": {
     "@prisma/engines@7.10.0": true,

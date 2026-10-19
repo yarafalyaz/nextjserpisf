@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { BomRevisionForm } from "../_components/bom-revision-form"
-import { prisma } from "@/lib/db/prisma"
+import { loadBomRevisionFormData } from "../_components/bom-revision-form-data"
 
 import type { Metadata } from "next"
 
@@ -12,20 +12,7 @@ export const metadata: Metadata = { title: "Buat Revisi BOM" }
 export default async function CreateBomRevisionPage() {
   await requirePermission("manage_bom_revisions")
 
-  const [products, items] = await Promise.all([
-    prisma.product.findMany({
-      where: {},
-      select: { id: true, name: true },
-      orderBy: { name: "asc" },
-      take: 500,
-    }),
-    prisma.item.findMany({
-      where: { isActive: true, deletedAt: null },
-      select: { id: true, sku: true, name: true, unitOfMeasure: true },
-      orderBy: { name: "asc" },
-      take: 2000,
-    }),
-  ])
+  const { products, items } = await loadBomRevisionFormData()
 
   return (
     <div className="flex flex-col gap-6">

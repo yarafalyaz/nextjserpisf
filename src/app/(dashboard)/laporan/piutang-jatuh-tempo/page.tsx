@@ -2,20 +2,10 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { requirePermission } from '@/lib/auth/permissions'
-import { formatCurrency, formatAccounting, formatDate } from '@/lib/utils/format'
-import { ExportButtons } from "@/components/reports/export-buttons"
-import { buildReportPdfHref } from "@/lib/reports/report-export"
-import { buildReportPeriodSlug } from "@/lib/reports/report-period"
-import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
-import { ReportLetterhead } from "@/components/reports/report-letterhead"
-import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
-import { ReportNarration } from "@/components/reports/report-narration"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
-import { AGING_BUCKETS, agingBucket, daysOverdue } from "@/lib/reports/aging"
+import { AgingReportView, buildAgingRows } from "@/components/reports/aging-report-view"
 
 import type { Metadata } from "next"
-import { ReportPageShell } from "@/components/reports/report-page-shell"
-import { AgingChart } from "@/components/lazy/aging-chart"
 
 export const metadata: Metadata = { title: "Piutang Jatuh Tempo" }
 
@@ -30,124 +20,38 @@ export default async function AgingReceivablesPage() {
     orderBy: { dueDate: 'asc' },
   })
 
-  const now = new Date()
-  const rows = invoices
-    .map(inv => {
-      if (!inv.dueDate) return null
-      const outstanding = Number(inv.grandTotal) - Number(inv.paidAmount)
-      if (outstanding <= 0) return null
-      const dueDate = new Date(inv.dueDate)
-      const overdue = daysOverdue(dueDate, now)
-      return {
-        customer: inv.customer.name,
-        invoiceNo: inv.documentNo,
-        dueDate,
-        overdueDays: overdue,
-        ageGroup: agingBucket(overdue),
-        outstanding,
-      }
-    })
-    .filter((r): r is NonNullable<typeof r> => r !== null)
-    .sort((a, b) => b.overdueDays - a.overdueDays)
-
-  const totalOutstanding = rows.reduce((s, r) => s + r.outstanding, 0)
-
-  const agingSummary = new Map<string, { count: number; total: number }>()
-  for (const row of rows) {
-    const existing = agingSummary.get(row.ageGroup) || { count: 0, total: 0 }
-    existing.count++
-    existing.total += row.outstanding
-    agingSummary.set(row.ageGroup, existing)
-  }
-  const agingGroups = AGING_BUCKETS.map(key => ({ key, count: agingSummary.get(key)?.count || 0, total: agingSummary.get(key)?.total || 0 }))
-
-  const period = `Per ${now.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
+  const rows = buildAgingRows(
+    invoices.map((inv) => ({
+      party: inv.customer.name,
+      documentNo: inv.documentNo,
+      dueDate: inv.dueDate,
+      grandTotal: inv.grandTotal,
+      paidAmount: inv.paidAmount,
+    })),
+    new Date(),
+  )
 
   return (
-    <ReportPageShell title="Piutang Jatuh Tempo" sheet={false} wide actions={<>
-<div className="flex items-center justify-end print:hidden">
-        <ExportButtons title="Piutang_Jatuh_Tempo" pdfHref={buildReportPdfHref("piutang-jatuh-tempo", buildReportPeriodSlug(new Date(), new Date()))} />
-      </div>
-</>}>
-
-
-
-
-      <ReportLetterhead title="Piutang Jatuh Tempo" subtitle="Umur Piutang" periodLabel={period} />
-      <ReportNarration text="Laporan Piutang Jatuh Tempo mengelompokkan piutang usaha berdasarkan umur jatuh temponya. Analisis aging piutang membantu mengidentifikasi risiko keterlambatan pembayaran dan mengevaluasi efektivitas penagihan kepada pelanggan." />
-
-      <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2 print:hidden">
-        <ReportKpiCard label="Total Piutang" value={formatCurrency(totalOutstanding)} />
-      </div>
-
-      <ReportSection title="Ringkasan Umur Piutang">
-        <DetailTable data-report-table="Ringkasan Umur Piutang">
-          <DetailTableHead>
-            <DetailTableTh>Kategori</DetailTableTh>
-            <DetailTableTh align="right">Jumlah</DetailTableTh>
-            <DetailTableTh align="right">Total (Rp)</DetailTableTh>
-          </DetailTableHead>
-          <DetailTableBody>
-            {agingGroups.map(g => (
-              <DetailTableRow key={g.key}>
-                <DetailTableTd>{g.key}</DetailTableTd>
-                <DetailTableTd align="right">{g.count}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(g.total)}</DetailTableTd>
-              </DetailTableRow>
-            ))}
-            <DetailTableRow className="font-bold border-t-2 border-default">
-              <DetailTableTd>TOTAL</DetailTableTd>
-              <DetailTableTd align="right">{rows.length}</DetailTableTd>
-              <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
-            </DetailTableRow>
-          </DetailTableBody>
-        </DetailTable>
-      </ReportSection>
-
-      <ReportSection title="Grafik Umur Piutang">
-        {/* Grafik memakai `agingGroups` yang sama dengan tabel di atas — satu sumber. */}
-        <AgingChart
-          data={agingGroups.map((group) => ({
-            label: group.key,
-            total: group.total,
-            count: group.count,
-          }))}
-          label="Nilai Piutang"
-          ariaLabel="Grafik umur piutang per kategori umur"
-        />
-      </ReportSection>
-
-      <ReportSection title="Detail Piutang">
-        <DetailTable data-report-table="Detail Piutang">
-          <DetailTableHead>
-            <DetailTableTh>Pelanggan</DetailTableTh>
-            <DetailTableTh>No. Faktur</DetailTableTh>
-            <DetailTableTh>Jatuh Tempo</DetailTableTh>
-            <DetailTableTh>Umur</DetailTableTh>
-            <DetailTableTh align="right">Sisa (Rp)</DetailTableTh>
-          </DetailTableHead>
-          <DetailTableBody>
-            {rows.map((r, i) => (
-              <DetailTableRow key={i}>
-                <DetailTableTd className="font-medium">{r.customer}</DetailTableTd>
-                <DetailTableTd className="font-mono text-sm">{r.invoiceNo}</DetailTableTd>
-                <DetailTableTd>{formatDate(r.dueDate)}</DetailTableTd>
-                <DetailTableTd>{r.ageGroup}</DetailTableTd>
-                <DetailTableTd align="right" className="font-semibold text-primary">{formatAccounting(r.outstanding)}</DetailTableTd>
-              </DetailTableRow>
-            ))}
-            {rows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={5} className="text-center text-muted-foreground py-6">Tidak ada piutang jatuh tempo</DetailTableTd></DetailTableRow>
-            )}
-            {rows.length > 0 && (
-              <DetailTableRow className="font-bold border-t-2 border-default">
-                <DetailTableTd colSpan={4}>TOTAL</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
-              </DetailTableRow>
-            )}
-          </DetailTableBody>
-        </DetailTable>
-      </ReportSection>
-    </ReportPageShell>
+    <AgingReportView
+      rows={rows}
+      texts={{
+        pageTitle: "Piutang Jatuh Tempo",
+        exportTitle: "Piutang_Jatuh_Tempo",
+        pdfSlug: "piutang-jatuh-tempo",
+        letterheadSubtitle: "Umur Piutang",
+        narration: "Laporan Piutang Jatuh Tempo mengelompokkan piutang usaha berdasarkan umur jatuh temponya. Analisis aging piutang membantu mengidentifikasi risiko keterlambatan pembayaran dan mengevaluasi efektivitas penagihan kepada pelanggan.",
+        kpiLabel: "Total Piutang",
+        summaryTitle: "Ringkasan Umur Piutang",
+        chartTitle: "Grafik Umur Piutang",
+        chartValueLabel: "Nilai Piutang",
+        chartAriaLabel: "Grafik umur piutang per kategori umur",
+        detailTitle: "Detail Piutang",
+        partyHeader: "Pelanggan",
+        documentHeader: "No. Faktur",
+        emptyText: "Tidak ada piutang jatuh tempo",
+        outstandingClassName: "font-semibold text-primary",
+        wrapActionsInDiv: true,
+      }}
+    />
   )
 }

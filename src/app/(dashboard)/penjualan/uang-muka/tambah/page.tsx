@@ -5,6 +5,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/shadcn/alert";
 import { DownPaymentForm } from "@/components/forms/down-payment-form";
 import { getActivePaymentMethods } from "@/lib/services/method.service";
+import { loadDownPaymentFormOptions } from "../_components/down-payment-options";
 
 import type { Metadata } from "next";
 
@@ -34,75 +35,10 @@ export default async function CreateDownPaymentPage({
     if (so?.quotationId) quotationId = so.quotationId;
   }
 
-  const [customersList, quotationsList, paymentMethods] = await Promise.all([
-    prisma.customer.findMany({
-      where: { isActive: true, deletedAt: null },
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        customerCategory: {
-          select: {
-            downPaymentPercent: true,
-          },
-        },
-      },
-    }),
-    prisma.quotation.findMany({
-      where: { status: { in: ["accepted", "approved"] } },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        documentNo: true,
-        customerId: true,
-        grandTotal: true,
-        sections: {
-          select: {
-            id: true,
-            name: true,
-            items: {
-              select: {
-                id: true,
-                description: true,
-                qty: true,
-                uom: true,
-                unitPrice: true,
-                total: true,
-              },
-            },
-          },
-        },
-      },
-    }),
+  const [{ customers, quotations }, paymentMethods] = await Promise.all([
+    loadDownPaymentFormOptions({ isActive: true, deletedAt: null }),
     getActivePaymentMethods(),
   ]);
-
-  const customers = customersList.map((c) => ({
-    id: c.id,
-    name: c.name,
-    customerCategory: c.customerCategory
-      ? { downPaymentPercent: Number(c.customerCategory.downPaymentPercent) }
-      : null,
-  }));
-
-  const quotations = quotationsList.map((q) => ({
-    id: q.id,
-    documentNo: q.documentNo,
-    customerId: q.customerId,
-    grandTotal: Number(q.grandTotal),
-    sections: q.sections.map((s) => ({
-      id: s.id,
-      name: s.name,
-      items: s.items.map((i) => ({
-        id: i.id,
-        description: i.description,
-        qty: Number(i.qty),
-        uom: i.uom,
-        unitPrice: Number(i.unitPrice),
-        total: Number(i.total),
-      })),
-    })),
-  }));
 
   // Pre-fill from quotation if provided
   const preselectedQuotation = quotationId

@@ -83,6 +83,57 @@ const revenueConfig = {
   lunas: { label: "Lunas", color: "var(--chart-2)" },
 } satisfies ChartConfig
 
+
+function RevenueAxes() {
+  return (
+    <>
+      <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.4} />
+      <XAxis
+        dataKey="date"
+        tickLine={false}
+        axisLine={false}
+        tickMargin={8}
+        minTickGap={32}
+        fontSize={12}
+        tickFormatter={formatDayLabel}
+      />
+      <YAxis
+        tickLine={false}
+        axisLine={false}
+        width={42}
+        fontSize={12}
+        tickFormatter={rupiahShort}
+      />
+    </>
+  )
+}
+
+function RevenueTooltip({ cursor }: { cursor: Record<string, unknown> }) {
+  return (
+    <ChartTooltip
+      cursor={cursor}
+      content={
+        <ChartTooltipContent
+          labelFormatter={formatChartDateLabel}
+          formatter={(value, name) => (
+            <>
+              <div
+                className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
+                style={{ backgroundColor: `var(--color-${name})` }}
+              />
+              {revenueConfig[name as keyof typeof revenueConfig]?.label || name}
+              <div className="ml-auto font-mono font-medium tabular-nums text-foreground">
+                Rp {Number(value).toLocaleString("id-ID")}
+              </div>
+            </>
+          )}
+          indicator="dot"
+        />
+      }
+    />
+  )
+}
+
 export function RevenueChart({ data }: { data: RevenueData[] }) {
   const [timeRange, setTimeRange] = React.useState("90d")
   const [chartType, setChartType] = React.useState<"area" | "line" | "bar">("area")
@@ -148,44 +199,8 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
     if (chartType === "line") {
       return (
         <LineChart data={filteredData}>
-          <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.4} />
-          <XAxis
-            dataKey="date"
-            tickLine={false}
-            axisLine={false}
-            tickMargin={8}
-            minTickGap={32}
-            fontSize={12}
-            tickFormatter={formatDayLabel}
-          />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            width={42}
-            fontSize={12}
-            tickFormatter={rupiahShort}
-          />
-          <ChartTooltip
-            cursor={{ stroke: "var(--border)", strokeDasharray: "4 4" }}
-            content={
-              <ChartTooltipContent
-                labelFormatter={formatChartDateLabel}
-                formatter={(value, name) => (
-                  <>
-                    <div
-                      className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                      style={{ backgroundColor: `var(--color-${name})` }}
-                    />
-                    {revenueConfig[name as keyof typeof revenueConfig]?.label || name}
-                    <div className="ml-auto font-mono font-medium tabular-nums text-foreground">
-                      Rp {Number(value).toLocaleString("id-ID")}
-                    </div>
-                  </>
-                )}
-                indicator="dot"
-              />
-            }
-          />
+          <RevenueAxes />
+          <RevenueTooltip cursor={{ stroke: "var(--border)", strokeDasharray: "4 4" }} />
           {showTagihan && (
             <Line
               dataKey="tagihan"
@@ -213,44 +228,8 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
     if (chartType === "bar") {
       return (
         <BarChart data={filteredData}>
-          <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.4} />
-          <XAxis
-            dataKey="date"
-            tickLine={false}
-            axisLine={false}
-            tickMargin={8}
-            minTickGap={32}
-            fontSize={12}
-            tickFormatter={formatDayLabel}
-          />
-          <YAxis
-            tickLine={false}
-            axisLine={false}
-            width={42}
-            fontSize={12}
-            tickFormatter={rupiahShort}
-          />
-          <ChartTooltip
-            cursor={{ fill: "var(--muted)", opacity: 0.15 }}
-            content={
-              <ChartTooltipContent
-                labelFormatter={formatChartDateLabel}
-                formatter={(value, name) => (
-                  <>
-                    <div
-                      className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                      style={{ backgroundColor: `var(--color-${name})` }}
-                    />
-                    {revenueConfig[name as keyof typeof revenueConfig]?.label || name}
-                    <div className="ml-auto font-mono font-medium tabular-nums text-foreground">
-                      Rp {Number(value).toLocaleString("id-ID")}
-                    </div>
-                  </>
-                )}
-                indicator="dot"
-              />
-            }
-          />
+          <RevenueAxes />
+          <RevenueTooltip cursor={{ fill: "var(--muted)", opacity: 0.15 }} />
           {showTagihan && (
             <Bar
               dataKey="tagihan"
@@ -281,44 +260,8 @@ export function RevenueChart({ data }: { data: RevenueData[] }) {
             <stop offset="95%" stopColor="var(--color-lunas)" stopOpacity={0.1} />
           </linearGradient>
         </defs>
-        <CartesianGrid vertical={false} strokeDasharray="3 3" opacity={0.4} />
-        <XAxis
-          dataKey="date"
-          tickLine={false}
-          axisLine={false}
-          tickMargin={8}
-          minTickGap={32}
-          fontSize={12}
-          tickFormatter={formatDayLabel}
-        />
-        <YAxis
-          tickLine={false}
-          axisLine={false}
-          width={42}
-          fontSize={12}
-          tickFormatter={rupiahShort}
-        />
-        <ChartTooltip
-          cursor={{ stroke: "var(--border)", strokeDasharray: "4 4" }}
-          content={
-            <ChartTooltipContent
-              labelFormatter={formatChartDateLabel}
-              formatter={(value, name) => (
-                <>
-                  <div
-                    className="h-2.5 w-2.5 shrink-0 rounded-[2px]"
-                    style={{ backgroundColor: `var(--color-${name})` }}
-                  />
-                  {revenueConfig[name as keyof typeof revenueConfig]?.label || name}
-                  <div className="ml-auto font-mono font-medium tabular-nums text-foreground">
-                    Rp {Number(value).toLocaleString("id-ID")}
-                  </div>
-                </>
-              )}
-              indicator="dot"
-            />
-          }
-        />
+        <RevenueAxes />
+        <RevenueTooltip cursor={{ stroke: "var(--border)", strokeDasharray: "4 4" }} />
         {showTagihan && (
           <Area
             dataKey="tagihan"

@@ -22,16 +22,25 @@
  * Returns `""` when the input has no slug-able characters (caller should fall
  * back to a stable identifier in that case).
  */
+/** Trim leading/trailing hyphens without a regex (avoids S8786 backtracking). */
+function trimHyphens(value: string): string {
+  let start = 0
+  let end = value.length
+  while (start < end && value.charAt(start) === "-") start += 1
+  while (end > start && value.charAt(end - 1) === "-") end -= 1
+  return value.slice(start, end)
+}
+
 export function slugify(input: string | null | undefined): string {
   if (input === null || input === undefined) return ""
-  return input
+  const slug = input
     .normalize("NFKD")
     // Remove combining diacritical marks.
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
+  return trimHyphens(slug)
 }
 
 /**

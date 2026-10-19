@@ -3,16 +3,15 @@
 
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
-import { useForm, Controller } from "react-hook-form"
+import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
 import { createSalesOrder, updateSalesOrder } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
+import { CustomerSelectField } from "@/components/forms/customer-select-field"
 import { Textarea } from "@/components/ui/shadcn/textarea"
-import { QuickAddSelect } from "@/components/ui/quick-add-select"
-import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
@@ -80,30 +79,13 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="customerId">Pelanggan *</Label>
-          <Controller
-            name="customerId"
-            control={control}
-            render={({ field }) => (
-              <QuickAddSelect
-                id="customerId"
-                value={field.value ? String(field.value) : null}
-                onChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                placeholder="Cari pelanggan..."
-                options={customerOptions.map((c) => ({ value: String(c.id), label: c.name }))}
-                title={QUICK_ADD.customer.title}
-                fields={QUICK_ADD.customer.fields}
-                action={QUICK_ADD.customer.action}
-                onCreated={(created) => {
-                  setCustomerOptions((prev) => [...prev, { id: created.id, name: created.label }])
-                  field.onChange(created.id)
-                }}
-              />
-            )}
-          />
-          {errors.customerId && <span className="text-xs text-danger mt-1">{errors.customerId.message}</span>}
-        </div>
+        <CustomerSelectField
+          control={control}
+          name="customerId"
+          options={customerOptions}
+          onCustomerCreated={(created) => setCustomerOptions((prev) => [...prev, created])}
+          error={errors.customerId?.message}
+        />
 
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
