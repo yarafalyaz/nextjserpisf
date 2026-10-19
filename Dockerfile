@@ -12,6 +12,7 @@ RUN npm ci --ignore-scripts
 COPY src/ ./src/
 COPY public/ ./public/
 COPY prisma/ ./prisma/
+COPY scripts/pre-migrate-column-audit.mjs ./scripts/pre-migrate-column-audit.mjs
 COPY next.config.ts tsconfig.json tsconfig.build.json postcss.config.mjs next-env.d.ts eslint.config.mjs prisma.config.ts ./
 
 # Generate Prisma Client
@@ -44,6 +45,7 @@ COPY --from=builder --chown=root:root --chmod=755 /app/.next/standalone ./
 COPY --from=builder --chown=root:root --chmod=755 /app/.next/static ./.next/static
 COPY --from=builder --chown=root:root --chmod=755 /app/public ./public
 COPY --from=builder --chown=root:root --chmod=755 /app/prisma ./prisma
+COPY --from=builder --chown=root:root --chmod=755 /app/scripts ./scripts
 COPY --from=builder --chown=root:root --chmod=755 /app/node_modules ./node_modules
 COPY --from=builder --chown=root:root --chmod=755 /app/prisma.config.ts ./
 

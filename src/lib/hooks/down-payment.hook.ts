@@ -146,8 +146,39 @@ export async function onDownPaymentConfirmed(
         
         // safeSum avoids JavaScript floating point drift (e.g. 0.1 + 0.7 = 0.7999999)
         // which would cause a fully paid invoice to stick at "partial" status.
-        const totalPaid = safeSum(payments.map((p) => p.amount), 2);
+        // AUD-NEXT-03 (putusan akuntan): DP lanjutan yang melebihi sisa faktur
+        // = KELEBIHAN, bukan pelunasan. Alokasikan hanya sebesar sisa
+        // (grandTotal - terbayar_sebelum_DP_ini); selisih jadi CustomerCredit
+        // per DP sumber. Tanpa cap, paidAmount > grandTotal = AR overstate +
+        // double-count (sekali di paidAmount, sekali di kredit). Kas tak
+        // dijurnal ulang (sudah masuk saat terima DP = Dr Kas / Cr 210102).
+        const paidBeforeSen = Math.round(safeSum(payments.map((p) => p.amount), 2) * 100) - Math.round(Number(dp.amount) * 100);
         const grandTotal = Number(existingInv.grandTotal ?? 0);
+        const grandSen = Math.round(grandTotal * 100);
+        const allocatableSen = Math.max(grandSen - paidBeforeSen, 0);
+        const dpSen = Math.round(Number(dp.amount) * 100);
+        const overSen = dpSen - allocatableSen;
+        if (overSen > 0) {
+          const overAmount = overSen / 100;
+          const creditDocNo = await generateDocumentNumber("CC");
+          const existingCredit = await tx.customerCredit.findFirst({
+            where: { sourceType: "DownPayment", sourceId: dp.id },
+          });
+          if (!existingCredit) {
+            await tx.customerCredit.create({
+              data: {
+                documentNo: creditDocNo,
+                customerId: quotation.customerId,
+                sourceType: "DownPayment",
+                sourceId: dp.id,
+                receivedAmount: overAmount,
+                notes: `Kelebihan DP ${dp.documentNo} atas faktur ${existingInv.documentNo} (sisa faktur ${allocatableSen / 100}, DP ${dpSen / 100}). Bisa dipakai ulang / di-refund.`,
+                createdBy: userId ?? null,
+              },
+            });
+          }
+        }
+        const totalPaid = Math.min(safeSum(payments.map((p) => p.amount), 2), grandTotal);
 
         // P0-2 (review): status DOKUMEN bukan status BAYAR. DP confirmation
         // hanya boleh menyentuh paymentStatus; status lifecycle (draft /

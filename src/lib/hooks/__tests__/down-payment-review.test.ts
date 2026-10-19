@@ -107,6 +107,7 @@ function buildTx(dp: ReturnType<typeof buildDp>) {
     },
     customerCredit: {
       create: vi.fn().mockResolvedValue({ id: 777, documentNo: "CC-1" }),
+      findFirst: vi.fn().mockResolvedValue(null),
     },
     product: { findMany: vi.fn().mockResolvedValue([]) },
     item: { findMany: vi.fn().mockResolvedValue([]) },
@@ -227,6 +228,40 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
     await onDownPaymentConfirmed(2, 1)
 
     expect(tx.customerCredit.create).not.toHaveBeenCalled()
+  })
+
+  it("DP lanjutan melebihi sisa faktur: cap paidAmount + selisih jadi kredit (AUD-NEXT-03)", async () => {
+    // Faktur 10000, terbayar 8000 (sisa 2000), DP lanjutan 5000 → alokasi
+    // 2000, kredit 3000. Tanpa cap: paidAmount 13000 = AR overstate.
+    const dp = buildDp({ id: 9, amount: 5000, status: "draft", docNo: "DP-9" })
+    const tx = buildTx(dp)
+    mocks.salesInvoiceFindFirst.mockResolvedValue({
+      id: 101, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000,
+      paymentStatus: "partial",
+    })
+    mocks.salesPaymentFindFirst.mockResolvedValue(null)
+    mocks.salesPaymentFindMany.mockResolvedValue([{ amount: 8000 }, { amount: 5000 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(9, 1)
+
+    // paidAmount DIBATASI 10000 — bukan 13000.
+    expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paidAmount: 10000, paymentStatus: "paid" }) }),
+    )
+    expect(mocks.salesInvoiceUpdate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ paidAmount: 13000 }) }),
+    )
+    // Selisih 3000 jadi kredit sumber DownPayment DP-9.
+    expect(tx.customerCredit.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          sourceType: "DownPayment",
+          sourceId: 9,
+          receivedAmount: 3000,
+        }),
+      }),
+    )
   })
 
   it("retry DP lanjutan yang sudah teralokasi: tidak buat SalesPayment kedua", async () => {

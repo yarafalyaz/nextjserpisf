@@ -2276,6 +2276,10 @@ model WorkOrder {
   @@map("work_orders")
 }
 
+// AUD-NEXT-07: `itemId = 0` = baris JASA/CUSTOM (bukan item stok).
+// Konvensi ini dipakai hook DP (itemId ?? 0) + form WO tambah
+// (resolvedItemId = it.itemId || 0): downstream (HPP/costing) membaca cost +
+// description untuk baris 0, bukan join ke items. Jangan anggap 0 = id item.
 model WorkOrderItem {
   id          Int       @id @default(autoincrement())
   workOrderId Int       @map("work_order_id")
