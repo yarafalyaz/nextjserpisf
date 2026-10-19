@@ -11,6 +11,7 @@ import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/appr
 import type { TxClient } from "@/lib/db/prisma"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import {
   createProjectSchema,
   updateProjectSchema,
@@ -40,8 +41,8 @@ export async function createProject(formData: FormData) {
       customerVehicleId: data.customerVehicleId ?? null,
       workOrderId: data.workOrderId ?? null,
       costCenterId: data.costCenterId ?? null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      endDate: data.endDate ? new Date(data.endDate) : null,
+      startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
+      endDate: data.endDate ? wibDateToUtcMidnight(data.endDate) : null,
       notes: data.notes ?? null,
       status: "active",
       createdBy: Number(user.id),
@@ -93,8 +94,8 @@ export async function updateProject(projectId: number, formData: FormData) {
       // persists it. Omitting it made the change silently no-op while the UI
       // reported success, which also corrupted profit-center reporting.
       costCenterId: data.costCenterId ?? null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      endDate: data.endDate ? new Date(data.endDate) : null,
+      startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
+      endDate: data.endDate ? wibDateToUtcMidnight(data.endDate) : null,
       notes: data.notes ?? null,
     },
   })
@@ -593,8 +594,8 @@ export async function createTask(formData: FormData) {
       description: data.description ?? null,
       status: data.status ?? "pending",
       assignedTo: data.assignedTo ?? null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
+      dueDate: data.dueDate ? wibDateToUtcMidnight(data.dueDate) : null,
     },
   })
 
@@ -648,8 +649,8 @@ export async function updateTask(formData: FormData) {
       description: data.description ?? null,
       status: data.status ?? "pending",
       assignedTo: data.assignedTo ?? null,
-      startDate: data.startDate ? new Date(data.startDate) : null,
-      dueDate: data.dueDate ? new Date(data.dueDate) : null,
+      startDate: data.startDate ? wibDateToUtcMidnight(data.startDate) : null,
+      dueDate: data.dueDate ? wibDateToUtcMidnight(data.dueDate) : null,
     },
   })
 

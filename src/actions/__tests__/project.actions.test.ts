@@ -76,6 +76,32 @@ beforeEach(() => {
 })
 
 describe("Project Actions Error Paths", () => {
+  it("createProject rejects fictional startDate 2026-02-30 without writing", async () => {
+    const res = await actions.createProject(fdMap({ customerId: 1, name: "P", startDate: "2026-02-30" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.project.create).not.toHaveBeenCalled()
+  })
+  it("createProject rejects fictional endDate 2026-02-30 without writing", async () => {
+    const res = await actions.createProject(fdMap({ customerId: 1, name: "P", endDate: "2026-02-30" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.project.create).not.toHaveBeenCalled()
+  })
+  it("createProject stores valid startDate as UTC midnight", async () => {
+    const res = await actions.createProject(fdMap({ customerId: 1, name: "P", startDate: "2026-02-28" }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.project.create.mock.calls.at(-1)?.[0]
+    expect(arg.data.startDate.toISOString()).toBe("2026-02-28T00:00:00.000Z")
+  })
+  it("createTask rejects fictional dueDate 2026-02-30 without writing", async () => {
+    const res = await actions.createTask(fdMap({ projectId: 1, name: "T", dueDate: "2026-02-30" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.task.create).not.toHaveBeenCalled()
+  })
+  it("updateTask rejects fictional startDate 2026-02-30 without writing", async () => {
+    const res = await actions.updateTask(fdMap({ id: 1, projectId: 1, name: "T", startDate: "2026-02-30" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.task.update).not.toHaveBeenCalled()
+  })
   it("createProject fails validation", async () => {
     const res = await actions.createProject(fdMap({ customerId: 1, name: "" }))
     expect(res?.success).toBe(false)

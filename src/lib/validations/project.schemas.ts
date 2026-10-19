@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { dateOnly } from "@/lib/validations/finance.schemas";
 
 // ==================== Helpers ====================
 
@@ -13,7 +14,10 @@ const requiredId = (field: string) =>
 
 const optionalId = z.coerce.number().int().positive().optional()
 
-const optionalDate = z.string().optional()
+const optionalDate = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  dateOnly.optional(),
+);
 
 // ==================== Project ====================
 
