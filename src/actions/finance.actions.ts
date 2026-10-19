@@ -3,7 +3,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeAdd, safeSubtract, compareAmounts, safeRound } from "@/lib/utils/math";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, type TxClient } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import {
@@ -473,13 +473,13 @@ function journalEntryRows(journalId: number, validEntries: JournalEntryInput[]) 
   }));
 }
 
-/** Kaitkan attachment pending ke jurnal (dipakai create dan update). */
-async function attachJournalAttachments(formData: FormData, journalId: number, userId: number) {
+/** Kaitkan attachment pending ke jurnal dalam tx pemanggil (ISF-01). */
+async function attachJournalAttachments(tx: TxClient, formData: FormData, journalId: number, userId: number) {
   const attachmentIds = formData.get("attachmentIds") as string | null;
   if (attachmentIds) {
-    await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
+    await attachPendingTransactionAttachments(tx, {
       attachmentIds, referenceType: "journal", referenceId: journalId, uploadedBy: userId,
-    }));
+    });
   }
 }
 
@@ -521,11 +521,12 @@ export async function createJournal(formData: FormData) {
       // Batch create all entries in one query (eliminates N+1)
       await tx.journalEntry.createMany({ data: journalEntryRows(j.id, validEntries) });
 
+      // ISF-01: klaim lampiran dalam tx yang sama — gagal klaim rollback
+      // header+entri, bukan jurnal yatim yang dilaporkan gagal ke pemanggil.
+      await attachJournalAttachments(tx, formData, j.id, Number(user.id));
+
       return j;
     });
-
-    // Associate uploaded attachments with the new journal
-    await attachJournalAttachments(formData, journal.id, Number(user.id));
 
     await logActivity("create", "Journal", journal.id, "Membuat jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -1926,11 +1927,12 @@ export async function updateJournal(id: number, formData: FormData) {
       // tidak mengubah jurnal akan menghapus pusat labanya.
       await tx.journalEntry.createMany({ data: journalEntryRows(id, validEntries) });
 
+      // ISF-01: klaim lampiran dalam tx yang sama — gagal klaim rollback
+      // header+entri, bukan perubahan commit yang dilaporkan gagal.
+      await attachJournalAttachments(tx, formData, id, Number(user.id));
+
       return j;
     });
-
-    // Associate uploaded attachments
-    await attachJournalAttachments(formData, journal.id, Number(user.id));
 
     await logActivity("update", "Journal", journal.id, "Memperbarui jurnal");
     revalidatePath("/keuangan/jurnal");
