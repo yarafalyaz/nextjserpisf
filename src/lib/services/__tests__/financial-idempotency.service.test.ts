@@ -79,6 +79,31 @@ describe("financial-idempotency.service", () => {
     ).rejects.toThrow("tidak valid")
   })
 
+  it("record lama tanpa fingerprint: TOLAK rekonsiliasi (AUD-R9-01)", async () => {
+    const dup = Object.assign(new Error("dup"), { code: "P2002", meta: { target: "key" } })
+    const tx = buildTx({
+      create: vi.fn().mockRejectedValue(dup),
+      findUnique: vi.fn().mockResolvedValue({
+        scope: "customer_credit_refund", payloadHash: null,
+        resultRefType: "Journal", resultRefId: 42, createdBy: 7,
+      }),
+    })
+    await expect(
+      claimIdempotencyKey(tx, "customer_credit_refund", "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaab5", 7,
+        "abc123digest"),
+    ).rejects.toThrow("rekonsiliasi manual")
+  })
+
+  it("error dibungkus ulang = AMBIGU aman, bukan definitif palsu (AUD-R9-03)", async () => {
+    const { definitive, isDefinitiveError } = await import("../financial-idempotency.service")
+    const d = definitive("saldo kurang")
+    expect(isDefinitiveError(d)).toBe(true)
+    // Pesan dibungkus Error biasa (mis. wrapper logging) → instanceof hilang
+    // → default AMBIGU (tahan key). Aman terhadap duplikasi.
+    expect(isDefinitiveError(new Error(d.message))).toBe(false)
+    expect(isDefinitiveError(new Error("connection lost"))).toBe(false)
+  })
+
   it("bind menulis ref hasil", async () => {
     const update = vi.fn().mockResolvedValue({})
     await bindIdempotencyKey(buildTx({ update }), "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaab2", "Journal", 42)

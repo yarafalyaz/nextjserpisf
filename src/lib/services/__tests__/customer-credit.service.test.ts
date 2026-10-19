@@ -301,9 +301,11 @@ describe("customer-credit.service", () => {
     // Klaim kedua = UNIQUE violation = replay.
     const dupErr = Object.assign(new Error("Unique constraint failed on the fields: (`key`)"), { code: "P2002", meta: { target: "key" } })
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    const { payloadFingerprint: fp1 } = await import("../financial-idempotency.service")
     mocks.idemFindUnique.mockResolvedValueOnce({
-      scope: "customer_credit_allocate", resultRefType: "SalesPayment",
-      resultRefId: 555, createdBy: 7,
+      scope: "customer_credit_allocate",
+      payloadHash: fp1({ scope: "customer_credit_allocate", creditId: 1, salesInvoiceId: 101, amount: 2000 }),
+      resultRefType: "SalesPayment", resultRefId: 555, createdBy: 7,
     })
     const r = await allocateCreditToInvoice(1, 101, 2000, 7, "cccccccc-cccc-4ccc-8ccc-ccccccccccc1")
     expect(r.success).toBe(true)
@@ -336,9 +338,11 @@ describe("customer-credit.service", () => {
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
     const dupErr = Object.assign(new Error("Unique constraint failed on the fields: (`key`)"), { code: "P2002", meta: { target: "key" } })
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    const { payloadFingerprint: fp2 } = await import("../financial-idempotency.service")
     mocks.idemFindUnique.mockResolvedValueOnce({
-      scope: "customer_credit_refund", resultRefType: "Journal",
-      resultRefId: 42, createdBy: 7,
+      scope: "customer_credit_refund",
+      payloadHash: fp2({ scope: "customer_credit_refund", creditId: 1, amount: 1000 }),
+      resultRefType: "Journal", resultRefId: 42, createdBy: 7,
     })
     const r2 = await refundCredit(1, 1000, 7, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1")
     expect(r2.success).toBe(true)
@@ -359,9 +363,11 @@ describe("customer-credit.service", () => {
     )
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
     // Key milik alokasi dipakai untuk refund → konflik.
+    const { payloadFingerprint: fp3 } = await import("../financial-idempotency.service")
     mocks.idemFindUnique.mockResolvedValueOnce({
-      scope: "customer_credit_allocate", resultRefType: "SalesPayment",
-      resultRefId: 999, createdBy: 7,
+      scope: "customer_credit_allocate",
+      payloadHash: fp3({ scope: "customer_credit_refund", creditId: 1, amount: 1000 }),
+      resultRefType: "SalesPayment", resultRefId: 999, createdBy: 7,
     })
     const r = await refundCredit(1, 1000, 7, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2")
     expect(r.success).toBe(false)
@@ -380,9 +386,11 @@ describe("customer-credit.service", () => {
       { code: "P2002", meta: { target: "key" } },
     )
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    const { payloadFingerprint: fp4 } = await import("../financial-idempotency.service")
     mocks.idemFindUnique.mockResolvedValueOnce({
-      scope: "customer_credit_refund", resultRefType: null,
-      resultRefId: null, createdBy: 7,
+      scope: "customer_credit_refund",
+      payloadHash: fp4({ scope: "customer_credit_refund", creditId: 1, amount: 1000 }),
+      resultRefType: "Journal", resultRefId: null, createdBy: 7,
     })
     const r = await refundCredit(1, 1000, 7, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb3")
     expect(r.success).toBe(false)
@@ -448,9 +456,11 @@ describe("customer-credit.service", () => {
       { code: "P2002", meta: { target: "key" } },
     )
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    const { payloadFingerprint: fp5 } = await import("../financial-idempotency.service")
     mocks.idemFindUnique.mockResolvedValueOnce({
-      scope: "customer_credit_allocate", resultRefType: "SalesPayment",
-      resultRefId: 777, createdBy: 7,
+      scope: "customer_credit_allocate",
+      payloadHash: fp5({ scope: "customer_credit_allocate", creditId: 1, salesInvoiceId: 101, amount: 2000 }),
+      resultRefType: "SalesPayment", resultRefId: 777, createdBy: 7,
     })
     const r = await allocateCreditToInvoice(1, 101, 2000, 7, "550e8400-e29b-41d4-a716-446655440001")
     expect(r.success).toBe(true)
@@ -473,9 +483,10 @@ describe("customer-credit.service", () => {
     )
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
     // Key milik intent nominal 1000 dipakai untuk nominal 2000.
+    const { payloadFingerprint: fp } = await import("../financial-idempotency.service")
     mocks.idemFindUnique.mockResolvedValueOnce({
       scope: "customer_credit_allocate",
-      payloadHash: "scope=customer_credit_allocate|amount=1000|creditId=1|salesInvoiceId=101",
+      payloadHash: fp({ scope: "customer_credit_allocate", creditId: 1, salesInvoiceId: 101, amount: 1000 }),
       resultRefType: "SalesPayment", resultRefId: 555, createdBy: 7,
     })
     const r = await allocateCreditToInvoice(1, 101, 2000, 7, "dddddddd-dddd-4ddd-8ddd-dddddddddddd")
@@ -498,8 +509,10 @@ describe("customer-credit.service", () => {
       { code: "P2002", meta: { target: "key" } },
     )
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
+    const { payloadFingerprint: fp6 } = await import("../financial-idempotency.service")
     mocks.idemFindUnique.mockResolvedValueOnce({
-      scope: "customer_credit_allocate", payloadHash: null,
+      scope: "customer_credit_allocate",
+      payloadHash: fp6({ scope: "customer_credit_allocate", creditId: 1, salesInvoiceId: 101, amount: 2000 }),
       resultRefType: "Journal", resultRefId: 42, createdBy: 7,
     })
     const r = await allocateCreditToInvoice(1, 101, 2000, 7, "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
@@ -523,6 +536,16 @@ describe("customer-credit.service", () => {
     expect(r.error).toContain("connection lost")
     expect(r.ambiguous).toBe(true)
     expect(mocks.paymentCreate).not.toHaveBeenCalled()
+  })
+
+  it("fingerprint SHA-256: stabil, urutan-bebas, beda payload beda (AUD-R9-04)", async () => {
+    const { payloadFingerprint } = await import("../financial-idempotency.service")
+    const a = payloadFingerprint({ scope: "x", creditId: 1, amount: 2000 })
+    const b = payloadFingerprint({ amount: 2000, creditId: 1, scope: "x" })
+    const c = payloadFingerprint({ scope: "x", creditId: 1, amount: 3000 })
+    expect(a).toBe(b)
+    expect(a).not.toBe(c)
+    expect(a).toMatch(/^[0-9a-f]{64}$/)
   })
 
   it("creditBalance = received - allocated - refunded", async () => {

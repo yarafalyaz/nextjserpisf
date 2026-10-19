@@ -21,32 +21,42 @@ export type IdemExisting = {
 }
 
 /**
- * AUD-R8-01: bedakan error DEFINITIF (aman ganti key) vs AMBIGU (pertahankan
- * key, retry sama). Definitif = validasi yang terjadi SEBELUM mutasi apa pun:
- * key invalid, nominal, saldo, pelanggan, periode, scope-beda, payload-beda.
- * AMBIGU = exception setelah klaim/insert (koneksi putus, deadlock, timeout,
- * crash) — status commit tak pasti. Marker: prefix "[DEFINITIF] ".
+ * AUD-R9-03: error terstruktur — kelas, bukan prefix string. Prefix rapuh:
+ * pesan bisa dibungkus/diubah Prisma/i18n lalu klasifikasi hilang diam-diam.
+ * - DefinitiveError = validasi SEBELUM mutasi (aman ganti key).
+ * - Error lain = AMBIGU (status commit tak pasti → tahan key, retry sama).
+ * Default ambigu = aman terhadap duplikasi, harga rekonsiliasi manual.
  */
-export function isDefinitiveError(e: unknown): boolean {
-  const msg = e instanceof Error ? e.message : String(e)
-  return msg.startsWith("[DEFINITIF] ")
+export class DefinitiveError extends Error {
+  readonly kind = "definitive" as const
+  constructor(msg: string) {
+    super(msg)
+    this.name = "DefinitiveError"
+  }
 }
 
-export function definitive(msg: string): Error {
-  return new Error(`[DEFINITIF] ${msg}`)
+export function isDefinitiveError(e: unknown): boolean {
+  return e instanceof DefinitiveError
+}
+
+export function definitive(msg: string): DefinitiveError {
+  return new DefinitiveError(msg)
 }
 
 /**
- * AUD-R8-02: fingerprint kanonis payload operasi. Scope sama + key sama +
- * payload beda = konflik (bukan replay). Format: scope|field=v|... (stabil,
- * tanpa secret).
+ * AUD-R9-04: fingerprint = SHA-256 hex (64 char) dari payload kanonis
+ * (key diurutkan, JSON stabil). Bukan potongan string — panjang tetap,
+ * tanpa collision praktis, muat VARCHAR(191) tanpa dipotong.
  */
+import { createHash } from "node:crypto"
+
 export function payloadFingerprint(parts: Record<string, string | number>): string {
-  return Object.keys(parts)
-    .sort()
-    .map((k) => `${k}=${parts[k]}`)
-    .join("|")
-    .slice(0, 191)
+  const canon = JSON.stringify(
+    Object.keys(parts)
+      .sort()
+      .map((k) => [k, parts[k]]),
+  )
+  return createHash("sha256").update(canon).digest("hex")
 }
 
 /** AUD-R8-03: tipe hasil yang sah per scope. Replay dengan tipe salah = error. */
@@ -133,6 +143,14 @@ export async function claimIdempotencyKey(
     if (existing.scope !== scope) {
       throw definitive(
         `Idempotency key dipakai untuk operasi lain (${existing.scope}) — kirim key baru`,
+      )
+    }
+    // AUD-R9-01: record LAMA tanpa fingerprint (payload_hash NULL, klaim
+    // sebelum migrasi R8) + retry bawa fingerprint = JANGAN replay otomatis.
+    // Tak bisa buktikan payload sama → tolak rekonsiliasi eksplisit.
+    if (fingerprint && !existing.payloadHash) {
+      throw definitive(
+        "Key lama belum memiliki fingerprint; rekonsiliasi manual (cek jurnal/saldo) lalu submit key baru",
       )
     }
     // AUD-R8-02: payload beda = konflik nyata, BUKAN replay. Key sama untuk
