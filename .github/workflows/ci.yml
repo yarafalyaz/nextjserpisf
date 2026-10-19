@@ -114,14 +114,6 @@ jobs:
           NEXTAUTH_URL: http://localhost:4101
           AUTH_TRUST_HOST: "true"
           E2E_PORT: "4101"
-      - name: Upload Auth State
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-auth
-          path: e2e/.auth/
-          retention-days: 1
-          include-hidden-files: true
-          if-no-files-found: ignore
 
   e2e:
     name: "E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})"
@@ -177,14 +169,23 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - run: ./node_modules/.bin/playwright install --with-deps chromium
-      - name: Download Auth State
-        uses: actions/download-artifact@v7
-        with:
-          name: playwright-auth
-          path: e2e/.auth
       - run: npm run build
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+      - name: Run Auth Setup
+        # Login HARUS di job ini, bukan diambil dari artifact job e2e-setup:
+        # token sesi mengikat 12 karakter awal hash password (src/lib/auth/auth.ts)
+        # dan bcrypt memakai salt acak, jadi tiap job yang men-seed DB sendiri
+        # menghasilkan hash berbeda. Cookie dari job lain langsung dicabut ->
+        # semua halaman dashboard redirect /login?reason=deactivated.
+        run: ./node_modules/.bin/playwright test --project=setup --workers=1
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+          NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
+          AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
+          NEXTAUTH_URL: http://localhost:4101
+          AUTH_TRUST_HOST: "true"
+          E2E_PORT: "4101"
       - name: Run E2E Tests
         # Both viewports: the mobile project guards a whole surface (drawers,
         # card lists, `lg:hidden` toolbars) that chromium alone never touches -
