@@ -2,10 +2,9 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
-import { notFound } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { CustomerVehicleForm } from "@/components/forms/customer-vehicle-form"
-import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { loadCustomerBySlug } from "../_components/load-customer-vehicle"
 
 import type { Metadata } from "next"
 
@@ -19,18 +18,7 @@ export default async function CreateCustomerVehiclePage({
   await requirePermission("create_customers")
   const { slug } = await params
 
-  const customer = await resolveEntity(
-    { segment: slug, fallbackWhere: { deletedAt: null } },
-    {
-      bySlug: (s, where) => prisma.customer.findFirst({ where: { slug: s, ...where } }),
-      byId: (id, where) => prisma.customer.findUnique({ where: { id, ...where } }),
-    },
-  )
-
-  if (!customer) notFound()
-
-  const customerId = customer.id
-  const customerKey = customer.slug ?? customer.id
+  const { customer, customerId, customerKey } = await loadCustomerBySlug(slug)
 
   const brands = await prisma.vehicleBrand.findMany({
     orderBy: { name: "asc" },

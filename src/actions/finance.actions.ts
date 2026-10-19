@@ -483,6 +483,24 @@ async function attachJournalAttachments(tx: TxClient, formData: FormData, journa
   }
 }
 
+/** Ekor sukses bersama create/update jurnal: log aktivitas + revalidate. */
+async function finishJournalMutation(
+  journal: { id: number },
+  action: "create" | "update",
+  logMessage: string,
+): Promise<{ success: boolean; id: number; error?: undefined }> {
+  await logActivity(action, "Journal", journal.id, logMessage);
+  revalidatePath("/keuangan/jurnal");
+  return { success: true, id: journal.id };
+}
+
+/** Hasil catch bersama create/update jurnal; redirect Next tetap diteruskan. */
+function journalMutationError(e: unknown, tag: string): { success: boolean; id?: undefined; error: string } {
+  if (isNextRedirectError(e)) throw e;
+  console.error(tag, getErrorMessage(e) || e);
+  return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+}
+
 // ==================== JOURNAL ACTIONS ====================
 
 export async function createJournal(formData: FormData) {
@@ -528,13 +546,9 @@ export async function createJournal(formData: FormData) {
       return j;
     });
 
-    await logActivity("create", "Journal", journal.id, "Membuat jurnal");
-    revalidatePath("/keuangan/jurnal");
-    return { success: true, id: journal.id };
+    return finishJournalMutation(journal, "create", "Membuat jurnal");
   } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[createJournal]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+    return journalMutationError(e, "[createJournal]");
   }
 }
 
@@ -1535,6 +1549,23 @@ export async function completeReconciliation(reconciliationId: number) {
  * Pusat Laba" — angka yang terlihat wajar tetapi tidak berguna.
  */
 
+/**
+ * Hasil catch bersama create/update pusat laba; redirect Next tetap diteruskan.
+ * `code` unik di skema: kegagalan paling sering adalah kode terpakai.
+ * Cek error mentah (code/pesan asli) sebelum sanitasi: pesan yang sudah
+ * disanitasi tidak lagi mengandung detail teknis seperti "Unique constraint".
+ */
+function profitCenterDuplicateError(e: unknown, tag: string) {
+  if (isNextRedirectError(e)) throw e;
+  const raw = e instanceof Error ? e.message : "";
+  if ((e as { code?: unknown })?.code === "P2002" || raw.includes("Unique constraint") || raw.includes("1062")) {
+    return { success: false as const, error: "Kode pusat laba sudah digunakan" };
+  }
+  const message = getErrorMessage(e) || "";
+  console.error(tag, message || e);
+  return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+}
+
 export async function createProfitCenter(formData: FormData) {
   try {
     await requirePermission("create_profit_centers");
@@ -1551,17 +1582,7 @@ export async function createProfitCenter(formData: FormData) {
     revalidatePath("/keuangan/pusat-laba");
     return { success: true as const, id: center.id };
   } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    // `code` unik di skema: kegagalan paling sering adalah kode terpakai.
-    // Cek error mentah (code/pesan asli) sebelum sanitasi: pesan yang sudah
-    // disanitasi tidak lagi mengandung detail teknis seperti "Unique constraint".
-    const raw = e instanceof Error ? e.message : "";
-    if ((e as { code?: unknown })?.code === "P2002" || raw.includes("Unique constraint") || raw.includes("1062")) {
-      return { success: false as const, error: "Kode pusat laba sudah digunakan" };
-    }
-    const message = getErrorMessage(e) || "";
-    console.error("[createProfitCenter]", message || e);
-    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+    return profitCenterDuplicateError(e, "[createProfitCenter]");
   }
 }
 
@@ -1582,14 +1603,7 @@ export async function updateProfitCenter(id: number, formData: FormData) {
     revalidatePath("/keuangan/pusat-laba");
     return { success: true as const };
   } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    const raw = e instanceof Error ? e.message : "";
-    if ((e as { code?: unknown })?.code === "P2002" || raw.includes("Unique constraint") || raw.includes("1062")) {
-      return { success: false as const, error: "Kode pusat laba sudah digunakan" };
-    }
-    const message = getErrorMessage(e) || "";
-    console.error("[updateProfitCenter]", message || e);
-    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+    return profitCenterDuplicateError(e, "[updateProfitCenter]");
   }
 }
 
@@ -1934,13 +1948,9 @@ export async function updateJournal(id: number, formData: FormData) {
       return j;
     });
 
-    await logActivity("update", "Journal", journal.id, "Memperbarui jurnal");
-    revalidatePath("/keuangan/jurnal");
-    return { success: true, id: journal.id };
+    return finishJournalMutation(journal, "update", "Memperbarui jurnal");
   } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[updateJournal]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+    return journalMutationError(e, "[updateJournal]");
   }
 }
 

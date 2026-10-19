@@ -1,62 +1,6 @@
 import { createPool } from "mariadb";
-
-const DATABASE_SOCKET_PATH = process.env.DATABASE_SOCKET_PATH
-// S5443: tidak ada fallback socket /tmp yang dapat ditulis publik. Socket hanya
-// dari DATABASE_SOCKET_PATH (env operator) atau dari query
-// `socketPath`/`socket` di DATABASE_URL. Tanpa keduanya, DATABASE_URL wajib ada.
-function buildPoolConfig() {
-  const fallback = DATABASE_SOCKET_PATH
-    ? {
-        socketPath: DATABASE_SOCKET_PATH,
-        user: "root",
-        password: "",
-        database: "yara_erp",
-        connectionLimit: 5,
-      }
-    : null;
-
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    if (fallback) return fallback;
-    throw new Error(
-      "DATABASE_URL wajib diisi (atau set DATABASE_SOCKET_PATH ke socket MySQL lokal)",
-    );
-  }
-
-  try {
-    const parsed = new URL(databaseUrl);
-    const socketPath =
-      parsed.searchParams.get("socketPath") ||
-      parsed.searchParams.get("socket");
-    const database =
-      decodeURIComponent(parsed.pathname.replace(/^\//, "")) || "yara_erp";
-    const user = decodeURIComponent(parsed.username || "root");
-    const password = decodeURIComponent(parsed.password || "");
-    const connectionLimit = Number(
-      parsed.searchParams.get("connectionLimit") || 5,
-    );
-
-    if (socketPath) {
-      return { socketPath, user, password, database, connectionLimit };
-    }
-
-    return {
-      host: parsed.hostname || "127.0.0.1",
-      port: parsed.port ? Number(parsed.port) : 3306,
-      user,
-      password,
-      database,
-      connectionLimit,
-    };
-  } catch {
-    if (fallback) return fallback;
-    throw new Error(
-      "DATABASE_URL wajib diisi (atau set DATABASE_SOCKET_PATH ke socket MySQL lokal)",
-    );
-  }
-}
-
-const pool = createPool(buildPoolConfig());
+import { buildPoolConfig } from "./seed-pool-config";
+const pool = createPool(buildPoolConfig({ includeAllowPublicKeyRetrieval: false }));
 
 async function main() {
   const conn = await pool.getConnection();

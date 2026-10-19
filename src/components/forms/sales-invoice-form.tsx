@@ -10,7 +10,7 @@ import { createSalesInvoice, updateSalesInvoice } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
-import { CustomerSelectField } from "@/components/forms/customer-select-field"
+import { SalesCustomerFormShell } from "@/components/forms/sales-customer-form-shell"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
@@ -174,58 +174,18 @@ export function SalesInvoiceForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <CustomerSelectField
-          control={control}
-          name="customerId"
-          options={customerOptions}
-          onCustomerCreated={(created) => setCustomerOptions((prev) => [...prev, created])}
-          error={errors.customerId?.message}
-        />
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="salesOrderId">Pesanan Penjualan (Opsional)</Label>
-          <Controller
-            name="salesOrderId"
-            control={control}
-            render={({ field }) => (
-              <Combobox
-                id="salesOrderId"
-                value={field.value ? String(field.value) : null}
-                onChange={(key) => field.onChange(key ? Number(key) : undefined)}
-                placeholder="Cari pesanan penjualan..."
-                options={salesOrders.map((so) => ({ value: String(so.id), label: so.documentNo }))}
-              />
-            )}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <AppDatePicker
-            label="Tanggal"
-            name="date"
-            value={watch("date")}
-            onChange={(val) => setValue("date", val)}
-            required
-          />
-          {errors.date && <span className="text-xs text-danger mt-1">{errors.date.message}</span>}
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <AppDatePicker
-            label="Jatuh Tempo"
-            name="dueDate"
-            value={watch("dueDate")}
-            onChange={(val) => setValue("dueDate", val)}
-          />
-        </div>
-
-        <div className="flex flex-col gap-1.5 col-span-full">
-          <Label htmlFor="notes">Catatan</Label>
-          <Textarea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk faktur ini..." />
-        </div>
-      </div>
+    <SalesCustomerFormShell
+      onSubmit={handleSubmit(onSubmit)}
+      control={control}
+      name="customerId"
+      options={customerOptions}
+      onCustomerCreated={(created) => setCustomerOptions((prev) => [...prev, created])}
+      error={errors.customerId?.message}
+      submitId="submit-sales-invoice"
+      isPending={isPending}
+      isEditing={Boolean(invoice?.id)}
+      afterGrid={
+        <>
 
       {/* Item faktur — nilai awal dari pesanan penjualan, tetap bisa diubah */}
       <div className="mt-6 pt-5 border-t border-default">
@@ -336,13 +296,51 @@ export function SalesInvoiceForm({
           </div>
         </div>
       </div>
+        </>
+      }
+    >
 
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending}  id="submit-sales-invoice">
-          {isPending ? "Menyimpan..." : invoice?.id ? "Perbarui" : "Simpan"}
-        </Button>
-      </div>
-    </form>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="salesOrderId">Pesanan Penjualan (Opsional)</Label>
+          <Controller
+            name="salesOrderId"
+            control={control}
+            render={({ field }) => (
+              <Combobox
+                id="salesOrderId"
+                value={field.value ? String(field.value) : null}
+                onChange={(key) => field.onChange(key ? Number(key) : undefined)}
+                placeholder="Cari pesanan penjualan..."
+                options={salesOrders.map((so) => ({ value: String(so.id), label: so.documentNo }))}
+              />
+            )}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <AppDatePicker
+            label="Tanggal"
+            name="date"
+            value={watch("date")}
+            onChange={(val) => setValue("date", val)}
+            required
+          />
+          {errors.date && <span className="text-xs text-danger mt-1">{errors.date.message}</span>}
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <AppDatePicker
+            label="Jatuh Tempo"
+            name="dueDate"
+            value={watch("dueDate")}
+            onChange={(val) => setValue("dueDate", val)}
+          />
+        </div>
+
+        <div className="flex flex-col gap-1.5 col-span-full">
+          <Label htmlFor="notes">Catatan</Label>
+          <Textarea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk faktur ini..." />
+        </div>
+    </SalesCustomerFormShell>
   )
 }

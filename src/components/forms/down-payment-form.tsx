@@ -10,11 +10,10 @@ import { createDownPayment, updateDownPayment } from "@/actions/sales.actions"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
-import { CustomerSelectField } from "@/components/forms/customer-select-field"
+import { SalesCustomerFormShell } from "@/components/forms/sales-customer-form-shell"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { CurrencyInput } from "@/components/ui/currency-input"
-import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 const downPaymentSchema = z.object({
@@ -115,15 +114,17 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-        <CustomerSelectField
-          control={control}
-          name="customerId"
-          options={customerOptions}
-          onCustomerCreated={(created) => setCustomerOptions((prev) => [...prev, created])}
-          error={errors.customerId?.message}
-        />
+    <SalesCustomerFormShell
+      onSubmit={handleSubmit(onSubmit)}
+      control={control}
+      name="customerId"
+      options={customerOptions}
+      onCustomerCreated={(created) => setCustomerOptions((prev) => [...prev, created])}
+      error={errors.customerId?.message}
+      submitId="submit-down-payment"
+      isPending={isPending}
+      isEditing={Boolean(downPayment?.id)}
+    >
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="quotationId">Penawaran *</Label>
@@ -269,14 +270,6 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
           <Label htmlFor="notes">Catatan</Label>
           <Textarea id="notes" {...register("notes")} rows={3} placeholder="Catatan untuk uang muka ini..." />
         </div>
-      </div>
-
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending}  id="submit-down-payment">
-          {isPending ? "Menyimpan..." : downPayment?.id ? "Perbarui" : "Simpan"}
-        </Button>
-      </div>
-    </form>
+    </SalesCustomerFormShell>
   )
 }

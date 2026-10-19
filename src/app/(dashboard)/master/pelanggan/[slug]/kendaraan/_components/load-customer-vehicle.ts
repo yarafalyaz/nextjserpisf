@@ -16,7 +16,7 @@ const cvInclude = {
   },
 } as const
 
-export async function loadCustomerVehicleContext(slug: string, vehicleSlug: string) {
+export async function loadCustomerBySlug(slug: string) {
   const customer = await resolveEntity(
     { segment: slug, fallbackWhere: { deletedAt: null } },
     {
@@ -29,6 +29,12 @@ export async function loadCustomerVehicleContext(slug: string, vehicleSlug: stri
 
   const customerId = customer.id
   const customerKey = customer.slug ?? customer.id
+
+  return { customer, customerId, customerKey }
+}
+
+export async function loadCustomerVehicleContext(slug: string, vehicleSlug: string) {
+  const { customer, customerId, customerKey } = await loadCustomerBySlug(slug)
 
   // Slug lebih dulu; id numerik tetap diterima untuk tautan lama. Cakupannya
   // dibatasi ke pelanggan di slug induk, supaya satu unit tidak bisa dibuka

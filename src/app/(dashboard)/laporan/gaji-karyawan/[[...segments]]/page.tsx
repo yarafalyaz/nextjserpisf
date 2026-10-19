@@ -2,14 +2,12 @@ export const dynamic = "force-dynamic"
 
 import type { Metadata } from "next"
 
-import { requireAnyPermission } from "@/lib/auth/permissions"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportTableView } from "@/components/reports/report-table-view"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { loadPayrollRows } from "@/lib/reports/payroll-reports-data"
+import { loadPayrollPageContext } from "@/lib/reports/payroll-page-context"
 import { buildPayrollByEmployee, payrollByEmployeeSummary } from "@/lib/reports/payroll-reports"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 
@@ -22,14 +20,7 @@ export default async function PayrollByEmployeePage({
   params: Promise<{ segments?: string[] }>
   searchParams: Promise<Record<string, string | undefined>>
 }) {
-  const user = await requireAnyPermission(["view_payroll_reports", "view_reports"])
-
-  const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
-    start: new Date(now.getFullYear(), now.getMonth(), 1),
-    end: now,
-  }))
-
-  const data = await loadPayrollRows(period)
+  const { user, period, data } = await loadPayrollPageContext(routeParams, searchParams)
   const result = buildPayrollByEmployee({
     rows: data.rows,
     draftSlips: data.draftSlips,
