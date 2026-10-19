@@ -41,34 +41,17 @@ const mocks = vi.hoisted(() => ({
   onSalesInvoicePosted: vi.fn(),
 }))
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    $transaction: (fn: any) => mocks.transaction(fn),
-    $queryRaw: (...a: unknown[]) => mocks.queryRaw(...a),
-  },
-}))
+vi.mock("@/lib/db/prisma", async () => (await import("./down-payment-fixtures")).dpPrismaFactory(mocks))
+vi.mock("@/lib/utils/document-number", async () => (await import("./down-payment-fixtures")).dpDocNumberFactory(mocks))
 
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
-}))
+vi.mock("@/lib/services/period-lock.service", async () => (await import("./down-payment-fixtures")).dpPeriodLockFactory(mocks))
 
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: (...a: unknown[]) => mocks.assertPeriodOpen(...a),
-}))
-
-vi.mock("@/lib/services/notification.service", () => ({
-  notificationService: {
-    notifyDocumentsReadyBatch: (...a: unknown[]) => mocks.notifyDocumentsReadyBatch(...a),
-  },
-}))
-
-vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onSalesInvoicePosted: (...a: unknown[]) => mocks.onSalesInvoicePosted(...a),
-}))
+vi.mock("@/lib/services/notification.service", async () => (await import("./down-payment-fixtures")).dpNotificationFactory(mocks))
+vi.mock("@/lib/hooks/accounting.hook", async () => (await import("./down-payment-fixtures")).dpAccountingFactory(mocks))
 
 import { onDownPaymentConfirmed } from "../down-payment.hook"
 
-import { buildDp as buildDpBase, buildDpTx } from "./down-payment-fixtures"
+import { buildDp as buildDpBase, buildDpTx, expectPaymentData, expectDpConfirmed } from "./down-payment-fixtures"
 
 function buildDp(opts: { id: number; amount: number; status: string; docNo: string }) {
   return buildDpBase({ ...opts, quotationStatus: "converted", sectionName: "Section 1" })
@@ -100,6 +83,13 @@ function buildTx(dp: ReturnType<typeof buildDp>, existingInvoiceId: number) {
   return { ...tx, existingInvoiceId }
 }
 
+const runDp2 = async () => {
+  const dp2 = buildDp({ id: 2, amount: 500, status: "draft", docNo: "DP-2" })
+  const tx = buildTx(dp2, 100)
+  mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+  return dp2
+}
+
 describe("onDownPaymentConfirmed — multi-DP support", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -123,45 +113,26 @@ describe("onDownPaymentConfirmed — multi-DP support", () => {
   it("records a subsequent DP as SalesPayment on the existing invoice", async () => {
     // DP1 already converted the quotation; the second DP (id=2, amount=500)
     // is being confirmed.
-    const dp2 = buildDp({ id: 2, amount: 500, status: "draft", docNo: "DP-2" })
-    const tx = buildTx(dp2, 100)
-    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+    await runDp2()
 
     // The quotation is already "converted" (DP1's confirmation set it).
     // The hook should NOT throw, even though dp.quotation.status === "converted".
     await expect(onDownPaymentConfirmed(2, 1)).resolves.toBeUndefined()
 
     // The new SalesPayment for DP2 must be linked to the existing invoice.
-    expect(mocks.salesPaymentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          salesInvoiceId: 100,
-          amount: 500,
-          paymentMethod: "down_payment",
-        }),
-      })
-    )
+    expectPaymentData(mocks, { salesInvoiceId: 100, amount: 500, paymentMethod: "down_payment" })
   })
 
   it("marks the subsequent DP as CONFIRMED", async () => {
-    const dp2 = buildDp({ id: 2, amount: 500, status: "draft", docNo: "DP-2" })
-    const tx = buildTx(dp2, 100)
-    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+    await runDp2()
 
     await onDownPaymentConfirmed(2, 1)
 
-    expect(mocks.downPaymentUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { id: 2 },
-        data: expect.objectContaining({ status: "confirmed" }),
-      })
-    )
+    expectDpConfirmed(mocks, 2)
   })
 
   it("does NOT re-create WO/SO/Invoice or re-post the invoice for a subsequent DP", async () => {
-    const dp2 = buildDp({ id: 2, amount: 500, status: "draft", docNo: "DP-2" })
-    const tx = buildTx(dp2, 100)
-    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+    await runDp2()
 
     await onDownPaymentConfirmed(2, 1)
 
@@ -226,9 +197,7 @@ describe("onDownPaymentConfirmed — ready-document notification batching", () =
 
   it("does not call the batched notification when no documents were produced (subsequent-DP branch)", async () => {
     // Subsequent-DP branch: existing invoice present → no new WO/SO/Invoice.
-    const dp2 = buildDp({ id: 2, amount: 500, status: "draft", docNo: "DP-2" })
-    const tx = buildTx(dp2, 100)
-    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+    await runDp2()
 
     await onDownPaymentConfirmed(2, 1)
 

@@ -186,6 +186,43 @@ function journalEntryBranch() {
 }
 
 
+const innerInvoice = (over: Record<string, unknown> = {}) => ({
+  id: 1, totalAmount: 1000, taxAmount: 0, date: new Date(), documentNo: "INV-1", ...over,
+})
+const seedInvoice = (inner: Record<string, unknown>, items?: unknown[]) => {
+  mocks.invoiceFindUniqueOrThrow.mockResolvedValue(items === undefined ? inner : { ...inner, items })
+  mocks.journalFindFirst.mockResolvedValue(null)
+  mocks.invoiceFindUnique.mockResolvedValue(inner)
+}
+const expectEntry = (data: Record<string, unknown>, times?: number) => {
+  if (times !== undefined) expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(times)
+  expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining(data) }),
+  )
+}
+const expectJournalRef = (referenceType: string, totalDebit: number, totalCredit: number) =>
+  expect(mocks.journalCreate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      data: expect.objectContaining({ referenceType, totalDebit, totalCredit }),
+    }),
+  )
+const seedPurchaseReturn = (itemCost: number, stockCost = 50) => {
+  mocks.purchaseReturnFindUniqueOrThrow.mockResolvedValue({
+    id: 1, documentNo: "PR-1", items: [{ qty: 10, cost: itemCost }],
+  })
+  mocks.stockMoveFindMany.mockResolvedValue([{ qty: 10, cost: stockCost }])
+  mocks.journalFindFirst.mockResolvedValue(null)
+  mocks.journalCreate.mockResolvedValue({ id: 9 })
+}
+const seedVendorBill = (over: Record<string, unknown> = {}, inner: unknown = undefined) => {
+  const bill = { id: 1, grandTotal: 500, tax: 0, date: new Date(), documentNo: "BILL-1", ...over }
+  mocks.vendorBillFindUniqueOrThrow.mockResolvedValue(bill)
+  mocks.goodsReceiptCount.mockResolvedValue(0)
+  mocks.journalFindFirst.mockResolvedValue(null)
+  if (inner !== undefined) mocks.vendorBillFindUnique.mockResolvedValue(inner)
+  return bill
+}
+
 beforeEach(() => {
   // assertAccountsExist: default semua akun dianggap ada; tiap describe boleh
   // override untuk kasus akun-hilang.
@@ -447,72 +484,23 @@ describe("onSalesInvoicePosted", () => {
   });
 
   it("creates Dr. AR / Cr. Revenue + Cr. PPN when tax account configured", async () => {
-    const inner = {
-      id: 1,
-      totalAmount: 1100,
-      taxAmount: 100,
-      date: new Date(),
-      documentNo: "INV-1",
-    };
-    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({ ...inner, items: [] });
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.invoiceFindUnique.mockResolvedValue(inner);
+    const inner = innerInvoice({ totalAmount: 1100, taxAmount: 100 });
+    seedInvoice(inner, []);
     mocks.journalCreate.mockResolvedValue({ id: 50 });
 
     await onSalesInvoicePosted(1, 999);
 
-    expect(mocks.journalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          referenceType: "SalesInvoice",
-          totalDebit: 1100,
-          totalCredit: 1100,
-        }),
-      }),
-    );
+    expectJournalRef("SalesInvoice", 1100, 1100);
     // 3 entries: Dr. AR 1100, Cr. Revenue 1000, Cr. PPN 100
-    expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(3);
-    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          accountId: 110,
-          debit: 1100,
-          credit: 0,
-        }),
-      }),
-    );
-    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          accountId: 410,
-          debit: 0,
-          credit: 1000,
-        }),
-      }),
-    );
-    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          accountId: 160,
-          debit: 0,
-          credit: 100,
-        }),
-      }),
-    );
+    expectEntry({ accountId: 110, debit: 1100, credit: 0 }, 3);
+    expectEntry({ accountId: 410, debit: 0, credit: 1000 });
+    expectEntry({ accountId: 160, debit: 0, credit: 100 });
   });
 
   it("skips PPN entry when no salesTaxAccountId (revenue absorbs full amount)", async () => {
     (mocks.systemSettings as any).salesTaxAccountId = null;
-    const inner = {
-      id: 1,
-      totalAmount: 1100,
-      taxAmount: 100,
-      date: new Date(),
-      documentNo: "INV-1",
-    };
-    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({ ...inner, items: [] });
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.invoiceFindUnique.mockResolvedValue(inner);
+    const inner = innerInvoice({ totalAmount: 1100, taxAmount: 100 });
+    seedInvoice(inner, []);
     mocks.journalCreate.mockResolvedValue({ id: 50 });
 
     await onSalesInvoicePosted(1);
@@ -531,19 +519,8 @@ describe("onSalesInvoicePosted", () => {
   });
 
   it("creates Dr. COGS / Cr. Inventory for product items with non-zero COGS", async () => {
-    const inner = {
-      id: 1,
-      totalAmount: 1000,
-      taxAmount: 0,
-      date: new Date(),
-      documentNo: "INV-1",
-    };
-    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
-      ...inner,
-      items: [{ itemId: 50, qty: 2, cost: 100 }],
-    });
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.invoiceFindUnique.mockResolvedValue(inner);
+    const inner = innerInvoice({ totalAmount: 1000 });
+    seedInvoice(inner, [{ itemId: 50, qty: 2, cost: 100 }]);
     mocks.itemFindMany.mockResolvedValue([
       { id: 50, cost: 100, isProduct: true, defaultWarehouseId: 7 },
     ]);
@@ -576,16 +553,8 @@ describe("onSalesInvoicePosted", () => {
   });
 
   it("skips COGS journal when cogsAmount is 0 (no product items)", async () => {
-    const inner = {
-      id: 1,
-      totalAmount: 500,
-      taxAmount: 0,
-      date: new Date(),
-      documentNo: "INV-1",
-    };
-    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({ ...inner, items: [] });
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.invoiceFindUnique.mockResolvedValue(inner);
+    const inner = innerInvoice({ totalAmount: 500 });
+    seedInvoice(inner, []);
     mocks.journalCreate.mockResolvedValue({ id: 50 });
 
     await onSalesInvoicePosted(1);
@@ -595,19 +564,8 @@ describe("onSalesInvoicePosted", () => {
   });
 
   it("rejects posting when product stock is insufficient in the default warehouse", async () => {
-    const inner = {
-      id: 1,
-      totalAmount: 1000,
-      taxAmount: 0,
-      date: new Date(),
-      documentNo: "INV-1",
-    };
-    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
-      ...inner,
-      items: [{ itemId: 50, qty: 2, cost: 100 }],
-    });
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.invoiceFindUnique.mockResolvedValue(inner);
+    const inner = innerInvoice({ totalAmount: 1000 });
+    seedInvoice(inner, [{ itemId: 50, qty: 2, cost: 100 }]);
     mocks.itemFindMany.mockResolvedValue([
       { id: 50, cost: 100, isProduct: true, defaultWarehouseId: 7 },
     ]);
@@ -639,19 +597,8 @@ describe("onSalesInvoicePosted", () => {
   });
 
   it("allows posting for a null-default-warehouse item by aggregating stock across all warehouses", async () => {
-    const inner = {
-      id: 1,
-      totalAmount: 1000,
-      taxAmount: 0,
-      date: new Date(),
-      documentNo: "INV-1",
-    };
-    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
-      ...inner,
-      items: [{ itemId: 50, qty: 2, cost: 100 }],
-    });
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.invoiceFindUnique.mockResolvedValue(inner);
+    const inner = innerInvoice({ totalAmount: 1000 });
+    seedInvoice(inner, [{ itemId: 50, qty: 2, cost: 100 }]);
     // Item has NO default warehouse → consumption spans warehouses.
     mocks.itemFindMany.mockResolvedValue([
       { id: 50, cost: 100, isProduct: true, defaultWarehouseId: null },
@@ -1404,13 +1351,7 @@ describe("onPurchaseReturnProcessed", () => {
   });
 
   it("throws error if journal doesn't balance (guard)", async () => {
-    mocks.purchaseReturnFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      documentNo: "PR-1",
-      items: [{ qty: 10, cost: 50 }], // 500
-    });
-    mocks.stockMoveFindMany.mockResolvedValue([{ qty: 10, cost: 50 }]);
-    mocks.journalFindFirst.mockResolvedValue(null);
+    seedPurchaseReturn(50);
     // intentionally unbalanced to trigger guard (would normally be balanced by code)
     // Actually, the guard in code checks totalDebit !== totalCredit BEFORE creating journal.
     // It's hard to trigger naturally unless variance logic is flawed. Let's test the balanced path first.
@@ -1420,96 +1361,31 @@ describe("onPurchaseReturnProcessed", () => {
   });
 
   it("creates balanced journal without variance when return = inventory amount", async () => {
-    mocks.purchaseReturnFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      documentNo: "PR-1",
-      items: [{ qty: 10, cost: 50 }], // AP relief: 500
-    });
-    mocks.stockMoveFindMany.mockResolvedValue([{ qty: 10, cost: 50 }]); // Inventory relief: 500
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    // AP relief: 500; Inventory relief: 500
+    seedPurchaseReturn(50);
     await onPurchaseReturnProcessed(1);
 
     // 2 entries
-    expect(mocks.journalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          referenceType: "PurchaseReturn",
-          totalDebit: 500,
-          totalCredit: 500,
-        }),
-      }),
-    );
+    expectJournalRef("PurchaseReturn", 500, 500);
     expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(2);
   });
 
   it("creates balanced journal with variance loss (Cr) when return < inventory amount", async () => {
-    // AP relief 400
-    mocks.purchaseReturnFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      documentNo: "PR-1",
-      items: [{ qty: 10, cost: 40 }],
-    });
-    // Inventory relief 500
-    mocks.stockMoveFindMany.mockResolvedValue([{ qty: 10, cost: 50 }]);
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    // AP relief 400; Inventory relief 500
+    seedPurchaseReturn(40);
     await onPurchaseReturnProcessed(1);
 
     // 3 entries
-    expect(mocks.journalCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          referenceType: "PurchaseReturn",
-          totalDebit: 500,
-          totalCredit: 500,
-        }),
-      }),
-    );
+    expectJournalRef("PurchaseReturn", 500, 500);
     expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(3);
-    // Dr. AP 400
-    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          debit: 400,
-          credit: 0,
-          accountId: 210,
-        }),
-      }),
-    );
-    // Cr. Inventory 500
-    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          debit: 0,
-          credit: 500,
-          accountId: 130,
-        }),
-      }),
-    );
-    // Dr. Variance 100 (loss, variance is < 0 so debit)
-    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          debit: 100,
-          credit: 0,
-          accountId: 220,
-        }),
-      }),
-    );
+    expectEntry({ debit: 400, credit: 0, accountId: 210 }); // Dr. AP 400
+    expectEntry({ debit: 0, credit: 500, accountId: 130 }); // Cr. Inventory 500
+    expectEntry({ debit: 100, credit: 0, accountId: 220 }); // Dr. Variance 100 (loss)
   });
 
   it("creates balanced journal with variance gain (Dr) when return > inventory amount", async () => {
-    // AP relief 600
-    mocks.purchaseReturnFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      documentNo: "PR-1",
-      items: [{ qty: 10, cost: 60 }],
-    });
-    // Inventory relief 500
-    mocks.stockMoveFindMany.mockResolvedValue([{ qty: 10, cost: 50 }]);
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.journalCreate.mockResolvedValue({ id: 9 });
+    // AP relief 600; Inventory relief 500
+    seedPurchaseReturn(60);
     await onPurchaseReturnProcessed(1);
 
     expect(mocks.journalCreate).toHaveBeenCalledWith(
@@ -1518,16 +1394,7 @@ describe("onPurchaseReturnProcessed", () => {
       }),
     );
     expect(mocks.journalEntryCreate).toHaveBeenCalledTimes(3);
-    // Cr. Variance 100 (gain)
-    expect(mocks.journalEntryCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          debit: 0,
-          credit: 100,
-          accountId: 220,
-        }),
-      }),
-    );
+    expectEntry({ debit: 0, credit: 100, accountId: 220 }); // Cr. Variance 100 (gain)
   });
 });
 
@@ -1694,51 +1561,17 @@ describe("onVendorBillPosted", () => {
 
   it("throws error for service bill without purchaseExpenseAccountId (fail-closed)", async () => {
     (mocks.systemSettings as any).purchaseExpenseAccountId = null;
-    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      grandTotal: 500,
-      tax: 0,
-      date: new Date(),
-      documentNo: "BILL-1",
-    });
-    mocks.goodsReceiptCount.mockResolvedValue(0);
-    mocks.journalFindFirst.mockResolvedValue(null);
-    await expect(onVendorBillPosted(1)).rejects.toThrow(
-      "purchaseExpenseAccountId",
-    );
+    seedVendorBill();
+    await expect(onVendorBillPosted(1)).rejects.toThrow("purchaseExpenseAccountId");
   });
 
   it("throws error if bill not found inside transaction lock", async () => {
-    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      grandTotal: 500,
-      tax: 0,
-      date: new Date(),
-      documentNo: "BILL-1",
-    });
-    mocks.goodsReceiptCount.mockResolvedValue(0);
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.vendorBillFindUnique.mockResolvedValue(null); // inner tx returns null
+    seedVendorBill({}, null); // inner tx returns null
     await expect(onVendorBillPosted(1)).rejects.toThrow("Bill tidak ditemukan");
   });
 
   it("creates expense-based journal (Dr. Expense / Cr. AP) for service bill", async () => {
-    mocks.vendorBillFindUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      grandTotal: 500,
-      tax: 0,
-      date: new Date(),
-      documentNo: "BILL-1",
-    });
-    mocks.goodsReceiptCount.mockResolvedValue(0);
-    mocks.journalFindFirst.mockResolvedValue(null);
-    mocks.vendorBillFindUnique.mockResolvedValue({
-      id: 1,
-      grandTotal: 500,
-      tax: 0,
-      date: new Date(),
-      documentNo: "BILL-1",
-    });
+    seedVendorBill({}, { id: 1, grandTotal: 500, tax: 0, date: new Date(), documentNo: "BILL-1" });
     await onVendorBillPosted(1);
 
     expect(mocks.journalCreate).toHaveBeenCalledWith(

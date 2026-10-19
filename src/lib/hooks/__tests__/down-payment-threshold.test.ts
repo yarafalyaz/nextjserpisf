@@ -24,30 +24,15 @@ const mocks = vi.hoisted(() => ({
   onSalesInvoicePosted: vi.fn(),
 }))
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    $transaction: (fn: any) => mocks.transaction(fn),
-    $queryRaw: (...a: unknown[]) => mocks.queryRaw(...a),
-  },
-}))
+vi.mock("@/lib/db/prisma", async () => (await import("./down-payment-fixtures")).dpPrismaFactory(mocks))
+vi.mock("@/lib/utils/document-number", async () => (await import("./down-payment-fixtures")).dpDocNumberFactory(mocks))
 
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
-}))
-
-vi.mock("@/lib/services/notification.service", () => ({
-  notificationService: {
-    notifyDocumentsReadyBatch: (...a: unknown[]) => mocks.notifyDocumentsReadyBatch(...a),
-  },
-}))
-
-vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onSalesInvoicePosted: (...a: unknown[]) => mocks.onSalesInvoicePosted(...a),
-}))
+vi.mock("@/lib/services/notification.service", async () => (await import("./down-payment-fixtures")).dpNotificationFactory(mocks))
+vi.mock("@/lib/hooks/accounting.hook", async () => (await import("./down-payment-fixtures")).dpAccountingFactory(mocks))
 
 import { onDownPaymentConfirmed } from "../down-payment.hook"
 
-import { buildDp, buildDpTx } from "./down-payment-fixtures"
+import { buildDp, buildDpTx, existingInvoice, wireInvoice, expectPaymentData, expectDpConfirmed } from "./down-payment-fixtures"
 
 function buildTx(dp: ReturnType<typeof buildDp>) {
   return buildDpTx(mocks, dp, {
@@ -97,9 +82,7 @@ describe("ambang 50% konversi DP ke invoice", () => {
     expect(mocks.salesOrderCreate).toHaveBeenCalled()
     expect(mocks.salesInvoiceCreate).not.toHaveBeenCalled()
     expect(mocks.onSalesInvoicePosted).not.toHaveBeenCalled()
-    expect(mocks.downPaymentUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: 1 }, data: expect.objectContaining({ status: "confirmed" }) })
-    )
+    expectDpConfirmed(mocks, 1)
   })
 
   it("DP kedua genap 50% (200+300 dari 1000): invoice DRAFT dibuat sekali", async () => {
@@ -138,19 +121,12 @@ describe("ambang 50% konversi DP ke invoice", () => {
   })
 
   it("DP lanjutan ke invoice existing: SalesPayment + jurnal Dr 210102 / Cr Piutang (AUD-FIN-04)", async () => {
-    const inv = { id: 101, documentNo: "INV-1", grandTotal: 1000, paidAmount: 600, paymentStatus: "partial" }
     const dp = buildDp({ id: 9, amount: 300, status: "draft", docNo: "DP-9" })
     const tx = buildTx(dp)
-    ;(tx.salesInvoice as any).findFirst = vi.fn().mockResolvedValue(inv)
-    const paymentFindFirst = vi.fn().mockResolvedValue(null)
-    ;(tx.salesPayment as any).findFirst = paymentFindFirst
-    const prePaid = vi.fn().mockResolvedValue([{ amount: 600, withholdingAmount: 0 }])
-    const postPaid = vi.fn().mockResolvedValue([{ amount: 600, withholdingAmount: 0 }, { amount: 300, withholdingAmount: 0 }])
+    wireInvoice(tx, existingInvoice())
     ;(tx.salesPayment as any).findMany = vi.fn()
       .mockResolvedValueOnce([{ amount: 600, withholdingAmount: 0 }])
       .mockResolvedValueOnce([{ amount: 600, withholdingAmount: 0 }, { amount: 300, withholdingAmount: 0 }])
-    void prePaid
-    void postPaid
     const invoiceUpdate = vi.fn()
     ;(tx.salesInvoice as any).update = invoiceUpdate
     mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
@@ -158,9 +134,7 @@ describe("ambang 50% konversi DP ke invoice", () => {
     await onDownPaymentConfirmed(9, 1)
 
     // allocSen = min(300, 1000-600) = 300 → payment alokasi 300.
-    expect(mocks.salesPaymentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ amount: 300, paymentMethod: "down_payment" }) }),
-    )
+    expectPaymentData(mocks, { amount: 300, paymentMethod: "down_payment" })
     // Jurnal reklas dalam tx sama: Dr 210102 / Cr Piutang 110, TANPA kas.
     expect((tx.journal.create as any)).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -185,11 +159,9 @@ describe("ambang 50% konversi DP ke invoice", () => {
   })
 
   it("DP lanjutan retry (payment sudah ada): payment + jurnal TIDAK ganda", async () => {
-    const inv = { id: 101, documentNo: "INV-1", grandTotal: 1000, paidAmount: 600, paymentStatus: "partial" }
     const dp = buildDp({ id: 9, amount: 300, status: "draft", docNo: "DP-9" })
     const tx = buildTx(dp)
-    ;(tx.salesInvoice as any).findFirst = vi.fn().mockResolvedValue(inv)
-    ;(tx.salesPayment as any).findFirst = vi.fn().mockResolvedValue({ id: 555 })
+    wireInvoice(tx, existingInvoice(), { id: 555 })
     mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
 
     await onDownPaymentConfirmed(9, 1)
@@ -208,8 +180,6 @@ describe("ambang 50% konversi DP ke invoice", () => {
 
     await onDownPaymentConfirmed(4, 1)
 
-    expect(mocks.salesPaymentCreate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ paymentDate: payDate }) })
-    )
+    expectPaymentData(mocks, { paymentDate: payDate })
   })
 })

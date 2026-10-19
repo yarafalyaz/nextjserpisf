@@ -109,6 +109,16 @@ function fdMap(
   return f;
 }
 
+const DATE = "2026-06-13"
+const itemsJson = (items: unknown[] = [{ itemId: 1, qty: 10, cost: 100 }]) => JSON.stringify(items)
+const saFd = (over: Record<string, string | number> = {}) => fdMap({ warehouseId: 1, date: DATE, reason: "Test", items: itemsJson(), ...over })
+const transferFd = (over: Record<string, string | number> = {}) => fdMap({ sourceWarehouseId: 1, destinationWarehouseId: 2, date: DATE, items: itemsJson([{ itemId: 1, qty: 10 }]), ...over })
+const miFd = (over: Record<string, string | number> = {}) => fdMap({ warehouseId: 1, projectId: 1, date: DATE, items: itemsJson(), ...over })
+const woFd = (over: Record<string, string | number> = {}, items: unknown[] = [{ itemId: 1, qty: 10, cost: 100 }]) => fdMap({ customerId: 1, projectId: 1, date: DATE, items: itemsJson(items), ...over })
+const seedDraft = (model: any, over: Record<string, unknown> = {}) => model.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", ...over })
+const seedDoc = (model: any, status: string, over: Record<string, unknown> = {}) => model.findUniqueOrThrow.mockResolvedValue({ id: 1, status, ...over })
+const expectSuccess = (res: any) => expect(res?.success).toBe(true)
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] });
@@ -116,27 +126,13 @@ beforeEach(() => {
 
 describe("Stock Adjustment Actions", () => {
   it("createStockAdjustment succeeds", async () => {
-    const res = await actions.createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
-    expect(res?.success).toBe(true);
+    const res = await actions.createStockAdjustment(saFd());
+    expectSuccess(res);
   });
 
   it("rejects duplicate item rows instead of saving conflicting physical counts", async () => {
     const res = await actions.createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([
-          { itemId: 1, newQty: 11, unitCost: 100 },
-          { itemId: 1, newQty: 12, unitCost: 100 },
-        ]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 11, unitCost: 100 }, { itemId: 1, newQty: 12, unitCost: 100 }]) }),
     );
     expect(res.success).toBe(false);
     expect(res.error).toContain("hanya boleh dicantumkan satu kali");
@@ -160,14 +156,7 @@ describe("Stock Adjustment Actions", () => {
       },
     );
     const res = await actions.createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([
-          { itemId: 1, currentQty: 999, newQty: 12, unitCost: 100, reason: "" },
-        ]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, currentQty: 999, newQty: 12, unitCost: 100, reason: "" }]) }),
     );
     expect(res?.success).toBe(true);
   });
@@ -180,72 +169,36 @@ describe("Stock Adjustment Actions", () => {
       },
     );
     const res = await actions.createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([
-          { itemId: 1, newQty: 0, unitCost: 100, reason: "" },
-        ]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 0, unitCost: 100, reason: "" }]) }),
     );
     expect(res?.success).toBe(true);
   });
   it("rejects duplicate item rows when updating a draft", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment);
     const res = await actions.updateStockAdjustment(
       1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([
-          { itemId: 1, newQty: 11, unitCost: 100 },
-          { itemId: 1, newQty: 12, unitCost: 100 },
-        ]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 11, unitCost: 100 }, { itemId: 1, newQty: 12, unitCost: 100 }]) }),
     );
     expect(res.success).toBe(false);
     expect(res.error).toContain("hanya boleh dicantumkan satu kali");
     expect(mocks.prismaMock.stockAdjustment.update).not.toHaveBeenCalled();
   });
   it("updateStockAdjustment succeeds", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
-    const res = await actions.updateStockAdjustment(
-      1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
-    expect(res?.success).toBe(true);
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    const res = await actions.updateStockAdjustment(1, saFd());
+    expectSuccess(res);
   });
   it("processStockAdjustment succeeds", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     const res = await actions.processStockAdjustment(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
   });
   it("processStockAdjustment ditolak bila approval pending (P0-3)", async () => {
     const { assertApproved } = await import("@/lib/services/approval-workflow.service");
     vi.mocked(assertApproved).mockRejectedValueOnce(
       new Error("Dokumen masih menunggu persetujuan (approval workflow) sebelum dapat dilanjutkan."),
     );
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     const res = await actions.processStockAdjustment(1);
     expect(res?.success).toBe(false);
     expect(res?.error).toContain("menunggu persetujuan");
@@ -254,140 +207,69 @@ describe("Stock Adjustment Actions", () => {
   });
   it("createStockAdjustment mengajukan approval bila workflow ada (P0-3)", async () => {
     const { requestApprovalIfConfigured } = await import("@/lib/services/approval-workflow.service");
-    const res = await actions.createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
-    expect(res?.success).toBe(true);
+    const res = await actions.createStockAdjustment(saFd());
+    expectSuccess(res);
     expect(requestApprovalIfConfigured).toHaveBeenCalledWith("StockAdjustment", expect.any(Number), 1);
   });
   it("processStockAdjustment does not duplicate journal (stock hook owns it)", async () => {
     vi.clearAllMocks();
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     const res = await actions.processStockAdjustment(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
     expect(stockAdjHook).toHaveBeenCalledWith(1, 1, expect.any(Object));
   });
 
   it("deleteStockAdjustment succeeds", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment);
     const res = await actions.deleteStockAdjustment(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
   });
 });
 
 describe("Inventory Transfer Actions", () => {
   it("createInventoryTransfer succeeds", async () => {
-    const res = await actions.createInventoryTransfer(
-      fdMap({
-        sourceWarehouseId: 1,
-        destinationWarehouseId: 2,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10 }]),
-      }),
-    );
-    expect(res?.success).toBe(true);
+    const res = await actions.createInventoryTransfer(transferFd());
+    expectSuccess(res);
   });
   it("updateInventoryTransfer succeeds", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
-    const res = await actions.updateInventoryTransfer(
-      1,
-      fdMap({
-        sourceWarehouseId: 1,
-        destinationWarehouseId: 2,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10 }]),
-      }),
-    );
-    expect(res?.success).toBe(true);
+    seedDraft(mocks.prismaMock.inventoryTransfer);
+    const res = await actions.updateInventoryTransfer(1, transferFd());
+    expectSuccess(res);
   });
   it("processInventoryTransfer succeeds", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer, { items: [] });
     const res = await actions.processInventoryTransfer(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
   });
   it("receiveInventoryTransfer succeeds", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "processed",
-      items: [],
-    });
+    seedDoc(mocks.prismaMock.inventoryTransfer, "processed", { items: [] });
     const res = await actions.receiveInventoryTransfer(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
   });
   it("deleteInventoryTransfer succeeds", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer);
     const res = await actions.deleteInventoryTransfer(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
   });
 });
 
 describe("Material Issue Actions", () => {
   it("createMaterialIssue succeeds", async () => {
-    const res = await actions.createMaterialIssue(
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
-    expect(res?.success).toBe(true);
+    const res = await actions.createMaterialIssue(miFd());
+    expectSuccess(res);
   });
   it("updateMaterialIssue succeeds", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
-    const res = await actions.updateMaterialIssue(
-      1,
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
-    expect(res?.success).toBe(true);
+    seedDraft(mocks.prismaMock.materialIssue);
+    const res = await actions.updateMaterialIssue(1, miFd());
+    expectSuccess(res);
   });
   // Regresi: workOrderId & projectId tidak punya input di form MI, jadi update
   // dulu menulis `?? null` dan memutus keduanya. Hilangnya workOrderId membuat
   // "Buat Pengeluaran Material" bisa dijalankan lagi untuk WO yang sama.
   it("updateMaterialIssue tidak menghapus workOrderId/projectId yang tidak dikirim form", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
-    const res = await actions.updateMaterialIssue(
-      1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
-    expect(res?.success).toBe(true);
+    seedDraft(mocks.prismaMock.materialIssue);
+    const res = await actions.updateMaterialIssue(1, fdMap({ warehouseId: 1, date: DATE, items: itemsJson() }));
+    expectSuccess(res);
     const payload = mocks.prismaMock.materialIssue.update.mock.calls.at(-1)?.[0] as
       | { data?: Record<string, unknown> }
       | undefined;
@@ -395,13 +277,9 @@ describe("Material Issue Actions", () => {
     expect(payload?.data && "projectId" in payload.data).toBe(false);
   });
   it("completeMaterialIssue succeeds", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.materialIssue, { items: [] });
     const res = await actions.completeMaterialIssue(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
   });
   it("completeMaterialIssue refuses when the WO was already consumed via PO (P1-4)", async () => {
     mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
@@ -421,53 +299,31 @@ describe("Material Issue Actions", () => {
   });
   it("completeMaterialIssue does not duplicate journal (stock hook owns it)", async () => {
     vi.clearAllMocks();
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.materialIssue, { items: [] });
     const res = await actions.completeMaterialIssue(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
     expect(matIssueHook).toHaveBeenCalledWith(1, 1, expect.any(Object));
   });
 
   it("deleteMaterialIssue succeeds", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.materialIssue);
     const res = await actions.deleteMaterialIssue(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
   });
 });
 
 describe("Rack & WorkOrder & Others", () => {
   it("createWorkOrder succeeds", async () => {
     const res = await actions.createWorkOrder(
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        name: "WO",
-        quantity: 1,
-      }),
+      fdMap({ customerId: 1, projectId: 1, date: DATE, name: "WO", quantity: 1 }),
     );
     expect(res?.success).toBe(true);
   });
   it("updateWorkOrder succeeds", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.workOrder);
     const res = await actions.updateWorkOrder(
       1,
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        name: "WO",
-        quantity: 1,
-      }),
+      fdMap({ customerId: 1, projectId: 1, date: DATE, name: "WO", quantity: 1 }),
     );
     expect(res?.success).toBe(true);
   });
@@ -657,11 +513,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
 
 describe("Inventory Transfer Error & Edge Paths", () => {
   it("processInventoryTransfer fails if not found or status not draft", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer, { items: [] });
     mocks.prismaMock.inventoryTransfer.updateMany.mockResolvedValue({
       count: 0,
     });
@@ -710,11 +562,7 @@ describe("Inventory Transfer Error & Edge Paths", () => {
     expect(res2?.success).toBe(false);
     expect(res2?.error).toContain("Transfer tidak ditemukan");
 
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer, { items: [] });
     const res3 = await (actions as any).receiveInventoryTransfer(1);
     expect(res3?.success).toBe(false);
     expect(res3?.error).toContain(
@@ -726,12 +574,7 @@ describe("Inventory Transfer Error & Edge Paths", () => {
 describe("Stock Adjustment Error & Edge Paths", () => {
   it("createStockAdjustment throws on negative actual qty", async () => {
     const res = await (actions as any).createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([{ itemId: 1, newQty: -10, cost: 100 }]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, newQty: -10, cost: 100 }]) }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -740,23 +583,12 @@ describe("Stock Adjustment Error & Edge Paths", () => {
   });
 
   it("updateStockAdjustment throws on negative actual qty", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment);
     mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({
       id: 1,
       status: "draft",
     });
-    const res = await (actions as any).updateStockAdjustment(
-      1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([{ itemId: 1, newQty: -10, cost: 100 }]),
-      }),
-    );
+    const res = await (actions as any).updateStockAdjustment(1, saFd({ items: itemsJson([{ itemId: 1, newQty: -10, cost: 100 }]) }));
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
       "Kuantitas fisik (actual) tidak boleh negatif",
@@ -764,21 +596,14 @@ describe("Stock Adjustment Error & Edge Paths", () => {
   });
 
   it("updateStockAdjustment fails if status changed inside transaction", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment);
     mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({
       id: 1,
       status: "processed",
     });
     const res = await (actions as any).updateStockAdjustment(
       1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, newQty: 10, cost: 100 }]),
-      }),
+      fdMap({ warehouseId: 1, date: DATE, items: itemsJson([{ itemId: 1, newQty: 10, cost: 100 }]) }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -793,7 +618,7 @@ describe("Stock Adjustment Error & Edge Paths", () => {
     });
     const res = await (actions as any).updateStockAdjustment(
       1,
-      fdMap({ warehouseId: 1, date: "2026-06-13" }),
+      fdMap({ warehouseId: 1, date: DATE }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -802,11 +627,7 @@ describe("Stock Adjustment Error & Edge Paths", () => {
   });
 
   it("processStockAdjustment fails if not found or not draft", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     mocks.prismaMock.stockAdjustment.updateMany.mockResolvedValue({ count: 0 });
     mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({
       status: "processed",
@@ -848,12 +669,7 @@ describe("Stock Adjustment Error & Edge Paths", () => {
 describe("Material Issue Error & Edge Paths", () => {
   it("createMaterialIssue fails if no valid items", async () => {
     const res = await (actions as any).createMaterialIssue(
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([]),
-      }),
+      miFd({ items: itemsJson([]) }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -862,10 +678,7 @@ describe("Material Issue Error & Edge Paths", () => {
   });
 
   it("updateMaterialIssue succeeds with empty valid items (no items create)", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.materialIssue);
     mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({
       id: 1,
       status: "draft",
@@ -873,12 +686,7 @@ describe("Material Issue Error & Edge Paths", () => {
     mocks.prismaMock.materialIssue.update.mockResolvedValue({ id: 1 });
     const res = await (actions as any).updateMaterialIssue(
       1,
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: -1, qty: 0 }]),
-      }),
+      miFd({ items: itemsJson([{ itemId: -1, qty: 0 }]) }),
     );
     expect(res?.success).toBe(true);
   });
@@ -890,7 +698,7 @@ describe("Material Issue Error & Edge Paths", () => {
     });
     const res = await (actions as any).updateMaterialIssue(
       1,
-      fdMap({ warehouseId: 1, projectId: 1, date: "2026-06-13" }),
+      fdMap({ warehouseId: 1, projectId: 1, date: DATE }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -899,22 +707,14 @@ describe("Material Issue Error & Edge Paths", () => {
   });
 
   it("updateMaterialIssue fails if status changed inside transaction", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.materialIssue);
     mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({
       id: 1,
       status: "processed",
     });
     const res = await (actions as any).updateMaterialIssue(
       1,
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
+      miFd(),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -923,11 +723,7 @@ describe("Material Issue Error & Edge Paths", () => {
   });
 
   it("completeMaterialIssue fails if not found or not draft", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.materialIssue, { items: [] });
     mocks.prismaMock.materialIssue.updateMany.mockResolvedValue({ count: 0 });
     mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({
       status: "processed",
@@ -1015,22 +811,14 @@ describe("Other Delete Errors", () => {
 
 describe("Inventory Transfer Remaining Coverage", () => {
   it("updateInventoryTransfer fails if status changed inside transaction", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer);
     mocks.prismaMock.inventoryTransfer.findUnique.mockResolvedValue({
       id: 1,
       status: "processed",
     });
     const res = await (actions as any).updateInventoryTransfer(
       1,
-      fdMap({
-        sourceWarehouseId: 1,
-        destinationWarehouseId: 2,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10 }]),
-      }),
+      transferFd(),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain("Hanya transfer draft yang dapat diedit");
@@ -1043,11 +831,7 @@ describe("Inventory Transfer Remaining Coverage", () => {
     });
     const res = await (actions as any).updateInventoryTransfer(
       1,
-      fdMap({
-        sourceWarehouseId: 1,
-        destinationWarehouseId: 2,
-        date: "2026-06-13",
-      }),
+      fdMap({ sourceWarehouseId: 1, destinationWarehouseId: 2, date: DATE }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain("Hanya transfer draft yang dapat diedit");
@@ -1056,18 +840,10 @@ describe("Inventory Transfer Remaining Coverage", () => {
 
 describe("WorkOrder Coverage", () => {
   it("updateWorkOrder handles item creation with negative/invalid data being filtered", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.workOrder);
     const res = await (actions as any).updateWorkOrder(
       1,
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: -1, qty: 10, cost: 100 }]),
-      }),
+      woFd({}, [{ itemId: -1, qty: 10, cost: 100 }]),
     );
     expect(res?.success).toBe(true);
   });
@@ -1076,31 +852,16 @@ describe("WorkOrder Coverage", () => {
 describe("WorkOrder Item Map Coverage", () => {
   it("createWorkOrder creates items when valid itemId provided", async () => {
     const res = await (actions as any).createWorkOrder(
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([
-          { itemId: 5, qty: 3, cost: 200, description: "d", status: "pending" },
-        ]),
-      }),
+      woFd({}, [{ itemId: 5, qty: 3, cost: 200, description: "d", status: "pending" }]),
     );
     expect(res?.success).toBe(true);
   });
 
   it("updateWorkOrder creates items when valid itemId provided", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.workOrder);
     const res = await (actions as any).updateWorkOrder(
       1,
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 5, qty: 3, cost: 200 }]),
-      }),
+      woFd({}, [{ itemId: 5, qty: 3, cost: 200 }]),
     );
     expect(res?.success).toBe(true);
   });

@@ -1,4 +1,4 @@
-import { vi } from "vitest"
+import { vi, expect } from "vitest"
 
 /**
  * Fixture bersama tes `onDownPaymentConfirmed` (down-payment-*.test.ts).
@@ -101,3 +101,88 @@ export function buildDpTx(mocks: Record<string, any>, dp: DpFixture, overrides: 
   }
   return { ...base, ...overrides }
 }
+
+
+/** Mock `downPayment.findMany`: kembalikan `rows` hanya untuk query status confirmed. */
+export function mockConfirmedDps(mocks: { downPaymentFindMany: any }, rows: unknown[]) {
+  mocks.downPaymentFindMany.mockImplementation(async (args: any) =>
+    args?.where?.status === "confirmed" ? rows : [],
+  )
+}
+
+export const confirmedDpRow = (docNo: string, amount: number, isoDate: string) => ({
+  documentNo: docNo,
+  amount,
+  paymentDate: new Date(isoDate),
+})
+
+export function expectInvoicePaid(mocks: { salesInvoiceUpdate: any }, data: Record<string, unknown>) {
+  expect(mocks.salesInvoiceUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining(data) }),
+  )
+}
+
+export function expectInvoiceNotPaid(mocks: { salesInvoiceUpdate: any }, data: Record<string, unknown>) {
+  expect(mocks.salesInvoiceUpdate).not.toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining(data) }),
+  )
+}
+
+export function expectPaymentNotes(mocks: { salesPaymentCreate: any }, docNo: string) {
+  expect(mocks.salesPaymentCreate).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining({ notes: expect.stringContaining(docNo) }) }),
+  )
+}
+
+export function expectPaymentData(mocks: { salesPaymentCreate: any }, data: Record<string, unknown>) {
+  expect(mocks.salesPaymentCreate).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining(data) }),
+  )
+}
+
+export function expectCreditCreated(tx: any, data: Record<string, unknown>) {
+  expect(tx.customerCredit.create).toHaveBeenCalledWith(
+    expect.objectContaining({ data: expect.objectContaining(data) }),
+  )
+}
+
+export const existingInvoice = (over: Record<string, unknown> = {}) => ({
+  id: 101, documentNo: "INV-1", grandTotal: 1000, paidAmount: 600, paymentStatus: "partial", ...over,
+})
+
+export function expectDpConfirmed(mocks: { downPaymentUpdate: any }, id: number) {
+  expect(mocks.downPaymentUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      where: { id },
+      data: expect.objectContaining({ status: "confirmed" }),
+    }),
+  )
+}
+
+export function wireInvoice(tx: any, inv: unknown, paymentFindFirstValue: unknown = null) {
+  ;(tx.salesInvoice as any).findFirst = vi.fn().mockResolvedValue(inv)
+  ;(tx.salesPayment as any).findFirst = vi.fn().mockResolvedValue(paymentFindFirstValue)
+  return tx
+}
+
+/** Factory `vi.mock` bersama DP (dipanggil di dalam factory berkas tes dengan `mocks` hoisted pemanggil). */
+export const dpPrismaFactory = (mocks: any) => ({
+  prisma: {
+    $transaction: (fn: any) => mocks.transaction(fn),
+    $queryRaw: (...a: unknown[]) => mocks.queryRaw(...a),
+  },
+})
+export const dpDocNumberFactory = (mocks: any) => ({
+  generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
+})
+export const dpPeriodLockFactory = (mocks: any) => ({
+  assertPeriodOpen: (...a: unknown[]) => mocks.assertPeriodOpen(...a),
+})
+export const dpNotificationFactory = (mocks: any) => ({
+  notificationService: {
+    notifyDocumentsReadyBatch: (...a: unknown[]) => mocks.notifyDocumentsReadyBatch(...a),
+  },
+})
+export const dpAccountingFactory = (mocks: any) => ({
+  onSalesInvoicePosted: (...a: unknown[]) => mocks.onSalesInvoicePosted(...a),
+})
