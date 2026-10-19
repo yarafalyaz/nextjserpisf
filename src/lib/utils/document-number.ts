@@ -37,6 +37,7 @@ const PREFIX_FIELD_MAP: Record<string, string | undefined> = {
   MI: 'materialIssuePrefix',
   MO: 'manufacturingOrderPrefix',
   SM: 'stockMovementPrefix',
+  CC: undefined as string | undefined, // Customer credit number (auto, not configurable)
   QCL: undefined as string | undefined, // QC checklist code (auto, not configurable)
   QCI: undefined as string | undefined, // QC inspection document number
   NCR: undefined as string | undefined, // Nonconformance report number
@@ -90,6 +91,7 @@ const DOCUMENT_SOURCE_MAP: Record<string, { model: keyof typeof prisma; field: s
   PC: { model: 'pettyCash', field: 'documentNo' },
   PAYROLL: { model: 'payroll', field: 'documentNo' },
   PRJ: { model: 'project', field: 'documentNo' },
+  CC: { model: 'customerCredit', field: 'documentNo' },
   // Master data simple codes. NOTE: we deliberately do NOT filter soft-deleted
   // rows here. The code/sku/employeeNo columns carry a UNIQUE constraint that
   // also covers soft-deleted rows, so a soft-deleted record keeps its code

@@ -8,16 +8,32 @@ const globalForPrisma = globalThis as unknown as {
   basePrisma?: PrismaClient
 }
 
+const DATABASE_SOCKET_PATH = process.env.DATABASE_SOCKET_PATH
+// S5443: tidak ada fallback socket /tmp yang dapat ditulis publik. Socket hanya
+// dari DATABASE_SOCKET_PATH (env operator) atau dari query
+// `socketPath`/`socket` di DATABASE_URL. Di luar test, ketiadaan keduanya sudah
+// ditolak validasi env (@/lib/env) saat import; cabang test memakai URL dummy
+// yang sama dengan CI — adapter tidak pernah connect karena modul di-mock.
 function createPrismaClient(): PrismaClient {
-  const adapter = process.env.DATABASE_URL
-    ? new PrismaMariaDb(process.env.DATABASE_URL)
-    : new PrismaMariaDb({
-        socketPath: "/tmp/mysql.sock",
-        user: "root",
-        password: "",
-        database: "yara_erp",
-        connectionLimit: 10,
-      })
+  let adapter
+  const databaseUrl = process.env.DATABASE_URL
+  if (databaseUrl) {
+    adapter = new PrismaMariaDb(databaseUrl)
+  } else if (DATABASE_SOCKET_PATH) {
+    adapter = new PrismaMariaDb({
+      socketPath: DATABASE_SOCKET_PATH,
+      user: "root",
+      password: "",
+      database: "yara_erp",
+      connectionLimit: 10,
+    })
+  } else if (process.env.NODE_ENV === "test") {
+    adapter = new PrismaMariaDb("mysql://root@localhost:3306/dummy")
+  } else {
+    throw new Error(
+      "DATABASE_URL wajib diisi (atau set DATABASE_SOCKET_PATH ke socket MySQL lokal)"
+    )
+  }
 
   return new PrismaClient({ adapter })
 }

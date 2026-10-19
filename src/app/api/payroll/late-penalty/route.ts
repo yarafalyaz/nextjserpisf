@@ -45,7 +45,7 @@ export async function GET(request: NextRequest) {
     const startDate = new Date(startDateStr)
     const endDate = new Date(endDateStr)
 
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
       return NextResponse.json({ error: "Invalid date format" }, { status: 400 })
     }
 

@@ -1,6 +1,12 @@
 import { describe, it, expect } from "vitest"
-import { readFileSync } from "node:fs"
-import { join } from "node:path"
+import {
+  readSrc as read,
+  JOURNAL_FORM as FORM,
+  JOURNAL_UBAH as UBAH,
+  JOURNAL_ACTIONS as ACTIONS,
+  JOURNAL_TAMBAH as TAMBAH,
+  expectActionWritesField,
+} from "./journal-wiring-helpers"
 
 /**
  * Penjaga sambungan Pusat Biaya → jurnal manual.
@@ -17,14 +23,6 @@ import { join } from "node:path"
  * dihapus dari form memerahkan tes ini.
  */
 
-const ROOT = join(__dirname, "..", "..")
-const read = (p: string) => readFileSync(join(ROOT, p), "utf8")
-
-const FORM = "src/components/forms/journal-form.tsx"
-const TAMBAH = "src/app/(dashboard)/keuangan/jurnal/tambah/page.tsx"
-const UBAH = "src/app/(dashboard)/keuangan/jurnal/[slug]/ubah/page.tsx"
-const ACTIONS = "src/actions/finance.actions.ts"
-
 describe("pusat biaya: form jurnal mengirim, aksi menulis, halaman menyediakan", () => {
   it("form punya select pusat biaya dan mengirim costCenterId", () => {
     const form = read(FORM)
@@ -35,15 +33,12 @@ describe("pusat biaya: form jurnal mengirim, aksi menulis, halaman menyediakan",
   })
 
   it("form mengisi ulang pilihan saat mengubah jurnal yang sudah bertanda", () => {
-    // Tanpa prefill ini, membuka jurnal yang punya pusat biaya lalu menyimpan akan
-    // MENGHAPUSNYA (select kembali ke kosong) — kehilangan data yang senyap.
     const form = read(FORM)
     expect(form).toMatch(/find\(\(entry\) => entry\.costCenterId\)\?\.costCenterId/)
     expect(form).toContain("journal?.entries?.find((entry) => entry.costCenterId)")
   })
 
   it("halaman ubah meneruskan costCenterId tiap entri ke form", () => {
-    // Form hanya bisa prefill kalau halamannya benar-benar mengirim field ini.
     expect(read(UBAH)).toContain("costCenterId: e.costCenterId ?? undefined")
   })
 
@@ -56,8 +51,6 @@ describe("pusat biaya: form jurnal mengirim, aksi menulis, halaman menyediakan",
   })
 
   it("aksi menulis costCenterId di KEDUA jalur (buat dan ubah)", () => {
-    // Satu jalur saja berarti mengubah jurnal menghapus pusat biayanya.
-    const writes = read(ACTIONS).match(/costCenterId: entry\.costCenterId \|\| null/g) ?? []
-    expect(writes.length).toBeGreaterThanOrEqual(2)
+    expectActionWritesField(read(ACTIONS), "costCenterId", "Pusat Biaya")
   })
 })

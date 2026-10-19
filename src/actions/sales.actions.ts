@@ -22,9 +22,10 @@ import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema, DELIVERABLE_ORDER_STATUSES, DELIVERABLE_ORDER_STATUS_LABELS } from "@/lib/validations/sales.schemas"
 import { findOverReturn } from "@/lib/sales/return-validation"
-import { logActivity } from "@/lib/services/activity-log.service"
+import { logActivity, reportPostCommitAuditFailure } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
-import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service"
+import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
+import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
 
 // ==================== QUOTATION ACTIONS ====================
@@ -51,47 +52,7 @@ export async function createQuotation(formData: FormData) {
     }
   }
 
-  // Server-side recompute of totals — never trust client-sent subtotal /
-  // grandTotal / per-line total. A tampered or buggy client could otherwise
-  // persist a Rp 0 grandTotal that flows downstream into DP and invoicing.
-  // Mirrors the client formula (calculateItemTotal + grandTotal in the form).
-  // Header discount is clamped to [0, computedSubtotal] and header tax to >= 0
-  // so a tampered negative or oversize value can't persist in the DB row and
-  // resurface in PDF/UI downstream — mirrors the updateSalesInvoice clamp.
-  const rawHeaderDiscount = Number(data.discount) || 0
-  const headerTax = Math.max(0, Number(data.tax) || 0)
-  const computeLine = (item: any) => {
-    // Clamp to the schema's minimum (quotationItemSchema.qty: min(0.01)) rather
-    // than silently coercing a tampered 0/undefined qty to 1. Coercing to 1
-    // bills the customer for an item they did not order; clamping to 0.01 makes
-    // the line essentially zero so the parent totals stay correct. The Zod
-    // schema is the real guard — this is the defensive backstop for routes
-    // (createQuotation / updateQuotation) that bypass parseFormData and read
-    // safeJsonParse(raw) directly.
-    const qty = Math.max(0.01, Number(item.qty) || 0)
-    const unitPrice = Number(item.unitPrice) || 0
-    const lineSubtotal = safeMultiply(qty, unitPrice, 0)
-    let discountAmount = Number(item.discount) || 0
-    if (item.discountType === "percent") {
-      // Clamp percent to [0, 100] so a tampered >100 or negative value can't
-      // produce a discount larger than the line subtotal and persist invalid
-      // data in the row. The per-line total is already clamped to >= 0 below.
-      const percent = Math.min(100, Math.max(0, discountAmount))
-      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
-    }
-    return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
-  }
-  const computedSubtotal = (data.sections || []).reduce(
-    (acc: number, section: any) =>
-      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeLine(it).total, 0), 0), 0),
-    0,
-  )
-  // Clamp the persisted headerDiscount to [0, computedSubtotal] so the value
-  // we store matches the value used in the grandTotal recompute. A discount
-  // > subtotal in the row would otherwise show up in the PDF/UI as a discount
-  // larger than the line total (confusing for the customer).
-  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
-  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
+  const { computedSubtotal, headerDiscount, headerTax, computedGrandTotal } = computeQuotationTotals(data)
 
   const quotation = await prisma.$transaction(async (tx) => {
     // Create sections and items in a single nested write (eliminates loop + N+1 inserts)
@@ -123,31 +84,7 @@ export async function createQuotation(formData: FormData) {
         notes: data.notes || null,
         status: "draft",
         createdBy: Number(user.id),
-        sections: {
-          create: (data.sections || []).map((section: any, si: number) => ({
-            name: section.name || `Section ${si + 1}`,
-            sortOrder: si,
-            items: {
-              create: (section.items || []).map((item: any, ii: number) => {
-                const { discountAmount, total } = computeLine(item)
-                return {
-                  // itemId arrives as a string from safeJsonParse; the items table
-                  // expects a number foreign key. Cast at the boundary so a tampered
-                  // "abc" / null doesn't quietly write a string to the Int column
-                  // and crash the Prisma insert with a "Invalid value" error.
-                  itemId: item.itemId ? Number(item.itemId) : null,
-                  description: item.description || null,
-                  qty: Number(item.qty) || 1,
-                  uom: item.uom || null,
-                  unitPrice: Number(item.unitPrice) || 0,
-                  discount: discountAmount,
-                  total,
-                  sortOrder: ii,
-                }
-              }),
-            },
-          })),
-        },
+        sections: quotationSectionsCreate(data, computeQuotationLine),
       },
     })
 
@@ -499,47 +436,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
     }
   }
 
-  // Server-side recompute of totals — never trust client-sent subtotal /
-  // grandTotal / per-line total. A tampered or buggy client could otherwise
-  // persist a Rp 0 grandTotal that flows downstream into DP and invoicing.
-  // Mirrors the client formula (calculateItemTotal + grandTotal in the form).
-  // Header discount is clamped to [0, computedSubtotal] and header tax to >= 0
-  // so a tampered negative or oversize value can't persist in the DB row and
-  // resurface in PDF/UI downstream — mirrors the updateSalesInvoice clamp.
-  const rawHeaderDiscount = Number(data.discount) || 0
-  const headerTax = Math.max(0, Number(data.tax) || 0)
-  const computeLine = (item: any) => {
-    // Clamp to the schema's minimum (quotationItemSchema.qty: min(0.01)) rather
-    // than silently coercing a tampered 0/undefined qty to 1. Coercing to 1
-    // bills the customer for an item they did not order; clamping to 0.01 makes
-    // the line essentially zero so the parent totals stay correct. The Zod
-    // schema is the real guard — this is the defensive backstop for routes
-    // (createQuotation / updateQuotation) that bypass parseFormData and read
-    // safeJsonParse(raw) directly.
-    const qty = Math.max(0.01, Number(item.qty) || 0)
-    const unitPrice = Number(item.unitPrice) || 0
-    const lineSubtotal = safeMultiply(qty, unitPrice, 0)
-    let discountAmount = Number(item.discount) || 0
-    if (item.discountType === "percent") {
-      // Clamp percent to [0, 100] so a tampered >100 or negative value can't
-      // produce a discount larger than the line subtotal and persist invalid
-      // data in the row. The per-line total is already clamped to >= 0 below.
-      const percent = Math.min(100, Math.max(0, discountAmount))
-      discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
-    }
-    return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
-  }
-  const computedSubtotal = (data.sections || []).reduce(
-    (acc: number, section: any) =>
-      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeLine(it).total, 0), 0), 0),
-    0,
-  )
-  // Clamp the persisted headerDiscount to [0, computedSubtotal] so the value
-  // we store matches the value used in the grandTotal recompute. A discount
-  // > subtotal in the row would otherwise show up in the PDF/UI as a discount
-  // larger than the line total (confusing for the customer).
-  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
-  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
+  const { computedSubtotal, headerDiscount, headerTax, computedGrandTotal } = computeQuotationTotals(data)
 
   await prisma.$transaction(async (tx) => {
     // Replace sections + items wholesale: the edit form sends the full section
@@ -581,31 +478,7 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
         paymentMethod: data.paymentMethod || null,
         shippingMethod: data.shippingMethod || null,
         notes: data.notes || null,
-        sections: {
-          create: (data.sections || []).map((section: any, si: number) => ({
-            name: section.name || `Section ${si + 1}`,
-            sortOrder: si,
-            items: {
-              create: (section.items || []).map((item: any, ii: number) => {
-                const { discountAmount, total } = computeLine(item)
-                return {
-                  // itemId arrives as a string from safeJsonParse; the items table
-                  // expects a number foreign key. Cast at the boundary so a tampered
-                  // "abc" / null doesn't quietly write a string to the Int column
-                  // and crash the Prisma insert with a "Invalid value" error.
-                  itemId: item.itemId ? Number(item.itemId) : null,
-                  description: item.description || null,
-                  qty: Number(item.qty) || 1,
-                  uom: item.uom || null,
-                  unitPrice: Number(item.unitPrice) || 0,
-                  discount: discountAmount,
-                  total,
-                  sortOrder: ii,
-                }
-              }),
-            },
-          })),
-        },
+        sections: quotationSectionsCreate(data, computeQuotationLine),
       },
     })
   })
@@ -637,43 +510,15 @@ export async function createDownPayment(formData: FormData) {
   const documentNo = await generateDocumentNumber("DP")
   const slug = await nextSlug("downPayment", documentNo)
 
-  let proofImage: string | null = null
-  const proofFile = formData.get("proofImage")
-  if (proofFile && proofFile instanceof File && proofFile.size > 0) {
-    // Cap proof uploads at 5 MB — these are payment screenshots/photos, not raw
-    // images. Without a cap, a hostile client can OOM the server by streaming
-    // an arbitrarily large file before we ever look at the type.
-    const MAX_PROOF_BYTES = 5 * 1024 * 1024
-    if (proofFile.size > MAX_PROOF_BYTES) {
-      throw new Error(`Ukuran bukti bayar melebihi batas maksimum ${MAX_PROOF_BYTES / 1024 / 1024}MB.`)
-    }
-
-    // Whitelist safe extensions for files served from `public/`. If a raw
-    // attacker-renamed `.html`/`.svg` lands here, Next will serve it from
-    // `public/uploads/proofs/` and execute its JS in the user's session
-    // (Stored XSS in the app's own origin).
-    const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
-    const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "pdf"])
-    const ext = allowedExts.has(rawExt.toLowerCase()) ? rawExt.toLowerCase() : "jpg"
-
-    const { writeFile, mkdir } = await import("fs/promises")
-    const path = await import("path")
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "proofs")
-    await mkdir(uploadDir, { recursive: true })
-    const filename = `proof-dp-${Date.now()}.${ext}`
-    const filepath = path.join(uploadDir, filename)
-    const bytes = await proofFile.arrayBuffer()
-    await writeFile(filepath, Buffer.from(bytes))
-    proofImage = `/uploads/proofs/${filename}`
-  }
+  const proofImage: string | null = await saveDownPaymentProof(formData)
 
   const quotationId = v.quotationId
   const amount = v.amount
 
-  const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
-  if (!["accepted", "approved", "converted"].includes(quotation.status)) {
-    throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
-  }
+  // Quotation TOCTOU guard: baca luar-tx dihapus. Status + grandTotal dibaca
+  // ulang DALAM tx setelah FOR UPDATE — pesaing bisa membatalkan/menolak
+  // quotation di antara baca luar dan tulis. Cap kumulatif tetap dalam tx yang
+  // sama (lock yang sama menutup keduanya).
 
   // Lock the quotation row + re-run the cumulative cap INSIDE the transaction so
   // two concurrent DP creations on the same quotation can't each pass the cap
@@ -686,6 +531,11 @@ export async function createDownPayment(formData: FormData) {
   // back the DP insert.
     const dp = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      const quotation = await tx.quotation.findUniqueOrThrow({ where: { id: quotationId } })
+      if (!["accepted", "approved", "converted"].includes(quotation.status)) {
+        throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
+      }
 
       const existingDPs = await tx.downPayment.aggregate({
         where: { quotationId, status: { not: "cancelled" } },
@@ -712,14 +562,11 @@ export async function createDownPayment(formData: FormData) {
         },
       })
 
-      // GL hook inside the same tx (was previously called after commit).
-      // onDownPaymentReceived accepts an optional txClient as the 3rd arg, so
-      // we join the atomic unit. Its internal executeInTx() will use this tx
-      // rather than opening a nested one.
-      await onDownPaymentReceived(created.id, Number(user.id), tx)
-
-      // Auto-confirm the Down Payment immediately after creation (now inside the same tx!)
-      await onDownPaymentConfirmed(created.id, Number(user.id), tx)
+      // P0-1: pencatatan DP berhenti di `draft`. Verifikasi penerimaan
+      // (jurnal kas) + konfirmasi (WO/SO/Project, invoice bila ambang 50%)
+      // terjadi eksplisit lewat confirmDownPayment — bukan otomatis di sini.
+      // Sebelumnya kedua hook dipanggil dalam tx yang sama sehingga DP
+      // sekecil apa pun langsung menjadi invoice POSTED + stock-out.
 
       return created
     })
@@ -735,11 +582,176 @@ export async function createDownPayment(formData: FormData) {
   }
 }
 
+/**
+ * AUD-R3-03: alokasi saldo kredit pelanggan ke faktur lain.
+ * Izin = confirm_down_payments (gerbang yang sama dengan konfirmasi DP —
+ * kredit lahir dari DP). Service mengunci baris + tolak over-saldo/sisa.
+ */
+/**
+ * AUD-R10-03: helper upload bukti bayar DP (dedup 2 blok identik create/update).
+ * Cap 5MB + whitelist ekstensi + magic-bytes SEBELUM tulis (anti Stored XSS
+ * via public/uploads). Return path public atau null bila tak ada file.
+ */
+/**
+ * AUD-R10-03: recompute total quotation server-side (dedup create/update).
+ * Jangan percaya subtotal/grandTotal kiriman klien — hitung ulang + clamp.
+ */
+function computeQuotationTotals(data: any): {
+  computedSubtotal: number
+  headerDiscount: number
+  headerTax: number
+  computedGrandTotal: number
+} {
+  const rawHeaderDiscount = Number(data.discount) || 0
+  const headerTax = Math.max(0, Number(data.tax) || 0)
+  const computedSubtotal = (data.sections || []).reduce(
+    (acc: number, section: any) =>
+      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeQuotationLine(it).total, 0), 0), 0),
+    0,
+  )
+  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
+  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
+  return { computedSubtotal, headerDiscount, headerTax, computedGrandTotal }
+}
+
+/**
+ * AUD-R10-03: computeLine quotation di module-scope (dedup create/update).
+ * Murni: clamp qty/diskon anti-tamper, hitung via safe* decimal-safe.
+ */
+function computeQuotationLine(item: any): { discountAmount: number; total: number } {
+  const qty = Math.max(0.01, Number(item.qty) || 0)
+  const unitPrice = Number(item.unitPrice) || 0
+  const lineSubtotal = safeMultiply(qty, unitPrice, 0)
+  let discountAmount = Number(item.discount) || 0
+  if (item.discountType === "percent") {
+    const percent = Math.min(100, Math.max(0, discountAmount))
+    discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
+  }
+  return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
+}
+
+/**
+ * AUD-R10-03: helper sections-create quotation (dedup create/update).
+ * Cast itemId string→number di boundary + clamp via computeLine pemanggil.
+ */
+function quotationSectionsCreate(data: any, computeLine: (item: any) => { discountAmount: number; total: number }) {
+  return {
+    create: (data.sections || []).map((section: any, si: number) => ({
+      name: section.name || `Section ${si + 1}`,
+      sortOrder: si,
+      items: {
+        create: (section.items || []).map((item: any, ii: number) => {
+          const { discountAmount, total } = computeLine(item)
+          return {
+            // itemId string dari safeJsonParse → number FK; "abc"/null tak
+            // boleh tulis string ke kolom Int.
+            itemId: item.itemId ? Number(item.itemId) : null,
+            description: item.description || null,
+            qty: Number(item.qty) || 1,
+            uom: item.uom || null,
+            unitPrice: Number(item.unitPrice) || 0,
+            discount: discountAmount,
+            total,
+            sortOrder: ii,
+          }
+        }),
+      },
+    })),
+  }
+}
+
+async function saveDownPaymentProof(formData: FormData): Promise<string | null> {
+  const proofFile = formData.get("proofImage")
+  if (!(proofFile && proofFile instanceof File && proofFile.size > 0)) return null
+  // Cap proof uploads at 5 MB — payment screenshots/photos, bukan raw images.
+  const MAX_PROOF_BYTES = 5 * 1024 * 1024
+  if (proofFile.size > MAX_PROOF_BYTES) {
+    throw new Error(`Ukuran bukti bayar melebihi batas maksimum ${MAX_PROOF_BYTES / 1024 / 1024}MB.`)
+  }
+  // Whitelist ekstensi aman untuk public/ (tolak .html/.svg → Stored XSS).
+  const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
+  const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "pdf"])
+  const ext = allowedExts.has(rawExt.toLowerCase()) ? rawExt.toLowerCase() : "jpg"
+
+  const { writeFile, mkdir } = await import("fs/promises")
+  const path = await import("path")
+  const uploadDir = path.join(process.cwd(), "public", "uploads", "proofs")
+  await mkdir(uploadDir, { recursive: true })
+  const filename = `proof-dp-${Date.now()}.${ext}`
+  const filepath = path.join(uploadDir, filename)
+  const bytes = await proofFile.arrayBuffer()
+  const buffer = Buffer.from(bytes)
+  // Tolak isi tak cocok ekstensi SEBELUM tulis (File.type/nama bisa dipalsukan).
+  assertMagicBytes(buffer, ext === "pdf" ? "application/pdf" : `image/${ext === "jpg" ? "jpeg" : ext}`)
+  await writeFile(filepath, buffer)
+  return `/uploads/proofs/${filename}`
+}
+
+export async function allocateCustomerCredit(creditId: number, salesInvoiceId: number, amount: number, idempotencyKey?: string) {
+  const { allocateCreditToInvoice } = await import("@/lib/services/customer-credit.service");
+  try {
+    const user = await requirePermission("confirm_down_payments");
+    const result = await allocateCreditToInvoice(creditId, salesInvoiceId, amount, Number(user.id), idempotencyKey);
+    // AUD-R8-01: teruskan flag ambigu — UI buang key HANYA bila definitif.
+    if (!result.success) return { success: false as const, error: result.error, ambiguous: result.ambiguous === true };
+    // AUD-R5-03: finansial SUDAH commit. Kegagalan audit dicatat via helper
+    // (baris AUDIT_FAILURE + console berkonteks) — transaksi tetap success.
+    let auditWarning: string | undefined;
+    try {
+      await logActivity("allocate", "CustomerCredit", creditId, `Alokasi kredit ${amount} ke faktur #${salesInvoiceId}`);
+    } catch (e) {
+      const r = await reportPostCommitAuditFailure("allocate", "CustomerCredit", creditId, e instanceof Error ? e.message : String(e));
+      // Penanda dikonsumsi: kegagalan jejak MUNCUL di respons (warning),
+      // bukan hilang. Transaksi uang tetap sah.
+      if (!r.auditPersisted) auditWarning = "Alokasi sah, tetapi jejak audit gagal dicatat — hubungi admin.";
+    }
+    revalidatePath("/penjualan/faktur");
+    // AUD-R7-03: bedakan operasi baru vs replay retry (UI tampilkan bukti ID).
+    return { success: true as const, warning: auditWarning, replayed: result.replayed === true, paymentId: result.paymentId };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * AUD-R3-03: refund sisa kredit pelanggan ke kas (Dr 210102 / Cr Kas).
+ * Izin = confirm_down_payments. Service menolak melebihi saldo.
+ */
+export async function refundCustomerCredit(creditId: number, amount: number, idempotencyKey?: string) {
+  const { refundCredit } = await import("@/lib/services/customer-credit.service");
+  try {
+    const user = await requirePermission("confirm_down_payments");
+    const result = await refundCredit(creditId, amount, Number(user.id), idempotencyKey);
+    if (!result.success) return { success: false as const, error: result.error, ambiguous: result.ambiguous === true };
+    // AUD-R5-03: sama — refund sudah commit; audit gagal = jejak, bukan error.
+    let refundAuditWarning: string | undefined;
+    try {
+      await logActivity("refund", "CustomerCredit", creditId, `Refund kredit ${amount} ke kas`);
+    } catch (e) {
+      const r = await reportPostCommitAuditFailure("refund", "CustomerCredit", creditId, e instanceof Error ? e.message : String(e));
+      if (!r.auditPersisted) refundAuditWarning = "Refund sah, tetapi jejak audit gagal dicatat — hubungi admin.";
+    }
+    revalidatePath("/penjualan/faktur");
+    return { success: true as const, warning: refundAuditWarning, replayed: result.replayed === true, journalId: result.journalId };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
 export async function confirmDownPayment(dpId: number) {
   try {
   const user = await requirePermission("confirm_down_payments")
 
-  await onDownPaymentConfirmed(dpId, Number(user.id))
+  // P0-1: dua tahap verifikasi dalam satu transaksi atomik —
+  // (1) terima: jurnal kas/bank vs uang muka (idempoten, gagal = rollback);
+  // (2) konfirmasi: WO/SO/Project + invoice bila kumulatif terverifikasi
+  // mencapai 50% nilai quotation.
+  await prisma.$transaction(async (tx) => {
+    await onDownPaymentReceived(dpId, Number(user.id), tx)
+    await onDownPaymentConfirmed(dpId, Number(user.id), tx)
+  })
 
   await logActivity("confirm", "DownPayment", dpId, `Konfirmasi uang muka #${dpId}`)
   revalidatePath("/penjualan/uang-muka")
@@ -1086,6 +1098,11 @@ export async function createSalesPayment(formData: FormData) {
       )
     }
 
+    if (v.accountId != null) {
+      const ok = await tx.account.count({ where: { id: v.accountId } })
+      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`)
+    }
+
     const created = await tx.salesPayment.create({
       data: {
         documentNo,
@@ -1150,6 +1167,31 @@ export async function completeSalesReturn(returnId: number) {
     throw new Error("Sales return sudah completed")
   }
 
+  // P1-1: identitas fisik wajib untuk item tracked. Tanpa serial/batch
+  // eksplisit, hook merevive serial "terbaru" dan layer tanpa batch — bukan
+  // identitas yang benar-benar kembali. Tolak di sini (sebelum mutasi) agar
+  // pesan jelas; hook memvalidasi ulang dalam tx.
+  const trackedIds = [...new Set(salesReturn.items.map((it) => it.itemId))]
+  if (trackedIds.length > 0) {
+    const trackedRows = await prisma.item.findMany({
+      where: { id: { in: trackedIds } },
+      select: { id: true, trackSerial: true, trackBatch: true },
+    })
+    const trackByItem = new Map(trackedRows.map((r) => [r.id, r]))
+    for (const it of salesReturn.items) {
+      const t = trackByItem.get(it.itemId)
+      if (!t) continue
+      const serials = Array.isArray(it.serialNumbers) ? (it.serialNumbers as unknown[]).filter((v) => String(v ?? "").trim()).length : 0
+      const batches = Array.isArray(it.batchNumbers) ? (it.batchNumbers as unknown[]).filter((v) => String(v ?? "").trim()).length : 0
+      if (t.trackSerial && serials === 0) {
+        throw new Error(`Item #${it.itemId} memakai pelacakan serial — sebutkan nomor seri yang benar-benar kembali.`)
+      }
+      if (t.trackBatch && batches === 0) {
+        throw new Error(`Item #${it.itemId} memakai pelacakan batch — sebutkan nomor batch yang benar-benar kembali.`)
+      }
+    }
+  }
+
   // Atomically process stock adjustment and post GL journal in a single transaction.
   await prisma.$transaction(async (tx) => {
     // Stock Move IN — the stock hook sets status to "completed" at the end. Do NOT
@@ -1170,6 +1212,21 @@ export async function completeSalesReturn(returnId: number) {
     console.error("[completeSalesReturn]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
+}
+
+/**
+ * P1-1: parse identitas fisik retur dari payload baris. Form mengirim
+ * `serialNumbers`/`batchNumbers` sebagai array string atau string koma-pisah.
+ * Kembalikan array bersih (unik, trim, tanpa kosong) atau undefined bila tak ada.
+ */
+function parseReturnIdentity(value: unknown): string[] | undefined {
+  const raw: unknown[] = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  const clean = [...new Set(raw.map((v) => String(v ?? "").trim()).filter((v) => v.length > 0))];
+  return clean.length ? clean : undefined;
 }
 
 export async function createSalesReturn(formData: FormData) {
@@ -1276,6 +1333,9 @@ export async function createSalesReturn(formData: FormData) {
             qty: Math.max(0.01, Number(item.qty) || 0),
             cost: returnCostMap.get(Number(item.itemId)) ?? 0,
             price: resolvePrice(Number(item.itemId)),
+            // P1-1: identitas fisik yang benar-benar kembali.
+            serialNumbers: parseReturnIdentity(item.serialNumbers),
+            batchNumbers: parseReturnIdentity(item.batchNumbers),
           })),
         },
       },
@@ -1980,16 +2040,16 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
-  // Fetch old invoiceId before update to handle invoice reassignment
-  const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true, documentNo: true } })
+  // Old payment row + slug: NO lookup outside the tx. A concurrent delete/edit
+  // of this payment between an outer read and the tx would make the recalc
+  // below act on stale data (or the update hit a ghost row). Slug derives
+  // from the locked row's documentNo inside the tx.
   const newInvoiceId = v.salesInvoiceId
   const newAmount = v.amount
   const newWithholdingAmount = v.withholdingAmount ?? 0
   if (newWithholdingAmount > 0 && !v.withholdingTypeId) {
     return { success: false, error: "Jenis PPh wajib dipilih bila ada potongan PPh" }
   }
-
-  const slug = await nextSlug("salesPayment", oldPayment.documentNo, { excludeId: id })
 
   // Atomic: lock the target invoice and validate the edited amount against the
   // remaining balance (excluding THIS payment) — mirrors createSalesPayment.
@@ -2001,7 +2061,23 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   // to the payment row, and the operator's just-uploaded attachments would
   // silently never get linked to the edited payment.
   const payment = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${newInvoiceId} FOR UPDATE`
+    // Lock BOTH invoices up front, id-sorted (anti-deadlock): two concurrent
+    // reassigns swapping invoices A<->B must take locks in the same order.
+    // Old row read here (not outside): baca luar + lock hanya baru = TOCTOU —
+    // pesaing bisa hapus/pindah payment ini atau ubah faktur lama di antaranya.
+    const lockedPayment = await tx.salesPayment.findUniqueOrThrow({
+      where: { id },
+      select: { salesInvoiceId: true, documentNo: true },
+    })
+    const oldInvoiceId = lockedPayment.salesInvoiceId
+    const invoiceIds = oldInvoiceId === newInvoiceId
+      ? [newInvoiceId]
+      : [Math.min(oldInvoiceId, newInvoiceId), Math.max(oldInvoiceId, newInvoiceId)]
+    for (const invoiceId of invoiceIds) {
+      await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${invoiceId} FOR UPDATE`
+    }
+    const slug = await nextSlug("salesPayment", lockedPayment.documentNo, { excludeId: id })
+
     const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: newInvoiceId } })
 
     // Status guard: reject invoices that were never posted (draft/approved) or
@@ -2039,6 +2115,11 @@ export async function updateSalesPayment(id: number, formData: FormData) {
       )
     }
 
+    if (v.accountId != null) {
+      const ok = await tx.account.count({ where: { id: v.accountId } })
+      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`)
+    }
+
     const updated = await tx.salesPayment.update({
       where: { id },
       data: {
@@ -2074,8 +2155,9 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     await onSalesPaymentUpdated(updated.salesInvoiceId, tx)
     // If the payment was reassigned to a different invoice, the old invoice also
     // needs a recalc — must happen inside the same tx for the same reason.
-    if (oldPayment.salesInvoiceId && oldPayment.salesInvoiceId !== updated.salesInvoiceId) {
-      await onSalesPaymentUpdated(oldPayment.salesInvoiceId, tx)
+    // oldInvoiceId comes from the in-tx locked row above (not a stale read).
+    if (oldInvoiceId && oldInvoiceId !== updated.salesInvoiceId) {
+      await onSalesPaymentUpdated(oldInvoiceId, tx)
     }
 
     // Associate uploaded attachments inside the tx (moved from outside) so a
@@ -2252,6 +2334,9 @@ export async function updateSalesReturn(id: number, formData: FormData) {
               qty: Math.max(0.01, Number(item.qty) || 0),
               cost: updReturnCostMap.get(Number(item.itemId)) ?? 0,
               price: resolveUpdPrice(Number(item.itemId)),
+              // P1-1: identitas fisik yang benar-benar kembali.
+              serialNumbers: parseReturnIdentity(item.serialNumbers),
+              batchNumbers: parseReturnIdentity(item.batchNumbers),
             })),
         },
       },
@@ -2336,29 +2421,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
   await requirePermission("edit_down_payments")
 
   // Fix #2: Jangan generate documentNo baru
-  let proofImage: string | null | undefined = undefined
-  const proofFile = formData.get("proofImage")
-  if (proofFile && proofFile instanceof File && proofFile.size > 0) {
-    // Same cap as the down-payment proof path above. See comment there.
-    const MAX_PROOF_BYTES = 5 * 1024 * 1024
-    if (proofFile.size > MAX_PROOF_BYTES) {
-      throw new Error(`Ukuran bukti bayar melebihi batas maksimum ${MAX_PROOF_BYTES / 1024 / 1024}MB.`)
-    }
-
-    const rawExt = (proofFile.name.split(".").pop() || "jpg").replace(/[^a-zA-Z0-9]/g, "")
-    const allowedExts = new Set(["jpg", "jpeg", "png", "webp", "pdf"])
-    const ext = allowedExts.has(rawExt.toLowerCase()) ? rawExt.toLowerCase() : "jpg"
-
-    const { writeFile, mkdir } = await import("fs/promises")
-    const path = await import("path")
-    const uploadDir = path.join(process.cwd(), "public", "uploads", "proofs")
-    await mkdir(uploadDir, { recursive: true })
-    const filename = `proof-dp-${Date.now()}.${ext}`
-    const filepath = path.join(uploadDir, filename)
-    const bytes = await proofFile.arrayBuffer()
-    await writeFile(filepath, Buffer.from(bytes))
-    proofImage = `/uploads/proofs/${filename}`
-  }
+  const proofImage: string | null | undefined = (await saveDownPaymentProof(formData)) ?? undefined
 
   const parsed = parseFormData(updateDownPaymentSchema, formData)
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
@@ -2370,10 +2433,9 @@ export async function updateDownPayment(id: number, formData: FormData) {
   }
   const slug = await nextSlug("downPayment", existingDp.documentNo, { excludeId: id })
   const quotationId = v.quotationId
-  const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
-  if (!["accepted", "approved", "converted"].includes(quotation.status)) {
-    throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
-  }
+  // Quotation TOCTOU guard: baca luar-tx dihapus. Quotation (status,
+  // customerId, grandTotal) dibaca ulang DALAM tx setelah FOR UPDATE —
+  // pesaing bisa mengubah/membatalkan quotation di antara baca luar dan tulis.
 
   const amount = v.amount
 
@@ -2385,6 +2447,11 @@ export async function updateDownPayment(id: number, formData: FormData) {
   // the outer catch surfaces the same message.
   const dp = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+    const quotation = await tx.quotation.findUniqueOrThrow({ where: { id: quotationId } })
+    if (!["accepted", "approved", "converted"].includes(quotation.status)) {
+      throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
+    }
 
     const otherDPs = await tx.downPayment.aggregate({
       where: { quotationId, status: { not: "cancelled" }, id: { not: id } },
@@ -2463,13 +2530,15 @@ export async function deleteSalesInvoice(id: number) {
   // Fix #23: Add permission check
   await requirePermission("delete_sales_invoices")
   await prisma.salesInvoice.findUniqueOrThrow({ where: { id } })
+  let removedFiles: { fileUrl: string; referenceType: string }[] = [];
   await prisma.$transaction(async (tx) => {
     await reverseSalesInvoicePostingTx(tx, id)
-    await tx.transactionAttachment.deleteMany({ where: { referenceType: "sales_invoice", referenceId: id } })
+    removedFiles = await deleteTransactionAttachmentsTx(tx, { referenceType: "sales_invoice", referenceId: id })
     await tx.salesPayment.deleteMany({ where: { salesInvoiceId: id } })
     await tx.salesInvoiceItem.deleteMany({ where: { salesInvoiceId: id } })
     await tx.salesInvoice.delete({ where: { id } })
   })
+  await removeAttachmentFiles(removedFiles)
   await logActivity("delete", "SalesInvoice", id, `Menghapus faktur penjualan #${id}`)
   revalidatePath("/penjualan/faktur")
   return { success: true }

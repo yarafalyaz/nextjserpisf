@@ -155,18 +155,22 @@ export async function onGoodsReceiptVerified(
       conversions.map((c) => [`${c.itemId}:${c.code}`, Number(c.factorToBase)])
     );
 
-    // Convert a (itemId, qty, uom) to the item's BASE unit. Mirrors the clamp
-    // in step 3 below: missing meta, empty uom, or uom already equal to the
-    // base unitOfMeasure → no conversion (factor 1). Missing conversion row
-    // or non-positive factor → also factor 1 (do not silently drop a partial
-    // GR; the resulting over/under detection may be conservative, which is
-    // the safe direction).
+    // Convert a (itemId, qty, uom) to the item's BASE unit. Mirrors
+    // toBaseFactor: missing meta, empty uom, or uom already equal to the base
+    // unitOfMeasure → no conversion (factor 1). Missing conversion row or
+    // non-positive factor → factor 1 with an EXPLICIT warning (never silent;
+    // throwing would break the sales quick-add UoM flow, see uom.service).
     const toBaseQty = (itemId: number, qty: number, uom: string | null): number => {
       const meta = metaByItem.get(itemId);
       if (!meta || !uom || uom === meta.unitOfMeasure) return qty;
-      const raw = factorMap.get(`${itemId}:${uom}`) ?? 1;
-      const factor = raw > 0 ? raw : 1;
-      return qty * factor;
+      const raw = factorMap.get(`${itemId}:${uom}`);
+      if (raw == null || !(raw > 0)) {
+        console.warn(
+          `[goods-receipt.hook] konversi ${uom} untuk item #${itemId} ${raw == null ? "tidak ditemukan" : `tidak valid (${raw})`} — qty dihitung 1:1 dalam satuan dasar ${meta.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+        );
+        return qty;
+      }
+      return qty * raw;
     };
 
     // ─── 2. Update PO status ─────────────────────────────────────────────
@@ -277,8 +281,19 @@ export async function onGoodsReceiptVerified(
     const landedLines = goodsReceipt.items.map((item) => {
       const meta = metaByItem.get(item.itemId);
       const isBase = !meta || !item.uom || item.uom === meta.unitOfMeasure;
-      const raw = isBase ? 1 : (factorMap.get(`${item.itemId}:${item.uom}`) ?? 1);
-      const f = raw > 0 ? raw : 1;
+      let f = 1;
+      if (!isBase) {
+        const raw = factorMap.get(`${item.itemId}:${item.uom}`);
+        // Missing/non-positive conversion → factor 1 with explicit warning
+        // (never silent; throwing would break the sales quick-add UoM flow).
+        if (raw == null || !(raw > 0)) {
+          console.warn(
+            `[goods-receipt.hook] konversi ${item.uom} untuk item #${item.itemId} ${raw == null ? "tidak ditemukan" : `tidak valid (${raw})`} — qty dihitung 1:1 dalam satuan dasar ${meta?.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+          );
+        } else {
+          f = raw;
+        }
+      }
       return { baseQty: Number(item.qty) * f, poNetUnitPrice: poNetUnitPriceOf(item.itemId) };
     });
 
@@ -336,9 +351,19 @@ export async function onGoodsReceiptVerified(
       // Multi-UoM: convert entered qty/cost to the item's BASE unit for stock.
       const itemMeta = metaByItem.get(item.itemId);
       const isBaseUom = !itemMeta || !item.uom || item.uom === itemMeta.unitOfMeasure;
-      // Mirror toBaseFactor's clamp: a missing or non-positive factor → 1.
-      const rawFactor = isBaseUom ? 1 : (factorMap.get(`${item.itemId}:${item.uom}`) ?? 1);
-      const factor = rawFactor > 0 ? rawFactor : 1;
+      // Missing or non-positive factor → 1 with explicit warning (never
+      // silent; throwing would break the sales quick-add UoM flow).
+      let factor = 1;
+      if (!isBaseUom) {
+        const fetched = factorMap.get(`${item.itemId}:${item.uom}`);
+        if (fetched == null || !(fetched > 0)) {
+          console.warn(
+            `[goods-receipt.hook] konversi ${item.uom} untuk item #${item.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`} — qty dihitung 1:1 dalam satuan dasar ${itemMeta?.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+          );
+        } else {
+          factor = fetched;
+        }
+      }
       const baseQty = Number(item.qty) * factor;
       const enteredUnitCost = Number(item.unitCost ?? 0);
       const baseUnitCost = factor > 0 ? enteredUnitCost / factor : enteredUnitCost;

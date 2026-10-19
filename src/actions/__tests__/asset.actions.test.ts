@@ -35,6 +35,10 @@ const mocks = vi.hoisted(() => {
       findUniqueOrThrow: vi.fn(),
       findFirst: vi.fn().mockResolvedValue(null),
     },
+    assetBrandModel: {
+      findUnique: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
     asset: {
       update: vi.fn(),
       delete: vi.fn(),
@@ -333,6 +337,41 @@ describe("Asset Brand Actions", () => {
     expect(res?.success).toBe(false)
     expect(String(res?.error)).toMatch(/masih dipakai 2 aset/)
     expect(prismaMock.assetBrand.delete).not.toHaveBeenCalled()
+  })
+
+  /**
+   * Penjagaan hapus merek berlapis: merek→aset, merek→tipe→aset, merek→tipe.
+   *
+   * `Asset.assetBrandModelId` bare int tanpa FK, jadi hapus merek/tipe diam-diam
+   * meninggalkan ID yatim. deleteAssetBrand menolak bila ada aset menunjuk
+   * mereknya, menunjuk salah satu tipenya, atau merek masih punya tipe.
+   */
+  it("deleteAssetBrand MENOLAK bila aset menunjuk tipenya (bukan merek langsung)", async () => {
+    prismaMock.asset.count.mockResolvedValueOnce(0)
+    prismaMock.assetBrandModel.findMany.mockResolvedValueOnce([{ id: 7 }, { id: 8 }])
+    prismaMock.asset.count.mockResolvedValueOnce(1)
+    const res = await deleteAssetBrand(20)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/lewat tipenya/)
+    expect(prismaMock.assetBrand.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteAssetBrand MENOLAK bila merek masih punya tipe walau tak dipakai aset", async () => {
+    prismaMock.asset.count.mockResolvedValueOnce(0)
+    prismaMock.assetBrandModel.findMany.mockResolvedValueOnce([{ id: 7 }])
+    prismaMock.asset.count.mockResolvedValueOnce(0)
+    const res = await deleteAssetBrand(20)
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/masih punya 1 tipe/)
+    expect(prismaMock.assetBrand.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteAssetBrand lolos bila merek tanpa tipe dan tanpa aset", async () => {
+    prismaMock.asset.count.mockResolvedValueOnce(0)
+    prismaMock.assetBrandModel.findMany.mockResolvedValueOnce([])
+    prismaMock.assetBrand.delete.mockResolvedValue({})
+    await expect(deleteAssetBrand(20)).rejects.toThrow("NEXT_REDIRECT")
+    expect(prismaMock.assetBrand.delete).toHaveBeenCalledWith({ where: { id: 20 } })
   })
 
   it("handles error on create brand", async () => {
@@ -803,6 +842,7 @@ describe("createAsset / updateAsset", () => {
 
     const arg = prismaMock.asset.create.mock.calls[0][0]
     expect(arg.data.assetBrandId).toBeNull()
+    expect(arg.data.assetBrandModelId).toBeNull()
     expect(arg.data.groupId).toBeNull()
   })
 
@@ -832,6 +872,106 @@ describe("createAsset / updateAsset", () => {
     const arg = prismaMock.asset.update.mock.calls[0][0]
     expect(arg.data.assetBrandId).toBe(5)
     expect(arg.data.groupId).toBe(6)
+  })
+
+  /**
+   * Tipe/model aset (`Asset.assetBrandModelId`) — sisi PENULISAN + PENJAGAAN.
+   *
+   * Kolomnya ada sejak awal sebagai bare int tanpa relasi, tetapi tidak ada
+   * jalur tulisnya: form aset hanya memilih merek. Skema kini menerimanya,
+   * create/update menulisnya, dan aksi MENOLAK model yang bukan milik merek
+   * terpilih (form berjenjang, tapi aksi yang memutuskan).
+   */
+  it("skema aset MENERIMA assetBrandModelId (bukan dibuang diam-diam)", async () => {
+    const parsed = assetSchema.safeParse({ name: "Aset", assetBrandId: "3", assetBrandModelId: "7" })
+    expect(parsed.success).toBe(true)
+    if (parsed.success) {
+      expect(parsed.data.assetBrandModelId).toBe(7)
+    }
+  })
+
+  it("createAsset menulis assetBrandModelId bila model milik mereknya", async () => {
+    prismaMock.assetBrandModel.findUnique.mockResolvedValue({ assetBrandId: 3 })
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-10",
+      purchasePrice: "1000",
+      assetBrandId: "3",
+      assetBrandModelId: "7",
+    }))
+    expect(res.success).toBe(true)
+    const arg = prismaMock.asset.create.mock.calls[0][0]
+    expect(arg.data.assetBrandId).toBe(3)
+    expect(arg.data.assetBrandModelId).toBe(7)
+  })
+
+  it("createAsset MENOLAK model milik merek lain", async () => {
+    prismaMock.assetBrandModel.findUnique.mockResolvedValue({ assetBrandId: 9 })
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-11",
+      purchasePrice: "1000",
+      assetBrandId: "3",
+      assetBrandModelId: "7",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/bukan milik merek ini/)
+    expect(prismaMock.asset.create).not.toHaveBeenCalled()
+  })
+
+  it("createAsset MENOLAK model tanpa merek", async () => {
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-12",
+      purchasePrice: "1000",
+      assetBrandModelId: "7",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/membutuhkan merek/)
+    expect(prismaMock.asset.create).not.toHaveBeenCalled()
+  })
+
+  it("createAsset MENOLAK model yang tidak dikenal", async () => {
+    prismaMock.assetBrandModel.findUnique.mockResolvedValue(null)
+    const res = await createAsset(fd({
+      name: "Laptop",
+      code: "LAP-13",
+      purchasePrice: "1000",
+      assetBrandId: "3",
+      assetBrandModelId: "999",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/bukan milik merek ini/)
+    expect(prismaMock.asset.create).not.toHaveBeenCalled()
+  })
+
+  it("updateAsset menulis dan menjaga assetBrandModelId", async () => {
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
+      id: 100,
+      purchaseCost: 1000,
+      status: "active",
+    })
+    prismaMock.assetBrandModel.findUnique.mockResolvedValue({ assetBrandId: 5 })
+    await updateAsset(100, fd({
+      name: "Laptop Ubah",
+      code: "LAP-14",
+      purchasePrice: "1000",
+      assetBrandId: "5",
+      assetBrandModelId: "7",
+    }))
+    const arg = prismaMock.asset.update.mock.calls[0][0]
+    expect(arg.data.assetBrandModelId).toBe(7)
+
+    prismaMock.assetBrandModel.findUnique.mockResolvedValue({ assetBrandId: 9 })
+    const res = await updateAsset(100, fd({
+      name: "Laptop Ubah",
+      code: "LAP-14",
+      purchasePrice: "1000",
+      assetBrandId: "5",
+      assetBrandModelId: "7",
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/bukan milik merek ini/)
   })
 
   it("routes the new asset through the approval workflow if configured", async () => {

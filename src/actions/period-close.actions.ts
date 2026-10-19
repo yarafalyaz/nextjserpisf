@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache"
 
-import { prisma } from "@/lib/db/prisma"
+import { prisma, type TxClient } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
@@ -12,6 +12,36 @@ function revalidatePeriodConsumers(): void {
   revalidatePath("/pengaturan/proses-akhir-bulan")
   revalidatePath("/pengaturan/preferensi")
   revalidatePath("/pengaturan/ubah")
+}
+
+/**
+ * R-09: kunci baris tunggal `system_settings` (FOR UPDATE), baca ulang di
+ * dalam tx yang sama. Protokol identik dengan cabang `tx` pada
+ * `assertPeriodOpen` (period-lock.service.ts), sehingga tutup/buka-periode
+ * dan penulis jurnal/bank saling menunggu secara serial, bukan balapan
+ * baca-lalu-tulis (TOCTOU).
+ *
+ * Urutan kunci & risiko deadlock: aksi tutup/buka-periode HANYA menahan
+ * kunci baris setting ini. Jalur penulis (postJournal/updateJournal/
+ * baris rekening koran) dapat sudah menahan kunci jurnal/bank lebih dulu
+ * lalu menunggu kunci setting di `assertPeriodOpen(tx)`. Penulis bisa
+ * menunggu tutup-periode, tetapi tutup-periode tidak pernah menunggu
+ * jurnal/bank — jadi tidak ada siklus tunggu: tutup-periode selalu
+ * menang/commit lebih dulu, lalu penulis membaca tanggal kunci yang baru
+ * dan menolak bila tanggalnya tertutup.
+ */
+async function lockPeriodSettingRow(
+  tx: TxClient,
+): Promise<{ id: number; periodLockDate: Date | null } | null> {
+  const rows = await tx.$queryRaw<Array<{ id: number; period_lock_date: Date | string | null }>>`
+    SELECT id, period_lock_date FROM system_settings ORDER BY id LIMIT 1 FOR UPDATE
+  `
+  const row = rows[0]
+  if (!row) return null
+  return {
+    id: row.id,
+    periodLockDate: row.period_lock_date == null ? null : new Date(row.period_lock_date),
+  }
 }
 
 export interface PeriodCloseActionResult {
@@ -37,21 +67,29 @@ export async function closeAccountingPeriod(formData: FormData): Promise<PeriodC
       return { success: false, error: "Tanggal kunci periode tidak valid." }
     }
 
-    const settings = await prisma.systemSetting.findFirst({ select: { id: true, periodLockDate: true } })
-    if (!settings) return { success: false, error: "Pengaturan sistem tidak ditemukan." }
+    // Satu transaksi: kunci baris setting -> baca ulang -> validasi ->
+    // update. Tanpa ini, cek "jangan turunkan kunci" dan update bisa
+    // disela penulis/tutup-periode lain (TOCTOU R-09).
+    const closed = await prisma.$transaction(async (tx) => {
+      const settings = await lockPeriodSettingRow(tx)
+      if (!settings) return { ok: false as const, error: "Pengaturan sistem tidak ditemukan." }
 
-    if (settings.periodLockDate && settings.periodLockDate.getTime() > date.getTime()) {
-      return {
-        success: false,
-        error: `Periode sudah dikunci sampai ${settings.periodLockDate.toLocaleDateString("id-ID")}. Buka kunci dulu bila memang ingin memundurkannya.`,
+      if (settings.periodLockDate && settings.periodLockDate.getTime() > date.getTime()) {
+        return {
+          ok: false as const,
+          error: `Periode sudah dikunci sampai ${settings.periodLockDate.toLocaleDateString("id-ID")}. Buka kunci dulu bila memang ingin memundurkannya.`,
+        }
       }
-    }
 
-    await prisma.systemSetting.update({ where: { id: settings.id }, data: { periodLockDate: date } })
+      await tx.systemSetting.update({ where: { id: settings.id }, data: { periodLockDate: date } })
+      return { ok: true as const, id: settings.id }
+    })
+    if (!closed.ok) return { success: false, error: closed.error }
+
     await logActivity(
       "update",
       "SystemSetting",
-      settings.id,
+      closed.id,
       `Mengunci periode akuntansi sampai ${date.toLocaleDateString("id-ID")}`,
     )
     revalidatePeriodConsumers()
@@ -74,16 +112,22 @@ export async function reopenAccountingPeriod(): Promise<PeriodCloseActionResult>
   try {
     await requirePermission("manage_settings")
 
-    const settings = await prisma.systemSetting.findFirst({ select: { id: true, periodLockDate: true } })
-    if (!settings) return { success: false, error: "Pengaturan sistem tidak ditemukan." }
-    if (!settings.periodLockDate) return { success: false, error: "Periode belum dikunci." }
+    // Satu transaksi, protokol sama dengan tutup-periode di atas.
+    const reopened = await prisma.$transaction(async (tx) => {
+      const settings = await lockPeriodSettingRow(tx)
+      if (!settings) return { ok: false as const, error: "Pengaturan sistem tidak ditemukan." }
+      if (!settings.periodLockDate) return { ok: false as const, error: "Periode belum dikunci." }
 
-    await prisma.systemSetting.update({ where: { id: settings.id }, data: { periodLockDate: null } })
+      await tx.systemSetting.update({ where: { id: settings.id }, data: { periodLockDate: null } })
+      return { ok: true as const, id: settings.id, previousLock: settings.periodLockDate }
+    })
+    if (!reopened.ok) return { success: false, error: reopened.error }
+
     await logActivity(
       "update",
       "SystemSetting",
-      settings.id,
-      `Membuka kunci periode (sebelumnya sampai ${settings.periodLockDate.toLocaleDateString("id-ID")})`,
+      reopened.id,
+      `Membuka kunci periode (sebelumnya sampai ${reopened.previousLock.toLocaleDateString("id-ID")})`,
     )
     revalidatePeriodConsumers()
 

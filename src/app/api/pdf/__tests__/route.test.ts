@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@/lib/auth/auth", () => ({ auth: (...args: unknown[]) => mocks.authFn(...args) }))
 vi.mock("@/lib/auth/permissions", () => ({
   hasPermission: (...args: unknown[]) => mocks.hasPermission(...args),
+  hasAnyPermission: async (perms: unknown) =>
+    mocks.hasPermission(...(perms as unknown[])),
 }))
 vi.mock("@/lib/reports/statement-data", () => ({
   loadBalanceSheetStatement: (...args: unknown[]) => mocks.loadBalanceSheetStatement(...args),
@@ -135,6 +137,14 @@ beforeEach(() => {
 })
 
 describe("GET /api/pdf", () => {
+  it("menolak laporan gaji tanpa izin gaji bila hanya view_reports yang dicek manual", async () => {
+    // Sanity: mock hasPermission(false) + hasAnyPermission passthrough means
+    // payroll keys follow the any-of gate (covered by route logic).
+    mocks.hasPermission.mockResolvedValue(false)
+    const res = await GET(request("laporan=gaji-karyawan&periode=2026-10"))
+    expect(res.status).toBe(403)
+  })
+
   it("menolak permintaan tanpa sesi", async () => {
     mocks.authFn.mockResolvedValue(null)
     const res = await GET(request("laporan=neraca&periode=2026-10"))

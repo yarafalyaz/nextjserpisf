@@ -12,6 +12,7 @@ const userCreateMock = vi.fn()
 const userUpdateMock = vi.fn()
 const roleFindManyMock = vi.fn()
 const warehouseCountMock = vi.fn()
+const userCountMock = vi.fn()
 
 const bcryptCompareMock = vi.fn()
 const bcryptHashMock = vi.fn()
@@ -31,10 +32,12 @@ vi.mock("@/lib/db/prisma", () => ({
       findUnique: (...a: unknown[]) => userFindUniqueMock(...a),
       create: (...a: unknown[]) => userCreateMock(...a),
       update: (...a: unknown[]) => userUpdateMock(...a),
+      count: (...a: unknown[]) => userCountMock(...a),
     },
     role: {
       findMany: (...a: unknown[]) => roleFindManyMock(...a),
     },
+
     warehouse: {
       count: (...a: unknown[]) => warehouseCountMock(...a),
     },
@@ -84,7 +87,7 @@ beforeEach(() => {
   for (const m of [
     signInMock, signOutMock, requireAuthMock, requirePermissionMock,
     revalidateMock, userFindMock, userFindUniqueMock, userCreateMock, userUpdateMock,
-    roleFindManyMock, warehouseCountMock, bcryptCompareMock, bcryptHashMock,
+    roleFindManyMock, warehouseCountMock, userCountMock, bcryptCompareMock, bcryptHashMock,
   ]) m.mockReset()
   bcryptHashMock.mockResolvedValue("hashed-value")
   // requirePermission resolves to the acting user (default: a plain admin
@@ -373,6 +376,35 @@ describe("updateUserRoles", () => {
     expect(userFindUniqueMock).not.toHaveBeenCalled()
     expect(userUpdateMock).toHaveBeenCalled()
   })
+
+  it("blocks deactivating your own account", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "3", roles: ["admin"], permissions: ["manage_users"] })
+    userFindUniqueMock.mockResolvedValue({ id: 3, roles: [] })
+    const res = await toggleUserActive(3)
+    expect(res).toEqual({ error: "Tidak dapat menonaktifkan akun sendiri" })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("blocks removing the last super_admin role from yourself", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    userFindUniqueMock.mockResolvedValue({ id: 1, roles: [{ name: "super_admin" }] })
+    roleFindManyMock.mockResolvedValue([{ id: 1, name: "super_admin" }])
+    userCountMock.mockResolvedValue(0)
+    const res = await updateUserRoles(1, [5])
+    expect(res).toEqual({ error: "Tidak dapat mencabut role super admin terakhir" })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("allows demoting yourself when another super_admin remains", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    userFindUniqueMock.mockResolvedValue({ id: 1, roles: [{ name: "super_admin" }] })
+    roleFindManyMock.mockResolvedValue([{ id: 1, name: "super_admin" }])
+    userCountMock.mockResolvedValue(2)
+    userUpdateMock.mockResolvedValue({ id: 1 })
+    const res = await updateUserRoles(1, [5])
+    expect(res).toEqual({ success: true })
+    expect(userUpdateMock).toHaveBeenCalled()
+  })
 })
 
 describe("toggleUserActive", () => {
@@ -428,7 +460,11 @@ describe("toggleUserActive", () => {
 })
 
 describe("updateProfile", () => {
-  beforeEach(() => requireAuthMock.mockResolvedValue({ id: "9" }))
+  beforeEach(() => {
+    requireAuthMock.mockResolvedValue({ id: "9" })
+    // Default: current email equals the submitted one (no email change).
+    userFindMock.mockResolvedValue({ id: 9, email: "y@z.c", password: "hashed-value" })
+  })
 
   it("requires name and email", async () => {
     const res = await updateProfile(fd({ name: "" }))
@@ -439,12 +475,29 @@ describe("updateProfile", () => {
   })
 
   it("updates the session user (IDOR guard) and maps duplicate email", async () => {
+    userFindMock.mockResolvedValue({ id: 9, email: "old@z.c", password: "hashed-value" })
+    bcryptCompareMock.mockResolvedValue(true)
     userUpdateMock.mockRejectedValue(new Error("Unique constraint failed"))
-    const res = await updateProfile(fd({ name: "Y", email: "y@z.c", userId: "111" }))
+    const res = await updateProfile(fd({ name: "Y", email: "y@z.c", userId: "111", currentPassword: "secret123" }))
     expect(res).toEqual({ error: "Email sudah digunakan" })
     expect(userUpdateMock).toHaveBeenCalledWith(
       expect.objectContaining({ where: { id: 9 } }),
     )
+  })
+
+  it("rejects an email change without password confirmation", async () => {
+    userFindMock.mockResolvedValue({ id: 9, email: "old@z.c", password: "hashed-value" })
+    const res = await updateProfile(fd({ name: "Y", email: "y@z.c" }))
+    expect(res).toEqual({ error: "Password wajib diisi untuk mengganti email" })
+    expect(userUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("rejects an email change with the wrong password", async () => {
+    userFindMock.mockResolvedValue({ id: 9, email: "old@z.c", password: "hashed-value" })
+    bcryptCompareMock.mockResolvedValue(false)
+    const res = await updateProfile(fd({ name: "Y", email: "y@z.c", currentPassword: "wrongval" }))
+    expect(res).toEqual({ error: "Password salah" })
+    expect(userUpdateMock).not.toHaveBeenCalled()
   })
 
   it("returns generic error on non-unique constraint exception", async () => {
@@ -453,6 +506,15 @@ describe("updateProfile", () => {
     const res = await updateProfile(fd({ name: "Y", email: "y@z.c" }))
     expect(res).toEqual({ error: "Terjadi kesalahan saat memperbarui profil" })
     consoleSpy.mockRestore()
+  })
+
+  it("accepts an email change with the correct password", async () => {
+    userFindMock.mockResolvedValue({ id: 9, email: "old@z.c", password: "hashed-value" })
+    bcryptCompareMock.mockResolvedValue(true)
+    userUpdateMock.mockResolvedValue({ id: 9 })
+    const res = await updateProfile(fd({ name: "Y", email: "y@z.c", currentPassword: "secret123" }))
+    expect(res).toEqual({ success: true })
+    expect(bcryptCompareMock).toHaveBeenCalledWith("secret123", "hashed-value")
   })
 
   it("returns success on valid update", async () => {

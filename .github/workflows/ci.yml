@@ -24,12 +24,14 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
-      - run: npx prisma generate
+      - run: npm ci --ignore-scripts
+      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
+      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
+      - run: ./node_modules/.bin/prisma generate
         env:
           DATABASE_URL: mysql://root@localhost:3306/dummy
-      - run: npx eslint .
-      - run: npx tsc --noEmit
+      - run: ./node_modules/.bin/eslint .
+      - run: ./node_modules/.bin/tsc --noEmit
 
   unit:
     name: Unit Tests
@@ -40,28 +42,84 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
-      - run: npx prisma generate
+      - run: npm ci --ignore-scripts
+      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
+      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
+      - run: ./node_modules/.bin/prisma generate
         env:
           DATABASE_URL: mysql://root@localhost:3306/dummy
-      - run: npx vitest run
+      - run: ./node_modules/.bin/vitest run
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
 
-  e2e-setup:
-    name: E2E Auth Setup
+  build:
+    name: Build Next.js
+    runs-on: ubuntu-latest
+    needs: lint
+    # Keputusan pemilik: E2E browser dijalankan lokal, GitHub Actions hanya
+    # lint + unit + integrasi DB + build produksi. Build tetap memakai service
+    # MySQL + `migrate deploy` (tanpa seed). Tidak semua halaman terbukti
+    # `force-dynamic`, jadi halaman yang di-prerender masih bisa mengakses DB
+    # saat build; tanpa DB nyata build bisa gagal atau menghasilkan output
+    # berbeda. `migrate deploy` murah (~30 dtk).
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: yara_erp
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root --silent"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+          --tmpfs /var/lib/mysql:rw
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 26
+          cache: npm
+      - run: npm ci --ignore-scripts
+      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
+      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
+      - run: ./node_modules/.bin/prisma generate
+        env:
+          DATABASE_URL: mysql://root@localhost:3306/dummy
+      - name: Cache Next.js build cache
+        uses: actions/cache@v4
+        with:
+          path: .next/cache
+          key: ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-${{ hashFiles('src/**', 'prisma/**', 'next.config.ts', 'tsconfig*.json') }}
+          restore-keys: |
+            ${{ runner.os }}-nextjs-${{ hashFiles('package-lock.json') }}-
+            ${{ runner.os }}-nextjs-
+      - run: ./node_modules/.bin/prisma generate
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - run: ./node_modules/.bin/prisma migrate deploy
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - run: npm run build
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+
+  db-integration:
+    name: DB Integration Tests
     runs-on: ubuntu-latest
     needs: lint
     services:
       mysql:
-        image: mariadb:10.11
+        image: mysql:8.0
         env:
-          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: yes
-          MARIADB_DATABASE: yara_erp
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: yara_erp
         ports:
           - 3306:3306
         options: >-
-          --health-cmd="mariadb-admin ping --silent"
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -u root --silent"
           --health-interval=10s
           --health-timeout=5s
           --health-retries=5
@@ -72,136 +130,55 @@ jobs:
         with:
           node-version: 26
           cache: npm
-      - run: npm ci
-      - run: npx prisma generate
+      - run: npm ci --ignore-scripts
+      # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
+      # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
+      - run: ./node_modules/.bin/prisma generate
         env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+          DATABASE_URL: mysql://root@localhost:3306/dummy
+      - run: ./node_modules/.bin/prisma generate
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
       # `migrate deploy`, bukan `db push`: rantai migrasi sudah diverifikasi bisa
       # mereproduksi skema dari DB kosong (drift 0). Dengan ini ketidaksesuaian skema vs
       # migrasi GAGAL KERAS, bukan tertutupi — konsekuensinya setiap perubahan skema
       # wajib menyertakan migrasinya.
-      - run: npx prisma migrate deploy
+      - run: ./node_modules/.bin/prisma migrate deploy
         env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx prisma/seed.ts
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - run: ./node_modules/.bin/tsx prisma/seed.ts
         env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx scripts/seed-remaining-e2e.ts
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          # Seed guard: demo users (9 akun) hanya dibuat bila eksplisit
+          # diizinkan + password admin disediakan. Integrasi DB butuh data seed.
+          ALLOW_DEMO_SEED: "true"
+          SEED_ADMIN_PASSWORD: Yara1234
+      - run: ./node_modules/.bin/tsx scripts/seed-remaining-e2e.ts
         env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          # Skrip ini impor env.ts; sesudah R-11 bypass CI=true dicabut, secret
+          # wajib ada (32+ char). Nilai tes khusus CI.
+          NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
+          AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
       - name: Run DB integration tests (FIFO/multi-UoM/batch/serial engine)
-        run: RUN_DB_INTEGRATION=1 npx vitest run src/lib/services/__tests__/inventory-integration.test.ts
+        run: RUN_DB_INTEGRATION=1 ./node_modules/.bin/vitest run src/lib/services/__tests__/inventory-integration.test.ts
         env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx playwright install --with-deps chromium
-      - run: npm run build
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - name: Run Auth Setup
-        run: npx playwright test --project=setup --workers=1
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-          NEXTAUTH_SECRET: ci-secret
-          AUTH_SECRET: ci-secret
-          NEXTAUTH_URL: http://localhost:4101
-          AUTH_TRUST_HOST: "true"
-          E2E_PORT: "4101"
-      - name: Upload Auth State
-        uses: actions/upload-artifact@v7
-        with:
-          name: playwright-auth
-          path: e2e/.auth/
-          retention-days: 1
-          include-hidden-files: true
-          if-no-files-found: ignore
-
-  e2e:
-    name: "E2E Tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})"
-    runs-on: ubuntu-latest
-    timeout-minutes: 40
-    needs: [lint, unit, e2e-setup]
-    strategy:
-      fail-fast: false
-      matrix:
-        shardIndex: [1, 2, 3, 4]
-        shardTotal: [4]
-    services:
-      mysql:
-        image: mariadb:10.11
-        env:
-          MARIADB_ALLOW_EMPTY_ROOT_PASSWORD: yes
-          MARIADB_DATABASE: yara_erp
-        ports:
-          - 3306:3306
-        options: >-
-          --health-cmd="mariadb-admin ping --silent"
-          --health-interval=10s
-          --health-timeout=5s
-          --health-retries=5
-          --tmpfs /var/lib/mysql:rw
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 26
-          cache: npm
-      - run: npm ci
-      - name: Tune MariaDB
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (bank statement concurrency, MySQL nyata)
+        # Anti-skip: suite ini SKIP seluruhnya (exit 0) bila INTEGRATION_DB_URL
+        # kosong, jadi hijau CI bisa berarti 0 tes jalan. Log di-tee lalu
+        # digrep: output mengandung 'skipped' (atau tanpa 'passed') = GAGAL.
         run: |
-          mysql -h 127.0.0.1 -u root -e "SET GLOBAL max_connections=200; SET GLOBAL wait_timeout=600; SET GLOBAL interactive_timeout=600;" 
-      - run: npx prisma generate
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/actions/__tests__/bank-statement-concurrency.integration.test.ts 2>&1 | tee bank-statement-concurrency.log
+          if grep -qi 'skipped' bank-statement-concurrency.log; then
+            echo "::error::bank-statement-concurrency.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' bank-statement-concurrency.log; then
+            echo "::error::bank-statement-concurrency.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
         env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      # `migrate deploy`, bukan `db push`: rantai migrasi sudah diverifikasi bisa
-      # mereproduksi skema dari DB kosong (drift 0). Dengan ini ketidaksesuaian skema vs
-      # migrasi GAGAL KERAS, bukan tertutupi — konsekuensinya setiap perubahan skema
-      # wajib menyertakan migrasinya.
-      - run: npx prisma migrate deploy
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx prisma/seed.ts
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx scripts/seed-remaining-e2e.ts
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx playwright install --with-deps chromium
-      - name: Download Auth State
-        uses: actions/download-artifact@v7
-        with:
-          name: playwright-auth
-          path: e2e/.auth
-      - run: npm run build
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - name: Run E2E Tests
-        # Both viewports: the mobile project guards a whole surface (drawers,
-        # card lists, `lg:hidden` toolbars) that chromium alone never touches -
-        # 331 mobile tests were previously never executed anywhere.
-        run: npx playwright test --project=chromium --project=mobile-chrome --no-deps --workers=1 --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
-        env:
-          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-          NEXTAUTH_SECRET: ci-secret
-          AUTH_SECRET: ci-secret
-          NEXTAUTH_URL: http://localhost:4101
-          AUTH_TRUST_HOST: "true"
-          E2E_PORT: "4101"
-          PW_WORKERS: 1
-      - uses: actions/upload-artifact@v7
-        if: always()
-        with:
-          name: playwright-report-shard-${{ matrix.shardIndex }}
-          path: playwright-report/
-          retention-days: 30
-          # Shard yang hijau tidak menghasilkan direktori ini; tanpa baris ini CI
-          # menandai "No files were found" sebagai anotasi yang menyamarkan
-          # kegagalan sungguhan.
-          if-no-files-found: ignore
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: test-results-shard-${{ matrix.shardIndex }}
-          path: test-results/
-          retention-days: 7
-          if-no-files-found: ignore
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true

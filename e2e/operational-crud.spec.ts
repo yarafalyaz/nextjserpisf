@@ -450,13 +450,52 @@ test("gerbang dokumen: form tetap tampil, dan sebabnya dijelaskan bila kosong", 
     await expect(page.locator("form").first()).toBeVisible({ timeout: 15_000 })
   }
 
-  // Di DB ber-seed: tak ada PO dan tak ada penawaran → sebabnya harus dijelaskan.
-  // `.first()` + tunggu tenang: saat hidrasi, pohon sempat berisi dua salinan sehingga
-  // locator teks bisa kena strict-mode violation (artefak, bukan duplikat nyata).
+  // Shard paralel: tes lain bisa membuat PO/penawaran layak di DB bersama.
+  // Bila halaman menampilkan opsi (ada data layak), pesan kosong memang TAK
+  // tampil — skip bagian itu (pola sama dengan tes "menjelaskan sebab" di atas).
   await page.goto("/pembelian/penerimaan/tambah", { waitUntil: "domcontentloaded" })
   await page.waitForLoadState("networkidle")
-  await expect(page.getByText(/Belum ada PO yang bisa diterima/i).first()).toBeVisible({ timeout: 15_000 })
+  // R10-01: expect().toBeVisible MENUNGGU (bukan isVisible instan yang tak
+  // menunggu). Timeout pendek 3 dtk: bila pesan tak muncul, WAJIB ada bukti
+  // data layak (opsi PO di combobox) baru boleh skip; tanpa bukti = fail.
+  const pesanPO = page.getByText(/Belum ada PO yang bisa diterima/i).first()
+  const poKosong = await expect(pesanPO).toBeVisible({ timeout: 3_000 }).then(
+    () => true,
+    () => false,
+  )
+  if (!poKosong) {
+    // R10-01(2): bukti TERIKAT combobox PO spesifik — buka dropdown
+    // "Cari pesanan pembelian..." lalu hitung [role=option] di listbox-nya.
+    // Bukan 'ul li' global (nav/daftar lain bisa false-positive).
+    let buktiPO = 0
+    try {
+      // Jangkar: button#purchaseOrderId (id stabil, tanpa ubah UI).
+      await page.locator('button#purchaseOrderId[role="combobox"]').click({ timeout: 3_000 })
+      buktiPO = await page.locator('[role="listbox"] [role="option"]').count()
+    } catch {
+      buktiPO = 0
+    }
+    test.skip(buktiPO > 0, "Shard paralel membuat PO layak; halaman menampilkan form")
+    // Tanpa bukti = kondisi aneh (bukan pesan, bukan opsi) → fail jujur.
+    await expect(pesanPO).toBeVisible({ timeout: 15_000 })
+  }
   await page.goto("/penjualan/uang-muka/tambah", { waitUntil: "domcontentloaded" })
   await page.waitForLoadState("networkidle")
-  await expect(page.getByText(/Belum ada penawaran yang bisa dipakai/i).first()).toBeVisible({ timeout: 15_000 })
+  const pesanQ = page.getByText(/Belum ada penawaran yang bisa dipakai/i).first()
+  const qKosong = await expect(pesanQ).toBeVisible({ timeout: 3_000 }).then(
+    () => true,
+    () => false,
+  )
+  if (!qKosong) {
+    let buktiQ = 0
+    try {
+      // Jangkar: button#quotationId (id stabil, tanpa ubah UI).
+      await page.locator('button#quotationId[role="combobox"]').click({ timeout: 3_000 })
+      buktiQ = await page.locator('[role="listbox"] [role="option"]').count()
+    } catch {
+      buktiQ = 0
+    }
+    test.skip(buktiQ > 0, "Shard paralel membuat penawaran layak; halaman menampilkan form")
+    await expect(pesanQ).toBeVisible({ timeout: 15_000 })
+  }
 })

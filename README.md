@@ -18,7 +18,7 @@ Sistem ERP terintegrasi yang dibangun dengan Next.js 16 App Router, Prisma 7, da
 
 ### Prasyarat
 
-- Node.js 20+
+- Node.js 26+ (lihat `engines` di `package.json`; Docker memakai `node:26-alpine`)
 - MySQL 8.0+
 - npm
 
@@ -91,10 +91,29 @@ npm run test:e2e     # Jalankan tes E2E (Playwright)
 
 ## CI/CD
 
-Pipeline GitHub Actions jalan tiap push ke `main`:
+GitHub Actions jalan tiap push/PR ke `main`, tanpa E2E browser:
 
-- **Job verifikasi**: cek TypeScript, ESLint, tes unit
-- **Job E2E**: layanan MySQL, migrasi DB, Playwright (4 shard)
+- **Lint**: ESLint + TypeScript
+- **Unit**: tes unit (Vitest)
+- **Build**: build produksi Next.js dengan layanan MySQL 8 (`migrate deploy`, tanpa seed)
+- **DB integration**: tes integrasi DB di MySQL
+
+E2E Playwright adalah gate lokal pra-merge (tidak ada job E2E GitHub,
+tidak ada shard). Prasyarat: MySQL 8 dengan database khusus tes yang
+boleh di-reset (jangan pakai DB dev/prod), dan `DATABASE_URL` diset
+eksplisit di environment — skrip tidak membaca `.env` untuk dirinya:
+
+```bash
+DATABASE_URL='mysql://USER:PASSWORD@HOST:3306/DB_TES' npm run ci
+# atau: DATABASE_URL='mysql://USER:PASSWORD@HOST:3306/DB_TES' ./scripts/ci-local.sh
+```
+
+Satu perintah `playwright test` menjalankan auth setup lalu project
+`chromium` + `mobile-chrome`. Log tersimpan di `.ci-logs/`; skrip
+mencatat commit SHA (`git rev-parse --short HEAD`) dan status dirty
+(`git status --porcelain`) di awal dan summary — lampirkan ke PR
+sebagai bukti gate. Tree bersih tidak diwajibkan, tetapi statusnya
+selalu dilaporkan. Tanpa E2E: `./scripts/ci-local.sh --skip-e2e`.
 
 ## Kualitas Kode
 

@@ -1,13 +1,31 @@
 services:
+  # One-shot migration step: run explicitly on every release BEFORE starting
+  # app (`docker compose -f docker-compose.prod.yml up migrate`), never as
+  # part of the app boot. `migrate deploy` fails the release when the chain
+  # cannot apply — the app never boots on a half-migrated schema.
+  # IMAGE_TAG is pinned per release (see scripts/build-amd64.sh); it must
+  # never be `latest` so a release can always roll back to an exact build.
+  migrate:
+    image: yekristanto/silengkap:${IMAGE_TAG}
+    container_name: silengkap_migrate
+    env_file:
+      - .env
+    environment:
+      - TZ=Asia/Jakarta
+      - DATABASE_URL=mysql://${DB_USER:-silengkap_user}:${DB_PASSWORD:?set DB_PASSWORD di .env produksi}@db:3306/${DB_NAME:-silengkap}
+    command: ["sh", "-c", "node scripts/pre-migrate-column-audit.mjs && ./node_modules/.bin/prisma migrate deploy"]
+    depends_on:
+      db:
+        condition: service_healthy
   app:
-    image: yekristanto/silengkap:latest
+    image: yekristanto/silengkap:${IMAGE_TAG}
     container_name: silengkap_app
     restart: unless-stopped
     env_file:
       - .env
     environment:
       - TZ=Asia/Jakarta
-      - DATABASE_URL=mysql://${DB_USER:-silengkap_user}:${DB_PASSWORD:-silengkap_pass123}@db:3306/${DB_NAME:-silengkap}
+      - DATABASE_URL=mysql://${DB_USER:-silengkap_user}:${DB_PASSWORD:?set DB_PASSWORD di .env produksi}@db:3306/${DB_NAME:-silengkap}
       - AUTH_URL=https://erp.yarasoft.net
       - AUTH_SECRET=${AUTH_SECRET}
       - NEXT_PUBLIC_APP_URL=https://erp.yarasoft.net
@@ -17,8 +35,6 @@ services:
       # brute-force, uploads, API). Do NOT set this on a deployment that is
       # exposed directly - the headers would then be spoofable.
       - TRUSTED_PROXY=1
-    ports:
-      - "3003:3000"
     volumes:
       - ./public/uploads:/app/public/uploads
     depends_on:
@@ -32,11 +48,11 @@ services:
     environment:
       - MYSQL_DATABASE=${DB_NAME:-silengkap}
       - MYSQL_USER=${DB_USER:-silengkap_user}
-      - MYSQL_PASSWORD=${DB_PASSWORD:-silengkap_pass123}
-      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:-root_password_change_me}
+      - MYSQL_PASSWORD=${DB_PASSWORD:?set DB_PASSWORD di .env produksi}
+      - MYSQL_ROOT_PASSWORD=${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD di .env produksi}
       - TZ=Asia/Jakarta
-    ports:
-      - "3309:3306"
+    # P2-4: port DB TIDAK dipublish — hanya app di network compose yang boleh
+    # bicara ke MySQL. Akses admin via tunnel/ssh, bukan port publik.
     volumes:
       - mysql_data:/var/lib/mysql
     healthcheck:

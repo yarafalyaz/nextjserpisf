@@ -270,7 +270,11 @@ export const stockJournalService = {
     transactionDate?: Date
   ) {
     const accounts = await getAccountIds()
-    if (!accounts.inventory || !accounts.stockAdj) return null
+    if (!accounts.inventory || !accounts.stockAdj) {
+      throw new Error(
+        "Akun Persediaan dan Akun Penyesuaian Stok harus diatur di Pengaturan → Akuntansi sebelum penyesuaian stok bisa dijurnal.",
+      )
+    }
 
     // Net value change = sum of (difference × unitCost)
     const netValue = items.reduce(
@@ -327,7 +331,11 @@ export const stockJournalService = {
   ) {
     const accounts = await getAccountIds()
     const expenseAcct = accounts.materialIssueExpense ?? accounts.materialExpense ?? accounts.cogs
-    if (!accounts.inventory || !expenseAcct) return null
+    if (!accounts.inventory || !expenseAcct) {
+      throw new Error(
+        "Akun Persediaan dan akun Beban Material harus diatur di Pengaturan → Akuntansi sebelum pengeluaran material bisa dijurnal.",
+      )
+    }
 
     const totalValue = sumValue(items)
     if (totalValue <= 0) return null

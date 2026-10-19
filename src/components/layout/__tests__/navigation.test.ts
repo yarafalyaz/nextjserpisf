@@ -17,7 +17,14 @@ describe("navigation single source of truth", () => {
     // Tapi `children` TIDAK boleh ikut dihapus: label, ikon, izin, deskripsi
     // katalog, breadcrumb, dan command palette semuanya membaca dari sini.
     expect(group?.children?.length ?? 0).toBeGreaterThan(30)
-    expect((group?.children ?? []).every((child) => child.permission === "view_reports")).toBe(true)
+    expect(
+      (group?.children ?? []).every((child) => {
+        if (["/laporan/gaji-karyawan", "/laporan/pph-21", "/laporan/porsi-gaji", "/laporan/bukti-potong-pph"].includes(child.href)) {
+          return (child.permissions ?? []).includes("view_payroll_reports")
+        }
+        return child.permission === "view_reports"
+      }),
+    ).toBe(true)
   })
 
   it("includes every menu the sidebar used to hardcode (no drift)", () => {

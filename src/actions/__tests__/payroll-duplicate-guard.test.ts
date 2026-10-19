@@ -56,6 +56,7 @@ vi.mock("@/lib/services/attendance-summary.service", () => ({
   calculateAttendanceSummary: vi.fn(async () => ({ workingDays: 20, presentDays: 20, absentDays: 0, absentDeduction: 0 })),
 }))
 vi.mock("@/lib/services/payroll-statutory.service", () => ({
+  getStatutoryParams: vi.fn(async () => ({})),
   computeBpjsEmployee: () => ({ health: 0, employment: 0, total: 0 }),
   computePph21Monthly: () => 0,
 }))

@@ -2,7 +2,7 @@ import { prisma, TxClient } from "@/lib/db/prisma";
 import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { notificationService } from "@/lib/services/notification.service";
-import { onSalesInvoicePosted } from "@/lib/hooks/accounting.hook";
+import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { Status, WorkOrderStatus, SalesStatus } from "@/lib/constants";
 
 /**
@@ -70,18 +70,11 @@ export async function onDownPaymentConfirmed(
     await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${dp.quotationId} FOR UPDATE`;
 
     // Guard: already confirmed — silent skip (idempotency).
-    // Recovery: if a prior confirm committed the invoice but the process died
-    // before the post-commit onSalesInvoicePosted call (revenue/COGS/stock-out),
-    // re-capture the invoice id so the idempotent posting hook below completes
-    // it on retry instead of leaving a "posted" invoice with no GL revenue.
+    // P0-2 (review): retry TIDAK boleh memanggil onSalesInvoicePosted tanpa
+    // gate. Posting resmi (postInvoice) menegakkan izin + approval +
+    // period-lock; hook retry tak punya ketiganya. Retry hanya melengkapi
+    // alokasi DP yang terlewat (lihat existingInv di atas) — bukan posting.
     if (dp.status === SalesStatus.CONFIRMED) {
-      const orphanInv = await tx.salesInvoice.findFirst({
-        where: { quotationId: dp.quotationId },
-        select: { id: true },
-      });
-      if (orphanInv) {
-        await onSalesInvoicePosted(orphanInv.id, userId, tx);
-      }
       return;
     }
 
@@ -101,51 +94,163 @@ export async function onDownPaymentConfirmed(
     // ─── Multi-DP & Idempotency Check ─────────────────────────────────
     // If the invoice already exists, this quotation has already been converted
     // (e.g. by a previous DP). This is a subsequent down payment.
+    // AUD-SAL-01: kecualikan invoice cancelled — DP baru tidak boleh
+    // teralokasi ke dokumen batal (void menuntut payments kosong, jadi
+    // invoice cancelled tak punya payment; DP yang masuk harus memicu
+    // invoice pengganti, bukan menempel ke yang batal).
     const existingInv = await tx.salesInvoice.findFirst({
-      where: { quotationId: quotation.id },
+      where: { quotationId: quotation.id, status: { not: "cancelled" } },
     });
 
+    // P0-1: DP lanjutan tanpa invoice (ambang 50% belum tercapai saat DP
+    // sebelumnya): tandai CONFIRMED dulu agar kumulatif termasuk DP ini,
+    // lalu JATUH ke alur pembuatan di bawah — bukan return — supaya invoice
+    // lahir tepat saat ambang tercapai oleh DP ini. WO/SO/Project tetap
+    // dibuat sekali (dilewati bila sudah ada).
+    if (!existingInv) {
+      await tx.downPayment.update({
+        where: { id: dpId },
+        data: { status: SalesStatus.CONFIRMED },
+      });
+    }
+
     if (existingInv) {
+      // P0-1 (review): DP lanjutan hanya boleh menambah SalesPayment untuk DP
+      // INI — dan idempoten: DP yang sama di-retry tidak boleh membuat baris
+      // kedua. Penandanya = notes berisi nomor dokumen DP (relasi otoritatif
+      // DP→payment belum ada di skema; cocok amount/tanggal rapuh).
+      const marker = `Uang muka dari DP ${dp.documentNo}`
+      const alreadyAllocated = await tx.salesPayment.findFirst({
+        where: { salesInvoiceId: existingInv.id, notes: { contains: marker } },
+      })
       // Create SalesPayment for this subsequent DP linked to the existing invoice
-      if (Number(dp.amount) > 0) {
+      if (Number(dp.amount) > 0 && !alreadyAllocated) {
+        // AUD-R3-04 (putusan akuntan): PISAHKAN penerimaan kas dari alokasi.
+        // Kas DP PENUH sudah dijurnal saat terima (Dr Kas / Cr 210102) — yang
+        // dicatat di sini HANYA alokasi ke faktur, sebesar SISA faktur.
+        // SalesPayment penuh + kredit selisih = double-count di laporan yang
+        // menjumlah SalesPayment.amount sebagai pelunasan faktur.
+        const prePaid = await tx.salesPayment.findMany({
+          where: { salesInvoiceId: existingInv.id },
+          select: { amount: true, withholdingAmount: true },
+        });
+        const prePaidSen = Math.round(safeSum(prePaid.map((p) => Number(p.amount) + Number(p.withholdingAmount ?? 0)), 2) * 100);
+        const invGrandSen = Math.round(Number(existingInv.grandTotal ?? 0) * 100);
+        const allocSen = Math.max(Math.min(Math.round(Number(dp.amount) * 100), invGrandSen - prePaidSen), 0);
         const payDocNo = await generateDocumentNumber("PAY");
-        await tx.salesPayment.create({
+        const allocPayment = await tx.salesPayment.create({
           data: {
             documentNo: payDocNo,
             salesInvoiceId: existingInv.id,
             customerId: quotation.customerId,
-            amount: dp.amount,
-            paymentDate: new Date(),
+            amount: allocSen / 100,
+            paymentDate: dp.paymentDate ?? new Date(),
             paymentMethod: "down_payment",
-            notes: `Uang muka dari DP ${dp.documentNo}`,
+            notes: `${marker} (alokasi ${allocSen / 100} dari DP ${Number(dp.amount)}; sisa jadi kredit)`,
             createdBy: userId ?? null,
           },
         });
 
+        // AUD-FIN-04 (putusan akuntan): alokasi DP lanjutan = reklas kewajiban
+        // 210102 → piutang sebesar allocSen, DALAM tx sama. Kas PENUH sudah
+        // dijurnal saat terima DP (onDownPaymentReceived: Dr Kas / Cr 210102)
+        // — tanpa jurnal di sini AR tak turun + kewajiban tak lunas.
+        // Idempoten: cek jurnal existing via referenceType/referenceId (pola
+        // hook lain); zero-alloc (allocSen = 0) = tak ada jurnal.
+        if (allocSen > 0) {
+          const dpSettings = await tx.systemSetting.findFirst();
+          const dpLiabilityId = (dpSettings as { customerDownPaymentAccountId?: number | null } | null)?.customerDownPaymentAccountId ?? null;
+          const dpArId = (dpSettings as { salesReceivableAccountId?: number | null } | null)?.salesReceivableAccountId ?? null;
+          if (!dpLiabilityId || !dpArId) {
+            throw new Error(
+              "Akun kewajiban UMP (210102) dan Piutang Usaha belum dikonfigurasi — alokasi DP lanjutan ditolak",
+            );
+          }
+          const allocDate = dp.paymentDate ?? new Date();
+          await assertPeriodOpen(allocDate, tx);
+          const existingAllocJournal = await tx.journal.findFirst({
+            where: { referenceType: "SalesPayment", referenceId: allocPayment.id },
+          });
+          if (!existingAllocJournal) {
+            const allocJournalNo = await generateDocumentNumber("JRN");
+            const allocAmount = allocSen / 100;
+            await tx.journal.create({
+              data: {
+                journalNumber: allocJournalNo,
+                transactionDate: allocDate,
+                referenceType: "SalesPayment",
+                referenceId: allocPayment.id,
+                description: `Alokasi DP ${dp.documentNo} ke faktur ${existingInv.documentNo ?? existingInv.id}`,
+                type: "AUTO",
+                status: "POSTED",
+                totalDebit: allocAmount,
+                totalCredit: allocAmount,
+                createdBy: userId ?? null,
+                entries: {
+                  create: [
+                    { accountId: dpLiabilityId, debit: allocAmount, credit: 0, memo: "Alokasi kewajiban UMP" },
+                    { accountId: dpArId, debit: 0, credit: allocAmount, memo: "Pelunasan piutang via uang muka" },
+                  ],
+                },
+              },
+            });
+          }
+        }
+
         // Recalculate invoice paid amount & status inside the same transaction
         const payments = await tx.salesPayment.findMany({
           where: { salesInvoiceId: existingInv.id },
-          select: { amount: true },
+          select: { amount: true, withholdingAmount: true },
         });
         
         // safeSum avoids JavaScript floating point drift (e.g. 0.1 + 0.7 = 0.7999999)
         // which would cause a fully paid invoice to stick at "partial" status.
-        const totalPaid = safeSum(payments.map((p) => p.amount), 2);
+        // AUD-R3-04: payment di atas = ALOKASI (<= sisa), jadi totalPaid tak
+        // bisa > grandTotal. overSen = DP penuh - yang teralokasi → kredit.
+        // paidBefore = prePaid (sebelum payment alokasi ini), BUKAN total - DP.
         const grandTotal = Number(existingInv.grandTotal ?? 0);
-        
-        let invStatus: "posted" | "partial" | "paid" = "posted";
-        let paymentStatus: "posted" | "partial" | "paid" = "posted";
+        const dpSen = Math.round(Number(dp.amount) * 100);
+        const overSen = dpSen - allocSen;
+        if (overSen > 0) {
+          const overAmount = overSen / 100;
+          const creditDocNo = await generateDocumentNumber("CC");
+          const existingCredit = await tx.customerCredit.findFirst({
+            where: { sourceType: "DownPayment", sourceId: dp.id },
+          });
+          if (!existingCredit) {
+            await tx.customerCredit.create({
+              data: {
+                documentNo: creditDocNo,
+                customerId: quotation.customerId,
+                sourceType: "DownPayment",
+                sourceId: dp.id,
+                receivedAmount: overAmount,
+                notes: `Kelebihan DP ${dp.documentNo} atas faktur ${existingInv.documentNo} (teralokasi ${allocSen / 100} dari DP ${dpSen / 100}). Bisa dipakai ulang / di-refund.`,
+                createdBy: userId ?? null,
+              },
+            });
+          }
+        }
+        // PPh dipotong pelanggan tetap melunasi piutang (parity sales-payment.hook:
+        // total = amount + withholdingAmount). Basis sen integer agar tak drift.
+        const totalPaidSen = Math.round(safeSum(payments.map((p) => Number(p.amount) + Number(p.withholdingAmount ?? 0)), 2) * 100);
+        const totalPaid = Math.min(totalPaidSen / 100, grandTotal);
+
+        // P0-2 (review): status DOKUMEN bukan status BAYAR. DP confirmation
+        // hanya boleh menyentuh paymentStatus; status lifecycle (draft /
+        // posted / approved) milik jalur posting resmi (postInvoice +
+        // gate izin/approval/period-lock). Tanpa ini, faktur draft berubah
+        // "posted" tanpa posting — stok-out + revenue/COGS lewat tanpa gate.
+        let paymentStatus: "posted" | "partial" | "paid" = existingInv.paymentStatus as "posted" | "partial" | "paid";
         if (totalPaid >= grandTotal) {
-          invStatus = "paid";
           paymentStatus = "paid";
         } else if (totalPaid > 0) {
-          invStatus = "partial";
           paymentStatus = "partial";
         }
 
         await tx.salesInvoice.update({
           where: { id: existingInv.id },
-          data: { paidAmount: totalPaid, status: invStatus, paymentStatus },
+          data: { paidAmount: totalPaid, paymentStatus },
         });
       }
 
@@ -169,16 +274,15 @@ export async function onDownPaymentConfirmed(
       return; // Stop here; do not re-create WO/SO/Invoice!
     }
 
-    // Otherwise, this is the FIRST DP: we need to create the WO/SO/Invoice.
-    // Idempotency: skip silently if WO/SO already exist without an invoice (shouldn't happen, but guards against partial state).
+    // Jalur pembuatan: WO/SO/Project dibuat SEKALI (dilewati bila sudah ada
+    // dari DP sebelumnya); invoice dievaluasi ambang 50% setiap kali.
     const existingWO = await tx.workOrder.findFirst({
       where: { quotationId: quotation.id },
     });
-    if (existingWO) return;
     const existingSO = await tx.salesOrder.findFirst({
       where: { quotationId: quotation.id },
     });
-    if (existingSO) return;
+    const needWorkDocs = !existingWO && !existingSO;
 
     // Flatten all items from quotation sections
     const allItems: FlatItem[] = quotation.sections.flatMap((section) =>
@@ -338,10 +442,16 @@ export async function onDownPaymentConfirmed(
       bomNotes += "\n[PERINGATAN] Catatan stok/BOM gagal dibuat otomatis — periksa ketersediaan material secara manual.\n";
     }
 
+    // ─── 1-3. Work Order + Project + Sales Order (SEKALI per quotation) ──
+    // Dilewati bila sudah ada dari DP sebelumnya; invoice di bawah tetap
+    // dievaluasi ambang setiap kali.
+    let workOrder = existingWO
+    let salesOrder = existingSO
+    if (needWorkDocs) {
     // ─── 1. Create Work Order ─────────────────────────────────────────
     const woDocNo = await generateDocumentNumber("WO");
 
-    const workOrder = await tx.workOrder.create({
+    workOrder = await tx.workOrder.create({
       data: {
         documentNo: woDocNo,
         quotationId: quotation.id,
@@ -356,12 +466,12 @@ export async function onDownPaymentConfirmed(
 
     // Create Work Order Items — include BOM/custom items (itemId=null) with
     // description so they appear in the WO items table.
-    if (allItems.length > 0) {
+    if (allItems.length > 0 && needWorkDocs) {
       await tx.workOrderItem.createMany({
         data: allItems
           .filter((item) => item.itemId !== null || (item.itemName && item.itemName.trim() !== ""))
           .map((item) => ({
-            workOrderId: workOrder.id,
+            workOrderId: workOrder!.id,
             itemId: item.itemId ?? 0,
             qty: item.qty,
             cost: item.unitPrice,
@@ -398,7 +508,7 @@ export async function onDownPaymentConfirmed(
     // ─── 3. Create Sales Order + Items ───────────────────────────────
     const soDocNo = await generateDocumentNumber("SO");
 
-    const salesOrder = await tx.salesOrder.create({
+    salesOrder = await tx.salesOrder.create({
       data: {
         documentNo: soDocNo,
         customerId: quotation.customerId,
@@ -415,10 +525,10 @@ export async function onDownPaymentConfirmed(
       },
     });
 
-    if (allItems.length > 0) {
+    if (allItems.length > 0 && needWorkDocs) {
       await tx.salesOrderItem.createMany({
         data: allItems.map((item) => ({
-          salesOrderId: salesOrder.id,
+          salesOrderId: salesOrder!.id,
           itemId: item.itemId,
           qty: item.qty,
           unitPrice: item.unitPrice,
@@ -427,11 +537,39 @@ export async function onDownPaymentConfirmed(
         })),
       });
     }
+    } // end if (needWorkDocs): WO/Project/SO dibuat sekali
+
+    // Di titik ini WO+SO pasti ada (dibuat di atas atau pre-existing).
+    // Bila keduanya null berarti state parsial yang tak dikenal — gagal keras
+    // daripada menulis invoice yatim tanpa dokumen kerja.
+    if (!workOrder || !salesOrder) {
+      throw new Error("Dokumen kerja (WO/SO) tidak ditemukan untuk quotation ini.")
+    }
 
     // ─── 4. Create Sales Invoice + Items ─────────────────────────────
+    // P0-1: invoice konversi DP dibuat SEKALI, hanya bila total DP
+    // terverifikasi (CONFIRMED, bukan draft/cancelled) mencapai minimal 50%
+    // dari nilai quotation — dihitung Decimal-safe (sen), bukan float.
+    // Invoice lahir sebagai DRAFT: pembuatan ≠ posting; stock-out +
+    // revenue/COGS terjadi saat posting manual lewat postInvoice.
+    const verifiedDPs = await tx.downPayment.findMany({
+      where: { quotationId: quotation.id, status: SalesStatus.CONFIRMED },
+      select: { amount: true },
+    })
+    // Decimal(15,2) → sen integer: drift float (0.1+0.7) tak bisa lewat.
+    const totalVerifiedSen = verifiedDPs.reduce(
+      (sum, d) => sum + Math.round(Number(d.amount) * 100),
+      0,
+    )
+    const grandTotalSen = Math.round(Number(quotation.grandTotal) * 100)
+    // Ambang 50% dibulatkan KE ATAS ke sen: 50% dari Rp1 → Rp0,50.
+    const thresholdSen = Math.ceil(grandTotalSen / 2)
+
+    let invoice: { id: number; documentNo: string } | null = null
+    if (totalVerifiedSen >= thresholdSen && salesOrder) {
     const invDocNo = await generateDocumentNumber("INV");
 
-    const invoice = await tx.salesInvoice.create({
+    const created = await tx.salesInvoice.create({
       data: {
         documentNo: invDocNo,
         customerId: quotation.customerId,
@@ -444,18 +582,19 @@ export async function onDownPaymentConfirmed(
         grandTotal: quotation.grandTotal,
         totalAmount: quotation.grandTotal,
         taxAmount: quotation.tax ?? 0,
-        paidAmount: dp.amount,
-        status: "posted",
-        paymentStatus: Number(dp.amount) >= Number(quotation.grandTotal) ? "paid" : "partial",
+        paidAmount: 0,
+        status: "draft",
+        paymentStatus: "partial",
         notes: `Otomatis dibuat dari DP ${dp.documentNo}`,
         createdBy: userId ?? null,
       },
     });
+    invoice = created
 
     if (allItems.length > 0) {
       await tx.salesInvoiceItem.createMany({
         data: allItems.map((item) => ({
-          salesInvoiceId: invoice.id,
+          salesInvoiceId: created.id,
           itemId: item.itemId,
           qty: item.qty,
           unitPrice: item.unitPrice,
@@ -469,24 +608,89 @@ export async function onDownPaymentConfirmed(
     // (recalc sums SalesPayment rows; without this, paidAmount would be overwritten
     // and the DP "lost"). No payment journal here — the cash was already journaled
     // at down-payment receipt (onDownPaymentReceived), so adding one would double cash.
-    if (Number(dp.amount) > 0) {
+    // P0-1 (review): alokasi SEMUA verified DP yang belum teralokasi — bukan
+    // cuma DP pemicu. Skenario: DP1 300 confirmed (di bawah ambang), DP2 200
+    // confirmed → ambang tercapai → invoice lahir. Tanpa loop ini, 300 milik
+    // DP1 hilang dari paidAmount dan AR overstate selamanya. Idempoten via
+    // marker notes per nomor DP (retry aman; kelebihan di atas grandTotal
+    // dicatat di notes, bukan dialokasi diam-diam).
+    const allocatedMarkers = new Set(
+      (
+        await tx.salesPayment.findMany({
+          where: { salesInvoiceId: created.id },
+          select: { notes: true },
+        })
+      ).map((p) => p.notes ?? ""),
+    )
+    const verifiedForAllocation = await tx.downPayment.findMany({
+      where: { quotationId: quotation.id, status: SalesStatus.CONFIRMED },
+    })
+    let allocatedSen = 0
+    for (const vdp of verifiedForAllocation) {
+      const vmarker = `Uang muka dari DP ${vdp.documentNo}`
+      if ([...allocatedMarkers].some((n) => n.includes(vmarker))) continue
+      if (Number(vdp.amount) <= 0) continue
       const payDocNo = await generateDocumentNumber("PAY");
       await tx.salesPayment.create({
         data: {
           documentNo: payDocNo,
-          salesInvoiceId: invoice.id,
+          salesInvoiceId: created.id,
           customerId: quotation.customerId,
-          amount: dp.amount,
-          paymentDate: new Date(),
+          amount: vdp.amount,
+          paymentDate: vdp.paymentDate ?? new Date(),
           paymentMethod: "down_payment",
-          notes: `Uang muka dari DP ${dp.documentNo}`,
+          notes: vmarker,
           createdBy: userId ?? null,
         },
       });
+      allocatedSen += Math.round(Number(vdp.amount) * 100)
     }
-    // Recognize revenue + COGS + stock-out for the auto-generated invoice (it is
-    // created already "posted", so trigger the posting hook inside the transaction).
-    await onSalesInvoicePosted(invoice.id, userId, tx);
+    const createdSen = Math.round(Number(quotation.grandTotal) * 100)
+    // AUD-FIN-02 (putusan akuntan): KELEBIHAN DP = KREDIT PELANGGAN
+    // terstruktur (customer_credits), BUKAN pelunasan, BUKAN catatan teks.
+    // paidAmount dibatasi grandTotal (tak boleh overstate); selisih masuk
+    // ledger per DP sumber. Idempoten: satu baris per quotation (sourceType
+    // Quotation + sourceId), retry hanya menambah bila selisih bertambah.
+    // Jurnal nol-net di kewajiban 210102 (reklas antar subledger pelanggan):
+    // kas SUDAH masuk saat terima DP — jurnal di sini ganda bila Dr. Kas.
+    const overSen = allocatedSen - createdSen
+    if (overSen > 0) {
+      const overAmount = overSen / 100
+      const creditDocNo = await generateDocumentNumber("CC")
+      await tx.customerCredit.create({
+        data: {
+          documentNo: creditDocNo,
+          customerId: quotation.customerId,
+          sourceType: "Quotation",
+          sourceId: quotation.id,
+          receivedAmount: overAmount,
+          notes: `Kelebihan DP atas quotation ${quotation.documentNo} (teralokasi ${allocatedSen / 100} > grandTotal ${createdSen / 100}). Bisa dipakai ulang / di-refund.`,
+          createdBy: userId ?? null,
+        },
+      })
+      await tx.salesInvoice.update({
+        where: { id: created.id },
+        data: {
+          notes: `Otomatis dibuat dari DP ${dp.documentNo}. KELEBIHAN DP ${overAmount} dicatat sebagai kredit pelanggan ${creditDocNo} — bukan pelunasan.`,
+        },
+      })
+    }
+    // TIDAK ada onSalesInvoicePosted di sini: invoice konversi lahir draft;
+    // revenue/COGS/stock-out terjadi saat posting manual (postInvoice).
+    // WO/SO/Project di atas tetap dibuat agar kerja bengkel bisa mulai
+    // tanpa menunggu ambang 50% (keputusan bisnis #7).
+    // paidAmount DIBATASI grandTotal — kelebihan sudah pindah ke ledger
+    // (di atas), jadi paidAmount > grandTotal = overstate AR + double-count
+    // (sekali di paidAmount, sekali di kredit). Cap di sini = satu sumber.
+    const allocatedTotal = Math.min(allocatedSen / 100, Number(quotation.grandTotal))
+    await tx.salesInvoice.update({
+      where: { id: created.id },
+      data: {
+        paidAmount: allocatedTotal,
+        paymentStatus: allocatedTotal >= Number(quotation.grandTotal) ? "paid" : "partial",
+      },
+    })
+    }
 
     // ─── 5. Update Down Payment status ───────────────────────────────
     await tx.downPayment.update({
@@ -516,7 +720,9 @@ export async function onDownPaymentConfirmed(
         data: {
           quotationId: quotation.id,
           action: "converted",
-          description: `Penawaran dikonversi menjadi Pesanan Penjualan (${salesOrder.documentNo}), Perintah Kerja (${workOrder.documentNo}), dan Faktur (${invoice.documentNo})`,
+          description: invoice
+            ? `Penawaran dikonversi menjadi Pesanan Penjualan (${salesOrder.documentNo}), Perintah Kerja (${workOrder.documentNo}), dan Faktur (${invoice.documentNo})`
+            : `Penawaran mulai dikerjakan: Pesanan Penjualan (${salesOrder.documentNo}), Perintah Kerja (${workOrder.documentNo}). Faktur menyusul saat DP terverifikasi mencapai 50%.`,
           userId: userId ?? null,
         }
       });
@@ -525,7 +731,9 @@ export async function onDownPaymentConfirmed(
     readyDocuments.push(
       { type: "WorkOrder", documentNo: workOrder.documentNo, context: `Dari DP ${dp.documentNo}` },
       { type: "SalesOrder", documentNo: salesOrder.documentNo, context: `Dari DP ${dp.documentNo}` },
-      { type: "SalesInvoice", documentNo: invoice.documentNo, context: `Dari DP ${dp.documentNo}` },
+      ...(invoice
+        ? [{ type: "SalesInvoice" as const, documentNo: invoice.documentNo, context: `Dari DP ${dp.documentNo}` }]
+        : []),
     );
   };
 

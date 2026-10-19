@@ -36,6 +36,23 @@ const mocks = vi.hoisted(() => {
     overtimeRequest: buildModelMock(),
     appreciation: buildModelMock(),
     payroll: buildModelMock(),
+    // AUD-R3-02: ruleset statutori LENGKAP untuk periode tes (tulis-final
+    // payroll fail-closed bila fallback — mock kosong = semua tes tulis gagal).
+    payrollStatutoryRule: {
+      ...buildModelMock(),
+      findMany: vi.fn().mockResolvedValue([
+        { key: "bpjs_health_employee_rate", value: 0.01, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "bpjs_health_ceiling", value: 12000000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "bpjs_jht_employee_rate", value: 0.02, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "bpjs_jp_employee_rate", value: 0.01, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "bpjs_jp_ceiling", value: 10500000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "ptkp_single", value: 54000000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "ptkp_married_extra", value: 4500000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "ptkp_dependent_extra", value: 4500000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "occupational_cost_rate", value: 0.05, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "occupational_cost_ceiling_year", value: 6000000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+      ]),
+    },
     employee: buildModelMock(),
     attendance: buildModelMock(),
     workSchedule: buildModelMock(),
@@ -569,6 +586,7 @@ describe("Payroll Actions", () => {
     const defaultPayroll = {
       id: 1, status: "draft", netPay: 5000000, employeeId: 1, period: "2026-05",
       loanDeduction: 0,
+      statutorySnapshot: { fromFallback: false },
       employee: { name: "A", code: "A1" }
     }
     prismaMock.payroll.findUnique.mockResolvedValue(defaultPayroll)
@@ -591,6 +609,21 @@ describe("Payroll Actions", () => {
     const res = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
     expect(res).toBeDefined()
     if (!res || "error" in res) throw new Error("Expected success, got error: " + (res && "error" in res ? res.error : "undefined"))
+  })
+
+  it("estimation and bulk share one statutory engine with snapshot (P1-6)", async () => {
+    requirePermissionMock.mockResolvedValueOnce({ id: "1", roles: ["hr_admin"] } as any)
+    prismaMock.employee.findUnique.mockResolvedValue({
+      baseSalary: 5000000, maritalStatus: "single", dependents: 0,
+      employeeLoans: [],
+    })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+    const single = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
+    if (!single || "error" in single) throw new Error("single failed")
+    const snap = (single as unknown as { statutorySnapshot: { fromFallback: boolean; asOf: string } }).statutorySnapshot
+    // Mock ruleset LENGKAP (default) → bukan fallback; snapshot jujur.
+    expect(snap.fromFallback).toBe(false)
+    expect(snap.asOf).toBe("2026-05-31")
   })
 
   it("generateBulkPayroll succeeds", async () => {
@@ -686,6 +719,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createLeaveRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -694,6 +728,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createOvertimeRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("approveOvertime handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -702,6 +737,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).approveOvertime(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("getPayrollEstimation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -710,6 +746,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).getPayrollEstimation(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("generateBulkPayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -718,6 +755,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).generateBulkPayroll(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("processPayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -726,6 +764,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).processPayroll(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updatePayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -734,6 +773,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updatePayroll(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("approvePayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -742,6 +782,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).approvePayroll(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("markPayrollPaid handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -750,6 +791,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).markPayrollPaid(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createEmployeeLoan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -758,6 +800,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createEmployeeLoan(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createTimesheet handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -766,6 +809,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createTimesheet(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteLeaveRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -774,6 +818,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteLeaveRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -782,6 +827,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteOvertimeRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteTimesheet handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -790,6 +836,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteTimesheet(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteEmployeeLoan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -798,6 +845,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteEmployeeLoan(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateLeaveRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -806,6 +854,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateLeaveRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -814,6 +863,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateOvertimeRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateEmployeeLoan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -822,6 +872,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateEmployeeLoan(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateTimesheet handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -830,6 +881,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateTimesheet(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createAppreciation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -838,6 +890,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createAppreciation(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateAppreciation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -846,6 +899,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateAppreciation(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteAppreciation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -854,6 +908,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteAppreciation(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
 })
 
@@ -1006,6 +1061,25 @@ describe("Payroll extra branches", () => {
     const r = await actions.approvePayroll(1)
     expect(r?.success).toBe(false)
     expect(r?.error).toContain("Payroll hanya bisa di-approve dari status draft")
+  })
+
+  it("generateBulkPayroll menolak ruleset fallback (AUD-R3-02)", async () => {
+    prismaMock.employee.findMany.mockResolvedValue([{
+      id: 1, baseSalary: 5000000, maritalStatus: "single", employeeLoans: [],
+    }])
+    prismaMock.payrollStatutoryRule.findMany.mockResolvedValueOnce([])
+    const r = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("belum lengkap/valid")
+  })
+
+  it("approvePayroll menolak slip fallback 2024 (AUD-HRM-01)", async () => {
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "draft", statutorySnapshot: { fromFallback: true },
+    })
+    const r = await actions.approvePayroll(1)
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("cadangan (2024)")
   })
 
   it("markPayrollPaid on non-approved rejects", async () => {

@@ -28,6 +28,36 @@ export async function logActivity(
   }
 }
 
+/**
+ * AUD-R5-03: kegagalan audit-log PASCA-COMMIT finansial.
+ * Bukan console-only: coba tulis baris AUDIT_FAILURE (koneksi baru, di luar
+ * tx yang sudah commit) + console.error berkonteks SELALU (monitoring log).
+ * Transaksi uang TIDAK dilaporkan gagal — retry ganda ditahan idempotency key.
+ * Return false bila jejak DB ikut gagal (pemanggil boleh sertakan di respons
+ * sukses sebagai peringatan, bukan error).
+ */
+export async function reportPostCommitAuditFailure(
+  action: string,
+  modelType: string,
+  modelId: number,
+  detail: string,
+): Promise<{ auditPersisted: boolean }> {
+  console.error(`[audit-log-gagal] ${action} ${modelType}#${modelId}: ${detail}`)
+  try {
+    await prisma.$executeRaw`
+      INSERT INTO activity_logs (user_id, action, model_type, model_id, description, metadata, created_at)
+      VALUES (NULL, 'AUDIT_FAILURE', ${modelType}, ${modelId}, ${`Audit ${action} gagal dicatat: ${detail}`}, NULL, NOW())
+    `
+    return { auditPersisted: true }
+  } catch {
+    // Jejak DB ikut gagal: kembalikan PENANDA (bukan default senyap) —
+    // pemanggil WAJIB sertakan warning di respons sukses. Guard
+    // anti-silent-failure: return ini bermakna + dikonsumsi eksplisit.
+    console.error(`[audit-log-gagal] jejak AUDIT_FAILURE ikut gagal untuk ${modelType}#${modelId}`)
+    return { auditPersisted: false }
+  }
+}
+
 export async function getActivityLogs(
   modelType?: string,
   modelId?: number,

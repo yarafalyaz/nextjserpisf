@@ -36,10 +36,15 @@ const KNOWN_UNUSED: string[] = [
   // create/update/deleteBankStatementLine) dan dikunci penjaga `finance.actions.test.ts`.
   // Empat sisanya (di bawah) menunggu keputusan produk: implementasikan atau buang lewat
   // migrasi. Lihat docs/AUDIT-SCHEMA.md §3.
-  "ApprovalWorkflowStep.canSkip",
-  "Asset.assetBrandModelId",
-  "BankReconciliationItem.clearedDate",
-  "BankStatementLine.matchedType",
+  // (`Asset.assetBrandModelId` PERNAH di sini — ditutup bersama dropdown
+  // "Tipe / Model" berjenjang di form aset + tulis create/update + penjagaan
+  // model↔merek di aksi; guard berarah dua memerah saat perbaikan mendarat.)
+  // (`ApprovalWorkflowStep.canSkip`, `BankReconciliationItem.clearedDate`, dan
+  // `BankStatementLine.matchedType` PERNAH di sini — dibuang lewat migrasi
+  // `20261019001000_drop_wave2_dead_columns` (2026-10-19, branch kerja):
+  // ketiganya 0 rujukan kode produk; `cleared` tetap dipakai matematika
+  // outstanding `completeReconciliation`; guard berarah dua memerah saat
+  // pembuangan mendarat.)
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")
@@ -73,8 +78,9 @@ const SEED_ONLY_COLUMNS: string[] = [
   "Attendance.checkInLongitude",
   "Attendance.checkOutLatitude",
   "Attendance.checkOutLongitude",
-  "CrmTicket.firstResponseAt",
-  "CrmTicket.resolvedAt",
+  // (CrmTicket.firstResponseAt/resolvedAt PERNAH di sini — ditutup bersama
+  // `updateTicket` yang mengisinya otomatis saat status berubah; guard
+  // berarah dua memerah saat perbaikan ini mendarat, lalu entri dibuang.)
 ].sort()
 
 /**
@@ -121,9 +127,8 @@ const SEED_ONLY_MODELS: string[] = [
   // `create_journals` — sama dengan penulis header `createBankStatement`) menulis
   // barisnya dan menghitung ulang `BankStatement.totalDebits/totalCredits` header
   // di dalam transaksi yang sama, sehingga halaman detail rekening koran akhirnya
-  // punya isi. Yang masih tanpa rujukan (dan tak ditulis siapa pun) tinggal
-  // `BankStatementLine.matchedType` — lihat KNOWN_UNUSED: rekonsiliasi belum
-  // menandai jenis kecocokannya.
+  // punya isi. `BankStatementLine.matchedType` yang dulu tanpa rujukan SUDAH
+  // DIBUANG (migrasi `20261019001000_drop_wave2_dead_columns`).
   // CRM: komentar tiket dibaca lewat nested read — ditutup bersama aksinya
   // (`addTicketComment` + form di detail tiket), lihat catatan di bawah.
   // Proyek: log proyek ditutup bersama aksinya (`addProjectLog` + form di tab Log).

@@ -47,11 +47,13 @@ const clientSchema = z.object({
 export type ServerEnv = z.infer<typeof serverSchema>
 
 function validateEnv() {
-  // Skip validation during build or test/CI (env vars not fully available)
+  // Skip validasi hanya saat build produksi (env belum tersedia penuh) atau
+  // NODE_ENV=test. CI=true SAJA tidak cukup: runner CI unit/build/E2E sudah
+  // menyetel DATABASE_URL (+ secret 32+ char untuk E2E), jadi validasi tetap
+  // jalan dan secret/URL basi tertangkap di sana — bukan lolos diam-diam.
   if (
     process.env.NEXT_PHASE === "phase-production-build" ||
-    process.env.NODE_ENV === "test" ||
-    process.env.CI === "true"
+    process.env.NODE_ENV === "test"
   ) {
     return process.env as unknown as ServerEnv
   }

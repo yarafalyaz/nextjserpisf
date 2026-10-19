@@ -48,14 +48,22 @@ export async function DELETE(
     // Files are stored under private/uploads/attachments/ but fileUrl is the API
     // route path (/api/attachments/<ref>/<filename>). Resolve actual disk path.
     try {
-      const filename = attachment.fileUrl.split("/").pop()
-      const refType = attachment.referenceType || "general"
-      const privateRoot = path.join(process.cwd(), "private", "uploads", "attachments", refType)
-      const filepath = path.resolve(privateRoot, filename || "")
-      const relative = path.relative(path.join(process.cwd(), "private", "uploads"), filepath)
+      // fileUrl kanonis /api/attachments/<tipe>/<namaberkas> — tolak di
+      // sumber bila tak cocok pola (split/pop meruntuhkan traversal).
+      const match = /^\/api\/attachments\/[^/]+\/([^/]+)$/.exec(attachment.fileUrl)
+      const filename = match?.[1] ?? ""
+      // fileUrl tak cocok pola (mis. "/") atau mengandung traversal: lewati
+      // unlink tapi LANJUT ke hapus baris DB — return telanjang di sini
+      // membuat handler mengembalikan undefined (respons 500 tanpa badan).
+      if (filename && !filename.includes("..")) {
+        const refType = attachment.referenceType || "general"
+        const privateRoot = path.join(process.cwd(), "private", "uploads", "attachments", refType)
+        const filepath = path.resolve(privateRoot, filename)
+        const relative = path.relative(path.join(process.cwd(), "private", "uploads"), filepath)
 
-      if (filename && !relative.startsWith("..") && !path.isAbsolute(relative)) {
-        await unlink(filepath)
+        if (!relative.startsWith("..") && !path.isAbsolute(relative)) {
+          await unlink(filepath)
+        }
       }
     } catch {
       // File might already be deleted or on R2, continue

@@ -200,8 +200,8 @@ export function AppSidebar({ companyName, companyLogo, companyLogoDark, permissi
                         <Link
                           href={item.href}
                           onClick={(event) => {
+                            handleNav()
                             event.stopPropagation()
-                            handleNav?.()
                           }}
                           className="truncate hover:underline"
                         >

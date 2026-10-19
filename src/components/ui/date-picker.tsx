@@ -81,8 +81,9 @@ export function AppDatePicker({
           {label}
         </Label>
       )}
-      {/* Hidden input keeps server-action FormData(name) working unchanged. */}
-      <input type="hidden" name={name} value={current} />
+      {/* Hidden input keeps server-action FormData(name) working unchanged.
+          Ikut disabled: field tampil-saja tidak boleh mengirim nilai. */}
+      <input type="hidden" name={name} value={current} disabled={disabled} />
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button

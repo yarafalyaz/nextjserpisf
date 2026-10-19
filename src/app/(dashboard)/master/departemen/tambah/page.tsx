@@ -10,7 +10,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 export const metadata: Metadata = { title: "Tambah Departemen" }
 
 export default async function CreateDepartmentPage() {
-  await requirePermission("edit_departments")
+  await requirePermission("create_departments")
 
   const generatedCode = await peekNextDocumentNumber("DEPT", "simple")
 

@@ -153,6 +153,11 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="email">Email</Label>
             <Input id="email" name="email" type="email" defaultValue={user.email} required />
+            <p className="text-xs text-muted-foreground">Ganti email wajib isi kata sandi saat ini.</p>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="currentPassword">Kata Sandi Saat Ini (wajib bila ganti email)</Label>
+            <Input id="profileCurrentPassword" name="currentPassword" type="password" placeholder="••••••••" autoComplete="current-password" />
           </div>
         </div>
         <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">

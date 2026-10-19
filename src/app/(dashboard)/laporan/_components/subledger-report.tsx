@@ -205,7 +205,7 @@ export async function SubledgerReport({ side, basePath, partyKey, startDate, end
   const partyLabel = isAr ? "Pelanggan" : "Pemasok"
   const balanceLabel = isAr ? "Saldo Piutang" : "Saldo Utang"
   const debitLabel = isAr ? "Faktur" : "Tagihan"
-  const creditLabel = isAr ? "Pembayaran/Retur" : "Pembayaran/Retur"
+  const creditLabel = isAr ? "Pembayaran Piutang/Retur" : "Pembayaran Utang/Retur"
   const outstandingTitle = isAr ? "Faktur Belum Lunas" : "Tagihan Belum Lunas"
 
   const totalOutstanding = outstanding.reduce((sum, row) => safeAdd(sum, row.remaining, 2), 0)

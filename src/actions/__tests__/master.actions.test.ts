@@ -467,6 +467,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createCustomer(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateCustomer handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -475,6 +476,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateCustomer(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteCustomer handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -483,6 +485,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteCustomer(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createVendor handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -491,6 +494,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createVendor(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateVendor handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -499,6 +503,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateVendor(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createItem handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -507,6 +512,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createItem(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateItem handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -515,6 +521,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateItem(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createWarehouse handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -523,6 +530,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createWarehouse(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateWarehouse handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -531,6 +539,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateWarehouse(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createEmployee handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -539,6 +548,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createEmployee(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateEmployee handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -547,6 +557,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateEmployee(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createAccount handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -555,6 +566,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createAccount(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createItemCategory handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -563,6 +575,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createItemCategory(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateItemCategory handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -571,6 +584,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateItemCategory(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createDepartment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -579,6 +593,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createDepartment(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateDepartment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -587,6 +602,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateDepartment(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createPosition handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -595,6 +611,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createPosition(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updatePosition handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -603,6 +620,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updatePosition(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createLead handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -611,6 +629,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createLead(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateLead handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -619,6 +638,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateLead(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createBank handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -627,6 +647,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createBank(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateBank handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -635,6 +656,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateBank(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createTax handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -643,6 +665,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createTax(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateTax handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -651,6 +674,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateTax(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
 
   it("lookupItemByScan handles error globally", async () => {
@@ -660,6 +684,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).lookupItemByScan(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createBarcode handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -668,6 +693,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createBarcode(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateBarcode handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -676,6 +702,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateBarcode(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createTaxGroup handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -684,6 +711,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createTaxGroup(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateTaxGroup handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -692,6 +720,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateTaxGroup(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createPaymentTerm handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -700,6 +729,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createPaymentTerm(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updatePaymentTerm handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -708,6 +738,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updatePaymentTerm(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deletePaymentTerm handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -716,6 +747,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deletePaymentTerm(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteVendor handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -724,6 +756,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteVendor(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteItem handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -732,6 +765,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteItem(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteWarehouse handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -740,6 +774,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteWarehouse(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteEmployee handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -748,6 +783,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteEmployee(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteDepartment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -756,6 +792,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteDepartment(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deletePosition handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -764,6 +801,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deletePosition(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteBank handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -772,6 +810,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteBank(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteTax handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -780,6 +819,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteTax(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteTaxGroup handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -788,6 +828,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteTaxGroup(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteBarcode handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -796,6 +837,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteBarcode(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteItemCategory handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -804,6 +846,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteItemCategory(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateAccount handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -812,6 +855,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateAccount(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createBrand handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -820,6 +864,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createBrand(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateBrand handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -828,6 +873,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateBrand(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteBrand handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -836,6 +882,7 @@ describe('Global Error Paths (Permission Reject for 52 funcs)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteBrand(arg1, arg2); } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
 })
 

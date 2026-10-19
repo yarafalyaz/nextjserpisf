@@ -49,15 +49,19 @@ describe("uom.service", () => {
       expect(await toBaseFactor(tx, 1, "BOX")).toBe(12);
     });
 
-    it("returns 1 when no UoM conversion exists", async () => {
+    it("warns and returns 1 when no UoM conversion exists", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       const tx = mockTx({
         item: { unitOfMeasure: "PCS" },
         conversion: null,
       });
       expect(await toBaseFactor(tx, 1, "UNKNOWN")).toBe(1);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("tidak ditemukan"));
+      warn.mockRestore();
     });
 
-    it("returns 1 when factorToBase is 0 or negative", async () => {
+    it("warns and returns 1 when factorToBase is 0 or negative", async () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       const tx0 = mockTx({
         item: { unitOfMeasure: "PCS" },
         conversion: { factorToBase: 0 },
@@ -69,6 +73,8 @@ describe("uom.service", () => {
         conversion: { factorToBase: -5 },
       });
       expect(await toBaseFactor(txNeg, 1, "BOX")).toBe(1);
+      expect(warn).toHaveBeenCalledTimes(2);
+      warn.mockRestore();
     });
 
     it("handles decimal conversion factors", async () => {

@@ -28,6 +28,46 @@ const executeInTx = async (
   return txClient ? callback(txClient) : prisma.$transaction(callback);
 };
 
+/**
+ * UNIQUE (referenceType, referenceId) di MySQL lolos bila referenceType NULL
+ * (NULL ≠ NULL) — dua jurnal tanpa klaim bisa duplikat diam-diam. Validasi
+ * ini fail-closed SEBELUM klaim: referenceType kosong/null = tolak, bukan
+ * tulis. Tanpa ubah UNIQUE lama; semua pemanggil existing kirim string
+ * non-empty (dicek via grep), jadi gate ini no-op di jalur normal.
+ */
+export function assertJournalClaimRef(referenceType: unknown, referenceId: unknown): void {
+  if (typeof referenceType !== "string" || referenceType.trim() === "") {
+    throw new Error(
+      "Klaim jurnal ditolak: referenceType wajib non-empty sebelum klaim (UNIQUE bypass via NULL).",
+    );
+  }
+  if (typeof referenceId !== "number" || !Number.isInteger(referenceId) || referenceId <= 0) {
+    throw new Error(
+      "Klaim jurnal ditolak: referenceId wajib integer positif sebelum klaim (UNIQUE bypass via NULL).",
+    );
+  }
+}
+
+/**
+ * Akun jurnal bare-int tanpa FK fisik (tax/transfer/expense/petty/payment):
+ * ID basi (akun dihapus) lolos FK lalu jurnal menunjuk akun hantu. Guard ini
+ * fail-closed di action/hook: tiap accountId yang dipakai entri dicek
+ * existensinya via prisma.account; hilang satu = tolak sebelum tulis.
+ */
+export async function assertAccountsExist(
+  db: TxClient,
+  accountIds: (number | null | undefined)[],
+  label: string,
+): Promise<void> {
+  const ids = [...new Set(accountIds.filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0))];
+  if (ids.length === 0) return;
+  const found = await db.account.findMany({ where: { id: { in: ids } }, select: { id: true } });
+  if (found.length !== ids.length) {
+    const missing = ids.filter((id) => !found.some((f) => f.id === id));
+    throw new Error(`${label}: akun tidak ditemukan (id: ${missing.join(", ")}). Pilih ulang akun sebelum posting.`);
+  }
+}
+
 async function generateJournalNumber(
   _tx: TxClient,
   prefix: string,
@@ -125,6 +165,82 @@ export async function deleteJournalByReferenceTx(
   await tx.journal.deleteMany({ where: { id: { in: journalIds } } });
 }
 
+/**
+ * P1-7: reversal jurnal per dokumen — histori dipertahankan, bukan dihapus.
+ * Untuk tiap jurnal POSTED yang merujuk (referenceType, referenceId): buat
+ * jurnal lawan (debit↔kredit, tanggal = tanggal asli, referenceType "Journal"
+ * → id asli) lalu tandai asli REVERSED. Idempoten: jurnal yang sudah punya
+ * reversal (atau sudah REVERSED) dilewati. Jurnal non-POSTED (draft) dihapus
+ * — belum menyentuh GL sehingga tak ada histori GL yang hilang; dokumen
+ * sumber (faktur/pembayaran) tetap ada sebagai audit trail.
+ * Period lock: reversal bertanggal asli → assertPeriodOpen(tanggal asli).
+ */
+export async function reverseJournalsByReferenceTx(
+  tx: TxClient,
+  referenceType: string | string[],
+  referenceId: number | number[],
+  reason: string,
+  userId?: number | null,
+): Promise<void> {
+  const journals = await tx.journal.findMany({
+    where: {
+      referenceType: Array.isArray(referenceType)
+        ? { in: referenceType }
+        : referenceType,
+      referenceId: Array.isArray(referenceId)
+        ? { in: referenceId }
+        : referenceId,
+    },
+    include: { entries: true },
+  });
+  if (journals.length === 0) return;
+
+  for (const j of journals) {
+    if (j.status !== "POSTED") {
+      // Belum GL: hapus aman (dokumen sumber tetap ada).
+      await tx.journalEntry.deleteMany({ where: { journalId: j.id } });
+      await tx.journal.delete({ where: { id: j.id } });
+      continue;
+    }
+    const existingReversal = await tx.journal.findFirst({
+      where: { referenceType: "Journal", referenceId: j.id },
+      select: { id: true },
+    });
+    if (existingReversal || (j as { status: string }).status === "REVERSED") continue;
+
+    // Koreksi periode asal — tolak bila periode sudah dikunci.
+    await assertPeriodOpen(j.transactionDate, tx);
+
+    const reversalNumber = await generateJournalNumber(tx, "JRN-RV", j.id);
+    const reversal = await tx.journal.create({
+      data: {
+        journalNumber: reversalNumber,
+        transactionDate: j.transactionDate,
+        description: `Pembalikan ${j.journalNumber}: ${reason}`,
+        type: j.type,
+        status: "POSTED",
+        referenceType: "Journal",
+        referenceId: j.id,
+        totalDebit: j.totalDebit,
+        totalCredit: j.totalCredit,
+        createdBy: userId ?? null,
+      },
+    });
+    await tx.journalEntry.createMany({
+      data: j.entries.map((e) => ({
+        journalId: reversal.id,
+        accountId: e.accountId,
+        debit: e.credit,
+        credit: e.debit,
+        memo: `Pembalikan: ${e.memo ?? ""}`,
+        costCenterId: e.costCenterId,
+        profitCenterId: e.profitCenterId,
+      })),
+    });
+    await tx.journal.update({ where: { id: j.id }, data: { status: "REVERSED" } });
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // 1. onSalesInvoicePosted
 //    Dr. Receivable (total_amount)
@@ -138,6 +254,7 @@ export async function onSalesInvoicePosted(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("SalesInvoice", invoiceId);
   const settings = await getSystemSettings(db);
   // JANGAN diam-diam menyerah di sini. Sebelumnya `return` polos, dan akibatnya
   // terbukti pada basis data nyata: faktur berubah status menjadi POSTED sementara
@@ -156,9 +273,10 @@ export async function onSalesInvoicePosted(
     include: { items: true },
   });
 
-  // Idempotency: skip when journal already exists
+  // Idempotency: skip when an ACTIVE journal already exists. A REVERSED journal
+  // is history (void/edit), not a block — the edit flow reverses then re-posts.
   const existing = await db.journal.findFirst({
-    where: { referenceType: "SalesInvoice", referenceId: invoiceId },
+    where: { referenceType: "SalesInvoice", referenceId: invoiceId, status: { not: "REVERSED" } },
   });
   if (existing) {
     console.info(
@@ -185,7 +303,7 @@ export async function onSalesInvoicePosted(
     if (!inv) throw new Error("Invoice tidak ditemukan");
 
     const existingInTx = await tx.journal.findFirst({
-      where: { referenceType: "SalesInvoice", referenceId: invoiceId },
+      where: { referenceType: "SalesInvoice", referenceId: invoiceId, status: { not: "REVERSED" } },
     });
     if (existingInTx) {
       console.info(
@@ -363,8 +481,19 @@ export async function onSalesInvoicePosted(
           if (!info?.isProduct) continue;
           const uom = (line as { uom?: string | null }).uom;
           const isBaseUom = !uom || uom === info.unitOfMeasure;
-          const rawFactor = isBaseUom ? 1 : (factorMap.get(`${line.itemId}:${uom}`) ?? 1);
-          const factor = rawFactor > 0 ? rawFactor : 1;
+          // Missing/non-positive conversion → 1 with explicit warning (never
+          // silent; throwing would break the sales quick-add UoM flow).
+          let factor = 1;
+          if (!isBaseUom) {
+            const fetched = factorMap.get(`${line.itemId}:${uom}`);
+            if (fetched == null || !(fetched > 0)) {
+              console.warn(
+                `[accounting.hook] konversi ${uom} untuk item #${line.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`} — kebutuhan stok dihitung 1:1 dalam satuan dasar ${info.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+              );
+            } else {
+              factor = fetched;
+            }
+          }
           const need = Number(line.qty) * factor;
           if (info.defaultWarehouseId == null) {
             neededAnyWarehouse.set(line.itemId, (neededAnyWarehouse.get(line.itemId) ?? 0) + need);
@@ -415,10 +544,19 @@ export async function onSalesInvoicePosted(
       // Multi-UoM: convert sold qty to base units for stock-out / COGS.
       const uom = (line as { uom?: string | null }).uom;
       const isBaseUom = !uom || uom === info.unitOfMeasure;
-      const rawFactor = isBaseUom
-        ? 1
-        : (factorMap.get(`${line.itemId}:${uom}`) ?? 1);
-      const factor = rawFactor > 0 ? rawFactor : 1;
+      // Missing/non-positive conversion → 1 with explicit warning (never
+      // silent; throwing would break the sales quick-add UoM flow).
+      let factor = 1;
+      if (!isBaseUom) {
+        const fetched = factorMap.get(`${line.itemId}:${uom}`);
+        if (fetched == null || !(fetched > 0)) {
+          console.warn(
+            `[accounting.hook] konversi ${uom} untuk item #${line.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`} — qty jual dihitung 1:1 dalam satuan dasar ${info.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+          );
+        } else {
+          factor = fetched;
+        }
+      }
       const qty = Number(line.qty) * factor;
       const fallbackUnitCost =
         factor > 0 ? Number(info.cost ?? 0) / factor : Number(info.cost ?? 0);
@@ -522,6 +660,7 @@ export async function onSalesPaymentCreated(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("SalesPayment", paymentId);
   const settings = await getSystemSettings(db);
   if (!settings.salesReceivableAccountId) {
     throw new Error(
@@ -538,7 +677,12 @@ export async function onSalesPaymentCreated(
   const existing = await db.journal.findFirst({
     where: { referenceType: "SalesPayment", referenceId: paymentId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pembayaran jual #${paymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   // PPh yang dipotong pelanggan: kas yang diterima (amount) lebih kecil dari
   // pelunasan piutang (amount + potongan), dan selisihnya menjadi PPh dibayar
@@ -563,7 +707,12 @@ export async function onSalesPaymentCreated(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesPayment", referenceId: paymentId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pembayaran jual #${paymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PAY", paymentId);
 
@@ -575,6 +724,7 @@ export async function onSalesPaymentCreated(
         "Akun kas/bank belum dikonfigurasi untuk penerimaan pembayaran penjualan",
       );
     }
+    await assertAccountsExist(tx, [cashAccountId, withholdingAccountId, settings.salesReceivableAccountId], "Pembayaran penjualan");
 
     const journal = await tx.journal.create({
       data: {
@@ -639,6 +789,7 @@ export async function onPurchaseOrderReceived(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("PurchaseOrder", orderId);
   const settings = await getSystemSettings(db);
   if (!settings.inventoryAccountId || !settings.purchasePayableAccountId) {
     throw new Error(
@@ -654,7 +805,12 @@ export async function onPurchaseOrderReceived(
   const existing = await db.journal.findFirst({
     where: { referenceType: "PurchaseOrder", referenceId: orderId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pesanan beli #${orderId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(order.date, txClient);
 
@@ -668,7 +824,12 @@ export async function onPurchaseOrderReceived(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "PurchaseOrder", referenceId: orderId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pesanan beli #${orderId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PO-RCV", orderId);
 
@@ -748,6 +909,7 @@ export async function onExpenseApproved(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("Expense", expenseId);
   const expense = await db.expense.findUniqueOrThrow({
     where: { id: expenseId },
   });
@@ -769,7 +931,12 @@ export async function onExpenseApproved(
   const existing = await db.journal.findFirst({
     where: { referenceType: "Expense", referenceId: expenseId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pengeluaran #${expenseId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(expense.date ?? new Date(), txClient);
 
@@ -783,9 +950,15 @@ export async function onExpenseApproved(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "Expense", referenceId: expenseId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pengeluaran #${expenseId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "EXP", expenseId);
+    await assertAccountsExist(tx, [expense.accountId, expense.paidFromAccountId], "Pengeluaran");
 
     const journal = await tx.journal.create({
       data: {
@@ -837,6 +1010,7 @@ export async function onPettyCashCreated(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("PettyCash", pettyCashId);
   const settings = await getSystemSettings(db);
   if (!settings.pettyCashAccountId) {
     throw new Error(
@@ -852,7 +1026,12 @@ export async function onPettyCashCreated(
   const existing = await db.journal.findFirst({
     where: { referenceType: "PettyCash", referenceId: pettyCashId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] kas kecil #${pettyCashId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   // Use the authoritative transaction date. `date` is the user-input transaction
   // date and is always populated; `transactionDate` is an optional legacy field
@@ -873,10 +1052,22 @@ export async function onPettyCashCreated(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "PettyCash", referenceId: pettyCashId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] kas kecil #${pettyCashId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PC", pettyCashId);
     const isInflow = pettyCash.type === "IN";
+    await assertAccountsExist(
+      tx,
+      isInflow
+        ? [settings.pettyCashAccountId, pettyCash.sourceAccountId ?? settings.cashBankAccountId]
+        : [pettyCash.expenseAccountId ?? settings.generalExpenseAccountId, settings.pettyCashAccountId],
+      "Kas kecil",
+    );
 
     const journal = await tx.journal.create({
       data: {
@@ -967,6 +1158,7 @@ export async function onSalesReturnCompleted(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("SalesReturn", returnId);
   const settings = await getSystemSettings(db);
   // Sales-return + inventory mappings are always needed. The AR mapping is only
   // needed when the return is tied to an invoice (see below) — resolved after we
@@ -998,7 +1190,12 @@ export async function onSalesReturnCompleted(
   const existing = await db.journal.findFirst({
     where: { referenceType: "SalesReturn", referenceId: returnId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   // Revenue side valued at the selling price (reduces A/R by what was invoiced);
   // goods come back into inventory at cost. The margin nets into the Sales Return
@@ -1023,7 +1220,12 @@ export async function onSalesReturnCompleted(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesReturn", referenceId: returnId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] retur jual #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "SR", returnId);
 
@@ -1107,6 +1309,7 @@ export async function onPurchaseReturnProcessed(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("PurchaseReturn", returnId);
   const settings = await getSystemSettings(db);
   if (!settings.purchasePayableAccountId || !settings.inventoryAccountId) {
     throw new Error(
@@ -1123,7 +1326,12 @@ export async function onPurchaseReturnProcessed(
   const existing = await db.journal.findFirst({
     where: { referenceType: "PurchaseReturn", referenceId: returnId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] retur beli #${returnId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   // AP relief = agreed return price (what the vendor credits back).
   const totalAmount = purchaseReturn.items.reduce(
@@ -1156,7 +1364,12 @@ export async function onPurchaseReturnProcessed(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "PurchaseReturn", referenceId: returnId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] retur beli #${returnId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PR", returnId);
 
@@ -1270,10 +1483,16 @@ export async function onDownPaymentReceived(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("DownPayment", dpId);
   const settings = await getSystemSettings(db);
-  if (!settings.cashBankAccountId || !settings.salesReceivableAccountId) {
+  // AUD-FIN-01 (putusan akuntan): DP yang belum jadi pendapatan = KEWAJIBAN
+  // (CoA 210102 Uang Muka Penjualan), BUKAN Piutang 1103. Kredit ke Piutang
+  // mengecilkan AR palsu + menyembunyikan kewajiban. Null = instalasi lama
+  // belum mapping → TOLAK posting (fail-closed), jangan salah catat diam-diam.
+  const dpLiabilityAccountId = (settings as { customerDownPaymentAccountId?: number | null }).customerDownPaymentAccountId ?? null;
+  if (!settings.cashBankAccountId || !dpLiabilityAccountId) {
     throw new Error(
-      "Akun kas/bank dan uang muka penjualan harus dikonfigurasi sebelum uang muka diterima",
+      "Akun kas/bank dan akun kewajiban Uang Muka Penjualan (210102) harus dikonfigurasi sebelum uang muka diterima",
     );
   }
 
@@ -1284,7 +1503,12 @@ export async function onDownPaymentReceived(
   const existing = await db.journal.findFirst({
     where: { referenceType: "DownPayment", referenceId: dpId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] uang muka #${dpId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(dp.paymentDate || new Date(), txClient);
 
@@ -1298,7 +1522,12 @@ export async function onDownPaymentReceived(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "DownPayment", referenceId: dpId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] uang muka #${dpId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "DP", dpId);
 
@@ -1323,9 +1552,10 @@ export async function onDownPaymentReceived(
               credit: 0,
               memo: "Bank/Cash received",
             },
-            // Fix #27: Cr. Uang Muka Penjualan (bukan Revenue)
+            // AUD-FIN-01: Cr. Kewajiban Uang Muka Penjualan 210102 (bukan
+            // Piutang 1103, bukan Revenue). DP = kewajiban sampai faktur posting.
             {
-              accountId: settings.salesReceivableAccountId!,
+              accountId: dpLiabilityAccountId!,
               debit: 0,
               credit: dp.amount,
               memo: "Uang Muka Penjualan",
@@ -1349,6 +1579,7 @@ export async function onVendorBillPosted(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("VendorBill", billId);
   const settings = await getSystemSettings(db);
   if (!settings.purchasePayableAccountId) {
     throw new Error(
@@ -1363,7 +1594,12 @@ export async function onVendorBillPosted(
   const existing = await db.journal.findFirst({
     where: { referenceType: "VendorBill", referenceId: billId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] tagihan vendor #${billId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(bill.date, txClient);
 
@@ -1441,7 +1677,12 @@ export async function onVendorBillPosted(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "VendorBill", referenceId: billId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] tagihan vendor #${billId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     // Fix: Re-fetch the bill inside the transaction under a lock to prevent
     // stale data from being used in the journal.
@@ -1574,6 +1815,7 @@ export async function onVendorPaymentCreated(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("VendorPayment", paymentId);
   const settings = await getSystemSettings(db);
   if (!settings.purchasePayableAccountId) {
     throw new Error(
@@ -1607,7 +1849,12 @@ export async function onVendorPaymentCreated(
   const existing = await db.journal.findFirst({
     where: { referenceType: "VendorPayment", referenceId: paymentId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pembayaran vendor #${paymentId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(payment.paymentDate || new Date(), txClient);
 
@@ -1616,9 +1863,15 @@ export async function onVendorPaymentCreated(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "VendorPayment", referenceId: paymentId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pembayaran vendor #${paymentId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "VP", paymentId);
+    await assertAccountsExist(tx, [settings.purchasePayableAccountId, feeAccount, bankAccountId], "Pembayaran vendor");
 
     const entries: {
       accountId: number;
@@ -1684,6 +1937,7 @@ export async function onPayrollPaid(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("Payroll", payrollId);
   const settings = await getSystemSettings(db);
   if (!settings.salaryExpenseAccountId || !settings.payrollBankAccountId) {
     throw new Error(
@@ -1695,7 +1949,12 @@ export async function onPayrollPaid(
   const existing = await db.journal.findFirst({
     where: { referenceType: "Payroll", referenceId: payrollId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   const payroll = await db.payroll.findUniqueOrThrow({
     where: { id: payrollId },
@@ -1766,7 +2025,12 @@ export async function onPayrollPaid(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "Payroll", referenceId: payrollId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] penggajian #${payrollId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "PAY", payrollId);
 
@@ -1876,6 +2140,7 @@ export async function onEmployeeLoanDisbursed(
   txClient?: TxClient,
 ): Promise<void> {
   const db = txClient || prisma;
+  assertJournalClaimRef("EmployeeLoan", loanId);
   const settings = await getSystemSettings(db);
   if (!settings.employeeReceivableAccountId || !settings.payrollBankAccountId) {
     throw new Error(
@@ -1890,7 +2155,12 @@ export async function onEmployeeLoanDisbursed(
   const existing = await db.journal.findFirst({
     where: { referenceType: "EmployeeLoan", referenceId: loanId },
   });
-  if (existing) return;
+  if (existing) {
+    console.info(
+      `[accounting.hook] pinjaman karyawan #${loanId} sudah punya jurnal ${existing.journalNumber ?? existing.id} — posting dilewati`,
+    );
+    return;
+  }
 
   await assertPeriodOpen(loan.loanDate || new Date(), txClient);
 
@@ -1898,7 +2168,12 @@ export async function onEmployeeLoanDisbursed(
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "EmployeeLoan", referenceId: loanId },
     });
-    if (existingInTx) return;
+    if (existingInTx) {
+      console.info(
+        `[accounting.hook] pinjaman karyawan #${loanId} sudah punya jurnal ${existingInTx.journalNumber ?? existingInTx.id} — posting di dalam transaksi dilewati`,
+      );
+      return;
+    }
 
     const journalNumber = await generateJournalNumber(tx, "LOAN", loanId);
 

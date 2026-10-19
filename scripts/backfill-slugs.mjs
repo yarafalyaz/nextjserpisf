@@ -11,6 +11,7 @@
  * Usage: node scripts/backfill-slugs.mjs
  */
 import { execFileSync } from "node:child_process"
+import { existsSync } from "node:fs"
 
 const DB = process.env.DB_CONTAINER ?? "silengkap_dev_db"
 const DB_NAME = process.env.DB_NAME ?? "silengkap"
@@ -55,7 +56,7 @@ const TABLE_SOURCES = {
   // inventaris
   rack_rows: "code", stock_moves: "document_no", material_issues: "document_no",
   stock_adjustments: "document_no", racks: "name",
-  inventory_transfers: "document_no",
+  inventory_transfers: "document_no", stocktake_sessions: "document_no",
   // penjualan
   sales_invoices: "document_no", sales_payments: "document_no", quotations: "document_no",
   sales_orders: "document_no", sales_returns: "document_no",
@@ -77,8 +78,18 @@ const TABLE_SOURCES = {
 }
 
 function sql(query) {
+  // S4036: docker tidak dicari lewat PATH pemanggil; hanya lokasi tetap.
+  const dockerBin = [
+    "/usr/local/bin/docker",
+    "/usr/bin/docker",
+    "/opt/homebrew/bin/docker",
+    "/Applications/Docker.app/Contents/Resources/bin/docker",
+  ].find((p) => existsSync(p))
+  if (!dockerBin) {
+    throw new Error("docker tidak ditemukan di lokasi tetap — install Docker Desktop / docker CLI.")
+  }
   return execFileSync(
-    "docker",
+    dockerBin,
     ["exec", "-i", DB, "mysql", `-u${DB_USER}`, `-p${DB_PASS}`, DB_NAME, "-N", "-B", "-e", query],
     { encoding: "utf8" },
   )

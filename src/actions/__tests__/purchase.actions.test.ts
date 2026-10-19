@@ -597,6 +597,37 @@ describe("Vendor Bill Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createVendorBill tidak mem-posting jurnal (draft murni, P0-2)", async () => {
+    const hook = (await import("@/lib/hooks/accounting.hook")).onVendorBillPosted as any
+    hook.mockClear()
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      subtotal: "1000",
+      tax: "0",
+      grandTotal: "1000",
+    }))
+    expect(res?.success).toBe(true)
+    // Satu titik pengakuan = posting; draft tanpa jurnal (selaras laporan AP
+    // yang mengecualikan draft).
+    expect(hook).not.toHaveBeenCalled()
+  })
+
+  it("confirmVendorBill isi balanceDue NETO (grandTotal − withholding, P0-2)", async () => {
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: null, vendorId: 3,
+      grandTotal: 1000000, withholdingAmount: 100000,
+    })
+    const res = await actions.confirmVendorBill(1)
+    expect(res?.success).toBe(true)
+    const update = mocks.prismaMock.vendorBill.update.mock.calls.at(-1)![0]
+    expect(Number(update.data.balanceDue)).toBe(900000)
+  })
+
   it("confirmVendorBill rolls a service PO's value into the work order's production HPP", async () => {
     // 3-way match
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
@@ -859,6 +890,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createPurchaseRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createPurchaseOrder handles error globally", async () => {
@@ -868,6 +900,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createPurchaseOrder(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("cancelPurchaseOrder handles error globally", async () => {
@@ -877,6 +910,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).cancelPurchaseOrder(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createGoodsReceipt handles error globally", async () => {
@@ -886,6 +920,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createGoodsReceipt(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("verifyGoodsReceipt handles error globally", async () => {
@@ -895,6 +930,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).verifyGoodsReceipt(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createVendorBill handles error globally", async () => {
@@ -904,6 +940,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createVendorBill(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createVendorPayment handles error globally", async () => {
@@ -913,6 +950,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createVendorPayment(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("confirmVendorBill handles error globally", async () => {
@@ -922,6 +960,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).confirmVendorBill(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("confirmVendorPayment handles error globally", async () => {
@@ -931,6 +970,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).confirmVendorPayment(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("createPurchaseReturn handles error globally", async () => {
@@ -940,6 +980,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createPurchaseReturn(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("processPurchaseReturn handles error globally", async () => {
@@ -949,6 +990,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).processPurchaseReturn(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deletePurchaseRequest handles error globally", async () => {
@@ -958,6 +1000,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deletePurchaseRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deletePurchaseOrder handles error globally", async () => {
@@ -967,6 +1010,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deletePurchaseOrder(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteGoodsReceipt handles error globally", async () => {
@@ -976,6 +1020,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteGoodsReceipt(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteVendorBill handles error globally", async () => {
@@ -985,6 +1030,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteVendorBill(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deleteVendorPayment handles error globally", async () => {
@@ -994,6 +1040,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteVendorPayment(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updatePurchaseRequest handles error globally", async () => {
@@ -1003,6 +1050,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updatePurchaseRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updatePurchaseOrder handles error globally", async () => {
@@ -1012,6 +1060,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updatePurchaseOrder(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateVendorBill handles error globally", async () => {
@@ -1021,6 +1070,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateVendorBill(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateGoodsReceipt handles error globally", async () => {
@@ -1030,6 +1080,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateGoodsReceipt(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updatePurchaseReturn handles error globally", async () => {
@@ -1039,6 +1090,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updatePurchaseReturn(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("updateVendorPayment handles error globally", async () => {
@@ -1048,6 +1100,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateVendorPayment(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("voidVendorBill handles error globally", async () => {
@@ -1057,6 +1110,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).voidVendorBill(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
   it("deletePurchaseReturn handles error globally", async () => {
@@ -1066,6 +1120,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deletePurchaseReturn(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
     // Since we just want coverage on the catch block, we don't strictly assert the return shape if it throws
   })
 })

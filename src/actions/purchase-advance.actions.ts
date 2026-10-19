@@ -15,6 +15,7 @@ import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { purchaseAdvanceSchema } from "@/lib/validations/finance.schemas"
+import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 
 const REVALIDATE = "/pembelian/uang-muka"
 
@@ -29,6 +30,13 @@ function toMoney(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
 }
 
+/**
+ * Mencatat uang muka pembelian + jurnalnya (Dr Uang Muka, Cr Kas/Bank).
+ *
+ * Dua hal yang sengaja ditolak lebih awal: tanggal di periode yang sudah dikunci
+ * (`assertPeriodOpen`) dan rekening/akun yang tidak ada — supaya jurnal tidak
+ * pernah lahir dengan akun yang tak terpetakan.
+ */
 export async function createPurchaseAdvance(formData: FormData): Promise<PurchaseAdvanceActionResult> {
   try {
     const user = await requirePermission("create_purchase_advances")
@@ -141,14 +149,16 @@ export async function deletePurchaseAdvance(id: number): Promise<PurchaseAdvance
 
     await assertPeriodOpen(advance.date)
 
+    let removedFiles: { fileUrl: string; referenceType: string }[] = []
     await prisma.$transaction(async (tx) => {
       if (advance.journalId) {
         await tx.journalEntry.deleteMany({ where: { journalId: advance.journalId } })
-        await tx.transactionAttachment.deleteMany({ where: { referenceType: "Journal", referenceId: advance.journalId } })
+        removedFiles = await deleteTransactionAttachmentsTx(tx, { referenceType: "Journal", referenceId: advance.journalId })
         await tx.journal.delete({ where: { id: advance.journalId } })
       }
       await tx.purchaseAdvance.delete({ where: { id } })
     })
+    await removeAttachmentFiles(removedFiles)
 
     await logActivity("delete", "PurchaseAdvance", id, `Menghapus uang muka pembelian ${advance.documentNo}`)
     revalidatePath(REVALIDATE)

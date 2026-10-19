@@ -3,31 +3,40 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // Tests for reverseSalesInvoicePostingTx — the shared reversal used by the
 // delete/void flows AND the "edit a posted-but-unpaid invoice" flow. When an
 // invoice's items change after posting, the old stock-out must be restored and
-// the AR/revenue + COGS journals removed before the new lines are re-posted.
+// the AR/revenue + COGS journals REVERSED (entry lawan, histori utuh — P1-7)
+// before the new lines are re-posted.
 
 const stockMoveFindMany = vi.fn()
 const stockMoveCreate = vi.fn()
-const stockMoveDeleteMany = vi.fn()
+const stockMoveUpdateMany = vi.fn()
 const inventoryLayerCreateMany = vi.fn()
 const executeRaw = vi.fn()
 const salesPaymentFindMany = vi.fn()
-const deleteJournalByReferenceTx = vi.fn()
+const salesInvoiceItemFindMany = vi.fn()
+const itemSerialUpdateMany = vi.fn()
+const reverseJournalsByReferenceTx = vi.fn()
 
 vi.mock("@/lib/hooks/accounting.hook", () => ({
-  deleteJournalByReferenceTx: (...a: unknown[]) => deleteJournalByReferenceTx(...a),
+  reverseJournalsByReferenceTx: (...a: unknown[]) => reverseJournalsByReferenceTx(...a),
 }))
 
 const client = {
   stockMove: {
     findMany: (...a: unknown[]) => stockMoveFindMany(...a),
     create: (...a: unknown[]) => stockMoveCreate(...a),
-    deleteMany: (...a: unknown[]) => stockMoveDeleteMany(...a),
+    updateMany: (...a: unknown[]) => stockMoveUpdateMany(...a),
   },
   inventoryLayer: {
     createMany: (...a: unknown[]) => inventoryLayerCreateMany(...a),
   },
   salesPayment: {
     findMany: (...a: unknown[]) => salesPaymentFindMany(...a),
+  },
+  salesInvoiceItem: {
+    findMany: (...a: unknown[]) => salesInvoiceItemFindMany(...a),
+  },
+  itemSerial: {
+    updateMany: (...a: unknown[]) => itemSerialUpdateMany(...a),
   },
   $executeRaw: (...a: unknown[]) => executeRaw(...a),
 }
@@ -40,7 +49,9 @@ beforeEach(() => {
   stockMoveCreate.mockImplementation(({ data }: { data: { id?: number } }) =>
     Promise.resolve({ ...data, id: 99 }),
   )
-  stockMoveDeleteMany.mockResolvedValue({ count: 0 })
+  stockMoveUpdateMany.mockResolvedValue({ count: 0 })
+  salesInvoiceItemFindMany.mockResolvedValue([])
+  itemSerialUpdateMany.mockResolvedValue({ count: 0 })
   inventoryLayerCreateMany.mockResolvedValue({ count: 0 })
   executeRaw.mockResolvedValue(0)
   salesPaymentFindMany.mockResolvedValue([])
@@ -60,13 +71,18 @@ describe("reverseSalesInvoicePostingTx", () => {
     expect(stockMoveCreate).toHaveBeenCalled()
     // FIFO layer created for the reversal
     expect(inventoryLayerCreateMany).toHaveBeenCalled()
-    // original OUT move removed
-    expect(stockMoveDeleteMany).toHaveBeenCalledWith({ where: { id: { in: [1] } } })
-    // journals reversed
-    expect(deleteJournalByReferenceTx).toHaveBeenCalledWith(
+    // P1-7: original OUT move ditandai reversed — TIDAK dihapus.
+    expect(stockMoveUpdateMany).toHaveBeenCalledWith({
+      where: { id: { in: [1] } },
+      data: { status: "reversed" },
+    })
+    // journals reversed via reversal entry (bukan hapus)
+    expect(reverseJournalsByReferenceTx).toHaveBeenCalledWith(
       client,
       ["SalesInvoice", "SalesInvoiceCOGS"],
       7,
+      expect.stringContaining("7"),
+      null,
     )
   })
 
@@ -78,11 +94,13 @@ describe("reverseSalesInvoicePostingTx", () => {
     expect(executeRaw).not.toHaveBeenCalled()
     expect(stockMoveCreate).not.toHaveBeenCalled()
     expect(inventoryLayerCreateMany).not.toHaveBeenCalled()
-    expect(stockMoveDeleteMany).not.toHaveBeenCalled()
-    expect(deleteJournalByReferenceTx).toHaveBeenCalledWith(
+    expect(stockMoveUpdateMany).not.toHaveBeenCalled()
+    expect(reverseJournalsByReferenceTx).toHaveBeenCalledWith(
       client,
       ["SalesInvoice", "SalesInvoiceCOGS"],
       7,
+      expect.stringContaining("7"),
+      null,
     )
   })
 
@@ -91,7 +109,41 @@ describe("reverseSalesInvoicePostingTx", () => {
 
     await reverseSalesInvoicePostingTx(client as never, 7)
 
-    expect(deleteJournalByReferenceTx).toHaveBeenCalledWith(client, "SalesPayment", [11, 12])
+    expect(reverseJournalsByReferenceTx).toHaveBeenCalledWith(
+      client,
+      "SalesPayment",
+      [11, 12],
+      expect.stringContaining("7"),
+      null,
+    )
+  })
+
+  it("restores sold serials to available from the invoice lines (P1-7)", async () => {
+    stockMoveFindMany.mockResolvedValue([])
+    salesInvoiceItemFindMany.mockResolvedValue([
+      { itemId: 10, serialNumbers: ["SN-1", "SN-2"] },
+      { itemId: 11, serialNumbers: null },
+    ])
+
+    await reverseSalesInvoicePostingTx(client as never, 7)
+
+    expect(itemSerialUpdateMany).toHaveBeenCalledWith({
+      where: { itemId: 10, serialNumber: { in: ["SN-1", "SN-2"] }, status: "used" },
+      data: { status: "available" },
+    })
+    expect(itemSerialUpdateMany).toHaveBeenCalledTimes(1)
+  })
+
+  it("only reverses POSTED out moves (second reversal is a no-op for stock)", async () => {
+    stockMoveFindMany.mockResolvedValue([])
+
+    await reverseSalesInvoicePostingTx(client as never, 7)
+
+    expect(stockMoveFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ status: "posted" }),
+      }),
+    )
   })
 
   it("keeps payment journals when reversePaymentJournals is false (invoice re-price)", async () => {
@@ -100,7 +152,9 @@ describe("reverseSalesInvoicePostingTx", () => {
     await reverseSalesInvoicePostingTx(client as never, 7, { reversePaymentJournals: false })
 
     // must NOT touch the payment (DP/cash) journals when re-pricing an invoice
-    expect(deleteJournalByReferenceTx).not.toHaveBeenCalledWith(client, "SalesPayment", [11])
+    expect(
+      reverseJournalsByReferenceTx.mock.calls.some((c) => c[1] === "SalesPayment"),
+    ).toBe(false)
     expect(salesPaymentFindMany).not.toHaveBeenCalled()
   })
 })

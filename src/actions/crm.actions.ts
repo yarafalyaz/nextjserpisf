@@ -94,6 +94,11 @@ export async function updateTicket(id: number, formData: FormData) {
   }
   const data = parsed.data
 
+  const existing = await prisma.crmTicket.findUnique({
+    where: { id },
+    select: { status: true, firstResponseAt: true, resolvedAt: true },
+  })
+
   const ticket = await prisma.crmTicket.update({
     where: { id },
     data: {
@@ -112,6 +117,18 @@ export async function updateTicket(id: number, formData: FormData) {
       status: data.status ?? undefined,
       assignedTo: data.assignedTo ?? null,
       resolutionNotes: data.resolutionNotes ?? null,
+      // Jejak waktu SLA dihitung di server, bukan dari form: respons pertama
+      // saat tiket keluar dari "open", selesai saat masuk resolved/closed.
+      // Komentar internal/tindak lanjut (addTicketComment) tidak menyentuhnya —
+      // hanya perubahan status yang berarti.
+      firstResponseAt:
+        existing && existing.status === "open" && data.status && data.status !== "open"
+          ? (existing.firstResponseAt ?? new Date())
+          : undefined,
+      resolvedAt:
+        existing && data.status && (data.status === "resolved" || data.status === "closed") && !existing.resolvedAt
+          ? new Date()
+          : undefined,
     },
   })
 

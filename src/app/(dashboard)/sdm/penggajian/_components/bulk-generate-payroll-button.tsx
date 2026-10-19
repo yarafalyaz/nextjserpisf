@@ -35,8 +35,8 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
 
     if (rawVal) {
       const [yearStr, monthStr] = rawVal.split("-")
-      const year = parseInt(yearStr, 10)
-      const month = parseInt(monthStr, 10) // 1-12
+      const year = Number.parseInt(yearStr, 10)
+      const month = Number.parseInt(monthStr, 10) // 1-12
 
       // End Date: selected-month-cutoffDay
       const endObj = new Date(year, month - 1, cutoffDay)

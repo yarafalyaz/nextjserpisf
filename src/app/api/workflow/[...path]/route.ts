@@ -217,6 +217,30 @@ export async function POST(
     const allowedFrom = STATUS_ALLOWED_FROM
     const delegate = prisma[config.model as keyof typeof prisma] as any
 
+    // Maker-Checker untuk jalur manual (tanpa workflow aktif): pembuat dokumen
+    // tidak boleh menyetujui/menolaknya sendiri. super_admin bypass (konsisten
+    // dengan approveStep/rejectStep). Cuti/lembur tidak punya createdBy:
+    // kepemilikan lewat employee.userId, jadi cek itu bila ada.
+    if (action === "approve" || action === "reject") {
+      const actorId = Number(session.user.id)
+      if (!userRoles?.includes("super_admin") && Number.isSafeInteger(actorId)) {
+        let makerId: number | null = null
+        if (config.model === "leaveRequest" || config.model === "overtimeRequest") {
+          const doc = await delegate.findUnique({
+            where: { id },
+            select: { employee: { select: { userId: true } } },
+          })
+          makerId = doc?.employee?.userId != null ? Number(doc.employee.userId) : null
+        } else {
+          const doc = await delegate.findUnique({ where: { id }, select: { createdBy: true } })
+          makerId = doc?.createdBy != null ? Number(doc.createdBy) : null
+        }
+        if (makerId !== null && makerId === actorId) {
+          return apiError("FORBIDDEN", "Maker-Checker: pembuat dokumen tidak boleh menyetujui/menolaknya sendiri")
+        }
+      }
+    }
+
     let result
     if (config.model === "employeeLoan" && newStatus === "active") {
       result = await prisma.$transaction(async (tx) => {

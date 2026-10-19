@@ -19,7 +19,7 @@ export function formatCurrency(
 
   const numericAmount = Number(amount ?? 0);
 
-  if (isNaN(numericAmount)) return showSymbol ? `${symbol}0` : "0";
+  if (Number.isNaN(numericAmount)) return showSymbol ? `${symbol}0` : "0";
 
   const formatted = new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: decimals,
@@ -57,7 +57,7 @@ export function formatAccounting(
   } = options ?? {};
 
   const numericAmount = Number(amount ?? 0);
-  if (isNaN(numericAmount)) return zeroDash ? "–" : "0";
+  if (Number.isNaN(numericAmount)) return zeroDash ? "–" : "0";
 
   // Treat sub-cent magnitudes as zero so float drift never prints "(0)".
   if (zeroDash && Math.abs(numericAmount) < 0.005) return "–";
@@ -82,7 +82,7 @@ export function formatNumber(
 ): string {
   const numericValue = Number(value ?? 0);
 
-  if (isNaN(numericValue)) return "0";
+  if (Number.isNaN(numericValue)) return "0";
 
   return new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: decimals,
@@ -107,7 +107,7 @@ export function formatDate(
 
   const dateObj = typeof date === "string" ? new Date(date) : date;
 
-  if (isNaN(dateObj.getTime())) return "-";
+  if (Number.isNaN(dateObj.getTime())) return "-";
 
   const dateOptions: Intl.DateTimeFormatOptions = (() => {
     switch (format) {
@@ -139,7 +139,7 @@ export function formatRelativeTime(
   if (!date) return "-";
 
   const dateObj = typeof date === "string" ? new Date(date) : date;
-  if (isNaN(dateObj.getTime())) return "-";
+  if (Number.isNaN(dateObj.getTime())) return "-";
 
   const now = new Date();
   const diffMs = now.getTime() - dateObj.getTime();
@@ -172,7 +172,7 @@ export function formatPercentage(
 ): string {
   const numericValue = Number(value ?? 0);
 
-  if (isNaN(numericValue)) return "0%";
+  if (Number.isNaN(numericValue)) return "0%";
 
   // Fix #52: Explicit flag instead of ambiguous auto-detection
   const percentage = isFraction ? numericValue * 100 : numericValue;
@@ -194,7 +194,7 @@ export function formatFileSize(bytes: number): string {
     units.length - 1,
   );
 
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${units[i]}`;
+  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${units[i]}`;
 }
 
 /**
@@ -282,7 +282,7 @@ export function formatPeriod(period: string | null | undefined): string {
     "November",
     "Desember",
   ];
-  const mIndex = parseInt(month, 10) - 1;
+  const mIndex = Number.parseInt(month, 10) - 1;
   if (mIndex >= 0 && mIndex < 12) {
     return `${months[mIndex]} ${year}`;
   }

@@ -19,7 +19,7 @@ echo "🔍 Running pre-commit checks..."
 
 # 1. Lint staged files (quick)
 echo -n "  ESLint... "
-if npx eslint src/ --quiet 2>/dev/null; then
+if node_modules/.bin/eslint src/ --quiet 2>/dev/null; then
   echo -e "${GREEN}OK${NC}"
 else
   echo -e "${RED}FAIL${NC}"
@@ -29,7 +29,7 @@ fi
 
 # 2. TypeScript
 echo -n "  TypeScript... "
-if npx tsc --noEmit 2>/dev/null; then
+if node_modules/.bin/tsc --noEmit 2>/dev/null; then
   echo -e "${GREEN}OK${NC}"
 else
   echo -e "${RED}FAIL${NC}"
@@ -39,7 +39,7 @@ fi
 
 # 3. Unit tests (fast, no coverage)
 echo -n "  Unit tests... "
-if npx vitest run --reporter=dot 2>/dev/null; then
+if node_modules/.bin/vitest run --reporter=dot 2>/dev/null; then
   echo -e "${GREEN}OK${NC}"
 else
   echo -e "${RED}FAIL${NC}"

@@ -20,7 +20,7 @@ import {
 } from "@/lib/validations/manufacturing.schemas";
 import { computeProjectStatus } from "@/lib/services/project-status";
 import { resolveEffectiveBom } from "@/lib/services/bom-revision.service";
-import { assertWorkOrderQcCleared } from "@/lib/services/qc.service";
+import { assertWorkOrderQcCleared, assertProductionOrderQcCleared } from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
@@ -255,6 +255,10 @@ export async function createBomRevision(formData: FormData) {
     });
 
     const revision = await prisma.$transaction(async (tx) => {
+      // Serialize concurrent creates for the same product so two parallel
+      // calls cannot read the same latest revisionNo and collide on the
+      // (productId, revisionNo) unique constraint.
+      await tx.$queryRaw`SELECT id FROM products WHERE id = ${v.productId} FOR UPDATE`;
       const latest = await tx.bomRevision.findFirst({
         where: { productId: v.productId },
         orderBy: { revisionNo: "desc" },
@@ -368,19 +372,28 @@ export async function releaseBomRevision(id: number) {
       return { success: false, error: "Revisi BOM tidak boleh kosong sebelum dirilis." };
     }
 
-    const claimed = await prisma.bomRevision.updateMany({
-      where: { id, status: "draft" },
-      data: { status: "released", releasedAt: new Date(), releasedBy: Number(user.id) },
-    });
-    if (claimed.count === 0) {
-      return { success: false, error: "Hanya revisi berstatus draft yang dapat dirilis." };
-    }
+    // Claim + supersede atomically: the draft→released claim and the
+    // supersede of the previously released revision run in ONE transaction so
+    // a crash between them can never leave zero or two released revisions.
+    const releaseResult = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.bomRevision.updateMany({
+        where: { id, status: "draft" },
+        data: { status: "released", releasedAt: new Date(), releasedBy: Number(user.id) },
+      });
+      if (claimed.count === 0) {
+        return { success: false as const, error: "Hanya revisi berstatus draft yang dapat dirilis." };
+      }
 
-    // Supersede any other released revision for the same product.
-    await prisma.bomRevision.updateMany({
-      where: { productId: revision.productId, status: "released", id: { not: id } },
-      data: { status: "superseded" },
+      // Supersede any other released revision for the same product.
+      await tx.bomRevision.updateMany({
+        where: { productId: revision.productId, status: "released", id: { not: id } },
+        data: { status: "superseded" },
+      });
+      return { success: true as const };
     });
+    if (!releaseResult.success) {
+      return { success: false, error: releaseResult.error };
+    }
 
     await logActivity(
       "release",
@@ -666,7 +679,7 @@ export async function issueMaterial(
       await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`;
       const order = await tx.productionOrder.findUniqueOrThrow({
         where: { id: productionOrderId },
-        select: { id: true, documentNo: true, status: true, totalActualCost: true },
+        select: { id: true, documentNo: true, status: true, totalActualCost: true, workOrderId: true },
       });
       if (order.status !== "confirmed" && order.status !== "in_progress") {
         throw new Error(
@@ -678,6 +691,24 @@ export async function issueMaterial(
           where: { id: productionOrderId },
           data: { status: "in_progress" },
         });
+      }
+
+      // P1-4: guard silang antar-jalur konsumsi. PO tertaut WO yang sudah
+      // dikonsumsi via Material Issue resmi (completed/processing) tidak
+      // boleh dikonsumsi lagi via issueMaterial — material sama keluar dua
+      // kali tanpa guard ini. Pilih satu jalur per WO.
+      if (order.workOrderId != null) {
+        const consumedViaMI = await tx.materialIssue.count({
+          where: {
+            workOrderId: order.workOrderId,
+            status: { in: ["processing", "completed"] },
+          },
+        });
+        if (consumedViaMI > 0) {
+          throw new Error(
+            `WO ${order.documentNo} sudah dikonsumsi via Pengeluaran Material — gunakan jalur itu, bukan pengeluaran PO langsung.`,
+          );
+        }
       }
 
       const itemIds = [...requested.keys()].sort((a, b) => a - b);
@@ -867,6 +898,8 @@ export async function completeProductionOrder(
           totalActualCost: true,
           totalStandardCost: true,
           variance: true,
+          releasedCost: true,
+          workOrderId: true,
           product: {
             select: {
               inventoryItem: {
@@ -886,6 +919,16 @@ export async function completeProductionOrder(
       });
       if (order.status !== "in_progress") {
         throw new Error(`Perintah produksi berstatus '${order.status}', hanya 'in_progress' yang bisa diselesaikan`);
+      }
+
+      // P1-2: gate QC konsisten dengan Work Order. PO yang diinspeksi
+      // langsung (referenceType ProductionOrder) dicek; bila tertaut WO,
+      // WO induk ikut dicek — FG tak boleh release dengan NCR terbuka atau
+      // inspeksi akhir gagal di kedua sisi. Tanpa QC records = lolos
+      // (opt-in, sama seperti WO).
+      await assertProductionOrderQcCleared(id, tx);
+      if (order.workOrderId != null) {
+        await assertWorkOrderQcCleared(order.workOrderId, tx);
       }
       const outputItem = order.product.inventoryItem;
       if (!outputItem || !outputItem.isProduct || !outputItem.isActive || outputItem.deletedAt) {
@@ -1067,13 +1110,19 @@ export async function completeProductionOrder(
           completedQty: newCompleted,
           totalActualCost: isFinal ? 0 : remainingCost,
           variance,
+          // P1-3: akumulasi biaya aktual yang di-release — sumber total biaya
+          // genealogi final (totalActualCost di-nol-kan saat final).
+          releasedCost: safeAdd(Number(order.releasedCost ?? 0), releaseCost, 2),
           ...(isFinal ? { status: "completed", endDate: new Date() } : {}),
         },
       });
 
       // Production genealogy (PRD line 369 / REP-13) is recorded once, on the
       // FINAL release, so the unique-per-order record still holds under partial
-      // completion.
+      // completion. P1-3: record final adalah AGREGAT semua release — bukan
+      // slice terakhir. Sebelumnya outputQty=orderQty dipasangkan serial
+      // final saja + batch documentNo + biaya slice final (urutan 4 lalu 6:
+      // qty catat 10, serial hanya 6 terakhir, biaya hanya slice 6).
       if (isFinal) {
         const materialRows = await tx.productionOrderMaterial.findMany({
           where: { productionOrderId: id },
@@ -1085,15 +1134,41 @@ export async function completeProductionOrder(
             batchNumbers: true,
           },
         });
+        // Semua serial/batch hasil order ini (semua release), bukan hanya
+        // release final. Dicatat dengan notes persis per order.
+        const releaseNote = `Hasil perintah produksi ${order.documentNo}`;
+        const allSerials = outputItem.trackSerial
+          ? (
+              await tx.itemSerial.findMany({
+                where: { itemId: outputItem.id, notes: releaseNote },
+                select: { serialNumber: true },
+                orderBy: { id: "asc" },
+              })
+            ).map((r) => r.serialNumber)
+          : [];
+        const allBatches = outputItem.trackBatch
+          ? (
+              await tx.itemBatch.findMany({
+                where: { itemId: outputItem.id, notes: releaseNote },
+                select: { batchNumber: true },
+                orderBy: { id: "asc" },
+              })
+            ).map((r) => r.batchNumber)
+          : [];
+        // Total biaya aktual = akumulasi release sebelumnya + release ini.
+        // (totalActualCost sudah di-nol-kan untuk final, jadi tak bisa jadi
+        // sumber.)
+        const totalReleasedCost = safeAdd(Number(order.releasedCost ?? 0), releaseCost, 2);
+        const genealogyUnitCost = orderQty > 0 ? Math.round((totalReleasedCost / orderQty) * 100) / 100 : 0;
         await recordProductionGenealogy(tx, {
           productionOrderId: id,
           documentNo: order.documentNo,
           outputItemId: outputItem.id,
           outputQty: orderQty,
-          outputSerials: serials,
-          outputBatch: outputItem.trackBatch ? order.documentNo : null,
-          unitCost,
-          totalCost: releaseCost,
+          outputSerials: allSerials,
+          outputBatch: outputItem.trackBatch ? allBatches.join(", ") : null,
+          unitCost: genealogyUnitCost,
+          totalCost: totalReleasedCost,
           completedBy: Number(user.id),
           materials: materialRows.map((m) => {
             const mq = Number(m.actualQty ?? 0);

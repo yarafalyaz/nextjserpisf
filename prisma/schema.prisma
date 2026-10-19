@@ -7,18 +7,18 @@ datasource db {
 }
 
 model User {
-  id             Int             @id @default(autoincrement())
+  id             Int                   @id @default(autoincrement())
   name           String
-  email          String          @unique
-  slug           String?         @unique
+  email          String                @unique
+  slug           String?               @unique
   password       String
-  avatar         String?         @db.Text
-  isActive       Boolean         @default(true) @map("is_active")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
+  avatar         String?               @db.Text
+  isActive       Boolean               @default(true) @map("is_active")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
   journals       Journal[]
   notifications  Notification[]
-  roles          Role[]          @relation("UserRoles")
+  roles          Role[]                @relation("UserRoles")
   employee       Employee[]
   userWarehouses UserWarehouse[]
   favorites      FavoriteTransaction[]
@@ -28,14 +28,14 @@ model User {
 }
 
 model Role {
-  slug         String?            @unique
-  id           Int                @id @default(autoincrement())
-  name         String             @unique
-  guardName    String             @default("web") @map("guard_name")
-  createdAt    DateTime           @default(now()) @map("created_at")
-  updatedAt    DateTime           @updatedAt @map("updated_at")
-  permissions  Permission[]       @relation("RolePermissions")
-  users        User[]             @relation("UserRoles")
+  slug        String?      @unique
+  id          Int          @id @default(autoincrement())
+  name        String       @unique
+  guardName   String       @default("web") @map("guard_name")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  permissions Permission[] @relation("RolePermissions")
+  users       User[]       @relation("UserRoles")
 
   @@index([createdAt])
   @@map("roles")
@@ -201,6 +201,12 @@ model SystemSetting {
   purchaseShippingAccountId        Int?    @map("purchase_shipping_account_id")
   purchaseAdminFeeAccountId        Int?    @map("purchase_admin_fee_account_id")
   purchaseReturnAccountId          Int?    @map("purchase_return_account_id")
+  // AUD-FIN-01: akun kewajiban Uang Muka Penjualan (CoA 210102). Sebelumnya
+  // jurnal terima DP mengkredit salesReceivableAccountId (Piutang 1103) —
+  // salah klasifikasi: DP yang belum jadi pendapatan adalah KEWAJIBAN,
+  // bukan pengurang piutang. Null = instalasi lama; hook menolak posting DP
+  // sampai dimapping (fail-closed), automap menebak dari nama "uang muka".
+  customerDownPaymentAccountId     Int?    @map("customer_down_payment_account_id")
   inventoryAccountId               Int?    @map("inventory_account_id")
   inventoryAdjustmentAccountId     Int?    @map("inventory_adjustment_account_id")
   stockAdjustmentAccountId         Int?    @map("stock_adjustment_account_id")
@@ -253,7 +259,9 @@ model FavoriteTransaction {
   id        Int      @id @default(autoincrement())
   userId    Int      @map("user_id")
   label     String
-  /** Jalur internal aplikasi, mis. "/penjualan/faktur/tambah". */
+  /**
+   * Jalur internal aplikasi, mis. "/penjualan/faktur/tambah".
+   */
   href      String
   sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
@@ -308,6 +316,7 @@ model Customer {
   updatedAt          DateTime          @updatedAt @map("updated_at")
   customerVehicles   CustomerVehicle[]
   downPayments       DownPayment[]
+  customerCredits    CustomerCredit[]
   projects           Project[]
   quotations         Quotation[]
   salesInvoices      SalesInvoice[]
@@ -323,6 +332,49 @@ model Customer {
   @@index([code], map: "idx_customers_code")
   @@index([createdAt])
   @@map("customers")
+}
+
+// AUD-FIN-02 (putusan akuntan): KREDIT PELANGGAN terstruktur. Kelebihan DP di
+// atas grandTotal BUKAN pelunasan — dicatat di sini sebagai saldo yang bisa
+// dipakai ulang / di-refund, bukan catatan teks di notes. Satu baris = satu
+// sumber dana (DP / lebih-bayar). allocated + refunded tak boleh > received
+// (ditegakkan di kode + guard tes; DB tak punya CHECK lintas kolom portabel).
+// Jurnal: saat dibentuk Dr. Kewajiban UMP 210102 / Cr. Kewajiban UMP 210102
+// (reklas antar subledger pelanggan, nol-net di GL); saat dipakai
+// Dr. 210102 / Cr. Piutang; saat refund Dr. 210102 / Cr. Kas.
+model CustomerCredit {
+  id              Int      @id @default(autoincrement())
+  documentNo      String   @unique @map("document_no")
+  customerId      Int      @map("customer_id")
+  sourceType      String   @map("source_type")
+  sourceId        Int      @map("source_id")
+  receivedAmount  Decimal  @map("received_amount") @db.Decimal(15, 2)
+  allocatedAmount Decimal  @default(0.00) @map("allocated_amount") @db.Decimal(15, 2)
+  refundedAmount  Decimal  @default(0.00) @map("refunded_amount") @db.Decimal(15, 2)
+  status          String   @default("open")
+  notes           String?  @db.Text
+  createdBy       Int?     @map("created_by")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  customer        Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, status], map: "idx_customer_credits_cust_status")
+  @@index([sourceType, sourceId], map: "idx_customer_credits_source")
+  @@map("customer_credits")
+}
+
+model FinancialIdempotencyKey {
+  id            Int      @id @default(autoincrement())
+  key           String   @unique
+  scope         String
+  payloadHash   String?  @map("payload_hash")
+  resultRefType String?  @map("result_ref_type")
+  resultRefId   Int?     @map("result_ref_id")
+  createdBy     Int?     @map("created_by")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([scope], map: "idx_fin_idem_scope")
+  @@map("financial_idempotency_keys")
 }
 
 model CustomerCategory {
@@ -392,22 +444,22 @@ model Vendor {
 /// uang muka yang dibayarkan, bukan saldo yang belum terpakai; laporan yang
 /// mengaku "sisa uang muka" tidak boleh dibuat dari tabel ini.
 model PurchaseAdvance {
-  slug              String?   @unique
-  id                Int       @id @default(autoincrement())
-  documentNo        String    @unique @map("document_no")
-  date              DateTime
-  vendorId          Int       @map("vendor_id")
-  amount            Decimal   @db.Decimal(15, 2)
-  paymentAccountId  Int       @map("payment_account_id")
-  advanceAccountId  Int       @map("advance_account_id")
-  description       String?   @db.Text
-  status            String    @default("posted")
-  journalId         Int?      @map("journal_id")
-  createdBy         Int?      @map("created_by")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  deletedAt         DateTime? @map("deleted_at")
-  vendor            Vendor    @relation(fields: [vendorId], references: [id])
+  slug             String?   @unique
+  id               Int       @id @default(autoincrement())
+  documentNo       String    @unique @map("document_no")
+  date             DateTime
+  vendorId         Int       @map("vendor_id")
+  amount           Decimal   @db.Decimal(15, 2)
+  paymentAccountId Int       @map("payment_account_id")
+  advanceAccountId Int       @map("advance_account_id")
+  description      String?   @db.Text
+  status           String    @default("posted")
+  journalId        Int?      @map("journal_id")
+  createdBy        Int?      @map("created_by")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  deletedAt        DateTime? @map("deleted_at")
+  vendor           Vendor    @relation(fields: [vendorId], references: [id])
 
   @@index([vendorId], map: "purchase_advances_vendor_id_fkey")
   @@index([date])
@@ -545,6 +597,8 @@ model Item {
   warehouse            Warehouse?           @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
   vendor               Vendor?              @relation(fields: [vendorId], references: [id])
   stockMoves           StockMove[]
+  stocktakeLines       StocktakeLine[]
+  remnants             Remnant[]
   manufacturedProducts Product[]            @relation("ProductInventoryItem")
   uomConversions       UomConversion[]
   fitmentRules         VehicleFitmentRule[]
@@ -564,26 +618,28 @@ model Item {
 }
 
 model Warehouse {
-  slug             String?             @unique
-  id               Int                 @id @default(autoincrement())
-  name             String
-  code             String              @unique
-  address          String?             @db.Text
-  isActive         Boolean             @default(true) @map("is_active")
-  deletedAt        DateTime?           @map("deleted_at")
-  createdAt        DateTime            @default(now()) @map("created_at")
-  updatedAt        DateTime            @updatedAt @map("updated_at")
-  goodsReceipts    GoodsReceipt[]
-  transfersIn      InventoryTransfer[] @relation("TransferDest")
-  transfersOut     InventoryTransfer[] @relation("TransferSource")
-  itemBatches      ItemBatch[]
-  itemSerials      ItemSerial[]
-  defaultItems     Item[]              @relation("ItemDefaultWarehouse")
-  materialIssues   MaterialIssue[]
-  racks            Rack[]
-  stockAdjustments StockAdjustment[]
-  stockMoves       StockMove[]
-  userWarehouses   UserWarehouse[]
+  slug              String?             @unique
+  id                Int                 @id @default(autoincrement())
+  name              String
+  code              String              @unique
+  address           String?             @db.Text
+  isActive          Boolean             @default(true) @map("is_active")
+  deletedAt         DateTime?           @map("deleted_at")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  goodsReceipts     GoodsReceipt[]
+  transfersIn       InventoryTransfer[] @relation("TransferDest")
+  transfersOut      InventoryTransfer[] @relation("TransferSource")
+  itemBatches       ItemBatch[]
+  itemSerials       ItemSerial[]
+  defaultItems      Item[]              @relation("ItemDefaultWarehouse")
+  materialIssues    MaterialIssue[]
+  racks             Rack[]
+  stockAdjustments  StockAdjustment[]
+  stockMoves        StockMove[]
+  userWarehouses    UserWarehouse[]
+  stocktakeSessions StocktakeSession[]
+  remnants          Remnant[]
 
   @@index([isActive, deletedAt])
   @@index([name])
@@ -689,6 +745,7 @@ model Employee {
   gender              String?
   dateOfBirth         DateTime?         @map("date_of_birth")
   maritalStatus       String?           @map("marital_status")
+  dependents          Int               @default(0)
   departmentId        Int?              @map("department_id")
   positionId          Int?              @map("position_id")
   joinDate            DateTime          @map("join_date")
@@ -720,23 +777,25 @@ model Employee {
 }
 
 model Account {
-  slug            String?          @unique
-  id              Int              @id @default(autoincrement())
-  code            String           @unique
-  name            String
-  type            AccountType
-  /** Tipe akun gaya Accurate (BANK, AREC, INTR, OCAS, FASS, DEPR, APAY, OCLY, LTLY, EQTY, REVE, OINC, COGS, EXPS, OEXP) — dasar pengelompokan laporan. */
-  reportGroup     String?          @map("report_group")
-  parentId        Int?             @map("parent_id")
-  normalBalance   String?          @map("normal_balance")
-  description     String?          @db.Text
-  isActive        Boolean          @default(true) @map("is_active")
-  deletedAt       DateTime?        @map("deleted_at")
-  createdAt       DateTime         @default(now()) @map("created_at")
-  updatedAt       DateTime         @updatedAt @map("updated_at")
-  parent          Account?         @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children        Account[]        @relation("AccountTree")
-  journalEntries  JournalEntry[]
+  slug           String?        @unique
+  id             Int            @id @default(autoincrement())
+  code           String         @unique
+  name           String
+  type           AccountType
+  /**
+   * Tipe akun gaya Accurate (BANK, AREC, INTR, OCAS, FASS, DEPR, APAY, OCLY, LTLY, EQTY, REVE, OINC, COGS, EXPS, OEXP) — dasar pengelompokan laporan.
+   */
+  reportGroup    String?        @map("report_group")
+  parentId       Int?           @map("parent_id")
+  normalBalance  String?        @map("normal_balance")
+  description    String?        @db.Text
+  isActive       Boolean        @default(true) @map("is_active")
+  deletedAt      DateTime?      @map("deleted_at")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  parent         Account?       @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children       Account[]      @relation("AccountTree")
+  journalEntries JournalEntry[]
 
   @@index([parentId], map: "accounts_parent_id_fkey")
   @@index([isActive, deletedAt])
@@ -792,23 +851,26 @@ model ShippingMethod {
   @@map("shipping_methods")
 }
 
-
 /// Jenis pemotongan PPh (mis. PPh 23 jasa 2%, PPh 4(2) 10%).
 model WithholdingTaxType {
-  slug                String?         @unique
-  id                  Int             @id @default(autoincrement())
-  code                String          @unique
+  slug                String?        @unique
+  id                  Int            @id @default(autoincrement())
+  code                String         @unique
   name                String
-  rate                Decimal         @default(0.00) @db.Decimal(5, 2)
-  /** Akun Hutang PPh (kita memotong vendor). */
-  liabilityAccountId  Int?            @map("liability_account_id")
-  /** Akun PPh dibayar dimuka (dipotong pelanggan). */
-  receivableAccountId Int?            @map("receivable_account_id")
-  isActive            Boolean         @default(true) @map("is_active")
-  deletedAt           DateTime?       @map("deleted_at")
-  createdBy           Int?            @map("created_by")
-  createdAt           DateTime        @default(now()) @map("created_at")
-  updatedAt           DateTime        @updatedAt @map("updated_at")
+  rate                Decimal        @default(0.00) @db.Decimal(5, 2)
+  /**
+   * Akun Hutang PPh (kita memotong vendor).
+   */
+  liabilityAccountId  Int?           @map("liability_account_id")
+  /**
+   * Akun PPh dibayar dimuka (dipotong pelanggan).
+   */
+  receivableAccountId Int?           @map("receivable_account_id")
+  isActive            Boolean        @default(true) @map("is_active")
+  deletedAt           DateTime?      @map("deleted_at")
+  createdBy           Int?           @map("created_by")
+  createdAt           DateTime       @default(now()) @map("created_at")
+  updatedAt           DateTime       @updatedAt @map("updated_at")
   vendorBills         VendorBill[]
   salesPayments       SalesPayment[]
   taxPayments         TaxPayment[]
@@ -827,13 +889,17 @@ model TaxPayment {
   id               Int                 @id @default(autoincrement())
   documentNo       String              @unique @map("document_no")
   date             DateTime
-  /** Masa pajak, mis. "2026-09". */
+  /**
+   * Masa pajak, mis. "2026-09".
+   */
   period           String?
   taxTypeId        Int?                @map("tax_type_id")
   taxAccountId     Int                 @map("tax_account_id")
   paymentAccountId Int                 @map("payment_account_id")
   amount           Decimal             @db.Decimal(15, 2)
-  /** Nomor SSP/MPN sebagai bukti setor. */
+  /**
+   * Nomor SSP/MPN sebagai bukti setor.
+   */
   reference        String?
   notes            String?             @db.Text
   status           String              @default("posted")
@@ -857,28 +923,36 @@ model TaxPayment {
 
 /// Template dokumen berulang (faktur/tagihan/beban/jurnal) yang dijalankan berkala.
 model RecurringTransaction {
-  slug         String?   @unique
-  id           Int       @id @default(autoincrement())
-  name         String
-  /** "sales_invoice" | "purchase_bill" | "expense" | "journal" */
-  type         String
-  /** "daily" | "weekly" | "monthly" | "quarterly" | "yearly" */
-  frequency    String
-  interval     Int       @default(1)
-  startDate    DateTime  @map("start_date")
-  endDate      DateTime? @map("end_date")
-  nextRunDate  DateTime  @map("next_run_date")
-  lastRunAt    DateTime? @map("last_run_at")
-  runCount     Int       @default(0) @map("run_count")
-  /** Template payload (JSON) untuk dokumen yang dihasilkan. */
-  template     String    @db.Text
-  /** Ringkasan dokumen terakhir yang dihasilkan. */
-  lastResult   String?   @map("last_result") @db.Text
-  isActive     Boolean   @default(true) @map("is_active")
-  deletedAt    DateTime? @map("deleted_at")
-  createdBy    Int?      @map("created_by")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  slug        String?   @unique
+  id          Int       @id @default(autoincrement())
+  name        String
+  /**
+   * "sales_invoice" | "purchase_bill" | "expense" | "journal"
+   */
+  type        String
+  /**
+   * "daily" | "weekly" | "monthly" | "quarterly" | "yearly"
+   */
+  frequency   String
+  interval    Int       @default(1)
+  startDate   DateTime  @map("start_date")
+  endDate     DateTime? @map("end_date")
+  nextRunDate DateTime  @map("next_run_date")
+  lastRunAt   DateTime? @map("last_run_at")
+  runCount    Int       @default(0) @map("run_count")
+  /**
+   * Template payload (JSON) untuk dokumen yang dihasilkan.
+   */
+  template    String    @db.Text
+  /**
+   * Ringkasan dokumen terakhir yang dihasilkan.
+   */
+  lastResult  String?   @map("last_result") @db.Text
+  isActive    Boolean   @default(true) @map("is_active")
+  deletedAt   DateTime? @map("deleted_at")
+  createdBy   Int?      @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
 
   @@index([isActive, deletedAt, nextRunDate])
   @@map("recurring_transactions")
@@ -1059,36 +1133,36 @@ model SalesOrderItem {
 }
 
 model SalesInvoice {
-  slug              String?            @unique
-  id                Int                @id @default(autoincrement())
-  customerVehicleId Int?               @map("customer_vehicle_id")
-  projectId         Int?               @map("project_id")
-  documentNo        String             @unique @map("document_no")
-  customerId        Int                @map("customer_id")
-  salesOrderId      Int?               @map("sales_order_id")
-  quotationId       Int?               @map("quotation_id")
-  date              DateTime
-  dueDate           DateTime?          @map("due_date")
-  subtotal          Decimal            @default(0.00) @db.Decimal(15, 2)
-  discount          Decimal            @default(0.00) @db.Decimal(15, 2)
-  tax               Decimal            @default(0.00) @db.Decimal(15, 2)
-  grandTotal        Decimal            @default(0.00) @map("grand_total") @db.Decimal(15, 2)
-  paidAmount        Decimal            @default(0.00) @map("paid_amount") @db.Decimal(15, 2)
-  totalAmount       Decimal            @default(0.00) @map("total_amount") @db.Decimal(15, 2)
-  taxAmount         Decimal            @default(0.00) @map("tax_amount") @db.Decimal(15, 2)
-  status            SalesInvoiceStatus @default(draft)
-  paymentStatus     String?            @map("payment_status")
-  notes             String?            @db.Text
-  createdBy         Int?               @map("created_by")
-  deletedAt         DateTime?          @map("deleted_at")
-  createdAt         DateTime           @default(now()) @map("created_at")
-  updatedAt         DateTime           @updatedAt @map("updated_at")
-  items             SalesInvoiceItem[]
-  customer          Customer           @relation(fields: [customerId], references: [id])
-  quotation         Quotation?         @relation(fields: [quotationId], references: [id])
-  salesOrder        SalesOrder?        @relation(fields: [salesOrderId], references: [id])
-  salesReturns      SalesReturn[]
-  payments          SalesPayment[]
+  slug                 String?               @unique
+  id                   Int                   @id @default(autoincrement())
+  customerVehicleId    Int?                  @map("customer_vehicle_id")
+  projectId            Int?                  @map("project_id")
+  documentNo           String                @unique @map("document_no")
+  customerId           Int                   @map("customer_id")
+  salesOrderId         Int?                  @map("sales_order_id")
+  quotationId          Int?                  @map("quotation_id")
+  date                 DateTime
+  dueDate              DateTime?             @map("due_date")
+  subtotal             Decimal               @default(0.00) @db.Decimal(15, 2)
+  discount             Decimal               @default(0.00) @db.Decimal(15, 2)
+  tax                  Decimal               @default(0.00) @db.Decimal(15, 2)
+  grandTotal           Decimal               @default(0.00) @map("grand_total") @db.Decimal(15, 2)
+  paidAmount           Decimal               @default(0.00) @map("paid_amount") @db.Decimal(15, 2)
+  totalAmount          Decimal               @default(0.00) @map("total_amount") @db.Decimal(15, 2)
+  taxAmount            Decimal               @default(0.00) @map("tax_amount") @db.Decimal(15, 2)
+  status               SalesInvoiceStatus    @default(draft)
+  paymentStatus        String?               @map("payment_status")
+  notes                String?               @db.Text
+  createdBy            Int?                  @map("created_by")
+  deletedAt            DateTime?             @map("deleted_at")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  items                SalesInvoiceItem[]
+  customer             Customer              @relation(fields: [customerId], references: [id])
+  quotation            Quotation?            @relation(fields: [quotationId], references: [id])
+  salesOrder           SalesOrder?           @relation(fields: [salesOrderId], references: [id])
+  salesReturns         SalesReturn[]
+  payments             SalesPayment[]
   invoiceExchangeItems InvoiceExchangeItem[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
@@ -1113,20 +1187,22 @@ model SalesInvoice {
 /// piutang sudah tercatat oleh fakturnya sendiri, jadi membuat jurnal di sini akan
 /// menggandakan piutang.
 model InvoiceExchange {
-  slug          String?   @unique
-  id            Int       @id @default(autoincrement())
-  documentNo    String    @unique @map("document_no")
+  slug          String?               @unique
+  id            Int                   @id @default(autoincrement())
+  documentNo    String                @unique @map("document_no")
   date          DateTime
-  customerId    Int       @map("customer_id")
-  /** Nomor tanda terima dari pelanggan. */
-  receiptNumber String?   @map("receipt_number")
-  dueDate       DateTime? @map("due_date")
-  notes         String?   @db.Text
-  createdBy     Int?      @map("created_by")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
-  customer      Customer  @relation(fields: [customerId], references: [id])
+  customerId    Int                   @map("customer_id")
+  /**
+   * Nomor tanda terima dari pelanggan.
+   */
+  receiptNumber String?               @map("receipt_number")
+  dueDate       DateTime?             @map("due_date")
+  notes         String?               @db.Text
+  createdBy     Int?                  @map("created_by")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+  deletedAt     DateTime?             @map("deleted_at")
+  customer      Customer              @relation(fields: [customerId], references: [id])
   items         InvoiceExchangeItem[]
 
   @@index([customerId])
@@ -1141,7 +1217,9 @@ model InvoiceExchangeItem {
   id             Int             @id @default(autoincrement())
   exchangeId     Int             @map("exchange_id")
   salesInvoiceId Int             @map("sales_invoice_id")
-  /** Nilai faktur saat diserahkan (grandTotal) — dasar penagihan. */
+  /**
+   * Nilai faktur saat diserahkan (grandTotal) — dasar penagihan.
+   */
   amount         Decimal         @db.Decimal(15, 2)
   exchange       InvoiceExchange @relation(fields: [exchangeId], references: [id], onDelete: Cascade)
   salesInvoice   SalesInvoice    @relation(fields: [salesInvoiceId], references: [id])
@@ -1170,32 +1248,34 @@ model SalesInvoiceItem {
 }
 
 model SalesPayment {
-  slug           String?      @unique
-  id             Int          @id @default(autoincrement())
-  documentNo     String       @unique @map("document_no")
-  customerId     Int?         @map("customer_id")
-  salesInvoiceId Int          @map("sales_invoice_id")
-  /** Kas yang benar-benar diterima — BUKAN termasuk PPh yang dipotong pelanggan. */
-  amount         Decimal      @db.Decimal(15, 2)
+  slug                     String?             @unique
+  id                       Int                 @id @default(autoincrement())
+  documentNo               String              @unique @map("document_no")
+  customerId               Int?                @map("customer_id")
+  salesInvoiceId           Int                 @map("sales_invoice_id")
+  /**
+   * Kas yang benar-benar diterima — BUKAN termasuk PPh yang dipotong pelanggan.
+   */
+  amount                   Decimal             @db.Decimal(15, 2)
   // PPh yang dipotong pelanggan saat membayar (mis. PPh 23). Disimpan di
   // pembayaran, bukan di faktur, karena bukti potong baru ada saat pelanggan
   // membayar — dan yang dipotong bukan bagian dari kas yang diterima.
   // Pelunasan piutang dihitung dari `amount + withholdingAmount`, dan jurnalnya
   // Dr Kas (amount) + Dr PPh dibayar dimuka (withholdingAmount) / Cr Piutang.
-  withholdingTypeId        Int?      @map("withholding_type_id")
-  withholdingAmount        Decimal   @default(0.00) @map("withholding_amount") @db.Decimal(15, 2)
-  withholdingCertificateNo String?   @map("withholding_certificate_no")
-  withholdingDate          DateTime? @map("withholding_date")
-  paymentDate    DateTime     @map("payment_date")
-  paymentMethod  String       @map("payment_method")
-  accountId      Int?         @map("account_id")
-  referenceNo    String?      @map("reference_no")
-  notes          String?      @db.Text
-  createdBy      Int?         @map("created_by")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
-  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
-  withholdingType WithholdingTaxType? @relation(fields: [withholdingTypeId], references: [id], onDelete: SetNull)
+  withholdingTypeId        Int?                @map("withholding_type_id")
+  withholdingAmount        Decimal             @default(0.00) @map("withholding_amount") @db.Decimal(15, 2)
+  withholdingCertificateNo String?             @map("withholding_certificate_no")
+  withholdingDate          DateTime?           @map("withholding_date")
+  paymentDate              DateTime            @map("payment_date")
+  paymentMethod            String              @map("payment_method")
+  accountId                Int?                @map("account_id")
+  referenceNo              String?             @map("reference_no")
+  notes                    String?             @db.Text
+  createdBy                Int?                @map("created_by")
+  createdAt                DateTime            @default(now()) @map("created_at")
+  updatedAt                DateTime            @updatedAt @map("updated_at")
+  salesInvoice             SalesInvoice        @relation(fields: [salesInvoiceId], references: [id])
+  withholdingType          WithholdingTaxType? @relation(fields: [withholdingTypeId], references: [id], onDelete: SetNull)
 
   @@index([salesInvoiceId], map: "sales_payments_sales_invoice_id_fkey")
   @@index([customerId])
@@ -1237,13 +1317,14 @@ model SalesReturnItem {
   qty           Decimal     @db.Decimal(15, 2)
   cost          Decimal     @default(0.00) @db.Decimal(15, 2)
   price         Decimal     @default(0.00) @db.Decimal(15, 2)
+  serialNumbers Json?       @map("serial_numbers")
+  batchNumbers  Json?       @map("batch_numbers")
   salesReturn   SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
 
   @@index([salesReturnId], map: "sales_return_items_sales_return_id_fkey")
   @@index([itemId])
   @@map("sales_return_items")
 }
-
 
 model PurchaseRequest {
   slug            String?               @unique
@@ -1529,42 +1610,42 @@ model VendorBillItem {
 }
 
 model VendorPayment {
-  slug            String?                   @unique
-  id              Int                       @id @default(autoincrement())
-  referenceNumber String?                   @map("reference_number")
-  bankId          Int?                      @map("bank_id")
-  bankAccount     String?                   @map("bank_account")
-  status          String                    @default("draft")
-  confirmedBy     Int?                      @map("confirmed_by")
-  confirmedAt     DateTime?                 @map("confirmed_at")
-  deletedAt       DateTime?                 @map("deleted_at")
-  documentNo      String                    @unique @map("document_no")
-  vendorId        Int                       @map("vendor_id")
-  amount          Decimal                   @db.Decimal(15, 2)
-  paymentDate     DateTime                  @map("payment_date")
-  paymentMethod   String                    @map("payment_method")
-  accountId       Int?                      @map("account_id")
+  slug              String?                   @unique
+  id                Int                       @id @default(autoincrement())
+  referenceNumber   String?                   @map("reference_number")
+  bankId            Int?                      @map("bank_id")
+  bankAccount       String?                   @map("bank_account")
+  status            String                    @default("draft")
+  confirmedBy       Int?                      @map("confirmed_by")
+  confirmedAt       DateTime?                 @map("confirmed_at")
+  deletedAt         DateTime?                 @map("deleted_at")
+  documentNo        String                    @unique @map("document_no")
+  vendorId          Int                       @map("vendor_id")
+  amount            Decimal                   @db.Decimal(15, 2)
+  paymentDate       DateTime                  @map("payment_date")
+  paymentMethod     String                    @map("payment_method")
+  accountId         Int?                      @map("account_id")
   // Bank / transfer admin fee paid to move the money (e.g. "Admin BCA 1.000").
   // A real cost of paying, NOT part of the bill settlement — it is expensed to
   // the purchase admin-fee account and never allocated to a bill.
-  adminFee        Decimal                   @default(0.00) @map("admin_fee") @db.Decimal(15, 2)
+  adminFee          Decimal                   @default(0.00) @map("admin_fee") @db.Decimal(15, 2)
   // Tagihan yang ditargetkan pembayaran ini (dipilih lewat tombol "Bayar" di
   // tagihan). Saat konfirmasi, alokasi diutamakan ke tagihan ini (boleh sebagian),
   // lalu sisanya oldest-first ke tagihan terbuka lain. Null = perilaku lama
   // (murni oldest-first).
-  vendorBillId    Int?                      @map("vendor_bill_id")
-  notes           String?                   @db.Text
+  vendorBillId      Int?                      @map("vendor_bill_id")
+  notes             String?                   @db.Text
   // Penanda eksekusi "Transfer Pemasok": kapan transfer bank ke pemasok benar-benar
   // dikirim, dan referensi bukti transfernya. Sifatnya operasional — jurnal kas/bank
   // sudah dibuat oleh pembayaran ini, jadi menandai transfer TIDAK membuat jurnal baru.
   transferredAt     DateTime?                 @map("transferred_at")
   transferReference String?                   @map("transfer_reference")
-  createdBy       Int?                      @map("created_by")
-  createdAt       DateTime                  @default(now()) @map("created_at")
-  updatedAt       DateTime                  @updatedAt @map("updated_at")
-  allocations     VendorPaymentAllocation[]
-  vendor          Vendor                    @relation(fields: [vendorId], references: [id])
-  vendorBill      VendorBill?               @relation(fields: [vendorBillId], references: [id])
+  createdBy         Int?                      @map("created_by")
+  createdAt         DateTime                  @default(now()) @map("created_at")
+  updatedAt         DateTime                  @updatedAt @map("updated_at")
+  allocations       VendorPaymentAllocation[]
+  vendor            Vendor                    @relation(fields: [vendorId], references: [id])
+  vendorBill        VendorBill?               @relation(fields: [vendorBillId], references: [id])
 
   @@index([vendorId], map: "vendor_payments_vendor_id_fkey")
   @@index([status])
@@ -1733,6 +1814,7 @@ model StockAdjustmentItem {
   unitCost          Decimal         @default(0.00) @map("unit_cost") @db.Decimal(15, 2)
   totalCost         Decimal         @default(0.00) @map("total_cost") @db.Decimal(15, 2)
   serialNumbers     Json?           @map("serial_numbers")
+  batchNumbers      Json?           @map("batch_numbers")
   notes             String?
   stockAdjustment   StockAdjustment @relation(fields: [stockAdjustmentId], references: [id], onDelete: Cascade)
 
@@ -1930,6 +2012,7 @@ model ProductionOrder {
   // carries its equivalent share of cost, the remainder stays as WIP.
   completedQty      Decimal                   @default(0.00) @map("completed_qty") @db.Decimal(15, 2)
   variance          Decimal                   @default(0.00) @db.Decimal(15, 2)
+  releasedCost      Decimal                   @default(0.00) @map("released_cost") @db.Decimal(15, 2)
   createdBy         Int?                      @map("created_by")
   createdAt         DateTime                  @default(now()) @map("created_at")
   updatedAt         DateTime                  @updatedAt @map("updated_at")
@@ -2230,6 +2313,10 @@ model WorkOrder {
   @@map("work_orders")
 }
 
+// AUD-NEXT-07: `itemId = 0` = baris JASA/CUSTOM (bukan item stok).
+// Konvensi ini dipakai hook DP (itemId ?? 0) + form WO tambah
+// (resolvedItemId = it.itemId || 0): downstream (HPP/costing) membaca cost +
+// description untuk baris 0, bukan join ke items. Jangan anggap 0 = id item.
 model WorkOrderItem {
   id          Int       @id @default(autoincrement())
   workOrderId Int       @map("work_order_id")
@@ -2248,12 +2335,12 @@ model WorkOrderItem {
 // Keep legacy attendance tables available to payroll and prevent db push from
 // dropping their data while the attendance UI is absent.
 model Holiday {
-  id                Int      @id @default(autoincrement())
-  name              String
-  date              DateTime
-  description       String?  @db.Text
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id          Int      @id @default(autoincrement())
+  name        String
+  date        DateTime
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
   @@index([createdAt])
   @@index([date])
@@ -2288,16 +2375,16 @@ model Attendance {
 }
 
 model WorkSchedule {
-  id                   Int          @id @default(autoincrement())
-  name                 String
-  workDays             String       @default("") @map("work_days")
-  startTime            String       @map("start_time")
-  endTime              String       @map("end_time")
-  isActive             Boolean      @default(true) @map("is_active")
-  createdAt            DateTime     @default(now()) @map("created_at")
-  updatedAt            DateTime     @updatedAt @map("updated_at")
-  employees            Employee[]   @relation("EmployeeWorkSchedules")
-  departments          Department[] @relation("DepartmentWorkSchedules")
+  id          Int          @id @default(autoincrement())
+  name        String
+  workDays    String       @default("") @map("work_days")
+  startTime   String       @map("start_time")
+  endTime     String       @map("end_time")
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  employees   Employee[]   @relation("EmployeeWorkSchedules")
+  departments Department[] @relation("DepartmentWorkSchedules")
 
   @@index([createdAt])
   @@map("work_schedules")
@@ -2370,6 +2457,98 @@ model OvertimeRequest {
   @@map("overtime_requests")
 }
 
+/// P1-5: sesi opname bertahap — snapshot sistem, hitung 1+2 (recount),
+/// final, approval independen, lalu posting variance jadi adjustment.
+/// Movement concurrent selama sesi dicatat (delta snapshot vs live saat posting).
+model StocktakeSession {
+  id           Int             @id @default(autoincrement())
+  documentNo   String          @unique @map("document_no")
+  slug         String?         @unique
+  warehouseId  Int             @map("warehouse_id")
+  date         DateTime        @db.Date
+  status       String          @default("draft") @db.VarChar(32)
+  snapshotAt   DateTime?       @map("snapshot_at")
+  notes        String?         @db.Text
+  countedBy    Int?            @map("counted_by")
+  approvedBy   Int?            @map("approved_by")
+  approvedAt   DateTime?       @map("approved_at")
+  adjustmentId Int?            @map("adjustment_id")
+  createdBy    Int?            @map("created_by")
+  createdAt    DateTime        @default(now()) @map("created_at")
+  updatedAt    DateTime        @updatedAt @map("updated_at")
+  warehouse    Warehouse       @relation(fields: [warehouseId], references: [id])
+  lines        StocktakeLine[]
+
+  @@index([warehouseId])
+  @@index([status])
+  @@map("stocktake_sessions")
+}
+
+/// P1-5: sisa potong usable/scrap. Remnant BUKAN stok gudang ganda — ia
+/// mencatat sisa dari material yang sudah keluar (issue/produksi). Konsumsi =
+/// status consumed (tanpa movement); scrap = alasan + biaya terpisah.
+model Remnant {
+  id          Int       @id @default(autoincrement())
+  documentNo  String    @unique @map("document_no")
+  itemId      Int       @map("item_id")
+  warehouseId Int       @map("warehouse_id")
+  qty         Decimal   @db.Decimal(15, 2)
+  uom         String?   @db.VarChar(32)
+  dimensions  String?   @db.VarChar(255)
+  sourceType  String?   @map("source_type") @db.VarChar(32)
+  sourceId    Int?      @map("source_id")
+  unitCost    Decimal   @default(0) @map("unit_cost") @db.Decimal(15, 2)
+  status      String    @default("usable") @db.VarChar(32)
+  scrapReason String?   @map("scrap_reason") @db.VarChar(500)
+  consumedBy  String?   @map("consumed_by") @db.VarChar(128)
+  consumedAt  DateTime? @map("consumed_at")
+  createdBy   Int?      @map("created_by")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  item        Item      @relation(fields: [itemId], references: [id])
+  warehouse   Warehouse @relation(fields: [warehouseId], references: [id])
+
+  @@index([itemId])
+  @@index([warehouseId])
+  @@index([status])
+  @@map("remnants")
+}
+
+model StocktakeLine {
+  id         Int              @id @default(autoincrement())
+  sessionId  Int              @map("session_id")
+  itemId     Int              @map("item_id")
+  systemQty  Decimal          @default(0) @db.Decimal(15, 2)
+  count1     Decimal?         @db.Decimal(15, 2)
+  count2     Decimal?         @db.Decimal(15, 2)
+  finalCount Decimal?         @map("final_count") @db.Decimal(15, 2)
+  variance   Decimal?         @map("variance") @db.Decimal(15, 2)
+  note       String?          @db.VarChar(500)
+  session    StocktakeSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  item       Item             @relation(fields: [itemId], references: [id])
+
+  @@index([sessionId])
+  @@index([itemId])
+  @@map("stocktake_lines")
+}
+
+/// P1-6: ruleset statutori payroll berperiode. Tarif jangan diedit diam-diam:
+/// perubahan aturan = baris baru dengan effectiveFrom baru (+ tutup baris lama
+/// via effectiveTo). Seed awal = parameter 2024 yang sebelumnya hardcoded.
+/// Angka 2026+ NEEDS ACCOUNTANT/LEGAL CONFIRMATION sebelum dimasukkan.
+model PayrollStatutoryRule {
+  id            Int       @id @default(autoincrement())
+  key           String    @db.VarChar(64)
+  value         Decimal   @db.Decimal(20, 6)
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  source        String?   @db.VarChar(255)
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@unique([key, effectiveFrom], map: "payroll_statutory_rules_key_effective_from_unique")
+  @@map("payroll_statutory_rules")
+}
+
 model Payroll {
   slug                   String?     @unique
   id                     Int         @id @default(autoincrement())
@@ -2390,6 +2569,7 @@ model Payroll {
   bpjsHealthEmployee     Decimal     @default(0.00) @map("bpjs_health_employee") @db.Decimal(15, 2)
   bpjsEmploymentEmployee Decimal     @default(0.00) @map("bpjs_employment_employee") @db.Decimal(15, 2)
   pph21                  Decimal     @default(0.00) @map("pph21") @db.Decimal(15, 2)
+  statutorySnapshot      Json?       @map("statutory_snapshot")
   lateMinutes            Int         @default(0) @map("late_minutes")
   workingDays            Int         @default(0) @map("working_days")
   presentDays            Int         @default(0) @map("present_days")
@@ -2608,24 +2788,23 @@ model PettyCash {
   @@map("petty_cash")
 }
 
-
 model CostCenter {
-  slug              String?                @unique
-  id                Int                    @id @default(autoincrement())
-  code              String                 @unique
-  name              String
-  description       String?                @db.Text
-  isActive          Boolean                @default(true) @map("is_active")
-  departmentId      Int?                   @map("department_id")
-  profitCenterId    Int?                   @map("profit_center_id")
-  parentId          Int?                   @map("parent_id")
-  parent            CostCenter?            @relation("CostCenterTree", fields: [parentId], references: [id])
-  children          CostCenter[]           @relation("CostCenterTree")
-  createdAt         DateTime               @default(now()) @map("created_at")
-  updatedAt         DateTime               @updatedAt @map("updated_at")
-  payrolls          Payroll[]
-  materialIssues    MaterialIssue[]
-  projects          Project[]
+  slug           String?         @unique
+  id             Int             @id @default(autoincrement())
+  code           String          @unique
+  name           String
+  description    String?         @db.Text
+  isActive       Boolean         @default(true) @map("is_active")
+  departmentId   Int?            @map("department_id")
+  profitCenterId Int?            @map("profit_center_id")
+  parentId       Int?            @map("parent_id")
+  parent         CostCenter?     @relation("CostCenterTree", fields: [parentId], references: [id])
+  children       CostCenter[]    @relation("CostCenterTree")
+  createdAt      DateTime        @default(now()) @map("created_at")
+  updatedAt      DateTime        @updatedAt @map("updated_at")
+  payrolls       Payroll[]
+  materialIssues MaterialIssue[]
+  projects       Project[]
 
   @@index([departmentId])
   @@index([profitCenterId])
@@ -2635,11 +2814,11 @@ model CostCenter {
 }
 
 model ProfitCenter {
-  id        Int        @id @default(autoincrement())
-  code      String     @unique
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
   name      String
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   @@index([createdAt])
   @@map("profit_centers")
@@ -2652,21 +2831,21 @@ model ProfitCenter {
 /// Jurnalnya dibuat sekali saat dokumen dibuat dan DI-POSTING langsung
 /// (transfer uang nyata), dengan `referenceType`/`referenceId` ke transfer ini.
 model BankTransfer {
-  slug         String?   @unique
-  id           Int       @id @default(autoincrement())
-  documentNo   String    @unique @map("document_no")
-  date         DateTime
-  fromAccountId Int      @map("from_account_id")
-  toAccountId   Int      @map("to_account_id")
-  amount       Decimal   @db.Decimal(15, 2)
-  adminFee     Decimal   @default(0.00) @map("admin_fee") @db.Decimal(15, 2)
-  feeAccountId Int?      @map("fee_account_id")
-  description  String?   @db.Text
-  journalId    Int?      @map("journal_id")
-  createdBy    Int?      @map("created_by")
-  deletedAt    DateTime? @map("deleted_at")
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
+  slug          String?   @unique
+  id            Int       @id @default(autoincrement())
+  documentNo    String    @unique @map("document_no")
+  date          DateTime
+  fromAccountId Int       @map("from_account_id")
+  toAccountId   Int       @map("to_account_id")
+  amount        Decimal   @db.Decimal(15, 2)
+  adminFee      Decimal   @default(0.00) @map("admin_fee") @db.Decimal(15, 2)
+  feeAccountId  Int?      @map("fee_account_id")
+  description   String?   @db.Text
+  journalId     Int?      @map("journal_id")
+  createdBy     Int?      @map("created_by")
+  deletedAt     DateTime? @map("deleted_at")
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
 
   @@index([fromAccountId])
   @@index([toAccountId])
@@ -2682,17 +2861,25 @@ model BankTransfer {
 model Cheque {
   id         Int       @id @default(autoincrement())
   documentNo String    @unique @map("document_no")
-  /** "giro" | "cek". */
+  /**
+   * "giro" | "cek".
+   */
   type       String    @default("giro")
-  /** "in" = diterima dari pelanggan, "out" = dikeluarkan ke pemasok. */
+  /**
+   * "in" = diterima dari pelanggan, "out" = dikeluarkan ke pemasok.
+   */
   direction  String    @default("in")
-  /** Nomor giro/cek yang tercetak di lembar bank. */
+  /**
+   * Nomor giro/cek yang tercetak di lembar bank.
+   */
   number     String?
   accountId  Int?      @map("account_id")
   party      String?
   amount     Decimal   @db.Decimal(15, 2)
   dueDate    DateTime  @map("due_date")
-  /** "pending" (belum cair) | "cleared" | "cancelled". */
+  /**
+   * "pending" (belum cair) | "cleared" | "cancelled".
+   */
   status     String    @default("pending")
   notes      String?   @db.Text
   createdBy  Int?      @map("created_by")
@@ -2741,19 +2928,17 @@ model BankStatement {
 }
 
 model BankStatementLine {
-  id               Int           @id @default(autoincrement())
-  bankStatementId  Int           @map("bank_statement_id")
-  date             DateTime
-  description      String?
-  amount           Decimal       @db.Decimal(15, 2)
-  debit            Decimal       @default(0.00) @db.Decimal(15, 2)
-  credit           Decimal       @default(0.00) @db.Decimal(15, 2)
-  balance          Decimal       @default(0.00) @db.Decimal(15, 2)
-  type             String
-  reference        String?
-  status           String        @default("unmatched")
-  matchedType      String?       @map("matched_type")
-  bankStatement    BankStatement @relation(fields: [bankStatementId], references: [id], onDelete: Cascade)
+  id              Int           @id @default(autoincrement())
+  bankStatementId Int           @map("bank_statement_id")
+  date            DateTime
+  description     String?
+  amount          Decimal       @db.Decimal(15, 2)
+  debit           Decimal       @default(0.00) @db.Decimal(15, 2)
+  credit          Decimal       @default(0.00) @db.Decimal(15, 2)
+  type            String
+  reference       String?
+  status          String        @default("unmatched")
+  bankStatement   BankStatement @relation(fields: [bankStatementId], references: [id], onDelete: Cascade)
 
   @@index([bankStatementId], map: "bank_statement_lines_bank_statement_id_fkey")
   @@map("bank_statement_lines")
@@ -2799,7 +2984,7 @@ model BankReconciliation {
 model BankReconciliationItem {
   id                   Int                @id @default(autoincrement())
   bankReconciliationId Int                @map("bank_reconciliation_id")
-  bankStatementLineId  Int                @map("bank_statement_line_id")
+  bankStatementLineId  Int?               @map("bank_statement_line_id")
   journalEntryId       Int?               @map("journal_entry_id")
   type                 String?
   reference            String?
@@ -2808,12 +2993,15 @@ model BankReconciliationItem {
   date                 DateTime?
   matched              Boolean            @default(false)
   cleared              Boolean            @default(false)
-  clearedDate          DateTime?          @map("cleared_date")
   bankReconciliation   BankReconciliation @relation(fields: [bankReconciliationId], references: [id], onDelete: Cascade)
 
   @@index([bankReconciliationId], map: "bank_reconciliation_items_bank_reconciliation_id_fkey")
   @@index([bankStatementLineId])
   @@index([journalEntryId])
+  // R-03: satu entri jurnal hanya boleh dipakai sekali per rekonsiliasi.
+  // MySQL memperlakukan NULL berbeda (banyak NULL di journal_entry_id
+  // tetap boleh — item penyesuaian tidak terpengaruh).
+  @@unique([bankReconciliationId, journalEntryId], map: "uq_recon_items_recon_journal")
   @@map("bank_reconciliation_items")
 }
 
@@ -3286,18 +3474,17 @@ model ApprovalWorkflow {
 }
 
 model ApprovalWorkflowStep {
-  id                      Int              @id @default(autoincrement())
-  workflowId              Int              @map("workflow_id")
-  name                    String?
-  stepOrder               Int              @map("step_order")
-  roleId                  Int?             @map("role_id")
-  userId                  Int?             @map("user_id")
-  approverType            String?          @map("approver_type")
-  canSkip                 Boolean          @default(false) @map("can_skip")
-  conditions              Json?
-  createdAt               DateTime         @default(now()) @map("created_at")
-  updatedAt               DateTime         @updatedAt @map("updated_at")
-  workflow                ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  id           Int              @id @default(autoincrement())
+  workflowId   Int              @map("workflow_id")
+  name         String?
+  stepOrder    Int              @map("step_order")
+  roleId       Int?             @map("role_id")
+  userId       Int?             @map("user_id")
+  approverType String?          @map("approver_type")
+  conditions   Json?
+  createdAt    DateTime         @default(now()) @map("created_at")
+  updatedAt    DateTime         @updatedAt @map("updated_at")
+  workflow     ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
 
   @@index([workflowId], map: "approval_workflow_steps_workflow_id_fkey")
   @@index([roleId])
@@ -3553,15 +3740,15 @@ model UomConversion {
 }
 
 model UnitOfMeasure {
-  slug             String?  @unique
-  id               Int      @id @default(autoincrement())
-  name             String
-  symbol           String
-  category         String?
-  baseUnitId       Int?     @map("base_unit_id")
-  isActive         Boolean  @default(true) @map("is_active")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  slug       String?  @unique
+  id         Int      @id @default(autoincrement())
+  name       String
+  symbol     String
+  category   String?
+  baseUnitId Int?     @map("base_unit_id")
+  isActive   Boolean  @default(true) @map("is_active")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
 
   @@index([baseUnitId])
   @@index([createdAt])

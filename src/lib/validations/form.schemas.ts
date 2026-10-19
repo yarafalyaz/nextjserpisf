@@ -100,6 +100,8 @@ export const employeeSchema = z.object({
   gender: z.string().optional(),
   dateOfBirth: z.string().optional(),
   maritalStatus: z.string().optional(),
+  // P1-6: jumlah tanggungan untuk PTKP (0-3).
+  dependents: z.coerce.number().int().min(0).max(3).default(0),
   departmentId: z.number().optional(),
   positionId: z.number().optional(),
   joinDate: z.string().min(1, "Tanggal masuk wajib diisi"),

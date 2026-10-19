@@ -29,6 +29,7 @@ async function main() {
   // berstatus `posted` tanpa satu pun entri buku. HPP & persediaan diperlukan supaya
   // jurnal HPP + pengurangan stok ikut terbentuk.
   const revenueAccount = await ensureAccount("E2E-4000", "E2E Sales Revenue", AccountType.REVENUE);
+  const salesReturnAccount = await ensureAccount("E2E-4100", "E2E Sales Return", AccountType.REVENUE);
   const cogsAccount = await ensureAccount("E2E-5103", "E2E Cost of Goods Sold", AccountType.EXPENSE);
   const inventoryAccount = await ensureAccount("E2E-1104", "E2E Inventory", AccountType.ASSET);
 
@@ -40,6 +41,7 @@ async function main() {
         cashBankAccountId: cash.id,
         salesReceivableAccountId: receivable.id,
         salesRevenueAccountId: revenueAccount.id,
+        salesReturnAccountId: salesReturnAccount.id,
         cogsAccountId: cogsAccount.id,
         inventoryAccountId: inventoryAccount.id,
         purchasePayableAccountId: payable.id,
@@ -55,6 +57,7 @@ async function main() {
         cashBankAccountId: cash.id,
         salesReceivableAccountId: receivable.id,
         salesRevenueAccountId: revenueAccount.id,
+        salesReturnAccountId: salesReturnAccount.id,
         cogsAccountId: cogsAccount.id,
         inventoryAccountId: inventoryAccount.id,
         purchasePayableAccountId: payable.id,
@@ -506,6 +509,47 @@ async function main() {
   );
 
   console.log(`10. Kendaraan: ${e2eBrand.name} / ${e2eModel.name} / ${e2eVariant.name} ✓`);
+  // ─── 12. RANTAI BELI P2-1: PO approved + item stok-able + vendor ───
+  // Spec purchase-chain menekan tombol: terima → verifikasi GR,
+  // buat + posting tagihan, catat + konfirmasi pembayaran. PO + GR-ID +
+  // item dibentuk di sini supaya spec deterministik & idempoten.
+  const buyVendor = await prisma.vendor.upsert({
+    where: { code: "E2E-BUY-VENDOR" },
+    update: { isActive: true },
+    create: { code: "E2E-BUY-VENDOR", name: "E2E Pemasok Rantai", isActive: true },
+  });
+  const buyItem = await prisma.item.upsert({
+    where: { sku: "E2E-BUY-ITEM" },
+    update: { isActive: true, defaultWarehouseId: e2eWarehouse.id, defaultRackId: e2eRack.id },
+    create: {
+      sku: "E2E-BUY-ITEM", name: "E2E Bahan Rantai Beli", unitOfMeasure: "PCS",
+      isProduct: false, isService: false, costingMethod: "average",
+      qtyOnHand: 0, cost: 50000, price: 0, isActive: true,
+      defaultWarehouseId: e2eWarehouse.id, defaultRackId: e2eRack.id,
+    },
+  });
+  // Hapus anak (GR + item) dulu: FK goods_receipts.purchase_order_id
+  // menolak hapus PO induk selagi GR rantai E2E masih menunjuknya.
+  const oldPo = await prisma.purchaseOrder.findFirst({ where: { documentNo: "E2E-PO-CHAIN" } });
+  if (oldPo) {
+    const oldGrs = await prisma.goodsReceipt.findMany({ where: { purchaseOrderId: oldPo.id }, select: { id: true } });
+    const oldGrIds = oldGrs.map((g) => g.id);
+    if (oldGrIds.length) {
+      await prisma.goodsReceiptItem.deleteMany({ where: { goodsReceiptId: { in: oldGrIds } } });
+      await prisma.goodsReceipt.deleteMany({ where: { id: { in: oldGrIds } } });
+    }
+    await prisma.purchaseOrder.deleteMany({ where: { id: oldPo.id } });
+  }
+  const chainPo = await prisma.purchaseOrder.create({
+    data: {
+      documentNo: "E2E-PO-CHAIN", slug: "e2e-po-chain", vendorId: buyVendor.id,
+      date: new Date("2026-06-02"), status: "approved", subtotal: 500000,
+      tax: 0, grandTotal: 500000, totalAmount: 500000, createdBy: userId,
+      items: { create: [{ itemId: buyItem.id, qty: 10, unitPrice: 50000, total: 500000 }] },
+    },
+  });
+  console.log(`12. Rantai beli: PO ${chainPo.documentNo} approved, 10x E2E-BUY-ITEM ✓`);
+
   console.log("\n=== REMAINING CORE FLOWS E2E COMPLETE ===");
 }
 

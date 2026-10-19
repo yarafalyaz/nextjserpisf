@@ -88,6 +88,23 @@ describe("CRM Ticket Actions", () => {
     const res = await actions.updateTicket(1, fdMap({}))
     expect(res?.success).toBe(false)
   })
+  it("updateTicket mengisi firstResponseAt saat keluar dari open", async () => {
+    mocks.prismaMock.crmTicket.findFirst.mockResolvedValueOnce(null)
+    mocks.prismaMock.crmTicket.findUnique.mockResolvedValueOnce({ status: "open", firstResponseAt: null, resolvedAt: null })
+    const res = await actions.updateTicket(1, fdMap({ subject: "Tiket", status: "in_progress" }))
+    expect(res?.success).toBe(true)
+    const data = mocks.prismaMock.crmTicket.update.mock.calls[mocks.prismaMock.crmTicket.update.mock.calls.length - 1][0].data
+    expect(data.firstResponseAt).toBeInstanceOf(Date)
+    expect(data.resolvedAt).toBeUndefined()
+  })
+  it("updateTicket mengisi resolvedAt saat resolved", async () => {
+    mocks.prismaMock.crmTicket.findFirst.mockResolvedValueOnce(null)
+    mocks.prismaMock.crmTicket.findUnique.mockResolvedValueOnce({ status: "in_progress", firstResponseAt: new Date(), resolvedAt: null })
+    const res = await actions.updateTicket(1, fdMap({ subject: "Tiket", status: "resolved" }))
+    expect(res?.success).toBe(true)
+    const data = mocks.prismaMock.crmTicket.update.mock.calls[mocks.prismaMock.crmTicket.update.mock.calls.length - 1][0].data
+    expect(data.resolvedAt).toBeInstanceOf(Date)
+  })
   it("updateTicket handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     mocks.prismaMock.crmTicket.update.mockRejectedValueOnce(new Error("db err"))

@@ -4,6 +4,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeAdd, safeSubtract, compareAmounts, safeRound } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import {
   onExpenseApproved,
@@ -34,8 +35,9 @@ import {
   computePettyCashChain,
   findFirstNegativeBalance,
 } from "@/lib/finance/petty-cash-chain";
-import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
+import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 // ==================== BANK STATEMENT ACTIONS ====================
@@ -49,24 +51,29 @@ export async function createBankStatement(formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    await assertPeriodOpen(v.date);
-
-    const bankStatement = await prisma.bankStatement.create({
-      data: {
-        accountId: v.accountId,
-        bankId: v.bankId ?? null,
-        accountNumber: v.accountNumber ?? null,
-        date: v.date,
-        reference: v.reference ?? null,
-        slug: await nextSlug("bankStatement", v.reference),
-        periodStart: v.periodStart ?? null,
-        periodEnd: v.periodEnd ?? null,
-        openingBalance: v.openingBalance,
-        closingBalance: v.closingBalance,
-        notes: v.notes ?? null,
-        status: "draft",
-        uploadedBy: Number(user.id),
-      },
+    // R-09: tulis header + cek periode dalam satu tx (cek di dalam, dengan
+    // tx) — cek luar-tx tanpa kunci bisa disela tutup-periode sebelum
+    // header tertulis. Baris header lahir draft; tanggal header tetap
+    // tanggal dokumen keuangan.
+    const bankStatement = await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(v.date, tx);
+      return tx.bankStatement.create({
+        data: {
+          accountId: v.accountId,
+          bankId: v.bankId ?? null,
+          accountNumber: v.accountNumber ?? null,
+          date: v.date,
+          reference: v.reference ?? null,
+          slug: await nextSlug("bankStatement", v.reference),
+          periodStart: v.periodStart ?? null,
+          periodEnd: v.periodEnd ?? null,
+          openingBalance: v.openingBalance,
+          closingBalance: v.closingBalance,
+          notes: v.notes ?? null,
+          status: "draft",
+          uploadedBy: Number(user.id),
+        },
+      });
     });
 
     await logActivity(
@@ -116,6 +123,77 @@ async function recalcBankStatementTotals(
 }
 
 /**
+ * R-12: kunci baris header `bank_statements` (FOR UPDATE) sebelum menulis
+ * baris + `recalcBankStatementTotals`.
+ *
+ * Tanpa kunci header, dua transaksi yang menulis baris BERBEDA pada header
+ * sama bisa berlari bersamaan: keduanya agregat sebelum keduanya update
+ * header, lalu update terakhir menang dengan angka yang belum mencakup
+ * baris transaksi lain (total basi). Kunci header menserialkan pasangan
+ * (tulis baris + recalc) per header.
+ *
+ * Id di-dedupe + diurutkan naik, lalu dikunci dalam SATU query
+ * `ORDER BY id ... FOR UPDATE` — urutan global yang sama untuk semua
+ * pemanggil mencegah deadlock antar jalur yang mengunci dua header
+ * (update baris yang pindah header).
+ *
+ * Urutan lock global jalur baris rekening koran:
+ * baris -> header(s) -> rekonsiliasi. Jalur match/unmatch/complete tidak
+ * menulis baris bank statement dan tidak memanggil recalc, jadi tidak
+ * mengambil kunci header; jalur itu tetap baris -> rekonsiliasi, yang
+ * konsisten karena header tidak pernah diambil sesudah rekonsiliasi.
+ *
+ * R-15: `assertPeriodOpen(tx)` mengunci baris setting, jadi urutan penuh
+ * penulis baris: baris (bila ada) -> header(s) -> setting -> rekonsiliasi
+ * (update/delete) / -> tulis baris + recalc (create). Setting selalu
+ * sesudah header di semua penulis baris. Aman karena tutup-periode hanya
+ * menahan setting dan tidak pernah menunggu header/baris/jurnal lain.
+ */
+async function lockBankStatementHeaders(
+  tx: BankStatementTx,
+  bankStatementIds: readonly number[],
+) {
+  const ids = [...new Set(bankStatementIds)].sort((a, b) => a - b);
+  if (ids.length === 0) return;
+  await tx.$queryRaw`SELECT id FROM bank_statements WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
+}
+
+
+/**
+ * Kunci induk rekonsiliasi yang terhubung (terurut naik) lalu tolak bila ada
+ * yang sudah selesai. Urutan di pemanggil TIDAK berubah: helper ini dipanggil
+ * persis di titik blok ini dulu berada (sesudah lock baris/header, sebelum
+ * tulis baris), jadi urutan lock baris -> header -> rekonsiliasi tetap.
+ */
+async function lockReconParentsAndAssertNotCompleted(
+  tx: BankStatementTx,
+  bankStatementLineId: number,
+  completedErrorMessage: string,
+) {
+  const matchedRecons = await tx.bankReconciliationItem.findMany({
+    where: { bankStatementLineId, matched: true },
+    select: { bankReconciliationId: true },
+  });
+  const reconIds = [...new Set(matchedRecons.map((m) => m.bankReconciliationId))].sort(
+    (a, b) => a - b,
+  );
+  for (const reconId of reconIds) {
+    await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconId} FOR UPDATE`;
+  }
+  const completedMatch = await tx.bankReconciliationItem.findFirst({
+    where: {
+      bankStatementLineId,
+      matched: true,
+      bankReconciliation: { status: "completed" },
+    },
+    select: { id: true },
+  });
+  if (completedMatch) {
+    throw new Error(completedErrorMessage);
+  }
+}
+
+/**
  * Izin baris rekening koran = izin header-nya (`create_journals`).
  *
  * Jangan mengarang izin baru di sini: `edit_bank_statements` /
@@ -134,9 +212,20 @@ export async function createBankStatementLine(formData: FormData) {
     const v = parsed.data;
     const lineDate = wibDateToUtcMidnight(v.date);
 
-    await assertPeriodOpen(lineDate);
-
     const line = await prisma.$transaction(async (tx) => {
+      // R-15: kunci header SEBELUM assertPeriodOpen — samakan urutan lock
+      // dengan update/delete (baris [bila ada] -> header -> setting).
+      // Dulu create ambil setting dulu lalu header, sedangkan
+      // update/delete ambil baris -> header -> setting: dua penulis baris
+      // pada header sama bisa membentuk siklus tunggu
+      // (create: setting -> header, update: header -> setting).
+      // Protokol benar: tutup-periode hanya menahan kunci setting dan
+      // tidak pernah menunggu header/baris/jurnal lain, jadi setting
+      // selalu terakhir aman; antar-penulis baris kini urutan sama.
+      // Cek periode tetap di DALAM tx dengan tx (R-09) — tutup-periode
+      // tidak bisa menyelip di antara cek dan tulis.
+      await lockBankStatementHeaders(tx, [v.bankStatementId]);
+      await assertPeriodOpen(lineDate, tx);
       const created = await tx.bankStatementLine.create({
         data: {
           bankStatementId: v.bankStatementId,
@@ -184,13 +273,30 @@ export async function updateBankStatementLine(id: number, formData: FormData) {
     const v = parsed.data;
 
     await prisma.$transaction(async (tx) => {
-      // Baris lama dibaca lebih dulu: baris yang tidak ada harus GAGAL (bukan
-      // "sukses" palsu), dan bila barisnya berpindah rekening koran, header
-      // LAMA juga wajib dihitung ulang — kalau tidak totalnya tertinggal.
+      // R-04: kunci BARIS dulu, baru baca — tanpa lock, match bersamaan bisa
+      // selip di antara baca dan tulis (TOCTOU), dan daftar induk dari item
+      // bisa kosong (= nol lock) tepat saat match+complete menyerbu.
+      // Urutan lock konsisten di semua jalur (baris dulu, baru induk) agar
+      // tak deadlock dengan match/unmatch/complete.
+      await tx.$executeRaw`SELECT id FROM bank_statement_lines WHERE id = ${id} FOR UPDATE`;
+
+      // Baris dibaca ulang sesudah lock: baris yang tidak ada harus GAGAL
+      // (bukan "sukses" palsu), dan bila barisnya berpindah rekening koran,
+      // header LAMA juga wajib dihitung ulang — kalau tidak totalnya tertinggal.
       const existing = await tx.bankStatementLine.findUniqueOrThrow({
         where: { id },
         select: { bankStatementId: true, date: true },
       });
+
+      // R-12: kunci header LAMA + BARU (terurut oleh helper) sesudah baris,
+      // sebelum induk rekonsiliasi — urutan lock global:
+      // baris -> header(s) -> rekonsiliasi. Kedua header harus terkunci
+      // sebelum update + recalc keduanya, agar pindah header tidak balapan
+      // dengan penulis baris lain di salah satu header.
+      await lockBankStatementHeaders(tx, [
+        existing.bankStatementId,
+        v.bankStatementId,
+      ]);
 
       // Baik tanggal lama maupun baru harus terbuka. Tanpa pemeriksaan tanggal
       // lama, baris periode yang sudah ditutup dapat "dipindahkan" ke periode
@@ -199,17 +305,14 @@ export async function updateBankStatementLine(id: number, formData: FormData) {
       const lineDate = wibDateToUtcMidnight(v.date);
       await assertPeriodOpen(lineDate, tx);
 
-      const completedMatch = await tx.bankReconciliationItem.findFirst({
-        where: {
-          bankStatementLineId: id,
-          matched: true,
-          bankReconciliation: { status: "completed" },
-        },
-        select: { id: true },
-      });
-      if (completedMatch) {
-        throw new Error("Baris yang sudah masuk rekonsiliasi selesai tidak dapat diubah");
-      }
+      // Induk dikunci (terurut) lalu hubungan+status dibaca ulang — tanpa
+      // lock, complete bersamaan bisa selip di antara cek dan update.
+      // Urutan lock konsisten dengan match/unmatch/complete (baris dulu).
+      await lockReconParentsAndAssertNotCompleted(
+        tx,
+        id,
+        "Baris yang sudah masuk rekonsiliasi selesai tidak dapat diubah",
+      );
 
       await tx.bankStatementLine.update({
         where: { id },
@@ -251,27 +354,36 @@ export async function deleteBankStatementLine(id: number) {
     await requirePermission("create_journals");
 
     await prisma.$transaction(async (tx) => {
-      // Dibaca dulu supaya baris yang tidak ada ditolak berisik: `delete`
-      // langsung akan melempar galat Prisma yang tak terbaca, dan menelan
-      // galat itu membuat pengguna melihat "berhasil" padahal barisnya masih ada.
+      // R-04: kunci BARIS dulu, baru baca — tanpa lock, delete bersamaan
+      // match bisa selip di antara baca dan hapus (TOCTOU).
+      // Urutan lock konsisten dengan match/unmatch/complete (baris dulu).
+      await tx.$executeRaw`SELECT id FROM bank_statement_lines WHERE id = ${id} FOR UPDATE`;
+
+      // Dibaca ulang sesudah lock supaya baris yang tidak ada ditolak
+      // berisik: `delete` langsung akan melempar galat Prisma yang tak
+      // terbaca, dan menelan galat itu membuat pengguna melihat "berhasil"
+      // padahal barisnya masih ada.
       const line = await tx.bankStatementLine.findUnique({
         where: { id },
         select: { bankStatementId: true, date: true },
       });
       if (!line) throw new Error("Baris rekening koran tidak ditemukan");
 
+      // R-12: kunci header sesudah baris, sebelum induk rekonsiliasi —
+      // urutan lock global: baris -> header -> rekonsiliasi. Header harus
+      // terkunci sebelum delete + recalc agar tidak balapan dengan penulis
+      // baris lain pada header sama.
+      await lockBankStatementHeaders(tx, [line.bankStatementId]);
+
       await assertPeriodOpen(line.date, tx);
-      const completedMatch = await tx.bankReconciliationItem.findFirst({
-        where: {
-          bankStatementLineId: id,
-          matched: true,
-          bankReconciliation: { status: "completed" },
-        },
-        select: { id: true },
-      });
-      if (completedMatch) {
-        throw new Error("Baris yang sudah masuk rekonsiliasi selesai tidak dapat dihapus");
-      }
+      // Induk dikunci (terurut) lalu hubungan+status dibaca ulang — urutan
+      // lock sama dengan update di atas agar tak deadlock dengan
+      // match/complete.
+      await lockReconParentsAndAssertNotCompleted(
+        tx,
+        id,
+        "Baris yang sudah masuk rekonsiliasi selesai tidak dapat dihapus",
+      );
 
       await tx.bankStatementLine.delete({ where: { id } });
       await recalcBankStatementTotals(tx, line.bankStatementId);
@@ -292,6 +404,85 @@ export async function deleteBankStatementLine(id: number) {
   }
 }
 
+
+type JournalEntryInput = {
+  accountId: number;
+  debit: number;
+  credit: number;
+  memo: string;
+  costCenterId?: number;
+  profitCenterId?: number;
+};
+
+/** Parse + validasi entri jurnal dari form (dipakai createJournal dan updateJournal, aturan identik). */
+function parseAndValidateJournalEntries(formData: FormData) {
+  const entriesJson = formData.get("entries") as string | null;
+  const entries = safeJsonParse<JournalEntryInput[]>(entriesJson) ?? [];
+
+  // Validate every entry has a valid accountId — reject early to prevent orphan header
+  const validEntries = entries.filter(
+    (e) => e.accountId && (e.debit > 0 || e.credit > 0),
+  );
+  if (validEntries.length < 2) {
+    throw new Error(
+      "Journal harus memiliki minimal 2 entri dengan akun dan nominal valid",
+    );
+  }
+
+  const totalDebit = validEntries.reduce(
+    (sum, e) => safeAdd(sum, e.debit || 0, 2),
+    0,
+  );
+  const totalCredit = validEntries.reduce(
+    (sum, e) => safeAdd(sum, e.credit || 0, 2),
+    0,
+  );
+  if (!compareAmounts(totalDebit, totalCredit, 0)) {
+    throw new Error(
+      `Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`,
+    );
+  }
+
+  // Per-line validation: debit and credit must be non-negative and exclusive
+  for (const entry of validEntries) {
+    if ((entry.debit || 0) < 0 || (entry.credit || 0) < 0) {
+      throw new Error("Nominal debit/credit tidak boleh negatif");
+    }
+    if ((entry.debit || 0) > 0 && (entry.credit || 0) > 0) {
+      throw new Error(
+        "Satu baris tidak boleh memiliki debit dan credit sekaligus",
+      );
+    }
+  }
+
+  return { validEntries, totalDebit, totalCredit };
+}
+
+/** Baris `journalEntry.createMany` untuk satu jurnal (dipakai create dan update). */
+function journalEntryRows(journalId: number, validEntries: JournalEntryInput[]) {
+  return validEntries.map((entry) => ({
+    journalId,
+    accountId: entry.accountId,
+    debit: entry.debit || 0,
+    credit: entry.credit || 0,
+    memo: entry.memo || null,
+    costCenterId: entry.costCenterId || null,
+    // Pusat laba: tanpa baris ini laporan pusat laba selalu menumpuk di
+    // "Tanpa Pusat Laba" walau masternya sudah ada.
+    profitCenterId: entry.profitCenterId || null,
+  }));
+}
+
+/** Kaitkan attachment pending ke jurnal (dipakai create dan update). */
+async function attachJournalAttachments(formData: FormData, journalId: number, userId: number) {
+  const attachmentIds = formData.get("attachmentIds") as string | null;
+  if (attachmentIds) {
+    await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
+      attachmentIds, referenceType: "journal", referenceId: journalId, uploadedBy: userId,
+    }));
+  }
+}
+
 // ==================== JOURNAL ACTIONS ====================
 
 export async function createJournal(formData: FormData) {
@@ -300,62 +491,19 @@ export async function createJournal(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("JRN");
 
-    // Block posting/creating into a closed accounting period
+    // Block posting/creating into a closed accounting period.
+    // Cek luar-tx hanya fast-fail; keputusan final diulang di dalam tx
+    // dengan tx di bawah (R-09) — tanpa itu tutup-periode bisa menyelip
+    // di antara cek ini dan tulis jurnal.
     const txDate = new Date(formData.get("transactionDate") as string);
     await assertPeriodOpen(txDate);
 
     // Laravel parity: parse and validate entries before creating journal
-    const entriesJson = formData.get("entries") as string | null;
-    const entries =
-      safeJsonParse<
-        {
-          accountId: number;
-          debit: number;
-          credit: number;
-          memo: string;
-          costCenterId?: number;
-          profitCenterId?: number;
-        }[]
-      >(entriesJson) ?? [];
-
-    // Validate every entry has a valid accountId — reject early to prevent orphan header
-    const validEntries = entries.filter(
-      (e) => e.accountId && (e.debit > 0 || e.credit > 0),
-    );
-    if (validEntries.length < 2) {
-      throw new Error(
-        "Journal harus memiliki minimal 2 entri dengan akun dan nominal valid",
-      );
-    }
-
-    const totalDebit = validEntries.reduce(
-      (sum, e) => safeAdd(sum, e.debit || 0, 2),
-      0,
-    );
-    const totalCredit = validEntries.reduce(
-      (sum, e) => safeAdd(sum, e.credit || 0, 2),
-      0,
-    );
-    if (!compareAmounts(totalDebit, totalCredit, 0)) {
-      throw new Error(
-        `Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`,
-      );
-    }
-
-    // Per-line validation: debit and credit must be non-negative and exclusive
-    for (const entry of validEntries) {
-      if ((entry.debit || 0) < 0 || (entry.credit || 0) < 0) {
-        throw new Error("Nominal debit/credit tidak boleh negatif");
-      }
-      if ((entry.debit || 0) > 0 && (entry.credit || 0) > 0) {
-        throw new Error(
-          "Satu baris tidak boleh memiliki debit dan credit sekaligus",
-        );
-      }
-    }
+    const { validEntries, totalDebit, totalCredit } = parseAndValidateJournalEntries(formData);
 
     // Wrap header + entries in a single transaction to prevent orphan journals
     const journal = await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(txDate, tx);
       const j = await tx.journal.create({
         data: {
           journalNumber: documentNo,
@@ -371,30 +519,13 @@ export async function createJournal(formData: FormData) {
       });
 
       // Batch create all entries in one query (eliminates N+1)
-      await tx.journalEntry.createMany({
-        data: validEntries.map((entry) => ({
-          journalId: j.id,
-          accountId: entry.accountId,
-          debit: entry.debit || 0,
-          credit: entry.credit || 0,
-          memo: entry.memo || null,
-          costCenterId: entry.costCenterId || null,
-          // Pusat laba: tanpa baris ini laporan pusat laba selalu menumpuk di
-          // "Tanpa Pusat Laba" walau masternya sudah ada.
-          profitCenterId: entry.profitCenterId || null,
-        })),
-      });
+      await tx.journalEntry.createMany({ data: journalEntryRows(j.id, validEntries) });
 
       return j;
     });
 
     // Associate uploaded attachments with the new journal
-    const attachmentIds = formData.get("attachmentIds") as string | null;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "journal", referenceId: journal.id, uploadedBy: Number(user.id),
-      }));
-    }
+    await attachJournalAttachments(formData, journal.id, Number(user.id));
 
     await logActivity("create", "Journal", journal.id, "Membuat jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -410,45 +541,82 @@ export async function postJournal(journalId: number) {
   try {
     await requirePermission("post_journals");
 
-    const journal = await prisma.journal.findUniqueOrThrow({
+    // F-01: baca awal hanya untuk validasi cepat (UX). Kebenaran
+    // diputus di dalam transaksi terkunci di bawah — snapshot ini tak
+    // boleh jadi dasar klaim status.
+    const preview = await prisma.journal.findUniqueOrThrow({
       where: { id: journalId },
       include: { entries: true },
     });
 
-    if (journal.status !== "DRAFT") {
+    if (preview.status !== "DRAFT") {
       throw new Error("Journal hanya bisa di-post dari status DRAFT");
     }
 
     // Block posting into a closed accounting period
-    await assertPeriodOpen(journal.transactionDate);
+    await assertPeriodOpen(preview.transactionDate);
 
-    // Validate double-entry balance
-    const totalDebit = journal.entries.reduce(
+    // Validate double-entry balance on preview (fast-fail before locking).
+    const previewDebit = preview.entries.reduce(
       (sum, e) => safeAdd(sum, Number(e.debit), 2),
       0,
     );
-    const totalCredit = journal.entries.reduce(
+    const previewCredit = preview.entries.reduce(
       (sum, e) => safeAdd(sum, Number(e.credit), 2),
       0,
     );
 
-    if (!compareAmounts(totalDebit, totalCredit, 0)) {
+    if (!compareAmounts(previewDebit, previewCredit, 0)) {
       throw new Error(
-        `Journal tidak balance: Debit ${totalDebit} vs Credit ${totalCredit}`,
+        `Journal tidak balance: Debit ${previewDebit} vs Credit ${previewCredit}`,
       );
     }
 
-    const claim = await prisma.journal.updateMany({
-      where: { id: journalId, status: "DRAFT" },
-      data: {
-        status: "POSTED",
-        totalDebit,
-        totalCredit,
-      },
+    // F-01: lock baris jurnal, baca ulang status+entri, validasi ulang,
+    // lalu klaim DRAFT→POSTED dalam transaksi yang sama. Edit bersamaan
+    // (updateJournal) ikut antre di lock yang sama — hasil serial.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM journals WHERE id = ${journalId} FOR UPDATE`;
+
+      const journal = await tx.journal.findUniqueOrThrow({
+        where: { id: journalId },
+        include: { entries: true },
+      });
+      if (journal.status !== "DRAFT") {
+        throw new Error("Jurnal sudah diposting atau sedang diproses");
+      }
+
+      // R-09: baca lock-date dalam tx yang sama (tanpa tx, tutup periode bisa
+      // selip di antara cek dan klaim).
+      await assertPeriodOpen(journal.transactionDate, tx);
+
+      const totalDebit = journal.entries.reduce(
+        (sum, e) => safeAdd(sum, Number(e.debit), 2),
+        0,
+      );
+      const totalCredit = journal.entries.reduce(
+        (sum, e) => safeAdd(sum, Number(e.credit), 2),
+        0,
+      );
+
+      if (!compareAmounts(totalDebit, totalCredit, 0)) {
+        throw new Error(
+          `Journal tidak balance: Debit ${totalDebit} vs Credit ${totalCredit}`,
+        );
+      }
+
+      const claim = await tx.journal.updateMany({
+        where: { id: journalId, status: "DRAFT" },
+        data: {
+          status: "POSTED",
+          totalDebit,
+          totalCredit,
+        },
+      });
+      if (claim.count === 0) {
+        throw new Error("Jurnal sudah diposting atau sedang diproses");
+      }
     });
-    if (claim.count === 0) {
-      throw new Error("Jurnal sudah diposting atau sedang diproses");
-    }
 
     await logActivity("post", "Journal", journalId, "Posting jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -466,6 +634,8 @@ export async function createExpense(formData: FormData) {
   try {
     const user = await requirePermission("create_expenses");
 
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
     const parsed = parseFormData(expenseSchema, formData);
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
@@ -473,7 +643,20 @@ export async function createExpense(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("EXP");
 
-    const expense = await prisma.expense.create({
+    // Akun bare-int tanpa FK: tolak ID basi sebelum tulis (fail-closed).
+    for (const aid of [v.accountId, v.paidFromAccountId]) {
+      if (aid != null) {
+        const ok = await prisma.account.count({ where: { id: aid } });
+        if (!ok) return { success: false, error: `Akun tidak ditemukan (id: ${aid}). Pilih ulang akun sebelum menyimpan.` };
+      }
+    }
+
+    const attachmentIds = formData.get("attachmentIds") as string | null;
+    const expense = await prisma.$transaction(async (tx) => {
+      // P2 idempotency UI: guard dalam transaksi yang sama (pola createPettyCash).
+      await checkIdempotency(idempotencyKey, tx, user.id);
+
+      const created = await tx.expense.create({
       data: {
         documentNo,
         slug: await nextSlug("expense", documentNo),
@@ -491,15 +674,16 @@ export async function createExpense(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
       },
+      });
+      // R-10: attach dalam tx utama yang sama — gagal attach = rollback expense,
+      // tanpa baris expense yatim atau lampiran menggantung referenceId=0.
+      if (attachmentIds) {
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "expense", referenceId: created.id, uploadedBy: Number(user.id),
+        });
+      }
+      return created;
     });
-
-    // Associate uploaded attachments with the new expense
-    const attachmentIds = formData.get("attachmentIds") as string | null;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "expense", referenceId: expense.id, uploadedBy: Number(user.id),
-      }));
-    }
 
     await logActivity("create", "Expense", expense.id, "Membuat pengeluaran");
     // Route through approval workflow if one is configured for Expense.
@@ -608,40 +792,59 @@ export async function rejectExpense(expenseId: number) {
 
 export async function markExpensePaid(expenseId: number) {
   try {
-    await requirePermission("approve_expenses");
+    const user = await requirePermission("approve_expenses");
 
-    const expense = await prisma.expense.findUniqueOrThrow({
-      where: { id: expenseId },
-    });
+    // Race guard: lock expense FOR UPDATE + recheck status + post journal +
+    // flip paid dalam SATU tx. Baca luar-tx dihapus: dua klik bayar bersamaan
+    // bisa sama-sama lolos cek approved lalu jurnal ganda / flip ganda.
+    // paidFromAccountId dicek ulang dalam tx setelah lock — pesaing bisa
+    // mengosongkannya di antara baca luar dan tulis.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM expenses WHERE id = ${expenseId} FOR UPDATE`;
 
-    // Laravel parity: only approved expenses can be marked as paid (draft → approved → paid)
-    if (expense.status !== "approved") {
-      throw new Error(
-        "Hanya pengeluaran yang sudah disetujui yang dapat ditandai sebagai dibayar",
-      );
-    }
+      const locked = await tx.expense.findUniqueOrThrow({
+        where: { id: expenseId },
+      });
 
-    // Refuse to settle an expense that has no source of funds. `onExpenseApproved`
-    // cannot post Dr. Beban / Cr. Kas-Bank without `paidFromAccountId`, and the old
-    // silent early-return there flipped the expense to "paid" anyway — cash out with
-    // zero GL trace. Reject it here (status untouched, retryable after the account is
-    // filled in) instead of banking on that hook never staying silent again.
-    if (!expense.paidFromAccountId) {
-      throw new Error(
-        "Pengeluaran belum punya akun sumber dana (kas/bank). Isi akun sumber dana sebelum menandai lunas — tanpa itu tidak ada jurnal yang bisa diposting.",
-      );
-    }
+      // Laravel parity: only approved expenses can be marked as paid (draft → approved → paid)
+      if (locked.status !== "approved") {
+        throw new Error(
+          "Hanya pengeluaran yang sudah disetujui yang dapat ditandai sebagai dibayar",
+        );
+      }
 
-    // Post the accounting journal FIRST (Laravel parity: GL created when paid).
-    // Posting before the status flip means a journal failure (e.g. closed period)
-    // leaves the expense at "approved" and retryable, instead of stranding it as
-    // "paid" with no GL entry. The journal's (referenceType, referenceId) unique
-    // constraint already prevents any double-post on concurrent calls.
-    await onExpenseApproved(expenseId);
+      // Refuse to settle an expense that has no source of funds. `onExpenseApproved`
+      // cannot post Dr. Beban / Cr. Kas-Bank without `paidFromAccountId`, and the old
+      // silent early-return there flipped the expense to "paid" anyway — cash out with
+      // zero GL trace. Reject it here (status untouched, retryable after the account is
+      // filled in) instead of banking on that hook never staying silent again.
+      if (!locked.paidFromAccountId) {
+        throw new Error(
+          "Pengeluaran belum punya akun sumber dana (kas/bank). Isi akun sumber dana sebelum menandai lunas — tanpa itu tidak ada jurnal yang bisa diposting.",
+        );
+      }
 
-    await prisma.expense.update({
-      where: { id: expenseId },
-      data: { status: "paid" },
+      // Post the accounting journal FIRST inside the same tx (Laravel parity: GL
+      // created when paid). Posting before the status flip means a journal
+      // failure (e.g. closed period) leaves the expense at "approved" and
+      // retryable, instead of stranding it as "paid" with no GL entry. The
+      // journal's (referenceType, referenceId) unique constraint already
+      // prevents any double-post on concurrent calls — the tx-scoped hook call
+      // (executeInTx reuses this tx) keeps check-then-create serial under the
+      // expense row lock.
+      await onExpenseApproved(expenseId, Number(user.id), tx);
+
+      // Conditional claim: only flip when still approved. The FOR UPDATE lock
+      // serializes this block, so count===0 means the status moved under us
+      // (reject/cancel path) — surface as processed error, never silently
+      // succeed.
+      const claim = await tx.expense.updateMany({
+        where: { id: expenseId, status: "approved" },
+        data: { status: "paid" },
+      });
+      if (claim.count === 0) {
+        throw new Error("Pengeluaran sudah diproses atau status tidak valid");
+      }
     });
 
     await logActivity(
@@ -793,8 +996,19 @@ export async function createPettyCash(formData: FormData) {
 
     const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
+    // Akun bare-int tanpa FK (PettyCash.accountId): tolak ID basi (fail-closed).
+    if (v.accountId != null) {
+      const ok = await prisma.account.count({ where: { id: v.accountId } });
+      if (!ok) return { success: false, error: `Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.` };
+    }
+
     const pettyCash = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
+
+      // Race guard: gap-lock tabel kas kecil SELAMA hitung saldo ekor.
+      // Tanpa ini dua create bersamaan baca balanceBefore sama lalu keduanya
+      // tulis — rantai/recalc sesudahnya menimpa salah satu, saldo akhir salah.
+      await tx.$executeRaw`SELECT id FROM petty_cash FOR UPDATE`;
 
       // Calculate balanceBefore from the chronologically LAST petty cash record.
       // The chain is ordered (date asc, id asc) — see recalcPettyCashChain — so
@@ -842,16 +1056,16 @@ export async function createPettyCash(formData: FormData) {
       // period, unconfigured account) rolls back the subledger row instead of
       // leaving a committed petty-cash row with no journal (subledger/GL drift).
       await onPettyCashCreated(created.id, Number(user.id), tx);
+      // R-10: attach dalam tx utama yang sama — gagal attach = rollback
+      // petty-cash + jurnalnya, tanpa baris yatim atau lampiran menggantung.
+      const attachmentIds = v.attachmentIds as string | undefined;
+      if (attachmentIds) {
+        await attachPendingTransactionAttachments(tx, {
+          attachmentIds, referenceType: "petty_cash", referenceId: created.id, uploadedBy: Number(user.id),
+        });
+      }
       return created;
     });
-
-    // Associate uploaded attachments with the new petty cash record
-    const attachmentIds = v.attachmentIds as string | undefined;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "petty_cash", referenceId: pettyCash.id, uploadedBy: Number(user.id),
-      }));
-    }
 
     await logActivity(
       "create",
@@ -918,12 +1132,19 @@ export async function matchReconciliationLine(
   journalEntryId: number,
 ) {
   try {
-    await requirePermission("post_journals");
+    await requirePermission("manage_bank_reconciliation");
 
     // Semua ID datang dari klien (Server Action tetap bisa dipanggil langsung),
     // jadi hubungan akun/periode/jurnal wajib diperiksa di sini, bukan dipercaya
     // dari pilihan UI.
     await prisma.$transaction(async (tx) => {
+      // R-04 + F-02: kunci BARIS dulu, baru induk — urutan lock konsisten di
+      // semua jalur (match/unmatch/adjustment/complete/update/delete) agar
+      // tak deadlock. Tanpa lock baris, update/delete bersamaan bisa selip
+      // di antara baca line dan tulis item (TOCTOU).
+      await tx.$executeRaw`SELECT id FROM bank_statement_lines WHERE id = ${lineId} FOR UPDATE`;
+      await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconciliationId} FOR UPDATE`;
+
       const recon = await tx.bankReconciliation.findUniqueOrThrow({
         where: { id: reconciliationId },
         select: { status: true, accountId: true, periodStart: true, periodEnd: true },
@@ -932,9 +1153,18 @@ export async function matchReconciliationLine(
         throw new Error("Hanya rekonsiliasi dengan status draft yang dapat dicocokkan");
       }
 
+      // Hubungan+status dibaca ulang sesudah lock: baris bisa dipindah/dihapus
+      // pesaing tepat sebelum match mengunci induk.
       const line = await tx.bankStatementLine.findUniqueOrThrow({
         where: { id: lineId },
-        select: { date: true, bankStatement: { select: { accountId: true } } },
+        select: {
+          date: true,
+          amount: true,
+          type: true,
+          debit: true,
+          credit: true,
+          bankStatement: { select: { accountId: true } },
+        },
       });
       if (line.bankStatement.accountId !== recon.accountId) {
         throw new Error("Baris rekening koran bukan milik akun rekonsiliasi ini");
@@ -950,6 +1180,8 @@ export async function matchReconciliationLine(
         where: { id: journalEntryId },
         select: {
           accountId: true,
+          debit: true,
+          credit: true,
           journal: { select: { status: true, deletedAt: true, transactionDate: true } },
         },
       });
@@ -964,6 +1196,49 @@ export async function matchReconciliationLine(
         (recon.periodEnd && journalEntry.journal.transactionDate > recon.periodEnd)
       ) {
         throw new Error("Tanggal jurnal berada di luar periode rekonsiliasi");
+      }
+
+      // R-03: nominal + arah wajib cocok. Tanpa ini, baris Rp100 ribu bisa
+      // "dicocokkan" dengan jurnal Rp1 (match palsu menutup selisih).
+      // Toleransi 0.01 untuk sisa pembulatan Decimal(15,2).
+      const lineAmount = Number(line.amount);
+      const entryDebit = Number(journalEntry.debit);
+      const entryCredit = Number(journalEntry.credit);
+      const entryHasDebit = entryDebit > 0;
+      const entryHasCredit = entryCredit > 0;
+      if (entryHasDebit === entryHasCredit) {
+        throw new Error("Entri jurnal tidak memiliki arah debit/kredit yang jelas");
+      }
+      const entryAmount = entryHasDebit ? entryDebit : entryCredit;
+      // Epsilon 1e-9 lawan noise biner float (1000.01-1000 = 0.0099999...).
+      if (Math.abs(lineAmount - entryAmount) >= 0.01 - 1e-9) {
+        throw new Error(
+          `Nominal tidak sama: baris rekening koran ${lineAmount} vs entri jurnal ${entryAmount}`,
+        );
+      }
+      // Arah: kolom debit = kas masuk (lihat createBankStatementLine),
+      // sama seperti sisi debit akun bank di jurnal. Debit lawan kredit
+      // berarti arus berlawanan — tolak.
+      const lineIsDebit = Number(line.debit) > 0 || line.type === "debit";
+      if (lineIsDebit !== entryHasDebit) {
+        throw new Error("Arah tidak sama: baris debit hanya dapat cocok dengan entri debit (dan sebaliknya)");
+      }
+
+      // R-03: satu entri jurnal hanya boleh dipakai sekali per rekonsiliasi.
+      // Tanpa ini, satu jurnal Rp1 jt bisa "menutup" banyak baris sekaligus.
+      // findFirst dikecualikan baris ini sendiri agar match ulang yang sama
+      // tetap idempoten; UNIQUE(bank_reconciliation_id, journal_entry_id)
+      // menutup balapan antar-transaksi (P2002 di bawah).
+      const journalReuse = await tx.bankReconciliationItem.findFirst({
+        where: {
+          bankReconciliationId: reconciliationId,
+          journalEntryId,
+          NOT: { bankStatementLineId: lineId },
+        },
+        select: { id: true },
+      });
+      if (journalReuse) {
+        throw new Error("Entri jurnal sudah dipakai di rekonsiliasi ini");
       }
 
       // Dedupe: satu baris rekening hanya dapat memiliki satu kecocokan pada
@@ -1002,86 +1277,239 @@ export async function matchReconciliationLine(
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
+    // R-03: balapan dua match jurnal-sama lolos cek findFirst lalu tabrakan
+    // di UNIQUE(bank_reconciliation_id, journal_entry_id) — pesan ramah.
+    if ((e as { code?: string })?.code === "P2002") {
+      return { success: false, error: "Entri jurnal sudah dipakai di rekonsiliasi ini" };
+    }
     console.error("[matchReconciliationLine]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
 
-export async function completeReconciliation(reconciliationId: number) {
+export async function createReconciliationAdjustment(
+  reconciliationId: number,
+  formData: FormData,
+) {
   try {
-    await requirePermission("post_journals");
+    await requirePermission("manage_bank_reconciliation");
 
-    // Laravel parity: only draft reconciliations can be completed
-    const reconciliation = await prisma.bankReconciliation.findUniqueOrThrow({
-      where: { id: reconciliationId },
-      include: { items: true },
+    const rawType = String(formData.get("type") ?? "").trim();
+    if (rawType !== "outstanding_deposit" && rawType !== "outstanding_check") {
+      return {
+        success: false as const,
+        error: "Jenis penyesuaian harus setoran beredar atau cek beredar",
+      };
+    }
+
+    const amount = parseMoneyAmount(formData.get("amount"));
+    if (amount === null || !(amount > 0)) {
+      return {
+        success: false as const,
+        error: "Nominal penyesuaian harus lebih dari 0",
+      };
+    }
+
+    const rawDate = String(formData.get("date") ?? "").trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(rawDate)) {
+      return { success: false as const, error: "Tanggal penyesuaian wajib diisi" };
+    }
+
+    const description = String(formData.get("description") ?? "").trim() || null;
+
+    // F-02: cek draft + tulis item dalam SATU transaksi terkunci agar
+    // tak selip di antara baca complete dan klaim completed.
+    const item = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconciliationId} FOR UPDATE`;
+
+      const recon = await tx.bankReconciliation.findUniqueOrThrow({
+        where: { id: reconciliationId },
+        select: { status: true },
+      });
+      if (recon.status !== "draft") {
+        throw new Error("Hanya rekonsiliasi dengan status draft yang dapat ditambah penyesuaian");
+      }
+
+      return tx.bankReconciliationItem.create({
+        data: {
+          bankReconciliationId: reconciliationId,
+          bankStatementLineId: null,
+          journalEntryId: null,
+          type: rawType,
+          amount,
+          date: wibDateToUtcMidnight(rawDate),
+          description,
+          cleared: false,
+          matched: false,
+        },
+      });
     });
 
-    if (reconciliation.status !== "draft") {
-      throw new Error(
-        "Hanya rekonsiliasi dengan status draft yang dapat diselesaikan",
-      );
-    }
-
-    if (reconciliation.items.length === 0) {
-      throw new Error("Rekonsiliasi belum memiliki baris yang dicocokkan");
-    }
-
-    // Semua baris yang telah dimasukkan ke rekonsiliasi wajib sudah matched.
-    const unmatchedItems = reconciliation.items.filter((item) => !item.matched);
-    if (unmatchedItems.length > 0) {
-      throw new Error(
-        `${unmatchedItems.length} baris belum di-match. Semua baris harus di-match sebelum menyelesaikan rekonsiliasi.`,
-      );
-    }
-
-    // Numeric balance gate (Laravel BankReconciliation::calculateDifference + isBalanced).
-    // Only UNCLEARED outstanding deposits/payments adjust the book balance.
-    //   adjusted_book_balance = book_balance + outstanding_deposits − outstanding_payments
-    //   difference            = statement_ending_balance − adjusted_book_balance
-    // Block completion unless |difference| < 0.01. Persist the computed figures
-    // so the report reflects the reconciliation math (these columns existed in
-    // the schema but were never populated before).
-    const outstandingDeposits = reconciliation.items
-      .filter((i) => !i.cleared && i.type === "outstanding_deposit")
-      .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
-    const outstandingPayments = reconciliation.items
-      .filter((i) => !i.cleared && i.type === "outstanding_check")
-      .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
-    const adjustedBookBalance = safeSubtract(
-      safeAdd(Number(reconciliation.bookBalance), outstandingDeposits, 2),
-      outstandingPayments,
-      2,
+    await logActivity(
+      "create",
+      "BankReconciliation",
+      reconciliationId,
+      "Menambah item penyesuaian rekonsiliasi bank",
     );
-    const difference = safeSubtract(
-      Number(reconciliation.statementBalance),
-      adjustedBookBalance,
-      2,
-    );
-    if (Math.abs(difference) >= 0.01) {
-      throw new Error(
-        `Rekonsiliasi belum seimbang. Selisih: ${difference.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. ` +
-          `Tambahkan item penyesuaian (setoran/cek beredar) atau periksa saldo sebelum menyelesaikan.`,
-      );
-    }
+    revalidatePath("/keuangan/rekonsiliasi-bank");
+    return { success: true as const, id: item.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createReconciliationAdjustment]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
 
-    await prisma.bankReconciliation.update({
-      where: { id: reconciliationId },
-      data: {
-        status: "completed",
-        completedAt: new Date(),
-        outstandingDeposits,
+export async function unmatchReconciliationLine(
+  reconciliationId: number,
+  itemId: number,
+) {
+  try {
+    await requirePermission("manage_bank_reconciliation");
+
+    await prisma.$transaction(async (tx) => {
+      // F-02: kunci induk dulu — urutan lock konsisten dengan match/complete.
+      await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconciliationId} FOR UPDATE`;
+
+      const recon = await tx.bankReconciliation.findUniqueOrThrow({
+        where: { id: reconciliationId },
+        select: { status: true },
+      });
+      if (recon.status !== "draft") {
+        throw new Error("Hanya rekonsiliasi dengan status draft yang dapat dibatalkan cocoknya");
+      }
+
+      const item = await tx.bankReconciliationItem.findUniqueOrThrow({
+        where: { id: itemId },
+        select: { bankReconciliationId: true },
+      });
+      if (item.bankReconciliationId !== reconciliationId) {
+        throw new Error("Item bukan milik rekonsiliasi ini");
+      }
+
+      await tx.bankReconciliationItem.delete({ where: { id: itemId } });
+    });
+
+    await logActivity(
+      "unmatch",
+      "BankReconciliation",
+      reconciliationId,
+      "Membatalkan kecocokan baris rekonsiliasi bank",
+    );
+    revalidatePath("/keuangan/rekonsiliasi-bank");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[unmatchReconciliationLine]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function completeReconciliation(reconciliationId: number) {
+  try {
+    await requirePermission("manage_bank_reconciliation");
+
+    // F-02: seluruh baca-validasi-tulis dalam SATU transaksi terkunci.
+    // Baris induk dikunci dulu agar match/unmatch/adjustment bersamaan
+    // antre di lock yang sama — complete selalu hitung dari data terbaru.
+    const figures = await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconciliationId} FOR UPDATE`;
+
+      // Laravel parity: only draft reconciliations can be completed
+      const reconciliation = await tx.bankReconciliation.findUniqueOrThrow({
+        where: { id: reconciliationId },
+        include: { items: true },
+      });
+
+      if (reconciliation.status !== "draft") {
+        throw new Error(
+          "Hanya rekonsiliasi dengan status draft yang dapat diselesaikan",
+        );
+      }
+
+      if (reconciliation.items.length === 0) {
+        throw new Error("Rekonsiliasi belum memiliki baris yang dicocokkan");
+      }
+
+      // R-01: gate matched hanya untuk item pencocokan (punya
+      // bankStatementLineId/journalEntryId). Item penyesuaian (keduanya null)
+      // tidak perlu matched — wajib cleared:false + amount>0.
+      const unmatchedMatchItems = reconciliation.items.filter(
+        (item) =>
+          (item.bankStatementLineId != null || item.journalEntryId != null) &&
+          !item.matched,
+      );
+      if (unmatchedMatchItems.length > 0) {
+        throw new Error(
+          `${unmatchedMatchItems.length} baris belum di-match. Semua baris harus di-match sebelum menyelesaikan rekonsiliasi.`,
+        );
+      }
+      const invalidAdjustments = reconciliation.items.filter(
+        (item) =>
+          item.bankStatementLineId == null &&
+          item.journalEntryId == null &&
+          (item.cleared || !(Number(item.amount) > 0)),
+      );
+      if (invalidAdjustments.length > 0) {
+        throw new Error(
+          `${invalidAdjustments.length} item penyesuaian tidak valid. Penyesuaian wajib belum cleared dan nominal lebih dari 0.`,
+        );
+      }
+
+      // Numeric balance gate — standar rekonsiliasi bank (sisi bank disesuaikan):
+      //   adjusted_bank = statement_balance + outstanding_deposits − outstanding_payments
+      //   difference    = adjusted_bank − book_balance
+      // Block completion unless |difference| < 0.01. Kolom `adjustedBookBalance`
+      // SUDAH ADA dan dipakai laporan — nama dipertahankan (warisan = adjusted
+      // bank balance), diisi nilai sisi-bank yang benar.
+      const outstandingDeposits = reconciliation.items
+        .filter((i) => !i.cleared && i.type === "outstanding_deposit")
+        .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
+      const outstandingPayments = reconciliation.items
+        .filter((i) => !i.cleared && i.type === "outstanding_check")
+        .reduce((s, i) => safeAdd(s, Number(i.amount), 2), 0);
+      const adjustedBookBalance = safeSubtract(
+        safeAdd(Number(reconciliation.statementBalance), outstandingDeposits, 2),
         outstandingPayments,
+        2,
+      );
+      const difference = safeSubtract(
         adjustedBookBalance,
-        difference,
-      },
+        Number(reconciliation.bookBalance),
+        2,
+      );
+      if (Math.abs(difference) >= 0.01) {
+        throw new Error(
+          `Rekonsiliasi belum seimbang. Selisih: ${difference.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}. ` +
+            `Tambahkan item penyesuaian (setoran/cek beredar) atau periksa saldo sebelum menyelesaikan.`,
+        );
+      }
+
+      // Klaim bersyarat draft→completed di dalam transaksi yang sama:
+      // complete ganda serentak hanya satu yang menang.
+      const claim = await tx.bankReconciliation.updateMany({
+        where: { id: reconciliationId, status: "draft" },
+        data: {
+          status: "completed",
+          completedAt: new Date(),
+          outstandingDeposits,
+          outstandingPayments,
+          adjustedBookBalance,
+          difference,
+        },
+      });
+      if (claim.count === 0) {
+        throw new Error("Rekonsiliasi sudah diselesaikan atau sedang diproses");
+      }
+
+      return { outstandingDeposits, outstandingPayments, adjustedBookBalance, difference };
     });
 
     await logActivity(
       "complete",
       "BankReconciliation",
       reconciliationId,
-      "Menyelesaikan rekonsiliasi bank",
+      `Menyelesaikan rekonsiliasi bank (selisih ${figures.difference})`,
     );
     revalidatePath("/keuangan/rekonsiliasi-bank");
     return { success: true };
@@ -1124,10 +1552,13 @@ export async function createProfitCenter(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     // `code` unik di skema: kegagalan paling sering adalah kode terpakai.
-    const message = getErrorMessage(e) || "";
-    if (message.includes("Unique constraint") || message.includes("1062")) {
+    // Cek error mentah (code/pesan asli) sebelum sanitasi: pesan yang sudah
+    // disanitasi tidak lagi mengandung detail teknis seperti "Unique constraint".
+    const raw = e instanceof Error ? e.message : "";
+    if ((e as { code?: unknown })?.code === "P2002" || raw.includes("Unique constraint") || raw.includes("1062")) {
       return { success: false as const, error: "Kode pusat laba sudah digunakan" };
     }
+    const message = getErrorMessage(e) || "";
     console.error("[createProfitCenter]", message || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
@@ -1151,10 +1582,11 @@ export async function updateProfitCenter(id: number, formData: FormData) {
     return { success: true as const };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
-    const message = getErrorMessage(e) || "";
-    if (message.includes("Unique constraint") || message.includes("1062")) {
+    const raw = e instanceof Error ? e.message : "";
+    if ((e as { code?: unknown })?.code === "P2002" || raw.includes("Unique constraint") || raw.includes("1062")) {
       return { success: false as const, error: "Kode pusat laba sudah digunakan" };
     }
+    const message = getErrorMessage(e) || "";
     console.error("[updateProfitCenter]", message || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
@@ -1275,13 +1707,15 @@ export async function deleteJournal(id: number) {
     }
 
     // Laravel parity: cascade delete entries then journal
+    let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
       await tx.journalEntry.deleteMany({ where: { journalId: id } });
-      await tx.transactionAttachment.deleteMany({
-        where: { referenceType: "Journal", referenceId: id },
+      removedFiles = await deleteTransactionAttachmentsTx(tx, {
+        referenceType: "Journal", referenceId: id,
       });
       await tx.journal.delete({ where: { id } });
     });
+    await removeAttachmentFiles(removedFiles);
 
     await logActivity("delete", "Journal", id, "Menghapus jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -1311,15 +1745,17 @@ export async function deleteExpense(id: number) {
     // deleted expense) — the user retries and the receipts are gone, or the
     // expense vanishes but the receipts persist with referenceId pointing at
     // a row that no longer exists.
+    let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
-      await tx.transactionAttachment.deleteMany({
-        where: { referenceType: "Expense", referenceId: id },
+      removedFiles = await deleteTransactionAttachmentsTx(tx, {
+        referenceType: "Expense", referenceId: id,
       });
       await tx.expense.delete({ where: { id } });
       await tx.approval.deleteMany({
         where: { referenceType: "Expense", referenceId: id },
       });
     });
+    await removeAttachmentFiles(removedFiles);
 
     await logActivity("delete", "Expense", id, "Menghapus pengeluaran");
     revalidatePath("/keuangan/pengeluaran");
@@ -1335,16 +1771,24 @@ export async function deletePettyCash(id: number) {
   try {
     await requirePermission("delete_petty_cash");
 
+    let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
+      // Race guard: gap-lock tabel + kunci baris target SELAMA hapus.
+      // Tanpa ini create/edit bersamaan baca chain pra-hapus lalu tulis
+      // setelah delete commit — saldo rantai dihitung dari data basi.
+      await tx.$executeRaw`SELECT id FROM petty_cash WHERE id = ${id} FOR UPDATE`;
+      await tx.$executeRaw`SELECT id FROM petty_cash FOR UPDATE`;
+
       // Remove the linked journal (avoid orphaned GL entries), delete the record,
       // then recompute the running balance for all remaining records.
       await deletePettyCashJournal(tx, id);
-      await tx.transactionAttachment.deleteMany({
-        where: { referenceType: "PettyCash", referenceId: id },
+      removedFiles = await deleteTransactionAttachmentsTx(tx, {
+        referenceType: "PettyCash", referenceId: id,
       });
       await tx.pettyCash.delete({ where: { id } });
       await recalcPettyCashChain(tx, { guardNegative: true });
     });
+    await removeAttachmentFiles(removedFiles);
 
     await logActivity(
       "delete",
@@ -1416,57 +1860,22 @@ export async function updateJournal(id: number, formData: FormData) {
       throw new Error("Journal yang sudah diposting tidak dapat diubah");
     }
 
-    // Block editing into a closed accounting period (both old and new dates)
+    // Block editing into a closed accounting period (both old and new dates).
+    // Tanggal BARU divalidasi formatnya dulu: string tak-terparse (mis.
+    // "bukan-tanggal") harus DITOLAK berisik, bukan lolos sebagai Invalid
+    // Date ke assertPeriodOpen/tulis.
     await assertPeriodOpen(existing.transactionDate);
-    await assertPeriodOpen(new Date(formData.get("transactionDate") as string));
+    const rawNewTxDate = String(formData.get("transactionDate") ?? "");
+    const newTxDate = new Date(rawNewTxDate);
+    if (!rawNewTxDate || Number.isNaN(newTxDate.getTime())) {
+      throw new Error("Tanggal transaksi tidak valid");
+    }
+    await assertPeriodOpen(newTxDate);
 
     // Parse and validate entries with the same rigor as createJournal —
     // previously the edit path ignored line entries entirely, so edited lines
     // were silently discarded and the balance invariant was never re-checked.
-    const entriesJson = formData.get("entries") as string | null;
-    const entries =
-      safeJsonParse<
-        {
-          accountId: number;
-          debit: number;
-          credit: number;
-          memo: string;
-          costCenterId?: number;
-          profitCenterId?: number;
-        }[]
-      >(entriesJson) ?? [];
-    const validEntries = entries.filter(
-      (e) => e.accountId && (e.debit > 0 || e.credit > 0),
-    );
-    if (validEntries.length < 2) {
-      throw new Error(
-        "Journal harus memiliki minimal 2 entri dengan akun dan nominal valid",
-      );
-    }
-
-    const totalDebit = validEntries.reduce(
-      (sum, e) => safeAdd(sum, e.debit || 0, 2),
-      0,
-    );
-    const totalCredit = validEntries.reduce(
-      (sum, e) => safeAdd(sum, e.credit || 0, 2),
-      0,
-    );
-    if (!compareAmounts(totalDebit, totalCredit, 0)) {
-      throw new Error(
-        `Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`,
-      );
-    }
-    for (const entry of validEntries) {
-      if ((entry.debit || 0) < 0 || (entry.credit || 0) < 0) {
-        throw new Error("Nominal debit/credit tidak boleh negatif");
-      }
-      if ((entry.debit || 0) > 0 && (entry.credit || 0) > 0) {
-        throw new Error(
-          "Satu baris tidak boleh memiliki debit dan credit sekaligus",
-        );
-      }
-    }
+    const { validEntries, totalDebit, totalCredit } = parseAndValidateJournalEntries(formData);
 
     // Fix #14: Jangan generate documentNo baru dan jangan reset totals ke 0
     // Replace header + entries atomically (delete old entries, recreate from form).
@@ -1483,10 +1892,27 @@ export async function updateJournal(id: number, formData: FormData) {
       : existing.type;
 
     const journal = await prisma.$transaction(async (tx) => {
+      // F-01: lock baris jurnal dulu — protokol sama dengan postJournal.
+      // Cek DRAFT di luar hanya fast-fail; keputusan final ada di sini,
+      // sesudah lock, agar edit-vs-posting serial.
+      await tx.$executeRaw`SELECT id FROM journals WHERE id = ${id} FOR UPDATE`;
+
+      const fresh = await tx.journal.findUniqueOrThrow({ where: { id } });
+      if (fresh.status !== "DRAFT") {
+        throw new Error("Journal yang sudah diposting tidak dapat diubah");
+      }
+
+      // R-09: kedua tanggal dicek ulang dalam tx sesudah lock (tanpa tx,
+      // tutup periode bisa selip di antara cek luar dan tulis). Cek luar-tx
+      // di atas hanya fast-fail agar boros lock terhindar. newTxDate adalah
+      // tanggal yang SUDAH tervalidasi di atas (bukan parse mentah).
+      await assertPeriodOpen(fresh.transactionDate, tx);
+      await assertPeriodOpen(newTxDate, tx);
+
       const j = await tx.journal.update({
         where: { id },
         data: {
-          transactionDate: new Date(formData.get("transactionDate") as string),
+          transactionDate: newTxDate,
           description: formData.get("description") as string | null,
           type: journalType,
           totalDebit,
@@ -1496,30 +1922,15 @@ export async function updateJournal(id: number, formData: FormData) {
       });
 
       await tx.journalEntry.deleteMany({ where: { journalId: id } });
-      await tx.journalEntry.createMany({
-        data: validEntries.map((entry) => ({
-          journalId: id,
-          accountId: entry.accountId,
-          debit: entry.debit || 0,
-          credit: entry.credit || 0,
-          memo: entry.memo || null,
-          costCenterId: entry.costCenterId || null,
-          // Sama seperti jalur buat: pusat laba harus ikut tersimpan saat entri
-          // diganti, kalau tidak mengubah jurnal akan menghapus pusat labanya.
-          profitCenterId: entry.profitCenterId || null,
-        })),
-      });
+      // Pusat laba ikut tersimpan saat entri diganti (journalEntryRows), kalau
+      // tidak mengubah jurnal akan menghapus pusat labanya.
+      await tx.journalEntry.createMany({ data: journalEntryRows(id, validEntries) });
 
       return j;
     });
 
     // Associate uploaded attachments
-    const attachmentIds = formData.get("attachmentIds") as string | null;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "journal", referenceId: journal.id, uploadedBy: Number(user.id),
-      }));
-    }
+    await attachJournalAttachments(formData, journal.id, Number(user.id));
 
     await logActivity("update", "Journal", journal.id, "Memperbarui jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -1535,106 +1946,95 @@ export async function reverseJournal(journalId: number) {
   try {
     const user = await requirePermission("post_journals");
 
-    const journal = await prisma.journal.findUniqueOrThrow({
-      where: { id: journalId },
-      include: { entries: true },
-    });
-
-    // Laravel parity: only posted journals can be reversed
-    if (journal.status !== "POSTED") {
-      throw new Error("Hanya journal yang sudah POSTED yang bisa di-reverse");
-    }
-
-    // Atomic conditional claim — serialize concurrent reverse requests so only one
-    // reversal journal is created; duplicates get a clean error instead of
-    // corrupting the GL with two reversals.
-    const claim = await prisma.journal.updateMany({
-      where: { id: journalId, status: "POSTED" },
-      data: { status: "REVERSING" },
-    });
-    if (claim.count === 0) {
-      const current = await prisma.journal.findUnique({
-        where: { id: journalId },
-        select: { status: true },
-      });
-      throw new Error(
-        current?.status === "REVERSED"
-          ? "Jurnal sudah pernah dibalik"
-          : current
-            ? `Jurnal tidak bisa dibalik (status: ${current.status})`
-            : "Jurnal tidak ditemukan",
-      );
-    }
-
-    // Wrap the period check, document-number allocation, and the reversal tx in
-    // a single rollback boundary. The claim flips POSTED -> REVERSING, and if
-    // anything after the claim throws (closed period, sequence generator down,
-    // unique collision on journalNumber, etc.) the journal must NOT be left
-    // stuck in REVERSING — that status is invisible to the GL (only POSTED
-    // journals are summed) and the claim requires POSTED, so the journal
-    // becomes permanently unrecoverable. Restore the claim so the user can
-    // retry.
+    // Race guard: klaim atomik POSTED->REVERSING + reversal + REVERSED dalam
+    // SATU tx. Klaim luar-tx dihapus: dua reverse bersamaan + crash di antara
+    // klaim dan tx bisa tinggalkan REVERSING basi / reversal ganda.
+    // Baris dikunci dulu (FOR UPDATE), status dibaca ulang dalam tx: baca
+    // luar-tx dihapus — status bisa berubah di antara baca dan lock.
+    // Period check + alokasi nomor + reversal semua dalam tx yang sama: gagal
+    // di tengah = rollback penuh, jurnal kembali POSTED dan retryable.
+    // (Cleanup cron taskRecoverStuckReversals tetap ada sebagai sabuk kedua
+    // bila proses mati di tengah commit.)
     let documentNo: string;
-    try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM journals WHERE id = ${journalId} FOR UPDATE`;
+
+      const journal = await tx.journal.findUniqueOrThrow({
+        where: { id: journalId },
+        include: { entries: true },
+      });
+
+      // Laravel parity: only posted journals can be reversed
+      if (journal.status !== "POSTED") {
+        const current = journal.status;
+        throw new Error(
+          current === "REVERSED"
+            ? "Jurnal sudah pernah dibalik"
+            : `Jurnal tidak bisa dibalik (status: ${current})`,
+        );
+      }
+
+      // Atomic conditional claim — serialize concurrent reverse requests so only one
+      // reversal journal is created; duplicates get a clean error instead of
+      // corrupting the GL with two reversals. Runs INSIDE the same tx after the
+      // lock + reread: the claim and the reversal commit atomically, so a crash
+      // can never leave REVERSING without a reversal row.
+      const claim = await tx.journal.updateMany({
+        where: { id: journalId, status: "POSTED" },
+        data: { status: "REVERSING" },
+      });
+      if (claim.count === 0) {
+        throw new Error("Jurnal tidak bisa dibalik (konflik konkurensi — coba lagi)");
+      }
+
       // Cannot reverse a journal that belongs to a closed period
-      await assertPeriodOpen(journal.transactionDate);
+      await assertPeriodOpen(journal.transactionDate, tx);
 
       documentNo = await generateDocumentNumber("JRN-RV");
 
-      await prisma.$transaction(async (tx) => {
-        const reversalJournal = await tx.journal.create({
-          data: {
-            journalNumber: documentNo,
-            // Date the reversal to the ORIGINAL journal's transactionDate, not
-            // today. The reversal is a correction of the original period: if it
-            // were stamped with today's date, a period income statement for the
-            // original period would still include the (now REVERSED) original
-            // with no offsetting entry in that period, and the reversal would
-            // wrongly land in the current period. Using the original date keeps
-            // the (REVERSED original + POSTED reversal) pair inside the same
-            // period, so PERIOD and CUMULATIVE reports both net to zero.
-            // Safe because we only get here after assertPeriodOpen(original date)
-            // passed, i.e. the original period is still open.
-            transactionDate: journal.transactionDate,
-            description: `Reversal of ${journal.journalNumber}: ${journal.description ?? ""}`,
-            type: journal.type,
-            status: "POSTED",
-            referenceType: "Journal",
-            referenceId: journal.id,
-            totalDebit: journal.totalDebit,
-            totalCredit: journal.totalCredit,
-            createdBy: Number(user.id),
-          },
-        });
-
-        // Batch create reversal entries (eliminates N+1)
-        await tx.journalEntry.createMany({
-          data: journal.entries.map((entry) => ({
-            journalId: reversalJournal.id,
-            accountId: entry.accountId,
-            debit: entry.credit,
-            credit: entry.debit,
-            memo: `Reversal: ${entry.memo ?? ""}`,
-            costCenterId: entry.costCenterId,
-            profitCenterId: entry.profitCenterId,
-          })),
-        });
-
-        await tx.journal.update({
-          where: { id: journalId },
-          data: { status: "REVERSED" },
-        });
+      const reversalJournal = await tx.journal.create({
+        data: {
+          journalNumber: documentNo,
+          // Date the reversal to the ORIGINAL journal's transactionDate, not
+          // today. The reversal is a correction of the original period: if it
+          // were stamped with today's date, a period income statement for the
+          // original period would still include the (now REVERSED) original
+          // with no offsetting entry in that period, and the reversal would
+          // wrongly land in the current period. Using the original date keeps
+          // the (REVERSED original + POSTED reversal) pair inside the same
+          // period, so PERIOD and CUMULATIVE reports both net to zero.
+          // Safe because we only get here after assertPeriodOpen(original date)
+          // passed, i.e. the original period is still open.
+          transactionDate: journal.transactionDate,
+          description: `Reversal of ${journal.journalNumber}: ${journal.description ?? ""}`,
+          type: journal.type,
+          status: "POSTED",
+          referenceType: "Journal",
+          referenceId: journal.id,
+          totalDebit: journal.totalDebit,
+          totalCredit: journal.totalCredit,
+          createdBy: Number(user.id),
+        },
       });
-    } catch (e) {
-      // Tx failed (or a pre-tx check failed) after the claim flipped status to
-      // REVERSING — roll back the claim so the journal can be retried instead of
-      // being stuck in limbo.
-      await prisma.journal.updateMany({
-        where: { id: journalId, status: "REVERSING" },
-        data: { status: "POSTED" },
+
+      // Batch create reversal entries (eliminates N+1)
+      await tx.journalEntry.createMany({
+        data: journal.entries.map((entry) => ({
+          journalId: reversalJournal.id,
+          accountId: entry.accountId,
+          debit: entry.credit,
+          credit: entry.debit,
+          memo: `Reversal: ${entry.memo ?? ""}`,
+          costCenterId: entry.costCenterId,
+          profitCenterId: entry.profitCenterId,
+        })),
       });
-      throw e;
-    }
+
+      await tx.journal.update({
+        where: { id: journalId },
+        data: { status: "REVERSED" },
+      });
+    });
 
     await logActivity("reverse", "Journal", journalId, "Membalik jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -1670,6 +2070,14 @@ export async function updateExpense(id: number, formData: FormData) {
       throw new Error(
         "Hanya pengeluaran dengan status draft yang dapat diubah",
       );
+    }
+
+    // Akun bare-int tanpa FK: tolak ID basi sebelum tulis (fail-closed).
+    for (const aid of [v.accountId, v.paidFromAccountId]) {
+      if (aid != null) {
+        const ok = await prisma.account.count({ where: { id: aid } });
+        if (!ok) throw new Error(`Akun tidak ditemukan (id: ${aid}). Pilih ulang akun sebelum menyimpan.`);
+      }
     }
 
     const expense = await prisma.expense.update({
@@ -1732,7 +2140,21 @@ export async function updatePettyCash(id: number, formData: FormData) {
     const type = v.type;
     const amount = v.amount;
 
+    // Akun bare-int tanpa FK (PettyCash.accountId): tolak ID basi (fail-closed).
+    if (v.accountId != null) {
+      const ok = await prisma.account.count({ where: { id: v.accountId } });
+      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`);
+    }
+
     const pettyCash = await prisma.$transaction(async (tx) => {
+      // Race guard: kunci baris yang diedit + gap-lock tabel SELAMA baca rantai.
+      // Tanpa ini dua edit bersamaan baca chain sama lalu tulis bergantian —
+      // recalc kedua menimpa hasil pertama, saldo akhir salah. Lock baris dulu
+      // (butuh bila tx pesaing update/delete id sama: satu antre, bukan deadlock
+      // — urutan sama di semua jalur), lalu kunci tabel untuk baca konsisten.
+      await tx.$executeRaw`SELECT id FROM petty_cash WHERE id = ${id} FOR UPDATE`;
+      await tx.$executeRaw`SELECT id FROM petty_cash FOR UPDATE`;
+
       // Existing documentNo is preserved across edits; reuse it to keep the slug
       // stable (slug is derived from the immutable document number).
       const existingPettyCash = await tx.pettyCash.findUniqueOrThrow({

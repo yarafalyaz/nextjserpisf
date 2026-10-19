@@ -15,7 +15,10 @@ export default async function CreateAssetPage() {
 
   const [categories, brands, groups, generatedCode] = await Promise.all([
     prisma.assetCategory.findMany({ orderBy: { name: "asc" } }),
-    prisma.assetBrand.findMany({ orderBy: { name: "asc" } }),
+    prisma.assetBrand.findMany({
+      orderBy: { name: "asc" },
+      include: { models: { select: { id: true, name: true }, orderBy: { name: "asc" } } },
+    }),
     prisma.assetGroup.findMany({ orderBy: { name: "asc" } }),
     peekNextDocumentNumber("AST", "simple"),
   ])

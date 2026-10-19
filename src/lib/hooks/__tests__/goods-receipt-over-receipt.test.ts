@@ -45,12 +45,20 @@ function wireTx(opts: {
   poId: number | null
   grItems: GrItem[]
   poItems: Array<{ itemId: number; qty: number }>
-  priorGrItems: Array<{ itemId: number; qty: number }>
+  priorGrItems: Array<{ itemId: number; qty: number; uom?: string | null }>
   itemMeta?: { unitOfMeasure?: string; trackBatch?: boolean; trackSerial?: boolean }
+  conversions?: Array<{ itemId: number; code: string; factorToBase: number }>
 }) {
   const meta = opts.itemMeta ?? { unitOfMeasure: "pcs", trackBatch: false, trackSerial: false }
   const spies = {
-    queryRaw: vi.fn().mockResolvedValue([]),
+    queryRaw: vi.fn().mockImplementation(async (...a: unknown[]) => {
+      const sql = Array.isArray(a[0]) ? (a[0] as string[]).join(" ") : String(a[0] ?? "")
+      if (sql.includes("system_settings")) {
+        const s = await spies.systemSettingFindFirst()
+        return [{ id: 1, period_lock_date: s?.periodLockDate ?? null }]
+      }
+      return []
+    }),
     executeRaw: vi.fn().mockResolvedValue(1),
     grFindUniqueOrThrow: vi.fn().mockResolvedValue({
       id: 100,
@@ -72,10 +80,10 @@ function wireTx(opts: {
     // New: bulk pre-fetch hoisted out of the per-item loop.
     itemFindMany: vi.fn().mockResolvedValue(
       // Match the per-itemId dedup the hook builds. Return one entry per unique
-      // grItems itemId, each with the shared `meta` from opts.
-      [...new Set(opts.grItems.map((g) => g.itemId))].map((id) => ({ id, ...meta }))
+      // itemId (current + prior GR), each with shared `meta` from opts.
+      [...new Set([...opts.grItems.map((g) => g.itemId), ...opts.priorGrItems.map((g) => g.itemId)])].map((id) => ({ id, ...meta }))
     ),
-    uomConversionFindMany: vi.fn().mockResolvedValue([]),
+    uomConversionFindMany: vi.fn().mockResolvedValue(opts.conversions ?? []),
     itemBatchFindFirst: vi.fn().mockResolvedValue(null),
     itemBatchCreate: vi.fn().mockResolvedValue({}),
     itemBatchUpdate: vi.fn().mockResolvedValue({}),
@@ -101,6 +109,13 @@ function wireTx(opts: {
   mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
   return { spies, tx }
 }
+
+type WireSpies = ReturnType<typeof wireTx>["spies"]
+const expectMoveData = (spies: WireSpies, data: Record<string, unknown>) =>
+  expect(spies.moveCreate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining(data) }))
+const expectVerified = (spies: WireSpies) =>
+  expect(spies.grUpdate).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ status: "verified" }) }))
+const moveDataOf = (spies: WireSpies) => (spies.moveCreate.mock.calls[0][0] as { data: { qty: number; cost: number } }).data
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -142,9 +157,7 @@ describe("onGoodsReceiptVerified over-receipt guard", () => {
 
     await onGoodsReceiptVerified(100, 1)
     expect(spies.moveCreate).toHaveBeenCalledTimes(1) // reached stock-in
-    expect(spies.grUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "verified" }) }),
-    )
+    expectVerified(spies)
   })
 
   it("stores the destination rack and rack row on the stock move", async () => {
@@ -157,11 +170,7 @@ describe("onGoodsReceiptVerified over-receipt guard", () => {
 
     await onGoodsReceiptVerified(100, 1)
 
-    expect(spies.moveCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ rackId: 3, rackRowId: 9 }),
-      }),
-    )
+    expectMoveData(spies, { rackId: 3, rackRowId: 9 })
   })
 
   it("leaves the rack/row null when the receipt line did not pick one", async () => {
@@ -174,11 +183,7 @@ describe("onGoodsReceiptVerified over-receipt guard", () => {
 
     await onGoodsReceiptVerified(100, 1)
 
-    expect(spies.moveCreate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({ rackId: null, rackRowId: null }),
-      }),
-    )
+    expectMoveData(spies, { rackId: null, rackRowId: null })
   })
 
   it("is idempotent: silent no-op when stock moves already exist", async () => {
@@ -385,15 +390,14 @@ describe("onGoodsReceiptVerified period lock", () => {
 // factor entirely.
 describe("onGoodsReceiptVerified multi-UoM journal consistency", () => {
   function wireTxWithUom(grItems: GrItem[], conversions: Array<{ itemId: number; code: string; factorToBase: number }>) {
-    const { spies, tx } = wireTx({
+    return wireTx({
       poId: null,
       poItems: [],
       priorGrItems: [],
       grItems,
       itemMeta: { unitOfMeasure: "PCS", trackBatch: false, trackSerial: false },
+      conversions,
     })
-    spies.uomConversionFindMany.mockResolvedValue(conversions)
-    return { spies, tx }
   }
 
   it("passes base-converted qty + unitCost to the journal when line uses a non-base UoM", async () => {
@@ -407,9 +411,7 @@ describe("onGoodsReceiptVerified multi-UoM journal consistency", () => {
     await onGoodsReceiptVerified(100, 1)
 
     // Stock move: base qty + base unit cost.
-    const moveCall = spies.moveCreate.mock.calls[0][0] as { data: { qty: number; cost: number } }
-    expect(moveCall.data.qty).toBe(24)
-    expect(moveCall.data.cost).toBe(500)
+    expect(moveDataOf(spies)).toMatchObject({ qty: 24, cost: 500 })
 
     // Journal: SAME base values, NOT the raw entered (2, 6000).
     expect(mocks.onGoodsReceipt).toHaveBeenCalledTimes(1)
@@ -430,13 +432,25 @@ describe("onGoodsReceiptVerified multi-UoM journal consistency", () => {
 
     await onGoodsReceiptVerified(100, 1)
 
-    const moveCall = spies.moveCreate.mock.calls[0][0] as { data: { qty: number; cost: number } }
-    expect(moveCall.data.qty).toBe(1000)
-    expect(moveCall.data.cost).toBe(8)
+    expect(moveDataOf(spies)).toMatchObject({ qty: 1000, cost: 8 })
 
     const journalArgs = mocks.onGoodsReceipt.mock.calls[0] as unknown[]
     const journalLines = journalArgs[1] as Array<{ qty: number; cost: number }>
     expect(journalLines).toEqual([{ qty: 1000, cost: 8 }])
+  })
+
+  it("warns (not silent) when a GR line uses an unregistered UoM, computing 1:1", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { spies } = wireTxWithUom(
+      [{ itemId: 7, qty: 2, unitCost: 6000, uom: "KARUNG" }],
+      [{ itemId: 7, code: "BOX", factorToBase: 12 }],
+    )
+
+    await onGoodsReceiptVerified(100, 1)
+
+    expect(moveDataOf(spies)).toMatchObject({ qty: 2, cost: 6000 })
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("KARUNG"))
+    warn.mockRestore()
   })
 })
 
@@ -447,75 +461,15 @@ describe("onGoodsReceiptVerified multi-UoM journal consistency", () => {
 // as a 13× over-receipt (false positive) or (b) let a 13-BOX GR against a
 // 12-PCS PO slip through (false negative, 13 < 12 only if compared raw).
 describe("onGoodsReceiptVerified over-receipt guard with multi-UoM", () => {
-  function wireUomTx(opts: {
-    poItems: Array<{ itemId: number; qty: number }>
-    priorGrItems: Array<{ itemId: number; qty: number; uom?: string | null }>
-    currentGrItems: GrItem[]
-    conversions: Array<{ itemId: number; code: string; factorToBase: number }>
-    itemMeta?: { unitOfMeasure?: string; trackBatch?: boolean; trackSerial?: boolean }
-  }) {
-    const meta = opts.itemMeta ?? { unitOfMeasure: "PCS", trackBatch: false, trackSerial: false }
-    const spies = {
-      queryRaw: vi.fn().mockResolvedValue([]),
-      executeRaw: vi.fn().mockResolvedValue(1),
-      grFindUniqueOrThrow: vi.fn().mockResolvedValue({
-        id: 100,
-        documentNo: "GR-001",
-        status: "draft",
-        purchaseOrderId: 50,
-        warehouseId: 1,
-        date: new Date("2024-06-15"),
-        items: opts.currentGrItems,
-        purchaseOrder: { id: 50 },
-      }),
-      moveFindFirst: vi.fn().mockResolvedValue(null),
-      moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
-      grUpdate: vi.fn().mockResolvedValue({}),
-      poItemFindMany: vi.fn().mockResolvedValue(opts.poItems),
-      grItemFindMany: vi.fn().mockResolvedValue(opts.priorGrItems),
-      poUpdate: vi.fn().mockResolvedValue({}),
-      itemFindUnique: vi.fn().mockResolvedValue(meta),
-      itemFindMany: vi.fn().mockResolvedValue(
-        [...new Set([
-          ...opts.currentGrItems.map((g) => g.itemId),
-          ...opts.priorGrItems.map((g) => g.itemId),
-        ])].map((id) => ({ id, ...meta }))
-      ),
-      uomConversionFindMany: vi.fn().mockResolvedValue(opts.conversions),
-      itemBatchFindFirst: vi.fn().mockResolvedValue(null),
-      itemBatchCreate: vi.fn().mockResolvedValue({}),
-      itemBatchUpdate: vi.fn().mockResolvedValue({}),
-      itemSerialCreate: vi.fn().mockResolvedValue({}),
-      itemSerialCreateMany: vi.fn().mockResolvedValue({ count: 0 }),
-      systemSettingFindFirst: vi.fn().mockResolvedValue({ periodLockDate: null }),
-      itemUpdate: vi.fn().mockResolvedValue({}),
-    }
-    const tx = {
-      $queryRaw: spies.queryRaw,
-      $executeRaw: spies.executeRaw,
-      goodsReceipt: { findUniqueOrThrow: spies.grFindUniqueOrThrow, update: spies.grUpdate },
-      stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
-      purchaseOrderItem: { findMany: spies.poItemFindMany },
-      goodsReceiptItem: { findMany: spies.grItemFindMany },
-      purchaseOrder: { update: spies.poUpdate },
-      item: { findUnique: spies.itemFindUnique, findMany: spies.itemFindMany, update: spies.itemUpdate },
-      uomConversion: { findMany: spies.uomConversionFindMany },
-      itemBatch: { findFirst: spies.itemBatchFindFirst, create: spies.itemBatchCreate, update: spies.itemBatchUpdate },
-      itemSerial: { create: spies.itemSerialCreate, createMany: spies.itemSerialCreateMany },
-      systemSetting: { findFirst: spies.systemSettingFindFirst },
-    }
-    mocks.transaction.mockImplementation((fn: (t: unknown) => Promise<unknown>) => fn(tx))
-    return { spies, tx }
-  }
-
   it("rejects when cumulative received (in base units) exceeds PO qty, even if entered UoM inflates the raw count", async () => {
     // PO: 12 PCS. Prior GR: 5 BOX (= 60 PCS). Current GR: 1 BOX (= 12 PCS).
     // Cumulative: 72 PCS > 12 PCS ordered — must reject. The old raw-qty path
     // would have summed 5 + 1 = 6 and PASSED, missing a 6× over-receipt.
-    const { spies } = wireUomTx({
+    const { spies } = wireTx({
+      poId: 50,
       poItems: [{ itemId: 7, qty: 12 }],
       priorGrItems: [{ itemId: 7, qty: 5, uom: "BOX" }],
-      currentGrItems: [{ itemId: 7, qty: 1, uom: "BOX" }],
+      grItems: [{ itemId: 7, qty: 1, uom: "BOX" }],
       conversions: [{ itemId: 7, code: "BOX", factorToBase: 12 }],
     })
 
@@ -530,18 +484,17 @@ describe("onGoodsReceiptVerified over-receipt guard with multi-UoM", () => {
     // (the over-receipt guard became a no-op for any UoM != base unit).
     // The fix is correctness-neutral here but catches the other direction in
     // the test above; this test pins the within-limit path under UoM.
-    const { spies } = wireUomTx({
+    const { spies } = wireTx({
+      poId: 50,
       poItems: [{ itemId: 7, qty: 12 }],
       priorGrItems: [],
-      currentGrItems: [{ itemId: 7, qty: 1, uom: "BOX" }],
+      grItems: [{ itemId: 7, qty: 1, uom: "BOX" }],
       conversions: [{ itemId: 7, code: "BOX", factorToBase: 12 }],
     })
 
     await onGoodsReceiptVerified(100, 1)
     expect(spies.moveCreate).toHaveBeenCalledTimes(1)
-    expect(spies.grUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ data: expect.objectContaining({ status: "verified" }) }),
-    )
+    expectVerified(spies)
   })
 
   it("sums prior GR + current GR in base units when only the prior GR uses a non-base UoM", async () => {
@@ -549,10 +502,11 @@ describe("onGoodsReceiptVerified over-receipt guard with multi-UoM", () => {
     // 98 PCS <= 100 → allowed. Old raw path: 4 + 50 = 54 vs 100, also passes
     // by coincidence — but the next test shows the cumulative edge.
     // This test pins the base-conversion of the prior GR specifically.
-    const { spies } = wireUomTx({
+    const { spies } = wireTx({
+      poId: 50,
       poItems: [{ itemId: 7, qty: 100 }],
       priorGrItems: [{ itemId: 7, qty: 4, uom: "BOX" }],
-      currentGrItems: [{ itemId: 7, qty: 50 }], // no uom → base unit
+      grItems: [{ itemId: 7, qty: 50 }], // no uom → base unit
       conversions: [{ itemId: 7, code: "BOX", factorToBase: 12 }],
     })
 
@@ -565,10 +519,11 @@ describe("onGoodsReceiptVerified over-receipt guard with multi-UoM", () => {
     // (24 PCS). Cumulative 72 PCS > 60 PCS → reject. Old raw path: 4 + 2 = 6
     // vs 5, would also reject — but for the wrong reason (raw inflation), and
     // would let 4 BOX + 1 BOX (= 60 PCS == 60 PCS PO) through as 5 vs 5.
-    const { spies } = wireUomTx({
+    const { spies } = wireTx({
+      poId: 50,
       poItems: [{ itemId: 7, qty: 5 }], // PO says 5 BOX = 60 PCS
       priorGrItems: [{ itemId: 7, qty: 4, uom: "BOX" }],
-      currentGrItems: [{ itemId: 7, qty: 2, uom: "BOX" }],
+      grItems: [{ itemId: 7, qty: 2, uom: "BOX" }],
       conversions: [{ itemId: 7, code: "BOX", factorToBase: 12 }],
     })
 

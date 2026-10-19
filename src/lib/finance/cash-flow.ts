@@ -98,7 +98,7 @@ export function classifyJournal(
 
   if (cashDelta === 0 || counterparts.length === 0) return null
 
-  const dominant = counterparts.reduce((a, b) => (b.weight > a.weight ? b : a))
+  const dominant = counterparts.reduce((a, b) => (b.weight > a.weight ? b : a), counterparts[0])
   return { activity: classifyCounterpart(dominant), cashDelta }
 }
 

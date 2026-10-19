@@ -90,10 +90,13 @@ export async function onStockAdjustmentProcessed(
       
       const trackedItems = await tx.item.findMany({
         where: { id: { in: itemIds } },
-        select: { id: true, trackSerial: true },
+        select: { id: true, trackSerial: true, trackBatch: true },
       });
       const trackSerialByItemId = new Map(
         trackedItems.map((trackedItem) => [trackedItem.id, trackedItem.trackSerial]),
+      );
+      const trackBatchByItemId = new Map(
+        trackedItems.map((trackedItem) => [trackedItem.id, trackedItem.trackBatch]),
       );
 
       // 3. Filter items with actual differences
@@ -170,13 +173,50 @@ export async function onStockAdjustmentProcessed(
         // Positive adjustment — create new FIFO layer at the entered cost.
         // Negative adjustment already consumed FIFO layers above.
         if (qtyDiff > 0) {
+          // P1-1: penambahan batch-tracked wajib identitas lot eksplisit
+          // (kebijakan batch eksplisit) — jangan ciptakan stok tanpa lot.
+          const batchNumbers = Array.isArray(item.batchNumbers)
+            ? item.batchNumbers.map(String).map((value) => value.trim()).filter(Boolean)
+            : [];
+          if (trackBatchByItemId.get(item.itemId) && batchNumbers.length === 0) {
+            throw new Error(
+              `Item batch #${item.itemId} memerlukan nomor batch untuk penambahan stok.`,
+            );
+          }
+          const batchForLayer = batchNumbers.length > 0 ? batchNumbers.join(", ") : null;
           await createInLayer(tx, {
             itemId: item.itemId,
             warehouseId: adjustment.warehouseId,
+            batchNumber: batchForLayer,
             stockMoveId: sm.id,
             qty: qtyDiff,
             unitCost: enteredUnitCost,
           });
+          if (batchNumbers.length > 0) {
+            // Pola sama seperti transfer/retur: tambah ke lot bila ada, buat bila belum.
+            for (const bn of batchNumbers) {
+              const destBatch = await tx.itemBatch.findFirst({
+                where: { itemId: item.itemId, warehouseId: adjustment.warehouseId, batchNumber: bn },
+                select: { id: true },
+              });
+              if (destBatch) {
+                await tx.itemBatch.update({
+                  where: { id: destBatch.id },
+                  data: { qty: { increment: qtyDiff / batchNumbers.length } },
+                });
+              } else {
+                await tx.itemBatch.create({
+                  data: {
+                    itemId: item.itemId,
+                    batchNumber: bn,
+                    warehouseId: adjustment.warehouseId,
+                    qty: qtyDiff / batchNumbers.length,
+                    notes: `Penyesuaian Stok ${adjustment.documentNo}`,
+                  },
+                });
+              }
+            }
+          }
           if (trackSerialByItemId.get(item.itemId)) {
             const serialNumbers = Array.isArray(item.serialNumbers)
               ? item.serialNumbers.map(String).map((value) => value.trim()).filter(Boolean)
@@ -220,13 +260,14 @@ export async function onStockAdjustmentProcessed(
       adjustment.date
     );
 
-    // Update Stock Adjustment status
+    // Update Stock Adjustment status. P0-3: TANPA self-approve — approvedBy/
+    // approvedAt hanya diisi mesin workflow (approval.actions.ts) saat
+    // persetujuan selesai. Sebelumnya hook menulis pemroses sebagai
+    // penyetuju dirinya sendiri, mengalahkan seluruh alur approval.
     await tx.stockAdjustment.update({
       where: { id: adjustmentId },
       data: {
         status: InventoryStatus.PROCESSED,
-        approvedBy: userId ?? null,
-        approvedAt: new Date(),
       },
     });
   });

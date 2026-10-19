@@ -41,6 +41,8 @@ vi.mock("@/lib/utils/document-number", () => ({
 
 vi.mock("@/lib/db/prisma", () => {
   const prisma: Record<string, unknown> = {
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    $executeRaw: vi.fn().mockResolvedValue(1),
     product: { findUniqueOrThrow: (...a: unknown[]) => productFindUniqueOrThrowMock(...a) },
     item: { findMany: (...a: unknown[]) => itemFindManyMock(...a) },
     productionOrder: {

@@ -125,4 +125,16 @@ describe("createCheque zod validation", () => {
     expect(res.success).toBe(true)
     expect(mocks.chequeCreate).toHaveBeenCalledOnce()
   })
+
+  it("happy path tetap menjaga kunci periode (assertPeriodOpen dipanggil)", async () => {
+    const res = await createCheque(form(base))
+    expect(res.success).toBe(true)
+    expect(mocks.assertPeriodOpen).toHaveBeenCalledOnce()
+  })
+
+  it("validasi gagal tidak menyentuh kunci periode", async () => {
+    const res = await createCheque(form({ ...base, type: "wesel" }))
+    expect(res.success).toBe(false)
+    expect(mocks.assertPeriodOpen).not.toHaveBeenCalled()
+  })
 })

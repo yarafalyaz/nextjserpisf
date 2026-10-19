@@ -47,6 +47,7 @@ interface EmployeeFormProps {
     gender: string | null
     dateOfBirth: string | null
     maritalStatus: string | null
+    dependents: number | null
     departmentId: number | null
     positionId: number | null
     joinDate: string
@@ -109,6 +110,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
       gender: employee?.gender || "",
       dateOfBirth: toDateInputValue(employee?.dateOfBirth),
       maritalStatus: employee?.maritalStatus || "",
+      dependents: employee?.dependents ?? 0,
       departmentId: employee?.departmentId || undefined,
       positionId: employee?.positionId || undefined,
       joinDate: toDateInputValue(employee?.joinDate) || toLocalDateOnly(new Date()),
@@ -219,6 +221,17 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
               />
             )}
           />
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="dependents">Tanggungan (PTKP)</label>
+            <input
+              id="dependents"
+              type="number"
+              min={0}
+              max={3}
+              {...register("dependents", { valueAsNumber: true })}
+              className="form-input"
+            />
+          </div>
         </FormSection>
 
         <FormSection title="Informasi Pekerjaan & Gaji">

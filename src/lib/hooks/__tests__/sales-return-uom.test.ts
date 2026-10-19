@@ -25,11 +25,14 @@ beforeEach(() => {
 
 /** Build a fully-stubbed tx and wire it into the prisma.$transaction mock. */
 function wireTx(overrides: {
-  items: { itemId: number; qty: number; cost: number }[]
-  itemRows: Array<{ id: number; defaultWarehouseId: number | null; trackSerial?: boolean }>
+  items: { itemId: number; qty: number; cost: number; serialNumbers?: string[]; batchNumbers?: string[] }[]
+  itemRows: Array<{ id: number; defaultWarehouseId: number | null; trackSerial?: boolean; trackBatch?: boolean }>
   invoiceItemRows: Array<{ itemId: number; uom: string | null }>
   serialFindMany: ReturnType<typeof vi.fn>
   serialUpdateMany?: ReturnType<typeof vi.fn>
+  batchFindFirst?: ReturnType<typeof vi.fn>
+  batchCreate?: ReturnType<typeof vi.fn>
+  batchUpdate?: ReturnType<typeof vi.fn>
 }) {
   const spies = {
     queryRaw: vi.fn().mockResolvedValue([]),
@@ -48,6 +51,9 @@ function wireTx(overrides: {
     invoiceItemFindMany: vi.fn().mockResolvedValue(overrides.invoiceItemRows),
     serialFindMany: overrides.serialFindMany,
     serialUpdateMany: overrides.serialUpdateMany ?? vi.fn().mockResolvedValue({ count: 0 }),
+    batchFindFirst: overrides.batchFindFirst ?? vi.fn().mockResolvedValue(null),
+    batchCreate: overrides.batchCreate ?? vi.fn().mockResolvedValue({}),
+    batchUpdate: overrides.batchUpdate ?? vi.fn().mockResolvedValue({}),
     systemSettingFindFirst: vi.fn().mockResolvedValue({ periodLockDate: null }),
     returnUpdate: vi.fn().mockResolvedValue({}),
   }
@@ -59,6 +65,7 @@ function wireTx(overrides: {
     warehouse: { findFirst: spies.warehouseFindFirst },
     item: { findMany: spies.itemFindMany },
     itemSerial: { findMany: spies.serialFindMany, updateMany: spies.serialUpdateMany },
+    itemBatch: { findFirst: spies.batchFindFirst, create: spies.batchCreate, update: spies.batchUpdate },
     salesInvoiceItem: { findMany: spies.invoiceItemFindMany },
     systemSetting: { findFirst: spies.systemSettingFindFirst },
   }
@@ -84,28 +91,26 @@ describe("sales return UoM", () => {
     expect(spies.returnUpdate).toHaveBeenCalledWith(expect.objectContaining({ where: { id: 7 }, data: { status: "completed" } }))
   })
 
-  // Regression: a sales return puts previously-sold units back in stock, so a
-  // serial-tracked item's serials must be revived to "available" (they were
-  // marked "used" by the sale). Without this the returned serials stay "used"
-  // forever and can never be sold/issued again.
-  it("revives returned serials to available for a serial-tracked item", async () => {
+  // P1-1: hanya serial yang disebut eksplisit yang direvive (identitas fisik
+  // yang benar-benar kembali). Merevive "used terbaru" salah: bisa menghidupkan
+  // serial yang masih di tangan pelanggan lain.
+  it("revives ONLY the named serials for a serial-tracked item", async () => {
     mocks.toBaseFactor.mockResolvedValue(1)
     const { spies } = wireTx({
-      items: [{ itemId: 3, qty: 2, cost: 100 }],
+      items: [{ itemId: 3, qty: 2, cost: 100, serialNumbers: ["SN-A", "SN-B"] }],
       itemRows: [{ id: 3, defaultWarehouseId: 5, trackSerial: true }],
       invoiceItemRows: [{ itemId: 3, uom: "PCS" }],
-      serialFindMany: vi.fn().mockResolvedValue([{ id: 91 }, { id: 92 }]),
+      serialFindMany: vi.fn().mockResolvedValue([
+        { id: 91, serialNumber: "SN-A", status: "used" },
+        { id: 92, serialNumber: "SN-B", status: "used" },
+      ]),
       serialUpdateMany: vi.fn().mockResolvedValue({ count: 2 }),
     })
 
     await onSalesReturnCompleted(7, 9)
 
-    // Prefers serials already in the destination warehouse.
     expect(spies.serialFindMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: { itemId: 3, status: "used", warehouseId: 5 },
-        take: 2,
-      })
+      expect.objectContaining({ where: { itemId: 3, serialNumber: { in: ["SN-A", "SN-B"] } } })
     )
     expect(spies.serialUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -115,32 +120,76 @@ describe("sales return UoM", () => {
     )
   })
 
-  it("prefers destination-warehouse serials and only falls back for the remainder", async () => {
+  it("rejects an unknown serial instead of reviving a stranger", async () => {
     mocks.toBaseFactor.mockResolvedValue(1)
-    // First (destination-warehouse) query yields 1 of the 2 needed; the fallback
-    // query must exclude it and take the remaining 1.
-    const serialFindMany = vi
-      .fn()
-      .mockImplementationOnce(async () => [{ id: 91 }])
-      .mockImplementationOnce(async () => [{ id: 92 }])
-    const { spies } = wireTx({
-      items: [{ itemId: 3, qty: 2, cost: 100 }],
+    wireTx({
+      items: [{ itemId: 3, qty: 1, cost: 100, serialNumbers: ["SN-X"] }],
       itemRows: [{ id: 3, defaultWarehouseId: 5, trackSerial: true }],
       invoiceItemRows: [{ itemId: 3, uom: "PCS" }],
-      serialFindMany,
-      serialUpdateMany: vi.fn().mockResolvedValue({ count: 2 }),
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
+
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/tak dikenal/)
+  })
+
+  it("rejects a serial that is not used (cannot be returned)", async () => {
+    mocks.toBaseFactor.mockResolvedValue(1)
+    wireTx({
+      items: [{ itemId: 3, qty: 1, cost: 100, serialNumbers: ["SN-A"] }],
+      itemRows: [{ id: 3, defaultWarehouseId: 5, trackSerial: true }],
+      invoiceItemRows: [{ itemId: 3, uom: "PCS" }],
+      serialFindMany: vi.fn().mockResolvedValue([
+        { id: 91, serialNumber: "SN-A", status: "available" },
+      ]),
+    })
+
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/terpakai/)
+  })
+
+  it("rejects a tracked item with no identity at all", async () => {
+    mocks.toBaseFactor.mockResolvedValue(1)
+    wireTx({
+      items: [{ itemId: 3, qty: 1, cost: 100 }],
+      itemRows: [{ id: 3, defaultWarehouseId: 5, trackSerial: true }],
+      invoiceItemRows: [{ itemId: 3, uom: "PCS" }],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
+
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/nomor seri/)
+  })
+
+  it("records the named batch on the layer and rebuilds the lot (P1-1)", async () => {
+    mocks.toBaseFactor.mockResolvedValue(1)
+    const { spies, tx } = wireTx({
+      items: [{ itemId: 3, qty: 4, cost: 100, batchNumbers: ["LOT-9"] }],
+      itemRows: [{ id: 3, defaultWarehouseId: 5, trackBatch: true }],
+      invoiceItemRows: [{ itemId: 3, uom: "PCS" }],
+      serialFindMany: vi.fn().mockResolvedValue([]),
     })
 
     await onSalesReturnCompleted(7, 9)
 
-    expect(serialFindMany.mock.calls.length).toBe(2)
-    expect(serialFindMany.mock.calls[0][0].where).toEqual({
-      itemId: 3,
-      status: "used",
-      warehouseId: 5,
-    })
-    expect(spies.serialUpdateMany).toHaveBeenCalledWith(
-      expect.objectContaining({ where: { id: { in: [91, 92] } } })
+    expect(mocks.createInLayer).toHaveBeenCalledWith(
+      tx,
+      expect.objectContaining({ batchNumber: "LOT-9", qty: 4 })
     )
+    expect(spies.batchFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { itemId: 3, warehouseId: 5, batchNumber: "LOT-9" } })
+    )
+    expect(spies.batchCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ batchNumber: "LOT-9", qty: 4 }) })
+    )
+  })
+
+  it("rejects a batch-tracked item with no batch identity", async () => {
+    mocks.toBaseFactor.mockResolvedValue(1)
+    wireTx({
+      items: [{ itemId: 3, qty: 1, cost: 100 }],
+      itemRows: [{ id: 3, defaultWarehouseId: 5, trackBatch: true }],
+      invoiceItemRows: [{ itemId: 3, uom: "PCS" }],
+      serialFindMany: vi.fn().mockResolvedValue([]),
+    })
+
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/batch/)
   })
 })

@@ -10,7 +10,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 const mocks = vi.hoisted(() => ({
   keyCreate: vi.fn(),
   keyFindUnique: vi.fn(),
-  keyUpdate: vi.fn(),
+  keyUpdateMany: vi.fn(),
   keyDeleteMany: vi.fn(),
 }))
 
@@ -19,7 +19,7 @@ vi.mock("@/lib/db/prisma", () => ({
     idempotencyKey: {
       create: (...a: unknown[]) => mocks.keyCreate(...a),
       findUnique: (...a: unknown[]) => mocks.keyFindUnique(...a),
-      update: (...a: unknown[]) => mocks.keyUpdate(...a),
+      updateMany: (...a: unknown[]) => mocks.keyUpdateMany(...a),
       deleteMany: (...a: unknown[]) => mocks.keyDeleteMany(...a),
     },
   },
@@ -35,7 +35,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.keyCreate.mockResolvedValue({})
   mocks.keyFindUnique.mockResolvedValue(null)
-  mocks.keyUpdate.mockResolvedValue({})
+  mocks.keyUpdateMany.mockResolvedValue({ count: 1 })
   mocks.keyDeleteMany.mockResolvedValue({ count: 0 })
 })
 
@@ -59,7 +59,7 @@ describe("checkIdempotency", () => {
     mocks.keyFindUnique.mockResolvedValue({ createdAt: new Date() })
 
     await expect(checkIdempotency("req-2")).rejects.toThrow(/duplikat/i)
-    expect(mocks.keyUpdate).not.toHaveBeenCalled()
+    expect(mocks.keyUpdateMany).not.toHaveBeenCalled()
   })
 
   it("rotates a key that is older than the TTL instead of blocking forever", async () => {
@@ -70,10 +70,24 @@ describe("checkIdempotency", () => {
 
     // The old entry belongs to a finished attempt, so the request must go through.
     await expect(checkIdempotency("req-3")).resolves.toBeUndefined()
-    expect(mocks.keyUpdate).toHaveBeenCalledWith({
-      where: { key: "req-3" },
+    expect(mocks.keyUpdateMany).toHaveBeenCalledWith({
+      where: { key: "req-3", createdAt: { lt: expect.any(Date) } },
       data: { createdAt: expect.any(Date) },
     })
+  })
+
+  it("rejects the loser when two requests reclaim a stale key at once (P1-8)", async () => {
+    // Pemenang: updateMany bersyarat kena 1 baris → lolos.
+    mocks.keyCreate.mockRejectedValue(uniqueViolation())
+    mocks.keyFindUnique.mockResolvedValue({
+      createdAt: new Date(Date.now() - IDEMPOTENCY_TTL_MS - 60_000),
+    })
+    mocks.keyUpdateMany.mockResolvedValue({ count: 1 })
+    await expect(checkIdempotency("req-race")).resolves.toBeUndefined()
+
+    // Pecundang: baris sudah direbut (tak lagi stale) → count 0 → duplikat.
+    mocks.keyUpdateMany.mockResolvedValue({ count: 0 })
+    await expect(checkIdempotency("req-race")).rejects.toThrow(/duplikat/i)
   })
 
   it("namespaces the key by scope so two users cannot collide", async () => {

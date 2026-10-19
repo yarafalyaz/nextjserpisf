@@ -30,6 +30,11 @@ const mocks = vi.hoisted(() => {
     systemSetting: { findFirst: settingsFindFirst },
   }
   prisma.$transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn(prisma))
+  // tx period-lock baca tx.$queryRaw rows; hormati periodLockDate dari settingsFindFirst.
+  prisma.$queryRaw = vi.fn(async () => {
+    const s = await settingsFindFirst()
+    return [{ id: 1, period_lock_date: s?.periodLockDate ?? null }]
+  })
 
   return {
     requirePermission,

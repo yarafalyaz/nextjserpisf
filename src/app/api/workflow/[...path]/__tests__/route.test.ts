@@ -154,6 +154,39 @@ describe("POST /api/workflow/[...path]", () => {
     expect(res.status).toBe(400)
   })
 
+  it("blocks maker-checker self-approval on the manual path", async () => {
+    // Non-super_admin with the right permission tries to approve own doc.
+    mocks.authFn.mockResolvedValue({ user: { id: 2, roles: ["staff"], permissions: ["approve_quotations"] } })
+    mocks.findUnique.mockResolvedValue({ createdBy: 2 })
+    const res = await POST(makeReq(), makeParams(["penjualan", "penawaran", "5", "approve"]))
+    expect(res.status).toBe(403)
+    expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("blocks maker-checker self-reject on the manual path", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 2, roles: ["staff"], permissions: ["approve_quotations"] } })
+    mocks.findUnique.mockResolvedValue({ createdBy: 2 })
+    const res = await POST(makeReq(), makeParams(["penjualan", "penawaran", "5", "reject"]))
+    expect(res.status).toBe(403)
+    expect(mocks.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("lets another approver through on the manual path", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 3, roles: ["staff"], permissions: ["approve_quotations"] } })
+    mocks.findUnique.mockResolvedValue({ createdBy: 2 })
+    mocks.updateMany.mockResolvedValue({ count: 1 })
+    const res = await POST(makeReq(), makeParams(["penjualan", "penawaran", "5", "approve"]))
+    expect(res.status).toBe(200)
+  })
+
+  it("lets super_admin self-approve on the manual path (bypass)", async () => {
+    mocks.authFn.mockResolvedValue(adminSession)
+    mocks.findUnique.mockResolvedValue({ createdBy: 1 })
+    mocks.updateMany.mockResolvedValue({ count: 1 })
+    const res = await POST(makeReq(), makeParams(["penjualan", "penawaran", "5", "approve"]))
+    expect(res.status).toBe(200)
+  })
+
   it("approves successfully and revalidates", async () => {
     mocks.authFn.mockResolvedValue(adminSession)
     mocks.updateMany.mockResolvedValue({ count: 1 })

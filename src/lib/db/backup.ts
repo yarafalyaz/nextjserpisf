@@ -12,6 +12,28 @@ import {
 
 const CLOUD_PREFIX = "backups/"
 
+// S4036: never resolve OS commands via the caller's PATH. mysqldump/mysql
+// ship with the DB client tools on the host image; resolve them to absolute
+// paths at startup (fixed search list), falling back to the bare name only
+// when none exists so behavior on dev machines is unchanged.
+const resolveBin = (names: string[]): string => {
+  for (const p of names) {
+    let ada = false
+    try {
+      ada = existsSync(p)
+    } catch {
+      // existsSync pada path aneh tak boleh menggagalkan startup;
+      // anggap kandidat ini tak ada, lanjut ke berikut.
+      ada = false
+    }
+    if (ada) return p
+  }
+  return names[names.length - 1]
+}
+const MYSQLDUMP_BIN = resolveBin(["/usr/bin/mysqldump", "/usr/local/bin/mysqldump", "/opt/homebrew/bin/mysqldump", "mysqldump"])
+const MYSQL_BIN = resolveBin(["/usr/bin/mysql", "/usr/local/bin/mysql", "/opt/homebrew/bin/mysql", "mysql"])
+const SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin"
+
 /**
  * Database backup/restore via mysqldump / mysql CLI.
  * Backups are stored OUTSIDE the web root (project-root /backups) so they are
@@ -93,8 +115,9 @@ export async function listBackups(): Promise<BackupFile[]> {
 /** Run mysqldump and stream output to a .sql file. Returns the created filename.
  *  Optional label is inserted into the filename (e.g. "autosnap"). */
 export function createBackup(label?: string): Promise<BackupFile> {
-  return new Promise(async (resolve, reject) => {
-    try {
+  return new Promise((resolve, reject) => {
+    const run = async () => {
+      try {
       const conn = parseDbUrl()
       await mkdir(BACKUP_DIR, { recursive: true })
 
@@ -116,11 +139,12 @@ export function createBackup(label?: string): Promise<BackupFile> {
         conn.database,
       ]
 
-      const env = { ...process.env }
+      // S4036: spawn dgn PATH tetap, bukan PATH dari pemanggil.
+      const env = { ...process.env, PATH: SAFE_PATH } as NodeJS.ProcessEnv
       if (conn.password) env.MYSQL_PWD = conn.password
 
       const out = createWriteStream(filepath)
-      const child = spawn("mysqldump", args, { env })
+      const child = spawn(MYSQLDUMP_BIN, args, { env })
       let stderr = ""
 
       child.stdout.pipe(out)
@@ -148,9 +172,11 @@ export function createBackup(label?: string): Promise<BackupFile> {
         }
         resolve({ filename, size: st.size, createdAt: st.mtime.toISOString(), local: true, cloud })
       })
-    } catch (e) {
-      reject(e instanceof Error ? e : new Error(String(e)))
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)))
+      }
     }
+    void run()
   })
 }
 
@@ -181,11 +207,12 @@ export async function restoreBackup(filename: string): Promise<void> {
       `-u${conn.user}`,
       conn.database,
     ]
-    const env = { ...process.env }
+    // S4036: spawn dgn PATH tetap, bukan PATH dari pemanggil.
+    const env = { ...process.env, PATH: SAFE_PATH } as NodeJS.ProcessEnv
     if (conn.password) env.MYSQL_PWD = conn.password
 
     const input = createReadStream(filepath)
-    const child = spawn("mysql", args, { env })
+    const child = spawn(MYSQL_BIN, args, { env })
     let stderr = ""
 
     input.pipe(child.stdin)

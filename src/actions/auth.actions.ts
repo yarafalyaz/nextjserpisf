@@ -241,6 +241,26 @@ export async function updateUserRoles(userId: number, roleIds: number[]) {
     }
     const cleanRoleIds = parsed.data
 
+    // Self-guard: super-admin terakhir tidak boleh mencabut role super_admin
+    // dari dirinya sendiri (lockout total). Non-super-admin tidak bisa sampai
+    // sini untuk target super_admin (assertCanModifyTarget di bawah menolak).
+    if (Number(actor.id) === userId) {
+      const selfRoles = await prisma.role.findMany({
+        where: { users: { some: { id: userId } } },
+        select: { id: true, name: true },
+      })
+      const wasSuperAdmin = selfRoles.some((r) => r.name === "super_admin")
+      const stillSuperAdmin = selfRoles.some((r) => r.name === "super_admin" && cleanRoleIds.includes(r.id))
+      if (wasSuperAdmin && !stillSuperAdmin) {
+        const others = await prisma.user.count({
+          where: { id: { not: userId }, roles: { some: { name: "super_admin" } } },
+        })
+        if (others === 0) {
+          return { error: "Tidak dapat mencabut role super admin terakhir" }
+        }
+      }
+    }
+
     // Target-escalation guard: a non-super-admin must not be able to alter the
     // roles of an existing super_admin (e.g. demote/strip the super_admin role).
     const targetErr = await assertCanModifyTarget(actor.roles, userId)
@@ -349,8 +369,10 @@ export async function toggleUserActive(userId: number) {
     // Fix #21: Add permission check
     const actor = await requirePermission("manage_users")
 
-    // Target-escalation guard: a non-super-admin must not be able to disable
-    // an existing super_admin's account.
+    // Self-guard: dilarang menonaktifkan akun sendiri.
+    if (Number(actor.id) === userId) {
+      return { error: "Tidak dapat menonaktifkan akun sendiri" }
+    }
     const targetErr = await assertCanModifyTarget(actor.roles, userId)
     if (targetErr) {
       return { error: targetErr }
@@ -401,6 +423,22 @@ export async function updateProfile(formData: FormData) {
       return { error: parsed.error.issues[0]?.message ?? "Validasi gagal" }
     }
     const { name, email } = parsed.data
+
+    // Ganti email = ganti identitas login. Wajib verifikasi password ulang:
+    // tanpa ini sesi yang dibajak (atau sesi tertinggal) bisa mengambil alih
+    // akun lewat email baru milik penyerang.
+    const current = await prisma.user.findUniqueOrThrow({ where: { id: userId } })
+    if (email.toLowerCase() !== current.email.toLowerCase()) {
+      const rawPassword = formData.get("currentPassword") ?? formData.get("password") ?? ""
+      const passwordConfirm = typeof rawPassword === "string" ? rawPassword : ""
+      if (!passwordConfirm) {
+        return { error: "Password wajib diisi untuk mengganti email" }
+      }
+      const valid = await bcrypt.compare(passwordConfirm, current.password)
+      if (!valid) {
+        return { error: "Password salah" }
+      }
+    }
 
     await prisma.user.update({
       where: { id: userId },

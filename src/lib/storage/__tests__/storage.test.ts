@@ -55,6 +55,21 @@ function makeFile(name: string, type: string, sizeBytes: number): File {
   return new File([content], name, { type })
 }
 
+// P2-4: header biner asli per MIME agar lolos cek magic-byte.
+const MAGIC_HEADS: Record<string, number[]> = {
+  "image/png": [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+  "image/jpeg": [0xff, 0xd8, 0xff, 0xe0],
+  "image/gif": [0x47, 0x49, 0x46, 0x38, 0x39, 0x61],
+  "image/webp": [0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50],
+  "application/pdf": [0x25, 0x50, 0x44, 0x46, 0x2d],
+}
+function makeRealFile(name: string, type: string, sizeBytes = 100): File {
+  const head = MAGIC_HEADS[type] ?? [0x00]
+  const content = new Uint8Array(Math.max(sizeBytes, head.length))
+  content.set(head.slice(0, content.length))
+  return new File([content], name, { type })
+}
+
 beforeEach(() => {
   findFirstMock.mockReset()
   writeFileMock.mockReset()
@@ -141,7 +156,7 @@ describe("uploadToStorage", () => {
 
   it("writes locally and returns a key under the category", async () => {
     findFirstMock.mockResolvedValue(null)
-    const file = makeFile("photo.PNG", "image/png", 100)
+    const file = makeRealFile("photo.PNG", "image/png")
     const res = await uploadToStorage(file, { category: "logos", prefix: "logo" })
     expect(res.key).toMatch(/^logos\/logo-\d+-[a-z0-9]+\.png$/)
     expect(res.url).toBe(`/uploads/${res.key}`)
@@ -150,7 +165,7 @@ describe("uploadToStorage", () => {
 
   it("sanitizes a dangerous prefix and extension", async () => {
     findFirstMock.mockResolvedValue(null)
-    const file = makeFile("x.p n!g", "image/png", 50)
+    const file = makeRealFile("x.p n!g", "image/png", 50)
     const res = await uploadToStorage(file, {
       category: "items",
       prefix: "../../etc/passwd",
@@ -163,7 +178,7 @@ describe("uploadToStorage", () => {
 
   it("honors a custom allowedTypes list", async () => {
     findFirstMock.mockResolvedValue(null)
-    const pdf = makeFile("doc.pdf", "application/pdf", 100)
+    const pdf = makeRealFile("doc.pdf", "application/pdf")
     const res = await uploadToStorage(pdf, {
       category: "attachments",
       allowedTypes: ["application/pdf"],
@@ -176,10 +191,31 @@ describe("uploadToStorage", () => {
     // Attacker: filename ".html" with a spoofed image Content-Type. Must be
     // stored as .png (from MIME), never .html — otherwise it'd be served as
     // text/html from public/uploads (stored XSS).
-    const file = makeFile("evil.html", "image/png", 50)
+    const file = makeRealFile("evil.html", "image/png", 50)
     const res = await uploadToStorage(file, { category: "items", prefix: "x" })
     expect(res.key).toMatch(/\.png$/)
     expect(res.key).not.toContain(".html")
+  })
+
+  it("rejects a spoofed image whose bytes are a script (magic-byte)", async () => {
+    findFirstMock.mockResolvedValue(null)
+    // Attacker: Content-Type image/png tapi isi skrip — magic-byte menolak
+    // SEBELUM tulis ke public/uploads.
+    const content = new TextEncoder().encode("<script>alert(1)</script>" + "x".repeat(50))
+    const fake = new File([content], "photo.png", { type: "image/png" })
+    await expect(uploadToStorage(fake, { category: "items" })).rejects.toThrow(
+      /tidak sesuai/,
+    )
+    expect(writeFileMock).not.toHaveBeenCalled()
+  })
+
+  it("accepts each allowed MIME with genuine magic bytes", async () => {
+    findFirstMock.mockResolvedValue(null)
+    for (const type of ["image/jpeg", "image/png", "image/webp", "image/gif"] as const) {
+      const file = makeRealFile("a", type)
+      const res = await uploadToStorage(file, { category: "items" })
+      expect(res.key).toMatch(/^items\//)
+    }
   })
 
   it("rejects SVG uploads (script-capable, served same-origin)", async () => {
@@ -195,7 +231,7 @@ describe("uploadToStorage", () => {
     findFirstMock.mockResolvedValue(null)
     // A custom allowedTypes entry whose MIME isn't in MIME_EXT, with a
     // dangerous filename extension -> must not write a .js file.
-    const file = makeFile("payload.js", "text/plain", 50)
+    const file = makeRealFile("payload.js", "text/plain", 50)
     const res = await uploadToStorage(file, {
       category: "attachments",
       allowedTypes: ["text/plain"],
@@ -248,7 +284,7 @@ describe("uploadToStorage on the r2 driver", () => {
   it("uploads to R2 and returns an absolute CDN URL", async () => {
     mockR2Config({ assetBaseUrl: "https://cdn.example.com/" })
     sendMock.mockResolvedValue({})
-    const file = makeFile("photo.png", "image/png", 50)
+    const file = makeRealFile("photo.png", "image/png", 50)
     const res = await uploadToStorage(file, { category: "logos" })
     expect(res.key).toMatch(/^logos\/logos-\d+-[a-z0-9]+\.png$/)
     expect(res.url).toBe(`https://cdn.example.com/${res.key}`)
@@ -260,7 +296,7 @@ describe("uploadToStorage on the r2 driver", () => {
     mockR2Config({ fallbackLocal: true, assetBaseUrl: "https://cdn.example.com" })
     const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {})
     sendMock.mockRejectedValue(new Error("R2 down"))
-    const file = makeFile("photo.png", "image/png", 50)
+    const file = makeRealFile("photo.png", "image/png", 50)
     const res = await uploadToStorage(file, { category: "logos" })
     expect(res.key).toMatch(/^logos\//)
     // Local fallback must NOT use the CDN base — /uploads is same-origin only.
@@ -273,7 +309,7 @@ describe("uploadToStorage on the r2 driver", () => {
   it("rethrows the R2 error when fallbackLocal is false", async () => {
     mockR2Config({ fallbackLocal: false })
     sendMock.mockRejectedValue(new Error("R2 hard fail"))
-    const file = makeFile("photo.png", "image/png", 50)
+    const file = makeRealFile("photo.png", "image/png", 50)
     await expect(uploadToStorage(file, { category: "logos" })).rejects.toThrow("R2 hard fail")
     expect(writeFileMock).not.toHaveBeenCalled()
   })
@@ -288,7 +324,7 @@ describe("uploadToStorage on the r2 driver", () => {
       r2SecretAccessKey: "sk",
       r2Bucket: "bucket",
     })
-    const file = makeFile("photo.png", "image/png", 50)
+    const file = makeRealFile("photo.png", "image/png", 50)
     await expect(uploadToStorage(file, { category: "logos" })).rejects.toThrow(
       /Cloudflare R2 belum dikonfigurasi lengkap/,
     )

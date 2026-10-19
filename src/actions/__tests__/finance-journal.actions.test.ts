@@ -11,6 +11,7 @@ const entryDeleteManyMock = vi.fn()
 const entryCreateManyMock = vi.fn()
 const attachmentUpdateManyMock = vi.fn()
 const transactionMock = vi.fn()
+const executeRawMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -62,8 +63,13 @@ function fd(entries: Record<string, string>): FormData {
 // A fake tx client wired into prisma.$transaction
 function wireTransaction() {
   const tx = {
-    journal: { update: journalUpdateMock },
+    $executeRaw: (...a: unknown[]) => executeRawMock(...a),
+    journal: {
+      findUniqueOrThrow: (...a: unknown[]) => journalFindUniqueOrThrowMock(...a),
+      update: journalUpdateMock,
+    },
     journalEntry: { deleteMany: entryDeleteManyMock, createMany: entryCreateManyMock },
+    systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
@@ -72,10 +78,11 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, assertPeriodOpenMock,
     journalFindUniqueOrThrowMock, journalUpdateMock, entryDeleteManyMock,
-    entryCreateManyMock, attachmentUpdateManyMock, transactionMock,
+    entryCreateManyMock, attachmentUpdateManyMock, transactionMock, executeRawMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
   assertPeriodOpenMock.mockResolvedValue(undefined)
+  executeRawMock.mockResolvedValue([])
   journalFindUniqueOrThrowMock.mockResolvedValue({ id: 7, status: "DRAFT", transactionDate: new Date("2026-06-01") })
   journalUpdateMock.mockResolvedValue({ id: 7 })
   entryDeleteManyMock.mockResolvedValue({ count: 2 })
@@ -155,5 +162,20 @@ describe("updateJournal", () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain("ditutup")
     expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it("R-09: cek ulang tanggal BARU dalam tx sesudah lock (tutup periode tak bisa selip)", async () => {
+    const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", entries: validEntries }))
+    expect(result.success).toBe(true)
+    // Cek luar-tx (fast-fail): tanggal lama + tanggal baru.
+    expect(assertPeriodOpenMock.mock.calls[0][0]).toEqual(new Date("2026-06-01"))
+    expect(assertPeriodOpenMock.mock.calls[1][0]).toEqual(new Date("2026-06-02"))
+    expect(assertPeriodOpenMock.mock.calls[1][1]).toBeUndefined()
+    // Cek ulang dalam tx sesudah lock: tanggal lama (fresh) + tanggal baru,
+    // keduanya dengan tx client agar baca lock-date serial dengan tulis.
+    const txCalls = assertPeriodOpenMock.mock.calls.filter((c) => c[1] !== undefined)
+    expect(txCalls).toHaveLength(2)
+    expect(txCalls[0][0]).toEqual(new Date("2026-06-01"))
+    expect(txCalls[1][0]).toEqual(new Date("2026-06-02"))
   })
 })

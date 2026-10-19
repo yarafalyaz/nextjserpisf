@@ -1,5 +1,7 @@
 import type { TxClient } from "@/lib/db/prisma"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
+import { unlink } from "node:fs/promises"
+import path from "node:path"
 
 /** Attach only temporary files uploaded by this user for this exact resource type. */
 export async function attachPendingTransactionAttachments(
@@ -18,7 +20,7 @@ export async function attachPendingTransactionAttachments(
   if (!Array.isArray(parsed)) throw new Error("Daftar lampiran tidak valid")
 
   const ids = [...new Set(parsed.map((value) => {
-    const id = typeof value === "number" || typeof value === "string" ? Number(value) : NaN
+    const id = typeof value === "number" || typeof value === "string" ? Number(value) : Number.NaN
     if (!Number.isSafeInteger(id) || id <= 0) throw new Error("ID lampiran tidak valid")
     return id
   }))]
@@ -33,4 +35,58 @@ export async function attachPendingTransactionAttachments(
     },
     data: { referenceId: input.referenceId },
   })
+}
+
+/**
+ * Hapus lampiran dokumen beserta berkas disknya, dua fase.
+ *
+ * Fase 1 (dalam tx pemanggil): baca baris target + hapus barisnya — atomic
+ * dengan hapus dokumennya, jadi tak ada baris menunjuk dokumen yang hilang.
+ * Fase 2 (sesudah tx commit): unlink tiap berkas. Dipisah karena I/O berkas
+ * tak bisa rollback bersama tx: unlink di DALAM tx yang lalu gagal = data
+ * hilang permanen; unlink SESUDAH commit yang gagal = hanya sampah disk
+ * (tak bisa diunduh — baris DB-nya sudah hilang — dan disapu cron
+ * sweep-orphan bila referenceId=0, atau tertinggal jinak bila tidak).
+ */
+export async function deleteTransactionAttachmentsTx(
+  tx: TxClient,
+  input: { referenceType: string; referenceId: number },
+): Promise<{ fileUrl: string; referenceType: string }[]> {
+  const rows = await tx.transactionAttachment.findMany({
+    where: { referenceType: input.referenceType, referenceId: input.referenceId },
+    select: { fileUrl: true, referenceType: true },
+  })
+  if (rows.length === 0) return []
+  await tx.transactionAttachment.deleteMany({
+    where: { referenceType: input.referenceType, referenceId: input.referenceId },
+  })
+  return rows
+}
+
+export async function removeAttachmentFiles(
+  rows: { fileUrl: string; referenceType: string }[],
+  unlinkFn: (path: string) => Promise<unknown> = unlink,
+): Promise<void> {
+  const uploadsRoot = path.join(process.cwd(), "private", "uploads", "attachments")
+  for (const row of rows) {
+    // fileUrl bentuk kanonis: /api/attachments/<tipe>/<namaberkas> (tanpa
+    // subpath — nama dibuat server sebagai `${tipe}-${id}-${uuid}.${ext}`).
+    // Ambil segmen terakhir LEWAT pola berjangkar: `split("/").pop()` saja
+    // meruntuhkan traversal ("../../x" -> "x") SEBELUM guard path bekerja,
+    // sehingga guard tak pernah melihatnya. Di sini traversal ditolak di
+    // sumber — baris DB yang korup tak bisa meng-unlink di luar root.
+    const match = /^\/api\/attachments\/[^/]+\/([^/]+)$/.exec(row.fileUrl)
+    const filename = match?.[1] ?? ""
+    if (!filename || filename.includes("..")) continue
+    const safeRefType = row.referenceType.replace(/[^a-zA-Z0-9_-]/g, "")
+    if (!safeRefType) continue
+    const filepath = path.resolve(uploadsRoot, safeRefType, filename)
+    const relative = path.relative(uploadsRoot, filepath)
+    if (relative.startsWith("..") || path.isAbsolute(relative)) continue
+    try {
+      await unlinkFn(filepath)
+    } catch (error) {
+      console.error(`[deleteTransactionAttachments] gagal hapus berkas ${filepath}:`, error)
+    }
+  }
 }

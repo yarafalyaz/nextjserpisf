@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: "Tambah Kelompok Pajak" }
 export const dynamic = "force-dynamic"
 
 export default async function CreateTaxGroupPage() {
-  await requirePermission("edit_tax_groups")
+  await requirePermission("create_taxes")
 
   const taxes = await prisma.tax.findMany({ where: { isActive: true }, orderBy: { name: "asc" } })
 

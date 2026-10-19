@@ -17,7 +17,7 @@ RUN apk add --no-cache \
     chown -R nextjs:nodejs /app/.next /app/.next-dev /app/node_modules
 
 COPY package.json package-lock.json ./
-RUN npm install
+RUN npm ci --ignore-scripts
 
 # Copy application configuration and Prisma schema
 COPY --chown=root:root --chmod=755 src/ ./src/
@@ -26,9 +26,9 @@ COPY --chown=root:root --chmod=755 prisma/ ./prisma/
 COPY --chown=root:root --chmod=644 next.config.ts tsconfig.json postcss.config.mjs next-env.d.ts eslint.config.js prisma.config.ts ./
 COPY --chown=root:root --chmod=755 docker/entrypoint.dev.sh /usr/local/bin/entrypoint.dev.sh
 
-# Generate Prisma Client
+# Generate Prisma Client (local binary — no npx registry fetch)
 ENV DATABASE_URL="mysql://build:build@localhost:3306/build"
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 
 EXPOSE 3001
 

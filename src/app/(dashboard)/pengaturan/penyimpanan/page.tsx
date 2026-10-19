@@ -23,10 +23,8 @@ function Field({ label, value, mono }: { label: string; value: string | null | u
   )
 }
 
-function maskSecret(secret: string | null | undefined): string {
-  if (!secret) return "-"
-  if (secret.length <= 4) return "••••"
-  return `${"•".repeat(8)}${secret.slice(-4)}`
+function secretStatus(secret: string | null | undefined): string {
+  return secret ? "Sudah diset" : "-"
 }
 
 export default async function StorageSettingsPage() {
@@ -111,7 +109,7 @@ export default async function StorageSettingsPage() {
                 <Field label="ID Akun" value={settings?.r2AccountId} mono />
                 <Field label="Bucket" value={settings?.r2Bucket} mono />
                 <Field label="ID Kunci Akses" value={settings?.r2AccessKeyId} mono />
-                <Field label="Kunci Akses Rahasia" value={maskSecret(settings?.r2SecretAccessKey)} mono />
+                <Field label="Kunci Akses Rahasia" value={secretStatus(settings?.r2SecretAccessKey)} mono />
               </div>
             </>
           )}

@@ -42,7 +42,12 @@ export default async function EditPage({
     salesInvoiceId: data.salesInvoiceId ?? 0,
     date: data.date.toISOString().split("T")[0],
     reason: data.reason,
-    items: data.items.map((it) => ({ itemId: it.itemId, qty: Number(it.qty) })),
+    items: data.items.map((it) => ({
+      itemId: it.itemId,
+      qty: Number(it.qty),
+      serialNumbers: Array.isArray(it.serialNumbers) ? (it.serialNumbers as unknown[]).map(String) : [],
+      batchNumbers: Array.isArray(it.batchNumbers) ? (it.batchNumbers as unknown[]).map(String) : [],
+    })),
   };
 
   const [invoices, customers, items] = await Promise.all([

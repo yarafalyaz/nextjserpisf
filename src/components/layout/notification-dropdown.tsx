@@ -57,7 +57,7 @@ export function NotificationDropdown() {
 
   function handleToggle() {
     if (!isOpen) {
-      fetchNotifications()
+      void fetchNotifications()
     }
     setIsOpen(!isOpen)
   }
@@ -137,7 +137,9 @@ export function NotificationDropdown() {
                   type="button"
                   aria-disabled={notif.readAt ? true : undefined}
                   className={`w-full text-left flex gap-3 px-4 py-3 border-b border-default last:border-0 hover:bg-surface-secondary transition-colors cursor-pointer ${!notif.readAt ? "bg-primary/5" : ""}`}
-                  onClick={() => !notif.readAt && markAsRead(notif.id)}
+                  onClick={() => {
+                    if (!notif.readAt) void markAsRead(notif.id)
+                  }}
                 >
                   <div className="flex-1 min-w-0">
                     <p className={`text-sm truncate ${!notif.readAt ? "font-semibold text-foreground" : "text-muted-foreground"}`}>

@@ -1019,13 +1019,10 @@ export async function createVendorBill(formData: FormData) {
         });
       }
 
-      // Post the AP journal in the same transaction (idempotent; no-op if a
-      // journal for this bill already exists).
-      await onVendorBillPosted(created.id, Number(user.id), tx);
-
-      // Roll the newly-billed service PO value into the work order's production
-      // HPP (subcontract cost).
-      await syncServicePoCostFromBills(tx, created.purchaseOrderId, Number(user.id));
+      // P0-2: draft MURNI — tanpa jurnal, tanpa HPP. Satu titik pengakuan
+      // adalah posting (confirmVendorBill): di sanalah jurnal AP + HPP jasa
+      // dibuat. Sebelumnya jurnal lahir saat draft sementara laporan AP
+      // mengecualikan draft → selisih AP vs GL.
 
       return created;
     });
@@ -1082,6 +1079,11 @@ export async function createVendorPayment(formData: FormData) {
     // (or worse, the attachments stay orphaned with referenceId=0 and never get
     // cleaned up). Wrapping both in one tx ties payment existence to the
     // attachment linkage.
+    if (v.accountId != null) {
+      const ok = await prisma.account.count({ where: { id: v.accountId } })
+      if (!ok) return { success: false, error: `Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.` }
+    }
+
     const payment = await prisma.$transaction(async (tx) => {
       const created = await tx.vendorPayment.create({
         data: {
@@ -1301,8 +1303,10 @@ export async function confirmVendorPayment(paymentId: number) {
             `Vendor bill #${alloc.vendorBillId} tidak ditemukan dalam tagihan terkunci`,
           );
         }
+        // P0-2: batas alokasi = NETO (bukan grandTotal) — konsisten dengan sisa.
+        const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 0);
         const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0);
-        if (nextPaid > Number(bill.grandTotal)) {
+        if (nextPaid > netPayable) {
           throw new Error(
             `Alokasi melebihi sisa tagihan vendor bill #${bill.id}`,
           );
@@ -1325,11 +1329,16 @@ export async function confirmVendorPayment(paymentId: number) {
       //    there are no write-write conflicts between these updates. Mirrors the
       //    parallel-update pattern used in onExpenseApprovedSyncPettyCash and the
       //    inventory-fifo batch-update refactors.
+      // P0-2: sisa = NETO (grandTotal − withholding) − terbayar, konsisten
+      // dengan jurnal (Cr AP neto) dan balanceDue saat confirm. Sebelumnya
+      // memakai grandTotal sehingga tagihan ber-PPh tak pernah lunas sekali
+      // bayar (sisa palsu sebesar withholding selamanya).
       await Promise.all(
         allocations.map((alloc) => {
           const bill = openBillMap.get(alloc.vendorBillId)!;
+          const netPayable = safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 0);
           const nextPaid = safeAdd(bill.paidAmount, alloc.amount, 0);
-          const nextBalance = safeSubtract(bill.grandTotal, nextPaid, 0);
+          const nextBalance = safeSubtract(netPayable, nextPaid, 0);
 
           return tx.vendorBill.update({
             where: { id: bill.id },
@@ -1834,9 +1843,10 @@ export async function deleteGoodsReceipt(id: number) {
       // verified receipt must lower it — otherwise stock that no longer exists
       // keeps counting as received. Recomputed (not decremented) from the receipts
       // that remain, so a delete/re-verify cycle also heals any drift, and in ONE
-      // statement so every PO line is written together. UoM rule mirrors the hook's
-      // toBaseQty clamp: no UoM or UoM == item base unit → factor 1, missing or
-      // non-positive conversion factor → also 1 (never silently drop a receipt line).
+      // statement so every PO line is written together. UoM rule: no UoM or UoM
+      // == item base unit → factor 1, missing or non-positive conversion
+      // factor → 1 with an explicit console.warn in the hook (never silent;
+      // throwing would break the sales quick-add UoM flow, see uom.service).
       if (gr.purchaseOrderId) {
         await tx.$executeRaw`
           UPDATE purchase_order_items poi
@@ -2617,6 +2627,11 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     });
     if (existingPayment.status !== "draft") {
       throw new Error("Hanya pembayaran draft yang dapat diedit");
+    }
+
+    if (v.accountId != null) {
+      const ok = await prisma.account.count({ where: { id: v.accountId } })
+      if (!ok) throw new Error(`Akun tidak ditemukan (id: ${v.accountId}). Pilih ulang akun sebelum menyimpan.`)
     }
 
     const slug = await nextSlug("vendorPayment", existingPayment.documentNo, { excludeId: id });

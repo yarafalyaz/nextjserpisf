@@ -6,6 +6,10 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { safeSubtract, safeMultiply } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import {
+  assertApproved,
+  requestApprovalIfConfigured,
+} from "@/lib/services/approval-workflow.service";
 import { getWarehouseScope, assertWarehouseAccess, assertWarehouseAccessMulti } from "@/lib/auth/warehouse-scope";
 import { onStockAdjustmentProcessed as onStockAdjustmentStock } from "@/lib/hooks/stock-adjustment.hook";
 import {
@@ -170,6 +174,10 @@ export async function createStockAdjustment(formData: FormData) {
       adjustment.id,
       `Membuat penyesuaian stok #${adjustment.id}`,
     );
+    // P0-3: ajukan ke alur persetujuan bila workflow StockAdjustment
+    // dikonfigurasi. Tanpa baris ini assertApproved di bawah tak pernah
+    // bisa menahan (tanpa record = lolos) — pola sama dengan Expense/Asset.
+    await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
     revalidatePath("/inventaris/penyesuaian");
     return { success: true, id: adjustment.id, slug: adjustment.slug };
   } catch (e: unknown) {
@@ -197,6 +205,12 @@ export async function processStockAdjustment(adjustmentId: number) {
     if (adjustment.status !== "draft") {
       throw new Error("Adjustment hanya bisa diproses dari status draft");
     }
+
+    // P0-3: proses menuntut persetujuan eksplisit. Tanpa workflow yang
+    // dikonfigurasi ini no-op (mundur kompatibel); bila workflow ada dan
+    // belum approved → tolak. Menutup lubang self-approve: sebelumnya siapa
+    // pun berizin process bisa menulis stok + jurnal tanpa pemeriksa kedua.
+    await assertApproved("StockAdjustment", adjustmentId);
 
     // Atomic conditional claim — serialize concurrent process requests so only
     // one caller creates stock moves and journal; duplicates get a clean error
@@ -585,6 +599,34 @@ export async function completeMaterialIssue(issueId: number) {
       );
     }
 
+    // P1-4: guard silang arah sebaliknya. MI tertaut WO yang PO-nya sudah
+    // mengonsumsi material (actualQty > 0) tidak boleh diselesaikan — jalur
+    // PO sudah mengeluarkan material yang sama. Dicek setelah klaim agar
+    // serial dengan complete konkuren. Klaim dikembalikan ke draft sebelum
+    // menolak agar bisa dicoba lagi setelah jalur diluruskan.
+    const issueWo = await prisma.materialIssue.findUniqueOrThrow({
+      where: { id: issueId },
+      select: { workOrderId: true },
+    });
+    if (issueWo.workOrderId != null) {
+      const poConsumed = await prisma.productionOrderMaterial.aggregate({
+        where: {
+          productionOrder: { workOrderId: issueWo.workOrderId },
+          actualQty: { gt: 0 },
+        },
+        _sum: { actualQty: true },
+      });
+      if (Number(poConsumed._sum.actualQty ?? 0) > 0) {
+        await prisma.materialIssue.updateMany({
+          where: { id: issueId, status: "processing" },
+          data: { status: "draft" },
+        });
+        throw new Error(
+          "WO ini sudah dikonsumsi via perintah produksi — batalkan/void MI ini dan gunakan jalur PO.",
+        );
+      }
+    }
+
     try {
       await prisma.$transaction(async (tx) => {
         // Hook creates Stock Moves OUT per item + Accounting journal
@@ -807,8 +849,8 @@ export async function getNextRackCode(warehouseId: number) {
   });
   let maxNum = 0;
   for (const r of existingCodes) {
-    const num = parseInt(r.code.slice(prefix.length), 10);
-    if (!isNaN(num) && num > maxNum) maxNum = num;
+    const num = Number.parseInt(r.code.slice(prefix.length), 10);
+    if (!Number.isNaN(num) && num > maxNum) maxNum = num;
   }
   let nextId = maxNum + 1;
 
@@ -884,8 +926,8 @@ export async function createRack(formData: FormData) {
       });
       let maxNum = 0;
       for (const r of existingCodes) {
-        const num = parseInt(r.code.slice(prefix.length), 10);
-        if (!isNaN(num) && num > maxNum) maxNum = num;
+        const num = Number.parseInt(r.code.slice(prefix.length), 10);
+        if (!Number.isNaN(num) && num > maxNum) maxNum = num;
       }
       let nextId = maxNum + 1;
 
@@ -1489,5 +1531,358 @@ export async function deleteRackRow(id: number) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteRackRow]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== P1-5: STOCKTAKE SESSION ====================
+// Sesi opname bertahap: draft → counting (snapshot) → recount → review →
+// approved → posted (adjustment). Approval independen: penyetuju ≠ pencacah.
+// Posting memakai LIVE qty sebagai basis (delta concurrent tercatat).
+
+import { finalizeCounts } from "@/lib/inventory/stocktake-finalize";
+
+const STOCKTAKE_PATH = "/inventaris/opname";
+
+async function liveQtyByItem(warehouseId: number): Promise<Map<number, number>> {
+  const layers = await prisma.inventoryLayer.groupBy({
+    by: ["itemId"],
+    where: { warehouseId, remaining: { gt: 0 } },
+    _sum: { remaining: true },
+  });
+  return new Map(layers.map((l) => [l.itemId, Number(l._sum.remaining ?? 0)]));
+}
+
+export async function createStocktakeSession(formData: FormData) {
+  try {
+    const user = await requirePermission("create_stock_adjustments");
+    const warehouseId = Number(formData.get("warehouseId"));
+    const dateRaw = (formData.get("date") as string | null) ?? "";
+    const notes = (formData.get("notes") as string | null) ?? null;
+    await assertWarehouseIdInScope(user, warehouseId);
+    if (!dateRaw) throw new Error("Tanggal wajib diisi");
+    await assertPeriodOpen(new Date(dateRaw));
+
+    const documentNo = await generateDocumentNumber("STK");
+    const slug = await nextSlug("stocktakeSession", documentNo);
+    const session = await prisma.stocktakeSession.create({
+      data: {
+        documentNo,
+        slug,
+        warehouseId,
+        date: new Date(dateRaw),
+        status: "draft",
+        notes,
+        createdBy: Number(user.id),
+      },
+    });
+    await logActivity("create", "StocktakeSession", session.id, `Sesi opname ${documentNo}`);
+    revalidatePath(STOCKTAKE_PATH);
+    return { success: true as const, id: session.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createStocktakeSession]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/** Kunci snapshot: salin live qty gudang ke lines, status → counting. */
+export async function snapshotStocktakeSession(id: number) {
+  try {
+    const user = await requirePermission("create_stock_adjustments");
+    const session = await prisma.stocktakeSession.findUniqueOrThrow({
+      where: { id },
+      include: { lines: { select: { id: true } } },
+    });
+    await assertWarehouseIdInScope(user, session.warehouseId);
+    if (session.status !== "draft") throw new Error("Hanya sesi draft yang bisa di-snapshot");
+
+    const live = await liveQtyByItem(session.warehouseId);
+    await prisma.$transaction(async (tx) => {
+      const locked = await tx.stocktakeSession.findUnique({ where: { id }, select: { status: true } });
+      if (!locked || locked.status !== "draft") throw new Error("Sesi sudah berjalan");
+      await tx.stocktakeLine.deleteMany({ where: { sessionId: id } });
+      if (live.size > 0) {
+        await tx.stocktakeLine.createMany({
+          data: [...live.entries()].map(([itemId, qty]) => ({
+            sessionId: id,
+            itemId,
+            systemQty: qty,
+          })),
+        });
+      }
+      await tx.stocktakeSession.update({
+        where: { id },
+        data: { status: "counting", snapshotAt: new Date(), countedBy: Number(user.id) },
+      });
+    });
+    await logActivity("update", "StocktakeSession", id, "Snapshot stok sesi opname");
+    revalidatePath(STOCKTAKE_PATH);
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[snapshotStocktakeSession]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/** Simpan hitungan 1/2 per baris (JSON: [{lineId,count1?,count2?,note?}]). */
+export async function saveStocktakeCounts(id: number, formData: FormData) {
+  try {
+    const user = await requirePermission("create_stock_adjustments");
+    const session = await prisma.stocktakeSession.findUniqueOrThrow({
+      where: { id },
+      select: { warehouseId: true, status: true },
+    });
+    await assertWarehouseIdInScope(user, session.warehouseId);
+    if (session.status !== "counting" && session.status !== "recount") {
+      throw new Error("Sesi tidak dalam tahap penghitungan");
+    }
+    const counts = safeJsonParse<{ lineId: number; count1?: number; count2?: number; note?: string }[]>(
+      (formData.get("counts") as string | null) ?? null,
+    ) ?? [];
+    await prisma.$transaction(async (tx) => {
+      for (const c of counts) {
+        if (!Number.isSafeInteger(c.lineId) || c.lineId <= 0) continue;
+        const data: { count1?: number; count2?: number | null; note?: string | null } = {};
+        if (c.count1 != null && Number.isFinite(Number(c.count1)) && Number(c.count1) >= 0) {
+          data.count1 = Number(c.count1);
+        }
+        if (c.count2 != null && c.count2 !== ("" as unknown as number) && Number.isFinite(Number(c.count2)) && Number(c.count2) >= 0) {
+          data.count2 = Number(c.count2);
+        }
+        if (c.note !== undefined) data.note = String(c.note).slice(0, 500) || null;
+        if (Object.keys(data).length === 0) continue;
+        await tx.stocktakeLine.updateMany({ where: { id: c.lineId, sessionId: id }, data });
+      }
+      // Bila semua baris berselisih sudah di-recount (count2 terisi) → review.
+      const lines = await tx.stocktakeLine.findMany({
+        where: { sessionId: id },
+        select: { systemQty: true, count1: true, count2: true },
+      });
+      const finals = finalizeCounts(
+        lines.map((l) => ({
+          itemId: 0,
+          systemQty: Number(l.systemQty),
+          count1: l.count1 == null ? null : Number(l.count1),
+          count2: l.count2 == null ? null : Number(l.count2),
+        })),
+      );
+      const pending = finals.filter((f) => f.needsRecount);
+      await tx.stocktakeSession.update({
+        where: { id },
+        data: { status: pending.length > 0 ? "recount" : "review" },
+      });
+    });
+    revalidatePath(STOCKTAKE_PATH);
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[saveStocktakeCounts]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/** Approval independen: penyetuju wajib ≠ pencacah. */
+export async function approveStocktakeSession(id: number) {
+  try {
+    const user = await requirePermission("edit_stock_adjustments");
+    const session = await prisma.stocktakeSession.findUniqueOrThrow({ where: { id } });
+    await assertWarehouseIdInScope(user, session.warehouseId);
+    if (session.status !== "review") throw new Error("Hanya sesi tahap review yang bisa disetujui");
+    if (session.countedBy != null && Number(session.countedBy) === Number(user.id)) {
+      throw new Error("Penyetuju harus independen — pencacah tidak boleh menyetujui sesi sendiri");
+    }
+    await prisma.stocktakeSession.update({
+      where: { id },
+      data: { status: "approved", approvedBy: Number(user.id), approvedAt: new Date() },
+    });
+    await logActivity("approve", "StocktakeSession", id, "Sesi opname disetujui");
+    revalidatePath(STOCKTAKE_PATH);
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[approveStocktakeSession]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Posting: variance → Stock Adjustment (jalur terbukti). Basis = LIVE qty
+ * (bukan snapshot basi): actualQty = finalCount, systemQty dikoreksi hook
+ * terhadap live. Delta concurrent (live - snapshot) dicatat di notes.
+ */
+export async function postStocktakeSession(id: number) {
+  try {
+    const user = await requirePermission("create_stock_adjustments");
+    const session = await prisma.stocktakeSession.findUniqueOrThrow({
+      where: { id },
+      include: { lines: { include: { item: { select: { cost: true } } } } },
+    });
+    await assertWarehouseIdInScope(user, session.warehouseId);
+    if (session.status !== "approved") throw new Error("Hanya sesi yang disetujui yang bisa diposting");
+    await assertPeriodOpen(new Date());
+
+    const finals = finalizeCounts(
+      session.lines.map((l) => ({
+        itemId: l.itemId,
+        systemQty: Number(l.systemQty),
+        count1: l.count1 == null ? null : Number(l.count1),
+        count2: l.count2 == null ? null : Number(l.count2),
+      })),
+    );
+    const differing = finals.filter((f) => f.variance !== 0);
+    if (differing.length === 0) {
+      await prisma.stocktakeSession.update({ where: { id }, data: { status: "posted" } });
+      revalidatePath(STOCKTAKE_PATH);
+      return { success: true as const, adjustmentId: null };
+    }
+
+    const live = await liveQtyByItem(session.warehouseId);
+    const snapByItem = new Map(finals.map((f) => [f.itemId, f.systemQty]));
+    const deltas = differing.map((f) => {
+      const liveQty = live.get(f.itemId) ?? 0;
+      const snap = snapByItem.get(f.itemId) ?? 0;
+      return { itemId: f.itemId, delta: liveQty - snap };
+    }).filter((d) => d.delta !== 0);
+
+    const documentNo = await generateDocumentNumber("ADJ");
+    const adjustment = await prisma.$transaction(async (tx) => {
+      const locked = await tx.stocktakeSession.findUnique({ where: { id }, select: { status: true } });
+      if (!locked || locked.status !== "approved") throw new Error("Sesi tidak lagi approved");
+      const adj = await tx.stockAdjustment.create({
+        data: {
+          documentNo,
+          slug: await nextSlug("stockAdjustment", documentNo),
+          warehouseId: session.warehouseId,
+          date: new Date(),
+          status: "draft",
+          notes:
+            `Posting opname ${session.documentNo}` +
+            (deltas.length > 0
+              ? ` (pergerakan selama sesi: ${deltas.map((d) => `#${d.itemId} ${d.delta > 0 ? "+" : ""}${d.delta}`).join(", ")})`
+              : ""),
+          createdBy: Number(user.id),
+          items: {
+            create: differing.map((f) => {
+              const line = session.lines.find((l) => l.itemId === f.itemId)!;
+              return {
+                itemId: f.itemId,
+                systemQty: live.get(f.itemId) ?? f.systemQty,
+                actualQty: f.finalCount,
+                difference: 0,
+                unitCost: Number(line.item.cost ?? 0),
+                totalCost: 0,
+                notes: `Opname ${session.documentNo}`,
+              };
+            }),
+          },
+        },
+      });
+      await tx.stocktakeSession.update({
+        where: { id },
+        data: { status: "posted", adjustmentId: adj.id },
+      });
+      return adj;
+    });
+    await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
+    await logActivity("post", "StocktakeSession", id, `Posting opname → adjustment ${documentNo}`);
+    revalidatePath(STOCKTAKE_PATH);
+    return { success: true as const, adjustmentId: adjustment.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[postStocktakeSession]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== P1-5: REMNANT / SCRAP ====================
+// Sisa potong usable dicatat (sumber WO/PO, dimensi, biaya bawaan) dan dapat
+// dipilih untuk issue berikut (consume → status consumed, tanpa movement
+// ganda karena remnant bukan stok gudang). Scrap = alasan + biaya terpisah.
+
+export async function createRemnant(formData: FormData) {
+  try {
+    const user = await requirePermission("create_material_issues");
+    const itemId = Number(formData.get("itemId"));
+    const warehouseId = Number(formData.get("warehouseId"));
+    const qty = Number(formData.get("qty"));
+    await assertWarehouseIdInScope(user, warehouseId);
+    if (!Number.isSafeInteger(itemId) || itemId <= 0) throw new Error("Item tidak valid");
+    if (!Number.isFinite(qty) || qty <= 0) throw new Error("Qty sisa harus > 0");
+    const documentNo = await generateDocumentNumber("RMN");
+    const remnant = await prisma.remnant.create({
+      data: {
+        documentNo,
+        itemId,
+        warehouseId,
+        qty,
+        uom: (formData.get("uom") as string | null) || null,
+        dimensions: (formData.get("dimensions") as string | null) || null,
+        sourceType: (formData.get("sourceType") as string | null) || null,
+        sourceId: Number(formData.get("sourceId")) || null,
+        unitCost: Number(formData.get("unitCost")) || 0,
+        status: "usable",
+        createdBy: Number(user.id),
+      },
+    });
+    await logActivity("create", "Remnant", remnant.id, `Sisa ${documentNo} (${qty})`);
+    revalidatePath("/inventaris/sisa");
+    return { success: true as const, id: remnant.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createRemnant]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/** Pakai remnant usable untuk kebutuhan berikut (klaim atomik — tanpa movement ganda). */
+export async function consumeRemnant(id: number, formData: FormData) {
+  try {
+    await requirePermission("create_material_issues");
+    const consumedBy = ((formData.get("consumedBy") as string | null) ?? "").slice(0, 128);
+    if (!consumedBy) throw new Error("Tujuan pemakaian wajib diisi");
+    const updated = await prisma.remnant.updateMany({
+      where: { id, status: "usable" },
+      data: { status: "consumed", consumedBy, consumedAt: new Date() },
+    });
+    if (updated.count === 0) {
+      const cur = await prisma.remnant.findUnique({ where: { id }, select: { status: true } });
+      throw new Error(
+        cur ? `Sisa sudah ${cur.status}, tidak bisa dipakai` : "Sisa tidak ditemukan",
+      );
+    }
+    await logActivity("update", "Remnant", id, `Sisa dipakai: ${consumedBy}`);
+    revalidatePath("/inventaris/sisa");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[consumeRemnant]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/** Tandai remnant sebagai scrap (alasan wajib — scrap bukan stok usable). */
+export async function scrapRemnant(id: number, formData: FormData) {
+  try {
+    await requirePermission("create_material_issues");
+    const reason = ((formData.get("scrapReason") as string | null) ?? "").trim();
+    if (!reason) throw new Error("Alasan scrap wajib diisi");
+    const updated = await prisma.remnant.updateMany({
+      where: { id, status: "usable" },
+      data: { status: "scrap", scrapReason: reason.slice(0, 500) },
+    });
+    if (updated.count === 0) {
+      const cur = await prisma.remnant.findUnique({ where: { id }, select: { status: true } });
+      throw new Error(
+        cur ? `Sisa sudah ${cur.status}, tidak bisa di-scrap` : "Sisa tidak ditemukan",
+      );
+    }
+    await logActivity("update", "Remnant", id, `Scrap: ${reason.slice(0, 120)}`);
+    revalidatePath("/inventaris/sisa");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[scrapRemnant]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

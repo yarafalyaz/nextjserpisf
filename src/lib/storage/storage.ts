@@ -1,4 +1,5 @@
 import { writeFile, mkdir } from "fs/promises"
+import { randomUUID } from "crypto"
 import path from "path"
 import { prisma } from "@/lib/db/prisma"
 
@@ -44,6 +45,36 @@ const MIME_EXT: Record<string, string> = {
 const DANGEROUS_EXT = new Set([
   "html", "htm", "xhtml", "xml", "svg", "js", "mjs", "cjs", "php", "phtml", "phar", "sh",
 ])
+
+// Magic-byte signature per MIME yang diizinkan. `file.type` datang dari
+// client dan bisa dipalsukan — tanpa cek ini, skrip yang diganti nama jadi
+// .jpg akan lolos validasi MIME lalu tersimpan di public/uploads.
+// PDF: %PDF- ; JPEG: FF D8 FF ; PNG: 89 50 4E 47 ; GIF: 47 49 46 ;
+// WebP: RIFF....WEBP.
+const MAGIC: Record<string, (b: Buffer) => boolean> = {
+  "application/pdf": (b) =>
+    b.length >= 5 && b[0] === 0x25 && b[1] === 0x50 && b[2] === 0x44 && b[3] === 0x46 && b[4] === 0x2d,
+  "image/jpeg": (b) => b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff,
+  "image/png": (b) =>
+    b.length >= 4 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47,
+  "image/gif": (b) =>
+    b.length >= 3 && b[0] === 0x47 && b[1] === 0x49 && b[2] === 0x46,
+  "image/webp": (b) =>
+    b.length >= 12 &&
+    b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 &&
+    b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50,
+}
+
+/** Tolak file yang isi binernya tidak cocok dengan MIME yang diklaim. */
+export function assertMagicBytes(buffer: Buffer, mimeType: string): void {
+  const check = MAGIC[mimeType]
+  // MIME kustom tanpa signature dikenal (mis. text/plain): tidak dicek di
+  // sini — ekstensi disimpan sebagai .bin (aman) oleh resolveExt.
+  if (!check) return
+  if (!check(buffer)) {
+    throw new Error("Isi file tidak sesuai dengan format yang diklaim (kemungkinan file palsu)")
+  }
+}
 
 export interface StorageConfig {
   driver: string
@@ -140,11 +171,14 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
 
   const ext = resolveExt(file.type, file.name)
   const prefix = (opts.prefix || opts.category).replace(/[^a-zA-Z0-9_-]/g, "")
-  const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const filename = `${prefix}-${Date.now()}-${randomUUID().replace(/-/g, "").slice(0, 12)}.${ext}`
   const key = `${opts.category}/${filename}`
 
   const bytes = await file.arrayBuffer()
   const buffer = Buffer.from(bytes)
+
+  // P2-4: isi biner harus cocok dengan MIME yang diklaim — SEBELUM tulis.
+  assertMagicBytes(buffer, file.type)
 
   if (config.driver === "r2") {
     try {

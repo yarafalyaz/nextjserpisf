@@ -49,7 +49,7 @@ export function CurrencyInput({
 
   function formatDisplay(num: number | string | null | undefined): string {
     if (num === null || num === undefined || num === "") return ""
-    const n = typeof num === "string" ? parseFloat(num) : num
+    const n = typeof num === "string" ? Number.parseFloat(num) : num
     if (isNaN(n)) return ""
     return new Intl.NumberFormat("id-ID").format(n)
   }
@@ -57,7 +57,7 @@ export function CurrencyInput({
   function parseInput(str: string): number {
     // Remove dots (thousand separator) and replace comma with dot (decimal)
     const cleaned = str.replace(/\./g, "").replace(",", ".")
-    const n = parseFloat(cleaned)
+    const n = Number.parseFloat(cleaned)
     return isNaN(n) ? 0 : n
   }
 
@@ -72,7 +72,7 @@ export function CurrencyInput({
       setDisplayValue("")
     } else {
       const currentNum = parseInput(displayValue)
-      const newNum = typeof controlledValue === "string" ? parseFloat(controlledValue) : controlledValue
+      const newNum = typeof controlledValue === "string" ? Number.parseFloat(controlledValue) : controlledValue
       if (currentNum !== newNum || isNaN(currentNum)) {
         setDisplayValue(formatDisplay(controlledValue))
       }
@@ -94,7 +94,7 @@ export function CurrencyInput({
 
       // Format integer part with thousand separators live while typing
       const [intPart, decPart] = sanitized.split(",")
-      const intNum = intPart ? parseInt(intPart, 10) : NaN
+      const intNum = intPart ? Number.parseInt(intPart, 10) : NaN
       const formattedInt = isNaN(intNum) ? "" : new Intl.NumberFormat("id-ID").format(intNum)
       const display = decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt
 

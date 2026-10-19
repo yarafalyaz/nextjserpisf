@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => {
     inventoryTransferItem: buildModelMock(),
     materialIssue: buildModelMock(),
     materialIssueItem: buildModelMock(),
+    productionOrderMaterial: buildModelMock(),
     workOrder: buildModelMock(),
     workOrderItem: buildModelMock(),
     rack: {
@@ -38,6 +39,10 @@ const mocks = vi.hoisted(() => {
       aggregate: vi.fn().mockResolvedValue({ _max: { id: 0 } }),
     },
     systemSetting: buildModelMock(),
+    remnant: buildModelMock(),
+    stocktakeSession: buildModelMock(),
+    stocktakeLine: buildModelMock(),
+    inventoryLayer: { ...buildModelMock(), groupBy: vi.fn().mockResolvedValue([]) },
     warehouse: buildModelMock(),
     userWarehouse: buildModelMock(),
     item: buildModelMock(),
@@ -85,6 +90,10 @@ vi.mock("@/lib/hooks/material-issue.hook", () => ({
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
 }));
+vi.mock("@/lib/services/approval-workflow.service", () => ({
+  assertApproved: vi.fn().mockResolvedValue(undefined),
+  requestApprovalIfConfigured: vi.fn().mockResolvedValue(false),
+}));
 
 import * as actions from "../inventory.actions";
 import { onStockAdjustmentProcessed as stockAdjHook } from "@/lib/hooks/stock-adjustment.hook";
@@ -100,6 +109,16 @@ function fdMap(
   return f;
 }
 
+const DATE = "2026-06-13"
+const itemsJson = (items: unknown[] = [{ itemId: 1, qty: 10, cost: 100 }]) => JSON.stringify(items)
+const saFd = (over: Record<string, string | number> = {}) => fdMap({ warehouseId: 1, date: DATE, reason: "Test", items: itemsJson(), ...over })
+const transferFd = (over: Record<string, string | number> = {}) => fdMap({ sourceWarehouseId: 1, destinationWarehouseId: 2, date: DATE, items: itemsJson([{ itemId: 1, qty: 10 }]), ...over })
+const miFd = (over: Record<string, string | number> = {}) => fdMap({ warehouseId: 1, projectId: 1, date: DATE, items: itemsJson(), ...over })
+const woFd = (over: Record<string, string | number> = {}, items: unknown[] = [{ itemId: 1, qty: 10, cost: 100 }]) => fdMap({ customerId: 1, projectId: 1, date: DATE, items: itemsJson(items), ...over })
+const seedDraft = (model: any, over: Record<string, unknown> = {}) => model.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", ...over })
+const seedDoc = (model: any, status: string, over: Record<string, unknown> = {}) => model.findUniqueOrThrow.mockResolvedValue({ id: 1, status, ...over })
+const expectSuccess = (res: any) => expect(res?.success).toBe(true)
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] });
@@ -107,27 +126,14 @@ beforeEach(() => {
 
 describe("Stock Adjustment Actions", () => {
   it("createStockAdjustment succeeds", async () => {
-    const res = await actions.createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
+    const res = await actions.createStockAdjustment(saFd());
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.stockAdjustment.create).toHaveBeenCalledTimes(1);
   });
 
   it("rejects duplicate item rows instead of saving conflicting physical counts", async () => {
     const res = await actions.createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([
-          { itemId: 1, newQty: 11, unitCost: 100 },
-          { itemId: 1, newQty: 12, unitCost: 100 },
-        ]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 11, unitCost: 100 }, { itemId: 1, newQty: 12, unitCost: 100 }]) }),
     );
     expect(res.success).toBe(false);
     expect(res.error).toContain("hanya boleh dicantumkan satu kali");
@@ -151,14 +157,7 @@ describe("Stock Adjustment Actions", () => {
       },
     );
     const res = await actions.createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([
-          { itemId: 1, currentQty: 999, newQty: 12, unitCost: 100, reason: "" },
-        ]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, currentQty: 999, newQty: 12, unitCost: 100, reason: "" }]) }),
     );
     expect(res?.success).toBe(true);
   });
@@ -171,185 +170,117 @@ describe("Stock Adjustment Actions", () => {
       },
     );
     const res = await actions.createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([
-          { itemId: 1, newQty: 0, unitCost: 100, reason: "" },
-        ]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 0, unitCost: 100, reason: "" }]) }),
     );
     expect(res?.success).toBe(true);
   });
   it("rejects duplicate item rows when updating a draft", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment);
     const res = await actions.updateStockAdjustment(
       1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([
-          { itemId: 1, newQty: 11, unitCost: 100 },
-          { itemId: 1, newQty: 12, unitCost: 100 },
-        ]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 11, unitCost: 100 }, { itemId: 1, newQty: 12, unitCost: 100 }]) }),
     );
     expect(res.success).toBe(false);
     expect(res.error).toContain("hanya boleh dicantumkan satu kali");
     expect(mocks.prismaMock.stockAdjustment.update).not.toHaveBeenCalled();
   });
   it("updateStockAdjustment succeeds", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
-    const res = await actions.updateStockAdjustment(
-      1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    const res = await actions.updateStockAdjustment(1, saFd());
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.stockAdjustment.update).toHaveBeenCalledTimes(1);
   });
   it("processStockAdjustment succeeds", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     const res = await actions.processStockAdjustment(1);
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.stockAdjustment.update).toHaveBeenCalled();
+  });
+  it("processStockAdjustment ditolak bila approval pending (P0-3)", async () => {
+    const { assertApproved } = await import("@/lib/services/approval-workflow.service");
+    vi.mocked(assertApproved).mockRejectedValueOnce(
+      new Error("Dokumen masih menunggu persetujuan (approval workflow) sebelum dapat dilanjutkan."),
+    );
+    seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
+    const res = await actions.processStockAdjustment(1);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("menunggu persetujuan");
+    // Hook stok tak boleh jalan — tak ada mutasi tanpa persetujuan.
+    expect(stockAdjHook).not.toHaveBeenCalled();
+  });
+  it("createStockAdjustment mengajukan approval bila workflow ada (P0-3)", async () => {
+    const { requestApprovalIfConfigured } = await import("@/lib/services/approval-workflow.service");
+    const res = await actions.createStockAdjustment(saFd());
+    expectSuccess(res);
+    expect(requestApprovalIfConfigured).toHaveBeenCalledWith("StockAdjustment", expect.any(Number), 1);
   });
   it("processStockAdjustment does not duplicate journal (stock hook owns it)", async () => {
     vi.clearAllMocks();
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     const res = await actions.processStockAdjustment(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
     expect(stockAdjHook).toHaveBeenCalledWith(1, 1, expect.any(Object));
   });
 
   it("deleteStockAdjustment succeeds", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment);
     const res = await actions.deleteStockAdjustment(1);
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.stockAdjustment.delete).toHaveBeenCalled();
   });
 });
 
 describe("Inventory Transfer Actions", () => {
   it("createInventoryTransfer succeeds", async () => {
-    const res = await actions.createInventoryTransfer(
-      fdMap({
-        sourceWarehouseId: 1,
-        destinationWarehouseId: 2,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10 }]),
-      }),
-    );
+    const res = await actions.createInventoryTransfer(transferFd());
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.create).toHaveBeenCalledTimes(1);
   });
   it("updateInventoryTransfer succeeds", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
-    const res = await actions.updateInventoryTransfer(
-      1,
-      fdMap({
-        sourceWarehouseId: 1,
-        destinationWarehouseId: 2,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10 }]),
-      }),
-    );
+    seedDraft(mocks.prismaMock.inventoryTransfer);
+    const res = await actions.updateInventoryTransfer(1, transferFd());
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.update).toHaveBeenCalledTimes(1);
   });
   it("processInventoryTransfer succeeds", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer, { items: [] });
     const res = await actions.processInventoryTransfer(1);
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.update).toHaveBeenCalled();
   });
   it("receiveInventoryTransfer succeeds", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "processed",
-      items: [],
-    });
+    seedDoc(mocks.prismaMock.inventoryTransfer, "processed", { items: [] });
     const res = await actions.receiveInventoryTransfer(1);
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.update).toHaveBeenCalled();
   });
   it("deleteInventoryTransfer succeeds", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer);
     const res = await actions.deleteInventoryTransfer(1);
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.inventoryTransfer.delete).toHaveBeenCalled();
   });
 });
 
 describe("Material Issue Actions", () => {
   it("createMaterialIssue succeeds", async () => {
-    const res = await actions.createMaterialIssue(
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
+    const res = await actions.createMaterialIssue(miFd());
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.materialIssue.create).toHaveBeenCalledTimes(1);
   });
   it("updateMaterialIssue succeeds", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
-    const res = await actions.updateMaterialIssue(
-      1,
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
+    seedDraft(mocks.prismaMock.materialIssue);
+    const res = await actions.updateMaterialIssue(1, miFd());
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.materialIssue.update).toHaveBeenCalledTimes(1);
   });
   // Regresi: workOrderId & projectId tidak punya input di form MI, jadi update
   // dulu menulis `?? null` dan memutus keduanya. Hilangnya workOrderId membuat
   // "Buat Pengeluaran Material" bisa dijalankan lagi untuk WO yang sama.
   it("updateMaterialIssue tidak menghapus workOrderId/projectId yang tidak dikirim form", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
-    const res = await actions.updateMaterialIssue(
-      1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
-    );
-    expect(res?.success).toBe(true);
+    seedDraft(mocks.prismaMock.materialIssue);
+    const res = await actions.updateMaterialIssue(1, fdMap({ warehouseId: 1, date: DATE, items: itemsJson() }));
+    expectSuccess(res);
     const payload = mocks.prismaMock.materialIssue.update.mock.calls.at(-1)?.[0] as
       | { data?: Record<string, unknown> }
       | undefined;
@@ -357,63 +288,57 @@ describe("Material Issue Actions", () => {
     expect(payload?.data && "projectId" in payload.data).toBe(false);
   });
   it("completeMaterialIssue succeeds", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.materialIssue, { items: [] });
     const res = await actions.completeMaterialIssue(1);
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.materialIssue.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1, status: "draft" } }),
+    );
+  });
+  it("completeMaterialIssue refuses when the WO was already consumed via PO (P1-4)", async () => {
+    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [], workOrderId: 42,
+    });
+    mocks.prismaMock.productionOrderMaterial.aggregate.mockResolvedValue({
+      _sum: { actualQty: 5 },
+    });
+    const res = await actions.completeMaterialIssue(1);
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("perintah produksi");
+    expect(matIssueHook).not.toHaveBeenCalled();
+    // Klaim dikembalikan ke draft agar bisa dicoba lagi.
+    expect(mocks.prismaMock.materialIssue.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "draft" } }),
+    );
   });
   it("completeMaterialIssue does not duplicate journal (stock hook owns it)", async () => {
     vi.clearAllMocks();
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.materialIssue, { items: [] });
     const res = await actions.completeMaterialIssue(1);
-    expect(res?.success).toBe(true);
+    expectSuccess(res);
     expect(matIssueHook).toHaveBeenCalledWith(1, 1, expect.any(Object));
   });
 
   it("deleteMaterialIssue succeeds", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.materialIssue);
     const res = await actions.deleteMaterialIssue(1);
     expect(res?.success).toBe(true);
+    expect(mocks.prismaMock.materialIssue.delete).toHaveBeenCalled();
   });
 });
 
 describe("Rack & WorkOrder & Others", () => {
   it("createWorkOrder succeeds", async () => {
     const res = await actions.createWorkOrder(
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        name: "WO",
-        quantity: 1,
-      }),
+      fdMap({ customerId: 1, projectId: 1, date: DATE, name: "WO", quantity: 1 }),
     );
     expect(res?.success).toBe(true);
   });
   it("updateWorkOrder succeeds", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.workOrder);
     const res = await actions.updateWorkOrder(
       1,
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        name: "WO",
-        quantity: 1,
-      }),
+      fdMap({ customerId: 1, projectId: 1, date: DATE, name: "WO", quantity: 1 }),
     );
     expect(res?.success).toBe(true);
   });
@@ -518,7 +443,7 @@ describe("Rack & WorkOrder & Others", () => {
 });
 
 describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
-  it("createStockAdjustment handles error globally", async () => {
+  async function expectPermissionReject(fnName: string) {
     vi.spyOn(console, "error").mockImplementation(() => {});
     if ((mocks as any).requirePermissionMock)
       (mocks as any).requirePermissionMock.mockRejectedValueOnce(
@@ -531,338 +456,103 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try {
-      await (actions as any).createStockAdjustment(arg1, arg2);
+      await (actions as any)[fnName](arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled();
+    expect((mocks as any).requirePermissionMock.mock.calls[0]?.[0]).toEqual(
+      expect.any(String),
+    );
+  }
+
+  it("createStockAdjustment handles error globally", async () => {
+    await expectPermissionReject("createStockAdjustment");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("processStockAdjustment handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).processStockAdjustment(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("processStockAdjustment");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createInventoryTransfer(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("createInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("processInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).processInventoryTransfer(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("processInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("receiveInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).receiveInventoryTransfer(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("receiveInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createMaterialIssue handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createMaterialIssue(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("createMaterialIssue");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("completeMaterialIssue handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).completeMaterialIssue(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("completeMaterialIssue");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createWorkOrder handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createWorkOrder(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("createWorkOrder");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateWorkOrder handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateWorkOrder(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("updateWorkOrder");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createRack handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createRack(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("createRack");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateRack handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateRack(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("updateRack");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteStockAdjustment handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteStockAdjustment(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("deleteStockAdjustment");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteInventoryTransfer(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("deleteInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteMaterialIssue handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteMaterialIssue(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("deleteMaterialIssue");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteRack handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteRack(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("deleteRack");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateStockAdjustment handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateStockAdjustment(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("updateStockAdjustment");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateMaterialIssue handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateMaterialIssue(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("updateMaterialIssue");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateInventoryTransfer(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("updateInventoryTransfer");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("createRackRow handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createRackRow(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("createRackRow");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("updateRackRow handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateRackRow(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("updateRackRow");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
   it("deleteRackRow handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteRackRow(arg1, arg2);
-    } catch {}
+    await expectPermissionReject("deleteRackRow");
+    expect(mocks.requirePermissionMock).toHaveBeenCalled();
   });
 });
 
 describe("Inventory Transfer Error & Edge Paths", () => {
   it("processInventoryTransfer fails if not found or status not draft", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer, { items: [] });
     mocks.prismaMock.inventoryTransfer.updateMany.mockResolvedValue({
       count: 0,
     });
@@ -911,11 +601,7 @@ describe("Inventory Transfer Error & Edge Paths", () => {
     expect(res2?.success).toBe(false);
     expect(res2?.error).toContain("Transfer tidak ditemukan");
 
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer, { items: [] });
     const res3 = await (actions as any).receiveInventoryTransfer(1);
     expect(res3?.success).toBe(false);
     expect(res3?.error).toContain(
@@ -927,12 +613,7 @@ describe("Inventory Transfer Error & Edge Paths", () => {
 describe("Stock Adjustment Error & Edge Paths", () => {
   it("createStockAdjustment throws on negative actual qty", async () => {
     const res = await (actions as any).createStockAdjustment(
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([{ itemId: 1, newQty: -10, cost: 100 }]),
-      }),
+      saFd({ items: itemsJson([{ itemId: 1, newQty: -10, cost: 100 }]) }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -941,23 +622,12 @@ describe("Stock Adjustment Error & Edge Paths", () => {
   });
 
   it("updateStockAdjustment throws on negative actual qty", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment);
     mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({
       id: 1,
       status: "draft",
     });
-    const res = await (actions as any).updateStockAdjustment(
-      1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        reason: "Test",
-        items: JSON.stringify([{ itemId: 1, newQty: -10, cost: 100 }]),
-      }),
-    );
+    const res = await (actions as any).updateStockAdjustment(1, saFd({ items: itemsJson([{ itemId: 1, newQty: -10, cost: 100 }]) }));
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
       "Kuantitas fisik (actual) tidak boleh negatif",
@@ -965,21 +635,14 @@ describe("Stock Adjustment Error & Edge Paths", () => {
   });
 
   it("updateStockAdjustment fails if status changed inside transaction", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment);
     mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({
       id: 1,
       status: "processed",
     });
     const res = await (actions as any).updateStockAdjustment(
       1,
-      fdMap({
-        warehouseId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, newQty: 10, cost: 100 }]),
-      }),
+      fdMap({ warehouseId: 1, date: DATE, items: itemsJson([{ itemId: 1, newQty: 10, cost: 100 }]) }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -994,7 +657,7 @@ describe("Stock Adjustment Error & Edge Paths", () => {
     });
     const res = await (actions as any).updateStockAdjustment(
       1,
-      fdMap({ warehouseId: 1, date: "2026-06-13" }),
+      fdMap({ warehouseId: 1, date: DATE }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -1003,11 +666,7 @@ describe("Stock Adjustment Error & Edge Paths", () => {
   });
 
   it("processStockAdjustment fails if not found or not draft", async () => {
-    mocks.prismaMock.stockAdjustment.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.stockAdjustment, { items: [] });
     mocks.prismaMock.stockAdjustment.updateMany.mockResolvedValue({ count: 0 });
     mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({
       status: "processed",
@@ -1049,12 +708,7 @@ describe("Stock Adjustment Error & Edge Paths", () => {
 describe("Material Issue Error & Edge Paths", () => {
   it("createMaterialIssue fails if no valid items", async () => {
     const res = await (actions as any).createMaterialIssue(
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([]),
-      }),
+      miFd({ items: itemsJson([]) }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -1063,10 +717,7 @@ describe("Material Issue Error & Edge Paths", () => {
   });
 
   it("updateMaterialIssue succeeds with empty valid items (no items create)", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.materialIssue);
     mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({
       id: 1,
       status: "draft",
@@ -1074,12 +725,7 @@ describe("Material Issue Error & Edge Paths", () => {
     mocks.prismaMock.materialIssue.update.mockResolvedValue({ id: 1 });
     const res = await (actions as any).updateMaterialIssue(
       1,
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: -1, qty: 0 }]),
-      }),
+      miFd({ items: itemsJson([{ itemId: -1, qty: 0 }]) }),
     );
     expect(res?.success).toBe(true);
   });
@@ -1091,7 +737,7 @@ describe("Material Issue Error & Edge Paths", () => {
     });
     const res = await (actions as any).updateMaterialIssue(
       1,
-      fdMap({ warehouseId: 1, projectId: 1, date: "2026-06-13" }),
+      fdMap({ warehouseId: 1, projectId: 1, date: DATE }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -1100,22 +746,14 @@ describe("Material Issue Error & Edge Paths", () => {
   });
 
   it("updateMaterialIssue fails if status changed inside transaction", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.materialIssue);
     mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({
       id: 1,
       status: "processed",
     });
     const res = await (actions as any).updateMaterialIssue(
       1,
-      fdMap({
-        warehouseId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10, cost: 100 }]),
-      }),
+      miFd(),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain(
@@ -1124,11 +762,7 @@ describe("Material Issue Error & Edge Paths", () => {
   });
 
   it("completeMaterialIssue fails if not found or not draft", async () => {
-    mocks.prismaMock.materialIssue.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-      items: [],
-    });
+    seedDraft(mocks.prismaMock.materialIssue, { items: [] });
     mocks.prismaMock.materialIssue.updateMany.mockResolvedValue({ count: 0 });
     mocks.prismaMock.materialIssue.findUnique.mockResolvedValue({
       status: "processed",
@@ -1216,22 +850,14 @@ describe("Other Delete Errors", () => {
 
 describe("Inventory Transfer Remaining Coverage", () => {
   it("updateInventoryTransfer fails if status changed inside transaction", async () => {
-    mocks.prismaMock.inventoryTransfer.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.inventoryTransfer);
     mocks.prismaMock.inventoryTransfer.findUnique.mockResolvedValue({
       id: 1,
       status: "processed",
     });
     const res = await (actions as any).updateInventoryTransfer(
       1,
-      fdMap({
-        sourceWarehouseId: 1,
-        destinationWarehouseId: 2,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 1, qty: 10 }]),
-      }),
+      transferFd(),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain("Hanya transfer draft yang dapat diedit");
@@ -1244,11 +870,7 @@ describe("Inventory Transfer Remaining Coverage", () => {
     });
     const res = await (actions as any).updateInventoryTransfer(
       1,
-      fdMap({
-        sourceWarehouseId: 1,
-        destinationWarehouseId: 2,
-        date: "2026-06-13",
-      }),
+      fdMap({ sourceWarehouseId: 1, destinationWarehouseId: 2, date: DATE }),
     );
     expect(res?.success).toBe(false);
     expect(res?.error).toContain("Hanya transfer draft yang dapat diedit");
@@ -1257,18 +879,10 @@ describe("Inventory Transfer Remaining Coverage", () => {
 
 describe("WorkOrder Coverage", () => {
   it("updateWorkOrder handles item creation with negative/invalid data being filtered", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.workOrder);
     const res = await (actions as any).updateWorkOrder(
       1,
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: -1, qty: 10, cost: 100 }]),
-      }),
+      woFd({}, [{ itemId: -1, qty: 10, cost: 100 }]),
     );
     expect(res?.success).toBe(true);
   });
@@ -1277,31 +891,16 @@ describe("WorkOrder Coverage", () => {
 describe("WorkOrder Item Map Coverage", () => {
   it("createWorkOrder creates items when valid itemId provided", async () => {
     const res = await (actions as any).createWorkOrder(
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([
-          { itemId: 5, qty: 3, cost: 200, description: "d", status: "pending" },
-        ]),
-      }),
+      woFd({}, [{ itemId: 5, qty: 3, cost: 200, description: "d", status: "pending" }]),
     );
     expect(res?.success).toBe(true);
   });
 
   it("updateWorkOrder creates items when valid itemId provided", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "draft",
-    });
+    seedDraft(mocks.prismaMock.workOrder);
     const res = await (actions as any).updateWorkOrder(
       1,
-      fdMap({
-        customerId: 1,
-        projectId: 1,
-        date: "2026-06-13",
-        items: JSON.stringify([{ itemId: 5, qty: 3, cost: 200 }]),
-      }),
+      woFd({}, [{ itemId: 5, qty: 3, cost: 200 }]),
     );
     expect(res?.success).toBe(true);
   });
@@ -1361,8 +960,7 @@ describe("NextRedirectError and Error Fallbacks", () => {
   });
 });
 
-describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
-  const errs = [
+const INVENTORY_ERROR_PATH_FUNCS = [
     "createStockAdjustment",
     "processStockAdjustment",
     "createInventoryTransfer",
@@ -1385,7 +983,28 @@ describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
     "updateRackRow",
     "deleteRackRow",
   ];
-  for (const fn of errs) {
+
+function inventoryErrorArg(fn: string, fd: FormData): any {
+  let arg: any = fd;
+  if (
+    fn === "processStockAdjustment" ||
+    fn === "deleteStockAdjustment" ||
+    fn === "deleteInventoryTransfer" ||
+    fn === "deleteMaterialIssue" ||
+    fn === "deleteRack" ||
+    fn === "completeMaterialIssue" ||
+    fn === "receiveInventoryTransfer" ||
+    fn === "processInventoryTransfer"
+  )
+    arg = 1;
+  if (fn.startsWith("update") || fn === "createWorkOrder") arg = [1, fd];
+  if (fn === "createRackRow") arg = fd;
+  if (fn === "createRack") arg = fd;
+  return arg;
+}
+
+describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
+  for (const fn of INVENTORY_ERROR_PATH_FUNCS) {
     it(`${fn} handles non-redirect error (covers isNextRedirectError false branch + console.error)`, async () => {
       vi.spyOn(console, "error").mockImplementation(() => {});
       // Reset requirePermission and trigger a normal error
@@ -1395,21 +1014,7 @@ describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
         );
       const fd = new FormData();
       fd.append("warehouseId", "1");
-      let arg: any = fd;
-      if (
-        fn === "processStockAdjustment" ||
-        fn === "deleteStockAdjustment" ||
-        fn === "deleteInventoryTransfer" ||
-        fn === "deleteMaterialIssue" ||
-        fn === "deleteRack" ||
-        fn === "completeMaterialIssue" ||
-        fn === "receiveInventoryTransfer" ||
-        fn === "processInventoryTransfer"
-      )
-        arg = 1;
-      if (fn.startsWith("update") || fn === "createWorkOrder") arg = [1, fd];
-      if (fn === "createRackRow") arg = fd;
-      if (fn === "createRack") arg = fd;
+      const arg = inventoryErrorArg(fn, fd);
       const res = await (actions as any)[fn](arg);
       expect(res?.success).toBe(false);
       expect(res?.error).toBe("generic err");
@@ -1418,30 +1023,7 @@ describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
 });
 
 describe("Catch block throw e for NextRedirectError", () => {
-  const errs = [
-    "createStockAdjustment",
-    "processStockAdjustment",
-    "createInventoryTransfer",
-    "processInventoryTransfer",
-    "receiveInventoryTransfer",
-    "createMaterialIssue",
-    "completeMaterialIssue",
-    "createWorkOrder",
-    "updateWorkOrder",
-    "createRack",
-    "updateRack",
-    "deleteStockAdjustment",
-    "deleteInventoryTransfer",
-    "deleteMaterialIssue",
-    "deleteRack",
-    "updateStockAdjustment",
-    "updateMaterialIssue",
-    "updateInventoryTransfer",
-    "createRackRow",
-    "updateRackRow",
-    "deleteRackRow",
-  ];
-  for (const fn of errs) {
+  for (const fn of INVENTORY_ERROR_PATH_FUNCS) {
     it(`${fn} rethrows NextRedirectError`, async () => {
       const redirectErr = new Error("NEXT_REDIRECT");
       (redirectErr as any).digest = "NEXT_REDIRECT_TOKEN";
@@ -1449,22 +1031,91 @@ describe("Catch block throw e for NextRedirectError", () => {
         (mocks as any).requirePermissionMock.mockRejectedValue(redirectErr);
       const fd = new FormData();
       fd.append("warehouseId", "1");
-      let arg: any = fd;
-      if (
-        fn === "processStockAdjustment" ||
-        fn === "deleteStockAdjustment" ||
-        fn === "deleteInventoryTransfer" ||
-        fn === "deleteMaterialIssue" ||
-        fn === "deleteRack" ||
-        fn === "completeMaterialIssue" ||
-        fn === "receiveInventoryTransfer" ||
-        fn === "processInventoryTransfer"
-      )
-        arg = 1;
-      if (fn.startsWith("update") || fn === "createWorkOrder") arg = [1, fd];
-      if (fn === "createRackRow") arg = fd;
-      if (fn === "createRack") arg = fd;
+      const arg = inventoryErrorArg(fn, fd);
       await expect((actions as any)[fn](arg)).rejects.toThrow();
     });
   }
+});
+
+describe("stocktake session (P1-5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["admin"] });
+    // Scope: admin penuh — getWarehouseScope default mock? Set akses dilalui
+    // dengan warehouse scope "all".
+  });
+
+  it("approveStocktakeSession refuses self-approval (independence)", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      warehouseId: 2,
+      status: "review",
+      countedBy: 7,
+    });
+    const res = await actions.approveStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/independen/);
+    expect(mocks.prismaMock.stocktakeSession.update).not.toHaveBeenCalled();
+  });
+
+  it("approveStocktakeSession allows an independent approver", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      warehouseId: 2,
+      status: "review",
+      countedBy: 9,
+    });
+    const res = await actions.approveStocktakeSession(1);
+    expect(res.success).toBe(true);
+    expect(mocks.prismaMock.stocktakeSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 1 } }),
+    );
+  });
+
+  it("postStocktakeSession refuses unapproved sessions", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      warehouseId: 2,
+      status: "review",
+      documentNo: "STK-1",
+      lines: [],
+    });
+    const res = await actions.postStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("remnant (P1-5)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["admin"] });
+  });
+
+  it("consumeRemnant only claims usable rows (atomic)", async () => {
+    const fd = new FormData();
+    fd.set("consumedBy", "WO-9");
+    mocks.prismaMock.remnant.updateMany.mockResolvedValue({ count: 1 });
+    const res = await actions.consumeRemnant(4, fd);
+    expect(res.success).toBe(true);
+    expect(mocks.prismaMock.remnant.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: 4, status: "usable" } }),
+    );
+  });
+
+  it("consumeRemnant refuses an already-consumed row", async () => {
+    const fd = new FormData();
+    fd.set("consumedBy", "WO-9");
+    mocks.prismaMock.remnant.updateMany.mockResolvedValue({ count: 0 });
+    mocks.prismaMock.remnant.findUnique.mockResolvedValue({ status: "consumed" });
+    const res = await actions.consumeRemnant(4, fd);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/consumed/);
+  });
+
+  it("scrapRemnant requires a reason", async () => {
+    const res = await actions.scrapRemnant(4, new FormData());
+    expect(res.success).toBe(false);
+    expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
+  });
 });

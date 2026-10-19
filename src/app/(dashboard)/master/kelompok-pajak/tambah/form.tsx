@@ -33,8 +33,8 @@ export function TaxGroupForm({ taxes }: Props) {
           <Label htmlFor="name">Nama Grup *</Label>
           <Input id="name" name="name" required />
         </div>
-        <div className="flex flex-col gap-1.5">
-          <label className="text-sm font-medium text-foreground">Pajak</label>
+        <fieldset aria-labelledby="tax-options-label" className="flex flex-col gap-1.5">
+          <span id="tax-options-label" className="text-sm font-medium text-foreground">Pajak</span>
           <div className="flex flex-col gap-2">
             {taxes.map((tax) => (
               <label key={tax.id} htmlFor={`tax-${tax.id}`} className="flex items-center gap-2 cursor-pointer">
@@ -43,7 +43,7 @@ export function TaxGroupForm({ taxes }: Props) {
               </label>
             ))}
           </div>
-        </div>
+        </fieldset>
       </div>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
         <Button className="w-full sm:w-auto" type="button" onPress={() => router.back()} >Batal</Button>

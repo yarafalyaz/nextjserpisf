@@ -12,15 +12,17 @@ RUN npm ci --ignore-scripts
 COPY src/ ./src/
 COPY public/ ./public/
 COPY prisma/ ./prisma/
-COPY next.config.ts tsconfig.json postcss.config.mjs next-env.d.ts eslint.config.js prisma.config.ts ./
+COPY scripts/pre-migrate-column-audit.mjs ./scripts/pre-migrate-column-audit.mjs
+COPY next.config.ts tsconfig.json tsconfig.build.json postcss.config.mjs next-env.d.ts eslint.config.mjs prisma.config.ts ./
 
-# Generate Prisma Client
+# Generate Prisma Client (local binary — no npx registry fetch)
 ENV DATABASE_URL="mysql://build:build@localhost:3306/build"
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 
 # Build the Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN NODE_ENV=production npm run build
+RUN NODE_ENV=production npm run build \
+  && npm prune --omit=dev
 
 # Use a smaller Node.js image for production
 FROM node:26-alpine AS runner
@@ -44,6 +46,7 @@ COPY --from=builder --chown=root:root --chmod=755 /app/.next/standalone ./
 COPY --from=builder --chown=root:root --chmod=755 /app/.next/static ./.next/static
 COPY --from=builder --chown=root:root --chmod=755 /app/public ./public
 COPY --from=builder --chown=root:root --chmod=755 /app/prisma ./prisma
+COPY --from=builder --chown=root:root --chmod=755 /app/scripts ./scripts
 COPY --from=builder --chown=root:root --chmod=755 /app/node_modules ./node_modules
 COPY --from=builder --chown=root:root --chmod=755 /app/prisma.config.ts ./
 
@@ -55,5 +58,8 @@ USER nextjs
 
 EXPOSE 3000
 
-# Start the application running migrations first
-CMD ["sh", "-c", "npx prisma db push && node server.js"]
+# Start the application only. Schema changes run in the one-shot `migrate`
+# service (docker-compose.prod.yml), never on every container boot — a
+# restart must not rewrite the production schema, and a failed migration
+# must stop the release instead of booting a half-migrated app.
+CMD ["sh", "-c", "node server.js"]

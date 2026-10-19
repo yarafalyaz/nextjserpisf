@@ -20,8 +20,19 @@ export async function toBaseFactor(tx: Tx, itemId: number, uom: string | null | 
     where: { itemId_code: { itemId, code: uom } },
     select: { factorToBase: true },
   })
-  const factor = conv ? Number(conv.factorToBase) : 1
-  return factor > 0 ? factor : 1
+  // Missing/non-positive conversion → factor 1 with an EXPLICIT warning (never
+  // silent). Throwing here would break legitimate flows: the sales editor
+  // allows inline quick-add of a new UoM master without a per-item conversion
+  // row, and legacy rows may reference a deleted conversion. The caller must
+  // treat the resulting qty as unconverted-entered-unit.
+  const factor = conv ? Number(conv.factorToBase) : Number.NaN
+  if (!conv || !(factor > 0)) {
+    console.warn(
+      `[uom] konversi ${uom} untuk item #${itemId} ${!conv ? "tidak ditemukan" : `tidak valid (${String(conv?.factorToBase)})`} — qty dihitung 1:1 dalam satuan dasar ${item.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+    )
+    return 1
+  }
+  return factor
 }
 
 /** Convert a quantity entered in `uom` to base units. */

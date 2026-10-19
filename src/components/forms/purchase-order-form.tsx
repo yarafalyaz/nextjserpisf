@@ -3,7 +3,7 @@
 
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { purchaseOrderSchema, type PurchaseOrderInput } from "@/lib/validations/form.schemas"
@@ -27,6 +27,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
+
+// P2 idempotency UI: generator key murni di luar render (pola customer-credit-panel).
+function newIdempotencyKey(): string {
+  return crypto.randomUUID()
+}
 
 interface PurchaseOrderFormProps {
   vendors: {
@@ -98,6 +103,9 @@ export function PurchaseOrderForm({
 }: PurchaseOrderFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  // P2 idempotency UI: satu key stabil per submit create (crypto.randomUUID per
+  // submit). Retry/error pakai key sama; sukses ganti key baru.
+  const idempotencyKeyRef = useRef<string>(newIdempotencyKey());
   const [vendorOptions, setVendorOptions] = useState(vendors);
   const [isService, setIsService] = useState<boolean>((order as any)?.isService ?? false);
   const [linkedPR, setLinkedPR] = useState<{
@@ -259,6 +267,9 @@ export function PurchaseOrderForm({
         });
         formData.append("items", JSON.stringify(poItems.map(({ uid: _uid, ...rest }) => rest)));
         formData.append("isService", isService ? "true" : "false");
+        // P2 idempotency UI: key stabil per intent create; retry/error pakai
+        // key sama, sukses ganti baru supaya create berikutnya tak ditolak.
+        if (!order?.id) formData.set("idempotencyKey", idempotencyKeyRef.current);
         const result = order?.id
           ? await updatePurchaseOrder(order.id, formData)
           : await createPurchaseOrder(formData);
@@ -266,6 +277,7 @@ export function PurchaseOrderForm({
           showError(result.error || "Gagal menyimpan data");
           return;
         }
+        if (!order?.id) idempotencyKeyRef.current = newIdempotencyKey();
         showSuccess(
           order?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan",
         );

@@ -248,7 +248,7 @@ export async function updateProjectStageProgress(
   const user = await requirePermission("edit_projects")
 
   if (percentage !== undefined) {
-    if (typeof percentage !== "number" || percentage < 0 || percentage > 100 || isNaN(percentage)) {
+    if (typeof percentage !== "number" || percentage < 0 || percentage > 100 || Number.isNaN(percentage)) {
       throw new Error("Persentase progres harus berupa angka antara 0 dan 100.")
     }
   }

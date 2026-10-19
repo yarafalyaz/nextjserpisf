@@ -48,7 +48,12 @@ const ROOT = join(__dirname, "..", "..")
  * Kalau suatu saat ada field yang benar-benar tidak dibaca, entri di sini WAJIB
  * memuat alasannya, bukan sekadar namanya.
  */
-const KNOWN_UNREAD_FORM_FIELDS: Array<[field: string, reason: string]> = []
+const KNOWN_UNREAD_FORM_FIELDS: Array<[field: string, reason: string]> = [
+  [
+    "periodLockDateDisplay",
+    "Tampil-saja (disabled) di form pengaturan; kunci periode hanya diubah lewat Proses Akhir Bulan (R-09).",
+  ],
+]
 
 function walk(dir: string, out: string[] = []): string[] {
   let entries: string[]
@@ -77,6 +82,10 @@ function collect(): { fields: Map<string, string[]>; schemaKeys: Set<string>; re
   for (const file of files) {
     const text = readFileSync(file, "utf8")
     const rel = file.replace(ROOT + "/", "")
+
+    // Berkas penjaga ini sendiri menyebut nama field di daftar-beku; itu
+    // bukan bukti field dibaca kode produksi.
+    if (rel === "src/__tests__/form-field-wiring.test.ts") continue
 
     if (isFormFile(file)) {
       const names = [

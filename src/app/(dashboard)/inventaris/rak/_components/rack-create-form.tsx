@@ -34,6 +34,9 @@ export function RackCreateForm({ enableAutoCode, warehouses }: RackCreateFormPro
     if (!enableAutoCode || !warehouseId) return
     getNextRackCode(Number(warehouseId)).then((res) => {
       setAutoCode(res.code)
+    }).catch((e) => {
+      // Gagal memuat kode berikutnya — kolom tetap bisa diisi manual.
+      console.warn("[auto-code]", e instanceof Error ? e.message : e)
     })
   }, [warehouseId, enableAutoCode])
 

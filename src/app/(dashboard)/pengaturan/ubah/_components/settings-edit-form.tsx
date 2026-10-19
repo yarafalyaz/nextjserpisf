@@ -679,7 +679,13 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                 <Input id="documentNumberFormat" name="documentNumberFormat" placeholder="(tidak dipakai)" defaultValue={settings.documentNumberFormat || ""} className="w-full" />
               </div>
               <div className="flex flex-col gap-1.5">
-                <AppDatePicker label="Tanggal Kunci Periode" name="periodLockDate" defaultValue={settings.periodLockDate ? (typeof settings.periodLockDate === 'string' ? (settings.periodLockDate as string).split("T")[0] : (settings.periodLockDate as Date).toISOString().split("T")[0]) : ""} className="w-full" />
+                {/* R-09: tampil saja, TIDAK ditulis dari form pengaturan umum.
+                    name diubah supaya FormData tidak lagi mengirim
+                    periodLockDate ke updateSystemSettings; kunci periode
+                    hanya berubah lewat proses akhir bulan
+                    (period-close.actions.ts). */}
+                <AppDatePicker label="Tanggal Kunci Periode" name="periodLockDateDisplay" defaultValue={settings.periodLockDate ? (typeof settings.periodLockDate === 'string' ? (settings.periodLockDate as string).split("T")[0] : (settings.periodLockDate as Date).toISOString().split("T")[0]) : ""} disabled className="w-full" />
+                <p className="text-[10px] text-muted-foreground">Diubah lewat Proses Akhir Bulan, bukan dari form ini.</p>
               </div>
               <div className="flex flex-col gap-3 justify-end">
                 <div className="flex items-center gap-3">

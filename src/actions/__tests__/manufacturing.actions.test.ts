@@ -93,6 +93,7 @@ vi.mock("@/lib/services/period-lock.service", () => ({
 // prisma models and fail every completeWorkOrder case.
 vi.mock("@/lib/services/qc.service", () => ({
   assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+  assertProductionOrderQcCleared: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock("@/lib/auth/warehouse-scope", () => ({
   getWarehouseScope: (...args: any[]) => mocks.warehouseScopeMock(...args),
@@ -302,6 +303,38 @@ describe("Production Order Actions", () => {
     expect(mocks.prismaMock.$executeRaw).toHaveBeenCalledOnce()
   })
 
+  it("refuses PO issue when the linked WO was already consumed via MI (P1-4)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", totalActualCost: 0, workOrderId: 42,
+    })
+    mocks.prismaMock.materialIssue.count.mockResolvedValue(1)
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Pengeluaran Material")
+    expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled()
+  })
+
+  it("allows PO issue when the linked WO has no completed MI (P1-4)", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "confirmed", totalActualCost: 0, workOrderId: 42,
+    })
+    mocks.prismaMock.materialIssue.count.mockResolvedValue(0)
+    mocks.prismaMock.item.findMany.mockResolvedValue([{
+      id: 4, standardCost: 12, purchasePrice: 10, defaultWarehouseId: 5,
+    }])
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.warehouse.findMany.mockResolvedValue([{ id: 5 }])
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 99 })
+    mocks.consumeFifoLayersMock.mockResolvedValue({ consumedCost: 42, shortfall: 0 })
+    mocks.prismaMock.productionOrderMaterial.findFirst.mockResolvedValue(null)
+
+    const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 3 }])
+
+    expect(res.success).toBe(true)
+  })
+
   it("rejects non-positive or invalid issued quantities", async () => {
     const res = await actions.issueMaterial(8, [{ itemId: 4, qty: 0 }])
     expect(res.success).toBe(false)
@@ -397,6 +430,7 @@ describe("Production Order Actions", () => {
     })
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
     mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+    mocks.prismaMock.itemBatch.findMany.mockResolvedValue([{ batchNumber: "MO-008" }])
 
     const res = await actions.completeProductionOrder(8)
 
@@ -432,6 +466,43 @@ describe("Production Order Actions", () => {
         }),
       }),
     )
+  })
+
+  it("checks the QC gate before completing a production order (P1-2)", async () => {
+    const qc = await import("@/lib/services/qc.service")
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 2,
+      totalActualCost: 20, totalStandardCost: 18, workOrderId: 42,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: true, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    const res = await actions.completeProductionOrder(8)
+    expect(res?.success).toBe(true)
+    // Gate PO sendiri + WO induk bila tertaut.
+    expect(vi.mocked(qc.assertProductionOrderQcCleared)).toHaveBeenCalledWith(8, expect.anything())
+    expect(vi.mocked(qc.assertWorkOrderQcCleared)).toHaveBeenCalledWith(42, expect.anything())
+  })
+
+  it("refuses production completion when QC gate rejects (P1-2)", async () => {
+    const qc = await import("@/lib/services/qc.service")
+    vi.mocked(qc.assertProductionOrderQcCleared).mockRejectedValueOnce(
+      new Error("Tidak dapat menyelesaikan PO: masih ada 1 nonconformance (NCR) terbuka yang harus diselesaikan."),
+    )
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 2,
+      totalActualCost: 20, totalStandardCost: 18, workOrderId: null,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: false, trackSerial: false,
+      } },
+    })
+    const res = await actions.completeProductionOrder(8)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("nonconformance")
+    expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled()
   })
 
   it("does not complete an order without a linked finished-goods inventory item", async () => {
@@ -495,6 +566,39 @@ describe("Production Order Actions", () => {
     expect(update.data.totalActualCost).toBe(0)
     // Genealogy is recorded on the final release.
     expect(mocks.prismaMock.productionGenealogy.create).toHaveBeenCalled()
+  })
+
+  it("genealogy final aggregates ALL releases, not the last slice (P1-3)", async () => {
+    // Order 10: release pertama 4 (biaya 40000) sudah lewat; release final 6.
+    // Genealogi harus: qty 10, total = 40000+60000 = 100000 (bukan slice 60000),
+    // batch gabungan kedua release.
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "in_progress", qty: 10, completedQty: 4,
+      totalActualCost: 60000, totalStandardCost: 90000, releasedCost: 40000,
+      product: { inventoryItem: {
+        id: 10, isProduct: true, isActive: true, deletedAt: null,
+        defaultWarehouseId: 5, trackBatch: true, trackSerial: false,
+      } },
+    })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue({ id: 5 })
+    mocks.prismaMock.stockMove.create.mockResolvedValue({ id: 456 })
+    mocks.prismaMock.itemBatch.findMany.mockResolvedValue([
+      { batchNumber: "MO-008-R4" },
+      { batchNumber: "MO-008" },
+    ])
+    mocks.prismaMock.productionOrderMaterial.findMany.mockResolvedValue([])
+
+    const res = await actions.completeProductionOrder(8, [], 6)
+
+    expect(res).toMatchObject({ success: true, isFinal: true })
+    const gen = mocks.prismaMock.productionGenealogy.create.mock.calls.at(-1)[0]
+    expect(gen.data.outputQty).toBe(10)
+    expect(Number(gen.data.totalCost)).toBe(100000)
+    expect(Number(gen.data.unitCost)).toBe(10000)
+    expect(gen.data.outputBatch).toBe("MO-008-R4, MO-008")
+    // Akumulasi biaya di order ikut bertambah.
+    const update = mocks.prismaMock.productionOrder.update.mock.calls.at(-1)[0]
+    expect(Number(update.data.releasedCost)).toBe(100000)
   })
 
   it("accumulates production variance across partial releases (not the remaining-slice vs full-standard)", async () => {

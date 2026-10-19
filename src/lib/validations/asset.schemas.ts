@@ -110,6 +110,10 @@ export const assetSchema = z.object({
   // halaman aset selalu menampilkan "-" walau pengguna memilih mereknya.
   // Catatan nama: field-nya `assetBrandId` (bukan `brandId`).
   assetBrandId: optionalId,
+  // Tipe/model di bawah merek terpilih (`asset_brand_models`). Opsional: merek
+  // tanpa tipe tetap sah, dan validasi kecocokan model↔merek ada di aksi
+  // (model harus milik merek yang dipilih) karena skema tidak kenal relasinya.
+  assetBrandModelId: optionalId,
   groupId: optionalId,
   purchaseDate: optionalDate,
   purchasePrice: optionalNum(0),

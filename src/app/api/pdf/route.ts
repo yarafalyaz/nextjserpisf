@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth/auth"
-import { hasPermission } from "@/lib/auth/permissions"
+import { hasAnyPermission, hasPermission } from "@/lib/auth/permissions"
 import { apiError } from "@/lib/api-response"
 import { parseReportPeriod } from "@/lib/reports/report-period"
 import { reportPdfFilename } from "@/lib/reports/report-export"
@@ -32,15 +32,22 @@ export async function GET(request: Request) {
   if (!session?.user) {
     return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
-  if (!(await hasPermission("view_reports"))) {
-    return apiError("FORBIDDEN", "Akses ditolak")
-  }
-
   const url = new URL(request.url)
   const search = Object.fromEntries(url.searchParams.entries())
   const report = search.laporan ?? ""
   if (!isReportPdfKey(report)) {
     return apiError("BAD_REQUEST", "Laporan tidak didukung")
+  }
+
+  // Laporan gaji/NPWP (data personalia sensitif) butuh view_payroll_reports.
+  // view_reports umum tetap diterima supaya pemegang lama tidak terkunci.
+  const PAYROLL_PDF_KEYS = new Set(["gaji-karyawan", "pph-21", "porsi-gaji", "bukti-potong-pph"])
+  if (PAYROLL_PDF_KEYS.has(report)) {
+    if (!(await hasAnyPermission(["view_payroll_reports", "view_reports"]))) {
+      return apiError("FORBIDDEN", "Akses ditolak")
+    }
+  } else if (!(await hasPermission("view_reports"))) {
+    return apiError("FORBIDDEN", "Akses ditolak")
   }
 
   const definition = REPORTS[report]

@@ -2,6 +2,7 @@
 import NextAuth from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/db/prisma";
 import { peekRateLimit, takeRateLimit } from "@/lib/security/rate-limit";
 
@@ -12,7 +13,13 @@ const EMAIL_LIMIT = { windowMs: 30 * 60 * 1000, max: 15 } as const
 // bcrypt hash (cost 12, same as real hashes) of a random throwaway string. Used
 // to perform equivalent work when the email does not exist, so response time
 // cannot be used to enumerate registered accounts. Not a real credential.
-const DUMMY_PASSWORD_HASH = "$2b$12$/n/40JlEWgcb9E55Lj3QCuecLxKFP9pvaZdJI9wgs3bkZOwepQ9lq"
+// No literal hash in source (secrets:S8215): generated once at first use from
+// random bytes, cached for process lifetime. Lazy so module load stays fast.
+let dummyPasswordHash: string | null = null
+function getDummyPasswordHash(): string {
+  dummyPasswordHash ??= bcrypt.hashSync(randomUUID(), 12)
+  return dummyPasswordHash
+}
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: { strategy: "jwt" },
@@ -66,7 +73,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         // return before any bcrypt work happened).
         const isPasswordValid = await bcrypt.compare(
           credentials.password,
-          user ? user.password : DUMMY_PASSWORD_HASH
+          user ? user.password : getDummyPasswordHash()
         );
 
         if (!user || !isPasswordValid) {

@@ -16,7 +16,13 @@
  * dihapus di blok `finally` — termasuk bila ada langkah yang gagal.
  */
 import { execFileSync } from "node:child_process"
+import { existsSync } from "node:fs"
 import mariadb from "mariadb"
+
+// S4036: CLI lokal project, tanpa npx/PATH. prisma terpasang di
+// node_modules (exact dari lockfile) — dijalankan lewat node yang sama
+// dengan skrip ini (process.execPath, path absolut).
+import { fileURLToPath } from "node:url"
 
 /**
  * URL yang dipakai untuk SEMUA langkah (buat DB scratch → migrate deploy → diff → hapus).
@@ -36,18 +42,34 @@ if (!LANTAI) {
 
 const url = new URL(LANTAI)
 const namaAsli = url.pathname.replace(/^\//, "")
-const namaScratch = `${namaAsli}_migrasi_check` // sengaja tetap: hanya DB ini yang dihapus
+// AUD-TOOL-01: nama scratch unik per run (PID + timestamp), BUKAN nama tetap.
+// Nama tetap + DROP IF EXISTS = run ini bisa menghapus DB milik run lain
+// (atau data beneran bila seseorang menamai DB-nya begitu). Unik = tabrakan
+// praktis mustahil; guard di bawah menolak bila nama sudah terpakai.
+const namaScratch = `${namaAsli}_migrasi_check_${process.pid}_${Date.now().toString(36)}`
+if (!/^[A-Za-z0-9_]+$/.test(namaScratch)) {
+  console.error("Nama scratch tidak sah — batal.")
+  process.exit(2)
+}
 const urlScratch = (() => {
   const u = new URL(LANTAI)
   u.pathname = `/${namaScratch}`
   return u.toString()
 })()
 
+const proyekRoot = fileURLToPath(new URL("..", import.meta.url))
+const prismaCli = `${proyekRoot}node_modules/prisma/build/index.js`
+if (!existsSync(prismaCli)) {
+  console.error("Prisma CLI lokal tidak ditemukan (node_modules/prisma). Jalankan npm ci lebih dulu.")
+  process.exit(2)
+}
+
 function jalankan(args) {
-  return execFileSync("npx", args, {
+  return execFileSync(process.execPath, [prismaCli, ...args], {
+    cwd: proyekRoot,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
-    env: { ...process.env, DATABASE_URL: urlScratch },
+    env: { ...process.env, DATABASE_URL: urlScratch, PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/opt/homebrew/bin" },
   })
 }
 
@@ -60,6 +82,7 @@ const pernyataan = (skrip) =>
 
 let conn
 let gagal = false
+let scratchMilikSendiri = false
 try {
   conn = await mariadb.createConnection({
     host: url.hostname,
@@ -67,17 +90,16 @@ try {
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
   })
-  await conn.query(`DROP DATABASE IF EXISTS \`${namaScratch}\``)
   await conn.query(
     `CREATE DATABASE \`${namaScratch}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,
   )
+  scratchMilikSendiri = true
   console.log(`• DB scratch siap: ${namaScratch}`)
 
-  jalankan(["prisma", "migrate", "deploy"])
+  jalankan(["migrate", "deploy"])
   console.log("• migrate deploy: seluruh migrasi diterapkan")
 
   const diff = jalankan([
-    "prisma",
     "migrate",
     "diff",
     "--from-config-datasource",
@@ -107,7 +129,10 @@ try {
     )
   }
 } finally {
-  if (conn) {
+  // AUD-TOOL-01: hapus hanya bila CREATE di run ini yang membuatnya. Bila
+  // CREATE gagal (nama tabrakan / DB sudah ada), DROP di sini akan menghapus
+  // milik orang lain — jadi hapus hanya bila run ini pemiliknya.
+  if (conn && scratchMilikSendiri) {
     try {
       await conn.query(`DROP DATABASE IF EXISTS \`${namaScratch}\``)
       console.log(`• DB scratch dihapus: ${namaScratch}`)

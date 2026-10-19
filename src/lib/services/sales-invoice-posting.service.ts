@@ -1,5 +1,5 @@
 import type { TxClient } from "@/lib/db/prisma"
-import { deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
+import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 
 /**
  * Reverse all GL + stock side effects of a (possibly posted) sales invoice.
@@ -10,31 +10,36 @@ import { deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook"
  * the new lines).
  *
  * Reverses, atomically within the caller's transaction:
- *  - Physical stock-out: for each StockMove OUT posted by onSalesInvoicePosted,
+ *  - Physical stock-out: for each POSTED StockMove OUT posted by onSalesInvoicePosted,
  *    the global qtyOnHand is restored and a reversing inbound FIFO layer is
  *    created at the same cost basis so per-warehouse availability stays
- *    consistent. The OUT moves are then deleted.
+ *    consistent. P1-7: OUT moves TIDAK dihapus — ditandai `reversed` agar
+ *    histori utuh; hanya move POSTED yang dibalik (idempoten: reversal kedua
+ *    tak menggandakan).
+ *  - Serial: nomor seri yang dijual (tercatat di baris faktur) dan masih
+ *    `used` dikembalikan ke `available`. Tanpa ini serial hilang selamanya
+ *    ("manual correction" sebelumnya).
  *  - Revenue journal (referenceType "SalesInvoice") and COGS journal
- *    ("SalesInvoiceCOGS").
+ *    ("SalesInvoiceCOGS"): P1-7 dibalik via reversal entry (asli REVERSED +
+ *    jurnal lawan), bukan dihapus.
  *  - Optionally the cash-receipt journals of every linked payment
  *    (referenceType "SalesPayment"). Callers that only want to re-price the
  *    invoice (item edit) must keep the payment journals, so they pass
  *    `{ reversePaymentJournals: false }`.
  *
  * No-op for draft invoices (no journals / no stock moves exist yet).
- * Note: serial-tracked items previously marked "used" are not restored to
- * "available" here; manual correction is required for serialized stock.
  */
 export async function reverseSalesInvoicePostingTx(
   tx: TxClient,
   invoiceId: number,
-  options: { reversePaymentJournals?: boolean } = {},
+  options: { reversePaymentJournals?: boolean; userId?: number | null } = {},
 ): Promise<void> {
-  const { reversePaymentJournals = true } = options
+  const { reversePaymentJournals = true, userId = null } = options
+  const reason = `void/edit faktur #${invoiceId}`
 
-  // 1. Restore stock for every OUT move created at posting time.
+  // 1. Restore stock for every POSTED OUT move created at posting time.
   const outMoves = await tx.stockMove.findMany({
-    where: { referenceType: "SalesInvoice", referenceId: invoiceId, impact: "OUT" },
+    where: { referenceType: "SalesInvoice", referenceId: invoiceId, impact: "OUT", status: "posted" },
     select: { id: true, itemId: true, warehouseId: true, qty: true, cost: true },
   })
   const qtyUpdates: Promise<unknown>[] = []
@@ -87,11 +92,34 @@ export async function reverseSalesInvoicePostingTx(
     })
   }
   if (outMoves.length > 0) {
-    await tx.stockMove.deleteMany({ where: { id: { in: outMoves.map((m) => m.id) } } })
+    // P1-7: tandai reversed — histori tetap bisa diaudit; laporan yang
+    // filter status posted (mis. profitability) otomatis mengabaikannya.
+    await tx.stockMove.updateMany({
+      where: { id: { in: outMoves.map((m) => m.id) } },
+      data: { status: "reversed" },
+    });
   }
 
-  // 2. Reverse the revenue + COGS journals.
-  await deleteJournalByReferenceTx(tx, ["SalesInvoice", "SalesInvoiceCOGS"], invoiceId)
+  // 1b. Pulihkan serial yang dijual pada faktur ini (masih `used` → `available`).
+  // Sumber identitas = baris faktur (serialNumbers), bukan tebakan terbaru.
+  const invItems = await tx.salesInvoiceItem.findMany({
+    where: { salesInvoiceId: invoiceId },
+    select: { itemId: true, serialNumbers: true },
+  });
+  for (const line of invItems) {
+    if (line.itemId == null || !Array.isArray(line.serialNumbers)) continue;
+    const names = (line.serialNumbers as unknown[])
+      .map((s) => String(s ?? "").trim())
+      .filter((s) => s.length > 0);
+    if (names.length === 0) continue;
+    await tx.itemSerial.updateMany({
+      where: { itemId: line.itemId, serialNumber: { in: names }, status: "used" },
+      data: { status: "available" },
+    });
+  }
+
+  // 2. Reverse the revenue + COGS journals (entry lawan, bukan hapus).
+  await reverseJournalsByReferenceTx(tx, ["SalesInvoice", "SalesInvoiceCOGS"], invoiceId, reason, userId)
 
   // 3. Reverse the cash-receipt journal of every linked payment (optional).
   if (reversePaymentJournals) {
@@ -100,7 +128,7 @@ export async function reverseSalesInvoicePostingTx(
       select: { id: true },
     })
     if (payments.length > 0) {
-      await deleteJournalByReferenceTx(tx, "SalesPayment", payments.map((p) => p.id))
+      await reverseJournalsByReferenceTx(tx, "SalesPayment", payments.map((p) => p.id), reason, userId)
     }
   }
 }

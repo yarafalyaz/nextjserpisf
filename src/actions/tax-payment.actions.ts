@@ -15,6 +15,7 @@ import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
 import { taxPaymentSchema } from "@/lib/validations/finance.schemas"
+import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 
 const REVALIDATE = "/keuangan/penyetoran-pajak"
 
@@ -143,14 +144,16 @@ export async function deleteTaxPayment(id: number): Promise<TaxPaymentActionResu
 
     await assertPeriodOpen(payment.date)
 
+    let removedFiles: { fileUrl: string; referenceType: string }[] = []
     await prisma.$transaction(async (tx) => {
       if (payment.journalId) {
         await tx.journalEntry.deleteMany({ where: { journalId: payment.journalId } })
-        await tx.transactionAttachment.deleteMany({ where: { referenceType: "Journal", referenceId: payment.journalId } })
+        removedFiles = await deleteTransactionAttachmentsTx(tx, { referenceType: "Journal", referenceId: payment.journalId })
         await tx.journal.delete({ where: { id: payment.journalId } })
       }
       await tx.taxPayment.delete({ where: { id } })
     })
+    await removeAttachmentFiles(removedFiles)
 
     await logActivity("delete", "TaxPayment", id, `Menghapus penyetoran pajak ${payment.documentNo}`)
     revalidatePath(REVALIDATE)

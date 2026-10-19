@@ -62,7 +62,7 @@ describe("buildProfitability", () => {
   it("memperingatkan baris barang berpendapatan tanpa HPP, tetapi tidak menghitung jasa", () => {
     const result = buildProfitability({
       lines: [
-        line({ key: "stock", revenue: 1_000_000, cogs: 0, revenueLinesWithoutCogs: 1, serviceLinesWithoutCogs: 0 }),
+        line({ key: "stock", revenue: 1_000_000, cogs: 0, revenueLinesWithoutCogs: 1, serviceLinesWithoutCogs: 0, stockRevenueWithoutCogs: 1_000_000 }),
         line({ key: "service", label: "JASA", revenue: 500_000, cogs: 0, revenueLinesWithoutCogs: 1, serviceLinesWithoutCogs: 1 }),
       ],
       dimension: "barang",
@@ -72,6 +72,28 @@ describe("buildProfitability", () => {
     expect(result.totals.revenueMissingCogs).toBe(1_000_000)
     expect(texts(result)).toContain("tidak punya HPP")
     expect(profitabilitySummary(result)).toContain("baris tanpa HPP")
+  })
+
+  it("mengakumulasi revenueMissingCogs per baris stok tanpa HPP, bukan se-bucket (R-08)", () => {
+    // Bucket campuran: satu baris stok ber-HPP (2jt) + satu baris stok tanpa HPP (1jt)
+    // + satu baris jasa tanpa HPP (5jt, dikecualikan). Total bucket 8jt,
+    // tapi revenueMissingCogs hanya 1jt.
+    const result = buildProfitability({
+      lines: [
+        line({
+          key: "mixed",
+          revenue: 8_000_000,
+          cogs: 1_200_000,
+          revenueLinesWithoutCogs: 2,
+          serviceLinesWithoutCogs: 1,
+          stockRevenueWithoutCogs: 1_000_000,
+        }),
+      ],
+      dimension: "faktur",
+    })
+
+    expect(result.totals.missingCogsLines).toBe(1)
+    expect(result.totals.revenueMissingCogs).toBe(1_000_000)
   })
 
   it("membedakan 'tidak ada penjualan' dari daftar kosong biasa", () => {

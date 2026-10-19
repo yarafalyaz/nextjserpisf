@@ -13,6 +13,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { ConfirmDownPaymentButton } from "../_components/confirm-dp-button";
+import { CustomerCreditPanel } from "../_components/customer-credit-panel";
 import {
   getPaymentMethodMap,
   resolvePaymentMethodName,
@@ -59,6 +60,23 @@ export default async function DownPaymentDetailPage({
   if (!dp) notFound();
 
   const pmMap = await getPaymentMethodMap();
+
+  // AUD-R4-01: kredit dari DP ini + faktur terbuka pelanggan yang sama
+  // (panel memanggil allocate/refund — rujukan nyata aksi→UI).
+  const dpCredits = await prisma.customerCredit.findMany({
+    where: { OR: [{ sourceType: "DownPayment", sourceId: dp.id }] },
+    orderBy: { id: "desc" },
+  });
+  const openInvoices = await prisma.salesInvoice.findMany({
+    where: {
+      customerId: dp.customerId,
+      status: { not: "cancelled" },
+      paymentStatus: { not: "paid" },
+    },
+    select: { id: true, documentNo: true, grandTotal: true, paidAmount: true },
+    orderBy: { id: "desc" },
+    take: 20,
+  });
 
   return (
     <div className="flex flex-col gap-6">
@@ -150,6 +168,13 @@ export default async function DownPaymentDetailPage({
             }
             colSpan="full"
           />
+        </DetailCard>
+      )}
+
+      {/* AUD-R4-01: panel operasional kredit (alokasi/refund). */}
+      {dpCredits.length > 0 && (
+        <DetailCard title="Kredit Pelanggan dari DP ini">
+          <CustomerCreditPanel credits={dpCredits} invoices={openInvoices} />
         </DetailCard>
       )}
 

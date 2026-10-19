@@ -123,7 +123,10 @@ export async function loadPayablesAging(): Promise<AgingReportView> {
   const items = bills
     .map((bill) => {
       if (!bill.dueDate) return null
-      const outstanding = Number(bill.grandTotal) - Number(bill.paidAmount)
+      // P0-2: sisa = NETO (grandTotal − withholding) − terbayar. Laporan
+      // sebelumnya memakai grandTotal sehingga tagihan ber-PPh tampil sisa
+      // lebih besar dari utang supplier sebenarnya.
+      const outstanding = Number(bill.grandTotal) - Number(bill.withholdingAmount ?? 0) - Number(bill.paidAmount)
       if (outstanding <= 0) return null
       return {
         party: bill.vendor.name,
@@ -164,6 +167,7 @@ export async function loadPayablesTotal(): Promise<AgingReportView> {
       dueDate: b.dueDate,
       grandTotal: Number(b.grandTotal),
       paidAmount: Number(b.paidAmount),
+      withholdingAmount: Number(b.withholdingAmount ?? 0),
     })),
     now,
   )

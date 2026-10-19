@@ -7,6 +7,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { normalizeTransferSelection } from "@/lib/finance/vendor-transfer"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
+import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 
 const REVALIDATE = "/pembelian/transfer-pemasok"
 
@@ -40,6 +41,8 @@ export async function markVendorPaymentsTransferred(formData: FormData): Promise
     const rawDate = String(formData.get("date") ?? "").trim()
     const date = parseDate(rawDate)
     if (!date) return { success: false, error: "Tanggal transfer tidak valid." }
+
+    await assertPeriodOpen(date)
 
     const reference = String(formData.get("reference") ?? "").trim() || null
 
@@ -78,6 +81,16 @@ export async function unmarkVendorPaymentsTransferred(formData: FormData): Promi
 
     const selection = normalizeTransferSelection(formData.getAll("paymentIds").map((value) => String(value)))
     if (selection.error) return { success: false, error: selection.error }
+
+    // Koreksi penanda transfer tetap dijaga period-lock: ambil tanggal
+    // transfer tersimpan, tolak bila berada di periode tertutup.
+    const existing = await prisma.vendorPayment.findMany({
+      where: { id: { in: selection.ids }, deletedAt: null },
+      select: { transferredAt: true },
+    })
+    for (const row of existing) {
+      if (row.transferredAt) await assertPeriodOpen(row.transferredAt)
+    }
 
     const result = await prisma.vendorPayment.updateMany({
       where: { id: { in: selection.ids }, deletedAt: null },

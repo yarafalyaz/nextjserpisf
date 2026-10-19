@@ -7,7 +7,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { parseMoneyAmount, parseLocaleNumber } from "@/lib/utils/parse-money"
 
 const REVALIDATE = "/pembelian/harga-pemasok"
 
@@ -22,10 +22,7 @@ function toMoney(value: number): Prisma.Decimal {
 }
 
 function parseNumber(raw: FormDataEntryValue | null, fallback: number | null = null): number | null {
-  const text = String(raw ?? "").trim()
-  if (text === "") return fallback
-  const value = Number(text.replace(",", "."))
-  return Number.isFinite(value) ? value : null
+  return parseLocaleNumber(raw, fallback)
 }
 
 /** Money fields accept the id-ID shapes ("2.000.000", "2.000.000,50"). */

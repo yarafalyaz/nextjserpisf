@@ -267,9 +267,11 @@ Tingkat MODEL sudah bersih — lihat §4.6. Yang tersisa di tingkat kolom & migr
   (`Attendance.checkIn/outLatitude`, `checkIn/outLongitude`) +
   `CrmTicket.firstResponseAt`/`resolvedAt` — tangkap lokasi di form absensi, tandai waktu
   respons/penyelesaian tiket, atau buang lewat migrasi.
-- Kolom **tanpa rujukan** (`KNOWN_UNUSED`, 4): `ApprovalWorkflowStep.canSkip`,
-  `Asset.assetBrandModelId`, `BankReconciliationItem.clearedDate`, dan
-  `BankStatementLine.matchedType` (rekonsiliasi belum menandai jenis kecocokan).
+- Kolom **tanpa rujukan** (`KNOWN_UNUSED`): **kosong** — gelombang 2 tuntas
+  (2026-10-19, branch kerja): `Asset.assetBrandModelId` tersambung ke form aset,
+  dan `ApprovalWorkflowStep.canSkip`, `BankReconciliationItem.clearedDate`,
+  `BankStatementLine.matchedType` dibuang lewat migrasi
+  `20261019001000_drop_wave2_dead_columns`.
 - `PettyCash.sourceAccountId/expenseAccountId` kolom mati (akun per transaksi tidak bisa
   dipilih dari UI; hook memakai `sourceAccountId ?? cashBankAccountId` setelan).
 - `OvertimeRequest.supervisorApprovedAt` kolom mati (halaman detail membacanya, belum ada

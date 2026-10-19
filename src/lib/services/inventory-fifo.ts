@@ -208,7 +208,7 @@ export async function consumeFifoLayers(
       
       for (const [key, qtyOut] of batchConsumption.entries()) {
         const [batchNumber, whId] = key.split("|")
-        const batchWarehouseId = whId ? parseInt(whId, 10) : null
+        const batchWarehouseId = whId ? Number.parseInt(whId, 10) : null
         
         const batches = batchesData.filter(b => 
           b.batchNumber === batchNumber && 

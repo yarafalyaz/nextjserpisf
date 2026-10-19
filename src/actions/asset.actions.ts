@@ -44,7 +44,7 @@ async function getAssetGlAccounts(category?: AssetGlCategory) {
       accumulatedDepreciationAccountId: true,
     },
   })
-  const env = (key: string) => parseInt(process.env[key] || "0") || 0
+  const env = (key: string) => Number.parseInt(process.env[key] || "0") || 0
   const first = (...candidates: (number | null | undefined)[]) =>
     candidates.find((c) => typeof c === "number" && c > 0) ?? 0
 
@@ -332,6 +332,35 @@ export async function deleteAssetBrand(id: number) {
       return {
         success: false,
         error: `Merek aset masih dipakai ${usedByAssets} aset. Pindahkan asetnya dulu.`,
+      };
+    }
+
+    // Tipe/model (`asset_brand_models.asset_brand_id`) ber-FK RESTRICT ke merek —
+    // hapus merek yang masih punya tipe gagal dengan pesan FK mentah. Dan
+    // `Asset.assetBrandModelId` adalah bare int TANPA relasi FK, jadi hapus tipe
+    // diam-diam meninggalkan ID yatim di aset. Karena itu tolak hapus merek
+    // selama masih ada aset yang menunjuk mereknya ATAU tipenya, dan tolak
+    // selama merek masih punya tipe (kosongkan dulu lewat form ubah merek).
+    const brandModelIds = (
+      await prisma.assetBrandModel.findMany({
+        where: { assetBrandId: id },
+        select: { id: true },
+      })
+    ).map((m) => m.id);
+    const usedByModelAssets =
+      brandModelIds.length > 0
+        ? await prisma.asset.count({ where: { assetBrandModelId: { in: brandModelIds } } })
+        : 0;
+    if (usedByModelAssets > 0) {
+      return {
+        success: false,
+        error: `Merek aset masih dipakai ${usedByModelAssets} aset lewat tipenya. Pindahkan asetnya dulu.`,
+      };
+    }
+    if (brandModelIds.length > 0) {
+      return {
+        success: false,
+        error: `Merek aset masih punya ${brandModelIds.length} tipe/model. Kosongkan dulu lewat Ubah Merek.`,
       };
     }
 
@@ -635,6 +664,21 @@ export async function createAsset(formData: FormData) {
     const acquisitionDate = data.purchaseDate
       ? new Date(data.purchaseDate)
       : new Date();
+    // Tipe/model harus milik merek yang dipilih: tanpa cek ini ID model merek
+    // lain bisa dikirim manual (form dirancang berjenjang, tapi aksi yang
+    // memutuskan — UI bisa dilewati lewat URL/param).
+    if (data.assetBrandModelId != null) {
+      if (data.assetBrandId == null) {
+        return { success: false, error: "Tipe/model membutuhkan merek yang dipilih." };
+      }
+      const model = await prisma.assetBrandModel.findUnique({
+        where: { id: data.assetBrandModelId },
+        select: { assetBrandId: true },
+      });
+      if (!model || model.assetBrandId !== data.assetBrandId) {
+        return { success: false, error: "Tipe/model yang dipilih bukan milik merek ini." };
+      }
+    }
     // Resolve GL accounts from the asset's category mapping (falls back to the
     // global Mapping Akun, then env vars).
     const category = data.categoryId
@@ -653,6 +697,7 @@ export async function createAsset(formData: FormData) {
           code: code,
           categoryId: data.categoryId ?? null,
           assetBrandId: data.assetBrandId ?? null,
+          assetBrandModelId: data.assetBrandModelId ?? null,
           groupId: data.groupId ?? null,
           purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,
           purchaseCost,
@@ -740,6 +785,21 @@ export async function updateAsset(id: number, formData: FormData) {
 
     const purchaseCost = data.purchasePrice ?? 0;
 
+    // Penjagaan model↔merek yang sama dengan createAsset: ID model dikirim
+    // manual tanpa cek ini bisa menautkan aset ke tipe milik merek lain.
+    if (data.assetBrandModelId != null) {
+      if (data.assetBrandId == null) {
+        return { success: false, error: "Tipe/model membutuhkan merek yang dipilih." };
+      }
+      const model = await prisma.assetBrandModel.findUnique({
+        where: { id: data.assetBrandModelId },
+        select: { assetBrandId: true },
+      });
+      if (!model || model.assetBrandId !== data.assetBrandId) {
+        return { success: false, error: "Tipe/model yang dipilih bukan milik merek ini." };
+      }
+    }
+
     // If the asset's acquisition was posted to the GL (Dr Fixed Asset = original
     // cost), the purchaseCost is now an accounting basis, not a free-form field.
     // Changing it would desync the GL: disposeAsset credits Fixed Asset using the
@@ -786,6 +846,7 @@ export async function updateAsset(id: number, formData: FormData) {
         slug: await nextSlug("asset", data.name, { excludeId: id }),
         name: data.name,
         assetBrandId: data.assetBrandId ?? null,
+        assetBrandModelId: data.assetBrandModelId ?? null,
         groupId: data.groupId ?? null,
         categoryId: data.categoryId ?? null,
         purchaseDate: data.purchaseDate ? new Date(data.purchaseDate) : null,

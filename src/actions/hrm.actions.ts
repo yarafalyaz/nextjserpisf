@@ -6,8 +6,11 @@ import { safeAdd, safeSubtract, safeSum } from "@/lib/utils/math";
 import {
   computeBpjsEmployee,
   computePph21Monthly,
+  getStatutoryParams,
+  type StatutoryParams,
 } from "@/lib/services/payroll-statutory.service";
 import { prisma } from "@/lib/db/prisma";
+import type { Prisma } from "@prisma/client";
 import {
   generateDocumentNumber,
   generateDocumentNumberBatch,
@@ -27,6 +30,7 @@ import {
   departmentHolidaySchema,
   workScheduleSchema,
   attendanceSchema,
+  statutoryRuleSchema,
 } from "@/lib/validations/hrm.schemas";
 import {
   computeLateMinutes,
@@ -353,6 +357,7 @@ interface PayrollEstimationResult {
   bpjsHealthEmployee: number;
   bpjsEmploymentEmployee: number;
   pph21: number;
+  statutorySnapshot: Record<string, unknown>;
 }
 
 function assertPayrollDateRange(startDateStr: string, endDateStr: string): void {
@@ -418,6 +423,7 @@ async function computePayrollEstimation(
         select: {
           baseSalary: true,
           maritalStatus: true,
+          dependents: true,
           employeeLoans: {
             where: { status: "active" },
           },
@@ -470,16 +476,22 @@ async function computePayrollEstimation(
     0,
   );
 
-  // 6. Statutory: BPJS (employee portion) + PPh21
+  // 6. Statutory: BPJS (employee portion) + PPh21 — P1-6: params berperiode
+  // dari ruleset (acuan akhir periode), bukan konstanta kode.
   const grossSalary = safeSum(
     [baseSalary, overtimeTotal, appreciationTotal],
     0,
   );
-  const bpjs = computeBpjsEmployee(baseSalary);
+  const statutoryParams = await getStatutoryParams(prisma, new Date(endDateStr));
+  // Estimasi = PREVIEW: fallback 2024 boleh + snapshot mencatat fromFallback
+  // jujur (R3-02). Yang fail-closed = tulis-final (bulk/update) + approve.
+  const bpjs = computeBpjsEmployee(baseSalary, statutoryParams);
   const pph21 = computePph21Monthly(
     grossSalary,
     employee.maritalStatus,
     bpjs.total,
+    employee.dependents ?? 0,
+    statutoryParams,
   );
 
   return {
@@ -500,6 +512,41 @@ async function computePayrollEstimation(
     bpjsHealthEmployee: bpjs.health,
     bpjsEmploymentEmployee: bpjs.employment,
     pph21,
+    statutorySnapshot: buildStatutorySnapshot(
+      statutoryParams,
+      employee.maritalStatus,
+      employee.dependents ?? 0,
+    ),
+  };
+}
+
+/**
+ * P1-6: snapshot parameter statutori yang dipakai satu slip — disimpan di
+ * `payrolls.statutory_snapshot` agar hitungan historis reproduksibel walau
+ * ruleset berubah. `fromFallback: true` = tabel kosong → angka 2024 kode.
+ */
+function buildStatutorySnapshot(
+  params: StatutoryParams,
+  maritalStatus: string | null | undefined,
+  dependents: number,
+): Record<string, unknown> {
+  return {
+    asOf: params.asOf,
+    fromFallback: params.fromFallback,
+    maritalStatus: maritalStatus ?? null,
+    dependents,
+    params: {
+      bpjsHealthEmployeeRate: params.bpjsHealthEmployeeRate,
+      bpjsHealthCeiling: params.bpjsHealthCeiling,
+      bpjsJhtEmployeeRate: params.bpjsJhtEmployeeRate,
+      bpjsJpEmployeeRate: params.bpjsJpEmployeeRate,
+      bpjsJpCeiling: params.bpjsJpCeiling,
+      ptkpSingle: params.ptkpSingle,
+      ptkpMarriedExtra: params.ptkpMarriedExtra,
+      ptkpDependentExtra: params.ptkpDependentExtra,
+      occupationalCostRate: params.occupationalCostRate,
+      occupationalCostCeilingYear: params.occupationalCostCeilingYear,
+    },
   };
 }
 
@@ -554,6 +601,7 @@ interface BulkPayrollEstimation {
   bpjsHealthEmployee: number;
   bpjsEmploymentEmployee: number;
   pph21: number;
+  statutorySnapshot: Record<string, unknown>;
 }
 
 /**
@@ -628,6 +676,7 @@ async function computeBulkPayrollEstimations(
         id: true,
         baseSalary: true,
         maritalStatus: true,
+        dependents: true,
         departmentId: true,
         employeeLoans: { where: { status: "active" } },
       },
@@ -696,6 +745,15 @@ async function computeBulkPayrollEstimations(
   today.setHours(23, 59, 59, 999);
   const evalEnd = rangeEnd < today ? rangeEnd : today;
   const publicHolidaySet = new Set(holidays.map((holiday) => dateKey(holiday.date)));
+  // P1-6: satu params untuk seluruh batch (satu periode) — mesin SAMA dengan single.
+  const bulkStatutoryParams = await getStatutoryParams(prisma, rangeEnd);
+  // AUD-R3-02: bulk sama — tolak fallback di sumber.
+  if (bulkStatutoryParams.fromFallback) {
+    throw new Error(
+      "Ruleset statutori periode ini belum lengkap/valid — hitung massal ditolak. " +
+        "Minta accountant melengkapi ruleset, lalu hitung ulang.",
+    );
+  }
   const departmentHolidaySet = new Map<number, Set<string>>();
   for (const holiday of departmentHolidays) {
     const dates = departmentHolidaySet.get(holiday.departmentId) ?? new Set<string>();
@@ -808,16 +866,18 @@ async function computeBulkPayrollEstimations(
     const dailyRate = totalWorkingDays > 0 ? baseSalary / totalWorkingDays : 0;
     const absentDeduction = Math.round(absentDays * dailyRate);
 
-    // 6. Statutory deductions.
+    // 6. Statutory deductions (mesin sama dengan single).
     const grossSalary = safeSum(
       [baseSalary, overtimeTotal, appreciationTotal],
       0,
     );
-    const bpjs = computeBpjsEmployee(baseSalary);
+    const bpjs = computeBpjsEmployee(baseSalary, bulkStatutoryParams);
     const pph21 = computePph21Monthly(
       grossSalary,
       employee.maritalStatus,
       bpjs.total,
+      employee.dependents ?? 0,
+      bulkStatutoryParams,
     );
 
     result.set(employee.id, {
@@ -838,6 +898,11 @@ async function computeBulkPayrollEstimations(
       bpjsHealthEmployee: bpjs.health,
       bpjsEmploymentEmployee: bpjs.employment,
       pph21,
+      statutorySnapshot: buildStatutorySnapshot(
+        bulkStatutoryParams,
+        employee.maritalStatus,
+        employee.dependents ?? 0,
+      ),
     });
   }
 
@@ -941,6 +1006,7 @@ export async function generateBulkPayroll(
       bpjsHealthEmployee: number;
       bpjsEmploymentEmployee: number;
       pph21: number;
+      statutorySnapshot: Prisma.InputJsonValue;
       netSalary: number;
       totalAmount: number;
       status: string;
@@ -1009,6 +1075,7 @@ export async function generateBulkPayroll(
         bpjsHealthEmployee: est.bpjsHealthEmployee ?? 0,
         bpjsEmploymentEmployee: est.bpjsEmploymentEmployee ?? 0,
         pph21: est.pph21 ?? 0,
+        statutorySnapshot: (est.statutorySnapshot ?? {}) as Prisma.InputJsonValue,
         netSalary: netSalary,
         totalAmount: netSalary,
         status: "draft",
@@ -1124,22 +1191,38 @@ export async function processPayroll(formData: FormData) {
     // it negative) and over-withhold pay. Mirror the estimator's cap.
     const loanDeduction = await capLoanDeduction(prisma, employeeId, v.loanDeduction ?? 0);
 
-    // Statutory: BPJS (employee) + PPh21, computed server-side from base salary.
+    // Statutory: BPJS (employee) + PPh21, computed server-side.
+    // P1-6: params berperiode dari ruleset + snapshot tersimpan.
     const empForTax = employeeId
       ? await prisma.employee.findUnique({
           where: { id: employeeId },
-          select: { maritalStatus: true },
+          select: { maritalStatus: true, dependents: true },
         })
       : null;
     const grossSalary = safeSum(
       [baseSalary, allowances, overtimeTotal, appreciationTotal],
       0,
     );
-    const bpjs = computeBpjsEmployee(baseSalary);
+    const statutoryParams = await getStatutoryParams(prisma, endDate);
+    // AUD-R3-02: single-create sama — tolak fallback di sumber.
+    if (statutoryParams.fromFallback) {
+      throw new Error(
+        "Ruleset statutori periode ini belum lengkap/valid — pembuatan slip ditolak. " +
+          "Minta accountant melengkapi ruleset, lalu hitung ulang.",
+      );
+    }
+    const bpjs = computeBpjsEmployee(baseSalary, statutoryParams);
     const pph21 = computePph21Monthly(
       grossSalary,
       empForTax?.maritalStatus,
       bpjs.total,
+      empForTax?.dependents ?? 0,
+      statutoryParams,
+    );
+    const statutorySnapshot = buildStatutorySnapshot(
+      statutoryParams,
+      empForTax?.maritalStatus,
+      empForTax?.dependents ?? 0,
     );
     const statutory = safeAdd(bpjs.total, pph21, 0);
 
@@ -1185,6 +1268,7 @@ export async function processPayroll(formData: FormData) {
         bpjsHealthEmployee: bpjs.health,
         bpjsEmploymentEmployee: bpjs.employment,
         pph21,
+        statutorySnapshot: statutorySnapshot as Prisma.InputJsonValue,
         netSalary,
         totalAmount,
         paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,
@@ -1295,21 +1379,37 @@ export async function updatePayroll(id: number, formData: FormData) {
     const loanDeduction = await capLoanDeduction(prisma, employeeId, v.loanDeduction ?? 0);
 
     // Statutory: BPJS (employee) + PPh21, computed server-side.
+    // P1-6: params berperiode dari ruleset + snapshot tersimpan.
     const empForTaxUpd = employeeId
       ? await prisma.employee.findUnique({
           where: { id: employeeId },
-          select: { maritalStatus: true },
+          select: { maritalStatus: true, dependents: true },
         })
       : null;
     const grossSalary = safeSum(
       [baseSalary, allowances, overtimeTotal, appreciationTotal],
       0,
     );
-    const bpjs = computeBpjsEmployee(baseSalary);
+    const updStatutoryParams = await getStatutoryParams(prisma, endDate);
+  // AUD-R3-02: update slip sama — tolak fallback di sumber.
+  if (updStatutoryParams.fromFallback) {
+    throw new Error(
+      "Ruleset statutori periode ini belum lengkap/valid — update slip ditolak. " +
+        "Minta accountant melengkapi ruleset, lalu hitung ulang.",
+    );
+  }
+    const bpjs = computeBpjsEmployee(baseSalary, updStatutoryParams);
     const pph21 = computePph21Monthly(
       grossSalary,
       empForTaxUpd?.maritalStatus,
       bpjs.total,
+      empForTaxUpd?.dependents ?? 0,
+      updStatutoryParams,
+    );
+    const updStatutorySnapshot = buildStatutorySnapshot(
+      updStatutoryParams,
+      empForTaxUpd?.maritalStatus,
+      empForTaxUpd?.dependents ?? 0,
     );
     const statutory = safeAdd(bpjs.total, pph21, 0);
 
@@ -1356,6 +1456,7 @@ export async function updatePayroll(id: number, formData: FormData) {
         bpjsHealthEmployee: bpjs.health,
         bpjsEmploymentEmployee: bpjs.employment,
         pph21,
+        statutorySnapshot: updStatutorySnapshot as Prisma.InputJsonValue,
         netSalary,
         totalAmount,
         paymentDate: paymentDateRaw ? new Date(paymentDateRaw) : null,
@@ -1388,6 +1489,19 @@ export async function approvePayroll(payrollId: number) {
 
     if (payroll.status !== "draft") {
       throw new Error("Payroll hanya bisa di-approve dari status draft");
+    }
+
+    // AUD-HRM-01: tolak approve bila slip dihitung dengan fallback 2024.
+    // Fallback = tabel kosong/gagal baca = ruleset belum tervalidasi untuk
+    // periode ini. Approve = finalisasi angka pajak/BPJS — angka 2024 yang
+    // lolos diam-diam adalah kesalahan gaji massal. Snapshot menyimpan
+    // fromFallback persis untuk gate ini.
+    const snapshot = payroll.statutorySnapshot as { fromFallback?: boolean } | null;
+    if (snapshot?.fromFallback) {
+      throw new Error(
+        "Penggajian ini dihitung dengan parameter statutori cadangan (2024). " +
+          "Minta accountant memvalidasi ruleset periode ini dulu, lalu hitung ulang sebelum approve.",
+      );
     }
 
     const claim = await prisma.payroll.updateMany({
@@ -2757,5 +2871,90 @@ export async function deleteAppreciation(id: number) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteAppreciation]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== P1-6: ATURAN STATUTORI PAYROLL ====================
+// Halaman `/sdm/aturan-statutori` adalah SATU-SATUNYA jalur tulis
+// `payroll_statutory_rules`. Perubahan tarif = baris BARU (effectiveFrom baru
+// + tutup baris lama via effectiveTo); edit value baris lama DITOLAK agar
+// snapshot slip historis tetap reproduksibel.
+
+const STATUTORY_RULE_PATH = "/sdm/aturan-statutori";
+
+export async function createStatutoryRule(formData: FormData) {
+  try {
+    await requirePermission("create_payroll");
+    const parsed = parseFormData(statutoryRuleSchema, formData);
+    if (!parsed.success) return { success: false as const, error: parsed.error };
+    const v = parsed.data;
+    const from = new Date(v.effectiveFrom);
+    const to = v.effectiveTo ? new Date(v.effectiveTo) : null;
+    if (to && to <= from) {
+      return { success: false as const, error: "Berlaku sampai harus setelah berlaku sejak" };
+    }
+    const rule = await prisma.payrollStatutoryRule.create({
+      data: {
+        key: v.key,
+        value: v.value,
+        effectiveFrom: from,
+        effectiveTo: to,
+        source: v.source ?? null,
+      },
+    });
+    await logActivity("create", "PayrollStatutoryRule", rule.id, `Aturan ${v.key} sejak ${v.effectiveFrom}`);
+    revalidatePath(STATUTORY_RULE_PATH);
+    return { success: true as const, id: rule.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createStatutoryRule]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function closeStatutoryRule(id: number, formData: FormData) {
+  try {
+    await requirePermission("edit_payroll");
+    const ruleId = requirePositiveId(id, "aturan statutori");
+    const toRaw = (formData.get("effectiveTo") as string | null) ?? "";
+    if (!toRaw) return { success: false as const, error: "Tanggal tutup wajib diisi" };
+    const to = new Date(toRaw);
+    const rule = await prisma.payrollStatutoryRule.findUniqueOrThrow({ where: { id: ruleId } });
+    if (to <= new Date(rule.effectiveFrom)) {
+      return { success: false as const, error: "Tanggal tutup harus setelah berlaku sejak" };
+    }
+    await prisma.payrollStatutoryRule.update({
+      where: { id: ruleId },
+      data: { effectiveTo: to },
+    });
+    await logActivity("update", "PayrollStatutoryRule", ruleId, `Tutup aturan ${rule.key} per ${toRaw}`);
+    revalidatePath(STATUTORY_RULE_PATH);
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[closeStatutoryRule]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function deleteStatutoryRule(id: number) {
+  try {
+    // Katalog payroll tanpa izin delete khusus — pakai edit_payroll.
+    // Baris yang sudah/pernah efektif (histori slip) TIDAK boleh dihapus;
+    // tutup via closeStatutoryRule. Hanya baris masa depan yang bisa hapus.
+    await requirePermission("edit_payroll");
+    const ruleId = requirePositiveId(id, "aturan statutori");
+    const rule = await prisma.payrollStatutoryRule.findUniqueOrThrow({ where: { id: ruleId } });
+    if (new Date(rule.effectiveFrom) <= new Date()) {
+      return { success: false as const, error: "Baris historis/aktif tidak boleh dihapus — tutup dengan tanggal akhir" };
+    }
+    await prisma.payrollStatutoryRule.delete({ where: { id: ruleId } });
+    await logActivity("delete", "PayrollStatutoryRule", id, `Menghapus aturan statutori #${id}`);
+    revalidatePath(STATUTORY_RULE_PATH);
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[deleteStatutoryRule]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useTransition } from "react"
+import { useState, useTransition } from "react"
 import { createAsset, updateAsset } from "@/actions/asset.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button"
 
 interface AssetFormProps {
   categories: { id: number; name: string }[]
-  brands: { id: number; name: string }[]
+  brands: { id: number; name: string; models: { id: number; name: string }[] }[]
   groups?: { id: number; name: string }[]
   asset?: {
     id?: number
@@ -23,6 +23,7 @@ interface AssetFormProps {
     code?: string | null
     categoryId?: number | null
     assetBrandId?: number | null
+    assetBrandModelId?: number | null
     groupId?: number | null
     purchaseDate?: string | null
     purchasePrice?: number | null
@@ -38,6 +39,27 @@ interface AssetFormProps {
 export function AssetForm({ categories, brands, groups = [], asset, generatedCode }: AssetFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
+  // Merek terpilih mengendalikan opsi Tipe/Model: hanya model milik merek itu
+  // yang ditawarkan, dan ganti merek mengosongkan pilihan model yang basi
+  // (kalau tidak, ID model merek lama terkirim bersama merek baru).
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(
+    asset?.assetBrandId ? String(asset.assetBrandId) : null,
+  )
+  const [selectedModelId, setSelectedModelId] = useState<string | null>(
+    asset?.assetBrandModelId ? String(asset.assetBrandModelId) : null,
+  )
+  const modelOptions =
+    brands.find((b) => String(b.id) === selectedBrandId)?.models.map((m) => ({
+      value: String(m.id),
+      label: m.name,
+    })) ?? []
+
+  function handleBrandChange(v: string | null) {
+    setSelectedBrandId(v)
+    // Model milik merek lama tidak berlaku untuk merek baru — kosongkan supaya
+    // ID basi tidak terkirim bersama merek yang baru dipilih.
+    setSelectedModelId(null)
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -81,9 +103,22 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
           <FormSelect
             id="assetBrandId"
             name="assetBrandId"
-            defaultValue={asset?.assetBrandId ? String(asset.assetBrandId) : undefined}
+            value={selectedBrandId}
+            onValueChange={handleBrandChange}
             placeholder="Pilih Merek"
             options={brands.map(b => ({ value: String(b.id), label: b.name }))}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="assetBrandModelId">Tipe / Model</Label>
+          <FormSelect
+            id="assetBrandModelId"
+            name="assetBrandModelId"
+            value={selectedModelId}
+            onValueChange={setSelectedModelId}
+            placeholder={selectedBrandId ? (modelOptions.length > 0 ? "Pilih Tipe / Model" : "Merek ini belum punya tipe") : "Pilih merek dulu"}
+            options={modelOptions}
+            disabled={!selectedBrandId || modelOptions.length === 0}
           />
         </div>
         <div className="flex flex-col gap-1.5">

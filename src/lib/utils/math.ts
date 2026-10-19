@@ -37,7 +37,7 @@ export function safeRound(
   decimals: number = 0
 ): number {
   const num = parseNumber(value);
-  if (isNaN(num) || !isFinite(num)) return 0;
+  if (Number.isNaN(num) || !Number.isFinite(num)) return 0;
   
   // Use exponential notation to avoid JS floating-point inaccuracies
   // e.g. safeRound(1.005, 2) -> 1.01
@@ -60,7 +60,7 @@ export function safeRound(
 
   // Already in exponential form (e.g. 1e-7, 1e+21)
   const base = str.slice(0, eIndex);
-  const exponent = parseInt(str.slice(eIndex + 1), 10);
+  const exponent = Number.parseInt(str.slice(eIndex + 1), 10);
   const newExponent = exponent + decimals;
   const shifted = Number(base + "e" + newExponent);
   const rounded = Math.round(shifted);
@@ -73,7 +73,7 @@ export function safeRound(
   // The rounded value itself overflowed into exponential form
   const rEIndex = roundedStr.indexOf("e");
   const rBase = roundedStr.slice(0, rEIndex);
-  const rExponent = parseInt(roundedStr.slice(rEIndex + 1), 10);
+  const rExponent = Number.parseInt(roundedStr.slice(rEIndex + 1), 10);
   return Number(rBase + "e" + (rExponent - decimals));
 }
 

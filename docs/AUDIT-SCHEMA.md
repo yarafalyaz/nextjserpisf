@@ -3,9 +3,12 @@
 **Status (akhir sesi):** sebagian temuan sudah **ditutup** (lihat §0). Sisanya menunggu
 keputusan pemilik produk, didaftarkan di bagian **Keputusan yang menunggu**.
 
-> **Pembaruan 2026-10-18.** Dua keluarga temuan besar sudah **tuntas**: (a) §3 gelombang 1 —
-> kesebelas kolom skalar sudah dibuang, gelombang 2 menyisakan **empat** kolom; (b) §5 —
-> "17 aksi tanpa pemanggil UI" ditindaklanjuti habis (8 dihapus, 9 disambungkan).
+> **Pembaruan 2026-10-19 (branch kerja).** Gelombang 2 §3 kini **tuntas**: keenam kolom
+> sudah ditutup — `BankStatement.totalDebits`/`totalCredits` dihitung ulang dari
+> barisnya, `Asset.assetBrandModelId` tersambung ke form aset, dan
+> `ApprovalWorkflowStep.canSkip` / `BankReconciliationItem.clearedDate` /
+> `BankStatementLine.matchedType` dibuang lewat migrasi
+> `20261019001000_drop_wave2_dead_columns`. `KNOWN_UNUSED` kosong.
 > Rincian per item ada di bagian masing-masing dan di **Keputusan yang menunggu**.
 
 **Cara memeriksa:** setiap nama field/kolom dicari sebagai kata utuh di `src/`, `scripts/`,
@@ -93,12 +96,15 @@ Semua di atas sudah hilang dari `schema.prisma` dan tidak lagi muncul di daftar-
 | Model | Kolom | Status |
 | --- | --- | --- |
 | `BankStatement` | `totalDebits`, `totalCredits` | **DITUTUP (2026-10-18)**: dihitung ulang dari barisnya (`recalcBankStatementTotals`, `src/actions/finance.actions.ts`) di dalam transaksi yang sama dengan create/update/delete `BankStatementLine`; dikunci `finance.actions.test.ts` |
-| `ApprovalWorkflowStep` | `canSkip` | mati — `/pengaturan/workflow` belum mengeksposnya |
-| `Asset` | `assetBrandModelId` | mati — form aset hanya memilih `assetBrandId` (merek); tautan aset → model belum ada di UI |
-| `BankReconciliationItem` | `clearedDate` | mati — pencocokan menulis `matched: true`, belum ada "tanggal clear" |
-| `BankStatementLine` | `matchedType` | mati — rekonsiliasi belum menandai jenis kecocokan |
+| `ApprovalWorkflowStep` | `canSkip` | **DIBUANG (2026-10-19, branch kerja)**: 0 rujukan kode produk — form `/pengaturan/workflow` tak mengeksposnya, `workflowStepSchema` tak punya field itu, engine `approveStep` tak membacanya; mengarang semantik skip = data audit palsu (migrasi `20261019001000_drop_wave2_dead_columns`) |
+| `Asset` | `assetBrandModelId` | **DITUTUP (2026-10-19, branch kerja)**: form aset kini punya dropdown "Tipe / Model" berjenjang dari merek (`AssetForm` + query `models` di halaman tambah/ubah), `assetSchema` menerima + `createAsset`/`updateAsset` menulis + MENOLAK model bukan milik merek terpilih; detail aset menampilkan Merek + Tipe; `deleteAssetBrand` menolak bila merek masih dipakai aset langsung/lewat tipe atau masih punya tipe (`assetBrandModelId` bare int tanpa FK — hapus diam-diam = ID yatim); dikunci `asset.actions.test.ts` 9 tes baru + prune `KNOWN_UNUSED` |
+| `BankReconciliationItem` | `clearedDate` | **DIBUANG (2026-10-19, branch kerja)**: 0 rujukan kode produk — tak satu pun aksi menulisnya; aksi `match` hanya menulis `matched` boolean di item; `cleared` tetap (matematika outstanding `completeReconciliation`) (migrasi `20261019001000_drop_wave2_dead_columns`) |
+| `BankStatementLine` | `matchedType` | **DIBUANG (2026-10-19, branch kerja)**: 0 rujukan kode produk — jenis kecocokan derivable dari `BankReconciliationItem.type` + `journalEntryId` (migrasi `20261019001000_drop_wave2_dead_columns`) |
 
-Empat kolom gelombang 2 itulah isi `KNOWN_UNUSED` di `src/__tests__/schema-usage.test.ts`
+Gelombang 2 kini **tuntas**: `KNOWN_UNUSED` di `src/__tests__/schema-usage.test.ts` kosong
+(tersisa hanya komentar riwayat), dan tak ada lagi kolom mati yang menunggu keputusan.
+
+Keenam kolom gelombang 2 itulah yang PERNAH mengisi `KNOWN_UNUSED` di `src/__tests__/schema-usage.test.ts`
 (dua arah: kolom mati baru memerahkan tes, dan menambal/membuang salah satunya juga).
 
 ## 4. (riwayat) `updatedBy`
@@ -257,9 +263,8 @@ lebih baik dibuktikan di browser/database daripada disimpulkan dari bacaan kode.
 2. ~~**Seed memalsukan status** (§5e)~~ — **sudah ditutup** (lihat §5e).
 3. **Skema tak terpakai** — ~~11 kolom §3~~ — **gelombang 1 tuntas** (kesebelasnya dibuang
    lewat `20261016220000_drop_unused_hook_columns` + `20261016230000_drop_uom_conversion_factor`).
-   Sisa keputusan tinggal **empat kolom gelombang 2** (§3): `ApprovalWorkflowStep.canSkip`,
-   `Asset.assetBrandModelId`, `BankReconciliationItem.clearedDate`, `BankStatementLine.matchedType`
-   — implementasikan atau buang lewat migrasi; daftar-bekunya (`KNOWN_UNUSED`) berarah dua.
+   Sisa keputusan gelombang 2: **tidak ada** — gelombang 2 tuntas (2026-10-19,
+   branch kerja): keempat kolom di bawah sudah ditutup/dibuang, lihat §3.
 4. ~~**Usulan `ci.yml`**~~ — **sudah diterapkan** (`db push` → `migrate deploy`, dua job).
    Terbukti: migrasi jalan dari DB kosong, `migrate status` up-to-date, drift 0, seed jalan,
    **suite E2E penuh hijau di skema hasil migrasi** (1063 lulus).
@@ -354,7 +359,8 @@ murni soal **niat fitur** ("masih berencana atau tidak"), bukan soal UI — jauh
 **Tindak lanjut (2026-10-16): diputuskan BUANG** — kesebelasnya sudah hilang dari `schema.prisma`
 lewat `20261016220000_drop_unused_hook_columns` (10 kolom) +
 `20261016230000_drop_uom_conversion_factor` (`conversionFactor`, setelah 6 barisnya terbukti
-hanya default `1.000000`). Sisa keputusan pindah ke empat kolom gelombang 2 (§3).
+hanya default `1.000000`). Gelombang 2 (§3) kini tuntas — tak ada sisa keputusan
+di kelompok ini.
 
 **Kesimpulan yang konsisten untuk kesembilannya**: tidak ada satu pun yang bisa "dibuang begitu saja";
 selalu ada **jejak UI yang menunggunya** (tombol, filter, label, atau bagian riwayat). Jadi pilihannya

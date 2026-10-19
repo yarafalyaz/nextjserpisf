@@ -25,6 +25,8 @@ export interface PayableBill {
   dueDate: Date | null
   grandTotal: number
   paidAmount: number
+  /** PPh dipotong — sisa ke supplier = grandTotal − withholding − paid. */
+  withholdingAmount?: number
 }
 
 export interface PayableBillRow extends PayableBill {
@@ -68,8 +70,9 @@ export function buildPayablesSummary(bills: PayableBill[], asOf: Date): Payables
   let totalPaid = 0
 
   for (const bill of bills) {
-    const outstanding = safeSubtract(bill.grandTotal, bill.paidAmount, 2)
-    totalBilled = safeAdd(totalBilled, bill.grandTotal, 2)
+    // P0-2: sisa NETO — konsisten dengan jurnal (Cr AP neto).
+    const outstanding = safeSubtract(safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2), bill.paidAmount, 2)
+    totalBilled = safeAdd(totalBilled, safeSubtract(bill.grandTotal, bill.withholdingAmount ?? 0, 2), 2)
     totalPaid = safeAdd(totalPaid, bill.paidAmount, 2)
 
     if (outstanding <= 0) continue

@@ -41,6 +41,12 @@ export interface ProfitLineInput {
   revenueLinesWithoutCogs: number
   /** Di antaranya yang memang jasa (HPP-nya emang tidak ada). */
   serviceLinesWithoutCogs: number
+  /**
+   * Σ pendapatan baris STOK tanpa HPP pada kelompok ini (jasa dikecualikan).
+   * Opsional supaya pemanggil lama tanpa rincian per-baris tetap jalan
+   * (fallback: seluruh pendapatan kelompok bila ada baris stok tanpa HPP).
+   */
+  stockRevenueWithoutCogs?: number
 }
 
 export interface ProfitabilityTotals {
@@ -106,9 +112,13 @@ export function buildProfitability(input: {
     totals.revenue += line.revenue
     totals.cogs += line.cogs
     // Hanya baris yang bukan jasa dianggap "HPP hilang" (jasa memang tanpa HPP).
+    // revenueMissingCogs akumulasi per-BARIS stok tanpa HPP, bukan se-bucket:
+    // bucket berisi campuran baris ber-HPP + tanpa-HPP tidak boleh menyeret
+    // seluruh pendapatan bucket. Pemanggil yang tak kirim rincian per-baris
+    // (stockRevenueWithoutCogs undefined) pakai fallback lama = line.revenue.
     const stockableWithoutCogs = line.revenueLinesWithoutCogs - line.serviceLinesWithoutCogs
     if (stockableWithoutCogs > 0) {
-      totals.revenueMissingCogs += line.revenue
+      totals.revenueMissingCogs += line.stockRevenueWithoutCogs ?? line.revenue
       totals.missingCogsLines += stockableWithoutCogs
     }
     return {

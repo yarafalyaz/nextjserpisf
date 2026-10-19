@@ -11,7 +11,6 @@
     "build": "rm -rf .next && next build",
     "start": "node scripts/prepare-standalone.mjs && PORT=3001 node .next/standalone/server.js",
     "lint": "eslint",
-    "db:push": "npx prisma db push",
     "db:pull": "npx prisma db pull",
     "db:generate": "npx prisma generate",
     "db:seed": "npx tsx prisma/seed.ts",

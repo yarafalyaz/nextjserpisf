@@ -1,0 +1,137 @@
+# Laporan Eksekusi Hermes — Audit & Hardening ERP Ironsmith Fabrication
+
+**Repo:** `github.com/yarafalyaz/nextjserpisf` · **Branch kerja:** `hermes/ironsmith-audit` (HEAD `main` = `9176b4f4`) · **Bahasa UI/dok:** Indonesia
+
+## A. Baseline
+
+| Item | Hasil |
+|---|---|
+| Commit HEAD | `9176b4f4` (feat hpp proyek) |
+| Branch | `hermes/ironsmith-audit` (baru, dari `main`) |
+| Worktree | bersih kecuali `reports/` untracked |
+| `npx tsc --noEmit` | 0 error |
+| `npm run lint` | bersih |
+| Migrasi terakhir | `20261019000100_vendor_bill_project` |
+| CI | `.github/workflows/ci.yml`: lint → unit → e2e-setup (MariaDB 10.11) → E2E 4 shard; `TZ=Asia/Jakarta` |
+| DB integrasi lokal | kontainer `silengkap-e2e-db` (MariaDB 10.11, `yara_erp`, port 3310) |
+
+## B. Register temuan
+
+| ID | Severity | File/baris | Status | Akar masalah | Perbaikan | Tes regresi |
+|---|---|---|---|---|---|---|
+| RV-P0-1 | P0 | `down-payment.hook.ts` jalur lahir invoice | FIXED (`aea6241c`) | Invoice lahir hanya alokasi DP pemicu; verified DP sebelumnya hilang dari paidAmount → AR overstate | Loop alokasi SEMUA verified DP (marker notes per nomor DP, idempoten); paidAmount = total teralokasi; paymentDate per DP; kelebihan > grandTotal → notes kredit pelanggan | `down-payment-review` 4/4 baru (terfalsifikasi) |
+| RV-P0-2 | P0 | `down-payment.hook.ts` existingInv + retry | FIXED (`aea6241c`) | existingInv tulis status lifecycle; retry panggil onSalesInvoicePosted tanpa gate izin/approval/period-lock | Confirmation hanya paidAmount+paymentStatus; retry = return; impor hook dibuang | `down-payment-review` 4/4 |
+| RV-P0-3 | P0 | `docker-compose.prod.yml` + `docs/RILIS-PRODUKSI.md` | FIXED (`aea6241c` + `9a7a904f`) | Review duga password tak masuk URL migrate — ternyata URL interpolasi DB_USER/DB_PASSWORD/DB_NAME utuh (single source .env) | Dok pola + URL-encode + urutan rilis; audit kolom pra-migrate; migrate deploy disposable sukses + P1000 kredensial salah | deployment-safety 8/8; smoke migrate OK |
+| RV-DROP | Risiko | migrasi 20261019000900/1000 (4 kolom DROP) | MITIGATED (`9a7a904f`) | Nol rujukan kode ≠ bukti DB prod kosong; belum ada backup/restore terdokumentasi | `pre-migrate-column-audit.sh` baca-only (gagal = rilis gagal); E2E lulus; disposisi per kolom butuh owner + backup/restore prod butuh Yara | audit E2E LULUS; falsifikasi ZZProbe → GAGAL |
+| P0-1a | P0 | `sales.actions.ts:710,719,722` | FIXED (`033e2a25`) | create buat DP `draft` lalu panggil received+confirmed dalam tx yang sama — tak ada tahap verifikasi terpisah | create catat draft saja; confirm = received+confirmed atomik via tombol existing | `down-payment-threshold` 4/4 (terfalsifikasi) |
+| P0-1b | P0 | `down-payment.hook.ts:448-449,489` | FIXED (`033e2a25`) | DP pertama langsung buat invoice `posted` + panggil `onSalesInvoicePosted` (revenue/COGS/stock-out) dalam tx yang sama | Invoice hanya bila CONFIRMED ≥50% (sen-integer), lahir DRAFT; posting manual | `down-payment-threshold` + `down-payment-multi` 9/9 |
+| P0-1c | P0 | `sales.actions.ts:690-697` + grep `0.5/50%/threshold` nihil | FIXED (`033e2a25`) | Satu-satunya cap kumulatif = 100% grandTotal; ambang 50% tak ada di `src` | Ambang `ceil(grandTotal/2)` sen; draft/cancelled tak dihitung | `down-payment-threshold` (draft tak dihitung) |
+| P0-2a | P0 | `purchase.actions.ts:1003,1024` | FIXED (`987e3a72`) | `createVendorBill` simpan `draft` lalu panggil `onVendorBillPosted` dalam tx sama | Draft murni; confirm satu-satunya titik pengakuan | purchase +1 (create tanpa jurnal) |
+| P0-2b | P0 | `aging-reports-data.ts:117-118,153-154`, `document-status.ts:10-11` | FIXED (`987e3a72`) | Laporan AP filter posted/partial/paid sementara GL akui draft → selisih AP vs GL | Draft tanpa jurnal → filter laporan kini benar | purchase +1 |
+| P0-2c | P0 | `purchase.actions.ts:1178` vs `:1331-1332` | FIXED (`987e3a72`) | `balanceDue=grandTotal-withholding` saat confirm, tapi update bayar pakai `grandTotal-nextPaid` → sisa palsu, tak pernah lunas sekali bayar | Sisa & batas alokasi = NETO − terbayar | purchase +1 (balanceDue 900rb) + `payables-withholding` 4/4 (terfalsifikasi) |
+| P0-2d | P0 | `aging-reports-data.ts:101,126`, `payables-summary.ts:71` | FIXED (`987e3a72`) | Laporan pakai grandTotal-paidAmount, abaikan withholding | Aging/summary/ringkasan pakai neto | `payables-withholding` 4/4 |
+| P0-3 | P0 | `inventory.actions.ts:182-274`, `approval-workflow.service.ts:68-80`, `stock-adjustment.hook.ts:224-231` | FIXED (`502fc723`) | Adjustment tanpa approval eksplisit; `assertApproved` lolos bila tanpa record; hook isi approvedBy = pemroses | create request + process assert (pola Expense/Asset); hook tanpa self-approve | inventory +2, baseline selaras (terfalsifikasi) |
+| P0-4 | P0 | `Dockerfile:59` | FIXED (`68fbeea9`) | `CMD npx prisma db push && node server.js` — tiap boot prod ubah skema; CI sudah `migrate deploy` | CMD hanya `node server.js`; layanan `migrate` sekali-jalan + image pin `${IMAGE_TAG}`; tag build tanggal-SHA | `deployment-safety` 3/3 (terfalsifikasi) |
+| P1-1 | P1 | `sales-return.hook.ts:121-169`, `stock-adjustment.hook.ts:172-200` | FIXED (`44e21889`) | Retur jual: `SalesReturnItem` tanpa kolom serial/batch; layer FIFO tanpa `batchNumber`; serial diambil dari `used` terbaru bukan fisik kembali. Adjustment IN batch-tracked tanpa identitas lot (`itemBatch`/`batchNumber` 0 rujukan). Transfer sudah OK | Kolom identitas + wajib tracked; hook revive serial disebut saja; layer+lot batch eksplisit; form kolom Serial/Batch | retur 7, adjustment +2 (terfalsifikasi), drift 0 |
+| P1-2 | P1 | `manufacturing.actions.ts` `completeProductionOrder` vs `:1251` | FIXED (`bc7fa5a1`) | `completeWorkOrder` panggil gate QC; `completeProductionOrder` nol rujukan QC — release FG tanpa cek inspeksi/NCR | Gate PO sendiri + WO induk (dalam tx); opt-in sama | qc +3, manufacturing +2 (terfalsifikasi) |
+| P1-3 | P1 | `manufacturing.actions.ts:1077-1096`, `schema.prisma:1996` | FIXED (`3730b481`) | Genealogi satu record final: `outputQty=orderQty` + serial final + `outputBatch=documentNo` + biaya slice final (urutan 4 lalu 6: qty 10, serial 6 terakhir, biaya slice 6). Costing per-release sudah proporsional | Kolom `released_cost` + agregat serial/batch/biaya semua release | manufacturing +1 (terfalsifikasi), drift 0 |
+| P1-4 | P1 | `schema.prisma:1788-1814`, `manufacturing.actions.ts:666-805` | FIXED (`df1402f2`) | Intra-jalur aman (atomic claim, idempoten, `completeWorkOrder` tak konsumsi ulang). Celah antar-jalur: `MaterialIssue` tanpa `productionOrderId`; material bisa keluar via MI (WO) dan `issueMaterial` (PO tertaut) tanpa guard silang | Guard dua arah: PO tolak bila MI jalan; MI tolak bila PO sudah konsumsi (klaim ke draft) | manufacturing +2, inventory +1 (terfalsifikasi) |
+| P1-5 | P1 | `inventaris/opname/*`, `stock-reconciliation.ts`, `schema.prisma` | FIXED (`72d6f328`) | Opname single-pass → satu draft adjustment; tanpa sesi/snapshot/recount/freeze. Model Stocktake/Remnant/Offcut/Scrap nol | Sesi bertahap (snapshot→recount→approve independen→posting live-basis) + remnant/scrap + 2 halaman | finalize 5 + sesi 3 + remnant 3 (terfalsifikasi), drift 0 |
+| P1-6 | P1 | `payroll-statutory.service.ts:1-42`, `schema.prisma:2373-2418` | FIXED (`516df6e7`) | Tarif 2024 hardcoded, tanggungan 0; tanpa ruleset `effectiveFrom`; `Payroll` tanpa snapshot; `Employee` tanpa jumlah tanggungan. Angka 2026 butuh konfirmasi akuntan | Ruleset berperiode + snapshot slip + dependents; single/bulk satu mesin; halaman aturan; angka 2026 NEEDS CONFIRMATION | rules 7 + hrm +1 + aksi 5 (terfalsifikasi), drift 0 |
+| P1-7 | P1 | `sales-invoice-posting.service.ts:90`, `accounting.hook.ts` `deleteJournalByReferenceTx` | FIXED (`90311278`) | Period lock + reverseJournal umum OK. Void/edit faktur HAPUS `stockMove`/baris jurnal (bukan reversal); serial tak dipulihkan; TOCTOU close-vs-posting | Move → `reversed`; jurnal → reversal entry idempoten + lock periode asal; serial pulih; re-post lewati REVERSED | posting.service 6 + journal-reversal 3 (terfalsifikasi) |
+| P1-8 | P1 | `idempotency.ts:57-68` | FIXED (`276916de`) | Reclaim key expired via findUnique+update — dua request bersamaan sama-sama lolos | `updateMany` bersyarat atomik; kalah → duplikat | idempotency +1 race (terfalsifikasi) |
+| P2-1 | P2 | `e2e/purchase-crud.spec.ts` | FIXED (`bb51d5ca`) | Tanpa rantai PO→GR→bill→payment dengan asersi jurnal/stok DB | `purchase-chain.spec.ts`: tombol sungguhan + movement IN, layer FIFO, jurnal seimbang, alokasi, bill paid sisa 0 | E2E 2 passed DB nyata |
+| P2-2 | P2 | `e2e/sales-flow.spec.ts`, `penjualan-posting-faktur.spec.ts` | FIXED (`0456c2e2`) | Posting hanya asersi status UI; tanpa asersi jurnal/stok DB; tanpa rantai DP→invoice→payment→return | `sales-chain.spec.ts`: posting + bayar lunas + retur sebagian; jurnal AR+COGS seimbang, movement OUT, paid, stok 10→8→9 | E2E 2 passed DB nyata |
+| P2-3 | P2 | `src/app/api/cron/` 5 route + `src/__tests__/cron-route-guard.test.ts` | FIXED (branch kerja, `2aecde5c`) | Rekomendasi audit tinggal sweep penuh: `proxy.ts` melewatkan `/api/cron` sehingga route cron baru tanpa guard lolos diam-diam | Penjaga `cron-route-guard` 2/2: tiap `route.ts` cron wajib panggil `isValidCronRequest(` (helper fail-closed + constant-time) | guard 2/2 (terfalsifikasi: mutasi hapus guard 1 route → 1 MERAH menyebut berkasnya, pulihkan → HIJAU; catatan: cek substring polos lolos mutasi — pakai `isValidCronRequest(`) |
+| P2-4 | P2 | `storage.ts`, `docker-compose.prod.yml` | FIXED (`eddb1cde`) | Tanpa magic-byte (MIME client saja); `db` publish 3309 + password default di repo | assertMagicBytes sebelum tulis; port DB internal; password wajib `:?` | storage +2, deploy-guard +2 (terfalsifikasi) |
+| P2-5 | P2 | `README.md:21` vs `package.json:5-6` vs `Dockerfile:2` | FIXED (`c59e8229`) | Node 20+ vs engines ^26 vs node:26 mismatch. `db push` npm script tersisa tapi tak di startup | README → 26+; script db:push dihapus | deploy-guard +2 |
+| R-2 | Risiko | `crm.actions.ts` `updateTicket` + `schema-usage.test.ts` SEED_ONLY_COLUMNS | FIXED (`43880238`, branch kerja) | `CrmTicket.firstResponseAt/resolvedAt` hanya diisi skrip seed `seed-hrm-crm-e2e.ts` — alur produk tak pernah menulisnya, sehingga SLA tiket di DB nyata selalu NULL | `updateTicket` isi otomatis di server: keluar dari `open` → `firstResponseAt`, masuk `resolved/closed` → `resolvedAt` (sekali, tak dioverwrite); komentar tak menyentuh | `crm.actions.test.ts` +2 (terfalsifikasi: cabut blok → 1 MERAH, pulihkan → 24/24 HIJAU) |
+| R-3 | Risiko | `vendor-price.actions.ts` `parseNumber` + form `minQty` `inputMode="decimal"` | FIXED (`37a32c9e`, branch kerja) | Parser lokal hanya ganti koma→titik: `Number("1.000")` = 1 tanpa error — minQty 1000 tersimpan sebagai 1, keunikan (vendor,item,minQty) rusak diam-diam | Normalisasi id-ID selaras `parseMoneyAmount` (titik ribuan, koma desimal) | `vendor-price.actions.test.ts` 4/4 baru (terfalsifikasi: cabut normalisasi → 2 MERAH, pulihkan → HIJAU) |
+| R-4 | Risiko | `parse-money.ts` `parseLocaleNumber` + `vendor-price.actions.ts` `parseNumber` | FIXED (`53a0567f`, branch kerja) | Salinan normalisasi id-ID lokal (warisan R-3) — salinan ganda menyimpang seiring waktu | `parseLocaleNumber(raw, fallback)` di `parse-money.ts`; `parseMoneyAmount` delegasi; `parseNumber` lokal jadi delegasi satu baris | `parse-money` +2 (terfalsifikasi: fallback→null memerahkan 1 tes, pulihkan → 14/14 HIJAU) |
+| R-5 | Risiko | `vendor-price-form.tsx` `inputMode="decimal"` | FIXED (`d9de19dc`, branch kerja) | Input Minimal Jml mentah: "1.000" tampil tanpa pemisah; nilai mentah sampai ke server (hanya selamat karena R-3/R-4). Terakhir dari `grep inputMode="decimal"` di `src` — kini nol | `CurrencyInput` + hidden input angka polos; parse server tak berubah | vendor-price 4/4 + parse-money 10/10 + form-field-wiring 2/2; E2E `operational-crud` fill `#minQty` pola sama dengan `#price` |
+| R-6 | Risiko | `master/departemen\|jabatan\|kelompok-pajak/tambah/page.tsx` + `page-action-permission-parity.test.ts` | FIXED (`c34deb98`, branch kerja) | 3 halaman tambah memakai guard `edit_*` padahal aksi create menuntut `create_*` (pola sama temuan §4 #1) — peran sah (create tanpa edit) ditolak di form | Guard = izin create aksi (`create_departments`, `create_positions`, `create_taxes`); CREATE_PAGE_CASES 5→9 | parity 6/6 (terfalsifikasi: kembalikan 1 guard → 1 MERAH, pulihkan → HIJAU) |
+| R-7 | Risiko | `sales.actions.ts` proofImage (create+update DP) + `storage.ts` `assertMagicBytes` | FIXED (`ad97b38e`, branch kerja) | 2 callsite bukti DP hanya validasi ekstensi/nama kiriman klien — skrip berekstensi .jpg lolos ke `public/uploads/proofs` (stored-XSS satu origin; celah kelas P2-4 yang terlewat di jalur lokal ini) | `assertMagicBytes` terpusat SEBELUM `writeFile` di kedua jalur (MIME dari ekstensi whitelist) | sales.actions 137/137 (+2 tolak php-berekstensi-jpg dan script-berekstensi-png; terfalsifikasi: cabut cek jadi 1 MERAH, pulihkan jadi HIJAU) |
+| R-8 | Risiko | `vendor-bill-form.tsx` + `petty-cash-form.tsx` + `transaction-attachment.service.test.ts` | FIXED (`6447b9ce`, branch kerja) | 2 form render `FormAttachmentUpload` (hidden `attachmentIds`, unggah `referenceId=0`) tetapi `onSubmit` tak meneruskannya — aksi sudah klaim via `attachPendingTransactionAttachments`, jadi berkas yatim permanen (disk + baris DB `referenceId=0` tanpa penyapu) | Teruskan `attachmentIds` dari hidden input (pola payment/expense/journal-form); tes klaim +1 (`where.uploadedBy` dijaga) | klaim 3/3 + form-field-wiring 2/2 (terfalsifikasi: mutasi `referenceId: 0` → 1 MERAH, mutasi `uploadedBy` → 2 MERAH, pulih HIJAU) |
+| R-9 | Risiko | `src/app/api/cron/route.ts` task `sweep-orphan-attachments` | FIXED (branch kerja) | Lanjutan R-8: baris `referenceId=0` yang tak pernah diklaim (form dibatalkan) menumpuk selamanya — tak ada penyapu untuk berkas yatim kedaluwarsa | Task cron baru: sapu batch 500 baris `referenceId=0` lebih tua dari 24 jam (fileUrl diparse pola berjangkar + guard traversal + hapus DB terkunci `referenceId: 0` anti-klaim-balap); ikut default task set | cron route +3 (terfalsifikasi: hapus `referenceId: 0` dari where → 1 MERAH, pulihkan → 34/34 HIJAU) |
+| R-10 | Risiko | 7 hapus dokumen (`finance/sales/bank-transfer/purchase-advance/tax-payment`) + `transaction-attachment.service.ts` + route hapus `[id]` | FIXED (branch kerja) | Hapus dokumen buang baris DB tapi berkas disk yatim selamanya. Bonus: `split("/").pop()` meruntuhkan traversal SEBELUM guard path — guard tak pernah melihatnya | Helper dua-fase `deleteTransactionAttachmentsTx` (baca+hapus baris atomic dalam tx) + `removeAttachmentFiles` (unlink pasca-commit, fileUrl pola berjangkar, gagal-unlink = log bukan throw); 7 callsite disambung; pola sama di cron-sweep + route `[id]` | klaim 3→7 (terfalsifikasi: longgarkan where baca → 1 MERAH, pulih → 7/7 HIJAU) |
+| R-11 | Risiko | `finance.actions.ts` + detail `rekonsiliasi-bank/[slug]` + migrasi `20261019000800` | FIXED (`16a9cf53`, branch kerja) | Rekonsiliasi tak bisa dipakai: `matchReconciliationLine` tanpa pemanggil UI; item penyesuaian (outstanding deposit/check) tanpa jalur tulis; skema menuntut `bankStatementLineId` NOT NULL untuk baris yang tak menunjuk koran | 2 aksi baru (`createReconciliationAdjustment` + `unmatchReconciliationLine`, guard draft + `manage_bank_reconciliation`) + detail jadi 3 kartu kerja (3 komponen baru) + kolom nullable | finance 134/134 (+7 baru, terfalsifikasi); silent-failure 10/10 (2 entri R-9/R-10, terfalsifikasi hapus→2 MERAH→pulih HIJAU) |
+| R-12 | RBAC | `finance.actions.ts` 4 aksi recon + detail `[slug]` | FIXED (`5d71694e`, branch kerja) | Aksi menegakkan `post_journals` sementara halaman + registry + seed memakai `manage_bank_reconciliation` — peran sah (manage tanpa post) ditolak di server walau tombol tampil; parity guard tak mencakup modul keuangan | Keempat aksi menuntut `manage_bank_reconciliation`; +1 tes assert izin | finance 135/135 (terfalsifikasi: kembalikan post jadi 1 MERAH, pulih HIJAU) |
+| R-10b | Risiko | `sales.actions.test.ts` mock + route `upload/attachments/[id]` | FIXED (`872bed6f`, branch kerja) | R-10 menambah unlink tanpa mock (2 tes sales merah); route DELETE pakai `return` telanjang saat fileUrl tak cocok pola — handler kembalikan undefined (500 tanpa badan), baris DB tak terhapus | unlink ke mock fs/promises; blok unlink dalam `if (filename && ...)` agar fileUrl aneh lewati unlink tapi tetap hapus DB + 200 | suite penuh 351 berkas / 4208 tes HIJAU (terfalsifikasi: kembalikan return jadi 2 MERAH, pulih jadi HIJAU) |
+| DM-2 | Kode-mati | `prisma/schema.prisma` `BankStatementLine.balance` + migrasi `20261019000900` | FIXED (branch kerja) | Tak pernah ditulis aksi (create/update hanya amount+debit+credit; default 0.00) dan tak pernah dibaca produk/laporan (saldo akhir = header `closingBalance` via `recalcBankStatementTotals`); DB E2E nyata: kolom ada, 0 baris — drop aman | Hapus baris skema + migrasi idempoten (pola 2026101621/22, teruji jalan di E2E) | tsc 0, lint 0, schema-usage 5/5, finance.actions 135/135; falsifikasi ZZProbe basi → MERAH → pulih HIJAU (catatan: penjaga kata-batas buta pada nama kolom generik — butuh audit tulis-vs-baca manual) |
+| DM-1 | Kode-mati | `approval-workflow.service.ts` + `validations/schemas.ts` + `validations/finance.schemas.ts` | FIXED (`9f503ed7`, branch kerja) | knip: `resubmitApproval` (wrapper 1 baris tanpa pemanggil), `employeeSchema` duplikat basi di schemas.ts (tanpa dependents PTKP/superRefine; employee-form pakai form.schemas), `updateJournalSchema` (jalur ubah jurnal validasi inline, skema tak dipakai) | Hapus ketiga export; grep nol rujukan pasca-hapus | tsc 0 error, lint 0 error, 17 berkas/361 tes HIJAU |
+| DM-4 | Kode-mati | schema.prisma + migrasi 20261019001000_drop_wave2_dead_columns + schema-usage.test.ts + AUDIT-SCHEMA.md | FIXED (branch kerja, 735092b6) | Sisa 3 kolom mati gelombang-2 KNOWN_UNUSED: ApprovalWorkflowStep.canSkip, BankReconciliationItem.clearedDate, BankStatementLine.matchedType - ketiganya 0 rujukan kode produk | Ketiganya DIBUANG: canSkip tanpa konsep skip di engine; clearedDate tanpa penulis (cleared tetap utk matematika outstanding); matchedType derivable dari item.type+journalEntryId; prune KNOWN_UNUSED hingga kosong + sinkron komentar basi (706a580f) | validate+generate OK; drift 0 utk 3 kolom; tsc 0; lint 0 error (1 warning pre-existing); schema-usage 5/5, finance 135/135, approval 40/40 |
+| DM-3 | Kode-mati→fitur | `asset.actions.ts` + `asset.schemas.ts` + form/tambah/ubah/detail aset + `schema-usage.test.ts` + `AUDIT-SCHEMA.md` | FIXED (branch kerja) | `Asset.assetBrandModelId` bare int tanpa relasi, nol jalur tulis (form aset hanya pilih merek) — kolom mati gelombang-2 `KNOWN_UNUSED` | Dropdown "Tipe / Model" berjenjang (opsi per merek, ganti merek reset model, combobox tanpa clear = model opsional tak bisa dilepas); skema terima + create/update tulis + TOLAK model bukan milik merek / model tanpa merek; detail tampil Merek + Tipe (resolve manual 2 query paralel); `deleteAssetBrand` tolak 3 lapis (aset→merek, aset→tipe, merek masih punya tipe); prune `KNOWN_UNUSED` (guard berarah dua memerah saat perbaikan mendarat) | tsc 0, lint 0 error (1 warning pre-existing), schema-usage+form-wiring+action-wiring+remount+asset 104/104; falsifikasi: hapus tulis modelId → 2 MERAH → pulih 92/92 HIJAU |
+| R-1 | Risiko | `accounting.hook.ts` 11 hook + `expense.hook.ts` + `inventory-transfer.hook.ts` + `purchase-return.hook.ts` | FIXED (`25cfff10`) | Rekomendasi audit rekonsiliasi §6: skip idempotensi diam — pemanggil tak bedakan "sudah diproses" vs "baru diproses" di log produksi | 26 cabang catat console.info (dokumen + nomor jurnal); guard `idempotency-logging` 3/3 berarah dua | guard 3/3 + hook terkait 76/76 (terfalsifikasi) |
+
+## C. Perubahan berkas
+
+| Commit | Berkas | Tujuan |
+|---|---|---|
+| `68fbeea9` | `Dockerfile` | CMD tanpa `db push` |
+| `68fbeea9` | `docker-compose.prod.yml` | layanan `migrate` + pin `${IMAGE_TAG}` |
+| `68fbeea9` | `scripts/build-amd64.sh` | tag immutable tanggal-SHA |
+| `68fbeea9` | `src/__tests__/deployment-safety.test.ts` | penjaga (baru, terfalsifikasi) |
+| `033e2a25` | `src/actions/sales.actions.ts` | create draft saja; confirm 2-tahap atomik |
+| `033e2a25` | `src/lib/hooks/down-payment.hook.ts` | ambang 50% + invoice draft + paymentDate aktual |
+| `033e2a25` | `src/lib/hooks/__tests__/down-payment-threshold.test.ts` | 4 tes ambang (baru, terfalsifikasi) |
+| `033e2a25` | `src/lib/hooks/__tests__/down-payment-multi.test.ts` | selaras perilaku baru |
+| `987e3a72` | `src/actions/purchase.actions.ts` | draft murni; sisa & batas alokasi neto |
+| `987e3a72` | `src/lib/reports/aging-reports-data.ts` + `payables-summary.ts` + `ar-ap-summary-data.ts` | sisa neto di 3 laporan |
+| `987e3a72` | `src/actions/__tests__/purchase.actions.test.ts` | +2 tes (tanpa jurnal; balanceDue neto) |
+| `987e3a72` | `src/lib/reports/__tests__/payables-withholding.test.ts` | 4 tes skenario dokumen (baru, terfalsifikasi) |
+| `502fc723` | `src/actions/inventory.actions.ts` | request saat create + assert saat process |
+| `502fc723` | `src/lib/hooks/stock-adjustment.hook.ts` | tanpa self-approve |
+| `502fc723` | `src/actions/__tests__/inventory.actions.test.ts` + `src/lib/hooks/__tests__/stock-adjustment-baseline.test.ts` | +2 tes & selaras (terfalsifikasi) |
+| `bc7fa5a1` | `src/lib/services/qc.service.ts` | gate generik + PO |
+| `bc7fa5a1` | `src/actions/manufacturing.actions.ts` | gate di completeProductionOrder |
+| `bc7fa5a1` | `src/lib/services/__tests__/qc.service.test.ts` + `src/actions/__tests__/manufacturing.actions.test.ts` | +5 tes (terfalsifikasi) |
+| `3730b481` | `prisma/schema.prisma` + `prisma/migrations/20261019000200_*` | kolom `released_cost` |
+| `3730b481` | `src/actions/manufacturing.actions.ts` | akumulasi + agregat genealogi |
+| `3730b481` | `src/actions/__tests__/manufacturing.actions.test.ts` | +1 agregat (terfalsifikasi) |
+| `276916de` | `src/lib/utils/idempotency.ts` + `__tests__/idempotency.test.ts` | reclaim atomik + tes race |
+| `df1402f2` | `src/actions/manufacturing.actions.ts` + `inventory.actions.ts` | guard silang dua arah |
+| `df1402f2` | `src/actions/__tests__/manufacturing.actions.test.ts` + `inventory.actions.test.ts` | +3 tes (terfalsifikasi) |
+| `44e21889` | `prisma/schema.prisma` + `prisma/migrations/20261019000300_*` + `20261019000400_*` | kolom identitas retur+adjustment |
+| `44e21889` | `src/actions/sales.actions.ts` + `sales-return.hook.ts` + `stock-adjustment.hook.ts` + form + halaman ubah | identitas eksplisit |
+| `44e21889` | `sales-return-uom.test.ts` + `stock-adjustment-baseline.test.ts` | 9 tes (terfalsifikasi) |
+| `90311278` | `src/lib/hooks/accounting.hook.ts` | `reverseJournalsByReferenceTx` + idempoten aktif |
+| `90311278` | `src/lib/services/sales-invoice-posting.service.ts` | move reversed + serial pulih |
+| `90311278` | `sales-invoice-posting.service.test.ts` + `journal-reversal.test.ts` | 9 tes (terfalsifikasi) |
+| `516df6e7` | `prisma/schema.prisma` + `prisma/migrations/20261019000500_*` | ruleset + snapshot + dependents |
+| `516df6e7` | `payroll-statutory.service.ts` + `hrm.actions.ts` + `master.actions.ts` + skema + form + halaman aturan + nav | mesin berperiode |
+| `516df6e7` | `payroll-statutory-rules.test.ts` + `hrm.actions.test.ts` + `hrm-statutory-rules.test.ts` | 13 tes (terfalsifikasi) |
+| `72d6f328` | `prisma/schema.prisma` + `prisma/migrations/20261019000600_*` + `20261019000700_*` | sesi opname + remnant |
+| `72d6f328` | `stocktake-finalize.ts` + `inventory.actions.ts` + halaman sesi/sisa + nav + slug | alur bertahap |
+| `72d6f328` | `stocktake-finalize.test.ts` + `inventory.actions.test.ts` | 11 tes (terfalsifikasi) |
+| `eddb1cde` | `storage.ts` + `docker-compose.prod.yml` | magic-byte + compose |
+| `eddb1cde` | `storage.test.ts` + `deployment-safety.test.ts` | 4 tes (terfalsifikasi) |
+| `c59e8229` | `README.md` + `package.json` + `deployment-safety.test.ts` | Node konsisten + tanpa db:push |
+| `bb51d5ca` | `e2e/purchase-chain.spec.ts` + seed blok 12 + tambah GR | rantai beli E2E (2 passed DB nyata) |
+| `0456c2e2` | `e2e/sales-chain.spec.ts` + seed akun retur E2E-4100 | rantai jual E2E (2 passed DB nyata) |
+|| `ad97b38e` | `src/actions/sales.actions.ts` + `src/actions/__tests__/sales.actions.test.ts` | magic-byte bukti DP |
+| (uncommitted) | `docs/HERMES-EXECUTION-REPORT.md` | laporan ini |
+| PORT-2 | Sinkron | `finance.schemas.ts` + 4 aksi keuangan + `button.tsx`/`process-button.tsx`/`safe-image.tsx` | FIXED (`a8c6a85e`, branch kerja) | Branch audit ketinggalan 4 commit main: purchaseAdvance/bankTransfer/taxPayment tanpa max-length + tanggal `new Date()` zona-proses + tanggal kalender fiktif lolos; cheque type/direction sampah diam-diam jadi giro/in; Button/ProcessButton tanpa aria-busy, SafeImage tanpa prop responsive | Gabung: port 4 skema Zod + parseFormData + WIB-midnight; TIGA assertPeriodOpen cheque DIPERTAHANKAN (main menghapusnya = regresi, port mentah ditolak); isValidTaxPeriod diganti taxPeriod setara | 28 tes port + suite penuh 367 file/4392 tes; tsc 0; lint 0 error (4 warning pre-existing); grep e2e nihil |
+
+## D. Migrasi/perbaikan data
+
+(belum ada)
+
+## E. Laporan tes
+
+- Suite penuh: 351 berkas / 4218 tes HIJAU (vitest `--maxWorkers=4`).
+- `npx tsc --noEmit`: 0 error. `npm run lint`: 0 error (1 warning pre-existing milik sesi lain).
+- E2E rantai beli (`purchase-chain`) + rantai jual (`sales-chain`): 2+2 passed di DB nyata (silengkap-e2e-db).
+- Suite penuh terkini: 352 berkas / 4223 tes HIJAU; `npm run build` sukses.
+- Migrasi dari DB kosong: `migrate deploy` sukses (67 migrasi) di DB disposable `yara_empty_smoke`.
+
+## F. Risiko tersisa
+
+- §7 butuh pemilik: UAT bisnis, backup/restore prod, rekonsiliasi GL vs subledger di data nyata, angka payroll 2026 (NEEDS ACCOUNTANT CONFIRMATION).
+- Branch kerja belum di-push (aturan: push hanya bila pemilik izinkan).
+
+## G. Aksi berikutnya
+
+1. Lanjut hardening domain berikut (satu commit per domain).
+2. Push branch kerja + buka PR review bila pemilik izinkan.
+
+| PORT-1 | Sinkron | `expense-category.actions.ts` + `finance.schemas.ts` + `tax-payment.actions.ts` + `quick-add-select.tsx`/`combobox.tsx` | FIXED (`d32df23b`, branch kerja) | Branch audit ketinggalan 5 commit main: expenseCategory tanpa max-length + `Number\|\|0` garbage→0; masa pajak fiktif 2026-13/2026-00; quick-add a11y orphan label/hint | Port 4 commit (overtime-form skip: identik; cheque 7ed1c8d1 SENGAJA skip — audit pakai hand-parse + assertPeriodOpen, Zod tanpa period lock = regresi) | 15/15 (expense 5 + tax-period 3 + QAS 7); tsc 0; lint 0 error (4 warning pre-existing) |

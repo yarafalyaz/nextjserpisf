@@ -31,6 +31,7 @@ vi.mock("@/lib/db/prisma", () => ({
       createMany: (...a: unknown[]) => entryCreateManyMock(...a),
     },
     $transaction: (...a: unknown[]) => transactionMock(...a),
+    $executeRaw: vi.fn().mockResolvedValue(1),
   },
 }))
 vi.mock("@/lib/services/period-lock.service", () => ({
@@ -83,13 +84,20 @@ beforeEach(() => {
   })
   // claim succeeds
   journalUpdateManyMock.mockResolvedValue({ count: 1 })
-  // wire transaction
-  transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
-    cb({
-      journal: { create: journalCreateMock, update: journalUpdateMock },
-      journalEntry: { createMany: entryCreateManyMock },
-    })
-  )
+  // wire transaction: lock → re-read → claim → reversal, all inside one tx.
+  // The outer prisma.journal mocks double as the in-tx client (same pattern
+  // as finance.actions.test.ts, whose $transaction passes prismaMock itself).
+  const txClient = {
+    $executeRaw: vi.fn().mockResolvedValue(1),
+    journal: {
+      findUniqueOrThrow: journalFindUniqueOrThrowMock,
+      updateMany: journalUpdateManyMock,
+      update: journalUpdateMock,
+      create: journalCreateMock,
+    },
+    journalEntry: { createMany: entryCreateManyMock },
+  }
+  transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) => cb(txClient))
   journalCreateMock.mockResolvedValue({ id: 99 })
   journalUpdateMock.mockResolvedValue({ id: 7 })
   entryCreateManyMock.mockResolvedValue({ count: 2 })
@@ -123,21 +131,10 @@ describe("reverseJournal", () => {
     expect(created.data.referenceId).toBe(7)
   })
 
-  it("rolls the REVERSING claim back to POSTED when the reversal tx throws", async () => {
-    // First call to journalUpdateMany = the claim (succeeds). Second call =
-    // the rollback inside the inner catch (must run to keep journal retryable).
-    let claimCount = 0
-    journalUpdateManyMock.mockImplementation(async (args: { data: { status: string } }) => {
-      if (args.data.status === "REVERSING") {
-        claimCount++
-        return { count: 1 }
-      }
-      if (args.data.status === "POSTED") {
-        return { count: 1 }
-      }
-      return { count: 0 }
-    })
-
+  it("rolls the tx back when the reversal body throws (atomic claim+reversal)", async () => {
+    // The claim now lives INSIDE the same tx as the reversal: a tx failure
+    // rolls both back atomically. No outer claim + compensating restore
+    // exists anymore — the journal stays POSTED and retryable by rollback.
     // Make the inner tx throw
     transactionMock.mockImplementation(async () => {
       throw new Error("simulated tx failure")
@@ -145,36 +142,15 @@ describe("reverseJournal", () => {
 
     const result = await reverseJournal(7)
     expect(result.success).toBe(false)
-    expect(claimCount).toBe(1)
-
-    // Verify the rollback updateMany was called to restore status POSTED
-    const restoreCall = journalUpdateManyMock.mock.calls.find(
-      (c) => (c[0] as { data: { status: string } }).data?.status === "POSTED"
-    )
-    expect(restoreCall).toBeTruthy()
-    expect((restoreCall?.[0] as { where: { status: string } }).where).toEqual({
-      id: 7,
-      status: "REVERSING",
-    })
+    expect(result.error).toContain("simulated tx failure")
+    // Nothing committed: no reversal journal row
+    expect(journalCreateMock).not.toHaveBeenCalled()
   })
 
-  it("rolls the REVERSING claim back to POSTED when the period is closed (regression: bug left journal stuck in REVERSING)", async () => {
+  it("leaves the journal POSTED when the period is closed (atomic rollback, retryable)", async () => {
     // Simulate: an admin clicks Reverse on a journal whose transactionDate
     // belongs to a period that has since been closed. assertPeriodOpen throws
-    // AFTER the claim has already flipped POSTED -> REVERSING. The bug:
-    // assertPeriodOpen was outside the inner rollback try/catch, so the
-    // journal was left permanently in REVERSING (invisible to GL reports
-    // and no longer reversible, since the claim requires POSTED).
-    let rollbackCallSeen = false
-    journalUpdateManyMock.mockImplementation(async (args: { data: { status: string } }) => {
-      if (args.data.status === "REVERSING") return { count: 1 }
-      if (args.data.status === "POSTED") {
-        rollbackCallSeen = true
-        return { count: 1 }
-      }
-      return { count: 0 }
-    })
-
+    // INSIDE the tx — the tx rolls back, the journal stays POSTED, retryable.
     assertPeriodOpenMock.mockRejectedValueOnce(
       new Error("Periode akuntansi sudah ditutup")
     )
@@ -183,28 +159,17 @@ describe("reverseJournal", () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain("ditutup")
 
-    // The fix must restore the claim so the journal is retryable.
-    expect(rollbackCallSeen).toBe(true)
+    // The claim + reversal both rolled back: no reversal journal committed.
+    expect(journalCreateMock).not.toHaveBeenCalled()
   })
 
-  it("rolls the REVERSING claim back to POSTED when generateDocumentNumber throws", async () => {
-    // The sequence-generator is also a DB-touching step that can fail (unique
-    // collision retries, sequence exhaustion, etc.). If it throws after the
-    // claim, the same rollback must apply.
-    let rollbackCallSeen = false
-    journalUpdateManyMock.mockImplementation(async (args: { data: { status: string } }) => {
-      if (args.data.status === "REVERSING") return { count: 1 }
-      if (args.data.status === "POSTED") {
-        rollbackCallSeen = true
-        return { count: 1 }
-      }
-      return { count: 0 }
-    })
-
+  it("leaves the journal POSTED when generateDocumentNumber throws (atomic rollback)", async () => {
+    // The sequence-generator failure also happens INSIDE the tx — rollback
+    // keeps the journal POSTED and retryable, no compensating restore needed.
     generateDocumentNumberMock.mockRejectedValueOnce(new Error("seq boom"))
 
     const result = await reverseJournal(7)
     expect(result.success).toBe(false)
-    expect(rollbackCallSeen).toBe(true)
+    expect(journalCreateMock).not.toHaveBeenCalled()
   })
 })

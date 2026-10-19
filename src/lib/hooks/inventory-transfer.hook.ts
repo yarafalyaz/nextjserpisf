@@ -44,7 +44,7 @@ export async function onTransferProcessed(
     // Enforce period lock — transfer date must fall in an open period.
     await assertPeriodOpen(transfer.date, tx);
 
-    // Idempotency: return silently if OUT moves already exist
+    // Idempotency: skip when stock moves already exist (logged — caller-visible in prod logs)
     const existingOutMoves = await tx.stockMove.findFirst({
       where: {
         referenceType: "InventoryTransfer",
@@ -52,7 +52,12 @@ export async function onTransferProcessed(
         impact: "OUT",
       },
     });
-    if (existingOutMoves) return;
+    if (existingOutMoves) {
+      console.info(
+        `[inventory-transfer.hook] transfer #${transferId} sudah punya movement OUT — pemrosesan dilewati`,
+      );
+      return;
+    }
 
     // Aggregate by itemId before generating moves. A duplicate item row would
     // otherwise create two OUT moves that split the FIFO consume across layers
@@ -158,7 +163,7 @@ export async function onTransferReceived(
     // Enforce period lock — transfer date must fall in an open period.
     await assertPeriodOpen(transfer.date, tx);
 
-    // Idempotency: return silently if IN moves already exist
+    // Idempotency: skip when IN moves already exist (logged — caller-visible in prod logs)
     const existingInMoves = await tx.stockMove.findFirst({
       where: {
         referenceType: "InventoryTransfer",
@@ -166,7 +171,12 @@ export async function onTransferReceived(
         impact: "IN",
       },
     });
-    if (existingInMoves) return;
+    if (existingInMoves) {
+      console.info(
+        `[inventory-transfer.hook] transfer #${transferId} sudah punya movement IN — pemrosesan dilewati`,
+      );
+      return;
+    }
 
     // Guard: must be processed (OUT already posted) before receiving. The
     // action also accepts the transient "receiving" claim state — it flips
@@ -239,6 +249,23 @@ export async function onTransferReceived(
     // Create Stock Move IN per item to destination warehouse
     const aggregatedItems = Array.from(aggregated.entries());
     if (aggregatedItems.length > 0) {
+      // P1-1: item batch-tracked wajib bawa alokasi lot eksplisit (kebijakan
+      // batch eksplisit, pola adjustment :176-186) — jangan ciptakan stok
+      // tujuan tanpa lot saat sumbernya teralokasi batch.
+      const itemIds = aggregatedItems.map(([id]) => id);
+      const trackedRows = await tx.item.findMany({
+        where: { id: { in: itemIds } },
+        select: { id: true, trackBatch: true },
+      });
+      const trackBatchByItem = new Map(trackedRows.map((r) => [r.id, r.trackBatch]));
+      for (const [itemId] of aggregatedItems) {
+        if (trackBatchByItem.get(itemId) && !batchesByItem.has(itemId)) {
+          throw new Error(
+            `Item batch #${itemId} memerlukan alokasi nomor batch untuk penerimaan transfer ${transfer.documentNo}.`,
+          );
+        }
+      }
+
       // Batch-generate one document number per item (was N serial round-trips).
       const smDocNos = await generateDocumentNumberBatch("SM", aggregatedItems.length);
 

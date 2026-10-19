@@ -690,10 +690,19 @@ const ACCOURATE_TO_INTERNAL = {
   REVE: "REVENUE", OINC: "REVENUE", COGS: "EXPENSE", EXPS: "EXPENSE", OEXP: "EXPENSE",
 }
 
+const DATABASE_SOCKET_PATH = process.env.DATABASE_SOCKET_PATH
+// S5443: tidak ada fallback socket /tmp yang dapat ditulis publik. Socket hanya
+// dari DATABASE_SOCKET_PATH (env operator) atau dari query
+// `socketPath`/`socket` di DATABASE_URL. Tanpa keduanya, DATABASE_URL wajib ada.
 function poolConfig() {
-  const fallback = { socketPath: "/tmp/mysql.sock", user: "root", password: "", database: "yara_erp", connectionLimit: 5 }
+  const fallback = DATABASE_SOCKET_PATH
+    ? { socketPath: DATABASE_SOCKET_PATH, user: "root", password: "", database: "yara_erp", connectionLimit: 5 }
+    : null
   const url = process.env.DATABASE_URL
-  if (!url) return fallback
+  if (!url) {
+    if (fallback) return fallback
+    throw new Error("DATABASE_URL wajib diisi (atau set DATABASE_SOCKET_PATH ke socket MySQL lokal)")
+  }
   try {
     const parsed = new URL(url)
     const socketPath = parsed.searchParams.get("socketPath") || parsed.searchParams.get("socket")
@@ -703,7 +712,8 @@ function poolConfig() {
     if (socketPath) return { socketPath, user, password, database, connectionLimit: 5 }
     return { host: parsed.hostname || "127.0.0.1", port: parsed.port ? Number(parsed.port) : 3306, user, password, database, connectionLimit: 5 }
   } catch {
-    return fallback
+    if (fallback) return fallback
+    throw new Error("DATABASE_URL wajib diisi (atau set DATABASE_SOCKET_PATH ke socket MySQL lokal)")
   }
 }
 
@@ -858,4 +868,7 @@ async function main() {
   }
 }
 
-main()
+main().catch((error) => {
+  console.error("Migrasi gagal:", error instanceof Error ? error.message : error)
+  process.exitCode = 1
+})

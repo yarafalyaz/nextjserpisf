@@ -17,9 +17,9 @@ if [ -f /app/prisma/schema.prisma ]; then
   echo "[entrypoint] prisma generate (sync client with schema)…"
   # Never let a generation hiccup take down the dev server: warn and continue,
   # the previously generated client still works for an unchanged schema.
-  if ! npx --prefix /app prisma generate; then
+  # Local binary only (no registry fetch, no npx fallback).
+  ./node_modules/.bin/prisma generate --schema /app/prisma/schema.prisma 2>/dev/null || \
     echo "[entrypoint] WARNING: prisma generate failed; using the existing client." >&2
-  fi
   # Hand the freshly written client back to the runtime user so the dev server
   # (non-root) can read it and future writes stay owned by nextjs.
   chown -R nextjs:nodejs /app/node_modules/.prisma /app/node_modules/@prisma 2>/dev/null || true

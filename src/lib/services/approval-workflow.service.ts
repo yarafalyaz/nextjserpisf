@@ -78,12 +78,3 @@ export async function assertApproved(referenceType: string, referenceId: number)
   }
   throw new Error("Dokumen masih menunggu persetujuan (approval workflow) sebelum dapat dilanjutkan.")
 }
-
-export async function resubmitApproval(
-  referenceType: string,
-  referenceId: number,
-  requestedBy?: number,
-  txClient?: any,
-): Promise<boolean> {
-  return requestApprovalIfConfigured(referenceType, referenceId, requestedBy, txClient)
-}

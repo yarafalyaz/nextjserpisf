@@ -7,6 +7,16 @@ import { Status } from "@/lib/constants";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { toBaseFactor } from "@/lib/services/uom.service";
 
+/** P1-1: normalisasi kolom identitas Json (array / koma-pisah / null). */
+function toCleanStrings(value: unknown): string[] {
+  const raw: unknown[] = Array.isArray(value)
+    ? value
+    : typeof value === "string"
+      ? value.split(",")
+      : [];
+  return [...new Set(raw.map((v) => String(v ?? "").trim()).filter((v) => v.length > 0))];
+}
+
 /**
  * Sales Return Hook - Observer pattern replacement.
  * Triggered when a Sales Return is completed.
@@ -48,9 +58,11 @@ export async function onSalesReturnCompleted(
       return; // already completed/cancelled; idempotent no-op
     }
 
-    // Resolve warehouse: item default warehouse → first warehouse fallback
+    // Resolve warehouse: item default warehouse → first ACTIVE warehouse fallback
     const fallbackWarehouse = await tx.warehouse.findFirst({
+      where: { isActive: true, deletedAt: null },
       select: { id: true },
+      orderBy: { id: "asc" },
     });
     if (!fallbackWarehouse) throw new Error("Tidak ada warehouse aktif.");
 
@@ -62,11 +74,12 @@ export async function onSalesReturnCompleted(
     const itemDefaults = returnItemIds.length
       ? await tx.item.findMany({
           where: { id: { in: returnItemIds } },
-          select: { id: true, defaultWarehouseId: true, trackSerial: true },
+          select: { id: true, defaultWarehouseId: true, trackSerial: true, trackBatch: true },
         })
       : [];
     const warehouseByItem = new Map(itemDefaults.map((it) => [it.id, it.defaultWarehouseId]));
     const trackSerialByItem = new Map(itemDefaults.map((it) => [it.id, it.trackSerial]));
+    const trackBatchByItem = new Map(itemDefaults.map((it) => [it.id, it.trackBatch]));
 
     const invoiceUnits = salesReturn.salesInvoiceId
       ? await tx.salesInvoiceItem.findMany({
@@ -117,57 +130,86 @@ export async function onSalesReturnCompleted(
         // Update item qtyOnHand (global total)
         await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${baseQty} WHERE id = ${item.itemId}`;
 
-        // Create FIFO inventory layer (returned stock) in the resolved warehouse
+        // Create FIFO inventory layer (returned stock) in the resolved warehouse.
+        // P1-1: provenance batch eksplisit — baris batch-tracked membawa
+        // batchNumbers dari dokumen retur; layer + itemBatch mencatatnya.
+        // Tanpa identitas (baris lama / panggilan langsung hook), tolak bila
+        // item batch-tracked agar tak tercipta stok tanpa identitas lot.
+        const rowBatches = toCleanStrings(item.batchNumbers);
+        if (trackBatchByItem.get(item.itemId) && rowBatches.length === 0) {
+          throw new Error(
+            `Item #${item.itemId} memakai pelacakan batch — sebutkan nomor batch yang benar-benar kembali.`,
+          );
+        }
+        const rowSerials = toCleanStrings(item.serialNumbers);
+        if (trackSerialByItem.get(item.itemId) && rowSerials.length === 0) {
+          throw new Error(
+            `Item #${item.itemId} memakai pelacakan serial — sebutkan nomor seri yang benar-benar kembali.`,
+          );
+        }
+        const batchForLayer = rowBatches.length > 0 ? rowBatches.join(", ") : null;
         await createInLayer(tx, {
           itemId: item.itemId,
           warehouseId: resolvedWarehouseId,
+          batchNumber: batchForLayer,
           stockMoveId: sm.id,
           qty: baseQty,
           unitCost: baseCost,
         });
-
-        // Serial-tracked items: a return puts the physical units back in stock,
-        // so their ItemSerial rows must be revived to "available". Without this
-        // they stay "used" forever after the original sale (consumeFifoLayers
-        // marks them used), the returned units cannot be sold/issued again, and
-        // the serial subledger drifts from the FIFO layer this line just created.
-        // We revive the most-recently-used serials for the item up to the
-        // returned qty (mirrors the auto-FIFO reviving in inventory-transfer).
-        if (trackSerialByItem.get(item.itemId)) {
-          const need = Math.round(baseQty);
-          if (need > 0) {
-            // Prefer serials already recorded in the destination warehouse (those
-            // are the units physically coming back), then fall back to any other
-            // used serial for the item. Keeping the destination match first avoids
-            // relocating a serial that was consumed from a different warehouse and
-            // is still represented there by a live FIFO layer.
-            const revivableInWarehouse = await tx.itemSerial.findMany({
-              where: { itemId: item.itemId, status: "used", warehouseId: resolvedWarehouseId },
-              orderBy: { id: "desc" },
-              take: need,
+        if (rowBatches.length > 0) {
+          // Pola sama seperti transfer: tambah ke lot tujuan bila ada, buat bila belum.
+          for (const bn of rowBatches) {
+            const destBatch = await tx.itemBatch.findFirst({
+              where: { itemId: item.itemId, warehouseId: resolvedWarehouseId, batchNumber: bn },
               select: { id: true },
             });
-            const pickedIds = revivableInWarehouse.map((s) => s.id);
-            if (pickedIds.length < need) {
-              const remainder = need - pickedIds.length;
-              const revivableAny = await tx.itemSerial.findMany({
-                where: {
+            if (destBatch) {
+              await tx.itemBatch.update({
+                where: { id: destBatch.id },
+                data: { qty: { increment: baseQty / rowBatches.length } },
+              });
+            } else {
+              await tx.itemBatch.create({
+                data: {
                   itemId: item.itemId,
-                  status: "used",
-                  ...(pickedIds.length ? { id: { notIn: pickedIds } } : {}),
+                  batchNumber: bn,
+                  warehouseId: resolvedWarehouseId,
+                  qty: baseQty / rowBatches.length,
+                  notes: `Retur Penjualan ${salesReturn.documentNo}`,
                 },
-                orderBy: { id: "desc" },
-                take: remainder,
-                select: { id: true },
-              });
-              pickedIds.push(...revivableAny.map((s) => s.id));
-            }
-            if (pickedIds.length > 0) {
-              await tx.itemSerial.updateMany({
-                where: { id: { in: pickedIds } },
-                data: { status: "available", warehouseId: resolvedWarehouseId },
               });
             }
+          }
+        }
+
+        // Serial-tracked items: a return puts the physical units back in stock,
+        // so their ItemSerial rows must be revived to "available" — TAPI hanya
+        // serial yang disebut eksplisit di baris retur (identitas fisik yang
+        // benar-benar kembali). Merevive "used terbaru" salah: bisa menghidupkan
+        // serial yang masih di tangan pelanggan lain.
+        if (trackSerialByItem.get(item.itemId)) {
+          const rows = await tx.itemSerial.findMany({
+            where: { itemId: item.itemId, serialNumber: { in: rowSerials } },
+            select: { id: true, serialNumber: true, status: true },
+          });
+          const found = new Map(rows.map((r) => [r.serialNumber, r]));
+          const missing = rowSerials.filter((s) => !found.has(s));
+          if (missing.length > 0) {
+            throw new Error(
+              `Nomor seri tak dikenal untuk item #${item.itemId}: ${missing.join(", ")}.`,
+            );
+          }
+          const notUsed = rows.filter((r) => r.status !== "used");
+          if (notUsed.length > 0) {
+            throw new Error(
+              `Nomor seri bukan status terpakai (tak bisa diretur): ${notUsed.map((r) => r.serialNumber).join(", ")}.`,
+            );
+          }
+          if (rows.length > 0) {
+            await tx.itemSerial.updateMany({
+              where: { id: { in: rows.map((r) => r.id) } },
+              data: { status: "available", warehouseId: resolvedWarehouseId },
+            });
           }
         }
       }
