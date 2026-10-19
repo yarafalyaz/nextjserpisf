@@ -16,6 +16,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export const PURCHASE_DIMENSIONS = ["pemasok", "barang", "biaya"] as const
@@ -77,10 +78,10 @@ export function buildPurchasesByDimension(input: {
 
   const totals: PurchaseByDimensionTotals = { documents: input.documentCount, dpp: 0, tax: 0, total: 0 }
   for (const line of visible) {
-    totals.dpp += line.dpp
-    totals.tax += line.tax
+    totals.dpp = safeAdd(totals.dpp, line.dpp, 2)
+    totals.tax = safeAdd(totals.tax, line.tax, 2)
   }
-  totals.total = totals.dpp + totals.tax
+  totals.total = safeAdd(totals.dpp, totals.tax, 2)
 
   const rows: TableRow[] = visible.map((line) => ({
     kind: "data",
@@ -89,7 +90,7 @@ export function buildPurchasesByDimension(input: {
       String(new Set(line.documentNos).size),
       amount(line.dpp),
       amount(line.tax),
-      amount(line.dpp + line.tax),
+      amount(safeAdd(line.dpp, line.tax, 2)),
     ],
   }))
 
