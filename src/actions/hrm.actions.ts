@@ -52,6 +52,44 @@ import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
 
+function timesheetWriteData(v: {
+  employeeId: number;
+  projectId: number;
+  taskId?: number | null;
+  date: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  hours: number;
+  description?: string | null;
+}) {
+  return {
+    employeeId: v.employeeId,
+    projectId: v.projectId,
+    taskId: v.taskId ?? null,
+    date: wibDateToUtcMidnight(v.date),
+    startTime: v.startTime ?? null,
+    endTime: v.endTime ?? null,
+    hours: v.hours,
+    description: v.description ?? null,
+  };
+}
+
+function appreciationWriteData(v: {
+  employeeId: number;
+  date: string;
+  type: string;
+  amount?: number | null;
+  notes?: string | null;
+}) {
+  return {
+    employeeId: v.employeeId,
+    date: wibDateToUtcMidnight(v.date),
+    type: v.type,
+    amount: v.amount ?? 0,
+    notes: v.notes ?? null,
+  };
+}
+
 // Single payroll write builder shared by create/update slips: loan-deduction
 // cap, statutory ruleset gate (reject fallback, AUD-R3-02), BPJS/PPh21 with
 // snapshot, net floored at 0 (total mirrors net).
@@ -1620,14 +1658,7 @@ export async function createTimesheet(formData: FormData) {
     const timesheet = await prisma.timesheet.create({
       data: {
         slug: await nextSlug("timesheet", "lembar-waktu"),
-        employeeId: v.employeeId,
-        projectId: v.projectId,
-        taskId: v.taskId ?? null,
-        date: wibDateToUtcMidnight(v.date),
-        startTime: v.startTime ?? null,
-        endTime: v.endTime ?? null,
-        hours: v.hours,
-        description: v.description ?? null,
+        ...timesheetWriteData(v),
       },
     });
 
@@ -2672,14 +2703,7 @@ export async function updateTimesheet(id: number, formData: FormData) {
       where: { id },
       data: {
         slug: await nextSlug("timesheet", "lembar-waktu", { excludeId: id }),
-        employeeId: v.employeeId,
-        projectId: v.projectId,
-        taskId: v.taskId ?? null,
-        date: wibDateToUtcMidnight(v.date),
-        startTime: v.startTime ?? null,
-        endTime: v.endTime ?? null,
-        hours: v.hours,
-        description: v.description ?? null,
+        ...timesheetWriteData(v),
       },
     });
 
@@ -2713,11 +2737,7 @@ export async function createAppreciation(formData: FormData) {
     const appreciation = await prisma.appreciation.create({
       data: {
         slug: await nextSlug("appreciation", "apresiasi"),
-        employeeId: v.employeeId,
-        date: wibDateToUtcMidnight(v.date),
-        type: v.type,
-        amount: v.amount ?? 0,
-        notes: v.notes ?? null,
+        ...appreciationWriteData(v),
       },
     });
 
@@ -2754,11 +2774,7 @@ export async function updateAppreciation(formData: FormData) {
       where: { id },
       data: {
         slug: await nextSlug("appreciation", "apresiasi", { excludeId: id }),
-        employeeId: v.employeeId,
-        date: wibDateToUtcMidnight(v.date),
-        type: v.type,
-        amount: v.amount ?? 0,
-        notes: v.notes ?? null,
+        ...appreciationWriteData(v),
       },
     });
 
