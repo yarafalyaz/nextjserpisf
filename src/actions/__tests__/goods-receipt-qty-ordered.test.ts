@@ -1,32 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { createGoodsReceipt } from "../purchase.actions"
+import {
+  goodsReceiptForm,
+  mockApprovedPo,
+  mockGrCreate,
+} from "./goods-receipt-test-utils"
 
 // Regression: GoodsReceiptItem.qtyOrdered must be snapshotted from the PO line
 // at creation time. It used to stay at its 0 default, so the detail page's
 // "Qty Dipesan" column always read 0 and a receipt looked like it had been
 // ordered for nothing.
-const mocks = vi.hoisted(() => {
-  const prismaMock: any = {
-    purchaseOrder: {
-      findUniqueOrThrow: vi.fn(),
-      update: vi.fn(),
-    },
-    goodsReceiptItem: {
-      findMany: vi.fn(),
-    },
-    goodsReceipt: {
-      create: vi.fn().mockResolvedValue({ id: 99, purchaseOrderId: 1 }),
-    },
-    $transaction: vi.fn(async (ops: any) => {
-      if (typeof ops === "function") return ops(prismaMock)
-      return Promise.all(ops)
-    }),
-  }
-  return {
-    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1, roles: ["super_admin"] }),
-    prismaMock,
-  }
-})
+const mocks = await vi.hoisted(async () => (await import("./goods-receipt-test-utils")).createGoodsReceiptMocks())
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: mocks.requirePermissionMock }))
@@ -38,25 +22,16 @@ vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "test-slug")
 describe("GoodsReceipt qtyOrdered snapshot", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.prismaMock.goodsReceipt.create.mockResolvedValue({ id: 99, purchaseOrderId: 1 })
+    mockGrCreate(mocks)
   })
 
   it("stores the PO ordered qty on each GR line", async () => {
-    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
-      id: 1,
-      status: "approved",
-      items: [{ itemId: 3, qty: 1 }],
-    })
+    mockApprovedPo(mocks, [{ itemId: 3, qty: 1 }])
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValue([])
 
-    const items = JSON.stringify([{ itemId: 3, qty: 1, unitCost: 15000000 }])
-    const f = new FormData()
-    f.append("purchaseOrderId", "1")
-    f.append("date", "2024-01-01")
-    f.append("warehouseId", "5")
-    f.append("items", items)
-
-    const res = await createGoodsReceipt(f)
+    const res = await createGoodsReceipt(
+      goodsReceiptForm([{ itemId: 3, qty: 1, unitCost: 15000000 }], { date: "2024-01-01" }),
+    )
     expect(res.success).toBe(true)
 
     const createArg = mocks.prismaMock.goodsReceipt.create.mock.calls[0][0]
