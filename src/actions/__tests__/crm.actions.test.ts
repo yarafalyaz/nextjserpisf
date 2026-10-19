@@ -199,6 +199,25 @@ describe("CRM Actions - Next redirect errors are re-thrown", () => {
   })
 })
 
+describe("addLeadActivity scheduledAt", () => {
+  it("menolak scheduledAt fiktif 2026-02-30 tanpa tulis DB", async () => {
+    const res = await actions.addLeadActivity(1, fdMap({ type: "task", subject: "Follow up", scheduledAt: "2026-02-30" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.leadActivity.create).not.toHaveBeenCalled()
+  })
+  it("menyimpan scheduledAt sah sebagai UTC midnight WIB; absen jadi null", async () => {
+    const res = await actions.addLeadActivity(1, fdMap({ type: "task", subject: "Follow up", scheduledAt: "2026-10-20" }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.leadActivity.create.mock.calls[0][0]
+    expect(arg.data.scheduledAt).toBeInstanceOf(Date)
+    expect(arg.data.scheduledAt.toISOString()).toBe("2026-10-20T00:00:00.000Z")
+    const res2 = await actions.addLeadActivity(1, fdMap({ type: "note", subject: "Catatan" }))
+    expect(res2?.success).toBe(true)
+    const arg2 = mocks.prismaMock.leadActivity.create.mock.calls[1][0]
+    expect(arg2.data.scheduledAt).toBeNull()
+  })
+})
+
 /**
  * Komentar tiket CRM — satu-satunya jalur tulis `crm_ticket_comments`.
  *

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createLeadSchema, updateLeadSchema } from "@/lib/validations/crm.schemas";
+import { createLeadSchema, updateLeadSchema, leadActivitySchema } from "@/lib/validations/crm.schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 describe("validations/crm dateOnly estimasi penutupan lead", () => {
@@ -20,5 +20,22 @@ describe("validations/crm dateOnly estimasi penutupan lead", () => {
     expect(kosong.success).toBe(true);
     if (kosong.success) expect(kosong.data.expectedCloseDate).toBeUndefined();
     expect(wibDateToUtcMidnight("2026-10-20").toISOString()).toBe("2026-10-20T00:00:00.000Z");
+  });
+});
+
+describe("validations/crm leadActivity scheduledAt dateOnly", () => {
+  it("menolak scheduledAt fiktif 2026-02-30 (z.coerce.date sebelumnya menggulir ke 2 Mar)", () => {
+    expect(leadActivitySchema.safeParse({ type: "task", subject: "Follow up", scheduledAt: "2026-02-30" }).success).toBe(false);
+  });
+  it("menolak scheduledAt bebas", () => {
+    expect(leadActivitySchema.safeParse({ type: "task", subject: "Follow up", scheduledAt: "besok" }).success).toBe(false);
+  });
+  it("tanggal sah tetap string dateOnly; kosong jadi undefined", () => {
+    const r = leadActivitySchema.safeParse({ type: "task", subject: "Follow up", scheduledAt: "2026-10-20" });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.scheduledAt).toBe("2026-10-20");
+    const kosong = leadActivitySchema.safeParse({ type: "task", subject: "Follow up", scheduledAt: "" });
+    expect(kosong.success).toBe(true);
+    if (kosong.success) expect(kosong.data.scheduledAt).toBeUndefined();
   });
 });

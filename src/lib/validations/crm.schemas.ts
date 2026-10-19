@@ -107,7 +107,13 @@ export const leadActivitySchema = z.object({
   type: z.enum(["note", "call", "email", "meeting", "task"]),
   subject: z.string().min(1, "Subjek wajib diisi").max(255),
   description: optionalString(2000),
-  scheduledAt: z.coerce.date().optional(),
+  // Date-only kalender: z.coerce.date terima "2026-02-30" lalu menggulir ke
+  // 2 Mar + bergantung TZ proses. dateOnly menolak pra-tulis-DB; aksi konversi
+  // via wibDateToUtcMidnight (pola expectedCloseDate di atas).
+  scheduledAt: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    dateOnly.optional(),
+  ),
 });
 
 /**
