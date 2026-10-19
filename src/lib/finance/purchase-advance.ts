@@ -13,6 +13,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface AdvanceJournalEntry {
@@ -82,7 +83,7 @@ export function buildAdvanceListing(lines: AdvanceReportLine[]): AdvanceReportRe
 
   let amount = 0
   const rows: TableRow[] = sorted.map((line) => {
-    amount += line.amount
+    amount = safeAdd(amount, line.amount, 2)
     return {
       kind: "data",
       cells: [

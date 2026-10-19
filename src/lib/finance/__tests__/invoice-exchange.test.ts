@@ -78,3 +78,15 @@ describe("buildInvoiceExchangeListing", () => {
     expect(invoiceExchangeSummary(result)).toContain("Tidak ada tukar faktur")
   })
 })
+
+describe("buildInvoiceExchangeListing presisi sen", () => {
+  it("total 7 baris bersen eksak, sisa = ditagih - dibayar", () => {
+    const lines = Array.from({ length: 7 }, (_, i) =>
+      line({ documentNo: `TKF-${i}`, amount: 1_234_567.89, paid: 123_456.78 }),
+    )
+    const result = buildInvoiceExchangeListing(lines)
+    expect(result.totals.amount).toBe(8_641_975.23)
+    expect(result.totals.paid).toBe(864_197.46)
+    expect(result.totals.outstanding).toBe(7_777_777.77)
+  })
+})

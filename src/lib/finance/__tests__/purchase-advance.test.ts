@@ -64,3 +64,14 @@ describe("buildAdvanceListing", () => {
     expect(advanceListingSummary(result)).toContain("Tidak ada uang muka")
   })
 })
+
+describe("buildAdvanceListing presisi sen", () => {
+  it("total 3 uang muka bersen eksak tanpa drift float", () => {
+    const result = buildAdvanceListing([
+      { date: new Date("2026-09-10T00:00:00"), vendorName: "PT Sumber Jaya", description: null, documentNo: "DP-A", amount: 10_000_000.10 },
+      { date: new Date("2026-09-10T00:00:00"), vendorName: "PT Sumber Jaya", description: null, documentNo: "DP-B", amount: 10_000_000.10 },
+      { date: new Date("2026-09-10T00:00:00"), vendorName: "PT Sumber Jaya", description: null, documentNo: "DP-C", amount: 10_000_000.10 },
+    ])
+    expect(result.totals.amount).toBe(30_000_000.30)
+  })
+})
