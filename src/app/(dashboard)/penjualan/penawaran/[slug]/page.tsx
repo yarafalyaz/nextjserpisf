@@ -17,6 +17,8 @@ import { PrintButton } from "@/components/ui/print-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
+import { JobBillingCard } from "@/components/reports/job-billing-card";
+import { loadJobBillingSummary } from "@/lib/reports/job-billing-summary-data";
 import {
   DetailTable,
   DetailTableHead,
@@ -71,6 +73,8 @@ export default async function QuotationDetailPage({
   );
 
   if (!quotation) notFound();
+
+  const billingSummary = await loadJobBillingSummary(quotation.id);
 
   const itemIds = quotation.sections
     .flatMap((section) => section.items.map((item) => item.itemId))
@@ -284,6 +288,8 @@ export default async function QuotationDetailPage({
                     }
                   />
                 </DetailCard>
+
+                {billingSummary ? <JobBillingCard summary={billingSummary} /> : null}
 
                 {/* Down Payments */}
                 {quotation.downPayments.length > 0 && (
