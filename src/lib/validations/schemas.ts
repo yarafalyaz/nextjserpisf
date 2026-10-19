@@ -119,6 +119,19 @@ export const taxServerSchema = z.object({
   effectiveTo: optionalDateOnly,
 })
 
+export const employeeDatesSchema = z.object({
+  // `new Date("2026-02-30")` menggulir ke 2 Mar; konversi lewat wibDateToUtcMidnight.
+  joinDate: z
+    .string({ message: "Tanggal masuk wajib diisi" })
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal masuk tidak valid (format YYYY-MM-DD)")
+    .refine((value) => {
+      const [y, m, d] = value.split("-").map(Number)
+      const dt = new Date(Date.UTC(y, m - 1, d))
+      return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
+    }, "Tanggal masuk tidak valid"),
+  dateOfBirth: optionalDateOnly,
+})
+
 export const uomServerSchema = z.object({
   name: z.string().min(1, "Nama satuan wajib diisi").max(200),
   // Quick-add hanya kirim name+symbol; form master kirim barang/jasa.

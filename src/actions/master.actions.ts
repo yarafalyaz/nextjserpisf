@@ -26,6 +26,7 @@ import {
   taxServerSchema,
   bankServerSchema,
   uomServerSchema,
+  employeeDatesSchema,
 } from "@/lib/validations/schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseFormData } from "@/lib/validations/parse-form";
@@ -678,15 +679,16 @@ function readEmployeeLoginInput(formData: FormData) {
 }
 
 /** Field karyawan yang sama persis di create dan update (tanpa kolom khusus jalur). */
-function readEmployeeFormFields(formData: FormData) {
+function readEmployeeFormFields(
+  formData: FormData,
+  dates: { joinDate: string; dateOfBirth?: string },
+) {
   return {
     name: requireString(formData.get("name"), "name"),
     email: formData.get("email") as string | null,
     phone: formData.get("phone") as string | null,
     gender: (formData.get("gender") as string | null) || null,
-    dateOfBirth: formData.get("dateOfBirth")
-      ? new Date(formData.get("dateOfBirth") as string)
-      : null,
+    dateOfBirth: dates.dateOfBirth ? wibDateToUtcMidnight(dates.dateOfBirth) : null,
     maritalStatus: (formData.get("maritalStatus") as string | null) || null,
     // P1-6: jumlah tanggungan untuk PTKP (0-3). Clamp server-side.
     dependents: Math.min(3, Math.max(0, Math.floor(Number(formData.get("dependents")) || 0))),
@@ -770,10 +772,13 @@ export async function createEmployee(formData: FormData) {
       }
     }
 
+    const parsedDates = parseFormData(employeeDatesSchema, formData);
+    if (!parsedDates.success) return { success: false, error: parsedDates.error };
+
     const employeeData = {
       employeeNo,
-      ...readEmployeeFormFields(formData),
-      joinDate: new Date(requireString(formData.get("joinDate"), "joinDate")),
+      ...readEmployeeFormFields(formData, parsedDates.data),
+      joinDate: wibDateToUtcMidnight(parsedDates.data.joinDate),
       isActive: true,
     };
 
@@ -915,9 +920,13 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       syncUserId = current.userId;
     }
 
-    const employeeFields = readEmployeeFormFields(formData);
+    const parsedDates = parseFormData(employeeDatesSchema, formData);
+    if (!parsedDates.success) return { success: false, error: parsedDates.error };
+
+    const employeeFields = readEmployeeFormFields(formData, parsedDates.data);
     const updateData = {
       ...employeeFields,
+      // updateEmployee tidak menulis joinDate (tak berubah); tanggal divalidasi di atas agar konsisten dgn create.
       slug: await nextSlug("employee", employeeFields.name, { excludeId: employeeId }),
     };
 
