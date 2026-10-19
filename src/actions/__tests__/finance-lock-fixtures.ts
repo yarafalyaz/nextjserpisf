@@ -179,10 +179,21 @@ export function wireMatchOk(prismaMock: any, line: any, entry: any) {
  * lock rekonsiliasi / tulis baris / recalc (aggregate header). Mengembalikan
  * juga id + SQL lock header persis seperti diteruskan ke `$queryRaw`.
  */
-export function recordBankStatementLineOrder(prismaMock: any) {
+export function recordBankStatementLineOrder(
+  prismaMock: any,
+  assertPeriodOpenMock?: any,
+) {
   const order: string[] = []
   const headerLockIds: number[][] = []
   const headerLockSql: string[] = []
+
+  if (assertPeriodOpenMock) {
+    const origAssert = assertPeriodOpenMock.getMockImplementation()
+    assertPeriodOpenMock.mockImplementation(async (...a: any[]) => {
+      order.push("period-assert")
+      return origAssert ? origAssert(...a) : undefined
+    })
+  }
 
   prismaMock.$executeRaw.mockImplementation(async (strings: any) => {
     const sql = String(strings?.[0] ?? "")
@@ -263,10 +274,11 @@ export async function runUpdateLineScenario(
   prismaMock: any,
   updateFn: (id: number, form: FormData) => Promise<any>,
   lineFixture: Record<string, any>,
+  assertPeriodOpenMock?: any,
 ) {
   prismaMock.bankStatementLine.findUniqueOrThrow.mockResolvedValue(lineFixture)
   seedReconItems(prismaMock)
-  const recorded = recordBankStatementLineOrder(prismaMock)
+  const recorded = recordBankStatementLineOrder(prismaMock, assertPeriodOpenMock)
   const res = await updateFn(11, bankStatementLineForm())
   return { ...recorded, res }
 }

@@ -21,17 +21,22 @@ import {
 // - Helper lockBankStatementHeaders mengunci bank_statements dengan
 //   `SELECT id FROM bank_statements WHERE id IN (...) ORDER BY id FOR UPDATE`
 //   (id terurut anti-deadlock, Prisma.join untuk daftar id).
-// - create: header dikunci di dalam tx SEBELUM create baris + recalc.
-// - update: urutan lock global baris -> header(s) -> rekonsiliasi; bila
-//   baris pindah header, header LAMA + BARU dikunci terurut dalam satu
-//   panggilan helper sebelum update + recalc kedua header.
-// - delete: baris -> header -> rekonsiliasi, header sebelum delete + recalc.
+// - create: header dikunci di dalam tx SEBELUM assertPeriodOpen (setting)
+//   + create baris + recalc (R-15: samakan urutan update/delete).
+// - update: urutan lock global baris -> header(s) -> setting ->
+//   rekonsiliasi; bila baris pindah header, header LAMA + BARU dikunci
+//   terurut dalam satu panggilan helper sebelum update + recalc kedua header.
+// - delete: baris -> header -> setting -> rekonsiliasi, header sebelum
+//   delete + recalc.
 //
 // Mock prisma penuh seperti finance-recon-match-guard.test.ts: transaksi
 // memanggil cb dengan prismaMock yang sama, jadi $executeRaw (lock baris +
 // lock rekonsiliasi) dan $queryRaw (lock header) berbagi satu rekaman
-// urutan. Falsifikasi: cabut lockBankStatementHeaders dari salah satu
-// jalur -> tes urutan jalur itu merah ("lock-header" hilang / salah posisi).
+// urutan. Recorder juga membungkus assertPeriodOpenMock sebagai
+// "period-assert". Falsifikasi: cabut lockBankStatementHeaders dari salah
+// satu jalur -> tes urutan jalur itu merah ("lock-header" hilang / salah
+// posisi); kembalikan urutan create lama (period-assert sebelum
+// lock-header) -> tes create R-15 merah.
 
 // vi.hoisted tidak bisa memanggil helper yang diimpor (TDZ impor), jadi
 // mock Prisma dibuat async di dalam factory vi.mock lalu disimpan di sini.
@@ -81,9 +86,12 @@ beforeEach(() => {
 })
 
 describe("R-12 kunci header bank_statements sebelum recalc", () => {
-  it("create: header dikunci sebelum create baris + recalc", async () => {
+  it("create R-15: header dikunci sebelum assertPeriodOpen (setting) + create baris + recalc", async () => {
     const { order, headerLockIds, headerLockSql } =
-      recordBankStatementLineOrder(mocks.guards.prismaMock)
+      recordBankStatementLineOrder(
+        mocks.guards.prismaMock,
+        mocks.guards.assertPeriodOpenMock,
+      )
 
     const res = await createBankStatementLine(
       bankStatementLineForm({
@@ -95,26 +103,35 @@ describe("R-12 kunci header bank_statements sebelum recalc", () => {
     )
 
     expect(res.success).toBe(true)
-    expect(order).toEqual(["lock-header", "create-line", "recalc"])
+    expect(order).toEqual([
+      "lock-header",
+      "period-assert",
+      "create-line",
+      "recalc",
+    ])
     expect(headerLockIds).toEqual([[42]])
     expect(headerLockSql[0]).toContain("FROM bank_statements")
     expect(headerLockSql[0]).toContain("ORDER BY id")
     expect(headerLockSql[0]).toContain("FOR UPDATE")
   })
 
-  it("update pindah header: baris -> header lama+baru terurut -> rekonsiliasi -> update -> recalc dua header", async () => {
+  it("update pindah header: baris -> header lama+baru terurut -> setting -> rekonsiliasi -> update -> recalc dua header", async () => {
     const { order, headerLockIds, res } = await runUpdateLineScenario(
       mocks.guards.prismaMock,
       updateBankStatementLine,
       bankLineReadFixture({ bankStatementId: 7 }),
+      mocks.guards.assertPeriodOpenMock,
     )
 
     // Header baru (3) < header lama (7): helper wajib mengurutkan naik
     // dalam satu panggilan, bukan urutan lama-baru dari pemanggil.
+    // Dua period-assert: tanggal lama + tanggal baru, keduanya sesudah header.
     expect(res.success).toBe(true)
     expect(order).toEqual([
       "lock-line",
       "lock-header",
+      "period-assert",
+      "period-assert",
       "lock-recon",
       "update-line",
       "recalc",
@@ -123,17 +140,20 @@ describe("R-12 kunci header bank_statements sebelum recalc", () => {
     expect(headerLockIds).toEqual([[3, 7]])
   })
 
-  it("update header sama: header dikunci sekali (dedupe) sesudah baris, sebelum rekonsiliasi", async () => {
+  it("update header sama: header dikunci sekali (dedupe) sesudah baris, sebelum setting + rekonsiliasi", async () => {
     const { order, headerLockIds, res } = await runUpdateLineScenario(
       mocks.guards.prismaMock,
       updateBankStatementLine,
       bankLineReadFixture(),
+      mocks.guards.assertPeriodOpenMock,
     )
 
     expect(res.success).toBe(true)
     expect(order).toEqual([
       "lock-line",
       "lock-header",
+      "period-assert",
+      "period-assert",
       "lock-recon",
       "update-line",
       "recalc",
@@ -141,13 +161,14 @@ describe("R-12 kunci header bank_statements sebelum recalc", () => {
     expect(headerLockIds).toEqual([[3]])
   })
 
-  it("delete: baris -> header -> rekonsiliasi -> delete -> recalc", async () => {
+  it("delete: baris -> header -> setting -> rekonsiliasi -> delete -> recalc", async () => {
     mocks.guards.prismaMock.bankStatementLine.findUnique.mockResolvedValue(
       bankLineReadFixture(),
     )
     seedReconItems(mocks.guards.prismaMock)
     const { order, headerLockIds } = recordBankStatementLineOrder(
       mocks.guards.prismaMock,
+      mocks.guards.assertPeriodOpenMock,
     )
 
     const res = await deleteBankStatementLine(11)
@@ -156,6 +177,7 @@ describe("R-12 kunci header bank_statements sebelum recalc", () => {
     expect(order).toEqual([
       "lock-line",
       "lock-header",
+      "period-assert",
       "lock-recon",
       "delete-line",
       "recalc",

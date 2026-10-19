@@ -142,6 +142,12 @@ async function recalcBankStatementTotals(
  * menulis baris bank statement dan tidak memanggil recalc, jadi tidak
  * mengambil kunci header; jalur itu tetap baris -> rekonsiliasi, yang
  * konsisten karena header tidak pernah diambil sesudah rekonsiliasi.
+ *
+ * R-15: `assertPeriodOpen(tx)` mengunci baris setting, jadi urutan penuh
+ * penulis baris: baris (bila ada) -> header(s) -> setting -> rekonsiliasi
+ * (update/delete) / -> tulis baris + recalc (create). Setting selalu
+ * sesudah header di semua penulis baris. Aman karena tutup-periode hanya
+ * menahan setting dan tidak pernah menunggu header/baris/jurnal lain.
  */
 async function lockBankStatementHeaders(
   tx: BankStatementTx,
@@ -207,17 +213,19 @@ export async function createBankStatementLine(formData: FormData) {
     const lineDate = wibDateToUtcMidnight(v.date);
 
     const line = await prisma.$transaction(async (tx) => {
-      // R-09: cek periode di DALAM tx dengan tx (dulu sebelum tx, tanpa
-      // kunci) — tutup-periode bisa menyelip di antara cek dan tulis.
-      // Di jalur create ini kunci setting diambil pertama; di jalur
-      // update/delete, kunci setting (lewat assertPeriodOpen di bawah)
-      // diambil sesudah kunci baris/header. Keduanya aman: tutup-periode
-      // hanya menahan kunci setting, jadi tidak ada siklus tunggu (lihat
-      // period-lock.service.ts).
-      await assertPeriodOpen(lineDate, tx);
-      // R-12: kunci header tujuan SEBELUM create + recalc — urutan lock
-      // global: header (create belum punya baris) -> tulis baris -> recalc.
+      // R-15: kunci header SEBELUM assertPeriodOpen — samakan urutan lock
+      // dengan update/delete (baris [bila ada] -> header -> setting).
+      // Dulu create ambil setting dulu lalu header, sedangkan
+      // update/delete ambil baris -> header -> setting: dua penulis baris
+      // pada header sama bisa membentuk siklus tunggu
+      // (create: setting -> header, update: header -> setting).
+      // Protokol benar: tutup-periode hanya menahan kunci setting dan
+      // tidak pernah menunggu header/baris/jurnal lain, jadi setting
+      // selalu terakhir aman; antar-penulis baris kini urutan sama.
+      // Cek periode tetap di DALAM tx dengan tx (R-09) — tutup-periode
+      // tidak bisa menyelip di antara cek dan tulis.
       await lockBankStatementHeaders(tx, [v.bankStatementId]);
+      await assertPeriodOpen(lineDate, tx);
       const created = await tx.bankStatementLine.create({
         data: {
           bankStatementId: v.bankStatementId,
