@@ -571,7 +571,13 @@ export const stockJournalService = {
     })
   },
 
-  /** Finished goods receipt — transfer accumulated production cost out of WIP. */
+  /**
+   * Finished goods receipt — transfer accumulated production cost out of WIP.
+   * `stockMoveId` (bila ada) jadi kunci jurnal per-release: jurnal unik pada
+   * (referenceType, referenceId), jadi release parsial ke-2 dengan kunci order
+   * yang sama pasti tabrakan P2002. Tanpa stockMoveId (caller lama/satu kali)
+   * kunci tetap order.
+   */
   async onProductionOrderCompleted(
     tx: Prisma.TransactionClient,
     items: JournalItemInput[],
@@ -579,6 +585,7 @@ export const stockJournalService = {
     productionOrderId: number,
     userId?: number,
     transactionDate?: Date,
+    stockMoveId?: number,
   ) {
     const accounts = await getAccountIds()
     if (!accounts.inventory || !accounts.wip) {
@@ -592,8 +599,8 @@ export const stockJournalService = {
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: transactionDate ?? new Date(),
-      referenceType: 'ProductionOrder',
-      referenceId: productionOrderId,
+      referenceType: stockMoveId != null ? 'ProductionOrderRelease' : 'ProductionOrder',
+      referenceId: stockMoveId ?? productionOrderId,
       type: 'PROD',
       description: `Penerimaan Hasil Produksi ${productionOrderNo}`,
       createdBy: userId,
@@ -614,7 +621,10 @@ export const stockJournalService = {
     })
   },
 
-  /** Settle sub-cent/unit-cost rounding left between WIP and stock valuation. */
+  /**
+   * Settle sub-cent/unit-cost rounding left between WIP and stock valuation.
+   * Kunci per-release sama seperti jurnal penerimaan (lihat di atas).
+   */
   async onProductionOrderCostRoundingVariance(
     tx: Prisma.TransactionClient,
     variance: number,
@@ -622,6 +632,7 @@ export const stockJournalService = {
     productionOrderId: number,
     userId?: number,
     transactionDate?: Date,
+    stockMoveId?: number,
   ) {
     if (Math.abs(variance) < 0.005) return null
     const accounts = await getAccountIds()
@@ -636,8 +647,8 @@ export const stockJournalService = {
     return journalSvc.createJournal({
       journalNumber,
       transactionDate: transactionDate ?? new Date(),
-      referenceType: 'ProductionOrderCostVariance',
-      referenceId: productionOrderId,
+      referenceType: stockMoveId != null ? 'ProductionOrderReleaseVariance' : 'ProductionOrderCostVariance',
+      referenceId: stockMoveId ?? productionOrderId,
       type: 'PROD',
       description: `Selisih pembulatan biaya produksi ${productionOrderNo}`,
       createdBy: userId,

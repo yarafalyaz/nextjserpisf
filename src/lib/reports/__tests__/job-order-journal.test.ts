@@ -38,6 +38,15 @@ describe("referenceType jurnal pekerjaan", () => {
     expect(isJobJournalReference("SALES_INVOICE")).toBe(false)
     expect(jobJournalLabel("SALES_INVOICE")).toBeNull()
   })
+
+  // Jurnal per-release memakai referenceType baru (kunci unik per stockMove);
+  // tanpa ini laporan jurnal pekerjaan menyembunyikan jurnal release parsial.
+  it("mengenali jurnal penerimaan dan selisih per release parsial", () => {
+    expect(isJobJournalReference("ProductionOrderRelease")).toBe(true)
+    expect(jobJournalLabel("ProductionOrderRelease")).toBe("Penyelesaian Produksi")
+    expect(isJobJournalReference("ProductionOrderReleaseVariance")).toBe(true)
+    expect(jobJournalLabel("ProductionOrderReleaseVariance")).toBe("Selisih Biaya Produksi")
+  })
 })
 
 describe("buildJobOrderJournal", () => {

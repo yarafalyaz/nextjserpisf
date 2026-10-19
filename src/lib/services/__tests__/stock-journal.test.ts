@@ -144,6 +144,22 @@ describe("stockJournalService", () => {
       }));
     });
 
+    // Regression: jurnal (referenceType, referenceId) unik — release parsial
+    // ke-2 dengan referenceId order yang sama pasti P2002 di DB nyata.
+    it("keys the FG receipt journal per stock move so partial releases can post twice", async () => {
+      await stockJournalService.onProductionOrderCompleted(
+        tx, [{ qty: 1, cost: 125 }], "MO-9", 9, 42, undefined, 501,
+      );
+      await stockJournalService.onProductionOrderCompleted(
+        tx, [{ qty: 1, cost: 125 }], "MO-9", 9, 42, undefined, 502,
+      );
+
+      const keys = mocks.createJournal.mock.calls.map(
+        (c: any[]) => `${c[0].referenceType}:${c[0].referenceId}`,
+      );
+      expect(keys).toEqual(["ProductionOrderRelease:501", "ProductionOrderRelease:502"]);
+    });
+
     it("requires WIP and inventory accounts for completion", async () => {
       mocks.getSystemSettings.mockResolvedValue({ ...FULL_ACCOUNTS, inventoryAccountId: null });
       await expect(stockJournalService.onProductionOrderCompleted(
@@ -156,6 +172,28 @@ describe("stockJournalService", () => {
   });
 
   describe("onProductionOrderCostRoundingVariance", () => {
+    it("keys the rounding journal per stock move so a second partial release can post", async () => {
+      await stockJournalService.onProductionOrderCostRoundingVariance(tx, 0.01, "MO-9", 9, undefined, undefined, 501);
+      await stockJournalService.onProductionOrderCostRoundingVariance(tx, -0.01, "MO-9", 9, undefined, undefined, 502);
+
+      const keys = mocks.createJournal.mock.calls.map(
+        (c: any[]) => `${c[0].referenceType}:${c[0].referenceId}`,
+      );
+      expect(keys).toEqual([
+        "ProductionOrderReleaseVariance:501",
+        "ProductionOrderReleaseVariance:502",
+      ]);
+    });
+
+    // Rounding jurnal tanpa identitas release (caller lama) tetap menunjuk order.
+    it("falls back to the order id when no stock move id is given", async () => {
+      await stockJournalService.onProductionOrderCostRoundingVariance(tx, 0.01, "MO-9", 9);
+      expect(mocks.createJournal).toHaveBeenCalledWith(expect.objectContaining({
+        referenceType: "ProductionOrderCostVariance",
+        referenceId: 9,
+      }));
+    });
+
     it("debits the variance expense when actual WIP is above rounded stock value", async () => {
       await stockJournalService.onProductionOrderCostRoundingVariance(tx, 0.01, "MO-9", 9);
       expect(mocks.createJournal).toHaveBeenCalledWith(expect.objectContaining({

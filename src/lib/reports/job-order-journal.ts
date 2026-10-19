@@ -20,16 +20,21 @@ import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 /** referenceType jurnal yang berasal dari alur produksi/pekerjaan pesanan. */
 export const JOB_JOURNAL_REFERENCE_TYPES = [
   "ProductionOrder",
+  "ProductionOrderRelease",
   "ProductionOrderMaterialIssue",
   "ProductionOrderCostVariance",
+  "ProductionOrderReleaseVariance",
   "ProductionCost",
   "MaterialIssue",
 ] as const
 
 const REFERENCE_LABELS: Record<string, string> = {
   ProductionOrder: "Penyelesaian Produksi",
+  // Per-release parsial: kunci jurnal adalah stockMove release itu, bukan order.
+  ProductionOrderRelease: "Penyelesaian Produksi",
   ProductionOrderMaterialIssue: "Bahan Perintah Produksi",
   ProductionOrderCostVariance: "Selisih Biaya Produksi",
+  ProductionOrderReleaseVariance: "Selisih Biaya Produksi",
   ProductionCost: "Penyerapan Biaya Produksi",
   MaterialIssue: "Pengeluaran Bahan",
 }
