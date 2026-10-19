@@ -29,6 +29,18 @@ describe("computeTrialBalance", () => {
     expect(lines[0].totalCredit).toBe(0)
   })
 
+  it("tidak drift float: grand total 3x10.000.000,10 = 30000000.30 persis", () => {
+    const r = computeTrialBalance([
+      acc(1, "ASSET", 10_000_000.10, 0),
+      acc(2, "ASSET", 10_000_000.10, 0),
+      acc(3, "ASSET", 10_000_000.10, 0),
+      acc(4, "LIABILITY", 0, 30_000_000.30),
+    ])
+    expect(r.grandTotalDebit).toBe(30_000_000.30)
+    expect(r.grandTotalCredit).toBe(30_000_000.30)
+    expect(r.isBalanced).toBe(true)
+  })
+
   it("places a credit-normal account (LIABILITY) with net credit in the CREDIT column", () => {
     // Regression: previously this landed in the debit column due to a type-based flip.
     const { lines } = computeTrialBalance([acc(2, "LIABILITY", 0, 5000)])
