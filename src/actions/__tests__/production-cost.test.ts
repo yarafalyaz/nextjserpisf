@@ -128,6 +128,7 @@ describe("createProductionCost", () => {
 describe("updateProductionCost", () => {
   it("applies only the delta to the order", async () => {
     costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, amount: 100 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
     costUpdateMock.mockResolvedValue({})
 
     const res = await updateProductionCost(5, fd({ category: "labor", amount: 300 }))
@@ -135,11 +136,36 @@ describe("updateProductionCost", () => {
     expect(res.success).toBe(true)
     expect(applyDeltaMock).toHaveBeenCalledWith(1, 200, expect.anything(), expect.anything())
   })
+
+  it("refuses to edit a cost on a completed/cancelled production order", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, amount: 100 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "completed" })
+
+    const res = await updateProductionCost(5, fd({ category: "labor", amount: 300 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("completed")
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("refuses to edit a cost whose linked production order is missing", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 9, amount: 100 })
+    orderFindUniqueMock.mockResolvedValue(null)
+
+    const res = await updateProductionCost(5, fd({ category: "labor", amount: 300 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak ditemukan")
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
 })
 
 describe("deleteProductionCost", () => {
   it("subtracts the amount from the order", async () => {
     costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, amount: 400 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
     costDeleteMock.mockResolvedValue({})
 
     const res = await deleteProductionCost(5)
@@ -147,9 +173,46 @@ describe("deleteProductionCost", () => {
     expect(res.success).toBe(true)
     expect(applyDeltaMock).toHaveBeenCalledWith(1, -400, expect.anything(), expect.anything())
   })
+
+  it("refuses to delete a cost on a completed production order", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, amount: 400 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "completed" })
+
+    const res = await deleteProductionCost(5)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("completed")
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
 })
 
 describe("pullLaborCostFromTimesheets", () => {
+  it("refuses to pull timesheets into a completed production order", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, projectId: 3 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "completed" })
+
+    const res = await pullLaborCostFromTimesheets(7, 1, 25000)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("completed")
+    expect(timesheetFindManyMock).not.toHaveBeenCalled()
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("refuses to pull timesheets into a production order of another work order", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, projectId: 3 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress", workOrderId: 99 })
+
+    const res = await pullLaborCostFromTimesheets(7, 1, 25000)
+
+    expect(res.success).toBe(false)
+    expect(timesheetFindManyMock).not.toHaveBeenCalled()
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
   it("creates one labor line per un-pulled timesheet and rolls the total", async () => {
     woFindUniqueMock.mockResolvedValue({ id: 7, projectId: 3 })
     orderFindUniqueMock.mockResolvedValue({ id: 1 })

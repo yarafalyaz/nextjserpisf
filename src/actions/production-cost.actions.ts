@@ -16,6 +16,21 @@ import {
 import { applyProductionCostDelta } from "@/lib/services/production-cost.service"
 import { safeMultiply, safeRound } from "@/lib/utils/math"
 
+/** Production orders keep their cost locked once completed/cancelled. */
+function mutableOrderError(
+  order: { status: string } | null,
+  verb: "ditambahkan" | "diubah" | "dihapus",
+): { success: false; error: string } | null {
+  if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
+  if (order.status === "completed" || order.status === "cancelled") {
+    return {
+      success: false,
+      error: `Biaya tidak dapat ${verb} pada perintah berstatus '${order.status}'.`,
+    }
+  }
+  return null
+}
+
 /**
  * Add a non-material cost line (labor/machine/overhead/subcontract/service) to a
  * production order and roll its amount into the order's actual cost (PRD
@@ -43,13 +58,8 @@ export async function createProductionCost(formData: FormData) {
         where: { id: v.productionOrderId },
         select: { id: true, status: true, documentNo: true },
       })
-      if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
-      if (order.status === "completed" || order.status === "cancelled") {
-        return {
-          success: false,
-          error: `Biaya tidak dapat ditambahkan ke perintah berstatus '${order.status}'.`,
-        }
-      }
+      const invalid = mutableOrderError(order, "ditambahkan")
+      if (invalid) return invalid
     }
     if (v.workOrderId) {
       const wo = await prisma.workOrder.findUnique({
@@ -128,6 +138,15 @@ export async function updateProductionCost(id: number, formData: FormData) {
       if (!vendor) return { success: false, error: "Vendor tidak ditemukan" }
     }
 
+    if (existing.productionOrderId) {
+      const order = await prisma.productionOrder.findUnique({
+        where: { id: existing.productionOrderId },
+        select: { id: true, status: true },
+      })
+      const invalid = mutableOrderError(order, "diubah")
+      if (invalid) return invalid
+    }
+
     await prisma.$transaction(async (tx) => {
       await tx.productionCost.update({
         where: { id },
@@ -171,6 +190,15 @@ export async function deleteProductionCost(id: number) {
       select: { id: true, productionOrderId: true, amount: true },
     })
     if (!existing) return { success: false, error: "Biaya tidak ditemukan" }
+
+    if (existing.productionOrderId) {
+      const order = await prisma.productionOrder.findUnique({
+        where: { id: existing.productionOrderId },
+        select: { id: true, status: true },
+      })
+      const invalid = mutableOrderError(order, "dihapus")
+      if (invalid) return invalid
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.productionCost.delete({ where: { id } })
@@ -224,9 +252,16 @@ export async function pullLaborCostFromTimesheets(
     }
     const order = await prisma.productionOrder.findUnique({
       where: { id: productionOrderId },
-      select: { id: true },
+      select: { id: true, status: true, workOrderId: true },
     })
-    if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
+    const invalid = mutableOrderError(order, "ditambahkan")
+    if (invalid) return invalid
+    if (order && order.workOrderId != null && order.workOrderId !== workOrderId) {
+      return {
+        success: false,
+        error: "Perintah produksi tidak termasuk dalam perintah kerja ini.",
+      }
+    }
 
     const timesheets = await prisma.timesheet.findMany({
       where: { projectId: wo.projectId },
