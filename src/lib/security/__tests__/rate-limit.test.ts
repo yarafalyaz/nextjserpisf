@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { takeRateLimit, peekRateLimit, getClientIp, canBlockOnClientIp, clientRateLimitKey } from "../rate-limit"
+import { takeRateLimit, peekRateLimit, getClientIp, canBlockOnClientIp, clientRateLimitKey, rateLimitDegradedCount } from "../rate-limit"
 
 describe("takeRateLimit (in-memory fallback)", () => {
   beforeEach(() => {
@@ -168,6 +168,9 @@ describe("takeRateLimit (Upstash Redis path)", () => {
     // In-memory fallback grants the first hit.
     expect(result.allowed).toBe(true)
     expect(result.remaining).toBe(2)
+    // AUD-R3-07: fallback menandai degraded + counter metrik naik.
+    expect(result.degraded).toBe(true)
+    expect(rateLimitDegradedCount()).toBeGreaterThan(0)
   })
 })
 

@@ -36,7 +36,23 @@ const mocks = vi.hoisted(() => {
     overtimeRequest: buildModelMock(),
     appreciation: buildModelMock(),
     payroll: buildModelMock(),
-    payrollStatutoryRule: buildModelMock(),
+    // AUD-R3-02: ruleset statutori LENGKAP untuk periode tes (tulis-final
+    // payroll fail-closed bila fallback — mock kosong = semua tes tulis gagal).
+    payrollStatutoryRule: {
+      ...buildModelMock(),
+      findMany: vi.fn().mockResolvedValue([
+        { key: "bpjs_health_employee_rate", value: 0.01, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "bpjs_health_ceiling", value: 12000000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "bpjs_jht_employee_rate", value: 0.02, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "bpjs_jp_employee_rate", value: 0.01, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "bpjs_jp_ceiling", value: 10500000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "ptkp_single", value: 54000000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "ptkp_married_extra", value: 4500000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "ptkp_dependent_extra", value: 4500000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "occupational_cost_rate", value: 0.05, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+        { key: "occupational_cost_ceiling_year", value: 6000000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+      ]),
+    },
     employee: buildModelMock(),
     attendance: buildModelMock(),
     workSchedule: buildModelMock(),
@@ -605,8 +621,8 @@ describe("Payroll Actions", () => {
     const single = await actions.getPayrollEstimation(1, "2026-05-01", "2026-05-31")
     if (!single || "error" in single) throw new Error("single failed")
     const snap = (single as unknown as { statutorySnapshot: { fromFallback: boolean; asOf: string } }).statutorySnapshot
-    // Tabel kosong di mock → fallback 2024 tercatat jujur.
-    expect(snap.fromFallback).toBe(true)
+    // Mock ruleset LENGKAP (default) → bukan fallback; snapshot jujur.
+    expect(snap.fromFallback).toBe(false)
     expect(snap.asOf).toBe("2026-05-31")
   })
 
@@ -1023,6 +1039,16 @@ describe("Payroll extra branches", () => {
     const r = await actions.approvePayroll(1)
     expect(r?.success).toBe(false)
     expect(r?.error).toContain("Payroll hanya bisa di-approve dari status draft")
+  })
+
+  it("generateBulkPayroll menolak ruleset fallback (AUD-R3-02)", async () => {
+    prismaMock.employee.findMany.mockResolvedValue([{
+      id: 1, baseSalary: 5000000, maritalStatus: "single", employeeLoans: [],
+    }])
+    prismaMock.payrollStatutoryRule.findMany.mockResolvedValueOnce([])
+    const r = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("belum lengkap/valid")
   })
 
   it("approvePayroll menolak slip fallback 2024 (AUD-HRM-01)", async () => {

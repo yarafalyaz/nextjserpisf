@@ -240,7 +240,11 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
       paymentStatus: "partial",
     })
     mocks.salesPaymentFindFirst.mockResolvedValue(null)
-    mocks.salesPaymentFindMany.mockResolvedValue([{ amount: 8000 }, { amount: 5000 }])
+    // R3-04: payment pertama = prePaid (8000, sebelum alokasi); kedua =
+    // sesudah alokasi 2000 → total 10000. Payment tak lagi DP penuh 5000.
+    mocks.salesPaymentFindMany
+      .mockResolvedValueOnce([{ amount: 8000 }])
+      .mockResolvedValue([{ amount: 8000 }, { amount: 2000 }])
     mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
 
     await onDownPaymentConfirmed(9, 1)
@@ -251,6 +255,14 @@ describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {
     )
     expect(mocks.salesInvoiceUpdate).not.toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ paidAmount: 13000 }) }),
+    )
+    // R3-04: SalesPayment = ALOKASI 2000 (bukan DP penuh 5000) — laporan
+    // yang menjumlah payment tak lagi double-count dengan kredit 3000.
+    expect(mocks.salesPaymentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ amount: 2000 }) }),
+    )
+    expect(mocks.salesPaymentCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ amount: 5000 }) }),
     )
     // Selisih 3000 jadi kredit sumber DownPayment DP-9.
     expect(tx.customerCredit.create).toHaveBeenCalledWith(

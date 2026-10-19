@@ -33,6 +33,16 @@ export type RateLimitResult = {
   allowed: boolean
   remaining: number
   resetAt: number
+  /** true bila dihitung dari Map lokal (Redis tak ada/gagal). Batas jadi
+   * PER-PROSES, bukan global — deployment multi-replica tanpa Redis
+   * mengalikan batas sejumlah proses. Prod WAJIB set Upstash Redis. */
+  degraded?: boolean
+}
+
+/** Counter fallback aktif (metrik/alert): berapa keputusan dari Map lokal. */
+let degradedDecisions = 0
+export function rateLimitDegradedCount(): number {
+  return degradedDecisions
 }
 
 function nowMs() {
@@ -88,7 +98,7 @@ function peekInMemRateLimit(key: string, config: RateLimitConfig): RateLimitResu
   const current = buckets.get(key)
 
   if (!current || now >= current.resetAt) {
-    return { allowed: true, remaining: config.max, resetAt: now + config.windowMs }
+    return { allowed: true, remaining: config.max, resetAt: now + config.windowMs, degraded: true }
   }
 
   // `allowed` answers "would the NEXT attempt be accepted?", matching
@@ -97,10 +107,12 @@ function peekInMemRateLimit(key: string, config: RateLimitConfig): RateLimitResu
     allowed: current.count < config.max,
     remaining: Math.max(0, config.max - current.count),
     resetAt: current.resetAt,
+    degraded: true,
   }
 }
 
 function takeInMemRateLimit(key: string, config: RateLimitConfig): RateLimitResult {
+  degradedDecisions += 1
   registerCleanup()
   const now = nowMs()
   const current = buckets.get(key)
@@ -112,6 +124,7 @@ function takeInMemRateLimit(key: string, config: RateLimitConfig): RateLimitResu
       allowed: true,
       remaining: Math.max(0, config.max - 1),
       resetAt,
+      degraded: true,
     }
   }
 
@@ -123,6 +136,7 @@ function takeInMemRateLimit(key: string, config: RateLimitConfig): RateLimitResu
     allowed,
     remaining: Math.max(0, config.max - current.count),
     resetAt: current.resetAt,
+    degraded: true,
   }
 }
 
@@ -159,6 +173,7 @@ export async function takeRateLimit(
     })
     .catch((err) => {
       // Graceful degradation: if Redis is unreachable, fall back to in-memory
+      // (degraded:true + counter; alert bila ini naik di prod = Redis mati).
       console.error("[rate-limit] Redis error, falling back to in-memory:", err)
       return takeInMemRateLimit(key, config)
     })

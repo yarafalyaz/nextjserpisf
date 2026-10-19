@@ -32,6 +32,24 @@ if (!url) {
   console.error("DATABASE_URL tidak diset.");
   process.exit(2);
 }
+// AUD-R3-08: password DB dengan karakter khusus URL (@ : / # % ?) HARUS
+// percent-encoded saat ditulis ke .env (mis. p@ss → p%40ss), kalau tidak URI
+// terparse keliru dan login gagal misterius. Compose tak bisa encode sendiri.
+// Validasi awal: userinfo wajib ada password non-kosong.
+try {
+  const u = new URL(url.replace(/^mysql:\/\//, "http://"));
+  if (!u.password) {
+    console.error(
+      "DATABASE_URL tanpa password (atau password mengandung karakter khusus " +
+        "yang belum percent-encoded sehingga terparse hilang). " +
+        "Perbaiki .env: encode @→%40 :→%3A /→%2F #→%23 %→%25 ?→%3F.",
+    );
+    process.exit(2);
+  }
+} catch (e) {
+  console.error(`DATABASE_URL tidak valid: ${e.message}`);
+  process.exit(2);
+}
 
 const adapter = new PrismaMariaDb(url);
 const prisma = new PrismaClient({ adapter });

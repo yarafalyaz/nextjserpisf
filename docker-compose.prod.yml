@@ -25,7 +25,7 @@ services:
       - .env
     environment:
       - TZ=Asia/Jakarta
-      - DATABASE_URL=mysql://${DB_USER:-silengkap_user}:${DB_PASSWORD:-silengkap_pass123}@db:3306/${DB_NAME:-silengkap}
+      - DATABASE_URL=mysql://${DB_USER:-silengkap_user}:${DB_PASSWORD:?set DB_PASSWORD di .env produksi}@db:3306/${DB_NAME:-silengkap}
       - AUTH_URL=https://erp.yarasoft.net
       - AUTH_SECRET=${AUTH_SECRET}
       - NEXT_PUBLIC_APP_URL=https://erp.yarasoft.net

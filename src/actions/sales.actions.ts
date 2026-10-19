@@ -738,6 +738,45 @@ export async function createDownPayment(formData: FormData) {
   }
 }
 
+/**
+ * AUD-R3-03: alokasi saldo kredit pelanggan ke faktur lain.
+ * Izin = confirm_down_payments (gerbang yang sama dengan konfirmasi DP —
+ * kredit lahir dari DP). Service mengunci baris + tolak over-saldo/sisa.
+ */
+export async function allocateCustomerCredit(creditId: number, salesInvoiceId: number, amount: number) {
+  const { allocateCreditToInvoice } = await import("@/lib/services/customer-credit.service");
+  try {
+    const user = await requirePermission("confirm_down_payments");
+    const result = await allocateCreditToInvoice(creditId, salesInvoiceId, amount, Number(user.id));
+    if (!result.success) return { success: false as const, error: result.error };
+    await logActivity("allocate", "CustomerCredit", creditId, `Alokasi kredit ${amount} ke faktur #${salesInvoiceId}`);
+    revalidatePath("/penjualan/faktur");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * AUD-R3-03: refund sisa kredit pelanggan ke kas (Dr 210102 / Cr Kas).
+ * Izin = confirm_down_payments. Service menolak melebihi saldo.
+ */
+export async function refundCustomerCredit(creditId: number, amount: number) {
+  const { refundCredit } = await import("@/lib/services/customer-credit.service");
+  try {
+    const user = await requirePermission("confirm_down_payments");
+    const result = await refundCredit(creditId, amount, Number(user.id));
+    if (!result.success) return { success: false as const, error: result.error };
+    await logActivity("refund", "CustomerCredit", creditId, `Refund kredit ${amount} ke kas`);
+    revalidatePath("/penjualan/faktur");
+    return { success: true as const };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
 export async function confirmDownPayment(dpId: number) {
   try {
   const user = await requirePermission("confirm_down_payments")

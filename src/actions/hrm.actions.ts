@@ -483,6 +483,8 @@ async function computePayrollEstimation(
     0,
   );
   const statutoryParams = await getStatutoryParams(prisma, new Date(endDateStr));
+  // Estimasi = PREVIEW: fallback 2024 boleh + snapshot mencatat fromFallback
+  // jujur (R3-02). Yang fail-closed = tulis-final (bulk/update) + approve.
   const bpjs = computeBpjsEmployee(baseSalary, statutoryParams);
   const pph21 = computePph21Monthly(
     grossSalary,
@@ -745,6 +747,13 @@ async function computeBulkPayrollEstimations(
   const publicHolidaySet = new Set(holidays.map((holiday) => dateKey(holiday.date)));
   // P1-6: satu params untuk seluruh batch (satu periode) — mesin SAMA dengan single.
   const bulkStatutoryParams = await getStatutoryParams(prisma, rangeEnd);
+  // AUD-R3-02: bulk sama — tolak fallback di sumber.
+  if (bulkStatutoryParams.fromFallback) {
+    throw new Error(
+      "Ruleset statutori periode ini belum lengkap/valid — hitung massal ditolak. " +
+        "Minta accountant melengkapi ruleset, lalu hitung ulang.",
+    );
+  }
   const departmentHolidaySet = new Map<number, Set<string>>();
   for (const holiday of departmentHolidays) {
     const dates = departmentHolidaySet.get(holiday.departmentId) ?? new Set<string>();
@@ -1365,6 +1374,13 @@ export async function updatePayroll(id: number, formData: FormData) {
       0,
     );
     const updStatutoryParams = await getStatutoryParams(prisma, endDate);
+  // AUD-R3-02: update slip sama — tolak fallback di sumber.
+  if (updStatutoryParams.fromFallback) {
+    throw new Error(
+      "Ruleset statutori periode ini belum lengkap/valid — update slip ditolak. " +
+        "Minta accountant melengkapi ruleset, lalu hitung ulang.",
+    );
+  }
     const bpjs = computeBpjsEmployee(baseSalary, updStatutoryParams);
     const pph21 = computePph21Monthly(
       grossSalary,

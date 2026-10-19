@@ -124,16 +124,28 @@ export async function onDownPaymentConfirmed(
       })
       // Create SalesPayment for this subsequent DP linked to the existing invoice
       if (Number(dp.amount) > 0 && !alreadyAllocated) {
+        // AUD-R3-04 (putusan akuntan): PISAHKAN penerimaan kas dari alokasi.
+        // Kas DP PENUH sudah dijurnal saat terima (Dr Kas / Cr 210102) — yang
+        // dicatat di sini HANYA alokasi ke faktur, sebesar SISA faktur.
+        // SalesPayment penuh + kredit selisih = double-count di laporan yang
+        // menjumlah SalesPayment.amount sebagai pelunasan faktur.
+        const prePaid = await tx.salesPayment.findMany({
+          where: { salesInvoiceId: existingInv.id },
+          select: { amount: true },
+        });
+        const prePaidSen = Math.round(safeSum(prePaid.map((p) => p.amount), 2) * 100);
+        const invGrandSen = Math.round(Number(existingInv.grandTotal ?? 0) * 100);
+        const allocSen = Math.max(Math.min(Math.round(Number(dp.amount) * 100), invGrandSen - prePaidSen), 0);
         const payDocNo = await generateDocumentNumber("PAY");
         await tx.salesPayment.create({
           data: {
             documentNo: payDocNo,
             salesInvoiceId: existingInv.id,
             customerId: quotation.customerId,
-            amount: dp.amount,
+            amount: allocSen / 100,
             paymentDate: dp.paymentDate ?? new Date(),
             paymentMethod: "down_payment",
-            notes: marker,
+            notes: `${marker} (alokasi ${allocSen / 100} dari DP ${Number(dp.amount)}; sisa jadi kredit)`,
             createdBy: userId ?? null,
           },
         });
@@ -146,18 +158,12 @@ export async function onDownPaymentConfirmed(
         
         // safeSum avoids JavaScript floating point drift (e.g. 0.1 + 0.7 = 0.7999999)
         // which would cause a fully paid invoice to stick at "partial" status.
-        // AUD-NEXT-03 (putusan akuntan): DP lanjutan yang melebihi sisa faktur
-        // = KELEBIHAN, bukan pelunasan. Alokasikan hanya sebesar sisa
-        // (grandTotal - terbayar_sebelum_DP_ini); selisih jadi CustomerCredit
-        // per DP sumber. Tanpa cap, paidAmount > grandTotal = AR overstate +
-        // double-count (sekali di paidAmount, sekali di kredit). Kas tak
-        // dijurnal ulang (sudah masuk saat terima DP = Dr Kas / Cr 210102).
-        const paidBeforeSen = Math.round(safeSum(payments.map((p) => p.amount), 2) * 100) - Math.round(Number(dp.amount) * 100);
+        // AUD-R3-04: payment di atas = ALOKASI (<= sisa), jadi totalPaid tak
+        // bisa > grandTotal. overSen = DP penuh - yang teralokasi → kredit.
+        // paidBefore = prePaid (sebelum payment alokasi ini), BUKAN total - DP.
         const grandTotal = Number(existingInv.grandTotal ?? 0);
-        const grandSen = Math.round(grandTotal * 100);
-        const allocatableSen = Math.max(grandSen - paidBeforeSen, 0);
         const dpSen = Math.round(Number(dp.amount) * 100);
-        const overSen = dpSen - allocatableSen;
+        const overSen = dpSen - allocSen;
         if (overSen > 0) {
           const overAmount = overSen / 100;
           const creditDocNo = await generateDocumentNumber("CC");
@@ -172,7 +178,7 @@ export async function onDownPaymentConfirmed(
                 sourceType: "DownPayment",
                 sourceId: dp.id,
                 receivedAmount: overAmount,
-                notes: `Kelebihan DP ${dp.documentNo} atas faktur ${existingInv.documentNo} (sisa faktur ${allocatableSen / 100}, DP ${dpSen / 100}). Bisa dipakai ulang / di-refund.`,
+                notes: `Kelebihan DP ${dp.documentNo} atas faktur ${existingInv.documentNo} (teralokasi ${allocSen / 100} dari DP ${dpSen / 100}). Bisa dipakai ulang / di-refund.`,
                 createdBy: userId ?? null,
               },
             });

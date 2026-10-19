@@ -60,6 +60,12 @@ export default async function DownPaymentDetailPage({
 
   const pmMap = await getPaymentMethodMap();
 
+  // AUD-R3-03: kredit yang lahir dari DP ini (kelebihan → saldo operasional).
+  const dpCredits = await prisma.customerCredit.findMany({
+    where: { OR: [{ sourceType: "DownPayment", sourceId: dp.id }] },
+    orderBy: { id: "desc" },
+  });
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -150,6 +156,24 @@ export default async function DownPaymentDetailPage({
             }
             colSpan="full"
           />
+        </DetailCard>
+      )}
+
+      {/* AUD-R3-03: kredit dari kelebihan DP ini — saldo operasional. */}
+      {dpCredits.length > 0 && (
+        <DetailCard title="Kredit Pelanggan dari DP ini">
+          {dpCredits.map((c) => {
+            const saldo =
+              Number(c.receivedAmount) - Number(c.allocatedAmount) - Number(c.refundedAmount);
+            return (
+              <DetailField
+                key={c.id}
+                label={c.documentNo}
+                value={`${formatCurrency(saldo)} tersisa dari ${formatCurrency(Number(c.receivedAmount))} (${c.status}) — alokasi/refund via faktur.`}
+                colSpan="full"
+              />
+            );
+          })}
         </DetailCard>
       )}
 
