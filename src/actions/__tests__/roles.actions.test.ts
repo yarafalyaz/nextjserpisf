@@ -152,6 +152,34 @@ describe("createRole least-privilege guard", () => {
   })
 })
 
+describe("role permissionIds validation", () => {
+  it("createRole menolak ID izin non-integer tanpa tulis", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    const res = await createRole(fd({ name: "Viewer", permissions: ["9", "abc"] }))
+    expect(res).toMatchObject({ success: false, error: expect.stringMatching(/permissions/) })
+    expect(roleCreateMock).not.toHaveBeenCalled()
+  })
+  it("createRole menolak ID izin negatif/desimal tanpa tulis", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    for (const bad of ["-5", "2.5", "0"]) {
+      const res = await createRole(fd({ name: "Viewer", permissions: [bad] }))
+      expect(res).toMatchObject({ success: false })
+    }
+    expect(roleCreateMock).not.toHaveBeenCalled()
+  })
+  it("updateRole menolak ID izin rusak tanpa tulis", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    const res = await updateRole(3, fd({ name: "Viewer", permissions: ["x"] }))
+    expect(res).toMatchObject({ success: false, error: expect.stringMatching(/permissions/) })
+    expect(roleUpdateMock).not.toHaveBeenCalled()
+  })
+  it("createRole dedup ID izin ganda", async () => {
+    requirePermissionMock.mockResolvedValue({ id: "1", roles: ["super_admin"], permissions: [] })
+    await expect(createRole(fd({ name: "Viewer", permissions: ["9", "9"] }))).rejects.toThrow("NEXT_REDIRECT")
+    expect(roleCreateMock.mock.calls.at(-1)?.[0]?.data?.permissions?.connect).toEqual([{ id: 9 }])
+  })
+})
+
 describe("updateRole validation", () => {
   it("mengembalikan pesan error (bukan melempar) saat validasi skema gagal", async () => {
     const result = await updateRole(3, fd({}))
