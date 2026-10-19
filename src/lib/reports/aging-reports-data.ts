@@ -19,6 +19,11 @@ import {
   daysOverdue,
 } from "@/lib/reports/aging"
 import { buildPayablesSummary } from "@/lib/reports/payables-summary"
+import {
+  buildAgingTotals,
+  payableOutstanding,
+  receivableOutstanding,
+} from "@/lib/reports/aging-amounts"
 import { formatAccounting } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -45,19 +50,12 @@ function bucketRows(
   asOf: Date,
 ): TableRow[] {
   const rows: TableRow[] = []
-  const groups = new Map<string, { count: number; total: number }>()
-  for (const item of items) {
-    const bucket = agingBucket(daysOverdue(item.dueDate, asOf))
-    const existing = groups.get(bucket) ?? { count: 0, total: 0 }
-    existing.count += 1
-    existing.total += item.outstanding
-    groups.set(bucket, existing)
-  }
-  const lines = AGING_BUCKETS.map((key) => ({
-    key,
-    count: groups.get(key)?.count ?? 0,
-    total: groups.get(key)?.total ?? 0,
-  }))
+  const totals = buildAgingTotals(
+    items,
+    (item) => agingBucket(daysOverdue(item.dueDate, asOf)),
+    AGING_BUCKETS,
+  )
+  const lines = totals.buckets
   rows.push({ kind: "group", label: "Ringkasan Umur" })
   for (const group of lines) {
     rows.push({
@@ -82,8 +80,7 @@ function bucketRows(
       ],
     })
   }
-  const total = items.reduce((s, item) => s + item.outstanding, 0)
-  rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", "", "", money(total)] })
+  rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", "", "", money(totals.grandTotal)] })
   return rows
 }
 
@@ -98,7 +95,7 @@ export async function loadReceivablesAging(): Promise<AgingReportView> {
   const items = invoices
     .map((inv) => {
       if (!inv.dueDate) return null
-      const outstanding = Number(inv.grandTotal) - Number(inv.paidAmount)
+      const outstanding = receivableOutstanding(inv.grandTotal, inv.paidAmount)
       if (outstanding <= 0) return null
       return {
         party: inv.customer.name,
@@ -126,7 +123,7 @@ export async function loadPayablesAging(): Promise<AgingReportView> {
       // P0-2: sisa = NETO (grandTotal − withholding) − terbayar. Laporan
       // sebelumnya memakai grandTotal sehingga tagihan ber-PPh tampil sisa
       // lebih besar dari utang supplier sebenarnya.
-      const outstanding = Number(bill.grandTotal) - Number(bill.withholdingAmount ?? 0) - Number(bill.paidAmount)
+      const outstanding = payableOutstanding(bill.grandTotal, bill.withholdingAmount ?? 0, bill.paidAmount)
       if (outstanding <= 0) return null
       return {
         party: bill.vendor.name,
