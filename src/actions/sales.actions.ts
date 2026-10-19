@@ -2256,12 +2256,17 @@ export async function deleteSalesPayment(id: number) {
   // settled AR row that disagrees with the payment ledger. The downstream recalc
   // also opens its own tx (sales-payment.hook), so we pass the existing tx to
   // avoid nested transactions. Mirrors deleteDownPayment and deleteVendorPayment.
+  // Lampiran "sales_payment" ikut disapu dalam tx yang sama (R-10).
+  let removedFiles: { fileUrl: string; referenceType: string }[] = []
   await prisma.$transaction(async (tx) => {
     // Reverse the cash-receipt journal (Dr Cash / Cr Piutang) before removing the
     // record, otherwise the GL keeps cash/receivable overstated. Mirrors the
     // vendor-payment delete path.
     await deleteJournalByReferenceTx(tx, "SalesPayment", id)
 
+    removedFiles = await deleteTransactionAttachmentsTx(tx, {
+      referenceType: "sales_payment", referenceId: id,
+    })
     await tx.salesPayment.delete({ where: { id } })
 
     // Recalculate invoice after payment deletion
@@ -2269,6 +2274,7 @@ export async function deleteSalesPayment(id: number) {
       await onSalesPaymentDeleted(payment.salesInvoiceId, tx)
     }
   })
+  await removeAttachmentFiles(removedFiles)
 
   await logActivity("delete", "SalesPayment", id, `Menghapus pembayaran penjualan #${id}`)
   revalidatePath("/penjualan/pembayaran")

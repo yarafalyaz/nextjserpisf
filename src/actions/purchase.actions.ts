@@ -39,7 +39,7 @@ import {
 import {
   requestApprovalIfConfigured,
 } from "@/lib/services/approval-workflow.service";
-import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
+import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service";
 import { parseFormData } from "@/lib/validations/parse-form";
 import {
   L3_MSG,
@@ -2361,6 +2361,10 @@ export async function deleteVendorBill(id: number) {
     // would orphan Dr Expense / Cr AP in the GL (no source document to reverse
     // later) — a silent balance-sheet drift. Wrapping the journal-delete + bill
     // delete in one tx guarantees the GL is clean iff the bill row is gone.
+    // Lampiran ikut: klaim create/update memakai referenceType "vendor_bill",
+    // jadi hapus tanpa menyapunya meninggalkan baris + berkas yatim permanen
+    // (cron sweep-orphan hanya menyapu referenceId=0).
+    let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
       // Kunci baris bill: serial dengan confirmVendorBill (yang juga
       // mengunci PO; kunci PO diambil lebih dulu di jalur confirm, dan di
@@ -2375,10 +2379,14 @@ export async function deleteVendorBill(id: number) {
       }
       // Reverse any journal posted at draft creation before removing the record.
       await deleteJournalByReferenceTx(tx, "VendorBill", id);
+      removedFiles = await deleteTransactionAttachmentsTx(tx, {
+        referenceType: "vendor_bill", referenceId: id,
+      });
       await tx.vendorBill.delete({ where: { id } });
       // Recompute the service PO's subcontract HPP after removing the bill.
       await syncServicePoCostFromBills(tx, billRef.purchaseOrderId, null);
     });
+    await removeAttachmentFiles(removedFiles);
 
     await logActivity(
       "delete",
@@ -2404,6 +2412,9 @@ export async function deleteVendorPayment(id: number) {
     // mengunci baris payment, jadi delete konkuren serial: bila confirm
     // menang, status fresh = completed dan delete ditolak, bukan menghapus
     // pembayaran terposting beserta jurnalnya.
+    // Lampiran "vendor_payment" ikut disapu: hapus tanpa menyapunya
+    // meninggalkan baris + berkas yatim permanen (R-13).
+    let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
       if (typeof tx.$executeRaw === "function") {
         await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id = ${id} FOR UPDATE`;
@@ -2414,8 +2425,12 @@ export async function deleteVendorPayment(id: number) {
       }
       // Reverse any journal posted at draft creation before removing the record.
       await deleteJournalByReferenceTx(tx, "VendorPayment", id);
+      removedFiles = await deleteTransactionAttachmentsTx(tx, {
+        referenceType: "vendor_payment", referenceId: id,
+      });
       await tx.vendorPayment.delete({ where: { id } });
     });
+    await removeAttachmentFiles(removedFiles);
 
     await logActivity(
       "delete",
