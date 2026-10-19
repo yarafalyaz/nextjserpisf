@@ -107,9 +107,10 @@ export function Button({
         onClick?.(e)
         onPress?.()
       }}
+      aria-busy={isPending || undefined}
       {...rest}
     >
-      {isPending && <Loader2 className="size-4 animate-spin" />}
+      {isPending && <Loader2 aria-hidden="true" className="size-4 animate-spin" />}
       {children}
     </ShadButton>
   )

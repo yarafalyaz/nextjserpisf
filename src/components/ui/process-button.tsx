@@ -56,8 +56,9 @@ export function ProcessButton({
         variant="primary"
         onPress={() => setIsOpen(true)}
         isDisabled={isPending}
+        aria-busy={isPending || undefined}
       >
-        <Check size={16} className="mr-1.5" />
+        <Check aria-hidden="true" size={16} className="mr-1.5" />
         {label}
       </Button>
 
