@@ -51,7 +51,7 @@ export const bankStatementSchema = z.object({
  * tidak ada (mis. `2026-13-45`) karena `Date.UTC` akan menggulirkannya diam-diam
  * ke tanggal lain.
  */
-const dateOnly = z
+export const dateOnly = z
   .string({ error: "Tanggal wajib diisi" })
   .regex(/^\d{4}-\d{2}-\d{2}$/, "Tanggal tidak valid (format YYYY-MM-DD)")
   .refine((value) => {
@@ -340,3 +340,39 @@ export const chequeSchema = z.object({
   dueDate: requiredDate,
   notes: optionalString(2000),
 });
+
+// ==================== PURCHASE ADVANCE ====================
+
+/**
+ * Server-side schema untuk createPurchaseAdvance: hand-parse sebelumnya tanpa
+ * max-length — description 5MB lolos ke DB, tanggal via `new Date()` yang
+ * bergantung zona waktu proses. `date` wajib YYYY-MM-DD yang benar-benar ada
+ * di kalender, dikonversi via wibDateToUtcMidnight di action.
+ */
+export const purchaseAdvanceSchema = z
+  .object({
+    date: dateOnly,
+    vendorId: z.coerce
+      .number({ message: "Pemasok wajib dipilih" })
+      .int()
+      .positive("Pemasok wajib dipilih"),
+    amount: z.preprocess(
+      (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+      z.coerce
+        .number({ message: "Jumlah uang muka harus lebih dari 0" })
+        .positive("Jumlah uang muka harus lebih dari 0"),
+    ),
+    paymentAccountId: z.coerce
+      .number({ message: "Akun kas/bank wajib dipilih" })
+      .int()
+      .positive(),
+    advanceAccountId: z.coerce
+      .number({ message: "Akun uang muka wajib dipilih" })
+      .int()
+      .positive(),
+    description: optionalString(2000),
+  })
+  .refine((v) => v.paymentAccountId !== v.advanceAccountId, {
+    message: "Akun kas/bank dan akun uang muka tidak boleh sama",
+    path: ["advanceAccountId"],
+  });
