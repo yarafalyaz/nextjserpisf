@@ -70,33 +70,16 @@ vi.mock("@/lib/db/prisma", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/db/prisma")>()
   return { ...actual, prisma: mocks.prismaBank }
 })
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: unknown[]) => mocks.requirePermission(...a),
-}))
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: (...a: unknown[]) => mocks.logActivity(...a),
-}))
-vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => mocks.revalidatePath(...a) }))
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
-}))
-vi.mock("@/lib/services/document-sequence.service", () => ({
-  DocumentSequenceService: { nextBatch: () => Promise.resolve([1]) },
-}))
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: (...a: unknown[]) => mocks.assertPeriodOpen(...a),
-}))
-vi.mock("@/lib/utils/slug-db", () => ({
-  nextSlug: () => Promise.resolve("slug-x"),
-}))
+import { formFormData as form } from "./validation-mock-helpers"
+vi.mock("@/lib/auth/permissions", async () => (await import("./validation-mock-helpers")).permissionFactory(mocks))
+vi.mock("@/lib/services/activity-log.service", async () => (await import("./validation-mock-helpers")).activityLogFactory(mocks))
+vi.mock("next/cache", async () => (await import("./validation-mock-helpers")).revalidateFactory(mocks))
+vi.mock("@/lib/utils/document-number", async () => (await import("./validation-mock-helpers")).docNumberFactory(mocks))
+vi.mock("@/lib/services/document-sequence.service", async () => (await import("./validation-mock-helpers")).docSequenceFactory())
+vi.mock("@/lib/services/period-lock.service", async () => (await import("./validation-mock-helpers")).periodLockFactory(mocks))
+vi.mock("@/lib/utils/slug-db", async () => (await import("./validation-mock-helpers")).slugFixedFactory())
 
 import { createBankTransfer } from "../bank-transfer.actions"
-
-function form(entries: Record<string, string>): FormData {
-  const fd = new FormData()
-  for (const [k, v] of Object.entries(entries)) fd.set(k, v)
-  return fd
-}
 
 const baseTransfer = {
   date: "2026-09-15",

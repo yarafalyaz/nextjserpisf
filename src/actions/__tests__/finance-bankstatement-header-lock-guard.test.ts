@@ -3,12 +3,22 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 import {
   bankLineReadFixture,
   bankStatementLineForm,
-  buildFinanceGuardMocks,
   type FinanceGuardHolder,
   recordBankStatementLineOrder,
   resetFinanceGuardMocks,
   runUpdateLineScenario,
   seedReconItems,
+  financeAccountingHookFactory,
+  financeActivityLogFactory,
+  financeApprovalFactory,
+  financeDocumentNumberFactory,
+  financeExpenseHookFactory,
+  financeNextCacheFactory,
+  financePeriodLockFactory,
+  financePermissionsFactory,
+  financePrismaFactory,
+  financeSettingsFactory,
+  financeSlugFactory,
 } from "./finance-lock-fixtures"
 
 // Guard R-12: total header rekening koran basi saat baris berbeda pada
@@ -41,38 +51,17 @@ import {
 // vi.hoisted tidak bisa memanggil helper yang diimpor (TDZ impor), jadi
 // mock Prisma dibuat async di dalam factory vi.mock lalu disimpan di sini.
 const mocks: FinanceGuardHolder = vi.hoisted(() => ({ guards: null as any, models: ["bankStatement", "bankStatementLine", "bankReconciliation", "bankReconciliationItem"] }))
-vi.mock("@/lib/db/prisma", () => {
-  mocks.guards = buildFinanceGuardMocks(mocks.models)
-  return { prisma: mocks.guards.prismaMock }
-})
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: any) => mocks.guards.requirePermissionMock(...a),
-}))
-vi.mock("next/cache", () => ({ revalidatePath: mocks.guards.revalidateMock }))
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: mocks.guards.logActivityMock,
-}))
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: (...a: any) => mocks.guards.assertPeriodOpenMock(...a),
-}))
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: vi.fn(async () => "DOC-001"),
-}))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn(async () => "s") }))
-vi.mock("@/lib/services/approval-workflow.service", () => ({
-  requestApprovalIfConfigured: vi.fn(),
-  assertApproved: vi.fn(),
-}))
-vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onExpenseApproved: vi.fn(),
-  onPettyCashCreated: vi.fn(),
-}))
-vi.mock("@/lib/hooks/expense.hook", () => ({
-  onExpenseApprovedSyncPettyCash: vi.fn(),
-}))
-vi.mock("@/lib/utils/settings", () => ({
-  getSystemSettings: vi.fn(async () => ({})),
-}))
+vi.mock("@/lib/db/prisma", () => financePrismaFactory(mocks))
+vi.mock("@/lib/auth/permissions", () => financePermissionsFactory(mocks))
+vi.mock("next/cache", () => financeNextCacheFactory(mocks))
+vi.mock("@/lib/services/activity-log.service", () => financeActivityLogFactory(mocks))
+vi.mock("@/lib/services/period-lock.service", () => financePeriodLockFactory(mocks))
+vi.mock("@/lib/utils/document-number", () => financeDocumentNumberFactory())
+vi.mock("@/lib/utils/slug-db", () => financeSlugFactory())
+vi.mock("@/lib/services/approval-workflow.service", () => financeApprovalFactory())
+vi.mock("@/lib/hooks/accounting.hook", () => financeAccountingHookFactory())
+vi.mock("@/lib/hooks/expense.hook", () => financeExpenseHookFactory())
+vi.mock("@/lib/utils/settings", () => financeSettingsFactory())
 
 import {
   createBankStatementLine,

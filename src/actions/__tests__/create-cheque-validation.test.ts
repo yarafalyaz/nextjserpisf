@@ -32,28 +32,15 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prisma }))
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: unknown[]) => mocks.requirePermission(...a),
-}))
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: (...a: unknown[]) => mocks.logActivity(...a),
-}))
-vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => mocks.revalidatePath(...a) }))
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: (...a: unknown[]) => mocks.generateDocumentNumber(...a),
-}))
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: (...a: unknown[]) => mocks.assertPeriodOpen(...a),
-}))
+import { formFormData as form } from "./validation-mock-helpers"
+vi.mock("@/lib/db/prisma", async () => (await import("./validation-mock-helpers")).prismaFactory(mocks))
+vi.mock("@/lib/auth/permissions", async () => (await import("./validation-mock-helpers")).permissionFactory(mocks))
+vi.mock("@/lib/services/activity-log.service", async () => (await import("./validation-mock-helpers")).activityLogFactory(mocks))
+vi.mock("next/cache", async () => (await import("./validation-mock-helpers")).revalidateFactory(mocks))
+vi.mock("@/lib/utils/document-number", async () => (await import("./validation-mock-helpers")).docNumberFactory(mocks))
+vi.mock("@/lib/services/period-lock.service", async () => (await import("./validation-mock-helpers")).periodLockFactory(mocks))
 
 import { createCheque } from "../cheque.actions"
-
-function form(entries: Record<string, string>): FormData {
-  const fd = new FormData()
-  for (const [k, v] of Object.entries(entries)) fd.set(k, v)
-  return fd
-}
 
 const base = {
   type: "giro",

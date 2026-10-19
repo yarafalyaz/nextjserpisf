@@ -1,5 +1,16 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
+import {
+  financeAccountingHookFactory,
+  financeActivityLogFactory,
+  financeApprovalFactory,
+  financeExpenseHookFactory,
+  financeJournalPrismaFactory,
+  financeNextCacheFactory,
+  financePeriodLockFactory,
+  financePermissionsFactory,
+} from "./finance-lock-fixtures"
+
 // Regression test for the journal double-entry decimal precision bug.
 // The action layer (createJournal / updateJournal) computes the balance
 // check with safeAdd(..., 0) — i.e. rounding each line to whole IDR.
@@ -13,63 +24,37 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // The fix is to use 2 decimals for the balance check so it matches
 // the Decimal(15,2) precision the DB enforces.
 
-const requirePermissionMock = vi.fn()
-const revalidateMock = vi.fn()
-const logActivityMock = vi.fn()
-const assertPeriodOpenMock = vi.fn()
-const generateDocumentNumberMock = vi.fn()
+const holder = vi.hoisted(() => ({ set: null as any, include: {
+  requirePermissionMock: true, revalidateMock: true, logActivityMock: true,
+  assertPeriodOpenMock: true, generateDocumentNumberMock: true,
+  journalFindUniqueOrThrowMock: true, journalUpdateMock: true,
+  journalCreateMock: true, entryCreateManyMock: true, entryDeleteManyMock: true,
+  attachmentUpdateManyMock: true, transactionMock: true,
+} }))
+let requirePermissionMock: any
+let revalidateMock: any
+let logActivityMock: any
+let assertPeriodOpenMock: any
+let generateDocumentNumberMock: any
+let journalFindUniqueOrThrowMock: any
+let journalUpdateMock: any
+let journalCreateMock: any
+let entryCreateManyMock: any
+let entryDeleteManyMock: any
+let attachmentUpdateManyMock: any
+let transactionMock: any
 
-const journalFindUniqueOrThrowMock = vi.fn()
-const journalUpdateMock = vi.fn()
-const journalCreateMock = vi.fn()
-const entryCreateManyMock = vi.fn()
-const entryDeleteManyMock = vi.fn()
-const attachmentUpdateManyMock = vi.fn()
-const transactionMock = vi.fn()
-
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
-}))
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    journal: {
-      findUniqueOrThrow: (...a: unknown[]) => journalFindUniqueOrThrowMock(...a),
-      update: (...a: unknown[]) => journalUpdateMock(...a),
-      create: (...a: unknown[]) => journalCreateMock(...a),
-    },
-    journalEntry: {
-      createMany: (...a: unknown[]) => entryCreateManyMock(...a),
-      deleteMany: (...a: unknown[]) => entryDeleteManyMock(...a),
-    },
-    transactionAttachment: {
-      updateMany: (...a: unknown[]) => attachmentUpdateManyMock(...a),
-    },
-    $transaction: (...a: unknown[]) => transactionMock(...a),
-  },
-}))
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: (...a: unknown[]) => assertPeriodOpenMock(...a),
-}))
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: (...a: unknown[]) => logActivityMock(...a),
-}))
-vi.mock("@/lib/services/approval-workflow.service", () => ({
-  requestApprovalIfConfigured: vi.fn(),
-  assertApproved: vi.fn(),
-}))
-vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onExpenseApproved: vi.fn(),
-  onPettyCashCreated: vi.fn(),
-}))
-vi.mock("@/lib/hooks/expense.hook", () => ({
-  onExpenseApprovedSyncPettyCash: vi.fn(),
-}))
+vi.mock("@/lib/auth/permissions", () => financePermissionsFactory(holder))
+vi.mock("@/lib/db/prisma", () => financeJournalPrismaFactory(holder))
+vi.mock("@/lib/services/period-lock.service", () => financePeriodLockFactory(holder))
+vi.mock("@/lib/services/activity-log.service", () => financeActivityLogFactory(holder))
+vi.mock("@/lib/services/approval-workflow.service", () => financeApprovalFactory())
+vi.mock("@/lib/hooks/accounting.hook", () => financeAccountingHookFactory())
+vi.mock("@/lib/hooks/expense.hook", () => financeExpenseHookFactory())
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => generateDocumentNumberMock(...a),
 }))
-vi.mock("next/cache", () => ({
-  revalidatePath: (...a: unknown[]) => revalidateMock(...a),
-}))
+vi.mock("next/cache", () => financeNextCacheFactory(holder))
 
 import { createJournal, updateJournal, postJournal } from "../finance.actions"
 
@@ -96,6 +81,7 @@ function wireUpdateTx() {
 }
 
 beforeEach(() => {
+  ;({ requirePermissionMock, revalidateMock, logActivityMock, assertPeriodOpenMock, generateDocumentNumberMock, journalFindUniqueOrThrowMock, journalUpdateMock, journalCreateMock, entryCreateManyMock, entryDeleteManyMock, attachmentUpdateManyMock, transactionMock } = holder.set)
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, assertPeriodOpenMock,
     generateDocumentNumberMock, journalFindUniqueOrThrowMock, journalUpdateMock,
