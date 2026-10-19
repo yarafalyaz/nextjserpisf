@@ -587,6 +587,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).createStockAdjustment(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("processStockAdjustment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -603,6 +604,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).processStockAdjustment(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("createInventoryTransfer handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -619,6 +621,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).createInventoryTransfer(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("processInventoryTransfer handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -635,6 +638,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).processInventoryTransfer(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("receiveInventoryTransfer handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -651,6 +655,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).receiveInventoryTransfer(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("createMaterialIssue handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -667,6 +672,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).createMaterialIssue(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("completeMaterialIssue handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -683,6 +689,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).completeMaterialIssue(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("createWorkOrder handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -699,6 +706,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).createWorkOrder(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("updateWorkOrder handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -715,6 +723,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).updateWorkOrder(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("createRack handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -731,6 +740,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).createRack(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("updateRack handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -747,6 +757,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).updateRack(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("deleteStockAdjustment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -763,6 +774,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).deleteStockAdjustment(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("deleteInventoryTransfer handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -779,6 +791,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).deleteInventoryTransfer(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("deleteMaterialIssue handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -795,6 +808,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).deleteMaterialIssue(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("deleteRack handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -811,6 +825,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).deleteRack(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("updateStockAdjustment handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -827,6 +842,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).updateStockAdjustment(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("updateMaterialIssue handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -843,6 +859,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).updateMaterialIssue(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("updateInventoryTransfer handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -859,6 +876,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).updateInventoryTransfer(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("createRackRow handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -875,6 +893,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).createRackRow(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("updateRackRow handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -891,6 +910,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).updateRackRow(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
   it("deleteRackRow handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -907,6 +927,7 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     try {
       await (actions as any).deleteRackRow(arg1, arg2);
     } catch {}
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   });
 });
 

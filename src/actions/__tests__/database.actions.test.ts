@@ -71,34 +71,32 @@ describe("Database Actions", () => {
 describe('Global Error Paths (Permission Reject for 4 funcs)', () => {
   it("getBackups handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).getBackups(arg1, arg2); } catch {}
+    mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    await expect(actions.getBackups()).rejects.toThrow("perm denied")
+    expect(mocks.listBackupsMock).not.toHaveBeenCalled()
   })
   it("createDatabaseBackup handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).createDatabaseBackup(arg1, arg2); } catch {}
+    mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    const res = await actions.createDatabaseBackup()
+    expect(res.success).toBe(false)
+    expect(res.message).toBe("perm denied")
+    expect(mocks.createBackupMock).not.toHaveBeenCalled()
   })
   it("restoreDatabaseBackup handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).restoreDatabaseBackup(arg1, arg2); } catch {}
+    mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    const res = await actions.restoreDatabaseBackup("test.sql.gz")
+    expect(res.success).toBe(false)
+    expect(res.message).toBe("perm denied")
+    expect(mocks.restoreBackupMock).not.toHaveBeenCalled()
   })
   it("deleteDatabaseBackup handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
-    if ((mocks as any).requirePermissionMock) (mocks as any).requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
-    if ((mocks as any).requireAuthMock) (mocks as any).requireAuthMock.mockRejectedValueOnce(new Error("perm denied"))
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try { await (actions as any).deleteDatabaseBackup(arg1, arg2); } catch {}
+    mocks.requirePermissionMock.mockRejectedValueOnce(new Error("perm denied"))
+    const res = await actions.deleteDatabaseBackup("test.sql.gz")
+    expect(res.success).toBe(false)
+    expect(res.message).toBe("perm denied")
+    expect(mocks.deleteBackupMock).not.toHaveBeenCalled()
   })
 })

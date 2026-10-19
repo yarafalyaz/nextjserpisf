@@ -118,7 +118,7 @@ export default async function StockReconciliationPage() {
                 <DetailTableTd align="right">{row.layerQty.toLocaleString('id-ID')}</DetailTableTd>
                 <DetailTableTd
                   align="right"
-                  className={row.variance > 0 ? 'text-danger font-semibold' : 'text-danger font-semibold'}
+                  className={row.variance > 0 ? 'text-success font-semibold' : 'text-danger font-semibold'}
                 >
                   {row.variance > 0 ? '+' : ''}{row.variance.toLocaleString('id-ID')}
                 </DetailTableTd>

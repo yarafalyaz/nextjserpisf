@@ -137,7 +137,7 @@ export function QuickAddSelect({
   const loaderKey = fields
     .filter((field) => field.loadOptions)
     .map((field) => field.name)
-    .sort()
+    .sort((a, b) => a.localeCompare(b))
     .join(",")
 
   // Dialog ber-field banyak (mis. Pelanggan: 8 field + pemilih wilayah) memakai lebar
@@ -160,6 +160,9 @@ export function QuickAddSelect({
         }),
     ).then((pairs) => {
       if (active) setDynamicOptions(Object.fromEntries(pairs))
+    }).catch((e) => {
+      // Gagal memuat pilihan dinamis — form tetap bisa diisi manual.
+      console.warn("[quick-add]", e instanceof Error ? e.message : e)
     })
     return () => {
       active = false

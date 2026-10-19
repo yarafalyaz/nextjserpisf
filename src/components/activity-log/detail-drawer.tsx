@@ -68,7 +68,7 @@ function DiffBlock({
       ...Object.keys(oldObj ?? {}),
       ...Object.keys(newObj ?? {}),
     ]),
-  ).sort()
+  ).sort((a, b) => a.localeCompare(b))
 
   if (allKeys.length === 0) {
     return (

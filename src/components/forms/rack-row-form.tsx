@@ -55,6 +55,9 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
     if (!enableAutoCode || !rackId) return
     getNextRowCode(Number(rackId)).then((res) => {
       setAutoCode(res.code ?? "")
+    }).catch((e) => {
+      // Gagal memuat kode berikutnya — kolom tetap bisa diisi manual.
+      console.warn("[auto-code]", e instanceof Error ? e.message : e)
     })
   }, [rackId, enableAutoCode])
 

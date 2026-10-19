@@ -48,7 +48,7 @@ export function AppTimePicker({
   for (let i = 0; i < 60; i += minuteStep) minuteValues.push(pad(i))
   if (m && !minuteValues.includes(m)) {
     minuteValues.push(m)
-    minuteValues.sort()
+    minuteValues.sort((a, b) => a.localeCompare(b))
   }
   const minuteOptions = minuteValues.map((mm) => ({ value: mm, label: mm }))
 

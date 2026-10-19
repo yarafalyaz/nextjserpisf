@@ -124,16 +124,31 @@ describe("Approval Progression Actions", () => {
       currentStep: 1,
       documentType: "PR",
       documentId: 1,
+      referenceType: "PurchaseRequest",
+      referenceId: 1,
+      requestedBy: 2,
       workflow: {
         steps: [{ stepOrder: 1, roleId: null, approverType: "specific" }],
       },
     });
-    // Function uses `throw e` in catch — wrap to catch
-    try {
-      await actions.approveStep(1, fdMap({ notes: "OK" }));
-    } catch {
-      // Throws production error; success path runs first
-    }
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ approvalId: 1, action: "approve" }),
+      }),
+    );
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1 },
+        data: expect.objectContaining({ status: "approved" }),
+      }),
+    );
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "approve",
+      "Approval",
+      1,
+      expect.any(String),
+    );
   });
   it("rejectStep succeeds", async () => {
     mocks.prismaMock.approval.findUnique.mockResolvedValue({
@@ -142,15 +157,31 @@ describe("Approval Progression Actions", () => {
       currentStep: 1,
       documentType: "PR",
       documentId: 1,
+      referenceType: "PurchaseRequest",
+      referenceId: 1,
+      requestedBy: 2,
       workflow: {
         steps: [{ stepOrder: 1, roleId: null, approverType: "specific" }],
       },
     });
-    try {
-      await actions.rejectStep(1, fdMap({ notes: "NO" }));
-    } catch {
-      // Throws production error
-    }
+    await actions.rejectStep(1, fdMap({ notes: "NO" }));
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ approvalId: 1, action: "reject" }),
+      }),
+    );
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1 },
+        data: expect.objectContaining({ status: "rejected" }),
+      }),
+    );
+    expect(mocks.logActivityMock).toHaveBeenCalledWith(
+      "reject",
+      "Approval",
+      1,
+      expect.any(String),
+    );
   });
 
   it("rejects approval records whose workflow has no steps", async () => {
@@ -430,6 +461,9 @@ describe("approveStep / rejectStep branches", () => {
       currentStep: 1,
       documentType: "PR",
       documentId: 1,
+      referenceType: "PurchaseRequest",
+      referenceId: 1,
+      requestedBy: 2,
       workflow: {
         steps: [
           {
@@ -447,9 +481,18 @@ describe("approveStep / rejectStep branches", () => {
         ],
       },
     });
-    try {
-      await actions.approveStep(1, fdMap({ notes: "OK" }));
-    } catch {}
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1 },
+        data: expect.objectContaining({ currentStep: 2 }),
+      }),
+    );
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ approvalId: 1, action: "approve" }),
+      }),
+    );
   });
   it("approveStep rejects non-approver (roleId path)", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -524,15 +567,27 @@ describe("approveStep / rejectStep branches", () => {
       currentStep: 1,
       documentType: "PR",
       documentId: 1,
+      referenceType: "PurchaseRequest",
+      referenceId: 1,
+      requestedBy: 2,
       workflow: {
         steps: [
           { stepOrder: 1, roleId: 1, userId: null, approverType: "role" },
         ],
       },
     });
-    try {
-      await actions.rejectStep(1, fdMap({ notes: "NO" }));
-    } catch {}
+    await actions.rejectStep(1, fdMap({ notes: "NO" }));
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1 },
+        data: expect.objectContaining({ status: "rejected" }),
+      }),
+    );
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ approvalId: 1, action: "reject" }),
+      }),
+    );
   });
 
   it("approveStep fails due to Maker-Checker SoD constraint", async () => {
@@ -588,15 +643,27 @@ describe("approveStep / rejectStep branches", () => {
       currentStep: 1,
       documentType: "PR",
       documentId: 1,
+      referenceType: "PurchaseRequest",
+      referenceId: 1,
+      requestedBy: 2,
       workflow: {
         steps: [
           { stepOrder: 1, roleId: null, userId: 7, approverType: "specific" },
         ],
       },
     });
-    try {
-      await actions.approveStep(1, fdMap({ notes: "OK" }));
-    } catch {}
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ approvalId: 1, action: "approve" }),
+      }),
+    );
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1 },
+        data: expect.objectContaining({ status: "approved" }),
+      }),
+    );
   });
 
   it("approveStep succeeds when stepDef not found (assertStepApprover)", async () => {
@@ -605,9 +672,12 @@ describe("approveStep / rejectStep branches", () => {
     mocks.prismaMock.approval.findUnique.mockResolvedValue({
       id: 1,
       status: "pending",
-      currentStep: 99,
+      currentStep: 1,
       documentType: "PR",
       documentId: 1,
+      referenceType: "PurchaseRequest",
+      referenceId: 1,
+      requestedBy: 2,
       workflow: {
         steps: [
           {
@@ -619,9 +689,18 @@ describe("approveStep / rejectStep branches", () => {
         ],
       },
     });
-    try {
-      await actions.approveStep(1, fdMap({ notes: "OK" }));
-    } catch {}
+    await actions.approveStep(1, fdMap({ notes: "OK" }));
+    expect(mocks.prismaMock.approval.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 1 },
+        data: expect.objectContaining({ status: "approved" }),
+      }),
+    );
+    expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ approvalId: 1, action: "approve" }),
+      }),
+    );
   });
 
   it("approveStep fails real validation when notes > 2000 chars", async () => {

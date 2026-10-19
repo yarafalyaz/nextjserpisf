@@ -15,9 +15,9 @@ COPY prisma/ ./prisma/
 COPY scripts/pre-migrate-column-audit.mjs ./scripts/pre-migrate-column-audit.mjs
 COPY next.config.ts tsconfig.json tsconfig.build.json postcss.config.mjs next-env.d.ts eslint.config.mjs prisma.config.ts ./
 
-# Generate Prisma Client
+# Generate Prisma Client (local binary — no npx registry fetch)
 ENV DATABASE_URL="mysql://build:build@localhost:3306/build"
-RUN npx prisma generate
+RUN ./node_modules/.bin/prisma generate
 
 # Build the Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1

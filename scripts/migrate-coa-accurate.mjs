@@ -858,4 +858,7 @@ async function main() {
   }
 }
 
-main()
+main().catch((error) => {
+  console.error("Migrasi gagal:", error instanceof Error ? error.message : error)
+  process.exitCode = 1
+})

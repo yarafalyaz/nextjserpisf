@@ -194,7 +194,7 @@ export function formatFileSize(bytes: number): string {
     units.length - 1,
   );
 
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${units[i]}`;
+  return `${Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${units[i]}`;
 }
 
 /**
@@ -282,7 +282,7 @@ export function formatPeriod(period: string | null | undefined): string {
     "November",
     "Desember",
   ];
-  const mIndex = parseInt(month, 10) - 1;
+  const mIndex = Number.parseInt(month, 10) - 1;
   if (mIndex >= 0 && mIndex < 12) {
     return `${months[mIndex]} ${year}`;
   }

@@ -84,7 +84,7 @@ elapsed() {
 
 cleanup() {
   # Kill next server if we started one
-  if [ -n "${NEXT_PID:-}" ]; then
+  if [[ -n "${NEXT_PID:-}" ]]; then
     kill "$NEXT_PID" 2>/dev/null || true
     wait "$NEXT_PID" 2>/dev/null || true
   fi
@@ -116,12 +116,12 @@ step "ESLint"
 STAGE_START=$(date +%s)
 LINT_LOG="$LOG_DIR/lint_${TIMESTAMP}.log"
 
-if npx eslint src/ --max-warnings=0 > "$LINT_LOG" 2>&1; then
+if node_modules/.bin/eslint src/ --max-warnings=0 > "$LINT_LOG" 2>&1; then
   pass "Lint passed ($(elapsed $STAGE_START))"
   RESULTS+=("${GREEN}✔ Lint${NC}")
 else
   # Retry with warnings allowed (non-blocking)
-  if npx eslint src/ > "$LINT_LOG" 2>&1; then
+  if node_modules/.bin/eslint src/ > "$LINT_LOG" 2>&1; then
     echo -e "  ${YELLOW}⚠ Lint passed with warnings ($(elapsed $STAGE_START))${NC}"
     RESULTS+=("${YELLOW}⚠ Lint (warnings)${NC}")
   else
@@ -138,7 +138,7 @@ step "TypeScript Type Check"
 STAGE_START=$(date +%s)
 TSC_LOG="$LOG_DIR/tsc_${TIMESTAMP}.log"
 
-if npx tsc --noEmit > "$TSC_LOG" 2>&1; then
+if node_modules/.bin/tsc --noEmit > "$TSC_LOG" 2>&1; then
   pass "Type check passed ($(elapsed $STAGE_START))"
   RESULTS+=("${GREEN}✔ TypeScript${NC}")
 else
@@ -157,7 +157,7 @@ step "Unit & Integration Tests (Vitest)"
 STAGE_START=$(date +%s)
 UNIT_LOG="$LOG_DIR/unit_${TIMESTAMP}.log"
 
-if npx vitest run --reporter=verbose > "$UNIT_LOG" 2>&1; then
+if node_modules/.bin/vitest run --reporter=verbose > "$UNIT_LOG" 2>&1; then
   pass "Unit tests passed ($(elapsed $STAGE_START))"
   RESULTS+=("${GREEN}✔ Unit Tests${NC}")
 else
@@ -206,7 +206,7 @@ DB_LOG="$LOG_DIR/db_${TIMESTAMP}.log"
 DB_OK=true
 
 # Prisma generate
-if npx prisma generate > "$DB_LOG" 2>&1; then
+if node_modules/.bin/prisma generate > "$DB_LOG" 2>&1; then
   pass "Prisma generate OK"
 else
   fail "Prisma generate failed" "$DB_LOG"
@@ -219,7 +219,7 @@ fi
 # `.github/workflows/ci.yml`. `db push` menutupi ketidaksesuaian skema vs
 # migrasi; `migrate deploy` membuatnya GAGAL KERAS.
 if $DB_OK; then
-  if npx prisma migrate deploy >> "$DB_LOG" 2>&1; then
+  if node_modules/.bin/prisma migrate deploy >> "$DB_LOG" 2>&1; then
     pass "DB migrated"
   else
     echo -e "  ${YELLOW}⚠ DB migrate failed (mungkin DB belum running)${NC}"
@@ -237,16 +237,16 @@ STAGE_START=$(date +%s)
 E2E_LOG="$LOG_DIR/e2e_${TIMESTAMP}.log"
 
 # Pastikan browsers terinstall
-if ! npx playwright install --dry-run chromium > /dev/null 2>&1; then
+if ! node_modules/.bin/playwright install --dry-run chromium > /dev/null 2>&1; then
   echo -e "  ${YELLOW}Installing Playwright browsers...${NC}"
-  npx playwright install chromium >> "$E2E_LOG" 2>&1
+  node_modules/.bin/playwright install chromium >> "$E2E_LOG" 2>&1
 fi
 
 # Run E2E
 export E2E_PORT
 export CI=true
 
-if npx playwright test --reporter=list > "$E2E_LOG" 2>&1; then
+if node_modules/.bin/playwright test --reporter=list > "$E2E_LOG" 2>&1; then
   pass "E2E tests passed ($(elapsed $STAGE_START))"
   RESULTS+=("${GREEN}✔ E2E Tests${NC}")
 else

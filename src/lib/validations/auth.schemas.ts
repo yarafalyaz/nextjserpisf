@@ -13,7 +13,7 @@ import { z } from "zod"
 // Permissive but not absurd: blocks whitespace, requires "@", requires at
 // least one "." in the domain with 1+ char on each side, and caps total
 // length so a 5MB string never reaches the user.create / user.update path.
-const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+const emailRegex = /^[^\s@]{1,64}@[^\s@]{1,253}\.[^\s@]{1,63}$/
 
 const emailField = z
   .string()

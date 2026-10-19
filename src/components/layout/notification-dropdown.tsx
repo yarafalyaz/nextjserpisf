@@ -57,7 +57,7 @@ export function NotificationDropdown() {
 
   function handleToggle() {
     if (!isOpen) {
-      fetchNotifications()
+      void fetchNotifications()
     }
     setIsOpen(!isOpen)
   }

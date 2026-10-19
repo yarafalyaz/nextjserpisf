@@ -10,7 +10,7 @@ if ! docker info > /dev/null 2>&1; then
 fi
 
 # Ensure .env exists
-if [ ! -f .env ]; then
+if [[ ! -f .env ]]; then
     echo "Error: .env file not found. Copying .env.example..."
     cp .env.example .env
 fi
@@ -28,13 +28,13 @@ docker compose up -d --build
 echo "Waiting for database to be healthy..."
 MAX_RETRIES=30
 COUNT=0
-until [ "$(docker inspect -f '{{.State.Health.Status}}' silengkap_dev_db 2>/dev/null)" == "healthy" ] || [ $COUNT -eq $MAX_RETRIES ]; do
+until [[ "$(docker inspect -f '{{.State.Health.Status}}' silengkap_dev_db 2>/dev/null)" == "healthy" ]] || [[ $COUNT -eq $MAX_RETRIES ]]; do
     sleep 2
     COUNT=$((COUNT + 1))
     echo "Checking database status... ($COUNT/$MAX_RETRIES)"
 done
 
-if [ "$(docker inspect -f '{{.State.Health.Status}}' silengkap_dev_db 2>/dev/null)" != "healthy" ]; then
+if [[ "$(docker inspect -f '{{.State.Health.Status}}' silengkap_dev_db 2>/dev/null)" != "healthy" ]]; then
     echo "Warning: Database health check timed out. Checking logs..."
     docker logs silengkap_dev_db --tail 20
 fi

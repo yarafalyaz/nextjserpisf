@@ -47,7 +47,7 @@ export async function updateSystemSettings(formData: FormData) {
     if (!has(key)) return undefined
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return undefined
-    const n = parseInt(String(v), 10)
+    const n = Number.parseInt(String(v), 10)
     return isNaN(n) ? undefined : n
   }
 
@@ -60,7 +60,7 @@ export async function updateSystemSettings(formData: FormData) {
     if (!has(key)) return undefined
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return null
-    const n = parseInt(String(v), 10)
+    const n = Number.parseInt(String(v), 10)
     return isNaN(n) ? null : n
   }
 
@@ -68,7 +68,7 @@ export async function updateSystemSettings(formData: FormData) {
     if (!has(key)) return undefined
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return undefined
-    const n = parseFloat(String(v))
+    const n = Number.parseFloat(String(v))
     return isNaN(n) ? undefined : n
   }
 
@@ -81,7 +81,7 @@ export async function updateSystemSettings(formData: FormData) {
     if (!has(key)) return undefined
     const v = formData.get(key)
     if (!v || String(v).trim() === "") return null
-    const n = parseFloat(String(v))
+    const n = Number.parseFloat(String(v))
     return isNaN(n) ? null : n
   }
 

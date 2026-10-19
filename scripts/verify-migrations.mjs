@@ -16,7 +16,12 @@
  * dihapus di blok `finally` — termasuk bila ada langkah yang gagal.
  */
 import { execFileSync } from "node:child_process"
+import { existsSync } from "node:fs"
 import mariadb from "mariadb"
+
+// S4036: jangan andalkan PATH pemanggil untuk menemukan npx. Cari biner
+// node/npm pada lokasi tetap; bila tak ada, pakai process.execPath agar
+// npx dijalankan lewat node yang sama dengan skrip ini.
 
 /**
  * URL yang dipakai untuk SEMUA langkah (buat DB scratch → migrate deploy → diff → hapus).
@@ -52,7 +57,10 @@ const urlScratch = (() => {
 })()
 
 function jalankan(args) {
-  return execFileSync("npx", args, {
+  const npxBin =
+    ["/usr/local/bin/npx", "/usr/bin/npx", "/opt/homebrew/bin/npx"].find((p) => existsSync(p)) ??
+    "npx"
+  return execFileSync(npxBin, args, {
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     env: { ...process.env, DATABASE_URL: urlScratch },

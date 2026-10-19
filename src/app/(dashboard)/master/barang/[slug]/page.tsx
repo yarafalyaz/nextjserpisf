@@ -206,8 +206,8 @@ export default async function ItemDetailPage({
     // Fallback: extract party info from description if not resolved
     if (party === "-" && sm.description) {
       // Try to extract "dari X" or "untuk X" or "dari X - reason"
-      const dariMatch = sm.description.match(/(?:dari|from)\s+(.+?)(?:\s*[-–]|$)/i)
-      const untukMatch = sm.description.match(/(?:untuk|to|for)\s+(.+?)(?:\s*[-–]|$)/i)
+      const dariMatch = sm.description.match(/(?:dari|from)\s+(.{1,500}?)(?:\s*[-–]|$)/i)
+      const untukMatch = sm.description.match(/(?:untuk|to|for)\s+(.{1,500}?)(?:\s*[-–]|$)/i)
       if (dariMatch) { party = dariMatch[1].trim(); partyLabel = "Pemasok" }
       else if (untukMatch) { party = untukMatch[1].trim(); partyLabel = "Pelanggan" }
       else { party = sm.description }

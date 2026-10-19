@@ -44,7 +44,7 @@ async function getAssetGlAccounts(category?: AssetGlCategory) {
       accumulatedDepreciationAccountId: true,
     },
   })
-  const env = (key: string) => parseInt(process.env[key] || "0") || 0
+  const env = (key: string) => Number.parseInt(process.env[key] || "0") || 0
   const first = (...candidates: (number | null | undefined)[]) =>
     candidates.find((c) => typeof c === "number" && c > 0) ?? 0
 

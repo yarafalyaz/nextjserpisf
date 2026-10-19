@@ -989,7 +989,7 @@ export function generateWorkOrderPDF(
       }
 
       // Section headers: [INFORMASI PROYEK], [DAFTAR ITEM...], etc.
-      if (/^\[.*\]$/.test(line.trim())) {
+      if (/^\[[^\]]{0,500}\]$/.test(line.trim())) {
         y += 3
         doc.setFont("Helvetica", "bold")
         doc.setFontSize(9)
@@ -1065,7 +1065,7 @@ export function generateWorkOrderPDF(
       }
 
       // Key-value lines: "Nama Proyek  : xxx", "Pelanggan    : xxx"
-      const kvMatch = line.match(/^(\S[^:]+?)\s*:\s*(.+)$/)
+      const kvMatch = line.match(/^(\S[^:]{0,500})\s*:\s*(.{1,2000})$/)
       if (kvMatch) {
         doc.setFont("Helvetica", "normal")
         doc.setFontSize(8.5)

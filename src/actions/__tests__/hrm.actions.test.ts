@@ -719,6 +719,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createLeaveRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -727,6 +728,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createOvertimeRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("approveOvertime handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -735,6 +737,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).approveOvertime(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("getPayrollEstimation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -743,6 +746,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).getPayrollEstimation(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("generateBulkPayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -751,6 +755,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).generateBulkPayroll(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("processPayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -759,6 +764,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).processPayroll(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updatePayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -767,6 +773,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updatePayroll(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("approvePayroll handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -775,6 +782,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).approvePayroll(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("markPayrollPaid handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -783,6 +791,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).markPayrollPaid(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createEmployeeLoan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -791,6 +800,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createEmployeeLoan(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createTimesheet handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -799,6 +809,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createTimesheet(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteLeaveRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -807,6 +818,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteLeaveRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -815,6 +827,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteOvertimeRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteTimesheet handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -823,6 +836,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteTimesheet(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteEmployeeLoan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -831,6 +845,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteEmployeeLoan(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateLeaveRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -839,6 +854,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateLeaveRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateOvertimeRequest handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -847,6 +863,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateOvertimeRequest(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateEmployeeLoan handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -855,6 +872,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateEmployeeLoan(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateTimesheet handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -863,6 +881,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateTimesheet(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("createAppreciation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -871,6 +890,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).createAppreciation(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("updateAppreciation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -879,6 +899,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).updateAppreciation(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
   it("deleteAppreciation handles error globally", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
@@ -887,6 +908,7 @@ describe('Global Error Paths (Permission Reject)', () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try { await (actions as any).deleteAppreciation(arg1, arg2); } catch {} 
+    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
   })
 })
 

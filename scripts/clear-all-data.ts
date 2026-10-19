@@ -113,4 +113,7 @@ async function main() {
   }
 }
 
-main();
+main().catch((e) => {
+  console.error("Error clearing data:", e);
+  process.exitCode = 1;
+});

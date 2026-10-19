@@ -53,7 +53,7 @@ import { createHash } from "node:crypto"
 export function payloadFingerprint(parts: Record<string, string | number>): string {
   const canon = JSON.stringify(
     Object.keys(parts)
-      .sort()
+      .sort((a, b) => a.localeCompare(b))
       .map((k) => [k, parts[k]]),
   )
   return createHash("sha256").update(canon).digest("hex")

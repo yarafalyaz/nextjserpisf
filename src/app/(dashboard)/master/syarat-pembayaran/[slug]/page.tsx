@@ -49,19 +49,19 @@ export default async function PaymentTermDetailPage({
       <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Kode</label>
+            <span className="text-sm font-medium text-foreground" aria-hidden="true">Kode</span>
             <p className="font-mono">{paymentTerm.code}</p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Nama</label>
+            <span className="text-sm font-medium text-foreground" aria-hidden="true">Nama</span>
             <p>{paymentTerm.name}</p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Jumlah Hari</label>
+            <span className="text-sm font-medium text-foreground" aria-hidden="true">Jumlah Hari</span>
             <p>{paymentTerm.days} hari</p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-foreground">Status</label>
+            <span className="text-sm font-medium text-foreground" aria-hidden="true">Status</span>
             <span className={`badge ${paymentTerm.isActive ? "badge-success" : "badge-secondary"}`}>
               {paymentTerm.isActive ? "Aktif" : "Nonaktif"}
             </span>

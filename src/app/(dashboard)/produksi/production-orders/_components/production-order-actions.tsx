@@ -73,7 +73,6 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
     if (qty !== undefined && (!Number.isFinite(qty) || qty <= 0)) {
       return showError("Kuantitas yang diselesaikan harus lebih dari 0")
     }
-    const isPartial = qty !== undefined && qty < remainingQty
     startTransition(async () => {
       const res = await completeProductionOrder(orderId, serialNumbers, qty)
       if (!res.success) return showError(res.error || "Gagal menyelesaikan")
@@ -86,8 +85,7 @@ export function ProductionOrderActions({ orderId, status, items, outputQty, outp
       setCompleteOpen(false)
       setSerialNumbersText("")
       setCompleteQty("")
-      if (isPartial) router.refresh()
-      else router.refresh()
+      router.refresh()
     })
   }
 

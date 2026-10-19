@@ -13,7 +13,7 @@ services:
     environment:
       - TZ=Asia/Jakarta
       - DATABASE_URL=mysql://${DB_USER:-silengkap_user}:${DB_PASSWORD:?set DB_PASSWORD di .env produksi}@db:3306/${DB_NAME:-silengkap}
-    command: ["sh", "-c", "node scripts/pre-migrate-column-audit.mjs && npx prisma migrate deploy"]
+    command: ["sh", "-c", "node scripts/pre-migrate-column-audit.mjs && ./node_modules/.bin/prisma migrate deploy"]
     depends_on:
       db:
         condition: service_healthy

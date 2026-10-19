@@ -25,11 +25,11 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci
-      - run: npx prisma generate
+      - run: ./node_modules/.bin/prisma generate
         env:
           DATABASE_URL: mysql://root@localhost:3306/dummy
-      - run: npx eslint .
-      - run: npx tsc --noEmit
+      - run: ./node_modules/.bin/eslint .
+      - run: ./node_modules/.bin/tsc --noEmit
 
   unit:
     name: Unit Tests
@@ -41,10 +41,10 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci
-      - run: npx prisma generate
+      - run: ./node_modules/.bin/prisma generate
         env:
           DATABASE_URL: mysql://root@localhost:3306/dummy
-      - run: npx vitest run
+      - run: ./node_modules/.bin/vitest run
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
 
@@ -73,32 +73,32 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci
-      - run: npx prisma generate
+      - run: ./node_modules/.bin/prisma generate
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       # `migrate deploy`, bukan `db push`: rantai migrasi sudah diverifikasi bisa
       # mereproduksi skema dari DB kosong (drift 0). Dengan ini ketidaksesuaian skema vs
       # migrasi GAGAL KERAS, bukan tertutupi — konsekuensinya setiap perubahan skema
       # wajib menyertakan migrasinya.
-      - run: npx prisma migrate deploy
+      - run: ./node_modules/.bin/prisma migrate deploy
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx prisma/seed.ts
+      - run: ./node_modules/.bin/tsx prisma/seed.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx scripts/seed-remaining-e2e.ts
+      - run: ./node_modules/.bin/tsx scripts/seed-remaining-e2e.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - name: Run DB integration tests (FIFO/multi-UoM/batch/serial engine)
-        run: RUN_DB_INTEGRATION=1 npx vitest run src/lib/services/__tests__/inventory-integration.test.ts
+        run: RUN_DB_INTEGRATION=1 ./node_modules/.bin/vitest run src/lib/services/__tests__/inventory-integration.test.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx playwright install --with-deps chromium
+      - run: ./node_modules/.bin/playwright install --with-deps chromium
       - run: npm run build
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       - name: Run Auth Setup
-        run: npx playwright test --project=setup --workers=1
+        run: ./node_modules/.bin/playwright test --project=setup --workers=1
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
           NEXTAUTH_SECRET: ci-secret
@@ -149,23 +149,23 @@ jobs:
       - name: Tune MariaDB
         run: |
           mysql -h 127.0.0.1 -u root -e "SET GLOBAL max_connections=200; SET GLOBAL wait_timeout=600; SET GLOBAL interactive_timeout=600;" 
-      - run: npx prisma generate
+      - run: ./node_modules/.bin/prisma generate
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
       # `migrate deploy`, bukan `db push`: rantai migrasi sudah diverifikasi bisa
       # mereproduksi skema dari DB kosong (drift 0). Dengan ini ketidaksesuaian skema vs
       # migrasi GAGAL KERAS, bukan tertutupi — konsekuensinya setiap perubahan skema
       # wajib menyertakan migrasinya.
-      - run: npx prisma migrate deploy
+      - run: ./node_modules/.bin/prisma migrate deploy
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx prisma/seed.ts
+      - run: ./node_modules/.bin/tsx prisma/seed.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx tsx scripts/seed-remaining-e2e.ts
+      - run: ./node_modules/.bin/tsx scripts/seed-remaining-e2e.ts
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-      - run: npx playwright install --with-deps chromium
+      - run: ./node_modules/.bin/playwright install --with-deps chromium
       - name: Download Auth State
         uses: actions/download-artifact@v7
         with:
@@ -178,7 +178,7 @@ jobs:
         # Both viewports: the mobile project guards a whole surface (drawers,
         # card lists, `lg:hidden` toolbars) that chromium alone never touches -
         # 331 mobile tests were previously never executed anywhere.
-        run: npx playwright test --project=chromium --project=mobile-chrome --no-deps --workers=1 --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
+        run: ./node_modules/.bin/playwright test --project=chromium --project=mobile-chrome --no-deps --workers=1 --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
           NEXTAUTH_SECRET: ci-secret
