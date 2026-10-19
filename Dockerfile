@@ -12,7 +12,7 @@ RUN npm ci --ignore-scripts
 COPY src/ ./src/
 COPY public/ ./public/
 COPY prisma/ ./prisma/
-COPY next.config.ts tsconfig.json postcss.config.mjs next-env.d.ts eslint.config.js prisma.config.ts ./
+COPY next.config.ts tsconfig.json tsconfig.build.json postcss.config.mjs next-env.d.ts eslint.config.mjs prisma.config.ts ./
 
 # Generate Prisma Client
 ENV DATABASE_URL="mysql://build:build@localhost:3306/build"
