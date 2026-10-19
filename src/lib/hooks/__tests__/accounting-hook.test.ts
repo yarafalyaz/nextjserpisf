@@ -185,6 +185,25 @@ function journalEntryBranch() {
   };
 }
 
+/** Objek `tx` sales-invoice bersama; hanya `inventoryLayer.groupBy` yang beda antar tes. */
+function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
+  return {
+    systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
+    salesInvoice: {
+      findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
+      findUnique: mocks.invoiceFindUnique,
+    },
+    journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
+    journalEntry: journalEntryBranch(),
+    item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
+    uomConversion: { findMany: mocks.uomConversionFindMany },
+    stockMove: { create: mocks.stockMoveCreate },
+    inventoryLayer: { groupBy: inventoryLayerGroupBy },
+    $queryRaw: mocks.queryRaw,
+    $executeRaw: mocks.executeRaw,
+  };
+}
+
 
 const innerInvoice = (over: Record<string, unknown> = {}) => ({
   id: 1, totalAmount: 1000, taxAmount: 0, date: new Date(), documentNo: "INV-1", ...over,
@@ -571,25 +590,11 @@ describe("onSalesInvoicePosted", () => {
     ]);
     // Only 1 unit available, 2 requested → must refuse.
     mocks.transaction.mockImplementationOnce((fn: any) =>
-      fn({
-        systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
-        salesInvoice: {
-          findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
-          findUnique: mocks.invoiceFindUnique,
-        },
-        journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-        journalEntry: journalEntryBranch(),
-        item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
-        uomConversion: { findMany: mocks.uomConversionFindMany },
-        stockMove: { create: mocks.stockMoveCreate },
-        inventoryLayer: {
-          groupBy: vi.fn().mockResolvedValue([
-            { itemId: 50, warehouseId: 7, _sum: { remaining: 1 } },
-          ]),
-        },
-        $queryRaw: mocks.queryRaw,
-        $executeRaw: mocks.executeRaw,
-      }),
+      fn(
+        buildSalesInvoiceTx(
+          vi.fn().mockResolvedValue([{ itemId: 50, warehouseId: 7, _sum: { remaining: 1 } }]),
+        ),
+      ),
     );
 
     await expect(onSalesInvoicePosted(1, 999)).rejects.toThrow(/Stok tidak mencukupi/)
@@ -606,31 +611,19 @@ describe("onSalesInvoicePosted", () => {
     mocks.fifoConsume.mockResolvedValue({ consumedCost: 200, shortfall: 0 });
     mocks.journalCreate.mockResolvedValue({ id: 50 });
     mocks.transaction.mockImplementationOnce((fn: any) =>
-      fn({
-        systemSetting: { findFirst: vi.fn().mockResolvedValue(mocks.systemSettings) },
-        salesInvoice: {
-          findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
-          findUnique: mocks.invoiceFindUnique,
-        },
-        journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-        journalEntry: journalEntryBranch(),
-        item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
-        uomConversion: { findMany: mocks.uomConversionFindMany },
-        stockMove: { create: mocks.stockMoveCreate },
-        inventoryLayer: {
+      fn(
+        buildSalesInvoiceTx(
           // Stock lives in warehouse 9 only, and warehouse 9 is NOT the default
           // warehouse of any sold item. The per-(item,warehouse) query (restricted
           // to default warehouses) therefore returns nothing, while the
           // any-warehouse query must still see the 5 units — otherwise a valid
           // multi-warehouse sale of a null-default item is wrongly rejected.
-          groupBy: vi.fn().mockImplementation(async (args: any) => {
+          vi.fn().mockImplementation(async (args: any) => {
             if (args?.by?.includes("warehouseId")) return [];
             return [{ itemId: 50, _sum: { remaining: 5 } }];
           }),
-        },
-        $queryRaw: mocks.queryRaw,
-        $executeRaw: mocks.executeRaw,
-      }),
+        ),
+      ),
     );
 
     await onSalesInvoicePosted(1, 999);

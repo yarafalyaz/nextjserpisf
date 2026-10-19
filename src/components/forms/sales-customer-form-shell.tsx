@@ -1,0 +1,64 @@
+"use client"
+
+import type { FormEventHandler, ReactNode } from "react"
+import { useRouter } from "next/navigation"
+import type { Control, FieldPath, FieldValues } from "react-hook-form"
+import { CustomerSelectField } from "@/components/forms/customer-select-field"
+import { Button } from "@/components/ui/button"
+
+interface SalesCustomerFormShellProps<
+  TFieldValues extends FieldValues,
+  TName extends FieldPath<TFieldValues>,
+> {
+  onSubmit: FormEventHandler<HTMLFormElement>
+  control: Control<TFieldValues>
+  name: TName
+  options: { id: number; name: string }[]
+  onCustomerCreated: (created: { id: number; name: string }) => void
+  error?: string
+  submitId: string
+  isPending: boolean
+  isEditing: boolean
+  afterGrid?: ReactNode
+  children: ReactNode
+}
+
+export function SalesCustomerFormShell<
+  TFieldValues extends FieldValues,
+  TName extends FieldPath<TFieldValues>,
+>({
+  onSubmit,
+  control,
+  name,
+  options,
+  onCustomerCreated,
+  error,
+  submitId,
+  isPending,
+  isEditing,
+  afterGrid,
+  children,
+}: SalesCustomerFormShellProps<TFieldValues, TName>) {
+  const router = useRouter()
+  return (
+    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+        <CustomerSelectField
+          control={control}
+          name={name}
+          options={options}
+          onCustomerCreated={onCustomerCreated}
+          error={error}
+        />
+        {children}
+      </div>
+      {afterGrid}
+      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
+        <Button type="button" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" isDisabled={isPending}  id={submitId}>
+          {isPending ? "Menyimpan..." : isEditing ? "Perbarui" : "Simpan"}
+        </Button>
+      </div>
+    </form>
+  )
+}

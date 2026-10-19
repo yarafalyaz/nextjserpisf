@@ -1,19 +1,12 @@
 export const dynamic = 'force-dynamic'
 
-import { cookies } from 'next/headers'
 import { requirePermission } from '@/lib/auth/permissions'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { StatementTableView } from "@/components/reports/statement-table-view"
-import {
-  allStatementOptionParamNames,
-  decodeStatementOptions,
-  parseStatementOptions,
-  statementOptionsToParams,
-  STATEMENT_OPTIONS_COOKIE,
-} from "@/lib/reports/statement-display"
-import { reportPeriodFromRoute } from "@/lib/reports/report-period"
+import { statementOptionsToParams } from "@/lib/reports/statement-display"
+import { loadStatementOptionsContext } from "@/lib/reports/statement-options-context"
 import { loadIncomeStatementStatement } from "@/lib/reports/statement-data"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { serializeStatementCsv } from "@/lib/reports/statement-csv"
@@ -31,21 +24,7 @@ export default async function IncomeStatementPage({
   searchParams: Promise<Record<string, string | undefined>>
 }) {
   const user = await requirePermission('view_reports')
-  const search = await searchParams
-
-  // Periode dari path; tautan lama (?tanggalMulai=) tetap dihormati. Aturannya
-  // hidup di satu tempat, `reportPeriodFromRoute`.
-  const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
-    start: new Date(now.getFullYear(), 0, 1),
-    end: now,
-  }))
-
-  const cookieStore = await cookies()
-  const fromCookie = decodeStatementOptions(cookieStore.get(STATEMENT_OPTIONS_COOKIE)?.value)
-  // An explicit query param (legacy share link) wins over the stored preference.
-  const hasQueryOptions = allStatementOptionParamNames().some((name) => search[name] !== undefined)
-  const options = hasQueryOptions ? parseStatementOptions(search) : fromCookie.options
-  const showPercent = search.kolomPersen !== undefined ? search.kolomPersen === '1' : fromCookie.percentColumn
+  const { period, options, showPercent } = await loadStatementOptionsContext(routeParams, searchParams)
 
   // Baris tabel disusun sekali di sini dan dipakai bersama layar + engine PDF.
   const statement = await loadIncomeStatementStatement(period, options, showPercent)
