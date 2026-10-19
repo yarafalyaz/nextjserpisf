@@ -27,6 +27,7 @@ import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/appr
 import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 // ==================== QUOTATION ACTIONS ====================
 
@@ -73,8 +74,8 @@ export async function createQuotation(formData: FormData) {
         customerVehicleId: data.customerVehicleId
           ? Number(data.customerVehicleId)
           : null,
-        date: new Date(data.date),
-        validUntil: data.validUntil ? new Date(data.validUntil) : null,
+        date: wibDateToUtcMidnight(data.date),
+        validUntil: data.validUntil ? wibDateToUtcMidnight(data.validUntil) : null,
         subtotal: computedSubtotal,
         discount: headerDiscount,
         tax: headerTax,
@@ -469,8 +470,8 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
         customerVehicleId: data.customerVehicleId
           ? Number(data.customerVehicleId)
           : null,
-        date: data.date ? new Date(data.date) : undefined,
-        validUntil: data.validUntil ? new Date(data.validUntil) : null,
+        date: data.date ? wibDateToUtcMidnight(data.date) : undefined,
+        validUntil: data.validUntil ? wibDateToUtcMidnight(data.validUntil) : null,
         subtotal: computedSubtotal,
         discount: headerDiscount,
         tax: headerTax,
@@ -553,7 +554,7 @@ export async function createDownPayment(formData: FormData) {
           quotationId,
           customerId: quotation.customerId,
           amount,
-          paymentDate: new Date(v.paymentDate),
+          paymentDate: wibDateToUtcMidnight(v.paymentDate),
           paymentMethod: v.paymentMethod ?? null,
           proofImage,
           notes: v.notes ?? null,
@@ -853,8 +854,8 @@ export async function createSalesOrder(formData: FormData) {
         slug,
         customerId: v.customerId,
         quotationId: v.quotationId ?? null,
-                date: new Date(v.date),
-        deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+                date: wibDateToUtcMidnight(v.date),
+        deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
         notes: v.notes ?? null,
         status: "draft" as const,
         createdBy: Number(user.id),
@@ -961,7 +962,7 @@ export async function createSalesInvoice(formData: FormData) {
   // Lapis-2: tanggal faktur harus di periode terbuka, sebelum mutasi apa pun.
   // (Lapis-1 tinggal di hook posting; faktur draft belum memposting jadi hook
   // tidak menyala — penjagaan di sini menutup celah back-date draft.)
-  await assertPeriodOpen(new Date(v.date))
+  await assertPeriodOpen(wibDateToUtcMidnight(v.date))
 
   const documentNo = await generateDocumentNumber("INV")
   const slug = await nextSlug("salesInvoice", documentNo)
@@ -1002,8 +1003,8 @@ export async function createSalesInvoice(formData: FormData) {
         customerId: v.customerId,
         salesOrderId: v.salesOrderId ?? null,
         quotationId: v.quotationId ?? null,
-        date: new Date(v.date),
-        dueDate: v.dueDate ? new Date(v.dueDate) : null,
+        date: wibDateToUtcMidnight(v.date),
+        dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
         subtotal,
         discount: discountTotal,
         tax: taxAmount,
@@ -1110,13 +1111,13 @@ export async function createSalesPayment(formData: FormData) {
         salesInvoiceId,
         customerId: invoice.customerId,
         amount,
-        paymentDate: new Date(v.paymentDate),
+        paymentDate: wibDateToUtcMidnight(v.paymentDate),
         paymentMethod: v.paymentMethod,
         accountId: v.accountId ?? null,
         withholdingTypeId: v.withholdingTypeId ?? null,
         withholdingAmount,
         withholdingCertificateNo: v.withholdingCertificateNo ?? null,
-        withholdingDate: v.withholdingDate ? new Date(v.withholdingDate) : null,
+        withholdingDate: v.withholdingDate ? wibDateToUtcMidnight(v.withholdingDate) : null,
         referenceNo: v.referenceNo ?? null,
         notes: v.notes ?? null,
         createdBy: Number(user.id),
@@ -1319,7 +1320,7 @@ export async function createSalesReturn(formData: FormData) {
         slug,
         salesInvoiceId: invoiceId,
         customerId: v.customerId,
-        date: new Date(v.date),
+        date: wibDateToUtcMidnight(v.date),
         reason: v.reason ?? null,
         status: "draft",
         createdBy: Number(user.id),
@@ -1462,8 +1463,8 @@ export async function createDeliveryOrder(formData: FormData) {
       doNumber: v.doNumber ?? null,
       customerId: salesOrder.customerId,
       salesOrderId,
-      date: new Date(v.date),
-      deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+      date: wibDateToUtcMidnight(v.date),
+      deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
       shippingAddress: v.shippingAddress ?? null,
       shippingProvince: v.shippingProvince ?? null,
       shippingCity: v.shippingCity ?? null,
@@ -1790,8 +1791,8 @@ export async function updateSalesOrder(id: number, formData: FormData) {
         // Pertahankan tautan penawaran bila payload tidak memuatnya — menulis
         // `?? null` menghapus tautan itu pada setiap penyimpanan.
         quotationId: v.quotationId ?? existing.quotationId,
-                date: new Date(v.date),
-        deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+                date: wibDateToUtcMidnight(v.date),
+        deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
         notes: v.notes ?? null,
       },
       include: { items: true },
@@ -1866,7 +1867,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
 
   // Lapis-2: tanggal baru harus di periode terbuka, sebelum mutasi apa pun —
   // termasuk sebelum reverse+repost jalur wasPosted di dalam transaksi.
-  await assertPeriodOpen(new Date(v.date))
+  await assertPeriodOpen(wibDateToUtcMidnight(v.date))
 
   const itemsJson = v.items
   const items = itemsJson ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; uom?: string | null; serialNumbers?: string[] | null; description?: string | null }>>(itemsJson) ?? []) : null
@@ -1905,8 +1906,8 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         // setiap kali faktur diedit, jadi nilai lama dipertahankan bila payload
         // tidak memuatnya.
         quotationId: v.quotationId ?? existingInvoice.quotationId,
-        date: new Date(v.date),
-        dueDate: v.dueDate ? new Date(v.dueDate) : null,
+        date: wibDateToUtcMidnight(v.date),
+        dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
         // Persist notes: the sales-invoice form exposes a notes textarea
         // but the previous data block silently dropped the value, so the
         // user's note input was never saved on edit.
@@ -2126,13 +2127,13 @@ export async function updateSalesPayment(id: number, formData: FormData) {
         slug,
         salesInvoiceId: newInvoiceId,
         amount: newAmount,
-        paymentDate: new Date(v.paymentDate),
+        paymentDate: wibDateToUtcMidnight(v.paymentDate),
         paymentMethod: v.paymentMethod,
         accountId: v.accountId ?? null,
         withholdingTypeId: v.withholdingTypeId ?? null,
         withholdingAmount: newWithholdingAmount,
         withholdingCertificateNo: v.withholdingCertificateNo ?? null,
-        withholdingDate: v.withholdingDate ? new Date(v.withholdingDate) : null,
+        withholdingDate: v.withholdingDate ? wibDateToUtcMidnight(v.withholdingDate) : null,
         referenceNo: v.referenceNo ?? null,
         notes: v.notes ?? null,
       },
@@ -2321,7 +2322,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
         slug,
         salesInvoiceId: updInvoiceId,
         customerId: input.customerId,
-        date: new Date(input.date),
+        date: wibDateToUtcMidnight(input.date),
         reason: input.reason ?? null,
         items: {
           create: validReturnItems
@@ -2388,8 +2389,8 @@ export async function updateDeliveryOrder(id: number, formData: FormData) {
       doNumber: v.doNumber ?? null,
       customerId: salesOrder?.customerId ?? null,
       salesOrderId: v.salesOrderId,
-      date: new Date(v.date),
-      deliveryDate: v.deliveryDate ? new Date(v.deliveryDate) : null,
+      date: wibDateToUtcMidnight(v.date),
+      deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
       shippingAddress: v.shippingAddress ?? null,
       shippingProvince: v.shippingProvince ?? null,
       shippingCity: v.shippingCity ?? null,
@@ -2467,7 +2468,7 @@ export async function updateDownPayment(id: number, formData: FormData) {
       quotationId,
       customerId: quotation.customerId,
       amount,
-      paymentDate: new Date(v.paymentDate),
+      paymentDate: wibDateToUtcMidnight(v.paymentDate),
       paymentMethod: v.paymentMethod ?? null,
       notes: v.notes ?? null,
     }

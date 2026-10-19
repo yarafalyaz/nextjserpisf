@@ -8,6 +8,19 @@ const optionalString = (max: number) =>
     .optional()
     .or(z.literal("").transform(() => undefined));
 
+/**
+ * Tanggal date-only opsional untuk dokumen penjualan.
+ *
+ * Sebelumnya tanggal memakai `optionalString(50)`/`z.string().max(50)`:
+ * "2026-02-30" lolos zod lalu `new Date(...)` di aksi menggulirkannya
+ * diam-diam ke 2 Mar. Kini `dateOnly` menolak tanggal tak-kalender;
+ * aksi mengonversi lewat `wibDateToUtcMidnight`.
+ */
+const optionalDate = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  dateOnly.optional(),
+);
+
 const requiredId = z.coerce.number().int().min(1, "ID wajib diisi");
 const optionalId = z.coerce.number().int().min(1).optional();
 
@@ -16,8 +29,8 @@ const optionalId = z.coerce.number().int().min(1).optional();
 export const updateQuotationSchema = z.object({
   customerId: optionalId,
   customerVehicleId: optionalId,
-  date: optionalString(50),
-  validUntil: optionalString(50),
+  date: optionalDate,
+  validUntil: optionalDate,
   paymentMethod: optionalString(200),
   shippingMethod: optionalString(200),
   notes: optionalString(500),
@@ -28,7 +41,7 @@ export const updateQuotationSchema = z.object({
 export const createDownPaymentSchema = z.object({
   quotationId: requiredId,
   amount: z.coerce.number().min(1, "Jumlah uang muka harus lebih dari 0"),
-  paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
+  paymentDate: dateOnly,
   paymentMethod: optionalString(200),
   notes: optionalString(500),
 });
@@ -40,8 +53,8 @@ export const updateDownPaymentSchema = createDownPaymentSchema;
 export const createSalesOrderSchema = z.object({
   customerId: requiredId,
   quotationId: optionalId,
-  date: z.string().min(1, "Tanggal wajib diisi").max(50),
-  deliveryDate: optionalString(50),
+  date: dateOnly,
+  deliveryDate: optionalDate,
   notes: optionalString(500),
   // Item disalin dari penawaran di dalam aksi; taxRate/discount hanya dipakai
   // bila pengguna menimpanya lewat form.
@@ -52,8 +65,8 @@ export const createSalesOrderSchema = z.object({
 export const updateSalesOrderSchema = z.object({
   customerId: requiredId,
   quotationId: optionalId,
-  date: z.string().min(1, "Tanggal wajib diisi").max(50),
-  deliveryDate: optionalString(50),
+  date: dateOnly,
+  deliveryDate: optionalDate,
   notes: optionalString(500),
   // Line items may be edited until a real settlement exists (custom
   // fabrication). Sent as a JSON string like the invoice editor. Per-line values
@@ -69,8 +82,8 @@ export const createSalesInvoiceSchema = z.object({
   customerId: requiredId,
   salesOrderId: optionalId,
   quotationId: optionalId,
-  date: z.string().min(1, "Tanggal wajib diisi").max(50),
-  dueDate: optionalString(50),
+  date: dateOnly,
+  dueDate: optionalDate,
   notes: optionalString(500),
   // Item boleh ikut saat pembuatan: faktur hasil konversi Pesanan Penjualan
   // harus lahir dengan baris itemnya, bukan header kosong bertotal 0.
@@ -91,7 +104,7 @@ export const updateSalesInvoiceSchema = createSalesInvoiceSchema;
 export const createSalesPaymentSchema = z.object({
   salesInvoiceId: requiredId,
   amount: z.coerce.number().min(1, "Jumlah pembayaran harus lebih dari 0"),
-  paymentDate: z.string().min(1, "Tanggal pembayaran wajib diisi").max(50),
+  paymentDate: dateOnly,
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(200),
   accountId: optionalId,
   // PPh yang dipotong pelanggan (opsional) — `amount` di atas tetap berarti kas
@@ -100,7 +113,7 @@ export const createSalesPaymentSchema = z.object({
   withholdingTypeId: optionalId,
   withholdingAmount: z.coerce.number().min(0, "Potongan PPh tidak boleh negatif").optional(),
   withholdingCertificateNo: optionalString(100),
-  withholdingDate: optionalString(50),
+  withholdingDate: optionalDate,
   referenceNo: optionalString(100),
   notes: optionalString(500),
   attachmentIds: optionalString(2000),
@@ -113,7 +126,7 @@ export const updateSalesPaymentSchema = createSalesPaymentSchema;
 export const createSalesReturnSchema = z.object({
   customerId: requiredId,
   salesInvoiceId: optionalId,
-  date: z.string().min(1, "Tanggal wajib diisi").max(50),
+  date: dateOnly,
   reason: optionalString(500),
   items: z.string().min(1, "Items wajib diisi").max(50000),
 });
@@ -144,8 +157,8 @@ export const DELIVERABLE_ORDER_STATUS_LABELS = "Disetujui, Dikonfirmasi, Diprose
 
 export const createDeliveryOrderSchema = z.object({
   salesOrderId: requiredId,
-  date: z.string().min(1, "Tanggal wajib diisi").max(50),
-  deliveryDate: optionalString(50),
+  date: dateOnly,
+  deliveryDate: optionalDate,
   doNumber: optionalString(200),
   shippingAddress: optionalString(500),
   shippingProvince: optionalString(200),
@@ -165,8 +178,8 @@ export const createDeliveryOrderSchema = z.object({
 
 export const updateDeliveryOrderSchema = z.object({
   salesOrderId: requiredId,
-  date: z.string().min(1, "Tanggal wajib diisi").max(50),
-  deliveryDate: optionalString(50),
+  date: dateOnly,
+  deliveryDate: optionalDate,
   doNumber: optionalString(200),
   shippingAddress: optionalString(500),
   shippingProvince: optionalString(200),
