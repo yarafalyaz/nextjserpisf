@@ -468,8 +468,16 @@ interface PayrollEstimationResult {
 }
 
 function assertPayrollDateRange(startDateStr: string, endDateStr: string): void {
-  const startDate = new Date(startDateStr);
-  const endDate = new Date(endDateStr);
+  // `new Date("2026-02-30")` rolls over silently to Mar 2 instead of failing,
+  // so route the raw strings through the strict calendar `dateOnly` (the same
+  // gate the payroll document dates use) before any parsing happens.
+  const start = dateOnly.safeParse(startDateStr);
+  const end = dateOnly.safeParse(endDateStr);
+  if (!start.success || !end.success) {
+    throw new Error("Rentang tanggal penggajian tidak valid");
+  }
+  const startDate = new Date(start.data);
+  const endDate = new Date(end.data);
   const rangeMs = endDate.getTime() - startDate.getTime();
   if (!Number.isFinite(rangeMs) || rangeMs < 0) {
     throw new Error("Rentang tanggal penggajian tidak valid");
@@ -1055,6 +1063,10 @@ export async function generateBulkPayroll(
 ) {
   try {
     const user = await requirePermission("create_payroll");
+    // Reject fictitious calendar dates before any rows are built: the bulk
+    // estimator/guard only checks range length, and `new Date("2026-02-30")`
+    // would otherwise persist the rolled-over date (Mar 2) on every slip.
+    assertPayrollDateRange(startDateStr, endDateStr);
 
     const employees = await prisma.employee.findMany({
       where: { isActive: true, deletedAt: null },
