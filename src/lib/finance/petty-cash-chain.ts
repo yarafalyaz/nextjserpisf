@@ -36,7 +36,9 @@ export function computePettyCashChain(
   let running = 0
   for (const rec of records) {
     const before = running
-    const after = rec.type === "IN" ? safeAdd(before, rec.amount, 0) : safeSubtract(before, rec.amount, 0)
+    // Decimal(15,2) di DB + jurnal GL pakai amount persis: chain wajib 2 desimal.
+    // decimals=0 dulu memotong sen (100000.50 -> 100001) dan meloloskan overdraw < Rp1.
+    const after = rec.type === "IN" ? safeAdd(before, rec.amount, 2) : safeSubtract(before, rec.amount, 2)
     out.push({ id: rec.id, balanceBefore: before, balanceAfter: after })
     running = after
   }
@@ -55,7 +57,7 @@ export function findFirstNegativeBalance(
 ): { record: PettyCashChainRecord; balanceAfter: number } | null {
   let running = 0
   for (const rec of records) {
-    running = rec.type === "IN" ? safeAdd(running, rec.amount, 0) : safeSubtract(running, rec.amount, 0)
+    running = rec.type === "IN" ? safeAdd(running, rec.amount, 2) : safeSubtract(running, rec.amount, 2)
     if (running < 0) {
       return { record: rec, balanceAfter: running }
     }

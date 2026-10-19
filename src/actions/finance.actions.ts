@@ -1044,8 +1044,8 @@ export async function createPettyCash(formData: FormData) {
 
       const balanceAfter =
         type === "IN"
-          ? safeAdd(balanceBefore, amount, 0)
-          : safeSubtract(balanceBefore, amount, 0);
+          ? safeAdd(balanceBefore, amount, 2)
+          : safeSubtract(balanceBefore, amount, 2);
 
       const created = await tx.pettyCash.create({
         data: {

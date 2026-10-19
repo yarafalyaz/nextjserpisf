@@ -95,3 +95,34 @@ describe("findFirstNegativeBalance", () => {
     expect(findFirstNegativeBalance(recs)).toBeNull()
   })
 })
+
+describe("petty cash chain preserves sen (Decimal 15,2)", () => {
+  it("keeps .50 / .25 through IN then OUT", () => {
+    const out = computePettyCashChain([
+      { id: 1, type: "IN", amount: 100000.5 },
+      { id: 2, type: "OUT", amount: 50000.25 },
+    ])
+    expect(out).toEqual([
+      { id: 1, balanceBefore: 0, balanceAfter: 100000.5 },
+      { id: 2, balanceBefore: 100000.5, balanceAfter: 50000.25 },
+    ])
+  })
+
+  it("does not round 100.49 up to 100 before subtracting", () => {
+    const out = computePettyCashChain([
+      { id: 1, type: "IN", amount: 100.49 },
+      { id: 2, type: "OUT", amount: 0.49 },
+    ])
+    expect(out[1].balanceAfter).toBe(100)
+  })
+
+  it("findFirstNegativeBalance sees sub-rupiah overdraw", () => {
+    // OUT 100.50 dari saldo 100.25 -> -0.25; decimals=0 membulatkannya 100-100=0 lolos.
+    const neg = findFirstNegativeBalance([
+      { id: 1, type: "IN", amount: 100.25 },
+      { id: 2, documentNo: "PC-002", type: "OUT", amount: 100.5 },
+    ])
+    expect(neg?.record.id).toBe(2)
+    expect(neg?.balanceAfter).toBe(-0.25)
+  })
+})
