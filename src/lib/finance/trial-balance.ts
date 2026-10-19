@@ -14,6 +14,8 @@
  * balance whenever any such account had a balance.)
  */
 
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
+
 export interface TrialBalanceEntryInput {
   id: number
   code: string
@@ -53,7 +55,7 @@ export function computeTrialBalance(
 ): TrialBalanceResult {
   const lines: TrialBalanceLine[] = accounts
     .map((acc) => {
-      const netBalance = acc.totalDebit - acc.totalCredit
+      const netBalance = safeSubtract(acc.totalDebit, acc.totalCredit, 2)
       return {
         id: acc.id,
         code: acc.code,
@@ -65,9 +67,9 @@ export function computeTrialBalance(
     })
     .filter((a) => a.totalDebit > 0 || a.totalCredit > 0)
 
-  const grandTotalDebit = lines.reduce((sum, a) => sum + a.totalDebit, 0)
-  const grandTotalCredit = lines.reduce((sum, a) => sum + a.totalCredit, 0)
-  const isBalanced = Math.abs(grandTotalDebit - grandTotalCredit) < 0.01
+  const grandTotalDebit = lines.reduce((sum, a) => safeAdd(sum, a.totalDebit, 2), 0)
+  const grandTotalCredit = lines.reduce((sum, a) => safeAdd(sum, a.totalCredit, 2), 0)
+  const isBalanced = Math.abs(safeSubtract(grandTotalDebit, grandTotalCredit, 2)) < 0.01
 
   return { lines, grandTotalDebit, grandTotalCredit, isBalanced }
 }

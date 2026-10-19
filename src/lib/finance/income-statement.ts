@@ -24,6 +24,8 @@
  *   margin  = revenue > 0 ? net / revenue * 100 : 0
  */
 
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
+
 export interface IncomeStatementAccountInput {
   id: number
   code: string
@@ -151,8 +153,8 @@ export function computeIncomeStatement(
     const section = classifyIncomeStatementAccount(account)
     if (!section) continue
     const balance = isCreditNormalSection(section)
-      ? account.credit - account.debit
-      : account.debit - account.credit
+      ? safeSubtract(account.credit, account.debit, 2)
+      : safeSubtract(account.debit, account.credit, 2)
     if (balance === 0) continue
     buckets[section].push({ id: account.id, code: account.code, name: account.name, balance })
   }
@@ -163,15 +165,17 @@ export function computeIncomeStatement(
   const otherIncomeData = buckets.other_income
   const otherExpenseData = buckets.other_expense
 
-  const totalRevenue = revenueData.reduce((s, a) => s + a.balance, 0)
-  const totalCogs = cogsData.reduce((s, a) => s + a.balance, 0)
-  const grossProfit = totalRevenue - totalCogs
-  const totalExpense = expenseData.reduce((s, a) => s + a.balance, 0)
-  const operatingProfit = grossProfit - totalExpense
-  const totalOtherIncome = otherIncomeData.reduce((s, a) => s + a.balance, 0)
-  const totalOtherExpense = otherExpenseData.reduce((s, a) => s + a.balance, 0)
-  const totalOther = totalOtherIncome - totalOtherExpense
-  const netProfit = operatingProfit + totalOther
+  const sum = (rows: IncomeStatementLine[]) =>
+    rows.reduce((acc, a) => safeAdd(acc, a.balance, 2), 0)
+  const totalRevenue = sum(revenueData)
+  const totalCogs = sum(cogsData)
+  const grossProfit = safeSubtract(totalRevenue, totalCogs, 2)
+  const totalExpense = sum(expenseData)
+  const operatingProfit = safeSubtract(grossProfit, totalExpense, 2)
+  const totalOtherIncome = sum(otherIncomeData)
+  const totalOtherExpense = sum(otherExpenseData)
+  const totalOther = safeSubtract(totalOtherIncome, totalOtherExpense, 2)
+  const netProfit = safeAdd(operatingProfit, totalOther, 2)
   const margin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0
 
   return {

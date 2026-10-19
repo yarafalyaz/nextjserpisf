@@ -49,6 +49,19 @@ describe("computeIncomeStatement", () => {
     expect(r.margin).toBeCloseTo(28, 2) // 28M / 100M * 100
   })
 
+  it("tidak drift float: 3x10.000.000,10 revenue = 30000000.30 persis", () => {
+    const accounts: IncomeStatementAccountInput[] = [
+      acc(1, "4-1000", "REVENUE", 0, 10_000_000.10),
+      acc(2, "4-2000", "REVENUE", 0, 10_000_000.10),
+      acc(3, "4-3000", "REVENUE", 0, 10_000_000.10),
+      acc(4, "5-1000", "EXPENSE", 10_000_000.10, 0),
+    ]
+    const r = computeIncomeStatement(accounts)
+    expect(r.totalRevenue).toBe(30_000_000.30)
+    expect(r.grossProfit).toBe(20_000_000.20)
+    expect(r.netProfit).toBe(20_000_000.20)
+  })
+
   it("classifies 5-1 codes as COGS even though they are EXPENSE type", () => {
     const accounts: IncomeStatementAccountInput[] = [
       acc(1, "4-1000", "REVENUE", 0, 10_000),
