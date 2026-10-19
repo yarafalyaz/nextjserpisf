@@ -290,12 +290,61 @@ describe("Lead Actions", () => {
 
 describe("Bank Actions", () => {
   it("createBank succeeds", async () => {
-    const res = await actions.createBank(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+    const res = await actions.createBank(fdMap({ name: "test", code: "test", type: "bank", rate: "10" }))
     expect(res?.success).toBe(true)
   })
   it("updateBank succeeds", async () => {
-    const res = await actions.updateBank(1, fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
+    const res = await actions.updateBank(1, fdMap({ name: "test", code: "test", type: "bank", rate: "10" }))
     expect(res?.success).toBe(true)
+  })
+  it("createBank rejects missing code before DB write", async () => {
+    const res = await actions.createBank(fdMap({ name: "bank-baru", type: "bank" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.bank.create).not.toHaveBeenCalled()
+  })
+  it("createBank rejects arbitrary type", async () => {
+    const res = await actions.createBank(fdMap({ name: "bank-baru", code: "BNK1", type: "crypto" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.bank.create).not.toHaveBeenCalled()
+  })
+  it("createBank rejects overlong code", async () => {
+    const res = await actions.createBank(fdMap({ name: "bank-baru", code: "X".repeat(51), type: "bank" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.bank.create).not.toHaveBeenCalled()
+  })
+  it("createBank accepts cash type from quick-add", async () => {
+    const res = await actions.createBank(fdMap({ name: "kas-kecil", code: "KAS1", type: "cash" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.bank.create).toHaveBeenCalled()
+  })
+  it("createBank rejects negative accountId", async () => {
+    const res = await actions.createBank(fdMap({ name: "bank-baru", code: "BNK1", type: "bank", accountId: "-5" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.bank.create).not.toHaveBeenCalled()
+  })
+  it("updateBank rejects arbitrary type before write", async () => {
+    const res = await actions.updateBank(1, fdMap({ name: "test", code: "test", type: "crypto" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.bank.update).not.toHaveBeenCalled()
+  })
+  it("createBank rejects nonexistent accountId", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.createBank(fdMap({ name: "bank-baru", code: "BNK1", type: "bank", accountId: "999" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toContain("Akun (COA) tidak ditemukan")
+    expect(mocks.prismaMock.bank.create).not.toHaveBeenCalled()
+  })
+  it("createBank accepts existing accountId", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValueOnce({ id: 999 })
+    const res = await actions.createBank(fdMap({ name: "bank-baru", code: "BNK1", type: "bank", accountId: "999" }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.bank.create).toHaveBeenCalled()
+  })
+  it("updateBank rejects nonexistent accountId before write", async () => {
+    mocks.prismaMock.account.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.updateBank(1, fdMap({ name: "test", code: "test", type: "bank", accountId: "999" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.bank.update).not.toHaveBeenCalled()
   })
   it("deleteBank succeeds", async () => {
     const res = await actions.deleteBank(1)

@@ -119,6 +119,16 @@ export const taxServerSchema = z.object({
   effectiveTo: optionalDateOnly,
 })
 
+export const bankServerSchema = z.object({
+  name: z.string().min(1, "Nama wajib diisi").max(200),
+  // `banks.code` kolom @unique wajib di schema (NOT NULL); dulu hand-parse lolos null -> P2011/P2002 mentah.
+  code: z.string().min(1, "Kode wajib diisi").max(50),
+  // Nilai yang di-render form master bank + quick-add (satu-satunya produsen data);
+  // `cash` = rek kas dari quick-add. Nilai lain = tamper klien, tolak sebelum DB.
+  type: z.enum(["bank", "emoney", "cash"], { message: "Tipe harus bank, emoney, atau kas" }).default("bank"),
+  accountId: z.coerce.number().int("Akun (COA) tidak valid").positive("Akun (COA) tidak valid").optional(),
+})
+
 export const accountServerSchema = z.object({
   code: optionalString(50),
   name: z.string().min(1, "Nama akun wajib diisi").max(200),
