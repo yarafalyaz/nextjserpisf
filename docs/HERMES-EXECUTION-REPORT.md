@@ -112,13 +112,16 @@
 
 ## E. Laporan tes
 
-- Baseline unit: _berjalan setelah verifikasi_ (`PASS`/`FAIL`/`NOT RUN` jujur).
+- Suite penuh: 351 berkas / 4218 tes HIJAU (vitest `--maxWorkers=4`).
+- `npx tsc --noEmit`: 0 error. `npm run lint`: 0 error (1 warning pre-existing milik sesi lain).
+- E2E rantai beli (`purchase-chain`) + rantai jual (`sales-chain`): 2+2 passed di DB nyata (silengkap-e2e-db).
 
 ## F. Risiko tersisa
 
-- Semua P0 belum terverifikasi → belum ada klaim.
+- §7 butuh pemilik: UAT bisnis, backup/restore prod, rekonsiliasi GL vs subledger di data nyata, angka payroll 2026 (NEEDS ACCOUNTANT CONFIRMATION).
+- Branch kerja belum di-push (aturan: push hanya bila pemilik izinkan).
 
 ## G. Aksi berikutnya
 
-1. Terima hasil 3 verifikator → isi register.
-2. P0-1 → P0-4 sesuai urutan dokumen.
+1. Lanjut hardening domain berikut (satu commit per domain).
+2. Push branch kerja + buka PR review bila pemilik izinkan.
