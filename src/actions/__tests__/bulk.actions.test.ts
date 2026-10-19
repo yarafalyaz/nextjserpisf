@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => {
     prismaMock: {
       customer: buildModelMock(),
       item: buildModelMock(),
+      vendor: buildModelMock(),
       purchaseRequest: buildModelMock(), // Needs individual
       employee: buildModelMock(), // Used for hasSoftDelete test
       asset: buildModelMock(), // Has GL journal orphan guard on single-delete
@@ -43,6 +44,10 @@ vi.mock("@prisma/client", () => ({
       datamodel: {
         models: [
           { name: "Customer", fields: [{ name: "id" }, { name: "name" }] },
+          {
+            name: "Vendor",
+            fields: [{ name: "id" }, { name: "deletedAt" }, { name: "isActive" }],
+          },
           { name: "Item", fields: [{ name: "id" }] },
           {
             name: "Employee",
@@ -134,9 +139,35 @@ describe("Bulk Actions", () => {
     expect(res?.success).toBe(false)
     expect(res?.message).toMatch(/Maksimal 500 data/)
   })
+  it("bulkDelete refuses models whose single-delete guards protect references", async () => {
+    // Each single-delete action refuses while the row is still referenced
+    // (SET NULL / bare-Int / side effects); raw bulk delete bypassed that.
+    // Employee also covers the login-revocation ordering in deleteEmployee.
+    for (const model of [
+      "assetBrand",
+      "assetCategory",
+      "assetTransfer",
+      "bank",
+      "brand",
+      "costCenter",
+      "department",
+      "employee",
+      "expenseCategory",
+      "itemCategory",
+      "paymentTerm",
+      "position",
+      "tax",
+      "approval",
+    ] as const) {
+      const result = await bulkDelete(model, [1])
+      expect(result.success).toBe(false)
+      expect(result.message).toMatch(/harus dihapus satu per satu/)
+    }
+  })
   it("bulkDelete fails when prisma model not found", async () => {
-    // Pass a valid model name that is missing from prismaMock
-    const res = await bulkDelete("bank", [1])
+    // Pass a valid model name that is missing from prismaMock and is not
+    // routed to the per-row action (bank now is — see guard test below).
+    const res = await bulkDelete("warehouse", [1])
     expect(res?.success).toBe(false)
     expect(res?.message).toMatch(/tidak ditemukan/)
   })
@@ -148,11 +179,11 @@ describe("Bulk Actions", () => {
     expect(res?.message).toMatch(/Skema model currency tidak ditemukan/)
   })
   it("bulkDelete uses soft delete when deletedAt exists", async () => {
-    const res = await bulkDelete("employee", [1])
+    const res = await bulkDelete("vendor", [1])
     expect(res?.success).toBe(true)
     // isActive is cleared as well: pickers and lists filter by isActive alone, so a
     // soft-deleted row that stayed active kept being offered for new documents.
-    expect(mocks.prismaMock.employee.updateMany).toHaveBeenCalledWith({
+    expect(mocks.prismaMock.vendor.updateMany).toHaveBeenCalledWith({
       where: { id: { in: [1] } },
       data: { deletedAt: expect.any(Date), isActive: false }
     })
