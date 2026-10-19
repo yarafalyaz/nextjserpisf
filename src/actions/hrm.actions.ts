@@ -19,6 +19,7 @@ import { revalidatePath } from "next/cache";
 import { requireId } from "@/lib/utils/safe-parse";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { parseFormData } from "@/lib/validations/parse-form";
+import { dateOnly } from "@/lib/validations/finance.schemas";
 import {
   leaveRequestSchema,
   overtimeRequestSchema,
@@ -2851,9 +2852,14 @@ export async function closeStatutoryRule(id: number, formData: FormData) {
   try {
     await requirePermission("edit_payroll");
     const ruleId = requirePositiveId(id, "aturan statutori");
-    const toRaw = (formData.get("effectiveTo") as string | null) ?? "";
+    const toRaw = ((formData.get("effectiveTo") as string | null) ?? "").trim();
     if (!toRaw) return { success: false as const, error: "Tanggal tutup wajib diisi" };
-    const to = new Date(toRaw);
+    // `new Date("2026-02-30")` menggulir diam-diam ke 2 Mar — tolak tanggal
+    // kalender fiktif (pola dateOnly create) sebelum tulis.
+    if (!dateOnly.safeParse(toRaw).success) {
+      return { success: false as const, error: "Tanggal tutup tidak valid" };
+    }
+    const to = wibDateToUtcMidnight(toRaw);
     const rule = await prisma.payrollStatutoryRule.findUniqueOrThrow({ where: { id: ruleId } });
     if (to <= new Date(rule.effectiveFrom)) {
       return { success: false as const, error: "Tanggal tutup harus setelah berlaku sejak" };
