@@ -572,7 +572,7 @@ describe("Rack & WorkOrder & Others", () => {
 });
 
 describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
-  it("createStockAdjustment handles error globally", async () => {
+  async function expectPermissionReject(fnName: string) {
     vi.spyOn(console, "error").mockImplementation(() => {});
     if ((mocks as any).requirePermissionMock)
       (mocks as any).requirePermissionMock.mockRejectedValueOnce(
@@ -585,349 +585,73 @@ describe("Global Error Paths (Permission Reject for 21 funcs)", () => {
     const arg1 = new FormData();
     const arg2 = new FormData();
     try {
-      await (actions as any).createStockAdjustment(arg1, arg2);
+      await (actions as any)[fnName](arg1, arg2);
     } catch {}
     expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+  }
+
+  it("createStockAdjustment handles error globally", async () => {
+    await expectPermissionReject("createStockAdjustment");
   });
   it("processStockAdjustment handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).processStockAdjustment(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("processStockAdjustment");
   });
   it("createInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createInventoryTransfer(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("createInventoryTransfer");
   });
   it("processInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).processInventoryTransfer(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("processInventoryTransfer");
   });
   it("receiveInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).receiveInventoryTransfer(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("receiveInventoryTransfer");
   });
   it("createMaterialIssue handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createMaterialIssue(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("createMaterialIssue");
   });
   it("completeMaterialIssue handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).completeMaterialIssue(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("completeMaterialIssue");
   });
   it("createWorkOrder handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createWorkOrder(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("createWorkOrder");
   });
   it("updateWorkOrder handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateWorkOrder(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("updateWorkOrder");
   });
   it("createRack handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createRack(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("createRack");
   });
   it("updateRack handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateRack(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("updateRack");
   });
   it("deleteStockAdjustment handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteStockAdjustment(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("deleteStockAdjustment");
   });
   it("deleteInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteInventoryTransfer(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("deleteInventoryTransfer");
   });
   it("deleteMaterialIssue handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteMaterialIssue(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("deleteMaterialIssue");
   });
   it("deleteRack handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteRack(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("deleteRack");
   });
   it("updateStockAdjustment handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateStockAdjustment(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("updateStockAdjustment");
   });
   it("updateMaterialIssue handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateMaterialIssue(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("updateMaterialIssue");
   });
   it("updateInventoryTransfer handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateInventoryTransfer(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("updateInventoryTransfer");
   });
   it("createRackRow handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).createRackRow(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("createRackRow");
   });
   it("updateRackRow handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).updateRackRow(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("updateRackRow");
   });
   it("deleteRackRow handles error globally", async () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    if ((mocks as any).requirePermissionMock)
-      (mocks as any).requirePermissionMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    if ((mocks as any).requireAuthMock)
-      (mocks as any).requireAuthMock.mockRejectedValueOnce(
-        new Error("perm denied"),
-      );
-    const arg1 = new FormData();
-    const arg2 = new FormData();
-    try {
-      await (actions as any).deleteRackRow(arg1, arg2);
-    } catch {}
-    expect((mocks as any).requirePermissionMock).toHaveBeenCalled()
+    await expectPermissionReject("deleteRackRow");
   });
 });
 
@@ -1436,8 +1160,7 @@ describe("NextRedirectError and Error Fallbacks", () => {
   });
 });
 
-describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
-  const errs = [
+const INVENTORY_ERROR_PATH_FUNCS = [
     "createStockAdjustment",
     "processStockAdjustment",
     "createInventoryTransfer",
@@ -1460,7 +1183,28 @@ describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
     "updateRackRow",
     "deleteRackRow",
   ];
-  for (const fn of errs) {
+
+function inventoryErrorArg(fn: string, fd: FormData): any {
+  let arg: any = fd;
+  if (
+    fn === "processStockAdjustment" ||
+    fn === "deleteStockAdjustment" ||
+    fn === "deleteInventoryTransfer" ||
+    fn === "deleteMaterialIssue" ||
+    fn === "deleteRack" ||
+    fn === "completeMaterialIssue" ||
+    fn === "receiveInventoryTransfer" ||
+    fn === "processInventoryTransfer"
+  )
+    arg = 1;
+  if (fn.startsWith("update") || fn === "createWorkOrder") arg = [1, fd];
+  if (fn === "createRackRow") arg = fd;
+  if (fn === "createRack") arg = fd;
+  return arg;
+}
+
+describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
+  for (const fn of INVENTORY_ERROR_PATH_FUNCS) {
     it(`${fn} handles non-redirect error (covers isNextRedirectError false branch + console.error)`, async () => {
       vi.spyOn(console, "error").mockImplementation(() => {});
       // Reset requirePermission and trigger a normal error
@@ -1470,21 +1214,7 @@ describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
         );
       const fd = new FormData();
       fd.append("warehouseId", "1");
-      let arg: any = fd;
-      if (
-        fn === "processStockAdjustment" ||
-        fn === "deleteStockAdjustment" ||
-        fn === "deleteInventoryTransfer" ||
-        fn === "deleteMaterialIssue" ||
-        fn === "deleteRack" ||
-        fn === "completeMaterialIssue" ||
-        fn === "receiveInventoryTransfer" ||
-        fn === "processInventoryTransfer"
-      )
-        arg = 1;
-      if (fn.startsWith("update") || fn === "createWorkOrder") arg = [1, fd];
-      if (fn === "createRackRow") arg = fd;
-      if (fn === "createRack") arg = fd;
+      const arg = inventoryErrorArg(fn, fd);
       const res = await (actions as any)[fn](arg);
       expect(res?.success).toBe(false);
       expect(res?.error).toBe("generic err");
@@ -1493,30 +1223,7 @@ describe("Catch Block Coverage (isNextRedirectError + console.error)", () => {
 });
 
 describe("Catch block throw e for NextRedirectError", () => {
-  const errs = [
-    "createStockAdjustment",
-    "processStockAdjustment",
-    "createInventoryTransfer",
-    "processInventoryTransfer",
-    "receiveInventoryTransfer",
-    "createMaterialIssue",
-    "completeMaterialIssue",
-    "createWorkOrder",
-    "updateWorkOrder",
-    "createRack",
-    "updateRack",
-    "deleteStockAdjustment",
-    "deleteInventoryTransfer",
-    "deleteMaterialIssue",
-    "deleteRack",
-    "updateStockAdjustment",
-    "updateMaterialIssue",
-    "updateInventoryTransfer",
-    "createRackRow",
-    "updateRackRow",
-    "deleteRackRow",
-  ];
-  for (const fn of errs) {
+  for (const fn of INVENTORY_ERROR_PATH_FUNCS) {
     it(`${fn} rethrows NextRedirectError`, async () => {
       const redirectErr = new Error("NEXT_REDIRECT");
       (redirectErr as any).digest = "NEXT_REDIRECT_TOKEN";
@@ -1524,21 +1231,7 @@ describe("Catch block throw e for NextRedirectError", () => {
         (mocks as any).requirePermissionMock.mockRejectedValue(redirectErr);
       const fd = new FormData();
       fd.append("warehouseId", "1");
-      let arg: any = fd;
-      if (
-        fn === "processStockAdjustment" ||
-        fn === "deleteStockAdjustment" ||
-        fn === "deleteInventoryTransfer" ||
-        fn === "deleteMaterialIssue" ||
-        fn === "deleteRack" ||
-        fn === "completeMaterialIssue" ||
-        fn === "receiveInventoryTransfer" ||
-        fn === "processInventoryTransfer"
-      )
-        arg = 1;
-      if (fn.startsWith("update") || fn === "createWorkOrder") arg = [1, fd];
-      if (fn === "createRackRow") arg = fd;
-      if (fn === "createRack") arg = fd;
+      const arg = inventoryErrorArg(fn, fd);
       await expect((actions as any)[fn](arg)).rejects.toThrow();
     });
   }

@@ -160,31 +160,49 @@ vi.mock("@/lib/utils/document-number", () => ({
     mocks.generateDocumentNumberBatch(...a),
 }));
 
-beforeEach(() => {
-  // assertAccountsExist: default semua akun dianggap ada; tiap describe boleh
-  // override untuk kasus akun-hilang.
+
+/** Reset implementasi `accountFindMany`: semua akun dianggap ada. */
+function mockAllAccountsExist() {
   mocks.accountFindMany.mockImplementation(async (args: any) => {
     const ids: number[] = args?.where?.id?.in ?? [];
     return ids.map((id) => ({ id }));
   });
+}
+
+/** Pasang `mocks.transaction` agar callback menerima `tx` rakitan pemanggil. */
+function wireTransaction(buildTx: () => Record<string, unknown>) {
+  mocks.transaction.mockImplementation((fn: any) => fn(buildTx()));
+}
+
+/** Cabang `journalEntry` tx (createMany meneruskan ke create per baris). */
+function journalEntryBranch() {
+  return {
+    create: mocks.journalEntryCreate,
+    createMany: vi.fn(async (args: any) => {
+      args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d }));
+      return { count: args.data.length };
+    }),
+  };
+}
+
+
+beforeEach(() => {
+  // assertAccountsExist: default semua akun dianggap ada; tiap describe boleh
+  // override untuk kasus akun-hilang.
+  mockAllAccountsExist();
 });
 
 describe("deleteJournalByReference", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
-    mocks.transaction.mockImplementation((fn: any) =>
-      fn({
-        journal: {
-          findMany: mocks.findMany,
-          deleteMany: mocks.deleteManyJournals,
-        },
-        journalEntry: { deleteMany: mocks.deleteManyEntries },
-      }),
-    );
+    mockAllAccountsExist();
+    wireTransaction(() => ({
+      journal: {
+        findMany: mocks.findMany,
+        deleteMany: mocks.deleteManyJournals,
+      },
+      journalEntry: { deleteMany: mocks.deleteManyEntries },
+    }));
   });
 
   it("deletes entries and journals when found", async () => {
@@ -339,10 +357,7 @@ describe("deleteJournalByReference", () => {
 describe("onSalesInvoicePosted", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     // Reset systemSettings to valid mappings (a prior test may have nulled one).
     mocks.systemSettings.salesReceivableAccountId = 110;
     mocks.systemSettings.salesRevenueAccountId = 410;
@@ -364,15 +379,7 @@ describe("onSalesInvoicePosted", () => {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
         },
-        journalEntry: {
-          create: mocks.journalEntryCreate,
-          createMany: vi.fn(async (args) => {
-            args.data.forEach((d: any) =>
-              mocks.journalEntryCreate({ data: d }),
-            );
-            return { count: args.data.length };
-          }),
-        },
+        journalEntry: journalEntryBranch(),
         item: {
           findUnique: mocks.itemFindUnique,
           findMany: mocks.itemFindMany,
@@ -613,13 +620,7 @@ describe("onSalesInvoicePosted", () => {
           findUnique: mocks.invoiceFindUnique,
         },
         journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-        journalEntry: {
-          create: mocks.journalEntryCreate,
-          createMany: vi.fn(async (args) => {
-            args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d }));
-            return { count: args.data.length };
-          }),
-        },
+        journalEntry: journalEntryBranch(),
         item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
         uomConversion: { findMany: mocks.uomConversionFindMany },
         stockMove: { create: mocks.stockMoveCreate },
@@ -665,13 +666,7 @@ describe("onSalesInvoicePosted", () => {
           findUnique: mocks.invoiceFindUnique,
         },
         journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-        journalEntry: {
-          create: mocks.journalEntryCreate,
-          createMany: vi.fn(async (args) => {
-            args.data.forEach((d: any) => mocks.journalEntryCreate({ data: d }));
-            return { count: args.data.length };
-          }),
-        },
+        journalEntry: journalEntryBranch(),
         item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
         uomConversion: { findMany: mocks.uomConversionFindMany },
         stockMove: { create: mocks.stockMoveCreate },
@@ -701,10 +696,7 @@ describe("onSalesInvoicePosted", () => {
 describe("onSalesPaymentCreated", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.systemSettings.salesReceivableAccountId = 110;
     mocks.systemSettings.cashBankAccountId = 100;
     mocks.transaction.mockImplementation((fn: any) =>
@@ -720,15 +712,7 @@ describe("onSalesPaymentCreated", () => {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
         },
-        journalEntry: {
-          create: mocks.journalEntryCreate,
-          createMany: vi.fn(async (args) => {
-            args.data.forEach((d: any) =>
-              mocks.journalEntryCreate({ data: d }),
-            );
-            return { count: args.data.length };
-          }),
-        },
+        journalEntry: journalEntryBranch(),
       }),
     );
   });
@@ -804,10 +788,7 @@ describe("onSalesPaymentCreated", () => {
 describe("onPurchaseOrderReceived", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.systemSettings.inventoryAccountId = 130;
     mocks.systemSettings.purchasePayableAccountId = 210;
     mocks.systemSettings.purchaseTaxAccountId = 150;
@@ -824,15 +805,7 @@ describe("onPurchaseOrderReceived", () => {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
         },
-        journalEntry: {
-          create: mocks.journalEntryCreate,
-          createMany: vi.fn(async (args) => {
-            args.data.forEach((d: any) =>
-              mocks.journalEntryCreate({ data: d }),
-            );
-            return { count: args.data.length };
-          }),
-        },
+        journalEntry: journalEntryBranch(),
       }),
     );
   });
@@ -919,10 +892,7 @@ describe("onPurchaseOrderReceived", () => {
 describe("onExpenseApproved", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.transaction.mockImplementation((fn: any) =>
       fn({
         systemSetting: {
@@ -936,15 +906,7 @@ describe("onExpenseApproved", () => {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
         },
-        journalEntry: {
-          create: mocks.journalEntryCreate,
-          createMany: vi.fn(async (args) => {
-            args.data.forEach((d: any) =>
-              mocks.journalEntryCreate({ data: d }),
-            );
-            return { count: args.data.length };
-          }),
-        },
+        journalEntry: journalEntryBranch(),
       }),
     );
   });
@@ -1067,10 +1029,7 @@ describe("onPettyCashCreated", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.systemSettings.pettyCashAccountId = 115;
     mocks.systemSettings.cashBankAccountId = 100;
     mocks.systemSettings.generalExpenseAccountId = 610;
@@ -1087,15 +1046,7 @@ describe("onPettyCashCreated", () => {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
         },
-        journalEntry: {
-          create: mocks.journalEntryCreate,
-          createMany: vi.fn(async (args) => {
-            args.data.forEach((d: any) =>
-              mocks.journalEntryCreate({ data: d }),
-            );
-            return { count: args.data.length };
-          }),
-        },
+        journalEntry: journalEntryBranch(),
       }),
     );
   });
@@ -1260,10 +1211,7 @@ describe("onPettyCashCreated", () => {
 describe("onSalesReturnCompleted", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.systemSettings.salesReturnAccountId = 420;
     mocks.systemSettings.salesReceivableAccountId = 110;
     mocks.systemSettings.inventoryAccountId = 130;
@@ -1280,15 +1228,7 @@ describe("onSalesReturnCompleted", () => {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
         },
-        journalEntry: {
-          create: mocks.journalEntryCreate,
-          createMany: vi.fn(async (args) => {
-            args.data.forEach((d: any) =>
-              mocks.journalEntryCreate({ data: d }),
-            );
-            return { count: args.data.length };
-          }),
-        },
+        journalEntry: journalEntryBranch(),
       }),
     );
   });
@@ -1412,10 +1352,7 @@ describe("onSalesReturnCompleted", () => {
 describe("onPurchaseReturnProcessed", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.systemSettings.purchasePayableAccountId = 210;
     mocks.systemSettings.inventoryAccountId = 130;
     mocks.systemSettings.purchaseReturnAccountId = 220;
@@ -1435,15 +1372,7 @@ describe("onPurchaseReturnProcessed", () => {
           findFirst: mocks.journalFindFirst,
           create: mocks.journalCreate,
         },
-        journalEntry: {
-          create: mocks.journalEntryCreate,
-          createMany: vi.fn(async (args) => {
-            args.data.forEach((d: any) =>
-              mocks.journalEntryCreate({ data: d }),
-            );
-            return { count: args.data.length };
-          }),
-        },
+        journalEntry: journalEntryBranch(),
       }),
     );
   });
@@ -1605,10 +1534,7 @@ describe("onPurchaseReturnProcessed", () => {
 describe("onDownPaymentReceived", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.systemSettings.cashBankAccountId = 100;
     (mocks.systemSettings as any).customerDownPaymentAccountId = 210102;
     mocks.transaction.mockImplementation((fn: any) =>
@@ -1681,10 +1607,7 @@ describe("onDownPaymentReceived", () => {
 describe("onVendorBillPosted", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.systemSettings.purchasePayableAccountId = 210;
     mocks.systemSettings.purchaseInventoryAccountId = 135;
     mocks.systemSettings.purchaseTaxAccountId = 150;
@@ -1858,10 +1781,7 @@ describe("onVendorBillPosted", () => {
 describe("onVendorPaymentCreated", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.systemSettings.purchasePayableAccountId = 210;
     mocks.systemSettings.cashBankAccountId = 100;
     mocks.transaction.mockImplementation((fn: any) =>
@@ -2020,10 +1940,7 @@ describe("onVendorPaymentCreated", () => {
 describe("onPayrollPaid", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.accountFindMany.mockImplementation(async (args: any) => {
-      const ids: number[] = args?.where?.id?.in ?? [];
-      return ids.map((id) => ({ id }));
-    });
+    mockAllAccountsExist();
     mocks.systemSettings.salaryExpenseAccountId = 630;
     mocks.systemSettings.payrollBankAccountId = 105;
     mocks.systemSettings.salariesPayableAccountId = 230;

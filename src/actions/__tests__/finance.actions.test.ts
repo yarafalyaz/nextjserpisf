@@ -174,6 +174,84 @@ describe("Bank Statement Line Actions", () => {
     return calls[calls.length - 1][0].data
   }
 
+  it("R-09: createBankStatementLine memanggil assertPeriodOpen DI DALAM tx dengan tx", async () => {
+    const phases: string[] = []
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: any) => {
+      phases.push("tx-begin")
+      try {
+        const out = await cb(mocks.prismaMock)
+        phases.push("tx-end")
+        return out
+      } catch (e) {
+        phases.push("tx-abort")
+        throw e
+      }
+    })
+    mocks.assertPeriodOpenMock.mockImplementation(async () => {
+      phases.push("assert")
+    })
+    mocks.prismaMock.bankStatementLine.create.mockResolvedValue({ id: 11 })
+
+    const res = await (actions as any).createBankStatementLine(
+      fdMap({ bankStatementId: 3, date: "2026-06-13", amount: "1000", type: "debit" }),
+    )
+
+    expect(res).toEqual({ success: true, id: 11 })
+    // assert terjadi sesudah tx mulai dan sebelum tx selesai — bukan
+    // sebelum $transaction dipanggil.
+    expect(phases).toEqual(["tx-begin", "assert", "tx-end"])
+    expect(mocks.assertPeriodOpenMock).toHaveBeenCalledTimes(1)
+    expect(mocks.assertPeriodOpenMock).toHaveBeenCalledWith(
+      expect.any(Date),
+      mocks.prismaMock,
+    )
+    expect(mocks.assertPeriodOpenMock.mock.calls[0][1]).toBe(mocks.prismaMock)
+  })
+
+  it("R-09: createBankStatement menulis header + assert di dalam tx dengan tx", async () => {
+    const phases: string[] = []
+    mocks.prismaMock.$transaction.mockImplementation(async (cb: any) => {
+      phases.push("tx-begin")
+      const out = await cb(mocks.prismaMock)
+      phases.push("tx-end")
+      return out
+    })
+    mocks.assertPeriodOpenMock.mockImplementation(async () => {
+      phases.push("assert")
+    })
+
+    const res = await (actions as any).createBankStatement(
+      fdMap({ accountId: 1, date: "2026-06-13", openingBalance: 1000, closingBalance: 2000 }),
+    )
+
+    expect(res?.success).toBe(true)
+    expect(phases).toEqual(["tx-begin", "assert", "tx-end"])
+    expect(mocks.assertPeriodOpenMock).toHaveBeenCalledWith(expect.any(Date), mocks.prismaMock)
+    expect(mocks.prismaMock.bankStatement.create).toHaveBeenCalled()
+  })
+
+  it("R-09: createJournal mengulang assert di dalam tx dengan tx (cek luar hanya fast-fail)", async () => {
+    const txArgs: unknown[] = []
+    mocks.assertPeriodOpenMock.mockImplementation(async (...a: any[]) => {
+      txArgs.push(a[1])
+    })
+    const entries = JSON.stringify([
+      { accountId: 1, debit: 100, credit: 0, memo: "" },
+      { accountId: 2, debit: 0, credit: 100, memo: "" },
+    ])
+
+    const res = await (actions as any).createJournal(
+      fdMap({ transactionDate: "2026-06-13", description: "t", type: "GENERAL", entries }),
+    )
+
+    expect(res?.success).toBe(true)
+    // Satu panggilan luar-tx (argumen tx undefined) + satu di dalam tx.
+    expect(mocks.assertPeriodOpenMock).toHaveBeenCalledTimes(2)
+    expect(txArgs[0]).toBeUndefined()
+    expect(txArgs[1]).toBe(mocks.prismaMock)
+    expect(mocks.prismaMock.journal.create).toHaveBeenCalled()
+  })
+
   it("createBankStatementLine memetakan type credit ke kolom credit saja", async () => {
     mocks.prismaMock.bankStatementLine.create.mockResolvedValue({ id: 11 })
 
@@ -190,7 +268,8 @@ describe("Bank Statement Line Actions", () => {
 
     expect(res).toEqual({ success: true, id: 11 })
     expect(mocks.requirePermissionMock).toHaveBeenCalledWith("create_journals")
-    expect(mocks.assertPeriodOpenMock).toHaveBeenCalledWith(expect.any(Date))
+    // R-09: dua argumen — tanggal + tx (objek transaksi yang sama).
+    expect(mocks.assertPeriodOpenMock).toHaveBeenCalledWith(expect.any(Date), mocks.prismaMock)
 
     const data = lastCreateData()
     expect(data.credit).toBe(250000)

@@ -55,7 +55,10 @@ export const updateSystemSettingsSchema = z.object({
   currencySymbol: optionalString(10),
   currencyLocale: optionalString(20),
   documentNumberFormat: optionalString(),
-  periodLockDate: optionalNullString(),
+  // R-09: `periodLockDate` dikeluarkan dari schema update umum. Bila
+  // diterima di sini, field itu lolos validasi lalu terabaikan diam-diam
+  // di settings.actions.ts — menyesatkan. Kunci periode hanya berubah
+  // lewat proses akhir bulan (period-close.actions.ts).
   showIsActiveField: optionalBool(),
   showTaxId: optionalBool(),
   defaultProjectStages: optionalString(1000),

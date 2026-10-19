@@ -59,78 +59,10 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
 
 import { onDownPaymentConfirmed } from "../down-payment.hook"
 
-function buildDp(opts: { id: number; amount: number; status: string; docNo: string }) {
-  return {
-    id: opts.id,
-    documentNo: opts.docNo,
-    quotationId: 10,
-    amount: opts.amount,
-    status: opts.status,
-    paymentDate: new Date("2026-10-01T00:00:00Z"),
-    quotation: {
-      id: 10,
-      status: "accepted",
-      customerId: 99,
-      customerVehicleId: null,
-      documentNo: "Q-1",
-      subtotal: 1000,
-      discount: 0,
-      tax: 0,
-      grandTotal: 1000,
-      customer: { id: 99, name: "Cust" },
-      customerVehicle: null,
-      projectId: null,
-      sections: [
-        {
-          id: 1,
-          name: "S1",
-          items: [
-            { id: 1, itemId: 1, description: "Item", qty: 1, unitPrice: 1000, discount: 0, total: 1000 },
-          ],
-        },
-      ],
-    },
-  }
-}
+import { buildDp, buildDpTx } from "./down-payment-fixtures"
 
 function buildTx(dp: ReturnType<typeof buildDp>) {
-  return {
-    $queryRaw: vi.fn().mockResolvedValue(undefined),
-    $executeRaw: vi.fn().mockResolvedValue(undefined),
-    downPayment: {
-      findUniqueOrThrow: vi.fn().mockResolvedValue(dp),
-      findMany: mocks.downPaymentFindMany,
-      update: mocks.downPaymentUpdate,
-    },
-    workOrder: { findFirst: vi.fn().mockResolvedValue({ id: 11 }), create: vi.fn() },
-    salesOrder: { findFirst: vi.fn().mockResolvedValue({ id: 12 }), create: vi.fn() },
-    salesInvoice: {
-      findFirst: mocks.salesInvoiceFindFirst,
-      create: mocks.salesInvoiceCreate,
-      update: mocks.salesInvoiceUpdate,
-    },
-    salesPayment: {
-      findMany: mocks.salesPaymentFindMany,
-      findFirst: mocks.salesPaymentFindFirst,
-      create: mocks.salesPaymentCreate,
-    },
-    systemSetting: { findFirst: mocks.systemSettingFindFirst },
-    journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-    account: { findMany: mocks.accountFindMany },
-    customerCredit: {
-      create: vi.fn().mockResolvedValue({ id: 777, documentNo: "CC-1" }),
-      findFirst: vi.fn().mockResolvedValue(null),
-    },
-    product: { findMany: vi.fn().mockResolvedValue([]) },
-    item: { findMany: vi.fn().mockResolvedValue([]) },
-    workOrderItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    project: { create: vi.fn().mockResolvedValue({ id: 21 }) },
-    projectStage: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    salesOrderItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    salesInvoiceItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    quotation: { update: vi.fn() },
-    quotationHistory: { create: vi.fn() },
-  }
+  return buildDpTx(mocks, dp)
 }
 
 describe("review P0-1/P0-2 — alokasi DP penuh + tanpa bypass posting", () => {

@@ -4,6 +4,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeAdd, safeSubtract, compareAmounts, safeRound } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
+import { Prisma } from "@prisma/client";
 import { checkIdempotency } from "@/lib/utils/idempotency";
 import {
   onExpenseApproved,
@@ -50,24 +51,29 @@ export async function createBankStatement(formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    await assertPeriodOpen(v.date);
-
-    const bankStatement = await prisma.bankStatement.create({
-      data: {
-        accountId: v.accountId,
-        bankId: v.bankId ?? null,
-        accountNumber: v.accountNumber ?? null,
-        date: v.date,
-        reference: v.reference ?? null,
-        slug: await nextSlug("bankStatement", v.reference),
-        periodStart: v.periodStart ?? null,
-        periodEnd: v.periodEnd ?? null,
-        openingBalance: v.openingBalance,
-        closingBalance: v.closingBalance,
-        notes: v.notes ?? null,
-        status: "draft",
-        uploadedBy: Number(user.id),
-      },
+    // R-09: tulis header + cek periode dalam satu tx (cek di dalam, dengan
+    // tx) — cek luar-tx tanpa kunci bisa disela tutup-periode sebelum
+    // header tertulis. Baris header lahir draft; tanggal header tetap
+    // tanggal dokumen keuangan.
+    const bankStatement = await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(v.date, tx);
+      return tx.bankStatement.create({
+        data: {
+          accountId: v.accountId,
+          bankId: v.bankId ?? null,
+          accountNumber: v.accountNumber ?? null,
+          date: v.date,
+          reference: v.reference ?? null,
+          slug: await nextSlug("bankStatement", v.reference),
+          periodStart: v.periodStart ?? null,
+          periodEnd: v.periodEnd ?? null,
+          openingBalance: v.openingBalance,
+          closingBalance: v.closingBalance,
+          notes: v.notes ?? null,
+          status: "draft",
+          uploadedBy: Number(user.id),
+        },
+      });
     });
 
     await logActivity(
@@ -117,6 +123,71 @@ async function recalcBankStatementTotals(
 }
 
 /**
+ * R-12: kunci baris header `bank_statements` (FOR UPDATE) sebelum menulis
+ * baris + `recalcBankStatementTotals`.
+ *
+ * Tanpa kunci header, dua transaksi yang menulis baris BERBEDA pada header
+ * sama bisa berlari bersamaan: keduanya agregat sebelum keduanya update
+ * header, lalu update terakhir menang dengan angka yang belum mencakup
+ * baris transaksi lain (total basi). Kunci header menserialkan pasangan
+ * (tulis baris + recalc) per header.
+ *
+ * Id di-dedupe + diurutkan naik, lalu dikunci dalam SATU query
+ * `ORDER BY id ... FOR UPDATE` — urutan global yang sama untuk semua
+ * pemanggil mencegah deadlock antar jalur yang mengunci dua header
+ * (update baris yang pindah header).
+ *
+ * Urutan lock global jalur baris rekening koran:
+ * baris -> header(s) -> rekonsiliasi. Jalur match/unmatch/complete tidak
+ * menulis baris bank statement dan tidak memanggil recalc, jadi tidak
+ * mengambil kunci header; jalur itu tetap baris -> rekonsiliasi, yang
+ * konsisten karena header tidak pernah diambil sesudah rekonsiliasi.
+ */
+async function lockBankStatementHeaders(
+  tx: BankStatementTx,
+  bankStatementIds: readonly number[],
+) {
+  const ids = [...new Set(bankStatementIds)].sort((a, b) => a - b);
+  if (ids.length === 0) return;
+  await tx.$queryRaw`SELECT id FROM bank_statements WHERE id IN (${Prisma.join(ids)}) ORDER BY id FOR UPDATE`;
+}
+
+
+/**
+ * Kunci induk rekonsiliasi yang terhubung (terurut naik) lalu tolak bila ada
+ * yang sudah selesai. Urutan di pemanggil TIDAK berubah: helper ini dipanggil
+ * persis di titik blok ini dulu berada (sesudah lock baris/header, sebelum
+ * tulis baris), jadi urutan lock baris -> header -> rekonsiliasi tetap.
+ */
+async function lockReconParentsAndAssertNotCompleted(
+  tx: BankStatementTx,
+  bankStatementLineId: number,
+  completedErrorMessage: string,
+) {
+  const matchedRecons = await tx.bankReconciliationItem.findMany({
+    where: { bankStatementLineId, matched: true },
+    select: { bankReconciliationId: true },
+  });
+  const reconIds = [...new Set(matchedRecons.map((m) => m.bankReconciliationId))].sort(
+    (a, b) => a - b,
+  );
+  for (const reconId of reconIds) {
+    await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconId} FOR UPDATE`;
+  }
+  const completedMatch = await tx.bankReconciliationItem.findFirst({
+    where: {
+      bankStatementLineId,
+      matched: true,
+      bankReconciliation: { status: "completed" },
+    },
+    select: { id: true },
+  });
+  if (completedMatch) {
+    throw new Error(completedErrorMessage);
+  }
+}
+
+/**
  * Izin baris rekening koran = izin header-nya (`create_journals`).
  *
  * Jangan mengarang izin baru di sini: `edit_bank_statements` /
@@ -135,9 +206,18 @@ export async function createBankStatementLine(formData: FormData) {
     const v = parsed.data;
     const lineDate = wibDateToUtcMidnight(v.date);
 
-    await assertPeriodOpen(lineDate);
-
     const line = await prisma.$transaction(async (tx) => {
+      // R-09: cek periode di DALAM tx dengan tx (dulu sebelum tx, tanpa
+      // kunci) — tutup-periode bisa menyelip di antara cek dan tulis.
+      // Di jalur create ini kunci setting diambil pertama; di jalur
+      // update/delete, kunci setting (lewat assertPeriodOpen di bawah)
+      // diambil sesudah kunci baris/header. Keduanya aman: tutup-periode
+      // hanya menahan kunci setting, jadi tidak ada siklus tunggu (lihat
+      // period-lock.service.ts).
+      await assertPeriodOpen(lineDate, tx);
+      // R-12: kunci header tujuan SEBELUM create + recalc — urutan lock
+      // global: header (create belum punya baris) -> tulis baris -> recalc.
+      await lockBankStatementHeaders(tx, [v.bankStatementId]);
       const created = await tx.bankStatementLine.create({
         data: {
           bankStatementId: v.bankStatementId,
@@ -200,6 +280,16 @@ export async function updateBankStatementLine(id: number, formData: FormData) {
         select: { bankStatementId: true, date: true },
       });
 
+      // R-12: kunci header LAMA + BARU (terurut oleh helper) sesudah baris,
+      // sebelum induk rekonsiliasi — urutan lock global:
+      // baris -> header(s) -> rekonsiliasi. Kedua header harus terkunci
+      // sebelum update + recalc keduanya, agar pindah header tidak balapan
+      // dengan penulis baris lain di salah satu header.
+      await lockBankStatementHeaders(tx, [
+        existing.bankStatementId,
+        v.bankStatementId,
+      ]);
+
       // Baik tanggal lama maupun baru harus terbuka. Tanpa pemeriksaan tanggal
       // lama, baris periode yang sudah ditutup dapat "dipindahkan" ke periode
       // terbuka lalu diubah diam-diam.
@@ -210,27 +300,11 @@ export async function updateBankStatementLine(id: number, formData: FormData) {
       // Induk dikunci (terurut) lalu hubungan+status dibaca ulang — tanpa
       // lock, complete bersamaan bisa selip di antara cek dan update.
       // Urutan lock konsisten dengan match/unmatch/complete (baris dulu).
-      const matchedRecons = await tx.bankReconciliationItem.findMany({
-        where: { bankStatementLineId: id, matched: true },
-        select: { bankReconciliationId: true },
-      });
-      const reconIds = [...new Set(matchedRecons.map((m) => m.bankReconciliationId))].sort(
-        (a, b) => a - b,
+      await lockReconParentsAndAssertNotCompleted(
+        tx,
+        id,
+        "Baris yang sudah masuk rekonsiliasi selesai tidak dapat diubah",
       );
-      for (const reconId of reconIds) {
-        await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconId} FOR UPDATE`;
-      }
-      const completedMatch = await tx.bankReconciliationItem.findFirst({
-        where: {
-          bankStatementLineId: id,
-          matched: true,
-          bankReconciliation: { status: "completed" },
-        },
-        select: { id: true },
-      });
-      if (completedMatch) {
-        throw new Error("Baris yang sudah masuk rekonsiliasi selesai tidak dapat diubah");
-      }
 
       await tx.bankStatementLine.update({
         where: { id },
@@ -287,31 +361,21 @@ export async function deleteBankStatementLine(id: number) {
       });
       if (!line) throw new Error("Baris rekening koran tidak ditemukan");
 
+      // R-12: kunci header sesudah baris, sebelum induk rekonsiliasi —
+      // urutan lock global: baris -> header -> rekonsiliasi. Header harus
+      // terkunci sebelum delete + recalc agar tidak balapan dengan penulis
+      // baris lain pada header sama.
+      await lockBankStatementHeaders(tx, [line.bankStatementId]);
+
       await assertPeriodOpen(line.date, tx);
       // Induk dikunci (terurut) lalu hubungan+status dibaca ulang — urutan
       // lock sama dengan update di atas agar tak deadlock dengan
       // match/complete.
-      const matchedRecons = await tx.bankReconciliationItem.findMany({
-        where: { bankStatementLineId: id, matched: true },
-        select: { bankReconciliationId: true },
-      });
-      const reconIds = [...new Set(matchedRecons.map((m) => m.bankReconciliationId))].sort(
-        (a, b) => a - b,
+      await lockReconParentsAndAssertNotCompleted(
+        tx,
+        id,
+        "Baris yang sudah masuk rekonsiliasi selesai tidak dapat dihapus",
       );
-      for (const reconId of reconIds) {
-        await tx.$executeRaw`SELECT id FROM bank_reconciliations WHERE id = ${reconId} FOR UPDATE`;
-      }
-      const completedMatch = await tx.bankReconciliationItem.findFirst({
-        where: {
-          bankStatementLineId: id,
-          matched: true,
-          bankReconciliation: { status: "completed" },
-        },
-        select: { id: true },
-      });
-      if (completedMatch) {
-        throw new Error("Baris yang sudah masuk rekonsiliasi selesai tidak dapat dihapus");
-      }
 
       await tx.bankStatementLine.delete({ where: { id } });
       await recalcBankStatementTotals(tx, line.bankStatementId);
@@ -332,6 +396,85 @@ export async function deleteBankStatementLine(id: number) {
   }
 }
 
+
+type JournalEntryInput = {
+  accountId: number;
+  debit: number;
+  credit: number;
+  memo: string;
+  costCenterId?: number;
+  profitCenterId?: number;
+};
+
+/** Parse + validasi entri jurnal dari form (dipakai createJournal dan updateJournal, aturan identik). */
+function parseAndValidateJournalEntries(formData: FormData) {
+  const entriesJson = formData.get("entries") as string | null;
+  const entries = safeJsonParse<JournalEntryInput[]>(entriesJson) ?? [];
+
+  // Validate every entry has a valid accountId — reject early to prevent orphan header
+  const validEntries = entries.filter(
+    (e) => e.accountId && (e.debit > 0 || e.credit > 0),
+  );
+  if (validEntries.length < 2) {
+    throw new Error(
+      "Journal harus memiliki minimal 2 entri dengan akun dan nominal valid",
+    );
+  }
+
+  const totalDebit = validEntries.reduce(
+    (sum, e) => safeAdd(sum, e.debit || 0, 2),
+    0,
+  );
+  const totalCredit = validEntries.reduce(
+    (sum, e) => safeAdd(sum, e.credit || 0, 2),
+    0,
+  );
+  if (!compareAmounts(totalDebit, totalCredit, 0)) {
+    throw new Error(
+      `Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`,
+    );
+  }
+
+  // Per-line validation: debit and credit must be non-negative and exclusive
+  for (const entry of validEntries) {
+    if ((entry.debit || 0) < 0 || (entry.credit || 0) < 0) {
+      throw new Error("Nominal debit/credit tidak boleh negatif");
+    }
+    if ((entry.debit || 0) > 0 && (entry.credit || 0) > 0) {
+      throw new Error(
+        "Satu baris tidak boleh memiliki debit dan credit sekaligus",
+      );
+    }
+  }
+
+  return { validEntries, totalDebit, totalCredit };
+}
+
+/** Baris `journalEntry.createMany` untuk satu jurnal (dipakai create dan update). */
+function journalEntryRows(journalId: number, validEntries: JournalEntryInput[]) {
+  return validEntries.map((entry) => ({
+    journalId,
+    accountId: entry.accountId,
+    debit: entry.debit || 0,
+    credit: entry.credit || 0,
+    memo: entry.memo || null,
+    costCenterId: entry.costCenterId || null,
+    // Pusat laba: tanpa baris ini laporan pusat laba selalu menumpuk di
+    // "Tanpa Pusat Laba" walau masternya sudah ada.
+    profitCenterId: entry.profitCenterId || null,
+  }));
+}
+
+/** Kaitkan attachment pending ke jurnal (dipakai create dan update). */
+async function attachJournalAttachments(formData: FormData, journalId: number, userId: number) {
+  const attachmentIds = formData.get("attachmentIds") as string | null;
+  if (attachmentIds) {
+    await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
+      attachmentIds, referenceType: "journal", referenceId: journalId, uploadedBy: userId,
+    }));
+  }
+}
+
 // ==================== JOURNAL ACTIONS ====================
 
 export async function createJournal(formData: FormData) {
@@ -340,62 +483,19 @@ export async function createJournal(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("JRN");
 
-    // Block posting/creating into a closed accounting period
+    // Block posting/creating into a closed accounting period.
+    // Cek luar-tx hanya fast-fail; keputusan final diulang di dalam tx
+    // dengan tx di bawah (R-09) — tanpa itu tutup-periode bisa menyelip
+    // di antara cek ini dan tulis jurnal.
     const txDate = new Date(formData.get("transactionDate") as string);
     await assertPeriodOpen(txDate);
 
     // Laravel parity: parse and validate entries before creating journal
-    const entriesJson = formData.get("entries") as string | null;
-    const entries =
-      safeJsonParse<
-        {
-          accountId: number;
-          debit: number;
-          credit: number;
-          memo: string;
-          costCenterId?: number;
-          profitCenterId?: number;
-        }[]
-      >(entriesJson) ?? [];
-
-    // Validate every entry has a valid accountId — reject early to prevent orphan header
-    const validEntries = entries.filter(
-      (e) => e.accountId && (e.debit > 0 || e.credit > 0),
-    );
-    if (validEntries.length < 2) {
-      throw new Error(
-        "Journal harus memiliki minimal 2 entri dengan akun dan nominal valid",
-      );
-    }
-
-    const totalDebit = validEntries.reduce(
-      (sum, e) => safeAdd(sum, e.debit || 0, 2),
-      0,
-    );
-    const totalCredit = validEntries.reduce(
-      (sum, e) => safeAdd(sum, e.credit || 0, 2),
-      0,
-    );
-    if (!compareAmounts(totalDebit, totalCredit, 0)) {
-      throw new Error(
-        `Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`,
-      );
-    }
-
-    // Per-line validation: debit and credit must be non-negative and exclusive
-    for (const entry of validEntries) {
-      if ((entry.debit || 0) < 0 || (entry.credit || 0) < 0) {
-        throw new Error("Nominal debit/credit tidak boleh negatif");
-      }
-      if ((entry.debit || 0) > 0 && (entry.credit || 0) > 0) {
-        throw new Error(
-          "Satu baris tidak boleh memiliki debit dan credit sekaligus",
-        );
-      }
-    }
+    const { validEntries, totalDebit, totalCredit } = parseAndValidateJournalEntries(formData);
 
     // Wrap header + entries in a single transaction to prevent orphan journals
     const journal = await prisma.$transaction(async (tx) => {
+      await assertPeriodOpen(txDate, tx);
       const j = await tx.journal.create({
         data: {
           journalNumber: documentNo,
@@ -411,30 +511,13 @@ export async function createJournal(formData: FormData) {
       });
 
       // Batch create all entries in one query (eliminates N+1)
-      await tx.journalEntry.createMany({
-        data: validEntries.map((entry) => ({
-          journalId: j.id,
-          accountId: entry.accountId,
-          debit: entry.debit || 0,
-          credit: entry.credit || 0,
-          memo: entry.memo || null,
-          costCenterId: entry.costCenterId || null,
-          // Pusat laba: tanpa baris ini laporan pusat laba selalu menumpuk di
-          // "Tanpa Pusat Laba" walau masternya sudah ada.
-          profitCenterId: entry.profitCenterId || null,
-        })),
-      });
+      await tx.journalEntry.createMany({ data: journalEntryRows(j.id, validEntries) });
 
       return j;
     });
 
     // Associate uploaded attachments with the new journal
-    const attachmentIds = formData.get("attachmentIds") as string | null;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "journal", referenceId: journal.id, uploadedBy: Number(user.id),
-      }));
-    }
+    await attachJournalAttachments(formData, journal.id, Number(user.id));
 
     await logActivity("create", "Journal", journal.id, "Membuat jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -1747,50 +1830,7 @@ export async function updateJournal(id: number, formData: FormData) {
     // Parse and validate entries with the same rigor as createJournal —
     // previously the edit path ignored line entries entirely, so edited lines
     // were silently discarded and the balance invariant was never re-checked.
-    const entriesJson = formData.get("entries") as string | null;
-    const entries =
-      safeJsonParse<
-        {
-          accountId: number;
-          debit: number;
-          credit: number;
-          memo: string;
-          costCenterId?: number;
-          profitCenterId?: number;
-        }[]
-      >(entriesJson) ?? [];
-    const validEntries = entries.filter(
-      (e) => e.accountId && (e.debit > 0 || e.credit > 0),
-    );
-    if (validEntries.length < 2) {
-      throw new Error(
-        "Journal harus memiliki minimal 2 entri dengan akun dan nominal valid",
-      );
-    }
-
-    const totalDebit = validEntries.reduce(
-      (sum, e) => safeAdd(sum, e.debit || 0, 2),
-      0,
-    );
-    const totalCredit = validEntries.reduce(
-      (sum, e) => safeAdd(sum, e.credit || 0, 2),
-      0,
-    );
-    if (!compareAmounts(totalDebit, totalCredit, 0)) {
-      throw new Error(
-        `Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`,
-      );
-    }
-    for (const entry of validEntries) {
-      if ((entry.debit || 0) < 0 || (entry.credit || 0) < 0) {
-        throw new Error("Nominal debit/credit tidak boleh negatif");
-      }
-      if ((entry.debit || 0) > 0 && (entry.credit || 0) > 0) {
-        throw new Error(
-          "Satu baris tidak boleh memiliki debit dan credit sekaligus",
-        );
-      }
-    }
+    const { validEntries, totalDebit, totalCredit } = parseAndValidateJournalEntries(formData);
 
     // Fix #14: Jangan generate documentNo baru dan jangan reset totals ke 0
     // Replace header + entries atomically (delete old entries, recreate from form).
@@ -1837,30 +1877,15 @@ export async function updateJournal(id: number, formData: FormData) {
       });
 
       await tx.journalEntry.deleteMany({ where: { journalId: id } });
-      await tx.journalEntry.createMany({
-        data: validEntries.map((entry) => ({
-          journalId: id,
-          accountId: entry.accountId,
-          debit: entry.debit || 0,
-          credit: entry.credit || 0,
-          memo: entry.memo || null,
-          costCenterId: entry.costCenterId || null,
-          // Sama seperti jalur buat: pusat laba harus ikut tersimpan saat entri
-          // diganti, kalau tidak mengubah jurnal akan menghapus pusat labanya.
-          profitCenterId: entry.profitCenterId || null,
-        })),
-      });
+      // Pusat laba ikut tersimpan saat entri diganti (journalEntryRows), kalau
+      // tidak mengubah jurnal akan menghapus pusat labanya.
+      await tx.journalEntry.createMany({ data: journalEntryRows(id, validEntries) });
 
       return j;
     });
 
     // Associate uploaded attachments
-    const attachmentIds = formData.get("attachmentIds") as string | null;
-    if (attachmentIds) {
-      await prisma.$transaction((tx) => attachPendingTransactionAttachments(tx, {
-        attachmentIds, referenceType: "journal", referenceId: journal.id, uploadedBy: Number(user.id),
-      }));
-    }
+    await attachJournalAttachments(formData, journal.id, Number(user.id));
 
     await logActivity("update", "Journal", journal.id, "Memperbarui jurnal");
     revalidatePath("/keuangan/jurnal");

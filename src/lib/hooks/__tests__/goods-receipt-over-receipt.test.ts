@@ -50,7 +50,14 @@ function wireTx(opts: {
 }) {
   const meta = opts.itemMeta ?? { unitOfMeasure: "pcs", trackBatch: false, trackSerial: false }
   const spies = {
-    queryRaw: vi.fn().mockResolvedValue([]),
+    queryRaw: vi.fn().mockImplementation(async (...a: unknown[]) => {
+      const sql = Array.isArray(a[0]) ? (a[0] as string[]).join(" ") : String(a[0] ?? "")
+      if (sql.includes("system_settings")) {
+        const s = await spies.systemSettingFindFirst()
+        return [{ id: 1, period_lock_date: s?.periodLockDate ?? null }]
+      }
+      return []
+    }),
     executeRaw: vi.fn().mockResolvedValue(1),
     grFindUniqueOrThrow: vi.fn().mockResolvedValue({
       id: 100,
@@ -472,7 +479,14 @@ describe("onGoodsReceiptVerified over-receipt guard with multi-UoM", () => {
   }) {
     const meta = opts.itemMeta ?? { unitOfMeasure: "PCS", trackBatch: false, trackSerial: false }
     const spies = {
-      queryRaw: vi.fn().mockResolvedValue([]),
+      queryRaw: vi.fn().mockImplementation(async (...a: unknown[]) => {
+        const sql = Array.isArray(a[0]) ? (a[0] as string[]).join(" ") : String(a[0] ?? "")
+        if (sql.includes("system_settings")) {
+          const s = await spies.systemSettingFindFirst()
+          return [{ id: 1, period_lock_date: s?.periodLockDate ?? null }]
+        }
+        return []
+      }),
       executeRaw: vi.fn().mockResolvedValue(1),
       grFindUniqueOrThrow: vi.fn().mockResolvedValue({
         id: 100,

@@ -68,50 +68,14 @@ vi.mock("@/lib/hooks/accounting.hook", () => ({
 
 import { onDownPaymentConfirmed } from "../down-payment.hook"
 
+import { buildDp as buildDpBase, buildDpTx } from "./down-payment-fixtures"
+
 function buildDp(opts: { id: number; amount: number; status: string; docNo: string }) {
-  return {
-    id: opts.id,
-    documentNo: opts.docNo,
-    quotationId: 10,
-    amount: opts.amount,
-    status: opts.status,
-    quotation: {
-      id: 10,
-      status: "converted",
-      customerId: 99,
-      customerVehicleId: null,
-      documentNo: "Q-1",
-      subtotal: 1000,
-      discount: 0,
-      tax: 0,
-      grandTotal: 1000,
-      customer: { id: 99, name: "Cust" },
-      customerVehicle: null,
-      sections: [
-        {
-          id: 1,
-          name: "Section 1",
-          items: [
-            {
-              id: 1,
-              itemId: 1,
-              description: "Item",
-              qty: 1,
-              unitPrice: 1000,
-              discount: 0,
-              total: 1000,
-            },
-          ],
-        },
-      ],
-    },
-  }
+  return buildDpBase({ ...opts, quotationStatus: "converted", sectionName: "Section 1" })
 }
 
 function buildTx(dp: ReturnType<typeof buildDp>, existingInvoiceId: number) {
-  return {
-    $queryRaw: vi.fn().mockResolvedValue(undefined),
-    $executeRaw: vi.fn().mockResolvedValue(undefined),
+  const tx = buildDpTx(mocks, dp, {
     downPayment: {
       findUniqueOrThrow: vi.fn().mockResolvedValue(dp),
       findMany: vi.fn().mockResolvedValue([]),
@@ -129,20 +93,11 @@ function buildTx(dp: ReturnType<typeof buildDp>, existingInvoiceId: number) {
       findFirst: vi.fn().mockResolvedValue(null),
       create: mocks.salesPaymentCreate,
     },
-    systemSetting: { findFirst: mocks.systemSettingFindFirst },
-    journal: { findFirst: mocks.journalFindFirst, create: mocks.journalCreate },
-    account: { findMany: mocks.accountFindMany },
     product: { findFirst: vi.fn().mockResolvedValue(null) },
     productMaterial: { findMany: vi.fn().mockResolvedValue([]) },
     item: { findMany: vi.fn().mockResolvedValue([]), findUnique: vi.fn().mockResolvedValue(null) },
-    workOrderItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    project: { create: vi.fn() },
-    projectStage: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    salesOrderItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    salesInvoiceItem: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
-    quotation: { update: vi.fn() },
-    existingInvoiceId,
-  }
+  })
+  return { ...tx, existingInvoiceId }
 }
 
 describe("onDownPaymentConfirmed — multi-DP support", () => {

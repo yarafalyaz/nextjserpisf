@@ -70,6 +70,23 @@ function fdMap(
   return f;
 }
 
+function seedApproval(over: Record<string, unknown> = {}) {
+  mocks.prismaMock.approval.findUnique.mockResolvedValue({
+    id: 1,
+    status: "pending",
+    currentStep: 1,
+    documentType: "PR",
+    documentId: 1,
+    referenceType: "PurchaseRequest",
+    referenceId: 1,
+    requestedBy: 2,
+    workflow: {
+      steps: [{ stepOrder: 1, roleId: null, approverType: "specific" }],
+    },
+    ...over,
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.requirePermissionMock.mockResolvedValue({
@@ -86,51 +103,19 @@ describe("Approval Progression Actions", () => {
     // ran no domain side effect, so no petty-cash record was created (petty cash
     // understated) with no retry path via approveExpense. approveStep must now
     // trigger the sync once the workflow's final step is approved.
-    mocks.prismaMock.approval.findUnique.mockResolvedValue({
-      id: 1,
-      status: "pending",
-      currentStep: 1,
-      referenceType: "Expense",
-      referenceId: 55,
-      requestedBy: 2,
-      workflow: {
-        steps: [{ stepOrder: 1, roleId: null, approverType: "specific" }],
-      },
-    });
+    seedApproval({ referenceType: "Expense", referenceId: 55 });
     await actions.approveStep(1, fdMap({ notes: "OK" }));
     expect(mocks.syncPettyCashMock).toHaveBeenCalledWith(55, 1);
   });
 
   it("does not sync petty cash for a non-Expense workflow completion", async () => {
-    mocks.prismaMock.approval.findUnique.mockResolvedValue({
-      id: 1,
-      status: "pending",
-      currentStep: 1,
-      referenceType: "PurchaseRequest",
-      referenceId: 77,
-      requestedBy: 2,
-      workflow: {
-        steps: [{ stepOrder: 1, roleId: null, approverType: "specific" }],
-      },
-    });
+    seedApproval({ referenceId: 77 });
     await actions.approveStep(1, fdMap({ notes: "OK" }));
     expect(mocks.syncPettyCashMock).not.toHaveBeenCalled();
   });
 
   it("approveStep succeeds (final step)", async () => {
-    mocks.prismaMock.approval.findUnique.mockResolvedValue({
-      id: 1,
-      status: "pending",
-      currentStep: 1,
-      documentType: "PR",
-      documentId: 1,
-      referenceType: "PurchaseRequest",
-      referenceId: 1,
-      requestedBy: 2,
-      workflow: {
-        steps: [{ stepOrder: 1, roleId: null, approverType: "specific" }],
-      },
-    });
+    seedApproval();
     await actions.approveStep(1, fdMap({ notes: "OK" }));
     expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -151,19 +136,7 @@ describe("Approval Progression Actions", () => {
     );
   });
   it("rejectStep succeeds", async () => {
-    mocks.prismaMock.approval.findUnique.mockResolvedValue({
-      id: 1,
-      status: "pending",
-      currentStep: 1,
-      documentType: "PR",
-      documentId: 1,
-      referenceType: "PurchaseRequest",
-      referenceId: 1,
-      requestedBy: 2,
-      workflow: {
-        steps: [{ stepOrder: 1, roleId: null, approverType: "specific" }],
-      },
-    });
+    seedApproval();
     await actions.rejectStep(1, fdMap({ notes: "NO" }));
     expect(mocks.prismaMock.approvalHistory.create).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -185,14 +158,7 @@ describe("Approval Progression Actions", () => {
   });
 
   it("rejects approval records whose workflow has no steps", async () => {
-    mocks.prismaMock.approval.findUnique.mockResolvedValue({
-      id: 1,
-      status: "pending",
-      currentStep: 1,
-      requestedBy: 2,
-      referenceType: "PurchaseRequest",
-      workflow: { steps: [] },
-    });
+    seedApproval({ workflow: { steps: [] } });
     await expect(actions.approveStep(1, fdMap({ notes: "OK" }))).rejects.toThrow(
       "Langkah approval tidak valid",
     );
@@ -200,11 +166,8 @@ describe("Approval Progression Actions", () => {
   });
 
   it("rejects an approval whose current step is outside the workflow", async () => {
-    mocks.prismaMock.approval.findUnique.mockResolvedValue({
-      id: 1,
-      status: "pending",
+    seedApproval({
       currentStep: 2,
-      referenceType: "PurchaseRequest",
       workflow: { steps: [{ stepOrder: 1, roleId: 1, userId: null }] },
     });
     await expect(actions.rejectStep(1, fdMap({ notes: "NO" }))).rejects.toThrow(

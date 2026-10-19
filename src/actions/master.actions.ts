@@ -657,6 +657,56 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
   }
 }
 
+
+/** Baca opsi akun login dari form karyawan (dipakai create + update, identik). */
+function readEmployeeLoginInput(formData: FormData) {
+  return {
+    wantsLogin:
+      formData.get("createLoginAccount") === "true" ||
+      formData.get("createLoginAccount") === "on",
+    email: formData.get("email") as string | null,
+    loginPass: formData.get("loginPassword") as string | null,
+    loginRoleIds: formData
+      .getAll("loginRoleIds")
+      .map((v) => Number(v))
+      .filter((n) => Number.isFinite(n)),
+  };
+}
+
+/** Field karyawan yang sama persis di create dan update (tanpa kolom khusus jalur). */
+function readEmployeeFormFields(formData: FormData) {
+  return {
+    name: requireString(formData.get("name"), "name"),
+    email: formData.get("email") as string | null,
+    phone: formData.get("phone") as string | null,
+    gender: (formData.get("gender") as string | null) || null,
+    dateOfBirth: formData.get("dateOfBirth")
+      ? new Date(formData.get("dateOfBirth") as string)
+      : null,
+    maritalStatus: (formData.get("maritalStatus") as string | null) || null,
+    // P1-6: jumlah tanggungan untuk PTKP (0-3). Clamp server-side.
+    dependents: Math.min(3, Math.max(0, Math.floor(Number(formData.get("dependents")) || 0))),
+    departmentId: safeId(formData.get("departmentId")),
+    positionId: safeId(formData.get("positionId")),
+    paymentFrequency:
+      (formData.get("paymentFrequency") as string) || "MONTHLY",
+    baseSalary: safeNumber(formData.get("baseSalary")) ?? 0,
+    idNumber: formData.get("idNumber") as string | null,
+    npwp: formData.get("npwp") as string | null,
+    bankName: formData.get("bankName") as string | null,
+    bankAccountNumber: formData.get("bankAccountNumber") as string | null,
+    bankAccountHolder: formData.get("bankAccountHolder") as string | null,
+    bpjsKetenagakerjaan: formData.get("bpjsKetenagakerjaan") as string | null,
+    bpjsKesehatan: formData.get("bpjsKesehatan") as string | null,
+    street: formData.get("street") as string | null,
+    province: formData.get("province") as string | null,
+    employeeCity: formData.get("city") as string | null,
+    employeeDistrict: formData.get("district") as string | null,
+    employeeVillage: formData.get("village") as string | null,
+    postalCode: formData.get("postalCode") as string | null,
+  };
+}
+
 // ==================== EMPLOYEE ACTIONS ====================
 
 export async function createEmployee(formData: FormData) {
@@ -688,15 +738,7 @@ export async function createEmployee(formData: FormData) {
     }
 
     // Optional login account fields
-    const wantsLogin =
-      formData.get("createLoginAccount") === "true" ||
-      formData.get("createLoginAccount") === "on";
-    const email = formData.get("email") as string | null;
-    const loginPass = formData.get("loginPassword") as string | null;
-    const loginRoleIds = formData
-      .getAll("loginRoleIds")
-      .map((v) => Number(v))
-      .filter((n) => Number.isFinite(n));
+    const { wantsLogin, email, loginPass, loginRoleIds } = readEmployeeLoginInput(formData);
 
     if (wantsLogin) {
       if (!email || email.trim() === "") {
@@ -726,35 +768,8 @@ export async function createEmployee(formData: FormData) {
 
     const employeeData = {
       employeeNo,
-      name: requireString(formData.get("name"), "name"),
-      email: email,
-      phone: formData.get("phone") as string | null,
-      gender: (formData.get("gender") as string | null) || null,
-      dateOfBirth: formData.get("dateOfBirth")
-        ? new Date(formData.get("dateOfBirth") as string)
-        : null,
-      maritalStatus: (formData.get("maritalStatus") as string | null) || null,
-      // P1-6: jumlah tanggungan untuk PTKP (0-3). Clamp server-side.
-      dependents: Math.min(3, Math.max(0, Math.floor(Number(formData.get("dependents")) || 0))),
-      departmentId: safeId(formData.get("departmentId")),
-      positionId: safeId(formData.get("positionId")),
+      ...readEmployeeFormFields(formData),
       joinDate: new Date(requireString(formData.get("joinDate"), "joinDate")),
-      paymentFrequency:
-        (formData.get("paymentFrequency") as string) || "MONTHLY",
-      baseSalary: safeNumber(formData.get("baseSalary")) ?? 0,
-      idNumber: formData.get("idNumber") as string | null,
-      npwp: formData.get("npwp") as string | null,
-      bankName: formData.get("bankName") as string | null,
-      bankAccountNumber: formData.get("bankAccountNumber") as string | null,
-      bankAccountHolder: formData.get("bankAccountHolder") as string | null,
-      bpjsKetenagakerjaan: formData.get("bpjsKetenagakerjaan") as string | null,
-      bpjsKesehatan: formData.get("bpjsKesehatan") as string | null,
-      street: formData.get("street") as string | null,
-      province: formData.get("province") as string | null,
-      employeeCity: formData.get("city") as string | null,
-      employeeDistrict: formData.get("district") as string | null,
-      employeeVillage: formData.get("village") as string | null,
-      postalCode: formData.get("postalCode") as string | null,
       isActive: true,
     };
 
@@ -828,15 +843,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
     }
 
     // Optional: create a login account for an employee that does not have one yet.
-    const wantsLogin =
-      formData.get("createLoginAccount") === "true" ||
-      formData.get("createLoginAccount") === "on";
-    const email = formData.get("email") as string | null;
-    const loginPass = formData.get("loginPassword") as string | null;
-    const loginRoleIds = formData
-      .getAll("loginRoleIds")
-      .map((v) => Number(v))
-      .filter((n) => Number.isFinite(n));
+    const { wantsLogin, email, loginPass, loginRoleIds } = readEmployeeLoginInput(formData);
 
     // Look up whether this employee already has a linked login account.
     const current = await prisma.employee.findUnique({
@@ -904,36 +911,10 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
       syncUserId = current.userId;
     }
 
+    const employeeFields = readEmployeeFormFields(formData);
     const updateData = {
-      name: requireString(formData.get("name"), "name"),
-      slug: await nextSlug("employee", requireString(formData.get("name"), "name"), { excludeId: employeeId }),
-      email: email,
-      phone: formData.get("phone") as string | null,
-      gender: (formData.get("gender") as string | null) || null,
-      dateOfBirth: formData.get("dateOfBirth")
-        ? new Date(formData.get("dateOfBirth") as string)
-        : null,
-      maritalStatus: (formData.get("maritalStatus") as string | null) || null,
-      // P1-6: jumlah tanggungan untuk PTKP (0-3). Clamp server-side.
-      dependents: Math.min(3, Math.max(0, Math.floor(Number(formData.get("dependents")) || 0))),
-      departmentId: safeId(formData.get("departmentId")),
-      positionId: safeId(formData.get("positionId")),
-      paymentFrequency:
-        (formData.get("paymentFrequency") as string) || "MONTHLY",
-      baseSalary: safeNumber(formData.get("baseSalary")) ?? 0,
-      idNumber: formData.get("idNumber") as string | null,
-      npwp: formData.get("npwp") as string | null,
-      bankName: formData.get("bankName") as string | null,
-      bankAccountNumber: formData.get("bankAccountNumber") as string | null,
-      bankAccountHolder: formData.get("bankAccountHolder") as string | null,
-      bpjsKetenagakerjaan: formData.get("bpjsKetenagakerjaan") as string | null,
-      bpjsKesehatan: formData.get("bpjsKesehatan") as string | null,
-      street: formData.get("street") as string | null,
-      province: formData.get("province") as string | null,
-      employeeCity: formData.get("city") as string | null,
-      employeeDistrict: formData.get("district") as string | null,
-      employeeVillage: formData.get("village") as string | null,
-      postalCode: formData.get("postalCode") as string | null,
+      ...employeeFields,
+      slug: await nextSlug("employee", employeeFields.name, { excludeId: employeeId }),
     };
 
     await prisma.$transaction(async (tx) => {

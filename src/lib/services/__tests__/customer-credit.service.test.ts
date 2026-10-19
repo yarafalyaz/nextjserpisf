@@ -86,7 +86,12 @@ import {
 
 function buildTx() {
   return {
-    $queryRaw: vi.fn().mockResolvedValue(undefined),
+    // tx period-lock baca `tx.$queryRaw` (rows system_settings), bukan findFirst.
+    // Hormati periodLockDate yang sama dengan settingFindFirst tiap tes.
+    $queryRaw: vi.fn().mockImplementation(async () => {
+      const s = await mocks.settingFindFirst()
+      return [{ id: 1, period_lock_date: s?.periodLockDate ?? null }]
+    }),
     customerCredit: {
       findUniqueOrThrow: mocks.creditFindUnique,
       findFirst: mocks.creditFindFirst,
@@ -112,6 +117,32 @@ function buildTx() {
   }
 }
 
+
+function seedCredit(over: Record<string, unknown> = {}) {
+  mocks.creditFindUnique.mockResolvedValue({
+    id: 1, documentNo: "CC-1", customerId: 9,
+    receivedAmount: 3000, allocatedAmount: 0, refundedAmount: 0, status: "open",
+    ...over,
+  })
+}
+
+function seedInvoice(over: Record<string, unknown> = {}) {
+  mocks.invoiceFindUnique.mockResolvedValue({
+    id: 101, customerId: 9, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000, status: "posted",
+    ...over,
+  })
+}
+
+
+function dupKeyError() {
+  return Object.assign(new Error("Unique constraint failed on the fields: (`key`)"), { code: "P2002", meta: { target: "key" } })
+}
+
+async function fingerprint() {
+  const { payloadFingerprint } = await import("../financial-idempotency.service")
+  return payloadFingerprint
+}
+
 describe("customer-credit.service", () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -130,13 +161,8 @@ describe("customer-credit.service", () => {
   })
 
   it("alokasi normal: kurangi saldo + lunasi faktur + jurnal Dr 210102 / Cr Piutang TANPA kas", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 3000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, documentNo: "INV-1", grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
+    seedCredit()
+    seedInvoice()
     const r = await allocateCreditToInvoice(1, 101, 2000, 7, "11111111-1111-4111-8111-111111111111")
     expect(r.success).toBe(true)
     // Lock baris dulu (suntik race ditolak antre di sini).
@@ -179,13 +205,8 @@ describe("customer-credit.service", () => {
   })
 
   it("alokasi habiskan saldo: status jadi used", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 3000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 7000, status: "posted",
-    })
+    seedCredit()
+    seedInvoice({ paidAmount: 7000 })
     mocks.paymentFindMany.mockResolvedValue([{ amount: 7000 }, { amount: 3000 }])
     const r = await allocateCreditToInvoice(1, 101, 3000, 7, "22222222-2222-4222-8222-222222222222")
     expect(r.success).toBe(true)
@@ -195,10 +216,7 @@ describe("customer-credit.service", () => {
   })
 
   it("alokasi > saldo: DITOLAK (tak ada jurnal setengah jalan)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
-    })
+    seedCredit({ allocatedAmount: 1000 })
     const r = await allocateCreditToInvoice(1, 101, 2500, 7, "33333333-3333-4333-8333-333333333333")
     expect(r.success).toBe(false)
     expect(r.error).toContain("tidak cukup")
@@ -207,36 +225,23 @@ describe("customer-credit.service", () => {
   })
 
   it("alokasi > sisa faktur: DITOLAK", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice()
     const r = await allocateCreditToInvoice(1, 101, 5000, 7, "44444444-4444-4444-8444-444444444444")
     expect(r.success).toBe(false)
     expect(r.error).toContain("sisa faktur")
   })
 
   it("alokasi ke faktur batal: DITOLAK", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 0, status: "cancelled",
-    })
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice({ paidAmount: 0, status: "cancelled" })
     const r = await allocateCreditToInvoice(1, 101, 1000, 7, "55555555-5555-4555-8555-555555555555")
     expect(r.success).toBe(false)
     expect(r.error).toContain("batal")
   })
 
   it("refund normal: jurnal Dr 210102 / Cr Kas + status refunded bila habis", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
-    })
+    seedCredit({ allocatedAmount: 1000 })
     const r = await refundCredit(1, 2000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1")
     expect(r.success).toBe(true)
     expect(mocks.journalCreate).toHaveBeenCalledWith(
@@ -260,10 +265,7 @@ describe("customer-credit.service", () => {
   })
 
   it("refund > saldo: DITOLAK tanpa jurnal", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
-    })
+    seedCredit({ allocatedAmount: 1000 })
     const r = await refundCredit(1, 2500, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2")
     expect(r.success).toBe(false)
     expect(r.error).toContain("tidak cukup")
@@ -271,13 +273,8 @@ describe("customer-credit.service", () => {
   })
 
   it("alokasi ke faktur pelanggan LAIN: DITOLAK tanpa payment (AUD-R4-02)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 77, grandTotal: 10000, paidAmount: 0, status: "posted",
-    })
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice({ customerId: 77, paidAmount: 0 })
     const r = await allocateCreditToInvoice(1, 101, 1000, 7, "66666666-6666-4666-8666-666666666666")
     expect(r.success).toBe(false)
     expect(r.error).toContain("tidak bisa dialokasikan")
@@ -294,10 +291,7 @@ describe("customer-credit.service", () => {
   })
 
   it("refund saat periode ditutup: DITOLAK tanpa jurnal/saldo (AUD-R4-05)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 3000, allocatedAmount: 1000, refundedAmount: 0, status: "open",
-    })
+    seedCredit({ allocatedAmount: 1000 })
     // Lock = "ditutup SAMPAI tanggal ini": lock hari ini → refund hari ini ditolak.
     mocks.settingFindFirst.mockResolvedValue({ periodLockDate: new Date() })
     const r = await refundCredit(1, 1000, 7, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa4")
@@ -307,17 +301,12 @@ describe("customer-credit.service", () => {
   })
 
   it("retry key SAMA: replay tanpa payment kedua (AUD-R5-02)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice()
     // Klaim kedua = UNIQUE violation = replay.
-    const dupErr = Object.assign(new Error("Unique constraint failed on the fields: (`key`)"), { code: "P2002", meta: { target: "key" } })
+    const dupErr = dupKeyError()
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
-    const { payloadFingerprint: fp1 } = await import("../financial-idempotency.service")
+    const fp1 = await fingerprint()
     mocks.idemFindUnique.mockResolvedValueOnce({
       scope: "customer_credit_allocate",
       payloadHash: fp1({ scope: "customer_credit_allocate", creditId: 1, salesInvoiceId: 101, amount: 2000 }),
@@ -330,13 +319,8 @@ describe("customer-credit.service", () => {
   })
 
   it("key BEDA nominal sama: dua operasi sah tercatat (AUD-R5-02)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice()
     const r1 = await allocateCreditToInvoice(1, 101, 1000, 7, "cccccccc-cccc-4ccc-8ccc-ccccccccccc2")
     const r2 = await allocateCreditToInvoice(1, 101, 1000, 7, "cccccccc-cccc-4ccc-8ccc-ccccccccccc3")
     expect(r1.success).toBe(true)
@@ -345,16 +329,13 @@ describe("customer-credit.service", () => {
   })
 
   it("refund retry key SAMA: satu jurnal saja (AUD-R5-01)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 5000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
+    seedCredit({ receivedAmount: 5000 })
     const r1 = await refundCredit(1, 1000, 7, "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1")
     expect(r1.success).toBe(true)
     expect(mocks.journalCreate).toHaveBeenCalledTimes(1)
-    const dupErr = Object.assign(new Error("Unique constraint failed on the fields: (`key`)"), { code: "P2002", meta: { target: "key" } })
+    const dupErr = dupKeyError()
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
-    const { payloadFingerprint: fp2 } = await import("../financial-idempotency.service")
+    const fp2 = await fingerprint()
     mocks.idemFindUnique.mockResolvedValueOnce({
       scope: "customer_credit_refund",
       payloadHash: fp2({ scope: "customer_credit_refund", creditId: 1, amount: 1000 }),
@@ -369,17 +350,11 @@ describe("customer-credit.service", () => {
   })
 
   it("key dipakai scope LAIN: DITOLAK bukan sukses palsu (AUD-R6-02)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 5000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    const dupErr = Object.assign(
-      new Error("Unique constraint failed on the fields: (`key`)"),
-      { code: "P2002", meta: { target: "key" } },
-    )
+    seedCredit({ receivedAmount: 5000 })
+    const dupErr = dupKeyError()
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
     // Key milik alokasi dipakai untuk refund → konflik.
-    const { payloadFingerprint: fp3 } = await import("../financial-idempotency.service")
+    const fp3 = await fingerprint()
     mocks.idemFindUnique.mockResolvedValueOnce({
       scope: "customer_credit_allocate",
       payloadHash: fp3({ scope: "customer_credit_refund", creditId: 1, amount: 1000 }),
@@ -393,16 +368,10 @@ describe("customer-credit.service", () => {
   })
 
   it("key tanpa hasil final: DITOLAK bukan sukses palsu (AUD-R6-02)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 5000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    const dupErr = Object.assign(
-      new Error("Unique constraint failed on the fields: (`key`)"),
-      { code: "P2002", meta: { target: "key" } },
-    )
+    seedCredit({ receivedAmount: 5000 })
+    const dupErr = dupKeyError()
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
-    const { payloadFingerprint: fp4 } = await import("../financial-idempotency.service")
+    const fp4 = await fingerprint()
     mocks.idemFindUnique.mockResolvedValueOnce({
       scope: "customer_credit_refund",
       payloadHash: fp4({ scope: "customer_credit_refund", creditId: 1, amount: 1000 }),
@@ -439,17 +408,9 @@ describe("customer-credit.service", () => {
   })
 
   it("konflik key tapi baris tak terbaca: ERROR eksplisit bukan sukses (AUD-R7-02)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
-    const dupErr = Object.assign(
-      new Error("Unique constraint failed on the fields: (`key`)"),
-      { code: "P2002", meta: { target: "key" } },
-    )
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice()
+    const dupErr = dupKeyError()
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
     mocks.idemFindUnique.mockResolvedValueOnce(null)
     const r = await allocateCreditToInvoice(1, 101, 2000, 7, "550e8400-e29b-41d4-a716-446655440000")
@@ -460,19 +421,11 @@ describe("customer-credit.service", () => {
   })
 
   it("replay alokasi kembalikan paymentId awal (AUD-R7-03)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
-    const dupErr = Object.assign(
-      new Error("Unique constraint failed on the fields: (`key`)"),
-      { code: "P2002", meta: { target: "key" } },
-    )
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice()
+    const dupErr = dupKeyError()
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
-    const { payloadFingerprint: fp5 } = await import("../financial-idempotency.service")
+    const fp5 = await fingerprint()
     mocks.idemFindUnique.mockResolvedValueOnce({
       scope: "customer_credit_allocate",
       payloadHash: fp5({ scope: "customer_credit_allocate", creditId: 1, salesInvoiceId: 101, amount: 2000 }),
@@ -486,20 +439,12 @@ describe("customer-credit.service", () => {
   })
 
   it("key sama payload BEDA (nominal lain): KONFLIK bukan replay (AUD-R8-02)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
-    const dupErr = Object.assign(
-      new Error("Unique constraint failed on the fields: (`key`)"),
-      { code: "P2002", meta: { target: "key" } },
-    )
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice()
+    const dupErr = dupKeyError()
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
     // Key milik intent nominal 1000 dipakai untuk nominal 2000.
-    const { payloadFingerprint: fp } = await import("../financial-idempotency.service")
+    const fp = await fingerprint()
     mocks.idemFindUnique.mockResolvedValueOnce({
       scope: "customer_credit_allocate",
       payloadHash: fp({ scope: "customer_credit_allocate", creditId: 1, salesInvoiceId: 101, amount: 1000 }),
@@ -513,19 +458,11 @@ describe("customer-credit.service", () => {
   })
 
   it("replay tipe hasil SALAH: DITOLAK bukan ID palsu (AUD-R8-03)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
-    const dupErr = Object.assign(
-      new Error("Unique constraint failed on the fields: (`key`)"),
-      { code: "P2002", meta: { target: "key" } },
-    )
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice()
+    const dupErr = dupKeyError()
     mocks.idemCreate.mockRejectedValueOnce(dupErr)
-    const { payloadFingerprint: fp6 } = await import("../financial-idempotency.service")
+    const fp6 = await fingerprint()
     mocks.idemFindUnique.mockResolvedValueOnce({
       scope: "customer_credit_allocate",
       payloadHash: fp6({ scope: "customer_credit_allocate", creditId: 1, salesInvoiceId: 101, amount: 2000 }),
@@ -539,13 +476,8 @@ describe("customer-credit.service", () => {
   })
 
   it("gagal AMBIGU (koneksi putus): flag ambiguous true = UI tahan key (AUD-R8-01)", async () => {
-    mocks.creditFindUnique.mockResolvedValue({
-      id: 1, documentNo: "CC-1", customerId: 9,
-      receivedAmount: 9000, allocatedAmount: 0, refundedAmount: 0, status: "open",
-    })
-    mocks.invoiceFindUnique.mockResolvedValue({
-      id: 101, customerId: 9, grandTotal: 10000, paidAmount: 8000, status: "posted",
-    })
+    seedCredit({ receivedAmount: 9000 })
+    seedInvoice()
     mocks.idemCreate.mockRejectedValueOnce(new Error("connection lost"))
     const r = await allocateCreditToInvoice(1, 101, 2000, 7, "ffffffff-ffff-4fff-8fff-ffffffffffff")
     expect(r.success).toBe(false)

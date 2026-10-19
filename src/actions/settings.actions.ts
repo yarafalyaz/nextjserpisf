@@ -94,14 +94,6 @@ export async function updateSystemSettings(formData: FormData) {
     })
   }
 
-  function dateNull(key: string): Date | null | undefined {
-    if (!has(key)) return undefined
-    const v = formData.get(key)
-    if (!v || String(v).trim() === "") return null
-    const d = new Date(String(v))
-    return isNaN(d.getTime()) ? null : d
-  }
-
   await prisma.systemSetting.update({
     where: { id: settings.id },
     data: {
@@ -129,7 +121,13 @@ export async function updateSystemSettings(formData: FormData) {
       currencySymbol: strDefault("currencySymbol", "Rp "),
       currencyLocale: strDefault("currencyLocale", "id_ID"),
       documentNumberFormat: str("documentNumberFormat") || undefined,
-      periodLockDate: dateNull("periodLockDate"),
+      // R-09: `periodLockDate` SENGAJA tidak ditulis dari jalur update
+      // pengaturan umum ini. Kunci periode hanya boleh berubah lewat
+      // proses akhir bulan (period-close.actions.ts: close/reopen yang
+      // tercatat di log aktivitas dan mengambil kunci baris setting
+      // FOR UPDATE). Bila ditulis di sini, admin bisa memundurkan /
+      // membuka kunci periode lewat form pengaturan biasa tanpa jejak
+      // log khusus tutup-periode.
       showIsActiveField: bool("showIsActiveField"),
       showTaxId: bool("showTaxId"),
       defaultProjectStages: strDefault("defaultProjectStages", "Persiapan, Pengerjaan, Quality Check, Selesai"),

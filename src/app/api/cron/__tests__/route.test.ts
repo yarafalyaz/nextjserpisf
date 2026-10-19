@@ -1,29 +1,60 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { GET, POST } from "../route"
 
-const mocks = vi.hoisted(() => ({
-  queryRaw: vi.fn(),
-  cronLogCreate: vi.fn(),
-  systemSettingFindFirst: vi.fn(),
-  systemSettingUpdate: vi.fn(),
-  salesInvoiceFindFirst: vi.fn(),
-  salesInvoiceFindMany: vi.fn(),
-  salesInvoiceAggregate: vi.fn(),
-  attendanceFindMany: vi.fn(),
-  activityLogDeleteMany: vi.fn(),
-  journalUpdateMany: vi.fn(),
-  idempotencyKeyDeleteMany: vi.fn(),
-  attachmentFindMany: vi.fn(),
-  attachmentDeleteMany: vi.fn(),
-  notificationLowStock: vi.fn(),
-  notificationNotifyAdmins: vi.fn(),
-  notificationLateCheckIn: vi.fn(),
-  notificationLateCheckInBatch: vi.fn(),
-}))
+// Cron auto-lock (R-09) mengunci baris setting FOR UPDATE lewat tx.$queryRaw,
+// sama seperti period-close. SystemSetting findFirst/update non-tx tetap
+// dipakai tugas lain lewat prisma global.
+const mocks = vi.hoisted(() => {
+  const order: string[] = []
+  const txQueryRaw = vi.fn(async (_strings: unknown, ..._values: unknown[]) => {
+    order.push("lock")
+    return [{ id: 1, period_lock_date: null as Date | null }]
+  })
+  const txSystemSettingUpdate = vi.fn(async (..._a: unknown[]) => {
+    order.push("update")
+    return {}
+  })
+  type TxMock = {
+    $queryRaw: (
+      strings: TemplateStringsArray,
+      ...values: unknown[]
+    ) => Promise<Array<{ id: number; period_lock_date: Date | null }>>
+    systemSetting: { update: (...a: unknown[]) => Promise<unknown> }
+  }
+  const tx: TxMock = {
+    $queryRaw: (strings: TemplateStringsArray, ...values: unknown[]) => txQueryRaw(strings, ...values),
+    systemSetting: { update: (...a: unknown[]) => txSystemSettingUpdate(...a) },
+  }
+  return {
+    order,
+    tx,
+    txQueryRaw,
+    txSystemSettingUpdate,
+    $transaction: vi.fn(async (cb: (t: TxMock) => unknown) => cb(tx)),
+    queryRaw: vi.fn(),
+    cronLogCreate: vi.fn(),
+    systemSettingFindFirst: vi.fn(),
+    systemSettingUpdate: vi.fn(),
+    salesInvoiceFindFirst: vi.fn(),
+    salesInvoiceFindMany: vi.fn(),
+    salesInvoiceAggregate: vi.fn(),
+    attendanceFindMany: vi.fn(),
+    activityLogDeleteMany: vi.fn(),
+    journalUpdateMany: vi.fn(),
+    idempotencyKeyDeleteMany: vi.fn(),
+    attachmentFindMany: vi.fn(),
+    attachmentDeleteMany: vi.fn(),
+    notificationLowStock: vi.fn(),
+    notificationNotifyAdmins: vi.fn(),
+    notificationLateCheckIn: vi.fn(),
+    notificationLateCheckInBatch: vi.fn(),
+  }
+})
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     $queryRaw: (...a: unknown[]) => mocks.queryRaw(...a),
+    $transaction: (cb: (t: typeof mocks.tx) => unknown) => mocks.$transaction(cb),
     cronLog: { create: (...a: unknown[]) => mocks.cronLogCreate(...a) },
     systemSetting: {
       findFirst: (...a: unknown[]) => mocks.systemSettingFindFirst(...a),
@@ -67,6 +98,16 @@ describe("GET /api/cron", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.CRON_SECRET = "test-secret"
+    mocks.order.length = 0
+    mocks.txQueryRaw.mockImplementation(async () => {
+      mocks.order.push("lock")
+      return [{ id: 1, period_lock_date: null as Date | null }]
+    })
+    mocks.txSystemSettingUpdate.mockImplementation(async (..._a: unknown[]) => {
+      mocks.order.push("update")
+      return {}
+    })
+    mocks.$transaction.mockImplementation(async (cb: (t: typeof mocks.tx) => unknown) => cb(mocks.tx))
     mocks.cronLogCreate.mockResolvedValue({})
     mocks.systemSettingFindFirst.mockResolvedValue({ id: 1, periodLockDate: null })
     mocks.systemSettingUpdate.mockResolvedValue({})
@@ -127,14 +168,39 @@ describe("GET /api/cron", () => {
   })
 
   describe("lock-period task", () => {
+    // R-09: auto-lock harus SATU $transaction: kunci baris system_settings
+    // FOR UPDATE -> baca ulang -> monotonic guard -> update via tx.
+    // Falsifikasi: kembalikan findFirst+update non-tx di route -> urutan &
+    // panggilan tx di bawah merah.
+    function expectLockBeforeTxUpdate() {
+      expect(mocks.$transaction).toHaveBeenCalledTimes(1)
+      expect(mocks.txQueryRaw).toHaveBeenCalledTimes(1)
+      const strings = mocks.txQueryRaw.mock.calls[0][0] as unknown as string[]
+      const sql = strings.join(" ")
+      expect(sql).toContain("FROM system_settings")
+      expect(sql).toContain("period_lock_date")
+      expect(sql).toContain("ORDER BY id")
+      expect(sql).toContain("LIMIT 1")
+      expect(sql).toContain("FOR UPDATE")
+      expect(mocks.order[0]).toBe("lock")
+      // Baca lama di luar tx tidak boleh jadi dasar keputusan.
+      expect(mocks.systemSettingFindFirst).not.toHaveBeenCalled()
+      expect(mocks.systemSettingUpdate).not.toHaveBeenCalled()
+    }
+
     it("locks period when no transactions in next month", async () => {
       mocks.salesInvoiceFindFirst.mockResolvedValue(null)
-      mocks.systemSettingFindFirst.mockResolvedValue({ id: 1, periodLockDate: null })
 
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=lock-period"))
       const json = await res.json()
       expect(json.results["lock-period"].status).toBe("success")
-      expect(mocks.systemSettingUpdate).toHaveBeenCalled()
+      expectLockBeforeTxUpdate()
+      expect(mocks.order[1]).toBe("update")
+      expect(mocks.txSystemSettingUpdate).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: { periodLockDate: expect.any(Date) },
+      })
+      expect(json.results["lock-period"].message).toContain("Period dikunci hingga")
     })
 
     it("locks period even when transactions exist in the current month (the just-opened month is unrelated to the previous-period lock)", async () => {
@@ -147,14 +213,35 @@ describe("GET /api/cron", () => {
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=lock-period"))
       const json = await res.json()
       expect(json.results["lock-period"].status).toBe("success")
-      expect(mocks.systemSettingUpdate).toHaveBeenCalled()
+      expect(mocks.txSystemSettingUpdate).toHaveBeenCalled()
+    })
+
+    it("monotonic guard dibaca ulang sesudah lock: kunci masa depan tidak dimundurkan", async () => {
+      const futureLock = new Date("2999-12-31T23:59:59")
+      mocks.txQueryRaw.mockImplementation(async () => {
+        mocks.order.push("lock")
+        return [{ id: 1, period_lock_date: futureLock }]
+      })
+      // Baca luar-tx sengaja beda: bila guard memakai ini, kunci akan mundur.
+      mocks.systemSettingFindFirst.mockResolvedValue({ id: 1, periodLockDate: null })
+
+      const res = await GET(makeCronRequest("http://localhost/api/cron?task=lock-period"))
+      const json = await res.json()
+      expect(json.results["lock-period"].status).toBe("success")
+      expect(json.results["lock-period"].message).toContain("auto-lock tidak memundurkan kunci")
+      expect(mocks.txSystemSettingUpdate).not.toHaveBeenCalled()
+      expect(mocks.systemSettingFindFirst).not.toHaveBeenCalled()
     })
 
     it("throws when systemSetting is missing", async () => {
-      mocks.systemSettingFindFirst.mockResolvedValue(null)
+      mocks.txQueryRaw.mockImplementation(async () => {
+        mocks.order.push("lock")
+        return []
+      })
       const res = await GET(makeCronRequest("http://localhost/api/cron?task=lock-period"))
       const json = await res.json()
       expect(json.results["lock-period"].status).toBe("error")
+      expect(mocks.txSystemSettingUpdate).not.toHaveBeenCalled()
     })
   })
 

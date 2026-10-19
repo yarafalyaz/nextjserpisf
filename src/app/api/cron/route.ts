@@ -112,28 +112,41 @@ async function taskLockPeriod(): Promise<string> {
   // monthIndex, 0)` gives the last day of the month BEFORE monthIndex.
   const periodEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59)
 
-  const setting = await prisma.systemSetting.findFirst()
-  if (!setting) {
-    throw new Error("SystemSetting tidak ditemukan")
-  }
+  // R-09: protokol sama dengan tutup/buka-periode (period-close.actions.ts):
+  // SATU transaksi yang mengunci baris tunggal `system_settings`
+  // (`... ORDER BY id LIMIT 1 FOR UPDATE`), membaca ulang dari baris
+  // terkunci, memvalidasi, lalu update lewat tx yang sama. Baca guard di
+  // luar tx (findFirst lama) bisa diselip tutup-periode/penulis jurnal
+  // di antara baca dan tulis (TOCTOU).
+  return prisma.$transaction(async (tx) => {
+    const rows = await tx.$queryRaw<Array<{ id: number; period_lock_date: Date | string | null }>>`
+      SELECT id, period_lock_date FROM system_settings ORDER BY id LIMIT 1 FOR UPDATE
+    `
+    const row = rows[0]
+    if (!row) {
+      throw new Error("SystemSetting tidak ditemukan")
+    }
 
-  // Monotonic guard: the auto-lock may only ADVANCE the lock date, never rewind
-  // it. A manual edit can set periodLockDate to a future date (e.g. locking
-  // through year-end, or closing a period early); the previous unconditional
-  // update would then pull the lock back to "end of last month" on the next
-  // cron run, silently REOPENING every period between the two dates and letting
-  // back-dated entries into a period that had already been closed.
-  const current = setting.periodLockDate
-  if (current && new Date(current).getTime() >= periodEnd.getTime()) {
-    return `Periode tetap dikunci hingga ${current.toLocaleDateString("id-ID")} (auto-lock tidak memundurkan kunci)`
-  }
+    // Monotonic guard: the auto-lock may only ADVANCE the lock date, never rewind
+    // it. A manual edit can set periodLockDate to a future date (e.g. locking
+    // through year-end, or closing a period early); the previous unconditional
+    // update would then pull the lock back to "end of last month" on the next
+    // cron run, silently REOPENING every period between the two dates and letting
+    // back-dated entries into a period that had already been closed.
+    // Dibaca ulang dari baris yang sudah dikunci di atas, bukan dari findFirst
+    // di luar transaksi.
+    const current = row.period_lock_date == null ? null : new Date(row.period_lock_date)
+    if (current && current.getTime() >= periodEnd.getTime()) {
+      return `Periode tetap dikunci hingga ${current.toLocaleDateString("id-ID")} (auto-lock tidak memundurkan kunci)`
+    }
 
-  await prisma.systemSetting.update({
-    where: { id: setting.id },
-    data: { periodLockDate: periodEnd },
+    await tx.systemSetting.update({
+      where: { id: row.id },
+      data: { periodLockDate: periodEnd },
+    })
+
+    return `Period dikunci hingga ${periodEnd.toLocaleDateString("id-ID")} (sebelumnya: ${current?.toLocaleDateString("id-ID") || "belum di-set"})`
   })
-
-  return `Period dikunci hingga ${periodEnd.toLocaleDateString("id-ID")} (sebelumnya: ${setting.periodLockDate?.toLocaleDateString("id-ID") || "belum di-set"})`
 }
 
 // 2. Low Stock Alert
