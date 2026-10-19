@@ -92,6 +92,7 @@ export async function updateRecurringTransaction(id: number, formData: FormData)
     if (invalid) return { success: false, error: invalid }
 
     const existing = await prisma.recurringTransaction.findUniqueOrThrow({ where: { id } })
+    if (existing.deletedAt) return { success: false, error: "Jadwal transaksi berulang sudah dihapus." }
     const slug = await nextSlug("recurringTransaction", v.name, { excludeId: id })
 
     // Only re-anchor the schedule when the start date actually moved — otherwise
@@ -146,6 +147,10 @@ export async function runRecurringNow(id: number) {
     const user = await requirePermission("manage_recurring_transactions")
 
     const schedule = await prisma.recurringTransaction.findUniqueOrThrow({ where: { id } })
+    // Cron path (runDueRecurring) hanya jalan untuk isActive && deletedAt null;
+    // jalur manual wajib sama, atau jadwal terhapus/nonaktif hidup lagi via tombol/API.
+    if (schedule.deletedAt) return { success: false, error: "Jadwal transaksi berulang sudah dihapus." }
+    if (!schedule.isActive) return { success: false, error: "Jadwal transaksi berulang tidak aktif." }
     const template = parseRecurringTemplate(schedule.template)
     const invalid = validateRecurringTemplate(schedule.type, template)
     if (invalid) return { success: false, error: invalid }

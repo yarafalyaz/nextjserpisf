@@ -63,6 +63,8 @@ import { runRecurringNow } from "../recurring.actions"
 
 const schedule = {
   id: 42,
+  isActive: true,
+  deletedAt: null,
   name: "Sewa gudang",
   type: "journal",
   frequency: "monthly",
@@ -130,5 +132,29 @@ describe("runRecurringNow — journal reference", () => {
     expect(res.success).toBe(true)
     expect(res.success === true && res.message).toContain("sudah ada, dilewati")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe("runRecurringNow — jadwal terhapus/nonaktif", () => {
+  it("refuses a soft-deleted schedule and generates nothing", async () => {
+    mocks.scheduleFindUnique.mockResolvedValue({ ...schedule, deletedAt: new Date(2026, 0, 1), isActive: false })
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(false)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
+  })
+
+  it("refuses an inactive schedule and generates nothing", async () => {
+    mocks.scheduleFindUnique.mockResolvedValue({ ...schedule, deletedAt: null, isActive: false })
+
+    const res = await runRecurringNow(42)
+
+    expect(res.success).toBe(false)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+    expect(mocks.expenseCreate).not.toHaveBeenCalled()
+    expect(mocks.scheduleUpdate).not.toHaveBeenCalled()
   })
 })
