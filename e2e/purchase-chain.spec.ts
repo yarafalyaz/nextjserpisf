@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test"
 import { prisma } from "@/lib/db/prisma"
+import { Prisma } from "@prisma/client"
 
 /**
  * RANTAI BELI P2-1: PO approved → GR (buat+verifikasi) → tagihan (buat+konfirmasi)
@@ -22,15 +23,25 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     await prisma.$executeRaw`DELETE FROM journals WHERE reference_type = 'GoodsReceipt' AND reference_id NOT IN (SELECT id FROM goods_receipts)`
     await prisma.$executeRaw`DELETE je FROM journal_entries je JOIN journals j ON j.id = je.journal_id WHERE j.reference_type = 'VendorBill' AND j.reference_id NOT IN (SELECT id FROM vendor_bills)`
     await prisma.$executeRaw`DELETE FROM journals WHERE reference_type = 'VendorBill' AND reference_id NOT IN (SELECT id FROM vendor_bills)`
-    await prisma.$executeRaw`DELETE il FROM inventory_layers il LEFT JOIN stock_moves sm ON sm.id = il.stock_move_id WHERE sm.id IS NULL`
-    await prisma.$executeRaw`DELETE il FROM inventory_layers il JOIN stock_moves sm ON sm.id = il.stock_move_id WHERE sm.reference_type = 'GoodsReceipt'`
-    await prisma.$executeRaw`DELETE FROM stock_moves WHERE reference_type = 'GoodsReceipt'`
-    // AUD-R11-01: cleanup SCOPING FIXTURE (bukan global). fullyParallel 4 shard
-    // berbagi DB: deleteMany({}) tanpa filter menghapus data run shard lain.
-    // Baca PO fixture DULU, lalu hapus hanya baris milik PO ini (urutan FK).
+    // AUD-R12-01: poRow DULU — semua cleanup di bawah scoping fixture ini.
     const poRow = await prisma.purchaseOrder.findUniqueOrThrow({
       where: { documentNo: "E2E-PO-CHAIN" },
     })
+    // GR fixture = semua GR milik PO ini (dibaca SEBELUM dihapus).
+    const fixtureGrIds = (
+      await prisma.goodsReceipt.findMany({
+        where: { purchaseOrderId: poRow.id },
+        select: { id: true },
+      })
+    ).map((g) => g.id)
+    if (fixtureGrIds.length > 0) {
+      // Movement + layer HANYA milik GR fixture (reference_id = GR id).
+      // Global reference_type='GoodsReceipt' = hapus data shard lain.
+      // Prisma.join: tiap id = parameter terpisah (bukan satu string koma).
+      await prisma.$executeRaw`DELETE il FROM inventory_layers il JOIN stock_moves sm ON sm.id = il.stock_move_id WHERE sm.reference_type = 'GoodsReceipt' AND sm.reference_id IN (${Prisma.join(fixtureGrIds)})`
+      await prisma.$executeRaw`DELETE FROM stock_moves WHERE reference_type = 'GoodsReceipt' AND reference_id IN (${Prisma.join(fixtureGrIds)})`
+    }
+    await prisma.$executeRaw`DELETE il FROM inventory_layers il LEFT JOIN stock_moves sm ON sm.id = il.stock_move_id WHERE sm.id IS NULL`
     const fixtureBillIds = (
       await prisma.vendorBill.findMany({
         where: { purchaseOrderId: poRow.id },
@@ -39,8 +50,9 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     ).map((b) => b.id)
     if (fixtureBillIds.length > 0) {
       await prisma.vendorPaymentAllocation.deleteMany({ where: { vendorBillId: { in: fixtureBillIds } } })
-      // Payment yatim milik fixture (tanpa alokasi tersisa) — bukan payment run lain.
-      await prisma.$executeRaw`DELETE vp FROM vendor_payments vp LEFT JOIN vendor_payment_allocations vpa ON vpa.vendor_payment_id = vp.id WHERE vpa.id IS NULL AND vp.vendor_id = (SELECT vendor_id FROM purchase_orders WHERE id = ${poRow.id})`
+      // AUD-R12-03: payment via vendorBillId = bill fixture (penanda eksplisit).
+      // Query lama (yatim + vendor_id PO) hapus payment tes lain se-vendor.
+      await prisma.vendorPayment.deleteMany({ where: { vendorBillId: { in: fixtureBillIds } } })
       await prisma.vendorBillItem.deleteMany({ where: { vendorBillId: { in: fixtureBillIds } } })
       await prisma.vendorBill.deleteMany({ where: { id: { in: fixtureBillIds } } })
     }
@@ -106,10 +118,16 @@ test.describe.serial("Pembelian — rantai penuh", () => {
     // lain di PO yang sama bisa menyodorkan GR verified basi → klik Verifikasi
     // ditolak "hanya dari status draf" + teks Terverifikasi tak muncul.
     // Poll hingga GR run ini lahir (klik Terima async di server).
+    // AUD-R12-02: filter purchaseOrderId + status draft — id>saja bisa
+    // comot GR PO lain dari shard paralel.
     let gr = null
     for (let i = 0; i < 20 && !gr; i++) {
       gr = await prisma.goodsReceipt.findFirst({
-        where: { id: { gt: maxGrBefore._max.id ?? 0 } },
+        where: {
+          id: { gt: maxGrBefore._max.id ?? 0 },
+          purchaseOrderId: po.id,
+          status: "draft",
+        },
         orderBy: { id: "desc" },
       })
       if (!gr) await new Promise((r) => setTimeout(r, 1000))
