@@ -255,6 +255,10 @@ export async function createBomRevision(formData: FormData) {
     });
 
     const revision = await prisma.$transaction(async (tx) => {
+      // Serialize concurrent creates for the same product so two parallel
+      // calls cannot read the same latest revisionNo and collide on the
+      // (productId, revisionNo) unique constraint.
+      await tx.$queryRaw`SELECT id FROM products WHERE id = ${v.productId} FOR UPDATE`;
       const latest = await tx.bomRevision.findFirst({
         where: { productId: v.productId },
         orderBy: { revisionNo: "desc" },
@@ -368,19 +372,28 @@ export async function releaseBomRevision(id: number) {
       return { success: false, error: "Revisi BOM tidak boleh kosong sebelum dirilis." };
     }
 
-    const claimed = await prisma.bomRevision.updateMany({
-      where: { id, status: "draft" },
-      data: { status: "released", releasedAt: new Date(), releasedBy: Number(user.id) },
-    });
-    if (claimed.count === 0) {
-      return { success: false, error: "Hanya revisi berstatus draft yang dapat dirilis." };
-    }
+    // Claim + supersede atomically: the draft→released claim and the
+    // supersede of the previously released revision run in ONE transaction so
+    // a crash between them can never leave zero or two released revisions.
+    const releaseResult = await prisma.$transaction(async (tx) => {
+      const claimed = await tx.bomRevision.updateMany({
+        where: { id, status: "draft" },
+        data: { status: "released", releasedAt: new Date(), releasedBy: Number(user.id) },
+      });
+      if (claimed.count === 0) {
+        return { success: false as const, error: "Hanya revisi berstatus draft yang dapat dirilis." };
+      }
 
-    // Supersede any other released revision for the same product.
-    await prisma.bomRevision.updateMany({
-      where: { productId: revision.productId, status: "released", id: { not: id } },
-      data: { status: "superseded" },
+      // Supersede any other released revision for the same product.
+      await tx.bomRevision.updateMany({
+        where: { productId: revision.productId, status: "released", id: { not: id } },
+        data: { status: "superseded" },
+      });
+      return { success: true as const };
     });
+    if (!releaseResult.success) {
+      return { success: false, error: releaseResult.error };
+    }
 
     await logActivity(
       "release",

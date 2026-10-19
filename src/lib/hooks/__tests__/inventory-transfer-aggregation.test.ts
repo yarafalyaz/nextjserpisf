@@ -47,6 +47,7 @@ function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number;
     moveCreate: vi.fn().mockResolvedValue({ id: 999 }),
     transferItemUpdate: vi.fn().mockResolvedValue({}),
     serialUpdateMany: vi.fn().mockResolvedValue({ count: 0 }),
+    itemFindMany: vi.fn().mockResolvedValue([]),
     batchFindMany: vi.fn().mockResolvedValue([]),
     batchFindFirst: vi.fn().mockResolvedValue(null),
     batchUpdate: vi.fn().mockResolvedValue({}),
@@ -58,6 +59,7 @@ function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number;
     $executeRaw: spies.executeRaw,
     inventoryTransfer: { findUniqueOrThrow: spies.transferFindUniqueOrThrow },
     inventoryTransferItem: { update: spies.transferItemUpdate },
+    item: { findMany: spies.itemFindMany },
     itemSerial: { updateMany: spies.serialUpdateMany },
     itemBatch: {
       findMany: spies.batchFindMany,
@@ -302,5 +304,14 @@ describe("onTransferReceived", () => {
       qty: 1,
       unitCost: 15,
     })
+  })
+
+  it("rejects receive of a batch-tracked item with no batch allocation (explicit-lot policy)", async () => {
+    const { spies } = wireTx([{ itemId: 7, qty: 3 }], "processed")
+    spies.moveFindFirst.mockResolvedValueOnce(null)
+    spies.itemFindMany.mockResolvedValueOnce([{ id: 7, trackBatch: true }])
+
+    await expect(onTransferReceived(100, 1)).rejects.toThrow(/memerlukan alokasi nomor batch/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
   })
 })

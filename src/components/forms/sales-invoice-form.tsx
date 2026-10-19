@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { z } from "zod"
@@ -91,6 +91,11 @@ function lineTotal(row: LineItem): number {
   return Math.max(0, gross - (Number(row.discount) || 0))
 }
 
+// P2 idempotency UI: generator key murni di luar render (pola customer-credit-panel).
+function newIdempotencyKey(): string {
+  return crypto.randomUUID()
+}
+
 export function SalesInvoiceForm({
   customers,
   salesOrders,
@@ -106,6 +111,10 @@ export function SalesInvoiceForm({
   const [customerOptions, setCustomerOptions] = useState(customers)
   const [rows, setRows] = useState<LineItem[]>(() => (initialItems ?? []).map(toRow))
   const [taxRate, setTaxRate] = useState<number>(() => Number(initialTaxRate ?? 0) || 0)
+  // P2 idempotency UI: satu key stabil per submit create (crypto.randomUUID per
+  // submit). Retry/error pakai key sama; sukses/regenerasi ganti key baru.
+  // Update (invoice?.id) tak perlu key — guard server hanya di jalur create.
+  const idempotencyKeyRef = useRef<string>(newIdempotencyKey())
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<SalesInvoiceInput>({
     resolver: zodResolver(salesInvoiceSchema),
@@ -147,8 +156,12 @@ export function SalesInvoiceForm({
           formData.append("items", JSON.stringify(payload))
           formData.append("taxRate", String(Number(taxRate) || 0))
         }
+        // P2 idempotency UI: key stabil per intent create; retry/error pakai
+        // key sama, sukses ganti baru supaya create berikutnya tak ditolak.
+        if (!invoice?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = invoice?.id ? await updateSalesInvoice(invoice.id, formData) : await createSalesInvoice(formData)
         if (result.success) {
+          if (!invoice?.id) idempotencyKeyRef.current = newIdempotencyKey()
           showSuccess(invoice?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
           router.push(`/penjualan/faktur/${result.slug ?? result.id}`)
           router.refresh()

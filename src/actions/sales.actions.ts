@@ -515,10 +515,10 @@ export async function createDownPayment(formData: FormData) {
   const quotationId = v.quotationId
   const amount = v.amount
 
-  const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
-  if (!["accepted", "approved", "converted"].includes(quotation.status)) {
-    throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
-  }
+  // Quotation TOCTOU guard: baca luar-tx dihapus. Status + grandTotal dibaca
+  // ulang DALAM tx setelah FOR UPDATE — pesaing bisa membatalkan/menolak
+  // quotation di antara baca luar dan tulis. Cap kumulatif tetap dalam tx yang
+  // sama (lock yang sama menutup keduanya).
 
   // Lock the quotation row + re-run the cumulative cap INSIDE the transaction so
   // two concurrent DP creations on the same quotation can't each pass the cap
@@ -531,6 +531,11 @@ export async function createDownPayment(formData: FormData) {
   // back the DP insert.
     const dp = await prisma.$transaction(async (tx) => {
       await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      const quotation = await tx.quotation.findUniqueOrThrow({ where: { id: quotationId } })
+      if (!["accepted", "approved", "converted"].includes(quotation.status)) {
+        throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
+      }
 
       const existingDPs = await tx.downPayment.aggregate({
         where: { quotationId, status: { not: "cancelled" } },
@@ -2035,16 +2040,16 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   if (!parsed.success) return { success: false, error: `Validasi gagal: ${parsed.error}` }
   const v = parsed.data
 
-  // Fetch old invoiceId before update to handle invoice reassignment
-  const oldPayment = await prisma.salesPayment.findUniqueOrThrow({ where: { id }, select: { salesInvoiceId: true, documentNo: true } })
+  // Old payment row + slug: NO lookup outside the tx. A concurrent delete/edit
+  // of this payment between an outer read and the tx would make the recalc
+  // below act on stale data (or the update hit a ghost row). Slug derives
+  // from the locked row's documentNo inside the tx.
   const newInvoiceId = v.salesInvoiceId
   const newAmount = v.amount
   const newWithholdingAmount = v.withholdingAmount ?? 0
   if (newWithholdingAmount > 0 && !v.withholdingTypeId) {
     return { success: false, error: "Jenis PPh wajib dipilih bila ada potongan PPh" }
   }
-
-  const slug = await nextSlug("salesPayment", oldPayment.documentNo, { excludeId: id })
 
   // Atomic: lock the target invoice and validate the edited amount against the
   // remaining balance (excluding THIS payment) — mirrors createSalesPayment.
@@ -2056,7 +2061,23 @@ export async function updateSalesPayment(id: number, formData: FormData) {
   // to the payment row, and the operator's just-uploaded attachments would
   // silently never get linked to the edited payment.
   const payment = await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${newInvoiceId} FOR UPDATE`
+    // Lock BOTH invoices up front, id-sorted (anti-deadlock): two concurrent
+    // reassigns swapping invoices A<->B must take locks in the same order.
+    // Old row read here (not outside): baca luar + lock hanya baru = TOCTOU —
+    // pesaing bisa hapus/pindah payment ini atau ubah faktur lama di antaranya.
+    const lockedPayment = await tx.salesPayment.findUniqueOrThrow({
+      where: { id },
+      select: { salesInvoiceId: true, documentNo: true },
+    })
+    const oldInvoiceId = lockedPayment.salesInvoiceId
+    const invoiceIds = oldInvoiceId === newInvoiceId
+      ? [newInvoiceId]
+      : [Math.min(oldInvoiceId, newInvoiceId), Math.max(oldInvoiceId, newInvoiceId)]
+    for (const invoiceId of invoiceIds) {
+      await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id = ${invoiceId} FOR UPDATE`
+    }
+    const slug = await nextSlug("salesPayment", lockedPayment.documentNo, { excludeId: id })
+
     const invoice = await tx.salesInvoice.findUniqueOrThrow({ where: { id: newInvoiceId } })
 
     // Status guard: reject invoices that were never posted (draft/approved) or
@@ -2134,8 +2155,9 @@ export async function updateSalesPayment(id: number, formData: FormData) {
     await onSalesPaymentUpdated(updated.salesInvoiceId, tx)
     // If the payment was reassigned to a different invoice, the old invoice also
     // needs a recalc — must happen inside the same tx for the same reason.
-    if (oldPayment.salesInvoiceId && oldPayment.salesInvoiceId !== updated.salesInvoiceId) {
-      await onSalesPaymentUpdated(oldPayment.salesInvoiceId, tx)
+    // oldInvoiceId comes from the in-tx locked row above (not a stale read).
+    if (oldInvoiceId && oldInvoiceId !== updated.salesInvoiceId) {
+      await onSalesPaymentUpdated(oldInvoiceId, tx)
     }
 
     // Associate uploaded attachments inside the tx (moved from outside) so a
@@ -2411,10 +2433,9 @@ export async function updateDownPayment(id: number, formData: FormData) {
   }
   const slug = await nextSlug("downPayment", existingDp.documentNo, { excludeId: id })
   const quotationId = v.quotationId
-  const quotation = await prisma.quotation.findUniqueOrThrow({ where: { id: quotationId } })
-  if (!["accepted", "approved", "converted"].includes(quotation.status)) {
-    throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
-  }
+  // Quotation TOCTOU guard: baca luar-tx dihapus. Quotation (status,
+  // customerId, grandTotal) dibaca ulang DALAM tx setelah FOR UPDATE —
+  // pesaing bisa mengubah/membatalkan quotation di antara baca luar dan tulis.
 
   const amount = v.amount
 
@@ -2426,6 +2447,11 @@ export async function updateDownPayment(id: number, formData: FormData) {
   // the outer catch surfaces the same message.
   const dp = await prisma.$transaction(async (tx) => {
     await tx.$executeRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+    const quotation = await tx.quotation.findUniqueOrThrow({ where: { id: quotationId } })
+    if (!["accepted", "approved", "converted"].includes(quotation.status)) {
+      throw new Error("DP hanya bisa dibuat untuk quotation approved/accepted/converted")
+    }
 
     const otherDPs = await tx.downPayment.aggregate({
       where: { quotationId, status: { not: "cancelled" }, id: { not: id } },

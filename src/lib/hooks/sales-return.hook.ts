@@ -58,9 +58,11 @@ export async function onSalesReturnCompleted(
       return; // already completed/cancelled; idempotent no-op
     }
 
-    // Resolve warehouse: item default warehouse → first warehouse fallback
+    // Resolve warehouse: item default warehouse → first ACTIVE warehouse fallback
     const fallbackWarehouse = await tx.warehouse.findFirst({
+      where: { isActive: true, deletedAt: null },
       select: { id: true },
+      orderBy: { id: "asc" },
     });
     if (!fallbackWarehouse) throw new Error("Tidak ada warehouse aktif.");
 

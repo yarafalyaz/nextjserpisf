@@ -527,6 +527,8 @@ export async function createExpense(formData: FormData) {
   try {
     const user = await requirePermission("create_expenses");
 
+    const idempotencyKey = formData.get("idempotencyKey") as string | null;
+
     const parsed = parseFormData(expenseSchema, formData);
     if (!parsed.success)
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
@@ -542,7 +544,11 @@ export async function createExpense(formData: FormData) {
       }
     }
 
-    const expense = await prisma.expense.create({
+    const expense = await prisma.$transaction(async (tx) => {
+      // P2 idempotency UI: guard dalam transaksi yang sama (pola createPettyCash).
+      await checkIdempotency(idempotencyKey, tx, user.id);
+
+      return tx.expense.create({
       data: {
         documentNo,
         slug: await nextSlug("expense", documentNo),
@@ -560,6 +566,7 @@ export async function createExpense(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
       },
+      });
     });
 
     // Associate uploaded attachments with the new expense
@@ -677,40 +684,59 @@ export async function rejectExpense(expenseId: number) {
 
 export async function markExpensePaid(expenseId: number) {
   try {
-    await requirePermission("approve_expenses");
+    const user = await requirePermission("approve_expenses");
 
-    const expense = await prisma.expense.findUniqueOrThrow({
-      where: { id: expenseId },
-    });
+    // Race guard: lock expense FOR UPDATE + recheck status + post journal +
+    // flip paid dalam SATU tx. Baca luar-tx dihapus: dua klik bayar bersamaan
+    // bisa sama-sama lolos cek approved lalu jurnal ganda / flip ganda.
+    // paidFromAccountId dicek ulang dalam tx setelah lock — pesaing bisa
+    // mengosongkannya di antara baca luar dan tulis.
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM expenses WHERE id = ${expenseId} FOR UPDATE`;
 
-    // Laravel parity: only approved expenses can be marked as paid (draft → approved → paid)
-    if (expense.status !== "approved") {
-      throw new Error(
-        "Hanya pengeluaran yang sudah disetujui yang dapat ditandai sebagai dibayar",
-      );
-    }
+      const locked = await tx.expense.findUniqueOrThrow({
+        where: { id: expenseId },
+      });
 
-    // Refuse to settle an expense that has no source of funds. `onExpenseApproved`
-    // cannot post Dr. Beban / Cr. Kas-Bank without `paidFromAccountId`, and the old
-    // silent early-return there flipped the expense to "paid" anyway — cash out with
-    // zero GL trace. Reject it here (status untouched, retryable after the account is
-    // filled in) instead of banking on that hook never staying silent again.
-    if (!expense.paidFromAccountId) {
-      throw new Error(
-        "Pengeluaran belum punya akun sumber dana (kas/bank). Isi akun sumber dana sebelum menandai lunas — tanpa itu tidak ada jurnal yang bisa diposting.",
-      );
-    }
+      // Laravel parity: only approved expenses can be marked as paid (draft → approved → paid)
+      if (locked.status !== "approved") {
+        throw new Error(
+          "Hanya pengeluaran yang sudah disetujui yang dapat ditandai sebagai dibayar",
+        );
+      }
 
-    // Post the accounting journal FIRST (Laravel parity: GL created when paid).
-    // Posting before the status flip means a journal failure (e.g. closed period)
-    // leaves the expense at "approved" and retryable, instead of stranding it as
-    // "paid" with no GL entry. The journal's (referenceType, referenceId) unique
-    // constraint already prevents any double-post on concurrent calls.
-    await onExpenseApproved(expenseId);
+      // Refuse to settle an expense that has no source of funds. `onExpenseApproved`
+      // cannot post Dr. Beban / Cr. Kas-Bank without `paidFromAccountId`, and the old
+      // silent early-return there flipped the expense to "paid" anyway — cash out with
+      // zero GL trace. Reject it here (status untouched, retryable after the account is
+      // filled in) instead of banking on that hook never staying silent again.
+      if (!locked.paidFromAccountId) {
+        throw new Error(
+          "Pengeluaran belum punya akun sumber dana (kas/bank). Isi akun sumber dana sebelum menandai lunas — tanpa itu tidak ada jurnal yang bisa diposting.",
+        );
+      }
 
-    await prisma.expense.update({
-      where: { id: expenseId },
-      data: { status: "paid" },
+      // Post the accounting journal FIRST inside the same tx (Laravel parity: GL
+      // created when paid). Posting before the status flip means a journal
+      // failure (e.g. closed period) leaves the expense at "approved" and
+      // retryable, instead of stranding it as "paid" with no GL entry. The
+      // journal's (referenceType, referenceId) unique constraint already
+      // prevents any double-post on concurrent calls — the tx-scoped hook call
+      // (executeInTx reuses this tx) keeps check-then-create serial under the
+      // expense row lock.
+      await onExpenseApproved(expenseId, Number(user.id), tx);
+
+      // Conditional claim: only flip when still approved. The FOR UPDATE lock
+      // serializes this block, so count===0 means the status moved under us
+      // (reject/cancel path) — surface as processed error, never silently
+      // succeed.
+      const claim = await tx.expense.updateMany({
+        where: { id: expenseId, status: "approved" },
+        data: { status: "paid" },
+      });
+      if (claim.count === 0) {
+        throw new Error("Pengeluaran sudah diproses atau status tidak valid");
+      }
     });
 
     await logActivity(
@@ -870,6 +896,11 @@ export async function createPettyCash(formData: FormData) {
 
     const pettyCash = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
+
+      // Race guard: gap-lock tabel kas kecil SELAMA hitung saldo ekor.
+      // Tanpa ini dua create bersamaan baca balanceBefore sama lalu keduanya
+      // tulis — rantai/recalc sesudahnya menimpa salah satu, saldo akhir salah.
+      await tx.$executeRaw`SELECT id FROM petty_cash FOR UPDATE`;
 
       // Calculate balanceBefore from the chronologically LAST petty cash record.
       // The chain is ordered (date asc, id asc) — see recalcPettyCashChain — so
@@ -1408,10 +1439,13 @@ export async function createProfitCenter(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     // `code` unik di skema: kegagalan paling sering adalah kode terpakai.
-    const message = getErrorMessage(e) || "";
-    if (message.includes("Unique constraint") || message.includes("1062")) {
+    // Cek error mentah (code/pesan asli) sebelum sanitasi: pesan yang sudah
+    // disanitasi tidak lagi mengandung detail teknis seperti "Unique constraint".
+    const raw = e instanceof Error ? e.message : "";
+    if ((e as { code?: unknown })?.code === "P2002" || raw.includes("Unique constraint") || raw.includes("1062")) {
       return { success: false as const, error: "Kode pusat laba sudah digunakan" };
     }
+    const message = getErrorMessage(e) || "";
     console.error("[createProfitCenter]", message || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
@@ -1435,10 +1469,11 @@ export async function updateProfitCenter(id: number, formData: FormData) {
     return { success: true as const };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
-    const message = getErrorMessage(e) || "";
-    if (message.includes("Unique constraint") || message.includes("1062")) {
+    const raw = e instanceof Error ? e.message : "";
+    if ((e as { code?: unknown })?.code === "P2002" || raw.includes("Unique constraint") || raw.includes("1062")) {
       return { success: false as const, error: "Kode pusat laba sudah digunakan" };
     }
+    const message = getErrorMessage(e) || "";
     console.error("[updateProfitCenter]", message || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
@@ -1614,6 +1649,12 @@ export async function deletePettyCash(id: number) {
 
     let removedFiles: { fileUrl: string; referenceType: string }[] = [];
     await prisma.$transaction(async (tx) => {
+      // Race guard: gap-lock tabel + kunci baris target SELAMA hapus.
+      // Tanpa ini create/edit bersamaan baca chain pra-hapus lalu tulis
+      // setelah delete commit — saldo rantai dihitung dari data basi.
+      await tx.$executeRaw`SELECT id FROM petty_cash WHERE id = ${id} FOR UPDATE`;
+      await tx.$executeRaw`SELECT id FROM petty_cash FOR UPDATE`;
+
       // Remove the linked journal (avoid orphaned GL entries), delete the record,
       // then recompute the running balance for all remaining records.
       await deletePettyCashJournal(tx, id);
@@ -1800,106 +1841,95 @@ export async function reverseJournal(journalId: number) {
   try {
     const user = await requirePermission("post_journals");
 
-    const journal = await prisma.journal.findUniqueOrThrow({
-      where: { id: journalId },
-      include: { entries: true },
-    });
-
-    // Laravel parity: only posted journals can be reversed
-    if (journal.status !== "POSTED") {
-      throw new Error("Hanya journal yang sudah POSTED yang bisa di-reverse");
-    }
-
-    // Atomic conditional claim — serialize concurrent reverse requests so only one
-    // reversal journal is created; duplicates get a clean error instead of
-    // corrupting the GL with two reversals.
-    const claim = await prisma.journal.updateMany({
-      where: { id: journalId, status: "POSTED" },
-      data: { status: "REVERSING" },
-    });
-    if (claim.count === 0) {
-      const current = await prisma.journal.findUnique({
-        where: { id: journalId },
-        select: { status: true },
-      });
-      throw new Error(
-        current?.status === "REVERSED"
-          ? "Jurnal sudah pernah dibalik"
-          : current
-            ? `Jurnal tidak bisa dibalik (status: ${current.status})`
-            : "Jurnal tidak ditemukan",
-      );
-    }
-
-    // Wrap the period check, document-number allocation, and the reversal tx in
-    // a single rollback boundary. The claim flips POSTED -> REVERSING, and if
-    // anything after the claim throws (closed period, sequence generator down,
-    // unique collision on journalNumber, etc.) the journal must NOT be left
-    // stuck in REVERSING — that status is invisible to the GL (only POSTED
-    // journals are summed) and the claim requires POSTED, so the journal
-    // becomes permanently unrecoverable. Restore the claim so the user can
-    // retry.
+    // Race guard: klaim atomik POSTED->REVERSING + reversal + REVERSED dalam
+    // SATU tx. Klaim luar-tx dihapus: dua reverse bersamaan + crash di antara
+    // klaim dan tx bisa tinggalkan REVERSING basi / reversal ganda.
+    // Baris dikunci dulu (FOR UPDATE), status dibaca ulang dalam tx: baca
+    // luar-tx dihapus — status bisa berubah di antara baca dan lock.
+    // Period check + alokasi nomor + reversal semua dalam tx yang sama: gagal
+    // di tengah = rollback penuh, jurnal kembali POSTED dan retryable.
+    // (Cleanup cron taskRecoverStuckReversals tetap ada sebagai sabuk kedua
+    // bila proses mati di tengah commit.)
     let documentNo: string;
-    try {
+    await prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT id FROM journals WHERE id = ${journalId} FOR UPDATE`;
+
+      const journal = await tx.journal.findUniqueOrThrow({
+        where: { id: journalId },
+        include: { entries: true },
+      });
+
+      // Laravel parity: only posted journals can be reversed
+      if (journal.status !== "POSTED") {
+        const current = journal.status;
+        throw new Error(
+          current === "REVERSED"
+            ? "Jurnal sudah pernah dibalik"
+            : `Jurnal tidak bisa dibalik (status: ${current})`,
+        );
+      }
+
+      // Atomic conditional claim — serialize concurrent reverse requests so only one
+      // reversal journal is created; duplicates get a clean error instead of
+      // corrupting the GL with two reversals. Runs INSIDE the same tx after the
+      // lock + reread: the claim and the reversal commit atomically, so a crash
+      // can never leave REVERSING without a reversal row.
+      const claim = await tx.journal.updateMany({
+        where: { id: journalId, status: "POSTED" },
+        data: { status: "REVERSING" },
+      });
+      if (claim.count === 0) {
+        throw new Error("Jurnal tidak bisa dibalik (konflik konkurensi — coba lagi)");
+      }
+
       // Cannot reverse a journal that belongs to a closed period
-      await assertPeriodOpen(journal.transactionDate);
+      await assertPeriodOpen(journal.transactionDate, tx);
 
       documentNo = await generateDocumentNumber("JRN-RV");
 
-      await prisma.$transaction(async (tx) => {
-        const reversalJournal = await tx.journal.create({
-          data: {
-            journalNumber: documentNo,
-            // Date the reversal to the ORIGINAL journal's transactionDate, not
-            // today. The reversal is a correction of the original period: if it
-            // were stamped with today's date, a period income statement for the
-            // original period would still include the (now REVERSED) original
-            // with no offsetting entry in that period, and the reversal would
-            // wrongly land in the current period. Using the original date keeps
-            // the (REVERSED original + POSTED reversal) pair inside the same
-            // period, so PERIOD and CUMULATIVE reports both net to zero.
-            // Safe because we only get here after assertPeriodOpen(original date)
-            // passed, i.e. the original period is still open.
-            transactionDate: journal.transactionDate,
-            description: `Reversal of ${journal.journalNumber}: ${journal.description ?? ""}`,
-            type: journal.type,
-            status: "POSTED",
-            referenceType: "Journal",
-            referenceId: journal.id,
-            totalDebit: journal.totalDebit,
-            totalCredit: journal.totalCredit,
-            createdBy: Number(user.id),
-          },
-        });
-
-        // Batch create reversal entries (eliminates N+1)
-        await tx.journalEntry.createMany({
-          data: journal.entries.map((entry) => ({
-            journalId: reversalJournal.id,
-            accountId: entry.accountId,
-            debit: entry.credit,
-            credit: entry.debit,
-            memo: `Reversal: ${entry.memo ?? ""}`,
-            costCenterId: entry.costCenterId,
-            profitCenterId: entry.profitCenterId,
-          })),
-        });
-
-        await tx.journal.update({
-          where: { id: journalId },
-          data: { status: "REVERSED" },
-        });
+      const reversalJournal = await tx.journal.create({
+        data: {
+          journalNumber: documentNo,
+          // Date the reversal to the ORIGINAL journal's transactionDate, not
+          // today. The reversal is a correction of the original period: if it
+          // were stamped with today's date, a period income statement for the
+          // original period would still include the (now REVERSED) original
+          // with no offsetting entry in that period, and the reversal would
+          // wrongly land in the current period. Using the original date keeps
+          // the (REVERSED original + POSTED reversal) pair inside the same
+          // period, so PERIOD and CUMULATIVE reports both net to zero.
+          // Safe because we only get here after assertPeriodOpen(original date)
+          // passed, i.e. the original period is still open.
+          transactionDate: journal.transactionDate,
+          description: `Reversal of ${journal.journalNumber}: ${journal.description ?? ""}`,
+          type: journal.type,
+          status: "POSTED",
+          referenceType: "Journal",
+          referenceId: journal.id,
+          totalDebit: journal.totalDebit,
+          totalCredit: journal.totalCredit,
+          createdBy: Number(user.id),
+        },
       });
-    } catch (e) {
-      // Tx failed (or a pre-tx check failed) after the claim flipped status to
-      // REVERSING — roll back the claim so the journal can be retried instead of
-      // being stuck in limbo.
-      await prisma.journal.updateMany({
-        where: { id: journalId, status: "REVERSING" },
-        data: { status: "POSTED" },
+
+      // Batch create reversal entries (eliminates N+1)
+      await tx.journalEntry.createMany({
+        data: journal.entries.map((entry) => ({
+          journalId: reversalJournal.id,
+          accountId: entry.accountId,
+          debit: entry.credit,
+          credit: entry.debit,
+          memo: `Reversal: ${entry.memo ?? ""}`,
+          costCenterId: entry.costCenterId,
+          profitCenterId: entry.profitCenterId,
+        })),
       });
-      throw e;
-    }
+
+      await tx.journal.update({
+        where: { id: journalId },
+        data: { status: "REVERSED" },
+      });
+    });
 
     await logActivity("reverse", "Journal", journalId, "Membalik jurnal");
     revalidatePath("/keuangan/jurnal");
@@ -2012,6 +2042,14 @@ export async function updatePettyCash(id: number, formData: FormData) {
     }
 
     const pettyCash = await prisma.$transaction(async (tx) => {
+      // Race guard: kunci baris yang diedit + gap-lock tabel SELAMA baca rantai.
+      // Tanpa ini dua edit bersamaan baca chain sama lalu tulis bergantian —
+      // recalc kedua menimpa hasil pertama, saldo akhir salah. Lock baris dulu
+      // (butuh bila tx pesaing update/delete id sama: satu antre, bukan deadlock
+      // — urutan sama di semua jalur), lalu kunci tabel untuk baca konsisten.
+      await tx.$executeRaw`SELECT id FROM petty_cash WHERE id = ${id} FOR UPDATE`;
+      await tx.$executeRaw`SELECT id FROM petty_cash FOR UPDATE`;
+
       // Existing documentNo is preserved across edits; reuse it to keep the slug
       // stable (slug is derived from the immutable document number).
       const existingPettyCash = await tx.pettyCash.findUniqueOrThrow({

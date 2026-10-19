@@ -106,9 +106,9 @@ jobs:
         run: ./node_modules/.bin/playwright test --project=setup --workers=1
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-          # 32+ chars: src/lib/env.ts menolak AUTH_SECRET < 32 (sesi JWE bisa
-          # dipalsukan). "ci-secret" (9 char) bikin SEMUA halaman dashboard 500
-          # di job E2E — 194 tes gagal @10s sampai job kena timeout 40 menit.
+          # 32+ char: di GitHub Actions env.ts melewati validasi (CI="true"),
+          # tapi run lokal/mirror tidak — secret 9 char gagal start di sana.
+          # Nilai ini sah di kedua tempat.
           NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
           AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
           NEXTAUTH_URL: http://localhost:4101
@@ -193,9 +193,9 @@ jobs:
         run: ./node_modules/.bin/playwright test --project=chromium --project=mobile-chrome --no-deps --workers=1 --shard=${{ matrix.shardIndex }}/${{ matrix.shardTotal }}
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp
-          # 32+ chars: src/lib/env.ts menolak AUTH_SECRET < 32 (sesi JWE bisa
-          # dipalsukan). "ci-secret" (9 char) bikin SEMUA halaman dashboard 500
-          # di job E2E — 194 tes gagal @10s sampai job kena timeout 40 menit.
+          # 32+ char: di GitHub Actions env.ts melewati validasi (CI="true"),
+          # tapi run lokal/mirror tidak — secret 9 char gagal start di sana.
+          # Nilai ini sah di kedua tempat.
           NEXTAUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
           AUTH_SECRET: ci-e2e-secret-0123456789abcdef0123456789
           NEXTAUTH_URL: http://localhost:4101

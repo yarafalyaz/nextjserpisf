@@ -1843,9 +1843,10 @@ export async function deleteGoodsReceipt(id: number) {
       // verified receipt must lower it — otherwise stock that no longer exists
       // keeps counting as received. Recomputed (not decremented) from the receipts
       // that remain, so a delete/re-verify cycle also heals any drift, and in ONE
-      // statement so every PO line is written together. UoM rule mirrors the hook's
-      // toBaseQty clamp: no UoM or UoM == item base unit → factor 1, missing or
-      // non-positive conversion factor → also 1 (never silently drop a receipt line).
+      // statement so every PO line is written together. UoM rule: no UoM or UoM
+      // == item base unit → factor 1, missing or non-positive conversion
+      // factor → 1 with an explicit console.warn in the hook (never silent;
+      // throwing would break the sales quick-add UoM flow, see uom.service).
       if (gr.purchaseOrderId) {
         await tx.$executeRaw`
           UPDATE purchase_order_items poi

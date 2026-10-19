@@ -9,6 +9,7 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 
 const REVALIDATE = "/keuangan/giro"
 const STATUSES = new Set(["pending", "cleared", "cancelled"])
@@ -35,6 +36,8 @@ export async function createCheque(formData: FormData) {
     if (!dueRaw || Number.isNaN(dueDate.getTime())) {
       return { success: false, error: "Tanggal jatuh tempo tidak valid." }
     }
+
+    await assertPeriodOpen(dueDate)
 
     if (accountId) {
       const exists = await prisma.account.count({ where: { id: accountId } })
@@ -78,9 +81,11 @@ export async function updateChequeStatus(id: number, status: string) {
 
     const cheque = await prisma.cheque.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, documentNo: true },
+      select: { id: true, documentNo: true, dueDate: true },
     })
     if (!cheque) return { success: false, error: "Giro/cek tidak ditemukan." }
+
+    await assertPeriodOpen(cheque.dueDate)
 
     await prisma.cheque.update({ where: { id }, data: { status } })
 
@@ -100,9 +105,11 @@ export async function deleteCheque(id: number) {
 
     const cheque = await prisma.cheque.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, documentNo: true },
+      select: { id: true, documentNo: true, dueDate: true },
     })
     if (!cheque) return { success: false, error: "Giro/cek tidak ditemukan." }
+
+    await assertPeriodOpen(cheque.dueDate)
 
     // Soft delete: register giro ikut audit trail, jadi barisnya tidak dihapus fisik.
     await prisma.cheque.update({ where: { id }, data: { deletedAt: new Date() } })

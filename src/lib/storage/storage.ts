@@ -1,4 +1,5 @@
 import { writeFile, mkdir } from "fs/promises"
+import { randomUUID } from "crypto"
 import path from "path"
 import { prisma } from "@/lib/db/prisma"
 
@@ -170,7 +171,7 @@ export async function uploadToStorage(file: File, opts: UploadOptions): Promise<
 
   const ext = resolveExt(file.type, file.name)
   const prefix = (opts.prefix || opts.category).replace(/[^a-zA-Z0-9_-]/g, "")
-  const filename = `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
+  const filename = `${prefix}-${Date.now()}-${randomUUID().replace(/-/g, "").slice(0, 12)}.${ext}`
   const key = `${opts.category}/${filename}`
 
   const bytes = await file.arrayBuffer()

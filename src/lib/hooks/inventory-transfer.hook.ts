@@ -249,6 +249,23 @@ export async function onTransferReceived(
     // Create Stock Move IN per item to destination warehouse
     const aggregatedItems = Array.from(aggregated.entries());
     if (aggregatedItems.length > 0) {
+      // P1-1: item batch-tracked wajib bawa alokasi lot eksplisit (kebijakan
+      // batch eksplisit, pola adjustment :176-186) — jangan ciptakan stok
+      // tujuan tanpa lot saat sumbernya teralokasi batch.
+      const itemIds = aggregatedItems.map(([id]) => id);
+      const trackedRows = await tx.item.findMany({
+        where: { id: { in: itemIds } },
+        select: { id: true, trackBatch: true },
+      });
+      const trackBatchByItem = new Map(trackedRows.map((r) => [r.id, r.trackBatch]));
+      for (const [itemId] of aggregatedItems) {
+        if (trackBatchByItem.get(itemId) && !batchesByItem.has(itemId)) {
+          throw new Error(
+            `Item batch #${itemId} memerlukan alokasi nomor batch untuk penerimaan transfer ${transfer.documentNo}.`,
+          );
+        }
+      }
+
       // Batch-generate one document number per item (was N serial round-trips).
       const smDocNos = await generateDocumentNumberBatch("SM", aggregatedItems.length);
 

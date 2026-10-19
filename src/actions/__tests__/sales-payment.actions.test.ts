@@ -21,9 +21,16 @@ vi.mock("@/lib/auth/permissions", () => ({
 }))
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    salesPayment: { findUniqueOrThrow: (...a: unknown[]) => paymentFindUniqueOrThrowMock(...a) },
+    salesPayment: {
+      findUniqueOrThrow: (...a: unknown[]) => paymentFindUniqueOrThrowMock(...a),
+      aggregate: (...a: unknown[]) => paymentAggregateMock(...a),
+      update: (...a: unknown[]) => paymentUpdateMock(...a),
+    },
+    salesInvoice: { findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a) },
+    account: { count: vi.fn().mockResolvedValue(0) },
     transactionAttachment: { updateMany: (...a: unknown[]) => attachmentUpdateManyMock(...a) },
     $transaction: (...a: unknown[]) => transactionMock(...a),
+    $executeRaw: (...a: unknown[]) => execRawMock(...a),
   },
 }))
 vi.mock("@/lib/hooks/accounting.hook", () => ({
@@ -62,11 +69,14 @@ function fd(entries: Record<string, string>): FormData {
 function wireTransaction() {
   const tx = {
     $executeRaw: (...a: unknown[]) => execRawMock(...a),
-    salesInvoice: { findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a) },
     salesPayment: {
+      findUniqueOrThrow: (...a: unknown[]) => paymentFindUniqueOrThrowMock(...a),
       aggregate: (...a: unknown[]) => paymentAggregateMock(...a),
       update: (...a: unknown[]) => paymentUpdateMock(...a),
     },
+    salesInvoice: { findUniqueOrThrow: (...a: unknown[]) => invoiceFindUniqueOrThrowMock(...a) },
+    account: { count: vi.fn().mockResolvedValue(0) },
+    transactionAttachment: { updateMany: (...a: unknown[]) => attachmentUpdateManyMock(...a) },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
@@ -79,7 +89,7 @@ beforeEach(() => {
     invoiceFindUniqueOrThrowMock, execRawMock, attachmentUpdateManyMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 1 })
-  paymentFindUniqueOrThrowMock.mockResolvedValue({ salesInvoiceId: 50 })
+  paymentFindUniqueOrThrowMock.mockResolvedValue({ salesInvoiceId: 50, documentNo: "PAY-0001" })
   invoiceFindUniqueOrThrowMock.mockResolvedValue({ id: 50, grandTotal: 1000, customerId: 3, status: "posted" })
   paymentAggregateMock.mockResolvedValue({ _sum: { amount: 200 } }) // 200 already paid by others
   paymentUpdateMock.mockResolvedValue({ id: 9, salesInvoiceId: 50 })

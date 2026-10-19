@@ -481,8 +481,19 @@ export async function onSalesInvoicePosted(
           if (!info?.isProduct) continue;
           const uom = (line as { uom?: string | null }).uom;
           const isBaseUom = !uom || uom === info.unitOfMeasure;
-          const rawFactor = isBaseUom ? 1 : (factorMap.get(`${line.itemId}:${uom}`) ?? 1);
-          const factor = rawFactor > 0 ? rawFactor : 1;
+          // Missing/non-positive conversion → 1 with explicit warning (never
+          // silent; throwing would break the sales quick-add UoM flow).
+          let factor = 1;
+          if (!isBaseUom) {
+            const fetched = factorMap.get(`${line.itemId}:${uom}`);
+            if (fetched == null || !(fetched > 0)) {
+              console.warn(
+                `[accounting.hook] konversi ${uom} untuk item #${line.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`} — kebutuhan stok dihitung 1:1 dalam satuan dasar ${info.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+              );
+            } else {
+              factor = fetched;
+            }
+          }
           const need = Number(line.qty) * factor;
           if (info.defaultWarehouseId == null) {
             neededAnyWarehouse.set(line.itemId, (neededAnyWarehouse.get(line.itemId) ?? 0) + need);
@@ -533,10 +544,19 @@ export async function onSalesInvoicePosted(
       // Multi-UoM: convert sold qty to base units for stock-out / COGS.
       const uom = (line as { uom?: string | null }).uom;
       const isBaseUom = !uom || uom === info.unitOfMeasure;
-      const rawFactor = isBaseUom
-        ? 1
-        : (factorMap.get(`${line.itemId}:${uom}`) ?? 1);
-      const factor = rawFactor > 0 ? rawFactor : 1;
+      // Missing/non-positive conversion → 1 with explicit warning (never
+      // silent; throwing would break the sales quick-add UoM flow).
+      let factor = 1;
+      if (!isBaseUom) {
+        const fetched = factorMap.get(`${line.itemId}:${uom}`);
+        if (fetched == null || !(fetched > 0)) {
+          console.warn(
+            `[accounting.hook] konversi ${uom} untuk item #${line.itemId} ${fetched == null ? "tidak ditemukan" : `tidak valid (${fetched})`} — qty jual dihitung 1:1 dalam satuan dasar ${info.unitOfMeasure}. Daftarkan konversi UoM item tersebut.`,
+          );
+        } else {
+          factor = fetched;
+        }
+      }
       const qty = Number(line.qty) * factor;
       const fallbackUnitCost =
         factor > 0 ? Number(info.cost ?? 0) / factor : Number(info.cost ?? 0);

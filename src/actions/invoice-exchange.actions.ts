@@ -9,6 +9,7 @@ import { logActivity } from "@/lib/services/activity-log.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
+import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 
 const REVALIDATE = "/penjualan/tukar-faktur"
 
@@ -65,6 +66,9 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
 
     const customer = await prisma.customer.findFirst({ where: { id: customerId, deletedAt: null }, select: { id: true, name: true } })
     if (!customer) return { success: false, error: "Pelanggan tidak ditemukan." }
+
+    await assertPeriodOpen(date)
+    if (dueDate) await assertPeriodOpen(dueDate)
 
     const invoices = await prisma.salesInvoice.findMany({
       where: { id: { in: invoiceIds }, deletedAt: null },
@@ -154,9 +158,11 @@ export async function deleteInvoiceExchange(id: number): Promise<InvoiceExchange
 
     const exchange = await prisma.invoiceExchange.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, documentNo: true },
+      select: { id: true, documentNo: true, date: true },
     })
     if (!exchange) return { success: false, error: "Tukar faktur tidak ditemukan." }
+
+    await assertPeriodOpen(exchange.date)
 
     await prisma.invoiceExchange.update({ where: { id }, data: { deletedAt: new Date() } })
     await logActivity("delete", "InvoiceExchange", id, `Menghapus tukar faktur ${exchange.documentNo}`)

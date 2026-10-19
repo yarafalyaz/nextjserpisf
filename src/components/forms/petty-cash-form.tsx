@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useMemo, useState, useTransition } from "react"
+import { useMemo, useRef, useState, useTransition } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { FormAttachmentUpload } from "@/components/ui/form-attachment-upload"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -17,6 +17,11 @@ import { FormCard, FormSection, FormActions } from "@/components/ui/form-section
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
+// P2 idempotency UI: generator key murni di luar render (pola customer-credit-panel).
+function newIdempotencyKey(): string {
+  return crypto.randomUUID()
+}
+
 export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = [], vendors = [], categories = [] }: { accounts: { id: number; code: string; name: string; type: string }[]; pettyCash?: { id: number; date: string; type?: string; description?: string | null; amount: number; accountId: number; notes?: string | null; referenceNo?: string | null; balanceBefore?: number; balanceAfter?: number; projectId?: number | null; vendorId?: number | null; categoryId?: number | null }; currentBalance?: number; projects?: { id: number; name: string; documentNo: string | null }[]; vendors?: { id: number; name: string }[]; categories?: { id: number; name: string; label: string }[] }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -31,6 +36,9 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
   const [categoryId, setCategoryId] = useState<string | null>(pettyCash?.categoryId ? String(pettyCash.categoryId) : null)
   const [accountList, setAccountList] = useState(accounts)
   const [vendorOptions, setVendorOptions] = useState(vendors)
+  // P2 idempotency UI: satu key stabil per submit create (crypto.randomUUID per
+  // submit). Retry/error pakai key sama; sukses ganti key baru.
+  const idempotencyKeyRef = useRef<string>(newIdempotencyKey())
   const assetAccounts = accountList.filter((a) => a.type === "ASSET")
   const expenseAccounts = accountList.filter((a) => a.type === "EXPENSE")
   const filteredOptions = useMemo(() => {
@@ -49,11 +57,15 @@ export function PettyCashForm({ accounts, pettyCash, currentBalance, projects = 
         // lampiran kas kecil yatim permanen (pola sama vendor-bill-form).
         const attachmentIdsValue = formData.get("attachmentIds")
         if (attachmentIdsValue) formData.set("attachmentIds", attachmentIdsValue as string)
+        // P2 idempotency UI: key stabil per intent create; retry/error pakai
+        // key sama, sukses ganti baru supaya create berikutnya tak ditolak.
+        if (!pettyCash?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const { createPettyCash, updatePettyCash } = await import("@/actions/finance.actions")
 
         const result = pettyCash?.id ? await updatePettyCash(pettyCash.id, formData) : await createPettyCash(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
 
+        if (!pettyCash?.id) idempotencyKeyRef.current = newIdempotencyKey()
         showSuccess(pettyCash?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/keuangan/kas-kecil")
         router.refresh()

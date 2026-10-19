@@ -1011,13 +1011,14 @@ describe("Additional Branches", () => {
   })
 
   it("reverseJournal recovers from error inside tx", async () => {
+    // Claim + reversal are atomic in one tx now: a tx throw rolls both back,
+    // the journal stays POSTED, and the action surfaces the failure.
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })
-    mocks.prismaMock.journal.updateMany.mockResolvedValueOnce({ count: 1 })
     mocks.prismaMock.$transaction.mockImplementationOnce(async () => { throw new Error("Tx fail") })
     const res = await actions.reverseJournal(1)
     expect(res.success).toBe(false)
-    expect(mocks.prismaMock.journal.updateMany).toHaveBeenCalledTimes(2)
+    expect(res.error).toMatch(/Tx fail/i)
   })
 
   it("createBankStatement validation error", async () => {
@@ -1154,23 +1155,22 @@ describe("More Action Branches", () => {
   })
 
   it("reverseJournal concurrent claim rejection (REVERSED)", async () => {
+    // In-tx re-read sees REVERSED → reject before any claim; no second lookup.
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
-    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })
-    mocks.prismaMock.journal.updateMany.mockResolvedValueOnce({ count: 0 })
-    mocks.prismaMock.journal.findUnique.mockResolvedValue({ status: "REVERSED" })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "REVERSED" })
     const res = await actions.reverseJournal(1)
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/Jurnal sudah pernah dibalik/i)
+    expect(mocks.prismaMock.journal.updateMany).not.toHaveBeenCalled()
   })
 
   it("reverseJournal concurrent claim rejection (DRAFT)", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
-    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })
-    mocks.prismaMock.journal.updateMany.mockResolvedValueOnce({ count: 0 })
-    mocks.prismaMock.journal.findUnique.mockResolvedValue({ status: "DRAFT" })
+    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT" })
     const res = await actions.reverseJournal(1)
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/Jurnal tidak bisa dibalik/i)
+    expect(mocks.prismaMock.journal.updateMany).not.toHaveBeenCalled()
   })
 
   it("matchReconciliationLine existing item update", async () => {
@@ -1421,11 +1421,14 @@ describe("More Action Branches", () => {
   })
 
   it("reverseJournal rejects non-POSTED journal", async () => {
+    // Status is re-read inside the tx after the lock — the mock's $transaction
+    // passes the same client, so the outer findUniqueOrThrow doubles as the
+    // in-tx re-read. New message names the actual status.
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "DRAFT" })
     const res = await actions.reverseJournal(1)
     expect(res.success).toBe(false)
-    expect(res.error).toMatch(/Hanya journal yang sudah POSTED yang bisa di-reverse/i)
+    expect(res.error).toMatch(/Jurnal tidak bisa dibalik \(status: DRAFT\)/i)
   })
 })
 
@@ -1666,14 +1669,13 @@ describe("Petty Cash & Reconciliation edge cases", () => {
     expect(res.error).toMatch(/Validasi gagal/i)
   })
 
-  it("reverseJournal findUnique returns null (not found)", async () => {
+  it("reverseJournal surfaces tx failure when the journal row is missing", async () => {
+    // findUniqueOrThrow inside the tx rejects → action surfaces the failure.
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
-    mocks.prismaMock.journal.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "POSTED" })
-    mocks.prismaMock.journal.updateMany.mockResolvedValueOnce({ count: 0 })
-    mocks.prismaMock.journal.findUnique.mockResolvedValue(null)
+    mocks.prismaMock.journal.findUniqueOrThrow.mockRejectedValueOnce(new Error("No Journal found"))
     const res = await actions.reverseJournal(1)
     expect(res.success).toBe(false)
-    expect(res.error).toMatch(/Jurnal tidak ditemukan/i)
+    expect(res.error).toMatch(/No Journal found/i)
   })
 
   it("recalcPettyCashChain negative balance error covers full message", async () => {

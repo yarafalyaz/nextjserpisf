@@ -438,6 +438,22 @@ describe("onGoodsReceiptVerified multi-UoM journal consistency", () => {
     const journalLines = journalArgs[1] as Array<{ qty: number; cost: number }>
     expect(journalLines).toEqual([{ qty: 1000, cost: 8 }])
   })
+
+  it("warns (not silent) when a GR line uses an unregistered UoM, computing 1:1", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const { spies } = wireTxWithUom(
+      [{ itemId: 7, qty: 2, unitCost: 6000, uom: "KARUNG" }],
+      [{ itemId: 7, code: "BOX", factorToBase: 12 }],
+    )
+
+    await onGoodsReceiptVerified(100, 1)
+
+    const moveCall = spies.moveCreate.mock.calls[0][0] as { data: { qty: number; cost: number } }
+    expect(moveCall.data.qty).toBe(2)
+    expect(moveCall.data.cost).toBe(6000)
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("KARUNG"))
+    warn.mockRestore()
+  })
 })
 
 // Regression test for the over-receipt guard under multi-UoM. The PO is always

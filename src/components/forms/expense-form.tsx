@@ -2,7 +2,7 @@
 /* eslint-disable react-hooks/incompatible-library */
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { useForm, Controller } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import { expenseSchema, type ExpenseInput } from "@/lib/validations/form.schemas"
@@ -19,6 +19,11 @@ import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { Button } from "@/components/ui/button"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+
+// P2 idempotency UI: generator key murni di luar render (pola customer-credit-panel).
+function newIdempotencyKey(): string {
+  return crypto.randomUUID()
+}
 
 interface ExpenseFormProps {
   accounts: { id: number; code: string; name: string; type: string }[]
@@ -40,6 +45,9 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
   const [costCenterOptions, setCostCenterOptions] = useState(costCenters)
   const [vendorOptions, setVendorOptions] = useState(vendors)
   const [costCenterId, setCostCenterId] = useState<string | null>(expense?.costCenterId ? String(expense.costCenterId) : null)
+  // P2 idempotency UI: satu key stabil per submit create (crypto.randomUUID per
+  // submit). Retry/error pakai key sama; sukses ganti key baru.
+  const idempotencyKeyRef = useRef<string>(newIdempotencyKey())
 
   const { register, handleSubmit, watch, setValue, control, formState: { errors } } = useForm<ExpenseInput>({
     resolver: zodResolver(expenseSchema),
@@ -76,8 +84,12 @@ export function ExpenseForm({ accounts, categories = [], costCenters = [], proje
         // costCenterId is held in local state (not part of the RHF schema), so it
         // must be appended explicitly or the selected cost center is lost.
         if (costCenterId) formData.append("costCenterId", costCenterId)
+        // P2 idempotency UI: key stabil per intent create; retry/error pakai
+        // key sama, sukses ganti baru supaya create berikutnya tak ditolak.
+        if (!expense?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
         const result = expense?.id ? await updateExpense(expense.id, formData) : await createExpense(formData)
         if (result && !result.success) { showError(result.error || "Gagal menyimpan data"); return }
+        if (!expense?.id) idempotencyKeyRef.current = newIdempotencyKey()
         showSuccess(expense?.id ? "Data berhasil diperbarui" : "Data berhasil ditambahkan")
         router.push("/keuangan/pengeluaran")
         router.refresh()

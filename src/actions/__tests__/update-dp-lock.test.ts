@@ -22,7 +22,13 @@ const dpUpdateMock = vi.fn()
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: (...a: unknown[]) => requirePermissionMock(...a) }))
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    quotation: { findUniqueOrThrow: (...a: unknown[]) => quotationFindUniqueOrThrowMock(...a) },
+    quotation: {
+      // Outer reads removed from DP actions: this mock only fires if the
+      // action regressed to reading outside the tx. In-tx reads go through
+      // the tx client wired below (updateDownPayment; createDownPayment has
+      // no outer read at all).
+      findUniqueOrThrow: (...a: unknown[]) => quotationFindUniqueOrThrowMock(...a),
+    },
     downPayment: {
       findUniqueOrThrow: (...a: unknown[]) => dpFindUniqueOrThrowMock(...a),
       update: (...a: unknown[]) => dpUpdateMock(...a),
@@ -54,6 +60,7 @@ import { updateDownPayment } from "../sales.actions"
 function wireTransaction() {
   const tx = {
     $executeRaw: txExecuteRawMock,
+    quotation: { findUniqueOrThrow: (...a: unknown[]) => quotationFindUniqueOrThrowMock(...a) },
     downPayment: { aggregate: dpAggregateMock, update: dpUpdateMock },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
