@@ -173,6 +173,32 @@ describe("Employee Actions", () => {
     const res = await actions.deleteEmployee(1)
     expect(res?.success).toBe(true)
   })
+
+  // `new Date("2026-02-30")` menggulir diam-diam ke 2 Mar dan string acak
+  // jadi Invalid Date — keduanya dulu sampai ke Prisma dari create/update.
+  it.each([
+    ["joinDate fiktif", { name: "test", joinDate: "2026-02-30" }] as const,
+    ["joinDate bukan tanggal", { name: "test", joinDate: "bukan-tanggal" }] as const,
+    ["dateOfBirth fiktif", { name: "test", joinDate: "2026-06-13", dateOfBirth: "1990-02-30" }] as const,
+  ])("menolak %s di createEmployee dan updateEmployee sebelum tulis DB", async (_label, payload) => {
+    const created = await actions.createEmployee(fdMap({ ...payload }))
+    expect(created?.success).toBe(false)
+    expect(mocks.prismaMock.employee.create).not.toHaveBeenCalled()
+
+    const updated = await actions.updateEmployee(1, fdMap({ ...payload }))
+    expect(updated?.success).toBe(false)
+    expect(mocks.prismaMock.employee.update).not.toHaveBeenCalled()
+  })
+
+  it("menyimpan joinDate/dateOfBirth sebagai tengah malam UTC hari kalender itu", async () => {
+    const res = await actions.createEmployee(
+      fdMap({ name: "test", joinDate: "2026-01-15", dateOfBirth: "1990-05-20" }),
+    )
+    expect(res?.success).toBe(true)
+    const data = mocks.prismaMock.employee.create.mock.calls.at(-1)?.[0]?.data
+    expect(data.joinDate.toISOString()).toBe("2026-01-15T00:00:00.000Z")
+    expect(data.dateOfBirth.toISOString()).toBe("1990-05-20T00:00:00.000Z")
+  })
 })
 
 describe("Account Actions", () => {
