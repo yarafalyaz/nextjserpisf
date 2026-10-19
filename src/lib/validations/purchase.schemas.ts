@@ -49,6 +49,16 @@ export const purchaseOrderSchema = z.object({
 
 // ==================== GOODS RECEIPT ====================
 
+/**
+ * Tanggal kedaluwarsa baris penerimaan di dalam JSON `items`: `dateOnly`
+ * kalender-ketat atau kosong/null. Tanpa ini `new Date("2026-02-30")` di action
+ * bergulir diam-diam ke 2 Mar dan string acak jadi Invalid Date ke Prisma.
+ */
+export const grItemExpiryDate = z.preprocess(
+  (v) => (v === "" || v == null ? null : v),
+  dateOnly.nullable(),
+);
+
 export const goodsReceiptSchema = z.object({
   purchaseOrderId: z.coerce.number().min(1, "PO wajib dipilih"),
   warehouseId: z.coerce.number().min(1, "Gudang wajib dipilih"),

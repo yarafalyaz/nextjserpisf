@@ -50,6 +50,7 @@ import {
   vendorBillSchema,
   vendorPaymentSchema,
   purchaseReturnSchema,
+  grItemExpiryDate,
 } from "@/lib/validations/purchase.schemas";
 
 /**
@@ -555,6 +556,13 @@ export async function createGoodsReceipt(formData: FormData) {
         }[]
       >(v.items ?? null) ?? [];
 
+    // expiryDate baris lolos JSON tanpa validasi kalender: "2026-02-30"
+    // bergulir ke 2 Mar oleh new Date, string acak jadi Invalid Date.
+    for (const i of items) {
+      if (!grItemExpiryDate.safeParse(i.expiryDate).success)
+        throw new Error("Tanggal kedaluwarsa tidak valid");
+    }
+
     // Scope gudang: header DAN setiap baris harus berada di gudang yang boleh diakses
     // user. Tanpa cek ini, pemegang create_goods_receipts yang hanya ditugaskan ke
     // gudang A bisa menerima stok ke gudang B (termasuk membuat layer FIFO/batch/serial
@@ -654,7 +662,7 @@ export async function createGoodsReceipt(formData: FormData) {
                 rackRowId: i.rackRowId ? Number(i.rackRowId) : null,
                 uom: i.uom || null,
                 batchNumber: i.batchNumber || null,
-                expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
+                expiryDate: i.expiryDate ? wibDateToUtcMidnight(i.expiryDate) : null,
                 serialNumbers:
                   i.serialNumbers && i.serialNumbers.length > 0
                     ? i.serialNumbers
@@ -2305,6 +2313,11 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
         }[]
       >(v.items ?? null) ?? [];
 
+    for (const i of items) {
+      if (!grItemExpiryDate.safeParse(i.expiryDate).success)
+        throw new Error("Tanggal kedaluwarsa tidak valid");
+    }
+
     // Scope gudang (header + tiap baris) — lihat catatan di createGoodsReceipt.
     const scope = await getWarehouseScope(user);
     assertWarehouseAccess(scope, v.warehouseId);
@@ -2392,7 +2405,7 @@ export async function updateGoodsReceipt(id: number, formData: FormData) {
               rackRowId: i.rackRowId ? Number(i.rackRowId) : null,
               uom: i.uom || null,
               batchNumber: i.batchNumber || null,
-              expiryDate: i.expiryDate ? new Date(i.expiryDate) : null,
+              expiryDate: i.expiryDate ? wibDateToUtcMidnight(i.expiryDate) : null,
               serialNumbers:
                 i.serialNumbers && i.serialNumbers.length > 0
                   ? i.serialNumbers
