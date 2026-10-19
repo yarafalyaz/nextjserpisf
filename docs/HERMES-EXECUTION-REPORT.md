@@ -120,6 +120,8 @@
 - Suite penuh: 351 berkas / 4218 tes HIJAU (vitest `--maxWorkers=4`).
 - `npx tsc --noEmit`: 0 error. `npm run lint`: 0 error (1 warning pre-existing milik sesi lain).
 - E2E rantai beli (`purchase-chain`) + rantai jual (`sales-chain`): 2+2 passed di DB nyata (silengkap-e2e-db).
+- Suite penuh terkini: 352 berkas / 4223 tes HIJAU; `npm run build` sukses.
+- Migrasi dari DB kosong: `migrate deploy` sukses (67 migrasi) di DB disposable `yara_empty_smoke`.
 
 ## F. Risiko tersisa
 
