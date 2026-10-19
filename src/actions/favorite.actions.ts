@@ -5,7 +5,8 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
-import { normalizeFavoriteHref } from "@/lib/utils/favorite-href"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { favoriteTransactionSchema } from "@/lib/validations/favorite.schemas"
 
 const REVALIDATE = "/pengaturan/transaksi-favorit"
 
@@ -19,16 +20,9 @@ export async function createFavoriteTransaction(formData: FormData) {
     const user = await requirePermission("manage_favorite_transactions")
     const userId = Number(user.id)
 
-    const label = String(formData.get("label") ?? "").trim()
-    if (!label) return { success: false, error: "Nama pintasan wajib diisi." }
-
-    const href = normalizeFavoriteHref(formData.get("href"))
-    if (!href) {
-      return {
-        success: false,
-        error: "Tautan harus berupa jalur internal aplikasi, mis. /penjualan/faktur/tambah.",
-      }
-    }
+    const parsed = parseFormData(favoriteTransactionSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const { label, href } = parsed.data
 
     const existing = await prisma.favoriteTransaction.findFirst({
       where: { userId, href },

@@ -170,3 +170,20 @@ export const vendorPriceSchema = z.object({
   notes: optionalString(2000),
 })
 
+
+// ==================== VENDOR TRANSFER ====================
+
+/**
+ * Penanda transfer pembayaran vendor (`markVendorPaymentsTransferred`).
+ *
+ * Sebelumnya action parse manual: `reference` (String tanpa batas) bisa 5MB
+ * ke DB, tanggal di-parse `new Date("<text>T00:00:00")` — tanggal kalender
+ * fiktif (2026-02-30) diterima dan hasilnya bergantung TZ proses. Kini
+ * `dateOnly` (kalender-valid) dikonversi via `wibDateToUtcMidnight` di action.
+ * `paymentIds` di-parse terpisah di action (parseFormData hanya simpan nilai
+ * terakhir per key).
+ */
+export const vendorTransferSchema = z.object({
+  date: dateOnly,
+  reference: optionalString(255),
+})

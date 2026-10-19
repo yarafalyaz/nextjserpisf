@@ -8,6 +8,9 @@ import { normalizeTransferSelection } from "@/lib/finance/vendor-transfer"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
+import { parseFormData } from "@/lib/validations/parse-form"
+import { vendorTransferSchema } from "@/lib/validations/purchase.schemas"
+import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 const REVALIDATE = "/pembelian/transfer-pemasok"
 
@@ -15,13 +18,6 @@ export interface VendorTransferActionResult {
   success: boolean
   error?: string
   updated?: number
-}
-
-function parseDate(raw: string): Date | null {
-  const text = raw.trim()
-  if (!text) return null
-  const date = new Date(`${text}T00:00:00`)
-  return Number.isNaN(date.getTime()) ? null : date
 }
 
 /**
@@ -38,13 +34,13 @@ export async function markVendorPaymentsTransferred(formData: FormData): Promise
     const selection = normalizeTransferSelection(formData.getAll("paymentIds").map((value) => String(value)))
     if (selection.error) return { success: false, error: selection.error }
 
-    const rawDate = String(formData.get("date") ?? "").trim()
-    const date = parseDate(rawDate)
-    if (!date) return { success: false, error: "Tanggal transfer tidak valid." }
+    const parsed = parseFormData(vendorTransferSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const date = wibDateToUtcMidnight(parsed.data.date)
 
     await assertPeriodOpen(date)
 
-    const reference = String(formData.get("reference") ?? "").trim() || null
+    const reference = parsed.data.reference?.trim() || null
 
     // Hanya pembayaran yang benar-benar ada (dan belum dihapus) yang boleh ditandai.
     const payments = await prisma.vendorPayment.findMany({
