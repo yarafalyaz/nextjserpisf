@@ -9,7 +9,10 @@ import { prisma } from "@/lib/db/prisma"
  * Spec menekan tombol sungguhan; DB membuktikan pembukuan (stok, jurnal,
  * sisa tagihan), bukan chip status.
  */
-test.describe("Pembelian — rantai penuh", () => {
+// AUD-R11-01/03: serial — describe ini me-reset fixture bersama (SKU/PO E2E).
+// fullyParallel membuat tes se-file paralel; tanpa serial, reset vs posting
+// balapan dalam file yang sama. Paralel antar-file tetap jalan.
+test.describe.serial("Pembelian — rantai penuh", () => {
   test("PO → terima → tagih → bayar, stok & jurnal & sisa terbukti di DB", async ({ page }) => {
     // 0. PO fixture: reset ke approved + bersihkan sisa run sebelumnya supaya
     // run idempoten (qty absolut, bukan akumulasi antar run). Jurnal + movement
@@ -22,20 +25,32 @@ test.describe("Pembelian — rantai penuh", () => {
     await prisma.$executeRaw`DELETE il FROM inventory_layers il LEFT JOIN stock_moves sm ON sm.id = il.stock_move_id WHERE sm.id IS NULL`
     await prisma.$executeRaw`DELETE il FROM inventory_layers il JOIN stock_moves sm ON sm.id = il.stock_move_id WHERE sm.reference_type = 'GoodsReceipt'`
     await prisma.$executeRaw`DELETE FROM stock_moves WHERE reference_type = 'GoodsReceipt'`
-    await prisma.goodsReceiptItem.deleteMany({})
-    await prisma.goodsReceipt.deleteMany({})
-    await prisma.vendorPaymentAllocation.deleteMany({})
-    await prisma.vendorPayment.deleteMany({})
-    await prisma.vendorBillItem.deleteMany({})
-    await prisma.vendorBill.deleteMany({})
+    // AUD-R11-01: cleanup SCOPING FIXTURE (bukan global). fullyParallel 4 shard
+    // berbagi DB: deleteMany({}) tanpa filter menghapus data run shard lain.
+    // Baca PO fixture DULU, lalu hapus hanya baris milik PO ini (urutan FK).
+    const poRow = await prisma.purchaseOrder.findUniqueOrThrow({
+      where: { documentNo: "E2E-PO-CHAIN" },
+    })
+    const fixtureBillIds = (
+      await prisma.vendorBill.findMany({
+        where: { purchaseOrderId: poRow.id },
+        select: { id: true },
+      })
+    ).map((b) => b.id)
+    if (fixtureBillIds.length > 0) {
+      await prisma.vendorPaymentAllocation.deleteMany({ where: { vendorBillId: { in: fixtureBillIds } } })
+      // Payment yatim milik fixture (tanpa alokasi tersisa) — bukan payment run lain.
+      await prisma.$executeRaw`DELETE vp FROM vendor_payments vp LEFT JOIN vendor_payment_allocations vpa ON vpa.vendor_payment_id = vp.id WHERE vpa.id IS NULL AND vp.vendor_id = (SELECT vendor_id FROM purchase_orders WHERE id = ${poRow.id})`
+      await prisma.vendorBillItem.deleteMany({ where: { vendorBillId: { in: fixtureBillIds } } })
+      await prisma.vendorBill.deleteMany({ where: { id: { in: fixtureBillIds } } })
+    }
+    await prisma.goodsReceiptItem.deleteMany({ where: { goodsReceipt: { purchaseOrderId: poRow.id } } })
+    await prisma.goodsReceipt.deleteMany({ where: { purchaseOrderId: poRow.id } })
     // Idempoten penuh: GR run paralel/sisa bisa verified (PO ikut received).
     // Terima butuh PO approved/ordered/partial + GR draft. Kembalikan SEMUA
     // GR PO ini ke draft + PO ke approved — run ini selalu mulai dari nol.
     // (Verify ulang GR lama = stok ganda, jadi GR lama diverify-ulang di
     // langkah 2 run ini; stok direset qtyOnHand 0 di bawah + layer dibersihkan.)
-    const poRow = await prisma.purchaseOrder.findUniqueOrThrow({
-      where: { documentNo: "E2E-PO-CHAIN" },
-    })
     await prisma.goodsReceipt.updateMany({
       where: { purchaseOrderId: poRow.id },
       data: { status: "draft" },

@@ -10,7 +10,10 @@ import { prisma } from "@/lib/db/prisma"
  * Spec menekan tombol sungguhan; DB membuktikan pembukuan (jurnal AR + COGS,
  * stok OUT, paymentStatus, stok balik), bukan chip status.
  */
-test.describe("Penjualan — rantai penuh", () => {
+// AUD-R11-01/03: serial — describe ini me-reset fixture bersama (SKU/PO E2E).
+// fullyParallel membuat tes se-file paralel; tanpa serial, reset vs posting
+// balapan dalam file yang sama. Paralel antar-file tetap jalan.
+test.describe.serial("Penjualan — rantai penuh", () => {
   test("faktur → posting → bayar → retur, jurnal & stok & sisa terbukti di DB", async ({
     page,
   }) => {
