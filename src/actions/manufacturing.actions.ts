@@ -1793,6 +1793,25 @@ export async function deleteProduct(id: number) {
   try {
     await requirePermission("delete_products");
 
+    // Guard: BomRevision.productId Cascade (hapus produk ikut hapus semua
+    // revisi BOM + material diam-diam), QcChecklist.productId SetNull
+    // (checklist kehilangan tautan produk), ProductionOrder Restrict
+    // (P2003 mentah). Tolak berpesan jumlah, pola deleteBomRevision.
+    const [productionOrderCount, bomCount, qcCount] = await Promise.all([
+      prisma.productionOrder.count({ where: { productId: id } }),
+      prisma.bomRevision.count({ where: { productId: id } }),
+      prisma.qcChecklist.count({ where: { productId: id } }),
+    ]);
+    if (productionOrderCount > 0 || bomCount > 0 || qcCount > 0) {
+      return {
+        success: false,
+        error:
+          `Produk masih dipakai oleh ${productionOrderCount + bomCount + qcCount} data ` +
+          `(perintah produksi: ${productionOrderCount}, revisi BOM: ${bomCount}, checklist QC: ${qcCount}) ` +
+          `dan tidak bisa dihapus. Hapus atau lepaskan data terkait terlebih dahulu.`,
+      };
+    }
+
     await prisma.product.delete({ where: { id } });
 
     await logActivity("delete", "Product", id, `Menghapus produk #${id}`);
