@@ -340,6 +340,59 @@ describe("Quotation Actions", () => {
     const res = await actions.rejectQuotation(1)
     expect(res?.success).toBe(false)
   })
+  // F-36: guard validUntil — accept/convert lewat masa berlaku ditolak, belum lewat hijau.
+  it("acceptQuotation fails when validUntil has passed (WIB)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "sent", revisionNumber: 1, validUntil: new Date(Date.UTC(2000, 0, 1)),
+    })
+    const res = await actions.acceptQuotation(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Masa berlaku penawaran sudah lewat")
+    expect(mocks.prismaMock.quotationHistory.create).not.toHaveBeenCalled()
+  })
+  it("acceptQuotation succeeds when validUntil is today (WIB, still valid)", async () => {
+    const now = new Date()
+    const todayUtcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "sent", revisionNumber: 1, validUntil: todayUtcMidnight,
+    })
+    const res = await actions.acceptQuotation(1)
+    expect(res?.success).toBe(true)
+  })
+  it("convertQuotationToOrder fails when validUntil has passed (WIB)", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "accepted", sections: [], validUntil: new Date(Date.UTC(2000, 0, 1)),
+    })
+    const res = await actions.convertQuotationToOrder(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Masa berlaku penawaran sudah lewat")
+  })
+  // F-38(a): alasan opsional tercatat di histori; tanpa alasan = deskripsi lama persis.
+  it("rejectQuotation records optional reason in history", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
+    const res = await actions.rejectQuotation(1, "  Harga kompetitor lebih murah  ")
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.quotationHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "rejected",
+          description: expect.stringContaining("Alasan: Harga kompetitor lebih murah"),
+        }),
+      }),
+    )
+  })
+  it("rejectQuotation without reason keeps legacy history description", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
+    const res = await actions.rejectQuotation(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.quotationHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          description: "Penawaran ditolak oleh pelanggan (revisi v3)",
+        }),
+      }),
+    )
+  })
 
   // === reviseQuotation ===
   it("reviseQuotation fails if status is not sent", async () => {

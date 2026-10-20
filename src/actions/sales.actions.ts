@@ -28,15 +28,24 @@ import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/appr
 import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
-import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import { wibDateToUtcMidnight, getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 import type { Prisma } from "@prisma/client"
 
 // ==================== QUOTATION ACTIONS ====================
 
+// F-36: validUntil disimpan sebagai tengah malam UTC hari kalender WIB.
+// Lewat bila hari WIB hari ini sudah sesudah validUntil (validUntil sendiri masih berlaku).
+function assertQuotationNotExpired(validUntil: Date | null | undefined) {
+  if (!validUntil) return
+  if (getWibTodayUtcDate().getTime() > validUntil.getTime()) {
+    throw new Error("Masa berlaku penawaran sudah lewat. Revisi atau perpanjang masa berlaku terlebih dahulu.")
+  }
+}
+
 async function decideQuotation(
   quotationId: number,
   userId: number,
-  decision: { status: string; action: string; verb: string },
+  decision: { status: string; action: string; verb: string; description?: string },
   revisionNumber: number,
 ) {
   await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
@@ -51,7 +60,7 @@ async function decideQuotation(
           quotationId,
           action: decision.action,
           revisionNumber,
-          description: `Penawaran ${decision.verb} oleh pelanggan (revisi v${revisionNumber})`,
+          description: decision.description ?? `Penawaran ${decision.verb} oleh pelanggan (revisi v${revisionNumber})`,
           userId,
         },
       })
@@ -180,6 +189,9 @@ export async function sendQuotation(quotationId: number) {
     }
   })
 
+  // F-37(a): approval generik opt-in — no-op tanpa workflow Quotation aktif.
+  await requestApprovalIfConfigured("Quotation", quotationId, Number(user.id))
+
   await logActivity("send", "Quotation", quotationId, `Mengirim penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
   return { success: true }
@@ -203,6 +215,10 @@ export async function acceptQuotation(quotationId: number) {
     throw new Error("Quotation hanya bisa di-accept dari status sent")
   }
 
+  assertQuotationNotExpired(quotation.validUntil)
+  // F-37(a): no-op tanpa workflow/approval Quotation.
+  await assertApproved("Quotation", quotationId)
+
   await decideQuotation(quotationId, Number(user.id), { status: "accepted", action: "accepted", verb: "diterima" }, quotation.revisionNumber)
 
   // Notify admins
@@ -220,7 +236,9 @@ export async function acceptQuotation(quotationId: number) {
 }
 
 
-export async function rejectQuotation(quotationId: number) {
+export async function rejectQuotation(quotationId: number, reason?: string) {
+  // F-38(a): alasan opsional, teks bebas ke QuotationHistory; tanpa migrasi.
+  const cleanReason = typeof reason === "string" ? reason.trim().slice(0, 2000) : ""
   try {
   const user = await requirePermission("confirm_quotations")
 
@@ -232,7 +250,19 @@ export async function rejectQuotation(quotationId: number) {
     throw new Error("Hanya penawaran terkirim yang dapat ditolak")
   }
 
-  await decideQuotation(quotationId, Number(user.id), { status: "rejected", action: "rejected", verb: "ditolak" }, quotation.revisionNumber)
+  await decideQuotation(
+    quotationId,
+    Number(user.id),
+    {
+      status: "rejected",
+      action: "rejected",
+      verb: "ditolak",
+      ...(cleanReason
+        ? { description: `Penawaran ditolak oleh pelanggan (revisi v${quotation.revisionNumber}) — Alasan: ${cleanReason}` }
+        : {}),
+    },
+    quotation.revisionNumber,
+  )
 
   await logActivity("reject", "Quotation", quotationId, `Menolak penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
@@ -323,6 +353,9 @@ export async function convertQuotationToOrder(quotationId: number) {
   if (!["accepted", "approved"].includes(quotation.status)) {
     throw new Error("Hanya penawaran approved/accepted yang dapat dikonversi")
   }
+
+  assertQuotationNotExpired(quotation.validUntil)
+  await assertApproved("Quotation", quotationId)
 
   const documentNo = await generateDocumentNumber("SO")
   const slug = await nextSlug("salesOrder", documentNo)
