@@ -65,6 +65,11 @@ export async function POST(
 
   const action = path[path.length - 1] // "approve" or "reject"
   const idRaw = path[path.length - 2]
+  // Tolak bentuk yang Number() terima diam-diam ("1e3", "0x10", "+5", " 5"):
+  // Prisma menolaknya sebagai 500, padahal id bukan desimal murni = 400.
+  if (!/^\d+$/.test(idRaw)) {
+    return apiError("BAD_REQUEST", "ID tidak valid")
+  }
   const id = Number(idRaw)
   if (!Number.isSafeInteger(id) || id <= 0) {
     return apiError("BAD_REQUEST", "ID tidak valid")
