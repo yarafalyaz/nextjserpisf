@@ -119,7 +119,7 @@ export default async function WorkOrderDetailPage({
     orderBy: { name: "asc" },
   });
 
-  const [completedMi, defaultWarehouse, linkedProducts, materialIssues, vehicleIntake] = await Promise.all([
+  const [completedMi, defaultWarehouse, linkedProducts, materialIssues, vehicleIntake, vehicleHandover] = await Promise.all([
     prisma.materialIssue.findFirst({
       where: { workOrderId: wo.id, status: "completed" },
       select: { id: true },
@@ -151,6 +151,18 @@ export default async function WorkOrderDetailPage({
     wo.customerVehicleId
       ? prisma.qcInspection.findFirst({
           where: { referenceType: "WorkOrder", referenceId: wo.id, inspectionType: "vehicle_intake" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, documentNo: true, status: true, slug: true },
+        })
+      : Promise.resolve(null),
+    // F-50 slice serah terima (tampilan saja, bukan gate baru): status inspeksi
+    // serah terima kendaraan tampil sejajar "Inspeksi Masuk". Backend
+    // assertQcCleared menolak NCR terbuka/inspeksi akhir non-passed;
+    // vehicle_handover sendiri tidak dibaca gate backend mana pun, jadi field
+    // ini display-only dan tidak memblokir penyelesaian.
+    wo.customerVehicleId
+      ? prisma.qcInspection.findFirst({
+          where: { referenceType: "WorkOrder", referenceId: wo.id, inspectionType: "vehicle_handover" },
           orderBy: { createdAt: "desc" },
           select: { id: true, documentNo: true, status: true, slug: true },
         })
@@ -293,6 +305,25 @@ export default async function WorkOrderDetailPage({
                   className="hover:underline"
                 >
                   Belum tercatat — buat inspeksi masuk
+                </Link>
+              )
+            }
+          />
+        )}
+        {wo.customerVehicle && (
+          <DetailField
+            label="Inspeksi Serah Terima"
+            value={
+              vehicleHandover ? (
+                <Link href={entityHref("/produksi/qc/inspeksi", vehicleHandover)} className="hover:underline">
+                  {vehicleHandover.documentNo} — tercatat
+                </Link>
+              ) : (
+                <Link
+                  href={`/produksi/qc/inspeksi/tambah?inspectionType=vehicle_handover&referenceType=WorkOrder&referenceId=${wo.id}`}
+                  className="hover:underline"
+                >
+                  Belum tercatat — buat inspeksi serah terima
                 </Link>
               )
             }
