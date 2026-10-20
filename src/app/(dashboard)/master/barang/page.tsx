@@ -60,9 +60,9 @@ export default async function ItemsPage({
             i.qty_on_hand AS qtyOnHand, i.min_stock AS minStock, i.price
            FROM items i
            LEFT JOIN item_categories c ON c.id = i.category_id
-           LEFT JOIN warehouses w ON w.id = i.warehouse_id
-           LEFT JOIN racks r ON r.id = i.rack_id
-           LEFT JOIN rack_rows rr ON rr.id = i.rack_row_id
+           LEFT JOIN warehouses w ON w.id = i.default_warehouse_id
+           LEFT JOIN racks r ON r.id = i.default_rack_id
+           LEFT JOIN rack_rows rr ON rr.id = i.default_rack_row_id
            WHERE i.is_active = true AND i.deleted_at IS NULL
            ${lowStockCond} ${searchCond} ${catCond}
            ORDER BY i.created_at DESC LIMIT ${take} OFFSET ${(page - 1) * pageSize}`,
