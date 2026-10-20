@@ -74,6 +74,32 @@ describe("GET /api/activity-logs/export", () => {
     })
   })
 
+it("rejects a non-integer userId with 400 and never queries", async () => {
+    mocks.authFn.mockResolvedValue({
+      user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] },
+    })
+    for (const bad of ["5abc", "abc", "0", "-3", "99999999999999999999"]) {
+      const res = await GET(makeReq(`http://localhost/api/activity-logs/export?userId=${bad}`) as any)
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({
+        error: { code: "BAD_REQUEST", message: "userId tidak valid" },
+      })
+    }
+    expect(mocks.findManyLogs).not.toHaveBeenCalled()
+  })
+
+  it("still applies a valid integer userId filter on export", async () => {
+    mocks.authFn.mockResolvedValue({
+      user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] },
+    })
+    mocks.findManyLogs.mockResolvedValue([])
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export?userId=5") as any)
+    expect(res.status).toBe(200)
+    expect(mocks.findManyLogs).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ userId: 5 }),
+    }))
+  })
+
   it("neutralises CSV formula-injection triggers in user-controlled fields", async () => {
     // User-controlled fields: a malicious user name, action, modelType and
     // description starting with a formula trigger (=/+/-/@/tab/CR). When an
