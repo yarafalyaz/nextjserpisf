@@ -92,6 +92,25 @@ describe("material issue serial attribution", () => {
     )
   })
 
+  it("F-39(a): persists consumed batches on the issue line", async () => {
+    mocks.consumeFifoLayers.mockResolvedValue({
+      consumedCost: 200,
+      shortfall: 0,
+      consumedSerials: [],
+      consumedBatches: [{ batchNumber: "LOT-9", warehouseId: 5, qty: 2 }],
+    })
+    const spies = wireTx([{ id: 57, itemId: 3, qty: 2, cost: 100 }])
+
+    await onMaterialIssueCompleted(7, 9)
+
+    expect(spies.issueItemUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 57 },
+        data: { batchNumbers: [{ batchNumber: "LOT-9", qty: 2 }] },
+      }),
+    )
+  })
+
   it("falls back to auto-FIFO (null serials) when no selection is provided", async () => {
     wireTx([{ id: 56, itemId: 3, qty: 2, cost: 100 }])
 
