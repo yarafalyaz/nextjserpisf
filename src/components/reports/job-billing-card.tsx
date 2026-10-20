@@ -28,7 +28,23 @@ export function JobBillingCard({ summary }: Readonly<{ summary: JobBillingSummar
         <Baris label="Sisa belum ditagih" value={summary.sisaBelumDitagih} bold />
         <Baris label="Sisa belum dibayar" value={summary.sisaBelumDibayar} />
         <Baris label="Uang muka diterima" value={summary.uangMukaDiterima} />
+        {summary.kreditTerbuka > 0 ? (
+          <>
+            <Baris label="Kredit terbuka (bukan tagihan)" value={summary.kreditTerbuka} />
+            <Baris label="Sisa efektif" value={summary.sisaEfektif} bold />
+          </>
+        ) : null}
       </dl>
+      {summary.kreditTerbuka > 0 && summary.openCredits.length > 0 ? (
+        <ul aria-label="Kredit terbuka" className="mt-3 space-y-1 text-sm">
+          {summary.openCredits.map((c) => (
+            <li key={c.id} className="flex justify-between gap-4">
+              <span>{c.documentNo}</span>
+              <span className="tabular-nums">{formatCurrency(c.saldo)}</span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
       {summary.billedInvoices.length > 0 ? (
         <ul aria-label="Invoice terhitung" className="mt-3 space-y-1 text-sm">
           {summary.billedInvoices.map((inv) => (
