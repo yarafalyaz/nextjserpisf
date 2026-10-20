@@ -362,7 +362,7 @@ type BomTransitionResult = { success: boolean; error?: string }
  */
 async function transitionBomRevision(opts: {
   id: number
-  permission: string
+  userId: number
   from: string[]
   data: (userId: number) => Record<string, unknown>
   claimError: string
@@ -370,18 +370,17 @@ async function transitionBomRevision(opts: {
   guard?: (revision: { createdBy: number | null }, userId: number) => string | null
 }): Promise<BomTransitionResult> {
   try {
-    const user = await requirePermission(opts.permission)
     const revision = await prisma.bomRevision.findUnique({
       where: { id: opts.id },
       select: { id: true, productId: true, revisionNo: true, createdBy: true },
     })
     if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" }
-    const guardError = opts.guard?.(revision, Number(user.id))
+    const guardError = opts.guard?.(revision, opts.userId)
     if (guardError) return { success: false, error: guardError }
 
     const claimed = await prisma.bomRevision.updateMany({
       where: { id: opts.id, status: { in: opts.from } },
-      data: opts.data(Number(user.id)),
+      data: opts.data(opts.userId),
     })
     if (claimed.count === 0) return { success: false, error: opts.claimError }
 
@@ -407,9 +406,10 @@ const sodGuard = (verb: string) => (revision: { createdBy: number | null }, user
  * the UI never shows stale rejected state.
  */
 export async function submitBomRevisionForApproval(id: number) {
+  const user = await requirePermission("manage_bom_revisions")
   return transitionBomRevision({
     id,
-    permission: "manage_bom_revisions",
+    userId: Number(user.id),
     from: ["draft", "rejected"],
     data: (userId) => ({
       status: "pending_approval",
@@ -429,9 +429,10 @@ export async function submitBomRevisionForApproval(id: number) {
  * `approve_bom_revisions` and must not be the revision creator (SoD).
  */
 export async function approveBomRevision(id: number) {
+  const user = await requirePermission("approve_bom_revisions")
   return transitionBomRevision({
     id,
-    permission: "approve_bom_revisions",
+    userId: Number(user.id),
     from: ["pending_approval"],
     data: (userId) => ({ status: "approved", approvedAt: new Date(), approvedBy: userId }),
     claimError: "Hanya revisi menunggu persetujuan yang dapat disetujui.",
@@ -447,9 +448,10 @@ export async function approveBomRevision(id: number) {
 export async function rejectBomRevision(id: number, reason: string) {
   const trimmed = reason?.trim()
   if (!trimmed) return { success: false, error: "Alasan penolakan wajib diisi." }
+  const user = await requirePermission("approve_bom_revisions")
   return transitionBomRevision({
     id,
-    permission: "approve_bom_revisions",
+    userId: Number(user.id),
     from: ["pending_approval"],
     data: (userId) => ({
       status: "rejected",
