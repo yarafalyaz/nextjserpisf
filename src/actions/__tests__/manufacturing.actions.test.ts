@@ -119,6 +119,9 @@ beforeEach(() => {
   mocks.consumeFifoLayersMock.mockResolvedValue({ consumedCost: 42, shortfall: 0 })
   mocks.assertPeriodOpenMock.mockResolvedValue(undefined)
   mocks.createInLayerMock.mockResolvedValue(undefined)
+  mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1 }])
+  mocks.prismaMock.vehicleBrand = { findFirst: vi.fn().mockResolvedValue({ id: 1 }) }
+  mocks.prismaMock.vehicleModel = { findFirst: vi.fn().mockResolvedValue({ id: 1, vehicleBrandId: 1 }) }
 })
 
 describe("Product Actions", () => {
@@ -181,6 +184,57 @@ describe("Product Actions", () => {
   it("updateProduct handles validation error", async () => {
     const res = await actions.updateProduct(1, new FormData())
     expect(res?.success).toBe(false)
+  })
+
+  // Material itemId / vehicleBrandId / vehicleModelId lolos format-only:
+  // item fiktif/terhapus/nonaktif -> P2003 mentah; brand/model fiktif ->
+  // SetNull diam-diam putus tautan; model dari brand lain merusak fitment.
+  describe("material & vehicle ref existence (regression)", () => {
+    it("createProduct rejects non-existent material item", async () => {
+      const fd = fdMap({ name: "Ghost Material" })
+      fd.append("materialItemId", "999")
+      fd.append("materialQty", "2")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/tidak ditemukan/i)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+
+    it("createProduct rejects soft-deleted/inactive material item", async () => {
+      mocks.prismaMock.item.findMany.mockResolvedValue([])
+      const fd = fdMap({ name: "Dead Material" })
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "2")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(false)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+
+    it("updateProduct rejects non-existent material item", async () => {
+      const fd = fdMap({ name: "Update Ghost" })
+      fd.append("materialItemId", "999")
+      fd.append("materialQty", "2")
+      const res = await actions.updateProduct(1, fd)
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/tidak ditemukan/i)
+      expect(mocks.prismaMock.product.update).not.toHaveBeenCalled()
+    })
+
+    it("createProduct rejects non-existent vehicleBrandId", async () => {
+      mocks.prismaMock.vehicleBrand.findFirst.mockResolvedValue(null)
+      const res = await actions.createProduct(fdMap({ name: "Ghost Brand", vehicleBrandId: 999 }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/Merek kendaraan tidak ditemukan/i)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+
+    it("createProduct rejects vehicleModelId from another brand", async () => {
+      mocks.prismaMock.vehicleModel.findFirst.mockResolvedValue({ id: 1, vehicleBrandId: 2 })
+      const res = await actions.createProduct(fdMap({ name: "Mismatch", vehicleBrandId: 1, vehicleModelId: 1 }))
+      expect(res?.success).toBe(false)
+      expect(res?.error).toMatch(/bukan milik merek/i)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
   })
 
   // ==================== REGRESSION: parseMaterialRows hardening ====================

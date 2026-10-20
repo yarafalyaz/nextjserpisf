@@ -36,6 +36,31 @@ import { Prisma } from "@prisma/client";
 
 // ==================== PRODUCT (BOM) ACTIONS ====================
 
+// itemId baris BOM hanya tanpa relasi Prisma (ProductMaterial/BomRevisionMaterial
+// itemId polos, tanpa FK DB): id fiktif lolos format-only -> baris yatim masuk
+// hitungan biaya/PO. Cek eksistensi aktif pra-tulis satu titik untuk semua jalur.
+async function bomRefsError(itemIds: number[], vehicleBrandId?: number | null, vehicleModelId?: number | null): Promise<string | null> {
+  if (itemIds.length > 0) {
+    const found = await prisma.item.findMany({
+      where: { id: { in: itemIds }, isActive: true, deletedAt: null },
+      select: { id: true },
+    })
+    const ok = new Set(found.map((i) => i.id))
+    const missing = itemIds.find((id) => !ok.has(id))
+    if (missing !== undefined) return `Item material #${missing} tidak ditemukan atau tidak aktif`
+  }
+  if (vehicleBrandId != null) {
+    const brand = await prisma.vehicleBrand.findFirst({ where: { id: vehicleBrandId }, select: { id: true } })
+    if (!brand) return "Merek kendaraan tidak ditemukan"
+  }
+  if (vehicleModelId != null) {
+    const model = await prisma.vehicleModel.findFirst({ where: { id: vehicleModelId }, select: { vehicleBrandId: true } })
+    if (!model) return "Model kendaraan tidak ditemukan"
+    if (vehicleBrandId != null && model.vehicleBrandId !== vehicleBrandId) return "Model kendaraan bukan milik merek yang dipilih"
+  }
+  return null
+}
+
 /** Normalise a Json column that holds an array of strings into `string[]`. */
 function toStringArray(value: Prisma.JsonValue | null | undefined): string[] {
   if (!Array.isArray(value)) return [];
@@ -84,6 +109,8 @@ export async function createProduct(formData: FormData) {
     if (!materialsParsed.success) {
       return { success: false, error: materialsParsed.error };
     }
+    const refsError = await bomRefsError(materialsParsed.data.map((m) => m.itemId), v.vehicleBrandId, v.vehicleModelId);
+    if (refsError) return { success: false, error: refsError };
 
     const product = await prisma.product.create({
       data: {
@@ -147,6 +174,8 @@ export async function updateProduct(id: number, formData: FormData) {
     if (!materialsParsed.success) {
       return { success: false, error: materialsParsed.error };
     }
+    const refsError = await bomRefsError(materialsParsed.data.map((m) => m.itemId), v.vehicleBrandId, v.vehicleModelId);
+    if (refsError) return { success: false, error: refsError };
 
     // Atomic BOM swap: deleteMany + createMany must commit together. Without
     // a $transaction, a transient error on the createMany leaves the product
@@ -320,6 +349,8 @@ export async function updateBomRevision(id: number, formData: FormData) {
     const qtys = formData.getAll("revisionQty") as string[];
     const linesParsed = parseRevisionRows(itemIds, qtys);
     if (!linesParsed.success) return { success: false, error: linesParsed.error };
+    const refsError = await bomRefsError(linesParsed.data.map((m) => m.itemId));
+    if (refsError) return { success: false, error: refsError };
 
     const existing = await prisma.bomRevision.findUnique({
       where: { id },
