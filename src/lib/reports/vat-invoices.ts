@@ -15,6 +15,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 266mm, area isi A4 mendatar. */
@@ -66,9 +67,9 @@ function summarize(items: VatInvoiceInput[]): VatInvoiceGroup {
   return items.reduce<VatInvoiceGroup>(
     (acc, item) => ({
       count: acc.count + 1,
-      dpp: acc.dpp + item.dpp,
-      vat: acc.vat + item.vat,
-      total: acc.total + item.total,
+      dpp: safeAdd(acc.dpp, item.dpp, 2),
+      vat: safeAdd(acc.vat, item.vat, 2),
+      total: safeAdd(acc.total, item.total, 2),
     }),
     { count: 0, dpp: 0, vat: 0, total: 0 },
   )
@@ -130,12 +131,16 @@ export function buildVatInvoiceList(input: {
     rows.push(subtotalRow("Jumlah PPN Masukan", inputGroup))
   }
 
-  const netVat = Math.round((output.vat - inputGroup.vat) * 100) / 100
+  const netVat = safeSubtract(output.vat, inputGroup.vat, 2)
   rows.push({
     kind: "total",
     grand: true,
     label: "Posisi PPN (Keluaran − Masukan)",
-    cells: [amount(output.dpp - inputGroup.dpp), amount(netVat), amount(output.total - inputGroup.total)],
+    cells: [
+      amount(safeSubtract(output.dpp, inputGroup.dpp, 2)),
+      amount(netVat),
+      amount(safeSubtract(output.total, inputGroup.total, 2)),
+    ],
   })
 
   if (output.count === 0 && inputGroup.count === 0) {

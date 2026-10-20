@@ -81,6 +81,29 @@ export const workOrderSchema = z.object({
   items: optionalStr(50000), // JSON string, parsed separately
 })
 
+// Revisi item WO berjalan (F-2026-10-20-06): tambah item baru + tandai item
+// lama diganti. Item diganti WAJIB belum ter-issue (guard di aksi dari
+// MaterialIssue completed); retur stok item ter-issue tetap lewat jalur
+// Material Issue/retur existing, bukan aksi ini.
+export const reviseWorkOrderItemsSchema = z.object({
+  workOrderId: requiredId("Perintah Kerja"),
+  replacedItemIds: z
+    .array(z.coerce.number().int().positive())
+    .max(200)
+    .default([]),
+  newItems: z
+    .array(
+      z.object({
+        itemId: z.coerce.number().int().positive(),
+        qty: z.coerce.number().positive(),
+        cost: z.coerce.number().min(0).default(0),
+        description: optionalStr(500),
+      }),
+    )
+    .max(200)
+    .default([]),
+})
+
 // ==================== RACK ====================
 
 export const rackSchema = z.object({

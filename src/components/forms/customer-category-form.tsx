@@ -39,15 +39,23 @@ export function CustomerCategoryForm({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={category?.id ? "Formulir ubah kategori pelanggan" : "Formulir tambah kategori pelanggan"}
+    >
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Kategori *</Label>
+            <Label htmlFor="name">
+              Nama Kategori <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Input id="name" name="name" placeholder="Nama kategori pelanggan" required defaultValue={category?.name ?? ""} />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="downPaymentPercent">Persentase Uang Muka (DP) (%) *</Label>
+            <Label htmlFor="downPaymentPercent">
+              Persentase Uang Muka (DP) (%) <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Input
               id="downPaymentPercent"
               name="downPaymentPercent"
