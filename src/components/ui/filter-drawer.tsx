@@ -21,7 +21,7 @@ export function FilterDrawer({ children, title = "Filter" }: FilterDrawerProps) 
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button variant="secondary" size="sm" className="lg:hidden" aria-label="Buka filter laci">
+        <Button variant="secondary" size="sm" className="min-h-11 lg:hidden" aria-label="Buka filter laci">
           <Filter className="size-4" aria-hidden="true" />
           {title}
         </Button>
