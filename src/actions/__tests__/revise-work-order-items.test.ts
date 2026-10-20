@@ -100,6 +100,52 @@ describe("reviseWorkOrderItems (F-2026-10-20-06)", () => {
     })
   })
 
+  it("F-39(a): baris saudara item sama belum ter-issue TIDAK terblokir (guard per baris WO)", async () => {
+    // Dua baris WO memakai itemId 100; hanya baris 2 yang ter-issue.
+    const allLines = [
+      { id: 1, itemId: 100, status: "pending" },
+      { id: 2, itemId: 100, status: "pending" },
+    ]
+    woiFindMany.mockImplementation(async (args: any) => {
+      const ids: number[] = args?.where?.id?.in ?? []
+      return allLines.filter((l) => ids.includes(l.id))
+    })
+    // Tiru semantik DB: filter OR guard baru atas baris issue completed.
+    const issuedRows = [{ itemId: 100, workOrderItemId: 2 }]
+    miItemFindMany.mockImplementation(async (args: any) => {
+      const ors = args?.where?.OR ?? []
+      return issuedRows.filter((r) =>
+        ors.some((o: any) =>
+          o.workOrderItemId?.in
+            ? o.workOrderItemId.in.includes(r.workOrderItemId)
+            : r.workOrderItemId == null && o.itemId?.in?.includes(r.itemId),
+        ),
+      )
+    })
+    const res = await reviseWorkOrderItems({ workOrderId: 10, replacedItemIds: [1] })
+    expect(res.success).toBe(true)
+    const res2 = await reviseWorkOrderItems({ workOrderId: 10, replacedItemIds: [2] })
+    expect(res2.success).toBe(false)
+    expect(res2.error).toMatch(/sudah dikeluarkan lewat Pengeluaran Material/)
+  })
+
+  it("F-39(a): baris issue legacy tanpa workOrderItemId tetap memblokir lewat itemId", async () => {
+    const issuedRows = [{ itemId: 100, workOrderItemId: null }]
+    miItemFindMany.mockImplementation(async (args: any) => {
+      const ors = args?.where?.OR ?? []
+      return issuedRows.filter((r) =>
+        ors.some((o: any) =>
+          o.workOrderItemId?.in
+            ? o.workOrderItemId.in.includes(r.workOrderItemId as never)
+            : r.workOrderItemId == null && o.itemId?.in?.includes(r.itemId),
+        ),
+      )
+    })
+    const res = await reviseWorkOrderItems({ workOrderId: 10, replacedItemIds: [1] })
+    expect(res.success).toBe(false)
+    expect(res.error).toMatch(/sudah dikeluarkan lewat Pengeluaran Material/)
+  })
+
   it("menolak input tidak valid (qty <= 0)", async () => {
     const res = await reviseWorkOrderItems({
       workOrderId: 10,

@@ -1128,6 +1128,11 @@ describe("Work Order Actions", () => {
     const res = await actions.createMaterialIssueFromWorkOrder(1, 1)
     expect(res?.success).toBe(true)
     expect(mocks.prismaMock.materialIssueItem.createMany).toHaveBeenCalled()
+    // F-39(a): baris issue menyimpan baris WO asalnya.
+    const createArg = mocks.prismaMock.materialIssueItem.createMany.mock.calls[0][0]
+    expect(createArg.data).toEqual([
+      expect.objectContaining({ itemId: 1, workOrderItemId: 1 }),
+    ])
   })
 
   it("createMaterialIssueFromWorkOrder fails when MI exists", async () => {

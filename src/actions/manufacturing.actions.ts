@@ -1672,13 +1672,16 @@ export async function createMaterialIssueFromWorkOrder(
         },
       });
 
-      // Auto-create MI items from WO items (same tx).
+      // Auto-create MI items from WO items (same tx). F-2026-10-20-39(a):
+      // simpan baris WO asal tiap baris issue supaya guard revisi bisa
+      // memutuskan per baris WO, bukan menebak dari itemId yang sama.
       await tx.materialIssueItem.createMany({
         data: wo.items
           .filter((i) => Number(i.qty) > 0)
           .map((i) => ({
             materialIssueId: created.id,
             itemId: i.itemId,
+            workOrderItemId: i.id,
             qty: i.qty,
             cost: i.cost,
           })),

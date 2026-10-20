@@ -1905,13 +1905,21 @@ model MaterialIssueItem {
   id              Int           @id @default(autoincrement())
   materialIssueId Int           @map("material_issue_id")
   itemId          Int           @map("item_id")
+  // F-2026-10-20-39(a): baris WO asal pengeluaran ini (nullable — MI manual
+  // tanpa WO tetap sah; baris lama tanpa FK dijaga guard revisi via itemId).
+  workOrderItemId Int?          @map("work_order_item_id")
   qty             Decimal       @db.Decimal(15, 2)
   cost            Decimal       @default(0.00) @db.Decimal(15, 2)
   serialNumbers   Json?         @map("serial_numbers")
+  // Batch/lot yang benar-benar ter-konsumsi FIFO saat complete (dari
+  // consumedBatches hook); null sampai baris ter-issue.
+  batchNumbers    Json?         @map("batch_numbers")
   materialIssue   MaterialIssue @relation(fields: [materialIssueId], references: [id], onDelete: Cascade)
+  workOrderItem   WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: SetNull)
 
   @@index([materialIssueId], map: "material_issue_items_material_issue_id_fkey")
   @@index([itemId])
+  @@index([workOrderItemId])
   @@map("material_issue_items")
 }
 
@@ -2339,6 +2347,7 @@ model WorkOrderItem {
   cost        Decimal   @default(0.00) @db.Decimal(15, 2)
   status      String    @default("pending")
   workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  materialIssueItems MaterialIssueItem[]
 
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])

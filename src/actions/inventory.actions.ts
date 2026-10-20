@@ -909,12 +909,23 @@ export async function reviseWorkOrderItems(input: {
 
         // Item ter-issue (MI completed WO ini) stoknya sudah keluar —
         // tandai replaced di sini akan mengaburkan retur stoknya.
+        // F-2026-10-20-39(a): keputusan per BARIS WO lewat workOrderItemId.
+        // Guard lama per itemId memblokir baris saudara yang belum ter-issue
+        // hanya karena item yang sama ter-issue di baris lain. Baris issue
+        // lama (workOrderItemId null, sebelum kolom ini ada) tetap dijaga
+        // lewat itemId supaya tidak lolos.
         const issued = await tx.materialIssueItem.findMany({
           where: {
-            itemId: { in: targets.map((t) => t.itemId) },
             materialIssue: { workOrderId: v.workOrderId, status: "completed" },
+            OR: [
+              { workOrderItemId: { in: replacedIds } },
+              {
+                workOrderItemId: null,
+                itemId: { in: targets.map((t) => t.itemId) },
+              },
+            ],
           },
-          select: { itemId: true },
+          select: { itemId: true, workOrderItemId: true },
         });
         if (issued.length > 0) {
           throw new Error(

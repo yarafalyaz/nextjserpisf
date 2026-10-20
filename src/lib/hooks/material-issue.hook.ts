@@ -85,7 +85,7 @@ export async function onMaterialIssueCompleted(
         // and capture the ACTUAL consumed cost first, so both the StockMove and
         // the GL journal record the real FIFO cost — not the item.cost master
         // snapshot. Falls back to master cost for any shortfall portion.
-        const { consumedCost, shortfall, consumedSerials } = await consumeFifoLayers(tx, {
+        const { consumedCost, shortfall, consumedSerials, consumedBatches } = await consumeFifoLayers(tx, {
           itemId: item.itemId,
           warehouseId: issue.warehouseId,
           qty,
@@ -99,6 +99,19 @@ export async function onMaterialIssueCompleted(
           await tx.materialIssueItem.update({
             where: { id: item.id },
             data: { serialNumbers: consumedSerials },
+          });
+        }
+        // F-2026-10-20-39(a): simpan batch/lot yang benar-benar ter-konsumsi
+        // supaya klaim garansi bisa menelusur lot terpasang per baris issue.
+        if (consumedBatches && consumedBatches.length > 0) {
+          await tx.materialIssueItem.update({
+            where: { id: item.id },
+            data: {
+              batchNumbers: consumedBatches.map((b) => ({
+                batchNumber: b.batchNumber,
+                qty: b.qty,
+              })),
+            },
           });
         }
         const fallback = Number(item.cost ?? 0);
