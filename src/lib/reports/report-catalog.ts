@@ -175,6 +175,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
     reports: [
       { href: "/laporan/biaya-pekerjaan" },
       { href: "/laporan/varians-produksi" },
+      { href: "/laporan/estimasi-vs-aktual" },
       { href: "/laporan/penyelesaian-pekerjaan" },
       { href: "/laporan/jurnal-pekerjaan" },
       { href: "/laporan/serapan-overhead" },
