@@ -41,6 +41,7 @@ const mocks = vi.hoisted(() => {
     taxGroupTax: buildModelMock(),
     paymentTerm: buildModelMock(),
     brand: buildModelMock(),
+    customerCategory: buildModelMock(),
     stockMovement: buildModelMock(),
     itemStock: buildModelMock(),
     user: buildModelMock(),
@@ -83,6 +84,29 @@ vi.mock("bcryptjs", () => {
 
 import * as actions from "../master.actions"
 import { Prisma as RealPrisma } from "@prisma/client"
+
+describe("FK fiktif customerCategoryId/paymentTermId (repro)", () => {
+  it("createCustomer tolak customerCategoryId fiktif", async () => {
+    const res = await actions.createCustomer(fdMap({ name: "X", customerCategoryId: "999999" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.customer.create).not.toHaveBeenCalled()
+  })
+  it("updateCustomer tolak customerCategoryId fiktif", async () => {
+    const res = await actions.updateCustomer(1, fdMap({ name: "X", customerCategoryId: "999999" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.customer.update).not.toHaveBeenCalled()
+  })
+  it("createVendor tolak paymentTermId fiktif", async () => {
+    const res = await actions.createVendor(fdMap({ name: "V", paymentTermId: "999999" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.vendor.create).not.toHaveBeenCalled()
+  })
+  it("updateVendor tolak paymentTermId fiktif", async () => {
+    const res = await actions.updateVendor(1, fdMap({ name: "V", paymentTermId: "999999" }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.vendor.update).not.toHaveBeenCalled()
+  })
+})
 
 function makeP2003(): unknown {
   return new RealPrisma.PrismaClientKnownRequestError("FK violation", {
