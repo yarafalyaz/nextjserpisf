@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { apiError } from "@/lib/api-response";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { takeRateLimit, getClientIp, canBlockOnClientIp, clientRateLimitKey } from "@/lib/security/rate-limit";
@@ -101,10 +102,7 @@ export async function proxy(req: NextRequest) {
     const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
     if (!result.allowed) {
       return addSecurityHeaders(req, 
-        NextResponse.json(
-          { error: "Too many attempts, coba lagi nanti" },
-          { status: 429 },
-        ),
+        apiError("RATE_LIMITED", "Too many attempts, coba lagi nanti"),
       );
     }
   }
@@ -142,10 +140,7 @@ export async function proxy(req: NextRequest) {
         const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
         if (!result.allowed) {
           return addSecurityHeaders(req, 
-            NextResponse.json(
-              { error: "Too many attempts, coba lagi nanti" },
-              { status: 429 },
-            ),
+            apiError("RATE_LIMITED", "Too many attempts, coba lagi nanti"),
           );
         }
       }
@@ -176,10 +171,7 @@ export async function proxy(req: NextRequest) {
       const result = await takeRateLimit(`upload:${clientKey}`, RATE_LIMITS.upload);
       if (!result.allowed) {
         return addSecurityHeaders(req, 
-          NextResponse.json(
-            { error: "Upload rate limit exceeded" },
-            { status: 429 },
-          ),
+          apiError("RATE_LIMITED", "Upload rate limit exceeded"),
         );
       }
     } else {
@@ -187,7 +179,7 @@ export async function proxy(req: NextRequest) {
       const result = await takeRateLimit(`api:${clientKey}`, RATE_LIMITS.api);
       if (!result.allowed) {
         return addSecurityHeaders(req, 
-          NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 }),
+          apiError("RATE_LIMITED", "Rate limit exceeded"),
         );
       }
     }
@@ -197,7 +189,7 @@ export async function proxy(req: NextRequest) {
     // they cannot use a still-valid JWT to hit routes that only call auth().
     if (!token || (token as { isActive?: boolean }).isActive === false) {
       return addSecurityHeaders(req, 
-        NextResponse.json({ error: "Tidak terotorisasi" }, { status: 401 }),
+        apiError("UNAUTHORIZED", "Tidak terotorisasi"),
       );
     }
     return addSecurityHeaders(req, NextResponse.next());
