@@ -152,6 +152,27 @@ describe("dateOnly calendar validation (regression: z.coerce.date rollover)", ()
     });
   });
 
+  describe("nominal format Indonesia (parseMoneyAmount, bukan Number mentah)", () => {
+    it("expense amount '2.000.000' terbaca 2000000, bukan ditolak/2", () => {
+      const r = expenseSchema.safeParse({ accountId: 1, amount: "2.000.000", date: "2026-06-09" });
+      expect(r.success && r.data.amount).toBe(2000000);
+    });
+    it("pettyCash amount '2.000.000,50' terbaca 2000000.5", () => {
+      const r = pettyCashSchema.safeParse({ type: "IN", amount: "2.000.000,50", date: "2026-06-09" });
+      expect(r.success && r.data.amount).toBe(2000000.5);
+    });
+    it("bankReconciliation saldo format Indonesia terbaca penuh", () => {
+      const r = bankReconciliationSchema.safeParse({ accountId: 1, statementDate: "2026-06-09", statementBalance: "2.000.000", bookBalance: "1.500.000" });
+      expect(r.success && r.data.statementBalance).toBe(2000000);
+      expect(r.success && r.data.bookBalance).toBe(1500000);
+    });
+    it("bankStatement saldo awal/akhir format Indonesia terbaca penuh", () => {
+      const r = bankStatementSchema.safeParse({ accountId: 1, date: "2026-06-09", openingBalance: "2.000.000", closingBalance: "2.500.000,50" });
+      expect(r.success && r.data.openingBalance).toBe(2000000);
+      expect(r.success && r.data.closingBalance).toBe(2500000.5);
+    });
+  });
+
   describe("chequeSchema", () => {
     it("accepts a valid cheque", () => {
       expect(chequeSchema.safeParse({ type: "cek", direction: "out", amount: 1000, dueDate: "2026-10-01" }).success).toBe(true);

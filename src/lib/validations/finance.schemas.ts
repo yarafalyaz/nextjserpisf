@@ -42,6 +42,20 @@ const optionalNumber = (min?: number) => {
   return base.optional();
 };
 
+/** Nominal yang boleh nol/negatif (saldo): parse format Indonesia dulu, bukan Number() mentah. */
+const moneyAmount = (message: string) =>
+  z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number({ message }),
+  );
+
+/** Nominal mutasi positif: sama, wajib > 0. */
+const positiveMoneyAmount = (message: string, positiveMessage: string) =>
+  z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number({ message }).positive(positiveMessage),
+  );
+
 // ==================== BANK STATEMENT ====================
 
 export const bankStatementSchema = z.object({
@@ -55,8 +69,14 @@ export const bankStatementSchema = z.object({
   reference: optionalString(200),
   periodStart: optionalDateOnly,
   periodEnd: optionalDateOnly,
-  openingBalance: z.coerce.number().default(0),
-  closingBalance: z.coerce.number().default(0),
+  openingBalance: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().default(0),
+  ),
+  closingBalance: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().default(0),
+  ),
   notes: optionalString(1000),
 });
 
@@ -115,9 +135,7 @@ export const expenseSchema = z.object({
   paidFromAccountId: optionalNumber(),
   projectId: optionalNumber(),
   costCenterId: optionalNumber(),
-  amount: z.coerce
-    .number({ message: "amount wajib diisi" })
-    .positive("amount harus lebih dari 0"),
+  amount: positiveMoneyAmount("amount wajib diisi", "amount harus lebih dari 0"),
   date: dateOnly,
   referenceNo: optionalString(100),
   description: optionalString(1000),
@@ -131,9 +149,7 @@ export const expenseSchema = z.object({
 
 export const pettyCashSchema = z.object({
   type: z.enum(["IN", "OUT"], { message: "type wajib diisi (IN/OUT)" }),
-  amount: z.coerce
-    .number({ message: "amount wajib diisi" })
-    .positive("amount harus lebih dari 0"),
+  amount: positiveMoneyAmount("amount wajib diisi", "amount harus lebih dari 0"),
   date: dateOnly,
   accountId: optionalNumber(),
   referenceNo: optionalString(100),
@@ -152,12 +168,13 @@ export const bankReconciliationSchema = z.object({
     .int()
     .positive(),
   statementDate: dateOnly,
-  statementBalance: z.coerce.number({
-    message: "statementBalance wajib diisi",
-  }),
+  statementBalance: moneyAmount("statementBalance wajib diisi"),
   periodStart: optionalDateOnly,
   periodEnd: optionalDateOnly,
-  bookBalance: z.coerce.number().default(0),
+  bookBalance: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().default(0),
+  ),
   notes: optionalString(1000),
 });
 
