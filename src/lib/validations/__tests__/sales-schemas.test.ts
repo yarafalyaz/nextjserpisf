@@ -71,6 +71,17 @@ describe("validations/sales.schemas", () => {
     it("rejects missing customerId", () => {
       expect(createSalesInvoiceSchema.safeParse({ date: "2026-06-09" }).success).toBe(false);
     });
+
+    it("accepts nomor faktur pajak opsional, menolak karakter liar", () => {
+      const base = { customerId: 1, date: "2026-06-09" };
+      expect(createSalesInvoiceSchema.safeParse(base).success).toBe(true);
+      expect(createSalesInvoiceSchema.safeParse({ ...base, taxInvoiceNumber: "" }).success).toBe(true);
+      const ok = createSalesInvoiceSchema.safeParse({ ...base, taxInvoiceNumber: "010.000-26.12345678" });
+      expect(ok.success).toBe(true);
+      if (ok.success) expect(ok.data.taxInvoiceNumber).toBe("010.000-26.12345678");
+      expect(createSalesInvoiceSchema.safeParse({ ...base, taxInvoiceNumber: "010/000;DROP" }).success).toBe(false);
+      expect(createSalesInvoiceSchema.safeParse({ ...base, taxInvoiceNumber: "0".repeat(51) }).success).toBe(false);
+    });
   });
 
   describe("createSalesPaymentSchema", () => {

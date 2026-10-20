@@ -1,6 +1,7 @@
 import { z } from "zod"
 import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money"
 import { dateOnly } from "@/lib/validations/finance.schemas"
+import { taxInvoiceNumber } from "@/lib/validations/tax-invoice.schemas"
 
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
@@ -92,6 +93,8 @@ export const vendorBillSchema = z.object({
   date: dateOnly,
   dueDate: optionalDateOnly,
   vendorInvoiceNumber: optionalString(100),
+  // Nomor faktur pajak masukan dari pemasok (e-Faktur/Coretax), opsional.
+  taxInvoiceNumber,
   terms: optionalString(200),
   notes: optionalString(1000),
   subtotal: z.coerce.number().min(0, "Subtotal minimal 0").default(0),

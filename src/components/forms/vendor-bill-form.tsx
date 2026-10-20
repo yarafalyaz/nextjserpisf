@@ -56,6 +56,7 @@ interface VendorBillFormProps {
     dueDate?: string | null;
     notes?: string | null;
     vendorInvoiceNumber?: string | null;
+    taxInvoiceNumber?: string | null;
     terms?: string | null;
     items?: Array<{
       itemId: number;
@@ -320,6 +321,16 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
               name="vendorInvoiceNumber"
               placeholder="No. faktur dari pemasok"
               defaultValue={bill?.vendorInvoiceNumber ?? ""}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="taxInvoiceNumber">Nomor Faktur Pajak (e-Faktur)</Label>
+            <Input
+              id="taxInvoiceNumber"
+              name="taxInvoiceNumber"
+              placeholder="Nomor faktur pajak masukan dari pemasok"
+              maxLength={50}
+              defaultValue={bill?.taxInvoiceNumber ?? ""}
             />
           </div>
           <div className="flex flex-col gap-1.5">

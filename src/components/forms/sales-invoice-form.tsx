@@ -15,6 +15,7 @@ import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
+import { Input } from "@/components/ui/shadcn/input"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { formatCurrency } from "@/lib/utils/format"
 
@@ -23,6 +24,14 @@ const salesInvoiceSchema = z.object({
   salesOrderId: z.number().optional(),
   date: z.string().min(1, "Tanggal wajib diisi"),
   dueDate: z.string().optional(),
+  // Format ringan selaras server (tax-invoice.schemas): kosong boleh.
+  taxInvoiceNumber: z
+    .string()
+    .trim()
+    .max(50, "Nomor faktur pajak maksimal 50 karakter")
+    .regex(/^[0-9A-Za-z][0-9A-Za-z .-]*$/, "Nomor faktur pajak hanya boleh berisi huruf, angka, spasi, titik, dan strip")
+    .optional()
+    .or(z.literal("")),
   notes: z.string().optional(),
 })
 
@@ -31,7 +40,7 @@ type SalesInvoiceInput = z.infer<typeof salesInvoiceSchema>
 interface SalesInvoiceFormProps {
   customers: { id: number; name: string
 }[]
-  invoice?: { id: number; customerId: number; salesOrderId?: number | null; date: string; dueDate?: string | null; notes?: string | null; items?: Array<{ itemId: number; qty: number; unitPrice: number; discount?: number }> }
+  invoice?: { id: number; customerId: number; salesOrderId?: number | null; date: string; dueDate?: string | null; taxInvoiceNumber?: string | null; notes?: string | null; items?: Array<{ itemId: number; qty: number; unitPrice: number; discount?: number }> }
   salesOrders: { id: number; documentNo: string }[]
   /** Sumber dari tautan "buat dari" (mis. dari Perintah Kerja/penawaran lewat
    *  pesanan penjualannya) supaya faktur baru sudah tertaut ke pesanan itu. */
@@ -122,6 +131,7 @@ export function SalesInvoiceForm({
       salesOrderId: invoice?.salesOrderId ?? defaultSalesOrderId ?? undefined,
       date: invoice?.date ?? toLocalDateOnly(new Date()),
       dueDate: invoice?.dueDate ?? "",
+      taxInvoiceNumber: invoice?.taxInvoiceNumber ?? "",
       notes: invoice?.notes ?? "",
     },
   })
@@ -335,6 +345,17 @@ export function SalesInvoiceForm({
             value={watch("dueDate")}
             onChange={(val) => setValue("dueDate", val)}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="taxInvoiceNumber">Nomor Faktur Pajak (e-Faktur)</Label>
+          <Input
+            id="taxInvoiceNumber"
+            {...register("taxInvoiceNumber")}
+            placeholder="Nomor faktur pajak keluaran"
+            maxLength={50}
+          />
+          {errors.taxInvoiceNumber && <span className="text-xs text-danger mt-1">{errors.taxInvoiceNumber.message}</span>}
         </div>
 
         <div className="flex flex-col gap-1.5 col-span-full">

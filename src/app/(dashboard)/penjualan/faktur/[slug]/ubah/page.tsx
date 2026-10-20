@@ -36,6 +36,7 @@ export default async function EditPage({
     salesOrderId: data.salesOrderId ?? null,
     date: data.date.toISOString().split("T")[0],
     dueDate: data.dueDate?.toISOString().split("T")[0] ?? null,
+    taxInvoiceNumber: data.taxInvoiceNumber ?? null,
     notes: data.notes ?? null,
   };
 

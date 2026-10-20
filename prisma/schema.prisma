@@ -1137,6 +1137,9 @@ model SalesInvoice {
   id                   Int                   @id @default(autoincrement())
   customerVehicleId    Int?                  @map("customer_vehicle_id")
   projectId            Int?                  @map("project_id")
+  // Nomor faktur pajak keluaran (e-Faktur/Coretax). Opsional: faktur pajak
+  // terbit di luar Silengkap, jadi dokumen lama/tanpa PPN tetap valid kosong.
+  taxInvoiceNumber     String?               @map("tax_invoice_number")
   documentNo           String                @unique @map("document_no")
   customerId           Int                   @map("customer_id")
   salesOrderId         Int?                  @map("sales_order_id")
@@ -1534,6 +1537,9 @@ model VendorBill {
   id                  Int                       @id @default(autoincrement())
   goodsReceiptId      Int?                      @map("goods_receipt_id")
   vendorInvoiceNumber String?                   @map("vendor_invoice_number")
+  // Nomor faktur pajak masukan dari pemasok (e-Faktur/Coretax), terpisah dari
+  // vendorInvoiceNumber (nomor faktur komersial pemasok). Opsional.
+  taxInvoiceNumber    String?                   @map("tax_invoice_number")
   discountAmount      Decimal                   @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
   balanceDue          Decimal                   @default(0.00) @map("balance_due") @db.Decimal(15, 2)
   terms               String?                   @map("terms") @db.Text
