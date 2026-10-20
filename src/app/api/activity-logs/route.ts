@@ -35,6 +35,21 @@ export async function GET(req: NextRequest) {
         orderBy: { createdAt: "desc" },
         skip,
         take,
+        // Hanya kolom kontrak: oldValues/newValues dimuat sebatas untuk
+        // flag hasChanges, dan metadata (String @db.Text) tidak pernah
+        // dipakai respons — jangan muat blob sensitif itu per baris.
+        select: {
+          id: true,
+          userId: true,
+          action: true,
+          modelType: true,
+          modelId: true,
+          description: true,
+          createdAt: true,
+          ipAddress: true,
+          oldValues: true,
+          newValues: true,
+        },
       }),
       prisma.activityLog.count({ where }),
     ]);

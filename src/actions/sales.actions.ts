@@ -16,7 +16,7 @@ import { notificationService } from "@/lib/services/notification.service"
 import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
 import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlement } from "@/lib/services/sales-settlement.service"
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
-import { computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
+import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -1012,6 +1012,44 @@ export async function postInvoice(invoiceId: number) {
   }
 }
 
+type QuotationInvoiceRow = { id: number; status: string; grandTotal: number }
+
+/** Kumpul faktur non-terhapus lewat 3 jembatan quotation→invoice, dedup per id. */
+async function collectQuotationInvoices(
+  tx: Prisma.TransactionClient,
+  quotationId: number,
+): Promise<QuotationInvoiceRow[]> {
+  const [salesOrders, workOrders, directInvoices] = await Promise.all([
+    tx.salesOrder.findMany({ where: { quotationId, deletedAt: null }, select: { id: true } }),
+    tx.workOrder.findMany({ where: { quotationId }, select: { projectId: true } }),
+    tx.salesInvoice.findMany({
+      where: { quotationId, deletedAt: null },
+      select: { id: true, status: true, grandTotal: true },
+    }),
+  ])
+  const salesOrderIds = salesOrders.map((s) => s.id)
+  const projectIds = [...new Set(workOrders.map((w) => w.projectId).filter((p): p is number => p !== null))]
+  const [viaSalesOrder, viaProject] = await Promise.all([
+    salesOrderIds.length === 0
+      ? Promise.resolve([])
+      : tx.salesInvoice.findMany({
+          where: { salesOrderId: { in: salesOrderIds }, deletedAt: null },
+          select: { id: true, status: true, grandTotal: true },
+        }),
+    projectIds.length === 0
+      ? Promise.resolve([])
+      : tx.salesInvoice.findMany({
+          where: { projectId: { in: projectIds }, deletedAt: null },
+          select: { id: true, status: true, grandTotal: true },
+        }),
+  ])
+  const byId = new Map<number, QuotationInvoiceRow>()
+  for (const inv of [...directInvoices, ...viaSalesOrder, ...viaProject]) {
+    byId.set(inv.id, { id: inv.id, status: inv.status, grandTotal: Number(inv.grandTotal) })
+  }
+  return [...byId.values()]
+}
+
 /**
  * F-2026-10-20-10: buat faktur selisih DRAFT dari revisi penawaran.
  *
@@ -1114,11 +1152,11 @@ export async function createDifferenceInvoice(quotationId: number) {
       // membaca total tertagih lama lalu membuat dua draft selisih.
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
-      const groups = await collectQuotationInvoiceGroups(tx, quotationId)
-      const related = await collectQuotationRelatedInvoices(tx, groups.salesOrderIds, groups.projectIds)
+      const invoices = await collectQuotationInvoices(tx, quotationId)
+
       const candidate = computeDifferenceInvoiceCandidate({
         quotationGrandTotal: Number(quotation.grandTotal),
-        invoices: mergeQuotationInvoices(groups.direct, related),
+        invoices,
       })
       if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada selisih revisi")
 
@@ -1165,6 +1203,99 @@ export async function createDifferenceInvoice(quotationId: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createDifferenceInvoice]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+
+/**
+ * F-2026-10-20-58: buat faktur progres DRAFT sebesar target kumulatif.
+ *
+ * Target = persen × Quotation.grandTotal berjalan; nominal = target −
+ * Σ invoice non-cancelled lewat tiga jembatan (definisi sama faktur
+ * selisih, draft ikut memesan porsi — builder computeProgressInvoiceCandidate).
+ * Selalu DRAFT tanpa jurnal: posting tetap lewat postInvoice. Baris item
+ * tunggal tanpa itemId (penyesuaian nilai, bukan barang) sehingga posting
+ * tidak menggerakkan stok. Persen divalidasi server (builder menolak
+ * 0/>100/nilai kontrak tak positif), jangan percaya kiriman klien.
+ */
+export async function createProgressInvoice(quotationId: number, targetPercent: number) {
+  try {
+    const user = await requirePermission("create_sales_invoices")
+
+    const quotation = await prisma.quotation.findFirst({
+      where: { id: quotationId, deletedAt: null },
+      select: {
+        id: true,
+        documentNo: true,
+        customerId: true,
+        customerVehicleId: true,
+        grandTotal: true,
+      },
+    })
+    if (!quotation) return { success: false, error: "Penawaran tidak ditemukan" }
+
+    const today = new Date()
+    await assertPeriodOpen(today)
+
+    const documentNo = await generateDocumentNumber("INV")
+    const slug = await nextSlug("salesInvoice", documentNo)
+    const progressDescription = `Faktur progres ${targetPercent}% penawaran ${quotation.documentNo}`
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      const invoices = await collectQuotationInvoices(tx, quotationId)
+      const candidate = computeProgressInvoiceCandidate({
+        quotationGrandTotal: Number(quotation.grandTotal),
+        targetPercent,
+        invoices,
+      })
+      if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada progres yang bisa ditagih")
+
+      return tx.salesInvoice.create({
+        data: {
+          documentNo,
+          slug,
+          customerId: quotation.customerId,
+          customerVehicleId: quotation.customerVehicleId,
+          quotationId: quotation.id,
+          date: today,
+          subtotal: candidate.progressAmount,
+          discount: 0,
+          tax: 0,
+          grandTotal: candidate.progressAmount,
+          paidAmount: 0,
+          totalAmount: candidate.progressAmount,
+          taxAmount: 0,
+          status: "draft",
+          notes: progressDescription,
+          createdBy: Number(user.id),
+          items: {
+            create: [
+              {
+                itemId: null,
+                description: progressDescription,
+                qty: 1,
+                unitPrice: candidate.progressAmount,
+                discount: 0,
+                total: candidate.progressAmount,
+              },
+            ],
+          },
+        },
+      })
+    })
+
+    await logActivity("create", "SalesInvoice", invoice.id, `Membuat faktur progres ${targetPercent}% #${invoice.id} dari penawaran ${quotation.documentNo}`)
+    await requestApprovalIfConfigured("SalesInvoice", invoice.id, Number(user.id))
+    revalidatePath("/penjualan/faktur")
+    revalidatePath("/penjualan/penawaran")
+    return { success: true, id: invoice.id, slug }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createProgressInvoice]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

@@ -43,7 +43,7 @@ export const approvalFactory = () => ({
   assertApproved: () => Promise.resolve(undefined),
 })
 
-/** Basis mock hoisted aksi penjualan revisi (selisih + revisi-turun). */
+/** Basis mock hoisted aksi penjualan revisi (selisih + revisi-turun + progres). */
 export function buildSalesRevisionPrismaMock(extra: Record<string, unknown> = {}) {
   const prismaMock: Record<string, any> = {
     quotation: buildModelMock(),

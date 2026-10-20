@@ -142,6 +142,59 @@ describe("POST /api/upload/attachments", () => {
     }))
   })
 
+  it("returns only contract fields on upload, never internal columns", async () => {
+    // Prisma create tanpa select mengembalikan baris utuh: referenceType/
+    // referenceId/uploadedBy (id pengunggah internal) tidak dipakai satu pun
+    // konsumen POST — jangan bocorkan ke klien. Mock meniru semantik Prisma:
+    // hanya kolom di `select` yang kembali.
+    mocks.attachmentCreate.mockImplementation(async (args: any) => {
+      const row: Record<string, unknown> = {
+        id: 7,
+        referenceType: args.data.referenceType,
+        referenceId: args.data.referenceId,
+        filename: "quotation-5-uuid.pdf",
+        originalName: args.data.originalName,
+        fileUrl: args.data.fileUrl,
+        fileSize: args.data.fileSize,
+        mimeType: args.data.mimeType,
+        uploadedBy: args.data.uploadedBy,
+        createdAt: new Date("2026-10-20T00:00:00.000Z"),
+      }
+      if (!args.select) return row
+      return Object.fromEntries(
+        Object.keys(args.select).map((k) => [k, row[k]]),
+      )
+    })
+    const file = makeFile("invoice.pdf", "application/pdf")
+    const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "5" }))
+    expect(res.status).toBe(200)
+    const json = await res.json()
+    expect(json).toEqual({
+      id: 7,
+      filename: "quotation-5-uuid.pdf",
+      originalName: "invoice.pdf",
+      fileUrl: expect.stringMatching(
+        /^\/api\/attachments\/quotation\/quotation-5-.+\.pdf$/,
+      ),
+      fileSize: 1024,
+      mimeType: "application/pdf",
+      createdAt: "2026-10-20T00:00:00.000Z",
+    })
+    expect(mocks.attachmentCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        select: {
+          id: true,
+          filename: true,
+          originalName: true,
+          fileUrl: true,
+          fileSize: true,
+          mimeType: true,
+          createdAt: true,
+        },
+      }),
+    )
+  })
+
   it("accepts an owned temporary upload for a new journal", async () => {
     const file = makeFile("journal.pdf", "application/pdf")
     const res = await POST(makePostReq({ file, referenceType: "journal", referenceId: "0" }))

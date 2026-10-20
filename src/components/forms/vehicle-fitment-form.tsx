@@ -107,17 +107,18 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={rule?.id ? "Formulir ubah aturan fitment" : "Formulir tambah aturan fitment"}>
       <FormCard>
         <FormSection title="Item & Cakupan">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="itemId">Item / SKU *</Label>
+            <Label htmlFor="itemId">Item / SKU <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Combobox
               id="itemId"
               options={items.map((i) => ({ value: String(i.id), label: `${i.sku} - ${i.name}` }))}
               value={itemId}
               onChange={setItemId}
               placeholder="Cari item..."
+              required
             />
           </div>
           <div className="flex flex-col gap-1.5">
@@ -182,7 +183,7 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="result">Hasil *</Label>
+            <Label htmlFor="result">Hasil <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Combobox
               id="result"
               options={[

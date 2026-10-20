@@ -8,6 +8,7 @@ function mockTx(opts: {
   layers?: { id: number; remaining: number; unitCost: number; batchNumber: string | null }[];
   trackSerial?: boolean;
   itemBatch?: { id: number; qty: number } | null;
+  batches?: { id: number; batchNumber: string; qty: number; warehouseId: number; expiryDate: Date | null }[];
   availableSerials?: { id: number; serialNumber?: string }[];
   costingMethod?: string | null;
   categoryMethod?: string | null;
@@ -27,7 +28,8 @@ function mockTx(opts: {
     $queryRaw: vi.fn().mockResolvedValue(opts.layers ?? []),
     itemBatch: {
       findMany: vi.fn().mockResolvedValue(
-        opts.itemBatch ? [{ id: opts.itemBatch.id, batchNumber: "BATCH-A", qty: opts.itemBatch.qty, warehouseId: 2 }] : [],
+        opts.batches ??
+          (opts.itemBatch ? [{ id: opts.itemBatch.id, batchNumber: "BATCH-A", qty: opts.itemBatch.qty, warehouseId: 2, expiryDate: null }] : []),
       ),
       update: batchUpdate,
     },
@@ -59,6 +61,48 @@ function mockTx(opts: {
       layerCreate: typeof layerCreate;
     };
   };
+}
+
+/** Skenario lapisan+lot bersama tes FEFO F-79 (lapisan tertua BATCH-LATE). */
+function mockFefoTx() {
+  return mockTx({
+    layers: [
+      { id: 1, remaining: 10, unitCost: 4, batchNumber: "BATCH-LATE" },
+      { id: 2, remaining: 10, unitCost: 6, batchNumber: "BATCH-EARLY" },
+    ],
+    batches: [
+      { id: 91, batchNumber: "BATCH-LATE", qty: 10, warehouseId: 2, expiryDate: new Date(2026, 5, 1) },
+      { id: 92, batchNumber: "BATCH-EARLY", qty: 10, warehouseId: 2, expiryDate: new Date(2026, 1, 1) },
+    ],
+  });
+}
+
+/** Lot tunggal sederhana untuk tes penolakan/kedaluwarsa F-79. */
+function mockSingleBatchTx(expiryDate: Date | null) {
+  return mockTx({
+    layers: [{ id: 1, remaining: 50, unitCost: 5, batchNumber: "BATCH-A" }],
+    batches: [{ id: 99, batchNumber: "BATCH-A", qty: 50, warehouseId: 2, expiryDate }],
+  });
+}
+
+/** Lapisan dua tingkat klasik bersama banyak tes costing (10@4 + 30@6). */
+function mockTwoLayerTx(opts: Parameters<typeof mockTx>[0] = {}) {
+  return mockTx({
+    ...opts,
+    layers: [
+      { id: 1, remaining: 10, unitCost: 4, batchNumber: null },
+      { id: 2, remaining: 30, unitCost: 6, batchNumber: null },
+    ],
+  });
+}
+
+/** Skenario serial bersama tes penolakan serial (availableSerials 1). */
+function mockSerialTx() {
+  return mockTx({
+    layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
+    trackSerial: true,
+    availableSerials: [{ id: 21 }],
+  });
 }
 
 describe("inventory-fifo", () => {
@@ -118,12 +162,7 @@ describe("inventory-fifo", () => {
     });
 
     it("consumes across multiple layers in FIFO order", async () => {
-      const tx = mockTx({
-        layers: [
-          { id: 1, remaining: 10, unitCost: 4, batchNumber: null },
-          { id: 2, remaining: 30, unitCost: 6, batchNumber: null },
-        ],
-      });
+      const tx = mockTwoLayerTx();
 
       const result = await consumeFifoLayers(tx, { itemId: 1, qty: 25 });
 
@@ -134,13 +173,7 @@ describe("inventory-fifo", () => {
     });
 
     it("average mode: books the weighted-average cost, not the oldest layer's cost", async () => {
-      const tx = mockTx({
-        costingMethod: "average",
-        layers: [
-          { id: 1, remaining: 10, unitCost: 4, batchNumber: null },
-          { id: 2, remaining: 30, unitCost: 6, batchNumber: null },
-        ],
-      });
+      const tx = mockTwoLayerTx({ costingMethod: "average" });
 
       // Weighted average over the remaining layers: (10*4 + 30*6) / 40 = 220/40 = 5.5
       const result = await consumeFifoLayers(tx, { itemId: 1, qty: 20 });
@@ -164,15 +197,7 @@ describe("inventory-fifo", () => {
     });
 
     it("defaults to fifo when neither item nor category nor global method is set", async () => {
-      const tx = mockTx({
-        costingMethod: null,
-        categoryMethod: null,
-        globalMethod: "FIFO",
-        layers: [
-          { id: 1, remaining: 10, unitCost: 4, batchNumber: null },
-          { id: 2, remaining: 30, unitCost: 6, batchNumber: null },
-        ],
-      });
+      const tx = mockTwoLayerTx({ costingMethod: null, categoryMethod: null, globalMethod: "FIFO" });
 
       const result = await consumeFifoLayers(tx, { itemId: 1, qty: 25 });
 
@@ -181,15 +206,7 @@ describe("inventory-fifo", () => {
     });
 
     it("jalur posting faktur MEMBACA pengaturan global: global average dipakai saat item/kategori kosong", async () => {
-      const tx = mockTx({
-        costingMethod: null,
-        categoryMethod: null,
-        globalMethod: "average",
-        layers: [
-          { id: 1, remaining: 10, unitCost: 4, batchNumber: null },
-          { id: 2, remaining: 30, unitCost: 6, batchNumber: null },
-        ],
-      });
+      const tx = mockTwoLayerTx({ costingMethod: null, categoryMethod: null, globalMethod: "average" });
 
       const result = await consumeFifoLayers(tx, { itemId: 1, qty: 20 });
 
@@ -307,6 +324,80 @@ describe("inventory-fifo", () => {
       });
     });
 
+    it("rejects expired batch lot when documentDate is provided (F-79)", async () => {
+      const tx = mockSingleBatchTx(new Date(2026, 0, 9));
+
+      await expect(
+        consumeFifoLayers(tx, { itemId: 1, warehouseId: 2, qty: 10, documentDate: new Date(2026, 0, 10) })
+      ).rejects.toThrow(/BATCH-A.*kedaluwarsa/);
+      expect(tx._spies.layerUpdate).not.toHaveBeenCalled();
+      expect(tx._spies.batchUpdate).not.toHaveBeenCalled();
+    });
+
+    it("allows batch expiring exactly on the document date (F-79)", async () => {
+      const tx = mockSingleBatchTx(new Date(2026, 0, 10));
+
+      const result = await consumeFifoLayers(tx, {
+        itemId: 1,
+        warehouseId: 2,
+        qty: 10,
+        documentDate: new Date(2026, 0, 10),
+      });
+      expect(result.shortfall).toBe(0);
+    });
+
+    it("allows batch lot without expiryDate (F-79)", async () => {
+      const tx = mockSingleBatchTx(null);
+
+      const result = await consumeFifoLayers(tx, {
+        itemId: 1,
+        warehouseId: 2,
+        qty: 10,
+        documentDate: new Date(2026, 0, 10),
+      });
+      expect(result.consumedBatches).toEqual([{ batchNumber: "BATCH-A", warehouseId: 2, qty: 10 }]);
+    });
+
+    it("decrements physical batches in FEFO order without changing FIFO cost (F-79)", async () => {
+      // Lapisan biaya tertua = BATCH-LATE (masuk lebih dulu), tetapi lot fisik
+      // yang kedaluwarsa lebih cepat adalah BATCH-EARLY: dekremen fisik wajib
+      // FEFO, biaya wajib tetap dari lapisan FIFO tertua.
+      const tx = mockFefoTx();
+
+      const result = await consumeFifoLayers(tx, {
+        itemId: 1,
+        warehouseId: 2,
+        qty: 15,
+        documentDate: new Date(2026, 0, 10),
+      });
+
+      // Biaya FIFO murni: 10@4 + 5@6 = 70 (bukan FEFO).
+      expect(result.consumedCost).toBe(70);
+      // Fisik FEFO: BATCH-EARLY habis dulu, lalu BATCH-LATE.
+      expect(result.consumedBatches).toEqual([
+        { batchNumber: "BATCH-EARLY", warehouseId: 2, qty: 10 },
+        { batchNumber: "BATCH-LATE", warehouseId: 2, qty: 5 },
+      ]);
+      expect(tx._spies.batchUpdate).toHaveBeenCalledWith({
+        where: { id: 92 },
+        data: { qty: { decrement: 10 } },
+      });
+      expect(tx._spies.batchUpdate).toHaveBeenCalledWith({
+        where: { id: 91 },
+        data: { qty: { decrement: 5 } },
+      });
+    });
+
+    it("keeps layer-precision batch decrement without documentDate (F-79)", async () => {
+      const tx = mockFefoTx();
+
+      const result = await consumeFifoLayers(tx, { itemId: 1, warehouseId: 2, qty: 15 });
+      expect(result.consumedBatches).toEqual([
+        { batchNumber: "BATCH-LATE", warehouseId: 2, qty: 10 },
+        { batchNumber: "BATCH-EARLY", warehouseId: 2, qty: 5 },
+      ]);
+    });
+
     it("marks oldest serials as used (auto FIFO) for serial-tracked items", async () => {
       const tx = mockTx({
         layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
@@ -353,11 +444,7 @@ describe("inventory-fifo", () => {
     });
 
     it("throws when manual serial count does not match consumed quantity", async () => {
-      const tx = mockTx({
-        layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
-        trackSerial: true,
-        availableSerials: [{ id: 21 }],
-      });
+      const tx = mockSerialTx();
 
       await expect(
         consumeFifoLayers(tx, { itemId: 1, qty: 5, serialNumbers: ["SN-1"] }) // qty=5 but 1 serial
@@ -377,11 +464,7 @@ describe("inventory-fifo", () => {
     });
 
     it("throws when chosen serials are not all available", async () => {
-      const tx = mockTx({
-        layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
-        trackSerial: true,
-        availableSerials: [{ id: 21 }], // only 1 found but 2 requested
-      });
+      const tx = mockSerialTx(); // only 1 found but 2 requested
 
       await expect(
         consumeFifoLayers(tx, { itemId: 1, qty: 2, serialNumbers: ["SN-1", "SN-2"] })

@@ -9,7 +9,9 @@ const mocks = vi.hoisted(() => ({
   salesInvoiceCount: vi.fn(),
   salesInvoiceAggregate: vi.fn(),
   purchaseOrderFindMany: vi.fn(),
+  purchaseOrderCount: vi.fn(),
   attendanceFindMany: vi.fn(),
+  attendanceCount: vi.fn(),
   holidayFindFirst: vi.fn(),
   employeeFindMany: vi.fn(),
   leaveRequestFindMany: vi.fn(),
@@ -40,8 +42,14 @@ vi.mock("@/lib/db/prisma", () => ({
       aggregate: (...a: unknown[]) => mocks.salesInvoiceAggregate(...a),
     },
     notification: { findFirst: (...a: unknown[]) => mocks.notificationFindFirst(...a) },
-    purchaseOrder: { findMany: (...a: unknown[]) => mocks.purchaseOrderFindMany(...a) },
-    attendance: { findMany: (...a: unknown[]) => mocks.attendanceFindMany(...a) },
+    purchaseOrder: {
+      findMany: (...a: unknown[]) => mocks.purchaseOrderFindMany(...a),
+      count: (...a: unknown[]) => mocks.purchaseOrderCount(...a),
+    },
+    attendance: {
+      findMany: (...a: unknown[]) => mocks.attendanceFindMany(...a),
+      count: (...a: unknown[]) => mocks.attendanceCount(...a),
+    },
     employee: { findMany: (...a: unknown[]) => mocks.employeeFindMany(...a) },
     workSchedule: { findMany: (...a: unknown[]) => mocks.workScheduleFindMany(...a) },
     departmentHoliday: { findMany: (...a: unknown[]) => mocks.departmentHolidayFindMany(...a) },
@@ -75,7 +83,9 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.salesInvoiceCount.mockResolvedValue(0)
     mocks.salesInvoiceAggregate.mockResolvedValue({ _sum: { grandTotal: 0, paidAmount: 0 } })
     mocks.purchaseOrderFindMany.mockResolvedValue([])
+    mocks.purchaseOrderCount.mockResolvedValue(0)
     mocks.attendanceFindMany.mockResolvedValue([])
+    mocks.attendanceCount.mockResolvedValue(0)
     mocks.holidayFindFirst.mockResolvedValue(null)
     mocks.employeeFindMany.mockResolvedValue([])
     mocks.leaveRequestFindMany.mockResolvedValue([])
@@ -162,21 +172,55 @@ describe("GET /api/cron/daily-notifications", () => {
   it("notifies stale POs", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T08:00:00"))
-    mocks.purchaseOrderFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.purchaseOrderCount.mockResolvedValue(2)
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.stalePOs).toBe(2)
   })
 
+  it("judul PO macet dari count penuh, bukan sampel findMany take:20", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-06-12T08:00:00"))
+    // Regresi: count = findMany(take:20).length berhenti di 20.
+    mocks.purchaseOrderCount.mockResolvedValue(47)
+    mocks.purchaseOrderFindMany.mockResolvedValue(
+      Array.from({ length: 20 }, (_, i) => ({ id: i + 1 })),
+    )
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.results.stalePOs).toBe(47)
+    const call = mocks.notifyUsersIfNew.mock.calls.find((c) => String(c[1]).includes("PO Belum Diterima"))
+    expect(call).toBeDefined()
+    expect(String(call![1])).toContain("47 PO")
+  })
+
   it("notifies late attendances (with >5 truncation and unknown name)", async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date("2026-06-12T08:00:00"))
+    mocks.attendanceCount.mockResolvedValue(6)
     mocks.attendanceFindMany.mockResolvedValue(
       Array.from({ length: 6 }, (_, i) => ({ employeeId: i + 1, status: "late", lateMinutes: 1, employee: i === 0 ? null : { name: `Emp${i}` } }))
     )
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.lateAttendance).toBe(6)
+  })
+
+  it("judul + sisa karyawan telat dari count penuh, bukan sampel take:20", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-06-12T08:00:00"))
+    // Regresi: 35 telat tertulis "20 Karyawan Telat ... dan 15 lainnya".
+    mocks.attendanceCount.mockResolvedValue(35)
+    mocks.attendanceFindMany.mockResolvedValue(
+      Array.from({ length: 20 }, (_, i) => ({ employeeId: i + 1, status: "late", lateMinutes: 1, employee: { name: `Emp${i}` } }))
+    )
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.results.lateAttendance).toBe(35)
+    const call = mocks.notifyUsersIfNew.mock.calls.find((c) => String(c[1]).includes("Karyawan Telat"))
+    expect(call).toBeDefined()
+    expect(String(call![1])).toContain("35 Karyawan Telat")
+    expect(String(call![2])).toContain("dan 30 lainnya")
   })
 
   it("notifies absent employees after 10am (skips present and on-leave)", async () => {
@@ -253,7 +297,8 @@ describe("GET /api/cron/daily-notifications", () => {
     }) // low stock (sample + count)
     mocks.salesInvoiceCount.mockResolvedValue(1)
     mocks.salesInvoiceFindMany.mockResolvedValue([{ grandTotal: 100, paidAmount: 0 }]) // overdue
-    mocks.purchaseOrderFindMany.mockResolvedValue([{ id: 1 }]) // stale PO
+    mocks.purchaseOrderCount.mockResolvedValue(1) // stale PO
+    mocks.attendanceCount.mockResolvedValue(1)
     mocks.attendanceFindMany.mockResolvedValue([{ employeeId: 1, status: "late", lateMinutes: 1, employee: { name: "Late" } }]) // late
     mocks.holidayFindFirst.mockResolvedValue(null)
     mocks.employeeFindMany.mockResolvedValue([{ id: 99, name: "Absent", departmentId: null, workSchedules: [], department: null }])

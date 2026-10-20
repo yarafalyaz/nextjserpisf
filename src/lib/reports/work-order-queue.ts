@@ -33,8 +33,12 @@ export interface WorkOrderQueueInput {
   startDate: Date | null
   endDate: Date | null
   customerName: string | null
+  /** Telepon pelanggan untuk tombol WA manual; null bila tak tercatat. */
+  customerPhone: string | null
   /** Label kendaraan (plat · model); null bila WO tanpa kendaraan. */
   vehicleLabel: string | null
+  /** Plat kendaraan untuk isi pesan WA; null bila tanpa kendaraan/plat. */
+  plateNumber: string | null
 }
 
 export interface WorkOrderQueueRow {
@@ -43,7 +47,9 @@ export interface WorkOrderQueueRow {
   documentNo: string
   status: string
   customerName: string | null
+  customerPhone: string | null
   vehicleLabel: string | null
+  plateNumber: string | null
   startDate: Date | null
   endDate: Date | null
   /** Hari kalender sejak mulai (startDate ?? date), >= 0. */
@@ -96,7 +102,9 @@ export function buildWorkOrderQueue(
       documentNo: input.documentNo,
       status: input.status,
       customerName: input.customerName,
+      customerPhone: input.customerPhone,
       vehicleLabel: input.vehicleLabel,
+      plateNumber: input.plateNumber,
       startDate: input.startDate,
       endDate: input.endDate,
       ageDays,
