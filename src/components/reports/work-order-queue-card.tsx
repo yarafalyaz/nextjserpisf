@@ -12,6 +12,8 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table"
 import { ReportCardShell } from "./report-card-shell"
+import { WhatsappButton } from "./whatsapp-button"
+import { buildWhatsappMessage } from "@/lib/utils/whatsapp"
 
 /**
  * F-2026-10-20-28(a): papan antrian bengkel di daftar perintah kerja.
@@ -44,6 +46,7 @@ export function WorkOrderQueueCard({ queue }: Readonly<{ queue: WorkOrderQueue }
               <DetailTableTh>Tenggat</DetailTableTh>
               <DetailTableTh align="right">Umur</DetailTableTh>
               <DetailTableTh>Keterlambatan</DetailTableTh>
+              <DetailTableTh>Hubungi</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {queue.rows.map((row) => (
@@ -66,6 +69,23 @@ export function WorkOrderQueueCard({ queue }: Readonly<{ queue: WorkOrderQueue }
                       <span className="font-medium text-destructive">
                         Terlambat {row.overdueDays} hari
                       </span>
+                    ) : (
+                      "—"
+                    )}
+                  </DetailTableTd>
+                  <DetailTableTd>
+                    {row.customerName ? (
+                      <WhatsappButton
+                        phone={row.customerPhone}
+                        message={buildWhatsappMessage({
+                          customerName: row.customerName,
+                          documentLabel: "Perintah Kerja",
+                          documentNo: row.documentNo,
+                          status: row.status,
+                          plateNumber: row.plateNumber,
+                          estimatedEndDate: row.endDate,
+                        })}
+                      />
                     ) : (
                       "—"
                     )}

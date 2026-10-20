@@ -27,7 +27,7 @@ export async function getWorkOrderQueue(now: Date = new Date()): Promise<WorkOrd
       date: true,
       startDate: true,
       endDate: true,
-      customer: { select: { name: true } },
+      customer: { select: { name: true, phone: true } },
       customerVehicle: {
         select: { plateNumber: true, vehicle: { select: { name: true } } },
       },
@@ -52,7 +52,9 @@ export async function getWorkOrderQueue(now: Date = new Date()): Promise<WorkOrd
         startDate: wo.startDate,
         endDate: wo.endDate,
         customerName: wo.customer?.name ?? null,
+        customerPhone: wo.customer?.phone ?? null,
         vehicleLabel: parts.length ? parts.join(" · ") : cv ? "Kendaraan tanpa plat" : null,
+        plateNumber: cv?.plateNumber ?? null,
       }
     }),
     now,

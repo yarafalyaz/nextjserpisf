@@ -16,8 +16,10 @@ function input(over: Partial<WorkOrderQueueInput>): WorkOrderQueueInput {
     date: new Date(2026, 9, 10),
     startDate: new Date(2026, 9, 10),
     endDate: null,
-    customerName: "Budi",
-    vehicleLabel: "B 1234 AA · Pajero",
+    customerName: "Budi Santoso",
+    customerPhone: "0812-3456-7890",
+    vehicleLabel: "B 1234 AA · Mitsubishi Pajero",
+    plateNumber: "B 1234 AA",
     ...over,
   }
 }
@@ -42,10 +44,32 @@ describe("WorkOrderQueueCard F-2026-10-20-28(a)", () => {
     expect(text).toContain("1 terlambat")
     expect(text).toContain("Terlambat 2 hari")
     expect(text).toContain("Budi")
-    expect(text).toContain("B 1234 AA · Pajero")
-    const links = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"))
+    expect(text).toContain("B 1234 AA · Mitsubishi Pajero")
+    const links = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href")).filter((h) => h?.startsWith("/produksi/"))
     // urutan tenggat: WO-0001 (18 Okt, terlambat) dulu, lalu WO-0002
     expect(links).toEqual(["/produksi/perintah-kerja/wo-1", "/produksi/perintah-kerja/wo-2"])
+    unmountCard(root)
+  })
+
+  it("tombol WA per baris berisi nomor WO/status/plat; tanpa nomor tampil — (F-92)", () => {
+    const queue = buildWorkOrderQueue(
+      [
+        input({ id: 1, slug: "wo-1", documentNo: "WO-0001", customerName: "Budi Santoso", customerPhone: "0812-3456-7890", plateNumber: "B 1234 AA", endDate: new Date(2026, 9, 25) }),
+        input({ id: 2, slug: "wo-2", documentNo: "WO-0002", customerName: "Sari", customerPhone: null, plateNumber: null, vehicleLabel: null }),
+      ],
+      NOW,
+    )
+    const { container, root } = renderCard(<WorkOrderQueueCard queue={queue} />)
+    const links = Array.from(container.querySelectorAll("a"))
+    const wa = links.find((a) => (a.textContent ?? "").includes("Kirim WA"))
+    expect(wa?.getAttribute("aria-label")).toBe("Kirim WA ke pelanggan")
+    const href = wa?.getAttribute("href") ?? ""
+    expect(href.startsWith("https://wa.me/6281234567890?text=")).toBe(true)
+    const text = decodeURIComponent(href.split("text=")[1] ?? "")
+    expect(text).toContain("Perintah Kerja WO-0001")
+    expect(text).toContain("B 1234 AA")
+    expect(text).toContain("Budi Santoso")
+    expect(container.textContent).toContain("—")
     unmountCard(root)
   })
 

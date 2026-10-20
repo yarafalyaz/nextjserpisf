@@ -30,7 +30,9 @@ function input(over: Partial<WorkOrderQueueInput>): WorkOrderQueueInput {
     startDate: new Date(2026, 9, 10),
     endDate: null,
     customerName: "Budi",
+    customerPhone: "0812-3456-7890",
     vehicleLabel: "B 1234 AA · Pajero",
+    plateNumber: "B 1234 AA",
     ...over,
   }
 }
@@ -107,7 +109,7 @@ describe("getWorkOrderQueue", () => {
         date: new Date(2026, 9, 12),
         startDate: new Date(2026, 9, 12),
         endDate: new Date(2026, 9, 18),
-        customer: { name: "Sari" },
+        customer: { name: "Sari", phone: "0811-2222-3333" },
         customerVehicle: { plateNumber: "B 77 XY", vehicle: { name: "Fortuner" } },
       },
       {
@@ -118,7 +120,7 @@ describe("getWorkOrderQueue", () => {
         date: new Date(2026, 9, 19),
         startDate: null,
         endDate: null,
-        customer: { name: "Andi" },
+        customer: { name: "Andi", phone: null },
         customerVehicle: null,
       },
     ])
@@ -135,11 +137,18 @@ describe("getWorkOrderQueue", () => {
     expect(r.rows[0]).toMatchObject({
       documentNo: "WO-7",
       customerName: "Sari",
+      customerPhone: "0811-2222-3333",
       vehicleLabel: "B 77 XY · Fortuner",
+      plateNumber: "B 77 XY",
       isOverdue: true,
       overdueDays: 2,
     })
-    expect(r.rows[1]).toMatchObject({ documentNo: "WO-8", vehicleLabel: null })
+    expect(r.rows[1]).toMatchObject({
+      documentNo: "WO-8",
+      customerPhone: null,
+      vehicleLabel: null,
+      plateNumber: null,
+    })
     expect(r.overdueCount).toBe(1)
   })
 })
