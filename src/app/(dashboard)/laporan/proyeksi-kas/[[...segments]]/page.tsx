@@ -6,7 +6,8 @@ import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency } from '@/lib/utils/format'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
-import { projectCash } from '@/lib/reports/cash-projection'
+import { projectCash, summarizeOpenCommitments } from '@/lib/reports/cash-projection'
+import { payableOutstanding } from '@/lib/reports/aging-amounts'
 import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
 import { ExportButtons } from '@/components/reports/export-buttons'
@@ -44,7 +45,7 @@ export default async function CashProjectionPage({
     settings.defaultCashAccountId,
   ].filter((id): id is number => typeof id === 'number' && id > 0)
 
-  const [sums, invoices, bills] = await Promise.all([
+  const [sums, invoices, bills, openPos, lastPayroll] = await Promise.all([
     sumEntriesByAccount({ date: { lte: now } }),
     prisma.salesInvoice.findMany({
       where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null, dueDate: { not: null } },
@@ -52,7 +53,17 @@ export default async function CashProjectionPage({
     }),
     prisma.vendorBill.findMany({
       where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null, dueDate: { not: null } },
-      select: { dueDate: true, grandTotal: true, paidAmount: true },
+      select: { dueDate: true, grandTotal: true, withholdingAmount: true, paidAmount: true },
+    }),
+    // F-2026-10-20-48(b): komitmen belum tertagih (memo, bukan proyeksi).
+    prisma.purchaseOrder.findMany({
+      where: { status: { in: ['ordered', 'partial_received'] }, deletedAt: null },
+      select: { status: true, items: { select: { qty: true, receivedQty: true, unitPrice: true } } },
+    }),
+    prisma.payroll.findFirst({
+      where: { status: { not: 'cancelled' } },
+      orderBy: { period: 'desc' },
+      select: { period: true },
     }),
   ])
 
@@ -67,9 +78,26 @@ export default async function CashProjectionPage({
   const receivables = invoices
     .map((inv) => ({ dueDate: inv.dueDate as Date, amount: safeSubtract(inv.grandTotal, inv.paidAmount, 2) }))
     .filter((row) => row.amount > 0)
+  // F-2026-10-20-48(a): utang NETO PPh (grandTotal - withholding - paid),
+  // samakan payableOutstanding laporan utang — bruto meng-overstate defisit.
   const payables = bills
-    .map((bill) => ({ dueDate: bill.dueDate as Date, amount: safeSubtract(bill.grandTotal, bill.paidAmount, 2) }))
+    .map((bill) => ({ dueDate: bill.dueDate as Date, amount: payableOutstanding(bill.grandTotal, bill.withholdingAmount, bill.paidAmount) }))
     .filter((row) => row.amount > 0)
+
+  const payrollNet = lastPayroll
+    ? await prisma.payroll.aggregate({
+        where: { period: lastPayroll.period, status: { not: 'cancelled' } },
+        _sum: { netSalary: true },
+      })
+    : null
+  const commitments = summarizeOpenCommitments({
+    purchaseOrders: openPos.map((po) => ({
+      status: po.status,
+      items: po.items.map((i) => ({ qty: Number(i.qty), receivedQty: Number(i.receivedQty), unitPrice: Number(i.unitPrice) })),
+    })),
+    payrollPeriod: lastPayroll?.period ?? null,
+    payrollNetTotal: Number(payrollNet?._sum.netSalary ?? 0),
+  })
 
   const rows = projectCash(opening, now, months, receivables, payables)
 
@@ -110,6 +138,28 @@ export default async function CashProjectionPage({
           valueClassName={closing >= 0 ? 'text-success' : 'text-danger'}
         />
       </div>
+
+      <ReportSection title="Komitmen Belum Tertagih (Memo)">
+        <p className="text-sm text-muted-foreground">
+          Memo terpisah — tidak mengurangi saldo proyeksi di atas: PO terbuka belum menjadi tagihan dan gaji periode berikut belum jatuh tempo dokumen.
+        </p>
+        <DetailTable data-report-table="Komitmen Belum Tertagih">
+          <DetailTableBody>
+            <DetailTableRow>
+              <DetailTableTd>PO terbuka ({commitments.openPurchaseOrderCount} dokumen, sisa qty belum diterima)</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(commitments.openPurchaseAmount, { zeroDash: false })}</DetailTableTd>
+            </DetailTableRow>
+            <DetailTableRow>
+              <DetailTableTd>Estimasi gaji bersih periode berikut{commitments.payrollPeriod ? ` (basis ${commitments.payrollPeriod})` : ''}</DetailTableTd>
+              <DetailTableTd align="right">{formatAccounting(commitments.estimatedPayrollAmount, { zeroDash: false })}</DetailTableTd>
+            </DetailTableRow>
+            <DetailTableRow>
+              <DetailTableTd className="font-semibold">Total komitmen memo</DetailTableTd>
+              <DetailTableTd align="right" className="font-semibold">{formatAccounting(commitments.total, { zeroDash: false })}</DetailTableTd>
+            </DetailTableRow>
+          </DetailTableBody>
+        </DetailTable>
+      </ReportSection>
 
       <ReportSection title="Proyeksi Kas per Bulan">
         <DetailTable data-report-table="Proyeksi Kas">

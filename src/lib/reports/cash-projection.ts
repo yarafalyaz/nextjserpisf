@@ -24,6 +24,49 @@ export interface CashProjectionMonth {
   closing: number
 }
 
+/**
+ * Komitmen kas yang belum tertagih (F-2026-10-20-48(b)).
+ *
+ * Ditampilkan sebagai MEMO terpisah di proyeksi kas — TIDAK dicampur ke
+ * saldo proyeksi utama: PO terbuka belum jadi tagihan, payroll bulan
+ * depan belum jatuh tempo dokumen. Estimasi payroll = total netSalary
+ * periode payroll terakhir (proxy kas keluar gaji bulan berikutnya).
+ */
+export interface OpenCommitmentSummary {
+  openPurchaseOrderCount: number
+  /** Sisa qty x harga per baris PO terbuka (belum diterima). */
+  openPurchaseAmount: number
+  /** Periode payroll terakhir yang jadi basis estimasi (YYYY-MM), bila ada. */
+  payrollPeriod: string | null
+  estimatedPayrollAmount: number
+  total: number
+}
+
+export function summarizeOpenCommitments(input: {
+  purchaseOrders: { status: string; items: { qty: number; receivedQty: number; unitPrice: number }[] }[]
+  payrollPeriod: string | null
+  payrollNetTotal: number
+}): OpenCommitmentSummary {
+  const open = input.purchaseOrders.filter(
+    (po) => po.status === "ordered" || po.status === "partial_received",
+  )
+  const openPurchaseAmount = open.reduce(
+    (sum, po) =>
+      po.items.reduce(
+        (s, i) => safeAdd(s, Math.max(i.qty - i.receivedQty, 0) * i.unitPrice, 2),
+        sum,
+      ),
+    0,
+  )
+  return {
+    openPurchaseOrderCount: open.length,
+    openPurchaseAmount: safeAdd(0, openPurchaseAmount, 2),
+    payrollPeriod: input.payrollPeriod,
+    estimatedPayrollAmount: safeAdd(0, input.payrollNetTotal, 2),
+    total: safeAdd(openPurchaseAmount, input.payrollNetTotal, 2),
+  }
+}
+
 const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`
 
 /**

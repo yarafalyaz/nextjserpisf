@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { projectCash } from "../cash-projection"
+import { projectCash, summarizeOpenCommitments } from "../cash-projection"
 
 describe("projectCash", () => {
   const from = new Date(2026, 9, 1) // Oct 2026
@@ -29,6 +29,18 @@ describe("projectCash", () => {
     const rows = projectCash(0, from, 1, [{ dueDate: new Date(2026, 11, 1), amount: 999 }], [])
     expect(rows).toHaveLength(1)
     expect(rows[0].closing).toBe(0)
+  })
+
+  it("F-48: summarizeOpenCommitments hitung PO terbuka sisa + payroll, abaikan PO selesai", () => {
+    const r = summarizeOpenCommitments({
+      purchaseOrders: [
+        { status: "partial_received", items: [{ qty: 10, receivedQty: 4, unitPrice: 100 }] },
+        { status: "received", items: [{ qty: 5, receivedQty: 5, unitPrice: 100 }] },
+      ],
+      payrollPeriod: "2026-10",
+      payrollNetTotal: 5000,
+    })
+    expect(r).toMatchObject({ openPurchaseOrderCount: 1, openPurchaseAmount: 600, estimatedPayrollAmount: 5000, total: 5600 })
   })
 
   it("returns a flat line when there are no flows", () => {
