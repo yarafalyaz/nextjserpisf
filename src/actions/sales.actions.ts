@@ -1065,61 +1065,6 @@ async function collectQuotationInvoices(
  * posting-nya tidak menggerakkan stok karena itemId null.
  */
 
-type QuotationInvoiceSummary = { id: number; status: string; grandTotal: number }
-
-async function collectQuotationInvoiceGroups(
-  tx: Prisma.TransactionClient,
-  quotationId: number,
-): Promise<{ salesOrderIds: number[]; projectIds: number[]; direct: QuotationInvoiceSummary[] }> {
-  const [salesOrders, workOrders, directInvoices] = await Promise.all([
-    tx.salesOrder.findMany({ where: { quotationId, deletedAt: null }, select: { id: true } }),
-    tx.workOrder.findMany({ where: { quotationId }, select: { projectId: true } }),
-    tx.salesInvoice.findMany({
-      where: { quotationId, deletedAt: null },
-      select: { id: true, status: true, grandTotal: true },
-    }),
-  ])
-  return {
-    salesOrderIds: salesOrders.map((s) => s.id),
-    projectIds: [...new Set(workOrders.map((w) => w.projectId).filter((p): p is number => p !== null))],
-    direct: directInvoices.map((i) => ({ id: i.id, status: i.status, grandTotal: Number(i.grandTotal) })),
-  }
-}
-
-async function collectQuotationRelatedInvoices(
-  tx: Prisma.TransactionClient,
-  salesOrderIds: number[],
-  projectIds: number[],
-): Promise<QuotationInvoiceSummary[]> {
-  const [viaSalesOrder, viaProject] = await Promise.all([
-    salesOrderIds.length === 0
-      ? Promise.resolve([])
-      : tx.salesInvoice.findMany({
-          where: { salesOrderId: { in: salesOrderIds }, deletedAt: null },
-          select: { id: true, status: true, grandTotal: true },
-        }),
-    projectIds.length === 0
-      ? Promise.resolve([])
-      : tx.salesInvoice.findMany({
-          where: { projectId: { in: projectIds }, deletedAt: null },
-          select: { id: true, status: true, grandTotal: true },
-        }),
-  ])
-  return [...viaSalesOrder, ...viaProject].map((i) => ({
-    id: i.id,
-    status: i.status,
-    grandTotal: Number(i.grandTotal),
-  }))
-}
-
-function mergeQuotationInvoices(
-  ...groups: QuotationInvoiceSummary[][]
-): QuotationInvoiceSummary[] {
-  const byId = new Map<number, QuotationInvoiceSummary>()
-  for (const group of groups) for (const inv of group) byId.set(inv.id, inv)
-  return [...byId.values()]
-}
-
 export async function createDifferenceInvoice(quotationId: number) {
   try {
     const user = await requirePermission("create_sales_invoices")
@@ -1325,16 +1270,15 @@ export async function createRevisionDownCredit(quotationId: number) {
     const credit = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
-      const [groups, confirmedDownPayments, downPayments] = await Promise.all([
-        collectQuotationInvoiceGroups(tx, quotationId),
+      const [invoices, confirmedDownPayments, downPayments] = await Promise.all([
+        collectQuotationInvoices(tx, quotationId),
         tx.downPayment.findMany({
           where: { quotationId, status: "confirmed" },
           select: { amount: true },
         }),
         tx.downPayment.findMany({ where: { quotationId }, select: { id: true } }),
       ])
-      const [related, existingRevisionDown, existingDownPayment] = await Promise.all([
-        collectQuotationRelatedInvoices(tx, groups.salesOrderIds, groups.projectIds),
+      const [existingRevisionDown, existingDownPayment] = await Promise.all([
         tx.customerCredit.findMany({
           where: { sourceType: "RevisionDown", sourceId: quotationId },
           select: { receivedAmount: true, allocatedAmount: true, refundedAmount: true },
@@ -1348,7 +1292,7 @@ export async function createRevisionDownCredit(quotationId: number) {
       ])
       const candidate = computeRevisionDownCreditCandidate({
         quotationGrandTotal: Number(quotation.grandTotal),
-        invoices: mergeQuotationInvoices(groups.direct, related),
+        invoices,
         confirmedDownPayments: confirmedDownPayments.map((d) => ({ amount: Number(d.amount) })),
         existingRevisionDownCredits: existingRevisionDown.map((c) => ({
           receivedAmount: Number(c.receivedAmount),
