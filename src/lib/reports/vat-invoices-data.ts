@@ -43,6 +43,7 @@ export async function loadVatInvoices(period: {
       },
       select: {
         documentNo: true,
+        taxInvoiceNumber: true,
         date: true,
         subtotal: true,
         discount: true,
@@ -61,6 +62,7 @@ export async function loadVatInvoices(period: {
       },
       select: {
         documentNo: true,
+        taxInvoiceNumber: true,
         date: true,
         subtotal: true,
         discountAmount: true,
@@ -75,6 +77,7 @@ export async function loadVatInvoices(period: {
   const output: VatInvoiceInput[] = salesInvoices.map((invoice) => ({
     date: invoice.date,
     documentNo: invoice.documentNo,
+    taxInvoiceNumber: invoice.taxInvoiceNumber,
     counterparty: invoice.customer.name,
     dpp: vatDpp(invoice.subtotal, invoice.discount),
     vat: Number(invoice.taxAmount),
@@ -84,6 +87,7 @@ export async function loadVatInvoices(period: {
   const input: VatInvoiceInput[] = vendorBills.map((bill) => ({
     date: bill.date,
     documentNo: bill.documentNo,
+    taxInvoiceNumber: bill.taxInvoiceNumber,
     counterparty: bill.vendor.name,
     dpp: vatDpp(bill.subtotal, bill.discountAmount),
     vat: Number(bill.tax),

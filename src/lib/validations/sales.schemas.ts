@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { dateOnly } from "@/lib/validations/finance.schemas";
+import { taxInvoiceNumber } from "@/lib/validations/tax-invoice.schemas";
 
 const optionalString = (max: number) =>
   z
@@ -84,6 +85,8 @@ export const createSalesInvoiceSchema = z.object({
   quotationId: optionalId,
   date: dateOnly,
   dueDate: optionalDate,
+  // Nomor faktur pajak keluaran dari e-Faktur/Coretax (opsional).
+  taxInvoiceNumber,
   notes: optionalString(500),
   // Item boleh ikut saat pembuatan: faktur hasil konversi Pesanan Penjualan
   // harus lahir dengan baris itemnya, bukan header kosong bertotal 0.
