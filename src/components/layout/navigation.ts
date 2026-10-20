@@ -290,6 +290,7 @@ export const navigation: NavItem[] = [
       { label: "Varians Produksi", href: "/laporan/varians-produksi", icon: TrendingUp, permission: "view_reports" },
       { label: "Estimasi vs Aktual Pekerjaan", href: "/laporan/estimasi-vs-aktual", icon: TrendingUp, permission: "view_reports" },
       { label: "Penyelesaian Pesanan", href: "/laporan/penyelesaian-pekerjaan", icon: PackageCheck, permission: "view_reports" },
+      { label: "Umur WIP Berjalan", href: "/laporan/wip-berjalan", icon: Factory, permission: "view_reports" },
       { label: "Jurnal Pekerjaan Pesanan", href: "/laporan/jurnal-pekerjaan", icon: Factory, permission: "view_reports" },
       { label: "Transaksi Bank Terekonsiliasi vs Belum", href: "/laporan/transaksi-bank", icon: Landmark, permission: "view_reports" },
       { label: "Faktur SPT Masa PPN", href: "/laporan/faktur-ppn", icon: Receipt, permission: "view_reports" },
