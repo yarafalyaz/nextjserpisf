@@ -22,6 +22,13 @@
  *   sebagai uangMukaDiterima; DP BUKAN tagihan (vonis accountant
  *   F-2026-10-20-03: termin/DP = kas saja, revenue+stok hanya invoice
  *   final), jadi tidak mengurangi sisa tagihan.
+ * - Kredit pelanggan terbuka (F-2026-10-20-43): saldo CustomerCredit
+ *   status open, saldo = received − allocated − refunded per baris
+ *   sen-aman, hanya baris saldo > 0 yang dilaporkan. kreditTerbuka
+ *   TIDAK mengurangi sisaBelumDitagih/sisaBelumDibayar — ia prepayment
+ *   pelanggan, bukan tagihan. sisaEfektif = sisaBelumDibayar −
+ *   kreditTerbuka (tampil saja, bisa negatif = dana pelanggan masih
+ *   di tangan bengkel melebihi sisa tagihan).
  *
  * Pure (tanpa Prisma/DOM). Loader DB ada di job-billing-summary-data.ts.
  */
@@ -48,6 +55,23 @@ export interface JobBillingSummaryInput {
   invoices: JobBillingInvoiceInput[]
   /** DownPayment yang sudah terkonfirmasi (status confirmed). */
   confirmedDownPayments: { amount: number }[]
+  /** Baris CustomerCredit terbuka milik quotation/customer ini. */
+  openCustomerCredits?: JobBillingCreditInput[]
+}
+
+export interface JobBillingCreditInput {
+  id: number
+  documentNo: string
+  receivedAmount: number
+  allocatedAmount: number
+  refundedAmount: number
+}
+
+export interface JobBillingCreditLine {
+  id: number
+  documentNo: string
+  /** received − allocated − refunded, sen-aman. */
+  saldo: number
 }
 
 export interface JobBillingInvoiceLine {
@@ -72,6 +96,12 @@ export interface JobBillingSummary {
   sisaBelumDibayar: number
   /** Σ DownPayment confirmed — kas diterima, bukan tagihan. */
   uangMukaDiterima: number
+  /** Σ saldo CustomerCredit terbuka (bukan tagihan). */
+  kreditTerbuka: number
+  /** sisaBelumDibayar − kreditTerbuka (tampil saja; bisa negatif). */
+  sisaEfektif: number
+  /** Baris kredit terbuka bersaldo > 0, urut id naik. */
+  openCredits: JobBillingCreditLine[]
   /** sudahDitagih > nilaiBerjalan. */
   overbilled: boolean
   /** Baris invoice yang terhitung, urut id naik. */
@@ -97,6 +127,21 @@ export function buildJobBillingSummary(input: JobBillingSummaryInput): JobBillin
   const nilaiBerjalan = round2(input.nilaiBerjalan)
   const sudahDitagih = safeSum(billed.map((i) => i.grandTotal), 2)
   const sudahDibayar = safeSum(billed.map((i) => i.paidAmount), 2)
+  const sisaBelumDibayar = safeSubtract(sudahDitagih, sudahDibayar, 2)
+
+  const openCredits = (input.openCustomerCredits ?? [])
+    .map((c) => ({
+      id: c.id,
+      documentNo: c.documentNo,
+      saldo: safeSubtract(
+        safeSubtract(c.receivedAmount, c.allocatedAmount, 2),
+        c.refundedAmount,
+        2,
+      ),
+    }))
+    .filter((c) => c.saldo > 0)
+    .sort((a, b) => a.id - b.id)
+  const kreditTerbuka = safeSum(openCredits.map((c) => c.saldo), 2)
 
   return {
     quotationId: input.quotationId,
@@ -105,8 +150,11 @@ export function buildJobBillingSummary(input: JobBillingSummaryInput): JobBillin
     sudahDitagih,
     sudahDibayar,
     sisaBelumDitagih: safeSubtract(nilaiBerjalan, sudahDitagih, 2),
-    sisaBelumDibayar: safeSubtract(sudahDitagih, sudahDibayar, 2),
+    sisaBelumDibayar,
     uangMukaDiterima: safeSum(input.confirmedDownPayments.map((d) => d.amount), 2),
+    kreditTerbuka,
+    sisaEfektif: safeSubtract(sisaBelumDibayar, kreditTerbuka, 2),
+    openCredits,
     overbilled: sudahDitagih > nilaiBerjalan,
     billedInvoices: billed.map((i) => ({
       id: i.id,

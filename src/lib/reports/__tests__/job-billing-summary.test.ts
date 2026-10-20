@@ -114,3 +114,73 @@ describe("buildJobBillingSummary — kriteria (c) feature-checker F-2026-10-20-0
     expect(s.sisaBelumDitagih).toBe(0.2)
   })
 })
+
+describe("buildJobBillingSummary — kredit terbuka F-2026-10-20-43", () => {
+  it("kredit terbuka tampil terpisah; sisaBelumDitagih/Dibayar tak berubah, sisaEfektif tampil saja", () => {
+    const s = buildJobBillingSummary({
+      quotationId: 9,
+      quotationDocumentNo: "Q-0009",
+      nilaiBerjalan: 100_000_000,
+      invoices: [inv({ id: 1, grandTotal: 40_000_000, paidAmount: 10_000_000, status: "partial" })],
+      confirmedDownPayments: [],
+      openCustomerCredits: [
+        { id: 2, documentNo: "CC-0002", receivedAmount: 28_000_000, allocatedAmount: 3_000_000, refundedAmount: 0 },
+        { id: 1, documentNo: "CC-0001", receivedAmount: 5_000_000, allocatedAmount: 5_000_000, refundedAmount: 0 },
+      ],
+    })
+    expect(s.kreditTerbuka).toBe(25_000_000)
+    expect(s.openCredits).toEqual([{ id: 2, documentNo: "CC-0002", saldo: 25_000_000 }])
+    expect(s.sisaBelumDitagih).toBe(60_000_000)
+    expect(s.sisaBelumDibayar).toBe(30_000_000)
+    expect(s.sisaEfektif).toBe(5_000_000)
+  })
+
+  it("kredit melebihi sisa belum dibayar: sisaEfektif negatif (dana pelanggan di tangan bengkel)", () => {
+    const s = buildJobBillingSummary({
+      quotationId: 9,
+      quotationDocumentNo: "Q-0009",
+      nilaiBerjalan: 10_000_000,
+      invoices: [inv({ id: 1, grandTotal: 10_000_000, paidAmount: 10_000_000, status: "paid" })],
+      confirmedDownPayments: [],
+      openCustomerCredits: [
+        { id: 1, documentNo: "CC-0001", receivedAmount: 2_500_000, allocatedAmount: 0, refundedAmount: 500_000 },
+      ],
+    })
+    expect(s.kreditTerbuka).toBe(2_000_000)
+    expect(s.sisaBelumDibayar).toBe(0)
+    expect(s.sisaEfektif).toBe(-2_000_000)
+  })
+
+  it("tanpa openCustomerCredits: kredit 0, sisaEfektif = sisaBelumDibayar", () => {
+    const s = buildJobBillingSummary({
+      quotationId: 9,
+      quotationDocumentNo: "Q-0009",
+      nilaiBerjalan: 50_000_000,
+      invoices: [inv({ id: 1, grandTotal: 20_000_000, paidAmount: 5_000_000, status: "partial" })],
+      confirmedDownPayments: [],
+    })
+    expect(s.kreditTerbuka).toBe(0)
+    expect(s.openCredits).toEqual([])
+    expect(s.sisaEfektif).toBe(15_000_000)
+  })
+
+  it("presisi sen saldo kredit: 17 x 0.24 received tidak drift", () => {
+    const credits = Array.from({ length: 17 }, (_, i) => ({
+      id: i + 1,
+      documentNo: `CC-${i + 1}`,
+      receivedAmount: 0.24,
+      allocatedAmount: 0,
+      refundedAmount: 0,
+    }))
+    const s = buildJobBillingSummary({
+      quotationId: 9,
+      quotationDocumentNo: "Q-0009",
+      nilaiBerjalan: 100,
+      invoices: [],
+      confirmedDownPayments: [],
+      openCustomerCredits: credits,
+    })
+    expect(s.kreditTerbuka).toBe(4.08)
+    expect(s.openCredits).toHaveLength(17)
+  })
+})
