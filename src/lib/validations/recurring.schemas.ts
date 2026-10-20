@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { dateOnly } from "@/lib/validations/finance.schemas"
+import { parseMoneyAmount } from "@/lib/utils/parse-money"
 
 const optionalId = z.coerce.number().int().min(1).optional()
 
@@ -16,7 +17,10 @@ export const recurringTransactionSchema = z.object({
     .max(500)
     .optional()
     .or(z.literal("").transform(() => undefined)),
-  amount: z.coerce.number().min(0, "Nominal minimal 0").default(0),
+  amount: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().min(0, "Nominal minimal 0").default(0),
+  ),
   /** Jurnal: akun debit & kredit. */
   debitAccountId: optionalId,
   creditAccountId: optionalId,
