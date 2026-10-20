@@ -5,79 +5,30 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * sebesar selisih revisi. Mock mandiri meniru pola sales.actions.test.ts
  * (hoisted prisma mock, $transaction menjalankan callback dgn mock sama).
  */
-const mocks = vi.hoisted(() => {
-  const buildModelMock = () => ({
-    findFirst: vi.fn().mockResolvedValue(null),
-    findUnique: vi.fn().mockResolvedValue(null),
-    findUniqueOrThrow: vi.fn().mockResolvedValue(null),
-    findMany: vi.fn().mockResolvedValue([]),
-    create: vi.fn().mockResolvedValue({ id: 99, slug: "inv-selisih" }),
-    update: vi.fn().mockResolvedValue({}),
-    count: vi.fn().mockResolvedValue(0),
-  })
-  const prismaMock: Record<string, unknown> = {
-    quotation: buildModelMock(),
-    salesOrder: buildModelMock(),
-    workOrder: buildModelMock(),
-    salesInvoice: buildModelMock(),
-    $queryRaw: vi.fn().mockResolvedValue([]),
-  }
-  prismaMock.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prismaMock))
-  return {
-    prismaMock: prismaMock as {
-      quotation: ReturnType<typeof buildModelMock>
-      salesOrder: ReturnType<typeof buildModelMock>
-      workOrder: ReturnType<typeof buildModelMock>
-      salesInvoice: ReturnType<typeof buildModelMock>
-      $transaction: ReturnType<typeof vi.fn>
-      $queryRaw: ReturnType<typeof vi.fn>
-    },
-    requirePermissionMock: vi.fn().mockResolvedValue({ id: 7 }),
-  }
+const mocks = await vi.hoisted(async () => {
+  const h = await import("./validation-mock-helpers")
+  const prismaMock = h.buildSalesRevisionPrismaMock()
+  prismaMock.quotation = h.buildModelMock({ id: 99, slug: "inv-selisih" })
+  return h.buildSalesRevisionMocks(prismaMock, "INV-2026-001")
 })
 
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: unknown[]) => mocks.requirePermissionMock(...a),
-}))
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: vi.fn().mockResolvedValue("INV-2026-001"),
-}))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn().mockResolvedValue("inv-2026-001") }))
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: vi.fn().mockResolvedValue(undefined),
-  reportPostCommitAuditFailure: vi.fn(),
-}))
-vi.mock("@/lib/services/approval-workflow.service", () => ({
-  requestApprovalIfConfigured: vi.fn().mockResolvedValue(undefined),
-  assertApproved: vi.fn().mockResolvedValue(undefined),
-}))
+import * as helpers from "./validation-mock-helpers"
+vi.mock("@/lib/db/prisma", () => helpers.registerSalesRevisionMocks(mocks).prisma())
+vi.mock("@/lib/auth/permissions", () => helpers.registerSalesRevisionMocks(mocks).permissions())
+vi.mock("next/cache", () => helpers.registerSalesRevisionMocks(mocks).cache())
+vi.mock("@/lib/utils/document-number", () => helpers.registerSalesRevisionMocks(mocks).docNumber())
+vi.mock("@/lib/utils/slug-db", () => helpers.registerSalesRevisionMocks(mocks).slug())
+vi.mock("@/lib/services/period-lock.service", () => helpers.registerSalesRevisionMocks(mocks).periodLock())
+vi.mock("@/lib/services/activity-log.service", () => helpers.registerSalesRevisionMocks(mocks).activityLog())
+vi.mock("@/lib/services/approval-workflow.service", () => helpers.registerSalesRevisionMocks(mocks).approval())
 
 import { createDifferenceInvoice } from "../sales.actions"
 
-const revisedQuotation = {
-  id: 5,
-  documentNo: "QUO-2026-005",
-  customerId: 3,
-  customerVehicleId: 9,
-  grandTotal: 1500000,
-  revisionNumber: 2,
-}
 
 describe("createDifferenceInvoice (F-2026-10-20-10)", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
-    mocks.prismaMock.quotation.findFirst.mockResolvedValue(revisedQuotation)
-    mocks.prismaMock.salesOrder.findMany.mockResolvedValue([])
-    mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
-    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
-      { id: 11, status: "paid", grandTotal: 1000000 },
-    ])
+    helpers.setupSalesRevisionBase(mocks, helpers.REVISION_CONTRACT_QUOTATION)
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue(helpers.REVISION_BILLED_INVOICE)
     mocks.prismaMock.salesInvoice.create.mockResolvedValue({ id: 99, slug: "inv-2026-001" })
   })
 
@@ -95,7 +46,7 @@ describe("createDifferenceInvoice (F-2026-10-20-10)", () => {
   })
 
   it("menolak penawaran yang belum pernah direvisi", async () => {
-    mocks.prismaMock.quotation.findFirst.mockResolvedValue({ ...revisedQuotation, revisionNumber: 0 })
+    mocks.prismaMock.quotation.findFirst.mockResolvedValue({ ...helpers.REVISION_CONTRACT_QUOTATION, revisionNumber: 0 })
     const res = await createDifferenceInvoice(5)
     expect(res.success).toBe(false)
     expect(res.error).toContain("belum pernah direvisi")

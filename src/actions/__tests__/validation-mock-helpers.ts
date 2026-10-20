@@ -5,7 +5,7 @@
  * factory di bawah hanya didelegasikan dari factory berkas pemanggil
  * dengan objek `mocks` hoisted pemanggil. Nilai mock tidak berubah.
  */
-import { vi } from "vitest"
+import { expect, vi } from "vitest"
 
 type AnyMocks = Record<string, any>
 
@@ -38,6 +38,11 @@ export function buildModelMock(createResult: unknown = { id: 99 }) {
   }
 }
 
+export const approvalFactory = () => ({
+  requestApprovalIfConfigured: () => Promise.resolve(undefined),
+  assertApproved: () => Promise.resolve(undefined),
+})
+
 /** Basis mock hoisted aksi penjualan revisi (selisih + revisi-turun + progres). */
 export function buildSalesRevisionPrismaMock(extra: Record<string, unknown> = {}) {
   const prismaMock: Record<string, any> = {
@@ -61,6 +66,19 @@ export function setupSalesRevisionBase(mocks: AnyMocks, quotation: Record<string
   mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
 }
 
+/** Fixture penawaran terikat kontrak bersama tes penjualan revisi. */
+export const REVISION_CONTRACT_QUOTATION = {
+  id: 5,
+  documentNo: "QUO-2026-005",
+  customerId: 3,
+  customerVehicleId: 9,
+  grandTotal: 1500000,
+  revisionNumber: 2,
+} as const
+
+/** Satu faktur lama tertagih bersama tes penjualan revisi. */
+export const REVISION_BILLED_INVOICE = [{ id: 11, status: "posted", grandTotal: 1000000 }] as const
+
 /** Sisi `return` mock hoisted bersama aksi penjualan revisi. */
 export function buildSalesRevisionMocks(prismaMock: Record<string, any>, docNo: string) {
   const requirePermissionMock = vi.fn().mockResolvedValue({ id: 7 })
@@ -75,7 +93,41 @@ export function buildSalesRevisionMocks(prismaMock: Record<string, any>, docNo: 
   }
 }
 
-export const approvalFactory = () => ({
-  requestApprovalIfConfigured: () => Promise.resolve(undefined),
-  assertApproved: () => Promise.resolve(undefined),
-})
+
+/**
+ * Registrasi delapan vi.mock bersama tes aksi penjualan revisi.
+ * File pemanggil tetap menulis `vi.mock` literal (hoisting Vitest);
+ * helper ini hanya dipanggil di dalam callback tiap blok.
+ */
+export function registerSalesRevisionMocks(mocks: AnyMocks) {
+  return {
+    prisma: () => prismaFactory(mocks, "prismaMock"),
+    permissions: () => permissionFactory(mocks),
+    cache: () => revalidateFactory(mocks),
+    docNumber: () => docNumberFactory(mocks),
+    slug: () => slugFixedFactory(),
+    periodLock: () => periodLockFactory(mocks),
+    activityLog: () => activityLogFactory(mocks),
+    approval: () => approvalFactory(),
+  }
+}
+
+/** Aserti penolakan bersama tes RevisionDown: gagal, pesan, tanpa create kredit. */
+export function expectRevisionDownRejection(mocks: AnyMocks, res: { success: boolean; error?: string }, message: string) {
+  expect(res.success).toBe(false)
+  expect(res.error).toContain(message)
+  expect(mocks.prismaMock.customerCredit.create).not.toHaveBeenCalled()
+}
+
+
+/** Nama modul yang didaftarkan vi.mock tes penjualan revisi. */
+export const SALES_REVISION_MODULE_NAMES = [
+  "@/lib/db/prisma",
+  "@/lib/auth/permissions",
+  "next/cache",
+  "@/lib/utils/document-number",
+  "@/lib/utils/slug-db",
+  "@/lib/services/period-lock.service",
+  "@/lib/services/activity-log.service",
+  "@/lib/services/approval-workflow.service",
+] as const

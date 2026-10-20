@@ -16,7 +16,7 @@ import { notificationService } from "@/lib/services/notification.service"
 import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
 import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlement } from "@/lib/services/sales-settlement.service"
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
-import { computeProgressInvoiceCandidate } from "@/lib/reports/job-billing-progress"
+import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -1064,6 +1064,50 @@ async function collectQuotationInvoices(
  * Baris item tunggal tanpa itemId (penyesuaian nilai, bukan barang):
  * posting-nya tidak menggerakkan stok karena itemId null.
  */
+
+function draftDerivedInvoiceData(input: {
+  documentNo: string
+  slug: string | null
+  customerId: number
+  customerVehicleId: number | null
+  quotationId: number
+  date: Date
+  amount: number
+  description: string
+  createdBy: number
+}) {
+  return {
+    documentNo: input.documentNo,
+    slug: input.slug,
+    customerId: input.customerId,
+    customerVehicleId: input.customerVehicleId,
+    quotationId: input.quotationId,
+    date: input.date,
+    subtotal: input.amount,
+    discount: 0,
+    tax: 0,
+    grandTotal: input.amount,
+    paidAmount: 0,
+    totalAmount: input.amount,
+    taxAmount: 0,
+    status: "draft" as const,
+    notes: input.description,
+    createdBy: input.createdBy,
+    items: {
+      create: [
+        {
+          itemId: null,
+          description: input.description,
+          qty: 1,
+          unitPrice: input.amount,
+          discount: 0,
+          total: input.amount,
+        },
+      ],
+    },
+  }
+}
+
 export async function createDifferenceInvoice(quotationId: number) {
   try {
     const user = await requirePermission("create_sales_invoices")
@@ -1105,36 +1149,17 @@ export async function createDifferenceInvoice(quotationId: number) {
       if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada selisih revisi")
 
       return tx.salesInvoice.create({
-        data: {
+        data: draftDerivedInvoiceData({
           documentNo,
           slug,
           customerId: quotation.customerId,
           customerVehicleId: quotation.customerVehicleId,
           quotationId: quotation.id,
           date: today,
-          subtotal: candidate.differenceAmount,
-          discount: 0,
-          tax: 0,
-          grandTotal: candidate.differenceAmount,
-          paidAmount: 0,
-          totalAmount: candidate.differenceAmount,
-          taxAmount: 0,
-          status: "draft",
-          notes: differenceDescription,
+          amount: candidate.differenceAmount,
+          description: differenceDescription,
           createdBy: Number(user.id),
-          items: {
-            create: [
-              {
-                itemId: null,
-                description: differenceDescription,
-                qty: 1,
-                unitPrice: candidate.differenceAmount,
-                discount: 0,
-                total: candidate.differenceAmount,
-              },
-            ],
-          },
-        },
+        }),
       })
     })
 
@@ -1198,36 +1223,17 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
       if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada progres yang bisa ditagih")
 
       return tx.salesInvoice.create({
-        data: {
+        data: draftDerivedInvoiceData({
           documentNo,
           slug,
           customerId: quotation.customerId,
           customerVehicleId: quotation.customerVehicleId,
           quotationId: quotation.id,
           date: today,
-          subtotal: candidate.progressAmount,
-          discount: 0,
-          tax: 0,
-          grandTotal: candidate.progressAmount,
-          paidAmount: 0,
-          totalAmount: candidate.progressAmount,
-          taxAmount: 0,
-          status: "draft",
-          notes: progressDescription,
+          amount: candidate.progressAmount,
+          description: progressDescription,
           createdBy: Number(user.id),
-          items: {
-            create: [
-              {
-                itemId: null,
-                description: progressDescription,
-                qty: 1,
-                unitPrice: candidate.progressAmount,
-                discount: 0,
-                total: candidate.progressAmount,
-              },
-            ],
-          },
-        },
+        }),
       })
     })
 
@@ -1240,6 +1246,92 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createProgressInvoice]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * F-2026-10-20-59 (vonis Salsa 18:30): kredit revisi-turun lahir sebagai
+ * CustomerCredit pasif sourceType RevisionDown, sourceId=quotationId,
+ * TANPA jurnal saat create. Jurnal hanya lahir saat alokasi/refund lewat
+ * customer-credit.service existing. Nominal dari builder #229
+ * (computeRevisionDownCreditCandidate) — jangan hitung ulang di sini.
+ * Lock baris quotation di dalam tx: submit ganda bersamaan tidak boleh
+ * sama-sama membaca kredit existing lama.
+ */
+export async function createRevisionDownCredit(quotationId: number) {
+  try {
+    const user = await requirePermission("confirm_down_payments")
+
+    const quotation = await prisma.quotation.findFirst({
+      where: { id: quotationId, deletedAt: null },
+      select: { id: true, documentNo: true, customerId: true, grandTotal: true, revisionNumber: true },
+    })
+    if (!quotation) return { success: false, error: "Penawaran tidak ditemukan" }
+    if (quotation.revisionNumber <= 0) {
+      return { success: false, error: "Penawaran belum pernah direvisi; tidak ada revisi-turun" }
+    }
+
+    const credit = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      const [invoices, confirmedDownPayments, downPayments] = await Promise.all([
+        collectQuotationInvoices(tx, quotationId),
+        tx.downPayment.findMany({
+          where: { quotationId, status: "confirmed" },
+          select: { amount: true },
+        }),
+        tx.downPayment.findMany({ where: { quotationId }, select: { id: true } }),
+      ])
+      const [existingRevisionDown, existingDownPayment] = await Promise.all([
+        tx.customerCredit.findMany({
+          where: { sourceType: "RevisionDown", sourceId: quotationId },
+          select: { receivedAmount: true, allocatedAmount: true, refundedAmount: true },
+        }),
+        downPayments.length === 0
+          ? Promise.resolve([])
+          : tx.customerCredit.findMany({
+              where: { sourceType: "DownPayment", sourceId: { in: downPayments.map((d) => d.id) } },
+              select: { receivedAmount: true },
+            }),
+      ])
+      const candidate = computeRevisionDownCreditCandidate({
+        quotationGrandTotal: Number(quotation.grandTotal),
+        invoices,
+        confirmedDownPayments: confirmedDownPayments.map((d) => ({ amount: Number(d.amount) })),
+        existingRevisionDownCredits: existingRevisionDown.map((c) => ({
+          receivedAmount: Number(c.receivedAmount),
+          allocatedAmount: Number(c.allocatedAmount),
+          refundedAmount: Number(c.refundedAmount),
+        })),
+        existingDownPaymentCredits: existingDownPayment.map((c) => ({
+          receivedAmount: Number(c.receivedAmount),
+        })),
+      })
+      if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada kredit revisi-turun")
+
+      const documentNo = await generateDocumentNumber("CC")
+      return tx.customerCredit.create({
+        data: {
+          documentNo,
+          customerId: quotation.customerId,
+          sourceType: "RevisionDown",
+          sourceId: quotation.id,
+          receivedAmount: candidate.creditAmount,
+          notes: `Kredit revisi-turun v${quotation.revisionNumber} penawaran ${quotation.documentNo}: tertagih/DP terikat ${candidate.committedAmount} melebihi nilai berjalan ${candidate.contractValue}. Tanpa jurnal saat lahir; jurnal hanya saat alokasi/refund.`,
+          createdBy: Number(user.id),
+        },
+      })
+    })
+
+    await logActivity("create", "CustomerCredit", credit.id, `Membuat kredit revisi-turun #${credit.id} dari penawaran ${quotation.documentNo}`)
+    revalidatePath("/penjualan/penawaran")
+    revalidatePath("/penjualan/faktur")
+    return { success: true, id: credit.id }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createRevisionDownCredit]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }

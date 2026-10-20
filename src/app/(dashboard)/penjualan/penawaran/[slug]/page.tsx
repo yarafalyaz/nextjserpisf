@@ -23,6 +23,7 @@ import { WhatsappButton } from "@/components/reports/whatsapp-button";
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { DifferenceInvoiceButton } from "@/components/reports/difference-invoice-button";
 import { ProgressInvoiceButton } from "@/components/reports/progress-invoice-button";
+import { RevisionDownCreditButton } from "@/components/reports/revision-down-credit-button";
 import { loadJobBillingSummary } from "@/lib/reports/job-billing-summary-data";
 import {
   DetailTable,
@@ -45,34 +46,28 @@ export default async function QuotationDetailPage({
   await requirePermission("view_quotations");
   const { slug } = await params;
 
+  const quotationInclude = {
+    customer: true,
+    sections: { include: { items: true }, orderBy: { sortOrder: "asc" } },
+    downPayments: { orderBy: { createdAt: "desc" } },
+    salesOrders: { orderBy: { createdAt: "desc" } },
+    workOrders: { orderBy: { createdAt: "desc" } },
+    salesInvoices: { orderBy: { createdAt: "desc" } },
+    histories: { orderBy: { createdAt: "desc" }, take: 10 },
+  } as const;
+
   const quotation = await resolveEntity(
     { segment: slug, fallbackWhere: { deletedAt: null } },
     {
       bySlug: (s, where) =>
         prisma.quotation.findFirst({
           where: { slug: s, ...where },
-          include: {
-            customer: true,
-            sections: { include: { items: true }, orderBy: { sortOrder: "asc" } },
-            downPayments: { orderBy: { createdAt: "desc" } },
-            salesOrders: { orderBy: { createdAt: "desc" } },
-            workOrders: { orderBy: { createdAt: "desc" } },
-            salesInvoices: { orderBy: { createdAt: "desc" } },
-            histories: { orderBy: { createdAt: "desc" }, take: 10 },
-          },
+          include: quotationInclude,
         }),
       byId: (id, where) =>
         prisma.quotation.findUnique({
           where: { id, ...where },
-          include: {
-            customer: true,
-            sections: { include: { items: true }, orderBy: { sortOrder: "asc" } },
-            downPayments: { orderBy: { createdAt: "desc" } },
-            salesOrders: { orderBy: { createdAt: "desc" } },
-            workOrders: { orderBy: { createdAt: "desc" } },
-            salesInvoices: { orderBy: { createdAt: "desc" } },
-            histories: { orderBy: { createdAt: "desc" }, take: 10 },
-          },
+          include: quotationInclude,
         }),
     },
   );
@@ -317,10 +312,16 @@ export default async function QuotationDetailPage({
                 <div className="flex flex-wrap justify-end gap-2">
                   <ProgressInvoiceButton quotationId={quotation.id} />
                   {quotation.revisionNumber > 0 ? (
+                    <>
                     <DifferenceInvoiceButton
                       quotationId={quotation.id}
                       revisionNumber={quotation.revisionNumber}
                     />
+                    <RevisionDownCreditButton
+                      quotationId={quotation.id}
+                      revisionNumber={quotation.revisionNumber}
+                    />
+                    </>
                   ) : null}
                 </div>
 
