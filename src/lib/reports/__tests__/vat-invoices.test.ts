@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildVatInvoiceList, displayNpwp, displayTaxInvoiceNo, vatInvoiceSummary, type VatInvoiceInput } from "@/lib/reports/vat-invoices"
+import { buildVatInvoiceList, computeReturnDeduction, displayNpwp, displayTaxInvoiceNo, vatInvoiceSummary, type VatInvoiceInput } from "@/lib/reports/vat-invoices"
 
 function invoice(overrides: Partial<VatInvoiceInput> = {}): VatInvoiceInput {
   return {
@@ -138,6 +138,57 @@ describe("buildVatInvoiceList", () => {
     expect(displayNpwp(invoice({ npwp: "  " }))).toBe("–")
     expect(displayNpwp(invoice({ npwp: null }))).toBe("–")
   })
+
+  it("pengurang retur tampil terpisah dan mengurangi posisi PPN, baris asal utuh", () => {
+    const result = buildVatInvoiceList({
+      output: [invoice()], // keluaran DPP 10jt / PPN 1,1jt
+      input: [],
+      returnDeductions: [
+        { date: new Date(2026, 9, 6), documentNo: "SR-001", sourceDocumentNo: "INV-001", counterparty: "PT Pelanggan", dpp: 5_000_000, vat: 550_000 },
+      ],
+    })
+    expect(result.output.vat).toBe(1_100_000) // baris asal tidak diubah
+    expect(result.returnDeduction).toEqual({ count: 1, dpp: 5_000_000, vat: 550_000, total: 5_550_000 })
+    expect(result.outputNetVat).toBe(550_000)
+    expect(result.netVat).toBe(550_000) // posisi memakai keluaran neto
+    expect(texts(result)).toContain("Pengurang Masa Retur — Nota Retur Penjualan (1)")
+    expect(texts(result)).toContain("SR-001")
+  })
+
+  it("tanpa retur: pengurang nol dan posisi = keluaran", () => {
+    const result = buildVatInvoiceList({ output: [invoice()], input: [] })
+    expect(result.returnDeduction.count).toBe(0)
+    expect(result.outputNetVat).toBe(result.output.vat)
+    expect(result.netVat).toBe(result.output.vat)
+    expect(texts(result)).not.toContain("Pengurang Masa Retur")
+  })
+
+describe("computeReturnDeduction (pengurang masa retur)", () => {
+  it("PPN = DPP-retur x tarif efektif faktur asal, dibulatkan sen", () => {
+    // Faktur asal DPP 10jt (11jt-1jt diskon), taxAmount 1,1jt -> tarif 11%.
+    const r = computeReturnDeduction({
+      qty: 2, price: 2_500_000,
+      source: { subtotal: 11_000_000, discount: 1_000_000, taxAmount: 1_100_000 },
+    })
+    expect(r.dpp).toBe(5_000_000)
+    expect(r.vat).toBe(550_000)
+  })
+
+  it("retur tanpa faktur asal / tanpa PPN asal tidak menghasilkan PPN-retur", () => {
+    expect(computeReturnDeduction({ qty: 1, price: 100_000, source: null })).toEqual({ dpp: 100_000, vat: 0 })
+    expect(computeReturnDeduction({
+      qty: 1, price: 100_000,
+      source: { subtotal: 1_000_000, discount: 0, taxAmount: 0 },
+    })).toEqual({ dpp: 100_000, vat: 0 })
+  })
+
+  it("DPP faktur asal nol tidak melempar dan PPN-retur nol", () => {
+    expect(computeReturnDeduction({
+      qty: 1, price: 100_000,
+      source: { subtotal: 500_000, discount: 500_000, taxAmount: 50_000 },
+    })).toEqual({ dpp: 100_000, vat: 0 })
+  })
+})
 
   it("memberi peringatan retur tanpa mengubah DPP/PPN/total laporan", () => {
     const result = buildVatInvoiceList({
