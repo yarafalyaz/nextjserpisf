@@ -15,6 +15,7 @@ import { onSalesReturnCompleted as onSalesReturnStock } from "@/lib/hooks/sales-
 import { notificationService } from "@/lib/services/notification.service"
 import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
 import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlement } from "@/lib/services/sales-settlement.service"
+import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -940,6 +941,134 @@ export async function postInvoice(invoiceId: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[postInvoice]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * F-2026-10-20-10: buat faktur selisih DRAFT dari revisi penawaran.
+ *
+ * Setelah revisi menaikkan Quotation.grandTotal (reviseQuotation), nilai
+ * baru tidak otomatis tertagih: invoice lama tetap sebesar nilai lama.
+ * Aksi ini membuat SalesInvoice DRAFT sebesar selisih positif
+ * (grandTotal berjalan − Σ invoice non-cancelled lewat TIGA jembatan
+ * quotationId/salesOrderId/projectId, dedup per id — pola
+ * loadJobBillingSummary). Selalu DRAFT: posting (jurnal piutang +
+ * keluar stok) tetap lewat postInvoice dari UI faktur, bukan di sini.
+ * Selisih ≤ 0 ditolak (kelebihan tagih = retur/kredit, bukan faktur).
+ * Baris item tunggal tanpa itemId (penyesuaian nilai, bukan barang):
+ * posting-nya tidak menggerakkan stok karena itemId null.
+ */
+export async function createDifferenceInvoice(quotationId: number) {
+  try {
+    const user = await requirePermission("create_sales_invoices")
+
+    const quotation = await prisma.quotation.findFirst({
+      where: { id: quotationId, deletedAt: null },
+      select: {
+        id: true,
+        documentNo: true,
+        customerId: true,
+        customerVehicleId: true,
+        grandTotal: true,
+        revisionNumber: true,
+      },
+    })
+    if (!quotation) return { success: false, error: "Penawaran tidak ditemukan" }
+    if (quotation.revisionNumber <= 0) {
+      return { success: false, error: "Penawaran belum pernah direvisi; tidak ada selisih revisi" }
+    }
+
+    const today = new Date()
+    await assertPeriodOpen(today)
+
+    const documentNo = await generateDocumentNumber("INV")
+    const slug = await nextSlug("salesInvoice", documentNo)
+    const differenceDescription = `Faktur selisih revisi v${quotation.revisionNumber} penawaran ${quotation.documentNo}`
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      // Kunci baris quotation: dua klik bersamaan tidak boleh sama-sama
+      // membaca total tertagih lama lalu membuat dua draft selisih.
+      await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      const [salesOrders, workOrders, directInvoices] = await Promise.all([
+        tx.salesOrder.findMany({ where: { quotationId, deletedAt: null }, select: { id: true } }),
+        tx.workOrder.findMany({ where: { quotationId }, select: { projectId: true } }),
+        tx.salesInvoice.findMany({
+          where: { quotationId, deletedAt: null },
+          select: { id: true, status: true, grandTotal: true },
+        }),
+      ])
+      const salesOrderIds = salesOrders.map((s) => s.id)
+      const projectIds = [...new Set(workOrders.map((w) => w.projectId).filter((p): p is number => p !== null))]
+      const [viaSalesOrder, viaProject] = await Promise.all([
+        salesOrderIds.length === 0
+          ? Promise.resolve([])
+          : tx.salesInvoice.findMany({
+              where: { salesOrderId: { in: salesOrderIds }, deletedAt: null },
+              select: { id: true, status: true, grandTotal: true },
+            }),
+        projectIds.length === 0
+          ? Promise.resolve([])
+          : tx.salesInvoice.findMany({
+              where: { projectId: { in: projectIds }, deletedAt: null },
+              select: { id: true, status: true, grandTotal: true },
+            }),
+      ])
+      const byId = new Map<number, { id: number; status: string; grandTotal: number }>()
+      for (const inv of [...directInvoices, ...viaSalesOrder, ...viaProject]) {
+        byId.set(inv.id, { id: inv.id, status: inv.status, grandTotal: Number(inv.grandTotal) })
+      }
+
+      const candidate = computeDifferenceInvoiceCandidate({
+        quotationGrandTotal: Number(quotation.grandTotal),
+        invoices: [...byId.values()],
+      })
+      if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada selisih revisi")
+
+      return tx.salesInvoice.create({
+        data: {
+          documentNo,
+          slug,
+          customerId: quotation.customerId,
+          customerVehicleId: quotation.customerVehicleId,
+          quotationId: quotation.id,
+          date: today,
+          subtotal: candidate.differenceAmount,
+          discount: 0,
+          tax: 0,
+          grandTotal: candidate.differenceAmount,
+          paidAmount: 0,
+          totalAmount: candidate.differenceAmount,
+          taxAmount: 0,
+          status: "draft",
+          notes: differenceDescription,
+          createdBy: Number(user.id),
+          items: {
+            create: [
+              {
+                itemId: null,
+                description: differenceDescription,
+                qty: 1,
+                unitPrice: candidate.differenceAmount,
+                discount: 0,
+                total: candidate.differenceAmount,
+              },
+            ],
+          },
+        },
+      })
+    })
+
+    await logActivity("create", "SalesInvoice", invoice.id, `Membuat faktur selisih revisi #${invoice.id} dari penawaran ${quotation.documentNo}`)
+    await requestApprovalIfConfigured("SalesInvoice", invoice.id, Number(user.id))
+    revalidatePath("/penjualan/faktur")
+    revalidatePath("/penjualan/penawaran")
+    return { success: true, id: invoice.id, slug }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createDifferenceInvoice]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
