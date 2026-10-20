@@ -20,7 +20,9 @@ import {
 import {
   averagePaymentDays,
   buildCustomerReceivables,
+  creditOverLimitLabel,
 } from "@/lib/reports/customer-receivables"
+import { groupReceivablesByVehicle } from "@/lib/reports/receivables-by-vehicle-data"
 import { receivableOutstanding } from "@/lib/reports/aging-amounts"
 import { safeAdd } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
@@ -350,6 +352,8 @@ export async function loadCustomerReceivables(period: Period): Promise<LedgerRep
         paidAmount: true,
         dueDate: true,
         customer: { select: { name: true, creditLimit: true } },
+        customerVehicleId: true,
+
       },
     }),
     prisma.salesPayment.findMany({
@@ -392,6 +396,37 @@ export async function loadCustomerReceivables(period: Period): Promise<LedgerRep
       })(),
     ],
   }))
+  for (const bucket of bucketList) {
+    const label = creditOverLimitLabel(bucket)
+    if (label) rows.push({ kind: "notice", text: `${bucket.customerName}: ${label}` })
+  }
+  const vehicleIds = [...new Set(invoices.map((inv) => inv.customerVehicleId).filter((id): id is number => id != null))]
+  const vehicles = vehicleIds.length
+    ? await prisma.customerVehicle.findMany({ where: { id: { in: vehicleIds } }, select: { id: true, plateNumber: true } })
+    : []
+  const plateById = new Map(vehicles.map((v) => [v.id, v.plateNumber]))
+  const byVehicle = groupReceivablesByVehicle(
+    invoices.map((inv) => ({
+      plateLabel: inv.customerVehicleId != null ? (plateById.get(inv.customerVehicleId) ?? null) : null,
+      grandTotal: inv.grandTotal,
+      paidAmount: inv.paidAmount,
+      dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+    })),
+    now,
+  )
+  for (const vehicle of byVehicle) {
+    rows.push({
+      kind: "data",
+      cells: [
+        `Per kendaraan: ${vehicle.plateLabel}`,
+        String(vehicle.invoiceCount),
+        "",
+        money(vehicle.outstanding),
+        money(vehicle.overdue),
+        "",
+      ],
+    })
+  }
   if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada piutang belum lunas." })
   else {
     const total = [...buckets.values()].reduce((s, b) => s + b.outstanding, 0)
