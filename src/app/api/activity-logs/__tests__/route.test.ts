@@ -134,6 +134,45 @@ it("rejects a non-integer userId with 400 and never queries", async () => {
     }))
   })
 
+  it.each(["bukan-tanggal", "2026-13-40"])(
+    "rejects invalid dateFrom %j with 400 and never queries",
+    async (dateFrom) => {
+      mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+      const res = await GET(makeReq(`http://localhost/api/activity-logs?dateFrom=${dateFrom}`) as any)
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({
+        error: { code: "BAD_REQUEST", message: "Tanggal tidak valid" },
+      })
+      expect(mocks.findManyLogs).not.toHaveBeenCalled()
+      expect(mocks.countLogs).not.toHaveBeenCalled()
+    },
+  )
+
+  it.each(["bukan-tanggal", "2026-13-40"])(
+    "rejects invalid dateTo %j with 400 and never queries",
+    async (dateTo) => {
+      mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+      const res = await GET(makeReq(`http://localhost/api/activity-logs?dateTo=${dateTo}`) as any)
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({
+        error: { code: "BAD_REQUEST", message: "Tanggal tidak valid" },
+      })
+      expect(mocks.findManyLogs).not.toHaveBeenCalled()
+      expect(mocks.countLogs).not.toHaveBeenCalled()
+    },
+  )
+
+  it("rejects dateFrom after dateTo with 400 and never queries", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    const res = await GET(makeReq("http://localhost/api/activity-logs?dateFrom=2026-02-01&dateTo=2026-01-01") as any)
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({
+      error: { code: "BAD_REQUEST", message: "Rentang tanggal tidak valid" },
+    })
+    expect(mocks.findManyLogs).not.toHaveBeenCalled()
+    expect(mocks.countLogs).not.toHaveBeenCalled()
+  })
+
   it("skips 'all' filters and date range when not provided", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 1 } })
     mocks.findManyLogs.mockResolvedValue([])

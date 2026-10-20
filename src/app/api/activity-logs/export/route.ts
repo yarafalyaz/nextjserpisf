@@ -35,19 +35,24 @@ export async function GET(req: NextRequest) {
     }
     if (action && action !== "all") where.action = action;
     if (modelType && modelType !== "all") where.modelType = modelType;
-    if (dateFrom || dateTo) {
+    const parsedFrom = dateFrom ? new Date(dateFrom) : null;
+    const parsedTo = dateTo ? new Date(dateTo) : null;
+    if (
+      (parsedFrom && Number.isNaN(parsedFrom.getTime())) ||
+      (parsedTo && Number.isNaN(parsedTo.getTime()))
+    ) {
+      return apiError("BAD_REQUEST", "Tanggal tidak valid");
+    }
+    if (parsedFrom && parsedTo && parsedFrom.getTime() > parsedTo.getTime()) {
+      return apiError("BAD_REQUEST", "Rentang tanggal tidak valid");
+    }
+    if (parsedFrom || parsedTo) {
       where.createdAt = {};
       const w = where.createdAt as Record<string, Date>;
-      if (dateFrom) {
-        const d = new Date(dateFrom);
-        if (!Number.isNaN(d.getTime())) w.gte = d;
-      }
-      if (dateTo) {
-        const d = new Date(dateTo);
-        if (!Number.isNaN(d.getTime())) {
-          d.setHours(23, 59, 59, 999);
-          w.lte = d;
-        }
+      if (parsedFrom) w.gte = parsedFrom;
+      if (parsedTo) {
+        parsedTo.setHours(23, 59, 59, 999);
+        w.lte = parsedTo;
       }
     }
     if (search) where.description = { contains: search };
