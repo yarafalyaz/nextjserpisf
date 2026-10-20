@@ -96,7 +96,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
 
   return (
     <>
-      <form onSubmit={handleSubmit(onSubmit)}>
+      <form onSubmit={handleSubmit(onSubmit)} aria-label={isEdit ? "Formulir ubah pelanggan" : "Formulir tambah pelanggan"} aria-busy={isPending}>
         <FormCard>
           <FormSection title="Informasi Umum">
             <div className="flex flex-col gap-1.5">
@@ -127,8 +127,8 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
               {errors.customerCategoryId && <span className="text-xs text-danger mt-1">{errors.customerCategoryId.message}</span>}
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="name">Nama Pelanggan *</Label>
-              <Input id="name" {...register("name")} placeholder="Nama lengkap" />
+              <Label htmlFor="name">Nama Pelanggan <span className="text-destructive" aria-hidden="true">*</span></Label>
+              <Input id="name" {...register("name")} placeholder="Nama lengkap" aria-required="true" />
               {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
             </div>
             <div className="flex flex-col gap-1.5">
@@ -137,7 +137,7 @@ export function CustomerForm({ customer, generatedCode, enableAutoCode = true, c
               {errors.email && <span className="text-xs text-danger mt-1">{errors.email.message}</span>}
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="phone">Telepon *</Label>
+              <Label htmlFor="phone">Telepon <span className="text-destructive" aria-hidden="true">*</span></Label>
               <Input id="phone" type="tel" inputMode="numeric" {...register("phone")} onInput={(e: FormEvent<HTMLInputElement>) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9+\-() ]/g, "") }} placeholder="08xxxxxxxxxx" />
               {errors.phone && <span className="text-xs text-danger mt-1">{errors.phone.message}</span>}
             </div>
