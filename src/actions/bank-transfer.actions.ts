@@ -13,6 +13,7 @@ import { DocumentSequenceService } from "@/lib/services/document-sequence.servic
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import { bankTransferSchema } from "@/lib/validations/finance.schemas"
 import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 
@@ -37,6 +38,8 @@ function decimal(value: number): Prisma.Decimal {
 export async function createBankTransfer(formData: FormData) {
   try {
     const user = await requirePermission("create_bank_transfers")
+
+    const idempotencyKey = formData.get("idempotencyKey") as string | null
 
     const parsed = parseFormData(bankTransferSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -74,6 +77,8 @@ export async function createBankTransfer(formData: FormData) {
     const totalMovement = amount + adminFee
 
     const transfer = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id)
+
       const created = await tx.bankTransfer.create({
         data: {
           documentNo,

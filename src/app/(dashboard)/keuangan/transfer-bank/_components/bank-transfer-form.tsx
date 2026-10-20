@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { ArrowRight } from "lucide-react"
 
 import { createBankTransfer } from "@/actions/bank-transfer.actions"
@@ -28,6 +28,7 @@ export function BankTransferForm({
   expenseAccounts: TransferAccountOption[]
 }) {
   const router = useRouter()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
 
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
@@ -54,6 +55,7 @@ export function BankTransferForm({
     startTransition(async () => {
       try {
         const formData = new FormData()
+        formData.set("idempotencyKey", idempotencyKeyRef.current)
         formData.set("date", date)
         formData.set("fromAccountId", fromAccountId)
         formData.set("toAccountId", toAccountId)
@@ -67,6 +69,7 @@ export function BankTransferForm({
           showError(result.error || "Gagal menyimpan transfer")
           return
         }
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Transfer berhasil disimpan dan jurnalnya diposting")
         router.push("/keuangan/transfer-bank")
         router.refresh()
