@@ -82,7 +82,7 @@ export function Header({ companyLogo, companyLogoDark }: HeaderProps = {}) {
             type="button"
             variant="ghost"
             size="icon-sm"
-            className="md:hidden"
+            className="size-11 md:hidden"
             aria-label="Cari"
             onClick={() => {
               const event = new KeyboardEvent("keydown", { key: "k", metaKey: true })
@@ -98,7 +98,7 @@ export function Header({ companyLogo, companyLogoDark }: HeaderProps = {}) {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="md:hidden" aria-label="Menu pengguna">
+              <Button variant="ghost" size="icon-sm" className="size-11 md:hidden" aria-label="Menu pengguna">
                 <Avatar className="size-7 rounded-lg">
                   <AvatarImage src={session?.user?.image || ""} alt={session?.user?.name || "Pengguna"} />
                   <AvatarFallback className="rounded-lg text-xs">
