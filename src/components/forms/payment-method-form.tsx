@@ -41,14 +41,14 @@ export function PaymentMethodForm({ method, generatedCode, enableAutoCode = true
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah metode pembayaran" : "Formulir tambah metode pembayaran"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="code">Kode {codeReadOnly ? "" : "*"}</Label>
+          <Label htmlFor="code">Kode {codeReadOnly ? "" : <span className="text-destructive" aria-hidden="true">*</span>}</Label>
           <Input id="code" name="code" placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan kode manual"} required={!codeReadOnly} readOnly={codeReadOnly} className={codeReadOnly ? "bg-muted" : undefined} defaultValue={codeDefault} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nama *</Label>
+          <Label htmlFor="name">Nama <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="name" name="name" placeholder="Contoh: Transfer Bank" required defaultValue={method?.name ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
