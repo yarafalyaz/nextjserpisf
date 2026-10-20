@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest"
+import { expect, vi } from "vitest"
 import { createElement, type ComponentType, type ReactElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
@@ -57,31 +57,31 @@ export function combobox(container: HTMLElement) {
   return container.querySelector('[role="combobox"]')!
 }
 
-// Dedup helper: Sonar hit each single-field brand/category form test's
-// near-identical 12-line block as duplication (33.3% on PR #83 lines 16-27).
-export function describeSingleFieldA11y(title: string, spec: A11yBrandFormSpec) {
-  const mountForm = (record?: { id: number; name: string }) =>
-    createElement(spec.component, record ? { [spec.propName]: record } : {})
-  describe(`${title} — a11y wiring`, () => {
-    it("form aria-label tambah + aria-busy false; input required; bintang dekoratif aria-hidden", () => {
-      withContainer((container) => {
-        const root = mountInto(container, mountForm())
-        const form = container.querySelector("form")!
-        expect(form.getAttribute("aria-label")).toBe(spec.addLabel)
-        expect(form.getAttribute("aria-busy")).toBe("false")
-        expect(container.querySelector("#name")!.getAttribute("required")).not.toBeNull()
-        expect(decorativeStars(form).length).toBe(1)
-        expect(labelTexts(form)).toEqual(expect.arrayContaining([spec.requiredLabel]))
-        unmount(root, container)
-      })
-    })
-    it("mode ubah: label ubah + nama terisi", () => {
-      withContainer((container) => {
-        const root = mountInto(container, mountForm({ id: 3, name: spec.editName }))
-        expect(container.querySelector("form")?.getAttribute("aria-label")).toBe(spec.editLabel)
-        expect(container.querySelector<HTMLInputElement>("#name")?.value).toBe(spec.editName)
-        unmount(root, container)
-      })
-    })
+// Test bodies live in single-field-a11y-forms.test.tsx (S2187: Sonar does not
+// count describe/it forwarded through a helper as tests in the calling file).
+// This helper only mounts + asserts; the calling file owns the `it` blocks.
+export type SingleFieldA11ySpec = A11yBrandFormSpec
+
+export function assertSingleFieldA11yAdd(spec: A11yBrandFormSpec) {
+  const element = createElement(spec.component, {})
+  withContainer((container) => {
+    const root = mountInto(container, element)
+    const form = container.querySelector("form")!
+    expect(form.getAttribute("aria-label")).toBe(spec.addLabel)
+    expect(form.getAttribute("aria-busy")).toBe("false")
+    expect(container.querySelector("#name")!.getAttribute("required")).not.toBeNull()
+    expect(decorativeStars(form).length).toBe(1)
+    expect(labelTexts(form)).toEqual(expect.arrayContaining([spec.requiredLabel]))
+    unmount(root, container)
+  })
+}
+
+export function assertSingleFieldA11yEdit(spec: A11yBrandFormSpec) {
+  const element = createElement(spec.component, { [spec.propName]: { id: 3, name: spec.editName } })
+  withContainer((container) => {
+    const root = mountInto(container, element)
+    expect(container.querySelector("form")?.getAttribute("aria-label")).toBe(spec.editLabel)
+    expect(container.querySelector<HTMLInputElement>("#name")?.value).toBe(spec.editName)
+    unmount(root, container)
   })
 }
