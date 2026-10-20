@@ -9,7 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 
 const mocks = vi.hoisted(() => ({
   prismaMock: {
-    workOrder: { findUnique: vi.fn() },
+    workOrder: { findUnique: vi.fn(), findMany: vi.fn() },
     item: { findMany: vi.fn() },
     materialIssue: { findMany: vi.fn() },
     purchaseOrder: { findMany: vi.fn() },
@@ -25,6 +25,7 @@ function woWith(items: Record<string, unknown>[]) {
   return { id: 9, items }
 }
 function baseMocks() {
+  mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
   mocks.prismaMock.workOrder.findUnique.mockResolvedValue(
     woWith([
       { itemId: 1, description: null, qty: 10, status: "pending" },
