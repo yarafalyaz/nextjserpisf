@@ -93,7 +93,7 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
       const notes = (e.currentTarget.elements.namedItem("notes") as HTMLTextAreaElement | null)?.value
       if (source) formData.set("source", source)
       if (notes) formData.set("notes", notes)
-      if (isActive) formData.set("isActive", "true")
+      formData.set("isActive", isActive ? "true" : "false")
 
       const res = rule?.id
         ? await updateVehicleFitment(rule.id, formData)
