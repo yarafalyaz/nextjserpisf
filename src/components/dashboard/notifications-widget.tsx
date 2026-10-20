@@ -94,7 +94,7 @@ export function NotificationsWidget() {
       icon: ClipboardCheck,
       label: "Menunggu Persetujuan",
       count: data.pendingApprovalCount,
-      href: "/pengaturan/persetujuan?status=menunggu",
+      href: "/pengaturan/persetujuan/menunggu",
       color: "text-info",
       bg: "bg-info/10",
     },
