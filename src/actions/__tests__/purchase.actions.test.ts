@@ -1232,7 +1232,7 @@ describe("Purchase Actions Additional Branch Coverage", () => {
   })
 
   it("verifyGoodsReceipt fails if status not draft", async () => {
-    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "verified" })
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "verified", warehouseId: 1, items: [] })
     const res = await actions.verifyGoodsReceipt(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("hanya bisa diverifikasi dari status draf")

@@ -33,7 +33,7 @@ const mocks = vi.hoisted(() => {
 
   const prismaMock: any = {
     goodsReceipt: {
-      findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 1, purchaseOrderId: 10, items: [] }),
+      findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 1, purchaseOrderId: 10, warehouseId: 5, items: [] }),
     },
     vendorBill: {
       count: vi.fn().mockResolvedValue(0),
@@ -44,7 +44,7 @@ const mocks = vi.hoisted(() => {
     }),
   }
   return {
-    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1 }),
+    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1, roles: ["super_admin"] }),
     prismaMock,
     txMock,
   }

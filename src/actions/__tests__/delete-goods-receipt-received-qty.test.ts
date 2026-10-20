@@ -53,7 +53,7 @@ const mocks = vi.hoisted(() => {
   };
 
   return {
-    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1 }),
+    requirePermissionMock: vi.fn().mockResolvedValue({ id: 1, roles: ["super_admin"] }),
     prismaMock,
     txMock,
   };
@@ -77,10 +77,11 @@ function receivedQtyRecompute(call: unknown[]) {
 describe("deleteGoodsReceipt menghitung ulang receivedQty PO", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.requirePermissionMock.mockResolvedValue({ id: 1 });
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1, roles: ["super_admin"] });
     mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValue({
       id: 1,
       purchaseOrderId: 10,
+      warehouseId: 5,
       items: [],
     });
     mocks.prismaMock.vendorBill.count.mockResolvedValue(0);
