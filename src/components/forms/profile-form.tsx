@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { apiErrorMessage } from "@/lib/utils/api-error-message"
 
 interface ProfileFormProps {
   user: { id: number; name: string; email: string; avatar: string | null }
@@ -43,7 +44,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
         router.refresh()
         showSuccess("Foto profil berhasil diperbarui!")
       } else {
-        showError(data.error || "Upload gagal")
+        showError(apiErrorMessage(data, "Upload gagal"))
       }
     } catch (err) {
       showError("Upload gagal: " + (err as Error).message)
