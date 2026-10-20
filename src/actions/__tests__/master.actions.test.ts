@@ -31,7 +31,11 @@ const mocks = vi.hoisted(() => {
     lead: buildModelMock(),
     bank: buildModelMock(),
     bankStatement: buildModelMock(),
-    tax: buildModelMock(),
+    tax: {
+      ...buildModelMock(),
+      // TaxGroup existence check: reflect requested ids as found rows.
+      findMany: vi.fn(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id }))),
+    },
     barcode: buildModelMock(),
     taxGroup: buildModelMock(),
     taxGroupTax: buildModelMock(),

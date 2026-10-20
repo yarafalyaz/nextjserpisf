@@ -1751,8 +1751,14 @@ export async function createTaxGroup(formData: FormData) {
     await requirePermission("create_taxes");
 
     const name = requireString(formData.get("name"), "name");
-    const taxIds = formData.getAll("taxIds").map((id) => safeId(id)).filter((id): id is number => id !== null);
-    if (taxIds.length !== formData.getAll("taxIds").length || taxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
+    const rawTaxIds = formData.getAll("taxIds");
+    const parsedTaxIds = rawTaxIds.map((id) => safeId(id));
+    if (parsedTaxIds.some((id) => id === null) || parsedTaxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
+    const taxIds = [...new Set(parsedTaxIds as number[])];
+    // tax_group_taxes.tax_id tanpa FK DB: cek pajak ada & belum terhapus pra-tulis,
+    // kalau tidak baris yatim lolos dan kelompok tampil kosong/rusak.
+    const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, deletedAt: null }, select: { id: true } });
+    if (foundTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
 
     const taxGroup = await prisma.taxGroup.create({
       data: {
@@ -1783,8 +1789,12 @@ export async function updateTaxGroup(id: number, formData: FormData) {
   try {
     await requirePermission("edit_taxes");
     const name = requireString(formData.get("name"), "name");
-    const taxIds = formData.getAll("taxIds").map((t) => safeId(t)).filter((id): id is number => id !== null);
-    if (taxIds.length !== formData.getAll("taxIds").length || taxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
+    const rawTaxIds = formData.getAll("taxIds");
+    const parsedTaxIds = rawTaxIds.map((t) => safeId(t));
+    if (parsedTaxIds.some((id) => id === null) || parsedTaxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
+    const taxIds = [...new Set(parsedTaxIds as number[])];
+    const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, deletedAt: null }, select: { id: true } });
+    if (foundTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
     await prisma.$transaction([
       prisma.taxGroupTax.deleteMany({ where: { taxGroupId: id } }),
       prisma.taxGroup.update({
