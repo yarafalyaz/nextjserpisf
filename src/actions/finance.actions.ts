@@ -423,13 +423,25 @@ function parseAndValidateJournalEntries(formData: FormData) {
   const entriesJson = formData.get("entries") as string | null;
   const entries = safeJsonParse<JournalEntryInput[]>(entriesJson) ?? [];
 
+  // Parser uang repo: Number("2.000.000,50") tak terbaca (NaN) dan Number("2.000.000")
+  // bernilai 2 — nominal Indonesia dari klien non-form wajib lewat parseMoneyAmount.
+  const parseEntryAmount = (value: unknown, side: "debit" | "credit"): number => {
+    if (typeof value === "string") {
+      if (!value.trim()) return 0;
+      const parsed = parseMoneyAmount(value);
+      if (parsed === null) throw new Error(`Nominal ${side} tidak valid`);
+      return parsed;
+    }
+    return (value ?? 0) as number;
+  };
+
   // Baris kosong penuh dari form (tanpa akun, nominal 0) dilewati; baris
   // setengah terisi WAJIB ditolak, bukan dibuang diam-diam — membuangnya
   // mengubah makna jurnal yang dikirim pemakai tanpa satu pun error.
   const validEntries: JournalEntryInput[] = [];
   for (const e of entries) {
-    const debit = typeof e.debit === "string" ? Number(e.debit) : (e.debit ?? 0);
-    const credit = typeof e.credit === "string" ? Number(e.credit) : (e.credit ?? 0);
+    const debit = parseEntryAmount(e.debit, "debit");
+    const credit = parseEntryAmount(e.credit, "credit");
     const isBlank = !e.accountId && !debit && !credit;
     if (isBlank) continue;
     if (!Number.isFinite(debit) || !Number.isFinite(credit)) {
