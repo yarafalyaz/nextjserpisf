@@ -18,6 +18,7 @@
  *
  * Pure (tanpa Prisma/DOM) supaya bisa diuji.
  */
+import { safeAdd } from "@/lib/utils/math"
 
 export const UNCATEGORISED_LABEL = "Tanpa Kategori"
 
@@ -58,7 +59,7 @@ export function accumulatedDepreciationByAsset(
   for (const entry of entries) {
     if (entry.type !== DEPRECIATION_TYPE) continue
     if (entry.date.getTime() > cutoffTime) continue
-    totals.set(entry.assetId, (totals.get(entry.assetId) ?? 0) + Number(entry.amount))
+    totals.set(entry.assetId, safeAdd(totals.get(entry.assetId) ?? 0, Number(entry.amount), 2))
   }
 
   return totals
