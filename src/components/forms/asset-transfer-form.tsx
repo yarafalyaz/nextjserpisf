@@ -86,16 +86,23 @@ export function AssetTransferForm({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={transfer?.id ? "Formulir ubah transfer aset" : "Formulir tambah transfer aset"}
+    >
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label>Aset *</Label>
+            <Label>
+              Aset <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Combobox
               name="assetId"
               value={assetId || null}
               onChange={(key) => setAssetId(key ?? "")}
               placeholder="Cari aset..."
+              required
               options={assets.map((a) => ({
                 value: String(a.id),
                 label: `${a.code} - ${a.name}`,
@@ -126,7 +133,9 @@ export function AssetTransferForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="toLocation">Ke Lokasi *</Label>
+            <Label htmlFor="toLocation">
+              Ke Lokasi <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Input
               id="toLocation"
               name="toLocation"
