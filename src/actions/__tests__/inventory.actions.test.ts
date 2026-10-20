@@ -55,6 +55,8 @@ const mocks = vi.hoisted(() => {
       if (typeof ops === "function") return ops(prismaMock);
       return Promise.all(ops);
     }),
+    $queryRaw: vi.fn().mockResolvedValue([]),
+    $executeRaw: vi.fn().mockResolvedValue(0),
   };
 
   return {
@@ -1048,6 +1050,68 @@ describe("stocktake session (P1-5)", () => {
     const res = await actions.postStocktakeSession(1);
     expect(res.success).toBe(false);
     expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
+  // AUD-01: klaim posting harus satu transaksi dengan lock baris sesi,
+  // untuk cabang tanpa selisih maupun dengan selisih.
+  it("postStocktakeSession tanpa selisih: lock sesi lalu posted dalam satu transaksi", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({ warehouseId: 1 });
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      id: 1,
+      warehouseId: 1,
+      status: "approved",
+      documentNo: "STK-1",
+      lines: [
+        { itemId: 10, systemQty: 10, count1: 10, count2: null, item: { cost: 5 } },
+      ],
+    });
+    const res = await actions.postStocktakeSession(1);
+    expect(res).toEqual({ success: true, adjustmentId: null });
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0];
+    const updateOrder = mocks.prismaMock.stocktakeSession.update.mock.invocationCallOrder[0];
+    expect(lockOrder).toBeLessThan(updateOrder);
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.stocktakeSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "posted" } }),
+    );
+  });
+
+  it("postStocktakeSession berselisih: hanya pemegang lock yang membuat adjustment", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({ warehouseId: 1 });
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      id: 1,
+      warehouseId: 1,
+      status: "approved",
+      documentNo: "STK-1",
+      lines: [
+        { itemId: 10, systemQty: 10, count1: 8, count2: null, item: { cost: 5 } },
+      ],
+    });
+    mocks.prismaMock.stockAdjustment.create.mockResolvedValue({ id: 99 });
+    const res = await actions.postStocktakeSession(1);
+    expect(res).toEqual({ success: true, adjustmentId: 99 });
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0];
+    const createOrder = mocks.prismaMock.stockAdjustment.create.mock.invocationCallOrder[0];
+    expect(lockOrder).toBeLessThan(createOrder);
+    expect(mocks.prismaMock.stocktakeSession.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { status: "posted", adjustmentId: 99 } }),
+    );
+  });
+
+  it("postStocktakeSession menolak sesi yang sudah posted (kalah klaim)", async () => {
+    mocks.prismaMock.stocktakeSession.findUniqueOrThrow.mockResolvedValue({ warehouseId: 1 });
+    mocks.prismaMock.stocktakeSession.findUnique.mockResolvedValue({
+      id: 1,
+      warehouseId: 1,
+      status: "posted",
+      documentNo: "STK-1",
+      lines: [],
+    });
+    const res = await actions.postStocktakeSession(1);
+    expect(res.success).toBe(false);
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.stocktakeSession.update).not.toHaveBeenCalled();
   });
 });
 
