@@ -8,6 +8,12 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { sendQuotation, acceptQuotation, rejectQuotation, reviseQuotation } from "@/actions/sales.actions"
+import {
+  LOST_REASON_CATEGORIES,
+  formatLostReasonReason,
+  isLostReasonCategoryKey,
+  type LostReasonCategoryKey,
+} from "@/lib/reports/quotation-outcome"
 
 /**
  * Alur penawaran: konsep -> terkirim -> diterima/ditolak.
@@ -25,6 +31,7 @@ export function QuotationFlowActions({ status, id }: { status: string; id: numbe
   const [isRejectOpen, setIsRejectOpen] = useState(false)
   const [reason, setReason] = useState("")
   const [rejectReason, setRejectReason] = useState("")
+  const [lostCategory, setLostCategory] = useState<LostReasonCategoryKey | "">("")
 
   function run(
     action: () => Promise<{ success: boolean; error?: string } | void>,
@@ -61,14 +68,27 @@ export function QuotationFlowActions({ status, id }: { status: string; id: numbe
   }
 
   function handleReject() {
+    // F-2026-10-20-101: kategori kalah wajib dipilih agar penolakan bisa
+    // diagregasi; teks bebas tetap opsional sebagai pendamping.
+    if (!isLostReasonCategoryKey(lostCategory)) {
+      showError("Kategori alasan penolakan wajib dipilih")
+      return
+    }
     startTransition(async () => {
-      const result = await rejectQuotation(id, rejectReason.trim() || undefined)
+      // Kategori dikirim sebagai awalan terstruktur pada `reason` existing;
+      // server membungkusnya ke description histori tanpa ubah kontrak aksi.
+      const reason = formatLostReasonReason({
+        category: lostCategory,
+        freeText: rejectReason.trim() || undefined,
+      })
+      const result = await rejectQuotation(id, reason)
       if (result && result.success === false) {
         showError(result.error || "Gagal menolak penawaran")
         return
       }
       showSuccess("Penawaran ditolak")
       setRejectReason("")
+      setLostCategory("")
       setIsRejectOpen(false)
       router.refresh()
     })
@@ -111,7 +131,9 @@ export function QuotationFlowActions({ status, id }: { status: string; id: numbe
           <XCircle size={14} aria-hidden="true" /> Tolak
         </Button>
 
-        {/* Alasan tolak opsional (F-38a): kosong = perilaku lama tanpa alasan. */}
+        {/* Kategori kalah wajib + teks bebas opsional (F-2026-10-20-101,
+            lanjutan F-38a): kategori dikirim sebagai awalan terstruktur
+            pada reason agar histori bisa diagregasi per periode. */}
         <ConfirmDialog
           isOpen={isRejectOpen}
           onOpenChange={setIsRejectOpen}
@@ -125,6 +147,23 @@ export function QuotationFlowActions({ status, id }: { status: string; id: numbe
           <span className="block mb-2">
             Penawaran ditandai ditolak oleh pelanggan.
           </span>
+          <label className="block mb-2 text-sm font-medium" htmlFor="lost-reason-category">
+            Kategori alasan penolakan <span aria-hidden="true">*</span>
+          </label>
+          <select
+            id="lost-reason-category"
+            className="mb-3 block w-full rounded-md border bg-background px-3 py-2 text-sm"
+            value={lostCategory}
+            onChange={(e) => setLostCategory(e.target.value as LostReasonCategoryKey | "")}
+            aria-required="true"
+          >
+            <option value="">Pilih kategori alasan</option>
+            {LOST_REASON_CATEGORIES.map((category) => (
+              <option key={category.key} value={category.key}>
+                {category.label}
+              </option>
+            ))}
+          </select>
           <Textarea
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
