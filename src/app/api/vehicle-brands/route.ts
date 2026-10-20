@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db/prisma";
 import { hasPermission } from "@/lib/auth/permissions";
 import { NextResponse } from "next/server";
 import { apiError } from "@/lib/api-response";
+import { parsePagination } from "@/lib/utils/pagination";
 
 export async function GET(request: Request) {
   try {
@@ -11,16 +12,12 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const cari = searchParams.get("cari") || undefined;
-    const halamanRaw = Number.parseInt(searchParams.get("halaman") || "1", 10);
-    const halaman = Number.isFinite(halamanRaw) ? Math.max(1, halamanRaw) : 1;
-    const pageSizeRaw = Number.parseInt(
-      searchParams.get("pageSize") || "50",
-      10,
-    );
-    const pageSize = Number.isFinite(pageSizeRaw)
-      ? Math.min(100, Math.max(1, pageSizeRaw))
-      : 50;
-    const skip = (halaman - 1) * pageSize;
+    // Helper bersama route lain: parseInt per-route memakai default 50 di sini
+    // tetapi 100 di activity-logs, dan fallback NaN lokal pernah divergen.
+    const { page: halaman, pageSize, skip } = parsePagination({
+      halaman: searchParams.get("halaman") ?? undefined,
+      pageSize: searchParams.get("pageSize") ?? undefined,
+    });
 
     const where = cari ? { name: { contains: cari } } : {};
 
