@@ -261,7 +261,25 @@ export async function consumeFifoLayers(
       }
       
       const batchUpdates: Promise<any>[] = []
-      
+      // Dedup Sonar: satu helper dekremen lot untuk kedua jalur (FEFO fisik
+      // dan presisi lapisan) — sebelumnya dua blok update identik.
+      const decrementBatch = (
+        batch: { id: number; batchNumber: string; warehouseId: number },
+        deduct: number
+      ) => {
+        batchUpdates.push(
+          tx.itemBatch.update({
+            where: { id: batch.id },
+            data: { qty: { decrement: deduct } },
+          })
+        )
+        consumedBatches.push({
+          batchNumber: batch.batchNumber,
+          warehouseId: batch.warehouseId,
+          qty: Math.round(deduct * 100) / 100,
+        })
+      }
+
       if (physicalBatches) {
         // FEFO fisik: total yang dikonsumsi lapisan FIFO didekremen dari lot
         // dengan expiry tercepat lebih dulu, tanpa expiry terakhir. Jumlah
@@ -277,18 +295,8 @@ export async function consumeFifoLayers(
           if (warehouseId != null && batch.warehouseId !== warehouseId) continue
           const deduct = Math.min(remainingToDecrement, Number(batch.qty))
           if (deduct > 0) {
-            batchUpdates.push(
-              tx.itemBatch.update({
-                where: { id: batch.id },
-                data: { qty: { decrement: deduct } },
-              })
-            )
+            decrementBatch(batch, deduct)
             remainingToDecrement = Math.round((remainingToDecrement - deduct) * 100) / 100
-            consumedBatches.push({
-              batchNumber: batch.batchNumber,
-              warehouseId: batch.warehouseId,
-              qty: Math.round(deduct * 100) / 100,
-            })
           }
         }
       } else {
@@ -306,21 +314,11 @@ export async function consumeFifoLayers(
             if (remainingToDecrement <= 0) break
             const deduct = Math.min(remainingToDecrement, Number(batch.qty))
             if (deduct > 0) {
-              batchUpdates.push(
-                tx.itemBatch.update({
-                  where: { id: batch.id },
-                  data: { qty: { decrement: deduct } },
-                })
-              )
-              remainingToDecrement -= deduct
               // Record only what was ACTUALLY decremented (a missing/undersized lot
               // row leaves part of qtyOut undecremented); reporting qtyOut here would
               // make a transfer re-create stock that was never removed at the source.
-              consumedBatches.push({
-                batchNumber,
-                warehouseId: batch.warehouseId,
-                qty: Math.round(deduct * 100) / 100,
-              })
+              decrementBatch({ ...batch, batchNumber }, deduct)
+              remainingToDecrement -= deduct
             }
           }
         }
