@@ -60,6 +60,14 @@ async function loadItemNames(ids: (number | null)[]): Promise<Map<number, string
   return names
 }
 
+// Pihak dokumen hanya dirender name/address/street/phone di kop cetak
+// (quotation tambah email). include customer:true memuat baris utuh -
+// taxId/creditLimit pelanggan, rekening bank + NPWP vendor, createdBy dst -
+// ke memori handler tanpa guna. Pola select sempit sama dengan
+// paymentMethod/shippingMethod/withholdingType di berkas ini.
+const PRINT_CUSTOMER_SELECT = { name: true, address: true, street: true, phone: true } as const
+const PRINT_VENDOR_SELECT = { name: true, address: true, street: true, phone: true } as const
+
 export async function GET(request: Request) {
   const session = await auth()
   if (!session?.user) {
@@ -124,7 +132,7 @@ export async function GET(request: Request) {
     if (type === "invoice") {
       const doc = await prisma.salesInvoice.findUnique({
         where: { id },
-        include: { customer: true, items: true },
+        include: { customer: { select: PRINT_CUSTOMER_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
@@ -164,12 +172,12 @@ export async function GET(request: Request) {
       const doc = await prisma.quotation.findUnique({
         where: { id },
         include: {
-          customer: true,
+          customer: { select: { ...PRINT_CUSTOMER_SELECT, email: true } },
           customerVehicle: {
             include: {
               vehicle: {
                 include: {
-                  variant: { include: { model: { include: { brand: true } } } },
+                  variant: { include: { model: { include: { brand: { select: { name: true } } } } } },
                 },
               },
             },
@@ -250,7 +258,7 @@ export async function GET(request: Request) {
     if (type === "order") {
       const doc = await prisma.salesOrder.findUnique({
         where: { id },
-        include: { customer: true, items: true },
+        include: { customer: { select: PRINT_CUSTOMER_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
@@ -289,7 +297,7 @@ export async function GET(request: Request) {
       const doc = await prisma.workOrder.findUnique({
         where: { id },
         include: {
-          customer: true,
+          customer: { select: PRINT_CUSTOMER_SELECT },
           items: true,
           quotation: { select: { documentNo: true } },
           project: { select: { name: true } },
@@ -338,7 +346,7 @@ export async function GET(request: Request) {
     if (type === "purchase-order") {
       const doc = await prisma.purchaseOrder.findUnique({
         where: { id },
-        include: { vendor: true, items: true },
+        include: { vendor: { select: PRINT_VENDOR_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
@@ -387,7 +395,7 @@ export async function GET(request: Request) {
       const doc = await prisma.deliveryOrder.findUnique({
         where: { id },
         include: {
-          salesOrder: { include: { customer: true } },
+          salesOrder: { include: { customer: { select: PRINT_CUSTOMER_SELECT } } },
           items: { include: { item: { select: { name: true, unitOfMeasure: true } } } },
         },
       })
@@ -423,7 +431,7 @@ export async function GET(request: Request) {
     }
 
     if (type === "down-payment") {
-      const doc = await prisma.downPayment.findUnique({ where: { id }, include: { customer: true } })
+      const doc = await prisma.downPayment.findUnique({ where: { id }, include: { customer: { select: PRINT_CUSTOMER_SELECT } } })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
       const amount = Number(doc.amount)
@@ -457,7 +465,7 @@ export async function GET(request: Request) {
       const doc = await prisma.salesPayment.findUnique({
         where: { id },
         // SalesPayment hanya menyimpan customerId — pelanggan diambil dari faktur.
-        include: { salesInvoice: { include: { customer: true } } },
+        include: { salesInvoice: { include: { customer: { select: PRINT_CUSTOMER_SELECT } } } },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
@@ -502,7 +510,7 @@ export async function GET(request: Request) {
       const doc = await prisma.vendorPayment.findUnique({
         where: { id },
         include: {
-          vendor: true,
+          vendor: { select: PRINT_VENDOR_SELECT },
           allocations: { include: { vendorBill: { select: { documentNo: true } } } },
         },
       })
@@ -552,7 +560,7 @@ export async function GET(request: Request) {
       const doc = await prisma.salesReturn.findUnique({
         where: { id },
         include: {
-          customer: true,
+          customer: { select: PRINT_CUSTOMER_SELECT },
           salesInvoice: { select: { documentNo: true } },
           items: true,
         },
@@ -597,7 +605,7 @@ export async function GET(request: Request) {
       const doc = await prisma.purchaseReturn.findUnique({
         where: { id },
         include: {
-          purchaseOrder: { include: { vendor: true } },
+          purchaseOrder: { include: { vendor: { select: PRINT_VENDOR_SELECT } } },
           items: true,
         },
       })
@@ -637,7 +645,7 @@ export async function GET(request: Request) {
       const doc = await prisma.goodsReceipt.findUnique({
         where: { id },
         include: {
-          purchaseOrder: { include: { vendor: true } },
+          purchaseOrder: { include: { vendor: { select: PRINT_VENDOR_SELECT } } },
           warehouse: { select: { name: true } },
           items: true,
         },
@@ -683,7 +691,7 @@ export async function GET(request: Request) {
     if (type === "purchase-request") {
       const doc = await prisma.purchaseRequest.findUnique({
         where: { id },
-        include: { vendor: true, items: true },
+        include: { vendor: { select: PRINT_VENDOR_SELECT }, items: true },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
@@ -719,7 +727,7 @@ export async function GET(request: Request) {
     if (type === "vendor-bill") {
       const doc = await prisma.vendorBill.findUnique({
         where: { id },
-        include: { vendor: true, items: true, withholdingType: { select: { name: true, rate: true } } },
+        include: { vendor: { select: PRINT_VENDOR_SELECT }, items: true, withholdingType: { select: { name: true, rate: true } } },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 
@@ -773,7 +781,7 @@ export async function GET(request: Request) {
     if (type === "expense") {
       const doc = await prisma.expense.findUnique({
         where: { id },
-        include: { vendor: true, category: true },
+        include: { vendor: { select: PRINT_VENDOR_SELECT }, category: { select: { label: true } } },
       })
       if (!doc) return apiError("NOT_FOUND", "Dokumen tidak ditemukan")
 

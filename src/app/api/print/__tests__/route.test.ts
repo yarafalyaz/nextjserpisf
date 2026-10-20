@@ -304,6 +304,52 @@ describe("GET /api/print", () => {
     })
   })
 
+  it("query pihak cetak memakai select sempit, bukan baris utuh (bocor PII internal)", async () => {
+    mocks.salesInvoiceFindUnique.mockResolvedValue({
+      documentNo: "INV-1", date: new Date(), dueDate: null,
+      subtotal: 0, grandTotal: 0,
+      customer: { name: "X", address: null, street: "Jl B", phone: null },
+      items: [],
+    })
+    mocks.quotationFindUnique.mockResolvedValue({
+      documentNo: "Q-1", date: new Date(), validUntil: null,
+      paymentMethod: null, shippingMethod: null,
+      subtotal: 0, discount: 0, tax: 0, grandTotal: 0,
+      customer: { name: "X", address: "a", street: null, phone: "", email: "c@x.id" },
+      customerVehicle: null, sections: [],
+    })
+    mocks.purchaseOrderFindUnique.mockResolvedValue({
+      documentNo: "PO-1", date: new Date(), expectedDate: null,
+      subtotal: 0, discount: 0, tax: 0, grandTotal: 0,
+      vendor: { name: "V", address: null, street: "Jl V", phone: null },
+      items: [],
+    })
+    mocks.expenseFindUnique.mockResolvedValue({
+      documentNo: "EXP-1", date: new Date(), amount: 1000,
+      referenceNo: null, description: "x",
+      vendor: { name: "V", address: null, street: null, phone: null },
+      category: { label: "Lain-lain" },
+    })
+
+    await GET(makeReq("http://localhost/api/print?tipe=invoice&id=1"))
+    await GET(makeReq("http://localhost/api/print?tipe=quotation&id=1"))
+    await GET(makeReq("http://localhost/api/print?tipe=purchase-order&id=1"))
+    await GET(makeReq("http://localhost/api/print?tipe=expense&id=1"))
+
+    const partySelect = { name: true, address: true, street: true, phone: true }
+    expect(mocks.salesInvoiceFindUnique.mock.calls[0][0].include.customer).toEqual({ select: partySelect })
+    expect(mocks.quotationFindUnique.mock.calls[0][0].include.customer).toEqual({
+      select: { ...partySelect, email: true },
+    })
+    // Merek kendaraan hanya nama yang dirender di kop penawaran.
+    expect(
+      mocks.quotationFindUnique.mock.calls[0][0].include.customerVehicle.include.vehicle.include.variant.include.model.include.brand,
+    ).toEqual({ select: { name: true } })
+    expect(mocks.purchaseOrderFindUnique.mock.calls[0][0].include.vendor).toEqual({ select: partySelect })
+    expect(mocks.expenseFindUnique.mock.calls[0][0].include.vendor).toEqual({ select: partySelect })
+    expect(mocks.expenseFindUnique.mock.calls[0][0].include.category).toEqual({ select: { label: true } })
+  })
+
   it("returns 400 for unsupported type", async () => {
     const res = await GET(makeReq("http://localhost/api/print?tipe=random&id=1"))
     expect(res.status).toBe(400)
