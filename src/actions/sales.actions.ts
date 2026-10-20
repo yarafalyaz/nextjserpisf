@@ -1603,10 +1603,21 @@ export async function deleteQuotation(id: number) {
 
     const workOrders = await tx.workOrder.findMany({ where: { quotationId: id }, select: { id: true, projectId: true } })
     const workOrderIds = workOrders.map((wo) => wo.id)
-    const projectIds = workOrders.map((wo) => wo.projectId).filter((pid): pid is number => pid !== null)
+    const candidateProjectIds = [...new Set(workOrders.map((wo) => wo.projectId).filter((pid): pid is number => pid !== null))]
     if (workOrderIds.length) await tx.workOrderItem.deleteMany({ where: { workOrderId: { in: workOrderIds } } })
     if (workOrderIds.length) await tx.workOrder.deleteMany({ where: { id: { in: workOrderIds } } })
-    if (projectIds.length) await tx.project.deleteMany({ where: { id: { in: projectIds } } })
+    // Project is shared (WorkOrder.projectId independent of quotationId): only
+    // delete candidate projects no longer referenced by any remaining work
+    // order. Deleting a shared project would fail FK Restrict on siblings or
+    // orphan their project link.
+    if (candidateProjectIds.length) {
+      const projects = await tx.project.findMany({
+        where: { id: { in: candidateProjectIds } },
+        select: { id: true, workOrders: { select: { id: true } } },
+      })
+      const orphanProjectIds = projects.filter((p) => p.workOrders.length === 0).map((p) => p.id)
+      if (orphanProjectIds.length) await tx.project.deleteMany({ where: { id: { in: orphanProjectIds } } })
+    }
 
     // Reverse the GL journal of every Down Payment tied to this quotation
     // BEFORE deleting the rows. Without this, the DP journal (Dr Bank / Cr
