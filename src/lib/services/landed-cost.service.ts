@@ -193,11 +193,18 @@ export function allocateLandedCost(input: AllocateLandedCostInput): AllocateLand
   const lineAdditions = lines.map((_, i) =>
     round2(chargeAdditions[i] + adminAdditions[i] - discountAdditions[i])
   )
+  // Per-unit WAJIB sen-exact (2dp): nilai ini dijumlah ke unit cost lalu ditulis
+  // ke StockMove.cost + InventoryLayer.unitCost (Decimal(15,2)) DAN dipakai jurnal
+  // GR sebagai qty × cost. Tanpa bulat, jurnal memesan 3 × 1033,333… = 3100,00
+  // sedangkan layer menyimpan 1033,33 sehingga FIFO hanya melepas 3099,99 —
+  // GL vs subledger stok selisih Rp0,01/baris. Sisa pool tak terbagi per unit
+  // (maks < Rp0,01 × qty) memang tak bisa disimpan di kolom 2dp; lineAdditions/
+  // absorbed tetap total pool eksak untuk pelaporan alokasi.
   const perUnitAdditions = lines.map((l, i) =>
-    l.baseQty > 0 ? lineAdditions[i] / l.baseQty : 0
+    l.baseQty > 0 ? round2(lineAdditions[i] / l.baseQty) : 0
   )
   const adminPerUnitAdditions = lines.map((l, i) =>
-    l.baseQty > 0 ? adminAdditions[i] / l.baseQty : 0
+    l.baseQty > 0 ? round2(adminAdditions[i] / l.baseQty) : 0
   )
 
   return {
