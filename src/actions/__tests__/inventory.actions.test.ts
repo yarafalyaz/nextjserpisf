@@ -983,6 +983,7 @@ describe("stocktake session (P1-5)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["admin"] });
+    mocks.prismaMock.warehouse.findUnique.mockResolvedValue({ id: 1 });
     // Scope: admin penuh — getWarehouseScope default mock? Set akses dilalui
     // dengan warehouse scope "all".
   });
@@ -1054,6 +1055,8 @@ describe("remnant (P1-5)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["admin"] });
+    mocks.prismaMock.item.findUnique.mockResolvedValue({ id: 1 });
+    mocks.prismaMock.warehouse.findUnique.mockResolvedValue({ id: 1 });
   });
 
   it("createRemnant menolak unitCost negatif bukan diam-diam 0", async () => {
@@ -1089,6 +1092,30 @@ describe("remnant (P1-5)", () => {
     expect(arg.data.uom).toHaveLength(32);
     expect(arg.data.unitCost).toBe(1500);
     expect(arg.data.sourceId).toBeNull();
+  });
+
+  it("createStocktakeSession menolak gudang yang tidak ada (bukan P2003 mentah)", async () => {
+    mocks.prismaMock.warehouse.findUnique.mockResolvedValue(null);
+    const fd = new FormData();
+    fd.set("warehouseId", "999");
+    fd.set("date", "2026-06-13");
+    const res = await actions.createStocktakeSession(fd);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/Gudang tidak ditemukan/);
+    expect(mocks.prismaMock.stocktakeSession.create).not.toHaveBeenCalled();
+  });
+
+  it("createRemnant menolak barang yang tidak ada (bukan P2003 mentah)", async () => {
+    mocks.prismaMock.item.findUnique.mockResolvedValue(null);
+    const fd = new FormData();
+    fd.set("itemId", "999");
+    fd.set("warehouseId", "1");
+    fd.set("qty", "2");
+    fd.set("unitCost", "100");
+    const res = await actions.createRemnant(fd);
+    expect(res.success).toBe(false);
+    expect(String((res as { error?: string }).error ?? "")).toMatch(/Barang tidak ditemukan/);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
   });
 
   it("consumeRemnant only claims usable rows (atomic)", async () => {
