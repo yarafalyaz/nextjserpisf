@@ -262,11 +262,11 @@ export function ActivityLogTable({
           <Button
             variant="ghost"
             size="sm"
-            className="size-10 p-0"
+            className="size-11 p-0"
             aria-label="Lihat rincian perubahan"
             onClick={() => setDetailRow(row.original)}
           >
-            <Eye className="h-3.5 w-3.5" />
+            <Eye className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
         ) : null
       },
@@ -338,9 +338,9 @@ export function ActivityLogTable({
         <a
           href={buildExportUrl()}
           download
-          className="inline-flex h-8 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
+          className="inline-flex h-11 items-center gap-1.5 rounded-md border bg-background px-3 text-xs font-medium hover:bg-accent hover:text-accent-foreground"
         >
-          <Download className="h-3.5 w-3.5" />
+          <Download className="h-3.5 w-3.5" aria-hidden="true" />
           CSV
         </a>
       </div>
