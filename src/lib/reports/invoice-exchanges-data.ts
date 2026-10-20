@@ -7,12 +7,23 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { sumMoney } from "@/lib/reports/aging-amounts"
 import {
   buildInvoiceExchangeListing,
   type ExchangeReportLine,
   type ExchangeReportResult,
 } from "@/lib/finance/invoice-exchange"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+
+/** Σ grandTotal/paidAmount faktur diserahkan, presisi sen. */
+export function sumExchangeAmounts(
+  items: readonly { salesInvoice: { grandTotal: unknown; paidAmount: unknown } }[],
+): { amount: number; paid: number } {
+  return {
+    amount: sumMoney(items.map((i) => i.salesInvoice.grandTotal as never)),
+    paid: sumMoney(items.map((i) => i.salesInvoice.paidAmount as never)),
+  }
+}
 
 export interface InvoiceExchangesReport {
   result: ExchangeReportResult
@@ -44,8 +55,7 @@ export async function loadInvoiceExchanges(period: {
     receiptNumber: exchange.receiptNumber,
     dueDate: exchange.dueDate,
     invoiceCount: exchange.items.length,
-    amount: exchange.items.reduce((sum, item) => sum + Number(item.salesInvoice.grandTotal), 0),
-    paid: exchange.items.reduce((sum, item) => sum + Number(item.salesInvoice.paidAmount), 0),
+    ...sumExchangeAmounts(exchange.items),
   }))
 
   return { result: buildInvoiceExchangeListing(lines), ...rangePeriodLabels(period) }

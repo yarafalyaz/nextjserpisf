@@ -3,12 +3,23 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { sumMoney } from "@/lib/reports/aging-amounts"
 import {
   buildPurchaseProcessHistory,
   type PurchaseProcessLine,
   type PurchaseProcessResult,
 } from "@/lib/reports/purchase-process-history"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+
+/** Σ grandTotal/paidAmount tagihan, presisi sen (bukan float mentah). */
+export function sumBillAmounts(
+  bills: readonly { grandTotal: unknown; paidAmount: unknown }[],
+): { billed: number; paid: number } {
+  return {
+    billed: sumMoney(bills.map((b) => b.grandTotal as never)),
+    paid: sumMoney(bills.map((b) => b.paidAmount as never)),
+  }
+}
 
 export interface PurchaseProcessReport {
   result: PurchaseProcessResult
@@ -42,8 +53,7 @@ export async function loadPurchaseProcessHistory(period: {
     requestNo: order.purchaseRequest?.documentNo ?? null,
     receiptCount: order.goodsReceipts.length,
     billCount: order.vendorBills.length,
-    billed: order.vendorBills.reduce((sum, bill) => sum + Number(bill.grandTotal), 0),
-    paid: order.vendorBills.reduce((sum, bill) => sum + Number(bill.paidAmount), 0),
+    ...sumBillAmounts(order.vendorBills),
   }))
 
   return {
