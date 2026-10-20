@@ -112,6 +112,45 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
     const documentNo = await generateDocumentNumber("TKF", "simple")
 
     const created = await prisma.$transaction(async (tx) => {
+      // Kunci baris faktur lalu putuskan ulang di dalam tx: cek di luar tx
+      // tidak menahan dua submit bersamaan (atau pembayaran bersamaan) —
+      // keduanya lolos, faktur yang sama tercatat diserahkan dua kali dan
+      // laporan tukar faktur menghitung nilainya ganda. Tidak ada unique
+      // constraint di (salesInvoiceId), jadi lock inilah penjaganya.
+      const sortedIds = [...invoiceIds].sort((a, b) => a - b)
+      await tx.$executeRaw`SELECT id FROM sales_invoices WHERE id IN (${Prisma.join(sortedIds)}) ORDER BY id FOR UPDATE`
+
+      const lockedInvoices = await tx.salesInvoice.findMany({
+        where: { id: { in: invoiceIds }, deletedAt: null },
+        select: { id: true, documentNo: true, customerId: true, grandTotal: true, paidAmount: true, status: true },
+      })
+      if (lockedInvoices.length !== invoiceIds.length) {
+        throw new Error("Ada faktur yang tidak ditemukan.")
+      }
+      const wrongLocked = lockedInvoices.filter((invoice) => invoice.customerId !== customerId)
+      if (wrongLocked.length > 0) {
+        throw new Error(`Faktur berikut bukan milik pelanggan ini: ${wrongLocked.map((invoice) => invoice.documentNo).join(", ")}.`)
+      }
+      const settledLocked = lockedInvoices.filter(
+        (invoice) => invoice.status === "paid" || Number(invoice.grandTotal) - Number(invoice.paidAmount) <= 0.005,
+      )
+      if (settledLocked.length > 0) {
+        throw new Error(`Faktur berikut sudah lunas sehingga tidak perlu diserahkan: ${settledLocked.map((invoice) => invoice.documentNo).join(", ")}.`)
+      }
+      const notExchangeableLocked = lockedInvoices.filter((invoice) => !(EXCHANGEABLE_STATUSES as readonly string[]).includes(invoice.status))
+      if (notExchangeableLocked.length > 0) {
+        throw new Error(`Faktur berikut belum diposting sehingga belum bisa diserahkan: ${notExchangeableLocked.map((invoice) => invoice.documentNo).join(", ")}.`)
+      }
+      const alreadyLocked = await tx.invoiceExchangeItem.findMany({
+        where: { salesInvoiceId: { in: invoiceIds }, exchange: { deletedAt: null } },
+        select: { salesInvoiceId: true },
+      })
+      if (alreadyLocked.length > 0) {
+        const ids = new Set(alreadyLocked.map((item) => item.salesInvoiceId))
+        const numbers = lockedInvoices.filter((invoice) => ids.has(invoice.id)).map((invoice) => invoice.documentNo)
+        throw new Error(`Faktur berikut sudah pernah diserahkan: ${numbers.join(", ")}.`)
+      }
+
       const exchange = await tx.invoiceExchange.create({
         data: {
           slug: await nextSlug("invoiceExchange", documentNo),
@@ -126,7 +165,7 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
       })
 
       await tx.invoiceExchangeItem.createMany({
-        data: invoices.map((invoice) => ({
+        data: lockedInvoices.map((invoice) => ({
           exchangeId: exchange.id,
           salesInvoiceId: invoice.id,
           amount: new Prisma.Decimal(Number(invoice.grandTotal).toFixed(2)),
