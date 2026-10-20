@@ -81,7 +81,7 @@ export function NotificationsWidget() {
       icon: Package,
       label: "Stok Menipis",
       count: data.lowStockCount,
-      href: "/master/barang/stok-menipis",
+      href: "/master/barang/stokmenipis",
       color: "text-warning",
       bg: "bg-warning/10",
     },

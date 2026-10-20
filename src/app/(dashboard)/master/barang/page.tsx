@@ -26,8 +26,8 @@ export default async function ItemsPage({
 
   const params = await searchParams
 
-  // Rute lama ?stok=menipis pindah ke /master/barang/stok-menipis.
-  if (params.stok === "menipis") redirect("/master/barang/stok-menipis")
+  // Rute lama ?stok=menipis pindah ke /master/barang/stokmenipis.
+  if (params.stok === "menipis") redirect("/master/barang/stokmenipis")
 
   const { page, pageSize, take } = parsePagination(params)
 

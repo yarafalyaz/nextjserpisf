@@ -127,9 +127,9 @@ export default async function LowStockItemsPage({
         total={total}
         page={page}
         pageSize={pageSize}
-        toolbar={<AppSearchField placeholder="Cari SKU atau nama barang..." action="/master/barang/stok-menipis" />}
+        toolbar={<AppSearchField placeholder="Cari SKU atau nama barang..." action="/master/barang/stokmenipis" />}
         filters={
-          <form className="flex gap-2 flex-wrap" action="/master/barang/stok-menipis">
+          <form className="flex gap-2 flex-wrap" action="/master/barang/stokmenipis">
             <FormSelect
               name="category"
               defaultValue={params.category || ""}
