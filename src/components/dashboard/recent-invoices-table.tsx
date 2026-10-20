@@ -305,12 +305,12 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                   onChange={(event) => setQuery(event.target.value)}
                   placeholder="Cari faktur atau pelanggan"
                   aria-label="Cari faktur atau pelanggan"
-                  className="h-8 pl-8"
+                  className="pl-8"
                 />
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-8 shrink-0" aria-label="Pilih kolom tabel">
+                  <Button variant="outline" size="sm" className="min-h-11 shrink-0" aria-label="Pilih kolom tabel">
                     <SlidersHorizontal className="size-4" aria-hidden="true" />
                     Kolom
                   </Button>
@@ -415,7 +415,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="size-10"
+                  className="size-11"
                   onClick={() => table.previousPage()}
                   disabled={!table.getCanPreviousPage()}
                   aria-label="Halaman sebelumnya"
@@ -425,7 +425,7 @@ export function RecentInvoicesTable({ data }: { data: InvoiceRow[] }) {
                 <Button
                   variant="outline"
                   size="icon"
-                  className="size-10"
+                  className="size-11"
                   onClick={() => table.nextPage()}
                   disabled={!table.getCanNextPage()}
                   aria-label="Halaman berikutnya"
