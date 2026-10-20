@@ -22,6 +22,7 @@ import { isQuotationExpired } from "@/lib/utils/quotation-expiry";
 import { WhatsappButton } from "@/components/reports/whatsapp-button";
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { DifferenceInvoiceButton } from "@/components/reports/difference-invoice-button";
+import { RevisionDownCreditButton } from "@/components/reports/revision-down-credit-button";
 import { loadJobBillingSummary } from "@/lib/reports/job-billing-summary-data";
 import {
   DetailTable,
@@ -314,8 +315,12 @@ export default async function QuotationDetailPage({
                 {billingSummary ? <JobBillingCard summary={billingSummary} /> : null}
 
                 {quotation.revisionNumber > 0 ? (
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap justify-end gap-2">
                     <DifferenceInvoiceButton
+                      quotationId={quotation.id}
+                      revisionNumber={quotation.revisionNumber}
+                    />
+                    <RevisionDownCreditButton
                       quotationId={quotation.id}
                       revisionNumber={quotation.revisionNumber}
                     />

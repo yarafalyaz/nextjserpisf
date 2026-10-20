@@ -16,6 +16,7 @@ import { notificationService } from "@/lib/services/notification.service"
 import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
 import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlement } from "@/lib/services/sales-settlement.service"
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
+import { computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -1135,6 +1136,117 @@ export async function createDifferenceInvoice(quotationId: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[createDifferenceInvoice]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * F-2026-10-20-59 (vonis Salsa 18:30): kredit revisi-turun lahir sebagai
+ * CustomerCredit pasif sourceType RevisionDown, sourceId=quotationId,
+ * TANPA jurnal saat create. Jurnal hanya lahir saat alokasi/refund lewat
+ * customer-credit.service existing. Nominal dari builder #229
+ * (computeRevisionDownCreditCandidate) — jangan hitung ulang di sini.
+ * Lock baris quotation di dalam tx: submit ganda bersamaan tidak boleh
+ * sama-sama membaca kredit existing lama.
+ */
+export async function createRevisionDownCredit(quotationId: number) {
+  try {
+    const user = await requirePermission("confirm_down_payments")
+
+    const quotation = await prisma.quotation.findFirst({
+      where: { id: quotationId, deletedAt: null },
+      select: { id: true, documentNo: true, customerId: true, grandTotal: true, revisionNumber: true },
+    })
+    if (!quotation) return { success: false, error: "Penawaran tidak ditemukan" }
+    if (quotation.revisionNumber <= 0) {
+      return { success: false, error: "Penawaran belum pernah direvisi; tidak ada revisi-turun" }
+    }
+
+    const credit = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      const [salesOrders, workOrders, directInvoices, confirmedDownPayments, downPayments] =
+        await Promise.all([
+          tx.salesOrder.findMany({ where: { quotationId, deletedAt: null }, select: { id: true } }),
+          tx.workOrder.findMany({ where: { quotationId }, select: { projectId: true } }),
+          tx.salesInvoice.findMany({
+            where: { quotationId, deletedAt: null },
+            select: { id: true, status: true, grandTotal: true },
+          }),
+          tx.downPayment.findMany({
+            where: { quotationId, status: "confirmed" },
+            select: { amount: true },
+          }),
+          tx.downPayment.findMany({ where: { quotationId }, select: { id: true } }),
+        ])
+      const salesOrderIds = salesOrders.map((s) => s.id)
+      const projectIds = [...new Set(workOrders.map((w) => w.projectId).filter((p): p is number => p !== null))]
+      const [viaSalesOrder, viaProject, existingRevisionDown, existingDownPayment] = await Promise.all([
+        salesOrderIds.length === 0
+          ? Promise.resolve([])
+          : tx.salesInvoice.findMany({
+              where: { salesOrderId: { in: salesOrderIds }, deletedAt: null },
+              select: { id: true, status: true, grandTotal: true },
+            }),
+        projectIds.length === 0
+          ? Promise.resolve([])
+          : tx.salesInvoice.findMany({
+              where: { projectId: { in: projectIds }, deletedAt: null },
+              select: { id: true, status: true, grandTotal: true },
+            }),
+        tx.customerCredit.findMany({
+          where: { sourceType: "RevisionDown", sourceId: quotationId },
+          select: { receivedAmount: true, allocatedAmount: true, refundedAmount: true },
+        }),
+        downPayments.length === 0
+          ? Promise.resolve([])
+          : tx.customerCredit.findMany({
+              where: { sourceType: "DownPayment", sourceId: { in: downPayments.map((d) => d.id) } },
+              select: { receivedAmount: true },
+            }),
+      ])
+      const byId = new Map<number, { id: number; status: string; grandTotal: number }>()
+      for (const inv of [...directInvoices, ...viaSalesOrder, ...viaProject]) {
+        byId.set(inv.id, { id: inv.id, status: inv.status, grandTotal: Number(inv.grandTotal) })
+      }
+
+      const candidate = computeRevisionDownCreditCandidate({
+        quotationGrandTotal: Number(quotation.grandTotal),
+        invoices: [...byId.values()],
+        confirmedDownPayments: confirmedDownPayments.map((d) => ({ amount: Number(d.amount) })),
+        existingRevisionDownCredits: existingRevisionDown.map((c) => ({
+          receivedAmount: Number(c.receivedAmount),
+          allocatedAmount: Number(c.allocatedAmount),
+          refundedAmount: Number(c.refundedAmount),
+        })),
+        existingDownPaymentCredits: existingDownPayment.map((c) => ({
+          receivedAmount: Number(c.receivedAmount),
+        })),
+      })
+      if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada kredit revisi-turun")
+
+      const documentNo = await generateDocumentNumber("CC")
+      return tx.customerCredit.create({
+        data: {
+          documentNo,
+          customerId: quotation.customerId,
+          sourceType: "RevisionDown",
+          sourceId: quotation.id,
+          receivedAmount: candidate.creditAmount,
+          notes: `Kredit revisi-turun v${quotation.revisionNumber} penawaran ${quotation.documentNo}: tertagih/DP terikat ${candidate.committedAmount} melebihi nilai berjalan ${candidate.contractValue}. Tanpa jurnal saat lahir; jurnal hanya saat alokasi/refund.`,
+          createdBy: Number(user.id),
+        },
+      })
+    })
+
+    await logActivity("create", "CustomerCredit", credit.id, `Membuat kredit revisi-turun #${credit.id} dari penawaran ${quotation.documentNo}`)
+    revalidatePath("/penjualan/penawaran")
+    revalidatePath("/penjualan/faktur")
+    return { success: true, id: credit.id }
+
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createRevisionDownCredit]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
