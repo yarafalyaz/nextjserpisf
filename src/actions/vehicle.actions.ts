@@ -674,21 +674,9 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
     const parsed = parseFormData(customerVehicleSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    const {
-      customerId,
-      variantId,
-      vehicleId: formVehicleId,
-      kendaraanId,
-      plateNumber,
-      color,
-      year,
-      chassisNumber,
-      engineNumber,
-      isActive,
-      notes,
-    } = parsed.data;
+    const d = parsed.data;
 
-    const refError = await assertCustomerVehicleRefsExist({ customerId, variantId, formVehicleId, kendaraanId });
+    const refError = await assertCustomerVehicleRefsExist({ customerId: d.customerId, variantId: d.variantId, formVehicleId: d.vehicleId, kendaraanId: d.kendaraanId });
     if (refError) return { success: false, error: refError };
 
     // Atomic update: the catalog-type Vehicle row + the ownership link, both in
@@ -702,19 +690,19 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
 
       let vehicleId: number;
 
-      if (variantId) {
+      if (d.variantId) {
         // Update the catalog type's variant/year from the form. `name` is not
         // edited here — it is a catalog label owned by /kendaraan.
         const updatedVehicle = await tx.vehicle.update({
           where: { id: existing.vehicleId },
           data: {
-            vehicleVariantId: variantId,
-            year: year ?? null,
+            vehicleVariantId: d.variantId,
+            year: d.year ?? null,
           },
         });
         vehicleId = updatedVehicle.id;
       } else {
-        const rawVehicleId = formVehicleId ?? kendaraanId;
+        const rawVehicleId = d.vehicleId ?? d.kendaraanId;
         if (!rawVehicleId) {
           throw new Error("vehicleId wajib diisi");
         }
@@ -723,7 +711,7 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
         // — otherwise relinking to an existing type silently dropped the edit.
         await tx.vehicle.update({
           where: { id: vehicleId },
-          data: { year: year ?? null },
+          data: { year: d.year ?? null },
         });
       }
 
@@ -732,17 +720,17 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
         where: { id },
         data: {
           vehicleId,
-          plateNumber: plateNumber ?? null,
-          color: color ?? null,
-          chassisNumber: chassisNumber ?? null,
-          engineNumber: engineNumber ?? null,
-          isActive: isActive ?? true,
-          notes: notes ?? null,
+          plateNumber: d.plateNumber ?? null,
+          color: d.color ?? null,
+          chassisNumber: d.chassisNumber ?? null,
+          engineNumber: d.engineNumber ?? null,
+          isActive: d.isActive ?? true,
+          notes: d.notes ?? null,
         },
       });
     });
 
-    revalidatePath(`/master/pelanggan/${customerId}/kendaraan`);
+    revalidatePath(`/master/pelanggan/${d.customerId}/kendaraan`);
     await logActivity(
       "update",
       "CustomerVehicle",
