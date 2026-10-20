@@ -10,6 +10,8 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { WorkOrderTable } from "./_components/work-order-table"
 import { WorkOrderQueueCard } from "@/components/reports/work-order-queue-card"
 import { getWorkOrderQueue } from "@/lib/reports/work-order-queue-data"
+import { WorkOrderLoadCard } from "@/components/reports/work-order-load-card"
+import { getWorkOrderLoad } from "@/lib/reports/work-order-load-data"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
@@ -50,7 +52,7 @@ export default async function WorkOrdersPage({
 
   const total = await prisma.workOrder.count({ where })
 
-  const queue = await getWorkOrderQueue()
+  const [queue, load] = await Promise.all([getWorkOrderQueue(), getWorkOrderLoad()])
 
   const tableData = toPlain(workOrders)
 
@@ -82,6 +84,8 @@ export default async function WorkOrdersPage({
       </div>
 
       <WorkOrderQueueCard queue={queue} />
+
+      <WorkOrderLoadCard load={load} />
 
       <WorkOrderTable
         data={tableData}
