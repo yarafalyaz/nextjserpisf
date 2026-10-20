@@ -1,10 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest"
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-
-import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
+import { renderCard as render, unmountCard } from "./card-test-utils"
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
@@ -34,16 +32,6 @@ vi.mock("@/lib/utils/toast", () => ({
 }))
 
 import { DifferenceInvoiceButton } from "../difference-invoice-button"
-
-function render(node: React.ReactNode) {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root: Root = createRoot(container)
-  act(() => {
-    root.render(node)
-  })
-  return { container, root }
-}
 
 afterEach(() => {
   vi.clearAllMocks()
@@ -86,7 +74,7 @@ describe("DifferenceInvoiceButton F-2026-10-20-10", () => {
     expect(showSuccess).toHaveBeenCalledWith("Faktur selisih dibuat")
     expect(showError).not.toHaveBeenCalled()
     expect(push).toHaveBeenCalledWith("/penjualan/faktur/inv-2026-0099")
-    act(() => root.unmount())
+    unmountCard(root)
     container.remove()
   })
 
@@ -111,7 +99,7 @@ describe("DifferenceInvoiceButton F-2026-10-20-10", () => {
     )
     expect(showSuccess).not.toHaveBeenCalled()
     expect(push).not.toHaveBeenCalled()
-    act(() => root.unmount())
+    unmountCard(root)
     container.remove()
   })
 })

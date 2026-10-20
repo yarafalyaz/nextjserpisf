@@ -1,61 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 /**
- * F-2026-10-20-10: createProgressInvoice membuat SalesInvoice DRAFT
+ * F-2026-10-20-58: createProgressInvoice membuat SalesInvoice DRAFT
  * sebesar selisih revisi. Mock mandiri meniru pola sales.actions.test.ts
  * (hoisted prisma mock, $transaction menjalankan callback dgn mock sama).
  */
-const mocks = vi.hoisted(() => {
-  const buildModelMock = () => ({
-    findFirst: vi.fn().mockResolvedValue(null),
-    findUnique: vi.fn().mockResolvedValue(null),
-    findUniqueOrThrow: vi.fn().mockResolvedValue(null),
-    findMany: vi.fn().mockResolvedValue([]),
-    create: vi.fn().mockResolvedValue({ id: 99, slug: "inv-selisih" }),
-    update: vi.fn().mockResolvedValue({}),
-    count: vi.fn().mockResolvedValue(0),
-  })
-  const prismaMock: Record<string, unknown> = {
-    quotation: buildModelMock(),
-    salesOrder: buildModelMock(),
-    workOrder: buildModelMock(),
-    salesInvoice: buildModelMock(),
-    $queryRaw: vi.fn().mockResolvedValue([]),
-  }
-  prismaMock.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prismaMock))
-  return {
-    prismaMock: prismaMock as {
-      quotation: ReturnType<typeof buildModelMock>
-      salesOrder: ReturnType<typeof buildModelMock>
-      workOrder: ReturnType<typeof buildModelMock>
-      salesInvoice: ReturnType<typeof buildModelMock>
-      $transaction: ReturnType<typeof vi.fn>
-      $queryRaw: ReturnType<typeof vi.fn>
-    },
-    requirePermissionMock: vi.fn().mockResolvedValue({ id: 7 }),
-  }
+const mocks = await vi.hoisted(async () => {
+  const h = await import("./validation-mock-helpers")
+  return h.buildSalesRevisionMocks(h.buildSalesRevisionPrismaMock(), "INV-2026-001")
 })
 
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: unknown[]) => mocks.requirePermissionMock(...a),
-}))
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
-vi.mock("@/lib/utils/document-number", () => ({
-  generateDocumentNumber: vi.fn().mockResolvedValue("INV-2026-001"),
-}))
-vi.mock("@/lib/utils/slug-db", () => ({ nextSlug: vi.fn().mockResolvedValue("inv-2026-001") }))
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
-}))
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: vi.fn().mockResolvedValue(undefined),
-  reportPostCommitAuditFailure: vi.fn(),
-}))
-vi.mock("@/lib/services/approval-workflow.service", () => ({
-  requestApprovalIfConfigured: vi.fn().mockResolvedValue(undefined),
-  assertApproved: vi.fn().mockResolvedValue(undefined),
-}))
+import * as helpers from "./validation-mock-helpers"
+vi.mock("@/lib/db/prisma", () => helpers.prismaFactory(mocks, "prismaMock"))
+vi.mock("@/lib/auth/permissions", () => helpers.permissionFactory(mocks))
+vi.mock("next/cache", () => helpers.revalidateFactory(mocks))
+vi.mock("@/lib/utils/document-number", () => helpers.docNumberFactory(mocks))
+vi.mock("@/lib/utils/slug-db", () => helpers.slugFixedFactory())
+vi.mock("@/lib/services/period-lock.service", () => helpers.periodLockFactory(mocks))
+vi.mock("@/lib/services/activity-log.service", () => helpers.activityLogFactory(mocks))
+vi.mock("@/lib/services/approval-workflow.service", () => helpers.approvalFactory())
 
 import { createProgressInvoice } from "../sales.actions"
 
@@ -70,11 +33,7 @@ const contractQuotation = {
 
 describe("createProgressInvoice (F-2026-10-20-58)", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
-    mocks.prismaMock.quotation.findFirst.mockResolvedValue(contractQuotation)
-    mocks.prismaMock.salesOrder.findMany.mockResolvedValue([])
-    mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
+    helpers.setupSalesRevisionBase(mocks, contractQuotation)
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
       { id: 11, status: "posted", grandTotal: 1000000 },
     ])
