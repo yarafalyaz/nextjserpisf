@@ -29,13 +29,14 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
-Arka | src/app/api/workflow/[...path]/route.ts + __tests__/route.test.ts (validasi ID bukan desimal murni) | 21:02 WIB — aktif
 Salsa | F-71 vonis read-only (tanpa edit berkas kode) | 20:35 WIB — selesai, klaim dilepas
 Salsa | src/actions/finance.actions.ts + src/actions/__tests__/finance.actions.journal-parse-money.test.ts | 19:50 WIB — selesai, klaim dilepas
 Bara | F-71 guard completed: src/lib/services/production-cost.service.ts + src/actions/purchase.actions.ts + tes terkait | 20:58 WIB — aktif, worktree /tmp/bara-f71
 Salsa | 19:55 WIB | finance.actions jurnal debit/kredit string Number() | SELESAI PR #245 f3da1b78: parseAndValidateJournalEntries kini parseMoneyAmount (sebelumnya Number("2.000.000")=2, "2.000.000,50"=NaN); kosong=0, tak terbaca ditolak; 155/155 (2 baru), falsifikasi cabut parser 1 MERAH pulih, tsc0 lint0, tanpa migrasi/schema/UI | BERIKUT: Gita merge #245 bila 5/5 PASS di f3da1b78
 
 ## STATUS (job | jam WIB | target | hasil)
+Arka | 2026-10-20 21:04 WIB | api/workflow ID bukan desimal murni lolos Number() -> 500 | SELESAI PR #255 51e9402d branch hermes/api-workflow-id-strict: cek /^\d+$/ sebelum Number() pola notifications/[id]; tes diperluas 1e3/0x10/+5/' 5' merah 500 -> hijau 24/24, falsifikasi cabut cek 1 MERAH pulih, api 309/309 TZ=Asia/Jakarta tsc0 lint0 (8w lama), tanpa migrasi/schema/UI/e2e; kontrak sukses tak berubah | BERIKUT: git-keeper merge #255 bila 5/5 PASS di 51e9402d
+HANDOFF Arka -> git-keeper | PR #255 51e9402d validasi ID workflow: merge hanya bila 5/5 PASS di SHA ini (2 file api+tes, tanpa migrasi/schema/UI) | gh pr view 255 | medium
 Gita | 2026-10-20 20:55 WIB | PR #253 #254 #252 #232 | TERGABUNG: #253 merge ed85fb31 (head 83c73fba, 5/5 PASS, tanpa migrasi/schema), #254 merge 18d4f850 (head 6783f1a0, 5/5 PASS sesudah Build PASS, tanpa migrasi/schema); origin/main 18d4f850 terverifikasi git log; branch remote terhapus via --delete-branch | bukti=gh pr view 253/254 MERGED + gh pr checks 5/5 live | BERIKUT=Qila verifikasi akhir F-93a+F-59 lampiran sesudah tergabung; Bimo dedup Sonar #252 + rebase/dedup #232 (keduanya DITUNDA Sonar FAIL, #232 DIRTY)
 HANDOFF Gita -> Bimo | PR #252 2b166d61 Sonar FAIL (4/5 PASS lain) + PR #232 cbbf2d43 Sonar FAIL + DIRTY/CONFLICTING: dedup/rebase per berkas Sonar, jangan ubah perilaku guard F-96/F-59; git-keeper merge hanya bila Sonar PASS + 5/5 di SHA baru | gh pr checks 252/232 live 20:55 | high
 HANDOFF Gita -> Qila | PR #253 ed85fb31 + #254 18d4f850 tergabung: verifikasi akhir unggah lampiran tampil + detail prospek terkonversi tampil kartu kendaraan, belum terkonversi tanpa kartu | gh pr view 253/254 MERGED | P1
