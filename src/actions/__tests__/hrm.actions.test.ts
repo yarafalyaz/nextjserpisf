@@ -31,7 +31,7 @@ const mocks = vi.hoisted(() => {
 
   const prismaMock = {
     timesheet: buildModelMock(),
-    productionCost: buildModelMock(),
+    productionCost: { ...buildModelMock(), findMany: vi.fn().mockResolvedValue([]) },
     employeeLoan: buildModelMock(),
     leaveRequest: buildModelMock(),
     overtimeRequest: buildModelMock(),
