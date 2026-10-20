@@ -12,6 +12,21 @@ import { toBaseFactor } from "@/lib/services/uom.service";
  * Creates Journal Entry (Dr Purchase Return, Cr Inventory)
  */
 
+export function resolvePurchaseReturnWarehouse(
+  itemId: number,
+  receiptByItem: Map<number, { warehouseId: number | null; goodsReceipt?: { warehouseId: number | null } | null }>,
+  defaultWarehouseByItem: Map<number, number | null>,
+  activeWarehouseId?: number | null,
+  anyWarehouseId?: number | null,
+): number | null {
+  const receipt = receiptByItem.get(itemId);
+  return receipt?.warehouseId ?? receipt?.goodsReceipt?.warehouseId
+    ?? defaultWarehouseByItem.get(itemId)
+    ?? activeWarehouseId
+    ?? anyWarehouseId
+    ?? null;
+}
+
 export async function onPurchaseReturnProcessed(
   returnId: number,
   userId?: number,
@@ -107,10 +122,7 @@ export async function onPurchaseReturnProcessed(
         const receipt = receiptByItem.get(item.itemId);
         const factor = await toBaseFactor(tx, item.itemId, receipt?.uom);
         const baseQty = Number(item.qty) * factor;
-        const warehouseId = receipt?.warehouseId ?? receipt?.goodsReceipt.warehouseId
-          ?? defaultWarehouseByItem.get(item.itemId)
-          ?? activeWarehouse?.id
-          ?? anyWarehouse?.id;
+        const warehouseId = resolvePurchaseReturnWarehouse(item.itemId, receiptByItem, defaultWarehouseByItem, activeWarehouse?.id, anyWarehouse?.id);
 
         if (!warehouseId) {
           throw new Error("Warehouse retur pembelian tidak ditemukan.");

@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => {
     vendorPayment: buildModelMock(),
     vendorPaymentAllocation: buildModelMock(),
     purchaseReturn: buildModelMock(),
+    warehouse: buildModelMock(),
     purchaseReturnItem: buildModelMock(),
     purchaseHistory: buildModelMock(),
     workOrder: buildModelMock(),
@@ -96,9 +97,13 @@ vi.mock("@/lib/hooks/goods-receipt.hook", () => ({
 vi.mock("@/lib/hooks/purchase-order.hook", () => ({
   onPurchaseOrderCreated: vi.fn().mockResolvedValue({}),
 }))
-vi.mock("@/lib/hooks/purchase-return.hook", () => ({
-  onPurchaseReturnProcessed: vi.fn().mockResolvedValue({}),
-}))
+vi.mock("@/lib/hooks/purchase-return.hook", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/hooks/purchase-return.hook")>();
+  return {
+    ...actual,
+    onPurchaseReturnProcessed: vi.fn().mockResolvedValue({}),
+  };
+})
 vi.mock("@/lib/sales/return-validation", () => ({ findOverReturn: vi.fn().mockReturnValue(null) }))
 vi.mock("@/lib/finance/payment-allocation", () => ({ allocatePaymentToBills: vi.fn().mockReturnValue([]) }))
 
@@ -839,6 +844,11 @@ describe("Purchase Return Actions", () => {
     mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({ 
       id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1 
     })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
+    mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: 3 }])
+    mocks.prismaMock.warehouse.findFirst
+      .mockResolvedValueOnce({ id: 3 })
+      .mockResolvedValueOnce({ id: 3 })
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(true)
   })
@@ -855,6 +865,36 @@ describe("Purchase Return Actions", () => {
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("tidak memiliki akses ke gudang")
+  })
+
+  it("processPurchaseReturn rejects when fallback warehouse is outside user scope", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
+    })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
+    mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: 9 }])
+    mocks.prismaMock.warehouse.findFirst
+      .mockResolvedValueOnce({ id: 9 })
+      .mockResolvedValueOnce({ id: 9 })
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
+    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 3 }])
+    const res = await actions.processPurchaseReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses ke gudang")
+  })
+
+  it("processPurchaseReturn rejects when no warehouse can be resolved", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
+    })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
+    mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: null }])
+    mocks.prismaMock.warehouse.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+    const res = await actions.processPurchaseReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Warehouse retur pembelian tidak ditemukan")
   })
 
   it("processPurchaseReturn succeeds when receipt warehouse is within user scope", async () => {

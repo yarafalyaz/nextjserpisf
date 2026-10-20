@@ -14,13 +14,26 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: { $transaction: (fn: (tx: unknown) => Promise<unknown>) => mocks.transaction(fn) },
 }))
 
-import { onPurchaseReturnProcessed } from "@/lib/hooks/purchase-return.hook"
+import { onPurchaseReturnProcessed, resolvePurchaseReturnWarehouse } from "@/lib/hooks/purchase-return.hook"
 
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.generateDocumentNumberBatch.mockResolvedValue(["SM-1"])
   mocks.consumeFifoLayers.mockResolvedValue({ consumedCost: 240 })
   mocks.toBaseFactor.mockResolvedValue(12)
+})
+
+describe("resolvePurchaseReturnWarehouse fallback chain", () => {
+  it("prefers receipt warehouse, then default, active, any", () => {
+    const receipt = new Map([[1, { warehouseId: null, goodsReceipt: { warehouseId: 2 } }], [3, { warehouseId: 7, goodsReceipt: { warehouseId: 2 } }]])
+    const defaults = new Map([[1, 6], [2, 6], [4, null]])
+    expect(resolvePurchaseReturnWarehouse(3, receipt, defaults, 5, 8)).toBe(7)
+    expect(resolvePurchaseReturnWarehouse(1, receipt, defaults, 5, 8)).toBe(2)
+    expect(resolvePurchaseReturnWarehouse(2, receipt, defaults, 5, 8)).toBe(6)
+    expect(resolvePurchaseReturnWarehouse(4, receipt, defaults, 5, 8)).toBe(5)
+    expect(resolvePurchaseReturnWarehouse(9, new Map(), new Map(), null, 8)).toBe(8)
+    expect(resolvePurchaseReturnWarehouse(9, new Map(), new Map(), null, null)).toBeNull()
+  })
 })
 
 describe("purchase return UoM and receipt warehouse", () => {

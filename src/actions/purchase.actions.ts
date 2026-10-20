@@ -22,7 +22,7 @@ import {
 } from "@/lib/hooks/accounting.hook";
 import { onGoodsReceiptVerified } from "@/lib/hooks/goods-receipt.hook";
 import { onPurchaseOrderCreated } from "@/lib/hooks/purchase-order.hook";
-import { onPurchaseReturnProcessed as onPurchaseReturnStock } from "@/lib/hooks/purchase-return.hook";
+import { onPurchaseReturnProcessed as onPurchaseReturnStock, resolvePurchaseReturnWarehouse } from "@/lib/hooks/purchase-return.hook";
 import { notificationService } from "@/lib/services/notification.service";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { nextSlug } from "@/lib/utils/slug-db";
@@ -1570,19 +1570,29 @@ export async function processPurchaseReturn(returnId: number) {
       },
       orderBy: { goodsReceipt: { createdAt: "desc" } },
     });
-    const receiptWarehouseByItem = new Map<number, number>();
+    // Scope gudang: hook mengeluarkan stok FIFO dari gudang hasil resolusi bersama
+    // (receipt ?? default ?? active ?? any). Cek tiap item atas HASIL resolusi itu,
+    // bukan hanya baris penerimaan — item tanpa GR verified/completed tetap jatuh
+    // ke fallback hook, jadi fallback di luar scope harus ditolak di sini.
+    const activeReturnItems = purchaseReturn.items.filter((item) => Number(item.qty) > 0);
+    const receiptByItem = new Map<number, { warehouseId: number | null; goodsReceipt: { warehouseId: number } }>();
     for (const line of receiptLines) {
-      if (!receiptWarehouseByItem.has(line.itemId)) {
-        receiptWarehouseByItem.set(
-          line.itemId,
-          line.warehouseId ?? line.goodsReceipt.warehouseId,
-        );
-      }
+      if (!receiptByItem.has(line.itemId)) receiptByItem.set(line.itemId, line);
     }
+    const returnItemIds = Array.from(new Set(activeReturnItems.map((item) => item.itemId)));
+    const [defaultWarehouseRows, activeWarehouse, anyWarehouseFallback] = await Promise.all([
+      returnItemIds.length
+        ? prisma.item.findMany({ where: { id: { in: returnItemIds } }, select: { id: true, defaultWarehouseId: true } })
+        : Promise.resolve([] as { id: number; defaultWarehouseId: number | null }[]),
+      prisma.warehouse.findFirst({ where: { isActive: true, deletedAt: null }, select: { id: true }, orderBy: { id: "asc" } }),
+      prisma.warehouse.findFirst({ select: { id: true }, orderBy: { id: "asc" } }),
+    ]);
+    const defaultWarehouseByItem = new Map(defaultWarehouseRows.map((r) => [r.id, r.defaultWarehouseId]));
     const scope = await getWarehouseScope(user);
-    for (const item of purchaseReturn.items) {
-      const warehouseId = receiptWarehouseByItem.get(item.itemId);
-      if (warehouseId) assertWarehouseAccess(scope, warehouseId);
+    for (const item of activeReturnItems) {
+      const warehouseId = resolvePurchaseReturnWarehouse(item.itemId, receiptByItem, defaultWarehouseByItem, activeWarehouse?.id, anyWarehouseFallback?.id);
+      if (!warehouseId) throw new Error("Warehouse retur pembelian tidak ditemukan.");
+      assertWarehouseAccess(scope, warehouseId);
     }
 
     // Atomically process stock adjustment and post GL journal in a single transaction.
