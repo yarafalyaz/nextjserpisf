@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   queryRaw: vi.fn(),
   salesInvoiceFindMany: vi.fn(),
   salesInvoiceCount: vi.fn(),
+  salesInvoiceAggregate: vi.fn(),
   purchaseOrderFindMany: vi.fn(),
   attendanceFindMany: vi.fn(),
   holidayFindFirst: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock("@/lib/db/prisma", () => ({
     salesInvoice: {
       findMany: (...a: unknown[]) => mocks.salesInvoiceFindMany(...a),
       count: (...a: unknown[]) => mocks.salesInvoiceCount(...a),
+      aggregate: (...a: unknown[]) => mocks.salesInvoiceAggregate(...a),
     },
     notification: { findFirst: (...a: unknown[]) => mocks.notificationFindFirst(...a) },
     purchaseOrder: { findMany: (...a: unknown[]) => mocks.purchaseOrderFindMany(...a) },
@@ -71,6 +73,7 @@ describe("GET /api/cron/daily-notifications", () => {
     })
     mocks.salesInvoiceFindMany.mockResolvedValue([])
     mocks.salesInvoiceCount.mockResolvedValue(0)
+    mocks.salesInvoiceAggregate.mockResolvedValue({ _sum: { grandTotal: 0, paidAmount: 0 } })
     mocks.purchaseOrderFindMany.mockResolvedValue([])
     mocks.attendanceFindMany.mockResolvedValue([])
     mocks.holidayFindFirst.mockResolvedValue(null)
@@ -135,6 +138,25 @@ describe("GET /api/cron/daily-notifications", () => {
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.overdueInvoices).toBe(2)
+  })
+
+  it("overdue total uang dari aggregate semua faktur, bukan sampel take:20", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-06-12T08:00:00"))
+    // count=25 tapi findMany hanya sampel 2 baris (take:20 di route);
+    // total piutang wajib dari aggregate seluruh where, bukan reduce sampel.
+    mocks.salesInvoiceFindMany.mockResolvedValue([
+      { grandTotal: 1000, paidAmount: 200 },
+      { grandTotal: 500, paidAmount: 0 },
+    ])
+    mocks.salesInvoiceCount.mockResolvedValue(25)
+    mocks.salesInvoiceAggregate.mockResolvedValue({ _sum: { grandTotal: 100000, paidAmount: 25000 } })
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.results.overdueInvoices).toBe(25)
+    const call = mocks.notifyUsersIfNew.mock.calls.find((c) => String(c[1]).includes("Invoice Jatuh Tempo"))
+    expect(call).toBeDefined()
+    expect(String(call![2])).toContain("75.000")
   })
 
   it("notifies stale POs", async () => {
