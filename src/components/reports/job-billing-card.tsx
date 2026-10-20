@@ -28,6 +28,11 @@ export function JobBillingCard({ summary }: Readonly<{ summary: JobBillingSummar
         <Baris label="Sisa belum ditagih" value={summary.sisaBelumDitagih} bold />
         <Baris label="Sisa belum dibayar" value={summary.sisaBelumDibayar} />
         <Baris label="Uang muka diterima" value={summary.uangMukaDiterima} />
+        {summary.ambangInvoiceTercapai ? (
+          <p className="py-1.5 text-sm text-muted-foreground">Ambang invoice konversi DP tercapai ({formatCurrency(summary.ambangInvoice)}).</p>
+        ) : (
+          <Baris label="Kekurangan DP menuju invoice" value={summary.jarakKeAmbangInvoice} />
+        )}
         {summary.kreditTerbuka > 0 ? (
           <>
             <Baris label="Kredit terbuka (bukan tagihan)" value={summary.kreditTerbuka} />
