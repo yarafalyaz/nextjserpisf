@@ -557,7 +557,7 @@ export function DataTable<TData extends { id: number | string }>({
               <Select
                 value={String(currentPageSize)}
                 onValueChange={(v) =>
-                  isServer ? goToPageSize(Number(v) || 100) : table.setPageSize(Number(v) || 20)
+                  isServer ? goToPageSize(Number(v) || 50) : table.setPageSize(Number(v) || 50)
                 }
               >
                 <SelectTrigger id="pageSize" className="h-11 w-[70px]" aria-label="Baris per halaman">

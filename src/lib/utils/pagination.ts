@@ -1,12 +1,12 @@
 /**
  * Helpers for server-side pagination driven by URL query params.
  *
- * Pages read `halaman` (1-based page number) and `pageSize` (default 100) from
+ * Pages read `halaman` (1-based page number) and `pageSize` (default 50) from
  * `searchParams`, run a `prisma.findMany({ skip, take })` plus a `prisma.count`,
  * and pass the total/page/pageSize to the client `DataTable`, which then wires
  * the page controls back to the URL via `?halaman=N`.
  */
-export const DEFAULT_PAGE_SIZE = 100
+export const DEFAULT_PAGE_SIZE = 50
 
 export interface PageParams {
   halaman?: string | string[] | undefined
