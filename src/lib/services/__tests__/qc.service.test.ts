@@ -11,12 +11,18 @@ const qcInspectionFindUniqueMock = vi.fn()
 const nonconformanceFindManyMock = vi.fn()
 const nonconformanceCreateMock = vi.fn()
 const generateDocumentNumberMock = vi.fn()
+const qcInspectionCountMock = vi.fn()
 
 vi.mock("@/lib/utils/document-number", () => ({
   generateDocumentNumber: (...a: unknown[]) => generateDocumentNumberMock(...a),
 }))
 
+const workOrderFindUniqueMock = vi.fn()
+
 const client = {
+  workOrder: {
+    findUnique: (...a: unknown[]) => workOrderFindUniqueMock(...a),
+  },
   nonconformance: {
     count: (...a: unknown[]) => nonconformanceCountMock(...a),
     findMany: (...a: unknown[]) => nonconformanceFindManyMock(...a),
@@ -25,12 +31,14 @@ const client = {
   qcInspection: {
     findMany: (...a: unknown[]) => qcInspectionFindManyMock(...a),
     findUnique: (...a: unknown[]) => qcInspectionFindUniqueMock(...a),
+    count: (...a: unknown[]) => qcInspectionCountMock(...a),
   },
 }
 
 import {
   assertWorkOrderQcCleared,
   assertProductionOrderQcCleared,
+  assertWorkOrderVehicleIntakeRecorded,
   raiseNonconformanceFromInspection,
 } from "@/lib/services/qc.service"
 
@@ -100,6 +108,52 @@ describe("assertWorkOrderQcCleared", () => {
     expect(arg.where.inspectionType).toBe("final")
     expect(arg.where.referenceType).toBe("WorkOrder")
     expect(arg.where.referenceId).toBe(7)
+  })
+})
+
+describe("assertWorkOrderVehicleIntakeRecorded (F-50a)", () => {
+  beforeEach(() => {
+    workOrderFindUniqueMock.mockReset()
+    qcInspectionCountMock.mockReset()
+    qcInspectionFindManyMock.mockReset()
+  })
+
+  it("blocks a vehicle WO without a recorded vehicle_intake inspection", async () => {
+    workOrderFindUniqueMock.mockResolvedValue({ customerVehicleId: 42 })
+    qcInspectionCountMock.mockResolvedValue(0)
+
+    await expect(assertWorkOrderVehicleIntakeRecorded(7, client as never)).rejects.toThrow(/inspeksi masuk kendaraan/i)
+
+    const woArg = workOrderFindUniqueMock.mock.calls[0][0]
+    expect(woArg.where).toEqual({ id: 7 })
+    expect(woArg.select.customerVehicleId).toBe(true)
+    const countArg = qcInspectionCountMock.mock.calls[0][0]
+    expect(countArg.where).toEqual({
+      referenceType: "WorkOrder",
+      referenceId: 7,
+      inspectionType: "vehicle_intake",
+    })
+  })
+
+  it("allows a vehicle WO with a recorded vehicle_intake inspection", async () => {
+    workOrderFindUniqueMock.mockResolvedValue({ customerVehicleId: 42 })
+    qcInspectionCountMock.mockResolvedValue(1)
+
+    await expect(assertWorkOrderVehicleIntakeRecorded(7, client as never)).resolves.toBeUndefined()
+  })
+
+  it("allows a non-vehicle WO without any intake inspection", async () => {
+    workOrderFindUniqueMock.mockResolvedValue({ customerVehicleId: null })
+
+    await expect(assertWorkOrderVehicleIntakeRecorded(7, client as never)).resolves.toBeUndefined()
+    expect(qcInspectionCountMock).not.toHaveBeenCalled()
+  })
+
+  it("allows a missing WO (caller already throws not-found)", async () => {
+    workOrderFindUniqueMock.mockResolvedValue(null)
+
+    await expect(assertWorkOrderVehicleIntakeRecorded(7, client as never)).resolves.toBeUndefined()
+    expect(qcInspectionCountMock).not.toHaveBeenCalled()
   })
 })
 

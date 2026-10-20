@@ -20,7 +20,11 @@ import {
 } from "@/lib/validations/manufacturing.schemas";
 import { computeProjectStatus } from "@/lib/services/project-status";
 import { resolveEffectiveBom } from "@/lib/services/bom-revision.service";
-import { assertWorkOrderQcCleared, assertProductionOrderQcCleared } from "@/lib/services/qc.service";
+import {
+  assertWorkOrderQcCleared,
+  assertProductionOrderQcCleared,
+  assertWorkOrderVehicleIntakeRecorded,
+} from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
@@ -1351,6 +1355,10 @@ export async function startWorkOrder(workOrderId: number) {
         "Perintah Kerja tidak bisa dimulai tanpa item. Tambahkan item terlebih dahulu.",
       );
     }
+
+    // F-50(a): WO kendaraan wajib punya inspeksi vehicle_intake tercatat
+    // sebelum mulai; tanpa itu kondisi masuk kendaraan tak terdokumentasi.
+    await assertWorkOrderVehicleIntakeRecorded(workOrderId);
 
     // ATOMICITY: the WO header status flip + the per-item status flip must
     // commit together. Previously they were two separate prisma calls — a

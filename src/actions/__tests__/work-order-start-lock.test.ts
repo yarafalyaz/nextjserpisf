@@ -37,6 +37,14 @@ vi.mock("@/lib/services/activity-log.service", () => ({
   logActivity: (...a: unknown[]) => logActivityMock(...a),
 }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
+// F-50(a) intake gate is out of scope here; stub so the real helper does not
+// query unmocked prisma models. Gate itself covered in qc.service.test.ts.
+const intakeGateMock = vi.fn()
+vi.mock("@/lib/services/qc.service", () => ({
+  assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+  assertProductionOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+  assertWorkOrderVehicleIntakeRecorded: (...a: unknown[]) => intakeGateMock(...a),
+}))
 
 import { startWorkOrder } from "../manufacturing.actions"
 
@@ -52,6 +60,8 @@ beforeEach(() => {
   })
   woUpdateManyMock.mockResolvedValue({ count: 1 })
   woItemUpdateManyMock.mockResolvedValue({ count: 1 })
+  intakeGateMock.mockReset()
+  intakeGateMock.mockResolvedValue(undefined)
 })
 
 describe("startWorkOrder concurrency guard", () => {
@@ -83,5 +93,17 @@ describe("startWorkOrder concurrency guard", () => {
 
     expect(result.success).toBe(false)
     expect(woUpdateManyMock).not.toHaveBeenCalled()
+  })
+
+  it("blocks start WITHOUT flipping items/status when the F-50(a) intake gate throws", async () => {
+    intakeGateMock.mockRejectedValueOnce(
+      new Error("Tidak dapat memulai Perintah Kerja: inspeksi masuk kendaraan belum tercatat"),
+    )
+
+    const result = await startWorkOrder(10)
+
+    expect(result.success).toBe(false)
+    expect(woUpdateManyMock).not.toHaveBeenCalled()
+    expect(woItemUpdateManyMock).not.toHaveBeenCalled()
   })
 })
