@@ -11,6 +11,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table"
+import { ReportCardShell } from "./report-card-shell"
 
 /**
  * F-2026-10-20-02 (tahap frontend): beban perintah kerja aktif.
@@ -23,24 +24,19 @@ import {
  */
 export function WorkOrderLoadCard({ load }: Readonly<{ load: WorkOrderLoad }>) {
   return (
-    <section
-      aria-label="Beban Perintah Kerja"
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
-        <h2 className="text-[0.9375rem] font-semibold text-foreground">Beban Perintah Kerja</h2>
-        <p className="text-xs text-muted-foreground">
+    <ReportCardShell
+      label="Beban Perintah Kerja"
+      title="Beban Perintah Kerja"
+      summary={
+        <>
           {load.totalActive} perintah kerja aktif · {formatNumber(load.totalLaborHours)} jam tenaga
           kerja · {formatNumber(load.totalMachineHours)} jam mesin ·{" "}
           {formatCurrency(load.totalAmount)}
-        </p>
-      </div>
-      <div className="p-4 px-5">
-        {load.workOrders.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-            Belum ada perintah kerja aktif
-          </p>
-        ) : (
+        </>
+      }
+      isEmpty={load.workOrders.length === 0}
+      emptyText="Belum ada perintah kerja aktif"
+    >
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>No. Dokumen</DetailTableTh>
@@ -68,8 +64,6 @@ export function WorkOrderLoadCard({ load }: Readonly<{ load: WorkOrderLoad }>) {
               ))}
             </DetailTableBody>
           </DetailTable>
-        )}
-      </div>
-    </section>
+    </ReportCardShell>
   )
 }

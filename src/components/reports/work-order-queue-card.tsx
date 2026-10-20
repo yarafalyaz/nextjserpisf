@@ -11,6 +11,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table"
+import { ReportCardShell } from "./report-card-shell"
 
 /**
  * F-2026-10-20-28(a): papan antrian bengkel di daftar perintah kerja.
@@ -22,23 +23,18 @@ import {
  */
 export function WorkOrderQueueCard({ queue }: Readonly<{ queue: WorkOrderQueue }>) {
   return (
-    <section
-      aria-label="Antrian Bengkel"
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
-    >
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
-        <h2 className="text-[0.9375rem] font-semibold text-foreground">Antrian Bengkel</h2>
-        <p className="text-xs text-muted-foreground">
+    <ReportCardShell
+      label="Antrian Bengkel"
+      title="Antrian Bengkel"
+      summary={
+        <>
           {queue.totalActive} perintah kerja aktif
           {queue.overdueCount > 0 ? ` · ${queue.overdueCount} terlambat` : ""}
-        </p>
-      </div>
-      <div className="p-4 px-5">
-        {queue.rows.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-            Belum ada perintah kerja aktif dalam antrian
-          </p>
-        ) : (
+        </>
+      }
+      isEmpty={queue.rows.length === 0}
+      emptyText="Belum ada perintah kerja aktif dalam antrian"
+    >
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>No. Dokumen</DetailTableTh>
@@ -78,8 +74,6 @@ export function WorkOrderQueueCard({ queue }: Readonly<{ queue: WorkOrderQueue }
               ))}
             </DetailTableBody>
           </DetailTable>
-        )}
-      </div>
-    </section>
+    </ReportCardShell>
   )
 }
