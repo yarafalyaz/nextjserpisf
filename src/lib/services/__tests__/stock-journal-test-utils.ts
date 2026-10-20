@@ -1,7 +1,7 @@
 import { vi } from "vitest"
 
 // Shared stock-journal test scaffolding (Sonar duplication gate): mock
-// fns + full account fixture used by stock-journal and stock-journal-cents.
+// fns + full account fixture used by stock-journal suite.
 export function createStockJournalMocks() {
   return {
     getSystemSettings: vi.fn(),
