@@ -179,18 +179,35 @@ describe("GET /api/cron/auto-reject-quotations", () => {
 
   it("passes correct cutoff date (14 days ago)", async () => {
     mocks.quotationFindMany.mockResolvedValue([])
-    const now = new Date()
-    const cutoff = new Date(now)
-    cutoff.setDate(cutoff.getDate() - 14)
 
     await GET(makeReq())
     expect(mocks.quotationFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({
         status: SalesStatus.SENT,
-        updatedAt: expect.objectContaining({
-          lt: expect.any(Date),
-        }),
+        // F-36(c): validUntil lewat ATAU (validUntil kosong DAN updatedAt>14hr)
+        OR: [
+          { validUntil: { lt: expect.any(Date) } },
+          {
+            validUntil: null,
+            updatedAt: { lt: expect.any(Date) },
+          },
+        ],
       }),
     }))
+    const orArg = (mocks.quotationFindMany.mock.calls[0][0] as any).where.OR
+    const ageMs = Date.now() - orArg[1].updatedAt.lt.getTime()
+    expect(ageMs).toBeGreaterThan(13 * 24 * 3600 * 1000)
+    expect(ageMs).toBeLessThan(15 * 24 * 3600 * 1000)
+  })
+
+  it("F-36(c): penawaran masih berlaku tidak masuk kandidat hanya karena updatedAt tua", async () => {
+    // Query OR adalah satu-satunya gerbang kandidat: baris validUntil masa depan
+    // tidak cocok cabang mana pun (cabang 1 validUntil<now gagal, cabang 2 butuh null).
+    mocks.quotationFindMany.mockResolvedValue([])
+    await GET(makeReq())
+    const where = (mocks.quotationFindMany.mock.calls[0][0] as any).where
+    expect(where.updatedAt).toBeUndefined()
+    expect(where.OR[0]).toEqual({ validUntil: { lt: expect.any(Date) } })
+    expect(where.OR[1].validUntil).toBeNull()
   })
 })

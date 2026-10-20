@@ -7,7 +7,11 @@ import { SalesStatus, Status } from "@/lib/constants"
 /**
  * Cron: Auto-reject quotations that have been in 'sent' status for more than 14 days.
  * Schedule: Daily at midnight (0 0 * * *)
- * 
+ *
+ * F-36(c): hormati validUntil — auto-reject bila validUntil sudah lewat, ATAU
+ * validUntil kosong dan updatedAt lebih dari 14 hari. Penawaran yang masih
+ * dalam masa berlaku tidak mati hanya karena updatedAt tua.
+ *
  * Mirrors Laravel: AutoRejectQuotations command
  */
 export async function GET(request: Request) {
@@ -20,13 +24,16 @@ export async function GET(request: Request) {
     const days = 14
     const cutoffDate = new Date()
     cutoffDate.setDate(cutoffDate.getDate() - days)
+    const now = new Date()
 
-    // Find quotations that are in 'sent' status and haven't been updated in 14 days
     const staleQuotations = await prisma.quotation.findMany({
       where: {
         status: SalesStatus.SENT,
         deletedAt: null,
-        updatedAt: { lt: cutoffDate },
+        OR: [
+          { validUntil: { lt: now } },
+          { validUntil: null, updatedAt: { lt: cutoffDate } },
+        ],
       },
     })
 
@@ -80,7 +87,7 @@ export async function GET(request: Request) {
             quotationId: c.id,
             action: "auto_rejected",
             revisionNumber: c.revisionNumber,
-            description: `Auto-rejected by system (expired after ${days} days without response) (revisi v${c.revisionNumber})`,
+            description: `Auto-rejected by system (masa berlaku lewat atau ${days} hari tanpa respons) (revisi v${c.revisionNumber})`,
           })),
         })
       }
