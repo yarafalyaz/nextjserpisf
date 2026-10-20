@@ -97,9 +97,6 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Auto-reject quotations cron failed:", err)
-    return NextResponse.json(
-      { error: "Cron job failed", rejected: 0 },
-      { status: 500 }
-    )
+    return apiError("INTERNAL_ERROR", "Cron job failed")
   }
 }

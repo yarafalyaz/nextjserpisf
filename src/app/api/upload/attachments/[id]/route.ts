@@ -33,15 +33,15 @@ export async function DELETE(
     })
 
     if (!attachment) {
-      return NextResponse.json({ error: "Attachment not found" }, { status: 404 })
+      return apiError("NOT_FOUND", "Attachment not found")
     }
 
     // Ownership guard: only uploader can delete
     if (attachment.uploadedBy !== userId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return apiError("FORBIDDEN", "Forbidden")
     }
     if (!(await canModifyAttachment(attachment.referenceType, attachment.referenceId))) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+      return apiError("FORBIDDEN", "Forbidden")
     }
 
     // Delete file from disk (normalize path)
@@ -77,9 +77,6 @@ export async function DELETE(
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error(error)
-    return NextResponse.json(
-      { error: "Gagal menghapus attachment" },
-      { status: 500 }
-    )
+    return apiError("INTERNAL_ERROR", "Gagal menghapus attachment")
   }
 }
