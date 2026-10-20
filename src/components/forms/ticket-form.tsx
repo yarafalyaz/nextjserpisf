@@ -48,7 +48,7 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah tiket" : "Formulir tambah tiket"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {isEdit && ticket?.ticketNumber && (
           <div className="flex flex-col gap-1.5 col-span-full">
@@ -57,7 +57,7 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
           </div>
         )}
         <div className="flex flex-col gap-1.5 col-span-full">
-          <Label htmlFor="subject">Subjek *</Label>
+          <Label htmlFor="subject">Subjek <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="subject" name="subject" placeholder="Subjek tiket" required defaultValue={ticket?.subject ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
@@ -111,7 +111,7 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="priority">Prioritas *</Label>
+          <Label htmlFor="priority">Prioritas <span className="text-destructive" aria-hidden="true">*</span></Label>
           <FormSelect
             id="priority"
             name="priority"
@@ -157,9 +157,9 @@ export function TicketForm({ customers, users, ticket }: TicketFormProps) {
           </div>
         )}
       </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending}  id="submit-ticket">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+        <Button type="button" onPress={() => router.back()} className="w-full sm:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} id="submit-ticket" className="w-full sm:w-auto">
           {isPending ? "Menyimpan..." : ticket?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
