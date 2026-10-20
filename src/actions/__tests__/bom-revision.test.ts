@@ -344,6 +344,7 @@ describe("updateBomRevision", () => {
 
   it("replaces the lines of a draft revision", async () => {
     bomRevisionFindUniqueMock.mockResolvedValue({ id: 1, status: "draft", productId: 9 })
+    itemFindManyMock.mockResolvedValue([{ id: 1 }, { id: 3 }])
     bomRevisionUpdateMock.mockResolvedValue({})
     const form = fd({ effectiveDate: "2026-10-09" })
     form.append("revisionItemId", "1")
