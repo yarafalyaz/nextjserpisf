@@ -7,6 +7,9 @@ const nextSlugMock = vi.fn()
 
 const expenseCategoryCreateMock = vi.fn()
 const expenseCategoryUpdateMock = vi.fn()
+const expenseCategoryDeleteMock = vi.fn()
+const expenseCountMock = vi.fn()
+const pettyCashCountMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -16,7 +19,10 @@ vi.mock("@/lib/db/prisma", () => ({
     expenseCategory: {
       create: (...a: unknown[]) => expenseCategoryCreateMock(...a),
       update: (...a: unknown[]) => expenseCategoryUpdateMock(...a),
+      delete: (...a: unknown[]) => expenseCategoryDeleteMock(...a),
     },
+    expense: { count: (...a: unknown[]) => expenseCountMock(...a) },
+    pettyCash: { count: (...a: unknown[]) => pettyCashCountMock(...a) },
   },
 }))
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
@@ -27,7 +33,7 @@ vi.mock("@/lib/utils/slug-db", () => ({
   nextSlug: (...a: unknown[]) => nextSlugMock(...a),
 }))
 
-import { createExpenseCategory, updateExpenseCategory } from "../expense-category.actions"
+import { createExpenseCategory, updateExpenseCategory, deleteExpenseCategory } from "../expense-category.actions"
 
 function fd(payload: Record<string, string>): FormData {
   const f = new FormData()
@@ -41,6 +47,9 @@ beforeEach(() => {
   nextSlugMock.mockResolvedValue("slug-x")
   expenseCategoryCreateMock.mockResolvedValue({ id: 1 })
   expenseCategoryUpdateMock.mockResolvedValue({})
+  expenseCategoryDeleteMock.mockResolvedValue({})
+  expenseCountMock.mockResolvedValue(0)
+  pettyCashCountMock.mockResolvedValue(3)
 })
 
 describe("expense-category Zod validation", () => {
@@ -80,5 +89,26 @@ describe("expense-category Zod validation", () => {
         data: expect.objectContaining({ name: "csr", label: "CSR", sortOrder: 3, isActive: true }),
       }),
     )
+  })
+})
+
+describe("deleteExpenseCategory referential guard", () => {
+  it("rejects delete when petty cash still uses category, without deleting", async () => {
+    const res = await deleteExpenseCategory(7)
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("kas kecil")
+    expect(String(res.error)).toContain("3")
+    expect(expenseCategoryDeleteMock).not.toHaveBeenCalled()
+    // expense check runs first, petty check second
+    expect(expenseCountMock).toHaveBeenCalledWith({ where: { categoryId: 7 } })
+    expect(pettyCashCountMock).toHaveBeenCalledWith({ where: { categoryId: 7 } })
+  })
+
+  it("deletes when neither expense nor petty cash uses category", async () => {
+    expenseCountMock.mockResolvedValue(0)
+    pettyCashCountMock.mockResolvedValue(0)
+    const res = await deleteExpenseCategory(7)
+    expect(res.success).toBe(true)
+    expect(expenseCategoryDeleteMock).toHaveBeenCalledWith({ where: { id: 7 } })
   })
 })
