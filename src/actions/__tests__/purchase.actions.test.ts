@@ -645,28 +645,28 @@ describe("Vendor Bill Actions", () => {
     expect(Number(update.data.balanceDue)).toBe(900000)
   })
 
-  it("confirmVendorBill rolls a service PO's value into the work order's production HPP", async () => {
-    // 3-way match
+  // Setup bersama confirm tagihan atas PO jasa tertaut WO 9.
+  const setupServicePoBill = (orders: unknown[]) => {
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
-    // Bill is a service PO linked to a work order.
     mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
     })
     mocks.prismaMock.vendorBill.findUnique.mockResolvedValue({
       id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
     })
-    // First aggregate call = 3-way match (0 already billed); second = service PO billed total.
     mocks.prismaMock.vendorBill.aggregate
       .mockResolvedValueOnce({ _sum: { grandTotal: 0 } })
       .mockResolvedValue({ _sum: { grandTotal: 500000 } })
-
-    // Service PO → work order 9.
     mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
       isService: true, workOrderId: 9, vendorId: 3, documentNo: "PO-0042",
     })
-    // Work order 9 has a production order.
-    mocks.prismaMock.productionOrder.findMany.mockResolvedValue([{ id: 55 }])
+    mocks.prismaMock.productionOrder.findMany.mockResolvedValue(orders)
     mocks.prismaMock.productionCost.findMany.mockResolvedValue([])
+  }
+
+  it("confirmVendorBill rolls a service PO's value into the work order's production HPP", async () => {
+    // First aggregate = 3-way match (0 billed); second = service PO total.
+    setupServicePoBill([{ id: 55 }])
     mocks.prismaMock.productionCost.create.mockResolvedValue({ id: 77 })
     mocks.prismaMock.productionOrder.findUnique.mockResolvedValue({ totalActualCost: 1000 })
 
@@ -685,23 +685,7 @@ describe("Vendor Bill Actions", () => {
   })
 
   it("F-71: confirmVendorBill still posts but warns when the production order is already completed", async () => {
-    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
-    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
-    })
-    mocks.prismaMock.vendorBill.findUnique.mockResolvedValue({
-      id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
-    })
-    mocks.prismaMock.vendorBill.aggregate
-      .mockResolvedValueOnce({ _sum: { grandTotal: 0 } })
-      .mockResolvedValue({ _sum: { grandTotal: 500000 } })
-    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
-      isService: true, workOrderId: 9, vendorId: 3, documentNo: "PO-0042",
-    })
-    // Work order 9's only production order is already completed (status is now
-    // selected by the F-71 guard — a bare { id } row would mean "not skipped").
-    mocks.prismaMock.productionOrder.findMany.mockResolvedValue([{ id: 55, status: "completed" }])
-    mocks.prismaMock.productionCost.findMany.mockResolvedValue([])
+    setupServicePoBill([{ id: 55, status: "completed" }])
 
     const res = await actions.confirmVendorBill(1)
 
