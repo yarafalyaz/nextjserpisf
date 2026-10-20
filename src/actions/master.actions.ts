@@ -159,6 +159,12 @@ export async function createCustomer(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // FK tanpa cek: customerCategoryId fiktif lolos optionalNumber lalu P2003 mentah.
+    if (v.customerCategoryId != null) {
+      const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null }, select: { id: true } });
+      if (!cat) return { success: false, error: "Kategori pelanggan tidak ditemukan" };
+    }
+
     const settings = await getSystemSettings();
     let code = v.code || null;
     if (settings.enableAutoCustomerCode !== false || !code) {
@@ -205,6 +211,11 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    if (v.customerCategoryId != null) {
+      const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null }, select: { id: true } });
+      if (!cat) return { success: false, error: "Kategori pelanggan tidak ditemukan" };
+    }
 
     await prisma.customer.update({
       where: { id: customerId },
@@ -285,6 +296,12 @@ export async function createVendor(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // FK tanpa cek: paymentTermId fiktif lolos optionalNumber lalu P2003 mentah.
+    if (v.paymentTermId != null) {
+      const term = await prisma.paymentTerm.findFirst({ where: { id: v.paymentTermId, isActive: true }, select: { id: true } });
+      if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
+    }
+
     const settings = await getSystemSettings();
     let code = v.code || null;
     if (settings.enableAutoVendorCode !== false || !code) {
@@ -333,6 +350,11 @@ export async function updateVendor(vendorId: number, formData: FormData) {
     const parsed = parseFormData(vendorSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    if (v.paymentTermId != null) {
+      const term = await prisma.paymentTerm.findFirst({ where: { id: v.paymentTermId, isActive: true }, select: { id: true } });
+      if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
+    }
 
     await prisma.vendor.update({
       where: { id: vendorId },
