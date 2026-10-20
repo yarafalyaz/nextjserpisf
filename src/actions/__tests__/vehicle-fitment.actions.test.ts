@@ -86,6 +86,26 @@ describe("createVehicleFitment", () => {
     expect(mocks.prisma.vehicleFitmentRule.create).not.toHaveBeenCalled()
   })
 
+  it("rejects out-of-range fitment years without writing", async () => {
+    for (const payload of [
+      { itemId: "5", yearFrom: "99999" },
+      { itemId: "5", yearTo: "1899" },
+      { itemId: "5", yearFrom: "2015", yearTo: "99999" },
+    ] as Record<string, string>[]) {
+      const res = await createVehicleFitment(fdMap(payload))
+      expect(res.success).toBe(false)
+      expect(String(res.error)).toMatch(/tahun/i)
+    }
+    expect(mocks.prisma.vehicleFitmentRule.create).not.toHaveBeenCalled()
+  })
+
+  it("rejects out-of-range check year without querying rules", async () => {
+    mocks.prisma.vehicleFitmentRule.findMany.mockResolvedValue([])
+    const res = await checkVehicleFitment(fdMap({ itemId: "5", year: "99999" }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toMatch(/tahun/i)
+  })
+
   it("defaults result to unknown when omitted", async () => {
     mocks.prisma.vehicleFitmentRule.create.mockResolvedValue({ id: 10 })
     await createVehicleFitment(fdMap({ itemId: "5" }))
