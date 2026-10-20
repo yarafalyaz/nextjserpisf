@@ -1695,6 +1695,8 @@ export async function createStocktakeSession(formData: FormData) {
     const notesRaw = (formData.get("notes") as string | null) ?? null;
     const notes = notesRaw ? notesRaw.slice(0, 1000) : null;
     await assertWarehouseIdInScope(user, warehouseId);
+    const warehouse = await prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true } });
+    if (!warehouse) throw new Error("Gudang tidak ditemukan");
     const parsedDate = dateOnly.safeParse(dateRaw);
     if (!parsedDate.success) throw new Error("Tanggal tidak valid");
     const sessionDate = wibDateToUtcMidnight(parsedDate.data);
@@ -1946,6 +1948,12 @@ export async function createRemnant(formData: FormData) {
     const qty = Number(formData.get("qty"));
     await assertWarehouseIdInScope(user, warehouseId);
     if (!Number.isSafeInteger(itemId) || itemId <= 0) throw new Error("Item tidak valid");
+    const [item, warehouse] = await Promise.all([
+      prisma.item.findUnique({ where: { id: itemId }, select: { id: true } }),
+      prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true } }),
+    ]);
+    if (!item) throw new Error("Barang tidak ditemukan");
+    if (!warehouse) throw new Error("Gudang tidak ditemukan");
     if (!Number.isFinite(qty) || qty <= 0) throw new Error("Qty sisa harus > 0");
     const unitCostRaw = Number(formData.get("unitCost"));
     if (!Number.isFinite(unitCostRaw) || unitCostRaw < 0) throw new Error("Biaya satuan tidak valid");
