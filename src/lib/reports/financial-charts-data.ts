@@ -12,6 +12,7 @@ import { computeIncomeStatement } from "@/lib/finance/income-statement"
 import { monthBuckets, type MonthlyMetric } from "@/lib/reports/financial-charts"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { sumEntriesByAccount, type AccountSums } from "@/lib/services/report-aggregation.service"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 
 /** Kelompok akun lancar — sama dengan yang dipakai laporan Rasio Keuangan. */
 const CURRENT_ASSET_GROUPS = new Set(["BANK", "AREC", "INTR", "OCAS"])
@@ -23,7 +24,7 @@ export interface FinancialChartsReport {
   periodCaption: string
 }
 
-interface AccountRow {
+export interface FinancialChartAccount {
   id: number
   code: string
   name: string
@@ -31,8 +32,8 @@ interface AccountRow {
   reportGroup: string | null
 }
 
-function balanceTotals(
-  accounts: AccountRow[],
+export function balanceTotals(
+  accounts: FinancialChartAccount[],
   sums: Map<number, AccountSums>,
 ): Pick<MonthlyMetric, "totalAssets" | "totalLiabilities" | "totalEquity" | "currentAssets" | "currentLiabilities"> {
   let totalAssets = 0
@@ -44,21 +45,40 @@ function balanceTotals(
   for (const account of accounts) {
     const sum = sums.get(account.id)
     if (!sum) continue
-    const net = account.type === "ASSET" ? sum.debit - sum.credit : sum.credit - sum.debit
+    const net =
+      account.type === "ASSET" ? safeSubtract(sum.debit, sum.credit, 2) : safeSubtract(sum.credit, sum.debit, 2)
     if (net === 0) continue
 
     if (account.type === "ASSET") {
-      totalAssets += net
-      if (account.reportGroup && CURRENT_ASSET_GROUPS.has(account.reportGroup)) currentAssets += net
+      totalAssets = safeAdd(totalAssets, net, 2)
+      if (account.reportGroup && CURRENT_ASSET_GROUPS.has(account.reportGroup)) currentAssets = safeAdd(currentAssets, net, 2)
     } else if (account.type === "LIABILITY") {
-      totalLiabilities += net
-      if (account.reportGroup && CURRENT_LIABILITY_GROUPS.has(account.reportGroup)) currentLiabilities += net
+      totalLiabilities = safeAdd(totalLiabilities, net, 2)
+      if (account.reportGroup && CURRENT_LIABILITY_GROUPS.has(account.reportGroup)) currentLiabilities = safeAdd(currentLiabilities, net, 2)
     } else if (account.type === "EQUITY") {
-      totalEquity += net
+      totalEquity = safeAdd(totalEquity, net, 2)
     }
   }
 
   return { totalAssets, totalLiabilities, totalEquity, currentAssets, currentLiabilities }
+}
+
+/** Gabung jumlah bulanan ke kumulatif, persis sen per akun. */
+export function accumulateAccountSums(
+  cumulative: Map<number, AccountSums>,
+  monthly: Map<number, AccountSums>,
+): Map<number, AccountSums> {
+  const next = new Map<number, AccountSums>(cumulative)
+  for (const [accountId, sums] of monthly) {
+    const current = next.get(accountId)
+    next.set(
+      accountId,
+      current
+        ? { debit: safeAdd(current.debit, sums.debit, 2), credit: safeAdd(current.credit, sums.credit, 2) }
+        : { ...sums },
+    )
+  }
+  return next
 }
 
 export async function loadFinancialMetrics(period: { start: Date; end: Date }): Promise<FinancialChartsReport> {
@@ -69,18 +89,12 @@ export async function loadFinancialMetrics(period: { start: Date; end: Date }): 
 
   const months = monthBuckets(period)
   const opening = await sumEntriesByAccount({ date: { lt: period.start } })
-  const cumulative = new Map<number, AccountSums>(opening)
+  let cumulative = new Map<number, AccountSums>(opening)
 
   const metrics: MonthlyMetric[] = []
   for (const month of months) {
     const monthly = await sumEntriesByAccount({ date: { gte: month.start, lte: month.end } })
-    for (const [accountId, sums] of monthly) {
-      const current = cumulative.get(accountId)
-      cumulative.set(
-        accountId,
-        current ? { debit: current.debit + sums.debit, credit: current.credit + sums.credit } : { ...sums },
-      )
-    }
+    cumulative = accumulateAccountSums(cumulative, monthly)
 
     const income = computeIncomeStatement(
       accounts.map((account) => ({
@@ -97,8 +111,8 @@ export async function loadFinancialMetrics(period: { start: Date; end: Date }): 
     metrics.push({
       label: month.label,
       // Didefinisikan agar pendapatan − biaya = laba bersih (lihat catatan modul pure).
-      revenue: income.totalRevenue + income.totalOtherIncome,
-      expense: income.totalCogs + income.totalExpense + income.totalOtherExpense,
+      revenue: safeAdd(income.totalRevenue, income.totalOtherIncome, 2),
+      expense: safeAdd(safeAdd(income.totalCogs, income.totalExpense, 2), income.totalOtherExpense, 2),
       netProfit: income.netProfit,
       ...balanceTotals(accounts, cumulative),
     })
