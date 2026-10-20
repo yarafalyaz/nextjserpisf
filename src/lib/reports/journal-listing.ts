@@ -13,6 +13,7 @@
  */
 
 import { formatAccounting } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
@@ -84,8 +85,10 @@ export function buildJournalListing(input: {
     const lines = [...journal.lines].sort((a, b) =>
       a.accountCode.localeCompare(b.accountCode, "id-ID", { numeric: true }),
     )
-    totalDebit += lines.reduce((sum, line) => sum + line.debit, 0)
-    totalCredit += lines.reduce((sum, line) => sum + line.credit, 0)
+    for (const line of lines) {
+      totalDebit = safeAdd(totalDebit, line.debit, 2)
+      totalCredit = safeAdd(totalCredit, line.credit, 2)
+    }
 
     rows.push({ kind: "group", label: journal.title })
     if (journal.description) rows.push({ kind: "notice", text: journal.description })
