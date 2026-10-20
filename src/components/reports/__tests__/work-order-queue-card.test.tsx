@@ -1,13 +1,9 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest"
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
-
 import { WorkOrderQueueCard } from "../work-order-queue-card"
 import { buildWorkOrderQueue, type WorkOrderQueueInput } from "@/lib/reports/work-order-queue"
+import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 
 const NOW = new Date(2026, 9, 20, 10, 0)
 
@@ -26,18 +22,8 @@ function input(over: Partial<WorkOrderQueueInput>): WorkOrderQueueInput {
   }
 }
 
-function render(node: React.ReactNode) {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root: Root = createRoot(container)
-  act(() => {
-    root.render(node)
-  })
-  return { container, root }
-}
-
 afterEach(() => {
-  document.body.replaceChildren()
+  clearRenderedCards()
 })
 
 describe("WorkOrderQueueCard F-2026-10-20-28(a)", () => {
@@ -49,7 +35,7 @@ describe("WorkOrderQueueCard F-2026-10-20-28(a)", () => {
       ],
       NOW,
     )
-    const { container, root } = render(<WorkOrderQueueCard queue={queue} />)
+    const { container, root } = renderCard(<WorkOrderQueueCard queue={queue} />)
     const text = container.textContent ?? ""
     expect(container.querySelector('[aria-label="Antrian Bengkel"]')).not.toBeNull()
     expect(text).toContain("2 perintah kerja aktif")
@@ -60,14 +46,14 @@ describe("WorkOrderQueueCard F-2026-10-20-28(a)", () => {
     const links = Array.from(container.querySelectorAll("a")).map((a) => a.getAttribute("href"))
     // urutan tenggat: WO-0001 (18 Okt, terlambat) dulu, lalu WO-0002
     expect(links).toEqual(["/produksi/perintah-kerja/wo-1", "/produksi/perintah-kerja/wo-2"])
-    act(() => root.unmount())
+    unmountCard(root)
   })
 
   it("kosong tampil pesan belum ada antrian aktif", () => {
     const queue = buildWorkOrderQueue([], NOW)
-    const { container, root } = render(<WorkOrderQueueCard queue={queue} />)
+    const { container, root } = renderCard(<WorkOrderQueueCard queue={queue} />)
     expect(container.textContent).toContain("Belum ada perintah kerja aktif dalam antrian")
     expect(container.textContent).toContain("0 perintah kerja aktif")
-    act(() => root.unmount())
+    unmountCard(root)
   })
 })
