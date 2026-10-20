@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest"
 import { ProjectForm } from "../project-form"
-import { mountInto, unmount, withContainer, decorativeStars, labelTexts } from "./form-a11y-test-utils"
+import { mountInto, unmount, withContainer, assertComboboxNameA11yAdd } from "./form-a11y-test-utils"
 
 vi.mock("next/navigation", async () => (await import("./form-a11y-test-utils")).routerModule)
 vi.mock("@/lib/utils/toast", async () => (await import("./form-a11y-test-utils")).toastModule)
@@ -14,13 +14,10 @@ describe("ProjectForm — a11y wiring", () => {
   it("tambah: aria-label + aria-busy false, pelanggan wajib aria-required, 2 bintang dekoratif", () => {
     withContainer((container) => {
       const root = mountInto(container, <ProjectForm customers={customers} />)
-      const form = container.querySelector("form")!
-      expect(form.getAttribute("aria-label")).toBe("Formulir tambah proyek")
-      expect(form.getAttribute("aria-busy")).toBe("false")
-      expect(container.querySelectorAll('[role="combobox"][aria-required="true"]').length).toBe(1)
-      expect(container.querySelector("#name")!.getAttribute("required")).not.toBeNull()
-      expect(decorativeStars(form).length).toBe(2)
-      expect(labelTexts(form)).toEqual(expect.arrayContaining(["Nama Proyek *", "Pelanggan *"]))
+      assertComboboxNameA11yAdd(container.querySelector("form")!, container, {
+        addLabel: "Formulir tambah proyek",
+        labels: ["Nama Proyek *", "Pelanggan *"],
+      })
       unmount(root, container)
     })
   })
