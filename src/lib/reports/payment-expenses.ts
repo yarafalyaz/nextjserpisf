@@ -15,6 +15,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
@@ -86,7 +87,7 @@ export function buildPaymentExpenses(input: {
     const group = visible.filter((expense) => expense.source === source)
     if (group.length === 0) continue
 
-    const subtotal = group.reduce((sum, expense) => sum + expense.adminFee, 0)
+    const subtotal = group.reduce((sum, expense) => safeAdd(sum, expense.adminFee, 2), 0)
     rows.push({ kind: "group", label: source })
 
     for (const expense of group) {
@@ -110,7 +111,7 @@ export function buildPaymentExpenses(input: {
 
     bySource.push({ source, count: group.length, adminFee: subtotal })
     totals.count += group.length
-    totals.adminFee += subtotal
+    totals.adminFee = safeAdd(totals.adminFee, subtotal, 2)
   }
 
   if (visible.length === 0) {
