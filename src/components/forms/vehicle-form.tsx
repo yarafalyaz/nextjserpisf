@@ -98,7 +98,7 @@ export function VehicleForm({ brands, models, variants, vehicle }: VehicleFormPr
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={vehicle?.id ? "Formulir ubah kendaraan" : "Formulir tambah kendaraan"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="brandId">Merek</Label>
@@ -124,10 +124,11 @@ export function VehicleForm({ brands, models, variants, vehicle }: VehicleFormPr
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="variantId">Tipe / Varian *</Label>
+          <Label htmlFor="variantId">Tipe / Varian <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Combobox
             id="variantId"
             name="variantId"
+            required
             options={filteredVariants.map((v) => {
               const tags = [v.drivetrain, v.transmission].filter(Boolean).join(" • ")
               return { value: String(v.id), label: tags ? `${v.name} (${tags})` : v.name }
