@@ -76,28 +76,47 @@ export async function syncServicePurchaseOrderCost(
     createdBy: number | null
   },
   client: TxClient | typeof prisma = prisma,
-): Promise<{ posted: number; productionOrderIds: number[] }> {
+): Promise<{ posted: number; productionOrderIds: number[]; skippedProductionOrderIds: number[] }> {
   const po = await client.purchaseOrder.findUnique({
     where: { id: input.purchaseOrderId },
     select: { isService: true, workOrderId: true, vendorId: true },
   })
   if (!po || !po.isService || po.workOrderId == null) {
-    return { posted: 0, productionOrderIds: [] }
+    return { posted: 0, productionOrderIds: [], skippedProductionOrderIds: [] }
   }
 
-  const productionOrders = await client.productionOrder.findMany({
+  const allProductionOrders = await client.productionOrder.findMany({
     where: { workOrderId: po.workOrderId },
-    select: { id: true },
+    select: { id: true, status: true },
   })
-  if (productionOrders.length === 0) {
-    return { posted: 0, productionOrderIds: [] }
+  // F-2026-10-20-71: a completed order's HPP is final — `totalActualCost` was
+  // zeroed and `releasedCost` frozen at completion (final release in
+  // manufacturing.actions), so a late service bill must not re-open it: writing
+  // here would raise the total off zero and post Dr WIP / Cr absorption with no
+  // further release to credit it (WIP hangs, GL != subledger). Completed orders
+  // are skipped entirely — existing subcontract lines on them stay as history —
+  // and reported so the caller can log it and surface a warning. The vendor
+  // bill itself still posts to AP normally; only the HPP mirror is refused.
+  const completedIds = new Set(
+    allProductionOrders.filter((o) => o.status === "completed").map((o) => o.id),
+  )
+  const productionOrders = allProductionOrders.filter((o) => !completedIds.has(o.id))
+  const skippedProductionOrderIds = allProductionOrders
+    .filter((o) => completedIds.has(o.id))
+    .map((o) => o.id)
+  if (allProductionOrders.length === 0) {
+    return { posted: 0, productionOrderIds: [], skippedProductionOrderIds: [] }
   }
 
   const desiredTotal = Math.max(0, Number(input.amount) || 0)
-  const existingLines = await client.productionCost.findMany({
-    where: { purchaseOrderId: input.purchaseOrderId, category: "subcontract" },
-    select: { id: true, amount: true, productionOrderId: true },
-  })
+  // Only lines on live (or unknown-order) targets are managed; lines pinned to
+  // a completed order are left untouched on every path below.
+  const existingLines = (
+    await client.productionCost.findMany({
+      where: { purchaseOrderId: input.purchaseOrderId, category: "subcontract" },
+      select: { id: true, amount: true, productionOrderId: true },
+    })
+  ).filter((l) => l.productionOrderId == null || !completedIds.has(l.productionOrderId))
 
   if (desiredTotal === 0) {
     if (existingLines.length) {
@@ -111,7 +130,7 @@ export async function syncServicePurchaseOrderCost(
         }
       }
     }
-    return { posted: 0, productionOrderIds: productionOrders.map((o) => o.id) }
+    return { posted: 0, productionOrderIds: productionOrders.map((o) => o.id), skippedProductionOrderIds }
   }
 
   // Spread the PO value across the work order's production orders equally per
@@ -171,8 +190,14 @@ export async function syncServicePurchaseOrderCost(
     }
   }
 
-  // `existingTotal` is the prior total; return the newly posted amount.
-  return { posted: desiredTotal, productionOrderIds: productionOrders.map((o) => o.id) }
+  // `existingTotal` is the prior total; return the newly posted amount. When
+  // every order was skipped there is no live order to carry the value, so
+  // nothing was posted into HPP at all.
+  return {
+    posted: productionOrders.length ? desiredTotal : 0,
+    productionOrderIds: productionOrders.map((o) => o.id),
+    skippedProductionOrderIds,
+  }
 }
 
 /**
