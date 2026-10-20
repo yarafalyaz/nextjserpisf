@@ -91,7 +91,7 @@ describe("buildStockValuation", () => {
   })
 
   it("global average menilai dari harga pokok barang (selaras HPP), bukan harga lapisan", () => {
-    const unset = layer({ item: { sku: "BRG-1", name: "Busi", unitOfMeasure: "PCS", cost: 1500, costingMethod: null, category: { name: "Sparepart", costingMethod: null } } })
+    const unset = layer({ item: { ...layer().item, costingMethod: null } })
     const lama = buildStockValuation([unset], (id) => warehouses.get(id ?? 0))
     const baru = buildStockValuation([unset], (id) => warehouses.get(id ?? 0), "Average")
 
