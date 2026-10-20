@@ -103,3 +103,33 @@ describe("createInvoiceExchange Zod validation", () => {
     expect(data.customerId).toBe(1)
   })
 })
+
+describe("createInvoiceExchange eligibility (Salsa run ini)", () => {
+  it("menolak faktur status paid walau belum tercatat diserahkan", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000, status: "paid" },
+    ])
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah lunas")
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak faktur lunas menurut angka (paidAmount >= grandTotal) walau status posted", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000, paidAmount: 1000, status: "posted" },
+    ])
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah lunas")
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("tetap menerima faktur partial dengan sisa > 0", async () => {
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+      { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000, paidAmount: 400, status: "partial" },
+    ])
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(true)
+  })
+})
