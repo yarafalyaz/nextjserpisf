@@ -568,6 +568,31 @@ export async function createCustomerVehicle(formData: FormData) {
       notes,
     } = parsed.data;
 
+    // FK hanya dicek format (int positif) oleh schema: customer terhapus,
+    // varian/tipe fiktif lolos lalu gagal P2003 mentah. Cek eksistensi
+    // pra-tulis (pola withholding-tax/position-department).
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, deletedAt: null, isActive: true },
+      select: { id: true },
+    });
+    if (!customer) return { success: false, error: "Pelanggan tidak ditemukan" };
+    if (variantId) {
+      const variant = await prisma.vehicleVariant.findFirst({
+        where: { id: variantId },
+        select: { id: true },
+      });
+      if (!variant) return { success: false, error: "Varian kendaraan tidak ditemukan" };
+    } else {
+      const rawVehicleId = formVehicleId ?? kendaraanId;
+      if (rawVehicleId) {
+        const vehicle = await prisma.vehicle.findFirst({
+          where: { id: rawVehicleId, deletedAt: null },
+          select: { id: true },
+        });
+        if (!vehicle) return { success: false, error: "Tipe kendaraan tidak ditemukan" };
+      }
+    }
+
     // Find or create the catalog-type Vehicle from variantId, then create the
     // ownership link (with the physical-unit attributes) — both in ONE
     // transaction. Without the wrapper, a vehicle.create success followed by a
@@ -651,6 +676,30 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
       isActive,
       notes,
     } = parsed.data;
+
+    // FK hanya dicek format oleh schema (lihat createCustomerVehicle):
+    // cek eksistensi pra-tulis, sebelum tx menyentuh Vehicle bersama.
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, deletedAt: null, isActive: true },
+      select: { id: true },
+    });
+    if (!customer) return { success: false, error: "Pelanggan tidak ditemukan" };
+    if (variantId) {
+      const variant = await prisma.vehicleVariant.findFirst({
+        where: { id: variantId },
+        select: { id: true },
+      });
+      if (!variant) return { success: false, error: "Varian kendaraan tidak ditemukan" };
+    } else {
+      const rawVehicleId = formVehicleId ?? kendaraanId;
+      if (rawVehicleId) {
+        const vehicle = await prisma.vehicle.findFirst({
+          where: { id: rawVehicleId, deletedAt: null },
+          select: { id: true },
+        });
+        if (!vehicle) return { success: false, error: "Tipe kendaraan tidak ditemukan" };
+      }
+    }
 
     // Atomic update: the catalog-type Vehicle row + the ownership link, both in
     // ONE transaction. A vehicle.update success followed by a customerVehicle
