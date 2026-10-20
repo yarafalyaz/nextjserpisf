@@ -72,6 +72,9 @@ export default async function BomRevisionDetailPage({
             {revision.status === "draft" && (
               <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary">Ubah</Button>
             )}
+            {revision.status === "rejected" && (
+              <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary">Ubah & Ajukan Ulang</Button>
+            )}
             <BackButton href="/produksi/bom-revisi" />
           </>
         }
@@ -87,6 +90,11 @@ export default async function BomRevisionDetailPage({
         <DetailField label="Status" value={<StatusChip status={revision.status} />} />
         <DetailField label="Tanggal Berlaku" value={formatDate(revision.effectiveDate)} />
         <DetailField label="Dirilis" value={revision.releasedAt ? formatDate(revision.releasedAt) : "-"} />
+        <DetailField label="Diajukan" value={revision.submittedAt ? formatDate(revision.submittedAt) : "-"} />
+        <DetailField label="Disetujui" value={revision.approvedAt ? formatDate(revision.approvedAt) : "-"} />
+        {revision.status === "rejected" && revision.rejectionReason && (
+          <DetailField label="Alasan Penolakan" value={revision.rejectionReason} colSpan="full" />
+        )}
         <DetailField label="Dibuat" value={formatDate(revision.createdAt)} />
         {revision.notes && <DetailField label="Catatan" value={revision.notes} colSpan="full" />}
       </DetailCard>

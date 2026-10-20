@@ -5,6 +5,9 @@ export const STATUS_LABELS: Record<string, string> = {
   // General
   draft: "Konsep",
   pending: "Menunggu",
+  pending_approval: "Menunggu Persetujuan",
+  released: "Dirilis",
+  superseded: "Digantikan",
   approved: "Disetujui",
   rejected: "Ditolak",
   completed: "Selesai",
