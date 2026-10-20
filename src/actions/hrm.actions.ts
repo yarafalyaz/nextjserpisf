@@ -2308,9 +2308,7 @@ export async function deleteOvertimeRequest(id: number) {
  * produksinya dulu bila memang perlu koreksi.
  */
 async function timesheetPulledError(id: number): Promise<{ success: false; error: string } | null> {
-  const used = await prisma.productionCost.count({
-    where: { sourceTimesheetId: id },
-  });
+  const used = (await prisma.productionCost.findMany({ where: { sourceTimesheetId: id }, select: { id: true } })).length;
   if (used === 0) return null;
   return {
     success: false,
