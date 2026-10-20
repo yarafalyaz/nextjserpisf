@@ -66,6 +66,19 @@ export function setupSalesRevisionBase(mocks: AnyMocks, quotation: Record<string
   mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
 }
 
+/** Fixture penawaran terikat kontrak bersama tes penjualan revisi. */
+export const REVISION_CONTRACT_QUOTATION = {
+  id: 5,
+  documentNo: "QUO-2026-005",
+  customerId: 3,
+  customerVehicleId: 9,
+  grandTotal: 1500000,
+  revisionNumber: 2,
+} as const
+
+/** Satu faktur lama tertagih bersama tes penjualan revisi. */
+export const REVISION_BILLED_INVOICE = [{ id: 11, status: "posted", grandTotal: 1000000 }] as const
+
 /** Sisi `return` mock hoisted bersama aksi penjualan revisi. */
 export function buildSalesRevisionMocks(prismaMock: Record<string, any>, docNo: string) {
   const requirePermissionMock = vi.fn().mockResolvedValue({ id: 7 })

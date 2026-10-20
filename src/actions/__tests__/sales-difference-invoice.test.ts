@@ -24,21 +24,11 @@ vi.mock("@/lib/services/approval-workflow.service", () => helpers.registerSalesR
 
 import { createDifferenceInvoice } from "../sales.actions"
 
-const revisedQuotation = {
-  id: 5,
-  documentNo: "QUO-2026-005",
-  customerId: 3,
-  customerVehicleId: 9,
-  grandTotal: 1500000,
-  revisionNumber: 2,
-}
 
 describe("createDifferenceInvoice (F-2026-10-20-10)", () => {
   beforeEach(() => {
-    helpers.setupSalesRevisionBase(mocks, revisedQuotation)
-    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
-      { id: 11, status: "paid", grandTotal: 1000000 },
-    ])
+    helpers.setupSalesRevisionBase(mocks, helpers.REVISION_CONTRACT_QUOTATION)
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue(helpers.REVISION_BILLED_INVOICE)
     mocks.prismaMock.salesInvoice.create.mockResolvedValue({ id: 99, slug: "inv-2026-001" })
   })
 
@@ -56,7 +46,7 @@ describe("createDifferenceInvoice (F-2026-10-20-10)", () => {
   })
 
   it("menolak penawaran yang belum pernah direvisi", async () => {
-    mocks.prismaMock.quotation.findFirst.mockResolvedValue({ ...revisedQuotation, revisionNumber: 0 })
+    mocks.prismaMock.quotation.findFirst.mockResolvedValue({ ...helpers.REVISION_CONTRACT_QUOTATION, revisionNumber: 0 })
     const res = await createDifferenceInvoice(5)
     expect(res.success).toBe(false)
     expect(res.error).toContain("belum pernah direvisi")

@@ -24,21 +24,11 @@ vi.mock("@/lib/services/approval-workflow.service", () => helpers.registerSalesR
 
 import { createProgressInvoice } from "../sales.actions"
 
-const contractQuotation = {
-  id: 5,
-  documentNo: "QUO-2026-005",
-  customerId: 3,
-  customerVehicleId: 9,
-  grandTotal: 1500000,
-  revisionNumber: 2,
-}
 
 describe("createProgressInvoice (F-2026-10-20-58)", () => {
   beforeEach(() => {
-    helpers.setupSalesRevisionBase(mocks, contractQuotation)
-    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
-      { id: 11, status: "posted", grandTotal: 1000000 },
-    ])
+    helpers.setupSalesRevisionBase(mocks, helpers.REVISION_CONTRACT_QUOTATION)
+    mocks.prismaMock.salesInvoice.findMany.mockResolvedValue(helpers.REVISION_BILLED_INVOICE)
     mocks.prismaMock.salesInvoice.create.mockResolvedValue({ id: 99, slug: "inv-2026-001" })
   })
 
