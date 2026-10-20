@@ -52,6 +52,7 @@ export function DeleteButton({ id, action, onSuccess }: DeleteButtonProps) {
         disabled={isPending}
         variant="destructive"
         size="sm"
+        className="min-h-11 min-w-11"
         aria-label="Hapus"
       >
         <Trash2 size={15} aria-hidden="true" />
