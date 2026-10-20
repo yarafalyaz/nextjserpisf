@@ -17,6 +17,7 @@
  */
 
 import { formatAccounting } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface EquityAccountRow {
@@ -42,9 +43,9 @@ export function buildEquityChanges(
 ): EquityChangesResult {
   const totals = accounts.reduce(
     (acc, account) => ({
-      opening: acc.opening + account.opening,
-      movement: acc.movement + account.movement,
-      closing: acc.closing + account.closing,
+      opening: safeAdd(acc.opening, account.opening, 2),
+      movement: safeAdd(acc.movement, account.movement, 2),
+      closing: safeAdd(acc.closing, account.closing, 2),
     }),
     { opening: 0, movement: 0, closing: 0 },
   )
@@ -53,7 +54,7 @@ export function buildEquityChanges(
     accounts: [...accounts].sort((a, b) => a.code.localeCompare(b.code, "id-ID")),
     totals,
     netProfit,
-    closingWithProfit: totals.closing + netProfit,
+    closingWithProfit: safeAdd(totals.closing, netProfit, 2),
   }
 }
 
@@ -144,9 +145,9 @@ export function buildRetainedEarnings(
   const matched = accounts.filter((account) => isRetainedEarningsAccount(account.name))
   const totals = matched.reduce(
     (acc, account) => ({
-      opening: acc.opening + account.opening,
-      movement: acc.movement + account.movement,
-      closing: acc.closing + account.closing,
+      opening: safeAdd(acc.opening, account.opening, 2),
+      movement: safeAdd(acc.movement, account.movement, 2),
+      closing: safeAdd(acc.closing, account.closing, 2),
     }),
     { opening: 0, movement: 0, closing: 0 },
   )
@@ -155,7 +156,7 @@ export function buildRetainedEarnings(
     rows: matched,
     ...totals,
     netProfit,
-    closingWithProfit: totals.closing + netProfit,
+    closingWithProfit: safeAdd(totals.closing, netProfit, 2),
     hasAccount: matched.length > 0,
   }
 }

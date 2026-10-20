@@ -290,6 +290,7 @@ export const PERMISSIONS = [
       // BOM revisions: create/edit/release/delete a versioned BOM snapshot.
       // Kept as one capability so a role either governs BOM revisions or not.
       "manage_bom_revisions",
+      "approve_bom_revisions",
       "view_bom_revisions",
       // Quality control (PRD FAB-10/FAB-11/FAB-13): checklists, inspections, NCR.
       "view_qc",
@@ -512,6 +513,7 @@ export const KABENG_WHITELIST = [
       "create_products",
       "edit_products",
       "manage_bom_revisions",
+      "approve_bom_revisions",
       "view_bom_revisions",
       "view_qc",
       "manage_qc_checklists",

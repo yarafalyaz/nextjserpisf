@@ -12,6 +12,7 @@
  */
 
 import { formatAccounting } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 import type { TrialBalanceLine } from "@/lib/finance/trial-balance"
 
@@ -72,11 +73,11 @@ export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBa
     let total1 = 0
     let total2 = 0
     const rows: TableRow[] = comparison.rows.map((row) => {
-      total1 += row.net1
-      total2 += row.net2
+      total1 = safeAdd(total1, row.net1, 2)
+      total2 = safeAdd(total2, row.net2, 2)
       return {
         kind: "data",
-        cells: [row.code, row.name, amount(row.net1), amount(row.net2), amount(row.net1 - row.net2)],
+        cells: [row.code, row.name, amount(row.net1), amount(row.net2), amount(safeSubtract(row.net1, row.net2, 2))],
       }
     })
 
@@ -87,7 +88,7 @@ export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBa
         kind: "total",
         grand: true,
         label: "Total",
-        cells: [amount(total1), amount(total2), amount(total1 - total2)],
+        cells: [amount(total1), amount(total2), amount(safeSubtract(total1, total2, 2))],
       })
     }
 
@@ -121,7 +122,7 @@ export function buildTrialBalanceReport(input: TrialBalanceReportInput): TrialBa
         kind: "notice",
         text:
           `Perhatian: total debit (${amount(input.grandTotalDebit)}) tidak sama dengan total kredit ` +
-          `(${amount(input.grandTotalCredit)}) — selisih ${amount(input.grandTotalDebit - input.grandTotalCredit)}.`,
+          `(${amount(input.grandTotalCredit)}) — selisih ${amount(safeSubtract(input.grandTotalDebit, input.grandTotalCredit, 2))}.`,
       })
     }
   }

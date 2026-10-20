@@ -1970,6 +1970,13 @@ model BomRevision {
   notes            String?               @db.Text
   releasedAt       DateTime?             @map("released_at")
   releasedBy       Int?                  @map("released_by")
+  submittedAt      DateTime?             @map("submitted_at")
+  submittedBy      Int?                  @map("submitted_by")
+  approvedAt       DateTime?             @map("approved_at")
+  approvedBy       Int?                  @map("approved_by")
+  rejectedAt       DateTime?             @map("rejected_at")
+  rejectedBy       Int?                  @map("rejected_by")
+  rejectionReason  String?               @map("rejection_reason") @db.Text
   createdBy        Int?                  @map("created_by")
   createdAt        DateTime              @default(now()) @map("created_at")
   updatedAt        DateTime              @updatedAt @map("updated_at")

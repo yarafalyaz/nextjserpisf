@@ -29,6 +29,8 @@ export const DEFAULT_STATEMENT_OPTIONS: StatementDisplayOptions = {
   showParentBalance: true,
 }
 
+import { safeAdd } from "@/lib/utils/math"
+
 const ZERO_EPSILON = 0.005
 
 export interface StatementAccount {
@@ -84,7 +86,7 @@ export function buildStatementRows(
     const cached = rollupCache.get(account.id)
     if (cached !== undefined) return cached
     const children = childrenOf.get(account.id) ?? []
-    const total = children.reduce((sum, child) => sum + rollup(child), account.ownBalance)
+    const total = children.reduce((sum, child) => safeAdd(sum, rollup(child), 2), account.ownBalance)
     rollupCache.set(account.id, total)
     return total
   }
