@@ -90,7 +90,7 @@ export function NotificationDropdown() {
     <div className="relative" ref={dropdownRef}>
       <Button
         onPress={handleToggle}
-        variant="ghost" size="sm" isIconOnly className="header-notification-btn" aria-label="Buka notifikasi"
+        variant="ghost" size="sm" isIconOnly className="size-11 header-notification-btn" aria-label="Buka notifikasi"
         aria-expanded={isOpen}
         aria-haspopup="menu"
         id="notification-btn"
