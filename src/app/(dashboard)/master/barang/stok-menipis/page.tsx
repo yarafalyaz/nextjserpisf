@@ -1,6 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { toPlain } from "@/lib/utils/serialization"
+import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
@@ -76,16 +77,14 @@ export default async function LowStockItemsPage({
     )[0]?.count ?? 0,
   )
 
-  // JSON_OBJECT driver mariadb datang sebagai string — parse aman.
+  // JSON_OBJECT driver mariadb datang sebagai string — parse via helper
+  // kontrak-null (safe-parse sudah di allowlist guard silent-failure).
   const asObj = <T,>(v: unknown): T | null => {
     if (v == null) return null
     if (typeof v === "object") return v as T
-    try {
-      const o = JSON.parse(String(v)) as Record<string, unknown>
-      return Object.values(o).every((x) => x == null) ? null : (o as T)
-    } catch {
-      return null
-    }
+    const o = safeJsonParse<Record<string, unknown>>(String(v))
+    if (!o || Object.values(o).every((x) => x == null)) return null
+    return o as T
   }
 
   const items = rawItems.map((item) => ({
