@@ -15,6 +15,7 @@
  */
 
 import { buildJournalListing, shortJournalDate } from "@/lib/reports/journal-listing"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** referenceType jurnal yang berasal dari alur produksi/pekerjaan pesanan. */
@@ -99,7 +100,7 @@ export function buildJobOrderJournal(input: { journals: JobOrderJournalInput[] }
   for (const journal of journals) {
     const baseReference = jobJournalBaseReference(journal.referenceType)
     const label = jobJournalLabel(journal.referenceType) ?? journal.referenceType
-    const debit = journal.lines.reduce((sum, line) => sum + line.debit, 0)
+    const debit = journal.lines.reduce((sum, line) => safeAdd(sum, line.debit, 2), 0)
     const bucket = byReference.get(baseReference) ?? {
       referenceType: baseReference,
       label,
@@ -107,7 +108,7 @@ export function buildJobOrderJournal(input: { journals: JobOrderJournalInput[] }
       amount: 0,
     }
     bucket.count += 1
-    bucket.amount += debit
+    bucket.amount = safeAdd(bucket.amount, debit, 2)
     byReference.set(baseReference, bucket)
   }
 

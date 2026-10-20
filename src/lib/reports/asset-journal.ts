@@ -13,6 +13,7 @@
  */
 
 import { buildJournalListing, shortJournalDate } from "@/lib/reports/journal-listing"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** referenceType jurnal aset — satu tempat, dipakai penyaring data & label. */
@@ -92,10 +93,10 @@ export function buildAssetJournal(input: {
   for (const journal of journals) {
     const kind = assetJournalKind(journal.referenceType)
     if (!kind) continue
-    const debit = journal.lines.reduce((sum, line) => sum + line.debit, 0)
+    const debit = journal.lines.reduce((sum, line) => safeAdd(sum, line.debit, 2), 0)
     const bucket = byKind.get(kind) ?? { kind, count: 0, amount: 0 }
     bucket.count += 1
-    bucket.amount += debit
+    bucket.amount = safeAdd(bucket.amount, debit, 2)
     byKind.set(kind, bucket)
   }
 
