@@ -17,6 +17,7 @@
  */
 
 import { formatAccounting } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
@@ -188,9 +189,9 @@ export function buildAssetHistory(input: {
 
     // Terbaru di atas: riwayat aset dibaca untuk menjawab "apa yang terakhir terjadi".
     for (const event of [...events].sort((a, b) => b.date.getTime() - a.date.getTime())) {
-      if (event.kind === "Perolehan") totals.acquisition += event.amount ?? 0
-      if (event.kind === "Penyusutan") totals.depreciation += Math.abs(event.amount ?? 0)
-      if (event.kind === "Pelepasan") totals.disposal += Math.abs(event.amount ?? 0)
+      if (event.kind === "Perolehan") totals.acquisition = safeAdd(totals.acquisition, event.amount ?? 0, 2)
+      if (event.kind === "Penyusutan") totals.depreciation = safeAdd(totals.depreciation, Math.abs(event.amount ?? 0), 2)
+      if (event.kind === "Pelepasan") totals.disposal = safeAdd(totals.disposal, Math.abs(event.amount ?? 0), 2)
       if (event.kind === "Pindah Lokasi") totals.transfers += 1
 
       rows.push({

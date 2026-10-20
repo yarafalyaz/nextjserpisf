@@ -15,6 +15,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
@@ -98,7 +99,7 @@ export function buildJobOrderCompletion(input: {
     const monthTotals = { qty: 0, totalCost: 0 }
     for (const completion of monthCompletions) {
       monthTotals.qty += completion.qty
-      monthTotals.totalCost += completion.totalCost
+      monthTotals.totalCost = safeAdd(monthTotals.totalCost, completion.totalCost, 2)
       rows.push({
         kind: "data",
         cells: [
@@ -119,7 +120,7 @@ export function buildJobOrderCompletion(input: {
     })
 
     totals.qty += monthTotals.qty
-    totals.totalCost += monthTotals.totalCost
+    totals.totalCost = safeAdd(totals.totalCost, monthTotals.totalCost, 2)
   }
 
   if (visible.length === 0) {
