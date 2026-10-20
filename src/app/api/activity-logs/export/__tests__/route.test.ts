@@ -88,6 +88,29 @@ it("rejects a non-integer userId with 400 and never queries", async () => {
     expect(mocks.findManyLogs).not.toHaveBeenCalled()
   })
 
+  it.each([["dateFrom", "bukan-tanggal"], ["dateFrom", "2026-13-40"], ["dateTo", "bukan-tanggal"], ["dateTo", "2026-13-40"]])(
+    "rejects invalid %s=%j with 400 and never queries",
+    async (field, value) => {
+      mocks.authFn.mockResolvedValue({ user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] } })
+      const res = await GET(makeReq(`http://localhost/api/activity-logs/export?${field}=${value}`) as any)
+      expect(res.status).toBe(400)
+      expect(await res.json()).toEqual({
+        error: { code: "BAD_REQUEST", message: "Tanggal tidak valid" },
+      })
+      expect(mocks.findManyLogs).not.toHaveBeenCalled()
+    },
+  )
+
+  it("rejects dateFrom after dateTo with 400 and never queries", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] } })
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export?dateFrom=2026-02-01&dateTo=2026-01-01") as any)
+    expect(res.status).toBe(400)
+    expect(await res.json()).toEqual({
+      error: { code: "BAD_REQUEST", message: "Rentang tanggal tidak valid" },
+    })
+    expect(mocks.findManyLogs).not.toHaveBeenCalled()
+  })
+
   it("still applies a valid integer userId filter on export", async () => {
     mocks.authFn.mockResolvedValue({
       user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] },

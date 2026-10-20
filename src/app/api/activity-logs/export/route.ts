@@ -2,6 +2,7 @@ import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
 import { hasPermission } from "@/lib/auth/permissions";
+import { buildActivityLogWhere } from "@/lib/utils/activity-log-filter";
 import { apiError } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
@@ -13,44 +14,9 @@ export async function GET(req: NextRequest) {
       return apiError("FORBIDDEN", "Akses ditolak");
     }
 
-    const sp = req.nextUrl.searchParams;
-    const where: Record<string, unknown> = {};
-
-    const userId = sp.get("userId");
-    const action = sp.get("action");
-    const modelType = sp.get("modelType");
-    const dateFrom = sp.get("dateFrom");
-    const dateTo = sp.get("dateTo");
-    const search = sp.get("cari");
-
-    if (userId && userId !== "all") {
-      if (!/^\d+$/.test(userId)) {
-        return apiError("BAD_REQUEST", "userId tidak valid");
-      }
-      const uid = Number(userId);
-      if (!Number.isSafeInteger(uid) || uid <= 0) {
-        return apiError("BAD_REQUEST", "userId tidak valid");
-      }
-      where.userId = uid;
-    }
-    if (action && action !== "all") where.action = action;
-    if (modelType && modelType !== "all") where.modelType = modelType;
-    if (dateFrom || dateTo) {
-      where.createdAt = {};
-      const w = where.createdAt as Record<string, Date>;
-      if (dateFrom) {
-        const d = new Date(dateFrom);
-        if (!Number.isNaN(d.getTime())) w.gte = d;
-      }
-      if (dateTo) {
-        const d = new Date(dateTo);
-        if (!Number.isNaN(d.getTime())) {
-          d.setHours(23, 59, 59, 999);
-          w.lte = d;
-        }
-      }
-    }
-    if (search) where.description = { contains: search };
+    const parsed = buildActivityLogWhere(req.nextUrl.searchParams);
+    if (!parsed.ok) return apiError("BAD_REQUEST", parsed.message);
+    const where = parsed.where;
 
     const logs = await prisma.activityLog.findMany({
       where,
