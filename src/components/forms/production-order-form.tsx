@@ -52,13 +52,14 @@ export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrde
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={order?.id ? "Formulir ubah perintah produksi" : "Formulir tambah perintah produksi"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="productId">Produk *</Label>
+          <Label htmlFor="productId">Produk <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Combobox
             id="productId"
             name="productId"
+            required
             value={productId || null}
             onChange={(key) => setProductId(key ?? "")}
             placeholder="Cari produk..."
@@ -66,7 +67,7 @@ export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrde
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="qty">Jumlah Produksi *</Label>
+          <Label htmlFor="qty">Jumlah Produksi <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="qty" name="qty" type="number" placeholder="Jml" min={1} required defaultValue={order?.qty ?? ""} />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -99,9 +100,9 @@ export function ProductionOrderForm({ products, workOrders = [], defaultWorkOrde
           <Textarea id="notes" name="notes" rows={3} placeholder="Catatan produksi..." defaultValue={order?.notes ?? ""} />
         </div>
       </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending}  id="submit-production-order">
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+        <Button type="button" onPress={() => router.back()} className="w-full sm:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} id="submit-production-order" className="w-full sm:w-auto">
           {isPending ? "Menyimpan..." : order?.id ? "Perbarui" : "Simpan"}
         </Button>
       </div>
