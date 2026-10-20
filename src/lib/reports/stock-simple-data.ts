@@ -11,12 +11,50 @@ import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { reconcileInventory } from "@/lib/inventory/stock-reconciliation"
 import { formatAccounting } from "@/lib/utils/format"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface StockSimpleReport {
   table: { columns: TableColumn[]; rows: TableRow[] }
   periodLabel: string
   periodCaption: string
+}
+
+/** Agregasi lapisan FIFO per gudang, nilai persis sen per lapisan. */
+export function aggregateLayersByWarehouse(
+  layers: { itemId: number; warehouseId: number | null; remaining: unknown; unitCost: unknown }[],
+): Map<number, { qty: number; value: number; items: Set<number> }> {
+  const byWarehouse = new Map<number, { qty: number; value: number; items: Set<number> }>()
+  for (const layer of layers) {
+    const id = layer.warehouseId ?? 0
+    const agg = byWarehouse.get(id) ?? { qty: 0, value: 0, items: new Set<number>() }
+    const remaining = Number(layer.remaining)
+    agg.qty = safeAdd(agg.qty, remaining, 2)
+    agg.value = safeAdd(agg.value, safeMultiply(remaining, Number(layer.unitCost), 2), 2)
+    agg.items.add(layer.itemId)
+    byWarehouse.set(id, agg)
+  }
+  return byWarehouse
+}
+
+/** Total lapisan FIFO per barang, nilai persis sen per lapisan. */
+export function aggregateLayersByItem(
+  layers: { itemId: number; remaining: unknown; unitCost: unknown }[],
+): Map<number, { layerQty: number; layerValue: number }> {
+  const layerTotals = new Map<number, { layerQty: number; layerValue: number }>()
+  for (const layer of layers) {
+    const agg = layerTotals.get(layer.itemId) ?? { layerQty: 0, layerValue: 0 }
+    const remaining = Number(layer.remaining)
+    agg.layerQty = safeAdd(agg.layerQty, remaining, 2)
+    agg.layerValue = safeAdd(agg.layerValue, safeMultiply(remaining, Number(layer.unitCost), 2), 2)
+    layerTotals.set(layer.itemId, agg)
+  }
+  return layerTotals
+}
+
+/** Total kuantitas persis 2 desimal (skala Decimal(15,2)). */
+export function sumRemainingQty(layers: { remaining: unknown }[]): number {
+  return layers.reduce((sum, layer) => safeAdd(sum, Number(layer.remaining), 2), 0)
 }
 
 const money = (value: number) => formatAccounting(value, { zeroDash: false })
@@ -71,7 +109,7 @@ export async function loadStockAging(): Promise<StockSimpleReport> {
     }))
   if (rows.length === 0) rows.push({ kind: "notice", text: "Tidak ada stok." })
   else {
-    const total = layers.reduce((s, l) => s + Number(l.remaining), 0)
+    const total = sumRemainingQty(layers)
     rows.push({ kind: "total", grand: true, label: "Jumlah", cells: ["", "", "", "", qty(total), "", ""] })
   }
   return { table: { columns: AGING_COLUMNS, rows }, ...nowLabels() }
@@ -92,24 +130,15 @@ export async function loadStockSummary(): Promise<StockSimpleReport> {
       select: { itemId: true, warehouseId: true, remaining: true, unitCost: true },
     }),
   ])
-  const byWarehouse = new Map<number, { qty: number; value: number; items: Set<number> }>()
-  for (const layer of layers) {
-    const id = layer.warehouseId ?? 0
-    const agg = byWarehouse.get(id) ?? { qty: 0, value: 0, items: new Set<number>() }
-    const remaining = Number(layer.remaining)
-    agg.qty += remaining
-    agg.value += remaining * Number(layer.unitCost)
-    agg.items.add(layer.itemId)
-    byWarehouse.set(id, agg)
-  }
+  const byWarehouse = aggregateLayersByWarehouse(layers)
   const rows: TableRow[] = []
   let totalQty = 0
   let totalValue = 0
   for (const wh of warehouses) {
     const agg = byWarehouse.get(wh.id)
     if (!agg) continue
-    totalQty += agg.qty
-    totalValue += agg.value
+    totalQty = safeAdd(totalQty, agg.qty, 2)
+    totalValue = safeAdd(totalValue, agg.value, 2)
     rows.push({
       kind: "data",
       cells: [`${wh.code} - ${wh.name}`, String(agg.items.size), qty(agg.qty), money(agg.value)],
@@ -141,14 +170,7 @@ export async function loadStockReconciliation(): Promise<StockSimpleReport> {
       select: { itemId: true, remaining: true, unitCost: true },
     }),
   ])
-  const layerTotals = new Map<number, { layerQty: number; layerValue: number }>()
-  for (const layer of layers) {
-    const agg = layerTotals.get(layer.itemId) ?? { layerQty: 0, layerValue: 0 }
-    const remaining = Number(layer.remaining)
-    agg.layerQty += remaining
-    agg.layerValue += remaining * Number(layer.unitCost)
-    layerTotals.set(layer.itemId, agg)
-  }
+  const layerTotals = aggregateLayersByItem(layers)
   const summary = reconcileInventory(
     items.map((i) => ({ itemId: i.id, sku: i.sku, name: i.name, masterQty: Number(i.qtyOnHand) })),
     layerTotals,
