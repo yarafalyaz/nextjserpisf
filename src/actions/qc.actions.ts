@@ -20,6 +20,27 @@ import { raiseNonconformanceFromInspection } from "@/lib/services/qc.service"
 import { syncReworkCostToOrder } from "@/lib/services/production-cost.service"
 import { nextSlug } from "@/lib/utils/slug-db"
 
+const QC_REFERENCE_LABEL: Record<string, string> = {
+  WorkOrder: "Perintah Kerja",
+  ProductionOrder: "Perintah Produksi",
+  GoodsReceipt: "Penerimaan Barang",
+}
+
+/** referenceType/referenceId polimorfik tanpa FK DB — eksistensi wajib dicek aksi. */
+async function assertQcReferenceExists(referenceType: string, referenceId: number) {
+  const found =
+    referenceType === "WorkOrder"
+      ? await prisma.workOrder.findUnique({ where: { id: referenceId }, select: { id: true } })
+      : referenceType === "ProductionOrder"
+        ? await prisma.productionOrder.findUnique({ where: { id: referenceId }, select: { id: true } })
+        : referenceType === "GoodsReceipt"
+          ? await prisma.goodsReceipt.findUnique({ where: { id: referenceId }, select: { id: true } })
+          : null
+  if (!found) {
+    throw new Error(`${QC_REFERENCE_LABEL[referenceType] ?? "Dokumen referensi"} #${referenceId} tidak ditemukan`)
+  }
+}
+
 // ==================== QC CHECKLIST ACTIONS ====================
 
 /**
@@ -231,6 +252,7 @@ export async function createQcInspection(formData: FormData) {
     if (checklist.status !== "released") {
       return { success: false, error: "Inspeksi hanya dapat memakai checklist yang sudah dirilis." }
     }
+    await assertQcReferenceExists(v.referenceType, v.referenceId)
 
     // Only results referencing items on this checklist are accepted.
     const validItemIds = new Set(checklist.items.map((it) => it.id))
@@ -327,6 +349,7 @@ export async function createNonconformance(formData: FormData) {
       })
       if (!inspection) return { success: false, error: "Inspeksi tidak ditemukan" }
     }
+    await assertQcReferenceExists(v.referenceType, v.referenceId)
 
     const documentNo = await generateDocumentNumber("NCR", "simple")
 
