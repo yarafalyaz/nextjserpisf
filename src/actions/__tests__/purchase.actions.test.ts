@@ -846,9 +846,7 @@ describe("Purchase Return Actions", () => {
     })
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: 3 }])
-    mocks.prismaMock.warehouse.findFirst
-      .mockResolvedValueOnce({ id: 3 })
-      .mockResolvedValueOnce({ id: 3 })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValueOnce({ id: 3 })
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(true)
   })
@@ -873,9 +871,7 @@ describe("Purchase Return Actions", () => {
     })
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: 9 }])
-    mocks.prismaMock.warehouse.findFirst
-      .mockResolvedValueOnce({ id: 9 })
-      .mockResolvedValueOnce({ id: 9 })
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValueOnce({ id: 9 })
     mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
     mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 3 }])
     const res = await actions.processPurchaseReturn(1)
@@ -889,9 +885,7 @@ describe("Purchase Return Actions", () => {
     })
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: null }])
-    mocks.prismaMock.warehouse.findFirst
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce(null)
+    mocks.prismaMock.warehouse.findFirst.mockResolvedValue(null)
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Warehouse retur pembelian tidak ditemukan")
