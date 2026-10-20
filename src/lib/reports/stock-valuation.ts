@@ -95,6 +95,45 @@ export function layerValue(
   return method === "average" ? safeMultiply(layer.remaining, layer.item.cost, 2) : safeMultiply(layer.remaining, layer.unitCost, 2)
 }
 
+/**
+ * Petakan baris lapisan mentah (Prisma) ke input `buildStockValuation`.
+ * Dipakai bersama oleh ketiga pemanggil laporan supaya blok pemetaan —
+ * dan dengan begitu angka valuasinya — tidak bisa menyimpang per laporan.
+ */
+export function toValuationLayers(
+  layers: {
+    itemId: number
+    warehouseId: number | null
+    remaining: unknown
+    unitCost: unknown
+    item: {
+      sku: string
+      name: string
+      unitOfMeasure: string | null
+      cost: unknown
+      costingMethod: string | null
+      category: { name: string | null; costingMethod: string | null } | null
+    }
+  }[],
+): StockValuationLayerInput[] {
+  return layers.map((layer) => ({
+    itemId: layer.itemId,
+    warehouseId: layer.warehouseId,
+    remaining: Number(layer.remaining),
+    unitCost: Number(layer.unitCost),
+    item: {
+      sku: layer.item.sku,
+      name: layer.item.name,
+      unitOfMeasure: layer.item.unitOfMeasure,
+      cost: Number(layer.item.cost ?? 0),
+      costingMethod: layer.item.costingMethod,
+      category: layer.item.category
+        ? { name: layer.item.category.name, costingMethod: layer.item.category.costingMethod }
+        : null,
+    },
+  }))
+}
+
 export function buildStockValuation(
   layers: StockValuationLayerInput[],
   warehouseLookup: (warehouseId: number | null) => { name: string; code: string } | undefined,
