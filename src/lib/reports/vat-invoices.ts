@@ -20,13 +20,14 @@ import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 266mm, area isi A4 mendatar. */
 const COLUMNS: TableColumn[] = [
-  { header: "Tanggal", align: "left", width: 24 },
-  { header: "Nomor Dokumen", align: "left", width: 32 },
-  { header: "Nomor Faktur Pajak", align: "left", width: 38 },
-  { header: "Pelanggan / Pemasok", align: "left", width: 60 },
-  { header: "DPP", align: "right", width: 36 },
-  { header: "PPN", align: "right", width: 36 },
-  { header: "Total", align: "right", width: 40 },
+  { header: "Tanggal", align: "left", width: 20 },
+  { header: "Nomor Dokumen", align: "left", width: 28 },
+  { header: "Nomor Faktur Pajak", align: "left", width: 34 },
+  { header: "Pelanggan / Pemasok", align: "left", width: 52 },
+  { header: "NPWP", align: "left", width: 32 },
+  { header: "DPP", align: "right", width: 32 },
+  { header: "PPN", align: "right", width: 32 },
+  { header: "Total", align: "right", width: 36 },
 ]
 
 export interface VatInvoiceInput {
@@ -36,10 +37,19 @@ export interface VatInvoiceInput {
   /** Nomor faktur pajak e-Faktur/Coretax; kosong = belum dicatat. */
   taxInvoiceNumber?: string | null
   counterparty: string
+  /** NPWP lawan transaksi (Customer.taxId / Vendor.npwp); kosong = belum dicatat. */
+  npwp?: string | null
   /** Dasar Pengenaan Pajak = subtotal − diskon. */
   dpp: number
   vat: number
   total: number
+  /**
+   * Retur terproses atas faktur ini (F-2026-10-20-33(a)): hanya peringatan —
+   * DPP/PPN retur TIDAK mengurangi angka laporan di sini; masa & dasar
+   * pengurang menunggu vonis accountant (F-33(b)). Tanpa field ini baris
+   * tampil biasa.
+   */
+  returnRef?: { documentNo: string; sourceDocumentNo: string | null } | null
 }
 
 export interface VatInvoiceGroup {
@@ -55,6 +65,8 @@ export interface VatInvoiceListResult {
   input: VatInvoiceGroup
   /** Faktur tanpa nomor faktur pajak tercatat (keluaran + masukan). */
   missingTaxInvoiceCount: number
+  /** Faktur ber-retur terproses pada periode ini (peringatan saja). */
+  returnedInvoiceCount: number
   /** Selisih PPN keluaran − masukan; positif = kurang bayar. */
   netVat: number
   verdict: string
@@ -97,19 +109,40 @@ function hasTaxInvoiceNo(item: VatInvoiceInput): boolean {
   return Boolean(item.taxInvoiceNumber?.trim())
 }
 
+/** NPWP lawan: nilai tercatat apa adanya; kosong/blank = "–". */
+export function displayNpwp(item: VatInvoiceInput): string {
+  const npwp = item.npwp?.trim()
+  return npwp ? npwp : "–"
+}
+
 function dataRows(items: VatInvoiceInput[]): TableRow[] {
-  return items.map((item) => ({
-    kind: "data",
-    cells: [
-      shortDate(item.date),
-      item.documentNo,
-      displayTaxInvoiceNo(item),
-      item.counterparty,
-      amount(item.dpp),
-      amount(item.vat),
-      amount(item.total),
-    ],
-  }))
+  const rows: TableRow[] = []
+  for (const item of items) {
+    rows.push({
+      kind: "data",
+      cells: [
+        shortDate(item.date),
+        item.documentNo,
+        displayTaxInvoiceNo(item),
+        item.counterparty,
+        displayNpwp(item),
+        amount(item.dpp),
+        amount(item.vat),
+        amount(item.total),
+      ],
+    })
+    if (item.returnRef) {
+      rows.push({
+        kind: "notice",
+        text:
+          `Peringatan: faktur ${item.documentNo} punya retur terproses ${item.returnRef.documentNo}` +
+          (item.returnRef.sourceDocumentNo ? ` atas ${item.returnRef.sourceDocumentNo}` : "") +
+          `. Angka DPP/PPN retur belum mengurangi laporan ini — nota retur mengurangi ` +
+          `PPN pada masa retur, menunggu vonis masa & dasar hitung.`,
+      })
+    }
+  }
+  return rows
 }
 
 function subtotalRow(label: string, group: VatInvoiceGroup): TableRow {
@@ -151,6 +184,9 @@ export function buildVatInvoiceList(input: {
   const missingTaxInvoiceCount =
     outputItems.filter((item) => !hasTaxInvoiceNo(item)).length +
     inputItems.filter((item) => !hasTaxInvoiceNo(item)).length
+  const returnedInvoiceCount =
+    outputItems.filter((item) => item.returnRef).length +
+    inputItems.filter((item) => item.returnRef).length
   rows.push({
     kind: "total",
     grand: true,
@@ -186,18 +222,30 @@ export function buildVatInvoiceList(input: {
     })
   }
 
+  if (returnedInvoiceCount > 0) {
+    rows.push({
+      kind: "notice",
+      text:
+        `${returnedInvoiceCount} faktur pada periode ini punya retur terproses. ` +
+        `DPP/PPN pada laporan ini masih nilai faktur asal; pengurangan karena nota retur ` +
+        `dihitung pada masa retur dan belum diterapkan di sini.`,
+    })
+  }
+
   const verdict =
     output.count === 0 && inputGroup.count === 0
       ? "Tidak ada faktur ber-PPN pada periode ini"
       : `PPN keluaran ${output.count} faktur · PPN masukan ${inputGroup.count} faktur · ` +
         `posisi ${netVat >= 0 ? "kurang" : "lebih"} bayar ${formatCurrency(Math.abs(netVat))}` +
-        (missingTaxInvoiceCount > 0 ? ` · ${missingTaxInvoiceCount} tanpa nomor faktur pajak` : "")
+        (missingTaxInvoiceCount > 0 ? ` · ${missingTaxInvoiceCount} tanpa nomor faktur pajak` : "") +
+        (returnedInvoiceCount > 0 ? ` · ${returnedInvoiceCount} faktur ber-retur` : "")
 
   return {
     table: { columns: COLUMNS, rows },
     output,
     input: inputGroup,
     missingTaxInvoiceCount,
+    returnedInvoiceCount,
     netVat,
     verdict,
   }

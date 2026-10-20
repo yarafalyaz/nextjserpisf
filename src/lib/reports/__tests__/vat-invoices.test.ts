@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildVatInvoiceList, displayTaxInvoiceNo, vatInvoiceSummary, type VatInvoiceInput } from "@/lib/reports/vat-invoices"
+import { buildVatInvoiceList, displayNpwp, displayTaxInvoiceNo, vatInvoiceSummary, type VatInvoiceInput } from "@/lib/reports/vat-invoices"
 
 function invoice(overrides: Partial<VatInvoiceInput> = {}): VatInvoiceInput {
   return {
@@ -120,5 +120,48 @@ describe("buildVatInvoiceList", () => {
     expect(displayTaxInvoiceNo(invoice({ taxInvoiceNumber: " 010.000-26.1 " }))).toBe("010.000-26.1")
     expect(displayTaxInvoiceNo(invoice({ taxInvoiceNumber: null }))).toBe("INV-001")
     expect(displayTaxInvoiceNo(invoice())).toBe("INV-001")
+  })
+
+  it("menampilkan NPWP lawan di kolomnya sendiri; kosong menjadi tanda hubung", () => {
+    const result = buildVatInvoiceList({
+      output: [invoice({ npwp: " 01.234.567.8-901.000 " })],
+      input: [invoice({ documentNo: "BILL-001", counterparty: "PT Pemasok" })],
+    })
+
+    expect(result.table.columns.map((c) => c.header)).toContain("NPWP")
+    const data = result.table.rows.filter((row) => row.kind === "data")
+    // Kolom: [tanggal, nomor dokumen, nomor faktur pajak, pihak, NPWP, ...]
+    expect(data.map((row) => (row.kind === "data" ? row.cells[4] : ""))).toEqual([
+      "01.234.567.8-901.000",
+      "–",
+    ])
+    expect(displayNpwp(invoice({ npwp: "  " }))).toBe("–")
+    expect(displayNpwp(invoice({ npwp: null }))).toBe("–")
+  })
+
+  it("memberi peringatan retur tanpa mengubah DPP/PPN/total laporan", () => {
+    const result = buildVatInvoiceList({
+      output: [
+        invoice({
+          returnRef: { documentNo: "SR-001", sourceDocumentNo: "INV-001" },
+        }),
+      ],
+      input: [],
+    })
+
+    expect(result.returnedInvoiceCount).toBe(1)
+    expect(result.output.vat).toBe(1_100_000)
+    expect(result.output.total).toBe(11_100_000)
+    expect(texts(result)).toContain("retur terproses SR-001")
+    expect(texts(result)).toContain("belum mengurangi laporan ini")
+    expect(result.verdict).toContain("1 faktur ber-retur")
+  })
+
+  it("tanpa retur tidak ada peringatan dan hitungan retur nol", () => {
+    const result = buildVatInvoiceList({ output: [invoice()], input: [] })
+
+    expect(result.returnedInvoiceCount).toBe(0)
+    expect(texts(result)).not.toContain("retur terproses")
+    expect(result.verdict).not.toContain("ber-retur")
   })
 })
