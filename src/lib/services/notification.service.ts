@@ -93,6 +93,40 @@ export const notificationService = {
   },
 
   /**
+   * Idempotent variant of notifyUsers for re-runnable callers (cron):
+   * skip when a notification with same title already exists for any
+   * recipient since `since`. Returns rows written (0 when skipped).
+   * ponytail: title-keyed dedupe, race window = two concurrent runs same
+   * title; upgrade to unique dedupe-key column if cron runs parallel.
+   */
+  async notifyUsersIfNew(
+    userIds: number[],
+    title: string,
+    body: string,
+    type: string = 'info',
+    since: Date
+  ): Promise<number> {
+    if (userIds.length === 0) return 0
+
+    const existing = await prisma.notification.findFirst({
+      where: { userId: { in: userIds }, title, createdAt: { gte: since } },
+      select: { id: true },
+    })
+    if (existing) return 0
+
+    await prisma.notification.createMany({
+      data: userIds.map((userId) => ({
+        userId,
+        title,
+        body,
+        type,
+        readAt: null,
+      })),
+    })
+    return userIds.length
+  },
+
+  /**
    * Check if an item's stock is below minimum threshold and notify admins.
    * NOTE: not idempotent — each call creates fresh notifications. Callers that
    * may run repeatedly for the same item/period must dedupe themselves (see the

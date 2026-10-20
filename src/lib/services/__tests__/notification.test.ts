@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   findManyUsers: vi.fn(),
+  findFirstNotif: vi.fn(),
   createManyNotif: vi.fn(),
   createNotif: vi.fn(),
   updateNotif: vi.fn(),
@@ -13,6 +14,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     user: { findMany: mocks.findManyUsers },
     notification: {
+      findFirst: mocks.findFirstNotif,
       createMany: mocks.createManyNotif,
       create: mocks.createNotif,
       update: mocks.updateNotif,
@@ -94,6 +96,40 @@ describe("notification.service", () => {
     it("does nothing when userIds is empty", async () => {
       await notificationService.notifyUsers([], "Title", "Body");
 
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("notifyUsersIfNew", () => {
+    const since = new Date("2026-06-12T00:00:00");
+
+    it("skips write when same title already sent to any recipient since window start", async () => {
+      mocks.findFirstNotif.mockResolvedValue({ id: 9 });
+
+      const sent = await notificationService.notifyUsersIfNew([1, 2], "3 Invoice Jatuh Tempo", "body", "danger", since);
+
+      expect(sent).toBe(0);
+      expect(mocks.findFirstNotif).toHaveBeenCalledWith({
+        where: { userId: { in: [1, 2] }, title: "3 Invoice Jatuh Tempo", createdAt: { gte: since } },
+        select: { id: true },
+      });
+      expect(mocks.createManyNotif).not.toHaveBeenCalled();
+    });
+
+    it("writes once when no same-title notification in window", async () => {
+      mocks.findFirstNotif.mockResolvedValue(null);
+      mocks.createManyNotif.mockResolvedValue({ count: 2 });
+
+      const sent = await notificationService.notifyUsersIfNew([1, 2], "Baru", "body", "warning", since);
+
+      expect(sent).toBe(2);
+      expect(mocks.createManyNotif).toHaveBeenCalledTimes(1);
+    });
+
+    it("does nothing for empty recipients without DB calls", async () => {
+      const sent = await notificationService.notifyUsersIfNew([], "Baru", "body", "info", since);
+      expect(sent).toBe(0);
+      expect(mocks.findFirstNotif).not.toHaveBeenCalled();
       expect(mocks.createManyNotif).not.toHaveBeenCalled();
     });
   });

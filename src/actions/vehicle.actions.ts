@@ -547,6 +547,39 @@ export async function listVehicleVariantOptions(): Promise<{ value: string; labe
   }));
 }
 
+// FK hanya dicek format (int positif) oleh schema: customer terhapus,
+// varian/tipe fiktif lolos lalu gagal P2003 mentah. Cek eksistensi
+// pra-tulis (pola withholding-tax/position-department).
+async function assertCustomerVehicleRefsExist(input: {
+  customerId: number;
+  variantId?: number | null;
+  formVehicleId?: number | null;
+  kendaraanId?: number | null;
+}): Promise<string | null> {
+  const customer = await prisma.customer.findFirst({
+    where: { id: input.customerId, deletedAt: null, isActive: true },
+    select: { id: true },
+  });
+  if (!customer) return "Pelanggan tidak ditemukan";
+  if (input.variantId) {
+    const variant = await prisma.vehicleVariant.findFirst({
+      where: { id: input.variantId },
+      select: { id: true },
+    });
+    if (!variant) return "Varian kendaraan tidak ditemukan";
+  } else {
+    const rawVehicleId = input.formVehicleId ?? input.kendaraanId;
+    if (rawVehicleId) {
+      const vehicle = await prisma.vehicle.findFirst({
+        where: { id: rawVehicleId, deletedAt: null },
+        select: { id: true },
+      });
+      if (!vehicle) return "Tipe kendaraan tidak ditemukan";
+    }
+  }
+  return null;
+}
+
 export async function createCustomerVehicle(formData: FormData) {
   try {
     await requirePermission("create_customers");
@@ -567,6 +600,9 @@ export async function createCustomerVehicle(formData: FormData) {
       isActive,
       notes,
     } = parsed.data;
+
+    const refError = await assertCustomerVehicleRefsExist({ customerId, variantId, formVehicleId, kendaraanId });
+    if (refError) return { success: false, error: refError };
 
     // Find or create the catalog-type Vehicle from variantId, then create the
     // ownership link (with the physical-unit attributes) — both in ONE
@@ -638,19 +674,10 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
     const parsed = parseFormData(customerVehicleSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
 
-    const {
-      customerId,
-      variantId,
-      vehicleId: formVehicleId,
-      kendaraanId,
-      plateNumber,
-      color,
-      year,
-      chassisNumber,
-      engineNumber,
-      isActive,
-      notes,
-    } = parsed.data;
+    const d = parsed.data;
+
+    const refError = await assertCustomerVehicleRefsExist({ customerId: d.customerId, variantId: d.variantId, formVehicleId: d.vehicleId, kendaraanId: d.kendaraanId });
+    if (refError) return { success: false, error: refError };
 
     // Atomic update: the catalog-type Vehicle row + the ownership link, both in
     // ONE transaction. A vehicle.update success followed by a customerVehicle
@@ -663,19 +690,19 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
 
       let vehicleId: number;
 
-      if (variantId) {
+      if (d.variantId) {
         // Update the catalog type's variant/year from the form. `name` is not
         // edited here — it is a catalog label owned by /kendaraan.
         const updatedVehicle = await tx.vehicle.update({
           where: { id: existing.vehicleId },
           data: {
-            vehicleVariantId: variantId,
-            year: year ?? null,
+            vehicleVariantId: d.variantId,
+            year: d.year ?? null,
           },
         });
         vehicleId = updatedVehicle.id;
       } else {
-        const rawVehicleId = formVehicleId ?? kendaraanId;
+        const rawVehicleId = d.vehicleId ?? d.kendaraanId;
         if (!rawVehicleId) {
           throw new Error("vehicleId wajib diisi");
         }
@@ -684,7 +711,7 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
         // — otherwise relinking to an existing type silently dropped the edit.
         await tx.vehicle.update({
           where: { id: vehicleId },
-          data: { year: year ?? null },
+          data: { year: d.year ?? null },
         });
       }
 
@@ -693,17 +720,17 @@ export async function updateCustomerVehicle(id: number, formData: FormData) {
         where: { id },
         data: {
           vehicleId,
-          plateNumber: plateNumber ?? null,
-          color: color ?? null,
-          chassisNumber: chassisNumber ?? null,
-          engineNumber: engineNumber ?? null,
-          isActive: isActive ?? true,
-          notes: notes ?? null,
+          plateNumber: d.plateNumber ?? null,
+          color: d.color ?? null,
+          chassisNumber: d.chassisNumber ?? null,
+          engineNumber: d.engineNumber ?? null,
+          isActive: d.isActive ?? true,
+          notes: d.notes ?? null,
         },
       });
     });
 
-    revalidatePath(`/master/pelanggan/${customerId}/kendaraan`);
+    revalidatePath(`/master/pelanggan/${d.customerId}/kendaraan`);
     await logActivity(
       "update",
       "CustomerVehicle",
