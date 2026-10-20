@@ -209,7 +209,7 @@ describe("deleteBomRevision", () => {
   it("refuses to delete a non-draft revision", async () => {
     bomRevisionFindUniqueMock.mockResolvedValue({
       id: 1, status: "released", productId: 9,
-      _count: { productionOrders: 0, workOrders: 0 },
+      _count: { productionOrders: 0, workOrders: 0, fitmentRules: 0 },
     })
 
     const res = await deleteBomRevision(1)
@@ -221,7 +221,7 @@ describe("deleteBomRevision", () => {
   it("refuses to delete a draft already pinned by an order", async () => {
     bomRevisionFindUniqueMock.mockResolvedValue({
       id: 1, status: "draft", productId: 9,
-      _count: { productionOrders: 2, workOrders: 0 },
+      _count: { productionOrders: 2, workOrders: 0, fitmentRules: 0 },
     })
 
     const res = await deleteBomRevision(1)
@@ -231,10 +231,23 @@ describe("deleteBomRevision", () => {
     expect(bomRevisionDeleteMock).not.toHaveBeenCalled()
   })
 
+  it("refuses to delete a draft pinned by a fitment rule", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({
+      id: 1, status: "draft", productId: 9,
+      _count: { productionOrders: 0, workOrders: 0, fitmentRules: 1 },
+    })
+
+    const res = await deleteBomRevision(1)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("kompatibilitas")
+    expect(bomRevisionDeleteMock).not.toHaveBeenCalled()
+  })
+
   it("deletes an unused draft", async () => {
     bomRevisionFindUniqueMock.mockResolvedValue({
       id: 1, status: "draft", productId: 9,
-      _count: { productionOrders: 0, workOrders: 0 },
+      _count: { productionOrders: 0, workOrders: 0, fitmentRules: 0 },
     })
     bomRevisionDeleteMock.mockResolvedValue({})
 
