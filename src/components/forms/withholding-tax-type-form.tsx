@@ -62,15 +62,15 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
   const accountOptions = accounts.map((a) => ({ value: String(a.id), label: `${a.code} — ${a.name}` }))
 
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={taxType?.id ? "Formulir ubah jenis pemotongan PPh" : "Formulir tambah jenis pemotongan PPh"}>
       <FormCard>
         <FormSection title="Jenis Pemotongan PPh">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="code">Kode *</Label>
+            <Label htmlFor="code">Kode <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Input id="code" name="code" required defaultValue={taxType?.code ?? ""} placeholder="mis. PPH23" />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama *</Label>
+            <Label htmlFor="name">Nama <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Input id="name" name="name" required defaultValue={taxType?.name ?? ""} placeholder="mis. PPh 23 — Jasa" />
           </div>
           <div className="flex flex-col gap-1.5">
