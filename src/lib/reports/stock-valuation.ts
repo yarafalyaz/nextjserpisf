@@ -56,14 +56,35 @@ export interface StockValuationResult {
 }
 
 /**
- * Metode penilaian efektif sebuah barang: kategori menang atas barang, dan
- * bawaannya `fifo`.
+ * Metode penilaian efektif sebuah barang: kategori menang atas barang, lalu
+ * bawaan global perusahaan, lalu `fifo`.
+ *
+ * WAJIB selaras dengan `resolveCostingMethod` di `costing-method.service.ts`
+ * (jalur terima/jual HPP): kategori → barang → global → fifo, dan nilai tak
+ * dikenal/kosong dianggap belum diset. Dulu fungsi ini berhenti di barang dan
+ * meneruskan nilai mentah (mis. "lifo" tetap "lifo" → dinilai FIFO diam-diam),
+ * sehingga laporan valuasi bisa berbeda metode dari HPP yang dibukukan.
+ * `globalMethod` opsional agar pemanggil lama tanpa konteks pengaturan tetap
+ * berperilaku sama (jatuh ke fifo).
  */
-export function resolveCostingMethod(item: {
-  costingMethod: string | null
-  category: { costingMethod: string | null } | null
-}): string {
-  return (item.category?.costingMethod || item.costingMethod || "fifo").toLowerCase()
+export function resolveCostingMethod(
+  item: {
+    costingMethod: string | null
+    category: { costingMethod: string | null } | null
+  },
+  globalMethod?: string | null,
+): string {
+  const normalize = (value: string | null | undefined): string | null => {
+    if (!value) return null
+    const v = value.toLowerCase()
+    return v === "average" || v === "fifo" ? v : null
+  }
+  return (
+    normalize(item.category?.costingMethod) ??
+    normalize(item.costingMethod) ??
+    normalize(globalMethod) ??
+    "fifo"
+  )
 }
 
 /** Nilai satu lapisan menurut metode barangnya. */
@@ -74,15 +95,55 @@ export function layerValue(
   return method === "average" ? safeMultiply(layer.remaining, layer.item.cost, 2) : safeMultiply(layer.remaining, layer.unitCost, 2)
 }
 
+/**
+ * Petakan baris lapisan mentah (Prisma) ke input `buildStockValuation`.
+ * Dipakai bersama oleh ketiga pemanggil laporan supaya blok pemetaan —
+ * dan dengan begitu angka valuasinya — tidak bisa menyimpang per laporan.
+ */
+export function toValuationLayers(
+  layers: {
+    itemId: number
+    warehouseId: number | null
+    remaining: unknown
+    unitCost: unknown
+    item: {
+      sku: string
+      name: string
+      unitOfMeasure: string | null
+      cost: unknown
+      costingMethod: string | null
+      category: { name: string | null; costingMethod: string | null } | null
+    }
+  }[],
+): StockValuationLayerInput[] {
+  return layers.map((layer) => ({
+    itemId: layer.itemId,
+    warehouseId: layer.warehouseId,
+    remaining: Number(layer.remaining),
+    unitCost: Number(layer.unitCost),
+    item: {
+      sku: layer.item.sku,
+      name: layer.item.name,
+      unitOfMeasure: layer.item.unitOfMeasure,
+      cost: Number(layer.item.cost ?? 0),
+      costingMethod: layer.item.costingMethod,
+      category: layer.item.category
+        ? { name: layer.item.category.name, costingMethod: layer.item.category.costingMethod }
+        : null,
+    },
+  }))
+}
+
 export function buildStockValuation(
   layers: StockValuationLayerInput[],
   warehouseLookup: (warehouseId: number | null) => { name: string; code: string } | undefined,
+  globalMethod?: string | null,
 ): StockValuationResult {
   const aggregated = new Map<string, StockValuationRow>()
 
   for (const layer of layers) {
     const key = `${layer.itemId}-${layer.warehouseId || 0}`
-    const method = resolveCostingMethod(layer.item)
+    const method = resolveCostingMethod(layer.item, globalMethod)
     const warehouse = warehouseLookup(layer.warehouseId)
 
     const existing = aggregated.get(key) ?? {

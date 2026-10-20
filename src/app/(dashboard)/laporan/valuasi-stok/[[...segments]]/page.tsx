@@ -12,7 +12,8 @@ import { ReportSection, ReportKpiCard } from "@/components/reports/report-sectio
 import { ReportNarration } from "@/components/reports/report-narration"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { splitReportSegments } from "@/lib/reports/report-period"
-import { buildStockValuation } from "@/lib/reports/stock-valuation"
+import { buildStockValuation, toValuationLayers } from "@/lib/reports/stock-valuation"
+import { getSystemSettings } from "@/lib/utils/settings"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -66,6 +67,8 @@ export default async function StockValuationPage({
     },
   })
 
+  const settings = await getSystemSettings()
+
   const warehouseMap = new Map(warehouses.map((w) => [w.id, { name: w.name, code: w.code }]))
 
   // Aturan penilaian (kategori menang atas barang; metode `average` memakai
@@ -73,23 +76,9 @@ export default async function StockValuationPage({
   // dengan laporan pemeriksaan selisih persediaan — kalau salah satunya
   // menghitung sendiri, dua laporan bisa menampilkan nilai persediaan berbeda.
   const { rows, totals } = buildStockValuation(
-    layers.map((layer) => ({
-      itemId: layer.itemId,
-      warehouseId: layer.warehouseId,
-      remaining: Number(layer.remaining),
-      unitCost: Number(layer.unitCost),
-      item: {
-        sku: layer.item.sku,
-        name: layer.item.name,
-        unitOfMeasure: layer.item.unitOfMeasure,
-        cost: Number(layer.item.cost ?? 0),
-        costingMethod: layer.item.costingMethod,
-        category: layer.item.category
-          ? { name: layer.item.category.name, costingMethod: layer.item.category.costingMethod }
-          : null,
-      },
-    })),
+    toValuationLayers(layers),
     (warehouseId) => warehouseMap.get(warehouseId ?? 0),
+    settings.costingMethod,
   )
   const totalQty = totals.qty
   const totalValue = totals.value

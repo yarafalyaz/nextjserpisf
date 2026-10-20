@@ -12,7 +12,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { sumNetForAccount } from "@/lib/services/report-aggregation.service"
-import { buildStockValuation } from "@/lib/reports/stock-valuation"
+import { buildStockValuation, toValuationLayers } from "@/lib/reports/stock-valuation"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import {
   buildInventoryReconciliation,
@@ -64,23 +64,9 @@ export async function loadInventoryReconciliation(period: {
   const warehouseMap = new Map(warehouses.map((warehouse) => [warehouse.id, { name: warehouse.name, code: warehouse.code }]))
 
   const valuation = buildStockValuation(
-    layers.map((layer) => ({
-      itemId: layer.itemId,
-      warehouseId: layer.warehouseId,
-      remaining: Number(layer.remaining),
-      unitCost: Number(layer.unitCost),
-      item: {
-        sku: layer.item.sku,
-        name: layer.item.name,
-        unitOfMeasure: layer.item.unitOfMeasure,
-        cost: Number(layer.item.cost ?? 0),
-        costingMethod: layer.item.costingMethod,
-        category: layer.item.category
-          ? { name: layer.item.category.name, costingMethod: layer.item.category.costingMethod }
-          : null,
-      },
-    })),
+    toValuationLayers(layers),
     (warehouseId) => warehouseMap.get(warehouseId ?? 0),
+    settings.costingMethod,
   )
 
   const ledgerBalance = inventoryAccountId

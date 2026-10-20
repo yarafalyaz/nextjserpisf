@@ -12,7 +12,7 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
-import { buildStockValuation } from "@/lib/reports/stock-valuation"
+import { buildStockValuation, toValuationLayers } from "@/lib/reports/stock-valuation"
 import { buildStockCard, openingBalance } from "@/lib/reports/stock-card"
 import {
   aggregateSales,
@@ -21,6 +21,7 @@ import {
 } from "@/lib/reports/sales-analytics"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { formatAccounting, formatReferenceType } from "@/lib/utils/format"
+import { getSystemSettings } from "@/lib/utils/settings"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface StockFlowReport {
@@ -95,6 +96,7 @@ const VALUATION_COLUMNS: TableColumn[] = [
 ]
 
 export async function loadStockValuation(warehouseId: number | null): Promise<StockFlowReport> {
+  const settings = await getSystemSettings()
   const [warehouses, layers] = await Promise.all([
     prisma.warehouse.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { code: "asc" } }),
     prisma.inventoryLayer.findMany({
@@ -115,23 +117,9 @@ export async function loadStockValuation(warehouseId: number | null): Promise<St
   ])
   const warehouseMap = new Map(warehouses.map((w) => [w.id, { name: w.name, code: w.code }]))
   const { rows: valueRows, totals } = buildStockValuation(
-    layers.map((layer) => ({
-      itemId: layer.itemId,
-      warehouseId: layer.warehouseId,
-      remaining: Number(layer.remaining),
-      unitCost: Number(layer.unitCost),
-      item: {
-        sku: layer.item.sku,
-        name: layer.item.name,
-        unitOfMeasure: layer.item.unitOfMeasure,
-        cost: Number(layer.item.cost ?? 0),
-        costingMethod: layer.item.costingMethod,
-        category: layer.item.category
-          ? { name: layer.item.category.name, costingMethod: layer.item.category.costingMethod }
-          : null,
-      },
-    })),
+    toValuationLayers(layers),
     (id) => warehouseMap.get(id ?? 0),
+    settings.costingMethod,
   )
   const rows: TableRow[] = valueRows.map((row) => ({
     kind: "data" as const,
