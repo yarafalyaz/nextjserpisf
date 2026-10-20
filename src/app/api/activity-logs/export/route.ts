@@ -2,14 +2,15 @@ import { type NextRequest } from "next/server";
 import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
 import { hasPermission } from "@/lib/auth/permissions";
+import { apiError } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
   try {
     const session = await auth();
-    if (!session?.user) return new Response("Unauthorized", { status: 401 });
+    if (!session?.user) return apiError("UNAUTHORIZED", "Tidak terotorisasi");
 
     if (!(await hasPermission("manage_settings"))) {
-      return new Response("Forbidden", { status: 403 });
+      return apiError("FORBIDDEN", "Akses ditolak");
     }
 
     const sp = req.nextUrl.searchParams;
@@ -101,6 +102,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     console.error("CSV export error:", e);
-    return new Response("Gagal export", { status: 500 });
+    return apiError("INTERNAL_ERROR", "Gagal mengekspor log aktivitas");
   }
 }

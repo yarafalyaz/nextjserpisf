@@ -41,6 +41,9 @@ describe("GET /api/activity-logs/export", () => {
     mocks.authFn.mockResolvedValue(null)
     const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
     expect(res.status).toBe(401)
+    expect(await res.json()).toEqual({
+      error: { code: "UNAUTHORIZED", message: "Tidak terotorisasi" },
+    })
   })
 
   it("returns 403 when authenticated but without manage_settings", async () => {
@@ -50,8 +53,25 @@ describe("GET /api/activity-logs/export", () => {
 
     const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
     expect(res.status).toBe(403)
+    expect(await res.json()).toEqual({
+      error: { code: "FORBIDDEN", message: "Akses ditolak" },
+    })
     // Crucial: must NOT dump the activity log to unauthorized callers.
     expect(mocks.findManyLogs).not.toHaveBeenCalled()
+  })
+
+  it("returns structured 500 when export query fails", async () => {
+    mocks.authFn.mockResolvedValue({
+      user: { id: 1, roles: ["admin"], permissions: ["manage_settings"] },
+    })
+    mocks.findManyLogs.mockRejectedValue(new Error("db down"))
+    vi.spyOn(console, "error").mockImplementation(() => {})
+
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
+    expect(res.status).toBe(500)
+    expect(await res.json()).toEqual({
+      error: { code: "INTERNAL_ERROR", message: "Gagal mengekspor log aktivitas" },
+    })
   })
 
   it("neutralises CSV formula-injection triggers in user-controlled fields", async () => {
