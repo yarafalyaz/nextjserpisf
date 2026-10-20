@@ -16,6 +16,7 @@
  */
 
 import { formatAccounting, formatDate } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import {
   accumulatedDepreciationByAsset,
   DISPOSAL_TYPE,
@@ -98,9 +99,9 @@ export function buildAssetDisposals(input: AssetDisposalReportInput): AssetDispo
       // akhir periode: aset yang dilepas 10 Oktober tidak boleh memakai beban
       // penyusutan November.
       const accumulated = accumulatedDepreciationByAsset(entries, entry.date).get(asset.id) ?? 0
-      const bookValue = cost - accumulated
+      const bookValue = safeSubtract(cost, accumulated, 2)
       const proceeds = Number(entry.amount ?? 0)
-      return { asset, date: entry.date, cost, accumulated, bookValue, proceeds, gainLoss: proceeds - bookValue }
+      return { asset, date: entry.date, cost, accumulated, bookValue, proceeds, gainLoss: safeSubtract(proceeds, bookValue, 2) }
     })
     .sort((a, b) => {
       const byDate = a.date.getTime() - b.date.getTime()
@@ -109,11 +110,11 @@ export function buildAssetDisposals(input: AssetDisposalReportInput): AssetDispo
     })
 
   const rows: TableRow[] = lines.map((line) => {
-    totals.cost += line.cost
-    totals.accumulated += line.accumulated
-    totals.bookValue += line.bookValue
-    totals.proceeds += line.proceeds
-    totals.gainLoss += line.gainLoss
+    totals.cost = safeAdd(totals.cost, line.cost, 2)
+    totals.accumulated = safeAdd(totals.accumulated, line.accumulated, 2)
+    totals.bookValue = safeAdd(totals.bookValue, line.bookValue, 2)
+    totals.proceeds = safeAdd(totals.proceeds, line.proceeds, 2)
+    totals.gainLoss = safeAdd(totals.gainLoss, line.gainLoss, 2)
 
     return {
       kind: "data",
