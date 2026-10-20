@@ -24,8 +24,8 @@ export async function DELETE(
   const { id } = await params
   const attachmentId = Number(id)
   const userId = Number(session.user.id)
-  if (!/^\d+$/.test(id) || !Number.isSafeInteger(attachmentId) || attachmentId <= 0) return apiError("BAD_REQUEST", "Invalid attachment id")
-  if (!Number.isSafeInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Invalid user")
+  if (!/^\d+$/.test(id) || !Number.isSafeInteger(attachmentId) || attachmentId <= 0) return apiError("BAD_REQUEST", "ID lampiran tidak valid")
+  if (!Number.isSafeInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Pengguna tidak valid")
 
   try {
     const attachment = await prisma.transactionAttachment.findUnique({
@@ -33,15 +33,15 @@ export async function DELETE(
     })
 
     if (!attachment) {
-      return apiError("NOT_FOUND", "Attachment not found")
+      return apiError("NOT_FOUND", "Lampiran tidak ditemukan")
     }
 
     // Ownership guard: only uploader can delete
     if (attachment.uploadedBy !== userId) {
-      return apiError("FORBIDDEN", "Forbidden")
+      return apiError("FORBIDDEN", "Tidak memiliki izin")
     }
     if (!(await canModifyAttachment(attachment.referenceType, attachment.referenceId))) {
-      return apiError("FORBIDDEN", "Forbidden")
+      return apiError("FORBIDDEN", "Tidak memiliki izin")
     }
 
     // Delete file from disk (normalize path)

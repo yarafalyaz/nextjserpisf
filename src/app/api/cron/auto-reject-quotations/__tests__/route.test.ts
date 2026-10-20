@@ -91,7 +91,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     const res = await GET(makeReq())
     expect(res.status).toBe(500)
     const json = await res.json()
-    expect(json.error).toEqual({ code: "INTERNAL_ERROR", message: "Cron job failed" })
+    expect(json.error).toEqual({ code: "INTERNAL_ERROR", message: "Tugas cron gagal dijalankan" })
   })
 
   it("processes stale quotations in one bulk update + one bulk history create", async () => {

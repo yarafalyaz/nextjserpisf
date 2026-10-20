@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const endDateStr = searchParams.get("tanggalSelesai")
 
     if (!Number.isSafeInteger(employeeId) || employeeId <= 0 || !startDateStr || !endDateStr) {
-      return apiError("BAD_REQUEST", "employeeId, startDate, and endDate are required")
+      return apiError("BAD_REQUEST", "employeeId, startDate, dan endDate wajib diisi")
     }
 
     const scope = await getHrScope({
@@ -43,17 +43,17 @@ export async function GET(request: NextRequest) {
     const endDate = new Date(endDateStr)
 
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-      return apiError("BAD_REQUEST", "Invalid date format")
+      return apiError("BAD_REQUEST", "Format tanggal tidak valid")
     }
 
     // Cap date range to 90 days to prevent DoS (full-table attendance scan)
     const MAX_RANGE_DAYS = 90
     const rangeMs = endDate.getTime() - startDate.getTime()
     if (rangeMs < 0) {
-      return apiError("BAD_REQUEST", "startDate must be before endDate")
+      return apiError("BAD_REQUEST", "startDate harus sebelum endDate")
     }
     if (rangeMs > MAX_RANGE_DAYS * 24 * 60 * 60 * 1000) {
-      return apiError("BAD_REQUEST", `Date range cannot exceed ${MAX_RANGE_DAYS} days`)
+      return apiError("BAD_REQUEST", `Rentang tanggal tidak boleh melebihi ${MAX_RANGE_DAYS} hari`)
     }
 
     const result = await calculateLatePenalty(employeeId, startDate, endDate)

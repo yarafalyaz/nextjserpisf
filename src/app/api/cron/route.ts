@@ -30,7 +30,7 @@ export async function POST(request: Request) {
 
 async function handleCron(request: Request) {
   if (!isValidCronRequest(request)) {
-    return apiError("UNAUTHORIZED", "Unauthorized")
+    return apiError("UNAUTHORIZED", "Tidak terotorisasi")
   }
 
   const url = new URL(request.url)

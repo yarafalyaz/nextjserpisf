@@ -7,7 +7,7 @@ import { assertCSRF } from "@/lib/security/csrf"
 export async function POST(req: NextRequest) {
   const canUpload = (await hasPermission("create_items")) || (await hasPermission("edit_items"))
   if (!canUpload) {
-    return apiError("FORBIDDEN", "Forbidden")
+    return apiError("FORBIDDEN", "Tidak memiliki izin")
   }
   try {
     await assertCSRF()
