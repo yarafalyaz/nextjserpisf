@@ -13,6 +13,7 @@ import {
 getStatusColor,
   formatPeriod,
   referenceHref,
+  formatReferenceType,
 } from "../format"
 
 describe("formatCurrency", () => {
@@ -329,5 +330,19 @@ describe("referenceHref", () => {
     expect(referenceHref("GoodsReceipt", null)).toBeNull()
     expect(referenceHref(null, 1)).toBeNull()
     expect(referenceHref(undefined, undefined)).toBeNull()
+  })
+
+  it("F-102: label Indonesia untuk tipe jurnal/stok nyata yang muncul di laporan", () => {
+    expect(formatReferenceType("Expense")).toBe("Pengeluaran")
+    expect(formatReferenceType("PettyCash")).toBe("Kas Kecil")
+    expect(formatReferenceType("DownPayment")).toBe("Uang Muka Penjualan")
+    expect(formatReferenceType("VendorBill")).toBe("Tagihan Vendor")
+    expect(formatReferenceType("VendorPayment")).toBe("Pembayaran Vendor")
+    expect(formatReferenceType("Payroll")).toBe("Penggajian")
+    expect(formatReferenceType("SalesInvoiceCOGS")).toBe("Faktur Penjualan (HPP)")
+    expect(formatReferenceType("ASSET_DEPRECIATION_202610")).toBe("Depresiasi Aset")
+    expect(formatReferenceType("RecurringTransaction_20261017")).toBe("Transaksi Berulang")
+    expect(formatReferenceType(null)).toBe("-")
+    expect(formatReferenceType("TipeBaruBelumDikenal")).toBe("TipeBaruBelumDikenal")
   })
 })
