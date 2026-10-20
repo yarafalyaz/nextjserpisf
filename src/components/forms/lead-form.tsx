@@ -59,7 +59,7 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah prospek" : "Formulir tambah prospek"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {isEdit && lead?.leadNumber && (
           <div className="flex flex-col gap-1.5">
@@ -68,7 +68,7 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
           </div>
         )}
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nama *</Label>
+          <Label htmlFor="name">Nama <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="name" name="name" placeholder="Nama lead" required defaultValue={lead?.name || ""} />
         </div>
         <div className="flex flex-col gap-1.5">
@@ -146,9 +146,9 @@ export function LeadForm({ lead, users = [] }: LeadFormProps) {
           <Textarea id="notes" name="notes" rows={3} placeholder="Catatan tentang lead..." defaultValue={lead?.notes || ""} />
         </div>
       </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Lead"}</Button>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+        <Button type="button" className="w-full sm:w-auto" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" className="w-full sm:w-auto" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Lead"}</Button>
       </div>
     </form>
   )
