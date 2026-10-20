@@ -102,17 +102,19 @@ export async function GET(request: Request) {
     status: { not: "cancelled" as const },
     deletedAt: null,
   }
-  const [overdueCount, overdueInvoices] = await Promise.all([
+  const [overdueCount, overdueAgg] = await Promise.all([
     prisma.salesInvoice.count({ where: overdueWhere }),
-    prisma.salesInvoice.findMany({ where: overdueWhere, take: 20 }),
+    prisma.salesInvoice.aggregate({
+      where: overdueWhere,
+      _sum: { grandTotal: true, paidAmount: true },
+    }),
   ])
 
   if (overdueCount > 0) {
     const count = overdueCount
-    const totalOverdue = overdueInvoices.reduce(
-      (sum, inv) => sum + (Number(inv.grandTotal) - Number(inv.paidAmount)),
-      0
-    )
+    // Total wajib dari aggregate seluruh where: findMany sampel (take:20)
+    // membuat piutang tampil jauh lebih kecil dari sebenarnya.
+    const totalOverdue = Number(overdueAgg._sum.grandTotal ?? 0) - Number(overdueAgg._sum.paidAmount ?? 0)
 
     await notificationService.notifyUsersIfNew(
       adminIds,
