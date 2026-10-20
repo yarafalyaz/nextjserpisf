@@ -63,7 +63,7 @@ export function BomRevisionActions({ revision }: { revision: BomRevisionRow }) {
     <>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button aria-label="Buka menu aksi" variant="ghost" size="icon" disabled={isPending}>
+          <Button aria-label="Buka menu aksi" variant="ghost" size="icon" className="size-11" disabled={isPending}>
             <MoreVertical className="size-4" aria-hidden="true" />
           </Button>
         </DropdownMenuTrigger>
