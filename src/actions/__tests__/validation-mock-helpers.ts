@@ -42,3 +42,32 @@ export const approvalFactory = () => ({
   requestApprovalIfConfigured: () => Promise.resolve(undefined),
   assertApproved: () => Promise.resolve(undefined),
 })
+
+/** Basis mock hoisted aksi penjualan revisi (selisih + revisi-turun). */
+export function buildSalesRevisionPrismaMock(extra: Record<string, unknown> = {}) {
+  const prismaMock: Record<string, any> = {
+    quotation: buildModelMock(),
+    salesOrder: buildModelMock(),
+    workOrder: buildModelMock(),
+    salesInvoice: buildModelMock(),
+    ...extra,
+    $queryRaw: vi.fn().mockResolvedValue([]),
+  }
+  prismaMock.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prismaMock))
+  return prismaMock
+}
+
+/** Sisi `return` mock hoisted bersama aksi penjualan revisi. */
+export function buildSalesRevisionMocks(prismaMock: Record<string, any>, docNo: string) {
+  const requirePermissionMock = vi.fn().mockResolvedValue({ id: 7 })
+  return {
+    prismaMock,
+    requirePermissionMock,
+    requirePermission: requirePermissionMock,
+    revalidatePath: vi.fn(),
+    assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
+    logActivity: vi.fn().mockResolvedValue(undefined),
+    generateDocumentNumber: vi.fn().mockResolvedValue(docNo),
+  }
+}
+

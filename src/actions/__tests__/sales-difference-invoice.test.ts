@@ -6,32 +6,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * (hoisted prisma mock, $transaction menjalankan callback dgn mock sama).
  */
 const mocks = await vi.hoisted(async () => {
-  const { buildModelMock } = await import("./validation-mock-helpers")
-  const prismaMock: Record<string, unknown> = {
-    quotation: buildModelMock({ id: 99, slug: "inv-selisih" }),
-    salesOrder: buildModelMock(),
-    workOrder: buildModelMock(),
-    salesInvoice: buildModelMock(),
-    $queryRaw: vi.fn().mockResolvedValue([]),
-  }
-  prismaMock.$transaction = vi.fn(async (fn: (tx: unknown) => unknown) => fn(prismaMock))
-  const requirePermissionMock = vi.fn().mockResolvedValue({ id: 7 })
-  return {
-    prismaMock: prismaMock as {
-      quotation: ReturnType<typeof buildModelMock>
-      salesOrder: ReturnType<typeof buildModelMock>
-      workOrder: ReturnType<typeof buildModelMock>
-      salesInvoice: ReturnType<typeof buildModelMock>
-      $transaction: ReturnType<typeof vi.fn>
-      $queryRaw: ReturnType<typeof vi.fn>
-    },
-    requirePermissionMock,
-    requirePermission: requirePermissionMock,
-    revalidatePath: vi.fn(),
-    assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
-    logActivity: vi.fn().mockResolvedValue(undefined),
-    generateDocumentNumber: vi.fn().mockResolvedValue("INV-2026-001"),
-  }
+  const h = await import("./validation-mock-helpers")
+  const prismaMock = h.buildSalesRevisionPrismaMock()
+  prismaMock.quotation = h.buildModelMock({ id: 99, slug: "inv-selisih" })
+  return h.buildSalesRevisionMocks(prismaMock, "INV-2026-001")
 })
 
 vi.mock("@/lib/db/prisma", async () => (await import("./validation-mock-helpers")).prismaFactory(mocks, "prismaMock"))
