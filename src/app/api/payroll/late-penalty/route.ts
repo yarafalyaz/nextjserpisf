@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     }
     // Payroll/salary-derived data — restrict to users who can view payroll.
     if (!(await hasPermission("view_payroll"))) {
-      return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
+      return apiError("FORBIDDEN", "Akses ditolak")
     }
 
     const { searchParams } = new URL(request.url)
@@ -26,10 +26,7 @@ export async function GET(request: NextRequest) {
     const endDateStr = searchParams.get("tanggalSelesai")
 
     if (!Number.isSafeInteger(employeeId) || employeeId <= 0 || !startDateStr || !endDateStr) {
-      return NextResponse.json(
-        { error: "employeeId, startDate, and endDate are required" },
-        { status: 400 }
-      )
+      return apiError("BAD_REQUEST", "employeeId, startDate, and endDate are required")
     }
 
     const scope = await getHrScope({
@@ -39,27 +36,24 @@ export async function GET(request: NextRequest) {
     try {
       await assertHrEmployeeAccess(scope, employeeId)
     } catch {
-      return NextResponse.json({ error: "Akses ditolak" }, { status: 403 })
+      return apiError("FORBIDDEN", "Akses ditolak")
     }
 
     const startDate = new Date(startDateStr)
     const endDate = new Date(endDateStr)
 
     if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
-      return NextResponse.json({ error: "Invalid date format" }, { status: 400 })
+      return apiError("BAD_REQUEST", "Invalid date format")
     }
 
     // Cap date range to 90 days to prevent DoS (full-table attendance scan)
     const MAX_RANGE_DAYS = 90
     const rangeMs = endDate.getTime() - startDate.getTime()
     if (rangeMs < 0) {
-      return NextResponse.json({ error: "startDate must be before endDate" }, { status: 400 })
+      return apiError("BAD_REQUEST", "startDate must be before endDate")
     }
     if (rangeMs > MAX_RANGE_DAYS * 24 * 60 * 60 * 1000) {
-      return NextResponse.json(
-        { error: `Date range cannot exceed ${MAX_RANGE_DAYS} days` },
-        { status: 400 }
-      )
+      return apiError("BAD_REQUEST", `Date range cannot exceed ${MAX_RANGE_DAYS} days`)
     }
 
     const result = await calculateLatePenalty(employeeId, startDate, endDate)
@@ -77,6 +71,6 @@ export async function GET(request: NextRequest) {
       })),
     })
   } catch {
-    return NextResponse.json({ error: "Terjadi kesalahan server" }, { status: 500 })
+    return apiError("INTERNAL_ERROR", "Terjadi kesalahan server")
   }
 }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { getSystemSettings } from "@/lib/utils/settings"
 import { hasPermission } from "@/lib/auth/permissions"
+import { apiError } from "@/lib/api-response"
 
 export const dynamic = "force-dynamic"
 
@@ -10,7 +11,7 @@ export async function GET() {
     // boleh membuka dasbor/laporan boleh membacanya, tapi endpoint ini tidak boleh
     // terbuka begitu saja (sebelumnya cukup punya sesi, tanpa cek izin apa pun).
     if (!(await hasPermission("view_dashboard"))) {
-      return NextResponse.json({ error: "Tidak memiliki izin" }, { status: 403 })
+      return apiError("FORBIDDEN", "Tidak memiliki izin")
     }
 
     const settings = await getSystemSettings()
@@ -31,9 +32,6 @@ export async function GET() {
     // Jangan balas 200 berisi identitas palsu: konsumennya memakainya sebagai
     // kop PDF, sehingga laporan tampak sah padahal setelannya gagal dibaca.
     console.error("[api/system-settings] gagal memuat pengaturan:", error)
-    return NextResponse.json(
-      { error: "Gagal memuat pengaturan sistem" },
-      { status: 500 }
-    )
+    return apiError("INTERNAL_ERROR", "Gagal memuat pengaturan sistem")
   }
 }

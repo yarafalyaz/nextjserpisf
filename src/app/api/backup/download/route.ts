@@ -43,6 +43,6 @@ export async function GET(req: NextRequest) {
     })
   } catch (e) {
     console.error("Backup download failed:", e)
-    return NextResponse.json({ error: "Gagal mengunduh backup" }, { status: 500 })
+    return apiError("INTERNAL_ERROR", "Gagal mengunduh backup")
   }
 }

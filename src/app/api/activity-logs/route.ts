@@ -110,9 +110,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (e) {
     console.error("Activity logs API error:", e);
-    return NextResponse.json(
-      { error: "Gagal memuat log aktivitas" },
-      { status: 500 },
-    );
+    return apiError("INTERNAL_ERROR", "Gagal memuat log aktivitas");
   }
 }
