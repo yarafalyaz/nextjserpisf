@@ -13,6 +13,7 @@ import { CreateServicePoButton } from "./_components/create-service-po-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/ui/print-button";
+import { TransactionAttachments } from "@/components/ui/transaction-attachments";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
   DetailTable,
@@ -427,6 +428,10 @@ export default async function WorkOrderDetailPage({
           <DetailField label="Catatan" value={wo.notes} colSpan="full" />
         </DetailCard>
       )}
+
+      {/* Foto bukti WO: izin work_order sudah terpetakan (view_work_orders
+          baca, edit_work_orders tulis) di attachment-permission-maps. */}
+      <TransactionAttachments referenceType="work_order" referenceId={wo.id} />
     </div>
   );
 }
