@@ -21,6 +21,7 @@ import {
 } from "@/lib/reports/sales-analytics"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
 import { formatAccounting, formatReferenceType } from "@/lib/utils/format"
+import { getSystemSettings } from "@/lib/utils/settings"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface StockFlowReport {
@@ -95,6 +96,7 @@ const VALUATION_COLUMNS: TableColumn[] = [
 ]
 
 export async function loadStockValuation(warehouseId: number | null): Promise<StockFlowReport> {
+  const settings = await getSystemSettings()
   const [warehouses, layers] = await Promise.all([
     prisma.warehouse.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { code: "asc" } }),
     prisma.inventoryLayer.findMany({
@@ -132,6 +134,7 @@ export async function loadStockValuation(warehouseId: number | null): Promise<St
       },
     })),
     (id) => warehouseMap.get(id ?? 0),
+    settings.costingMethod,
   )
   const rows: TableRow[] = valueRows.map((row) => ({
     kind: "data" as const,

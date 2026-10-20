@@ -13,6 +13,7 @@ import { ReportNarration } from "@/components/reports/report-narration"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { splitReportSegments } from "@/lib/reports/report-period"
 import { buildStockValuation } from "@/lib/reports/stock-valuation"
+import { getSystemSettings } from "@/lib/utils/settings"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -66,6 +67,8 @@ export default async function StockValuationPage({
     },
   })
 
+  const settings = await getSystemSettings()
+
   const warehouseMap = new Map(warehouses.map((w) => [w.id, { name: w.name, code: w.code }]))
 
   // Aturan penilaian (kategori menang atas barang; metode `average` memakai
@@ -90,6 +93,7 @@ export default async function StockValuationPage({
       },
     })),
     (warehouseId) => warehouseMap.get(warehouseId ?? 0),
+    settings.costingMethod,
   )
   const totalQty = totals.qty
   const totalValue = totals.value

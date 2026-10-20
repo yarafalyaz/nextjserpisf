@@ -81,6 +81,7 @@ export async function loadInventoryReconciliation(period: {
       },
     })),
     (warehouseId) => warehouseMap.get(warehouseId ?? 0),
+    settings.costingMethod,
   )
 
   const ledgerBalance = inventoryAccountId

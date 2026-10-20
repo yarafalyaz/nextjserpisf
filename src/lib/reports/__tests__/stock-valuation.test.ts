@@ -30,6 +30,18 @@ describe("resolveCostingMethod", () => {
     expect(resolveCostingMethod({ costingMethod: "average", category: null })).toBe("average")
     expect(resolveCostingMethod({ costingMethod: null, category: null })).toBe("fifo")
   })
+
+  it("selaras resolver HPP: global dipakai bila kategori+barang kosong", () => {
+    expect(resolveCostingMethod({ costingMethod: null, category: null }, "Average")).toBe("average")
+    expect(resolveCostingMethod({ costingMethod: null, category: { costingMethod: null } }, "FIFO")).toBe("fifo")
+    expect(resolveCostingMethod({ costingMethod: "fifo", category: null }, "average")).toBe("fifo")
+  })
+
+  it("nilai tak dikenal dianggap belum diset, bukan diteruskan mentah", () => {
+    expect(resolveCostingMethod({ costingMethod: "average", category: { costingMethod: "lifo" } })).toBe("average")
+    expect(resolveCostingMethod({ costingMethod: null, category: { costingMethod: "LIFO" } }, "average")).toBe("average")
+    expect(resolveCostingMethod({ costingMethod: "", category: null }, "")).toBe("fifo")
+  })
 })
 
 describe("layerValue", () => {
@@ -76,6 +88,17 @@ describe("buildStockValuation", () => {
     expect(result.rows[0].costingMethod).toBe("AVERAGE")
     expect(result.rows[0].category).toBe("-")
     expect(result.rows[0].uom).toBe("PCS")
+  })
+
+  it("global average menilai dari harga pokok barang (selaras HPP), bukan harga lapisan", () => {
+    const unset = layer({ item: { sku: "BRG-1", name: "Busi", unitOfMeasure: "PCS", cost: 1500, costingMethod: null, category: { name: "Sparepart", costingMethod: null } } })
+    const lama = buildStockValuation([unset], (id) => warehouses.get(id ?? 0))
+    const baru = buildStockValuation([unset], (id) => warehouses.get(id ?? 0), "Average")
+
+    expect(lama.rows[0].value).toBe(10 * 1000)
+    expect(lama.rows[0].costingMethod).toBe("FIFO")
+    expect(baru.rows[0].value).toBe(10 * 1500)
+    expect(baru.rows[0].costingMethod).toBe("AVERAGE")
   })
 
   it("daftar lapisan kosong menghasilkan nol, bukan galat", () => {
