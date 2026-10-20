@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useState, useTransition } from "react"
+import { useRef, useState, useTransition } from "react"
 import { ArrowRight } from "lucide-react"
 
 import { createTaxPayment } from "@/actions/tax-payment.actions"
@@ -30,6 +30,7 @@ export function TaxPaymentForm({
   paymentAccounts: Option[]
 }) {
   const router = useRouter()
+  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
   const [isPending, startTransition] = useTransition()
 
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
@@ -46,6 +47,7 @@ export function TaxPaymentForm({
     startTransition(async () => {
       try {
         const formData = new FormData()
+        formData.set("idempotencyKey", idempotencyKeyRef.current)
         formData.set("date", date)
         formData.set("period", period)
         formData.set("taxTypeId", taxTypeId)
@@ -60,6 +62,7 @@ export function TaxPaymentForm({
           showError(result.error || "Gagal menyimpan penyetoran pajak")
           return
         }
+        idempotencyKeyRef.current = crypto.randomUUID()
         showSuccess("Penyetoran pajak tersimpan dan jurnalnya diposting")
         router.push("/keuangan/penyetoran-pajak")
         router.refresh()

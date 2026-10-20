@@ -14,6 +14,7 @@ import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 import { parseFormData } from "@/lib/validations/parse-form"
+import { checkIdempotency } from "@/lib/utils/idempotency"
 import { taxPaymentSchema } from "@/lib/validations/finance.schemas"
 import { deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service"
 
@@ -32,6 +33,8 @@ function toMoney(value: number): Prisma.Decimal {
 export async function createTaxPayment(formData: FormData): Promise<TaxPaymentActionResult> {
   try {
     const user = await requirePermission("create_tax_payments")
+
+    const idempotencyKey = formData.get("idempotencyKey") as string | null
 
     const parsed = parseFormData(taxPaymentSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -77,6 +80,8 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
     })
 
     const created = await prisma.$transaction(async (tx) => {
+      await checkIdempotency(idempotencyKey, tx, user.id)
+
       const payment = await tx.taxPayment.create({
         data: {
           slug: await nextSlug("taxPayment", documentNo),
