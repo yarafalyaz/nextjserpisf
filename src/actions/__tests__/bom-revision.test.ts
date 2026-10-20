@@ -277,7 +277,7 @@ describe("BOM approval flow (ACC-15901)", () => {
     expect(res.success).toBe(true)
     expect(requirePermissionMock).toHaveBeenCalledWith("approve_bom_revisions")
     const arg = bomRevisionUpdateManyMock.mock.calls[0][0]
-    expect(arg.where).toEqual({ id: 1, status: "pending_approval" })
+    expect(arg.where).toEqual({ id: 1, status: { in: ["pending_approval"] } })
     expect(arg.data.status).toBe("approved")
     expect(arg.data.approvedBy).toBe(5)
   })

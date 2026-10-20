@@ -354,45 +354,74 @@ export async function updateBomRevision(id: number, formData: FormData) {
   }
 }
 
+type BomTransitionResult = { success: boolean; error?: string }
+
+/**
+ * Shared atomic state-guarded BOM revision transition (ACC-15901).
+ * `guard` runs after load, before the claim (e.g. SoD); claim lost → `claimError`.
+ */
+async function transitionBomRevision(opts: {
+  id: number
+  permission: string
+  from: string[]
+  data: (userId: number) => Record<string, unknown>
+  claimError: string
+  activity: string
+  guard?: (revision: { createdBy: number | null }, userId: number) => string | null
+}): Promise<BomTransitionResult> {
+  try {
+    const user = await requirePermission(opts.permission)
+    const revision = await prisma.bomRevision.findUnique({
+      where: { id: opts.id },
+      select: { id: true, productId: true, revisionNo: true, createdBy: true },
+    })
+    if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" }
+    const guardError = opts.guard?.(revision, Number(user.id))
+    if (guardError) return { success: false, error: guardError }
+
+    const claimed = await prisma.bomRevision.updateMany({
+      where: { id: opts.id, status: { in: opts.from } },
+      data: opts.data(Number(user.id)),
+    })
+    if (claimed.count === 0) return { success: false, error: opts.claimError }
+
+    await logActivity(opts.activity, "BomRevision", opts.id, `Revisi BOM #${revision.revisionNo}`)
+    revalidatePath("/produksi/bom-revisi")
+    revalidatePath(`/produksi/products/${revision.productId}`)
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[transitionBomRevision]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+const sodGuard = (verb: string) => (revision: { createdBy: number | null }, userId: number) =>
+  revision.createdBy != null && revision.createdBy === userId
+    ? `Pembuat revisi tidak dapat ${verb} revisinya sendiri.`
+    : null
+
 /**
  * Submit a draft/rejected revision for approval: → pending_approval
  * (Accurate ACC-15901). Resubmitting clears the previous rejection audit so
- * the UI never shows stale rejected state. Atomic state-guarded claim.
+ * the UI never shows stale rejected state.
  */
 export async function submitBomRevisionForApproval(id: number) {
-  try {
-    const user = await requirePermission("manage_bom_revisions");
-
-    const revision = await prisma.bomRevision.findUnique({
-      where: { id },
-      select: { id: true, status: true, productId: true, revisionNo: true },
-    });
-    if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
-
-    const claimed = await prisma.bomRevision.updateMany({
-      where: { id, status: { in: ["draft", "rejected"] } },
-      data: {
-        status: "pending_approval",
-        submittedAt: new Date(),
-        submittedBy: Number(user.id),
-        rejectedAt: null,
-        rejectedBy: null,
-        rejectionReason: null,
-      },
-    });
-    if (claimed.count === 0) {
-      return { success: false, error: "Hanya revisi draft/ditolak yang dapat diajukan untuk persetujuan." };
-    }
-
-    await logActivity("submit", "BomRevision", id, `Mengajukan revisi BOM #${revision.revisionNo} untuk persetujuan`);
-    revalidatePath("/produksi/bom-revisi");
-    revalidatePath(`/produksi/products/${revision.productId}`);
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[submitBomRevisionForApproval]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
+  return transitionBomRevision({
+    id,
+    permission: "manage_bom_revisions",
+    from: ["draft", "rejected"],
+    data: (userId) => ({
+      status: "pending_approval",
+      submittedAt: new Date(),
+      submittedBy: userId,
+      rejectedAt: null,
+      rejectedBy: null,
+      rejectionReason: null,
+    }),
+    claimError: "Hanya revisi draft/ditolak yang dapat diajukan untuk persetujuan.",
+    activity: "submit",
+  })
 }
 
 /**
@@ -400,35 +429,15 @@ export async function submitBomRevisionForApproval(id: number) {
  * `approve_bom_revisions` and must not be the revision creator (SoD).
  */
 export async function approveBomRevision(id: number) {
-  try {
-    const user = await requirePermission("approve_bom_revisions");
-
-    const revision = await prisma.bomRevision.findUnique({
-      where: { id },
-      select: { id: true, status: true, productId: true, revisionNo: true, createdBy: true },
-    });
-    if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
-    if (revision.createdBy != null && revision.createdBy === Number(user.id)) {
-      return { success: false, error: "Pembuat revisi tidak dapat menyetujui revisinya sendiri." };
-    }
-
-    const claimed = await prisma.bomRevision.updateMany({
-      where: { id, status: "pending_approval" },
-      data: { status: "approved", approvedAt: new Date(), approvedBy: Number(user.id) },
-    });
-    if (claimed.count === 0) {
-      return { success: false, error: "Hanya revisi menunggu persetujuan yang dapat disetujui." };
-    }
-
-    await logActivity("approve", "BomRevision", id, `Menyetujui revisi BOM #${revision.revisionNo}`);
-    revalidatePath("/produksi/bom-revisi");
-    revalidatePath(`/produksi/products/${revision.productId}`);
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[approveBomRevision]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
+  return transitionBomRevision({
+    id,
+    permission: "approve_bom_revisions",
+    from: ["pending_approval"],
+    data: (userId) => ({ status: "approved", approvedAt: new Date(), approvedBy: userId }),
+    claimError: "Hanya revisi menunggu persetujuan yang dapat disetujui.",
+    activity: "approve",
+    guard: sodGuard("menyetujui"),
+  })
 }
 
 /**
@@ -436,43 +445,22 @@ export async function approveBomRevision(id: number) {
  * Creator may then edit and resubmit. SoD sama seperti approve.
  */
 export async function rejectBomRevision(id: number, reason: string) {
-  try {
-    const user = await requirePermission("approve_bom_revisions");
-
-    const trimmed = reason?.trim();
-    if (!trimmed) return { success: false, error: "Alasan penolakan wajib diisi." };
-
-    const revision = await prisma.bomRevision.findUnique({
-      where: { id },
-      select: { id: true, status: true, productId: true, revisionNo: true, createdBy: true },
-    });
-    if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
-    if (revision.createdBy != null && revision.createdBy === Number(user.id)) {
-      return { success: false, error: "Pembuat revisi tidak dapat menolak revisinya sendiri." };
-    }
-
-    const claimed = await prisma.bomRevision.updateMany({
-      where: { id, status: "pending_approval" },
-      data: {
-        status: "rejected",
-        rejectedAt: new Date(),
-        rejectedBy: Number(user.id),
-        rejectionReason: trimmed,
-      },
-    });
-    if (claimed.count === 0) {
-      return { success: false, error: "Hanya revisi menunggu persetujuan yang dapat ditolak." };
-    }
-
-    await logActivity("reject", "BomRevision", id, `Menolak revisi BOM #${revision.revisionNo}: ${trimmed}`);
-    revalidatePath("/produksi/bom-revisi");
-    revalidatePath(`/produksi/products/${revision.productId}`);
-    return { success: true };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[rejectBomRevision]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
-  }
+  const trimmed = reason?.trim()
+  if (!trimmed) return { success: false, error: "Alasan penolakan wajib diisi." }
+  return transitionBomRevision({
+    id,
+    permission: "approve_bom_revisions",
+    from: ["pending_approval"],
+    data: (userId) => ({
+      status: "rejected",
+      rejectedAt: new Date(),
+      rejectedBy: userId,
+      rejectionReason: trimmed,
+    }),
+    claimError: "Hanya revisi menunggu persetujuan yang dapat ditolak.",
+    activity: "reject",
+    guard: sodGuard("menolak"),
+  })
 }
 
 /**
