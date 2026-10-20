@@ -85,3 +85,29 @@ export function assertSingleFieldA11yEdit(spec: A11yBrandFormSpec) {
     unmount(root, container)
   })
 }
+
+// Add-mode asserts for two-required-field (code+name) forms. Kept here once:
+// each per-form copy of this block trips Sonar new-code duplication.
+export function assertCodeNameA11yAdd(form: Element, container: HTMLElement, addLabel: string) {
+  expect(form.getAttribute("aria-label")).toBe(addLabel)
+  expect(form.getAttribute("aria-busy")).toBe("false")
+  expect(container.querySelector("#code")!.getAttribute("required")).not.toBeNull()
+  expect(container.querySelector("#name")!.getAttribute("required")).not.toBeNull()
+  expect(decorativeStars(form).length).toBe(2)
+  expect(labelTexts(form)).toEqual(expect.arrayContaining(["Kode *", "Nama *"]))
+}
+
+// Add-mode asserts for combobox+name forms (1 aria-required combobox, #name
+// required, 2 decorative stars). Same Sonar rationale as above.
+export function assertComboboxNameA11yAdd(
+  form: Element,
+  container: HTMLElement,
+  spec: { addLabel: string; labels: [string, string] },
+) {
+  expect(form.getAttribute("aria-label")).toBe(spec.addLabel)
+  expect(form.getAttribute("aria-busy")).toBe("false")
+  expect(container.querySelectorAll('[role="combobox"][aria-required="true"]').length).toBe(1)
+  expect(container.querySelector("#name")!.getAttribute("required")).not.toBeNull()
+  expect(decorativeStars(form).length).toBe(2)
+  expect(labelTexts(form)).toEqual(expect.arrayContaining([...spec.labels]))
+}

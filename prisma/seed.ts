@@ -24,6 +24,7 @@ import {
   EXPENSE_CATEGORIES,
   DEPARTMENTS,
   POSITIONS,
+  WITHHOLDING_TAX_TYPES,
 } from "../src/lib/setup/base-data";
 import {
   INSTALL_SLUG_SOURCES,
@@ -172,6 +173,18 @@ async function main() {
       );
     }
     console.log(`✅ ${CHART_OF_ACCOUNTS.length} accounts created (${roots.length} induk + ${children.length} anak)`);
+
+    // Jenis potongan PPh bawaan tertaut akun COA (setara seedWithholdingTaxTypes
+    // di wizard install). Hanya mengisi bila kode belum ada — edit tenant aman.
+    for (const t of WITHHOLDING_TAX_TYPES) {
+      await conn.query(
+        `INSERT INTO withholding_tax_types (code, name, rate, liability_account_id, receivable_account_id, is_active, created_at, updated_at)
+         SELECT ?, ?, ?, (SELECT id FROM accounts WHERE code = ?), (SELECT id FROM accounts WHERE code = ?), true, NOW(), NOW()
+         WHERE NOT EXISTS (SELECT 1 FROM withholding_tax_types WHERE code = ?)`,
+        [t.code, t.name, t.rate, t.liabilityAccountCode ?? null, t.receivableAccountCode ?? null, t.code],
+      );
+    }
+    console.log(`✅ ${WITHHOLDING_TAX_TYPES.length} withholding tax types seeded/checked`);
 
     // Create default warehouse
     await conn.query(

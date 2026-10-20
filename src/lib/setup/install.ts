@@ -22,6 +22,7 @@ import {
   POSITIONS,
 } from "./base-data"
 import { createChartOfAccounts } from "./coa"
+import { seedWithholdingTaxTypes } from "./withholding-tax-types"
 import {
   INSTALL_SLUG_SOURCES,
   SLUG_COLUMN_QUERY,
@@ -109,6 +110,11 @@ export async function installBaseData(input: InstallInput): Promise<{ adminEmail
     for (const [key, value] of Object.entries(accountMappings)) {
       if (value) mappingFields[key] = Number(value)
     }
+
+    // 2b. Jenis potongan PPh bawaan tertaut akun COA di atas (PPh 22
+    // marketplace 0,5% dst.) — tanpa ini hook akuntansi fail-closed menolak
+    // jurnal pembayaran berpotongan PPh pada instalasi baru.
+    await seedWithholdingTaxTypes(tx)
 
     // 3. System settings. `getSystemSettings()` auto-creates a default row on the
     // first page render, so update it when present; otherwise create the

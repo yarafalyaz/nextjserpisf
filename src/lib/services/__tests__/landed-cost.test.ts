@@ -233,6 +233,38 @@ describe("allocateLandedCost — rounding reconciliation", () => {
   })
 })
 
+describe("allocateLandedCost — per-unit sen precision (GL vs FIFO layer)", () => {
+  it("rounds per-unit additions to sen so journal qty×cost equals FIFO layer value", () => {
+    // Pool Rp100 over 3 units: exact per-unit 33.333… cannot fit Decimal(15,2)
+    // InventoryLayer.unitCost / StockMove.cost. Unrounded per-unit made the GR
+    // journal book 3 × 1033.333… = 3100.00 while the layer stored 1033.33 and
+    // FIFO later relieved only 3099.99 — GL vs subledger drift Rp0,01/baris.
+    const r = allocateLandedCost({
+      lines: [{ baseQty: 3, poNetUnitPrice: 1000 }],
+      poCostPool: 100,
+      poNetValue: 3000,
+    })
+    expect(r.lineAdditions).toEqual([100])
+    expect(r.absorbed).toBe(100)
+    // Per-unit must be sen-exact: qty × perUnit is the value both sides book.
+    expect(r.perUnitAdditions[0]).toBe(33.33)
+    expect(Math.round(3 * (1000 + r.perUnitAdditions[0]) * 100) / 100).toBe(3099.99)
+    expect(r.adminPerUnitAdditions[0]).toBe(0)
+  })
+
+  it("rounds admin per-unit additions to sen as well", () => {
+    const r = allocateLandedCost({
+      lines: [{ baseQty: 3, poNetUnitPrice: 1000 }],
+      poCostPool: 0,
+      poNetValue: 3000,
+      adminFee: 100,
+    })
+    expect(r.adminAdditions).toEqual([100])
+    expect(r.adminPerUnitAdditions[0]).toBe(33.33)
+    expect(r.perUnitAdditions[0]).toBe(33.33)
+  })
+})
+
 describe("allocateLandedCost — degenerate inputs", () => {
   it("returns zeros for an empty line list", () => {
     const r = allocateLandedCost({ lines: [], poCostPool: 1000, poNetValue: 1000 })

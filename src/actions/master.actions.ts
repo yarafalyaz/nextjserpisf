@@ -159,6 +159,13 @@ export async function createCustomer(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // FK tanpa cek: customerCategoryId fiktif lolos optionalNumber lalu P2003 mentah.
+    // UI hanya tawarkan kategori aktif (tambah/ubah pelanggan), samakan di sini.
+    if (v.customerCategoryId != null) {
+      const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
+      if (!cat) return { success: false, error: "Kategori pelanggan tidak ditemukan" };
+    }
+
     const settings = await getSystemSettings();
     let code = v.code || null;
     if (settings.enableAutoCustomerCode !== false || !code) {
@@ -205,6 +212,11 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     const parsed = parseFormData(customerSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    if (v.customerCategoryId != null) {
+      const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
+      if (!cat) return { success: false, error: "Kategori pelanggan tidak ditemukan" };
+    }
 
     await prisma.customer.update({
       where: { id: customerId },
@@ -285,6 +297,13 @@ export async function createVendor(formData: FormData) {
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
 
+    // FK tanpa cek: paymentTermId fiktif lolos optionalNumber lalu P2003 mentah.
+    // PaymentTerm tanpa deletedAt; nonaktif tetap ditolak (tak bisa dipakai bayar).
+    if (v.paymentTermId != null) {
+      const term = await prisma.paymentTerm.findFirst({ where: { id: v.paymentTermId, isActive: true }, select: { id: true } });
+      if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
+    }
+
     const settings = await getSystemSettings();
     let code = v.code || null;
     if (settings.enableAutoVendorCode !== false || !code) {
@@ -333,6 +352,11 @@ export async function updateVendor(vendorId: number, formData: FormData) {
     const parsed = parseFormData(vendorSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    if (v.paymentTermId != null) {
+      const term = await prisma.paymentTerm.findFirst({ where: { id: v.paymentTermId, isActive: true }, select: { id: true } });
+      if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
+    }
 
     await prisma.vendor.update({
       where: { id: vendorId },
@@ -716,6 +740,19 @@ function readEmployeeFormFields(
   };
 }
 
+// departmentId/positionId hanya divalidasi format oleh safeId; FK fiktif lolos
+// ke Prisma (P2003 mentah / karyawan yatim). Cek eksistensi pra-tulis.
+async function assertEmployeeRefsExist(fields: { departmentId: number | null; positionId: number | null }) {
+  if (fields.departmentId !== null) {
+    const dept = await prisma.department.findFirst({ where: { id: fields.departmentId }, select: { id: true } });
+    if (!dept) throw new Error("Departemen tidak ditemukan");
+  }
+  if (fields.positionId !== null) {
+    const pos = await prisma.position.findFirst({ where: { id: fields.positionId }, select: { id: true } });
+    if (!pos) throw new Error("Jabatan tidak ditemukan");
+  }
+}
+
 // ==================== EMPLOYEE ACTIONS ====================
 
 export async function createEmployee(formData: FormData) {
@@ -784,6 +821,7 @@ export async function createEmployee(formData: FormData) {
       joinDate: wibDateToUtcMidnight(parsedDates.data.joinDate),
       isActive: true,
     };
+    await assertEmployeeRefsExist(employeeData);
 
     // Create employee + (optionally) a linked login account atomically.
     const employee = await prisma.$transaction(async (tx) => {
@@ -927,6 +965,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
     if (!parsedDates.success) return { success: false, error: parsedDates.error };
 
     const employeeFields = readEmployeeFormFields(formData, parsedDates.data);
+    await assertEmployeeRefsExist(employeeFields);
     const updateData = {
       ...employeeFields,
       // updateEmployee tidak menulis joinDate (tak berubah); tanggal divalidasi di atas agar konsisten dgn create.
@@ -1240,6 +1279,13 @@ export async function createPosition(formData: FormData) {
       if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
     }
 
+    // FK tanpa cek: departmentId fiktif lolos safeId lalu meledak P2003 mentah
+    // di DB (atau jabatan yatim). Tolak pra-tulis dengan pesan yang bisa ditindak.
+    const departmentId = safeId(formData.get("departmentId"));
+    if (departmentId !== null) {
+      const dept = await prisma.department.findFirst({ where: { id: departmentId }, select: { id: true } });
+      if (!dept) throw new Error("Departemen tidak ditemukan");
+    }
 
     const submittedCode = (formData.get("code") as string) || null;
     let code = submittedCode;
@@ -1255,7 +1301,7 @@ export async function createPosition(formData: FormData) {
             name: requireString(formData.get("name"), "name"),
             slug: await nextSlug("position", requireString(formData.get("name"), "name")),
             code,
-            departmentId: safeId(formData.get("departmentId")),
+            departmentId,
             description: (formData.get("description") as string) || null,
           },
         });
@@ -1294,13 +1340,20 @@ export async function updatePosition(id: number, formData: FormData) {
   try {
     const user = await requirePermission("edit_positions");
 
+    // Sama seperti createPosition: departmentId fiktif ditolak pra-tulis.
+    const departmentId = safeId(formData.get("departmentId"));
+    if (departmentId !== null) {
+      const dept = await prisma.department.findFirst({ where: { id: departmentId }, select: { id: true } });
+      if (!dept) throw new Error("Departemen tidak ditemukan");
+    }
+
     await prisma.position.update({
       where: { id },
       data: {
         updatedBy: Number(user.id),
         name: requireString(formData.get("name"), "name"),
         slug: await nextSlug("position", requireString(formData.get("name"), "name"), { excludeId: id }),
-        departmentId: safeId(formData.get("departmentId")),
+        departmentId,
         description: (formData.get("description") as string) || null,
       },
     });
@@ -1737,8 +1790,14 @@ export async function createTaxGroup(formData: FormData) {
     await requirePermission("create_taxes");
 
     const name = requireString(formData.get("name"), "name");
-    const taxIds = formData.getAll("taxIds").map((id) => safeId(id)).filter((id): id is number => id !== null);
-    if (taxIds.length !== formData.getAll("taxIds").length || taxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
+    const rawTaxIds = formData.getAll("taxIds");
+    const parsedTaxIds = rawTaxIds.map((id) => safeId(id));
+    if (parsedTaxIds.some((id) => id === null) || parsedTaxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
+    const taxIds = [...new Set(parsedTaxIds as number[])];
+    // tax_group_taxes.tax_id tanpa FK DB: cek pajak ada & belum terhapus pra-tulis,
+    // kalau tidak baris yatim lolos dan kelompok tampil kosong/rusak.
+    const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, deletedAt: null }, select: { id: true } });
+    if (foundTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
 
     const taxGroup = await prisma.taxGroup.create({
       data: {
@@ -1769,8 +1828,12 @@ export async function updateTaxGroup(id: number, formData: FormData) {
   try {
     await requirePermission("edit_taxes");
     const name = requireString(formData.get("name"), "name");
-    const taxIds = formData.getAll("taxIds").map((t) => safeId(t)).filter((id): id is number => id !== null);
-    if (taxIds.length !== formData.getAll("taxIds").length || taxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
+    const rawTaxIds = formData.getAll("taxIds");
+    const parsedTaxIds = rawTaxIds.map((t) => safeId(t));
+    if (parsedTaxIds.some((id) => id === null) || parsedTaxIds.length === 0) throw new Error("Kelompok pajak wajib berisi minimal satu pajak yang valid");
+    const taxIds = [...new Set(parsedTaxIds as number[])];
+    const foundTaxes = await prisma.tax.findMany({ where: { id: { in: taxIds }, deletedAt: null }, select: { id: true } });
+    if (foundTaxes.length !== taxIds.length) throw new Error("Pajak dalam kelompok tidak ditemukan atau nonaktif");
     await prisma.$transaction([
       prisma.taxGroupTax.deleteMany({ where: { taxGroupId: id } }),
       prisma.taxGroup.update({
