@@ -25,6 +25,7 @@ export async function loadMinStock(period: {
   const items = await prisma.item.findMany({
     where: { isActive: true, deletedAt: null, isService: false },
     select: {
+      id: true,
       sku: true,
       name: true,
       unitOfMeasure: true,
@@ -41,6 +42,7 @@ export async function loadMinStock(period: {
   return {
     report: buildMinStock(
       items.map((item) => ({
+        itemId: item.id,
         sku: item.sku,
         name: item.name,
         unit: item.unitOfMeasure,
