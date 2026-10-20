@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   // shape that the real prisma client provides inside $transaction.
   txQuotationFindMany: vi.fn(),
   txQuotationUpdateMany: vi.fn(),
+  flippedIds: new Set<number>(),
   txQuotationHistoryCreateMany: vi.fn(),
   $transaction: vi.fn(),
 }))
@@ -58,6 +59,10 @@ describe("GET /api/cron/auto-reject-quotations", () => {
       where.id.in.map((id) => ({ id })),
     )
     mocks.txQuotationUpdateMany.mockResolvedValue({ count: 0 })
+    mocks.flippedIds = new Set<number>()
+    mocks.txQuotationUpdateMany.mockImplementation(async ({ where }: { where: { id: number } }) => ({
+      count: mocks.flippedIds.has(where.id) ? 1 : 0,
+    }))
     mocks.txQuotationHistoryCreateMany.mockResolvedValue({ count: 0 })
     mocks.$transaction.mockImplementation(
       (run: (tx: unknown) => unknown) => run({
@@ -103,15 +108,15 @@ describe("GET /api/cron/auto-reject-quotations", () => {
       { id: 2, revisionNumber: 5 },
     ])
     // Bulk update flips both rows.
-    mocks.txQuotationUpdateMany.mockResolvedValue({ count: 2 })
+    mocks.flippedIds = new Set([1, 2])
 
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.rejected).toBe(2)
     expect(json.rejectedIds).toEqual([1, 2])
 
-    // One bulk updateMany + one bulk createMany, regardless of N.
-    expect(mocks.txQuotationUpdateMany).toHaveBeenCalledTimes(1)
+    // Satu updateMany bersyarat per baris + satu bulk createMany.
+    expect(mocks.txQuotationUpdateMany).toHaveBeenCalledTimes(2)
     expect(mocks.txQuotationHistoryCreateMany).toHaveBeenCalledTimes(1)
     // Outer-loop create() is gone.
     expect(mocks.txQuotationHistoryCreateMany).toHaveBeenCalledWith({
@@ -129,7 +134,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     // between the outer scan and our write).
     mocks.txQuotationFindMany.mockResolvedValue([{ id: 1 }])
     // status guard trims nothing further here.
-    mocks.txQuotationUpdateMany.mockResolvedValue({ count: 1 })
+    mocks.flippedIds = new Set([1])
 
     const res = await GET(makeReq())
     const json = await res.json()
@@ -137,10 +142,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     // The update was scoped to the in-tx candidate set, not the outer scan set.
     expect(mocks.txQuotationUpdateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: expect.objectContaining({
-          id: { in: [1] },
-          status: SalesStatus.SENT,
-        }),
+        where: { id: 1, status: SalesStatus.SENT },
         data: { status: Status.REJECTED },
       }),
     )
@@ -150,12 +152,30 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     })
   })
 
+  it("history hanya untuk baris yang benar-benar ter-flip saat updateMany sebagian", async () => {
+    mocks.quotationFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.txQuotationFindMany.mockResolvedValue([
+      { id: 1, revisionNumber: 2 },
+      { id: 2, revisionNumber: 5 },
+    ])
+    // Penulis lain membalik id=2 di antara baca-dalam-tx dan update:
+    // updateMany hanya mengenai 1 baris. History wajib mengikuti baris
+    // yang ter-flip, bukan daftar kandidat.
+    mocks.flippedIds = new Set([1])
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.rejected).toBe(1)
+    expect(json.rejectedIds).toEqual([1])
+    expect(mocks.txQuotationHistoryCreateMany).toHaveBeenCalledWith({
+      data: [expect.objectContaining({ quotationId: 1, action: "auto_rejected", revisionNumber: 2 })],
+    })
+  })
+
   it("skips history creation when bulk updateMany affects 0 rows (status guard trims all)", async () => {
     mocks.quotationFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
     mocks.txQuotationFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
     // Every row flipped to non-SENT between the in-tx read and the update.
-    mocks.txQuotationUpdateMany.mockResolvedValue({ count: 0 })
-
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.rejected).toBe(0)

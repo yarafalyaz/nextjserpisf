@@ -44,11 +44,11 @@ export async function GET(request: Request) {
     // Idempotency contract: only reject quotations that are STILL in SENT
     // status at the moment of writing. If a user rejects a quotation between
     // our scan and the write, that row is silently skipped (its status is no
-    // longer SENT, so the bulk updateMany below affects 0 rows for it and it
-    // gets no history entry). Collapsed 2N serial round-trips (per-quotation
-    // updateMany + create) into 1 bulk updateMany + 1 createMany inside a
-    // single interactive transaction, so the snapshot read, write, and audit
-    // log are atomic relative to other writers.
+    // longer SENT, so the per-row conditional updateMany below affects
+    // 0 rows for it and it gets no history entry). History uses a single
+    // createMany; the flip itself is one conditional updateMany per row
+    // so the exact set of flipped rows is known (a single bulk updateMany
+    // only reports a total count, not which rows flipped).
     const { rejectedCount, rejectedIds } = await prisma.$transaction(async (tx) => {
       // Re-read inside the transaction so we see a consistent snapshot.
       const candidates = await tx.quotation.findMany({
@@ -63,27 +63,24 @@ export async function GET(request: Request) {
         return { rejectedCount: 0, rejectedIds: [] as number[] }
       }
 
-      // status guard preserved: only flip rows that are still SENT. This is
-      // a no-op for any row that another writer already mutated.
-      const updateRes = await tx.quotation.updateMany({
-        where: {
-          id: { in: candidates.map((c) => c.id) },
-          status: SalesStatus.SENT,
-        },
-        data: { status: Status.REJECTED },
-      })
+      // Flip per baris bersyarat di dalam tx: count tiap updateMany
+      // menyebut PERSIS baris mana yang ter-flip run ini. Baris yang
+      // dibalik penulis lain di antara baca dan tulis memberi count 0
+      // dan dilewati — history + rejectedIds hanya untuk baris ter-flip,
+      // bukan daftar kandidat (satu updateMany massal hanya memberi
+      // total count, tidak menyebut baris mana).
+      const flippedCandidates: typeof candidates = []
+      for (const c of candidates) {
+        const res = await tx.quotation.updateMany({
+          where: { id: c.id, status: SalesStatus.SENT },
+          data: { status: Status.REJECTED },
+        })
+        if (res.count > 0) flippedCandidates.push(c)
+      }
 
-      // updateRes.count can never exceed candidates.length (we just read
-      // those rows inside the same tx, holding the read view). On a clean
-      // box it equals candidates.length; under contention the status guard
-      // could trim it. We log history only for the rows we know were
-      // considered — which matches the old per-row behaviour (a row that
-      // flipped between findMany and updateMany also created no history
-      // entry before, since the inner updateMany returned count=0).
-      const ids = candidates.map((c) => c.id)
-      if (updateRes.count > 0) {
+      if (flippedCandidates.length > 0) {
         await tx.quotationHistory.createMany({
-          data: candidates.map((c) => ({
+          data: flippedCandidates.map((c) => ({
             quotationId: c.id,
             action: "auto_rejected",
             revisionNumber: c.revisionNumber,
@@ -91,7 +88,7 @@ export async function GET(request: Request) {
           })),
         })
       }
-      return { rejectedCount: updateRes.count, rejectedIds: ids }
+      return { rejectedCount: flippedCandidates.length, rejectedIds: flippedCandidates.map((c) => c.id) }
     })
 
     return NextResponse.json({
