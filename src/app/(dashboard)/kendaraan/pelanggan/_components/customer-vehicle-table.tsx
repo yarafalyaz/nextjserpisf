@@ -111,7 +111,7 @@ export function CustomerVehicleTable({
         <div className="flex items-center gap-1 justify-end">
           <Link
             href={`${entityHref("/master/pelanggan", row.original.customer)}/kendaraan/${row.original.slug ?? row.original.id}`}
-            className="inline-flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
+            className="inline-flex items-center justify-center size-11 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label="Detail"
           >
             <Eye size={15} />
