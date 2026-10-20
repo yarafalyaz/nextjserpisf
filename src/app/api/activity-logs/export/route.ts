@@ -24,8 +24,14 @@ export async function GET(req: NextRequest) {
     const search = sp.get("cari");
 
     if (userId && userId !== "all") {
-      const uid = Number.parseInt(userId, 10);
-      if (Number.isInteger(uid)) where.userId = uid;
+      if (!/^\d+$/.test(userId)) {
+        return apiError("BAD_REQUEST", "userId tidak valid");
+      }
+      const uid = Number(userId);
+      if (!Number.isSafeInteger(uid) || uid <= 0) {
+        return apiError("BAD_REQUEST", "userId tidak valid");
+      }
+      where.userId = uid;
     }
     if (action && action !== "all") where.action = action;
     if (modelType && modelType !== "all") where.modelType = modelType;
