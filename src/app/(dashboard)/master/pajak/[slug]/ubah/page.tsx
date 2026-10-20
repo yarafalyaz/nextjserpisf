@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import { prisma } from "@/lib/db/prisma"
 import { notFound } from "next/navigation"
 import { TaxEditForm } from "./form"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { EditPageShell } from "@/components/ui/edit-page-shell"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 
 import type { Metadata } from "next"
@@ -30,17 +30,16 @@ export default async function EditTaxPage({
   if (!tax) notFound()
 
   return (
-    <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
-  { label: "Dasbor", href: "/" },
-  { label: "Data Master", href: "/master" },
-  { label: "Pajak", href: "/master/pajak" },
-  { label: "Ubah" },
-]} />
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Ubah Pajak: {tax.name}</h1>
-      </div>
+    <EditPageShell
+      breadcrumbs={[
+        { label: "Dasbor", href: "/" },
+        { label: "Data Master", href: "/master" },
+        { label: "Pajak", href: "/master/pajak" },
+        { label: "Ubah" },
+      ]}
+      title={`Ubah Pajak: ${tax.name}`}
+    >
       <TaxEditForm tax={{ id: tax.id, name: tax.name, rate: Number(tax.rate) }} />
-    </div>
+    </EditPageShell>
   )
 }
