@@ -185,6 +185,9 @@ export default async function WorkOrderDetailPage({
               status={wo.status}
               hasCompletedMaterialIssue={!!completedMi}
               defaultWarehouseId={defaultWarehouse?.id ?? null}
+              revisableItems={wo.items
+                .filter((i) => i.status !== "replaced")
+                .map((i) => ({ id: i.id, label: itemNameMap.get(i.itemId) || `Barang #${i.itemId}` }))}
             />
             <CreateServicePoButton
               workOrderId={wo.id}

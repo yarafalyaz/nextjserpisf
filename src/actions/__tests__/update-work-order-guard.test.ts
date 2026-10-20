@@ -1,34 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { updateWorkOrder } from "../inventory.actions"
 
-const requirePermissionMock = vi.fn()
-const revalidateMock = vi.fn()
-const logActivityMock = vi.fn()
-const woFindUniqueOrThrowMock = vi.fn()
-const transactionMock = vi.fn()
+const m = await vi.hoisted(async () => (await import("./work-order-test-utils")).createWorkOrderMocks())
+const requirePermissionMock = m.requirePermissionMock
+const revalidateMock = m.revalidateMock
+const logActivityMock = m.logActivityMock
+const woFindUniqueOrThrowMock = m.woFindUniqueOrThrow
+const transactionMock = m.transactionMock
 
-vi.mock("@/lib/auth/permissions", () => ({
-  requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
-}))
-
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    workOrder: {
-      findUniqueOrThrow: (...a: unknown[]) => woFindUniqueOrThrowMock(...a),
-    },
-    $transaction: (...a: unknown[]) => transactionMock(...a),
-  },
-}))
-
-vi.mock("@/lib/services/activity-log.service", () => ({
-  logActivity: (...a: unknown[]) => logActivityMock(...a),
-}))
-
-vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
-
-vi.mock("@/lib/services/period-lock.service", () => ({
-  assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
-}))
+vi.mock("@/lib/auth/permissions", () => m.mockAuth())
+vi.mock("@/lib/db/prisma", () => m.mockPrisma())
+vi.mock("@/lib/services/activity-log.service", () => m.mockActivity())
+vi.mock("next/cache", () => m.mockCache())
+vi.mock("@/lib/services/period-lock.service", () => m.mockPeriod())
 
 beforeEach(() => {
   requirePermissionMock.mockReset().mockResolvedValue({ id: 5 })
