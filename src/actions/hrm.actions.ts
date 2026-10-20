@@ -2307,12 +2307,15 @@ export async function deleteOvertimeRequest(id: number) {
  * membuat subledger biaya produksi tak bisa ditelusur. Hapus baris biaya
  * produksinya dulu bila memang perlu koreksi.
  */
-async function assertTimesheetNotPulled(id: number): Promise<string | null> {
+async function timesheetPulledError(id: number): Promise<{ success: false; error: string } | null> {
   const used = await prisma.productionCost.count({
     where: { sourceTimesheetId: id },
   });
   if (used === 0) return null;
-  return `Lembar waktu ini sudah ditarik menjadi ${used} baris biaya produksi dan tidak dapat diubah atau dihapus. Hapus baris biaya produksinya terlebih dahulu bila perlu koreksi.`;
+  return {
+    success: false,
+    error: `Lembar waktu ini sudah ditarik menjadi ${used} baris biaya produksi dan tidak dapat diubah atau dihapus. Hapus baris biaya produksinya terlebih dahulu bila perlu koreksi.`,
+  };
 }
 
 export async function deleteTimesheet(id: number) {
@@ -2325,8 +2328,8 @@ export async function deleteTimesheet(id: number) {
     });
     await assertHrEmployeeAccess(scope, timesheet.employeeId);
 
-    const pulledError = await assertTimesheetNotPulled(id);
-    if (pulledError) return { success: false, error: pulledError };
+    const pulled = await timesheetPulledError(id);
+    if (pulled) return pulled;
 
     await prisma.timesheet.delete({ where: { id } });
 
@@ -2735,8 +2738,8 @@ export async function updateTimesheet(id: number, formData: FormData) {
     });
     await assertHrEmployeeAccess(scope, existing.employeeId);
 
-    const pulledError = await assertTimesheetNotPulled(id);
-    if (pulledError) return { success: false, error: pulledError };
+    const pulled = await timesheetPulledError(id);
+    if (pulled) return pulled;
 
     // Validation parity with createTimesheet: route the same Zod schema so the
     // edit path cannot be used to write values the create-guard rejects (e.g.
