@@ -46,8 +46,16 @@ describe("diskon tagihan vendor: penulis dan pembaca DPP harus sepakat", () => {
   it("laporan tetap menghitung DPP sebagai subtotal dikurangi diskon dokumen", () => {
     for (const file of READERS) {
       const src = read(file)
-      expect(src, `${file} harus menghitung DPP dari subtotal − discountAmount`)
-        .toMatch(/subtotal\)\s*-\s*Number\([^)]*discountAmount/)
+      // Dua bentuk sah: hitung mentah yang bisa dipindai, atau helper sen
+      // `vatDpp` (diekspor vat-invoices-data, terkunci oleh
+      // vat-invoices-cents.test.ts). Keduanya wajib TETAP mengurangi diskon;
+      // menghilangkan pengurangan, bukan mengganti bentuk, yang dilarang.
+      const rawDiscount = /subtotal\)\s*-\s*Number\([^)]*discountAmount/
+      const viaVatDpp = /dpp:\s*vatDpp\([^,]*\.subtotal,\s*[^,]*\.discountAmount/
+      expect(
+        rawDiscount.test(src) || viaVatDpp.test(src),
+        `${file} harus menghitung DPP dari subtotal − discountAmount`
+      ).toBe(true)
     }
   })
 
