@@ -186,7 +186,8 @@ export async function acceptQuotation(quotationId: number) {
         data: {
           quotationId,
           action: "accepted",
-          description: "Penawaran diterima oleh pelanggan",
+          revisionNumber: quotation.revisionNumber,
+          description: `Penawaran diterima oleh pelanggan (revisi v${quotation.revisionNumber})`,
           userId: Number(user.id),
         },
       })
@@ -231,7 +232,8 @@ export async function rejectQuotation(quotationId: number) {
         data: {
           quotationId,
           action: "rejected",
-          description: "Penawaran ditolak oleh pelanggan",
+          revisionNumber: quotation.revisionNumber,
+          description: `Penawaran ditolak oleh pelanggan (revisi v${quotation.revisionNumber})`,
           userId: Number(user.id),
         },
       })

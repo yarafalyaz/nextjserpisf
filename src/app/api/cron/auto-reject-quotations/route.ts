@@ -50,7 +50,7 @@ export async function GET(request: Request) {
           status: SalesStatus.SENT,
           deletedAt: null,
         },
-        select: { id: true },
+        select: { id: true, revisionNumber: true },
       })
       if (candidates.length === 0) {
         return { rejectedCount: 0, rejectedIds: [] as number[] }
@@ -76,10 +76,11 @@ export async function GET(request: Request) {
       const ids = candidates.map((c) => c.id)
       if (updateRes.count > 0) {
         await tx.quotationHistory.createMany({
-          data: ids.map((quotationId) => ({
-            quotationId,
+          data: candidates.map((c) => ({
+            quotationId: c.id,
             action: "auto_rejected",
-            description: `Auto-rejected by system (expired after ${days} days without response)`,
+            revisionNumber: c.revisionNumber,
+            description: `Auto-rejected by system (expired after ${days} days without response) (revisi v${c.revisionNumber})`,
           })),
         })
       }
