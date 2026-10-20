@@ -1065,6 +1065,49 @@ async function collectQuotationInvoices(
  * posting-nya tidak menggerakkan stok karena itemId null.
  */
 
+function draftDerivedInvoiceData(input: {
+  documentNo: string
+  slug: string | null
+  customerId: number
+  customerVehicleId: number | null
+  quotationId: number
+  date: Date
+  amount: number
+  description: string
+  createdBy: number
+}) {
+  return {
+    documentNo: input.documentNo,
+    slug: input.slug,
+    customerId: input.customerId,
+    customerVehicleId: input.customerVehicleId,
+    quotationId: input.quotationId,
+    date: input.date,
+    subtotal: input.amount,
+    discount: 0,
+    tax: 0,
+    grandTotal: input.amount,
+    paidAmount: 0,
+    totalAmount: input.amount,
+    taxAmount: 0,
+    status: "draft" as const,
+    notes: input.description,
+    createdBy: input.createdBy,
+    items: {
+      create: [
+        {
+          itemId: null,
+          description: input.description,
+          qty: 1,
+          unitPrice: input.amount,
+          discount: 0,
+          total: input.amount,
+        },
+      ],
+    },
+  }
+}
+
 export async function createDifferenceInvoice(quotationId: number) {
   try {
     const user = await requirePermission("create_sales_invoices")
@@ -1106,36 +1149,17 @@ export async function createDifferenceInvoice(quotationId: number) {
       if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada selisih revisi")
 
       return tx.salesInvoice.create({
-        data: {
+        data: draftDerivedInvoiceData({
           documentNo,
           slug,
           customerId: quotation.customerId,
           customerVehicleId: quotation.customerVehicleId,
           quotationId: quotation.id,
           date: today,
-          subtotal: candidate.differenceAmount,
-          discount: 0,
-          tax: 0,
-          grandTotal: candidate.differenceAmount,
-          paidAmount: 0,
-          totalAmount: candidate.differenceAmount,
-          taxAmount: 0,
-          status: "draft",
-          notes: differenceDescription,
+          amount: candidate.differenceAmount,
+          description: differenceDescription,
           createdBy: Number(user.id),
-          items: {
-            create: [
-              {
-                itemId: null,
-                description: differenceDescription,
-                qty: 1,
-                unitPrice: candidate.differenceAmount,
-                discount: 0,
-                total: candidate.differenceAmount,
-              },
-            ],
-          },
-        },
+        }),
       })
     })
 
@@ -1199,36 +1223,17 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
       if (!candidate.eligible) throw new Error(candidate.reason ?? "Tidak ada progres yang bisa ditagih")
 
       return tx.salesInvoice.create({
-        data: {
+        data: draftDerivedInvoiceData({
           documentNo,
           slug,
           customerId: quotation.customerId,
           customerVehicleId: quotation.customerVehicleId,
           quotationId: quotation.id,
           date: today,
-          subtotal: candidate.progressAmount,
-          discount: 0,
-          tax: 0,
-          grandTotal: candidate.progressAmount,
-          paidAmount: 0,
-          totalAmount: candidate.progressAmount,
-          taxAmount: 0,
-          status: "draft",
-          notes: progressDescription,
+          amount: candidate.progressAmount,
+          description: progressDescription,
           createdBy: Number(user.id),
-          items: {
-            create: [
-              {
-                itemId: null,
-                description: progressDescription,
-                qty: 1,
-                unitPrice: candidate.progressAmount,
-                discount: 0,
-                total: candidate.progressAmount,
-              },
-            ],
-          },
-        },
+        }),
       })
     })
 
