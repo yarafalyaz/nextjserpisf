@@ -63,6 +63,8 @@ describe("GET /api/address — kodeInduk validation", () => {
   it("returns 400 for an unknown tipe", async () => {
     const res = await GET(req("tipe=galaxy"))
     expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.error.message).toMatch(/tidak dikenal/)
   })
 
   it("handles districts type with parentCode", async () => {
@@ -99,5 +101,7 @@ describe("GET /api/address — kodeInduk validation", () => {
     const { GET: FreshGET } = await import("../route")
     const res = await FreshGET(req("tipe=provinces"))
     expect(res.status).toBe(500)
+    const body = await res.json()
+    expect(body.error.message).toMatch(/Gagal memuat/)
   })
 })
