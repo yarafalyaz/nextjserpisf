@@ -101,6 +101,21 @@ describe("buildStockValuation", () => {
     expect(baru.rows[0].costingMethod).toBe("AVERAGE")
   })
 
+  it("presedensi tetap di atas global: kategori dan barang menang atas bawaan perusahaan", () => {
+    const byCategory = layer({
+      item: { ...layer().item, costingMethod: null, category: { name: "Sparepart", costingMethod: "average" } },
+    })
+    const byItem = layer({ item: { ...layer().item, costingMethod: "fifo" } })
+
+    const catResult = buildStockValuation([byCategory], (id) => warehouses.get(id ?? 0), "fifo")
+    const itemResult = buildStockValuation([byItem], (id) => warehouses.get(id ?? 0), "average")
+
+    expect(catResult.rows[0].costingMethod).toBe("AVERAGE")
+    expect(catResult.rows[0].value).toBe(10 * 1500)
+    expect(itemResult.rows[0].costingMethod).toBe("FIFO")
+    expect(itemResult.rows[0].value).toBe(10 * 1000)
+  })
+
   it("daftar lapisan kosong menghasilkan nol, bukan galat", () => {
     const result = buildStockValuation([], () => undefined)
 
