@@ -13,6 +13,8 @@ import {
   RECOGNISED_AR_STATUSES,
 } from "@/lib/reports/document-status"
 import { formatAccounting } from "@/lib/utils/format"
+import { buildApByVendor, buildArByCustomer, sumOutstanding } from "@/lib/reports/ar-ap-summary"
+import { safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface ArApSummaryReport {
@@ -46,35 +48,19 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
   const rows: TableRow[] = []
   const money = (value: number) => formatAccounting(value, { zeroDash: false })
 
-  const arByCustomer = new Map<string, { count: number; billed: number; paid: number; outstanding: number }>()
-  for (const inv of invoices) {
-    const invoiced = Number(inv.grandTotal)
-    const paid = Number(inv.paidAmount)
-    const existing = arByCustomer.get(inv.customer.name) ?? { count: 0, billed: 0, paid: 0, outstanding: 0 }
-    existing.count += 1
-    existing.billed += invoiced
-    existing.paid += paid
-    existing.outstanding += invoiced - paid
-    arByCustomer.set(inv.customer.name, existing)
-  }
+  const arByCustomer = buildArByCustomer(invoices.map((inv) => ({
+    customerName: inv.customer.name, grandTotal: inv.grandTotal, paidAmount: inv.paidAmount,
+  })))
   const arRows = [...arByCustomer.entries()].filter(([, r]) => r.outstanding > 0)
 
-  const apByVendor = new Map<string, { count: number; billed: number; paid: number; outstanding: number }>()
-  for (const bill of bills) {
-    // P0-2: utang supplier = NETO (grandTotal − withholding), bukan bruto.
-    const billed = Number(bill.grandTotal) - Number(bill.withholdingAmount ?? 0)
-    const paid = Number(bill.paidAmount)
-    const existing = apByVendor.get(bill.vendor.name) ?? { count: 0, billed: 0, paid: 0, outstanding: 0 }
-    existing.count += 1
-    existing.billed += billed
-    existing.paid += paid
-    existing.outstanding += billed - paid
-    apByVendor.set(bill.vendor.name, existing)
-  }
+  // P0-2: utang supplier = NETO (grandTotal − withholding), bukan bruto.
+  const apByVendor = buildApByVendor(bills.map((bill) => ({
+    vendorName: bill.vendor.name, grandTotal: bill.grandTotal, withholdingAmount: bill.withholdingAmount, paidAmount: bill.paidAmount,
+  })))
   const apRows = [...apByVendor.entries()].filter(([, r]) => r.outstanding > 0)
 
-  const totalAR = arRows.reduce((s, [, r]) => s + r.outstanding, 0)
-  const totalAP = apRows.reduce((s, [, r]) => s + r.outstanding, 0)
+  const totalAR = sumOutstanding(arRows)
+  const totalAP = sumOutstanding(apRows)
 
   if (arRows.length > 0) {
     rows.push({ kind: "group", label: "Piutang Usaha" })
@@ -103,7 +89,7 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
       kind: "total",
       grand: true,
       label: "Posisi Bersih (AR − AP)",
-      cells: ["", "", "", "", money(totalAR - totalAP)],
+      cells: ["", "", "", "", money(safeSubtract(totalAR, totalAP, 2))],
     })
   }
 
