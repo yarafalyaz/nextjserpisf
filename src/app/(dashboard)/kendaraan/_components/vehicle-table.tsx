@@ -71,7 +71,7 @@ export function VehicleTable({ data, total, page, pageSize }: { data: VehicleRow
         <div className="flex items-center gap-1 justify-end">
           <Link
             href={entityHref("/kendaraan", row.original)}
-            className="inline-flex items-center justify-center size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
+            className="inline-flex items-center justify-center size-11 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label="Detail"
           >
             <Pencil size={15} />
