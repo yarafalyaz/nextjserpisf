@@ -73,13 +73,14 @@ export function PurchaseReturnForm({ purchaseOrders, items, returnData }: Purcha
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={returnData?.id ? "Formulir ubah retur pembelian" : "Formulir tambah retur pembelian"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="purchaseOrderId">Pesanan Pembelian *</Label>
+          <Label htmlFor="purchaseOrderId">Pesanan Pembelian <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Combobox
             id="purchaseOrderId"
             name="purchaseOrderId"
+            required
             value={purchaseOrderId || null}
             onChange={(key) => setPurchaseOrderId(key ?? "")}
             placeholder="Cari pesanan pembelian..."
