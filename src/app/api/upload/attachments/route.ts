@@ -200,6 +200,17 @@ export async function GET(req: NextRequest) {
     },
     orderBy: { createdAt: "desc" },
     take: 200,
+    // Kontrak GET hanya field yang dipakai TransactionAttachments; tanpa
+    // select, referenceType/referenceId/uploadedBy ikut bocor ke klien.
+    select: {
+      id: true,
+      filename: true,
+      originalName: true,
+      fileUrl: true,
+      fileSize: true,
+      mimeType: true,
+      createdAt: true,
+    },
   })
 
   return NextResponse.json(attachments)
