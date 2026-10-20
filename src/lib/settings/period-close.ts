@@ -19,6 +19,8 @@ export interface PeriodCloseCounts {
   draftSalesInvoices: number
   draftVendorBills: number
   unfinishedReconciliations: number
+  unverifiedGoodsReceipts: number
+  unmatchedStatementLines: number
   draftPayrolls: number
   negativeStockItems: number
 }
@@ -103,6 +105,20 @@ export function buildPeriodCloseChecks(input: PeriodCloseInput): PeriodCloseResu
       "Rekonsiliasi bank belum selesai",
       "Rekonsiliasi dengan tanggal rekening koran di bulan ini yang statusnya belum selesai.",
       "Menutup periode dengan rekonsiliasi setengah jalan membuat selisih bank tidak bisa ditelusuri lagi (koreksinya harus bertanggal dalam periode yang sudah terkunci).",
+    ),
+    check(
+      "unverifiedGoodsReceipts",
+      counts.unverifiedGoodsReceipts,
+      "Penerimaan barang belum terverifikasi",
+      "Penerimaan barang bertanggal di bulan ini yang statusnya masih draft (belum verified/completed).",
+      "Penerimaan draft belum masuk stok dan HPP; verifikasi sebelum menutup, atau stok dan nilai persediaan bulan ini akan bergeser ke bulan berikutnya.",
+    ),
+    check(
+      "unmatchedStatementLines",
+      counts.unmatchedStatementLines,
+      "Baris rekening koran belum cocok",
+      "Baris rekening koran bertanggal di bulan ini yang statusnya belum matched.",
+      "Baris yang belum cocok berarti mutasi bank belum tertaut ke jurnal; cocokkan sebelum menutup agar saldo bank bulan ini bisa ditelusuri.",
     ),
     check(
       "draftPayrolls",
