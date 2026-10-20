@@ -19,6 +19,7 @@ const mocks = vi.hoisted(() => {
     workOrder: { findMany: vi.fn().mockResolvedValue([]) },
     salesInvoice: { findMany: vi.fn().mockResolvedValue([]) },
     downPayment: { findMany: vi.fn().mockResolvedValue([]) },
+    customerCredit: { findMany: vi.fn().mockResolvedValue([]) },
   }
   return { prismaMock }
 })
@@ -48,6 +49,7 @@ beforeEach(() => {
   mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
   mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
   mocks.prismaMock.downPayment.findMany.mockResolvedValue([])
+  mocks.prismaMock.customerCredit.findMany.mockResolvedValue([])
 })
 
 describe("loadJobBillingSummary — verifikasi (c) F-2026-10-20-03", () => {
@@ -115,5 +117,34 @@ describe("loadJobBillingSummary — verifikasi (c) F-2026-10-20-03", () => {
     expect(dpWhere).toEqual({ quotationId: 9, status: "confirmed" })
     expect(s?.uangMukaDiterima).toBe(30_000_000)
     expect(s?.sisaBelumDitagih).toBe(100_000_000)
+  })
+
+  it("kredit terbuka F-43: Quotation + DownPayment quotation ini, status open saja", async () => {
+    mocks.prismaMock.downPayment.findMany
+      .mockResolvedValueOnce([{ amount: 0 }])
+      .mockResolvedValueOnce([{ id: 11 }, { id: 12 }])
+    mocks.prismaMock.customerCredit.findMany
+      .mockResolvedValueOnce([
+        { id: 1, documentNo: "CC-0001", receivedAmount: 28_000_000, allocatedAmount: 3_000_000, refundedAmount: 0 },
+      ])
+      .mockResolvedValueOnce([
+        { id: 2, documentNo: "CC-0002", receivedAmount: 1_000_000, allocatedAmount: 0, refundedAmount: 0 },
+        { id: 1, documentNo: "CC-0001", receivedAmount: 28_000_000, allocatedAmount: 3_000_000, refundedAmount: 0 },
+      ])
+
+    const s = await loadJobBillingSummary(9)
+
+    const calls = mocks.prismaMock.customerCredit.findMany.mock.calls.map((c) => c[0])
+    expect(calls[0].where).toEqual({ sourceType: "Quotation", sourceId: 9, status: "open" })
+    expect(calls[1].where).toEqual({ sourceType: "DownPayment", sourceId: { in: [11, 12] }, status: "open" })
+    // Dedup per id: CC-0001 dari dua sumber terhitung sekali.
+    expect(s?.kreditTerbuka).toBe(26_000_000)
+    expect(s?.openCredits.map((c) => c.id)).toEqual([1, 2])
+    expect(s?.sisaBelumDitagih).toBe(100_000_000)
+  })
+
+  it("tanpa DP quotation: query kredit DownPayment dilewati", async () => {
+    await loadJobBillingSummary(9)
+    expect(mocks.prismaMock.customerCredit.findMany).toHaveBeenCalledTimes(1)
   })
 })

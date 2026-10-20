@@ -11,6 +11,13 @@
  * Fungsi ini TIDAK mengubah down-payment.hook / ambang 50% dan tidak
  * menambah billingKind/paymentScheduleId — inti termin tetap
  * ditunda-teknis (PUTUSAN manager F-2026-10-20-03).
+ *
+ * F-2026-10-20-43: kredit terbuka dimuat massal tanpa N+1 dari dua
+ * sumber existing — baris Quotation untuk quotation ini, plus baris
+ * DownPayment untuk DP quotation ini (DP berlebih lahir per-DP di
+ * down-payment.hook) — hanya status open. Fallback per-customer
+ * SENGAJA tidak dipakai: kredit pelanggan lain/quotation lain bukan
+ * dana job ini. Alokasi/refund tetap panel existing.
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -41,33 +48,79 @@ export async function loadJobBillingSummary(
   })
   if (!quotation) return null
 
-  const [salesOrders, workOrders, directInvoices, confirmedDownPayments] =
-    await Promise.all([
-      prisma.salesOrder.findMany({
-        where: { quotationId, deletedAt: null },
-        select: { id: true },
-      }),
-      prisma.workOrder.findMany({
-        where: { quotationId },
-        select: { id: true, documentNo: true, projectId: true },
-        orderBy: { id: "asc" },
-      }),
-      prisma.salesInvoice.findMany({
-        where: { quotationId, deletedAt: null },
-        select: {
-          id: true,
-          documentNo: true,
-          status: true,
-          grandTotal: true,
-          paidAmount: true,
-          deletedAt: true,
-        },
-      }),
-      prisma.downPayment.findMany({
-        where: { quotationId, status: "confirmed" },
-        select: { amount: true },
-      }),
-    ])
+  const [
+    salesOrders,
+    workOrders,
+    directInvoices,
+    confirmedDownPayments,
+    openCreditsForQuotation,
+    quotationDownPayments,
+  ] = await Promise.all([
+    prisma.salesOrder.findMany({
+      where: { quotationId, deletedAt: null },
+      select: { id: true },
+    }),
+    prisma.workOrder.findMany({
+      where: { quotationId },
+      select: { id: true, documentNo: true, projectId: true },
+      orderBy: { id: "asc" },
+    }),
+    prisma.salesInvoice.findMany({
+      where: { quotationId, deletedAt: null },
+      select: {
+        id: true,
+        documentNo: true,
+        status: true,
+        grandTotal: true,
+        paidAmount: true,
+        deletedAt: true,
+      },
+    }),
+    prisma.downPayment.findMany({
+      where: { quotationId, status: "confirmed" },
+      select: { amount: true },
+    }),
+    prisma.customerCredit.findMany({
+      where: { sourceType: "Quotation", sourceId: quotationId, status: "open" },
+      select: {
+        id: true,
+        documentNo: true,
+        receivedAmount: true,
+        allocatedAmount: true,
+        refundedAmount: true,
+      },
+      orderBy: { id: "asc" },
+    }),
+    prisma.downPayment.findMany({
+      where: { quotationId },
+      select: { id: true },
+    }),
+  ])
+
+  const downPaymentIds = quotationDownPayments.map((d) => d.id)
+  const openCreditsForDownPayments =
+    downPaymentIds.length === 0
+      ? []
+      : await prisma.customerCredit.findMany({
+          where: {
+            sourceType: "DownPayment",
+            sourceId: { in: downPaymentIds },
+            status: "open",
+          },
+          select: {
+            id: true,
+            documentNo: true,
+            receivedAmount: true,
+            allocatedAmount: true,
+            refundedAmount: true,
+          },
+          orderBy: { id: "asc" },
+        })
+
+  const creditById = new Map<number, (typeof openCreditsForQuotation)[number]>()
+  for (const credit of [...openCreditsForQuotation, ...openCreditsForDownPayments]) {
+    creditById.set(credit.id, credit)
+  }
 
   const salesOrderIds = salesOrders.map((s) => s.id)
   const projectIds = [
@@ -126,6 +179,13 @@ export async function loadJobBillingSummary(
     })),
     confirmedDownPayments: confirmedDownPayments.map((d) => ({
       amount: Number(d.amount),
+    })),
+    openCustomerCredits: [...creditById.values()].map((c) => ({
+      id: c.id,
+      documentNo: c.documentNo,
+      receivedAmount: Number(c.receivedAmount),
+      allocatedAmount: Number(c.allocatedAmount),
+      refundedAmount: Number(c.refundedAmount),
     })),
   })
 
