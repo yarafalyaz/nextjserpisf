@@ -19,6 +19,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
@@ -127,8 +128,8 @@ export function buildStockCount(input: {
 
     for (const item of document.items) {
       const difference = item.actualQty - item.systemQty
-      const value = difference * item.unitCost
-      documentValue += value
+      const value = safeMultiply(difference, item.unitCost, 2)
+      documentValue = safeAdd(documentValue, value, 2)
       totals.items += 1
       if (Math.abs(difference) > 0.0001) totals.itemsWithDifference += 1
       if (item.unit) units.add(item.unit)
@@ -151,7 +152,7 @@ export function buildStockCount(input: {
       label: `Nilai selisih ${document.documentNo}`,
       cells: ["", "", "", "", "", amount(documentValue)],
     })
-    totals.differenceValue += documentValue
+    totals.differenceValue = safeAdd(totals.differenceValue, documentValue, 2)
   }
 
   if (visible.length === 0) {
