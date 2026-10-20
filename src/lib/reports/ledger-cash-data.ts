@@ -26,6 +26,7 @@ import { groupReceivablesByVehicle } from "@/lib/reports/receivables-by-vehicle-
 import { receivableOutstanding } from "@/lib/reports/aging-amounts"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
+import { buildCashFlowTotals } from "@/lib/reports/arus-kas"
 import type { StatementTable } from "@/lib/reports/statement-table"
 import { formatAccounting } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
@@ -488,7 +489,6 @@ export async function loadCashFlow(period: Period): Promise<CashFlowReportView> 
     }),
     sumEntriesByAccount({ date: { lt: period.start } }),
   ])
-  const opening = cashIds.reduce((s, id) => s + ((priorSums.get(id)?.debit ?? 0) - (priorSums.get(id)?.credit ?? 0)), 0)
   const cashIdSet = new Set(cashIds)
   const journalIds = [...new Set(entries.map((e) => e.journalId))]
   const fullJournals = journalIds.length
@@ -512,7 +512,15 @@ export async function loadCashFlow(period: Period): Promise<CashFlowReportView> 
       ),
     ),
   )
-  const net = activities.operating + activities.investing + activities.financing
+  // Saldo awal + neto aktivitas sen-aman lewat builder arus kas murni;
+  // neto aktivitas menggantikan penjumlahan tiga aktivitas mentah.
+  const totals = buildCashFlowTotals({
+    entries: [],
+    priorBalances: cashIds.map((id) => ({ debit: priorSums.get(id)?.debit ?? 0, credit: priorSums.get(id)?.credit ?? 0 })),
+    activities,
+  })
+  const opening = totals.openingBalance
+  const net = totals.activityNet
   const statement: StatementTable = {
     columns: [{ header: "Periode", align: "right" }],
     rows: [
@@ -534,7 +542,7 @@ export async function loadCashFlow(period: Period): Promise<CashFlowReportView> 
       })),
       { kind: "subtotal", label: "Kenaikan/(Penurunan) Kas Bersih", values: [money(net)] },
       { kind: "line", id: 90, code: "", name: "Saldo Kas Awal Periode", level: 1, hasChildren: false, values: [money(opening)] },
-      { kind: "grand", label: "Saldo Kas Akhir Periode", values: [money(opening + net)] },
+      { kind: "grand", label: "Saldo Kas Akhir Periode", values: [money(safeAdd(opening, net, 2))] },
     ],
   }
   const label = rangePeriodLabels(period)
