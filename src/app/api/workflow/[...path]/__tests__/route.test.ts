@@ -114,7 +114,7 @@ describe("POST /api/workflow/[...path]", () => {
 
   it("rejects IDs with suffixes, fractions, and unsafe integers", async () => {
     mocks.authFn.mockResolvedValue(adminSession)
-    for (const id of ["12oops", "1.5", "9007199254740992"]) {
+    for (const id of ["12oops", "1.5", "1e3", "0x10", "+5", " 5", "9007199254740992"]) {
       const res = await POST(makeReq(), makeParams(["penjualan", "penawaran", id, "approve"]))
       expect(res.status).toBe(400)
     }
