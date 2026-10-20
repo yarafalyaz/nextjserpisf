@@ -24,6 +24,9 @@ interface NotificationData {
     id: number
     action: string
     modelType: string
+    modelId: number | null
+    refLabel: string | null
+    href: string | null
     description: string | null
     createdAt: string
   }[]
@@ -197,7 +200,13 @@ export function NotificationsWidget() {
                   <div className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-xs font-medium text-foreground">
-                      {act.description || `${act.action} ${act.modelType}`}
+                      {act.href ? (
+                        <Link href={act.href} className="text-primary hover:underline">
+                          {act.refLabel ?? act.description ?? `${act.action} ${act.modelType}`}
+                        </Link>
+                      ) : (
+                        (act.refLabel ?? act.description ?? `${act.action} ${act.modelType}`)
+                      )}
                     </p>
                     <p className="mt-0.5 text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(act.createdAt), { addSuffix: true, locale: idLocale })}

@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   hasPermission: vi.fn(),
   approvalCount: vi.fn(),
   notificationFindMany: vi.fn(),
+  activityLogFindMany: vi.fn(),
   getDailyAttendanceMetrics: vi.fn(),
 }))
 
@@ -16,12 +17,24 @@ vi.mock("@/lib/auth/permissions", () => ({
 
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
-    $queryRaw: vi.fn(),
-    salesInvoice: { count: vi.fn() },
+    $queryRaw: vi.fn().mockResolvedValue([{ count: BigInt(0) }]),
+    salesInvoice: { count: vi.fn().mockResolvedValue(0) },
     approval: { count: (...args: unknown[]) => mocks.approvalCount(...args) },
     notification: { findMany: (...args: unknown[]) => mocks.notificationFindMany(...args) },
-    activityLog: { findMany: vi.fn().mockResolvedValue([]) },
+    activityLog: { findMany: (...args: unknown[]) => mocks.activityLogFindMany(...args) },
+    salesOrder: { findMany: vi.fn().mockResolvedValue([{ id: 6, documentNo: "SO-0006" }]) },
+    salesInvoiceRef: { findMany: vi.fn().mockResolvedValue([]) },
   },
+}))
+
+vi.mock("@/lib/services/activity-reference.service", () => ({
+  resolveActivityReferenceLabels: vi.fn().mockImplementation(async (refs: Array<{ modelType: string; modelId: number | null }>) => {
+    const map = new Map<string, string>()
+    for (const r of refs) {
+      if (r.modelType === "SalesOrder" && r.modelId === 6) map.set("SalesOrder:6", "SO-0006")
+    }
+    return map
+  }),
 }))
 
 vi.mock("@/lib/services/daily-attendance.service", () => ({
@@ -31,8 +44,9 @@ vi.mock("@/lib/services/daily-attendance.service", () => ({
 describe("GET /api/dashboard/notifications approval queue access", () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    mocks.hasPermission.mockResolvedValue(false)
+    mocks.hasPermission.mockImplementation((perm: unknown) => Promise.resolve(perm === "approve_workflows"))
     mocks.approvalCount.mockResolvedValue(12)
+    mocks.activityLogFindMany.mockResolvedValue([])
     mocks.notificationFindMany.mockResolvedValue([])
     mocks.getDailyAttendanceMetrics.mockResolvedValue({ lateAttendanceCount: 0, absentEmployees: [] })
   })
@@ -55,5 +69,37 @@ describe("GET /api/dashboard/notifications approval queue access", () => {
 
     expect(result.pendingApprovalCount).toBe(12)
     expect(mocks.approvalCount).toHaveBeenCalledWith({ where: { status: "pending" } })
+  })
+})
+
+describe("GET /api/dashboard/notifications recent activities", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.hasPermission.mockResolvedValue(true)
+    mocks.requireAuth.mockResolvedValue({ id: 1, roles: ["super_admin"], permissions: [] })
+    mocks.notificationFindMany.mockResolvedValue([])
+    mocks.getDailyAttendanceMetrics.mockResolvedValue({ lateAttendanceCount: 0, absentEmployees: [] })
+  })
+
+  function logRow(id: number, modelType: string, modelId: number | null) {
+    return { id, action: "create", modelType, modelId, description: `X #${modelId}`, createdAt: new Date() }
+  }
+
+  it("menyembunyikan aktivitas yang record-nya sudah terhapus", async () => {
+    // SO 6 hidup (mock salesOrder), invoice 15 mati (tanpa mock delegate)
+    mocks.activityLogFindMany.mockResolvedValue([logRow(1, "SalesOrder", 6), logRow(2, "SalesInvoice", 15)])
+
+    const result = await (await GET()).json()
+
+    expect(result.recentActivities.map((a: { id: number }) => a.id)).toEqual([1])
+  })
+
+  it("memberi label nomor dokumen + href pada aktivitas yang hidup", async () => {
+    mocks.activityLogFindMany.mockResolvedValue([logRow(1, "SalesOrder", 6)])
+
+    const result = await (await GET()).json()
+
+    expect(result.recentActivities[0].refLabel).toBe("SO-0006")
+    expect(result.recentActivities[0].href).toBe("/penjualan/pesanan/6")
   })
 })

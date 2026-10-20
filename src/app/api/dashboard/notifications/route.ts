@@ -3,6 +3,8 @@ import { prisma } from "@/lib/db/prisma";
 import { hasPermission, requireAuth } from "@/lib/auth/permissions";
 import { apiError } from "@/lib/api-response";
 import { getDailyAttendanceMetrics } from "@/lib/services/daily-attendance.service";
+import { resolveActivityReferenceLabels } from "@/lib/services/activity-reference.service";
+import { activityEntityHref } from "@/lib/utils/activity-href";
 
 export async function GET() {
   try {
@@ -60,11 +62,13 @@ export async function GET() {
       canViewActivity
         ? prisma.activityLog.findMany({
             orderBy: { createdAt: "desc" },
-            take: 5,
+            where: { createdAt: { gte: new Date(Date.now() - 24 * 60 * 60 * 1000) } },
+            take: 10,
             select: {
               id: true,
               action: true,
               modelType: true,
+              modelId: true,
               description: true,
               createdAt: true,
             },
@@ -85,6 +89,23 @@ export async function GET() {
       }),
     ]);
 
+    // Sembunyikan baris yang record-nya sudah terhapus + beri link ke sisanya.
+    // Baris yatim (ref tak teresolusi) hanya jejak audit — tempatnya di halaman
+    // log-aktivitas, bukan widget ringkas dashboard.
+    const refLabels = await resolveActivityReferenceLabels(
+      recentActivities.map((a) => ({ modelType: a.modelType, modelId: a.modelId })),
+    );
+    const liveActivities = recentActivities
+      .map((a) => {
+        const key = a.modelId != null ? `${a.modelType}:${a.modelId}` : null;
+        const refLabel = key ? (refLabels.get(key) ?? null) : null;
+        const href =
+          a.modelId != null ? activityEntityHref(a.modelType, a.modelId) : null;
+        return { ...a, refLabel, href };
+      })
+      .filter((a) => a.refLabel !== null || a.modelId == null)
+      .slice(0, 5);
+
     return NextResponse.json({
       lowStockCount: Number(lowStockCount[0]?.count ?? 0),
       overdueInvoiceCount,
@@ -94,7 +115,7 @@ export async function GET() {
         canViewAttendance && new Date().getHours() >= 10
           ? attendanceMetrics.absentEmployees.length
           : 0,
-      recentActivities: recentActivities.map((a) => ({
+      recentActivities: liveActivities.map((a) => ({
         ...a,
         createdAt: a.createdAt.toISOString(),
       })),
