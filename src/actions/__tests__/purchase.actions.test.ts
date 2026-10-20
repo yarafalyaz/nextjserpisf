@@ -125,6 +125,18 @@ beforeEach(() => {
   mocks.generateDocNumMock.mockResolvedValue("DOC-001")
 })
 
+function mockDraftReturn() {
+  mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
+    id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
+  })
+}
+
+function scopeUser(warehouseIds: number[]) {
+  mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
+  mocks.prismaMock.userWarehouse.findMany.mockResolvedValue(
+    warehouseIds.map((warehouseId) => ({ warehouseId })))
+}
+
 describe("Purchase Actions Smoke Tests", () => {
   it("exports everything", () => {
     expect(actions.createPurchaseRequest).toBeDefined()
@@ -841,9 +853,7 @@ describe("Purchase Return Actions", () => {
   })
 
   it("processPurchaseReturn succeeds", async () => {
-    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({ 
-      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1 
-    })
+    mockDraftReturn()
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: 3 }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValueOnce({ id: 3 })
@@ -852,53 +862,42 @@ describe("Purchase Return Actions", () => {
   })
 
   it("processPurchaseReturn succeeds via active-warehouse fallback when receipt+default kosong", async () => {
-    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
-    })
+    mockDraftReturn()
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: null }])
     // Loader queries active warehouse first (where.isActive); distinguish by arg so
     // mutating the loader to return active/any=null turns this test red.
     mocks.prismaMock.warehouse.findFirst.mockImplementation(async (arg: any) =>
       arg?.where?.isActive ? { id: 5 } : null)
-    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
-    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 5 }])
+    scopeUser([5])
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(true)
   })
 
   it("processPurchaseReturn rejects when receipt warehouse is outside user scope", async () => {
-    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
-    })
+    mockDraftReturn()
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([
       { itemId: 1, warehouseId: 9, goodsReceipt: { warehouseId: 9 } },
     ])
-    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
-    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 3 }])
+    scopeUser([3])
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("tidak memiliki akses ke gudang")
   })
 
   it("processPurchaseReturn rejects when fallback warehouse is outside user scope", async () => {
-    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
-    })
+    mockDraftReturn()
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: 9 }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValueOnce({ id: 9 })
-    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
-    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 3 }])
+    scopeUser([3])
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("tidak memiliki akses ke gudang")
   })
 
   it("processPurchaseReturn rejects when no warehouse can be resolved", async () => {
-    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
-    })
+    mockDraftReturn()
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
     mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: null }])
     mocks.prismaMock.warehouse.findFirst.mockResolvedValue(null)
@@ -908,14 +907,11 @@ describe("Purchase Return Actions", () => {
   })
 
   it("processPurchaseReturn succeeds when receipt warehouse is within user scope", async () => {
-    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
-      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
-    })
+    mockDraftReturn()
     mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([
       { itemId: 1, warehouseId: 3, goodsReceipt: { warehouseId: 3 } },
     ])
-    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
-    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 3 }])
+    scopeUser([3])
     const res = await actions.processPurchaseReturn(1)
     expect(res?.success).toBe(true)
   })
