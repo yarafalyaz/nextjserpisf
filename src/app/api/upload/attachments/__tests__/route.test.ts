@@ -216,11 +216,39 @@ describe("GET /api/upload/attachments", () => {
   })
 
   it("returns attachment list on success", async () => {
+    mocks.attachmentFindMany.mockResolvedValue([{
+      id: 1,
+      filename: "quotation-5-uuid.pdf",
+      originalName: "invoice.pdf",
+      fileUrl: "/api/attachments/quotation/quotation-5-uuid.pdf",
+      fileSize: 1024,
+      mimeType: "application/pdf",
+      createdAt: new Date("2026-10-20T00:00:00.000Z"),
+    }])
     const res = await GET(makeGetReq("http://localhost/api/upload/attachments?tipeReferensi=quotation&referensiId=5"))
     const json = await res.json()
-    expect(json).toEqual([{ id: 1 }])
+    expect(json).toEqual([{
+      id: 1,
+      filename: "quotation-5-uuid.pdf",
+      originalName: "invoice.pdf",
+      fileUrl: "/api/attachments/quotation/quotation-5-uuid.pdf",
+      fileSize: 1024,
+      mimeType: "application/pdf",
+      createdAt: "2026-10-20T00:00:00.000Z",
+    }])
+    // Kontrak GET hanya field yang dipakai TransactionAttachments; tanpa
+    // select, referenceType/referenceId/uploadedBy ikut bocor ke klien.
     expect(mocks.attachmentFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { referenceType: "quotation", referenceId: 5 },
+      select: {
+        id: true,
+        filename: true,
+        originalName: true,
+        fileUrl: true,
+        fileSize: true,
+        mimeType: true,
+        createdAt: true,
+      },
     }))
   })
 
