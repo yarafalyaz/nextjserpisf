@@ -716,6 +716,19 @@ function readEmployeeFormFields(
   };
 }
 
+// departmentId/positionId hanya divalidasi format oleh safeId; FK fiktif lolos
+// ke Prisma (P2003 mentah / karyawan yatim). Cek eksistensi pra-tulis.
+async function assertEmployeeRefsExist(fields: { departmentId: number | null; positionId: number | null }) {
+  if (fields.departmentId !== null) {
+    const dept = await prisma.department.findFirst({ where: { id: fields.departmentId }, select: { id: true } });
+    if (!dept) throw new Error("Departemen tidak ditemukan");
+  }
+  if (fields.positionId !== null) {
+    const pos = await prisma.position.findFirst({ where: { id: fields.positionId }, select: { id: true } });
+    if (!pos) throw new Error("Jabatan tidak ditemukan");
+  }
+}
+
 // ==================== EMPLOYEE ACTIONS ====================
 
 export async function createEmployee(formData: FormData) {
@@ -784,6 +797,7 @@ export async function createEmployee(formData: FormData) {
       joinDate: wibDateToUtcMidnight(parsedDates.data.joinDate),
       isActive: true,
     };
+    await assertEmployeeRefsExist(employeeData);
 
     // Create employee + (optionally) a linked login account atomically.
     const employee = await prisma.$transaction(async (tx) => {
@@ -927,6 +941,7 @@ export async function updateEmployee(employeeId: number, formData: FormData) {
     if (!parsedDates.success) return { success: false, error: parsedDates.error };
 
     const employeeFields = readEmployeeFormFields(formData, parsedDates.data);
+    await assertEmployeeRefsExist(employeeFields);
     const updateData = {
       ...employeeFields,
       // updateEmployee tidak menulis joinDate (tak berubah); tanggal divalidasi di atas agar konsisten dgn create.
