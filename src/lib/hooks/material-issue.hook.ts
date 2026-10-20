@@ -91,6 +91,11 @@ export async function onMaterialIssueCompleted(
           qty,
           label: `pengeluaran material ${issue.documentNo}`,
           serialNumbers: pickedSerials && pickedSerials.length > 0 ? pickedSerials : null,
+          // F-2026-10-20-79: tanggal dokumen mengaktifkan guard batch
+          // kedaluwarsa + dekremen ItemBatch FEFO fisik di consumeFifoLayers;
+          // biaya tetap FIFO lapisan. Lemparan di sini menggulung seluruh tx
+          // (tanpa StockMove/jurnal/status yang lahir).
+          documentDate: issue.date,
         });
 
         // Persist the serial attribution on the issue line so the document

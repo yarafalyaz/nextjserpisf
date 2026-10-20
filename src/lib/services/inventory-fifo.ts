@@ -68,6 +68,26 @@ export async function availableQty(
  *   warehouses (legacy / untracked items without a default warehouse).
  * - Throws if there is not enough stock, unless `allowShortfall` is true.
  */
+/**
+ * F-2026-10-20-79: tanggal kalender dokumen untuk guard kedaluwarsa batch.
+ * Dibandingkan per hari (bukan timestamp) agar batch yang kedaluwarsa tepat
+ * pada tanggal dokumen masih lolos.
+ */
+export function toCalendarDate(value: Date): Date {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate())
+}
+
+/**
+ * Urutan fisik FEFO untuk dekremen ItemBatch: expiryDate naik, lot tanpa
+ * expiryDate terakhir. Hanya mengurutkan identitas lot fisik — biaya tetap
+ * dari lapisan FIFO `consumeFifoLayers`, jangan disatukan jadi satu ORDER BY.
+ */
+export function compareBatchExpiry<T extends { expiryDate?: Date | null }>(a: T, b: T): number {
+  const ea = a.expiryDate ? toCalendarDate(a.expiryDate).getTime() : Number.POSITIVE_INFINITY
+  const eb = b.expiryDate ? toCalendarDate(b.expiryDate).getTime() : Number.POSITIVE_INFINITY
+  return ea - eb
+}
+
 export async function consumeFifoLayers(
   tx: Tx,
   opts: {
@@ -77,9 +97,16 @@ export async function consumeFifoLayers(
     label?: string
     allowShortfall?: boolean
     serialNumbers?: string[] | null
+    /**
+     * F-2026-10-20-79: tanggal dokumen. Bila diisi dan item memiliki baris
+     * ItemBatch, lot kedaluwarsa (expiryDate < tanggal dokumen) ditolak dan
+     * dekremen lot fisik urut FEFO. Opt-in: pemanggil tanpa tanggal dokumen
+     * (sales/transfer/adjustment) mempertahankan perilaku lama persis.
+     */
+    documentDate?: Date | null
   }
 ): Promise<FifoConsumption> {
-  const { itemId, warehouseId, qty, label, allowShortfall = false, serialNumbers } = opts
+  const { itemId, warehouseId, qty, label, allowShortfall = false, serialNumbers, documentDate } = opts
   if (qty <= 0) {
     return { consumedCost: 0, shortfall: 0, consumedSerials: [], consumedBatches: [] }
   }
@@ -111,6 +138,30 @@ export async function consumeFifoLayers(
       }
     }
   })
+  // F-2026-10-20-79 (vonis accountant 19:23): guard kedaluwarsa + urutan FEFO
+  // fisik hidup di SATU tempat untuk semua jalur konsumsi batch-tracked.
+  // Biaya tetap FIFO (lapisan di atas, created_at ASC) dan TIDAK berubah.
+  // Tanpa documentDate, pemanggil lama tak terpengaruh sama sekali.
+  let physicalBatches: { id: number; batchNumber: string; qty: unknown; warehouseId: number; expiryDate: Date | null }[] | null = null
+  if (documentDate) {
+    const batchRows = await tx.itemBatch.findMany({
+      where: { itemId, ...(warehouseId != null ? { warehouseId } : {}) },
+      select: { id: true, batchNumber: true, qty: true, warehouseId: true, expiryDate: true },
+    })
+    if (batchRows.length > 0) {
+      const docDay = toCalendarDate(documentDate)
+      for (const b of batchRows) {
+        if (b.expiryDate && toCalendarDate(b.expiryDate).getTime() < docDay.getTime()) {
+          throw new Error(
+            `Batch ${b.batchNumber} untuk item #${itemId} sudah kedaluwarsa (${toCalendarDate(b.expiryDate).toISOString().slice(0, 10)}) sebelum tanggal dokumen (${docDay.toISOString().slice(0, 10)}); pengeluaran ditolak.`
+          )
+        }
+      }
+      // FEFO fisik: lot tercepat kedaluwarsa didekremen lebih dulu.
+      physicalBatches = [...batchRows].sort((a, b) => compareBatchExpiry(a, b) || a.id - b.id)
+    }
+  }
+
   const costingMethod = await resolveCostingMethodForItem(item, tx)
 
   let averageCost = 0
@@ -190,13 +241,18 @@ export async function consumeFifoLayers(
     if (batchConsumption.size > 0) {
       // Hoist the batch lookup to O(1) before the loop
       const uniqueBatchNumbers = Array.from(batchConsumption.keys()).map(k => k.split("|")[0])
-      const batchesData = await tx.itemBatch.findMany({
+      const fetchedBatches = await tx.itemBatch.findMany({
         where: {
           itemId,
           batchNumber: { in: uniqueBatchNumbers },
           // Filter by warehouse in memory since the IN clause covers all batches
         }
       })
+      // FEFO fisik (documentDate): pakai daftar batch yang sudah dimuat+diurut
+      // di awal panggilan ini. Tanpa documentDate: presisi lapisan FIFO lama.
+      const batchesData =
+        physicalBatches ??
+        (fetchedBatches as unknown as { id: number; batchNumber: string; qty: unknown; warehouseId: number; expiryDate: Date | null }[])
 
       if (typeof tx.$executeRaw === "function" && batchesData.length > 0) {
         for (const batch of batchesData) {
@@ -206,18 +262,19 @@ export async function consumeFifoLayers(
       
       const batchUpdates: Promise<any>[] = []
       
-      for (const [key, qtyOut] of batchConsumption.entries()) {
-        const [batchNumber, whId] = key.split("|")
-        const batchWarehouseId = whId ? Number.parseInt(whId, 10) : null
-        
-        const batches = batchesData.filter(b => 
-          b.batchNumber === batchNumber && 
-          (batchWarehouseId != null ? b.warehouseId === batchWarehouseId : true)
-        )
-        
-        let remainingToDecrement = qtyOut
-        for (const batch of batches) {
+      if (physicalBatches) {
+        // FEFO fisik: total yang dikonsumsi lapisan FIFO didekremen dari lot
+        // dengan expiry tercepat lebih dulu, tanpa expiry terakhir. Jumlah
+        // dekremen persis consumedQty; consumedBatches mencerminkan lot
+        // fisik ini agar telusur garansi (F-39) menunjuk lot yang benar-benar
+        // keluar. Biaya sudah dihitung dari lapisan FIFO di atas.
+        let remainingToDecrement = consumedQty
+        for (const batch of batchesData) {
           if (remainingToDecrement <= 0) break
+          if (Number(batch.qty) <= 0) continue
+          // Gudang baris lapisan sudah dibatasi query lapisan; di sini cukup
+          // hormati gudang yang diminta pemanggil.
+          if (warehouseId != null && batch.warehouseId !== warehouseId) continue
           const deduct = Math.min(remainingToDecrement, Number(batch.qty))
           if (deduct > 0) {
             batchUpdates.push(
@@ -226,15 +283,45 @@ export async function consumeFifoLayers(
                 data: { qty: { decrement: deduct } },
               })
             )
-            remainingToDecrement -= deduct
-            // Record only what was ACTUALLY decremented (a missing/undersized lot
-            // row leaves part of qtyOut undecremented); reporting qtyOut here would
-            // make a transfer re-create stock that was never removed at the source.
+            remainingToDecrement = Math.round((remainingToDecrement - deduct) * 100) / 100
             consumedBatches.push({
-              batchNumber,
+              batchNumber: batch.batchNumber,
               warehouseId: batch.warehouseId,
               qty: Math.round(deduct * 100) / 100,
             })
+          }
+        }
+      } else {
+        for (const [key, qtyOut] of batchConsumption.entries()) {
+          const [batchNumber, whId] = key.split("|")
+          const batchWarehouseId = whId ? Number.parseInt(whId, 10) : null
+
+          const batches = batchesData.filter(b =>
+            b.batchNumber === batchNumber &&
+            (batchWarehouseId != null ? b.warehouseId === batchWarehouseId : true)
+          )
+
+          let remainingToDecrement = qtyOut
+          for (const batch of batches) {
+            if (remainingToDecrement <= 0) break
+            const deduct = Math.min(remainingToDecrement, Number(batch.qty))
+            if (deduct > 0) {
+              batchUpdates.push(
+                tx.itemBatch.update({
+                  where: { id: batch.id },
+                  data: { qty: { decrement: deduct } },
+                })
+              )
+              remainingToDecrement -= deduct
+              // Record only what was ACTUALLY decremented (a missing/undersized lot
+              // row leaves part of qtyOut undecremented); reporting qtyOut here would
+              // make a transfer re-create stock that was never removed at the source.
+              consumedBatches.push({
+                batchNumber,
+                warehouseId: batch.warehouseId,
+                qty: Math.round(deduct * 100) / 100,
+              })
+            }
           }
         }
       }
