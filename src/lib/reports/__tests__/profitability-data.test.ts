@@ -287,3 +287,20 @@ describe("loadProfitability — cakupan HPP berbasis qty (R-13)", () => {
     expect(result.totals.revenueMissingCogs).toBe(0)
   })
 })
+
+describe("loadProfitability — presisi sen loader HPP", () => {
+  it("HPP per move dibulatkan sen sebelum diagregat: 3 move 1×0,335 → 1,02 bukan 1,01", async () => {
+    const result = await seedAndLoad(
+      [{ itemId: 5, qty: 3, total: 300 }],
+      [
+        move({ referenceId: 1, itemId: 5, qty: 1, cost: 0.335 }),
+        move({ referenceId: 1, itemId: 5, qty: 1, cost: 0.335 }),
+        move({ referenceId: 1, itemId: 5, qty: 1, cost: 0.335 }),
+      ],
+    )
+    // Per move: safeMultiply(1, 0.335, 2)=0,34; total 1,02.
+    // Mentah: 3×0.335=1,0050000000000001 dibulatkan builder sekali → 1,01 (salah sen).
+    expect(result.totals.cogs).toBe(1.02)
+    expect(result.totals.grossProfit).toBe(298.98)
+  })
+})

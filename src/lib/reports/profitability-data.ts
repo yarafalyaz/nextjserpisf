@@ -43,6 +43,7 @@ import {
   type ProfitabilityResult,
 } from "@/lib/reports/profitability"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 
 const RECOGNISED_INVOICE_STATUSES = ["posted", "partial", "paid"] as const
 
@@ -114,8 +115,10 @@ export async function loadProfitability(
     if (move.itemId === null || move.referenceId === null) continue
     const key = keyOf(move.referenceId, move.itemId)
     const qty = Number(move.qty)
-    movedQtyByInvoiceItem.set(key, (movedQtyByInvoiceItem.get(key) ?? 0) + qty)
-    cogsByInvoiceItem.set(key, (cogsByInvoiceItem.get(key) ?? 0) + qty * Number(move.cost))
+    movedQtyByInvoiceItem.set(key, safeAdd(movedQtyByInvoiceItem.get(key) ?? 0, qty, 2))
+    // HPP per move dibulatkan sen dulu (qty×cost), baru diagregat sen — agregat
+    // mentah 3×(1×0,335)=1,005… dibulatkan builder sekali jadi 1,01, hilang 1 sen.
+    cogsByInvoiceItem.set(key, safeAdd(cogsByInvoiceItem.get(key) ?? 0, safeMultiply(qty, Number(move.cost), 2), 2))
   }
 
   const invoicedQtyByInvoiceItem = new Map<string, number>()
@@ -123,7 +126,7 @@ export async function loadProfitability(
     for (const line of invoice.items) {
       if (line.itemId === null) continue
       const key = keyOf(invoice.id, line.itemId)
-      invoicedQtyByInvoiceItem.set(key, (invoicedQtyByInvoiceItem.get(key) ?? 0) + Number(line.qty))
+      invoicedQtyByInvoiceItem.set(key, safeAdd(invoicedQtyByInvoiceItem.get(key) ?? 0, Number(line.qty), 2))
     }
   }
 
@@ -196,10 +199,10 @@ export async function loadProfitability(
       // HPP" secara definisi (dihitung terpisah, bukan stok). Stok: proporsi
       // qty belum keluar pada garis (faktur, barang)-nya.
       const uncoveredFraction = !isService && cogsKey ? uncoveredFractionByInvoiceItem.get(cogsKey) ?? 0 : 0
-      const uncoveredRevenue = revenue * uncoveredFraction
+      const uncoveredRevenue = safeMultiply(revenue, uncoveredFraction, 2)
 
       const target = bucketForLine(line)
-      target.revenue += revenue
+      target.revenue = safeAdd(target.revenue, revenue, 2)
       if (revenue !== 0) {
         if (isService) {
           target.revenueLinesWithoutCogs += 1
@@ -207,7 +210,7 @@ export async function loadProfitability(
         } else if (uncoveredFraction > 0) {
           // Atribusi proporsional per baris: Σ baris SKU = fraksi × Σ revenue
           // garis, jadi konsisten antar dimensi tanpa dobel.
-          target.stockRevenueWithoutCogs = (target.stockRevenueWithoutCogs ?? 0) + uncoveredRevenue
+          target.stockRevenueWithoutCogs = safeAdd(target.stockRevenueWithoutCogs ?? 0, uncoveredRevenue, 2)
           const countedKey = `${target.key}|${cogsKey}`
           if (!uncoveredCounted.has(countedKey)) {
             uncoveredCounted.add(countedKey)
@@ -220,7 +223,7 @@ export async function loadProfitability(
       // dengan SKU sama dalam faktur yang sama tidak menambah lagi.
       if (cogsKey !== null && !cogsApplied.has(cogsKey)) {
         cogsApplied.add(cogsKey)
-        target.cogs += lineCogs
+        target.cogs = safeAdd(target.cogs, lineCogs, 2)
       }
     }
   }
