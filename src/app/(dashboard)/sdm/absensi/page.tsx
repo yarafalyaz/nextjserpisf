@@ -89,6 +89,7 @@ export default async function AttendancePage({
     bulan?: string
     editAbsensi?: string
     cari?: string
+    status?: string
     halaman?: string
     pageSize?: string
   }>
@@ -104,13 +105,30 @@ export default async function AttendancePage({
   const { page, pageSize, skip, take } = parsePagination(params)
 
   const range = attendanceDateRange(params.tanggal, params.bulan)
+  // ?status=telat = definisi sama dengan penghitung widget dashboard
+  // (status late ATAU lateMinutes > 0).
+  const lateOnly = params.status === "telat"
+  const canSearch = !!(params.cari && canSearchAcrossEmployees(scope))
   const where = {
     ...hrScopeWhere(scope),
     ...(range && { date: range }),
-    // Pencarian nama bebas hanya bermakna bagi yang jangkauannya lintas karyawan.
-    ...(params.cari && canSearchAcrossEmployees(scope) && {
-      OR: [{ employee: { name: { contains: params.cari } } }],
-    }),
+    // Dua OR (telat + cari) digabung AND eksplisit agar tak saling timpa.
+    ...(lateOnly && canSearch
+      ? {
+          AND: [
+            { OR: [{ status: "late" }, { lateMinutes: { gt: 0 } }] },
+            { OR: [{ employee: { name: { contains: params.cari } } }] },
+          ],
+        }
+      : {
+          ...(lateOnly && {
+            OR: [{ status: "late" }, { lateMinutes: { gt: 0 } }],
+          }),
+          // Pencarian nama bebas hanya bermakna bagi yang jangkauannya lintas karyawan.
+          ...(canSearch && {
+            OR: [{ employee: { name: { contains: params.cari } } }],
+          }),
+        }),
   }
 
   const editId = Number(params.editAbsensi)
