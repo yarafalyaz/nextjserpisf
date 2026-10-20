@@ -11,6 +11,7 @@
  * Pure (tanpa Prisma/DOM) supaya aturan pengelompokan dan penjumlahan bisa diuji.
  */
 
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { formatAccounting, formatDate } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import {
@@ -105,7 +106,7 @@ export function buildAssetRegister(input: AssetRegisterInput): AssetRegisterResu
     // aset dilepas): yang tampil adalah nilai buku PADA saat pelepasan, bukan nol.
     const accumulated = accumulatedByAsset.get(asset.id) ?? 0
     const category = categoryLabelOf(asset)
-    const line: Line = { asset, accumulated, bookValue: cost - accumulated }
+    const line: Line = { asset, accumulated, bookValue: safeSubtract(cost, accumulated, 2) }
     if (line.bookValue < -0.005) hasNegativeBookValue = true
 
     byCategory.set(category, [...(byCategory.get(category) ?? []), line])
@@ -132,9 +133,9 @@ export function buildAssetRegister(input: AssetRegisterInput): AssetRegisterResu
 
     for (const line of lines) {
       const cost = Number(line.asset.purchaseCost)
-      categoryCost += cost
-      categoryAccumulated += line.accumulated
-      categoryBookValue += line.bookValue
+      categoryCost = safeAdd(categoryCost, cost, 2)
+      categoryAccumulated = safeAdd(categoryAccumulated, line.accumulated, 2)
+      categoryBookValue = safeAdd(categoryBookValue, line.bookValue, 2)
       assetCount += 1
 
       rows.push({
@@ -157,9 +158,9 @@ export function buildAssetRegister(input: AssetRegisterInput): AssetRegisterResu
       cells: [amount(categoryCost), amount(categoryAccumulated), amount(categoryBookValue)],
     })
 
-    totalCost += categoryCost
-    totalAccumulatedDepreciation += categoryAccumulated
-    totalBookValue += categoryBookValue
+    totalCost = safeAdd(totalCost, categoryCost, 2)
+    totalAccumulatedDepreciation = safeAdd(totalAccumulatedDepreciation, categoryAccumulated, 2)
+    totalBookValue = safeAdd(totalBookValue, categoryBookValue, 2)
   }
 
   rows.push({
