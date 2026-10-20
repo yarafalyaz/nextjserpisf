@@ -27,6 +27,7 @@ import {
   inventoryTransferSchema,
   materialIssueSchema,
   workOrderSchema,
+  reviseWorkOrderItemsSchema,
   rackSchema,
   rackRowSchema,
 } from "@/lib/validations/inventory.schemas";
@@ -831,6 +832,127 @@ export async function updateWorkOrder(id: number, formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateWorkOrder]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Revisi item WO yang sedang berjalan (F-2026-10-20-06, sub-aman F-02).
+ *
+ * `updateWorkOrder` menolak WO `in_progress` (delete+recreate item merusak
+ * jejak Material Issue). Aksi ini jalur sempit penggantinya: tambah item
+ * baru (status pending) dan/atau tandai item lama `replaced` — tanpa migrasi
+ * (`WorkOrderItem.status` String existing), tanpa menghapus baris.
+ *
+ * Guard stok dua arah: item yang sudah keluar lewat Material Issue
+ * `completed` untuk WO ini TIDAK boleh ditandai replaced di sini — stoknya
+ * sudah OUT (FIFO + jurnal), mengembalikan wajib lewat jalur retur/Material
+ * Issue existing agar jurnal baliknya benar. Item belum ter-issue aman
+ * diganti karena belum ada pergerakan stok apa pun.
+ */
+export async function reviseWorkOrderItems(input: {
+  workOrderId: number;
+  replacedItemIds?: number[];
+  newItems?: { itemId: number; qty: number; cost?: number; description?: string }[];
+}) {
+  try {
+    await requirePermission("edit_work_orders");
+
+    const parsed = reviseWorkOrderItemsSchema.safeParse(input ?? {});
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Data revisi tidak valid",
+      };
+    }
+    const v = parsed.data;
+    const replacedIds = [...new Set(v.replacedItemIds)];
+    if (replacedIds.length === 0 && v.newItems.length === 0) {
+      return {
+        success: false,
+        error: "Pilih item yang diganti atau tambahkan item baru",
+      };
+    }
+
+    const wo = await prisma.workOrder.findUniqueOrThrow({
+      where: { id: v.workOrderId },
+      select: { id: true, status: true },
+    });
+    if (wo.status !== "in_progress") {
+      throw new Error(
+        `Item hanya bisa direvisi saat Perintah Kerja berjalan. Status saat ini '${wo.status}' — gunakan ubah biasa untuk draft/pending.`,
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Klaim kondisional: serialkan revisi konkuren pada WO yang sama.
+      const claim = await tx.workOrder.updateMany({
+        where: { id: v.workOrderId, status: "in_progress" },
+        data: { updatedAt: new Date() },
+      });
+      if (claim.count === 0) {
+        throw new Error("Status Perintah Kerja sudah berubah; muat ulang halaman.");
+      }
+
+      if (replacedIds.length > 0) {
+        const targets = await tx.workOrderItem.findMany({
+          where: { id: { in: replacedIds }, workOrderId: v.workOrderId },
+          select: { id: true, itemId: true, status: true },
+        });
+        if (targets.length !== replacedIds.length) {
+          throw new Error("Sebagian item yang diganti tidak ditemukan pada Perintah Kerja ini.");
+        }
+        const alreadyReplaced = targets.filter((t) => t.status === "replaced");
+        if (alreadyReplaced.length > 0) {
+          throw new Error("Sebagian item sudah pernah diganti.");
+        }
+
+        // Item ter-issue (MI completed WO ini) stoknya sudah keluar —
+        // tandai replaced di sini akan mengaburkan retur stoknya.
+        const issued = await tx.materialIssueItem.findMany({
+          where: {
+            itemId: { in: targets.map((t) => t.itemId) },
+            materialIssue: { workOrderId: v.workOrderId, status: "completed" },
+          },
+          select: { itemId: true },
+        });
+        if (issued.length > 0) {
+          throw new Error(
+            "Sebagian item sudah dikeluarkan lewat Pengeluaran Material selesai — kembalikan stoknya lewat jalur retur/pengeluaran material, bukan revisi item.",
+          );
+        }
+
+        await tx.workOrderItem.updateMany({
+          where: { id: { in: replacedIds }, workOrderId: v.workOrderId },
+          data: { status: "replaced" },
+        });
+      }
+
+      if (v.newItems.length > 0) {
+        await tx.workOrderItem.createMany({
+          data: v.newItems.map((i) => ({
+            workOrderId: v.workOrderId,
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost || 0,
+            description: i.description || null,
+            status: "pending",
+          })),
+        });
+      }
+    });
+
+    await logActivity(
+      "update",
+      "WorkOrder",
+      v.workOrderId,
+      `Merevisi item perintah kerja #${v.workOrderId}: ${replacedIds.length} diganti, ${v.newItems.length} baru`,
+    );
+    revalidatePath("/produksi/perintah-kerja");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[reviseWorkOrderItems]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
