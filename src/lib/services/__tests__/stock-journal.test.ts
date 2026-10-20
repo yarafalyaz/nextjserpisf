@@ -1,10 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const mocks = vi.hoisted(() => ({
-  getSystemSettings: vi.fn(),
-  generateDocumentNumber: vi.fn(),
-  createJournal: vi.fn(),
-}));
+const mocks = await vi.hoisted(
+  async () =>
+    (await import("./stock-journal-test-utils")).createStockJournalMocks(),
+);
 
 vi.mock("@/lib/utils/settings", () => ({
   getSystemSettings: mocks.getSystemSettings,
@@ -25,31 +24,17 @@ import {
   productionOrderCompletionJournalRef,
   productionOrderCostVarianceJournalRef,
 } from "@/lib/services/stock-journal.service";
+import {
+  STOCK_JOURNAL_FULL_ACCOUNTS as FULL_ACCOUNTS,
+  seedStockJournalMocks,
+} from "./stock-journal-test-utils";
 
 const tx = {} as never;
-
-// Full account config used by most tests.
-const FULL_ACCOUNTS = {
-  inventoryAccountId: 100,
-  stockAdjustmentAccountId: 200,
-  inventoryAdjustmentAccountId: null,
-  cogsAccountId: 300,
-  wipAccountId: 400,
-  materialExpenseAccountId: 500,
-  materialIssueExpenseAccountId: 510,
-  purchaseInventoryAccountId: 600,
-  purchaseReturnAccountId: 700,
-  salesReturnAccountId: 800,
-  purchaseShippingAccountId: 620,
-  purchaseAdminFeeAccountId: 630,
-};
 
 describe("stockJournalService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.getSystemSettings.mockResolvedValue(FULL_ACCOUNTS);
-    mocks.generateDocumentNumber.mockResolvedValue("JRN-001");
-    mocks.createJournal.mockResolvedValue({ id: 1, journalNumber: "JRN-001" });
+    seedStockJournalMocks(mocks);
   });
 
   describe("onProductionOrderMaterialIssue", () => {

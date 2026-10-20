@@ -6,11 +6,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * 4.080000000000002 yang lolos sebagai debit/kredit jurnal (onGoodsReceipt
  * membulatkan via round2 lokal, jalur lain tidak). Jurnal harus tepat sen.
  */
-const mocks = vi.hoisted(() => ({
-  getSystemSettings: vi.fn(),
-  generateDocumentNumber: vi.fn(),
-  createJournal: vi.fn(),
-}));
+const mocks = await vi.hoisted(
+  async () =>
+    (await import("./stock-journal-test-utils")).createStockJournalMocks(),
+);
 
 vi.mock("@/lib/utils/settings", () => ({
   getSystemSettings: mocks.getSystemSettings,
@@ -27,28 +26,14 @@ vi.mock("@/lib/services/journal.service", () => ({
 }));
 
 import { stockJournalService } from "@/lib/services/stock-journal.service";
+import { seedStockJournalMocks } from "./stock-journal-test-utils";
 
 const tx = {} as never;
 const ITEMS_17 = Array.from({ length: 17 }, () => ({ qty: 1, cost: 0.24 }));
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.getSystemSettings.mockResolvedValue({
-    inventoryAccountId: 100,
-    stockAdjustmentAccountId: 200,
-    inventoryAdjustmentAccountId: null,
-    cogsAccountId: 300,
-    wipAccountId: 400,
-    materialExpenseAccountId: 500,
-    materialIssueExpenseAccountId: 510,
-    purchaseInventoryAccountId: 600,
-    purchaseReturnAccountId: 700,
-    salesReturnAccountId: 800,
-    purchaseShippingAccountId: 620,
-    purchaseAdminFeeAccountId: 630,
-  });
-  mocks.generateDocumentNumber.mockResolvedValue("JRN-001");
-  mocks.createJournal.mockResolvedValue({ id: 1, journalNumber: "JRN-001" });
+  seedStockJournalMocks(mocks);
 });
 
 function entriesOf(call: number) {
