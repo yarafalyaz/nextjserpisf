@@ -265,6 +265,9 @@ const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
   "leave",
   "overtime",
   "timesheet",
+  // WorkSchedule deletion refuses while assigned to employees/departments
+  // (M2M cascade would silently detach schedules used by attendance).
+  "workSchedule",
   // Rack deletion has a reference guard to preserve item and stock locations
   "rack",
   "rackRow",
