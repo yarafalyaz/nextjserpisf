@@ -31,6 +31,7 @@ describe("buildMinStock", () => {
 
     expect(result.totals.items).toBe(1)
     expect(result.totals.shortageValue).toBe(5_000)
+    expect(result.shortageLines).toEqual([{ itemId: null, shortage: 5 }])
     expect(texts(result)).toContain("BRG-1 Busi")
     expect(texts(result)).toContain("CV Sumber")
     expect(result.verdict).toContain("1 barang")

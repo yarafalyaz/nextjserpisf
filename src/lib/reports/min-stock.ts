@@ -28,6 +28,8 @@ import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface MinStockItemInput {
+  /** Id barang — dipakai tombol "Buat Permintaan" membuka form ter-prefill. */
+  itemId?: number
   sku: string
   name: string
   unit: string | null
@@ -43,6 +45,8 @@ export interface MinStockItemInput {
 
 export interface MinStockResult {
   table: { columns: TableColumn[]; rows: TableRow[] }
+  /** Baris di bawah minimum dengan id barang — untuk aksi lanjutan di halaman. */
+  shortageLines: { itemId: number | null; shortage: number }[]
   totals: {
     /** Barang di bawah minimum. */
     items: number
@@ -168,7 +172,15 @@ export function buildMinStock(items: MinStockItemInput[]): MinStockResult {
     })
   }
 
-  return { table: { columns, rows }, totals, verdict }
+  return {
+    table: { columns, rows },
+    shortageLines: below.map(({ item, shortage }) => ({
+      itemId: item.itemId ?? null,
+      shortage,
+    })),
+    totals,
+    verdict,
+  }
 }
 
 /** Ringkasan satu baris untuk KPI di halaman laporan. */
