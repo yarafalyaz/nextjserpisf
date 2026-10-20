@@ -7,12 +7,23 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { sumMoney } from "@/lib/reports/aging-amounts"
 import {
   buildSalesProcessHistory,
   type SalesProcessLine,
   type SalesProcessResult,
 } from "@/lib/reports/sales-process-history"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+
+/** Σ grandTotal/paidAmount faktur, presisi sen (bukan float mentah). */
+export function sumInvoiceAmounts(
+  invoices: readonly { grandTotal: unknown; paidAmount: unknown }[],
+): { invoiced: number; paid: number } {
+  return {
+    invoiced: sumMoney(invoices.map((i) => i.grandTotal as never)),
+    paid: sumMoney(invoices.map((i) => i.paidAmount as never)),
+  }
+}
 
 export interface SalesProcessReport {
   result: SalesProcessResult
@@ -44,8 +55,7 @@ export async function loadSalesProcessHistory(period: {
     status: order.status,
     deliveryCount: order.deliveryOrders.length,
     invoiceCount: order.salesInvoices.length,
-    invoiced: order.salesInvoices.reduce((sum, invoice) => sum + Number(invoice.grandTotal), 0),
-    paid: order.salesInvoices.reduce((sum, invoice) => sum + Number(invoice.paidAmount), 0),
+    ...sumInvoiceAmounts(order.salesInvoices),
   }))
 
   return {

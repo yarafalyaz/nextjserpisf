@@ -13,6 +13,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 260mm, area isi A4 mendatar. */
@@ -79,10 +80,10 @@ export function buildPurchaseProcessHistory(lines: PurchaseProcessLine[]): Purch
   }
 
   const rows: TableRow[] = sorted.map((line) => {
-    const outstanding = line.billed - line.paid
-    totals.billed += line.billed
-    totals.paid += line.paid
-    totals.outstanding += outstanding
+    const outstanding = safeSubtract(line.billed, line.paid, 2)
+    totals.billed = safeAdd(totals.billed, line.billed, 2)
+    totals.paid = safeAdd(totals.paid, line.paid, 2)
+    totals.outstanding = safeAdd(totals.outstanding, outstanding, 2)
     if (line.receiptCount > 0 && line.billCount === 0) totals.receivedNotBilled += 1
     if (line.billCount > 0 && outstanding > 0.005) totals.billedUnpaid += 1
 
