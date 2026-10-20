@@ -23,6 +23,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import { AGING_BUCKETS, ageInDays } from "@/lib/reports/received-not-billed"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -125,9 +126,9 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
     let transferValue = 0
     for (const item of transfer.items) {
       const unitCost = item.unitCost
-      const value = item.qty * (unitCost ?? 0)
+      const value = safeMultiply(item.qty, unitCost ?? 0, 2)
       if (unitCost === null) totals.estimatedLines += 1
-      transferValue += value
+      transferValue = safeAdd(transferValue, value, 2)
       totals.items += 1
       if (item.unit) units.add(item.unit)
 
@@ -149,8 +150,8 @@ export function buildTransferInTransit(input: TransferInTransitInput): TransferI
     })
 
     totals.transfers += 1
-    totals.value += transferValue
-    if (bucket) bucket.value += transferValue
+    totals.value = safeAdd(totals.value, transferValue, 2)
+    if (bucket) bucket.value = safeAdd(bucket.value, transferValue, 2)
   }
 
   let verdict: string
