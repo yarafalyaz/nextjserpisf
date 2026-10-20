@@ -9,6 +9,7 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { itemSchema, type ItemInput } from "@/lib/validations/form.schemas"
 import { createItem, updateItem } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { apiErrorMessage } from "@/lib/utils/api-error-message"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -184,7 +185,7 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
         setValue("image", data.url)
         setImagePreview(data.url)
       } else {
-        showError(data.error || "Unggah gagal")
+        showError(apiErrorMessage(data, "Unggah gagal"))
       }
     } catch (err) {
       showError("Unggah gagal: " + (err as Error).message)
