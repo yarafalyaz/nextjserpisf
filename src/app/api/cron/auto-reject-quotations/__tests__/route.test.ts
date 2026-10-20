@@ -88,7 +88,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.rejected).toBe(0)
-    expect(json.message).toBe("No stale quotations found.")
+    expect(json.message).toBe("Tidak ada penawaran kedaluwarsa.")
   })
 
   it("returns 500 on internal error", async () => {
@@ -180,7 +180,7 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     const json = await res.json()
     expect(json.rejected).toBe(0)
     expect(json.message).toBe(
-      "No stale quotations were still in SENT status at write time.",
+      "Tidak ada penawaran kedaluwarsa yang masih berstatus terkirim saat penulisan.",
     )
     expect(mocks.txQuotationHistoryCreateMany).not.toHaveBeenCalled()
   })

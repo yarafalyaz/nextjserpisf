@@ -38,7 +38,7 @@ export async function GET(request: Request) {
     })
 
     if (staleQuotations.length === 0) {
-      return NextResponse.json({ rejected: 0, message: "No stale quotations found." })
+      return NextResponse.json({ rejected: 0, message: "Tidak ada penawaran kedaluwarsa." })
     }
 
     // Idempotency contract: only reject quotations that are STILL in SENT
@@ -95,8 +95,8 @@ export async function GET(request: Request) {
       rejected: rejectedCount,
       message:
         rejectedCount === 0
-          ? "No stale quotations were still in SENT status at write time."
-          : `Successfully rejected ${rejectedCount} stale quotations.`,
+          ? "Tidak ada penawaran kedaluwarsa yang masih berstatus terkirim saat penulisan."
+          : `Berhasil menolak ${rejectedCount} penawaran kedaluwarsa.`,
       rejectedIds,
     })
   } catch (err) {

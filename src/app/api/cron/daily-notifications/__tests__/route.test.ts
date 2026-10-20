@@ -98,7 +98,7 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.userFindMany.mockResolvedValue([])
     const res = await GET(makeReq())
     const json = await res.json()
-    expect(json.message).toBe("No active admins found.")
+    expect(json.message).toBe("Tidak ada admin aktif.")
   })
 
   it("returns 500 on internal error", async () => {
@@ -211,7 +211,7 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.userFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
     const res = await GET(makeReq())
     const json = await res.json()
-    expect(json.message).toBe("Daily notifications sent.")
+    expect(json.message).toBe("Notifikasi harian terkirim.")
     expect(json.adminsNotified).toBe(2)
   })
 
