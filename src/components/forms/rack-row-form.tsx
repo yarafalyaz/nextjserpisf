@@ -120,7 +120,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
         </h1>
       </div>
 
-      <form onSubmit={onSubmit}>
+      <form onSubmit={onSubmit} aria-busy={isPending} aria-label={rackRow ? "Formulir ubah baris rak" : "Formulir tambah baris rak"}>
         <FormCard>
           <input type="hidden" name="rackId" value={rackId} />
           {enableAutoCode && <input type="hidden" name="code" value={autoCode} />}
@@ -128,9 +128,10 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
           <FormSection title="Informasi Umum">
             {/* Warehouse select */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="warehouseId">Gudang *</Label>
+              <Label htmlFor="warehouseId">Gudang <span className="text-destructive" aria-hidden="true">*</span></Label>
               <QuickAddSelect
                 id="warehouseId"
+                required
                 value={warehouseId || null}
                 onChange={handleWarehouseChange}
                 placeholder="Cari gudang..."
@@ -148,9 +149,10 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
 
             {/* Rack select (filtered by warehouse) */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="rackIdSelect">Rak *</Label>
+              <Label htmlFor="rackIdSelect">Rak <span className="text-destructive" aria-hidden="true">*</span></Label>
               <Combobox
                 id="rackIdSelect"
+                required
                 value={rackId || null}
                 onChange={handleRackChange}
                 placeholder="Cari rak..."
@@ -179,7 +181,7 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
 
             {/* Name input */}
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="name">Nama *</Label>
+              <Label htmlFor="name">Nama <span className="text-destructive" aria-hidden="true">*</span></Label>
               <Input
                 id="name"
                 name="name"
