@@ -14,6 +14,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 260mm, area isi A4 mendatar. */
@@ -79,10 +80,10 @@ export function buildSalesProcessHistory(lines: SalesProcessLine[]): SalesProces
   }
 
   const rows: TableRow[] = sorted.map((line) => {
-    const outstanding = line.invoiced - line.paid
-    totals.invoiced += line.invoiced
-    totals.paid += line.paid
-    totals.outstanding += outstanding
+    const outstanding = safeSubtract(line.invoiced, line.paid, 2)
+    totals.invoiced = safeAdd(totals.invoiced, line.invoiced, 2)
+    totals.paid = safeAdd(totals.paid, line.paid, 2)
+    totals.outstanding = safeAdd(totals.outstanding, outstanding, 2)
     if (line.deliveryCount > 0 && line.invoiceCount === 0) totals.deliveredNotInvoiced += 1
     if (line.invoiceCount > 0 && outstanding > 0.005) totals.invoicedUnpaid += 1
 
