@@ -8,6 +8,8 @@ import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { WorkOrderTable } from "./_components/work-order-table"
+import { WorkOrderQueueCard } from "@/components/reports/work-order-queue-card"
+import { getWorkOrderQueue } from "@/lib/reports/work-order-queue-data"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
@@ -48,6 +50,8 @@ export default async function WorkOrdersPage({
 
   const total = await prisma.workOrder.count({ where })
 
+  const queue = await getWorkOrderQueue()
+
   const tableData = toPlain(workOrders)
 
   const statusChips = ["", "draft", "in_progress", "completed"].map((dbStatus) => {
@@ -76,6 +80,8 @@ export default async function WorkOrdersPage({
           + Buat Perintah Kerja
         </Link>
       </div>
+
+      <WorkOrderQueueCard queue={queue} />
 
       <WorkOrderTable
         data={tableData}
