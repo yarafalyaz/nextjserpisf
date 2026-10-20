@@ -851,6 +851,22 @@ describe("Purchase Return Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("processPurchaseReturn succeeds via active-warehouse fallback when receipt+default kosong", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
+    })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([])
+    mocks.prismaMock.item.findMany.mockResolvedValueOnce([{ id: 1, defaultWarehouseId: null }])
+    // Loader queries active warehouse first (where.isActive); distinguish by arg so
+    // mutating the loader to return active/any=null turns this test red.
+    mocks.prismaMock.warehouse.findFirst.mockImplementation(async (arg: any) =>
+      arg?.where?.isActive ? { id: 5 } : null)
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
+    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 5 }])
+    const res = await actions.processPurchaseReturn(1)
+    expect(res?.success).toBe(true)
+  })
+
   it("processPurchaseReturn rejects when receipt warehouse is outside user scope", async () => {
     mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
