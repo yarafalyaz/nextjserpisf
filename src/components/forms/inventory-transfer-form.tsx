@@ -80,11 +80,12 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={transfer?.id ? "Formulir ubah transfer stok" : "Formulir tambah transfer stok"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="sourceWarehouseId">Dari Gudang *</Label>
+          <Label htmlFor="sourceWarehouseId">Dari Gudang <span className="text-destructive" aria-hidden="true">*</span></Label>
           <QuickAddSelect
+            required
             id="sourceWarehouseId"
             options={warehouseOptions.map((w) => ({ value: String(w.id), label: w.name }))}
             value={sourceId || null}
@@ -100,8 +101,9 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="destinationWarehouseId">Ke Gudang *</Label>
+          <Label htmlFor="destinationWarehouseId">Ke Gudang <span className="text-destructive" aria-hidden="true">*</span></Label>
           <QuickAddSelect
+            required
             id="destinationWarehouseId"
             options={warehouseOptions.filter((w) => String(w.id) !== sourceId).map((w) => ({ value: String(w.id), label: w.name }))}
             value={destId || null}
@@ -188,9 +190,9 @@ export function InventoryTransferForm({ warehouses, items, transfer }: TransferF
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Memproses..." : "Buat Transfer"}</Button>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+        <Button type="button" className="w-full sm:w-auto" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" className="w-full sm:w-auto" isDisabled={isPending} >{isPending ? "Memproses..." : "Buat Transfer"}</Button>
       </div>
     </form>
   )
