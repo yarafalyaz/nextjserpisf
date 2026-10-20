@@ -139,12 +139,12 @@ export function CustomerVehicleForm({
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form onSubmit={handleSubmit} aria-busy={isPending} aria-label={vehicle?.id ? "Formulir ubah kendaraan pelanggan" : "Formulir tambah kendaraan pelanggan"}>
       <FormCard>
         {showCustomerPicker && (
           <FormSection title="Pemilik">
             <div className="flex flex-col gap-1.5">
-              <Label>Pelanggan *</Label>
+              <Label htmlFor="customerId">Pelanggan <span className="text-destructive" aria-hidden="true">*</span></Label>
               <Combobox
                 id="customerId"
                 value={selectedCustomerId ? String(selectedCustomerId) : null}
@@ -160,8 +160,9 @@ export function CustomerVehicleForm({
         )}
         <FormSection title="Informasi Kendaraan">
           <div className="flex flex-col gap-1.5">
-            <Label>Merek Kendaraan *</Label>
+            <Label htmlFor="brandId">Merek Kendaraan <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Combobox
+              id="brandId"
               value={selectedBrandId ? String(selectedBrandId) : null}
               onChange={(key) => {
                 setSelectedBrandId(key ? Number(key) : null);
@@ -177,8 +178,9 @@ export function CustomerVehicleForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label>Model Kendaraan *</Label>
+            <Label htmlFor="modelId">Model Kendaraan <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Combobox
+              id="modelId"
               value={selectedModelId ? String(selectedModelId) : null}
               onChange={(key) => {
                 setSelectedModelId(key ? Number(key) : null);
@@ -194,8 +196,10 @@ export function CustomerVehicleForm({
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label>Varian *</Label>
+            <Label htmlFor="variantId">Varian <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Combobox
+              id="variantId"
+              required
               value={selectedVariantId ? String(selectedVariantId) : null}
               onChange={(key) => setSelectedVariantId(key ? Number(key) : null)}
               disabled={!selectedModelId}
