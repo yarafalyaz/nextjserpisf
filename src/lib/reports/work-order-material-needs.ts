@@ -18,6 +18,14 @@
  * "Tersedia" memakai stok global `Item.qtyOnHand` (konvensi sama seperti
  * laporan stok minimum, min-stock.ts: total seluruh gudang), bukan per
  * gudang — halaman WO tidak mengunci satu gudang material.
+ *
+ * F-2026-10-20-51(a): "tersedia efektif" mengurangi stok yang sudah
+ * terikat kebutuhan WO aktif LAIN (committedOtherQty) supaya stok yang
+ * sama tidak tampak cukup untuk dua job sekaligus. Ini peringatan
+ * read-only (ATP), BUKAN reservasi mengikat — inti StockReservation
+ * (F-07) tetap ditunda.
+ * F-2026-10-20-52: incoming = sisa PO tertaut WO ini yang belum diterima,
+ * dengan tanggal tercepat; status cakupannya dibandingkan ke startDate WO.
  */
 
 export interface MaterialNeedInput {
@@ -28,7 +36,17 @@ export interface MaterialNeedInput {
   qtyOnHand: number
   issuedQty: number
   orderedQty: number
+  /** Sisa kebutuhan WO aktif lain (required−issued, non-replaced) per item. Opsional: pemanggil lama tanpa field ini dianggap 0. */
+  committedOtherQty?: number
+  /** Sisa PO WO ini belum diterima (qty−receivedQty) per item; default = orderedQty. */
+  incomingQty?: number
+  /** expectedDate tercepat di antara PO penyumbang incoming; null = tidak ada tanggal. */
+  incomingEarliestDate?: Date | null
+  /** startDate WO untuk menilai tepat-waktu; null = tidak dinilai (dianggap tepat-waktu). */
+  workOrderStartDate?: Date | null
 }
+
+export type IncomingCover = "none" | "tepat-waktu" | "terlambat" | "belum-jadwal"
 
 export interface MaterialNeedLine {
   itemId: number
@@ -40,8 +58,17 @@ export interface MaterialNeedLine {
   orderedQty: number
   /** Yang masih harus keluar: maks(0, required - issued). */
   remainingQty: number
-  /** remainingQty - qtyOnHand > 0: stok belum menutup sisa kebutuhan. */
+  /** Sisa kebutuhan WO aktif lain atas item ini (ATP read-only, bukan kunci stok). */
+  committedOtherQty: number
+  /** qtyOnHand − committedOtherQty, dibatasi >= 0. */
+  effectiveAvailableQty: number
+  /** remainingQty − effectiveAvailableQty > 0: stok efektif belum menutup sisa kebutuhan. */
   shortageQty: number
+  /** Sisa PO WO ini belum diterima; = orderedQty bila pemanggil tidak memisahkan. */
+  incomingQty: number
+  incomingEarliestDate: Date | null
+  /** none: incoming tidak menutup shortage; tepat-waktu/terlambat vs startDate; belum-jadwal: incoming menutup tapi tanpa expectedDate. */
+  incomingCover: IncomingCover
   isService: boolean
   fulfilled: boolean
 }
@@ -68,8 +95,22 @@ export function buildWorkOrderMaterialNeeds(
     const issuedQty = isService ? 0 : input.issuedQty
     const orderedQty = isService ? 0 : input.orderedQty
     const qtyOnHand = isService ? 0 : input.qtyOnHand
+    const committedOtherQty = isService ? 0 : Math.max(0, input.committedOtherQty ?? 0)
+    const effectiveAvailableQty = Math.max(0, qtyOnHand - committedOtherQty)
     const remainingQty = Math.max(0, requiredQty - issuedQty)
-    const shortageQty = Math.max(0, remainingQty - qtyOnHand)
+    const shortageQty = Math.max(0, remainingQty - effectiveAvailableQty)
+    const incomingQty = isService ? 0 : (input.incomingQty ?? orderedQty)
+    const incomingEarliestDate = isService ? null : (input.incomingEarliestDate ?? null)
+    let incomingCover: IncomingCover = "none"
+    if (!isService && shortageQty > EPSILON && incomingQty >= shortageQty - EPSILON) {
+      if (incomingEarliestDate == null) {
+        incomingCover = "belum-jadwal"
+      } else if (input.workOrderStartDate != null && incomingEarliestDate.getTime() > input.workOrderStartDate.getTime()) {
+        incomingCover = "terlambat"
+      } else {
+        incomingCover = "tepat-waktu"
+      }
+    }
     return {
       itemId: input.itemId,
       name: input.name,
@@ -78,8 +119,13 @@ export function buildWorkOrderMaterialNeeds(
       qtyOnHand,
       issuedQty,
       orderedQty,
+      committedOtherQty,
+      effectiveAvailableQty,
       remainingQty,
       shortageQty,
+      incomingQty,
+      incomingEarliestDate,
+      incomingCover,
       isService,
       fulfilled: isService || remainingQty <= EPSILON,
     }

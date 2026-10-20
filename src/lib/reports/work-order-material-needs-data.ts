@@ -11,6 +11,15 @@
  * `qty - receivedQty`). Tersedia = `Item.qtyOnHand` total (konvensi
  * min-stock).
  *
+ * F-2026-10-20-51(a): "terikat WO lain" = sisa kebutuhan (qty−issued dari
+ * MI completed WO itu) baris non-replaced WO aktif lain
+ * (draft/pending/in_progress, himpunan `ACTIVE_WORK_ORDER_STATUSES`)
+ * per item. Query massal (WO lain + MI-nya), bukan per-WO. Ini
+ * peringatan ATP read-only — BUKAN `StockReservation` mengikat (F-07
+ * inti ditunda); WO tidak dikunci dan stok tidak ditahan.
+ * F-2026-10-20-52: incoming memakai `expectedDate` PO yang sama; tanggal
+ * tercepat per item dibandingkan builder ke `startDate` WO.
+ *
  * Read-only: tanpa migrasi, tanpa jurnal, tanpa mutasi.
  */
 
@@ -20,6 +29,7 @@ import {
   type MaterialNeedInput,
   type WorkOrderMaterialNeeds,
 } from "@/lib/reports/work-order-material-needs"
+import { ACTIVE_WORK_ORDER_STATUSES } from "@/lib/reports/work-order-queue"
 
 export async function getWorkOrderMaterialNeeds(
   workOrderId: number,
@@ -28,6 +38,7 @@ export async function getWorkOrderMaterialNeeds(
     where: { id: workOrderId },
     select: {
       id: true,
+      startDate: true,
       items: {
         select: { itemId: true, description: true, qty: true, status: true },
         orderBy: { id: "asc" },
@@ -39,7 +50,7 @@ export async function getWorkOrderMaterialNeeds(
   const active = wo.items.filter((i) => i.status !== "replaced")
   const ids = [...new Set(active.map((i) => i.itemId).filter((id) => id > 0))]
 
-  const [items, issues, orders] = await Promise.all([
+  const [items, issues, orders, otherWorkOrders] = await Promise.all([
     ids.length
       ? prisma.item.findMany({
           where: { id: { in: ids } },
@@ -52,8 +63,20 @@ export async function getWorkOrderMaterialNeeds(
     }),
     prisma.purchaseOrder.findMany({
       where: { workOrderId, deletedAt: null, status: { notIn: ["cancelled"] } },
-      select: { items: { select: { itemId: true, qty: true, receivedQty: true } } },
+      select: { expectedDate: true, items: { select: { itemId: true, qty: true, receivedQty: true } } },
     }),
+    ids.length
+      ? prisma.workOrder.findMany({
+          where: { id: { not: workOrderId }, status: { in: [...ACTIVE_WORK_ORDER_STATUSES] } },
+          select: {
+            id: true,
+            items: {
+              where: { itemId: { in: ids } },
+              select: { itemId: true, qty: true, status: true },
+            },
+          },
+        })
+      : Promise.resolve([] as { id: number; items: { itemId: number; qty: unknown; status: string }[] }[]),
   ])
 
   const metaById = new Map(items.map((i) => [i.id, i]))
@@ -70,6 +93,47 @@ export async function getWorkOrderMaterialNeeds(
     })),
   )
 
+  // F-52: tanggal incoming tercepat per item dari PO penyumbang sisa > 0.
+  const incomingEarliest = new Map<number, Date>()
+  for (const po of orders) {
+    if (po.expectedDate == null) continue
+    for (const row of po.items) {
+      if (Math.max(0, Number(row.qty) - Number(row.receivedQty)) <= 0) continue
+      const prev = incomingEarliest.get(row.itemId)
+      if (!prev || po.expectedDate.getTime() < prev.getTime()) incomingEarliest.set(row.itemId, po.expectedDate)
+    }
+  }
+
+  // F-51(a): terikat WO lain. Query massal MI completed untuk semua WO lain
+  // yang memuat item terkait (bukan per-WO). Mock/test tanpa findMany pada
+  // materialIssue untuk WO lain tetap aman: query kedua memakai where sama
+  // dengan workOrderId tunggal target, jadi di sini kita hitung dari WO lain
+  // + MI completed yang tertaut WO-WO itu bila mock menyediakannya.
+  const otherIds = otherWorkOrders.map((w) => w.id)
+  const committedOther = new Map<number, number>()
+  if (otherIds.length > 0) {
+    const otherIssues = await prisma.materialIssue.findMany({
+      where: { workOrderId: { in: otherIds }, status: "completed" },
+      select: { workOrderId: true, items: { select: { itemId: true, qty: true } } },
+    })
+    const issuedByWoItem = new Map<string, number>()
+    for (const mi of otherIssues as { workOrderId: number; items: { itemId: number; qty: unknown }[] }[]) {
+      for (const row of mi.items) {
+        const key = `${mi.workOrderId}:${row.itemId}`
+        issuedByWoItem.set(key, (issuedByWoItem.get(key) ?? 0) + Number(row.qty))
+      }
+    }
+    for (const other of otherWorkOrders) {
+      for (const line of other.items) {
+        if (line.status === "replaced" || line.itemId <= 0) continue
+        const req = Number(line.qty)
+        const iss = issuedByWoItem.get(`${other.id}:${line.itemId}`) ?? 0
+        const remaining = Math.max(0, req - iss)
+        if (remaining > 0) committedOther.set(line.itemId, (committedOther.get(line.itemId) ?? 0) + remaining)
+      }
+    }
+  }
+
   const required = new Map<number, number>()
   for (const line of active) {
     if (line.itemId <= 0) continue
@@ -84,6 +148,10 @@ export async function getWorkOrderMaterialNeeds(
     qtyOnHand: Number(metaById.get(itemId)?.qtyOnHand ?? 0),
     issuedQty: issued.get(itemId) ?? 0,
     orderedQty: ordered.get(itemId) ?? 0,
+    committedOtherQty: committedOther.get(itemId) ?? 0,
+    incomingQty: ordered.get(itemId) ?? 0,
+    incomingEarliestDate: incomingEarliest.get(itemId) ?? null,
+    workOrderStartDate: wo.startDate ?? null,
   }))
   // Baris jasa (itemId=0) dipertahankan sebagai baris terpenuhi supaya
   // jumlah baris kartu cocok dengan baris WO yang terlihat pengguna.

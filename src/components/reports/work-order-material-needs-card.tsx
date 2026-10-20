@@ -17,7 +17,19 @@ import {
  * WorkOrderItem non-replaced, keluar dari MI `completed`, dipesan bersih
  * dari PO non-cancelled tertaut WO. Baris jasa selalu terpenuhi.
  * Komponen murni presentasi — tanpa query, tanpa mutasi.
+ *
+ * F-51(a)/F-52: kolom Terikat menampilkan committedOtherQty; Tersedia
+ * Efektif = qtyOnHand − terikat. Status kekurangan dirinci cakupan
+ * incoming: tertutup tepat waktu / terlambat / belum dijadwalkan bila
+ * incoming menutup shortage.
  */
+function fmtDate(d: Date | null | undefined): string {
+  if (!d) return ""
+  const dd = String(d.getDate()).padStart(2, "0")
+  const mm = String(d.getMonth() + 1).padStart(2, "0")
+  return `${dd}/${mm}/${d.getFullYear()}`
+}
+
 export function WorkOrderMaterialNeedsCard({
   needs,
 }: Readonly<{ needs: WorkOrderMaterialNeeds }>) {
@@ -46,7 +58,8 @@ export function WorkOrderMaterialNeedsCard({
             <DetailTableHead>
               <DetailTableTh>Barang</DetailTableTh>
               <DetailTableTh align="right">Butuh</DetailTableTh>
-              <DetailTableTh align="right">Tersedia</DetailTableTh>
+              <DetailTableTh align="right">Terikat WO lain</DetailTableTh>
+              <DetailTableTh align="right">Tersedia efektif</DetailTableTh>
               <DetailTableTh align="right">Keluar</DetailTableTh>
               <DetailTableTh align="right">Dipesan</DetailTableTh>
               <DetailTableTh align="right">Sisa</DetailTableTh>
@@ -63,7 +76,8 @@ export function WorkOrderMaterialNeedsCard({
                     ) : null}
                   </DetailTableTd>
                   <DetailTableTd align="right">{line.requiredQty}</DetailTableTd>
-                  <DetailTableTd align="right">{line.qtyOnHand}</DetailTableTd>
+                  <DetailTableTd align="right">{line.committedOtherQty}</DetailTableTd>
+                  <DetailTableTd align="right">{line.effectiveAvailableQty}</DetailTableTd>
                   <DetailTableTd align="right">{line.issuedQty}</DetailTableTd>
                   <DetailTableTd align="right">{line.orderedQty}</DetailTableTd>
                   <DetailTableTd align="right">{line.remainingQty}</DetailTableTd>
@@ -74,7 +88,13 @@ export function WorkOrderMaterialNeedsCard({
                       : line.fulfilled
                         ? "Terpenuhi"
                         : line.shortageQty > 0
-                          ? "Kekurangan stok"
+                          ? line.incomingCover === "tepat-waktu"
+                            ? `Kekurangan stok — tertutup incoming tepat waktu (${fmtDate(line.incomingEarliestDate)})`
+                            : line.incomingCover === "terlambat"
+                              ? `Kekurangan stok — incoming terlambat (${fmtDate(line.incomingEarliestDate)})`
+                              : line.incomingCover === "belum-jadwal"
+                                ? "Kekurangan stok — incoming belum dijadwalkan"
+                                : "Kekurangan stok"
                           : "Belum keluar"}
                   </DetailTableTd>
                 </DetailTableRow>
