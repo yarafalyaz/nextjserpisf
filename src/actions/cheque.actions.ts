@@ -16,6 +16,17 @@ import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 const REVALIDATE = "/keuangan/giro"
 const STATUSES = new Set(["pending", "cleared", "cancelled"])
 
+// Giro/cek yang sudah berakhir tidak boleh berubah status lagi. Tanpa guard
+// ini, cleared bisa di-flip balik ke pending atau cancelled dan menampilkan
+// ulang tombol Cair/Batal (transfer kas kemudian terikat pada status yang
+// sudah settle).
+const TERMINAL_STATUSES = new Set(["cleared", "cancelled"])
+const ALLOWED_FROM: Record<string, ReadonlySet<string>> = {
+  pending: new Set(["cleared", "cancelled"]),
+  cleared: new Set(),
+  cancelled: new Set(),
+}
+
 export async function createCheque(formData: FormData) {
   try {
     const user = await requirePermission("create_cheques")
@@ -79,15 +90,47 @@ export async function updateChequeStatus(id: number, status: string) {
 
     const cheque = await prisma.cheque.findFirst({
       where: { id, deletedAt: null },
-      select: { id: true, documentNo: true, dueDate: true },
+      select: { id: true, documentNo: true, dueDate: true, status: true },
     })
     if (!cheque) return { success: false, error: "Giro/cek tidak ditemukan." }
 
+    if (cheque.status === status) {
+      return {
+        success: false,
+        error: `Status giro/cek sudah '${status}', tidak ada perubahan.`,
+      }
+    }
+    const allowed = ALLOWED_FROM[cheque.status]
+    if (!allowed || !allowed.has(status)) {
+      if (TERMINAL_STATUSES.has(cheque.status)) {
+        return {
+          success: false,
+          error: `Giro/cek sudah berakhir dengan status '${cheque.status}' dan tidak dapat diubah lagi.`,
+        }
+      }
+      return {
+        success: false,
+        error: `Transisi status giro/cek dari '${cheque.status}' ke '${status}' tidak diizinkan.`,
+      }
+    }
+
     await assertPeriodOpen(cheque.dueDate)
 
-    await prisma.cheque.update({ where: { id }, data: { status } })
+    // Klaim transisi secara kondisional: hanya baris yang statusnya masih
+    // sama saat dibaca yang boleh berpindah. Mencegah dua klik bersamaan
+    // (cair + batal) sama-sama sukses.
+    const claimed = await prisma.cheque.updateMany({
+      where: { id, deletedAt: null, status: cheque.status },
+      data: { status },
+    })
+    if (claimed.count === 0) {
+      return {
+        success: false,
+        error: "Giro/cek berubah status oleh pengguna lain — muat ulang halaman.",
+      }
+    }
 
-    await logActivity("update", "Cheque", id, `Mengubah status ${cheque.documentNo} menjadi ${status}`)
+    await logActivity("update", "Cheque", id, `Mengubah status ${cheque.documentNo} dari ${cheque.status} menjadi ${status}`)
     revalidatePath(REVALIDATE)
     return { success: true }
   } catch (e: unknown) {
