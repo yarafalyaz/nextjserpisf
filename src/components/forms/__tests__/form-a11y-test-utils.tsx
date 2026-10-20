@@ -1,7 +1,18 @@
 // @vitest-environment jsdom
-import { vi } from "vitest"
+import { describe, it, expect, vi } from "vitest"
+import { createElement, type ComponentType, type ReactElement } from "react"
 import { createRoot, type Root } from "react-dom/client"
-import { act, type ReactElement } from "react"
+import { act } from "react"
+
+type A11yBrandFormSpec = {
+  // ponytail: any-component cast needed, per-form props differ (brand/category)
+  component: ComponentType<any>
+  propName: string
+  addLabel: string
+  editLabel: string
+  editName: string
+  requiredLabel: string
+}
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -44,4 +55,33 @@ export function labelTexts(form: Element) {
 
 export function combobox(container: HTMLElement) {
   return container.querySelector('[role="combobox"]')!
+}
+
+// Dedup helper: Sonar hit each single-field brand/category form test's
+// near-identical 12-line block as duplication (33.3% on PR #83 lines 16-27).
+export function describeSingleFieldA11y(title: string, spec: A11yBrandFormSpec) {
+  const mountForm = (record?: { id: number; name: string }) =>
+    createElement(spec.component, record ? { [spec.propName]: record } : {})
+  describe(`${title} — a11y wiring`, () => {
+    it("form aria-label tambah + aria-busy false; input required; bintang dekoratif aria-hidden", () => {
+      withContainer((container) => {
+        const root = mountInto(container, mountForm())
+        const form = container.querySelector("form")!
+        expect(form.getAttribute("aria-label")).toBe(spec.addLabel)
+        expect(form.getAttribute("aria-busy")).toBe("false")
+        expect(container.querySelector("#name")!.getAttribute("required")).not.toBeNull()
+        expect(decorativeStars(form).length).toBe(1)
+        expect(labelTexts(form)).toEqual(expect.arrayContaining([spec.requiredLabel]))
+        unmount(root, container)
+      })
+    })
+    it("mode ubah: label ubah + nama terisi", () => {
+      withContainer((container) => {
+        const root = mountInto(container, mountForm({ id: 3, name: spec.editName }))
+        expect(container.querySelector("form")?.getAttribute("aria-label")).toBe(spec.editLabel)
+        expect(container.querySelector<HTMLInputElement>("#name")?.value).toBe(spec.editName)
+        unmount(root, container)
+      })
+    })
+  })
 }
