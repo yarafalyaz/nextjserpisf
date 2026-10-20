@@ -19,6 +19,8 @@ import { VoidButton } from "@/components/ui/void-button"
 import { StatusActions } from "@/components/ui/status-actions"
 import { PrintButton } from "@/components/ui/print-button"
 import { ProcessButton } from "@/components/ui/process-button"
+import { WhatsappButton } from "@/components/reports/whatsapp-button"
+import { buildWhatsappMessage } from "@/lib/utils/whatsapp"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -136,6 +138,15 @@ export default async function InvoiceDetailPage({
             {invoice.status === "paid" && (
               <Button href={`/penjualan/surat-jalan/tambah?fakturPenjualanId=${invoice.id}`} variant="primary">+ Surat Jalan</Button>
             )}
+            <WhatsappButton
+              phone={invoice.customer.phone}
+              message={buildWhatsappMessage({
+                customerName: invoice.customer.name,
+                documentLabel: "Faktur",
+                documentNo: invoice.documentNo,
+                status: invoice.status,
+              })}
+            />
             <PrintButton documentType="invoice" documentId={invoice.id} />
             {["draft", "approved"].includes(invoice.status) && (
               <ProcessButton

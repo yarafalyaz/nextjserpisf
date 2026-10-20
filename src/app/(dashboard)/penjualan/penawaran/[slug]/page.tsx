@@ -18,6 +18,8 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { JobBillingCard } from "@/components/reports/job-billing-card";
+import { WhatsappButton } from "@/components/reports/whatsapp-button";
+import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { DifferenceInvoiceButton } from "@/components/reports/difference-invoice-button";
 import { loadJobBillingSummary } from "@/lib/reports/job-billing-summary-data";
 import {
@@ -184,6 +186,15 @@ export default async function QuotationDetailPage({
               <Pencil size={14} /> Ubah
             </Button>
             <PrintButton documentType="quotation" documentId={quotation.id} />
+            <WhatsappButton
+              phone={quotation.customer.phone}
+              message={buildWhatsappMessage({
+                customerName: quotation.customer.name,
+                documentLabel: "Penawaran",
+                documentNo: quotation.documentNo,
+                status: quotation.status,
+              })}
+            />
             <QuotationFlowActions status={quotation.status} id={quotation.id} />
             {["accepted", "approved"].includes(quotation.status) && (
               <>
