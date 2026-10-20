@@ -18,6 +18,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 267mm, area isi A4 mendatar. */
@@ -118,11 +119,11 @@ export function buildJobOrderCost(input: {
     const monthTotals = { materialCost: 0, productionCost: 0, completedQty: 0 }
 
     for (const job of monthJobs) {
-      const total = job.materialCost + job.productionCost
+      const total = safeAdd(job.materialCost, job.productionCost, 2)
       if (job.completedQty <= 0 && total > 0) withoutOutput += 1
 
-      monthTotals.materialCost += job.materialCost
-      monthTotals.productionCost += job.productionCost
+      monthTotals.materialCost = safeAdd(monthTotals.materialCost, job.materialCost, 2)
+      monthTotals.productionCost = safeAdd(monthTotals.productionCost, job.productionCost, 2)
       monthTotals.completedQty += job.completedQty
 
       rows.push({
@@ -138,7 +139,7 @@ export function buildJobOrderCost(input: {
       })
     }
 
-    const monthTotal = monthTotals.materialCost + monthTotals.productionCost
+    const monthTotal = safeAdd(monthTotals.materialCost, monthTotals.productionCost, 2)
     rows.push({
       kind: "total",
       label: `Jumlah ${month}`,
@@ -152,12 +153,12 @@ export function buildJobOrderCost(input: {
       ],
     })
 
-    totals.materialCost += monthTotals.materialCost
-    totals.productionCost += monthTotals.productionCost
+    totals.materialCost = safeAdd(totals.materialCost, monthTotals.materialCost, 2)
+    totals.productionCost = safeAdd(totals.productionCost, monthTotals.productionCost, 2)
     totals.completedQty += monthTotals.completedQty
   }
 
-  totals.totalCost = totals.materialCost + totals.productionCost
+  totals.totalCost = safeAdd(totals.materialCost, totals.productionCost, 2)
   totals.unitCost = totals.completedQty > 0 ? totals.totalCost / totals.completedQty : 0
 
   if (visible.length === 0) {
