@@ -56,6 +56,7 @@ export type ReportPdfKey =
   | "piutang-pelanggan"
   | "umur-stok"
   | "wip-berjalan"
+  | "hasil-penawaran"
   | "ringkasan-stok"
   | "rekonsiliasi-stok"
   | "mutasi-stok"
@@ -137,6 +138,7 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "piutang-pelanggan": "Piutang-per-Pelanggan",
     "umur-stok": "Umur-Stok",
     "wip-berjalan": "Umur-WIP-Berjalan",
+    "hasil-penawaran": "Hasil-Penawaran",
     "ringkasan-stok": "Ringkasan-Persediaan",
     "rekonsiliasi-stok": "Rekonsiliasi-Stok",
     "mutasi-stok": "Mutasi-Stok",
