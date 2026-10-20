@@ -72,6 +72,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/pusat-laba", family: "Laba Rugi", variant: "Per Pusat Laba" },
       { href: "/laporan/profitabilitas" },
       { href: "/laporan/histori-penjualan" },
+      { href: "/laporan/hasil-penawaran" },
       { href: "/laporan/histori-pembelian" },
       { href: "/laporan/pembelian" },
       { href: "/laporan/neraca", family: "Neraca", variant: "Standar" },

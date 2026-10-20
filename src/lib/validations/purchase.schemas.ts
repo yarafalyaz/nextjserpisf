@@ -97,9 +97,18 @@ export const vendorBillSchema = z.object({
   taxInvoiceNumber,
   terms: optionalString(200),
   notes: optionalString(1000),
-  subtotal: z.coerce.number().min(0, "Subtotal minimal 0").default(0),
-  tax: z.coerce.number().min(0, "Pajak minimal 0").default(0),
-  grandTotal: z.coerce.number().min(0, "Grand total minimal 0").default(0),
+  subtotal: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().min(0, "Subtotal minimal 0").default(0),
+  ),
+  tax: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().min(0, "Pajak minimal 0").default(0),
+  ),
+  grandTotal: z.preprocess(
+    (v) => (v === "" || v == null ? 0 : typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().min(0, "Grand total minimal 0").default(0),
+  ),
   attachmentIds: optionalString(5000), // JSON string
   items: optionalString(50000), // JSON string, parsed separately
 })
@@ -108,7 +117,10 @@ export const vendorBillSchema = z.object({
 
 export const vendorPaymentSchema = z.object({
   vendorId: z.coerce.number().min(1, "Vendor wajib dipilih"),
-  amount: z.coerce.number().min(1, "Jumlah pembayaran wajib diisi"),
+  amount: z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number({ message: "Jumlah pembayaran wajib diisi" }).min(1, "Jumlah pembayaran wajib diisi"),
+  ),
   // Bank/transfer admin fee (a real cost of paying, expensed separately — never
   // allocated to a bill).
   adminFee: optionalNumber(0),

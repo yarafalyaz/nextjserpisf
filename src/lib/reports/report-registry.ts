@@ -82,6 +82,10 @@ import {
   buildWipAgingTable,
   loadWipAgingReport,
 } from "@/lib/reports/wip-aging-export"
+import {
+  buildQuotationOutcomeTable,
+  loadQuotationOutcomeReport,
+} from "@/lib/reports/quotation-outcome-export"
 import { loadBankTransactionReconciliation } from "@/lib/reports/bank-transaction-reconciliation-data"
 import { loadVatInvoices } from "@/lib/reports/vat-invoices-data"
 import { loadPurchaseOutstanding } from "@/lib/reports/purchase-outstanding-data"
@@ -576,6 +580,21 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
       return {
         kind: "table",
         table: buildWipAgingTable(result),
+        periodCaption: result.periodCaption,
+        landscape: true,
+      }
+    },
+  },
+
+  "hasil-penawaran": {
+    title: "Hasil Penawaran",
+    subtitle: "Ringkasan Menang, Kalah, dan Konversi Penawaran",
+    defaultPeriod: startOfYear,
+    async load({ period }) {
+      const result = await loadQuotationOutcomeReport(period)
+      return {
+        kind: "table",
+        table: buildQuotationOutcomeTable(result),
         periodCaption: result.periodCaption,
         landscape: true,
       }
