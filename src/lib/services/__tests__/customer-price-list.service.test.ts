@@ -50,6 +50,19 @@ describe("pickPriceListPrice", () => {
     ]
     expect(pickPriceListPrice(rows, { itemId: 1, customerCategoryId: null, date })).toBe(90000)
   })
+
+  it("baris dipilih dari TANGGAL DOKUMEN, bukan hari ini/createdAt (backdate deterministik)", () => {
+    // Dokumen backdate ke 2026-05-01: hanya baris efektif <= tanggal itu berlaku;
+    // baris efektif 2026-06-01 (sudah berlaku "hari ini") TIDAK boleh terpilih.
+    const rows = [
+      row({ price: 95000, effectiveDate: new Date("2026-01-01T00:00:00Z") }),
+      row({ price: 90000, effectiveDate: new Date("2026-06-01T00:00:00Z") }),
+    ]
+    const docDate = new Date("2026-05-01T00:00:00Z")
+    expect(pickPriceListPrice(rows, { itemId: 1, customerCategoryId: null, date: docDate })).toBe(95000)
+    // Dokumen sesudah kedua tanggal efektif -> baris terbaru yang menang.
+    expect(pickPriceListPrice(rows, { itemId: 1, customerCategoryId: null, date })).toBe(90000)
+  })
 })
 
 describe("resolveLinePricing (prioritas + diskon sebelum pajak)", () => {

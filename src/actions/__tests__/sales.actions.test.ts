@@ -1091,6 +1091,29 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(Number(argSO.data.subtotal)).toBe(190000)
   })
 
+  // Penegasan putusan: harga dipilih dari TANGGAL DOKUMEN (date form),
+  // bukan hari ini. Invoice backdate hanya melihat baris yang sudah efektif
+  // pada tanggal dokumennya.
+  it("createSalesInvoice memilih price-list dari tanggal dokumen, bukan hari ini", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-004")
+    mocks.prismaMock.customer.findUnique.mockResolvedValue({ customerCategoryId: 7 })
+    mocks.prismaMock.customerPriceList.findMany.mockResolvedValue([
+      { customerCategoryId: 7, itemId: 11, price: 95000, effectiveDate: new Date("2026-01-01T00:00:00Z"), isActive: true },
+      { customerCategoryId: 7, itemId: 11, price: 90000, effectiveDate: new Date("2026-06-01T00:00:00Z"), isActive: true },
+    ])
+    const items = JSON.stringify([{ itemId: 11, qty: 1, unitPrice: 100000, discount: 0 }])
+
+    const backdate = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-05-01", items }))
+    expect(backdate?.success).toBe(true)
+    const argBack = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(Number(argBack.data.items.create[0].unitPrice)).toBe(95000)
+
+    const kini = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", items }))
+    expect(kini?.success).toBe(true)
+    const argNow = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(Number(argNow.data.items.create[0].unitPrice)).toBe(90000)
+  })
+
   // Konversi Penawaran -> Pesanan harus MEMBAWA itemnya. Sebelumnya header dibuat
   // tanpa satu pun baris item, jadi pesanan hasil konversi lahir kosong dan kasir
   // mengetik ulang seluruh penawaran.
