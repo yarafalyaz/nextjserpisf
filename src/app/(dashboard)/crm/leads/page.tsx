@@ -9,6 +9,8 @@ import { AppSearchField } from "@/components/ui/search-field"
 import { requirePermission } from "@/lib/auth/permissions"
 import { LeadTable } from "./_components/lead-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { getStaleLeads } from "@/lib/reports/stale-leads-data"
+import { StaleLeadsCard } from "@/components/reports/stale-leads-card"
 
 import type { Metadata } from "next"
 import { CanCreate } from "@/components/auth/can-create"
@@ -50,6 +52,8 @@ export default async function LeadsPage({
 
   const total = await prisma.lead.count({ where })
 
+  const staleLeads = await getStaleLeads()
+
   const data = toPlain(leads)
 
   const statusChips = ["", "new", "contacted", "qualified", "proposal", "won", "lost"].map((dbStatus) => {
@@ -80,6 +84,8 @@ export default async function LeadsPage({
         </Link>
         </CanCreate>
       </div>
+
+      <StaleLeadsCard stale={staleLeads} />
 
       <LeadTable
         data={data}
