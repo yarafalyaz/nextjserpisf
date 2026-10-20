@@ -9,6 +9,7 @@
 import { prisma } from "@/lib/db/prisma"
 import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service"
 import { computeIncomeStatement } from "@/lib/finance/income-statement"
+import { safeSubtract } from "@/lib/utils/math"
 import type { EquityAccountRow } from "@/lib/reports/equity-changes"
 
 export interface EquityChangesReport {
@@ -35,7 +36,7 @@ export async function loadEquityChanges(period: {
   ])
 
   const creditBalance = (sums?: { debit: number; credit: number }) =>
-    sums ? sums.credit - sums.debit : 0
+    sums ? safeSubtract(sums.credit, sums.debit, 2) : 0
 
   const rows: EquityAccountRow[] = accounts
     .filter((account) => account.type === "EQUITY")
@@ -47,7 +48,7 @@ export async function loadEquityChanges(period: {
         code: account.code,
         name: account.name,
         opening,
-        movement: closing - opening,
+        movement: safeSubtract(closing, opening, 2),
         closing,
       }
     })
