@@ -47,6 +47,7 @@ const mocks = vi.hoisted(() => {
     quotationHistory: buildModelMock(),
     customerVehicle: buildModelMock(),
     customer: buildModelMock(),
+    customerPriceList: buildModelMock(),
     salesOrder: buildModelMock(),
     salesOrderItem: buildModelMock(),
     salesInvoice: buildModelMock(),
@@ -1060,6 +1061,57 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(Number(arg.data.items.create[0].qty)).toBe(0)
     expect(Number(arg.data.items.create[0].unitPrice)).toBe(0)
     expect(Number(arg.data.items.create[0].discount)).toBe(0)
+  })
+
+  // F-PRICELIST-01: baris langsung dari form menerima harga price-list
+  // kategori pelanggan; baris hasil konversi SO mempertahankan harga SO.
+  it("createSalesInvoice menerapkan price-list untuk baris form langsung, bukan baris konversi SO", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-003")
+    mocks.prismaMock.customer.findUnique.mockResolvedValue({ customerCategoryId: 7 })
+    mocks.prismaMock.customerPriceList.findMany.mockResolvedValue([
+      { customerCategoryId: 7, itemId: 11, price: 90000, effectiveDate: null, isActive: true },
+    ])
+    const items = JSON.stringify([{ itemId: 11, qty: 2, unitPrice: 100000, discount: 10000 }])
+
+    const langsung = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", items }))
+    expect(langsung?.success).toBe(true)
+    const arg = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    // unitPrice ditimpa price-list 90000; diskon manual 10000 tetap menang di
+    // atasnya; total baris 170000 masuk subtotal (diskon sebelum pajak).
+    expect(Number(arg.data.items.create[0].unitPrice)).toBe(90000)
+    expect(Number(arg.data.items.create[0].discount)).toBe(10000)
+    expect(Number(arg.data.subtotal)).toBe(170000)
+
+    const dariSO = await actions.createSalesInvoice(
+      fdMap({ customerId: "7", date: "2026-06-12", salesOrderId: "9", items }),
+    )
+    expect(dariSO?.success).toBe(true)
+    const argSO = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(Number(argSO.data.items.create[0].unitPrice)).toBe(100000)
+    expect(Number(argSO.data.subtotal)).toBe(190000)
+  })
+
+  // Penegasan putusan: harga dipilih dari TANGGAL DOKUMEN (date form),
+  // bukan hari ini. Invoice backdate hanya melihat baris yang sudah efektif
+  // pada tanggal dokumennya.
+  it("createSalesInvoice memilih price-list dari tanggal dokumen, bukan hari ini", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-004")
+    mocks.prismaMock.customer.findUnique.mockResolvedValue({ customerCategoryId: 7 })
+    mocks.prismaMock.customerPriceList.findMany.mockResolvedValue([
+      { customerCategoryId: 7, itemId: 11, price: 95000, effectiveDate: new Date("2026-01-01T00:00:00Z"), isActive: true },
+      { customerCategoryId: 7, itemId: 11, price: 90000, effectiveDate: new Date("2026-06-01T00:00:00Z"), isActive: true },
+    ])
+    const items = JSON.stringify([{ itemId: 11, qty: 1, unitPrice: 100000, discount: 0 }])
+
+    const backdate = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-05-01", items }))
+    expect(backdate?.success).toBe(true)
+    const argBack = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(Number(argBack.data.items.create[0].unitPrice)).toBe(95000)
+
+    const kini = await actions.createSalesInvoice(fdMap({ customerId: "7", date: "2026-06-12", items }))
+    expect(kini?.success).toBe(true)
+    const argNow = mocks.prismaMock.salesInvoice.create.mock.calls.at(-1)![0] as any
+    expect(Number(argNow.data.items.create[0].unitPrice)).toBe(90000)
   })
 
   // Konversi Penawaran -> Pesanan harus MEMBAWA itemnya. Sebelumnya header dibuat

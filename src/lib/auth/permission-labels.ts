@@ -98,6 +98,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   qc_checklists: "Checklist QC",
   qc_inspections: "Inspeksi QC",
   quotations: "Penawaran",
+  customer_price_lists: "Daftar Harga Pelanggan",
   recurring_transactions: "Transaksi Berulang",
   reports: "Laporan",
   roles: "Peran",

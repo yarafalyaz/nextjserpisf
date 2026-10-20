@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 327 permission dikelompokkan per modul (15 modul). */
+/** 331 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -138,6 +138,10 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "delete", resource: "vendors", permissionKey: "delete_vendors", label: "Vendor" },
   ],
   sales: [
+    { key: "view", resource: "customer_price_lists", permissionKey: "view_customer_price_lists", label: "Daftar Harga Pelanggan" },
+    { key: "create", resource: "customer_price_lists", permissionKey: "create_customer_price_lists", label: "Daftar Harga Pelanggan" },
+    { key: "edit", resource: "customer_price_lists", permissionKey: "edit_customer_price_lists", label: "Daftar Harga Pelanggan" },
+    { key: "delete", resource: "customer_price_lists", permissionKey: "delete_customer_price_lists", label: "Daftar Harga Pelanggan" },
     { key: "view", resource: "sales_invoices", permissionKey: "view_sales_invoices", label: "Faktur Penjualan" },
     { key: "create", resource: "sales_invoices", permissionKey: "create_sales_invoices", label: "Faktur Penjualan" },
     { key: "edit", resource: "sales_invoices", permissionKey: "edit_sales_invoices", label: "Faktur Penjualan" },

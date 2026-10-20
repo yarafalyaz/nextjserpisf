@@ -387,6 +387,7 @@ model CustomerCategory {
   createdAt          DateTime   @default(now()) @map("created_at")
   updatedAt          DateTime   @updatedAt @map("updated_at")
   customers          Customer[]
+  priceLists         CustomerPriceList[]
 
   @@index([isActive, deletedAt], map: "idx_cust_cat_active_deleted")
   @@map("customer_categories")
@@ -497,6 +498,27 @@ model VendorItemPrice {
   @@map("vendor_item_prices")
 }
 
+model CustomerPriceList {
+  id                 Int               @id @default(autoincrement())
+  customerCategoryId Int?              @map("customer_category_id")
+  itemId             Int               @map("item_id")
+  price              Decimal           @db.Decimal(15, 2)
+  effectiveDate      DateTime?         @map("effective_date")
+  notes              String?           @db.Text
+  isActive           Boolean           @default(true) @map("is_active")
+  createdBy          Int?              @map("created_by")
+  createdAt          DateTime          @default(now()) @map("created_at")
+  updatedAt          DateTime          @updatedAt @map("updated_at")
+  customerCategory   CustomerCategory? @relation(fields: [customerCategoryId], references: [id], onDelete: Cascade)
+  item               Item              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([customerCategoryId, itemId, effectiveDate], map: "uq_customer_price_list")
+  @@index([itemId], map: "customer_price_lists_item_id_fkey")
+  @@index([customerCategoryId], map: "customer_price_lists_category_id_fkey")
+  @@index([createdAt])
+  @@map("customer_price_lists")
+}
+
 model Brand {
   slug        String?        @unique
   id          Int            @id @default(autoincrement())
@@ -603,6 +625,7 @@ model Item {
   uomConversions       UomConversion[]
   fitmentRules         VehicleFitmentRule[]
   vendorPrices         VendorItemPrice[]
+  customerPrices       CustomerPriceList[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
