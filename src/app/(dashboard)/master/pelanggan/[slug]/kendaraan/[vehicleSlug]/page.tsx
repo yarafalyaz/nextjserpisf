@@ -1,18 +1,26 @@
 export const dynamic = "force-dynamic"
 
-import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatusChip } from "@/components/ui/status-chip"
-import { formatDate } from "@/lib/utils/format"
+import { formatDate, formatCurrency } from "@/lib/utils/format"
 import Link from "next/link"
 import { Pencil } from "lucide-react"
 import { entityHref } from "@/lib/utils/entity-url"
 import { loadCustomerVehicleContext } from "../_components/load-customer-vehicle"
+import { getCustomerVehicleHistory, type CustomerVehicleHistoryKind } from "@/lib/reports/customer-vehicle-history-data"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Kendaraan" }
+
+const HISTORY_KIND: Record<CustomerVehicleHistoryKind, { label: string; basePath: string }> = {
+  quotation: { label: "Penawaran", basePath: "/penjualan/penawaran" },
+  sales_order: { label: "Pesanan", basePath: "/penjualan/pesanan" },
+  sales_invoice: { label: "Faktur", basePath: "/penjualan/faktur" },
+  work_order: { label: "Perintah Kerja", basePath: "/produksi/perintah-kerja" },
+  project: { label: "Proyek", basePath: "/proyek" },
+}
 
 export default async function CustomerVehicleDetailPage({
   params,
@@ -24,20 +32,9 @@ export default async function CustomerVehicleDetailPage({
 
   const { customer, customerKey, cv } = await loadCustomerVehicleContext(slug, vehicleSlug)
 
-  const [workOrders, quotations] = await Promise.all([
-    prisma.workOrder.findMany({
-      where: { customerVehicleId: cv.id },
-      select: { id: true, slug: true, documentNo: true, date: true, status: true },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    }),
-    prisma.quotation.findMany({
-      where: { customerVehicleId: cv.id },
-      select: { id: true, slug: true, documentNo: true, date: true, status: true },
-      orderBy: { createdAt: "desc" },
-      take: 20,
-    }),
-  ])
+  const history = await getCustomerVehicleHistory(cv.id)
+  const workOrders = history.entries.filter((e) => e.kind === "work_order")
+  const quotations = history.entries.filter((e) => e.kind === "quotation")
 
   const brandName = cv.vehicle?.variant?.model?.brand?.name || "-"
   const modelName = cv.vehicle?.variant?.model?.name || "-"
@@ -163,6 +160,42 @@ export default async function CustomerVehicleDetailPage({
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      </div>
+      {/* Linimasa */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Linimasa Kendaraan</h2>
+        </div>
+        <div className="p-4 px-5">
+          {history.entries.length === 0 ? (
+            <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">Belum ada riwayat</p>
+          ) : (
+            <ol className="flex flex-col divide-y divide-default">
+              {history.entries.map((entry) => {
+                const kind = HISTORY_KIND[entry.kind]
+                return (
+                  <li key={`${entry.kind}-${entry.id}`} className="flex flex-wrap items-center justify-between gap-4 py-3">
+                    <span className="flex flex-wrap items-center gap-3">
+                      <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{kind.label}</span>
+                      <Link href={entityHref(kind.basePath, entry)} className="font-mono text-sm text-primary hover:underline">
+                        {entry.documentNo}
+                      </Link>
+                    </span>
+                    <span className="flex flex-wrap items-center gap-3">
+                      {entry.grandTotal !== null && (
+                        <span className="text-sm text-muted-foreground tabular-nums">
+                          {formatCurrency(entry.grandTotal)} · Terbayar {formatCurrency(entry.paidAmount ?? 0)}
+                        </span>
+                      )}
+                      <span className="text-sm text-muted-foreground">{formatDate(entry.date)}</span>
+                      <StatusChip status={entry.status} />
+                    </span>
+                  </li>
+                )
+              })}
+            </ol>
           )}
         </div>
       </div>
