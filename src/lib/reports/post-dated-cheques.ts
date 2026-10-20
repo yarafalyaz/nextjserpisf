@@ -15,6 +15,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -78,7 +79,7 @@ export function daysUntilDue(dueDate: Date, asOf: Date): number {
 
 function summarize(items: ChequeInput[]): PostDatedGroup {
   return items.reduce<PostDatedGroup>(
-    (acc, item) => ({ count: acc.count + 1, amount: acc.amount + item.amount }),
+    (acc, item) => ({ count: acc.count + 1, amount: safeAdd(acc.amount, item.amount, 2) }),
     { count: 0, amount: 0 },
   )
 }
