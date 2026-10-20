@@ -113,12 +113,17 @@ export function TableMobileCards<TData extends { id: number | string }>({
               {/* Header: selection + primary content (name, SKU, thumbnail...) */}
               <div className="flex items-start gap-3 p-3">
                 {selectable && (
-                  <Checkbox
-                    aria-label={`Pilih baris ${row.original.id}`}
-                    className="mt-1 shrink-0"
-                    checked={selected}
-                    onCheckedChange={(v) => row.toggleSelected(!!v)}
-                  />
+                  // ponytail: 44px touch target via -m-3.5 p-3.5 around the 16px
+                  // box — visual size unchanged, hit area meets WCAG target size.
+                  // Upgrade path: native size-11 checkbox if design accepts it.
+                  <span className="-m-3.5 shrink-0 p-3.5">
+                    <Checkbox
+                      aria-label={`Pilih baris ${row.original.id}`}
+                      className="shrink-0"
+                      checked={selected}
+                      onCheckedChange={(v) => row.toggleSelected(!!v)}
+                    />
+                  </span>
                 )}
                 <div className="min-w-0 flex-1 text-sm text-foreground">
                   {primary ? renderValue(primary) : null}
