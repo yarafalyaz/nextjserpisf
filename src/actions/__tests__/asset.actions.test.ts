@@ -35,6 +35,9 @@ const mocks = vi.hoisted(() => {
       findUniqueOrThrow: vi.fn(),
       findFirst: vi.fn().mockResolvedValue(null),
     },
+    account: {
+      findFirst: vi.fn().mockResolvedValue({ id: 1 }),
+    },
     assetBrandModel: {
       findUnique: vi.fn().mockResolvedValue(null),
       findMany: vi.fn().mockResolvedValue([]),
@@ -412,6 +415,40 @@ describe("Asset Category Actions", () => {
   it("fails validation on update with empty form", async () => {
     const res = await updateAssetCategory(10, fd({}))
     expect(res?.success).toBe(false)
+  })
+
+  it("MENOLAK akun GL fiktif saat membuat kategori (tanpa FK DB)", async () => {
+    prismaMock.account.findFirst.mockResolvedValueOnce(null)
+    const res = await createAssetCategory(fd({ name: "Komputer", assetAccountId: "999" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/Akun Aset Tetap/)
+    expect(prismaMock.assetCategory.create).not.toHaveBeenCalled()
+    expect(prismaMock.account.findFirst).toHaveBeenCalledWith({
+      where: { id: 999, deletedAt: null },
+      select: { id: true },
+    })
+  })
+
+  it("MENOLAK akun GL fiktif saat mengubah kategori", async () => {
+    prismaMock.account.findFirst.mockResolvedValueOnce(null)
+    const res = await updateAssetCategory(10, fd({ name: "Komputer", gainLossAccountId: "888" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/Akun Laba\/Rugi Pelepasan/)
+    expect(prismaMock.assetCategory.update).not.toHaveBeenCalled()
+    expect(prismaMock.account.findFirst).toHaveBeenCalledWith({
+      where: { id: 888, deletedAt: null },
+      select: { id: true },
+    })
+  })
+
+  it("MENOLAK akun GL terhapus (deletedAt terisi)", async () => {
+    prismaMock.account.findFirst.mockResolvedValueOnce(null)
+    const res = await createAssetCategory(
+      fd({ name: "Komputer", depreciationExpenseAccountId: "777" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/Akun Beban Penyusutan/)
+    expect(prismaMock.assetCategory.create).not.toHaveBeenCalled()
   })
 
   it("creates category and redirects", async () => {

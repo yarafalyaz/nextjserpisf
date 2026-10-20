@@ -79,6 +79,34 @@ async function nextAssetJournalNumber(
 
 // ==================== ASSET CATEGORY ACTIONS ====================
 
+/**
+ * Akun GL kategori aset adalah Int polos tanpa FK DB — ID fiktif/terhapus lolos
+ * simpan, lalu jurnal perolehan/penyusutan/pelepasan aset gagal jauh kemudian.
+ * Cek ada (dan belum terhapus) pra-tulis, pola withholdingAccountError.
+ */
+async function assetCategoryAccountError(v: {
+  assetAccountId?: number | null
+  accumulatedDepreciationAccountId?: number | null
+  depreciationExpenseAccountId?: number | null
+  gainLossAccountId?: number | null
+}): Promise<string | null> {
+  const slots: Array<[number | null | undefined, string]> = [
+    [v.assetAccountId, "Akun Aset Tetap tidak ditemukan"],
+    [v.accumulatedDepreciationAccountId, "Akun Akumulasi Penyusutan tidak ditemukan"],
+    [v.depreciationExpenseAccountId, "Akun Beban Penyusutan tidak ditemukan"],
+    [v.gainLossAccountId, "Akun Laba/Rugi Pelepasan tidak ditemukan"],
+  ]
+  for (const [accountId, message] of slots) {
+    if (accountId == null) continue
+    const account = await prisma.account.findFirst({
+      where: { id: accountId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!account) return message
+  }
+  return null
+}
+
 export async function createAssetCategory(formData: FormData) {
   try {
     await requirePermission("create_asset_categories");
@@ -86,6 +114,9 @@ export async function createAssetCategory(formData: FormData) {
     const parsed = parseFormData(assetCategorySchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const { data } = parsed;
+
+    const accountError = await assetCategoryAccountError(data);
+    if (accountError) return { success: false, error: accountError };
 
     const category = await prisma.assetCategory.create({
       data: {
@@ -512,6 +543,9 @@ export async function updateAssetCategory(id: number, formData: FormData) {
     const parsed = parseFormData(assetCategorySchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const { data } = parsed;
+
+    const accountError = await assetCategoryAccountError(data);
+    if (accountError) return { success: false, error: accountError };
 
     await prisma.assetCategory.update({
       where: { id },
