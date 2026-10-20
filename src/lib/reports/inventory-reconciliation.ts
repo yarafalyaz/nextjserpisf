@@ -23,6 +23,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeRound, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface InventoryReconciliationInput {
@@ -64,7 +65,8 @@ export function buildInventoryReconciliation(
     { header: "Nilai", align: "right", width: 67 },
   ]
 
-  const difference = ledger === null ? null : ledger.balance - valuation.value
+  const valuationValue = safeRound(valuation.value, 2)
+  const difference = ledger === null ? null : safeSubtract(ledger.balance, valuationValue, 2)
   const isBalanced = difference !== null && Math.abs(difference) < BALANCE_TOLERANCE
 
   const rows: TableRow[] = [
@@ -139,8 +141,8 @@ export function buildInventoryReconciliation(
   return {
     table: { columns, rows },
     totals: {
-      valuationValue: valuation.value,
-      ledgerBalance: ledger?.balance ?? null,
+      valuationValue: valuationValue,
+      ledgerBalance: ledger === null ? null : safeRound(ledger.balance, 2),
       difference,
       isBalanced,
     },
