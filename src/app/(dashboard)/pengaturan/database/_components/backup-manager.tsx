@@ -143,28 +143,32 @@ export function BackupManager({ initialBackups }: { initialBackups: BackupFile[]
                       <TableCell className="px-4 text-muted-foreground lg:px-6">{formatDateTime(b.createdAt)}</TableCell>
                       <TableCell className="px-4 lg:px-6">
                         <div className="flex items-center justify-end gap-1">
-                          <Button asChild variant="ghost" size="icon-sm" title="Unduh">
+                          <Button asChild variant="ghost" size="icon-sm" className="min-h-11 min-w-11" title="Unduh" aria-label={`Unduh ${b.filename}`}>
                             <a href={`/api/backup/download?file=${encodeURIComponent(b.filename)}`} download>
-                              <Download className="size-4" />
+                              <Download className="size-4" aria-hidden="true" />
                             </a>
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            className="min-h-11 min-w-11"
                             title="Pulihkan"
+                            aria-label={`Pulihkan ${b.filename}`}
                             onClick={() => setRestoreTarget(b.filename)}
                             disabled={actionPending}
                           >
-                            <RotateCcw className="size-4" />
+                            <RotateCcw className="size-4" aria-hidden="true" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon-sm"
+                            className="min-h-11 min-w-11"
                             title="Hapus"
+                            aria-label={`Hapus backup ${b.filename}`}
                             onClick={() => setDeleteTarget(b.filename)}
                             disabled={actionPending}
                           >
-                            <Trash2 className="size-4 text-destructive" />
+                            <Trash2 className="size-4 text-destructive" aria-hidden="true" />
                           </Button>
                         </div>
                       </TableCell>
