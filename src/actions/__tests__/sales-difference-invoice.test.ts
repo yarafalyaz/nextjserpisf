@@ -12,14 +12,15 @@ const mocks = await vi.hoisted(async () => {
   return h.buildSalesRevisionMocks(prismaMock, "INV-2026-001")
 })
 
-vi.mock("@/lib/db/prisma", async () => (await import("./validation-mock-helpers")).prismaFactory(mocks, "prismaMock"))
-vi.mock("@/lib/auth/permissions", async () => (await import("./validation-mock-helpers")).permissionFactory(mocks))
-vi.mock("next/cache", async () => (await import("./validation-mock-helpers")).revalidateFactory(mocks))
-vi.mock("@/lib/utils/document-number", async () => (await import("./validation-mock-helpers")).docNumberFactory(mocks))
-vi.mock("@/lib/utils/slug-db", async () => (await import("./validation-mock-helpers")).slugFixedFactory())
-vi.mock("@/lib/services/period-lock.service", async () => (await import("./validation-mock-helpers")).periodLockFactory(mocks))
-vi.mock("@/lib/services/activity-log.service", async () => (await import("./validation-mock-helpers")).activityLogFactory(mocks))
-vi.mock("@/lib/services/approval-workflow.service", async () => (await import("./validation-mock-helpers")).approvalFactory())
+import * as helpers from "./validation-mock-helpers"
+vi.mock("@/lib/db/prisma", () => helpers.prismaFactory(mocks, "prismaMock"))
+vi.mock("@/lib/auth/permissions", () => helpers.permissionFactory(mocks))
+vi.mock("next/cache", () => helpers.revalidateFactory(mocks))
+vi.mock("@/lib/utils/document-number", () => helpers.docNumberFactory(mocks))
+vi.mock("@/lib/utils/slug-db", () => helpers.slugFixedFactory())
+vi.mock("@/lib/services/period-lock.service", () => helpers.periodLockFactory(mocks))
+vi.mock("@/lib/services/activity-log.service", () => helpers.activityLogFactory(mocks))
+vi.mock("@/lib/services/approval-workflow.service", () => helpers.approvalFactory())
 
 import { createDifferenceInvoice } from "../sales.actions"
 
@@ -34,11 +35,7 @@ const revisedQuotation = {
 
 describe("createDifferenceInvoice (F-2026-10-20-10)", () => {
   beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
-    mocks.prismaMock.quotation.findFirst.mockResolvedValue(revisedQuotation)
-    mocks.prismaMock.salesOrder.findMany.mockResolvedValue([])
-    mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
+    helpers.setupSalesRevisionBase(mocks, revisedQuotation)
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
       { id: 11, status: "paid", grandTotal: 1000000 },
     ])

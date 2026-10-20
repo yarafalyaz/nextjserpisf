@@ -57,6 +57,15 @@ export function buildSalesRevisionPrismaMock(extra: Record<string, unknown> = {}
   return prismaMock
 }
 
+/** Setup beforeEach bersama: izin + penawaran revisi + SO/WO kosong. */
+export function setupSalesRevisionBase(mocks: AnyMocks, quotation: Record<string, unknown>) {
+  vi.clearAllMocks()
+  mocks.requirePermissionMock.mockResolvedValue({ id: 7 })
+  mocks.prismaMock.quotation.findFirst.mockResolvedValue(quotation)
+  mocks.prismaMock.salesOrder.findMany.mockResolvedValue([])
+  mocks.prismaMock.workOrder.findMany.mockResolvedValue([])
+}
+
 /** Sisi `return` mock hoisted bersama aksi penjualan revisi. */
 export function buildSalesRevisionMocks(prismaMock: Record<string, any>, docNo: string) {
   const requirePermissionMock = vi.fn().mockResolvedValue({ id: 7 })
