@@ -119,7 +119,7 @@ export default async function WorkOrderDetailPage({
     orderBy: { name: "asc" },
   });
 
-  const [completedMi, defaultWarehouse, linkedProducts, materialIssues] = await Promise.all([
+  const [completedMi, defaultWarehouse, linkedProducts, materialIssues, vehicleIntake] = await Promise.all([
     prisma.materialIssue.findFirst({
       where: { workOrderId: wo.id, status: "completed" },
       select: { id: true },
@@ -146,6 +146,15 @@ export default async function WorkOrderDetailPage({
       orderBy: { createdAt: "desc" },
       select: { id: true, documentNo: true, status: true, slug: true },
     }),
+    // F-50(b): status inspeksi masuk kendaraan — gate mulai F-50(a) tampil di
+    // UI (field + tombol nonaktif), bukan hanya error sesudah klik.
+    wo.customerVehicleId
+      ? prisma.qcInspection.findFirst({
+          where: { referenceType: "WorkOrder", referenceId: wo.id, inspectionType: "vehicle_intake" },
+          orderBy: { createdAt: "desc" },
+          select: { id: true, documentNo: true, status: true, slug: true },
+        })
+      : Promise.resolve(null),
   ]);
 
   const suggestedProductId = linkedProducts.length === 1 ? linkedProducts[0].id : null;
@@ -191,6 +200,8 @@ export default async function WorkOrderDetailPage({
               status={wo.status}
               hasCompletedMaterialIssue={!!completedMi}
               defaultWarehouseId={defaultWarehouse?.id ?? null}
+              vehicleIntakeBlocked={!!wo.customerVehicleId && !vehicleIntake}
+              vehicleIntakeHref={`/produksi/qc/inspeksi/tambah?inspectionType=vehicle_intake&referenceType=WorkOrder&referenceId=${wo.id}`}
               revisableItems={wo.items
                 .filter((i) => i.status !== "replaced")
                 .map((i) => ({ id: i.id, label: itemNameMap.get(i.itemId) || `Barang #${i.itemId}` }))}
@@ -265,6 +276,25 @@ export default async function WorkOrderDetailPage({
                   wo.customerVehicle.plateNumber,
                 ].filter(Boolean).join(" · ") || `Kendaraan #${wo.customerVehicle.id}`}
               </Link>
+            }
+          />
+        )}
+        {wo.customerVehicle && (
+          <DetailField
+            label="Inspeksi Masuk"
+            value={
+              vehicleIntake ? (
+                <Link href={entityHref("/produksi/qc/inspeksi", vehicleIntake)} className="hover:underline">
+                  {vehicleIntake.documentNo} — tercatat
+                </Link>
+              ) : (
+                <Link
+                  href={`/produksi/qc/inspeksi/tambah?inspectionType=vehicle_intake&referenceType=WorkOrder&referenceId=${wo.id}`}
+                  className="hover:underline"
+                >
+                  Belum tercatat — buat inspeksi masuk
+                </Link>
+              )
             }
           />
         )}

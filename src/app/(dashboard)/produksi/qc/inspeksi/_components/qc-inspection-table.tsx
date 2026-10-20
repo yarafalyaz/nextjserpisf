@@ -27,6 +27,8 @@ const TYPE_LABELS: Record<string, string> = {
   in_process: "Proses",
   final: "Akhir",
   safety: "Keselamatan",
+  vehicle_intake: "Inspeksi Masuk Kendaraan",
+  vehicle_handover: "Serah Terima Kendaraan",
 }
 
 const columns = [

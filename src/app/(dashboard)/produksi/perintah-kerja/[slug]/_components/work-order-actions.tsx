@@ -14,13 +14,17 @@ interface Props {
   defaultWarehouseId: number | null
   /** Item WO yang bisa ditandai diganti (belum replaced). */
   revisableItems?: { id: number; label: string }[]
+  /** F-50(b): WO kendaraan belum punya inspeksi vehicle_intake tercatat (gate F-50a). */
+  vehicleIntakeBlocked?: boolean
+  /** Tautan catat inspeksi masuk (prefill WO ini) saat vehicleIntakeBlocked. */
+  vehicleIntakeHref?: string
 }
 
 /**
  * Work Order lifecycle controls. Surfaces the manufacturing flow that previously
  * existed only in server actions but had no UI: start → issue materials → complete.
  */
-export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, defaultWarehouseId, revisableItems = [] }: Props) {
+export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, defaultWarehouseId, revisableItems = [], vehicleIntakeBlocked = false, vehicleIntakeHref }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [reviseOpen, setReviseOpen] = useState(false)
@@ -43,6 +47,23 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
   }
 
   if (status === "draft" || status === "pending") {
+    if (vehicleIntakeBlocked) {
+      return (
+        <span className="flex flex-wrap items-center gap-2">
+          <Button variant="primary" isDisabled aria-describedby="wo-intake-hint">
+            Mulai Pengerjaan
+          </Button>
+          {vehicleIntakeHref && (
+            <Button href={vehicleIntakeHref} variant="secondary">
+              Buat Inspeksi Masuk
+            </Button>
+          )}
+          <span id="wo-intake-hint" role="note" className="text-xs text-muted-foreground">
+            inspeksi masuk kendaraan belum tercatat — catat inspeksi masuk (vehicle intake) untuk WO ini sebelum memulai.
+          </span>
+        </span>
+      )
+    }
     return (
       <Button variant="primary" isDisabled={isPending} onPress={() => run(() => startWorkOrder(workOrderId), "Perintah Kerja dimulai")}>
         Mulai Pengerjaan

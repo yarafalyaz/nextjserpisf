@@ -40,6 +40,8 @@ const TYPE_OPTIONS = [
   { value: "in_process", label: "Proses" },
   { value: "final", label: "Akhir" },
   { value: "safety", label: "Keselamatan" },
+  { value: "vehicle_intake", label: "Inspeksi Masuk Kendaraan" },
+  { value: "vehicle_handover", label: "Serah Terima Kendaraan" },
 ]
 
 const REFERENCE_OPTIONS = [
@@ -48,14 +50,26 @@ const REFERENCE_OPTIONS = [
   { value: "GoodsReceipt", label: "Penerimaan Barang" },
 ]
 
-export function QcInspectionForm({ checklists }: { checklists: ChecklistOption[] }) {
+interface QcInspectionFormProps {
+  checklists: ChecklistOption[]
+  /** Prefill dari tautan konteks (mis. gate intake WO F-50b). */
+  initialInspectionType?: string
+  initialReferenceType?: string
+  initialReferenceId?: number
+}
+
+export function QcInspectionForm({ checklists, initialInspectionType, initialReferenceType, initialReferenceId }: QcInspectionFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
   const [checklistId, setChecklistId] = useState<number | null>(null)
-  const [inspectionType, setInspectionType] = useState("final")
-  const [referenceType, setReferenceType] = useState("WorkOrder")
-  const [referenceId, setReferenceId] = useState("")
+  const [inspectionType, setInspectionType] = useState(
+    TYPE_OPTIONS.some((o) => o.value === initialInspectionType) ? (initialInspectionType as string) : "final",
+  )
+  const [referenceType, setReferenceType] = useState(
+    REFERENCE_OPTIONS.some((o) => o.value === initialReferenceType) ? (initialReferenceType as string) : "WorkOrder",
+  )
+  const [referenceId, setReferenceId] = useState(initialReferenceId ? String(initialReferenceId) : "")
   const [results, setResults] = useState<Record<number, { result: ResultValue; measured: string; note: string }>>({})
 
   const selectedChecklist = useMemo(
