@@ -1105,6 +1105,27 @@ describe("remnant (P1-5)", () => {
     expect(mocks.prismaMock.stocktakeSession.create).not.toHaveBeenCalled();
   });
 
+  it("createRemnant membaca unitCost format Indonesia penuh, bukan 2", async () => {
+    const fd = new FormData();
+    fd.set("itemId", "1");
+    fd.set("warehouseId", "1");
+    fd.set("qty", "2");
+    fd.set("unitCost", "2.000.000");
+    const res = await actions.createRemnant(fd);
+    expect(res.success).toBe(true);
+    const arg = mocks.prismaMock.remnant.create.mock.calls[0][0];
+    expect(arg.data.unitCost).toBe(2000000);
+
+    const bad = new FormData();
+    bad.set("itemId", "1");
+    bad.set("warehouseId", "1");
+    bad.set("qty", "2");
+    bad.set("unitCost", "bukan-angka");
+    const badRes = await actions.createRemnant(bad);
+    expect(badRes.success).toBe(false);
+    expect(mocks.prismaMock.remnant.create).toHaveBeenCalledTimes(1);
+  });
+
   it("createRemnant menolak barang yang tidak ada (bukan P2003 mentah)", async () => {
     mocks.prismaMock.item.findUnique.mockResolvedValue(null);
     const fd = new FormData();

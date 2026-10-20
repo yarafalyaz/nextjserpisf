@@ -22,6 +22,7 @@ import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
+import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import {
   stockAdjustmentSchema,
   inventoryTransferSchema,
@@ -1955,8 +1956,9 @@ export async function createRemnant(formData: FormData) {
     if (!item) throw new Error("Barang tidak ditemukan");
     if (!warehouse) throw new Error("Gudang tidak ditemukan");
     if (!Number.isFinite(qty) || qty <= 0) throw new Error("Qty sisa harus > 0");
-    const unitCostRaw = Number(formData.get("unitCost"));
-    if (!Number.isFinite(unitCostRaw) || unitCostRaw < 0) throw new Error("Biaya satuan tidak valid");
+    // Biaya satuan nominal uang: wajib parser repo — Number("2.000.000")=2.
+    const unitCostRaw = parseMoneyAmount(formData.get("unitCost"));
+    if (unitCostRaw === null || !Number.isFinite(unitCostRaw) || unitCostRaw < 0) throw new Error("Biaya satuan tidak valid");
     const sourceIdRaw = formData.get("sourceId");
     const sourceId = sourceIdRaw ? Number(sourceIdRaw) : null;
     if (sourceId !== null && (!Number.isSafeInteger(sourceId) || sourceId <= 0)) {
