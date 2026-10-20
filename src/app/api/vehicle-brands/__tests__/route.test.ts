@@ -56,6 +56,21 @@ describe("GET /api/vehicle-brands", () => {
     }))
   })
 
+  it.each([
+    ["halaman=abc&pageSize=xyz", 1, 50, 0, 50],
+    ["halaman=0&pageSize=9999", 1, 500, 0, 500],
+    ["halaman=-2&pageSize=0", 1, 50, 0, 50],
+  ])("parser pagination bersama: ?%s -> halaman %i pageSize %i", async (q, page, pageSize, skip, take) => {
+    mocks.hasPermission.mockResolvedValue(true)
+    mocks.findMany.mockResolvedValue([])
+    mocks.count.mockResolvedValue(0)
+    const res = await GET(new Request(`http://localhost/api/vehicle-brands?${q}`))
+    const json = await res.json()
+    expect(json.page).toBe(page)
+    expect(json.pageSize).toBe(pageSize)
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip, take }))
+  })
+
   it("respects cari, halaman, and pageSize params", async () => {
     mocks.hasPermission.mockResolvedValue(true)
     mocks.findMany.mockResolvedValue([])
