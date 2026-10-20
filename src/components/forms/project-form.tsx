@@ -81,21 +81,22 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah proyek" : "Formulir tambah proyek"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="documentNo">No. Dokumen</Label>
           <Input id="documentNo" name="documentNo" value={project?.documentNo || generatedCode || ""} readOnly className="bg-default-soft font-mono" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nama Proyek *</Label>
+          <Label htmlFor="name">Nama Proyek <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="name" name="name" required placeholder="Nama proyek" defaultValue={project?.name || ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="customerId">Pelanggan *</Label>
+          <Label htmlFor="customerId">Pelanggan <span className="text-destructive" aria-hidden="true">*</span></Label>
           <QuickAddSelect
             id="customerId"
             name="customerId"
+            required
             value={customerId || null}
             onChange={(key) => { setCustomerId(key ?? ""); setCustomerVehicleId("") }}
             placeholder="Cari pelanggan..."
@@ -180,9 +181,9 @@ export function ProjectForm({ customers, customerVehicles = [], costCenters = []
           <Textarea id="notes" name="notes" rows={3} placeholder="Catatan proyek..." defaultValue={project?.notes || ""} />
         </div>
       </div>
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Proyek"}</Button>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+        <Button type="button" onPress={() => router.back()} className="w-full sm:w-auto">Batal</Button>
+        <Button type="submit" isDisabled={isPending} className="w-full sm:w-auto">{isPending ? "Menyimpan..." : isEdit ? "Perbarui" : "Simpan Proyek"}</Button>
       </div>
     </form>
   )
