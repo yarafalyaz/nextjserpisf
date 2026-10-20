@@ -15,7 +15,8 @@ const mocks = vi.hoisted(() => ({
   workScheduleFindMany: vi.fn(),
   holidayFindMany: vi.fn(),
   departmentHolidayFindMany: vi.fn(),
-  notifyUsers: vi.fn(),
+  notifyUsersIfNew: vi.fn(),
+  notificationFindFirst: vi.fn(),
 }))
 
 vi.mock("@/lib/security/cron", () => ({
@@ -24,7 +25,7 @@ vi.mock("@/lib/security/cron", () => ({
 
 vi.mock("@/lib/services/notification.service", () => ({
   notificationService: {
-    notifyUsers: (...a: unknown[]) => mocks.notifyUsers(...a),
+    notifyUsersIfNew: (...a: unknown[]) => mocks.notifyUsersIfNew(...a),
   },
 }))
 
@@ -36,6 +37,7 @@ vi.mock("@/lib/db/prisma", () => ({
       findMany: (...a: unknown[]) => mocks.salesInvoiceFindMany(...a),
       count: (...a: unknown[]) => mocks.salesInvoiceCount(...a),
     },
+    notification: { findFirst: (...a: unknown[]) => mocks.notificationFindFirst(...a) },
     purchaseOrder: { findMany: (...a: unknown[]) => mocks.purchaseOrderFindMany(...a) },
     attendance: { findMany: (...a: unknown[]) => mocks.attendanceFindMany(...a) },
     employee: { findMany: (...a: unknown[]) => mocks.employeeFindMany(...a) },
@@ -113,11 +115,12 @@ describe("GET /api/cron/daily-notifications", () => {
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.lowStock).toBe(7)
-    expect(mocks.notifyUsers).toHaveBeenCalledWith(
+    expect(mocks.notifyUsersIfNew).toHaveBeenCalledWith(
       [1],
       expect.stringContaining("7 Barang"),
       expect.stringContaining("lainnya"),
-      "warning"
+      "warning",
+      expect.any(Date)
     )
   })
 
@@ -199,11 +202,12 @@ describe("GET /api/cron/daily-notifications", () => {
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.results.absentEmployees).toBe(7)
-    expect(mocks.notifyUsers).toHaveBeenCalledWith(
+    expect(mocks.notifyUsersIfNew).toHaveBeenCalledWith(
       [1],
       expect.stringContaining("7 Karyawan Belum Absen"),
       expect.stringContaining("lainnya"),
-      "danger"
+      "danger",
+      expect.any(Date)
     )
   })
 
@@ -211,7 +215,7 @@ describe("GET /api/cron/daily-notifications", () => {
     // Regression: previously the route pre-fetched admins at the top AND each
     // notifyAdmins(...) call internally re-queried the same user list, yielding
     // up to 5 redundant `prisma.user.findMany` round-trips per cron pass. Now
-    // the pre-fetched admin IDs are reused via notifyUsers, so the user lookup
+    // the pre-fetched admin IDs are reused via notifyUsersIfNew, so the user lookup
     // must be called exactly once regardless of how many notification branches
     // fire.
     vi.useFakeTimers()
@@ -241,12 +245,29 @@ describe("GET /api/cron/daily-notifications", () => {
     expect(json.results.absentEmployees).toBe(1)
 
     // The pre-fetched admin IDs must be passed to every notifyUsers call
-    expect(mocks.notifyUsers).toHaveBeenCalledTimes(5)
-    for (const call of mocks.notifyUsers.mock.calls) {
+    expect(mocks.notifyUsersIfNew).toHaveBeenCalledTimes(5)
+    for (const call of mocks.notifyUsersIfNew.mock.calls) {
       expect(call[0]).toEqual([1, 2])
     }
 
     // And the user table must have been queried exactly once
     expect(mocks.userFindMany).toHaveBeenCalledTimes(1)
+  })
+
+  it("re-run same day skips duplicate notifications (idempotent cron)", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-06-12T08:00:00"))
+    mocks.notificationFindFirst.mockResolvedValue({ id: 42 })
+    mocks.salesInvoiceCount.mockResolvedValue(1)
+    mocks.salesInvoiceFindMany.mockResolvedValue([{ grandTotal: 100, paidAmount: 0 }])
+
+    const res = await GET(makeReq())
+    expect(res.status).toBe(200)
+    // Route still delegates dedupe to service; service returns 0 rows.
+    // Here notifyUsersIfNew is mocked, so assert route passes dayStart window.
+    const call = mocks.notifyUsersIfNew.mock.calls.find((c) => String(c[1]).includes("Invoice Jatuh Tempo"))
+    expect(call).toBeDefined()
+    expect(call![4]).toBeInstanceOf(Date)
+    expect((call![4] as Date).getHours()).toBe(0)
   })
 })
