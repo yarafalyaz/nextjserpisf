@@ -285,6 +285,7 @@ export const navigation: NavItem[] = [
       { label: "Pusat Laba", href: "/laporan/pusat-laba", icon: TrendingUp, permission: "view_reports" },
       { label: "Harga Beli Multi-Sumber", href: "/laporan/analisis-harga-beli", icon: Package, permission: "view_reports" },
       { label: "Analisis Penjualan", href: "/laporan/analisis-penjualan", icon: BarChart3, permission: "view_reports" },
+      { label: "Hasil Penawaran", href: "/laporan/hasil-penawaran", icon: BarChart3, permission: "view_reports" },
       { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, permission: "view_reports" },
       { label: "Bahan & Biaya Pekerjaan", href: "/laporan/biaya-pekerjaan", icon: Hammer, permission: "view_reports" },
       { label: "Varians Produksi", href: "/laporan/varians-produksi", icon: TrendingUp, permission: "view_reports" },
