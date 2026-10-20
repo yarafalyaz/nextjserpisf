@@ -119,3 +119,15 @@ export function expectRevisionDownRejection(mocks: AnyMocks, res: { success: boo
   expect(mocks.prismaMock.customerCredit.create).not.toHaveBeenCalled()
 }
 
+
+/** Nama modul yang didaftarkan vi.mock tes penjualan revisi. */
+export const SALES_REVISION_MODULE_NAMES = [
+  "@/lib/db/prisma",
+  "@/lib/auth/permissions",
+  "next/cache",
+  "@/lib/utils/document-number",
+  "@/lib/utils/slug-db",
+  "@/lib/services/period-lock.service",
+  "@/lib/services/activity-log.service",
+  "@/lib/services/approval-workflow.service",
+] as const
