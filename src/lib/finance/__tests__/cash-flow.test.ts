@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import {
+  buildDirectCashFlow,
   classifyCounterpart,
   classifyJournal,
   foldActivities,
@@ -133,5 +134,24 @@ describe("foldActivities", () => {
     ])
     const net = totals.operating + totals.investing + totals.financing
     expect(net).toBe(400)
+  })
+})
+
+describe("buildDirectCashFlow (F-2026-10-20-46(b))", () => {
+  const cash = (id: number) => id === 1
+  it("kelompokkan penerimaan/pengeluaran per akun lawan; total = delta kas", () => {
+    const rows = buildDirectCashFlow(
+      [
+        { entries: [line({ accountId: 1, debit: 500 }), line({ accountId: 2, type: "REVENUE", code: "4000", name: "Pendapatan", credit: 500 })] },
+        { entries: [line({ accountId: 1, credit: 200 }), line({ accountId: 2, type: "REVENUE", code: "4000", name: "Pendapatan", debit: 50 }), line({ accountId: 3, type: "EXPENSE", code: "5100", name: "Beban Gaji", debit: 150 })] },
+        { entries: [line({ accountId: 9, debit: 999 }), line({ accountId: 2, type: "REVENUE", credit: 999 })] },
+      ],
+      cash,
+    )
+    expect(rows).toHaveLength(2)
+    const rev = rows.find((r) => r.accountId === 2)!
+    expect(rev).toMatchObject({ received: 500, paid: 50, slug: null, activity: "operating" })
+    const net = rows.reduce((s, r) => s + r.received - r.paid, 0)
+    expect(net).toBe(300)
   })
 })

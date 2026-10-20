@@ -104,6 +104,60 @@ export function classifyJournal(
   return { activity: classifyCounterpart(dominant), cashDelta }
 }
 
+export interface DirectCashFlowRow {
+  accountId: number
+  code: string
+  name: string
+  slug: string | null
+  activity: CashFlowActivity
+  /** Kas diterima dari akun lawan ini (lawan kredit bersih). */
+  received: number
+  /** Kas dibayar ke akun lawan ini (lawan debit bersih). */
+  paid: number
+}
+
+/**
+ * Metode langsung (F-2026-10-20-46(b)): penerimaan/pengeluaran kas aktual
+ * dikelompokkan per akun lawan dari jurnal yang menyentuh kas — tanpa
+ * tagging baru. Per baris lawan: kas diterima = kredit - debit lawan
+ * (positif), kas dibayar = debit - kredit lawan (positif). Jurnal
+ * seimbang => total received - paid = perubahan kas bersih; jurnal tanpa
+ * kas atau tanpa lawan dilewati. Transfer antar-kas (delta 0) tak punya
+ * lawan sehingga otomatis absen.
+ */
+export function buildDirectCashFlow(
+  journals: { entries: (JournalLine & { slug?: string | null })[] }[],
+  isCashAccount: (accountId: number) => boolean,
+): DirectCashFlowRow[] {
+  const byAccount = new Map<number, DirectCashFlowRow>()
+  for (const journal of journals) {
+    const touchesCash = journal.entries.some((e) => isCashAccount(e.accountId))
+    if (!touchesCash) continue
+    for (const e of journal.entries) {
+      if (isCashAccount(e.accountId)) continue
+      const net = safeSubtract(Number(e.credit) || 0, Number(e.debit) || 0, 2)
+      if (net === 0) continue
+      const row =
+        byAccount.get(e.accountId) ??
+        {
+          accountId: e.accountId,
+          code: e.code,
+          name: e.name,
+          slug: e.slug ?? null,
+          activity: classifyCounterpart(e),
+          received: 0,
+          paid: 0,
+        }
+      if (net > 0) row.received = safeAdd(row.received, net, 2)
+      else row.paid = safeAdd(row.paid, Math.abs(net), 2)
+      byAccount.set(e.accountId, row)
+    }
+  }
+  return [...byAccount.values()].sort(
+    (a, b) => b.received + b.paid - (a.received + a.paid),
+  )
+}
+
 /** Fold a set of classified journals into per-activity totals. */
 export function foldActivities(
   classified: ({ activity: CashFlowActivity; cashDelta: number } | null)[],

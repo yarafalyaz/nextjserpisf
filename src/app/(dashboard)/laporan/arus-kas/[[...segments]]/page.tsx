@@ -17,7 +17,13 @@ import {
   STATEMENT_OPTIONS_COOKIE,
 } from "@/lib/reports/statement-display";
 import { reportPeriodFromRoute } from "@/lib/reports/report-period";
-import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow";
+import {
+  buildDirectCashFlow,
+  classifyJournal,
+  foldActivities,
+} from "@/lib/finance/cash-flow"
+import { buildReportHref } from "@/lib/reports/report-href";
+import { safeAdd } from "@/lib/utils/math";
 
 import type { Metadata } from "next";
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -149,6 +155,30 @@ export default async function CashFlowPage({
     ),
   );
 
+  // F-2026-10-20-46(b): metode langsung per akun lawan dari jurnal kas
+  // yang sama (tanpa tagging baru); baris tertaut Buku Besar akun lawan.
+  const directRows = buildDirectCashFlow(
+    fullJournals.map((j) => ({
+      entries: j.entries.map((e) => ({
+        accountId: e.accountId,
+        type: e.account?.type ?? "",
+        code: e.account?.code ?? "",
+        name: e.account?.name ?? "",
+        slug: e.account?.slug ?? null,
+        debit: Number(e.debit),
+        credit: Number(e.credit),
+      })),
+    })),
+    (accountId) => cashIdSet.has(accountId),
+  );
+  const directReceived = directRows.reduce((s, r) => safeAdd(s, r.received, 2), 0);
+  const directPaid = directRows.reduce((s, r) => safeAdd(s, r.paid, 2), 0);
+  const activityLabel: Record<string, string> = {
+    operating: "Operasi",
+    investing: "Investasi",
+    financing: "Pendanaan",
+  };
+
   const activityRows: { key: string; label: string; value: number }[] = [
     { key: "operating", label: "Arus Kas dari Aktivitas Operasi", value: activity.operating },
     { key: "investing", label: "Arus Kas dari Aktivitas Investasi", value: activity.investing },
@@ -211,6 +241,51 @@ export default async function CashFlowPage({
               <td>Saldo Kas Akhir Periode</td>
               <td className="num">{amount(closingBalance)}</td>
             </tr>
+          </tbody>
+        </table>
+
+        <div className="doc-head" style={{ marginTop: 24 }}>
+          <div className="doc-title" style={{ fontSize: "10.5pt" }}>Metode Langsung — Penerimaan &amp; Pengeluaran per Akun Lawan</div>
+        </div>
+        <table className="stmt" data-report-table="Arus Kas Metode Langsung" style={{ marginTop: 8 }}>
+          <thead>
+            <tr>
+              <th>Akun Lawan</th>
+              <th>Aktivitas</th>
+              <th className="num">Diterima</th>
+              <th className="num">Dibayar</th>
+              <th className="num">Bersih</th>
+            </tr>
+          </thead>
+          <tbody>
+            {directRows.map((row) => (
+              <tr key={row.accountId}>
+                <td className="indent-1">
+                  {row.slug ? (
+                    <a href={buildReportHref("/laporan/buku-besar", period.slug, { akun: row.slug })}>{row.code} — {row.name}</a>
+                  ) : (
+                    <>{row.code} — {row.name}</>
+                  )}
+                </td>
+                <td>{activityLabel[row.activity]}</td>
+                <td className="num">{amount(row.received)}</td>
+                <td className="num">{amount(row.paid)}</td>
+                <td className="num">{amount(row.received - row.paid)}</td>
+              </tr>
+            ))}
+            {directRows.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="stmt-empty">Tidak ada jurnal kas dengan akun lawan pada periode ini</td>
+              </tr>
+            ) : (
+              <tr className="subtotal">
+                <td>Total Metode Langsung</td>
+                <td></td>
+                <td className="num">{amount(directReceived)}</td>
+                <td className="num">{amount(directPaid)}</td>
+                <td className="num">{amount(directReceived - directPaid)}</td>
+              </tr>
+            )}
           </tbody>
         </table>
 
