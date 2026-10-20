@@ -111,7 +111,7 @@ export async function GET() {
       msg.includes("Silakan login") ||
       msg.includes("auth")
     ) {
-      return apiError("UNAUTHORIZED", "Unauthorized");
+      return apiError("UNAUTHORIZED", "Tidak terotorisasi");
     }
     console.error("Dashboard notifications error:", e);
     return apiError("INTERNAL_ERROR", "Terjadi kesalahan server");

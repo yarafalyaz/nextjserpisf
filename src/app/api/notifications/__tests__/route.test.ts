@@ -41,6 +41,7 @@ describe("GET /api/notifications", () => {
     mocks.authFn.mockResolvedValue({ user: { id: "abc" } })
     const res = await GET()
     expect(res.status).toBe(400)
+    expect((await res.json()).error.message).toBe("Pengguna tidak valid")
   })
 
   it("returns 400 when user.id is 0 or negative", async () => {

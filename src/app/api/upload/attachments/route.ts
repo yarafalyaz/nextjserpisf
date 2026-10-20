@@ -22,11 +22,11 @@ export async function POST(req: NextRequest) {
   const referenceId = formData.get("referenceId") as string | null
 
   if (!file) {
-    return apiError("BAD_REQUEST", "No file uploaded")
+    return apiError("BAD_REQUEST", "Tidak ada berkas yang diunggah")
   }
 
   if (!referenceType || !referenceId) {
-    return apiError("BAD_REQUEST", "referenceType and referenceId are required")
+    return apiError("BAD_REQUEST", "referenceType dan referenceId wajib diisi")
   }
 
   // Validate file type
@@ -44,15 +44,15 @@ export async function POST(req: NextRequest) {
   }
 
   if (!/^\d+$/.test(referenceId)) {
-    return apiError("BAD_REQUEST", "Invalid referenceId")
+    return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
   const userId = Number.parseInt(String(session.user.id), 10)
   if (!Number.isSafeInteger(referenceIdNum) || referenceIdNum < 0) {
-    return apiError("BAD_REQUEST", "Invalid referenceId")
+    return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
   if (!Number.isInteger(userId) || userId <= 0) {
-    return apiError("BAD_REQUEST", "Invalid user")
+    return apiError("BAD_REQUEST", "Pengguna tidak valid")
   }
 
   const bytes = await file.arrayBuffer()
@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
   // Sanitize referenceType to prevent path traversal
   const safeRefType = referenceType.replace(/[^a-zA-Z0-9_-]/g, "")
   if (!safeRefType || safeRefType !== referenceType) {
-    return apiError("BAD_REQUEST", "Invalid referenceType")
+    return apiError("BAD_REQUEST", "referenceType tidak valid")
   }
 
   // Whitelist allowed reference types (same as GET)
@@ -113,7 +113,7 @@ export async function POST(req: NextRequest) {
   // Final path traversal guard
   const relativePath = path.relative(uploadDir, filepath)
   if (relativePath.startsWith("..") || path.isAbsolute(relativePath)) {
-    return apiError("BAD_REQUEST", "Invalid file path")
+    return apiError("BAD_REQUEST", "Path berkas tidak valid")
   }
 
   await writeFile(filepath, buffer, { flag: "wx" })
@@ -161,7 +161,7 @@ export async function GET(req: NextRequest) {
   const referenceId = searchParams.get("referensiId")
 
   if (!referenceType || !referenceId) {
-    return apiError("BAD_REQUEST", "referenceType and referenceId are required")
+    return apiError("BAD_REQUEST", "referenceType dan referenceId wajib diisi")
   }
 
   // Whitelist allowed reference types to prevent enumeration of arbitrary tables
@@ -177,11 +177,11 @@ export async function GET(req: NextRequest) {
   }
 
   if (!/^\d+$/.test(referenceId)) {
-    return apiError("BAD_REQUEST", "Invalid referenceId")
+    return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
   if (!Number.isSafeInteger(referenceIdNum) || referenceIdNum < 0) {
-    return apiError("BAD_REQUEST", "Invalid referenceId")
+    return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
 
   // Check the specific document and its warehouse scope, not only its module.

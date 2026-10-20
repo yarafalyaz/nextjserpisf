@@ -9,7 +9,7 @@ export async function GET() {
     if (!session?.user) return apiError("UNAUTHORIZED", "Tidak terotorisasi")
 
     const userId = Number.parseInt(String(session.user.id), 10)
-    if (!Number.isInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Invalid user")
+    if (!Number.isInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Pengguna tidak valid")
 
     const notifications = await prisma.notification.findMany({
       where: { userId },

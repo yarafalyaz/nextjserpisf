@@ -104,6 +104,6 @@ export async function GET(request: Request) {
     })
   } catch (err) {
     console.error("Auto-reject quotations cron failed:", err)
-    return apiError("INTERNAL_ERROR", "Cron job failed")
+    return apiError("INTERNAL_ERROR", "Tugas cron gagal dijalankan")
   }
 }

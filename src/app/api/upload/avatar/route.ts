@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
 
   const userId = Number.parseInt(String(session.user.id), 10)
   if (!Number.isInteger(userId) || userId <= 0) {
-    return apiError("BAD_REQUEST", "User tidak valid")
+    return apiError("BAD_REQUEST", "Pengguna tidak valid")
   }
 
   try {

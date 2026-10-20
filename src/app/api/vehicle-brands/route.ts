@@ -6,7 +6,7 @@ import { apiError } from "@/lib/api-response";
 export async function GET(request: Request) {
   try {
     if (!(await hasPermission("view_vehicle_brands"))) {
-      return apiError("FORBIDDEN", "Forbidden");
+      return apiError("FORBIDDEN", "Tidak memiliki izin");
     }
 
     const { searchParams } = new URL(request.url);

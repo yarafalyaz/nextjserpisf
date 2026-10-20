@@ -16,15 +16,15 @@ export async function POST(
     const { id } = await params
     const notificationId = Number(id)
     const userId = Number(session.user.id)
-    if (!/^\d+$/.test(id) || !Number.isSafeInteger(notificationId) || notificationId <= 0) return apiError("BAD_REQUEST", "Invalid notification id")
-    if (!Number.isSafeInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Invalid user")
+    if (!/^\d+$/.test(id) || !Number.isSafeInteger(notificationId) || notificationId <= 0) return apiError("BAD_REQUEST", "ID notifikasi tidak valid")
+    if (!Number.isSafeInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Pengguna tidak valid")
 
     // Security: scope the update to the caller's userId inside the service.
     // `markAsRead` returns false both for missing notifications and
     // notifications owned by other users, so we return 404 for both — the
     // response shape doesn't leak existence to a probing attacker.
     const ok = await notificationService.markAsRead(notificationId, userId)
-    if (!ok) return apiError("NOT_FOUND", "Not found")
+    if (!ok) return apiError("NOT_FOUND", "Notifikasi tidak ditemukan")
 
     return NextResponse.json({ success: true })
   } catch (error) {

@@ -29,6 +29,7 @@ describe("GET /api/vehicle-brands", () => {
     mocks.hasPermission.mockResolvedValue(false)
     const res = await GET(new Request("http://localhost/api/vehicle-brands"))
     expect(res.status).toBe(403)
+    expect((await res.json()).error.message).toBe("Tidak memiliki izin")
   })
 
   it("returns 500 on error", async () => {

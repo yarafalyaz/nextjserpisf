@@ -31,13 +31,13 @@ export async function GET(
 
   const segments = (await params).path
   if (!segments || segments.length < 2) {
-    return apiError("NOT_FOUND", "Not found")
+    return apiError("NOT_FOUND", "Berkas tidak ditemukan")
   }
 
   // Prevent path traversal
   for (const seg of segments) {
     if (seg === ".." || seg.includes("/") || seg.includes("\\")) {
-      return apiError("BAD_REQUEST", "Invalid path")
+      return apiError("BAD_REQUEST", "Path berkas tidak valid")
     }
   }
 
@@ -61,7 +61,7 @@ export async function GET(
   // Ensure the resolved path is still within the private directory
   const privateDir = path.join(process.cwd(), "private", "uploads", "attachments")
   if (!absolutePath.startsWith(privateDir)) {
-    return apiError("BAD_REQUEST", "Invalid path")
+    return apiError("BAD_REQUEST", "Path berkas tidak valid")
   }
 
   try {
