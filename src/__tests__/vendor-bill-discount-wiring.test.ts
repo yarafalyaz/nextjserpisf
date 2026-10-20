@@ -34,23 +34,21 @@ const READERS = [
 describe("diskon tagihan vendor: penulis dan pembaca DPP harus sepakat", () => {
   it("pembuat DAN pengubah tagihan mengisi diskon level dokumen dari Σ diskon baris", () => {
     const src = read(WRITER)
-    // Penulis mengisi kop dari `summarizeBillItems(v.items)` (hitung ulang
-    // server dari baris yang sama dengan yang ditulis ke vendor_bill_items);
-    // dua-duanya wajib mengarah ke sumber itu — pola lama
-    // `sumBillItemDiscount(v.items)` digantikan helper kop ini.
-    const summaries = src.match(/const billHeader = summarizeBillItems\(v\.items\)/g) ?? []
-    const writes = src.match(/discountAmount: billHeader\.discountAmount/g) ?? []
+    // Dua bentuk sah: hitung langsung per-sisi, atau sumber tunggal
+    // `summarizeBillItems` (= agregasi `computeBillLineAmounts`, termasuk
+    // `discountAmount`) yang dipakai kedua penulis lewat `billHeader`.
+    // Yang dilarang: salah satu penulis berhenti mengisi `discountAmount`.
+    const direct = src.match(/discountAmount: sumBillItemDiscount\(v\.items\)/g) ?? []
+    const viaHeader =
+      src.match(/const billHeader = summarizeBillItems\(v\.items\)/g) ?? []
+    const headerWrites =
+      src.match(/discountAmount: billHeader\.discountAmount/g) ?? []
     expect(
-      summaries.length,
-      "createVendorBill dan updateVendorBill dua-duanya harus menghitung kop " +
-        "dari summarizeBillItems(v.items)",
-    ).toBe(2)
-    expect(
-      writes.length,
+      direct.length === 2 || (viaHeader.length === 2 && headerWrites.length === 2),
       "createVendorBill dan updateVendorBill dua-duanya harus mengisi " +
         "VendorBill.discountAmount; kalau salah satu terlewat, DPP pada tagihan " +
-        "yang diubah (atau dibuat) dilaporkan terlalu besar.",
-    ).toBe(2)
+        "yang diubah (atau dibuat) dilaporkan terlalu besar."
+    ).toBe(true)
   })
 
   it("laporan tetap menghitung DPP sebagai subtotal dikurangi diskon dokumen", () => {
