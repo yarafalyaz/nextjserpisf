@@ -123,41 +123,26 @@ describe("updateJournal", () => {
     expect(result.error).toContain("debit dan credit sekaligus")
   })
 
-  it("rejects a negative-only line instead of silently dropping it", async () => {
-    // Baris debit negatif tanpa kredit: kode lama membuangnya diam-diam
-    // (filter debit>0||credit>0) lalu jurnal sisa lolos seimbang.
+  // Baris setengah terisi WAJIB ditolak, bukan dibuang diam-diam — membuangnya
+  // mengubah makna jurnal (filter lama debit>0||credit>0 membuang baris
+  // negatif/tanpa-akun lalu jurnal sisa lolos seimbang).
+  async function submitBadLine(badLine: unknown) {
     const entries = JSON.stringify([
       { accountId: 100, debit: 500, credit: 0 },
       { accountId: 200, debit: 0, credit: 500 },
-      { accountId: 300, debit: -50, credit: 0 },
+      badLine,
     ])
-    const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", entries }))
-    expect(result.success).toBe(false)
-    expect(result.error).toContain("tidak boleh negatif")
-    expect(transactionMock).not.toHaveBeenCalled()
-  })
+    return updateJournal(7, fd({ transactionDate: "2026-06-02", entries }))
+  }
 
-  it("rejects a line with amount but no account instead of silently dropping it", async () => {
-    const entries = JSON.stringify([
-      { accountId: 100, debit: 500, credit: 0 },
-      { accountId: 200, debit: 0, credit: 500 },
-      { accountId: 0, debit: 250, credit: 0 },
-    ])
-    const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", entries }))
+  it.each<{ name: string; badLine: { accountId: number; debit: number | string; credit: number }; message: string }>([
+    { name: "a negative-only line", badLine: { accountId: 300, debit: -50, credit: 0 }, message: "tidak boleh negatif" },
+    { name: "a line with amount but no account", badLine: { accountId: 0, debit: 250, credit: 0 }, message: "Akun wajib" },
+    { name: "a non-finite amount", badLine: { accountId: 300, debit: "abc", credit: 0 }, message: "tidak valid" },
+  ])("rejects $name instead of silently dropping it", async ({ badLine, message }) => {
+    const result = await submitBadLine(badLine)
     expect(result.success).toBe(false)
-    expect(result.error).toContain("Akun wajib")
-    expect(transactionMock).not.toHaveBeenCalled()
-  })
-
-  it("rejects a non-finite amount instead of silently dropping the line", async () => {
-    const entries = JSON.stringify([
-      { accountId: 100, debit: 500, credit: 0 },
-      { accountId: 200, debit: 0, credit: 500 },
-      { accountId: 300, debit: "abc", credit: 0 },
-    ])
-    const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", entries }))
-    expect(result.success).toBe(false)
-    expect(result.error).toContain("tidak valid")
+    expect(result.error).toContain(message)
     expect(transactionMock).not.toHaveBeenCalled()
   })
 
