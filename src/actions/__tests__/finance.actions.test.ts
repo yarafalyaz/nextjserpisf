@@ -526,6 +526,38 @@ describe("Journal Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createJournal membaca debit/kredit string id-ID sebagai nominal penuh, bukan pecahan di titik", async () => {
+    // Regresi: parseAndValidateJournalEntries memakai Number("2.000.000") === 2.
+    // Baris debit 2 jt + kredit 2 jt seimbang tetapi tersimpan 2 rupiah;
+    // pasangan tak seimbang dalam format Indonesia (2.000.000 vs 2) juga
+    // terbalik tertolak. parseMoneyAmount adalah parser uang repo ini.
+    const res = await (actions as any).createJournal(fdMap({
+      transactionDate: "2026-06-13",
+      entries: JSON.stringify([
+        { accountId: 1, debit: "2.000.000,50", credit: "" },
+        { accountId: 2, debit: "", credit: "2.000.000,50" },
+      ]),
+    }))
+    expect(res?.success).toBe(true)
+
+    const calls = mocks.prismaMock.journalEntry.createMany.mock.calls
+    const data = calls[calls.length - 1][0].data
+    expect(data.map((entry: { debit: number }) => entry.debit)).toEqual([2000000.5, 0])
+    expect(data.map((entry: { credit: number }) => entry.credit)).toEqual([0, 2000000.5])
+  })
+
+  it("createJournal menolak debit/kredit string yang tidak bisa dibaca sebagai angka", async () => {
+    const res = await (actions as any).createJournal(fdMap({
+      transactionDate: "2026-06-13",
+      entries: JSON.stringify([
+        { accountId: 1, debit: "bukan-angka", credit: 0 },
+        { accountId: 2, debit: 0, credit: 1000 },
+      ]),
+    }))
+    expect(res?.success).toBe(false)
+    expect(mocks.prismaMock.journal.create).not.toHaveBeenCalled()
+  })
+
   it.each([
     ["fictitious calendar date 2026-02-30 (no silent roll to March)", "2026-02-30"],
     ["unparseable date instead of letting Invalid Date bypass period lock", "bukan-tanggal"],
