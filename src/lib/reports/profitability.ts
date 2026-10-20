@@ -19,6 +19,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export const PROFITABILITY_DIMENSIONS = ["faktur", "barang", "pelanggan"] as const
@@ -109,8 +110,8 @@ export function buildProfitability(input: {
   const visible = sorted.filter((line) => line.revenue !== 0 || line.cogs !== 0)
 
   const rows: TableRow[] = visible.map((line) => {
-    totals.revenue += line.revenue
-    totals.cogs += line.cogs
+    totals.revenue = safeAdd(totals.revenue, line.revenue, 2)
+    totals.cogs = safeAdd(totals.cogs, line.cogs, 2)
     // Hanya baris yang bukan jasa dianggap "HPP hilang" (jasa memang tanpa HPP).
     // revenueMissingCogs akumulasi per-BARIS stok tanpa HPP, bukan se-bucket:
     // bucket berisi campuran baris ber-HPP + tanpa-HPP tidak boleh menyeret
@@ -118,16 +119,16 @@ export function buildProfitability(input: {
     // (stockRevenueWithoutCogs undefined) pakai fallback lama = line.revenue.
     const stockableWithoutCogs = line.revenueLinesWithoutCogs - line.serviceLinesWithoutCogs
     if (stockableWithoutCogs > 0) {
-      totals.revenueMissingCogs += line.stockRevenueWithoutCogs ?? line.revenue
+      totals.revenueMissingCogs = safeAdd(totals.revenueMissingCogs, line.stockRevenueWithoutCogs ?? line.revenue, 2)
       totals.missingCogsLines += stockableWithoutCogs
     }
     return {
       kind: "data",
-      cells: [line.label, amount(line.revenue), amount(line.cogs), amount(line.revenue - line.cogs), marginCell(line.revenue, line.cogs)],
+      cells: [line.label, amount(line.revenue), amount(line.cogs), amount(safeSubtract(line.revenue, line.cogs, 2)), marginCell(line.revenue, line.cogs)],
     }
   })
 
-  totals.grossProfit = totals.revenue - totals.cogs
+  totals.grossProfit = safeSubtract(totals.revenue, totals.cogs, 2)
 
   if (visible.length === 0) {
     rows.push({
