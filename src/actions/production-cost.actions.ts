@@ -14,6 +14,7 @@ import {
   OVERHEAD_DRIVER_LABELS,
 } from "@/lib/validations/production-cost.schemas"
 import { applyProductionCostDelta } from "@/lib/services/production-cost.service"
+import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { safeMultiply, safeRound } from "@/lib/utils/math"
 
 /** Production orders keep their cost locked once completed/cancelled. */
@@ -40,6 +41,7 @@ function mutableOrderError(
 export async function createProductionCost(formData: FormData) {
   try {
     const user = await requirePermission("manage_production_costs")
+    await assertPeriodOpen(new Date())
 
     const parsed = parseFormData(createProductionCostSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -122,6 +124,7 @@ export async function createProductionCost(formData: FormData) {
 export async function updateProductionCost(id: number, formData: FormData) {
   try {
     const user = await requirePermission("manage_production_costs")
+    await assertPeriodOpen(new Date())
 
     const parsed = parseFormData(updateProductionCostSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
@@ -184,6 +187,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
 export async function deleteProductionCost(id: number) {
   try {
     const user = await requirePermission("manage_production_costs")
+    await assertPeriodOpen(new Date())
 
     const existing = await prisma.productionCost.findUnique({
       where: { id },
@@ -238,6 +242,7 @@ export async function pullLaborCostFromTimesheets(
 ) {
   try {
     const user = await requirePermission("manage_production_costs")
+    await assertPeriodOpen(new Date())
     if (!Number.isFinite(ratePerHour) || ratePerHour < 0) {
       return { success: false, error: "Tarif per jam tidak valid." }
     }
@@ -332,6 +337,7 @@ export async function pullLaborCostFromTimesheets(
 export async function applyOverheadToProductionOrder(formData: FormData) {
   try {
     const user = await requirePermission("manage_production_costs")
+    await assertPeriodOpen(new Date())
 
     const parsed = parseFormData(applyOverheadSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }

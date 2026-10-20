@@ -62,16 +62,29 @@ export async function loadPeriodClose(periode: string | undefined): Promise<Peri
   const month = resolveCloseMonth(periode)
   const range = { gte: month.start, lte: month.end }
 
-  const [settings, draftJournals, draftSalesInvoices, draftVendorBills, unfinishedReconciliations, draftPayrolls, negativeStockItems] =
-    await Promise.all([
-      prisma.systemSetting.findFirst({ select: { periodLockDate: true } }),
-      prisma.journal.count({ where: { status: "DRAFT", deletedAt: null, transactionDate: range } }),
-      prisma.salesInvoice.count({ where: { status: "draft", deletedAt: null, date: range } }),
-      prisma.vendorBill.count({ where: { status: "draft", deletedAt: null, date: range } }),
-      prisma.bankReconciliation.count({ where: { status: { not: "completed" }, statementDate: range } }),
-      prisma.payroll.count({ where: { status: "draft", startDate: range } }),
-      prisma.item.count({ where: { deletedAt: null, isActive: true, qtyOnHand: { lt: 0 } } }),
-    ])
+  const [
+    settings,
+    draftJournals,
+    draftSalesInvoices,
+    draftVendorBills,
+    unfinishedReconciliations,
+    unverifiedGoodsReceipts,
+    unmatchedStatementLines,
+    draftPayrolls,
+    negativeStockItems,
+  ] = await Promise.all([
+    prisma.systemSetting.findFirst({ select: { periodLockDate: true } }),
+    prisma.journal.count({ where: { status: "DRAFT", deletedAt: null, transactionDate: range } }),
+    prisma.salesInvoice.count({ where: { status: "draft", deletedAt: null, date: range } }),
+    prisma.vendorBill.count({ where: { status: "draft", deletedAt: null, date: range } }),
+    prisma.bankReconciliation.count({ where: { status: { not: "completed" }, statementDate: range } }),
+    prisma.goodsReceipt.count({ where: { status: "draft", date: range } }),
+    prisma.bankStatementLine.count({
+      where: { status: { not: "matched" }, date: range, bankStatement: { deletedAt: null } },
+    }),
+    prisma.payroll.count({ where: { status: "draft", startDate: range } }),
+    prisma.item.count({ where: { deletedAt: null, isActive: true, qtyOnHand: { lt: 0 } } }),
+  ])
 
   const result = buildPeriodCloseChecks({
     monthLabel: month.label,
@@ -82,6 +95,8 @@ export async function loadPeriodClose(periode: string | undefined): Promise<Peri
       draftSalesInvoices,
       draftVendorBills,
       unfinishedReconciliations,
+      unverifiedGoodsReceipts,
+      unmatchedStatementLines,
       draftPayrolls,
       negativeStockItems,
     },

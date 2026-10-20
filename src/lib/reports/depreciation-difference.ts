@@ -20,6 +20,7 @@
 
 import { computeMonthlyDepreciation } from "@/lib/finance/asset-depreciation"
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 262mm, area isi A4 mendatar. */
@@ -81,7 +82,7 @@ export function accountingAnnualDepreciation(asset: DepreciationAssetInput): num
     categoryDepreciationRate: asset.categoryDepreciationRate,
     categoryUsefulLife: asset.categoryUsefulLife,
   })
-  return monthly * 12
+  return safeMultiply(monthly, 12, 2)
 }
 
 /**
@@ -102,7 +103,7 @@ export function fiscalAnnualDepreciation(asset: DepreciationAssetInput): number 
     categoryDepreciationRate: hasRate ? asset.taxDepreciationRate : null,
     categoryUsefulLife: hasLife ? asset.taxUsefulLife : null,
   })
-  return monthly * 12
+  return safeMultiply(monthly, 12, 2)
 }
 
 export function buildDepreciationDifference(
@@ -136,13 +137,13 @@ export function buildDepreciationDifference(
       currentCategory = categoryName
     }
 
-    totals.accountingAnnual += accounting
+    totals.accountingAnnual = safeAdd(totals.accountingAnnual, accounting, 2)
     if (fiscal === null) {
       totals.withoutFiscal += 1
     } else {
-      totals.fiscalAnnual += fiscal
-      totals.accountingComparable += accounting
-      totals.difference += accounting - fiscal
+      totals.fiscalAnnual = safeAdd(totals.fiscalAnnual, fiscal, 2)
+      totals.accountingComparable = safeAdd(totals.accountingComparable, accounting, 2)
+      totals.difference = safeAdd(totals.difference, safeSubtract(accounting, fiscal, 2), 2)
     }
 
     rows.push({

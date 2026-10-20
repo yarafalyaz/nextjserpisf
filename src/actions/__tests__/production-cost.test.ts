@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 //     timesheets, and needs a linked project.
 
 const requirePermissionMock = vi.fn()
+const periodOpenMock = vi.fn()
 const revalidateMock = vi.fn()
 const logActivityMock = vi.fn()
 const applyDeltaMock = vi.fn()
@@ -32,6 +33,9 @@ vi.mock("@/lib/services/activity-log.service", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMock(...a) }))
 vi.mock("@/lib/services/production-cost.service", () => ({
   applyProductionCostDelta: (...a: unknown[]) => applyDeltaMock(...a),
+}))
+vi.mock("@/lib/services/period-lock.service", () => ({
+  assertPeriodOpen: (...a: unknown[]) => periodOpenMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => {
@@ -70,14 +74,88 @@ function fd(payload: Record<string, string | number | null | undefined>): FormDa
 
 beforeEach(() => {
   for (const m of [
-    requirePermissionMock, revalidateMock, logActivityMock, applyDeltaMock,
+    requirePermissionMock, periodOpenMock, revalidateMock, logActivityMock, applyDeltaMock,
     costCreateMock, costFindUniqueMock, costUpdateMock, costDeleteMock, costFindManyMock,
     orderFindUniqueMock, woFindUniqueMock, vendorFindUniqueMock, timesheetFindManyMock,
   ]) m.mockReset()
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
+  periodOpenMock.mockResolvedValue(undefined)
   applyDeltaMock.mockResolvedValue(undefined)
   vi.spyOn(console, "error").mockImplementation(() => {})
+})
+
+describe("kunci periode hari-ini (F-2026-10-20-24a)", () => {
+  const LOCKED = new Error("Periode akuntansi sudah ditutup sampai 31/10/2026.")
+
+  it("create ditolak dan tidak menulis bila hari ini terkunci", async () => {
+    periodOpenMock.mockRejectedValue(LOCKED)
+
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 1000 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("ditutup")
+    expect(periodOpenMock).toHaveBeenCalledWith(expect.any(Date))
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("update ditolak dan tidak menulis bila hari ini terkunci", async () => {
+    periodOpenMock.mockRejectedValue(LOCKED)
+
+    const res = await updateProductionCost(5, fd({ category: "labor", amount: 300 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("ditutup")
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("delete ditolak dan tidak menulis bila hari ini terkunci", async () => {
+    periodOpenMock.mockRejectedValue(LOCKED)
+
+    const res = await deleteProductionCost(5)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("ditutup")
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("pullLabor ditolak bila hari ini terkunci", async () => {
+    periodOpenMock.mockRejectedValue(LOCKED)
+
+    const res = await pullLaborCostFromTimesheets(7, 1, 25000)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("ditutup")
+    expect(timesheetFindManyMock).not.toHaveBeenCalled()
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("applyOverhead ditolak bila hari ini terkunci", async () => {
+    periodOpenMock.mockRejectedValue(LOCKED)
+
+    const res = await applyOverheadToProductionOrder(
+      fd({ productionOrderId: 1, driverType: "machine_hours", driverQty: 2, rate: 1000 }),
+    )
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("ditutup")
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("kunci kemarin tidak menghalangi: create hari ini tetap lewat", async () => {
+    periodOpenMock.mockResolvedValue(undefined)
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    costCreateMock.mockResolvedValue({ id: 99 })
+
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 1000 }))
+
+    expect(res.success).toBe(true)
+    expect(periodOpenMock).toHaveBeenCalledTimes(1)
+  })
 })
 
 describe("createProductionCost", () => {
