@@ -57,6 +57,7 @@ export default async function QuotationsPage({
       ? { licensePlate: q.customerVehicle.plateNumber }
       : null,
     date: q.date,
+    validUntil: q.validUntil,
     grandTotal: Number(q.grandTotal),
     status: q.status,
   }))

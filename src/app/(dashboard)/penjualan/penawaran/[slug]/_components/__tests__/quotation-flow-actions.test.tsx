@@ -11,6 +11,7 @@ vi.mock("@/actions/sales.actions", () => ({
   sendQuotation: vi.fn(async () => ({ success: true })),
   acceptQuotation: vi.fn(async () => ({ success: true })),
   rejectQuotation: vi.fn(async () => ({ success: true })),
+  reviseQuotation: vi.fn(async () => ({ success: true })),
 }))
 
 import { QuotationFlowActions } from "../quotation-flow-actions"
@@ -35,6 +36,8 @@ describe("QuotationFlowActions", () => {
     const html = render("sent")
     expect(html).toContain("Terima")
     expect(html).toContain("Tolak")
+    // Dialog alasan tolak (F-38a) portal tertutup tak dirender static,
+    // sama seperti dialog Revisi existing; perilaku terikat handleReject.
   })
 
   it("tidak menawarkan tombol apa pun pada status yang tak bisa menjalankannya", () => {

@@ -12,6 +12,7 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportSection, ReportKpiCard } from "@/components/reports/report-section"
 import { ReportNarration } from "@/components/reports/report-narration"
 import { ReportLetterhead } from "@/components/reports/report-letterhead"
+import { loadWithholdingCertificatesCsv } from "@/lib/reports/withholding-certificates-data"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -128,7 +129,7 @@ export default async function WithholdingTaxReportPage({
         defaultEndDate={toLocalDateOnly(endDate)}
       />
 </>} actions={<>
-<div className="flex items-center justify-end print:hidden"><ExportButtons title="Bukti_Potong_PPh" pdfHref={buildReportPdfHref("bukti-potong-pph", period.slug)} /></div>
+<div className="flex items-center justify-end print:hidden"><ExportButtons title="Bukti_Potong_PPh" pdfHref={buildReportPdfHref("bukti-potong-pph", period.slug)} csvData={(await loadWithholdingCertificatesCsv(period)).csv} /></div>
 </>}>
 
 

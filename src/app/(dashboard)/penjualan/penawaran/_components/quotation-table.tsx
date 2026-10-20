@@ -9,6 +9,7 @@ import { deleteQuotation } from "@/actions/sales.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
+import { isQuotationExpired } from "@/lib/utils/quotation-expiry"
 
 interface Quotation {
   id: number
@@ -17,6 +18,7 @@ interface Quotation {
   customer: { name: string }
   customerVehicle: { licensePlate: string } | null
   date: Date | string
+  validUntil?: Date | string | null
   grandTotal: number | string
   status: string
 }
@@ -54,7 +56,16 @@ const columns = [
     header: "Status",
     cell: (info) => {
       const val = info.getValue()
-      return <StatusChip status={val} />
+      return (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <StatusChip status={val} />
+          {isQuotationExpired(info.row.original.validUntil) ? (
+            <span className="inline-flex items-center rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
+              Lewat masa berlaku
+            </span>
+          ) : null}
+        </span>
+      )
     },
   }),
   columnHelper.display({
