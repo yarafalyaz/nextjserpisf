@@ -8,6 +8,7 @@
 
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { formatPeriod } from "@/lib/utils/format"
+import { payableOutstanding } from "@/lib/reports/aging-amounts"
 
 export interface CashFlowItem {
   dueDate: Date
@@ -22,6 +23,30 @@ export interface CashProjectionMonth {
   outflow: number
   net: number
   closing: number
+}
+
+export interface PayableProjectionBill {
+  dueDate: Date | null
+  grandTotal: unknown
+  withholdingAmount?: unknown
+  paidAmount: unknown
+}
+
+/** CashFlowItems for outstanding vendor bills: remainder is NET of withholding
+ * (same invariant as aging/payables-summary: grandTotal - withholding - paid),
+ * so a bill with PPh withheld does not overstate projected cash outflow. */
+export function buildPayableProjectionItems(bills: readonly PayableProjectionBill[]): CashFlowItem[] {
+  return bills
+    .filter((bill): bill is PayableProjectionBill & { dueDate: Date } => bill.dueDate != null)
+    .map((bill) => ({
+      dueDate: bill.dueDate,
+      amount: payableOutstanding(
+        Number(bill.grandTotal ?? 0),
+        Number(bill.withholdingAmount ?? 0),
+        Number(bill.paidAmount ?? 0),
+      ),
+    }))
+    .filter((row) => row.amount > 0)
 }
 
 const monthKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`

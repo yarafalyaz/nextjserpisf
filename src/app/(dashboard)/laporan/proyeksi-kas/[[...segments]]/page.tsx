@@ -6,7 +6,7 @@ import { sumEntriesByAccount } from '@/lib/services/report-aggregation.service'
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatCurrency } from '@/lib/utils/format'
 import { safeAdd, safeSubtract } from '@/lib/utils/math'
-import { projectCash } from '@/lib/reports/cash-projection'
+import { projectCash, buildPayableProjectionItems } from '@/lib/reports/cash-projection'
 import { RECOGNISED_AP_STATUSES, RECOGNISED_AR_STATUSES } from '@/lib/reports/document-status'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
 import { ExportButtons } from '@/components/reports/export-buttons'
@@ -52,7 +52,7 @@ export default async function CashProjectionPage({
     }),
     prisma.vendorBill.findMany({
       where: { status: { in: [...RECOGNISED_AP_STATUSES] }, deletedAt: null, dueDate: { not: null } },
-      select: { dueDate: true, grandTotal: true, paidAmount: true },
+      select: { dueDate: true, grandTotal: true, withholdingAmount: true, paidAmount: true },
     }),
   ])
 
@@ -67,9 +67,9 @@ export default async function CashProjectionPage({
   const receivables = invoices
     .map((inv) => ({ dueDate: inv.dueDate as Date, amount: safeSubtract(inv.grandTotal, inv.paidAmount, 2) }))
     .filter((row) => row.amount > 0)
-  const payables = bills
-    .map((bill) => ({ dueDate: bill.dueDate as Date, amount: safeSubtract(bill.grandTotal, bill.paidAmount, 2) }))
-    .filter((row) => row.amount > 0)
+  // Sisa utang NETO potongan PPh (grandTotal - withholding - paid), selaras
+  // aging/payables-summary; bruto menaikkan proyeksi kas keluar tagihan ber-PPh.
+  const payables = buildPayableProjectionItems(bills)
 
   const rows = projectCash(opening, now, months, receivables, payables)
 
