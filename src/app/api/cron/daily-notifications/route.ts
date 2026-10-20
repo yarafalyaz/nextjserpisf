@@ -85,11 +85,12 @@ export async function GET(request: Request) {
       .map((i) => `• ${i.name} (Stok: ${i.qty_on_hand}, Min: ${i.min_stock})`)
       .join("\n")
 
-    await notificationService.notifyUsers(
+    await notificationService.notifyUsersIfNew(
       adminIds,
       `${total} Barang Stok Menipis`,
       itemList + (total > 5 ? `\n...dan ${total - 5} lainnya` : ""),
-      "warning"
+      "warning",
+      dayStart
     )
     results.lowStock = total
   }
@@ -113,11 +114,12 @@ export async function GET(request: Request) {
       0
     )
 
-    await notificationService.notifyUsers(
+    await notificationService.notifyUsersIfNew(
       adminIds,
       `${count} Invoice Jatuh Tempo`,
       `Total piutang overdue: Rp ${totalOverdue.toLocaleString("id-ID")}`,
-      "danger"
+      "danger",
+      dayStart
     )
     results.overdueInvoices = count
   }
@@ -137,11 +139,12 @@ export async function GET(request: Request) {
 
   if (stalePOs.length > 0) {
     const count = stalePOs.length
-    await notificationService.notifyUsers(
+    await notificationService.notifyUsersIfNew(
       adminIds,
       `${count} PO Belum Diterima (>7 hari)`,
       `Ada ${count} pesanan pembelian yang sudah lebih dari 7 hari belum diterima barangnya.`,
-      "warning"
+      "warning",
+      dayStart
     )
     results.stalePOs = count
   }
@@ -163,11 +166,12 @@ export async function GET(request: Request) {
       .map((a) => `• ${a.employee?.name || "Unknown"}`)
       .join("\n")
 
-    await notificationService.notifyUsers(
+    await notificationService.notifyUsersIfNew(
       adminIds,
       `${count} Karyawan Telat Hari Ini`,
       names + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
-      "warning"
+      "warning",
+      dayStart
     )
     results.lateAttendance = count
   }
@@ -181,11 +185,12 @@ export async function GET(request: Request) {
         .slice(0, 5)
         .map((e) => `• ${e.name}${e.department ? ` (${e.department.name})` : ""}`)
         .join("\n")
-      await notificationService.notifyUsers(
+      await notificationService.notifyUsersIfNew(
         adminIds,
         `${count} Karyawan Belum Absen`,
         names + (count > 5 ? `\n...dan ${count - 5} lainnya` : ""),
         "danger",
+        dayStart
       )
       results.absentEmployees = count
     }
