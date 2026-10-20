@@ -21,7 +21,14 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url)
-    const employeeId = Number(searchParams.get("karyawanId"))
+    const employeeIdRaw = searchParams.get("karyawanId")
+    // Number() menerima diam-diam "1e3"/"0x10"/"+5"/" 5" — ID karyawan bukan
+    // desimal murni wajib 400, bukan dihitung untuk karyawan lain (pola
+    // notifications/[id]/read).
+    if (!employeeIdRaw || !/^\d+$/.test(employeeIdRaw)) {
+      return apiError("BAD_REQUEST", "employeeId, startDate, dan endDate wajib diisi")
+    }
+    const employeeId = Number(employeeIdRaw)
     const startDateStr = searchParams.get("tanggalMulai")
     const endDateStr = searchParams.get("tanggalSelesai")
 
