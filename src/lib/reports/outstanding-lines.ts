@@ -22,6 +22,7 @@
  */
 
 import { formatAccounting } from "@/lib/utils/format"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface OutstandingLineItem {
@@ -143,8 +144,8 @@ export function buildOutstandingLines(input: {
     let documentValue = 0
 
     for (const { item, remaining } of outstanding) {
-      const value = remaining * item.unitPrice
-      documentValue += value
+      const value = safeMultiply(remaining, item.unitPrice, 2)
+      documentValue = safeAdd(documentValue, value, 2)
       totals.items += 1
       if (item.fulfilledQty > EPSILON) totals.partiallyFulfilled += 1
       else totals.notFulfilled += 1
@@ -168,7 +169,7 @@ export function buildOutstandingLines(input: {
       label: `Nilai sisa ${document.documentNo}`,
       cells: ["", "", "", "", "", amount(documentValue)],
     })
-    totals.outstandingValue += documentValue
+    totals.outstandingValue = safeAdd(totals.outstandingValue, documentValue, 2)
   }
 
   if (totals.documents === 0) {
