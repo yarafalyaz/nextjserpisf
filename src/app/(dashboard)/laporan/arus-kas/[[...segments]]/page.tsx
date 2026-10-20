@@ -17,7 +17,8 @@ import {
   STATEMENT_OPTIONS_COOKIE,
 } from "@/lib/reports/statement-display";
 import { reportPeriodFromRoute } from "@/lib/reports/report-period";
-import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow";
+import { buildCashFlowTotals, classifyJournal, foldActivities } from "@/lib/finance/cash-flow";
+import { safeAdd, safeSubtract } from "@/lib/utils/math";
 
 import type { Metadata } from "next";
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -97,31 +98,23 @@ export default async function CashFlowPage({
     sumEntriesByAccount({ date: { lt: startDate } }),
   ]);
 
-  let totalInflow = 0;
-  let totalOutflow = 0;
-  const monthlyData = new Map<string, { inflow: number; outflow: number }>();
-
-  for (const entry of entries) {
-    const debit = Number(entry.debit);
-    const credit = Number(entry.credit);
-    const date = entry.journal.transactionDate;
-    const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-
-    const bucket = monthlyData.get(monthKey) ?? { inflow: 0, outflow: 0 };
-    bucket.inflow += debit;
-    bucket.outflow += credit;
-    monthlyData.set(monthKey, bucket);
-
-    totalInflow += debit;
-    totalOutflow += credit;
-  }
-
-  const netCashFlow = totalInflow - totalOutflow;
-  const openingBalance = cashAccountIds.reduce(
-    (sum, id) => sum + ((priorSums.get(id)?.debit ?? 0) - (priorSums.get(id)?.credit ?? 0)),
+  const openingRaw = cashAccountIds.reduce(
+    (sum, id) => safeAdd(sum, safeSubtract(priorSums.get(id)?.debit ?? 0, priorSums.get(id)?.credit ?? 0, 2), 2),
     0,
   );
-  const closingBalance = openingBalance + netCashFlow;
+  const totals = buildCashFlowTotals(
+    entries.map((entry) => ({
+      debit: Number(entry.debit),
+      credit: Number(entry.credit),
+      date: entry.journal.transactionDate,
+    })),
+    openingRaw,
+  );
+  const { totalInflow, totalOutflow, netCashFlow, openingBalance, closingBalance } = totals;
+  const sortedMonths: [string, { inflow: number; outflow: number }][] = totals.months.map((m) => [
+    m.monthKey,
+    { inflow: m.inflow, outflow: m.outflow },
+  ]);
 
   // Activity classification (dominant counterpart account) lives in a pure
   // helper so it is unit-tested — see lib/finance/cash-flow.ts.
@@ -155,7 +148,6 @@ export default async function CashFlowPage({
     { key: "financing", label: "Arus Kas dari Aktivitas Pendanaan", value: activity.financing },
   ];
 
-  const sortedMonths = Array.from(monthlyData.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   const periodLabel = `Periode ${startDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })} – ${endDate.toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}`;
   const amount = (value: number) => formatAccounting(value, { zeroDash: false });
 
@@ -232,7 +224,7 @@ export default async function CashFlowPage({
                 <td className="indent-1">{formatPeriod(month)}</td>
                 <td className="num">{amount(data.inflow)}</td>
                 <td className="num">{amount(data.outflow)}</td>
-                <td className="num">{amount(data.inflow - data.outflow)}</td>
+                <td className="num">{amount(safeSubtract(data.inflow, data.outflow, 2))}</td>
               </tr>
             ))}
             {sortedMonths.length === 0 ? (

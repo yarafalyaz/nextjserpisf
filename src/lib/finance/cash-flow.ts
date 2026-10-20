@@ -12,7 +12,7 @@
  * asset), drawing a loan attributes to financing (counterpart liability/equity).
  */
 
-import { safeAdd, safeSubtract } from "@/lib/utils/math"
+import { safeAdd, safeRound, safeSubtract } from "@/lib/utils/math"
 
 export type CashFlowActivity = "operating" | "investing" | "financing"
 
@@ -113,4 +113,70 @@ export function foldActivities(
     if (c) totals[c.activity] = safeAdd(totals[c.activity], c.cashDelta, 2)
   }
   return totals
+}
+
+export interface CashFlowEntryInput {
+  debit: number
+  credit: number
+  /** Waktu Journal.transactionDate; bulan tampilan dari nilai ini. */
+  date: Date
+}
+
+export interface CashFlowMonthBucket {
+  monthKey: string
+  inflow: number
+  outflow: number
+  net: number
+}
+
+export interface CashFlowTotals {
+  months: CashFlowMonthBucket[]
+  totalInflow: number
+  totalOutflow: number
+  netCashFlow: number
+  openingBalance: number
+  closingBalance: number
+}
+
+/**
+ * Akumulasi sen-aman baris jurnal kas per bulan + total + saldo.
+ * Tiap nilai baris dibulatkan ke sen sebelum dijumlah supaya total sama
+ * dengan baris yang ditampilkan (hindari drift seperti 17x0.24).
+ */
+export function buildCashFlowTotals(
+  entries: CashFlowEntryInput[],
+  openingBalance: number,
+): CashFlowTotals {
+  const byMonth = new Map<string, { inflow: number; outflow: number }>()
+  let totalInflow = 0
+  let totalOutflow = 0
+  for (const entry of entries) {
+    const debit = safeRound(entry.debit, 2)
+    const credit = safeRound(entry.credit, 2)
+    const monthKey = `${entry.date.getFullYear()}-${String(entry.date.getMonth() + 1).padStart(2, "0")}`
+    const bucket = byMonth.get(monthKey) ?? { inflow: 0, outflow: 0 }
+    bucket.inflow = safeAdd(bucket.inflow, debit, 2)
+    bucket.outflow = safeAdd(bucket.outflow, credit, 2)
+    byMonth.set(monthKey, bucket)
+    totalInflow = safeAdd(totalInflow, debit, 2)
+    totalOutflow = safeAdd(totalOutflow, credit, 2)
+  }
+  const netCashFlow = safeSubtract(totalInflow, totalOutflow, 2)
+  const opening = safeRound(openingBalance, 2)
+  const months = Array.from(byMonth.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([monthKey, b]) => ({
+      monthKey,
+      inflow: b.inflow,
+      outflow: b.outflow,
+      net: safeSubtract(b.inflow, b.outflow, 2),
+    }))
+  return {
+    months,
+    totalInflow,
+    totalOutflow,
+    netCashFlow,
+    openingBalance: opening,
+    closingBalance: safeAdd(opening, netCashFlow, 2),
+  }
 }
