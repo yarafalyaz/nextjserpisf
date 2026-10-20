@@ -49,16 +49,19 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-import { formFormData as form } from "./validation-mock-helpers"
-vi.mock("@/lib/db/prisma", async () => (await import("./validation-mock-helpers")).prismaFactory(mocks))
-vi.mock("@/lib/auth/permissions", async () => (await import("./validation-mock-helpers")).permissionFactory(mocks))
-vi.mock("@/lib/services/activity-log.service", async () => (await import("./validation-mock-helpers")).activityLogFactory(mocks))
-vi.mock("next/cache", async () => (await import("./validation-mock-helpers")).revalidateFactory(mocks))
-vi.mock("@/lib/utils/document-number", async () => (await import("./validation-mock-helpers")).docNumberFactory(mocks))
-vi.mock("@/lib/services/document-sequence.service", async () => (await import("./validation-mock-helpers")).docSequenceFactory())
-vi.mock("@/lib/services/period-lock.service", async () => (await import("./validation-mock-helpers")).periodLockFactory(mocks))
-vi.mock("@/lib/utils/slug-db", async () => (await import("./validation-mock-helpers")).slugFixedFactory())
+import * as helpers from "./validation-mock-helpers"
+
+vi.mock("@/lib/db/prisma", () => helpers.prismaFactory(mocks))
+vi.mock("@/lib/auth/permissions", () => helpers.permissionFactory(mocks))
+vi.mock("@/lib/services/activity-log.service", () => helpers.activityLogFactory(mocks))
+vi.mock("next/cache", () => helpers.revalidateFactory(mocks))
+vi.mock("@/lib/utils/document-number", () => helpers.docNumberFactory(mocks))
+vi.mock("@/lib/services/document-sequence.service", () => helpers.docSequenceFactory())
+vi.mock("@/lib/services/period-lock.service", () => helpers.periodLockFactory(mocks))
+vi.mock("@/lib/utils/slug-db", () => helpers.slugFixedFactory())
 vi.mock("@/lib/utils/idempotency", () => ({ checkIdempotency: mocks.checkIdempotency }))
+
+const form = helpers.formFormData
 
 import { createBankTransfer } from "../bank-transfer.actions"
 import { createTaxPayment } from "../tax-payment.actions"
