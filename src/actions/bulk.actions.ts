@@ -235,6 +235,7 @@ const BULK_DELETE_MAX = 500
  */
 const BULK_DELETE_REQUIRES_INDIVIDUAL = new Set<ModelName>([
   // Sales / purchasing — reverse downstream documents and honor state guards
+  "salesQuotation",
   "salesOrder",
   "purchaseRequest",
   "purchaseOrder",

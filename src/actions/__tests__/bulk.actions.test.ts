@@ -128,6 +128,17 @@ describe("Bulk Actions", () => {
     expect(resModel?.success).toBe(false)
     expect(resModel?.message).toMatch(/harus dihapus satu per satu/)
   })
+  it("bulkDelete refuses salesQuotation (deleteQuotation reverses downstream GL/stock)", async () => {
+    // deleteQuotation reverses every linked invoice's GL + stock posting and
+    // deletes linked orders/delivery orders inside a transaction. A raw bulk
+    // delete only soft-deletes the quotation (it has deletedAt), orphaning the
+    // posted journals and stock moves of everything linked to it.
+    mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+    const res = await bulkDelete("salesQuotation", [1])
+    expect(res?.success).toBe(false)
+    expect(res?.message).toMatch(/harus dihapus satu per satu/)
+    expect(mocks.requirePermissionMock).toHaveBeenLastCalledWith("delete_quotations")
+  })
   it("bulkDelete fails on unknown model", async () => {
     const res = await bulkDelete("unknownModel" as any, [1])
     expect(res?.success).toBe(false)
