@@ -2300,6 +2300,22 @@ export async function deleteOvertimeRequest(id: number) {
   }
 }
 
+/**
+ * F-2026-10-20-96 (lapis aman): lembar waktu yang sudah ditarik menjadi
+ * ProductionCost (sourceTimesheetId) tidak boleh diubah/dihapus — jam di
+ * timesheet adalah dasar snapshot HPP labor; mengubahnya sesudah ditarik
+ * membuat subledger biaya produksi tak bisa ditelusur. Hapus baris biaya
+ * produksinya dulu bila memang perlu koreksi.
+ */
+async function timesheetPulledError(id: number): Promise<{ success: false; error: string } | null> {
+  const used = (await prisma.productionCost.findMany({ where: { sourceTimesheetId: id }, select: { id: true } })).length;
+  if (used === 0) return null;
+  return {
+    success: false,
+    error: `Lembar waktu ini sudah ditarik menjadi ${used} baris biaya produksi dan tidak dapat diubah atau dihapus. Hapus baris biaya produksinya terlebih dahulu bila perlu koreksi.`,
+  };
+}
+
 export async function deleteTimesheet(id: number) {
   try {
     const user = await requirePermission("delete_timesheets");
@@ -2309,6 +2325,9 @@ export async function deleteTimesheet(id: number) {
       select: { employeeId: true },
     });
     await assertHrEmployeeAccess(scope, timesheet.employeeId);
+
+    const pulled = await timesheetPulledError(id);
+    if (pulled) return pulled;
 
     await prisma.timesheet.delete({ where: { id } });
 
@@ -2716,6 +2735,9 @@ export async function updateTimesheet(id: number, formData: FormData) {
       select: { employeeId: true },
     });
     await assertHrEmployeeAccess(scope, existing.employeeId);
+
+    const pulled = await timesheetPulledError(id);
+    if (pulled) return pulled;
 
     // Validation parity with createTimesheet: route the same Zod schema so the
     // edit path cannot be used to write values the create-guard rejects (e.g.

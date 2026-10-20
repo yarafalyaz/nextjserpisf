@@ -31,6 +31,7 @@ const mocks = vi.hoisted(() => {
 
   const prismaMock = {
     timesheet: buildModelMock(),
+    productionCost: { ...buildModelMock(), findMany: vi.fn().mockResolvedValue([]) },
     employeeLoan: buildModelMock(),
     leaveRequest: buildModelMock(),
     overtimeRequest: buildModelMock(),
@@ -522,6 +523,17 @@ describe("Timesheet Actions", () => {
   it("deleteTimesheet removes record", async () => {
     const res = await actions.deleteTimesheet(1)
     expect(res?.success).toBe(true)
+  })
+
+  it.each([
+    ["deleteTimesheet", 2, async () => actions.deleteTimesheet(1), () => prismaMock.timesheet.delete],
+    ["updateTimesheet", 1, async () => actions.updateTimesheet(1, fd({ employeeId: "1", projectId: "1", date: "2026-06-12", hours: "4", activity: "Review" })), () => prismaMock.timesheet.update],
+  ])("%s menolak bila sudah ditarik menjadi biaya produksi (F-96)", async (_nama, jumlah, panggil, mutasi) => {
+    prismaMock.productionCost.findMany.mockResolvedValue(Array.from({ length: jumlah }, () => ({})))
+    const res = await panggil()
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain(`sudah ditarik menjadi ${jumlah} baris biaya produksi`)
+    expect(mutasi()).not.toHaveBeenCalled()
   })
 })
 

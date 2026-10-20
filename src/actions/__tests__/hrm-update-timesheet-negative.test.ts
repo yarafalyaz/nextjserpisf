@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => {
   })
   const prismaMock = {
     timesheet: buildModelMock(),
+    productionCost: buildModelMock(),
     appreciation: buildModelMock(),
     departmentHoliday: buildModelMock(),
     holiday: buildModelMock(),
