@@ -15,7 +15,8 @@
  * faktur selisih hantu bernilai ~1e-16.
  */
 
-import { safeAdd, safeSubtract } from "@/lib/utils/math"
+import { safeSubtract } from "@/lib/utils/math"
+import { billedAmountExcludingCancelled } from "./job-billing-progress"
 
 export interface DifferenceInvoiceInput {
   id: number
@@ -36,9 +37,7 @@ export function computeDifferenceInvoiceCandidate(input: {
   quotationGrandTotal: number
   invoices: DifferenceInvoiceInput[]
 }): DifferenceInvoiceCandidate {
-  const billedAmount = input.invoices
-    .filter((inv) => inv.status !== "cancelled")
-    .reduce((sum, inv) => safeAdd(sum, inv.grandTotal, 2), 0)
+  const billedAmount = billedAmountExcludingCancelled(input.invoices)
   const differenceAmount = safeSubtract(input.quotationGrandTotal, billedAmount, 2)
   if (differenceAmount <= 0) {
     return {
