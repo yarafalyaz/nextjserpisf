@@ -223,6 +223,11 @@ export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) 
       // TERAKHIR: jadwal Senin–Jumat akan tersimpan sebagai "Jumat" saja. Jadi
       // hari-hari digabung lebih dulu menjadi satu nilai.
       fd.set("workDays", fd.getAll("workDays").map(String).join(","))
+      // Checkbox `isActive` native tidak mengirim field saat tidak dicentang,
+      // sedangkan aksi membaca absen sebagai tetap aktif — tanpa set eksplisit,
+      // jadwal nonaktif tidak pernah bisa dinonaktifkan lewat UI.
+      const activeBox = form.querySelector<HTMLInputElement>('input[name="isActive"]')
+      fd.set("isActive", activeBox?.checked ? "true" : "false")
       const res = schedule
         ? await updateWorkSchedule(schedule.id, fd)
         : await createWorkSchedule(fd)
