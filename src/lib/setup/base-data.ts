@@ -800,6 +800,7 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   ["110504", "PPN Masukan", "OCAS", "1105"],
   ["210202", "PPh 23 Pembelian", "OCLY", "2102"],
   ["110505", "PPh 23 Penjualan", "OCAS", "1105"],
+  ["110507", "PPh 22 Penjualan", "OCAS", "1105"],
   ["720003", "Pajak Jasa Giro", "OEXP", "7200"],
   ["710002", "Pendapatan Bunga Deposito", "OINC", "7100"],
   ["710005", "Pendapatan Diluar Usaha Lainnya", "OINC", "7100"],
@@ -829,6 +830,30 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   ["510103", "Penyesuaian Persediaan", "COGS", "5101"],
   ["600025", "Diskon Pembelian", "EXPS", "6000"],
   ["600026", "Retur Pembelian", "EXPS", "6000"],
+]
+
+/**
+ * Jenis potongan PPh bawaan instalasi baru. Akun dirujuk per KODE COA (bukan
+ * id) supaya satu daftar ini aman dipakai wizard install (Prisma) maupun seed
+ * CLI (raw SQL). Tanpa baris ini, hook akuntansi fail-closed: pembayaran
+ * berpotongan PPh gagal jurnal karena jenis PPh belum punya akun.
+ *
+ * PPh 22 marketplace (PMK-37/2025): marketplace memungut 0,5% dari peredaran
+ * bruto seller; bagi seller itu PPh dibayar dimuka (kredit pajak / pengurang
+ * PPh final), BUKAN beban — fee marketplace tetap beban terpisah.
+ * ponytail: hanya jenis yang akun COA bawaannya sudah ada yang di-seed;
+ * PPh 21/26/final tetap dibuat manual di Pengaturan → Pajak Potong.
+ */
+export const WITHHOLDING_TAX_TYPES: {
+  code: string
+  name: string
+  rate: number
+  liabilityAccountCode?: string
+  receivableAccountCode?: string
+}[] = [
+  { code: "PPH22", name: "PPh 22", rate: 0.5, receivableAccountCode: "110507" },
+  { code: "PPH23-JUAL", name: "PPh 23 Penjualan", rate: 2, receivableAccountCode: "110505" },
+  { code: "PPH23-BELI", name: "PPh 23 Pembelian", rate: 2, liabilityAccountCode: "210202" },
 ]
 
 /** Default payment methods (codes follow the auto-generated MTP- scheme). */

@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     warehouse: model(), department: model(), position: model(), paymentMethod: model(),
     shippingMethod: model(), unitOfMeasure: model(), expenseCategory: model(),
     documentSequence: model(), module: model(), moduleAction: model(), user: model(), employee: model(),
+    withholdingTaxType: model(),
   }
   prismaMock.$transaction = vi.fn(async (fn: any) => fn(prismaMock))
   // Slug backfill reads the tables that have a `slug` column and then UPDATEs them.
@@ -28,7 +29,7 @@ const mocks = vi.hoisted(() => {
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 
 import { installBaseData } from "../install"
-import { PERMISSIONS, ROLES, CHART_OF_ACCOUNTS } from "../base-data"
+import { PERMISSIONS, ROLES, CHART_OF_ACCOUNTS, WITHHOLDING_TAX_TYPES } from "../base-data"
 
 const input = {
   companyName: "PT Sumber Makmur",
@@ -210,6 +211,42 @@ describe("installBaseData", () => {
     expect(statements[0]).toContain("UPDATE `roles`")
     expect(statements[1]).toContain("UPDATE `accounts`")
     expect(statements.every((sql: string) => sql.includes("WHERE t.slug IS NULL"))).toBe(true)
+  })
+
+  it("seeds default withholding tax types linked to their COA accounts", async () => {
+    // Semua akun COA terlihat (induk + anak) supaya kode anak seperti 110507
+    // ikut ter-resolve ke id — helper merujuk akun per kode, bukan per id.
+    mocks.prismaMock.account.findMany.mockResolvedValue(
+      CHART_OF_ACCOUNTS.map(([code, name], index) => ({ id: index + 1, code, name })),
+    )
+    mocks.prismaMock.withholdingTaxType.findFirst.mockResolvedValue(null)
+
+    await installBaseData(input)
+
+    const idOf = (code: string) => CHART_OF_ACCOUNTS.findIndex(([c]) => c === code) + 1
+    const created = mocks.prismaMock.withholdingTaxType.create.mock.calls.map(
+      (c: any[]) => c[0].data,
+    )
+    expect(created).toHaveLength(WITHHOLDING_TAX_TYPES.length)
+    // PPh 22 marketplace 0,5% (PMK-37/2025): aset PPh dibayar dimuka, bukan beban.
+    expect(created).toContainEqual({
+      code: "PPH22",
+      name: "PPh 22",
+      rate: 0.5,
+      liabilityAccountId: null,
+      receivableAccountId: idOf("110507"),
+    })
+    expect(created).toContainEqual(
+      expect.objectContaining({ code: "PPH23-BELI", liabilityAccountId: idOf("210202") }),
+    )
+  })
+
+  it("does not overwrite withholding tax types the tenant already has", async () => {
+    mocks.prismaMock.withholdingTaxType.findFirst.mockResolvedValue({ id: 9 })
+
+    await installBaseData(input)
+
+    expect(mocks.prismaMock.withholdingTaxType.create).not.toHaveBeenCalled()
   })
 
   it("leaves tables without a slug column alone", async () => {
