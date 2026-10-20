@@ -18,6 +18,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { JobBillingCard } from "@/components/reports/job-billing-card";
+import { isQuotationExpired } from "@/lib/utils/quotation-expiry";
 import { WhatsappButton } from "@/components/reports/whatsapp-button";
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { DifferenceInvoiceButton } from "@/components/reports/difference-invoice-button";
@@ -257,7 +258,16 @@ export default async function QuotationDetailPage({
                   />
                   <DetailField
                     label="Berlaku Sampai"
-                    value={formatDate(quotation.validUntil)}
+                    value={
+                      <>
+                        {formatDate(quotation.validUntil)}
+                        {isQuotationExpired(quotation.validUntil) ? (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-danger/10 px-2 py-0.5 text-xs font-medium text-danger">
+                            Lewat masa berlaku
+                          </span>
+                        ) : null}
+                      </>
+                    }
                   />
                   <DetailField
                     label="Total Keseluruhan"

@@ -22,7 +22,9 @@ export function QuotationFlowActions({ status, id }: { status: string; id: numbe
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [isReviseOpen, setIsReviseOpen] = useState(false)
+  const [isRejectOpen, setIsRejectOpen] = useState(false)
   const [reason, setReason] = useState("")
+  const [rejectReason, setRejectReason] = useState("")
 
   function run(
     action: () => Promise<{ success: boolean; error?: string } | void>,
@@ -58,6 +60,20 @@ export function QuotationFlowActions({ status, id }: { status: string; id: numbe
     })
   }
 
+  function handleReject() {
+    startTransition(async () => {
+      const result = await rejectQuotation(id, rejectReason.trim() || undefined)
+      if (result && result.success === false) {
+        showError(result.error || "Gagal menolak penawaran")
+        return
+      }
+      showSuccess("Penawaran ditolak")
+      setRejectReason("")
+      setIsRejectOpen(false)
+      router.refresh()
+    })
+  }
+
   if (status === "draft") {
     return (
       <Button
@@ -89,11 +105,33 @@ export function QuotationFlowActions({ status, id }: { status: string; id: numbe
         </Button>
         <Button
           variant="danger"
-          onPress={() => run(() => rejectQuotation(id), "Penawaran ditolak", "Gagal menolak penawaran")}
+          onPress={() => setIsRejectOpen(true)}
           isDisabled={isPending}
         >
           <XCircle size={14} aria-hidden="true" /> Tolak
         </Button>
+
+        {/* Alasan tolak opsional (F-38a): kosong = perilaku lama tanpa alasan. */}
+        <ConfirmDialog
+          isOpen={isRejectOpen}
+          onOpenChange={setIsRejectOpen}
+          title="Tolak penawaran ini?"
+          confirmLabel="Tolak Penawaran"
+          cancelLabel="Batal"
+          variant="danger"
+          isPending={isPending}
+          onConfirm={handleReject}
+        >
+          <span className="block mb-2">
+            Penawaran ditandai ditolak oleh pelanggan.
+          </span>
+          <Textarea
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="Alasan penolakan (opsional)"
+            aria-label="Alasan penolakan"
+          />
+        </ConfirmDialog>
 
         {/* reviseQuotation menuntut alasan dan hanya menerima status `sent`; baris
             "Revisi" di timeline detail berasal dari sini. */}
