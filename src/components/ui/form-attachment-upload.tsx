@@ -4,6 +4,7 @@ import { useId, useRef, useState } from "react"
 import { FileText, Upload, X } from "lucide-react"
 import { SafeImage } from "./safe-image"
 import { showError } from "@/lib/utils/toast"
+import { apiErrorMessage } from "@/lib/utils/api-error-message"
 import { Label } from "@/components/ui/shadcn/label"
 import { Button } from "@/components/ui/button"
 
@@ -69,7 +70,7 @@ export function FormAttachmentUpload({ referenceType, label = "Lampiran Bukti", 
         setUploadedFiles(newFiles)
         onAttachmentsChange?.(newFiles.map((f) => f.id))
       } else {
-        showError(data.error || "Upload gagal")
+        showError(apiErrorMessage(data, "Upload gagal"))
       }
     } catch (err) {
       showError("Upload gagal: " + (err as Error).message)

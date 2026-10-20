@@ -3,6 +3,7 @@
 import { useCallback, useState, useEffect, useRef, useId } from "react"
 import { Upload, FileText, Download, Trash2 } from "lucide-react"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { apiErrorMessage } from "@/lib/utils/api-error-message"
 import { SafeImage } from "./safe-image"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
@@ -105,7 +106,7 @@ export function TransactionAttachments({ referenceType, referenceId }: Transacti
         setAttachments((prev) => [data, ...prev])
         showSuccess("Bukti berhasil diupload")
       } else {
-        showError(data.error || "Upload gagal")
+        showError(apiErrorMessage(data, "Upload gagal"))
       }
     } catch (err) {
       showError("Upload gagal: " + (err as Error).message)

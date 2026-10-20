@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { useState, useTransition, useRef, useId } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { showSuccess, showError } from "@/lib/utils/toast"
+import { apiErrorMessage } from "@/lib/utils/api-error-message"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -99,7 +100,7 @@ export function VendorPaymentForm({ vendors, bills, payment, paymentMethods = []
           mimeType: data.mimeType,
           fileSize: data.fileSize}])
       } else {
-        showError(data.error || "Unggahan gagal")
+        showError(apiErrorMessage(data, "Unggahan gagal"))
       }
     } catch (err) {
       showError("Unggahan gagal: " + (err as Error).message)

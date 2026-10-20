@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Printer, Loader2 } from "lucide-react"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { apiErrorMessage } from "@/lib/utils/api-error-message"
 
 interface PrintButtonProps {
   title?: string
@@ -65,7 +66,7 @@ export function PrintButton({ title = "Cetak", documentType, documentId, disable
       const data = await res.json()
 
       if (!res.ok) {
-        throw new Error(data.error || "Gagal mengambil data cetak")
+        throw new Error(apiErrorMessage(data, "Gagal mengambil data cetak"))
       }
 
       if (documentType === "quotation") {
