@@ -18,6 +18,16 @@ describe("validations/sales.schemas", () => {
       expect(result.success).toBe(true);
     });
 
+    it("menerima nominal format Indonesia (2.000.000 bukan 2)", () => {
+      const result = createDownPaymentSchema.safeParse({
+        quotationId: 5,
+        amount: "2.000.000",
+        paymentDate: "2026-06-09",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.amount).toBe(2_000_000);
+    });
+
     it("rejects amount of 0", () => {
       const result = createDownPaymentSchema.safeParse({
         quotationId: 5,
@@ -93,6 +103,14 @@ describe("validations/sales.schemas", () => {
         paymentMethod: "transfer",
       });
       expect(result.success).toBe(true);
+    });
+
+    it("menerima pembayaran format Indonesia beserta sen", () => {
+      const result = createSalesPaymentSchema.safeParse({
+        salesInvoiceId: 1, amount: "2.000.000,50", paymentDate: "2026-06-09", paymentMethod: "transfer",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) expect(result.data.amount).toBe(2_000_000.5);
     });
 
     it("rejects amount of 0", () => {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { dateOnly } from "@/lib/validations/finance.schemas";
+import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { taxInvoiceNumber } from "@/lib/validations/tax-invoice.schemas";
 
 const optionalString = (max: number) =>
@@ -41,7 +42,10 @@ export const updateQuotationSchema = z.object({
 
 export const createDownPaymentSchema = z.object({
   quotationId: requiredId,
-  amount: z.coerce.number().min(1, "Jumlah uang muka harus lebih dari 0"),
+  amount: z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number({ message: "Jumlah uang muka wajib diisi" }).min(1, "Jumlah uang muka harus lebih dari 0"),
+  ),
   paymentDate: dateOnly,
   paymentMethod: optionalString(200),
   notes: optionalString(500),
@@ -106,7 +110,10 @@ export const updateSalesInvoiceSchema = createSalesInvoiceSchema;
 
 export const createSalesPaymentSchema = z.object({
   salesInvoiceId: requiredId,
-  amount: z.coerce.number().min(1, "Jumlah pembayaran harus lebih dari 0"),
+  amount: z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number({ message: "Jumlah pembayaran wajib diisi" }).min(1, "Jumlah pembayaran harus lebih dari 0"),
+  ),
   paymentDate: dateOnly,
   paymentMethod: z.string().min(1, "Metode pembayaran wajib diisi").max(200),
   accountId: optionalId,
@@ -114,7 +121,10 @@ export const createSalesPaymentSchema = z.object({
   // yang diterima. Batas "amount + potongan tidak boleh melebihi sisa tagihan"
   // diperiksa di action, karena hanya di sana sisa tagihannya diketahui.
   withholdingTypeId: optionalId,
-  withholdingAmount: z.coerce.number().min(0, "Potongan PPh tidak boleh negatif").optional(),
+  withholdingAmount: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().min(0, "Potongan PPh tidak boleh negatif").optional(),
+  ),
   withholdingCertificateNo: optionalString(100),
   withholdingDate: optionalDate,
   referenceNo: optionalString(100),
