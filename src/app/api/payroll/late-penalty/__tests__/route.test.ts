@@ -119,6 +119,26 @@ describe("GET /api/payroll/late-penalty", () => {
     expect(json.details[0].date).toBe("2026-01-15")
   })
 
+  it("returns 400 for karyawanId exponent/hex/blank forms", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    mocks.hasPermission.mockResolvedValue(true)
+    for (const bad of ["1e3", "0x10", "+5", " 5", ""]) {
+      const res = await GET(new NextRequest(`http://localhost/api/payroll/late-penalty?karyawanId=${encodeURIComponent(bad)}&tanggalMulai=2026-01-01&tanggalSelesai=2026-01-31`))
+      expect(res.status, bad).toBe(400)
+    }
+    expect(mocks.getHrScope).not.toHaveBeenCalled()
+  })
+
+  it("returns 400 for malformed calendar dates instead of rolling over", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    mocks.hasPermission.mockResolvedValue(true)
+    for (const bad of ["2026-02-30", "2026-13-01", "01/01/2026", "2026-1-1"]) {
+      const res = await GET(new NextRequest(`http://localhost/api/payroll/late-penalty?karyawanId=1&tanggalMulai=${encodeURIComponent(bad)}&tanggalSelesai=2026-12-31`))
+      expect(res.status, bad).toBe(400)
+    }
+    expect(mocks.calculateLatePenalty).not.toHaveBeenCalled()
+  })
+
   it("returns 500 on internal error", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 1 } })
     mocks.hasPermission.mockResolvedValue(true)
