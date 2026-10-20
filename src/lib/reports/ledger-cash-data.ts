@@ -21,6 +21,8 @@ import {
   averagePaymentDays,
   buildCustomerReceivables,
 } from "@/lib/reports/customer-receivables"
+import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+import { safeAdd } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import type { StatementTable } from "@/lib/reports/statement-table"
 import { formatAccounting } from "@/lib/utils/format"
@@ -287,6 +289,57 @@ const RECEIVABLE_COLUMNS: TableColumn[] = [
 ]
 
 /** Piutang per Pelanggan: saldo + limit + DSO periode. */
+export interface CustomerReceivableInvoice {
+  customerId: number
+  customerName: string
+  creditLimit: number
+  grandTotal: unknown
+  paidAmount: unknown
+  dueDate: Date | null
+}
+
+export interface CustomerReceivableBucket {
+  customerId: number
+  customerName: string
+  creditLimit: number
+  outstanding: number
+  overdue: number
+  invoiceCount: number
+}
+
+/**
+ * Agregasi piutang per pelanggan, presisi sen.
+ *
+ * Sisa tiap faktur dihitung `receivableOutstanding` (safeSubtract 2 desimal),
+ * bukan `Number(grandTotal) - Number(paidAmount)` mentah: float mentah
+ * menyisakan residu (100.10 − 0.20 = 99.899999…) yang terakumulasi antar
+ * faktur dan bisa menampilkan faktur lunas sebagai masih berutang.
+ * Konsisten dengan aging (aging-amounts.ts) + ar-ap-summary.
+ */
+export function aggregateCustomerReceivables(
+  invoices: readonly CustomerReceivableInvoice[],
+  now: Date = new Date(),
+): CustomerReceivableBucket[] {
+  const buckets = new Map<number, CustomerReceivableBucket>()
+  for (const inv of invoices) {
+    const outstanding = receivableOutstanding(inv.grandTotal as never, inv.paidAmount as never)
+    if (outstanding <= 0) continue
+    const bucket = buckets.get(inv.customerId) ?? {
+      customerId: inv.customerId,
+      customerName: inv.customerName,
+      creditLimit: Number(inv.creditLimit ?? 0),
+      outstanding: 0,
+      overdue: 0,
+      invoiceCount: 0,
+    }
+    bucket.outstanding = safeAdd(bucket.outstanding, outstanding, 2)
+    if (inv.dueDate && inv.dueDate < now) bucket.overdue = safeAdd(bucket.overdue, outstanding, 2)
+    bucket.invoiceCount += 1
+    buckets.set(inv.customerId, bucket)
+  }
+  return [...buckets.values()]
+}
+
 export async function loadCustomerReceivables(period: Period): Promise<LedgerReportView> {
   const [invoices, payments] = await Promise.all([
     prisma.salesInvoice.findMany({
@@ -305,23 +358,18 @@ export async function loadCustomerReceivables(period: Period): Promise<LedgerRep
     }),
   ])
   const now = new Date()
-  const buckets = new Map<number, { customerId: number; customerName: string; creditLimit: number; outstanding: number; overdue: number; invoiceCount: number }>()
-  for (const inv of invoices) {
-    const outstanding = Number(inv.grandTotal) - Number(inv.paidAmount)
-    if (outstanding <= 0) continue
-    const bucket = buckets.get(inv.customerId) ?? {
+  const bucketList = aggregateCustomerReceivables(
+    invoices.map((inv) => ({
       customerId: inv.customerId,
       customerName: inv.customer.name,
       creditLimit: Number(inv.customer.creditLimit ?? 0),
-      outstanding: 0,
-      overdue: 0,
-      invoiceCount: 0,
-    }
-    bucket.outstanding += outstanding
-    if (inv.dueDate && inv.dueDate < now) bucket.overdue += outstanding
-    bucket.invoiceCount += 1
-    buckets.set(inv.customerId, bucket)
-  }
+      grandTotal: inv.grandTotal,
+      paidAmount: inv.paidAmount,
+      dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
+    })),
+    now,
+  )
+  const buckets = new Map(bucketList.map((b) => [b.customerId, b]))
   const paymentsByCustomer = new Map<number, { invoiceDate: Date; paymentDate: Date; amount: number }[]>()
   for (const pay of payments) {
     const customerId = pay.salesInvoice?.customerId
