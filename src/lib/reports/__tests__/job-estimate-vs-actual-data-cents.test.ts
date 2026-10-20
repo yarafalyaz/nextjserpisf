@@ -7,38 +7,16 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * di laporan meleset sen dari sumbernya (17 x 0.24 = 4.080000000000002).
  */
 
-const mocks = vi.hoisted(() => {
-  const prismaMock = {
-    workOrder: { findMany: vi.fn().mockResolvedValue([]) },
-    salesOrder: { findMany: vi.fn().mockResolvedValue([]) },
-    salesInvoice: { findMany: vi.fn().mockResolvedValue([]) },
-    productionCost: { findMany: vi.fn().mockResolvedValue([]) },
-  }
-  return { prismaMock }
-})
+const mocks = await vi.hoisted(async () => (await import("./job-estimate-vs-actual-test-utils")).createJobEstimateMocks())
 
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
+vi.mock("@/lib/db/prisma", () => mocks.prismaModule())
 
 import { loadJobEstimateVsActual } from "../job-estimate-vs-actual-data"
-
-const PERIOD = { start: new Date("2026-10-01T00:00:00"), end: new Date("2026-10-31T23:59:59") }
+import { JOB_ESTIMATE_PERIOD, jobEstimateWo } from "./job-estimate-vs-actual-test-utils"
 
 beforeEach(() => {
   vi.clearAllMocks()
-  mocks.prismaMock.workOrder.findMany.mockResolvedValue([
-    {
-      id: 1,
-      documentNo: "WO-0001",
-      date: new Date("2026-10-05T00:00:00"),
-      status: "completed",
-      quotationId: 9,
-      projectId: null,
-      customer: { name: "Bengkel Jaya" },
-      customerVehicle: null,
-      quotation: { status: "accepted", grandTotal: 100 },
-      productionOrders: [],
-    },
-  ])
+  mocks.prismaMock.workOrder.findMany.mockResolvedValue([jobEstimateWo({ quotation: { status: "accepted", grandTotal: 100 } })])
   mocks.prismaMock.salesOrder.findMany.mockResolvedValue([])
   mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([])
   mocks.prismaMock.productionCost.findMany.mockResolvedValue([])
@@ -58,7 +36,7 @@ describe("loadJobEstimateVsActual — presisi sen", () => {
       })),
     )
 
-    const r = await loadJobEstimateVsActual(PERIOD)
+    const r = await loadJobEstimateVsActual(JOB_ESTIMATE_PERIOD)
 
     expect(r.estimate.rows[0].billedAmount).toBe(4.08)
   })
@@ -72,7 +50,7 @@ describe("loadJobEstimateVsActual — presisi sen", () => {
       })),
     )
 
-    const r = await loadJobEstimateVsActual(PERIOD)
+    const r = await loadJobEstimateVsActual(JOB_ESTIMATE_PERIOD)
 
     expect(r.estimate.rows[0].actualCost).toBe(4.08)
     expect(r.estimate.rows[0].actualMargin).toBe(-4.08)

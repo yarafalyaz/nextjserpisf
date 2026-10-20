@@ -12,50 +12,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
  * tampil tanpa estimasi (null, bukan nol).
  */
 
-const mocks = vi.hoisted(() => {
-  const prismaMock = {
-    workOrder: { findMany: vi.fn().mockResolvedValue([]) },
-    salesOrder: { findMany: vi.fn().mockResolvedValue([]) },
-    salesInvoice: { findMany: vi.fn().mockResolvedValue([]) },
-    productionCost: { findMany: vi.fn().mockResolvedValue([]) },
-  }
-  return { prismaMock }
-})
+const mocks = await vi.hoisted(async () => (await import("./job-estimate-vs-actual-test-utils")).createJobEstimateMocks())
 
-vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
+vi.mock("@/lib/db/prisma", () => mocks.prismaModule())
 
 import { loadJobEstimateVsActual } from "../job-estimate-vs-actual-data"
-
-const PERIOD = { start: new Date("2026-10-01T00:00:00"), end: new Date("2026-10-31T23:59:59") }
-
-function wo(over: Record<string, unknown> = {}) {
-  return {
-    id: 1,
-    documentNo: "WO-0001",
-    date: new Date("2026-10-05T00:00:00"),
-    status: "completed",
-    quotationId: 9,
-    projectId: null,
-    customer: { name: "Bengkel Jaya" },
-    customerVehicle: null,
-    quotation: { status: "accepted", grandTotal: 100_000_000 },
-    productionOrders: [],
-    ...over,
-  }
-}
-
-function inv(over: Record<string, unknown> = {}) {
-  return {
-    id: 1,
-    quotationId: 9,
-    salesOrderId: null,
-    projectId: null,
-    status: "posted",
-    grandTotal: 40_000_000,
-    deletedAt: null,
-    ...over,
-  }
-}
+import { JOB_ESTIMATE_PERIOD as PERIOD, jobEstimateWo as wo, jobEstimateInv as inv } from "./job-estimate-vs-actual-test-utils"
 
 beforeEach(() => {
   vi.clearAllMocks()
