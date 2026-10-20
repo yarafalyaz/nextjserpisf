@@ -70,4 +70,19 @@ describe("GET /api/vehicle-models", () => {
       where: { name: { contains: "Jazz" }, vehicleBrandId: 5 },
     }))
   })
+
+  it.each(["abc", "5abc", "0", "-3", ""])(
+    "returns 400 for invalid brandId %j without querying",
+    async (brandId) => {
+      mocks.hasPermission.mockResolvedValue(true)
+      const res = await GET(
+        new Request(`http://localhost/api/vehicle-models?brandId=${encodeURIComponent(brandId)}`),
+      )
+      expect(res.status).toBe(400)
+      const json = await res.json()
+      expect(json.error.code).toBe("BAD_REQUEST")
+      expect(mocks.findMany).not.toHaveBeenCalled()
+      expect(mocks.count).not.toHaveBeenCalled()
+    },
+  )
 })

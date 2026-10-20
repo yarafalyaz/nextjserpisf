@@ -25,9 +25,15 @@ export async function GET(request: Request) {
 
     const where: Record<string, unknown> = {};
     if (cari) where.name = { contains: cari };
-    if (brandId) {
-      const bid = Number.parseInt(brandId, 10);
-      if (Number.isInteger(bid)) where.vehicleBrandId = bid;
+    if (brandId !== null) {
+      if (!/^\d+$/.test(brandId)) {
+        return apiError("BAD_REQUEST", "brandId tidak valid");
+      }
+      const bid = Number(brandId);
+      if (!Number.isSafeInteger(bid) || bid <= 0) {
+        return apiError("BAD_REQUEST", "brandId tidak valid");
+      }
+      where.vehicleBrandId = bid;
     }
 
     const [models, total] = await Promise.all([
