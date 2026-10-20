@@ -423,10 +423,34 @@ function parseAndValidateJournalEntries(formData: FormData) {
   const entriesJson = formData.get("entries") as string | null;
   const entries = safeJsonParse<JournalEntryInput[]>(entriesJson) ?? [];
 
-  // Validate every entry has a valid accountId — reject early to prevent orphan header
-  const validEntries = entries.filter(
-    (e) => e.accountId && (e.debit > 0 || e.credit > 0),
-  );
+  // Baris kosong penuh dari form (tanpa akun, nominal 0) dilewati; baris
+  // setengah terisi WAJIB ditolak, bukan dibuang diam-diam — membuangnya
+  // mengubah makna jurnal yang dikirim pemakai tanpa satu pun error.
+  const validEntries: JournalEntryInput[] = [];
+  for (const e of entries) {
+    const debit = typeof e.debit === "string" ? Number(e.debit) : (e.debit ?? 0);
+    const credit = typeof e.credit === "string" ? Number(e.credit) : (e.credit ?? 0);
+    const isBlank = !e.accountId && !debit && !credit;
+    if (isBlank) continue;
+    if (!Number.isFinite(debit) || !Number.isFinite(credit)) {
+      throw new Error("Nominal debit/credit tidak valid");
+    }
+    if (debit < 0 || credit < 0) {
+      throw new Error("Nominal debit/credit tidak boleh negatif");
+    }
+    if (!e.accountId) {
+      throw new Error("Akun wajib dipilih pada setiap baris jurnal bernominal");
+    }
+    if (debit > 0 && credit > 0) {
+      throw new Error(
+        "Satu baris tidak boleh memiliki debit dan credit sekaligus",
+      );
+    }
+    if (debit === 0 && credit === 0) {
+      throw new Error("Setiap baris jurnal wajib memiliki nominal debit atau kredit");
+    }
+    validEntries.push({ ...e, debit, credit });
+  }
   if (validEntries.length < 2) {
     throw new Error(
       "Journal harus memiliki minimal 2 entri dengan akun dan nominal valid",
@@ -445,18 +469,6 @@ function parseAndValidateJournalEntries(formData: FormData) {
     throw new Error(
       `Journal tidak balance: Total Debit ${totalDebit} ≠ Total Credit ${totalCredit}`,
     );
-  }
-
-  // Per-line validation: debit and credit must be non-negative and exclusive
-  for (const entry of validEntries) {
-    if ((entry.debit || 0) < 0 || (entry.credit || 0) < 0) {
-      throw new Error("Nominal debit/credit tidak boleh negatif");
-    }
-    if ((entry.debit || 0) > 0 && (entry.credit || 0) > 0) {
-      throw new Error(
-        "Satu baris tidak boleh memiliki debit dan credit sekaligus",
-      );
-    }
   }
 
   return { validEntries, totalDebit, totalCredit };
