@@ -1330,7 +1330,18 @@ describe("Kalender Kerja", () => {
     expect(arg.data.departmentId).toBe(2)
   })
 
+  it("deleteWorkSchedule menolak jadwal yang masih ditugaskan", async () => {
+    prismaMock.workSchedule.findUnique.mockResolvedValueOnce({
+      _count: { employees: 2, departments: 1 },
+    })
+    const res = await actions.deleteWorkSchedule(3)
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toContain("2 karyawan dan 1 departemen")
+    expect(prismaMock.workSchedule.delete).not.toHaveBeenCalled()
+  })
+
   it("aksi hapus memakai izin hapus masing-masing", async () => {
+    prismaMock.workSchedule.findUnique.mockResolvedValue({ _count: { employees: 0, departments: 0 } })
     prismaMock.workSchedule.delete.mockResolvedValue({})
     prismaMock.departmentHoliday.delete.mockResolvedValue({})
 

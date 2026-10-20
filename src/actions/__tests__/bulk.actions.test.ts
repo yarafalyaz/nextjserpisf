@@ -90,6 +90,12 @@ describe("Bulk Actions", () => {
       expect(result.message).toMatch(/harus dihapus satu per satu/)
     }
   })
+  it("bulkDelete refuses workSchedule (single-delete assignment guard)", async () => {
+    const res = await bulkDelete("workSchedule", [1])
+    expect(res?.success).toBe(false)
+    expect(res?.message).toMatch(/harus dihapus satu per satu/)
+    expect(mocks.requirePermissionMock).toHaveBeenLastCalledWith("delete_work_schedules")
+  })
   it("bulkDelete fails on strict individual models", async () => {
     const res = await bulkDelete("journal", [1])
     expect(res?.success).toBe(false)

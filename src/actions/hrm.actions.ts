@@ -2059,7 +2059,23 @@ export async function updateWorkSchedule(id: number, formData: FormData) {
 export async function deleteWorkSchedule(id: number) {
   try {
     await requirePermission("delete_work_schedules");
-    await prisma.workSchedule.delete({ where: { id: requirePositiveId(id, "jadwal kerja") } });
+    const scheduleId = requirePositiveId(id, "jadwal kerja");
+    // M2M penugasan karyawan/departemen ON DELETE CASCADE: hapus tanpa guard
+    // mencabut jadwal dari semua yang ditugaskan diam-diam, lalu resolusi
+    // absensi jatuh ke jadwal lain/global tanpa peringatan.
+    const schedule = await prisma.workSchedule.findUnique({
+      where: { id: scheduleId },
+      select: { _count: { select: { employees: true, departments: true } } },
+    });
+    if (!schedule) return { success: false as const, error: "Jadwal kerja tidak ditemukan" };
+    const { employees, departments } = schedule._count;
+    if (employees > 0 || departments > 0) {
+      return {
+        success: false as const,
+        error: `Jadwal kerja masih ditugaskan ke ${employees} karyawan dan ${departments} departemen. Lepas penugasan terlebih dahulu.`,
+      };
+    }
+    await prisma.workSchedule.delete({ where: { id: scheduleId } });
     await logActivity("delete", "WorkSchedule", id, `Menghapus jadwal kerja #${id}`);
     revalidatePath("/sdm/kalender-kerja");
     return { success: true as const };
