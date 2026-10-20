@@ -1,89 +1,53 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 import { GET } from "../route"
+import { SHARED_PAGINATION_CASES } from "../../vehicle-test-utils"
 
-const mocks = vi.hoisted(() => ({
-  hasPermission: vi.fn(),
-  findMany: vi.fn(),
-  count: vi.fn(),
-}))
+const mocks = vi.hoisted(() => ({ hasPermission: vi.fn(), findMany: vi.fn(), count: vi.fn() }))
 
-vi.mock("@/lib/auth/permissions", () => ({
-  hasPermission: (...a: unknown[]) => mocks.hasPermission(...a),
-}))
+vi.mock("@/lib/auth/permissions", async () => (await import("../../vehicle-test-utils")).vehiclePermissionFactory(mocks))
+vi.mock("@/lib/db/prisma", async () => (await import("../../vehicle-test-utils")).vehiclePrismaFactory(mocks, "vehicleBrand"))
 
-vi.mock("@/lib/db/prisma", () => ({
-  prisma: {
-    vehicleBrand: {
-      findMany: (...a: unknown[]) => mocks.findMany(...a),
-      count: (...a: unknown[]) => mocks.count(...a),
-    },
-  },
-}))
+const allow = (rows: unknown[] = []) => {
+  mocks.hasPermission.mockResolvedValue(true)
+  mocks.findMany.mockResolvedValue(rows)
+  mocks.count.mockResolvedValue(rows.length)
+}
+const brandsUrl = (q = "") => new Request(`http://localhost/api/vehicle-brands${q}`)
 
 describe("GET /api/vehicle-brands", () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+  beforeEach(() => vi.clearAllMocks())
 
   it("returns 403 when user lacks permission", async () => {
     mocks.hasPermission.mockResolvedValue(false)
-    const res = await GET(new Request("http://localhost/api/vehicle-brands"))
+    const res = await GET(brandsUrl())
     expect(res.status).toBe(403)
     expect((await res.json()).error.message).toBe("Tidak memiliki izin")
   })
 
   it("returns 500 on error", async () => {
     mocks.hasPermission.mockRejectedValue(new Error("boom"))
-    const res = await GET(new Request("http://localhost/api/vehicle-brands"))
-    expect(res.status).toBe(500)
+    expect((await GET(brandsUrl())).status).toBe(500)
   })
 
   it("returns brands with default pagination", async () => {
-    mocks.hasPermission.mockResolvedValue(true)
-    mocks.findMany.mockResolvedValue([{ id: 1, name: "Toyota" }])
-    mocks.count.mockResolvedValue(1)
-
-    const res = await GET(new Request("http://localhost/api/vehicle-brands"))
-    const json = await res.json()
+    allow([{ id: 1, name: "Toyota" }])
+    const json = await (await GET(brandsUrl())).json()
+    expect(json).toMatchObject({ total: 1, page: 1, pageSize: 50 })
     expect(json.data).toHaveLength(1)
-    expect(json.total).toBe(1)
-    expect(json.page).toBe(1)
-    expect(json.pageSize).toBe(50)
-    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      skip: 0,
-      take: 50,
-      where: {},
-    }))
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 0, take: 50, where: {} }))
   })
 
-  it.each([
-    ["halaman=abc&pageSize=xyz", 1, 50, 0, 50],
-    ["halaman=0&pageSize=9999", 1, 500, 0, 500],
-    ["halaman=-2&pageSize=0", 1, 50, 0, 50],
-  ])("parser pagination bersama: ?%s -> halaman %i pageSize %i", async (q, page, pageSize, skip, take) => {
-    mocks.hasPermission.mockResolvedValue(true)
-    mocks.findMany.mockResolvedValue([])
-    mocks.count.mockResolvedValue(0)
-    const res = await GET(new Request(`http://localhost/api/vehicle-brands?${q}`))
-    const json = await res.json()
-    expect(json.page).toBe(page)
-    expect(json.pageSize).toBe(pageSize)
+  it.each(SHARED_PAGINATION_CASES)("parser pagination bersama: ?%s -> halaman %i pageSize %i", async (q, page, pageSize, skip, take) => {
+    allow()
+    const json = await (await GET(brandsUrl(`?${q}`))).json()
+    expect(json).toMatchObject({ page, pageSize })
     expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip, take }))
   })
 
   it("respects cari, halaman, and pageSize params", async () => {
-    mocks.hasPermission.mockResolvedValue(true)
-    mocks.findMany.mockResolvedValue([])
-    mocks.count.mockResolvedValue(0)
-
-    const res = await GET(new Request("http://localhost/api/vehicle-brands?cari=Honda&halaman=2&pageSize=10"))
-    const json = await res.json()
-    expect(json.page).toBe(2)
-    expect(json.pageSize).toBe(10)
-    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({
-      skip: 10,
-      take: 10,
-      where: { name: { contains: "Honda" } },
-    }))
+    allow()
+    const json = await (await GET(brandsUrl("?cari=Honda&halaman=2&pageSize=10"))).json()
+    expect(json).toMatchObject({ page: 2, pageSize: 10 })
+    expect(mocks.findMany).toHaveBeenCalledWith(expect.objectContaining({ skip: 10, take: 10, where: { name: { contains: "Honda" } } }))
   })
 })
