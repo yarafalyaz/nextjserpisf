@@ -15,7 +15,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
-import { safeAdd, safeSubtract } from "@/lib/utils/math"
+import { safeAdd, safeMultiply, safeRound, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 266mm, area isi A4 mendatar. */
@@ -59,6 +59,40 @@ export interface VatInvoiceGroup {
   total: number
 }
 
+/**
+ * Pengurang masa retur (vonis Salsa F-2026-10-20-61): baris retur penjualan
+ * terproses pada masa berjalan. DPP-retur = Σ qty × SalesReturnItem.price
+ * (price membeku dari faktur asal saat create); PPN-retur = DPP-retur × tarif
+ * efektif faktur asal. Baris pengurang tampil TERPISAH — baris faktur asal
+ * tidak diubah. Sisi beli belum ada (tautan PurchaseReturn→VendorBill ambigu).
+ */
+export interface VatReturnDeductionInput {
+  date: Date
+  /** Nomor nota retur. */ documentNo: string
+  /** Nomor faktur asal; null = retur tanpa faktur (tanpa PPN-retur). */ sourceDocumentNo: string | null
+  counterparty: string
+  /** DPP pengurang. */ dpp: number
+  /** PPN pengurang (0 bila faktur asal tanpa PPN / tanpa faktur asal). */ vat: number
+}
+
+/**
+ * Hitung pengurang satu retur (murni, untuk loader + tes langsung).
+ * source null / taxAmount 0 / DPP asal 0 → vat 0 (ditandai lewat vat=0,
+ * bukan ditebak tarifnya).
+ */
+export function computeReturnDeduction(input: {
+  qty: number
+  price: number
+  source: { subtotal: number; discount: number; taxAmount: number } | null
+}): { dpp: number; vat: number } {
+  const dpp = safeRound(safeMultiply(input.qty, input.price), 2)
+  if (!input.source || input.source.taxAmount <= 0) return { dpp, vat: 0 }
+  const sourceDpp = safeSubtract(input.source.subtotal, input.source.discount, 2)
+  if (sourceDpp <= 0) return { dpp, vat: 0 }
+  const rate = input.source.taxAmount / sourceDpp
+  return { dpp, vat: safeRound(dpp * rate, 2) }
+}
+
 export interface VatInvoiceListResult {
   table: { columns: TableColumn[]; rows: TableRow[] }
   output: VatInvoiceGroup
@@ -67,6 +101,10 @@ export interface VatInvoiceListResult {
   missingTaxInvoiceCount: number
   /** Faktur ber-retur terproses pada periode ini (peringatan saja). */
   returnedInvoiceCount: number
+  /** Total pengurang masa retur (sisi jual); dpp/vat mengurangi posisi. */
+  returnDeduction: VatInvoiceGroup & { count: number }
+  /** Pengurang bersih: PPN keluaran neto = keluaran − pengurang. */
+  outputNetVat: number
   /** Selisih PPN keluaran − masukan; positif = kurang bayar. */
   netVat: number
   verdict: string
@@ -92,7 +130,7 @@ function summarize(items: VatInvoiceInput[]): VatInvoiceGroup {
   )
 }
 
-function sortByDate(items: VatInvoiceInput[]): VatInvoiceInput[] {
+function sortByDate<T extends { date: Date; documentNo: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => {
     const byDate = a.date.getTime() - b.date.getTime()
     return byDate !== 0 ? byDate : a.documentNo.localeCompare(b.documentNo, "id-ID")
@@ -156,6 +194,7 @@ function subtotalRow(label: string, group: VatInvoiceGroup): TableRow {
 export function buildVatInvoiceList(input: {
   output: VatInvoiceInput[]
   input: VatInvoiceInput[]
+  /** Baris pengurang masa retur (sisi jual saja). */ returnDeductions?: VatReturnDeductionInput[]
 }): VatInvoiceListResult {
   const outputItems = sortByDate(input.output)
   const inputItems = sortByDate(input.input)
@@ -180,7 +219,25 @@ export function buildVatInvoiceList(input: {
     rows.push(subtotalRow("Jumlah PPN Masukan", inputGroup))
   }
 
-  const netVat = safeSubtract(output.vat, inputGroup.vat, 2)
+  const deductionItems = sortByDate(input.returnDeductions ?? [])
+  const deductionWithTotal = deductionItems.map((d) => ({ ...d, total: safeAdd(d.dpp, d.vat, 2) }))
+  const returnDeduction = { ...summarize(deductionWithTotal), count: deductionItems.length }
+  const outputNetVat = safeSubtract(output.vat, returnDeduction.vat, 2)
+
+  if (deductionItems.length > 0) {
+    rows.push({ kind: "group", label: `Pengurang Masa Retur — Nota Retur Penjualan (${returnDeduction.count})` })
+    rows.push(...dataRows(deductionWithTotal))
+    rows.push(subtotalRow("Jumlah Pengurang Masa Retur", { ...returnDeduction, total: returnDeduction.total }))
+    rows.push({
+      kind: "notice",
+      text:
+        "Baris pengurang di atas adalah nota retur penjualan terproses pada masa ini: " +
+        "DPP-retur = qty × harga baris retur (beku dari faktur asal), PPN-retur memakai tarif " +
+        "efektif faktur asal. Baris faktur asal di kelompok PPN Keluaran tidak diubah.",
+    })
+  }
+
+  const netVat = safeSubtract(outputNetVat, inputGroup.vat, 2)
   const missingTaxInvoiceCount =
     outputItems.filter((item) => !hasTaxInvoiceNo(item)).length +
     inputItems.filter((item) => !hasTaxInvoiceNo(item)).length
@@ -222,13 +279,13 @@ export function buildVatInvoiceList(input: {
     })
   }
 
-  if (returnedInvoiceCount > 0) {
+  if (returnedInvoiceCount > 0 && returnDeduction.count === 0) {
     rows.push({
       kind: "notice",
       text:
         `${returnedInvoiceCount} faktur pada periode ini punya retur terproses. ` +
         `DPP/PPN pada laporan ini masih nilai faktur asal; pengurangan karena nota retur ` +
-        `dihitung pada masa retur dan belum diterapkan di sini.`,
+        `dihitung pada masa retur.`,
     })
   }
 
@@ -238,7 +295,8 @@ export function buildVatInvoiceList(input: {
       : `PPN keluaran ${output.count} faktur · PPN masukan ${inputGroup.count} faktur · ` +
         `posisi ${netVat >= 0 ? "kurang" : "lebih"} bayar ${formatCurrency(Math.abs(netVat))}` +
         (missingTaxInvoiceCount > 0 ? ` · ${missingTaxInvoiceCount} tanpa nomor faktur pajak` : "") +
-        (returnedInvoiceCount > 0 ? ` · ${returnedInvoiceCount} faktur ber-retur` : "")
+        (returnedInvoiceCount > 0 ? ` · ${returnedInvoiceCount} faktur ber-retur` : "") +
+        (returnDeduction.count > 0 ? ` · pengurang retur ${formatCurrency(returnDeduction.vat)}` : "")
 
   return {
     table: { columns: COLUMNS, rows },
@@ -246,6 +304,8 @@ export function buildVatInvoiceList(input: {
     input: inputGroup,
     missingTaxInvoiceCount,
     returnedInvoiceCount,
+    returnDeduction,
+    outputNetVat,
     netVat,
     verdict,
   }

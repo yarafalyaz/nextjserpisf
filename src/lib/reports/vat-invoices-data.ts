@@ -7,18 +7,21 @@
  * `rekonsiliasi-ppn` supaya kedua laporan tidak bertentangan.
  *
  * NPWP lawan dimuat dari `Customer.taxId` / `Vendor.npwp` (F-2026-10-20-33(a)).
- * Retur terproses hanya menjadi peringatan: retur penjualan tertaut langsung
- * lewat `SalesReturn.salesInvoiceId`; retur pembelian tertaut lewat vendor PO
- * hanya bila vendor itu punya satu tagihan pada periode ini (tautan tak ambigu).
- * Angka retur tidak mengurangi laporan ini — masa & dasar pengurang menunggu
- * vonis F-33(b); tautan retur pembelian eksplisit butuh kolom baru (F-34 inti).
+ * Retur terproses menjadi peringatan pada baris faktur asal; pengurang
+ * masa retur (F-2026-10-20-61, vonis Salsa 18:41): baris terpisah per nota
+ * retur penjualan completed bertanggal pada masa ini, DPP=Σ qty×price beku,
+ * PPN=DPP×tarif efektif faktur asal, posisi PPN memakai keluaran neto.
+ * Sisi beli belum jadi pengurang: PurchaseReturnItem hanya cost dan tautan
+ * ke VendorBill ambigu (F-34 inti ditunda-teknis).
  */
 
 import { prisma } from "@/lib/db/prisma"
 import {
   buildVatInvoiceList,
+  computeReturnDeduction,
   type VatInvoiceInput,
   type VatInvoiceListResult,
+  type VatReturnDeductionInput,
 } from "@/lib/reports/vat-invoices"
 import { safeSubtract, type SafeMathInput } from "@/lib/utils/math"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
@@ -117,8 +120,12 @@ export async function loadVatInvoices(period: {
       },
       select: {
         documentNo: true,
+        date: true,
         salesInvoiceId: true,
-        salesInvoice: { select: { documentNo: true } },
+        salesInvoice: {
+          select: { documentNo: true, subtotal: true, discount: true, taxAmount: true, customer: { select: { name: true } } },
+        },
+        items: { select: { qty: true, price: true } },
       },
     }),
     prisma.purchaseReturn.findMany({
@@ -167,8 +174,41 @@ export async function loadVatInvoices(period: {
     returnRef: purchaseReturnByBill.get(bill.documentNo) ?? null,
   }))
 
+  // Pengurang masa retur (F-2026-10-20-61): baris per retur pada masa tanggal
+  // retur; faktur asal bisa dari masa lain. Retur tanpa faktur asal (tanpa
+  // salesInvoiceId) tidak ikut — query di atas mewajibkannya; PPN-retur 0 bila
+  // faktur asal tanpa PPN (vonis Salsa). Retur ber-nota kredit: belum ada model
+  // SalesCreditNote di repo, jadi belum ada yang diabaikan di sini.
+  const returnDeductions: VatReturnDeductionInput[] = salesReturns.map((ret) => {
+    let dpp = 0
+    let vat = 0
+    for (const item of ret.items) {
+      const r = computeReturnDeduction({
+        qty: Number(item.qty),
+        price: Number(item.price),
+        source: ret.salesInvoice
+          ? {
+              subtotal: Number(ret.salesInvoice.subtotal),
+              discount: Number(ret.salesInvoice.discount),
+              taxAmount: Number(ret.salesInvoice.taxAmount),
+            }
+          : null,
+      })
+      dpp += r.dpp
+      vat += r.vat
+    }
+    return {
+      date: ret.date,
+      documentNo: ret.documentNo,
+      sourceDocumentNo: ret.salesInvoice?.documentNo ?? null,
+      counterparty: ret.salesInvoice?.customer.name ?? "–",
+      dpp,
+      vat,
+    }
+  })
+
   return {
-    report: buildVatInvoiceList({ output, input }),
+    report: buildVatInvoiceList({ output, input, returnDeductions }),
     ...rangePeriodLabels(period),
   }
 }
