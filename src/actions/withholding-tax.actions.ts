@@ -17,6 +17,32 @@ import { nextSlug } from "@/lib/utils/slug-db"
  * namanya: satu berkas, satu tanggung jawab.
  */
 
+/**
+ * Akun PPh adalah Int polos tanpa FK DB — ID fiktif lolos simpan lalu hook
+ * akuntansi gagal berisik saat posting pembayaran/tagihan ber-PPh. Cek ada
+ * (dan belum terhapus) pra-tulis, pola master.actions createBank.
+ */
+async function withholdingAccountError(v: {
+  liabilityAccountId?: number
+  receivableAccountId?: number
+}): Promise<string | null> {
+  if (v.liabilityAccountId != null) {
+    const account = await prisma.account.findFirst({
+      where: { id: v.liabilityAccountId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!account) return "Akun Hutang PPh tidak ditemukan"
+  }
+  if (v.receivableAccountId != null) {
+    const account = await prisma.account.findFirst({
+      where: { id: v.receivableAccountId, deletedAt: null },
+      select: { id: true },
+    })
+    if (!account) return "Akun PPh dibayar dimuka tidak ditemukan"
+  }
+  return null
+}
+
 export async function createWithholdingTaxType(formData: FormData) {
   try {
     const user = await requirePermission("manage_withholding_tax")
@@ -24,6 +50,9 @@ export async function createWithholdingTaxType(formData: FormData) {
     const parsed = parseFormData(withholdingTaxTypeSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
+
+    const accountError = await withholdingAccountError(v)
+    if (accountError) return { success: false, error: accountError }
 
     const taxType = await prisma.withholdingTaxType.create({
       data: {
@@ -55,6 +84,9 @@ export async function updateWithholdingTaxType(id: number, formData: FormData) {
     const parsed = parseFormData(withholdingTaxTypeSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
     const v = parsed.data
+
+    const accountError = await withholdingAccountError(v)
+    if (accountError) return { success: false, error: accountError }
 
     await prisma.withholdingTaxType.update({
       where: { id },
