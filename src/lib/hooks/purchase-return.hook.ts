@@ -12,6 +12,60 @@ import { toBaseFactor } from "@/lib/services/uom.service";
  * Creates Journal Entry (Dr Purchase Return, Cr Inventory)
  */
 
+export function resolvePurchaseReturnWarehouse(
+  itemId: number,
+  receiptByItem: Map<number, { warehouseId: number | null; goodsReceipt?: { warehouseId: number | null } | null }>,
+  defaultWarehouseByItem: Map<number, number | null>,
+  activeWarehouseId?: number | null,
+  anyWarehouseId?: number | null,
+): number | null {
+  const receipt = receiptByItem.get(itemId);
+  return receipt?.warehouseId ?? receipt?.goodsReceipt?.warehouseId
+    ?? defaultWarehouseByItem.get(itemId)
+    ?? activeWarehouseId
+    ?? anyWarehouseId
+    ?? null;
+}
+
+type WarehouseResolutionClient = Pick<TxClient, "goodsReceiptItem" | "item" | "warehouse">;
+
+export async function loadPurchaseReturnWarehouseContext(
+  client: WarehouseResolutionClient,
+  purchaseOrderId: number,
+  itemIds: number[],
+) {
+  const uniqueItemIds = Array.from(new Set(itemIds));
+  const receiptLines = await client.goodsReceiptItem.findMany({
+    where: {
+      goodsReceipt: { purchaseOrderId, status: { in: ["verified", "completed"] } },
+      ...(uniqueItemIds.length ? { itemId: { in: uniqueItemIds } } : {}),
+    },
+    select: { itemId: true, uom: true, warehouseId: true, goodsReceipt: { select: { warehouseId: true } } },
+    orderBy: { goodsReceipt: { createdAt: "desc" } },
+  });
+  const receiptByItem = new Map<number, (typeof receiptLines)[number]>();
+  for (const line of receiptLines) if (!receiptByItem.has(line.itemId)) receiptByItem.set(line.itemId, line);
+
+  const activeWarehouse = await client.warehouse.findFirst({
+    where: { isActive: true, deletedAt: null },
+    select: { id: true },
+    orderBy: { id: "asc" },
+  });
+  const anyWarehouse = activeWarehouse
+    ? null
+    : await client.warehouse.findFirst({ select: { id: true }, orderBy: { id: "asc" } });
+
+  const defaultWarehouseRows = uniqueItemIds.length
+    ? await client.item.findMany({
+        where: { id: { in: uniqueItemIds } },
+        select: { id: true, defaultWarehouseId: true },
+      })
+    : [];
+  const defaultWarehouseByItem = new Map<number, number | null>(defaultWarehouseRows.map((r) => [r.id, r.defaultWarehouseId]));
+
+  return { receiptByItem, defaultWarehouseByItem, activeWarehouseId: activeWarehouse?.id ?? null, anyWarehouseId: anyWarehouse?.id ?? null };
+}
+
 export async function onPurchaseReturnProcessed(
   returnId: number,
   userId?: number,
@@ -56,46 +110,11 @@ export async function onPurchaseReturnProcessed(
     }
 
     // Use each item's receipt line: one PO can receive different items into different warehouses.
-    const receiptLines = await tx.goodsReceiptItem.findMany({
-      where: {
-        goodsReceipt: {
-          purchaseOrderId: purchaseReturn.purchaseOrderId,
-          status: { in: ["verified", "completed"] },
-        },
-      },
-      select: { itemId: true, uom: true, warehouseId: true, goodsReceipt: { select: { warehouseId: true } } },
-      orderBy: { goodsReceipt: { createdAt: "desc" } },
-    });
-    const receiptByItem = new Map<number, (typeof receiptLines)[number]>();
-    for (const line of receiptLines) if (!receiptByItem.has(line.itemId)) receiptByItem.set(line.itemId, line);
-
-    const activeWarehouse = await tx.warehouse.findFirst({
-      where: { isActive: true, deletedAt: null },
-      select: { id: true },
-      orderBy: { id: "asc" },
-    });
-    const anyWarehouse = activeWarehouse
-      ? null
-      : await tx.warehouse.findFirst({ select: { id: true }, orderBy: { id: "asc" } });
-
-    // Pre-fetch every item's default warehouse in ONE query instead of issuing a
-    // findUnique per line inside the loop below (N+1 → O(1)). Stock-move creation,
-    // the FOR UPDATE row lock, and FIFO consumption still run per item.
-    const prItemIds = Array.from(
-      new Set(purchaseReturn.items.filter((it) => Number(it.qty) > 0).map((it) => it.itemId))
-    );
-    const defaultWarehouseRows = prItemIds.length
-      ? await tx.item.findMany({
-          where: { id: { in: prItemIds } },
-          select: { id: true, defaultWarehouseId: true },
-        })
-      : [];
-    const defaultWarehouseByItem = new Map(
-      defaultWarehouseRows.map((r) => [r.id, r.defaultWarehouseId])
-    );
+    const activeItems = purchaseReturn.items.filter((it) => Number(it.qty) > 0);
+    const { receiptByItem, defaultWarehouseByItem, activeWarehouseId, anyWarehouseId } =
+      await loadPurchaseReturnWarehouseContext(tx, purchaseReturn.purchaseOrderId, activeItems.map((it) => it.itemId));
 
     // Create Stock Move OUT per item (goods returned to vendor)
-    const activeItems = purchaseReturn.items.filter((it) => Number(it.qty) > 0);
     if (activeItems.length > 0) {
       // Batch-generate one document number per line (was N serial round-trips).
       const smDocNos = await generateDocumentNumberBatch("SM", activeItems.length);
@@ -107,10 +126,7 @@ export async function onPurchaseReturnProcessed(
         const receipt = receiptByItem.get(item.itemId);
         const factor = await toBaseFactor(tx, item.itemId, receipt?.uom);
         const baseQty = Number(item.qty) * factor;
-        const warehouseId = receipt?.warehouseId ?? receipt?.goodsReceipt.warehouseId
-          ?? defaultWarehouseByItem.get(item.itemId)
-          ?? activeWarehouse?.id
-          ?? anyWarehouse?.id;
+        const warehouseId = resolvePurchaseReturnWarehouse(item.itemId, receiptByItem, defaultWarehouseByItem, activeWarehouseId, anyWarehouseId);
 
         if (!warehouseId) {
           throw new Error("Warehouse retur pembelian tidak ditemukan.");
