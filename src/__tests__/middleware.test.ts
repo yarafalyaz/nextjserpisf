@@ -66,6 +66,40 @@ describe("proxy security headers spec", () => {
 })
 
 /**
+ * AUD-03/AUD-04 wiring guards: produksi memakai CSP nonce (tanpa
+ * 'unsafe-inline' untuk script) dan bucket sensitif fail-closed.
+ * Dibaca dari sumber karena proxy tidak bisa diimpor murah di unit test.
+ */
+describe("proxy: nonce CSP & fail-closed (AUD-03/AUD-04)", () => {
+  const proxySource = () => {
+    const { readFileSync } = require("node:fs") as typeof import("node:fs")
+    const { join } = require("node:path") as typeof import("node:path")
+    return readFileSync(join(process.cwd(), "src/proxy.ts"), "utf8")
+  }
+
+  it("CSP produksi memakai nonce + strict-dynamic, bukan unsafe-inline script", () => {
+    const src = proxySource()
+    expect(src).toContain("'nonce-${nonce}' 'strict-dynamic'")
+    expect(src).toContain('req.headers.set("x-nonce", nonce)')
+    expect(src).not.toContain("script-src 'self' 'unsafe-inline'\"")
+  })
+
+  it("root layout meneruskan nonce ke script tema inline", () => {
+    const { readFileSync } = require("node:fs") as typeof import("node:fs")
+    const { join } = require("node:path") as typeof import("node:path")
+    const layout = readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8")
+    expect(layout).toContain('get("x-nonce")')
+    expect(layout).toContain("nonce={nonce}")
+  })
+
+  it("bucket auth/upload fail-closed saat degraded", () => {
+    const src = proxySource()
+    expect(src).toContain("sensitiveRateLimitBlocked(result)")
+    expect(src).toContain("isRateLimitFailClosed")
+  })
+})
+
+/**
  * Public API allowlist contract (proxy.ts). These API paths must bypass the
  * session check so unauthenticated infra can reach them:
  *   - /api/auth/*  : NextAuth must work before a session exists
