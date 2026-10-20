@@ -525,26 +525,15 @@ describe("Timesheet Actions", () => {
     expect(res?.success).toBe(true)
   })
 
-  it("deleteTimesheet menolak bila sudah ditarik menjadi biaya produksi (F-96)", async () => {
-    prismaMock.productionCost.count.mockResolvedValue(2)
-    const res = await actions.deleteTimesheet(1)
+  it.each([
+    ["deleteTimesheet", 2, async () => actions.deleteTimesheet(1), () => prismaMock.timesheet.delete],
+    ["updateTimesheet", 1, async () => actions.updateTimesheet(1, fd({ employeeId: "1", projectId: "1", date: "2026-06-12", hours: "4", activity: "Review" })), () => prismaMock.timesheet.update],
+  ])("%s menolak bila sudah ditarik menjadi biaya produksi (F-96)", async (_nama, jumlah, panggil, mutasi) => {
+    prismaMock.productionCost.count.mockResolvedValue(jumlah)
+    const res = await panggil()
     expect(res?.success).toBe(false)
-    expect(res?.error).toContain("sudah ditarik menjadi 2 baris biaya produksi")
-    expect(prismaMock.timesheet.delete).not.toHaveBeenCalled()
-  })
-
-  it("updateTimesheet menolak bila sudah ditarik menjadi biaya produksi (F-96)", async () => {
-    prismaMock.productionCost.count.mockResolvedValue(1)
-    const res = await actions.updateTimesheet(1, fd({
-      employeeId: "1",
-      projectId: "1",
-      date: "2026-06-12",
-      hours: "4",
-      activity: "Review",
-    }))
-    expect(res?.success).toBe(false)
-    expect(res?.error).toContain("sudah ditarik menjadi 1 baris biaya produksi")
-    expect(prismaMock.timesheet.update).not.toHaveBeenCalled()
+    expect(res?.error).toContain(`sudah ditarik menjadi ${jumlah} baris biaya produksi`)
+    expect(mutasi()).not.toHaveBeenCalled()
   })
 })
 
