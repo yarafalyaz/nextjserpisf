@@ -13,7 +13,13 @@ import {
   type VatInvoiceInput,
   type VatInvoiceListResult,
 } from "@/lib/reports/vat-invoices"
+import { safeSubtract, type SafeMathInput } from "@/lib/utils/math"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+
+/** DPP = subtotal − diskon, presisi sen (bukan float mentah). */
+export function vatDpp(subtotal: SafeMathInput, discount: SafeMathInput): number {
+  return safeSubtract(subtotal, discount, 2)
+}
 
 export interface VatInvoiceReport {
   report: VatInvoiceListResult
@@ -70,7 +76,7 @@ export async function loadVatInvoices(period: {
     date: invoice.date,
     documentNo: invoice.documentNo,
     counterparty: invoice.customer.name,
-    dpp: Number(invoice.subtotal) - Number(invoice.discount),
+    dpp: vatDpp(invoice.subtotal, invoice.discount),
     vat: Number(invoice.taxAmount),
     total: Number(invoice.grandTotal),
   }))
@@ -79,7 +85,7 @@ export async function loadVatInvoices(period: {
     date: bill.date,
     documentNo: bill.documentNo,
     counterparty: bill.vendor.name,
-    dpp: Number(bill.subtotal) - Number(bill.discountAmount),
+    dpp: vatDpp(bill.subtotal, bill.discountAmount),
     vat: Number(bill.tax),
     total: Number(bill.grandTotal),
   }))
