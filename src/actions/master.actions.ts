@@ -31,6 +31,7 @@ import {
 } from "@/lib/validations/schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseFormData } from "@/lib/validations/parse-form";
+import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import {
   createLeadSchema,
   updateLeadSchema,
@@ -723,7 +724,9 @@ function readEmployeeFormFields(
     positionId: safeId(formData.get("positionId")),
     paymentFrequency:
       (formData.get("paymentFrequency") as string) || "MONTHLY",
-    baseSalary: safeNumber(formData.get("baseSalary")) ?? 0,
+    // Gaji pokok nominal uang: wajib parser repo — safeNumber/Number membaca
+    // "5.000.000" sebagai 5 dan "5.000.000,50" sebagai NaN->0.
+    baseSalary: parseMoneyAmount(formData.get("baseSalary")) ?? 0,
     idNumber: formData.get("idNumber") as string | null,
     npwp: formData.get("npwp") as string | null,
     bankName: formData.get("bankName") as string | null,

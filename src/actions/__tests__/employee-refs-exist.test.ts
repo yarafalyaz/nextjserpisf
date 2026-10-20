@@ -108,3 +108,21 @@ describe("Employee departmentId/positionId wajib ada", () => {
     expect(mocks.prismaMock.employee.update).not.toHaveBeenCalled()
   })
 })
+
+describe("Employee baseSalary format Indonesia", () => {
+  it("create: '5.000.000' tersimpan 5000000, bukan 5", async () => {
+    const res = await actions.createEmployee(fd({ ...base, baseSalary: "5.000.000" }))
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.employee.create).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ baseSalary: 5000000 }) }),
+    )
+  })
+
+  it("update: '5.000.000,50' tersimpan 5000000.5, bukan 0", async () => {
+    const res = await actions.updateEmployee(1, fd({ ...base, baseSalary: "5.000.000,50" }))
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.employee.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ baseSalary: 5000000.5 }) }),
+    )
+  })
+})
