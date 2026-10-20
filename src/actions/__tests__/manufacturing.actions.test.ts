@@ -94,6 +94,7 @@ vi.mock("@/lib/services/period-lock.service", () => ({
 vi.mock("@/lib/services/qc.service", () => ({
   assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
   assertProductionOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+  assertWorkOrderVehicleIntakeRecorded: vi.fn().mockResolvedValue(undefined),
 }))
 vi.mock("@/lib/auth/warehouse-scope", () => ({
   getWarehouseScope: (...args: any[]) => mocks.warehouseScopeMock(...args),

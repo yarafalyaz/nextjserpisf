@@ -30,6 +30,36 @@ export async function assertWorkOrderQcCleared(
 }
 
 /**
+ * F-2026-10-20-50(a): intake gate for starting work. A work order tied to a
+ * customer vehicle (`customerVehicleId` set) must have a recorded
+ * `vehicle_intake` inspection (reference WorkOrder/<id>) before work starts —
+ * the masuk-kondisi record is what later disputes about pre-existing damage
+ * are settled against. Non-vehicle WOs are untouched. Unlike the completion
+ * gate this is NOT opt-in: a vehicle job without intake is exactly the gap
+ * the gate exists to close. Inspections are only ever created already
+ * `passed`/`failed` (see createQcInspection), so presence is the check.
+ */
+export async function assertWorkOrderVehicleIntakeRecorded(
+  workOrderId: number,
+  client: TxClient | typeof prisma = prisma,
+): Promise<void> {
+  const wo = await client.workOrder.findUnique({
+    where: { id: workOrderId },
+    select: { customerVehicleId: true },
+  })
+  if (!wo?.customerVehicleId) return
+
+  const intakeCount = await client.qcInspection.count({
+    where: { referenceType: "WorkOrder", referenceId: workOrderId, inspectionType: "vehicle_intake" },
+  })
+  if (intakeCount === 0) {
+    throw new Error(
+      "Tidak dapat memulai Perintah Kerja: inspeksi masuk kendaraan (vehicle intake) belum tercatat untuk kendaraan ini. Rekam inspeksi kondisi kendaraan masuk terlebih dahulu.",
+    )
+  }
+}
+
+/**
  * P1-2: gate yang sama untuk Production Order. Release FG tanpa cek
  * inspeksi/NCR adalah lubang: completeProductionOrder tak merujuk QC sama
  * sekali. Inspeksi/NCR dirujuk per (referenceType, referenceId) sehingga PO
