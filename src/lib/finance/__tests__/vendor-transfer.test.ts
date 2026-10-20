@@ -15,6 +15,15 @@ describe("splitInstructions", () => {
     expect(result.pendingAmount).toBe(1_500_000)
     expect(result.transferredAmount).toBe(2_000_000)
   })
+
+  it("total presisi sen tanpa float drift", () => {
+    const result = splitInstructions([
+      { vendorName: "A", amount: 10_000_000.1, transferredAt: null },
+      { vendorName: "B", amount: 10_000_000.1, transferredAt: null },
+      { vendorName: "C", amount: 10_000_000.1, transferredAt: null },
+    ])
+    expect(result.pendingAmount).toBe(30_000_000.3)
+  })
 })
 
 describe("normalizeTransferSelection", () => {
