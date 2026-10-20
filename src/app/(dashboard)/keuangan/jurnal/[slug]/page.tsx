@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { formatDate, formatCurrency, formatReferenceType } from "@/lib/utils/format"
+import { formatDate, formatCurrency, formatReferenceType, referenceHref } from "@/lib/utils/format"
+import Link from "next/link"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -61,7 +62,22 @@ export default async function JournalDetailPage({
         <DetailField label="No. Jurnal" value={journal.journalNumber} mono />
         <DetailField label="Tanggal Transaksi" value={formatDate(journal.transactionDate)} />
         <DetailField label="Tipe" value={{ GENERAL: "Umum", AUTO: "Otomatis" }[journal.type] ?? journal.type} />
-        {journal.referenceType && <DetailField label="Referensi" value={`${formatReferenceType(journal.referenceType)} #${journal.referenceId}`} />}
+        {journal.referenceType &&
+          (referenceHref(journal.referenceType, journal.referenceId) ? (
+            <DetailField
+              label="Referensi"
+              value={
+                <Link
+                  href={referenceHref(journal.referenceType, journal.referenceId)!}
+                  aria-label={`Lihat ${formatReferenceType(journal.referenceType)} #${journal.referenceId}`}
+                >
+                  {`${formatReferenceType(journal.referenceType)} #${journal.referenceId}`}
+                </Link>
+              }
+            />
+          ) : (
+            <DetailField label="Referensi" value={`${formatReferenceType(journal.referenceType)} #${journal.referenceId}`} />
+          ))}
         {journal.creator && <DetailField label="Dibuat Oleh" value={journal.creator.name} />}
         {journal.description && <DetailField label="Deskripsi" value={journal.description} colSpan="full" />}
       </DetailCard>

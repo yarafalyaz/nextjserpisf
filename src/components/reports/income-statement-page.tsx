@@ -39,7 +39,10 @@ export async function IncomeStatementPage({
   const user = await requirePermission("view_reports")
   const { period, options, showPercent } = await loadStatementOptionsContext(routeParams, searchParams)
 
-  const statement = await loadIncomeStatementByStatus(period, options, showPercent, statuses)
+  const statement = await loadIncomeStatementByStatus(period, options, showPercent, statuses, {
+    basePath: "/laporan/buku-besar",
+    periodSlug: period.slug,
+  })
 
   return (
     <ReportPageShell

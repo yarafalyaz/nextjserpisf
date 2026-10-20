@@ -12,6 +12,8 @@ import { ReportSheet } from "@/components/reports/report-sheet"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
+import Link from "next/link"
+import { referenceHref } from "@/lib/utils/format"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -48,7 +50,19 @@ export default async function GeneralLedgerPage({
     : null
   const accountId = accountRow?.id ?? null
 
-  let entries: { id: number; date: Date; journalNumber: string; memo: string | null; description: string | null; debit: number; credit: number }[] = []
+  let entries: {
+    id: number
+    date: Date
+    journalNumber: string
+    journalSlug: string | null
+    memo: string | null
+    description: string | null
+    referenceType: string | null
+    referenceId: number | null
+    referenceLabel: string | null
+    debit: number
+    credit: number
+  }[] = []
   let selectedAccount: { code: string; name: string } | null = null
   let openingBalance = 0
 
@@ -73,7 +87,14 @@ export default async function GeneralLedgerPage({
       },
       include: {
         journal: {
-          select: { journalNumber: true, transactionDate: true, description: true },
+          select: {
+            journalNumber: true,
+            slug: true,
+            transactionDate: true,
+            description: true,
+            referenceType: true,
+            referenceId: true,
+          },
         },
       },
       orderBy: [
@@ -86,8 +107,15 @@ export default async function GeneralLedgerPage({
       id: e.id,
       date: e.journal.transactionDate,
       journalNumber: e.journal.journalNumber,
+      journalSlug: e.journal.slug,
       memo: e.memo,
       description: e.journal.description,
+      referenceType: e.journal.referenceType,
+      referenceId: e.journal.referenceId,
+      referenceLabel:
+        e.journal.referenceType && referenceHref(e.journal.referenceType, e.journal.referenceId)
+          ? `${e.journal.referenceType} #${e.journal.referenceId}`
+          : null,
       debit: Number(e.debit),
       credit: Number(e.credit),
     }))
@@ -157,6 +185,7 @@ export default async function GeneralLedgerPage({
               <tr>
                 <th>Tanggal</th>
                 <th>No. Jurnal</th>
+                <th>Referensi</th>
                 <th>Keterangan</th>
                 <th className="num">Debit</th>
                 <th className="num">Kredit</th>
@@ -165,18 +194,38 @@ export default async function GeneralLedgerPage({
             </thead>
             <tbody>
               <tr className="subtotal">
-                <td colSpan={5}>Saldo Awal</td>
+                <td colSpan={6}>Saldo Awal</td>
                 <td className="num">{formatAccounting(openingBalance, { zeroDash: false })}</td>
               </tr>
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="stmt-empty">Tidak ada transaksi dalam periode ini</td>
+                  <td colSpan={7} className="stmt-empty">Tidak ada transaksi dalam periode ini</td>
                 </tr>
               ) : (
                 rows.map((row) => (
                   <tr key={row.id}>
                     <td>{row.date.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' })}</td>
-                    <td className="muted">{row.journalNumber}</td>
+                    <td className="muted">
+                      {row.journalSlug ? (
+                        <Link href={`/keuangan/jurnal/${row.journalSlug}`} aria-label={`Lihat jurnal ${row.journalNumber}`}>
+                          {row.journalNumber}
+                        </Link>
+                      ) : (
+                        row.journalNumber
+                      )}
+                    </td>
+                    <td className="muted">
+                      {row.referenceLabel && row.referenceType && referenceHref(row.referenceType, row.referenceId) ? (
+                        <Link
+                          href={referenceHref(row.referenceType, row.referenceId)!}
+                          aria-label={`Lihat ${row.referenceLabel}`}
+                        >
+                          {row.referenceLabel}
+                        </Link>
+                      ) : (
+                        row.referenceLabel ?? "-"
+                      )}
+                    </td>
                     <td>{row.memo || row.description || '-'}</td>
                     <td className="num">{row.debit ? formatAccounting(row.debit, { zeroDash: false }) : ''}</td>
                     <td className="num">{row.credit ? formatAccounting(row.credit, { zeroDash: false }) : ''}</td>
@@ -186,7 +235,7 @@ export default async function GeneralLedgerPage({
               )}
               {rows.length > 0 && (
                 <tr className="grand">
-                  <td colSpan={3}>Total &amp; Saldo Akhir</td>
+                  <td colSpan={4}>Total &amp; Saldo Akhir</td>
                   <td className="num">{formatAccounting(totalDebit, { zeroDash: false })}</td>
                   <td className="num">{formatAccounting(totalCredit, { zeroDash: false })}</td>
                   <td className="num">{formatAccounting(finalBalance, { zeroDash: false })}</td>

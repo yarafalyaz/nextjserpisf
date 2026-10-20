@@ -13,6 +13,7 @@
  */
 
 import { formatAccounting } from "@/lib/utils/format"
+import { buildReportHref } from "@/lib/reports/report-href"
 import type { StatementRow } from "@/lib/reports/statement-display"
 import type { IncomeStatementResult } from "@/lib/finance/income-statement"
 
@@ -34,6 +35,8 @@ export type StatementTableRow =
       name: string
       level: number
       hasChildren: boolean
+      /** Tautan drill-down layar saja (F-30); PDF/CSV tetap teks polos. */
+      href?: string
       values: string[]
     }
   /** Subtotal per kelompok — garis tipis di atas. */
@@ -55,7 +58,17 @@ export function statementAmount(value: number): string {
   return formatAccounting(value, { zeroDash: false })
 }
 
-function lineRows(rows: StatementRow[], negative = false): StatementTableRow[] {
+export interface StatementLineLink {
+  basePath: string
+  periodSlug: string
+}
+
+function ledgerHref(link: StatementLineLink | undefined, row: StatementRow): string | undefined {
+  if (!link || !row.slug) return undefined
+  return buildReportHref(link.basePath, link.periodSlug, { akun: row.slug })
+}
+
+function lineRows(rows: StatementRow[], negative = false, link?: StatementLineLink): StatementTableRow[] {
   return rows.map((row) => ({
     kind: "line",
     id: row.id,
@@ -63,6 +76,7 @@ function lineRows(rows: StatementRow[], negative = false): StatementTableRow[] {
     name: row.name,
     level: row.level,
     hasChildren: row.hasChildren,
+    href: ledgerHref(link, row),
     values: [statementAmount(negative ? -row.balance : row.balance)],
   }))
 }
@@ -76,6 +90,7 @@ export interface BalanceSheetTableInput {
   totalLiabilities: number
   totalEquity: number
   isBalanced: boolean
+  lineLink?: StatementLineLink
 }
 
 /**
@@ -89,13 +104,13 @@ export function buildBalanceSheetTable(input: BalanceSheetTableInput): Statement
 
   const rows: StatementTableRow[] = [
     { kind: "group", label: "Aset" },
-    ...lineRows(input.assetRows),
+    ...lineRows(input.assetRows, false, input.lineLink),
     { kind: "subtotal", label: "Jumlah Aset", values: [statementAmount(input.totalAssets)] },
     { kind: "group", label: "Kewajiban" },
-    ...lineRows(input.liabilityRows),
+    ...lineRows(input.liabilityRows, false, input.lineLink),
     { kind: "subtotal", label: "Jumlah Kewajiban", values: [statementAmount(input.totalLiabilities)] },
     { kind: "group", label: "Ekuitas" },
-    ...lineRows(input.equityRows),
+    ...lineRows(input.equityRows, false, input.lineLink),
     { kind: "subtotal", label: "Jumlah Ekuitas", values: [statementAmount(input.totalEquity)] },
     {
       kind: "grand",
@@ -133,6 +148,7 @@ export interface IncomeStatementTableInput {
   otherIncomeRows: StatementRow[]
   otherExpenseRows: StatementRow[]
   result: IncomeStatementResult
+  lineLink?: StatementLineLink
 }
 
 /**
@@ -158,6 +174,7 @@ export function buildIncomeStatementTable(input: IncomeStatementTableInput): Sta
       name: row.name,
       level: row.level,
       hasChildren: row.hasChildren,
+      href: ledgerHref(input.lineLink, row),
       values: showPercent
         ? [
             statementAmount(negative ? -row.balance : row.balance),

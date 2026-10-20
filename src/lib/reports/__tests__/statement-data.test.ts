@@ -227,3 +227,23 @@ describe("loadIncomeStatementByCostCenter", () => {
     expect(mocks.sumEntriesByAccount).not.toHaveBeenCalled()
   })
 })
+
+describe("drill-down Buku Besar F-2026-10-20-30 (data)", () => {
+  it("slug akun dari loader menjadi href baris neraca; tanpa lineLink polos", async () => {
+    mocks.accountFindMany.mockResolvedValue([{ ...ASSET_ACCOUNT, slug: "kas" }])
+    mocks.journalEntryFindMany.mockResolvedValue([
+      { accountId: 1, debit: 1_000_000, credit: 0, account: ASSET_ACCOUNT },
+    ])
+
+    const linked = await loadBalanceSheetStatement(new Date(2026, 9, 31), DEFAULT_STATEMENT_OPTIONS, {
+      basePath: "/laporan/buku-besar",
+      periodSlug: "2026-10",
+    })
+    const line = linked.table.rows.find((row) => row.kind === "line")
+    expect(line?.kind === "line" ? line.href : null).toBe("/laporan/buku-besar/2026-10/akun/kas")
+
+    const plain = await loadBalanceSheetStatement(new Date(2026, 9, 31), DEFAULT_STATEMENT_OPTIONS)
+    const plainLine = plain.table.rows.find((row) => row.kind === "line")
+    expect(plainLine?.kind === "line" ? plainLine.href : "ada").toBeUndefined()
+  })
+})

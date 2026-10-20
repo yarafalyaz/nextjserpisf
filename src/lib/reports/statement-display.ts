@@ -35,6 +35,7 @@ const ZERO_EPSILON = 0.005
 
 export interface StatementAccount {
   id: number
+  slug?: string | null
   code: string
   name: string
   parentId: number | null
@@ -44,6 +45,8 @@ export interface StatementAccount {
 
 export interface StatementRow {
   id: number
+  /** Slug akun untuk tautan drill-down Buku Besar (null = baris tanpa slug). */
+  slug?: string | null
   code: string
   name: string
   /** Saldo yang ditampilkan (roll-up induk atau saldo sendiri). */
@@ -105,7 +108,7 @@ export function buildStatementRows(
 
     const childLevel = rowVisible ? level + 1 : level
     if (rowVisible) {
-      rows.push({ id: account.id, code: account.code, name: account.name, balance, level, hasChildren })
+      rows.push({ id: account.id, slug: account.slug, code: account.code, name: account.name, balance, level, hasChildren })
     }
     // A hidden row promotes its children to its own level so no posting account
     // disappears from the report.

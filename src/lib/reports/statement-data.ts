@@ -96,7 +96,7 @@ export async function loadBalanceSheetParts(
     }),
     prisma.account.findMany({
       where: { isActive: true },
-      select: { id: true, code: true, name: true, type: true, parentId: true },
+      select: { id: true, slug: true, code: true, name: true, type: true, parentId: true },
       orderBy: { code: "asc" },
     }),
   ])
@@ -127,6 +127,7 @@ export async function loadBalanceSheetParts(
         .filter((account) => account.type === type)
         .map((account) => ({
           id: account.id,
+          slug: account.slug,
           code: account.code,
           name: account.name,
           parentId: account.parentId,
@@ -153,6 +154,7 @@ export async function loadBalanceSheetParts(
 export async function loadBalanceSheetStatement(
   asOfDate: Date,
   options: StatementDisplayOptions,
+  lineLink?: { basePath: string; periodSlug: string },
 ): Promise<BalanceSheetStatement> {
   const parts = await loadBalanceSheetParts(asOfDate, options)
 
@@ -166,6 +168,7 @@ export async function loadBalanceSheetStatement(
       totalLiabilities: parts.totalLiabilities,
       totalEquity: parts.totalEquity,
       isBalanced: parts.isBalanced,
+      lineLink,
     }),
     asOfLabel: parts.asOfLabel,
     periodLabel: `Per ${parts.asOfLabel}`,
@@ -195,11 +198,12 @@ export async function loadIncomeStatementByStatus(
   options: StatementDisplayOptions,
   showPercent: boolean,
   statuses: readonly string[],
+  lineLink?: { basePath: string; periodSlug: string },
 ): Promise<IncomeStatementStatement> {
   const [accounts, periodSums] = await Promise.all([
     prisma.account.findMany({
       where: { isActive: true },
-      select: { id: true, code: true, name: true, type: true, parentId: true, reportGroup: true },
+      select: { id: true, slug: true, code: true, name: true, type: true, parentId: true, reportGroup: true },
       orderBy: { code: "asc" },
     }),
     sumEntriesByAccount({ date: { gte: period.start, lte: period.end }, statuses }),
@@ -207,6 +211,7 @@ export async function loadIncomeStatementByStatus(
 
   const lines = accounts.map((acc) => ({
     id: acc.id,
+    slug: acc.slug,
     code: acc.code,
     name: acc.name,
     type: acc.type,
@@ -230,6 +235,7 @@ export async function loadIncomeStatementByStatus(
       return [
         {
           id: line.id,
+          slug: line.slug,
           code: line.code,
           name: line.name,
           parentId: parentById.get(line.id) ?? null,
@@ -260,6 +266,7 @@ export async function loadIncomeStatementByStatus(
       otherIncomeRows: rowsOf("other_income"),
       otherExpenseRows: rowsOf("other_expense"),
       result,
+      lineLink,
     }),
     columnLabel,
     periodLabel: `Periode ${shortDate(start)} – ${shortDate(end)}`,
