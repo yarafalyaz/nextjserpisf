@@ -574,17 +574,19 @@ export async function deleteBomRevision(id: number) {
         id: true,
         status: true,
         productId: true,
-        _count: { select: { productionOrders: true, workOrders: true } },
+        _count: { select: { productionOrders: true, workOrders: true, fitmentRules: true } },
       },
     });
     if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
     if (revision.status !== "draft") {
       return { success: false, error: "Hanya revisi draft yang dapat dihapus." };
     }
-    if (revision._count.productionOrders > 0 || revision._count.workOrders > 0) {
+    // VehicleFitmentRule.bomRevisionId opsional SetNull: tanpa hitungan ini
+    // hapus draft diam-diam melepas aturan kompatibilitas dari revisi BOM-nya.
+    if (revision._count.productionOrders > 0 || revision._count.workOrders > 0 || revision._count.fitmentRules > 0) {
       return {
         success: false,
-        error: "Revisi BOM sudah dipakai oleh perintah kerja/produksi dan tidak dapat dihapus.",
+        error: "Revisi BOM sudah dipakai oleh perintah kerja/produksi atau aturan kompatibilitas kendaraan dan tidak dapat dihapus.",
       };
     }
 
