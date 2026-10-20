@@ -72,6 +72,47 @@ describe("loadJobOrderCost — data dari perintah produksi yang tertaut WO", () 
     expect(cost.jobCount).toBe(1)
   })
 
+  it("17 baris bahan 1 x 0,24 per WO tepat 4,08 (bukan 4,080000000000002)", async () => {
+    mocks.prismaMock.materialIssue.findMany.mockResolvedValue([
+      {
+        workOrderId: 1,
+        items: Array.from({ length: 17 }, () => ({ qty: 1, cost: 0.24 })),
+      },
+    ])
+
+    const { cost } = await loadJobOrderCost(period)
+
+    expect(cost.totals.materialCost).toBe(4.08)
+  })
+
+  it("3 baris bahan 1 x 0,335 dibulatkan per baris ke sen", async () => {
+    mocks.prismaMock.materialIssue.findMany.mockResolvedValue([
+      {
+        workOrderId: 1,
+        items: Array.from({ length: 3 }, () => ({ qty: 1, cost: 0.335 })),
+      },
+    ])
+
+    const { cost } = await loadJobOrderCost(period)
+
+    expect(cost.totals.materialCost).toBe(1.02)
+  })
+
+  it("akumulasi biaya produksi lintas baris tepat sen", async () => {
+    mocks.prismaMock.productionCost.findMany.mockResolvedValue(
+      Array.from({ length: 17 }, () => ({
+        workOrderId: 1,
+        amount: 0.24,
+        productionOrder: null,
+      })),
+    )
+
+    const { cost } = await loadJobOrderCost(period)
+
+    expect(cost.totals.productionCost).toBe(4.08)
+    expect(cost.totals.totalCost).toBe(4.08)
+  })
+
   it("mengabaikan pengeluaran material tanpa workOrderId (sisi orphan)", async () => {
     mocks.prismaMock.materialIssue.findMany.mockResolvedValue([
       { workOrderId: null, items: [{ qty: 2, cost: 5_000 }] },

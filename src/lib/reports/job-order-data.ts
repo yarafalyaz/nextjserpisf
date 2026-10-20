@@ -11,6 +11,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import {
   buildJobOrderCost,
   type JobOrderCostResult,
@@ -93,15 +94,25 @@ export async function loadJobOrderCost(period: {
   const materialByWorkOrder = new Map<number, number>()
   for (const issue of issues) {
     if (issue.workOrderId === null) continue
-    const value = issue.items.reduce((sum, item) => sum + Number(item.qty) * Number(item.cost), 0)
-    materialByWorkOrder.set(issue.workOrderId, (materialByWorkOrder.get(issue.workOrderId) ?? 0) + value)
+    // ponytail: akumulasi sen-aman di loader; builder hanya meng-round total per WO masuk.
+    const value = issue.items.reduce(
+      (sum, item) => safeAdd(sum, safeMultiply(Number(item.qty), Number(item.cost), 2), 2),
+      0,
+    )
+    materialByWorkOrder.set(
+      issue.workOrderId,
+      safeAdd(materialByWorkOrder.get(issue.workOrderId) ?? 0, value, 2),
+    )
   }
 
   const costByWorkOrder = new Map<number, number>()
   for (const cost of costs) {
     const workOrderId = cost.workOrderId ?? cost.productionOrder?.workOrderId ?? null
     if (workOrderId === null) continue
-    costByWorkOrder.set(workOrderId, (costByWorkOrder.get(workOrderId) ?? 0) + Number(cost.amount))
+    costByWorkOrder.set(
+      workOrderId,
+      safeAdd(costByWorkOrder.get(workOrderId) ?? 0, Number(cost.amount), 2),
+    )
   }
 
   const completedByWorkOrder = new Map<number, number>()
