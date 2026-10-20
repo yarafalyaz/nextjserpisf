@@ -1,0 +1,96 @@
+export const dynamic = "force-dynamic"
+
+import { toPlain } from "@/lib/utils/serialization"
+import Link from "next/link"
+import { prisma } from "@/lib/db/prisma"
+import { parsePagination } from "@/lib/utils/pagination"
+import { requirePermission } from "@/lib/auth/permissions"
+import { InvoiceTable } from "../_components/invoice-table"
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+
+import type { Metadata } from "next"
+
+export const metadata: Metadata = { title: "Faktur Jatuh Tempo" }
+
+export default async function OverdueInvoicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cari?: string; halaman?: string; pageSize?: string }>
+}) {
+  await requirePermission("view_sales_invoices")
+
+  const params = await searchParams
+  const { page, pageSize, take } = parsePagination(params)
+  const cari = params.cari?.trim()
+
+  // Kondisi sama persis dengan penghitung widget dashboard:
+  // sudah lewat tanggal jatuh tempo, belum lunas, tak batal, tak terhapus.
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const rawInvoices = await prisma.salesInvoice.findMany({
+    where: cari
+      ? {
+          dueDate: { lt: today },
+          paymentStatus: { not: "paid" },
+          status: { not: "cancelled" },
+          deletedAt: null,
+          OR: [
+            { documentNo: { contains: cari } },
+            { customer: { name: { contains: cari } } },
+          ],
+        }
+      : {
+          dueDate: { lt: today },
+          paymentStatus: { not: "paid" },
+          status: { not: "cancelled" },
+          deletedAt: null,
+        },
+    include: { customer: true },
+    take,
+    skip: (page - 1) * pageSize,
+    orderBy: { dueDate: "asc" },
+  })
+
+  const invoices = rawInvoices.map((inv) => ({
+    id: inv.id,
+    slug: inv.slug,
+    documentNo: inv.documentNo,
+    date: inv.date,
+    dueDate: inv.dueDate,
+    totalAmount: Number(inv.totalAmount),
+    paidAmount: Number(inv.paidAmount),
+    status: inv.status,
+    customer: inv.customer,
+  }))
+
+  const total = await prisma.salesInvoice.count({
+    where: {
+      dueDate: { lt: today },
+      paymentStatus: { not: "paid" },
+      status: { not: "cancelled" },
+      deletedAt: null,
+    },
+  })
+
+  const tableData = toPlain(invoices)
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{label:"Faktur",href:"/penjualan/faktur"},{label:"Jatuh Tempo"}]} />
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Faktur Jatuh Tempo</h1>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-danger/10 px-3 py-1 text-xs font-medium text-danger">
+            Jatuh tempo ({total})
+          </span>
+          <Link href="/penjualan/faktur/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-invoice-btn">
+            + Buat Faktur
+          </Link>
+        </div>
+      </div>
+
+      <InvoiceTable data={tableData} total={total} page={page} pageSize={pageSize} />
+    </div>
+  )
+}
