@@ -68,8 +68,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(data, { headers: CACHE_HEADERS })
     }
 
-    return apiError("BAD_REQUEST", "Invalid type")
+    return apiError("BAD_REQUEST", "Tipe data alamat tidak dikenal")
   } catch {
-    return apiError("INTERNAL_ERROR", "Failed to fetch data")
+    return apiError("INTERNAL_ERROR", "Gagal memuat data alamat")
   }
 }
