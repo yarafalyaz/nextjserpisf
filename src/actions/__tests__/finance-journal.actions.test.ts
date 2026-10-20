@@ -123,6 +123,54 @@ describe("updateJournal", () => {
     expect(result.error).toContain("debit dan credit sekaligus")
   })
 
+  it("rejects a negative-only line instead of silently dropping it", async () => {
+    // Baris debit negatif tanpa kredit: kode lama membuangnya diam-diam
+    // (filter debit>0||credit>0) lalu jurnal sisa lolos seimbang.
+    const entries = JSON.stringify([
+      { accountId: 100, debit: 500, credit: 0 },
+      { accountId: 200, debit: 0, credit: 500 },
+      { accountId: 300, debit: -50, credit: 0 },
+    ])
+    const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", entries }))
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("tidak boleh negatif")
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it("rejects a line with amount but no account instead of silently dropping it", async () => {
+    const entries = JSON.stringify([
+      { accountId: 100, debit: 500, credit: 0 },
+      { accountId: 200, debit: 0, credit: 500 },
+      { accountId: 0, debit: 250, credit: 0 },
+    ])
+    const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", entries }))
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("Akun wajib")
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it("rejects a non-finite amount instead of silently dropping the line", async () => {
+    const entries = JSON.stringify([
+      { accountId: 100, debit: 500, credit: 0 },
+      { accountId: 200, debit: 0, credit: 500 },
+      { accountId: 300, debit: "abc", credit: 0 },
+    ])
+    const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", entries }))
+    expect(result.success).toBe(false)
+    expect(result.error).toContain("tidak valid")
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it("still skips a fully blank form line", async () => {
+    const entries = JSON.stringify([
+      { accountId: 100, debit: 500, credit: 0, memo: "kas" },
+      { accountId: 200, debit: 0, credit: 500, memo: "modal" },
+      { accountId: 0, debit: 0, credit: 0, memo: "" },
+    ])
+    const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", entries }))
+    expect(result.success).toBe(true)
+  })
+
   it("replaces entries atomically on a valid balanced edit", async () => {
     const result = await updateJournal(7, fd({ transactionDate: "2026-06-02", description: "edit", entries: validEntries }))
     expect(result.success).toBe(true)
