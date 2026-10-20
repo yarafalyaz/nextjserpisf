@@ -5,6 +5,8 @@
  * factory di bawah hanya didelegasikan dari factory berkas pemanggil
  * dengan objek `mocks` hoisted pemanggil. Nilai mock tidak berubah.
  */
+import { vi } from "vitest"
+
 type AnyMocks = Record<string, any>
 
 export const permissionFactory = (m: AnyMocks) => ({ requirePermission: (...a: unknown[]) => m.requirePermission(...a) })
@@ -22,3 +24,21 @@ export function formFormData(entries: Record<string, string>): FormData {
   for (const [k, v] of Object.entries(entries)) fd.set(k, v)
   return fd
 }
+
+/** Model mock generik tes aksi: finder kosong, create ter-resolve `createResult`. */
+export function buildModelMock(createResult: unknown = { id: 99 }) {
+  return {
+    findFirst: vi.fn().mockResolvedValue(null),
+    findUnique: vi.fn().mockResolvedValue(null),
+    findUniqueOrThrow: vi.fn().mockResolvedValue(null),
+    findMany: vi.fn().mockResolvedValue([]),
+    create: vi.fn().mockResolvedValue(createResult),
+    update: vi.fn().mockResolvedValue({}),
+    count: vi.fn().mockResolvedValue(0),
+  }
+}
+
+export const approvalFactory = () => ({
+  requestApprovalIfConfigured: () => Promise.resolve(undefined),
+  assertApproved: () => Promise.resolve(undefined),
+})
