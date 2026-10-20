@@ -61,6 +61,14 @@ describe("GET /api/notifications", () => {
     expect(mocks.notificationFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { userId: 7 },
       take: 10,
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        type: true,
+        readAt: true,
+        createdAt: true,
+      },
     }))
   })
 
