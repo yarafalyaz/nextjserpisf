@@ -21,6 +21,7 @@ import type { Metadata } from "next"
 
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { LeadCustomerVehiclesCard } from "@/components/reports/lead-customer-vehicles-card"
 
 export const metadata: Metadata = { title: "Prospek" }
 
@@ -49,6 +50,30 @@ export default async function LeadDetailPage({
   )
 
   if (!lead) notFound()
+
+  // F-2026-10-20-93(a): kendaraan pelanggan tertaut (read-only). Lead belum
+  // terkonversi (customerId kosong) tidak punya kendaraan; tampilkan kartu
+  // hanya bila pelanggan tertaut ada.
+  const linkedCustomer = lead.customerId
+    ? await prisma.customer.findUnique({
+        where: { id: lead.customerId },
+        select: { id: true, slug: true, name: true },
+      })
+    : null
+  const linkedVehicles = linkedCustomer
+    ? await prisma.customerVehicle.findMany({
+        where: { customerId: linkedCustomer.id },
+        select: {
+          id: true,
+          slug: true,
+          plateNumber: true,
+          color: true,
+          isActive: true,
+          vehicle: { select: { name: true, year: true } },
+        },
+        orderBy: { createdAt: "desc" },
+      })
+    : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -79,6 +104,7 @@ export default async function LeadDetailPage({
             id: "info",
             label: "Informasi",
             content: (
+              <div className="flex flex-col gap-6">
               <DetailCard>
                 <DetailField label="Nama" value={lead.name} />
                 <DetailField label="Email" value={lead.email || "-"} />
@@ -90,6 +116,23 @@ export default async function LeadDetailPage({
                 {lead.notes && <DetailField label="Catatan" value={lead.notes} colSpan="full" />}
                 <DetailField label="Dibuat" value={formatDate(lead.createdAt)} />
               </DetailCard>
+              {linkedCustomer ? (
+                <LeadCustomerVehiclesCard
+                  customerSlug={linkedCustomer.slug}
+                  customerId={linkedCustomer.id}
+                  customerName={linkedCustomer.name}
+                  vehicles={linkedVehicles.map((vehicle) => ({
+                    id: vehicle.id,
+                    slug: vehicle.slug,
+                    plateNumber: vehicle.plateNumber,
+                    vehicleName: vehicle.vehicle?.name ?? null,
+                    color: vehicle.color,
+                    year: vehicle.vehicle?.year ?? null,
+                    isActive: vehicle.isActive,
+                  }))}
+                />
+              ) : null}
+              </div>
             ),
           },
           {
