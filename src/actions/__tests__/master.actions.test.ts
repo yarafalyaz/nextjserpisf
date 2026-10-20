@@ -1388,6 +1388,58 @@ describe('Coverage Hardening Edge Cases', () => {
     expect(updateArg.data.name).toBe("Kategori")
   })
 
+  it("createItemCategory rejects arbitrary costingMethod and missing parent", async () => {
+    const badCosting = await actions.createItemCategory(fdMap({ name: "Kat A", costingMethod: "lifo" }))
+    expect(badCosting?.success).toBe(false)
+    expect(mocks.prismaMock.itemCategory.create).not.toHaveBeenCalled()
+
+    mocks.prismaMock.itemCategory.findUnique.mockResolvedValue(null)
+    const badParent = await actions.createItemCategory(fdMap({ name: "Kat B", parentId: "999" }))
+    expect(badParent?.success).toBe(false)
+    expect(badParent?.error).toMatch(/induk tidak ditemukan/i)
+    expect(mocks.prismaMock.itemCategory.create).not.toHaveBeenCalled()
+  })
+
+  it("createItemCategory accepts fifo with existing parent", async () => {
+    mocks.prismaMock.itemCategory.findUnique.mockResolvedValueOnce({ id: 7 })
+    const res = await actions.createItemCategory(fdMap({ name: "Kat C", parentId: "7", costingMethod: "fifo" }))
+    expect(res?.success).toBe(true)
+    const createArg = mocks.prismaMock.itemCategory.create.mock.calls.at(-1)?.[0]
+    expect(createArg.data.costingMethod).toBe("fifo")
+    expect(createArg.data.parentId).toBe(7)
+  })
+
+  it("updateItemCategory rejects arbitrary costingMethod, self-parent, and cycle", async () => {
+    const badCosting = await actions.updateItemCategory(5, fdMap({ name: "Kat", costingMethod: "weird" }))
+    expect(badCosting?.success).toBe(false)
+    expect(mocks.prismaMock.itemCategory.update).not.toHaveBeenCalled()
+
+    const selfParent = await actions.updateItemCategory(5, fdMap({ name: "Kat", parentId: "5" }))
+    expect(selfParent?.success).toBe(false)
+    expect(selfParent?.error).toMatch(/dirinya sendiri/i)
+
+    // Parent 9 adalah anak dari 5 -> siklus.
+    mocks.prismaMock.itemCategory.findUnique.mockResolvedValueOnce({ id: 9, parentId: 5 })
+    const cycle = await actions.updateItemCategory(5, fdMap({ name: "Kat", parentId: "9" }))
+    expect(cycle?.success).toBe(false)
+    expect(cycle?.error).toMatch(/sub-kategori/i)
+    expect(mocks.prismaMock.itemCategory.update).not.toHaveBeenCalled()
+  })
+
+  it("itemCategory treats blank parentId/costingMethod as unset", async () => {
+    const created = await actions.createItemCategory(fdMap({ name: "Kat D", parentId: "", costingMethod: "" }))
+    expect(created?.success).toBe(true)
+    const createArg = mocks.prismaMock.itemCategory.create.mock.calls.at(-1)?.[0]
+    expect(createArg.data.parentId).toBeNull()
+    expect(createArg.data.costingMethod).toBe("average")
+
+    const updated = await actions.updateItemCategory(5, fdMap({ name: "Kat", parentId: "", costingMethod: "" }))
+    expect(updated?.success).toBe(true)
+    const updateArg = mocks.prismaMock.itemCategory.update.mock.calls.at(-1)?.[0]
+    expect(updateArg.data.parentId).toBeNull()
+    expect(updateArg.data).not.toHaveProperty("costingMethod")
+  })
+
   it('deleteTax - refuses when the tax is still a member of a tax group', async () => {
     // tax_group_taxes.tax_id has no FK, so a hard delete would silently orphan
     // the group row. The action must guard on membership explicitly.
