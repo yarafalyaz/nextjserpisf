@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   })
 
   if (admins.length === 0) {
-    return NextResponse.json({ message: "No active admins found." })
+    return NextResponse.json({ message: "Tidak ada admin aktif." })
   }
 
   // Pre-resolve admin IDs once. notificationService.notifyAdmins internally
@@ -199,7 +199,7 @@ export async function GET(request: Request) {
   }
 
   return NextResponse.json({
-    message: "Daily notifications sent.",
+    message: "Notifikasi harian terkirim.",
     adminsNotified: admins.length,
     results,
   })
