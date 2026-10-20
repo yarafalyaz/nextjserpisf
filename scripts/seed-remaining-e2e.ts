@@ -362,6 +362,42 @@ async function main() {
   assert(checklistItems >= 1, "QC checklist items tidak tersimpan");
   console.log(`6. QC Checklist: ${checklist.code} ✓ (${checklistItems} item, released)`);
 
+  // 6b. Vehicle intake template (F-2026-10-20-13a): existing-damage checklist
+  // bound to a WorkOrder at vehicle reception. Type lives in the free String
+  // column; upsert on code keeps re-runs safe like the fixture above.
+  const intakeChecklist = await prisma.qcChecklist.upsert({
+    where: { code: "QC-VEHICLE-INTAKE" },
+    update: { status: "released", isActive: true, releasedAt: new Date("2026-05-28") },
+    create: {
+      code: "QC-VEHICLE-INTAKE",
+      name: "Kondisi Kendaraan Masuk",
+      checklistType: "vehicle_intake",
+      status: "released",
+      isActive: true,
+      releasedAt: new Date("2026-05-28"),
+      releasedBy: userId,
+      createdBy: userId,
+    },
+  });
+  const intakeItems = await prisma.qcChecklistItem.count({ where: { checklistId: intakeChecklist.id } });
+  if (intakeItems === 0) {
+    await prisma.qcChecklistItem.createMany({
+      data: [
+        { checklistId: intakeChecklist.id, sortOrder: 1, itemName: "Panel bodi kiri (gores/penyok/cat)", method: "visual", isRequired: true },
+        { checklistId: intakeChecklist.id, sortOrder: 2, itemName: "Panel bodi kanan (gores/penyok/cat)", method: "visual", isRequired: true },
+        { checklistId: intakeChecklist.id, sortOrder: 3, itemName: "Panel bodi depan & belakang (gores/penyok/cat)", method: "visual", isRequired: true },
+        { checklistId: intakeChecklist.id, sortOrder: 4, itemName: "Kaca & spion (retak/pecah)", method: "visual", isRequired: true },
+        { checklistId: intakeChecklist.id, sortOrder: 5, itemName: "Interior & jok (sobek/noda)", method: "visual", isRequired: true },
+        { checklistId: intakeChecklist.id, sortOrder: 6, itemName: "Ban & velg (keausan/kerusakan)", method: "visual", isRequired: true },
+        { checklistId: intakeChecklist.id, sortOrder: 7, itemName: "Aksesori terpasang (audio, karpet, dongkrak, ban serep)", method: "visual", isRequired: true },
+        { checklistId: intakeChecklist.id, sortOrder: 8, itemName: "Lampu & indikator dashboard", method: "functional", isRequired: true },
+      ],
+    });
+  }
+  const intakeCount = await prisma.qcChecklistItem.count({ where: { checklistId: intakeChecklist.id } });
+  assert(intakeCount >= 8, "Template kondisi kendaraan masuk tidak lengkap");
+  console.log(`6b. QC Vehicle Intake: ${intakeChecklist.code} ✓ (${intakeCount} item, released)`);
+
   // Asset — the crud-surface sweep walks /aset, and with an empty asset list
   // there is no row to open: the desktop run "passes" by matching a nav link
   // while the mobile run times out (the sidebar is collapsed). One row keeps
