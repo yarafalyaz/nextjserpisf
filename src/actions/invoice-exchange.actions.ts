@@ -16,8 +16,10 @@ import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
 
 const REVALIDATE = "/penjualan/tukar-faktur"
 
-/** Faktur yang boleh diserahkan: sudah diposting (bukan draft) dan belum lunas. */
-const EXCHANGEABLE_STATUSES = ["posted", "partial", "paid"] as const
+/** Faktur yang boleh diserahkan: sudah diposting (bukan draft). Kelunasan
+ * diputuskan dari ANGKA (paidAmount vs grandTotal), bukan status saja —
+ * halaman tambah memakai tolok ukur yang sama (sisa > 0,005). */
+const EXCHANGEABLE_STATUSES = ["posted", "partial"] as const
 
 export interface InvoiceExchangeActionResult {
   success: boolean
@@ -64,7 +66,7 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
 
     const invoices = await prisma.salesInvoice.findMany({
       where: { id: { in: invoiceIds }, deletedAt: null },
-      select: { id: true, documentNo: true, customerId: true, grandTotal: true, status: true },
+      select: { id: true, documentNo: true, customerId: true, grandTotal: true, paidAmount: true, status: true },
     })
 
     if (invoices.length !== invoiceIds.length) {
@@ -76,6 +78,16 @@ export async function createInvoiceExchange(formData: FormData): Promise<Invoice
       return {
         success: false,
         error: `Faktur berikut bukan milik pelanggan ini: ${wrongCustomer.map((invoice) => invoice.documentNo).join(", ")}.`,
+      }
+    }
+
+    const settled = invoices.filter(
+      (invoice) => invoice.status === "paid" || Number(invoice.grandTotal) - Number(invoice.paidAmount) <= 0.005,
+    )
+    if (settled.length > 0) {
+      return {
+        success: false,
+        error: `Faktur berikut sudah lunas sehingga tidak perlu diserahkan: ${settled.map((invoice) => invoice.documentNo).join(", ")}.`,
       }
     }
 
