@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
       if (typeof ops === "function") return ops(prismaMock)
       return Promise.all(ops)
     }),
+    $executeRaw: vi.fn().mockResolvedValue(1),
   }
 
   return {
@@ -101,6 +102,35 @@ describe("createInvoiceExchange Zod validation", () => {
     const data = mocks.prismaMock.invoiceExchange.create.mock.calls.at(-1)![0].data
     expect(data.date.toISOString()).toBe("2026-10-20T00:00:00.000Z")
     expect(data.customerId).toBe(1)
+  })
+})
+
+describe("createInvoiceExchange race guard dalam tx (Salsa)", () => {
+  it("menolak bila cek dalam tx menemukan faktur sudah diserahkan (submit ganda bersamaan)", async () => {
+    // Cek luar tx bersih, tapi di dalam tx (sesudah lock) faktur sudah tercatat.
+    mocks.prismaMock.invoiceExchangeItem.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([{ salesInvoiceId: 10 }])
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah pernah diserahkan")
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("menolak bila faktur lunas di antara cek luar dan lock dalam tx", async () => {
+    mocks.prismaMock.salesInvoice.findMany
+      .mockResolvedValueOnce([{ id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000, paidAmount: 0, status: "posted" }])
+      .mockResolvedValueOnce([{ id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000, paidAmount: 1000, status: "paid" }])
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah lunas")
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
+
+  it("mengunci baris faktur di dalam tx sebelum cek ulang", async () => {
+    const res = await actions.createInvoiceExchange(fd(base))
+    expect(res.success).toBe(true)
+    expect(mocks.prismaMock.$transaction).toHaveBeenCalled()
   })
 })
 
