@@ -30,6 +30,39 @@ import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight, getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 import type { Prisma } from "@prisma/client"
+import {
+  loadPriceListRows,
+  pickPriceListPrice,
+  resolveLinePricing,
+} from "@/lib/services/customer-price-list.service"
+
+// F-PRICELIST-01 tahap 1: terapkan daftar harga pelanggan ke baris dokumen
+// yang dibuat LANGSUNG dari form (bukan hasil konversi penawaran/pesanan —
+// baris hasil konversi sudah membawa harga dokumen sumbernya). Harga
+// price-list menjadi unitPrice baris; diskon baris manual tetap menimpa di
+// atasnya; tanpa baris price-list berlaku, harga kiriman form dipakai apa
+// adanya (default aman). Harga SAP tidak dibaca di sini: FIFO menghitung
+// HPP sendiri dan peringatan margin tidak pernah memblokir simpan.
+async function applyPriceListLines<
+  T extends { itemId: number | null; qty: number; unitPrice: number; discount?: number },
+>(tx: Prisma.TransactionClient, customerId: number, date: Date, lines: readonly T[]): Promise<T[]> {
+  const itemIds = lines.map((l) => l.itemId).filter((id): id is number => id != null)
+  if (itemIds.length === 0) return [...lines]
+  const { customerCategoryId, rows } = await loadPriceListRows(tx, { customerId, itemIds, date })
+  if (rows.length === 0) return [...lines]
+  return lines.map((line) => {
+    if (line.itemId == null) return line
+    const priceListPrice = pickPriceListPrice(rows, { itemId: line.itemId, customerCategoryId, date })
+    if (priceListPrice === null) return line
+    const r = resolveLinePricing({
+      qty: line.qty,
+      itemPrice: line.unitPrice,
+      priceListPrice,
+      manualDiscount: line.discount,
+    })
+    return { ...line, unitPrice: r.unitPrice, discount: r.discount }
+  })
+}
 
 // ==================== QUOTATION ACTIONS ====================
 
@@ -1128,12 +1161,20 @@ export async function createSalesInvoice(formData: FormData) {
   // Faktur yang lahir hanya dengan header memaksa kasir mengetik ulang seluruh
   // baris. Nilai di-clamp seperti updateSalesInvoice: baris negatif tak tersimpan.
   const itemsJson = v.items
-  const items = itemsJson
+  const rawItems = itemsJson
     ? (safeJsonParse<Array<{ itemId: number | null; qty: number; unitPrice: number; discount?: number; description?: string | null }>>(itemsJson) ?? [])
     : null
 
   const invoice = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
+
+    // F-PRICELIST-01: baris langsung dari form mendapat harga price-list
+    // (unitPrice form diperlakukan sebagai Item.price fallback). Baris
+    // hasil konversi (salesOrderId terisi) mempertahankan harga SO.
+    const items =
+      rawItems && !v.salesOrderId
+        ? await applyPriceListLines(tx, v.customerId, wibDateToUtcMidnight(v.date), rawItems)
+        : rawItems
 
     let subtotal = 0
     let discountTotal = 0

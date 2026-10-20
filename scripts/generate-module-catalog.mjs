@@ -84,6 +84,7 @@ const RESOURCES = [
   ["sales_invoices", "sales", "Faktur Penjualan"],
   ["sales_payments", "sales", "Pembayaran Penjualan"],
   ["sales_returns", "sales", "Retur Penjualan"],
+  ["customer_price_lists", "sales", "Daftar Harga Pelanggan"],
   ["invoice_exchanges", "sales", "Tukar Faktur"],
   ["purchase_requests", "purchase", "Permintaan Pembelian"],
   ["purchase_advances", "purchase", "Uang Muka Pembelian"],

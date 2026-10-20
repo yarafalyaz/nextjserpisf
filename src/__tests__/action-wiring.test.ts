@@ -91,6 +91,14 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
+  // F-PRICELIST-01 tahap 1 (backend dulu): resolver+loader sudah tersambung
+  // ke createSalesInvoice; UI kelola daftar harga = tahap Fira berikutnya.
+  "src/actions/customer-price-list.actions.ts::createCustomerPriceList":
+    "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
+  "src/actions/customer-price-list.actions.ts::updateCustomerPriceList":
+    "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
+  "src/actions/customer-price-list.actions.ts::deleteCustomerPriceList":
+    "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
 }
 
 describe("keterhubungan aksi server", () => {
