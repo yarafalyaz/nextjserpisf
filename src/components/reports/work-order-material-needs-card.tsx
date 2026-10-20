@@ -9,6 +9,7 @@ import {
   DetailTableFoot,
   DetailTableFootRow,
 } from "@/components/ui/detail-table"
+import { ReportCardShell } from "./report-card-shell"
 
 /**
  * F-2026-10-20-19: kartu Kebutuhan Material di detail perintah kerja.
@@ -34,26 +35,19 @@ export function WorkOrderMaterialNeedsCard({
   needs,
 }: Readonly<{ needs: WorkOrderMaterialNeeds }>) {
   return (
-    <section
-      aria-label="Kebutuhan Material"
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+    <ReportCardShell
+      label="Kebutuhan Material"
+      title="Kebutuhan Material"
+      summary={
+        needs.allFulfilled
+          ? "Semua kebutuhan terpenuhi"
+          : needs.shortageCount > 0
+            ? `${needs.shortageCount} baris kekurangan stok`
+            : "Belum semua material keluar"
+      }
+      isEmpty={needs.lines.length === 0}
+      emptyText="Belum ada kebutuhan material untuk perintah kerja ini"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
-        <h2 className="text-[0.9375rem] font-semibold text-foreground">Kebutuhan Material</h2>
-        <p className="text-xs text-muted-foreground">
-          {needs.allFulfilled
-            ? "Semua kebutuhan terpenuhi"
-            : needs.shortageCount > 0
-              ? `${needs.shortageCount} baris kekurangan stok`
-              : "Belum semua material keluar"}
-        </p>
-      </div>
-      <div className="p-4 px-5">
-        {needs.lines.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
-            Belum ada kebutuhan material untuk perintah kerja ini
-          </p>
-        ) : (
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Barang</DetailTableTh>
@@ -113,8 +107,6 @@ export function WorkOrderMaterialNeedsCard({
               </DetailTableFootRow>
             </DetailTableFoot>
           </DetailTable>
-        )}
-      </div>
-    </section>
+    </ReportCardShell>
   )
 }
