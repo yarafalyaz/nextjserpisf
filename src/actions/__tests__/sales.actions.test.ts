@@ -382,6 +382,21 @@ describe("Quotation Actions", () => {
       }),
     )
   })
+  // F-2026-10-20-101 tahap server: awalan kategori tak dikenal ditolak agar
+  // tidak mengotori agregasi kalah (jatuh ke ember tak-tercatat).
+  it("rejectQuotation rejects unknown lost-reason category prefix", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
+    const res = await actions.rejectQuotation(1, "[kalah:bukan-kategori] Harga kompetitor")
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Kategori alasan kalah")
+    expect(mocks.prismaMock.quotationHistory.create).not.toHaveBeenCalled()
+  })
+  it("rejectQuotation accepts known lost-reason category prefix", async () => {
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
+    const res = await actions.rejectQuotation(1, "[kalah:harga] Harga kompetitor")
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.quotationHistory.create).toHaveBeenCalled()
+  })
   it("rejectQuotation without reason keeps legacy history description", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
     const res = await actions.rejectQuotation(1)

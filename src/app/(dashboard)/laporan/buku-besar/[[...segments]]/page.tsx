@@ -13,7 +13,7 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { parseReportFilters } from "@/lib/reports/report-href"
 import Link from "next/link"
-import { referenceHref } from "@/lib/utils/format"
+import { referenceHref, formatReferenceType } from "@/lib/utils/format"
 
 import type { Metadata } from "next"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -113,8 +113,8 @@ export default async function GeneralLedgerPage({
       referenceType: e.journal.referenceType,
       referenceId: e.journal.referenceId,
       referenceLabel:
-        e.journal.referenceType && referenceHref(e.journal.referenceType, e.journal.referenceId)
-          ? `${e.journal.referenceType} #${e.journal.referenceId}`
+        e.journal.referenceType && e.journal.referenceId != null
+          ? `${formatReferenceType(e.journal.referenceType)} #${e.journal.referenceId}`
           : null,
       debit: Number(e.debit),
       credit: Number(e.credit),

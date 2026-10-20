@@ -293,30 +293,67 @@ export function formatPeriod(period: string | null | undefined): string {
 /**
  * Translate database reference type names to friendly Indonesian terms.
  * Example: "SalesInvoice" -> "Faktur Penjualan"
+ *
+ * F-2026-10-20-102: label terpisah dari `referenceHref` — tipe diberi label
+ * Indonesia walau belum punya halaman detail ([slug]) agar kolom Referensi
+ * jurnal/buku-besar tidak menampilkan enum mentah; `referenceHref` tetap
+ * daftar putih rute yang terbukti ada.
  */
+const REFERENCE_TYPE_LABELS: Record<string, string> = {
+  SalesInvoice: "Faktur Penjualan",
+  SalesInvoiceCOGS: "Faktur Penjualan (HPP)",
+  SalesInvoiceReversal: "Pembalikan Faktur Penjualan",
+  PurchaseOrder: "Pesanan Pembelian",
+  GoodsReceipt: "Penerimaan Barang",
+  // Jurnal beban jasa dari penerimaan campuran barang+jasa (penanda terpisah
+  // karena `journals` unik pada (reference_type, reference_id) — lihat
+  // stock-journal.service). Tanpa label ini tabel jurnal menampilkan enum mentah.
+  GoodsReceiptService: "Penerimaan Barang (Jasa)",
+  MaterialIssue: "Pengeluaran Bahan",
+  StockAdjustment: "Penyesuaian Stok",
+  InventoryTransfer: "Transfer Stok",
+  SalesReturn: "Retur Penjualan",
+  PurchaseReturn: "Retur Pembelian",
+  ProductionOrder: "Perintah Produksi",
+  ManufacturingOrder: "Perintah Produksi",
+  WorkOrder: "Perintah Kerja",
+  Expense: "Pengeluaran",
+  PettyCash: "Kas Kecil",
+  DownPayment: "Uang Muka Penjualan",
+  VendorBill: "Tagihan Vendor",
+  VendorPayment: "Pembayaran Vendor",
+  Payroll: "Penggajian",
+  SalesPayment: "Pembayaran Penjualan",
+  EmployeeLoan: "Pinjaman Karyawan",
+  TaxPayment: "Penyetoran Pajak",
+  PurchaseAdvance: "Uang Muka Pembelian",
+  CustomerCredit: "Kredit Pelanggan",
+  Journal: "Jurnal",
+  SalesOrder: "Pesanan Penjualan",
+  Quotation: "Penawaran",
+  PurchaseRequest: "Permintaan Pembelian",
+  Invoice: "Faktur",
+  LeaveRequest: "Pengajuan Cuti",
+  OvertimeRequest: "Pengajuan Lembur",
+  ProductionCost: "Biaya Produksi",
+  ProductionOrderMaterialIssue: "Pengeluaran Bahan Produksi",
+  ProductionOrderCostVariance: "Selisih Biaya Produksi",
+  YearEndClosing: "Tutup Buku Tahunan",
+  ASSET_ACQUISITION: "Perolehan Aset",
+  ASSET_DISPOSAL: "Pelepasan Aset",
+  BANK_TRANSFER: "Transfer Bank",
+};
+
 export function formatReferenceType(refType: string | null | undefined): string {
   if (!refType) return "-";
-  
-  const refTypeMap: Record<string, string> = {
-    SalesInvoice: "Faktur Penjualan",
-    PurchaseOrder: "Pesanan Pembelian",
-    GoodsReceipt: "Penerimaan Barang",
-    // Jurnal beban jasa dari penerimaan campuran barang+jasa (penanda terpisah
-    // karena `journals` unik pada (reference_type, reference_id) — lihat
-    // stock-journal.service). Tanpa label ini tabel jurnal menampilkan enum mentah.
-    GoodsReceiptService: "Penerimaan Barang (Jasa)",
-    MaterialIssue: "Pengeluaran Bahan",
-    StockAdjustment: "Penyesuaian Stok",
-    InventoryTransfer: "Transfer Stok",
-    SalesReturn: "Retur Penjualan",
-    PurchaseReturn: "Retur Pembelian",
-    ProductionOrder: "Perintah Produksi",
-    SalesInvoiceReversal: "Pembalikan Faktur Penjualan",
-    ManufacturingOrder: "Perintah Produksi",
-    WorkOrder: "Perintah Kerja",
-  };
-  
-  return refTypeMap[refType] || refType;
+  // Jurnal depresiasi aset memakai penanda berkala `ASSET_DEPRECIATION_YYYYMM`
+  // (lihat api/cron/asset-depreciation) — harga mati per bulan tidak mungkin.
+  if (/^ASSET_DEPRECIATION_\d{6}$/.test(refType)) return "Depresiasi Aset";
+  // Jurnal balik transaksi berulang: `RecurringTransaction_YYYYMMDD`
+  // (lihat reverseJournalsByReference di accounting.hook).
+  if (/^RecurringTransaction_\d{8}$/.test(refType)) return "Transaksi Berulang";
+
+  return REFERENCE_TYPE_LABELS[refType] || refType;
 }
 
 /**

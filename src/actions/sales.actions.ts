@@ -14,6 +14,7 @@ import { onSalesPaymentCreated as onSalesPaymentRecalculate, onSalesPaymentUpdat
 import { onSalesReturnCompleted as onSalesReturnStock } from "@/lib/hooks/sales-return.hook"
 import { notificationService } from "@/lib/services/notification.service"
 import { resyncOnEdit } from "@/lib/services/quotation-sync.service"
+import { isLostReasonCategoryKey } from "@/lib/reports/quotation-outcome"
 import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlement } from "@/lib/services/sales-settlement.service"
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
@@ -272,7 +273,18 @@ export async function acceptQuotation(quotationId: number) {
 
 export async function rejectQuotation(quotationId: number, reason?: string) {
   // F-38(a): alasan opsional, teks bebas ke QuotationHistory; tanpa migrasi.
-  const cleanReason = typeof reason === "string" ? reason.trim().slice(0, 2000) : ""
+  const rawReason = typeof reason === "string" ? reason.trim() : ""
+  // F-2026-10-20-101 tahap server: awalan [kalah:<key>] yang dikirim UI
+  // wajib memakai kamus quotation-outcome. Key tak dikenal ditolak agar
+  // tidak lolos diam-diam lalu jatuh ke ember `tak-tercatat` di laporan
+  // (mencemari agregasi). Awalan SATU-satunya yang dilepas dari teks —
+  // awalan kedua di tengah teks bebas adalah isi bebas biasa, dan
+  // buildQuotationOutcomeSummary membaca awalan SAH pertama.
+  const prefixMatch = /^\[kalah:([a-z-]+)\]/.exec(rawReason)
+  if (prefixMatch && !isLostReasonCategoryKey(prefixMatch[1])) {
+    return { success: false, error: "Kategori alasan kalah tidak dikenal" }
+  }
+  const cleanReason = rawReason.slice(0, 2000)
   try {
   const user = await requirePermission("confirm_quotations")
 
