@@ -97,7 +97,7 @@ export function VendorForm({ vendor, generatedCode, enableAutoCode = true, payme
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit)} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah pemasok" : "Formulir tambah pemasok"}>
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
@@ -106,7 +106,7 @@ export function VendorForm({ vendor, generatedCode, enableAutoCode = true, payme
           </div>
 
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama Pemasok *</Label>
+            <Label htmlFor="name">Nama Pemasok <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Input id="name" {...register("name")} placeholder="Nama pemasok" />
             {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
           </div>
