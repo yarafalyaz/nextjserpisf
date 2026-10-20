@@ -560,7 +560,7 @@ export function DataTable<TData extends { id: number | string }>({
                   isServer ? goToPageSize(Number(v) || 100) : table.setPageSize(Number(v) || 20)
                 }
               >
-                <SelectTrigger id="pageSize" className="h-8 w-[70px]" aria-label="Baris per halaman">
+                <SelectTrigger id="pageSize" className="h-11 w-[70px]" aria-label="Baris per halaman">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent side="top">
@@ -582,7 +582,7 @@ export function DataTable<TData extends { id: number | string }>({
               <Button
                 variant="outline"
                 size="icon"
-                className="hidden size-10 lg:flex"
+                className="hidden size-11 lg:flex"
                 onClick={isServer ? handleServerFirstPage : () => table.setPageIndex(0)}
                 disabled={pageIndex <= 0}
               >
@@ -592,7 +592,7 @@ export function DataTable<TData extends { id: number | string }>({
               <Button
                 variant="outline"
                 size="icon"
-                className="size-10"
+                className="size-11"
                 onClick={isServer ? handleServerPreviousPage : () => table.previousPage()}
                 disabled={pageIndex <= 0}
               >
@@ -602,7 +602,7 @@ export function DataTable<TData extends { id: number | string }>({
               <Button
                 variant="outline"
                 size="icon"
-                className="size-10"
+                className="size-11"
                 onClick={isServer ? handleServerNextPage : () => table.nextPage()}
                 disabled={pageIndex >= pageCount - 1}
               >
@@ -612,7 +612,7 @@ export function DataTable<TData extends { id: number | string }>({
               <Button
                 variant="outline"
                 size="icon"
-                className="hidden size-10 lg:flex"
+                className="hidden size-11 lg:flex"
                 onClick={isServer ? handleServerLastPage : () => table.setPageIndex(pageCount - 1)}
                 disabled={pageIndex >= pageCount - 1}
               >
