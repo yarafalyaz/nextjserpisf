@@ -25,6 +25,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export interface MinStockItemInput {
@@ -98,7 +99,10 @@ export function buildMinStock(items: MinStockItemInput[]): MinStockResult {
   const totals: MinStockResult["totals"] = {
     items: below.length,
     outOfStock: below.filter(({ item }) => item.qtyOnHand <= EPSILON).length,
-    shortageValue: below.reduce((sum, { item, shortage }) => sum + shortage * item.cost, 0),
+    shortageValue: below.reduce(
+      (sum, { item, shortage }) => safeAdd(sum, safeMultiply(shortage, item.cost, 2), 2),
+      0,
+    ),
     hasAnyMinimum,
   }
 
@@ -115,7 +119,7 @@ export function buildMinStock(items: MinStockItemInput[]): MinStockResult {
         quantity(item.qtyOnHand),
         quantity(item.minStock),
         quantity(shortage),
-        amount(shortage * item.cost),
+        amount(safeMultiply(shortage, item.cost, 2)),
       ],
     })
   }
