@@ -134,6 +134,17 @@ export async function POST(req: NextRequest) {
         mimeType: file.type,
         uploadedBy: userId,
       },
+      // Kontrak POST sama dengan GET: tanpa select, Prisma create mengembalikan
+      // baris utuh (referenceType/referenceId/uploadedBy internal ikut bocor).
+      select: {
+        id: true,
+        filename: true,
+        originalName: true,
+        fileUrl: true,
+        fileSize: true,
+        mimeType: true,
+        createdAt: true,
+      },
     })
   } catch (error) {
     await unlink(filepath).catch(() => undefined)
