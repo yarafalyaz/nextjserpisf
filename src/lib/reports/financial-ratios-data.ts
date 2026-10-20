@@ -9,6 +9,7 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { sumEntriesByAccount } from "@/lib/services/report-aggregation.service"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { computeIncomeStatement } from "@/lib/finance/income-statement"
 import { computeFinancialRatios, type FinancialRatiosResult } from "@/lib/finance/financial-ratios"
 
@@ -47,20 +48,24 @@ export async function loadFinancialRatios(period: {
     const sums = positionSums.get(account.id)
     if (!sums) continue
     const debitNormal = account.type === "ASSET" || account.type === "EXPENSE"
-    const balance = debitNormal ? sums.debit - sums.credit : sums.credit - sums.debit
+    const balance = debitNormal
+      ? safeSubtract(sums.debit, sums.credit, 2)
+      : safeSubtract(sums.credit, sums.debit, 2)
     if (balance === 0) continue
 
     if (account.type === "ASSET") {
-      totalAssets += balance
-      if (account.reportGroup && CURRENT_ASSET_GROUPS.has(account.reportGroup)) currentAssets += balance
-      if (account.reportGroup && INVENTORY_GROUPS.has(account.reportGroup)) inventory += balance
+      totalAssets = safeAdd(totalAssets, balance, 2)
+      if (account.reportGroup && CURRENT_ASSET_GROUPS.has(account.reportGroup))
+        currentAssets = safeAdd(currentAssets, balance, 2)
+      if (account.reportGroup && INVENTORY_GROUPS.has(account.reportGroup))
+        inventory = safeAdd(inventory, balance, 2)
     } else if (account.type === "LIABILITY") {
-      totalLiabilities += balance
+      totalLiabilities = safeAdd(totalLiabilities, balance, 2)
       if (account.reportGroup && CURRENT_LIABILITY_GROUPS.has(account.reportGroup)) {
-        currentLiabilities += balance
+        currentLiabilities = safeAdd(currentLiabilities, balance, 2)
       }
     } else if (account.type === "EQUITY") {
-      totalEquity += balance
+      totalEquity = safeAdd(totalEquity, balance, 2)
     }
   }
 
