@@ -1,4 +1,5 @@
 import { JournalService } from '@/lib/services/journal.service'
+import { safeAdd, safeMultiply } from '@/lib/utils/math'
 import { generateDocumentNumber } from '@/lib/utils/document-number'
 import { getSystemSettings } from '@/lib/utils/settings'
 import type { Prisma } from '@prisma/client'
@@ -49,7 +50,12 @@ async function getAccountIds(): Promise<AccountIds> {
 }
 
 function sumValue(items: JournalItemInput[]): number {
-  return items.reduce((s, i) => s + Number(i.qty) * Number(i.cost), 0)
+  // Nilai per baris dan akumulasinya tepat sen: float mentah membuat 17 baris
+  // 1x0.24 menjadi 4.080000000000002 yang lolos sebagai debit/kredit jurnal.
+  return items.reduce(
+    (s, i) => safeAdd(s, safeMultiply(i.qty, i.cost, 2), 2),
+    0,
+  )
 }
 
 /**
