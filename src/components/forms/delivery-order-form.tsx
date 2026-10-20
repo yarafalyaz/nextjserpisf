@@ -104,13 +104,14 @@ export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOr
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah surat jalan" : "Formulir tambah surat jalan"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="salesOrderId">Pesanan Penjualan *</Label>
+          <Label htmlFor="salesOrderId">Pesanan Penjualan <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Combobox
             id="salesOrderId"
             name="salesOrderId"
+            required
             value={salesOrderId || null}
             onChange={(key) => {
               const next = key ?? ""
@@ -234,9 +235,9 @@ export function DeliveryOrderForm({ salesOrders, defaultSalesOrderId, deliveryOr
         )}
       </div>
 
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()} >Batal</Button>
-        <Button type="submit" isDisabled={isPending} >{isPending ? "Menyimpan..." : deliveryOrder?.id ? "Perbarui" : "Simpan"}</Button>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+        <Button type="button" className="w-full sm:w-auto" onPress={() => router.back()} >Batal</Button>
+        <Button type="submit" className="w-full sm:w-auto" isDisabled={isPending} >{isPending ? "Menyimpan..." : deliveryOrder?.id ? "Perbarui" : "Simpan"}</Button>
       </div>
     </form>
   )
