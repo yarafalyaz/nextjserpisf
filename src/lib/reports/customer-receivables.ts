@@ -34,6 +34,18 @@ export function buildCustomerReceivables(rows: CustomerReceivableInput[]): Custo
     .sort((a, b) => b.outstanding - a.outstanding)
 }
 
+/** Plain-money label for a customer over their credit limit; null within
+ *  limit. Limit 0 = no limit configured, never "over". Advisory only —
+ *  never blocks saving. */
+export function creditOverLimitLabel(row: CustomerReceivableInput): string | null {
+  if (row.creditLimit <= 0) return null
+  const overBy = safeSubtract(row.outstanding, row.creditLimit, 2)
+  if (overBy <= 0) return null
+  const fmt = (value: number) =>
+    `Rp${new Intl.NumberFormat("id-ID", { maximumFractionDigits: 2, minimumFractionDigits: 2 }).format(value)}`
+  return `Lewat batas kredit ${fmt(overBy)} (batas ${fmt(row.creditLimit)}, terutang ${fmt(row.outstanding)})`
+}
+
 /**
  * Amount-weighted average days between invoice date and payment date.
  * Returns null when there is no payment to average.
