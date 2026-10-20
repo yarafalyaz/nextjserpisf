@@ -130,17 +130,18 @@ export async function GET(request: Request) {
   const sevenDaysAgo = new Date()
   sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7)
 
-  const stalePOs = await prisma.purchaseOrder.findMany({
+  // Judul wajib dari count penuh, bukan findMany take:20 (blok ini tak
+  // menampilkan daftar, hanya jumlah — sampel murni plafon angka).
+  const stalePOCount = await prisma.purchaseOrder.count({
     where: {
       status: "ordered",
       createdAt: { lt: sevenDaysAgo },
       deletedAt: null,
     },
-    take: 20,
   })
 
-  if (stalePOs.length > 0) {
-    const count = stalePOs.length
+  if (stalePOCount > 0) {
+    const count = stalePOCount
     await notificationService.notifyUsersIfNew(
       adminIds,
       `${count} PO Belum Diterima (>7 hari)`,
@@ -152,17 +153,22 @@ export async function GET(request: Request) {
   }
 
   // 4. Late attendance today
-  const lateAttendances = await prisma.attendance.findMany({
-    where: {
-      date: { gte: dayStart, lt: dayEnd },
-      OR: [{ status: "late" }, { lateMinutes: { gt: 0 } }],
-    },
-    include: { employee: { include: { department: true } } },
-    take: 20,
-  })
+  // Daftar nama tetap sampel take:20, judul + sisa "lainnya" dari count penuh.
+  const lateWhere = {
+    date: { gte: dayStart, lt: dayEnd },
+    OR: [{ status: "late" as const }, { lateMinutes: { gt: 0 } }],
+  }
+  const [lateCount, lateAttendances] = await Promise.all([
+    prisma.attendance.count({ where: lateWhere }),
+    prisma.attendance.findMany({
+      where: lateWhere,
+      include: { employee: { include: { department: true } } },
+      take: 20,
+    }),
+  ])
 
-  if (lateAttendances.length > 0) {
-    const count = lateAttendances.length
+  if (lateCount > 0) {
+    const count = lateCount
     const names = lateAttendances
       .slice(0, 5)
       .map((a) => `• ${a.employee?.name || "Unknown"}`)
