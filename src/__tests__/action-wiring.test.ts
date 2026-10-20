@@ -91,12 +91,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
-  // F-2026-10-20-10: aksi backend sengaja mendahului UI. Tombolnya di halaman
-  // penawaran dirender frontend SESUDAH PR #92 (F-15) merged — antrean rantai
-  // board; begitu frontend menyambungkannya entri ini wajib dibuang (penjaga
-  // arah-kedua memerahkan tes ini).
-  "src/actions/sales.actions.ts::createDifferenceInvoice":
-    "F-2026-10-20-10 faktur selisih revisi: tombol UI di penawaran/[slug] menunggu PR #92 merged (rantai backend->frontend di board); aksi + tes unit sudah ada, UI menyusul tahap frontend",
 }
 
 describe("keterhubungan aksi server", () => {

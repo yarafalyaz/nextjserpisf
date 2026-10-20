@@ -1,0 +1,100 @@
+import type { WorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs"
+import {
+  DetailTable,
+  DetailTableHead,
+  DetailTableTh,
+  DetailTableBody,
+  DetailTableRow,
+  DetailTableTd,
+  DetailTableFoot,
+  DetailTableFootRow,
+} from "@/components/ui/detail-table"
+
+/**
+ * F-2026-10-20-19: kartu Kebutuhan Material di detail perintah kerja.
+ *
+ * Data dari loader read-only `getWorkOrderMaterialNeeds`: butuh dari
+ * WorkOrderItem non-replaced, keluar dari MI `completed`, dipesan bersih
+ * dari PO non-cancelled tertaut WO. Baris jasa selalu terpenuhi.
+ * Komponen murni presentasi — tanpa query, tanpa mutasi.
+ */
+export function WorkOrderMaterialNeedsCard({
+  needs,
+}: Readonly<{ needs: WorkOrderMaterialNeeds }>) {
+  return (
+    <section
+      aria-label="Kebutuhan Material"
+      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
+        <h2 className="text-[0.9375rem] font-semibold text-foreground">Kebutuhan Material</h2>
+        <p className="text-xs text-muted-foreground">
+          {needs.allFulfilled
+            ? "Semua kebutuhan terpenuhi"
+            : needs.shortageCount > 0
+              ? `${needs.shortageCount} baris kekurangan stok`
+              : "Belum semua material keluar"}
+        </p>
+      </div>
+      <div className="p-4 px-5">
+        {needs.lines.length === 0 ? (
+          <p className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
+            Belum ada kebutuhan material untuk perintah kerja ini
+          </p>
+        ) : (
+          <DetailTable>
+            <DetailTableHead>
+              <DetailTableTh>Barang</DetailTableTh>
+              <DetailTableTh align="right">Butuh</DetailTableTh>
+              <DetailTableTh align="right">Tersedia</DetailTableTh>
+              <DetailTableTh align="right">Keluar</DetailTableTh>
+              <DetailTableTh align="right">Dipesan</DetailTableTh>
+              <DetailTableTh align="right">Sisa</DetailTableTh>
+              <DetailTableTh align="right">Kurang</DetailTableTh>
+              <DetailTableTh>Status</DetailTableTh>
+            </DetailTableHead>
+            <DetailTableBody>
+              {needs.lines.map((line) => (
+                <DetailTableRow key={line.itemId}>
+                  <DetailTableTd>
+                    {line.name}
+                    {line.unitOfMeasure ? (
+                      <span className="text-muted-foreground"> ({line.unitOfMeasure})</span>
+                    ) : null}
+                  </DetailTableTd>
+                  <DetailTableTd align="right">{line.requiredQty}</DetailTableTd>
+                  <DetailTableTd align="right">{line.qtyOnHand}</DetailTableTd>
+                  <DetailTableTd align="right">{line.issuedQty}</DetailTableTd>
+                  <DetailTableTd align="right">{line.orderedQty}</DetailTableTd>
+                  <DetailTableTd align="right">{line.remainingQty}</DetailTableTd>
+                  <DetailTableTd align="right">{line.shortageQty}</DetailTableTd>
+                  <DetailTableTd>
+                    {line.isService
+                      ? "Jasa — terpenuhi"
+                      : line.fulfilled
+                        ? "Terpenuhi"
+                        : line.shortageQty > 0
+                          ? "Kekurangan stok"
+                          : "Belum keluar"}
+                  </DetailTableTd>
+                </DetailTableRow>
+              ))}
+            </DetailTableBody>
+            <DetailTableFoot>
+              <DetailTableFootRow>
+                <DetailTableTd className="font-bold">Total</DetailTableTd>
+                <DetailTableTd align="right" className="font-bold">{needs.totalRequired}</DetailTableTd>
+                <DetailTableTd>{null}</DetailTableTd>
+                <DetailTableTd align="right" className="font-bold">{needs.totalIssued}</DetailTableTd>
+                <DetailTableTd align="right" className="font-bold">{needs.totalOrdered}</DetailTableTd>
+                <DetailTableTd>{null}</DetailTableTd>
+                <DetailTableTd>{null}</DetailTableTd>
+                <DetailTableTd>{null}</DetailTableTd>
+              </DetailTableFootRow>
+            </DetailTableFoot>
+          </DetailTable>
+        )}
+      </div>
+    </section>
+  )
+}

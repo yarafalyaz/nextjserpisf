@@ -14,6 +14,8 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/ui/print-button";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
+import { WorkOrderMaterialNeedsCard } from "@/components/reports/work-order-material-needs-card";
+import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs-data";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
   DetailTable,
@@ -145,6 +147,8 @@ export default async function WorkOrderDetailPage({
   ]);
 
   const suggestedProductId = linkedProducts.length === 1 ? linkedProducts[0].id : null;
+
+  const materialNeeds = await getWorkOrderMaterialNeeds(wo.id);
 
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
@@ -318,6 +322,8 @@ export default async function WorkOrderDetailPage({
           </div>
         </div>
       )}
+
+      {materialNeeds ? <WorkOrderMaterialNeedsCard needs={materialNeeds} /> : null}
 
       {/* Pengeluaran material yang lahir dari WO ini. SELALU tampil: tombol
           "Buat Pengeluaran Material" menulis MI langsung lewat aksi (tanpa
