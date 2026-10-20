@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ApprovalTable } from "./_components/approval-table"
@@ -20,6 +21,10 @@ export default async function ApprovalsPage({
   // This list spans approvals from every module and exposes request metadata.
   await requirePermission("approve_workflows")
   const params = await searchParams
+
+  // Rute lama ?status=menunggu pindah ke /pengaturan/persetujuan/menunggu.
+  if (params.status === "menunggu") redirect("/pengaturan/persetujuan/menunggu")
+
   const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
   const cari = params.cari?.trim()
