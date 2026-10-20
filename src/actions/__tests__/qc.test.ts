@@ -24,6 +24,9 @@ const qcInspectionCreateMock = vi.fn()
 const nonconformanceFindUniqueMock = vi.fn()
 const nonconformanceCreateMock = vi.fn()
 const nonconformanceUpdateMock = vi.fn()
+const workOrderFindUniqueQcMock = vi.fn()
+const productionOrderFindUniqueQcMock = vi.fn()
+const goodsReceiptFindUniqueQcMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -64,11 +67,14 @@ vi.mock("@/lib/db/prisma", () => {
       findFirst: vi.fn().mockResolvedValue(null),
     },
     workOrder: {
+      findUnique: (...a: unknown[]) => workOrderFindUniqueQcMock(...a),
       findUniqueOrThrow: vi.fn().mockResolvedValue({
         id: 1, status: "in_progress", items: [{ id: 1 }],
       }),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    productionOrder: { findUnique: (...a: unknown[]) => productionOrderFindUniqueQcMock(...a) },
+    goodsReceipt: { findUnique: (...a: unknown[]) => goodsReceiptFindUniqueQcMock(...a) },
     workOrderItem: { updateMany: vi.fn().mockResolvedValue({ count: 1 }) },
     materialIssue: { findFirst: vi.fn().mockResolvedValue({ id: 1 }) },
     deliveryOrder: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
@@ -81,6 +87,7 @@ vi.mock("@/lib/db/prisma", () => {
 
 import {
   createQcInspection,
+  createNonconformance,
   releaseQcChecklist,
   deleteQcChecklist,
   resolveNonconformance,
@@ -117,9 +124,13 @@ beforeEach(() => {
     qcChecklistUpdateManyMock, qcChecklistDeleteMock, qcInspectionCreateMock,
     nonconformanceFindUniqueMock, nonconformanceCreateMock, nonconformanceUpdateMock,
     raiseNcrFromInspectionMock, syncReworkCostMock,
+    workOrderFindUniqueQcMock, productionOrderFindUniqueQcMock, goodsReceiptFindUniqueQcMock,
   ]) m.mockReset()
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
+  workOrderFindUniqueQcMock.mockResolvedValue({ id: 9 })
+  productionOrderFindUniqueQcMock.mockResolvedValue({ id: 9 })
+  goodsReceiptFindUniqueQcMock.mockResolvedValue({ id: 9 })
   generateDocumentNumberMock.mockResolvedValue("QCI-0001")
   assertWorkOrderQcClearedMock.mockResolvedValue(undefined)
   raiseNcrFromInspectionMock.mockResolvedValue([])
@@ -214,6 +225,20 @@ describe("createQcInspection", () => {
     expect(qcInspectionCreateMock).not.toHaveBeenCalled()
   })
 
+  it("refuses when referenced document does not exist", async () => {
+    qcChecklistFindUniqueMock.mockResolvedValue({
+      id: 5, status: "released",
+      items: [{ id: 1, isRequired: true }],
+    })
+    workOrderFindUniqueQcMock.mockResolvedValue(null)
+
+    const res = await createQcInspection(inspectionForm({ rows: [{ id: 1, result: "pass" }] }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak ditemukan")
+    expect(qcInspectionCreateMock).not.toHaveBeenCalled()
+  })
+
   it("drops results that reference items not on the checklist", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({
       id: 5, status: "released",
@@ -228,6 +253,33 @@ describe("createQcInspection", () => {
     const arg = qcInspectionCreateMock.mock.calls[0][0]
     expect(arg.data.results.create).toHaveLength(1)
     expect(arg.data.results.create[0].checklistItemId).toBe(1)
+  })
+})
+
+describe("createNonconformance", () => {
+  it("refuses when referenced document does not exist", async () => {
+    productionOrderFindUniqueQcMock.mockResolvedValue(null)
+
+    const res = await createNonconformance(fd({
+      referenceType: "ProductionOrder", referenceId: 999,
+      defectDescription: "cacat", responsibility: "internal", severity: "minor",
+    }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak ditemukan")
+    expect(nonconformanceCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("creates NCR when referenced document exists", async () => {
+    nonconformanceCreateMock.mockResolvedValue({ id: 7, slug: "ncr-7" })
+
+    const res = await createNonconformance(fd({
+      referenceType: "ProductionOrder", referenceId: 9,
+      defectDescription: "cacat", responsibility: "internal", severity: "minor",
+    }))
+
+    expect(res.success).toBe(true)
+    expect(nonconformanceCreateMock).toHaveBeenCalledTimes(1)
   })
 })
 
