@@ -40,6 +40,7 @@ const mocks = vi.hoisted(() => {
     deliveryOrderItem: buildModelMock(),
     projectStage: buildModelMock(),
     project: buildModelMock(),
+    qcChecklist: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -270,6 +271,24 @@ describe("Product Actions", () => {
   it("deleteProduct succeeds", async () => {
     const res = await actions.deleteProduct(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("deleteProduct menolak produk yang masih punya revisi BOM (Cascade ikut terhapus)", async () => {
+    mocks.prismaMock.bomRevision.count.mockResolvedValueOnce(3)
+    const res = await actions.deleteProduct(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/revisi BOM: 3/)
+    expect(mocks.prismaMock.product.delete).not.toHaveBeenCalled()
+  })
+
+  it("deleteProduct menolak produk yang masih dipakai perintah produksi / checklist QC", async () => {
+    mocks.prismaMock.productionOrder.count.mockResolvedValueOnce(2)
+    mocks.prismaMock.bomRevision.count.mockResolvedValueOnce(0)
+    mocks.prismaMock.qcChecklist.count.mockResolvedValueOnce(1)
+    const res = await actions.deleteProduct(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/perintah produksi: 2/)
+    expect(mocks.prismaMock.product.delete).not.toHaveBeenCalled()
   })
 })
 
