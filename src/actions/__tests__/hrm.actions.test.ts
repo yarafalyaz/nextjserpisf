@@ -1295,6 +1295,25 @@ describe("Kalender Kerja", () => {
     expect(requirePermissionMock).toHaveBeenCalledWith("edit_work_schedules")
   })
 
+  it("updateWorkSchedule menyimpan isActive=false eksplisit dan membiarkan absen tak tersentuh", async () => {
+    prismaMock.workSchedule.update.mockResolvedValue({})
+    const off = await actions.updateWorkSchedule(
+      3,
+      fd({ name: "Shift Pagi", workDays: ["1", "2"], startTime: "07:00", endTime: "15:00", isActive: "false" }),
+    )
+    expect(off).toEqual({ success: true })
+    expect(prismaMock.workSchedule.update.mock.calls[0][0].data.isActive).toBe(false)
+
+    prismaMock.workSchedule.update.mockClear()
+    const absent = await actions.updateWorkSchedule(
+      3,
+      fd({ name: "Shift Pagi", workDays: ["1", "2"], startTime: "07:00", endTime: "15:00" }),
+    )
+    expect(absent).toEqual({ success: true })
+    // Kontrak pemanggil non-formulir: field absen tidak boleh menonaktifkan diam-diam.
+    expect(prismaMock.workSchedule.update.mock.calls[0][0].data.isActive).toBe(true)
+  })
+
   it("createDepartmentHoliday wajib memilih departemen", async () => {
     const bad = await actions.createDepartmentHoliday(
       fd({ name: "Cuti pabrik", date: "2026-12-24" }),
