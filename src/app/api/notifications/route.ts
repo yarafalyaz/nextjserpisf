@@ -15,6 +15,15 @@ export async function GET() {
       where: { userId },
       orderBy: { createdAt: "desc" },
       take: 10,
+      // Kontrak dropdown hanya butuh field ini; tanpa select, userId internal ikut bocor.
+      select: {
+        id: true,
+        title: true,
+        body: true,
+        type: true,
+        readAt: true,
+        createdAt: true,
+      },
     })
 
     const unreadCount = await prisma.notification.count({
