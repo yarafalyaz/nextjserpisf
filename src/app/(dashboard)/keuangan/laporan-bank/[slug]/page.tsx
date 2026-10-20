@@ -1,7 +1,8 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { notFound } from "next/navigation"
+import { notFound, redirect } from "next/navigation"
+import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
@@ -19,21 +20,11 @@ import {
   DetailTableFootRow,
 } from "@/components/ui/detail-table"
 import { deleteBankStatementLine } from "@/actions/finance.actions"
-import { BankStatementLineForm } from "./_components/bank-statement-line-form"
 import { bankStatementLineTypeLabel } from "./_components/bank-statement-line-labels"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Laporan Bank" }
-
-/**
- * `BankStatementLine.date` disimpan sebagai TENGAH MALAM UTC hari kalender WIB
- * (aksinya memakai `wibDateToUtcMidnight`), jadi komponen UTC nilai ini memang
- * tanggal WIB-nya — nilai untuk `AppDatePicker` tanpa digeser zona waktu.
- */
-function dateInputValue(date: Date): string {
-  return date.toISOString().slice(0, 10)
-}
 
 /**
  * Detail rekening koran: ringkasan saldo + baris mutasinya.
@@ -46,10 +37,11 @@ function dateInputValue(date: Date): string {
  * (nilai absolut dari agregat barisnya) — jangan menghitung ulang di sini, karena
  * dua sumber angka untuk hal yang sama adalah cara keduanya menyimpang.
  *
- * Pengubahan baris memakai parameter `?editBaris=<id>` (formulir inline, pola yang
- * sama dengan `/sdm/kalender-kerja` dan `/sdm/absensi`) supaya tidak perlu rute
- * `ubah` terpisah. Izin tulisnya mengikuti penulis header rekening koran
- * (`create_journals`); halaman cukup `view_bank_statements` untuk melihat.
+ * Penambahan & pengubahan baris memakai halaman terpisah
+ * (`/baris/tambah` dan `/baris/[lineId]/ubah` di bawah detail ini);
+ * tautan lama `?editBaris=<id>` diarahkan ke halaman ubah. Izin tulisnya
+ * mengikuti penulis header rekening koran (`create_journals`); halaman
+ * cukup `view_bank_statements` untuk melihat.
  */
 export default async function BankStatementDetailPage({
   params,
@@ -61,6 +53,14 @@ export default async function BankStatementDetailPage({
   const user = await requirePermission("view_bank_statements")
   const { slug } = await params
   const query = await searchParams
+
+  // Tautan lama `?editBaris=<id>` diarahkan ke halaman ubah baris.
+  if (query.editBaris) {
+    const legacyLineId = Number(query.editBaris)
+    if (Number.isInteger(legacyLineId) && legacyLineId > 0) {
+      redirect(`/keuangan/laporan-bank/${encodeURIComponent(slug)}/baris/${legacyLineId}/ubah`)
+    }
+  }
 
   const lineInclude = {
     lines: { orderBy: [{ date: "asc" as const }, { id: "asc" as const }] },
@@ -83,30 +83,11 @@ export default async function BankStatementDetailPage({
 
   const baseHref = `/keuangan/laporan-bank/${encodeURIComponent(slug)}`
 
-  // Target ubah dibatasi pada baris rekening koran INI: id milik dokumen lain di
-  // URL tidak boleh membuka formulirnya di sini (aksinya tetap menolak, tetapi
-  // halaman yang menampilkan data dokumen lain itu sendiri sudah keliru).
-  const editLineId = Number(query.editBaris)
-  const editingLine = Number.isInteger(editLineId)
-    ? stmt.lines.find((line) => line.id === editLineId)
-    : undefined
-
   const userRoles: string[] = user.roles ?? []
   const userPerms: string[] = user.permissions ?? []
   const isSuperAdmin = userRoles.includes("super_admin")
   // Izin tulis = izin penulis header dan baris rekening koran (create_journals).
   const canWrite = isSuperAdmin || userPerms.includes("create_journals")
-
-  const editingLineItem = editingLine
-    ? {
-        id: editingLine.id,
-        date: dateInputValue(editingLine.date),
-        description: editingLine.description ?? "",
-        amount: Number(editingLine.amount),
-        type: editingLine.type,
-        reference: editingLine.reference ?? "",
-      }
-    : undefined
 
   return (
     <div className="flex flex-col gap-6">
@@ -147,21 +128,18 @@ export default async function BankStatementDetailPage({
               menentukan kolomnya.
             </p>
           </div>
+          {canWrite && (
+            <Link
+              href={`${baseHref}/baris/tambah`}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            >
+              + Tambah Baris
+            </Link>
+          )}
         </div>
 
-        {canWrite ? (
-          <BankStatementLineForm
-            // `key` WAJIB: tanpa itu React memakai ulang formulir yang sudah ter-mount saat
-            // berpindah dari "Tambah" ke "Ubah" (navigasi klien `?editBaris=N`), sehingga
-            // `defaultValue` pada input tak terkendali tidak pernah diterapkan lagi — formulir
-            // tampil kosong dan menyimpan akan menimpa baris yang ada dengan nilai kosong.
-            key={editingLineItem ? `edit-${editingLineItem.id}` : "baru"}
-            bankStatementId={stmt.id}
-            baseHref={baseHref}
-            line={editingLineItem}
-          />
-        ) : (
-          <p className="p-4 px-5 text-sm text-muted-foreground">
+        {!canWrite && (
+          <p className="p-4 px-5 text-sm text-muted-foreground border-b border-default">
             Anda tidak memiliki izin untuk menambah atau mengubah baris rekening koran.
           </p>
         )}
@@ -195,10 +173,7 @@ export default async function BankStatementDetailPage({
                       <DetailTableTd align="right">
                         <div className="flex items-center justify-end">
                           <ActionDropdown
-                            // `?editBaris=` dibaca halaman ini sendiri. Izinnya eksplisit
-                            // karena href-nya membawa query sehingga tidak bisa diturunkan
-                            // dari prefix `ROUTE_PERMS`.
-                            editHref={`${baseHref}?editBaris=${line.id}`}
+                            editHref={`${baseHref}/baris/${line.id}/ubah`}
                             editPermission="create_journals"
                             deleteAction={deleteBankStatementLine}
                             deleteId={line.id}

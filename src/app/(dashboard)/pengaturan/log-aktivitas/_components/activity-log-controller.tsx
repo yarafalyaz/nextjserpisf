@@ -38,10 +38,22 @@ export function ActivityLogController(props: ControllerProps) {
 
   function onFilterChange(key: string, value: string) {
     const sp = new URLSearchParams(searchParams.toString())
-    if (!value || value === "all") sp.delete(key)
-    else sp.set(key, value)
     // Reset page on any filter change
     sp.delete("halaman")
+    // Tanggal hidup di PATH (`/dari/<tgl>/sampai/<tgl>`), bukan query —
+    // ubah segmennya sambil mempertahankan filter query lainnya.
+    if (key === "dateFrom" || key === "dateTo") {
+      const dari = key === "dateFrom" ? value : props.filterDateFrom
+      const sampai = key === "dateTo" ? value : props.filterDateTo
+      let path = "/pengaturan/log-aktivitas"
+      if (dari) path += `/dari/${dari}`
+      if (sampai) path += `/sampai/${sampai}`
+      const qs = sp.toString()
+      router.push(qs ? `${path}?${qs}` : path)
+      return
+    }
+    if (!value || value === "all") sp.delete(key)
+    else sp.set(key, value)
     router.push(`?${sp.toString()}`)
   }
 

@@ -13,12 +13,8 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table"
 import { DeleteButton } from "@/components/ui/delete-button"
+import { redirect } from "next/navigation"
 import Link from "next/link"
-import {
-  HolidayForm,
-  DepartmentHolidayForm,
-  WorkScheduleForm,
-} from "./_components/work-calendar-forms"
 import {
   deleteHoliday,
   deleteDepartmentHoliday,
@@ -63,7 +59,21 @@ export default async function WorkCalendarPage({
   await requireAnyPermission(["view_work_schedules", "edit_holidays", "manage_holidays"])
   const params = await searchParams
 
-  const [holidays, departmentHolidays, workSchedules, departments] = await Promise.all([
+  // Tautan lama `?editHoliday=`/`?editDeptHoliday=`/`?editSchedule=`
+  // diarahkan ke halaman ubah masing-masing.
+  const legacyEdits: Array<[string | undefined, string]> = [
+    [params.editHoliday, "libur"],
+    [params.editDeptHoliday, "libur-departemen"],
+    [params.editSchedule, "jadwal"],
+  ]
+  for (const [legacyId, segment] of legacyEdits) {
+    const id = Number(legacyId)
+    if (legacyId && Number.isInteger(id) && id > 0) {
+      redirect(`/sdm/kalender-kerja/${segment}/${id}/ubah`)
+    }
+  }
+
+  const [holidays, departmentHolidays, workSchedules] = await Promise.all([
     prisma.holiday.findMany({ orderBy: { date: "desc" }, take: 200 }),
     prisma.departmentHoliday.findMany({
       orderBy: { date: "desc" },
@@ -71,18 +81,7 @@ export default async function WorkCalendarPage({
       include: { department: { select: { name: true } } },
     }),
     prisma.workSchedule.findMany({ orderBy: { name: "asc" }, take: 200 }),
-    prisma.department.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
   ])
-
-  const editHolidayId = Number(params.editHoliday)
-  const editingHoliday = holidays.find((h) => h.id === editHolidayId)
-  const editDeptHolidayId = Number(params.editDeptHoliday)
-  const editingDeptHoliday = departmentHolidays.find((h) => h.id === editDeptHolidayId)
-  const editScheduleId = Number(params.editSchedule)
-  const editingSchedule = workSchedules.find((s) => s.id === editScheduleId)
 
   return (
     <div className="flex flex-col gap-6">
@@ -104,24 +103,13 @@ export default async function WorkCalendarPage({
               Berlaku untuk seluruh perusahaan dan dipakai perhitungan absensi.
             </p>
           </div>
+          <Link
+            href="/sdm/kalender-kerja/libur/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+          >
+            + Tambah
+          </Link>
         </div>
-        <HolidayForm
-          // `key` wajib: tanpa itu React memakai ulang form yang sudah ter-mount saat
-          // berpindah dari "Tambah" ke "Ubah" (navigasi klien `?editHoliday=N`), sehingga
-          // `defaultValue` tidak pernah diterapkan lagi — form tampil kosong dan
-          // menyimpan akan menimpa data lama dengan nilai kosong.
-          key={editingHoliday?.id ?? "baru"}
-          holiday={
-            editingHoliday
-              ? {
-                  id: editingHoliday.id,
-                  name: editingHoliday.name,
-                  date: editingHoliday.date.toISOString(),
-                  description: editingHoliday.description,
-                }
-              : undefined
-          }
-        />
         <div className="p-4 px-5">
           {holidays.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
@@ -144,7 +132,7 @@ export default async function WorkCalendarPage({
                     <DetailTableTd align="right">
                       <div className="flex items-center justify-end gap-2">
                         <Link
-                          href={`/sdm/kalender-kerja?editHoliday=${holiday.id}`}
+                          href={`/sdm/kalender-kerja/libur/${holiday.id}/ubah`}
                           className="text-sm text-primary hover:underline"
                         >
                           Ubah
@@ -171,22 +159,13 @@ export default async function WorkCalendarPage({
               Hanya berlaku untuk departemen yang dipilih.
             </p>
           </div>
+          <Link
+            href="/sdm/kalender-kerja/libur-departemen/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+          >
+            + Tambah
+          </Link>
         </div>
-        <DepartmentHolidayForm
-          // Lihat catatan `key` pada HolidayForm di atas.
-          key={editingDeptHoliday?.id ?? "baru"}
-          departments={departments}
-          item={
-            editingDeptHoliday
-              ? {
-                  id: editingDeptHoliday.id,
-                  name: editingDeptHoliday.name,
-                  date: editingDeptHoliday.date.toISOString(),
-                  departmentId: editingDeptHoliday.departmentId,
-                }
-              : undefined
-          }
-        />
         <div className="p-4 px-5">
           {departmentHolidays.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
@@ -209,7 +188,7 @@ export default async function WorkCalendarPage({
                     <DetailTableTd align="right">
                       <div className="flex items-center justify-end gap-2">
                         <Link
-                          href={`/sdm/kalender-kerja?editDeptHoliday=${holiday.id}`}
+                          href={`/sdm/kalender-kerja/libur-departemen/${holiday.id}/ubah`}
                           className="text-sm text-primary hover:underline"
                         >
                           Ubah
@@ -235,23 +214,13 @@ export default async function WorkCalendarPage({
               karyawan atau departemen tidak punya jadwal, sistem memakai Senin–Jumat.
             </p>
           </div>
+          <Link
+            href="/sdm/kalender-kerja/jadwal/tambah"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+          >
+            + Tambah
+          </Link>
         </div>
-        <WorkScheduleForm
-          // Lihat catatan `key` pada HolidayForm di atas.
-          key={editingSchedule?.id ?? "baru"}
-          schedule={
-            editingSchedule
-              ? {
-                  id: editingSchedule.id,
-                  name: editingSchedule.name,
-                  workDays: editingSchedule.workDays,
-                  startTime: editingSchedule.startTime,
-                  endTime: editingSchedule.endTime,
-                  isActive: editingSchedule.isActive,
-                }
-              : undefined
-          }
-        />
         <div className="p-4 px-5">
           {workSchedules.length === 0 ? (
             <p className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
@@ -284,7 +253,7 @@ export default async function WorkCalendarPage({
                     <DetailTableTd align="right">
                       <div className="flex items-center justify-end gap-2">
                         <Link
-                          href={`/sdm/kalender-kerja?editSchedule=${schedule.id}`}
+                          href={`/sdm/kalender-kerja/jadwal/${schedule.id}/ubah`}
                           className="text-sm text-primary hover:underline"
                         >
                           Ubah

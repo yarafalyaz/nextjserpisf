@@ -6,8 +6,10 @@ import { parsePagination } from "@/lib/utils/pagination"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatsCards } from "@/components/activity-log/stats-cards"
 import { Suspense } from "react"
-import { ActivityLogController } from "./_components/activity-log-controller"
-import { ClearLogButton } from "./_components/clear-log-button"
+import { notFound, redirect } from "next/navigation"
+import { buildPathFilterHref, parsePathFilterSegments } from "@/lib/utils/path-filters"
+import { ActivityLogController } from "../_components/activity-log-controller"
+import { ClearLogButton } from "../_components/clear-log-button"
 import { resolveActivityReferenceLabels } from "@/lib/services/activity-reference.service"
 import { applyReferenceLabel, isTrackedActivityReference } from "@/lib/utils/activity-href"
 
@@ -16,8 +18,10 @@ import type { Metadata } from "next"
 export const metadata: Metadata = { title: "Log Aktivitas" }
 
 export default async function ActivityLogPage({
+  params: routeParams,
   searchParams,
 }: {
+  params: Promise<{ segments?: string[] }>
   searchParams: Promise<{
     cari?: string
     halaman?: string
@@ -32,6 +36,29 @@ export default async function ActivityLogPage({
   await requirePermission("manage_settings")
 
   const sp = await searchParams
+
+  // Tautan lama `?dateFrom=&dateTo=` diarahkan ke pasangan path (filter
+  // lain dipertahankan sebagai query, halaman dibuang).
+  if (sp.dateFrom || sp.dateTo) {
+    const legacyPath = buildPathFilterHref("/pengaturan/log-aktivitas", {
+      dari: sp.dateFrom,
+      sampai: sp.dateTo,
+    })
+    const legacy = new URLSearchParams()
+    for (const key of ["cari", "userId", "action", "modelType", "pageSize"] as const) {
+      if (sp[key]) legacy.set(key, sp[key])
+    }
+    const legacyQuery = legacy.toString()
+    redirect(legacyQuery ? `${legacyPath}?${legacyQuery}` : legacyPath)
+  }
+
+  const { segments } = await routeParams
+  const filters = parsePathFilterSegments(segments, {
+    dari: /^\d{4}-\d{2}-\d{2}$/,
+    sampai: /^\d{4}-\d{2}-\d{2}$/,
+  })
+  if (!filters) notFound()
+
   const { page, pageSize, skip, take } = parsePagination(sp)
 
   // Build where clause
@@ -46,12 +73,12 @@ export default async function ActivityLogPage({
   if (sp.modelType && sp.modelType !== "all") {
     where.modelType = sp.modelType
   }
-  if (sp.dateFrom || sp.dateTo) {
+  if (filters.dari || filters.sampai) {
     where.createdAt = {}
     const w = where.createdAt as Record<string, Date>
-    if (sp.dateFrom) w.gte = new Date(sp.dateFrom)
-    if (sp.dateTo) {
-      const d = new Date(sp.dateTo)
+    if (filters.dari) w.gte = new Date(filters.dari)
+    if (filters.sampai) {
+      const d = new Date(filters.sampai)
       d.setHours(23, 59, 59, 999)
       w.lte = d
     }
@@ -228,8 +255,8 @@ export default async function ActivityLogPage({
             filterUser={sp.userId ?? "all"}
             filterAction={sp.action ?? "all"}
             filterModel={sp.modelType ?? "all"}
-            filterDateFrom={sp.dateFrom ?? ""}
-            filterDateTo={sp.dateTo ?? ""}
+            filterDateFrom={filters.dari ?? ""}
+            filterDateTo={filters.sampai ?? ""}
           />
         </Suspense>
       </div>

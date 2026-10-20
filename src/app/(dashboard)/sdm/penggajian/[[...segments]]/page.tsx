@@ -7,11 +7,12 @@ import { getHrScope, hrScopeWhere, canSearchAcrossEmployees } from "@/lib/auth/h
 import Link from "next/link";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { AppSearchField } from "@/components/ui/search-field";
-import { PayrollTable } from "./_components/payroll-table";
-import { Button } from "@/components/ui/button";
-import { FormSelect } from "@/components/ui/form-select";
+import { notFound, redirect } from "next/navigation";
+import { PayrollTable } from "../_components/payroll-table";
+import { PayrollFilterForm } from "../_components/payroll-filter-form";
+import { buildPathFilterHref, parsePathFilterSegments } from "@/lib/utils/path-filters";
 
-import { BulkGeneratePayrollButton } from "./_components/bulk-generate-payroll-button";
+import { BulkGeneratePayrollButton } from "../_components/bulk-generate-payroll-button";
 import { CanCreate } from "@/components/auth/can-create";
 
 import type { Metadata } from "next";
@@ -31,8 +32,10 @@ const indoToStatus: Record<string, string> = {
 };
 
 export default async function PayrollPage({
+  params: routeParams,
   searchParams,
 }: {
+  params: Promise<{ segments?: string[] }>;
   searchParams: Promise<{
     status?: string;
     cari?: string;
@@ -51,11 +54,32 @@ export default async function PayrollPage({
 
   const params = await searchParams;
 
+  // Tautan lama `?bulan=&tahun=` diarahkan ke pasangan path (status/cari
+  // dipertahankan sebagai query).
+  if (params.bulan || params.tahun) {
+    const legacyPath = buildPathFilterHref("/sdm/penggajian", {
+      tahun: params.tahun,
+      bulan: params.bulan,
+    });
+    const legacy = new URLSearchParams();
+    if (params.status) legacy.set("status", params.status);
+    if (params.cari) legacy.set("cari", params.cari);
+    const legacyQuery = legacy.toString();
+    redirect(legacyQuery ? `${legacyPath}?${legacyQuery}` : legacyPath);
+  }
+
+  const { segments } = await routeParams;
+  const filters = parsePathFilterSegments(segments, {
+    tahun: /^\d{4}$/,
+    bulan: /^([1-9]|1[0-2])$/,
+  });
+  if (!filters) notFound();
+
   const { page, pageSize, take } = parsePagination(params);
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined;
 
-  const month = params.bulan ? Number(params.bulan) : undefined;
-  const year = params.tahun ? Number(params.tahun) : undefined;
+  const month = filters.bulan ? Number(filters.bulan) : undefined;
+  const year = filters.tahun ? Number(filters.tahun) : undefined;
 
   const where = {
     ...hrScopeWhere(scope),
@@ -109,17 +133,18 @@ export default async function PayrollPage({
   const settings = await prisma.systemSetting.findFirst();
   const cutoffDay = settings?.payrollCutoffDay ?? 25;
 
+  const filterPath = buildPathFilterHref("/sdm/penggajian", {
+    tahun: filters.tahun,
+    bulan: filters.bulan,
+  });
+
   const statusChips = ["", "draft", "approved", "paid"].map((dbStatus) => {
     const urlStatus = dbStatus ? statusToIndo[dbStatus] : "";
-    const qs = new URLSearchParams();
-    if (urlStatus) qs.set("status", urlStatus);
-    if (month) qs.set("bulan", String(month));
-    if (year) qs.set("tahun", String(year));
-    const qstr = qs.toString();
+    const qstr = urlStatus ? `?status=${urlStatus}` : "";
     return (
       <Link
         key={dbStatus}
-        href={`/sdm/penggajian${qstr ? `?${qstr}` : ""}`}
+        href={`${filterPath}${qstr}`}
         className={`filter-chip ${params.status === urlStatus || (!params.status && !urlStatus) ? "active" : ""}`}
       >
         {dbStatus ? statusLabel(dbStatus) : "Semua"}
@@ -157,55 +182,12 @@ export default async function PayrollPage({
         toolbar={
           <AppSearchField
             placeholder="Cari nama karyawan..."
-            action="/sdm/penggajian"
+            action={filterPath}
           />
         }
         filters={
           <>
-            <div className="flex gap-2 flex-wrap items-center">
-              <form className="flex gap-2 flex-wrap" action="/sdm/penggajian">
-                <FormSelect
-                  name="bulan"
-                  defaultValue={params.bulan ?? ""}
-                  placeholder="Bulan"
-                  className="min-w-[140px]"
-                  options={[
-                    { value: "", label: "Semua Bulan" },
-                    ...[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((m) => ({
-                      value: String(m),
-                      label: new Date(2026, m - 1).toLocaleString("id-ID", {
-                        month: "long",
-                      }),
-                    })),
-                  ]}
-                />
-                <FormSelect
-                  name="tahun"
-                  defaultValue={params.tahun ?? ""}
-                  placeholder="Tahun"
-                  className="min-w-[110px]"
-                  options={[
-                    { value: "", label: "Semua Tahun" },
-                    ...[2025, 2026, 2027].map((y) => ({
-                      value: String(y),
-                      label: String(y),
-                    })),
-                  ]}
-                />
-                {params.status && (
-                  <input type="hidden" name="status" value={params.status} />
-                )}
-                <Button type="submit">Filter</Button>
-              </form>
-              {month && year && (
-                <Link
-                  href={`/sdm/penggajian${params.status ? `?status=${params.status}` : ""}`}
-                  className="text-xs text-primary hover:underline"
-                >
-                  Atur ulang bulan
-                </Link>
-              )}
-            </div>
+            <PayrollFilterForm bulan={filters.bulan} tahun={filters.tahun} status={params.status} />
             <div className="flex flex-wrap gap-1.5">{statusChips}</div>
           </>
         }

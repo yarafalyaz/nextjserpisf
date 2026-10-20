@@ -7,20 +7,31 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/shadcn/card"
 import { Badge } from "@/components/ui/shadcn/badge"
 import { requirePermission } from "@/lib/auth/permissions"
+import { notFound, redirect } from "next/navigation"
 import { loadPeriodClose } from "@/lib/settings/period-close-data"
-import { PeriodClosePanel } from "./_components/period-close-panel"
+import { parsePathFilterSegments } from "@/lib/utils/path-filters"
+import { PeriodClosePanel } from "../_components/period-close-panel"
 
 export const metadata: Metadata = { title: "Proses Akhir Bulan" }
 
 export default async function PeriodClosePage({
+  params: routeParams,
   searchParams,
 }: {
+  params: Promise<{ segments?: string[] }>
   searchParams: Promise<Record<string, string | undefined>>
 }) {
   await requirePermission("manage_settings")
 
   const params = await searchParams
-  const { month, result } = await loadPeriodClose(params.periode)
+  // Tautan lama `?periode=YYYY-MM` diarahkan ke bentuk path.
+  if (params.periode) redirect(`/pengaturan/proses-akhir-bulan/periode/${params.periode}`)
+
+  const { segments } = await routeParams
+  const filters = parsePathFilterSegments(segments, { periode: /^\d{4}-\d{2}$/ })
+  if (!filters) notFound()
+
+  const { month, result } = await loadPeriodClose(filters.periode)
   const monthEnd = [
     month.end.getFullYear(),
     String(month.end.getMonth() + 1).padStart(2, "0"),

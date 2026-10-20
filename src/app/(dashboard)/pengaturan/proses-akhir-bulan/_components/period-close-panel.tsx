@@ -34,7 +34,7 @@ export function PeriodClosePanel({
 
   function changeMonth(value: string) {
     if (!/^\d{4}-\d{2}$/.test(value)) return
-    router.push(`/pengaturan/proses-akhir-bulan?periode=${value}`)
+    router.push(`/pengaturan/proses-akhir-bulan/periode/${value}`)
   }
 
   function handleClose() {

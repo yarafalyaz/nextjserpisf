@@ -59,10 +59,17 @@ function editingFormTags(source: string): { tag: string; hasKey: boolean }[] {
 describe("form ubah wajib di-remount (key)", () => {
   const pages = pagesUnder("src/app")
 
-  it("menemukan halaman yang merender form ubah (penjaga ini tidak diam-diam kosong)", () => {
+  it("tidak ada lagi tautan ubah inline ?edit<X>= di halaman manapun", () => {
+    // Sejak migrasi Oktober 2026 (absensi, kalender kerja, baris rekening
+    // koran), form ubah selalu halaman terpisah `/[id]/ubah` — pola inline
+    // `?edit<X>=` yang memicu bahaya remount ini sudah tidak dipakai lagi,
+    // dan penjaga ini melarangnya kembali.
+    const offenders = pages.filter((p) => /\?edit[A-Z][A-Za-z]*=\$\{/.test(readFileSync(p, "utf8")))
+    expect(offenders).toEqual([])
+    // Pemindai tag `editing…` di bawah tetap hidup: bila pola itu muncul
+    // lagi tanpa `key`, tes berikutnya yang menangkapnya.
     const withEditingForms = pages.filter((p) => editingFormTags(readFileSync(p, "utf8")).length > 0)
-    // Bila ini nol, pemindaiannya yang rusak — bukan berarti tidak ada form ubah.
-    expect(withEditingForms.length).toBeGreaterThan(0)
+    expect(withEditingForms).toEqual([])
   })
 
   it("setiap form yang diisi dari ?edit<X>= punya prop key", () => {

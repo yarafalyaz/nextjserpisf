@@ -85,7 +85,7 @@ export function BankStatementLineForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="flex flex-col gap-3 p-4 px-5 border-b border-default"
+      className="flex flex-col gap-5"
       aria-label={line ? "Ubah baris rekening koran" : "Tambah baris rekening koran"}
     >
       <Input type="hidden" name="bankStatementId" value={bankStatementId} />

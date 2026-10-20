@@ -14,7 +14,9 @@ import {
   toDayKey,
   WEEKDAY_LABELS,
 } from "@/lib/reports/calendar-grid"
+import { notFound, redirect } from "next/navigation"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { parsePathFilterSegments } from "@/lib/utils/path-filters"
 
 import type { Metadata } from "next"
 
@@ -43,15 +45,24 @@ const KIND_STYLES: Record<EventKind, { chip: string; label: string }> = {
 }
 
 export default async function CalendarPage({
+  params: routeParams,
   searchParams,
 }: {
+  params: Promise<{ segments?: string[] }>
   searchParams: Promise<{ bulan?: string }>
 }) {
   await requirePermission("view_calendar")
 
   const params = await searchParams
+  // Tautan lama `?bulan=YYYY-MM` diarahkan ke bentuk path.
+  if (params.bulan) redirect(`/kalender/bulan/${params.bulan}`)
+
+  const { segments } = await routeParams
+  const filters = parsePathFilterSegments(segments, { bulan: /^\d{4}-\d{2}$/ })
+  if (!filters) notFound()
+
   const today = new Date()
-  const { year, month } = parseMonthParam(params.bulan, today)
+  const { year, month } = parseMonthParam(filters.bulan, today)
   const weeks = buildMonthGrid(year, month, today)
 
   const gridStart = weeks[0][0].date
@@ -115,7 +126,7 @@ export default async function CalendarPage({
 
   const prev = previousMonth(year, month)
   const next = nextMonth(year, month)
-  const monthLink = (target: { year: number; month: number }) => `/kalender?bulan=${monthParam(target.year, target.month)}`
+  const monthLink = (target: { year: number; month: number }) => `/kalender/bulan/${monthParam(target.year, target.month)}`
 
   return (
     <div className="flex flex-col gap-6">

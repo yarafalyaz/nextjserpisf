@@ -14,10 +14,9 @@ import { ExportButtons } from '@/components/reports/export-buttons'
 import { ReportLetterhead } from '@/components/reports/report-letterhead'
 import { ReportSection, ReportKpiCard } from '@/components/reports/report-section'
 import { ReportNarration } from '@/components/reports/report-narration'
-import { FormSelect } from '@/components/ui/form-select'
-import { Label } from '@/components/ui/shadcn/label'
-import { Button } from '@/components/ui/button'
-import { AppDatePicker } from '@/components/ui/date-picker'
+import { notFound, redirect } from 'next/navigation'
+import { parsePathFilterSegments } from '@/lib/utils/path-filters'
+import { PaymentOrderFilterForm } from '../_components/payment-order-filter-form'
 
 import type { Metadata } from 'next'
 
@@ -30,15 +29,27 @@ export const metadata: Metadata = { title: "Perintah Pembayaran" }
  * settlement is recorded in Pembayaran Vendor as usual.
  */
 export default async function PaymentOrderPage({
+  params: routeParams,
   searchParams,
 }: {
+  params: Promise<{ segments?: string[] }>
   searchParams: Promise<{ vendorId?: string; sampaiTanggal?: string }>
 }) {
   await requireAnyPermission(["view_vendor_bills", "view_vendor_payments"])
 
   const params = await searchParams
+  // Tautan lama `?sampaiTanggal=` diarahkan ke bentuk path (vendorId tetap query).
+  if (params.sampaiTanggal) {
+    const legacyPath = `/pembelian/perintah-pembayaran/sampai/${params.sampaiTanggal}`
+    redirect(params.vendorId ? `${legacyPath}?vendorId=${params.vendorId}` : legacyPath)
+  }
+
+  const { segments } = await routeParams
+  const filters = parsePathFilterSegments(segments, { sampai: /^\d{4}-\d{2}-\d{2}$/ })
+  if (!filters) notFound()
+
   const now = new Date()
-  const dueThrough = params.sampaiTanggal ? new Date(params.sampaiTanggal) : now
+  const dueThrough = filters.sampai ? new Date(filters.sampai) : now
   dueThrough.setHours(23, 59, 59, 999)
   const vendorId = params.vendorId ? Number(params.vendorId) : null
 
@@ -95,20 +106,11 @@ export default async function PaymentOrderPage({
         ]} />
       </div>
 
-      <form className="mb-2 flex items-end gap-4 flex-wrap print:hidden">
-        <div className="flex flex-col gap-1.5 w-full sm:w-[260px]">
-          <Label htmlFor="vendorId">Pemasok</Label>
-          <FormSelect
-            id="vendorId"
-            name="vendorId"
-            defaultValue={params.vendorId || undefined}
-            placeholder="Semua Pemasok"
-            options={vendors.map((v) => ({ value: String(v.id), label: `${v.code ? `${v.code} — ` : ""}${v.name}` }))}
-          />
-        </div>
-        <AppDatePicker label="Jatuh Tempo s/d" name="sampaiTanggal" defaultValue={toLocalDateOnly(dueThrough)} className="w-full sm:w-[200px]" />
-        <Button type="submit" variant="primary" size="sm">Tampilkan</Button>
-      </form>
+      <PaymentOrderFilterForm
+        vendors={vendors.map((v) => ({ value: String(v.id), label: `${v.code ? `${v.code} — ` : ""}${v.name}` }))}
+        vendorId={params.vendorId}
+        sampaiTanggal={toLocalDateOnly(dueThrough)}
+      />
 
       <div className="flex items-center justify-end print:hidden">
         <ExportButtons title="Perintah_Pembayaran" />
