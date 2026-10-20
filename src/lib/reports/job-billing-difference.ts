@@ -9,8 +9,13 @@
  * faktur selisih (kelebihan tagih ditangani retur/kredit, bukan di sini).
  * Status selain cancelled dihitung sebagai penagih: draft pun sudah
  * memesan porsi nilai revisi, jadi membuat draft kedua untuk porsi yang
- * sama akan menagih ganda. Uang rupiah (Decimal 15,2).
+ * sama akan menagih ganda. Uang rupiah (Decimal 15,2) diakumulasi
+ * sen-persis (safeAdd/safeSubtract 2 desimal): jumlah float mentah
+ * membuat selisih sejati nol terbaca positif mungil dan melahirkan
+ * faktur selisih hantu bernilai ~1e-16.
  */
+
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 
 export interface DifferenceInvoiceInput {
   id: number
@@ -33,8 +38,8 @@ export function computeDifferenceInvoiceCandidate(input: {
 }): DifferenceInvoiceCandidate {
   const billedAmount = input.invoices
     .filter((inv) => inv.status !== "cancelled")
-    .reduce((sum, inv) => sum + inv.grandTotal, 0)
-  const differenceAmount = input.quotationGrandTotal - billedAmount
+    .reduce((sum, inv) => safeAdd(sum, inv.grandTotal, 2), 0)
+  const differenceAmount = safeSubtract(input.quotationGrandTotal, billedAmount, 2)
   if (differenceAmount <= 0) {
     return {
       eligible: false,
