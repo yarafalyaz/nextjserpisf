@@ -182,3 +182,28 @@ test.describe("Finance — Journal & Reports", () => {
     expect(totalKredit).toBe(totalDebit)
   })
 })
+
+test.describe("Buku Besar — drill-down jurnal/referensi F-2026-10-20-31", () => {
+  test("kolom Referensi tampil; No. Jurnal tertaut ke detail jurnal bila ada baris", async ({ page }, testInfo) => {
+    skipOnMobile(testInfo.project.name, "Ledger drill-down is a desktop interaction")
+
+    await page.goto("/laporan/buku-besar", { waitUntil: "domcontentloaded" })
+    await waitForHydration(page)
+
+    const accountPicker = page.locator("#filter-akun")
+    await expect(accountPicker).toBeVisible()
+    await accountPicker.click()
+    const options = page.getByRole("listbox").getByRole("option")
+    await expect(options.first()).toBeVisible({ timeout: 10000 })
+    await options.first().click()
+    await page.getByRole("button", { name: "Tampilkan" }).click()
+    await page.waitForLoadState("networkidle")
+
+    await expect(page.getByRole("columnheader", { name: /Referensi/ })).toBeVisible({ timeout: 30000 })
+    // Bila periode punya baris jurnal, No. Jurnal pertama harus tautan ke detail.
+    const journalLink = page.getByRole("link", { name: /Lihat jurnal / }).first()
+    if (await journalLink.count()) {
+      await expect(journalLink).toHaveAttribute("href", /\/keuangan\/jurnal\//)
+    }
+  })
+})

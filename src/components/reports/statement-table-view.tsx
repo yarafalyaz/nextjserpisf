@@ -1,3 +1,4 @@
+import Link from "next/link"
 import type { StatementTable } from "@/lib/reports/statement-table"
 
 /**
@@ -57,7 +58,15 @@ export function StatementTableView({
             return (
               <tr key={row.id} className={row.hasChildren ? "row-parent" : undefined}>
                 <td className="col-code">{row.code}</td>
-                <td className={`indent-${Math.min(row.level + 1, 3)}`}>{row.name}</td>
+                <td className={`indent-${Math.min(row.level + 1, 3)}`}>
+                  {row.href ? (
+                    <Link href={row.href} aria-label={`Lihat Buku Besar ${row.name}`}>
+                      {row.name}
+                    </Link>
+                  ) : (
+                    row.name
+                  )}
+                </td>
                 {row.values.map((value, columnIndex) => (
                   <td key={columnIndex} className="num">
                     {value}

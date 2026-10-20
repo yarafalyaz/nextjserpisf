@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest"
 import { buildBalanceSheetTable, buildIncomeStatementTable, statementAmount } from "../statement-table"
+import { serializeStatementCsv } from "../statement-csv"
 import type { StatementRow } from "@/lib/reports/statement-display"
 import type { StatementTableRow } from "@/lib/reports/statement-table"
 import type { IncomeStatementResult } from "@/lib/finance/income-statement"
@@ -239,5 +240,64 @@ describe("buildIncomeStatementTable", () => {
 
     const gaji = table.rows.find((r) => r.kind === "line" && r.name === "Gaji")
     expect(gaji).toMatchObject({ values: ["200.000", "20.0%"] })
+  })
+})
+
+describe("drill-down Buku Besar F-2026-10-20-30", () => {
+  const linked = { basePath: "/laporan/buku-besar", periodSlug: "2026-10" }
+
+  it("baris neraca berslug jadi href akun+periode; tanpa slug polos", () => {
+    const table = buildBalanceSheetTable({
+      asOfLabel: "31 Okt 2026",
+      assetRows: [row({ id: 1, slug: "kas", code: "1-100", name: "Kas", balance: 1000 })],
+      liabilityRows: [],
+      equityRows: [row({ id: 2, slug: null, code: "3-100", name: "Modal", balance: 1000 })],
+      totalAssets: 1000,
+      totalLiabilities: 0,
+      totalEquity: 1000,
+      isBalanced: true,
+      lineLink: linked,
+    })
+    const lines = table.rows.filter((r) => r.kind === "line")
+    expect(lines[0].kind === "line" && lines[0].href).toBe("/laporan/buku-besar/2026-10/akun/kas")
+    expect(lines[1].kind === "line" && lines[1].href).toBeUndefined()
+  })
+
+  it("tanpa lineLink tidak ada href (PDF/CSV aman)", () => {
+    const table = buildBalanceSheetTable({
+      asOfLabel: "31 Okt 2026",
+      assetRows: [row({ id: 1, slug: "kas", code: "1-100", name: "Kas", balance: 1000 })],
+      liabilityRows: [],
+      equityRows: [],
+      totalAssets: 1000,
+      totalLiabilities: 0,
+      totalEquity: 0,
+      isBalanced: false,
+    })
+    const line = table.rows.find((r) => r.kind === "line")
+    expect(line?.kind === "line" && line.href).toBeUndefined()
+    expect(serializeStatementCsv("Neraca", table)).not.toContain("/laporan/buku-besar")
+  })
+
+  it("baris laba-rugi berslug jadi href; induk tanpa slug polos", () => {
+    const table = buildIncomeStatementTable({
+      columnLabel: "Okt 2026",
+      showPercent: false,
+      revenueRows: [row({ id: 1, slug: "penjualan", code: "4-100", name: "Penjualan", balance: 5000 })],
+      cogsRows: [],
+      operatingExpenseRows: [row({ id: 2, code: "6-100", name: "Beban", balance: 100 })],
+      otherIncomeRows: [],
+      otherExpenseRows: [],
+      result: {
+        revenueData: [], cogsData: [], expenseData: [], otherIncomeData: [], otherExpenseData: [],
+        totalRevenue: 5000, totalCogs: 0, grossProfit: 5000, totalExpense: 100,
+        operatingProfit: 4900, totalOtherIncome: 0, totalOtherExpense: 0, totalOther: 0,
+        netProfit: 4900, margin: 98,
+      },
+      lineLink: linked,
+    })
+    const lines = table.rows.filter((r) => r.kind === "line")
+    expect(lines[0].kind === "line" && lines[0].href).toBe("/laporan/buku-besar/2026-10/akun/penjualan")
+    expect(lines[1].kind === "line" && lines[1].href).toBeUndefined()
   })
 })

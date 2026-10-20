@@ -45,7 +45,10 @@ export default async function BalanceSheetPage({
   const options = hasQueryOptions ? parseStatementOptions(search) : fromCookie.options;
 
   // Baris tabel disusun sekali di sini dan dipakai bersama layar + engine PDF.
-  const statement = await loadBalanceSheetStatement(asOfDate, options);
+  const statement = await loadBalanceSheetStatement(asOfDate, options, {
+    basePath: "/laporan/buku-besar",
+    periodSlug: period.slug,
+  });
 
   return (
     <ReportPageShell

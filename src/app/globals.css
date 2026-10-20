@@ -1718,6 +1718,8 @@ html.dark [cmdk-group-heading] {
 .stmt .indent-2 { padding-left: 32px; }
 .stmt .indent-3 { padding-left: 48px; }
 .stmt .col-code { width: 68px; color: var(--doc-muted); }
+.stmt td a { color: var(--doc-ink); text-decoration: underline; text-underline-offset: 2px; }
+.stmt td a:hover { text-decoration-thickness: 2px; }
 .stmt .muted { color: var(--doc-muted); }
 .stmt-empty { padding: 14px 0; text-align: center; color: var(--doc-muted); font-size: 9pt; }
 
