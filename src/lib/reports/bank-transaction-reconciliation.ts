@@ -19,6 +19,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 258mm + sisa area isi A4 mendatar. */
@@ -72,8 +73,8 @@ function summarize(inputs: BankTransactionInput[]): BankTransactionGroup {
   return inputs.reduce<BankTransactionGroup>(
     (acc, item) => ({
       count: acc.count + 1,
-      inflow: acc.inflow + item.inflow,
-      outflow: acc.outflow + item.outflow,
+      inflow: safeAdd(acc.inflow, item.inflow, 2),
+      outflow: safeAdd(acc.outflow, item.outflow, 2),
     }),
     { count: 0, inflow: 0, outflow: 0 },
   )
@@ -189,6 +190,6 @@ export function bankTransactionSummary(result: BankTransactionReconciliationResu
   return (
     `${result.total.count} transaksi · terekonsiliasi ${result.reconciled.count} · ` +
     `belum ${result.unreconciled.count} · belum terekonsiliasi senilai ` +
-    `${formatCurrency(result.unreconciled.inflow + result.unreconciled.outflow)}`
+    `${formatCurrency(safeAdd(result.unreconciled.inflow, result.unreconciled.outflow, 2))}`
   )
 }
