@@ -371,7 +371,7 @@ export function DataTable<TData extends { id: number | string }>({
                         }
                       }}
                       placeholder={searchPlaceholder}
-                      className="pl-9"
+                      className="h-11 pl-9"
                       aria-label={searchPlaceholder}
                     />
                   </div>
@@ -379,7 +379,7 @@ export function DataTable<TData extends { id: number | string }>({
                 {showColumnToggle && (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="ml-auto shrink-0">
+                      <Button variant="outline" className="ml-auto h-11 shrink-0">
                         Kolom <ChevronDown className="size-4" aria-hidden="true" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -410,7 +410,7 @@ export function DataTable<TData extends { id: number | string }>({
           <div className="mb-2 flex items-center gap-3 rounded-md border bg-muted/50 px-4 py-2">
             <span className="text-sm font-medium">{selectedCount} data dipilih</span>
             {onBulkDelete && (
-              <Button size="sm" variant="destructive" onClick={handleBulkDelete} disabled={isDeleting}>
+              <Button variant="destructive" className="h-11" onClick={handleBulkDelete} disabled={isDeleting}>
                 <Trash2 className="size-3" aria-hidden="true" /> {isDeleting ? "Menghapus..." : "Hapus Terpilih"}
               </Button>
             )}
