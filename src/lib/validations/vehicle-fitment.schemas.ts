@@ -51,9 +51,12 @@ export const createVehicleFitmentSchema = z.object({
 });
 
 export const updateVehicleFitmentSchema = createVehicleFitmentSchema.extend({
+  // Form selalu mengirim eksplisit "true"/"false" (parseFormData mengubahnya
+  // jadi boolean). Absen = pemanggil non-form: biarkan tak berubah.
   isActive: z
-    .preprocess((v) => v === "on" || v === "true" || v === true, z.boolean())
-    .optional(),
+    .union([z.boolean(), z.literal("true"), z.literal("false"), z.literal("on")])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === true || v === "true" || v === "on")),
 });
 
 export const checkFitmentSchema = z.object({

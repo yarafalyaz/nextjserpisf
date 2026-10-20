@@ -37,8 +37,7 @@ export function WithholdingTaxTypeForm({ accounts, taxType }: WithholdingTaxType
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
-    if (isActive) formData.set("isActive", "true")
-    else formData.delete("isActive")
+    formData.set("isActive", isActive ? "true" : "false")
     if (liabilityAccountId) formData.set("liabilityAccountId", liabilityAccountId)
     if (receivableAccountId) formData.set("receivableAccountId", receivableAccountId)
 

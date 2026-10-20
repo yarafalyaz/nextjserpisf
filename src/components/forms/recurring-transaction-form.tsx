@@ -72,7 +72,7 @@ export function RecurringTransactionForm({ accounts, expenseCategories, schedule
     formData.set("amount", String(amount))
     formData.set("startDate", startDate)
     if (endDate) formData.set("endDate", endDate)
-    if (isActive) formData.set("isActive", "true")
+    formData.set("isActive", isActive ? "true" : "false")
     if (type === "journal") {
       if (debitAccountId) formData.set("debitAccountId", debitAccountId)
       if (creditAccountId) formData.set("creditAccountId", creditAccountId)

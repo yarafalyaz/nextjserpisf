@@ -172,3 +172,22 @@ describe("checkVehicleFitment", () => {
     expect(res.success).toBe(false)
   })
 })
+
+describe("updateVehicleFitment — isActive eksplisit", () => {
+  it("isActive=false dari form benar-benar menonaktifkan aturan", async () => {
+    mocks.prisma.vehicleFitmentRule.update.mockResolvedValue({ id: 9 })
+    const res = await updateVehicleFitment(9, fdMap({ itemId: "5", result: "compatible", isActive: "false" }))
+    expect(res.success).toBe(true)
+    expect(mocks.prisma.vehicleFitmentRule.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ isActive: false }) }),
+    )
+  })
+
+  it("tanpa isActive (pemanggil non-form) tidak mengubah status aktif", async () => {
+    mocks.prisma.vehicleFitmentRule.update.mockResolvedValue({ id: 9 })
+    const res = await updateVehicleFitment(9, fdMap({ itemId: "5", result: "compatible" }))
+    expect(res.success).toBe(true)
+    const arg = mocks.prisma.vehicleFitmentRule.update.mock.calls.at(-1)?.[0] as { data: Record<string, unknown> }
+    expect(arg.data).not.toHaveProperty("isActive")
+  })
+})
