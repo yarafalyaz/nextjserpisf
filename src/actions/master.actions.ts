@@ -1590,12 +1590,14 @@ export async function updateTax(id: number, formData: FormData) {
 // ==================== BARCODE ACTIONS ====================
 
 /**
- * Resolve a scanned/typed code (barcode OR SKU) to an item id.
+ * Resolve a scanned/typed code (barcode OR SKU) to an item slug/id.
  * Used by the scan page to jump straight to the item's tracking detail.
+ * Returns the slug when present so the scan page lands on the canonical
+ * slug URL (detail pages accept numeric ids too, as legacy fallback).
  */
 export async function lookupItemByScan(
   rawCode: string,
-): Promise<{ success: boolean; id?: number; error?: string }> {
+): Promise<{ success: boolean; id?: number; slug?: string | null; error?: string }> {
   try {
     await requirePermission("view_items");
     const code = (rawCode || "").trim();
@@ -1603,15 +1605,15 @@ export async function lookupItemByScan(
 
     const byBarcode = await prisma.barcode.findUnique({
       where: { barcode: code },
-      select: { itemId: true },
+      select: { itemId: true, item: { select: { slug: true } } },
     });
-    if (byBarcode) return { success: true, id: byBarcode.itemId };
+    if (byBarcode) return { success: true, id: byBarcode.itemId, slug: byBarcode.item?.slug ?? null };
 
     const bySku = await prisma.item.findFirst({
       where: { sku: code, deletedAt: null },
-      select: { id: true },
+      select: { id: true, slug: true },
     });
-    if (bySku) return { success: true, id: bySku.id };
+    if (bySku) return { success: true, id: bySku.id, slug: bySku.slug };
 
     return {
       success: false,

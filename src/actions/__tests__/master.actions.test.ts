@@ -496,6 +496,26 @@ describe("ItemByScan Actions", () => {
     const res = await actions.lookupItemByScan("test")
     expect(res?.success).toBe(true)
   })
+
+  it("lookupItemByScan mengembalikan slug barang (URL kanonik scan)", async () => {
+    mocks.prismaMock.barcode.findUnique.mockResolvedValueOnce({
+      itemId: 42,
+      item: { slug: "busi-iridium" },
+    })
+    const res = await actions.lookupItemByScan("8991234567890")
+    expect(res?.success).toBe(true)
+    expect(res?.id).toBe(42)
+    expect(res?.slug).toBe("busi-iridium")
+  })
+
+  it("lookupItemByScan via SKU mengembalikan slug barang", async () => {
+    mocks.prismaMock.barcode.findUnique.mockResolvedValueOnce(null)
+    mocks.prismaMock.item.findFirst.mockResolvedValueOnce({ id: 7, slug: "oli-mesin-1l" })
+    const res = await actions.lookupItemByScan("SKU-OLI-1L")
+    expect(res?.success).toBe(true)
+    expect(res?.id).toBe(7)
+    expect(res?.slug).toBe("oli-mesin-1l")
+  })
 })
 
 describe("Barcode Actions", () => {

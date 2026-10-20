@@ -24,8 +24,8 @@ export default function ScanItemPage() {
     setNotFound(null)
     startTransition(async () => {
       const res = await lookupItemByScan(v)
-      if (res.success && res.id) {
-        router.push(`/master/barang/${res.id}`)
+      if (res.success && (res.slug || res.id)) {
+        router.push(`/master/barang/${res.slug ?? res.id}`)
       } else {
         setNotFound(res.error || "Barang tidak ditemukan")
         showError(res.error || "Barang tidak ditemukan")
@@ -42,8 +42,8 @@ export default function ScanItemPage() {
     if (!param) return
     startTransition(async () => {
       const res = await lookupItemByScan(param)
-      if (res.success && res.id) {
-        router.push(`/master/barang/${res.id}`)
+      if (res.success && (res.slug || res.id)) {
+        router.push(`/master/barang/${res.slug ?? res.id}`)
       } else {
         setNotFound(res.error || "Barang tidak ditemukan")
         showError(res.error || "Barang tidak ditemukan")
