@@ -67,6 +67,53 @@ async function submitEdit(isActiveChecked: boolean) {
   container.remove()
 }
 
+describe("VehicleFitmentForm — a11y wiring", () => {
+  it("tambah: aria-label + aria-busy false, combobox item wajib, 2 bintang dekoratif", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root: Root = createRoot(container)
+    act(() => {
+      root.render(
+        <VehicleFitmentForm
+          items={[{ id: 5, sku: "SKU-1", name: "Barang Satu" }]}
+          brands={[{ id: 1, name: "Toyota" }]}
+          models={[{ id: 1, vehicleBrandId: 1, name: "Avanza" }]}
+          variants={[{ id: 1, vehicleModelId: 1, name: "1.3 G" }]}
+        />,
+      )
+    })
+    const form = container.querySelector("form")!
+    expect(form.getAttribute("aria-label")).toBe("Formulir tambah aturan fitment")
+    expect(form.getAttribute("aria-busy")).toBe("false")
+    expect(container.querySelectorAll('[role="combobox"][aria-required="true"]').length).toBe(1)
+    expect(form.querySelectorAll('span[aria-hidden="true"].text-destructive').length).toBe(2)
+    const labels = Array.from(form.querySelectorAll("label")).map((l) => l.textContent)
+    expect(labels).toEqual(expect.arrayContaining(["Item / SKU *", "Hasil *"]))
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it("mode ubah: aria-label ubah aturan fitment", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root: Root = createRoot(container)
+    act(() => {
+      root.render(
+        <VehicleFitmentForm
+          items={[{ id: 5, sku: "SKU-1", name: "Barang Satu" }]}
+          brands={[]}
+          models={[]}
+          variants={[]}
+          rule={rule}
+        />,
+      )
+    })
+    expect(container.querySelector("form")!.getAttribute("aria-label")).toBe("Formulir ubah aturan fitment")
+    act(() => root.unmount())
+    container.remove()
+  })
+})
+
 describe("VehicleFitmentForm — isActive payload", () => {
   beforeEach(() => vi.clearAllMocks())
 
