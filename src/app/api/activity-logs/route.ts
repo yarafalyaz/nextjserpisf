@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { auth } from "@/lib/auth/auth";
 import { hasPermission } from "@/lib/auth/permissions";
 import { parsePagination } from "@/lib/utils/pagination";
+import { buildActivityLogWhere } from "@/lib/utils/activity-log-filter";
 import { apiError } from "@/lib/api-response";
 
 export async function GET(req: NextRequest) {
@@ -24,55 +25,9 @@ export async function GET(req: NextRequest) {
       pageSize: sp.get("pageSize") ?? undefined,
     });
 
-    // Filters
-    const userId = sp.get("userId");
-    const action = sp.get("action");
-    const modelType = sp.get("modelType");
-    const dateFrom = sp.get("dateFrom");
-    const dateTo = sp.get("dateTo");
-    const search = sp.get("cari");
-
-    const where: Record<string, unknown> = {};
-
-    if (userId && userId !== "all") {
-      if (!/^\d+$/.test(userId)) {
-        return apiError("BAD_REQUEST", "userId tidak valid");
-      }
-      const uid = Number(userId);
-      if (!Number.isSafeInteger(uid) || uid <= 0) {
-        return apiError("BAD_REQUEST", "userId tidak valid");
-      }
-      where.userId = uid;
-    }
-    if (action && action !== "all") {
-      where.action = action;
-    }
-    if (modelType && modelType !== "all") {
-      where.modelType = modelType;
-    }
-    const parsedFrom = dateFrom ? new Date(dateFrom) : null;
-    const parsedTo = dateTo ? new Date(dateTo) : null;
-    if (
-      (parsedFrom && Number.isNaN(parsedFrom.getTime())) ||
-      (parsedTo && Number.isNaN(parsedTo.getTime()))
-    ) {
-      return apiError("BAD_REQUEST", "Tanggal tidak valid");
-    }
-    if (parsedFrom && parsedTo && parsedFrom.getTime() > parsedTo.getTime()) {
-      return apiError("BAD_REQUEST", "Rentang tanggal tidak valid");
-    }
-    if (parsedFrom || parsedTo) {
-      where.createdAt = {};
-      const w = where.createdAt as Record<string, Date>;
-      if (parsedFrom) w.gte = parsedFrom;
-      if (parsedTo) {
-        parsedTo.setHours(23, 59, 59, 999);
-        w.lte = parsedTo;
-      }
-    }
-    if (search) {
-      where.description = { contains: search };
-    }
+    const parsed = buildActivityLogWhere(sp);
+    if (!parsed.ok) return apiError("BAD_REQUEST", parsed.message);
+    const where = parsed.where;
 
     const [logs, total] = await Promise.all([
       prisma.activityLog.findMany({
