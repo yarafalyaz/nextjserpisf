@@ -5,7 +5,7 @@
  * factory di bawah hanya didelegasikan dari factory berkas pemanggil
  * dengan objek `mocks` hoisted pemanggil. Nilai mock tidak berubah.
  */
-import { vi } from "vitest"
+import { expect, vi } from "vitest"
 
 type AnyMocks = Record<string, any>
 
@@ -78,5 +78,31 @@ export function buildSalesRevisionMocks(prismaMock: Record<string, any>, docNo: 
     logActivity: vi.fn().mockResolvedValue(undefined),
     generateDocumentNumber: vi.fn().mockResolvedValue(docNo),
   }
+}
+
+
+/**
+ * Registrasi delapan vi.mock bersama tes aksi penjualan revisi.
+ * File pemanggil tetap menulis `vi.mock` literal (hoisting Vitest);
+ * helper ini hanya dipanggil di dalam callback tiap blok.
+ */
+export function registerSalesRevisionMocks(mocks: AnyMocks) {
+  return {
+    prisma: () => prismaFactory(mocks, "prismaMock"),
+    permissions: () => permissionFactory(mocks),
+    cache: () => revalidateFactory(mocks),
+    docNumber: () => docNumberFactory(mocks),
+    slug: () => slugFixedFactory(),
+    periodLock: () => periodLockFactory(mocks),
+    activityLog: () => activityLogFactory(mocks),
+    approval: () => approvalFactory(),
+  }
+}
+
+/** Aserti penolakan bersama tes RevisionDown: gagal, pesan, tanpa create kredit. */
+export function expectRevisionDownRejection(mocks: AnyMocks, res: { success: boolean; error?: string }, message: string) {
+  expect(res.success).toBe(false)
+  expect(res.error).toContain(message)
+  expect(mocks.prismaMock.customerCredit.create).not.toHaveBeenCalled()
 }
 

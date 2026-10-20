@@ -13,14 +13,14 @@ const mocks = await vi.hoisted(async () => {
 })
 
 import * as helpers from "./validation-mock-helpers"
-vi.mock("@/lib/db/prisma", () => helpers.prismaFactory(mocks, "prismaMock"))
-vi.mock("@/lib/auth/permissions", () => helpers.permissionFactory(mocks))
-vi.mock("next/cache", () => helpers.revalidateFactory(mocks))
-vi.mock("@/lib/utils/document-number", () => helpers.docNumberFactory(mocks))
-vi.mock("@/lib/utils/slug-db", () => helpers.slugFixedFactory())
-vi.mock("@/lib/services/period-lock.service", () => helpers.periodLockFactory(mocks))
-vi.mock("@/lib/services/activity-log.service", () => helpers.activityLogFactory(mocks))
-vi.mock("@/lib/services/approval-workflow.service", () => helpers.approvalFactory())
+vi.mock("@/lib/db/prisma", () => helpers.registerSalesRevisionMocks(mocks).prisma())
+vi.mock("@/lib/auth/permissions", () => helpers.registerSalesRevisionMocks(mocks).permissions())
+vi.mock("next/cache", () => helpers.registerSalesRevisionMocks(mocks).cache())
+vi.mock("@/lib/utils/document-number", () => helpers.registerSalesRevisionMocks(mocks).docNumber())
+vi.mock("@/lib/utils/slug-db", () => helpers.registerSalesRevisionMocks(mocks).slug())
+vi.mock("@/lib/services/period-lock.service", () => helpers.registerSalesRevisionMocks(mocks).periodLock())
+vi.mock("@/lib/services/activity-log.service", () => helpers.registerSalesRevisionMocks(mocks).activityLog())
+vi.mock("@/lib/services/approval-workflow.service", () => helpers.registerSalesRevisionMocks(mocks).approval())
 
 import { createDifferenceInvoice } from "../sales.actions"
 

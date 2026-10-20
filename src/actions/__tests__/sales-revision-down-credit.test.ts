@@ -16,14 +16,14 @@ const mocks = await vi.hoisted(async () => {
 })
 
 import * as helpers from "./validation-mock-helpers"
-vi.mock("@/lib/db/prisma", () => helpers.prismaFactory(mocks, "prismaMock"))
-vi.mock("@/lib/auth/permissions", () => helpers.permissionFactory(mocks))
-vi.mock("next/cache", () => helpers.revalidateFactory(mocks))
-vi.mock("@/lib/utils/document-number", () => helpers.docNumberFactory(mocks))
-vi.mock("@/lib/utils/slug-db", () => helpers.slugFixedFactory())
-vi.mock("@/lib/services/period-lock.service", () => helpers.periodLockFactory(mocks))
-vi.mock("@/lib/services/activity-log.service", () => helpers.activityLogFactory(mocks))
-vi.mock("@/lib/services/approval-workflow.service", () => helpers.approvalFactory())
+vi.mock("@/lib/db/prisma", () => helpers.registerSalesRevisionMocks(mocks).prisma())
+vi.mock("@/lib/auth/permissions", () => helpers.registerSalesRevisionMocks(mocks).permissions())
+vi.mock("next/cache", () => helpers.registerSalesRevisionMocks(mocks).cache())
+vi.mock("@/lib/utils/document-number", () => helpers.registerSalesRevisionMocks(mocks).docNumber())
+vi.mock("@/lib/utils/slug-db", () => helpers.registerSalesRevisionMocks(mocks).slug())
+vi.mock("@/lib/services/period-lock.service", () => helpers.registerSalesRevisionMocks(mocks).periodLock())
+vi.mock("@/lib/services/activity-log.service", () => helpers.registerSalesRevisionMocks(mocks).activityLog())
+vi.mock("@/lib/services/approval-workflow.service", () => helpers.registerSalesRevisionMocks(mocks).approval())
 
 import { createRevisionDownCredit } from "../sales.actions"
 
@@ -72,9 +72,7 @@ describe("createRevisionDownCredit (F-2026-10-20-59)", () => {
       { id: 11, status: "paid", grandTotal: 800000 },
     ])
     const res = await createRevisionDownCredit(5)
-    expect(res.success).toBe(false)
-    expect(res.error).toContain("Tidak ada kelebihan")
-    expect(mocks.prismaMock.customerCredit.create).not.toHaveBeenCalled()
+    helpers.expectRevisionDownRejection(mocks, res, "Tidak ada kelebihan")
   })
 
   it("anti dobel: kredit RevisionDown existing mengurangi nominal baru", async () => {
@@ -92,9 +90,7 @@ describe("createRevisionDownCredit (F-2026-10-20-59)", () => {
       .mockResolvedValueOnce([{ receivedAmount: 500000, allocatedAmount: 0, refundedAmount: 0 }])
       .mockResolvedValue([])
     const res = await createRevisionDownCredit(5)
-    expect(res.success).toBe(false)
-    expect(res.error).toContain("sudah tercatat")
-    expect(mocks.prismaMock.customerCredit.create).not.toHaveBeenCalled()
+    helpers.expectRevisionDownRejection(mocks, res, "sudah tercatat")
   })
 
   it("invoice cancelled tidak dihitung tertagih", async () => {
@@ -102,9 +98,7 @@ describe("createRevisionDownCredit (F-2026-10-20-59)", () => {
       { id: 11, status: "cancelled", grandTotal: 1500000 },
     ])
     const res = await createRevisionDownCredit(5)
-    expect(res.success).toBe(false)
-    expect(res.error).toContain("Tidak ada kelebihan")
-    expect(mocks.prismaMock.customerCredit.create).not.toHaveBeenCalled()
+    helpers.expectRevisionDownRejection(mocks, res, "Tidak ada kelebihan")
   })
 
   it("menolak penawaran tidak ditemukan", async () => {
