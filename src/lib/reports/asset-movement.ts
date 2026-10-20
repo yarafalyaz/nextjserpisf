@@ -25,6 +25,7 @@ import {
   type AssetLedgerAsset,
   type AssetLedgerEntry,
 } from "@/lib/reports/asset-ledger"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — A4 mendatar (area isi 267mm). */
@@ -72,9 +73,9 @@ function emptyTotals(): AssetMovementTotals {
 }
 
 function addTo(target: AssetMovementTotals, cost: number, accumulated: number) {
-  target.cost += cost
-  target.accumulated += accumulated
-  target.bookValue += cost - accumulated
+  target.cost = safeAdd(target.cost, cost, 2)
+  target.accumulated = safeAdd(target.accumulated, accumulated, 2)
+  target.bookValue = safeAdd(target.bookValue, safeSubtract(cost, accumulated, 2), 2)
 }
 
 /** Baris angka untuk tripel (cost, accumulated, bookValue). */
@@ -165,7 +166,7 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
     if (entry.date.getTime() < start.getTime() || entry.date.getTime() > end.getTime()) continue
     const category = categoryOf.get(entry.assetId)
     if (!category) continue
-    depreciationByCategory.set(category, (depreciationByCategory.get(category) ?? 0) + Number(entry.amount))
+    depreciationByCategory.set(category, safeAdd(depreciationByCategory.get(category) ?? 0, Number(entry.amount), 2))
   }
 
   rows.push({ kind: "group", label: "Penyusutan Periode Ini" })
@@ -212,9 +213,17 @@ export function buildAssetMovement(input: AssetMovementInput): AssetMovementResu
 
   // ── Saldo akhir: hasil pergerakan, diperiksa terhadap data ─────────────────
   const closing: AssetMovementTotals = {
-    cost: opening.cost + additions.cost + depreciation.cost + disposals.cost,
-    accumulated: opening.accumulated + additions.accumulated + depreciation.accumulated + disposals.accumulated,
-    bookValue: opening.bookValue + additions.bookValue + depreciation.bookValue + disposals.bookValue,
+    cost: safeAdd(safeAdd(opening.cost, additions.cost, 2), safeAdd(depreciation.cost, disposals.cost, 2), 2),
+    accumulated: safeAdd(
+      safeAdd(opening.accumulated, additions.accumulated, 2),
+      safeAdd(depreciation.accumulated, disposals.accumulated, 2),
+      2,
+    ),
+    bookValue: safeAdd(
+      safeAdd(opening.bookValue, additions.bookValue, 2),
+      safeAdd(depreciation.bookValue, disposals.bookValue, 2),
+      2,
+    ),
   }
 
   const closingByData = emptyTotals()
