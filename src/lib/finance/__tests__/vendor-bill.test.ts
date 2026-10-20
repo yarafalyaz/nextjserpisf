@@ -61,3 +61,20 @@ describe("Σ diskon baris untuk diskon level dokumen", () => {
     expect(sumBillItemDiscount(JSON.stringify(rows))).toBeCloseTo(perLine, 2)
   })
 })
+
+describe("kop tagihan dihitung ulang dari baris (summarizeBillItems)", () => {
+  it("menjumlahkan bruto, diskon, pajak, total dari semua baris berlaku", async () => {
+    const { summarizeBillItems } = await import("@/lib/finance/vendor-bill")
+    const h = summarizeBillItems(JSON.stringify([
+      { itemId: 9, qty: 2, unitPrice: 50000, discountPercent: 10, taxPercent: 11 },
+      { itemId: 9, qty: 0, unitPrice: 999999, discountPercent: 90, taxPercent: 11 },
+    ]))
+    expect(h).toEqual({ subtotal: 100000, discountAmount: 10000, tax: 9900, grandTotal: 99900 })
+  })
+  it("null bila tidak ada baris berlaku (kop manual dipertahankan pemanggil)", async () => {
+    const { summarizeBillItems } = await import("@/lib/finance/vendor-bill")
+    expect(summarizeBillItems(null)).toBeNull()
+    expect(summarizeBillItems("[]")).toBeNull()
+    expect(summarizeBillItems(JSON.stringify([{ qty: 0, unitPrice: 100 }]))).toBeNull()
+  })
+})
