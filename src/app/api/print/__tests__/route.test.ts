@@ -140,6 +140,14 @@ describe("GET /api/print", () => {
     expect(mocks.salesInvoiceFindUnique).not.toHaveBeenCalled()
   })
 
+  it("menolak ID bukan desimal murni (1e3/0x10/+5/' 5') sebelum query", async () => {
+    for (const id of ["1e3", "0x10", "+5", " 5"]) {
+      const res = await GET(makeReq(`http://localhost/api/print?tipe=invoice&id=${encodeURIComponent(id)}`))
+      expect(res.status).toBe(400)
+    }
+    expect(mocks.salesInvoiceFindUnique).not.toHaveBeenCalled()
+  })
+
   describe("invoice", () => {
     it("returns invoice print data with items and summary", async () => {
       mocks.salesInvoiceFindUnique.mockResolvedValue({

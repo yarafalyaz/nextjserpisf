@@ -86,6 +86,12 @@ export async function GET(request: Request) {
     return apiError("FORBIDDEN", "Akses ditolak")
   }
 
+  // Tolak bentuk yang Number() terima diam-diam ("1e3", "0x10", "+5", " 5"):
+  // pola notifications/[id] + workflow. Tes terpisah karena tes 9007199254740992
+  // sesudah Number() gagal isSafeInteger, sedangkan bentuk ini lolos sebagai ID lain.
+  if (!/^\d+$/.test(idStr)) {
+    return apiError("BAD_REQUEST", "ID tidak valid")
+  }
   const id = Number(idStr)
   if (!Number.isSafeInteger(id) || id <= 0) {
     return apiError("BAD_REQUEST", "ID tidak valid")
