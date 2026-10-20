@@ -70,6 +70,7 @@ import {
 } from "@/lib/reports/job-order-data"
 import { loadBankMovements } from "@/lib/reports/bank-movements-data"
 import { loadProductionVariance } from "@/lib/reports/production-variance-data"
+import { loadJobEstimateVsActual } from "@/lib/reports/job-estimate-vs-actual-data"
 import { loadStockCount } from "@/lib/reports/stock-count-data"
 import { loadPaymentExpenses } from "@/lib/reports/payment-expenses-data"
 import { loadOrderFulfillment } from "@/lib/reports/order-fulfillment-data"
@@ -391,6 +392,21 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
       return {
         kind: "table",
         table: report.variance.table,
+        periodCaption: report.periodCaption,
+        landscape: true,
+      }
+    },
+  },
+
+  "estimasi-vs-aktual": {
+    title: "Estimasi vs Aktual Pekerjaan",
+    subtitle: "Penawaran Disetujui vs Penagihan & Biaya Aktual per Pekerjaan",
+    defaultPeriod: startOfYear,
+    async load({ period }) {
+      const report = await loadJobEstimateVsActual(period)
+      return {
+        kind: "table",
+        table: report.estimate.table,
         periodCaption: report.periodCaption,
         landscape: true,
       }
