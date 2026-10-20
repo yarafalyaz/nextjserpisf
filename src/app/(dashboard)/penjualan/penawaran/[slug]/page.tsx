@@ -18,6 +18,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { JobBillingCard } from "@/components/reports/job-billing-card";
+import { DifferenceInvoiceButton } from "@/components/reports/difference-invoice-button";
 import { loadJobBillingSummary } from "@/lib/reports/job-billing-summary-data";
 import {
   DetailTable,
@@ -290,6 +291,15 @@ export default async function QuotationDetailPage({
                 </DetailCard>
 
                 {billingSummary ? <JobBillingCard summary={billingSummary} /> : null}
+
+                {quotation.revisionNumber > 0 ? (
+                  <div className="flex justify-end">
+                    <DifferenceInvoiceButton
+                      quotationId={quotation.id}
+                      revisionNumber={quotation.revisionNumber}
+                    />
+                  </div>
+                ) : null}
 
                 {/* Down Payments */}
                 {quotation.downPayments.length > 0 && (
