@@ -684,6 +684,35 @@ describe("Vendor Bill Actions", () => {
     })
   })
 
+  it("F-71: confirmVendorBill still posts but warns when the production order is already completed", async () => {
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+    })
+    mocks.prismaMock.vendorBill.findUnique.mockResolvedValue({
+      id: 1, status: "draft", purchaseOrderId: 42, vendorId: 3, grandTotal: 500000,
+    })
+    mocks.prismaMock.vendorBill.aggregate
+      .mockResolvedValueOnce({ _sum: { grandTotal: 0 } })
+      .mockResolvedValue({ _sum: { grandTotal: 500000 } })
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
+      isService: true, workOrderId: 9, vendorId: 3, documentNo: "PO-0042",
+    })
+    // Work order 9's only production order is already completed (status is now
+    // selected by the F-71 guard — a bare { id } row would mean "not skipped").
+    mocks.prismaMock.productionOrder.findMany.mockResolvedValue([{ id: 55, status: "completed" }])
+    mocks.prismaMock.productionCost.findMany.mockResolvedValue([])
+
+    const res = await actions.confirmVendorBill(1)
+
+    expect(res?.success).toBe(true)
+    // Posting to AP still happened; only the HPP mirror was refused.
+    expect(mocks.prismaMock.vendorBill.update).toHaveBeenCalled()
+    expect(mocks.prismaMock.productionCost.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.productionOrder.update).not.toHaveBeenCalled()
+    expect((res as any).warning).toContain("sudah selesai")
+  })
+
   it("confirmVendorBill does not touch HPP for a non-service PO", async () => {
     mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([{ items: [{ qty: 1, unitCost: 1000 }] }])
     mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { grandTotal: 0 } })

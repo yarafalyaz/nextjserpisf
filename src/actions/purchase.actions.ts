@@ -177,18 +177,25 @@ async function assertThreeWayMatch(
  * the sum of its non-cancelled vendor bills' grandTotal and mirrors it onto
  * `ProductionCost` (`subcontract`) so subcontract work reaches HPP. No-op for
  * non-service POs or service POs whose work order has no production order.
+ *
+ * F-2026-10-20-71: when the sync skips a completed production order, log it
+ * (structured, with the skipped ids) and return a caller-visible notice — the
+ * vendor bill still posts, but the operator must see that the late cost was
+ * refused into an already-finished HPP instead of hanging WIP.
  */
+type ServicePoCostNotice = { productionOrderIds: number[]; text: string };
+
 async function syncServicePoCostFromBills(
   tx: Prisma.TransactionClient,
   purchaseOrderId: number | null | undefined,
   userId: number | null,
-): Promise<void> {
-  if (!purchaseOrderId) return;
+): Promise<ServicePoCostNotice | null> {
+  if (!purchaseOrderId) return null;
   const po = await tx.purchaseOrder.findUnique({
     where: { id: purchaseOrderId },
     select: { isService: true, workOrderId: true, documentNo: true },
   });
-  if (!po || !po.isService || po.workOrderId == null) return;
+  if (!po || !po.isService || po.workOrderId == null) return null;
 
   const agg = await tx.vendorBill.aggregate({
     where: { purchaseOrderId, status: { notIn: ["cancelled"] } },
@@ -196,7 +203,7 @@ async function syncServicePoCostFromBills(
   });
   const billedTotal = Number(agg._sum.grandTotal ?? 0);
 
-  await syncServicePurchaseOrderCost(
+  const synced = await syncServicePurchaseOrderCost(
     {
       purchaseOrderId,
       amount: billedTotal,
@@ -205,6 +212,16 @@ async function syncServicePoCostFromBills(
     },
     tx,
   );
+
+  if (synced.skippedProductionOrderIds.length === 0) return null;
+
+  console.warn(
+    `[syncServicePoCostFromBills] biaya subkontrak PO ${po.documentNo} tidak diterapkan ke HPP: perintah produksi sudah selesai (id: ${synced.skippedProductionOrderIds.join(", ")}); tagihan tetap diposting ke utang`,
+  );
+  return {
+    productionOrderIds: synced.skippedProductionOrderIds,
+    text: `Biaya subkontrak tidak diterapkan ke HPP karena perintah produksi sudah selesai (id: ${synced.skippedProductionOrderIds.join(", ")}). Tagihan tetap diposting ke utang.`,
+  };
 }
 
 import { logActivity } from "@/lib/services/activity-log.service";
@@ -1183,6 +1200,7 @@ export async function confirmVendorBill(billId: number) {
     // confirms (or a confirm racing a createVendorBill) on the same PO could both
     // pass the match and over-bill. Mirrors confirmVendorPayment. GL posting runs
     // after commit (onVendorBillPosted opens its own tx and is idempotent).
+    let completedOrderNotice: string | undefined;
     await prisma.$transaction(async (tx) => {
       if (bill.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${bill.purchaseOrderId} FOR UPDATE`;
@@ -1219,7 +1237,8 @@ export async function confirmVendorBill(billId: number) {
       await onVendorBillPosted(billId, Number(user.id), tx);
 
       // Reflect the posted (now recognised) value in the work order's HPP.
-      await syncServicePoCostFromBills(tx, fresh.purchaseOrderId, Number(user.id));
+      const notice = await syncServicePoCostFromBills(tx, fresh.purchaseOrderId, Number(user.id));
+      if (notice) completedOrderNotice = notice.text;
     });
 
     await logActivity(
@@ -1229,7 +1248,7 @@ export async function confirmVendorBill(billId: number) {
       `Posting tagihan vendor #${billId}`,
     );
     revalidatePath("/pembelian/tagihan");
-    return { success: true };
+    return completedOrderNotice ? { success: true, warning: completedOrderNotice } : { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[confirmVendorBill]", getErrorMessage(e) || e);
@@ -2217,6 +2236,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
       throw new Error("Hanya tagihan draft yang dapat diedit");
     }
 
+    let costWarning: string | undefined;
     const slug = await nextSlug("vendorBill", existingBill.documentNo, { excludeId: id });
 
     // Lock the PO + re-run the 3-way match BEFORE persisting the edit, mirroring
@@ -2312,8 +2332,13 @@ export async function updateVendorBill(id: number, formData: FormData) {
 
       // The bill's PO link or amount may have changed — resync the old and new
       // service PO subcontract costs so HPP stays exact.
-      await syncServicePoCostFromBills(tx, existingBill.purchaseOrderId, Number(user.id));
-      await syncServicePoCostFromBills(tx, updated.purchaseOrderId, Number(user.id));
+      const noticeOld = await syncServicePoCostFromBills(tx, existingBill.purchaseOrderId, Number(user.id));
+      const noticeNew =
+        updated.purchaseOrderId != null && updated.purchaseOrderId !== existingBill.purchaseOrderId
+          ? await syncServicePoCostFromBills(tx, updated.purchaseOrderId, Number(user.id))
+          : null;
+      const warnings = [noticeOld, noticeNew].filter((n) => n != null).map((n) => n.text);
+      if (warnings.length > 0) costWarning = warnings.join(" ");
 
       return updated;
     });
@@ -2325,7 +2350,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
       `Memperbarui tagihan vendor #${bill.id}`,
     );
     revalidatePath("/pembelian/tagihan");
-    return { success: true, id: bill.id, slug };
+    return costWarning ? { success: true, id: bill.id, slug, warning: costWarning } : { success: true, id: bill.id, slug };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateVendorBill]", getErrorMessage(e) || e);

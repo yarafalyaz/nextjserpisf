@@ -228,7 +228,7 @@ describe("syncServicePurchaseOrderCost", () => {
 
     const res = await syncServicePurchaseOrderCost(input, client as never)
 
-    expect(res).toEqual({ posted: 0, productionOrderIds: [] })
+    expect(res).toEqual({ posted: 0, productionOrderIds: [], skippedProductionOrderIds: [] })
     expect(costCreateMock).not.toHaveBeenCalled()
     expect(orderUpdateMock).not.toHaveBeenCalled()
   })
@@ -238,7 +238,7 @@ describe("syncServicePurchaseOrderCost", () => {
 
     const res = await syncServicePurchaseOrderCost(input, client as never)
 
-    expect(res).toEqual({ posted: 0, productionOrderIds: [] })
+    expect(res).toEqual({ posted: 0, productionOrderIds: [], skippedProductionOrderIds: [] })
     expect(costCreateMock).not.toHaveBeenCalled()
   })
 
@@ -248,7 +248,7 @@ describe("syncServicePurchaseOrderCost", () => {
 
     const res = await syncServicePurchaseOrderCost(input, client as never)
 
-    expect(res).toEqual({ posted: 0, productionOrderIds: [] })
+    expect(res).toEqual({ posted: 0, productionOrderIds: [], skippedProductionOrderIds: [] })
     expect(costCreateMock).not.toHaveBeenCalled()
   })
 
@@ -262,7 +262,7 @@ describe("syncServicePurchaseOrderCost", () => {
 
     const res = await syncServicePurchaseOrderCost(input, client as never)
 
-    expect(res).toEqual({ posted: 500000, productionOrderIds: [55] })
+    expect(res).toEqual({ posted: 500000, productionOrderIds: [55], skippedProductionOrderIds: [] })
     const created = costCreateMock.mock.calls[0][0]
     expect(created.data.category).toBe("subcontract")
     expect(created.data.purchaseOrderId).toBe(42)
@@ -306,7 +306,7 @@ describe("syncServicePurchaseOrderCost", () => {
 
     const res = await syncServicePurchaseOrderCost({ ...input, amount: 0 }, client as never)
 
-    expect(res).toEqual({ posted: 0, productionOrderIds: [55] })
+    expect(res).toEqual({ posted: 0, productionOrderIds: [55], skippedProductionOrderIds: [] })
     expect(costDeleteMock).toHaveBeenCalledWith({ where: { id: 1 } })
     expect(orderUpdateMock).toHaveBeenCalledWith({
       where: { id: 55 },
@@ -339,9 +339,81 @@ describe("syncServicePurchaseOrderCost", () => {
 
     const res = await syncServicePurchaseOrderCost({ ...input, amount: 0 }, client as never)
 
-    expect(res).toEqual({ posted: 0, productionOrderIds: [55] })
+    expect(res).toEqual({ posted: 0, productionOrderIds: [55], skippedProductionOrderIds: [] })
     expect(costCreateMock).not.toHaveBeenCalled()
     expect(costDeleteMock).not.toHaveBeenCalled()
     expect(orderUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("F-71: skips a completed production order entirely (no line, no HPP, no journal)", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    orderFindManyMock.mockResolvedValue([{ id: 55, status: "completed" }])
+    costFindManyMock.mockResolvedValue([])
+
+    const res = await syncServicePurchaseOrderCost(input, client as never)
+
+    expect(res).toEqual({ posted: 0, productionOrderIds: [], skippedProductionOrderIds: [55] })
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+    expect(absorbedMock).not.toHaveBeenCalled()
+  })
+
+  it("F-71: spreads the PO value only across non-completed orders", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    orderFindManyMock.mockResolvedValue([
+      { id: 55, status: "completed" },
+      { id: 56, status: "in_progress" },
+    ])
+    costFindManyMock.mockResolvedValue([])
+    costCreateMock.mockResolvedValue({ id: 1 })
+    orderFindUniqueMock.mockResolvedValue({ totalActualCost: 0 })
+    orderUpdateMock.mockResolvedValue({})
+
+    const res = await syncServicePurchaseOrderCost({ ...input, amount: 100 }, client as never)
+
+    expect(res.skippedProductionOrderIds).toEqual([55])
+    expect(res.productionOrderIds).toEqual([56])
+    // The full amount lands on the one active order — no equal split with the
+    // completed order and nothing written to it.
+    const created = costCreateMock.mock.calls.map((c) => c[0].data)
+    expect(created).toHaveLength(1)
+    expect(created[0].productionOrderId).toBe(56)
+    expect(Number(created[0].amount)).toBe(100)
+    expect(orderUpdateMock.mock.calls.every((c) => c[0].where.id === 56)).toBe(true)
+  })
+
+  it("F-71: leaves existing subcontract lines on a completed order untouched", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    orderFindManyMock.mockResolvedValue([
+      { id: 55, status: "completed" },
+      { id: 56, status: "in_progress" },
+    ])
+    costFindManyMock.mockResolvedValue([{ id: 1, amount: 300000, productionOrderId: 55 }])
+    costCreateMock.mockResolvedValue({ id: 2 })
+    orderFindUniqueMock.mockResolvedValue({ totalActualCost: 0 })
+    orderUpdateMock.mockResolvedValue({})
+
+    await syncServicePurchaseOrderCost({ ...input, amount: 100 }, client as never)
+
+    // The completed order's existing line is historic — not updated, not
+    // deleted, and its HPP is not re-opened by the delta.
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock.mock.calls.every((c) => c[0].where.id === 56)).toBe(true)
+  })
+
+  it("F-71: does not strip subcontract cost from a completed order when the billed total is cleared", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    orderFindManyMock.mockResolvedValue([{ id: 55, status: "completed" }])
+    costFindManyMock.mockResolvedValue([{ id: 1, amount: 300000, productionOrderId: 55 }])
+
+    const res = await syncServicePurchaseOrderCost({ ...input, amount: 0 }, client as never)
+
+    expect(res).toEqual({ posted: 0, productionOrderIds: [], skippedProductionOrderIds: [55] })
+    expect(costDeleteMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+    expect(absorbedMock).not.toHaveBeenCalled()
   })
 })
