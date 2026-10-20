@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest"
-import { projectCash } from "../cash-projection"
+import { projectCash, buildPayableProjectionItems } from "../cash-projection"
 
 describe("projectCash", () => {
   const from = new Date(2026, 9, 1) // Oct 2026
@@ -34,5 +34,26 @@ describe("projectCash", () => {
   it("returns a flat line when there are no flows", () => {
     const rows = projectCash(250, from, 2, [], [])
     expect(rows.map((r) => r.closing)).toEqual([250, 250])
+  })
+
+  it("payable items are NET of withholding (F-48): bruto overstates outflow", () => {
+    const due = new Date(2026, 9, 15)
+    const items = buildPayableProjectionItems([
+      // Tagihan ber-PPh: kas keluar nyata = 1.000.000 - 20.000 - 400.000.
+      { dueDate: due, grandTotal: 1_000_000, withholdingAmount: 20_000, paidAmount: 400_000 },
+      // Sudah lunas neto -> dibuang (sisa <= 0).
+      { dueDate: due, grandTotal: 500_000, withholdingAmount: 10_000, paidAmount: 490_000 },
+      // Tanpa jatuh tempo -> dibuang (pemanggil memutuskan perlakuan lain).
+      { dueDate: null, grandTotal: 700_000, withholdingAmount: 0, paidAmount: 0 },
+    ])
+    expect(items).toEqual([{ dueDate: due, amount: 580_000 }])
+  })
+
+  it("payable items without withholding keep grandTotal - paidAmount sen-exact", () => {
+    const due = new Date(2026, 9, 15)
+    const items = buildPayableProjectionItems([
+      { dueDate: due, grandTotal: 100.1, withholdingAmount: 0, paidAmount: 100.07 },
+    ])
+    expect(items).toEqual([{ dueDate: due, amount: 0.03 }])
   })
 })
