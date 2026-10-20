@@ -78,6 +78,10 @@ import { loadInventoryReconciliation } from "@/lib/reports/inventory-reconciliat
 import { loadReceivedNotBilled } from "@/lib/reports/received-not-billed-data"
 import { loadTransferInTransit } from "@/lib/reports/transfer-in-transit-data"
 import { loadMinStock } from "@/lib/reports/min-stock-data"
+import {
+  buildWipAgingTable,
+  loadWipAgingReport,
+} from "@/lib/reports/wip-aging-export"
 import { loadBankTransactionReconciliation } from "@/lib/reports/bank-transaction-reconciliation-data"
 import { loadVatInvoices } from "@/lib/reports/vat-invoices-data"
 import { loadPurchaseOutstanding } from "@/lib/reports/purchase-outstanding-data"
@@ -558,6 +562,21 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
         kind: "table",
         table: report.report.table,
         periodCaption: report.periodCaption,
+        landscape: true,
+      }
+    },
+  },
+
+  "wip-berjalan": {
+    title: "Umur WIP Berjalan",
+    subtitle: "Sisa Biaya WIP per Order Produksi Berjalan dan Ember Umurnya",
+    defaultPeriod: startOfYear,
+    async load({ period }) {
+      const result = await loadWipAgingReport(period)
+      return {
+        kind: "table",
+        table: buildWipAgingTable(result),
+        periodCaption: result.periodCaption,
         landscape: true,
       }
     },
