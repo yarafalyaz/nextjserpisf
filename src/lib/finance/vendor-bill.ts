@@ -57,6 +57,36 @@ export function computeBillLineAmounts(line: VendorBillLineInput): VendorBillLin
   }
 }
 
+export type VendorBillHeaderTotals = {
+  /** Bruto: Σ (qty × harga) sebelum diskon baris. */
+  subtotal: number
+  discountAmount: number
+  tax: number
+  grandTotal: number
+}
+
+/**
+ * Totales kop tagihan dihitung ulang dari baris `items` — SATU sumber angka.
+ * Mengembalikan `null` bila tidak ada baris berlaku (qty > 0): tagihan tanpa
+ * rincian baris (jasa/manual) tetap memakai kop yang dikirim form.
+ * `subtotal` kop adalah BRUTO, konsisten dengan pembaca DPP
+ * (`subtotal − discountAmount`) dan penjaga 3-way match.
+ */
+export function summarizeBillItems(
+  itemsJson: string | null | undefined,
+): VendorBillHeaderTotals | null {
+  const rows = safeJsonParse<VendorBillLineInput[]>(itemsJson ?? null) ?? []
+  const lines = rows
+    .filter((row) => safeRound(row.qty ?? 0, 2) > 0)
+    .map((row) => computeBillLineAmounts(row))
+  if (lines.length === 0) return null
+  const subtotal = lines.reduce((sum, line) => safeAdd(sum, line.gross, 2), 0)
+  const discountAmount = lines.reduce((sum, line) => safeAdd(sum, line.discountAmount, 2), 0)
+  const tax = lines.reduce((sum, line) => safeAdd(sum, line.taxAmount, 2), 0)
+  const grandTotal = lines.reduce((sum, line) => safeAdd(sum, line.total, 2), 0)
+  return { subtotal, discountAmount, tax, grandTotal }
+}
+
 /**
  * Σ diskon baris dari JSON `items` form — persis jumlah `VendorBillItem.discountAmount`
  * yang akan ditulis `mapVendorBillItems` (baris ber-qty 0 diabaikan di kedua sisi),

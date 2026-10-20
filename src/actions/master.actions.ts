@@ -160,8 +160,9 @@ export async function createCustomer(formData: FormData) {
     const v = parsed.data;
 
     // FK tanpa cek: customerCategoryId fiktif lolos optionalNumber lalu P2003 mentah.
+    // UI hanya tawarkan kategori aktif (tambah/ubah pelanggan), samakan di sini.
     if (v.customerCategoryId != null) {
-      const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null }, select: { id: true } });
+      const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
       if (!cat) return { success: false, error: "Kategori pelanggan tidak ditemukan" };
     }
 
@@ -213,7 +214,7 @@ export async function updateCustomer(customerId: number, formData: FormData) {
     const v = parsed.data;
 
     if (v.customerCategoryId != null) {
-      const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null }, select: { id: true } });
+      const cat = await prisma.customerCategory.findFirst({ where: { id: v.customerCategoryId, deletedAt: null, isActive: true }, select: { id: true } });
       if (!cat) return { success: false, error: "Kategori pelanggan tidak ditemukan" };
     }
 
@@ -297,6 +298,7 @@ export async function createVendor(formData: FormData) {
     const v = parsed.data;
 
     // FK tanpa cek: paymentTermId fiktif lolos optionalNumber lalu P2003 mentah.
+    // PaymentTerm tanpa deletedAt; nonaktif tetap ditolak (tak bisa dipakai bayar).
     if (v.paymentTermId != null) {
       const term = await prisma.paymentTerm.findFirst({ where: { id: v.paymentTermId, isActive: true }, select: { id: true } });
       if (!term) return { success: false, error: "Syarat pembayaran tidak ditemukan" };
