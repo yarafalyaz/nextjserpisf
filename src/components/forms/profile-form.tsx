@@ -156,7 +156,7 @@ export function ProfileForm({ user, roles }: ProfileFormProps) {
             <p className="text-xs text-muted-foreground">Ganti email wajib isi kata sandi saat ini.</p>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="currentPassword">Kata Sandi Saat Ini (wajib bila ganti email)</Label>
+            <Label htmlFor="profileCurrentPassword">Kata Sandi Saat Ini (wajib bila ganti email)</Label>
             <Input id="profileCurrentPassword" name="currentPassword" type="password" placeholder="••••••••" autoComplete="current-password" />
           </div>
         </div>
