@@ -24,7 +24,7 @@ import {
 } from "@/lib/reports/customer-receivables"
 import { groupReceivablesByVehicle } from "@/lib/reports/receivables-by-vehicle-data"
 import { receivableOutstanding } from "@/lib/reports/aging-amounts"
-import { safeAdd } from "@/lib/utils/math"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import type { StatementTable } from "@/lib/reports/statement-table"
 import { formatAccounting } from "@/lib/utils/format"
@@ -57,6 +57,60 @@ const LEDGER_COLUMNS: TableColumn[] = [
   { header: "Saldo", align: "right", width: 36 },
 ]
 
+export interface LedgerEntryInput {
+  date: Date
+  doc: string
+  desc: string
+  debit: unknown
+  credit: unknown
+}
+
+export interface LedgerRowsResult {
+  rows: TableRow[]
+  /** Saldo akhir (saldo awal + mutasi periode), presisi sen. */
+  balance: number
+  totalDebit: number
+  totalCredit: number
+}
+
+/**
+ * Saldo berjalan buku besar/pembantu, presisi sen.
+ *
+ * Tiap langkah memakai safeAdd/safeSubtract 2 desimal, bukan `+=` float
+ * mentah: 17 mutasi (0.37 − 0.13) terakumulasi 4.080000000000002 dan
+ * saldo bisa drift sen dari total debit−kredit. Saldo awal juga
+ * dinormalkan sen karena berasal dari selisih agregat DB.
+ * `direction`: "debit" saldo naik oleh debit (buku besar, piutang);
+ * "credit" saldo naik oleh kredit (utang).
+ */
+export function buildLedgerRows(input: {
+  opening: unknown
+  entries: readonly LedgerEntryInput[]
+  direction?: "debit" | "credit"
+}): LedgerRowsResult {
+  const direction = input.direction ?? "debit"
+  const step = (balance: number, debit: number, credit: number) =>
+    direction === "credit"
+      ? safeAdd(safeSubtract(balance, debit, 2), credit, 2)
+      : safeAdd(safeSubtract(balance, credit, 2), debit, 2)
+  let balance = safeAdd(input.opening as never, 0, 2)
+  let totalDebit = 0
+  let totalCredit = 0
+  const rows: TableRow[] = [{ kind: "data", cells: ["", "", "Saldo Awal", "", "", money(balance)] }]
+  for (const e of input.entries) {
+    const debit = safeAdd(e.debit as never, 0, 2)
+    const credit = safeAdd(e.credit as never, 0, 2)
+    balance = step(balance, debit, credit)
+    totalDebit = safeAdd(totalDebit, debit, 2)
+    totalCredit = safeAdd(totalCredit, credit, 2)
+    rows.push({
+      kind: "data",
+      cells: [shortDate(e.date), e.doc, e.desc, debit ? money(debit) : "", credit ? money(credit) : "", money(balance)],
+    })
+  }
+  return { rows, balance, totalDebit, totalCredit }
+}
+
 async function ledgerRows(
   accountId: number | null,
   period: Period,
@@ -72,7 +126,7 @@ async function ledgerRows(
     }
   }
   const opening = await sumEntriesByAccount({ date: { lt: period.start } }).then(
-    (sums) => (sums.get(accountId)?.debit ?? 0) - (sums.get(accountId)?.credit ?? 0),
+    (sums) => safeSubtract(sums.get(accountId)?.debit ?? 0, sums.get(accountId)?.credit ?? 0, 2),
   )
   const entries = await prisma.journalEntry.findMany({
     where: {
@@ -86,30 +140,17 @@ async function ledgerRows(
     include: { journal: { select: { journalNumber: true, transactionDate: true, description: true } } },
     orderBy: [{ journal: { transactionDate: "asc" } }, { id: "asc" }],
   })
-  const rows: TableRow[] = [
-    { kind: "data", cells: ["", "", "Saldo Awal", "", "", money(opening)] },
-  ]
-  let balance = opening
-  let totalDebit = 0
-  let totalCredit = 0
-  for (const e of entries) {
-    const debit = Number(e.debit)
-    const credit = Number(e.credit)
-    balance += debit - credit
-    totalDebit += debit
-    totalCredit += credit
-    rows.push({
-      kind: "data",
-      cells: [
-        shortDate(e.journal.transactionDate),
-        e.journal.journalNumber,
-        e.memo || e.journal.description || "-",
-        debit ? money(debit) : "",
-        credit ? money(credit) : "",
-        money(balance),
-      ],
-    })
-  }
+  const built = buildLedgerRows({
+    opening,
+    entries: entries.map((e) => ({
+      date: e.journal.transactionDate,
+      doc: e.journal.journalNumber,
+      desc: e.memo || e.journal.description || "-",
+      debit: e.debit,
+      credit: e.credit,
+    })),
+  })
+  const rows = built.rows
   if (entries.length === 0) {
     rows.push({ kind: "notice", text: "Tidak ada transaksi dalam periode ini." })
   } else {
@@ -117,7 +158,7 @@ async function ledgerRows(
       kind: "total",
       grand: true,
       label: "Total & Saldo Akhir",
-      cells: ["", "", "", money(totalDebit), money(totalCredit), money(balance)],
+      cells: ["", "", "", money(built.totalDebit), money(built.totalCredit), money(built.balance)],
     })
   }
   return { table: { columns: LEDGER_COLUMNS, rows }, ...periodOf(period) }
@@ -202,29 +243,18 @@ export async function loadReceivableSubledger(period: Period, partyKey: string |
     }),
   ])
   const entries = [
-    ...invoices.map((inv) => ({ date: inv.date, doc: inv.documentNo, desc: "Faktur Penjualan", debit: Number(inv.grandTotal), credit: 0 })),
-    ...payments.map((pay) => ({ date: pay.paymentDate, doc: pay.documentNo, desc: "Pembayaran", debit: 0, credit: Number(pay.amount) })),
+    ...invoices.map((inv) => ({ date: inv.date, doc: inv.documentNo, desc: "Faktur Penjualan", debit: inv.grandTotal, credit: 0 })),
+    ...payments.map((pay) => ({ date: pay.paymentDate, doc: pay.documentNo, desc: "Pembayaran", debit: 0, credit: pay.amount })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime())
   const inPeriod = entries.filter((e) => e.date >= period.start && e.date <= period.end)
-  let balance = entries.filter((e) => e.date < period.start).reduce((s, e) => s + e.debit - e.credit, 0)
-  const opening = balance
-  const rows: TableRow[] = [{ kind: "data", cells: ["", "", "Saldo Awal", "", "", money(opening)] }]
-  let totalDebit = 0
-  let totalCredit = 0
-  for (const e of inPeriod) {
-    balance += e.debit - e.credit
-    totalDebit += e.debit
-    totalCredit += e.credit
-    rows.push({
-      kind: "data",
-      cells: [shortDate(e.date), e.doc, e.desc, e.debit ? money(e.debit) : "", e.credit ? money(e.credit) : "", money(balance)],
-    })
-  }
+  const opening = buildLedgerRows({ opening: 0, entries: entries.filter((e) => e.date < period.start) }).balance
+  const built = buildLedgerRows({ opening, entries: inPeriod })
+  const rows: TableRow[] = [...built.rows]
   rows.push({
     kind: "total",
     grand: true,
     label: "Total & Saldo Akhir",
-    cells: ["", "", "", money(totalDebit), money(totalCredit), money(balance)],
+    cells: ["", "", "", money(built.totalDebit), money(built.totalCredit), money(built.balance)],
   })
   return { table: { columns: SUBLEDGER_COLUMNS, rows }, ...periodOf(period) }
 }
@@ -254,29 +284,18 @@ export async function loadPayableSubledger(period: Period, partyKey: string | nu
     }),
   ])
   const entries = [
-    ...bills.map((bill) => ({ date: bill.date, doc: bill.documentNo, desc: "Tagihan Vendor", debit: 0, credit: Number(bill.grandTotal) })),
-    ...payments.map((pay) => ({ date: pay.paymentDate, doc: pay.documentNo, desc: "Pembayaran", debit: Number(pay.amount), credit: 0 })),
+    ...bills.map((bill) => ({ date: bill.date, doc: bill.documentNo, desc: "Tagihan Vendor", debit: 0, credit: bill.grandTotal })),
+    ...payments.map((pay) => ({ date: pay.paymentDate, doc: pay.documentNo, desc: "Pembayaran", debit: pay.amount, credit: 0 })),
   ].sort((a, b) => a.date.getTime() - b.date.getTime())
   const inPeriod = entries.filter((e) => e.date >= period.start && e.date <= period.end)
-  let balance = entries.filter((e) => e.date < period.start).reduce((s, e) => s + e.credit - e.debit, 0)
-  const opening = balance
-  const rows: TableRow[] = [{ kind: "data", cells: ["", "", "Saldo Awal", "", "", money(opening)] }]
-  let totalDebit = 0
-  let totalCredit = 0
-  for (const e of inPeriod) {
-    balance += e.credit - e.debit
-    totalDebit += e.debit
-    totalCredit += e.credit
-    rows.push({
-      kind: "data",
-      cells: [shortDate(e.date), e.doc, e.desc, e.debit ? money(e.debit) : "", e.credit ? money(e.credit) : "", money(balance)],
-    })
-  }
+  const opening = buildLedgerRows({ opening: 0, entries: entries.filter((e) => e.date < period.start), direction: "credit" }).balance
+  const built = buildLedgerRows({ opening, entries: inPeriod, direction: "credit" })
+  const rows: TableRow[] = [...built.rows]
   rows.push({
     kind: "total",
     grand: true,
     label: "Total & Saldo Akhir",
-    cells: ["", "", "", money(totalDebit), money(totalCredit), money(balance)],
+    cells: ["", "", "", money(built.totalDebit), money(built.totalCredit), money(built.balance)],
   })
   return { table: { columns: SUBLEDGER_COLUMNS, rows }, ...periodOf(period) }
 }
