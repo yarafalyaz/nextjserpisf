@@ -56,6 +56,17 @@ describe("kalender kerja: halaman, formulir, dan navigasi tersambung", () => {
     expect(read(DESCRIPTIONS)).toContain('"/sdm/kalender-kerja"')
   })
 
+  it("formulir mengirim isActive eksplisit (jadwal nonaktif tidak boleh hidup lagi saat diubah)", () => {
+    const src = read(FORMS)
+    expect(
+      src,
+      "Checkbox `isActive` native tidak mengirim field saat tidak dicentang, dan " +
+        "`updateWorkSchedule` membaca absen sebagai `?? true` — tanpa `fd.set` eksplisit, " +
+        "jadwal kerja nonaktif tidak akan pernah bisa dinonaktifkan lewat UI dan akan " +
+        "tetap dibaca layanan absensi/cuti yang hanya mengambil `isActive: true`.",
+    ).toContain('fd.set("isActive"')
+  })
+
   it("izin ubah jadwal kerja benar-benar ditegakkan aksinya", () => {
     const actions = read("src/actions/hrm.actions.ts")
     expect(actions).toMatch(/export async function updateWorkSchedule[\s\S]{0,120}requirePermission\("edit_work_schedules"\)/)
