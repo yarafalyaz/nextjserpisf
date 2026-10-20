@@ -1,11 +1,8 @@
 "use client"
 
-import { useTransition } from "react"
-import { useRouter } from "next/navigation"
 import { ReceiptText } from "lucide-react"
 import { createDifferenceInvoice } from "@/actions/sales.actions"
-import { showError, showSuccess } from "@/lib/utils/toast"
-import { Button } from "@/components/ui/button"
+import { RevisionActionButton } from "./revision-action-button"
 
 /**
  * F-2026-10-20-10: tombol "Buat Faktur Selisih" di detail penawaran.
@@ -20,33 +17,15 @@ export function DifferenceInvoiceButton({
   quotationId,
   revisionNumber,
 }: Readonly<{ quotationId: number; revisionNumber: number }>) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-
-  if (revisionNumber <= 0) {
-    return null
-  }
-
-  function handleClick() {
-    startTransition(async () => {
-      const result = await createDifferenceInvoice(quotationId)
-      if (!result.success) {
-        showError(result.error || "Gagal membuat faktur selisih")
-        return
-      }
-      showSuccess("Faktur selisih dibuat")
-      router.push(`/penjualan/faktur/${result.slug}`)
-    })
-  }
-
   return (
-    <Button
-      variant="secondary"
-      onPress={handleClick}
-      isPending={isPending}
-      aria-label="Buat faktur selisih"
-    >
-      <ReceiptText size={14} aria-hidden="true" /> Buat Faktur Selisih
-    </Button>
+    <RevisionActionButton
+      quotationId={quotationId}
+      revisionNumber={revisionNumber}
+      action={createDifferenceInvoice}
+      label="Faktur Selisih"
+      successMessage="Faktur selisih dibuat"
+      errorMessage="Gagal membuat faktur selisih"
+      Icon={ReceiptText}
+    />
   )
 }

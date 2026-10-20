@@ -45,34 +45,28 @@ export default async function QuotationDetailPage({
   await requirePermission("view_quotations");
   const { slug } = await params;
 
+  const quotationInclude = {
+    customer: true,
+    sections: { include: { items: true }, orderBy: { sortOrder: "asc" } },
+    downPayments: { orderBy: { createdAt: "desc" } },
+    salesOrders: { orderBy: { createdAt: "desc" } },
+    workOrders: { orderBy: { createdAt: "desc" } },
+    salesInvoices: { orderBy: { createdAt: "desc" } },
+    histories: { orderBy: { createdAt: "desc" }, take: 10 },
+  } as const;
+
   const quotation = await resolveEntity(
     { segment: slug, fallbackWhere: { deletedAt: null } },
     {
       bySlug: (s, where) =>
         prisma.quotation.findFirst({
           where: { slug: s, ...where },
-          include: {
-            customer: true,
-            sections: { include: { items: true }, orderBy: { sortOrder: "asc" } },
-            downPayments: { orderBy: { createdAt: "desc" } },
-            salesOrders: { orderBy: { createdAt: "desc" } },
-            workOrders: { orderBy: { createdAt: "desc" } },
-            salesInvoices: { orderBy: { createdAt: "desc" } },
-            histories: { orderBy: { createdAt: "desc" }, take: 10 },
-          },
+          include: quotationInclude,
         }),
       byId: (id, where) =>
         prisma.quotation.findUnique({
           where: { id, ...where },
-          include: {
-            customer: true,
-            sections: { include: { items: true }, orderBy: { sortOrder: "asc" } },
-            downPayments: { orderBy: { createdAt: "desc" } },
-            salesOrders: { orderBy: { createdAt: "desc" } },
-            workOrders: { orderBy: { createdAt: "desc" } },
-            salesInvoices: { orderBy: { createdAt: "desc" } },
-            histories: { orderBy: { createdAt: "desc" }, take: 10 },
-          },
+          include: quotationInclude,
         }),
     },
   );
