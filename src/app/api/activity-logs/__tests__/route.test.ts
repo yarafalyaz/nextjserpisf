@@ -184,4 +184,51 @@ it("rejects a non-integer userId with 400 and never queries", async () => {
       where: {},
     }))
   })
+
+  it("queries only the contract columns (oldValues/newValues/metadata tidak ikut dimuat)", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    mocks.findManyLogs.mockResolvedValue([])
+    mocks.countLogs.mockResolvedValue(0)
+
+    await GET(makeReq("http://localhost/api/activity-logs") as any)
+
+    // Tanpa select, Prisma memuat seluruh baris ActivityLog — termasuk
+    // oldValues/newValues (Json, bisa memuat gaji/bank) dan metadata (Text) —
+    // padahal respons hanya memakai field kontrak + keberadaan old/newValues
+    // sebagai boolean hasChanges. select harus membatasi ke field kontrak saja.
+    expect(mocks.findManyLogs).toHaveBeenCalledWith(expect.objectContaining({
+      select: {
+        id: true,
+        userId: true,
+        action: true,
+        modelType: true,
+        modelId: true,
+        description: true,
+        createdAt: true,
+        ipAddress: true,
+        oldValues: true,
+        newValues: true,
+      },
+    }))
+    const call = mocks.findManyLogs.mock.calls[0][0] as Record<string, unknown>
+    expect(call.select).not.toHaveProperty("metadata")
+  })
+
+  it("sets hasChanges from the presence of old/new values only", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+    mocks.findManyLogs.mockResolvedValue([
+      { id: 1, userId: 1, action: "create", modelType: "User", modelId: 5, description: "Test", createdAt: new Date(), ipAddress: "127.0.0.1", oldValues: { gaji: 999 }, newValues: null },
+      { id: 2, userId: 1, action: "login", modelType: "User", modelId: 5, description: null, createdAt: new Date(), ipAddress: null, oldValues: null, newValues: null },
+    ])
+    mocks.countLogs.mockResolvedValue(2)
+    mocks.findManyUsers.mockResolvedValue([{ id: 1, name: "John" }])
+
+    const res = await GET(makeReq("http://localhost/api/activity-logs") as any)
+    const json = await res.json()
+    expect(json.data[0].hasChanges).toBe(true)
+    expect(json.data[1].hasChanges).toBe(false)
+    // Nilai old/new tidak boleh bocor ke respons — hanya flag-nya.
+    expect(JSON.stringify(json.data[0])).not.toContain("gaji")
+    expect(json.data[0]).not.toHaveProperty("oldValues")
+  })
 })

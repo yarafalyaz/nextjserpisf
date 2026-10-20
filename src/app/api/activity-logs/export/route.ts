@@ -22,6 +22,18 @@ export async function GET(req: NextRequest) {
       where,
       orderBy: { createdAt: "desc" },
       take: 10000,
+      // Hanya kolom CSV: oldValues/newValues/metadata tidak pernah ditulis
+      // ke CSV — jangan muat blob sensitif itu untuk sampai 10.000 baris.
+      select: {
+        id: true,
+        userId: true,
+        action: true,
+        modelType: true,
+        modelId: true,
+        description: true,
+        createdAt: true,
+        ipAddress: true,
+      },
     });
 
     const userIds = Array.from(

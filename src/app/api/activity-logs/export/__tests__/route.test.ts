@@ -162,3 +162,37 @@ it("rejects a non-integer userId with 400 and never queries", async () => {
     expect(body).not.toMatch(dangerousCell)
   })
 })
+
+describe("GET /api/activity-logs/export — kontrak kolom query", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.hasPermissionFn.mockResolvedValue(true)
+    mocks.findManyLogs.mockResolvedValue([])
+  })
+
+  it("queries only the CSV columns (oldValues/newValues/metadata tidak ikut dimuat)", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 1 } })
+
+    const res = await GET(makeReq("http://localhost/api/activity-logs/export") as any)
+    expect(res.status).toBe(200)
+
+    // Ekspor CSV hanya memakai createdAt/userId/action/modelType/modelId/
+    // description/ipAddress. Tanpa select, take:10000 ikut memuat
+    // oldValues/newValues (Json sensitif) + metadata (Text) per baris.
+    expect(mocks.findManyLogs).toHaveBeenCalledWith(expect.objectContaining({
+      select: {
+        id: true,
+        userId: true,
+        action: true,
+        modelType: true,
+        modelId: true,
+        description: true,
+        createdAt: true,
+        ipAddress: true,
+      },
+    }))
+    const call = mocks.findManyLogs.mock.calls[0][0] as Record<string, unknown>
+    expect(call.select).not.toHaveProperty("oldValues")
+    expect(call.select).not.toHaveProperty("metadata")
+  })
+})
