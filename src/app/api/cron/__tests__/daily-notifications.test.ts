@@ -4,6 +4,7 @@ import { NextRequest } from "next/server"
 const mocks = vi.hoisted(() => ({
   prisma: {
     user: { findMany: vi.fn().mockResolvedValue([{ id: 1 }]) },
+    notification: { findFirst: vi.fn().mockResolvedValue(null) },
     $queryRaw: vi.fn().mockResolvedValue([]),
     salesInvoice: { findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
     purchaseOrder: { findMany: vi.fn().mockResolvedValue([]) },
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
     employee: { findMany: vi.fn().mockResolvedValue([]) },
     leaveRequest: { findMany: vi.fn().mockResolvedValue([]) },
   },
-  notificationService: { notifyUsers: vi.fn() },
+  notificationService: { notifyUsersIfNew: vi.fn().mockResolvedValue(0) },
   isValidCronRequest: vi.fn().mockReturnValue(true),
 }))
 

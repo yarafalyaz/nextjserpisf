@@ -34,12 +34,22 @@ const READERS = [
 describe("diskon tagihan vendor: penulis dan pembaca DPP harus sepakat", () => {
   it("pembuat DAN pengubah tagihan mengisi diskon level dokumen dari Σ diskon baris", () => {
     const src = read(WRITER)
-    const writes = src.match(/discountAmount: sumBillItemDiscount\(v\.items\)/g) ?? []
+    // Penulis mengisi kop dari `summarizeBillItems(v.items)` (hitung ulang
+    // server dari baris yang sama dengan yang ditulis ke vendor_bill_items);
+    // dua-duanya wajib mengarah ke sumber itu — pola lama
+    // `sumBillItemDiscount(v.items)` digantikan helper kop ini.
+    const summaries = src.match(/const billHeader = summarizeBillItems\(v\.items\)/g) ?? []
+    const writes = src.match(/discountAmount: billHeader\.discountAmount/g) ?? []
+    expect(
+      summaries.length,
+      "createVendorBill dan updateVendorBill dua-duanya harus menghitung kop " +
+        "dari summarizeBillItems(v.items)",
+    ).toBe(2)
     expect(
       writes.length,
       "createVendorBill dan updateVendorBill dua-duanya harus mengisi " +
         "VendorBill.discountAmount; kalau salah satu terlewat, DPP pada tagihan " +
-        "yang diubah (atau dibuat) dilaporkan terlalu besar."
+        "yang diubah (atau dibuat) dilaporkan terlalu besar.",
     ).toBe(2)
   })
 
