@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => {
     vehicleFitmentRule: buildModelMock(),
     salesOrder: buildModelMock(),
     salesInvoice: buildModelMock(),
+    customer: buildModelMock(),
 
     $transaction: vi.fn(async (ops: any) => {
       if (typeof ops === "function") return ops(prismaMock)
@@ -58,6 +59,11 @@ function fdMap(payload: Record<string, string | number | null | undefined>): For
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
+  // Default: FK referensi ada (cek eksistensi create/updateCustomerVehicle).
+  // Tes penolakan menimpa dengan mockResolvedValueOnce(null).
+  mocks.prismaMock.customer.findFirst.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValue({ id: 1 })
+  mocks.prismaMock.vehicle.findFirst.mockResolvedValue({ id: 1 })
 })
 
 describe("Vehicle Brand Actions", () => {
@@ -92,6 +98,7 @@ describe("Vehicle Model Actions", () => {
 
 describe("Vehicle Variant Actions", () => {
   it("createVehicleVariant succeeds", async () => {
+    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce(null)
     const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
     expect(res?.success).toBe(true)
   })
@@ -275,6 +282,64 @@ describe("Customer Vehicle Actions", () => {
     expect(mocks.prismaMock.customerVehicle.delete).toHaveBeenCalledWith({ where: { id: 1 } })
     expect(mocks.prismaMock.vehicle.deleteMany).not.toHaveBeenCalled()
   })
+  // Bug: customerId/variantId/vehicleId hanya dicek format (int positif).
+  // Customer terhapus/inaktif, varian fiktif, tipe fiktif lolos schema lalu
+  // gagal P2003 mentah — atau menempel ke pelanggan mati. Cek eksistensi
+  // pra-tulis wajib (pola withholding-tax/position-department).
+  it("createCustomerVehicle menolak customer fiktif/terhapus", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.createCustomerVehicle(fdMap({ customerId: 999, variantId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Pelanggan tidak ditemukan")
+    expect(mocks.prismaMock.customerVehicle.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicle.create).not.toHaveBeenCalled()
+  })
+  it("createCustomerVehicle menolak variantId fiktif", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValueOnce({ id: 1 })
+    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.createCustomerVehicle(fdMap({ customerId: 1, variantId: 999 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Varian kendaraan tidak ditemukan")
+    expect(mocks.prismaMock.customerVehicle.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicle.create).not.toHaveBeenCalled()
+  })
+  it("createCustomerVehicle menolak vehicleId fiktif", async () => {
+    mocks.prismaMock.customer.findFirst.mockResolvedValueOnce({ id: 1 })
+    mocks.prismaMock.vehicle.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.createCustomerVehicle(fdMap({ customerId: 1, vehicleId: 999 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Tipe kendaraan tidak ditemukan")
+    expect(mocks.prismaMock.customerVehicle.create).not.toHaveBeenCalled()
+  })
+  it("updateCustomerVehicle menolak customer fiktif/terhapus", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 1 })
+    mocks.prismaMock.customer.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 999, variantId: 1 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Pelanggan tidak ditemukan")
+    expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicle.update).not.toHaveBeenCalled()
+  })
+  it("updateCustomerVehicle menolak variantId fiktif tanpa mutasi Vehicle bersama", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 1 })
+    mocks.prismaMock.customer.findFirst.mockResolvedValueOnce({ id: 1 })
+    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1, variantId: 999 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Varian kendaraan tidak ditemukan")
+    expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicle.update).not.toHaveBeenCalled()
+  })
+  it("updateCustomerVehicle menolak vehicleId fiktif", async () => {
+    mocks.prismaMock.customerVehicle.findUniqueOrThrow.mockResolvedValue({ id: 1, customerId: 1, vehicleId: 1 })
+    mocks.prismaMock.customer.findFirst.mockResolvedValueOnce({ id: 1 })
+    mocks.prismaMock.vehicle.findFirst.mockResolvedValueOnce(null)
+    const res = await actions.updateCustomerVehicle(1, fdMap({ customerId: 1, vehicleId: 999 }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Tipe kendaraan tidak ditemukan")
+    expect(mocks.prismaMock.customerVehicle.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicle.update).not.toHaveBeenCalled()
+  })
 })
 
 describe("Vehicle Actions Error Paths", () => {
@@ -350,6 +415,7 @@ describe("Vehicle Actions Error Paths", () => {
   })
   it("createVehicleVariant handles error", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.vehicleVariant.findFirst.mockResolvedValueOnce(null)
     mocks.prismaMock.vehicleVariant.create.mockRejectedValueOnce(new Error("db err"))
     const res = await actions.createVehicleVariant(fdMap({ name: "1.5 G", vehicleModelId: 1 }))
     expect(res?.success).toBe(false)
