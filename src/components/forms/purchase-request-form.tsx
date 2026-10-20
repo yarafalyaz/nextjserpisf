@@ -40,6 +40,8 @@ interface PRFormProps {
     description?: string | null;
     items?: Array<{ itemId: number; qty: number; notes?: string }>;
   };
+  /** Baris awal untuk form tambah ter-prefill (mis. dari stok minimum). */
+  initialItems?: Array<{ itemId: number; qty: number }>;
 }
 
 interface PRItem {
@@ -55,6 +57,7 @@ export function PurchaseRequestForm({
   employees,
   vendors,
   request,
+  initialItems,
 }: PRFormProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -87,7 +90,15 @@ export function PurchaseRequestForm({
         notes: i.notes || "",
         uid: nextItemUid(),
       }),
-    ) || [{ itemId: 0, qty: 1, notes: "", uid: nextItemUid() }],
+    ) ||
+      (initialItems && initialItems.length > 0
+        ? initialItems.map((i) => ({
+            itemId: i.itemId,
+            qty: Number(i.qty),
+            notes: "",
+            uid: nextItemUid(),
+          }))
+        : [{ itemId: 0, qty: 1, notes: "", uid: nextItemUid() }]),
   );
 
   function addItem() {

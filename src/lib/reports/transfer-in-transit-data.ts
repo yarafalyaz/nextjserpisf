@@ -15,6 +15,7 @@
 
 import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
 import {
   buildTransferInTransit,
   type TransferInTransitResult,
@@ -22,6 +23,22 @@ import {
 
 /** Status pemindahan yang berarti barang masih di jalan. */
 export const IN_TRANSIT_TRANSFER_STATUS = "processed"
+
+/** Akumulasi nilai per pemindahan+barang dari pergerakan stok, persis sen. */
+export function aggregateTransferMoves(
+  moves: { referenceId: number | null; itemId: number; qty: unknown; cost: unknown }[],
+): Map<string, { qty: number; value: number }> {
+  const valueByKey = new Map<string, { qty: number; value: number }>()
+  for (const move of moves) {
+    if (move.referenceId === null) continue
+    const key = `${move.referenceId}-${move.itemId}`
+    const previous = valueByKey.get(key) ?? { qty: 0, value: 0 }
+    previous.qty = safeAdd(previous.qty, Number(move.qty), 2)
+    previous.value = safeAdd(previous.value, safeMultiply(Number(move.qty), Number(move.cost), 2), 2)
+    valueByKey.set(key, previous)
+  }
+  return valueByKey
+}
 
 export interface TransferInTransitReport {
   report: TransferInTransitResult
@@ -64,15 +81,7 @@ export async function loadTransferInTransit(period: {
     : []
 
   /** Nilai per pemindahan+barang dari pergerakan aslinya. */
-  const valueByKey = new Map<string, { qty: number; value: number }>()
-  for (const move of moves) {
-    if (move.referenceId === null) continue
-    const key = `${move.referenceId}-${move.itemId}`
-    const previous = valueByKey.get(key) ?? { qty: 0, value: 0 }
-    previous.qty += Number(move.qty)
-    previous.value += Number(move.qty) * Number(move.cost)
-    valueByKey.set(key, previous)
-  }
+  const valueByKey = aggregateTransferMoves(moves)
 
   const itemIds = [...new Set(transfers.flatMap((transfer) => transfer.items.map((item) => item.itemId)))]
   const items = itemIds.length

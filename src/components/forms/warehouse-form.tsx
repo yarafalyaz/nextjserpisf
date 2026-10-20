@@ -57,16 +57,16 @@ export function WarehouseForm({ warehouse, generatedCode, enableAutoCode = true 
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={handleSubmit(onSubmit)} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah gudang" : "Formulir tambah gudang"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="code">Kode Gudang *</Label>
+          <Label htmlFor="code">Kode Gudang <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="code" {...register("code")} readOnly={isEdit || enableAutoCode} className={isEdit || enableAutoCode ? "bg-muted" : undefined} placeholder={enableAutoCode ? "Dibuat otomatis" : "Masukkan kode manual"} />
           {errors.code && <span className="text-xs text-danger mt-1">{errors.code.message}</span>}
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nama Gudang *</Label>
+          <Label htmlFor="name">Nama Gudang <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="name" {...register("name")} placeholder="Gudang Utama" />
           {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
         </div>
