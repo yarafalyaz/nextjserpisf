@@ -20,18 +20,21 @@ import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 266mm, area isi A4 mendatar. */
 const COLUMNS: TableColumn[] = [
-  { header: "Tanggal", align: "left", width: 26 },
-  { header: "Nomor Dokumen", align: "left", width: 40 },
-  { header: "Pelanggan / Pemasok", align: "left", width: 78 },
-  { header: "DPP", align: "right", width: 40 },
-  { header: "PPN", align: "right", width: 40 },
-  { header: "Total", align: "right", width: 42 },
+  { header: "Tanggal", align: "left", width: 24 },
+  { header: "Nomor Dokumen", align: "left", width: 32 },
+  { header: "Nomor Faktur Pajak", align: "left", width: 38 },
+  { header: "Pelanggan / Pemasok", align: "left", width: 60 },
+  { header: "DPP", align: "right", width: 36 },
+  { header: "PPN", align: "right", width: 36 },
+  { header: "Total", align: "right", width: 40 },
 ]
 
 export interface VatInvoiceInput {
   date: Date
-  /** Nomor dokumen internal (faktur pajak e-Faktur belum disimpan, lihat catatan). */
+  /** Nomor dokumen internal. */
   documentNo: string
+  /** Nomor faktur pajak e-Faktur/Coretax; kosong = belum dicatat. */
+  taxInvoiceNumber?: string | null
   counterparty: string
   /** Dasar Pengenaan Pajak = subtotal − diskon. */
   dpp: number
@@ -50,6 +53,8 @@ export interface VatInvoiceListResult {
   table: { columns: TableColumn[]; rows: TableRow[] }
   output: VatInvoiceGroup
   input: VatInvoiceGroup
+  /** Faktur tanpa nomor faktur pajak tercatat (keluaran + masukan). */
+  missingTaxInvoiceCount: number
   /** Selisih PPN keluaran − masukan; positif = kurang bayar. */
   netVat: number
   verdict: string
@@ -82,12 +87,23 @@ function sortByDate(items: VatInvoiceInput[]): VatInvoiceInput[] {
   })
 }
 
+/** Sel faktur pajak: nomor e-Faktur bila ada, fallback nomor dokumen internal. */
+export function displayTaxInvoiceNo(item: VatInvoiceInput): string {
+  const taxNo = item.taxInvoiceNumber?.trim()
+  return taxNo ? taxNo : item.documentNo
+}
+
+function hasTaxInvoiceNo(item: VatInvoiceInput): boolean {
+  return Boolean(item.taxInvoiceNumber?.trim())
+}
+
 function dataRows(items: VatInvoiceInput[]): TableRow[] {
   return items.map((item) => ({
     kind: "data",
     cells: [
       shortDate(item.date),
       item.documentNo,
+      displayTaxInvoiceNo(item),
       item.counterparty,
       amount(item.dpp),
       amount(item.vat),
@@ -132,6 +148,9 @@ export function buildVatInvoiceList(input: {
   }
 
   const netVat = safeSubtract(output.vat, inputGroup.vat, 2)
+  const missingTaxInvoiceCount =
+    outputItems.filter((item) => !hasTaxInvoiceNo(item)).length +
+    inputItems.filter((item) => !hasTaxInvoiceNo(item)).length
   rows.push({
     kind: "total",
     grand: true,
@@ -150,12 +169,19 @@ export function buildVatInvoiceList(input: {
         "Tidak ada faktur ber-PPN pada periode ini, jadi SPT Masa PPN tidak memuat apa pun. " +
         "Pastikan faktur sudah diposting dan tanggalnya masuk periode yang dipilih.",
     })
+  } else if (missingTaxInvoiceCount > 0) {
+    rows.push({
+      kind: "notice",
+      text:
+        `Kolom Nomor Faktur Pajak memuat nomor faktur pajak (e-Faktur/Coretax) bila tercatat; ` +
+        `${missingTaxInvoiceCount} faktur belum punya nomor faktur pajak sehingga kolomnya kembali ke nomor dokumen internal. ` +
+        `DPP = subtotal − diskon (nilai sebelum pajak).`,
+    })
   } else {
     rows.push({
       kind: "notice",
       text:
-        "Kolom Nomor Dokumen memuat nomor dokumen internal; nomor faktur pajak (e-Faktur) belum " +
-        "disimpan pada dokumen, jadi laporan ini tidak bisa dipakai untuk mengunggah e-Faktur secara langsung. " +
+        "Kolom Nomor Faktur Pajak memuat nomor faktur pajak (e-Faktur/Coretax) tiap dokumen. " +
         "DPP = subtotal − diskon (nilai sebelum pajak).",
     })
   }
@@ -164,12 +190,14 @@ export function buildVatInvoiceList(input: {
     output.count === 0 && inputGroup.count === 0
       ? "Tidak ada faktur ber-PPN pada periode ini"
       : `PPN keluaran ${output.count} faktur · PPN masukan ${inputGroup.count} faktur · ` +
-        `posisi ${netVat >= 0 ? "kurang" : "lebih"} bayar ${formatCurrency(Math.abs(netVat))}`
+        `posisi ${netVat >= 0 ? "kurang" : "lebih"} bayar ${formatCurrency(Math.abs(netVat))}` +
+        (missingTaxInvoiceCount > 0 ? ` · ${missingTaxInvoiceCount} tanpa nomor faktur pajak` : "")
 
   return {
     table: { columns: COLUMNS, rows },
     output,
     input: inputGroup,
+    missingTaxInvoiceCount,
     netVat,
     verdict,
   }

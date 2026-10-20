@@ -45,18 +45,18 @@ export function AccountForm({ accounts, generatedCode, account }: AccountFormPro
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={account?.id ? "Formulir ubah akun" : "Formulir tambah akun"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="code">Kode Akun *</Label>
+          <Label htmlFor="code">Kode Akun <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="code" name="code" defaultValue={account?.code ?? generatedCode ?? ""} readOnly className="bg-muted" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nama Akun *</Label>
+          <Label htmlFor="name">Nama Akun <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="name" name="name" placeholder="Kas" defaultValue={account?.name ?? ""} required />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="type">Tipe *</Label>
+          <Label htmlFor="type">Tipe <span className="text-destructive" aria-hidden="true">*</span></Label>
           <FormSelect
             id="type"
             name="type"

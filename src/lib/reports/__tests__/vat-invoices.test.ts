@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest"
 
-import { buildVatInvoiceList, vatInvoiceSummary, type VatInvoiceInput } from "@/lib/reports/vat-invoices"
+import { buildVatInvoiceList, displayTaxInvoiceNo, vatInvoiceSummary, type VatInvoiceInput } from "@/lib/reports/vat-invoices"
 
 function invoice(overrides: Partial<VatInvoiceInput> = {}): VatInvoiceInput {
   return {
@@ -89,9 +89,36 @@ describe("buildVatInvoiceList", () => {
     expect(urutan[1]).toBe("AKHIR")
   })
 
-  it("menyatakan bahwa nomor faktur pajak e-Faktur belum disimpan", () => {
-    const result = buildVatInvoiceList({ output: [invoice()], input: [] })
+  it("menampilkan nomor faktur pajak di kolomnya sendiri bila tercatat", () => {
+    const result = buildVatInvoiceList({
+      output: [invoice({ taxInvoiceNumber: "010.000-26.12345678" })],
+      input: [invoice({ documentNo: "BILL-001", counterparty: "PT Pemasok", taxInvoiceNumber: "010.000-26.87654321" })],
+    })
 
-    expect(texts(result)).toContain("e-Faktur")
+    expect(result.table.columns.map((c) => c.header)).toContain("Nomor Faktur Pajak")
+    expect(texts(result)).toContain("010.000-26.12345678")
+    expect(texts(result)).toContain("010.000-26.87654321")
+    expect(result.missingTaxInvoiceCount).toBe(0)
+    expect(texts(result)).not.toContain("belum punya nomor faktur pajak")
+  })
+
+  it("kembali ke nomor dokumen internal bila nomor faktur pajak kosong", () => {
+    const result = buildVatInvoiceList({
+      output: [invoice(), invoice({ documentNo: "INV-002", taxInvoiceNumber: "  " })],
+      input: [],
+    })
+    const data = result.table.rows.filter((row) => row.kind === "data")
+
+    // Kolom: [tanggal, nomor dokumen, nomor faktur pajak, pihak, ...]
+    expect(data.map((row) => (row.kind === "data" ? row.cells[2] : ""))).toEqual(["INV-001", "INV-002"])
+    expect(result.missingTaxInvoiceCount).toBe(2)
+    expect(texts(result)).toContain("2 faktur belum punya nomor faktur pajak")
+    expect(result.verdict).toContain("2 tanpa nomor faktur pajak")
+  })
+
+  it("displayTaxInvoiceNo memprioritaskan nomor faktur pajak, lalu nomor internal", () => {
+    expect(displayTaxInvoiceNo(invoice({ taxInvoiceNumber: " 010.000-26.1 " }))).toBe("010.000-26.1")
+    expect(displayTaxInvoiceNo(invoice({ taxInvoiceNumber: null }))).toBe("INV-001")
+    expect(displayTaxInvoiceNo(invoice())).toBe("INV-001")
   })
 })

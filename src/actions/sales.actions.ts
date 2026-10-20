@@ -1129,6 +1129,7 @@ export async function createSalesInvoice(formData: FormData) {
         quotationId: v.quotationId ?? null,
         date: wibDateToUtcMidnight(v.date),
         dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
+        taxInvoiceNumber: v.taxInvoiceNumber ?? null,
         subtotal,
         discount: discountTotal,
         tax: taxAmount,
@@ -2043,6 +2044,7 @@ export async function updateSalesInvoice(id: number, formData: FormData) {
         quotationId: v.quotationId ?? existingInvoice.quotationId,
         date: wibDateToUtcMidnight(v.date),
         dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
+        taxInvoiceNumber: v.taxInvoiceNumber ?? null,
         // Persist notes: the sales-invoice form exposes a notes textarea
         // but the previous data block silently dropped the value, so the
         // user's note input was never saved on edit.

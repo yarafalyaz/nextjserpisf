@@ -17,6 +17,8 @@
  * Pure (tanpa Prisma/DOM).
  */
 
+import { safeAdd, safeMultiply } from "@/lib/utils/math"
+
 export interface StockValuationLayerInput {
   itemId: number
   warehouseId: number | null
@@ -69,7 +71,7 @@ export function layerValue(
   layer: { remaining: number; unitCost: number; item: { cost: number } },
   method: string,
 ): number {
-  return method === "average" ? layer.remaining * layer.item.cost : layer.remaining * layer.unitCost
+  return method === "average" ? safeMultiply(layer.remaining, layer.item.cost, 2) : safeMultiply(layer.remaining, layer.unitCost, 2)
 }
 
 export function buildStockValuation(
@@ -99,7 +101,7 @@ export function buildStockValuation(
     }
 
     existing.qty += layer.remaining
-    existing.value += layerValue(layer, method)
+    existing.value = safeAdd(existing.value, layerValue(layer, method), 2)
     aggregated.set(key, existing)
   }
 
@@ -118,7 +120,7 @@ export function buildStockValuation(
     }
     existing.items += 1
     existing.qty += row.qty
-    existing.value += row.value
+    existing.value = safeAdd(existing.value, row.value, 2)
     warehouseMap.set(row.warehouseCode, existing)
   }
 
@@ -126,7 +128,7 @@ export function buildStockValuation(
     rows,
     totals: {
       qty: rows.reduce((sum, row) => sum + row.qty, 0),
-      value: rows.reduce((sum, row) => sum + row.value, 0),
+      value: rows.reduce((sum, row) => safeAdd(sum, row.value, 2), 0),
     },
     byWarehouse: [...warehouseMap.values()].sort((a, b) => a.code.localeCompare(b.code)),
   }

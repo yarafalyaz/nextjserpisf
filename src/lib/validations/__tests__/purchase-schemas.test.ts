@@ -53,6 +53,14 @@ describe("validations/purchase.schemas", () => {
     it("rejects negative subtotal", () => {
       expect(vendorBillSchema.safeParse({ vendorId: 1, date: "2026-06-09", subtotal: -10 }).success).toBe(false);
     });
+    it("accepts nomor faktur pajak opsional, menolak karakter liar", () => {
+      const base = { vendorId: 1, date: "2026-06-09" };
+      const ok = vendorBillSchema.safeParse({ ...base, taxInvoiceNumber: "010.000-26.87654321" });
+      expect(ok.success).toBe(true);
+      if (ok.success) expect(ok.data.taxInvoiceNumber).toBe("010.000-26.87654321");
+      expect(vendorBillSchema.safeParse({ ...base, taxInvoiceNumber: "" }).success).toBe(true);
+      expect(vendorBillSchema.safeParse({ ...base, taxInvoiceNumber: "010/000;DROP" }).success).toBe(false);
+    });
   });
 
   describe("vendorPaymentSchema", () => {

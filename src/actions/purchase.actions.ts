@@ -1014,6 +1014,7 @@ export async function createVendorBill(formData: FormData) {
           date: wibDateToUtcMidnight(v.date),
           dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
           vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
+          taxInvoiceNumber: v.taxInvoiceNumber ?? null,
           terms: v.terms ?? null,
           notes: v.notes ?? null,
           subtotal: v.subtotal,
@@ -2254,6 +2255,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
           // update payment terms / notes) silently discarded the change with
           // a successful save — the user could not tell from the UI.
           vendorInvoiceNumber: v.vendorInvoiceNumber ?? null,
+          taxInvoiceNumber: v.taxInvoiceNumber ?? null,
           terms: v.terms ?? null,
           notes: v.notes ?? null,
           subtotal: v.subtotal,

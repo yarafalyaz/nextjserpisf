@@ -21,6 +21,7 @@
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm). */
@@ -101,16 +102,16 @@ function emptyTotals(): PayrollTotals {
 
 function accumulate(totals: PayrollTotals, row: PayrollRowInput): void {
   totals.slips += 1
-  totals.baseSalary += row.baseSalary
-  totals.allowances += row.allowances + row.appreciation
-  totals.overtime += row.overtime
-  totals.deductions += row.deductions
-  totals.bpjs += row.bpjsHealth + row.bpjsEmployment
-  totals.pph21 += row.pph21
-  totals.gross += row.gross
-  totals.net += row.net
+  totals.baseSalary = safeAdd(totals.baseSalary, row.baseSalary, 2)
+  totals.allowances = safeAdd(totals.allowances, safeAdd(row.allowances, row.appreciation, 2), 2)
+  totals.overtime = safeAdd(totals.overtime, row.overtime, 2)
+  totals.deductions = safeAdd(totals.deductions, row.deductions, 2)
+  totals.bpjs = safeAdd(totals.bpjs, safeAdd(row.bpjsHealth, row.bpjsEmployment, 2), 2)
+  totals.pph21 = safeAdd(totals.pph21, row.pph21, 2)
+  totals.gross = safeAdd(totals.gross, row.gross, 2)
+  totals.net = safeAdd(totals.net, row.net, 2)
   // Rumus modul: bersih = max(0, bruto − potongan total).
-  const expected = row.gross - (row.deductions + row.bpjsHealth + row.bpjsEmployment + row.pph21)
+  const expected = safeSubtract(row.gross, safeAdd(safeAdd(row.deductions, row.bpjsHealth, 2), safeAdd(row.bpjsEmployment, row.pph21, 2), 2), 2)
   if (expected < 0) totals.flooredNet += 1
 }
 
@@ -315,7 +316,7 @@ export function buildPayrollComposition(input: { rows: PayrollRowInput[]; draftS
     rows.push({
       kind: "total",
       label: "Total Potongan",
-      cells: [amount(-(totals.deductions + totals.bpjs + totals.pph21)), percent(totals.deductions + totals.bpjs + totals.pph21, totals.gross)],
+      cells: [amount(-(safeAdd(safeAdd(totals.deductions, totals.bpjs, 2), totals.pph21, 2))), percent(safeAdd(safeAdd(totals.deductions, totals.bpjs, 2), totals.pph21, 2), totals.gross)],
     })
 
     rows.push({
@@ -337,7 +338,7 @@ export function buildPayrollComposition(input: { rows: PayrollRowInput[]; draftS
   const verdict =
     totals.slips === 0
       ? "Tidak ada slip gaji disetujui pada periode ini"
-      : `Bruto ${formatCurrency(totals.gross)} · potongan ${formatCurrency(totals.deductions + totals.bpjs + totals.pph21)} · bersih ${formatCurrency(totals.net)}`
+      : `Bruto ${formatCurrency(totals.gross)} · potongan ${formatCurrency(safeAdd(safeAdd(totals.deductions, totals.bpjs, 2), totals.pph21, 2))} · bersih ${formatCurrency(totals.net)}`
 
   return { table: { columns: COMPOSITION_COLUMNS, rows }, totals, verdict }
 }

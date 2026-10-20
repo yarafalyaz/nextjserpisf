@@ -69,6 +69,7 @@ export default async function EditPage({
     dueDate: data.dueDate?.toISOString().split("T")[0] ?? null,
     notes: data.notes,
     vendorInvoiceNumber: data.vendorInvoiceNumber,
+    taxInvoiceNumber: data.taxInvoiceNumber,
     terms: data.terms,
     items: data.items.map((it) => ({
       itemId: it.itemId ?? 0,

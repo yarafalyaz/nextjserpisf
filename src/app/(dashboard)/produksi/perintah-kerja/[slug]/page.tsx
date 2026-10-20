@@ -14,6 +14,8 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/ui/print-button";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
+import { WhatsappButton } from "@/components/reports/whatsapp-button";
+import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { WorkOrderMaterialNeedsCard } from "@/components/reports/work-order-material-needs-card";
 import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs-data";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
@@ -206,6 +208,17 @@ export default async function WorkOrderDetailPage({
                 + Faktur Penjualan
               </Button>
             )}
+            <WhatsappButton
+              phone={wo.customer.phone}
+              message={buildWhatsappMessage({
+                customerName: wo.customer.name,
+                documentLabel: "Perintah Kerja",
+                documentNo: wo.documentNo,
+                status: wo.status,
+                plateNumber: wo.customerVehicle?.plateNumber,
+                estimatedEndDate: wo.endDate,
+              })}
+            />
             <PrintButton documentType="work-order" documentId={wo.id} />
             <DeleteButton id={wo.id} action={deleteWorkOrder} />
             <BackButton href="/produksi/perintah-kerja" />

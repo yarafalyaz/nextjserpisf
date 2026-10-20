@@ -8,6 +8,8 @@ function counts(overrides: Partial<PeriodCloseCounts> = {}): PeriodCloseCounts {
     draftSalesInvoices: 0,
     draftVendorBills: 0,
     unfinishedReconciliations: 0,
+    unverifiedGoodsReceipts: 0,
+    unmatchedStatementLines: 0,
     draftPayrolls: 0,
     negativeStockItems: 0,
     ...overrides,
@@ -73,5 +75,27 @@ describe("buildPeriodCloseChecks", () => {
     const result = build({}, new Date("2026-06-30T23:59:59"))
 
     expect(result.currentLockDate).toBe("2026-06-30")
+  })
+
+  it("menandai penerimaan belum terverifikasi dan baris koran belum cocok (F-25a)", () => {
+    const result = build({ unverifiedGoodsReceipts: 2, unmatchedStatementLines: 5 })
+
+    const receipts = result.checks.find((check) => check.key === "unverifiedGoodsReceipts")
+    expect(receipts?.status).toBe("warn")
+    expect(receipts?.count).toBe(2)
+    expect(receipts?.guidance).toContain("belum masuk stok")
+
+    const lines = result.checks.find((check) => check.key === "unmatchedStatementLines")
+    expect(lines?.status).toBe("warn")
+    expect(lines?.count).toBe(5)
+    expect(result.warningCount).toBe(2)
+  })
+
+  it("penerimaan/baris bersih tidak menambah peringatan (F-25a)", () => {
+    const result = build({ unverifiedGoodsReceipts: 0, unmatchedStatementLines: 0 })
+
+    expect(result.checks.find((check) => check.key === "unverifiedGoodsReceipts")?.status).toBe("ok")
+    expect(result.checks.find((check) => check.key === "unmatchedStatementLines")?.status).toBe("ok")
+    expect(result.warningCount).toBe(0)
   })
 })

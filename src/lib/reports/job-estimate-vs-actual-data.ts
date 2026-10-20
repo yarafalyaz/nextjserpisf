@@ -35,6 +35,7 @@ import {
   type JobEstimateVsActualResult,
 } from "@/lib/reports/job-estimate-vs-actual"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+import { safeAdd } from "@/lib/utils/math"
 
 const APPROVED_QUOTATION_STATUSES = ["accepted", "approved", "converted"] as const
 
@@ -241,7 +242,7 @@ export async function loadJobEstimateVsActual(period: {
     if (workOrderId === undefined) continue
     billedByWorkOrder.set(
       workOrderId,
-      (billedByWorkOrder.get(workOrderId) ?? 0) + Number(inv.grandTotal),
+      safeAdd(billedByWorkOrder.get(workOrderId) ?? 0, Number(inv.grandTotal), 2),
     )
     billedWorkOrders.add(workOrderId)
   }
@@ -250,7 +251,7 @@ export async function loadJobEstimateVsActual(period: {
   for (const cost of costs) {
     const workOrderId = cost.workOrderId ?? cost.productionOrder?.workOrderId ?? null
     if (workOrderId === null) continue
-    costByWorkOrder.set(workOrderId, (costByWorkOrder.get(workOrderId) ?? 0) + Number(cost.amount))
+    costByWorkOrder.set(workOrderId, safeAdd(costByWorkOrder.get(workOrderId) ?? 0, Number(cost.amount), 2))
   }
 
   const jobs: JobEstimateVsActualInput[] = workOrders.map((w) => {
