@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
     user: { findMany: vi.fn().mockResolvedValue([{ id: 1 }]) },
     notification: { findFirst: vi.fn().mockResolvedValue(null) },
     $queryRaw: vi.fn().mockResolvedValue([]),
-    salesInvoice: { findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0) },
+    salesInvoice: { findMany: vi.fn().mockResolvedValue([]), count: vi.fn().mockResolvedValue(0), aggregate: vi.fn().mockResolvedValue({ _sum: { grandTotal: 0, paidAmount: 0 } }) },
     purchaseOrder: { findMany: vi.fn().mockResolvedValue([]) },
     attendance: { findMany: vi.fn().mockResolvedValue([]) },
     holiday: { findFirst: vi.fn().mockResolvedValue(null) },
