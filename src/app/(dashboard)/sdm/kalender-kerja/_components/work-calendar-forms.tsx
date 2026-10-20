@@ -14,6 +14,8 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
+import { AppDatePicker } from "@/components/ui/date-picker"
+import { AppTimePicker } from "@/components/ui/time-picker"
 
 // Formulir kalender kerja: satu-satunya UI yang memanggil aksi hari libur dan
 // jadwal kerja. Sebelum ini ketiga tabelnya (hari libur, hari libur departemen,
@@ -45,7 +47,7 @@ type WorkScheduleItem = {
 
 const DAY_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"]
 
-/** `Date` Prisma → nilai untuk `<input type="date">` (YYYY-MM-DD). */
+/** `Date` Prisma → nilai untuk `AppDatePicker` (YYYY-MM-DD). */
 function dateInputValue(value: string | Date): string {
   return new Date(value).toISOString().split("T")[0]
 }
@@ -87,16 +89,13 @@ export function HolidayForm({ holiday }: { holiday?: HolidayItem }) {
           defaultValue={holiday?.name ?? ""}
         />
       </div>
-      <div className="flex flex-col gap-1.5 sm:w-40">
-        <Label htmlFor="holidayDate">Tanggal *</Label>
-        <Input
-          id="holidayDate"
-          name="date"
-          type="date"
-          required
-          defaultValue={holiday ? dateInputValue(holiday.date) : ""}
-        />
-      </div>
+      <AppDatePicker
+        label="Tanggal *"
+        name="date"
+        required
+        defaultValue={holiday ? dateInputValue(holiday.date) : ""}
+        className="sm:w-40"
+      />
       <div className="flex flex-1 flex-col gap-1.5">
         <Label htmlFor="holidayDescription">Keterangan</Label>
         <Input
@@ -182,16 +181,13 @@ export function DepartmentHolidayForm({
           defaultValue={item?.name ?? ""}
         />
       </div>
-      <div className="flex flex-col gap-1.5 sm:w-40">
-        <Label htmlFor="deptHolidayDate">Tanggal *</Label>
-        <Input
-          id="deptHolidayDate"
-          name="date"
-          type="date"
-          required
-          defaultValue={item ? dateInputValue(item.date) : ""}
-        />
-      </div>
+      <AppDatePicker
+        label="Tanggal *"
+        name="date"
+        required
+        defaultValue={item ? dateInputValue(item.date) : ""}
+        className="sm:w-40"
+      />
       <div className="flex gap-2">
         <Button type="submit" variant="primary" isDisabled={isPending}>
           {isPending ? "Menyimpan..." : item ? "Perbarui" : "Tambah"}
@@ -259,25 +255,13 @@ export function WorkScheduleForm({ schedule }: { schedule?: WorkScheduleItem }) 
             defaultValue={schedule?.name ?? ""}
           />
         </div>
-        <div className="flex flex-col gap-1.5 sm:w-32">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="scheduleStart">Jam mulai *</Label>
-          <Input
-            id="scheduleStart"
-            name="startTime"
-            type="time"
-            required
-            defaultValue={schedule?.startTime ?? "08:00"}
-          />
+          <AppTimePicker id="scheduleStart" name="startTime" defaultValue={schedule?.startTime ?? "08:00"} />
         </div>
-        <div className="flex flex-col gap-1.5 sm:w-32">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="scheduleEnd">Jam selesai *</Label>
-          <Input
-            id="scheduleEnd"
-            name="endTime"
-            type="time"
-            required
-            defaultValue={schedule?.endTime ?? "17:00"}
-          />
+          <AppTimePicker id="scheduleEnd" name="endTime" defaultValue={schedule?.endTime ?? "17:00"} />
         </div>
         <label className="inline-flex items-center gap-2 pb-2 text-sm text-muted-foreground">
           <input

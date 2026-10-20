@@ -29,7 +29,7 @@ export const metadata: Metadata = { title: "Laporan Bank" }
 /**
  * `BankStatementLine.date` disimpan sebagai TENGAH MALAM UTC hari kalender WIB
  * (aksinya memakai `wibDateToUtcMidnight`), jadi komponen UTC nilai ini memang
- * tanggal WIB-nya — nilai untuk `<input type="date">` tanpa digeser zona waktu.
+ * tanggal WIB-nya — nilai untuk `AppDatePicker` tanpa digeser zona waktu.
  */
 function dateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10)

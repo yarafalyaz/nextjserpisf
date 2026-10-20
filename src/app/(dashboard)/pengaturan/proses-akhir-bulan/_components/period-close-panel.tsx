@@ -7,8 +7,7 @@ import { Lock, LockOpen } from "lucide-react"
 import { closeAccountingPeriod, reopenAccountingPeriod } from "@/actions/period-close.actions"
 import { Button } from "@/components/ui/shadcn/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
-import { Input } from "@/components/ui/shadcn/input"
-import { Label } from "@/components/ui/shadcn/label"
+import { AppMonthPicker } from "@/components/ui/month-picker"
 import { showError, showSuccess } from "@/lib/utils/toast"
 
 export interface PeriodClosePanelProps {
@@ -82,14 +81,14 @@ export function PeriodClosePanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2 sm:max-w-xs">
-        <Label htmlFor="periode">Bulan yang ditutup</Label>
-        <Input
-          id="periode"
-          type="month"
+      <div className="sm:max-w-xs">
+        <AppMonthPicker
+          label="Bulan yang ditutup"
+          name="periode"
           value={monthKey}
-          onChange={(event) => changeMonth(event.target.value)}
+          onChange={changeMonth}
           disabled={disabled}
+          required
         />
       </div>
 

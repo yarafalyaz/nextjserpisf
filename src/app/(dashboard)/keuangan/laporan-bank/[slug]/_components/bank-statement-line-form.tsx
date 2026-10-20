@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { CurrencyInput } from "@/components/ui/currency-input"
+import { AppDatePicker } from "@/components/ui/date-picker"
 import { BANK_STATEMENT_LINE_TYPE_LABELS } from "./bank-statement-line-labels"
 
 // Formulir baris rekening koran: satu-satunya UI yang memanggil
@@ -28,7 +29,7 @@ import { BANK_STATEMENT_LINE_TYPE_LABELS } from "./bank-statement-line-labels"
 
 export type BankStatementLineItem = {
   id: number
-  /** `YYYY-MM-DD` hari kalender WIB (nilai untuk `<input type="date">`). */
+  /** `YYYY-MM-DD` hari kalender WIB (nilai untuk `AppDatePicker`). */
   date: string
   description: string
   /** Besar mutasi, selalu positif; `type` yang menentukan kolomnya. */
@@ -90,16 +91,13 @@ export function BankStatementLineForm({
       <Input type="hidden" name="bankStatementId" value={bankStatementId} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-        <div className="flex flex-col gap-1.5 sm:w-40">
-          <Label htmlFor="lineDate">Tanggal *</Label>
-          <Input
-            id="lineDate"
-            name="date"
-            type="date"
-            required
-            defaultValue={line?.date ?? ""}
-          />
-        </div>
+        <AppDatePicker
+          label="Tanggal *"
+          name="date"
+          required
+          defaultValue={line?.date ?? ""}
+          className="sm:w-40"
+        />
         <div className="flex flex-1 flex-col gap-1.5">
           <Label htmlFor="lineDescription">Deskripsi</Label>
           <Input
