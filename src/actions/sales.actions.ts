@@ -28,8 +28,35 @@ import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, re
 import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time"
+import type { Prisma } from "@prisma/client"
 
 // ==================== QUOTATION ACTIONS ====================
+
+async function decideQuotation(
+  quotationId: number,
+  userId: number,
+  decision: { status: string; action: string; verb: string },
+  revisionNumber: number,
+) {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    await tx.quotation.update({
+      where: { id: quotationId },
+      data: { status: decision.status },
+    })
+
+    if (tx.quotationHistory) {
+      await tx.quotationHistory.create({
+        data: {
+          quotationId,
+          action: decision.action,
+          revisionNumber,
+          description: `Penawaran ${decision.verb} oleh pelanggan (revisi v${revisionNumber})`,
+          userId,
+        },
+      })
+    }
+  })
+}
 
 export async function createQuotation(formData: FormData) {
   try {
@@ -175,24 +202,7 @@ export async function acceptQuotation(quotationId: number) {
     throw new Error("Quotation hanya bisa di-accept dari status sent")
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.quotation.update({
-      where: { id: quotationId },
-      data: { status: "accepted" },
-    })
-
-    if (tx.quotationHistory) {
-      await tx.quotationHistory.create({
-        data: {
-          quotationId,
-          action: "accepted",
-          revisionNumber: quotation.revisionNumber,
-          description: `Penawaran diterima oleh pelanggan (revisi v${quotation.revisionNumber})`,
-          userId: Number(user.id),
-        },
-      })
-    }
-  })
+  await decideQuotation(quotationId, Number(user.id), { status: "accepted", action: "accepted", verb: "diterima" }, quotation.revisionNumber)
 
   // Notify admins
   await notificationService.notifyAdmins('Penawaran diterima pelanggan', `/penjualan/penawaran/${quotationId}`)
@@ -221,24 +231,7 @@ export async function rejectQuotation(quotationId: number) {
     throw new Error("Hanya penawaran terkirim yang dapat ditolak")
   }
 
-  await prisma.$transaction(async (tx) => {
-    await tx.quotation.update({
-      where: { id: quotationId },
-      data: { status: "rejected" },
-    })
-
-    if (tx.quotationHistory) {
-      await tx.quotationHistory.create({
-        data: {
-          quotationId,
-          action: "rejected",
-          revisionNumber: quotation.revisionNumber,
-          description: `Penawaran ditolak oleh pelanggan (revisi v${quotation.revisionNumber})`,
-          userId: Number(user.id),
-        },
-      })
-    }
-  })
+  await decideQuotation(quotationId, Number(user.id), { status: "rejected", action: "rejected", verb: "ditolak" }, quotation.revisionNumber)
 
   await logActivity("reject", "Quotation", quotationId, `Menolak penawaran #${quotationId}`)
   revalidatePath("/penjualan/penawaran")
