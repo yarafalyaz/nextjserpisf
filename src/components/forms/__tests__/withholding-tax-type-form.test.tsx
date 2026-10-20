@@ -2,7 +2,7 @@
 import { describe, it, expect, vi } from "vitest"
 import { WithholdingTaxTypeForm } from "../withholding-tax-type-form"
 import {
-  mountInto, unmount, withContainer, decorativeStars, labelTexts,
+  mountInto, unmount, withContainer, assertCodeNameA11yAdd,
 } from "./form-a11y-test-utils"
 
 vi.mock("next/navigation", async () => (await import("./form-a11y-test-utils")).routerModule)
@@ -13,13 +13,7 @@ describe("WithholdingTaxTypeForm — a11y wiring", () => {
   it("form aria-label tambah + aria-busy false; bintang dekoratif aria-hidden", () => {
     withContainer((container) => {
       const root = mountInto(container, <WithholdingTaxTypeForm accounts={[]} />)
-      const form = container.querySelector("form")!
-      expect(form.getAttribute("aria-label")).toBe("Formulir tambah jenis pemotongan PPh")
-      expect(form.getAttribute("aria-busy")).toBe("false")
-      expect(container.querySelector("#code")!.getAttribute("required")).not.toBeNull()
-      expect(container.querySelector("#name")!.getAttribute("required")).not.toBeNull()
-      expect(decorativeStars(form).length).toBe(2)
-      expect(labelTexts(form)).toEqual(expect.arrayContaining(["Kode *", "Nama *"]))
+      assertCodeNameA11yAdd(container.querySelector("form")!, container, "Formulir tambah jenis pemotongan PPh")
       unmount(root, container)
     })
   })
