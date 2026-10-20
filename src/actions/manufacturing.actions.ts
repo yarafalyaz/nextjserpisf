@@ -300,9 +300,9 @@ export async function createBomRevision(formData: FormData) {
 }
 
 /**
- * Edit a DRAFT revision: replace its lines and/or metadata. A released (or
- * superseded) revision is immutable — editing it must go through a new
- * revision, so this is rejected unless the revision is still `draft`.
+ * Edit a DRAFT or REJECTED revision: replace its lines and/or metadata. A
+ * pending/approved/released (or superseded) revision is immutable — editing
+ * it must go through a new revision.
  */
 export async function updateBomRevision(id: number, formData: FormData) {
   try {
@@ -322,7 +322,7 @@ export async function updateBomRevision(id: number, formData: FormData) {
       select: { id: true, status: true, productId: true },
     });
     if (!existing) return { success: false, error: "Revisi BOM tidak ditemukan" };
-    if (existing.status !== "draft") {
+    if (existing.status !== "draft" && existing.status !== "rejected") {
       return {
         success: false,
         error: `Revisi berstatus '${existing.status}' tidak dapat diubah; buat revisi baru.`,
@@ -355,10 +355,132 @@ export async function updateBomRevision(id: number, formData: FormData) {
 }
 
 /**
- * Release a draft revision: draft → released. The previously released revision
- * for the same product is marked `superseded` in the same transaction so at
- * most one revision is ever `released` at a time. Releasing an empty revision
- * is rejected — an order later pinned to it would consume nothing.
+ * Submit a draft/rejected revision for approval: → pending_approval
+ * (Accurate ACC-15901). Resubmitting clears the previous rejection audit so
+ * the UI never shows stale rejected state. Atomic state-guarded claim.
+ */
+export async function submitBomRevisionForApproval(id: number) {
+  try {
+    const user = await requirePermission("manage_bom_revisions");
+
+    const revision = await prisma.bomRevision.findUnique({
+      where: { id },
+      select: { id: true, status: true, productId: true, revisionNo: true },
+    });
+    if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
+
+    const claimed = await prisma.bomRevision.updateMany({
+      where: { id, status: { in: ["draft", "rejected"] } },
+      data: {
+        status: "pending_approval",
+        submittedAt: new Date(),
+        submittedBy: Number(user.id),
+        rejectedAt: null,
+        rejectedBy: null,
+        rejectionReason: null,
+      },
+    });
+    if (claimed.count === 0) {
+      return { success: false, error: "Hanya revisi draft/ditolak yang dapat diajukan untuk persetujuan." };
+    }
+
+    await logActivity("submit", "BomRevision", id, `Mengajukan revisi BOM #${revision.revisionNo} untuk persetujuan`);
+    revalidatePath("/produksi/bom-revisi");
+    revalidatePath(`/produksi/products/${revision.productId}`);
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[submitBomRevisionForApproval]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Approve a pending revision: pending_approval → approved. Approver must hold
+ * `approve_bom_revisions` and must not be the revision creator (SoD).
+ */
+export async function approveBomRevision(id: number) {
+  try {
+    const user = await requirePermission("approve_bom_revisions");
+
+    const revision = await prisma.bomRevision.findUnique({
+      where: { id },
+      select: { id: true, status: true, productId: true, revisionNo: true, createdBy: true },
+    });
+    if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
+    if (revision.createdBy != null && revision.createdBy === Number(user.id)) {
+      return { success: false, error: "Pembuat revisi tidak dapat menyetujui revisinya sendiri." };
+    }
+
+    const claimed = await prisma.bomRevision.updateMany({
+      where: { id, status: "pending_approval" },
+      data: { status: "approved", approvedAt: new Date(), approvedBy: Number(user.id) },
+    });
+    if (claimed.count === 0) {
+      return { success: false, error: "Hanya revisi menunggu persetujuan yang dapat disetujui." };
+    }
+
+    await logActivity("approve", "BomRevision", id, `Menyetujui revisi BOM #${revision.revisionNo}`);
+    revalidatePath("/produksi/bom-revisi");
+    revalidatePath(`/produksi/products/${revision.productId}`);
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[approveBomRevision]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Reject a pending revision: pending_approval → rejected, reason wajib.
+ * Creator may then edit and resubmit. SoD sama seperti approve.
+ */
+export async function rejectBomRevision(id: number, reason: string) {
+  try {
+    const user = await requirePermission("approve_bom_revisions");
+
+    const trimmed = reason?.trim();
+    if (!trimmed) return { success: false, error: "Alasan penolakan wajib diisi." };
+
+    const revision = await prisma.bomRevision.findUnique({
+      where: { id },
+      select: { id: true, status: true, productId: true, revisionNo: true, createdBy: true },
+    });
+    if (!revision) return { success: false, error: "Revisi BOM tidak ditemukan" };
+    if (revision.createdBy != null && revision.createdBy === Number(user.id)) {
+      return { success: false, error: "Pembuat revisi tidak dapat menolak revisinya sendiri." };
+    }
+
+    const claimed = await prisma.bomRevision.updateMany({
+      where: { id, status: "pending_approval" },
+      data: {
+        status: "rejected",
+        rejectedAt: new Date(),
+        rejectedBy: Number(user.id),
+        rejectionReason: trimmed,
+      },
+    });
+    if (claimed.count === 0) {
+      return { success: false, error: "Hanya revisi menunggu persetujuan yang dapat ditolak." };
+    }
+
+    await logActivity("reject", "BomRevision", id, `Menolak revisi BOM #${revision.revisionNo}: ${trimmed}`);
+    revalidatePath("/produksi/bom-revisi");
+    revalidatePath(`/produksi/products/${revision.productId}`);
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[rejectBomRevision]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Release an APPROVED revision: approved → released (Accurate ACC-15901 —
+ * draft tidak bisa langsung dirilis). The previously released revision for
+ * the same product is marked `superseded` in the same transaction so at most
+ * one revision is ever `released` at a time. Releasing an empty revision is
+ * rejected — an order later pinned to it would consume nothing.
  */
 export async function releaseBomRevision(id: number) {
   try {
@@ -378,11 +500,11 @@ export async function releaseBomRevision(id: number) {
     // a crash between them can never leave zero or two released revisions.
     const releaseResult = await prisma.$transaction(async (tx) => {
       const claimed = await tx.bomRevision.updateMany({
-        where: { id, status: "draft" },
+        where: { id, status: "approved" },
         data: { status: "released", releasedAt: new Date(), releasedBy: Number(user.id) },
       });
       if (claimed.count === 0) {
-        return { success: false as const, error: "Hanya revisi berstatus draft yang dapat dirilis." };
+        return { success: false as const, error: "Hanya revisi berstatus disetujui yang dapat dirilis." };
       }
 
       // Supersede any other released revision for the same product.

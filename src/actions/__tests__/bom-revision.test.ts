@@ -69,6 +69,9 @@ import {
   createProductionOrder,
   createBomRevision,
   releaseBomRevision,
+  submitBomRevisionForApproval,
+  approveBomRevision,
+  rejectBomRevision,
   deleteBomRevision,
   updateBomRevision,
 } from "../manufacturing.actions"
@@ -169,7 +172,7 @@ describe("releaseBomRevision", () => {
     expect(bomRevisionUpdateManyMock).not.toHaveBeenCalled()
   })
 
-  it("releases a draft and supersedes the previously released revision", async () => {
+  it("releases an approved revision and supersedes the previously released revision", async () => {
     bomRevisionFindUniqueMock.mockResolvedValue({
       id: 1, revisionNo: 2, productId: 9, materials: [{ itemId: 1, qty: 1 }],
     })
@@ -181,14 +184,14 @@ describe("releaseBomRevision", () => {
 
     expect(res.success).toBe(true)
     const claim = bomRevisionUpdateManyMock.mock.calls[0][0]
-    expect(claim.where).toEqual({ id: 1, status: "draft" })
+    expect(claim.where).toEqual({ id: 1, status: "approved" })
     expect(claim.data.status).toBe("released")
     const supersede = bomRevisionUpdateManyMock.mock.calls[1][0]
     expect(supersede.where).toEqual({ productId: 9, status: "released", id: { not: 1 } })
     expect(supersede.data.status).toBe("superseded")
   })
 
-  it("fails when the atomic draft claim is lost (non-draft)", async () => {
+  it("fails when the atomic approved claim is lost (draft not yet approved)", async () => {
     bomRevisionFindUniqueMock.mockResolvedValue({
       id: 1, revisionNo: 2, productId: 9, materials: [{ itemId: 1, qty: 1 }],
     })
@@ -240,6 +243,92 @@ describe("deleteBomRevision", () => {
     expect(res.success).toBe(true)
     expect(bomRevisionDeleteMock).toHaveBeenCalledWith({ where: { id: 1 } })
   })
+})
+
+describe("BOM approval flow (ACC-15901)", () => {
+  it("submit: draft → pending_approval, clears rejection audit, requires manage_bom_revisions", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({ id: 1, status: "rejected", productId: 9, revisionNo: 3 })
+    bomRevisionUpdateManyMock.mockResolvedValue({ count: 1 })
+
+    const res = await submitBomRevisionForApproval(1)
+
+    expect(res.success).toBe(true)
+    expect(requirePermissionMock).toHaveBeenCalledWith("manage_bom_revisions")
+    const arg = bomRevisionUpdateManyMock.mock.calls[0][0]
+    expect(arg.where).toEqual({ id: 1, status: { in: ["draft", "rejected"] } })
+    expect(arg.data.status).toBe("pending_approval")
+    expect(arg.data.rejectedAt).toBeNull()
+    expect(arg.data.rejectionReason).toBeNull()
+  })
+
+  it("submit: fails when claim lost (already pending)", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({ id: 1, status: "pending_approval", productId: 9, revisionNo: 3 })
+    bomRevisionUpdateManyMock.mockResolvedValue({ count: 0 })
+    const res = await submitBomRevisionForApproval(1)
+    expect(res.success).toBe(false)
+  })
+
+  it("approve: pending → approved, requires approve_bom_revisions", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({ id: 1, status: "pending_approval", productId: 9, revisionNo: 3, createdBy: 7 })
+    bomRevisionUpdateManyMock.mockResolvedValue({ count: 1 })
+
+    const res = await approveBomRevision(1)
+
+    expect(res.success).toBe(true)
+    expect(requirePermissionMock).toHaveBeenCalledWith("approve_bom_revisions")
+    const arg = bomRevisionUpdateManyMock.mock.calls[0][0]
+    expect(arg.where).toEqual({ id: 1, status: "pending_approval" })
+    expect(arg.data.status).toBe("approved")
+    expect(arg.data.approvedBy).toBe(5)
+  })
+
+  it("approve: SoD — creator cannot approve own revision", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 7 })
+    bomRevisionFindUniqueMock.mockResolvedValue({ id: 1, status: "pending_approval", productId: 9, revisionNo: 3, createdBy: 7 })
+
+    const res = await approveBomRevision(1)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak dapat menyetujui")
+    expect(bomRevisionUpdateManyMock).not.toHaveBeenCalled()
+  })
+
+  it("reject: requires non-empty reason and rejects pending", async () => {
+    bomRevisionFindUniqueMock.mockResolvedValue({ id: 1, status: "pending_approval", productId: 9, revisionNo: 3, createdBy: 7 })
+    bomRevisionUpdateManyMock.mockResolvedValue({ count: 1 })
+
+    expect((await rejectBomRevision(1, "  ")).success).toBe(false)
+    const res = await rejectBomRevision(1, "  qty salah  ")
+    expect(res.success).toBe(true)
+    const arg = bomRevisionUpdateManyMock.mock.calls[0][0]
+    expect(arg.data.status).toBe("rejected")
+    expect(arg.data.rejectionReason).toBe("qty salah")
+  })
+
+  it("reject: SoD — creator cannot reject own revision", async () => {
+    requirePermissionMock.mockResolvedValue({ id: 7 })
+    bomRevisionFindUniqueMock.mockResolvedValue({ id: 1, status: "pending_approval", productId: 9, revisionNo: 3, createdBy: 7 })
+    const res = await rejectBomRevision(1, "alasan")
+    expect(res.success).toBe(false)
+    expect(bomRevisionUpdateManyMock).not.toHaveBeenCalled()
+  })
+
+  it.each(["pending_approval", "approved", "rejected"])(
+    "guard PO: resolveEffectiveBom query stays released-only (status %s never selected)",
+    async () => {
+      productFindUniqueOrThrowMock.mockResolvedValue({ id: 9, standardCost: 0 })
+      bomRevisionFindFirstMock.mockResolvedValue(null)
+      productMaterialFindManyMock.mockResolvedValue([{ itemId: 7, qty: 1 }])
+      itemFindManyMock.mockResolvedValue([{ id: 7, standardCost: 4 }])
+      productionOrderCreateMock.mockResolvedValue({ id: 102 })
+
+      const res = await createProductionOrder(fd({ productId: 9, qty: 1 }))
+
+      expect(res.success).toBe(true)
+      expect(bomRevisionFindFirstMock.mock.calls[0][0].where).toEqual({ productId: 9, status: "released" })
+      expect(productionOrderCreateMock.mock.calls[0][0].data.bomRevisionId).toBeNull()
+    },
+  )
 })
 
 describe("updateBomRevision", () => {
