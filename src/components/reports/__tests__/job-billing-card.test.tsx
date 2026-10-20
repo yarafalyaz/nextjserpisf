@@ -14,6 +14,9 @@ const base: JobBillingSummaryResult = {
   sisaBelumDitagih: 600_000,
   sisaBelumDibayar: 250_000,
   uangMukaDiterima: 500_000,
+  ambangInvoice: 500_000,
+  jarakKeAmbangInvoice: 0,
+  ambangInvoiceTercapai: true,
   kreditTerbuka: 0,
   sisaEfektif: 250_000,
   openCredits: [],
@@ -61,6 +64,24 @@ describe("JobBillingCard F-2026-10-20-43 kredit terbuka", () => {
     expect(list?.textContent).toContain("CR-1")
     expect(text).toContain("Sisa belum dibayar")
     expect(text).toContain("Sisa belum ditagih")
+    act(() => root.unmount()); container.remove()
+  })
+})
+
+describe("JobBillingCard F-2026-10-20-60 jarak ambang invoice", () => {
+  it("belum tercapai: baris Kekurangan DP menuju invoice tampil, teks tercapai tidak", () => {
+    const below: JobBillingSummaryResult = { ...base, uangMukaDiterima: 300_000, jarakKeAmbangInvoice: 200_000, ambangInvoiceTercapai: false }
+    const { container, root } = render(<JobBillingCard summary={below} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Kekurangan DP menuju invoice")
+    expect(text).not.toContain("Ambang invoice konversi DP tercapai")
+    act(() => root.unmount()); container.remove()
+  })
+  it("tercapai: teks ambang tercapai tampil, baris kekurangan tidak", () => {
+    const { container, root } = render(<JobBillingCard summary={base} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Ambang invoice konversi DP tercapai")
+    expect(text).not.toContain("Kekurangan DP menuju invoice")
     act(() => root.unmount()); container.remove()
   })
 })

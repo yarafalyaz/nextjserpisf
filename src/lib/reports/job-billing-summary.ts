@@ -86,6 +86,12 @@ export interface JobBillingSummary {
   quotationId: number
   quotationDocumentNo: string
   nilaiBerjalan: number
+  /** Ambang invoice konversi DP: ceil(nilaiBerjalan/2) sen-aman (F-2026-10-20-60, cermin down-payment.hook). */
+  ambangInvoice: number
+  /** max(0, ambangInvoice − uangMukaDiterima): jarak DP confirmed ke ambang; 0 = tercapai. */
+  jarakKeAmbangInvoice: number
+  /** DP confirmed mencapai ambang invoice konversi. */
+  ambangInvoiceTercapai: boolean
   /** Σ grandTotal invoice posted/partial/paid non-deleted. */
   sudahDitagih: number
   /** Σ paidAmount invoice yang sama. */
@@ -142,16 +148,23 @@ export function buildJobBillingSummary(input: JobBillingSummaryInput): JobBillin
     .filter((c) => c.saldo > 0)
     .sort((a, b) => a.id - b.id)
   const kreditTerbuka = safeSum(openCredits.map((c) => c.saldo), 2)
+  const uangMukaDiterima = safeSum(input.confirmedDownPayments.map((d) => d.amount), 2)
+  // F-2026-10-20-60: cerminkan ambang hook — Math.ceil(sen/2) di down-payment.hook.ts:566.
+  const ambangInvoice = Math.ceil(Math.round(nilaiBerjalan * 100) / 2) / 100
+  const jarakKeAmbangInvoice = Math.max(0, safeSubtract(ambangInvoice, uangMukaDiterima, 2))
 
   return {
     quotationId: input.quotationId,
     quotationDocumentNo: input.quotationDocumentNo,
     nilaiBerjalan,
+    ambangInvoice,
+    jarakKeAmbangInvoice,
+    ambangInvoiceTercapai: jarakKeAmbangInvoice === 0,
     sudahDitagih,
     sudahDibayar,
     sisaBelumDitagih: safeSubtract(nilaiBerjalan, sudahDitagih, 2),
     sisaBelumDibayar,
-    uangMukaDiterima: safeSum(input.confirmedDownPayments.map((d) => d.amount), 2),
+    uangMukaDiterima,
     kreditTerbuka,
     sisaEfektif: safeSubtract(sisaBelumDibayar, kreditTerbuka, 2),
     openCredits,

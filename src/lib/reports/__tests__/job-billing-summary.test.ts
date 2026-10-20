@@ -115,6 +115,36 @@ describe("buildJobBillingSummary — kriteria (c) feature-checker F-2026-10-20-0
   })
 })
 
+describe("buildJobBillingSummary — jarak ambang invoice F-2026-10-20-60", () => {
+  it("DP di bawah ambang: jarak = ceil(nilai/2) − DP confirmed", () => {
+    const s = buildJobBillingSummary({
+      quotationId: 9, quotationDocumentNo: "Q-0009", nilaiBerjalan: 100_000_000,
+      invoices: [], confirmedDownPayments: [{ amount: 30_000_000 }],
+    })
+    expect(s.ambangInvoice).toBe(50_000_000)
+    expect(s.jarakKeAmbangInvoice).toBe(20_000_000)
+    expect(s.ambangInvoiceTercapai).toBe(false)
+  })
+  it("DP tepat/melebihi ambang: jarak 0 + tercapai (tak negatif)", () => {
+    for (const dp of [50_000_000, 60_000_000]) {
+      const s = buildJobBillingSummary({
+        quotationId: 9, quotationDocumentNo: "Q-0009", nilaiBerjalan: 100_000_000,
+        invoices: [], confirmedDownPayments: [{ amount: dp }],
+      })
+      expect(s.jarakKeAmbangInvoice).toBe(0)
+      expect(s.ambangInvoiceTercapai).toBe(true)
+    }
+  })
+  it("sen ganjil: nilai Rp0,01 -> ambang Rp0,01 (ceil sen, cermin hook Rp1->Rp0,50)", () => {
+    const s = buildJobBillingSummary({
+      quotationId: 9, quotationDocumentNo: "Q-0009", nilaiBerjalan: 0.01,
+      invoices: [], confirmedDownPayments: [],
+    })
+    expect(s.ambangInvoice).toBe(0.01)
+    expect(s.jarakKeAmbangInvoice).toBe(0.01)
+  })
+})
+
 describe("buildJobBillingSummary — kredit terbuka F-2026-10-20-43", () => {
   it("kredit terbuka tampil terpisah; sisaBelumDitagih/Dibayar tak berubah, sisaEfektif tampil saja", () => {
     const s = buildJobBillingSummary({
