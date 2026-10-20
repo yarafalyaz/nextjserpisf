@@ -1029,19 +1029,9 @@ export async function createPettyCash(formData: FormData) {
       return { success: false, error: "Akun Beban Umum belum dikonfigurasi. Isi di Pengaturan > Mapping Akun terlebih dahulu." };
     }
 
-    // IN: cek saldo sumber dana (kas/bank)
-    if (type === "IN") {
-      const sourceId = settings.cashBankAccountId;
-      if (sourceId) {
-        const sourceEntries = await prisma.journalEntry.findMany({
-          where: { accountId: sourceId, journal: { status: "POSTED" } },
-        });
-        const sourceBalance = sourceEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0);
-        if (sourceBalance < amount) {
-          return { success: false, error: `Saldo akun Kas/Bank tidak mencukupi: tersedia ${sourceBalance.toLocaleString("id-ID")}, dibutuhkan ${amount.toLocaleString("id-ID")}` };
-        }
-      }
-    }
+    // IN: cek saldo sumber dana (kas/bank) dilakukan DI DALAM transaksi utama
+    // di bawah (AUD-02) — cek di sini membaca snapshot sebelum transaksi dan
+    // bisa dilalui dua request paralel yang sama-sama lolos.
 
     const idempotencyKey = formData.get("idempotencyKey") as string | null;
 
@@ -1058,6 +1048,23 @@ export async function createPettyCash(formData: FormData) {
       // Tanpa ini dua create bersamaan baca balanceBefore sama lalu keduanya
       // tulis — rantai/recalc sesudahnya menimpa salah satu, saldo akhir salah.
       await tx.$executeRaw`SELECT id FROM petty_cash FOR UPDATE`;
+
+      // AUD-02: serialisasi menurut akun sumber. Kunci baris akun kas/bank
+      // lalu hitung saldonya dari jurnal POSTED di dalam transaksi ini, agar
+      // dua IN paralel tidak sama-sama lolos dari saldo sumber yang sama.
+      if (type === "IN" && settings.cashBankAccountId) {
+        const sourceId = settings.cashBankAccountId;
+        await tx.$queryRaw`SELECT id FROM accounts WHERE id = ${sourceId} FOR UPDATE`;
+        const sourceEntries = await tx.journalEntry.findMany({
+          where: { accountId: sourceId, journal: { status: "POSTED" } },
+        });
+        const sourceBalance = sourceEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0);
+        if (sourceBalance < amount) {
+          throw new Error(
+            `Saldo akun Kas/Bank tidak mencukupi: tersedia ${sourceBalance.toLocaleString("id-ID")}, dibutuhkan ${amount.toLocaleString("id-ID")}`,
+          );
+        }
+      }
 
       // Calculate balanceBefore from the chronologically LAST petty cash record.
       // The chain is ordered (date asc, id asc) — see recalcPettyCashChain — so
