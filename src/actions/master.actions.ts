@@ -25,6 +25,7 @@ import {
   barcodeServerSchema,
   taxServerSchema,
   bankServerSchema,
+  itemCategoryServerSchema,
   uomServerSchema,
   employeeDatesSchema,
 } from "@/lib/validations/schemas";
@@ -399,13 +400,15 @@ export async function createItem(formData: FormData) {
     // "phantom" items missing the multi-UoM data the operator just typed in.
     // Wrapping both in one tx ties item existence to conversion existence.
     const item = await prisma.$transaction(async (tx) => {
-      let finalCostingMethod = v.costingMethod;
+      let finalCostingMethod: "fifo" | "average" | undefined = v.costingMethod;
       if (!finalCostingMethod && v.categoryId) {
         const cat = await tx.itemCategory.findUnique({
           where: { id: v.categoryId },
           select: { costingMethod: true },
         });
-        if (cat) {
+        // Nilai warisan tak dikenal diabaikan (resolver HPP menormalisasi
+        // sisanya); jangan simpan string sampah ke baris barang baru.
+        if (cat && (cat.costingMethod === "fifo" || cat.costingMethod === "average")) {
           finalCostingMethod = cat.costingMethod;
         }
       }
@@ -1045,13 +1048,25 @@ export async function createItemCategory(formData: FormData) {
     }
 
 
+    const parsed = parseFormData(itemCategoryServerSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    if (v.parentId !== undefined) {
+      const parent = await prisma.itemCategory.findUnique({
+        where: { id: v.parentId },
+        select: { id: true },
+      });
+      if (!parent) return { success: false, error: "Kategori induk tidak ditemukan" };
+    }
+
     const category = await prisma.itemCategory.create({
       data: {
-        name: requireString(formData.get("name"), "name"),
-        slug: await nextSlug("itemCategory", requireString(formData.get("name"), "name")),
-        description: formData.get("description") as string | null,
-        parentId: safeNumber(formData.get("parentId")),
-        costingMethod: (formData.get("costingMethod") as string) || "average",
+        name: v.name,
+        slug: await nextSlug("itemCategory", v.name),
+        description: v.description ?? null,
+        parentId: v.parentId ?? null,
+        costingMethod: v.costingMethod ?? "average",
         createdBy: Number(user.id),
       },
     });
@@ -1083,21 +1098,45 @@ export async function updateItemCategory(id: number, formData: FormData) {
     // `parentId: safeNumber(null)` / `costingMethod: "" || "average"` would wipe
     // the category's parent (flattening the tree) and flip a FIFO category to
     // "average" on every save — silently changing HPP valuation for its items.
+    const parsed = parseFormData(itemCategoryServerSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
     const data: Record<string, unknown> = {
       updatedBy: Number(user.id),
-      name: requireString(formData.get("name"), "name"),
-      slug: await nextSlug(
-        "itemCategory",
-        requireString(formData.get("name"), "name"),
-        { excludeId: id },
-      ),
-      description: formData.get("description") as string | null,
+      name: v.name,
+      slug: await nextSlug("itemCategory", v.name, { excludeId: id }),
+      description: v.description ?? null,
     };
     if (formData.has("parentId")) {
-      data.parentId = safeNumber(formData.get("parentId"));
+      if (v.parentId === undefined) {
+        data.parentId = null;
+      } else {
+        if (v.parentId === id) {
+          return { success: false, error: "Kategori tidak dapat menjadi induk bagi dirinya sendiri" };
+        }
+        const parent = await prisma.itemCategory.findUnique({
+          where: { id: v.parentId },
+          select: { id: true, parentId: true },
+        });
+        if (!parent) return { success: false, error: "Kategori induk tidak ditemukan" };
+        // Anti-siklus: induk baru tidak boleh keturunan kategori ini.
+        let cursor: { id: number; parentId: number | null } | null = parent;
+        for (let depth = 0; cursor && depth < 100; depth++) {
+          if (cursor.parentId === id) {
+            return { success: false, error: "Kategori induk tidak boleh berupa sub-kategori dari kategori ini" };
+          }
+          if (cursor.parentId === null) break;
+          cursor = await prisma.itemCategory.findUnique({
+            where: { id: cursor.parentId },
+            select: { id: true, parentId: true },
+          });
+        }
+        data.parentId = v.parentId;
+      }
     }
-    if (formData.has("costingMethod")) {
-      data.costingMethod = (formData.get("costingMethod") as string) || "average";
+    if (formData.has("costingMethod") && v.costingMethod !== undefined) {
+      data.costingMethod = v.costingMethod;
     }
 
     await prisma.itemCategory.update({

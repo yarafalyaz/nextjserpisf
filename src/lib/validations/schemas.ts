@@ -70,7 +70,9 @@ export const itemSchema = z.object({
   price: z.coerce.number().min(0, "Harga jual minimal 0"),
   standardCost: optionalNumber(0),
   purchasePrice: optionalNumber(0),
-  costingMethod: z.string().optional(),
+  costingMethod: z
+    .enum(["fifo", "average"], { message: "Metode penilaian harus fifo atau average" })
+    .optional(),
   isProduct: optionalBoolean,
   isService: optionalBoolean,
   trackBatch: optionalBoolean,
@@ -148,6 +150,17 @@ export const bankServerSchema = z.object({
   // `cash` = rek kas dari quick-add. Nilai lain = tamper klien, tolak sebelum DB.
   type: z.enum(["bank", "emoney", "cash"], { message: "Tipe harus bank, emoney, atau kas" }).default("bank"),
   accountId: z.coerce.number().int("Akun (COA) tidak valid").positive("Akun (COA) tidak valid").optional(),
+})
+
+export const itemCategoryServerSchema = z.object({
+  name: z.string({ message: "Nama wajib diisi" }).min(1, "Nama wajib diisi").max(200),
+  description: optionalString(2000),
+  // Dulu hand-parse: string bebas tersimpan lalu resolver HPP jatuh diam-diam
+  // ke fifo (costing-method.service), dan parentId mentah memicu P2003/siklus.
+  parentId: z.coerce.number().int("Kategori induk tidak valid").positive("Kategori induk tidak valid").optional(),
+  costingMethod: z
+    .enum(["fifo", "average"], { message: "Metode penilaian harus fifo atau average" })
+    .optional(),
 })
 
 export const accountServerSchema = z.object({
