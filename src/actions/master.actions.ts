@@ -1240,6 +1240,13 @@ export async function createPosition(formData: FormData) {
       if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
     }
 
+    // FK tanpa cek: departmentId fiktif lolos safeId lalu meledak P2003 mentah
+    // di DB (atau jabatan yatim). Tolak pra-tulis dengan pesan yang bisa ditindak.
+    const departmentId = safeId(formData.get("departmentId"));
+    if (departmentId !== null) {
+      const dept = await prisma.department.findFirst({ where: { id: departmentId }, select: { id: true } });
+      if (!dept) throw new Error("Departemen tidak ditemukan");
+    }
 
     const submittedCode = (formData.get("code") as string) || null;
     let code = submittedCode;
@@ -1255,7 +1262,7 @@ export async function createPosition(formData: FormData) {
             name: requireString(formData.get("name"), "name"),
             slug: await nextSlug("position", requireString(formData.get("name"), "name")),
             code,
-            departmentId: safeId(formData.get("departmentId")),
+            departmentId,
             description: (formData.get("description") as string) || null,
           },
         });
@@ -1294,13 +1301,20 @@ export async function updatePosition(id: number, formData: FormData) {
   try {
     const user = await requirePermission("edit_positions");
 
+    // Sama seperti createPosition: departmentId fiktif ditolak pra-tulis.
+    const departmentId = safeId(formData.get("departmentId"));
+    if (departmentId !== null) {
+      const dept = await prisma.department.findFirst({ where: { id: departmentId }, select: { id: true } });
+      if (!dept) throw new Error("Departemen tidak ditemukan");
+    }
+
     await prisma.position.update({
       where: { id },
       data: {
         updatedBy: Number(user.id),
         name: requireString(formData.get("name"), "name"),
         slug: await nextSlug("position", requireString(formData.get("name"), "name"), { excludeId: id }),
-        departmentId: safeId(formData.get("departmentId")),
+        departmentId,
         description: (formData.get("description") as string) || null,
       },
     });
