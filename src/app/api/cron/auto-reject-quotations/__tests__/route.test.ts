@@ -98,7 +98,10 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     // Outer scan finds 2 stale quotations older than the cutoff.
     mocks.quotationFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
     // In-tx re-read confirms both are still SENT.
-    mocks.txQuotationFindMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+    mocks.txQuotationFindMany.mockResolvedValue([
+      { id: 1, revisionNumber: 2 },
+      { id: 2, revisionNumber: 5 },
+    ])
     // Bulk update flips both rows.
     mocks.txQuotationUpdateMany.mockResolvedValue({ count: 2 })
 
@@ -113,8 +116,8 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     // Outer-loop create() is gone.
     expect(mocks.txQuotationHistoryCreateMany).toHaveBeenCalledWith({
       data: expect.arrayContaining([
-        expect.objectContaining({ quotationId: 1, action: "auto_rejected" }),
-        expect.objectContaining({ quotationId: 2, action: "auto_rejected" }),
+        expect.objectContaining({ quotationId: 1, action: "auto_rejected", revisionNumber: 2 }),
+        expect.objectContaining({ quotationId: 2, action: "auto_rejected", revisionNumber: 5 }),
       ]),
     })
   })

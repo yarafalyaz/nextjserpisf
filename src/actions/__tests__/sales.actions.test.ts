@@ -881,14 +881,25 @@ describe("Quotation Actions (legacy happy paths)", () => {
     expect(res?.success).toBe(true)
   })
   it("acceptQuotation succeeds", async () => {
-    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent" })
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
     const res = await actions.acceptQuotation(1)
     expect(res?.success).toBe(true)
+    // F-2026-10-20-03(a): histori accept terikat revisi yang disetujui.
+    expect(mocks.prismaMock.quotationHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "accepted", revisionNumber: 3 }),
+      }),
+    )
   })
   it("rejectQuotation succeeds", async () => {
-    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent" })
+    mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent", revisionNumber: 3 })
     const res = await actions.rejectQuotation(1)
     expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.quotationHistory.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ action: "rejected", revisionNumber: 3 }),
+      }),
+    )
   })
   it("reviseQuotation succeeds", async () => {
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "sent" })
