@@ -843,6 +843,33 @@ describe("Purchase Return Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("processPurchaseReturn rejects when receipt warehouse is outside user scope", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
+    })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([
+      { itemId: 1, warehouseId: 9, goodsReceipt: { warehouseId: 9 } },
+    ])
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
+    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 3 }])
+    const res = await actions.processPurchaseReturn(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak memiliki akses ke gudang")
+  })
+
+  it("processPurchaseReturn succeeds when receipt warehouse is within user scope", async () => {
+    mocks.prismaMock.purchaseReturn.findUniqueOrThrow.mockResolvedValue({
+      id: 1, status: "draft", items: [{ itemId: 1, qty: 3 }], purchaseOrderId: 1
+    })
+    mocks.prismaMock.goodsReceiptItem.findMany.mockResolvedValueOnce([
+      { itemId: 1, warehouseId: 3, goodsReceipt: { warehouseId: 3 } },
+    ])
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["warehouse"] })
+    mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 3 }])
+    const res = await actions.processPurchaseReturn(1)
+    expect(res?.success).toBe(true)
+  })
+
   it("deletePurchaseReturn succeeds", async () => {
     const res = await actions.deletePurchaseReturn(1)
     expect(res?.success).toBe(true)

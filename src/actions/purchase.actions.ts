@@ -1545,10 +1545,44 @@ export async function processPurchaseReturn(returnId: number) {
 
     const purchaseReturn = await prisma.purchaseReturn.findUniqueOrThrow({
       where: { id: returnId },
+      include: { items: true },
     });
 
     if (purchaseReturn.status !== "draft") {
       throw new Error("Purchase return hanya bisa diproses dari status draft");
+    }
+
+    // Scope gudang: hook mengeluarkan stok FIFO dari gudang baris penerimaan
+    // terbaru per item. Tanpa cek ini, user yang hanya ditugaskan ke gudang A
+    // bisa memproses retur yang stoknya keluar dari gudang B.
+    const receiptLines = await prisma.goodsReceiptItem.findMany({
+      where: {
+        goodsReceipt: {
+          purchaseOrderId: purchaseReturn.purchaseOrderId,
+          status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
+        },
+        itemId: { in: purchaseReturn.items.map((item) => item.itemId) },
+      },
+      select: {
+        itemId: true,
+        warehouseId: true,
+        goodsReceipt: { select: { warehouseId: true } },
+      },
+      orderBy: { goodsReceipt: { createdAt: "desc" } },
+    });
+    const receiptWarehouseByItem = new Map<number, number>();
+    for (const line of receiptLines) {
+      if (!receiptWarehouseByItem.has(line.itemId)) {
+        receiptWarehouseByItem.set(
+          line.itemId,
+          line.warehouseId ?? line.goodsReceipt.warehouseId,
+        );
+      }
+    }
+    const scope = await getWarehouseScope(user);
+    for (const item of purchaseReturn.items) {
+      const warehouseId = receiptWarehouseByItem.get(item.itemId);
+      if (warehouseId) assertWarehouseAccess(scope, warehouseId);
     }
 
     // Atomically process stock adjustment and post GL journal in a single transaction.
