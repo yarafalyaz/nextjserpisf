@@ -1791,3 +1791,39 @@ describe("Purchase Actions Redirect and Validation Gaps", () => {
     expect(res?.success).toBe(true)
   })
 })
+
+describe("Vendor Bill header recompute (anti manipulasi klien)", () => {
+  beforeEach(() => {
+    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, vendorId: 1, documentNo: "PO-001", isService: false })
+    mocks.prismaMock.vendorBill.create.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.vendorBill.update.mockResolvedValue({ id: 1 })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 9, sku: "S", name: "Item", unitOfMeasure: null }])
+  })
+  it("createVendorBill hitung ulang header dari baris, abaikan subtotal klien", async () => {
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1", date: "2026-06-12",
+      subtotal: "999999", tax: "999999", grandTotal: "1999998",
+      items: JSON.stringify([{ itemId: 9, qty: 2, unitPrice: 50000, discountPercent: 10, taxPercent: 11 }]),
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBill.create.mock.calls.at(-1)![0]
+    // gross 100000, diskon 10000, subtotal bruto tetap 100000, tax 9900, grand 99900
+    expect(arg.data.subtotal).toBe(100000)
+    expect(arg.data.discountAmount).toBe(10000)
+    expect(Number(arg.data.tax)).toBe(9900)
+    expect(Number(arg.data.grandTotal)).toBe(99900)
+  })
+  it("updateVendorBill hitung ulang header dari baris", async () => {
+    const res = await actions.updateVendorBill(1, fdMap({
+      vendorId: "1", date: "2026-06-12",
+      subtotal: "1", tax: "1", grandTotal: "2",
+      items: JSON.stringify([{ itemId: 9, qty: 1, unitPrice: 100000, discountPercent: 0, taxPercent: 11 }]),
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.vendorBill.update.mock.calls.at(-1)![0]
+    expect(arg.data.subtotal).toBe(100000)
+    expect(Number(arg.data.tax)).toBe(11000)
+    expect(Number(arg.data.grandTotal)).toBe(111000)
+  })
+})

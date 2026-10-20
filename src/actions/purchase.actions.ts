@@ -29,7 +29,7 @@ import { nextSlug } from "@/lib/utils/slug-db";
 import { revalidatePath } from "next/cache";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { findOverReturn } from "@/lib/sales/return-validation";
-import { computeBillLineAmounts, sumBillItemDiscount } from "@/lib/finance/vendor-bill";
+import { computeBillLineAmounts, summarizeBillItems } from "@/lib/finance/vendor-bill";
 import { allocatePaymentToBills } from "@/lib/finance/payment-allocation";
 import { syncServicePurchaseOrderCost } from "@/lib/services/production-cost.service";
 import {
@@ -910,6 +910,16 @@ export async function createVendorBill(formData: FormData) {
     // commit (closed period, missing account) would then leave the bill without
     // an AP journal — an unposted liability. Posting inside rolls the whole
     // thing back so the user retries cleanly.
+    // Bila form mengirim baris, kop (subtotal bruto/diskon/pajak/total)
+    // dihitung ulang dari baris yang sama dengan yang ditulis ke
+    // vendor_bill_items; tanpa baris, kop manual form dipertahankan.
+    const billHeader = summarizeBillItems(v.items) ?? {
+      subtotal: v.subtotal,
+      discountAmount: 0,
+      tax: v.tax,
+      grandTotal: v.grandTotal,
+    };
+
     const bill = await prisma.$transaction(async (tx) => {
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
@@ -931,7 +941,7 @@ export async function createVendorBill(formData: FormData) {
         }
       }
 
-      await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, v.subtotal);
+      await assertThreeWayMatch(tx, v.purchaseOrderId ?? null, billHeader.subtotal);
 
       // "Buat Tagihan dari Penerimaan" (`?grId=`): tautkan tagihan ke penerimaan
       // yang ditagih. Tanpa ini `VendorBill.goodsReceiptId` /
@@ -1017,15 +1027,13 @@ export async function createVendorBill(formData: FormData) {
           taxInvoiceNumber: v.taxInvoiceNumber ?? null,
           terms: v.terms ?? null,
           notes: v.notes ?? null,
-          subtotal: v.subtotal,
-          // Diskon level DOKUMEN = Σ diskon baris. `v.subtotal` dari form adalah
-          // angka BRUTO (sebelum diskon baris), sedangkan laporan menghitung
-          // DPP = subtotal − discountAmount. Tanpa baris ini kolomnya selalu 0
-          // sehingga DPP (dasar PPh) dilaporkan lebih besar daripada dasar
-          // pemotongan yang sebenarnya.
-          discountAmount: sumBillItemDiscount(v.items),
-          tax: v.tax,
-          grandTotal: v.grandTotal,
+          // Kop dihitung ulang server dari baris (billHeader): angka kop
+          // kiriman klien tidak dipercaya bila ada baris, karena jurnal AP,
+          // DPP/PPN, dan 3-way match membaca kop ini — bukan barisnya.
+          subtotal: billHeader.subtotal,
+          discountAmount: billHeader.discountAmount,
+          tax: billHeader.tax,
+          grandTotal: billHeader.grandTotal,
           status: "draft",
           createdBy: Number(user.id),
         },
@@ -2217,6 +2225,13 @@ export async function updateVendorBill(id: number, formData: FormData) {
     // journal would be reposted with a value the 3-way match should have rejected
     // — i.e. the over-bill guard was bypassable via edit. assertThreeWayMatch
     // excludes this bill's own id so it doesn't count itself.
+    const billHeader = summarizeBillItems(v.items) ?? {
+      subtotal: v.subtotal,
+      discountAmount: 0,
+      tax: v.tax,
+      grandTotal: v.grandTotal,
+    };
+
     const bill = await prisma.$transaction(async (tx) => {
       const latestBill = await tx.vendorBill.findUnique({
         where: { id },
@@ -2232,7 +2247,7 @@ export async function updateVendorBill(id: number, formData: FormData) {
       await assertThreeWayMatch(
         tx,
         v.purchaseOrderId ?? null,
-        v.subtotal,
+        billHeader.subtotal,
         id,
       );
 
@@ -2258,11 +2273,11 @@ export async function updateVendorBill(id: number, formData: FormData) {
           taxInvoiceNumber: v.taxInvoiceNumber ?? null,
           terms: v.terms ?? null,
           notes: v.notes ?? null,
-          subtotal: v.subtotal,
-          // Sama seperti saat membuat: DPP = subtotal (bruto) − Σ diskon baris.
-          discountAmount: sumBillItemDiscount(v.items),
-          tax: v.tax,
-          grandTotal: v.grandTotal,
+          // Sama seperti saat membuat: kop dihitung ulang dari baris.
+          subtotal: billHeader.subtotal,
+          discountAmount: billHeader.discountAmount,
+          tax: billHeader.tax,
+          grandTotal: billHeader.grandTotal,
           status: "draft",
         },
       });
