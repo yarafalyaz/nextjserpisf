@@ -111,3 +111,21 @@ export function assertComboboxNameA11yAdd(
   expect(decorativeStars(form).length).toBe(2)
   expect(labelTexts(form)).toEqual(expect.arrayContaining([...spec.labels]))
 }
+
+// Add-mode asserts for order-combobox-only forms (1 aria-required combobox,
+// 1 decorative star, tidak ada #name). Same Sonar rationale as above.
+export function assertOrderComboboxA11yAdd(
+  form: Element,
+  container: HTMLElement,
+  spec: { addLabel: string; requiredLabel: string },
+) {
+  expect(form.getAttribute("aria-label")).toBe(spec.addLabel)
+  expect(form.getAttribute("aria-busy")).toBe("false")
+  expect(container.querySelectorAll('[role="combobox"][aria-required="true"]').length).toBe(1)
+  expect(decorativeStars(form).length).toBe(1)
+  expect(labelTexts(form)).toEqual(expect.arrayContaining([spec.requiredLabel]))
+}
+
+export function assertFormEditLabel(container: HTMLElement, editLabel: string) {
+  expect(container.querySelector("form")!.getAttribute("aria-label")).toBe(editLabel)
+}
