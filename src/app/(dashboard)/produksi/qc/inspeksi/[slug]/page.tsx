@@ -87,6 +87,21 @@ export default async function QcInspectionDetailPage({
           }
         />
         <DetailField label="Status" value={<StatusChip status={inspection.status} />} />
+        <DetailField
+          label="Jenis"
+          value={
+            (
+              {
+                incoming: "Penerimaan",
+                in_process: "Proses",
+                final: "Akhir",
+                safety: "Keselamatan",
+                vehicle_intake: "Inspeksi Masuk Kendaraan",
+                vehicle_handover: "Serah Terima Kendaraan",
+              } as Record<string, string>
+            )[inspection.inspectionType] ?? inspection.inspectionType
+          }
+        />
         <DetailField label="Referensi" value={`${inspection.referenceType} #${inspection.referenceId}`} />
         <DetailField label="Diinspeksi" value={inspection.inspectedAt ? formatDate(inspection.inspectedAt) : "-"} />
         {inspection.notes && <DetailField label="Catatan" value={inspection.notes} colSpan="full" />}

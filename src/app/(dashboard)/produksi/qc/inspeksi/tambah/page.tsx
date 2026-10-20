@@ -9,8 +9,14 @@ import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Catat Inspeksi QC" }
 
-export default async function CreateQcInspectionPage() {
+export default async function CreateQcInspectionPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ inspectionType?: string; referenceType?: string; referenceId?: string }>
+}) {
   await requirePermission("manage_qc_inspections")
+  const { inspectionType, referenceType, referenceId } = await searchParams
+  const initialReferenceId = referenceId && /^\d+$/.test(referenceId) ? Number(referenceId) : undefined
 
   const checklists = await prisma.qcChecklist.findMany({
     where: { status: "released", isActive: true },
@@ -47,7 +53,12 @@ export default async function CreateQcInspectionPage() {
           Belum ada checklist yang dirilis. Rilis checklist terlebih dahulu di menu Checklist QC.
         </p>
       ) : (
-        <QcInspectionForm checklists={checklists} />
+        <QcInspectionForm
+          checklists={checklists}
+          initialInspectionType={inspectionType}
+          initialReferenceType={referenceType}
+          initialReferenceId={initialReferenceId}
+        />
       )}
     </div>
   )
