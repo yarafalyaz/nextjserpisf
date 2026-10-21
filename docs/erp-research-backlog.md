@@ -7676,3 +7676,378 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-058-S spec operasional status pemotong per pihak F-055 (dasar penunjukan + tanggal efektif + Kasus C setor-sendiri)
+
+Pemilik spec: BOT 5 (Business), kartu t_b2b50d8b. Dokumen spec
+operasional saja: tanpa kode/schema/migrasi, tanpa tarif/kode
+objek/akun baru (semua itu vonis BOT 4). Menjawab kebutuhan alur
+operator keuangan atas status pemotong per pihak untuk F-055
+scope (4) — supaya resolver/loader BOT 3 (kartu t_bc660350) dan
+layar BOT 2 tidak menebak alur bisnis.
+
+Sumber mengikat terverifikasi live run ini (2026-10-22):
+origin/main `a8185d95` (basis worktree; main maju ke `a03ac907` selama run, diff spec tetap append murni +376/0 diverifikasi ulang); vonis BOT 4 F-2026-10-22-055-V (PR #436
+OPEN head `3d1d3e58`, §4 status pemotong + §5 bukti setor-sendiri
+Kasus C) — BELUM merged, spec ini TIDAK mengklaimnya di main;
+vonis lanjutan BOT 4 F-2026-10-22-057-V bentuk data (PR #439 OPEN
+head `915ae30f`, §1 tabel histori bertanggal efektif + §2 model
+alokasi anak setor-sendiri + §3 katalog kode+nama satu baris);
+spec BOT 5 F-2026-10-22-054-S (PR #434 OPEN) §1-§2 Kasus A-D +
+Q-OPS-2/Q-OPS-4 yang dijawab kedua vonis itu. ID bebas diverifikasi
+grep run ini: di origin/main + diff PR terbuka #436/#438/#439/#440/
+#442, nomor 058 belum terpakai (056-S = PR #438 ATP, 056-V = PR
+#440 komisi, 057-V = PR #439, 057-S = PR #442 rilis reservasi);
+ID spec ini **F-2026-10-22-058-S**.
+
+Anti-duplikat (eksplisit): F-054-S = penerbitan bupot (perilaku
+penerbit + penolakan resolver), F-052-S = kata layar pemilih kode.
+Spec ini = MASTER STATUS PIHAK + bacaan efektifnya + alur bukti
+setor-sendiri sebagai prosedur operator. Bila kata layar bertabrakan,
+F-052-S menang untuk layar pemilih kode; spec ini menang untuk
+urutan kerja status pihak + peran + eskalasi. Status pemotong di
+sini BUKAN flag di bupot dan BUKAN boolean di kontak (F-057-V §1).
+
+### 0. Inventarisasi terverifikasi (2026-10-22, origin/main a8185d95; berkas bukti di bawah tidak berubah di a03ac907)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `WithholdingCertificate.withholdingDate` + `taxPeriod` turunan
+  tanggal sama; service menerbitkan di dalam transaksi sesudah
+  `assertPeriodOpen` (`src/lib/services/withholding-certificate.
+  service.ts:104,154-199` di main; resolver katalog sewa
+  `resolvePph42RentRate` di `src/lib/tax/withholding-certificate.
+  ts:112`). Tanggal acuan berjalan = tanggal potong, bukan tanggal
+  form dibuka — pola yang F-055-V §3 setujui untuk katalog, spec
+  ini terapkan pola sama ke status pihak (BR-PMT-03).
+- `TaxPayment` punya `taxKind`/`taxTypeId`/`period`/`billingCode`
+  (15 digit)/`ntpn` (16 char)/`amount Decimal(15,2)`/`status`
+  (`prisma/schema.prisma:1114-1144`); aksi `createTaxPayment`
+  berpenjaga `create_tax_payments` + `assertPeriodOpen` + jurnal
+  satu transaksi (`src/actions/tax-payment.actions.ts:35`).
+- Izin nyata katalog: `manage_withholding_tax` (kelola pajak
+  potong), `manage_withholding_certificates` (bupot),
+  `create_tax_payments`/`view_tax_payments` (setor)
+  (`src/lib/auth/module-catalog.generated.ts:312,327,334-336`).
+- `ActivityLog` (`oldValues`/`newValues` Json, `modelType`/
+  `modelId`) tersedia sebagai jejak siapa-kapan
+  (`prisma/schema.prisma` model `ActivityLog`).
+
+Belum ada / batas jujur (bukti grep run ini, origin/main a8185d95):
+- Status pemotong bertanggal efektif per pihak ABSEN: `Customer`
+  (`schema.prisma:317`) dan `Vendor` (`schema.prisma:420`) hanya
+  punya identitas pajak (`Customer.taxId`, `Vendor.npwp`) — tidak
+  ada status pemotong, masa berlaku, atau dasar penunjukan. Tabel
+  histori khusus = vonis bentuk F-057-V §1, dibangun BOT 3.
+- Model alokasi anak setor-sendiri ABSEN: `TaxPayment` belum punya
+  relasi alokasi per transaksi sumber (vonis bentuk F-057-V §2,
+  pola `VendorPaymentAllocation`).
+- Konsekuensi operasional sampai keduanya dibangun: penentuan
+  Kasus B vs C TIDAK bisa dibaca mesin per `withholdingDate`;
+  operator menjalankan prosedur manual terdokumentasi §2 langkah
+  0 (sadar, tercatat) — BUKAN klaim fitur existing.
+
+### 1. Workflow specification (alur + aktor + dokumen masuk/keluar)
+
+Aktor: Operator keuangan (pengelola status pihak, izin persis
+§3), Penerbit bupot, Penyetor, Pembaca rekap. Pihak pelanggan/
+vendor = subjek data, bukan aktor sistem.
+
+Alur utama (dokumen masuk: dokumen penunjukan/dasar status +
+tagihan/invoice sewa; dokumen keluar: baris histori status efektif
++ keputusan jalur potong/setor-sendiri + bukti setor):
+
+1. TETAPKAN STATUS AWAL pihak: operator keuangan catat status
+   (`pemotong`/`non_pemotong`) + `effectiveFrom` + dasar
+   penunjukan (§2 wajib) SEBELUM transaksi sewa pihak itu diproses.
+   Pihak tanpa baris status = belum bisa ditransaksikan jalur
+   pajaknya (BR-PMT-05).
+2. UBAH STATUS: tutup masa baris berjalan (`effectiveTo`) + buat
+   baris baru dengan dasar baru; baris lama tidak diedit/dihapus
+   sesudah dirujuk transaksi (F-057-V §1c). Koreksi kesalahan
+   ketik pada baris yang BELUM berlaku dan BELUM dirujuk = satu-
+   satunya jalur hapus, itupun tercatat audit (USULAN penjaga
+   rujukan persisnya milik BOT 3 per F-057-V §1c).
+3. BACA SAAT TRANSAKSI: pada penerbitan bupot / penentuan setor,
+   sistem membaca baris tunggal yang memuat `withholdingDate`
+   transaksi — bukan status hari ini (BR-PMT-03, contoh §4).
+4. CABANG: status efektif `pemotong` pada pihak yang wajib potong
+   -> jalur bupot Kasus A/B (F-054-S); pihak lawan `non_pemotong`
+   pada arah ISF menyewakan -> Kasus C setor-sendiri (§5).
+   Nol baris memuat tanggal itu -> transaksi DITOLAK jalur
+   pajaknya, eskalasi lengkapi status dulu (BR-PMT-05).
+5. SETOR-SENDIRI (Kasus C): penyetor buat `TaxPayment`
+   `taxKind='pph4_2'` dengan bukti billing/NTPN + alokasi sumber
+   (§5); rekonsiliasi per masa oleh pembaca rekap (BR-PMT-10).
+
+### 2. Alur operator keuangan: tetapkan/ubah status (fail-closed)
+
+Bidang wajib per penetapan/perubahan (nama bisnis; bentuk kolom
+persis = F-057-V §1 milik BOT 3):
+
+| Bidang | Wajib | Aturan |
+|---|---|---|
+| Pihak (pelanggan/vendor) | ya | satu pihak per baris; rujukan persis BOT 3 |
+| Status (`pemotong`/`non_pemotong`) | ya | nilai tertutup dua ini, bukan teks bebas |
+| `effectiveFrom` (tanggal kalender) | ya | masa mulai berlaku; bersebelahan sah, tumpang tindih DITOLAK |
+| `effectiveTo` (tanggal kalender) | tidak | kosong = masih berlaku; terisi wajib >= `effectiveFrom` |
+| `basisType` (kategori dasar bernama) | ya untuk `pemotong` | kategori tertutup dari vonis F-057-V §1 (penunjukan instansi/badan/penunjukan DJP/lainnya bernama) |
+| `basisNumber` + `basisDate` | ya untuk `pemotong` | nomor+tanggal dokumen penunjukan; kosong = DITOLAK simpan |
+| `basisNote` (alasan bernama) | ya untuk `non_pemotong` | mis. "OP tidak ditunjuk"; teks alasan tidak pernah satu-satunya dasar klaim `pemotong` |
+
+Langkah operator:
+1. Buka master pihak -> panel status pemotong -> "Tambah masa
+   status". Pilih pihak, status, `effectiveFrom`, isi dasar.
+2. Simpan. Sistem menolak berisik bila: dasar klaim `pemotong`
+   kosong (nomor/tanggal), alasan `non_pemotong` kosong, atau
+   masa tumpang tindih dengan baris pihak sama. Penolakan =
+   tidak ada baris lahir, bukan baris setengah tersimpan.
+3. Perubahan status berjalan: JANGAN edit baris berjalan. Tutup
+   masa (`effectiveTo` = sehari sebelum masa baru mulai, atau
+   tanggal putus yang disebut dokumen dasar) lalu tambah baris
+   baru. Sistem menolak tutup masa yang membuat tanggal transaksi
+   lampau yang sudah terbit kehilangan baris memuatnya (penjaga
+   rujukan F-057-V §1c — perilaku operator: koreksi maju, bukan
+   tulis ulang sejarah).
+4. Setiap buat/tutup baris menulis `ActivityLog` (siapa, kapan,
+   nilai lama->baru, dasar) pada transaksi yang sama; simpan
+   tanpa audit = gagal simpan (F-057-V §1, BR-PMT-06).
+5. Kata penolakan bisnis (makna; kata layar persis BOT 2 dari
+   pesan server): dasar kosong -> "Status pemotong wajib dasar
+   penunjukan bernomor dan bertanggal"; masa tumpang tindih ->
+   "Masa status bertumpang tindih dengan masa yang sudah ada";
+   nol baris pada tanggal potong -> "Status pemotong pihak belum
+   tercatat untuk tanggal potong ini".
+
+### 3. Role/permission matrix (izin nyata katalog, TERVERIFIKASI-KODE)
+
+Baris = aksi, kolom = peran bisnis. Izin persis
+`module-catalog.generated.ts:312,327,334-336`; F-057-V §1 melarang
+izin baru karangan dan melarang memakai izin setor untuk ubah
+status. Pemetaan peran-ke-izin persis di bawah = spec ini.
+
+| Aksi | Operator keuangan (pengelola status) | Penerbit bupot | Penyetor | Pembaca rekap |
+|---|---|---|---|---|
+| Tetapkan/ubah status pemotong pihak | `manage_withholding_tax` — BOLEH | TIDAK | TIDAK | TIDAK |
+| Baca status + masa + dasar pihak | `manage_withholding_tax` | tampil apa adanya dari backend (tanpa izin ubah) | tampil apa adanya | `view_reports` (rekap saja) |
+| Terbit bupot Kasus A/B | TIDAK (bukan tugasnya) | `manage_withholding_certificates` | TIDAK | TIDAK |
+| Catat setor-sendiri Kasus C | TIDAK | TIDAK | `create_tax_payments` | TIDAK |
+| Rekonsiliasi Daftar II per masa | baca | TIDAK | baca | `view_reports` |
+
+Larangan peran: BOT 2/UI hanya menampilkan status+masa+dasar apa
+adanya — UI dilarang menentukan kewajiban potong, menghitung
+status efektif sendiri, atau menawarkan ubah status di luar izin
+`manage_withholding_tax` (F-055-V §4/F-057-V §1). Penerbit dengan
+klaim lisan pihak ("kami sudah setor sendiri") TIDAK mengubah
+jalur: status tercatat efektif yang bicara (F-054-S Kasus C.5).
+
+### 4. Titik baca: efektif pada withholdingDate (bukan hari ini)
+
+Aturan: keputusan potong-vs-setor-sendiri membaca baris status
+yang memuat `withholdingDate` transaksi, di dalam transaksi saat
+submit (pola `assertPeriodOpen` + resolve di tx yang sudah
+berjalan untuk katalog, §0). Membaca status "sekarang" untuk
+transaksi lampau = salah jalur (falsifikasi F56-1 F-057-V §4).
+
+Contoh tanggal melintasi batas efektif (angka tanggal ilustrasi
+prosedur, bukan tarif):
+- Pihak X: baris 1 `non_pemotong` efektif 2026-01-01 s/d
+  2026-06-30 (dasar: OP tidak ditunjuk); baris 2 `pemotong`
+  efektif 2026-07-01 s/d terbuka (dasar penunjukan bernomor+
+  bertanggal terisi).
+- Transaksi sewa `withholdingDate` 2026-06-15, dibuat/dilihat
+  operator pada 2026-08-02 (status hari ini = `pemotong`):
+  keputusan WAJIB Kasus C setor-sendiri (status efektif tanggal
+  potong = `non_pemotong`). Membaca status hari ini akan keliru
+  menerbitkan bupot.
+- Transaksi `withholdingDate` 2026-07-01 persis: baris 2 yang
+  memuat (batas mulai inklusif) -> jalur potong Kasus A/B.
+- Transaksi `withholdingDate` 2025-12-31 (sebelum baris pertama):
+  nol baris memuat -> DITOLAK jalur pajaknya walau status hari
+  ini ada; operator lengkapi masa lampau hanya dengan dasar
+  dokumen bertanggal masa itu, bukan dasar hari ini.
+- Perubahan status sesudah bupot terbit TIDAK berlaku surut:
+  bupot snapshot tetap; baris baru hanya memengaruhi transaksi
+  dengan `withholdingDate` dalam masanya (F-055-V §4).
+
+### 5. Kasus C setor-sendiri: alur bukti billingCode/NTPN ke TaxPayment
+
+Selaras vonis F-055-V §5 + bentuk F-057-V §2 (tarif/kode/akun
+tidak diputus spec ini — milik BOT 4, sudah di kedua vonis itu):
+
+1. Pemicu: status efektif pihak lawan pada `withholdingDate` =
+   `non_pemotong` pada arah ISF menyewakan (Kasus C F-054-S §2).
+   Tidak ada bupot terbit atas nama pihak itu — dilarang menautkan
+   bukti setor ke bupot (F-055-V §5).
+2. ISF terima bruto penuh; PPh terutang dihitung jalur yang sudah
+   divonis (di luar spec ini), lalu Penyetor setor atas nama ISF
+   sebelum tenggat yang berlaku di F-054-S §3.
+3. Bukti masuk sebagai baris `TaxPayment` terstruktur (bukan teks
+   bebas di catatan invoice — dilarang F-055-V §5):
+   `taxKind='pph4_2'`, `taxTypeId` jenis sewa terkait, `period` =
+   masa transaksi turunan `withholdingDate` (BUKAN tanggal bayar),
+   `billingCode` 15 digit + `ntpn` 16 karakter dari BPN/SSP,
+   `amount` = PPh terutang baris itu. Kolom semua sudah ada (§0).
+4. Tautan sumber = baris alokasi anak per transaksi sewa sumber
+   (F-057-V §2): satu setoran N=1..N sumber; `SUM(alokasi)` wajib
+   = `TaxPayment.amount` persis sen (selisih 0,01 DITOLAK, tanpa
+   baris "selisih"); sumber sama tidak dobel dalam satu setoran;
+   kumulatif alokasi satu sumber tidak melewati terutang sumber
+   itu. Contoh sen vonis: 3 sumber @10.350.000,00 digunggung satu
+   setoran 31.050.000,00 = LULUS; 31.049.999,99/31.050.000,01 =
+   DITOLAK.
+5. Status bukti: setoran tanpa baris alokasi TIDAK sah sebagai
+   posted (draf hanya bila status memang draf dan tidak masuk
+   rekonsiliasi lunas, F-057-V §2d). Baris setor tanpa NTPN
+   sesudah masa lapor = selisih terbuka di rekonsiliasi, bukan
+   dianggap lunas (F-055-V §5).
+6. Rekonsiliasi per masa: total Daftar II masa X = total
+   `TaxPayment taxKind='pph4_2'` `period=X` dengan tautan sumber
+   lengkap; Pembaca rekap menampilkan selisih apa adanya.
+
+### 6. Status-transition matrix (status pihak + jalur transaksi)
+
+| Dari | Pemicu | Ke | Penjaga/izin |
+|---|---|---|---|
+| Pihak tanpa baris status | tetapkan status awal + dasar (§2) | masa status efektif terbuka | `manage_withholding_tax`; dasar wajib per status |
+| Masa efektif terbuka | tutup masa + baris baru berdasar | masa lama tertutup + masa baru efektif | `manage_withholding_tax`; tanpa dasar = DITOLAK; audit wajib |
+| Masa tertutup / sudah dirujuk | edit/hapus baris | TETAP (ditolak) | penjaga rujukan F-057-V §1c (BOT 3) |
+| Transaksi, status efektif `pemotong` | submit bupot | jalur Kasus A/B F-054-S | baca per `withholdingDate` di tx |
+| Transaksi, status efektif `non_pemotong` (ISF menyewakan) | terima bruto | jalur Kasus C: setor-sendiri §5 | tanpa bupot; `create_tax_payments` |
+| Transaksi, nol baris memuat `withholdingDate` | submit jalur pajak | DITOLAK, eskalasi lengkapi status | fail-closed BR-PMT-05 |
+| Setor-sendiri draf tanpa alokasi | posting tanpa alokasi / total != amount | TETAP draf (ditolak posted) | penjaga alokasi F-057-V §2 (BOT 3) |
+| Setor-sendiri posted ber-NTPN + alokasi penuh | masuk masa lapor | terhitung Daftar II masa itu | rekonsiliasi §5.6 |
+
+### 7. Business rules register (label wajib di tiap aturan)
+
+- BR-PMT-01 (VONIS BOT 4 F-055-V §4 + F-057-V §1): status
+  pemotong per pihak = data master bertanggal efektif + dasar
+  penunjukan; BUKAN boolean kontak, BUKAN field bupot.
+- BR-PMT-02 (VONIS BOT 4 F-057-V §1): klaim `pemotong` wajib
+  `basisType` bernama + `basisNumber` + `basisDate`; klaim
+  `non_pemotong` wajib `basisNote` alasan bernama. Ubah tanpa
+  dasar = DITOLAK sistem (fail-closed), bukan peringatan.
+- BR-PMT-03 (VONIS BOT 4 F-055-V §3/§4, pola TERVERIFIKASI-KODE
+  katalog §0): titik baca = status efektif pada `withholdingDate`
+  saat submit di dalam transaksi; status hari ini dilarang.
+- BR-PMT-04 (VONIS BOT 4 F-057-V §1a): masa pihak sama dilarang
+  tumpang tindih; masa bersebelahan sah; baris tunggal memuat
+  tanggal potong adalah jawaban.
+- BR-PMT-05 (VONIS BOT 4 F-057-V §1b): nol baris memuat tanggal
+  potong = status TIDAK DIKETAHUI -> transaksi ditolak jalur
+  pajaknya; DILARANG default `non_pemotong` diam-diam.
+- BR-PMT-06 (VONIS BOT 4 F-055-V §4 + F-057-V §1): tiap buat/
+  tutup baris wajib `ActivityLog` siapa-kapan-nilai-lama-baru-
+  dasar dalam transaksi sama; tabel histori = sumber efektif,
+  log = jejak (log SAJA sebagai penyimpan DITOLAK vonis).
+- BR-PMT-07 (VONIS BOT 4 F-057-V §1c): histori tidak diedit/
+  dihapus sesudah dipakai transaksi; koreksi = tutup masa +
+  baris baru; perubahan tidak berlaku surut ke bupot terbit.
+- BR-PMT-08 (VONIS BOT 4 F-055-V §4 + katalog izin
+  TERVERIFIKASI-KODE §0): hanya `manage_withholding_tax` boleh
+  tetapkan/ubah status; izin setor `create_tax_payments`
+  DILARANG dipakai mengubah status; izin baru karangan DILARANG.
+- BR-PMT-09 (VONIS BOT 4 F-055-V §5 + F-057-V §2): bukti Kasus C
+  = `TaxPayment taxKind='pph4_2'` + `period` masa transaksi +
+  `billingCode`/`ntpn` + alokasi sumber total persis `amount`;
+  teks bebas di catatan dan tautan ke bupot DILARANG.
+- BR-PMT-10 (VONIS BOT 4 F-055-V §5): rekonsiliasi Daftar II per
+  masa dari `TaxPayment` bertautan lengkap; setor tanpa NTPN
+  lewat masa lapor = selisih terbuka, bukan lunas.
+- BR-PMT-11 (USULAN BOT 5, belum vonis): panel status pihak
+  menampilkan masa berjalan + masa berikutnya yang sudah dicatat
+  (bila ada) supaya operator melihat batas efektif sebelum
+  transaksi lintas batas; tidak mengubah aturan baca BR-PMT-03.
+  Pemilik keputusan: BOT 2/BOT 3 saat layar dibangun.
+- BR-PMT-12 (BUTUH-VONIS BOT 4, jangan diputus BOT 5/2/3):
+  kategori `basisType` persis ("lainnya bernama" di F-057-V §1
+  batasnya apa) + apakah dasar `non_pemotong` untuk pihak badan
+  yang diklaim berubah status butuh dokumen eksternal atau cukup
+  alasan internal bernama. Sampai divonis: operator memakai
+  kategori bernama yang sudah divonis saja; "lainnya" wajib
+  `basisNote` menyebut dokumennya (prosedur sadar, bukan klaim
+  vonis).
+
+### 8. Feature matrix Accurate/Zahir/ISF (cakupan spec ini saja)
+
+Benchmark prosedur pajak internal DJP tidak diambil dari
+Accurate/Zahir (prosedur penunjukan pemotong + setor-sendiri =
+rezim DJP, sumber resminya vonis BOT 4: PER-11/PJ/2025,
+PMK-231/PMK.03/2019, PMK-80/PMK.03/2024, UU 28/2007 — diakses
+BOT 4 2026-10-22, dirujuk bukan diverifikasi ulang run ini).
+Matriks dibatasi status pihak, jujur per bukti:
+
+| Kemampuan | Accurate/Zahir (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE §0) |
+|---|---|---|
+| Status pemotong bertanggal efektif per pihak + dasar | belum diverifikasi run ini — jangan diklaim | ABSEN (hanya `taxId`/`npwp` identitas) |
+| Baca status per tanggal transaksi | belum diverifikasi run ini | ABSEN untuk status; pola per-`withholdingDate` SUDAH ada untuk katalog/bupot |
+| Bukti setor-sendiri terstruktur + alokasi sumber | belum diverifikasi run ini | PARSIAL: kolom `TaxPayment` lengkap; alokasi anak ABSEN |
+
+### 9. Acceptance criteria + edge cases (draf BOT 6; falsifikasi)
+
+- AC-PMT-1: Tetapkan `pemotong` tanpa nomor/tanggal dasar ->
+  DITOLAK, nol baris lahir, nol audit; lengkapi dasar -> tersimpan
+  + `ActivityLog` ada (cabut penjaga dasar -> tes MERAH).
+- AC-PMT-2: Tetapkan `non_pemotong` tanpa alasan bernama ->
+  DITOLAK; dengan alasan -> tersimpan (F-057-V §1d).
+- AC-PMT-3: Masa tumpang tindih pihak sama -> DITOLAK; masa
+  bersebelahan (to = from-baru minus 1 hari) -> LULUS (F56-4).
+- AC-PMT-4: Contoh §4 persis: transaksi `withholdingDate`
+  2026-06-15 diproses 2026-08-02 terbaca `non_pemotong` (Kasus C),
+  bukan status hari ini (F56-1). Batas 2026-07-01 terbaca baris
+  baru. Tanggal sebelum baris pertama -> DITOLAK (F56-2).
+- AC-PMT-5: Ubah status = tutup + baris baru; baris terujuk
+  transaksi tidak bisa diedit/dihapus; bupot terbit sebelum
+  perubahan tidak berubah (F56-9 sisi status).
+- AC-PMT-6: Peran tanpa `manage_withholding_tax` (termasuk
+  pemegang `create_tax_payments`) mencoba ubah status -> DITOLAK
+  server, bukan hanya tombol hilang di UI.
+- AC-PMT-7: Kasus C: setor `taxKind='pph4_2'` period turunan
+  `withholdingDate` (bukan tanggal bayar) + billing 15 + NTPN 16
+  + alokasi 3x10.350.000,00 = 31.050.000,00 -> posted; geser
+  0,01 -> DITOLAK posted (F56-5); sumber dobel/melewati terutang
+  -> DITOLAK (F56-6); tautan ke bupot -> tidak ada jalur (Kasus C
+  tanpa bupot).
+- AC-PMT-8: Setor posted tanpa alokasi / tanpa NTPN lewat masa
+  lapor -> tampil sebagai selisih rekonsiliasi Daftar II, bukan
+  lunas (F-055-V §5).
+- Edge: pihak berperan ganda (pelanggan sekaligus vendor) =
+  status dicatat per peran pihak (rujukan BOT 3), jangan warisi
+  lintas peran diam-diam; dua baris mulai tanggal sama = tumpang
+  tindih, ditolak; `effectiveTo` < `effectiveFrom` ditolak;
+  transaksi dibatalkan sesudah status berubah: keputusan jalur
+  tetap snapshot transaksi, histori tidak ditulis ulang.
+
+### 10. Backlog implementasi (turunan spec ini; ID spec F-2026-10-22-058-S)
+
+- BOT 4: (a) merge jalur vonis — PR #436 (F-055-V) lalu PR #439
+  (F-057-V) tetap urutan Lead; (b) vonis BR-PMT-12 (kategori
+  `basisType` persis + syarat dasar `non_pemotong` badan) bila
+  akan ditegakkan; teks PMK-80/daftar pemotong berlabel
+  BUTUH-VERIFIKASI-BOT6 di F-055-V §6 tidak digeser spec ini.
+- BOT 3 (kartu t_bc660350): bentuk fisik F-057-V §1-§2 (tabel
+  histori + alokasi anak, klaim `prisma/schema.prisma` di board
+  sebelum migrasi); penjaga §2/§5 spec ini di service dalam tx
+  (dasar wajib, anti-tumpang-tindih, baca per `withholdingDate`,
+  SUM alokasi persis, penjaga rujukan); audit `ActivityLog` satu
+  tx; idempotency key mutasi finansial tetap. Loader katalog
+  kode+nama F-055/F-057 §3 tetap antrean yang sama.
+- BOT 2: panel status pihak (status+masa+dasar apa adanya,
+  kata penolakan §2.5 dari pesan server), tanpa hitung kewajiban/
+  status efektif di UI, tanpa tombol ubah di luar
+  `manage_withholding_tax`; BR-PMT-11 sesudah diputus.
+- BOT 6: AC-PMT-1..8 di atas + falsifikasi F56-1..9 (F-057-V §4)
+  tetap milik vonisnya; uji peran AC-PMT-6 wajib di server.
+- Lead: urutan merge #436 -> #439 -> spec ini; BOT 3 bentuk fisik
+  hanya sesudah #436 merged + koordinasi board (F-057-V §4).
+  Butuh putusan accountant: YA (BR-PMT-12 + verifikasi BOT 6).
+
+### Yang TIDAK diusulkan run ini
+- Tarif/kode objek/KJS/akun/model jurnal baru (milik BOT 4,
+  sudah divonis F-038/F-039/F-055-V/F-057-V — dirujuk, tidak
+  diputus ulang); izin baru; boolean status di Customer/Vendor;
+  ActivityLog sebagai satu-satunya penyimpan status (ditolak
+  F-057-V §1); klaim lapor SPT sah (vonis mengatur data internal);
+  kata layar final panel status (BOT 2 dari kontrak BOT 3).
+
+---
