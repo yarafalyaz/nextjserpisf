@@ -23,6 +23,7 @@ const orderFindUniqueMock = vi.fn()
 const woFindUniqueMock = vi.fn()
 const vendorFindUniqueMock = vi.fn()
 const timesheetFindManyMock = vi.fn()
+const jobGuardMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -36,6 +37,9 @@ vi.mock("@/lib/services/production-cost.service", () => ({
 }))
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: (...a: unknown[]) => periodOpenMock(...a),
+}))
+vi.mock("@/lib/services/job-closeout.service", () => ({
+  assertJobCostMutable: (...a: unknown[]) => jobGuardMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => {
@@ -81,6 +85,8 @@ beforeEach(() => {
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
   periodOpenMock.mockResolvedValue(undefined)
+  jobGuardMock.mockReset()
+  jobGuardMock.mockResolvedValue(undefined)
   applyDeltaMock.mockResolvedValue(undefined)
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
@@ -262,6 +268,64 @@ describe("deleteProductionCost", () => {
     expect(res.error).toContain("completed")
     expect(costDeleteMock).not.toHaveBeenCalled()
     expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("F-2026-10-21-009-V: guard job closed (production-cost actions)", () => {
+  const CLOSED = new Error("Biaya tidak dapat ditambahkan: perintah kerja sudah ditutup (closed).")
+
+  it("create ke job closed ditolak guard, tanpa tulis", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    jobGuardMock.mockRejectedValue(CLOSED)
+
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 1000 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah ditutup")
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("create WO-only ke WO closed ditolak guard", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7 })
+    jobGuardMock.mockRejectedValue(CLOSED)
+
+    const res = await createProductionCost(fd({ workOrderId: 7, category: "service", amount: 500 }))
+
+    expect(res.success).toBe(false)
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("update biaya job closed ditolak guard", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, workOrderId: null, amount: 100 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    jobGuardMock.mockRejectedValue(CLOSED)
+
+    const res = await updateProductionCost(5, fd({ category: "labor", amount: 300 }))
+
+    expect(res.success).toBe(false)
+    expect(costUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("delete biaya job closed ditolak guard", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, workOrderId: null, amount: 100 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    jobGuardMock.mockRejectedValue(CLOSED)
+
+    const res = await deleteProductionCost(5)
+
+    expect(res.success).toBe(false)
+    expect(costDeleteMock).not.toHaveBeenCalled()
+  })
+
+  it("create PO closed ditolak mutableOrderError menyebut closed", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "closed" })
+
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 1000 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("closed")
+    expect(costCreateMock).not.toHaveBeenCalled()
   })
 })
 
