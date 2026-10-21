@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => {
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     materialIssueItem: { deleteMany: vi.fn().mockResolvedValue({ count: 0 }) },
+    // F-2026-10-21-009-V: guard tutup-job membaca status WO pada create MI.
+    workOrder: { findUnique: vi.fn().mockResolvedValue({ status: "in_progress" }) },
   }
   prismaMock.$transaction = vi.fn(async (ops: unknown) =>
     typeof ops === "function" ? (ops as (tx: unknown) => unknown)(prismaMock) : Promise.all(ops as unknown[]),

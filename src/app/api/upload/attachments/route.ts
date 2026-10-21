@@ -8,6 +8,28 @@ import path from "path"
 import { apiError } from "@/lib/api-response"
 import { assertCSRF } from "@/lib/security/csrf"
 
+/**
+ * Ekstensi tersimpan dari MIME yang sudah divalidasi, bukan nama berkas klien
+ * (pola resolveExt di storage.ts): "laporan.html" + header image/png tanpa ini
+ * tersimpan .html dan menipu konsumen nama/ikon walau served via route
+ * lampiran (sandbox, bukan public dir). Fallback .bin bila MIME tak dikenal.
+ */
+export function resolveAttachmentExt(mimeType: string, filename: string): string {
+  const byMime: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "application/pdf": "pdf",
+  }
+  const known = byMime[mimeType]
+  if (known) return known
+  const raw = (filename.split(".").pop() || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toLowerCase()
+  const dangerous = new Set(["html", "htm", "xhtml", "xml", "svg", "js", "mjs", "cjs", "php", "phtml", "phar", "sh"])
+  if (!raw || dangerous.has(raw)) return "bin"
+  return raw
+}
+
 export async function POST(req: NextRequest) {
   try {
   const session = await auth()
@@ -47,11 +69,15 @@ export async function POST(req: NextRequest) {
     return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
-  const userId = Number.parseInt(String(session.user.id), 10)
+  const userIdRaw = String(session.user.id)
+  if (!/^\d+$/.test(userIdRaw)) {
+    return apiError("BAD_REQUEST", "Pengguna tidak valid")
+  }
+  const userId = Number(userIdRaw)
   if (!Number.isSafeInteger(referenceIdNum) || referenceIdNum < 0) {
     return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
-  if (!Number.isInteger(userId) || userId <= 0) {
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
     return apiError("BAD_REQUEST", "Pengguna tidak valid")
   }
 
@@ -104,9 +130,8 @@ export async function POST(req: NextRequest) {
   const uploadDir = path.join(process.cwd(), "private", "uploads", "attachments", safeRefType)
   await mkdir(uploadDir, { recursive: true })
 
-  // Sanitize extension - only allow alphanumeric
-  const rawExt = (file.name.split(".").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "")
-  const ext = rawExt.slice(0, 10) || "bin"
+  // Ekstensi dari MIME tervalidasi, bukan nama klien (resolveAttachmentExt).
+  const ext = resolveAttachmentExt(file.type, file.name)
   const filename = `${safeRefType}-${referenceIdNum}-${randomUUID()}.${ext}`
   const filepath = path.join(uploadDir, filename)
 

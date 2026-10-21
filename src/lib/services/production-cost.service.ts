@@ -1,6 +1,7 @@
 import { prisma, TxClient } from "@/lib/db/prisma"
 import { safeAdd, safeSubtract, safeMultiply } from "@/lib/utils/math"
 import { stockJournalService } from "@/lib/services/stock-journal.service"
+import { assertJobCostMutable } from "@/lib/services/job-closeout.service"
 
 /**
  * Non-material production cost rollup (PRD FAB-06/07/08/09).
@@ -89,6 +90,19 @@ export async function syncServicePurchaseOrderCost(
     where: { workOrderId: po.workOrderId },
     select: { id: true, status: true },
   })
+  // F-2026-10-21-009-V: WO closed membekukan semua PO anak — sync jasa
+  // dilewati seluruhnya dan dilaporkan skipped (pola F-71 completed).
+  const woRow = await client.workOrder.findUnique({
+    where: { id: po.workOrderId },
+    select: { status: true },
+  })
+  if (woRow?.status === "closed") {
+    return {
+      posted: 0,
+      productionOrderIds: [],
+      skippedProductionOrderIds: allProductionOrders.map((o) => o.id),
+    }
+  }
   // F-2026-10-20-71: a completed order's HPP is final — `totalActualCost` was
   // zeroed and `releasedCost` frozen at completion (final release in
   // manufacturing.actions), so a late service bill must not re-open it: writing
@@ -98,7 +112,7 @@ export async function syncServicePurchaseOrderCost(
   // and reported so the caller can log it and surface a warning. The vendor
   // bill itself still posts to AP normally; only the HPP mirror is refused.
   const completedIds = new Set(
-    allProductionOrders.filter((o) => o.status === "completed").map((o) => o.id),
+    allProductionOrders.filter((o) => o.status === "completed" || o.status === "closed").map((o) => o.id),
   )
   const productionOrders = allProductionOrders.filter((o) => !completedIds.has(o.id))
   const skippedProductionOrderIds = allProductionOrders
@@ -227,6 +241,10 @@ export async function syncReworkCostToOrder(
   }
   const productionOrderId = nonconformance.referenceId
   const desired = Math.max(0, Number(input.reworkCost) || 0)
+
+  // F-009-V: PO closed / WO induk closed membekukan sync rework — lempar
+  // agar tx pemanggil (resolveNonconformance) rollback, bukan diam.
+  await assertJobCostMutable({ productionOrderId }, "diubah rework-nya", client)
 
   const existing = await client.productionCost.findUnique({
     where: { nonconformanceId: nonconformance.id },

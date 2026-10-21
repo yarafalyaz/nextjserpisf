@@ -70,3 +70,21 @@ export const transitionSupplierClaimSchema = z.object({
   supplierClaimRefNo: optionalText(191),
   supplierClaimNotes: optionalText(5000),
 });
+
+// F-2026-10-21-021 tahap 3 rute MATI — pemanggil jurnal E2/E3. Bentuk saja;
+// syarat status/mapping/periode/anti-dobel hidup di warranty-journal.service.
+const eventDate = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? undefined : v),
+  z.coerce.date().optional(),
+);
+
+export const postWarrantyClaimCostSchema = z.object({
+  claimId: z.coerce.number().int().positive("Klaim garansi wajib dipilih"),
+  eventDate,
+});
+
+export const postWarrantySupplierRecoverySchema = z.object({
+  claimId: z.coerce.number().int().positive("Klaim garansi wajib dipilih"),
+  amount: z.coerce.number().positive("Nominal recovery harus lebih dari nol"),
+  eventDate,
+});
