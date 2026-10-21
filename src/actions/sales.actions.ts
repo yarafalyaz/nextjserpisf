@@ -103,6 +103,27 @@ async function decideQuotation(
   })
 }
 
+/**
+ * F-2026-10-21-016 tahap 1: resolve atribusi penjual opsional.
+ * Nilai kosong -> null (dokumen tanpa penjual sah, komisi tak dihitung).
+ * Nilai terisi wajib menunjuk Employee aktif belum terhapus; selain itu
+ * ditolak agar snapshot tidak menunjuk orang fiktif/nonaktif.
+ */
+async function resolveSalesEmployeeId(
+  tx: Prisma.TransactionClient,
+  raw: unknown,
+): Promise<number | null> {
+  if (raw === null || raw === undefined || raw === "") return null
+  const id = Number(raw)
+  if (!Number.isInteger(id) || id <= 0) throw new Error("Penjual (sales) tidak valid")
+  const emp = await tx.employee.findFirst({
+    where: { id, isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  if (!emp) throw new Error("Penjual (sales) tidak ditemukan atau sudah nonaktif")
+  return emp.id
+}
+
 export async function createQuotation(formData: FormData) {
   try {
   const user = await requirePermission("create_quotations")
@@ -146,6 +167,7 @@ export async function createQuotation(formData: FormData) {
         customerVehicleId: data.customerVehicleId
           ? Number(data.customerVehicleId)
           : null,
+        salesEmployeeId: await resolveSalesEmployeeId(tx, data.salesEmployeeId),
         date: wibDateToUtcMidnight(data.date),
         validUntil: data.validUntil ? wibDateToUtcMidnight(data.validUntil) : null,
         subtotal: computedSubtotal,
@@ -428,6 +450,7 @@ export async function convertQuotationToOrder(quotationId: number) {
         customerId: quotation.customerId,
         quotationId: quotation.id,
         customerVehicleId: quotation.customerVehicleId,
+        salesEmployeeId: quotation.salesEmployeeId,
         date: new Date(),
         subtotal: quotation.subtotal,
         discount: quotation.discount ?? 0,
@@ -893,6 +916,7 @@ export async function createSalesOrder(formData: FormData) {
       total: number
     }> = []
     let quotationTaxRate = 0
+    let quotationSalesEmployeeId: number | null = null
 
     if (v.quotationId) {
       const quotation = await tx.quotation.findUnique({
@@ -900,6 +924,7 @@ export async function createSalesOrder(formData: FormData) {
         include: { sections: { include: { items: true } } },
       })
       if (quotation) {
+        quotationSalesEmployeeId = quotation.salesEmployeeId
         // Gerbang yang sama dengan convertQuotationToOrder: jalur form tidak
         // boleh menjadi jalan pintas mengonversi penawaran konsep/ditolak/
         // kedaluwarsa yang jalur resminya menolak.
@@ -937,6 +962,7 @@ export async function createSalesOrder(formData: FormData) {
         slug,
         customerId: v.customerId,
         quotationId: v.quotationId ?? null,
+        salesEmployeeId: quotationSalesEmployeeId,
                 date: wibDateToUtcMidnight(v.date),
         deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
         notes: v.notes ?? null,
@@ -1390,10 +1416,11 @@ export async function createSalesInvoice(formData: FormData) {
     // daftar yang sama supaya URL/form yang ditempel tidak bisa memfakturkan
     // pesanan konsep/ditolak. Faktur langsung dari penawaran (quotationId
     // tanpa salesOrderId) tetap boleh.
+    let inheritedSalesEmployeeId: number | null = null
     if (v.salesOrderId) {
       const so = await tx.salesOrder.findUnique({
         where: { id: v.salesOrderId },
-        select: { status: true },
+        select: { status: true, salesEmployeeId: true, quotationId: true },
       })
       if (!so) throw new Error("Pesanan Penjualan tidak ditemukan")
       if (!(DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(so.status)) {
@@ -1401,6 +1428,20 @@ export async function createSalesInvoice(formData: FormData) {
           `Pesanan Penjualan berstatus '${so.status}' belum bisa difaktur (harus ${DELIVERABLE_ORDER_STATUS_LABELS})`,
         )
       }
+      inheritedSalesEmployeeId = so.salesEmployeeId
+      if (inheritedSalesEmployeeId === null && so.quotationId) {
+        const q = await tx.quotation.findUnique({
+          where: { id: so.quotationId },
+          select: { salesEmployeeId: true },
+        })
+        inheritedSalesEmployeeId = q?.salesEmployeeId ?? null
+      }
+    } else if (v.quotationId) {
+      const q = await tx.quotation.findUnique({
+        where: { id: v.quotationId },
+        select: { salesEmployeeId: true },
+      })
+      inheritedSalesEmployeeId = q?.salesEmployeeId ?? null
     }
 
     // F-PRICELIST-01: baris langsung dari form mendapat harga price-list
@@ -1436,6 +1477,7 @@ export async function createSalesInvoice(formData: FormData) {
         customerId: v.customerId,
         salesOrderId: v.salesOrderId ?? null,
         quotationId: v.quotationId ?? null,
+        salesEmployeeId: inheritedSalesEmployeeId,
         date: wibDateToUtcMidnight(v.date),
         dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
         taxInvoiceNumber: v.taxInvoiceNumber ?? null,
