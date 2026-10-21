@@ -85,31 +85,17 @@ export async function updateCustomerPriceList(id: number, formData: FormData): P
 
     const parsed = parseFormData(customerPriceListSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
-    const v = parsed.data
-
-    const categoryId = v.customerCategoryId ?? null
-    const effectiveDate = v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null
-    const minQty = new Prisma.Decimal(v.minQty.toFixed(2))
+    const data = priceListData(parsed.data)
 
     const duplicate = await prisma.customerPriceList.findFirst({
-      where: { customerCategoryId: categoryId, itemId: v.itemId, minQty, effectiveDate, id: { not: id } },
+      where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate, id: { not: id } },
       select: { id: true },
     })
     if (duplicate) {
       return { success: false, error: "Sudah ada baris lain dengan kategori, barang, minimal qty, dan tanggal efektif yang sama." }
     }
 
-    await prisma.customerPriceList.update({
-      where: { id },
-      data: {
-        customerCategoryId: categoryId,
-        itemId: v.itemId,
-        price: toMoney(v.price),
-        minQty,
-        effectiveDate,
-        notes: v.notes ?? null,
-      },
-    })
+    await prisma.customerPriceList.update({ where: { id }, data })
 
     await logActivity("update", "CustomerPriceList", id, "Mengubah daftar harga pelanggan")
     revalidatePath(REVALIDATE)
