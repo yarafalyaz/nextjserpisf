@@ -2335,3 +2335,163 @@ Pemilik berikutnya: Lead merge PR ini; Bot 2 memakai
 `create_tax_invoices`/`manage_withholding_certificates` untuk gating
 form faktur/bupot (CanCreate/requirePermission UI), BUKAN
 `create_tax_payments` lagi.
+
+
+---
+
+## 2026-10-21 18:16 WIB — Domain (k) CRM/antrian/notifikasi (verifikasi ulang aa04aea9)
+
+Rotasi: run sebelumnya (j) laporan & BI F-2026-10-21-032..033, rotasi
+a–j DITUTUP 11:32. Run ini (k) — domain berikutnya sesudah (j) yang
+belum punya F-ID di backlog file ini. Catatan: label (k) pernah dipakai
+riset Raka 2026-10-20 20:13 (F-2026-10-20-90..94, tercatat hanya di
+board, BUKAN di file backlog ini) — item itu diverifikasi ulang di
+bawah terhadap origin/main aa04aea9, bukan diduplikasi. F-ID baru
+mulai F-2026-10-21-035 (034 sudah dipakai izin faktur/bupot).
+
+Benchmark resmi (akses 2026-10-21):
+- Zahir Reminder: jatuh tempo piutang/hutang/giro untuk kontrol
+  tagihan + rencana arus kas — https://www.zahironline.com/reminder/
+  dan daftar fitur https://www.zahironline.com/fitur-lengkap-zahir/
+- Accurate Perusahaan/Kalender: "notifikasi pengingat untuk aktivitas
+  penting seperti tenggat waktu pembayaran, pengiriman, dan laporan
+  keuangan" — https://accurate.id/online/fitur/perusahaan/
+- Klaim reminder otomatis email/WA dari blog/partner Accurate TIDAK
+  dipakai sebagai bukti fitur resmi (bukan help.accurate.id).
+
+### Status F-2026-10-20-90..94 terverifikasi ulang (aa04aea9)
+
+- F-90 histori geser endDate: TETAP ABSEN. `updateWorkOrder`
+  (inventory.actions.ts:740) menimpa startDate/endDate lalu hanya
+  `logActivity("update","WorkOrder",id,"Memperbarui perintah kerja #id")`
+  tanpa old/new; grep oldValues/newValues pemanggil aksi = 0. ActivityLog
+  model sendiri mendukung oldValues/newValues Json (schema:3944).
+  → diteruskan sebagai F-2026-10-21-035.
+- F-91(a) hitungan beban: SELESAI sebagai varian lain —
+  `buildWorkOrderLoad` per status WO aktif (work-order-load.ts, dipakai
+  halaman perintah-kerja), bukan irisan per-hari startDate..endDate.
+  Inti WorkBay/bayId tetap ditunda-teknis (PUTUSAN 20:22 berlaku).
+  Tidak diusulkan ulang.
+- F-92 tombol WA manual: SELESAI (WhatsappButton + buildWhatsappMessage
+  di antrean/faktur/penawaran/detail WO). Sisa: klik tombol tidak
+  meninggalkan jejak apa pun → diteruskan sebagai F-2026-10-21-036.
+- F-93(a) kartu kendaraan lead: SELESAI (LeadCustomerVehiclesCard,
+  hanya bila customerId ada). Inti Lead.customerVehicleId tetap
+  ditunda-teknis. Tidak diusulkan ulang.
+- F-94 urutan tenggat+umur: SELESAI di builder antrean
+  (work-order-queue.ts compareRows: tenggat dulu). Inti
+  WorkOrder.priority tetap ditunda-teknis. Tidak diusulkan ulang.
+
+### Inventarisasi terverifikasi (2026-10-21, domain k)
+
+Sudah ada (TERVERIFIKASI-KODE, worktree origin/main aa04aea9):
+- Notifikasi internal saja: model Notification userId internal
+  (schema:289), notification.service.ts (notifyAdmins/notifyUser(s)/
+  notifyUsersIfNew dedupe per-judul per-hari), API + dropdown +
+  halaman /notifikasi. Cron daily-notifications (vercel.json) cek
+  stok menipis, invoice overdue, PO basi, telat/absen — semua ke
+  admin internal, tidak pernah ke pelanggan.
+- WA manual wa.me: whatsapp.ts (normalize/build message/URL) +
+  WhatsappButton di 4 permukaan. Tanpa gateway/API/kredensial;
+  grep SMTP/nodemailer/email-send di src = 0.
+- CRM: Lead+LeadActivity (scheduledAt/completedAt ada), CrmTicket
+  (+firstResponseAt diisi server saat komentar pertama,
+  crm.actions.ts:121-127), stale-leads builder (lead new/contacted
+  diam >7 hari) + kartu di daftar prospek.
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN histori geser tenggat WO (F-90 di atas).
+- ABSEN jejak klik/kirim WA: grep model/log sentAt/delivery di
+  schema+src = 0 hasil relevan; klik wa.me tidak tercatat, staf
+  tidak bisa membuktikan pelanggan sudah dihubungi.
+- PARSIAL follow-up lead terjadwal: LeadActivity.scheduledAt bisa
+  disimpan (crm.actions.ts:351-356) tapi tidak ada builder daftar
+  "follow-up jatuh tempo hari ini / terlambat" — yang ada hanya
+  stale-leads berbasis aktivitas terakhir, bukan jadwal berikutnya.
+  Aktivitas terjadwal masa depan justru membuat lead terlihat segar
+  di stale-leads (lastActivityAt memakai scheduledAt).
+
+### Gap
+
+#### F-2026-10-21-035 (k) P1 — Histori geser endDate WO tidak tercatat (F-90 lanjutan)
+- Kompetitor: Accurate Kalender/Log Aktivitas (pengingat tenggat +
+  pantau aktivitas) — https://accurate.id/online/fitur/perusahaan/
+- Status Silengkap: ABSEN. Bukti di atas: endDate ditimpa diam-diam,
+  tanpa nilai lama/baru, tanpa alasan.
+- Relevansi: janji selesai ke pelanggan bergeser tanpa jejak = sengketa
+  "katanya selesai tanggal X" tidak bisa dijawab; umur/keterlambatan
+  antrean (work-order-queue) membaca endDate berjalan saja.
+- Adaptasi (tanpa migrasi): di `updateWorkOrder`, bila endDate berubah
+  dari nilai tersimpan, tulis logActivity dengan oldValues/newValues
+  {endDate lama, endDate baru} memakai kolom Json ActivityLog existing.
+  Alasan wajib = pertanyaan terbuka untuk Business (jangan ditebak
+  Lead); lapis pertama boleh tanpa alasan dulu bila Business belum
+  memutus, tapi nilai lama/baru WAJIB tercatat.
+- Modul disentuh: src/actions/inventory.actions.ts (updateWorkOrder
+  saja) + tes aksi existing. BUKAN schema, BUKAN UI.
+- Effort: S. Risiko: rendah (jalur tulis existing). Falsifikasi:
+  ubah endDate tanpa log → tes merah; endDate sama → tidak ada log baru.
+- Pemilik usulan: backend (builder/aksi), sales/business (spec alasan),
+  QA (verifikasi). Butuh putusan accountant: TIDAK.
+
+#### F-2026-10-21-036 (k) P1 — Klik WA ke pelanggan tidak meninggalkan jejak
+- Kompetitor: Zahir Reminder (kontrol tagihan terpusat) —
+  https://www.zahironline.com/reminder/ ; Accurate pengingat tenggat
+  (URL perusahaan di atas). Keduanya tidak membuktikan log WA — item
+  ini kebutuhan ISF sendiri, bukan klaim paritas vendor.
+- Status Silengkap: ABSEN. Bukti: WhatsappButton murni <a href wa.me>,
+  tanpa aksi server/log; LeadActivity tidak terisi dari klik.
+- Relevansi: follow-up penagihan/status WO lewat WA adalah kanal nyata
+  bengkel; tanpa jejak, dua staf bisa menghubungi pelanggan sama
+  berulang atau mengklaim sudah mengingatkan tanpa bukti.
+- Adaptasi (tanpa migrasi, tanpa gateway): aksi server ringan mencatat
+  klik sebagai LeadActivity (untuk konteks lead) ATAU ActivityLog
+  (konteks dokumen WO/invoice) — pilihan konteks = spec Business dulu;
+  tombol tetap wa.me manual (F-27(b) WA otomatis tetap ditunda-teknis).
+  Catatan jujur: yang tercatat = KLIK staf, bukan pesan terkirim.
+- Modul disentuh: src/actions/crm.actions.ts ATAU file aksi notifikasi
+  baru (satu saja, diputus Business), pemanggil di komponen WA.
+  Frontend hanya memanggil aksi existing sesudah kontrak ada.
+- Effort: S-M. Risiko: log dianggap bukti kirim — mitigasi label
+  eksplisit "tautan dibuka", bukan "pesan terkirim".
+- Pemilik usulan: sales/business (spec konteks+label), backend (aksi
+  log), frontend (kabel tombol), QA (verifikasi). Putusan accountant:
+  TIDAK.
+
+#### F-2026-10-21-037 (k) P2 — Follow-up lead terjadwal tidak terbaca sebagai antrean
+- Kompetitor: Accurate Kalender pengingat aktivitas —
+  https://accurate.id/online/fitur/perusahaan/
+- Status Silengkap: PARSIAL. Bukti: scheduledAt tersimpan tapi tanpa
+  builder/daftar jatuh-tempo; stale-leads mengukur aktivitas terakhir,
+  bukan jadwal berikutnya, dan jadwal masa depan menutupi kebasian.
+- Relevansi: janji "hubungi lagi Selasa" hilang dari pandangan; lead
+  terlihat ditindaklanjuti padahal jadwalnya sudah lewat.
+- Adaptasi (read-model murni, tanpa migrasi): builder
+  `lead-followups.ts` — aktivitas scheduledAt <= hari ini (WIB) dan
+  completedAt kosong, per lead ambil jadwal terawal yang belum
+  selesai; urut paling terlambat dulu. Loader satu query massal pola
+  stale-leads-data. UI kartu menyusul sesudah builder (frontend).
+- Modul disentuh: src/lib/reports/lead-followups*.ts (baru) + tesnya.
+  BUKAN actions/schema/UI pada tahap builder.
+- Effort: S. Risiko: dobel makna dengan stale-leads — mitigasi label
+  terpisah "Jadwal follow-up lewat" vs "Lead diam".
+- Pemilik usulan: backend (builder), frontend (kartu sesudah builder),
+  QA (verifikasi). Putusan accountant: TIDAK.
+
+### Yang TIDAK diusulkan run ini
+- WA otomatis/gateway + template terkirim: F-27(b) tetap
+  ditunda-teknis; butuh kredensial/biaya kanal nyata, bukan gap kode.
+- Model WorkBay, Lead.customerVehicleId, WorkOrder.priority:
+  inti F-91/93/94 tetap ditunda-teknis per PUTUSAN 2026-10-20 20:22.
+- Email reminder otomatis ke pelanggan: tidak ada infrastruktur
+  email keluar sama sekali (grep = 0); bangun kanal = keputusan
+  bisnis/ops terpisah, bukan gap run ini.
+- SLA tiket CRM terukur (target respons per prioritas): firstResponseAt
+  sudah tercatat; target SLA belum ada aturan bisnisnya — pertanyaan
+  terbuka Business, bukan gap ber-ID sampai aturan ada.
+
+Fokus berikutnya: implementasi F-035 (backend), spec F-036
+(sales/business), builder F-037 (backend) — lihat child kanban run ini.
+Rotasi berikutnya sesudah (k) dibuka hanya bila domain baru terbukti
+belum punya F-ID; jangan duplikasi F-90..94/035..037.
+
