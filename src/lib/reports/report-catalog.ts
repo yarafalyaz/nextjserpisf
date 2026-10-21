@@ -181,6 +181,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/jurnal-pekerjaan" },
       { href: "/laporan/serapan-overhead" },
       { href: "/laporan/wip-berjalan" },
+      { href: "/laporan/rekap-borongan" },
     ],
   },
   {
