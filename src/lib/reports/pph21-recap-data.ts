@@ -14,12 +14,18 @@ import {
   type Pph21Recap,
   type Pph21RecapEmployeeRow,
   type Pph21RecapPeriodRow,
+  type Pph21RecapSlipInput,
 } from "@/lib/reports/pph21-recap"
+import {
+  buildPph21Export,
+  type Pph21ExportResult,
+} from "@/lib/reports/pph21-export"
 import { formatAccounting } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export type { Pph21Recap, Pph21RecapEmployeeRow, Pph21RecapPeriodRow }
 export { buildPph21Recap }
+export type { Pph21ExportResult }
 
 export interface Pph21RecapReport {
   recap: Pph21Recap
@@ -94,21 +100,25 @@ function annualTable(recap: Pph21Recap, year: number): { columns: TableColumn[];
   return { columns: ANNUAL_COLUMNS, rows }
 }
 
-export async function loadPph21Recap(
-  period: { start: Date; end: Date },
-  opts?: { annualYear?: number },
-): Promise<Pph21RecapReport> {
+/** Satu-satunya query payroll jalur rekap+ekspor (F-028-I §I.2, AC-9). */
+async function fetchPph21Slips(period: { start: Date; end: Date }): Promise<Pph21RecapSlipInput[]> {
   const payrolls = await prisma.payroll.findMany({
     where: { startDate: { gte: period.start, lte: period.end } },
     select: {
-      employeeId: true, period: true, status: true,
+      employeeId: true, period: true, status: true, type: true,
       grossSalary: true, pph21: true, netSalary: true, statutorySnapshot: true,
-      employee: { select: { name: true, npwp: true } },
+      paymentDate: true, endDate: true,
+      employee: {
+        select: {
+          name: true, npwp: true, idNumber: true,
+          maritalStatus: true, dependents: true,
+          position: { select: { name: true } },
+        },
+      },
     },
     orderBy: [{ period: "asc" }, { id: "asc" }],
   })
-
-  const recap = buildPph21Recap(payrolls.map((p) => ({
+  return payrolls.map((p) => ({
     employeeId: p.employeeId,
     employeeName: p.employee?.name ?? "Tanpa karyawan",
     npwp: p.employee?.npwp ?? null,
@@ -118,7 +128,21 @@ export async function loadPph21Recap(
     pph21: Number(p.pph21),
     netSalary: Number(p.netSalary),
     statutorySnapshot: p.statutorySnapshot ?? null,
-  })))
+    nik: p.employee?.idNumber ?? null,
+    maritalStatus: p.employee?.maritalStatus ?? null,
+    dependents: p.employee?.dependents ?? null,
+    position: p.employee?.position?.name ?? null,
+    type: p.type,
+    paymentDate: p.paymentDate ?? null,
+    endDate: p.endDate ?? null,
+  }))
+}
+
+export async function loadPph21Recap(
+  period: { start: Date; end: Date },
+  opts?: { annualYear?: number },
+): Promise<Pph21RecapReport> {
+  const recap = buildPph21Recap(await fetchPph21Slips(period))
 
   const years = [...recap.employeesByYear.keys()]
   const annualYear = opts?.annualYear ?? (years.length ? Math.max(...years) : period.end.getFullYear())
@@ -130,4 +154,20 @@ export async function loadPph21Recap(
     annualTable: annualTable(recap, annualYear),
     ...rangePeriodLabels(period),
   }
+}
+
+/**
+ * Ekspor internal CSV Lapis 1 (F-028-I): jalur data SAMA dengan
+ * `loadPph21Recap` (satu query `fetchPph21Slips`, builder sama) — bukan
+ * query agregasi kedua. Hasil membawa bukti rekonsiliasi terstruktur;
+ * pemanggil (UI/unduhan BOT 2) wajib mengarsipkannya bersama berkas.
+ * Tanpa tabel/log baru: bukti hidup di hasil ini (§I.6, tanpa migrasi).
+ */
+export async function loadPph21Export(
+  period: { start: Date; end: Date },
+  targetPeriods: readonly string[],
+  opts?: { correctionNo?: number; exportedBy?: string | null },
+): Promise<Pph21ExportResult> {
+  const recap = buildPph21Recap(await fetchPph21Slips(period))
+  return buildPph21Export(recap, targetPeriods, opts)
 }
