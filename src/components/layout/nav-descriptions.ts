@@ -48,6 +48,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/beban-pembayaran": "Menampilkan biaya bank dan administrasi saat membayar vendor atau menerima barang",
   "/laporan/buku-besar": "Menampilkan buku besar per akun",
   "/laporan/buku-pembantu-piutang": "Menampilkan mutasi dan saldo piutang per pelanggan",
+  "/laporan/statement-pelanggan": "Menampilkan statement mutasi piutang pelanggan beserta saldo awal, saldo berjalan, dan saldo akhir",
   "/laporan/buku-pembantu-utang": "Menampilkan mutasi dan saldo utang per pemasok",
   "/laporan/hutang-jatuh-tempo": "Menampilkan umur utang per pemasok",
   "/laporan/kartu-stok": "Menampilkan riwayat pergerakan stok satu barang",

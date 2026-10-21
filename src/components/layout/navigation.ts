@@ -277,6 +277,7 @@ export const navigation: NavItem[] = [
       { label: "Piutang Jatuh Tempo", href: "/laporan/piutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
       { label: "Piutang per Pelanggan", href: "/laporan/piutang-pelanggan", icon: Users, permission: "view_reports" },
       { label: "Buku Pembantu Piutang", href: "/laporan/buku-pembantu-piutang", icon: Users, permission: "view_reports" },
+      { label: "Statement Pelanggan", href: "/laporan/statement-pelanggan", icon: FileText, permission: "view_reports" },
       { label: "Buku Pembantu Utang", href: "/laporan/buku-pembantu-utang", icon: Building2, permission: "view_reports" },
       { label: "Hutang Jatuh Tempo", href: "/laporan/hutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
       { label: "Total Hutang", href: "/laporan/total-hutang", icon: Banknote, permission: "view_reports" },
