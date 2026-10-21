@@ -77,21 +77,62 @@ export function resolvePph42Rate(
 /** Tarif PPh 4(2) final sewa tanah/bangunan: TETAP 10% (PP 34/2017). */
 export const PPH42_RENT_RATE = 10
 
+/** Pola format kode objek e-Bupot: NN-NNN-NN (PER-11/PJ/2025 Lampiran B). */
+const OBJECT_CODE_FORMAT = /^\d{2}-\d{3}-\d{2}$/
+
 /**
- * Validasi penerbitan bupot sewa: kode objek master WAJIB terisi dan tarif
- * selalu 10. Kode konstruksi (28-409-xx) DITOLAK di sini — resolver sewa
- * tidak pernah meminjam tarif konstruksi (vonis BOT 4 F-038/F-041/F-047).
- * Nilai sah saat ini 28-403-02 hidup sebagai ISI master WithholdingTaxType
- * (bukan pin di fungsi ini); service terbit memanggil validasi ini dan
- * membekukan hasilnya ke snapshot. Master belum bertanggal efektif/histori.
+ * Satu baris katalog kode objek sewa, DIBACA DARI MASTER jenis pajak
+ * (baris WithholdingTaxType aktif keluarga sewa) oleh service — daftar
+ * kode sah TIDAK di-hardcode di resolver ini (F51-5 vonis BOT 4
+ * F-2026-10-22-051-V). `requiresEvidence` menandai kode bersyarat bukti
+ * dokumen (di master: jenis sewa non-default, mis. proyek pemerintah
+ * hibah/pinjaman luar negeri); penanda per-jenis, bukan pin kode.
  */
-export function resolvePph42RentRate(objectCode: string | null | undefined): 10 {
+export interface Pph42RentCatalogEntry {
+  objectCode: string
+  /** Tarif master baris ini; wajib cocok tarif resmi katalog (10). */
+  rate: number
+  requiresEvidence: boolean
+}
+
+/**
+ * Validasi penerbitan bupot sewa terhadap katalog master (vonis BOT 4
+ * F-2026-10-22-051-V Putusan 1+2, menutup lubang PR #408):
+ * - kode wajib terisi, format NN-NNN-NN;
+ * - kode WAJIB ada di katalog master aktif yang diteruskan pemanggil —
+ *   di luar katalog (konstruksi 28-409-*, pengalihan 28-402-*, PPh 23
+ *   24-*, 28-403 karangan, acak) TOLAK fail-closed berisik;
+ * - tarif baris katalog wajib tepat tarif resmi sewa (10) — tarif master
+ *   menyimpang ditolak, jangan dipakai diam-diam (F51-6);
+ * - kode bersyarat bukti (`requiresEvidence`) wajib bukti dokumen
+ *   non-kosong (F51-3).
+ * Mengembalikan tarif resmi 10 untuk snapshot. Master belum bertanggal
+ * efektif/histori — katalog = baris aktif saat terbit, dibekukan snapshot.
+ */
+export function resolvePph42RentRate(
+  objectCode: string | null | undefined,
+  catalog: readonly Pph42RentCatalogEntry[],
+  opts?: { evidence?: string | null },
+): 10 {
   const code = (objectCode ?? "").trim()
   if (code === "") {
     throw new Error("PPh 4(2) sewa: kode objek wajib terisi di master jenis PPH42-SEWA — tanpa kode, bupot sewa tidak diterbitkan.")
   }
+  if (!OBJECT_CODE_FORMAT.test(code)) {
+    throw new Error(`PPh 4(2) sewa: kode objek "${code}" berformat rusak (wajib pola NN-NNN-NN) — di luar katalog kode objek sewa.`)
+  }
   if (code.startsWith("28-409")) {
     throw new Error("PPh 4(2) sewa: kode objek konstruksi tidak berlaku untuk sewa tanah/bangunan — pilih kode objek sewa.")
+  }
+  const entry = catalog.find((e) => e.objectCode.trim() === code)
+  if (!entry) {
+    throw new Error(`PPh 4(2) sewa: kode objek "${code}" di luar katalog master aktif — bupot sewa hanya memakai kode objek dari master jenis PPH42-SEWA yang aktif.`)
+  }
+  if (safeRound(entry.rate, 2) !== PPH42_RENT_RATE) {
+    throw new Error(`PPh 4(2) sewa: tarif master untuk kode objek "${code}" menyimpang dari tarif resmi ${PPH42_RENT_RATE}% — koreksi master sebelum bupot diterbitkan.`)
+  }
+  if (entry.requiresEvidence && !(opts?.evidence ?? "").trim()) {
+    throw new Error(`PPh 4(2) sewa: kode objek "${code}" hanya untuk sewa terbukti dokumen dasarnya (proyek pemerintah hibah/pinjaman luar negeri) — tanpa bukti dokumen, pakai kode objek sewa umum di master.`)
   }
   return PPH42_RENT_RATE
 }

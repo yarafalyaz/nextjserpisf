@@ -111,6 +111,13 @@ export interface IssueWithholdingInput {
   salesPaymentId?: number | null
   facility?: "SKB" | "PP23" | "DTP" | null
   facilityNumber?: string | null
+  /**
+   * Bukti dokumen dasar sewa untuk kode objek bersyarat bukti di katalog
+   * master (vonis BOT 4 F-051-V F51-3, mis. proyek pemerintah hibah/
+   * pinjaman luar negeri). Wajib non-kosong bila kode objek katalog
+   * bertanda syarat bukti; untuk kode umum boleh kosong.
+   */
+  rentObjectEvidence?: string | null
   idempotencyKey: string
   userId?: number
 }
@@ -152,14 +159,25 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
       if (dupe) throw definitive(`Nomor bupot "${number}" sudah terbit`)
       const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: input.withholdingTypeId } })
       const article = assertArticle(type.article ?? "")
-      // F47-1 (vonis BOT 4 PR #408): bupot sewa fail-closed di level service —
-      // kode objek master wajib terisi & bukan konstruksi, tarif selalu 10.
+      // F51-1/2/3/5/6 (vonis BOT 4 F-2026-10-22-051-V): bupot sewa
+      // fail-closed terhadap KATALOG master. Katalog dibaca di sini dari
+      // baris master aktif keluarga sewa (code "PPH42-SEWA" dan turunannya,
+      // mis. "PPH42-SEWA-PP") — resolver tidak meng-hardcode daftar kode.
+      // Jenis sewa non-default di katalog = kode bersyarat bukti dokumen.
       // Jenis lain tak disentuh resolver sewa. Master tanpa tanggal
       // efektif/histori: nilai berjalan divalidasi lalu dibekukan snapshot.
-      const tariff = type.code === "PPH42-SEWA"
-        ? (() => {
+      const isRentType = type.code.startsWith("PPH42-SEWA")
+      const tariff = isRentType
+        ? await (async () => {
+            const rows = await tx.withholdingTaxType.findMany({
+              where: { code: { startsWith: "PPH42-SEWA" }, isActive: true, deletedAt: null },
+              select: { code: true, objectCode: true, rate: true },
+            })
+            const catalog = rows.flatMap((r) =>
+              r.objectCode ? [{ objectCode: r.objectCode, rate: Number(r.rate), requiresEvidence: r.code !== "PPH42-SEWA" }] : [],
+            )
             try {
-              return resolvePph42RentRate(type.objectCode)
+              return resolvePph42RentRate(type.objectCode, catalog, { evidence: input.rentObjectEvidence })
             } catch (e) {
               throw definitive(getErrorMessage(e))
             }
