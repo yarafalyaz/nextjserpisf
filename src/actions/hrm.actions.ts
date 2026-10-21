@@ -287,7 +287,7 @@ async function assertActiveComponentNameAvailable(normalizedName: string, exclud
 
 export async function createPayrollComponent(formData: FormData) {
   try {
-    const user = await requirePayrollComponentAdmin("create_employees");
+    const user = await requirePermission("create_employees"); await requirePayrollComponentAdmin("create_employees");
     const v = parseComponentForm(formData);
     const normalizedName = v.name.toLowerCase();
     await assertActiveComponentNameAvailable(normalizedName);
@@ -309,7 +309,7 @@ export async function createPayrollComponent(formData: FormData) {
 
 export async function updatePayrollComponent(id: number, formData: FormData) {
   try {
-    const user = await requirePayrollComponentAdmin("edit_employees");
+    const user = await requirePermission("edit_employees"); await requirePayrollComponentAdmin("edit_employees");
     if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Komponen gaji tidak valid");
     const existing = await prisma.payrollComponent.findUnique({ where: { id } });
     if (!existing) throw new Error("Komponen gaji tidak ditemukan");
@@ -337,7 +337,7 @@ export async function updatePayrollComponent(id: number, formData: FormData) {
 
 export async function assignEmployeePayrollComponent(formData: FormData) {
   try {
-    const user = await requirePayrollComponentAdmin("create_employees");
+    const user = await requirePermission("create_employees"); await requirePayrollComponentAdmin("create_employees");
     const employeeId = Number(formData.get("employeeId"));
     const componentId = Number(formData.get("componentId"));
     const defaultAmount = Number(formData.get("defaultAmount"));
@@ -393,7 +393,7 @@ export async function assignEmployeePayrollComponent(formData: FormData) {
 
 export async function updateEmployeePayrollComponent(id: number, formData: FormData) {
   try {
-    const user = await requirePayrollComponentAdmin("edit_employees");
+    const user = await requirePermission("edit_employees"); await requirePayrollComponentAdmin("edit_employees");
     if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Penugasan komponen gaji tidak valid");
     const existing = await prisma.employeePayrollComponent.findUnique({ where: { id } });
     if (!existing) throw new Error("Penugasan komponen gaji tidak ditemukan");
@@ -444,7 +444,7 @@ export async function updateEmployeePayrollComponent(id: number, formData: FormD
 
 export async function setPayrollComponentActive(id: number, isActive: boolean) {
   try {
-    const user = await requirePayrollComponentAdmin("edit_employees");
+    const user = await requirePermission("edit_employees"); await requirePayrollComponentAdmin("edit_employees");
     if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Komponen gaji tidak valid");
     const existing = await prisma.payrollComponent.findUnique({ where: { id } });
     if (!existing) throw new Error("Komponen gaji tidak ditemukan");
@@ -464,7 +464,7 @@ export async function setPayrollComponentActive(id: number, isActive: boolean) {
 
 export async function getPayrollComponents() {
   try {
-    await requirePayrollComponentAdmin("create_employees");
+    await requirePermission("create_employees"); await requirePayrollComponentAdmin("create_employees");
     const rows = await prisma.payrollComponent.findMany({
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
       select: {
@@ -482,7 +482,7 @@ export async function getPayrollComponents() {
 
 export async function getEmployeePayrollComponents(employeeId: number) {
   try {
-    await requirePayrollComponentAdmin("create_employees");
+    await requirePermission("create_employees"); await requirePayrollComponentAdmin("create_employees");
     if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid");
     const rows = await prisma.employeePayrollComponent.findMany({
       where: { employeeId },
@@ -593,7 +593,7 @@ async function assertDraftPayrollLineAccess(payrollId: number): Promise<void> {
 export async function addPayrollComponentLine(payrollId: number, formData: FormData) {
   try {
     if (!Number.isSafeInteger(payrollId) || payrollId <= 0) throw new Error("Slip gaji tidak valid");
-    await assertDraftPayrollLineAccess(payrollId);
+    await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(payrollId);
     const componentId = Number(formData.get("componentId"));
     const amount = Number(formData.get("amount"));
     if (!Number.isSafeInteger(componentId) || componentId <= 0) throw new Error("Komponen gaji tidak valid");
@@ -637,7 +637,7 @@ export async function updatePayrollComponentLineAmount(lineId: number, formData:
     if (!Number.isSafeInteger(lineId) || lineId <= 0) throw new Error("Baris komponen gaji tidak valid");
     const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
     if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
-    await assertDraftPayrollLineAccess(line.payrollId);
+    await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(line.payrollId);
     const amount = Number(formData.get("amount"));
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal baris komponen gaji harus lebih dari nol");
@@ -658,7 +658,7 @@ export async function removePayrollComponentLine(lineId: number) {
     if (!Number.isSafeInteger(lineId) || lineId <= 0) throw new Error("Baris komponen gaji tidak valid");
     const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
     if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
-    await assertDraftPayrollLineAccess(line.payrollId);
+    await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(line.payrollId);
     await prisma.payrollComponentLine.delete({ where: { id: lineId } });
     await recalcDraftPayrollFromLines(line.payrollId);
     revalidatePath("/sdm/penggajian");
