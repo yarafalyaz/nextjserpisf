@@ -243,7 +243,7 @@ describe("installBaseData", () => {
     )
     // F-038/F-041: sewa final 10% ke 210206 KHUSUS — bukan 210202, bukan 210205 Provisi Garansi.
     expect(created).toContainEqual(
-      expect.objectContaining({ code: "PPH42-SEWA", rate: 10, article: "PPh4(2)", liabilityAccountId: idOf("210206") }),
+      expect.objectContaining({ code: "PPH42-SEWA", rate: 10, article: "PPh4(2)", objectCode: "28-403-02", liabilityAccountId: idOf("210206") }),
     )
   })
 
