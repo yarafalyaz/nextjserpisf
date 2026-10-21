@@ -5,9 +5,16 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { safeAdd, safeSubtract, safeSum } from "@/lib/utils/math";
 import {
   computeBpjsEmployee,
+  computePph21FinalPeriod,
   computePph21Monthly,
+  computePph21Ter,
   getStatutoryParams,
+  getTerBrackets,
+  resolveTerPeriod,
+  statusCodeDependents,
+  terCategoryFor,
   type StatutoryParams,
+  type TerBracket,
 } from "@/lib/services/payroll-statutory.service";
 import { prisma } from "@/lib/db/prisma";
 import type { Prisma } from "@prisma/client";
@@ -96,6 +103,9 @@ function appreciationWriteData(v: {
 // snapshot, net floored at 0 (total mirrors net).
 async function buildPayrollWrite(o: {
   employeeId: number | null;
+  period?: string;
+  excludePayrollId?: number;
+  resignationFinal?: boolean;
   endDate: Date;
   fallbackLabel: "pembuatan slip" | "update slip";
   v: {
@@ -131,8 +141,24 @@ async function buildPayrollWrite(o: {
     );
   }
   const bpjsParts = computeBpjsEmployee(base, ruleset);
-  const pph = computePph21Monthly(gross, taxProfile?.maritalStatus, bpjsParts.total, taxProfile?.dependents ?? 0, ruleset);
-  const snapshot = buildStatutorySnapshot(ruleset, taxProfile?.maritalStatus, taxProfile?.dependents ?? 0);
+  // F-026: masa berjalan = TER atas bruto gabungan se-masa; masa terakhir
+  // (Des / final-resign) = hitung ulang Pasal 17. Legacy TIDAK lagi dipanggil
+  // jalur tulis — dipertahankan hanya reproduksi slip pra-titik-berlaku.
+  const pphResult = await computePph21ForPeriod({
+    employeeId: o.employeeId,
+    period: o.period ?? `${o.endDate.getFullYear()}-${String(o.endDate.getMonth() + 1).padStart(2, "0")}`,
+    endDate: o.endDate,
+    gross,
+    maritalStatus: taxProfile?.maritalStatus,
+    dependents: taxProfile?.dependents ?? 0,
+    pensionMonthly: bpjsParts.employment,
+    ruleset,
+    excludePayrollId: o.excludePayrollId,
+    resignationFinal: o.resignationFinal ?? false,
+    finalReason: o.resignationFinal ? "resign" : null,
+  });
+  const pph = pphResult.pph21;
+  const snapshot = buildStatutorySnapshot(ruleset, taxProfile?.maritalStatus, taxProfile?.dependents ?? 0, pphResult.ter);
   const statutoryTotal = safeAdd(bpjsParts.total, pph, 0);
   const withheld = safeSum([v.deductions ?? 0, cappedLoan, v.lateDeduction, v.absentDeduction, statutoryTotal], 0);
   const net = Math.max(0, safeSubtract(gross, withheld, 0));
@@ -598,16 +624,22 @@ async function computePayrollEstimation(
     0,
   );
   const statutoryParams = await getStatutoryParams(prisma, new Date(endDateStr));
-  // Estimasi = PREVIEW: fallback 2024 boleh + snapshot mencatat fromFallback
-  // jujur (R3-02). Yang fail-closed = tulis-final (bulk/update) + approve.
+  // Estimasi = PREVIEW non-final (R3-02): tabel TER tersedia → TER atas bruto
+  // masa ini; belum tersedia → legacy berlabel LEGACY_PRE_TER di snapshot.
+  // Yang fail-closed = tulis-final (bulk/single/update) + approve.
   const bpjs = computeBpjsEmployee(baseSalary, statutoryParams);
-  const pph21 = computePph21Monthly(
-    grossSalary,
-    employee.maritalStatus,
-    bpjs.total,
-    employee.dependents ?? 0,
-    statutoryParams,
-  );
+  const estCategory = terCategoryFor(employee.maritalStatus, employee.dependents ?? 0);
+  const estBrackets = await getTerBrackets(prisma as never, estCategory, new Date(endDateStr));
+  const estTer = estBrackets ? computePph21Ter(grossSalary, estBrackets) : null;
+  const pph21 = estTer
+    ? estTer.pph21
+    : computePph21Monthly(
+        grossSalary,
+        employee.maritalStatus,
+        bpjs.total,
+        employee.dependents ?? 0,
+        statutoryParams,
+      );
 
   return {
     baseSalary,
@@ -631,8 +663,205 @@ async function computePayrollEstimation(
       statutoryParams,
       employee.maritalStatus,
       employee.dependents ?? 0,
+      buildTerSnapshot({
+        maritalStatus: employee.maritalStatus,
+        dependents: employee.dependents ?? 0,
+        ter: estTer ? { bracket: estTer.bracket, ratePct: estTer.ratePct } : null,
+        final: null,
+        periodKind: "preview",
+        monthsInStint: null,
+      }),
     ),
   };
+}
+
+export interface TerSnapshotInfo {
+  method: "TER" | "LEGACY_PRE_TER"
+  category: TerBracket["category"] | null
+  maritalStatusRaw: string | null
+  dependentsClamped: number
+  statusCodeDependents: number | null
+  statusDependentsMismatch: boolean
+  rateMilliPercent: number | null
+  ratePct: number | null
+  bracketLowerBound: number | null
+  bracketUpperBound: number | null
+  bracketEffectiveFrom: string | null
+  bracketSource: string | null
+  periodKind: string
+  monthsInStint: number | null
+  priorEmployerIncomeIncluded: boolean | null
+  annualTax: number | null
+  overWithheld: number | null
+  overWithheldReturned: boolean | null
+  overWithheldReturnedAt: string | null
+  underWithheldExcess: number | null
+  finalReason: string | null
+}
+
+function buildTerSnapshot(o: {
+  maritalStatus: string | null | undefined
+  dependents: number
+  ter: { bracket: TerBracket; ratePct: number } | null
+  final: { annualTax: number; overWithheld: number; underWithheldExcess: number } | null
+  periodKind: string
+  monthsInStint: number | null
+  finalReason?: string | null
+}): TerSnapshotInfo {
+  const dep = Math.min(3, Math.max(0, Math.floor(o.dependents)))
+  const codeDep = statusCodeDependents(o.maritalStatus)
+  return {
+    method: o.ter || o.final ? "TER" : "LEGACY_PRE_TER",
+    category: o.ter ? o.ter.bracket.category : o.final ? terCategoryFor(o.maritalStatus, dep) : null,
+    maritalStatusRaw: o.maritalStatus ?? null,
+    dependentsClamped: dep,
+    statusCodeDependents: codeDep,
+    statusDependentsMismatch: codeDep != null && codeDep !== dep,
+    rateMilliPercent: o.ter ? o.ter.bracket.rateMilliPercent : null,
+    ratePct: o.ter ? o.ter.ratePct : null,
+    bracketLowerBound: o.ter ? o.ter.bracket.lowerBound : null,
+    bracketUpperBound: o.ter ? o.ter.bracket.upperBound : null,
+    bracketEffectiveFrom: o.ter ? o.ter.bracket.effectiveFrom : null,
+    bracketSource: o.ter ? o.ter.bracket.source : null,
+    periodKind: o.periodKind,
+    monthsInStint: o.monthsInStint,
+    priorEmployerIncomeIncluded: o.final ? false : null,
+    annualTax: o.final ? o.final.annualTax : null,
+    overWithheld: o.final ? o.final.overWithheld : null,
+    overWithheldReturned: o.final ? false : null,
+    overWithheldReturnedAt: null,
+    underWithheldExcess: o.final ? o.final.underWithheldExcess : null,
+    finalReason: o.finalReason ?? null,
+  }
+}
+
+/** Status slip yang ikut agregasi tahunan F-026 (vonis §4: terbit/final —
+ * draft/batal TIDAK ikut). */
+const FINAL_PAYROLL_STATUSES = ["approved", "paid"]
+
+function periodYearMonth(period: string, fallback: Date): { year: number; month: number } {
+  const m = /^(\d{4})-(\d{2})/.exec(period)
+  if (m) return { year: Number(m[1]), month: Number(m[2]) }
+  return { year: fallback.getFullYear(), month: fallback.getMonth() + 1 }
+}
+
+interface Pph21PeriodComputation {
+  pph21: number
+  ter: TerSnapshotInfo
+}
+
+/**
+ * F-2026-10-21-026: PPh21 satu masa pajak dari bruto GABUNGAN masa itu.
+ * - Masa selain terakhir: bruto gabungan × TER (tanpa pengurang).
+ * - Slip kedua dst se-masa (T7): target gabungan − PPh21 slip se-masa lain
+ *   yang sudah ada (semua status selain batal; unik employee+period+type
+ *   membuat pasangan REGULAR+THR menjadi dua baris periode sama).
+ * - Masa terakhir (Des / final-resign eksplisit): hitung ulang Pasal 17
+ *   tahunan atas Σ bruto final tahun berjalan + slip berjalan, kurangi
+ *   Σ terpotong final masa sebelumnya; lebih potong → snapshot, bukan negatif.
+ * Tabel TER kosong/tidak lengkap → throw (fail-closed, tanpa fallback legacy).
+ */
+async function computePph21ForPeriod(o: {
+  employeeId: number | null
+  period: string
+  endDate: Date
+  gross: number
+  maritalStatus: string | null | undefined
+  dependents: number
+  pensionMonthly: number // JHT+JP karyawan slip berjalan (pengurang §4)
+  ruleset: StatutoryParams
+  excludePayrollId?: number
+  resignationFinal?: boolean
+  finalReason?: string | null
+}): Promise<Pph21PeriodComputation> {
+  const { year, month } = periodYearMonth(o.period, o.endDate)
+  let joinDate: Date | null = null
+  if (o.employeeId) {
+    const emp = await prisma.employee.findUnique({
+      where: { id: o.employeeId },
+      select: { joinDate: true },
+    })
+    joinDate = emp?.joinDate ?? null
+  }
+  const resolution = resolveTerPeriod({
+    periodYear: year,
+    periodMonth: month,
+    joinDate,
+    resignationFinal: o.resignationFinal ?? false,
+  })
+  const category = terCategoryFor(o.maritalStatus, o.dependents)
+  const isFinal = resolution.kind !== "monthly"
+
+  // Slip se-tahun karyawan (untuk agregasi masa terakhir + selisih se-masa).
+  let yearSlips: { id: number; period: string; type: string; status: string; grossSalary: unknown; pph21: unknown; bpjsEmploymentEmployee: unknown; statutorySnapshot: unknown }[] = []
+  if (o.employeeId) {
+    const all = await prisma.payroll.findMany({
+      where: { employeeId: o.employeeId },
+      select: {
+        id: true, period: true, type: true, status: true, grossSalary: true,
+        pph21: true, bpjsEmploymentEmployee: true, statutorySnapshot: true,
+      },
+    })
+    yearSlips = all.filter((r) => {
+      if (o.excludePayrollId && r.id === o.excludePayrollId) return false
+      if (r.status === "cancelled" || r.status === "canceled") return false
+      return periodYearMonth(r.period, o.endDate).year === year
+    })
+  }
+  const samePeriod = yearSlips.filter((r) => r.period === o.period)
+
+  if (isFinal) {
+    const priorFinals = yearSlips.filter(
+      (r) => r.status !== "draft" && (r.statutorySnapshot as { pph21Ter?: { periodKind?: string } } | null)?.pph21Ter?.periodKind?.startsWith("final"),
+    )
+    if (priorFinals.length > 0) {
+      throw new Error("Masa pajak terakhir tahun ini sudah terbit — hitung ulang kedua ditolak (F-026).")
+    }
+    const finalRows = yearSlips.filter((r) => FINAL_PAYROLL_STATUSES.includes(r.status))
+    const grossYear = finalRows.reduce((sum, r) => sum + Number(r.grossSalary), 0) + o.gross
+    const pensionYear = finalRows.reduce((sum, r) => sum + Number(r.bpjsEmploymentEmployee), 0) + o.pensionMonthly
+    const priorWithheld = finalRows
+      .filter((r) => r.period !== o.period)
+      .reduce((sum, r) => sum + Number(r.pph21), 0)
+      + samePeriod.filter((r) => FINAL_PAYROLL_STATUSES.includes(r.status)).reduce((sum, r) => sum + Number(r.pph21), 0)
+    const fin = computePph21FinalPeriod({
+      grossYear,
+      pensionDeductionYear: pensionYear,
+      maritalStatus: o.maritalStatus,
+      dependents: o.dependents,
+      monthsInStint: resolution.monthsInStint,
+      priorWithheld,
+      finalPeriodGross: o.gross,
+      p: o.ruleset,
+    })
+    return {
+      pph21: fin.pph21,
+      ter: buildTerSnapshot({
+        maritalStatus: o.maritalStatus, dependents: o.dependents, ter: null,
+        final: fin, periodKind: resolution.kind, monthsInStint: resolution.monthsInStint,
+        finalReason: o.finalReason ?? (resolution.kind === "final-december" ? "december" : null),
+      }),
+    }
+  }
+
+  const brackets = await getTerBrackets(prisma as never, category, o.endDate)
+  if (!brackets) {
+    throw new Error(
+      "Tabel TER PP 58/2023 belum terisi lengkap untuk periode ini — hitung final ditolak. Minta accountant melengkapi tabel TER, lalu hitung ulang.",
+    )
+  }
+  const combinedGross = samePeriod.reduce((sum, r) => sum + Number(r.grossSalary), 0) + o.gross
+  const combined = computePph21Ter(combinedGross, brackets)
+  const alreadyWithheld = samePeriod.reduce((sum, r) => sum + Number(r.pph21), 0)
+  const pph21 = Math.max(0, combined.pph21 - alreadyWithheld)
+  return {
+    pph21,
+    ter: buildTerSnapshot({
+      maritalStatus: o.maritalStatus, dependents: o.dependents,
+      ter: { bracket: combined.bracket, ratePct: combined.ratePct },
+      final: null, periodKind: resolution.kind, monthsInStint: resolution.monthsInStint,
+    }),
+  }
 }
 
 /**
@@ -644,12 +873,14 @@ function buildStatutorySnapshot(
   params: StatutoryParams,
   maritalStatus: string | null | undefined,
   dependents: number,
+  pph21Ter?: TerSnapshotInfo,
 ): Record<string, unknown> {
   return {
     asOf: params.asOf,
     fromFallback: params.fromFallback,
     maritalStatus: maritalStatus ?? null,
     dependents,
+    ...(pph21Ter ? { pph21Ter } : {}),
     params: {
       bpjsHealthEmployeeRate: params.bpjsHealthEmployeeRate,
       bpjsHealthCeiling: params.bpjsHealthCeiling,
@@ -862,6 +1093,12 @@ async function computeBulkPayrollEstimations(
   const publicHolidaySet = new Set(holidays.map((holiday) => dateKey(holiday.date)));
   // P1-6: satu params untuk seluruh batch (satu periode) — mesin SAMA dengan single.
   const bulkStatutoryParams = await getStatutoryParams(prisma, rangeEnd);
+  // F-026: tabel TER per kategori dipakai batch ini (fail-closed di pemakaian).
+  const bulkTerByCategory = new Map<string, TerBracket[] | null>();
+  for (const cat of ["A", "B", "C"] as const) {
+    bulkTerByCategory.set(cat, await getTerBrackets(prisma as never, cat, rangeEnd));
+  }
+  const bulkPeriod = `${rangeEnd.getFullYear()}-${String(rangeEnd.getMonth() + 1).padStart(2, "0")}`;
   // AUD-R3-02: bulk sama — tolak fallback di sumber.
   if (bulkStatutoryParams.fromFallback) {
     throw new Error(
@@ -987,13 +1224,21 @@ async function computeBulkPayrollEstimations(
       0,
     );
     const bpjs = computeBpjsEmployee(baseSalary, bulkStatutoryParams);
-    const pph21 = computePph21Monthly(
-      grossSalary,
-      employee.maritalStatus,
-      bpjs.total,
-      employee.dependents ?? 0,
-      bulkStatutoryParams,
-    );
+    // F-026 jalur tulis massal: TER masa berjalan atas bruto karyawan ini
+    // (generate melewati karyawan yang sudah ber-slip periode ini, jadi tidak
+    // ada slip se-masa lain). Snapshot Desember ditandai pending-final:
+    // hitung ulang masa terakhir per karyawan terjadi di jalur single/update
+    // (buildPayrollWrite) yang punya agregasi tahunan lengkap.
+    const bulkCategory = terCategoryFor(employee.maritalStatus, employee.dependents ?? 0);
+    const bulkBrackets = bulkTerByCategory.get(bulkCategory);
+    if (!bulkBrackets) {
+      throw new Error(
+        "Tabel TER PP 58/2023 belum terisi lengkap untuk periode ini — hitung massal ditolak. " +
+          "Minta accountant melengkapi tabel TER, lalu hitung ulang.",
+      );
+    }
+    const bulkTer = computePph21Ter(grossSalary, bulkBrackets);
+    const pph21 = bulkTer.pph21;
 
     result.set(employee.id, {
       baseSalary,
@@ -1017,6 +1262,14 @@ async function computeBulkPayrollEstimations(
         bulkStatutoryParams,
         employee.maritalStatus,
         employee.dependents ?? 0,
+        buildTerSnapshot({
+          maritalStatus: employee.maritalStatus,
+          dependents: employee.dependents ?? 0,
+          ter: { bracket: bulkTer.bracket, ratePct: bulkTer.ratePct },
+          final: null,
+          periodKind: bulkPeriod.endsWith("-12") ? "bulk-december-pending-final" : "monthly",
+          monthsInStint: null,
+        }),
       ),
     });
   }
@@ -1300,6 +1553,7 @@ export async function processPayroll(formData: FormData) {
 
     const w = await buildPayrollWrite({
       employeeId,
+      period,
       endDate,
       fallbackLabel: "pembuatan slip",
       v: { ...v, lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction },
@@ -1372,6 +1626,16 @@ export async function updatePayroll(id: number, formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
+    // F-026 MEDIUM (vonis Bot 4): flag client BUKAN bukti berhenti. Belum ada
+    // tanggal berhenti terstruktur di Employee — fail-closed: tolak flag,
+    // jangan diam-diam final Pasal 17 maupun fallback TER seolah tak terjadi.
+    if (formData.get("resignationFinal") === "true") {
+      throw new Error(
+        "Penanda berhenti bekerja belum bisa dibuktikan dari data berhenti terverifikasi di server. " +
+          "Final berhenti ditolak — gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
+      );
+    }
+
     const employeeId = v.employeeId ?? null;
     const startDate = wibDateToUtcMidnight(v.startDate);
     const endDate = wibDateToUtcMidnight(v.endDate);
@@ -1415,6 +1679,9 @@ export async function updatePayroll(id: number, formData: FormData) {
 
     const w = await buildPayrollWrite({
       employeeId,
+      period: v.period,
+      excludePayrollId: id,
+      resignationFinal: false,
       endDate,
       fallbackLabel: "update slip",
       v: { ...v, lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction },
@@ -1466,7 +1733,24 @@ export async function approvePayroll(payrollId: number) {
     // periode ini. Approve = finalisasi angka pajak/BPJS — angka 2024 yang
     // lolos diam-diam adalah kesalahan gaji massal. Snapshot menyimpan
     // fromFallback persis untuk gate ini.
-    const snapshot = payroll.statutorySnapshot as { fromFallback?: boolean } | null;
+    const snapshot = payroll.statutorySnapshot as { fromFallback?: boolean; pph21Ter?: { method?: string; periodKind?: string } } | null;
+    // F-026 HIGH: slip Desember massal masih TER bulanan (pending-final) —
+    // belum hitung ulang Pasal 17. Tolak approve; hitung ulang lewat update
+    // slip draft membuka jalur buildPayrollWrite final-december per karyawan.
+    if (snapshot?.pph21Ter?.periodKind === "bulk-december-pending-final") {
+      throw new Error(
+        "Penggajian Desember ini masih memakai TER bulanan dan belum dihitung ulang Pasal 17. " +
+          "Hitung ulang slip draft ini (edit/update slip) agar memakai hitung final Pasal 17 sebelum approve.",
+      );
+    }
+    // F-026: slip metode legacy tidak boleh difinalkan sesudah titik berlaku
+    // (tabel TER kini wajib terisi; hitung ulang slip lewat update draft).
+    if (snapshot?.pph21Ter?.method === "LEGACY_PRE_TER") {
+      throw new Error(
+        "Penggajian ini masih memakai metode PPh21 lama (pra-TER). " +
+          "Hitung ulang slip draft ini agar memakai TER PP 58/2023 sebelum approve.",
+      );
+    }
     if (snapshot?.fromFallback) {
       throw new Error(
         "Penggajian ini dihitung dengan parameter statutori cadangan (2024). " +

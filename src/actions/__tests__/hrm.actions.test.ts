@@ -29,6 +29,13 @@ const mocks = vi.hoisted(() => {
     upsert: vi.fn().mockResolvedValue({}),
   })
 
+  // F-026: pulihkan implementasi mock TER sesudah vi.clearAllMocks().
+  const restoreTerBracketMock = () => {
+    prismaMock.payrollTerBracket.findMany.mockImplementation(async (args: { where?: { category?: string } }) => [
+      { category: args?.where?.category ?? "A", lowerBound: 0, upperBound: null, rateMilliPercent: 0, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+    ])
+  }
+
   const prismaMock = {
     timesheet: buildModelMock(),
     productionCost: { ...buildModelMock(), findMany: vi.fn().mockResolvedValue([]) },
@@ -52,6 +59,15 @@ const mocks = vi.hoisted(() => {
         { key: "ptkp_dependent_extra", value: 4500000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
         { key: "occupational_cost_rate", value: 0.05, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
         { key: "occupational_cost_ceiling_year", value: 6000000, effectiveFrom: new Date("2024-01-01"), effectiveTo: null },
+      ]),
+    },
+
+    // F-026: tabel TER lengkap (satu bracket terbuka 0% cukup untuk fixture
+    // hitung — angka pajak spesifik diuji di payroll-pph21-ter.test.ts).
+    payrollTerBracket: {
+      ...buildModelMock(),
+      findMany: vi.fn(async (args: { where?: { category?: string } }) => [
+        { category: args?.where?.category ?? "A", lowerBound: 0, upperBound: null, rateMilliPercent: 0, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
       ]),
     },
     employee: buildModelMock(),
@@ -86,6 +102,7 @@ const mocks = vi.hoisted(() => {
     generateDocNumMock,
     generateDocNumBatchMock,
     prismaMock,
+    restoreTerBracketMock,
   }
 })
 
@@ -96,6 +113,7 @@ const {
   assertApprovedMock,
   generateDocNumMock,
   prismaMock,
+  restoreTerBracketMock,
 } = mocks
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -170,6 +188,7 @@ const EXPORTED_FN_NAMES = [
 describe("HRM Actions exports smoke test", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.timesheet.create.mockResolvedValue({ id: 1 })
     prismaMock.timesheet.update.mockResolvedValue({})
@@ -217,6 +236,7 @@ describe("HRM Actions exports smoke test", () => {
 describe("Leave Request Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.leaveRequest.create.mockResolvedValue({ id: 1 })
     prismaMock.leaveRequest.findUniqueOrThrow.mockResolvedValue({
@@ -322,6 +342,7 @@ describe("Leave Request Actions", () => {
 describe("Overtime Request Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.overtimeRequest.create.mockResolvedValue({ id: 1 })
     prismaMock.overtimeRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending", hours: 2, calculatedValue: null, employee: { baseSalary: 5_000_000 } })
@@ -442,6 +463,7 @@ describe("Overtime Request Actions", () => {
 describe("Employee Loan Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employeeLoan.create.mockResolvedValue({ id: 1 })
     prismaMock.employeeLoan.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1, status: "pending" })
@@ -494,6 +516,7 @@ describe("Employee Loan Actions", () => {
 describe("Timesheet Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.timesheet.findUniqueOrThrow.mockResolvedValue({ id: 1, employeeId: 1 })
   })
@@ -540,6 +563,7 @@ describe("Timesheet Actions", () => {
 describe("Appreciation Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
   })
 
@@ -575,6 +599,7 @@ describe("Appreciation Actions", () => {
 describe("Payroll Actions", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findUnique.mockResolvedValue({
       id: 1, basicSalary: 5000000, employeeLoan: [],
@@ -948,6 +973,7 @@ describe('Global Error Paths (Permission Reject)', () => {
 describe("generateBulkPayroll edge cases", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findMany.mockResolvedValue([{
       id: 1, baseSalary: 100, maritalStatus: "single", employeeLoans: []
@@ -979,6 +1005,7 @@ describe("generateBulkPayroll edge cases", () => {
 describe("markPayrollPaid edge cases", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
   })
 
@@ -1078,6 +1105,7 @@ describe("HRM Actions Extra Coverage - Loops and Array callbacks", () => {
 describe("Payroll extra branches", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
   })
@@ -1115,6 +1143,51 @@ describe("Payroll extra branches", () => {
     expect(r?.error).toContain("cadangan (2024)")
   })
 
+  it("approvePayroll menolak slip Desember massal pending-final Pasal 17 (F-026 HIGH)", async () => {
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "draft",
+      statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "bulk-december-pending-final" } },
+    })
+    const r = await actions.approvePayroll(1)
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("belum dihitung ulang Pasal 17")
+    expect(r?.error).toContain("Hitung ulang slip draft ini")
+    expect(prismaMock.payroll.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("generateBulkPayroll Desember menandai snapshot pending-final yang tak bisa di-approve (F-026 HIGH)", async () => {
+    prismaMock.employee.findMany.mockResolvedValue([{
+      id: 1, baseSalary: 5000000, maritalStatus: "single",
+      employeeLoans: [],
+    }])
+    const r = await actions.generateBulkPayroll("2026-12", "2026-12-01", "2026-12-31")
+    expect(r?.success).toBe(true)
+    const createManyArg = prismaMock.payroll.createMany.mock.calls.at(-1)?.[0]
+    const rows = createManyArg?.data as Array<{ statutorySnapshot: { pph21Ter: { periodKind: string } } }>
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows[0].statutorySnapshot.pph21Ter.periodKind).toBe("bulk-december-pending-final")
+    // Slip yang sama persis dari generate massal wajib tertolak di approve.
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "draft", statutorySnapshot: rows[0].statutorySnapshot,
+    })
+    const blocked = await actions.approvePayroll(1)
+    expect(blocked?.success).toBe(false)
+    expect(blocked?.error).toContain("Pasal 17")
+  })
+
+  it("updatePayroll menolak flag final-resign client tanpa bukti berhenti server (F-026 MEDIUM Bot 4)", async () => {
+    const f = new FormData()
+    f.set("employeeId", "1")
+    f.set("period", "2026-09")
+    f.set("startDate", "2026-09-01")
+    f.set("endDate", "2026-09-30")
+    f.set("resignationFinal", "true")
+    const r = await actions.updatePayroll(1, f)
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("belum bisa dibuktikan")
+    expect(prismaMock.payroll.update).not.toHaveBeenCalled()
+  })
+
   it("markPayrollPaid on non-approved rejects", async () => {
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "paid" })
     const r = await actions.markPayrollPaid(1)
@@ -1137,6 +1210,7 @@ describe("Payroll extra branches", () => {
 describe("Payroll errors and limits", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findUnique.mockResolvedValue({ id: 1 })
     prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
@@ -1212,6 +1286,7 @@ describe("normalizeWorkDays", () => {
 describe("Kalender Kerja", () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
   })
 
@@ -1390,6 +1465,7 @@ describe("Absensi Actions", () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    restoreTerBracketMock()
     requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
     prismaMock.employee.findUnique.mockResolvedValue(karyawanDengan([JADWAL_PAGI]))
     prismaMock.employee.findFirst.mockResolvedValue(null)

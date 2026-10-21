@@ -2847,6 +2847,26 @@ model PayrollStatutoryRule {
   @@map("payroll_statutory_rules")
 }
 
+/// F-2026-10-21-026: tabel TER bulanan PP 58/2023 Lampiran A/B/C sebagai data
+/// master berperiode (BUKAN konstanta kode). Satu baris = satu bracket:
+/// batas bawah eksklusif / batas atas inklusif bruto bulanan; tarif disimpan
+/// rateMilliPercent (tarif % × 1000, 2% = 2000). Baris terbuka: upperBound null.
+model PayrollTerBracket {
+  id            Int       @id @default(autoincrement())
+  category      String    @db.VarChar(1)
+  lowerBound    Decimal   @map("lower_bound") @db.Decimal(20, 2)
+  upperBound    Decimal?  @map("upper_bound") @db.Decimal(20, 2)
+  rateMilliPercent Int   @map("rate_milli_percent")
+  effectiveFrom DateTime  @map("effective_from") @db.Date
+  effectiveTo   DateTime? @map("effective_to") @db.Date
+  source        String?   @db.VarChar(255)
+  createdAt     DateTime  @default(now()) @map("created_at")
+
+  @@unique([category, lowerBound, effectiveFrom], map: "payroll_ter_brackets_category_lower_effective_unique")
+  @@index([category, effectiveFrom], map: "payroll_ter_brackets_category_effective_idx")
+  @@map("payroll_ter_brackets")
+}
+
 model Payroll {
   slug                   String?     @unique
   id                     Int         @id @default(autoincrement())
