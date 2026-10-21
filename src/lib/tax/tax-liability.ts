@@ -76,7 +76,7 @@ export function buildTaxLiability(input: {
   for (const p of input.payments) {
     paidBy.set(p.bucket, safeAdd(paidBy.get(p.bucket) ?? 0, safeAdd(0, p.amount, 2), 2))
   }
-  const buckets = [...new Set([...liabilityBy.keys(), ...paidBy.keys()])].sort()
+  const buckets = [...new Set([...liabilityBy.keys(), ...paidBy.keys()])].sort((a, b) => a.localeCompare(b))
   const rows = buckets.map((bucket) => {
     const liability = liabilityBy.get(bucket) ?? 0
     const paid = paidBy.get(bucket) ?? 0

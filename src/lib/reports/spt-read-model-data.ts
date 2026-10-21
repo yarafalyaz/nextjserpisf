@@ -239,7 +239,7 @@ export async function loadSptPeriodRowsForRange(range?: {
       .map((r) => [r.bucket.slice(4), r]),
   )
 
-  const rows: SptPeriodRow[] = [...periods].sort().map((period) => {
+  const rows: SptPeriodRow[] = [...periods].sort((a, b) => a.localeCompare(b)).map((period) => {
     const out = outBy.get(period)
     const inp = inBy.get(period)
     const ded = dedBy.get(period)
