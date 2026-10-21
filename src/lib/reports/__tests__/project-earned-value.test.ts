@@ -39,6 +39,10 @@ function budget(over: Partial<ProjectBudgetResult> = {}): ProjectBudgetResult {
       },
     ],
     unallocatedBudget: { categories: [], total: 0 },
+    perStageRealized: [
+      { projectStageId: 11, stageName: "Tahap A", realized: null, hasStageAllocation: false },
+      { projectStageId: 12, stageName: "Tahap B", realized: null, hasStageAllocation: false },
+    ],
     totalBudget: 100_000_000,
     realizedTotal: 0,
     unallocatedRealized: 0,
