@@ -218,6 +218,17 @@ describe("loader", () => {
     expect(r?.lines[0].result).toBe("incompatible")
   })
 
+  it("workOrder tanpa kendaraan = null, aturan tidak dimuat", async () => {
+    mocks.prismaMock.workOrder.findFirst.mockResolvedValue({
+      customerVehicleId: null,
+      bomRevisionId: null,
+      items: [{ id: 1, itemId: 10, description: "Shock" }],
+    })
+    await expect(getWorkOrderFitment(9)).resolves.toBeNull()
+    expect(mocks.prismaMock.customerVehicle.findFirst).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.vehicleFitmentRule.findMany).not.toHaveBeenCalled()
+  })
+
   it("dokumen tidak ditemukan = null", async () => {
     mocks.prismaMock.workOrder.findFirst.mockResolvedValue(null)
     await expect(getWorkOrderFitment(404)).resolves.toBeNull()
