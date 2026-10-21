@@ -37,3 +37,36 @@ export const transitionWarrantyClaimSchema = z.object({
   to: z.enum(["eligibility", "in_repair", "closed"]),
   repairWorkOrderId: optionalInt("Work order perbaikan"),
 });
+
+// F-2026-10-21-022 — tautan klaim supplier. Bentuk FormData saja; guard
+// vendor/item/serial/bukti hidup di warranty.service.ts.
+const optionalText = (max: number) =>
+  z.preprocess(
+    (v) => (v === "" || v === undefined || v === null ? undefined : v),
+    z.string().trim().max(max).optional(),
+  );
+
+export const linkSupplierClaimSchema = z.object({
+  claimId: z.coerce.number().int().positive("Klaim garansi wajib dipilih"),
+  supplierClaimVendorId: z.coerce.number().int().positive("Vendor klaim supplier wajib dipilih"),
+  // Kosong = jalur vendor-saja tanpa PO asal (retur tidak bisa lahir).
+  purchaseReturnId: optionalInt("Retur pembelian"),
+  supplierClaimRefNo: optionalText(191),
+  supplierClaimNotes: optionalText(5000),
+});
+
+export const transitionSupplierClaimSchema = z.object({
+  claimId: z.coerce.number().int().positive("Klaim garansi wajib dipilih"),
+  to: z.enum([
+    "drafted",
+    "sent",
+    "accepted",
+    "rejected_supplier",
+    "returned",
+    "closed_recovered",
+    "closed_no_recovery",
+    "none",
+  ]),
+  supplierClaimRefNo: optionalText(191),
+  supplierClaimNotes: optionalText(5000),
+});
