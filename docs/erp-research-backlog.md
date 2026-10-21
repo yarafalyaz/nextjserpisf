@@ -4292,6 +4292,88 @@ sesudah gerbang §6 butir 1 terpenuhi, kartu tahap jurnal TERPISAH;
 Qila — AC-S1..S7; Fira — label flag tetap klasifikasi tersimpan,
 bukan janji bebas pajak, sampai mode split live.
 
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-041 Tabrakan kode 210205: provisi garansi vs liabilitas PPh 4(2) sewa
+
+Status: PUTUSAN FINAL BOT 4 (kartu t_956b5056). Menyelesaikan
+tabrakan usulan akun antara vonis F-021 tahap 3 (merged #388) dan
+vonis F-038/F-039 PPh 4(2) sewa (tertulis, menunggu rilis). Dokumen
+saja; tanpa kode/schema/migrasi.
+
+### Fakta terverifikasi live (origin/main 9f140792)
+
+1. COA bawaan `src/lib/setup/base-data.ts` kelompok 2102 "Kewajiban
+   Jangka Pendek Lainnya" (OCLY) terisi berurutan: 210201 PPN
+   Keluaran, 210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum
+   Ditagih, 210204 Hutang Gaji. Kode 210205 dan 210206 BELUM dipakai
+   akun apa pun di COA bawaan (grep live run ini).
+2. Vonis F-021 tahap 3 (backlog, merged) memakai 510104 Beban Provisi
+   Garansi / 210205 Provisi Garansi / 110508 Klaim Garansi Dibayar di
+   Muka + 3 mapping SystemSetting; kartu implementasi BOT 3
+   t_d4ae15cc sudah READY dengan gerbang G1 Lead.
+3. Vonis F-038 butir 2 menulis: "Akun liabilitas terpisah dari 210202
+   (usulan akun baru Utang PPh Final Sewa, kode 210205 bebas
+   terverifikasi di COA bawaan)". Kata "usulan ... bebas
+   terverifikasi" berarti F-038 TIDAK mengunci 210205 — ia mengunci
+   syaratnya: terpisah dari 210202 dan fail-closed. Vonis F-039
+   mengulang "210205 usulan" pada jurnal sewa dibayar di muka.
+
+### Putusan
+
+1. **210205 = Provisi Garansi (tetap milik F-021).** Dilarang dipakai
+   ulang untuk kewajiban pajak apa pun.
+2. **210206 = akun baru "Utang PPh 4(2) Sewa Tanah/Bangunan"** (anak
+   2102, OCLY) untuk liabilitas PPh Pasal 4(2) final persewaan tanah
+   dan/atau bangunan per PP 34/2017 (F-038/F-039). Seluruh rujukan
+   "Utang PPh Final Sewa (210205 usulan)" di vonis F-038 butir 2 dan
+   F-039 (jurnal sewa dibayar di muka + rekap) DIGANTI 210206. Tarif,
+   saat potong, kode objek, dan tenggat TIDAK berubah.
+3. Perlakuan mapping mengikuti pola existing, bukan SystemSetting
+   baru: jenis potong PPh menunjuk akun liabilitas per KODE COA lewat
+   `WITHHOLDING_TAX_TYPES` (`liabilityAccountCode`, pola PPH23-BELI ->
+   210202 di base-data.ts). Jenis bawaan PPh 4(2) sewa (kode jenis
+   diusulkan `PPH42-SEWA`, tarif 10% master bertanggal efektif)
+   membawa `liabilityAccountCode: "210206"`. Akun 210206 tidak ada /
+   tidak aktif = jurnal pembayaran berpotongan GAGAL fail-closed
+   berisik; dilarang fallback ke 210202 atau akun pajak lain.
+   Provisi garansi TETAP lewat SystemSetting F-021
+   (warrantyProvisionAccountId -> 210205) — dua jalur mapping berbeda
+   untuk dua substansi berbeda, disengaja.
+
+### Alasan (PSAK/CoA)
+
+Provisi garansi adalah liabilitas ESTIMASI PSAK 57: kewajiban kini
+dari peristiwa masa lalu yang jumlah dan waktunya tidak pasti, diukur
+dari taksiran klaim, dipakai saat klaim, dan kelebihan provisi
+dibebaskan kembali ke laba rugi. Utang PPh 4(2) adalah liabilitas
+PASTI: jumlahnya persis 10% x DPP per masa, dibuktikan bukti potong,
+dan lunas hanya dengan penyetoran ke kas negara (KJS 411128-403).
+Satu kode akun untuk dua substansi itu merusak dua rekonsiliasi
+sekaligus: (a) saldo potong-per-masa tidak bisa ditelusur dari bukti
+potong ke GL untuk SPT Masa Unifikasi; (b) roll-forward provisi
+(dibentuk-dibebani-dipakai-dibebaskan) tercemar mutasi setor pajak.
+Prinsip COA yang sudah hidup di repo: satu kode = satu substansi;
+pajak potong duduk berurutan di kelompok 2102 sesudah kewajiban
+lancar lain (210204), provisi duduk di 210205 sesuai vonis yang lebih
+dulu final dan sudah bergerbang implementasi.
+
+### Batas build
+
+- BOT 3 (t_c70095d5 F-038): seed akun 210206 + jenis PPH42-SEWA
+  menunjuk 210206; JANGAN tanam 210205 untuk pajak. Kartu t_d4ae15cc
+  F-021 tidak berubah (210205 sah miliknya).
+- BOT 5 (spec F-040-S t_cbecc698, PR #393): sesuaikan tabel akun di
+  spec ke 210206 sebelum spec dirilis; heartbeat "210205=Provisi
+  Garansi (tabrak)" terjawab oleh vonis ini.
+- BOT 6: falsifikasi wajib — pembayaran sewa bruto Rp100.000.000
+  memotong Rp10.000.000 -> kredit 210206 (bukan 210202, bukan
+  210205); hapus/nonaktifkan akun 210206 -> jurnal GAGAL fail-closed;
+  jurnal provisi garansi tetap kredit 210205 dan tidak menyentuh
+  210206.
+
+Tanpa klaim kepatuhan baru: tarif/kode objek/tenggat tetap per vonis
+F-038/F-039 beserta sumber resminya; vonis ini hanya memutus KODE
+AKUN.
+
 ## VONIS BOT 4 2026-10-22 — F-2026-10-21-033 Q-033-1/2/4 (margin per kendaraan)
 
 Status: PARSIAL — builder `vehicle-margin` + loader `vehicle-margin-data`
