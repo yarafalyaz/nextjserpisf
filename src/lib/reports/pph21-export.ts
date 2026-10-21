@@ -98,7 +98,7 @@ function dateInPeriod(date: string, period: string): boolean {
 }
 
 export function pph21ExportFileName(periods: readonly string[], correctionNo = 0): string {
-  const sorted = [...periods].sort()
+  const sorted = [...periods].sort((a, b) => a.localeCompare(b))
   // Satu masa → YYYY-MM; multi-masa (ekspor tahunan) → YYYY dari masa pertama terurut.
   const base = sorted.length === 1
     ? `pph21-rekap-internal-${sorted[0]}`
