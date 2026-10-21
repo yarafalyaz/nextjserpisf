@@ -207,6 +207,14 @@ model SystemSetting {
   // bukan pengurang piutang. Null = instalasi lama; hook menolak posting DP
   // sampai dimapping (fail-closed), automap menebak dari nama "uang muka".
   customerDownPaymentAccountId     Int?    @map("customer_down_payment_account_id")
+  // F-2026-10-21-021 tahap 3 (rute provisi MATI, vonis BOT 4 + PUTUSAN G1
+  // Lead): mapping jurnal garansi E2/E3. Semua nullable tanpa default tebak;
+  // posting garansi DITOLAK fail-closed bila mapping jalur terpilih kosong.
+  // warrantyProvisionAccountId disiapkan untuk E1/E4 yang masih DITUNDA —
+  // tidak ada pemanggil yang memakainya sampai gerbang data dinilai BOT 4.
+  warrantyExpenseAccountId         Int?    @map("warranty_expense_account_id")
+  warrantyProvisionAccountId       Int?    @map("warranty_provision_account_id")
+  supplierClaimReceivableAccountId Int?    @map("supplier_claim_receivable_account_id")
   inventoryAccountId               Int?    @map("inventory_account_id")
   inventoryAdjustmentAccountId     Int?    @map("inventory_adjustment_account_id")
   stockAdjustmentAccountId         Int?    @map("stock_adjustment_account_id")
@@ -226,6 +234,10 @@ model SystemSetting {
   depreciationExpenseAccountId     Int?    @map("depreciation_expense_account_id")
   accumulatedDepreciationAccountId Int?    @map("accumulated_depreciation_account_id")
   defaultProjectStages             String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_project_stages") @db.VarChar(1000)
+  // F-2026-10-21-020 Tahap A: template tahap perintah kerja (pola
+  // defaultProjectStages). Vonis Lead: isi default 4 nama saja; template
+  // per-Product ditunda (WO tanpa productId andal).
+  defaultWorkOrderStages           String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_work_order_stages") @db.VarChar(1000)
   /**
    * F-006: gerbang jurnal disposisi varians produksi. Default MATI —
    * tanpa mode ini satu pun jurnal varians tak boleh terbit walau order
@@ -812,6 +824,7 @@ model Employee {
   salesQuotations     Quotation[]       @relation("QuotationSalesEmployee")
   salesOrdersAsSales  SalesOrder[]      @relation("SalesOrderSalesEmployee")
   salesInvoicesAsSales SalesInvoice[]   @relation("SalesInvoiceSalesEmployee")
+  workOrderOperations WorkOrderOperation[]
 
   @@index([departmentId], map: "employees_department_id_fkey")
   @@index([positionId], map: "employees_position_id_fkey")
@@ -2625,6 +2638,7 @@ model WorkOrder {
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   items             WorkOrderItem[]
+  operations        WorkOrderOperation[]
   costs             ProductionCost[]
   timesheets        Timesheet[]
   purchaseOrders    PurchaseOrder[]
@@ -2666,6 +2680,39 @@ model WorkOrderItem {
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])
   @@map("work_order_items")
+}
+
+// F-2026-10-21-020 Tahap A: tahap progres perintah kerja (ringan, BUKAN
+// routing costing — tanpa kolom biaya, tanpa jurnal, tanpa WorkCenter).
+// Nama tahap = snapshot dari SystemSetting.defaultWorkOrderStages saat
+// inisialisasi; edit setting sesudahnya tidak mengubah WO berjalan.
+// Status enum aplikasi: pending | in_progress | completed | skipped.
+// Urutan SEQUENSIAL-KERAS (vonis Lead Q1): tahap hanya boleh maju bila
+// semua tahap ber-sortOrder lebih kecil sudah completed/skipped.
+// skipped WAJIB notes (vonis Q2) dan keluar dari denominator progres.
+model WorkOrderOperation {
+  id                 Int       @id @default(autoincrement())
+  workOrderId        Int       @map("work_order_id")
+  name               String
+  sortOrder          Int       @default(0) @map("sort_order")
+  status             String    @default("pending")
+  estimatedHours     Decimal?  @map("estimated_hours") @db.Decimal(15, 2)
+  assignedEmployeeId Int?      @map("assigned_employee_id")
+  startedAt          DateTime? @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+  notes              String?   @db.Text
+  createdBy          Int?      @map("created_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  workOrder          WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  assignedEmployee   Employee? @relation(fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId], map: "work_order_operations_work_order_id_fkey")
+  @@index([workOrderId, sortOrder], map: "work_order_operations_wo_sort_idx")
+  @@index([status])
+  @@index([assignedEmployeeId])
+  @@index([createdAt])
+  @@map("work_order_operations")
 }
 
 // Keep legacy attendance tables available to payroll and prevent db push from
