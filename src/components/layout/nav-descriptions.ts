@@ -107,6 +107,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/total-hutang": "Menampilkan saldo seluruh utang usaha",
   "/laporan/umur-stok": "Menampilkan umur persediaan",
   "/laporan/wip-berjalan": "Menampilkan sisa WIP per order produksi berjalan menurut ember umur 0-30, 31-60, 61-90, dan lebih dari 90 hari",
+  "/laporan/rekap-borongan": "Menampilkan rekap upah borongan per teknisi secara informatif, bukan dasar pembayaran atau jurnal",
   "/laporan/penghitungan-stok": "Menampilkan hasil stok opname per dokumen: kuantitas sistem, hasil hitung, dan selisihnya",
   "/laporan/valuasi-stok": "Menampilkan nilai persediaan per gudang",
   "/master/akun": "Bagan akun (COA)",
