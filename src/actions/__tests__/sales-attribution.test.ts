@@ -28,8 +28,9 @@ vi.mock("@/lib/db/prisma", () => ({
   },
 }))
 vi.mock("@/lib/hooks/accounting.hook", () => ({
-  onSalesInvoicePosted: vi.fn(), onSalesPaymentCreated: vi.fn(), onSalesReturnCompleted: vi.fn(),
-  onDownPaymentReceived: vi.fn(), deleteJournalByReference: vi.fn(), deleteJournalByReferenceTx: vi.fn(),
+  onSalesInvoicePosted: vi.fn(), onSalesPaymentCreated: vi.fn(),
+  onSalesReturnCompleted: vi.fn(), onDownPaymentReceived: vi.fn(),
+  deleteJournalByReference: vi.fn(), deleteJournalByReferenceTx: vi.fn(),
 }))
 vi.mock("@/lib/hooks/down-payment.hook", () => ({ onDownPaymentConfirmed: vi.fn() }))
 vi.mock("@/lib/hooks/sales-payment.hook", () => ({
@@ -55,6 +56,17 @@ beforeEach(() => {
   requirePermissionMock.mockResolvedValue({ id: 1 })
 })
 
+function wireConvertTx() {
+  transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
+    cb({
+      $queryRaw: vi.fn(async () => []),
+      salesOrder: { findFirst: vi.fn(async () => null), create: soCreateMock },
+      salesOrderItem: { createMany: vi.fn() },
+      quotation: { update: vi.fn() },
+    }),
+  )
+}
+
 function quotation(over: Record<string, unknown> = {}) {
   return {
     id: 50, documentNo: "QUO-0001", status: "accepted", customerId: 3, customerVehicleId: null,
@@ -69,14 +81,7 @@ describe("F-016 tahap 1 pewarisan penjual", () => {
   it("convert: SO mewarisi salesEmployeeId penawaran", async () => {
     quotationFindUniqueOrThrowMock.mockResolvedValue(quotation())
     soCreateMock.mockResolvedValue({ id: 99 })
-    transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
-      cb({
-        $queryRaw: vi.fn(async () => []),
-        salesOrder: { findFirst: vi.fn(async () => null), create: soCreateMock },
-        salesOrderItem: { createMany: vi.fn() },
-        quotation: { update: vi.fn() },
-      }),
-    )
+    wireConvertTx()
     const r = await convertQuotationToOrder(50)
     expect(r.success).toBe(true)
     expect(soCreateMock.mock.calls[0][0].data.salesEmployeeId).toBe(7)
@@ -85,14 +90,7 @@ describe("F-016 tahap 1 pewarisan penjual", () => {
   it("convert: penawaran tanpa penjual -> SO tanpa penjual", async () => {
     quotationFindUniqueOrThrowMock.mockResolvedValue(quotation({ salesEmployeeId: null }))
     soCreateMock.mockResolvedValue({ id: 99 })
-    transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
-      cb({
-        $queryRaw: vi.fn(async () => []),
-        salesOrder: { findFirst: vi.fn(async () => null), create: soCreateMock },
-        salesOrderItem: { createMany: vi.fn() },
-        quotation: { update: vi.fn() },
-      }),
-    )
+    wireConvertTx()
     await convertQuotationToOrder(50)
     expect(soCreateMock.mock.calls[0][0].data.salesEmployeeId).toBeNull()
   })
