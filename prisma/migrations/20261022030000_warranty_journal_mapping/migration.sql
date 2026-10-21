@@ -12,22 +12,11 @@ ALTER TABLE `system_settings` ADD COLUMN `supplier_claim_receivable_account_id` 
 
 -- Akun garansi instalasi berjalan (idempoten per kode unik accounts.code).
 INSERT INTO `accounts` (`code`, `name`, `type`, `report_group`, `parent_id`, `is_active`, `created_at`, `updated_at`)
-SELECT '510104', 'Beban Garansi', 'EXPENSE', 'COGS', p.`id`, true, NOW(), NOW()
-FROM `accounts` p
-WHERE p.`code` = '5101'
-  AND NOT EXISTS (SELECT 1 FROM `accounts` a WHERE a.`code` = '510104')
-LIMIT 1;
-
-INSERT INTO `accounts` (`code`, `name`, `type`, `report_group`, `parent_id`, `is_active`, `created_at`, `updated_at`)
-SELECT '210205', 'Provisi Garansi', 'LIABILITY', 'OCLY', p.`id`, true, NOW(), NOW()
-FROM `accounts` p
-WHERE p.`code` = '2102'
-  AND NOT EXISTS (SELECT 1 FROM `accounts` a WHERE a.`code` = '210205')
-LIMIT 1;
-
-INSERT INTO `accounts` (`code`, `name`, `type`, `report_group`, `parent_id`, `is_active`, `created_at`, `updated_at`)
-SELECT '110508', 'Piutang Klaim Supplier — Garansi', 'ASSET', 'OCAS', p.`id`, true, NOW(), NOW()
-FROM `accounts` p
-WHERE p.`code` = '1105'
-  AND NOT EXISTS (SELECT 1 FROM `accounts` a WHERE a.`code` = '110508')
-LIMIT 1;
+SELECT seed.`code`, seed.`name`, seed.`type`, seed.`report_group`, p.`id`, true, NOW(), NOW()
+FROM (
+  SELECT '510104' AS `code`, 'Beban Garansi' AS `name`, 'EXPENSE' AS `type`, 'COGS' AS `report_group`, '5101' AS `parent_code`
+  UNION ALL SELECT '210205', 'Provisi Garansi', 'LIABILITY', 'OCLY', '2102'
+  UNION ALL SELECT '110508', 'Piutang Klaim Supplier — Garansi', 'ASSET', 'OCAS', '1105'
+) seed
+JOIN `accounts` p ON p.`code` = seed.`parent_code`
+WHERE NOT EXISTS (SELECT 1 FROM `accounts` a WHERE a.`code` = seed.`code`);

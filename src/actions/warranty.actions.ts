@@ -220,51 +220,48 @@ export async function getWarrantyClaimDetail(claimId: number) {
 // Posting jurnal = aksi finansial: izin menyetujui klaim (pejabat yang sama
 // yang memutus klaim). Syarat jurnal hidup di warranty-journal.service.ts.
 
-export async function postWarrantyClaimCostAction(formData: FormData) {
+async function runWarrantyJournalAction(
+  tag: string,
+  fallback: string,
+  post: (userId: number) => Promise<{ journalId: number; journalNumber: string; amount: number }>,
+  label: (r: { journalNumber: string }) => string,
+) {
   try {
     const user = await requirePermission("approve_warranty_claims");
-    const parsed = parseFormData(postWarrantyClaimCostSchema, formData);
-    if (!parsed.success) return { success: false, error: parsed.error };
-    const v = parsed.data;
-
-    const result = await postWarrantyClaimCostJournal({
-      claimId: v.claimId,
-      eventDate: v.eventDate ?? new Date(),
-      createdBy: Number(user.id),
-    });
-
+    const result = await post(Number(user.id));
     revalidatePath("/produksi/garansi");
-    await logActivity("create", "Journal", result.journalId, `Posting jurnal biaya klaim garansi #${v.claimId} (${result.journalNumber})`);
+    await logActivity("create", "Journal", result.journalId, label(result));
     return { success: true, journalId: result.journalId, journalNumber: result.journalNumber, amount: result.amount };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
-    console.error("[postWarrantyClaimCostAction]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Gagal memposting jurnal biaya garansi") };
+    console.error(`[${tag}]`, getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, fallback) };
   }
 }
 
+export async function postWarrantyClaimCostAction(formData: FormData) {
+  const parsed = parseFormData(postWarrantyClaimCostSchema, formData);
+  if (!parsed.success) return { success: false, error: parsed.error };
+  const v = parsed.data;
+  return runWarrantyJournalAction(
+    "postWarrantyClaimCostAction",
+    "Gagal memposting jurnal biaya garansi",
+    (userId) => postWarrantyClaimCostJournal({ claimId: v.claimId, eventDate: v.eventDate ?? new Date(), createdBy: userId }),
+    (r) => `Posting jurnal biaya klaim garansi #${v.claimId} (${r.journalNumber})`,
+  );
+}
+
 export async function postWarrantySupplierRecoveryAction(formData: FormData) {
-  try {
-    const user = await requirePermission("approve_warranty_claims");
-    const parsed = parseFormData(postWarrantySupplierRecoverySchema, formData);
-    if (!parsed.success) return { success: false, error: parsed.error };
-    const v = parsed.data;
-
-    const result = await postWarrantySupplierRecoveryJournal({
-      claimId: v.claimId,
-      amount: v.amount,
-      eventDate: v.eventDate ?? new Date(),
-      createdBy: Number(user.id),
-    });
-
-    revalidatePath("/produksi/garansi");
-    await logActivity("create", "Journal", result.journalId, `Posting jurnal recovery supplier garansi #${v.claimId} (${result.journalNumber})`);
-    return { success: true, journalId: result.journalId, journalNumber: result.journalNumber, amount: result.amount };
-  } catch (e: unknown) {
-    if (isNextRedirectError(e)) throw e;
-    console.error("[postWarrantySupplierRecoveryAction]", getErrorMessage(e) || e);
-    return { success: false, error: getErrorMessage(e, "Gagal memposting jurnal recovery supplier") };
-  }
+  const parsed = parseFormData(postWarrantySupplierRecoverySchema, formData);
+  if (!parsed.success) return { success: false, error: parsed.error };
+  const v = parsed.data;
+  return runWarrantyJournalAction(
+    "postWarrantySupplierRecoveryAction",
+    "Gagal memposting jurnal recovery supplier",
+    (userId) =>
+      postWarrantySupplierRecoveryJournal({ claimId: v.claimId, amount: v.amount, eventDate: v.eventDate ?? new Date(), createdBy: userId }),
+    (r) => `Posting jurnal recovery supplier garansi #${v.claimId} (${r.journalNumber})`,
+  );
 }
 
 /** Cakupan aktif satu kendaraan — titik mulai intake klaim dari detail kendaraan. */

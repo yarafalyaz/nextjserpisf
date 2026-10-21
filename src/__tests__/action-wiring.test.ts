@@ -147,6 +147,13 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
   "src/actions/project.actions.ts::rejectProjectBudgetRevision":
     "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  // F-2026-10-21-021 tahap 3 backend dulu (kartu t_d4ae15cc): pemanggil jurnal
+  // E2/E3 rute provisi MATI; tombol posting di halaman /produksi/garansi
+  // menyusul di kartu frontend (buang 2 entri ini saat UI memanggilnya).
+  "src/actions/warranty.actions.ts::postWarrantyClaimCostAction":
+    "F-2026-10-21-021 tahap 3 backend; tombol posting biaya klaim (E2) di halaman garansi menyusul (frontend)",
+  "src/actions/warranty.actions.ts::postWarrantySupplierRecoveryAction":
+    "F-2026-10-21-021 tahap 3 backend; tombol posting recovery supplier (E3) di halaman garansi menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {
