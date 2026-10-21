@@ -44,21 +44,69 @@ function PendingCells() {
   )
 }
 
+/** Sel realisasi per tahap: angka builder apa adanya; null/belum teralokasi = "Belum terukur" (BUKAN 0). */
+function StageRealizedCells({
+  budgetTotal,
+  realized,
+  hasStageAllocation,
+}: Readonly<{ budgetTotal: number | null; realized: number | null; hasStageAllocation: boolean }>) {
+  if (realized === null || !hasStageAllocation) {
+    return (
+      <>
+        <DetailTableTd align="right">Belum terukur</DetailTableTd>
+        <DetailTableTd align="right">-</DetailTableTd>
+        <DetailTableTd align="right">-</DetailTableTd>
+      </>
+    )
+  }
+  return (
+    <>
+      <DetailTableTd align="right">{formatCurrency(realized)}</DetailTableTd>
+      <DetailTableTd align="right">
+        {budgetTotal === null ? "-" : formatCurrency(budgetTotal - realized)}
+      </DetailTableTd>
+      <DetailTableTd align="right">
+        {budgetTotal === null || budgetTotal <= 0 ? "-" : `${((realized / budgetTotal) * 100).toFixed(1)}%`}
+      </DetailTableTd>
+    </>
+  )
+}
+
 /**
  * F-2026-10-21-030 (tahap frontend): RAB vs realisasi proyek per tahap.
  *
  * Murni presentasi dari `loadProjectBudgetForProject` (builder
- * `buildProjectBudget`, PR #370): anggaran per tahap + ember belum
- * teralokasi + realisasi total F-029 tampil apa adanya. UI tidak
- * mengagregasi baris mentah dan tidak memecah realisasi per tahap —
- * realisasi per tahap belum ada di kontrak backend (BR-09 ditunda),
- * jadi seluruh realisasi tampil sebagai belum teralokasi.
+ * `buildProjectBudget`, PR #370 + kontrak perStageRealized PR #429):
+ * anggaran per tahap + ember belum teralokasi + realisasi total F-029
+ * tampil apa adanya. UI tidak mengagregasi baris mentah. Realisasi per
+ * tahap dari `perStageRealized`: null/belum teralokasi tampil
+ * "Belum terukur" (BUKAN 0); seluruh realisasi tampil belum teralokasi.
  */
 export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetForProject }>) {
   const isEmpty = budget.totalBudget === 0 && budget.contractAmount === null && budget.history.length === 0
   const showUnallocated = budget.unallocatedBudget.total > 0 || budget.unallocatedRealized > 0
   const budgetUsedPercent =
     budget.totalBudget > 0 ? (budget.realizedTotal / budget.totalBudget) * 100 : null
+  // Gabung SEMUA tahap kontrak builder (perStageRealized, urut sortOrder)
+  // dengan anggaran per tahap; tahap tanpa baris RAB anggaran "-".
+  const budgetByStageId = new Map(budget.perStageBudget.map((s) => [s.projectStageId, s]))
+  const realizedByStageId = new Map(budget.perStageRealized.map((s) => [s.projectStageId, s]))
+  const stageRows = [
+    ...budget.perStageRealized.map((stage) => ({
+      projectStageId: stage.projectStageId,
+      stageName: stage.stageName,
+      budgetStage: budgetByStageId.get(stage.projectStageId) ?? null,
+      realizedStage: stage,
+    })),
+    ...budget.perStageBudget
+      .filter((stage) => !realizedByStageId.has(stage.projectStageId))
+      .map((stage) => ({
+        projectStageId: stage.projectStageId,
+        stageName: stage.stageName,
+        budgetStage: stage,
+        realizedStage: null,
+      })),
+  ]
 
   return (
     <ReportCardShell
@@ -118,15 +166,21 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
               <DetailTableTh align="right">% Terpakai</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
-              {budget.perStageBudget.map((stage) => (
-                <Fragment key={`stage-${stage.projectStageId}`}>
+              {stageRows.map((row) => (
+                <Fragment key={`stage-${row.projectStageId}`}>
                   <DetailTableRow>
-                    <DetailTableTd>{stage.stageName ?? `Tahap #${stage.projectStageId}`}</DetailTableTd>
-                    <DetailTableTd align="right">{formatCurrency(stage.total)}</DetailTableTd>
-                    <PendingCells />
+                    <DetailTableTd>{row.stageName ?? `Tahap #${row.projectStageId}`}</DetailTableTd>
+                    <DetailTableTd align="right">
+                      {row.budgetStage === null ? "-" : formatCurrency(row.budgetStage.total)}
+                    </DetailTableTd>
+                    <StageRealizedCells
+                      budgetTotal={row.budgetStage?.total ?? null}
+                      realized={row.realizedStage?.realized ?? null}
+                      hasStageAllocation={row.realizedStage?.hasStageAllocation ?? false}
+                    />
                   </DetailTableRow>
-                  {stage.categories.map((cat) => (
-                    <DetailTableRow key={`cat-${cat.category ?? "null"}`}>
+                  {(row.budgetStage?.categories ?? []).map((cat) => (
+                    <DetailTableRow key={`cat-${row.projectStageId}-${cat.category ?? "null"}`}>
                       <DetailTableTd className="pl-6 text-muted-foreground">{categoryLabel(cat.category)}</DetailTableTd>
                       <DetailTableTd align="right">{formatCurrency(cat.amount)}</DetailTableTd>
                       <PendingCells />
@@ -173,7 +227,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
           </DetailTable>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Realisasi per tahap belum tersedia — seluruh realisasi {formatCurrency(budget.unallocatedRealized)} tampil sebagai belum teralokasi, tidak dibagi rata ke tahap.
+            Realisasi per tahap belum terukur — seluruh realisasi {formatCurrency(budget.unallocatedRealized)} tampil sebagai belum teralokasi, tidak dibagi rata ke tahap.
           </p>
         </section>
       )}
