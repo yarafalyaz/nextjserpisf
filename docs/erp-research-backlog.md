@@ -2955,6 +2955,26 @@ manual umum, TANPA provisi dan TANPA piutang klaim supplier.
    pembalikan estimasi. Di luar 4 ini TIDAK ada jurnal garansi.
    Klaim rejected, klaim di luar cakupan, dan pekerjaan tertagih
    TIDAK PERNAH memakai jurnal garansi (jalur §3).
+- KEJADIAN 2026-10-22 — Tahap 3 RUTE PROVISI MATI dibangun (BOT 3,
+  kartu t_d4ae15cc): pemanggil E2/E3 kini hidup di
+  `src/lib/services/warranty-journal.service.ts` +
+  `postWarrantyClaimCostAction`/`postWarrantySupplierRecoveryAction`
+  (izin `approve_warranty_claims`); gerbang server `invoiceForbidden`
+  ditegakkan di createSalesInvoice/createDifferenceInvoice/
+  createProgressInvoice/postInvoice lewat jembatan
+  quotationId/projectId/salesOrderId (SalesInvoice tak punya FK WO).
+  Mapping `SystemSetting.warrantyExpenseAccountId`/
+  `warrantyProvisionAccountId`/`supplierClaimReceivableAccountId`
+  nullable fail-closed; CoA 510104/210205/110508 di `CHART_OF_ACCOUNTS`
+  + seed migrasi `20261022030000_warranty_journal_mapping` instalasi
+  berjalan + automap by-code persis (510103 tetap Penyesuaian
+  Persediaan, DILARANG garansi). E2 rute MATI = reklasifikasi beban:
+  Dr 510104 / Cr akun beban sumber WO repair (MaterialIssue completed
+  sudah Dr beban material/Cr Persediaan di hook existing — Cr
+  Persediaan kedua dilarang); ProductionCost WO-only belum punya GL
+  sendiri existing (ceiling terdokumentasi di service). E1/E4 TETAP
+  tidak dibangun dan tidak disaklarkan; rute provisi hanya hidup
+  sesudah gerbang data §2 dinilai BOT 4.
 ### §1 Matriks posting (event → debit/kredit → syarat)
 Semua jurnal: `JournalService.createJournal` existing, status POSTED,
 `assertPeriodOpen(tanggal jurnal)` di dalam transaksi pemanggil,
@@ -4071,6 +4091,288 @@ hanya reversal/jurnal lawan di periode terbuka.
 
 ---
 
+---
+
+## VONIS BOT 4 2026-10-21 23:43 WIB — F-2026-10-21-027 / BR-027-07 basis pajak per komponen (FINAL, tertulis saja)
+
+Pemutus: `accounting-finance-tax` (BOT 4 / Salsa), kartu t_43cdbc95.
+Sumber kartu: spec Wira t_2dcbf0f0 §H (BR-027-07), vonis akun F-027-V
+t_e7624f49, kickoff Nara t_ae87a2a1. Tanpa kode; `src/lib/tax/**`,
+`accounting.hook.ts`, schema TIDAK disentuh vonis ini. Bukti live:
+origin/main 12e7dfc1 (fetch 2026-10-21 23:43) + PR #360 head d1fdb8a0
+OPEN/BEHIND (struktur BR-027-I06). Tahap jurnal F-027 menunggu #360
+merged — vonis ini tidak menunggu hijau, sesuai badan kartu.
+
+### 0. Dua bruto, jangan dicampur (putusan dasar)
+
+1. **Bruto kas/akuntansi** = base + Σ earning dibayar (tunai maupun yang
+   kelak non-tunai diakui) + overtime + appreciation. Ini gross slip
+   berjalan (buildPayrollWrite hrm.actions.ts origin/main: gross =
+   base+allowances+overtime+appreciation) dan dasar kaki debit jurnal.
+2. **Bruto pajak masa berjalan (basis TER)** = seluruh penghasilan
+   Pegawai Tetap teratur + tidak teratur dari pemberi kerja dalam
+   1 masa pajak, dikurangi hanya penghasilan yang BUKAN objek/tidak
+   termasuk dipotong. Dasar: PMK 168/2023 Pasal 5 ayat (1) huruf a dan
+   ayat (3), Pasal 6 ayat (1), Pasal 8 ayat (1) huruf a + ayat (2)
+   huruf a. Masa terakhir: bruto tahunan − pengurang Pasal 10 −
+   PTKP (Pasal 8 ayat (3)/(5), Pasal 10).
+3. Konsekuensi nama snapshot: `taxableGross` = bruto pajak (butir 2),
+   BUKAN bruto kas. Slip warisan tanpa snapshot = mode warisan agregat.
+
+### 1. Tabel basis per jenis komponen (mengikat tahap split)
+
+| # | Jenis komponen | Basis pajak | Syarat keras (gagal satu = taxable) |
+|---|---|---|---|
+| T1 | Earning teratur tunai (gaji, tunjangan tetap, uang lembur, apresiasi, tunjangan tunai kesehatan/asuransi ke karyawan) | TAXABLE penuh; masuk TER masa diterima | — (PMK 168/2023 Pasal 5 ayat (3) huruf a) |
+| T2 | Earning tidak teratur (THR, bonus, tantiem, jasa produksi, gratifikasi, premi tidak teratur) | TAXABLE penuh; DIGABUNG bruto masa diterima lalu TER; masa terakhir masuk hitung ulang Pasal 17 | Bukan dipisah tarif sendiri (PMK 168/2023 Pasal 5 ayat (3) huruf b; PP 58/2023 TER atas bruto gabungan se-masa; DJP: THR+ gaji digabung, pajak.go.id artikel TER-THR). Vonis F-026 §2 tetap berlaku PENUH; adanya baris komponen tidak mengubahnya |
+| T3 | Reimbursement biaya kerja tunai (penggantian pengeluaran nyata: perjalanan dinas, transport kerja, makan dinas luar) | NON-TAXABLE hanya sebesar nilai terbukti, dan hanya bila BUKAN natura/kenikmatan | (a) bukti pengeluaran pihak ketiga atas nama/tanggal pekerjaan; (b) penggantian ≤ pengeluaran nyata (selisih lebih = T1 taxable); (c) bukan tambahan penghasilan tetap berkedok penggantian. Tanpa bukti lengkap: TAXABLE (fail-safe). Catatan kejujuran dasar: reimbursement tunai murni BUKAN pengecualian PMK 66/2023 (itu mengatur natura); ia di luar penghasilan karena sifat penggantian biaya — klasifikasi dokumen, BUKAN flag bebas. Kupon/penggantian makan dinas luar dalam bentuk natura: PMK 66/2023 Pasal 5 ayat (3)-(5), batas Rp2.000.000/bln atau nilai penyediaan di tempat kerja (mana lebih besar); selisih lebih taxable |
+| T4 | Natura/kenikmatan dikecualikan objek | NON-TAXABLE hanya dalam kategori + batas PMK 66/2023 | Wajib `kategori pengecualian terstruktur` per master (Pasal 4 huruf a-e; Lampiran jenis/batasan): makanan seluruh pegawai; daerah tertentu berpenetapan DJP (Pasal 8); wajib kerja K3 (Pasal 6: seragam, alat keselamatan, antar-jemput, penginapan awak, penanganan pandemi/bencana); APBN/APBD; jenis-berbatas (kupon makan ≤2jt/bln Pasal 5 ayat (4), tempat tinggal nonkomunal ≤2jt/bln, olahraga ≤1,5jt/bln, kendaraan syarat kumulatif bukan pemegang saham + bruto ≤100jt/bln — Lampiran). Selisih di atas batas = TAXABLE (Pasal 7 ayat (4)). Tanpa kategori terpilih: TAXABLE |
+| T5 | Natura/kenikmatan objek + premi/iuran dibayar pemberi kerja yang menjadi objek (PMK 168/2023 Pasal 5 ayat (3) huruf d-f: JKK, JKM, premi asuransi dibayar pemberi kerja) | TAXABLE (nilai masuk bruto pajak) | Tetap DITUNDA-3 vonis akun (kaki kredit non-tunai belum didesain): master boleh disimpan NONAKTIF; generate MENOLAK baris ini aktif sampai tahap jurnal natura dibuka. Iuran pensiun/hari tua dibayar PEMBERI KERJA ke dana pensiun sah/BPJS TK/badan THT: BUKAN objek yang dipotong (PMK 168/2023 Pasal 7 huruf c) — tetapi itu komponen pemberi kerja (DITUNDA-1), DILARANG disisipkan sebagai earning/deduction karyawan |
+| T6 | Tunjangan PPh21 / PPh21 ditanggung (gross-up) | DITUNDA-2 tetap | DILARANG aktif sebagai komponen earning biasa (objek kenikmatan; hitung iteratif). PMK 168/2023 Pasal 7 huruf h hanya mengecualikan PPh yang ditanggung PEMERINTAH (DTP), bukan ditanggung perusahaan |
+
+### 2. Penetapan flag isTaxable (siapa boleh, bagaimana)
+
+1. Flag hidup di MASTER `PayrollComponent`, disalin ke snapshot baris
+   saat slip lahir (pola vonis akun §1 butir 3). Edit master tidak
+   mengubah slip terbit.
+2. `isTaxable=false` SAH hanya untuk T3/T4, dan hanya bila master
+   memuat alasan terstruktur: kelas pengecualian (T3: penggantian-biaya
+   berbukti; T4: kategori PMK 66/2023 + batas nilai bila berlaku).
+   Flag false tanpa alasan terstruktur = data tidak sah; server tahap
+   split WAJIB menolak simpan (bukan diam-diam menganggap taxable).
+3. Penetap: peran pengelola master komponen (permission master SDM
+   berjalan `create_employees`/`edit_employees` + scope all per spec
+   Wira §C) BOLEH membuat komponen taxable. Menetapkan/mengubah
+   `isTaxable=false` adalah keputusan pajak: tahap split WAJIB gerbang
+   tambahan — perubahan flag ke non-taxable dicatat audit (siapa,
+   kapan, alasan, kategori) dan TIDAK berlaku surut ke slip terbit.
+   Permission khusus pajak terpisah = BUTUH-VONIS Lead (BR-027-09);
+   sampai ada, gerbang audit + scope all adalah minimum, dan UI
+   DILARANG membingkai flag sebagai "bebas pajak aktif" selama mode
+   masih all-taxable-v1 (spec Wira §F/§C-akhir — ditegaskan ulang).
+4. Deduction: `isTaxable` tidak bermakna; disimpan false, diabaikan
+   (spec Wira §2). Dilarang memakai flag deduction untuk mengurangi
+   basis (lihat §3).
+
+### 3. Deduction pengurang basis — daftar tertutup
+
+Basis TER masa berjalan TIDAK dikurangi deduction komponen apa pun.
+Pengurang bruto hanya dikenal pada hitung ulang masa terakhir
+(PMK 168/2023 Pasal 10 ayat (1)), daftar TERTUTUP:
+
+| Pengurang sah (masa terakhir saja) | Perlakuan komponen |
+|---|---|
+| Biaya jabatan 5% bruto, maks Rp500.000/bln / Rp6.000.000/thn (Pasal 10 ayat (2)) | Dihitung mesin F-026; BUKAN komponen master; dilarang operator membuat komponen "biaya jabatan" |
+| Iuran pensiun/hari tua terkait gaji dibayar PEGAWAI melalui pemberi kerja ke dana pensiun sah OJK/Menteri, BPJS TK, atau badan THT sah (Pasal 10 ayat (1) huruf b) — praktik berjalan: JHT+JP porsi karyawan (`employment` computeBpjsEmployee; BPJS Kesehatan TIDAK termasuk) | Satu-satunya kelas deduction yang boleh mengurangi bruto tahunan. Syarat tahap split: deduction terklasifikasi terstruktur `pengurangPensiun=true` hanya untuk iuran ke penerima Pasal 10 ayat (1) huruf b; selain itu false dan tidak mengurangi apa pun |
+| Zakat/sumbangan keagamaan wajib dibayar melalui pemberi kerja ke BAZ/LAZ/lembaga disahkan pemerintah (Pasal 10 ayat (1) huruf c) | Boleh sebagai komponen deduction terklasifikasi `zakatWajib=true` hanya bila penerima terstruktur sah; bukti setor ke lembaga = syarat dokumen tahap jurnal |
+
+Selain tiga baris di atas: deduction (koperasi, cicilan, denda,
+potongan disiplin, angsuran) TIDAK mengurangi basis pajak pada masa
+apa pun — hanya mengurangi net (kelas D1/D2 vonis akun §4 tetap:
+D1 mengurangi bruto KAS akuntansi tanpa kredit Hutang Gaji; D2 wajib
+akun liability penampung). Membuat deduction generik mengurangi TER =
+salah potong, dilarang.
+
+### 4. Komponen tidak tetap (variable)
+
+1. Recurrence `variable` tidak pernah tertarik otomatis (vonis akun
+   §6, spec Wira T2.1/E12). Masuk manual per slip draft, atau run
+   khusus (mis. run THR `Payroll.type=THR` berisi komponen THR
+   eksplisit).
+2. Perlakuan pajak variable mengikuti §1 menurut JENISNYA (THR/bonus
+   variable = T2 taxable gabungan se-masa; reimbursement variable =
+   T3 bersyarat bukti). Label variable TIDAK memberi perlakuan pajak
+   tersendiri.
+3. Dua slip se-masa (reguler + THR terpisah): agregasi bruto se-masa
+   F-026 T7 tetap mengikat — tahap split dilarang menghitung slip
+   variable terisolasi dari slip lain se-masa karyawan sama.
+
+### 5. Mode all-taxable-v1: SAH untuk tahap struktur, dengan batas
+
+1. **SAH dan WAJIB dipertahankan** pada PR struktur F-027 (#360):
+   snapshot berjalan `payrollComponents: { mode: "all-taxable-v1",
+   taxableGross: grossSalary, nonTaxableEarningTotal: 0, ... }`
+   (PR #360 head d1fdb8a0, payrollComponentsSnapshotValue) persis
+   kontrak spec Wira §3/§D. `isTaxableSnapshot` disimpan, tidak dibaca
+   mesin hitung apa pun. Bentuk kunci snapshot ini FINAL; tahap split
+   hanya mengubah cara mengisi, bukan bentuk (spec Wira §D ditegaskan).
+2. **FALSIFIKASI ANGKA — dinyatakan eksplisit:** fixture tanpa komponen
+   menghasilkan gross/PPh21/net IDENTIK pra vs pasca fitur; fixture
+   dengan baris earning menghasilkan angka sama dengan allowances
+   agregat lama sebesar Σ baris. Bukti berjalan PR #360: tes "tanpa
+   penugasan angka identik pra-fitur" (hrm-payroll-components.test.ts)
+   + snapshot taxableGross=5.800.000 pada fixture berbaris. Cabut
+   tarikan / cabut penjumlahan Σearning ke basis massal → tes paritas
+   massal-vs-tunggal (AC-T4 spec Wira) wajib MERAH; pulih hijau.
+3. Batas sah: mode ini berhenti sah pada hari tahap split diaktifkan.
+   Sesudah split, slip BARU wajib mode split; slip all-taxable-v1 dan
+   warisan tetap terbaca, tidak dihitung ulang surut (pola §7 vonis
+   akun + F-026 titik berlaku).
+
+### 6. Syarat buka tahap jurnal F-027 (gerbang, semua wajib)
+
+Tahap jurnal (BR-027-08 implementasi + mode split) BOLEH dibuka hanya
+bila SEMUA terpenuhi:
+
+1. PR #360 merged ke main (struktur + mode all-taxable-v1 live).
+   Status cek terakhir vonis ini: OPEN head d1fdb8a0, BEHIND,
+   check berjalan — belum merged, jadi gerbang ini BELUM terpenuhi.
+2. Mesin split: `taxableGross` diisi dari §1 (T3/T4 non-taxable keluar
+   basis TER masa berjalan DAN keluar pengurang tak sah), snapshot
+   menulis `mode: "split"` hanya untuk slip yang dihitung mesin split;
+   penulisan mode split sebelum syarat ini = dilarang (spec Wira D2).
+3. Gerbang approve tambahan (menjawab §H butir d spec Wira): slip mode
+   split DITOLAK approve bila snapshot basis tidak lengkap (mode absen,
+   taxableGross ≠ bruto kas − nonTaxableEarningTotal, atau ada baris
+   isTaxable=false tanpa alasan terstruktur tersnapshot). Slip
+   all-taxable-v1/warisan TIDAK kena gerbang baru ini.
+4. Validasi akun tahap jurnal aktif bersamaan: accountId komponen
+   EXPENSE aktif saat simpan untuk earning; D2 accountId LIABILITY
+   wajib (generate ditolak bila kosong) — vonis akun §1.2/§3/§4 mulai
+   berlaku di tahap ini, bukan di PR struktur (penyimpangan sadar
+   spec Wira F3 berakhir di sini).
+5. Koreksi D1 (late/absent/deduction pengurang bruto berhenti dikredit
+   ke Hutang Gaji 210204) dibangun dalam scope khusus
+   `accounting.hook.ts` terpisah, tidak dicampur PR struktur; jurnal
+   tetap SATU per slip paid, komponen hanya memecah kaki debit
+   (vonis akun §1 butir 1/4).
+6. Tes falsifikasi §7 hijau di SHA tahap jurnal persis + gate repo
+   (tsc, lint berkas, vitest berkas) hijau; PR terbuka tanpa merge
+   menunggu verdict Qila di SHA persis.
+
+### 7. Acceptance untuk tahap split (draf untuk Qila)
+
+- AC-S1: reimbursement T3 Rp1.000.000 berbukti pada bruto kas
+  Rp10.000.000: taxableGross Rp9.000.000, PPh21 sama dengan slip tanpa
+  baris reimbursement; bukti dicabut → komponen tertolak non-taxable
+  (atau terhitung taxable), PPh21 naik. Dua arah terbukti: flag dibalik
+  ke taxable → PPh21 berubah; kedua arah wajib tes
+  merah-bila-penjaga-dicabut (frasa falsifikasi dua-arah dari #369).
+- AC-S2: natura T4 kupon makan Rp2.500.000/bln: Rp500.000 taxable,
+  Rp2.000.000 non-taxable (PMK 66/2023 Pasal 5 ayat (4)-(5)).
+- AC-S3: THR variable Rp10.000.000 se-masa dengan reguler
+  Rp10.000.000: PPh21 slip kedua = selisih TER atas gabungan
+  Rp20.000.000 (pola F-026 T7), bukan TER slip sendiri.
+- AC-S4: deduction koperasi Rp500.000: basis pajak tidak berubah,
+  net berkurang Rp500.000; deduction iuran JHT/JP karyawan hanya
+  mengurangi pada hitung ulang masa terakhir, tidak pada TER berjalan.
+- AC-S5: ubah flag master sesudah slip terbit: slip lama tidak
+  berubah (snapshot); slip baru memakai flag baru.
+- AC-S6: slip mode split tanpa snapshot basis lengkap → approve
+  ditolak; slip all-taxable-v1 lama → approve tetap jalan.
+- AC-S7: generate ulang periode sama: tidak ada slip/baris dobel;
+  angka paritas massal vs tunggal tetap identik (AC-T4 hidup terus).
+
+### 8. Sumber (diakses 2026-10-21)
+
+- PMK 168/2023 (berlaku 1 Jan 2024): Pasal 5, 6, 7, 8, 10 —
+  https://peraturan.go.id/files/permenkeu-no-168-tahun-2023.pdf ;
+  ringkasan JDIH https://jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023 ;
+  PDF JDIH https://jdih.kemenkeu.go.id/api/download/e60a82e0-b218-40f5-9d18-b924aa1e11ce/2023pmkeuangan168.pdf
+- PP 58/2023 TER (Lampiran tarif; bruto gabungan se-masa) — dirujuk
+  lewat PMK 168/2023 Mengingat butir 4 + vonis F-026 backlog.
+- PMK 66/2023 natura: Pasal 3, 4, 5, 6, 7, 8 + Lampiran —
+  https://peraturan.go.id/files/permenkeu-no-66-tahun-2023.pdf ;
+  https://jdih.kemenkeu.go.id/dok/pmk-66-tahun-2023/summary
+- DJP, THR digabung gaji masa sama (TER): 
+  https://www.pajak.go.id/id/artikel/meluruskan-narasi-kenaikan-pajak-atas-thr
+- Produk (bukan dasar hukum): Zahir komponen tetap/tidak tetap +
+  kena pajak; Accurate pencatatan gaji — URL di backlog F-027 induk.
+
+### 9. Yang tetap DITUNDA / bukan vonis ini
+
+DITUNDA-1..6 vonis akun t_e7624f49 tetap: BPJS pemberi kerja,
+gross-up (T6), kaki kredit natura (T5), pisah akun Utang PPh21/BPJS,
+cost center per baris, komponen rumus otomatis. Permission khusus
+pajak untuk flag non-taxable = BR-027-09 milik Lead bila diminta.
+Angka gaji personal tidak masuk vonis/board publik.
+
+Pemilik berikutnya: Bara (backend) — tahap split + jurnal hanya
+sesudah gerbang §6 butir 1 terpenuhi, kartu tahap jurnal TERPISAH;
+Qila — AC-S1..S7; Fira — label flag tetap klasifikasi tersimpan,
+bukan janji bebas pajak, sampai mode split live.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-041 Tabrakan kode 210205: provisi garansi vs liabilitas PPh 4(2) sewa
+
+Status: PUTUSAN FINAL BOT 4 (kartu t_956b5056). Menyelesaikan
+tabrakan usulan akun antara vonis F-021 tahap 3 (merged #388) dan
+vonis F-038/F-039 PPh 4(2) sewa (tertulis, menunggu rilis). Dokumen
+saja; tanpa kode/schema/migrasi.
+
+### Fakta terverifikasi live (origin/main 9f140792)
+
+1. COA bawaan `src/lib/setup/base-data.ts` kelompok 2102 "Kewajiban
+   Jangka Pendek Lainnya" (OCLY) terisi berurutan: 210201 PPN
+   Keluaran, 210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum
+   Ditagih, 210204 Hutang Gaji. Kode 210205 dan 210206 BELUM dipakai
+   akun apa pun di COA bawaan (grep live run ini).
+2. Vonis F-021 tahap 3 (backlog, merged) memakai 510104 Beban Provisi
+   Garansi / 210205 Provisi Garansi / 110508 Klaim Garansi Dibayar di
+   Muka + 3 mapping SystemSetting; kartu implementasi BOT 3
+   t_d4ae15cc sudah READY dengan gerbang G1 Lead.
+3. Vonis F-038 butir 2 menulis: "Akun liabilitas terpisah dari 210202
+   (usulan akun baru Utang PPh Final Sewa, kode 210205 bebas
+   terverifikasi di COA bawaan)". Kata "usulan ... bebas
+   terverifikasi" berarti F-038 TIDAK mengunci 210205 — ia mengunci
+   syaratnya: terpisah dari 210202 dan fail-closed. Vonis F-039
+   mengulang "210205 usulan" pada jurnal sewa dibayar di muka.
+
+### Putusan
+
+1. **210205 = Provisi Garansi (tetap milik F-021).** Dilarang dipakai
+   ulang untuk kewajiban pajak apa pun.
+2. **210206 = akun baru "Utang PPh 4(2) Sewa Tanah/Bangunan"** (anak
+   2102, OCLY) untuk liabilitas PPh Pasal 4(2) final persewaan tanah
+   dan/atau bangunan per PP 34/2017 (F-038/F-039). Seluruh rujukan
+   "Utang PPh Final Sewa (210205 usulan)" di vonis F-038 butir 2 dan
+   F-039 (jurnal sewa dibayar di muka + rekap) DIGANTI 210206. Tarif,
+   saat potong, kode objek, dan tenggat TIDAK berubah.
+3. Perlakuan mapping mengikuti pola existing, bukan SystemSetting
+   baru: jenis potong PPh menunjuk akun liabilitas per KODE COA lewat
+   `WITHHOLDING_TAX_TYPES` (`liabilityAccountCode`, pola PPH23-BELI ->
+   210202 di base-data.ts). Jenis bawaan PPh 4(2) sewa (kode jenis
+   diusulkan `PPH42-SEWA`, tarif 10% master bertanggal efektif)
+   membawa `liabilityAccountCode: "210206"`. Akun 210206 tidak ada /
+   tidak aktif = jurnal pembayaran berpotongan GAGAL fail-closed
+   berisik; dilarang fallback ke 210202 atau akun pajak lain.
+   Provisi garansi TETAP lewat SystemSetting F-021
+   (warrantyProvisionAccountId -> 210205) — dua jalur mapping berbeda
+   untuk dua substansi berbeda, disengaja.
+
+### Alasan (PSAK/CoA)
+
+Provisi garansi adalah liabilitas ESTIMASI PSAK 57: kewajiban kini
+dari peristiwa masa lalu yang jumlah dan waktunya tidak pasti, diukur
+dari taksiran klaim, dipakai saat klaim, dan kelebihan provisi
+dibebaskan kembali ke laba rugi. Utang PPh 4(2) adalah liabilitas
+PASTI: jumlahnya persis 10% x DPP per masa, dibuktikan bukti potong,
+dan lunas hanya dengan penyetoran ke kas negara (KJS 411128-403).
+Satu kode akun untuk dua substansi itu merusak dua rekonsiliasi
+sekaligus: (a) saldo potong-per-masa tidak bisa ditelusur dari bukti
+potong ke GL untuk SPT Masa Unifikasi; (b) roll-forward provisi
+(dibentuk-dibebani-dipakai-dibebaskan) tercemar mutasi setor pajak.
+Prinsip COA yang sudah hidup di repo: satu kode = satu substansi;
+pajak potong duduk berurutan di kelompok 2102 sesudah kewajiban
+lancar lain (210204), provisi duduk di 210205 sesuai vonis yang lebih
+dulu final dan sudah bergerbang implementasi.
+
+### Batas build
+
+- BOT 3 (t_c70095d5 F-038): seed akun 210206 + jenis PPH42-SEWA
+  menunjuk 210206; JANGAN tanam 210205 untuk pajak. Kartu t_d4ae15cc
+  F-021 tidak berubah (210205 sah miliknya).
+- BOT 5 (spec F-040-S t_cbecc698, PR #393): sesuaikan tabel akun di
+  spec ke 210206 sebelum spec dirilis; heartbeat "210205=Provisi
+  Garansi (tabrak)" terjawab oleh vonis ini.
+- BOT 6: falsifikasi wajib — pembayaran sewa bruto Rp100.000.000
+  memotong Rp10.000.000 -> kredit 210206 (bukan 210202, bukan
+  210205); hapus/nonaktifkan akun 210206 -> jurnal GAGAL fail-closed;
+  jurnal provisi garansi tetap kredit 210205 dan tidak menyentuh
+  210206.
+
+Tanpa klaim kepatuhan baru: tarif/kode objek/tenggat tetap per vonis
+F-038/F-039 beserta sumber resminya; vonis ini hanya memutus KODE
+AKUN.
 
 ## VONIS BOT 4 2026-10-22 — F-2026-10-21-033 Q-033-1/2/4 (margin per kendaraan)
 
