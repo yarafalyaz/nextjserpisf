@@ -1477,3 +1477,148 @@ Belum ada / parsial (bukti grep run ini):
 Fokus berikutnya: (i) proyek — verifikasi klaim retrofit ProjectCost
 lifetime (F-2026-10-20-102 patch) + RAB-vs-aktual per tahap.
 
+
+---
+
+## 2026-10-21 10:30 WIB — Domain (i) proyek
+
+Rotasi: run sebelumnya (h) SDM/payroll F-2026-10-21-026..028. Run ini
+(i). Berikutnya: (j) laporan & BI.
+
+Benchmark resmi (akses 2026-10-21):
+- Zahir proyek multi-fase: anggaran biaya + pendapatan per fase,
+  transaksi diarahkan per fase, laporan anggaran vs realisasi per fase:
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+  dan https://help.zahironline.com/portal/id/kb/articles/memasukkan-data-proye
+- Zahir Laba Rugi Per Proyek Realisasi vs Anggaran (varians per proyek,
+  deteksi cost overrun):
+  https://zahirerp.com/id/all-features-of-zahir-products/
+- Accurate anggaran proyek general vs kontraktor (RAB material terkait
+  stok) + laporan anggaran dan biaya aktual: acuan sekunder partner
+  resmi https://www.acisindonesia.com/cara-membuat-anggaran-di-accurate/
+  (halaman help.accurate.id anggaran proyek perlu cek ulang bila
+  dikutip lebih dalam).
+
+### Inventarisasi terverifikasi (2026-10-21, origin/main 98bef9ac)
+
+Sudah ada:
+- Project + ProjectStage (+ProjectStageProgress persen) + ProjectItem
+  (qty×cost) + ProjectLog (schema origin/main:3398-3470). Tahap dibuat
+  otomatis dari setting defaultProjectStages (project.actions.ts:174-212).
+- Laporan Laba Rugi per Proyek read-model ADA
+  (laporan/laba-rugi-proyek page.tsx:34-113): pendapatan invoice
+  ber-projectId (subtotal−diskon), material MaterialIssue completed,
+  Expense approved, PettyCash OUT, VendorBill confirmed+ — per proyek,
+  per periode.
+- Biaya sumber kaya tapi tersebar: ProductionCost per WorkOrder
+  (schema:2282-2320, kategori labor/machine/overhead/subcontract/
+  rework), Timesheet wajib projectId (schema:2669-2691), WO membawa
+  projectId (schema:2330).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN anggaran/RAB resmi: Project tanpa budgetAmount/contractAmount;
+  ProjectItem (schema:3438-3450) hanya qty+cost tanpa kategori/tahap —
+  ia daftar material longgar, bukan RAB yang dikunci. Detail proyek
+  membandingkan grandTotal SEMUA quotation pelanggan (bukan proyek)
+  vs Σ ProjectItem dan menyebutnya margin proyek
+  (proyek/[slug]/page.tsx, baca run ini) — SALAH cakupan: quotation
+  pelanggan lain ikut terhitung, biaya aktual tidak dipakai.
+- SALAH cakupan laporan: L/R proyek tidak memasukkan ProductionCost
+  dari WO ber-projectId (labor/overhead/subcontract/rework) dan tidak
+  memasukkan labor Timesheet yang belum ditarik ke ProductionCost —
+  HPP proyek understated persis di komponen upah bengkel terbesar.
+  Bukti: page.tsx:34-93 hanya 5 sumber di atas; grep productionCost di
+  file itu = 0 baris hasil query.
+- ABSEN dimensi tahap pada biaya: tidak ada FK projectStageId di
+  MaterialIssue/Expense/PettyCash/VendorBill/ProductionCost/Timesheet
+  (grep projectStageId schema hanya ProjectStageProgress:3474) —
+  anggaran vs realisasi PER FASE ala Zahir mustahil; progres tahap
+  persen fisik berdiri sendiri tanpa uang.
+- PARSIAL rantai pendapatan: Quotation.projectId ada (schema Quotation),
+  tapi detail proyek mengambil quotation per customerId (bukan
+  projectId) take 10 — kontrak proyek tidak tertaut tegas.
+
+### Gap
+
+#### F-2026-10-21-029 (i) P0 — Laba/rugi proyek salah cakupan: labor WO dan timesheet tidak terhitung, quotation pelanggan tercampur (SALAH)
+- Kompetitor: Zahir L/R proyek dari transaksi teralokasi proyek
+  https://help.zahironline.com/portal/id/kb/articles/memasukkan-data-proye
+- Status Silengkap: SALAH (parsial sumber). Bukti: daftar 5 query
+  laba-rugi-proyek page.tsx:34-93 tanpa ProductionCost/Timesheet;
+  detail proyek totalQuotation per customerId.
+- Relevansi: margin proyek yang terlihat selalu lebih bagus dari nyata
+  (upah las/pasang tak terhitung) → harga job berikutnya ditetapkan
+  dari margin semu; proyek rugi terbaca untung. Risiko uang langsung.
+- Adaptasi bertahap TANPA jurnal baru: (1) read-model builder tunggal
+  `project-pl-data` (pola *-data.ts existing) dipakai laporan DAN
+  detail proyek: pendapatan = SalesInvoice.projectId langsung +
+  jembatan WO (invoice tanpa projectId tapi quotation/WO tertaut —
+  pola job-billing-summary-data.ts:126-151 existing, dedup per id);
+  biaya = MaterialIssue langsung + ProductionCost via WorkOrder.
+  projectId (amount snapshot, termasuk labor hasil pull timesheet) +
+  Expense/PettyCash/VendorBill existing; Timesheet yang BELUM ditarik
+  ditampilkan sebagai baris memo "labor belum ditarik" (jam saja, tanpa
+  rupiah ditebak) agar tidak dobel dengan ProductionCost.
+  (2) detail proyek berhenti memakai quotation-per-pelanggan: tampilkan
+  kontrak = quotation ber-projectId + invoice builder sama.
+- Modul disentuh: src/lib/reports/project-pl-data.ts (baru),
+  src/app/(dashboard)/laporan/laba-rugi-proyek/[[...segments]]/page.tsx,
+  src/app/(dashboard)/proyek/[slug]/page.tsx.
+- Effort: M. Risiko: dobel hitung invoice langsung + jembatan — mitigasi
+  dedup per invoice id seperti pola existing; ProductionCost purchaseOrder
+  vs VendorBill proyek berpotensi tumpang tindih — mitigasi VendorBill
+  hanya yang tanpa purchaseOrderId tertaut ProductionCost (atau label
+  terpisah subkontrak-non-WO), wajib uji fixture.
+- Urutan: builder+tes fixture → laporan pakai builder → detail proyek.
+- Pemilik usulan: backend (builder), frontend (detail). Butuh putusan
+  accountant: TIDAK (agregasi baca dokumen existing; definisi pendapatan
+  subtotal−diskon dipertahankan apa adanya).
+
+#### F-2026-10-21-030 (i) P1 — Anggaran/RAB per proyek & per tahap absen; ProjectItem bukan anggaran terkunci
+- Kompetitor: Zahir anggaran per fase + realisasi per fase
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang ;
+  Accurate RAB kontraktor (material-stok)
+  https://www.acisindonesia.com/cara-membuat-anggaran-di-accurate/
+- Status Silengkap: ABSEN. Bukti: ProjectItem schema:3438-3450 tanpa
+  tahap/kategori/versi; Project tanpa nilai kontrak/anggaran.
+- Relevansi: tanpa anggaran, F-029 hanya melaporkan masa lalu; overrun
+  ketahuan sesudah proyek selesai. Proyek custom besar (armoring,
+  ekspedisi build) paling terpapar.
+- Adaptasi bertahap: (1) `Project.contractAmount` snapshot nilai kontrak
+  disetujui (diisi dari quotation ber-projectId terpilih, bukan hitung
+  ulang berjalan) + `ProjectItem.projectStageId` nullable +
+  `ProjectItem.category` (material/labor/subkontrak/lain) — ProjectItem
+  menjadi RAB per tahap; status anggaran dikunci saat proyek mulai
+  (field budgetLockedAt), perubahan sesudahnya = revisi tercatat
+  ProjectLog existing. (2) laporan anggaran vs realisasi per tahap:
+  anggaran ProjectItem per tahap vs realisasi F-029 yang diberi
+  projectStageId opsional di MaterialIssue/Expense (tahap lain menyusul
+  bertahap; tanpa tahap = baris "belum dialokasi").
+- Modul disentuh: prisma/schema.prisma, src/actions/project.actions.ts,
+  halaman proyek (frontend), builder F-029.
+- Effort: M-L. Risiko: RAB diedit mundur menyembunyikan overrun —
+  mitigasi budgetLockedAt + log revisi; realisasi tanpa tahap menumpuk
+  di belum-dialokasi — tampilkan eksplisit, jangan dibagi rata.
+- Urutan: sesudah F-029 builder stabil.
+- Pemilik usulan: backend, frontend. Butuh putusan accountant: TIDAK
+  (anggaran operasional, bukan jurnal).
+
+#### F-2026-10-21-031 (i) P2 — Progres fisik tahap tidak terhubung uang (earned value sederhana absen)
+- Status Silengkap: PARSIAL. Bukti: ProjectStageProgress persen ada;
+  tanpa bobot anggaran per tahap, % selesai proyek = rerata persen
+  tahap sama rata (detail proyek membagi rata stages).
+- Adaptasi: sesudah F-030 — bobot tahap = anggaran tahap/total; progres
+  tertimbang + SPI/CPI sederhana read-only di detail proyek.
+- Effort: S (sesudah F-030). Pemilik: backend/frontend. Butuh putusan
+  accountant: TIDAK. Ditunda sampai F-030 terbukti dipakai.
+
+### Yang TIDAK diusulkan run ini
+- Alokasi jurnal per proyek di GL (dimensi projectId di JournalEntry):
+  pola Zahir menag transaksi, Silengkap L/R proyek read-model cukup
+  untuk skala ini; nilai ulang bila L/R proyek wajib rekonsiliasi GL.
+- Gantt proyek: tanpa bukti kebutuhan sesudah tahap existing.
+
+Fokus berikutnya: (j) laporan & BI — audit registry laporan vs
+kebutuhan keputusan (kas, margin per kendaraan, WIP aging) lalu tutup
+rotasi a-j + rekap status P0 lintas domain.
+
