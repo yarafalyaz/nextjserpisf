@@ -26,6 +26,8 @@ describe("MinStockWarehouseCard F-2026-10-21-013", () => {
     )
     const text = container.textContent ?? ""
     expect(container.querySelector('[aria-label="Stok Minimum per Gudang"]')).not.toBeNull()
+    // label kejujuran persis wajib tampil (acceptance F-013 poin 4, Lead 12:05)
+    expect(text).toContain("Minimum masih global")
     expect(text).toContain("Gudang Bengkel")
     expect(text).toContain("Plat Besi 3mm")
     expect(text).toContain("Pipa Galvanis")

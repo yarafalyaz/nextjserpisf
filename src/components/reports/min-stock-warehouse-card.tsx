@@ -18,8 +18,12 @@ import { ReportCardShell } from "./report-card-shell"
  * (barang, gudang) dibandingkan ke minimum global. Komponen ini murni
  * presentasi — tidak menghitung ulang stok, tidak menyentuh notifikasi
  * low-stock; kartu tidak dirender halaman bila daftar kosong.
- * `note` = `MinStockReport.warehouseNote` backend (PR #285 merged) tampil
- * verbatim, bukan kalimat frontend — vonis Lead-Arch 11:36.
+ *
+ * Label kejujuran WAJIB tampil persis "Minimum masih global" di kepala
+ * kartu (acceptance F-013 poin 4, koreksi Lead-Arch 12:05): kontrak
+ * builder merged tidak memuat string scope, jadi kejujuran ini tanggung
+ * jawab UI — jangan dihapus/diubah kata. `note` = warehouseNote backend
+ * (PR #285) tampil verbatim sebagai penjelas di bawah tabel.
  */
 export function MinStockWarehouseCard({
   shortages,
@@ -29,7 +33,7 @@ export function MinStockWarehouseCard({
     <ReportCardShell
       label="Stok Minimum per Gudang"
       title="Stok Minimum per Gudang"
-      summary={`${shortages.length} baris di bawah minimum per gudang`}
+      summary={`${shortages.length} baris di bawah minimum per gudang · Minimum masih global`}
       isEmpty={shortages.length === 0}
       emptyText="Tidak ada barang di bawah minimum pada gudang mana pun"
     >
