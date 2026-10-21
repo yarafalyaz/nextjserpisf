@@ -104,6 +104,10 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // vehicle-fitment-form memanggilnya).
   "src/actions/vehicle-fitment.actions.ts::checkVehicleFitmentConflicts":
     "F-2026-10-21-025 backend; peringatan konflik di VehicleFitmentForm menyusul (frontend t_6d28c338)",
+  // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
+  // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
+  "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
+    "F-2026-10-21-019 backend; UI pull labor perintah kerja menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {
