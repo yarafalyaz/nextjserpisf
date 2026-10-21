@@ -226,7 +226,7 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit)} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah karyawan" : "Formulir tambah karyawan"}>
       <FormCard>
         <FormSection title="Data Pribadi">
           <div className="flex flex-col gap-1.5">
@@ -235,8 +235,8 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
             {errors.employeeNo && <span className="text-xs text-danger mt-1">{errors.employeeNo.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="name">Nama *</Label>
-            <Input id="name" {...register("name")} placeholder="Nama lengkap" />
+            <Label htmlFor="name">Nama <span className="text-destructive" aria-hidden="true">*</span></Label>
+            <Input id="name" required {...register("name")} placeholder="Nama lengkap" />
             {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
@@ -444,8 +444,8 @@ export function EmployeeForm({ employee, departments, positions, generatedCode, 
             {createLogin && (
               <div className="flex flex-col gap-5 pt-2 border-t border-default mt-2">
                 <div className="flex flex-col gap-1.5 max-w-md">
-                  <Label htmlFor="loginPassword">Kata Sandi *</Label>
-                  <Input id="loginPassword" name="loginPassword" type="password" placeholder="Minimal 8 karakter" minLength={8} autoComplete="new-password" />
+                  <Label htmlFor="loginPassword">Kata Sandi <span className="text-destructive" aria-hidden="true">*</span></Label>
+                  <Input id="loginPassword" name="loginPassword" type="password" required placeholder="Minimal 8 karakter" minLength={8} autoComplete="new-password" />
                   <span className="text-xs text-muted-foreground">Minimal 8 karakter. Pastikan email pada bagian atas sudah terisi.</span>
                 </div>
                 <RolePicker roleOptions={roleOptions} loginRoleIds={loginRoleIds} toggleLoginRole={toggleLoginRole} hint="Pilih satu atau lebih peran untuk menentukan hak akses." />
