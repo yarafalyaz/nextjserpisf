@@ -10,16 +10,17 @@
  *      (pendapatan subtotal−diskon invoice posted/partial/paid dedup
  *      dua jembatan, material, ProductionCost, expense, petty, vendor
  *      bill sesudah saringan anti-dobel) masuk ke kendaraan proyek.
- *  (b) WO non-proyek ber-kendaraan: billed + ProductionCost per aturan
- *      job-estimate-vs-actual existing — billed = Σ grandTotal invoice
- *      posted/partial/paid belum terhapus yang terjangkau jembatan
- *      quotation/SO/proyek WO itu (dedup per id, atribusi invoice
- *      bersama ke WO pertama urut tanggal ditangani loader), biaya =
- *      Σ ProductionCost.amount terikat WO atau lewat ProductionOrder-nya.
- *      Catatan jujur: billed di sini memakai grandTotal (termasuk pajak,
- *      definisi job-billing-summary) sedangkan pendapatan proyek (a)
- *      memakai subtotal−diskon — definisi masing-masing builder asal,
- *      sengaja tidak ditulis ulang di sini.
+ *  (b) WO non-proyek ber-kendaraan: pendapatan DPP + ProductionCost.
+ *      Pendapatan per vonis Q-033-1 (BOT 4) = Σ (subtotal−diskon)
+ *      invoice posted/partial/paid belum terhapus yang terjangkau
+ *      jembatan quotation/SO WO itu (dedup per id, atribusi invoice
+ *      bersama ke WO pertama urut tanggal ditangani loader) — subtotal−diskon,
+ *      sama dengan kelas (a)/(c), BUKAN grandTotal yang memuat PPN.
+ *      biaya = Σ ProductionCost.amount terikat WO atau lewat
+ *      ProductionOrder-nya. MI manual completed yang tertaut langsung
+ *      ke WO (tanpa jalur ProductionOrder) TIDAK dijumlahkan (Q-033-2:
+ *      menghindari biaya material dobel); baris kendaraannya hanya
+ *      ditandai `hasUnlinkedMaterial`.
  *  (c) Invoice langsung ber-kendaraan tanpa WO/proyek tertaut:
  *      pendapatan saja (subtotal−diskon, definisi project-pl), biaya 0,
  *      dihitung sebagai baris `directInvoiceCount` supaya margin
@@ -61,10 +62,20 @@ export interface VehicleMarginJobInput {
   customerVehicleId: number | null
   vehiclePlate: string | null
   customerName: string
-  /** Σ grandTotal invoice terhitung ditagih (definisi job-billing). */
+  /**
+   * Pendapatan DPP (subtotal−discount, BUKAN grandTotal) invoice terhitung
+   * ditagih — status dari job-billing-summary, basis DPP dari vonis
+   * Q-033-1 (BOT 4) agar sebanding dengan kelas (a)/(c).
+   */
   billedAmount: number
   /** Σ ProductionCost.amount WO ini (langsung / via ProductionOrder). */
   actualCost: number
+  /**
+   * True bila ada MaterialIssue completed tertaut langsung ke WO ini
+   * (tanpa jalur ProductionOrder, Q-033-2): biaya material itu TIDAK masuk
+   * actualCost — penanda parsial saja, Tanpa jumlah.
+   */
+  hasUnlinkedMaterial: boolean
 }
 
 export interface VehicleMarginDirectInvoiceInput {
@@ -103,6 +114,8 @@ export interface VehicleMarginRow {
   directInvoiceCount: number
   /** Punya baris tipe (c): margin belum memuat biaya job untuk itu. */
   hasUnlinkedRevenue: boolean
+  /** Punya MI completed langsung ke WO non-proyek (Q-033-2): biaya material langsung belum termasuk di totalCost. */
+  hasUnlinkedMaterial: boolean
 }
 
 export interface VehicleMarginResult {
@@ -130,6 +143,7 @@ interface Bucket {
   projectCount: number
   jobCount: number
   directInvoiceCount: number
+  hasUnlinkedMaterial: boolean
 }
 
 export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResult {
@@ -152,6 +166,7 @@ export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResu
         projectCount: 0,
         jobCount: 0,
         directInvoiceCount: 0,
+        hasUnlinkedMaterial: false,
       }
       buckets.set(customerVehicleId, bucket)
     }
@@ -173,12 +188,13 @@ export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResu
     bucket.projectCount += 1
   }
 
-  // (b) WO non-proyek: billed + ProductionCost per job-estimate-vs-actual.
+  // (b) WO non-proyek: pendapatan DPP + ProductionCost.
   for (const job of input.jobs) {
     const bucket = bucketOf(job.customerVehicleId, job.vehiclePlate, job.customerName)
     bucket.revenues.push(job.billedAmount)
     bucket.productionCosts.push(job.actualCost)
     bucket.jobCount += 1
+    if (job.hasUnlinkedMaterial) bucket.hasUnlinkedMaterial = true
   }
 
   // (c) Invoice langsung tanpa job: pendapatan saja, tertanda.
@@ -211,6 +227,7 @@ export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResu
       jobCount: bucket.jobCount,
       directInvoiceCount: bucket.directInvoiceCount,
       hasUnlinkedRevenue: bucket.directInvoiceCount > 0,
+      hasUnlinkedMaterial: bucket.hasUnlinkedMaterial,
     }
   }
 

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/permissions";
+import { requirePermission, hasPermission } from "@/lib/auth/permissions";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,6 +9,7 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteWorkOrder } from "@/actions/manufacturing.actions";
 import { WorkOrderActions } from "./_components/work-order-actions";
+import { WorkOrderOperationActions, InitializeStagesButton } from "./_components/work-order-operation-actions";
 import { CreateServicePoButton } from "./_components/create-service-po-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -22,6 +23,8 @@ import { WorkOrderMaterialNeedsCard } from "@/components/reports/work-order-mate
 import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs-data";
 import { WorkOrderPartStatusCard } from "@/components/reports/work-order-part-status-card";
 import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
+import { WorkOrderProgressCard } from "@/components/reports/work-order-progress-card";
+import { getWorkOrderProgress } from "@/lib/reports/work-order-progress-data";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
   DetailTable,
@@ -182,6 +185,11 @@ export default async function WorkOrderDetailPage({
   // Kartu murni presentasi: tanpa hitung ulang, tanpa tulis WorkOrderItem.status.
   const partStatus = await getWorkOrderPartStatus(wo.id);
 
+  // F-020-B: progres tahap WO dari builder Bara (PR #377) — tampil apa adanya.
+  // Aksi tahap hanya dirender bila izin edit_work_orders; server penegak.
+  const stageProgress = await getWorkOrderProgress(wo.id);
+  const canEditStages = await hasPermission("edit_work_orders");
+
   // F-036 tahap 2 + F-035: jejak klik WA terakhir + histori geser endDate.
   const whatsappTrail = await getWhatsappTrail("WorkOrder", wo.id);
 
@@ -230,6 +238,7 @@ export default async function WorkOrderDetailPage({
               defaultWarehouseId={defaultWarehouse?.id ?? null}
               vehicleIntakeBlocked={!!wo.customerVehicleId && !vehicleIntake}
               vehicleIntakeHref={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_intake`}
+              pendingStageCount={stageProgress?.pendingCount}
               revisableItems={wo.items
                 .filter((i) => i.status !== "replaced")
                 .map((i) => ({ id: i.id, label: itemNameMap.get(i.itemId) || `Barang #${i.itemId}` }))}
@@ -421,6 +430,40 @@ export default async function WorkOrderDetailPage({
           </div>
         </div>
       )}
+
+      {stageProgress ? (
+        <>
+          {!canEditStages && wo.status === "in_progress" && stageProgress.hasStages ? (
+            <p className="text-sm text-muted-foreground">
+              Hanya pengguna berizin edit_work_orders yang dapat mengubah
+              progres tahap.
+            </p>
+          ) : null}
+          <WorkOrderProgressCard
+            progress={stageProgress}
+            actions={
+              canEditStages && wo.status === "in_progress"
+                ? Object.fromEntries(
+                    stageProgress.rows.map((row) => [
+                      row.id,
+                      <WorkOrderOperationActions
+                        key={row.id}
+                        workOrderId={wo.id}
+                        workOrderStatus={wo.status}
+                        row={row}
+                      />,
+                    ]),
+                  )
+                : undefined
+            }
+            initAction={
+              canEditStages && wo.status === "in_progress"
+                ? <InitializeStagesButton workOrderId={wo.id} />
+                : undefined
+            }
+          />
+        </>
+      ) : null}
 
       {materialNeeds ? <WorkOrderMaterialNeedsCard needs={materialNeeds} /> : null}
 

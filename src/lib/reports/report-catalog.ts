@@ -70,6 +70,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/laba-rugi-proyek", family: "Laba Rugi", variant: "Per Proyek" },
       { href: "/laporan/laba-rugi-per-pusat-biaya", family: "Laba Rugi", variant: "Per Pusat Biaya" },
       { href: "/laporan/pusat-laba", family: "Laba Rugi", variant: "Per Pusat Laba" },
+      { href: "/laporan/margin-kendaraan" },
       { href: "/laporan/profitabilitas" },
       { href: "/laporan/histori-penjualan" },
       { href: "/laporan/hasil-penawaran" },

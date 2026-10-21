@@ -78,6 +78,7 @@ describe("paritas registry PDF laporan", () => {
       "giro-mundur",
       "harga-pemasok",
       "laba-rugi-proyek",
+      "margin-kendaraan",
       "multi-periode",
       "nomor-seri-batch",
       "perbandingan-periode",

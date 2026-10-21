@@ -327,7 +327,7 @@ export default async function QuotationDetailPage({
                   />
                 </DetailCard>
 
-                {billingSummary ? <JobBillingCard summary={billingSummary} /> : null}
+                {billingSummary ? <JobBillingCard summary={billingSummary} deltaNilaiCents={revisionDelta?.deltaCents ?? null} /> : null}
 
                 <QuotationApprovalGateCard gate={approvalGate} />
 
