@@ -3465,3 +3465,132 @@ hanya reversal/jurnal lawan di periode terbuka.
   E1/E4, jangan diuji sebagai kegagalan inti rute ini.
 
 ---
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-041-V Tabrakan kode akun 210205 (provisi garansi F-021 vs liabilitas PPh 4(2) sewa F-038)
+
+Status: PUTUSAN FINAL BOT 4. Kartu t_956b5056. Dokumen vonis saja,
+tanpa kode/schema/migrasi. Vonis ini menyelesaikan tabrakan yang
+ditemukan sesudah F-038 (PR terbuka) dan F-039 (working tree, belum
+ter-commit) memakai "210205" untuk Utang PPh Final Sewa, padahal
+210205 sudah divonis lebih dulu untuk Provisi Garansi di F-021 tahap
+3 (backlog origin/main, PR #383 MERGED, kartu BOT 3 t_d4ae15cc ready).
+
+### Bukti live (origin/main @ 9f140792, diverifikasi 2026-10-22)
+
+- `src/lib/setup/base-data.ts` CoA bawaan: di bawah header 2102
+  "Kewajiban Jangka Pendek Lainnya" (OCLY) baru terisi 210201 PPN
+  Keluaran, 210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum
+  Ditagih, 210204 Hutang Gaji. Kode 210205-210299 BEBAS semua di kode
+  (grep "210205" di src/prisma origin/main = hanya data alamat CSV,
+  bukan CoA). Jadi tabrakan ini BUKAN tabrakan kode live — tabrakan
+  VONIS: dua vonis BOT 4 mengalokasikan kode bebas yang sama untuk
+  dua kewajiban berbeda sifat.
+- F-021 tahap 3 (backlog origin/main baris 2690 dst, §0 butir 3,
+  matriks E1-E4, AC-G1..G10, gerbang G1-G7): **210205 Provisi Garansi**
+  [OCLY di bawah 2102], pasangan 510104 Beban Garansi [COGS 5101] dan
+  110508 Piutang Klaim Supplier — Garansi [OCAS 1105]; 3 kolom mapping
+  SystemSetting: `warrantyExpenseAccountId`,
+  `warrantyProvisionAccountId`, `supplierClaimReceivableAccountId`.
+  Vonis ini sudah MERGED (#383, #388) dan kartu implementasi BOT 3
+  t_d4ae15cc sudah ready di atasnya.
+- F-038 (draft PR terbuka, belum di origin/main): putusan 2 menulis
+  "Akun liabilitas terpisah dari 210202 (usulan akun baru Utang PPh
+  Final Sewa, kode 210205 bebas terverifikasi di COA bawaan)".
+  F-039 menurunkannya ke contoh jurnal + falsifikasi F39-1 yang
+  menyebut akun 210205. Kata "usulan" + "verifikasi bebas" di F-038
+  memang membuka ruang koreksi; vonis ini koreksi itu.
+- Mekanisme mapping pajak live BUKAN kolom SystemSetting baru:
+  `WithholdingTaxType.liabilityAccountId` (schema.prisma) diisi seed
+  `WITHHOLDING_TAX_TYPES` lewat `liabilityAccountCode` per kode CoA
+  (`src/lib/setup/base-data.ts:897`, `src/lib/setup/withholding-tax-types.ts`).
+  Pola existing: PPH23-BELI -> 210202. Jenis sewa baru wajib ikut pola
+  ini; JANGAN buat kolom SystemSetting khusus sewa.
+
+### Putusan final (mengikat, menggantikan butir akun F-038/F-039)
+
+1. **210205 TETAP = Provisi Garansi** (F-021). Tidak dialihkan, tidak
+   dipakai bersama. Alasan: (a) senioritas — F-021 tahap 3 sudah
+   merged + kartu BOT 3 ready, mengubahnya membatalkan AC-G1..G10 dan
+   gerbang G1-G7 yang sudah diaudit BOT 6 (PR #383 PASS); (b) sifat
+   akuntansi berbeda tegas: provisi garansi = liabilitas estimasi
+   PSAK 57 (kewajiban kini dari peristiwa masa lalu, jumlah/waktu
+   tidak pasti, diukur estimasi terbaik, di-review tiap periode),
+   sedangkan utang PPh 4(2) dipotong = liabilitas statutori pasti
+   (jumlah terukur persis dari bupot, jatuh tempo setor PMK 81/2024).
+   Satu akun untuk keduanya merusak rekonsiliasi keduanya: saldo
+   210205 wajib = ΣE1−ΣE2−ΣE4 per kelompok garansi (AC-G10), dan saldo
+   utang potong wajib = Σbupot terbit − Σsetor per Masa Pajak. Audit
+   trail tercampur = temuan. (c) Keduanya sama-sama OCLY di bawah
+   2102, jadi tidak ada alasan pengelompokan yang memaksa berbagi kode.
+2. **Liabilitas PPh 4(2) final sewa tanah/bangunan = akun baru
+   `210205` DIBATALKAN; diganti `210206` "Utang PPh 4(2) Final Sewa"**
+   [OCLY, induk 2102, sesudah 210204 Hutang Gaji dan 210205 Provisi
+   Garansi]. Kode 210206 terverifikasi bebas di origin/main (grep di
+   atas: tidak ada 210206 di CoA bawaan) dan mengikuti pola urutan
+   existing (210201 PPN Keluaran, 210202 PPh 23, lalu kewajiban lain).
+   Nama memakai pola "Utang ..." sejajar 210101 Utang Usaha dan frasa
+   F-038 sendiri ("Utang PPh Final Sewa"), ditambah penanda "(4(2))"
+   supaya tidak tertukar dengan PPh final lain (konstruksi/divestasi)
+   bila kelak ditambah — tiap jenis final = akun liabilitas sendiri,
+   dilarang satu akun "PPh final" campuran (beda KJS setor: sewa
+   411128-403, beda kode objek bupot, beda rekonsiliasi SPT).
+3. **Mapping: lewat jenis pajak, BUKAN SystemSetting.** BOT 3 tanam:
+   (a) CoA seed baris `["210206", "Utang PPh 4(2) Final Sewa", "OCLY",
+   "2102"]` di `src/lib/setup/base-data.ts`; (b) jenis bawaan baru di
+   `WITHHOLDING_TAX_TYPES`: kode jenis mengikuti penamaan existing
+   (usulan `PPH42-SEWA`, nama "PPh 4(2) Final Sewa Tanah/Bangunan",
+   rate 10, article `PPh4(2)`, `liabilityAccountCode: "210206"`,
+   objectCode TIDAK di-seed keras — dipilih per penerbitan bupot
+   sesuai lampiran DJP berlaku, referensi PER-24/PJ/2021 28-403-02,
+   konsisten F-038 putusan 1); (c) seed idempoten existing
+   (`seedWithholdingTaxTypes`) menautkan `liabilityAccountId` dari
+   kode 210206 — instalasi existing yang CoA-nya belum punya 210206
+   menghasilkan `liabilityAccountId = null` dan WAJIB fail-closed
+   berisik saat posting (akun kosong = tolak, arahkan ke Pengaturan
+   Akun/Pajak Potong), DILARANG fallback ke 210202 atau akun tebak
+   lain (konsisten F-038 putusan 2, hanya kodenya yang berganti).
+   TIDAK ada kolom SystemSetting baru untuk sewa di kartu ini.
+4. **Koreksi wajib atas teks F-038/F-039 saat PR-nya dibuka/direvisi:**
+   semua penyebutan "210205" sebagai Utang PPh Final Sewa diganti
+   "210206" — F-038 putusan 2, contoh jurnal F-039 putusan 1-2, dan
+   falsifikasi F39-1 ("akun 210205" -> "akun 210206"). Falsifikasi
+   F39-1 diperkuat: bupot sewa terbit ke 210205 (akun provisi garansi)
+   = MERAH. BOT 5 spec F-040-S (t_cbecc698) dan tabel operasional
+   t_64afcbb5 wajib memakai 210206 sejak sekarang; penyebutan 210205
+   di spec yang sedang jalan = rujuk vonis ini.
+5. **Jurnal tidak berubah selain kode kredit pajak:** penyewa bayar:
+   Dr Utang Usaha bruto / Cr Kas 90% / Cr **210206** 10%; setor: Dr
+   **210206** / Cr Kas (KJS 411128-403). Sisi menyewakan dipotong:
+   tetap beban PPh final (bukan kredit pajak, F-038 putusan 4) —
+   vonis ini tidak membuka akun beban baru; akun beban mengikuti
+   mapping existing jalur itu, di luar tabrakan ini.
+
+### Batas build untuk BOT 3 (pemilik t_c70095d5 + t_d4ae15cc)
+
+- t_d4ae15cc (F-021 inti): TIDAK BERUBAH. 510104/210205/110508 +
+  3 mapping SystemSetting garansi jalan apa adanya.
+- t_c70095d5 (F-038): pakai 210206 + jalur WithholdingTaxType di atas.
+  Dilarang: memakai 210205 untuk apa pun selain provisi garansi;
+  membuat kolom SystemSetting sewa; fallback akun diam-diam.
+- Urutan aman: bila kedua kartu jalan berdekatan, seed CoA keduanya
+  aditif dan tidak konflik (210205 garansi, 210206 sewa) — tidak ada
+  migrasi bersama, tidak ada urutan merge wajib di antara keduanya.
+
+### Falsifikasi wajib BOT 6 (di atas falsifikasi F-038/F-039 existing)
+
+- F41-1. Bupot/jurnal potong sewa mengkredit 210205 atau baris CoA
+  seed memakai 210205 untuk sewa -> MERAH: wajib 210206.
+- F41-2. Saldo provisi: jurnal garansi E1-E4 posting lalu jurnal sewa
+  masuk; rekonsiliasi AC-G10 (saldo GL 210205 = ΣE1−ΣE2−ΣE4) berubah
+  karena jurnal sewa -> MERAH.
+- F41-3. Jenis PPH42-SEWA tanpa akun tertaut (instalasi tanpa 210206
+  di CoA) tetap bisa posting dengan fallback 210202 -> MERAH: wajib
+  fail-closed berisik.
+
+Pemilik berikutnya: BOT 3 (t_c70095d5 pakai 210206; t_d4ae15cc tidak
+berubah), BOT 5 (spec F-040-S t_cbecc698 ganti 210205->210206 untuk
+sewa), BOT 6 (falsifikasi F41-1..F41-3 gabung paket F-038/F-039),
+Lead (merge PR docs ini; PR F-038/F-039 wajib direvisi kodenya
+sebelum merge).
