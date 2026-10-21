@@ -1347,3 +1347,133 @@ Belum ada (bukti grep run ini):
 Fokus berikutnya: (h) SDM/payroll — verifikasi overlap gaji-pokok
 Employee vs komponen PayrollRun + status SPEC grand design.
 
+
+---
+
+## 2026-10-21 10:20 WIB — Domain (h) SDM/payroll
+
+Rotasi: run sebelumnya (g) kendaraan F-2026-10-21-023..025. Run ini (h).
+Berikutnya: (i) proyek.
+
+Benchmark resmi (akses 2026-10-21):
+- Accurate PPh21 otomatis + SPT PPh 21 dari pencatatan gaji (TER PP
+  58/2023, hitung ulang Desember):
+  https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/mencatat-beban-gaji-pph21/
+  dan https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/catat-gaji-pph21-spt/
+- Accurate THR/bonus seperiode gaji + rekonsiliasi Desember:
+  https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/catat-pph21-bonus-thr/
+- Zahir Payroll: Payroll Component (tetap/tidak tetap, kena pajak/tidak)
+  + run payroll hitung PPh21/BPJS + slip karyawan:
+  https://zahirerp.com/id/all-features-of-zahir-products/
+- Regulasi: PP 58/2023 (TER Jan-Nov, tarif progresif Pasal 17 di
+  Desember/akhir kerja) — vonis angka tetap accountant, riset hanya
+  mencatat kesenjangan metode.
+
+### Inventarisasi terverifikasi (2026-10-21, domain h)
+
+Sudah ada:
+- Payroll per karyawan/periode (Payroll statutorySnapshot Json,
+  PayrollStatutoryRule berperiode effectiveFrom/To + halaman
+  sdm/aturan-statutori), BPJS karyawan + PPh21 metode disetahunkan
+  progresif PTKP status/tanggungan (payroll-statutory.service.ts:237-277,
+  perilaku fail-closed status tak dikenal didokumentasikan :186-233).
+- Employee lengkap NPWP/BPJS/gaji pokok bank (schema:746-798), pinjaman
+  karyawan + potong gaji, lembur/cuti/absensi/timesheet. Halaman
+  sdm/penggajian + approve/mark-paid.
+
+Belum ada / parsial (bukti grep run ini):
+- SALAH vs regulasi berjalan (perlu vonis): PPh21 memakai metode lama
+  disetahunkan dari Januari (`computePph21Monthly` gross×12), bukan TER
+  PP 58/2023 untuk Jan-Nov + hitung ulang progresif Desember. Header
+  service sendiri (:8-10) mengaku "pragmatic approximation" dan backlog
+  lama (baris 492 dokumen ini) sudah menulis "PPh 21 tetap domain
+  payroll (TER)" — implementasi belum mengikuti. Selisih potong per
+  slip kecil per bulan, menumpuk salah setor di Desember.
+- ABSEN: komponen gaji terstruktur. `grep PayrollComponent` schema+src
+  = 0; Payroll hanya agregat allowances/deductions Decimal tunggal
+  (schema Payroll). Tunjangan kena pajak vs tidak, komponen tetap vs
+  tidak tetap (pembedaan Zahir di atas) tidak bisa dinyatakan — input
+  ulang manual tiap periode, rawan salah klasifikasi pajak.
+- ABSEN keluaran SPT: `grep 1721|BuktiPotong|eBupot` reports/services/
+  schema = 0. Data Payroll.pph21 per karyawan ada tapi tidak ada rekap
+  masa 1721-I/bukti potong tahunan — rekonsiliasi SPT manual spreadsheet.
+- PARSIAL: Payroll.type default REGULAR tanpa pemakaian THR terverifikasi
+  (`grep THR src/actions/hrm.actions.ts` = 0 di potongan run ini);
+  THR/bonus diperlakukan tunjangan generik — dampak PPh21-nya benar
+  hanya di metode disetahunkan, ikut salah di skema TER.
+
+### Gap
+
+#### F-2026-10-21-026 (h) P0 — Metode PPh21 masih disetahunkan lama, bukan TER PP 58/2023 + hitung ulang Desember (SALAH)
+- Kompetitor/regulasi: Accurate TER otomatis + SPT
+  https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/catat-gaji-pph21-spt/ ;
+  PP 58/2023 (TER kategori A/B/C dari status PTKP, Desember tarif
+  Pasal 17 atas penghasilan setahun dikurangi potongan Jan-Nov).
+- Status Silengkap: SALAH metode. Bukti: payroll-statutory.service.ts:
+  8-10,237-277; grep TER di service/actions = 0.
+- Relevansi: potongan tiap slip karyawan salah basis sejak 2024;
+  perusahaan menanggung kurang/lebih setor + koreksi Desember manual.
+  Risiko pajak = P0 per definisi SOUL (salah hitung pajak).
+- Adaptasi: VONIS accountant dulu (kategori TER dari maritalStatus+
+  dependents existing, perlakuan penghasilan tidak teratur, bulan
+  masuk/keluar tengah tahun). Implementasi: tambah metode `ter` di
+  PayrollStatutoryRule (tabel TER per kategori sebagai rule berperiode,
+  bukan konstanta kode), computePph21Ter(grossMonthly, kategori) untuk
+  Jan-Nov; Desember panggil hitung progresif tahunan existing dikurangi
+  akumulasi pph21 Jan-Nov karyawan (data Payroll per periode sudah ada).
+  Slip lama tidak dihitung ulang diam-diam — berlaku periode baru.
+- Modul disentuh: src/lib/services/payroll-statutory.service.ts,
+  src/app/(dashboard)/sdm/aturan-statutori (isi tabel TER), generate
+  payroll di hrm.actions.ts.
+- Effort: M (sesudah vonis). Risiko: kategori salah dari status teks
+  bebas — mitigasi pakai ptkpFor/fail-closed existing untuk memetakan
+  kategori, slip tampilkan kategori TER terpilih.
+- Urutan: vonis → tabel TER+Jan-Nov → Desember hitung ulang → uji
+  banding 3 profil gaji vs kalkulator DJP.
+- Pemilik usulan: accountant (vonis WAJIB), backend (implementasi).
+
+#### F-2026-10-21-027 (h) P1 — Komponen gaji terstruktur absen; tunjangan/potongan hanya agregat bebas
+- Kompetitor: Zahir Payroll Component tetap/tidak tetap + kena pajak
+  https://zahirerp.com/id/all-features-of-zahir-products/ ; Accurate
+  Gaji/Tunjangan per jenis + akun penampung (URL pencatatan gaji di atas).
+- Status Silengkap: ABSEN. Bukti: grep PayrollComponent = 0; Payroll.
+  allowances/deductions agregat schema.
+- Relevansi: tunjangan transport (kena pajak) vs reimbursement (tidak)
+  tercampur satu angka; THR sulit dibedakan; kesalahan klasifikasi
+  mengalir ke PPh21 F-026.
+- Adaptasi: model `PayrollComponent` (nama, jenis earning/deduction,
+  isTaxable, isFixed, accountId nullable untuk tahap jurnal) +
+  `PayrollComponentLine` per Payroll (componentId, amount) menggantikan
+  input agregat bertahap: generate payroll menarik komponen tetap
+  karyawan (`EmployeeComponent` amount default), agregat lama tetap
+  diisi dari jumlah baris agar laporan lama tidak pecah.
+- Modul disentuh: prisma/schema.prisma, src/actions/hrm.actions.ts,
+  halaman sdm (master komponen + generate). Jurnal per komponen =
+  tahap sesudah vonis pemetaan akun accountant.
+- Effort: M-L. Risiko: migrasi riwayat — mitigasi baris agregat historis
+  tidak dipecah mundur.
+- Pemilik usulan: backend, frontend. Butuh putusan accountant: YA hanya
+  pemetaan akun jurnal per komponen; struktur data TIDAK.
+
+#### F-2026-10-21-028 (h) P2 — Rekap SPT PPh21 masa/tahunan dari data payroll absen
+- Kompetitor: Accurate Laporan SPT PPh Ps.21 per periode dari catatan
+  gaji https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/catat-gaji-pph21-spt/
+- Status Silengkap: ABSEN keluaran, ADA data. Bukti: grep 1721 = 0;
+  Payroll.pph21 per karyawan/periode tersimpan + statutorySnapshot.
+- Relevansi: beban admin bulanan; nilai rekap harus cocok slip —
+  sesudah F-026 metode benar, rekap hanya agregasi baca.
+- Adaptasi: read-model rekap masa (per periode: jumlah karyawan, bruto,
+  PPh21 terpotong dari Payroll approved/paid) + rekap tahunan per
+  karyawan (total bruto/PPh21 untuk bukti potong manual). Format file
+  e-Bupot impor DJP = tahap sesudah vonis format accountant.
+- Effort: S rekap, M ekspor. Pemilik: backend. Butuh putusan accountant:
+  YA untuk format ekspor; rekap baca TIDAK.
+
+### Yang TIDAK diusulkan run ini
+- SPEC grand design payroll utuh (F-065 lama): tetap ditahan; F-026/027
+  sengaja irisan terkecil yang menutup salah hitung berjalan.
+- Slip gaji portal karyawan / absensi biometrik: tidak ada bukti gap.
+
+Fokus berikutnya: (i) proyek — verifikasi klaim retrofit ProjectCost
+lifetime (F-2026-10-20-102 patch) + RAB-vs-aktual per tahap.
+
