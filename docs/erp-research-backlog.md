@@ -7676,3 +7676,259 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+## 2026-10-22 — Domain (k) Spec konsumen UI lencana SLA tiket CRM (F-2026-10-22-001-U)
+
+Kartu: t_6c84cc71. Spec konsumen UI untuk aturan induk
+F-2026-10-22-001 (spec BOT 5 t_0224ffa0, PR #381 head 20997554,
+entri "Domain (k) SLA tiket CRM terukur" di file ini). Spec saja —
+tanpa kode, tanpa schema, tanpa migrasi. Kartu ini TIDAK membuat
+aturan SLA baru: angka target, jam kerja, ambang mendekati, dan
+definisi lewat-SLA semuanya milik spec induk dan dirujuk, bukan
+diulang sebagai sumber kedua. Gerbang induk tetap berlaku: Q1
+(angka BR-CRM-01) + Q2 (Sabtu hari kerja?) = BUTUH-VONIS Lead;
+kartu implementasi BOT 2/BOT 3 di bawah hanya boleh dibuat sesudah
+gerbang itu dijawab.
+
+### Sumber kebenaran (rujuk, jangan definisikan ulang)
+
+- Aturan: BR-CRM-01..05 spec induk (target respons/resolusi per
+  prioritas low/medium/high dalam jam kerja WIB, Holiday existing;
+  lewat-SLA respons/resolusi; mendekati = sisa target ≤ 25%;
+  prioritas tak dikenal = diperlakukan medium + flag tak-dikenal).
+- Hitungan: builder backend kartu BACKEND spec induk (builder murni
+  + loader satu query massal, pola stale-leads.ts). UI membaca
+  keluaran builder/loader yang sama dengan antrean — UI TIDAK
+  menghitung jam kerja, tenggat, sisa, atau kelebihan sendiri.
+- Permission: view_tickets existing. Tidak ada izin baru.
+
+### Inventarisasi terverifikasi (2026-10-22, basis HEAD 8ff0c7a9)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Daftar tiket: src/app/(dashboard)/crm/tickets/page.tsx:25 gerbang
+  view_tickets; kolom tabel di _components/ticket-table.tsx:22-61 =
+  Subjek / Prioritas / Status / Dibuat / Aksi (StatusChip untuk
+  Prioritas dan Status). Paginasi server: halaman saat ini hanya
+  memuat `take` baris (page.tsx:45-50) — konsekuensi untuk antrean
+  lihat bagian Antrean.
+- Detail tiket: [slug]/page.tsx:38 gerbang view_tickets; header
+  :100-105 menampilkan StatusChip status + StatusChip priority;
+  DetailCard :121-162 (Subjek/Prioritas/Status/Pelanggan/
+  Ditugaskan ke/Dibuat/Deskripsi). firstResponseAt/resolvedAt TIDAK
+  ditampilkan di detail hari ini.
+- StatusChip: src/components/ui/status-chip.tsx:55-70 menerima
+  customLabel + customTone; tone sah: success/warning/danger/
+  default/accent (:5, :47-53). Komponen lencana baru TIDAK perlu.
+- Pola kartu antrean existing di halaman daftar: StaleLeadsCard
+  (src/components/reports/stale-leads-card.tsx) di daftar prospek
+  (crm/leads/page.tsx:55,88) dan WorkOrderQueueCard
+  (work-order-queue-card.tsx, DetailTable + entityHref + summary
+  hitungan). Antrean lewat-SLA mengikuti pola ini, bukan pola baru.
+- Prioritas tampil existing: form low/medium/high = Rendah/Sedang/
+  Tinggi (ticket-form.tsx:119-123). Kolom priority String bebas
+  (schema:3396 default "medium"); status enum 4 nilai
+  open/in_progress/resolved/closed (crm.schemas.ts:40-44).
+
+Belum ada (bukti grep run ini): lencana SLA, kartu antrean tiket,
+kolom tenggat di daftar/detail — semua ABSEN, sesuai spec induk.
+
+### Keadaan SLA yang ditampilkan (turunan builder, bukan status tiket)
+
+Builder mengembalikan per tiket aktif satu keadaan. UI hanya
+memetakan keadaan → tampilan; UI tidak menurunkan keadaan sendiri.
+
+| Keadaan builder | Arti (milik spec induk) | Lencana di daftar | Lencana di detail | Teks persis |
+|---|---|---|---|---|
+| dalam-sla | belum lewat, sisa > 25% target berjalan | tanpa lencana | tanpa lencana (baris tenggat tetap tampil) | — |
+| mendekati-respons | status open, firstResponseAt kosong, sisa target respons ≤ 25%, belum lewat | StatusChip customLabel="Mendekati SLA" customTone="warning" | sama + baris tenggat respons | `Mendekati SLA` |
+| mendekati-resolusi | tiket aktif, sisa target resolusi ≤ 25%, belum lewat (respons sudah tercapai atau ikut mendekati) | StatusChip customLabel="Mendekati SLA" customTone="warning" | sama + baris tenggat resolusi | `Mendekati SLA` |
+| lewat-respons | status open, firstResponseAt kosong, jam kerja > target respons | StatusChip customLabel="Lewat SLA" customTone="danger" | sama + baris tenggat respons + kelebihan | `Lewat SLA` |
+| lewat-resolusi | status open/in_progress, jam kerja > target resolusi | StatusChip customLabel="Lewat SLA" customTone="danger" | sama + baris tenggat resolusi + kelebihan | `Lewat SLA` |
+| selesai-tepat / selesai-terlambat | resolved/closed (keluar antrean aktif) | tanpa lencana | tanpa lencana aktif; label historis opsional lihat UI-Q2 | — |
+| dikecualikan | deletedAt terisi | tidak tampil (sudah difilter daftar existing) | 404 existing | — |
+
+Aturan pemetaan UI (USULAN tampilan, bukan aturan SLA baru):
+- Satu tiket, satu lencana. Tiket bisa lewat-respons DAN
+  lewat-resolusi bersamaan (open lama tanpa respons): tampilkan
+  hanya lencana paling parah dengan urutan lewat-resolusi >
+  lewat-respons > mendekati-resolusi > mendekati-respons. Alasan:
+  resolusi = janji akhir ke pelanggan; menampilkan dua lencana
+  merah pada satu baris = derau. Detail tetap menunjukkan kedua
+  tenggat + keadaan masing-masing, jadi tidak ada fakta disembunyikan.
+- Lencana TIDAK menggantikan StatusChip status/prioritas existing;
+  ia lencana tambahan. Di daftar: kolom baru "SLA" sesudah kolom
+  Status (ticket-table.tsx), supaya mata membaca Subjek →
+  Prioritas → Status → SLA → Dibuat. Di detail: di samping dua chip
+  header existing ([slug]/page.tsx:100-105), chip ketiga hanya bila
+  keadaan mendekati/lewat.
+- Tone hanya dua: warning (mendekati) dan danger (lewat). Tidak ada
+  tone success "Dalam SLA" — tiket sehat tanpa lencana; daftar yang
+  penuh chip hijau menyembunyikan yang merah.
+- Aksesibilitas: teks lencana adalah teks asli ("Lewat SLA"),
+  bukan warna saja. BOT 2 wajib mempertahankan teks terbaca
+  screen-reader; jangan ganti menjadi ikon/titik warna tanpa teks.
+
+### Penempatan persis
+
+Daftar (/crm/tickets, gerbang view_tickets page.tsx:25):
+1. Kolom "SLA" baru di TicketTable sesudah "Status": isi lencana
+   per tabel di atas, atau "—" untuk dalam-sla/selesai. Nilai kolom
+   berasal dari data server per baris (keluaran builder yang sama),
+   bukan hitungan client.
+2. Kartu antrean "Tiket Lewat SLA" di atas tabel, pola
+   StaleLeadsCard/WorkOrderQueueCard: judul persis
+   `Tiket Lewat SLA`, ringkasan persis
+   `{n} tiket lewat SLA · {m} mendekati SLA` (bagian mendekati
+   dihilangkan bila m = 0), daftar baris lewat-SLA (mendekati TIDAK
+   masuk daftar antrean — ia sudah terlihat lewat lencana di tabel;
+   antrean = daftar kerja yang harus ditindak sekarang).
+   Kolom antrean: No. Tiket (ticketNumber, tautan entityHref ke
+   detail) / Subjek / Prioritas (label Rendah/Sedang/Tinggi) /
+   Status / Tenggat yang lewat (Respons/Resolusi) / Lewat
+   (kelebihan jam kerja dari builder, tampil apa adanya) /
+   Ditugaskan ke (nama, atau `Belum ditugaskan`).
+   Urutan = urutan builder (kelebihan terbesar dulu, seri
+   ticketNumber lalu id — milik spec induk, UI tidak mengurut ulang).
+   Keadaan kosong: kartu tetap tampil dengan teks persis
+   `Tidak ada tiket lewat SLA — semua tiket aktif masih dalam target`
+   (pola kalimat kosong StaleLeadsCard:37-39).
+3. Paginasi: antrean adalah himpunan global tiket aktif, BUKAN
+   subset halaman tabel saat ini. Loader antrean terpisah dari
+   query daftar terpaginasi (page.tsx:45-52) — jangan turunkan
+   antrean dari `data` halaman berjalan, nanti tiket lewat di
+   halaman lain hilang dari antrean. Ini batas kontrak data untuk
+   BOT 3/BOT 2, bukan hitungan SLA baru.
+
+Detail (/crm/tickets/[slug], gerbang view_tickets :38):
+1. Chip SLA di header (lihat di atas).
+2. Baris DetailCard baru, hanya untuk tiket aktif, label persis:
+   `Tenggat Respons` dan `Tenggat Resolusi`, nilai = tanggal-jam
+   WIB yang dikembalikan server (format tanggal existing
+   formatDate; bila builder mengembalikan jam, tampilkan apa
+   adanya — UI tidak menambah/mengurangi jam).
+   Bila target sudah tercapai: nilai tenggat tetap tampil + baris
+   `Respons Pertama` (firstResponseAt) / `Selesai` (resolvedAt)
+   bila terisi, supaya staf bisa membuktikan kapan tercapai.
+   Hari ini kedua field tidak tampil di detail — menambah baris
+   tampil field existing, bukan field baru.
+3. Tiket resolved/closed: tanpa chip aktif dan tanpa baris tenggat
+   aktif. Label historis "pernah terlambat" = pertanyaan terbuka
+   UI-Q2, JANGAN dibangun sebelum dijawab (risiko: label permanen
+   menghukum tiket yang akhirnya selesai — perlu keputusan apakah
+   laporan keterlambatan historis cukup di laporan, bukan detail).
+
+### Perilaku tepi (konsumen UI)
+
+| Kasus | Perilaku UI wajib | Sumber |
+|---|---|---|
+| priority kosong/null | Diperlakukan builder sebagai medium (default kolom) — UI tampilkan chip prioritas existing apa adanya; lencana SLA mengikuti keadaan builder, UI tidak menebak prioritas pengganti | spec induk BR-CRM-02 |
+| priority tak dikenal ("urgent", "HIGH", nilai liar non-form) | Lencana SLA tetap tampil dari keadaan builder (dihitung sebagai medium); tambahan teks kecil `Prioritas tak dikenal` di detail di samping chip prioritas, dan baris antrean ikut tertanda sama. Di daftar: jangan tambah chip ketiga — cukup lencana SLA; ketakdikenalan terlihat di detail + antrean. Maksud: data liar terlihat, bukan diam-diam cocok (case-sensitive milik builder) | spec induk BR-CRM-02 + EC-7 |
+| firstResponseAt kosong + status open | Keadaan respons berjalan (dalam/mendekati/lewat-respons). BUKAN error, BUKAN "belum ada data": tiket baru memang belum direspons. UI dilarang menampilkan pesan kosong/"-" yang menyiratkan data hilang | spec induk BR-CRM-03 |
+| firstResponseAt kosong + status in_progress | Tidak mungkin dari jalur produk existing (diisi saat keluar open, crm.actions.ts) — bila builder menemukannya, UI tampilkan keadaan resolusi saja; jangan karang lencana respons. Tercatat sebagai anomali data untuk BOT 6, bukan ditebak UI | TERVERIFIKASI-KODE crm.actions.ts |
+| Tiket baru dibuat di luar jam kerja | Keadaan dalam-sla; tenggat bergeser ke jam kerja berikutnya oleh builder. UI tidak menampilkan hitungan mundur jam kalender | spec induk BR-CRM-05/EC-1 |
+| Prioritas diubah naik di tengah jalan | Lencana bisa berubah seketika jadi Lewat SLA (target dihitung ulang dari createdAt). UI tidak menampilkan peringatan khusus perubahan prioritas pada tahap pertama | spec induk BR-CRM-03/EC-4 |
+| Tiket tanpa assignedTo | Tetap tampil di antrean; kolom penanggung jawab `Belum ditugaskan`. Tidak disembunyikan dari antrean | spec induk BR-CRM-05/EC-6 |
+| Builder/loader gagal atau belum tersedia | Jangan tampilkan lencana "Dalam SLA" karangan. Sembunyikan kolom isi (tampilkan "—") dan sembunyikan kartu antrean; daftar tiket existing tetap bisa dipakai. Label jujur: ketiadaan data SLA ≠ tiket aman | USULAN (label jujur) |
+
+### Siapa boleh lihat
+
+| Permukaan | Izin | Catatan |
+|---|---|---|
+| Daftar + lencana + antrean | view_tickets (page.tsx:25) | Tanpa izin ini halaman sudah tertolak existing — tidak ada permukaan SLA terpisah untuk role lain |
+| Detail + tenggat | view_tickets ([slug]/page.tsx:38) | Sama |
+| Ubah prioritas/status/assignee | edit_tickets existing | UI SLA read-only; tidak ada tombol aksi baru di antrean selain tautan ke detail |
+| Angka target SLA | bukan data UI | Konstanta builder sesudah Q1 disetujui; tidak ada layar pengaturan pada tahap pertama (spec induk) |
+
+Tidak ada data gaji/pribadi pada permukaan ini. Nama pelanggan/
+penanggung jawab yang tampil = yang sudah tampil di daftar/detail
+existing untuk pemegang view_tickets.
+
+### Draf acceptance kartu lanjutan (usulan, BELUM dibuat)
+
+Gerbang sebelum kartu dibuat: Q1 + Q2 spec induk dijawab Lead.
+Kartu FRONTEND di bawah dikerjakan BOT 2 sesudah kartu BACKEND
+spec induk (builder+loader) selesai — urutan induk tidak berubah.
+
+#### Usulan kartu FRONTEND (BOT 2) — lencana + antrean konsumen UI
+
+1. Daftar tiket menampilkan kolom SLA + lencana persis tabel
+   pemetaan di atas (teks `Lewat SLA`/`Mendekati SLA`, tone
+   danger/warning lewat StatusChip customLabel/customTone —
+   status-chip.tsx:55-70; tanpa komponen lencana baru, tanpa
+   hitungan jam kerja di client).
+2. Kartu antrean `Tiket Lewat SLA` di atas tabel dari loader
+   global (bukan subset halaman), kolom + urutan + teks kosong
+   persis spec ini; mendekati tidak masuk daftar antrean.
+3. Detail menampilkan chip SLA + baris `Tenggat Respons`/
+   `Tenggat Resolusi` (+ `Respons Pertama`/`Selesai` bila terisi)
+   dari data server yang sama; resolved/closed/deleted tanpa
+   lencana aktif.
+4. Kasus tepi tabel "Perilaku tepi" terpenuhi, termasuk prioritas
+   tak dikenal tertanda di detail/antrean dan kegagalan builder
+   tidak menghasilkan label aman karangan.
+5. Tes komponen pola stale-leads-card.test.tsx /
+   work-order-queue-card.test.tsx: (a) lewat → teks "Lewat SLA"
+   tampil; (b) dalam-sla → tanpa lencana; (c) antrean kosong →
+   teks kosong persis; (d) falsifikasi: tukar keadaan builder
+   lewat→dalam pada fixture yang sama, lencana wajib hilang.
+   Sebelum commit: grep e2e untuk selector tiket terdampak
+   (aria-label "Daftar tiket dukungan" ticket-table.tsx:77) dan
+   sinkronkan bila berubah.
+
+#### Usulan kartu AUDIT (BOT 6) — label jujur SLA
+
+1. Buktikan UI tidak menghitung SLA sendiri: grep diff BOT 2
+   untuk aritmetika tanggal/target di komponen tiket = 0;
+   semua keadaan datang dari keluaran builder/loader server.
+2. Buktikan satu tiket satu lencana dan urutan parah
+   lewat-resolusi > lewat-respons > mendekati-* pada fixture
+   tiket open lama tanpa respons (memenuhi dua keadaan sekaligus).
+3. Buktikan antrean global: tiket lewat di luar halaman tabel
+   pertama tetap muncul di kartu antrean.
+4. Buktikan label jujur saat builder gagal: tidak ada lencana
+   aman karangan; dan prioritas tak dikenal tertanda, bukan
+   diam-diam cocok medium tanpa tanda.
+5. Buktikan izin: pengguna tanpa view_tickets tidak mencapai
+   daftar/detail/antrean (gerbang existing page.tsx:25 /
+   [slug]/page.tsx:38 tidak dilemahkan oleh perubahan).
+
+Acceptance backend builder antrean: dirujuk dari spec induk
+F-2026-10-22-001 bagian "Kartu BACKEND" butir 1–7 — sengaja tidak
+didefinisikan ulang di sini supaya tidak ada dua sumber hitungan.
+
+### Pertanyaan terbuka UI (eksplisit)
+
+- UI-Q1 (pemilik: BOT 2, putusan Lead bila sengketa): kolom "SLA"
+  terpisah vs lencana menempel di sel Status. Spec ini memilih
+  kolom terpisah (urut baca + satu lencana per baris mudah
+  dipindai); bila lebar tabel 360px sempit, BOT 2 boleh menumpuk
+  lencana di bawah chip status pada sel yang sama TANPA mengubah
+  teks/tone/urutan — perubahan penempatan sempit dicatat di kartu
+  BOT 2, bukan diam-diam.
+- UI-Q2 (BUTUH-VONIS Lead): tiket resolved/closed yang historis
+  terlambat — tampilkan label historis di detail, atau cukup di
+  laporan? Spec ini default TANPA label (lihat Penempatan detail
+  butir 3) sampai dijawab.
+- UI-Q3: apakah kartu antrean perlu tautan filter "hanya lewat
+  SLA" pada tabel utama (query param baru)? Tidak diusulkan tahap
+  pertama — antrean sudah daftar kerja; filter tabel = kartu
+  terpisah bila volume membuktikan perlu.
+- UI-Q4: teks kelebihan di antrean ("Lewat 3 jam kerja" vs angka
+  mentah builder) — BOT 2 menampilkan nilai builder apa adanya;
+  format satuan (jam/hari kerja) mengikuti field yang builder
+  kembalikan, dilarang konversi kalender di UI. Bila builder hanya
+  mengembalikan menit jam kerja, label satuan diputus di kartu
+  BACKEND, bukan ditebak UI.
+
+### Yang TIDAK diusulkan run ini
+
+- Kode apa pun (komponen, loader, builder, cron) — spec saja.
+- Ambang/target/definisi SLA baru apa pun — semua milik spec induk.
+- Komponen lencana baru, ikon/titik warna tanpa teks, hitungan
+  SLA di client, layar pengaturan target, notifikasi pelanggan.
+
+F-2026-10-22-001-U (k) — Spec konsumen UI lencana SLA tiket CRM.
+Status: SPEC SELESAI run ini; implementasi menunggu gerbang induk
+Q1/Q2 (BUTUH-VONIS Lead) lalu urutan BACKEND (BOT 3) → FRONTEND
+(BOT 2) → AUDIT (BOT 6). Pemilik usulan: BOT 5 (spec), BOT 2 (UI),
+BOT 3 (builder dirujuk induk), BOT 6 (audit label jujur).
+Butuh putusan accountant: TIDAK.
