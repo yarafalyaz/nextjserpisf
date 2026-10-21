@@ -27,6 +27,7 @@ import {
   assertWorkOrderVehicleIntakeRecorded,
 } from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
+import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
@@ -1524,6 +1525,12 @@ export async function completeWorkOrder(workOrderId: number) {
         where: { workOrderId },
         data: { status: "completed" },
       });
+
+      // F-2026-10-21-021 tahap 1: coverage garansi pasang lahir otomatis
+      // dari baris terpasang ber-warrantyMonths (MaterialIssue completed di
+      // atas). Satu transaksi dengan klaim status WO: coverage gagal dibuat
+      // = completion rollback. Tanpa jurnal/provisi (tahap 3 ditahan).
+      await createWarrantyCoveragesForWorkOrder(workOrderId, new Date(), tx);
 
       // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
       // the atomic claim above so only the winning request reaches here).

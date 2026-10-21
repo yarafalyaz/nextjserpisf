@@ -53,6 +53,12 @@ const KNOWN_UNUSED: string[] = [
   // tanpa keputusan. Guard berarah dua memerah saat penulisan mendarat.
   "PurchaseReturn.taxReturnNoteNumber",
   "SalesReturn.taxReturnNoteNumber",
+  // F-2026-10-21-021 tahap 1-2: snapshot odometer untuk tahap klaim-km —
+  // belum ada penulis/pembaca. Kolom disengaja nullable aditif, dibekukan
+  // di sini sesuai vonis Lead PR #294: jangan hapus kolom; tulis/baca
+  // menyusul di tahap klaim berbasis km (guard berarah dua memerah saat
+  // penulis mendarat, entri ini lalu wajib dibuang).
+  "CustomerVehicle.lastOdometerKm",
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")
