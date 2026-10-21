@@ -3388,3 +3388,80 @@ sesudah Q7 diputus; QA (@qa-security-reporting-release-auditor)
 untuk AC-B6-*. Butuh putusan accountant: TIDAK (selama AC-B3-5
 dijaga). Butuh putusan team-lead/pemilik proses: Q1, Q2, Q4, Q5, Q6,
 Q7, Q9 (di atas).
+
+## VONIS BOT 4 F-021 TAHAP 3 LANJUTAN — Penilaian gerbang G1-G7 (2026-10-22)
+
+Pemutus: `accounting-finance-tax` (BOT 4). Kartu: t_0c38a33e.
+Lanjutan vonis inti F-021 tahap 3 (PR #383 MERGED di main
+6c1384f6). Tanpa kode, tanpa ubah src/lib/tax, tanpa vonis angka
+baru di luar vonis inti §0-§9. Bukti live run ini: worktree
+t_0c38a33e basis origin/main 3f6a08d9.
+
+### 1. Tabel gerbang (bukti live per gerbang)
+
+| Gerbang | Status | Bukti live run ini |
+|---|---|---|
+| G1 PUTUSAN Lead buka inti | BELUM | Board baris 814 masih "HANDOFF BOT 4 -> Lead: PUTUSAN buka inti = gerbang G1"; grep board tak menemukan PUTUSAN Lead membuka inti F-021 tahap 3 sesudah vonis inti terbit. Merge #383 = merge dokumen vonis, BUKAN putusan buka inti. |
+| G2 Migrasi inti (3 akun + 3 kolom setting + koreksi header) | BELUM | grep `510104\|210205\|110508` di base-data.ts/schema.prisma = 0 hasil; SystemSetting tanpa kolom warranty*; header warranty-accounting.ts:51-53 masih kode usang 510103/2105xx/1108xx. Ini memang isi paket inti — belum dibangun bukan pelanggaran, tapi gerbang belum terpenuhi. |
+| G3 Gerbang data §2 / mode provisi MATI | BELUM terbukti (rute MATI tersedia) | Model tahap 2 hidup (WarrantyCoverage schema:4068, WarrantyClaim:4109) tetapi usia data produksi tak dapat dibuktikan dari repo; 12 bulan/30 klaim closed per kelompok = bukti data operasional, bukan bukti kode. Vonis inti §6 G3 sendiri menyediakan rute sah: inti dibangun dengan provisi MATI (E1/E4 nonaktif, hanya E2 beban-saat-terjadi + E3). Rute itu yang divonis di §2 bawah. |
+| G4 Sumber biaya E2 terverifikasi | TERPENUHI sebagian (struktur) | `WarrantyClaim.repairWorkOrderId` ada (schema:4121) + relasi repairWorkOrder; biaya WO repair dari MaterialIssue/ProductionCost = jalur WO existing. Belum ada pemanggil yang membuktikan rantai klaim->biaya di kode produksi (memang inti belum dibangun). Syarat bentuknya siap dipakai inti. |
+| G5 invoiceForbidden di server | BELUM | grep invoiceForbidden/WarrantyClaim di jalur invoice (sales.actions.ts, invoice service) = 0; tak ada penjaga server yang menolak SalesInvoice dari WO repair covered. Wajib dibangun di inti, diuji AC-G2. |
+| G6 assertPeriodOpen + anti-dobel + mapping fail-closed per pemanggil | BELUM (prasyarat pola TERSEDIA) | `journals_reference_unique` ada (schema:3024); 4 referenceType vonis inti (WarrantyProvisionAccrual dst.) grep di src = 0 pemanggil; mapping warranty belum ada (G2). Pola existing (assertPeriodOpen, cek POSTED non-REVERSED) tersedia untuk dipakai inti. |
+| G7 Acceptance BOT 6 lulus | BELUM | AC-G1..G10 vonis inti §7 belum dijalankan siapa pun atas implementasi (implementasi belum ada). Berlaku sebagai syarat selesai inti, bukan syarat mulai. |
+
+### 2. Putusan: TUNDA PENUH bukan; BUKA BERSYARAT rute provisi-MATI
+
+Putusan BOT 4: **BUKA implementasi inti tahap 3 SESUDAH G1
+terbit, HANYA dalam mode provisi MATI** (jalur G3 alternatif vonis
+inti): E2 (beban klaim saat terjadi, seluruh biaya ke 510104
+selama saldo provisi 0) + E3 (recovery virtually-certain) +
+penjaga G5/G6. **E1/E4 (akrual + pelepasan provisi) TETAP
+DITUNDA** sampai gerbang data §2 terbukti dari data operasional
+nyata (12 bulan ATAU 30 klaim closed per kelompok + metode
+tertulis disetujui finance) — bukti itu dinilai BOT 4 dari data,
+bukan dari kode; BOT 3 dilarang mengarang saklar aktivasi provisi
+sebelum penilaian itu.
+
+Alasan satu kalimat: seluruh syarat bentuk (model tahap 1-2,
+mesin F-49 teruji 10/10, unique jurnal, pola fail-closed) sudah
+tersedia; yang belum ada hanya putusan Lead (G1) dan paket inti
+itu sendiri (G2/G5/G6) — menunda keduanya atas nama gerbang data
+provisi akan menahan juga jalur beban-saat-terjadi yang justru
+diwajibkan vonis inti selama provisi belum andal.
+
+### 3. Syarat sisa (mengikat kartu BOT 3)
+
+1. Urutan bangun persis vonis inti §6 G2: 3 akun CoA -> 3 kolom
+   SystemSetting -> koreksi header warranty-accounting.ts:51-53
+   -> pemanggil E2/E3 saja. E1/E4 tidak dibangun, tidak disiapkan
+   saklarnya.
+2. G5 + G6 dibangun bersama pemanggil, bukan menyusul:
+   invoiceForbidden server, assertPeriodOpen dalam tx, cek
+   anti-dobel referenceType/referenceId, mapping fail-closed.
+3. Acceptance kartu BOT 3 = AC-G2, AC-G3 (varian saldo 0: seluruh
+   biaya 510104), AC-G4, AC-G5, AC-G6, AC-G7, AC-G8, AC-G10
+   (rekonsiliasi trivial saldo provisi 0 + WAR-01) dari vonis inti
+   §7. AC-G1 + AC-G9 DITUNDA bersama E1/E4. Falsifikasi wajib
+   tetap: cabut fail-closed mapping -> merah; cabut
+   invoiceForbidden -> merah; dobel posting E2 -> merah.
+4. Aktivasi E1/E4 kelak = kartu terpisah dengan penilaian gerbang
+   data BOT 4 (§2) sebagai syarat masuk; bukan flag admin bebas.
+
+### 4. Yang tidak berubah
+
+Seluruh vonis inti §0-§9 tetap berlaku: akun 510104/210205/
+110508, recovery hanya virtually-certain, garansi service
+DITUNDA, deductibility fiskal BUTUH-VONIS-AKUNTAN, koreksi jurnal
+hanya reversal/jurnal lawan di periode terbuka.
+
+### Handoff F-021 tahap 3 lanjutan
+
+- Lead: terbitkan PUTUSAN G1 (atau tolak dengan alasan) — sesudah
+  itu BOT 3 boleh mulai; tanpa G1 tetap jangan bangun.
+- BOT 3: kartu inti rute provisi-MATI per §3; berhenti dan
+  eskalasi BOT 4 bila bentuk akrual tambahan perubahan estimasi
+  atau penyimpanan bukti butuh model baru di luar vonis inti.
+- BOT 6: siapkan AC per §3 butir 3; AC-G1/AC-G9 ditunda bersama
+  E1/E4, jangan diuji sebagai kegagalan inti rute ini.
+
+---
