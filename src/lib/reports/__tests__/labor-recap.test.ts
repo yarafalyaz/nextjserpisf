@@ -76,6 +76,30 @@ describe("buildLaborRecap", () => {
     expect(r.totalLaborHours).toBe(0.3)
     expect(r.technicians[0]?.laborHours).toBe(0.3)
   })
+
+  it("F-038 periode: hanya tanggal kerja dalam rentang; tanpa tanggal di luar total", () => {
+    const period = { start: new Date(2026, 0, 1), end: new Date(2026, 0, 31, 23, 59, 59, 999) }
+    const r = buildLaborRecap(
+      [
+        cost({ amount: 100_000, workDate: new Date(2026, 0, 31) }),
+        cost({ amount: 200_000, workDate: new Date(2026, 1, 1) }),
+        cost({ employeeId: null, employeeName: null, amount: 50_000, workDate: null }),
+        cost({ amount: 75_000, workDate: new Date(2026, 0, 1) }),
+      ],
+      period,
+    )
+    expect(r.totalAmount).toBe(175_000)
+    expect(r.totalLineCount).toBe(2)
+    expect(r.technicians[0]?.totalAmount).toBe(175_000)
+    expect(r.undated).toEqual({ laborHours: 2, totalAmount: 50_000, lineCount: 1 })
+    expect(r.unattributed.lineCount).toBe(0)
+  })
+
+  it("F-038 tanpa periode: perilaku lama seluruh baris, undated kosong", () => {
+    const r = buildLaborRecap([cost({ amount: 100_000, workDate: null })])
+    expect(r.totalAmount).toBe(100_000)
+    expect(r.undated.lineCount).toBe(0)
+  })
 })
 
 describe("getLaborRecap", () => {
@@ -89,8 +113,8 @@ describe("getLaborRecap", () => {
       { sourceTimesheetId: 99, hours: 5, amount: 300_000 },
     ])
     mocks.prismaMock.timesheet.findMany.mockResolvedValue([
-      { id: 10, employeeId: 1, employee: { name: "Budi" } },
-      { id: 11, employeeId: 2, employee: { name: "Andi" } },
+      { id: 10, employeeId: 1, date: new Date(2026, 0, 15), employee: { name: "Budi" } },
+      { id: 11, employeeId: 2, date: new Date(2026, 0, 20), employee: { name: "Andi" } },
     ])
   })
 
@@ -111,6 +135,17 @@ describe("getLaborRecap", () => {
     // Baris manual (null) + baris timesheet 99 yang sudah hilang: tanpa teknisi.
     expect(r.unattributed).toEqual({ laborHours: 9, totalAmount: 550_000, lineCount: 2 })
     expect(r.totalAmount).toBe(960_000)
+  })
+
+  it("F-038 loader periode Januari: baris Feb dibuang, manual jadi undated", async () => {
+    const r = await getLaborRecap({
+      start: new Date(2026, 0, 1),
+      end: new Date(2026, 0, 31, 23, 59, 59, 999),
+    })
+    // Fixture beforeEach: Budi 210rb (15 Jan), Andi 200rb (20 Jan) dalam periode;
+    // manual 250rb + timesheet hilang 300rb tanpa tanggal terbukti.
+    expect(r.totalAmount).toBe(410_000)
+    expect(r.undated).toEqual({ laborHours: 9, totalAmount: 550_000, lineCount: 2 })
   })
 
   it("tanpa baris bersumber: query timesheet dilewati", async () => {
