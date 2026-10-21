@@ -7,11 +7,17 @@ import { notFound } from "next/navigation"
 import { getWarrantyClaimDetail } from "@/actions/warranty.actions"
 import { hasPermission } from "@/lib/auth/permissions"
 import { requirePermission } from "@/lib/auth/permissions"
+import { prisma } from "@/lib/db/prisma"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate, formatNumber } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { WarrantyClaimActions, type WarrantyClaimFacts } from "../_components/warranty-claim-actions"
+import {
+  WarrantySupplierClaimPanel,
+  type SupplierClaimFacts,
+} from "../_components/warranty-supplier-claim-panel"
 
 export const metadata: Metadata = { title: "Detail Klaim Garansi" }
 
@@ -76,6 +82,60 @@ export default async function WarrantyClaimDetailPage({
     resolutionType: claim.resolutionType,
     repairWorkOrderId: claim.repairWorkOrderId,
   }
+
+  const supplierActor = claim.supplierClaimBy
+    ? await prisma.user.findUnique({
+        where: { id: claim.supplierClaimBy },
+        select: { name: true },
+      })
+    : null
+  const supplierClaim: SupplierClaimFacts = {
+    claimId: claim.id,
+    claimStatus: claim.status,
+    resolutionType: claim.resolutionType,
+    supplierClaimStatus: claim.supplierClaimStatus,
+    vendorName: claim.supplierClaimVendor?.name ?? null,
+    purchaseReturnLabel: claim.purchaseReturn
+      ? `${claim.purchaseReturn.documentNo} (status retur: ${statusLabel(claim.purchaseReturn.status)})`
+      : null,
+    supplierClaimRefNo: claim.supplierClaimRefNo,
+    supplierClaimNotes: claim.supplierClaimNotes,
+    supplierClaimByName: claim.supplierClaimBy
+      ? (supplierActor?.name ?? `Pengguna #${claim.supplierClaimBy}`)
+      : null,
+    supplierClaimAt: claim.supplierClaimAt
+      ? formatDate(claim.supplierClaimAt, { includeTime: true })
+      : null,
+    attachmentCount: 0,
+  }
+  supplierClaim.attachmentCount = await prisma.transactionAttachment.count({
+    where: { referenceType: "WarrantyClaim", referenceId: claim.id },
+  })
+  const vendorOptions =
+    claim.supplierClaimStatus === "none" && canTransition
+      ? (
+          await prisma.vendor.findMany({
+            where: { isActive: true, deletedAt: null },
+            orderBy: { name: "asc" },
+            take: 200,
+            select: { id: true, name: true },
+          })
+        ).map((v) => ({ value: String(v.id), label: v.name }))
+      : []
+  const purchaseReturnOptions =
+    claim.supplierClaimStatus === "none" && canTransition
+      ? (
+          await prisma.purchaseReturn.findMany({
+            where: { status: "draft" },
+            orderBy: { date: "desc" },
+            take: 200,
+            select: { id: true, documentNo: true, purchaseOrder: { select: { vendor: { select: { name: true } } } } },
+          })
+        ).map((r) => ({
+          value: String(r.id),
+          label: `${r.documentNo} — ${r.purchaseOrder.vendor.name}`,
+        }))
+      : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -151,6 +211,16 @@ export default async function WarrantyClaimDetailPage({
       </section>
 
       <WarrantyClaimActions claim={facts} canDecide={canDecide} canTransition={canTransition} />
+
+      <WarrantySupplierClaimPanel
+        facts={supplierClaim}
+        vendorOptions={vendorOptions}
+        purchaseReturnOptions={purchaseReturnOptions}
+        canLink={canTransition}
+        canApprove={canDecide}
+      />
+
+      <TransactionAttachments referenceType="WarrantyClaim" referenceId={claim.id} />
     </div>
   )
 }
