@@ -99,11 +99,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
   "src/actions/customer-price-list.actions.ts::deleteCustomerPriceList":
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
-  // F-2026-10-21-025 backend dulu: kontrak konflik untuk form aturan fitment;
-  // UI peringatan menyusul di kartu frontend t_6d28c338 (buang entri ini saat
-  // vehicle-fitment-form memanggilnya).
-  "src/actions/vehicle-fitment.actions.ts::checkVehicleFitmentConflicts":
-    "F-2026-10-21-025 backend; peringatan konflik di VehicleFitmentForm menyusul (frontend t_6d28c338)",
 }
 
 describe("keterhubungan aksi server", () => {

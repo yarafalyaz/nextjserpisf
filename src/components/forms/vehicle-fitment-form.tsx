@@ -1,7 +1,8 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useMemo, useState, useTransition } from "react"
+import { useEffect, useMemo, useState, useTransition } from "react"
+import { AlertTriangle } from "lucide-react"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
@@ -13,7 +14,15 @@ import { DRIVETRAIN_OPTIONS, TRANSMISSION_OPTIONS } from "@/lib/constants/vehicl
 import {
   createVehicleFitment,
   updateVehicleFitment,
+  checkVehicleFitmentConflicts,
 } from "@/actions/vehicle-fitment.actions"
+import type { FitmentConflict as VehicleFitmentConflict } from "@/lib/services/vehicle-fitment.service"
+
+export const FITMENT_RESULT_LABEL: Record<string, string> = {
+  compatible: "Cocok",
+  incompatible: "Tidak Cocok",
+  unknown: "Belum Diketahui",
+}
 
 interface Option {
   id: number
@@ -63,6 +72,34 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
   const [yearFrom, setYearFrom] = useState(rule?.yearFrom != null ? String(rule.yearFrom) : "")
   const [yearTo, setYearTo] = useState(rule?.yearTo != null ? String(rule.yearTo) : "")
   const [isActive, setIsActive] = useState(rule?.isActive ?? true)
+  const [conflicts, setConflicts] = useState<VehicleFitmentConflict[]>([])
+
+  // F-2026-10-21-025: peringatan aturan berlawanan dari kontrak backend
+  // (checkVehicleFitmentConflicts) — peringatan saja, simpan tidak diblokir.
+  useEffect(() => {
+    if (!itemId || !isActive) return
+    const timer = setTimeout(async () => {
+      const formData = new FormData()
+      formData.set("itemId", itemId)
+      if (brandId) formData.set("vehicleBrandId", brandId)
+      if (modelId) formData.set("vehicleModelId", modelId)
+      if (variantId) formData.set("vehicleVariantId", variantId)
+      if (yearFrom) formData.set("yearFrom", yearFrom)
+      if (yearTo) formData.set("yearTo", yearTo)
+      if (drivetrain) formData.set("drivetrain", drivetrain)
+      if (transmission) formData.set("transmission", transmission)
+      formData.set("result", result)
+      if (rule?.id) formData.set("excludeRuleId", String(rule.id))
+      try {
+        const res = await checkVehicleFitmentConflicts(formData)
+        setConflicts(res.success ? (res.conflicts ?? []) : [])
+      } catch {
+        // Gagal cek konflik tidak boleh mematikan form: kosongkan peringatan.
+        setConflicts([])
+      }
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [itemId, brandId, modelId, variantId, yearFrom, yearTo, drivetrain, transmission, result, isActive, rule?.id])
 
   // Cascade the scope selectors so only consistent combinations are offered.
   const modelOptions = useMemo(
@@ -108,6 +145,26 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
 
   return (
     <form onSubmit={onSubmit} aria-busy={isPending} aria-label={rule?.id ? "Formulir ubah aturan fitment" : "Formulir tambah aturan fitment"}>
+      {isActive && itemId && conflicts.length > 0 ? (
+        <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100">
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+          <div>
+            <p className="font-medium">Peringatan: aturan berlawanan ditemukan.</p>
+            <ul className="mt-1 list-disc pl-5">
+              {conflicts.map((c) => (
+                <li key={c.ruleId}>
+                  Aturan #{c.ruleId}: {FITMENT_RESULT_LABEL[c.conflictResult] ?? c.conflictResult}
+                  {c.scope.vehicleBrandId != null ? `, merek #${c.scope.vehicleBrandId}` : ""}
+                  {c.scope.vehicleModelId != null ? `, model #${c.scope.vehicleModelId}` : ""}
+                  {c.scope.vehicleVariantId != null ? `, varian #${c.scope.vehicleVariantId}` : ""}
+                  {c.source ? ` — ${c.source}` : ""}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-1">Simpan tetap bisa dilanjutkan.</p>
+          </div>
+        </div>
+      ) : null}
       <FormCard>
         <FormSection title="Item & Cakupan">
           <div className="flex flex-col gap-1.5">
