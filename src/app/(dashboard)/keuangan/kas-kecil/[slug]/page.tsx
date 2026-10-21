@@ -17,6 +17,7 @@ import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityEditHref } from "@/lib/utils/entity-url";
+import { CanCreate } from "@/components/auth/can-create";
 export const metadata: Metadata = { title: "Kas Kecil" };
 
 export default async function PettyCashDetailPage({
@@ -71,13 +72,17 @@ export default async function PettyCashDetailPage({
         ]}
         actions={
           <>
-            <Button
-              href={entityEditHref("/keuangan/kas-kecil", pettyCash)}
-              variant="primary"
-            >
-              <Pencil size={14} /> Ubah
-            </Button>
-            <DeleteButton id={pettyCash.id} action={deletePettyCash} />
+            <CanCreate permission="edit_petty_cash">
+              <Button
+                href={entityEditHref("/keuangan/kas-kecil", pettyCash)}
+                variant="primary"
+              >
+                <Pencil size={14} /> Ubah
+              </Button>
+            </CanCreate>
+            <CanCreate permission="delete_petty_cash">
+              <DeleteButton id={pettyCash.id} action={deletePettyCash} />
+            </CanCreate>
             <BackButton href="/keuangan/kas-kecil" />
           </>
         }

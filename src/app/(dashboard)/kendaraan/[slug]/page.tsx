@@ -9,6 +9,7 @@ import { deleteVehicle } from "@/actions/vehicle.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { CanCreate } from "@/components/auth/can-create"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
@@ -74,8 +75,12 @@ export default async function VehicleDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/kendaraan", vehicle)} variant="primary">Ubah</Button>
-            <DeleteButton id={vehicle.id} action={deleteVehicle} />
+            <CanCreate permission="edit_vehicles">
+              <Button href={entityEditHref("/kendaraan", vehicle)} variant="primary">Ubah</Button>
+            </CanCreate>
+            <CanCreate permission="delete_vehicles">
+              <DeleteButton id={vehicle.id} action={deleteVehicle} />
+            </CanCreate>
             <BackButton href="/kendaraan" />
           </>
         }

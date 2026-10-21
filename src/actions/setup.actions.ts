@@ -7,6 +7,7 @@ import { parseFormData } from "@/lib/validations/parse-form"
 import { setupSchema } from "@/lib/validations/setup.schemas"
 import { installBaseData } from "@/lib/setup/install"
 import { isInstalled } from "@/lib/setup/install-state"
+import { getSetupChecks, provisionSchema, type SetupChecks } from "@/lib/setup/provision"
 import { getErrorMessage } from "@/lib/utils/error"
 
 /**
@@ -16,6 +17,63 @@ import { getErrorMessage } from "@/lib/utils/error"
  * it runs before any user exists. It is instead guarded by `isInstalled()`
  * (refuses once an administrator exists) and `assertCSRF()`.
  */
+/**
+ * Status untuk langkah "Pemeriksaan Sistem" pada wizard: apakah aplikasi
+ * sudah terpasang, dan bila belum, apakah database terjangkau + skemanya
+ * siap. Read-only dan hanya memaparkan boolean/jumlah tabel, jadi aman
+ * dipanggil sebelum ada pengguna. Sesudah terpasang, `checks` null dan
+ * halaman /setup sendiri sudah me-redirect pergi.
+ */
+export async function getSetupStatus(): Promise<{
+  installed: boolean
+  checks: SetupChecks | null
+}> {
+  const installed = await isInstalled()
+  return { installed, checks: installed ? null : await getSetupChecks() }
+}
+
+/**
+ * Buat skema database dari wizard (menjalankan migrasi yang tertunda)
+ * bila database terjangkau tetapi tabelnya belum ada. Gerbangnya sama
+ * seperti `runSetup`: hanya sebelum instalasi + CSRF. Idempoten —
+ * skema yang sudah siap dikembalikan apa adanya tanpa migrasi ulang.
+ */
+export async function provisionSetupSchema() {
+  try {
+    if (await isInstalled()) {
+      return { success: false, error: "Aplikasi sudah terpasang." }
+    }
+
+    await assertCSRF()
+
+    const before = await getSetupChecks()
+    if (!before.databaseConnected) {
+      return {
+        success: false,
+        error: "Database tidak terjangkau. Periksa DATABASE_URL pada konfigurasi server.",
+        checks: before,
+      }
+    }
+    if (before.schemaReady) {
+      return { success: true, checks: before }
+    }
+
+    const result = await provisionSchema()
+    const checks = await getSetupChecks()
+    if (!result.success || !checks.schemaReady) {
+      return {
+        success: false,
+        error: result.message || "Skema database belum siap.",
+        checks,
+      }
+    }
+    return { success: true, checks }
+  } catch (e: unknown) {
+    console.error("[provisionSetupSchema]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Gagal menyiapkan skema database") }
+  }
+}
+
 export async function runSetup(formData: FormData) {
   try {
     if (await isInstalled()) {

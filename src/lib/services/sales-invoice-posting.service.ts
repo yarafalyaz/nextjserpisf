@@ -1,5 +1,6 @@
 import type { TxClient } from "@/lib/db/prisma"
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
+import { slugify } from "@/lib/utils/slug"
 
 /**
  * Reverse all GL + stock side effects of a (possibly posted) sales invoice.
@@ -45,6 +46,7 @@ export async function reverseSalesInvoicePostingTx(
   const qtyUpdates: Promise<unknown>[] = []
   const moveInserts: Array<{
     documentNo: string
+    slug: string
     itemId: number
     warehouseId: number | null
     qty: number
@@ -62,6 +64,7 @@ export async function reverseSalesInvoicePostingTx(
     qtyUpdates.push(tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qty} WHERE id = ${m.itemId}`)
     moveInserts.push({
       documentNo: `SM-REV-INV-${invoiceId}-${m.id}`,
+      slug: slugify(`SM-REV-INV-${invoiceId}-${m.id}`),
       itemId: m.itemId,
       warehouseId: m.warehouseId,
       qty,

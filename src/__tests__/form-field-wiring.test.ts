@@ -53,6 +53,10 @@ const KNOWN_UNREAD_FORM_FIELDS: Array<[field: string, reason: string]> = [
     "periodLockDateDisplay",
     "Tampil-saja (disabled) di form pengaturan; kunci periode hanya diubah lewat Proses Akhir Bulan (R-09).",
   ],
+  [
+    "sampaiTanggal",
+    "Filter klien perintah pembayaran: nilainya dibaca dari state React dan dikirim sebagai segmen path /sampai/<tanggal>, bukan FormData — input tersembunyi AppDatePicker tidak pernah terkirim.",
+  ],
 ]
 
 function walk(dir: string, out: string[] = []): string[] {

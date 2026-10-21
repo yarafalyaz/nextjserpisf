@@ -46,6 +46,10 @@ interface SalesInvoiceFormProps {
    *  pesanan penjualannya) supaya faktur baru sudah tertaut ke pesanan itu. */
   defaultSalesOrderId?: number
   defaultCustomerId?: number
+  /** Faktur lahir langsung dari penawaran (belum ada pesanannya, mis. dari
+   *  Perintah Kerja): id penawaran diteruskan ke createSalesInvoice supaya
+   *  tautan penawarannya tidak hilang. */
+  defaultQuotationId?: number
   /** Item pesanan penjualan sebagai NILAI AWAL — boleh diubah/dihapus.
    *  Fabrikasi: spesifikasi bisa berubah setelah faktur dibuat. */
   initialItems?: InitialItem[]
@@ -110,6 +114,7 @@ export function SalesInvoiceForm({
   invoice,
   defaultSalesOrderId,
   defaultCustomerId,
+  defaultQuotationId,
   initialItems,
   initialTaxRate,
   availableItems = [],
@@ -168,6 +173,8 @@ export function SalesInvoiceForm({
         // P2 idempotency UI: key stabil per intent create; retry/error pakai
         // key sama, sukses ganti baru supaya create berikutnya tak ditolak.
         if (!invoice?.id) formData.set("idempotencyKey", idempotencyKeyRef.current)
+        // Tautan penawaran untuk faktur yang lahir langsung dari penawaran.
+        if (!invoice?.id && defaultQuotationId) formData.append("quotationId", String(defaultQuotationId))
         const result = invoice?.id ? await updateSalesInvoice(invoice.id, formData) : await createSalesInvoice(formData)
         if (result.success) {
           if (!invoice?.id) idempotencyKeyRef.current = newIdempotencyKey()

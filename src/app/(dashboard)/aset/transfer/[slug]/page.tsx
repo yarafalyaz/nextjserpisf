@@ -14,6 +14,7 @@ import { Pencil } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Transfer Stok" }
@@ -52,8 +53,12 @@ export default async function AssetTransferDetailPage({
           { label: "Detail" },
         ]}
         actions={<>
-          <Button href={entityEditHref("/aset/transfer", transfer)} variant="primary"><Pencil size={14} /> Ubah</Button>
-          <DeleteButton id={transfer.id} action={deleteAssetTransfer} />
+          <CanCreate permission="edit_asset_transfers">
+            <Button href={entityEditHref("/aset/transfer", transfer)} variant="primary"><Pencil size={14} /> Ubah</Button>
+          </CanCreate>
+          <CanCreate permission="delete_asset_transfers">
+            <DeleteButton id={transfer.id} action={deleteAssetTransfer} />
+          </CanCreate>
           <BackButton href="/aset/transfer" />
         </>}
       />

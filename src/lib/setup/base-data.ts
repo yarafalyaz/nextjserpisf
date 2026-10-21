@@ -354,7 +354,10 @@ export const PERMISSIONS = [
       // Granted to admin/super_admin via "ALL"; grant it explicitly to finance
       // if that role is meant to approve loans.
       "approve_loans",
-];
+] as const;
+
+/** Nama permission yang sah — union dari katalog di atas (type-safe). */
+export type PermissionName = (typeof PERMISSIONS)[number];
 
 export const ROLES = [
       "super_admin",
@@ -366,7 +369,29 @@ export const ROLES = [
       "purchasing",
       "warehouse",
       "finance"
+] as const;
+
+/** Nama peran yang sah — union dari daftar peran di atas (type-safe). */
+export type RoleName = (typeof ROLES)[number];
+
+/**
+ * Izin administrasi sistem — hanya `super_admin` yang memegangnya.
+ * `admin` menerima seluruh katalog KECUALI kelompok ini: tanpa
+ * `manage_roles`, admin tidak bisa mengedit izin role-nya sendiri untuk
+ * mengambil kembali `manage_users`/`manage_settings`, jadi pemisahan
+ * ini nyata dan bukan sekadar tampilan. Dikunci oleh
+ * role-sensitive-permissions.test.ts.
+ */
+export const SYSTEM_ADMIN_PERMISSIONS: PermissionName[] = [
+      "manage_users",
+      "manage_roles",
+      "manage_settings",
 ];
+
+/** Seluruh katalog kecuali izin administrasi sistem (lihat di atas). */
+export const ADMIN_WHITELIST: PermissionName[] = PERMISSIONS.filter(
+      (p) => !SYSTEM_ADMIN_PERMISSIONS.includes(p),
+);
 
 export const STAFF_WHITELIST = [
       "view_dashboard",
@@ -690,13 +715,9 @@ export const FINANCE_WHITELIST = [
       "edit_sales_payments",
       "delete_sales_payments",
       "view_quotations",
-      "approve_quotations",
       "view_sales_orders",
-      "approve_sales_orders",
       "view_purchase_requests",
-      "approve_purchase_requests",
       "view_purchase_orders",
-      "approve_purchase_orders",
       "view_reports",
       "view_payroll_reports",
       "view_customers",

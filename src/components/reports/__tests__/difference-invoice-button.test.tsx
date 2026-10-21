@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
   showSuccess: vi.fn(),
   createDifferenceInvoice: vi.fn(),
 }))
-const { push, refresh, showError, showSuccess, createDifferenceInvoice } = mocks
+const { push, showError, showSuccess, createDifferenceInvoice } = mocks
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({

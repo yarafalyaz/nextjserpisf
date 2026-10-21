@@ -8,6 +8,7 @@ import { seedModules } from "../src/lib/setup/modules";
 import {
   PERMISSIONS,
   ROLES,
+  ADMIN_WHITELIST,
   STAFF_WHITELIST,
   GA_WHITELIST,
   KABENG_WHITELIST,
@@ -136,7 +137,7 @@ async function main() {
     }
 
     await assignPermissionsToRole("super_admin", "ALL");
-    await assignPermissionsToRole("admin", "ALL");
+    await assignPermissionsToRole("admin", ADMIN_WHITELIST);
     await assignPermissionsToRole("staff", STAFF_WHITELIST);
     await assignPermissionsToRole("ga", GA_WHITELIST);
     await assignPermissionsToRole("kepala_bengkel", KABENG_WHITELIST);

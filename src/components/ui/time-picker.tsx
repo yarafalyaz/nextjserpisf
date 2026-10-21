@@ -15,7 +15,7 @@ interface AppTimePickerProps {
   name?: string
   id?: string
   disabled?: boolean
-  /** Minute granularity. Default 5. */
+  /** Minute granularity. Default 1 (setiap menit bisa dipilih). */
   minuteStep?: number
   className?: string
 }
@@ -34,7 +34,7 @@ export function AppTimePicker({
   name,
   id,
   disabled,
-  minuteStep = 5,
+  minuteStep = 1,
   className,
 }: AppTimePickerProps) {
   const isControlled = value !== undefined

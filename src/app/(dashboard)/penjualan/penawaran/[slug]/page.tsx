@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/permissions";
+import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
@@ -25,6 +25,8 @@ import { DifferenceInvoiceButton } from "@/components/reports/difference-invoice
 import { ProgressInvoiceButton } from "@/components/reports/progress-invoice-button";
 import { RevisionDownCreditButton } from "@/components/reports/revision-down-credit-button";
 import { loadJobBillingSummary } from "@/lib/reports/job-billing-summary-data";
+import { loadQuotationApprovalGate } from "@/lib/reports/quotation-approval-gate-data";
+import { QuotationApprovalGateCard } from "@/components/reports/quotation-approval-gate-card";
 import {
   DetailTable,
   DetailTableHead,
@@ -44,6 +46,7 @@ export default async function QuotationDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   await requirePermission("view_quotations");
+  const canApprove = await hasPermission("approve_quotations");
   const { slug } = await params;
 
   const quotationInclude = {
@@ -74,7 +77,10 @@ export default async function QuotationDetailPage({
 
   if (!quotation) notFound();
 
-  const billingSummary = await loadJobBillingSummary(quotation.id);
+  const [billingSummary, approvalGate] = await Promise.all([
+    loadJobBillingSummary(quotation.id),
+    loadQuotationApprovalGate(quotation),
+  ]);
 
   const itemIds = quotation.sections
     .flatMap((section) => section.items.map((item) => item.itemId))
@@ -196,14 +202,14 @@ export default async function QuotationDetailPage({
             {["accepted", "approved"].includes(quotation.status) && (
               <>
                 <Button
-                  href={`/penjualan/uang-muka/tambah?quotationId=${quotation.id}`}
+                  href={`/penjualan/uang-muka/tambah/penawaran/${quotation.slug ?? quotation.id}`}
                   variant="secondary"
                 >
                   + Uang Muka
                 </Button>
                 {quotation.salesOrders.length === 0 ? (
                   <Button
-                    href={`/penjualan/pesanan/tambah?quotationId=${quotation.id}`}
+                    href={`/penjualan/pesanan/tambah/penawaran/${quotation.slug ?? quotation.id}`}
                     variant="primary"
                   >
                     + Pesanan Penjualan
@@ -238,6 +244,7 @@ export default async function QuotationDetailPage({
                   status={quotation.status}
                   id={quotation.id}
                   module="penjualan/penawaran"
+                  canAct={canApprove}
                 />
                 <DetailCard columns={4}>
                   <DetailField
@@ -308,6 +315,8 @@ export default async function QuotationDetailPage({
                 </DetailCard>
 
                 {billingSummary ? <JobBillingCard summary={billingSummary} /> : null}
+
+                <QuotationApprovalGateCard gate={approvalGate} />
 
                 <div className="flex flex-wrap justify-end gap-2">
                   <ProgressInvoiceButton quotationId={quotation.id} />

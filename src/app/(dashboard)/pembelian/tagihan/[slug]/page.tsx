@@ -7,7 +7,6 @@ import { notFound } from "next/navigation"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteVendorBill, voidVendorBill } from "@/actions/purchase.actions"
 import { VoidButton } from "@/components/ui/void-button"
-import { StatusActions } from "@/components/ui/status-actions"
 import { PrintButton } from "@/components/ui/print-button"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
@@ -21,6 +20,7 @@ import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { ProcessButton } from "@/components/ui/process-button"
 import { confirmVendorBill } from "@/actions/purchase.actions"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Tagihan" }
 
 export default async function VendorBillDetailPage({
@@ -79,24 +79,31 @@ export default async function VendorBillDetailPage({
               />
             )}
             {bill.status !== "draft" && bill.status !== "cancelled" && bill.status !== "paid" && Number(bill.balanceDue) > 0 && (
-            <Link href={`/pembelian/pembayaran-vendor/tambah?billId=${bill.id}`} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Bayar</Link>
+            <CanCreate permission="create_vendor_payments">
+              <Link href={`/pembelian/pembayaran-vendor/tambah/tagihan/${bill.slug ?? bill.id}`} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Bayar</Link>
+            </CanCreate>
           )}
-          <Link href={entityEditHref("/pembelian/tagihan", bill)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
+          <CanCreate permission="edit_vendor_bills">
+            <Link href={entityEditHref("/pembelian/tagihan", bill)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
+          </CanCreate>
           <PrintButton documentType="vendor-bill" documentId={bill.id} />
           {bill.status !== "draft" && bill.status !== "cancelled" && (
             <VoidButton id={bill.id} action={voidVendorBill} />
           )}
-          <DeleteButton id={bill.id} action={deleteVendorBill} />
+          <CanCreate permission="delete_vendor_bills">
+            <DeleteButton id={bill.id} action={deleteVendorBill} />
+          </CanCreate>
                   <Link href="/pembelian/tagihan" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
         </div>
       </div>
 
-      <StatusActions
-        status={bill.status}
-        id={bill.id}
-        module="pembelian/tagihan"
-      />
+      {/* Sengaja tanpa <StatusActions> generik (Setujui/Tolak): pada tagihan,
+          tombol itu hanya membalik status ke approved tanpa jurnal dan
+          tanpa balanceDue, sementara Konfirmasi di header memposting dari
+          draft langsung. Sesudah "disetujui" generik, Konfirmasi hilang
+          (draft-only) dan Bayar terkunci (balanceDue masih 0) — tagihan
+          terkunci permanen. Status cukup tampil sebagai badge di header. */}
       <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">
           <div className="flex flex-col gap-1">

@@ -9,6 +9,7 @@ import { deleteEmployeeLoan } from "@/actions/hrm.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -53,8 +54,12 @@ export default async function EmployeeLoanDetailPage({
         badge={<StatusChip status={loan.status} />}
         actions={
           <>
-            <Button href={entityEditHref("/sdm/pinjaman", loan)} variant="primary">Ubah</Button>
-            <DeleteButton id={loan.id} action={deleteEmployeeLoan} />
+            <CanCreate permission="create_loans">
+              <Button href={entityEditHref("/sdm/pinjaman", loan)} variant="primary">Ubah</Button>
+            </CanCreate>
+            <CanCreate permission="delete_loans">
+              <DeleteButton id={loan.id} action={deleteEmployeeLoan} />
+            </CanCreate>
             <BackButton href="/sdm/pinjaman" />
           </>
         }

@@ -24,8 +24,13 @@ const ACTION_FILES_BY_PERMISSION: Record<string, string[]> = {
   manage_settings: ["src/actions/database.actions.ts", "src/actions/activity-log.actions.ts"],
 }
 
-const pageFileFor = (routePrefix: string) =>
-  `src/app/(dashboard)${routePrefix}/page.tsx`
+const pageFileFor = (routePrefix: string) => {
+  // Halaman dengan filter path tinggal di `[[...segments]]/page.tsx`.
+  const direct = `src/app/(dashboard)${routePrefix}/page.tsx`
+  return fs.existsSync(path.join(ROOT, direct))
+    ? direct
+    : `src/app/(dashboard)${routePrefix}/[[...segments]]/page.tsx`
+}
 
 describe("route pengaturan sensitif", () => {
   it("memakai permission yang benar-benar ada di daftar yang ditegakkan", () => {

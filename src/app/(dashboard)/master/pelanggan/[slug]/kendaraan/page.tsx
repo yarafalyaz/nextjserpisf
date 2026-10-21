@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import Link from "next/link"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -56,9 +57,11 @@ export default async function CustomerVehiclesPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Kendaraan - {customer.name}</h1>
         <div className="flex gap-2">
-          <Link href={`/master/pelanggan/${customerKey}/kendaraan/tambah`} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
-            <Plus size={14} /> Tambah Kendaraan
-          </Link>
+          <CanCreate permission="create_customers">
+            <Link href={`/master/pelanggan/${customerKey}/kendaraan/tambah`} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">
+              <Plus size={14} /> Tambah Kendaraan
+            </Link>
+          </CanCreate>
           <Link href={`/master/pelanggan/${customerKey}`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
       </div>
@@ -92,10 +95,14 @@ export default async function CustomerVehiclesPage({
                         <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.slug ?? cv.id}`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Detail">
                           <Eye size={14} />
                         </Link>
-                        <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.slug ?? cv.id}/ubah`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Ubah">
-                          <Pencil size={14} />
-                        </Link>
-                        <DeleteButton id={cv.id} action={deleteCustomerVehicle} />
+                        <CanCreate permission="edit_customers">
+                          <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.slug ?? cv.id}/ubah`} className="p-1.5 rounded-md hover:bg-surface-secondary transition-colors" title="Ubah">
+                            <Pencil size={14} />
+                          </Link>
+                        </CanCreate>
+                        <CanCreate permission="delete_customers">
+                          <DeleteButton id={cv.id} action={deleteCustomerVehicle} />
+                        </CanCreate>
                       </div>
                     </DetailTableTd>
                   </DetailTableRow>

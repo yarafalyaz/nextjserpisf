@@ -1,3 +1,4 @@
+import type { PermissionName } from "@/lib/setup/base-data"
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db/prisma"
 import { getSystemSettings } from "@/lib/utils/settings"
@@ -9,7 +10,7 @@ import { formatDate } from "@/lib/utils/format"
 import { companyAddressLines } from "@/lib/utils/company-address"
 import { canAccessWarehouseScopedDocument } from "@/lib/auth/document-scope"
 
-const PRINT_PERMISSION: Record<string, string> = {
+const PRINT_PERMISSION: Record<string, PermissionName> = {
   invoice: "view_sales_invoices",
   quotation: "view_quotations",
   order: "view_sales_orders",

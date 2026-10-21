@@ -2226,21 +2226,25 @@ export async function deleteTaxGroup(id: number) {
   try {
     await requirePermission("delete_taxes");
 
-    // Guard: TaxGroupTax.taxGroupId ON DELETE CASCADE — hapus mentah ikut
-    // menghapus seluruh baris keanggotaan tanpa jejak. Tolak bila grup masih
-    // punya anggota pajak.
+    // Keanggotaan dihapus EKSPLISIT dalam satu transaksi, bukan mengandalkan
+    // ON DELETE CASCADE: jejaknya jelas dan atomik. Penolakan lama ("keluarkan
+    // pajak dulu") membuat grup mustahil dihapus selamanya, karena buat/ubah
+    // sama-sama mewajibkan ≥1 pajak — grup tak pernah bisa dikosongkan.
     const memberCount = await prisma.taxGroupTax.count({ where: { taxGroupId: id } });
-    if (memberCount > 0) {
-      return {
-        success: false,
-        error: `Kelompok pajak masih berisi ${memberCount} pajak. Keluarkan pajak dari kelompok terlebih dahulu.`,
-      };
-    }
-
-    await prisma.taxGroup.delete({ where: { id } });
+    await prisma.$transaction([
+      prisma.taxGroupTax.deleteMany({ where: { taxGroupId: id } }),
+      prisma.taxGroup.delete({ where: { id } }),
+    ]);
 
     revalidatePath("/master/kelompok-pajak");
-    await logActivity("delete", "TaxGroup", id, "Menghapus kelompok pajak");
+    await logActivity(
+      "delete",
+      "TaxGroup",
+      id,
+      memberCount > 0
+        ? `Menghapus kelompok pajak (${memberCount} pajak dikeluarkan dari kelompok)`
+        : "Menghapus kelompok pajak",
+    );
     return { success: true };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;

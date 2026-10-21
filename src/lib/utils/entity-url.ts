@@ -8,6 +8,13 @@
  * During the migration some records may not yet have a slug (legacy rows). The
  * resolver accepts either a slug or a numeric id, so `entityHref` degrades
  * gracefully to the id when no slug is present.
+ *
+ * Canonical exception — numeric `[id]` route families: a few models have NO
+ * `slug` column in `schema.prisma`, so their edit routes stay numeric by
+ * design (e.g. `sdm/absensi/[id]/ubah`, `pembelian/harga-pemasok/[id]/ubah`,
+ * `sdm/kalender-kerja/{libur,libur-departemen,jadwal}/[id]/ubah`). Links to them use the raw
+ * id; do not "fix" them to slugs unless the model gains a slug column plus a
+ * backfill.
  */
 
 /** Minimal shape needed to build an entity href. */
@@ -32,6 +39,22 @@ export function entityHref(basePath: string, entity: SluggedEntity): string {
  */
 export function entityEditHref(basePath: string, entity: SluggedEntity): string {
   return `${entityHref(basePath, entity)}/ubah`
+}
+
+/**
+ * Build an href for a child entity nested under a parent entity, e.g.
+ * `/master/pelanggan/<pelanggan>/kendaraan/<kendaraan>`. Both segments use
+ * the same slug-or-id rule as `entityHref`, so call sites stop hand-rolling
+ * `${parent.slug ?? parent.id}` fallbacks.
+ */
+export function entityNestedHref(
+  parentBasePath: string,
+  parent: SluggedEntity,
+  childSegment: string,
+  child: SluggedEntity,
+): string {
+  const childKey = child.slug && child.slug.length > 0 ? child.slug : String(child.id)
+  return `${entityHref(parentBasePath, parent)}/${childSegment}/${childKey}`
 }
 
 /**

@@ -38,4 +38,18 @@ describe("setupSchema", () => {
       expect(parsed.error.issues.some((i) => i.path.includes("confirmPassword"))).toBe(true)
     }
   })
+
+  it("accepts phone numbers with digits and phone punctuation", () => {
+    for (const companyPhone of ["0211234567", "021-1234567", "+62-21-555-0100", "(021) 555 0100"]) {
+      expect(setupSchema.safeParse({ ...base, companyPhone }).success, companyPhone).toBe(true)
+    }
+  })
+
+  it("rejects letters in the company phone number", () => {
+    const parsed = setupSchema.safeParse({ ...base, companyPhone: "021-abc-123" })
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) {
+      expect(parsed.error.issues[0]?.message).toContain("hanya boleh berisi angka")
+    }
+  })
 })

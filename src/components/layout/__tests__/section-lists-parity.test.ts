@@ -17,6 +17,14 @@ import { QC_SECTIONS } from "@/components/layout/qc-sections"
 const ROOT = process.cwd()
 const DASHBOARD = path.join(ROOT, "src/app/(dashboard)")
 
+/** Berkas halaman sebuah rute: langsung, atau di `[[...segments]]` (filter path). */
+function pageFileOf(route: string): string {
+  const direct = path.join(DASHBOARD, route.slice(1), "page.tsx")
+  return fs.existsSync(direct)
+    ? direct
+    : path.join(DASHBOARD, route.slice(1), "[[...segments]]", "page.tsx")
+}
+
 /** Halaman statis (bukan [slug]) langsung di bawah sebuah direktori. */
 function pagesIn(dir: string): string[] {
   const base = path.join(DASHBOARD, dir)
@@ -24,13 +32,17 @@ function pagesIn(dir: string): string[] {
   return fs
     .readdirSync(base, { withFileTypes: true })
     .filter((entry) => entry.isDirectory() && !entry.name.startsWith("["))
-    .filter((entry) => fs.existsSync(path.join(base, entry.name, "page.tsx")))
+    .filter(
+      (entry) =>
+        fs.existsSync(path.join(base, entry.name, "page.tsx")) ||
+        fs.existsSync(path.join(base, entry.name, "[[...segments]]", "page.tsx")),
+    )
     .map((entry) => `/${dir}/${entry.name}`)
 }
 
 /** Izin yang dipakai halaman itu (requirePermission / requireAnyPermission / requireRole). */
 function guardOf(route: string): string[] {
-  const source = fs.readFileSync(path.join(DASHBOARD, route.slice(1), "page.tsx"), "utf8")
+  const source = fs.readFileSync(pageFileOf(route), "utf8")
   const single = source.match(/requirePermission\(\s*"([a-z_]+)"/)
   if (single) return [single[1]]
   const any = source.match(/requireAnyPermission\(\s*\[([\s\S]*?)\]\s*\)/)
@@ -59,7 +71,7 @@ describe("daftar hub ↔ halaman di disk", () => {
 
   it("tidak ada item terdaftar yang halamannya tidak ada (tautan mati)", () => {
     const broken = [...settingsListed, ...qcListed]
-      .filter((item) => !fs.existsSync(path.join(DASHBOARD, item.href.slice(1), "page.tsx")))
+      .filter((item) => !fs.existsSync(pageFileOf(item.href)))
       .map((item) => item.href)
     expect(broken).toEqual([])
   })

@@ -2,7 +2,12 @@ import { NextResponse } from "next/server";
 import { apiError } from "@/lib/api-response";
 import type { NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
-import { takeRateLimit, getClientIp, canBlockOnClientIp, clientRateLimitKey } from "@/lib/security/rate-limit";
+import { takeRateLimit, getClientIp, canBlockOnClientIp, clientRateLimitKey, isRateLimitFailClosed, warnRateLimitRedisMissingOnce } from "@/lib/security/rate-limit";
+
+/** AUD-04: bucket sensitif ditolak juga saat keputusannya degraded di produksi. */
+function sensitiveRateLimitBlocked(result: { allowed: boolean; degraded?: boolean }): boolean {
+  return !result.allowed || (Boolean(result.degraded) && isRateLimitFailClosed());
+}
 import { isSecureRequest } from "@/lib/security/secure-request";
 import { SENSITIVE_ROUTE_PERMISSIONS } from "@/lib/auth/sensitive-routes";
 import { isSameOriginRequest } from "@/lib/security/same-origin";
@@ -22,14 +27,7 @@ const RATE_LIMITS = {
   auth: { windowMs: 300_000, max: 10 }, // 10 login attempts/5min
 } as const;
 
-function addSecurityHeaders(req: NextRequest, response: NextResponse): NextResponse {
-  // CSP keeps 'unsafe-inline' for scripts because Next.js emits inline
-  // bootstrap <script> tags that are NOT nonce-tagged unless the nonce is
-  // plumbed through `NextResponse.next({ request: { headers }})` AND verified
-  // against a production build. A misconfigured nonce/strict-dynamic policy
-  // silently blocks hydration (login form never submits). 'unsafe-eval' is
-  // dropped in production. Tighten to nonce-based CSP only after verifying a
-  // prod build end-to-end (login + hydration).
+function buildCsp(req: NextRequest, nonce: string): string {
   const isProd = process.env.NODE_ENV === "production";
   // `upgrade-insecure-requests` (and HSTS) may only be sent over TLS. Emitting
   // them on a plain-HTTP production build - the e2e/CI server on
@@ -37,11 +35,16 @@ function addSecurityHeaders(req: NextRequest, response: NextResponse): NextRespo
   // the browser rewrite same-origin navigations to https://localhost:4101 and
   // every page load after login dies with ERR_SSL_PROTOCOL_ERROR.
   const isHttps = isSecureRequest(req);
+  // AUD-03: produksi memakai nonce per-request + 'strict-dynamic' (pola
+  // resmi Next.js: nonce diteruskan lewat header request `x-nonce` +
+  // Content-Security-Policy, Next menerapkannya ke script framework &
+  // bootstrap; root layout meneruskannya ke script tema). Dev tetap
+  // 'unsafe-inline'/'unsafe-eval' untuk HMR.
   const scriptSrc = isProd
-    ? "script-src 'self' 'unsafe-inline'"
+    ? `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'`
     : "script-src 'self' 'unsafe-inline' 'unsafe-eval'";
 
-  const csp = [
+  return [
     "default-src 'self'",
     scriptSrc,
     "style-src 'self' 'unsafe-inline'",
@@ -54,6 +57,13 @@ function addSecurityHeaders(req: NextRequest, response: NextResponse): NextRespo
     "object-src 'none'",
     ...(isProd && isHttps ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
+}
+
+function addSecurityHeaders(req: NextRequest, response: NextResponse): NextResponse {
+  const isHttps = isSecureRequest(req);
+  const csp =
+    req.headers.get("Content-Security-Policy") ??
+    buildCsp(req, req.headers.get("x-nonce") ?? "");
 
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "SAMEORIGIN");
@@ -86,6 +96,15 @@ export async function proxy(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // AUD-03: nonce CSP per-request. Header CSP juga dipasang pada REQUEST
+  // agar Next menerapkannya ke script framework/bootstrap saat rendering;
+  // root layout membaca x-nonce untuk script tema.
+  const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
+  req.headers.set("x-nonce", nonce);
+  req.headers.set("Content-Security-Policy", buildCsp(req, nonce));
+  const nextPage = () => NextResponse.next({ request: { headers: req.headers } });
+  warnRateLimitRedisMissingOnce();
+
   const ip = getClientIp(req);
 
   // Saat identitas klien tidak tepercaya (TRUSTED_PROXY belum diset), semua
@@ -100,7 +119,7 @@ export async function proxy(req: NextRequest) {
   // Rate limit login attempts
   if (pathname === "/login" && req.method === "POST" && mayBlockOnIp) {
     const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
-    if (!result.allowed) {
+    if (sensitiveRateLimitBlocked(result)) {
       return addSecurityHeaders(req, 
         apiError("RATE_LIMITED", "Too many attempts, coba lagi nanti"),
       );
@@ -138,38 +157,38 @@ export async function proxy(req: NextRequest) {
     if (pathname.startsWith("/api/auth")) {
       if (req.method === "POST" && mayBlockOnIp) {
         const result = await takeRateLimit(`auth:${ip}`, RATE_LIMITS.auth);
-        if (!result.allowed) {
+        if (sensitiveRateLimitBlocked(result)) {
           return addSecurityHeaders(req, 
             apiError("RATE_LIMITED", "Too many attempts, coba lagi nanti"),
           );
         }
       }
-      return addSecurityHeaders(req, NextResponse.next());
+      return addSecurityHeaders(req, nextPage());
     }
 
     // Cron routes use their own CRON_SECRET verification
     if (pathname.startsWith("/api/cron")) {
-      return addSecurityHeaders(req, NextResponse.next());
+      return addSecurityHeaders(req, nextPage());
     }
 
     // Health check must be reachable without a session — it's the liveness
     // probe for monitors / load balancers / k8s / CI. It exposes no sensitive
     // data (DB SELECT 1 + status) and returns 200/503 by design.
     if (pathname === "/api/health") {
-      return addSecurityHeaders(req, NextResponse.next());
+      return addSecurityHeaders(req, nextPage());
     }
 
     // Public reference data (Indonesian region list from bundled CSVs). Used by
     // the address pickers, including the first-run setup wizard which runs
     // before any session exists.
     if (pathname === "/api/address") {
-      return addSecurityHeaders(req, NextResponse.next());
+      return addSecurityHeaders(req, nextPage());
     }
 
     // Rate limit upload endpoints more strictly
     if (pathname.startsWith("/api/upload")) {
       const result = await takeRateLimit(`upload:${clientKey}`, RATE_LIMITS.upload);
-      if (!result.allowed) {
+      if (sensitiveRateLimitBlocked(result)) {
         return addSecurityHeaders(req, 
           apiError("RATE_LIMITED", "Upload rate limit exceeded"),
         );
@@ -192,7 +211,7 @@ export async function proxy(req: NextRequest) {
         apiError("UNAUTHORIZED", "Tidak terotorisasi"),
       );
     }
-    return addSecurityHeaders(req, NextResponse.next());
+    return addSecurityHeaders(req, nextPage());
   }
 
   // Treat a deactivated user as not-logged-in for page routing. Otherwise the
@@ -222,7 +241,7 @@ export async function proxy(req: NextRequest) {
     // tetapi cookie sesi hanya dihapus kalau navigasinya memang berasal dari
     // aplikasi sendiri. Tanpa syarat itu, satu tautan lintas-situs ber-`?reason`
     // yang diklik korban dapat mengeluarkannya dari sesi (logout CSRF).
-    const res = addSecurityHeaders(req, NextResponse.next());
+    const res = addSecurityHeaders(req, nextPage());
     if (isSameOriginRequest(req)) {
       for (const cookie of req.cookies.getAll()) {
         if (SESSION_COOKIE_PATTERN.test(cookie.name)) {
@@ -260,7 +279,7 @@ export async function proxy(req: NextRequest) {
     }
   }
 
-  return addSecurityHeaders(req, NextResponse.next());
+  return addSecurityHeaders(req, nextPage());
 }
 
 export const config = {

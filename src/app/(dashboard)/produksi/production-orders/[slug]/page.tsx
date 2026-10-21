@@ -18,6 +18,7 @@ import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
 import { requirePermission } from "@/lib/auth/permissions"
 import { buildProductionVariance } from "@/lib/reports/production-variance"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Perintah Produksi" }
 
 export default async function ProductionOrderDetailPage({
@@ -184,8 +185,12 @@ export default async function ProductionOrderDetailPage({
             outputTracksSerial={order.product.inventoryItem?.trackSerial ?? false}
             completedQty={Number(order.completedQty ?? 0)}
           />
-          <Link href={entityEditHref("/produksi/production-orders", order)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
-          <DeleteButton id={order.id} action={deleteProductionOrder} />
+          <CanCreate permission="edit_production_orders">
+            <Link href={entityEditHref("/produksi/production-orders", order)} className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
+          </CanCreate>
+          <CanCreate permission="delete_production_orders">
+            <DeleteButton id={order.id} action={deleteProductionOrder} />
+          </CanCreate>
                   <Link href="/produksi/production-orders" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
         </div>

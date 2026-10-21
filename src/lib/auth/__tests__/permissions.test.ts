@@ -21,6 +21,7 @@ import {
   hasPermission,
   hasAnyPermission,
 } from "@/lib/auth/permissions";
+import type { PermissionName, RoleName } from "@/lib/setup/base-data";
 
 describe("auth/permissions", () => {
   beforeEach(() => {
@@ -63,7 +64,7 @@ describe("auth/permissions", () => {
       const user = { id: "1", roles: ["super_admin"], permissions: [], isActive: true };
       mocks.auth.mockResolvedValue({ user });
 
-      expect(await requirePermission("anything")).toBe(user);
+      expect(await requirePermission("anything" as PermissionName)).toBe(user);
     });
 
     it("throws when user lacks the permission", async () => {
@@ -86,21 +87,21 @@ describe("auth/permissions", () => {
       const user = { id: "1", roles: ["manager"], permissions: [], isActive: true };
       mocks.auth.mockResolvedValue({ user });
 
-      expect(await requireRole("manager")).toBe(user);
+      expect(await requireRole("manager" as RoleName)).toBe(user);
     });
 
     it("bypasses check for super_admin", async () => {
       const user = { id: "1", roles: ["super_admin"], permissions: [], isActive: true };
       mocks.auth.mockResolvedValue({ user });
 
-      expect(await requireRole("manager")).toBe(user);
+      expect(await requireRole("manager" as RoleName)).toBe(user);
     });
 
     it("throws when user lacks the role", async () => {
       const user = { id: "1", roles: ["staff"], permissions: [], isActive: true };
       mocks.auth.mockResolvedValue({ user });
 
-      await expect(requireRole("manager")).rejects.toThrow(
+      await expect(requireRole("manager" as RoleName)).rejects.toThrow(
         "Redirected to /"
       );
     });
@@ -120,7 +121,7 @@ describe("auth/permissions", () => {
         user: { id: "1", roles: ["super_admin"], permissions: [], isActive: true },
       });
 
-      expect(await hasPermission("anything")).toBe(true);
+      expect(await hasPermission("anything" as PermissionName)).toBe(true);
     });
 
     it("returns false when user lacks the permission", async () => {
@@ -165,7 +166,7 @@ describe("auth/permissions", () => {
       const user = { id: "1", roles: ["super_admin"], permissions: [], isActive: true };
       mocks.auth.mockResolvedValue({ user });
 
-      expect(await requireAnyPermission(["anything", "else"])).toBe(user);
+      expect(await requireAnyPermission(["anything", "else"] as unknown as PermissionName[])).toBe(user);
     });
 
     it("throws (redirects to /) when user lacks all required permissions", async () => {
@@ -199,7 +200,7 @@ describe("auth/permissions", () => {
         user: { id: "1", roles: ["super_admin"], permissions: [], isActive: true },
       });
 
-      expect(await hasAnyPermission(["anything", "else"])).toBe(true);
+      expect(await hasAnyPermission(["anything", "else"] as unknown as PermissionName[])).toBe(true);
     });
 
     it("returns false when user lacks all permissions", async () => {

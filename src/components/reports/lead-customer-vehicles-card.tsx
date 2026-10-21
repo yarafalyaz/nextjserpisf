@@ -1,5 +1,6 @@
 import Link from "next/link"
 import { ReportCardShell } from "./report-card-shell"
+import { entityNestedHref } from "@/lib/utils/entity-url"
 
 /**
  * F-2026-10-20-93(a): kendaraan pelanggan tertaut yang tampil di detail lead.
@@ -33,7 +34,7 @@ export function LeadCustomerVehiclesCard({
   customerName: string
   vehicles: LeadCustomerVehicleRow[]
 }>) {
-  const customerKey = customerSlug && customerSlug.length > 0 ? customerSlug : String(customerId)
+  const customer = { id: customerId, slug: customerSlug }
   return (
     <ReportCardShell
       label="Kendaraan Pelanggan"
@@ -48,8 +49,6 @@ export function LeadCustomerVehiclesCard({
     >
       <ul className="flex flex-col divide-y divide-default">
         {vehicles.map((vehicle) => {
-          const vehicleKey =
-            vehicle.slug && vehicle.slug.length > 0 ? vehicle.slug : String(vehicle.id)
           const label = vehicle.vehicleName ?? "Kendaraan tanpa nama"
           return (
             <li
@@ -58,7 +57,7 @@ export function LeadCustomerVehiclesCard({
             >
               <span className="flex flex-wrap items-center gap-3">
                 <Link
-                  href={`/master/pelanggan/${customerKey}/kendaraan/${vehicleKey}`}
+                  href={entityNestedHref("/master/pelanggan", customer, "kendaraan", vehicle)}
                   className="font-medium text-primary hover:underline"
                 >
                   {label}

@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test"
 import { skipOnMobile } from "./utils/desktop-only"
 import { openCombobox, selectComboboxOptionBySearch, selectFirstComboboxOption } from "./utils/combobox"
+import { pickMonth } from "./utils/pickers"
 
 /**
  * Memilih opsi lewat pencarian, memilih dengan **keyboard**.
@@ -110,7 +111,8 @@ test.describe("Modul operasional baru — alur create/hapus", () => {
     await page.goto("/keuangan/penyetoran-pajak/tambah", { waitUntil: "domcontentloaded" })
     await page.waitForLoadState("networkidle")
 
-    await page.locator("#period").fill("2026-09")
+    // Masa pajak kini AppMonthPicker (bukan <input type=month>): pilih dari grid.
+    await pickMonth(page, "period", "Sep")
     await page.locator("#amount").fill("555222")
 
     const adaAkun = await selectFirstComboboxOption(page, { name: /Akun Utang Pajak/ })

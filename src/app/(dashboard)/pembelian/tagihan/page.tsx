@@ -3,12 +3,13 @@ export const dynamic = "force-dynamic"
 import { toPlain } from "@/lib/utils/serialization"
 import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { VendorBillTable } from "./_components/vendor-bill-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -53,6 +54,8 @@ export default async function VendorBillsPage({
 
   const total = await prisma.vendorBill.count({ where })
 
+  const canCreateVendorPayment = await hasPermission("create_vendor_payments")
+
   const tableData = toPlain(bills)
 
 
@@ -61,9 +64,11 @@ export default async function VendorBillsPage({
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/pembelian"},{ label: "Tagihan Pemasok" }]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Tagihan Pemasok</h1>
-<Link href="/pembelian/tagihan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-bill-btn">
-          + Buat Tagihan
-        </Link>
+<CanCreate permission="create_vendor_bills">
+          <Link href="/pembelian/tagihan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-bill-btn">
+            + Buat Tagihan
+          </Link>
+        </CanCreate>
       </div>
 
       <VendorBillTable
@@ -71,6 +76,7 @@ export default async function VendorBillsPage({
         total={total}
         page={page}
         pageSize={pageSize}
+        canCreateVendorPayment={canCreateVendorPayment}
         toolbar={<AppSearchField placeholder="Cari no. dokumen atau vendor..." action="/pembelian/tagihan" />}
         filters={
           <div className="flex gap-1.5 flex-wrap">

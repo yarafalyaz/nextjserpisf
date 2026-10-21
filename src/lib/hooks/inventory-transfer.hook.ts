@@ -1,6 +1,7 @@
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { Prisma } from "@prisma/client";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
+import { slugify } from "@/lib/utils/slug";
 import { consumeFifoLayers, createInLayer, ConsumedBatch } from "@/lib/services/inventory-fifo";
 import { safeAdd } from "@/lib/utils/math";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
@@ -122,6 +123,7 @@ export async function onTransferProcessed(
         await tx.stockMove.create({
           data: {
             documentNo: smDocNo,
+            slug: slugify(smDocNo),
             itemId: itemId,
             warehouseId: transfer.sourceWarehouseId,
             qty: qty,
@@ -283,6 +285,7 @@ export async function onTransferReceived(
         const createdMove = await tx.stockMove.create({
           data: {
             documentNo: smDocNo,
+            slug: slugify(smDocNo),
             itemId: itemId,
             warehouseId: transfer.destinationWarehouseId,
             qty: qty,

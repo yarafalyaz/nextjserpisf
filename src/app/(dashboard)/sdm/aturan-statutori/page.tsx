@@ -12,6 +12,7 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table"
 import { DeleteButton } from "@/components/ui/delete-button"
+import { CanCreate } from "@/components/auth/can-create"
 import { StatutoryRuleForm, CloseRuleForm } from "./_components/statutory-rule-forms"
 import { deleteStatutoryRule } from "@/actions/hrm.actions"
 
@@ -87,7 +88,9 @@ export default async function StatutoryRulesPage() {
                     <DetailTableTd align="right">
                       <div className="flex justify-end gap-2">
                         {!rule.effectiveTo && <CloseRuleForm id={rule.id} />}
-                        <DeleteButton id={rule.id} action={deleteStatutoryRule} />
+                        <CanCreate permission="edit_payroll">
+                          <DeleteButton id={rule.id} action={deleteStatutoryRule} />
+                        </CanCreate>
                       </div>
                     </DetailTableTd>
                   </DetailTableRow>

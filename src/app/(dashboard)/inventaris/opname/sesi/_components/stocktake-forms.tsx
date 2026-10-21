@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Button } from "@/components/ui/button"
+import { AppDatePicker } from "@/components/ui/date-picker"
 import {
   createStocktakeSession,
   snapshotStocktakeSession,
@@ -45,10 +46,7 @@ export function StocktakeSessionForm() {
         <Label htmlFor="stkWarehouse">ID Gudang *</Label>
         <Input id="stkWarehouse" name="warehouseId" type="number" min={1} required />
       </div>
-      <div className="flex flex-1 flex-col gap-1.5">
-        <Label htmlFor="stkDate">Tanggal *</Label>
-        <Input id="stkDate" name="date" type="date" required />
-      </div>
+      <AppDatePicker label="Tanggal *" name="date" required className="flex-1" />
       <div className="flex flex-1 flex-col gap-1.5">
         <Label htmlFor="stkNotes">Catatan</Label>
         <Textarea id="stkNotes" name="notes" rows={1} />

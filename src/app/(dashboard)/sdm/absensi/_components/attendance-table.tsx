@@ -87,7 +87,7 @@ const columns = [
     enableSorting: false,
     cell: (info) => (
       <ActionDropdown
-        editHref={`/sdm/absensi?editAbsensi=${info.row.original.id}`}
+        editHref={`/sdm/absensi/${info.row.original.id}/ubah`}
         editPermission="edit_attendance"
         deleteAction={deleteAttendance}
         deleteId={info.row.original.id}
