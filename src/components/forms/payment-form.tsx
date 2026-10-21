@@ -149,7 +149,7 @@ export function PaymentForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit)} aria-busy={isPending} aria-label={payment?.id ? "Formulir ubah pembayaran penjualan" : "Formulir tambah pembayaran penjualan"}>
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
@@ -158,9 +158,10 @@ export function PaymentForm({
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="salesInvoiceId">Faktur *</Label>
+                  <Label htmlFor="salesInvoiceId">Faktur <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <Combobox
                     id="salesInvoiceId"
+                    required
                     options={invoices.map((inv) => ({
                       value: String(inv.id),
                       label: `${inv.documentNo} - ${inv.customer.name}`,
@@ -218,9 +219,10 @@ export function PaymentForm({
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="paymentMethod">Metode Bayar *</Label>
+                  <Label htmlFor="paymentMethod">Metode Bayar <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <Combobox
                     id="paymentMethod"
+                    required
                     value={field.value || null}
                     onChange={(v) => field.onChange(v ?? "")}
                     placeholder="Pilih / ketik metode..."
@@ -244,13 +246,14 @@ export function PaymentForm({
         </FormSection>
         <FormSection title="Keuangan">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="amount">Jumlah Bayar (Rp) *</Label>
+            <Label htmlFor="amount">Jumlah Bayar (Rp) <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Controller
               name="amount"
               control={control}
               render={({ field }) => (
                 <CurrencyInput
                   id="amount"
+                  required
                   value={field.value}
                   onChange={field.onChange}
                   onBlur={field.onBlur}
