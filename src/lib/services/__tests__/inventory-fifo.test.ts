@@ -398,6 +398,40 @@ describe("inventory-fifo", () => {
       ]);
     });
 
+    it("ignores expired lot with zero qty — live lot still issues (F-011)", async () => {
+      const tx = mockTx({
+        layers: [{ id: 1, remaining: 50, unitCost: 5, batchNumber: "BATCH-LIVE" }],
+        batches: [
+          { id: 98, batchNumber: "BATCH-DEAD", qty: 0, warehouseId: 2, expiryDate: new Date(2025, 0, 1) },
+          { id: 99, batchNumber: "BATCH-LIVE", qty: 50, warehouseId: 2, expiryDate: new Date(2027, 0, 1) },
+        ],
+      });
+
+      const result = await consumeFifoLayers(tx, {
+        itemId: 1,
+        warehouseId: 2,
+        qty: 10,
+        documentDate: new Date(2026, 0, 10),
+      });
+      expect(result.consumedCost).toBe(50);
+      expect(result.consumedBatches).toEqual([{ batchNumber: "BATCH-LIVE", warehouseId: 2, qty: 10 }]);
+    });
+
+    it("rejects when a live-qty lot is expired even if another lot is valid (F-011)", async () => {
+      const tx = mockTx({
+        layers: [{ id: 1, remaining: 50, unitCost: 5, batchNumber: "BATCH-LIVE" }],
+        batches: [
+          { id: 98, batchNumber: "BATCH-EXP", qty: 5, warehouseId: 2, expiryDate: new Date(2025, 0, 1) },
+          { id: 99, batchNumber: "BATCH-LIVE", qty: 50, warehouseId: 2, expiryDate: new Date(2027, 0, 1) },
+        ],
+      });
+
+      await expect(
+        consumeFifoLayers(tx, { itemId: 1, warehouseId: 2, qty: 10, documentDate: new Date(2026, 0, 10) })
+      ).rejects.toThrow(/BATCH-EXP.*kedaluwarsa/);
+      expect(tx._spies.layerUpdate).not.toHaveBeenCalled();
+    });
+
     it("marks oldest serials as used (auto FIFO) for serial-tracked items", async () => {
       const tx = mockTx({
         layers: [{ id: 1, remaining: 10, unitCost: 5, batchNumber: null }],
