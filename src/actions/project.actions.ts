@@ -18,7 +18,16 @@ import {
   createTaskSchema,
   updateTaskSchema,
   projectLogSchema,
+  projectBudgetItemSchema,
+  projectBudgetItemUpdateSchema,
+  manualContractSchema,
+  budgetRevisionProposalSchema,
 } from "@/lib/validations/project.schemas"
+import type { Prisma } from "@prisma/client"
+import {
+  evaluateBudgetLock,
+  type ProjectBudgetItemInput,
+} from "@/lib/reports/project-budget"
 
 // ==================== PROJECT ACTIONS ====================
 
@@ -724,6 +733,673 @@ export async function addProjectLog(projectId: number, formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[addProjectLog]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+// ==================== PROJECT BUDGET (RAB) F-2026-10-21-030 ====================
+//
+// Kontrak + baris RAB + kunci + revisi. Aturan bisnis BR-RAB-030-01..17
+// (spec t_132a1a93) sesuai vonis Lead t_3e892715 #86:
+// - contractAmount = snapshot SEKALI salin dari Quotation.grandTotal
+//   terpilih (BR-01) atau manual ber-alasan (BR-04); bukan hitung ulang.
+// - Sesudah budgetLockedAt terisi, edit langsung baris/kontrak DITOLAK
+//   server untuk SEMUA role termasuk manage_projects/super_admin (BR-03)
+//   — perubahan hanya lewat revisi: ajukan (log rab_revision_proposed,
+//   angka belum berubah) -> setujui (satu transaksi terapkan + log
+//   rab_revision berisi lama->baru + budgetRevisionNo+1) / tolak
+//   (log rab_revision_rejected, nol perubahan angka).
+// - Kunci hanya manage_projects dengan prasyarat BR-02 (penjaga murni
+//   evaluateBudgetLock) dan ditolak untuk proyek completed (BR-13).
+// Aktor selalu dari sesi (requirePermission), tidak pernah dari form.
+
+const CONTRACT_QUOTATION_STATUSES = ["accepted", "approved", "converted"] as const
+
+const LOCKED_BUDGET_ERROR =
+  "Anggaran proyek ini sudah terkunci — perubahan hanya dapat dilakukan lewat revisi RAB yang disetujui."
+
+type BudgetItemData = {
+  itemId?: number
+  projectStageId?: number
+  category?: string
+  description?: string
+  qty: number
+  cost: number
+  sortOrder?: number
+}
+
+function toBudgetItemData(data: BudgetItemData) {
+  return {
+    itemId: data.itemId ?? null,
+    projectStageId: data.projectStageId ?? null,
+    category: data.category ?? null,
+    description: data.description ?? null,
+    qty: data.qty,
+    cost: data.cost,
+    sortOrder: data.sortOrder ?? 0,
+  }
+}
+
+async function assertBudgetStageBelongsToProject(
+  tx: TxClient,
+  projectId: number,
+  projectStageId: number | null | undefined,
+) {
+  if (projectStageId === null || projectStageId === undefined) return
+  const stage = await tx.projectStage.findUnique({
+    where: { id: projectStageId },
+    select: { projectId: true },
+  })
+  if (!stage || stage.projectId !== projectId) {
+    throw new Error("Tahap RAB tidak ditemukan pada proyek ini.")
+  }
+}
+
+async function loadBudgetProject(tx: TxClient, projectId: number) {
+  const project = await tx.project.findUnique({
+    where: { id: projectId },
+    select: {
+      id: true,
+      status: true,
+      contractAmount: true,
+      contractQuotationId: true,
+      budgetLockedAt: true,
+      budgetRevisionNo: true,
+    },
+  })
+  if (!project) throw new Error("Proyek tidak ditemukan")
+  return project
+}
+
+function assertBudgetUnlocked(project: { budgetLockedAt: Date | null }) {
+  if (project.budgetLockedAt !== null) throw new Error(LOCKED_BUDGET_ERROR)
+}
+
+type RevisionChange =
+  | { type: "create"; data: BudgetItemData }
+  | { type: "update"; projectItemId: number; data: BudgetItemData }
+  | { type: "delete"; projectItemId: number }
+
+interface RevisionPayload {
+  changes: RevisionChange[]
+  contractAmount?: number
+  contractQuotationId?: number | null
+}
+
+function parseRevisionPayload(raw: string): RevisionPayload {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw)
+  } catch {
+    throw new Error("Format perubahan revisi tidak valid (bukan JSON).")
+  }
+  const obj = (parsed ?? {}) as Record<string, unknown>
+  const rawChanges = Array.isArray(obj.changes) ? obj.changes : null
+  if (!rawChanges || rawChanges.length === 0) {
+    throw new Error("Perubahan revisi wajib memuat minimal satu perubahan baris atau kontrak.")
+  }
+  const changes: RevisionChange[] = rawChanges.map((entry, index) => {
+    const change = (entry ?? {}) as Record<string, unknown>
+    const dataRaw = (change.data ?? {}) as Record<string, unknown>
+    const data: BudgetItemData = {
+      itemId: typeof dataRaw.itemId === "number" ? dataRaw.itemId : undefined,
+      projectStageId:
+        typeof dataRaw.projectStageId === "number" ? dataRaw.projectStageId : undefined,
+      category: typeof dataRaw.category === "string" ? dataRaw.category : undefined,
+      description:
+        typeof dataRaw.description === "string" ? dataRaw.description : undefined,
+      qty: typeof dataRaw.qty === "number" ? dataRaw.qty : Number.NaN,
+      cost: typeof dataRaw.cost === "number" ? dataRaw.cost : Number.NaN,
+      sortOrder: typeof dataRaw.sortOrder === "number" ? dataRaw.sortOrder : undefined,
+    }
+    if (change.type === "create") {
+      if (!(data.qty > 0) || !(data.cost >= 0)) {
+        throw new Error(`Perubahan revisi #${index + 1}: qty harus > 0 dan biaya satuan >= 0.`)
+      }
+      return { type: "create", data }
+    }
+    if (change.type === "update" || change.type === "delete") {
+      if (typeof change.projectItemId !== "number") {
+        throw new Error(`Perubahan revisi #${index + 1}: projectItemId wajib berupa angka.`)
+      }
+      if (change.type === "update" && (!(data.qty > 0) || !(data.cost >= 0))) {
+        throw new Error(`Perubahan revisi #${index + 1}: qty harus > 0 dan biaya satuan >= 0.`)
+      }
+      return change.type === "update"
+        ? { type: "update", projectItemId: change.projectItemId, data }
+        : { type: "delete", projectItemId: change.projectItemId }
+    }
+    throw new Error(`Perubahan revisi #${index + 1}: tipe perubahan tidak dikenal.`)
+  })
+  const hasContractChange =
+    typeof obj.contractAmount === "number" || "contractQuotationId" in obj
+  if (!hasContractChange && changes.length === 0) {
+    throw new Error("Perubahan revisi wajib memuat minimal satu perubahan baris atau kontrak.")
+  }
+  return {
+    changes,
+    contractAmount: typeof obj.contractAmount === "number" ? obj.contractAmount : undefined,
+    contractQuotationId:
+      typeof obj.contractQuotationId === "number"
+        ? obj.contractQuotationId
+        : obj.contractQuotationId === null
+          ? null
+          : undefined,
+  }
+}
+
+export async function setProjectContractFromQuotation(
+  projectId: number,
+  quotationId: number,
+) {
+  try {
+    const user = await requirePermission("edit_projects")
+    const now = new Date()
+    const result = await prisma.$transaction(async (tx) => {
+      const project = await loadBudgetProject(tx, projectId)
+      assertBudgetUnlocked(project)
+      const quotation = await tx.quotation.findFirst({
+        where: {
+          id: quotationId,
+          projectId,
+          deletedAt: null,
+          status: { in: [...CONTRACT_QUOTATION_STATUSES] },
+        },
+        select: { id: true, documentNo: true, grandTotal: true },
+      })
+      if (!quotation) {
+        throw new Error(
+          "Quotation sumber kontrak tidak ditemukan pada proyek ini atau belum disetujui (accepted/approved/converted).",
+        )
+      }
+      await tx.project.update({
+        where: { id: projectId },
+        data: {
+          contractAmount: quotation.grandTotal,
+          contractQuotationId: quotation.id,
+          contractSetAt: now,
+          contractSetBy: Number(user.id),
+        },
+      })
+      await tx.projectLog.create({
+        data: {
+          projectId,
+          action: "rab_contract_snapshot",
+          notes: `Snapshot kontrak dari quotation ${quotation.documentNo}`,
+          details: {
+            contractAmount: {
+              old: project.contractAmount !== null ? Number(project.contractAmount) : null,
+              new: Number(quotation.grandTotal),
+            },
+            contractQuotationId: { old: project.contractQuotationId, new: quotation.id },
+          } as Prisma.InputJsonValue,
+          userId: Number(user.id),
+        },
+      })
+      return { contractAmount: Number(quotation.grandTotal) }
+    })
+    revalidatePath("/proyek")
+    return { success: true, ...result }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[setProjectContractFromQuotation]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function setProjectContractManual(projectId: number, formData: FormData) {
+  try {
+    const parsed = parseFormData(manualContractSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const user = await requirePermission("edit_projects")
+    const now = new Date()
+    await prisma.$transaction(async (tx) => {
+      const project = await loadBudgetProject(tx, projectId)
+      assertBudgetUnlocked(project)
+      await tx.project.update({
+        where: { id: projectId },
+        data: {
+          contractAmount: parsed.data.contractAmount,
+          contractQuotationId: null,
+          contractSetAt: now,
+          contractSetBy: Number(user.id),
+        },
+      })
+      await tx.projectLog.create({
+        data: {
+          projectId,
+          action: "rab_contract_manual",
+          notes: parsed.data.reason,
+          details: {
+            contractAmount: {
+              old: project.contractAmount !== null ? Number(project.contractAmount) : null,
+              new: parsed.data.contractAmount,
+            },
+            contractQuotationId: { old: project.contractQuotationId, new: null },
+            source: "manual",
+            reason: parsed.data.reason,
+          } as Prisma.InputJsonValue,
+          userId: Number(user.id),
+        },
+      })
+    })
+    revalidatePath("/proyek")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[setProjectContractManual]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function createProjectBudgetItem(projectId: number, formData: FormData) {
+  try {
+    const parsed = parseFormData(projectBudgetItemSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    await requirePermission("edit_projects")
+    const item = await prisma.$transaction(async (tx) => {
+      const project = await loadBudgetProject(tx, projectId)
+      assertBudgetUnlocked(project)
+      await assertBudgetStageBelongsToProject(tx, projectId, parsed.data.projectStageId)
+      return tx.projectItem.create({
+        data: { projectId, ...toBudgetItemData(parsed.data) },
+      })
+    })
+    revalidatePath("/proyek")
+    return { success: true, id: item.id }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[createProjectBudgetItem]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function updateProjectBudgetItem(formData: FormData) {
+  try {
+    const parsed = parseFormData(projectBudgetItemUpdateSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    await requirePermission("edit_projects")
+    await prisma.$transaction(async (tx) => {
+      const item = await tx.projectItem.findUnique({
+        where: { id: parsed.data.id },
+        select: { id: true, projectId: true },
+      })
+      if (!item) throw new Error("Baris RAB tidak ditemukan")
+      const project = await loadBudgetProject(tx, item.projectId)
+      assertBudgetUnlocked(project)
+      await assertBudgetStageBelongsToProject(tx, item.projectId, parsed.data.projectStageId)
+      await tx.projectItem.update({
+        where: { id: parsed.data.id },
+        data: toBudgetItemData(parsed.data),
+      })
+    })
+    revalidatePath("/proyek")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[updateProjectBudgetItem]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function deleteProjectBudgetItem(itemId: number) {
+  try {
+    await requirePermission("edit_projects")
+    await prisma.$transaction(async (tx) => {
+      const item = await tx.projectItem.findUnique({
+        where: { id: itemId },
+        select: { id: true, projectId: true },
+      })
+      if (!item) throw new Error("Baris RAB tidak ditemukan")
+      const project = await loadBudgetProject(tx, item.projectId)
+      assertBudgetUnlocked(project)
+      await tx.projectItem.delete({ where: { id: itemId } })
+    })
+    revalidatePath("/proyek")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[deleteProjectBudgetItem]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function lockProjectBudget(projectId: number) {
+  try {
+    const user = await requirePermission("manage_projects")
+    const now = new Date()
+    await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE
+      `
+      if (rows.length === 0) throw new Error("Proyek tidak ditemukan")
+      const project = await loadBudgetProject(tx, projectId)
+      const [items, stages] = await Promise.all([
+        tx.projectItem.findMany({
+          where: { projectId },
+          select: {
+            id: true,
+            projectStageId: true,
+            category: true,
+            qty: true,
+            cost: true,
+            sortOrder: true,
+          },
+        }),
+        tx.projectStage.findMany({
+          where: { projectId },
+          select: { id: true, name: true, sortOrder: true, status: true },
+        }),
+      ])
+      const derivedStatus =
+        stages.length > 0
+          ? computeProjectStatus(stages, project.status, null, now).status
+          : project.status
+      const itemInputs: ProjectBudgetItemInput[] = items.map((item) => ({
+        id: item.id,
+        projectStageId: item.projectStageId,
+        category: item.category,
+        qty: Number(item.qty),
+        cost: Number(item.cost),
+        sortOrder: item.sortOrder,
+      }))
+      const failures = evaluateBudgetLock(
+        {
+          contractAmount:
+            project.contractAmount !== null ? Number(project.contractAmount) : null,
+          budgetLockedAt: project.budgetLockedAt,
+          projectStatus: derivedStatus,
+        },
+        itemInputs,
+        stages,
+      )
+      if (failures.length > 0) {
+        throw new Error(`Anggaran belum dapat dikunci: ${failures.join("; ")}`)
+      }
+      await tx.project.update({
+        where: { id: projectId },
+        data: { budgetLockedAt: now, budgetLockedBy: Number(user.id) },
+      })
+      const totalBudget = itemInputs.reduce(
+        (sum, item) => sum + item.qty * item.cost,
+        0,
+      )
+      await tx.projectLog.create({
+        data: {
+          projectId,
+          action: "rab_locked",
+          notes: "Anggaran (RAB) proyek dikunci",
+          details: {
+            budgetRevisionNo: project.budgetRevisionNo,
+            totalBudget: Math.round(totalBudget * 100) / 100,
+          } as Prisma.InputJsonValue,
+          userId: Number(user.id),
+        },
+      })
+    })
+    revalidatePath("/proyek")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[lockProjectBudget]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function proposeProjectBudgetRevision(
+  projectId: number,
+  formData: FormData,
+) {
+  try {
+    const parsed = parseFormData(budgetRevisionProposalSchema, formData)
+    if (!parsed.success) return { success: false, error: parsed.error }
+    const user = await requirePermission("edit_projects")
+    const payload = parseRevisionPayload(parsed.data.changes)
+    const log = await prisma.$transaction(async (tx) => {
+      const project = await loadBudgetProject(tx, projectId)
+      if (project.budgetLockedAt === null) {
+        throw new Error(
+          "Anggaran proyek belum terkunci — ubah baris RAB langsung, revisi hanya untuk anggaran terkunci.",
+        )
+      }
+      return tx.projectLog.create({
+        data: {
+          projectId,
+          action: "rab_revision_proposed",
+          notes: parsed.data.reason,
+          details: {
+            changes: payload.changes,
+            ...(payload.contractAmount !== undefined
+              ? { contractAmount: { new: payload.contractAmount } }
+              : {}),
+            ...(payload.contractQuotationId !== undefined
+              ? { contractQuotationId: { new: payload.contractQuotationId } }
+              : {}),
+            reason: parsed.data.reason,
+          } as Prisma.InputJsonValue,
+          userId: Number(user.id),
+        },
+      })
+    })
+    revalidatePath("/proyek")
+    return { success: true, id: log.id }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[proposeProjectBudgetRevision]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+async function loadOpenRevisionProposal(tx: TxClient, projectId: number, proposalLogId: number) {
+  const proposal = await tx.projectLog.findFirst({
+    where: { id: proposalLogId, projectId, action: "rab_revision_proposed" },
+    select: { id: true, notes: true, details: true, userId: true },
+  })
+  if (!proposal) throw new Error("Usulan revisi RAB tidak ditemukan pada proyek ini.")
+  const settled = await tx.projectLog.findMany({
+    where: { projectId, action: { in: ["rab_revision", "rab_revision_rejected"] } },
+    select: { details: true },
+  })
+  const alreadySettled = settled.some((entry) => {
+    const details = (entry.details ?? {}) as Record<string, unknown>
+    return details.proposalLogId === proposalLogId
+  })
+  if (alreadySettled) {
+    throw new Error("Usulan revisi RAB ini sudah diputuskan (diterapkan atau ditolak).")
+  }
+  return proposal
+}
+
+export async function applyProjectBudgetRevision(projectId: number, proposalLogId: number) {
+  try {
+    const user = await requirePermission("manage_projects")
+    const result = await prisma.$transaction(async (tx) => {
+      const rows = await tx.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM projects WHERE id = ${projectId} FOR UPDATE
+      `
+      if (rows.length === 0) throw new Error("Proyek tidak ditemukan")
+      const project = await loadBudgetProject(tx, projectId)
+      if (project.budgetLockedAt === null) {
+        throw new Error("Anggaran proyek belum terkunci — tidak ada revisi untuk diterapkan.")
+      }
+      const proposal = await loadOpenRevisionProposal(tx, projectId, proposalLogId)
+      const details = (proposal.details ?? {}) as Record<string, unknown>
+      const payload = parseRevisionPayload(
+        JSON.stringify({
+          changes: details.changes ?? [],
+          ...(typeof (details.contractAmount as Record<string, unknown> | undefined)?.new ===
+          "number"
+            ? { contractAmount: (details.contractAmount as Record<string, unknown>).new }
+            : {}),
+          ...("contractQuotationId" in details
+            ? {
+                contractQuotationId: (
+                  details.contractQuotationId as Record<string, unknown>
+                ).new,
+              }
+            : {}),
+        }),
+      )
+      const reason =
+        typeof details.reason === "string" ? details.reason : (proposal.notes ?? "")
+
+      const appliedChanges: Record<string, unknown>[] = []
+      for (const change of payload.changes) {
+        if (change.type === "create") {
+          await assertBudgetStageBelongsToProject(tx, projectId, change.data.projectStageId)
+          const created = await tx.projectItem.create({
+            data: { projectId, ...toBudgetItemData(change.data) },
+          })
+          appliedChanges.push({
+            projectItemId: created.id,
+            field: "created",
+            old: null,
+            new: toBudgetItemData(change.data),
+          })
+        } else if (change.type === "update") {
+          const existing = await tx.projectItem.findFirst({
+            where: { id: change.projectItemId, projectId },
+          })
+          if (!existing) {
+            throw new Error(`Baris RAB #${change.projectItemId} tidak ditemukan pada proyek ini.`)
+          }
+          await assertBudgetStageBelongsToProject(tx, projectId, change.data.projectStageId)
+          const next = toBudgetItemData(change.data)
+          for (const field of ["itemId", "projectStageId", "category", "description", "qty", "cost", "sortOrder"] as const) {
+            const oldValue =
+              field === "qty" || field === "cost" ? Number(existing[field]) : existing[field]
+            if (oldValue !== next[field]) {
+              appliedChanges.push({
+                projectItemId: existing.id,
+                field,
+                old: oldValue,
+                new: next[field],
+              })
+            }
+          }
+          await tx.projectItem.update({ where: { id: existing.id }, data: next })
+        } else {
+          const existing = await tx.projectItem.findFirst({
+            where: { id: change.projectItemId, projectId },
+          })
+          if (!existing) {
+            throw new Error(`Baris RAB #${change.projectItemId} tidak ditemukan pada proyek ini.`)
+          }
+          appliedChanges.push({
+            projectItemId: existing.id,
+            field: "deleted",
+            old: {
+              itemId: existing.itemId,
+              projectStageId: existing.projectStageId,
+              category: existing.category,
+              description: existing.description,
+              qty: Number(existing.qty),
+              cost: Number(existing.cost),
+              sortOrder: existing.sortOrder,
+            },
+            new: null,
+          })
+          await tx.projectItem.delete({ where: { id: existing.id } })
+        }
+      }
+
+      const revisionNo = project.budgetRevisionNo + 1
+      const contractUpdate: Record<string, unknown> = { budgetRevisionNo: revisionNo }
+      let contractAmountDetail: Record<string, unknown> | undefined
+      if (payload.contractQuotationId !== undefined && payload.contractQuotationId !== null) {
+        const quotation = await tx.quotation.findFirst({
+          where: {
+            id: payload.contractQuotationId,
+            projectId,
+            deletedAt: null,
+            status: { in: [...CONTRACT_QUOTATION_STATUSES] },
+          },
+          select: { id: true, grandTotal: true },
+        })
+        if (!quotation) {
+          throw new Error(
+            "Quotation sumber kontrak revisi tidak ditemukan pada proyek ini atau belum disetujui (accepted/approved/converted).",
+          )
+        }
+        contractUpdate.contractAmount = quotation.grandTotal
+        contractUpdate.contractQuotationId = quotation.id
+        contractUpdate.contractSetAt = new Date()
+        contractUpdate.contractSetBy = Number(user.id)
+        contractAmountDetail = {
+          old: project.contractAmount !== null ? Number(project.contractAmount) : null,
+          new: Number(quotation.grandTotal),
+        }
+      } else if (payload.contractAmount !== undefined) {
+        contractUpdate.contractAmount = payload.contractAmount
+        contractUpdate.contractQuotationId =
+          payload.contractQuotationId !== undefined ? payload.contractQuotationId : project.contractQuotationId
+        contractUpdate.contractSetAt = new Date()
+        contractUpdate.contractSetBy = Number(user.id)
+        contractAmountDetail = {
+          old: project.contractAmount !== null ? Number(project.contractAmount) : null,
+          new: payload.contractAmount,
+        }
+      }
+      await tx.project.update({ where: { id: projectId }, data: contractUpdate })
+
+      await tx.projectLog.create({
+        data: {
+          projectId,
+          action: "rab_revision",
+          notes: reason || null,
+          details: {
+            proposalLogId,
+            revisionNo,
+            changes: appliedChanges,
+            ...(contractAmountDetail ? { contractAmount: contractAmountDetail } : {}),
+            reason,
+          } as Prisma.InputJsonValue,
+          userId: Number(user.id),
+        },
+      })
+      return { revisionNo }
+    })
+    revalidatePath("/proyek")
+    return { success: true, revisionNo: result.revisionNo }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[applyProjectBudgetRevision]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+export async function rejectProjectBudgetRevision(
+  projectId: number,
+  proposalLogId: number,
+  formData: FormData,
+) {
+  try {
+    // Penolakan hanya butuh alasan penolak (bukan payload perubahan usulan).
+    const reasonRaw = formData.get("reason")
+    const reason = typeof reasonRaw === "string" ? reasonRaw.trim() : ""
+    if (!reason) return { success: false, error: "Alasan penolakan wajib diisi" }
+    const user = await requirePermission("manage_projects")
+    await prisma.$transaction(async (tx) => {
+      const project = await loadBudgetProject(tx, projectId)
+      if (project.budgetLockedAt === null) {
+        throw new Error("Anggaran proyek belum terkunci — tidak ada revisi untuk ditolak.")
+      }
+      await loadOpenRevisionProposal(tx, projectId, proposalLogId)
+      await tx.projectLog.create({
+        data: {
+          projectId,
+          action: "rab_revision_rejected",
+          notes: reason,
+          details: { proposalLogId, reason } as Prisma.InputJsonValue,
+          userId: Number(user.id),
+        },
+      })
+    })
+    revalidatePath("/proyek")
+    return { success: true }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[rejectProjectBudgetRevision]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
