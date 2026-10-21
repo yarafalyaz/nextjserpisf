@@ -7676,3 +7676,281 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+## SPEC OPERASIONAL BOT 5 2026-10-22 — F-2026-10-22-054-S alur operator penerbitan bupot sewa fail-closed (pendamping resolver F-051-V)
+
+Pemilik spec: BOT 5 (Business), kartu t_a59629f6. Dokumen spec
+operasional saja: tanpa kode/schema/migrasi, tanpa angka/tarif/kode
+baru. Sumber mengikat terverifikasi live run ini (2026-10-22):
+origin/main `6ae8b2da`; vonis BOT 4 F-2026-10-22-051-V (PR #416
+CLOSED, isi di branch `hermes/bot4-f051-katalog-kode-objek` head
+`3b1ebdcf` — substansi katalog dua kode + fail-closed Putusan 1-3);
+vonis BOT 4 F-038/F-039 (PR #432 OPEN head `eb81d543` — peta
+pemotong, potong sekali dibayar di muka, tenggat setor tgl 15
+PMK 81/2024 Pasal 94, lapor SPT Masa Unifikasi 20 hari); resolver
+BOT 3 F-051-V SUDAH MERGED di PR #428 `ee903048`
+(`resolvePph42RentRate` di `src/lib/tax/withholding-certificate.ts`
++ katalog dari baris aktif `PPH42-SEWA*` di service, seed
+`PPH42-SEWA-PP`/28-403-04 NONAKTIF di
+`src/lib/setup/base-data.ts:928`).
+
+Anti-duplikat (eksplisit): F-2026-10-22-052-S (PR #424 MERGED) =
+spec KONSUMEN UI/layar (kata layar, loader, snapshot tampil) — spec
+ini TIDAK mengulang kata layar; spec ini = ALUR KERJA OPERATOR +
+PERAN + keputusan manusia di tiap penolakan resolver. F-040-S/
+F-038-S lama = cakupan sewa umum PRA-katalog (alur sewa sebelum
+vonis katalog F-051-V); spec ini menyempitkan hanya ke penerbitan
+bupot sesudah katalog + resolver fail-closed berlaku. Bila kata
+layar di sini berbeda dari F-052-S §5, F-052-S menang untuk layar;
+spec ini menang untuk urutan kerja + peran + eskalasi.
+
+### 0. Inventarisasi terverifikasi (2026-10-22, origin/main 6ae8b2da)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Resolver fail-closed live: `resolvePph42RentRate`
+  (`src/lib/tax/withholding-certificate.ts:112`) menolak berisik:
+  kode kosong, format bukan `NN-NNN-NN`, konstruksi `28-409-*`,
+  kode di luar katalog master aktif, tarif master != 10, kode
+  bersyarat bukti tanpa `evidence` non-kosong. Katalog dibaca
+  service dari baris `WithholdingTaxType` aktif keluarga
+  `PPH42-SEWA*` (`withholding-certificate.service.ts:164-180`);
+  jenis sewa non-default = `requiresEvidence`. Seed: `PPH42-SEWA`
+  28-403-02 aktif, `PPH42-SEWA-PP` 28-403-04 `isActive:false`
+  (`base-data.ts:923-928`). Snapshot bupot beku pola existing.
+- Izin (F-048-S, dirujuk bukan divonis ulang): terbit/cabut bupot
+  `manage_withholding_certificates`, master jenis
+  `manage_withholding_tax`, setor `create_tax_payments`, rekap
+  `view_reports`.
+
+Belum ada / batas jujur (bukti run ini):
+- Master BERTANGGAL EFEKTIF/histori katalog BELUM dibangun (PR #428
+  sendiri mencatat gap itu): katalog hari ini = baris AKTIF SAAT
+  TERBIT. Konsekuensi operasional: "kode kedaluwarsa" di spec ini =
+  kode dinonaktifkan/diubah di antara buka form dan submit, BUKAN
+  tanggal efektif lampau. Kata "kedaluwarsa" operator di §2 memakai
+  makna itu; tanggal efektif = pertanyaan terbuka Q-OPS-3.
+- Bukti 28-403-04 hari ini berupa string `rentObjectEvidence`
+  non-kosong di service (bukan unggahan berkas terstruktur); bentuk
+  dokumen/metadata persisnya tetap Q-BUPOT-052-1 milik BOT 4 —
+  spec ini hanya mengatur PERILAKU operator mengisinya.
+- Status pemotong pihak (flag bertanggal F-039 Putusan 3) belum
+  terbukti ada sebagai data pihak di kode run ini — perilaku
+  operator di §2 kasus C ditulis sebagai prosedur sadar, bukan
+  klaim field existing.
+
+### 1. Peran (siapa berperan apa)
+
+| Peran | Izin | Tugas di alur ini | TIDAK boleh |
+|---|---|---|---|
+| Penerbit bupot (operator keuangan) | `manage_withholding_certificates` | pilih kode dari katalog, tautkan bukti 04 bila dipakai, terbitkan, cabut+koreksi | ubah katalog/tarif master; mengarang kode di luar katalog |
+| Pengelola master pajak | `manage_withholding_tax` | aktif/nonaktifkan baris katalog, koreksi tarif master, aktifkan 28-403-04 bila syarat terbukti | menerbitkan bupot atas nama penerbit |
+| Penyetor | `create_tax_payments` | setor PPh terutang KJS 411128-403 sebelum tenggat §4 | mengubah isi bupot terbit |
+| Pembaca rekap | `view_reports` | rekap/ekspor bupot + status setor | aksi terbit/setor |
+| Pihak menyewakan (luar) | — | terima neto + bupot (bila ISF pemotong); setor sendiri (bila ISF bukan pemotong, kasus C) | menentukan kode objek ISF |
+
+Pemotong vs setor-sendiri ditentukan STATUS PIHAK TERVERIFIKASI
+(F-039 Putusan 3), bukan tebakan operator: ISF badan dalam negeri
+menyewa = ISF pemotong (kasus A/B). ISF menyewakan ke penyewa yang
+bukan pemotong (OP tidak ditunjuk/bukan subjek pajak) = ISF setor
+sendiri (kasus C). Status pihak belum terverifikasi = BERHENTI,
+selesaikan status dulu (fail-closed manusia, selaras F-039).
+
+### 2. Tabel langkah operator per kasus (inti spec ini)
+
+Dokumen masuk semua kasus: tagihan sewa posted (VendorBill) /
+kontrak sewa + nilai bruto (termasuk komponen pendamping kewajiban
+pemilik per F-039 Putusan 1 — komponen tercampur tanpa rincian
+terbukti = seluruhnya DPP final). Dokumen keluar: bupot `issued`
+bersnapshot beku + liabilitas Cr 210206, atau penolakan tercatat.
+
+Kasus A — kode default 28-403-02 (sewa umum):
+1. Penerbit buka form bupot, arah "Kita memotong", jenis PPH42-SEWA.
+2. Pilih kode `28-403-02` dari katalog master aktif (satu-satunya
+   seed aktif). Isi DPP bruto dari tagihan.
+3. Terbit. Resolver cocokkan kode ke katalog aktif + tarif 10.
+4. Hasil akhir: bupot `issued`, potong 10% Cr 210206, neto 90%
+   dibayar ke pemilik; bupot diserahkan ke pemilik.
+5. Penyetor setor sebelum tenggat §4; pembaca rekap verifikasi.
+
+Kasus B — kode bersyarat 28-403-04 + bukti:
+1. Prasyarat manusia: dokumen dasar membuktikan sewa untuk proyek
+   pemerintah dibiayai hibah/pinjaman luar negeri. Ragu = Kasus A.
+2. Pengelola master aktifkan baris 28-403-04 (seed nonaktif) —
+   penerbit TIDAK bisa mengaktifkan dari form bupot.
+3. Penerbit pilih 28-403-04, tautkan bukti dokumen pada kolom bukti
+   (`rentObjectEvidence`); tanpa bukti terisi, Terbit ditolak
+   resolver walau UI lolos.
+4. Hasil akhir: bupot `issued` kode 28-403-04 tarif 10% + bukti
+   tercatat di penerbitan; snapshot beku sama seperti Kasus A.
+5. Sesudah kebutuhan selesai, pengelola master nonaktifkan lagi
+   baris 04 supaya tidak terpilih keliru di penerbitan berikutnya.
+
+Kasus C — pihak non-pemotong (ISF setor sendiri):
+1. Konfirmasi status: ISF menyewakan, penyewa bukan pemotong
+   (F-039 Putusan 3). Operator TIDAK menerbitkan bupot potong atas
+   nama penyewa.
+2. Terima pembayaran bruto penuh dari penyewa (tanpa potongan).
+3. Penyetor setor sendiri 10% KJS 411128-403 atas nama ISF sebelum
+   tenggat §4; catat sebagai PPh disetor sendiri, BUKAN bupot.
+4. Hasil akhir: beban PPh final ISF (bukan kredit pajak, F-038
+   Putusan 4); bukti setor diarsip ke transaksi sewa.
+5. Kebalikan: ISF menyewa dan counterpart mengklaim "sudah setor
+   sendiri" padahal ISF pemotong = klaim DITOLAK operator, ISF
+   tetap potong Kasus A/B (kewajiban melekat di pemotong, F-039).
+
+Kasus D — katalog kosong / kode kedaluwarsa / luar katalog:
+1. Katalog kosong (nol baris sewa aktif pada saat terbit): resolver
+   menolak semua kode. Operator: JANGAN terbitkan bupot jenis lain,
+   JANGAN pinjam kode konstruksi/PPh 23. Eskalasi ke pengelola
+   master; tagihan tetap posted, bupot MENUNDA sampai katalog pulih.
+2. Kode kedaluwarsa operasional (baris dinonaktifkan/diubah antara
+   buka form dan submit): submit ditolak berisik. Operator: muat
+   ulang pilihan dari katalog aktif terbaru, pilih ulang sadar;
+   dilarang mempertahankan pilihan lama diam-diam.
+3. Kode luar katalog terkirim (28-409-*, 28-402-*, 24-*, 28-403-99,
+   acak, kosong): ditolak server. Operator: bukan "coba kode lain
+   sampai lolos" — periksa JENIS transaksi: konstruksi/pengalihan/
+   PPh 23 = rezim + bupotnya sendiri di luar alur sewa ini.
+4. Hasil akhir semua sub-kasus D: dokumen TIDAK lahir, tidak ada
+   jurnal pajak, penolakan tercatat; penerbitan ulang hanya dari
+   katalog aktif sesudah akar masalah selesai.
+
+Tabel ringkas hasil + pesan bisnis (kata layar persis = F-052-S §5;
+kolom Kata di sini = makna bisnis yang operator pahami + tindakan):
+
+| Kasus | Hasil akhir | Pesan penolakan bisnis (makna) | Tindakan operator |
+|---|---|---|---|
+| A 28-403-02 aktif | bupot issued 10% Cr 210206 | — | serahkan bupot, setor §4 |
+| B 28-403-04 tanpa bukti | TIDAK terbit | kode 04 hanya sewa proyek pemerintah hibah/pinjaman LN terbukti dokumen | tautkan bukti, atau turun ke 28-403-02 |
+| C non-pemotong | tanpa bupot; setor sendiri ISF | (bukan penolakan resolver) status pihak menentukan jalur | terima bruto, setor sendiri, arsip bukti setor |
+| D katalog kosong | TIDAK terbit | katalog kode sewa kosong — hubungi pengelola master pajak | eskalasi master; bupot menunda |
+| D kode nonaktif saat submit | TIDAK terbit | kode tidak aktif — pilihan dimuat ulang | pilih ulang dari katalog aktif |
+| D luar katalog/format rusak | TIDAK terbit | kode di luar katalog sewa | periksa rezim transaksi; jangan coba-coba kode |
+| D tarif master != 10 | TIDAK terbit | tarif master menyimpang dari tarif resmi 10% | pengelola master koreksi; form tidak menawarkan tarif pengganti |
+
+### 3. Sewa dibayar di muka + tenggat (F-039, operasional)
+
+- Potong SEKALI atas total bruto termin yang dibayar/diutangkan,
+  pada Masa Pajak pembayaran itu (F-039 Putusan 2). Bayar 12 bulan
+  di muka = satu bupot atas total, BUKAN 12 bupot bulanan; amortisasi
+  bulanan 110502 tanpa potongan lagi. Termin berikut = potong lagi
+  saat termin itu dibayar. Operator dilarang mencicil potongan
+  mengikuti bulan pemakaian (falsifikasi F39-2).
+- Setor: paling lambat TANGGAL 15 bulan berikutnya sesudah Masa
+  Pajak berakhir (PMK 81/2024 Pasal 94 ayat (2); jatuh hari libur ->
+  hari kerja berikutnya Pasal 100). Berlaku sama untuk dipotong
+  maupun setor sendiri. Tenggat lama tgl 10 rezim PMK 242/2014
+  DITINGGALKAN (F39-4).
+- Lapor: SPT Masa PPh Unifikasi paling lama 20 hari sesudah Masa
+  Pajak berakhir (PER-11/PJ/2025). Bupot per pemilik per Masa Pajak
+  per kode objek; koreksi = pembetulan bupot + SPT pembetulan masa
+  asal, bukan edit bupot/jurnal terposting.
+
+### 4. Business rules register (label wajib)
+
+- BR-OPS-01 (vonis BOT 4 F-051-V Putusan 1 + TERVERIFIKASI-KODE
+  PR #428): katalog sah hanya 28-403-02 (default aktif) +
+  28-403-04 (bersyarat bukti, seed nonaktif); operator hanya
+  memilih dari katalog master aktif.
+- BR-OPS-02 (vonis BOT 4 F-051-V Putusan 2 + TERVERIFIKASI-KODE):
+  di luar katalog = TOLAK fail-closed berisik; tidak ada jalur
+  "terima dengan catatan" dan tidak ada coba-kode operator.
+- BR-OPS-03 (vonis BOT 4 F-051-V Putusan 1/F51-3): 28-403-04 tanpa
+  bukti tertaut = tidak terbit; meragukan -> 28-403-02.
+- BR-OPS-04 (vonis BOT 4 F-039 Putusan 3): pemotong ditentukan
+  status pihak terverifikasi; status belum terverifikasi =
+  berhenti, bukan tebakan. ISF menyewa = pemotong; ISF menyewakan
+  ke non-pemotong = setor sendiri.
+- BR-OPS-05 (vonis BOT 4 F-039 Putusan 2): dibayar di muka =
+  potong sekali atas total termin pada masa pembayaran.
+- BR-OPS-06 (vonis BOT 4 F-039 Putusan 4): setor tgl 15 bulan
+  berikut (PMK 81/2024), lapor SPT Masa Unifikasi 20 hari.
+- BR-OPS-07 (vonis BOT 4 F-051-V Putusan 3, sebagian): snapshot
+  beku saat terbit; koreksi hanya cabut + terbit baru. Bagian
+  "master bertanggal efektif" = BELUM dibangun (lihat §0) —
+  sampai dibangun, nonaktif/ubah master berlaku seketika untuk
+  bupot BARU dan operator memperlakukannya sebagai Kasus D.2.
+- BR-OPS-08 (USULAN BOT 5, belum vonis): baris 28-403-04
+  dinonaktifkan lagi sesudah kebutuhan Kasus B selesai (higiene
+  katalog supaya tidak terpilih keliru). Pemilik keputusan:
+  pengelola master/BOT 4 bila akan dijadikan kewajiban.
+
+### 5. Status-transition matrix (operasional)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| Tagihan sewa posted, status pihak terverifikasi pemotong | penerbit pilih kode katalog aktif | siap terbit | `manage_withholding_certificates` |
+| Siap terbit (28-403-04) | bukti belum tertaut | tetap siap-terbit-tertahan (tidak bisa submit sah) | resolver bukti F51-3 |
+| Siap terbit | submit lolos resolver katalog+tarif+bukti | bupot `issued` + Cr 210206 | resolver PR #428 |
+| Siap terbit | submit saat katalog berubah/kosong | ditolak berisik, dokumen tidak lahir | resolver PR #428 |
+| Bupot `issued` | cabut | `revoked`; koreksi = terbit baru | izin bupot |
+| Bupot `issued` | setor oleh penyetor | liabilitas lunas KJS 411128-403 | `create_tax_payments` + tenggat §3 |
+| Sewa ke non-pemotong (Kasus C) | terima bruto | setor-sendiri ISF (tanpa bupot) | status pihak F-039 P3 |
+| Baris katalog aktif | pengelola nonaktifkan | menolak bupot BARU saja; bupot lama utuh | `manage_withholding_tax` |
+
+### 6. Acceptance criteria + edge cases (draf BOT 6)
+
+- AC-OPS-1: Latih Kasus A dari tagihan posted -> bupot 28-403-02
+  terbit, potong 10% Cr 210206; matikan semua baris sewa -> Kasus
+  D katalog kosong: tidak ada bupot lahir, eskalasi tercatat.
+- AC-OPS-2: 28-403-04 nonaktif di master -> tidak bisa dipilih;
+  aktifkan lalu terbit tanpa bukti -> TOLAK; tautkan bukti ->
+  terbit; nonaktifkan lagi -> submit berikutnya TOLAK (F51-3/F51-4).
+- AC-OPS-3: Kasus C: sewa ke penyewa OP tidak ditunjuk -> tidak
+  ada bupot atas nama penyewa, bruto diterima penuh, setor sendiri
+  tercatat; klaim counterpart "sudah setor sendiri" saat ISF
+  pemotong -> operator tetap potong (Kasus A).
+- AC-OPS-4: Sewa 12 bulan dibayar di muka -> SATU potong atas total
+  di masa pembayaran; amortisasi 11 bulan berikut nol potong baru
+  (F39-2). Termin kedua dibayar -> potong baru atas termin itu.
+- AC-OPS-5: Kode dinonaktifkan antara buka form dan submit ->
+  penolakan Kasus D.2, pilihan lama tidak dipertahankan, tidak ada
+  dokumen lahir (selaras AC-BUPOT-052-3, diuji sebagai PERILAKU
+  operator: muat ulang + pilih ulang sadar).
+- AC-OPS-6: Kirim 28-409-22 / 28-402-01 / 24-100-02 / 28-403-99 /
+  kosong -> semua TOLAK berisik; operator mengarahkan transaksi
+  non-sewa keluar alur ini, bukan mencoba kode lain (F51-1/F51-2).
+- Edge: tagihan tercampur sewa + komponen tanpa rincian terbukti =
+  seluruhnya DPP final 10% (F-039 P1c); dua bupot masa sama kode
+  berbeda untuk pemilik sama = sah (satu kode per bupot); bupot
+  arah dipotong-pelanggan tidak masuk alur sewa operator ini;
+  tenggat setor jatuh hari libur -> hari kerja berikutnya.
+
+### 7. Pertanyaan terbuka bernama (BUTUH-VONIS BOT 4 — jangan diputus BOT 5/2/3)
+
+- Q-OPS-1 (= Q-BUPOT-052-1, diteruskan): bukti 28-403-04 persisnya
+  dokumen apa + metadata wajib + retensi — menentukan apakah
+  pengisian string bukti hari ini cukup atau wajib lampiran berkas.
+- Q-OPS-2: Status pemotong pihak disimpan di mana sebagai data
+  bertanggal (flag + dasar penunjukan F-039 P3) dan siapa berhak
+  mengubahnya — sampai ada, verifikasi status di Kasus C manual
+  terdokumentasi di luar sistem.
+- Q-OPS-3: Master bertanggal efektif katalog (gap diakui PR #428):
+  apakah "kedaluwarsa" akan berarti tanggal efektif lampau, dan
+  tanggal acuan keaktifan = tanggal potong (usul F-052-S
+  Q-BUPOT-052-3)? Menentukan makna final Kasus D.2.
+- Q-OPS-4: Bukti setor-sendiri Kasus C dicatat/ditautkan ke apa di
+  sistem (daftar PPh disetor sendiri SPT Masa) — bentuk catatan
+  operator sampai fitur itu ada.
+
+### 8. Backlog implementasi (turunan spec ini; ID spec F-2026-10-22-054-S)
+
+- BOT 4: jawab Q-OPS-1..4 (Q-OPS-1/3 meneruskan Q-BUPOT-052-1/3).
+- BOT 3: master bertanggal efektif + kolom syarat-bukti eksplisit
+  (gap PR #428) sesudah Q-OPS-3; penampung bukti terstruktur
+  sesudah Q-OPS-1. Resolver fail-closed sendiri SUDAH merged #428.
+- BOT 2: tidak ada layar baru dari spec ini — layar tetap F-052-S;
+  hanya bila Q-OPS mengubah kontrak, sesuaikan kata/perilaku.
+- BOT 6: AC-OPS-1..6 di atas sebagai latihan operator + falsifikasi
+  F51-1..6/F39-1..4 tetap milik vonisnya.
+- Lead: urutan merge PR #432 (vonis F-038/F-039) + PR docs spec ini;
+  PR #416 CLOSED — substansi F-051-V sudah dirujuk resolver #428,
+  Lead putuskan perlu terbit ulang vonis ke main atau cukup rujukan
+  branch (jangan BOT 5 putus). Butuh putusan accountant: YA (Q §7).
+
+### Yang TIDAK diusulkan run ini
+- Kata layar baru (milik F-052-S), kode objek/tarif baru, input kode
+  teks bebas, edit bupot terbit, jalur bupot untuk konstruksi/
+  pengalihan/PPh 23 di alur sewa, benchmark Accurate/Zahir untuk
+  prosedur internal DJP — ditolak/ditunda tercatat, bukan hilang.
+
+---
