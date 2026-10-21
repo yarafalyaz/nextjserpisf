@@ -30,6 +30,8 @@ vi.mock("@/lib/db/prisma", () => {
     workOrder: {
       findUniqueOrThrow: (...a: unknown[]) => woFindUniqueOrThrowMock(...a),
       updateMany: (...a: unknown[]) => woUpdateManyMock(...a),
+      // F-2026-10-21-021: hook coverage di dalam tx membaca kendaraan WO.
+      findUnique: vi.fn().mockResolvedValue({ customerVehicleId: null }),
     },
     workOrderItem: { updateMany: (...a: unknown[]) => woItemUpdateManyMock(...a) },
     materialIssue: { findFirst: (...a: unknown[]) => miFindFirstMock(...a) },
@@ -57,6 +59,12 @@ vi.mock("next/cache", () => ({ revalidatePath: (...a: unknown[]) => revalidateMo
 // not query unmocked prisma models.
 vi.mock("@/lib/services/qc.service", () => ({
   assertWorkOrderQcCleared: vi.fn().mockResolvedValue(undefined),
+}))
+// F-2026-10-21-021: hook auto-create coverage wajib terpanggil di dalam
+// transaksi completion. Cabut panggilan di completeWorkOrder = tes ini merah.
+const createWarrantyCoveragesMock = vi.fn().mockResolvedValue({ created: 0 })
+vi.mock("@/lib/services/warranty.service", () => ({
+  createWarrantyCoveragesForWorkOrder: (...a: unknown[]) => createWarrantyCoveragesMock(...a),
 }))
 
 import { completeWorkOrder } from "../manufacturing.actions"
@@ -92,6 +100,9 @@ describe("completeWorkOrder concurrency guard", () => {
     expect(claimArg.where.id).toBe(10)
     expect(claimArg.where.status).toEqual({ in: ["in_progress", "pending"] })
     expect(claimArg.data.status).toBe("completed")
+    // F-2026-10-21-021 tahap 1: coverage garansi dibuat dalam tx completion.
+    expect(createWarrantyCoveragesMock).toHaveBeenCalledTimes(1)
+    expect(createWarrantyCoveragesMock.mock.calls[0][0]).toBe(10)
   })
 
   it("aborts WITHOUT creating a delivery order when the claim is lost (count===0)", async () => {

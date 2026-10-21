@@ -600,6 +600,9 @@ model Item {
   purchasePrice        Decimal              @default(0.00) @map("purchase_price") @db.Decimal(15, 2)
   isProduct            Boolean              @default(false) @map("is_product")
   isService            Boolean              @default(false) @map("is_service")
+  // F-2026-10-21-021 tahap 1: masa garansi pasang per item (bulan). Null =
+  // item tidak bergaransi pasang; tidak ada coverage lahir saat WO selesai.
+  warrantyMonths       Int?                 @map("warranty_months")
   trackBatch           Boolean              @default(false) @map("track_batch")
   trackSerial          Boolean              @default(false) @map("track_serial")
   isActive             Boolean              @default(true) @map("is_active")
@@ -626,6 +629,7 @@ model Item {
   fitmentRules         VehicleFitmentRule[]
   vendorPrices         VendorItemPrice[]
   customerPrices       CustomerPriceList[]
+  warrantyCoverages    WarrantyCoverage[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -2345,6 +2349,8 @@ model WorkOrder {
   quotation         Quotation?        @relation(fields: [quotationId], references: [id])
   project           Project?          @relation(fields: [projectId], references: [id])
   bomRevision       BomRevision?      @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
+  warrantyCoverages WarrantyCoverage[] @relation("WorkOrderWarrantyCoverages")
+  warrantyRepairClaims WarrantyClaim[] @relation("WarrantyClaimRepairWorkOrder")
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
@@ -3397,6 +3403,10 @@ model CustomerVehicle {
   color         String?     @map("color")
   chassisNumber String?     @map("chassis_number")
   engineNumber  String?     @map("engine_number")
+  // F-2026-10-21-021 tahap 1: odometer terakhir tercatat (km), snapshot saat
+  // check-in/serah terima WO. Null = belum pernah tercatat; klaim tetap boleh
+  // masuk (kasus tepi odometer tak terbaca diputus manual, bukan ditolak).
+  lastOdometerKm Int?       @map("last_odometer_km")
   isActive      Boolean     @default(true) @map("is_active")
   notes         String?     @db.Text
   deletedAt     DateTime?   @map("deleted_at")
@@ -3407,6 +3417,8 @@ model CustomerVehicle {
   projects      Project[]
   quotations    Quotation[]
   workOrders    WorkOrder[]
+  warrantyCoverages WarrantyCoverage[]
+  warrantyClaims    WarrantyClaim[]
 
   @@index([customerId], map: "customer_vehicles_customer_id_fkey")
   @@index([vehicleId], map: "customer_vehicles_vehicle_id_fkey")
@@ -3730,6 +3742,73 @@ model TransactionAttachment {
   @@index([uploadedBy])
   @@index([createdAt])
   @@map("transaction_attachments")
+}
+
+// F-2026-10-21-021 tahap 1 — cakupan garansi pasang. Lahir otomatis saat
+// WorkOrder completed untuk baris terpasang (MaterialIssue completed) yang
+// item-nya punya warrantyMonths. TANPA jurnal/provisi (tahap 3 menunggu
+// vonis accountant). Status: active | expired | revoked. Kadaluarsa dibaca
+// dari expiresAt; kolom status hanya berubah lewat pencabutan manual.
+model WarrantyCoverage {
+  id                Int             @id @default(autoincrement())
+  customerVehicleId Int             @map("customer_vehicle_id")
+  workOrderId       Int             @map("work_order_id")
+  itemId            Int             @map("item_id")
+  serialNumber      String?         @map("serial_number")
+  installedAt       DateTime        @map("installed_at")
+  expiresAt         DateTime        @map("expires_at")
+  warrantyMonths    Int             @map("warranty_months")
+  mileageLimitKm    Int?            @map("mileage_limit_km")
+  termsSnapshot     String          @db.Text @map("terms_snapshot")
+  status            String          @default("active")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  customerVehicle   CustomerVehicle @relation(fields: [customerVehicleId], references: [id])
+  workOrder         WorkOrder       @relation("WorkOrderWarrantyCoverages", fields: [workOrderId], references: [id])
+  item              Item            @relation(fields: [itemId], references: [id])
+  claims            WarrantyClaim[]
+
+  @@index([customerVehicleId])
+  @@index([workOrderId])
+  @@index([itemId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("warranty_coverages")
+}
+
+// F-2026-10-21-021 tahap 2 — klaim garansi. State machine:
+// intake -> eligibility -> approved|rejected -> in_repair -> closed.
+// Keputusan SELALU manual (decisionBy/decisionAt wajib saat approved/
+// rejected): sistem TIDAK PERNAH auto-reject klaim di luar masa — fakta
+// eligibility hanya ditampilkan untuk penilai. Foto bukti memakai
+// TransactionAttachment existing (referenceType = "WarrantyClaim"),
+// bukan tabel lampiran baru. TANPA jurnal/provisi.
+model WarrantyClaim {
+  id                 Int             @id @default(autoincrement())
+  coverageId         Int             @map("coverage_id")
+  customerVehicleId  Int             @map("customer_vehicle_id")
+  reportedAt         DateTime        @map("reported_at")
+  odometerKm         Int?            @map("odometer_km")
+  complaint          String          @db.Text
+  status             String          @default("intake")
+  decisionBy         Int?            @map("decision_by")
+  decisionAt         DateTime?       @map("decision_at")
+  decisionNotes      String?         @db.Text @map("decision_notes")
+  resolutionType     String?         @map("resolution_type")
+  repairWorkOrderId  Int?            @map("repair_work_order_id")
+  createdBy          Int?            @map("created_by")
+  createdAt          DateTime        @default(now()) @map("created_at")
+  updatedAt          DateTime        @updatedAt @map("updated_at")
+  coverage           WarrantyCoverage @relation(fields: [coverageId], references: [id])
+  customerVehicle    CustomerVehicle  @relation(fields: [customerVehicleId], references: [id])
+  repairWorkOrder    WorkOrder?       @relation("WarrantyClaimRepairWorkOrder", fields: [repairWorkOrderId], references: [id], onDelete: SetNull)
+
+  @@index([coverageId])
+  @@index([customerVehicleId])
+  @@index([status])
+  @@index([repairWorkOrderId])
+  @@index([createdAt])
+  @@map("warranty_claims")
 }
 
 model DeliveryOrderItem {
