@@ -72,15 +72,15 @@ describe("VehicleMarginCard F-2026-10-22-001", () => {
     unmountCard(root)
   })
 
-  it("penanda material belum tertaut tampil verbatim; tanpa penanda tidak tampil", () => {
+  it("penanda material langsung belum termasuk tampil verbatim; tanpa penanda tidak tampil", () => {
     const { container, root } = renderCard(
       <VehicleMarginCard report={reportExample(true)} />,
     )
-    expect(container.textContent ?? "").toContain("Ada material belum tertaut")
+    expect(container.textContent ?? "").toContain("biaya material langsung belum termasuk")
     unmountCard(root)
 
     const without = renderCard(<VehicleMarginCard report={reportExample()} />)
-    expect(without.container.textContent ?? "").not.toContain("Ada material belum tertaut")
+    expect(without.container.textContent ?? "").not.toContain("biaya material langsung belum termasuk")
     unmountCard(without.root)
   })
 

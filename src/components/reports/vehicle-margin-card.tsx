@@ -57,7 +57,7 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
                   ) : null}
                   {row.hasUnlinkedMaterial ? (
                     <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-xs font-medium text-warning">
-                      Ada material belum tertaut
+                      biaya material langsung belum termasuk
                     </span>
                   ) : null}
                 </DetailTableTd>
