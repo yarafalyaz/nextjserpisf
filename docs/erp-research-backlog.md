@@ -1622,3 +1622,112 @@ Fokus berikutnya: (j) laporan & BI — audit registry laporan vs
 kebutuhan keputusan (kas, margin per kendaraan, WIP aging) lalu tutup
 rotasi a-j + rekap status P0 lintas domain.
 
+
+---
+
+## 2026-10-21 11:32 WIB — Domain (j) laporan & BI + tutup rotasi a–j
+
+Rotasi: run sebelumnya (i) proyek F-2026-10-21-029..031. Run ini (j),
+run penutup rotasi a–j. Berikutnya: antrean implementasi per vonis
+Lead-Arch di board, bukan domain baru.
+
+Benchmark resmi (akses 2026-10-21):
+- Accurate Daftar Laporan + ekspor Excel/PDF/CSV + drill-down ke detail:
+  https://help.accurate.id/product/daftar-laporan/ ,
+  https://accurate.id/online/fitur/laporan-keuangan/
+- Zahir Ekspor Laporan (PDF/Excel, kirim email) + Laporan Bisa Diklik
+  (telusur sampai buku besar/jurnal):
+  https://www.zahironline.com/fitur-lengkap-zahir/
+
+### Inventarisasi terverifikasi (2026-10-21, domain j)
+
+Sudah ada (TERVERIFIKASI-KODE, worktree origin/main 032eb3bf):
+- 77 halaman `/laporan/*`; registry ekspor PDF 60 kunci
+  (`report-registry.ts`), katalog 76 href (`report-catalog.ts:222`),
+  navigasi 76 href (`navigation.ts:225-273`). Tiga kebutuhan keputusan
+  yang disebut fokus run ini SEMUA sudah ada: proyeksi kas
+  (`cash-projection.ts` + memo komitmen F-2026-10-20-48(b)), umur WIP
+  berjalan (`wip-aging*.ts`, F-2026-10-20-72), riwayat per kendaraan
+  (`customer-vehicle-history-data.ts` 5 sumber).
+- 18 halaman tanpa kunci registry BUKAN gap: halaman standalone/
+  keluarga (neraca, keuangan, proyeksi-kas, laba-rugi-proyek, dst.)
+  yang memang tidak lewat jalur ekspor registry — terverifikasi dari
+  struktur `ReportStandaloneEntry` (`report-catalog.ts:43-50`).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN margin per kendaraan sebagai laporan keputusan: riwayat
+  kendaraan = daftar dokumen, tanpa agregat pendapatan-vs-biaya per
+  unit; margin per job baru terbaca sesudah F-029 (proyek) beres dan
+  belum digulirkan ke dimensi kendaraan.
+- ABSEN customer statement: `grep "customer statement|statement
+  pelanggan"` di src/lib/reports + halaman laporan = 0; piutang
+  terbaca per faktur (`piutang-pelanggan`, `customer-receivables.ts`)
+  tanpa dokumen mutasi saldo berjalan per pelanggan untuk dikirim.
+- ABSEN jadwal/kirim laporan berkala: grep jadwal-laporan/email-
+  laporan = 0 di luar transaksi-berulang (bukan laporan).
+
+### Gap
+
+#### F-2026-10-21-032 (j) P1 — Customer statement (mutasi piutang per pelanggan) absen
+- Kompetitor: Accurate riwayat transaksi per pelanggan dari fitur
+  Pelanggan https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/mengenal-fitur-pelanggan/
+- Status Silengkap: ABSEN. Bukti: grep di atas = 0; laporan piutang
+  existing per-faktur tanpa saldo awal + mutasi + saldo berjalan.
+- Relevansi: penagihan ke pelanggan bengkel (fleet/kantor) butuh satu
+  dokumen rekap per periode; hari ini staf menyusun manual dari
+  daftar faktur — rawan selisih dengan `paidAmount` berjalan.
+- Adaptasi (read-model murni, tanpa migrasi): builder
+  `customer-statement-data.ts` — saldo awal dari faktur+ pembayaran
+  sebelum periode; baris periode = invoice terbit (Dr) + SalesPayment
+  + CustomerCredit teralokasi (Cr) dengan saldo berjalan; hanya
+  dokumen non-cancelled (pola `collectQuotationInvoices` existing);
+  tampilkan per pelanggan + ekspor lewat registry existing.
+- Modul disentuh: src/lib/reports/customer-statement*.ts (baru),
+  halaman `/laporan/statement-pelanggan` (frontend), registry.
+- Effort: M. Risiko: dobel hitung kredit vs payment — mitigasi
+  fixture: kredit teralokasi tampil sebagai baris sendiri, bukan
+  payment; uji saldo akhir = outstanding `customer-receivables.ts`.
+- Pemilik usulan: backend (builder), frontend (halaman). Butuh
+  putusan accountant: TIDAK (agregasi baca; definisi outstanding
+  mengikuti read-model piutang existing).
+
+#### F-2026-10-21-033 (j) P2 — Margin per kendaraan menunggu F-029; jangan bangun jalur kedua
+- Status Silengkap: PARSIAL (riwayat dokumen ada, agregat margin
+  tidak). Bukti: `customer-vehicle-history-data.ts:4-8` merangkai 5
+  sumber tanpa total pendapatan/biaya per kendaraan.
+- Adaptasi: SESUDAH builder F-2026-10-21-029 (`project-pl-data`)
+  terbukti — gulirkan agregat yang sama per `customerVehicleId`
+  (invoice via WO/quotation tertaut kendaraan + biaya MaterialIssue/
+  ProductionCost via WO kendaraan); label tegas "margin job
+  kendaraan", BUKAN laba akuntansi. Dilarang builder paralel sebelum
+  F-029 stabil (sumber nilai tunggal).
+- Effort: S (sesudah F-029). Pemilik: backend. Butuh putusan
+  accountant: TIDAK. Ditunda-teknis sampai F-029 merged.
+
+### Rekap P0 lintas domain (tutup rotasi a–j, status 2026-10-21 11:32)
+
+| ID | Domain | Isi | Status jalur |
+|---|---|---|---|
+| F-2026-10-20-103 | (c) | Change order WO tanpa dokumen | inti ditahan vonis Salsa 22:38 (batas build jelas) |
+| F-2026-10-21-011 | (c) | Lot kedaluwarsa lolos 4/5 jalur keluar | LAPIS AMAN MERGED PR #279 |
+| F-2026-10-21-021 | (f) | Garansi pasang tak tercatat | tahap 1-2 siap tanpa vonis, belum dibangun |
+| F-2026-10-21-026 | (h) | PPh21 pra-TER PP 58/2023 (SALAH) | BUTUH-VONIS accountant — angka final bukan milik Bot 5 |
+| F-2026-10-21-029 | (i) | L/R proyek salah cakupan (SALAH) | read-model, tanpa vonis, belum dibangun |
+
+Aturan keras terkonfirmasi ulang run ini: tidak ada P0 baru dari
+domain (j); tiga kebutuhan keputusan fokus (j) sudah terlayani
+laporan existing — gap nyata hanya statement (F-032) dan guliran
+margin kendaraan (F-033, tergantung F-029).
+
+### Yang TIDAK diusulkan run ini
+- Laporan terjadwal terkirim email (Zahir bisa): tanpa bukti
+  kebutuhan pemilik proses; catat sebagai USULAN tertunda, bukan gap.
+- Dashboard BI/grafik baru: dashboard existing + grafik-keuangan
+  cukup; menambah grafik tanpa keputusan yang dilayani = YAGNI.
+- Registry untuk 18 halaman standalone: struktur katalog memang
+  membedakan standalone vs registry — bukan inkonsistensi.
+
+Fokus berikutnya: antrean implementasi — F-032 builder (backend),
+label "Minimum masih global" F-013 (frontend, vonis Lead-Arch
+12:05), vonis F-026 (accountant). Rotasi a–j DITUTUP run ini.
+
