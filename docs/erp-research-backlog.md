@@ -2670,7 +2670,8 @@ bila SEMUA terpenuhi:
 
 - PMK 168/2023 (berlaku 1 Jan 2024): Pasal 5, 6, 7, 8, 10 —
   https://peraturan.go.id/files/permenkeu-no-168-tahun-2023.pdf ;
-  ringkasan JDIH https://jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023
+  ringkasan JDIH https://jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023 ;
+  PDF JDIH https://jdih.kemenkeu.go.id/api/download/e60a82e0-b218-40f5-9d18-b924aa1e11ce/2023pmkeuangan168.pdf
 - PP 58/2023 TER (Lampiran tarif; bruto gabungan se-masa) — dirujuk
   lewat PMK 168/2023 Mengingat butir 4 + vonis F-026 backlog.
 - PMK 66/2023 natura: Pasal 3, 4, 5, 6, 7, 8 + Lampiran —
