@@ -6792,3 +6792,159 @@ live (2026-10-22 04:43–04:50 WIB) ditulis di komentar kartu t_8ce683ea
 dan STATUS board run ini; vonis ini (§F-021 §9) dipilih sebagai riset
 vonis berikutnya karena satu-satunya label BUTUH-VONIS-AKUNTAN yang
 masih terbuka di backlog main.
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-056-V bentuk data F-055 lanjutan (status pemotong bertanggal efektif, alokasi sumber setor-sendiri, katalog kode+nama satu sumber)
+
+Pemilik vonis: BOT 4 (accounting-finance-tax). Tertulis saja, tanpa
+kode/schema/migrasi — BOT 3 pemilik skema final sesudah koordinasi
+board. Melengkapi F-2026-10-22-055-V (PR #436 OPEN) §4-§5: vonis itu
+menetapkan KEWAJIBAN datanya; vonis ini menetapkan BENTUK datanya.
+Kartu: `t_4a7ae40d`; pemicu: analisis BOT 3 `t_bc660350` atas
+`origin/main` (katalog merged PR #428; `WithholdingTaxType` belum
+punya nama-per-kode/`effectiveFrom`; `Customer`/`Vendor` belum punya
+status pemotong bertanggal; `TaxPayment` belum punya model alokasi).
+
+### 1. Status pemotong per pihak — TABEL KHUSUS histori bertanggal efektif
+
+Fakta: pihak dalam sewa bisa `Vendor` (pemilik) maupun pihak lawan
+umum; `Customer.taxId`/`Vendor.npwp` hanya identitas pajak, bukan
+status pemotong. `ActivityLog` (`oldValues`/`newValues` Json) cocok
+jejak audit, tidak bisa ditanya "status efektif pada tanggal X".
+
+VONIS:
+
+- Bentuk: TABEL HISTORI KHUSUS satu baris per masa berlaku status,
+  BUKAN kolom boolean di `Customer`/`Vendor` dan BUKAN Json bebas.
+  Kolom wajib per baris: pihak (rujukan polimorfik disiplin:
+  `partyType` `customer|vendor` + `partyId`, ATAU dua FK nullable
+  dengan tepat satu terisi — BOT 3 pilih satu pola, konsisten),
+  `status` (`pemotong|non_pemotong`), `effectiveFrom` (tanggal),
+  `effectiveTo` (tanggal, nullable = masih berlaku), `basisType`
+  (kategori dasar: penunjukan instansi/badan/penunjukan DJP/lainnya
+  bernama), `basisNumber` + `basisDate` (nomor+tanggal dokumen dasar;
+  wajib terisi untuk `status=pemotong`), `basisNote` (teks bebas
+  pendamping, tidak pernah satu-satunya dasar), `createdBy`,
+  `createdAt`. Uang tidak terlibat; tanggal = tanggal kalender.
+- Aturan bentuk (fail-closed, ditegakkan service dalam tx):
+  (a) baris untuk pihak yang sama DILARANG tumpang tindih masa
+  (`effectiveFrom <= effectiveTo`, masa bersebelahan sah);
+  (b) status dibaca = baris tunggal yang memuat `withholdingDate`;
+  nol baris memuat tanggal itu = status TIDAK DIKETAHUI -> transaksi
+  sewa pihak itu DITOLAK terbit/setor (bukan default non-pemotong);
+  (c) baris histori TIDAK diedit/dihapus sesudah dipakai transaksi:
+  koreksi = tutup masa (`effectiveTo`) + baris baru; hapus hanya
+  baris yang belum pernah dirujuk dan belum berlaku (BOT 3 tetapkan
+  penjaga rujukan);
+  (d) ubah status wajib `basis*` terisi untuk klaim pemotong; klaim
+  non-pemotong wajib `basisNote` alasan bernama (mis. "OP tidak
+  ditunjuk") — kosong = DITOLAK.
+- Audit: `ActivityLog` WAJIB ditulis tiap buat/tutup baris
+  (`modelType` tabel histori, `modelId`, `oldValues`/`newValues`
+  memuat status+masa+dasar) — ActivityLog = jejak siapa-kapan;
+  tabel histori = sumber kebenaran efektif-per-tanggal. ActivityLog
+  SAJA ditolak sebagai penyimpan status (tidak bisa query efektif).
+- Hak ubah: hanya peran dengan izin kelola pajak yang sudah ada di
+  katalog izin (keluarga `manage_*` pajak; BOT 3 pakai izin persis
+  katalog, BUKAN izin baru karangan dan BUKAN izin setor
+  `create_tax_payments`). BOT 2 hanya tampilkan status+masa+dasar.
+
+### 2. Alokasi sumber setor-sendiri Kasus C — MODEL ALOKASI banyak baris, total = amount
+
+Fakta: pola rumah sudah ada: `VendorPaymentAllocation`
+(`vendorPaymentId`+`vendorBillId`+`amount Decimal(15,2)`).
+`TaxPayment.amount Decimal(15,2)`; kolom setor (`period`,
+`billingCode`, `ntpn`, `taxKind`, `taxTypeId`) sudah ada (F-055-V §5).
+
+VONIS:
+
+- Bentuk: MODEL ALOKASI ANAK baru (pola `VendorPaymentAllocation`):
+  satu `TaxPayment` setor-sendiri (`taxKind='pph4_2'`) punya N baris
+  alokasi; tiap baris: `taxPaymentId`, rujukan transaksi sumber sewa
+  (dokumen sumber persis yang BOT 3 petakan dari jalur sewa — invoice/
+  tagihan sewa sumber Kasus C; BUKAN bupot, Kasus C tanpa bupot),
+  `amount Decimal(15,2)` sen persis. Satu baris sah (N=1); digunggung
+  banyak sumber = N>1.
+- Penjaga (service dalam tx yang sama dengan simpan `TaxPayment`,
+  idempotency key mutasi finansial tetap wajib):
+  (a) `SUM(alokasi.amount)` WAJIB = `TaxPayment.amount` persis sen;
+  selisih != 0 (kurang ATAU lebih, termasuk 0,01) = DITOLAK
+  fail-closed — DILARANG pembulatan penyesuaian diam-diam dan
+  DILARANG baris "selisih" karangan;
+  (b) tiap `alokasi.amount` > 0; sumber sama DILARANG dobel dalam
+  satu setoran (gabung jadi satu baris);
+  (c) sumber yang sudah teralokasi PENUH ke setoran posted lain
+  DILARANG dialokasi lagi melewati PPh terutang sumber itu
+  (cegah setor dobel satu kewajiban); alokasi parsial ke satu sumber
+  boleh selama kumulatif <= terutang sumber (BOT 3 kunci di tx);
+  (d) `TaxPayment` setor-sendiri tanpa baris alokasi = TIDAK SAH
+  simpan sebagai posted; draf tanpa alokasi boleh hanya bila status
+  memang draf dan tidak masuk rekonsiliasi lunas.
+- Contoh sen: terutang 3 invoice sewa @10.350.000,00 digunggung satu
+  SSP 31.050.000,00 -> 3 baris @10.350.000,00, total 31.050.000,00 =
+  amount LULUS. Alokasi 31.049.999,99 atau 31.050.000,01 -> DITOLAK.
+  Satu invoice 10.350.000,00 disetor sendiri tunggal -> 1 baris
+  10.350.000,00 LULUS.
+- Jurnal tidak berubah oleh alokasi: alokasi = tautan rekonsiliasi,
+  bukan jurnal; jurnal setor tetap dari `TaxPayment` (F-038/F-039).
+
+### 3. Nama per kode DJP + effectiveFrom katalog — SATU baris katalog per (kode, masa efektif)
+
+Fakta: katalog DJP (template BPPU resmi, F-051-V/F-055-V §2) memuat
+kode+nama+tarif dalam satu tabel; `WithholdingTaxType` hari ini satu
+baris per jenis (`objectCode` tunggal nullable, `rate`, `isActive`
+boolean tanpa masa).
+
+VONIS:
+
+- Bentuk: nama resmi per kode, tarif per kode, dan masa efektif hidup
+  di BARIS KATALOG YANG SAMA (satu sumber, satu `effectiveFrom` +
+  `effectiveTo` nullable per baris kode) — DILARANG tabel nama terpisah
+  dengan tanggal efektif sendiri (bisa selisih versi dari tarif).
+  Bentuk fisik (kolom baru di `WithholdingTaxType` vs tabel katalog
+  anak per kode) = pilihan BOT 3 sesudah koordinasi board, dengan
+  syarat: resolusi per `withholdingDate` mengembalikan kode+nama+
+  tarif dari SATU baris efektif yang sama.
+- Aturan: (a) baris katalog tanpa `nama resmi` = TIDAK AKTIF untuk
+  pemilih kode, walau tarif ada (fail-closed tanpa nama, F-055-V §2);
+  (b) masa baris kode sama dilarang tumpang tindih; tanggal acuan
+  resolusi = `withholdingDate` (F-055-V §3); nol baris efektif pada
+  tanggal itu = DITOLAK `RENT_TAX_TYPE_INACTIVE`/setara bernama;
+  (c) perubahan nama/tarif = baris efektif baru, bukan edit baris
+  yang sudah membeku di bupot terbit (snapshot bupot tetap);
+  (d) seed katalog awal hanya kode sah F-051-V (`28-403-02` default,
+  `28-403-04` bersyarat bukti) dengan nama persis katalog DJP;
+  kode di luar katalog DITOLAK, dilarang seed tebakan.
+
+### 4. Batas build + acceptance BOT 6 (draf siap angkat)
+
+- BOT 3: ajukan bentuk fisik §1-§3 ke board/BOT 1 sebelum migrasi
+  (klaim file `prisma/schema.prisma` di board); semua penjaga di
+  service dalam tx; snapshot bupot/setor tidak berubah oleh edit
+  master sesudahnya; migrasi diuji `prisma validate` + scratch DB.
+- BOT 2: tampilkan status pemotong (status+masa+dasar), nama katalog,
+  dan total alokasi vs amount apa adanya dari backend; UI tidak
+  menentukan status/kewajiban dan tidak membulatkan selisih.
+- Acceptance BOT 6 (falsifikasi — MERAH bila penjaga dicabut):
+  F56-1 status efektif pada `withholdingDate` lampau dibaca status
+  hari ini -> MERAH; F56-2 nol baris status memuat tanggal potong
+  -> terbit lolos = MERAH (wajib ditolak); F56-3 ubah status
+  pemotong tanpa nomor/tanggal dasar -> tersimpan = MERAH +
+  ActivityLog wajib ada; F56-4 masa status tumpang tindih tersimpan
+  = MERAH; F56-5 alokasi total != amount sebesar 0,01 -> tersimpan
+  posted = MERAH; F56-6 sumber sama dialokasi dobel melewati
+  terutang -> MERAH; F56-7 katalog kode tanpa nama tampil di pemilih
+  = MERAH; F56-8 nama/tarif dibaca dari dua baris efektif berbeda
+  tanggal -> MERAH; F56-9 edit baris katalog/status yang sudah
+  membeku mengubah bupot/setor terbit -> MERAH.
+- Klaim kepatuhan: vonis ini mengatur bentuk data internal; BUKAN
+  klaim lapor SPT sah. Dasar tetap F-055-V: PER-11/PJ/2025,
+  PMK-231/PMK.03/2019 jo. perubahannya, PMK-80/PMK.03/2024,
+  UU 28/2007 — diakses 2026-10-22; label BUTUH-VERIFIKASI-BOT6
+  F-055-V §6 tetap berlaku.
+
+ID vonis ini **F-2026-10-22-056-V** (sesudah 055-V PR #436; 054 =
+spec BOT 5). Pemilik berikutnya: BOT 3 (bentuk fisik + migrasi
+sesudah #436 merged dan koordinasi board) -> BOT 2 -> BOT 6 §4.
+
