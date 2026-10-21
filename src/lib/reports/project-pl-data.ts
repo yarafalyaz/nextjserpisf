@@ -134,7 +134,7 @@ function toBuilderInput(all: {
     grandTotal: unknown
     deletedAt: Date | null
   }[]
-  timesheets: { id: number; projectId: number; hours: unknown }[]
+  timesheets: { id: number; projectId: number | null; hours: unknown }[]
 }) {
   return {
     projectId: all.projectId,
@@ -179,11 +179,13 @@ function toBuilderInput(all: {
       grandTotal: Number(b.grandTotal),
       deletedAt: b.deletedAt,
     })),
-    timesheets: all.timesheets.map((t) => ({
-      id: t.id,
-      projectId: t.projectId,
-      hours: Number(t.hours),
-    })),
+    // Timesheet konteks WO (projectId null, F-2026-10-21-019) bukan memo
+    // proyek — saring di sini supaya tidak pernah terhitung dua kali.
+    timesheets: all.timesheets.flatMap((t) =>
+      t.projectId === null
+        ? []
+        : [{ id: t.id, projectId: t.projectId, hours: Number(t.hours) }],
+    ),
   }
 }
 
@@ -236,7 +238,7 @@ export async function loadProjectPlReport(period: {
       select: VENDOR_BILL_SELECT,
     }),
     prisma.timesheet.findMany({
-      where: { ...dateWhere },
+      where: { projectId: { not: null }, ...dateWhere },
       select: { id: true, projectId: true, hours: true },
     }),
     prisma.workOrder.findMany({
@@ -252,7 +254,7 @@ export async function loadProjectPlReport(period: {
   for (const e of expenses) if (e.projectId !== null) activeProjectIds.add(e.projectId)
   for (const p of pettyCash) if (p.projectId !== null) activeProjectIds.add(p.projectId)
   for (const b of vendorBills) if (b.projectId !== null) activeProjectIds.add(b.projectId)
-  for (const t of timesheets) activeProjectIds.add(t.projectId)
+  for (const t of timesheets) if (t.projectId !== null) activeProjectIds.add(t.projectId)
   for (const w of periodWorkOrders) if (w.projectId !== null) activeProjectIds.add(w.projectId)
 
   if (activeProjectIds.size === 0) {

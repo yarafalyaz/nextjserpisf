@@ -127,6 +127,9 @@ describe("resolveAllAccountMappings", () => {
     { id: 11, code: "5000", name: "Harga Pokok Penjualan" },
     { id: 12, code: "5300", name: "Beban Penyusutan" },
     { id: 13, code: "5500", name: "Kas Kecil" },
+    { id: 15, code: "510104", name: "Beban Garansi" },
+    { id: 16, code: "210205", name: "Provisi Garansi" },
+    { id: 17, code: "110508", name: "Piutang Klaim Supplier — Garansi" },
   ]
 
   it("resolves the core accounting fields from the COA", () => {
@@ -140,6 +143,10 @@ describe("resolveAllAccountMappings", () => {
     expect(mapping.cashBankAccountId).toBe("1")
     // AUD-FIN-01: kewajiban UMP — bukan Piutang (2), bukan Utang Usaha (5).
     expect(mapping.customerDownPaymentAccountId).toBe("14")
+    // F-021 tahap 3: akun garansi by-code persis (510104/210205/110508).
+    expect(mapping.warrantyExpenseAccountId).toBe("15")
+    expect(mapping.warrantyProvisionAccountId).toBe("16")
+    expect(mapping.supplierClaimReceivableAccountId).toBe("17")
     expect(mapping.pettyCashAccountId).toBe("13")
     expect(mapping.salariesPayableAccountId).toBe("8")
     expect(mapping.cogsAccountId).toBe("11")
