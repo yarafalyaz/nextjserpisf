@@ -23,22 +23,7 @@ vi.mock("@/actions/hrm.actions", () => ({
   removePayrollComponentLine: (...a: unknown[]) => removeMock(...(a as [])),
 }))
 vi.mock("@/lib/utils/toast", () => ({ showSuccess: showSuccessMock, showError: showErrorMock }))
-vi.mock("@/components/ui/button", () => ({
-  Button: ({
-    children,
-    isDisabled,
-    ...rest
-  }: {
-    children: React.ReactNode
-    isDisabled?: boolean
-    [key: string]: unknown
-  }) => (
-    <button {...(rest as Record<string, unknown>)} disabled={isDisabled}>
-      {children}
-    </button>
-  ),
-  buttonVariants: vi.fn(() => ""),
-}))
+vi.mock("@/components/ui/button", async () => await import("./button-mock"))
 vi.mock("@/components/ui/delete-button", () => ({
   DeleteButton: ({ id }: { id: number }) => <span data-delete-id={id}>Hapus</span>,
 }))

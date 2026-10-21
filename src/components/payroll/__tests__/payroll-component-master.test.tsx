@@ -19,22 +19,7 @@ vi.mock("@/actions/hrm.actions", () => ({
   setPayrollComponentActive: (...a: unknown[]) => setActiveMock(...(a as [])),
 }))
 vi.mock("@/lib/utils/toast", () => ({ showSuccess: vi.fn(), showError: vi.fn() }))
-vi.mock("@/components/ui/button", () => ({
-  Button: ({
-    children,
-    isDisabled,
-    ...rest
-  }: {
-    children: React.ReactNode
-    isDisabled?: boolean
-    [key: string]: unknown
-  }) => (
-    <button {...(rest as Record<string, unknown>)} disabled={isDisabled}>
-      {children}
-    </button>
-  ),
-  buttonVariants: vi.fn(() => ""),
-}))
+vi.mock("@/components/ui/button", async () => await import("./button-mock"))
 
 import { PayrollComponentMaster, taxableLabel } from "../payroll-component-master"
 
