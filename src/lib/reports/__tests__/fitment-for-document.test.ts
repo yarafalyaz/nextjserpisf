@@ -188,11 +188,12 @@ describe("loader", () => {
         {
           items: [
             { id: 1, itemId: 10, description: "Shock" },
-            { id: 2, itemId: null, description: "Jasa" },
+            { id: 2, itemId: 12, description: "Jasa" },
           ],
         },
       ],
     })
+    mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 12 }])
     mocks.prismaMock.vehicleFitmentRule.findMany.mockResolvedValue([
       rule({ id: 5, itemId: 10, vehicleVariantId: 100, result: "incompatible" }),
     ])
