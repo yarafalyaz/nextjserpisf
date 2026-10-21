@@ -13,6 +13,8 @@ import { hasPermission } from "@/lib/auth/permissions"
 import { VehicleWarrantyCard } from "@/components/warranty/vehicle-warranty-card"
 import { prisma } from "@/lib/db/prisma"
 import { getCustomerVehicleHistory, type CustomerVehicleHistoryKind } from "@/lib/reports/customer-vehicle-history-data"
+import { getInstalledParts } from "@/lib/reports/installed-parts-data"
+import { InstalledPartsCard } from "@/components/warranty/installed-parts-card"
 
 import type { Metadata } from "next"
 
@@ -37,6 +39,10 @@ export default async function CustomerVehicleDetailPage({
   const { customer, customerKey, cv } = await loadCustomerVehicleContext(slug, vehicleSlug)
 
   const history = await getCustomerVehicleHistory(cv.id)
+
+  // Part terpasang: read-model builder F-024 (status diputus builder,
+  // UI hanya menampilkan). Read-only, kendaraan tanpa part = daftar kosong.
+  const installedParts = await getInstalledParts(cv.id)
 
   // Kartu garansi: cakupan dibaca lewat action existing (izin view terpisah);
   // tanpa izin itu kartu tidak dirender sama sekali, bukan dirender kosong.
@@ -161,6 +167,9 @@ export default async function CustomerVehicleDetailPage({
           )}
         </div>
       </div>
+
+      {/* Part terpasang (F-024) */}
+      <InstalledPartsCard rows={installedParts.rows} />
 
       {/* Garansi kendaraan */}
       {canViewWarranty && (
