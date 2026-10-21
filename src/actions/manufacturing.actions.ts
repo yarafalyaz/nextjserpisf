@@ -38,6 +38,10 @@ import {
   validateReopenReason,
 } from "@/lib/services/job-closeout.service";
 import { assertWarehouseAccess, getWarehouseScope } from "@/lib/auth/warehouse-scope";
+import {
+  evaluateWorkOrderOperationTransition,
+  parseWorkOrderStageNames,
+} from "@/lib/reports/work-order-progress";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { Prisma } from "@prisma/client";
@@ -1438,6 +1442,11 @@ export async function startWorkOrder(workOrderId: number) {
         where: { workOrderId, status: "pending" },
         data: { status: "in_progress" },
       });
+
+      // F-2026-10-21-020 Tahap A: tahap lahir di transaksi yang sama
+      // dengan klaim start — start gagal tidak meninggalkan baris yatim,
+      // dan hanya pemenang klaim yang menginisialisasi (idempoten).
+      await doInitializeWorkOrderOperationsTx(tx, workOrderId);
     });
 
     await logActivity(
@@ -2120,6 +2129,144 @@ export async function reopenProductionOrder(id: number, reason?: string) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[reopenProductionOrder]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== WORK ORDER OPERATIONS (F-2026-10-21-020 Tahap A) ====================
+
+/**
+ * Inisialisasi tahap WO dari setting di dalam transaksi pemanggil.
+ * Pola doInitializeProjectStages: kunci baris WO FOR UPDATE, no-op
+ * sukses bila baris tahap sudah ada (idempoten). Tanpa backfill massal.
+ */
+async function doInitializeWorkOrderOperationsTx(
+  tx: TxClient,
+  workOrderId: number,
+  createdBy?: number | null,
+): Promise<{ initialized: boolean }> {
+  const rows = await tx.$queryRaw<Array<{ id: number }>>`
+    SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE
+  `;
+  if (rows.length === 0) throw new Error("Perintah kerja tidak ditemukan");
+
+  const existing = await tx.workOrderOperation.findMany({
+    where: { workOrderId },
+    select: { id: true },
+  });
+  if (existing.length > 0) return { initialized: false };
+
+  const settings = await tx.systemSetting.findFirst();
+  const stageNames = parseWorkOrderStageNames(settings?.defaultWorkOrderStages);
+  await tx.workOrderOperation.createMany({
+    data: stageNames.map((name, index) => ({
+      workOrderId,
+      name,
+      sortOrder: index + 1,
+      status: "pending",
+      createdBy: createdBy ?? null,
+    })),
+  });
+  return { initialized: true };
+}
+
+/**
+ * Inisialisasi manual tahap WO (untuk WO lama yang sudah in_progress
+ * sebelum fitur ini ada). Idempoten: klik kedua tidak menggandakan.
+ */
+export async function initializeWorkOrderOperations(workOrderId: number) {
+  try {
+    const user = await requirePermission("edit_work_orders");
+    const res = await prisma.$transaction(async (tx) => {
+      const wo = await tx.workOrder.findUniqueOrThrow({
+        where: { id: workOrderId },
+        select: { id: true, status: true },
+      });
+      if (wo.status !== "in_progress") {
+        throw new Error(
+          `Tahap hanya dapat diinisialisasi saat perintah kerja berstatus 'in_progress' (saat ini '${wo.status}').`,
+        );
+      }
+      return doInitializeWorkOrderOperationsTx(tx, workOrderId, Number(user.id));
+    });
+    if (!res.initialized) return { success: true, message: "Tahap sudah terinisialisasi" };
+    await logActivity("initialize", "WorkOrderOperation", workOrderId, "Inisialisasi tahapan perintah kerja");
+    revalidatePath("/produksi/perintah-kerja");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[initializeWorkOrderOperations]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Transisi satu tahap WO. Guard (vonis Lead t_0a5c5eff):
+ * - permission edit_work_orders, tanpa key baru (Q4);
+ * - WO induk wajib in_progress — mutasi di draft/completed ditolak (Q1/Q3);
+ * - SEQUENSIAL-KERAS: maju hanya bila tahap sebelumnya completed/skipped;
+ * - skipped WAJIB notes alasan (Q2);
+ * - tahap selesai TIDAK menulis jurnal/ProductionCost/stok apa pun.
+ */
+export async function updateWorkOrderOperationStatus(
+  workOrderId: number,
+  operationId: number,
+  status: string,
+  notes?: string,
+) {
+  try {
+    await requirePermission("edit_work_orders");
+
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
+      const wo = await tx.workOrder.findUniqueOrThrow({
+        where: { id: workOrderId },
+        select: { id: true, status: true },
+      });
+      const operation = await tx.workOrderOperation.findUniqueOrThrow({
+        where: { id: operationId },
+      });
+      if (operation.workOrderId !== workOrderId) {
+        throw new Error("Tahap tidak ditemukan pada perintah kerja ini.");
+      }
+      const operations = await tx.workOrderOperation.findMany({
+        where: { workOrderId },
+        select: { sortOrder: true, status: true, name: true },
+      });
+      const verdict = evaluateWorkOrderOperationTransition({
+        workOrderStatus: wo.status,
+        operations,
+        targetSortOrder: operation.sortOrder,
+        targetStatus: status,
+        notes,
+      });
+      if (!verdict.ok) throw new Error(verdict.error);
+
+      const updateData: Record<string, unknown> = { status };
+      if (status === "in_progress") {
+        if (!operation.startedAt) updateData.startedAt = new Date();
+        updateData.completedAt = null;
+      } else if (status === "completed" || status === "skipped") {
+        if (!operation.startedAt) updateData.startedAt = new Date();
+        updateData.completedAt = new Date();
+      } else if (status === "pending") {
+        updateData.startedAt = null;
+        updateData.completedAt = null;
+      }
+      if (notes !== undefined) updateData.notes = notes;
+
+      await tx.workOrderOperation.update({
+        where: { id: operationId },
+        data: updateData,
+      });
+    });
+
+    await logActivity("update", "WorkOrderOperation", operationId, "Memperbarui progres tahapan perintah kerja");
+    revalidatePath("/produksi/perintah-kerja");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateWorkOrderOperationStatus]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

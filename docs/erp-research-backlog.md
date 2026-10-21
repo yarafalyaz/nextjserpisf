@@ -1125,6 +1125,20 @@ Belum ada (bukti grep run ini):
   rencana mingguan.
 - Pemilik usulan: backend (model), frontend (progres). Butuh putusan
   accountant: TIDAK.
+- Status implementasi (Bara, kartu t_0a5c5eff sesuai vonis Lead Q1-Q5):
+  TAHAP A SELESAI di backend — model WorkOrderOperation + setting
+  defaultWorkOrderStages (default 4 nama vonis; template per-Product
+  DITUNDA karena WO tanpa productId andal), builder murni
+  work-order-progress + loader massal, aksi initializeWorkOrderOperations
+  (idempoten FOR UPDATE) + updateWorkOrderOperationStatus
+  (SEQUENSIAL-KERAS, skipped wajib notes, WO wajib in_progress,
+  edit_work_orders tanpa key baru), startWorkOrder inisialisasi dalam
+  transaksi klaim yang sama. Tanpa realisasi jam/jurnal/ProductionCost
+  (vonis Q5), tanpa backfill (WO lama nol baris). Migrasi aditif
+  20261022010000_work_order_operations; verify-migrations lokal belum
+  hijau (butuh user ber-hak CREATE DB — CI DB Integration memverifikasi).
+  Menyusul: UI progres detail/antrean (frontend), getWorkOrderPartStatus
+  loncat ke operasi kala complete tanpa blok (integrasi Q3).
 
 ### Yang TIDAK diusulkan run ini
 - WorkCenter/bay + finite capacity solver: tetap ditunda-teknis per
