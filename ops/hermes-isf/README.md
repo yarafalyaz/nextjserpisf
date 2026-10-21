@@ -30,7 +30,7 @@ From the root of the local clone of `yarafalyaz/nextjserpisf`:
 zsh ops/hermes-isf/setup.zsh
 ```
 
-The script uses the current checkout's HEAD as the base for isolated agent branches. Commit or stash any desired changes first; it deliberately refuses to proceed with a dirty worktree so work is not silently omitted.
+The script uses the local `origin/main` commit as the base for isolated agent branches when that remote-tracking ref exists; otherwise it falls back to the current clean HEAD. Run `git fetch origin main` before setup if you want the newest remote main. Commit or stash any desired changes first; it deliberately refuses to proceed with a dirty worktree so work is not silently omitted.
 
 ## First-time provider setup
 The script clones the default profile's runtime config and provider environment to avoid re-entering the same routed model setup six times. It does not ask to clone messaging channels or cron jobs. Review the resulting profile list and confirm there are no duplicate Telegram/channel credentials before starting any profile gateway.
