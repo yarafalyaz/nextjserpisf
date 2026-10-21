@@ -35,6 +35,14 @@ if [[ -n "$(git status --porcelain)" ]]; then
   die "Working tree tidak bersih. Commit/stash perubahan yang ingin dipertahankan, lalu jalankan ulang. Script tidak akan membuang perubahan lokal."
 fi
 
+# Prefer origin/main as the clean base so agent worktrees do not branch from this setup PR.
+# If the remote-tracking ref is unavailable, use the current clean HEAD and print the choice.
+if git show-ref --verify --quiet refs/remotes/origin/main; then
+  BASE_SHA="$(git rev-parse origin/main)"
+else
+  BASE_SHA="$(git rev-parse HEAD)"
+fi
+
 HERMES_HOME="${HERMES_HOME:-$HOME/.hermes}"
 [[ -f "$HERMES_HOME/config.yaml" ]] || die "Config default Hermes tidak ditemukan: $HERMES_HOME/config.yaml"
 
@@ -66,6 +74,7 @@ info "Versi Hermes:"
 hermes --version
 info "Repository: $REPO_ROOT"
 info "Remote origin: $REMOTE"
+info "Base commit untuk worktrees: $BASE_SHA"
 info "Working tree bersih; default Hermes config dan cron tidak akan diubah."
 
 mkdir -p "$WORKSPACE_ROOT"
@@ -89,7 +98,7 @@ for i in {1..6}; do
   worktree="$WORKSPACE_ROOT/$name"
   branch="agents/$name"
   info "Membuat worktree $name ($branch)"
-  git worktree add -b "$branch" "$worktree" HEAD
+  git worktree add -b "$branch" "$worktree" "$BASE_SHA"
   created_worktrees+=("$worktree")
 done
 
