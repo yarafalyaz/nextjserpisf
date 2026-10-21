@@ -1,9 +1,4 @@
-import type { VehicleMarginReport, VehicleMarginRow } from "@/lib/reports/vehicle-margin-data"
-
-type MarginRowWithMaterialFlag = VehicleMarginRow & {
-  // Kontrak BOT 3 t_e9ef3980; opsional agar UI tidak mengada-ada sebelum loader menerbitkan.
-  hasUnlinkedMaterial?: boolean
-}
+import type { VehicleMarginReport } from "@/lib/reports/vehicle-margin-data"
 import { formatAccounting } from "@/lib/utils/format"
 import {
   DetailTable,
@@ -27,7 +22,6 @@ import { ReportCardShell } from "./report-card-shell"
  */
 export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginReport }>) {
   const { rows, totals } = report
-  const materialRows = rows as MarginRowWithMaterialFlag[]
   const currency = (value: number) => formatAccounting(value, { decimals: 2 })
 
   return (
@@ -50,7 +44,7 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
           <DetailTableTh align="right">Margin Job Kendaraan</DetailTableTh>
         </DetailTableHead>
         <DetailTableBody>
-          {materialRows.map((row) => {
+          {rows.map((row) => {
             const isUnassigned = row.customerVehicleId === null
             return (
               <DetailTableRow key={row.customerVehicleId ?? "tanpa-kendaraan"}>

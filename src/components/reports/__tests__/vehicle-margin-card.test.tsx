@@ -2,7 +2,6 @@
 import { describe, it, expect, afterEach } from "vitest"
 
 import { VehicleMarginCard } from "../vehicle-margin-card"
-import type { VehicleMarginReport } from "@/lib/reports/vehicle-margin-data"
 import { buildVehicleMargin } from "@/lib/reports/vehicle-margin"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 import { projectPlWithCost } from "./project-pl-test-fixtures"
@@ -11,7 +10,7 @@ afterEach(() => {
   clearRenderedCards()
 })
 
-function reportExample() {
+function reportExample(hasUnlinkedMaterial = false) {
   const margin = buildVehicleMargin({
     projects: [
       {
@@ -21,7 +20,17 @@ function reportExample() {
         pl: projectPlWithCost(),
       },
     ],
-    jobs: [],
+    jobs: [
+      {
+        workOrderId: 11,
+        customerVehicleId: 7,
+        vehiclePlate: "B 1234 AA",
+        customerName: "PT A",
+        billedAmount: 0,
+        actualCost: 0,
+        hasUnlinkedMaterial,
+      },
+    ],
     directInvoices: [
       {
         id: 2,
@@ -64,14 +73,9 @@ describe("VehicleMarginCard F-2026-10-22-001", () => {
   })
 
   it("penanda material belum tertaut tampil verbatim; tanpa penanda tidak tampil", () => {
-    const base = reportExample()
-    const withFlag = {
-      ...base,
-      rows: base.rows.map((row, index) =>
-        index === 0 ? { ...row, hasUnlinkedMaterial: true } : row,
-      ),
-    } as VehicleMarginReport
-    const { container, root } = renderCard(<VehicleMarginCard report={withFlag} />)
+    const { container, root } = renderCard(
+      <VehicleMarginCard report={reportExample(true)} />,
+    )
     expect(container.textContent ?? "").toContain("Ada material belum tertaut")
     unmountCard(root)
 
