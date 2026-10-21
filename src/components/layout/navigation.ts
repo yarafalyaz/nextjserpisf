@@ -264,7 +264,7 @@ export const navigation: NavItem[] = [
       { label: "Rincian Beban Pembayaran", href: "/laporan/beban-pembayaran", icon: Wallet, permission: "view_reports" },
       { label: "Ringkasan AR/AP", href: "/laporan/ringkasan-ar-ap", icon: Users, permission: "view_reports" },
       { label: "Pajak", href: "/laporan/pajak", icon: Receipt, permission: "view_reports" },
-      { label: "Bukti Potong PPh", href: "/laporan/bukti-potong-pph", icon: BadgeDollarSign, permission: "view_payroll_reports" },
+      { label: "Bukti Potong PPh", href: "/laporan/bukti-potong-pph", icon: BadgeDollarSign, permission: "view_reports" },
       { label: "Rekonsiliasi PPN", href: "/laporan/rekonsiliasi-ppn", icon: Receipt, permission: "view_reports" },
       { label: "Posisi SPT", href: "/laporan/posisi-spt", icon: Receipt, permission: "view_reports" },
       { label: "Valuasi Stok", href: "/laporan/valuasi-stok", icon: Package, permission: "view_reports" },
