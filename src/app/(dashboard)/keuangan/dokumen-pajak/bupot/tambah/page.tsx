@@ -17,7 +17,7 @@ import {
   WithholdingCertificateForm,
   WithholdingLifecycleActions,
   type TaxOption,
-} from "@/app/(dashboard)/laporan/pajak/_components/withholding-certificate-form"
+} from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/withholding-certificate-form"
 import { formatCurrency } from "@/lib/utils/format"
 
 export const metadata: Metadata = { title: "Terbitkan Bukti Potong" }
@@ -84,8 +84,8 @@ export default async function CreateWithholdingCertificatePage() {
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Pajak", href: "/laporan/pajak" },
+          { label: "Keuangan", href: "/keuangan" },
+          { label: "Dokumen Pajak", href: "/keuangan/dokumen-pajak/faktur/tambah" },
           { label: "Terbitkan Bukti Potong" },
         ]}
       />

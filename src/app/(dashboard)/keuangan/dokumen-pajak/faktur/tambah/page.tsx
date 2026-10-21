@@ -13,7 +13,7 @@ import type { PermissionName } from "@/lib/setup/base-data"
  */
 const CREATE_TAX_INVOICES = "create_tax_invoices" as PermissionName
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
-import { TaxInvoiceForm, TaxInvoiceLifecycleActions, type TaxOption } from "@/app/(dashboard)/laporan/pajak/_components/tax-invoice-form"
+import { TaxInvoiceForm, TaxInvoiceLifecycleActions, type TaxOption } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/tax-invoice-form"
 import { formatCurrency } from "@/lib/utils/format"
 
 export const metadata: Metadata = { title: "Terbitkan Faktur Pajak" }
@@ -68,8 +68,8 @@ export default async function CreateTaxInvoicePage() {
       <AppBreadcrumbs
         items={[
           { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Pajak", href: "/laporan/pajak" },
+          { label: "Keuangan", href: "/keuangan" },
+          { label: "Dokumen Pajak", href: "/keuangan/dokumen-pajak/faktur/tambah" },
           { label: "Terbitkan Faktur Pajak" },
         ]}
       />
