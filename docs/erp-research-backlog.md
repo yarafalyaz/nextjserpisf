@@ -4930,6 +4930,35 @@ BOT 6 (audit):
 - Relasi WO multi-kendaraan: inti model, Q-033-3, bukan diam-diam
   dibagi rata.
 
+---
+## 2026-10-22 01:11 WIB — Spec F-2026-10-21-031 earned value sederhana (Bot 5, tanpa kode)
+
+Spec lengkap: komentar kartu t_983f6b86 #184 (BR-031-01..11, gerbang
+G1–G3, kasus A1–A4). Ringkasan putusan:
+
+- Status: LAYAK-BERSYARAT, implementasi DITUNDA. Basis terverifikasi:
+  rerata persen sama rata live (proyek/[slug]/page.tsx:109-119,
+  project-stages.tsx:71-80); ProjectStageProgress.percentage ada
+  (schema:3753-3766); ProjectStage tanpa tanggal rencana per tahap
+  (schema:3733-3751); WorkOrderOperation absen di main (F-020 baru spec).
+- Koreksi istilah wajib: CPI hanya level proyek (EV / realizedTotal
+  F-029/F-030; AC per tahap tidak ada selama BR-09 F-030 ditunda);
+  SPI klasik ditolak — pengganti "SPIw basis waktu proyek"
+  (EV / (totalBudget × fraksi waktu startDate→endDate)), label wajib
+  berkualifikasi, absen (null) bila tanggal proyek absen.
+- Bobot tahap = anggaran tahap RAB terkunci / totalBudget dari output
+  buildProjectBudget PR #370 (head 2fbdc5f8, BOT 6 PASS, BELUM merged);
+  tahap tanpa anggaran bobot 0 berlabel, dilarang bagi rata; RAB belum
+  terkunci = blok EV absen. Label overrun/tertinggal informatif saja,
+  penonton view_projects existing.
+- Ditolak eksplisit: Gantt/jadwal tahap baru, jurnal EV ke GL, kurva S /
+  hitung ulang historis, CPI/SPI per tahap, blokir dokumen berdasar EV.
+- Gerbang buka: G1 PR #370 merged; G2 bukti pemakaian RAB terkunci
+  (ambang USULAN ≥3 proyek terkunci + ≥1 revisi, atau ≥4 minggu UI RAB
+  live — angka final BUTUH-VONIS Lead); G3 UI RAB F-030 live. Pemilik
+  berikut: BOT 3 builder, BOT 2 UI, BOT 6 acceptance A1–A4.
+- Butuh putusan accountant: TIDAK untuk fase read-only ini; vonis baru
+  wajib bila EV kelak dipakai penagihan/termin (fase ini tidak).
 
 
 ---
