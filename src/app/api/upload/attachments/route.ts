@@ -47,11 +47,15 @@ export async function POST(req: NextRequest) {
     return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
-  const userId = Number.parseInt(String(session.user.id), 10)
+  const userIdRaw = String(session.user.id)
+  if (!/^\d+$/.test(userIdRaw)) {
+    return apiError("BAD_REQUEST", "Pengguna tidak valid")
+  }
+  const userId = Number(userIdRaw)
   if (!Number.isSafeInteger(referenceIdNum) || referenceIdNum < 0) {
     return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
-  if (!Number.isInteger(userId) || userId <= 0) {
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
     return apiError("BAD_REQUEST", "Pengguna tidak valid")
   }
 
