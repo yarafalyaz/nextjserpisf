@@ -27,6 +27,8 @@ import { RevisionDownCreditButton } from "@/components/reports/revision-down-cre
 import { loadJobBillingSummary } from "@/lib/reports/job-billing-summary-data";
 import { loadQuotationApprovalGate } from "@/lib/reports/quotation-approval-gate-data";
 import { QuotationApprovalGateCard } from "@/components/reports/quotation-approval-gate-card";
+import { getQuotationRevisionDelta } from "@/lib/reports/quotation-revision-delta-data";
+import { QuotationRevisionDeltaCard } from "@/components/reports/quotation-revision-delta-card";
 import {
   DetailTable,
   DetailTableHead,
@@ -77,9 +79,10 @@ export default async function QuotationDetailPage({
 
   if (!quotation) notFound();
 
-  const [billingSummary, approvalGate] = await Promise.all([
+  const [billingSummary, approvalGate, revisionDelta] = await Promise.all([
     loadJobBillingSummary(quotation.id),
     loadQuotationApprovalGate(quotation),
+    getQuotationRevisionDelta(quotation.id),
   ]);
 
   const itemIds = quotation.sections
@@ -317,6 +320,8 @@ export default async function QuotationDetailPage({
                 {billingSummary ? <JobBillingCard summary={billingSummary} /> : null}
 
                 <QuotationApprovalGateCard gate={approvalGate} />
+
+                <QuotationRevisionDeltaCard delta={revisionDelta} />
 
                 <div className="flex flex-wrap justify-end gap-2">
                   <ProgressInvoiceButton quotationId={quotation.id} />
