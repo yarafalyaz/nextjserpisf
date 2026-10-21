@@ -86,6 +86,13 @@ export interface CustomerCreditExposureRow extends CustomerCreditExposureInput {
   status: "unset" | "ok" | "warning" | "over"
 }
 
+export const CREDIT_EXPOSURE_STATUS_LABEL: Record<CustomerCreditExposureRow["status"], string> = {
+  unset: "Limit belum diatur",
+  ok: "Aman",
+  warning: "Mendekati batas",
+  over: "Lewat batas",
+}
+
 export function buildCustomerCreditExposure(rows: CustomerCreditExposureInput[]): CustomerCreditExposureRow[] {
   return rows
     .map((row) => {
