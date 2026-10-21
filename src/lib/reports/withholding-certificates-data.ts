@@ -1,10 +1,11 @@
 /**
- * Loader ekspor CSV Bukti Potong PPh (F-2026-10-20-35(a)).
+ * Loader ekspor CSV Bukti Potong PPh (F-2026-10-20-35(a), F-003).
  *
- * Query sama dengan halaman bukti-potong-pph: pembelian dari VendorBill
- * posted/partial/paid ber-withholding, penjualan dari SalesPayment
- * ber-withholding. NPWP lawan dari master existing (Vendor.npwp /
- * Customer.taxId) — tanpa migrasi, tanpa jurnal.
+ * Sumber utama sesudah model ada: dokumen `WithholdingCertificate`
+ * (snapshot pasal+kode+tarif+DPP — edit master tak mengubah baris ini).
+ * Baris dokumen komersial TANPA bupot tetap tampil fallback master
+ * berjalan berlabel lewat nomor kosong; bupot yg menaut dokumen sumber
+ * menggantikan baris fallback dokumen itu (tanpa dobel).
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -18,7 +19,7 @@ import {
 type Period = { start: Date; end: Date }
 
 export async function loadWithholdingCertificatesCsv(period: Period): Promise<WithholdingCertificateCsv> {
-  const [bills, payments] = await Promise.all([
+  const [bills, payments, certificates] = await Promise.all([
     prisma.vendorBill.findMany({
       where: {
         date: { gte: period.start, lte: period.end },
@@ -43,10 +44,45 @@ export async function loadWithholdingCertificatesCsv(period: Period): Promise<Wi
       },
       orderBy: [{ paymentDate: "asc" }, { documentNo: "asc" }],
     }),
+    prisma.withholdingCertificate.findMany({
+      where: {
+        withholdingDate: { gte: period.start, lte: period.end },
+        status: { not: "revoked" },
+      },
+      include: {
+        withholdingType: { select: { code: true, name: true } },
+        vendorBill: { select: { documentNo: true } },
+        salesPayment: { select: { documentNo: true } },
+      },
+      orderBy: [{ withholdingDate: "asc" }, { certificateNumber: "asc" }],
+    }),
   ])
 
+  // Bupot snapshot menggantikan baris fallback dokumen sumber tertaut.
+  const certifiedBillIds = new Set(
+    certificates.map((c) => c.vendorBillId).filter((v): v is number => v != null),
+  )
+  const certifiedPaymentIds = new Set(
+    certificates.map((c) => c.salesPaymentId).filter((v): v is number => v != null),
+  )
+
   const inputs: WithholdingCertificateInput[] = [
-    ...bills.map((bill): WithholdingCertificateInput => ({
+    ...certificates.map((cert): WithholdingCertificateInput => ({
+      side: cert.direction === "we_withhold" ? "purchase" : "sales",
+      date: cert.withholdingDate,
+      certificateNo: cert.certificateNumber,
+      documentNo: cert.vendorBill?.documentNo ?? cert.salesPayment?.documentNo ?? cert.certificateNumber,
+      counterparty: cert.counterpartyName,
+      npwp: cert.counterpartyTaxId,
+      typeCode: cert.withholdingType.code,
+      typeName: `${cert.withholdingType.name} (${cert.article}${cert.objectCode ? ` ${cert.objectCode}` : ""})`,
+      rate: Number(cert.tariff),
+      dpp: Number(cert.dpp),
+      withheld: Number(cert.withheldAmount),
+    })),
+    ...bills
+      .filter((bill) => !certifiedBillIds.has(bill.id))
+      .map((bill): WithholdingCertificateInput => ({
       side: "purchase",
       date: bill.date,
       certificateNo: null,
@@ -59,7 +95,9 @@ export async function loadWithholdingCertificatesCsv(period: Period): Promise<Wi
       dpp: purchaseDpp(Number(bill.subtotal), Number(bill.discountAmount ?? 0)),
       withheld: Number(bill.withholdingAmount),
     })),
-    ...payments.map((payment): WithholdingCertificateInput => ({
+    ...payments
+      .filter((payment) => !certifiedPaymentIds.has(payment.id))
+      .map((payment): WithholdingCertificateInput => ({
       side: "sales",
       date: payment.paymentDate,
       certificateNo: payment.withholdingCertificateNo,

@@ -99,6 +99,23 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
   "src/actions/customer-price-list.actions.ts::deleteCustomerPriceList":
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
+  // F-2026-10-21-001..006 inti pajak (backend dulu, pola F-PRICELIST-01):
+  // service TaxInvoice/bupot + read-model SPT sudah tersambung registry PDF
+  // posisi-spt; form faktur/bupot = tahap UI Bot 2 berikutnya.
+  "src/actions/tax-documents.actions.ts::issueTaxInvoiceAction":
+    "F-001/F-002 inti TaxInvoice backend; form faktur pajak menyusul (tahap UI)",
+  "src/actions/tax-documents.actions.ts::replaceTaxInvoiceAction":
+    "F-001/F-002 inti TaxInvoice backend; form faktur pengganti menyusul (tahap UI)",
+  "src/actions/tax-documents.actions.ts::cancelTaxInvoiceAction":
+    "F-001/F-002 inti TaxInvoice backend; aksi batal faktur menyusul (tahap UI)",
+  "src/actions/tax-documents.actions.ts::creditInputInvoiceAction":
+    "F-002 inti kredit faktur masukan backend; form masa kredit menyusul (tahap UI)",
+  "src/actions/tax-documents.actions.ts::issueWithholdingCertificateAction":
+    "F-003 inti bupot backend; form bukti potong menyusul (tahap UI)",
+  "src/actions/tax-documents.actions.ts::revokeWithholdingCertificateAction":
+    "F-003 inti bupot backend; aksi batal bupot menyusul (tahap UI)",
+  "src/actions/tax-documents.actions.ts::settleWithholdingTaxAction":
+    "F-003/F-005 inti setor PPh backend; form setor bupot menyusul (tahap UI)",
 }
 
 describe("keterhubungan aksi server", () => {

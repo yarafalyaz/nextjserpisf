@@ -40,7 +40,7 @@ export type WarrantyClaimStatus = (typeof WARRANTY_CLAIM_STATUSES)[number]
 export const WARRANTY_RESOLUTION_TYPES = ["repair", "replace", "reject"] as const
 export type WarrantyResolutionType = (typeof WARRANTY_RESOLUTION_TYPES)[number]
 
-/** Transisi status klaim yang sah. rejected & closed terminal. */
+/** Transisi status klaim yang sah. closed satu-satunya terminal. */
 export const WARRANTY_CLAIM_TRANSITIONS: Record<WarrantyClaimStatus, readonly WarrantyClaimStatus[]> = {
   intake: ["eligibility"],
   eligibility: ["approved", "rejected"],

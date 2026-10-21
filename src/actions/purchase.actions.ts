@@ -97,6 +97,32 @@ function parseGrItems(items: string | null | undefined) {
 }
 
 /**
+ * F-004: harga beli beku per item utk snapshot DPP retur beli — dari
+ * VendorBillItem.unitPrice tagihan PO terbaru (non-cancelled). Item tanpa
+ * baris tagihan → tak ada entri (baris retur legacy, bukan ditebak dari
+ * Item.cost/HPP). Payload `item.price` eksplisit menang di pemanggil.
+ */
+async function loadBillUnitPriceByItem(
+  tx: Prisma.TransactionClient,
+  purchaseOrderId: number | null | undefined,
+  itemIds: number[],
+): Promise<Map<number, number>> {
+  const out = new Map<number, number>();
+  if (!purchaseOrderId || itemIds.length === 0) return out;
+  const bills = await tx.vendorBill.findMany({
+    where: { purchaseOrderId, status: { not: "cancelled" } },
+    orderBy: { id: "desc" },
+    select: { items: { where: { itemId: { in: itemIds } }, select: { itemId: true, unitPrice: true } } },
+  });
+  for (const bill of bills) {
+    for (const line of bill.items) {
+      if (line.itemId != null && !out.has(line.itemId)) out.set(line.itemId, Number(line.unitPrice));
+    }
+  }
+  return out;
+}
+
+/**
  * 3-way match guard (PO ↔ Goods Receipt ↔ Vendor Bill).
  * When a vendor bill is linked to a PO, ensure: (1) goods were actually received
  * (a verified GR exists), and (2) the cumulative billed amount does not exceed
@@ -1578,6 +1604,7 @@ export async function createPurchaseReturn(formData: FormData) {
         }
       }
 
+      const billPriceByItem = await loadBillUnitPriceByItem(tx, v.purchaseOrderId, prItemIds);
       return await tx.purchaseReturn.create({
         data: {
           documentNo,
@@ -1596,6 +1623,11 @@ export async function createPurchaseReturn(formData: FormData) {
               // rather than crashing the Prisma insert with a string-to-Int error.
               qty: Math.max(0.01, Number(item.qty) || 0),
               cost: prDocumentCostMap.get(Number(item.itemId)) ?? 0,
+              // F-004: bekukan harga beli (payload menang, else tagihan asal).
+              price:
+                item.price != null && Number(item.price) > 0
+                  ? Number(item.price)
+                  : (billPriceByItem.get(Number(item.itemId)) ?? null),
             })),
           },
         },
@@ -2672,6 +2704,7 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
       await tx.purchaseReturnItem.deleteMany({
         where: { purchaseReturnId: id },
       });
+      const updBillPriceByItem = await loadBillUnitPriceByItem(tx, v.purchaseOrderId, updPrIds);
       const date = wibDateToUtcMidnight(v.date);
       return tx.purchaseReturn.update({
         where: { id },
@@ -2689,6 +2722,11 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
               // rather than crashing the Prisma insert with a string-to-Int error.
               qty: Math.max(0.01, Number(item.qty) || 0),
               cost: updPrDocumentCostMap.get(Number(item.itemId)) ?? 0,
+              // F-004: bekukan harga beli (payload menang, else tagihan asal).
+              price:
+                item.price != null && Number(item.price) > 0
+                  ? Number(item.price)
+                  : (updBillPriceByItem.get(Number(item.itemId)) ?? null),
             })),
           },
         },

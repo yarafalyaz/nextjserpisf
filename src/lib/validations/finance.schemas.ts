@@ -289,6 +289,21 @@ export const taxPaymentSchema = z.object({
     (v) => (v === "" || v == null ? undefined : v),
     taxPeriod.optional(),
   ),
+  /** Kode billing MPN: tepat 15 digit bila diisi (F-005). */
+  billingCode: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.string().regex(/^\d{15}$/, "Kode billing harus 15 digit").optional(),
+  ),
+  /** NTPN: tepat 16 karakter bila diisi (F-005). */
+  ntpn: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.string().length(16, "NTPN harus 16 karakter").optional(),
+  ),
+  /** Jenis pajak terstruktur (F-005): ppn|pph21|pph23|pph4_2|pph_badan|other. */
+  taxKind: z.preprocess(
+    (v) => (v === "" || v == null ? undefined : v),
+    z.enum(["ppn", "pph21", "pph23", "pph4_2", "pph_badan", "other"]).optional(),
+  ),
   taxTypeId: z.preprocess(
     (v) => (v === "" || v == null ? undefined : v),
     z.coerce.number().int().positive().optional(),
