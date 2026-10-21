@@ -18,10 +18,11 @@ import {
 
 /**
  * Server action tipis F-001/F-002 (TaxInvoice) + F-003 (bupot/setor):
- * validasi Zod + permission existing, delegasi penuh ke service.
- * Tanpa permission khusus faktur/bupot di katalog, pemakaian ulang
- * `create_tax_payments` (domain setor pajak) — jangan ciptakan key baru
- * tanpa migrasi katalog permission.
+ * validasi Zod + permission, delegasi penuh ke service.
+ * Izin khusus F-2026-10-21-034: faktur pajak = `create_tax_invoices`,
+ * bupot = `manage_withholding_certificates`; setor tetap izin setor
+ * existing `create_tax_payments`. Action yang gagal izin melempar via
+ * requirePermission sebelum parse/delegasi — pola file ini.
  */
 
 const REVALIDATE_TAX = "/laporan/pajak"
@@ -81,28 +82,28 @@ const creditSchema = z.object({
 })
 
 export async function issueTaxInvoiceAction(formData: FormData) {
-  const user = await requirePermission("create_tax_payments")
+  const user = await requirePermission("create_tax_invoices")
   const parsed = parseFormData(issueSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
   return issueTaxInvoice({ ...parsed.data, userId: Number(user.id) })
 }
 
 export async function replaceTaxInvoiceAction(formData: FormData) {
-  const user = await requirePermission("create_tax_payments")
+  const user = await requirePermission("create_tax_invoices")
   const parsed = parseFormData(replaceSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
   return replaceTaxInvoice({ ...parsed.data, userId: Number(user.id) })
 }
 
 export async function cancelTaxInvoiceAction(formData: FormData) {
-  const user = await requirePermission("create_tax_payments")
+  const user = await requirePermission("create_tax_invoices")
   const parsed = parseFormData(cancelSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
   return cancelTaxInvoice({ ...parsed.data, userId: Number(user.id) })
 }
 
 export async function creditInputInvoiceAction(formData: FormData) {
-  const user = await requirePermission("create_tax_payments")
+  const user = await requirePermission("create_tax_invoices")
   const parsed = parseFormData(creditSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
   return creditInputInvoice({ ...parsed.data, userId: Number(user.id) })
@@ -151,7 +152,7 @@ const settleSchema = z.object({
 })
 
 export async function issueWithholdingCertificateAction(formData: FormData) {
-  const user = await requirePermission("create_tax_payments")
+  const user = await requirePermission("manage_withholding_certificates")
   const parsed = parseFormData(issueBupotSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
   return issueWithholdingCertificate({
@@ -162,7 +163,7 @@ export async function issueWithholdingCertificateAction(formData: FormData) {
 }
 
 export async function revokeWithholdingCertificateAction(formData: FormData) {
-  const user = await requirePermission("create_tax_payments")
+  const user = await requirePermission("manage_withholding_certificates")
   const parsed = parseFormData(revokeBupotSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
   return revokeWithholdingCertificate({ ...parsed.data, userId: Number(user.id) })

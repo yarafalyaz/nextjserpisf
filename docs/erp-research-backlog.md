@@ -2283,3 +2283,55 @@ Fokus berikutnya: (h) SDM & payroll — verifikasi live klaim skill
 Bot 5: generateBulkPayroll tanpa filter paymentFrequency, status
 kepegawaian tanpa field PKWT/PKWTT, PPh 21 TER F-2026-10-21-026.
 
+
+## VONIS + IMPLEMENTASI BOT 4 2026-10-21 — F-2026-10-21-034 izin khusus faktur pajak/bupot
+
+Konteks: audit Bot 6 atas PR #290 (issuecomment-6311118772, diteruskan
+Lead 2026-10-21) mencatat medium non-blokir: 7 aksi
+`src/actions/tax-documents.actions.ts` memakai ulang izin setor
+`create_tax_payments`. Pemegang izin setor otomatis boleh menerbitkan/
+mengganti/membatalkan faktur pajak dan bupot — pemisahan tugas lemah,
+wajib dipisah sebelum UI form faktur/bupot dibuka (Bot 2). PR #290
+sudah MERGED `85f6289e`; item ini PR lanjutan mandiri, tanpa migrasi.
+
+Keputusan izin (mengikat):
+- Faktur pajak (issue/replace/cancel/credit masukan) =
+  `create_tax_invoices` (verba create, resource `tax_invoices`,
+  label "Faktur Pajak", modul finance).
+- Bupot (issue/revoke) = `manage_withholding_certificates` (verba
+  manage, resource `withholding_certificates`, label "Bukti Potong
+  (Bupot)", modul finance). Satu izin manage untuk terbit+batal:
+  bupot tidak punya siklus CRUD terpisah; memecah create/delete
+  menambah key tanpa pemisahan tugas nyata (penerbit yang sama yang
+  mencabut dengan reversal jurnal).
+- Setor PPh (`settleWithholdingTaxAction`) TETAP `create_tax_payments`
+  — itu memang domain setor; jangan diganti.
+- Pelaporan/ekspor bupot dan halaman posisi-spt tetap `view_reports`
+  (jalur baca laporan), tidak ikut item ini.
+
+Grant peran: permission baru masuk `PERMISSIONS` (base-data.ts);
+`admin` menerimanya otomatis via ADMIN_WHITELIST (seluruh katalog
+kecuali SYSTEM_ADMIN_PERMISSIONS), `super_admin` via grant menyeluruh.
+Role lain TIDAK menerima otomatis — admin peran memberi eksplisit via
+matriks izin sesudah `npm run db:seed`; perilaku sesudah merge:
+pemegang `create_tax_payments` non-admin kehilangan akses aksi faktur/
+bupot sampai diberi izin baru. Itu memang tujuan pemisahan; UI form
+belum ada sehingga tidak ada fitur berjalan yang putus.
+
+Temuan samping terbukti: generator katalog
+`scripts/generate-module-catalog.mjs` RUSAK di main — pola
+split(/^\];/m) tidak pernah cocok (blok diakhiri `] as const;`)
+sehingga ROLES ikut terbaca dan generator meledak di "super_admin"
+(reproduksi di tree bersih tanpa edit: exit gagal). Diperbaiki di PR
+ini; regenerasi kini 333 permission dan diff katalog hanya 2 baris
+baru + hitungan — membuktikan katalog generated sebelumnya tidak drift.
+
+Penjaga: modules-catalog.test.ts (paritas dua arah PERMISSIONS vs
+katalog + invarian key_verba_resource) dan permission-seed-parity
+(requirePermission string wajib ada di seed) — keduanya menutupi key
+baru dan akan merah bila izin action diganti ke key tak terdaftar.
+
+Pemilik berikutnya: Lead merge PR ini; Bot 2 memakai
+`create_tax_invoices`/`manage_withholding_certificates` untuk gating
+form faktur/bupot (CanCreate/requirePermission UI), BUKAN
+`create_tax_payments` lagi.
