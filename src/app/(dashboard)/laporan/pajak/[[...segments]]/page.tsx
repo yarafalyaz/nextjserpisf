@@ -6,10 +6,9 @@ import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
 
 /**
- * Izin aksi dokumen pajak dari F-034 (PR #301, belum di main saat file ini
- * ditulis): faktur = `create_tax_invoices`, bupot =
- * `manage_withholding_certificates`. ponytail: literal + cast lokal supaya
- * tsc main bersih; sesudah #301 merged pakai literal polos, hapus konstanta.
+ * Izin aksi dokumen pajak dari F-034 (PR #301, di main): faktur =
+ * `create_tax_invoices`, bupot = `manage_withholding_certificates`;
+ * settle tetap `create_tax_payments`.
  */
 import { CanCreate } from "@/components/auth/can-create"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -26,8 +25,10 @@ export const metadata: Metadata = { title: "Pajak" }
 /**
  * Halaman layar Laporan Pajak (F-2026-10-21-001..006, tahap frontend).
  *
- * Satu sumber kebenaran dengan PDF `pajak` dan halaman Posisi SPT:
- * `loadTaxSummarySpt` atas read-model SPT (`loadSptPeriodRowsForRange`).
+ * Satu sumber kebenaran dengan ekspor PDF halaman ini (kunci registry
+ * `posisi-spt`) dan halaman Posisi SPT: `loadTaxSummarySpt` atas
+ * read-model SPT (`loadSptPeriodRowsForRange`) — layar dan PDF bentuk
+ * tabel yang sama persis, bukan rincian per dokumen.
  * Angka per masa — keluaran, pengurang retur, masukan, neto, kewajiban
  * jurnal, selisih, disetor, sisa — tampil apa adanya dari builder; halaman
  * ini tidak meng-query dokumen mentah dan tidak menghitung ulang pajak.
@@ -85,7 +86,7 @@ export default async function TaxReportPage({
           </CanCreate>
           <ExportButtons
             title="Laporan_Pajak"
-            pdfHref={buildReportPdfHref("pajak", period.slug)}
+            pdfHref={buildReportPdfHref("posisi-spt", period.slug)}
           />
         </>
       }

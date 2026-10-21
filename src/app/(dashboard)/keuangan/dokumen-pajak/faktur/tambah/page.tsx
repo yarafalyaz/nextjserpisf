@@ -6,9 +6,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 
 /**
- * Izin terbit faktur dari F-034 (PR #301, belum di main saat file ini ditulis).
- * ponytail: literal + cast lokal supaya tsc main bersih; sesudah #301 merged
- * ganti dengan "create_tax_invoices" polos dan hapus cast ini.
+ * Izin terbit faktur dari F-034 (PR #301, di main): `create_tax_invoices`.
  */
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaxInvoiceForm, TaxInvoiceLifecycleActions, type TaxOption } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/tax-invoice-form"

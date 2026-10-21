@@ -6,9 +6,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 
 /**
- * Izin bupot dari F-034 (PR #301, belum di main saat file ini ditulis).
- * ponytail: literal + cast lokal supaya tsc main bersih; sesudah #301 merged
- * ganti dengan "manage_withholding_certificates" polos dan hapus cast ini.
+ * Izin bupot dari F-034 (PR #301, di main): `manage_withholding_certificates`.
  */
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import {
