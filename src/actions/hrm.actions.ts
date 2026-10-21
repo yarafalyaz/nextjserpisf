@@ -98,6 +98,578 @@ function appreciationWriteData(v: {
   };
 }
 
+// ==================== F-2026-10-21-027 PAYROLL COMPONENTS ====================
+// Mode pajak aman "all-taxable-v1": isTaxable tersimpan sebagai snapshot,
+// belum mengubah basis PPh21 — semua earning tetap kena pajak seperti
+// pra-fitur sampai vonis basis pajak (BR-027-07) turun.
+
+type PayrollComponentLineData = {
+  componentId: number | null;
+  componentNameSnapshot: string;
+  kindSnapshot: string;
+  recurrenceSnapshot: string;
+  isTaxableSnapshot: boolean;
+  source: string;
+  assignmentId: number | null;
+  accountIdSnapshot: number | null;
+  amount: number;
+};
+
+type PayrollAssignmentRow = {
+  id: number;
+  componentId: number;
+  defaultAmount: unknown;
+  effectiveFrom: Date;
+  effectiveTo: Date | null;
+  component: {
+    name: string;
+    kind: string;
+    recurrence: string;
+    isTaxable: boolean;
+    accountId: number | null;
+  };
+};
+
+function summarizePayrollComponentLines(
+  lines: readonly { kindSnapshot: string; amount: unknown }[],
+): { allowances: number; deductions: number; earningTotal: number; deductionTotal: number } {
+  let allowances = 0;
+  let deductions = 0;
+  for (const line of lines) {
+    const amount = Number(line.amount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error("Nominal baris komponen gaji tidak valid");
+    }
+    if (line.kindSnapshot === "earning") allowances = safeAdd(allowances, amount, 0);
+    else if (line.kindSnapshot === "deduction") deductions = safeAdd(deductions, amount, 0);
+    else throw new Error("Jenis baris komponen gaji tidak valid");
+  }
+  return { allowances, deductions, earningTotal: allowances, deductionTotal: deductions };
+}
+
+function buildPayrollComponentLinesFromAssignments(
+  assignments: readonly PayrollAssignmentRow[],
+  endDate: Date,
+): PayrollComponentLineData[] {
+  const seen = new Set<number>();
+  const lines: PayrollComponentLineData[] = [];
+  const sorted = [...assignments].sort((a, b) => a.componentId - b.componentId);
+  for (const a of sorted) {
+    if (a.effectiveFrom > endDate) continue;
+    if (a.effectiveTo != null && a.effectiveTo < endDate) continue;
+    const amount = Number(a.defaultAmount);
+    if (!Number.isFinite(amount) || amount < 0) {
+      throw new Error("Nominal penugasan komponen gaji tidak valid");
+    }
+    if (amount === 0) continue;
+    if (seen.has(a.componentId)) {
+      throw new Error("Penugasan komponen gaji ganda untuk komponen yang sama");
+    }
+    seen.add(a.componentId);
+    lines.push({
+      componentId: a.componentId,
+      componentNameSnapshot: a.component.name,
+      kindSnapshot: a.component.kind,
+      recurrenceSnapshot: a.component.recurrence,
+      isTaxableSnapshot: a.component.isTaxable,
+      source: "fixed_assignment",
+      assignmentId: a.id,
+      accountIdSnapshot: a.component.accountId ?? null,
+      amount,
+    });
+  }
+  return lines;
+}
+
+function payrollComponentsSnapshotValue(
+  lines: readonly { kindSnapshot: string; amount: unknown }[],
+  grossSalary: number,
+): Record<string, unknown> {
+  const s = summarizePayrollComponentLines(lines);
+  return {
+    mode: "all-taxable-v1",
+    taxableGross: grossSalary,
+    nonTaxableEarningTotal: 0,
+    earningTotal: s.earningTotal,
+    deductionTotal: s.deductionTotal,
+    lineCount: lines.length,
+  };
+}
+
+async function loadEffectivePayrollAssignments(
+  db: Pick<typeof prisma, "employeePayrollComponent">,
+  employeeIds: number[],
+  endDate: Date,
+): Promise<Map<number, PayrollAssignmentRow[]>> {
+  const map = new Map<number, PayrollAssignmentRow[]>();
+  if (employeeIds.length === 0) return map;
+  const rows = await db.employeePayrollComponent.findMany({
+    where: {
+      employeeId: { in: employeeIds },
+      isActive: true,
+      effectiveFrom: { lte: endDate },
+      OR: [{ effectiveTo: null }, { effectiveTo: { gte: endDate } }],
+      component: { isActive: true, recurrence: "fixed" },
+    },
+    include: {
+      component: {
+        select: { name: true, kind: true, recurrence: true, isTaxable: true, accountId: true },
+      },
+    },
+    orderBy: { componentId: "asc" },
+  });
+  for (const row of rows as (PayrollAssignmentRow & { employeeId: number })[]) {
+    const arr = map.get(row.employeeId) ?? [];
+    arr.push(row);
+    map.set(row.employeeId, arr);
+  }
+  return map;
+}
+
+async function requirePayrollComponentAdmin(
+  permission: "create_employees" | "edit_employees",
+): Promise<{ id: unknown; roles?: string[] }> {
+  const user = await requirePermission(permission);
+  const scope = await getHrScope({
+    id: String((user as { id: unknown }).id),
+    roles: Array.isArray((user as { roles?: unknown }).roles)
+      ? [...((user as { roles: string[] }).roles)]
+      : [],
+  });
+  if (scope.kind !== "all") {
+    throw new Error("Komponen gaji hanya boleh dikelola oleh pengguna dengan cakupan semua karyawan");
+  }
+  return user as { id: unknown; roles?: string[] };
+}
+
+function parseComponentForm(formData: FormData): {
+  name: string;
+  kind: string;
+  recurrence: string;
+  isTaxable: boolean;
+  accountId: number | null;
+} {
+  const name = String(formData.get("name") ?? "").trim();
+  const kind = String(formData.get("kind") ?? "").trim();
+  const recurrence = String(formData.get("recurrence") ?? "").trim();
+  if (!name) throw new Error("Nama komponen gaji wajib diisi");
+  if (kind !== "earning" && kind !== "deduction") {
+    throw new Error("Jenis komponen gaji harus earning atau deduction");
+  }
+  if (recurrence !== "fixed" && recurrence !== "variable") {
+    throw new Error("Sifat komponen gaji harus fixed atau variable");
+  }
+  const rawAccount = String(formData.get("accountId") ?? "").trim();
+  const accountId = rawAccount === "" ? null : Number(rawAccount);
+  if (accountId != null && (!Number.isSafeInteger(accountId) || accountId <= 0)) {
+    throw new Error("Akun komponen gaji tidak valid");
+  }
+  return {
+    name,
+    kind,
+    recurrence,
+    isTaxable: kind === "earning" && formData.get("isTaxable") === "true",
+    accountId,
+  };
+}
+
+async function assertActiveComponentNameAvailable(normalizedName: string, excludeId?: number): Promise<void> {
+  const dup = await prisma.payrollComponent.findFirst({
+    where: {
+      normalizedName,
+      isActive: true,
+      ...(excludeId != null ? { id: { not: excludeId } } : {}),
+    },
+    select: { id: true },
+  });
+  if (dup) throw new Error("Nama komponen gaji aktif sudah digunakan");
+}
+
+export async function createPayrollComponent(formData: FormData) {
+  try {
+    const user = await requirePayrollComponentAdmin("create_employees");
+    const v = parseComponentForm(formData);
+    const normalizedName = v.name.toLowerCase();
+    await assertActiveComponentNameAvailable(normalizedName);
+    if (v.accountId != null) {
+      const account = await prisma.account.findUnique({ where: { id: v.accountId }, select: { id: true } });
+      if (!account) throw new Error("Akun komponen gaji tidak ditemukan");
+    }
+    const created = await prisma.payrollComponent.create({
+      data: { ...v, normalizedName, createdBy: Number(user.id), updatedBy: Number(user.id) },
+    });
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: created.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[createPayrollComponent]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updatePayrollComponent(id: number, formData: FormData) {
+  try {
+    const user = await requirePayrollComponentAdmin("edit_employees");
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Komponen gaji tidak valid");
+    const existing = await prisma.payrollComponent.findUnique({ where: { id } });
+    if (!existing) throw new Error("Komponen gaji tidak ditemukan");
+    const v = parseComponentForm(formData);
+    const normalizedName = v.name.toLowerCase();
+    const rawActive = formData.get("isActive");
+    const isActive = rawActive == null ? existing.isActive : rawActive === "true";
+    if (isActive) await assertActiveComponentNameAvailable(normalizedName, id);
+    if (v.accountId != null) {
+      const account = await prisma.account.findUnique({ where: { id: v.accountId }, select: { id: true } });
+      if (!account) throw new Error("Akun komponen gaji tidak ditemukan");
+    }
+    const updated = await prisma.payrollComponent.update({
+      where: { id },
+      data: { ...v, normalizedName, isActive, updatedBy: Number(user.id) },
+    });
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: updated.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updatePayrollComponent]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function assignEmployeePayrollComponent(formData: FormData) {
+  try {
+    const user = await requirePayrollComponentAdmin("create_employees");
+    const employeeId = Number(formData.get("employeeId"));
+    const componentId = Number(formData.get("componentId"));
+    const defaultAmount = Number(formData.get("defaultAmount"));
+    const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "").trim();
+    const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim();
+    if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid");
+    if (!Number.isSafeInteger(componentId) || componentId <= 0) throw new Error("Komponen gaji tidak valid");
+    if (!Number.isFinite(defaultAmount) || defaultAmount < 0) {
+      throw new Error("Nominal penugasan komponen gaji tidak boleh negatif");
+    }
+    if (!effectiveFromRaw) throw new Error("Tanggal mulai penugasan wajib diisi");
+    const effectiveFrom = wibDateToUtcMidnight(effectiveFromRaw);
+    const effectiveTo = effectiveToRaw ? wibDateToUtcMidnight(effectiveToRaw) : null;
+    if (effectiveTo != null && effectiveTo < effectiveFrom) {
+      throw new Error("Tanggal selesai penugasan tidak boleh sebelum tanggal mulai");
+    }
+    const [employee, component] = await Promise.all([
+      prisma.employee.findUnique({ where: { id: employeeId }, select: { id: true } }),
+      prisma.payrollComponent.findUnique({ where: { id: componentId } }),
+    ]);
+    if (!employee) throw new Error("Karyawan tidak ditemukan");
+    if (!component) throw new Error("Komponen gaji tidak ditemukan");
+    if (!component.isActive) throw new Error("Komponen gaji nonaktif tidak boleh ditugaskan");
+    if (component.recurrence !== "fixed") {
+      throw new Error("Hanya komponen gaji tetap yang boleh ditugaskan");
+    }
+    const newEnd = effectiveTo ?? new Date("9999-12-31T00:00:00.000Z");
+    const overlap = await prisma.employeePayrollComponent.findFirst({
+      where: {
+        employeeId,
+        componentId,
+        isActive: true,
+        effectiveFrom: { lte: newEnd },
+        OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveFrom } }],
+      },
+      select: { id: true },
+    });
+    if (overlap) throw new Error("Penugasan komponen gaji tumpang tindih untuk karyawan ini");
+    const created = await prisma.employeePayrollComponent.create({
+      data: {
+        employeeId, componentId, defaultAmount, effectiveFrom, effectiveTo,
+        createdBy: Number(user.id), updatedBy: Number(user.id),
+      },
+    });
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: created.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[assignEmployeePayrollComponent]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updateEmployeePayrollComponent(id: number, formData: FormData) {
+  try {
+    const user = await requirePayrollComponentAdmin("edit_employees");
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Penugasan komponen gaji tidak valid");
+    const existing = await prisma.employeePayrollComponent.findUnique({ where: { id } });
+    if (!existing) throw new Error("Penugasan komponen gaji tidak ditemukan");
+    const defaultAmount = formData.get("defaultAmount") == null
+      ? Number(existing.defaultAmount)
+      : Number(formData.get("defaultAmount"));
+    if (!Number.isFinite(defaultAmount) || defaultAmount < 0) {
+      throw new Error("Nominal penugasan komponen gaji tidak boleh negatif");
+    }
+    const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "").trim();
+    const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim();
+    const effectiveFrom = effectiveFromRaw ? wibDateToUtcMidnight(effectiveFromRaw) : existing.effectiveFrom;
+    const effectiveTo = formData.get("effectiveTo") == null
+      ? existing.effectiveTo
+      : effectiveToRaw ? wibDateToUtcMidnight(effectiveToRaw) : null;
+    if (effectiveTo != null && effectiveTo < effectiveFrom) {
+      throw new Error("Tanggal selesai penugasan tidak boleh sebelum tanggal mulai");
+    }
+    const rawActive = formData.get("isActive");
+    const isActive = rawActive == null ? existing.isActive : rawActive === "true";
+    if (isActive) {
+      const newEnd = effectiveTo ?? new Date("9999-12-31T00:00:00.000Z");
+      const overlap = await prisma.employeePayrollComponent.findFirst({
+        where: {
+          id: { not: id },
+          employeeId: existing.employeeId,
+          componentId: existing.componentId,
+          isActive: true,
+          effectiveFrom: { lte: newEnd },
+          OR: [{ effectiveTo: null }, { effectiveTo: { gte: effectiveFrom } }],
+        },
+        select: { id: true },
+      });
+      if (overlap) throw new Error("Penugasan komponen gaji tumpang tindih untuk karyawan ini");
+    }
+    const updated = await prisma.employeePayrollComponent.update({
+      where: { id },
+      data: { defaultAmount, effectiveFrom, effectiveTo, isActive, updatedBy: Number(user.id) },
+    });
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: updated.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updateEmployeePayrollComponent]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function setPayrollComponentActive(id: number, isActive: boolean) {
+  try {
+    const user = await requirePayrollComponentAdmin("edit_employees");
+    if (!Number.isSafeInteger(id) || id <= 0) throw new Error("Komponen gaji tidak valid");
+    const existing = await prisma.payrollComponent.findUnique({ where: { id } });
+    if (!existing) throw new Error("Komponen gaji tidak ditemukan");
+    if (isActive) await assertActiveComponentNameAvailable(existing.normalizedName, id);
+    const updated = await prisma.payrollComponent.update({
+      where: { id },
+      data: { isActive, updatedBy: Number(user.id) },
+    });
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: updated.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[setPayrollComponentActive]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function getPayrollComponents() {
+  try {
+    await requirePayrollComponentAdmin("create_employees");
+    const rows = await prisma.payrollComponent.findMany({
+      orderBy: [{ isActive: "desc" }, { name: "asc" }],
+      select: {
+        id: true, name: true, kind: true, recurrence: true,
+        isTaxable: true, accountId: true, isActive: true,
+      },
+    });
+    return { success: true, data: rows };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[getPayrollComponents]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function getEmployeePayrollComponents(employeeId: number) {
+  try {
+    await requirePayrollComponentAdmin("create_employees");
+    if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid");
+    const rows = await prisma.employeePayrollComponent.findMany({
+      where: { employeeId },
+      orderBy: { componentId: "asc" },
+      select: {
+        id: true, employeeId: true, componentId: true, defaultAmount: true,
+        effectiveFrom: true, effectiveTo: true, isActive: true,
+        component: { select: { name: true, kind: true, recurrence: true, isTaxable: true, isActive: true } },
+      },
+    });
+    return { success: true, data: rows.map((r) => ({ ...r, defaultAmount: Number(r.defaultAmount) })) };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[getEmployeePayrollComponents]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function getPayrollComponentLines(payrollId: number) {
+  try {
+    const user = await requirePermission("view_payroll");
+    if (!Number.isSafeInteger(payrollId) || payrollId <= 0) throw new Error("Slip gaji tidak valid");
+    const payroll = await prisma.payroll.findUniqueOrThrow({
+      where: { id: payrollId },
+      select: { id: true, employeeId: true },
+    });
+    if (payroll.employeeId != null) {
+      const scope = await getHrScope({
+        id: String((user as { id: unknown }).id),
+        roles: Array.isArray((user as { roles?: unknown }).roles)
+          ? [...((user as { roles: string[] }).roles)]
+          : [],
+      });
+      await assertHrEmployeeAccess(scope, payroll.employeeId);
+    }
+    const rows = await prisma.payrollComponentLine.findMany({
+      where: { payrollId },
+      orderBy: { componentId: "asc" },
+      select: {
+        id: true, payrollId: true, componentId: true, componentNameSnapshot: true,
+        kindSnapshot: true, recurrenceSnapshot: true, isTaxableSnapshot: true,
+        source: true, assignmentId: true, accountIdSnapshot: true, amount: true,
+      },
+    });
+    return { success: true, data: rows.map((r) => ({ ...r, amount: Number(r.amount) })) };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[getPayrollComponentLines]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+async function recalcDraftPayrollFromLines(payrollId: number): Promise<void> {
+  const payroll = await prisma.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+  if (payroll.status !== "draft") {
+    throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
+  }
+  const lines = await prisma.payrollComponentLine.findMany({
+    where: { payrollId },
+    orderBy: { componentId: "asc" },
+  });
+  const summary = summarizePayrollComponentLines(lines);
+  const w = await buildPayrollWrite({
+    employeeId: payroll.employeeId,
+    period: payroll.period,
+    excludePayrollId: payroll.id,
+    endDate: payroll.endDate,
+    fallbackLabel: "update slip",
+    componentLines: lines,
+    v: {
+      baseSalary: Number(payroll.baseSalary),
+      allowances: summary.allowances,
+      deductions: summary.deductions,
+      overtimeTotal: Number(payroll.overtimeTotal),
+      appreciationTotal: Number(payroll.appreciationTotal),
+      loanDeduction: Number(payroll.loanDeduction),
+      paymentDate: payroll.paymentDate
+        ? payroll.paymentDate.toISOString().slice(0, 10)
+        : null,
+      lateDeduction: Number(payroll.lateDeduction),
+      lateMinutes: payroll.lateMinutes,
+      workingDays: payroll.workingDays,
+      presentDays: payroll.presentDays,
+      absentDays: payroll.absentDays,
+      absentDeduction: Number(payroll.absentDeduction),
+    },
+  });
+  await prisma.payroll.update({ where: { id: payrollId }, data: { ...w } });
+}
+
+async function assertDraftPayrollLineAccess(payrollId: number): Promise<void> {
+  const user = await requirePermission("edit_payroll");
+  const payroll = await prisma.payroll.findUniqueOrThrow({ where: { id: payrollId } });
+  if (payroll.status !== "draft") {
+    throw new Error("Baris komponen gaji hanya dapat diubah pada slip draft");
+  }
+  if (payroll.employeeId != null) {
+    const scope = await getHrScope({
+      id: String((user as { id: unknown }).id),
+      roles: Array.isArray((user as { roles?: unknown }).roles)
+        ? [...((user as { roles: string[] }).roles)]
+        : [],
+    });
+    await assertHrEmployeeAccess(scope, payroll.employeeId);
+  }
+}
+
+export async function addPayrollComponentLine(payrollId: number, formData: FormData) {
+  try {
+    if (!Number.isSafeInteger(payrollId) || payrollId <= 0) throw new Error("Slip gaji tidak valid");
+    await assertDraftPayrollLineAccess(payrollId);
+    const componentId = Number(formData.get("componentId"));
+    const amount = Number(formData.get("amount"));
+    if (!Number.isSafeInteger(componentId) || componentId <= 0) throw new Error("Komponen gaji tidak valid");
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Nominal baris komponen gaji harus lebih dari nol");
+    }
+    const component = await prisma.payrollComponent.findUnique({ where: { id: componentId } });
+    if (!component) throw new Error("Komponen gaji tidak ditemukan");
+    if (!component.isActive) throw new Error("Komponen gaji nonaktif tidak boleh ditambahkan");
+    const dup = await prisma.payrollComponentLine.findFirst({
+      where: { payrollId, componentId },
+      select: { id: true },
+    });
+    if (dup) throw new Error("Komponen gaji yang sama sudah ada pada slip ini");
+    const created = await prisma.payrollComponentLine.create({
+      data: {
+        payrollId,
+        componentId,
+        componentNameSnapshot: component.name,
+        kindSnapshot: component.kind,
+        recurrenceSnapshot: component.recurrence,
+        isTaxableSnapshot: component.isTaxable,
+        source: "manual",
+        assignmentId: null,
+        accountIdSnapshot: component.accountId ?? null,
+        amount,
+      },
+    });
+    await recalcDraftPayrollFromLines(payrollId);
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: created.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[addPayrollComponentLine]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function updatePayrollComponentLineAmount(lineId: number, formData: FormData) {
+  try {
+    if (!Number.isSafeInteger(lineId) || lineId <= 0) throw new Error("Baris komponen gaji tidak valid");
+    const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
+    if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
+    await assertDraftPayrollLineAccess(line.payrollId);
+    const amount = Number(formData.get("amount"));
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new Error("Nominal baris komponen gaji harus lebih dari nol");
+    }
+    await prisma.payrollComponentLine.update({ where: { id: lineId }, data: { amount } });
+    await recalcDraftPayrollFromLines(line.payrollId);
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: lineId };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[updatePayrollComponentLineAmount]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function removePayrollComponentLine(lineId: number) {
+  try {
+    if (!Number.isSafeInteger(lineId) || lineId <= 0) throw new Error("Baris komponen gaji tidak valid");
+    const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
+    if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
+    await assertDraftPayrollLineAccess(line.payrollId);
+    await prisma.payrollComponentLine.delete({ where: { id: lineId } });
+    await recalcDraftPayrollFromLines(line.payrollId);
+    revalidatePath("/sdm/penggajian");
+    return { success: true, id: lineId };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[removePayrollComponentLine]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
 // Single payroll write builder shared by create/update slips: loan-deduction
 // cap, statutory ruleset gate (reject fallback, AUD-R3-02), BPJS/PPh21 with
 // snapshot, net floored at 0 (total mirrors net).
@@ -108,6 +680,7 @@ async function buildPayrollWrite(o: {
   resignationFinal?: boolean;
   endDate: Date;
   fallbackLabel: "pembuatan slip" | "update slip";
+  componentLines?: readonly { kindSnapshot: string; amount: unknown }[];
   v: {
     baseSalary?: number;
     allowances?: number;
@@ -158,7 +731,12 @@ async function buildPayrollWrite(o: {
     finalReason: o.resignationFinal ? "resign" : null,
   });
   const pph = pphResult.pph21;
-  const snapshot = buildStatutorySnapshot(ruleset, taxProfile?.maritalStatus, taxProfile?.dependents ?? 0, pphResult.ter);
+  const snapshot = {
+    ...buildStatutorySnapshot(ruleset, taxProfile?.maritalStatus, taxProfile?.dependents ?? 0, pphResult.ter),
+    ...(o.componentLines
+      ? { payrollComponents: payrollComponentsSnapshotValue(o.componentLines, gross) }
+      : {}),
+  };
   const statutoryTotal = safeAdd(bpjsParts.total, pph, 0);
   const withheld = safeSum([v.deductions ?? 0, cappedLoan, v.lateDeduction, v.absentDeduction, statutoryTotal], 0);
   const net = Math.max(0, safeSubtract(gross, withheld, 0));
@@ -931,6 +1509,9 @@ function dateKey(d: Date): string {
 
 interface BulkPayrollEstimation {
   baseSalary: number;
+  allowances: number;
+  deductions: number;
+  componentLines: PayrollComponentLineData[];
   overtimeTotal: number;
   appreciationTotal: number;
   loanDeduction: number;
@@ -998,6 +1579,7 @@ async function computeBulkPayrollEstimations(
     appreciations,
     attendances,
     leaves,
+    componentAssignmentsByEmployee,
   ] = await Promise.all([
     getSystemSettings(),
     prisma.workSchedule.findMany({
@@ -1056,6 +1638,7 @@ async function computeBulkPayrollEstimations(
       },
       select: { employeeId: true, startDate: true, endDate: true },
     }),
+    loadEffectivePayrollAssignments(prisma, employeeIds, rangeEnd),
   ]);
 
   // Index per-employee slices in O(N)
@@ -1219,8 +1802,13 @@ async function computeBulkPayrollEstimations(
     const absentDeduction = Math.round(absentDays * dailyRate);
 
     // 6. Statutory deductions (mesin sama dengan single).
+    const componentLines = buildPayrollComponentLinesFromAssignments(
+      componentAssignmentsByEmployee.get(employee.id) ?? [],
+      rangeEnd,
+    );
+    const componentSummary = summarizePayrollComponentLines(componentLines);
     const grossSalary = safeSum(
-      [baseSalary, overtimeTotal, appreciationTotal],
+      [baseSalary, componentSummary.allowances, overtimeTotal, appreciationTotal],
       0,
     );
     const bpjs = computeBpjsEmployee(baseSalary, bulkStatutoryParams);
@@ -1242,6 +1830,9 @@ async function computeBulkPayrollEstimations(
 
     result.set(employee.id, {
       baseSalary,
+      allowances: componentSummary.allowances,
+      deductions: componentSummary.deductions,
+      componentLines,
       overtimeTotal,
       appreciationTotal,
       loanDeduction,
@@ -1258,19 +1849,22 @@ async function computeBulkPayrollEstimations(
       bpjsHealthEmployee: bpjs.health,
       bpjsEmploymentEmployee: bpjs.employment,
       pph21,
-      statutorySnapshot: buildStatutorySnapshot(
-        bulkStatutoryParams,
-        employee.maritalStatus,
-        employee.dependents ?? 0,
-        buildTerSnapshot({
-          maritalStatus: employee.maritalStatus,
-          dependents: employee.dependents ?? 0,
-          ter: { bracket: bulkTer.bracket, ratePct: bulkTer.ratePct },
-          final: null,
-          periodKind: bulkPeriod.endsWith("-12") ? "bulk-december-pending-final" : "monthly",
-          monthsInStint: null,
-        }),
-      ),
+      statutorySnapshot: {
+        ...buildStatutorySnapshot(
+          bulkStatutoryParams,
+          employee.maritalStatus,
+          employee.dependents ?? 0,
+          buildTerSnapshot({
+            maritalStatus: employee.maritalStatus,
+            dependents: employee.dependents ?? 0,
+            ter: { bracket: bulkTer.bracket, ratePct: bulkTer.ratePct },
+            final: null,
+            periodKind: bulkPeriod.endsWith("-12") ? "bulk-december-pending-final" : "monthly",
+            monthsInStint: null,
+          }),
+        ),
+        payrollComponents: payrollComponentsSnapshotValue(componentLines, grossSalary),
+      },
     });
   }
 
@@ -1394,10 +1988,10 @@ export async function generateBulkPayroll(
         (est.bpjsHealthEmployee ?? 0) +
         (est.bpjsEmploymentEmployee ?? 0) +
         (est.pph21 ?? 0);
-      // Allowances/deductions are manual per-payslip fields (not part of auto-estimation);
-      // they default to 0 and can be edited before approval. Formula mirrors processPayroll.
-      const allowances = 0;
-      const deductions = 0;
+      // Komponen terstruktur: agregat server dari baris tertarik (0 bila
+      // tidak ada penugasan — identik perilaku pra-fitur).
+      const allowances = est.allowances ?? 0;
+      const deductions = est.deductions ?? 0;
       const gross = safeSum(
         [
           est.baseSalary ?? 0,
@@ -1457,13 +2051,36 @@ export async function generateBulkPayroll(
 
     const count = rows.length;
     if (count > 0) {
-      // createMany collapses N inserts into 1. skipDuplicates handles the
-      // (employeeId, period) and (documentNo) unique-constraint races that
-      // the previous loop caught per-row with a P2002 try/catch.
       await prisma.payroll.createMany({
         data: rows,
         skipDuplicates: true,
       });
+      // Baris komponen: createMany tidak mengembalikan ID — baca ulang slip
+      // periode ini, buat baris hanya untuk slip tanpa baris (generate 2x
+      // tidak menggandakan). Slip yang kalah race skipDuplicates tidak ada
+      // di hasil baca, jadi tidak dibuatkan baris yatim.
+      const withLines = rows.filter((r) => (estimations.get(r.employeeId)?.componentLines.length ?? 0) > 0);
+      if (withLines.length > 0) {
+        const created = await prisma.payroll.findMany({
+          where: { period, employeeId: { in: withLines.map((r) => r.employeeId) } },
+          select: { id: true, employeeId: true, componentLines: { select: { id: true } } },
+        });
+        for (const slip of created) {
+          if (slip.componentLines.length > 0 || slip.employeeId == null) continue;
+          const lines = estimations.get(slip.employeeId)?.componentLines ?? [];
+          if (lines.length === 0) continue;
+          await prisma.$transaction(async (tx) => {
+            const fresh = await tx.payroll.findUnique({
+              where: { id: slip.id },
+              select: { status: true, componentLines: { select: { id: true } } },
+            });
+            if (!fresh || fresh.status !== "draft" || fresh.componentLines.length > 0) return;
+            await tx.payrollComponentLine.createMany({
+              data: lines.map((l) => ({ ...l, payrollId: slip.id })),
+            });
+          });
+        }
+      }
     }
 
     await logActivity(
@@ -1551,12 +2168,24 @@ export async function processPayroll(formData: FormData) {
       absentDeduction = att.absentDeduction;
     }
 
+    const componentAssignments = await loadEffectivePayrollAssignments(prisma, [employeeId], endDate);
+    const componentLines = buildPayrollComponentLinesFromAssignments(
+      componentAssignments.get(employeeId) ?? [],
+      endDate,
+    );
+    const componentSummary = summarizePayrollComponentLines(componentLines);
     const w = await buildPayrollWrite({
       employeeId,
       period,
       endDate,
       fallbackLabel: "pembuatan slip",
-      v: { ...v, lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction },
+      componentLines,
+      v: {
+        ...v,
+        allowances: componentLines.length > 0 ? componentSummary.allowances : (v.allowances ?? 0),
+        deductions: componentLines.length > 0 ? componentSummary.deductions : (v.deductions ?? 0),
+        lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction,
+      },
     });
 
     const payroll = await prisma.$transaction(async (tx) => {
@@ -1573,6 +2202,11 @@ export async function processPayroll(formData: FormData) {
         createdBy: Number(user.id),
         },
       });
+      if (componentLines.length > 0) {
+        await tx.payrollComponentLine.createMany({
+          data: componentLines.map((l) => ({ ...l, payrollId: created.id })),
+        });
+      }
       await requestApprovalIfConfigured(
         "Payroll",
         created.id,
@@ -1677,6 +2311,11 @@ export async function updatePayroll(id: number, formData: FormData) {
       absentDeduction = att.absentDeduction;
     }
 
+    const existingLines = await prisma.payrollComponentLine.findMany({
+      where: { payrollId: id },
+      orderBy: { componentId: "asc" },
+    });
+    const lineSummary = summarizePayrollComponentLines(existingLines);
     const w = await buildPayrollWrite({
       employeeId,
       period: v.period,
@@ -1684,7 +2323,13 @@ export async function updatePayroll(id: number, formData: FormData) {
       resignationFinal: false,
       endDate,
       fallbackLabel: "update slip",
-      v: { ...v, lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction },
+      componentLines: existingLines.length > 0 ? existingLines : undefined,
+      v: {
+        ...v,
+        allowances: existingLines.length > 0 ? lineSummary.allowances : (v.allowances ?? 0),
+        deductions: existingLines.length > 0 ? lineSummary.deductions : (v.deductions ?? 0),
+        lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction,
+      },
     });
 
     const payroll = await prisma.payroll.update({
