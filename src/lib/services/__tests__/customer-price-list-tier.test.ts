@@ -28,9 +28,16 @@ const pick = (qty: number, rows: PriceListRow[] = master, customerCategoryId: nu
   pickPriceListPrice(rows, { itemId: 1, customerCategoryId, date, qty })
 
 describe("F-018 tingkat qty-aware (A1-A15)", () => {
-  it("A1 qty 1 -> T1 100000", () => expect(pick(1)).toBe(100000))
-  it("A2 qty 4,99 -> T1 (di bawah tingkat 5, tanpa pembulatan)", () => expect(pick(4.99)).toBe(100000))
-  it("A3 qty tepat 5 INKLUSIF -> T5 95000", () => expect(pick(5)).toBe(95000))
+  // [kasus, qty, harga pemenang] — A1-A8: batas inklusif + tingkat terbesar.
+  it.each([
+    ["A1 qty 1 -> T1", 1, 100000],
+    ["A2 qty 4,99 -> T1 (di bawah tingkat 5, tanpa pembulatan)", 4.99, 100000],
+    ["A3 qty tepat 5 INKLUSIF -> T5", 5, 95000],
+    ["A5 qty tepat 10 -> T10", 10, 88000],
+    ["A6 qty 15 -> T10", 15, 88000],
+    ["A7 qty 20 -> T20", 20, 85000],
+    ["A8 qty 150 -> T100", 150, 83000],
+  ])("%s", (_nama, qty, harga) => expect(pick(qty)).toBe(harga))
   it("A4 qty 9,99 -> T5, total 949050 PPN 104396 grand 1053446", () => {
     const r = resolveLinePricing({ qty: 9.99, itemPrice: 100000, priceListPrice: pick(9.99) })
     expect(r.unitPrice).toBe(95000)
@@ -39,10 +46,6 @@ describe("F-018 tingkat qty-aware (A1-A15)", () => {
     expect(tax).toBe(104396)
     expect(r.total + tax).toBe(1053446)
   })
-  it("A5 qty tepat 10 -> T10 88000", () => expect(pick(10)).toBe(88000))
-  it("A6 qty 15 -> T10", () => expect(pick(15)).toBe(88000))
-  it("A7 qty 20 -> T20 85000", () => expect(pick(20)).toBe(85000))
-  it("A8 qty 150 -> T100 83000", () => expect(pick(150)).toBe(83000))
   it("A9 diskon manual di atas tingkat: DPP 830000, PPN 91300", () => {
     const r = resolveLinePricing({ qty: 10, itemPrice: 100000, priceListPrice: pick(10), manualDiscount: 50000 })
     expect(r.unitPrice).toBe(88000)

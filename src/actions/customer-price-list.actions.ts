@@ -23,6 +23,19 @@ function toMoney(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
 }
 
+type PriceListForm = ReturnType<typeof customerPriceListSchema.parse>
+
+function priceListData(v: PriceListForm) {
+  return {
+    customerCategoryId: v.customerCategoryId ?? null,
+    itemId: v.itemId,
+    price: toMoney(v.price),
+    minQty: toMoney(v.minQty),
+    effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null,
+    notes: v.notes ?? null,
+  }
+}
+
 /**
  * F-PRICELIST-01 tahap 1 + F-2026-10-21-018: simpan satu baris daftar harga jual.
  *
@@ -36,14 +49,10 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
 
     const parsed = parseFormData(customerPriceListSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
-    const v = parsed.data
-
-    const categoryId = v.customerCategoryId ?? null
-    const effectiveDate = v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null
-    const minQty = new Prisma.Decimal(v.minQty.toFixed(2))
+    const data = priceListData(parsed.data)
 
     const duplicate = await prisma.customerPriceList.findFirst({
-      where: { customerCategoryId: categoryId, itemId: v.itemId, minQty, effectiveDate },
+      where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate },
       select: { id: true },
     })
     if (duplicate) {
@@ -54,15 +63,7 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
     }
 
     const created = await prisma.customerPriceList.create({
-      data: {
-        customerCategoryId: categoryId,
-        itemId: v.itemId,
-        price: toMoney(v.price),
-        minQty,
-        effectiveDate,
-        notes: v.notes ?? null,
-        createdBy: Number(user.id),
-      },
+      data: { ...data, createdBy: Number(user.id) },
     })
 
     await logActivity("create", "CustomerPriceList", created.id, "Menambah daftar harga pelanggan")
