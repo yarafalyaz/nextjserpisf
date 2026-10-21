@@ -7676,3 +7676,326 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+## 2026-10-22 02:35 WIB — Domain (l) Spec alur operasional sewa kena PPh 4(2) final (F-2026-10-22-040-S)
+
+Kartu: t_cbecc698. Lanjutan F-2026-10-22-038-S (spec cakupan,
+PR #390 head ef6eff2a — dokumen terbuka, belum merge; isi dirujuk
+dari head itu). Spec alur saja: kontrak -> tagihan -> potong/setor
+-> bukti potong -> perpanjangan/berakhir. Tanpa kode, tanpa schema,
+tanpa migrasi. Kartu ini TIDAK memvonis pajak.
+
+### Keadaan sumber (jujur, terverifikasi run ini)
+
+- Vonis tertulis BOT 4 F-2026-10-22-038 BELUM ada di repo
+  (grep `F-2026-10-22-038` di origin/main 9f140792 = 0 di luar
+  rujukan; temuan BOT 6 F3 di PR #390). Yang ada = isi rujukan
+  kartu induk: tarif 10%, kode objek wajib, cakupan hanya
+  tanah/bangunan, jasa pendamping terpisah, jurnal
+  penyewa-memotong/dipotong. Semua angka/kode di spec ini tertulis
+  "per vonis BOT 4", bukan sumber kedua.
+- Vonis BOT 4 F-2026-10-22-039 SUDAH terbit (main,
+  backlog:2549): gerbang komponen pendamping, potong-sekali di
+  muka, peta pemotong fail-closed, tenggat setor tgl 15
+  PMK 81/2024 + lapor 20 hari. Langkah/E/BR di bawah sudah
+  disesuaikan ke putusan 1-4 vonis itu (revisi t_f35e68b2).
+- Kode akun liabilitas PPh 4(2) sewa = 210206 "Utang PPh 4(2)
+  Sewa Tanah/Bangunan" per vonis BOT 4 F-2026-10-22-041
+  (PR #394 merged 486f0f3a): 210205 TETAP Provisi Garansi
+  (F-021, backlog:2720) dan TIDAK disentuh spec ini. Jenis
+  PPH42-SEWA menunjuk 210206 lewat liabilityAccountCode;
+  210206 tak ada/tidak aktif = fail-closed, dilarang fallback
+  210202. Seed BOT 3 dilarang menunjuk 210205 untuk pajak.
+- Q-SEWA-1..7 (F-038-S) masih terbuka. Alur di bawah menandai
+  titik yang bergantung padanya; langkah yang bergantung TIDAK
+  boleh diimplementasikan sebelum vonisnya terbit.
+
+### Inventarisasi terverifikasi (2026-10-22, basis origin/main 9f140792)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Vendor master: name + npwp (schema.prisma:412-446, npwp :433)
+  — pemilik sewa = Vendor; counterpartyTaxId bupot dari Vendor.npwp.
+- VendorBill: vendorId, date, subtotal/tax/grandTotal, status
+  String default draft, SATU withholdingTypeId + SATU
+  withholdingAmount per tagihan (schema:1828-1888, potong
+  :1845-1846). Draft tanpa jurnal; posting = confirmVendorBill
+  (purchase.actions.ts, create :977) + jurnal potong
+  onVendorBillPosted (accounting.hook.ts:1675).
+- Fail-closed existing: potong > 0 tanpa liabilityAccountId di
+  jenis -> posting DITOLAK (accounting.hook.ts:~1817-1822);
+  potong > grandTotal -> ditolak. Pola kode-objek-wajib existing:
+  resolvePph42Rate menolak tanpa kode objek
+  (src/lib/tax/withholding-certificate.ts:62-75, konstruksi).
+- Bupot: WithholdingCertificate (schema:1047-1099) direction
+  we_withhold/withheld_from_us, certificateNumber unik wajib,
+  objectCode snapshot dari jenis (service :174), status
+  draft|issued|revoked, tautan vendorBillId/salesPaymentId;
+  terbit/cabut izin manage_withholding_certificates
+  (tax-documents.actions.ts:155,166), setor izin
+  create_tax_payments (:173).
+- RecurringTransaction type purchase_bill (schema:1157-1190) —
+  tagihan sewa periodik tanpa mesin baru.
+- Akun 110502 Sewa Gedung Dibayar Dimuka (base-data.ts:857).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN model kontrak sewa (lease master): grep model Lease/
+  RentalContract schema = 0. "Kontrak" di alur ini = dokumen
+  sumber bisnis (kertas/PDF + catatan), BUKAN model baru —
+  konsisten F-038-S (YAGNI: RecurringTransaction + VendorBill
+  menampung pola berjalan). Field wajib kontrak di bawah dicatat
+  di dokumen sumber + template recurring + notes tagihan;
+  menjadikannya kolom = keputusan skema BOT 3/BOT 1, bukan spec ini.
+- ABSEN jenis sewa di seed + resolver kode objek sewa (F-038-S).
+- ABSEN penanda komponen per baris tagihan: tagihan campur tidak
+  bisa dipecah potongnya hari ini (satu jenis+nominal per tagihan).
+- ABSEN status serah bupot ke pemilik (sudah/belum diserahkan).
+
+### Aktor
+
+| Aktor | Peran di alur | Permission nyata (module-catalog.generated.ts) |
+|---|---|---|
+| Admin operasional / GA | Catat kontrak (dokumen sumber), buat template recurring, buat tagihan | create_vendor_bills / edit_vendor_bills (:214-215 area) |
+| Finance / AP | Posting tagihan (titik jurnal potong), bayar neto ke pemilik | approve_vendor_bills (:217); create/approve_vendor_payments (:189,192 area) |
+| Staf pajak | Terbit/serahkan bupot, setor utang PPh ke negara | manage_withholding_certificates (:312); create_tax_payments (:334) |
+| Pengelola master pajak | Buat jenis potong sewa sesudah vonis BOT 4 | manage_withholding_tax (:327) |
+| Pemilik aset (pihak luar) | Terima bayar neto + bupot; bukan user sistem | — (Vendor master) |
+
+### Alur langkah demi langkah
+
+Langkah 0 — Master prasyarat (sekali, sesudah vonis BOT 4).
+Dokumen sumber: vonis tertulis BOT 4 (kode objek sewa + akun
+liabilitas 210206 per F-041 + tarif per F-038/F-039). Aksi: pengelola master buat jenis
+PPh 4(2) sewa dengan objectCode + liabilityAccountId terisi.
+FAIL-CLOSED: jenis tanpa objectCode atau tanpa liabilityAccountId
+= tidak boleh dipakai di tagihan sewa (penjaga BOT 3 meniru pola
+resolvePph42Rate + hook :1817-1822). Tanpa langkah 0, seluruh alur
+berhenti — bukan jalan dengan jenis karangan staf.
+STATUS PEMOTONG (F-039 putusan 3): status pemotong pihak
+(pemilik/penyewa) adalah data bertanggal terverifikasi, bukan
+tebakan nama/jenis. Status belum terverifikasi = alur pajak
+berhenti di sini (fail-closed berisik).
+
+Langkah 1 — Kontrak sewa dicatat (status alur: draft).
+Aktor: admin operasional. Dokumen masuk: kontrak/perjanjian sewa
+bertandatangan (sumber bisnis). Dokumen keluar: Vendor pemilik
+terdaftar (npwp terisi bila ada) + RecurringTransaction
+purchase_bill (pola periodik) atau rencana tagihan manual (pola
+di muka/sekali). Field wajib kontrak (USULAN daftar periksa
+operasional — dicatat di dokumen sumber, bukan kolom baru):
+(a) pemilik: nama + NPWP (atau penanda eksplisit "NPWP belum
+diketahui" -> masuk antrean Q-SEWA-5, tagihan TIDAK diproses
+potongnya sampai vonis); (b) objek: tanah/bangunan/alamat objek —
+objek bukan tanah/bangunan KELUAR alur ini (F-038-S S5/S6);
+(c) nilai sewa per periode + apakah nilai termasuk jasa pendamping
+terpisah atau tercampur (menentukan Langkah 2); (d) masa mulai–
+akhir + pola bayar (bulanan / di muka penuh / termin);
+(e) pemilik PKP membebankan PPN atau tidak (DPP ikut Q-SEWA-6);
+(f) klausul berakhir dini/perpanjangan (menentukan Langkah 6).
+Kontrak belum aktif = belum ada tagihan; dilarang membuat tagihan
+dari kontrak draft yang belum ditandatangani (USULAN gerbang
+operasional: dokumen sumber wajib ada sebelum tagihan pertama).
+
+Langkah 2 — Tagihan terbit (status alur: draft -> aktif).
+Aktor: admin operasional (buat), finance (posting). Dokumen
+sumber: kontrak Langkah 1 + faktur/invoice pemilik bila ada
+(vendorInvoiceNumber; taxInvoiceNumber terpisah bila ber-PPN).
+Dokumen keluar: VendorBill draft -> posted. Field wajib tagihan:
+vendorId pemilik, date, nilai sewa periode itu, withholdingTypeId
+jenis sewa Langkah 0, DPP + withholdingAmount dihitung dari jenis
+(bukan ketik bebas menyimpang dari DPP — cara hitung final milik
+BOT 3 per vonis), dueDate. Titik potong operasional = POSTING
+tagihan (BR-SEWA-01 F-038-S; titik fiskal final = Q-SEWA-4).
+FAIL-CLOSED di langkah ini: (i) tanpa kode objek di jenis ->
+posting ditolak; (ii) jenis tanpa akun liabilitas -> ditolak
+(hook existing); (iii) objek kontrak bukan tanah/bangunan ->
+jenis sewa tidak boleh dipilih (gerbang UI BOT 2 dari tabel
+cakupan F-038-S); (iv) NPWP pemilik kosong -> tahan (Q-SEWA-5).
+(v) GERBANG KOMPONEN PENDAMPING (F-039 putusan 1, urutan wajib):
+uji penerima + dasar kewajiban dulu. Komponen perawatan/
+pemeliharaan/keamanan/kebersihan/service charge/fasilitas yang
+kewajiban pemilik dan dibayar/diutang ke pemilik (termasuk lewat
+pengelola sebagai penagih pemilik) = MASUK DPP final 10%, walau
+perjanjian/invoice terpisah. Keluar ke PPh 23 2% HANYA bila
+keduanya terbukti: penerima pihak ketiga independen DAN jasa
+bukan kewajiban pemilik (dipilih penyewa sendiri). Satu tagihan
+tercampur tanpa rincian penerima/komponen terbukti = SELURUHNYA
+DPP final 10% (fail-closed); memecah tanpa bukti = tolak.
+Sesudah posting: balanceDue = neto terutang ke pemilik; status
+alur = aktif (berjalan) dan, untuk tagihan itu, dipotong.
+
+Langkah 3 — Bayar neto + potong tercatat (status: dipotong).
+Aktor: finance. Dokumen sumber: VendorBill posted. Dokumen
+keluar: VendorPayment neto (create/approve_vendor_payments)
+melunasi balanceDue; utang PPh sewa tercatat di 210206 (F-041;
+BUKAN 210205 Provisi Garansi, bukan fallback 210202). Pembayaran termin atas satu tagihan TIDAK
+memotong ulang (BR-SEWA-03 F-038-S). Bila tagihan batal sebelum
+bayar: VendorBill cancelled + bupot (bila sudah terbit) revoked +
+reversal (BR-SEWA-04); dilarang hapus baris.
+
+Langkah 4 — Bukti potong terbit + diserahkan (status tetap
+dipotong sampai setor; bukti = sub-langkah wajib).
+Aktor: staf pajak. Dokumen sumber: VendorBill posted berpotong.
+Dokumen keluar: WithholdingCertificate we_withhold issued
+tertaut vendorBillId: certificateNumber DJP wajib,
+counterpartyName/counterpartyTaxId dari Vendor, DPP/tarif/
+objectCode snapshot dari jenis, withholdingDate -> taxPeriod.
+Bupot diserahkan ke pemilik; cara catat status serah = keputusan
+BOT 3 (kolom baru vs catatan — spec ini tidak mengarang kolom).
+FAIL-CLOSED: tagihan sewa terpotong tanpa bupot terbit = utang
+bukti terbuka; antrean baca "terpotong belum ada bupot" per masa
+wajib ada di kartu BOT 3/BOT 2 (bukan pengingat manual).
+
+Langkah 5 — Setor ke negara (status alur: disetor).
+Aktor: staf pajak. Dokumen sumber: kumpulan bupot issued satu
+jenis + satu masa. Dokumen keluar: setoran create_tax_payments
+(service existing: Dr akun utang PPh / Cr kas-bank). Setor per
+jenis+masa, bukan per tagihan. Sesudah setor, masa itu tertutup
+untuk alur ini; bupot yang baru terbit sesudah setor masa sama =
+masuk masa setor berikutnya atau koreksi — cara koreksinya
+BUTUH-VONIS BOT 4 bila belum diatur vonis (jangan karang).
+Tenggat (F-039 putusan 4, master bertanggal efektif — bukan
+konstanta kode): setor paling lambat tanggal 15 bulan berikutnya
+sesudah Masa Pajak berakhir (PMK 81/2024 Pasal 94; jatuh tempo
+hari libur -> hari kerja berikutnya, Pasal 100); lapor SPT Masa
+PPh Unifikasi paling lama 20 hari sesudah Masa Pajak berakhir
+(PER-11/PJ/2025). UI menampilkan snapshot tenggat dari backend.
+
+Langkah 6 — Perpanjangan / berakhir (status alur: selesai).
+Perpanjangan: kontrak baru/adendum = ulangi Langkah 1 (dokumen
+sumber baru; template recurring diperpanjang endDate-nya atau
+dibuat baru — jangan edit riwayat tagihan lama). Berakhir normal:
+tagihan terakhir posted+dibayar+bupot+setor; tidak ada tagihan
+sesudah endDate kontrak. Berakhir dini: lihat kasus tepi E3.
+Status selesai hanya bila semua tagihan kontrak: posted, lunas
+neto, bupot issued, dan masa-masa terkait sudah disetor; satu
+tagihan menggantung = kontrak BELUM selesai (USULAN definisi
+operasional "selesai", bukan status dokumen baru).
+
+### Status-transition matrix (memetakan ke status dokumen existing — TIDAK ada status baru)
+
+| Status alur (kartu ini) | VendorBill | WithholdingCertificate | Pemicu | Penjaga |
+|---|---|---|---|---|
+| draft | draft (tanpa jurnal) | belum ada | Kontrak ditandatangani, tagihan dibuat | create_vendor_bills; dokumen sumber ada |
+| aktif | posted (jurnal potong lahir, AP neto) | belum ada/draft | Posting tagihan | approve_vendor_bills; fail-closed kode objek + akun liabilitas |
+| dipotong | posted/paid sebagian-penuh (neto) | issued, diserahkan | Bayar neto + bupot terbit | approve_vendor_payments; manage_withholding_certificates |
+| disetor | paid | issued (masa tersetor) | Setor per jenis+masa | create_tax_payments |
+| selesai | semua tagihan paid/cancelled sah | semua issued/revoked sah | Kontrak berakhir/perpanjangan diganti kontrak baru | Definisi Langkah 6; tanpa tagihan menggantung |
+
+Batal di titik mana pun: VendorBill cancelled + bupot revoked +
+reversal jurnal (jalur existing); tidak ada penghapusan baris.
+
+### Kasus tepi
+
+- E1 Sewa dibayar di muka lintas masa (F-039 putusan 2): potong
+  SEKALI atas total bruto yang dibayar, pada Masa Pajak
+  pembayaran (bukan dicicil per bulan pemakaian); bupot = satu
+  atas pembayaran di muka itu. Amortisasi 110502 per bulan TANPA
+  potongan lagi (BR-SEWA40-05). Termin berikut dipotong saat termin
+  itu dibayar/terutang, atas nilai termin itu.
+- E2 Komponen jasa tercampur (F-039 putusan 1): terapkan gerbang
+  Langkah 2(v). Tagihan tercampur tanpa rincian penerima/komponen
+  yang dapat dibuktikan = SELURUHNYA DPP final 10% (fail-closed) —
+  dilarang memotong sebagian dengan tarif lebih rendah tanpa
+  bukti. Komponen yang lolos gerbang (b) dipisah dokumennya dan
+  dipotong PPh 23 2% (210202) dengan bupot terpisah (kode objek
+  jasa); kendala existing satu jenis+nominal per tagihan
+  (schema:1845-1846) = alasan pecah dokumen, bukan alasan tebak.
+- E3 Sewa berakhir dini: tagihan periode berjalan yang sudah
+  posted tetap sah (potong+bupot+setor berjalan); tagihan masa
+  depan dari recurring DIMATIKAN (isActive/endDate template),
+  bukan dihapus; kelebihan bayar di muka / pengembalian sisa sewa
+  ke/dari pemilik = dokumen pembayaran/pengembalian existing,
+  perlakuan pajak atas pengembaliannya BUTUH-VONIS BOT 4
+  (jangan netting diam-diam terhadap potong). Amortisasi 110502
+  atas masa tak terpakai dihentikan — reklas sisanya mengikuti
+  vonis BOT 4, bukan angka bebas.
+- E4 Pemilik tanpa NPWP (S9/Q-SEWA-5): kontrak boleh dicatat,
+  tagihan TIDAK diposting dengan jenis sewa sampai vonis terbit.
+- E5 Tagihan ber-PPN (S10/Q-SEWA-6): DPP bupot mengikuti vonis;
+  faktur pajak masukan lewat TaxInvoice existing, terpisah dari bupot.
+- E6 ISF sebagai pemilik dipotong pihak lain (F-038-S P1/P2):
+  di luar alur utama kartu ini (alur ini = ISF penyewa); penerimaan
+  dipotong dicatat di SalesPayment existing + bupot withheld_from_us
+  diterima; P2 (penyewa perorangan tak memotong) = Q-SEWA-7.
+
+### Business rules register (spec ini)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SEWA40-01 | Titik potong operasional = posting VendorBill (mesin existing); titik fiskal final ikut Q-SEWA-4 | TERVERIFIKASI-KODE (hook) + BUTUH-VONIS (fiskal) |
+| BR-SEWA40-02 | Tanpa kode objek di jenis sewa = posting ditolak (fail-closed) | USULAN (pola TERVERIFIKASI-KODE resolvePph42Rate) |
+| BR-SEWA40-03 | Kode akun utang PPh 4(2) sewa = 210206 (F-041); 210205 tetap Provisi Garansi dan tidak disentuh; 210206 tak ada/tidak aktif = fail-closed, dilarang fallback 210202 | TERVERIFIKASI-KODE (tabrakan) + vonis BOT 4 F-041 (PR #394) |
+| BR-SEWA40-04 | Gerbang komponen F-039 putusan 1: kewajiban pemilik ke pemilik/penagihnya = DPP final 10% walau terpisah; PPh 23 2% hanya bila penerima independen + bukan kewajiban pemilik; tercampur tanpa rincian terbukti = seluruhnya final 10% | vonis BOT 4 F-039 putusan 1 |
+| BR-SEWA40-05 | Potong sekali di muka atas total bruto dibayar; amortisasi 110502 hanya pengakuan beban, tanpa potong lagi | USULAN (akun TERVERIFIKASI-KODE) + vonis BOT 4 F-039 putusan 2 |
+| BR-SEWA40-06 | "Selesai" = semua tagihan lunas neto + bupot issued + masa disetor | USULAN |
+| BR-SEWA40-07 | Tarif/kode objek/jurnal final tidak didefinisikan spec ini | BUTUH-VONIS BOT 4 (F-038/F-039) |
+| BR-SEWA40-08 | Status pemotong = data pihak bertanggal terverifikasi; belum terverifikasi = transaksi tidak posting pajak (fail-closed) | vonis BOT 4 F-039 putusan 3 |
+| BR-SEWA40-09 | Setor <= tgl 15 bulan berikut (PMK 81/2024), lapor <= 20 hari sesudah Masa Pajak berakhir (PER-11/PJ/2025); tenggat master bertanggal efektif | vonis BOT 4 F-039 putusan 4 |
+
+### Acceptance per langkah (format input -> hasil terharap, untuk BOT 6)
+
+1. Langkah 0: jenis sewa dibuat tanpa objectCode -> dipakai di
+   tagihan + posting -> DITOLAK dengan pesan kode objek wajib;
+   jenis tanpa liabilityAccountId -> posting DITOLAK (pola hook).
+2. Langkah 1: kontrak objek tanah kosong + pemilik ber-NPWP ->
+   Vendor + template recurring tercipta; kontrak objek sewa mobil
+   -> DITOLAK masuk alur ini (keluar cakupan F-038-S S6).
+   Kontrak tanpa dokumen bertandatangan -> tagihan pertama
+   DITOLAK dibuat/diposting.
+3. Langkah 2: tagihan sewa bulanan posted -> jurnal potong lahir
+   sekali, balanceDue = grandTotal - potong; posting ulang ->
+   tidak ada jurnal kedua (klaim existing). Pemilik NPWP kosong
+   -> posting TAHAN (E4).
+4. Langkah 3: bayar termin 2x atas satu tagihan -> potong tetap
+   sekali (saldo utang PPh tidak berubah di termin kedua); bayar
+   penuh -> AP neto lunas, utang PPh tetap menunggu setor.
+5. Langkah 4: tagihan posted berpotong -> bupot issued tertaut
+   vendorBillId dengan DPP/tarif/objectCode snapshot; ubah master
+   jenis sesudahnya -> bupot tidak berubah. Daftar masa berisi
+   tagihan terpotong tanpa bupot -> tampil di antrean belum-bupot.
+6. Langkah 5: setor satu masa -> jurnal Dr utang PPh/Cr kas lahir
+   sekali per setoran; setor ulang masa+jenis sama tanpa bupot
+   baru -> tidak ada jurnal dobel.
+7. Langkah 6/E1: sewa 12 bulan di muka -> satu potong + satu
+   bupot; amortisasi bulanan 110502 berjalan tanpa mengubah bupot;
+   potong 12.000.000 penuh di Masa Pajak pembayaran;
+   potong dicicil mengikuti amortisasi = MERAH (F39-2).
+8. E2: tagihan campur tanpa rincian terbukti -> SELURUHNYA DPP
+   final 10%; komponen lolos gerbang (b) terpecah -> hanya dokumen
+   sewa dipotong jenis sewa 10% ke 210206, dokumen jasa dipotong
+   PPh 23 2% ke 210202, dua bupot terpisah.
+9. E3: kontrak berakhir dini di bulan ke-4 dari 12 -> recurring
+   berhenti, tagihan bulan 1-4 tetap sah tersetor, tidak ada
+   tagihan bulan 5+, tidak ada baris terhapus.
+10. Batal: tagihan posted dibatalkan -> bupot revoked + jurnal
+    reversal; saldo utang PPh dan AP kembali seperti sebelum posting.
+11. Status pemotong pihak belum terverifikasi -> posting pajak
+    DITAHAN (F39-3); jurnal potong sewa mengkredit 210205/210202
+    -> MERAH, wajib 210206 (F41-1/F41-3).
+
+### Draf kartu lanjutan (USULAN — belum dibuat)
+
+1. BOT 4: vonis F-038/F-039/F-041 SUDAH terbit (F-041 = PR #394
+   merged). Sisa Q-SEWA yang belum diputus vonis tetap gerbang
+   butir terkait; tanpa vonis baru kartu BOT 3 jalan di atas
+   F-038/F-039/F-041.
+2. BOT 3 (backend, sesudah 1): seed jenis sewa + resolver kode
+   objek sewa (fail-closed) + read-model antrean terpotong-belum-
+   bupot + keputusan catat status serah bupot. Acceptance = butir
+   1,3,5,7,10 di atas (jalur server).
+3. BOT 2 (frontend, sesudah kontrak BOT 3 stabil): pilihan jenis
+   sewa berlabel pasal+kode di form VendorBill, peringatan cakupan
+   objek (S5/S6), tautan terbit bupot dari detail tagihan, kartu
+   antrean bupot. UI tidak menanam tarif/kode.
+4. BOT 6 (QA): falsifikasi acceptance 1-11 di atas + mutasi:
+   cabut penjaga kode objek -> tes merah; pakai 210205 -> tes merah.
+   Falsifikasi F39-1..F39-3 (+F39-4 bila master tenggat dibangun)
+   dan F41-1..F41-3.
+
+### Yang TIDAK diusulkan run ini
+- Model kontrak sewa / lease master baru: ABSEN bukti kebutuhan;
+  dokumen sumber + RecurringTransaction + VendorBill menampung.
+- Angka tarif, kode objek, akun, jurnal: milik BOT 4.
+- Jalur potong di Expense kas langsung (F-038-S: ditolak, risiko).
+- Coretax/e-Bupot unifikasi: di luar kartu ini.
+
+---
