@@ -73,6 +73,33 @@ describe("GET /api/notifications", () => {
     }))
   })
 
+  it("queries notifications and unread count in parallel", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 7 } })
+    let resolveFindMany: (v: unknown) => void = () => {}
+    let resolveCount: (v: unknown) => void = () => {}
+    mocks.notificationFindMany.mockImplementation(
+      () => new Promise((r) => { resolveFindMany = r }),
+    )
+    mocks.notificationCount.mockImplementation(
+      () => new Promise((r) => { resolveCount = r }),
+    )
+
+    const pending = GET()
+    // Kedua query wajib sudah dipanggil sebelum salah satu selesai.
+    // Versi serial: count baru dipanggil sesudah findMany resolve -> merah.
+    await vi.waitFor(() => {
+      expect(mocks.notificationFindMany).toHaveBeenCalledTimes(1)
+      expect(mocks.notificationCount).toHaveBeenCalledTimes(1)
+    })
+    resolveCount(3)
+    resolveFindMany([{ id: 1, title: "Test" }])
+
+    const res = await pending
+    const json = await res.json()
+    expect(json.notifications).toHaveLength(1)
+    expect(json.unreadCount).toBe(3)
+  })
+
   it("returns 500 on internal error", async () => {
     mocks.authFn.mockRejectedValue(new Error("boom"))
     const res = await GET()

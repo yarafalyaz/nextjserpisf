@@ -11,24 +11,26 @@ export async function GET() {
     const userId = Number.parseInt(String(session.user.id), 10)
     if (!Number.isInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Pengguna tidak valid")
 
-    const notifications = await prisma.notification.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      // Kontrak dropdown hanya butuh field ini; tanpa select, userId internal ikut bocor.
-      select: {
-        id: true,
-        title: true,
-        body: true,
-        type: true,
-        readAt: true,
-        createdAt: true,
-      },
-    })
-
-    const unreadCount = await prisma.notification.count({
-      where: { userId, readAt: null },
-    })
+    // Query independen — jalan paralel, bukan serial.
+    const [notifications, unreadCount] = await Promise.all([
+      prisma.notification.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        take: 10,
+        // Kontrak dropdown hanya butuh field ini; tanpa select, userId internal ikut bocor.
+        select: {
+          id: true,
+          title: true,
+          body: true,
+          type: true,
+          readAt: true,
+          createdAt: true,
+        },
+      }),
+      prisma.notification.count({
+        where: { userId, readAt: null },
+      }),
+    ])
 
     return NextResponse.json({ notifications, unreadCount })
   } catch {
