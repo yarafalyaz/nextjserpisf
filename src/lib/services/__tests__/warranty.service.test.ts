@@ -6,6 +6,9 @@ import {
   createWarrantyClaim,
   createWarrantyCoveragesForWorkOrder,
   decideWarrantyClaim,
+  linkSupplierClaim,
+  linkSupplierClaimVendorOnly,
+  transitionSupplierClaim,
   transitionWarrantyClaim,
 } from "../warranty.service"
 import { prisma } from "@/lib/db/prisma"
@@ -16,8 +19,11 @@ vi.mock("@/lib/db/prisma", () => ({
     materialIssue: { findMany: vi.fn() },
     item: { findMany: vi.fn() },
     warrantyCoverage: { findMany: vi.fn(), create: vi.fn(), findUnique: vi.fn() },
-    warrantyClaim: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    warrantyClaim: { create: vi.fn(), findUnique: vi.fn(), findFirst: vi.fn(), update: vi.fn() },
     customerVehicle: { update: vi.fn() },
+    vendor: { findUnique: vi.fn() },
+    purchaseReturn: { findUnique: vi.fn() },
+    transactionAttachment: { count: vi.fn() },
   },
 }))
 
@@ -276,6 +282,258 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
         prisma as never,
       ),
     ).rejects.toThrow("tidak valid")
+  })
+})
+
+describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", () => {
+  const baseClaim: {
+    id: number
+    status: string
+    resolutionType: string | null
+    supplierClaimVendorId: number | null
+    purchaseReturnId: number | null
+    supplierClaimStatus: string
+    supplierClaimRefNo: string | null
+    supplierClaimNotes: string | null
+    supplierClaimBy: number | null
+    coverage: { itemId: number; serialNumber: string | null }
+  } = {
+    id: 1,
+    status: "approved",
+    resolutionType: "replace",
+    supplierClaimVendorId: null,
+    purchaseReturnId: null,
+    supplierClaimStatus: "none",
+    supplierClaimRefNo: null,
+    supplierClaimNotes: null,
+    supplierClaimBy: null,
+    coverage: { itemId: 42, serialNumber: "SN-1" },
+  }
+  const draftReturn = {
+    id: 9,
+    status: "draft",
+    purchaseOrder: { vendorId: 5 },
+    items: [{ itemId: 42, serialNumbers: ["SN-1"] }],
+  }
+
+  function seedLink(claim = baseClaim, ret: unknown = draftReturn) {
+    p.warrantyClaim.findUnique.mockResolvedValue(claim)
+    p.vendor.findUnique.mockResolvedValue({ id: 5, isActive: true, deletedAt: null })
+    p.purchaseReturn.findUnique.mockResolvedValue(ret)
+    p.warrantyClaim.findFirst.mockResolvedValue(null)
+    p.transactionAttachment.count.mockResolvedValue(1)
+    p.warrantyClaim.update.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => ({ id: 1, ...data }),
+    )
+  }
+
+  it("tautan sah: vendor+item+serial cocok → drafted, ID tautan terisi", async () => {
+    seedLink()
+    const linked = (await linkSupplierClaim(
+      { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+      prisma as never,
+    )) as unknown as { supplierClaimStatus: string; purchaseReturnId: number; supplierClaimVendorId: number }
+    expect(linked.supplierClaimStatus).toBe("drafted")
+    expect(linked.purchaseReturnId).toBe(9)
+    expect(linked.supplierClaimVendorId).toBe(5)
+  })
+
+  it("FALSIFIKASI vendor mismatch: vendor PO retur ≠ vendor klaim → ditolak", async () => {
+    seedLink(baseClaim, { ...draftReturn, purchaseOrder: { vendorId: 99 } })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("bukan milik vendor")
+    expect(p.warrantyClaim.update).not.toHaveBeenCalled()
+  })
+
+  it("FALSIFIKASI item mismatch: retur tidak memuat coverage.itemId → ditolak", async () => {
+    seedLink(baseClaim, { ...draftReturn, items: [{ itemId: 77, serialNumbers: ["SN-1"] }] })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("tidak memuat item")
+  })
+
+  it("FALSIFIKASI serial mismatch: coverage SN-1, retur serial lain → ditolak", async () => {
+    seedLink(baseClaim, { ...draftReturn, items: [{ itemId: 42, serialNumbers: ["SN-LAIN"] }] })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("Nomor seri")
+  })
+
+  it("coverage tanpa serial: pencocokan turun ke itemId saja → lolos", async () => {
+    seedLink(
+      { ...baseClaim, coverage: { itemId: 42, serialNumber: null } },
+      { ...draftReturn, items: [{ itemId: 42, serialNumbers: null }] },
+    )
+    const linked = (await linkSupplierClaim(
+      { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+      prisma as never,
+    )) as unknown as { supplierClaimStatus: string }
+    expect(linked.supplierClaimStatus).toBe("drafted")
+  })
+
+  it("FALSIFIKASI klaim belum approved → tautan ditolak", async () => {
+    seedLink({ ...baseClaim, status: "eligibility" })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("sesudah klaim garansi disetujui")
+  })
+
+  it("FALSIFIKASI resolusi repair (bukan replace) → tautan ditolak", async () => {
+    seedLink({ ...baseClaim, resolutionType: "repair" })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("replace")
+  })
+
+  it("FALSIFIKASI retur sudah returned / sudah tertaut klaim aktif lain → ditolak", async () => {
+    seedLink(baseClaim, { ...draftReturn, status: "returned" })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("draft")
+    seedLink()
+    p.warrantyClaim.findFirst.mockResolvedValue({ id: 2 })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("sudah tertaut")
+  })
+
+  it("FALSIFIKASI vendor nonaktif → ditolak eksplisit", async () => {
+    seedLink()
+    p.vendor.findUnique.mockResolvedValue({ id: 5, isActive: false, deletedAt: null })
+    await expect(
+      linkSupplierClaim(
+        { claimId: 1, supplierClaimVendorId: 5, purchaseReturnId: 9, actorUserId: 7 },
+        prisma as never,
+      ),
+    ).rejects.toThrow("tidak aktif")
+  })
+
+  it("jalur vendor-saja tanpa PO: notes wajib, purchaseReturnId tetap null", async () => {
+    seedLink()
+    const linked = (await linkSupplierClaimVendorOnly(
+      {
+        claimId: 1,
+        supplierClaimVendorId: 5,
+        actorUserId: 7,
+        supplierClaimNotes: "Part stok lama, tanpa PO asal",
+      },
+      prisma as never,
+    )) as unknown as { supplierClaimStatus: string; purchaseReturnId: null }
+    expect(linked.supplierClaimStatus).toBe("drafted")
+    expect(linked.purchaseReturnId).toBeNull()
+    await expect(
+      linkSupplierClaimVendorOnly(
+        { claimId: 1, supplierClaimVendorId: 5, actorUserId: 7, supplierClaimNotes: "  " },
+        prisma as never,
+      ),
+    ).rejects.toThrow("Catatan wajib")
+  })
+
+  it("FALSIFIKASI sent tanpa ref/resi → ditolak; tanpa foto → ditolak; penyetuju=pembuat → ditolak", async () => {
+    seedLink({ ...baseClaim, supplierClaimStatus: "drafted", supplierClaimBy: 7 })
+    await expect(
+      transitionSupplierClaim({ claimId: 1, to: "sent", actorUserId: 8 }, prisma as never),
+    ).rejects.toThrow("Nomor klaim supplier")
+    seedLink({ ...baseClaim, supplierClaimStatus: "drafted", supplierClaimRefNo: "RESI-1", supplierClaimBy: 7 })
+    p.transactionAttachment.count.mockResolvedValue(0)
+    await expect(
+      transitionSupplierClaim({ claimId: 1, to: "sent", actorUserId: 8 }, prisma as never),
+    ).rejects.toThrow("Foto bukti")
+    seedLink({ ...baseClaim, supplierClaimStatus: "drafted", supplierClaimRefNo: "RESI-1", supplierClaimBy: 7 })
+    await expect(
+      transitionSupplierClaim({ claimId: 1, to: "sent", actorUserId: 7 }, prisma as never),
+    ).rejects.toThrow("tidak boleh sama")
+    const sent = (await transitionSupplierClaim(
+      { claimId: 1, to: "sent", actorUserId: 8 },
+      prisma as never,
+    )) as unknown as { supplierClaimStatus: string }
+    expect(sent.supplierClaimStatus).toBe("sent")
+  })
+
+  it("alur penuh drafted→sent→accepted→returned→closed_recovered; status klaim pelanggan tidak disentuh", async () => {
+    const state: Record<string, unknown> = {
+      ...baseClaim,
+      supplierClaimStatus: "drafted",
+      supplierClaimVendorId: 5,
+      purchaseReturnId: 9,
+      supplierClaimBy: 7,
+    }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...state }))
+    p.purchaseReturn.findUnique.mockResolvedValue({ status: "returned" })
+    p.transactionAttachment.count.mockResolvedValue(2)
+    p.warrantyClaim.update.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => {
+        Object.assign(state, data)
+        return { ...state }
+      },
+    )
+    await transitionSupplierClaim(
+      { claimId: 1, to: "sent", actorUserId: 8, supplierClaimRefNo: "RMA-9" },
+      prisma as never,
+    )
+    await transitionSupplierClaim(
+      { claimId: 1, to: "accepted", actorUserId: 7, supplierClaimNotes: "Supplier setuju ganti" },
+      prisma as never,
+    )
+    await transitionSupplierClaim({ claimId: 1, to: "returned", actorUserId: 7 }, prisma as never)
+    await transitionSupplierClaim({ claimId: 1, to: "closed_recovered", actorUserId: 7 }, prisma as never)
+    expect(state.supplierClaimStatus).toBe("closed_recovered")
+    for (const call of p.warrantyClaim.update.mock.calls) {
+      expect(call[0].data).not.toHaveProperty("status")
+    }
+    await expect(
+      transitionSupplierClaim({ claimId: 1, to: "sent", actorUserId: 7 }, prisma as never),
+    ).rejects.toThrow("tidak diizinkan")
+  })
+
+  it("FALSIFIKASI returned sebelum retur diproses → ditolak; rejected wajib alasan; lepas sesudah sent → ditolak", async () => {
+    seedLink({ ...baseClaim, supplierClaimStatus: "accepted", purchaseReturnId: 9, supplierClaimBy: 7 })
+    p.purchaseReturn.findUnique.mockResolvedValue({ status: "draft" })
+    await expect(
+      transitionSupplierClaim({ claimId: 1, to: "returned", actorUserId: 7 }, prisma as never),
+    ).rejects.toThrow("belum diproses")
+    seedLink({ ...baseClaim, supplierClaimStatus: "sent", supplierClaimBy: 7 })
+    await expect(
+      transitionSupplierClaim({ claimId: 1, to: "rejected_supplier", actorUserId: 7 }, prisma as never),
+    ).rejects.toThrow("Alasan penolakan")
+    await expect(
+      transitionSupplierClaim(
+        { claimId: 1, to: "none", actorUserId: 7, supplierClaimNotes: "salah taut" },
+        prisma as never,
+      ),
+    ).rejects.toThrow("tidak diizinkan")
+  })
+
+  it("lepas tautan dari drafted: purchaseReturnId dibersihkan, alasan wajib", async () => {
+    seedLink({ ...baseClaim, supplierClaimStatus: "drafted", purchaseReturnId: 9, supplierClaimBy: 7 })
+    const unlinked = (await transitionSupplierClaim(
+      { claimId: 1, to: "none", actorUserId: 7, supplierClaimNotes: "Retur salah dokumen" },
+      prisma as never,
+    )) as unknown as { supplierClaimStatus: string; purchaseReturnId: null }
+    expect(unlinked.supplierClaimStatus).toBe("none")
+    expect(unlinked.purchaseReturnId).toBeNull()
   })
 })
 

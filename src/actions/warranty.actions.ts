@@ -9,12 +9,17 @@ import { parseFormData } from "@/lib/validations/parse-form";
 import {
   createWarrantyClaimSchema,
   decideWarrantyClaimSchema,
+  linkSupplierClaimSchema,
+  transitionSupplierClaimSchema,
   transitionWarrantyClaimSchema,
 } from "@/lib/validations/warranty.schemas";
 import {
   assessWarrantyEligibility,
   createWarrantyClaim,
   decideWarrantyClaim,
+  linkSupplierClaim,
+  linkSupplierClaimVendorOnly,
+  transitionSupplierClaim,
   transitionWarrantyClaim,
 } from "@/lib/services/warranty.service";
 
@@ -97,6 +102,84 @@ export async function transitionWarrantyClaimAction(formData: FormData) {
     if (isNextRedirectError(e)) throw e;
     console.error("[transitionWarrantyClaimAction]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Gagal mengubah status klaim garansi") };
+  }
+}
+
+// ==================== SUPPLIER CLAIM LINK (F-2026-10-21-022) ====================
+// Tautan dokumen saja: TANPA jurnal recovery, TANPA auto-buat PurchaseReturn.
+// Permission existing dipakai ulang (edit/approve_warranty_claims); retur
+// lahir terpisah lewat createPurchaseReturn existing (create_purchase_returns).
+
+export async function linkSupplierClaimAction(formData: FormData) {
+  try {
+    const user = await requirePermission("edit_warranty_claims");
+    const parsed = parseFormData(linkSupplierClaimSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const claim =
+      v.purchaseReturnId != null
+        ? await linkSupplierClaim({
+            claimId: v.claimId,
+            supplierClaimVendorId: v.supplierClaimVendorId,
+            purchaseReturnId: v.purchaseReturnId,
+            actorUserId: Number(user.id),
+            supplierClaimRefNo: v.supplierClaimRefNo ?? null,
+            supplierClaimNotes: v.supplierClaimNotes ?? null,
+          })
+        : await linkSupplierClaimVendorOnly({
+            claimId: v.claimId,
+            supplierClaimVendorId: v.supplierClaimVendorId,
+            actorUserId: Number(user.id),
+            supplierClaimRefNo: v.supplierClaimRefNo ?? null,
+            supplierClaimNotes: v.supplierClaimNotes ?? "",
+          });
+
+    revalidatePath("/produksi/garansi");
+    await logActivity("update", "WarrantyClaim", claim.id, "Menautkan klaim supplier part cacat");
+    return { success: true, id: claim.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[linkSupplierClaimAction]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Gagal menautkan klaim supplier") };
+  }
+}
+
+export async function transitionSupplierClaimAction(formData: FormData) {
+  try {
+    const parsed = parseFormData(transitionSupplierClaimSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+    // R2 kirim + R6/R8 tutup final = persetujuan: approve_warranty_claims.
+    // Langkah pencatatan lain (accepted/rejected/returned/lepas) = edit.
+    const user =
+      v.to === "sent" || v.to === "closed_no_recovery"
+        ? await requirePermission("approve_warranty_claims")
+        : await requirePermission("edit_warranty_claims");
+    const roles = (user as { roles?: string[] }).roles ?? [];
+    const actorIsAdmin = roles.includes("admin") || roles.includes("super_admin");
+
+    const claim = await transitionSupplierClaim({
+      claimId: v.claimId,
+      to: v.to,
+      actorUserId: Number(user.id),
+      actorIsAdmin,
+      supplierClaimRefNo: v.supplierClaimRefNo ?? null,
+      supplierClaimNotes: v.supplierClaimNotes ?? null,
+    });
+
+    revalidatePath("/produksi/garansi");
+    await logActivity(
+      "update",
+      "WarrantyClaim",
+      claim.id,
+      `Status klaim supplier berpindah ke ${v.to}`,
+    );
+    return { success: true, id: claim.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[transitionSupplierClaimAction]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Gagal mengubah status klaim supplier") };
   }
 }
 

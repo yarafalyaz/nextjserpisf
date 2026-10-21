@@ -40,6 +40,39 @@ export type WarrantyClaimStatus = (typeof WARRANTY_CLAIM_STATUSES)[number]
 export const WARRANTY_RESOLUTION_TYPES = ["repair", "replace", "reject"] as const
 export type WarrantyResolutionType = (typeof WARRANTY_RESOLUTION_TYPES)[number]
 
+/**
+ * F-2026-10-21-022 — status recovery klaim supplier, TERPISAH dari status
+ * klaim pelanggan di atas. Enum teks divalidasi di service (bukan kolom
+ * status klaim utama). Terminal: closed_recovered | closed_no_recovery.
+ */
+export const WARRANTY_SUPPLIER_CLAIM_STATUSES = [
+  "none",
+  "drafted",
+  "sent",
+  "accepted",
+  "rejected_supplier",
+  "returned",
+  "closed_recovered",
+  "closed_no_recovery",
+] as const
+export type WarrantySupplierClaimStatus = (typeof WARRANTY_SUPPLIER_CLAIM_STATUSES)[number]
+
+/** Transisi recovery R1–R8 (spec F-022-S §3). `returned` = cermin baca-silang
+ * status PurchaseReturn existing, bukan input bebas. */
+export const WARRANTY_SUPPLIER_CLAIM_TRANSITIONS: Record<
+  WarrantySupplierClaimStatus,
+  readonly WarrantySupplierClaimStatus[]
+> = {
+  none: ["drafted"],
+  drafted: ["sent", "none"],
+  sent: ["accepted", "rejected_supplier"],
+  accepted: ["returned", "closed_recovered", "closed_no_recovery"],
+  rejected_supplier: ["closed_no_recovery"],
+  returned: ["closed_recovered"],
+  closed_recovered: [],
+  closed_no_recovery: [],
+}
+
 /** Transisi status klaim yang sah. closed satu-satunya terminal. */
 export const WARRANTY_CLAIM_TRANSITIONS: Record<WarrantyClaimStatus, readonly WarrantyClaimStatus[]> = {
   intake: ["eligibility"],
@@ -356,6 +389,300 @@ export async function transitionWarrantyClaim(
       ...(input.to === "in_repair" && input.repairWorkOrderId != null
         ? { repairWorkOrderId: input.repairWorkOrderId }
         : {}),
+    },
+  })
+}
+
+// ==================== F-2026-10-21-022: tautan klaim supplier ====================
+// TAUTAN DOKUMEN SAJA. Fungsi-fungsi di bawah TIDAK membuat jurnal apa pun
+// dan TIDAK membuat PurchaseReturn (retur lahir lewat createPurchaseReturn
+// existing; jurnal satu-satunya = jurnal retur beli existing saat
+// processPurchaseReturn). Aset piutang klaim supplier = vonis tahap 3.
+
+export function assertSupplierClaimTransition(from: string, to: string): void {
+  const allowed =
+    (WARRANTY_SUPPLIER_CLAIM_TRANSITIONS as Record<string, readonly string[]>)[from] ?? []
+  if (!allowed.includes(to)) {
+    throw new Error(`Transisi klaim supplier dari '${from}' ke '${to}' tidak diizinkan.`)
+  }
+}
+
+const CLAIM_LINK_SELECT = {
+  id: true,
+  status: true,
+  resolutionType: true,
+  supplierClaimVendorId: true,
+  purchaseReturnId: true,
+  supplierClaimStatus: true,
+  supplierClaimRefNo: true,
+  supplierClaimNotes: true,
+  supplierClaimBy: true,
+  coverage: { select: { itemId: true, serialNumber: true } },
+} as const
+
+type ClaimLinkRow = {
+  id: number
+  status: string
+  resolutionType: string | null
+  supplierClaimVendorId: number | null
+  purchaseReturnId: number | null
+  supplierClaimStatus: string
+  supplierClaimRefNo: string | null
+  supplierClaimNotes: string | null
+  supplierClaimBy: number | null
+  coverage: { itemId: number; serialNumber: string | null }
+}
+
+async function loadClaimForSupplierLink(
+  claimId: number,
+  client: TxClient | typeof prisma,
+): Promise<ClaimLinkRow> {
+  const claim = await client.warrantyClaim.findUnique({
+    where: { id: claimId },
+    select: CLAIM_LINK_SELECT,
+  })
+  if (!claim) throw new Error("Klaim garansi tidak ditemukan.")
+  return claim as ClaimLinkRow
+}
+
+/** Gerbang S0: tautan hanya lahir dari klaim yang sudah diputus approved
+ * (approved/in_repair/closed) dengan resolusi replace. */
+function assertClaimEligibleForSupplierLink(claim: ClaimLinkRow): void {
+  if (!["approved", "in_repair", "closed"].includes(claim.status)) {
+    throw new Error("Tautan klaim supplier hanya boleh dibuat sesudah klaim garansi disetujui.")
+  }
+  if (claim.resolutionType !== "replace") {
+    throw new Error("Tautan klaim supplier hanya untuk klaim beresolusi replace (ganti part).")
+  }
+}
+
+async function assertActiveVendor(
+  vendorId: number,
+  client: TxClient | typeof prisma,
+): Promise<void> {
+  const vendor = await client.vendor.findUnique({
+    where: { id: vendorId },
+    select: { id: true, isActive: true, deletedAt: true },
+  })
+  if (!vendor || vendor.deletedAt) throw new Error("Vendor klaim supplier tidak ditemukan.")
+  if (!vendor.isActive) {
+    throw new Error("Vendor klaim supplier tidak aktif — pilih vendor lain secara manual.")
+  }
+}
+
+/**
+ * R1: tautkan klaim ke vendor supplier + PurchaseReturn draft existing.
+ * Guard: vendor PO retur = vendor klaim, retur memuat coverage.itemId,
+ * serial cocok bila coverage.serialNumber terisi, retur belum tertaut
+ * klaim lain yang recovery-nya belum terminal. TANPA jurnal.
+ */
+export async function linkSupplierClaim(
+  input: {
+    claimId: number
+    supplierClaimVendorId: number
+    purchaseReturnId: number
+    actorUserId: number
+    supplierClaimRefNo?: string | null
+    supplierClaimNotes?: string | null
+    at?: Date
+  },
+  client: TxClient | typeof prisma = prisma,
+) {
+  const claim = await loadClaimForSupplierLink(input.claimId, client)
+  assertClaimEligibleForSupplierLink(claim)
+  assertSupplierClaimTransition(claim.supplierClaimStatus, "drafted")
+  await assertActiveVendor(input.supplierClaimVendorId, client)
+
+  const ret = await client.purchaseReturn.findUnique({
+    where: { id: input.purchaseReturnId },
+    select: {
+      id: true,
+      status: true,
+      purchaseOrder: { select: { vendorId: true } },
+      items: { select: { itemId: true, serialNumbers: true } },
+    },
+  })
+  if (!ret) throw new Error("Retur pembelian untuk klaim supplier tidak ditemukan.")
+  if (ret.status !== "draft") {
+    throw new Error("Retur pembelian yang ditautkan wajib masih berstatus draft.")
+  }
+  if (ret.purchaseOrder.vendorId !== input.supplierClaimVendorId) {
+    throw new Error("Retur pembelian bukan milik vendor klaim supplier ini.")
+  }
+  const itemRows = ret.items.filter((i) => i.itemId === claim.coverage.itemId)
+  if (itemRows.length === 0) {
+    throw new Error("Retur pembelian tidak memuat item part yang diklaim garansinya.")
+  }
+  if (claim.coverage.serialNumber) {
+    const serials = itemRows.flatMap((i) => parseSerialNumbers(i.serialNumbers))
+    if (!serials.includes(claim.coverage.serialNumber)) {
+      throw new Error("Nomor seri part pada retur tidak cocok dengan seri cakupan garansi.")
+    }
+  }
+  const other = await client.warrantyClaim.findFirst({
+    where: {
+      purchaseReturnId: input.purchaseReturnId,
+      id: { not: claim.id },
+      supplierClaimStatus: { notIn: ["closed_recovered", "closed_no_recovery", "none"] },
+    },
+    select: { id: true },
+  })
+  if (other) {
+    throw new Error("Retur pembelian ini sudah tertaut ke klaim garansi lain yang masih aktif.")
+  }
+
+  return client.warrantyClaim.update({
+    where: { id: claim.id },
+    data: {
+      supplierClaimVendorId: input.supplierClaimVendorId,
+      purchaseReturnId: input.purchaseReturnId,
+      supplierClaimStatus: "drafted",
+      ...(input.supplierClaimRefNo?.trim()
+        ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
+        : {}),
+      ...(input.supplierClaimNotes?.trim()
+        ? { supplierClaimNotes: input.supplierClaimNotes.trim() }
+        : {}),
+      supplierClaimBy: input.actorUserId,
+      supplierClaimAt: input.at ?? new Date(),
+    },
+  })
+}
+
+/**
+ * Jalur tanpa PO asal (spec §6): vendor saja + ref manual, tanpa
+ * PurchaseReturn — PurchaseReturn.purchaseOrderId NOT NULL sehingga retur
+ * tanpa PO tidak bisa lahir; PO/retur dummy DILARANG. Catatan wajib
+ * menjelaskan ketiadaan PO asal.
+ */
+export async function linkSupplierClaimVendorOnly(
+  input: {
+    claimId: number
+    supplierClaimVendorId: number
+    actorUserId: number
+    supplierClaimRefNo?: string | null
+    supplierClaimNotes: string
+    at?: Date
+  },
+  client: TxClient | typeof prisma = prisma,
+) {
+  if (!input.supplierClaimNotes?.trim()) {
+    throw new Error("Catatan wajib diisi untuk klaim supplier tanpa retur pembelian (mis. tanpa PO asal).")
+  }
+  const claim = await loadClaimForSupplierLink(input.claimId, client)
+  assertClaimEligibleForSupplierLink(claim)
+  assertSupplierClaimTransition(claim.supplierClaimStatus, "drafted")
+  await assertActiveVendor(input.supplierClaimVendorId, client)
+  return client.warrantyClaim.update({
+    where: { id: claim.id },
+    data: {
+      supplierClaimVendorId: input.supplierClaimVendorId,
+      purchaseReturnId: null,
+      supplierClaimStatus: "drafted",
+      ...(input.supplierClaimRefNo?.trim()
+        ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
+        : {}),
+      supplierClaimNotes: input.supplierClaimNotes.trim(),
+      supplierClaimBy: input.actorUserId,
+      supplierClaimAt: input.at ?? new Date(),
+    },
+  })
+}
+
+/**
+ * Transisi status recovery R2–R8. Bukti wajib per langkah ditegakkan di
+ * sini (server), bukan hanya UI:
+ * - sent: refNo/resi terisi + ≥1 foto bukti (TransactionAttachment
+ *   referenceType "WarrantyClaim") + penyetuju ≠ pembuat tautan.
+ * - accepted: refNo atau catatan bukti respons supplier terisi.
+ * - rejected_supplier: alasan (notes) wajib.
+ * - returned: baca-silang — PurchaseReturn tertaut wajib sudah `returned`.
+ * - closed_recovered: retur sudah returned ATAU catatan nomor GR pengganti.
+ * - closed_no_recovery: dari rejected_supplier wajib catatan disposisi;
+ *   dari accepted wajib admin (actorIsAdmin) + alasan.
+ * - none (lepas tautan R7): hanya dari drafted, alasan wajib, retur draft
+ *   existing TIDAK ikut terhapus.
+ * Status klaim pelanggan tidak pernah diubah fungsi ini.
+ */
+export async function transitionSupplierClaim(
+  input: {
+    claimId: number
+    to: WarrantySupplierClaimStatus
+    actorUserId: number
+    actorIsAdmin?: boolean
+    supplierClaimRefNo?: string | null
+    supplierClaimNotes?: string | null
+    at?: Date
+  },
+  client: TxClient | typeof prisma = prisma,
+) {
+  const claim = await loadClaimForSupplierLink(input.claimId, client)
+  assertSupplierClaimTransition(claim.supplierClaimStatus, input.to)
+  const refNo = input.supplierClaimRefNo?.trim() || claim.supplierClaimRefNo
+  const notes = input.supplierClaimNotes?.trim() || null
+
+  if (input.to === "sent") {
+    if (!refNo) {
+      throw new Error("Nomor klaim supplier atau nomor resi pengiriman wajib diisi sebelum status sent.")
+    }
+    const photoCount = await client.transactionAttachment.count({
+      where: { referenceType: "WarrantyClaim", referenceId: claim.id },
+    })
+    if (photoCount === 0) {
+      throw new Error("Foto bukti part cacat wajib dilampirkan sebelum status sent.")
+    }
+    if (claim.supplierClaimBy != null && claim.supplierClaimBy === input.actorUserId) {
+      throw new Error("Penyetuju pengiriman tidak boleh sama dengan pembuat tautan klaim supplier.")
+    }
+  }
+  if (input.to === "accepted" && !refNo && !notes) {
+    throw new Error("Bukti respons supplier (nomor referensi atau catatan) wajib diisi.")
+  }
+  if (input.to === "rejected_supplier" && !notes) {
+    throw new Error("Alasan penolakan supplier wajib diisi.")
+  }
+  if (input.to === "returned" || input.to === "closed_recovered") {
+    const ret = claim.purchaseReturnId
+      ? await client.purchaseReturn.findUnique({
+          where: { id: claim.purchaseReturnId },
+          select: { status: true },
+        })
+      : null
+    if (input.to === "returned" && ret?.status !== "returned") {
+      throw new Error("Retur pembelian tertaut belum diproses (status belum returned).")
+    }
+    if (input.to === "closed_recovered" && ret?.status !== "returned" && !notes) {
+      throw new Error(
+        "Tutup recovered wajib retur berstatus returned atau catatan nomor goods receipt pengganti.",
+      )
+    }
+  }
+  if (input.to === "closed_no_recovery") {
+    if (claim.supplierClaimStatus === "accepted") {
+      if (!input.actorIsAdmin) {
+        throw new Error("Tutup tanpa recovery sesudah supplier menerima hanya boleh oleh admin.")
+      }
+      if (!notes) throw new Error("Alasan tutup tanpa recovery wajib diisi.")
+    }
+    if (claim.supplierClaimStatus === "rejected_supplier" && !notes) {
+      throw new Error("Catatan disposisi part wajib diisi sebelum tutup tanpa recovery.")
+    }
+  }
+  if (input.to === "none" && !notes) {
+    throw new Error("Alasan melepas tautan klaim supplier wajib diisi.")
+  }
+
+  return client.warrantyClaim.update({
+    where: { id: claim.id },
+    data: {
+      supplierClaimStatus: input.to,
+      ...(input.supplierClaimRefNo?.trim()
+        ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
+        : {}),
+      ...(notes ? { supplierClaimNotes: notes } : {}),
+      ...(input.to === "none" ? { purchaseReturnId: null } : {}),
+      supplierClaimBy: input.actorUserId,
+      supplierClaimAt: input.at ?? new Date(),
     },
   })
 }
