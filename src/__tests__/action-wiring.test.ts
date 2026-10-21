@@ -119,6 +119,30 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
+  // F-2026-10-21-027 backend dulu (PR #360): kontrak komponen gaji terstruktur;
+  // UI /sdm/penggajian menyusul di kartu frontend Fira (buang entri ini saat UI memanggilnya).
+  "src/actions/hrm.actions.ts::createPayrollComponent":
+    "F-2026-10-21-027 backend; UI kelola komponen gaji menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::updatePayrollComponent":
+    "F-2026-10-21-027 backend; UI kelola komponen gaji menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::setPayrollComponentActive":
+    "F-2026-10-21-027 backend; UI kelola komponen gaji menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::getPayrollComponents":
+    "F-2026-10-21-027 backend; UI kelola komponen gaji menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::assignEmployeePayrollComponent":
+    "F-2026-10-21-027 backend; UI penugasan komponen menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::updateEmployeePayrollComponent":
+    "F-2026-10-21-027 backend; UI penugasan komponen menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::getEmployeePayrollComponents":
+    "F-2026-10-21-027 backend; UI penugasan komponen menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::getPayrollComponentLines":
+    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::addPayrollComponentLine":
+    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::updatePayrollComponentLineAmount":
+    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::removePayrollComponentLine":
+    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
   // F-2026-10-21-030 fase a+b (backend dulu, PR #370): UI RAB Fira DITAHAN
   // menunggu Lead merge builder ini — vonis Lead t_3e892715 komentar #86.
   // Buang ke-9 entri ini saat UI RAB memanggilnya.

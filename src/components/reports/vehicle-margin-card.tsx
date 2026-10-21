@@ -55,6 +55,11 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
                       Sebagian
                     </span>
                   ) : null}
+                  {row.hasUnlinkedMaterial ? (
+                    <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-xs font-medium text-warning">
+                      biaya material langsung belum termasuk
+                    </span>
+                  ) : null}
                 </DetailTableTd>
                 <DetailTableTd>{row.customerName}</DetailTableTd>
                 <DetailTableTd align="right">{currency(row.revenue)}</DetailTableTd>

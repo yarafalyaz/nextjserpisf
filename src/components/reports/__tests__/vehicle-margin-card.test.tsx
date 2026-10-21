@@ -10,7 +10,7 @@ afterEach(() => {
   clearRenderedCards()
 })
 
-function reportExample() {
+function reportExample(hasUnlinkedMaterial = false) {
   const margin = buildVehicleMargin({
     projects: [
       {
@@ -20,7 +20,17 @@ function reportExample() {
         pl: projectPlWithCost(),
       },
     ],
-    jobs: [],
+    jobs: [
+      {
+        workOrderId: 11,
+        customerVehicleId: 7,
+        vehiclePlate: "B 1234 AA",
+        customerName: "PT A",
+        billedAmount: 0,
+        actualCost: 0,
+        hasUnlinkedMaterial,
+      },
+    ],
     directInvoices: [
       {
         id: 2,
@@ -60,6 +70,18 @@ describe("VehicleMarginCard F-2026-10-22-001", () => {
     expect(text).toContain("Sebagian")
     expect(text.indexOf("B 1234 AA")).toBeLessThan(text.indexOf("Tanpa kendaraan"))
     unmountCard(root)
+  })
+
+  it("penanda material langsung belum termasuk tampil verbatim; tanpa penanda tidak tampil", () => {
+    const { container, root } = renderCard(
+      <VehicleMarginCard report={reportExample(true)} />,
+    )
+    expect(container.textContent ?? "").toContain("biaya material langsung belum termasuk")
+    unmountCard(root)
+
+    const without = renderCard(<VehicleMarginCard report={reportExample()} />)
+    expect(without.container.textContent ?? "").not.toContain("biaya material langsung belum termasuk")
+    unmountCard(without.root)
   })
 
   it("kosong tampil pesan, bukan tabel", () => {
