@@ -529,6 +529,7 @@ model CustomerPriceList {
   customerCategoryId Int?              @map("customer_category_id")
   itemId             Int               @map("item_id")
   price              Decimal           @db.Decimal(15, 2)
+  minQty             Decimal           @default(1.00) @map("min_qty") @db.Decimal(15, 2)
   effectiveDate      DateTime?         @map("effective_date")
   notes              String?           @db.Text
   isActive           Boolean           @default(true) @map("is_active")
@@ -538,7 +539,7 @@ model CustomerPriceList {
   customerCategory   CustomerCategory? @relation(fields: [customerCategoryId], references: [id], onDelete: Cascade)
   item               Item              @relation(fields: [itemId], references: [id], onDelete: Cascade)
 
-  @@unique([customerCategoryId, itemId, effectiveDate], map: "uq_customer_price_list")
+  @@unique([customerCategoryId, itemId, minQty, effectiveDate], map: "uq_customer_price_list")
   @@index([itemId], map: "customer_price_lists_item_id_fkey")
   @@index([customerCategoryId], map: "customer_price_lists_category_id_fkey")
   @@index([createdAt])
@@ -1500,6 +1501,12 @@ model SalesInvoiceItem {
   unitPrice      Decimal      @default(0.00) @map("unit_price") @db.Decimal(15, 2)
   discount       Decimal      @default(0.00) @db.Decimal(15, 2)
   total          Decimal      @default(0.00) @db.Decimal(15, 2)
+  // F-2026-10-21-018 BR-TIER-09: sumber harga satuan saat baris dibuat
+  // (price_list_tier | price_list_base | item_master). Null = baris lama /
+  // konversi / edit — BUKAN klaim historis, jangan ditampilkan sebagai sumber.
+  priceSource    String?      @map("price_source")
+  priceListId    Int?         @map("price_list_id")
+  priceListMinQty Decimal?    @map("price_list_min_qty") @db.Decimal(15, 2)
   salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id], onDelete: Cascade)
 
   @@index([salesInvoiceId], map: "sales_invoice_items_sales_invoice_id_fkey")

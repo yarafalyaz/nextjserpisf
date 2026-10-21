@@ -32,12 +32,19 @@ import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, re
 import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight, getWibTodayUtcDate } from "@/lib/utils/attendance-time"
-import type { Prisma } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import {
   loadPriceListRows,
-  pickPriceListPrice,
+  pickPriceListRow,
   resolveLinePricing,
+  type PriceSource,
 } from "@/lib/services/customer-price-list.service"
+
+export interface PricedLineMeta {
+  priceSource?: PriceSource | null
+  priceListId?: number | null
+  priceListMinQty?: number | null
+}
 
 // F-PRICELIST-01 tahap 1: terapkan daftar harga pelanggan ke baris dokumen
 // yang dibuat LANGSUNG dari form (bukan hasil konversi penawaran/pesanan —
@@ -48,22 +55,43 @@ import {
 // HPP sendiri dan peringatan margin tidak pernah memblokir simpan.
 async function applyPriceListLines<
   T extends { itemId: number | null; qty: number; unitPrice: number; discount?: number },
->(tx: Prisma.TransactionClient, customerId: number, date: Date, lines: readonly T[]): Promise<T[]> {
+>(
+  tx: Prisma.TransactionClient,
+  customerId: number,
+  date: Date,
+  lines: readonly T[],
+): Promise<(T & PricedLineMeta)[]> {
   const itemIds = lines.map((l) => l.itemId).filter((id): id is number => id != null)
   if (itemIds.length === 0) return [...lines]
   const { customerCategoryId, rows } = await loadPriceListRows(tx, { customerId, itemIds, date })
   if (rows.length === 0) return [...lines]
   return lines.map((line) => {
     if (line.itemId == null) return line
-    const priceListPrice = pickPriceListPrice(rows, { itemId: line.itemId, customerCategoryId, date })
-    if (priceListPrice === null) return line
+    // F-018: resolusi qty-aware per baris (BR-TIER-01..06), tanpa agregasi.
+    const winner = pickPriceListRow(rows, {
+      itemId: line.itemId,
+      customerCategoryId,
+      date,
+      qty: line.qty,
+    })
+    if (winner === null) {
+      return { ...line, priceSource: "item_master" as const, priceListId: null, priceListMinQty: null }
+    }
     const r = resolveLinePricing({
       qty: line.qty,
       itemPrice: line.unitPrice,
-      priceListPrice,
+      priceListPrice: winner.price,
+      priceListRow: winner,
       manualDiscount: line.discount,
     })
-    return { ...line, unitPrice: r.unitPrice, discount: r.discount }
+    return {
+      ...line,
+      unitPrice: r.unitPrice,
+      discount: r.discount,
+      priceSource: r.priceSource,
+      priceListId: r.priceListId,
+      priceListMinQty: r.priceListMinQty,
+    }
   })
 }
 
@@ -1525,6 +1553,14 @@ export async function createSalesInvoice(formData: FormData) {
                     unitPrice: safePrice,
                     discount: safeDiscount,
                     total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),
+                    // F-018 BR-TIER-09: hanya baris langsung hasil resolver
+                    // yang membawa sumber; konversi SO tetap null (bukan klaim).
+                    priceSource: "priceSource" in item ? (item.priceSource ?? null) : null,
+                    priceListId: "priceListId" in item ? (item.priceListId ?? null) : null,
+                    priceListMinQty:
+                      "priceListMinQty" in item && item.priceListMinQty != null
+                        ? new Prisma.Decimal(Number(item.priceListMinQty).toFixed(2))
+                        : null,
                   }
                 }),
               },

@@ -24,11 +24,11 @@ function toMoney(value: number): Prisma.Decimal {
 }
 
 /**
- * F-PRICELIST-01 tahap 1: simpan satu baris daftar harga jual.
+ * F-PRICELIST-01 tahap 1 + F-2026-10-21-018: simpan satu baris daftar harga jual.
  *
- * Kombinasi (kategori, barang, tanggal efektif) unik. MySQL memperlakukan
- * NULL sebagai berbeda di unique index, jadi duplikat baris umum (kategori
- * null) dicegah cek aplikasi ini, bukan constraint DB.
+ * Kombinasi (kategori, barang, minQty, tanggal efektif) unik. MySQL
+ * memperlakukan NULL sebagai berbeda di unique index, jadi duplikat baris
+ * umum (kategori null) dicegah cek aplikasi ini, bukan constraint DB.
  */
 export async function createCustomerPriceList(formData: FormData): Promise<CustomerPriceListActionResult> {
   try {
@@ -40,15 +40,16 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
 
     const categoryId = v.customerCategoryId ?? null
     const effectiveDate = v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null
+    const minQty = new Prisma.Decimal(v.minQty.toFixed(2))
 
     const duplicate = await prisma.customerPriceList.findFirst({
-      where: { customerCategoryId: categoryId, itemId: v.itemId, effectiveDate },
+      where: { customerCategoryId: categoryId, itemId: v.itemId, minQty, effectiveDate },
       select: { id: true },
     })
     if (duplicate) {
       return {
         success: false,
-        error: "Harga untuk kategori, barang, dan tanggal efektif itu sudah ada. Ubah baris yang ada.",
+        error: "Harga untuk kategori, barang, minimal qty, dan tanggal efektif itu sudah ada. Ubah baris yang ada.",
       }
     }
 
@@ -57,6 +58,7 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
         customerCategoryId: categoryId,
         itemId: v.itemId,
         price: toMoney(v.price),
+        minQty,
         effectiveDate,
         notes: v.notes ?? null,
         createdBy: Number(user.id),
@@ -86,13 +88,14 @@ export async function updateCustomerPriceList(id: number, formData: FormData): P
 
     const categoryId = v.customerCategoryId ?? null
     const effectiveDate = v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null
+    const minQty = new Prisma.Decimal(v.minQty.toFixed(2))
 
     const duplicate = await prisma.customerPriceList.findFirst({
-      where: { customerCategoryId: categoryId, itemId: v.itemId, effectiveDate, id: { not: id } },
+      where: { customerCategoryId: categoryId, itemId: v.itemId, minQty, effectiveDate, id: { not: id } },
       select: { id: true },
     })
     if (duplicate) {
-      return { success: false, error: "Sudah ada baris lain dengan kategori, barang, dan tanggal efektif yang sama." }
+      return { success: false, error: "Sudah ada baris lain dengan kategori, barang, minimal qty, dan tanggal efektif yang sama." }
     }
 
     await prisma.customerPriceList.update({
@@ -101,6 +104,7 @@ export async function updateCustomerPriceList(id: number, formData: FormData): P
         customerCategoryId: categoryId,
         itemId: v.itemId,
         price: toMoney(v.price),
+        minQty,
         effectiveDate,
         notes: v.notes ?? null,
       },
