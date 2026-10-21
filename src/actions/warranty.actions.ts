@@ -10,9 +10,15 @@ import {
   createWarrantyClaimSchema,
   decideWarrantyClaimSchema,
   linkSupplierClaimSchema,
+  postWarrantyClaimCostSchema,
+  postWarrantySupplierRecoverySchema,
   transitionSupplierClaimSchema,
   transitionWarrantyClaimSchema,
 } from "@/lib/validations/warranty.schemas";
+import {
+  postWarrantyClaimCostJournal,
+  postWarrantySupplierRecoveryJournal,
+} from "@/lib/services/warranty-journal.service";
 import {
   assessWarrantyEligibility,
   createWarrantyClaim,
@@ -207,6 +213,57 @@ export async function getWarrantyClaimDetail(claimId: number) {
     if (isNextRedirectError(e)) throw e;
     console.error("[getWarrantyClaimDetail]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Gagal memuat klaim garansi") };
+  }
+}
+
+// ==================== JURNAL GARANSI TAHAP 3 RUTE MATI (E2/E3) ====================
+// Posting jurnal = aksi finansial: izin menyetujui klaim (pejabat yang sama
+// yang memutus klaim). Syarat jurnal hidup di warranty-journal.service.ts.
+
+export async function postWarrantyClaimCostAction(formData: FormData) {
+  try {
+    const user = await requirePermission("approve_warranty_claims");
+    const parsed = parseFormData(postWarrantyClaimCostSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const result = await postWarrantyClaimCostJournal({
+      claimId: v.claimId,
+      eventDate: v.eventDate ?? new Date(),
+      createdBy: Number(user.id),
+    });
+
+    revalidatePath("/produksi/garansi");
+    await logActivity("create", "Journal", result.journalId, `Posting jurnal biaya klaim garansi #${v.claimId} (${result.journalNumber})`);
+    return { success: true, journalId: result.journalId, journalNumber: result.journalNumber, amount: result.amount };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[postWarrantyClaimCostAction]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Gagal memposting jurnal biaya garansi") };
+  }
+}
+
+export async function postWarrantySupplierRecoveryAction(formData: FormData) {
+  try {
+    const user = await requirePermission("approve_warranty_claims");
+    const parsed = parseFormData(postWarrantySupplierRecoverySchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const result = await postWarrantySupplierRecoveryJournal({
+      claimId: v.claimId,
+      amount: v.amount,
+      eventDate: v.eventDate ?? new Date(),
+      createdBy: Number(user.id),
+    });
+
+    revalidatePath("/produksi/garansi");
+    await logActivity("create", "Journal", result.journalId, `Posting jurnal recovery supplier garansi #${v.claimId} (${result.journalNumber})`);
+    return { success: true, journalId: result.journalId, journalNumber: result.journalNumber, amount: result.amount };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[postWarrantySupplierRecoveryAction]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Gagal memposting jurnal recovery supplier") };
   }
 }
 
