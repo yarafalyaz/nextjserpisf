@@ -1,14 +1,13 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition } from "react"
+import { useRef, useState } from "react"
 
 import {
   issueWithholdingCertificateAction,
   revokeWithholdingCertificateAction,
   settleWithholdingTaxAction,
 } from "@/actions/tax-documents.actions"
-import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { AppDatePicker } from "@/components/ui/date-picker"
@@ -18,11 +17,9 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { useTaxDocSubmit, useTaxDocAction, type TaxOption } from "./tax-doc-submit"
 
-export interface TaxOption {
-  value: string
-  label: string
-}
+export type { TaxOption }
 
 /**
  * Form bukti potong + setor PPh (F-2026-10-21-003, tahap frontend).
@@ -44,8 +41,11 @@ export function WithholdingCertificateForm({
   salesPayments: TaxOption[]
 }) {
   const router = useRouter()
-  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
-  const [isPending, startTransition] = useTransition()
+  const { isPending, idempotencyKeyRef, run } = useTaxDocSubmit(
+    "Bukti potong diterbitkan",
+    "Gagal menerbitkan bukti potong",
+    "/laporan/pajak",
+  )
   const [direction, setDirection] = useState("we_withhold")
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
   const [linkId, setLinkId] = useState("")
@@ -53,29 +53,13 @@ export function WithholdingCertificateForm({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const formEl = e.currentTarget
-    startTransition(async () => {
-      try {
-        const formData = new FormData(formEl)
-        formData.set("idempotencyKey", idempotencyKeyRef.current)
-        formData.set("direction", direction)
-        formData.set("withholdingDate", date)
-        formData.set("dpp", dpp === null ? "" : String(dpp))
-        formData.set(direction === "we_withhold" ? "vendorBillId" : "salesPaymentId", linkId)
-
-        const result = await issueWithholdingCertificateAction(formData)
-        if (result && !result.success) {
-          showError(result.error || "Gagal menerbitkan bukti potong")
-          return
-        }
-        idempotencyKeyRef.current = crypto.randomUUID()
-        showSuccess("Bukti potong diterbitkan")
-        router.push("/laporan/pajak")
-        router.refresh()
-      } catch (error) {
-        showError(error instanceof Error ? error.message : "Gagal menerbitkan bukti potong")
-      }
-    })
+    const formData = new FormData(e.currentTarget)
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
+    formData.set("direction", direction)
+    formData.set("withholdingDate", date)
+    formData.set("dpp", dpp === null ? "" : String(dpp))
+    formData.set(direction === "we_withhold" ? "vendorBillId" : "salesPaymentId", linkId)
+    run(issueWithholdingCertificateAction, formData)
   }
 
   return (
@@ -168,27 +152,6 @@ export function WithholdingCertificateForm({
   )
 }
 
-function useCertAction() {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  function run(action: (fd: FormData) => Promise<{ success: boolean; error?: string } | undefined>, formData: FormData, successText: string) {
-    startTransition(async () => {
-      try {
-        const result = await action(formData)
-        if (result && !result.success) {
-          showError(result.error || "Gagal memproses bukti potong")
-          return
-        }
-        showSuccess(successText)
-        router.refresh()
-      } catch (error) {
-        showError(error instanceof Error ? error.message : "Gagal memproses bukti potong")
-      }
-    })
-  }
-  return { isPending, run }
-}
-
 /** Cabut bupot terbit + setor PPh per masa (izin berbeda, F-034). */
 export function WithholdingLifecycleActions({
   certificates,
@@ -205,7 +168,7 @@ export function WithholdingLifecycleActions({
   canRevoke: boolean
   canSettle: boolean
 }) {
-  const { isPending, run } = useCertAction()
+  const { isPending, run } = useTaxDocAction("Gagal memproses bukti potong")
   const [certId, setCertId] = useState("")
   const [period, setPeriod] = useState("")
   const [amount, setAmount] = useState<number | null>(null)

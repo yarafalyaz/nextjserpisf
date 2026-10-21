@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useRef, useState, useTransition } from "react"
+import { useRef, useState } from "react"
 
 import {
   issueTaxInvoiceAction,
@@ -9,7 +9,6 @@ import {
   cancelTaxInvoiceAction,
   creditInputInvoiceAction,
 } from "@/actions/tax-documents.actions"
-import { showSuccess, showError } from "@/lib/utils/toast"
 import { Button } from "@/components/ui/button"
 import { CurrencyInput } from "@/components/ui/currency-input"
 import { AppDatePicker } from "@/components/ui/date-picker"
@@ -19,11 +18,9 @@ import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
+import { useTaxDocSubmit, useTaxDocAction, type TaxOption } from "./tax-doc-submit"
 
-export interface TaxOption {
-  value: string
-  label: string
-}
+export type { TaxOption }
 
 const DIRECTION_OPTIONS: TaxOption[] = [
   { value: "out", label: "Keluaran (penjualan)" },
@@ -51,8 +48,11 @@ export function TaxInvoiceForm({
   vendors: TaxOption[]
 }) {
   const router = useRouter()
-  const idempotencyKeyRef = useRef<string>(crypto.randomUUID())
-  const [isPending, startTransition] = useTransition()
+  const { isPending, idempotencyKeyRef, run } = useTaxDocSubmit(
+    "Faktur pajak diterbitkan",
+    "Gagal menerbitkan faktur pajak",
+    "/laporan/pajak",
+  )
   const [direction, setDirection] = useState("out")
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
   const [linkId, setLinkId] = useState("")
@@ -60,29 +60,13 @@ export function TaxInvoiceForm({
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    const formEl = e.currentTarget
-    startTransition(async () => {
-      try {
-        const formData = new FormData(formEl)
-        formData.set("idempotencyKey", idempotencyKeyRef.current)
-        formData.set("direction", direction)
-        formData.set("taxInvoiceDate", date)
-        formData.set("sellingPrice", sellingPrice === null ? "" : String(sellingPrice))
-        formData.set(direction === "out" ? "salesInvoiceId" : "vendorBillId", linkId)
-
-        const result = await issueTaxInvoiceAction(formData)
-        if (result && !result.success) {
-          showError(result.error || "Gagal menerbitkan faktur pajak")
-          return
-        }
-        idempotencyKeyRef.current = crypto.randomUUID()
-        showSuccess("Faktur pajak diterbitkan")
-        router.push("/laporan/pajak")
-        router.refresh()
-      } catch (error) {
-        showError(error instanceof Error ? error.message : "Gagal menerbitkan faktur pajak")
-      }
-    })
+    const formData = new FormData(e.currentTarget)
+    formData.set("idempotencyKey", idempotencyKeyRef.current)
+    formData.set("direction", direction)
+    formData.set("taxInvoiceDate", date)
+    formData.set("sellingPrice", sellingPrice === null ? "" : String(sellingPrice))
+    formData.set(direction === "out" ? "salesInvoiceId" : "vendorBillId", linkId)
+    run(issueTaxInvoiceAction, formData)
   }
 
   return (
@@ -169,30 +153,9 @@ export function TaxInvoiceForm({
   )
 }
 
-function useDocAction() {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
-  function run(action: (fd: FormData) => Promise<{ success: boolean; error?: string } | undefined>, formData: FormData, successText: string) {
-    startTransition(async () => {
-      try {
-        const result = await action(formData)
-        if (result && !result.success) {
-          showError(result.error || "Gagal memproses dokumen pajak")
-          return
-        }
-        showSuccess(successText)
-        router.refresh()
-      } catch (error) {
-        showError(error instanceof Error ? error.message : "Gagal memproses dokumen pajak")
-      }
-    })
-  }
-  return { isPending, run }
-}
-
 /** Aksi atas satu faktur terbit: pengganti / batal / kredit masukan. */
 export function TaxInvoiceLifecycleActions({ invoices }: { invoices: TaxOption[] }) {
-  const { isPending, run } = useDocAction()
+  const { isPending, run } = useTaxDocAction()
   const [mode, setMode] = useState<"replace" | "cancel" | "credit" | "">("")
   const [invoiceId, setInvoiceId] = useState("")
   const [date, setDate] = useState(toLocalDateOnly(new Date()))
