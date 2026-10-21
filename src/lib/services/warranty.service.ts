@@ -101,6 +101,14 @@ function parseSerialNumbers(raw: unknown): string[] {
  * dibuat ulang. WO tanpa customerVehicleId atau tanpa baris bergaransi
  * menghasilkan nol coverage (bukan error). Dipanggil di dalam transaksi
  * completion WO supaya status WO dan coverage commit/rollback bersama.
+ *
+ * F-021-HARDEN-UNIQUE: idempotensi di atas hanya cek-baca-tulis di aplikasi —
+ * dua transaksi bersamaan bisa sama-sama lolos cek lalu sama-sama create.
+ * Jangkar terakhir kini di DB: `serialKey` (= serialNumber ?? "") ikut
+ * unique (workOrderId, itemId, serialKey); pelanggar kedua memicu P2002
+ * yang DITELAN di sini sebagai "sudah ada" (bukan error transaksi), supaya
+ * completion WO pemenang tidak ikut rollback. Serial kosong "" bukan
+ * serial asli — jangan tampilkan ke pengguna.
  */
 export async function createWarrantyCoveragesForWorkOrder(
   workOrderId: number,
@@ -162,27 +170,35 @@ export async function createWarrantyCoveragesForWorkOrder(
       const key = `${line.itemId}::${serialNumber ?? ""}`
       if (existingKeys.has(key)) continue
       existingKeys.add(key)
-      await client.warrantyCoverage.create({
-        data: {
-          customerVehicleId,
-          workOrderId,
-          itemId: line.itemId,
-          serialNumber,
-          installedAt,
-          expiresAt,
-          warrantyMonths: line.warrantyMonths,
-          mileageLimitKm: null,
-          termsSnapshot: buildWarrantyTermsSnapshot({
-            itemName: line.itemName,
-            itemSku: line.itemSku,
-            warrantyMonths: line.warrantyMonths,
+      try {
+        await client.warrantyCoverage.create({
+          data: {
+            customerVehicleId,
+            workOrderId,
+            itemId: line.itemId,
+            serialNumber,
+            serialKey: serialNumber ?? "",
             installedAt,
             expiresAt,
-            serialNumber,
-          }),
-          status: "active",
-        },
-      })
+            warrantyMonths: line.warrantyMonths,
+            mileageLimitKm: null,
+            termsSnapshot: buildWarrantyTermsSnapshot({
+              itemName: line.itemName,
+              itemSku: line.itemSku,
+              warrantyMonths: line.warrantyMonths,
+              installedAt,
+              expiresAt,
+              serialNumber,
+            }),
+            status: "active",
+          },
+        })
+      } catch (e) {
+        // Balapan dua transaksi: unique DB menolak salinan kedua. Itu bukti
+        // coverage sudah ada — telan khusus P2002, error lain tetap naik.
+        if ((e as { code?: string })?.code === "P2002") continue
+        throw e
+      }
       created++
     }
   }
