@@ -782,6 +782,23 @@ describe("Petty Cash Actions", () => {
     expect(String(res?.error ?? "")).toMatch(/Saldo akun Kas\/Bank tidak mencukupi/)
     expect(mocks.prismaMock.pettyCash.create).not.toHaveBeenCalled()
   })
+  it("createPettyCash IN meloloskan saldo sumber 3x100.10 untuk IN 300.30 (anti float-drift)", async () => {
+    // Regresi: reduce mentah s + Number(debit) - Number(credit) menghasilkan
+    // 300.29999999999995 < 300.30 sehingga IN sah ditolak; safeAdd/safeSubtract
+    // per langkah (pola repo) menghasilkan 300.30 persis.
+    mocks.prismaMock.journalEntry.findMany.mockResolvedValue([
+      { debit: 100.10, credit: 0 },
+      { debit: 100.10, credit: 0 },
+      { debit: 100.10, credit: 0 },
+    ])
+    const res = await (actions as any).createPettyCash(fdMap({
+      type: "IN",
+      amount: 300.30,
+      date: "2026-06-13",
+    }))
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.pettyCash.create).toHaveBeenCalled()
+  })
   it("createPettyCash IN mengunci akun sumber sebelum membaca saldo jurnal", async () => {
     const res = await (actions as any).createPettyCash(fdMap({
       type: "IN",
