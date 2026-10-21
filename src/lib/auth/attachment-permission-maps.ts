@@ -35,6 +35,7 @@ export const ATTACHMENT_PERMISSION: Record<string, PermissionName> = {
   inventory_transfer: "view_inventory_transfers",
   stock_adjustment: "view_stock_adjustments",
   petty_cash: "view_petty_cash",
+  WarrantyClaim: "view_warranty_claims",
 }
 
 export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
@@ -62,6 +63,7 @@ export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
   inventory_transfer: "edit_inventory_transfers",
   stock_adjustment: "edit_stock_adjustments",
   petty_cash: "edit_petty_cash",
+  WarrantyClaim: "edit_warranty_claims",
 }
 
 export const ATTACHMENT_CREATE_PERMISSION: Record<string, PermissionName> = {

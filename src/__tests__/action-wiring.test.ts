@@ -104,12 +104,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // vehicle-fitment-form memanggilnya).
   "src/actions/vehicle-fitment.actions.ts::checkVehicleFitmentConflicts":
     "F-2026-10-21-025 backend; peringatan konflik di VehicleFitmentForm menyusul (frontend t_6d28c338)",
-  // F-2026-10-21-022 backend dulu (pola F-021): kontrak field+aksi klaim
-  // supplier final di PR ini; UI klaim supplier = task frontend berikutnya.
-  "src/actions/warranty.actions.ts::linkSupplierClaimAction":
-    "F-2026-10-21-022 backend; UI tautan klaim supplier menyusul sesudah kontrak merged",
-  "src/actions/warranty.actions.ts::transitionSupplierClaimAction":
-    "F-2026-10-21-022 backend; UI status recovery klaim supplier menyusul sesudah kontrak merged",
 }
 
 describe("keterhubungan aksi server", () => {
