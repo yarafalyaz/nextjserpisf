@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 333 permission dikelompokkan per modul (15 modul). */
+/** 337 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -245,6 +245,10 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "manage", resource: "qc_checklists", permissionKey: "manage_qc_checklists", label: "Checklist QC" },
     { key: "manage", resource: "qc_inspections", permissionKey: "manage_qc_inspections", label: "Inspeksi QC" },
     { key: "view", resource: "qc", permissionKey: "view_qc", label: "Kendali Mutu" },
+    { key: "view", resource: "warranty_claims", permissionKey: "view_warranty_claims", label: "Klaim Garansi" },
+    { key: "create", resource: "warranty_claims", permissionKey: "create_warranty_claims", label: "Klaim Garansi" },
+    { key: "edit", resource: "warranty_claims", permissionKey: "edit_warranty_claims", label: "Klaim Garansi" },
+    { key: "approve", resource: "warranty_claims", permissionKey: "approve_warranty_claims", label: "Klaim Garansi" },
     { key: "manage", resource: "nonconformances", permissionKey: "manage_nonconformances", label: "NCR" },
     { key: "view", resource: "work_orders", permissionKey: "view_work_orders", label: "Perintah Kerja" },
     { key: "create", resource: "work_orders", permissionKey: "create_work_orders", label: "Perintah Kerja" },

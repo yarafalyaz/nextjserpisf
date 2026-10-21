@@ -131,6 +131,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   withholding_tax: "Pajak Potong",
   withholding_certificates: "Bukti Potong",
   work_orders: "Perintah Kerja",
+  warranty_claims: "Klaim Garansi",
   work_schedules: "Jadwal Kerja",
   workflows: "Alur Kerja",
 };

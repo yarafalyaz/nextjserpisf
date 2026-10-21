@@ -64,6 +64,7 @@ const EXPECTED_SENSITIVE: Record<string, string[]> = {
     "approve_bom_revisions",
     "approve_leave_requests",
     "approve_overtime_requests",
+    "approve_warranty_claims",
   ],
   karyawan: [],
   purchasing: [],
