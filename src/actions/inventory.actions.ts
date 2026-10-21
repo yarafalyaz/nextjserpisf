@@ -29,6 +29,8 @@ import {
   materialIssueSchema,
   workOrderSchema,
   reviseWorkOrderItemsSchema,
+  WORK_ORDER_END_DATE_REASONS,
+  type WorkOrderEndDateReasonCode,
   rackSchema,
   rackRowSchema,
 } from "@/lib/validations/inventory.schemas";
@@ -737,20 +739,8 @@ export async function createWorkOrder(formData: FormData) {
   }
 }
 
-// F-2026-10-21-035 (vonis Lead Q-LEAD-2, t_586ab283): daftar tertutup alasan
-// geser endDate WO. Kode = kontrak data (disimpan di metadata ActivityLog);
-// label = teks tampil di description log. Mengubah daftar ini = ubah kontrak.
-export const WORK_ORDER_END_DATE_REASONS = {
-  part_delay: "Menunggu suku cadang",
-  scope_change: "Perubahan ruang lingkup pekerjaan",
-  queue_capacity: "Antrean/kapasitas bengkel",
-  customer_request: "Permintaan pelanggan",
-  customer_unavailable: "Kendaraan/pelanggan belum tersedia",
-  technical_issue: "Kendala teknis pengerjaan",
-  other: "Lainnya",
-} as const;
-export type WorkOrderEndDateReasonCode = keyof typeof WORK_ORDER_END_DATE_REASONS;
-
+// F-2026-10-21-035: daftar tertutup alasan geser endDate =
+// WORK_ORDER_END_DATE_REASONS di inventory.schemas (dipakai juga UI).
 const endDateOnly = (d: Date | null | undefined) =>
   d ? d.toISOString().slice(0, 10) : null;
 

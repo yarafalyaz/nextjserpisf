@@ -70,6 +70,21 @@ export const materialIssueSchema = z.object({
 
 // ==================== WORK ORDER ====================
 
+// F-2026-10-21-035 (vonis Lead Q-LEAD-2, t_586ab283): daftar tertutup alasan
+// geser endDate WO. Kode = kontrak data (disimpan di metadata ActivityLog);
+// label = teks tampil. Di file skema (bukan actions) supaya bisa dipakai UI
+// dan tidak melanggar aturan ekspor file "use server".
+export const WORK_ORDER_END_DATE_REASONS = {
+  part_delay: "Menunggu suku cadang",
+  scope_change: "Perubahan ruang lingkup pekerjaan",
+  queue_capacity: "Antrean/kapasitas bengkel",
+  customer_request: "Permintaan pelanggan",
+  customer_unavailable: "Kendaraan/pelanggan belum tersedia",
+  technical_issue: "Kendala teknis pengerjaan",
+  other: "Lainnya",
+} as const
+export type WorkOrderEndDateReasonCode = keyof typeof WORK_ORDER_END_DATE_REASONS
+
 export const workOrderSchema = z.object({
   customerId: requiredId("Pelanggan"),
   projectId: optionalId,
