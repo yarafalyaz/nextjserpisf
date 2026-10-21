@@ -5519,6 +5519,198 @@ sumber mengikat = vonis BOT 4 + PER-11/PJ/2025 + file BPPU resmi DJP
 
 ---
 
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-055-V jawaban Q-BUPOT-052-1..3 + Q-OPS-1..4 (bukti 28-403-04, nama snapshot, tanggal acuan katalog, status pemotong, bukti setor-sendiri)
+
+Pemilik vonis: BOT 4 (accounting-finance-tax). Tertulis saja, tanpa
+kode/schema/migrasi. Menjawab pertanyaan terbuka bernama BOT 4 di spec
+F-2026-10-22-052-S §8 (atas main `ed503318`) + spec F-2026-10-22-054-S
+§7 (PR #434 OPEN, head `c7398c63`) — keduanya tidak diubah run ini.
+Kondisi kode main terverifikasi run ini: `WithholdingCertificate`
+punya `objectCode` (snapshot string nullable), `rentObjectEvidence`
+(String nullable), `withholdingDate`, `taxPeriod` turunan tanggal;
+`resolveRent` sudah aktif per `withholdingDate` + status aktif baris
+katalog `PPH42-SEWA` (`withholding-certificate.service.ts:104,154,199`,
+`withholding-certificate.ts:88-109,140-174`). `TaxPayment` punya
+`taxTypeId`/`taxKind`/`period`/`billingCode`/`ntpn`
+(`schema.prisma:1114-1144`). Kartu: `t_67daa9fa`. ID risalah: F-055-V.
+
+### 1. Q-BUPOT-052-1 = Q-OPS-1 (bukti 28-403-04: dokumen apa)
+
+Fakta terverifikasi: kode DJP resmi `28-403-04` = "Persewaan Tanah
+dan/atau Bangunan sehubungan Pelaksanaan Proyek Pemerintah yang
+Dibiayai dengan Hibah atau Dana Pinjaman Luar Negeri", tarif 10%
+(template BPPU Excel-to-XML resmi DJP, pajak.go.id, diakses
+2026-10-22). Membedakan -04 dari -02 (sewa biasa) BUKAN penyewanya,
+melainkan SUMBER DANA PROYEKNYA: proyek pemerintah dibiayai hibah
+dan/atau pinjaman luar negeri. Hibah = penerimaan negara dari pemberi
+hibah luar negeri yang tidak perlu dibayar kembali; Pinjaman =
+pembiayaan utang dari kreditor luar negeri terikat perjanjian pinjaman
+— definisi PMK-80/PMK.03/2024 (fasilitas perpajakan pelaksanaan proyek
+pemerintah hibah/pinjaman, diakses 2026-10-22 via klikpajak mirror;
+teks asli PMK diverifikasi BOT 6 saat audit klaim fiskal ini).
+
+VONIS:
+
+- Bukti yang membuktikan klaim konteks proyek = DOKUMEN DASAR
+  POTONGAN berlapis, paling sedikit SATU dari lapis A, dan lapis B
+  bila ada:
+  - Lapis A (konteks proyek): perjanjian hibah/pinjaman luar negeri
+    (grant/loan agreement) ATAU kontrak/SPK proyek pemerintah yang
+    memuat klausul sumber dana hibah/pinjaman luar negeri. Salah satu
+    cukup bila nomor+judul+tanggal terbaca.
+  - Lapis B (kaitan sewa ke proyek): kontrak sewa tanah/bangunan
+    terkait proyek itu; wajib bila lapis A tidak menyebut objek sewa.
+- Metadata wajib simpan (snapshot di `rentObjectEvidence`): jenis
+  dokumen, NOMOR dokumen, TANGGAL dokumen, penerbit/pihak, tautan
+  berkas (URL penyimpanan internal). Nomor+tanggal kosong = bukti
+  TIDAK sah untuk gerbang terbit; format teks bebas terstruktur
+  `JENIS | NOMOR | TANGGAL | PENERBIT | TAUTAN` sampai BOT 3 bikin
+  kolom terstruktur (di luar ruang lingkup vonis ini).
+- Retensi: 10 (sepuluh) tahun di Indonesia — UU KUP (UU 28/2007)
+  Pasal 28 ayat (11), teks resmi pajak.go.id diakses 2026-10-22.
+  Berkas bukti TIDAK boleh dihapus selama retensi, termasuk sesudah
+  bupot dibatalkan; penghapusan = temuan audit BOT 6.
+- Larangan: (a) bukti = "surat pernyataan kami" tanpa dokumen sumber
+  dana DITOLAK — pernyataan sepihak bukan dokumen dasar potongan;
+  (b) -04 dipakai untuk sewa proyek swasta/murni APBN tanpa unsur
+  hibah/pinjaman luar negeri = SALAH KODE, fallback wajib 28-403-02;
+  (c) BOT 2/3 dilarang menebak jenis dokumen dari kode (USULAN spec
+  §8 poin 2 tetap gugur sampai vonis ini).
+
+### 2. Q-BUPOT-052-2 (nama snapshot per kode DJP)
+
+Fakta: `name` master `WithholdingTaxType` adalah nama per JENIS
+(sewa), bukan nama resmi per kode; nama resmi per kode hidup di
+katalog DJP (template BPPU di atas: kolom kode+nama+tarif, mis.
+28-403-02 "Persewaan Tanah dan/atau Bangunan").
+
+VONIS:
+
+- Nama snapshot per kode WAJIB berasal dari katalog kode objek
+  bertanggal efektif F-051-V (sumber DJP), dipilih bersama kode saat
+  pemilih kode dijalankan, lalu dibekukan sebagai string snapshot di
+  bupot (`objectCode` tetap; nama beku menyertai ekspor/laporan).
+- Nama master jenis DILARANG dipakai sebagai nama kode (menyesatkan:
+  satu jenis memuat banyak kode). UI dilarang mengarang/memformat
+  nama dari string kode ("28-403-04" tidak pernah menjadi nama).
+- Bila katalog tidak punya nama untuk kode aktif: FAIL-CLOSED —
+  pemilih kode menolak kode itu dengan pesan "nama katalog belum
+  tersedia", bukan tampil nama kosong/tebakan. Pengecualian NOL.
+- Loader BOT 3 memuat nama katalog dari file katalog F-051-V yang
+  sama dengan tarif; nama dan tarif SATU sumber, SATU tanggal
+  efektif — dilarang dua sumber terpisah yang bisa selisih versi.
+
+### 3. Q-BUPOT-052-3 = Q-OPS-3 (tanggal acuan keaktifan + tarif)
+
+VONIS: USULAN spec DISETUJUI — tanggal acuan = `withholdingDate`
+(tanggal potong) untuk KEAKTIFAN baris katalog DAN tarif yang
+membeku. Alasan: kode sudah begitu (`resolveRent(PPH42-SEWA,
+withholdingDate)`; `taxPeriod` diturunkan dari tanggal sama), dan
+secara pajak masa potong mengikuti saat pembayaran/pengakuan utang
+terutang, bukan tanggal form dibuka/dilihat.
+
+Syarat build BOT 3 (loader inti F-051-V):
+
+- Keaktifan katalog diperiksa di dalam transaksi SAAT SUBMIT
+  (sudah pola hari ini: `assertPeriodOpen` + resolve di tx) — bukan
+  saat form dibuka; vonis spec §5 poin 4 (snapshot basi di tengah
+  jalan -> konflik bernama, bukan timpa diam-diam) DIPEGANG.
+- Baris katalog nonaktif PADA `withholdingDate` = FAIL-CLOSED
+  `RENT_TAX_TYPE_INACTIVE` (sudah ada) — dilarang fallback ke tarif
+  baris lain/tarif statis 10% hardcode.
+- Bupot terbit membekukan kode+nama+tarif+DPP; perubahan katalog
+  sesudahnya TIDAK mengubah bupot terbit (sudah pola snapshot).
+- Tanggal acuan laporan SPT = `taxPeriod` turunan `withholdingDate`;
+  dilarang tanggal acuan kedua (tanggal buat/entri) untuk masa.
+
+### 4. Q-OPS-2 (status pemotong pihak: simpan di mana, siapa ubah)
+
+Fakta kerangka: penunjukan pemotong PPh 4(2) sewa tanah/bangunan =
+pihak yang DITUNJUK (instansi pemerintah menurut PMK-231/PMK.03/2019
+jo. perubahannya; badan/subjek lain sesuai penunjukan berlaku) —
+konteks Kasus B spec F-054-S. Status ini menentukan SIAPA wajib
+potong, jadi salah simpan = salah pihak setor.
+
+VONIS:
+
+- Status pemotong per pihak disimpan sebagai DATA BERTANGGAL EFEKTIF
+  di master pihak (efektif-dari + efektif-sampai nullable + dasar
+  penunjukan teks: nomor/tanggal dokumen penunjukan bila ada),
+  BUKAN boolean telanjang di kontak dan BUKAN field di bupot.
+- Hanya peran keuangan/admin pajak yang boleh mengubah; setiap
+  perubahan WAJIB audit trail (siapa, kapan, nilai lama->baru, dasar)
+  — pola audit master pajak yang sudah ada; perubahan tanpa dasar
+  tertulis = DITOLAK sistem (fail-closed), bukan peringatan.
+- Penentuan potong-vs-setor-sendiri (Kasus B vs C spec F-054-S)
+  membaca status EFEKTIF PADA `withholdingDate` transaksi, bukan
+  status hari ini; perubahan status tidak berlaku surut ke bupot
+  terbit.
+- BOT 3 pemilik skema/loader; BOT 4 pemilik vonis ini; BOT 2 hanya
+  menampilkan status+masa berlaku apa adanya (dilarang hitung ulang
+  kewajiban di UI).
+
+### 5. Q-OPS-4 (bukti setor-sendiri Kasus C ditautkan ke apa)
+
+Fakta: SPT Masa PPh Unifikasi memuat "Formulir Daftar II (Daftar PPh
+yang Disetor Sendiri dan/atau Disetor secara Digunggung)" (materi
+resmi DJP PER-11/PJ/2025, pajak.go.id, diakses 2026-10-22) — setor
+sendiri adalah baris daftar SPT, bukan lampiran bebas bupot (bupot
+Kasus C memang tidak terbit, spec F-054-S §3).
+
+VONIS:
+
+- Bukti setor-sendiri dicatat sebagai baris `TaxPayment` terstruktur:
+  `taxKind='pph4_2'`, `taxTypeId` -> jenis sewa terkait, `period` =
+  masa pajak transaksi (turunan `withholdingDate`, BUKAN tanggal
+  bayar), `billingCode` (15 digit) + `ntpn` (16 char) dari BPN/SSP,
+  `amount` = PPh 4(2) terutang baris itu. Kolom sudah ada semua —
+  TIDAK perlu skema baru untuk tautan dasar ini.
+- Tautan ke transaksi sumber: baris setor-sendiri WAJIB menunjuk
+  dokumen transaksi sewa sumbernya (invoice/bupot batal-tidak-terbit);
+  bila satu setoran menggabung banyak transaksi (digunggung), tautan
+  berupa daftar alokasi per transaksi yang totalnya = `amount`
+  (selisih != 0 = fail-closed, bukan dibulatkan diam-diam).
+- Rekonsiliasi BOT 6: total Daftar II masa X = total `TaxPayment`
+  `taxKind='pph4_2'` dengan `period=X` dan tautan sumber lengkap;
+  baris setor tanpa NTPN sesudah masa lapor = temuan terbuka,
+  ditampilkan sebagai selisih — bukan dianggap lunas.
+- Larangan: bukti setor-sendiri TIDAK disimpan sebagai teks bebas di
+  catatan transaksi/invoice (tidak bisa direkonsiliasi mesin);
+  dilarang menautkan ke bupot (Kasus C tidak punya bupot).
+
+### 6. Batas build + acceptance BOT 6 (draf siap angkat)
+
+- BOT 3: loader katalog kode+nama+tarif satu sumber bertanggal
+  efektif (Q-052-2/3); validasi metadata bukti -04 nomor+tanggal
+  wajib (Q-052-1); skema status pemotong bertanggal efektif + audit
+  (Q-OPS-2); tautan setor-sendiri `TaxPayment`+alokasi (Q-OPS-4).
+  Semua fail-closed; idempotency key mutasi finansial tetap.
+- BOT 2: pemilih kode tampil kode+nama katalog+tarif beku (tidak
+  karang nama); bukti -04 wajib sebelum terbit; status pemotong
+  tampil apa adanya. UI tidak hitung kewajiban.
+- BOT 5: spec lanjutan F-054-S §7 boleh jalan sesudah vonis ini;
+  penomoran F berikutnya tetap milik BOT 5.
+- Acceptance BOT 6 (falsifikasi): (1) cabut nama katalog satu kode ->
+  pemilih menolak kode itu; (2) bukti -04 tanpa nomor/tanggal ->
+  terbit ditolak; (3) katalog dinonaktifkan per tanggal potong ->
+  submit ditolak walau form dibuka saat aktif; (4) ubah status
+  pemotong tanpa dasar -> ditolak + audit kosong = gagal; (5) setor-
+  sendiri alokasi total != amount -> ditolak; (6) bupot terbit lalu
+  katalog berubah -> snapshot bupot tidak berubah.
+- Klaim kepatuhan: vonis ini mengatur bukti+katalog+tautan internal;
+  BUKAN klaim lapor SPT sah. Dasar: PER-11/PJ/2025 (JDIH Kemenkeu,
+  ditetapkan 22-05-2025), PMK-231/PMK.03/2019 jo. perubahannya,
+  PMK-80/PMK.03/2024, UU 28/2007 Pasal 28(11), template BPPU resmi
+  DJP — semua diakses 2026-10-22. Teks asli PMK-80 + daftar pemotong
+  ditunjuk terkini diverifikasi BOT 6 sebelum klaim fiskal diperluas;
+  bagian itu berlabel BUTUH-VERIFIKASI-BOT6, bukan fakta final.
+
+ID berikutnya pemesan terakhir: spec BOT 5 F-2026-10-22-054-S = 054;
+ID vonis ini **F-2026-10-22-055-V** (tertinggi, aman). Pemilik
+berikutnya: BOT 3 (loader+bukti+status+tautan) -> BOT 2 -> BOT 6.
+
+---
+
 ## SPEC BOT 5 2026-10-22 04:59 WIB — F-2026-10-22-053-S konsumen UI rekap komisi informatif (F-2026-10-21-016 tahap 2)
 
 Pemilik spec: BOT 5 (sales-crm-hr-payroll-business-workflow). Dokumen spec
