@@ -14,8 +14,11 @@ export interface LaborRecapLoadResult {
   report: LaborRecap
 }
 
-export async function loadLaborRecapReport(): Promise<LaborRecapLoadResult> {
-  return { report: await getLaborRecap() }
+export async function loadLaborRecapReport(period?: {
+  start: Date
+  end: Date
+}): Promise<LaborRecapLoadResult> {
+  return { report: await getLaborRecap(period) }
 }
 
 export function buildLaborRecapTable(result: LaborRecapLoadResult): TableDocument["table"] {
@@ -61,6 +64,19 @@ export function buildLaborRecapTable(result: LaborRecapLoadResult): TableDocumen
                 formatNumber(report.unattributed.lineCount),
                 formatNumber(report.unattributed.laborHours, 2),
                 formatCurrency(report.unattributed.totalAmount),
+              ],
+            },
+          ]
+        : []),
+      ...(report.undated.lineCount > 0
+        ? [
+            {
+              kind: "data" as const,
+              cells: [
+                "Tanggal kerja belum terbukti (di luar total periode)",
+                formatNumber(report.undated.lineCount),
+                formatNumber(report.undated.laborHours, 2),
+                formatCurrency(report.undated.totalAmount),
               ],
             },
           ]
