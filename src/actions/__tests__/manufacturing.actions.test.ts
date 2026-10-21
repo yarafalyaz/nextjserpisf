@@ -905,6 +905,11 @@ describe("Production Order Actions", () => {
 })
 
 describe("Work Order Operation Actions (F-2026-10-21-020 Tahap A)", () => {
+  const P = mocks.prismaMock
+  const setupInProgress = () => {
+    P.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress" })
+    P.$queryRaw.mockResolvedValue([{ id: 1 }])
+  }
   const opRow = (over: Record<string, unknown> = {}) => ({
     id: 11,
     workOrderId: 1,
@@ -916,15 +921,14 @@ describe("Work Order Operation Actions (F-2026-10-21-020 Tahap A)", () => {
   })
 
   it("initializeWorkOrderOperations creates stages from setting (idempotent helper)", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress" })
-    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
-    mocks.prismaMock.workOrderOperation.findMany.mockResolvedValue([])
-    mocks.prismaMock.systemSetting.findFirst.mockResolvedValue({
+    setupInProgress()
+    P.workOrderOperation.findMany.mockResolvedValue([])
+    P.systemSetting.findFirst.mockResolvedValue({
       defaultWorkOrderStages: "Persiapan, Pengerjaan, Quality Check, Selesai",
     })
     const res = await actions.initializeWorkOrderOperations(1)
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.workOrderOperation.createMany).toHaveBeenCalledWith(
+    expect(P.workOrderOperation.createMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.arrayContaining([
           expect.objectContaining({ name: "Persiapan", sortOrder: 1, status: "pending" }),
@@ -935,82 +939,78 @@ describe("Work Order Operation Actions (F-2026-10-21-020 Tahap A)", () => {
   })
 
   it("initializeWorkOrderOperations no-op success when stages already exist", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress" })
-    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
-    mocks.prismaMock.workOrderOperation.findMany.mockResolvedValue([{ id: 11 }])
+    setupInProgress()
+    P.workOrderOperation.findMany.mockResolvedValue([{ id: 11 }])
     const res = await actions.initializeWorkOrderOperations(1)
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.workOrderOperation.createMany).not.toHaveBeenCalled()
+    expect(P.workOrderOperation.createMany).not.toHaveBeenCalled()
   })
 
   it("initializeWorkOrderOperations rejects WO not in_progress", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
+    P.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     const res = await actions.initializeWorkOrderOperations(1)
     expect(res?.success).toBe(false)
   })
 
   it("startWorkOrder initializes stages in same transaction", async () => {
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [{ id: 1 }] })
-    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
-    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
-    mocks.prismaMock.workOrderOperation.findMany.mockResolvedValue([])
-    mocks.prismaMock.systemSetting.findFirst.mockResolvedValue(null)
+    P.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", items: [{ id: 1 }] })
+    P.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    P.$queryRaw.mockResolvedValue([{ id: 1 }])
+    P.workOrderOperation.findMany.mockResolvedValue([])
+    P.systemSetting.findFirst.mockResolvedValue(null)
     const res = await actions.startWorkOrder(1)
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.workOrderOperation.createMany).toHaveBeenCalledTimes(1)
+    expect(P.workOrderOperation.createMany).toHaveBeenCalledTimes(1)
   })
 
   it("updateWorkOrderOperationStatus completes first stage", async () => {
-    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress" })
-    mocks.prismaMock.workOrderOperation.findUniqueOrThrow.mockResolvedValue(opRow())
-    mocks.prismaMock.workOrderOperation.findMany.mockResolvedValue([
+    setupInProgress()
+    P.workOrderOperation.findUniqueOrThrow.mockResolvedValue(opRow())
+    P.workOrderOperation.findMany.mockResolvedValue([
       { sortOrder: 1, status: "pending", name: "Persiapan" },
     ])
     const res = await actions.updateWorkOrderOperationStatus(1, 11, "completed")
     expect(res?.success).toBe(true)
-    expect(mocks.prismaMock.workOrderOperation.update).toHaveBeenCalledWith(
+    expect(P.workOrderOperation.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: expect.objectContaining({ status: "completed" }) }),
     )
   })
 
   it("updateWorkOrderOperationStatus blocks out-of-order transition", async () => {
-    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress" })
-    mocks.prismaMock.workOrderOperation.findUniqueOrThrow.mockResolvedValue(
+    setupInProgress()
+    P.workOrderOperation.findUniqueOrThrow.mockResolvedValue(
       opRow({ id: 12, name: "Pengerjaan", sortOrder: 2 }),
     )
-    mocks.prismaMock.workOrderOperation.findMany.mockResolvedValue([
+    P.workOrderOperation.findMany.mockResolvedValue([
       { sortOrder: 1, status: "pending", name: "Persiapan" },
       { sortOrder: 2, status: "pending", name: "Pengerjaan" },
     ])
     const res = await actions.updateWorkOrderOperationStatus(1, 12, "in_progress")
     expect(res?.success).toBe(false)
-    expect(mocks.prismaMock.workOrderOperation.update).not.toHaveBeenCalled()
+    expect(P.workOrderOperation.update).not.toHaveBeenCalled()
   })
 
   it("updateWorkOrderOperationStatus rejects skipped without reason note", async () => {
-    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress" })
-    mocks.prismaMock.workOrderOperation.findUniqueOrThrow.mockResolvedValue(opRow())
-    mocks.prismaMock.workOrderOperation.findMany.mockResolvedValue([
+    setupInProgress()
+    P.workOrderOperation.findUniqueOrThrow.mockResolvedValue(opRow())
+    P.workOrderOperation.findMany.mockResolvedValue([
       { sortOrder: 1, status: "pending", name: "Persiapan" },
     ])
     const res = await actions.updateWorkOrderOperationStatus(1, 11, "skipped")
     expect(res?.success).toBe(false)
-    expect(mocks.prismaMock.workOrderOperation.update).not.toHaveBeenCalled()
+    expect(P.workOrderOperation.update).not.toHaveBeenCalled()
   })
 
   it("updateWorkOrderOperationStatus rejects mutation when WO completed", async () => {
-    mocks.prismaMock.$queryRaw.mockResolvedValue([{ id: 1 }])
-    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed" })
-    mocks.prismaMock.workOrderOperation.findUniqueOrThrow.mockResolvedValue(opRow())
-    mocks.prismaMock.workOrderOperation.findMany.mockResolvedValue([
+    P.$queryRaw.mockResolvedValue([{ id: 1 }])
+    P.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "completed" })
+    P.workOrderOperation.findUniqueOrThrow.mockResolvedValue(opRow())
+    P.workOrderOperation.findMany.mockResolvedValue([
       { sortOrder: 1, status: "pending", name: "Persiapan" },
     ])
     const res = await actions.updateWorkOrderOperationStatus(1, 11, "completed")
     expect(res?.success).toBe(false)
-    expect(mocks.prismaMock.workOrderOperation.update).not.toHaveBeenCalled()
+    expect(P.workOrderOperation.update).not.toHaveBeenCalled()
   })
 })
 
