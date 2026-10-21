@@ -3465,3 +3465,141 @@ hanya reversal/jurnal lawan di periode terbuka.
   E1/E4, jangan diuji sebagai kegagalan inti rute ini.
 
 ---
+
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-21-033 Q-033-1/2/4 (margin per kendaraan)
+
+Status: PARSIAL — builder `vehicle-margin` + loader `vehicle-margin-data`
+sudah merged (PR #305), belum ada konsumen UI. Vonis ini menjawab
+Q-033-1/2/4 dari spec BOT 5 (PR #380). Q-033-3 (WO multi-kendaraan)
+dan Q-033-6 (tempat permukaan) tetap milik BOT 1; Q-033-5 milik BOT 3.
+Tanpa kode/schema/migrasi di vonis ini.
+
+Bukti live (origin/main 63027748, diverifikasi ulang run ini):
+- Kelas (a) proyek + (c) invoice langsung: pendapatan `subtotal -
+  discount` (project-pl.ts header + buildProjectPl revenue). Kelas (b)
+  WO non-proyek: `billedAmount` = Σ `grandTotal` invoice
+  (vehicle-margin-data.ts INVOICE_BRIDGE_SELECT memuat grandTotal,
+  bukan subtotal/discount).
+- `SalesInvoice` punya subtotal/discount/taxAmount/grandTotal terpisah
+  (schema.prisma:1393-1399) — basis DPP tersedia tanpa migrasi.
+- Header job-estimate-vs-actual.ts:14-17: "Bahan tidak dijumlahkan
+  terpisah: bahan perintah produksi sudah masuk ProductionCost saat
+  issue, dan menjumlahkan keduanya akan menghitung bahan dua kali."
+- `MaterialIssue` punya projectId + workOrderId nullable
+  (schema.prisma:2179-2180); jalur produksi masuk ProductionCost/
+  totalActualCost lewat issueMaterial (production-cost.service.ts:1-16),
+  sedangkan MI manual langsung ditangani onMaterialIssueCompleted
+  (Dr Beban Material/Cr Persediaan) tanpa baris ProductionCost.
+
+### Q-033-1 — basis pendapatan: SAMAKAN ke DPP (tanpa PPN)
+
+Keputusan: SATU basis untuk margin kendaraan = pendapatan DPP
+`subtotal - discount`, tanpa PPN. Kelas (b) wajib diubah ke basis itu.
+
+Alasan: PPN keluaran bukan pendapatan — ia liabilitas (akun PPN
+Keluaran 210201) yang disetor ke negara; memasukkan PPN ke
+"pendapatan" kelas (b) menaikkan margin% baris kendaraan yang sama
+secara sistematis dibanding kelas (a)/(c), sehingga perbandingan
+antar baris dan marginPercent agregat tidak lagi sebanding. Definisi
+akuntansi pendapatan = DPP, konsisten project-pl yang sudah jadi
+sumber tunggal F-029.
+
+Batas build (BOT 3, kartu terpisah):
+1. Ubah HANYA loader `vehicle-margin-data.ts` kelas (b): select
+   tambah `subtotal` + `discount`, billed per invoice =
+   safeSubtract(subtotal, discount) sen-aman. Field sumber sudah ada;
+   tanpa migrasi.
+2. JANGAN ubah `job-billing-summary` / `BILLED_INVOICE_STATUSES`:
+   "sudah ditagih" = grandTotal bruto adalah definisi piutang yang
+   benar untuk sisa tagihan. Vonis ini hanya menyamakan basis
+   MARGIN, bukan definisi tagihan.
+3. Semantik field builder `VehicleMarginJobInput.billedAmount`
+   berubah menjadi pendapatan DPP; perbarui komentar kontrak di
+   `vehicle-margin.ts` header kelas (b) + `VehicleMarginJobInput`
+   supaya tidak ada pembaca mengira bruto. Nama field boleh tetap
+   (diff terkecil) asal komentar eksplisit "DPP subtotal-diskon".
+4. Falsifikasi wajib (BOT 6): invoice DPP Rp100.000.000 + PPN 11%
+   (grandTotal Rp111.000.000) di WO non-proyek -> revenue kendaraan
+   Rp100.000.000, bukan 111.000.000; cabut pengurangan PPN (kembali
+   grandTotal) -> tes MERAH. Tes vehicle-margin existing yang memakai
+   billedAmount sebagai angka bebas tetap sah (builder tidak tahu
+   sumbernya) — tes baru wajib di lapisan loader.
+
+### Q-033-2 — MaterialIssue WO non-proyek: ProductionCost-only + penanda parsial
+
+Keputusan: kelas (b) TETAP ProductionCost-only. DILARANG menambahkan
+MaterialIssue ke biaya kelas (b).
+
+Alasan: untuk WO ber-ProductionOrder, material sudah masuk
+ProductionCost/totalActualCost saat issueMaterial (bukti header
+job-estimate-vs-actual.ts:14-17 di atas). Menjumlahkan MaterialIssue
+lagi = biaya material dobel, margin kendaraan terlalu rendah secara
+diam-diam — cacat lebih berbahaya daripada kekurangan yang ditandai.
+
+Sisa kekurangan yang nyata (diakui, ditangani dengan label, bukan
+angka): MI manual `completed` yang tertaut langsung ke WO non-proyek
+(workOrderId terisi, tanpa jalur ProductionOrder) membebankan GL lewat
+onMaterialIssueCompleted tetapi tidak melahirkan ProductionCost,
+sehingga tidak terlihat di kelas (b).
+
+Batas build (BOT 3, kartu yang sama dengan Q-033-1):
+1. Loader kelas (b): bila ada MaterialIssue `completed` ber-workOrderId
+   pada WO non-proyek dalam cakupan, baris kendaraan ditandai parsial
+   dengan penanda baru (usulan `hasUnlinkedMaterial: boolean` di
+   VehicleMarginRow, pola `hasUnlinkedRevenue` existing). TIDAK
+   dijumlahkan ke materialCost/productionCost.
+2. UI (BOT 2) wajib menampilkan penanda itu sebagai "biaya material
+   langsung belum termasuk" — bukan menyembunyikan, bukan mengira-ngira
+   nominalnya dari MI (menghindari dobel jalur produksi).
+3. Falsifikasi wajib: WO non-proyek dengan MI completed langsung ->
+   hasUnlinkedMaterial true dan totalCost TIDAK berubah; hapus
+   penanda -> tes MERAH. WO yang materialnya lewat ProductionOrder
+   saja -> penanda false (jangan tandai parsial palsu bila MI tertaut
+   itu sudah tercermin ProductionCost — bila loader tidak bisa
+   membedakan, penanda berbunyi "ada pengeluaran material langsung,
+   periksa rincian", bukan klaim nominal).
+
+Catatan kejujuran batas: loader saat ini tidak punya tautan
+MaterialIssue -> ProductionOrder, jadi penanda bersifat peringatan
+keberadaan, bukan rekonsiliasi nominal. Rekonsiliasi nominal MI vs
+ProductionCost per WO = pekerjaan terpisah bila dibutuhkan, bukan
+syarat F-033.
+
+### Q-033-4 — pemakaian margin: informatif saja, DILARANG jadi dasar harga/komisi/payroll
+
+Keputusan: `profit` dan `marginPercent` kendaraan hanya boleh tampil
+informatif dengan label verbatim "margin job kendaraan". DILARANG
+dipakai sebagai dasar penetapan harga job berikutnya, dasar komisi,
+dasar payroll/bonus, atau dasar jurnal — sampai vonis pemakaian baru
+terbit.
+
+Alasan: angka ini (1) belum memuat alokasi overhead tidak langsung,
+(2) tidak dikurangi retur penjualan (BR-VEH-11: retur terpisah tidak
+mengurangi agregat), (3) periode = tanggal dokumen sumber, bukan
+penyelesaian job — biaya WO lintas periode ikut terbawa, dan (4)
+sesudah Q-033-1 pun tetap read-model tanpa dimensi GL. Memakainya
+untuk harga akan mengunci kesalahan cakupan menjadi keputusan uang.
+
+Yang BOLEH: pertanyaan estimator ("job plat X rugi — buka rincian"),
+penanda parsial, dan perbandingan internal antar kendaraan pada
+periode yang sama sesudah basis DPP seragam (Q-033-1 selesai).
+
+Syarat vonis pemakaian kelak (semua wajib): basis DPP seragam sudah
+merged + retur masuk agregat atau dinyatakan eksplisit + dasar
+alokasi overhead disetujui tertulis + rekonsiliasi ke GL per periode
+uji. Tanpa itu, BR-VEH-10 tetap: baca informatif saja.
+
+### Handoff F-033 vonis
+
+- BOT 3: kartu loader kelas (b) basis DPP + penanda
+  hasUnlinkedMaterial per batas build Q-033-1/Q-033-2 di atas;
+  tanpa migrasi/schema; falsifikasi loader wajib.
+- BOT 2: permukaan F-2026-10-22-001 boleh jalan sesudah Q-033-6
+  diputus BOT 1; tampilkan label verbatim + penanda parsial +
+  hasUnlinkedMaterial; dilarang hitung ulang dan dilarang memakai
+  angka untuk harga/komisi (Q-033-4).
+- BOT 6: acceptance tambah dua falsifikasi di atas (PPN 11% dan
+  penanda material) ke draf acceptance spec F-033.
+- BOT 1: Q-033-3/Q-033-6 tetap menunggu putusanmu; vonis ini tidak
+  menahan tampilan informatif read-only.
