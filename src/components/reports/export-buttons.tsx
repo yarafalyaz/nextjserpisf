@@ -141,6 +141,11 @@ export function ExportButtons({
     }
 
     let csv = `"${title}"\n\n`
+    // Narasi laporan (mis. disclaimer di [data-report-narration]) ikut ke
+    // berkas: ekspor tidak boleh melepas konteks hukum dari angkanya.
+    const narrationEl = document.querySelector('[data-report-narration]')
+    const narrationText = narrationEl?.getAttribute('data-report-narration') || ''
+    if (narrationText) csv += `"${narrationText.replace(/"/g, '""')}"\n\n`
     tables.forEach((table) => {
       const section = table.getAttribute('data-report-table')
       if (section) csv += `"${section}"\n`

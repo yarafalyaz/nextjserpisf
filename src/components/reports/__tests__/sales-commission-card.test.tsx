@@ -25,6 +25,17 @@ describe("SalesCommissionCard F-2026-10-22-053-S", () => {
     )
     const text = container.textContent ?? ""
     expect(text).toContain(SALES_COMMISSION_NOTICE)
+    // Penjaga literal AC-KOM-1 (BUKAN konstanta impor): ubah string builder
+    // SALES_COMMISSION_NOTICE = tes ini MERAH.
+    expect(text).toContain(
+      "Rekap informatif dari snapshot penjual di faktur lunas — bukan utang komisi, bukan dasar jurnal atau pembayaran. Persen 0 berarti tarif belum diatur untuk baris itu.",
+    )
+    // Penanda ekspor: notice verbatim terbawa ke PDF/CSV via ExportButtons.
+    expect(
+      container.querySelector("[data-report-narration]")?.getAttribute("data-report-narration"),
+    ).toBe(
+      "Rekap informatif dari snapshot penjual di faktur lunas — bukan utang komisi, bukan dasar jurnal atau pembayaran. Persen 0 berarti tarif belum diatur untuk baris itu.",
+    )
     expect(text).toContain("Sari")
     expect(text).toContain("Budi")
     expect(text).toContain("Rp 1.250.000")

@@ -45,6 +45,9 @@ export function SalesCommissionCard({
       isEmpty={isEmpty}
       emptyText="Tidak ada faktur lunas pada masa ini."
     >
+      {/* Penanda ekspor: ExportButtons membaca [data-report-narration] agar
+          disclaimer ikut PDF/CSV — notice tidak boleh lepas dari angka. */}
+      <span className="hidden" data-report-narration={report.notice} aria-hidden="true" />
       <DetailTable data-report-table="rekap komisi penjualan">
         <DetailTableHead>
           <DetailTableTh>Penjual</DetailTableTh>
