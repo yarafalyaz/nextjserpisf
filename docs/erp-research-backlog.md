@@ -4710,3 +4710,61 @@ BOT 6 (audit):
   dibagi rata.
 
 
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-051-V Katalog kode objek e-Bupot PPh 4(2) sewa (lanjutan F-047, lubang PR #408)
+
+Status: FINAL untuk katalog domain ini. Pelengkap F-038/F-039/F-041/F-042-V/F-047 (PR #404). Tanpa kode/schema/migrasi. Tanpa angka pajak baru di luar sumber resmi di bawah.
+
+Lubang ditutup: PR #408 (BOT 3) menulis katalog kode objek e-Bupot sewa tidak ditulis vonis — selain seri konstruksi, kode non-kosong diterima apa adanya. Vonis ini mengganti perilaku itu: resolver/terbit bupot jenis `PPH42-SEWA` hanya menerima kode dari katalog sah di bawah, dari master bertanggal efektif; di luar katalog = TOLAK fail-closed berisik.
+
+### Bukti resmi (akses 2026-10-22)
+
+- PER-11/PJ/2025 (berlaku 22-05-2025): kode objek pajak bukti pemotongan PPh 4(2) diisi berdasarkan Lampiran huruf B peraturan ini; bukti pemotongan dibuat per penerima + per kode objek. PDF resmi: https://www.pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf ; halaman peraturan: https://pajak.go.id/id/peraturan/ketentuan-pelaporan-pajak-penghasilan-pajak-pertambahan-nilai-pajak-penjualan-atas-barang
+- File referensi resmi DJP `BPPU Excel to XML v.2.xlsx`: https://www.pajak.go.id/sites/default/files/2025-01/BPPU%20Excel%20to%20XML%20v.2.xlsx (diunduh + dibaca mesin run ini, sheet referensi kode objek, 201 baris). Baris relevan persis:
+  - `28-403-02,Persewaan Tanah dan/atau Bangunan,10`
+  - `28-403-04,Persewaan Tanah dan/atau Bangunan sehubungan Pelaksanaan Proyek Pemerintah yang Dibiayai dengan Hibah atau Dana Pinjaman Luar Negeri,10`
+  - Seri `28-402-xx` = pengalihan hak atas tanah/bangunan (2,5/1/0) — rezim F-050-V, BUKAN sewa.
+  - Seri `28-409-xx` = jasa konstruksi final — BUKAN sewa.
+  - `24-100-02,Sewa dan Penghasilan Lain Sehubungan Dengan Penggunaan Harta Kecuali Sewa Tanah dan/atau Bangunan...,2` = PPh 23 sewa non-tanah/bangunan — BUKAN bupot sewa tanah/bangunan.
+- KJS setor sewa `411128-403`: https://pajak.go.id/id/kode-akun-pajak-dan-kode-jenis-setoran-pajak (akses 2026-10-22, konsisten F-047).
+- Tarif 10% bruto sewa tanah/bangunan: PP 34/2017 (tetap F-038/F-047).
+
+Catatan kejujuran sumber: daftar di atas = isi file referensi BPPU resmi DJP yang dibaca mesin run ini, bukan kutipan lampiran PDF kata-per-kata. Bila Lampiran B PER-11/PJ/2025 cetak berbeda dari file BPPU, Lampiran B yang menang dan master wajib disesuaikan bertanggal efektif (Putusan 3) — selisih dilaporkan ke BOT 4, jangan dipilih diam-diam.
+
+### Putusan 1 — katalog sah bupot `PPH42-SEWA` (hanya dua kode)
+
+| Kode objek | Nama resmi (BPPU DJP) | Tarif | Syarat pakai |
+|---|---|---|---|
+| `28-403-02` | Persewaan Tanah dan/atau Bangunan | 10% | Default sewa tanah/bangunan umum. Satu-satunya kode seed awal `PPH42-SEWA` (F-047 Putusan 1). |
+| `28-403-04` | Persewaan Tanah dan/atau Bangunan sehubungan Pelaksanaan Proyek Pemerintah yang Dibiayai dengan Hibah atau Dana Pinjaman Luar Negeri | 10% | HANYA bila dokumen dasar membuktikan proyek pemerintah dibiayai hibah/pinjaman luar negeri. Tanpa bukti dokumen itu = dilarang pilih; pakai `28-403-02`. Bukan kode seed default; operator aktifkan di master bertanggal efektif per kebutuhan terbukti. |
+
+Di luar dua kode ini, TIDAK ada kode sah untuk bupot `PPH42-SEWA` pada katalog ini.
+
+### Putusan 2 — wajib ditolak di resolver/terbit bupot sewa
+
+1. Seri konstruksi `28-409-*` (semua sufiks, termasuk -22/-43 dst): TOLAK. Rezim jasa konstruksi final, jenis pajak + akun liabilitas berbeda.
+2. Seri pengalihan hak `28-402-*`: TOLAK di jalur sewa. Itu rezim F-050-V (PP 34/2016 pengalihan), setor-sendiri, bukan potong sewa.
+3. Kode PPh 23 `24-100-02` dan seri jasa `24-104-*`: TOLAK di bupot `PPH42-SEWA`. Sewa non-tanah/bangunan memang PPh 23 2%, tetapi lewat jenis `PPH23-*` sendiri — dilarang menyusup ke bupot final sewa (konsisten F-047: dilarang fallback kode objek PPh 23).
+4. Kode kosong/null, kode nonaktif di master, kode berformat rusak (bukan pola `NN-NNN-NN`), dan kode 28-403 lain di luar Putusan 1 (mis. `28-403-01`/`28-403-03` karangan): TOLAK fail-closed berisik dengan pesan menyebut kode + alasan di luar katalog.
+5. Kode sah katalog tetapi tarif master tidak cocok tarif resmi kode itu (28-403-02/04 = 10%): TOLAK terbit sampai master dikoreksi bertanggal efektif; jangan pakai tarif master diam-diam.
+
+Perilaku kode di luar katalog diputus TEGAS: fail-closed TOLAK, bukan terima-berisik. Alasan satu kalimat: bupot terbit dengan kode di luar lampiran = dokumen pajak salah rezim yang lolos ke SPT Masa; terima-berisik mengulang persis lubang PR #408.
+
+### Putusan 3 — master bertanggal efektif + snapshot beku
+
+1. Katalog hidup di master jenis pajak (`WithholdingTaxType`/seed `WITHHOLDING_TAX_TYPES` pola F-003/F-047): tiap baris kode membawa kode objek, nama, tarif Decimal(5,2), tanggal efektif mulai, status aktif. Resolver DILARANG hardcode daftar kode sebagai konstanta logika; seed awal hanya `28-403-02` aktif (F-047), `28-403-04` boleh disemai nonaktif atau ditambah operator bila syarat Putusan 1 terbukti.
+2. Kode berlaku untuk bupot bertanggal terbit >= tanggal efektifnya dan selama aktif. Kode dinonaktifkan: bupot baru TOLAK; bupot lama tidak berubah.
+3. Snapshot beku saat terbit: kode objek + nama + tarif + DPP bruto + pasal + akun liabilitas (210206, F-041/F-047) tersalin ke bupot. Edit katalog/master sesudah terbit TIDAK mengubah bupot terbit, rekap masa, maupun ekspor — koreksi bupot hanya lewat batal + terbit baru (pola F-003), bukan edit snapshot.
+4. Perubahan lampiran DJP di masa depan: operator tambah baris master efektif baru / nonaktifkan lama; TANPA rilis kode dan TANPA mengubah bupot lama. Bila tarif resmi berubah, baris lama ditutup tanggal efektifnya — dilarang timpa tarif baris yang sudah pernah dipakai bupot terbit.
+5. Satu bupot = satu kode objek (PER-11/PJ/2025 per kode objek, F-039 putusan 4): transaksi campuran sewa + komponen mengikuti gerbang F-039/Q-SEWA — komponen ikut DPP final memakai kode sewa yang sama; dilarang pecah kode dalam satu bupot.
+
+### Falsifikasi wajib BOT 6
+
+- F51-1: kode `28-409-22` (konstruksi) diajukan ke resolver/terbit bupot `PPH42-SEWA` -> TOLAK; lolos = MERAH.
+- F51-2: kode luar katalog (`28-402-01`, `24-100-02`, `28-403-99`, string acak, kosong) diperlakukan sah/diterima diam-diam atau diterima-berisik -> MERAH. Semua wajib gagal berisik.
+- F51-3: `28-403-04` dipilih tanpa bukti dokumen proyek pemerintah hibah/pinjaman LN -> terbit TOLAK; lolos = MERAH.
+- F51-4: edit/nonaktifkan kode di master sesudah bupot terbit -> snapshot bupot lama berubah = MERAH; bupot baru memakai kode nonaktif -> lolos = MERAH.
+- F51-5: hardcode daftar `28-403-02`/`28-403-04` sebagai konstanta di service/resolver di luar seed/master = MERAH (grep).
+- F51-6: tarif master diubah menyimpang dari 10% untuk 28-403-02 lalu bupot terbit memakai tarif menyimpang itu tanpa tolak = MERAH (Putusan 2 butir 5).
+
+Pemilik berikutnya: BOT 3 (tutup lubang PR #408: resolver sewa hanya terima katalog master Putusan 1, fail-closed Putusan 2; hubungkan ke jalur terbit per audit BOT 4 t_a41fa944), BOT 6 falsifikasi F51-1..F51-6, BOT 2 label kode+nama dari snapshot/master tanpa hitung ulang, BOT 1 merge urutan #404/#399/#408 sesudah audit. Tanpa klaim kepatuhan di luar sumber resmi di atas.
