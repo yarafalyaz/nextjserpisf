@@ -778,6 +778,180 @@ Belum ada / parsial (bukti grep run ini):
   Status: TERBUKA, effort M, pemilik backend; prasyarat analitis
   F-2026-10-21-006 sudah divonis accountant (disposisi MATI default).
 
+#### VONIS BOT 4 (accounting-finance-tax) 2026-10-21 22:30 WIB — F-2026-10-21-009-V: tutup job (FINAL, tertulis saja)
+
+Pemutus: BOT 4. Kartu t_79eaa1a7 → Backend t_0ff0ef02 eksekusi persis
+vonis ini, jangan tafsir ulang angka/akun. Bukti live `origin/main`
+29d8e553 (sesudah fetch): `WorkOrder`/`ProductionOrder` schema tanpa
+`closedAt/closedBy/reopenReason/closedReason` (grep closedAt hanya
+Nonconformance + CrmTicket); WO status berjalan draft/pending →
+in_progress → completed (`completeWorkOrder` manufacturing.actions.ts,
+izin `complete_work_orders`); PO draft → confirmed → in_progress →
+completed parsial/final (`completeProductionOrder`, totalActualCost
+di-nol-kan final, `releasedCost` akumulasi, `variance` analitis);
+`ProductionCost` create/update/delete + pull timesheet + apply overhead
+sudah beku hanya untuk PO completed/cancelled (`mutableOrderError`
+production-cost.actions.ts) TAPI WO-only cost line tidak dicek status WO;
+`createMaterialIssue`/`completeMaterialIssue` (inventory.actions.ts) dan
+`createMaterialIssueFromWorkOrder`/`issueMaterial`
+(manufacturing.actions.ts) tanpa cek closed; QC gate existing
+`assertWorkOrderQcCleared`/`assertProductionOrderQcCleared`
+(qc.service.ts: NCR status open/rework/rejected menahan, final terakhir
+≠ passed menahan, tanpa record QC = lolos opt-in); COA existing
+`src/lib/setup/base-data.ts`: 110404 Barang Dalam Proses (WIP) di bawah
+1104, 110403 Persediaan Dalam Proses, 110401 Persediaan, 510102 Beban
+Material + 510103 Penyesuaian Persediaan di bawah 5101 Beban Pokok
+Penjualan; setting existing `wipAccountId` (automap → 110404),
+`materialExpenseAccountId` (→ 510102), `cogsAccountId` (→ 5101);
+F-006 FINAL: disposisi varians MATI default, hanya
+`standardCostingEnabled` + `productionVarianceAccountId` fail-closed
+(`src/lib/tax/production-variance-gate.ts`); estimasi-vs-aktual/margin
+F-007 read-model existing `job-estimate-vs-actual(-data).ts` membaca
+ProductionCost langsung/lewat PO — tanpa snapshot tutup.
+
+**Keputusan 1 — Makna tutup: `completed` ≠ `closed`; closed = beku biaya.**
+(a) Status baru `closed` TERPISAH dari `completed`: completed =
+milestone operasional/fisik selesai (perilaku existing tidak berubah);
+closed = kunci akuntansi job sesudah completed. Dilarang memakai ulang
+completed sebagai tutup buku job. (b) Transisi sah SAJA:
+WorkOrder `completed → closed`; ProductionOrder `completed → closed`.
+Draft/pending/confirmed/in_progress/cancelled TIDAK boleh langsung
+closed (cancelled tetap terminal sendiri, bukan closed). (c) Saat
+closed, server WAJIB menolak mutasi biaya BARU dan mutasi biaya LAMA
+yang mengubah angka job: create/update/delete `ProductionCost`
+(workOrderId job itu ATAU productionOrderId PO di bawah WO itu —
+termasuk baris WO-only yang hari ini lolos tanpa cek status),
+`pullLaborCostFromTimesheets`, `applyOverheadToProductionOrder`,
+`syncServicePurchaseOrderCost`, `syncReworkCostToOrder`,
+`createMaterialIssue` + `completeMaterialIssue` (workOrderId job itu),
+`createMaterialIssueFromWorkOrder`, `issueMaterial` PO job itu.
+Penjaga di service/action server dalam tx yang sama dengan mutasi
+(pola `mutableOrderError` diperluas, bukan cek UI). (d) Beku berlaku
+dua arah rantai: WO closed membekukan SEMUA PO di bawahnya walau PO
+belum closed; PO closed membekukan PO itu walau WO induk belum closed.
+Tutup WO dengan PO anak belum completed/cancelled = DITOLAK (lihat syarat 3).
+(e) Dokumen non-biaya tidak dibekukan vonis ini (invoice, pembayaran,
+dokumen pajak berjalan jalur existing masing-masing — empat status
+tetap terpisah). (f) Koreksi sesudah tutup HANYA dua jalur sah:
+reopen ber-alasan (keputusan 4) lalu mutasi normal di periode terbuka,
+atau dokumen/jurnal koreksi periode berjalan TANPA membuka job
+(keputusan 4c). Dilarang edit/hapus baris biaya job tertutup diam-diam.
+
+**Keputusan 2 — Selisih WIP/varian saat tutup: TANPA jurnal tutup baru;
+tanpa ambang materialitas.**
+(a) ProductionOrder completed final sudah melepaskan seluruh biaya:
+totalActualCost di-nol-kan final (manufacturing.actions.ts complete final),
+releasedCost = akumulasi seluruh rilis, jurnal existing Dr 110401
+Persediaan / Cr WIP (setting `wipAccountId`, seed 110404) per rilis —
+jadi pada PO yang sah ditutup, `totalActualCost` WAJIB 0,00.
+Tutup BUKAN event posting: Backend DILARANG membuat jurnal "buang
+sisa WIP" saat close. (b) Bila saat aksi tutup `totalActualCost ≠ 0,00`
+atau completedQty < qty: tutup DITOLAK fail-closed dengan pesan menyebut
+nominal sisa — itu temuan data (rilis parsial belum final / biaya yatim),
+bukan selisih yang boleh dibuang otomatis. Guard tutup membaca field final
+ini langsung; JANGAN menurunkan sisa dari `totalActualCost − releasedCost`
+(field pertama sudah sisa berjalan, pengurangan kedua menghitung rilis
+dua kali). Selesaikan lewat complete final existing
+atau koreksi dokumen sumbernya, bukan jurnal penyeimbang tebakan.
+(c) `ProductionOrder.variance` TETAP analitis standar-vs-aktual,
+menempel pada order sebagai histori — TIDAK dijurnal saat tutup,
+mengikuti F-006: disposisi hanya lewat gerbang
+`production-variance-gate.ts` bila standard-costing aktif; akun
+existing yang disebut vonis F-006 tetap `productionVarianceAccountId`
+(setting, fail-closed) — BUKAN 510102/510103 dan bukan akun COA baru
+yang dikarang kartu ini. (d) Selisih PEMBULATAN rilis existing
+(`onProductionOrderCostRoundingVariance`, |selisih| ≥ 0,005 baru
+posting; akun materialExpense ?? cogs setting existing) TIDAK diubah.
+(e) Ambang materialitas tutup: TIDAK ADA — eksplisit tanpa ambang.
+Alasan: sisa WIP ≠ 0 pada order completed adalah inkonsistensi
+subledger↔GL; ambang rupiah berapa pun akan melegalkan WIP menggantung
+dan memutus rekonsiliasi WIP-aging ↔ saldo GL akun WIP. Toleransi
+satu-satunya = pembulatan sen dari rumus existing (safeRound 2 desimal;
+selisih < 0,005 sudah ditangani jalur pembulatan).
+(f) WO jasa tanpa PO: tidak ada WIP PO; biaya WO-only tetap tercatat
+sebagai ProductionCost job dan ikut beku — tutup WO tidak menjurnal
+ulang biaya itu ke akun mana pun.
+
+**Keputusan 3 — Syarat tutup: finansial (vonis BOT 4, mengikat) vs
+operasional (USULAN ke Business/Bot 5, BUKAN vonis).**
+Finansial/akuntansi — Backend WAJIB tahan tutup bila: (i) status bukan
+completed; (ii) untuk WO: masih ada ProductionOrder anak belum
+completed/cancelled, MaterialIssue job berstatus draft/processing,
+atau ProductionCost job/PO-anak yang belum postedAt terisi; (iii)
+untuk PO: completedQty < qty atau sisa WIP ≠ 0,00 (keputusan 2b);
+(iv) periode tanggal tutup tertutup — aksi tutup/reopen wajib
+`assertPeriodOpen(tanggal aksi, tx)` dalam tx sama; (v) QC finansial:
+NCR terbuka terkait job (status open/rework/rejected per definisi
+existing qc.service.ts) MENAHAN tutup — biaya rework NCR adalah biaya
+job nyata dan NCR terbuka berarti biaya belum final; inspeksi final
+terakhir ≠ passed juga menahan, konsisten gate completed existing.
+Tanpa record QC sama sekali TIDAK menahan (opt-in existing dipertahankan;
+mengubahnya = keputusan operasional).
+Operasional — USULAN (pemilik Business/Bot 5, jangan dibangun sebagai
+gate finansial tanpa vonis mereka): invoice/serah-terima/DeliveryOrder
+belum selesai TIDAK menahan tutup finansial menurut BOT 4 — piutang dan
+penagihan adalah status terpisah dari status posting job; menahan tutup
+karena belum ditagih akan mengunci biaya mengikuti status bayar
+pelanggan. QC lolos sebagai syarat operasional handover, garansi,
+dan kepuasan pelanggan di luar butir (v) di atas juga ranah Business.
+Backend JANGAN menjadikan invoice lunas/DO terkirim syarat close.
+
+**Keputusan 4 — Reopen.**
+(a) Izin: pakai izin EXISTING, jangan buat permission baru tanpa
+kebutuhan pemisahan tugas nyata — tutup WO = `complete_work_orders`,
+reopen WO = `complete_work_orders`; tutup/reopen PO =
+`edit_production_orders` (pola transisi PO existing). Admin mengikuti
+whitelist existing. (b) Alasan WAJIB: reopen tanpa alasan terisi
+(trim kosong) DITOLAK server; alasan + closedAt/closedBy/closedReason
+dan setiap reopen (reopenedAt/reopenedBy/reopenReason atau jejak
+setara) tersimpan dan TIDAK dihapus tutup berikutnya — jejak
+tutup→reopen→tutup lengkap via kolom histori/ActivityLog existing
+(`logActivity`), bukan overwrite diam. (c) Reopen mengembalikan status
+ke `completed` (BUKAN in_progress): output fisik sudah terbit; mutasi
+biaya tambahan sesudah reopen hanya lewat jalur biaya normal dengan
+jurnal periode BERJALAN (tanggal hari aksi, `assertPeriodOpen` dalam
+tx). Jurnal POSTED lama DILARANG diubah/dihapus — koreksi = reversal/
+jurnal koreksi baru periode terbuka, pola repo. Reopen TIDAK membuka
+kembali totalActualCost/releasedCost/variance/unit-cost FG terbit dan
+TIDAK mengubah lapisan stok/FG yang sudah terbit (konsisten vonis
+biaya telat F-2026-10-20-71: membuka angka final = HPP retroaktif
+salah). (d) Dampak F-007: read-model estimasi-vs-aktual/margin membaca
+biaya berjalan, jadi biaya sah sesudah reopen tampil sebagai biaya
+aktual & margin BERUBAH — itu benar dan WAJIB terbaca sebagai perubahan
+sesudah tutup pertama (jejak reopen tampil di read-model/detail, bukan
+angka lama ditimpa diam-diam). Backend DILARANG membekukan salinan
+margin kedua di luar read-model existing tanpa kartu tersendiri.
+
+**Keputusan 5 — Larangan eksplisit + guard fail-closed (Backend
+t_0ff0ef02 WAJIB patuh; butir tanpa vonis di sini = jangan dibangun).**
+1. Dilarang: jurnal disposisi/penyeimbang baru saat close; akun COA
+   baru; fallback akun diam-diam (akun kosong = tolak berisik pola
+   setting existing); ambang materialitas tutup; ubah/hapus jurnal
+   posted; ubah ProductionOrder cost fields final saat reopen; syarat
+   tutup berbasis lunas invoice/DO; permission baru; hitung margin/
+   pajak di UI.
+2. Guard fail-closed per jalur biaya (keputusan 1c): satu helper
+   status-job bersama dipakai semua jalur, cek di dalam tx sesudah
+   lock baris job/PO; status closed/cancelled/completed-final yang
+   sudah beku existing tetap berlaku kumulatif.
+3. Transisi tutup/reopen atomik: conditional update
+   (updateMany WHERE status='completed' / 'closed') pola claim
+   existing; dua klik bersamaan tidak boleh dobel tutup/dobel log.
+4. Falsifikasi wajib Backend: biaya baru ke PO closed ditolak; biaya
+   WO-only ke WO closed ditolak; MI complete ke WO closed ditolak;
+   pull timesheet ke job closed ditolak; tutup dengan sisa WIP ≠ 0
+   ditolak menyebut nominal; tutup dengan NCR terbuka ditolak; reopen
+   tanpa alasan ditolak; reopen oleh izin salah ditolak; cabut satu
+   guard → tes jalur itu MERAH, pulih hijau; tutup→reopen→tutup jejak
+   utuh; jurnal posted sebelum tutup tidak berubah sesudah reopen.
+5. Migrasi hanya kolom aditif tutup/reopen di WorkOrder +
+   ProductionOrder sesuai lane kartu Backend; tanpa backfill status —
+   job completed lama tetap completed (belum closed) sampai operator
+   menutup eksplisit.
+
+Status item: DIVONIS — siap Backend t_0ff0ef02. Tanpa kode/migrasi di
+kartu vonis ini.
+
 ### Gap baru domain (c)
 
 #### F-2026-10-21-011 (c) P0 — Lot kedaluwarsa lolos di 4 dari 5 jalur keluar stok (SALAH)
