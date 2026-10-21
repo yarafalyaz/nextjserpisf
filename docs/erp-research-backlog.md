@@ -1134,3 +1134,101 @@ Belum ada (bukti grep run ini):
 Fokus berikutnya: (f) garansi & after-sales — verifikasi model
 WarrantyRecord (F-2026-10-20-69 ditunda) + odometer terhadap klaim nyata.
 
+
+---
+
+## 2026-10-21 10:10 WIB — Domain (f) garansi & after-sales
+
+Rotasi: run sebelumnya (e) jadwal F-2026-10-21-019..020. Run ini (f).
+Berikutnya: (g) kendaraan & fitment.
+
+Benchmark resmi (akses 2026-10-21):
+- Accurate Klaim Pelanggan/garansi dalam alur penjualan (dokumen klaim
+  tertaut penjualan): https://help.accurate.id/product/penjualan/
+- Zahir: tidak ada modul garansi khusus di daftar fasilitas resmi
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang —
+  celah pasar, bukan alasan menunda; dasar perlakuan = PSAK 57/72 (vonis
+  accountant F-49 existing).
+
+Status lama: P0-1 run (f) 2026-10-20 + F-2026-10-20-69 inti
+WarrantyRecord DITUNDA-TEKNIS per PUTUSAN manager; mesin vonis murni
+`decideWarrantyClaimAccounting` sudah dibangun (warranty-accounting.ts,
+F-49). Run ini verifikasi ulang + pecah tahap terkecil yang bisa jalan
+tanpa membuka inti penuh.
+
+### Inventarisasi terverifikasi (2026-10-21, domain f)
+
+Sudah ada:
+- Mesin keputusan akuntansi garansi murni + aturan PSAK 57/72, pemetaan
+  akun rekomendasi 510103/2105xx/1108xx (belum dibuat di CoA),
+  fail-closed mapping (warranty-accounting.ts:1-60,121).
+- Nonconformance/rework internal + biaya rework ke ProductionCost.
+
+Belum ada (bukti grep run ini):
+- ABSEN model: `grep WarrantyRecord|WarrantyClaim|WarrantyCoverage
+  prisma/schema.prisma` = 0 (tipe TS di service bukan model DB).
+  Halaman garansi/klaim = 0 direktori.
+- ABSEN odometer: `grep -rni odometer|kilometer|mileage prisma src`
+  non-test = 0. Eligibility berbasis km mustahil.
+- ABSEN masa garansi per barang: `grep warrantyMonths|warrantyKm` = 0;
+  Item/Product tanpa field masa garansi.
+- PARSIAL: CrmTicket tanpa customerVehicleId/workOrderId/invoiceId/
+  serial (schema CrmTicket) — klaim masuk tiket generik tak tertelusur
+  ke kendaraan/part terpasang.
+
+### Gap
+
+#### F-2026-10-21-021 (f) P0 — Garansi pasang tidak tercatat sama sekali; inti ditunda tanpa tahap antara
+- Kompetitor: Accurate klaim pelanggan tertaut dokumen penjualan
+  https://help.accurate.id/product/penjualan/ ; Zahir tanpa modul
+  garansi resmi (di atas) — Silengkap bisa unggul di ceruk ini.
+- Status Silengkap: ABSEN dokumen, ADA mesin vonis. Bukti: grep model
+  = 0; warranty-accounting.ts:4-8 menyatakan sendiri "inti bila dibuka".
+- Relevansi: bumper/rollcage/lift kit gagal lapangan ditangani lisan;
+  tak bisa buktikan cakupan/umur/serial; biaya rework tercampur HPP job
+  baru; part cacat tak bisa ditagih balik ke supplier. Risiko uang +
+  perselisihan pelanggan (definisi P0 SOUL).
+- Adaptasi bertahap (pecah dari usulan L lama agar bisa mulai):
+  Tahap 1 (M, tanpa jurnal provisi): `Item.warrantyMonths` +
+  `CustomerVehicle` tambah kolom odometer terakhir (snapshot saat
+  check-in/serah terima di WO); model `WarrantyCoverage` lahir otomatis
+  saat WorkOrder completed (customerVehicleId, workOrderId, itemId,
+  serialNumber nullable, installedAt, expiresAt = installedAt +
+  warrantyMonths, termsSnapshot, status aktif/habis/dicabut).
+  Tahap 2 (M): `WarrantyClaim` (coverageId, odometerKm, keluhan, foto
+  TransactionAttachment existing, status intake→eligibility→approved/
+  rejected→in_repair→closed, repairWorkOrderId) + keputusan memakai
+  decideWarrantyClaimAccounting existing — TANPA posting provisi dulu
+  (biaya klaim masuk ProductionCost kategori rework WO perbaikan,
+  pola Nonconformance). Tahap 3 (jurnal provisi 510103/2105xx):
+  hanya sesudah vonis accountant membuka inti F-49 penuh.
+- Modul disentuh: prisma/schema.prisma, src/actions/manufacturing.
+  actions.ts (auto-create coverage saat complete), halaman produksi/
+  garansi (frontend), detail CustomerVehicle.
+- Effort: M per tahap. Risiko: eligibility salah tagih — mitigasi
+  termsSnapshot + keputusan manual ber-approval, tidak auto-reject.
+- Urutan: tahap 1 → 2 → (vonis) 3.
+- Pemilik usulan: backend (model), frontend (halaman). Butuh putusan
+  accountant: TIDAK untuk tahap 1-2 (tanpa jurnal baru); YA tahap 3.
+
+#### F-2026-10-21-022 (f) P1 — Klaim supplier atas part cacat tidak tertaut garansi pelanggan
+- Status Silengkap: ABSEN. Bukti: WarrantyClaim belum ada (F-021);
+  PurchaseReturn ada tapi tanpa tautan klaim/serial pelanggan.
+- Relevansi: shock/winch cacat diganti gratis ke pelanggan, part lama
+  harus kembali ke distributor; tanpa rantai klaim, recovery hilang.
+- Adaptasi: sesudah F-021 tahap 2 — field supplierClaimVendorId +
+  purchaseReturnId di WarrantyClaim; status recovery mengikuti vonis
+  PSAK 57 di warranty-accounting.ts:31-35 (aset hanya bila hampir pasti).
+- Effort: S (sesudah F-021). Risiko: jurnal recovery prematur — mitigasi
+  tahap ini hanya tautan dokumen, jurnal mengikuti vonis tahap 3.
+- Pemilik usulan: backend. Butuh putusan accountant: YA untuk jurnal
+  recovery (ditahan tahap 3).
+
+### Yang TIDAK diusulkan run ini
+- Provisi garansi otomatis saat invoice terbit: tahap 3, menunggu data
+  klaim tahap 1-2 membuktikan estimasi andal (syarat PSAK 57 sendiri).
+- Portal klaim pelanggan: P2 lama tetap.
+
+Fokus berikutnya: (g) kendaraan & fitment — verifikasi VehicleFitmentRule
+most-specific-wins terhadap konflik aturan + cakupan tahun/drivetrain.
+
