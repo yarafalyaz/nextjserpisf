@@ -263,6 +263,7 @@ export const navigation: NavItem[] = [
       { label: "Pajak", href: "/laporan/pajak", icon: Receipt, permission: "view_reports" },
       { label: "Bukti Potong PPh", href: "/laporan/bukti-potong-pph", icon: BadgeDollarSign, permissions: ["view_payroll_reports", "view_reports"] },
       { label: "Rekonsiliasi PPN", href: "/laporan/rekonsiliasi-ppn", icon: Receipt, permission: "view_reports" },
+      { label: "Posisi SPT", href: "/laporan/posisi-spt", icon: Receipt, permission: "view_reports" },
       { label: "Valuasi Stok", href: "/laporan/valuasi-stok", icon: Package, permission: "view_reports" },
       { label: "Mutasi Stok", href: "/laporan/mutasi-stok", icon: ArrowLeftRight, permission: "view_reports" },
       { label: "Kartu Stok", href: "/laporan/kartu-stok", icon: Package, permission: "view_reports" },

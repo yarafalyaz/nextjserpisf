@@ -17,7 +17,7 @@ import { Prisma } from "@prisma/client"
 import { prisma, type TxClient } from "@/lib/db/prisma"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
-import { nextSlug } from "@/lib/utils/slug-db"
+import { buildUniqueSlug, slugify } from "@/lib/utils/slug"
 import {
   claimIdempotencyKey,
   bindIdempotencyKey,
@@ -28,7 +28,6 @@ import {
   type IdemScope,
 } from "@/lib/services/financial-idempotency.service"
 import { getErrorMessage } from "@/lib/utils/error"
-import { slugify } from "@/lib/utils/slug"
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 import {
   computeWithheld,
@@ -41,6 +40,39 @@ import { isValidBillingCode, isValidNtpn } from "@/lib/tax/tax-liability"
 const SCOPE_ISSUE: IdemScope = "withholding_issue"
 const SCOPE_REVOKE: IdemScope = "withholding_revoke"
 const SCOPE_SETTLE: IdemScope = "withholding_settle"
+
+/**
+ * Slug unik di dalam tx: `prisma` global belum melihat baris tak-tercommit,
+ * dua terbit berurutan dalam satu tx bisa bertabrakan di kolom @unique.
+ * Cek tabrakan lewat delegate tx.
+ */
+async function nextTxSlug(
+  tx: TxClient,
+  model: "withholdingCertificate",
+  base: string,
+): Promise<string> {
+  const d = tx[model] as unknown as {
+    findFirst: (args: { where: Record<string, unknown>; select: { id: true } }) => Promise<{ id: number } | null>
+  }
+  return buildUniqueSlug(base, async (candidate) => (await d.findFirst({ where: { slug: candidate }, select: { id: true } })) !== null)
+}
+
+/**
+ * Slug unik luar tx pra-transaksi (setor): nomor dokumen sudah unik dari
+ * generateDocumentNumber; suffix diincrement bila slug kebetulan bentrok.
+ * ponytail: cek prisma global pra-tx cukup — kolom @unique + constraint DB
+ * tetap penjaga akhir; naik ke in-tx builder bila setor makin konkuren.
+ */
+async function nextSlugGlobal(
+  model: "taxPayment" | "journal",
+  base: string,
+): Promise<string> {
+  const d = (prisma as never as Record<string, unknown>)[model] as unknown as {
+    findFirst: (args: { where: Record<string, unknown>; select: { id: true } }) => Promise<{ id: number } | null>
+  } | undefined
+  if (!d || typeof d.findFirst !== "function") return slugify(base) || base
+  return buildUniqueSlug(base, async (candidate) => (await d.findFirst({ where: { slug: candidate }, select: { id: true } })) !== null)
+}
 
 export type WithholdingResult = {
   success: boolean
@@ -130,7 +162,7 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
       const computed = computeWithheld(input.dpp, tariff)
       const created = await tx.withholdingCertificate.create({
         data: {
-          slug: slugify(`bupot-${number}`) || `bupot-${Date.now()}`,
+          slug: await nextTxSlug(tx as never, "withholdingCertificate", `bupot-${number}`),
           direction: input.direction,
           certificateNumber: number,
           withholdingDate: input.withholdingDate,
@@ -249,8 +281,8 @@ export async function settleWithholdingTax(input: SettleWithholdingInput): Promi
     let isReplay = false
     const documentNo = await generateDocumentNumber("PAJAK", "simple")
     const journalNo = await generateDocumentNumber("JRN")
-    const paymentSlug = await nextSlug("taxPayment", documentNo)
-    const journalSlug = await nextSlug("journal", journalNo)
+    const paymentSlug = await nextSlugGlobal("taxPayment", documentNo)
+    const journalSlug = await nextSlugGlobal("journal", journalNo)
     await prisma.$transaction(async (tx) => {
       const claim = await claimIdempotencyKey(tx as never, SCOPE_SETTLE, input.idempotencyKey, input.userId, fp)
       if (claim.replayed) {

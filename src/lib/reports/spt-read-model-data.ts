@@ -60,7 +60,14 @@ export async function loadSptPeriodRowsForRange(range?: {
   start: Date
   end: Date
 }): Promise<SptPeriodRow[]> {
-  const settings = await getSystemSettings().catch(() => null)
+  // Akun PPN belum dipetakan di pengaturan = kewajiban jurnal null (selisih
+  // tampil "-"), bukan gagal total: posisi dokumen tetap wajib tampil.
+  let settings: Awaited<ReturnType<typeof getSystemSettings>> | null = null
+  try {
+    settings = await getSystemSettings()
+  } catch {
+    settings = null
+  }
   const outputAccountId = settings?.salesTaxAccountId ?? null
   const inputAccountId = settings?.purchaseTaxAccountId ?? null
 

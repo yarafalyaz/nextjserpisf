@@ -15,6 +15,8 @@
  * - Unik (vendorId, nomor) masukan non-batal: partial unique tak portabel
  *   MySQL → guard service + index komposit; duplikat kredit = tolak keras.
  */
+import { createHash } from "node:crypto"
+
 import { Prisma } from "@prisma/client"
 import { prisma, type TxClient } from "@/lib/db/prisma"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
@@ -28,7 +30,7 @@ import {
   type IdemScope,
 } from "@/lib/services/financial-idempotency.service"
 import { getErrorMessage } from "@/lib/utils/error"
-import { slugify } from "@/lib/utils/slug"
+import { buildUniqueSlug } from "@/lib/utils/slug"
 import {
   computeVatFromSellingPrice,
   taxPeriodFromDate,
@@ -59,6 +61,22 @@ function toMoney(value: number): Prisma.Decimal {
 
 function toRate(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
+}
+
+/**
+ * Slug unik di dalam tx: `prisma` global belum melihat baris tak-tercommit,
+ * dua terbit berurutan dalam satu tx bisa bertabrakan di kolom @unique.
+ * Cek tabrakan lewat delegate tx (pola buildUniqueSlug financial-idempotency).
+ */
+async function nextTxSlug(
+  tx: TxClient,
+  model: "taxInvoice" | "withholdingCertificate",
+  base: string,
+): Promise<string> {
+  const d = tx[model] as unknown as {
+    findFirst: (args: { where: Record<string, unknown>; select: { id: true } }) => Promise<{ id: number } | null>
+  }
+  return buildUniqueSlug(base, async (candidate) => (await d.findFirst({ where: { slug: candidate }, select: { id: true } })) !== null)
 }
 
 async function mirrorHeadNumber(
@@ -148,7 +166,7 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
       }
       const created = await tx.taxInvoice.create({
         data: {
-          slug: slugify(`fp-${input.direction}-${number}`) || `fp-${Date.now()}`,
+          slug: await nextTxSlug(tx as never, "taxInvoice", `fp-${input.direction}-${number}`),
           direction: input.direction,
           transactionCode: code,
           taxInvoiceNumber: number,
@@ -165,6 +183,13 @@ export async function issueTaxInvoice(input: IssueTaxInvoiceInput): Promise<TaxI
           counterpartyName: input.counterpartyName ?? null,
           counterpartyNitku: input.counterpartyNitku ?? null,
           xmlPayload: input.xmlPayload ?? null,
+          // Jejak impor XML Coretax: hash isi + waktu impor, untuk rekonsiliasi
+          // dobel-impor (dokumen sama tidak diterbitkan dua kali).
+          xmlHash: input.xmlPayload
+            ? createHash("sha256").update(input.xmlPayload).digest("hex")
+            : null,
+          xmlImportedAt: input.xmlPayload ? new Date() : null,
+          djpMessage: input.xmlPayload ? "Diimpor dari XML Coretax" : null,
           createdBy: input.userId ?? null,
         },
       })
@@ -252,7 +277,7 @@ export async function replaceTaxInvoice(input: ReplaceTaxInvoiceInput): Promise<
       // diperbarui ke nomor pengganti bersamaan (mirrorHeadNumber).
       const created = await tx.taxInvoice.create({
         data: {
-          slug: slugify(`fp-ganti-${input.taxInvoiceNumber.trim()}-${Date.now()}`) || `fp-ganti-${Date.now()}`,
+          slug: await nextTxSlug(tx as never, "taxInvoice", `fp-ganti-${input.taxInvoiceNumber.trim()}`),
           direction: old.direction,
           transactionCode: old.transactionCode,
           taxInvoiceNumber: input.taxInvoiceNumber.trim(),

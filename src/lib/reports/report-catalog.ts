@@ -190,6 +190,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
     icon: Receipt,
     reports: [
       { href: "/laporan/pajak" },
+      { href: "/laporan/posisi-spt" },
       { href: "/laporan/rekonsiliasi-ppn" },
       { href: "/laporan/faktur-ppn" },
       { href: "/laporan/bukti-potong-pph" },
