@@ -44,6 +44,12 @@ export interface MaterialNeedInput {
   incomingEarliestDate?: Date | null
   /** startDate WO untuk menilai tepat-waktu; null = tidak dinilai (dianggap tepat-waktu). */
   workOrderStartDate?: Date | null
+  /**
+   * F-2026-10-21-012 lapis aman: stok di gudang yang relevan untuk WO ini
+   * (gudang MI completed WO ini + gudang default item). Opsional: pemanggil
+   * lama tanpa field ini dianggap sama dengan qtyOnHand global.
+   */
+  qtyOnHandAtWarehouse?: number
 }
 
 export type IncomingCover = "none" | "tepat-waktu" | "terlambat" | "belum-jadwal"
@@ -71,6 +77,10 @@ export interface MaterialNeedLine {
   incomingCover: IncomingCover
   isService: boolean
   fulfilled: boolean
+  /** Stok di gudang relevan WO (F-012); = qtyOnHand global bila loader lama. */
+  qtyOnHandAtWarehouse: number
+  /** remainingQty − qtyOnHandAtWarehouse > 0: gudang relevan tak menutup sisa, walau global cukup. */
+  warehouseShortageQty: number
 }
 
 export interface WorkOrderMaterialNeeds {
@@ -81,6 +91,8 @@ export interface WorkOrderMaterialNeeds {
   lineCount: number
   fulfilledCount: number
   shortageCount: number
+  /** Jumlah baris shortage di gudang relevan walau global cukup (F-012). */
+  warehouseShortageCount: number
   allFulfilled: boolean
 }
 
@@ -100,6 +112,8 @@ export function buildWorkOrderMaterialNeeds(
     const remainingQty = Math.max(0, requiredQty - issuedQty)
     const shortageQty = Math.max(0, remainingQty - effectiveAvailableQty)
     const incomingQty = isService ? 0 : (input.incomingQty ?? orderedQty)
+    const qtyOnHandAtWarehouse = isService ? 0 : Math.max(0, input.qtyOnHandAtWarehouse ?? qtyOnHand)
+    const warehouseShortageQty = Math.max(0, remainingQty - qtyOnHandAtWarehouse)
     const incomingEarliestDate = isService ? null : (input.incomingEarliestDate ?? null)
     let incomingCover: IncomingCover = "none"
     if (!isService && shortageQty > EPSILON && incomingQty >= shortageQty - EPSILON) {
@@ -128,6 +142,8 @@ export function buildWorkOrderMaterialNeeds(
       incomingCover,
       isService,
       fulfilled: isService || remainingQty <= EPSILON,
+      qtyOnHandAtWarehouse,
+      warehouseShortageQty,
     }
   })
   return {
@@ -138,6 +154,7 @@ export function buildWorkOrderMaterialNeeds(
     lineCount: lines.length,
     fulfilledCount: lines.filter((l) => l.fulfilled).length,
     shortageCount: lines.filter((l) => l.shortageQty > EPSILON).length,
+    warehouseShortageCount: lines.filter((l) => l.warehouseShortageQty > EPSILON).length,
     allFulfilled: lines.every((l) => l.fulfilled),
   }
 }
