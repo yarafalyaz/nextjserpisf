@@ -40,7 +40,7 @@ export default async function CreateSalesReturnPage({
   }
   const requestedInvoiceId = seg.faktur
     ? await resolvePrefillId(prisma.salesInvoice, seg.faktur, invoiceHref)
-    : NaN
+    : Number.NaN
 
   const [invoices, customers, items] = await Promise.all([
     prisma.salesInvoice.findMany({
