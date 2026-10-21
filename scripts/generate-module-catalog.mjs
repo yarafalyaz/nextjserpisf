@@ -108,6 +108,7 @@ const RESOURCES = [
   ["production_orders", "manufacturing", "Perintah Produksi"],
   ["products", "manufacturing", "Produk / BOM"],
   ["work_orders", "manufacturing", "Perintah Kerja"],
+  ["warranty_claims", "manufacturing", "Klaim Garansi"],
   ["bom_revisions", "manufacturing", "Revisi BOM"],
   ["qc", "manufacturing", "Kendali Mutu"],
   ["qc_checklists", "manufacturing", "Checklist QC"],
