@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requireAnyPermission } from "@/lib/auth/permissions"
+import { requirePermission } from "@/lib/auth/permissions"
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
@@ -39,7 +39,8 @@ export default async function WithholdingTaxReportPage({
   params: Promise<{ segments?: string[] }>
   searchParams: Promise<{ tanggalMulai?: string; tanggalSelesai?: string }>
 }) {
-  await requireAnyPermission(["view_payroll_reports", "view_reports"])
+  // Selaras gerbang PDF payroll: wajib view_payroll_reports saja (fail-closed).
+  await requirePermission("view_payroll_reports")
 
   const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
     start: new Date(now.getFullYear(), 0, 1),

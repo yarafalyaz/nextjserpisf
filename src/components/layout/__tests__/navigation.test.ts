@@ -20,7 +20,8 @@ describe("navigation single source of truth", () => {
     expect(
       (group?.children ?? []).every((child) => {
         if (["/laporan/gaji-karyawan", "/laporan/pph-21", "/laporan/porsi-gaji", "/laporan/bukti-potong-pph"].includes(child.href)) {
-          return (child.permissions ?? []).includes("view_payroll_reports")
+          // Fail-closed: view_reports generik TIDAK boleh membuka laporan gaji.
+          return child.permission === "view_payroll_reports" && !(child.permissions ?? []).includes("view_reports")
         }
         return child.permission === "view_reports"
       }),
