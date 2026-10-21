@@ -109,6 +109,20 @@ describe("F-017-S AC-CR (vonis BOT 4 F-2026-10-22-044-V)", () => {
     expect(withoutQuotationByCustomer.get(1)).toBe(1)
   })
 
+  it("F5-1 sentinel: SO parsial < quotation tetap menekan K5 ke 0 (anti-dobel K2/K5)", () => {
+    // Quotation 100 sudah terwakili SO 40 (K2 menanggung sisanya lewat jalur
+    // SO) — K5 wajib 0. Bila guard quotationsWithOrder dicabut, K5 menjadi
+    // 100-40=60 dan tes ini merah.
+    const { byCustomer } = woUnrepresentedByCustomer({
+      workOrders: [{ customerId: 1, quotationId: 10 }],
+      quotations: [{ id: 10, customerId: 1, grandTotal: 100 }],
+      salesOrders: [{ quotationId: 10, grandTotal: 40 }],
+      invoices: [],
+    })
+    expect(byCustomer.get(1) ?? 0).toBe(0)
+    expect(byCustomer.size).toBe(0)
+  })
+
   it("K5 nol bila invoice recognised menutup quotation", () => {
     const { byCustomer } = woUnrepresentedByCustomer({
       workOrders: [{ customerId: 1, quotationId: 10 }],
