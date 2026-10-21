@@ -40,6 +40,20 @@ describe("normalizeTransferSelection", () => {
     expect(result.ids).toEqual([])
     expect(result.error).toContain("Pilih minimal satu")
   })
+
+  it("menolak ID non-desimal murni (0x10/1e3/0b101/+10/10.0) — bukan ID pembayaran 5/10/16/1000", () => {
+    const result = normalizeTransferSelection(["0x10", "1e3", "0b101", "+10", "10.0"])
+
+    expect(result.ids).toEqual([])
+    expect(result.error).toContain("Pilih minimal satu")
+  })
+
+  it("spasi di sekitar angka tetap diterima (trim pola existing)", () => {
+    const result = normalizeTransferSelection([" 10 "])
+
+    expect(result.ids).toEqual([10])
+    expect(result.error).toBeUndefined()
+  })
 })
 
 describe("transferSummary", () => {

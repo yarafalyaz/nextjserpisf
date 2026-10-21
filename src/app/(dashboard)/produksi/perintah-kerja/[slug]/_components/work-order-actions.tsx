@@ -18,13 +18,15 @@ interface Props {
   vehicleIntakeBlocked?: boolean
   /** Tautan catat inspeksi masuk (prefill WO ini) saat vehicleIntakeBlocked. */
   vehicleIntakeHref?: string
+  /** F-020-B Q3: jumlah tahap pending dari builder; peringatan saja, tidak memblokir complete. */
+  pendingStageCount?: number
 }
 
 /**
  * Work Order lifecycle controls. Surfaces the manufacturing flow that previously
  * existed only in server actions but had no UI: start → issue materials → complete.
  */
-export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, defaultWarehouseId, revisableItems = [], vehicleIntakeBlocked = false, vehicleIntakeHref }: Props) {
+export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssue, defaultWarehouseId, revisableItems = [], vehicleIntakeBlocked = false, vehicleIntakeHref, pendingStageCount }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [reviseOpen, setReviseOpen] = useState(false)
@@ -121,9 +123,20 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
             </Button>
           </span>
         )}
+        {typeof pendingStageCount === "number" && pendingStageCount > 0 ? (
+          <p role="note" id="wo-stage-pending-note" className="text-sm text-amber-700">
+            {pendingStageCount} tahap belum selesai — perintah kerja tetap
+            dapat diselesaikan.
+          </p>
+        ) : null}
         <Button
           variant="primary"
           isDisabled={isPending || !hasCompletedMaterialIssue}
+          aria-describedby={
+            typeof pendingStageCount === "number" && pendingStageCount > 0
+              ? "wo-stage-pending-note"
+              : undefined
+          }
           onPress={() => run(() => completeWorkOrder(workOrderId), "Perintah Kerja selesai")}
         >
           Selesaikan
