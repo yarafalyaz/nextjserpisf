@@ -28,4 +28,14 @@ describe("F-017 buildCustomerCreditExposure", () => {
     expect(buildCustomerCreditExposure([base({ outstanding: 85 })])[0].status).toBe("warning")
     expect(buildCustomerCreditExposure([base({ outstanding: 50 })])[0].status).toBe("ok")
   })
+
+  it("DP confirmed mengurangi paparan: 60+50-60=50 -> ok", () => {
+    const [row] = buildCustomerCreditExposure([base({ openOrderAmount: 50, confirmedDownPayment: 60 })])
+    expect(row).toMatchObject({ exposure: 50, remainingCredit: 50, utilization: 50, status: "ok" })
+  })
+
+  it("DP melebihi paparan dijepit 0, bukan negatif", () => {
+    const [row] = buildCustomerCreditExposure([base({ outstanding: 10, confirmedDownPayment: 500 })])
+    expect(row).toMatchObject({ exposure: 0, utilization: 0, status: "ok" })
+  })
 })

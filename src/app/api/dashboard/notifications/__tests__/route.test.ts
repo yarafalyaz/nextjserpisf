@@ -2,7 +2,7 @@ import { describe, expect, it, vi, beforeEach } from "vitest"
 import { GET } from "../route"
 
 const mocks = vi.hoisted(() => ({
-  requireAuth: vi.fn(),
+  authFn: vi.fn(),
   hasPermission: vi.fn(),
   approvalCount: vi.fn(),
   notificationFindMany: vi.fn(),
@@ -10,8 +10,11 @@ const mocks = vi.hoisted(() => ({
   getDailyAttendanceMetrics: vi.fn(),
 }))
 
+vi.mock("@/lib/auth/auth", () => ({
+  auth: (...args: unknown[]) => mocks.authFn(...args),
+}))
+
 vi.mock("@/lib/auth/permissions", () => ({
-  requireAuth: (...args: unknown[]) => mocks.requireAuth(...args),
   hasPermission: (...args: unknown[]) => mocks.hasPermission(...args),
 }))
 
@@ -53,7 +56,7 @@ describe("GET /api/dashboard/notifications approval queue access", () => {
   })
 
   it("does not return the global pending approval count to ordinary dashboard users", async () => {
-    mocks.requireAuth.mockResolvedValue({ id: 4, roles: ["karyawan"], permissions: [] })
+    mocks.authFn.mockResolvedValue({ user: { id: 4, isActive: true, roles: ["karyawan"], permissions: [] } })
 
     const response = await GET()
     const result = await response.json()
@@ -63,7 +66,7 @@ describe("GET /api/dashboard/notifications approval queue access", () => {
   })
 
   it("returns the pending approval count to workflow managers", async () => {
-    mocks.requireAuth.mockResolvedValue({ id: 4, roles: ["admin"], permissions: ["approve_workflows"] })
+    mocks.authFn.mockResolvedValue({ user: { id: 4, isActive: true, roles: ["admin"], permissions: ["approve_workflows"] } })
 
     const response = await GET()
     const result = await response.json()
@@ -77,7 +80,7 @@ describe("GET /api/dashboard/notifications recent activities", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.hasPermission.mockResolvedValue(true)
-    mocks.requireAuth.mockResolvedValue({ id: 1, roles: ["super_admin"], permissions: [] })
+    mocks.authFn.mockResolvedValue({ user: { id: 1, isActive: true, roles: ["super_admin"], permissions: [] } })
     mocks.notificationFindMany.mockResolvedValue([])
     mocks.getDailyAttendanceMetrics.mockResolvedValue({ lateAttendanceCount: 0, absentEmployees: [] })
   })
@@ -102,5 +105,23 @@ describe("GET /api/dashboard/notifications recent activities", () => {
 
     expect(result.recentActivities[0].refLabel).toBe("SO-0006")
     expect(result.recentActivities[0].href).toBe("/penjualan/pesanan/6")
+  })
+
+  it("membalas 401 kontrak apiError saat tanpa sesi (tanpa redirect)", async () => {
+    mocks.authFn.mockResolvedValue(null)
+
+    const response = await GET()
+    const result = await response.json()
+
+    expect(response.status).toBe(401)
+    expect(result.error.code).toBe("UNAUTHORIZED")
+  })
+
+  it("membalas 401 saat pengguna nonaktif", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 4, isActive: false, roles: ["karyawan"], permissions: [] } })
+
+    const response = await GET()
+
+    expect(response.status).toBe(401)
   })
 })
