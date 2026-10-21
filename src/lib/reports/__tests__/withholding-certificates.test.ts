@@ -4,6 +4,7 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     vendorBill: { findMany: vi.fn() },
     salesPayment: { findMany: vi.fn() },
+    withholdingCertificate: { findMany: vi.fn() },
   },
 }))
 
@@ -17,6 +18,7 @@ import { loadWithholdingCertificatesCsv } from "../withholding-certificates-data
 
 const vb = vi.mocked(prisma.vendorBill.findMany)
 const sp = vi.mocked(prisma.salesPayment.findMany)
+const wc = vi.mocked(prisma.withholdingCertificate.findMany)
 
 function row(overrides: Partial<WithholdingCertificateInput>): WithholdingCertificateInput {
   return {
@@ -35,7 +37,10 @@ function row(overrides: Partial<WithholdingCertificateInput>): WithholdingCertif
   }
 }
 
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  wc.mockResolvedValue([] as never)
+})
 
 describe("serializeWithholdingCertificatesCsv (F-35a)", () => {
   it("kolom backlog lengkap + NPWP + total dua sisi terpisah sen persis", () => {
@@ -99,5 +104,29 @@ describe("loadWithholdingCertificatesCsv (F-35a)", () => {
     expect(vb).toHaveBeenCalledWith(expect.objectContaining({
       where: expect.objectContaining({ withholdingAmount: { gt: 0 } }),
     }))
+  })
+
+  it("F-003: bupot snapshot menggantikan baris fallback tagihan tertaut (tanpa dobel)", async () => {
+    vb.mockResolvedValue([{
+      id: 5, date: new Date(2026, 0, 10), documentNo: "VB-001", subtotal: 1000, discountAmount: 100,
+      withholdingAmount: 18,
+      vendor: { name: "PT Maklon", npwp: "02.111" },
+      withholdingType: { code: "PPh 23", name: "Jasa", rate: 2 },
+    }] as never)
+    sp.mockResolvedValue([] as never)
+    wc.mockResolvedValue([{
+      direction: "we_withhold", certificateNumber: "BP-77", withholdingDate: new Date(2026, 0, 12),
+      counterpartyName: "PT Maklon", counterpartyTaxId: "02.111",
+      article: "PPh23", objectCode: "24-104-01", dpp: 900, tariff: 2, withheldAmount: 18,
+      vendorBillId: 5, salesPaymentId: null,
+      withholdingType: { code: "PPh 23", name: "Jasa" },
+      vendorBill: { documentNo: "VB-001" }, salesPayment: null,
+    }] as never)
+
+    const out = await loadWithholdingCertificatesCsv({ start: new Date(2026, 0, 1), end: new Date(2026, 0, 31) })
+    expect(out.purchaseCount).toBe(1)
+    expect(out.csv).toContain('"BP-77"')
+    expect(out.csv).toContain("24-104-01")
+    expect(out.purchaseWithheld).toBe(18)
   })
 })

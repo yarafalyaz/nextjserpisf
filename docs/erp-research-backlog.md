@@ -2120,3 +2120,166 @@ tahun dihapus, dsb).
   fail-closed A + snapshot transparan), penghasilan pemberi kerja
   lain tak terlihat sistem (SPT Tahunan karyawan), keluar-masuk
   kembali se-tahun (§3b butir terakhir).
+
+---
+
+## 2026-10-21 11:03 WIB — Domain (g) kendaraan & fitment
+
+Rotasi: run sebelumnya (f) garansi F-2026-10-21-021..022. Run ini (g)
+oleh Bot 5 sales/CRM (kendaraan pelanggan = konteks quotation/WO).
+Berikutnya: (h) SDM & payroll — domain inti Bot 5.
+
+Benchmark resmi (akses 2026-10-21):
+- Accurate Barang & Jasa (data barang dipakai transaksi penjualan/
+  pekerjaan pesanan, tanpa modul fitment kendaraan terdokumentasi):
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-dan-jasa/mengenal-fitur-barang-dan-jasa/
+- Zahir fasilitas resmi (assembly + serial number kendaraan, tanpa
+  aturan kompatibilitas part↔konfigurasi kendaraan):
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+- Kesimpulan `BENCHMARK`: fitment rule = keunggulan ISF existing,
+  bukan fitur paritas. Gap di bawah = fitment belum dipakai alur jual.
+
+### Inventarisasi terverifikasi (2026-10-21, domain g)
+
+Sudah ada (`TERVERIFIKASI-KODE`):
+- Model `VehicleFitmentRule` lengkap: item + bomRevision opsional,
+  scope brand/model/variant/yearFrom/yearTo/drivetrain/transmission
+  (null = wildcard), result, source, isActive
+  (prisma/schema.prisma:4097-4133).
+- Evaluator most-specific-wins: variant 8 > model 4 > brand 2,
+  +1 tahun/drivetrain/transmission/bomRevision; seri dipecah aturan
+  terbaru (id terbesar); tanpa aturan cocok = `unknown` fail-safe
+  (src/lib/services/vehicle-fitment.service.ts:61-71,124-153).
+  Teruji: src/lib/services/__tests__/vehicle-fitment.service.test.ts
+  (7 tes: unknown, spesifik, tahun, drivetrain case-insensitive).
+- CRUD + permission `view/create/edit/delete_vehicle_fitments`,
+  halaman `/kendaraan/fitment`, checker ad-hoc per item/produk di
+  detail Product (src/actions/vehicle-fitment.actions.ts:126-167;
+  fitment-checker.tsx). Kosakata drivetrain/transmission kanonik
+  tunggal (src/lib/constants/vehicle.ts:18-35).
+- Dokumen jual/bengkel SUDAH membawa kendaraan: `Quotation.
+  customerVehicleId` (schema:1187), `WorkOrder.customerVehicleId`
+  (schema:2572), kepemilikan kendaraan divalidasi terhadap customer
+  saat quotation dibuat (src/actions/sales.actions.ts:118-120).
+
+Belum ada / parsial (bukti grep run ini):
+- SALAH-cakupan: `evaluateFitment` hanya dipanggil checker manual
+  (vehicle-fitment.actions.ts:144,153). Grep fitment di
+  sales.actions.ts / manufacturing.actions.ts / hooks / inventory
+  actions = 0 hasil evaluasi. Quotation/WO/MaterialIssue tidak pernah
+  memeriksa kompatibilitas walau customerVehicleId terisi.
+- KONFLIK tak terdeteksi: tidak ada unique constraint / deteksi
+  aturan aktif ganda dengan scope identik (itemId + bomRevisionId +
+  brand/model/variant + tahun + drivetrain + transmission sama).
+  Dua aturan identik beda result diam-diam diputuskan urutan id
+  (vehicle-fitment.service.ts:135-139) — teknisi tidak tahu ada
+  konflik data.
+- CustomerVehicle tanpa odometer (schema:3618-3643) — meneruskan
+  gap F-2026-10-21-021, tidak diduplikasi di sini.
+
+### Gap
+
+#### F-2026-10-21-023 (g) P1 — Fitment tidak dievaluasi di quotation/WO; part tidak cocok bisa terjual & terpasang
+- Kompetitor: tidak ada modul fitment resmi Accurate/Zahir (URL di
+  atas) — `BENCHMARK` negatif; ini penguatan fitur ISF existing.
+- Status Silengkap: PARSIAL. Bukti: evaluator + checker manual ADA
+  (vehicle-fitment.service.ts:103-196); nol pemanggil di alur
+  quotation/WO/issue (grep run ini).
+- Relevansi: inti janji bengkel modifikasi — bumper/lift kit salah
+  varian/tahun baru ketahuan saat pasang; biaya bongkar + retur +
+  perselisihan ditanggung bengkel. Kendaraan sudah tertaut dokumen,
+  konfigurasi (brand/model/variant/year/drivetrain/transmission)
+  bisa diturunkan dari CustomerVehicle→Vehicle→Variant tanpa input
+  ulang.
+- Adaptasi lapis aman dulu (`USULAN`, tanpa menahan dokumen):
+  (1) builder read-only `fitment-for-document`: turunkan konfigurasi
+  dari customerVehicleId, evaluasi tiap QuotationItem.itemId /
+  WorkOrderItem.itemId (lewati itemId null/0 = jasa/custom),
+  kembalikan compatible/incompatible/unknown + ruleId/source per
+  baris. (2) Kartu peringatan di detail quotation + WO: baris
+  `incompatible` merah, `unknown` kuning "belum terverifikasi" —
+  TIDAK memblokir simpan/kirim (pola informatif F-2026-10-20-100).
+  (3) Gerbang keras (blokir WO start / MaterialIssue bila
+  incompatible) = `BUTUH-VONIS` team-lead sesudah data peringatan
+  membuktikan false-positive rendah.
+- Modul disentuh: src/lib/reports/ builder baru (pola
+  work-order-load.ts), detail quotation/WO (frontend), TANPA
+  migrasi. Inti gerbang menyentuh sales/manufacturing actions.
+- Effort: S aman, M inti. Risiko: aturan belum lengkap → mayoritas
+  `unknown` mengajari user mengabaikan peringatan — mitigasi:
+  tampilkan cakupan aturan (n baris terverifikasi dari total) dan
+  hanya `incompatible` yang menonjol.
+- Urutan: builder → kartu quotation → kartu WO → vonis gerbang.
+- Acceptance: quotation kendaraan X + item aturan incompatible
+  tampil merah menyebut source aturan; item tanpa aturan tampil
+  unknown (bukan compatible); baris jasa (itemId null/0) tidak
+  dievaluasi; cabut builder = kartu hilang, dokumen tetap jalan.
+- Pemilik usulan: backend (builder), frontend (kartu), Bot 3
+  koordinasi WO/MaterialIssue. Butuh putusan accountant: TIDAK.
+  Butuh vonis team-lead: YA hanya gerbang keras tahap 3.
+
+#### F-2026-10-21-024 (g) P1 — Konflik aturan fitment scope identik tidak terdeteksi; pemenang ditentukan urutan buat diam-diam
+- Status Silengkap: SALAH-data-diam. Bukti: tanpa @@unique /
+  deteksi duplikat di VehicleFitmentRule (schema:4097-4133);
+  tie-break `b.id - a.id` (vehicle-fitment.service.ts:136-139)
+  menutupi konflik compatible vs incompatible scope sama persis.
+- Relevansi: dua teknisi input aturan bertentangan (sumber berbeda)
+  → hasil checker berubah sesudah input terakhir tanpa jejak;
+  keputusan pasang/tidak bertumpu data yang tidak disadari konflik.
+- Adaptasi (`USULAN`, tanpa migrasi): query read-only daftar
+  kelompok aturan aktif dengan kunci scope ternormalisasi sama
+  (drivetrain/transmission dibandingkan hasil `norm()` lowercase)
+  tetapi result berbeda; tampilkan kartu "konflik aturan" di
+  halaman /kendaraan/fitment + tolak simpan aturan baru yang
+  scope-nya identik aturan aktif lain dengan pesan menyebut aturan
+  lama (edit aturan lama, bukan tumpuk). Unique constraint DB
+  ditunda — scope nullable membuat unique MySQL multi-null tidak
+  menegakkan kesamaan wildcard.
+- Modul disentuh: src/actions/vehicle-fitment.actions.ts (guard
+  simpan), src/lib/reports/ query konflik, halaman fitment.
+- Effort: S. Risiko: aturan lama ganda sudah terlanjur ada —
+  mitigasi guard hanya menolak yang baru; daftar konflik untuk
+  dibersihkan manual.
+- Acceptance: buat aturan scope identik result berbeda ditolak
+  menyebut ID aturan existing; dua aturan lama konflik tampil di
+  daftar; aturan scope beda 1 dimensi (tahun lain) tetap lolos;
+  nonaktifkan salah satu = konflik hilang dari daftar.
+- Pemilik usulan: backend. Butuh putusan accountant: TIDAK.
+
+#### F-2026-10-21-025 (g) P2 — Checker fitment hanya di detail Product; sales tidak bisa cek dari kendaraan pelanggan
+- Status Silengkap: PARSIAL. Bukti: checker terpasang hanya di
+  produksi/products/[slug] (fitment-checker.tsx); detail
+  CustomerVehicle tidak menampilkan kendaraan cocok part apa /
+  part terpasang apa; checkVehicleFitment menuntut konfigurasi
+  dirakit manual per panggilan (vehicle-fitment.actions.ts:134-141).
+- Relevansi: pertanyaan pelanggan "part X cocok untuk mobil saya?"
+  dijawab dari halaman produk menebak konfigurasi, bukan dari
+  kendaraan aktual pelanggan yang sudah tercatat.
+- Adaptasi (`USULAN`): varian checker "dari CustomerVehicle" —
+  konfigurasi diturunkan server dari rantai
+  CustomerVehicle→Vehicle→Variant→Model→Brand + Vehicle.year;
+  kartu di detail kendaraan pelanggan: cek 1 item/produk +
+  daftar hasil evaluasi item yang pernah terpasang via WO
+  kendaraan itu (riwayat, bukan klaim garansi — itu F-021).
+- Modul disentuh: src/actions/vehicle-fitment.actions.ts (mode
+  customerVehicleId), halaman kendaraan/pelanggan (frontend).
+- Effort: S. Risiko: Vehicle.year/variant kosong → hasil unknown
+  jujur, tampilkan field kosongnya sebagai alasan.
+- Acceptance: dari detail kendaraan, cek produk menghasilkan
+  per-baris compatible/incompatible/unknown tanpa input brand/
+  model manual; kendaraan tanpa tahun tampil alasan "tahun kosong".
+- Pemilik usulan: backend + frontend. Butuh putusan accountant:
+  TIDAK.
+
+### Yang TIDAK diusulkan run ini
+- Gerbang keras blokir dokumen atas incompatible: ditunda sampai
+  vonis team-lead + bukti false-positive (lihat F-023 tahap 3).
+- Atribut kendaraan baru (mesin cc, bahan bakar, dimensi): tanpa
+  bukti aturan fitment nyata yang membutuhkannya; scope existing
+  brand/model/variant/tahun/drivetrain/transmission cukup.
+- Odometer: milik F-2026-10-21-021, tidak diduplikasi.
+
+Fokus berikutnya: (h) SDM & payroll — verifikasi live klaim skill
+Bot 5: generateBulkPayroll tanpa filter paymentFrequency, status
+kepegawaian tanpa field PKWT/PKWTT, PPh 21 TER F-2026-10-21-026.
+

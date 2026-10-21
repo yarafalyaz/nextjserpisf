@@ -90,6 +90,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/proyeksi-kas": "Menampilkan proyeksi kas dari jatuh tempo piutang dan utang",
   "/laporan/pusat-laba": "Menampilkan laba per pusat laba",
   "/laporan/rekonsiliasi-ppn": "Menampilkan PPN menurut buku dibanding dokumen beserta kurang/lebih bayar",
+  "/laporan/posisi-spt": "Menampilkan posisi SPT masa PPN per masa: dokumen, jurnal POSTED, dan setoran",
   "/laporan/rekonsiliasi-stok": "Menampilkan selisih kuantitas induk dengan lapisan FIFO",
   "/laporan/selisih-persediaan": "Menampilkan selisih saldo akun persediaan menurut buku besar dengan nilai barang menurut lapisan persediaan",
   "/laporan/penerimaan-belum-ditagih": "Menampilkan penerimaan barang yang belum atau belum penuh ditagih vendor beserta umur sisa dan perbandingannya dengan saldo akun GRNI",

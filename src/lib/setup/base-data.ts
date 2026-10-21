@@ -873,12 +873,16 @@ export const WITHHOLDING_TAX_TYPES: {
   code: string
   name: string
   rate: number
+  /** Pasal snapshot F-003; null = jenis lama tanpa pasal terdaftar. */
+  article?: string
   liabilityAccountCode?: string
   receivableAccountCode?: string
 }[] = [
   { code: "PPH22", name: "PPh 22", rate: 0.5, receivableAccountCode: "110507" },
-  { code: "PPH23-JUAL", name: "PPh 23 Penjualan", rate: 2, receivableAccountCode: "110505" },
-  { code: "PPH23-BELI", name: "PPh 23 Pembelian", rate: 2, liabilityAccountCode: "210202" },
+  // F-003: pasal di-seed, kode objek TIDAK — dipilih per jenis jasa saat
+  // bupot terbit (PMK-141/2015), jangan satu kode keras untuk semua jasa.
+  { code: "PPH23-JUAL", name: "PPh 23 Penjualan", rate: 2, article: "PPh23", receivableAccountCode: "110505" },
+  { code: "PPH23-BELI", name: "PPh 23 Pembelian", rate: 2, article: "PPh23", liabilityAccountCode: "210202" },
 ]
 
 /** Default payment methods (codes follow the auto-generated MTP- scheme). */

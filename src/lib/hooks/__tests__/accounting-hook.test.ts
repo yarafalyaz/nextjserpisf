@@ -1184,6 +1184,16 @@ describe("onSalesReturnCompleted", () => {
           findFirst: vi.fn().mockResolvedValue(mocks.systemSettings),
         },
         salesReturn: { findUniqueOrThrow: mocks.salesReturnFindUniqueOrThrow },
+        salesReturnItem: {
+          findMany: vi.fn().mockResolvedValue([]),
+          update: vi.fn().mockResolvedValue({}),
+        },
+        salesInvoice: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue({ subtotal: 200, discount: 0, taxAmount: 0 }),
+        },
+        taxInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
+        $queryRaw: mocks.queryRaw,
+        $executeRaw: mocks.executeRaw,
         account: {
           findMany: mocks.accountFindMany,
         },
