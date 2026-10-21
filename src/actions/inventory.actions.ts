@@ -737,6 +737,97 @@ export async function createWorkOrder(formData: FormData) {
   }
 }
 
+// F-2026-10-21-035 (vonis Lead Q-LEAD-2, t_586ab283): daftar tertutup alasan
+// geser endDate WO. Kode = kontrak data (disimpan di metadata ActivityLog);
+// label = teks tampil di description log. Mengubah daftar ini = ubah kontrak.
+export const WORK_ORDER_END_DATE_REASONS = {
+  part_delay: "Menunggu suku cadang",
+  scope_change: "Perubahan ruang lingkup pekerjaan",
+  queue_capacity: "Antrean/kapasitas bengkel",
+  customer_request: "Permintaan pelanggan",
+  customer_unavailable: "Kendaraan/pelanggan belum tersedia",
+  technical_issue: "Kendala teknis pengerjaan",
+  other: "Lainnya",
+} as const;
+export type WorkOrderEndDateReasonCode = keyof typeof WORK_ORDER_END_DATE_REASONS;
+
+const endDateOnly = (d: Date | null | undefined) =>
+  d ? d.toISOString().slice(0, 10) : null;
+
+/**
+ * Validasi alasan geser endDate (Q-LEAD-2): wajib HANYA bila nilai lama
+ * non-null dan tanggal baru berbeda (maju/mundur/dikosongkan). Pengisian
+ * pertama dari null bukan "geser" — tanpa alasan wajib. `other` wajib teks
+ * pendamping; 6 kode lain teks opsional. Return pesan error atau null.
+ */
+function endDateReasonError(
+  oldEndDate: Date | null | undefined,
+  newEndDate: Date | null,
+  reasonCode?: string,
+  reasonNote?: string,
+): string | null {
+  const oldStr = endDateOnly(oldEndDate);
+  if (oldStr === null || oldStr === endDateOnly(newEndDate)) return null;
+  if (!reasonCode) {
+    return "Alasan wajib diisi bila estimasi selesai (endDate) digeser dari tanggal yang sudah ditetapkan";
+  }
+  if (!(reasonCode in WORK_ORDER_END_DATE_REASONS)) {
+    return "Alasan geser estimasi selesai tidak dikenal";
+  }
+  if (reasonCode === "other" && !reasonNote?.trim()) {
+    return "Catatan alasan wajib diisi bila memilih alasan Lainnya";
+  }
+  return null;
+}
+
+/**
+ * Tulis SATU baris histori geser endDate: action work_order_end_date_changed,
+ * oldValues/newValues hanya {endDate}, metadata {reasonCode, reasonNote?}.
+ * Baris pertama yang juga ditulis untuk pengisian dari null (reasonCode
+ * kosong). `logActivity` existing tidak bisa dipakai — ia tidak menulis
+ * oldValues/newValues.
+ *
+ * Return { success } berisi penanda eksplisit. Gagal tulis TIDAK melempar
+ * ({ success: false } + console.error berkonteks, pola
+ * reportPostCommitAuditFailure): update WO yang sudah commit tidak boleh
+ * dilaporkan gagal gara-gara jejak audit.
+ */
+async function writeWorkOrderEndDateLog(args: {
+  userId: number;
+  workOrderId: number;
+  oldEndDate: Date | null | undefined;
+  newEndDate: Date | null;
+  reasonCode?: string;
+  reasonNote?: string;
+}): Promise<{ success: boolean }> {
+  const oldStr = endDateOnly(args.oldEndDate);
+  const newStr = endDateOnly(args.newEndDate);
+  const label = args.reasonCode
+    ? WORK_ORDER_END_DATE_REASONS[args.reasonCode as WorkOrderEndDateReasonCode]
+    : undefined;
+  const metadata: Record<string, string> = {};
+  if (args.reasonCode) metadata.reasonCode = args.reasonCode;
+  if (args.reasonNote?.trim()) metadata.reasonNote = args.reasonNote.trim();
+  try {
+    await prisma.activityLog.create({
+      data: {
+        userId: args.userId,
+        action: "work_order_end_date_changed",
+        modelType: "WorkOrder",
+        modelId: args.workOrderId,
+        description: `Estimasi selesai digeser dari ${oldStr ?? "-"} ke ${newStr ?? "-"}${label ? ` — ${label}` : ""}`,
+        metadata: Object.keys(metadata).length > 0 ? JSON.stringify(metadata) : null,
+        oldValues: { endDate: oldStr },
+        newValues: { endDate: newStr },
+      },
+    });
+    return { success: true };
+  } catch (logError) {
+    console.error("[workOrderEndDate] gagal menulis histori endDate", logError);
+    return { success: false };
+  }
+}
+
 export async function updateWorkOrder(id: number, formData: FormData) {
   try {
     const user = await requirePermission("edit_work_orders");
@@ -772,6 +863,18 @@ export async function updateWorkOrder(id: number, formData: FormData) {
     const endDateChanged =
       (wo.endDate?.toISOString().slice(0, 10) ?? null) !==
       (newEndDate?.toISOString().slice(0, 10) ?? null);
+
+    // Vonis Lead Q-LEAD-2: geser dari nilai non-null wajib alasan tertutup.
+    // Tolak SEBELUM transaksi — WO tidak berubah sama sekali.
+    if (endDateChanged) {
+      const reasonError = endDateReasonError(
+        wo.endDate,
+        newEndDate,
+        v.endDateReasonCode,
+        v.endDateReasonNote,
+      );
+      if (reasonError) return { success: false, error: reasonError };
+    }
 
     const itemsJson = v.items ?? null;
     const items =
@@ -831,27 +934,17 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       }
     });
 
-    // F-2026-10-21-035: endDate geser → 1 baris ActivityLog tambahan dengan
-    // oldValues/newValues (kolom Json existing, schema:3954-3955).
-    // logActivity existing hanya menulis kolom `metadata`, jadi baris ini
-    // ditulis via Prisma langsung. Gagal tulis log ditelan seperti
-    // logActivity existing (logging tidak boleh menggagalkan update WO).
+    // F-2026-10-21-035: endDate berubah → tepat 1 baris histori
+    // work_order_end_date_changed (oldValues/newValues kolom Json existing).
     if (endDateChanged) {
-      try {
-        await prisma.activityLog.create({
-          data: {
-            userId: Number(user.id),
-            action: "update",
-            modelType: "WorkOrder",
-            modelId: id,
-            description: `EndDate perintah kerja #${id} berubah dari ${wo.endDate?.toISOString().slice(0, 10) ?? "-"} ke ${newEndDate?.toISOString().slice(0, 10) ?? "-"}`,
-            oldValues: { endDate: wo.endDate?.toISOString().slice(0, 10) ?? null },
-            newValues: { endDate: newEndDate?.toISOString().slice(0, 10) ?? null },
-          },
-        });
-      } catch (logError) {
-        console.error("[updateWorkOrder] gagal menulis histori endDate", logError);
-      }
+      await writeWorkOrderEndDateLog({
+        userId: Number(user.id),
+        workOrderId: id,
+        oldEndDate: wo.endDate,
+        newEndDate,
+        reasonCode: v.endDateReasonCode,
+        reasonNote: v.endDateReasonNote,
+      });
     }
 
     await logActivity(
@@ -887,9 +980,14 @@ export async function reviseWorkOrderItems(input: {
   workOrderId: number;
   replacedItemIds?: number[];
   newItems?: { itemId: number; qty: number; cost?: number; description?: string }[];
+  // F-2026-10-21-035 Q-LEAD-3: geser endDate saja (tanpa revisi item) sah di
+  // jalur ini. `newEndDate` string tanggal baru; alasan mengikuti aturan sama.
+  newEndDate?: string;
+  endDateReasonCode?: string;
+  endDateReasonNote?: string;
 }) {
   try {
-    await requirePermission("edit_work_orders");
+    const user = await requirePermission("edit_work_orders");
 
     const parsed = reviseWorkOrderItemsSchema.safeParse(input ?? {});
     if (!parsed.success) {
@@ -900,16 +998,10 @@ export async function reviseWorkOrderItems(input: {
     }
     const v = parsed.data;
     const replacedIds = [...new Set(v.replacedItemIds)];
-    if (replacedIds.length === 0 && v.newItems.length === 0) {
-      return {
-        success: false,
-        error: "Pilih item yang diganti atau tambahkan item baru",
-      };
-    }
 
     const wo = await prisma.workOrder.findUniqueOrThrow({
       where: { id: v.workOrderId },
-      select: { id: true, status: true },
+      select: { id: true, status: true, endDate: true },
     });
     if (wo.status !== "in_progress") {
       throw new Error(
@@ -917,11 +1009,40 @@ export async function reviseWorkOrderItems(input: {
       );
     }
 
+    // Geser endDate (Q-LEAD-3): hanya endDate + log, tanpa sentuh item/stok.
+    // Nilai lama non-null & berubah → alasan wajib (daftar sama Q-LEAD-2).
+    const shiftedEndDate =
+      v.newEndDate !== undefined ? wibDateToUtcMidnight(v.newEndDate) : undefined;
+    const endDateChanged =
+      shiftedEndDate !== undefined &&
+      endDateOnly(wo.endDate) !== endDateOnly(shiftedEndDate);
+    if (endDateChanged) {
+      const reasonError = endDateReasonError(
+        wo.endDate,
+        shiftedEndDate,
+        v.endDateReasonCode,
+        v.endDateReasonNote,
+      );
+      if (reasonError) return { success: false, error: reasonError };
+    }
+    if (replacedIds.length === 0 && v.newItems.length === 0 && !endDateChanged) {
+      return {
+        success: false,
+        error:
+          v.newEndDate !== undefined
+            ? "Estimasi selesai tidak berubah — tidak ada yang digeser"
+            : "Pilih item yang diganti atau tambahkan item baru",
+      };
+    }
+
     await prisma.$transaction(async (tx) => {
       // Klaim kondisional: serialkan revisi konkuren pada WO yang sama.
       const claim = await tx.workOrder.updateMany({
         where: { id: v.workOrderId, status: "in_progress" },
-        data: { updatedAt: new Date() },
+        data: {
+          updatedAt: new Date(),
+          ...(endDateChanged ? { endDate: shiftedEndDate } : {}),
+        },
       });
       if (claim.count === 0) {
         throw new Error("Status Perintah Kerja sudah berubah; muat ulang halaman.");
@@ -985,6 +1106,19 @@ export async function reviseWorkOrderItems(input: {
         });
       }
     });
+
+    // Q-LEAD-3: geser endDate di WO berjalan → baris histori yang sama persis
+    // (satu action work_order_end_date_changed untuk semua jalur geser).
+    if (endDateChanged && shiftedEndDate !== undefined) {
+      await writeWorkOrderEndDateLog({
+        userId: Number(user.id),
+        workOrderId: v.workOrderId,
+        oldEndDate: wo.endDate,
+        newEndDate: shiftedEndDate,
+        reasonCode: v.endDateReasonCode,
+        reasonNote: v.endDateReasonNote,
+      });
+    }
 
     await logActivity(
       "update",

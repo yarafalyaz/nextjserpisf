@@ -77,6 +77,12 @@ export const workOrderSchema = z.object({
   date: dateString,
   startDate: optionalDateOnly,
   endDate: optionalDateOnly,
+  // F-2026-10-21-035 (vonis Lead Q-LEAD-2): alasan geser endDate. Wajib hanya
+  // bila endDate lama non-null dan berubah — penegakan di aksi (butuh nilai
+  // tersimpan), di sini hanya bentuknya. Kode tertutup di
+  // WORK_ORDER_END_DATE_REASON_CODES (inventory.actions).
+  endDateReasonCode: optionalStr(50),
+  endDateReasonNote: optionalStr(500),
   notes: optionalStr(2000),
   items: optionalStr(50000), // JSON string, parsed separately
 })
@@ -102,6 +108,12 @@ export const reviseWorkOrderItemsSchema = z.object({
     )
     .max(200)
     .default([]),
+  // F-2026-10-21-035 Q-LEAD-3: geser endDate opsional di jalur sempit ini.
+  // `undefined` = tidak digeser; string tanggal = target baru. Alasan wajib
+  // bila nilai lama non-null dan berubah (penegakan di aksi).
+  newEndDate: optionalDateOnly,
+  endDateReasonCode: optionalStr(50),
+  endDateReasonNote: optionalStr(500),
 })
 
 // ==================== RACK ====================

@@ -59,11 +59,13 @@ vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),
 }))
 
-function formWith(endDate?: string) {
+function formWith(endDate?: string, reason?: { code?: string; note?: string }) {
   const formData = new FormData()
   formData.set("customerId", "1")
   formData.set("date", "2024-01-01")
   if (endDate !== undefined) formData.set("endDate", endDate)
+  if (reason?.code !== undefined) formData.set("endDateReasonCode", reason.code)
+  if (reason?.note !== undefined) formData.set("endDateReasonNote", reason.note)
   return formData
 }
 
@@ -85,18 +87,23 @@ beforeEach(() => {
 })
 
 describe("updateWorkOrder histori endDate (F-2026-10-21-035)", () => {
-  it("endDate berubah -> 1 baris ActivityLog tambahan dengan oldValues/newValues", async () => {
-    const result = await updateWorkOrder(10, formWith("2024-02-15"))
+  it("endDate berubah + alasan valid -> 1 baris work_order_end_date_changed", async () => {
+    const result = await updateWorkOrder(
+      10,
+      formWith("2024-02-15", { code: "part_delay" }),
+    )
 
     expect(result.success).toBe(true)
     expect(activityLogCreate).toHaveBeenCalledTimes(1)
     expect(activityLogCreate).toHaveBeenCalledWith({
       data: {
         userId: 5,
-        action: "update",
+        action: "work_order_end_date_changed",
         modelType: "WorkOrder",
         modelId: 10,
-        description: "EndDate perintah kerja #10 berubah dari 2024-02-10 ke 2024-02-15",
+        description:
+          "Estimasi selesai digeser dari 2024-02-10 ke 2024-02-15 — Menunggu suku cadang",
+        metadata: JSON.stringify({ reasonCode: "part_delay" }),
         oldValues: { endDate: "2024-02-10" },
         newValues: { endDate: "2024-02-15" },
       },
@@ -111,6 +118,56 @@ describe("updateWorkOrder histori endDate (F-2026-10-21-035)", () => {
     )
   })
 
+  it("endDate berubah dari non-null TANPA alasan -> ditolak, nol log, nol transaksi", async () => {
+    const result = await updateWorkOrder(10, formWith("2024-02-15"))
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Alasan wajib diisi/)
+    expect(activityLogCreate).not.toHaveBeenCalled()
+    expect(transactionMock).not.toHaveBeenCalled()
+    expect(logActivityMock).not.toHaveBeenCalled()
+  })
+
+  it("alasan other tanpa catatan -> ditolak", async () => {
+    const result = await updateWorkOrder(
+      10,
+      formWith("2024-02-15", { code: "other" }),
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/Catatan alasan wajib diisi/)
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
+  it("alasan other + catatan -> tersimpan, metadata memuat reasonNote", async () => {
+    const result = await updateWorkOrder(
+      10,
+      formWith("2024-02-15", { code: "other", note: "Menunggu keputusan asuransi" }),
+    )
+
+    expect(result.success).toBe(true)
+    expect(activityLogCreate).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        action: "work_order_end_date_changed",
+        metadata: JSON.stringify({
+          reasonCode: "other",
+          reasonNote: "Menunggu keputusan asuransi",
+        }),
+      }),
+    })
+  })
+
+  it("kode alasan tidak dikenal -> ditolak", async () => {
+    const result = await updateWorkOrder(
+      10,
+      formWith("2024-02-15", { code: "sengaja_lambat" }),
+    )
+
+    expect(result.success).toBe(false)
+    expect(result.error).toMatch(/tidak dikenal/)
+    expect(transactionMock).not.toHaveBeenCalled()
+  })
+
   it("endDate sama -> 0 baris histori tambahan, log generik tetap jalan", async () => {
     const result = await updateWorkOrder(10, formWith("2024-02-10"))
 
@@ -119,7 +176,7 @@ describe("updateWorkOrder histori endDate (F-2026-10-21-035)", () => {
     expect(logActivityMock).toHaveBeenCalledTimes(1)
   })
 
-  it("endDate diisi dari kosong -> tercatat (null -> tanggal)", async () => {
+  it("endDate diisi dari kosong -> tercatat tanpa alasan wajib (null -> tanggal)", async () => {
     woFindUniqueOrThrow.mockResolvedValue({
       id: 10,
       status: "draft",
@@ -133,15 +190,23 @@ describe("updateWorkOrder histori endDate (F-2026-10-21-035)", () => {
     expect(activityLogCreate).toHaveBeenCalledTimes(1)
     expect(activityLogCreate).toHaveBeenCalledWith({
       data: expect.objectContaining({
+        action: "work_order_end_date_changed",
+        metadata: null,
         oldValues: { endDate: null },
         newValues: { endDate: "2024-02-15" },
       }),
     })
   })
 
-  it("endDate dikosongkan -> tercatat (tanggal -> null)", async () => {
-    const result = await updateWorkOrder(10, formWith(undefined))
+  it("endDate dikosongkan dari non-null -> alasan wajib juga (tanggal -> null)", async () => {
+    const tanpaAlasan = await updateWorkOrder(10, formWith(undefined))
+    expect(tanpaAlasan.success).toBe(false)
+    expect(tanpaAlasan.error).toMatch(/Alasan wajib diisi/)
 
+    const result = await updateWorkOrder(
+      10,
+      formWith(undefined, { code: "customer_request" }),
+    )
     expect(result.success).toBe(true)
     expect(activityLogCreate).toHaveBeenCalledTimes(1)
     expect(activityLogCreate).toHaveBeenCalledWith({
@@ -155,7 +220,10 @@ describe("updateWorkOrder histori endDate (F-2026-10-21-035)", () => {
   it("gagal tulis histori tidak menggagalkan update", async () => {
     activityLogCreate.mockRejectedValue(new Error("db mati"))
 
-    const result = await updateWorkOrder(10, formWith("2024-02-15"))
+    const result = await updateWorkOrder(
+      10,
+      formWith("2024-02-15", { code: "part_delay" }),
+    )
 
     expect(result.success).toBe(true)
     expect(logActivityMock).toHaveBeenCalledTimes(1)
@@ -169,7 +237,10 @@ describe("updateWorkOrder histori endDate (F-2026-10-21-035)", () => {
       endDate: new Date(Date.UTC(2024, 1, 10)),
     })
 
-    const result = await updateWorkOrder(10, formWith("2024-02-15"))
+    const result = await updateWorkOrder(
+      10,
+      formWith("2024-02-15", { code: "part_delay" }),
+    )
 
     expect(result.success).toBe(false)
     expect(activityLogCreate).not.toHaveBeenCalled()
