@@ -1,0 +1,227 @@
+/**
+ * F-2026-10-21-032: customer statement (mutasi piutang per pelanggan).
+ *
+ * Pure by design (no Prisma) — saldo awal periode, baris mutasi periode
+ * dengan saldo berjalan, saldo akhir. Definisi outstanding mengikuti
+ * read-model piutang existing (`customer-receivables.ts` /
+ * `receivableOutstanding`): grandTotal − paidAmount per faktur recognised,
+ * dan `paidAmount` invoice sendiri adalah Σ(amount + withholdingAmount)
+ * atas SEMUA SalesPayment faktur itu (lihat `sales-payment.hook.ts`).
+ *
+ * Alokasi CustomerCredit BUKAN dokumen terpisah di DB: service alokasi
+ * (`customer-credit.service.ts`) membuatnya sebagai SalesPayment dengan
+ * `paymentMethod === "customer_credit"` DAN menaikkan
+ * `CustomerCredit.allocatedAmount`. Karena itu baris kredit di sini
+ * diturunkan dari payment tersebut — BUKAN dari `allocatedAmount` —
+ * supaya tidak dobel: total Cr periode selalu = perubahan paidAmount,
+ * dan saldo akhir statement = outstanding piutang untuk fixture sama.
+ * `creditDocumentNo` diisi loader dari notes payment ("Alokasi kredit
+ * pelanggan <docNo> …") bila terbaca; builder tidak mengarangnya.
+ */
+
+import { safeAdd, safeSubtract } from "@/lib/utils/math"
+import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+
+export type CustomerStatementEntryKind = "invoice" | "payment" | "credit"
+
+/** Satu faktur recognised milik pelanggan (status sudah difilter loader). */
+export interface CustomerStatementInvoiceInput {
+  id: number
+  documentNo: string
+  /** Tanggal terbit faktur — momen Dr. */
+  date: Date
+  grandTotal: number
+}
+
+/** Satu SalesPayment atas faktur pelanggan. `paymentMethod === "customer_credit"` = alokasi kredit. */
+export interface CustomerStatementPaymentInput {
+  id: number
+  documentNo: string
+  salesInvoiceId: number
+  salesInvoiceDocumentNo: string
+  paymentDate: Date
+  amount: number
+  withholdingAmount: number
+  paymentMethod: string
+  /** Nomor dokumen CustomerCredit sumber alokasi, bila terbaca dari notes. */
+  creditDocumentNo?: string | null
+}
+
+export interface CustomerStatementEntry {
+  kind: CustomerStatementEntryKind
+  date: Date
+  documentNo: string
+  /** No. faktur lawan untuk baris payment/credit; null untuk baris invoice. */
+  referenceDocumentNo: string | null
+  description: string
+  debit: number
+  credit: number
+  /** Saldo piutang sesudah baris ini (saldo awal + kumulatif Dr − Cr). */
+  balance: number
+}
+
+export interface CustomerStatement {
+  customerId: number
+  periodStart: Date
+  periodEnd: Date
+  /** Σ grandTotal − Σ(amount+withholding) untuk semua mutasi < periodStart. */
+  openingBalance: number
+  entries: CustomerStatementEntry[]
+  totalDebit: number
+  totalCredit: number
+  /** openingBalance + totalDebit − totalCredit. */
+  closingBalance: number
+}
+
+const CREDIT_PAYMENT_METHOD = "customer_credit"
+
+function byDateThenKindThenId(
+  a: { date: Date; kind: CustomerStatementEntryKind; id: number },
+  b: { date: Date; kind: CustomerStatementEntryKind; id: number },
+): number {
+  const byDate = a.date.getTime() - b.date.getTime()
+  if (byDate !== 0) return byDate
+  // Faktur (Dr) sebelum pelunasannya pada tanggal sama.
+  const rank = (kind: CustomerStatementEntryKind) => (kind === "invoice" ? 0 : 1)
+  const byKind = rank(a.kind) - rank(b.kind)
+  if (byKind !== 0) return byKind
+  return a.id - b.id
+}
+
+/**
+ * Bangun statement satu pelanggan untuk [periodStart, periodEnd] inklusif.
+ *
+ * Input = SEMUA faktur recognised + payment pelanggan (loader memfilter
+ * status non-cancelled & deletedAt); builder membelah sebelum/periode
+ * sendiri supaya saldo awal dan saldo akhir konsisten dari sumber sama.
+ * Payment atas faktur di luar himpunan invoice (mis. faktur cancelled)
+ * diabaikan — piutangnya tidak pernah diakui, jadi tidak boleh meng-Cr.
+ */
+export function buildCustomerStatement(input: {
+  customerId: number
+  periodStart: Date
+  periodEnd: Date
+  invoices: readonly CustomerStatementInvoiceInput[]
+  payments: readonly CustomerStatementPaymentInput[]
+}): CustomerStatement {
+  const { customerId, periodStart, periodEnd } = input
+  const startMs = periodStart.getTime()
+  const endMs = periodEnd.getTime()
+  const invoiceIds = new Set(input.invoices.map((inv) => inv.id))
+  const payments = input.payments.filter((p) => invoiceIds.has(p.salesInvoiceId))
+
+  let openingBalance = 0
+  type Raw = {
+    id: number
+    kind: CustomerStatementEntryKind
+    date: Date
+    documentNo: string
+    referenceDocumentNo: string | null
+    description: string
+    debit: number
+    credit: number
+  }
+  const raw: Raw[] = []
+
+  for (const inv of input.invoices) {
+    const t = inv.date.getTime()
+    if (t < startMs) {
+      openingBalance = safeAdd(openingBalance, inv.grandTotal, 2)
+    } else if (t <= endMs) {
+      raw.push({
+        id: inv.id,
+        kind: "invoice",
+        date: inv.date,
+        documentNo: inv.documentNo,
+        referenceDocumentNo: null,
+        description: `Faktur penjualan ${inv.documentNo}`,
+        debit: safeAdd(0, inv.grandTotal, 2),
+        credit: 0,
+      })
+    }
+  }
+
+  for (const pay of payments) {
+    // Pelunasan piutang = amount + PPh dipotong (pola sales-payment.hook).
+    // Baris kredit: withholding selalu 0 pada payment customer_credit,
+    // rumus sama tetap berlaku.
+    const settled = safeAdd(pay.amount, pay.withholdingAmount, 2)
+    const t = pay.paymentDate.getTime()
+    if (t < startMs) {
+      openingBalance = safeSubtract(openingBalance, settled, 2)
+    } else if (t <= endMs) {
+      const isCredit = pay.paymentMethod === CREDIT_PAYMENT_METHOD
+      raw.push({
+        id: pay.id,
+        kind: isCredit ? "credit" : "payment",
+        date: pay.paymentDate,
+        documentNo: pay.documentNo,
+        referenceDocumentNo: pay.salesInvoiceDocumentNo,
+        description: isCredit
+          ? `Alokasi kredit pelanggan${pay.creditDocumentNo ? ` ${pay.creditDocumentNo}` : ""} ke faktur ${pay.salesInvoiceDocumentNo}`
+          : `Pembayaran faktur ${pay.salesInvoiceDocumentNo}`,
+        debit: 0,
+        credit: settled,
+      })
+    }
+  }
+
+  raw.sort(byDateThenKindThenId)
+
+  let balance = openingBalance
+  let totalDebit = 0
+  let totalCredit = 0
+  const entries: CustomerStatementEntry[] = raw.map((row) => {
+    balance = safeSubtract(safeAdd(balance, row.debit, 2), row.credit, 2)
+    totalDebit = safeAdd(totalDebit, row.debit, 2)
+    totalCredit = safeAdd(totalCredit, row.credit, 2)
+    return {
+      kind: row.kind,
+      date: row.date,
+      documentNo: row.documentNo,
+      referenceDocumentNo: row.referenceDocumentNo,
+      description: row.description,
+      debit: row.debit,
+      credit: row.credit,
+      balance,
+    }
+  })
+
+  return {
+    customerId,
+    periodStart,
+    periodEnd,
+    openingBalance,
+    entries,
+    totalDebit,
+    totalCredit,
+    closingBalance: balance,
+  }
+}
+
+/**
+ * Outstanding piutang pelanggan dari himpunan faktur+payment yang sama —
+ * jembatan uji AC-1: harus identik dengan closingBalance statement yang
+ * periodenya menutup di akhir data, dan dengan agregasi
+ * `customer-receivables.ts` (Σ receivableOutstanding per faktur, termasuk
+ * faktur lunas yang di sana ter-skip karena sisa ≤ 0 — kontribusi 0).
+ */
+export function customerStatementOutstanding(input: {
+  invoices: readonly CustomerStatementInvoiceInput[]
+  payments: readonly CustomerStatementPaymentInput[]
+}): number {
+  const invoiceIds = new Set(input.invoices.map((inv) => inv.id))
+  const paidByInvoice = new Map<number, number>()
+  for (const pay of input.payments) {
+    if (!invoiceIds.has(pay.salesInvoiceId)) continue
+    paidByInvoice.set(
+      pay.salesInvoiceId,
+      safeAdd(paidByInvoice.get(pay.salesInvoiceId) ?? 0, safeAdd(pay.amount, pay.withholdingAmount, 2), 2),
+    )
+  }
+  let total = 0
+  for (const inv of input.invoices) {
+    total = safeAdd(total, receivableOutstanding(inv.grandTotal, paidByInvoice.get(inv.id) ?? 0), 2)
+  }
+  return total
+}
