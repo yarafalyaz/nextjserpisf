@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
@@ -71,11 +72,17 @@ export default async function AssetDetailPage({
         ]}
         badge={<StatusChip status={asset.status} />}
         actions={<>
-          <Button href={entityEditHref("/aset", asset)} variant="primary"><Pencil size={14} /> Ubah</Button>
+          <CanCreate permission="edit_assets">
+            <Button href={entityEditHref("/aset", asset)} variant="primary"><Pencil size={14} /> Ubah</Button>
+          </CanCreate>
           {asset.status !== "disposed" && (
-            <DisposeAssetButton assetId={asset.id} bookValue={Number(asset.currentValue)} />
+            <CanCreate permission="manage_assets">
+              <DisposeAssetButton assetId={asset.id} bookValue={Number(asset.currentValue)} />
+            </CanCreate>
           )}
-          <DeleteButton id={asset.id} action={deleteAsset} />
+          <CanCreate permission="delete_assets">
+            <DeleteButton id={asset.id} action={deleteAsset} />
+          </CanCreate>
           <BackButton href="/aset" />
         </>}
       />

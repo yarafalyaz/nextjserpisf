@@ -10,7 +10,7 @@ import { notFound, redirect } from "next/navigation"
 import { buildPathFilterHref, parsePathFilterSegments } from "@/lib/utils/path-filters"
 import { ActivityLogController } from "../_components/activity-log-controller"
 import { ClearLogButton } from "../_components/clear-log-button"
-import { resolveActivityReferenceLabels } from "@/lib/services/activity-reference.service"
+import { resolveActivityReferenceLabels, resolveActivityReferenceSlugs } from "@/lib/services/activity-reference.service"
 import { applyReferenceLabel, isTrackedActivityReference } from "@/lib/utils/activity-href"
 
 import type { Metadata } from "next"
@@ -163,6 +163,9 @@ export default async function ActivityLogPage({
   const refLabels = await resolveActivityReferenceLabels(
     logs.map((log) => ({ modelType: log.modelType, modelId: log.modelId })),
   )
+  const refSlugs = await resolveActivityReferenceSlugs(
+    logs.map((log) => ({ modelType: log.modelType, modelId: log.modelId })),
+  )
 
   const rows = logs.map((log) => {
     const refLabel =
@@ -180,6 +183,8 @@ export default async function ActivityLogPage({
       modelType: log.modelType,
       modelId: log.modelId,
       refLabel,
+      refSlug:
+        log.modelId != null ? (refSlugs.get(`${log.modelType}:${log.modelId}`) ?? null) : null,
       refMissing,
       // Deskripsi menyematkan id mentah ("… #16"); tampilkan nomor dokumennya
       // supaya entri log jelas dibaca.

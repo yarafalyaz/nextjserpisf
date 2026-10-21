@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requireAnyPermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { formatDate } from "@/lib/utils/format"
 import { PageHeader } from "@/components/ui/page-header"
 import {
@@ -103,12 +104,14 @@ export default async function WorkCalendarPage({
               Berlaku untuk seluruh perusahaan dan dipakai perhitungan absensi.
             </p>
           </div>
-          <Link
-            href="/sdm/kalender-kerja/libur/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-          >
-            + Tambah
-          </Link>
+          <CanCreate permission="create_holidays">
+            <Link
+              href="/sdm/kalender-kerja/libur/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            >
+              + Tambah
+            </Link>
+          </CanCreate>
         </div>
         <div className="p-4 px-5">
           {holidays.length === 0 ? (
@@ -131,13 +134,17 @@ export default async function WorkCalendarPage({
                     <DetailTableTd>{holiday.description ?? "-"}</DetailTableTd>
                     <DetailTableTd align="right">
                       <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/sdm/kalender-kerja/libur/${holiday.id}/ubah`}
-                          className="text-sm text-primary hover:underline"
-                        >
-                          Ubah
-                        </Link>
-                        <DeleteButton id={holiday.id} action={deleteHoliday} />
+                        <CanCreate permission="edit_holidays">
+                          <Link
+                            href={`/sdm/kalender-kerja/libur/${holiday.id}/ubah`}
+                            className="text-sm text-primary hover:underline"
+                          >
+                            Ubah
+                          </Link>
+                        </CanCreate>
+                        <CanCreate permission="delete_holidays">
+                          <DeleteButton id={holiday.id} action={deleteHoliday} />
+                        </CanCreate>
                       </div>
                     </DetailTableTd>
                   </DetailTableRow>
@@ -159,12 +166,14 @@ export default async function WorkCalendarPage({
               Hanya berlaku untuk departemen yang dipilih.
             </p>
           </div>
-          <Link
-            href="/sdm/kalender-kerja/libur-departemen/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-          >
-            + Tambah
-          </Link>
+          <CanCreate permission="create_holidays">
+            <Link
+              href="/sdm/kalender-kerja/libur-departemen/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            >
+              + Tambah
+            </Link>
+          </CanCreate>
         </div>
         <div className="p-4 px-5">
           {departmentHolidays.length === 0 ? (
@@ -187,13 +196,17 @@ export default async function WorkCalendarPage({
                     <DetailTableTd className="font-medium">{holiday.name}</DetailTableTd>
                     <DetailTableTd align="right">
                       <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/sdm/kalender-kerja/libur-departemen/${holiday.id}/ubah`}
-                          className="text-sm text-primary hover:underline"
-                        >
-                          Ubah
-                        </Link>
-                        <DeleteButton id={holiday.id} action={deleteDepartmentHoliday} />
+                        <CanCreate permission="edit_holidays">
+                          <Link
+                            href={`/sdm/kalender-kerja/libur-departemen/${holiday.id}/ubah`}
+                            className="text-sm text-primary hover:underline"
+                          >
+                            Ubah
+                          </Link>
+                        </CanCreate>
+                        <CanCreate permission="delete_holidays">
+                          <DeleteButton id={holiday.id} action={deleteDepartmentHoliday} />
+                        </CanCreate>
                       </div>
                     </DetailTableTd>
                   </DetailTableRow>
@@ -214,12 +227,14 @@ export default async function WorkCalendarPage({
               karyawan atau departemen tidak punya jadwal, sistem memakai Senin–Jumat.
             </p>
           </div>
-          <Link
-            href="/sdm/kalender-kerja/jadwal/tambah"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-          >
-            + Tambah
-          </Link>
+          <CanCreate permission="create_work_schedules">
+            <Link
+              href="/sdm/kalender-kerja/jadwal/tambah"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+            >
+              + Tambah
+            </Link>
+          </CanCreate>
         </div>
         <div className="p-4 px-5">
           {workSchedules.length === 0 ? (
@@ -252,13 +267,17 @@ export default async function WorkCalendarPage({
                     </DetailTableTd>
                     <DetailTableTd align="right">
                       <div className="flex items-center justify-end gap-2">
-                        <Link
-                          href={`/sdm/kalender-kerja/jadwal/${schedule.id}/ubah`}
-                          className="text-sm text-primary hover:underline"
-                        >
-                          Ubah
-                        </Link>
-                        <DeleteButton id={schedule.id} action={deleteWorkSchedule} />
+                        <CanCreate permission="edit_work_schedules">
+                          <Link
+                            href={`/sdm/kalender-kerja/jadwal/${schedule.id}/ubah`}
+                            className="text-sm text-primary hover:underline"
+                          >
+                            Ubah
+                          </Link>
+                        </CanCreate>
+                        <CanCreate permission="delete_work_schedules">
+                          <DeleteButton id={schedule.id} action={deleteWorkSchedule} />
+                        </CanCreate>
                       </div>
                     </DetailTableTd>
                   </DetailTableRow>

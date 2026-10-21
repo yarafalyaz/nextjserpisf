@@ -11,6 +11,13 @@ interface StatusActionsProps {
   status: string
   id: number
   module: string
+  /**
+   * Apakah pengguna boleh menyetujui/menolak (izin approve_* modul ini,
+   * dihitung server di halaman pemanggil). Tanpa ini tombol tampil hanya
+   * berdasar status — pengaju pun melihat Setujui atas pengajuannya sendiri
+   * dan hanya menerima FORBIDDEN dari API.
+   */
+  canAct?: boolean
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -26,12 +33,12 @@ const STATUS_COLORS: Record<string, string> = {
   partial: "bg-warning/20 text-warning-600",
 }
 
-export function StatusActions({ status, id, module }: StatusActionsProps) {
+export function StatusActions({ status, id, module, canAct = true }: StatusActionsProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
 
-  const canApprove = ["draft", "pending"].includes(status)
-  const canReject = ["draft", "pending"].includes(status)
+  const canApprove = canAct && ["draft", "pending"].includes(status)
+  const canReject = canAct && ["draft", "pending"].includes(status)
 
   async function handleAction(action: "approve" | "reject") {
     startTransition(async () => {

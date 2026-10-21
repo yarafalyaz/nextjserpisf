@@ -14,6 +14,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 
 export const metadata: Metadata = { title: "Detail Checklist QC" }
 
@@ -80,7 +81,9 @@ export default async function QcChecklistDetailPage({
         actions={
           <>
             {checklist.status === "draft" && (
-              <Button href={entityEditHref("/produksi/qc/checklist", checklist)} variant="primary">Ubah</Button>
+              <CanCreate permission="manage_qc_checklists">
+                <Button href={entityEditHref("/produksi/qc/checklist", checklist)} variant="primary">Ubah</Button>
+              </CanCreate>
             )}
             <BackButton href="/produksi/qc/checklist" />
           </>

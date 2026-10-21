@@ -16,7 +16,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Permintaan Pembelian" }
@@ -27,6 +27,7 @@ export default async function PurchaseRequestDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_purchase_requests")
+  const canApprove = await hasPermission("approve_purchase_requests")
 
   const { slug } = await params
 
@@ -70,7 +71,7 @@ export default async function PurchaseRequestDetailPage({
         actions={
           <>
             {(request.status === "approved" || request.status === "partial_ordered") && (
-              <Button href={`/pembelian/pesanan/tambah/${request.slug ?? request.id}`} variant="primary">
+              <Button href={`/pembelian/pesanan/tambah/pr/${request.slug ?? request.id}`} variant="primary">
                 Buat Pesanan
               </Button>
             )}
@@ -86,6 +87,7 @@ export default async function PurchaseRequestDetailPage({
         status={request.status}
         id={request.id}
         module="pembelian/permintaan"
+        canAct={canApprove}
       />
 
       <DetailCard>

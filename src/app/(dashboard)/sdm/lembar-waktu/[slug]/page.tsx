@@ -8,6 +8,7 @@ import { deleteTimesheet } from "@/actions/hrm.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -51,8 +52,12 @@ export default async function TimesheetDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/sdm/lembar-waktu", timesheet)} variant="primary">Ubah</Button>
-            <DeleteButton id={timesheet.id} action={deleteTimesheet} />
+            <CanCreate permission="create_timesheets">
+              <Button href={entityEditHref("/sdm/lembar-waktu", timesheet)} variant="primary">Ubah</Button>
+            </CanCreate>
+            <CanCreate permission="delete_timesheets">
+              <DeleteButton id={timesheet.id} action={deleteTimesheet} />
+            </CanCreate>
             <BackButton href="/sdm/lembar-waktu" />
           </>
         }

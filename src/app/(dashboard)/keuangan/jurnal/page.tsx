@@ -8,6 +8,7 @@ import { indoToStatus, statusToIndo, statusLabel } from "@/lib/utils/status-labe
 import { AppSearchField } from "@/components/ui/search-field"
 import { JournalTable } from "./_components/journal-table"
 import { FilterDrawer } from "@/components/ui/filter-drawer"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -75,9 +76,11 @@ export default async function JournalsPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Jurnal</h1>
-<Link href="/keuangan/jurnal/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-journal-btn">
-          + Buat Jurnal
-        </Link>
+        <CanCreate permission="create_journals">
+          <Link href="/keuangan/jurnal/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-journal-btn">
+            + Buat Jurnal
+          </Link>
+        </CanCreate>
       </div>
 
       <JournalTable

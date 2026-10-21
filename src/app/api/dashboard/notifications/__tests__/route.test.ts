@@ -35,6 +35,7 @@ vi.mock("@/lib/services/activity-reference.service", () => ({
     }
     return map
   }),
+  resolveActivityReferenceSlugs: vi.fn().mockResolvedValue(new Map<string, string>()),
 }))
 
 vi.mock("@/lib/services/daily-attendance.service", () => ({

@@ -206,6 +206,7 @@ describe("stockJournalService", () => {
       expect(keys).toEqual(["ProductionOrderCostVariance_456|9", "ProductionOrderCostVariance_457|9"]);
       expect(new Set(keys).size).toBe(keys.length);
       expect(productionOrderCostVarianceJournalRef(457)).toBe("ProductionOrderCostVariance_457");
+      expect(productionOrderCompletionJournalRef(457)).toBe("ProductionOrder_457");
     });
   });
 

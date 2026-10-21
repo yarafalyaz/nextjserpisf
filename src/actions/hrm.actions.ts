@@ -272,7 +272,7 @@ export async function createLeaveRequest(formData: FormData) {
 
       const created = await tx.leaveRequest.create({
         data: {
-          slug: await nextSlug("leaveRequest", "cuti"),
+          slug: await nextSlug("leaveRequest", `cuti-${startDate.toISOString().slice(0, 10)}`),
           employeeId,
           type: v.type,
           startDate,
@@ -319,7 +319,7 @@ export async function createOvertimeRequest(formData: FormData) {
     const overtime = await prisma.$transaction(async (tx) => {
       const created = await tx.overtimeRequest.create({
         data: {
-          slug: await nextSlug("overtimeRequest", "lembur"),
+          slug: await nextSlug("overtimeRequest", `lembur-${v.date}`),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
           date: wibDateToUtcMidnight(v.date),
@@ -1620,7 +1620,7 @@ export async function createEmployeeLoan(formData: FormData) {
     const loan = await prisma.$transaction(async (tx) => {
       const created = await tx.employeeLoan.create({
         data: {
-          slug: await nextSlug("employeeLoan", "pinjaman"),
+          slug: await nextSlug("employeeLoan", `pinjaman-${v.loanDate}`),
           employeeId: v.employeeId,
           loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,
@@ -1670,7 +1670,7 @@ export async function createTimesheet(formData: FormData) {
 
     const timesheet = await prisma.timesheet.create({
       data: {
-        slug: await nextSlug("timesheet", "lembar-waktu"),
+        slug: await nextSlug("timesheet", `lembar-waktu-${v.date}`),
         ...timesheetWriteData(v),
       },
     });
@@ -2523,7 +2523,7 @@ export async function updateLeaveRequest(id: number, formData: FormData) {
       return await tx.leaveRequest.update({
         where: { id },
         data: {
-          slug: await nextSlug("leaveRequest", "cuti", { excludeId: id }),
+          slug: await nextSlug("leaveRequest", `cuti-${startDate.toISOString().slice(0, 10)}`, { excludeId: id }),
           employeeId,
           type: v.type,
           startDate,
@@ -2596,7 +2596,7 @@ export async function updateOvertimeRequest(id: number, formData: FormData) {
       const changed = await tx.overtimeRequest.updateMany({
         where: { id, status: "pending" },
         data: {
-          slug: await nextSlug("overtimeRequest", "lembur", { excludeId: id }),
+          slug: await nextSlug("overtimeRequest", `lembur-${v.date}`, { excludeId: id }),
           employeeId: v.employeeId,
           projectId: v.projectId ?? null,
           date: wibDateToUtcMidnight(v.date),
@@ -2694,7 +2694,7 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
       const changed = await tx.employeeLoan.updateMany({
         where: { id, status: "pending" },
         data: {
-          slug: await nextSlug("employeeLoan", "pinjaman", { excludeId: id }),
+          slug: await nextSlug("employeeLoan", `pinjaman-${v.loanDate}`, { excludeId: id }),
           employeeId: v.employeeId,
           loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,

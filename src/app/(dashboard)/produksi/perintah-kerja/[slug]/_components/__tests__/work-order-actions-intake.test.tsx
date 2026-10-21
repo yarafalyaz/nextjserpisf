@@ -18,7 +18,7 @@ vi.mock("@/actions/inventory.actions", () => ({
 
 import { WorkOrderActions } from "../work-order-actions"
 
-const INTAKE_HREF = "/produksi/qc/inspeksi/tambah?inspectionType=vehicle_intake&referenceType=WorkOrder&referenceId=7"
+const INTAKE_HREF = "/produksi/qc/inspeksi/tambah/perintah-kerja/wo-7/tipe/vehicle_intake"
 
 function render(props: Partial<React.ComponentProps<typeof WorkOrderActions>> = {}) {
   return renderToStaticMarkup(

@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { prisma } from '@/lib/db/prisma'
 import { sumNetForAccount } from "@/lib/services/report-aggregation.service"
+import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
 import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting } from '@/lib/utils/format'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -121,6 +122,9 @@ export default async function GeneralLedgerPage({
     }))
   }
 
+  // Slug dokumen sumber untuk tautan referensi (kanonis, bukan id numerik).
+  const referenceSlugs = await resolveReferenceSlugs(entries)
+
   const rows = entries.reduce<Array<(typeof entries)[number] & { balance: number }>>((acc, entry) => {
     const previousBalance = acc.length > 0 ? acc[acc.length - 1].balance : openingBalance
     const nextBalance = previousBalance + entry.debit - entry.credit
@@ -215,9 +219,9 @@ export default async function GeneralLedgerPage({
                       )}
                     </td>
                     <td className="muted">
-                      {row.referenceLabel && row.referenceType && referenceHref(row.referenceType, row.referenceId) ? (
+                      {row.referenceLabel && row.referenceType && referenceHref(row.referenceType, row.referenceId, referenceSlugs.get(referenceSlugKey(row))) ? (
                         <Link
-                          href={referenceHref(row.referenceType, row.referenceId)!}
+                          href={referenceHref(row.referenceType, row.referenceId, referenceSlugs.get(referenceSlugKey(row)))!}
                           aria-label={`Lihat ${row.referenceLabel}`}
                         >
                           {row.referenceLabel}

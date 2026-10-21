@@ -2,6 +2,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/db/prisma";
 import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
+import { slugify } from "@/lib/utils/slug";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { createInLayer } from "@/lib/services/inventory-fifo";
 import { allocateLandedCost } from "@/lib/services/landed-cost.service";
@@ -381,6 +382,7 @@ export async function onGoodsReceiptVerified(
       const sm = await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
+          slug: slugify(smDocNo),
           itemId: item.itemId,
           warehouseId: lineWarehouseId,
           // Destination rack/row picked on the receipt line (nullable — an

@@ -1,10 +1,15 @@
 import { prisma } from "@/lib/db/prisma";
 
 /**
- * Opsi pelanggan + penawaran (Diterima/Disetujui) untuk form Uang Muka.
+ * Opsi pelanggan + penawaran untuk form Uang Muka.
  * Dipakai halaman tambah dan ubah; filter pelanggan berbeda antar halaman
  * (tambah hanya yang aktif, ubah semua yang belum terhapus), jadi filter itu
  * tetap argumen pemanggil, bukan disembunyikan di helper.
+ *
+ * Status penawaran di sini HARUS sama dengan yang diterima createDownPayment
+ * (accepted/approved/converted): penawaran hasil konversi ke Pesanan adalah
+ * jalur resmi uang muka dari detail Pesanan — menyaringnya keluar membuat
+ * pemilih yatim padahal submit-nya sah.
  */
 export async function loadDownPaymentFormOptions(customerWhere: {
   isActive?: boolean;
@@ -25,7 +30,7 @@ export async function loadDownPaymentFormOptions(customerWhere: {
       },
     }),
     prisma.quotation.findMany({
-      where: { status: { in: ["accepted", "approved"] } },
+      where: { status: { in: ["accepted", "approved", "converted"] } },
       orderBy: { createdAt: "desc" },
       select: {
         id: true,

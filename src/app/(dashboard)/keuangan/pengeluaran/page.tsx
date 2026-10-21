@@ -7,6 +7,7 @@ import Link from "next/link"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppSearchField } from "@/components/ui/search-field"
 import { ExpenseTable } from "./_components/expense-table"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -67,9 +68,11 @@ export default async function ExpensesPage({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Pengeluaran</h1>
-<Link href="/keuangan/pengeluaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-expense-btn">
-          + Buat Pengeluaran
-        </Link>
+        <CanCreate permission="create_expenses">
+          <Link href="/keuangan/pengeluaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-expense-btn">
+            + Buat Pengeluaran
+          </Link>
+        </CanCreate>
       </div>
 
       <ExpenseTable

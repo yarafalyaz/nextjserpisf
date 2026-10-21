@@ -102,6 +102,14 @@ jobs:
       - run: ./node_modules/.bin/prisma migrate deploy
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      # Gerbang drift: rantai migrasi harus mereproduksi schema.prisma persis
+      # (pernah lolos kolom `system_qty` vs `systemQty` yang hanya ketahuan
+      # manual). Skrip membuat DB scratch sendiri lalu menghapusnya; root
+      # service CI punya hak CREATE DATABASE untuk itu.
+      - name: Verify migration chain reproduces schema (drift 0)
+        run: node scripts/verify-migrations.mjs
+        env:
+          MIGRATION_CHECK_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
       - run: npm run build
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true

@@ -1,3 +1,4 @@
+import type { PermissionName } from "@/lib/setup/base-data"
 import {
   Activity,
   BadgeDollarSign,
@@ -98,6 +99,6 @@ export const SETTINGS_SECTIONS: SettingsSectionGroup[] = [
 ]
 
 /** Semua izin yang membuat hub Pengaturan layak dibuka (any-of). */
-export function settingsPermissions(): string[] {
-  return [...new Set(SETTINGS_SECTIONS.flatMap((group) => group.items.map((item) => item.permission)))]
+export function settingsPermissions(): PermissionName[] {
+  return [...new Set(SETTINGS_SECTIONS.flatMap((group) => group.items.map((item) => item.permission)))] as PermissionName[]
 }

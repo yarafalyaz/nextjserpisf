@@ -2,13 +2,14 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth/auth"
 import { uploadToStorage, type UploadCategory } from "@/lib/storage/storage"
 import { requirePermission } from "@/lib/auth/permissions"
+import type { PermissionName } from "@/lib/setup/base-data"
 import { apiError } from "@/lib/api-response"
 import { assertCSRF } from "@/lib/security/csrf"
 
 const VALID_CATEGORIES: UploadCategory[] = ["avatars", "logos", "signatures", "items"]
 
 // Per-category permission: only users with relevant permissions can upload
-const CATEGORY_PERMISSIONS: Partial<Record<UploadCategory, string | null>> = {
+const CATEGORY_PERMISSIONS: Partial<Record<UploadCategory, PermissionName | null>> = {
   avatars: null, // any authenticated user can upload their own avatar
   logos: "manage_settings",
   signatures: "manage_settings",

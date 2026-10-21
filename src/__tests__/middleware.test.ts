@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 
 /**
  * Test the addSecurityHeaders logic from proxy.ts.
@@ -71,11 +73,7 @@ describe("proxy security headers spec", () => {
  * Dibaca dari sumber karena proxy tidak bisa diimpor murah di unit test.
  */
 describe("proxy: nonce CSP & fail-closed (AUD-03/AUD-04)", () => {
-  const proxySource = () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs")
-    const { join } = require("node:path") as typeof import("node:path")
-    return readFileSync(join(process.cwd(), "src/proxy.ts"), "utf8")
-  }
+  const proxySource = () => readFileSync(join(process.cwd(), "src/proxy.ts"), "utf8")
 
   it("CSP produksi memakai nonce + strict-dynamic, bukan unsafe-inline script", () => {
     const src = proxySource()
@@ -85,8 +83,6 @@ describe("proxy: nonce CSP & fail-closed (AUD-03/AUD-04)", () => {
   })
 
   it("root layout meneruskan nonce ke script tema inline", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs")
-    const { join } = require("node:path") as typeof import("node:path")
     const layout = readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8")
     expect(layout).toContain('get("x-nonce")')
     expect(layout).toContain("nonce={nonce}")

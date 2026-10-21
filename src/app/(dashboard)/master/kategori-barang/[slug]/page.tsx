@@ -15,6 +15,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Kategori Barang" }
@@ -68,8 +69,12 @@ export default async function ItemCategoryDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/master/kategori-barang", category)} variant="secondary"><Pencil size={14} /> Ubah</Button>
-            <DeleteButton id={category.id} action={deleteItemCategory} />
+            <CanCreate permission="edit_item_categories">
+              <Button href={entityEditHref("/master/kategori-barang", category)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            </CanCreate>
+            <CanCreate permission="delete_item_categories">
+              <DeleteButton id={category.id} action={deleteItemCategory} />
+            </CanCreate>
             <BackButton href="/master/kategori-barang" />
           </>
         }

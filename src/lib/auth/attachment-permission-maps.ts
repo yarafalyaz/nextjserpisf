@@ -8,10 +8,12 @@
  * driver, which requires fs/net/tls) into the browser bundle and broke
  * `next build` with "Module not found: Can't resolve 'fs'".
  *
- * Keep this file free of any import.
+ * Keep this file free of any RUNTIME import (type-only imports are erased
+ * at compile time and never reach the browser bundle).
  */
+import type { PermissionName } from "@/lib/setup/base-data";
 
-export const ATTACHMENT_PERMISSION: Record<string, string> = {
+export const ATTACHMENT_PERMISSION: Record<string, PermissionName> = {
   sales_invoice: "view_sales_invoices",
   sales_order: "view_sales_orders",
   quotation: "view_quotations",
@@ -35,7 +37,7 @@ export const ATTACHMENT_PERMISSION: Record<string, string> = {
   petty_cash: "view_petty_cash",
 }
 
-export const ATTACHMENT_WRITE_PERMISSION: Record<string, string> = {
+export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
   sales_invoice: "edit_sales_invoices",
   sales_order: "edit_sales_orders",
   quotation: "edit_quotations",
@@ -62,7 +64,7 @@ export const ATTACHMENT_WRITE_PERMISSION: Record<string, string> = {
   petty_cash: "edit_petty_cash",
 }
 
-export const ATTACHMENT_CREATE_PERMISSION: Record<string, string> = {
+export const ATTACHMENT_CREATE_PERMISSION: Record<string, PermissionName> = {
   journal: "create_journals",
   expense: "create_expenses",
   sales_payment: "create_sales_payments",

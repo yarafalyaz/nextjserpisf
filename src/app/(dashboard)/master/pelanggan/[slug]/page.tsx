@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
@@ -77,7 +78,9 @@ export default async function CustomerDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/master/pelanggan", customer)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            <CanCreate permission="edit_customers">
+              <Button href={entityEditHref("/master/pelanggan", customer)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            </CanCreate>
             <BackButton href="/master/pelanggan" />
           </>
         }

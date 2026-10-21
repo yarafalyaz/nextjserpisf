@@ -21,6 +21,7 @@ import { Pencil } from "lucide-react";
 import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
+import { CanCreate } from "@/components/auth/can-create";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityEditHref } from "@/lib/utils/entity-url";
 export const metadata: Metadata = { title: "Merek Kendaraan" };
@@ -56,10 +57,14 @@ export default async function AssetBrandDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/aset/merek", brand)} variant="primary">
-              <Pencil size={14} /> Ubah
-            </Button>
-            <DeleteButton id={brand.id} action={deleteAssetBrand} />
+            <CanCreate permission="edit_asset_brands">
+              <Button href={entityEditHref("/aset/merek", brand)} variant="primary">
+                <Pencil size={14} /> Ubah
+              </Button>
+            </CanCreate>
+            <CanCreate permission="delete_asset_brands">
+              <DeleteButton id={brand.id} action={deleteAssetBrand} />
+            </CanCreate>
             <BackButton href="/aset/merek" />
           </>
         }

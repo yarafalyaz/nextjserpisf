@@ -5,7 +5,7 @@ import { Eye } from "lucide-react"
 import { DataTable } from "@/components/ui/data-table"
 import { StatusChip } from "@/components/ui/status-chip"
 import type { ErpColumnDef as ColumnDef } from "@/lib/table"
-import { entityHref } from "@/lib/utils/entity-url"
+import { entityHref, entityNestedHref } from "@/lib/utils/entity-url"
 
 interface CustomerVehicleRow {
   id: number
@@ -46,7 +46,7 @@ export function CustomerVehicleTable({
       header: "Plat Nomor",
       cell: ({ row }) => (
         <Link
-          href={`${entityHref("/master/pelanggan", row.original.customer)}/kendaraan/${row.original.slug ?? row.original.id}`}
+          href={entityNestedHref("/master/pelanggan", row.original.customer, "kendaraan", row.original)}
           className="font-medium font-mono text-foreground hover:underline"
         >
           {row.original.plateNumber ?? "-"}
@@ -110,7 +110,7 @@ export function CustomerVehicleTable({
       cell: ({ row }) => (
         <div className="flex items-center gap-1 justify-end">
           <Link
-            href={`${entityHref("/master/pelanggan", row.original.customer)}/kendaraan/${row.original.slug ?? row.original.id}`}
+            href={entityNestedHref("/master/pelanggan", row.original.customer, "kendaraan", row.original)}
             className="inline-flex items-center justify-center size-11 rounded-lg text-muted-foreground hover:text-foreground hover:bg-surface-secondary transition-all"
             aria-label="Detail"
           >

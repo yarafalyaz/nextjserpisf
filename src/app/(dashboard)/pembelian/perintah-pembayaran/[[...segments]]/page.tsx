@@ -38,23 +38,55 @@ export default async function PaymentOrderPage({
   await requireAnyPermission(["view_vendor_bills", "view_vendor_payments"])
 
   const params = await searchParams
-  // Tautan lama `?sampaiTanggal=` diarahkan ke bentuk path (vendorId tetap query).
-  if (params.sampaiTanggal) {
-    const legacyPath = `/pembelian/perintah-pembayaran/sampai/${params.sampaiTanggal}`
-    redirect(params.vendorId ? `${legacyPath}?vendorId=${params.vendorId}` : legacyPath)
+  const { segments } = await routeParams
+
+  // Tautan lama `?sampaiTanggal=`/`?vendorId=` diarahkan ke bentuk path
+  // (`/sampai/<tanggal>`, `/pemasok/<slug>`).
+  if (params.sampaiTanggal || params.vendorId) {
+    const legacyVendorId = params.vendorId ? Number(params.vendorId) : null
+    const legacyVendor =
+      legacyVendorId && Number.isInteger(legacyVendorId) && legacyVendorId > 0
+        ? await prisma.vendor.findUnique({
+            where: { id: legacyVendorId },
+            select: { slug: true },
+          })
+        : null
+    const legacyPath = [
+      "/pembelian/perintah-pembayaran",
+      ...(params.sampaiTanggal ? [`sampai/${params.sampaiTanggal}`] : []),
+      ...(legacyVendor?.slug ? [`pemasok/${legacyVendor.slug}`] : []),
+    ].join("/")
+    redirect(legacyPath)
   }
 
-  const { segments } = await routeParams
-  const filters = parsePathFilterSegments(segments, { sampai: /^\d{4}-\d{2}-\d{2}$/ })
+  const filters = parsePathFilterSegments(segments, {
+    sampai: /^\d{4}-\d{2}-\d{2}$/,
+    pemasok: /^[A-Za-z0-9][A-Za-z0-9-_]*$/,
+  })
   if (!filters) notFound()
 
   const now = new Date()
   const dueThrough = filters.sampai ? new Date(filters.sampai) : now
   dueThrough.setHours(23, 59, 59, 999)
-  const vendorId = params.vendorId ? Number(params.vendorId) : null
+
+  // Pemasok dari path (slug lebih dulu, id sebagai cadangan — pola laporan).
+  const vendorSegment = filters.pemasok
+  const selectedVendor = vendorSegment
+    ? await prisma.vendor.findFirst({
+        where: {
+          OR: [
+            { slug: vendorSegment },
+            ...(/^\d+$/.test(vendorSegment) ? [{ id: Number(vendorSegment) }] : []),
+          ],
+        },
+        select: { id: true, slug: true },
+      })
+    : null
+  if (vendorSegment && !selectedVendor) notFound()
+  const vendorId = selectedVendor?.id ?? null
 
   const [vendors, bills] = await Promise.all([
-    prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: 'asc' }, select: { id: true, code: true, name: true } }),
+    prisma.vendor.findMany({ where: { isActive: true, deletedAt: null }, orderBy: { name: 'asc' }, select: { id: true, slug: true, code: true, name: true } }),
     prisma.vendorBill.findMany({
       where: {
         status: { in: [...RECOGNISED_AP_STATUSES] },
@@ -107,8 +139,8 @@ export default async function PaymentOrderPage({
       </div>
 
       <PaymentOrderFilterForm
-        vendors={vendors.map((v) => ({ value: String(v.id), label: `${v.code ? `${v.code} — ` : ""}${v.name}` }))}
-        vendorId={params.vendorId}
+        vendors={vendors.map((v) => ({ value: v.slug ?? String(v.id), label: `${v.code ? `${v.code} — ` : ""}${v.name}` }))}
+        vendorSegment={selectedVendor ? (selectedVendor.slug ?? String(selectedVendor.id)) : undefined}
         sampaiTanggal={toLocalDateOnly(dueThrough)}
       />
 

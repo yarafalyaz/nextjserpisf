@@ -16,6 +16,7 @@ import { Pencil } from "lucide-react"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Kategori" }
@@ -58,8 +59,12 @@ export default async function AssetCategoryDetailPage({
           { label: category.name },
         ]}
         actions={<>
-          <Button href={entityEditHref("/aset/kategori", category)} variant="primary"><Pencil size={14} /> Ubah</Button>
-          <DeleteButton id={category.id} action={deleteAssetCategory} />
+          <CanCreate permission="edit_asset_categories">
+            <Button href={entityEditHref("/aset/kategori", category)} variant="primary"><Pencil size={14} /> Ubah</Button>
+          </CanCreate>
+          <CanCreate permission="delete_asset_categories">
+            <DeleteButton id={category.id} action={deleteAssetCategory} />
+          </CanCreate>
           <BackButton href="/aset/kategori" />
         </>}
       />

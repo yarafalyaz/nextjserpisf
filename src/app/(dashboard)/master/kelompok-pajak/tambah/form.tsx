@@ -1,8 +1,10 @@
 "use client"
 
+import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useTransition } from "react"
 import { createTaxGroup } from "@/actions/master.actions"
+import { showError } from "@/lib/utils/toast"
 import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
@@ -20,7 +22,13 @@ export function TaxGroupForm({ taxes }: Props) {
     e.preventDefault()
     const formData = new FormData(e.currentTarget)
     startTransition(async () => {
-      await createTaxGroup(formData)
+      const res = await createTaxGroup(formData)
+      if (!res.success) {
+        // Jangan pura-pura sukses: validasi server (mis. belum memilih
+        // pajak) dulu tertelan dan pengguna terlempar ke daftar kosong.
+        showError(res.error ?? "Gagal membuat kelompok pajak")
+        return
+      }
       router.push("/master/kelompok-pajak")
       router.refresh()
     })
@@ -36,6 +44,15 @@ export function TaxGroupForm({ taxes }: Props) {
         <fieldset aria-labelledby="tax-options-label" className="flex flex-col gap-1.5">
           <span id="tax-options-label" className="text-sm font-medium text-foreground">Pajak</span>
           <div className="flex flex-col gap-2">
+            {taxes.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                Belum ada pajak yang bisa dipilih.{" "}
+                <Link href="/master/pajak/tambah" className="text-primary hover:underline">
+                  Buat pajak dulu
+                </Link>{" "}
+                — kelompok wajib berisi minimal satu pajak.
+              </p>
+            ) : null}
             {taxes.map((tax) => (
               <label key={tax.id} htmlFor={`tax-${tax.id}`} className="flex items-center gap-2 cursor-pointer">
                 <Checkbox id={`tax-${tax.id}`} name="taxIds" value={String(tax.id)} />

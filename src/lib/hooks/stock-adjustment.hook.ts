@@ -1,6 +1,7 @@
 
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
+import { slugify } from "@/lib/utils/slug";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
@@ -140,6 +141,7 @@ export async function onStockAdjustmentProcessed(
         const sm = await tx.stockMove.create({
           data: {
             documentNo: smDocNo,
+            slug: slugify(smDocNo),
             itemId: item.itemId,
             warehouseId: adjustment.warehouseId,
             qty,

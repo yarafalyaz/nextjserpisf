@@ -6,6 +6,7 @@ import { AlertTriangle, ArrowUpRight, Car } from "lucide-react"
 import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
+import { entityHref } from "@/lib/utils/entity-url"
 import { NotificationsWidget } from "@/components/dashboard/notifications-widget"
 import { RecentInvoicesTable } from "@/components/dashboard/recent-invoices-table"
 import { SectionCards } from "@/components/dashboard/section-cards"
@@ -164,6 +165,7 @@ async function getDashboardData() {
       take: 8,
       select: {
         id: true,
+        slug: true,
         name: true,
         endDate: true,
         customer: { select: { name: true } },
@@ -422,7 +424,7 @@ export default async function DashboardPage() {
                               )}
                             </div>
                             <Link
-                              href={`/proyek/${car.id}`}
+                              href={entityHref("/proyek", car)}
                               className="shrink-0 text-xs font-medium text-primary hover:underline"
                             >
                               Detail

@@ -8,29 +8,31 @@ import { Button } from "@/components/ui/button"
 import { AppDatePicker } from "@/components/ui/date-picker"
 
 /**
- * Filter perintah pembayaran: pemasok tetap query string (`?vendorId=`),
- * sedangkan batas jatuh tempo hidup di PATH (`/sampai/2026-09-30`, pola
- * kunci/nilai yang sama dengan filter absensi).
+ * Filter perintah pembayaran: pemasok dan batas jatuh tempo sama-sama
+ * hidup di PATH (`/pemasok/<slug>`, `/sampai/2026-09-30`, pola kunci/nilai
+ * yang sama dengan filter absensi).
  */
 export function PaymentOrderFilterForm({
   vendors,
-  vendorId,
+  vendorSegment,
   sampaiTanggal,
 }: {
   vendors: { value: string; label: string }[]
-  vendorId?: string
+  vendorSegment?: string
   sampaiTanggal: string
 }) {
   const router = useRouter()
-  const [vendorValue, setVendorValue] = useState(vendorId ?? "")
+  const [vendorValue, setVendorValue] = useState(vendorSegment ?? "")
   const [dateValue, setDateValue] = useState(sampaiTanggal)
 
   function onSubmit(e: React.FormEvent) {
     e.preventDefault()
-    const path = dateValue
-      ? `/pembelian/perintah-pembayaran/sampai/${dateValue}`
-      : "/pembelian/perintah-pembayaran"
-    router.push(vendorValue ? `${path}?vendorId=${vendorValue}` : path)
+    const path = [
+      "/pembelian/perintah-pembayaran",
+      ...(dateValue ? [`sampai/${dateValue}`] : []),
+      ...(vendorValue ? [`pemasok/${vendorValue}`] : []),
+    ].join("/")
+    router.push(path)
   }
 
   return (

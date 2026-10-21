@@ -1,6 +1,7 @@
 
 "use server"
 
+import type { PermissionName } from "@/lib/setup/base-data"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { revalidatePath } from "next/cache"
@@ -70,7 +71,7 @@ type ModelName =
   | "lead"
   | "approval"
 
-const modelPermissionMap: Record<ModelName, string> = {
+const modelPermissionMap: Record<ModelName, PermissionName> = {
   purchaseRequest: "delete_purchase_requests",
   purchaseOrder: "delete_purchase_orders",
   goodsReceipt: "delete_goods_receipts",

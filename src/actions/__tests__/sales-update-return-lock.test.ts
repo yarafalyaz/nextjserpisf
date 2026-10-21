@@ -40,6 +40,9 @@ vi.mock("@/lib/db/prisma", () => ({
     salesReturn: {
       findUnique: vi.fn().mockResolvedValue({ status: "draft" })
     },
+    salesInvoice: {
+      findUnique: vi.fn().mockResolvedValue({ status: "paid" })
+    },
     item: {
       findMany: vi.fn().mockResolvedValue([{ id: 1, cost: 50, price: 100 }])
     },

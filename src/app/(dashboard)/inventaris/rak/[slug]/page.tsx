@@ -15,6 +15,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Rak" }
 
 export default async function RackDetailPage({
@@ -62,8 +63,12 @@ export default async function RackDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/inventaris/rak", rack)} variant="primary">Ubah</Button>
-            <DeleteButton id={rack.id} action={deleteRack} />
+            <CanCreate permission="create_warehouses">
+              <Button href={entityEditHref("/inventaris/rak", rack)} variant="primary">Ubah</Button>
+            </CanCreate>
+            <CanCreate permission="delete_warehouses">
+              <DeleteButton id={rack.id} action={deleteRack} />
+            </CanCreate>
             <BackButton href="/inventaris/rak" />
           </>
         }

@@ -22,6 +22,8 @@ interface LogRow {
   modelId: number | null
   /** Label manusiawi entitas (nomor dokumen / kode / nama), hasil resolusi server. */
   refLabel?: string | null
+  /** Slug entitas untuk tautan kanonis, hasil resolusi server. */
+  refSlug?: string | null
   /** true bila entitas dilacak tetapi recordnya sudah tidak ada (terhapus). */
   refMissing?: boolean
   description: string
@@ -212,7 +214,7 @@ export function ActivityLogTable({
         // fallback. Bila entitasnya dilacak tetapi recordnya tidak ada lagi,
         // tandai "dihapus" supaya "#16" tidak terbaca sebagai kesalahan tampilan.
         const label = row.original.refLabel ?? `#${row.original.modelId}`
-        const href = activityEntityHref(row.original.modelType, row.original.modelId)
+        const href = activityEntityHref(row.original.modelType, row.original.modelId, row.original.refSlug)
         return (
           <span className="inline-flex items-center gap-1.5">
             {href ? (

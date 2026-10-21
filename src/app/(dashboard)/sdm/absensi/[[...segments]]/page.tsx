@@ -13,6 +13,7 @@ import { AppSearchField } from "@/components/ui/search-field"
 import Link from "next/link"
 import { AttendanceFilterForm } from "../_components/attendance-filter-form"
 import { AttendanceTable } from "../_components/attendance-table"
+import { CanCreate } from "@/components/auth/can-create"
 import { wibDateInputValue, wibTimeLabel } from "../_components/attendance-data"
 
 import type { Metadata } from "next"
@@ -190,7 +191,6 @@ export default async function AttendancePage({
   const userRoles: string[] = user.roles ?? []
   const userPerms: string[] = user.permissions ?? []
   const isSuperAdmin = userRoles.includes("super_admin")
-  const canCreate = isSuperAdmin || userPerms.includes("create_attendance")
   const showActions =
     isSuperAdmin || userPerms.includes("edit_attendance") || userPerms.includes("manage_attendance")
 
@@ -226,14 +226,14 @@ export default async function AttendancePage({
           { label: "Absensi" },
         ]}
         actions={
-          canCreate ? (
+          <CanCreate permission="create_attendance">
             <Link
               href="/sdm/absensi/tambah"
               className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
             >
               + Catat Absensi
             </Link>
-          ) : undefined
+          </CanCreate>
         }
       />
 

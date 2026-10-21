@@ -23,7 +23,7 @@ import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
 import { parseFormData } from "@/lib/validations/parse-form"
-import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema, DELIVERABLE_ORDER_STATUSES, DELIVERABLE_ORDER_STATUS_LABELS } from "@/lib/validations/sales.schemas"
+import { createDownPaymentSchema, createSalesPaymentSchema, createSalesInvoiceSchema, createSalesOrderSchema, createDeliveryOrderSchema, updateDeliveryOrderSchema, createSalesReturnSchema, updateDownPaymentSchema, updateSalesOrderSchema, updateSalesInvoiceSchema, updateSalesPaymentSchema, updateSalesReturnSchema, DELIVERABLE_ORDER_STATUSES, DELIVERABLE_ORDER_STATUS_LABELS, RETURNABLE_INVOICE_STATUSES } from "@/lib/validations/sales.schemas"
 import { findOverReturn } from "@/lib/sales/return-validation"
 import { logActivity, reportPostCommitAuditFailure } from "@/lib/services/activity-log.service"
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service"
@@ -900,6 +900,14 @@ export async function createSalesOrder(formData: FormData) {
         include: { sections: { include: { items: true } } },
       })
       if (quotation) {
+        // Gerbang yang sama dengan convertQuotationToOrder: jalur form tidak
+        // boleh menjadi jalan pintas mengonversi penawaran konsep/ditolak/
+        // kedaluwarsa yang jalur resminya menolak.
+        if (!["accepted", "approved"].includes(quotation.status)) {
+          throw new Error("Hanya penawaran approved/accepted yang dapat dikonversi")
+        }
+        assertQuotationNotExpired(quotation.validUntil)
+        await assertApproved("Quotation", v.quotationId)
         quotationItems = quotation.sections.flatMap((section) =>
           section.items.map((item) => ({
             itemId: item.itemId,
@@ -1377,6 +1385,24 @@ export async function createSalesInvoice(formData: FormData) {
   const invoice = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
 
+    // Gerbang status pesanan: tombol di detail pesanan dan daftar pemilih di
+    // faktur/tambah membaca DELIVERABLE_ORDER_STATUSES; server menegakkan
+    // daftar yang sama supaya URL/form yang ditempel tidak bisa memfakturkan
+    // pesanan konsep/ditolak. Faktur langsung dari penawaran (quotationId
+    // tanpa salesOrderId) tetap boleh.
+    if (v.salesOrderId) {
+      const so = await tx.salesOrder.findUnique({
+        where: { id: v.salesOrderId },
+        select: { status: true },
+      })
+      if (!so) throw new Error("Pesanan Penjualan tidak ditemukan")
+      if (!(DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(so.status)) {
+        throw new Error(
+          `Pesanan Penjualan berstatus '${so.status}' belum bisa difaktur (harus ${DELIVERABLE_ORDER_STATUS_LABELS})`,
+        )
+      }
+    }
+
     // F-PRICELIST-01: baris langsung dari form mendapat harga price-list
     // (unitPrice form diperlakukan sebagai Item.price fallback). Baris
     // hasil konversi (salesOrderId terisi) mempertahankan harga SO.
@@ -1662,6 +1688,19 @@ export async function createSalesReturn(formData: FormData) {
   // Selling price for the AR reduction: prefer the original invoice line price,
   // fall back to the item master price, then cost.
   const invoiceId = v.salesInvoiceId ?? null
+  // Gerbang status faktur: UI bisa dilewati lewat form yang ditempel, jadi
+  // server menegakkan daftar yang sama dengan tombol/daftar di UI
+  // (RETURNABLE_INVOICE_STATUSES). Retur tanpa faktur tetap boleh.
+  if (invoiceId) {
+    const invoice = await prisma.salesInvoice.findUnique({
+      where: { id: invoiceId },
+      select: { status: true },
+    })
+    if (!invoice) return { success: false, error: "Faktur tidak ditemukan" }
+    if (!(RETURNABLE_INVOICE_STATUSES as readonly string[]).includes(invoice.status)) {
+      return { success: false, error: `Faktur berstatus '${invoice.status}' tidak bisa diretur` }
+    }
+  }
   const invoicePriceMap = new Map<number, number>()
   const invoicedQtyByItem = new Map<number, number>()
   const invoiceUomByItem = new Map<number, string | null>()
@@ -2639,6 +2678,17 @@ export async function updateSalesReturn(id: number, formData: FormData) {
   const baseUpdReturnCostMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.cost ?? 0)]))
   const baseUpdMasterPriceMap = new Map(updReturnCostRows.map((r) => [r.id, Number(r.price ?? 0)]))
   const updInvoiceId = input.salesInvoiceId ?? null
+  // Gerbang status faktur yang sama dengan createSalesReturn.
+  if (updInvoiceId) {
+    const invoice = await prisma.salesInvoice.findUnique({
+      where: { id: updInvoiceId },
+      select: { status: true },
+    })
+    if (!invoice) throw new Error("Faktur tidak ditemukan")
+    if (!(RETURNABLE_INVOICE_STATUSES as readonly string[]).includes(invoice.status)) {
+      throw new Error(`Faktur berstatus '${invoice.status}' tidak bisa diretur`)
+    }
+  }
   const updInvoicePriceMap = new Map<number, number>()
   const updInvoiceUomByItem = new Map<number, string | null>()
   if (updInvoiceId) {

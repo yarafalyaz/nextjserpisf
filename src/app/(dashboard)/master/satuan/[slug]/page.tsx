@@ -13,6 +13,7 @@ import { entityEditHref } from "@/lib/utils/entity-url"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Satuan" }
 
 export default async function UomDetailPage({
@@ -46,8 +47,12 @@ export default async function UomDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/master/satuan", uom)} variant="primary">Ubah</Button>
-            <DeleteButton id={uom.id} action={deleteUom} />
+            <CanCreate permission="edit_units">
+              <Button href={entityEditHref("/master/satuan", uom)} variant="primary">Ubah</Button>
+            </CanCreate>
+            <CanCreate permission="edit_units">
+              <DeleteButton id={uom.id} action={deleteUom} />
+            </CanCreate>
             <BackButton href="/master/satuan" />
           </>
         }

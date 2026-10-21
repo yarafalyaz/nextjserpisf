@@ -18,6 +18,7 @@ import { statusLabel } from "@/lib/utils/status-labels";
 import { ProcessButton } from "@/components/ui/process-button";
 import { shipDeliveryOrder, deliverDeliveryOrder } from "@/actions/sales.actions";
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table";
+import { CanCreate } from "@/components/auth/can-create";
 export const metadata: Metadata = { title: "Surat Jalan" };
 
 export default async function DeliveryOrderDetailPage({
@@ -72,12 +73,14 @@ export default async function DeliveryOrderDetailPage({
             {statusLabel(deliveryOrder.status)}
           </span>
           <div className="flex gap-2">
-            <Link
-              href={entityEditHref("/penjualan/surat-jalan", deliveryOrder)}
-              className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-            >
-              Ubah
-            </Link>
+            <CanCreate permission="edit_delivery_orders">
+              <Link
+                href={entityEditHref("/penjualan/surat-jalan", deliveryOrder)}
+                className="inline-flex items-center justify-center gap-1.5 w-full sm:w-auto px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+              >
+                Ubah
+              </Link>
+            </CanCreate>
             {/* Transisi status: hanya surat jalan berstatus shipped/delivered yang
                 dihitung laporan Pemenuhan Pesanan, jadi tanpa tombol ini semua
                 surat jalan tersangkut di konsep dan "terkirim" selalu 0. */}
@@ -102,7 +105,9 @@ export default async function DeliveryOrderDetailPage({
               />
             )}
             <PrintButton documentType="delivery-order" documentId={deliveryOrder.id} />
-            <DeleteButton id={deliveryOrder.id} action={deleteDeliveryOrder} />
+            <CanCreate permission="delete_delivery_orders">
+              <DeleteButton id={deliveryOrder.id} action={deleteDeliveryOrder} />
+            </CanCreate>
             <Link
               href="/penjualan/surat-jalan"
               className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all"

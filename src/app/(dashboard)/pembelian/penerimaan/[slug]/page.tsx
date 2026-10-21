@@ -31,6 +31,7 @@ import {
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
+import { CanCreate } from "@/components/auth/can-create";
 export const metadata: Metadata = { title: "Penerimaan Barang" };
 
 export default async function GoodsReceiptDetailPage({
@@ -158,13 +159,17 @@ export default async function GoodsReceiptDetailPage({
                   successMessage="Penerimaan barang berhasil diverifikasi"
                   label="Verifikasi"
                 />
-                <Link
-                  href={entityEditHref("/pembelian/penerimaan", receipt)}
-                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-                >
-                  Ubah
-                </Link>
-                <DeleteButton id={receipt.id} action={deleteGoodsReceipt} />
+                <CanCreate permission="edit_goods_receipts">
+                  <Link
+                    href={entityEditHref("/pembelian/penerimaan", receipt)}
+                    className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+                  >
+                    Ubah
+                  </Link>
+                </CanCreate>
+                <CanCreate permission="delete_goods_receipts">
+                  <DeleteButton id={receipt.id} action={deleteGoodsReceipt} />
+                </CanCreate>
               </>
             )}
             <PrintButton documentType="goods-receipt" documentId={receipt.id} />
@@ -173,13 +178,15 @@ export default async function GoodsReceiptDetailPage({
                 sehingga laporan Diterima Belum Ditagih mengenali penerimaan ini.
                 Hanya untuk penerimaan yang sudah diverifikasi (draft belum
                 menambah stok / membersihkan clearing, jadi tak bisa ditagih). */}
-            {receipt.status !== "draft" && receipt.vendorBills.length === 0 && (
-              <Link
-                href={`/pembelian/tagihan/tambah?grId=${receipt.id}`}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-              >
-                Buat Tagihan
-              </Link>
+            {["verified", "completed"].includes(receipt.status) && receipt.vendorBills.length === 0 && (
+              <CanCreate permission="create_vendor_bills">
+                <Link
+                  href={`/pembelian/tagihan/tambah/penerimaan/${receipt.slug ?? receipt.id}`}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+                >
+                  Buat Tagihan
+                </Link>
+              </CanCreate>
             )}
             <BackButton href="/pembelian/penerimaan" />
           </>

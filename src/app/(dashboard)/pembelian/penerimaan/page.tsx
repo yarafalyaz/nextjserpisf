@@ -9,6 +9,7 @@ import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labe
 import { AppSearchField } from "@/components/ui/search-field"
 import { GoodsReceiptTable } from "./_components/goods-receipt-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -55,9 +56,11 @@ export default async function GoodsReceiptsPage({
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Pembelian",href:"/pembelian"},{label:"Penerimaan Barang"}]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Penerimaan Barang</h1>
-        <Link href="/pembelian/penerimaan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-gr-btn">
-          + Buat Penerimaan
-        </Link>
+        <CanCreate permission="create_goods_receipts">
+          <Link href="/pembelian/penerimaan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-gr-btn">
+            + Buat Penerimaan
+          </Link>
+        </CanCreate>
       </div>
 
       <GoodsReceiptTable

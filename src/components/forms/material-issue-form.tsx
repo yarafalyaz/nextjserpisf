@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import {
   createMaterialIssue,
@@ -18,6 +18,8 @@ import { nextItemUid } from "@/lib/utils/item-uid"
 
 interface MaterialIssueFormProps {
   warehouses: { id: number; name: string }[];
+  /** WO terpilih awal dari segmen path `perintah-kerja/<slug>` (jalur "buat dari"). */
+  defaultWorkOrderId?: number;
   costCenters?: { id: number; code: string; name: string }[];
   /** Pilihan dokumen sumber (perintah kerja) — kolom `workOrderId` sudah ada di skema. */
   workOrders?: { id: number; documentNo: string }[];
@@ -92,6 +94,7 @@ export function buildMaterialIssueFormData(input: MaterialIssuePayload): FormDat
 
 export function MaterialIssueForm({
   warehouses,
+  defaultWorkOrderId,
   costCenters = [],
   workOrders = [],
   projects = [],
@@ -99,11 +102,10 @@ export function MaterialIssueForm({
   issue,
 }: MaterialIssueFormProps) {
   const router = useRouter();
-  // Jalur "buat dari": `/inventaris/pengeluaran-material/tambah?workOrderId=N`
-  // (pola yang sama dengan form rak/baris rak). Tanpa membaca URL, pengeluaran
-  // material dari form Inventaris selalu orphan: `workOrderId`/`projectId`
-  // tertinggal null walau kolomnya sudah ada di skema.
-  const searchParams = useSearchParams();
+  // Jalur "buat dari": segmen path `perintah-kerja/<slug>` diteruskan server
+  // sebagai `defaultWorkOrderId` (pola yang sama dengan form rak/baris rak).
+  // Tanpa itu, pengeluaran material dari form Inventaris selalu orphan:
+  // `workOrderId` tertinggal null walau kolomnya sudah ada di skema.
   const [isPending, startTransition] = useTransition();
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses);
   const [warehouseId, setWarehouseId] = useState(
@@ -114,10 +116,14 @@ export function MaterialIssueForm({
     issue?.costCenterId ? String(issue.costCenterId) : "",
   );
   const [workOrderId, setWorkOrderId] = useState(
-    issue?.workOrderId ? String(issue.workOrderId) : searchParams.get("workOrderId") ?? "",
+    issue?.workOrderId
+      ? String(issue.workOrderId)
+      : defaultWorkOrderId
+        ? String(defaultWorkOrderId)
+        : "",
   );
   const [projectId, setProjectId] = useState(
-    issue?.projectId ? String(issue.projectId) : searchParams.get("projectId") ?? "",
+    issue?.projectId ? String(issue.projectId) : "",
   );
   const [miItems, setMiItems] = useState<MIItem[]>(
     issue?.items && issue.items.length > 0
@@ -239,8 +245,8 @@ export function MaterialIssueForm({
           ) : (
             <>
               {/* Halaman pemanggil belum mengirim daftar perintah kerja; tautan
-                  yang sudah menempel (dari URL ?workOrderId= atau dokumen yang
-                  diubah) tetap harus ikut tersimpan apa adanya. */}
+                  yang sudah menempel (dari segmen perintah-kerja/<slug> atau
+                  dokumen yang diubah) tetap harus ikut tersimpan apa adanya. */}
               <input type="hidden" name="workOrderId" value={workOrderId} />
               <p className="text-sm text-foreground">Perintah Kerja #{workOrderId}</p>
             </>

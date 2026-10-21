@@ -14,6 +14,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 
 export const metadata: Metadata = { title: "Detail Revisi BOM" }
 
@@ -70,10 +71,14 @@ export default async function BomRevisionDetailPage({
         actions={
           <>
             {revision.status === "draft" && (
-              <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary">Ubah</Button>
+              <CanCreate permission="manage_bom_revisions">
+                <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary">Ubah</Button>
+              </CanCreate>
             )}
             {revision.status === "rejected" && (
-              <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary">Ubah & Ajukan Ulang</Button>
+              <CanCreate permission="manage_bom_revisions">
+                <Button href={entityEditHref("/produksi/bom-revisi", revision)} variant="primary">Ubah & Ajukan Ulang</Button>
+              </CanCreate>
             )}
             <BackButton href="/produksi/bom-revisi" />
           </>

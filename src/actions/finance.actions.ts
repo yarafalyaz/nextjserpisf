@@ -68,7 +68,9 @@ export async function createBankStatement(formData: FormData) {
           accountNumber: v.accountNumber ?? null,
           date: stmtDate,
           reference: v.reference ?? null,
-          slug: await nextSlug("bankStatement", v.reference),
+          // Referensi boleh kosong; tanpa batang cadangan slug jatuh ke
+          // "item" generik. Batang cadangan: akun + tanggal dokumen.
+          slug: await nextSlug("bankStatement", v.reference ?? `rekening-${v.accountId}-${v.date}`),
           periodStart: v.periodStart ? wibDateToUtcMidnight(v.periodStart) : null,
           periodEnd: v.periodEnd ? wibDateToUtcMidnight(v.periodEnd) : null,
           openingBalance: v.openingBalance,
