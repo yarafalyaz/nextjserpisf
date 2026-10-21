@@ -1,22 +1,8 @@
 /**
- * Builder murni progres tahap perintah kerja (F-2026-10-21-020 Tahap A).
- *
- * Vonis Lead (kartu t_0a5c5eff, mengikat):
- * - Q1 SEQUENSIAL-KERAS pola ProjectStage: tahap hanya boleh maju bila
- *   semua tahap ber-sortOrder lebih kecil sudah completed/skipped.
- *   Progres x/y tanpa urutan = angka karangan.
- * - Q2 notes WAJIB untuk skipped (mengubah denominator = jejak audit);
- *   skipped tanpa alasan ditolak. Notes opsional untuk completed.
- * - Q3 complete WO TIDAK diblokir tahap menggantung tahap ini — builder
- *   hanya mengekspos pendingCount supaya UI menampilkan peringatan.
- * - Progres: denominator = baris != skipped; progres = completed /
- *   denominator x 100 (1 desimal); denominator 0 (tanpa tahap / semua
- *   skipped) -> percent null ("—"), BUKAN 0% karangan. Tanpa tahap sama
- *   sekali -> hasStages false, percent null juga.
- *
- * Tahap BUKAN routing costing: builder ini tidak membaca biaya, jurnal,
- * ProductionCost, atau stok. Transisi tahap tidak menulis satu pun.
- * Pure (tanpa Prisma/DOM); loader DB di work-order-progress-data.ts.
+ * Builder progres tahap WO (F-2026-10-21-020 A, vonis Lead t_0a5c5eff):
+ * Q1 sekuensial-keras, Q2 skipped wajib notes, Q3 pendingCount = bahan
+ * peringatan UI (complete tak diblokir). Denominator tanpa skipped;
+ * 0/semua skipped -> percent null, bukan 0 karangan. Pure.
  */
 
 export const WORK_ORDER_OPERATION_STATUSES = [
@@ -36,11 +22,7 @@ export const DEFAULT_WORK_ORDER_STAGES = [
   "Selesai",
 ] as const
 
-export const WORK_ORDER_PROGRESS_NOTICE =
-  "Progres tahap perintah kerja (ringan, tanpa WorkCenter): urutan " +
-  "sekuensial — tahap berikut hanya maju sesudah tahap sebelumnya " +
-  "selesai/dilewati beralasan. Tahap bukan biaya: tidak mengubah jurnal, " +
-  "ProductionCost, atau stok."
+export const WORK_ORDER_PROGRESS_NOTICE = "Progres tahap perintah kerja (ringan, tanpa WorkCenter)."
 
 export interface WorkOrderOperationInput {
   id: number

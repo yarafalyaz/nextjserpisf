@@ -2135,11 +2135,7 @@ export async function reopenProductionOrder(id: number, reason?: string) {
 
 // ==================== WORK ORDER OPERATIONS (F-2026-10-21-020 Tahap A) ====================
 
-/**
- * Inisialisasi tahap WO dari setting di dalam transaksi pemanggil.
- * Pola doInitializeProjectStages: kunci baris WO FOR UPDATE, no-op
- * sukses bila baris tahap sudah ada (idempoten). Tanpa backfill massal.
- */
+/** Init tahap WO di tx pemanggil (FOR UPDATE, idempoten, tanpa backfill). */
 async function doInitializeWorkOrderOperationsTx(
   tx: TxClient,
   workOrderId: number,
@@ -2170,10 +2166,7 @@ async function doInitializeWorkOrderOperationsTx(
   return { initialized: true };
 }
 
-/**
- * Inisialisasi manual tahap WO (untuk WO lama yang sudah in_progress
- * sebelum fitur ini ada). Idempoten: klik kedua tidak menggandakan.
- */
+/** Init manual tahap WO (WO lama in_progress); klik kedua no-op. */
 export async function initializeWorkOrderOperations(workOrderId: number) {
   try {
     const user = await requirePermission("edit_work_orders");
@@ -2200,14 +2193,7 @@ export async function initializeWorkOrderOperations(workOrderId: number) {
   }
 }
 
-/**
- * Transisi satu tahap WO. Guard (vonis Lead t_0a5c5eff):
- * - permission edit_work_orders, tanpa key baru (Q4);
- * - WO induk wajib in_progress — mutasi di draft/completed ditolak (Q1/Q3);
- * - SEQUENSIAL-KERAS: maju hanya bila tahap sebelumnya completed/skipped;
- * - skipped WAJIB notes alasan (Q2);
- * - tahap selesai TIDAK menulis jurnal/ProductionCost/stok apa pun.
- */
+/** Transisi tahap WO; guard murni evaluateWorkOrderOperationTransition (Q1-Q4). */
 export async function updateWorkOrderOperationStatus(
   workOrderId: number,
   operationId: number,

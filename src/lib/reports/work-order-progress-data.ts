@@ -1,10 +1,4 @@
-/**
- * Loader read-only progres tahap perintah kerja (F-2026-10-21-020 A).
- *
- * Satu query massal per WO (relasi operations terurut) — tanpa N+1.
- * Agregasi + guard urutan di builder murni work-order-progress.ts.
- * Tanpa mutasi; tahap selesai tidak menulis jurnal/ProductionCost/stok.
- */
+/** Loader read-only progres tahap WO (F-020 A) — query massal relasi terurut, builder murni. */
 
 import { prisma } from "@/lib/db/prisma"
 import {
