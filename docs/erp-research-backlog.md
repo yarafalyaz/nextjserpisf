@@ -6949,3 +6949,235 @@ spec BOT 5; 056-V sudah dipakai vonis Q-KOM-1 PR #440 — renumber
 sesudah tabrakan ID terdeteksi, isi vonis nol berubah). Pemilik berikutnya: BOT 3 (bentuk fisik + migrasi
 sesudah #436 merged dan koordinasi board) -> BOT 2 -> BOT 6 §4.
 
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-056-V jawaban Q-KOM-1 tarif komisi (sumber persen, basis DPP, retur)
+
+Pemilik vonis: BOT 4 (accounting-finance-tax). Menjawab Q-KOM-1 di
+F-2026-10-22-053-S §3 (BUTUH-VONIS BOT 4). ID: grep ID F-2026-10-22-*
+di origin/main `a8185d95` tertinggi merged 053-S; PR terbuka #436
+memesan 055-V (head `3d1d3e58`) — maka vonis ini **F-2026-10-22-056-V**.
+Dokumen vonis saja — tanpa kode/schema/migrasi. PR vonis ini terbuka
+TANPA merge (merge = Lead). Tidak menahan PR #435 (persen 0 jujur sah).
+
+Status verifikasi: LIVE origin/main `a8185d95` (2026-10-22 05:52 WIB):
+baca-balik `src/lib/reports/sales-commission.ts` +
+`sales-commission-data.ts` + tesnya, `prisma/schema.prisma`
+(CustomerCategory :404-418, Customer :317-358, SalesInvoice :1388-1445,
+SalesReturn :1557-1618), `src/actions/sales.actions.ts` (rumus
+grandTotal :1506-1539, completeSalesReturn :1691-1751),
+`src/lib/hooks/accounting.hook.ts` onSalesReturnCompleted :1178-1360,
+`src/lib/tax/return-snapshot.ts`, izin master kategori
+(master.actions.ts:2693 create_customers / :2728 edit_customers).
+
+### Koreksi premis implisit spec (bukti kode)
+
+1. Builder existing menghitung estimasi dari **grandTotal** per baris
+   (sales-commission.ts: `base = safeRound(inv.grandTotal)`, estimasi =
+   base × commissionPercent/100) dan loader meneruskan grandTotal apa
+   adanya. Di sales.actions.ts grandTotal = (subtotal − diskon) +
+   taxAmount. Jadi basis berjalan hari ini = **DPP + PPN**, bukan DPP.
+   Vonis putusan 2 di bawah MENGUBAH basis ini — syarat build BOT 3,
+   bukan penafsiran ulang diam-diam atas kode existing.
+2. SalesInvoice SUDAH menyimpan `taxAmount` beku per faktur
+   (schema :1408) — DPP per faktur dapat diturunkan persis dari snapshot
+   faktur (grandTotal − taxAmount), tanpa hitung ulang tarif berjalan.
+3. Retur SUDAH punya snapshot DPP/PPN beku per baris saat complete:
+   `SalesReturnItem.returnDpp/returnVat/sourceTaxRate` (schema
+   :1594-1618; diisi onSalesReturnCompleted dalam tx + guard kumulatif
+   ≤ DPP/PPN faktur asal, return-snapshot.ts). Pengurang komisi wajib
+   membaca snapshot ini — dilarang hitung ulang dari `cost` (HPP, bukan
+   DPP; larangan F-004 berlaku penuh di sini) dan dilarang qty × price
+   berjalan untuk baris yang sudah punya snapshot.
+4. Model nota kredit penjualan terpisah (SalesCreditNote) ABSEN
+   (grep `creditNote|SalesCreditNote` src+prisma = 0). "Kredit" dalam
+   vonis ini = retur completed tertaut faktur + pembatalan/koreksi
+   dokumen lewat jalur existing. Dilarang mengarang model nota kredit
+   demi komisi.
+
+### Putusan 1 — Sumber tarif: histori persen per kategori pelanggan, snapshot di faktur
+
+a) Bentuk sumber (mengikat untuk build BOT 3): tarif komisi hidup
+   sebagai **histori bertanggal efektif per CustomerCategory** — baris
+   histori memuat: customerCategoryId, commissionPercent
+   `Decimal(5,2)` (pola presisi tarif repo), effectiveFrom,
+   effectiveTo (null = masih berlaku), dicatat-oleh (createdBy) +
+   createdAt. Satu kategori punya tepat satu persen berlaku pada satu
+   tanggal (rentang tidak boleh tumpang tindih; tumpang tindih =
+   penulisan ditolak berisik, bukan dipilih diam-diam).
+   Alasan bentuk histori, bukan kolom tunggal di CustomerCategory:
+   persen komisi adalah angka uang yang berubah dari waktu ke waktu;
+   kolom tunggal yang ditimpa membuat rekap masa lalu berubah sesudah
+   tarif diganti — persis cacat yang dilarang prinsip snapshot BOT 4.
+   (Kolom tunggal `downPaymentPercent` di CustomerCategory :408 adalah
+   pola existing untuk persen operasional, BUKAN preseden untuk angka
+   yang mengunci hak uang historis.)
+b) Pemilik data: pemegang izin master kategori existing —
+   `create_customers` (tambah baris histori) / `edit_customers`
+   (tutup/ubah rentang) di master.actions.ts:2693/2728. Peran penjual/
+   karyawan TIDAK boleh menulis tarif atas komisinya sendiri
+   (pemisahan tugas). Vonis ini TIDAK menciptakan izin katalog baru;
+   bila BOT 3 menilai histori tarif perlu izin terpisah, wajib minta
+   vonis izin BOT 4 dulu — dilarang meminjam izin laporan/payroll.
+c) Tanggal acuan tarif: **tanggal faktur** (SalesInvoice.date), bukan
+   tanggal lunas, bukan tanggal baca rekap. Tarif yang berlaku =
+   baris histori dengan effectiveFrom ≤ tanggal faktur < effectiveTo
+   (effectiveTo null = terbuka). Kategori pelanggan yang dipakai =
+   kategori pelanggan faktur itu; pelanggan tanpa kategori
+   (customerCategoryId null) = tarif 0 jujur (masuk makna notice
+   "tarif belum diatur"), TIDAK ditebak ke kategori lain.
+d) Snapshot wajib (syarat inti BOT 3): saat faktur mencapai status
+   yang membuatnya masuk basis (transisi ke paid) ATAU saat loader
+   pertama kali membaca faktur itu — pilih SATU titik dan kunci di
+   tes: persen terpilih + customerCategoryId acuan dibekukan di
+   SalesInvoice (snapshot), dan rekap membaca snapshot itu. Edit
+   histori tarif / pindah kategori pelanggan sesudahnya TIDAK mengubah
+   rekap masa lalu. Faktur lama sebelum snapshot ada (kolom kosong):
+   loader meneruskan 0 jujur berlabel makna notice existing — dilarang
+   backfill tebakan dari histori berjalan.
+   Catatan jujur: titik snapshot mengubah angka bila tarif diganti di
+   antara tanggal faktur dan tanggal lunas. Vonis memilih tanggal
+   faktur sebagai acuan (hak komisi lahir dari penjualan, bukan dari
+   kas masuk) dan snapshot membekukannya; titik penulisan snapshot
+   boleh di paid agar faktur draft/batal tidak membekukan apa pun,
+   tetapi NILAI yang dibekukan wajib hasil resolusi per tanggal
+   faktur, bukan tarif berlaku pada hari lunas.
+
+### Putusan 2 — Basis hitung: DPP tanpa PPN
+
+a) Basis komisi per faktur = **DPP = grandTotal − taxAmount** dari
+   snapshot faktur itu sendiri, safeRound sen (pola safeSubtract/
+   safeRound `src/lib/utils/math` existing). Faktur tanpa PPN
+   (taxAmount 0) → basis = grandTotal penuh. Dilarang menurunkan DPP
+   dari tarif PPN master berjalan, dilarang memakai subtotal mentah
+   (belum dikurangi diskon), dilarang `Number()` mentah atas Decimal.
+b) Dasar (kebijakan internal, dinyatakan jujur — BUKAN kewajiban
+   regulasi): PPN keluaran adalah pajak yang dipungut penjual untuk
+   negara atas nama pembeli; PPN bukan nilai ekonomi penjualan dan
+   bukan milik perusahaan. Komisi dihitung atas nilai penjualan bersih
+   pajak agar penjual tidak dibayar persen atas uang negara.
+   Tidak ada UU/PMK yang mengatur basis komisi penjualan internal —
+   dilarang mengutip regulasi pajak sebagai dasar putusan ini.
+c) Dampak sen (contoh mengikat untuk tes BOT 6): faktur DPP
+   11.000.000 + PPN 12% 1.320.000 = grandTotal 12.320.000, tarif 2%:
+   komisi benar = 2% × 11.000.000 = **220.000**; rumus lama
+   (grandTotal) = 246.400; selisih 26.400 per faktur. Selisih ini
+   persis PPN × tarif — bukan soal pembulatan.
+d) Konsekuensi build: field basis builder berubah makna dari
+   grandTotal menjadi DPP. Nama field rekap (`paidBase`) dan label UI
+   PR #435 ("Basis Faktur Lunas") wajib diselaraskan BOT 2/BOT 3 agar
+   tidak menjanjikan grandTotal: basis yang ditampilkan = DPP faktur
+   lunas. Mengganti angka tanpa mengganti label = temuan BOT 6.
+
+### Putusan 3 — Retur/kredit mengurangi basis; diakui di masa retur
+
+a) Retur penjualan **completed** yang tertaut ke faktur asal
+   (SalesReturn.salesInvoiceId terisi, status completed) MENGURANGI
+   basis komisi penjual faktur asal sebesar Σ `returnDpp` snapshot
+   baris retur itu (sen-aman). Retur draft/cancelled/tidak tertaut
+   faktur: pengurang 0 (tanpa faktur asal tidak ada hak yang lahir;
+   jurnal retur existing pun melewati kaki harga/piutang untuk yang
+   tak tertaut — accounting.hook.ts:1200-1205).
+b) Periode pengakuan pengurang: **masa tanggal retur** (SalesReturn
+   .date masa retur completed itu dibaca) — BUKAN restate masa faktur.
+   Rekap masa lalu yang sudah dibaca/dibagikan tidak ditulis ulang;
+   pengurang tampil sebagai pengurang pada masa retur berjalan,
+   teratribusi ke penjual snapshot faktur asal (bukan penjual/dokumen
+   returnya — SalesReturn tidak punya salesEmployeeId). Bila masa
+   retur membuat neto penjual negatif pada masa itu, tampil negatif
+   apa adanya (jangan clamp 0 diam-diam); label kolom wajib membuat
+   pembaca paham ada pengurang retur (kata persis = BOT 2 mengikuti
+   field builder, tanpa karang makna "utang").
+c) Plafon: kumulatif pengurang per faktur tidak boleh melewati DPP
+   faktur asal — sudah ditegakkan guard kumulatif existing saat
+   complete (checkCumulativeReturnCap, toleransi 0,01). Loader komisi
+   TIDAK menegakkan ulang dan TIDAK memotong diam-diam; selisih di
+   luar snapshot (baris legacy returnDpp null) = fallback hitung-ulang
+   qty × price beku baris dengan label `legacy` di read-model
+   (konsisten F-004), dan `cost` tetap dilarang.
+d) Refund kas / CustomerCredit / kelebihan bayar BUKAN pengurang
+   komisi (itu saldo dana pelanggan, bukan pembalikan penjualan).
+   Pembatalan faktur: faktur cancelled memang tidak pernah masuk
+   basis (loader paid-only) — tidak ada pengurang tambahan.
+e) Estimasi pengurang memakai persen snapshot faktur asal (putusan
+   1d), bukan tarif kategori berjalan saat retur.
+
+### Yang TIDAK berubah (mengikat)
+
+- Rekap tetap INFORMATIF: bukan utang komisi, bukan dasar jurnal/
+  pembayaran/payroll. Tahap 3 jurnal Dr Beban Komisi / Cr Utang
+  Komisi tetap DITUNDA-TEKNIS (BR-KOM-07); vonis ini hanya membuka
+  tarif nyata untuk rekap informatif. Pajak atas penghasilan komisi
+  (PPh 21 karyawan dst) TIDAK diputus di sini — itu urusan tahap
+  pembayaran/payroll dengan vonis terpisah; dilarang menyimpulkannya
+  dari vonis ini.
+- Basis hanya faktur status `paid` (keputusan tahap 2 existing);
+  faktur partial/posted belum masuk. Mengubah basis lunas = vonis
+  baru, bukan tafsir loader.
+- Notice verbatim existing tetap; persen 0 tetap berarti tarif belum
+  diatur (termasuk kategori null / snapshot kosong), bukan "hak nol".
+
+### Syarat build
+
+BOT 3 (backend, sesudah vonis ini; koordinasi schema sebelum migrasi):
+1. Model histori tarif per kategori + resolusi per tanggal faktur +
+   snapshot persen/kategori di SalesInvoice (putusan 1); penulisan
+   lewat master kategori berizin create/edit_customers existing;
+   rentang tumpang tindih ditolak.
+2. Loader: basis = grandTotal − taxAmount snapshot per faktur;
+   query kedua retur completed dalam masa (Σ returnDpp per faktur
+   asal → penjual snapshot faktur asal) sebagai pengurang masa retur;
+   dilarang N+1 dan dilarang hitung ulang PPN.
+3. Builder: terima basis DPP + baris pengurang retur berlabel; jaga
+   urut/tie-break existing; ember unattributed tetap tanpa estimasi
+   (pengurang retur atas faktur tanpa penjual masuk ember sebagai
+   pengurang basis ember, tetap tanpa estimasi — sebut eksplisit di
+   tes).
+BOT 2 (frontend): selaraskan label basis menjadi DPP (putusan 2d);
+tampilkan pengurang retur dari field builder apa adanya; TETAP tanpa
+input persen, tanpa persen turunan (estimasi/basis), tanpa aksi bayar.
+BOT 6 (QA): falsifikasi di bawah atas head BOT 3/BOT 2.
+BOT 5: tidak ada perubahan workflow penjualan; atribusi penjual
+snapshot existing tidak disentuh.
+
+### Falsifikasi wajib BOT 6 (MERAH bila penjaga dicabut/dimutasi)
+
+KOM-1. Tarif diganti sesudah faktur terbit: histori kategori diubah
+  (persen baru effectiveFrom sesudah tanggal faktur) → rekap masa
+  faktur lama TIDAK berubah (snapshot). Berubah = MERAH.
+KOM-2. Basis PPN: faktur grandTotal 12.320.000, taxAmount 1.320.000,
+  tarif snapshot 2% → estimasi 220.000 persis. Keluar 246.400
+  (basis grandTotal) = MERAH.
+KOM-3. Retur mengurangi di masa retur: faktur lunas masa M (DPP
+  11.000.000, tarif 2%), retur completed masa M+1 returnDpp snapshot
+  1.000.000 → masa M tetap 220.000; masa M+1 memuat pengurang basis
+  1.000.000 dan pengurang estimasi 20.000 pada penjual faktur asal.
+  Pengurang muncul di M / tidak muncul sama sekali / clamp 0 = MERAH.
+KOM-4. Retur draft/cancelled/tak tertaut + baris retur memakai `cost`
+  sebagai DPP → pengurang wajib 0 / snapshot yang dipakai; pengurang
+  ≠ 0 dari jalur itu = MERAH.
+KOM-5. Pelanggan tanpa kategori atau histori belum berlaku pada
+  tanggal faktur → persen 0 jujur + makna notice; loader menebak
+  tarif kategori lain/hari ini = MERAH.
+KOM-6. UI tetap tanpa input persen, tanpa kolom persen turunan,
+  tanpa tombol bayar/posting/jurnal (melanjutkan AC-KOM-3/6 spec
+  F-053-S atas permukaan tarif nyata).
+
+### Dasar & label bukti
+
+- TERVERIFIKASI-KODE: semua rujukan berkas:baris di atas atas
+  origin/main a8185d95.
+- KEBIJAKAN INTERNAL (bukan regulasi): pilihan DPP sebagai basis,
+  acuan tanggal faktur, pengurang di masa retur, bentuk histori —
+  keputusan akuntansi internal BOT 4. Tidak ada klaim kepatuhan
+  pajak yang dibuat vonis ini; benchmark Accurate/Zahir (F-016:
+  persen per golongan/tabel) hanya pembanding kemampuan produk.
+- BUTUH-VONIS lanjutan (belum diputus, jangan dibangun): tahap 3
+  jurnal/bayar komisi + perlakuan PPh atas komisi; izin terpisah
+  histori tarif bila BOT 3 mengusulkan.
+
+Pemilik berikutnya: BOT 1 putus urutan build (histori+snapshot BOT 3
+dulu, label DPP BOT 2 menyusul head itu); BOT 3 rancang skema histori
++ snapshot (koordinasi schema dulu); BOT 2 selaraskan label sesudah
+kontrak loader final; BOT 6 acceptance KOM-1..6.
