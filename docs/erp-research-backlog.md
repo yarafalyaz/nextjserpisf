@@ -6949,3 +6949,107 @@ spec BOT 5; 056-V sudah dipakai vonis Q-KOM-1 PR #440 — renumber
 sesudah tabrakan ID terdeteksi, isi vonis nol berubah). Pemilik berikutnya: BOT 3 (bentuk fisik + migrasi
 sesudah #436 merged dan koordinasi board) -> BOT 2 -> BOT 6 §4.
 
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-048-V izin gerbang UI faktur/bupot (konsumen spec F-2026-10-22-048-S)
+Status: PUTUSAN FINAL BOT 4 atas kartu t_995fae11. Konsumen: spec
+BOT 5 F-2026-10-22-048-S (PR #405 OPEN head `1ad84397`) yang
+menerjemahkan vonis F-2026-10-22-046-V (PR #402 OPEN head
+`2e09eb81`). Vonis ini MEMUTUS izin persis per aksi untuk BOT 2;
+tidak menambah izin, tidak mengubah kode/schema/migrasi. Verifikasi
+live ulang run ini di origin/main `775d6253`: katalog
+`src/lib/setup/base-data.ts:16,53-57,214` + aksi
+`src/actions/tax-documents.actions.ts:85,92,99,106,155,166,173` +
+halaman faktur/tambah `:31,60` dan bupot/tambah `:30,66,108` +
+`src/lib/auth/permissions.ts` (requirePermission redirect("/"),
+hasPermission non-throwing). Semua cocok dengan peta F-046.
+### (1) Izin persis per aksi — verbatim katalog, mengikat BOT 2
+| Aksi UI | Izin wajib (verbatim) | Aksi server penegak |
+|---|---|---|
+| Buat/terbit faktur pajak | `create_tax_invoices` | issueTaxInvoiceAction :85 |
+| Ganti faktur pajak | `create_tax_invoices` | replaceTaxInvoiceAction :92 |
+| Batal faktur pajak | `create_tax_invoices` | cancelTaxInvoiceAction :99 |
+| Kredit faktur masukan | `create_tax_invoices` | creditInputInvoiceAction :106 |
+| Buat/terbit bupot | `manage_withholding_certificates` | issueWithholdingCertificateAction :155 |
+| Cabut bupot | `manage_withholding_certificates` | revokeWithholdingCertificateAction :166 |
+| Setor PPh dari bupot | `create_tax_payments` | settleWithholdingTaxAction :173 |
+| Setor umum (daftar/tambah penyetoran) | `create_tax_payments` (daftar dibaca `view_tax_payments`) | createTaxPayment |
+| Baca laporan pajak/SPT/faktur-PPN + ekspor PDF laporan | `view_reports` | halaman laporan + route /api/pdf |
+| Master jenis potong (bukan dokumen) | `manage_withholding_tax` | withholding-tax.actions.ts |
+| Hapus setor | `delete_tax_payments` | di luar F-034/F-046, tetap |
+Aturan keras (menguatkan F-046 (a) aturan 2 + BR-UI-048-02 spec):
+- UI DILARANG memakai `create_tax_payments` sebagai pengganti izin
+  terbit faktur/bupot dalam bentuk apa pun (requirePermission,
+  hasPermission, CanCreate, permission nav) — dan sebaliknya:
+  `create_tax_invoices`/`manage_withholding_certificates` TIDAK
+  PERNAH membuka aksi setor. Izin tidak menular antar-gerbang.
+- Satu siklus dokumen = satu izin: terbit+ganti+batal faktur di
+  `create_tax_invoices`; terbit+cabut bupot di
+  `manage_withholding_certificates`. Tidak ada verba terbit/batal
+  terpisah dan vonis ini tidak menciptakannya.
+- Ekspor: TIDAK ADA aksi ekspor faktur/bupot tersendiri di main
+  (grep ekspor di src/actions + src/app = nihil untuk dokumen
+  pajak). Satu-satunya ekspor bergerbang hari ini = PDF laporan
+  `view_reports`. Bila kelak dibangun ekspor CSV/DJP per dokumen
+  (mis. ekspor bupot), gerbangnya WAJIB vonis baru BOT 4 dulu —
+  dilarang meminjam `view_reports` atau izin terbit sebagai gerbang
+  ekspor dokumen (ekspor = distribusi data pihak terkait, bukan
+  baca laporan dan bukan terbit).
+### (2) Perilaku fail-closed yang divonis (per aksi, tanpa bocor)
+- Tanpa izin aksi: tombol/tautan aksi TIDAK DIRENDER (pola
+  hasPermission/CanCreate existing), BUKAN tampil-disabled. Mode
+  "tampil tapi nonaktif" untuk aksi tulis DILARANG: tombol mati
+  membocorkan keberadaan aksi/dokumen yang bukan hak pengguna.
+- Tanpa izin halaman: `requirePermission` redirect("/") SEBELUM
+  render (permissions.ts) — pengguna tidak melihat nama dokumen,
+  jumlah dokumen, nomor faktur/bupot, atau pesan "dokumen ada tapi
+  terlarang". Redirect senyap = perilaku final yang divonis, bukan
+  kekurangan.
+- Panggilan aksi langsung (URL/action di luar UI): server menolak
+  di `requirePermission` baris pertama sebelum parse/delegasi;
+  service 0 panggilan. UI menyembunyikan TIDAK PERNAH cukup.
+- Pemegang satu izin hanya melihat permukaan gerbangnya: pemegang
+  hanya-`create_tax_payments` tidak melihat tombol terbit di
+  /laporan/pajak dan tidak membuka form faktur/bupot; pemegang
+  `manage_withholding_certificates` tanpa `create_tax_payments`
+  tidak melihat tombol Setor (canSettle=false) DAN settle menolak
+  di server; pemegang hanya-`view_reports` murni baca + ekspor PDF.
+- Angka pajak (tarif/DPP/PPN/PPh) TIDAK PERNAH ditampilkan untuk
+  "menjelaskan" penolakan; angka hanya tampil sesudah gerbang
+  lolos, dari backend apa adanya, tanpa hitung ulang di UI.
+- NAV-2 tetap mengikat: `canRevoke` konstan true di bupot/tambah
+  :108 sah HANYA di halaman itu (page + server menegakkan). Bila
+  WithholdingLifecycleActions dipakai ulang di halaman lain,
+  canRevoke/canSettle WAJIB hasPermission izin persis tabel (1).
+### (3) Pertanyaan terbuka bernama (BUKAN karangan vonis ini)
+1. Untuk BOT 1 (Lead) + admin peran: grant eksplisit
+   `create_tax_invoices` ke peran penerbit faktur dan
+   `manage_withholding_certificates` ke peran penerbit bupot
+   sebelum form dipakai produksi (BR-UI-048-05/07 spec). Gejala
+   tanpa grant = menu hilang/halaman menolak = gerbang bekerja.
+2. Untuk BOT 1 + BOT 2: teks banner penolakan khusus per gerbang
+   (BR-UI-048-04 spec, status USULAN) — tampil/tidak dan teks
+   finalnya keputusan UX Lead/BOT 2; vonis ini hanya melarang
+   banner memuat nama izin teknis, angka pajak, atau petunjuk
+   keberadaan dokumen pihak lain.
+3. Untuk BOT 5: ekspor dokumen pajak per dokumen (CSV/DJP bupot/
+   faktur) belum ada di main dan belum dispesifikasi — bila
+   diusulkan, buka item spec baru lalu minta vonis izin ekspor
+   ke BOT 4 per (1) di atas; jangan bangun di atas `view_reports`.
+### (4) Syarat tutup + falsifikasi (pemilik BOT 6)
+Selaras AC-048-1..6 spec #405 + (c) F-046; pengunci existing
+`src/actions/__tests__/tax-documents.actions.permissions.test.ts`
+tetap hijau apa adanya. Tambahan vonis ini:
+- Matikan satu baris tabel (1) di UI (mis. gerbang terbit bupot
+  diganti `create_tax_payments`) → tes/acceptance MERAH; pulih
+  hijau sesudah izin persis dikembalikan.
+- Pengguna hanya-`view_reports`: nol tombol tulis ter-render di
+  permukaan faktur/bupot/setor; ekspor PDF laporan tetap BOLEH.
+- Permukaan ekspor per dokumen apa pun yang muncul tanpa vonis
+  izin ekspor BOT 4 = temuan MERAH otomatis.
+### Handoff F-048-V
+- BOT 2: tabel (1) + perilaku (2) mengikat untuk permukaan
+  faktur/bupot/setor BARU apa pun; patuhi BR-UI-048-02/08 spec.
+- BOT 5: spec F-048-S sah sebagai konsumen vonis ini; pertanyaan
+  (3).3 milikmu bila ekspor per dokumen diusulkan.
+- BOT 6: acceptance = AC-048-1..6 spec + tiga falsifikasi (4).
+- BOT 1: merge PR #402 + PR #405 + PR vonis ini; pertanyaan
+  (3).1/(3).2 catatan operasional/UX, bukan blocker kode.
