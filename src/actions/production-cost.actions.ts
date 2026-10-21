@@ -14,6 +14,7 @@ import {
   OVERHEAD_DRIVER_LABELS,
 } from "@/lib/validations/production-cost.schemas"
 import { applyProductionCostDelta } from "@/lib/services/production-cost.service"
+import { closedWorkOrderError } from "@/lib/services/timesheet-context"
 import { assertJobCostMutable } from "@/lib/services/job-closeout.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { safeMultiply, safeRound } from "@/lib/utils/math"
@@ -266,7 +267,7 @@ export async function pullLaborCostFromTimesheets(
   try {
     const user = await requirePermission("manage_production_costs")
     await assertPeriodOpen(new Date())
-    if (!Number.isFinite(ratePerHour) || ratePerHour < 0) {
+    if (!Number.isFinite(ratePerHour) || ratePerHour <= 0) {
       return { success: false, error: "Tarif per jam tidak valid." }
     }
 
@@ -300,8 +301,10 @@ export async function pullLaborCostFromTimesheets(
       return { success: false, error: "Tidak ada timesheet pada proyek ini." }
     }
 
+    // Anti-dobel GLOBAL (F-2026-10-21-019): satu timesheet tidak pernah
+    // menjadi dua ProductionCost, lintas jalur proyek/PO maupun jalur WO.
     const alreadyPulled = await prisma.productionCost.findMany({
-      where: { productionOrderId, sourceTimesheetId: { not: null } },
+      where: { sourceTimesheetId: { in: timesheets.map((t) => t.id) } },
       select: { sourceTimesheetId: true },
     })
     const pulledSet = new Set(alreadyPulled.map((c) => c.sourceTimesheetId))
@@ -347,6 +350,92 @@ export async function pullLaborCostFromTimesheets(
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
     console.error("[pullLaborCostFromTimesheets]", getErrorMessage(e) || e)
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
+  }
+}
+
+/**
+ * F-2026-10-21-019 (jalur W): pull labor langsung dari timesheet konteks
+ * perintah kerja (workOrderId pada Timesheet) ke ProductionCost WO, TANPA
+ * ProductionOrder — menutup lubang WO non-proyek yang jalur proyek di atas
+ * tolak. Manual per WO (bukan otomatis saat WO completed), tarif snapshot
+ * dari pemanggil (sistem tidak membaca payroll di sini), idempoten GLOBAL
+ * per sourceTimesheetId: tarikan kedua menghasilkan 0 baris baru. Tanpa
+ * rollup PO dan tanpa jurnal baru — aktual WO terbaca dari
+ * ProductionCost.workOrderId oleh laporan beban WO existing.
+ */
+export async function pullLaborCostFromWorkOrderTimesheets(
+  workOrderId: number,
+  ratePerHour: number,
+) {
+  try {
+    const user = await requirePermission("manage_production_costs")
+    await assertPeriodOpen(new Date())
+    if (!Number.isFinite(ratePerHour) || ratePerHour <= 0) {
+      return { success: false, error: "Tarif per jam tidak valid." }
+    }
+
+    const wo = await prisma.workOrder.findUnique({
+      where: { id: workOrderId },
+      select: { id: true, status: true },
+    })
+    if (!wo) return { success: false, error: "Perintah kerja tidak ditemukan" }
+    const closed = closedWorkOrderError(wo.status, "ditarik")
+    if (closed) return { success: false, error: closed }
+
+    const timesheets = await prisma.timesheet.findMany({
+      where: { workOrderId },
+      select: { id: true, hours: true, date: true, description: true },
+      orderBy: { date: "asc" },
+    })
+    if (timesheets.length === 0) {
+      return { success: false, error: "Tidak ada timesheet pada perintah kerja ini." }
+    }
+
+    let totalAdded = 0
+    let createdCount = 0
+    await prisma.$transaction(async (tx) => {
+      // Dibaca ulang di dalam transaksi: semesta idempoten per-timesheet
+      // global (lintas jalur proyek/WO), bukan per perintah.
+      const alreadyPulled = await tx.productionCost.findMany({
+        where: { sourceTimesheetId: { in: timesheets.map((t) => t.id) } },
+        select: { sourceTimesheetId: true },
+      })
+      const pulledSet = new Set(alreadyPulled.map((c) => c.sourceTimesheetId))
+      for (const t of timesheets) {
+        if (pulledSet.has(t.id)) continue
+        const hours = Number(t.hours)
+        const amount = safeRound(safeMultiply(hours, ratePerHour, 0), 2)
+        if (amount <= 0) continue
+        await tx.productionCost.create({
+          data: {
+            productionOrderId: null,
+            workOrderId,
+            category: "labor",
+            description: t.description ?? `Tenaga kerja timesheet #${t.id}`,
+            hours,
+            rate: ratePerHour,
+            amount,
+            sourceTimesheetId: t.id,
+            postedAt: new Date(),
+            createdBy: Number(user.id),
+          },
+        })
+        createdCount += 1
+        totalAdded = safeRound(totalAdded + amount, 2)
+      }
+    })
+
+    if (createdCount > 0) {
+      await logActivity("create", "ProductionCost", workOrderId,
+        `Menarik ${createdCount} timesheet perintah kerja → biaya tenaga kerja Rp${totalAdded} ke perintah kerja #${workOrderId}`,
+      )
+      revalidatePath(`/produksi/perintah-kerja/${workOrderId}`)
+    }
+    return { success: true, added: totalAdded, count: createdCount }
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e
+    console.error("[pullLaborCostFromWorkOrderTimesheets]", getErrorMessage(e) || e)
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") }
   }
 }
