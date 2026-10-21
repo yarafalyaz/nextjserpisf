@@ -144,6 +144,39 @@ describe("buildProjectBudget — F-2026-10-21-030 fase b", () => {
   })
 })
 
+describe("buildProjectBudget perStageRealized — F-030(c) kontrak BR-09", () => {
+  it("semua tahap eksplisit belum-terukur (null+false), urut sortOrder tahap", () => {
+    const r = buildProjectBudget(
+      base({
+        stages: [
+          { id: 12, name: "Pengerjaan", sortOrder: 2 },
+          { id: 11, name: "Persiapan", sortOrder: 1 },
+        ],
+        items: [item({})],
+      }),
+    )
+    expect(r.perStageRealized).toEqual([
+      { projectStageId: 11, stageName: "Persiapan", realized: null, hasStageAllocation: false },
+      { projectStageId: 12, stageName: "Pengerjaan", realized: null, hasStageAllocation: false },
+    ])
+  })
+
+  it("rekonsiliasi: Σ per tahap teralokasi + belum-teralokasi = realizedTotal (0.00)", () => {
+    const r = buildProjectBudget(base({ items: [item({})] }))
+    const allocated = r.perStageRealized.reduce((s, x) => s + (x.realized ?? 0), 0)
+    expect(allocated + r.unallocatedRealized).toBe(r.realizedTotal)
+    expect(r.unallocatedRealized).toBe(10_000_000)
+  })
+
+  it("tahap tanpa stage master tetap muncul belum-terukur; proyek tanpa tahap = []", () => {
+    const empty = buildProjectBudget(base({ stages: [], items: [] }))
+    expect(empty.perStageRealized).toEqual([])
+    const r = buildProjectBudget(base({ items: [item({ projectStageId: 99 })] }))
+    expect(r.perStageRealized.map((s) => s.projectStageId)).toEqual([11, 12])
+    expect(r.perStageRealized.every((s) => s.realized === null && !s.hasStageAllocation)).toBe(true)
+  })
+})
+
 describe("evaluateBudgetLock — BR-02/BR-13 (A3)", () => {
   const okProject = { contractAmount: 10_000_000, budgetLockedAt: null, projectStatus: "in_progress" }
   const okItems = [item({})]
