@@ -299,3 +299,610 @@ Belum ada / parsial (bukti pencarian dijalankan):
 - Pengingat termin otomatis ke pelanggan: domain (k) notifikasi, sesudah jadwal terbaca.
 
 Run berikutnya: domain (e) akuntansi & pajak Indonesia lanjutan.
+
+---
+
+## 2026-10-21 — Charter Lead ERP Research (patokan Zahir & Accurate)
+
+Profil `lead-erp-research` kini permanen sebagai pemimpin riset ERP
+Silengkap. Patokan benchmark: Accurate Online (accurate.id, help.accurate.id)
+dan Zahir Accounting (zahiraccounting.com, help.zahironline.com), regulasi
+DJP/Coretax untuk pajak. Metode, format entri, rotasi domain (a)-(j), dan
+larangan tercatat di skill `erp-research-lead` + `references/benchmark-zahir-accurate.md`.
+Riset menghasilkan gap terverifikasi + handoff; implementasi oleh
+leadbackend/leadfrontend, vonis uang/pajak oleh lead-accountantax.
+
+Fokus berikutnya: domain (e) akuntansi & pajak Indonesia lanjutan —
+kelanjutan P0 faktur pajak keluaran/masukan + e-Bupot dari run (a)
+2026-10-20; cek status implementasi item (a) terbuka sebelum gap baru.
+
+---
+
+## 2026-10-21 — Status item terbuka run (a) 2026-10-20 (verifikasi lead-erp-research)
+
+Verifikasi grep/schema live 2026-10-21 09:21 WIB. Item run (a) lama memakai
+label P0-1/P0-2/P1-1/P1-2/P2-1 tanpa ID F-*; ID diberikan sekarang agar bisa
+di-handoff per kontrak leadbackend.
+
+- **P0-1 → F-2026-10-21-001**: TERIMPLEMENTASI PARSIAL lapis nomor.
+  `SalesInvoice.taxInvoiceNumber` (schema:1163-1165) + validasi bersama
+  `src/lib/validations/tax-invoice.schemas.ts` + laporan SPT menampilkan nomor
+  e-Faktur bila ada, fallback nomor internal (`vat-invoices.ts:141-147`).
+  Tetap ABSEN: model `TaxInvoice` (grep `^model TaxInvoice` = 0), kode
+  transaksi, tanggal faktur pajak, masa pajak, status DJP, pengganti/batal,
+  ekspor XML Coretax (grep = 0), identitas pajak terstruktur Customer
+  (nitku/statusPkp grep = 0). Butuh putusan accountant: YA (kode transaksi,
+  perlakuan faktur pengganti/batal, DPP nilai lain).
+- **P0-2 → F-2026-10-21-002**: TERIMPLEMENTASI PARSIAL lapis nomor.
+  `VendorBill.taxInvoiceNumber` (schema:1563-1565) terpisah dari
+  `vendorInvoiceNumber`. Tetap ABSEN: masa kredit terpisah dari tanggal
+  tagihan, flag dapat-dikreditkan, keunikan (vendorId, nomor) — SPT masukan
+  masih membaca dokumen tagihan, bukan dokumen faktur pajak. Butuh putusan
+  accountant: YA (aturan masa pengkreditan + flag tidak dapat dikreditkan).
+- **P1-1 → F-2026-10-21-003**: PARSIAL. Read-model rekap bukti potong +
+  ekspor CSV sudah ada (`withholding-certificates-data.ts`, tes berlabel
+  F-35a); model `WithholdingCertificate` tetap ABSEN (grep = 0), nomor bupot
+  masih field manual `SalesPayment.withholdingCertificateNo`. Butuh putusan
+  accountant: YA (pasal + kode objek pajak + tarif snapshot per jenis).
+- **P1-2 (retur pajak) → F-2026-10-21-004**: belum terverifikasi ulang run
+  ini; status terakhir ABSEN pajak. Verifikasi masuk run (a) lanjutan.
+- **P2-1 (setor pajak) → F-2026-10-21-005**: belum terverifikasi ulang run
+  ini; status terakhir PARSIAL. Verifikasi masuk run (a) lanjutan.
+
+Fokus berikutnya tetap: (a) akuntansi & pajak Indonesia lanjutan —
+selesaikan desain inti F-2026-10-21-001/002/003 sesudah vonis accountant,
+bukan tambah gap baru dulu.
+
+---
+
+## VONIS ACCOUNTANT 2026-10-21 — F-2026-10-21-001/002/003 (FINAL)
+
+Pemutus: `lead-accountantax`. Sifat: final untuk desain angka/pajak; backend
+eksekusi mesin/Prisma/API, frontend tampil. Bukti repo live: model
+`TaxInvoice`/`WithholdingCertificate` = 0; `SalesInvoice.taxInvoiceNumber`
+schema:1165, `VendorBill.taxInvoiceNumber` schema:1565,
+`SalesPayment.withholdingCertificateNo` schema:1293; SPT fallback nomor
+internal `vat-invoices.ts:140-147`; rekap bupot read-model
+`withholding-certificates-data.ts` memakai tarif master berjalan.
+Sumber: UU PPN Pasal 9(2),(8),(9) & 13(5)(6); PMK-131/2024; PER-1/PJ/2025;
+PER-11/PJ/2025; siaran DJP KT-08_2025 (kredit beda masa).
+
+### F-001 Faktur pajak keluaran (TaxInvoice)
+
+**Model wajib.** `TaxInvoice` satu dokumen pajak, bukan field tempel:
+arah (`out`/`in`), `transactionCode` (string 2 digit simpan `01`..`10`;
+Coretax tampil `010` hanya pad untuk kode 10 — simpan nilai kanonik `10`),
+nomor seri penuh, tanggal faktur, masa pajak terbit (`YYYY-MM` dari
+tanggal faktur), DPP faktur, tarif PPN efektif, jumlah PPN, status DJP
+enum (`draft|approved|rejected|replaced|cancelled`), tautan dokumen
+sumber (`salesInvoiceId` keluaran / `vendorBillId` masukan), tautan
+pengganti (`replacesId` self-FK nullable, unik), alasan
+pengganti/batal, snapshot NPWP/NIK + nama lawan + NITKU bila ada,
+payload XML Coretax + hasil impor (hash file, waktu impor, pesan DJP).
+Unik: `(direction, taxInvoiceNumber)` global untuk nomor terbit DJP
+non-null. Tanggal faktur BUKAN tanggal invoice komersial; masa SPT
+DITURUNKAN dari tanggal faktur, tidak diinput bebas.
+
+**Kode transaksi yang didukung Silengkap** (PER-11/PJ/2025, 10 kode).
+Default sistem untuk penjualan normal ERP: `04` — sejak PMK-131/2024
+penyerahan BKP non-mewah + semua JKP memakai DPP nilai lain 11/12 ×
+tarif nominal 12% (efektif 11%). Aturan pilih, urut prioritas pertama
+cocok menang: (1) pemungut instansi pemerintah → `02`; pemungut lain /
+Pasal 32A UU KUP → `03`. (2) fasilitas dibebaskan → `08`; tidak dipungut
+/DTP → `07`. (3) aktiva Pasal 16D → `09` (hanya dari modul disposal
+aset, bukan invoice penjualan biasa). (4) besaran tertentu Pasal 9A →
+`05` hanya bila jenis usaha/transaksi tenant terdaftar PMK besaran
+tertentu. (5) VAT-refund turis → `06` hanya tenant toko retail peserta.
+(6) tarif selain Pasal 7(1) UU PPN → `10`. (7) DPP nilai lain PMK
+tersendiri (termasuk PMK-131) → `04`. (8) sisanya DPP penuh tarif umum
+(BKP mewah objek PPnBM) → `01`. Kode `01` BUKAN default lagi; `04`
+BUKAN untuk BKP mewah.
+DPP nilai lain berlaku: SEMUA penyerahan BKP selain tergolong mewah +
+semua JKP kena PPN (PMK-131), dan DPP nilai lain lain yang diatur PMK
+tersendiri (mis. LPG tertentu PMK-62/2022). Jurnal tetap dari DPP
+FAKTUR × tarif nominal: Dr Piutang (DPP faktur + PPN), Cr Pendapatan
+sebesar harga jual/penggantian PENUH (bukan DPP 11/12), Cr PPN Keluaran
+= 12% × DPP faktur. Selisih harga jual vs DPP adalah mekanisme tarif,
+bukan diskon/pembulatan — jangan jurnal akun selisih.
+
+**Pengganti & batal.** Jurnal komersial asal TIDAK diubah/dihapus.
+Faktur pengganti: dokumen TaxInvoice baru, nomor seri sama dengan
+digit status pengganti sesuai Coretax, `replacesId` menunjuk faktur
+diganti; faktur lama status `replaced`. SPT: pengganti dilaporkan pada
+MASA FAKTUR DIGANTI (PER-11/PJ/2025) — read-model SPT mengelompokkan
+efektif per rantai: hanya faktur kepala rantai terakhir yang bernilai,
+yang diganti tampil sebagai referensi nol-efek; BUKAN baris DPP/PPN baru
+di masa terbit pengganti. Pembatalan: hanya bila transaksi penyerahan
+batal (bukan salah tulis — itu pengganti); faktur status `cancelled`,
+nomor TIDAK dipakai ulang; efek SPT masa faktur asal dikoreksi lewat
+mekanisme pembetulan masa asal, bukan jurnal baru di masa batal.
+Akuntansi: perubahan DPP/PPN karena pengganti/batal TIDAK menjurnal
+selisih otomatis ke periode berjalan. Bila nilai komersial invoice ikut
+berubah, koreksi lewat dokumen komersial sah (retur/nota kredit/
+reversal jurnal di periode terbuka, `assertPeriodOpen` dalam tx);
+selisih PPN saja dicatat jurnal koreksi PPN di periode terbuka dengan
+memo merujuk nomor faktur pengganti/batal. Pengganti/batal DITOLAK
+sistem bila masa asal sudah terkunci tanpa jalur pembetulan — paksa
+jurnal koreksi, bukan edit faktur lama. Retur BKP/nota pembatalan JKP
+tetap dokumen sendiri; pengganti yang lahir sesudah nota retur
+memperhitungkan nota itu (nilai neto), jangan dobel-kurang di SPT.
+
+### F-002 Faktur pajak masukan
+
+**Masa kredit.** Tambah ke TaxInvoice masukan: `creditPeriod`
+(`YYYY-MM`, masa pengkreditan dipilih), `creditedAt`, enum
+`creditStatus` (`uncredited|credited|not_creditable|expired`).
+Aturan final (UU PPN 9(2) + 9(9), KT-08_2025): default masa kredit =
+masa TANGGAL FAKTUR pemasok; boleh digeser ke masa berikutnya, maks
+**3 masa pajak sesudah masa faktur** (faktur Jan → terakhir Apr),
+sepanjang PPN belum dibebankan sebagai biaya/HPP. Lewat batas →
+`expired`, tidak boleh masuk SPT; klaim hanya lewat jalur restitusi/
+pembetulan sesuai aturan, bukan kredit masa berjalan. Masa kredit
+TIDAK diturunkan dari tanggal VendorBill/tanggal terima barang; tanggal
+terima hanya bukti pendukung. Faktur menyusul sesudah SPT masa faktur
+terbit: kreditkan pada masa terima-faktur bila masih dalam jendela
+(di atas) — JANGAN paksa pembetulan masa faktur hanya karena faktur
+telat diterima; pembetulan masa asal hanya bila faktur memang
+dilaporkan/diganti/dibatalkan pemasok (rantai pengganti ikut F-001).
+VendorBill tanpa nomor faktur pajak valid: PPN vendor TIDAK masuk
+akun PPN Masukan — gabung ke harga perolehan/HPP (Dr persediaan/beban
+termasuk PPN), bukan Dr PPN Masukan.
+
+**Flag tidak dapat dikreditkan.** Enum alasan wajib bila
+`not_creditable` (UU PPN 9(8)): `PRE_PKP` perolehan sebelum pengukuhan
+PKP; `NO_DIRECT_RELATION` tak berhubungan langsung kegiatan usaha;
+`VEHICLE_SEDAN_SW` perolehan/pemeliharaan sedan & station wagon
+(kecuali barang dagangan/disewakan — itu kreditabel); `FOREIGN_USE_PRE_PKP`
+pemanfaatan luar daerah pabean sebelum PKP; `INVALID_INVOICE` faktur
+tak memenuhi Pasal 13(5)(9)/tanpa identitas pembeli; `FOREIGN_INVALID`
+dokumen luar pabean tak memenuhi 13(6); `ASSESSED` ditagih ketetapan
+pajak; `UNREPORTED_FOUND_ON_AUDIT` tak dilaporkan & ditemukan saat
+pemeriksaan (status retrospektif, hanya koreksi); `PRE_PRODUCTION_NON_CAPITAL`
+perolehan selain barang modal sebelum berproduksi (9(2a)); plus
+`BY_POLICY_EXEMPT_OUTPUT` alokasi penyerahan dibebaskan/tidak terutang
+(dihitung pedoman pengkreditan, bukan tebak per faktur).
+Perlakuan GL: `not_creditable` → PPN masuk harga perolehan aset/
+persediaan atau beban periode berjalan (sesuai sifat perolehan), TIDAK
+pernah Dr PPN Masukan. Sebagian kreditabel (campur kena+bebas): simpan
+`creditablePercent Decimal(5,2)` + dasar pedoman; hanya porsi itu Dr
+PPN Masukan, sisa kapitalisasi/beban. Unik `(vendorId, nomor faktur)`
+pada TaxInvoice masukan non-batal; nomor sama vendor beda = faktur
+beda sah. Duplikat kredit (faktur sama dikreditkan 2 masa) = tolak
+keras di service, bukan peringatan.
+
+### F-003 Bukti potong / e-Bupot Unifikasi
+
+**Model.** `WithholdingCertificate` dokumen sendiri: arah (`we_withhold`
+kita potong / `withheld_from_us` dipotong pelanggan), nomor bupot DJP,
+tanggal bupot, masa pajak (`YYYY-MM` dari tanggal potong), identitas
+pihak dipotong (NPWP/NIK + nama snapshot), `withholdingTypeId`, pasal
+enum snapshot (`PPh21|PPh22|PPh23|PPh4(2)|PPh26|PPh15`), `objectCode`
+string (kode objek e-Bupot, mis. seri `24-104-xx` untuk jasa PPh 23,
+`28-409-xx` konstruksi final), DPP bruto snapshot `Decimal(15,2)`,
+tarif snapshot `Decimal(5,2)`, jumlah dipotong, status
+(`draft|issued|revoked`), dokumen sumber (VendorBill/SalesPayment),
+fasilitas (SKB/PP23/DTP + nomor fasilitas nullable).
+`WithholdingTaxType` diperluas: tambah `article`, `objectCode`,
+`accountPayableId` tetap utang PPh, `prepaidAccountId` tetap PPh
+dibayar dimuka. Seed bawaan hanya 2 pasal terbukti dipakai repo
+sekarang: PPh 23 jasa umum tarif 2% (objek per-jenis-jasa PMK-141/2015,
+kode dipilih per jasa — JANGAN satu kode keras untuk semua jasa) dan
+PPh 4(2) konstruksi/final (tarif per kualifikasi 1,75%/2,65%/3,5%/4%/6%
+per kode objek konstruksi berlaku; wajib pilih kode, tarif mengikuti
+kode terpilih). PPh 21 tetap domain payroll (TER), PPh 22/26/15 hanya
+aktif bila tenant aktifkan jenisnya — jangan seed mati.
+
+**Snapshot final.** Bupot lahir menyalin pasal+kode objek+tarif+DPP dari
+jenis terpilih ke dokumen; edit tarif master SESUDAH itu tidak mengubah
+bupot terbit maupun jurnalnya (tarif master berjalan yang dibaca
+`withholding-certificates-data.ts` sekarang = cacat untuk bupot
+terbit — sesudah model ada, rekap membaca snapshot; baris legacy tanpa
+dokumen tetap fallback master dengan label `legacy`). Jurnal tidak
+berubah dari pola berjalan: kita potong vendor Dr Hutang / Cr Utang
+PPh, setor Dr Utang PPh / Cr Kas (`TaxPayment` wajib taut
+`withholdingTypeId`+masa); dipotong pelanggan Dr Kas neto + Dr PPh
+dibayar dimuka / Cr Piutang penuh. Bupot batal = status `revoked` +
+jurnal reversal dokumen sumber, bukan hapus baris. Rekap SPT Masa
+Unifikasi per masa dari `withholdingDate`, bukan tanggal bayar kas.
+
+### Batasan eksekusi backend (mengikat)
+
+1. Migrasi Prisma = skema baru; jalankan jalur migrasi repo, verifikasi
+   `prisma validate` + tidak mengubah kolom berjalan. Field lama
+   `taxInvoiceNumber` dipertahankan sebagai cermin nomor kepala rantai
+   (backfill dari TaxInvoice pertama), bukan sumber kebenaran baru.
+2. Semua mutasi TaxInvoice/WithholdingCertificate: `assertPeriodOpen`
+   dalam tx + idempotency key; akun dari setting/COA aktif, gagal keras.
+3. Uang `Decimal(15,2)`, tarif `Decimal(5,2)`, persen kreditabel
+   `Decimal(5,2)`; tak ada `Number()` mentah di hitung DPP/PPN/PPh.
+4. Test falsifikasi minimum: (a) kode 04 harga 12.000.000 → DPP
+   11.000.000 PPN 1.320.000, pendapatan tetap 12.000.000; (b) pengganti
+   mengubah PPN — SPT masa asal berubah, masa terbit pengganti tidak
+   dobel; (c) faktur masukan bulan ke-4 ditolak `expired`; (d) duplikat
+   (vendor,nomor) ditolak; (e) non-kredit sedan → PPN kapitalisasi,
+   PPN Masukan nol; (f) edit tarif master tidak mengubah bupot terbit.
+5. XML Coretax: impor/ekspor mengikuti skema DJP berjalan; Silengkap
+   TIDAK menerbitkan nomor seri faktur sendiri.
+
+PEMILIK BERIKUTNYA: leadbackend (migrasi+service+test), lalu leadfrontend.
+
+### Verifikasi ulang 004/005 — 2026-10-21 09:33 WIB (lead-erp-research)
+
+- **F-2026-10-21-004 (retur–pajak): naik status ABSEN → PARSIAL, lebih maju
+  dari catatan 2026-10-20.** Potongan PPN retur SUDAH mengurangi SPT pada masa
+  tanggal retur dengan proporsi faktur asal (`vat-invoices-data.ts:182-215`,
+  label F-2026-10-20-61, `computeReturnDeduction`; PPN-retur 0 bila faktur asal
+  tanpa PPN). Tetap ABSEN: dokumen nota retur pajak — `SalesReturn`
+  (schema:1315-1334) & `PurchaseReturn` (schema:1523-1541) tanpa
+  taxInvoiceId/nomorNotaRetur/tanggalNotaRetur; item retur tanpa DPP/PPN
+  snapshot (dihitung ulang dari faktur asal saat laporan dibaca, bukan
+  snapshot saat retur). Risiko SALAH potensial: harga/qty item retur berubah
+  sesudah retur → potongan masa lalu ikut berubah diam-diam saat laporan
+  dibaca ulang. Butuh putusan accountant: YA (snapshot wajib vs hitung-ulang
+  sah; guard kumulatif potongan ≤ DPP/PPN faktur asal; nota retur untuk
+  retur tanpa faktur pajak asal).
+- **F-2026-10-21-005 (setor pajak): tetap PARSIAL, satu koreksi catatan.**
+  `TaxPayment.taxTypeId` → `WithholdingTaxType` SUDAH ada (schema:910-936) —
+  catatan lama "tanpa tautan dokumen masa" tidak tepat untuk jenis potong.
+  Tetap ABSEN: kodeBilling/NTPN terstruktur (grep kodeBilling|ntpn = 0 hasil
+  kode; `reference` teks bebas "SSP/MPN"), masa terstruktur (period string
+  "2026-09" bebas), jenisKewajiban PPN/PPh badan di luar tipe potong,
+  kewajiban−setor per masa. Effort S. Butuh putusan accountant: TIDAK untuk
+  kolom billing/NTPN; YA hanya untuk definisi kewajiban per masa (sumber
+  angka kewajiban: SPT vs jurnal).
+
+---
+
+## 2026-10-21 09:35 WIB — Status domain (b) manufaktur & job costing (verifikasi ulang)
+
+Run 2026-10-20 (b) memakai label P0-1/P0-2/P1-1/P1-2/P2-1 tanpa ID F-*.
+ID diberikan sekarang; status diverifikasi grep live 2026-10-21:
+
+- **(b) P0-1 → F-2026-10-21-006** Variance produksi: TERIMPLEMENTASI laporan.
+  `src/lib/reports/production-variance.ts` + `production-variance-data.ts`
+  ADA (memecah ProductionOrder.variance per komponen). Sisa belum
+  terverifikasi: jurnal disposisi akun selisih saat completed + kartu
+  variance di detail ProductionOrder — cek run (b) berikutnya. Butuh putusan
+  accountant: YA untuk jurnal disposisi (mode standard-costing).
+- **(b) P0-2 → F-2026-10-21-007** Estimasi biaya per job + margin WO:
+  ABSEN terverifikasi — grep `WorkOrderCostEstimate|estimatedCost|budgetCost`
+  di schema+src = 0 model/field (satu-satunya estimatedCost = parameter
+  `warranty-accounting.ts:194`, bukan estimasi job); `SalesInvoice` tetap
+  tanpa workOrderId (hanya projectId/salesOrderId/quotationId). Gap tetap
+  terbuka penuh. Butuh putusan accountant: TIDAK untuk snapshot analitis;
+  YA bila angka dipakai posting.
+- **(b) P1-1 → F-2026-10-21-008** Scrap/yield terstruktur: belum
+  terverifikasi ulang run ini.
+- **(b) P1-2 → F-2026-10-21-009** Tutup job (close-out): belum
+  terverifikasi ulang run ini; berkaitan prasyarat F-2026-10-21-006
+  (disposisi variance).
+- **(b) P2-1 → F-2026-10-21-010** Makan-balik kalibrasi standar: turunan
+  F-2026-10-21-006, sesudah laporan varian terbukti dipakai.
+
+Fokus berikutnya: (c) persediaan & gudang — verifikasi F-2026-10-21-008 +
+inventarisasi opname/transfer/multi-gudang vs Accurate/Zahir.
+
+---
+
+## VONIS ACCOUNTANT 2026-10-21 — F-2026-10-21-004/005/006 (FINAL)
+
+Pemutus: `lead-accountantax`. Final angka/pajak; backend eksekusi
+mesin/Prisma, frontend tampil. Bukti live run ini: `computeReturnDeduction`
+`vat-invoices.ts:83-94` (DPP=qty×price item retur, PPN=DPP×taxAmount/(subtotal−discount)
+faktur asal, tanpa snapshot); loader `vat-invoices-data.ts:182-215` baca ulang
+faktur asal tiap laporan; `SalesReturn` schema:1315 / `PurchaseReturn`
+schema:1523 tanpa kolom nota retur/snapshot; jurnal retur
+`accounting.hook.ts:1169-1172` Dr Retur/Cr Piutang TANPA kaki PPN;
+`TaxPayment` schema:910-936 (taxTypeId ADA, period teks bebas, reference
+teks bebas, billing/NTPN=0); `production-variance.ts` laporan read-only ADA
++ peringatan baris `uncalibrated` tidak boleh ikut jurnal disposisi;
+disposisi berjalan hanya selisih PEMBULATAN `stock-journal.service.ts:650-686`
+(materialExpense ?? cogs, ambang 0,005); `ProductionOrder.variance`
+akumulasi rilis `manufacturing.actions.ts:1246-1269` tanpa jurnal disposisi.
+
+### F-004 Retur–pajak: snapshot WAJIB, hitung-ulang hanya legacy
+
+1. **Snapshot saat retur completed/returned, bukan hitung ulang saat baca.**
+   Di `SalesReturnItem`/`PurchaseReturnItem` bekukan: `returnDpp`,
+   `returnVat` (Decimal 15,2), `sourceTaxRate` efektif (Decimal 5,2),
+   `sourceTaxInvoiceId` (FK TaxInvoice asal bila ada). Rumus snapshot =
+   rumus berjalan: DPP = qty × price beku item; PPN = DPP ×
+   taxAmount/(subtotal−discount) faktur asal, `safeRound` sen; faktur asal
+   taxAmount=0 → PPN-retur 0. Sesudah snapshot, edit harga/qty/master TIDAK
+   mengubah potongan masa lalu. Baris legacy tanpa snapshot: fallback
+   hitung-ulang berjalan DIIZINKAN dengan label `legacy` di read-model,
+   bukan diam-diam dianggap snapshot.
+2. **Guard kumulatif keras.** Σ DPP/PPN snapshot semua retur completed atas
+   satu faktur asal ≤ DPP/PPN faktur asal, per item maupun total faktur.
+   Retur yang membuat kumulatif lewat → ditolak saat complete (dalam tx,
+   lock baris faktur asal), bukan dipotong diam-diam di laporan.
+3. **Nota retur dokumen.** Tambah di header retur: `taxReturnNoteNumber`
+   (nomor nota retur Coretax, dicatat apa adanya — sistem tidak menerbitkan
+   nomor pajak sendiri), `taxReturnNoteDate`, tautan TaxInvoice asal
+   (`sourceTaxInvoiceId`). Masa pengurang = masa TANGGAL NOTA RETUR; tanpa
+   nota (retur komersial murni) masa = tanggal retur — konsisten vonis
+   F-61 Salsa 2026-10-20 18:41. Retur tanpa faktur asal: nota retur tetap
+   boleh dicatat, PPN-retur = 0 (tidak ada PPN asal yang dikurangi).
+4. **Jurnal GL tidak berubah.** `onSalesReturnCompleted` tetap tanpa kaki
+   PPN; pengurang SPT = lapisan laporan dari snapshot. Dr PPN Keluaran di
+   jurnal hanya lewat dokumen nota kredit terpisah (inti F-59, tetap
+   ditunda-teknis). Builder SPT wajib abaikan retur yang sudah masuk nota
+   kredit berjurnal (anti dobel-kurang).
+5. Sisi beli simetris: snapshot dari VendorBill/TaxInvoice masukan tertaut
+   eksplisit; `PurchaseReturnItem.cost` DILARANG jadi DPP (vonis F-61 tetap).
+
+### F-005 Setor pajak: kewajiban per masa dari jurnal, setor melunasi
+
+1. **Sumber kewajiban = JURNAL, bukan SPT saja, bukan input bebas.** Saldo
+   kewajiban masa = Σ kredit − debit POSTED per akun pajak (PPN Keluaran −
+   PPN Masukan untuk PPN; akun Utang PPh per jenis untuk potong) dari
+   `JournalEntry`, direkonsiliasi ke posisi SPT (`vat-invoices` neto,
+   rekap bupot). Selisih jurnal vs SPT = temuan ditampilkan, bukan dipilih
+   salah satu diam-diam. Read-model kewajiban menampilkan: kewajiban masa,
+   sudah disetor, sisa — per (jenis pajak, masa).
+2. **Struktur TaxPayment (lapis kolom, effort S, BOLEH backend langsung):**
+   `billingCode` (15 digit MPN), `ntpn` (16 karakter), `period` divalidasi
+   format `YYYY-MM` (bukan teks bebas), `taxKind` enum
+   (`ppn|pph21|pph23|pph4_2|pph_badan|other`) agar PPN/PPh badan di luar
+   tipe potong terwakili; `reference` lama dipertahankan cermin legacy.
+   Jurnal tetap Dr akun utang pajak / Cr kas-bank; setor > sisa kewajiban
+   masa → peringatan keras di read-model (bukan blokir: setor lebih sah
+   sebagai pembayaran dimuka, wajib tampil sebagai saldo lebih-bayar).
+3. Masa setor diturunkan dari `period` terstruktur, bukan tanggal bayar.
+
+### F-006 Jurnal disposisi varians: mode standar MATI default
+
+1. **Default: jurnal disposisi varians produksi MATI.** Sistem berjalan =
+   aktual penuh: FG masuk sebesar biaya rilis aktual
+   (`onProductionOrderCompleted` Dr Persediaan/Cr WIP nilai aktual),
+   `ProductionOrder.variance` adalah angka ANALITIS standar-vs-aktual,
+   bukan saldo yang menunggu dijurnal. Menjurnalnya ke beban = mengubah
+   HPP retroaktif atas FG yang sudah tercatat aktual — DITOLAK sebagai
+   perilaku bawaan.
+2. Jurnal disposisi HANYA sah bila tenant mengaktifkan mode standard-costing
+   secara eksplisit (setting baru `standardCostingEnabled`, default false)
+   DAN FG dinilai standar. Tanpa mode itu, tombol/aksi disposisi tidak ada.
+3. Bila kelak aktif: akun selisih = setting `productionVarianceAccountId`
+   fail-closed (kosong = posting ditolak berisik; JANGAN fallback
+   materialExpense/cogs — fallback berjalan hanya untuk selisih PEMBULATAN
+   < ambang di `onProductionOrderCostRoundingVariance`, itu bukan disposisi
+   varians). Arah: varians tak menguntungkan Dr Beban Selisih Biaya
+   Produksi / Cr WIP; menguntungkan sebaliknya. Hanya baris terkalibrasi —
+   baris `uncalibrated` (standar 0) DILARANG ikut disposisi. Satu disposisi
+   per ProductionOrder saat completed, `referenceType=ProductionVariance_<id>`
+   anti-dobel, `assertPeriodOpen` dalam tx, idempotency key wajib.
+4. Selisih pembulatan existing TIDAK diubah vonis ini.
+
+PEMILIK BERIKUTNYA: leadbackend (F-004 snapshot+guard+kolom nota,
+F-005 kolom+read-model kewajiban, F-006 setting+gerbang mati default);
+leadfrontend sesudah model stabil. Falsifikasi wajib: edit harga item
+retur sesudah completed tidak mengubah potongan; retur kumulatif > faktur
+ditolak; setor tampil sisa per masa dari jurnal; mode standar mati →
+tidak ada jurnal varians walau order completed.
+
+---
+
+## 2026-10-21 09:55 WIB — Domain (c) persediaan & gudang
+
+Rotasi: run sebelumnya (b) manufaktur (status F-2026-10-21-006..010 tercatat
+09:35). Run ini (c). Berikutnya: (d) penjualan/pembelian & CRM.
+
+Benchmark resmi (akses 2026-10-21):
+- Accurate Persediaan: Permintaan Barang, Pemindahan Barang, Penyesuaian,
+  Perintah+Hasil Stok Opname, Gudang multi-lokasi, Satuan bertingkat,
+  Barang per Gudang, Barang Stok Minimum:
+  https://accurate.id/online/fitur/persediaan/
+- Accurate Pemindahan Barang antar gudang (Kirim Barang → Terima Barang,
+  dua pencatatan):
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pemindahan-barang/mencatat-pemindahan-barang-antar-gudang/
+- Accurate Permintaan Barang (antar gudang/cabang + dari stok minimum):
+  https://help.accurate.id/product/permintaan-barang/
+- Zahir fasilitas: Inventory, Serial Number, Lot Number, FIFO/LIFO,
+  Multi-Warehouse:
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+- Zahir Stock Opname:
+  https://help.zahironline.com/portal/id/kb/articles/stock-opname-zahir-online-v2
+
+### Inventarisasi terverifikasi (2026-10-21, domain c)
+
+Sudah ada (kuat):
+- Multi-gudang + rak/baris: `Warehouse` (schema:643), `Rack`/`RackRow`,
+  `UserWarehouse` (akses per user). Lapisan FIFO per (item,warehouse):
+  `InventoryLayer.warehouseId` + `availableQty(tx,itemId,warehouseId)`
+  (`inventory-fifo.ts:39-60`); konsumsi warehouse-scoped + kunci FOR UPDATE;
+  guard stok negatif `allowShortfall:false` (accounting.hook.ts:598,
+  purchase-return.hook.ts:145).
+- Transfer 2 tahap: `InventoryTransfer` draft→processed→received
+  (inventory-transfer.hook.ts:22-23) + re-create lot/serial tujuan +
+  laporan `transfer-terkirim` (report-registry.ts:559).
+- Batch/serial: `ItemBatch` (expiryDate, schema:3732), `ItemSerial` status
+  per warehouse (schema:3753); FEFO fisik + tolak lot kedaluwarsa opt-in
+  `documentDate` (inventory-fifo.ts, F-2026-10-20-79).
+- Opname penuh: `StocktakeSession` snapshot→count1/2→review→approved
+  (approval independen) →posted adjustment, koreksi live + delta concurrent
+  di notes (inventory.actions.ts:1674-1927). `StockAdjustment` ber-journal.
+- Penilaian: FIFO/Average per item/kategori/global
+  (costing-method.service.ts; stock-valuation.ts:65-90); laporan kartu-stok,
+  mutasi-stok, ringkasan-stok per gudang, valuasi-stok, rekonsiliasi-stok,
+  umur-stok (report-registry.ts:812), nomor-seri-batch, stok-minimum +
+  tombol Buat Permintaan (min-stock-request.ts), selisih-persediaan.
+- Multi-satuan: `UomConversion` per item dipakai goods-receipt
+  (goods-receipt.hook.ts:150-156). `PurchaseRequest` ADA — permintaan
+  PEMBELIAN (schema:1355), bukan permintaan antar gudang.
+- Peringatan ATP read-only kebutuhan material WO + committed WO lain
+  (work-order-material-needs.ts:25-52, F-2026-10-20-19/51/52).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN: reservasi stok mengikat. `grep StockReservation|reservedQty|
+  qtyReserved` = 0 model/field; komentar eksplisit `work-order-material-
+  needs.ts:25-30,51-52`: "BUKAN reservasi mengikat — inti StockReservation
+  (F-07) tetap ditunda". ATP hanya peringatan global, bukan per gudang.
+- PARSIAL (SALAH potensial): guard kedaluwarsa batch hanya 1 dari 5 jalur
+  keluar. `grep documentDate src --include=*.ts` non-test, non-definisi:
+  hanya `material-issue.hook.ts:99`. Penjualan (accounting.hook.ts),
+  transfer (inventory-transfer.hook.ts:98), adjustment OUT
+  (stock-adjustment.hook.ts:127), retur pembelian
+  (purchase-return.hook.ts) memanggil consumeFifoLayers TANPA tanggal
+  dokumen → lot kedaluwarsa bisa terjual/tertransfer dan jadi HPP.
+- PARSIAL: `Item.minStock` global tunggal (schema:595); laporan stok-
+  minimum membandingkan `Item.qtyOnHand` total semua gudang
+  (min-stock.ts:23-27 dinyatakan sendiri). Min per gudang ABSEN; lead time
+  / safety stock / reorder point ABSEN (`grep reorderPoint|safetyStock|
+  leadTime` = 0); `VendorItemPrice` tanpa leadTimeDays.
+- ABSEN: permintaan barang antar gudang sebagai dokumen (Accurate
+  Permintaan Barang). `grep MaterialRequest|ItemRequest` = 0; bengkel
+  minta part ke gudang pusat = lisan/telepon; `InventoryTransfer` lahir
+  tanpa dokumen permintaan/approval sumber.
+- PARSIAL: transfer terima selalu qty penuh baris; qty rusak/kurang di
+  perjalanan hanya bisa ditolak/diabaikan (inventory-transfer.hook.ts:
+  197-378 menjumlah qty terkirim penuh); tidak ada receivedQty per baris
+  transfer / akun in-transit (status processed sudah mengurangi sumber,
+  penerimaan menambah tujuan — selisih perjalanan tak tercatat).
+
+### F-2026-10-21-008 (b→c) verifikasi — scrap/yield terstruktur: TETAP PARSIAL
+
+- Bukti: `BomRevisionMaterial` hanya qty (tanpa scrapPercent);
+  `MaterialIssueItem` (schema:1927-1945) tanpa plannedQty/scrapQty/
+  scrapReasonCode; `Remnant` (schema:2540+) `sourceType/sourceId` String
+  generik nullable, tanpa FK wajib MaterialIssue/ProductionOrder;
+  `scrapReason` teks bebas VarChar(500). Sesuai catatan asal (b) P1-1.
+  Status: TERBUKA, effort M, pemilik backend (schema+issue), tanpa vonis
+  accountant (tidak mengubah posting; scrap tetap biaya job).
+
+### F-2026-10-21-009 (b→c) verifikasi — tutup job: TETAP ABSEN
+
+- Bukti: `WorkOrder` (schema:2322+) dan `ProductionOrder` tanpa
+  closedAt/closedBy/reopenReason (`grep closedAt` hanya Nonconformance:
+  2258 dan CrmTicket:3126 — bukan job); status WO string bebas tanpa
+  status `closed`. Konfirmasi backlog lama tetap berlaku.
+  Status: TERBUKA, effort M, pemilik backend; prasyarat analitis
+  F-2026-10-21-006 sudah divonis accountant (disposisi MATI default).
+
+### Gap baru domain (c)
+
+#### F-2026-10-21-011 (c) P0 — Lot kedaluwarsa lolos di 4 dari 5 jalur keluar stok (SALAH)
+- Kompetitor: Zahir Lot Number + FIFO/LIFO per produk
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang ;
+  Accurate Barang per Gudang + penyesuaian persediaan
+  https://accurate.id/online/fitur/persediaan/
+- Status Silengkap: SALAH (parsial). Bukti: guard `documentDate` hanya
+  material-issue.hook.ts:99; 4 pemanggil lain tanpa tanggal (di atas).
+  Oli/adhesive/sealant/ban kedaluwarsa terpasang ke kendaraan pelanggan =
+  risiko keselamatan + klaim garansi; HPP tercatat dari lot tak layak.
+- Relevansi: bengkel offroad menyimpan oli, gemuk, sealant, ban, aki —
+  semua berumur simpan. Jalur penjualan langsung (sparepart counter) jalan
+  paling ramai justru tanpa guard.
+- Adaptasi: teruskan `documentDate` (tanggal dokumen masing-masing) ke
+  consumeFifoLayers di accounting.hook (invoice), inventory-transfer,
+  stock-adjustment OUT, purchase-return; urutan dekremen lot fisik FEFO
+  sama seperti material issue. Tanpa model baru, tanpa ubah posting
+  (biaya tetap lapisan FIFO). Item tanpa ItemBatch = perilaku lama.
+- Modul disentuh: src/lib/hooks/accounting.hook.ts,
+  src/lib/hooks/inventory-transfer.hook.ts,
+  src/lib/hooks/stock-adjustment.hook.ts,
+  src/lib/hooks/purchase-return.hook.ts, tes hooks terkait.
+- Effort: S. Risiko: dokumen backdate ditolak padahal stok fisik belum
+  kedaluwarsa saat kejadian — mitigasi: pakai tanggal dokumen (bukan
+  hari ini), pesan error menyebut nomor lot + tanggal kedaluwarsa.
+- Urutan: purchase-return+transfer (dampak internal) → adjustment →
+  penjualan (dampak pelanggan, terakhir).
+- Pemilik usulan: backend. Butuh putusan accountant: TIDAK (guard fisik,
+  bukan perlakuan jurnal).
+
+#### F-2026-10-21-012 (c) P1 — Reservasi stok mengikat per WO/gudang tidak ada; ATP hanya peringatan global
+- Kompetitor: Accurate Pemenuhan Pesanan (ketersediaan vs pesanan)
+  https://accurate.id/online/fitur/persediaan/ ; Zahir Multi-Warehouse
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+- Status Silengkap: ABSEN (mengikat), PARSIAL (peringatan). Bukti:
+  work-order-material-needs.ts:25-52; grep StockReservation = 0.
+  Dua WO bersamaan bisa sama-sama membaca stok cukup; yang jalan kedua
+  kehabisan di tengah bongkar.
+- Relevansi: shock/ban/winch stok satuan mahal; kendaraan terlanjur
+  dibongkar menunggu part = bay terblokir (gabung domain e).
+- Adaptasi bertahap: (1) lapis aman: ATP per gudang WO (warehouseId WO/
+  MaterialIssue) di builder existing, bukan global Item.qtyOnHand;
+  (2) inti: model `StockReservation` (workOrderId, itemId, warehouseId,
+  qty, status active/released/consumed/expired, expiresAt) dibuat saat WO
+  start, dikonsumsi MaterialIssue, dilepas saat WO cancel/complete.
+  Konsumsi FIFO wajib kurangi reservasi aktif pihak lain.
+- Modul disentuh: prisma/schema.prisma, src/lib/services/inventory-fifo.ts,
+  src/lib/reports/work-order-material-needs*.ts,
+  src/actions/manufacturing.actions.ts.
+- Effort: S lapis aman, M-L inti. Risiko: reservasi menggantung mengunci
+  stok selamanya — mitigasi expiresAt + lepas otomatis di transisi WO.
+- Urutan: ATP per gudang → reservasi saat start → konsumsi/lepas otomatis.
+- Pemilik usulan: backend. Butuh putusan accountant: TIDAK.
+
+#### F-2026-10-21-013 (c) P1 — Stok minimum hanya global; tanpa lead time / titik pesan-ulang per gudang
+- Kompetitor: Accurate Barang Stok Minimum + Permintaan Barang dari stok
+  minimum https://accurate.id/online/fitur/persediaan/ ;
+  https://help.accurate.id/product/permintaan-barang/
+- Status Silengkap: PARSIAL. Bukti: Item.minStock schema:595 global;
+  min-stock.ts:23-27 total semua gudang; grep reorder/leadTime/safety = 0.
+  Gudang bengkel kosong sementara gudang pusat penuh terbaca "aman".
+- Relevansi: plat besi/pipa/fastener habis di gudang kerja menghentikan
+  job; stok minimum pusat vs bengkel beda kebutuhan.
+- Adaptasi: (1) lapis aman: laporan stok-minimum per gudang dari
+  InventoryLayer remaining per warehouse vs minStock global yang sama
+  (label "minimum masih global"); (2) inti: model `ItemWarehouseSetting`
+  (itemId, warehouseId, minStock, safetyStock, leadTimeDays,
+  reorderPoint turunan tampil) + `VendorItemPrice.leadTimeDays`;
+  saran qty pesan = kebutuhan lead time + safety − tersedia − incoming PO.
+- Modul disentuh: prisma/schema.prisma, src/lib/reports/min-stock*.ts,
+  src/lib/services/notification.service.ts:136-167 (peringatan ikut per
+  gudang).
+- Effort: S lapis aman, M inti. Risiko: minimum per gudang dikali jumlah
+  gudang menggelembungkan stok — mitigasi: default warisi global, edit
+  per gudang eksplisit.
+- Pemilik usulan: backend (model+data), frontend (tampil per gudang).
+  Butuh putusan accountant: TIDAK.
+
+#### F-2026-10-21-014 (c) P1 — Permintaan barang antar gudang tidak ada sebagai dokumen
+- Kompetitor: Accurate Permintaan Barang antar gudang/cabang, diteruskan
+  ke Pemindahan Barang
+  https://help.accurate.id/product/permintaan-barang/
+- Status Silengkap: ABSEN. Bukti: grep MaterialRequest = 0;
+  PurchaseRequest = permintaan pembelian ke vendor (schema:1355), bukan
+  antar gudang. Transfer lahir langsung tanpa permintaan/approval gudang
+  tujuan.
+- Relevansi: mekanik minta shock ke pusat lisan; tidak ada antrean
+  permintaan per WO, tidak tahu part diminta untuk job mana / sejak kapan.
+- Adaptasi: model `MaterialRequest` (documentNo, requesterWarehouseId,
+  sourceWarehouseId, workOrderId nullable, itemId, qty, uom, status
+  draft→approved→fulfilled/rejected, fulfilledTransferId) → tombol
+  "Buat Transfer" membuat InventoryTransfer draft terisi; tanpa ubah
+  jurnal transfer existing.
+- Modul disentuh: prisma/schema.prisma, src/actions/inventory.actions.ts,
+  src/app/(dashboard)/inventaris/ (halaman permintaan baru via frontend).
+- Effort: M. Risiko: dokumen ganda dengan PurchaseRequest membingungkan —
+  mitigasi nama UI "Permintaan Antar Gudang" vs "Permintaan Pembelian".
+- Pemilik usulan: backend (model+aksi), frontend (halaman).
+  Butuh putusan accountant: TIDAK.
+
+#### F-2026-10-21-015 (c) P2 — Penerimaan transfer selalu penuh; selisih/rusak di perjalanan tak tercatat
+- Kompetitor: Accurate Pemindahan Barang dua tahap Kirim→Terima
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pemindahan-barang/mencatat-pemindahan-barang-antar-gudang/
+- Status Silengkap: PARSIAL. Bukti: inventory-transfer.hook.ts receive
+  menjumlah qty terkirim penuh per item (baris 197-378); InventoryTransfer
+  tanpa status partial-received / receivedQty per baris.
+- Relevansi: antar lokasi dekat (satu kota) selisih jarang — P2, naik P1
+  bila buka cabang kota lain.
+- Adaptasi: `InventoryTransferItem.receivedQty` + status received parsial;
+  selisih jadi StockAdjustment alasan "selisih transfer" ber-approval
+  (pola opname existing). Tanpa akun in-transit baru.
+- Effort: M. Risiko: selisih disembunyikan sebagai adjustment rutin —
+  mitigasi alasan wajib + approval beda orang (pola stocktake).
+- Pemilik usulan: backend. Butuh putusan accountant: TIDAK (kuantitas;
+  akun adjustment existing).
+
+### Yang TIDAK diusulkan run ini
+- LIFO: PSAK/peraturan pajak Indonesia tidak mengakui LIFO untuk
+  persediaan; Zahir menawarkannya sebagai opsi global, Silengkap benar
+  hanya FIFO/Average — JANGAN ditiru.
+- Konsinyasi: grep consign = 0, tidak ada bukti proses titip-jual di
+  bengkel; tolak sampai ada kebutuhan nyata.
+- Bin location lebih dalam dari Rack/RackRow existing: cukup.
+
+Fokus berikutnya: (d) penjualan/pembelian & CRM — verifikasi status part
+WO (F-105) terhadap pemenuhan SO/DO + komisi/multi-harga Accurate/Zahir.
+
