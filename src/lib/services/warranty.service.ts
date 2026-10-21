@@ -258,6 +258,13 @@ export async function createWarrantyClaim(
     select: { id: true, customerVehicleId: true },
   })
   if (!coverage) throw new Error("Cakupan garansi tidak ditemukan.")
+  // Odometer lapor = odometer terakhir kendaraan yang diketahui.
+  if (input.odometerKm != null) {
+    await client.customerVehicle.update({
+      where: { id: coverage.customerVehicleId },
+      data: { lastOdometerKm: input.odometerKm },
+    })
+  }
   return client.warrantyClaim.create({
     data: {
       coverageId: coverage.id,
