@@ -9404,3 +9404,120 @@ Urutan: BOT 1 putusan → BOT 3 inti → BOT 2 UI → BOT 6. Effort usulan: inti
 | Q-TGT-3 | Lihat = hanya pemegang `view_reports`; tidak ada pandangan per-penjual/self-service tahap 1; data penjual lain terlihat penuh hanya oleh pemegang `view_reports`. | Default-aman spec §5; self-service = kartu terpisah bila diminta pemilik proses. |
 | Q-TGT-4 | Periode = bebas tanggal inklusif dua ujung (`periodStart`/`periodEnd`), bukan bulanan-saja. | Loader komisi sudah rentang-bebas; BR-TGT-05 menahan persen periode tidak utuh; bulanan-saja mengarang batas yang tidak diminta proses ISF. Penjaga overlap BR-TGT-03 wajib di aksi. |
 | Q-TGT-1 | TIDAK dibuka tahap 1 (tetap wilayah BOT 4 + Lead bila tahap 2 dibuka). | BR-TGT-06/07 tahap 1 berlaku apa adanya. |
+### Yang TIDAK diusulkan run ini
+- Pengingat otomatis WA/email ke pelanggan, denda keterlambatan, penagihan pihak ketiga, alokasi pembayaran parsial per janji, status penagihan tersimpan di SalesInvoice, perubahan aging/statement existing.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-058-V rekonsiliasi silang F-057-V (PR #439) × F-056-V (PR #440)
+kode/schema/migrasi. Kartu: `t_1960e7b4`. Tujuan: pastikan dua vonis
+pagi ini tidak bertabrakan pola histori bertanggal efektif sebelum
+BOT 3 membangun skema status pemotong (F-057-V) dan tarif komisi
+(F-056-V).
+Head live dibaca 2026-10-22 saat mulai (acceptance 1):
+- PR #439 OPEN tanpa merge, head `915ae30fa6528305e0c9d62c56b14350695613ea`
+  (bot4/f-056-bentuk-data) = F-2026-10-22-057-V.
+- PR #440 OPEN tanpa merge, head `abd8a9b30cbc1344811d8b2559cfd21e03f069ff`
+  (hermes/bot4-q-kom-1-vonis) = F-2026-10-22-056-V.
+- Vonis ini berlaku untuk head persis di atas; head berubah = wajib
+  konfirmasi ulang singkat, kecuali diff susulan nol isi.
+### Hasil rekonsiliasi (per butir, eksplisit)
+Tidak ada tabrakan kolom/schema antar kedua vonis (domain beda:
+status pemotong pihak vs tarif kategori pelanggan; snapshot beda:
+SalesInvoice vs bupot/setor). Yang ditemukan: (K1) dua perbedaan
+konvensi tanggal yang SENGAJA dan sah — TIDAK boleh diseragamkan;
+(K2-K4) tiga celah penjaga yang harus dikoreksi SEBELUM build BOT 3;
+(K5) satu titik interaksi masa retur yang tertutup tapi wajib dicatat.
+### K1. BERSIH-DENGAN-ALASAN — konvensi batas masa TIDAK diseragamkan
+- F-057-V §1/§3: masa INKLUSIF dua ujung: `effectiveFrom <= tanggal
+  <= effectiveTo` (effectiveTo nullable = masih berlaku); masa
+  bersebelahan sah. Sifat datanya: status/katalog resmi DJP berlaku
+  PULUHAN masa; penutupan masa selalu eksplisit per baris.
+- F-056-V putusan 1c: masa SEMI-TERBUKA: `effectiveFrom <= tanggal
+  faktur < effectiveTo`; tarif diganti = baris baru effectiveFrom
+  pada tanggal ganti (pola kontinu tarif komersial).
+- Keduanya sah untuk domainnya; menyeragamkan salah satu ke lainnya
+  = bug (inklusif→semi-terbuka membuat hari effectiveTo tarif hilang
+  satu hari; sebaliknya katalog DJP tertutup ganda). BOT 3 WAJIB
+  menulis konvensi tiap tabel sebagai CONSTRAINT + komentar schema,
+  bukan asumsi pembaca. Falsifikasi REK-1.
+### K2. KOREKSI — snapshot komisi (1d) titik tulis belum diputus final
+F-056-V 1d memberi DUA pilihan titik snapshot (paid ATAU baca
+pertama) dengan "pilih satu, kunci di tes" — itu delegasi tanpa
+batas yang bisa menghasilkan angka beda antar build (tarif diganti
+antara tanggal faktur dan lunas). REKONSILIASI MEMUTUS: titik tulis
+snapshot = TRANSISI ke status `paid` (transisi yang membuat faktur
+masuk basis, putusan "Yang TIDAK berubah" F-056-V), NILAI = resolusi
+per tanggal faktur (sudah diputus 1d). Baca-pertama DILARANG sebagai
+titik tulis (loader murni baca, tanpa efek samping tulis — konsisten
+prinsip loader repo). Faktur paid sebelum kolom snapshot ada = kolom
+kosong = 0 jujur berlabel (tidak berubah dari 1d). Falsifikasi REK-2.
+### K3. KOREKSI — hasil resolusi nol baris WAJIB dibedakan per domain
+- F-057-V: nol baris status memuat `withholdingDate` = TIDAK
+  DIKETAHUI -> DITOLAK terbit/setor (fail-closed keras; menerbitkan
+  bupot/setor salah rezim = risiko pajak nyata).
+- F-056-V: histori belum berlaku / kategori null = tarif 0 jujur +
+  notice (fail-soft berlabel; rekap informatif, bukan utang).
+Perbedaan ini BENAR (tarif 0 pada rekap informatif != status pajak
+tidak diketahui pada dokumen setor). Yang dilarang: BOT 3 menyamakan
+penanganan keduanya (fail-closed keras di komisi akan memblokir rekap
+hanya karena satu kategori belum punya histori; fail-soft di pemotong
+akan menerbitkan bupot dengan rezim tebakan). Tulis beda ini sebagai
+komentar pada resolver masing-masing. Falsifikasi REK-3.
+### K4. KOREKSI — penjaga "histori dipakai = beku" WAJIB pada tarif komisi
+F-057-V §1(c) melarang edit/hapus baris histori status sesudah
+dipakai transaksi (koreksi = tutup masa + baris baru). F-056-V TIDAK
+menyatakan larangan setara untuk histori tarif — padahal snapshot
+faktur merujuk baris histori asal (customerCategoryId acuan + persen).
+REKONSILIASI MEMUTUS: baris histori tarif yang sudah menjadi sumber
+snapshot faktur mana pun DILARANG diedit persen/effectiveFrom-nya
+maupun dihapus (koreksi = tutup masa + baris baru, pola F-057-V
+dipakai ulang). Alasan: audit jejak "persen ini dari baris mana"
+harus bisa ditelusur; snapshot persen beku saja tidak cukup bila
+baris sumbernya bisa diubah diam-diam. BOT 3 tetapkan penjaga rujukan
+(cek snapshot merujuk baris itu) di service dalam tx. Falsifikasi REK-4.
+### K5. BERSIH-TERCATAT — interaksi masa retur × masa status
+Pengurang komisi dibaca di MASA RETUR (F-056-V putusan 3b) dan
+snapshot persennya dari faktur asal — TIDAK membaca ulang status
+pemotong/histori tarif per tanggal retur. Jadi perubahan status
+pemotong pihak atau tarif kategori di antara tanggal faktur dan
+tanggal retur TIDAK memengaruhi pengurang komisi (benar: hak komisi
+lahir dari penjualan asal). Tidak ada penulisan ganda antar domain.
+BOT 6 cukup buktikan REK-5 (ubah tarif/status sesudah faktur, sebelum
+retur -> pengurang tetap pakai snapshot faktur asal).
+### Syarat BOT 3 (sesudah PR #436/#439/#440 merged, koordinasi board)
+1. Konvensi masa ditulis eksplisit per tabel (K1); snapshot komisi
+   titik-tulis = transisi paid, nilai = resolusi tanggal faktur (K2).
+2. Dua resolver beda rezim nol-baris (K3) dengan komentar alasan.
+3. Penjaga beku baris histori tarif terpakai (K4) setara §1(c) F-057-V.
+4. Tanpa perubahan: alokasi setor-sendiri F-057-V §2 dan basis DPP /
+   pengurang masa-retur F-056-V — tidak tersentuh rekonsiliasi ini.
+### Falsifikasi BOT 6 (MERAH bila penjaga dicabut/dimutasi)
+REK-1. Baris tarif effectiveTo = T dibaca untuk faktur tanggal T ->
+harus KOSONG (semi-terbuka); baris status effectiveTo = T dibaca
+untuk withholdingDate T -> harus KETEMU (inklusif). Salah satu
+terbalik = MERAH.
+REK-2. Tarif diganti antara tanggal faktur dan tanggal lunas, faktur
+lalu paid -> snapshot = persen resolusi tanggal faktur (bukan tarif
+hari lunas, bukan persen saat loader pertama membaca). Selain itu =
+MERAH. Loader membaca rekap TIDAK menulis kolom snapshot.
+REK-3. Kategori tanpa baris histori berlaku -> rekap tampil 0 jujur
++ notice, TIDAK melempar error; pihak tanpa baris status pada
+withholdingDate -> terbit/setor DITOLAK bernama. Salah rezim = MERAH.
+REK-4. Edit persen/effectiveFrom atau hapus baris histori tarif yang
+sudah dirujuk snapshot faktur -> DITOLAK; koreksi lewat tutup masa +
+baris baru lolos. Edit lolos = MERAH.
+REK-5. Tarif/status berubah sesudah faktur paid, sebelum retur
+completed -> pengurang komisi masa retur tetap persen snapshot
+faktur asal; berubah mengikuti master berjalan = MERAH.
+### Batas vonis
+Rekonsiliasi internal dua vonis BOT 4; BUKAN klaim kepatuhan pajak.
+Dasar regulasi tetap milik F-055-V/F-057-V (PER-11/PJ/2025,
+PMK-231/PMK.03/2019 jo. perubahannya, PMK-80/PMK.03/2024) dan label
+BUTUH-VERIFIKASI-BOT6 F-055-V §6 tidak berubah. Angka komisi tetap
+KEBIJAKAN INTERNAL (F-056-V), bukan regulasi.
+ID vonis ini **F-2026-10-22-058-V** (cek anti-tabrakan 2026-10-22:
+origin/main `bf493950` tertinggi 055-V; 056-V di PR #440; 057-V di
+PR #439; 058 di origin/main maupun PR terbuka kosong; 057-S/056-S
+milik BOT 5 beda sufiks S, bukan vonis BOT 4). PR vonis ini terbuka
+TANPA merge (merge = Lead). Pemilik berikutnya: BOT 1 merge putusan
+urutan -> BOT 3 syarat di atas -> BOT 2 (tanpa ubah dari F-056-V) ->
+BOT 6 REK-1..5 bersama KOM-1..6 dan F56-1..9.
