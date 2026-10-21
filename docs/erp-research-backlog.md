@@ -1235,6 +1235,888 @@ most-specific-wins terhadap konflik aturan + cakupan tahun/drivetrain.
 
 ---
 
+## 2026-10-21 10:15 WIB — Domain (g) kendaraan & fitment
+
+Rotasi: run sebelumnya (f) garansi F-2026-10-21-021..022. Run ini (g).
+Berikutnya: (h) SDM/payroll.
+
+Benchmark: Accurate/Zahir resmi TIDAK punya fitment kendaraan (modul
+generik persediaan/manufaktur). Acuan resmi terdekat = daftar fasilitas
+Zahir (tanpa kompatibilitas kendaraan):
+https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang dan
+Accurate persediaan/manufaktur:
+https://accurate.id/online/fitur/persediaan/ . Domain ini keunggulan
+niche Silengkap; gap dinilai dari rantai proses internal, bukan
+kekalahan benchmark.
+
+### Inventarisasi terverifikasi (2026-10-21, domain g)
+
+Sudah ada (kuat):
+- Master katalog VehicleBrand→VehicleModel→VehicleVariant→Vehicle
+  (+year) dan CustomerVehicle (plate/chassis/engine, schema:3304-3395).
+- `VehicleFitmentRule`: scope brand/model/variant/year/drivetrain/
+  transmission + bomRevisionId, result compatible/incompatible/unknown
+  (schema:3850). Evaluator most-specific-wins + tie-break id terbaru
+  (vehicle-fitment.service.ts:51-95,146-153); checker manual di
+  vehicle-fitment.actions.ts:130-144; evaluasi BOM produk
+  evaluateProductFitment. Guard yearFrom<=yearTo di create/update.
+- Quotation/SO/WO/Project sudah membawa customerVehicleId opsional
+  (schema:991,1109,2325,3404).
+
+Belum ada (bukti grep run ini):
+- PARSIAL (tidak terhubung): fitment TIDAK pernah dipanggil alur
+  transaksi. `grep evaluateFitment|evaluateProductFitment src` di luar
+  service/actions-nya sendiri + test = 0 pemanggil di sales.actions/
+  manufacturing.actions (WO). Checker berdiri sendiri di halaman
+  kendaraan; staf bisa menerbitkan quotation/WO part incompatible tanpa
+  peringatan apa pun.
+- ABSEN: registri part terpasang per kendaraan. `grep installed
+  prisma/schema.prisma` = 0 model InstalledPart; WorkOrderItem tanpa
+  serial terpasang per kendaraan. Riwayat "bumper X serial Y terpasang
+  di plat Z sejak tanggal T" tidak bisa dijawab — fondasi garansi
+  F-2026-10-21-021 tahap 1 + riwayat kendaraan.
+- PARSIAL: VehicleVariant membawa drivetrain/transmission, tapi
+  CustomerVehicle→Vehicle hanya year lewat Vehicle.year; evaluasi dari
+  dokumen harus merangkai variant sendiri — belum ada helper
+  configuration-dari-CustomerVehicle (checker menerima ID manual).
+- PARSIAL kecil: konflik dua aturan sama-spesifik hasil berlawanan
+  diselesaikan diam-diam id terbaru (service:148-153) tanpa peringatan
+  konflik saat input; hasil bisa berbalik tanpa jejak niat.
+
+### Gap
+
+#### F-2026-10-21-023 (g) P1 — Fitment tidak menegakkan apa pun di Quotation/WO (checker yatim)
+- Kompetitor: tidak ada di Accurate/Zahir resmi (niche) — acuan proses:
+  evaluasi compatible/incompatible/unknown yang sudah dibangun PRD
+  VEH-06/07 sendiri (vehicle-fitment.service.ts:4-11 menyatakan caller
+  "can require technical verification before releasing work").
+- Status Silengkap: PARSIAL. Bukti: grep pemanggil transaksi = 0.
+- Relevansi: bumper Hilux terbit untuk Ranger tanpa peringatan = revisi
+  produksi/rework mahal; seluruh investasi katalog fitment tak bernilai
+  operasional.
+- Adaptasi lapis aman (peringatan, bukan blokir): helper
+  `configurationFromCustomerVehicle(db, customerVehicleId)` (brand/
+  model/variant/year/drivetrain/transmission dari rantai master) →
+  saat simpan QuotationItem/WO item dengan customerVehicleId terisi,
+  panggil evaluateFitment per itemId; hasil incompatible/unknown
+  disimpan sebagai snapshot peringatan di baris (fitmentResult,
+  fitmentRuleId) + tampil di detail; dokumen tetap terbit. Blokir keras
+  = putusan team-lead sesudah data peringatan terbukti dipakai.
+- Modul disentuh: src/lib/services/vehicle-fitment.service.ts (helper),
+  src/actions/sales.actions.ts, src/actions/manufacturing.actions.ts,
+  detail quotation/WO (frontend).
+- Effort: M. Risiko: peringatan bising untuk item tanpa aturan (unknown
+  massal) — mitigasi hanya tampilkan incompatible sebagai peringatan
+  keras, unknown sebagai lencana netral; item jasa dilewati.
+- Urutan: helper → snapshot di WO → quotation → evaluasi blokir.
+- Pemilik usulan: backend, frontend lencana. Butuh putusan accountant:
+  TIDAK.
+
+#### F-2026-10-21-024 (g) P1 — Registri part terpasang per kendaraan absen (fondasi garansi + riwayat)
+- Kompetitor: tidak ada di Accurate/Zahir resmi (niche after-sales).
+- Status Silengkap: ABSEN. Bukti: grep installed schema = 0.
+- Relevansi: inti garansi F-021 butuh tahu part+serial terpasang di
+  kendaraan mana; tanpa registri, coverage dibuat dari ingatan WO.
+  Juga menjawab riwayat modifikasi per plat saat kendaraan kembali.
+- Adaptasi: model `InstalledPart` (customerVehicleId, workOrderId,
+  itemId, itemSerialId nullable, qty, installedAt, removedAt nullable,
+  status terpasang/dilepas/diganti) terisi otomatis dari MaterialIssue/
+  WO completion untuk item bertipe part terpasang (flag Item sederhana
+  atau kategori), dilepas saat WO penggantian. Read-model riwayat
+  kendaraan = installed aktif + WO selesai per CustomerVehicle.
+- Modul disentuh: prisma/schema.prisma, hook material-issue/WO
+  completion, detail CustomerVehicle (frontend).
+- Effort: M. Risiko: semua item tercatat sebagai terpasang (bising) —
+  mitigasi hanya item kategori part utama / berserial / ber-BOM produk.
+- Urutan: model+flag → isi dari WO completion → riwayat → makan F-021.
+- Pemilik usulan: backend, frontend riwayat. Butuh putusan accountant:
+  TIDAK.
+
+#### F-2026-10-21-025 (g) P2 — Konflik aturan fitment sama-spesifik tak terdeteksi saat input
+- Status Silengkap: PARSIAL. Bukti: service:148-153 tie-break id.
+- Adaptasi: saat create/update aturan, query aturan aktif lain item sama
+  dengan scope identik + result berbeda → peringatan "menimpa aturan
+  #id" (tetap boleh simpan). Tanpa ubah evaluator.
+- Effort: S. Pemilik: backend. Butuh putusan accountant: TIDAK.
+
+### Yang TIDAK diusulkan run ini
+- Dekode VIN otomatis / katalog fitment pihak ketiga: master internal
+  cukup; tidak ada bukti kebutuhan.
+- Blokir keras fitment: ditunda sampai F-023 data peringatan terbukti.
+
+Fokus berikutnya: (h) SDM/payroll — verifikasi overlap gaji-pokok
+Employee vs komponen PayrollRun + status SPEC grand design.
+
+
+---
+
+## 2026-10-21 10:20 WIB — Domain (h) SDM/payroll
+
+Rotasi: run sebelumnya (g) kendaraan F-2026-10-21-023..025. Run ini (h).
+Berikutnya: (i) proyek.
+
+Benchmark resmi (akses 2026-10-21):
+- Accurate PPh21 otomatis + SPT PPh 21 dari pencatatan gaji (TER PP
+  58/2023, hitung ulang Desember):
+  https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/mencatat-beban-gaji-pph21/
+  dan https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/catat-gaji-pph21-spt/
+- Accurate THR/bonus seperiode gaji + rekonsiliasi Desember:
+  https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/catat-pph21-bonus-thr/
+- Zahir Payroll: Payroll Component (tetap/tidak tetap, kena pajak/tidak)
+  + run payroll hitung PPh21/BPJS + slip karyawan:
+  https://zahirerp.com/id/all-features-of-zahir-products/
+- Regulasi: PP 58/2023 (TER Jan-Nov, tarif progresif Pasal 17 di
+  Desember/akhir kerja) — vonis angka tetap accountant, riset hanya
+  mencatat kesenjangan metode.
+
+### Inventarisasi terverifikasi (2026-10-21, domain h)
+
+Sudah ada:
+- Payroll per karyawan/periode (Payroll statutorySnapshot Json,
+  PayrollStatutoryRule berperiode effectiveFrom/To + halaman
+  sdm/aturan-statutori), BPJS karyawan + PPh21 metode disetahunkan
+  progresif PTKP status/tanggungan (payroll-statutory.service.ts:237-277,
+  perilaku fail-closed status tak dikenal didokumentasikan :186-233).
+- Employee lengkap NPWP/BPJS/gaji pokok bank (schema:746-798), pinjaman
+  karyawan + potong gaji, lembur/cuti/absensi/timesheet. Halaman
+  sdm/penggajian + approve/mark-paid.
+
+Belum ada / parsial (bukti grep run ini):
+- SALAH vs regulasi berjalan (perlu vonis): PPh21 memakai metode lama
+  disetahunkan dari Januari (`computePph21Monthly` gross×12), bukan TER
+  PP 58/2023 untuk Jan-Nov + hitung ulang progresif Desember. Header
+  service sendiri (:8-10) mengaku "pragmatic approximation" dan backlog
+  lama (baris 492 dokumen ini) sudah menulis "PPh 21 tetap domain
+  payroll (TER)" — implementasi belum mengikuti. Selisih potong per
+  slip kecil per bulan, menumpuk salah setor di Desember.
+- ABSEN: komponen gaji terstruktur. `grep PayrollComponent` schema+src
+  = 0; Payroll hanya agregat allowances/deductions Decimal tunggal
+  (schema Payroll). Tunjangan kena pajak vs tidak, komponen tetap vs
+  tidak tetap (pembedaan Zahir di atas) tidak bisa dinyatakan — input
+  ulang manual tiap periode, rawan salah klasifikasi pajak.
+- ABSEN keluaran SPT: `grep 1721|BuktiPotong|eBupot` reports/services/
+  schema = 0. Data Payroll.pph21 per karyawan ada tapi tidak ada rekap
+  masa 1721-I/bukti potong tahunan — rekonsiliasi SPT manual spreadsheet.
+- PARSIAL: Payroll.type default REGULAR tanpa pemakaian THR terverifikasi
+  (`grep THR src/actions/hrm.actions.ts` = 0 di potongan run ini);
+  THR/bonus diperlakukan tunjangan generik — dampak PPh21-nya benar
+  hanya di metode disetahunkan, ikut salah di skema TER.
+
+### Gap
+
+#### F-2026-10-21-026 (h) P0 — Metode PPh21 masih disetahunkan lama, bukan TER PP 58/2023 + hitung ulang Desember (SALAH)
+- Kompetitor/regulasi: Accurate TER otomatis + SPT
+  https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/catat-gaji-pph21-spt/ ;
+  PP 58/2023 (TER kategori A/B/C dari status PTKP, Desember tarif
+  Pasal 17 atas penghasilan setahun dikurangi potongan Jan-Nov).
+- Status Silengkap: SALAH metode. Bukti: payroll-statutory.service.ts:
+  8-10,237-277; grep TER di service/actions = 0.
+- Relevansi: potongan tiap slip karyawan salah basis sejak 2024;
+  perusahaan menanggung kurang/lebih setor + koreksi Desember manual.
+  Risiko pajak = P0 per definisi SOUL (salah hitung pajak).
+- Adaptasi: VONIS accountant dulu (kategori TER dari maritalStatus+
+  dependents existing, perlakuan penghasilan tidak teratur, bulan
+  masuk/keluar tengah tahun). Implementasi: tambah metode `ter` di
+  PayrollStatutoryRule (tabel TER per kategori sebagai rule berperiode,
+  bukan konstanta kode), computePph21Ter(grossMonthly, kategori) untuk
+  Jan-Nov; Desember panggil hitung progresif tahunan existing dikurangi
+  akumulasi pph21 Jan-Nov karyawan (data Payroll per periode sudah ada).
+  Slip lama tidak dihitung ulang diam-diam — berlaku periode baru.
+- Modul disentuh: src/lib/services/payroll-statutory.service.ts,
+  src/app/(dashboard)/sdm/aturan-statutori (isi tabel TER), generate
+  payroll di hrm.actions.ts.
+- Effort: M (sesudah vonis). Risiko: kategori salah dari status teks
+  bebas — mitigasi pakai ptkpFor/fail-closed existing untuk memetakan
+  kategori, slip tampilkan kategori TER terpilih.
+- Urutan: vonis → tabel TER+Jan-Nov → Desember hitung ulang → uji
+  banding 3 profil gaji vs kalkulator DJP.
+- Pemilik usulan: accountant (vonis WAJIB), backend (implementasi).
+
+#### F-2026-10-21-027 (h) P1 — Komponen gaji terstruktur absen; tunjangan/potongan hanya agregat bebas
+- Kompetitor: Zahir Payroll Component tetap/tidak tetap + kena pajak
+  https://zahirerp.com/id/all-features-of-zahir-products/ ; Accurate
+  Gaji/Tunjangan per jenis + akun penampung (URL pencatatan gaji di atas).
+- Status Silengkap: ABSEN. Bukti: grep PayrollComponent = 0; Payroll.
+  allowances/deductions agregat schema.
+- Relevansi: tunjangan transport (kena pajak) vs reimbursement (tidak)
+  tercampur satu angka; THR sulit dibedakan; kesalahan klasifikasi
+  mengalir ke PPh21 F-026.
+- Adaptasi: model `PayrollComponent` (nama, jenis earning/deduction,
+  isTaxable, isFixed, accountId nullable untuk tahap jurnal) +
+  `PayrollComponentLine` per Payroll (componentId, amount) menggantikan
+  input agregat bertahap: generate payroll menarik komponen tetap
+  karyawan (`EmployeeComponent` amount default), agregat lama tetap
+  diisi dari jumlah baris agar laporan lama tidak pecah.
+- Modul disentuh: prisma/schema.prisma, src/actions/hrm.actions.ts,
+  halaman sdm (master komponen + generate). Jurnal per komponen =
+  tahap sesudah vonis pemetaan akun accountant.
+- Effort: M-L. Risiko: migrasi riwayat — mitigasi baris agregat historis
+  tidak dipecah mundur.
+- Pemilik usulan: backend, frontend. Butuh putusan accountant: YA hanya
+  pemetaan akun jurnal per komponen; struktur data TIDAK.
+
+#### F-2026-10-21-028 (h) P2 — Rekap SPT PPh21 masa/tahunan dari data payroll absen
+- Kompetitor: Accurate Laporan SPT PPh Ps.21 per periode dari catatan
+  gaji https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/catat-gaji-pph21-spt/
+- Status Silengkap: ABSEN keluaran, ADA data. Bukti: grep 1721 = 0;
+  Payroll.pph21 per karyawan/periode tersimpan + statutorySnapshot.
+- Relevansi: beban admin bulanan; nilai rekap harus cocok slip —
+  sesudah F-026 metode benar, rekap hanya agregasi baca.
+- Adaptasi: read-model rekap masa (per periode: jumlah karyawan, bruto,
+  PPh21 terpotong dari Payroll approved/paid) + rekap tahunan per
+  karyawan (total bruto/PPh21 untuk bukti potong manual). Format file
+  e-Bupot impor DJP = tahap sesudah vonis format accountant.
+- Effort: S rekap, M ekspor. Pemilik: backend. Butuh putusan accountant:
+  YA untuk format ekspor; rekap baca TIDAK.
+
+### Yang TIDAK diusulkan run ini
+- SPEC grand design payroll utuh (F-065 lama): tetap ditahan; F-026/027
+  sengaja irisan terkecil yang menutup salah hitung berjalan.
+- Slip gaji portal karyawan / absensi biometrik: tidak ada bukti gap.
+
+Fokus berikutnya: (i) proyek — verifikasi klaim retrofit ProjectCost
+lifetime (F-2026-10-20-102 patch) + RAB-vs-aktual per tahap.
+
+
+---
+
+## 2026-10-21 10:30 WIB — Domain (i) proyek
+
+Rotasi: run sebelumnya (h) SDM/payroll F-2026-10-21-026..028. Run ini
+(i). Berikutnya: (j) laporan & BI.
+
+Benchmark resmi (akses 2026-10-21):
+- Zahir proyek multi-fase: anggaran biaya + pendapatan per fase,
+  transaksi diarahkan per fase, laporan anggaran vs realisasi per fase:
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+  dan https://help.zahironline.com/portal/id/kb/articles/memasukkan-data-proye
+- Zahir Laba Rugi Per Proyek Realisasi vs Anggaran (varians per proyek,
+  deteksi cost overrun):
+  https://zahirerp.com/id/all-features-of-zahir-products/
+- Accurate anggaran proyek general vs kontraktor (RAB material terkait
+  stok) + laporan anggaran dan biaya aktual: acuan sekunder partner
+  resmi https://www.acisindonesia.com/cara-membuat-anggaran-di-accurate/
+  (halaman help.accurate.id anggaran proyek perlu cek ulang bila
+  dikutip lebih dalam).
+
+### Inventarisasi terverifikasi (2026-10-21, origin/main 98bef9ac)
+
+Sudah ada:
+- Project + ProjectStage (+ProjectStageProgress persen) + ProjectItem
+  (qty×cost) + ProjectLog (schema origin/main:3398-3470). Tahap dibuat
+  otomatis dari setting defaultProjectStages (project.actions.ts:174-212).
+- Laporan Laba Rugi per Proyek read-model ADA
+  (laporan/laba-rugi-proyek page.tsx:34-113): pendapatan invoice
+  ber-projectId (subtotal−diskon), material MaterialIssue completed,
+  Expense approved, PettyCash OUT, VendorBill confirmed+ — per proyek,
+  per periode.
+- Biaya sumber kaya tapi tersebar: ProductionCost per WorkOrder
+  (schema:2282-2320, kategori labor/machine/overhead/subcontract/
+  rework), Timesheet wajib projectId (schema:2669-2691), WO membawa
+  projectId (schema:2330).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN anggaran/RAB resmi: Project tanpa budgetAmount/contractAmount;
+  ProjectItem (schema:3438-3450) hanya qty+cost tanpa kategori/tahap —
+  ia daftar material longgar, bukan RAB yang dikunci. Detail proyek
+  membandingkan grandTotal SEMUA quotation pelanggan (bukan proyek)
+  vs Σ ProjectItem dan menyebutnya margin proyek
+  (proyek/[slug]/page.tsx, baca run ini) — SALAH cakupan: quotation
+  pelanggan lain ikut terhitung, biaya aktual tidak dipakai.
+- SALAH cakupan laporan: L/R proyek tidak memasukkan ProductionCost
+  dari WO ber-projectId (labor/overhead/subcontract/rework) dan tidak
+  memasukkan labor Timesheet yang belum ditarik ke ProductionCost —
+  HPP proyek understated persis di komponen upah bengkel terbesar.
+  Bukti: page.tsx:34-93 hanya 5 sumber di atas; grep productionCost di
+  file itu = 0 baris hasil query.
+- ABSEN dimensi tahap pada biaya: tidak ada FK projectStageId di
+  MaterialIssue/Expense/PettyCash/VendorBill/ProductionCost/Timesheet
+  (grep projectStageId schema hanya ProjectStageProgress:3474) —
+  anggaran vs realisasi PER FASE ala Zahir mustahil; progres tahap
+  persen fisik berdiri sendiri tanpa uang.
+- PARSIAL rantai pendapatan: Quotation.projectId ada (schema Quotation),
+  tapi detail proyek mengambil quotation per customerId (bukan
+  projectId) take 10 — kontrak proyek tidak tertaut tegas.
+
+### Gap
+
+#### F-2026-10-21-029 (i) P0 — Laba/rugi proyek salah cakupan: labor WO dan timesheet tidak terhitung, quotation pelanggan tercampur (SALAH)
+- Kompetitor: Zahir L/R proyek dari transaksi teralokasi proyek
+  https://help.zahironline.com/portal/id/kb/articles/memasukkan-data-proye
+- Status Silengkap: SALAH (parsial sumber). Bukti: daftar 5 query
+  laba-rugi-proyek page.tsx:34-93 tanpa ProductionCost/Timesheet;
+  detail proyek totalQuotation per customerId.
+- Relevansi: margin proyek yang terlihat selalu lebih bagus dari nyata
+  (upah las/pasang tak terhitung) → harga job berikutnya ditetapkan
+  dari margin semu; proyek rugi terbaca untung. Risiko uang langsung.
+- Adaptasi bertahap TANPA jurnal baru: (1) read-model builder tunggal
+  `project-pl-data` (pola *-data.ts existing) dipakai laporan DAN
+  detail proyek: pendapatan = SalesInvoice.projectId langsung +
+  jembatan WO (invoice tanpa projectId tapi quotation/WO tertaut —
+  pola job-billing-summary-data.ts:126-151 existing, dedup per id);
+  biaya = MaterialIssue langsung + ProductionCost via WorkOrder.
+  projectId (amount snapshot, termasuk labor hasil pull timesheet) +
+  Expense/PettyCash/VendorBill existing; Timesheet yang BELUM ditarik
+  ditampilkan sebagai baris memo "labor belum ditarik" (jam saja, tanpa
+  rupiah ditebak) agar tidak dobel dengan ProductionCost.
+  (2) detail proyek berhenti memakai quotation-per-pelanggan: tampilkan
+  kontrak = quotation ber-projectId + invoice builder sama.
+- Modul disentuh: src/lib/reports/project-pl-data.ts (baru),
+  src/app/(dashboard)/laporan/laba-rugi-proyek/[[...segments]]/page.tsx,
+  src/app/(dashboard)/proyek/[slug]/page.tsx.
+- Effort: M. Risiko: dobel hitung invoice langsung + jembatan — mitigasi
+  dedup per invoice id seperti pola existing; ProductionCost purchaseOrder
+  vs VendorBill proyek berpotensi tumpang tindih — mitigasi VendorBill
+  hanya yang tanpa purchaseOrderId tertaut ProductionCost (atau label
+  terpisah subkontrak-non-WO), wajib uji fixture.
+- Urutan: builder+tes fixture → laporan pakai builder → detail proyek.
+- Pemilik usulan: backend (builder), frontend (detail). Butuh putusan
+  accountant: TIDAK (agregasi baca dokumen existing; definisi pendapatan
+  subtotal−diskon dipertahankan apa adanya).
+
+#### F-2026-10-21-030 (i) P1 — Anggaran/RAB per proyek & per tahap absen; ProjectItem bukan anggaran terkunci
+- Kompetitor: Zahir anggaran per fase + realisasi per fase
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang ;
+  Accurate RAB kontraktor (material-stok)
+  https://www.acisindonesia.com/cara-membuat-anggaran-di-accurate/
+- Status Silengkap: ABSEN. Bukti: ProjectItem schema:3438-3450 tanpa
+  tahap/kategori/versi; Project tanpa nilai kontrak/anggaran.
+- Relevansi: tanpa anggaran, F-029 hanya melaporkan masa lalu; overrun
+  ketahuan sesudah proyek selesai. Proyek custom besar (armoring,
+  ekspedisi build) paling terpapar.
+- Adaptasi bertahap: (1) `Project.contractAmount` snapshot nilai kontrak
+  disetujui (diisi dari quotation ber-projectId terpilih, bukan hitung
+  ulang berjalan) + `ProjectItem.projectStageId` nullable +
+  `ProjectItem.category` (material/labor/subkontrak/lain) — ProjectItem
+  menjadi RAB per tahap; status anggaran dikunci saat proyek mulai
+  (field budgetLockedAt), perubahan sesudahnya = revisi tercatat
+  ProjectLog existing. (2) laporan anggaran vs realisasi per tahap:
+  anggaran ProjectItem per tahap vs realisasi F-029 yang diberi
+  projectStageId opsional di MaterialIssue/Expense (tahap lain menyusul
+  bertahap; tanpa tahap = baris "belum dialokasi").
+- Modul disentuh: prisma/schema.prisma, src/actions/project.actions.ts,
+  halaman proyek (frontend), builder F-029.
+- Effort: M-L. Risiko: RAB diedit mundur menyembunyikan overrun —
+  mitigasi budgetLockedAt + log revisi; realisasi tanpa tahap menumpuk
+  di belum-dialokasi — tampilkan eksplisit, jangan dibagi rata.
+- Urutan: sesudah F-029 builder stabil.
+- Pemilik usulan: backend, frontend. Butuh putusan accountant: TIDAK
+  (anggaran operasional, bukan jurnal).
+
+#### F-2026-10-21-031 (i) P2 — Progres fisik tahap tidak terhubung uang (earned value sederhana absen)
+- Status Silengkap: PARSIAL. Bukti: ProjectStageProgress persen ada;
+  tanpa bobot anggaran per tahap, % selesai proyek = rerata persen
+  tahap sama rata (detail proyek membagi rata stages).
+- Adaptasi: sesudah F-030 — bobot tahap = anggaran tahap/total; progres
+  tertimbang + SPI/CPI sederhana read-only di detail proyek.
+- Effort: S (sesudah F-030). Pemilik: backend/frontend. Butuh putusan
+  accountant: TIDAK. Ditunda sampai F-030 terbukti dipakai.
+
+### Yang TIDAK diusulkan run ini
+- Alokasi jurnal per proyek di GL (dimensi projectId di JournalEntry):
+  pola Zahir menag transaksi, Silengkap L/R proyek read-model cukup
+  untuk skala ini; nilai ulang bila L/R proyek wajib rekonsiliasi GL.
+- Gantt proyek: tanpa bukti kebutuhan sesudah tahap existing.
+
+Fokus berikutnya: (j) laporan & BI — audit registry laporan vs
+kebutuhan keputusan (kas, margin per kendaraan, WIP aging) lalu tutup
+rotasi a-j + rekap status P0 lintas domain.
+
+
+---
+
+## 2026-10-21 11:32 WIB — Domain (j) laporan & BI + tutup rotasi a–j
+
+Rotasi: run sebelumnya (i) proyek F-2026-10-21-029..031. Run ini (j),
+run penutup rotasi a–j. Berikutnya: antrean implementasi per vonis
+Lead-Arch di board, bukan domain baru.
+
+Benchmark resmi (akses 2026-10-21):
+- Accurate Daftar Laporan + ekspor Excel/PDF/CSV + drill-down ke detail:
+  https://help.accurate.id/product/daftar-laporan/ ,
+  https://accurate.id/online/fitur/laporan-keuangan/
+- Zahir Ekspor Laporan (PDF/Excel, kirim email) + Laporan Bisa Diklik
+  (telusur sampai buku besar/jurnal):
+  https://www.zahironline.com/fitur-lengkap-zahir/
+
+### Inventarisasi terverifikasi (2026-10-21, domain j)
+
+Sudah ada (TERVERIFIKASI-KODE, worktree origin/main 032eb3bf):
+- 77 halaman `/laporan/*`; registry ekspor PDF 60 kunci
+  (`report-registry.ts`), katalog 76 href (`report-catalog.ts:222`),
+  navigasi 76 href (`navigation.ts:225-273`). Tiga kebutuhan keputusan
+  yang disebut fokus run ini SEMUA sudah ada: proyeksi kas
+  (`cash-projection.ts` + memo komitmen F-2026-10-20-48(b)), umur WIP
+  berjalan (`wip-aging*.ts`, F-2026-10-20-72), riwayat per kendaraan
+  (`customer-vehicle-history-data.ts` 5 sumber).
+- 18 halaman tanpa kunci registry BUKAN gap: halaman standalone/
+  keluarga (neraca, keuangan, proyeksi-kas, laba-rugi-proyek, dst.)
+  yang memang tidak lewat jalur ekspor registry — terverifikasi dari
+  struktur `ReportStandaloneEntry` (`report-catalog.ts:43-50`).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN margin per kendaraan sebagai laporan keputusan: riwayat
+  kendaraan = daftar dokumen, tanpa agregat pendapatan-vs-biaya per
+  unit; margin per job baru terbaca sesudah F-029 (proyek) beres dan
+  belum digulirkan ke dimensi kendaraan.
+- ABSEN customer statement: `grep "customer statement|statement
+  pelanggan"` di src/lib/reports + halaman laporan = 0; piutang
+  terbaca per faktur (`piutang-pelanggan`, `customer-receivables.ts`)
+  tanpa dokumen mutasi saldo berjalan per pelanggan untuk dikirim.
+- ABSEN jadwal/kirim laporan berkala: grep jadwal-laporan/email-
+  laporan = 0 di luar transaksi-berulang (bukan laporan).
+
+### Gap
+
+#### F-2026-10-21-032 (j) P1 — Customer statement (mutasi piutang per pelanggan) absen
+- Kompetitor: Accurate riwayat transaksi per pelanggan dari fitur
+  Pelanggan https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/mengenal-fitur-pelanggan/
+- Status Silengkap: ABSEN. Bukti: grep di atas = 0; laporan piutang
+  existing per-faktur tanpa saldo awal + mutasi + saldo berjalan.
+- Relevansi: penagihan ke pelanggan bengkel (fleet/kantor) butuh satu
+  dokumen rekap per periode; hari ini staf menyusun manual dari
+  daftar faktur — rawan selisih dengan `paidAmount` berjalan.
+- Adaptasi (read-model murni, tanpa migrasi): builder
+  `customer-statement-data.ts` — saldo awal dari faktur+ pembayaran
+  sebelum periode; baris periode = invoice terbit (Dr) + SalesPayment
+  + CustomerCredit teralokasi (Cr) dengan saldo berjalan; hanya
+  dokumen non-cancelled (pola `collectQuotationInvoices` existing);
+  tampilkan per pelanggan + ekspor lewat registry existing.
+- Modul disentuh: src/lib/reports/customer-statement*.ts (baru),
+  halaman `/laporan/statement-pelanggan` (frontend), registry.
+- Effort: M. Risiko: dobel hitung kredit vs payment — mitigasi
+  fixture: kredit teralokasi tampil sebagai baris sendiri, bukan
+  payment; uji saldo akhir = outstanding `customer-receivables.ts`.
+- Pemilik usulan: backend (builder), frontend (halaman). Butuh
+  putusan accountant: TIDAK (agregasi baca; definisi outstanding
+  mengikuti read-model piutang existing).
+
+#### F-2026-10-21-033 (j) P2 — Margin per kendaraan menunggu F-029; jangan bangun jalur kedua
+- Status Silengkap: PARSIAL (riwayat dokumen ada, agregat margin
+  tidak). Bukti: `customer-vehicle-history-data.ts:4-8` merangkai 5
+  sumber tanpa total pendapatan/biaya per kendaraan.
+- Adaptasi: SESUDAH builder F-2026-10-21-029 (`project-pl-data`)
+  terbukti — gulirkan agregat yang sama per `customerVehicleId`
+  (invoice via WO/quotation tertaut kendaraan + biaya MaterialIssue/
+  ProductionCost via WO kendaraan); label tegas "margin job
+  kendaraan", BUKAN laba akuntansi. Dilarang builder paralel sebelum
+  F-029 stabil (sumber nilai tunggal).
+- Effort: S (sesudah F-029). Pemilik: backend. Butuh putusan
+  accountant: TIDAK. Ditunda-teknis sampai F-029 merged.
+
+### Rekap P0 lintas domain (tutup rotasi a–j, status 2026-10-21 11:32)
+
+| ID | Domain | Isi | Status jalur |
+|---|---|---|---|
+| F-2026-10-20-103 | (c) | Change order WO tanpa dokumen | inti ditahan vonis Salsa 22:38 (batas build jelas) |
+| F-2026-10-21-011 | (c) | Lot kedaluwarsa lolos 4/5 jalur keluar | LAPIS AMAN MERGED PR #279 |
+| F-2026-10-21-021 | (f) | Garansi pasang tak tercatat | tahap 1-2 siap tanpa vonis, belum dibangun |
+| F-2026-10-21-026 | (h) | PPh21 pra-TER PP 58/2023 (SALAH) | BUTUH-VONIS accountant — angka final bukan milik Bot 5 |
+| F-2026-10-21-029 | (i) | L/R proyek salah cakupan (SALAH) | read-model, tanpa vonis, belum dibangun |
+
+Aturan keras terkonfirmasi ulang run ini: tidak ada P0 baru dari
+domain (j); tiga kebutuhan keputusan fokus (j) sudah terlayani
+laporan existing — gap nyata hanya statement (F-032) dan guliran
+margin kendaraan (F-033, tergantung F-029).
+
+### Yang TIDAK diusulkan run ini
+- Laporan terjadwal terkirim email (Zahir bisa): tanpa bukti
+  kebutuhan pemilik proses; catat sebagai USULAN tertunda, bukan gap.
+- Dashboard BI/grafik baru: dashboard existing + grafik-keuangan
+  cukup; menambah grafik tanpa keputusan yang dilayani = YAGNI.
+- Registry untuk 18 halaman standalone: struktur katalog memang
+  membedakan standalone vs registry — bukan inkonsistensi.
+
+Fokus berikutnya: antrean implementasi — F-032 builder (backend),
+label "Minimum masih global" F-013 (frontend, vonis Lead-Arch
+12:05), vonis F-026 (accountant). Rotasi a–j DITUTUP run ini.
+
+
+---
+
+## VONIS ACCOUNTANT 2026-10-21 — F-2026-10-21-026 (FINAL)
+
+Pemutus: `accounting-finance-tax` (BOT 4). Sifat: FINAL untuk angka/metode
+PPh21; backend eksekusi mesin/Prisma/API, frontend tampil slip apa
+adanya (tidak hitung ulang). Bukti repo live di `origin/main` 313ac37c:
+`src/lib/services/payroll-statutory.service.ts:8-10,237-277`
+`computePph21Monthly` masih metode disetahunkan ((bruto×12 − biaya
+jabatan − BPJS×12 − PTKP) × tarif Pasal 17 / 12, `Math.floor`); grep
+TER di service/actions = 0. `Employee.maritalStatus String?` +
+`Employee.dependents Int @default(0)` (schema:770-771); `Payroll.period
+String`, `Payroll.pph21 Decimal(15,2)`, `statutorySnapshot Json?`,
+`@@unique([employeeId, period])` (schema:2597-2635) — agregasi tahunan
+per karyawan SUDAH dapat diturunkan dari baris Payroll, tanpa model
+baru. Tiga jalur hitung berjalan `hrm.actions.ts:134,604,990` semua
+memanggil fungsi lama yang sama.
+
+Sumber resmi (akses 2026-10-21):
+- PP 58/2023 Pasal 2 ayat (1)-(6), Pasal 5 (berlaku 1 Januari 2024) +
+  Lampiran A/B/C/D. Teks resmi:
+  https://jdih.kemenkeu.go.id/api/download/e47c3fc4-a912-4bf1-bcad-335fee3f71f8/2023pp058.pdf
+  dan https://www.jdih.kemenkeu.go.id/dok/pp-58-tahun-2023/view
+- PMK 168/2023 Pasal 1 angka 17-18 (definisi Masa Pajak Terakhir),
+  Pasal 5 ayat (1) huruf a + ayat (3), Pasal 8, Pasal 9 ayat (2),(4),
+  Pasal 10, Pasal 13, Pasal 15, Pasal 21. Teks resmi:
+  https://jdih.kemenkeu.go.id/api/download/e60a82e0-b218-40f5-9d18-b924aa1e11ce/2023pmkeuangan168.pdf
+  Ringkasan DJP: https://pajak.go.id/id/pmk-168-tahun-2023-pph-pasal-21-ter
+- Benchmark produk (bukan dasar hukum): Accurate pencatatan gaji PPh21
+  https://help.accurate.id/product/accurate-online/fitur-aol/buku-besar/pencatatan-gaji/catat-gaji-pph21-spt/
+
+### Keputusan inti (mengikat, bukan opsi)
+
+Metode disetahunkan di `computePph21Monthly` DINYATAKAN SALAH untuk
+semua slip masa pajak ≥ titik berlaku di §5 dan WAJIB diganti skema
+dua-lapis PP 58/2023 + PMK 168/2023:
+
+1. Masa pajak SELAIN masa pajak terakhir: PPh21 = penghasilan bruto
+   satu masa pajak × TER bulanan kategori A/B/C (PP 58/2023 Pasal 2
+   ayat (2) huruf a, ayat (4)-(5); PMK 168/2023 Pasal 15 ayat (1)
+   huruf a). TANPA kurang biaya jabatan/BPJS/PTKP di lapisan ini —
+   ketiganya sudah terinternalisasi dalam tabel TER (Penjelasan
+   PP 58/2023 Pasal 2 ayat (2) huruf a).
+2. Masa pajak TERAKHIR: hitung ulang tarif Pasal 17 ayat (1) huruf a
+   UU PPh atas penghasilan kena pajak 1 tahun pajak / bagian tahun
+   pajak, dikurangi Σ PPh21 terpotong masa-masa sebelumnya dalam
+   tahun pajak yang sama (PMK 168/2023 Pasal 15 ayat (1) huruf b,
+   ayat (2)). Mesin progresif tahunan existing BOLEH dipakai ulang
+   hanya sebagai sub-fungsi hitung-ulang ini, dengan koreksi §4.
+
+### 1. Pemetaan kategori TER dari field existing
+
+Dasar: PP 58/2023 Pasal 2 ayat (3)-(4) — kategori ditentukan status
+PTKP (status kawin + jumlah tanggungan) pada AWAL tahun pajak
+(menguat: PMK 168/2023 Pasal 9 ayat (4)).
+
+| Status PTKP | Kategori TER |
+|---|---|
+| TK/0, TK/1, K/0 | A |
+| TK/2, TK/3, K/1, K/2 | B |
+| K/3 | C |
+
+Pemetaan dari data berjalan (tanpa field baru, tanpa migrasi):
+- Kawin/tidak: `isMarriedStatus(maritalStatus)` existing
+  (payroll-statutory.service.ts:193-234) DIPAKAI ULANG apa adanya —
+  termasuk penjaga negasi "Belum Kawin"/"Tidak Kawin"/"Cerai" yang
+  sudah teruji. Dilarang menulis parser status kedua.
+- Tanggungan: `dependents` di-clamp `min(3, max(0, floor))` persis
+  `ptkpFor` existing (baris 189). `dependents > 3` → 3, BUKAN error.
+- Kategori = fungsi murni (married, dep): (false,0|1)→A; (false,2|3)→B;
+  (true,0)→A; (true,1|2)→B; (true,3)→C.
+- Status tidak dikenal/null/kosong: fail-closed existing dipertahankan
+  (diperlakukan TK/0 → kategori A). Alasan: kategori A = potongan
+  tertinggi untuk bruto sama, jadi default ini tidak pernah
+  kurang-potong; tampilkan status mentah di snapshot agar HR dapat
+  memperbaiki master. DILARANG memperlebar ke B/C berdasar tebakan.
+- Kode kanonik `K/1`..`K/3`/`TK/n` pada `maritalStatus`: bila angka
+  pada kode dan kolom `dependents` berbeda, KOLOM `dependents`
+  MENANG (satu-satunya sumber hitung terstruktur); kode hanya penentu
+  kawin. Selisih dicatat di snapshot sebagai peringatan data, bukan
+  ditolak.
+- Kategori dibekukan di `statutorySnapshot` tiap slip (kategori,
+  status mentah, dependents ter-clamp, tarif TER terpilih, batas
+  bracket, versi/efektif tabel). Perubahan status tengah tahun TIDAK
+  mengubah kategori slip berjalan: kategori berlaku sejak masa pajak
+  Januari tahun berjalan; status baru berlaku untuk kategori mulai
+  Januari tahun berikutnya (Pasal 9 ayat (4) PMK 168/2023), kecuali
+  karyawan baru masuk — kategori dari status pada awal bulan ia
+  mulai bekerja (Pasal 9 ayat (5) diterapkan analog untuk pegawai
+  baru di pemberi kerja ini). Perubahan status tetap memengaruhi
+  PTKP hitung-ulang masa terakhir hanya bila status pada awal tahun
+  memang demikian; koreksi status retroaktif = kasus §4 butir e.
+- Cakupan subjek vonis ini: pegawai tetap penerima penghasilan
+  bulanan. TER harian pegawai tidak tetap, bukan-pegawai 50% × Pasal
+  17, dan peserta kegiatan (PMK 168/2023 Pasal 16) secara eksplisit
+  DI LUAR vonis ini — jangan dicampur ke fungsi TER bulanan.
+
+### 2. Penghasilan tidak teratur (bonus/THR/jasa produksi/tantiem)
+
+Dasar: PMK 168/2023 Pasal 5 ayat (1) huruf a jo. ayat (3) huruf b —
+bonus, THR, jasa produksi, tantiem, gratifikasi, premi, dan
+penghasilan tidak teratur lain adalah penghasilan pegawai tetap.
+
+- Masa selain masa terakhir: penghasilan tidak teratur DIGABUNG ke
+  penghasilan bruto masa pajak bulan diterimanya, lalu seluruh bruto
+  bulan itu × TER kategori karyawan (satu tarif atas total bruto,
+  BUKAN tarif terpisah per komponen, BUKAN dirata-rata 12 bulan).
+  Contoh mengikat DJP (sosialisasi PP 58/2023): bulan terima THR
+  melonjak bracket TER — itu benar dan disengaja; penyeimbang
+  satu-satunya adalah hitung ulang masa terakhir, bukan perataan.
+- `Payroll.type` (REGULAR/THR/dll) TIDAK mengubah metode: slip THR
+  terpisah pada bulan yang sama dengan slip reguler wajib
+  diagregasi dulu bruto + PPh21-nya sebagai SATU masa pajak sebelum
+  tarif dipilih. Memotong slip secara terpisah-pisah dengan tarif
+  masing-masing = SALAH (melanggar definisi bruto satu masa pajak,
+  Penjelasan PP 58/2023 Pasal 2 ayat (5)-(6)). Bila urutan terbit
+  membuat slip pertama sudah terpotong sebelum slip kedua terbit,
+  slip kedua memotong SELISIH: (bruto gabungan × TER) − PPh21 yang
+  sudah dipotong pada masa yang sama. Penjaga ini wajib tes (§6 T7).
+- Natura/kenikmatan kena pajak dan premi/iuran dibayar pemberi kerja
+  yang termasuk Pasal 5 ayat (3) huruf d-f ikut bruto bila sudah
+  masuk angka bruto slip; klasifikasi komponen kena/tidak kena pajak
+  = wilayah F-027, vonis ini tidak memutus pemetaan komponen —
+  fungsi TER hanya menerima satu angka: bruto masa pajak final.
+- Di masa terakhir, seluruh penghasilan tidak teratur tahun itu ikut
+  bruto tahunan hitung ulang §4 tanpa perlakuan khusus.
+
+### 3. Karyawan masuk / keluar tengah tahun
+
+Definisi mengikat: Masa Pajak Terakhir = masa Desember, ATAU masa
+tertentu saat pegawai tetap berhenti bekerja (PMK 168/2023 Pasal 1
+angka 18). Jadi "Desember" di seluruh vonis ini dibaca "masa pajak
+terakhir".
+
+a. Masuk tengah tahun (mulai bekerja setelah Januari, termasuk
+   kewajiban subjektif baru mulai setelah Januari):
+   - Bulan pertama s.d. bulan sebelum masa terakhir: TER bulanan
+     biasa atas bruto bulan berjalan (kategori dari status pada awal
+     bulan mulai bekerja, §1). TIDAK ada annualisasi, TIDAK ada
+     prorata PTKP di lapisan TER.
+   - Masa terakhirnya: hitung ulang Pasal 17 dengan aturan bagian
+     tahun pajak PMK 168/2023 Pasal 15 ayat (3): penghasilan neto
+     bagian tahun DISETAHUNKAN (neto bagian ÷ jumlah bulan bagian ×
+     12), PTKP PENUH setahun (tidak diprorata), tarif Pasal 17 atas
+     PKP disetahunkan (dibulatkan ke bawah ribuan penuh, Pasal 8
+     ayat (4)), lalu pajak bagian tahun = pajak disetahunkan ×
+     (jumlah bulan bagian ÷ 12). Kurangi Σ terpotong sebelumnya.
+   - Penghasilan dari pemberi kerja SEBELUMNYA pada tahun yang sama
+     TIDAK ikut hitung ulang di sistem ini (tidak ada datanya dan
+     bukan kewajiban pemberi kerja baru tanpa bukti potong yang
+     diserahkan); karyawan mengkreditkan di SPT Tahunannya. Sistem
+     DILARANG mengasumsikan nihil-di-tempat-lain di UI/laporan —
+     snapshot masa terakhir mencatat `priorEmployerIncomeIncluded:
+     false`.
+b. Keluar tengah tahun (berhenti sebelum Desember):
+   - Bulan berhenti = masa pajak terakhir bagi karyawan itu: pada
+     slip finalnya lakukan hitung ulang Pasal 17 persis butir (a)
+     di atas atas bagian tahun Januari–bulan berhenti (atau sejak
+     bulan masuk bila masuk tengah tahun juga), kurangi Σ terpotong
+     masa sebelumnya di tahun yang sama.
+   - Slip final WAJIB ditandai eksplisit sebagai masa terakhir
+     (penanda terstruktur di snapshot, mis. `isFinalTaxPeriod: true`
+     + alasan `resign`), bukan disimpulkan diam-diam dari
+     `Employee.isActive` — karyawan nonaktif karena cuti/data belum
+     lengkap tidak boleh memicu hitung ulang. Penanda diisi aksi
+     yang menerbitkan slip final; backend menentukan mekanismenya,
+     semantiknya mengikat: satu karyawan satu tahun pajak hanya
+     boleh punya SATU masa terakhir; hitung ulang kedua ditolak.
+   - Tanggal berhenti aktual menentukan bulan bagian; karyawan yang
+     berhenti tetapi slip final terbit bulan berikutnya: masa
+     terakhir = masa bulan terutangnya slip final tersebut, jumlah
+     bulan bagian dihitung dari bulan berpenghasilan pertama s.d.
+     bulan berhenti bekerja. Bila ragu antara dua bulan, hentikan
+     dan eskalasi ke BOT 4 — jangan tebak.
+   - Karyawan keluar lalu masuk kembali tahun yang sama di pemberi
+     kerja sama: masa terakhir final yang sudah terbit TIDAK dibuka
+     lagi; penghasilan sesudah masuk kembali diperlakukan sebagai
+     rangkaian baru dan diselesaikan di SPT Tahunan karyawan.
+     Sistem mencatat rangkaian kedua dengan snapshot merujuk slip
+     final rangkaian pertama. (Penyederhanaan sadar; risiko sisa
+     ditanggung rekonsiliasi SPT Tahunan karyawan, bukan pemberi
+     kerja.)
+
+### 4. Hitung ulang masa terakhir + kurang/lebih potong
+
+Rumus mengikat (PMK 168/2023 Pasal 8, Pasal 10, Pasal 15 ayat (1)
+huruf b + ayat (2)-(3)):
+
+```
+brutoTahun      = Σ penghasilan bruto seluruh masa pajak tahun
+                  berjalan (termasuk tidak teratur; hanya masa
+                  dalam rangkaian kerja tahun itu)
+biayaJabatan    = min(5% × brutoTahun, Rp500.000 × jumlahBulanBagian)
+pengurangLain   = iuran pensiun/hari tua dibayar karyawan melalui
+                  pemberi kerja + zakat/sumbangan keagamaan wajib
+                  melalui pemberi kerja (Pasal 10 ayat (1) b-c),
+                  HANYA sebesar yang benar-benar terpotong di slip
+netoTahun       = brutoTahun − biayaJabatan − pengurangLain
+                  (bagian tahun: netoDisetahunkan = netoTahun ÷
+                   jumlahBulanBagian × 12)
+PKP             = floor-ke-ribuan(max(0, neto(Disetahunkan) − PTKP))
+pajakTahun      = tarif Pasal 17 ayat (1) huruf a atas PKP
+                  (bagian tahun: × jumlahBulanBagian ÷ 12)
+pphMasaTerakhir = pajakTahun − Σ PPh21 terpotong masa sebelumnya
+```
+
+- PTKP dari status awal tahun (§1) dengan nilai master existing
+  (54.000.000 + 4.500.000 kawin + 4.500.000/tanggungan maks 3).
+  Braket Pasal 17 existing (UU HPP: 5/15/25/30/35%) DIPAKAI ULANG.
+- BPJS karyawan: hanya komponen yang memenuhi Pasal 10 ayat (1)
+  huruf b (iuran terkait pensiun/hari tua melalui pemberi kerja —
+  dalam data berjalan: porsi JP + JHT karyawan) yang mengurangi.
+  BPJS Kesehatan karyawan TIDAK mengurangi neto PPh21. Mesin lama
+  mengurangi seluruh `bpjs.total` — pada jalur hitung ulang ini
+  WAJIB dipisah; parameter masukan hitung ulang adalah iuran
+  pensiun-tahun berjalan terpisah dari BPJS total. (Lapisan TER
+  bulanan tidak terpengaruh — tidak ada pengurang sama sekali.)
+- Pembulatan: PKP dibulatkan ke bawah ke ribuan penuh sebelum tarif;
+  hasil akhir rupiah penuh `safeRound` sen sesuai presisi repo
+  Decimal(15,2). Pembulatan lantai per-bulan ala PER-16 lama pada
+  komentar existing (service:271-276) TIDAK berlaku untuk skema ini;
+  hapus klaim itu dari jalur baru agar tidak menyesatkan.
+- Kurang potong (selisih > 0): jumlah itu adalah PPh21 slip masa
+  terakhir (dipotong dari slip itu). Bila selisih melebihi bruto
+  slip masa terakhir, potong sebesar bruto tersedia dan sisa kurang
+  potong DITAMPILKAN sebagai temuan terbuka di snapshot + rekap —
+  dilarang menjadi saldo negatif diam-diam atau memotong masa tahun
+  berikutnya tanpa dokumen.
+- Lebih potong (selisih < 0): PPh21 slip masa terakhir = 0, dan
+  kelebihan WAJIB dikembalikan pemberi kerja kepada karyawan paling
+  lambat akhir bulan berikutnya setelah masa pajak terakhir,
+  disertai bukti potong (PMK 168/2023 Pasal 21 ayat (1); hak karyawan
+  Pasal 22 ayat (2)). Sistem mencatat nilai lebih-potong sebagai
+  angka positif terstruktur di snapshot slip masa terakhir
+  (`overWithheld`) dan status pengembaliannya (belum/sudah +
+  tanggal) — pengembalian adalah pembayaran nyata ke karyawan,
+  bukan pengurang slip tahun berikutnya secara diam-diam. Di sisi
+  pemberi kerja, kelebihan setor dikompensasikan ke masa berikutnya
+  lewat SPT Masa (Pasal 21 ayat (3)) — itu urusan rekap F-028,
+  bukan penyesuai slip individu.
+- Agregasi "terpotong sebelumnya" = Σ `Payroll.pph21` final
+  (status terbit/approved/paid menurut konvensi berjalan — slip
+  draft/batal TIDAK ikut) karyawan yang sama, tahun kalender sama,
+  masa < masa terakhir, termasuk potongan slip THR/bonus se-masa
+  (§2). Idempoten: menjalankan ulang hitung ulang pada masa yang
+  sama menghasilkan angka sama dan tidak menggandakan pengembalian.
+- Koreksi status/data master sesudah slip masa terakhir terbit:
+  TIDAK menghitung ulang slip terbit. Koreksi hanya lewat slip
+  koreksi/dokumen pembetulan di periode terbuka dengan rujukan slip
+  asal; angka asli tetap di snapshot.
+
+### 5. Titik berlaku — slip lama TIDAK dihitung ulang
+
+- Vonis berlaku untuk slip yang DITERBITKAN (generate/approve final,
+  bukan sekadar periode kalender slip) sesudah implementasi vonis
+  ini merged DAN tabel TER terisi efektif (lihat Handoff). Slip
+  pertama wajib metode TER adalah slip masa pajak pertama yang
+  diterbitkan sesudah kedua syarat itu terpenuhi.
+- Seluruh slip terbit sebelum titik itu — termasuk seluruh slip
+  tahun 2024-2025 yang terlanjur memakai metode disetahunkan —
+  TIDAK dihitung ulang, TIDAK diterbitkan ulang, TIDAK disesuaikan
+  diam-diam. Angka `pph21` + `statutorySnapshot` historis beku.
+- Konsekuensi eksplisit: hitung ulang masa terakhir pertama sesudah
+  titik berlaku memakai Σ terpotong sebelumnya APA ADANYA (termasuk
+  yang dihitung dengan metode lama di tahun yang sama). Jangan
+  "memperbaiki" bulan-bulan lama itu di dalam hitung ulang; selisih
+  metode lama tertangkap secara alami sebagai kurang/lebih potong
+  masa terakhir — di situlah tempat sahnya menurut Pasal 15/21.
+- Tabel TER = data master bertanggal efektif (PP 58/2023 berlaku
+  1 Jan 2024, Pasal 5), disimpan sebagai ruleset berperiode
+  (`PayrollStatutoryRule` atau tabel bracket khusus — keputusan
+  struktur milik backend, SEMANTIK mengikat): setiap baris bracket
+  membawa kategori, batas bawah eksklusif/batas atas inklusif bruto
+  bulanan, tarif %, effectiveFrom/To, source="PP 58/2023 Lampiran
+  A/B/C". Tabel kosong/tidak lengkap untuk periode slip → hitung
+  FINAL ditolak berisik (pola fail-closed ruleset existing
+  hrm.actions.ts:127-132 DIPERTAHANKAN dan diperluas ke TER);
+  dilarang fallback ke metode disetahunkan sebagai "cadangan".
+  Preview/estimasi boleh tampil berlabel non-final sesuai pola
+  existing, angka final tidak.
+- Slip menampilkan kategori TER + tarif yang dipakai (dari snapshot)
+  agar karyawan/HR dapat memeriksa; UI tidak menghitung ulang.
+
+### 6. Tes falsifikasi mengikat untuk backend
+
+Fixture angka memakai iuran-pengurang dinyatakan eksplisit per kasus;
+`bpjsPengurang` = hanya porsi pensiun/hari tua (§4), TER bulanan
+mengabaikannya. Semua tes wajib MERAH bila penjaga terkait dicabut
+(ganti TER→disetahunkan, gabung-masa dihapus, annualisasi bagian
+tahun dihapus, dsb).
+
+- **T1 kategori beda tanggungan (TER, masa selain terakhir).** Bruto
+  Rp10.000.000, satu masa: TK/0→A tarif 2,00% → PPh21 Rp200.000
+  (Lampiran A: >9.650.000–10.050.000); K/1→B tarif 1,50% → Rp150.000
+  (Lampiran B: >9.200.000–10.750.000); K/0→A Rp200.000. Bruto
+  Rp6.500.000: TK/0→A tarif 1,00% → Rp65.000; K/3→C tarif 0% →
+  Rp0 (Lampiran C: ≤6.600.000). `dependents=9` ter-clamp 3 (K→C).
+  Status "Belum Kawin" = TK (bukan K). Acuan silang resmi: contoh
+  Penjelasan PP 58/2023 Pasal 2 — K/0 bruto 10.000.000 → 2% →
+  Rp200.000/bulan Jan–Nov.
+- **T2 Desember karyawan penuh (hitung ulang + kurang potong).**
+  K/0 (PTKP 58.500.000), bruto Rp10.000.000 × 12, iuran pensiun
+  karyawan Rp100.000/bln, tanpa tidak-teratur. Jan–Nov TER A 2% =
+  Rp200.000 × 11 = Rp2.200.000. Tahunan: bruto 120.000.000 − biaya
+  jabatan 6.000.000 − iuran 1.200.000 = neto 112.800.000; PKP
+  54.300.000; pajak Pasal 17 = 5% × 54.300.000 = Rp2.715.000.
+  PPh21 Desember WAJIB Rp515.000 (= 2.715.000 − 2.200.000). Angka
+  ini persis contoh resmi Penjelasan PP 58/2023 — simpangan berapa
+  pun = gagal.
+- **T3 THR digabung se-masa + Desember menyeimbangkan.** TK/0, gaji
+  Rp10.000.000/bln, THR Rp10.000.000 diterima April, pengurang
+  pensiun 0 (fixture eksplisit). Jan–Mar TER A 2% = Rp200.000/bln.
+  April bruto gabungan Rp20.000.000 → TER A 9,00% (Lampiran A:
+  >19.750.000–24.150.000) → Rp1.800.000. Mei–Nov Rp200.000/bln.
+  Σ sebelum Des = 3×200.000 + 1.800.000 + 7×200.000 = Rp3.800.000.
+  Tahunan: bruto 130.000.000 − biaya jabatan 6.000.000 (cap) −
+  PTKP 54.000.000 = PKP 70.000.000; pajak = 5%×60.000.000 +
+  15%×10.000.000 = Rp4.500.000. PPh21 Desember = 4.500.000 −
+  3.800.000 = Rp700.000. (THR dipotong terpisah per slip atau
+  dirata-rata → angka berbeda → tes merah.)
+- **T4 masuk tengah tahun (bagian tahun, disetahunkan proporsional).**
+  TK/0, masuk 1 Juli, bruto Rp10.000.000/bln Jul–Des, pengurang 0.
+  Jul–Nov TER A 2% = Rp200.000 × 5 = Rp1.000.000. Masa terakhir
+  Des: bruto bagian 60.000.000 − biaya jabatan 3.000.000 (5%, di
+  bawah cap prorata 6×500.000) = neto 57.000.000; disetahunkan
+  114.000.000; PKP 60.000.000; pajak disetahunkan Rp3.000.000;
+  proporsional 6/12 → Rp1.500.000; PPh21 Des = 1.500.000 −
+  1.000.000 = Rp500.000. Tanpa annualisasi (PKP atas 57.000.000
+  langsung) hasilnya Rp150.000 pajak / selisih negatif — tes wajib
+  membedakan.
+- **T5 keluar tengah tahun = masa terakhir di bulan berhenti.**
+  TK/0, kerja Jan–Sep, bruto Rp10.000.000/bln, pengurang 0, slip
+  Sep ditandai final-resign. Jan–Agu TER Rp200.000 × 8 =
+  Rp1.600.000. Sep: neto bagian 90.000.000 − 4.500.000 =
+  85.500.000; disetahunkan 114.000.000; PKP 60.000.000; pajak
+  proporsional 9/12 × 3.000.000 = Rp2.250.000; PPh21 Sep =
+  Rp650.000. Tanpa penanda final, Sep terpotong TER Rp200.000 →
+  tes merah. Masa terakhir kedua tahun sama ditolak.
+- **T6 lebih potong wajib kembali (bukan negatif diam).** TK/0,
+  gaji Rp5.400.000/bln (TER A 0%), satu bulan terima tambahan tidak
+  teratur Rp50.000.000 (bruto bulan itu Rp55.400.000 → TER A 18%
+  (Lampiran A: >51.400.000–56.300.000) = Rp9.972.000), pengurang 0.
+  Tahunan: bruto 114.800.000 − biaya jabatan 5.740.000 − PTKP
+  54.000.000 = PKP 55.060.000 → pajak Rp2.753.000. Selisih Des =
+  2.753.000 − 9.972.000 = −Rp7.219.000 → PPh21 Des = Rp0 DAN
+  `overWithheld` tercatat Rp7.219.000 berstatus belum-kembali.
+  Slip Des negatif / pengurang tahun berikut = gagal.
+- **T7 dua slip se-masa (REGULAR + THR terpisah).** TK/0, slip
+  reguler bruto Rp10.000.000 terbit terpotong Rp200.000; slip THR
+  Rp10.000.000 bulan sama terbit sesudahnya: target gabungan
+  Rp20.000.000 × 9% = Rp1.800.000, maka PPh21 slip THR WAJIB
+  Rp1.600.000 (selisih), bukan Rp1.800.000 dan bukan TER atas
+  10.000.000 sendiri.
+- Penjaga non-angka wajib: tabel TER kosong → final ditolak;
+  snapshot memuat kategori+tarif+bracket dan tidak berubah saat
+  master diubah sesudahnya; menjalankan ulang generate masa
+  terakhir idempoten (angka sama, pengembalian tidak ganda);
+  slip pra-titik-berlaku tidak berubah oleh mesin baru (regresi
+  snapshot lama tetap terbaca).
+
+### Handoff (eksplisit)
+
+- Backend (`@backend-prisma-inventory-workshop`) BOLEH mulai
+  implementasi F-026 sesudah vonis ini merged; task backend F-026
+  bergantung task vonis ini. Tidak ada poin metode/angka yang
+  "terserah backend" — yang milik backend hanya struktur tabel
+  bracket, penanda final, dan mekanisme agregasi, dalam semantik
+  §1-§6.
+- Frontend menampilkan kategori TER, tarif, dan status lebih-potong
+  dari snapshot backend apa adanya; dilarang hitung ulang di UI.
+- Di luar cakupan vonis ini (jangan dikerjakan atas nama F-026):
+  TER harian/bukan-pegawai/peserta kegiatan, pemetaan komponen
+  kena pajak (F-027), rekap SPT/e-Bupot (F-028), jurnal akuntansi
+  atas lebih-potong (perlu vonis jurnal terpisah bila akan dibukukan
+  otomatis), status kawin karyawati Pasal 9 ayat (2)-(3) PMK
+  168/2023 (data gender/status existing belum cukup membuktikan
+  syarat keterangan suami tanpa penghasilan — perlakukan status
+  sesuai field berjalan, eskalasi ke BOT 4 bila ditemukan kasusnya).
+- Risiko sisa tercatat: kategori dari teks status bebas (dimitigasi
+  fail-closed A + snapshot transparan), penghasilan pemberi kerja
+  lain tak terlihat sistem (SPT Tahunan karyawan), keluar-masuk
+  kembali se-tahun (§3b butir terakhir).
+
+---
+
 ## 2026-10-21 11:03 WIB — Domain (g) kendaraan & fitment
 
 Rotasi: run sebelumnya (f) garansi F-2026-10-21-021..022. Run ini (g)
