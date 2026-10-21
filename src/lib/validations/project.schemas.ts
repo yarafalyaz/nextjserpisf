@@ -63,6 +63,61 @@ export const updateProjectSchema = z.object({
   notes: optionalStr(2000),
 })
 
+// ==================== Project Budget (RAB) F-2026-10-21-030 ====================
+
+/**
+ * Baris RAB proyek. `category` kanonik material|labor|subkontrak|lain
+ * (PROJECT_BUDGET_CATEGORIES di builder anggaran) — divalidasi di sini
+ * supaya baris tak sah tidak pernah tersimpan dari jalur form.
+ */
+const budgetCategory = z.enum(["material", "labor", "subkontrak", "lain"], {
+  error: "Kategori RAB tidak valid",
+})
+
+const optionalBudgetCategory = z.preprocess(
+  (v) => (v === "" || v == null ? undefined : v),
+  budgetCategory.optional(),
+)
+
+export const projectBudgetItemSchema = z.object({
+  itemId: optionalId,
+  projectStageId: optionalId,
+  category: optionalBudgetCategory,
+  description: optionalStr(1000),
+  qty: z.coerce
+    .number({ error: "Qty wajib diisi" })
+    .positive("Qty harus lebih dari 0"),
+  cost: z.coerce
+    .number({ error: "Biaya satuan wajib diisi" })
+    .min(0, "Biaya satuan tidak boleh negatif"),
+  sortOrder: z.coerce.number().int().min(0).optional(),
+})
+
+export const projectBudgetItemUpdateSchema = projectBudgetItemSchema.extend({
+  id: requiredId("ID baris RAB"),
+})
+
+export const manualContractSchema = z.object({
+  contractAmount: z.coerce
+    .number({ error: "Nilai kontrak wajib diisi" })
+    .positive("Nilai kontrak harus lebih dari 0"),
+  reason: z
+    .string({ error: "Alasan wajib diisi" })
+    .trim()
+    .min(1, "Alasan wajib diisi")
+    .max(2000),
+})
+
+export const budgetRevisionProposalSchema = z.object({
+  reason: z
+    .string({ error: "Alasan revisi wajib diisi" })
+    .trim()
+    .min(1, "Alasan revisi wajib diisi")
+    .max(2000),
+  /** JSON terstruktur perubahan baris + kontrak usulan; diparse aksi. */
+  changes: z.string().min(2, "Perubahan revisi wajib diisi").max(20000),
+})
+
 // ==================== Task ====================
 
 export const createTaskSchema = z.object({

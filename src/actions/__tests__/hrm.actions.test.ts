@@ -44,6 +44,10 @@ const mocks = vi.hoisted(() => {
     overtimeRequest: buildModelMock(),
     appreciation: buildModelMock(),
     payroll: buildModelMock(),
+    // F-2026-10-21-027: model komponen gaji (mock kosong = tanpa penugasan).
+    payrollComponent: buildModelMock(),
+    employeePayrollComponent: buildModelMock(),
+    payrollComponentLine: buildModelMock(),
     // AUD-R3-02: ruleset statutori LENGKAP untuk periode tes (tulis-final
     // payroll fail-closed bila fallback — mock kosong = semua tes tulis gagal).
     payrollStatutoryRule: {
