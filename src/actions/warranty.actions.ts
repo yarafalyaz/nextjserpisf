@@ -223,12 +223,11 @@ export async function getWarrantyClaimDetail(claimId: number) {
 async function runWarrantyJournalAction(
   tag: string,
   fallback: string,
-  post: (userId: number) => Promise<{ journalId: number; journalNumber: string; amount: number }>,
+  post: () => Promise<{ journalId: number; journalNumber: string; amount: number }>,
   label: (r: { journalNumber: string }) => string,
 ) {
   try {
-    const user = await requirePermission("approve_warranty_claims");
-    const result = await post(Number(user.id));
+    const result = await post();
     revalidatePath("/produksi/garansi");
     await logActivity("create", "Journal", result.journalId, label(result));
     return { success: true, journalId: result.journalId, journalNumber: result.journalNumber, amount: result.amount };
@@ -243,10 +242,11 @@ export async function postWarrantyClaimCostAction(formData: FormData) {
   const parsed = parseFormData(postWarrantyClaimCostSchema, formData);
   if (!parsed.success) return { success: false, error: parsed.error };
   const v = parsed.data;
+  const user = await requirePermission("approve_warranty_claims");
   return runWarrantyJournalAction(
     "postWarrantyClaimCostAction",
     "Gagal memposting jurnal biaya garansi",
-    (userId) => postWarrantyClaimCostJournal({ claimId: v.claimId, eventDate: v.eventDate ?? new Date(), createdBy: userId }),
+    () => postWarrantyClaimCostJournal({ claimId: v.claimId, eventDate: v.eventDate ?? new Date(), createdBy: Number(user.id) }),
     (r) => `Posting jurnal biaya klaim garansi #${v.claimId} (${r.journalNumber})`,
   );
 }
@@ -255,11 +255,12 @@ export async function postWarrantySupplierRecoveryAction(formData: FormData) {
   const parsed = parseFormData(postWarrantySupplierRecoverySchema, formData);
   if (!parsed.success) return { success: false, error: parsed.error };
   const v = parsed.data;
+  const user = await requirePermission("approve_warranty_claims");
   return runWarrantyJournalAction(
     "postWarrantySupplierRecoveryAction",
     "Gagal memposting jurnal recovery supplier",
-    (userId) =>
-      postWarrantySupplierRecoveryJournal({ claimId: v.claimId, amount: v.amount, eventDate: v.eventDate ?? new Date(), createdBy: userId }),
+    () =>
+      postWarrantySupplierRecoveryJournal({ claimId: v.claimId, amount: v.amount, eventDate: v.eventDate ?? new Date(), createdBy: Number(user.id) }),
     (r) => `Posting jurnal recovery supplier garansi #${v.claimId} (${r.journalNumber})`,
   );
 }
