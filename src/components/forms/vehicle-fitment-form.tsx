@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useState, useTransition } from "react"
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react"
 import { AlertTriangle } from "lucide-react"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
@@ -74,21 +74,26 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
   const [isActive, setIsActive] = useState(rule?.isActive ?? true)
   const [conflicts, setConflicts] = useState<VehicleFitmentConflict[]>([])
 
+  const buildScopeFormData = useCallback(() => {
+    const formData = new FormData()
+    if (itemId) formData.set("itemId", itemId)
+    if (brandId) formData.set("vehicleBrandId", brandId)
+    if (modelId) formData.set("vehicleModelId", modelId)
+    if (variantId) formData.set("vehicleVariantId", variantId)
+    if (yearFrom) formData.set("yearFrom", yearFrom)
+    if (yearTo) formData.set("yearTo", yearTo)
+    if (drivetrain) formData.set("drivetrain", drivetrain)
+    if (transmission) formData.set("transmission", transmission)
+    formData.set("result", result)
+    return formData
+  }, [itemId, brandId, modelId, variantId, yearFrom, yearTo, drivetrain, transmission, result])
+
   // F-2026-10-21-025: peringatan aturan berlawanan dari kontrak backend
   // (checkVehicleFitmentConflicts) — peringatan saja, simpan tidak diblokir.
   useEffect(() => {
     if (!itemId || !isActive) return
     const timer = setTimeout(async () => {
-      const formData = new FormData()
-      formData.set("itemId", itemId)
-      if (brandId) formData.set("vehicleBrandId", brandId)
-      if (modelId) formData.set("vehicleModelId", modelId)
-      if (variantId) formData.set("vehicleVariantId", variantId)
-      if (yearFrom) formData.set("yearFrom", yearFrom)
-      if (yearTo) formData.set("yearTo", yearTo)
-      if (drivetrain) formData.set("drivetrain", drivetrain)
-      if (transmission) formData.set("transmission", transmission)
-      formData.set("result", result)
+      const formData = buildScopeFormData()
       if (rule?.id) formData.set("excludeRuleId", String(rule.id))
       try {
         const res = await checkVehicleFitmentConflicts(formData)
@@ -99,7 +104,7 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
       }
     }, 200)
     return () => clearTimeout(timer)
-  }, [itemId, brandId, modelId, variantId, yearFrom, yearTo, drivetrain, transmission, result, isActive, rule?.id])
+  }, [buildScopeFormData, itemId, isActive, rule?.id])
 
   // Cascade the scope selectors so only consistent combinations are offered.
   const modelOptions = useMemo(
@@ -116,16 +121,7 @@ export function VehicleFitmentForm({ items, brands, models, variants, rule }: Fi
     if (!itemId) return showError("Item wajib dipilih")
 
     startTransition(async () => {
-      const formData = new FormData()
-      formData.set("itemId", itemId)
-      if (brandId) formData.set("vehicleBrandId", brandId)
-      if (modelId) formData.set("vehicleModelId", modelId)
-      if (variantId) formData.set("vehicleVariantId", variantId)
-      if (yearFrom) formData.set("yearFrom", yearFrom)
-      if (yearTo) formData.set("yearTo", yearTo)
-      if (drivetrain) formData.set("drivetrain", drivetrain)
-      if (transmission) formData.set("transmission", transmission)
-      formData.set("result", result)
+      const formData = buildScopeFormData()
       const source = (e.currentTarget.elements.namedItem("source") as HTMLTextAreaElement | null)?.value
       const notes = (e.currentTarget.elements.namedItem("notes") as HTMLTextAreaElement | null)?.value
       if (source) formData.set("source", source)
