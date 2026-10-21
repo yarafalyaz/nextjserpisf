@@ -6379,7 +6379,6 @@ rincian DPP + snapshot tenggat backend apa adanya; BOT 6 acceptance
 F39-1..F39-3 (+F39-4 bila master tenggat dibangun).
 
 ## VONIS BOT 4 2026-10-22 — F-2026-10-22-042-V Jawaban Q-SEWA-1..7 (pelengkap F-038/F-039/F-041)
-
 Status: PUTUSAN BOT 4 (kartu t_f0e26b31). Menjawab tujuh pertanyaan
 terbuka BOT 5 di PR #390 (F-2026-10-22-038-S, baris "Pertanyaan terbuka
 untuk BOT 4") dan dirujuk ulang PR #393 (F-2026-10-22-040-S). Dokumen
@@ -6387,9 +6386,7 @@ saja; tanpa kode/schema/migrasi. Penomoran: Q-SEWA tetap F-042-V per
 usulan kondektur BOT 1 (komentar kartu 2026-10-22 02:42); vonis paparan
 kredit F-017 direnumber F-044-V oleh pemilik kartunya — dicatat, bukan
 diputus di sini.
-
 ### Konsistensi mengikat (jangan dilanggar build)
-
 - Akun liabilitas PPh 4(2) sewa = **210206** Utang PPh 4(2) Sewa
   Tanah/Bangunan (F-041, PR #394). Seluruh tulisan "210205 usulan" di
   vonis F-038 butir 2 dan F-039 (jurnal + falsifikasi F39-1) dibaca
@@ -6407,9 +6404,7 @@ diputus di sini.
   lama bertenggat tanggal 10 BUKAN dasar build (sudah ditegaskan
   F-039; halaman pemotongan DJP yang masih menampilkan "tanggal 10"
   terverifikasi run ini — abaikan untuk tenggat).
-
 ### Bukti repo terverifikasi run ini (origin/main 389b2705)
-
 - Repo berjalan hanya mengenal SATU jenis potong + satu nominal per
   tagihan: `VendorBill.withholdingTypeId` + `withholdingAmount`
   (prisma/schema.prisma:1840-1841; bupot `withholdingTypeId`
@@ -6417,9 +6412,7 @@ diputus di sini.
   Konsekuensi langsung ke Q-SEWA-2.
 - Mesin potong existing memotong saat POSTING tagihan
   (accounting.hook.ts onVendorBillPosted; dirujuk PR #390 BR-SEWA-01).
-
 ### Dasar regulasi bersama (diakses 2026-10-22)
-
 - PP No. 34 Tahun 2017 (berlaku 02-01-2018; JDIH BPK
   https://peraturan.bpk.go.id/Details/64693/pp-no-34-tahun-2017;
   teks penjelasan https://www.peraturan.go.id/files/pp34-2017pjl.pdf):
@@ -6440,9 +6433,7 @@ diputus di sini.
   https://www.pajak.go.id/id/artikel/waspadai-salah-tarif-pph-biaya-layanan-gedung
   (biaya layanan kewajiban pemilik = masuk jumlah bruto final 10%
   walau dibayar lewat pengelola; menegaskan F-039 putusan 1).
-
 ---
-
 Q-SEWA-1 — Jasa pendamping terpisah kena pasal apa; ISF wajib potong?
 JAWABAN: Sudah diputus F-039 putusan 1 — vonis ini menegaskan + menutup.
 Perlakuan dua rezim, uji urutan wajib:
@@ -6466,7 +6457,6 @@ penerima independen. Rumus build BOT 3: DPP_final = sewa + komponen
 lolos gerbang (a); potong = 10% x DPP_final -> Cr 210206.
 Falsifikasi BOT 6: = F39-1 (service charge terpisah dipotong 2% =
 MERAH).
-
 Q-SEWA-2 — Satu tagihan campur: pecah dokumen, pecah baris, dominan?
 JAWABAN: Perlakuan fiskal = pecah per komponen menurut Q-SEWA-1/
 F-039 (BUKAN perlakuan dominan; dominan DILARANG — tidak ada dasar
@@ -6492,7 +6482,6 @@ Falsifikasi BOT 6: tagihan campur 11.500.000 tanpa rincian dipotong
 2% atau dominan-sewa-sebagian = MERAH (wajib 10% x 11.500.000 =
 1.150.000 -> 210206); dua dokumen terpisah -> bupot sewa 10% + bupot
 jasa 2% sah.
-
 Q-SEWA-3 — Mess/apartemen karyawan + pemilik perorangan berfasilitas:
 pengecualian subjek/fasilitas?
 JAWABAN: Objek tetap MASUK final sewa. PP 34/2017 Pasal 2 ayat (1)
@@ -6520,7 +6509,6 @@ potong, karena ISF pemotong menanggung risiko kurang potong).
 Falsifikasi BOT 6: sewa apartemen karyawan dipotong 0% beralasan
 "pemilik perorangan" = MERAH; tagihan jasa pondok pekerja dipotong
 10% jenis sewa = MERAH.
-
 Q-SEWA-4 — Titik potong fiskal: terutang vs bayar vs lebih dulu;
 sewa di muka penuh di muka vs ikut masa manfaat?
 JAWABAN: Sudah diputus F-039 putusan 2 — ditegaskan mengikat build:
@@ -6546,7 +6534,6 @@ sebagai temuan rekonsiliasi, bukan digeser diam-diam.
 Falsifikasi BOT 6: = F39-2 (potong dicicil mengikuti amortisasi =
 MERAH) + pembayaran atas VendorBill sewa draft lolos tanpa potongan =
 MERAH.
-
 Q-SEWA-5 — Pemilik tanpa NPWP: tarif/kewajiban berubah?
 JAWABAN: TETAP 10%, kewajiban potong TIDAK berubah. PP 34/2017
 Pasal 4 ayat (1) menetapkan tarif tunggal 10% x jumlah bruto tanpa
@@ -6566,7 +6553,6 @@ mengarang NPWP.
 Falsifikasi BOT 6: pemilik tanpa NPWP dipotong selain 10% (mis. 20%
 ala PPh 23) = MERAH; tagihan sewa tanpa NPWP diposting tanpa
 potongan = MERAH; bupot terbit dengan identitas kosong = MERAH.
-
 Q-SEWA-6 — DPP final bila tagihan ber-PPN; PPN sewa terutang?
 JAWABAN: (a) DPP PPh final = jumlah bruto nilai persewaan TANPA PPN.
 PPN bukan penghasilan persewaan pemilik dan bukan "jumlah yang
@@ -6604,7 +6590,6 @@ default build tetap DPP tanpa PPN.
 Falsifikasi BOT 6: tagihan 111.000.000 (termasuk PPN 11jt) dipotong
 11.100.000 = MERAH (wajib 10.000.000); tagihan pemilik non-PKP
 ditambah PPN oleh sistem = MERAH.
-
 Q-SEWA-7 — ISF pemilik disewa perorangan tak memotong: setor
 sendiri/lapor + bukti dicatat?
 JAWABAN: Mengikat F-039 putusan 3 dari sisi pemilik. Penyewa OP
@@ -6627,9 +6612,7 @@ ditutup: tetap terutang, jalur setor-sendiri).
 Falsifikasi BOT 6: penerimaan dari penyewa OP dicatat neto +
 "PPh dibayar di muka" = MERAH; penerimaan bruto tanpa jurnal setor
 sendiri dan tanpa temuan rekonsiliasi masa = MERAH.
-
 ### Rekap batas build BOT 3 (sesudah F-038/F-041, tanpa migrasi di kartu ini)
-
 1. Jenis PPH42-SEWA tarif 10% master efektif, kode objek wajib dari
    lampiran DJP berlaku, liabilityAccountCode -> 210206 (F-041).
 2. Default aman Q-SEWA-2: satu jenis per tagihan; campur tanpa bukti
@@ -6646,16 +6629,166 @@ sendiri dan tanpa temuan rekonsiliasi masa = MERAH.
 7. Sisi pemilik: penyewa non-pemotong -> setor-sendiri 10% beban
    final + bukti NTPN tertaut; klasifikasi penginapan vs sewa per
    Q-SEWA-3, ragu kontraktual = BUTUH-VONIS-AKUNTAN per kasus.
-
 Pemilik berikutnya: BOT 3 (seed sewa t_c70095d5 kini TERBUKA sesudah
 vonis ini + F-041 masuk repo; tanam 210206, DILARANG 210205 untuk
 pajak), BOT 5 (spec F-038-S/F-040-S sesuaikan: akun 210206, titik
 potong Q-SEWA-4, default aman Q-SEWA-2), BOT 2 (UI sesudah kontrak
 BOT 3: label pasal/kode dari master, tanpa hitung ulang), BOT 6
 (falsifikasi per Q di atas + F39-1..F39-4 + F-041).
-
 ### Catatan duplikat PR F-041 (BUKAN putusan kartu ini) — TERTUTUP
-
 Duplikat tuntas: PR #395 CLOSED; PR #394 MERGED 486f0f3a
 (kanonis F-041). Teks lama menyebut #395 live/CONFLICTING — basi,
 ditutup di PR ini per temuan low BOT 6 kartu t_3cc62169.
+## VONIS BOT 4 2026-10-22 04:50 WIB — F-2026-10-21-021 §9: deductibility fiskal provisi garansi + urutan koreksi SPT (FINAL tertulis, dok. lanjutan t_8ce683ea)
+Pemutus: `accounting-finance-tax` (BOT 4). Kartu: t_8ce683ea (audit antrean
+vonis terbuka + riset vonis berikutnya). Tanpa kode/schema/migrasi. Basis
+live: origin/main 633d737a (worktree /private/tmp/bot4-f021-fiskal). Vonis
+inti F-021 tahap 3 (§0–§9) + lanjutan gerbang G1–G7 tetap berlaku penuh;
+seksi ini HANYA menutup butir §9 "Deductibility fiskal provisi untuk SPT:
+BUTUH-VONIS-AKUNTAN" dan peringatan §5 "koreksi fiskal akhir tahun di
+luar cakupan". Tidak membuka E1/E4 dan bukan izin bangun.
+### 0. Putusan ringkas
+1. Provisi garansi akuntansi (E1 Dr 510104 Beban Garansi / Cr 210205
+   Provisi Garansi) BUKAN biaya fiskal pada tahun pembentukannya.
+   Koreksi fiskal POSITIF wajib sebesar beban provisi tahun berjalan
+   (510104 dari E1) pada SPT Tahunan PPh Badan tahun itu.
+2. Biaya klaim aktual (E2: beban nyata repair covered — material FIFO,
+   ProductionCost, jasa) DAPAT dikurangkan fiskal pada tahun biaya itu
+   terjadi/terutang, sepanjang memenuhi uji 3M Pasal 6. Pada tahun E2,
+   bagian E2 yang didebit ke 210205 (pemakaian provisi) TIDAK dikoreksi
+   positif lagi (bukan beban komersial tahun itu) dan TIDAK dikurangkan
+   dua kali; bagian E2 yang didebit langsung ke 510104 di tahun yang
+   sama (klaim di luar/di atas provisi, mode provisi MATI) dikurangkan
+   fiskal tahun itu tanpa koreksi, karena memang biaya aktual.
+3. Pelepasan provisi (E4 Dr 210205 / Cr 510104) BUKAN penghasilan fiskal
+   dan BUKAN pengurang biaya tahun pelepasan sebesar yang dulu sudah
+   dikoreksi positif; koreksi fiskal NEGATIF hanya sebesar saldo yang
+   terbukti dulu dikoreksi positif dan kini dilepas tanpa klaim aktual
+   menutupinya — wajib ditelusur per kelompok item, bukan global.
+4. Recovery supplier (E3 Dr 110508 / Cr 510104): fiskal mengikuti kapan
+   hak itu menjadi penghasilan/pemulihan biaya per aturan umum; E3 tidak
+   menciptakan koreksi provisi dan tidak mengurangi koreksi positif E1
+   (tidak net-off — konsisten §4/§7 AC-G5). Recovery atas biaya yang
+   belum pernah dikurangkan fiskal (masih terkoreksi positif) tidak
+   boleh dikurangkan/dikenai dua kali; penanganannya = kurangi koreksi
+   yang relevan atau akui sesuai dokumen credit note — wajib bukti
+   dokumen supplier, bukan snapshot status tautan.
+5. Konsekuensi urutan SPT mengikat: jurnal komersial berjalan normal
+   sesuai vonis inti; KOREKSI FISKAL hidup di lapis SPT/rekonsiliasi
+   fiskal, BUKAN jurnal balik dan BUKAN penghapusan provisi dari GL.
+   Dilarang menghapus/menolakkan provisi komersial demi menyamakan
+   fiskal — PSAK 57 kewajiban present tetap berdiri; beda temporer
+   ditangani di kertas kerja fiskal (dan pajak tangguhan di luar
+   cakupan vonis ini).
+### 1. Dasar resmi (diverifikasi run ini, bukan kutipan sekunder saja)
+- UU PPh: UU 7/1983 stdtd UU 36/2008 (teks UU 36/2008 juga membawa
+  rumusan sesudah UU HPP untuk Pasal 9 ayat (1) huruf c dalam hasil
+  pencarian resmi; substansi tidak berubah): Pasal 9 ayat (1) huruf c —
+  pembentukan/pemupukan dana cadangan TIDAK boleh dikurangkan, kecuali
+  daftar tertutup: (1) cadangan piutang tak tertagih untuk bank dan
+  badan usaha lain penyalur kredit, sewa guna usaha dengan hak opsi,
+  perusahaan pembiayaan konsumen, anjak piutang; (2) cadangan usaha
+  asuransi termasuk cadangan bantuan sosial BPJS; (3) cadangan
+  penjaminan LPS; (4) cadangan biaya reklamasi pertambangan; (5)
+  cadangan biaya penanaman kembali kehutanan; (6) cadangan biaya
+  penutupan dan pemeliharaan tempat pembuangan limbah industri.
+  Provisi garansi penjual/bengkel TIDAK ada di daftar ini. Sumber:
+  https://pajak.go.id/sites/default/files/UU%20PPh%20No%2036%20Th%202008.pdf
+  dan halaman peraturan DJP
+  https://www.pajak.go.id/id/pembentukan-atau-pemupukan-dana-cadangan-yang-boleh-dikurangkan-sebagai-biaya
+  (akses 2026-10-22).
+- PMK 81/PMK.03/2009 tentang Pembentukan atau Pemupukan Dana Cadangan
+  yang Boleh Dikurangkan sebagai Biaya, diubah PMK 219/PMK.011/2012
+  (JDIH Kemenkeu: https://jdih.kemenkeu.go.id/dok/81-pmk-03-2009):
+  hanya mengoperasionalkan enam jenis cadangan Pasal 9 ayat (1) huruf c
+  itu. Tidak ada cadangan garansi produk/jasa non-asuransi. PMK
+  74/2024 (cadangan piutang tak tertagih) tidak relevan dengan garansi
+  — jangan dipakai sebagai dasar analogi.
+- Pasal 6 ayat (1) UU PPh: biaya yang boleh dikurangkan = biaya untuk
+  mendapatkan, menagih, dan memelihara penghasilan (3M), termasuk biaya
+  pembelian bahan dan biaya berkenaan pekerjaan/jasa. Biaya klaim
+  garansi aktual memenuhi 3M karena melekat pada penjualan yang sudah
+  diakui penghasilannya dan kewajiban garansi assurance dari kontrak
+  penjualan itu; provisi estimasi belum memenuhi realisasi biaya
+  (belum ada pengeluaran/kewajiban aktual ke pihak luar sebesar
+  estimasi kelompok) — inilah garis Pasal 6 vs Pasal 9 huruf c.
+- PSAK 57 (vonis inti §8) tetap dasar komersial: provisi diakui bila
+  kewajiban kini + arus keluar probable + estimasi andal. Fiskal tidak
+  membatalkan pengakuan komersial; ia hanya menolak pembebanannya
+  sampai biaya aktual terjadi.
+### 2. Syarat (semua wajib)
+S1. Rekonsiliasi fiskal per kelompok item sama dengan kunci provisi
+    komersial vonis inti (itemGroupId bila inti dibuka): saldo awal
+    210205, + E1, − E2 (porsi provisi), − E4, = saldo akhir; koreksi
+    positif tahun = E1 tahun itu; koreksi negatif tahun = E4 yang
+    terbukti dari tumpukan sudah-terkoreksi; biaya aktual terkurangkan
+    = E2 aktual (porsi 510104 langsung + porsi pemakaian provisi yang
+    biayanya terjadi tahun ini, ditandai bukan beban komersial tahun
+    berjalan). Satu kelompok tidak menutup koreksi kelompok lain.
+S2. Bukti biaya aktual E2 = dokumen sumber (MaterialIssue completed,
+    ProductionCost, VendorBill jasa repair) tertaut klaim/WO repair —
+    sama gerbang G4 vonis inti. Estimasi, persen master, dan rekap
+    informatif BUKAN bukti fiskal.
+S3. Tahun pengakuan fiskal = tahun biaya aktual terutang/terjadi per
+    dokumen sumber, BUKAN tahun pembayaran kas semata dan bukan tahun
+    penjualan awal (kecuali biaya memang terjadi tahun itu). Pemotongan
+    periode (cut-off) mengikuti tanggal dokumen sumber pola laporan
+    existing; jurnal di periode terkunci tetap ditolak (G6/AC-G8).
+S4. Untuk SPT: lapis koreksi ditampilkan terpisah dari jurnal komersial
+    (kertas kerja/rekonsiliasi), memuat akun 510104/210205 dan rujukan
+    kelompok; angka SPT tidak membaca saldo provisi seolah biaya.
+S5. Bila E1/E4 kelak diaktifkan (gerbang data 12 bln/30 klaim + kartu
+    aktivasi terpisah): vonis ini berlaku sejak E1 pertama; tanpa E1,
+    hanya butir 2 (biaya aktual mode MATI) dan butir 4 yang hidup.
+### 3. Larangan
+L1. Jangan jadikan provisi garansi (E1) biaya fiskal tahun pembentukan,
+    jangan sebut "cadangan garansi deductible" di UI/laporan/SPT.
+L2. Jangan kurangkan E2 dua kali (sekali saat E1 dikoreksi longgar,
+    sekali saat klaim aktual) — desain S1 mencegahnya; pelanggaran =
+    temuan audit.
+L3. Jangan net-off recovery E3 terhadap provisi/koreksi; jangan akui
+    recovery dari status tautan drafted/sent (vonis F-022 tetap).
+L4. Jangan buat jurnal fiskal di GL untuk koreksi ini (tidak ada Dr/Cr
+    koreksi fiskal di buku komersial); jangan hapus provisi komersial
+    agar fiskal "bersih".
+L5. Jangan perluas analogi PMK 81/2009 cadangan asuransi/piutang ke
+    garansi bengkel; usaha ISF bukan usaha asuransi/penyalur kredit
+    untuk daftar Pasal 9 ayat (1) huruf c itu.
+### 4. Batas build
+- BOT 3: TIDAK ada build dari vonis ini sekarang. Inti F-021 tetap
+  menunggu G1 Lead + rute provisi MATI (E2/E3) per vonis lanjutan.
+  Bila kelak laporan SPT/rekonsiliasi fiskal dibangun: baca jurnal
+  E1/E2/E4 + saldo 210205 per kelompok dari GL existing, tampilkan
+  koreksi positif/negatif sebagai baris rekonsiliasi (bukan jurnal),
+  fail-closed bila mapping warranty* kosong (pola §0.4/G6); berhenti
+  dan eskalasi BOT 4 bila bentuk biaya aktual di luar E2 hendak
+  diklaim deductible.
+- BOT 2: tidak ada UI dari vonis ini. Label dilarang: "biaya garansi
+  dapat dikurangkan" untuk provisi; yang sah ditampilkan hanya angka
+  komersial + baris koreksi fiskal apa adanya dari backend.
+- BOT 5: tidak ada angka statutori baru; spec SPT kelak merujuk vonis
+  ini + vonis inti §5, bukan mengarang perlakuan provisi.
+### 5. Draf acceptance BOT 6 (untuk kartu SPT/rekonsiliasi kelak)
+AC-F1. Tahun ada E1 10jt, tanpa klaim: SPT koreksi positif 510104
+  tepat 10jt; GL tetap memuat E1 seimbang; cabut baris koreksi ->
+  tes rekonsiliasi MERAH (falsifikasi).
+AC-F2. Tahun berikut klaim aktual 6jt diposting E2 dari provisi:
+  biaya fiskal terkurangkan 6jt tahun itu, koreksi positif baru 0
+  untuk porsi itu, saldo 210205 turun 6jt, tidak ada pengurangan ganda
+  (total fiskal dua tahun = 6jt, bukan 16jt/10jt).
+AC-F3. Mode MATI tanpa E1: klaim aktual 6jt ke 510104 langsung =
+  deductible tahun itu tanpa koreksi positif/negatif provisi.
+AC-F4. E4 lepas 4jt dari tumpukan sudah-terkoreksi: koreksi negatif
+  4jt tahun lepas; E4 atas tumpukan tidak pernah dikoreksi (data
+  sebelum vonis, bila ada) = koreksi negatif 0 untuk porsi itu,
+  ditandai.
+AC-F5. Recovery supplier virtually-certain atas klaim yang biayanya
+  sudah terkurangkan: perlakuan dokumen credit note terbaca; recovery
+  possible: nol efek fiskal tahun itu.
+### 6. Urutan antrean vonis yang diaudit run ini (bukti kartu t_8ce683ea)
+Antrean dinyatakan KOSONG untuk vonis baru yang menghalangi; yang ada =
+finalisasi merge/duplikat, bukan putusan tertunda. Daftar cek dan hasil
+live (2026-10-22 04:43–04:50 WIB) ditulis di komentar kartu t_8ce683ea
+dan STATUS board run ini; vonis ini (§F-021 §9) dipilih sebagai riset
+vonis berikutnya karena satu-satunya label BUTUH-VONIS-AKUNTAN yang
+masih terbuka di backlog main.
