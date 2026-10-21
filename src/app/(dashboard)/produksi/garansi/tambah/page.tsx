@@ -28,7 +28,7 @@ export default async function WarrantyClaimCreatePage({
 }) {
   await requirePermission("create_warranty_claims")
   const params = await searchParams
-  const vehicleId = params.kendaraan ? Number(params.kendaraan) : NaN
+  const vehicleId = params.kendaraan ? Number(params.kendaraan) : Number.NaN
 
   let coverageOptions: WarrantyCoverageOption[] = []
   let vehicleLabel: string | null = null

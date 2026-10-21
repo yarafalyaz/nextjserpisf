@@ -8,13 +8,17 @@
  *      dari `Project.customerVehicleId` (query ringan terpisah karena
  *      loader F-029 hanya membawa plat sebagai label).
  *  (b) WO non-proyek pada periode (`WorkOrder.date`, projectId null):
- *      billed per definisi `job-billing-summary` lewat jembatan
+ *      pendapatan per definisi `job-billing-summary` lewat jembatan
  *      quotation → SalesOrder / quotation langsung (dedup per invoice
  *      id; invoice bersama diatribusikan ke WO pertama urut tanggal —
  *      aturan deterministik loader job-estimate-vs-actual), biaya =
  *      ProductionCost terikat WO atau lewat ProductionOrder-nya.
  *      Invoice ber-projectId tidak dipinjam ke WO non-proyek: ia milik
- *      ember proyek (a) lewat builder F-029.
+ *      ember proyek (a) lewat builder F-029. Basis pendapatan = DPP
+ *      (subtotal−diskon, vonis BOT 4 Q-033-1 PR #391) — BUKAN grandTotal;
+ *      `job-billing-summary` sendiri tidak diubah. MaterialIssue
+ *      completed langsung ke WO ditandai `hasUnlinkedMaterial` saja
+ *      (Q-033-2), tidak dijumlahkan ke biaya.
  *  (c) Invoice langsung ber-kendaraan pada periode yang tidak terjangkau
  *      jembatan mana pun di atas (quotationId/salesOrderId/projectId
  *      semua null): pendapatan subtotal−diskon saja.
@@ -34,7 +38,7 @@ import {
   buildVehicleMargin,
   type VehicleMarginResult,
 } from "@/lib/reports/vehicle-margin"
-import { safeSubtract } from "@/lib/utils/math"
+import { safeSubtract, safeSum } from "@/lib/utils/math"
 
 export type { VehicleMarginResult, VehicleMarginRow } from "@/lib/reports/vehicle-margin"
 export { buildVehicleMargin, VEHICLE_MARGIN_LABEL } from "@/lib/reports/vehicle-margin"
@@ -50,7 +54,8 @@ const INVOICE_BRIDGE_SELECT = {
   salesOrderId: true,
   projectId: true,
   status: true,
-  grandTotal: true,
+  subtotal: true,
+  discount: true,
   deletedAt: true,
 } as const
 
@@ -60,7 +65,8 @@ type BridgeInvoice = {
   salesOrderId: number | null
   projectId: number | null
   status: string
-  grandTotal: unknown
+  subtotal: unknown
+  discount: unknown
   deletedAt: Date | null
 }
 
@@ -111,6 +117,7 @@ export async function loadVehicleMarginReport(period: {
     customerName: string
     billedAmount: number
     actualCost: number
+    hasUnlinkedMaterial: boolean
   }[] = []
 
   if (workOrders.length > 0) {
@@ -122,7 +129,7 @@ export async function loadVehicleMarginReport(period: {
     const workOrderIds = workOrders.map((w) => w.id)
     const productionOrderIds = workOrders.flatMap((w) => w.productionOrders.map((p) => p.id))
 
-    const [salesOrders, quotationInvoices, costs] = await Promise.all([
+    const [salesOrders, quotationInvoices, costs, directMaterialIssues] = await Promise.all([
       quotationIds.length
         ? prisma.salesOrder.findMany({
             where: { quotationId: { in: quotationIds }, deletedAt: null },
@@ -149,6 +156,11 @@ export async function loadVehicleMarginReport(period: {
           amount: true,
           productionOrder: { select: { workOrderId: true } },
         },
+      }),
+      // Penanda parsial Q-033-2: keberadaan saja, jumlah tidak dibaca.
+      prisma.materialIssue.findMany({
+        where: { workOrderId: { in: workOrderIds }, status: "completed" },
+        select: { workOrderId: true },
       }),
     ])
 
@@ -193,7 +205,17 @@ export async function loadVehicleMarginReport(period: {
         (inv.salesOrderId !== null ? workOrderBySalesOrder.get(inv.salesOrderId) : undefined)
       if (woId === undefined) continue
       seenInvoiceIds.add(inv.id)
-      billedByWorkOrder.set(woId, (billedByWorkOrder.get(woId) ?? 0) + Number(inv.grandTotal))
+      // Basis DPP (Q-033-1): subtotal−diskon, tanpa PPN — bukan grandTotal.
+      billedByWorkOrder.set(
+        woId,
+        safeSum(
+          [
+            billedByWorkOrder.get(woId) ?? 0,
+            safeSubtract(Number(inv.subtotal), Number(inv.discount), 2),
+          ],
+          2,
+        ),
+      )
     }
 
     const costByWorkOrder = new Map<number, number>()
@@ -203,6 +225,12 @@ export async function loadVehicleMarginReport(period: {
       costByWorkOrder.set(woId, (costByWorkOrder.get(woId) ?? 0) + Number(cost.amount))
     }
 
+    const unlinkedMaterialWorkOrderIds = new Set(
+      directMaterialIssues
+        .map((mi) => mi.workOrderId)
+        .filter((id): id is number => id !== null),
+    )
+
     for (const w of workOrders) {
       jobs.push({
         workOrderId: w.id,
@@ -211,6 +239,7 @@ export async function loadVehicleMarginReport(period: {
         customerName: w.customer.name,
         billedAmount: billedByWorkOrder.get(w.id) ?? 0,
         actualCost: costByWorkOrder.get(w.id) ?? 0,
+        hasUnlinkedMaterial: unlinkedMaterialWorkOrderIds.has(w.id),
       })
     }
   }
