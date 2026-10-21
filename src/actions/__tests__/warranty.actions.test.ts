@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   createWarrantyClaimMock: vi.fn(),
   decideWarrantyClaimMock: vi.fn(),
   transitionWarrantyClaimMock: vi.fn(),
+  linkSupplierClaimMock: vi.fn(),
+  linkSupplierClaimVendorOnlyMock: vi.fn(),
+  transitionSupplierClaimMock: vi.fn(),
   warrantyClaimFindUnique: vi.fn(),
   warrantyCoverageFindMany: vi.fn(),
 }))
@@ -29,6 +32,9 @@ vi.mock("@/lib/services/warranty.service", async (importOriginal) => {
     createWarrantyClaim: (...a: unknown[]) => mocks.createWarrantyClaimMock(...a),
     decideWarrantyClaim: (...a: unknown[]) => mocks.decideWarrantyClaimMock(...a),
     transitionWarrantyClaim: (...a: unknown[]) => mocks.transitionWarrantyClaimMock(...a),
+    linkSupplierClaim: (...a: unknown[]) => mocks.linkSupplierClaimMock(...a),
+    linkSupplierClaimVendorOnly: (...a: unknown[]) => mocks.linkSupplierClaimVendorOnlyMock(...a),
+    transitionSupplierClaim: (...a: unknown[]) => mocks.transitionSupplierClaimMock(...a),
   }
 })
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: vi.fn() }))
@@ -37,6 +43,8 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }))
 import {
   createWarrantyClaimAction,
   decideWarrantyClaimAction,
+  linkSupplierClaimAction,
+  transitionSupplierClaimAction,
   transitionWarrantyClaimAction,
   getWarrantyClaimDetail,
 } from "../warranty.actions"
@@ -122,5 +130,66 @@ describe("getWarrantyClaimDetail", () => {
     const res = await getWarrantyClaimDetail(5)
     expect(res.success).toBe(true)
     if (res.success) expect(res.eligibility?.withinPeriod).toBe(false)
+  })
+})
+
+describe("linkSupplierClaimAction (F-2026-10-21-022)", () => {
+  it("dengan purchaseReturnId: izin edit_warranty_claims, teruskan ke linkSupplierClaim", async () => {
+    mocks.linkSupplierClaimMock.mockResolvedValue({ id: 5 })
+    const res = await linkSupplierClaimAction(
+      fd({ claimId: "5", supplierClaimVendorId: "3", purchaseReturnId: "9" }),
+    )
+    expect(res.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_warranty_claims")
+    expect(mocks.linkSupplierClaimMock).toHaveBeenCalledWith(
+      expect.objectContaining({ claimId: 5, supplierClaimVendorId: 3, purchaseReturnId: 9, actorUserId: 7 }),
+    )
+    expect(mocks.linkSupplierClaimVendorOnlyMock).not.toHaveBeenCalled()
+  })
+
+  it("tanpa purchaseReturnId: jalur vendor-saja (tanpa PO asal)", async () => {
+    mocks.linkSupplierClaimVendorOnlyMock.mockResolvedValue({ id: 5 })
+    const res = await linkSupplierClaimAction(
+      fd({ claimId: "5", supplierClaimVendorId: "3", supplierClaimNotes: "Tanpa PO asal" }),
+    )
+    expect(res.success).toBe(true)
+    expect(mocks.linkSupplierClaimVendorOnlyMock).toHaveBeenCalledWith(
+      expect.objectContaining({ claimId: 5, supplierClaimVendorId: 3, supplierClaimNotes: "Tanpa PO asal" }),
+    )
+    expect(mocks.linkSupplierClaimMock).not.toHaveBeenCalled()
+  })
+
+  it("vendor kosong ditolak schema sebelum service dipanggil", async () => {
+    const res = await linkSupplierClaimAction(fd({ claimId: "5" }))
+    expect(res.success).toBe(false)
+    expect(mocks.linkSupplierClaimMock).not.toHaveBeenCalled()
+    expect(mocks.linkSupplierClaimVendorOnlyMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("transitionSupplierClaimAction (F-2026-10-21-022)", () => {
+  it("sent wajib izin approve_warranty_claims (penyetuju kirim), bukan edit", async () => {
+    mocks.transitionSupplierClaimMock.mockResolvedValue({ id: 5 })
+    const res = await transitionSupplierClaimAction(
+      fd({ claimId: "5", to: "sent", supplierClaimRefNo: "RESI-1" }),
+    )
+    expect(res.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("approve_warranty_claims")
+  })
+
+  it("accepted cukup izin edit_warranty_claims; actorIsAdmin false tanpa role admin", async () => {
+    mocks.transitionSupplierClaimMock.mockResolvedValue({ id: 5 })
+    const res = await transitionSupplierClaimAction(fd({ claimId: "5", to: "accepted" }))
+    expect(res.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("edit_warranty_claims")
+    expect(mocks.transitionSupplierClaimMock).toHaveBeenCalledWith(
+      expect.objectContaining({ claimId: 5, to: "accepted", actorUserId: 7, actorIsAdmin: false }),
+    )
+  })
+
+  it("status recovery tidak dikenal ditolak schema", async () => {
+    const res = await transitionSupplierClaimAction(fd({ claimId: "5", to: "paid" }))
+    expect(res.success).toBe(false)
+    expect(mocks.transitionSupplierClaimMock).not.toHaveBeenCalled()
   })
 })
