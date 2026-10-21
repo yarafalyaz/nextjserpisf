@@ -31,6 +31,7 @@ import { getErrorMessage } from "@/lib/utils/error"
 import { reverseJournalsByReferenceTx } from "@/lib/hooks/accounting.hook"
 import {
   computeWithheld,
+  resolvePph42RentRate,
   type WithholdingArticle,
   WITHHOLDING_ARTICLES,
 } from "@/lib/tax/withholding-certificate"
@@ -151,7 +152,19 @@ export async function issueWithholdingCertificate(input: IssueWithholdingInput):
       if (dupe) throw definitive(`Nomor bupot "${number}" sudah terbit`)
       const type = await tx.withholdingTaxType.findUniqueOrThrow({ where: { id: input.withholdingTypeId } })
       const article = assertArticle(type.article ?? "")
-      const tariff = Number(type.rate)
+      // F47-1 (vonis BOT 4 PR #408): bupot sewa fail-closed di level service —
+      // kode objek master wajib terisi & bukan konstruksi, tarif selalu 10.
+      // Jenis lain tak disentuh resolver sewa. Master tanpa tanggal
+      // efektif/histori: nilai berjalan divalidasi lalu dibekukan snapshot.
+      const tariff = type.code === "PPH42-SEWA"
+        ? (() => {
+            try {
+              return resolvePph42RentRate(type.objectCode)
+            } catch (e) {
+              throw definitive(getErrorMessage(e))
+            }
+          })()
+        : Number(type.rate)
       if (!(tariff >= 0)) throw definitive(`Jenis PPh "${type.code}" bertarif tak valid`)
       if (input.direction === "we_withhold" && type.liabilityAccountId == null) {
         throw definitive(`Jenis PPh "${type.code}" belum punya akun Hutang PPh — lengkapi di Pengaturan → Pajak Potong`)
