@@ -15,6 +15,7 @@ import {
 } from "@/lib/validations/production-cost.schemas"
 import { applyProductionCostDelta } from "@/lib/services/production-cost.service"
 import { closedWorkOrderError } from "@/lib/services/timesheet-context"
+import { assertJobCostMutable } from "@/lib/services/job-closeout.service"
 import { assertPeriodOpen } from "@/lib/services/period-lock.service"
 import { safeMultiply, safeRound } from "@/lib/utils/math"
 
@@ -24,6 +25,12 @@ function mutableOrderError(
   verb: "ditambahkan" | "diubah" | "dihapus",
 ): { success: false; error: string } | null {
   if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
+  if (order.status === "closed") {
+    return {
+      success: false,
+      error: `Biaya tidak dapat ${verb} pada perintah berstatus 'closed' (job sudah ditutup). Buka kembali (reopen) dengan alasan untuk mengubah biaya.`,
+    }
+  }
   if (order.status === "completed" || order.status === "cancelled") {
     return {
       success: false,
@@ -77,6 +84,12 @@ export async function createProductionCost(formData: FormData) {
     }
 
     const cost = await prisma.$transaction(async (tx) => {
+      // F-009-V: guard closed di dalam tx (PO/WO tertutup ditolak server).
+      await assertJobCostMutable(
+        { productionOrderId: v.productionOrderId ?? null, workOrderId: v.workOrderId ?? null },
+        "ditambahkan",
+        tx,
+      )
       const created = await tx.productionCost.create({
         data: {
           productionOrderId: v.productionOrderId ?? null,
@@ -133,7 +146,7 @@ export async function updateProductionCost(id: number, formData: FormData) {
 
     const existing = await prisma.productionCost.findUnique({
       where: { id },
-      select: { id: true, productionOrderId: true, amount: true },
+      select: { id: true, productionOrderId: true, workOrderId: true, amount: true },
     })
     if (!existing) return { success: false, error: "Biaya tidak ditemukan" }
 
@@ -152,6 +165,11 @@ export async function updateProductionCost(id: number, formData: FormData) {
     }
 
     await prisma.$transaction(async (tx) => {
+      await assertJobCostMutable(
+        { productionOrderId: existing.productionOrderId, workOrderId: existing.workOrderId },
+        "diubah",
+        tx,
+      )
       await tx.productionCost.update({
         where: { id },
         data: {
@@ -192,7 +210,7 @@ export async function deleteProductionCost(id: number) {
 
     const existing = await prisma.productionCost.findUnique({
       where: { id },
-      select: { id: true, productionOrderId: true, amount: true },
+      select: { id: true, productionOrderId: true, workOrderId: true, amount: true },
     })
     if (!existing) return { success: false, error: "Biaya tidak ditemukan" }
 
@@ -206,6 +224,11 @@ export async function deleteProductionCost(id: number) {
     }
 
     await prisma.$transaction(async (tx) => {
+      await assertJobCostMutable(
+        { productionOrderId: existing.productionOrderId, workOrderId: existing.workOrderId },
+        "dihapus",
+        tx,
+      )
       await tx.productionCost.delete({ where: { id } })
       if (existing.productionOrderId) {
         await applyProductionCostDelta(existing.productionOrderId, -Number(existing.amount), tx, {
@@ -293,6 +316,7 @@ export async function pullLaborCostFromTimesheets(
 
     let totalAdded = 0
     await prisma.$transaction(async (tx) => {
+      await assertJobCostMutable({ productionOrderId, workOrderId }, "ditambahkan", tx)
       for (const t of toCreate) {
         const hours = Number(t.hours)
         const amount = Math.round(hours * ratePerHour * 100) / 100
@@ -442,6 +466,9 @@ export async function applyOverheadToProductionOrder(formData: FormData) {
       select: { id: true, status: true, documentNo: true },
     })
     if (!order) return { success: false, error: "Perintah produksi tidak ditemukan" }
+    if (order.status === "closed") {
+      return { success: false, error: "Overhead tidak dapat diterapkan ke perintah berstatus 'closed' (job sudah ditutup). Buka kembali (reopen) dengan alasan untuk mengubah biaya." }
+    }
     if (order.status === "completed" || order.status === "cancelled") {
       return { success: false, error: `Overhead tidak dapat diterapkan ke perintah berstatus '${order.status}'.` }
     }
@@ -449,6 +476,7 @@ export async function applyOverheadToProductionOrder(formData: FormData) {
     const driverLabel = OVERHEAD_DRIVER_LABELS[v.driverType]
 
     const cost = await prisma.$transaction(async (tx) => {
+      await assertJobCostMutable({ productionOrderId: v.productionOrderId }, "ditambahkan", tx)
       const created = await tx.productionCost.create({
         data: {
           productionOrderId: v.productionOrderId,

@@ -108,6 +108,17 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
     "F-2026-10-21-019 backend; UI pull labor perintah kerja menyusul (frontend)",
+  // F-2026-10-21-009-V backend dulu (vonis BOT 4 PR #349): kontrak tutup/reopen
+  // job siap; tombol UI menyusul di kartu frontend (buang entri ini saat halaman
+  // produksi/perintah kerja memanggilnya).
+  "src/actions/manufacturing.actions.ts::closeProductionOrder":
+    "F-2026-10-21-009-V backend; tombol tutup produksi menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::reopenProductionOrder":
+    "F-2026-10-21-009-V backend; tombol buka-kembali produksi menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::closeWorkOrder":
+    "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::reopenWorkOrder":
+    "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {
