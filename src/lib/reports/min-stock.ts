@@ -61,6 +61,56 @@ export interface MinStockResult {
   verdict: string
 }
 
+/**
+ * F-2026-10-21-013 lapis aman: stok minimum per gudang. Minimum masih
+ * global `Item.minStock` (inti ItemWarehouseSetting ditunda) — dibandingkan
+ * ke sisa lapisan per gudang supaya gudang bengkel kosong tak tertutup
+ * stok gudang pusat. Gudang tanpa lapisan untuk barang itu tidak dinilai
+ * (bukan 0): barang memang tidak disimpan di sana.
+ */
+export interface MinStockWarehouseInput {
+  itemId: number
+  sku: string
+  name: string
+  warehouseId: number
+  warehouseName: string
+  qtyAtWarehouse: number
+  minStock: number
+  cost: number
+}
+
+export interface MinStockWarehouseLine {
+  itemId: number
+  sku: string
+  name: string
+  warehouseId: number
+  warehouseName: string
+  qtyAtWarehouse: number
+  minStock: number
+  shortage: number
+  shortageValue: number
+}
+
+export function buildMinStockByWarehouse(rows: MinStockWarehouseInput[]): MinStockWarehouseLine[] {
+  return rows
+    .filter((r) => r.minStock > EPSILON && r.qtyAtWarehouse <= r.minStock + EPSILON)
+    .map((r) => {
+      const shortage = Math.max(0, r.minStock - r.qtyAtWarehouse)
+      return {
+        itemId: r.itemId,
+        sku: r.sku,
+        name: r.name,
+        warehouseId: r.warehouseId,
+        warehouseName: r.warehouseName,
+        qtyAtWarehouse: r.qtyAtWarehouse,
+        minStock: r.minStock,
+        shortage,
+        shortageValue: safeMultiply(shortage, r.cost, 2),
+      }
+    })
+    .sort((a, b) => b.shortageValue - a.shortageValue || a.sku.localeCompare(b.sku, "id-ID"))
+}
+
 const EPSILON = 0.0001
 
 function amount(value: number): string {
