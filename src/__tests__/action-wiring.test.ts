@@ -124,12 +124,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  "src/actions/hrm.actions.ts::addPayrollComponentLine":
-    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  "src/actions/hrm.actions.ts::updatePayrollComponentLineAmount":
-    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  "src/actions/hrm.actions.ts::removePayrollComponentLine":
-    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
   // F-2026-10-21-030: ke-9 aksi RAB sudah ter-wire UI ProjectBudgetEditor
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3 backend dulu (kartu t_d4ae15cc): pemanggil jurnal
