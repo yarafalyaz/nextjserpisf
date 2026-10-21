@@ -808,6 +808,9 @@ model Employee {
   tasks               Task[]
   timesheets          Timesheet[]
   workSchedules       WorkSchedule[]    @relation("EmployeeWorkSchedules")
+  salesQuotations     Quotation[]       @relation("QuotationSalesEmployee")
+  salesOrdersAsSales  SalesOrder[]      @relation("SalesOrderSalesEmployee")
+  salesInvoicesAsSales SalesInvoice[]   @relation("SalesInvoiceSalesEmployee")
 
   @@index([departmentId], map: "employees_department_id_fkey")
   @@index([positionId], map: "employees_position_id_fkey")
@@ -1190,6 +1193,9 @@ model Quotation {
   documentNo        String             @unique @map("document_no")
   customerId        Int                @map("customer_id")
   customerVehicleId Int?               @map("customer_vehicle_id")
+  // F-2026-10-21-016 tahap 1: atribusi penjual (snapshot; diwariskan
+  // SO -> Invoice). Tanpa jurnal komisi (tahap 3 ditunda vonis Lead).
+  salesEmployeeId   Int?               @map("sales_employee_id")
   date              DateTime
   validUntil        DateTime?          @map("valid_until")
   subtotal          Decimal            @default(0.00) @db.Decimal(15, 2)
@@ -1209,12 +1215,14 @@ model Quotation {
   sections          QuotationSection[]
   customer          Customer           @relation(fields: [customerId], references: [id])
   customerVehicle   CustomerVehicle?   @relation(fields: [customerVehicleId], references: [id])
+  salesEmployee     Employee?          @relation("QuotationSalesEmployee", fields: [salesEmployeeId], references: [id])
   salesInvoices     SalesInvoice[]
   salesOrders       SalesOrder[]
   workOrders        WorkOrder[]
 
   @@index([customerId], map: "quotations_customer_id_fkey")
   @@index([customerVehicleId], map: "quotations_customer_vehicle_id_fkey")
+  @@index([salesEmployeeId])
   @@index([status], map: "idx_quotations_status")
   @@index([projectId])
   @@index([createdBy])
@@ -1308,6 +1316,8 @@ model SalesOrder {
   slug              String?          @unique
   id                Int              @id @default(autoincrement())
   customerVehicleId Int?             @map("customer_vehicle_id")
+  // F-2026-10-21-016 tahap 1: snapshot penjual diwariskan dari Quotation.
+  salesEmployeeId   Int?             @map("sales_employee_id")
   totalAmount       Decimal          @default(0.00) @map("total_amount") @db.Decimal(15, 2)
   documentNo        String           @unique @map("document_no")
   customerId        Int              @map("customer_id")
@@ -1329,11 +1339,13 @@ model SalesOrder {
   items             SalesOrderItem[]
   customer          Customer         @relation(fields: [customerId], references: [id])
   quotation         Quotation?       @relation(fields: [quotationId], references: [id])
+  salesEmployee     Employee?        @relation("SalesOrderSalesEmployee", fields: [salesEmployeeId], references: [id])
 
   @@index([customerId], map: "sales_orders_customer_id_fkey")
   @@index([quotationId], map: "sales_orders_quotation_id_fkey")
   @@index([status], map: "idx_sales_orders_status")
   @@index([customerVehicleId])
+  @@index([salesEmployeeId])
   @@index([createdBy])
   @@index([createdAt])
   @@index([deletedAt])
@@ -1361,6 +1373,8 @@ model SalesInvoice {
   id                   Int                   @id @default(autoincrement())
   customerVehicleId    Int?                  @map("customer_vehicle_id")
   projectId            Int?                  @map("project_id")
+  // F-2026-10-21-016 tahap 1: snapshot penjual diwariskan SO/Quotation.
+  salesEmployeeId      Int?                  @map("sales_employee_id")
   // Nomor faktur pajak keluaran (e-Faktur/Coretax). Opsional: faktur pajak
   // terbit di luar Silengkap, jadi dokumen lama/tanpa PPN tetap valid kosong.
   taxInvoiceNumber     String?               @map("tax_invoice_number")
@@ -1388,12 +1402,14 @@ model SalesInvoice {
   customer             Customer              @relation(fields: [customerId], references: [id])
   quotation            Quotation?            @relation(fields: [quotationId], references: [id])
   salesOrder           SalesOrder?           @relation(fields: [salesOrderId], references: [id])
+  salesEmployee        Employee?             @relation("SalesInvoiceSalesEmployee", fields: [salesEmployeeId], references: [id])
   salesReturns         SalesReturn[]
   payments             SalesPayment[]
   invoiceExchangeItems InvoiceExchangeItem[]
   taxInvoices          TaxInvoice[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
+  @@index([salesEmployeeId])
   @@index([quotationId], map: "sales_invoices_quotation_id_fkey")
   @@index([salesOrderId], map: "sales_invoices_sales_order_id_fkey")
   @@index([status], map: "idx_sales_invoices_status")
