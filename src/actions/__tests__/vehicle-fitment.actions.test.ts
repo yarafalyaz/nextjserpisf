@@ -26,6 +26,7 @@ import {
   updateVehicleFitment,
   deleteVehicleFitment,
   checkVehicleFitment,
+  checkVehicleFitmentConflicts,
 } from "../vehicle-fitment.actions"
 
 function fdMap(payload: Record<string, string>): FormData {
@@ -170,6 +171,57 @@ describe("checkVehicleFitment", () => {
   it("requires a product or item", async () => {
     const res = await checkVehicleFitment(fdMap({ vehicleModelId: "2" }))
     expect(res.success).toBe(false)
+  })
+})
+
+describe("checkVehicleFitmentConflicts (F-2026-10-21-025)", () => {
+  it("returns opposing active rules for the candidate scope in the form", async () => {
+    mocks.prisma.vehicleFitmentRule.findMany.mockResolvedValue([
+      {
+        id: 7, itemId: 5, bomRevisionId: null,
+        vehicleBrandId: null, vehicleModelId: 2, vehicleVariantId: null,
+        yearFrom: null, yearTo: null, drivetrain: "4wd", transmission: null,
+        result: "incompatible", source: "katalog", notes: null,
+      },
+    ])
+    const res = await checkVehicleFitmentConflicts(fdMap({
+      itemId: "5", vehicleModelId: "2", drivetrain: "4WD", result: "compatible",
+    }))
+    expect(res.success).toBe(true)
+    expect((res as { conflicts: unknown[] }).conflicts).toMatchObject([
+      { ruleId: 7, conflictResult: "incompatible", candidateResult: "compatible" },
+    ])
+    expect(mocks.prisma.vehicleFitmentRule.findMany).toHaveBeenCalledWith({
+      where: { itemId: 5, isActive: true },
+      orderBy: { id: "asc" },
+    })
+  })
+
+  it("excludes the rule being edited and rejects bad year range without querying", async () => {
+    mocks.prisma.vehicleFitmentRule.findMany.mockResolvedValue([
+      {
+        id: 7, itemId: 5, bomRevisionId: null,
+        vehicleBrandId: null, vehicleModelId: 2, vehicleVariantId: null,
+        yearFrom: null, yearTo: null, drivetrain: null, transmission: null,
+        result: "incompatible", source: null, notes: null,
+      },
+    ])
+    const res = await checkVehicleFitmentConflicts(fdMap({
+      itemId: "5", vehicleModelId: "2", result: "compatible", excludeRuleId: "7",
+    }))
+    expect(res.success).toBe(true)
+    expect((res as { conflicts: unknown[] }).conflicts).toHaveLength(0)
+
+    const bad = await checkVehicleFitmentConflicts(fdMap({
+      itemId: "5", yearFrom: "2020", yearTo: "2010", result: "compatible",
+    }))
+    expect(bad.success).toBe(false)
+    expect(String(bad.error)).toMatch(/tahun/i)
+  })
+
+  it("requires itemId and a concrete result", async () => {
+    expect((await checkVehicleFitmentConflicts(fdMap({ result: "compatible" }))).success).toBe(false)
+    expect((await checkVehicleFitmentConflicts(fdMap({ itemId: "5" }))).success).toBe(false)
   })
 })
 

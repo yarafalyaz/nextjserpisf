@@ -77,6 +77,9 @@ export function WorkOrderQueueCard({ queue }: Readonly<{ queue: WorkOrderQueue }
                     {row.customerName ? (
                       <WhatsappButton
                         phone={row.customerPhone}
+                        modelType="WorkOrder"
+                        modelId={row.id}
+                        surface="queue"
                         message={buildWhatsappMessage({
                           customerName: row.customerName,
                           documentLabel: "Perintah Kerja",
