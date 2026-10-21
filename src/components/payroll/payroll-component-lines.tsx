@@ -1,0 +1,221 @@
+"use client"
+
+import { useRouter } from "next/navigation"
+import { useTransition } from "react"
+import {
+  addPayrollComponentLine,
+  removePayrollComponentLine,
+  updatePayrollComponentLineAmount,
+} from "@/actions/hrm.actions"
+import { showError, showSuccess } from "@/lib/utils/toast"
+import { formatCurrency } from "@/lib/utils/format"
+import { Button } from "@/components/ui/button"
+import { CurrencyInput } from "@/components/ui/currency-input"
+import { DeleteButton } from "@/components/ui/delete-button"
+import { Label } from "@/components/ui/shadcn/label"
+import { kindLabel, recurrenceLabel, taxableLabel } from "./payroll-component-master"
+
+export interface PayrollComponentLineRow {
+  id: number
+  componentId: number | null
+  componentNameSnapshot: string
+  kindSnapshot: string
+  recurrenceSnapshot: string
+  isTaxableSnapshot: boolean
+  source: string
+  amount: number
+}
+
+export interface LineComponentOption {
+  id: number
+  name: string
+  kind: string
+  recurrence: string
+}
+
+const SOURCE_LABEL: Record<string, string> = {
+  fixed_assignment: "Penugasan tetap",
+  manual: "Manual",
+}
+
+export function PayrollComponentLines({
+  payrollId,
+  status,
+  lines,
+  components,
+  allowances,
+  deductions,
+  canEdit,
+}: {
+  payrollId: number
+  status: string
+  lines: PayrollComponentLineRow[]
+  components: LineComponentOption[]
+  allowances: number
+  deductions: number
+  canEdit: boolean
+}) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+  const editable = status === "draft" && canEdit
+  const usedIds = new Set(lines.map((l) => l.componentId).filter((v) => v != null))
+  // Kartu F-027 UI: baris manual hanya komponen tidak-tetap; komponen tetap
+  // masuk slip lewat penugasan saat generate.
+  const available = components.filter((c) => c.recurrence === "variable" && !usedIds.has(c.id))
+
+  function run(fn: () => Promise<{ success: boolean; error?: string }>, ok: string) {
+    startTransition(async () => {
+      const result = await fn()
+      if (!result.success) {
+        showError(result.error || "Gagal menyimpan baris komponen gaji")
+        return
+      }
+      showSuccess(ok)
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
+      <h2 className="mb-1 text-base font-semibold text-foreground">Komponen Gaji Slip</h2>
+      <p className="mb-4 text-sm text-muted-foreground">
+        Baris snapshot dari server. Total tunjangan dan potongan di Rincian Gaji
+        adalah turunan baris-baris ini, bukan isian bebas.
+      </p>
+
+      {lines.length === 0 ? (
+        <p className="py-4 text-sm text-muted-foreground">
+          Belum ada baris komponen gaji pada slip ini.
+        </p>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b border-default text-left text-muted-foreground">
+                <th className="px-3 py-2 font-medium">Komponen</th>
+                <th className="px-3 py-2 font-medium">Jenis</th>
+                <th className="px-3 py-2 font-medium">Sifat</th>
+                <th className="px-3 py-2 font-medium">Klasifikasi Pajak</th>
+                <th className="px-3 py-2 font-medium">Sumber</th>
+                <th className="px-3 py-2 text-right font-medium">Nominal</th>
+                {editable && <th className="px-3 py-2 font-medium">Aksi</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {lines.map((l) => (
+                <tr key={l.id} className="border-b border-default last:border-0">
+                  <td className="px-3 py-2 font-medium text-foreground">{l.componentNameSnapshot}</td>
+                  <td className="px-3 py-2">{kindLabel(l.kindSnapshot)}</td>
+                  <td className="px-3 py-2">{recurrenceLabel(l.recurrenceSnapshot)}</td>
+                  <td className="px-3 py-2">{taxableLabel(l.isTaxableSnapshot, l.kindSnapshot)}</td>
+                  <td className="px-3 py-2">{SOURCE_LABEL[l.source] ?? l.source}</td>
+                  <td className="px-3 py-2 text-right">{formatCurrency(l.amount)}</td>
+                  {editable && (
+                    <td className="px-3 py-2">
+                      <div className="flex flex-wrap items-end gap-2">
+                        <form
+                          aria-label={`Ubah nominal ${l.componentNameSnapshot}`}
+                          onSubmit={(e) => {
+                            e.preventDefault()
+                            run(
+                              () => updatePayrollComponentLineAmount(l.id, new FormData(e.currentTarget)),
+                              "Nominal baris komponen gaji diubah",
+                            )
+                          }}
+                          className="flex items-end gap-2"
+                        >
+                          <div className="flex flex-col gap-1">
+                            <Label htmlFor={`line-amount-${l.id}`}>Nominal baru</Label>
+                            <CurrencyInput
+                              id={`line-amount-${l.id}`}
+                              name="amount"
+                              defaultValue={l.amount}
+                              prefix="Rp"
+                            />
+                          </div>
+                          <Button type="submit" variant="secondary" isDisabled={isPending}>
+                            Simpan
+                          </Button>
+                        </form>
+                        <DeleteButton id={l.id} action={removePayrollComponentLine} />
+                      </div>
+                    </td>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
+          <dt className="text-xs text-muted-foreground">Total Tunjangan (turunan baris pendapatan)</dt>
+          <dd className="text-base font-semibold text-foreground">{formatCurrency(allowances)}</dd>
+        </div>
+        <div className="rounded-lg border border-default bg-surface-secondary/40 p-3">
+          <dt className="text-xs text-muted-foreground">Total Potongan Komponen (turunan baris potongan)</dt>
+          <dd className="text-base font-semibold text-foreground">{formatCurrency(deductions)}</dd>
+        </div>
+      </dl>
+
+      {editable ? (
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            run(
+              () => addPayrollComponentLine(payrollId, new FormData(e.currentTarget)),
+              "Baris komponen gaji ditambahkan",
+            )
+          }}
+          aria-busy={isPending}
+          aria-label="Formulir tambah baris komponen gaji"
+          className="mt-5 grid grid-cols-1 gap-4 border-t border-default pt-5 md:grid-cols-3"
+        >
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="line-component">
+              Komponen <span aria-hidden="true" className="text-destructive">*</span>
+            </Label>
+            <select
+              id="line-component"
+              name="componentId"
+              required
+              className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+            >
+              <option value="">Pilih komponen...</option>
+              {available.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} ({kindLabel(c.kind)}, {recurrenceLabel(c.recurrence)})
+                </option>
+              ))}
+            </select>
+            {available.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                Tidak ada komponen tidak-tetap aktif yang belum ada pada slip ini.
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="line-amount">
+              Nominal <span aria-hidden="true" className="text-destructive">*</span>
+            </Label>
+            <CurrencyInput id="line-amount" name="amount" required prefix="Rp" placeholder="0" />
+          </div>
+          <div className="flex items-end justify-end">
+            <Button type="submit" variant="primary" isDisabled={isPending || available.length === 0}>
+              {isPending ? "Menyimpan..." : "Tambah Baris"}
+            </Button>
+          </div>
+        </form>
+      ) : (
+        lines.length > 0 && (
+          <p className="mt-4 border-t border-default pt-4 text-sm text-muted-foreground">
+            {status === "draft"
+              ? "Baris komponen hanya dapat diubah oleh pengguna berizin ubah penggajian."
+              : "Slip sudah bukan draf — baris komponen terkunci dan tidak dapat diubah."}
+          </p>
+        )
+      )}
+    </div>
+  )
+}

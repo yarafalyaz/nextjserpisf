@@ -19,6 +19,12 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { LEAVE_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
+import { hasPermission } from "@/lib/auth/permissions"
+import {
+  getEmployeePayrollComponents,
+  getPayrollComponents,
+} from "@/actions/hrm.actions"
+import { EmployeePayrollComponents, type EmployeePayrollComponentRow } from "@/components/payroll/employee-payroll-components"
 
 import type { Metadata } from "next"
 
@@ -76,6 +82,35 @@ export default async function EmployeeDetailPage({
 
   // Annual-leave balance for the current calendar year (surface in Info tab).
   const leaveQuota = await getLeaveQuota(employee.id)
+
+  // Penugasan komponen gaji tetap: hanya untuk pemegang create_employees
+  // (aksi server juga menuntut cakupan semua karyawan; gagal = pesan apa adanya).
+  const canManageComponents = await hasPermission("create_employees")
+  const [assignmentsResult, componentsResult] = canManageComponents
+    ? await Promise.all([
+        getEmployeePayrollComponents(employee.id),
+        getPayrollComponents(),
+      ])
+    : [null, null]
+  const componentAssignments: EmployeePayrollComponentRow[] =
+    assignmentsResult?.success && assignmentsResult.data
+      ? assignmentsResult.data.map((a) => ({
+          id: a.id,
+          employeeId: a.employeeId,
+          componentId: a.componentId,
+          defaultAmount: a.defaultAmount,
+          isActive: a.isActive,
+          component: a.component,
+          effectiveFrom: new Date(a.effectiveFrom).toISOString(),
+          effectiveTo: a.effectiveTo ? new Date(a.effectiveTo).toISOString() : null,
+        }))
+      : []
+  const fixedComponents =
+    componentsResult?.success && componentsResult.data
+      ? componentsResult.data
+          .filter((c) => c.isActive && c.recurrence === "fixed")
+          .map((c) => ({ id: c.id, name: c.name, kind: c.kind }))
+      : []
 
   return (
     <div className="flex flex-col gap-6">
@@ -287,6 +322,24 @@ export default async function EmployeeDetailPage({
                     </DetailTable>
                   )}
                 </div>
+                {canManageComponents && (
+                  <div className="border-t border-default p-4 px-5">
+                    <h3 className="mb-3 text-[0.9375rem] font-semibold text-foreground">
+                      Komponen Gaji Tetap
+                    </h3>
+                    {assignmentsResult && !assignmentsResult.success ? (
+                      <p className="text-sm text-muted-foreground" role="alert">
+                        {assignmentsResult.error || "Penugasan komponen gaji tidak dapat dimuat."}
+                      </p>
+                    ) : (
+                      <EmployeePayrollComponents
+                        employeeId={employee.id}
+                        assignments={componentAssignments}
+                        components={fixedComponents}
+                      />
+                    )}
+                  </div>
+                )}
               </div>
             ),
           },
