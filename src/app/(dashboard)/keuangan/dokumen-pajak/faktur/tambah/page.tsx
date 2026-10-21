@@ -4,14 +4,12 @@ import type { Metadata } from "next"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
-import type { PermissionName } from "@/lib/setup/base-data"
 
 /**
  * Izin terbit faktur dari F-034 (PR #301, belum di main saat file ini ditulis).
  * ponytail: literal + cast lokal supaya tsc main bersih; sesudah #301 merged
  * ganti dengan "create_tax_invoices" polos dan hapus cast ini.
  */
-const CREATE_TAX_INVOICES = "create_tax_invoices" as PermissionName
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaxInvoiceForm, TaxInvoiceLifecycleActions, type TaxOption } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/tax-invoice-form"
 import { formatCurrency } from "@/lib/utils/format"
@@ -32,7 +30,7 @@ const moneyOption = (documentNo: string, amount: unknown, party: string): TaxOpt
  * sini murni opsi tautan + daftar pilih — DPP/PPN tetap dihitung service.
  */
 export default async function CreateTaxInvoicePage() {
-  await requirePermission(CREATE_TAX_INVOICES)
+  await requirePermission("create_tax_invoices")
 
   const [salesInvoices, vendorBills, vendors, issued] = await Promise.all([
     prisma.salesInvoice.findMany({
@@ -61,7 +59,7 @@ export default async function CreateTaxInvoicePage() {
     }),
   ])
 
-  const canLifecycle = await hasPermission(CREATE_TAX_INVOICES)
+  const canLifecycle = await hasPermission("create_tax_invoices")
 
   return (
     <div className="flex flex-col gap-6">
@@ -70,7 +68,7 @@ export default async function CreateTaxInvoicePage() {
           { label: "Dasbor", href: "/" },
           { label: "Keuangan", href: "/keuangan" },
           { label: "Dokumen Pajak", href: "/keuangan/dokumen-pajak/faktur/tambah" },
-          { label: "Terbitkan Faktur Pajak" },
+          { label: "Dokumen Pajak" },
         ]}
       />
       <h1 className="text-2xl font-bold text-foreground">Terbitkan Faktur Pajak</h1>

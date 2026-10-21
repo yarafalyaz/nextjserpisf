@@ -4,7 +4,6 @@ import type { Metadata } from "next"
 import Link from "next/link"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import type { PermissionName } from "@/lib/setup/base-data"
 
 /**
  * Izin aksi dokumen pajak dari F-034 (PR #301, belum di main saat file ini
@@ -12,8 +11,6 @@ import type { PermissionName } from "@/lib/setup/base-data"
  * `manage_withholding_certificates`. ponytail: literal + cast lokal supaya
  * tsc main bersih; sesudah #301 merged pakai literal polos, hapus konstanta.
  */
-const CREATE_TAX_INVOICES = "create_tax_invoices" as PermissionName
-const MANAGE_WITHHOLDING_CERTIFICATES = "manage_withholding_certificates" as PermissionName
 import { CanCreate } from "@/components/auth/can-create"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -70,7 +67,7 @@ export default async function TaxReportPage({
       }
       actions={
         <>
-          <CanCreate permission={CREATE_TAX_INVOICES}>
+          <CanCreate permission="create_tax_invoices">
             <Link
               href="/keuangan/dokumen-pajak/faktur/tambah"
               className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
@@ -78,7 +75,7 @@ export default async function TaxReportPage({
               Terbitkan Faktur Pajak
             </Link>
           </CanCreate>
-          <CanCreate permission={MANAGE_WITHHOLDING_CERTIFICATES}>
+          <CanCreate permission="manage_withholding_certificates">
             <Link
               href="/keuangan/dokumen-pajak/bupot/tambah"
               className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"

@@ -4,14 +4,12 @@ import type { Metadata } from "next"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission, hasPermission } from "@/lib/auth/permissions"
-import type { PermissionName } from "@/lib/setup/base-data"
 
 /**
  * Izin bupot dari F-034 (PR #301, belum di main saat file ini ditulis).
  * ponytail: literal + cast lokal supaya tsc main bersih; sesudah #301 merged
  * ganti dengan "manage_withholding_certificates" polos dan hapus cast ini.
  */
-const MANAGE_WITHHOLDING_CERTIFICATES = "manage_withholding_certificates" as PermissionName
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import {
   WithholdingCertificateForm,
@@ -31,7 +29,7 @@ export const metadata: Metadata = { title: "Terbitkan Bukti Potong" }
  * potong dibaca/dihitung service, bukan UI.
  */
 export default async function CreateWithholdingCertificatePage() {
-  await requirePermission(MANAGE_WITHHOLDING_CERTIFICATES)
+  await requirePermission("manage_withholding_certificates")
 
   const [withholdingTypes, vendorBills, salesPayments, certificates, liabilityAccounts, paymentAccounts, canSettle] =
     await Promise.all([
@@ -86,7 +84,7 @@ export default async function CreateWithholdingCertificatePage() {
           { label: "Dasbor", href: "/" },
           { label: "Keuangan", href: "/keuangan" },
           { label: "Dokumen Pajak", href: "/keuangan/dokumen-pajak/faktur/tambah" },
-          { label: "Terbitkan Bukti Potong" },
+          { label: "Bukti Potong" },
         ]}
       />
       <h1 className="text-2xl font-bold text-foreground">Terbitkan Bukti Potong</h1>
