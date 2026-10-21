@@ -27,6 +27,8 @@ function pl(over: Partial<ProjectPlResult> = {}): ProjectPlResult {
     vendorBillIds: [],
     unpulledTimesheetHours: 7.5,
     unpulledTimesheetCount: 2,
+    stageRealization: [],
+    unallocatedRealized: 10_000_000,
     ...over,
   }
 }
@@ -210,5 +212,80 @@ describe("buildProjectBudgetHistory — A6 dari ProjectLog saja", () => {
     expect(history.map((h) => h.action)).toEqual(["rab_locked", "rab_revision"])
     expect(history[1].userId).toBe(9)
     expect(history[1].details).toMatchObject({ revisionNo: 1 })
+  })
+})
+
+describe("buildProjectBudget — realisasi per tahap BR-09 (F-2026-10-21-030 fase c)", () => {
+  const SRC0 = { material: 0, productionCost: 0, expense: 0, pettyCash: 0, vendorBill: 0 }
+
+  it("semua tahap proyek tercantum; tanpa partisi: hasRealization false + 0 eksplisit; unallocated = totalCost", () => {
+    const r = buildProjectBudget(base({ items: [item({})] }))
+    expect(r.perStageRealized).toEqual([
+      { projectStageId: 11, stageName: "Persiapan", realizedAmount: 0, hasRealization: false, bySource: SRC0 },
+      { projectStageId: 12, stageName: "Pengerjaan", realizedAmount: 0, hasRealization: false, bySource: SRC0 },
+    ])
+    expect(r.unallocatedRealized).toBe(10_000_000)
+    const sum = r.perStageRealized.reduce((s, x) => s + x.realizedAmount, 0)
+    expect(sum + r.unallocatedRealized).toBe(r.realizedTotal)
+  })
+
+  it("partisi F-029 terpasang per tahap (bySource apa adanya); rekonsiliasi Σ tahap + unallocated = realizedTotal 0.00", () => {
+    const r = buildProjectBudget(
+      base({
+        items: [item({})],
+        pl: pl({
+          totalCost: 7_250_000,
+          stageRealization: [
+            { projectStageId: 11, amount: 5_200_000, bySource: { ...SRC0, material: 200_000, productionCost: 5_000_000 } },
+            { projectStageId: 12, amount: 1_300_000, bySource: { ...SRC0, expense: 300_000, pettyCash: 100_000, vendorBill: 900_000 } },
+          ],
+          unallocatedRealized: 750_000,
+        }),
+      }),
+    )
+    expect(r.perStageRealized[0]).toMatchObject({ projectStageId: 11, realizedAmount: 5_200_000, hasRealization: true })
+    expect(r.perStageRealized[0].bySource.productionCost).toBe(5_000_000)
+    expect(r.perStageRealized[1]).toMatchObject({ projectStageId: 12, realizedAmount: 1_300_000, hasRealization: true })
+    expect(r.unallocatedRealized).toBe(750_000)
+    const sum = r.perStageRealized.reduce((s, x) => s + x.realizedAmount, 0)
+    expect(sum + r.unallocatedRealized).toBe(r.realizedTotal)
+  })
+
+  it("partisi tahap asing (di luar tahap proyek) tidak bocor: jatuh ke unallocated, rekonsiliasi tetap 0.00", () => {
+    const r = buildProjectBudget(
+      base({
+        pl: pl({
+          totalCost: 1_000_000,
+          stageRealization: [{ projectStageId: 999, amount: 400_000, bySource: { ...SRC0, material: 400_000 } }],
+          unallocatedRealized: 600_000,
+        }),
+      }),
+    )
+    expect(r.perStageRealized.every((s) => !s.hasRealization)).toBe(true)
+    expect(r.unallocatedRealized).toBe(1_000_000)
+    const sum = r.perStageRealized.reduce((s, x) => s + x.realizedAmount, 0)
+    expect(sum + r.unallocatedRealized).toBe(r.realizedTotal)
+  })
+
+  it("tahap tanpa baris RAB tetap tercantum di realisasi (daftar dari master tahap, bukan perStageBudget)", () => {
+    const r = buildProjectBudget(base({ items: [item({ projectStageId: 11 })] }))
+    expect(r.perStageBudget.map((s) => s.projectStageId)).toEqual([11])
+    expect(r.perStageRealized.map((s) => s.projectStageId)).toEqual([11, 12])
+  })
+
+  it("FALSIFIKASI: cabut partisi -> realisasi tahap 0/false dan unallocated naik tepat nilai partisi", () => {
+    const withPart = buildProjectBudget(
+      base({
+        pl: pl({
+          stageRealization: [{ projectStageId: 11, amount: 2_500_000, bySource: { ...SRC0, material: 2_500_000 } }],
+          unallocatedRealized: 7_500_000,
+        }),
+      }),
+    )
+    const withoutPart = buildProjectBudget(base())
+    expect(withPart.perStageRealized[0].realizedAmount).toBe(2_500_000)
+    expect(withoutPart.perStageRealized[0].realizedAmount).toBe(0)
+    expect(withoutPart.perStageRealized[0].hasRealization).toBe(false)
+    expect(withoutPart.unallocatedRealized - withPart.unallocatedRealized).toBe(2_500_000)
   })
 })

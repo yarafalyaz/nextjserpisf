@@ -41,6 +41,7 @@ function budget(over: Partial<ProjectBudgetResult> = {}): ProjectBudgetResult {
     unallocatedBudget: { categories: [], total: 0 },
     totalBudget: 100_000_000,
     realizedTotal: 0,
+    perStageRealized: [],
     unallocatedRealized: 0,
     varianceTotal: 100_000_000,
     marginRencana: 20_000_000,

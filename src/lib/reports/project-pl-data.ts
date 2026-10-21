@@ -7,7 +7,12 @@
  * periode dokumen, mengambil massal per sumber (tanpa N+1), lalu
  * mendelegasikan SEMUA aturan agregasi ke builder murni `buildProjectPl`
  * — supaya angka bisa diuji tanpa DB dan falsifikasi cukup mencabut satu
- * sumber di builder.
+ * sumber di builder. Partisi realisasi per tahap (BR-09 F-030c) lahir di
+ * builder dari kandidat `stageAllocation` per baris; loader hari ini
+ * TIDAK mengisinya (belum ada kolom tahap sah di sumber — vonis Lead
+ * t_3e892715 #86 menunda kolom itu), jadi `stageRealization` selalu
+ * kosong dan seluruh realisasi tampil belum-teralokasi sampai kartu
+ * schema tahap disetujui. Tanpa query agregasi kedua.
  *
  * Jembatan yang dimuat (aturan kepemilikan penuh di header `project-pl.ts`):
  *  - WorkOrder pada himpunan proyek aktif menjadi jembatan: quotation-nya
@@ -41,7 +46,11 @@ import {
 } from "@/lib/reports/project-pl"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 
-export type { ProjectPlResult } from "@/lib/reports/project-pl"
+export type {
+  ProjectPlResult,
+  ProjectPlStageAllocation,
+  ProjectPlStageRealization,
+} from "@/lib/reports/project-pl"
 export { buildProjectPl } from "@/lib/reports/project-pl"
 
 export interface ProjectPlRow extends ProjectPlResult {

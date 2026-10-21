@@ -46,6 +46,8 @@ function pl(over: Record<string, unknown> = {}) {
     vendorBillIds: [],
     unpulledTimesheetHours: 0,
     unpulledTimesheetCount: 0,
+    stageRealization: [],
+    unallocatedRealized: 12_500_000,
     ...over,
   }
 }
@@ -170,5 +172,37 @@ describe("loadProjectBudgetsForProjects — massal tanpa N+1", () => {
     expect(mockPrisma.projectItem.findMany).toHaveBeenCalledWith(
       expect.objectContaining({ where: { projectId: { in: [PROJECT_ID, 94031] } } }),
     )
+  })
+})
+
+describe("loadProjectBudgetForProject — realisasi per tahap BR-09 (F-030 fase c)", () => {
+  it("partisi dari loader F-029 terpasang; tahap tanpa realisasi eksplisit; rekonsiliasi 0.00", async () => {
+    mockPrisma.projectStage.findMany.mockResolvedValue([
+      { id: 11, name: "Persiapan", sortOrder: 1 },
+      { id: 12, name: "Pengerjaan", sortOrder: 2 },
+    ])
+    mockLoadProjectPlForProject.mockResolvedValue(
+      pl({
+        totalCost: 12_500_000,
+        stageRealization: [
+          {
+            projectStageId: 11,
+            amount: 3_000_000,
+            bySource: { material: 3_000_000, productionCost: 0, expense: 0, pettyCash: 0, vendorBill: 0 },
+          },
+        ],
+        unallocatedRealized: 9_500_000,
+      }),
+    )
+    const r = await loadProjectBudgetForProject(PROJECT_ID)
+    expect(r?.perStageRealized).toEqual([
+      expect.objectContaining({ projectStageId: 11, realizedAmount: 3_000_000, hasRealization: true }),
+      expect.objectContaining({ projectStageId: 12, realizedAmount: 0, hasRealization: false }),
+    ])
+    expect(r?.unallocatedRealized).toBe(9_500_000)
+    const sum = (r?.perStageRealized ?? []).reduce((s, x) => s + x.realizedAmount, 0)
+    expect(sum + (r?.unallocatedRealized ?? 0)).toBe(r?.realizedTotal)
+    // BR-10 tetap: satu panggilan loader PL, tanpa query agregasi kedua.
+    expect(mockLoadProjectPlForProject).toHaveBeenCalledTimes(1)
   })
 })

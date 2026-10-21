@@ -24,6 +24,8 @@ function pl(over: Partial<ProjectPlResult> = {}): ProjectPlResult {
     vendorBillIds: [],
     unpulledTimesheetHours: 0,
     unpulledTimesheetCount: 0,
+    stageRealization: [],
+    unallocatedRealized: 0,
     ...over,
   }
 }

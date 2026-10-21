@@ -235,3 +235,119 @@ describe("buildProjectPl — kriteria terima F-2026-10-21-029", () => {
     expect(r.materialCost).toBe(0.07)
   })
 })
+
+describe("buildProjectPl — partisi realisasi per tahap BR-09 (F-2026-10-21-030 fase c)", () => {
+  const alloc = (id: number | null) => ({ projectStageId: id, hasStageAllocation: true })
+
+  it("tanpa kandidat tahap: stageRealization kosong, unallocated = totalCost penuh (keadaan hari ini)", () => {
+    const r = buildProjectPl(
+      base({
+        workOrders: [wo()],
+        materialIssues: [
+          { id: 1, projectId: 1, workOrderId: 10, status: "completed", items: [{ qty: 2, cost: 100_000 }] },
+        ],
+        productionCosts: [
+          { workOrderId: 10, amount: 5_000_000, sourceTimesheetId: null, purchaseOrderId: null },
+        ],
+      }),
+    )
+    expect(r.stageRealization).toEqual([])
+    expect(r.unallocatedRealized).toBe(r.totalCost)
+    expect(r.totalCost).toBe(5_200_000)
+  })
+
+  it("kandidat tahap pada baris terhitung: partisi per tahap + per sumber; rekonsiliasi 0.00", () => {
+    const r = buildProjectPl(
+      base({
+        workOrders: [wo()],
+        materialIssues: [
+          { id: 1, projectId: 1, workOrderId: 10, status: "completed", items: [{ qty: 2, cost: 100_000 }], stageAllocation: alloc(11) },
+          { id: 2, projectId: 1, workOrderId: null, status: "completed", items: [{ qty: 1, cost: 50_000 }] },
+        ],
+        productionCosts: [
+          { workOrderId: 10, amount: 5_000_000, sourceTimesheetId: null, purchaseOrderId: null, stageAllocation: alloc(11) },
+          { workOrderId: 10, amount: 700_000, sourceTimesheetId: null, purchaseOrderId: null },
+        ],
+        expenses: [
+          { projectId: 1, status: "approved", amount: 300_000, stageAllocation: alloc(12) },
+        ],
+        pettyCash: [{ projectId: 1, type: "OUT", amount: 100_000, stageAllocation: alloc(12) }],
+        vendorBills: [
+          { id: 1, projectId: 1, purchaseOrderId: null, status: "posted", grandTotal: 900_000, deletedAt: null, stageAllocation: alloc(12) },
+        ],
+      }),
+    )
+    expect(r.totalCost).toBe(7_250_000)
+    expect(r.stageRealization).toEqual([
+      {
+        projectStageId: 11,
+        amount: 5_200_000,
+        bySource: { material: 200_000, productionCost: 5_000_000, expense: 0, pettyCash: 0, vendorBill: 0 },
+      },
+      {
+        projectStageId: 12,
+        amount: 1_300_000,
+        bySource: { material: 0, productionCost: 0, expense: 300_000, pettyCash: 100_000, vendorBill: 900_000 },
+      },
+    ])
+    const allocated = r.stageRealization.reduce((s, x) => s + x.amount, 0)
+    expect(allocated + r.unallocatedRealized).toBe(r.totalCost)
+    expect(r.unallocatedRealized).toBe(750_000)
+  })
+
+  it("kandidat pada baris yang TIDAK terhitung tidak bocor ke partisi (status/proyek/anti-dobel)", () => {
+    const r = buildProjectPl(
+      base({
+        workOrders: [wo()],
+        materialIssues: [
+          // draft -> tidak terhitung walau berkandidat tahap
+          { id: 1, projectId: 1, workOrderId: null, status: "draft", items: [{ qty: 9, cost: 999_000 }], stageAllocation: alloc(11) },
+          // proyek lain
+          { id: 2, projectId: 2, workOrderId: null, status: "completed", items: [{ qty: 9, cost: 999_000 }], stageAllocation: alloc(11) },
+        ],
+        productionCosts: [
+          { workOrderId: 10, amount: 4_000_000, sourceTimesheetId: null, purchaseOrderId: 900 },
+        ],
+        expenses: [{ projectId: 1, status: "draft", amount: 888_000, stageAllocation: alloc(11) }],
+        pettyCash: [{ projectId: 1, type: "IN", amount: 777_000, stageAllocation: alloc(11) }],
+        vendorBills: [
+          // tercermin ProductionCost -> anti-dobel F-029; kandidat tahapnya juga tidak dihitung
+          { id: 1, projectId: 1, purchaseOrderId: 900, status: "posted", grandTotal: 4_000_000, deletedAt: null, stageAllocation: alloc(11) },
+        ],
+      }),
+    )
+    expect(r.totalCost).toBe(4_000_000)
+    expect(r.stageRealization).toEqual([])
+    expect(r.unallocatedRealized).toBe(4_000_000)
+  })
+
+  it("hasStageAllocation false / projectStageId null = belum-teralokasi eksplisit, tidak ditebak", () => {
+    const r = buildProjectPl(
+      base({
+        expenses: [
+          { projectId: 1, status: "approved", amount: 100_000, stageAllocation: { projectStageId: null, hasStageAllocation: false } },
+          { projectId: 1, status: "approved", amount: 200_000, stageAllocation: { projectStageId: 11, hasStageAllocation: false } },
+          { projectId: 1, status: "approved", amount: 400_000, stageAllocation: { projectStageId: null, hasStageAllocation: true } },
+        ],
+      }),
+    )
+    expect(r.stageRealization).toEqual([])
+    expect(r.unallocatedRealized).toBe(700_000)
+  })
+
+  it("FALSIFIKASI: cabut kandidat satu baris -> partisi turun tepat nilai baris, totalCost tetap", () => {
+    const withAlloc = buildProjectPl(
+      base({
+        expenses: [{ projectId: 1, status: "approved", amount: 300_000, stageAllocation: alloc(11) }],
+      }),
+    )
+    const withoutAlloc = buildProjectPl(
+      base({ expenses: [{ projectId: 1, status: "approved", amount: 300_000 }] }),
+    )
+    expect(withAlloc.stageRealization[0]?.amount).toBe(300_000)
+    expect(withoutAlloc.stageRealization).toEqual([])
+    expect(withAlloc.totalCost).toBe(withoutAlloc.totalCost)
+    expect(withAlloc.unallocatedRealized).toBe(0)
+    expect(withoutAlloc.unallocatedRealized).toBe(300_000)
+  })
+})

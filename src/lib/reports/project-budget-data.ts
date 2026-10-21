@@ -9,7 +9,9 @@
  *  4. `ProjectLog` aksi rab_* untuk riwayat revisi (A6).
  * Realisasi HANYA dari `loadProjectPlForProject` F-029 apa adanya per
  * proyek (BR-10 — dilarang query agregasi kedua di sini); agregasi
- * anggaran murni di `buildProjectBudget`.
+ * anggaran murni di `buildProjectBudget`. Realisasi per tahap (BR-09
+ * fase c) ikut dari partisi yang F-029 turunkan (`pl.stageRealization`)
+ * — loader ini tidak menambah query tahap apa pun.
  *
  * Mengembalikan null (satu proyek) / melewati id tak dikenal (massal)
  * bila proyek tidak ada.
@@ -29,6 +31,7 @@ export type {
   ProjectBudgetCategoryTotal,
   ProjectBudgetHistoryEntry,
   ProjectBudgetResult,
+  ProjectBudgetStageRealization,
   ProjectBudgetStageTotal,
 } from "@/lib/reports/project-budget"
 export {

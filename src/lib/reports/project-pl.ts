@@ -50,6 +50,21 @@
  * cancelled tidak pernah dihitung di sumber mana pun (status
  * `cancelled` dibuang builder; loader juga menyaringnya di query).
  *
+ * Realisasi per tahap BR-09 (F-030 fase c): kolom `projectStageId` di
+ * sumber realisasi MASIH ditunda vonis Lead (t_3e892715 #86 — dilarang
+ * tambah kolom ke MaterialIssue/Expense; ProductionCost via WO tak punya
+ * tahap alami). Maka partisi tahap diturunkan di builder dari baris yang
+ * SUDAH dihitung builder ini — satu lintasan, tanpa query agregasi kedua
+ * (BR-10 tetap utuh): baris ber-`stageAllocation` adalah kandidat partisi
+ * per baris yang diekstrak loader dari kolom tahap yang SAH di sumber
+ * (hari ini tidak ada satupun — daftar kosong). Partisi = himpunan
+ * kandidat yang juga lolos saringan kepemilikan/status/dedup/anti-dobel
+ * sumbernya di atas (dijumlahkan persis cara baris itu masuk total
+ * sumber); sisanya tetap `unallocated`. Invarian wajib:
+ * Σ partisi per tahap + unallocated = totalCost, per sumber DAN total —
+ * selisih selalu 0.00 (diuji). Bila kelak kolom tahap disetujui, loader
+ * cukup mengisi `stageAllocation`; builder tidak berubah.
+ *
  * Sen-aman: semua penjumlahan lewat helper `src/lib/utils/math`, dibulatkan
  * 2 desimal. Pure (tanpa Prisma/DOM).
  */
@@ -94,11 +109,20 @@ export interface ProjectPlMaterialIssueInput {
   workOrderId: number | null
   status: string
   items: { qty: number; cost: number }[]
+  /**
+   * Kandidat partisi BR-09 per baris dari kolom tahap yang SAH di sumber
+   * (loader yang mengekstrak; null/absen = belum ada kolom tahap sah —
+   * keadaan hari ini). Builder hanya menghormati kandidat yang barisnya
+   * juga lolos saringan kepemilikan/status — lihat header.
+   */
+  stageAllocation?: ProjectPlStageAllocation | null
 }
 
 export interface ProjectPlProductionCostInput {
   workOrderId: number | null
   amount: number
+  /** Kandidat partisi BR-09 — lihat `ProjectPlMaterialIssueInput`. */
+  stageAllocation?: ProjectPlStageAllocation | null
   /** Timesheet sumber bila baris ini hasil pull; null = labor manual/lain. */
   sourceTimesheetId: number | null
   /** PO sumber bila baris ini cerminan subkontrak PO jasa; null = bukan. */
@@ -109,6 +133,8 @@ export interface ProjectPlExpenseInput {
   projectId: number | null
   status: string
   amount: number
+  /** Kandidat partisi BR-09 — lihat `ProjectPlMaterialIssueInput`. */
+  stageAllocation?: ProjectPlStageAllocation | null
 }
 
 export interface ProjectPlPettyCashInput {
@@ -116,6 +142,8 @@ export interface ProjectPlPettyCashInput {
   /** Hanya `OUT` yang beban; `IN` bukan biaya proyek. */
   type: string
   amount: number
+  /** Kandidat partisi BR-09 — lihat `ProjectPlMaterialIssueInput`. */
+  stageAllocation?: ProjectPlStageAllocation | null
 }
 
 export interface ProjectPlVendorBillInput {
@@ -125,6 +153,8 @@ export interface ProjectPlVendorBillInput {
   status: string
   grandTotal: number
   deletedAt: Date | null
+  /** Kandidat partisi BR-09 — lihat `ProjectPlMaterialIssueInput`. */
+  stageAllocation?: ProjectPlStageAllocation | null
 }
 
 export interface ProjectPlTimesheetInput {
@@ -180,6 +210,47 @@ export interface ProjectPlResult {
   unpulledTimesheetHours: number
   /** Jumlah baris timesheet di balik memo jam di atas. */
   unpulledTimesheetCount: number
+  /**
+   * Partisi realisasi per tahap (BR-09, F-030c), diturunkan dari baris
+   * terhitung builder ini — BUKAN agregasi kedua. Hari ini selalu `[]`
+   * (belum ada kolom tahap sah di sumber; vonis Lead menunda). Diurutkan
+   * projectStageId naik.
+   */
+  stageRealization: ProjectPlStageRealization[]
+  /**
+   * Realisasi tanpa tahap teralokasi = totalCost − Σ stageRealization.
+   * Hari ini selalu = totalCost penuh. Rekonsiliasi:
+   * Σ stageRealization.amount + unallocatedRealized = totalCost (0.00).
+   */
+  unallocatedRealized: number
+}
+
+/**
+ * Kandidat partisi realisasi per tahap untuk SATU baris sumber, diekstrak
+ * loader dari kolom tahap yang sah. `projectStageId` null ATAU
+ * `hasStageAllocation` false = baris tidak punya tahap yang bisa
+ * dipertanggungjawabkan → masuk ember belum-teralokasi (tidak ditebak,
+ * tidak dibagi rata — BR-08/BR-11).
+ */
+export interface ProjectPlStageAllocation {
+  projectStageId: number | null
+  hasStageAllocation: boolean
+}
+
+/** Sumber realisasi F-029 yang menyusun totalCost — partisi per tahap membawa sumbernya. */
+export type ProjectPlRealizationSource =
+  | "material"
+  | "productionCost"
+  | "expense"
+  | "pettyCash"
+  | "vendorBill"
+
+/** Satu tahap pada partisi realisasi: total + rincian per sumber (5 sumber F-029). */
+export interface ProjectPlStageRealization {
+  projectStageId: number
+  /** Σ material + productionCost + expense + pettyCash + vendorBill tahap ini. */
+  amount: number
+  bySource: Record<ProjectPlRealizationSource, number>
 }
 
 function isRecognisedInvoice(invoice: ProjectPlInvoiceInput): boolean {
@@ -275,6 +346,65 @@ export function buildProjectPl(input: ProjectPlInput): ProjectPlResult {
   )
   const vendorBillCost = safeSum(vendorBills.map((b) => b.grandTotal), 2)
 
+  // Partisi realisasi per tahap (BR-09): hanya baris yang SUDAH terhitung
+  // di atas boleh menyumbang, dan hanya sebesar nilai yang baris itu
+  // sumbang ke total sumbernya (MI: Σ qty×cost baris; lainnya: amount /
+  // grandTotal baris) — partisi tidak pernah melebihi total sumbernya.
+  const stageBuckets = new Map<number, Record<ProjectPlRealizationSource, number>>()
+  const addStageAmount = (
+    alloc: ProjectPlStageAllocation | null | undefined,
+    source: ProjectPlRealizationSource,
+    amount: number,
+  ) => {
+    if (!alloc || !alloc.hasStageAllocation || alloc.projectStageId === null) return
+    const bucket = stageBuckets.get(alloc.projectStageId) ?? {
+      material: 0,
+      productionCost: 0,
+      expense: 0,
+      pettyCash: 0,
+      vendorBill: 0,
+    }
+    bucket[source] = safeSum([bucket[source], amount], 2)
+    stageBuckets.set(alloc.projectStageId, bucket)
+  }
+  for (const mi of materialById.values()) {
+    addStageAmount(
+      mi.stageAllocation,
+      "material",
+      safeSum(mi.items.map((item) => safeMultiply(item.qty, item.cost, 2)), 2),
+    )
+  }
+  for (const c of projectCosts) addStageAmount(c.stageAllocation, "productionCost", c.amount)
+  for (const e of input.expenses) {
+    if (e.projectId === projectId && e.status === "approved") {
+      addStageAmount(e.stageAllocation, "expense", e.amount)
+    }
+  }
+  for (const p of input.pettyCash) {
+    if (p.projectId === projectId && p.type === "OUT") {
+      addStageAmount(p.stageAllocation, "pettyCash", p.amount)
+    }
+  }
+  for (const b of vendorBills) addStageAmount(b.stageAllocation, "vendorBill", b.grandTotal)
+
+  const stageRealization: ProjectPlStageRealization[] = [...stageBuckets.entries()]
+    .map(([projectStageId, bySource]) => ({
+      projectStageId,
+      bySource,
+      amount: safeSum(
+        [
+          bySource.material,
+          bySource.productionCost,
+          bySource.expense,
+          bySource.pettyCash,
+          bySource.vendorBill,
+        ],
+        2,
+      ),
+    }))
+    .sort((a, b) => a.projectStageId - b.projectStageId)
+  const allocatedRealized = safeSum(stageRealization.map((s) => s.amount), 2)
+
   const totalCost = safeSum(
     [materialCost, productionCost, expenseCost, pettyCashCost, vendorBillCost],
     2,
@@ -311,5 +441,7 @@ export function buildProjectPl(input: ProjectPlInput): ProjectPlResult {
     vendorBillIds: vendorBills.map((b) => b.id).sort((a, b) => a - b),
     unpulledTimesheetHours,
     unpulledTimesheetCount: unpulled.length,
+    stageRealization,
+    unallocatedRealized: safeSubtract(totalCost, allocatedRealized, 2),
   }
 }

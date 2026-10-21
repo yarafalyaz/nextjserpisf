@@ -39,6 +39,8 @@ function budgetFixture(overrides: Partial<Parameters<typeof buildProjectBudget>[
       vendorBillIds: [],
       unpulledTimesheetCount: 0,
       unpulledTimesheetHours: 0,
+      stageRealization: [],
+      unallocatedRealized: 6_000_000,
     },
     ...overrides,
   })

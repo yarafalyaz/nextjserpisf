@@ -7,13 +7,19 @@
  * "belum teralokasi" — tidak hilang, tidak dibagi rata (BR-08/BR-11).
  *
  * Realisasi = output `buildProjectPl` F-029 APA ADANYA (BR-10): builder
- * ini dilarang query agregasi kedua dan dilarang memecah productionCost
- * per kategori (ProjectPlResult memang hanya total datar). Karena kolom
- * tahap di sumber realisasi DITUNDA vonis (BR-09/BR-17c), di fase ini
- * SELURUH realisasi tampil sebagai `unallocatedRealized` = totalCost
- * penuh; perbandingan per kategori menyusul kartu (c). Rekonsiliasi
- * wajib: Σ per tahap + belum-dialokasi (anggaran) = ΣRAB, dan
- * realizedTotal selalu persis totalCost F-029 (selisih 0.00).
+ * ini dilarang query agregasi kedua. Kolom tahap di sumber realisasi
+ * MASIH ditunda vonis Lead (t_3e892715 #86 — dilarang tambah kolom tahap
+ * ke MaterialIssue/Expense; ProductionCost via WO tak punya tahap
+ * alami). Fase (c) ini mengonsumsi partisi tahap yang F-029 turunkan
+ * dari baris terhitungnya sendiri (`pl.stageRealization` /
+ * `pl.unallocatedRealized`) — builder ini hanya memasangkan partisi itu
+ * ke daftar tahap proyek; ia tidak menghitung ulang rupiah realisasi.
+ * Hari ini partisi selalu kosong (belum ada kolom tahap sah), jadi
+ * seluruh realisasi tetap `unallocatedRealized` = totalCost penuh —
+ * perilaku fase (b) dipertahankan persis sampai kolom tahap sah lahir
+ * lewat kartu schema tersendiri. Rekonsiliasi wajib: Σ per tahap +
+ * belum-dialokasi (anggaran) = ΣRAB; Σ realizedAmount per tahap +
+ * unallocatedRealized = realizedTotal = totalCost F-029 (selisih 0.00).
  *
  * contractAmount adalah snapshot nilai JUAL kontrak (dari
  * Quotation.grandTotal terpilih atau manual ber-alasan), RAB adalah
@@ -24,7 +30,10 @@
  */
 
 import { safeMultiply, safeSubtract, safeSum } from "@/lib/utils/math"
-import type { ProjectPlResult } from "@/lib/reports/project-pl"
+import type {
+  ProjectPlResult,
+  ProjectPlStageRealization,
+} from "@/lib/reports/project-pl"
 
 /** Kategori kanonik baris RAB (pola string ProductionCost.category). */
 export const PROJECT_BUDGET_CATEGORIES = [
@@ -95,6 +104,22 @@ export interface ProjectBudgetStageTotal {
   total: number
 }
 
+/**
+ * Realisasi SATU tahap dari partisi F-029 (BR-09 fase c). Selalu hadir
+ * per tahap yang tercantum — tahap tanpa realisasi BUKAN ditebak UI:
+ * `hasRealization` false + `realizedAmount` 0 + `bySource` semua 0.
+ */
+export interface ProjectBudgetStageRealization {
+  projectStageId: number
+  stageName: string | null
+  /** Σ realisasi teralokasi ke tahap ini (0 bila tidak ada). */
+  realizedAmount: number
+  /** false = tahap tanpa realisasi teralokasi — tampilkan eksplisit, bukan kosong/tebakan. */
+  hasRealization: boolean
+  /** Rincian per sumber F-029 (material/productionCost/expense/pettyCash/vendorBill). */
+  bySource: ProjectPlStageRealization["bySource"]
+}
+
 export interface ProjectBudgetResult {
   projectId: number
   contractAmount: number | null
@@ -110,8 +135,20 @@ export interface ProjectBudgetResult {
   /** Realisasi total = pl.totalCost F-029 persis. */
   realizedTotal: number
   /**
-   * Realisasi yang belum bisa dialokasi per tahap = realizedTotal penuh
-   * di fase ini (BR-09 ditunda vonis Lead).
+   * Realisasi per tahap dari partisi F-029 (`pl.stageRealization`),
+   * terpasang ke daftar tahap proyek: SEMUA tahap proyek tercantum
+   * (termasuk tanpa baris RAB), urut sortOrder tahap. Tahap tanpa
+   * realisasi = `hasRealization` false + `realizedAmount` 0 (eksplisit).
+   * Partisi berkunci projectStageId asing (di luar tahap proyek) tidak
+   * dimasukkan ke sini — ia tetap di `unallocatedRealized` supaya
+   * rekonsiliasi tidak pernah bocor.
+   */
+  perStageRealized: ProjectBudgetStageRealization[]
+  /**
+   * Realisasi yang belum bisa dialokasi per tahap. Hari ini =
+   * realizedTotal penuh (kolom tahap sumber masih ditunda vonis Lead);
+   * nanti = pl.unallocatedRealized + partisi tahap asing. Rekonsiliasi:
+   * Σ perStageRealized.realizedAmount + nilai ini = realizedTotal (0.00).
    */
   unallocatedRealized: number
   /** totalBudget − realizedTotal; negatif = realisasi melewati RAB. */
@@ -184,6 +221,41 @@ export function buildProjectBudget(input: ProjectBudgetInput): ProjectBudgetResu
 
   const realizedTotal = input.pl.totalCost
 
+  // Realisasi per tahap (BR-09 fase c): pasang partisi F-029 ke daftar
+  // tahap proyek. Jumlah proyek-tahap selalu dari `stages` (bukan dari
+  // partisi), jadi tahap tanpa realisasi tampil eksplisit 0/false.
+  // Partisi ber-id di luar tahap proyek tidak diakui di sini — selisihnya
+  // jatuh ke unallocatedRealized di bawah, bukan hilang.
+  const realizationByStage = new Map(
+    input.pl.stageRealization.map((r) => [r.projectStageId, r]),
+  )
+  const perStageRealized: ProjectBudgetStageRealization[] = [...input.stages]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((stage) => {
+      const part = realizationByStage.get(stage.id)
+      return {
+        projectStageId: stage.id,
+        stageName: stage.name,
+        realizedAmount: part?.amount ?? 0,
+        hasRealization: part !== undefined,
+        bySource: part?.bySource ?? {
+          material: 0,
+          productionCost: 0,
+          expense: 0,
+          pettyCash: 0,
+          vendorBill: 0,
+        },
+      }
+    })
+  const allocatedToKnownStages = safeSum(
+    perStageRealized.map((r) => r.realizedAmount),
+    2,
+  )
+  // unallocated = totalCost − teralokasi-ke-tahap-proyek. Identik dengan
+  // pl.unallocatedRealized bila semua partisi menunjuk tahap proyek;
+  // partisi tahap asing ikut tertampung di sini (tidak hilang).
+  const unallocatedRealized = safeSubtract(realizedTotal, allocatedToKnownStages, 2)
+
   return {
     projectId: input.projectId,
     contractAmount: input.contractAmount,
@@ -194,7 +266,8 @@ export function buildProjectBudget(input: ProjectBudgetInput): ProjectBudgetResu
     unallocatedBudget: { categories: unallocatedCategories, total: unallocatedTotal },
     totalBudget,
     realizedTotal,
-    unallocatedRealized: realizedTotal,
+    perStageRealized,
+    unallocatedRealized,
     varianceTotal: safeSubtract(totalBudget, realizedTotal, 2),
     marginRencana:
       input.contractAmount === null
