@@ -104,6 +104,10 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // vehicle-fitment-form memanggilnya).
   "src/actions/vehicle-fitment.actions.ts::checkVehicleFitmentConflicts":
     "F-2026-10-21-025 backend; peringatan konflik di VehicleFitmentForm menyusul (frontend t_6d28c338)",
+  // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
+  // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
+  "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
+    "F-2026-10-21-019 backend; UI pull labor perintah kerja menyusul (frontend)",
   // F-2026-10-21-009-V backend dulu (vonis BOT 4 PR #349): kontrak tutup/reopen
   // job siap; tombol UI menyusul di kartu frontend (buang entri ini saat halaman
   // produksi/perintah kerja memanggilnya).
@@ -139,6 +143,27 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
   "src/actions/hrm.actions.ts::removePayrollComponentLine":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  // F-2026-10-21-030 fase a+b (backend dulu, PR #370): UI RAB Fira DITAHAN
+  // menunggu Lead merge builder ini — vonis Lead t_3e892715 komentar #86.
+  // Buang ke-9 entri ini saat UI RAB memanggilnya.
+  "src/actions/project.actions.ts::setProjectContractFromQuotation":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::setProjectContractManual":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::createProjectBudgetItem":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::updateProjectBudgetItem":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::deleteProjectBudgetItem":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::lockProjectBudget":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::proposeProjectBudgetRevision":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::applyProjectBudgetRevision":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::rejectProjectBudgetRevision":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
 }
 
 describe("keterhubungan aksi server", () => {

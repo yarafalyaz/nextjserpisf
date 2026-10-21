@@ -50,6 +50,16 @@ describe("GET /api/notifications", () => {
     expect(res.status).toBe(400)
   })
 
+  it.each(["7abc", "7.5", "0x10", "1e3", "+7", " 7"])(
+    "returns 400 when user.id is non-canonical %s",
+    async (raw) => {
+      mocks.authFn.mockResolvedValue({ user: { id: raw } })
+      const res = await GET()
+      expect(res.status).toBe(400)
+      expect(mocks.notificationFindMany).not.toHaveBeenCalled()
+    },
+  )
+
   it("returns notifications and unread count", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 7 } })
     mocks.notificationFindMany.mockResolvedValue([{ id: 1, title: "Test" }])
