@@ -12,10 +12,21 @@ import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { buildMinStock, buildMinStockByWarehouse, type MinStockResult } from "@/lib/reports/min-stock"
 
+/**
+ * F-2026-10-21-013: label kejujuran lapis aman per gudang. Minimum yang
+ * dibandingkan tetap global Item.minStock — inti ItemWarehouseSetting
+ * (minimum per gudang) belum ada. Frontend tempel teks ini verbatim di
+ * dekat daftar per gudang; jangan parafrase jadi klaim minimum per gudang.
+ */
+export const MIN_STOCK_WAREHOUSE_NOTE =
+  "Per gudang: minimum masih global — batas Item.minStock yang sama dibandingkan ke stok tiap gudang; minimum per gudang belum diatur."
+
 export interface MinStockReport {
   report: MinStockResult
   /** F-013 lapis aman: baris di bawah minimum per gudang (minimum masih global). */
   warehouseShortages: import("@/lib/reports/min-stock").MinStockWarehouseLine[]
+  /** Teks verbatim untuk UI: minimum masih global (lihat MIN_STOCK_WAREHOUSE_NOTE). */
+  warehouseNote: string
   periodLabel: string
   periodCaption: string
 }
@@ -82,6 +93,7 @@ export async function loadMinStock(period: {
 
   return {
     warehouseShortages,
+    warehouseNote: MIN_STOCK_WAREHOUSE_NOTE,
     report: buildMinStock(
       items.map((item) => ({
         itemId: item.id,
