@@ -59,6 +59,21 @@ export const updateVehicleFitmentSchema = createVehicleFitmentSchema.extend({
     .transform((v) => (v === undefined ? undefined : v === true || v === "true" || v === "on")),
 });
 
+export const checkFitmentConflictSchema = z.object({
+  itemId: z.coerce.number().int().positive("Item wajib dipilih"),
+  // Rule being edited; excluded from its own conflict list.
+  excludeRuleId: optionalNumber(),
+  bomRevisionId: optionalNumber(),
+  vehicleBrandId: optionalNumber(),
+  vehicleModelId: optionalNumber(),
+  vehicleVariantId: optionalNumber(),
+  yearFrom: yearBound(),
+  yearTo: yearBound(),
+  drivetrain: optionalString(100),
+  transmission: optionalString(100),
+  result: vehicleFitmentResultEnum,
+});
+
 export const checkFitmentSchema = z.object({
   productId: optionalNumber(),
   itemId: optionalNumber(),
