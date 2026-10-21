@@ -2680,3 +2680,246 @@ bpmp + uji unggah nyata BELUM) — jangan naikkan klaim.
   sampai syarat PR #379 §D lapis 2 (a)-(c) terbukti + vonis BPA1.
 
 ---
+## VONIS BOT 4 2026-10-22 01:24 WIB — F-2026-10-21-021 TAHAP 3 (provisi + jurnal garansi)
+Kartu t_0d982ec6 (ready, klaim 2026-10-22 01:22). Tanpa kode, tanpa
+schema/migrasi, tanpa jurnal nyata. Vonis ini melengkapi vonis BOT 4
+2026-10-21 22:18 (F-021 tahap 3 "DITOLAK-AKTIFKAN" saat data klaim belum
+ada) dan vonis kesiapan akun 2026-10-21 18:53 (F-69: kode 510104/210205/
+110508). Tahap 1-2 sudah hidup (model WarrantyCoverage/WarrantyClaim,
+PR #294/#300/#303/#312) tetapi TANPA jurnal apa pun. Bila syarat §6 di
+bawah terpenuhi, tahap 3 DIBUKA dengan bentuk di §1-§5. Bila syarat
+belum terpenuhi, default aman existing tetap berlaku: garansi tercatat
+operasional saja, biaya klaim dibebankan saat terjadi lewat jurnal
+manual umum, TANPA provisi dan TANPA piutang klaim supplier.
+### §0 Ringkasan putusan
+1. Provisi garansi BOLEH diakui HANYA untuk garansi assurance dengan
+   kewajiban kini dari penjualan/serah-terima, arus keluar kemungkinan
+   besar, dan estimasi andal dari data klaim historis per kelompok
+   item/jasa. Estimasi nol/tidak andal = TIDAK ada provisi; biaya
+   dibebankan saat klaim terjadi. Sistem TIDAK PERNAH mengarang tarif
+   provisi (persen penjualan, persen HPP, dsb.) tanpa dasar data.
+2. Jurnal tahap 3 memakai mesin keputusan murni existing
+   `src/lib/services/warranty-accounting.ts` (F-49, 10 tes angka hijau:
+   covered/billable/rejected, saldo provisi tidak negatif, recovery
+   virtually-certain saja). Mesin itu TIDAK disentuh kartu ini; vonis
+   ini hanya menetapkan SYARAT kapan ia boleh dipanggil inti + bentuk
+   jurnal posting nyata. `decideWarrantyClaimAccounting` tidak pernah
+   dipanggil dari kode produksi hari ini (grep pemanggil = hanya tes).
+3. Akun final (koreksi F-69 mengikat, membatalkan header lama modul
+   yang masih menulis 510103/2105xx/1108xx): **510104 Beban Garansi**
+   [COGS di bawah 5101], **210205 Provisi Garansi** [OCLY di bawah
+   2102], **110508 Piutang Klaim Supplier — Garansi** [OCAS di bawah
+   1105]. 510103 = Penyesuaian Persediaan, DILARANG untuk garansi.
+   Header komentar warranty-accounting.ts:51-53 WAJIB dikoreksi BOT 3
+   saat inti dibangun (kode salah = jebakan posting).
+4. Tiga kolom mapping SystemSetting baru wajib (migrasi inti):
+   `warrantyExpenseAccountId`, `warrantyProvisionAccountId`,
+   `supplierClaimReceivableAccountId` — semua nullable, tanpa default
+   tebak. Posting tahap 3 DITOLAK fail-closed bila mapping yang
+   dibutuhkan jalur terpilih kosong (pola AUD-FIN-01
+   customerDownPaymentAccountId, accounting-hook.test.ts:1456).
+   Automap boleh MENAWARKAN kandidat by-code (510104/210205/110508)
+   di wizard, tetapi TIDAK mengisi diam-diam: finance wajib memilih/
+   mengonfirmasi akun aktif, terposting, dan bertipe benar
+   (COGS/OCLY/OCAS) — akun nonaktif atau induk header DITOLAK.
+5. Peristiwa posting hanya 4: (E1) akrual provisi saat serah-terima,
+   (E2) realisasi biaya klaim approved, (E3) pengakuan recovery
+   supplier virtually-certain, (E4) pelepasan provisi di akhir masa /
+   pembalikan estimasi. Di luar 4 ini TIDAK ada jurnal garansi.
+   Klaim rejected, klaim di luar cakupan, dan pekerjaan tertagih
+   TIDAK PERNAH memakai jurnal garansi (jalur §3).
+### §1 Matriks posting (event → debit/kredit → syarat)
+Semua jurnal: `JournalService.createJournal` existing, status POSTED,
+`assertPeriodOpen(tanggal jurnal)` di dalam transaksi pemanggil,
+uang Decimal(15,2), satu jurnal per peristiwa per dokumen sumber.
+Tanggal jurnal = tanggal peristiwa bisnis (serah-terima / penyelesaian
+biaya klaim / penetapan recovery / akhir masa), BUKAN tanggal input
+mundur ke periode terkunci dan BUKAN tanggal faktur asal diubah.
+| Event | Debit | Kredit | Syarat posting (semua wajib) |
+|---|---|---|---|
+| E1 Akrual provisi | 510104 Beban Garansi = estimasi terbaik per coverage/kelompok | 210205 Provisi Garansi | Garansi assurance; serah-terima WO completed (coverage lahir); estimasi > 0 dari metode §2 terdokumentasi; mapping expense+provision terisi; periode tanggal serah-terima terbuka |
+| E2 Realisasi klaim | 210205 sebesar min(biaya aktual, saldo provisi terkait); selisih lebih biaya → 510104 | Akun biaya sumber per bukti: Persediaan/WIP (part FIFO) / Utang / Kas-Bank (jasa dibayar) | Klaim status approved/in_repair→closed dengan decisionBy/decisionAt tercatat; biaya aktual terverifikasi dari WO perbaikan (MaterialIssue/ProductionCost WO repair), BUKAN angka ketik bebas; invoiceForbidden=true ditegakkan (tidak ada SalesInvoice untuk WO repair ini) |
+| E3 Recovery supplier | 110508 Piutang Klaim Supplier | 510104 Beban Garansi (pemulihan biaya, BUKAN pendapatan) | Supplier claim status accepted/closed_recovered DAN bukti hampir-pasti (surat persetujuan supplier/credit note) terlampir TransactionAttachment referenceType="WarrantyClaim"; nominal ≤ biaya klaim yang dibebankan; TIDAK net-off saldo provisi di neraca |
+| E4 Pelepasan provisi | 210205 sebesar saldo tersisa coverage/kelompok | 510104 Beban Garansi (pembalikan beban, BUKAN pendapatan) | Masa garansi berakhir (expiresAt lewat) dan tidak ada klaim terbuka atas coverage terkait; atau telaah periode membuktikan arus keluar tidak lagi kemungkinan besar; jurnal lawan/reversal, BUKAN hapus jurnal E1 |
+Koreksi jurnal terposting: SELALU jurnal reversal
+(`JournalService.reverseJournal` existing) + jurnal baru benar di
+periode terbuka. Jurnal terposting TIDAK diedit, TIDAK dihapus.
+Reversal E2/E3 memakai tanggal periode berjalan (pola reverseJournal
+existing menanggalkan ke tanggal jurnal asal — inti WAJIB menelaah:
+bila periode asal sudah terkunci, reversal ditolak dan koreksi lewat
+jurnal lawan bertanggal berjalan; JANGAN memaksa backdate).
+### §2 Metode estimasi provisi (PSAK 57 par 14, 24, 36)
+- Estimasi = estimasi terbaik arus keluar untuk populasi coverage
+  sejenis (kelompok item/jasa + rentang masa garansi), dari data
+  historis klaim ISF sendiri: (frekuensi klaim historis) × (rata-rata
+  biaya klaim terverifikasi), ditelaah tiap akhir periode.
+- Gerbang data minimum SEBELUM provisi pertama boleh diakui:
+  (a) minimal 12 bulan data klaim tahap 2 ATAU 30 klaim closed
+  (mana tercapai lebih dulu) per kelompok; (b) metode + asumsi
+  tertulis disetujui finance (dokumen metode, bukan konstanta kode);
+  (c) hasil estimasi dapat direkonsiliasi: saldo 210205 per kelompok
+  = Σ E1 − Σ E2 − Σ E4, dapat ditelusur ke coverage/claim.
+- Di bawah gerbang data: provisi TIDAK diakui (bukan "provisi kecil
+  dulu"). Biaya klaim approved dibebankan penuh ke 510104 saat
+  terjadi (jalur covered_warranty provisionBalance=0 di mesin F-49).
+  Ini BUKAN pelanggaran PSAK 57: par 14(c) mensyaratkan estimasi
+  andal; tanpa itu pengakuan provisi justru dilarang.
+- Perubahan estimasi = prospektif (PSAK 25): selisih ditampung E4/
+  E1 tambahan periode berjalan. DILARANG restatement jurnal lama.
+- Garansi `service` (berbayar/terpisah, PSAK 72 PP29-PP32): BUKAN
+  provisi PSAK 57. Bagian harga dialokasikan ke liabilitas kontrak
+  dan diakui pendapatan sepanjang masa jasa. ISF hari ini tidak
+  punya produk garansi berbayar terpisah maupun kolom jenis garansi
+  di Item/WarrantyCoverage → garansi service DITUNDA: butuh kolom
+  jenis + alokasi harga (migrasi + vonis lanjutan BOT 4) sebelum
+  boleh dijual/dijanjikan. Sampai itu, semua garansi pasang ISF
+  diperlakukan assurance.
+### §3 Batas jalur (anti tertagih dobel, WAR-01)
+- Klaim covered (dalam masa + approved): invoiceForbidden WAJIB
+  ditegakkan di server — WO repair tertaut WarrantyClaim approved
+  tidak dapat melahirkan SalesInvoice. Penegakan UI saja TIDAK cukup.
+- Klaim rejected / di luar masa / di luar cakupan: BUKAN jurnal
+  garansi. Bila pelanggan setuju perbaikan berbayar → WO + invoice
+  BARU normal (Dr Piutang / Cr Pendapatan + PPN keluaran bila PKP,
+  Dr HPP / Cr Persediaan). Dokumen klaim tidak pernah menjadi dasar
+  tagihan.
+- Invoice asal TIDAK diubah oleh klaim apa pun (WAR-01). Biaya klaim
+  tampil sebagai biaya periode klaim + lifetime cost job asal di
+  laporan, bukan koreksi invoice lama.
+- Biaya part pengganti keluar pada nilai lapisan FIFO berjalan
+  (sama seperti MaterialIssue biasa), BUKAN harga jual.
+- Recovery supplier `possible` (belum hampir pasti): TANPA jurnal,
+  diungkapkan sebagai aset kontinjensi (PSAK 57 par 31-35).
+  `supplierClaimStatus` tahap 2 (none→…→closed_recovered) tetap
+  status operasional; jurnal E3 hanya lahir di gerbang virtually-
+  certain §1, bukan mengikuti setiap transisi status.
+### §4 Idempotency + referensi jurnal
+- `Journal.referenceType/referenceId` unik DB (journals_reference_
+  unique). Satu peristiwa = satu jurnal aktif:
+  E1 → referenceType="WarrantyProvisionAccrual", referenceId=
+  coverageId (satu akrual per coverage; akrual tambahan perubahan
+  estimasi = dokumen penyesuaian terpisah, BUKAN jurnal kedua diam-
+  diam — inti memutus bentuknya dan melapor ke BOT 4 sebelum bangun);
+  E2 → "WarrantyClaimCost", referenceId=claimId; E3 →
+  "WarrantySupplierRecovery", referenceId=claimId; E4 →
+  "WarrantyProvisionRelease", referenceId=coverageId.
+- Pemanggil WAJIB cek jurnal POSTED non-REVERSED existing untuk
+  (referenceType, referenceId) lebih dulu dan menolak dobel dengan
+  pesan jelas (pola vonis tutup tahun F-86), bukan mengandalkan
+  P2002 mentah. Idempotency key per intent wajib mengikuti pola
+  mutasi finansial existing bila aksi dipanggil dari UI berulang.
+- Status dokumen, pembayaran, pajak, posting tetap TERPISAH:
+  status WarrantyClaim (operasional) tidak menyiratkan jurnal ada;
+  keberadaan jurnal dibaca dari Journal reference, bukan flag klaim.
+### §5 Pajak
+- Rework garansi covered: TIDAK ada penyerahan kena pajak baru —
+  tanpa faktur pajak, tanpa PPN keluaran, tanpa PPh atas "pendapatan
+  garansi" (tidak ada pendapatan). Jangan membuat TaxInvoice dari
+  dokumen klaim/WO repair covered.
+- Rework tertagih (jalur invoice baru §3): perlakuan pajak mengikuti
+  invoice normal existing (PPN keluaran bila PKP, DPP = nilai
+  pekerjaan tertagih). Mesin F-49 jalur billable_rework hanya contoh
+  penyajian piutang/pendapatan; posting nyata WAJIB lewat jalur
+  invoice existing, bukan jurnal langsung dari modul garansi.
+- Recovery supplier: pemulihan biaya, BUKAN objek PPN dan bukan
+  pendapatan. Credit note supplier yang memuat PPN mengikuti jalur
+  retur/nota retur existing (F-022 tautan PurchaseReturn) — E3 tidak
+  membuat jurnal pajak sendiri.
+- Biaya garansi/provisi = beban fiskal mengikuti ketentuan umum
+  biaya untuk mendapatkan, menagih, memelihara penghasilan; vonis
+  ini TIDAK mengklaim deductibility per komponen — koreksi fiskal
+  akhir tahun di luar cakupan (tandai BUTUH-VONIS-AKUNTAN bila
+  finance hendak memakai angka provisi untuk SPT sebelum biaya
+  aktual terjadi; provisi akuntansi ≠ biaya fiskal otomatis).
+### §6 Syarat buka inti (gerbang, semua wajib sebelum BOT 3 bangun)
+G1. Lead membuka inti F-021 tahap 3 secara eksplisit (PUTUSAN) —
+    vonis ini bukan izin bangun.
+G2. Migrasi inti satu paket: 3 akun CoA (510104/210205/110508, seed
+    base-data install baru + penambahan aman instalasi berjalan),
+    3 kolom SystemSetting §0.4, koreksi header warranty-accounting.
+    ts:51-53. Urutan: akun+mapping dulu, jurnal sesudahnya.
+G3. Gerbang data §2 dipenuhi ATAU inti dibangun dengan provisi
+    MATI (E1/E4 nonaktif, hanya E2 jalur beban-saat-terjadi + E3).
+    Mode provisi diaktifkan per kelompok item, bukan global diam-
+    diam; saklar aktivasi tercatat (siapa, kapan, metode apa).
+G4. Sumber biaya E2 terverifikasi sistem: biaya dari WO repair
+    tertaut (repairWorkOrderId existing) — MaterialIssue completed
+    (FIFO) + ProductionCost; klaim tanpa WO repair/biaya nol =
+    tanpa jurnal E2.
+G5. Penegakan invoiceForbidden di server untuk WO repair covered.
+G6. Setiap pemanggil jurnal: assertPeriodOpen + cek anti-dobel §4 +
+    resolusi mapping fail-closed §0.4 di dalam satu transaksi.
+G7. Draf acceptance BOT 6 di §7 lulus termasuk falsifikasi.
+### §7 Draf acceptance untuk BOT 6 (Qila)
+AC-G1. Coverage assurance, estimasi andal: serah-terima → E1 Dr
+  510104 / Cr 210205 seimbang sen; cabut mapping provision → posting
+  ditolak berisik, nol jurnal lahir (falsifikasi fail-closed).
+AC-G2. Klaim covered biaya 1,5jt, provisi 2jt: E2 Dr 210205 1,5jt /
+  Cr sumber biaya 1,5jt; nol SalesInvoice dapat dibuat dari WO
+  repair (server menolak); cabut gerbang invoiceForbidden → tes
+  merah.
+AC-G3. Biaya 2,75jt > provisi 2jt: Dr 210205 2jt + Dr 510104 750rb,
+  saldo provisi tidak negatif; jurnal seimbang 2,75jt.
+AC-G4. Tanpa provisi (gerbang data belum lolos): seluruh biaya ke
+  510104 saat klaim; tidak ada baris 210205.
+AC-G5. Recovery possible: nol jurnal, catatan kontinjensi tampil.
+  Recovery virtually-certain 900rb: E3 Dr 110508 / Cr 510104; saldo
+  provisi TIDAK berkurang oleh E3 (tidak net-off); recovery > biaya
+  klaim ditolak/dibatasi biaya.
+AC-G6. Klaim rejected dan klaim luar masa: nol jurnal garansi;
+  perbaikan berbayar hanya lahir sebagai invoice baru normal.
+AC-G7. Posting E1/E2 dua kali (klik ulang/retry): jurnal kedua
+  ditolak pesan jelas; total jurnal per reference tetap satu.
+AC-G8. Periode terkunci pada tanggal peristiwa: posting ditolak;
+  tanggal jurnal tidak digeser diam-diam ke hari ini.
+AC-G9. Akhir masa tanpa klaim: E4 Dr 210205 / Cr 510104 sebesar
+  saldo; akun pendapatan tidak tersentuh; reversal E4 lewat jurnal
+  lawan, jurnal asal utuh.
+AC-G10. Rekonsiliasi: saldo GL 210205 = ΣE1−ΣE2−ΣE4 per kelompok;
+  laporan lifetime cost job asal menampilkan biaya klaim tanpa
+  mengubah invoice asal (WAR-01).
+### §8 Sumber
+- PSAK 72 PP28–PP33 (garansi assurance vs service) — IAI,
+  ED PSAK 72 Lampiran B (resmi IAI):
+  https://web.iaiglobal.or.id/assets/files/file_sak/exposure-draft/ED%20PSAK%2072_Pendapatan%20dari%20Kontrak%20Pelanggan.pdf
+  (akses 2026-10-22; teks final PSAK 72 di SAK Online IAI).
+- PSAK 57 par 14, 24, 31–36, 84 (provisi, estimasi terbaik, aset
+  kontinjensi, penggantian pihak ketiga) — IAI:
+  https://web.iaiglobal.or.id/PSAK-Umum/39 (akses 2026-10-22).
+  Amendemen PSAK 57 (kontrak memberatkan):
+  https://web.iaiglobal.or.id/assets/files/file_sak/exposure-draft/DE%20AMENDEMEN%20PSAK%2057.pdf
+- PMK 168/2023 (konteks PPh 21 komponen; vonis BR-027-07 PR #367 —
+  konteks saja, bukan dasar jurnal garansi):
+  https://www.peraturan.go.id/files/permenkeu-no-168-tahun-2023.pdf
+- PMK 66/2023 (natura/kenikmatan; konteks saja):
+  https://www.peraturan.go.id/files/permenkeu-no-66-tahun-2023.pdf
+- Bukti kode live (worktree t_0d982ec6, basis 51f4e471):
+  warranty-accounting.ts (mesin F-49 + header usang :51-56),
+  warranty-accounting.test.ts 10 tes, warranty.service.ts
+  (coverage/claim tahap 1-2 tanpa jurnal, transisi supplier
+  R1–R8), schema.prisma WarrantyCoverage:4033/WarrantyClaim:4074/
+  journals_reference_unique:3019/SystemSetting tanpa kolom
+  warranty*, base-data.ts 510102/510103:866-867, 210201-210204,
+  110501-110507, journal.service.ts create/reverse.
+### §9 Yang TIDAK divonis / ditunda
+- Garansi service berbayar: DITUNDA (§2) — butuh desain produk +
+  kolom jenis + alokasi harga PSAK 72; vonis lanjutan bila bisnis
+  membuka produknya.
+- Tarif/rumus estimasi per kelompok item konkret: milik finance
+  dengan data §2; BOT 4 menelaah metode tertulisnya, bukan
+  menetapkan persen dari meja ini.
+- Deductibility fiskal provisi untuk SPT: BUTUH-VONIS-AKUNTAN
+  eksternal (§5).
+- UI pengaturan mapping/akun dan layar provisi: BOT 2 sesudah
+  kontrak inti BOT 3 stabil; UI tidak menghitung jurnal.
+HANDOFF:
+- Lead (Nara): PUTUSAN buka inti tahap 3 = gerbang G1; vonis ini
+  siap sebagai lampiran kartu inti BOT 3.
+- BOT 3 (Bara): jangan bangun sebelum G1–G6; urutan akun→mapping→
+  koreksi header modul→pemanggil jurnal; mesin F-49 jangan diubah
+  putusannya tanpa kembali ke BOT 4.
+- BOT 6 (Qila): draf acceptance AC-G1..G10 di §7; falsifikasi
+  wajib: cabut fail-closed mapping, cabut invoiceForbidden, dobel
+  posting.
+- BOT 2 (Fira): tidak ada pekerjaan UI dari vonis ini sampai
+  kontrak inti ada.
