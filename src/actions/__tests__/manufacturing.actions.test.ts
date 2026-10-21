@@ -1272,6 +1272,135 @@ describe("Work Order Actions", () => {
 })
 
 
+describe("F-2026-10-21-009-V: tutup/reopen job", () => {
+  const closedWo = {
+    id: 1, documentNo: "WO-001", status: "closed",
+    closedAt: new Date("2026-10-21T10:00:00Z"), closedBy: 5, closedReason: "selesai audit",
+  }
+
+  it("closeWorkOrder: completed bersih -> closed + log close", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "completed" })
+    mocks.prismaMock.productionOrder.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.productionCost = { findFirst: vi.fn().mockResolvedValue(null) }
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    const res = await actions.closeWorkOrder(1, "selesai")
+    expect(res?.success).toBe(true)
+    const upd = mocks.prismaMock.workOrder.updateMany.mock.calls[0][0]
+    expect(upd.where).toEqual({ id: 1, status: "completed" })
+    expect(upd.data.status).toBe("closed")
+    expect(upd.data.closedReason).toBe("selesai")
+    expect(mocks.logActivityMock).toHaveBeenCalledWith("close", "WorkOrder", 1, expect.stringContaining("selesai"))
+  })
+
+  it("closeWorkOrder: tanpa alasan ditolak, tanpa tulis", async () => {
+    const res = await actions.closeWorkOrder(1, "   ")
+    expect(res?.success).toBe(false)
+    expect((res as any)?.error).toContain("wajib")
+    expect(mocks.prismaMock.workOrder.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("closeWorkOrder: PO anak belum final ditolak", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "completed" })
+    mocks.prismaMock.productionOrder.findFirst.mockResolvedValue({ id: 7, documentNo: "MO-007", status: "in_progress" })
+    const res = await actions.closeWorkOrder(1, "selesai")
+    expect(res?.success).toBe(false)
+    expect((res as any)?.error).toContain("MO-007")
+    expect(mocks.prismaMock.workOrder.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("closeWorkOrder: MI draft ditolak", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "completed" })
+    mocks.prismaMock.productionOrder.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 3, documentNo: "MI-003", status: "draft" })
+    const res = await actions.closeWorkOrder(1, "selesai")
+    expect(res?.success).toBe(false)
+    expect((res as any)?.error).toContain("MI-003")
+  })
+
+  it("closeWorkOrder: status bukan completed ditolak", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "in_progress" })
+    const res = await actions.closeWorkOrder(1, "selesai")
+    expect(res?.success).toBe(false)
+    expect((res as any)?.error).toContain("hanya dapat ditutup dari status 'completed'")
+  })
+
+  it("closeProductionOrder: sisa WIP 0,01 ditolak menyebut nominal", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "completed", qty: 10, completedQty: 10, totalActualCost: 0.01, workOrderId: null,
+    })
+    const res = await actions.closeProductionOrder(8, "tutup")
+    expect(res?.success).toBe(false)
+    expect((res as any)?.error).toContain("0.01")
+    expect(mocks.prismaMock.productionOrder.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("closeProductionOrder: bersih -> closed", async () => {
+    mocks.prismaMock.productionOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 8, documentNo: "MO-008", status: "completed", qty: 10, completedQty: 10, totalActualCost: 0, workOrderId: null,
+    })
+    mocks.prismaMock.productionOrder.updateMany.mockResolvedValue({ count: 1 })
+    const res = await actions.closeProductionOrder(8, "tutup")
+    expect(res?.success).toBe(true)
+    const upd = mocks.prismaMock.productionOrder.updateMany.mock.calls[0][0]
+    expect(upd.data.status).toBe("closed")
+    expect(upd.data.closedBy).toBe(1)
+  })
+
+  it("reopenWorkOrder: tanpa alasan ditolak", async () => {
+    const res = await actions.reopenWorkOrder(1, "")
+    expect(res?.success).toBe(false)
+    expect((res as any)?.error).toContain("wajib")
+  })
+
+  it("reopenWorkOrder: izin salah ditolak", async () => {
+    mocks.requirePermissionMock.mockRejectedValue(new Error("Tidak memiliki izin complete_work_orders"))
+    const res = await actions.reopenWorkOrder(1, "koreksi")
+    expect(res?.success).toBe(false)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("complete_work_orders")
+  })
+
+  it("tutup->reopen->tutup: jejak log 3 peristiwa berurutan utuh", async () => {
+    // tutup #1
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "completed" })
+    mocks.prismaMock.productionOrder.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.productionCost = { findFirst: vi.fn().mockResolvedValue(null) }
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    expect((await actions.closeWorkOrder(1, "tutup pertama"))?.success).toBe(true)
+    // reopen
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue(closedWo)
+    expect((await actions.reopenWorkOrder(1, "ada biaya telat"))?.success).toBe(true)
+    const reopenUpd = mocks.prismaMock.workOrder.updateMany.mock.calls.at(-1)[0]
+    expect(reopenUpd.data.status).toBe("completed")
+    expect(reopenUpd.data.reopenReason).toBe("ada biaya telat")
+    expect(reopenUpd.data.closedAt).toBeUndefined() // kolom tutup tidak ditimpa reopen
+    // tutup #2
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "completed" })
+    expect((await actions.closeWorkOrder(1, "tutup kedua"))?.success).toBe(true)
+    const logActions = mocks.logActivityMock.mock.calls.map((c: unknown[]) => `${c[0]}:${String(c[3])}`)
+    expect(logActions[0]).toContain("close:")
+    expect(logActions[0]).toContain("tutup pertama")
+    expect(logActions[1]).toContain("reopen:")
+    expect(logActions[1]).toContain("ada biaya telat")
+    expect(logActions[1]).toContain("selesai audit") // snapshot tutup sebelumnya terbawa
+    expect(logActions[2]).toContain("close:")
+    expect(logActions[2]).toContain("tutup kedua")
+  })
+
+  it("createMaterialIssueFromWorkOrder ke WO closed ditolak", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, documentNo: "WO-001", status: "closed", items: [{ id: 1, qty: 1, cost: 0 }],
+      customer: { name: "X" }, quotation: null, projectId: null,
+    })
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ status: "closed" })
+    const res = await actions.createMaterialIssueFromWorkOrder(1, 1)
+    expect(res?.success).toBe(false)
+    expect((res as any)?.error).toContain("sudah ditutup")
+    expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled()
+  })
+})
+
 describe('Global Error Paths (Permission Reject for 11 funcs)', () => {
   // A real NEXT_REDIRECT error object so isNextRedirectError returns true and the catch re-throws.
   const redirectErr = Object.assign(new Error("NEXT_REDIRECT"), { digest: "NEXT_REDIRECT;push;/login;307" })
