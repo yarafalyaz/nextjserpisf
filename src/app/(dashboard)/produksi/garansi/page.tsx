@@ -1,0 +1,185 @@
+export const dynamic = "force-dynamic"
+
+import type { Metadata } from "next"
+import Link from "next/link"
+
+import { requirePermission } from "@/lib/auth/permissions"
+import { prisma } from "@/lib/db/prisma"
+import { CanCreate } from "@/components/auth/can-create"
+import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { AppSearchField } from "@/components/ui/search-field"
+import { StatusChip } from "@/components/ui/status-chip"
+import { formatDate, formatNumber } from "@/lib/utils/format"
+import { statusLabel } from "@/lib/utils/status-labels"
+
+export const metadata: Metadata = { title: "Klaim Garansi" }
+
+const STATUS_FILTERS = [
+  { value: "", label: "Semua Status" },
+  { value: "intake", label: "Masuk" },
+  { value: "eligibility", label: "Penilaian" },
+  { value: "approved", label: "Disetujui" },
+  { value: "rejected", label: "Ditolak" },
+  { value: "in_repair", label: "Dalam Perbaikan" },
+  { value: "closed", label: "Tutup" },
+]
+
+/**
+ * Daftar klaim garansi (F-2026-10-21-021 tahap UI).
+ *
+ * Halaman hanya MEMBACA klaim + cakupan apa adanya dari database lewat
+ * Prisma boundary server; tidak ada penilaian eligibility dan tidak ada
+ * keputusan di sini. Detail klaim (fakta penilaian + keputusan pejabat)
+ * hidup di halaman [claimSlug]; intake baru di /produksi/garansi/tambah.
+ */
+export default async function WarrantyClaimsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ status?: string; cari?: string }>
+}) {
+  await requirePermission("view_warranty_claims")
+  const params = await searchParams
+  const status = params.status ?? ""
+  const cari = (params.cari ?? "").trim()
+
+  const claims = await prisma.warrantyClaim.findMany({
+    where: {
+      ...(status ? { status } : {}),
+      ...(cari
+        ? {
+            OR: [
+              { complaint: { contains: cari } },
+              { customerVehicle: { plateNumber: { contains: cari } } },
+              { coverage: { item: { name: { contains: cari } } } },
+            ],
+          }
+        : {}),
+    },
+    orderBy: { reportedAt: "desc" },
+    take: 200,
+    include: {
+      customerVehicle: { select: { plateNumber: true } },
+      coverage: {
+        select: {
+          status: true,
+          expiresAt: true,
+          item: { select: { name: true } },
+        },
+      },
+    },
+  })
+
+  return (
+    <div className="flex flex-col gap-6">
+      <AppBreadcrumbs
+        items={[
+          { label: "Dasbor", href: "/" },
+          { label: "Manufaktur", href: "/produksi" },
+          { label: "Klaim Garansi" },
+        ]}
+      />
+
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <h1 className="text-2xl font-bold text-foreground">Klaim Garansi</h1>
+        <CanCreate permission="create_warranty_claims">
+          <Link
+            href="/produksi/garansi/tambah"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
+          >
+            Buat Klaim Garansi
+          </Link>
+        </CanCreate>
+      </div>
+
+      <form
+        method="get"
+        aria-label="Filter klaim garansi"
+        className="flex flex-wrap items-end gap-3"
+      >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="warranty-status-filter" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Status
+          </label>
+          <select
+            id="warranty-status-filter"
+            name="status"
+            defaultValue={status}
+            className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
+          >
+            {STATUS_FILTERS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cari</span>
+          <AppSearchField action="/produksi/garansi" placeholder="Keluhan, plat nomor, atau barang" />
+        </div>
+        <button
+          type="submit"
+          className="inline-flex min-h-11 items-center justify-center rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
+        >
+          Terapkan
+        </button>
+      </form>
+
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        {claims.length === 0 ? (
+          <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+            Belum ada klaim garansi
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" aria-label="Daftar klaim garansi">
+              <thead>
+                <tr className="border-b border-default text-left">
+                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Tanggal Lapor</th>
+                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Kendaraan</th>
+                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Barang Tercakup</th>
+                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Keluhan</th>
+                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Odometer</th>
+                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Status</th>
+                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-default">
+                {claims.map((claim) => (
+                  <tr key={claim.id}>
+                    <td className="px-5 py-3 text-foreground">{formatDate(claim.reportedAt)}</td>
+                    <td className="px-5 py-3 text-foreground font-mono">{claim.customerVehicle.plateNumber ?? "-"}</td>
+                    <td className="px-5 py-3 text-foreground">{claim.coverage.item.name}</td>
+                    <td className="px-5 py-3 text-foreground">
+                      <span className="line-clamp-2 max-w-72">{claim.complaint}</span>
+                    </td>
+                    <td className="px-5 py-3 text-foreground tabular-nums">
+                      {claim.odometerKm === null ? "-" : `${formatNumber(claim.odometerKm)} km`}
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusChip status={claim.status} />
+                      <span className="sr-only">{statusLabel(claim.status)}</span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <Link
+                        href={`/produksi/garansi/${claim.id}`}
+                        className="text-primary hover:underline"
+                        aria-label={`Lihat detail klaim garansi ${claim.id}`}
+                      >
+                        Detail
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <p className="text-sm text-muted-foreground">
+        Menampilkan {claims.length} klaim terbaru. Fakta penilaian dan keputusan pejabat ada di halaman detail klaim.
+      </p>
+    </div>
+  )
+}

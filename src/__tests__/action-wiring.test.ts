@@ -99,18 +99,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
   "src/actions/customer-price-list.actions.ts::deleteCustomerPriceList":
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
-  // F-2026-10-21-021 tahap 2 (backend dulu): service klaim garansi sudah
-  // hidup sejak tahap 1; halaman /produksi/garansi = tahap UI Bot 2.
-  "src/actions/warranty.actions.ts::createWarrantyClaimAction":
-    "F-2026-10-21-021 tahap 2 backend; halaman klaim garansi menyusul (tahap UI)",
-  "src/actions/warranty.actions.ts::decideWarrantyClaimAction":
-    "F-2026-10-21-021 tahap 2 backend; halaman klaim garansi menyusul (tahap UI)",
-  "src/actions/warranty.actions.ts::transitionWarrantyClaimAction":
-    "F-2026-10-21-021 tahap 2 backend; halaman klaim garansi menyusul (tahap UI)",
-  "src/actions/warranty.actions.ts::getWarrantyClaimDetail":
-    "F-2026-10-21-021 tahap 2 backend; halaman klaim garansi menyusul (tahap UI)",
-  "src/actions/warranty.actions.ts::listWarrantyCoveragesByVehicle":
-    "F-2026-10-21-021 tahap 2 backend; halaman klaim garansi menyusul (tahap UI)",
 }
 
 describe("keterhubungan aksi server", () => {
