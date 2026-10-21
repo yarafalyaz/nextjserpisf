@@ -2,6 +2,7 @@
 import { describe, it, expect, afterEach } from "vitest"
 
 import { VehicleMarginCard } from "../vehicle-margin-card"
+import type { VehicleMarginReport } from "@/lib/reports/vehicle-margin-data"
 import { buildVehicleMargin } from "@/lib/reports/vehicle-margin"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 import { projectPlWithCost } from "./project-pl-test-fixtures"
@@ -60,6 +61,23 @@ describe("VehicleMarginCard F-2026-10-22-001", () => {
     expect(text).toContain("Sebagian")
     expect(text.indexOf("B 1234 AA")).toBeLessThan(text.indexOf("Tanpa kendaraan"))
     unmountCard(root)
+  })
+
+  it("penanda material belum tertaut tampil verbatim; tanpa penanda tidak tampil", () => {
+    const base = reportExample()
+    const withFlag = {
+      ...base,
+      rows: base.rows.map((row, index) =>
+        index === 0 ? { ...row, hasUnlinkedMaterial: true } : row,
+      ),
+    } as VehicleMarginReport
+    const { container, root } = renderCard(<VehicleMarginCard report={withFlag} />)
+    expect(container.textContent ?? "").toContain("Ada material belum tertaut")
+    unmountCard(root)
+
+    const without = renderCard(<VehicleMarginCard report={reportExample()} />)
+    expect(without.container.textContent ?? "").not.toContain("Ada material belum tertaut")
+    unmountCard(without.root)
   })
 
   it("kosong tampil pesan, bukan tabel", () => {

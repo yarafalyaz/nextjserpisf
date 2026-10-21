@@ -1,4 +1,9 @@
-import type { VehicleMarginReport } from "@/lib/reports/vehicle-margin-data"
+import type { VehicleMarginReport, VehicleMarginRow } from "@/lib/reports/vehicle-margin-data"
+
+type MarginRowWithMaterialFlag = VehicleMarginRow & {
+  // Kontrak BOT 3 t_e9ef3980; opsional agar UI tidak mengada-ada sebelum loader menerbitkan.
+  hasUnlinkedMaterial?: boolean
+}
 import { formatAccounting } from "@/lib/utils/format"
 import {
   DetailTable,
@@ -22,6 +27,7 @@ import { ReportCardShell } from "./report-card-shell"
  */
 export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginReport }>) {
   const { rows, totals } = report
+  const materialRows = rows as MarginRowWithMaterialFlag[]
   const currency = (value: number) => formatAccounting(value, { decimals: 2 })
 
   return (
@@ -44,7 +50,7 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
           <DetailTableTh align="right">Margin Job Kendaraan</DetailTableTh>
         </DetailTableHead>
         <DetailTableBody>
-          {rows.map((row) => {
+          {materialRows.map((row) => {
             const isUnassigned = row.customerVehicleId === null
             return (
               <DetailTableRow key={row.customerVehicleId ?? "tanpa-kendaraan"}>
@@ -53,6 +59,11 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
                   {row.hasUnlinkedRevenue ? (
                     <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-xs font-medium text-warning">
                       Sebagian
+                    </span>
+                  ) : null}
+                  {row.hasUnlinkedMaterial ? (
+                    <span className="ml-2 rounded bg-warning/15 px-1.5 py-0.5 text-xs font-medium text-warning">
+                      Ada material belum tertaut
                     </span>
                   ) : null}
                 </DetailTableTd>
