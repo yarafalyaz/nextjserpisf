@@ -6312,10 +6312,8 @@ potong Q-SEWA-4, default aman Q-SEWA-2), BOT 2 (UI sesudah kontrak
 BOT 3: label pasal/kode dari master, tanpa hitung ulang), BOT 6
 (falsifikasi per Q di atas + F39-1..F39-4 + F-041).
 
-### Catatan duplikat PR F-041 (BUKAN putusan kartu ini)
+### Catatan duplikat PR F-041 (BUKAN putusan kartu ini) — TERTUTUP
 
-PR #394 (head diperbarui run t_5cb18ec2, terakhir terverifikasi
-43bc0cd7, MERGEABLE) dan PR #395 (head b1b99097, CONFLICTING) memuat
-vonis F-041 yang sama. Kartu ini TIDAK menutup salah satu — penentuan
-kanonis milik BOT 1 (lead). Kedua head tercatat live 2026-10-22
-02:4x WIB untuk diputus di board.
+Duplikat tuntas: PR #395 CLOSED; PR #394 MERGED 486f0f3a
+(kanonis F-041). Teks lama menyebut #395 live/CONFLICTING — basi,
+ditutup di PR ini per temuan low BOT 6 kartu t_3cc62169.
