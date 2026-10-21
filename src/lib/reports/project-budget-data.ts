@@ -29,6 +29,7 @@ export type {
   ProjectBudgetCategoryTotal,
   ProjectBudgetHistoryEntry,
   ProjectBudgetResult,
+  ProjectBudgetStageRealized,
   ProjectBudgetStageTotal,
 } from "@/lib/reports/project-budget"
 export {
