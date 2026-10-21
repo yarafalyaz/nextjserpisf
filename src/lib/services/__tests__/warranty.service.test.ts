@@ -17,6 +17,7 @@ vi.mock("@/lib/db/prisma", () => ({
     item: { findMany: vi.fn() },
     warrantyCoverage: { findMany: vi.fn(), create: vi.fn(), findUnique: vi.fn() },
     warrantyClaim: { create: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
+    customerVehicle: { update: vi.fn() },
   },
 }))
 
@@ -26,6 +27,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   p.warrantyCoverage.findMany.mockResolvedValue([])
   p.warrantyCoverage.create.mockResolvedValue({})
+  p.customerVehicle.update.mockResolvedValue({})
 })
 
 describe("addCalendarMonths", () => {
@@ -120,6 +122,10 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
       prisma as never,
     )) as unknown as { status: string }
     expect(claim.status).toBe("intake")
+    expect(p.customerVehicle.update).toHaveBeenCalledWith({
+      where: { id: 7 },
+      data: { lastOdometerKm: 50000 },
+    })
     // assess hanya memberi fakta; tidak menyentuh status.
     const facts = assessWarrantyEligibility({
       coverage: expiredCoverage,
