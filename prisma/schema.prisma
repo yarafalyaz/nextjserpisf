@@ -207,6 +207,14 @@ model SystemSetting {
   // bukan pengurang piutang. Null = instalasi lama; hook menolak posting DP
   // sampai dimapping (fail-closed), automap menebak dari nama "uang muka".
   customerDownPaymentAccountId     Int?    @map("customer_down_payment_account_id")
+  // F-2026-10-21-021 tahap 3 (rute provisi MATI, vonis BOT 4 + PUTUSAN G1
+  // Lead): mapping jurnal garansi E2/E3. Semua nullable tanpa default tebak;
+  // posting garansi DITOLAK fail-closed bila mapping jalur terpilih kosong.
+  // warrantyProvisionAccountId disiapkan untuk E1/E4 yang masih DITUNDA —
+  // tidak ada pemanggil yang memakainya sampai gerbang data dinilai BOT 4.
+  warrantyExpenseAccountId         Int?    @map("warranty_expense_account_id")
+  warrantyProvisionAccountId       Int?    @map("warranty_provision_account_id")
+  supplierClaimReceivableAccountId Int?    @map("supplier_claim_receivable_account_id")
   inventoryAccountId               Int?    @map("inventory_account_id")
   inventoryAdjustmentAccountId     Int?    @map("inventory_adjustment_account_id")
   stockAdjustmentAccountId         Int?    @map("stock_adjustment_account_id")
