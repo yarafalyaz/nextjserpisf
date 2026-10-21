@@ -86,6 +86,10 @@ import {
   buildQuotationOutcomeTable,
   loadQuotationOutcomeReport,
 } from "@/lib/reports/quotation-outcome-export"
+import {
+  buildLaborRecapTable,
+  loadLaborRecapReport,
+} from "@/lib/reports/labor-recap-export"
 import { loadBankTransactionReconciliation } from "@/lib/reports/bank-transaction-reconciliation-data"
 import { loadVatInvoices } from "@/lib/reports/vat-invoices-data"
 import { loadPurchaseOutstanding } from "@/lib/reports/purchase-outstanding-data"
@@ -596,6 +600,21 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
         kind: "table",
         table: buildQuotationOutcomeTable(result),
         periodCaption: result.periodCaption,
+        landscape: true,
+      }
+    },
+  },
+
+  "rekap-borongan": {
+    title: "Rekap Borongan",
+    subtitle: "Upah Borongan per Teknisi (Informatif — Bukan Dasar Bayar/Jurnal)",
+    defaultPeriod: startOfYear,
+    async load() {
+      const result = await loadLaborRecapReport()
+      return {
+        kind: "table",
+        table: buildLaborRecapTable(result),
+        periodCaption: "Seluruh baris labor",
         landscape: true,
       }
     },
