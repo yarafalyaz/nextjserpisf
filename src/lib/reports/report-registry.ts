@@ -125,6 +125,10 @@ import {
 } from "@/lib/reports/ledger-cash-data"
 import { SALES_DIMENSIONS, type SalesDimension } from "@/lib/reports/sales-analytics"
 import { loadCustomerStatement } from "@/lib/reports/customer-statement-data"
+import {
+  buildProjectPlTable,
+  loadProjectPlPdfReport,
+} from "@/lib/reports/project-pl-export"
 
 /** Isi lembar: statement bergaya kode/nama/kolom angka, atau tabel kolom bebas. */
 export type ReportPayload =
@@ -977,6 +981,20 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
       }
       const report = await loadCustomerStatement(customerId, period)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: false }
+    },
+  },
+  "laba-rugi-proyek": {
+    title: "Laba Rugi per Proyek",
+    subtitle: "Rincian Pendapatan, Biaya, dan Laba per Proyek",
+    defaultPeriod: startOfYear,
+    async load({ period }) {
+      const result = await loadProjectPlPdfReport(period)
+      return {
+        kind: "table",
+        table: buildProjectPlTable(result),
+        periodCaption: result.periodCaption,
+        landscape: true,
+      }
     },
   },
   "buku-pembantu-utang": {
