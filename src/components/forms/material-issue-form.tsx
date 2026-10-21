@@ -187,13 +187,16 @@ export function MaterialIssueForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="bg-surface rounded-xl border border-default shadow-sm p-6"
+      aria-label={issue?.id ? "Formulir ubah pengeluaran material" : "Formulir tambah pengeluaran material"}
+      aria-busy={isPending}
+      className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6"
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="warehouseId">Gudang *</Label>
+          <Label htmlFor="warehouseId">Gudang <span className="text-destructive" aria-hidden="true">*</span></Label>
           <QuickAddSelect
             id="warehouseId"
+            required
             options={warehouseOptions.map((w) => ({
               value: String(w.id),
               label: w.name,
@@ -356,11 +359,11 @@ export function MaterialIssueForm({
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 mt-6 pt-5 border-t border-default">
-        <Button type="button" onPress={() => router.back()}>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3 mt-6 pt-5 border-t border-default">
+        <Button type="button" onPress={() => router.back()} className="w-full sm:w-auto">
           Batal
         </Button>
-        <Button type="submit" isDisabled={isPending}>
+        <Button type="submit" isDisabled={isPending} className="w-full sm:w-auto">
           {isPending ? "Memproses..." : "Buat Pengeluaran Material"}
         </Button>
       </div>
