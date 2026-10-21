@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest"
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
+import { mount, act } from "./mount"
 
 const refreshMock = vi.fn()
 const assignMock = vi.fn(async () => ({ success: true }))
@@ -53,16 +50,6 @@ const assignments = [
 ]
 
 const components = [{ id: 1, name: "Tunjangan Makan", kind: "earning" }]
-
-function mount(node: React.ReactNode): { container: HTMLDivElement; root: Root } {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  act(() => {
-    root.render(node)
-  })
-  return { container, root }
-}
 
 describe("EmployeePayrollComponents", () => {
   it("renders assignment with formatted amount and open-ended period", () => {

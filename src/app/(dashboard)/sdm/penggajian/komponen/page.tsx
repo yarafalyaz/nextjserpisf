@@ -14,6 +14,7 @@ export default async function PayrollComponentsPage() {
   const [result, accounts] = await Promise.all([
     getPayrollComponents(),
     prisma.account.findMany({
+      where: { isActive: true, deletedAt: null },
       select: { id: true, code: true, name: true },
       orderBy: { code: "asc" },
       take: 500,

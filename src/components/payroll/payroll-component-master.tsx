@@ -50,8 +50,10 @@ export function taxableLabel(isTaxable: boolean, kind: string): string {
 
 export function PayrollComponentMaster({
   components,
+  accounts = [],
 }: {
   components: PayrollComponentMasterRow[]
+  accounts?: { id: number; code: string; name: string }[]
 }) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -199,18 +201,35 @@ export function PayrollComponentMaster({
             </select>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="pc-account">Akun (opsional)</Label>
-            <Input
-              id="pc-account"
-              name="accountId"
-              type="number"
-              min={1}
-              placeholder="ID akun"
-              defaultValue={editing?.accountId ?? ""}
-              key={`acc-${editing?.id ?? "new"}`}
-            />
+            <Label htmlFor="pc-account">Akun Referensi (opsional)</Label>
+            {accounts.length > 0 ? (
+              <select
+                id="pc-account"
+                name="accountId"
+                className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm"
+                defaultValue={editing?.accountId ?? ""}
+                key={`acc-${editing?.id ?? "new"}`}
+              >
+                <option value="">— Tanpa akun —</option>
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.code} — {a.name}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <Input
+                id="pc-account"
+                name="accountId"
+                type="number"
+                min={1}
+                placeholder="ID akun"
+                defaultValue={editing?.accountId ?? ""}
+                key={`acc-${editing?.id ?? "new"}`}
+              />
+            )}
             <p className="text-xs text-muted-foreground">
-              Hanya disimpan di master; belum dipakai jurnal.
+              Hanya disimpan sebagai referensi master; jurnal slip tetap agregat, bukan per komponen.
             </p>
           </div>
         </div>

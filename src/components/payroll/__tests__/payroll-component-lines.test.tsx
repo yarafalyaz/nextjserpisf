@@ -1,13 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest"
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
+import { mount, act } from "./mount"
 
 const refreshMock = vi.fn()
-const addMock = vi.fn(async () => ({ success: true }))
+const { showSuccessMock, showErrorMock } = vi.hoisted(() => ({
+  showSuccessMock: vi.fn(),
+  showErrorMock: vi.fn(),
+}))
+const addMock = vi.fn(async (): Promise<{ success: boolean; error?: string }> => ({ success: true }))
 const updateAmountMock = vi.fn(async () => ({ success: true }))
 const removeMock = vi.fn(async () => ({ success: true }))
 
@@ -21,7 +22,7 @@ vi.mock("@/actions/hrm.actions", () => ({
   updatePayrollComponentLineAmount: (...a: unknown[]) => updateAmountMock(...(a as [])),
   removePayrollComponentLine: (...a: unknown[]) => removeMock(...(a as [])),
 }))
-vi.mock("@/lib/utils/toast", () => ({ showSuccess: vi.fn(), showError: vi.fn() }))
+vi.mock("@/lib/utils/toast", () => ({ showSuccess: showSuccessMock, showError: showErrorMock }))
 vi.mock("@/components/ui/button", () => ({
   Button: ({
     children,
@@ -61,16 +62,6 @@ const options = [
   { id: 2, name: "Bonus Proyek", kind: "earning", recurrence: "variable" },
   { id: 4, name: "Potongan Disiplin", kind: "deduction", recurrence: "fixed" },
 ]
-
-function mount(node: React.ReactNode): { container: HTMLDivElement; root: Root } {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  act(() => {
-    root.render(node)
-  })
-  return { container, root }
-}
 
 describe("PayrollComponentLines", () => {
   it("draft + canEdit: snapshot row, manual form only offers unused variable components", () => {
@@ -133,6 +124,32 @@ describe("PayrollComponentLines", () => {
     )
     expect(container.textContent).toContain("hanya dapat diubah oleh pengguna berizin ubah penggajian")
     expect(container.querySelector('form[aria-label="Formulir tambah baris komponen gaji"]')).toBeNull()
+    act(() => root.unmount())
+  })
+
+  it("submit tambah baris: error server tampil verbatim via showError", async () => {
+    addMock.mockReset()
+    showErrorMock.mockReset()
+    addMock.mockResolvedValue({ success: false, error: "Komponen gaji yang sama sudah ada pada slip ini" })
+    const { container, root } = mount(
+      <PayrollComponentLines
+        payrollId={7}
+        status="draft"
+        lines={[]}
+        components={options}
+        allowances={0}
+        deductions={0}
+        canEdit={true}
+      />,
+    )
+    const form = container.querySelector('form[aria-label="Formulir tambah baris komponen gaji"]') as HTMLFormElement
+    const select = container.querySelector("#line-component") as HTMLSelectElement
+    select.value = "2"
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
+    expect(addMock).toHaveBeenCalled()
+    expect(showErrorMock).toHaveBeenCalledWith("Komponen gaji yang sama sudah ada pada slip ini")
     act(() => root.unmount())
   })
 

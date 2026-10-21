@@ -1,10 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi } from "vitest"
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
+import { mount, act } from "./mount"
 
 const refreshMock = vi.fn()
 const createMock = vi.fn(async () => ({ success: true }))
@@ -45,16 +42,6 @@ const components = [
   { id: 1, name: "Tunjangan Makan", kind: "earning", recurrence: "fixed", isTaxable: true, accountId: null, isActive: true },
   { id: 2, name: "Potongan Kasbon", kind: "deduction", recurrence: "variable", isTaxable: false, accountId: null, isActive: false },
 ]
-
-function mount(node: React.ReactNode): { container: HTMLDivElement; root: Root } {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root = createRoot(container)
-  act(() => {
-    root.render(node)
-  })
-  return { container, root }
-}
 
 describe("PayrollComponentMaster", () => {
   it("rows show kind, recurrence, taxable classification, active state", () => {
