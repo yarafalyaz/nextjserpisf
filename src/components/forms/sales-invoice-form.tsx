@@ -201,6 +201,7 @@ export function SalesInvoiceForm({
       submitId="submit-sales-invoice"
       isPending={isPending}
       isEditing={Boolean(invoice?.id)}
+      formLabel={invoice?.id ? "Formulir ubah faktur" : "Formulir tambah faktur"}
       afterGrid={
         <>
 

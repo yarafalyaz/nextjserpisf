@@ -1245,4 +1245,30 @@ describe("remnant (P1-5)", () => {
     expect((await actions.scrapRemnant(4, fd)).success).toBe(false);
     expect(mocks.prismaMock.remnant.updateMany).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ["itemId", "0x10"], ["itemId", "1e3"], ["itemId", "0b101"], ["itemId", " 1"], ["itemId", "+1"], ["itemId", "1.0"],
+    ["warehouseId", "0x10"], ["warehouseId", "1e3"], ["warehouseId", "0b101"], ["warehouseId", " 1"], ["warehouseId", "+1"], ["warehouseId", "1.0"],
+    ["qty", "1e3"], ["qty", "0x2"], ["qty", " 2"], ["qty", "+2 "], ["qty", ""], ["qty", "-2"],
+  ])("createRemnant menolak %s=%j bukan desimal murni", async (field, weird) => {
+    const fd = new FormData();
+    fd.set("itemId", "1");
+    fd.set("warehouseId", "1");
+    fd.set("qty", "2");
+    fd.set("unitCost", "1500");
+    fd.set(field, weird);
+    expect((await actions.createRemnant(fd)).success).toBe(false);
+    expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
+  });
+
+  it.each(["0x10", "1e3", "0b101", " 1", "+1", "1.0"])(
+    "createStocktakeSession menolak warehouseId=%j bukan desimal murni",
+    async (weird) => {
+      const fd = new FormData();
+      fd.set("warehouseId", weird);
+      fd.set("date", "2026-06-13");
+      expect((await actions.createStocktakeSession(fd)).success).toBe(false);
+      expect(mocks.prismaMock.stocktakeSession.create).not.toHaveBeenCalled();
+    },
+  );
 });

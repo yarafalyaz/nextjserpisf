@@ -42,6 +42,9 @@ vi.mock("@/lib/db/prisma", () => {
         create: (...a: unknown[]) => payrollCreateMock(...a),
       },
       payrollTerBracket: { findMany: vi.fn().mockResolvedValue([]) },
+      // F-2026-10-21-027: tanpa penugasan komponen pada fixture ini.
+      employeePayrollComponent: { findMany: vi.fn().mockResolvedValue([]) },
+      payrollComponentLine: { createMany: vi.fn().mockResolvedValue({ count: 0 }) },
       employee: { findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a) },
       approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
       approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },

@@ -192,7 +192,7 @@ function ptkpFor(maritalStatus?: string | null, dependents = 0, p: StatutoryPara
   return q.ptkpSingle + (isMarried ? q.ptkpMarriedExtra : 0) + dep * q.ptkpDependentExtra
 }
 
-function isMarriedStatus(maritalStatus?: string | null): boolean {
+export function isMarriedStatus(maritalStatus?: string | null): boolean {
   const raw = (maritalStatus ?? "").toLowerCase().trim()
   if (!raw) return false
 

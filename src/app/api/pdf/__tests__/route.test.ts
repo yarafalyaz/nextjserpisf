@@ -164,7 +164,7 @@ beforeEach(() => {
 
 describe("GET /api/pdf", () => {
   describe("gerbang payroll fail-closed (view_payroll_reports saja)", () => {
-    const PAYROLL_KEYS = ["gaji-karyawan", "pph-21", "porsi-gaji", "bukti-potong-pph"]
+    const PAYROLL_KEYS = ["gaji-karyawan", "pph-21", "porsi-gaji"]
 
     it.each(PAYROLL_KEYS)("menolak %s untuk sesi hanya-view_reports (tanpa menyentuh loader)", async (key) => {
       mocks.grants = new Set(["view_reports"])
@@ -185,6 +185,26 @@ describe("GET /api/pdf", () => {
       mocks.grants = new Set()
       const res = await GET(request(`laporan=${key}&periode=2026-10`))
       expect(res.status).toBe(403)
+    })
+  })
+
+  describe("bukti-potong-pph gerbang laporan pajak umum (bukan payroll)", () => {
+    // Loader-nya VendorBill pemasok (loadWithholdingSummary) — nol data
+    // karyawan. Vonis BOT 4 F-2026-10-21-034: pelaporan bupot tetap
+    // view_reports; putusan Lead opsi (a) atas sanggahan PR #316.
+    it("mengizinkan sesi hanya-view_reports dan memanggil loader bupot", async () => {
+      mocks.grants = new Set(["view_reports"])
+      const res = await GET(request("laporan=bukti-potong-pph&periode=2026-10"))
+      expect(res.status).toBe(200)
+      expect(mocks.loadWithholdingSummary).toHaveBeenCalledTimes(1)
+      expect(mocks.loadPayrollRows).not.toHaveBeenCalled()
+    })
+
+    it("menolak sesi hanya-view_payroll_reports (izin gaji bukan izin pajak)", async () => {
+      mocks.grants = new Set(["view_payroll_reports"])
+      const res = await GET(request("laporan=bukti-potong-pph&periode=2026-10"))
+      expect(res.status).toBe(403)
+      expect(mocks.loadWithholdingSummary).not.toHaveBeenCalled()
     })
   })
 
