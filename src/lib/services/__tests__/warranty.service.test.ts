@@ -181,6 +181,28 @@ describe("klaim di luar masa (F-021 AC2): manual, BUKAN auto-reject", () => {
     ).rejects.toThrow("wajib beresolusi reject")
   })
 
+  it("rejected→closed sah; closed terminal tidak boleh transisi apa pun", async () => {
+    const claim: { id: number; status: string } = { id: 1, status: "eligibility" }
+    p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
+    p.warrantyClaim.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => {
+      Object.assign(claim, data)
+      return { ...claim }
+    })
+
+    await decideWarrantyClaim(
+      { claimId: 1, decision: "rejected", resolutionType: "reject", decisionBy: 9 },
+      prisma as never,
+    )
+    expect(claim.status).toBe("rejected")
+    await transitionWarrantyClaim({ claimId: 1, to: "closed" }, prisma as never)
+    expect(claim.status).toBe("closed")
+    for (const to of ["intake", "eligibility", "in_repair"] as const) {
+      await expect(transitionWarrantyClaim({ claimId: 1, to }, prisma as never)).rejects.toThrow(
+        "tidak diizinkan",
+      )
+    }
+  })
+
   it("alur sah penuh: intake→eligibility→approved→in_repair→closed", async () => {
     const claim: { id: number; status: string } = { id: 1, status: "intake" }
     p.warrantyClaim.findUnique.mockImplementation(async () => ({ ...claim }))
