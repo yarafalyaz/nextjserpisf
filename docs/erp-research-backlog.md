@@ -1232,3 +1232,118 @@ Belum ada (bukti grep run ini):
 Fokus berikutnya: (g) kendaraan & fitment — verifikasi VehicleFitmentRule
 most-specific-wins terhadap konflik aturan + cakupan tahun/drivetrain.
 
+
+---
+
+## 2026-10-21 10:15 WIB — Domain (g) kendaraan & fitment
+
+Rotasi: run sebelumnya (f) garansi F-2026-10-21-021..022. Run ini (g).
+Berikutnya: (h) SDM/payroll.
+
+Benchmark: Accurate/Zahir resmi TIDAK punya fitment kendaraan (modul
+generik persediaan/manufaktur). Acuan resmi terdekat = daftar fasilitas
+Zahir (tanpa kompatibilitas kendaraan):
+https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang dan
+Accurate persediaan/manufaktur:
+https://accurate.id/online/fitur/persediaan/ . Domain ini keunggulan
+niche Silengkap; gap dinilai dari rantai proses internal, bukan
+kekalahan benchmark.
+
+### Inventarisasi terverifikasi (2026-10-21, domain g)
+
+Sudah ada (kuat):
+- Master katalog VehicleBrand→VehicleModel→VehicleVariant→Vehicle
+  (+year) dan CustomerVehicle (plate/chassis/engine, schema:3304-3395).
+- `VehicleFitmentRule`: scope brand/model/variant/year/drivetrain/
+  transmission + bomRevisionId, result compatible/incompatible/unknown
+  (schema:3850). Evaluator most-specific-wins + tie-break id terbaru
+  (vehicle-fitment.service.ts:51-95,146-153); checker manual di
+  vehicle-fitment.actions.ts:130-144; evaluasi BOM produk
+  evaluateProductFitment. Guard yearFrom<=yearTo di create/update.
+- Quotation/SO/WO/Project sudah membawa customerVehicleId opsional
+  (schema:991,1109,2325,3404).
+
+Belum ada (bukti grep run ini):
+- PARSIAL (tidak terhubung): fitment TIDAK pernah dipanggil alur
+  transaksi. `grep evaluateFitment|evaluateProductFitment src` di luar
+  service/actions-nya sendiri + test = 0 pemanggil di sales.actions/
+  manufacturing.actions (WO). Checker berdiri sendiri di halaman
+  kendaraan; staf bisa menerbitkan quotation/WO part incompatible tanpa
+  peringatan apa pun.
+- ABSEN: registri part terpasang per kendaraan. `grep installed
+  prisma/schema.prisma` = 0 model InstalledPart; WorkOrderItem tanpa
+  serial terpasang per kendaraan. Riwayat "bumper X serial Y terpasang
+  di plat Z sejak tanggal T" tidak bisa dijawab — fondasi garansi
+  F-2026-10-21-021 tahap 1 + riwayat kendaraan.
+- PARSIAL: VehicleVariant membawa drivetrain/transmission, tapi
+  CustomerVehicle→Vehicle hanya year lewat Vehicle.year; evaluasi dari
+  dokumen harus merangkai variant sendiri — belum ada helper
+  configuration-dari-CustomerVehicle (checker menerima ID manual).
+- PARSIAL kecil: konflik dua aturan sama-spesifik hasil berlawanan
+  diselesaikan diam-diam id terbaru (service:148-153) tanpa peringatan
+  konflik saat input; hasil bisa berbalik tanpa jejak niat.
+
+### Gap
+
+#### F-2026-10-21-023 (g) P1 — Fitment tidak menegakkan apa pun di Quotation/WO (checker yatim)
+- Kompetitor: tidak ada di Accurate/Zahir resmi (niche) — acuan proses:
+  evaluasi compatible/incompatible/unknown yang sudah dibangun PRD
+  VEH-06/07 sendiri (vehicle-fitment.service.ts:4-11 menyatakan caller
+  "can require technical verification before releasing work").
+- Status Silengkap: PARSIAL. Bukti: grep pemanggil transaksi = 0.
+- Relevansi: bumper Hilux terbit untuk Ranger tanpa peringatan = revisi
+  produksi/rework mahal; seluruh investasi katalog fitment tak bernilai
+  operasional.
+- Adaptasi lapis aman (peringatan, bukan blokir): helper
+  `configurationFromCustomerVehicle(db, customerVehicleId)` (brand/
+  model/variant/year/drivetrain/transmission dari rantai master) →
+  saat simpan QuotationItem/WO item dengan customerVehicleId terisi,
+  panggil evaluateFitment per itemId; hasil incompatible/unknown
+  disimpan sebagai snapshot peringatan di baris (fitmentResult,
+  fitmentRuleId) + tampil di detail; dokumen tetap terbit. Blokir keras
+  = putusan team-lead sesudah data peringatan terbukti dipakai.
+- Modul disentuh: src/lib/services/vehicle-fitment.service.ts (helper),
+  src/actions/sales.actions.ts, src/actions/manufacturing.actions.ts,
+  detail quotation/WO (frontend).
+- Effort: M. Risiko: peringatan bising untuk item tanpa aturan (unknown
+  massal) — mitigasi hanya tampilkan incompatible sebagai peringatan
+  keras, unknown sebagai lencana netral; item jasa dilewati.
+- Urutan: helper → snapshot di WO → quotation → evaluasi blokir.
+- Pemilik usulan: backend, frontend lencana. Butuh putusan accountant:
+  TIDAK.
+
+#### F-2026-10-21-024 (g) P1 — Registri part terpasang per kendaraan absen (fondasi garansi + riwayat)
+- Kompetitor: tidak ada di Accurate/Zahir resmi (niche after-sales).
+- Status Silengkap: ABSEN. Bukti: grep installed schema = 0.
+- Relevansi: inti garansi F-021 butuh tahu part+serial terpasang di
+  kendaraan mana; tanpa registri, coverage dibuat dari ingatan WO.
+  Juga menjawab riwayat modifikasi per plat saat kendaraan kembali.
+- Adaptasi: model `InstalledPart` (customerVehicleId, workOrderId,
+  itemId, itemSerialId nullable, qty, installedAt, removedAt nullable,
+  status terpasang/dilepas/diganti) terisi otomatis dari MaterialIssue/
+  WO completion untuk item bertipe part terpasang (flag Item sederhana
+  atau kategori), dilepas saat WO penggantian. Read-model riwayat
+  kendaraan = installed aktif + WO selesai per CustomerVehicle.
+- Modul disentuh: prisma/schema.prisma, hook material-issue/WO
+  completion, detail CustomerVehicle (frontend).
+- Effort: M. Risiko: semua item tercatat sebagai terpasang (bising) —
+  mitigasi hanya item kategori part utama / berserial / ber-BOM produk.
+- Urutan: model+flag → isi dari WO completion → riwayat → makan F-021.
+- Pemilik usulan: backend, frontend riwayat. Butuh putusan accountant:
+  TIDAK.
+
+#### F-2026-10-21-025 (g) P2 — Konflik aturan fitment sama-spesifik tak terdeteksi saat input
+- Status Silengkap: PARSIAL. Bukti: service:148-153 tie-break id.
+- Adaptasi: saat create/update aturan, query aturan aktif lain item sama
+  dengan scope identik + result berbeda → peringatan "menimpa aturan
+  #id" (tetap boleh simpan). Tanpa ubah evaluator.
+- Effort: S. Pemilik: backend. Butuh putusan accountant: TIDAK.
+
+### Yang TIDAK diusulkan run ini
+- Dekode VIN otomatis / katalog fitment pihak ketiga: master internal
+  cukup; tidak ada bukti kebutuhan.
+- Blokir keras fitment: ditunda sampai F-023 data peringatan terbukti.
+
+Fokus berikutnya: (h) SDM/payroll — verifikasi overlap gaji-pokok
+Employee vs komponen PayrollRun + status SPEC grand design.
+
