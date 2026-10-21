@@ -237,13 +237,19 @@ describe("installBaseData", () => {
       objectCode: null,
       liabilityAccountId: null,
       receivableAccountId: idOf("110507"),
+      isActive: true,
     })
     expect(created).toContainEqual(
       expect.objectContaining({ code: "PPH23-BELI", liabilityAccountId: idOf("210202") }),
     )
     // F-038/F-041: sewa final 10% ke 210206 KHUSUS — bukan 210202, bukan 210205 Provisi Garansi.
     expect(created).toContainEqual(
-      expect.objectContaining({ code: "PPH42-SEWA", rate: 10, article: "PPh4(2)", objectCode: "28-403-02", liabilityAccountId: idOf("210206") }),
+      expect.objectContaining({ code: "PPH42-SEWA", rate: 10, article: "PPh4(2)", objectCode: "28-403-02", liabilityAccountId: idOf("210206"), isActive: true }),
+    )
+    // F-051-V: 28-403-04 proyek pemerintah disemai NONAKTIF — operator wajib
+    // mengaktifkan + membuktikan syarat sebelum katalog membacanya.
+    expect(created).toContainEqual(
+      expect.objectContaining({ code: "PPH42-SEWA-PP", rate: 10, article: "PPh4(2)", objectCode: "28-403-04", liabilityAccountId: idOf("210206"), isActive: false }),
     )
   })
 

@@ -34,6 +34,7 @@ export async function seedWithholdingTaxTypes(tx: Prisma.TransactionClient): Pro
         objectCode: t.objectCode ?? null,
         liabilityAccountId: t.liabilityAccountCode ? (idByCode.get(t.liabilityAccountCode) ?? null) : null,
         receivableAccountId: t.receivableAccountCode ? (idByCode.get(t.receivableAccountCode) ?? null) : null,
+        isActive: t.isActive ?? true,
       },
     })
     created++

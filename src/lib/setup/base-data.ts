@@ -899,6 +899,12 @@ export const WITHHOLDING_TAX_TYPES: {
   objectCode?: string
   liabilityAccountCode?: string
   receivableAccountCode?: string
+  /**
+   * Aktifkan saat seed? Default true (terbit langsung). false = baris
+   * master dibuat NONAKTIF; operator wajib mengaktifkan + membuktikan
+   * syaratnya sebelum bisa dipakai (vonis BOT 4 F-051-V Putusan 1).
+   */
+  isActive?: boolean
 }[] = [
   { code: "PPH22", name: "PPh 22", rate: 0.5, receivableAccountCode: "110507" },
   // F-003: pasal di-seed, kode objek TIDAK — dipilih per jenis jasa saat
@@ -915,6 +921,11 @@ export const WITHHOLDING_TAX_TYPES: {
   // Liabilitas 210206 KHUSUS sewa — dilarang fallback 210202 (PPh 23) dan
   // dilarang 210205 (Provisi Garansi). Akun hilang = fail-closed di jalur jurnal.
   { code: "PPH42-SEWA", name: "PPh 4(2) Sewa Tanah/Bangunan", rate: 10, article: "PPh4(2)", objectCode: "28-403-02", liabilityAccountCode: "210206" },
+  // F-051-V Putusan 1 (vonis BOT 4): kode 28-403-04 HANYA untuk sewa dalam
+  // rangka proyek pemerintah yang dibiayai hibah/pinjaman luar negeri.
+  // Disemai NONAKTIF — operator mengaktifkan hanya bila syarat terbukti;
+  // resolver katalog juga mewajibkan bukti dokumen saat terbit (F51-3).
+  { code: "PPH42-SEWA-PP", name: "PPh 4(2) Sewa Proyek Pemerintah (Hibah/Pinjaman LN)", rate: 10, article: "PPh4(2)", objectCode: "28-403-04", liabilityAccountCode: "210206", isActive: false },
 ]
 
 /** Default payment methods (codes follow the auto-generated MTP- scheme). */
