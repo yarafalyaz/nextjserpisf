@@ -354,19 +354,14 @@ type TerDb = {
  * (effectiveFrom terbesar ≤ acuan) menang; rantai bracket wajib utuh dari 0
  * sampai terbuka — selain itu tabel dianggap tidak lengkap (null). */
 export async function getTerBrackets(db: TerDb, category: TerCategory, asOf: Date): Promise<TerBracket[] | null> {
-  let rows: Awaited<ReturnType<TerDb["payrollTerBracket"]["findMany"]>>
-  try {
-    rows = await db.payrollTerBracket.findMany({
-      where: {
-        category,
-        effectiveFrom: { lte: asOf },
-        OR: [{ effectiveTo: null } as never, { effectiveTo: { gt: asOf } } as never],
-      },
-      orderBy: { lowerBound: "asc" },
-    })
-  } catch {
-    return null
-  }
+  const rows = await db.payrollTerBracket.findMany({
+    where: {
+      category,
+      effectiveFrom: { lte: asOf },
+      OR: [{ effectiveTo: null } as never, { effectiveTo: { gt: asOf } } as never],
+    },
+    orderBy: { lowerBound: "asc" },
+  })
   const latestFrom = rows.reduce((m, r) => Math.max(m, new Date(r.effectiveFrom).getTime()), -Infinity)
   const brackets = rows
     .filter((r) => new Date(r.effectiveFrom).getTime() === latestFrom)

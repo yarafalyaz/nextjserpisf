@@ -114,6 +114,10 @@ const SEED_ONLY_COLUMNS: string[] = [
  * yang sudah punya jalur tulis produk (atau modelnya dibuang) juga memerahkan.
  */
 const SEED_ONLY_MODELS: string[] = [
+  // F-2026-10-21-026: tabel tarif TER PP 58/2023 (Lampiran A/B/C) hanya diisi
+  // migrasi seed dari regulasi; tidak ada jalur tulis produk karena tarif
+  // bukan data operasional — perubahan tarif wajib migrasi baru dari regulasi.
+  "PayrollTerBracket",
   // Kehadiran: SUDAH DITUTUP — halaman `/sdm/absensi` + `createAttendance`,
   // `updateAttendance`, `deleteAttendance` (izin create/edit/manage_attendance)
   // menulis absensi dari jam dinding WIB, jadi entri `Attendance` TIDAK lagi di

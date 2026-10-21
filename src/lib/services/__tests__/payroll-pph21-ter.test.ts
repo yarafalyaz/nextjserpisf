@@ -209,8 +209,11 @@ describe("penjaga non-angka vonis §6", () => {
       },
     }
     expect(await getTerBrackets(partial as never, "A", new Date("2026-01-01"))).toBeNull()
+    // DB error = gagal keras, BUKAN null: null berarti "tabel tidak lengkap"
+    // (fail-closed berpesan jelas); menelan error jadi null menyembunyikan
+    // penyebab dan meloloskan silent-failure (default-return).
     const down = { payrollTerBracket: { findMany: vi.fn().mockRejectedValue(new Error("db down")) } }
-    expect(await getTerBrackets(down as never, "A", new Date("2026-01-01"))).toBeNull()
+    await expect(getTerBrackets(down as never, "A", new Date("2026-01-01"))).rejects.toThrow("db down")
   })
 
   it("regresi slip lama: fungsi disetahunkan legacy tidak berubah hasil", () => {
