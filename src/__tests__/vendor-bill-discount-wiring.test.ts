@@ -26,7 +26,11 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8")
 
 const WRITER = "src/actions/purchase.actions.ts"
 const READERS = [
-  "src/app/(dashboard)/laporan/pajak/[[...segments]]/page.tsx",
+  // Halaman /laporan/pajak kini murni read-model SPT (nol hitung ulang);
+  // DPP legacy vendor diturunkan di read-model dengan semantik sama persis.
+  // Vonis Bot 4 issuecomment-6311771332: penjaga mengawasi rumus di
+  // read-model, bukan lokasi berkas halaman.
+  "src/lib/reports/spt-read-model-data.ts",
   "src/app/(dashboard)/laporan/bukti-potong-pph/[[...segments]]/page.tsx",
   "src/lib/reports/vat-invoices-data.ts",
 ]
