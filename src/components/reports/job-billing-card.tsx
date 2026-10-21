@@ -1,13 +1,24 @@
 import Link from "next/link"
 import { entityHref } from "@/lib/utils/entity-url"
 import type { JobBillingSummaryResult } from "@/lib/reports/job-billing-summary-data"
-import { formatCurrency } from "@/lib/utils/format"
+import { formatCurrency, formatPercentage } from "@/lib/utils/format"
 
 function Baris({ label, value, bold }: Readonly<{ label: string; value: number; bold?: boolean }>) {
   return (
     <div className="flex items-center justify-between gap-4 py-1.5">
       <dt className="text-sm text-muted-foreground">{label}</dt>
       <dd className={bold ? "text-sm font-semibold tabular-nums" : "text-sm tabular-nums"}>{formatCurrency(value)}</dd>
+    </div>
+  )
+}
+
+function BarisProgres({ label, nominal, persen }: Readonly<{ label: string; nominal: number; persen: number | null }>) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-1.5">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="text-sm tabular-nums">
+        {persen === null ? formatCurrency(nominal) : `${formatPercentage(persen, 1)} · ${formatCurrency(nominal)}`}
+      </dd>
     </div>
   )
 }
@@ -32,6 +43,9 @@ export function JobBillingCard({
               ? (Math.abs(deltaNilaiCents) / (summary.nilaiBerjalan * 100 - deltaNilaiCents)) * 100
               : null,
         }
+  // ponytail: persen presentasi murni dari field existing; clamp 0..100, nominal apa adanya.
+  const persenDariNilai = (nilai: number) =>
+    summary.nilaiBerjalan <= 0 ? null : Math.min(100, Math.max(0, (nilai / summary.nilaiBerjalan) * 100))
   return (
     <section aria-label={`Ringkasan tagihan ${summary.quotationDocumentNo}`} className="rounded-xl border border-default bg-surface p-5 shadow-sm">
       <h2 className="text-base font-semibold">Tagihan Berjalan — {summary.quotationDocumentNo}</h2>
@@ -87,6 +101,15 @@ export function JobBillingCard({
       ) : (
         <p className="mt-4 border-t border-default pt-3 text-xs text-muted-foreground">Perubahan nilai sejak snapshot tidak tercatat</p>
       )}
+      <section aria-label="Progres termin turunan" className="mt-4 border-t border-default pt-3">
+        <h3 className="text-sm font-semibold">Progres termin turunan</h3>
+        <p className="mt-0.5 text-xs text-muted-foreground">Turunan posisi berjalan, bukan jadwal kontraktual</p>
+        <dl className="mt-1 divide-y divide-default">
+          <BarisProgres label="DP terkonfirmasi dari nilai berjalan" nominal={summary.uangMukaDiterima} persen={persenDariNilai(summary.uangMukaDiterima)} />
+          <BarisProgres label="Tertagih dari nilai berjalan" nominal={summary.sudahDitagih} persen={persenDariNilai(summary.sudahDitagih)} />
+          <BarisProgres label="Sisa belum ditagih dari nilai berjalan" nominal={summary.sisaBelumDitagih} persen={persenDariNilai(summary.sisaBelumDitagih)} />
+        </dl>
+      </section>
       {summary.kreditTerbuka > 0 && summary.openCredits.length > 0 ? (
         <ul aria-label="Kredit terbuka" className="mt-3 space-y-1 text-sm">
           {summary.openCredits.map((c) => (
