@@ -2650,7 +2650,9 @@ bila SEMUA terpenuhi:
 - AC-S1: reimbursement T3 Rp1.000.000 berbukti pada bruto kas
   Rp10.000.000: taxableGross Rp9.000.000, PPh21 sama dengan slip tanpa
   baris reimbursement; bukti dicabut → komponen tertolak non-taxable
-  (atau terhitung taxable), PPh21 naik. Dua arah terbukti.
+  (atau terhitung taxable), PPh21 naik. Dua arah terbukti: flag dibalik
+  ke taxable → PPh21 berubah; kedua arah wajib tes
+  merah-bila-penjaga-dicabut (frasa falsifikasi dua-arah dari #369).
 - AC-S2: natura T4 kupon makan Rp2.500.000/bln: Rp500.000 taxable,
   Rp2.000.000 non-taxable (PMK 66/2023 Pasal 5 ayat (4)-(5)).
 - AC-S3: THR variable Rp10.000.000 se-masa dengan reguler
