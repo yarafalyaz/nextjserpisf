@@ -1,6 +1,6 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useTransition, useEffect } from "react"
 import { createRack, getNextRackCode } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -19,13 +19,14 @@ interface Warehouse {
 interface RackCreateFormProps {
   enableAutoCode: boolean
   warehouses: Warehouse[]
+  /** Gudang terpilih awal dari segmen path `gudang/<slug>` (jalur "buat dari"). */
+  defaultWarehouseId?: number
 }
 
-export function RackCreateForm({ enableAutoCode, warehouses }: RackCreateFormProps) {
+export function RackCreateForm({ enableAutoCode, warehouses, defaultWarehouseId }: RackCreateFormProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
-  const [warehouseId, setWarehouseId] = useState(searchParams.get("warehouseId") || "")
+  const [warehouseId, setWarehouseId] = useState(defaultWarehouseId ? String(defaultWarehouseId) : "")
   const [warehouseOptions, setWarehouseOptions] = useState(warehouses)
   const [autoCode, setAutoCode] = useState("")
 

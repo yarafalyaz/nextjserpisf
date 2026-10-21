@@ -8,6 +8,7 @@ import { formatDate } from "@/lib/utils/format"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { entityHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -44,9 +45,11 @@ export default async function BankStatementsPage({
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Laporan Bank</h1>
-        <Link href="/keuangan/laporan-bank/tambah" className="button button--primary w-full sm:w-auto">
-          <Plus size={16} /> Tambah Rekening Koran
-        </Link>
+        <CanCreate permission="create_journals">
+          <Link href="/keuangan/laporan-bank/tambah" className="button button--primary w-full sm:w-auto">
+            <Plus size={16} /> Tambah Rekening Koran
+          </Link>
+        </CanCreate>
       </div>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

@@ -17,6 +17,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Pengeluaran Material" }
 
 export default async function MaterialIssueDetailPage({
@@ -80,8 +81,12 @@ export default async function MaterialIssueDetailPage({
                   successMessage="Pengeluaran material berhasil diposting"
                   label="Posting"
                 />
-                <Link href={entityEditHref("/inventaris/pengeluaran-material", issue)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default text-foreground hover:bg-surface-secondary hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
-                <DeleteButton id={issue.id} action={deleteMaterialIssue} />
+                <CanCreate permission="edit_material_issues">
+                  <Link href={entityEditHref("/inventaris/pengeluaran-material", issue)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium border border-default text-foreground hover:bg-surface-secondary hover:-translate-y-px hover:shadow-md transition-all">Ubah</Link>
+                </CanCreate>
+                <CanCreate permission="delete_material_issues">
+                  <DeleteButton id={issue.id} action={deleteMaterialIssue} />
+                </CanCreate>
               </>
             )}
             <Link href="/inventaris/pengeluaran-material" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>

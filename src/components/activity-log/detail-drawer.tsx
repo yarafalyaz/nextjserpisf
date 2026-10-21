@@ -22,6 +22,8 @@ interface DetailDrawerProps {
     modelId: number | null
     /** Label manusiawi entitas (nomor dokumen / kode / nama). */
     refLabel?: string | null
+    /** Slug entitas untuk tautan kanonis. */
+    refSlug?: string | null
     /** true bila entitas dilacak tetapi recordnya sudah tidak ada (terhapus). */
     refMissing?: boolean
     description: string
@@ -140,7 +142,7 @@ export function DetailDrawer({
   if (!row) return null
 
   const actionText = actionLabel[row.action] || row.action
-  const entityHref = activityEntityHref(row.modelType, row.modelId)
+  const entityHref = activityEntityHref(row.modelType, row.modelId, row.refSlug)
   // Utamakan nomor dokumen/kode supaya entri terbaca jelas; id mentah hanya
   // fallback ketika labelnya tak bisa diresolusi (mis. record sudah dihapus).
   const entityLabel =

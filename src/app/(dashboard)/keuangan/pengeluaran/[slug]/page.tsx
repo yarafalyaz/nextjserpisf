@@ -20,6 +20,7 @@ import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityEditHref, entityHref } from "@/lib/utils/entity-url";
+import { CanCreate } from "@/components/auth/can-create";
 export const metadata: Metadata = { title: "Pengeluaran" };
 
 export default async function ExpenseDetailPage({
@@ -88,14 +89,18 @@ export default async function ExpenseDetailPage({
         badge={<StatusChip status={expense.status} />}
         actions={
           <>
-            <Button
-              href={entityEditHref("/keuangan/pengeluaran", expense)}
-              variant="primary"
-            >
-              <Pencil size={14} /> Ubah
-            </Button>
+            <CanCreate permission="edit_expenses">
+              <Button
+                href={entityEditHref("/keuangan/pengeluaran", expense)}
+                variant="primary"
+              >
+                <Pencil size={14} /> Ubah
+              </Button>
+            </CanCreate>
             <PrintButton documentType="expense" documentId={expense.id} />
-            <DeleteButton id={expense.id} action={deleteExpense} />
+            <CanCreate permission="delete_expenses">
+              <DeleteButton id={expense.id} action={deleteExpense} />
+            </CanCreate>
             <BackButton href="/keuangan/pengeluaran" />
           </>
         }

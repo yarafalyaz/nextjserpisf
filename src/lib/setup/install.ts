@@ -6,6 +6,7 @@ import { seedModules } from "./modules"
 import {
   PERMISSIONS,
   ROLES,
+  ADMIN_WHITELIST,
   STAFF_WHITELIST,
   GA_WHITELIST,
   KABENG_WHITELIST,
@@ -50,7 +51,7 @@ export interface InstallInput {
 /** Default permission sets per role ("ALL" = every permission). */
 const ROLE_WHITELISTS: Record<string, string[] | "ALL"> = {
   super_admin: "ALL",
-  admin: "ALL",
+  admin: ADMIN_WHITELIST,
   staff: STAFF_WHITELIST,
   ga: GA_WHITELIST,
   kepala_bengkel: KABENG_WHITELIST,

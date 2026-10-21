@@ -13,7 +13,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
@@ -25,6 +25,7 @@ export default async function LeaveRequestDetailPage({
   params: Promise<{ slug: string }>
 }) {
   const user = await requirePermission("view_leave_requests")
+  const canApprove = await hasPermission("approve_leave_requests")
   const scope = await getHrScope(user)
 
   const { slug } = await params
@@ -65,6 +66,7 @@ export default async function LeaveRequestDetailPage({
         status={leave.status}
         id={leave.id}
         module="sdm/cuti"
+        canAct={canApprove}
       />
 
       <DetailCard>

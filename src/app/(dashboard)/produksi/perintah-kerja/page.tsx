@@ -13,6 +13,7 @@ import { getWorkOrderQueue } from "@/lib/reports/work-order-queue-data"
 import { WorkOrderLoadCard } from "@/components/reports/work-order-load-card"
 import { getWorkOrderLoad } from "@/lib/reports/work-order-load-data"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -78,9 +79,11 @@ export default async function WorkOrdersPage({
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Perintah Kerja</h1>
-        <Link href="/produksi/perintah-kerja/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-wo-btn">
-          + Buat Perintah Kerja
-        </Link>
+        <CanCreate permission="create_work_orders">
+          <Link href="/produksi/perintah-kerja/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-wo-btn">
+            + Buat Perintah Kerja
+          </Link>
+        </CanCreate>
       </div>
 
       <WorkOrderQueueCard queue={queue} />

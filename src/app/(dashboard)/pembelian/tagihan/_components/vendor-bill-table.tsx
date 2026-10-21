@@ -23,7 +23,8 @@ interface VendorBill {
 
 const columnHelper = createColumnHelper<VendorBill>()
 
-const columns = [
+function buildColumns(canCreateVendorPayment: boolean) {
+  return [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
@@ -76,11 +77,12 @@ const columns = [
     enableSorting: false,
     cell: (info) => {
       const b = info.row.original
+      if (!canCreateVendorPayment) return <span className="text-muted-foreground">-</span>
       const payable = b.status !== "draft" && b.status !== "cancelled" && b.status !== "paid"
       if (!payable) return <span className="text-muted-foreground">-</span>
       return (
         <Link
-          href={`/pembelian/pembayaran-vendor/tambah?billId=${b.id}`}
+          href={`/pembelian/pembayaran-vendor/tambah/tagihan/${b.slug ?? b.id}`}
           className="text-primary hover:underline font-medium"
         >
           Bayar
@@ -110,7 +112,8 @@ const columns = [
       />
     ),
   }),
-]
+  ]
+}
 
 interface VendorBillTableProps {
   data: VendorBill[]
@@ -119,13 +122,15 @@ interface VendorBillTableProps {
   pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
+  /** Server-checked (hasPermission "create_vendor_payments") — gates the per-row "Bayar" create-link, which lives in this client table where the async server <CanCreate> cannot render. */
+  canCreateVendorPayment: boolean
 }
 
-export function VendorBillTable({ data, total, page, pageSize, toolbar, filters }: VendorBillTableProps) {
+export function VendorBillTable({ data, total, page, pageSize, toolbar, filters, canCreateVendorPayment }: VendorBillTableProps) {
   return (
     <DataTable
       data={data}
-      columns={columns}
+      columns={buildColumns(canCreateVendorPayment)}
       ariaLabel="Daftar tagihan pemasok"
       serverPagination={{ total, page, pageSize }}
       selectable={true}

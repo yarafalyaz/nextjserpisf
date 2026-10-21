@@ -168,6 +168,17 @@ export const DELIVERABLE_ORDER_STATUSES = ["approved", "confirmed", "processing"
 /** Daftar status di atas dalam bahasa layar, untuk pesan penolakan. */
 export const DELIVERABLE_ORDER_STATUS_LABELS = "Disetujui, Dikonfirmasi, Diproses, atau Selesai";
 
+/**
+ * Status Faktur Penjualan yang boleh dibuatkan Retur Penjualan.
+ *
+ * Satu sumber untuk tiga tempat: tombol di detail faktur, saringan daftar di
+ * `retur/tambah`, dan penjagaan server `createSalesReturn`. Faktur lunas
+ * (`paid`) justru kasus retur paling umum — mengecualikannya membuat retur
+ * tidak terjangkau dari UI walau server membolehkannya. `sent` BUKAN status
+ * faktur (itu status pesanan/pengiriman) dan tidak termasuk.
+ */
+export const RETURNABLE_INVOICE_STATUSES = ["posted", "partial", "paid"] as const;
+
 export const createDeliveryOrderSchema = z.object({
   salesOrderId: requiredId,
   date: dateOnly,

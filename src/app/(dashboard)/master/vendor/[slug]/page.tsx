@@ -15,6 +15,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Pemasok" }
@@ -81,7 +82,9 @@ export default async function VendorDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/master/vendor", vendor)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            <CanCreate permission="edit_vendors">
+              <Button href={entityEditHref("/master/vendor", vendor)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            </CanCreate>
             <BackButton href="/master/vendor" />
           </>
         }

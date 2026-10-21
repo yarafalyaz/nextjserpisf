@@ -9,6 +9,7 @@ import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labe
 import { AppSearchField } from "@/components/ui/search-field"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { OrderTable } from "./_components/order-table"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -67,9 +68,11 @@ export default async function SalesOrdersPage({
       <AppBreadcrumbs items={[{label:"Dasbor",href:"/"},{label:"Penjualan",href:"/penjualan"},{ label: "Pesanan Penjualan" }]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Pesanan Penjualan</h1>
-<Link href="/penjualan/pesanan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-so-btn">
-          + Buat Pesanan Penjualan
-        </Link>
+<CanCreate permission="create_sales_orders">
+          <Link href="/penjualan/pesanan/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-so-btn">
+            + Buat Pesanan Penjualan
+          </Link>
+        </CanCreate>
       </div>
 
       <OrderTable

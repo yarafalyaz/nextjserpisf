@@ -1,3 +1,4 @@
+import type { PermissionName } from "@/lib/setup/base-data"
 import "server-only"
 import { hasPermission } from "@/lib/auth/permissions"
 import { auth } from "@/lib/auth/auth"
@@ -53,7 +54,7 @@ const ATTACHMENT_MODEL: Record<string, string> = {
 async function canAccessAttachmentWithPermission(
   referenceType: string,
   referenceId: number,
-  permission: string | undefined,
+  permission: PermissionName | undefined,
 ): Promise<boolean> {
   const modelKey = ATTACHMENT_MODEL[referenceType]
   if (!permission || !modelKey || !Number.isSafeInteger(referenceId) || referenceId <= 0) return false

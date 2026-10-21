@@ -15,9 +15,9 @@ interface ProductionOrderFormProps {
   products: { id: number; name: string; sku: string | null }[]
   /** Pilihan dokumen sumber (perintah kerja) — tautan `workOrderId`. */
   workOrders?: { id: number; documentNo: string }[]
-  /** Terisi dari `?workOrderId=` saat masuk lewat "Buat Perintah Produksi" dari WO. */
+  /** Terisi dari segmen `perintah-kerja/<slug>` saat masuk lewat "Buat Perintah Produksi" dari WO. */
   defaultWorkOrderId?: number | null
-  /** Terisi dari `?productId=` (produk jadi yang cocok dengan item WO). */
+  /** Terisi dari segmen `produk/<slug>` (produk jadi yang cocok dengan item WO). */
   defaultProductId?: number | null
   order?: { id: number; workOrderId?: number | null; itemId?: number; productId?: number | null; qty: number; startDate?: string | null; endDate?: string | null; notes?: string | null }
 }

@@ -3,6 +3,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error";
 import { requirePermission } from "@/lib/auth/permissions";
 import { safeMultiply, safeAdd, safeSubtract } from "@/lib/utils/math";
+import { slugify } from "@/lib/utils/slug";
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { generateDocumentNumber, generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
@@ -968,6 +969,7 @@ export async function issueMaterial(
         const move = await tx.stockMove.create({
           data: {
             documentNo: stockMoveDocumentNos[index],
+            slug: slugify(stockMoveDocumentNos[index]),
             itemId: line.itemId,
             warehouseId: line.warehouseId,
             qty: line.qty,
@@ -1165,6 +1167,7 @@ export async function completeProductionOrder(
       const move = await tx.stockMove.create({
         data: {
           documentNo: moveNo,
+          slug: slugify(moveNo),
           itemId: outputItem.id,
           warehouseId,
           qty,

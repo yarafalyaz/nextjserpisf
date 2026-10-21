@@ -23,7 +23,7 @@ import {
 
 import type { Metadata } from "next";
 
-import { requirePermission } from "@/lib/auth/permissions";
+import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 export const metadata: Metadata = { title: "Pesanan" };
@@ -34,6 +34,7 @@ export default async function SalesOrderDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   await requirePermission("view_sales_orders");
+  const canApprove = await hasPermission("approve_sales_orders");
 
   const { slug } = await params;
 
@@ -130,9 +131,9 @@ export default async function SalesOrderDetailPage({
             >
               Ubah
             </Button>
-            {order.status === "confirmed" && (
+            {order.quotationId && order.status !== "cancelled" && (
               <Button
-                href={`/penjualan/uang-muka/tambah?salesOrderId=${order.id}`}
+                href={`/penjualan/uang-muka/tambah/pesanan/${order.slug ?? order.id}`}
                 variant="primary"
               >
                 + Uang Muka
@@ -149,6 +150,7 @@ export default async function SalesOrderDetailPage({
         status={order.status}
         id={order.id}
         module="penjualan/pesanan"
+        canAct={canApprove}
       />
 
       <DetailCard>
@@ -257,7 +259,7 @@ export default async function SalesOrderDetailPage({
             order.status as (typeof DELIVERABLE_ORDER_STATUSES)[number]
           ) && (
             <Button
-              href={`/penjualan/surat-jalan/tambah?salesOrderId=${order.id}`}
+              href={`/penjualan/surat-jalan/tambah/pesanan/${order.slug ?? order.id}`}
               variant="primary"
             >
               + Surat Jalan
@@ -309,7 +311,7 @@ export default async function SalesOrderDetailPage({
             order.status as (typeof DELIVERABLE_ORDER_STATUSES)[number]
           ) && (
             <Button
-              href={`/penjualan/faktur/tambah?salesOrderId=${order.id}`}
+              href={`/penjualan/faktur/tambah/pesanan/${order.slug ?? order.id}`}
               variant="primary"
             >
               + Faktur

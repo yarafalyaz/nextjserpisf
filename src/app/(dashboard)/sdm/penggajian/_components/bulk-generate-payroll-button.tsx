@@ -8,11 +8,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/shadcn/dialog"
-import { Input } from "@/components/ui/shadcn/input"
 import { Label } from "@/components/ui/shadcn/label"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Button } from "@/components/ui/button"
 import { AppDatePicker } from "@/components/ui/date-picker"
+import { AppMonthPicker } from "@/components/ui/month-picker"
 import { generateBulkPayroll } from "@/actions/hrm.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { useRouter } from "next/navigation"
@@ -29,8 +29,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
   const [isManual, setIsManual] = useState(false)
 
   // Handle month selection and auto-calculate dates based on system cutoffDay setting
-  const handlePeriodChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawVal = e.target.value // e.g. "2026-05"
+  const handlePeriodChange = (rawVal: string) => {
     setPeriod(rawVal)
 
     if (rawVal) {
@@ -98,16 +97,14 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
               Sistem akan otomatis membuat draf slip gaji untuk <strong>semua karyawan yang aktif</strong>. Tanggal cut-off akan diatur otomatis berdasarkan pengaturan sistem (tgl {cutoffDay}).
             </p>
 
-            <div className="flex flex-col gap-1.5">
-              <Label htmlFor="period-picker">Pilih Periode Bulan *</Label>
-              <Input
-                id="period-picker"
-                type="month"
-                value={period}
-                onChange={handlePeriodChange}
-                className="w-full"
-              />
-            </div>
+            <AppMonthPicker
+              label="Pilih Periode Bulan *"
+              name="period"
+              value={period}
+              onChange={handlePeriodChange}
+              required
+              className="w-full"
+            />
 
             {!isManual ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-default-100/50 p-3 rounded-lg border border-default/50 text-xs">

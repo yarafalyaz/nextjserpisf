@@ -7,11 +7,11 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 /**
  * Shared server renderer for "Buat Pesanan Pembelian".
  *
- * Used by both routes:
- *   /pembelian/pesanan/tambah           → buy directly (no PR)
- *   /pembelian/pesanan/tambah/[prId]    → create a PO for a specific PR
+ * Used by both route shapes of `tambah/[[...segments]]`:
+ *   /pembelian/pesanan/tambah             → buy directly (no PR)
+ *   /pembelian/pesanan/tambah/pr/<slug>   → create a PO for a specific PR
  *
- * Keeping the query + form wiring here avoids the two routes drifting apart.
+ * Keeping the form wiring here avoids the two shapes drifting apart.
  * `prSegment` may be a PR slug (new links) or a numeric id (legacy/bookmarks).
  */
 export async function renderCreatePurchaseOrder(prSegment?: string) {

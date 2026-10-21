@@ -1,6 +1,6 @@
 "use client"
 
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useEffect, useMemo, useState, useTransition } from "react"
 import { createRackRow, updateRackRow, getNextRowCode } from "@/actions/inventory.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
@@ -16,12 +16,15 @@ import { Button } from "@/components/ui/button"
 interface Warehouse {
   id: number
   name: string
+  slug?: string | null
   racks: { id: number; name: string }[]
 }
 
 interface RackRowFormProps {
   warehouses: Warehouse[]
   enableAutoCode: boolean
+  /** Gudang terpilih awal dari segmen path `gudang/<slug>` (jalur "buat dari"). */
+  defaultWarehouseId?: number
   rackRow?: {
     id: number
     rackId: number
@@ -31,14 +34,15 @@ interface RackRowFormProps {
   }
 }
 
-export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowFormProps) {
+export function RackRowForm({ warehouses, enableAutoCode, rackRow, defaultWarehouseId }: RackRowFormProps) {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
   const initialWarehouseId = rackRow
     ? String(rackRow.rack.warehouseId)
-    : searchParams.get("warehouseId") || ""
+    : defaultWarehouseId
+      ? String(defaultWarehouseId)
+      : ""
   const [warehouseId, setWarehouseId] = useState(initialWarehouseId)
   const [rackId, setRackId] = useState(rackRow ? String(rackRow.rackId) : "")
   const [autoCode, setAutoCode] = useState("")
@@ -159,6 +163,18 @@ export function RackRowForm({ warehouses, enableAutoCode, rackRow }: RackRowForm
                 disabled={!warehouseId}
                 options={racks.map((r) => ({ value: String(r.id), label: r.name }))}
               />
+              {selectedWarehouse && racks.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Gudang ini belum punya rak.{" "}
+                  <a
+                    href={`/inventaris/rak/tambah/gudang/${selectedWarehouse.slug ?? selectedWarehouse.id}`}
+                    className="font-medium text-primary underline underline-offset-2"
+                  >
+                    Buat Rak dulu
+                  </a>{" "}
+                  sebelum menambah baris rak.
+                </p>
+              )}
             </div>
 
             {/* Code input */}

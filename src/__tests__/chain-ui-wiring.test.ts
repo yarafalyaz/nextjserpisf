@@ -28,11 +28,11 @@ const read = (p: string) => readFileSync(join(ROOT, p), "utf8")
 
 const PESANAN_DETAIL = "src/app/(dashboard)/penjualan/pesanan/[slug]/page.tsx"
 const FAKTUR_DETAIL = "src/app/(dashboard)/penjualan/faktur/[slug]/page.tsx"
-const FAKTUR_TAMBAH = "src/app/(dashboard)/penjualan/faktur/tambah/page.tsx"
+const FAKTUR_TAMBAH = "src/app/(dashboard)/penjualan/faktur/tambah/[[...segments]]/page.tsx"
 const WO_DETAIL = "src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx"
-const MI_TAMBAH = "src/app/(dashboard)/inventaris/pengeluaran-material/tambah/page.tsx"
+const MI_TAMBAH = "src/app/(dashboard)/inventaris/pengeluaran-material/tambah/[[...segments]]/page.tsx"
 const MI_UBAH = "src/app/(dashboard)/inventaris/pengeluaran-material/[slug]/ubah/page.tsx"
-const DP_TAMBAH = "src/app/(dashboard)/penjualan/uang-muka/tambah/page.tsx"
+const DP_TAMBAH = "src/app/(dashboard)/penjualan/uang-muka/tambah/[[...segments]]/page.tsx"
 
 describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
   it("detail Pesanan Penjualan selalu menampilkan kartu Surat Jalan beserta jalan membuatnya", () => {
@@ -47,8 +47,8 @@ describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
     // halaman ini untuk surat jalan; `salesInvoices.length > 0` sah dan berbeda.
     expect(src).not.toContain("deliveryOrders.length > 0")
 
-    // Jalan membuatnya harus ada dan menunjuk halaman yang membaca parameternya.
-    expect(src).toContain("/penjualan/surat-jalan/tambah?salesOrderId=${order.id}")
+    // Jalan membuatnya harus ada dan menunjuk halaman yang membaca segmennya.
+    expect(src).toContain("/penjualan/surat-jalan/tambah/pesanan/${order.slug ?? order.id}")
 
     // Keadaan kosong yang terlihat, bukan kartu kosong tanpa penjelasan.
     expect(src).toContain("Belum ada surat jalan untuk pesanan ini")
@@ -72,10 +72,10 @@ describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
     expect(src).toContain("invoice.salesReturns.map(")
     expect(src).toContain("Belum ada retur untuk faktur ini")
 
-    // Jalan membuatnya menunjuk halaman yang membaca `?invoiceId=`.
-    expect(src).toContain("/penjualan/retur/tambah?invoiceId=${invoice.id}")
-    expect(read("src/app/(dashboard)/penjualan/retur/tambah/page.tsx")).toContain(
-      "params.invoiceId"
+    // Jalan membuatnya menunjuk halaman yang membaca segmen `faktur/<slug>`.
+    expect(src).toContain("/penjualan/retur/tambah/faktur/${invoice.slug ?? invoice.id}")
+    expect(read("src/app/(dashboard)/penjualan/retur/tambah/[[...segments]]/page.tsx")).toContain(
+      "seg.faktur"
     )
   })
 
@@ -88,8 +88,8 @@ describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
     // persis celah kartu Surat Jalan yang sudah ditutup di atas.
     expect(src).not.toContain("salesInvoices.length > 0")
 
-    // Jalan membuatnya harus ada dan menunjuk halaman yang membaca parameternya.
-    expect(src).toContain("/penjualan/faktur/tambah?salesOrderId=${order.id}")
+    // Jalan membuatnya harus ada dan menunjuk halaman yang membaca segmennya.
+    expect(src).toContain("/penjualan/faktur/tambah/pesanan/${order.slug ?? order.id}")
 
     // Keadaan kosong yang terlihat, bukan kartu kosong tanpa penjelasan.
     expect(src).toContain("Belum ada faktur untuk pesanan ini")
@@ -98,9 +98,9 @@ describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
     // dipakai bersama dengan aksi server, bukan disalin ulang secara manual.
     expect(src).toContain("DELIVERABLE_ORDER_STATUSES.includes(")
 
-    // Halaman tujuan benar-benar membaca parameternya dan mem-prefill item.
+    // Halaman tujuan benar-benar membaca segmennya dan mem-prefill item.
     const tambah = read(FAKTUR_TAMBAH)
-    expect(tambah).toContain("params.salesOrderId")
+    expect(tambah).toContain("seg.pesanan")
     expect(tambah).toContain("initialItems")
   })
 
@@ -112,7 +112,7 @@ describe("keterhubungan UI: kartu, tombol buat, dan daftar pilihan", () => {
     // halaman hanya membaca satu MI selesai (untuk gerbang tombol) dan tidak
     // pernah merender daftarnya.
     expect(src).toContain("Belum ada pengeluaran material untuk perintah kerja ini")
-    expect(src).toContain("/inventaris/pengeluaran-material/tambah?workOrderId=${wo.id}")
+    expect(src).toContain("/inventaris/pengeluaran-material/tambah/perintah-kerja/${wo.slug ?? wo.id}")
     expect(src).toContain("prisma.materialIssue.findMany")
   })
 

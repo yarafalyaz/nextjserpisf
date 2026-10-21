@@ -16,6 +16,17 @@ test.describe("Master Kelompok Pajak CRUD", () => {
   test("create → delete", async ({ page }, testInfo) => {
     const ts = `${Date.now()}-${testInfo.retry}-${testInfo.parallelIndex}`
     const name = `Grup E2E ${ts}`
+    const taxName = `PPN E2E ${ts}`
+
+    // Kelompok wajib berisi minimal satu pajak (validasi createTaxGroup) dan
+    // DB uji bisa kosong pajaknya — buat satu pajak dulu lewat UI.
+    await page.goto("/master/pajak/tambah", { waitUntil: "domcontentloaded" })
+    await waitForHydration(page)
+    await expect(page.getByRole("heading", { name: "Tambah Pajak" })).toBeVisible({ timeout: 30000 })
+    await page.locator("#tax-name").fill(taxName)
+    await page.locator("#tax-rate").fill("11")
+    await page.locator("#submit-tax").click()
+    await page.waitForURL("**/master/pajak", { timeout: 30000 })
 
     // ─── CREATE ────────────────────────────────────────────────
     await page.goto("/master/kelompok-pajak/tambah", { waitUntil: "domcontentloaded" })
@@ -24,6 +35,7 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await expect(page.getByRole("heading", { name: "Tambah Grup Pajak" })).toBeVisible({ timeout: 30000 })
 
     await page.locator("#name").fill(name)
+    await page.getByRole("checkbox").first().check()
     await waitForHydration(page)
     await page.getByRole("button", { name: "Simpan" }).click()
 
@@ -63,5 +75,15 @@ test.describe("Master Kelompok Pajak CRUD", () => {
     await waitForHydration(page)
     await page.waitForLoadState("networkidle")
     await expect(page.locator("body")).not.toContainText(name, { timeout: 30000 })
+
+    // Bersihkan pajak yang dibuat di awal spec ini.
+    await page.goto("/master/pajak", { waitUntil: "domcontentloaded" })
+    await waitForHydration(page)
+    const taxRow = page.getByRole("row", { name: new RegExp(taxName) }).first()
+    await expect(taxRow).toBeVisible({ timeout: 30000 })
+    await taxRow.getByRole("button", { name: "Buka menu aksi" }).click()
+    await page.getByRole("menuitem", { name: "Hapus" }).first().click()
+    await page.getByRole("button", { name: "Hapus" }).last().click()
+    await expect(page.getByRole("row", { name: new RegExp(taxName) })).toHaveCount(0, { timeout: 30000 })
   })
 })

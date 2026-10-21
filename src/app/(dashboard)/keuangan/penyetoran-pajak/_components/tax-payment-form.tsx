@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/shadcn/label"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { AppDatePicker } from "@/components/ui/date-picker"
+import { AppMonthPicker } from "@/components/ui/month-picker"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 
 export interface Option {
@@ -81,15 +82,8 @@ export function TaxPaymentForm({
         <AppDatePicker label="Tanggal Setor *" name="date" value={date} onChange={setDate} />
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="period">Masa Pajak</Label>
-          <Input
-            id="period"
-            name="period"
-            type="month"
-            value={period}
-            onChange={(event) => setPeriod(event.target.value)}
-          />
-          <span className="text-xs text-muted-foreground">Mis. 2026-09. Boleh dikosongkan.</span>
+          <AppMonthPicker label="Masa Pajak" name="period" value={period} onChange={setPeriod} />
+          <span className="text-xs text-muted-foreground">Mis. September 2026. Boleh dikosongkan (klik bulan terpilih untuk mengosongkan).</span>
         </div>
 
         <div className="flex flex-col gap-1.5">

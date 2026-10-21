@@ -1679,8 +1679,11 @@ import { finalizeCounts } from "@/lib/inventory/stocktake-finalize";
 
 const STOCKTAKE_PATH = "/inventaris/opname";
 
-async function liveQtyByItem(warehouseId: number): Promise<Map<number, number>> {
-  const layers = await prisma.inventoryLayer.groupBy({
+async function liveQtyByItem(
+  warehouseId: number,
+  db: Pick<typeof prisma, "inventoryLayer"> = prisma,
+): Promise<Map<number, number>> {
+  const layers = await db.inventoryLayer.groupBy({
     by: ["itemId"],
     where: { warehouseId, remaining: { gt: 0 } },
     _sum: { remaining: true },
@@ -1855,41 +1858,53 @@ export async function approveStocktakeSession(id: number) {
 export async function postStocktakeSession(id: number) {
   try {
     const user = await requirePermission("create_stock_adjustments");
-    const session = await prisma.stocktakeSession.findUniqueOrThrow({
+    // Pra-cek keberadaan + jangkauan gudang saja. Status TIDAK dipercaya dari
+    // baca ini — status dibaca ulang di dalam transaksi sesudah baris sesi
+    // dikunci (AUD-01: klaim posted harus single-winner di semua cabang).
+    const existing = await prisma.stocktakeSession.findUniqueOrThrow({
       where: { id },
-      include: { lines: { include: { item: { select: { cost: true } } } } },
+      select: { warehouseId: true },
     });
-    await assertWarehouseIdInScope(user, session.warehouseId);
-    if (session.status !== "approved") throw new Error("Hanya sesi yang disetujui yang bisa diposting");
-    await assertPeriodOpen(new Date());
+    await assertWarehouseIdInScope(user, existing.warehouseId);
 
-    const finals = finalizeCounts(
-      session.lines.map((l) => ({
-        itemId: l.itemId,
-        systemQty: Number(l.systemQty),
-        count1: l.count1 == null ? null : Number(l.count1),
-        count2: l.count2 == null ? null : Number(l.count2),
-      })),
-    );
-    const differing = finals.filter((f) => f.variance !== 0);
-    if (differing.length === 0) {
-      await prisma.stocktakeSession.update({ where: { id }, data: { status: "posted" } });
-      revalidatePath(STOCKTAKE_PATH);
-      return { success: true as const, adjustmentId: null };
-    }
+    const outcome = await prisma.$transaction(async (tx) => {
+      // Klaim atomik: kunci baris sesi lebih dulu, lalu baca ulang status +
+      // lines di dalam transaksi yang sama. Request paralel menunggu di lock
+      // ini dan melihat status final pemenang, bukan snapshot lama.
+      await tx.$queryRaw`SELECT id FROM stocktake_sessions WHERE id = ${id} FOR UPDATE`;
+      const session = await tx.stocktakeSession.findUnique({
+        where: { id },
+        include: { lines: { include: { item: { select: { cost: true } } } } },
+      });
+      if (!session) throw new Error("Sesi opname tidak ditemukan");
+      if (session.status !== "approved") {
+        throw new Error("Hanya sesi yang disetujui yang bisa diposting");
+      }
+      await assertPeriodOpen(new Date(), tx);
 
-    const live = await liveQtyByItem(session.warehouseId);
-    const snapByItem = new Map(finals.map((f) => [f.itemId, f.systemQty]));
-    const deltas = differing.map((f) => {
-      const liveQty = live.get(f.itemId) ?? 0;
-      const snap = snapByItem.get(f.itemId) ?? 0;
-      return { itemId: f.itemId, delta: liveQty - snap };
-    }).filter((d) => d.delta !== 0);
+      const finals = finalizeCounts(
+        session.lines.map((l) => ({
+          itemId: l.itemId,
+          systemQty: Number(l.systemQty),
+          count1: l.count1 == null ? null : Number(l.count1),
+          count2: l.count2 == null ? null : Number(l.count2),
+        })),
+      );
+      const differing = finals.filter((f) => f.variance !== 0);
+      if (differing.length === 0) {
+        await tx.stocktakeSession.update({ where: { id }, data: { status: "posted" } });
+        return { adjustmentId: null as number | null, documentNo: null as string | null };
+      }
 
-    const documentNo = await generateDocumentNumber("ADJ");
-    const adjustment = await prisma.$transaction(async (tx) => {
-      const locked = await tx.stocktakeSession.findUnique({ where: { id }, select: { status: true } });
-      if (!locked || locked.status !== "approved") throw new Error("Sesi tidak lagi approved");
+      const live = await liveQtyByItem(session.warehouseId, tx);
+      const snapByItem = new Map(finals.map((f) => [f.itemId, f.systemQty]));
+      const deltas = differing.map((f) => {
+        const liveQty = live.get(f.itemId) ?? 0;
+        const snap = snapByItem.get(f.itemId) ?? 0;
+        return { itemId: f.itemId, delta: liveQty - snap };
+      }).filter((d) => d.delta !== 0);
+
+      const documentNo = await generateDocumentNumber("ADJ");
       const adj = await tx.stockAdjustment.create({
         data: {
           documentNo,
@@ -1923,12 +1938,15 @@ export async function postStocktakeSession(id: number) {
         where: { id },
         data: { status: "posted", adjustmentId: adj.id },
       });
-      return adj;
+      return { adjustmentId: adj.id as number | null, documentNo: documentNo as string | null };
     });
-    await requestApprovalIfConfigured("StockAdjustment", adjustment.id, Number(user.id));
-    await logActivity("post", "StocktakeSession", id, `Posting opname → adjustment ${documentNo}`);
+
+    if (outcome.adjustmentId != null) {
+      await requestApprovalIfConfigured("StockAdjustment", outcome.adjustmentId, Number(user.id));
+      await logActivity("post", "StocktakeSession", id, `Posting opname → adjustment ${outcome.documentNo}`);
+    }
     revalidatePath(STOCKTAKE_PATH);
-    return { success: true as const, adjustmentId: adjustment.id };
+    return { success: true as const, adjustmentId: outcome.adjustmentId };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[postStocktakeSession]", getErrorMessage(e) || e);

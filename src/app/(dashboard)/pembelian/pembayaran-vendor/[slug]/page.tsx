@@ -19,6 +19,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Pembayaran Pemasok" }
 
 export default async function VendorPaymentDetailPage({
@@ -68,9 +69,13 @@ export default async function VendorPaymentDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/pembelian/pembayaran-vendor", payment)} variant="primary">Ubah</Button>
+            <CanCreate permission="edit_vendor_payments">
+              <Button href={entityEditHref("/pembelian/pembayaran-vendor", payment)} variant="primary">Ubah</Button>
+            </CanCreate>
             <PrintButton documentType="vendor-payment" documentId={payment.id} />
-            <DeleteButton id={payment.id} action={deleteVendorPayment} />
+            <CanCreate permission="delete_vendor_payments">
+              <DeleteButton id={payment.id} action={deleteVendorPayment} />
+            </CanCreate>
             <BackButton href="/pembelian/pembayaran-vendor" />
           </>
         }

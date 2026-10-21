@@ -8,6 +8,7 @@ import Link from "next/link"
 import { PaymentTable } from "./_components/payment-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -68,9 +69,11 @@ export default async function SalesPaymentsPage({
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Pembayaran Penjualan</h1>
-        <Link href="/penjualan/pembayaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-payment-btn">
-          + Terima Pembayaran
-        </Link>
+        <CanCreate permission="create_sales_payments">
+          <Link href="/penjualan/pembayaran/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-payment-btn">
+            + Terima Pembayaran
+          </Link>
+        </CanCreate>
       </div>
 
       <PaymentTable data={tableData} total={total} page={page} pageSize={pageSize} />

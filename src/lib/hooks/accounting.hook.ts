@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma, TxClient } from "@/lib/db/prisma";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
+import { slugify } from "@/lib/utils/slug";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { safeAdd } from "@/lib/utils/math";
@@ -312,6 +313,23 @@ export async function onSalesInvoicePosted(
       return;
     }
 
+    // Idempotensi stok: jurnal bisa absen (mis. terhapus dari DB) sementara
+    // gerakan OUT-nya masih POSTED — tanpa penjaga ini posting ulang
+    // mengeluarkan stok yang sama dua kali (qtyOnHand dan lapisan FIFO
+    // berkurang dobel). Alur edit yang sah membalik gerakan lama menjadi
+    // "reversed" lebih dulu (reverseSalesInvoicePostingTx), jadi penjaga
+    // status-posted ini tidak menghalanginya.
+    const existingOutMove = await tx.stockMove.findFirst({
+      where: { referenceType: "SalesInvoice", referenceId: invoiceId, impact: "OUT", status: "posted" },
+      select: { id: true },
+    });
+    if (existingOutMove) {
+      console.info(
+        `[accounting.hook] faktur #${invoiceId} sudah punya gerakan stok OUT #${existingOutMove.id} — posting dilewati`
+      );
+      return;
+    }
+
     const journalNumber = await generateJournalNumber(tx, "INV", invoiceId);
 
     const journal = await tx.journal.create({
@@ -586,6 +604,7 @@ export async function onSalesInvoicePosted(
       await tx.stockMove.create({
         data: {
           documentNo: smDocNo,
+          slug: slugify(smDocNo),
           itemId: line.itemId,
           warehouseId: info.defaultWarehouseId ?? null,
           qty,

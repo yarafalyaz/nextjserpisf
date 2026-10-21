@@ -252,6 +252,12 @@ export async function createQcInspection(formData: FormData) {
     if (checklist.status !== "released") {
       return { success: false, error: "Inspeksi hanya dapat memakai checklist yang sudah dirilis." }
     }
+    // Jenis checklist harus sama dengan jenis inspeksi (enum bersama
+    // QC_CHECKLIST_TYPES): gate Inspeksi Masuk/Serah Terima WO tidak boleh
+    // terpenuhi checklist jenis lain walau form dilewati.
+    if (checklist.checklistType !== v.inspectionType) {
+      return { success: false, error: "Jenis checklist tidak sesuai dengan jenis inspeksi." }
+    }
     await assertQcReferenceExists(v.referenceType, v.referenceId)
 
     // Only results referencing items on this checklist are accepted.

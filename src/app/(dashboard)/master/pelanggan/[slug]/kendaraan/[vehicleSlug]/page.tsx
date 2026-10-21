@@ -6,7 +6,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import Link from "next/link"
 import { Pencil } from "lucide-react"
-import { entityHref } from "@/lib/utils/entity-url"
+import { entityHref, entityNestedHref } from "@/lib/utils/entity-url"
 import { loadCustomerVehicleContext } from "../_components/load-customer-vehicle"
 import { getCustomerVehicleHistory, type CustomerVehicleHistoryKind } from "@/lib/reports/customer-vehicle-history-data"
 
@@ -54,7 +54,7 @@ export default async function CustomerVehicleDetailPage({
       <div className="flex flex-wrap items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-bold text-foreground">Detail Kendaraan</h1>
         <div className="flex gap-2">
-          <Link href={`/master/pelanggan/${customerKey}/kendaraan/${cv.slug ?? cv.id}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
+          <Link href={`${entityNestedHref("/master/pelanggan", customer, "kendaraan", cv)}/ubah`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all">
             <Pencil size={14} /> Ubah
           </Link>
           <Link href={`/master/pelanggan/${customerKey}/kendaraan`} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>

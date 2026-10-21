@@ -366,6 +366,7 @@ export function formatReferenceType(refType: string | null | undefined): string 
 export function referenceHref(
   refType: string | null | undefined,
   refId: number | null | undefined,
+  refSlug?: string | null,
 ): string | null {
   if (!refType || refId == null || Number.isNaN(Number(refId))) return null;
   const id = Number(refId);
@@ -389,5 +390,7 @@ export function referenceHref(
     InventoryTransfer: "/inventaris/transfer",
   };
   const base = routes[refType];
-  return base ? `${base}/${id}` : null;
+  // Slug kanonis bila pemanggil menyediakannya (resolveReferenceSlugs);
+  // tanpa slug jatuh ke id numerik yang tetap diterima resolver halaman.
+  return base ? `${base}/${refSlug ?? id}` : null;
 }

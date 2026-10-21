@@ -19,6 +19,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Retur" }
 
 export default async function PurchaseReturnDetailPage({
@@ -67,7 +68,9 @@ export default async function PurchaseReturnDetailPage({
         badge={<StatusChip status={purchaseReturn.status} />}
         actions={
           <>
-            <Button href={entityEditHref("/pembelian/retur", purchaseReturn)} variant="primary">Ubah</Button>
+            <CanCreate permission="edit_purchase_returns">
+              <Button href={entityEditHref("/pembelian/retur", purchaseReturn)} variant="primary">Ubah</Button>
+            </CanCreate>
             <PrintButton documentType="purchase-return" documentId={purchaseReturn.id} />
             {/* processPurchaseReturn hanya menerima status draft (stok + jurnal). */}
             {purchaseReturn.status === "draft" && (
@@ -80,7 +83,9 @@ export default async function PurchaseReturnDetailPage({
                 successMessage="Retur berhasil diproses"
               />
             )}
-            <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
+            <CanCreate permission="delete_purchase_returns">
+              <DeleteButton id={purchaseReturn.id} action={deletePurchaseReturn} />
+            </CanCreate>
             <BackButton href="/pembelian/retur" />
           </>
         }

@@ -109,7 +109,6 @@ function ruleKeyOf(k: string): string {
 
 type RuleDb = {
   payrollStatutoryRule: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     findMany: (args: any) => Promise<{ key: string; value: unknown; effectiveFrom: Date; effectiveTo: Date | null }[]>
   }
 }

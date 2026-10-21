@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 /**
  * Menyuntikkan bidang tersembunyi `goodsReceiptId` ke dalam form yang dirender
  * anak-anaknya, supaya jalur "Buat Tagihan dari Penerimaan"
- * (`/pembelian/tagihan/tambah?grId=N`) bisa memberitahu server action
+ * (`/pembelian/tagihan/tambah/penerimaan/<slug>`) bisa memberitahu server action
  * `createVendorBill` penerimaan mana yang ditagih.
  *
  * Kenapa lewat DOM, bukan field biasa di form: form tagihan

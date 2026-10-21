@@ -121,12 +121,14 @@ export function isTrackedActivityReference(modelType: string | null | undefined)
 export function activityEntityHref(
   modelType: string | null | undefined,
   modelId: number | null | undefined,
+  slug?: string | null,
 ): string | null {
-  const documentHref = referenceHref(modelType, modelId)
+  const documentHref = referenceHref(modelType, modelId, slug)
   if (documentHref) return documentHref
   if (!modelType || modelId == null || Number.isNaN(Number(modelId))) return null
   const base = MASTER_ROUTES[modelType]
-  return base ? `${base}/${Number(modelId)}` : null
+  // Slug kanonis bila pemanggil menyediakannya (resolveActivityReferenceSlugs).
+  return base ? `${base}/${slug ?? Number(modelId)}` : null
 }
 
 /**

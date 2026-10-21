@@ -1,7 +1,7 @@
 /**
  * Pemuatan data untuk halaman **Proses Akhir Bulan**.
  *
- * Bulan yang diperiksa diambil dari `?periode=YYYY-MM`; bawaannya **bulan lalu**
+ * Bulan yang diperiksa diambil dari path `/periode/YYYY-MM`; bawaannya **bulan lalu**
  * (bulan yang biasanya baru saja selesai dan hendak ditutup) — bukan bulan berjalan,
  * yang masih berjalan dan belum untuk ditutup.
  */

@@ -89,6 +89,10 @@ try {
     port: Number(url.port || 3306),
     user: decodeURIComponent(url.username),
     password: decodeURIComponent(url.password),
+    // MySQL 8 (caching_sha2_password) lewat TCP menolak login tanpa ini —
+    // URL contoh di dokumentasi skrip ini sudah menyertakan parameternya,
+    // jadi hormati: `...?allowPublicKeyRetrieval=true`.
+    allowPublicKeyRetrieval: url.searchParams.get("allowPublicKeyRetrieval") === "true",
   })
   await conn.query(
     `CREATE DATABASE \`${namaScratch}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`,

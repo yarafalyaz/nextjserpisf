@@ -31,6 +31,11 @@ const GUARD_PATTERN =
 const EXCEPTIONS: Record<string, string> = {
   "auth.actions.ts::loginAction": "Jalur publik: dijalankan sebelum sesi ada (proses login).",
   "auth.actions.ts::logoutAction": "Jalur publik: mengakhiri sesi, tidak butuh izin.",
+  "setup.actions.ts::getSetupStatus":
+    "Bootstrap pra-pengguna: langkah pemeriksaan wizard. Read-only dan hanya memaparkan " +
+    "boolean terpasang/koneksi/skema (tanpa data tenant); sesudah terpasang halaman /setup " +
+    "me-redirect dan action mengembalikan checks=null. Action setup yang MENULIS " +
+    "(runSetup, provisionSetupSchema) tidak dikecualikan — keduanya assertCSRF + isInstalled().",
 }
 
 function collectUnguardedActions(): string[] {

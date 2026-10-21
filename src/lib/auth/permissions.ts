@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { auth } from "./auth";
+import type { PermissionName, RoleName } from "@/lib/setup/base-data";
 
 /**
  * Require authenticated session. Redirects to /login if not signed in.
@@ -17,7 +18,7 @@ export async function requireAuth() {
  * On miss, redirects to dashboard (/) instead of throwing — halaman forbidden
  * langsung dialihkan, tidak muncul "Terjadi Kesalahan".
  */
-export async function requirePermission(permission: string) {
+export async function requirePermission(permission: PermissionName) {
   const user = await requireAuth();
 
   // Super admin bypass
@@ -34,7 +35,7 @@ export async function requirePermission(permission: string) {
  * Require at least one of the specified permissions. Super admin bypasses all checks.
  * On miss, redirects to dashboard (/) instead of throwing.
  */
-export async function requireAnyPermission(permissions: string[]) {
+export async function requireAnyPermission(permissions: readonly PermissionName[]) {
   const user = await requireAuth();
 
   // Super admin bypass
@@ -55,7 +56,7 @@ export async function requireAnyPermission(permissions: string[]) {
 /**
  * Require specific role. Super admin bypasses all role checks.
  */
-export async function requireRole(role: string) {
+export async function requireRole(role: RoleName) {
   const user = await requireAuth();
 
   if (!user.roles.includes(role) && !user.roles.includes("super_admin")) {
@@ -69,7 +70,7 @@ export async function requireRole(role: string) {
  * Non-throwing permission check for API routes (which should return 403, not 500).
  * Returns false when unauthenticated or lacking the permission. Super admin bypasses.
  */
-export async function hasPermission(permission: string): Promise<boolean> {
+export async function hasPermission(permission: PermissionName): Promise<boolean> {
   const session = await auth();
   const user = session?.user;
   if (!user || user.isActive === false) return false;
@@ -80,7 +81,7 @@ export async function hasPermission(permission: string): Promise<boolean> {
 /**
  * Non-throwing check if user holds at least one of the specified permissions.
  */
-export async function hasAnyPermission(permissions: string[]): Promise<boolean> {
+export async function hasAnyPermission(permissions: readonly PermissionName[]): Promise<boolean> {
   const session = await auth();
   const user = session?.user;
   if (!user || user.isActive === false) return false;

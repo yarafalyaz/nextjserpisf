@@ -769,6 +769,32 @@ describe("Petty Cash Actions", () => {
     }))
     expect(res?.success).toBe(true)
   })
+  // AUD-02: saldo sumber divalidasi DI DALAM transaksi sesudah lock akun
+  // sumber, bukan dari snapshot sebelum transaksi.
+  it("createPettyCash IN menolak saldo sumber kurang di dalam transaksi", async () => {
+    mocks.prismaMock.journalEntry.findMany.mockResolvedValue([{ debit: 500, credit: 0 }])
+    const res = await (actions as any).createPettyCash(fdMap({
+      type: "IN",
+      amount: 1000,
+      date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error ?? "")).toMatch(/Saldo akun Kas\/Bank tidak mencukupi/)
+    expect(mocks.prismaMock.pettyCash.create).not.toHaveBeenCalled()
+  })
+  it("createPettyCash IN mengunci akun sumber sebelum membaca saldo jurnal", async () => {
+    const res = await (actions as any).createPettyCash(fdMap({
+      type: "IN",
+      amount: 1000,
+      date: "2026-06-13"
+    }))
+    expect(res?.success).toBe(true)
+    const lockOrder = mocks.prismaMock.$queryRaw.mock.invocationCallOrder[0]
+    const readOrder = mocks.prismaMock.journalEntry.findMany.mock.invocationCallOrder[0]
+    const createOrder = mocks.prismaMock.pettyCash.create.mock.invocationCallOrder[0]
+    expect(lockOrder).toBeLessThan(readOrder)
+    expect(readOrder).toBeLessThan(createOrder)
+  })
   it("createPettyCash persists Nama Project + Vendor + Kategori", async () => {
     // The create runs inside a tx; the model mock's create is the same fn.
     const res = await (actions as any).createPettyCash(fdMap({

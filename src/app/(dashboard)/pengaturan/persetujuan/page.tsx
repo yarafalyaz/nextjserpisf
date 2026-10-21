@@ -4,6 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
+import { redirect } from "next/navigation"
 import { statusLabel, statusToIndo, indoToStatus } from "@/lib/utils/status-labels"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { ApprovalTable } from "./_components/approval-table"
@@ -17,15 +18,32 @@ export default async function ApprovalsPage({
 }: {
   searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string }>
 }) {
+  return renderApprovalsPage(searchParams)
+}
+
+export async function renderApprovalsPage(
+  searchParams: Promise<{ cari?: string; status?: string; halaman?: string; pageSize?: string }>,
+  pendingOnly = false,
+) {
   // This list spans approvals from every module and exposes request metadata.
   await requirePermission("approve_workflows")
   const params = await searchParams
+
+  // Rute lama ?status=menunggu pindah ke /pengaturan/persetujuan/menunggu.
+  if (params.status === "menunggu") redirect("/pengaturan/persetujuan/menunggu")
+
   const { page, pageSize, take } = parsePagination(params)
   const dbStatusParam = params.status ? indoToStatus[params.status] : undefined
   const cari = params.cari?.trim()
 
   const where = {
-    ...((dbStatusParam || params.status) && { status: dbStatusParam || params.status }),
+    ...(pendingOnly
+      ? { status: "pending" }
+      : {
+          ...((dbStatusParam || params.status) && {
+            status: dbStatusParam || params.status,
+          }),
+        }),
     // Kotak cari DataTable menulis ?cari= (mode server) — terjemahkan ke query.
     ...(cari && {
       OR: [
@@ -72,16 +90,36 @@ export default async function ApprovalsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <AppBreadcrumbs items={[
+      <AppBreadcrumbs items={pendingOnly
+        ? [
+  { label: "Dasbor", href: "/" },
+  { label: "Pengaturan", href: "/pengaturan" },
+  { label: "Persetujuan", href: "/pengaturan/persetujuan" },
+  { label: "Menunggu" },
+]
+        : [
   { label: "Dasbor", href: "/" },
   { label: "Pengaturan", href: "/pengaturan" },
   { label: "Persetujuan" },
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-        <h1 className="text-xl font-bold text-foreground sm:text-2xl">Alur Persetujuan</h1>
+        <h1 className="text-xl font-bold text-foreground sm:text-2xl">{pendingOnly ? "Menunggu Persetujuan" : "Alur Persetujuan"}</h1>
+        {pendingOnly && (
+          <span className="rounded-full bg-info/10 px-3 py-1 text-xs font-medium text-info">
+            Menunggu ({total})
+          </span>
+        )}
       </div>
 
-      <ApprovalTable data={data} total={total} page={page} pageSize={pageSize} filters={<div className="flex flex-wrap gap-1.5">{statusChips}</div>} />
+      <ApprovalTable
+        data={data}
+        total={total}
+        page={page}
+        pageSize={pageSize}
+        {...(!pendingOnly && {
+          filters: <div className="flex flex-wrap gap-1.5">{statusChips}</div>,
+        })}
+      />
     </div>
   )
 }

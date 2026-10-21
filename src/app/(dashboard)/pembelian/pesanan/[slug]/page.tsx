@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { hasPermission, requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
@@ -29,6 +29,7 @@ export default async function PurchaseOrderDetailPage({
   params: Promise<{ slug: string }>
 }) {
   await requirePermission("view_purchase_orders")
+  const canApprove = await hasPermission("approve_purchase_orders")
   const { slug } = await params
 
   const po = await resolveEntity(
@@ -87,8 +88,11 @@ export default async function PurchaseOrderDetailPage({
         actions={
           <>
             <Button href={entityEditHref("/pembelian/pesanan", po)} variant="primary">Ubah</Button>
-            {po.vendorBills.length === 0 && po.status !== "cancelled" && (
-              <Button href={`/pembelian/tagihan/tambah?poId=${po.id}`}>
+            {po.vendorBills.length === 0 &&
+              (po.isService
+                ? !["draft", "cancelled", "rejected"].includes(po.status)
+                : po.goodsReceipts.some((gr) => ["verified", "completed"].includes(gr.status))) && (
+              <Button href={`/pembelian/tagihan/tambah/po/${po.slug ?? po.id}`}>
                 {po.isService ? "Buat Tagihan Jasa" : "Buat Tagihan"}
               </Button>
             )}
@@ -116,6 +120,7 @@ export default async function PurchaseOrderDetailPage({
                   status={po.status}
                   id={po.id}
                   module="pembelian/pesanan"
+                  canAct={canApprove}
                 />
                 <DetailCard>
                   <DetailField label="Pemasok" value={po.vendor.name} />
@@ -190,8 +195,8 @@ export default async function PurchaseOrderDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Penerimaan Barang</h2>
-                  {po.status === "ordered" && (
-                    <Link href={`/pembelian/penerimaan/tambah?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Penerimaan</Link>
+                  {["approved", "ordered", "partial_received"].includes(po.status) && (
+                    <Link href={`/pembelian/penerimaan/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Penerimaan</Link>
                   )}
                 </div>
                 <div className="p-4 px-5">
@@ -229,9 +234,12 @@ export default async function PurchaseOrderDetailPage({
                 <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Retur Pembelian</h2>
                   {/* "Buat Retur dari PO" — PO-nya ikut ter-prefill (dan barisnya
-                      dari qty yang sudah diterima) lewat ?poId= di halaman retur. */}
-                  {po.status !== "cancelled" && (
-                    <Link href={`/pembelian/retur/tambah?poId=${po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
+                      dari qty yang sudah diterima) lewat segmen `po/<slug>` di halaman retur.
+                      Hanya ditawarkan bila memang sudah ada barang diterima
+                      (GR terverifikasi/selesai); PO rejected/draft/belum
+                      terima tidak punya apa pun untuk diretur. */}
+                  {po.goodsReceipts.some((gr) => ["verified", "completed"].includes(gr.status)) && (
+                    <Link href={`/pembelian/retur/tambah/po/${po.slug ?? po.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
                   )}
                 </div>
                 <div className="p-4 px-5">

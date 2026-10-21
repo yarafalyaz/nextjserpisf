@@ -15,6 +15,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Gudang" }
@@ -69,7 +70,9 @@ export default async function WarehouseDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/master/gudang", warehouse)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            <CanCreate permission="edit_warehouses">
+              <Button href={entityEditHref("/master/gudang", warehouse)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+            </CanCreate>
             <BackButton href="/master/gudang" />
           </>
         }
@@ -100,20 +103,24 @@ export default async function WarehouseDetailPage({
                   <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
                     <div />
                     <div className="flex gap-2">
-                      <Link
-                        href={`/inventaris/rak/tambah?warehouseId=${warehouse.id}`}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-                        id="create-rack-btn"
-                      >
-                        + Rak
-                      </Link>
-                      <Link
-                        href={`/inventaris/baris-rak/tambah?warehouseId=${warehouse.id}`}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-                        id="create-rack-row-btn"
-                      >
-                        + Baris Rak
-                      </Link>
+                      <CanCreate permission="create_warehouses">
+                        <Link
+                          href={`/inventaris/rak/tambah/gudang/${warehouse.slug ?? warehouse.id}`}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+                          id="create-rack-btn"
+                        >
+                          + Rak
+                        </Link>
+                      </CanCreate>
+                      <CanCreate permission="manage_inventory">
+                        <Link
+                          href={`/inventaris/baris-rak/tambah/gudang/${warehouse.slug ?? warehouse.id}`}
+                          className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+                          id="create-rack-row-btn"
+                        >
+                          + Baris Rak
+                        </Link>
+                      </CanCreate>
                     </div>
                   </div>
                   {warehouse.racks.length === 0 ? (

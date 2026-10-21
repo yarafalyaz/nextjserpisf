@@ -1,8 +1,10 @@
 export const dynamic = "force-dynamic"
 
+import { redirect } from "next/navigation"
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { PageHeader } from "@/components/ui/page-header"
+import { entityHref } from "@/lib/utils/entity-url"
 import {
   DetailTable,
   DetailTableHead,
@@ -11,7 +13,7 @@ import {
   DetailTableRow,
   DetailTableTd,
 } from "@/components/ui/detail-table"
-import { StocktakeSessionForm, StocktakeLineForm, StocktakeActions } from "./_components/stocktake-forms"
+import { StocktakeSessionForm, StocktakeActions } from "./_components/stocktake-forms"
 
 import type { Metadata } from "next"
 
@@ -31,6 +33,23 @@ export default async function StocktakePage({
   await requirePermission("view_stock_opname")
   const params = await searchParams
 
+  // Tautan lama `?sessionId=<id>` → halaman sesi `/sesi/<slug>`.
+  if (params.sessionId !== undefined) {
+    const legacyId = Number(params.sessionId)
+    const legacy =
+      Number.isSafeInteger(legacyId) && legacyId > 0
+        ? await prisma.stocktakeSession.findUnique({
+            where: { id: legacyId },
+            select: { slug: true },
+          })
+        : null
+    redirect(
+      legacy?.slug
+        ? `/inventaris/opname/sesi/${legacy.slug}`
+        : "/inventaris/opname/sesi",
+    )
+  }
+
   const sessions = await prisma.stocktakeSession.findMany({
     orderBy: { createdAt: "desc" },
     take: 50,
@@ -39,20 +58,6 @@ export default async function StocktakePage({
       _count: { select: { lines: true } },
     },
   })
-
-  const activeId = Number(params.sessionId)
-  const active = Number.isSafeInteger(activeId) && activeId > 0
-    ? await prisma.stocktakeSession.findUnique({
-        where: { id: activeId },
-        include: {
-          lines: {
-            include: { item: { select: { sku: true, name: true, unitOfMeasure: true } } },
-            orderBy: { id: "asc" },
-            take: 500,
-          },
-        },
-      })
-    : null
 
   return (
     <div className="flex flex-col gap-6">
@@ -100,7 +105,7 @@ export default async function StocktakePage({
                     <DetailTableTd>{s._count.lines}</DetailTableTd>
                     <DetailTableTd align="right">
                       <div className="flex justify-end gap-2">
-                        <a href={`/inventaris/opname/sesi?sessionId=${s.id}`}>Buka</a>
+                        <a href={entityHref("/inventaris/opname/sesi", s)}>Buka</a>
                         <StocktakeActions id={s.id} status={s.status} />
                       </div>
                     </DetailTableTd>
@@ -112,30 +117,6 @@ export default async function StocktakePage({
         </div>
       </div>
 
-      {active && (
-        <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
-            <div className="flex flex-col gap-0.5">
-              <h2 className="text-[0.9375rem] font-semibold text-foreground">
-                {active.documentNo} — {active.status}
-              </h2>
-              <p className="text-xs text-muted-foreground">
-                Snapshot sistem vs hitung fisik. Selisih tanpa recount masuk tahap recount.
-              </p>
-            </div>
-          </div>
-          <div className="p-4 px-5">
-            <StocktakeLineForm sessionId={active.id} lines={active.lines.map((l) => ({
-              id: l.id,
-              sku: l.item.sku,
-              name: l.item.name,
-              systemQty: Number(l.systemQty),
-              count1: l.count1 == null ? null : Number(l.count1),
-              count2: l.count2 == null ? null : Number(l.count2),
-            }))} />
-          </div>
-        </div>
-      )}
     </div>
   )
 }

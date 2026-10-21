@@ -110,6 +110,34 @@ async function assertThreeWayMatch(
 ): Promise<void> {
   if (!purchaseOrderId) return; // bills without a PO link are not matched
 
+  // PO jasa tidak punya penerimaan barang sama sekali — menuntut GR
+  // terverifikasi membuat tagihan jasa yang tertaut PO mustahil disimpan.
+  // Untuk jasa, kecocokan yang ditegakkan adalah plafon total PO.
+  const po = await tx.purchaseOrder.findUnique({
+    where: { id: purchaseOrderId },
+    select: { isService: true, grandTotal: true, documentNo: true },
+  });
+  if (po?.isService) {
+    const otherBills = await tx.vendorBill.aggregate({
+      where: {
+        purchaseOrderId,
+        status: { notIn: ["cancelled"] },
+        ...(excludeBillId ? { id: { not: excludeBillId } } : {}),
+      },
+      _sum: { subtotal: true },
+    });
+    const alreadyBilled = Number(otherBills._sum.subtotal ?? 0);
+    const poTotal = Number(po.grandTotal ?? 0);
+    const tolerance = safeRound(Math.max(1000, safeMultiply(poTotal, 0.01, 2)), 0);
+    if (safeAdd(alreadyBilled, billGoodsValue, 0) > safeAdd(poTotal, tolerance, 0)) {
+      throw new Error(
+        `3-way match gagal: total tagihan jasa (${safeAdd(alreadyBilled, billGoodsValue, 0).toLocaleString("id-ID")}) ` +
+          `melebihi total PO ${po.documentNo} (${poTotal.toLocaleString("id-ID")}).`,
+      );
+    }
+    return;
+  }
+
   const grs = await tx.goodsReceipt.findMany({
     where: { purchaseOrderId, status: { in: ["verified", "completed"] } },
     include: { items: true },
@@ -335,6 +363,22 @@ export async function createPurchaseOrder(formData: FormData) {
 
     const po = await prisma.$transaction(async (tx) => {
       await checkIdempotency(idempotencyKey, tx, user.id);
+
+      // Gerbang status PR: daftar PR siap-pesan dan tombol Buat Pesanan hanya
+      // menawarkan approved/partial_ordered; server menegakkannya juga supaya
+      // URL basi ke PR konsep/ditolak tidak melahirkan PO tanpa persetujuan.
+      if (v.purchaseRequestId) {
+        const pr = await tx.purchaseRequest.findUnique({
+          where: { id: v.purchaseRequestId },
+          select: { status: true, documentNo: true },
+        });
+        if (!pr) throw new Error("Permintaan Pembelian tidak ditemukan");
+        if (!["approved", "partial_ordered"].includes(pr.status)) {
+          throw new Error(
+            `Permintaan Pembelian ${pr.documentNo} berstatus '${pr.status}' belum bisa dibuatkan pesanan (harus Disetujui/Sebagian Terpesan)`,
+          );
+        }
+      }
 
       const created = await tx.purchaseOrder.create({
         data: {
@@ -1120,6 +1164,12 @@ export async function createVendorPayment(formData: FormData) {
       }
       if (target.status === "paid" || target.status === "cancelled") {
         return { success: false, error: "Tagihan sudah lunas atau dibatalkan" };
+      }
+      // Tagihan konsep belum diposting (jurnal utang + balanceDue lahir saat
+      // Konfirmasi); membayarnya sekarang mengakui pembayaran atas utang yang
+      // belum diakui. Tombol Bayar di UI memang tidak menawarkannya.
+      if (target.status === "draft") {
+        return { success: false, error: "Tagihan masih konsep — konfirmasi dulu sebelum dibayar" };
       }
       targetBillId = target.id;
     }

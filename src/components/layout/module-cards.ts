@@ -1,4 +1,5 @@
 import type { ModuleItem } from "@/components/ui/module-grid"
+import type { PermissionName } from "@/lib/setup/base-data"
 
 import { navigation } from "./navigation"
 import { NAV_CARD_DESCRIPTIONS } from "./nav-descriptions"
@@ -36,9 +37,9 @@ export function moduleItemsForGroup(groupHref: string): ModuleItem[] {
  * Izin yang membuat halaman hub ini layak dibuka: gabungan izin anak-anaknya
  * (any-of), menggantikan daftar izin yang dulu ditulis ulang per halaman.
  */
-export function groupPermissions(groupHref: string): string[] {
+export function groupPermissions(groupHref: string): PermissionName[] {
   return moduleItemsForGroup(groupHref).flatMap((item) => [
     ...(item.permission ? [item.permission] : []),
     ...(item.permissions ?? []),
-  ])
+  ]) as PermissionName[]
 }

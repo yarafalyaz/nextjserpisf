@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useState } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
+import { AppMonthPicker } from "@/components/ui/month-picker"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/shadcn/checkbox"
 import { Input } from "@/components/ui/shadcn/input"
@@ -146,10 +147,7 @@ export function ReportPeriodFilter({
       ) : mode === "as-of" ? (
         <AppDatePicker label="Per tanggal" name="periode" value={startDate} onChange={setStartDate} className="w-full sm:w-[180px]" />
       ) : mode === "month" ? (
-        <div className="flex flex-col gap-1.5 w-full sm:w-[180px]">
-          <Label htmlFor="filter-periode">Bulan</Label>
-          <Input id="filter-periode" type="month" value={startDate} onChange={(event) => setStartDate(event.target.value)} className="w-full sm:w-[180px]" />
-        </div>
+        <AppMonthPicker label="Bulan" name="periode" value={startDate} onChange={setStartDate} required className="w-full sm:w-[180px]" />
       ) : null}
 
       {numberField ? (
