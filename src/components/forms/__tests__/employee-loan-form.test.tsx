@@ -29,7 +29,7 @@ describe("EmployeeLoanForm — a11y wiring", () => {
       expect(combobox(container).getAttribute("aria-required")).toBe("true")
       expect(container.querySelector("#totalAmount")!.getAttribute("required")).not.toBeNull()
       expect(container.querySelector("#monthlyInstallment")!.getAttribute("required")).not.toBeNull()
-      expect(decorativeStars(form).length).toBe(3)
+      expect(decorativeStars(form).length).toBe(4)
       expect(labelTexts(form)).toEqual(expect.arrayContaining([
         "Karyawan *", "Jumlah Pinjaman (Rp) *", "Cicilan per Bulan (Rp) *",
       ]))
