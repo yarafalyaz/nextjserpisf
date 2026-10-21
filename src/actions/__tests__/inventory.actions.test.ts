@@ -1247,21 +1247,16 @@ describe("remnant (P1-5)", () => {
   });
 
   it("createRemnant menolak ID non-desimal murni (0x10/1e3/0b101/spasi) — bukan ID 10/16/1000", async () => {
-    for (const weird of ["0x10", "1e3", "0b101", " 1", "+1", "1.0"]) {
+    const fdWith = (itemId: string, warehouseId: string, qty = "2") => {
       const fd = new FormData();
-      fd.set("itemId", weird);
-      fd.set("warehouseId", "1");
-      fd.set("qty", "2");
-      const res = await actions.createRemnant(fd);
-      expect(res.success).toBe(false);
-    }
+      fd.set("itemId", itemId);
+      fd.set("warehouseId", warehouseId);
+      fd.set("qty", qty);
+      return fd;
+    };
     for (const weird of ["0x10", "1e3", "0b101", " 1", "+1", "1.0"]) {
-      const fd = new FormData();
-      fd.set("itemId", "1");
-      fd.set("warehouseId", weird);
-      fd.set("qty", "2");
-      const res = await actions.createRemnant(fd);
-      expect(res.success).toBe(false);
+      expect((await actions.createRemnant(fdWith(weird, "1"))).success).toBe(false);
+      expect((await actions.createRemnant(fdWith("1", weird))).success).toBe(false);
     }
     expect(mocks.prismaMock.remnant.create).not.toHaveBeenCalled();
   });
