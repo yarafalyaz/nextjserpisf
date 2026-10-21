@@ -88,7 +88,7 @@ export async function POST(req: NextRequest) {
     "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
     "journal", "expense", "material_issue", "work_order", "project",
     "goods_receipt", "purchase_return", "sales_return", "bank_statement",
-    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash",
+    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash", "WarrantyClaim",
   ]
   if (!allowedRefTypes.includes(safeRefType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
@@ -181,7 +181,7 @@ export async function GET(req: NextRequest) {
     "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
     "journal", "expense", "material_issue", "work_order", "project",
     "goods_receipt", "purchase_return", "sales_return", "bank_statement",
-    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash",
+    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash", "WarrantyClaim",
   ]
   if (!allowedRefTypes.includes(referenceType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")

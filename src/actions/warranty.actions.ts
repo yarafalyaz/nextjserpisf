@@ -192,6 +192,8 @@ export async function getWarrantyClaimDetail(claimId: number) {
       include: {
         coverage: true,
         customerVehicle: { select: { id: true, plateNumber: true, lastOdometerKm: true } },
+        supplierClaimVendor: { select: { id: true, name: true } },
+        purchaseReturn: { select: { id: true, documentNo: true, status: true } },
       },
     });
     if (!claim) return { success: false, error: "Klaim garansi tidak ditemukan." };
