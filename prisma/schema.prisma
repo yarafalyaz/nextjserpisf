@@ -811,6 +811,7 @@ model Employee {
   appreciations       Appreciation[]
   attendances         Attendance[]
   employeeLoans       EmployeeLoan[]
+  employeePayrollComponents EmployeePayrollComponent[]
   department          Department?       @relation(fields: [departmentId], references: [id])
   position            Position?         @relation(fields: [positionId], references: [id])
   user                User?             @relation(fields: [userId], references: [id])
@@ -853,6 +854,7 @@ model Account {
   parent         Account?       @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
   children       Account[]      @relation("AccountTree")
   journalEntries JournalEntry[]
+  payrollComponents PayrollComponent[]
 
   @@index([parentId], map: "accounts_parent_id_fkey")
   @@index([isActive, deletedAt])
@@ -2985,6 +2987,7 @@ model Payroll {
   createdAt              DateTime    @default(now()) @map("created_at")
   updatedAt              DateTime    @updatedAt @map("updated_at")
   employee               Employee?   @relation(fields: [employeeId], references: [id])
+  componentLines         PayrollComponentLine[]
   costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
   costCenterId           Int?        @map("cost_center_id")
 
@@ -2996,6 +2999,89 @@ model Payroll {
   @@index([createdBy])
   @@index([createdAt])
   @@map("payrolls")
+}
+
+/// F-2026-10-21-027: katalog komponen gaji terstruktur (master perusahaan).
+/// `accountId` hanya disimpan tahap ini — TIDAK dipakai jurnal (jurnal tetap
+/// agregat existing sampai tahap jurnal per komponen diputus terpisah).
+/// `isTaxable` = klasifikasi tersimpan; mode pajak aktif tahap ini tetap
+/// all-taxable-v1 (semua earning kena pajak, angka identik pra-fitur).
+model PayrollComponent {
+  id             Int      @id @default(autoincrement())
+  name           String
+  normalizedName String   @map("normalized_name")
+  kind           String
+  recurrence     String
+  isTaxable      Boolean  @default(false) @map("is_taxable")
+  accountId      Int?     @map("account_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdBy      Int?     @map("created_by")
+  updatedBy      Int?     @map("updated_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  account        Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  assignments    EmployeePayrollComponent[]
+  lines          PayrollComponentLine[]
+
+  @@index([normalizedName])
+  @@index([isActive])
+  @@index([accountId])
+  @@index([createdAt])
+  @@map("payroll_components")
+}
+
+/// Penugasan komponen tetap ke karyawan. Hanya komponen recurrence=fixed
+/// aktif; berlaku pada periode bila rentang mencakup endDate periode
+/// (tanpa prorata). Baris nol tidak pernah ditarik ke slip.
+model EmployeePayrollComponent {
+  id            Int             @id @default(autoincrement())
+  employeeId    Int             @map("employee_id")
+  componentId   Int             @map("component_id")
+  defaultAmount Decimal         @default(0.00) @map("default_amount") @db.Decimal(15, 2)
+  effectiveFrom DateTime        @map("effective_from")
+  effectiveTo   DateTime?       @map("effective_to")
+  isActive      Boolean         @default(true) @map("is_active")
+  createdBy     Int?            @map("created_by")
+  updatedBy     Int?            @map("updated_by")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  employee      Employee        @relation(fields: [employeeId], references: [id])
+  component     PayrollComponent @relation(fields: [componentId], references: [id])
+  lines         PayrollComponentLine[]
+
+  @@index([employeeId])
+  @@index([componentId])
+  @@index([createdAt])
+  @@map("employee_payroll_components")
+}
+
+/// Baris snapshot komponen per slip gaji. Snapshot nama/kind/isTaxable/akun
+/// dibekukan saat baris dibuat — master berubah/nonaktif tidak mengubah
+/// slip historis. Payroll.allowances = Σ earning, deductions = Σ deduction
+/// dari baris-baris ini untuk slip yang memilikinya.
+model PayrollComponentLine {
+  id                     Int      @id @default(autoincrement())
+  payrollId              Int      @map("payroll_id")
+  componentId            Int?     @map("component_id")
+  componentNameSnapshot  String   @map("component_name_snapshot")
+  kindSnapshot           String   @map("kind_snapshot")
+  recurrenceSnapshot     String   @map("recurrence_snapshot")
+  isTaxableSnapshot      Boolean  @default(false) @map("is_taxable_snapshot")
+  source                 String
+  assignmentId           Int?     @map("assignment_id")
+  accountIdSnapshot      Int?     @map("account_id_snapshot")
+  amount                 Decimal  @default(0.00) @db.Decimal(15, 2)
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+  payroll                Payroll  @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  component              PayrollComponent? @relation(fields: [componentId], references: [id], onDelete: SetNull)
+  assignment             EmployeePayrollComponent? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([payrollId])
+  @@index([componentId])
+  @@index([assignmentId])
+  @@index([createdAt])
+  @@map("payroll_component_lines")
 }
 
 model EmployeeLoan {
