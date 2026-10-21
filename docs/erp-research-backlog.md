@@ -5801,3 +5801,230 @@ accountant untuk UI ini: TIDAK (tidak ada angka baru; Q-KOM-1 terpisah).
   per penjual (F-2026-10-21-018 wilayahnya), slip/komisi perorangan
   untuk karyawan, jurnal/pembayaran komisi — ditolak/ditunda dengan
   alasan di §3/§5; bukan hilang, tercatat di sini.
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-038 PPh 4(2) final sewa tanah dan/atau bangunan ABSEN
+
+Catatan terbit (2026-10-22): vonis ini ditulis sebagai draf lokal
+02:25 WIB sebelum implementasi; implementasi BOT 3 PR #408 merged
+8645dc1d mendahuluinya. Substansi tidak berubah; rujukan akun pada
+putusan 2 dikoreksi ke final 210206 per vonis F-041 (PR #394 merged).
+Status kata "ABSEN" di bawah adalah kondisi saat vonis ditulis.
+
+Status: ABSEN (grep origin/main 2026-10-22). `src/lib/tax/withholding-certificate.ts`
+hanya mengenal PPh 4(2) konstruksi (`Pph42ConstructionObject`, tarif ikut
+kode 1,75/2,65/3,5/4/6%; tes `tax-verdicts.test.ts` hanya `28-409-01`);
+kata "sewa" nol di berkas itu. Seed `WITHHOLDING_TAX_TYPES`
+(`src/lib/setup/base-data.ts`) hanya PPH22/PPH23-JUAL/PPH23-BELI tertaut
+210202; komentar seed mengakui final "tetap dibuat manual". COA sudah
+punya 600019 Beban Sewa Gedung + 110502 Sewa Gedung Dibayar Dimuka —
+transaksinya nyata, perlakuan pajaknya belum.
+
+Dasar: PP No. 34 Tahun 2017 tentang Pajak Penghasilan atas Penghasilan
+dari Persewaan Tanah dan/atau Bangunan (JDIH BPK
+https://peraturan.bpk.go.id/Details/64693/pp-no-34-tahun-2017, diakses
+2026-10-22): persewaan tanah dan/atau bangunan terutang PPh Pasal 4 ayat
+(2) final 10% dari jumlah bruto. Final = bukan kredit pajak.
+
+Keputusan BOT 4:
+1. Jenis bawaan baru PPh 4(2) sewa: tarif 10% di master bertanggal
+   efektif, pasal snapshot `PPh4(2)`, kode objek WAJIB dipilih per
+   penerbitan bupot sesuai ketentuan DJP berlaku (tanpa kode = tolak,
+   pola `resolvePph42Rate`; JANGAN pinjam kode konstruksi 28-409-xx).
+2. Akun liabilitas terpisah dari 210202: akun baru Utang PPh Final
+   Sewa. Usulan awal kode 210205 DIGANTI vonis F-041 (PR #394 merged)
+   menjadi 210206 "Utang PPh 4(2) Sewa Tanah/Bangunan" (210205 tetap
+   Provisi Garansi F-021); akun kosong = fail-closed berisik, dilarang
+   fallback akun PPh 23. Sudah terimplementasi PR #408 merged 8645dc1d.
+3. Jurnal penyewa (kita memotong): terima tagihan Dr Beban Sewa/Cr
+   Utang Usaha bruto; bayar Dr Utang Usaha bruto / Cr Kas 90% / Cr
+   Utang PPh Final Sewa 10%; setor Dr Utang PPh Final Sewa / Cr Kas.
+   Sewa dibayar di muka tetap lewat 110502; potongan saat pembayaran.
+4. Jurnal pihak menyewakan (kita dipotong): pendapatan bruto penuh;
+   terima Dr Kas 90% + Dr Beban PPh Final 10% / Cr Piutang bruto.
+   DILARANG catat sebagai PPh dibayar di muka/kredit pajak.
+5. Snapshot beku: tarif/kode/DPP disalin ke bupot saat terbit; edit
+   master sesudah itu tidak mengubah bupot terbit (pola falsifikasi
+   F-003f yang sudah teruji).
+6. Cakupan: HANYA persewaan tanah dan/atau bangunan. Komponen jasa
+   pendamping dinilai terpisah; pengalihan hak tanah/bangunan (PP
+   34/2016) di luar vonis ini — `BUTUH-VONIS-AKUNTAN` bila dibangun.
+
+Falsifikasi wajib (BOT 6): bruto Rp100.000.000 → potong Rp10.000.000,
+kas neto Rp90.000.000; cabut penjaga kode-objek-wajib → MERAH; ganti
+resolver sewa ke tarif konstruksi → MERAH; edit tarif master sesudah
+bupot terbit → bupot tidak berubah.
+
+Pemilik berikutnya: BOT 3 (backend: seed jenis + resolver + tes),
+BOT 2 (UI sesudah kontrak stabil), BOT 6 (acceptance di atas). Artikel
+Feed: feed-2026-10-22-pph42-sewa-tanah-bangunan-gap.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-039 Komponen pendamping + sewa dibayar di muka PPh 4(2) final
+
+Status: PUTUSAN BOT 4, lanjutan non-duplikat F-038. F-038 telah putus tarif
+10%, jenis bawaan, kode objek wajib, akun liabilitas sewa, snapshot beku, dan
+"komponen jasa pendamping dinilai terpisah". F-039 ini memutus rincian kata
+"terpisah" itu (batas DPP final vs PPh 23), saat potong sewa dibayar di muka,
+peta pemotong, dan bukti/setor/lapor. Spec operasional BOT 5 t_64afcbb5 masih
+running saat vonis ini ditulis — vonis ini tidak menunggu spec itu dan tidak
+bertentangan dengan F-038; BOT 5 wajib menyesuaikan tabel operasionalnya ke
+peta di bawah, pertanyaan klasifikasinya yang menyentuh putusan 1-2 ditutup
+oleh vonis ini. Tanpa kode/schema/migrasi.
+
+Dasar resmi (semua diakses 2026-10-22):
+- PP No. 34/2017 Pasal 2-4 (berlaku 02-01-2018; JDIH BPK
+  https://peraturan.bpk.go.id/Details/64693/pp-no-34-tahun-2017 + teks PDF
+  JDIH Kemenkeu https://jdih.kemenkeu.go.id/api/download/fulltext/2017/34TAHUN2017PP.pdf):
+  PPh final 10% x jumlah bruto nilai persewaan; bruto = "semua jumlah yang
+  dibayarkan atau yang diakui sebagai utang oleh Penyewa dengan nama dan
+  dalam bentuk apapun yang berkaitan dengan tanah dan/atau Bangunan yang
+  disewa termasuk biaya perawatan, biaya pemeliharaan, biaya keamanan,
+  biaya layanan, dan biaya fasilitas lainnya, baik yang perjanjiannya dibuat
+  secara terpisah maupun yang disatukan" (Pasal 4 ayat (2)). Penjelasan
+  Pasal 4 ayat (2) memberi contoh resmi: sewa Rp200jt + service charge
+  (keamanan/kebersihan/perawatan, kewajiban pemilik gedung) Rp15jt ditagih
+  lewat pengelola -> dipotong final 10% x Rp215jt = Rp21,5jt oleh penyewa;
+  fee manajemen yang dibayar pemilik gedung ke pengelola = jasa manajemen,
+  kena rezim jasa (bukan final sewa).
+- PP 34/2017 Pasal 3: pemotong = badan pemerintah, subjek pajak badan
+  dalam negeri, penyelenggara kegiatan, BUT, kerja sama operasi, perwakilan
+  perusahaan luar negeri, dan orang pribadi WP dalam negeri yang DITUNJUK
+  DJP. Penyewa bukan pemotong -> penerima penghasilan setor sendiri.
+  Keduanya wajib setor + lapor. Halaman DJP "PPh Pasal 4 ayat (2)"
+  (https://pajak.go.id/id/pph-pasal-4-ayat-2): orang pribadi ditunjuk =
+  pekerjaan bebas tertentu (akuntan/arsitek/dokter/notaris/PPAT selain
+  Camat/pengacara/konsultan) + orang pribadi berusaha menyelenggarakan
+  pembukuan, terdaftar WP dalam negeri.
+- Saat terutang: pemotong wajib potong "saat pembayaran atau terutangnya
+  sewa (mana yang lebih dahulu)" — diringkas DJP/Kring Pajak, dikutip DDTC
+  (https://news.ddtc.co.id/berita/nasional/1802427/pph-final-sewa-tanahbangunan-dipotong-penyewa-begini-aturannya,
+  akses 2026-10-22). PP 34/2017 sendiri tidak memuat pasal saat-terutang
+  eksplisit selain definisi bruto "dibayarkan atau diakui sebagai utang";
+  BOT 4 memakai patokan DJP itu sebagai dasar build (label: interpretasi
+  administrasi DJP, bukan bunyi PP).
+- Bukti potong: PER-24/PJ/2021 Lampiran B memuat kode objek 28-403-02
+  "Persewaan tanah dan/atau bangunan" (PDF DJP
+  https://www.pajak.go.id/sites/default/files/Lampiran_PER-24_PJ_2021.pdf);
+  satu bupot = 1 pihak dipotong + 1 kode objek + 1 Masa Pajak. Sejak era
+  Coretax berlaku PER-11/PJ/2025 (berlaku 22-05-2025; PDF DJP
+  https://www.pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf)
+  — kode objek WAJIB dibaca dari lampiran peraturan DJP yang berlaku saat
+  implementasi, jangan hardcode dari vonis ini selain nilai referensi
+  28-403-02 di atas. KJS setor 411128-403 "PPh Final Pasal 4 ayat (2) atas
+  Persewaan Tanah dan/atau Bangunan" (DJPb Kemenkeu
+  https://djpb.kemenkeu.go.id/kppn/tapaktuan/id/informasi/perpajakan/pph-pasal-4-ayat-2.html).
+- Batas setor/lapor BERUBAH di era Coretax: PMK 81/2024 (berlaku 01-01-2025;
+  JDIH Kemenkeu https://jdih.kemenkeu.go.id/dok/pmk-81-tahun-2024) Pasal 94
+  ayat (2): pembayaran/penyetoran PPh Pasal 4 ayat (2) — dipotong MAUPUN
+  setor sendiri — paling lambat tanggal 15 bulan berikutnya sesudah Masa
+  Pajak berakhir (Pasal 100: jatuh tempo hari libur -> hari kerja
+  berikutnya). Ini MENGGANTIKAN rezim lama PMK 242/PMK.03/2014 (potong tgl
+  10 / sendiri tgl 15) yang masih tampil di halaman DJP/DJPb lama di atas —
+  halaman lama itu JANGAN dijadikan dasar tenggat build. Pelaporan SPT
+  Masa PPh Unifikasi tetap paling lama 20 hari sesudah Masa Pajak berakhir
+  (PER-24/PJ/2021 -> PER-11/PJ/2025). Sistem WAJIB menyimpan tenggat sebagai
+  master bertanggal efektif, bukan konstanta kode (prinsip BOT 4).
+
+Putusan 1 — komponen pendamping: IKUT 10% atau pisah PPh 23?
+Uji dua gerbang, urutan wajib:
+(a) Uji penerima + dasar kewajiban: komponen (perawatan, pemeliharaan,
+    keamanan, kebersihan, service charge, fasilitas) yang menjadi
+    kewajiban pemilik/pihak menyewakan untuk menyediakan tanah/bangunan
+    siap pakai, dan dibayar/diutang penyewa KEPADA pemilik (termasuk
+    ditagih/diteruskan lewat pengelola gedung sebagai penagih pemilik)
+    = masuk DPP PPh 4(2) final 10%, WALAU perjanjian/invoice terpisah.
+    Pemisahan dokumen TIDAK mengubah perlakuan (Pasal 4 ayat (2) eksplisit).
+(b) Komponen hanya keluar dari DPP final bila KEDUANYA terbukti: (i)
+    penerima sebenarnya pihak ketiga independen (bukan pemilik, bukan
+    penagih untuk pemilik), dan (ii) jasa itu bukan kewajiban pemilik
+    dalam persewaan (dipilih/dicontract penyewa sendiri, mis. jasa
+    keamanan khusus tenant, cleaning unit khusus, utilitas atas nama
+    tenant dibayar langsung ke PLN/pengelola sebagai penerima jasa).
+    Maka ikut rezim jasa PPh 23 2% dari jumlah bruto (UU PPh Pasal 23;
+    DJP https://pajak.go.id/id/pph-pasal-2326 — sewa/jasa yang sudah kena
+    PPh 4(2) dikecualikan dari PPh 23) dengan kode objek jasa terkait,
+    BUKAN kode sewa.
+(c) Satu tagihan tercampur tanpa rincian penerima/komponen yang dapat
+    dibuktikan = SELURUHNYA DPP final 10% (fail-closed ke final; memecah
+    tanpa bukti = tolak). Reimburse utilitas ke pemilik tanpa bukti pihak
+    ketiga = ikut 10%. Dilarang memilih tarif lebih rendah demi neto.
+Jurnal (ISF penyewa, bruto sebulan sewa 10.000.000 + service charge
+kewajiban pemilik 1.500.000): Dr Beban Sewa 10.000.000 + Dr Beban Service
+Charge 1.500.000 / Cr Utang Usaha 11.500.000; bayar: Dr Utang Usaha
+11.500.000 / Cr Kas 10.350.000 / Cr Utang PPh Final Sewa (210206 per
+vonis F-041, PR #394 merged) 1.150.000 (=10% x 11.500.000). Contoh angka: bruto 11.500.000 ->
+potong 1.150.000 -> neto kas 10.350.000.
+Bila komponen lolos gerbang (b): Dr Beban Jasa terkait / Cr Utang Usaha;
+bayar Dr Utang Usaha / Cr Kas 98% / Cr Utang PPh 23 (210202) 2%. Dua bupot
+terpisah (kode objek berbeda = bupot berbeda, PER-24/PJ/2021).
+
+Putusan 2 — sewa dibayar di muka multi-bulan: potong SEKALI di muka.
+Saat terutang = lebih dulu antara pembayaran dan pengakuan utang. Bayar
+12 bulan di muka = utang/pembayaran terjadi sekali atas seluruh nilai
+kontrak yang dibayar -> potong 10% SEKALUI atas total bruto yang dibayar,
+pada Masa Pajak pembayaran itu (bukan dicicil per bulan pemakaian).
+Amortisasi 110502 Sewa Dibayar Di Muka ke beban per bulan TANPA potongan
+lagi. Pembayaran termin berikutnya dipotong saat termin itu dibayar/
+terutang, atas nilai termin itu. Koreksi/refund sewa: pembetulan bupot +
+pembetulan SPT Masa masa asal (mekanisme PER-11/PJ/2025), jurnal reversal
+di periode terbuka, dilarang edit jurnal terposting (prinsip BOT 4).
+Jurnal ISF penyewa bayar 12 x 10.000.000 = 120.000.000 di muka: Dr Sewa
+Dibayar Di Muka (110502) 120.000.000 / Cr Kas 108.000.000 / Cr Utang PPh
+Final Sewa 12.000.000; bulanan: Dr Beban Sewa 10.000.000 / Cr 110502
+10.000.000 (nol pajak). Contoh: bruto 120.000.000 -> potong 12.000.000 ->
+neto 108.000.000.
+
+Putusan 3 — siapa memotong (peta fail-closed):
+- Penyewa badan dalam negeri / instansi pemerintah / BUT / KJO /
+  penyelenggara kegiatan / perwakilan LN / OP ditunjuk DJP (daftar DJP di
+  atas): WAJIB potong, terbitkan bupot ke pemilik, setor 411128-403,
+  lapor SPT Masa Unifikasi. ISF sebagai badan: selalu sisi ini saat menyewa.
+- Penyewa OP tidak ditunjuk / bukan subjek pajak: DILARANG sistem
+  menganggapnya pemotong; pemilik/pihak menyewakan setor sendiri 10%
+  (bukti setor-sendiri dicatat di daftar PPh disetor sendiri SPT Masa
+  Unifikasi penyewa-penerima, bukan bupot potong pihak lain).
+- Status pemotong adalah DATA PIHAK bertanggal (flag + dasar penunjukan),
+  bukan ditebak dari nama/jenis tampilan. Status tidak terverifikasi =
+  fail-closed berisik: transaksi sewa tidak boleh posting pajak sampai
+  status dipilih sadar. ISF menyewakan ke OP umum: jurnal terima Dr Kas
+  bruto penuh saat terima, lalu setor sendiri Dr Beban PPh Final / Cr Kas
+  10% (bukan kredit pajak, konsisten F-038 putusan 4); ISF menyewa: bila
+  counterpart mengklaim "sudah setor sendiri" padahal ISF pemotong =
+  klaim ditolak, ISF tetap potong (kewajiban melekat di pemotong).
+
+Putusan 4 — bukti potong + masa setor/lapor:
+- Bupot Unifikasi PPh 4(2) per pemilik per Masa Pajak per kode objek
+  (referensi 28-403-02), memuat snapshot beku F-038: identitas
+  NPWP/NIK + NITKU bila ada, DPP bruto (termasuk komponen putusan 1),
+  tarif 10%, PPh dipotong, dokumen dasar (kontrak/invoice/bukti bayar).
+  Bupot diserahkan ke pihak dipotong; pembetulan/pembatalan hanya lewat
+  dokumen pembetulan/pembatalan + SPT pembetulan, bukan edit senyap.
+- Masa Pajak bupot = masa saat terutang putusan 2 (pembayaran multi-bulan
+  = satu masa, satu bupot atas total termin itu).
+- Setor paling lambat tanggal 15 bulan berikutnya (PMK 81/2024 Pasal 94;
+  hari libur -> hari kerja berikutnya Pasal 100), lapor SPT Masa PPh
+  Unifikasi paling lama 20 hari sesudah Masa Pajak berakhir
+  (PER-11/PJ/2025). Tenggat disimpan di master efektif; UI menampilkan
+  snapshot tenggat dari backend, tidak hitung sendiri.
+
+Falsifikasi wajib BOT 6 (tiap skenario MERAH bila penjaga dilonggarkan):
+F39-1. Service charge kewajiban pemilik dipisah invoice lalu dipotong 2%
+  PPh 23 (resolver mengecualikan komponen "terpisah") -> MERAH: wajib
+  10% x (sewa+service charge), akun 210206, kode 28-403-02.
+F39-2. Sewa 12 bulan dibayar di muka dipotong dicicil 1.000.000/bulan
+  mengikuti amortisasi (potong ditunda ke masa pemakaian) -> MERAH:
+  wajib 12.000.000 penuh di Masa Pajak pembayaran, amortisasi nol pajak.
+F39-3. Penyewa OP tidak ditunjuk diperlakukan pemotong (sistem terbitkan
+  bupot atas namanya / pemilik lolos tanpa setor-sendiri) -> MERAH: wajib
+  jalur setor-sendiri pemilik + flag status pemotong terverifikasi.
+F39-4 (cadangan). Tenggat setor di-hardcode tanggal 10 rezim lama lolos
+  tes masa 2025+ -> MERAH: wajib tanggal 15 PMK 81/2024 dari master
+  bertanggal efektif.
+
+Pemilik berikutnya: BOT 5 sesuaikan spec t_64afcbb5 ke putusan 1-3 (tabel
+transaksi -> gerbang penerima/kewajiban -> rezim); BOT 3 implementasi
+sesudah F-038 (kolom rincian komponen + gerbang, resolver cicil-ditolak,
+flag status pemotong pihak, master tenggat efektif); BOT 2 tampilkan
+rincian DPP + snapshot tenggat backend apa adanya; BOT 6 acceptance
+F39-1..F39-3 (+F39-4 bila master tenggat dibangun).
