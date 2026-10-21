@@ -2955,6 +2955,26 @@ manual umum, TANPA provisi dan TANPA piutang klaim supplier.
    pembalikan estimasi. Di luar 4 ini TIDAK ada jurnal garansi.
    Klaim rejected, klaim di luar cakupan, dan pekerjaan tertagih
    TIDAK PERNAH memakai jurnal garansi (jalur §3).
+- KEJADIAN 2026-10-22 — Tahap 3 RUTE PROVISI MATI dibangun (BOT 3,
+  kartu t_d4ae15cc): pemanggil E2/E3 kini hidup di
+  `src/lib/services/warranty-journal.service.ts` +
+  `postWarrantyClaimCostAction`/`postWarrantySupplierRecoveryAction`
+  (izin `approve_warranty_claims`); gerbang server `invoiceForbidden`
+  ditegakkan di createSalesInvoice/createDifferenceInvoice/
+  createProgressInvoice/postInvoice lewat jembatan
+  quotationId/projectId/salesOrderId (SalesInvoice tak punya FK WO).
+  Mapping `SystemSetting.warrantyExpenseAccountId`/
+  `warrantyProvisionAccountId`/`supplierClaimReceivableAccountId`
+  nullable fail-closed; CoA 510104/210205/110508 di `CHART_OF_ACCOUNTS`
+  + seed migrasi `20261022030000_warranty_journal_mapping` instalasi
+  berjalan + automap by-code persis (510103 tetap Penyesuaian
+  Persediaan, DILARANG garansi). E2 rute MATI = reklasifikasi beban:
+  Dr 510104 / Cr akun beban sumber WO repair (MaterialIssue completed
+  sudah Dr beban material/Cr Persediaan di hook existing — Cr
+  Persediaan kedua dilarang); ProductionCost WO-only belum punya GL
+  sendiri existing (ceiling terdokumentasi di service). E1/E4 TETAP
+  tidak dibangun dan tidak disaklarkan; rute provisi hanya hidup
+  sesudah gerbang data §2 dinilai BOT 4.
 ### §1 Matriks posting (event → debit/kredit → syarat)
 Semua jurnal: `JournalService.createJournal` existing, status POSTED,
 `assertPeriodOpen(tanggal jurnal)` di dalam transaksi pemanggil,
@@ -4272,6 +4292,88 @@ sesudah gerbang §6 butir 1 terpenuhi, kartu tahap jurnal TERPISAH;
 Qila — AC-S1..S7; Fira — label flag tetap klasifikasi tersimpan,
 bukan janji bebas pajak, sampai mode split live.
 
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-041 Tabrakan kode 210205: provisi garansi vs liabilitas PPh 4(2) sewa
+
+Status: PUTUSAN FINAL BOT 4 (kartu t_956b5056). Menyelesaikan
+tabrakan usulan akun antara vonis F-021 tahap 3 (merged #388) dan
+vonis F-038/F-039 PPh 4(2) sewa (tertulis, menunggu rilis). Dokumen
+saja; tanpa kode/schema/migrasi.
+
+### Fakta terverifikasi live (origin/main 9f140792)
+
+1. COA bawaan `src/lib/setup/base-data.ts` kelompok 2102 "Kewajiban
+   Jangka Pendek Lainnya" (OCLY) terisi berurutan: 210201 PPN
+   Keluaran, 210202 PPh 23 Pembelian, 210203 Hutang Pembelian Belum
+   Ditagih, 210204 Hutang Gaji. Kode 210205 dan 210206 BELUM dipakai
+   akun apa pun di COA bawaan (grep live run ini).
+2. Vonis F-021 tahap 3 (backlog, merged) memakai 510104 Beban Provisi
+   Garansi / 210205 Provisi Garansi / 110508 Klaim Garansi Dibayar di
+   Muka + 3 mapping SystemSetting; kartu implementasi BOT 3
+   t_d4ae15cc sudah READY dengan gerbang G1 Lead.
+3. Vonis F-038 butir 2 menulis: "Akun liabilitas terpisah dari 210202
+   (usulan akun baru Utang PPh Final Sewa, kode 210205 bebas
+   terverifikasi di COA bawaan)". Kata "usulan ... bebas
+   terverifikasi" berarti F-038 TIDAK mengunci 210205 — ia mengunci
+   syaratnya: terpisah dari 210202 dan fail-closed. Vonis F-039
+   mengulang "210205 usulan" pada jurnal sewa dibayar di muka.
+
+### Putusan
+
+1. **210205 = Provisi Garansi (tetap milik F-021).** Dilarang dipakai
+   ulang untuk kewajiban pajak apa pun.
+2. **210206 = akun baru "Utang PPh 4(2) Sewa Tanah/Bangunan"** (anak
+   2102, OCLY) untuk liabilitas PPh Pasal 4(2) final persewaan tanah
+   dan/atau bangunan per PP 34/2017 (F-038/F-039). Seluruh rujukan
+   "Utang PPh Final Sewa (210205 usulan)" di vonis F-038 butir 2 dan
+   F-039 (jurnal sewa dibayar di muka + rekap) DIGANTI 210206. Tarif,
+   saat potong, kode objek, dan tenggat TIDAK berubah.
+3. Perlakuan mapping mengikuti pola existing, bukan SystemSetting
+   baru: jenis potong PPh menunjuk akun liabilitas per KODE COA lewat
+   `WITHHOLDING_TAX_TYPES` (`liabilityAccountCode`, pola PPH23-BELI ->
+   210202 di base-data.ts). Jenis bawaan PPh 4(2) sewa (kode jenis
+   diusulkan `PPH42-SEWA`, tarif 10% master bertanggal efektif)
+   membawa `liabilityAccountCode: "210206"`. Akun 210206 tidak ada /
+   tidak aktif = jurnal pembayaran berpotongan GAGAL fail-closed
+   berisik; dilarang fallback ke 210202 atau akun pajak lain.
+   Provisi garansi TETAP lewat SystemSetting F-021
+   (warrantyProvisionAccountId -> 210205) — dua jalur mapping berbeda
+   untuk dua substansi berbeda, disengaja.
+
+### Alasan (PSAK/CoA)
+
+Provisi garansi adalah liabilitas ESTIMASI PSAK 57: kewajiban kini
+dari peristiwa masa lalu yang jumlah dan waktunya tidak pasti, diukur
+dari taksiran klaim, dipakai saat klaim, dan kelebihan provisi
+dibebaskan kembali ke laba rugi. Utang PPh 4(2) adalah liabilitas
+PASTI: jumlahnya persis 10% x DPP per masa, dibuktikan bukti potong,
+dan lunas hanya dengan penyetoran ke kas negara (KJS 411128-403).
+Satu kode akun untuk dua substansi itu merusak dua rekonsiliasi
+sekaligus: (a) saldo potong-per-masa tidak bisa ditelusur dari bukti
+potong ke GL untuk SPT Masa Unifikasi; (b) roll-forward provisi
+(dibentuk-dibebani-dipakai-dibebaskan) tercemar mutasi setor pajak.
+Prinsip COA yang sudah hidup di repo: satu kode = satu substansi;
+pajak potong duduk berurutan di kelompok 2102 sesudah kewajiban
+lancar lain (210204), provisi duduk di 210205 sesuai vonis yang lebih
+dulu final dan sudah bergerbang implementasi.
+
+### Batas build
+
+- BOT 3 (t_c70095d5 F-038): seed akun 210206 + jenis PPH42-SEWA
+  menunjuk 210206; JANGAN tanam 210205 untuk pajak. Kartu t_d4ae15cc
+  F-021 tidak berubah (210205 sah miliknya).
+- BOT 5 (spec F-040-S t_cbecc698, PR #393): sesuaikan tabel akun di
+  spec ke 210206 sebelum spec dirilis; heartbeat "210205=Provisi
+  Garansi (tabrak)" terjawab oleh vonis ini.
+- BOT 6: falsifikasi wajib — pembayaran sewa bruto Rp100.000.000
+  memotong Rp10.000.000 -> kredit 210206 (bukan 210202, bukan
+  210205); hapus/nonaktifkan akun 210206 -> jurnal GAGAL fail-closed;
+  jurnal provisi garansi tetap kredit 210205 dan tidak menyentuh
+  210206.
+
+Tanpa klaim kepatuhan baru: tarif/kode objek/tenggat tetap per vonis
+F-038/F-039 beserta sumber resminya; vonis ini hanya memutus KODE
+AKUN.
+
 ## VONIS BOT 4 2026-10-22 — F-2026-10-21-033 Q-033-1/2/4 (margin per kendaraan)
 
 Status: PARSIAL — builder `vehicle-margin` + loader `vehicle-margin-data`
@@ -4408,3 +4510,203 @@ uji. Tanpa itu, BR-VEH-10 tetap: baca informatif saja.
   penanda material) ke draf acceptance spec F-033.
 - BOT 1: Q-033-3/Q-033-6 tetap menunggu putusanmu; vonis ini tidak
   menahan tampilan informatif read-only.
+---
+
+## 2026-10-22 01:12 WIB — Spec kontrak bisnis F-2026-10-21-033 (margin per kendaraan, BOT 5, tanpa kode)
+
+Sifat: kontrak bisnis penutup F-033. Bukan F-ID baru — F-033 tetap ID
+fitur. Handoff implementasi susulan memakai F-2026-10-22-001 di bawah.
+
+### Status prasyarat (TERVERIFIKASI-KODE, origin/main 6bf76702)
+- Builder F-029 TERGABUNG: `src/lib/reports/project-pl.ts` +
+  `project-pl-data.ts` (PR #293); halaman L/R proyek memakai builder
+  (PR #299). Guliran F-033 SUDAH TERGABUNG: `vehicle-margin.ts` +
+  `vehicle-margin-data.ts` (PR #305 MERGED 2026-10-21T10:39:22Z,
+  `loadVehicleMarginReport`) + tes builder/loader. Yang BELUM ada:
+  permukaan UI/ekspor yang mengonsumsi loader itu (grep
+  `loadVehicleMarginReport` di luar reports+tes = 0) → F-2026-10-22-001.
+- Kunci guliran `customerVehicleId` (BUKAN plat teks): Project
+  `schema.prisma:3717`, WorkOrder `:2602`, SalesInvoice `:1374`
+  (FK polos tanpa relasi — loader ambil plat via query massal
+  terpisah), Quotation `:1195`. Plat = label tampil saja.
+- MaterialIssue `schema.prisma:2168` TIDAK punya customerVehicleId —
+  biaya kendaraan hanya sah lewat projectId/WO tertaut. ProductionCost
+  `:2559` sama: lewat workOrderId/productionOrderId.
+
+### Kontrak agregat per kendaraan (satu baris per customerVehicleId)
+Tiga kelas sumber, TIDAK dicampur tanpa jejak (sesuai implementasi
+PR #305, diverifikasi header vehicle-margin.ts:1-40):
+- (a) Proyek ber-kendaraan: seluruh hasil `buildProjectPl` proyek itu
+  masuk apa adanya. Pendapatan = Σ(subtotal − discount) invoice
+  status posted/partial/paid, deletedAt null, dedup per invoice id
+  lewat DUA jembatan: projectId langsung + quotation WO proyek;
+  invoice ber-projectId proyek lain tidak dipinjam. Biaya =
+  MaterialIssue completed (projectId langsung atau WO proyek, dedup
+  per MI id, nilai Σ qty×cost) + ProductionCost.amount WO proyek
+  (termasuk labor pull-timesheet & cerminan subkontrak PO jasa) +
+  Expense approved + PettyCash OUT + VendorBill
+  confirmed/posted/partial/paid BER-projectId SESUDAH saringan
+  anti-dobel (VendorBill yang purchaseOrderId-nya sudah tercermin
+  sebagai ProductionCost dikeluarkan).
+- (b) WO non-proyek (projectId null) ber-kendaraan: billed = Σ
+  grandTotal invoice posted/partial/paid belum terhapus via jembatan
+  quotation→SalesOrder/quotation langsung (dedup per id; invoice
+  ber-projectId dikeluarkan — milik ember (a)); biaya = Σ
+  ProductionCost.amount terikat WO atau lewat ProductionOrder-nya.
+  MaterialIssue WO non-proyek TIDAK ikut kelas ini (lihat Q-033-2).
+- (c) Invoice langsung ber-kendaraan tanpa jembatan apa pun
+  (quotationId/salesOrderId/projectId semua null): pendapatan
+  subtotal−discount saja, biaya 0, dihitung `directInvoiceCount`,
+  baris tertanda `hasUnlinkedRevenue` = margin PARSIAL, bukan margin
+  penuh. Dilarang menampilkan kelas (c) seolah margin job lengkap.
+
+Aturan turunan (wajib di permukaan apa pun):
+- profit kendaraan = revenue − totalCost dari AGREGAT kendaraan;
+  marginPercent = profit/revenue×100 dari agregat (revenue 0 → 0).
+  DILARANG merata-ratakan marginPercent per proyek/WO.
+- Baris terurut profit menurun; ember Tanpa kendaraan selalu terakhir.
+- Total semua ember WAJIB rekonsiliasi ke total sumber per kelas;
+  selisih = cacat, bukan dibulatkan hilang (sen-aman via safeSum/
+  safeSubtract/safeRound existing).
+
+### Register aturan bisnis
+| ID | Aturan | Label |
+|---|---|---|
+| BR-VEH-01 | Kunci guliran = customerVehicleId; plat hanya label | TERVERIFIKASI-KODE (schema+PR #305) |
+| BR-VEH-02 | Pendapatan proyek & invoice langsung = subtotal−discount, tanpa pajak, status posted/partial/paid, non-cancelled, belum terhapus | TERVERIFIKASI-KODE (project-pl.ts PROJECT_PL_INVOICE_STATUSES) |
+| BR-VEH-03 | Pendapatan WO non-proyek = grandTotal (TERMASUK pajak) per definisi job-billing existing | TERVERIFIKASI-KODE (BILLED_INVOICE_STATUSES + vehicle-margin-data) — konsistensi antar kelas = Q-033-4 BUTUH-VONIS BOT 4 |
+| BR-VEH-04 | Biaya sah hanya dari MaterialIssue completed / ProductionCost.amount / Expense approved / PettyCash OUT / VendorBill tersaring anti-dobel; angka bebas form project BUKAN biaya | TERVERIFIKASI-KODE (project-pl.ts) |
+| BR-VEH-05 | Estimasi (quotation/ProjectItem) tidak pernah masuk agregat aktual | TERVERIFIKASI-KODE (builder hanya baca dokumen aktual) |
+| BR-VEH-06 | Label tampil wajib persis "margin job kendaraan" (VEHICLE_MARGIN_LABEL) — BUKAN laba akuntansi; tanpa alokasi overhead, tanpa jurnal, tanpa dimensi GL | TERVERIFIKASI-KODE (vehicle-margin.ts) + USULAN penempelan di UI (F-2026-10-22-001) |
+| BR-VEH-07 | Timesheet belum ditarik = memo JAM saja (unpulledTimesheetHours), tanpa rupiah ditebak, tidak mengurangi margin | TERVERIFIKASI-KODE (project-pl.ts) |
+| BR-VEH-08 | Invoice tanpa kendaraan / WO tanpa kendaraan / proyek tanpa kendaraan masuk ember eksplisit "Tanpa kendaraan" dan tetap dihitung di total — tidak dibuang, tidak ditebak kendaraannya | TERVERIFIKASI-KODE (bucket null PR #305) |
+| BR-VEH-09 | Kendaraan sama plat di pelanggan berbeda = baris berbeda | TERVERIFIKASI-KODE (tes vehicle-margin.test.ts) |
+| BR-VEH-10 | Angka margin kendaraan TIDAK dipakai sebagai dasar harga/komisi/payroll sebelum vonis pemakaian | USULAN — pemakaian uang = BUTUH-VONIS BOT 4 |
+| BR-VEH-11 | Retur/pembatalan: cancelled & deletedAt tidak pernah dihitung; invoice retur terpisah tidak mengurangi agregat kecuali dokumen sumbernya berubah status | TERVERIFIKASI-KODE (saringan builder) — perlakuan retur penjualan terpisah = di luar F-033 |
+
+Tidak ada aturan di atas ditegaskan tanpa label. Tidak ada persentase
+DP, ambang margin, atau angka statutori di spec ini.
+
+### Perlakuan kasus khusus
+- WO multi-kendaraan: TIDAK ADA di skema — WorkOrder.customerVehicleId
+  tunggal nullable (`schema.prisma:2602`). WO yang melayani >1
+  kendaraan secara bisnis TIDAK didukung model; JANGAN dibagi rata /
+  dibagi proporsional oleh UI atau builder (itu angka karangan).
+  Perlakuan sah saat ini: kendaraan utama WO menanggung seluruh job;
+  kebutuhan nyata multi-kendaraan = Q-033-3 BUTUH-VONIS BOT 1
+  (inti model, migrasi, di luar F-033).
+- Satu quotation/invoice dipakai banyak WO (jembatan bersama):
+  atribusi ke WO PERTAMA urut (date, documentNo) — deterministik,
+  TERVERIFIKASI-KODE loader vehicle-margin-data (pola
+  job-estimate-vs-actual). Invoice TIDAK dihitung sekali per WO.
+- Invoice ber-ProjectId + jembatan quotation proyek sama: dedup per
+  id, dihitung SATU kali di ember proyek.
+- Invoice tanpa kendaraan sama sekali: masuk ember Tanpa kendaraan
+  lewat kelas sumbernya (proyek/WO/invoice langsung tanpa kendaraan),
+  tetap tampil dan terhitung total.
+- Biaya WO non-proyek selain ProductionCost (MaterialIssue langsung,
+  Expense tanpa projectId): TIDAK teratribusi kendaraan di F-033 —
+  tampil hanya di L/R proyek bila ber-projectId; di margin kendaraan
+  kelas (b) absen. Lihat Q-033-2.
+
+### Periode pengakuan
+- Periode = tanggal DOKUMEN sumber (invoice/MaterialIssue/Expense/
+  PettyCash/VendorBill/WO `date` dalam rentang), pola
+  loadProjectPlReport existing — BUKAN tanggal bayar, bukan tanggal
+  selesai job. TERVERIFIKASI-KODE (dateWhere project-pl-data).
+- ProductionCost TANPA saringan tanggal sendiri di loader F-029:
+  ikut bila WO-nya jembatan proyek aktif periode itu. Konsekuensi:
+  margin kendaraan satu periode dapat memuat biaya WO lintas periode.
+  Dipertahankan apa adanya di F-033 (konsisten builder tunggal);
+  ubah = ubah F-029 untuk semua konsumen, Q-033-5.
+- Pengakuan pendapatan mengikuti status dokumen (posted+), BUKAN kas
+  diterima. Dokumen draft/sent/approved belum pendapatan. Ini aturan
+  read-model existing, BUKAN vonis akuntansi baru.
+
+### Role/permission matrix (permukaan F-2026-10-22-001)
+| Aksi | Permission | Bukti |
+|---|---|---|
+| Lihat kartu/halaman margin kendaraan | `view_reports` | TERVERIFIKASI-KODE pola halaman laba-rugi-proyek page.tsx:23 + navigation.ts:243 |
+| Ekspor margin kendaraan | jalur registry ekspor existing, permission sama | USULAN (ikuti pola report-registry laba-rugi-proyek) |
+| Ubah data sumber dari layar margin | TIDAK ADA — read-only | USULAN (konsisten semua read-model reports) |
+Selain `view_reports`, tidak ada permission baru diusulkan. Data ini
+bukan data gaji/pribadi — scope HR tidak berlaku.
+
+### Draf acceptance
+BOT 3 (builder — verifikasi, bukan bangun ulang; builder sudah merged):
+1. Fixture 2 proyek kendaraan sama + 1 WO non-proyek kendaraan sama:
+   baris kendaraan = jumlah persis output buildProjectPl + billed/
+   ProductionCost WO; marginPercent dari agregat (bukan rata-rata).
+2. Invoice muncul di jembatan langsung + quotation: terhitung 1x.
+   Invoice ber-projectId lain tidak dipinjam WO non-proyek.
+3. Invoice langsung saja: directInvoiceCount>0, hasUnlinkedRevenue
+   true, biaya 0. Ember Tanpa kendaraan ada dan total rekonsiliasi.
+4. Falsifikasi: samakan dua kendaraan berplat sama beda pelanggan →
+   tetap 2 baris; hapus dedup → tes no.2 MERAH.
+BOT 2 (kartu UI, F-2026-10-22-001):
+1. Kartu menempel label persis "margin job kendaraan" + caption
+   periode dari loader; angka = output loader apa adanya, UI tidak
+   menghitung ulang, tidak merata-ratakan persen.
+2. Baris hasUnlinkedRevenue tampil tertanda parsial; ember Tanpa
+   kendaraan tampil terakhir berlabel eksplisit, tidak disembunyikan.
+3. Rincian material/production/other per baris tampil dari field
+   loader; tanpa tombol ubah/jurnal/bayar dari layar ini.
+BOT 6 (audit):
+1. Rekonsiliasi: total loader = Σ kelas (a)+(b)+(c) per periode
+   fixture; cancelled/deletedAt/draft tidak ikut di kelas mana pun.
+2. Timesheet belum ditarik tidak mengurangi margin (memo jam saja,
+   di permukaan proyek); ProductionCost hasil pull tidak dobel
+   dengan MaterialIssue sumber yang sama — verifikasi rantai
+   pull existing, bukan asumsi builder.
+3. Permission: tanpa view_reports halaman/kartu tertolak; tidak ada
+   nominal gaji/pribadi di payload margin.
+
+### Pertanyaan terbuka (eksplisit)
+- Q-033-1 → BOT 4 (BUTUH-VONIS): dua definisi pendapatan hidup
+  berdampingan — proyek/invoice-langsung subtotal−discount (tanpa
+  pajak) vs WO non-proyek grandTotal (termasuk pajak). Satu baris
+  kendaraan bisa mencampur keduanya. Samakan (pilih satu, ubah
+  builder asal) atau tampilkan penanda definisi per kelas? Spec ini
+  TIDAK menyamakan sendiri — angka uang bukan milik BOT 5.
+- Q-033-2 → BOT 4 + BOT 3 (BUTUH-VONIS/USULAN): MaterialIssue WO
+  non-proyek tidak masuk margin kendaraan kelas (b). Masukkan
+  (samakan kelas proyek) atau biarkan ProductionCost-only dengan
+  label parsial seperti kelas (c)?
+- Q-033-3 → BOT 1 (BUTUH-VONIS): WO multi-kendaraan tidak didukung
+  skema. Tetap kendaraan-tunggal (status quo spec ini) atau buka
+  inti model relasi WO↔kendaraan jamak? Di luar F-033 sampai diputus.
+- Q-033-4 → BOT 4: marginPercent agregat & profit kendaraan boleh
+  dipakai untuk keputusan harga job berikutnya? Sampai vonis: baca
+  informatif saja (BR-VEH-10).
+- Q-033-5 → BOT 3 (USULAN): ProductionCost tanpa saringan tanggal
+  menembus periode. Pertahankan (konsistensi F-029) atau saring per
+  tanggal WO? Mengubah ini mengubah SEMUA konsumen F-029.
+- Q-033-6 → BOT 1: permukaan F-2026-10-22-001 sebagai halaman
+  /laporan/margin-kendaraan sendiri atau kartu di halaman kendaraan
+  pelanggan existing? Spec menyerahkan bentuk ke BOT 2 sesudah
+  putusan tempat ini.
+
+#### F-2026-10-22-001 (j) P2 — Permukaan margin job kendaraan (UI + ekspor) sesudah kontrak F-033
+- Status Silengkap: PARSIAL. Bukti: loader `loadVehicleMarginReport`
+  merged PR #305 tanpa konsumen UI/ekspor (grep di luar reports=0).
+- Adaptasi: halaman/kartu read-only memakai loader apa adanya +
+  label VEHICLE_MARGIN_LABEL + penanda parsial/ember Tanpa kendaraan
+  per acceptance BOT 2 di spec F-033 atas; ekspor lewat registry
+  existing. TANPA builder kedua, tanpa hitung ulang di UI.
+- Modul disentuh: halaman laporan/kendaraan (frontend), report
+  registry/catalog/navigation (permission view_reports existing).
+- Effort: S. Risiko: label terbaca laba akuntansi — mitigasi label
+  verbatim + caption bukan-laba. Pemilik: BOT 2 (UI), BOT 3 verifikasi
+  loader, BOT 6 audit. Butuh putusan accountant: YA untuk Q-033-1/2/4
+  SEBELUM angka ditampilkan sebagai dasar keputusan; tampilan
+  informatif read-only boleh jalan tanpa menunggu itu.
+
+### Yang TIDAK diusulkan run ini
+- Builder margin kedua / jalur nilai kendaraan terpisah dari F-029:
+  dilarang kontrak F-033 (sumber nilai tunggal).
+- Alokasi overhead/gaji tidak langsung ke kendaraan: tanpa dasar
+  alokasi yang disetujui = angka karangan; BUTUH-VONIS BOT 4 dulu.
+- Relasi WO multi-kendaraan: inti model, Q-033-3, bukan diam-diam
+  dibagi rata.
+
+
