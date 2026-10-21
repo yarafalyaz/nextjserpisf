@@ -2494,6 +2494,7 @@ Fokus berikutnya: implementasi F-035 (backend), spec F-036
 (sales/business), builder F-037 (backend) — lihat child kanban run ini.
 Rotasi berikutnya sesudah (k) dibuka hanya bila domain baru terbukti
 belum punya F-ID; jangan duplikasi F-90..94/035..037.
+---
 
 
 ---
@@ -2765,3 +2766,437 @@ HANDOFF:
   posting.
 - BOT 2 (Fira): tidak ada pekerjaan UI dari vonis ini sampai
   kontrak inti ada.
+
+---
+
+## 2026-10-22 01:33 WIB — Domain (d) penjualan: SPEC F-2026-10-21-018 harga bertingkat kuantitas
+
+Spec saja, tanpa kode. Target penjualan TIDAK dibahas di bagian ini
+(ditunda sadar sampai F-2026-10-21-016 atribusi sales dipakai; jangan
+spec-kan target di follow-up kartu ini).
+
+Benchmark resmi (akses 2026-10-22):
+- Accurate: harga grosir berubah OTOMATIS berdasar kuantitas; contoh
+  harga normal Rp200.000, "Untuk Kts Diatas" 10 -> qty 15 memakai
+  Rp180.000/pcs, qty <= 10 tetap Rp200.000/pcs:
+  https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/menerapkan-harga-grosir-penjualan/
+- Accurate POS: harga grosir per kategori pelanggan + syarat kuantitas
+  ("Untuk kts di atas" 8 -> Rp80.000/pcs), bila kategori pelanggan sudah
+  terpasang pada transaksi:
+  https://help.accurate.id/product/accurate-pos/pengaturan-aplikasi/pesanan-baru/tambah-harga-grosir/
+- Zahir: Multi Price memisahkan harga per golongan pelanggan (distributor/
+  agen/pengecer/pembeli akhir); Multi Discount menyebut acuan diskon
+  bertingkat = golongan pelanggan + jumlah barang dibeli:
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+  + https://help.zahironline.com/portal/id/kb/articles/penerapan-multi-price-dengan-satuan-ukuran-yang-berbeda
+
+Catatan benchmark: kedua vendor memisahkan (a) golongan/kategori pelanggan
+dan (b) syarat kuantitas. Di Accurate contohnya EKSKLUSIF tegas
+(> 10, bukan >= 10). Di Silengkap, minQty VendorItemPrice sudah punya
+pola inklusif existing (schema:493-513, unique [vendorId, itemId, minQty];
+default 1.00). Dua semantik yang berbeda itu JANGAN dicampur — lihat
+BR-TIER-01 di bawah.
+
+### Inventarisasi terverifikasi (2026-10-22, basis HEAD 8ff0c7a9)
+
+Sudah ada:
+- `CustomerPriceList` (schema:515-534): customerCategoryId? (null = semua
+  kategori), itemId, price, effectiveDate?, notes, isActive, @@unique
+  [customerCategoryId, itemId, effectiveDate]. TANPA minQty/min_quantity.
+- `VendorItemPrice` (schema:493-513): minQty Decimal(15,2) default 1.00,
+  @@unique [vendorId, itemId, minQty]. INI pola skema yang dirujuk backlog
+  untuk ditiru di CustomerPriceList.
+- Service tahap 1 `customer-price-list.service.ts:1-14`: eksplisit
+  "Tahap 1 hanya daftar harga per kategori pelanggan dan/atau per item +
+  tanggal efektif, diterapkan saat baris dibuat. Tanpa PricingRule umum,
+  tanpa aturan qty/promo."; `:56-109` pickPriceListPrice tanpa qty;
+  `:174-199` priceDocumentLines per baris.
+- Vonis akuntansi yang SUDAH mengikat lapis ini (`service.ts:1-16`):
+  (1) price-list hanya memotong harga jual dan diterapkan SEBELUM
+  subtotal -> taxAmount (DPP PPN ikut turun); (2) prioritas: price-list
+  menjadi unitPrice, diskon MANUAL BARIS menimpa di atasnya (manual
+  menang), cap diskon 100% nilai baris; (3) jual di bawah HPP = peringatan
+  lunak, TIDAK memblokir jurnal.
+- Jalur masuk yang LIVE (`sales.actions.ts:48-67` applyPriceListLines,
+  `:1406-1412` createSalesInvoice): resolver diterapkan ke baris invoice
+  langsung dari form (`!v.salesOrderId`) SAJA. Baris konversi SO
+  mempertahankan harga SO. `updateSalesInvoice` (sales.actions.ts:2315+)
+  TIDAK memanggil applyPriceListLines — cocok dengan komentar
+  `sales.actions.ts:41-46` "diterapkan hanya saat baris dibuat".
+- Baris dokumen: QuotationItem (schema:1241-1260), SalesOrderItem
+  (schema:1343-1357), SalesInvoiceItem (schema:1460-1476), SalesReturnItem
+  (schema:1555-1581) — TIDAK ADA satu pun yang menyimpan sumber harga
+  (priceListPriceId / tier minQty / fromPriceList). `fromPriceList`
+  hanya ada di tipe hasil service (`service.ts:33-44`) dan di tes.
+- Retur live: createSalesReturn (`sales.actions.ts:1688-1725`)
+  resolvePrice = unitPrice faktur asal (invoicePriceMap dari
+  SalesInvoiceItem.unitPrice) -> fallback Item.price -> fallback cost.
+  Harga retur DIBEKUKAN dari faktur asal, BUKAN di-resolve ulang dari
+  price-list. Snapshot pajak (return-snapshot.ts:39-55):
+  returnDpp = qty x price beku (safeRound sen), returnVat = DPP x tarif
+  efektif faktur asal; guard kumulatif keras di accounting.hook.ts:1246-1293.
+- Permission katalog (module-catalog.generated.ts:140-170):
+  customer_price_lists view/create/edit/delete saja (tanpa approve);
+  sales_invoices view/create/edit/delete/approve/post; sales_orders
+  view/create/edit/delete/approve; sales_returns view/create/edit/delete.
+- Halaman kelola daftar harga pelanggan BELUM ADA: grep
+  CustomerPriceList|harga-pelanggan di src/app = 0 hasil; REVALIDATE
+  "/penjualan/harga-pelanggan" (customer-price-list.actions.ts:14)
+  menunjuk route yang belum ada. UI kelola = tahap UI yang sudah dicatat
+  backlog (F-PRICELIST-01 tahap 2); kartu ini TIDAK membuat kartu UI baru
+  untuk kelola daftar harga, hanya menambah requirement sumber harga
+  pada baris invoice bila kolom sumber harga benar-benar ditambah.
+
+Belum ada / parsial (bukti grep run ini):
+- minQty di CustomerPriceList: ABSEN (schema:515-534).
+- Resolusi qty-aware: ABSEN (pickPriceListPrice tanpa parameter qty).
+- Sumber harga persist di baris dokumen: ABSEN (schema baris di atas).
+- Target penjualan: ABSEN sadar, TIDAK di-spec di sini (lihat
+  "Yang TIDAK diusulkan").
+
+#### F-2026-10-21-018 (d) P2 — Spesifikasi aturan harga jual bertingkat kuantitas
+
+Status item: PARSIAL (lapis kategori+tanggal tahap 1 sudah live; lapis
+kuantitas belum). Bagian ini MENETAPKAN aturan bisnis supaya BOT 3 bisa
+implementasi tanpa menebak aturan tingkat. Target penjualan DITUNDA
+sadar — bukan bagian spec ini (lihat "Yang TIDAK diusulkan").
+
+##### Business rules register (label bukti wajib dibaca)
+
+| ID | Aturan | Status | Bukti / sumber |
+|---|---|---|---|
+| BR-TIER-01 | `minQty` INKLUSIF: baris tingkat berlaku bila `qtyBaris >= minQty`. Batas tegas: qty tepat = minQty MEMAKAI harga tingkat itu; qty di bawahnya TIDAK. | USULAN (pola existing `VendorItemPrice.minQty` `schema:493-513`, default 1.00) — MENOLAK semantik Accurate "> 10" supaya dua model tier (beli/jual) di repo ini punya satu semantik batas yang sama; dua semantik berbeda dalam satu codebase = sumber bug operator. Bukan putusan accountant. Lihat Q1. | schema:493-513; Accurate help URL di atas |
+| BR-TIER-02 | Pemenang tingkat: di antara baris yang MEMENUHI (qty >= minQty), yang menang = minQty TERBESAR yang masih terpenuhi ("tingkat tertinggi yang memenuhi"). Bukan minQty terkecil, bukan harga terendah/termurah. | USULAN. Pola "maks yang lolos" = satu-satunya yang membuat tabel tingkat monotonic bila operator mengisi tingkat dari murah->mahal; pemenang "termurah" akan selalu memilih diskon terbesar dan membuat tingkat menengah tak pernah terpakai. Lihat Q2. | `service.ts:56-76` pola sort pemenang existing (kategori spesifik > umum, tanggal terbaru) diperluas |
+| BR-TIER-03 | Urutan pemenang PENUH (per baris, deterministik, tidak bergantung urutan array/createdAt selain tanggal efektif): (1) cocok itemId; (2) isActive; (3) effectiveDate <= tanggal dokumen (null = selalu berlaku) — dipertahankan dari tahap 1; (4) qty >= minQty (null minQty diperlakukan sebagai 1); (5) kategori spesifik (customerCategoryId = kategori pelanggan) menang atas kategori umum (null); (6) minQty terbesar; (7) effectiveDate terbaru; (8) TIDAK ada tie-break ke-4 lain: bila masih ada dua baris setara penuh (kategori sama + minQty sama + effectiveDate sama), itu ERROR DATA, bukan pilihan diam-diam: unique constraint [customerCategoryId, itemId, effectiveDate] diganti [customerCategoryId, itemId, minQty, effectiveDate] dan action menolak duplikat (kategori, item, minQty, tanggal efektif) dengan pesan menyebut penyebabnya, pola existing `customer-price-list.actions.ts:44-53` dan `vendor-price.actions.ts:40-49`. | USULAN (perluasan deterministik dari `service.ts:56-76`). Tie-break implisit createdAt/urutan DB DILARANG: hasil harga tidak boleh berubah karena urutan fetch. | service.ts:56-76; schema:529; actions :44-53 |
+| BR-TIER-04 | `minQty` diukur dari QTY SATU BARIS dokumen, BUKAN gabungan qty beberapa baris item yang sama dalam satu dokumen. Dua baris item sama 6 + 6 TIDAK menjadi 12 untuk memicu tingkat >= 10. | USULAN kuat (lihat Q3). Alasan: (a) SalesInvoiceItem/SalesOrderItem adalah baris independen (bisa beda gudang/serial/uom/diskon manual); menggabungkan memaksa aturan penggabungan kedua yang belum diatur (diskon baris mana yang dipakai?); (b) grid UI mengedit baris satu per satu — harga baris akan berubah saat baris LAIN diubah, membingungkan operator; (c) pola existing `resolveLinePricing({qty})` dan `priceDocumentLines` per baris (service.ts:174-199). Bila suatu hari fleet order butuh agregat, itu fitur terpisah dengan aturan gabung sendiri, bukan perubahan diam-diam resolver ini. | service.ts:174-199; schema baris :1343-1476 |
+| BR-TIER-05 | Qty yang dibandingkan = qty BARIS DALAM SATUAN DOKUMEN (uom baris), BUKAN qty hasil konversi ke satuan dasar. SalesInvoiceItem.uom (schema:1460-1476) — dokumen boleh bertransaksi dalam satuan alternatif (uom.service.ts:5-42: stok selalu satuan dasar; 1 BOX = 12 PCS). Membandingkan qty dokumen apa adanya = "10 BOX" memicu tingkat >= 10 walau isi 120 PCS, dan "9 PCS" tidak memicu tingkat >= 10 walau 9 PCS < 10 PCS: konsisten DENGAN YANG DILIHAT OPERATOR di baris. Konversi ke base UoM untuk ambang harga adalah Q4 terbuka (membutuhkan owner putus: ambang harga adalah aturan komersial terhadap angka yang diketik operator, atau aturan fisik terhadap isi?). DEFAULT spec ini: qty dokumen apa adanya, tanpa konversi. | USULAN + BUTUH-VONIS pemilik proses (team-lead), BUKAN accountant. | uom.service.ts:5-42; schema:1460-1476 |
+| BR-TIER-06 | Satuan tingkat (`minQty` Decimal(15,2), schema pola VendorItemPrice) dibandingkan apa adanya terhadap qty Decimal(15,2) baris, TANPA pembulatan ke bilangan bulat. qty 9,99 TIDAK memicu minQty 10; qty 9,995 juga tidak (tidak ada round-half-up ke 10). Presisi Decimal(15,2) kedua sisi = perbandingan eksak 2 desimal. | USULAN. Pembulatan diam-diam (floor/ceil/round) DILARANG: qty pecahan sah di repo ini (SalesReturnItem.qty Math.max(0.01,...), uom pecahan). | schema:493-513; schema:1460-1476 |
+| BR-TIER-07 | Harga manual TIDAK mengalahkan harga tingkat sebagai unitPrice. Merujuk vonis tahap 1 yang sudah mengikat (service.ts:1-16): price-list MENJADI unitPrice baris; yang mengalahkan adalah DISKON MANUAL BARIS (rupiah per baris), ditumpuk DI ATAS harga tingkat, cap 100% nilai baris. Jika operator mengetik "harga final" langsung di unitPrice form pada invoice langsung (createSalesInvoice), nilai itu adalah `itemPrice` fallback yang dipakai HANYA bila tidak ada baris price-list berlaku — bukan override. Konsekuensi jujur yang wajib diterima sadar: operator TIDAK bisa mengetik unitPrice bebas untuk kabur dari harga tingkat lewat form biasa; jalan keluar resmi = diskon baris (terlihat sebagai diskon, bukan harga satuan sulap). Itu disengaja: harga tingkat yang bisa ditimpa diam-diam lewat ketik unitPrice bukan harga tingkat, melainkan saran. | TERVERIFIKASI-KODE untuk perilaku tahap 1 (service.ts:1-16, sales.actions.ts:48-67,1406-1412); USULAN bahwa perilaku sama dipertahankan untuk tingkat. Lihat Q5 bila pemilik proses mau override unitPrice eksplisit. | service.ts:1-16; sales.actions.ts:48-67,1406-1412 |
+| BR-TIER-08 | Resolusi tingkat BERLAKU HANYA pada titik yang sama dengan tahap 1: baris invoice LANGSUNG dari form (createSalesInvoice tanpa salesOrderId). Baris hasil konversi (quotation -> SO -> invoice) mempertahankan harga dokumen sumber dan TIDAK di-resolve ulang terhadap qty invoice. Alasan: (a) harga konversi adalah harga yang sudah disetujui pelanggan di dokumen sumber; me-resolve ulang diam-diam mengubah total terhadap persetujuan; (b) pola existing `sales.actions.ts:1406-1412` + komentar `:41-46`; (c) change-order/nilai berjalan sudah punya jalur sendiri (F-2026-10-20-103), resolver ini TIDAK menjadi jalur nilai kedua. `updateSalesInvoice` TIDAK menjalankan resolver (mempertahankan perilaku live: harga baris hasil edit adalah harga final baris; qty berubah lewat edit TIDAK memicu tingkat baru sampai/dibatalkan). Qty berubah di editor baris pada invoice yang BELUM terbit: karena updateSalesInvoice tidak me-resolve, perubahan qty lewat edit TIDAK mengubah tingkat — operator yang mau tingkat mengikuti qty baru harus membuat baris/dokumen baru ATAU BOT 3 memutuskan menambah resolusi ke updateSalesInvoice SEBELUM posting dengan penjagaan wasPosted yang sudah ada (sales.actions.ts:2354,2464-2475 reverse+repost). Keputusan terakhir itu di luar spec ini (lihat Q6). | TERVERIFIKASI-KODE (titik live) + USULAN (mempertahankan titik sama). | sales.actions.ts:41-67,1406-1412,2315-2490 |
+| BR-TIER-09 | Sumber harga yang terpilih WAJIB tertampil/tercatat di baris invoice bila BOT 3 menambah kolom persist (usulan kolom: `priceSource` String? + `priceListId` Int? + `priceListMinQty` Decimal? di SalesInvoiceItem — NAMA KOLOM usulan, BOT 3 yang menetapkan akhir mengikuti konvensi schema). Nilai priceSource minimal: `price_list_tier` (baris tingkat menang, minQty > 1), `price_list_base` (price-list menang minQty <= 1 / tanpa tingkat), `item_master` (fallback Item.price), `manual_discount` BUKAN nilai priceSource (diskon ditumpuk, bukan sumber harga satuan). Bila kolom persist tidak ditambah pada migrasi yang sama, maka SEMENTARA (sampai kartu UI): resolver mengembalikan metadata sumber di hasil service (perluasan ResolvedLinePricing) dan BOT 2 menampilkan label hasil RESOLUSI LIVE untuk baris yang sedang diedit (bukan klaim historis). DILARANG menampilkan label "harga tingkat >= 10" untuk baris historis yang harganya tidak disimpan sumbernya — itu klaim tanpa bukti. Migrasi kolom persist = keputusan BOT 3/lead (lihat Q7); mitigasi backlog "tampilkan sumber harga terpilih di baris invoice" hanya terpenuhi PENUH bila persist, terpenuhi SEBAGIAN (baris baru saja) bila hanya live. | USULAN (mitigasi eksplisit backlog F-018: "tampilkan sumber harga terpilih di baris invoice"). | schema:1460-1476 (sumber ABSEN); service.ts:33-44 |
+| BR-TIER-10 | Retur memakai HARGA FAKTUR ASAL yang sudah ter-beku di SalesInvoiceItem.unitPrice, BUKAN resolusi ulang terhadap qty retur, BUKAN resolusi ulang terhadap qty sisa sesudah retur parsial. Retur 3 dari invoice qty 10 harga tingkat Rp88.000 = kredit 3 x Rp88.000, walau 3 < minQty 10. Menghitung ulang tingkat dari qty retur (harga dasar Rp100.000) akan mengkredit pelanggan LEBIH dari yang pernah ditagih per unit (selisih Rp12.000/unit = kebocoran). Menghitung ulang dari qty sisa (10 - 3 = 7 -> harga dasar) dan menagih ulang selisih tingkat atas 7 unit yang TIDAK diretur DILARANG di spec ini: itu penyesuaian harga retroaktif yang membutuhkan dokumen penyesuaian/change-order sendiri dengan persetujuan pelanggan — BUKAN efek samping retur. Snapshot pajak retur tetap pola existing (return-snapshot.ts:39-55): returnDpp = qtyRetur x price beku faktur; guard kumulatif DPP/PPN terhadap faktur asal tetap jalan. | TERVERIFIKASI-KODE (createSalesReturn sales.actions.ts:1688-1725; snapshot return-snapshot.ts:39-55; guard accounting.hook.ts:1246-1293) + USULAN eksplisit menolak lookup ulang. | sales.actions.ts:1688-1725; return-snapshot.ts:39-55 |
+| BR-TIER-11 | Retur TANPA faktur asal (salesInvoiceId kosong — pola existing membolehkan, RETURNABLE_INVOICE_STATUSES hanya menjegal bila invoiceId terisi, sales.actions.ts:1690-1702): harga retur = fallback existing Item.price -> cost (resolvePrice :1724-1725), TIDAK menjalankan resolver tingkat (tidak ada pelanggan/dokumen asal untuk konteks kategori+tanggal). Jangan tambahkan resolver tingkat ke jalur ini. | TERVERIFIKASI-KODE + USULAN mempertahankan. | sales.actions.ts:1690-1725 |
+| BR-TIER-12 | Harga tingkat BUKAN harga yang monoton wajib: sistem TIDAK menolak baris tingkat yang harganya LEBIH MAHAL dari tingkat di bawahnya (minQty 20 harga Rp110.000 di atas minQty 1 Rp100.000). Resolver tetap memilih minQty terbesar yang terpenuhi walau lebih mahal. Alasan: (a) urutan harga adalah keputusan komersial (bisa ada alasan: kemasan besar lebih mahal per unit karena handling); (b) menolak = menambah validasi bisnis yang belum diminta pemilik proses; (c) mitigasi salah ketik cukup dari tampilan sumber harga (BR-TIER-09) + operator melihat unitPrice hasil. Peringatan lunak "tingkat lebih tinggi tapi harga lebih mahal dari tingkat bawahnya" BOLEH ditambah BOT 3 sebagai warning non-blocking di action kelola daftar harga; BUKAN gerbang simpan. | USULAN. | - |
+| BR-TIER-13 | Diskon header/dokumen (subtotal -> discount -> DPP -> PPN, sales.actions.ts:1426-1429 pola existing) berada DI LUAR resolver tingkat: tingkat mengubah unitPrice baris; diskon header tetap diterapkan sesudah subtotal baris seperti existing, sebelum pajak. Resolver tingkat TIDAK mengubah urutan diskon-sebelum-pajak vonis tahap 1 (service.ts:1-16). Tidak ada diskon persen per tingkat di spec ini (itu fitur promo terpisah, di luar cakupan). | TERVERIFIKASI-KODE + USULAN mempertahankan. | sales.actions.ts:1426-1429; service.ts:1-16 |
+| BR-TIER-14 | Item tanpa baris price-list sama sekali (atau semua baris nonaktif/belum efektif): perilaku fallback tahap 1 PERTAHANKAN persis — pakai Item.price (resolver mengembalikan null -> itemPrice fallback, service.ts:87-108); tidak ada error, tidak ada blokir. `minQty` null pada baris lama (pra-migrasi) diperlakukan sebagai 1 (pola VendorItemPrice default 1.00). Baris dengan minQty <= 0 di data = data rusak: schema validasi action menolak minQty <= 0 (pola vendorPriceSchema.minQty positive, purchase.schemas.ts:183-190); service memperlakukan minQty <= 0 sebagai tidak memenuhi syarat (lihat Q8 — dua pilihan: clamp ke 1 atau baris dilewati; spec merekomendasikan DILEWATI + baris dianggap tidak berlaku, karena clamp diam-diam mengubah makna data rusak menjadi harga dasar). | TERVERIFIKASI-KODE (fallback) + USULAN (penanganan data rusak). | service.ts:87-108; purchase.schemas.ts:183-190 |
+
+Penjelasan semantik batas (BR-TIER-01) untuk operator:
+"Untuk Kts Diatas 10" versi Accurate = eksklusif (qty 10 TETAP harga
+normal, qty 11 baru grosir). Spec ini memilih INKLUSIF gaya
+VendorItemPrice: minQty 10 berarti qty 10 SUDAH harga tingkat. Alasan
+satu kalimat: repo ini sudah punya satu model tier inklusif di sisi
+pembelian; menambah model eksklusif kedua hanya untuk sisi penjualan
+membuat operator menghafal dua makna batas untuk konsep yang sama.
+Bila pemilik proses ternyata ingin perilaku Accurate persis, itu
+perubahan SATU baris perbandingan (`>=` -> `>`) — tapi harus DIPUTUSKAN
+sebelum implementasi, bukan sesudah data tingkat terisi (mengubah
+semantik sesudah data ada menggeser harga transaksi borderline secara
+retroaktif).
+
+Scope dokumen yang di-resolve (ringkasan BR-TIER-08):
+- createSalesInvoice baris form LANGSUNG (tanpa salesOrderId): YA,
+  resolver tingkat jalan (perluasan titik live existing).
+- createSalesInvoice DARI SO (salesOrderId terisi): TIDAK.
+- Quotation / SalesOrder create & edit: TIDAK (harga dokumen sumber
+  dipertahankan; menambah resolusi ke quotation = keputusan terpisah
+  karena quotation adalah dokumen persetujuan pelanggan — lihat Q6).
+- updateSalesInvoice: TIDAK (perilaku live dipertahankan; lihat Q6).
+- SalesReturn: TIDAK PERNAH (harga beku faktur asal, BR-TIER-10/11).
+
+##### Workflow specification
+
+Aktor:
+- Admin penjualan / admin master data: kelola baris CustomerPriceList
+  (kategori?, item, minQty, price, effectiveDate?) via action existing
+  yang diperluas (customer-price-list.actions.ts).
+- Operator penjualan (kasir/admin faktur): buat invoice langsung dari
+  form; sistem me-resolve harga tingkat per baris dari (customer,
+  tanggal dokumen, qty baris). Operator mengetik diskon baris manual
+  bila ada persetujuan diskon (ditumpuk di atas harga tingkat).
+- Pelanggan: menerima invoice dengan unitPrice hasil tingkat; bukan
+  aktor sistem.
+- BOT 4 (accountant): TIDAK dilibatkan (backlog: "Butuh putusan
+  accountant: TIDAK") — selama urutan diskon-sebelum-pajak tahap 1
+  (service.ts:1-16) dipertahankan persis. Bila implementasi menyentuh
+  urutan pajak atau membulatkan DPP per tingkat, STOP dan minta vonis
+  BOT 4 dulu.
+
+Dokumen masuk:
+- Baris CustomerPriceList (master; satu baris = satu tingkat untuk satu
+  pasangan kategori?/item pada satu effectiveDate).
+- Item master (Item.price fallback, Item.cost untuk peringatan margin
+  lunak existing).
+- Customer (customerCategoryId dibaca server dari Customer, BUKAN
+  dipercaya dari form — pola existing loadPriceListRows :116-172).
+
+Dokumen keluar:
+- SalesInvoice + SalesInvoiceItem dengan unitPrice hasil resolusi
+  (total baris = qty x unitPrice tingkat - diskon baris, cap diskon
+  100%, tidak negatif — pola resolveLinePricing :85-109).
+- (Bila kolom persist ditambah) metadata sumber harga per baris
+  invoice untuk ditampilkan BOT 2.
+- SalesReturn + SalesReturnItem dengan price = unitPrice beku faktur
+  asal (BUKAN hasil resolver).
+
+Alur utama:
+1. Admin membuat baris tingkat: mis. (kategori null, item A, minQty 1,
+   Rp100.000), (null, A, 5, Rp95.000), (null, A, 10, Rp88.000).
+2. Operator membuat invoice langsung, pelanggan kategori umum, tanggal
+   dokumen T, baris item A qty 10.
+3. Resolver memilih kandidat: itemId cocok, aktif, effectiveDate <= T,
+   qty 10 >= minQty -> {1,5,10} lolos; 20/100 tidak. Pemenang kategori:
+   semua null (setara); minQty terbesar = 10 -> unitPrice Rp88.000.
+4. Diskon baris manual Rp50.000 ditumpuk: total baris
+   10 x 88.000 - 50.000 = Rp830.000. Diskon SEBELUM pajak.
+5. Invoice tersimpan dengan unitPrice Rp88.000 (dan, bila persist,
+   sumber = price_list_tier minQty 10).
+6. Retur 3 unit atas invoice itu: harga retur Rp88.000/unit =
+   kredit DPP Rp264.000 (BUKAN harga tingkat qty 3).
+
+##### Role / permission matrix (permission key nyata)
+
+| Aksi | Permission key | Catatan |
+|---|---|---|
+| Lihat daftar harga pelanggan | `view_customer_price_lists` | module-catalog:141 |
+| Buat baris tingkat | `create_customer_price_lists` | module-catalog:142; validasi minQty ditambah di schema yang sama |
+| Ubah baris tingkat | `edit_customer_price_lists` | module-catalog:143 |
+| Hapus baris tingkat | `delete_customer_price_lists` | module-catalog:144 |
+| Buat invoice (resolusi jalan) | `create_sales_invoices` | module-catalog:146; resolver server-side, operator tidak memilih tingkat manual |
+| Ubah invoice | `edit_sales_invoices` | module-catalog:147; TIDAK me-resolve (BR-TIER-08) |
+| Posting invoice | `post_sales_invoices` | module-catalog:150; jurnal membaca angka baris final apa adanya |
+| Buat retur | `create_sales_returns` | module-catalog:167; harga beku faktur asal |
+| Lihat sumber harga di baris | `view_sales_invoices` | module-catalog:145; label sumber mengikuti hak lihat invoice, TIDAK ada permission baru |
+
+Tidak ada permission approve khusus tingkat: kelola daftar harga
+adalah master data (pola VendorItemPrice sama: create/edit/delete
+tanpa approve). Menambah gerbang approve untuk daftar harga = di luar
+spec ini (lihat Q9).
+
+##### Status-transition matrix
+
+Tidak ada status dokumen baru. Resolver TIDAK mengubah status
+apa pun; ia hanya menentukan unitPrice saat baris invoice dibuat.
+
+| Dokumen | Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|---|
+| SalesInvoice | (belum ada) | createSalesInvoice form langsung | draft | `create_sales_invoices`; resolver tingkat per baris |
+| SalesInvoice | (belum ada) | createSalesInvoice dari SO | draft | `create_sales_invoices`; harga SO dipertahankan, tanpa resolver |
+| SalesInvoice | draft (existing) | updateSalesInvoice ubah qty/unitPrice | status tidak berubah (existing) | `edit_sales_invoices`; TANPA resolusi tingkat; gerbang wasPosted + settlement existing tetap |
+| SalesInvoice | draft | posting (existing) | posted (existing) | `post_sales_invoices`; angka baris final apa adanya |
+| SalesReturn | (belum ada) | createSalesReturn | draft | `create_sales_returns`; harga beku faktur asal |
+| CustomerPriceList | aktif | deleteCustomerPriceList / isActive=false | terhapus/nonaktif | `delete/edit_customer_price_lists`; baris nonaktif dilewati resolver |
+
+Transisi lain (approve/post/partial/paid/cancelled invoice) TIDAK
+disentuh spec ini dan mengikuti perilaku existing persis.
+
+##### Feature matrix (benchmark resmi, akses 2026-10-22)
+
+| Fitur | Accurate | Zahir | ISF (Silengkap) sesudah spec ini |
+|---|---|---|---|
+| Syarat kuantitas otomatis | Ya — "Untuk Kts Diatas 10" EKSKLUSIF, harga berubah otomatis di transaksi (help.accurate.id menerapkan-harga-grosir) | Multi Discount: acuan golongan + jumlah barang (help.zahironline.com fasilitas-yang) | USULAN: `CustomerPriceList.minQty` INKLUSIF `qty >= minQty` (BR-TIER-01) — beda semantik batas dari Accurate, disengaja, pola VendorItemPrice existing |
+| Per kategori/golongan pelanggan | Ya — kategori penjualan per pelanggan (help.accurate.id Accurate POS tambah-harga-grosir) | Ya — Multi Price per golongan (fasilitas-yang + penerapan-multi-price) | Sudah live tahap 1 (customerCategoryId null = semua) + dipertahankan (BR-TIER-03 langkah 5) |
+| Per tanggal efektif | Ya — "Mulai Berlaku" (help.accurate.id menerapkan-harga-grosir) | (tidak ditegaskan di URL benchmark) | Sudah live tahap 1 (effectiveDate <= tanggal dokumen) + dipertahankan |
+| Sumber harga tampil di baris | Tidak ditegaskan di help benchmark | Tidak ditegaskan di help benchmark | USULAN persist/live label (BR-TIER-09) — mitigasi risiko backlog, BUKAN klaim paritas vendor |
+| Retur pada harga transaksi asal | Tidak dibahas di URL benchmark | Tidak dibahas di URL benchmark | TERVERIFIKASI-KODE: harga beku faktur asal (BR-TIER-10) |
+| Target penjualan per sales | Ada (disebut backlog F-018) | Ada (disebut backlog F-018) | DITUNDA SADAR — bukan spec ini |
+
+URL benchmark persis:
+- https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/menerapkan-harga-grosir-penjualan/
+- https://help.accurate.id/product/accurate-pos/pengaturan-aplikasi/pesanan-baru/tambah-harga-grosir/
+- https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+- https://help.zahironline.com/portal/id/kb/articles/penerapan-multi-price-dengan-satuan-ukuran-yang-berbeda
+
+##### Contoh angka terukur (wajib dipakai tes; PPN ilustrasi 11% mengikuti pola tes existing service.ts:90-99)
+
+Master tingkat contoh (item A, kategori pelanggan: umum/null kecuali disebut lain; Item.price contoh Rp100.000; Item.cost contoh Rp80.000; tanggal dokumen 2026-10-22; semua baris effectiveDate null, aktif):
+
+| Baris | customerCategoryId | minQty | price |
+|---|---|---|---|
+| T1 | null | 1 | Rp100.000 |
+| T5 | null | 5 | Rp95.000 |
+| T10 | null | 10 | Rp88.000 |
+| T20 | null | 20 | Rp85.000 |
+| T100 | null | 100 | Rp83.000 |
+
+Hasil resolusi yang WAJIB (harga satuan = per unit; total = qty x unitPrice; DPP = total - diskon baris; PPN = round(DPP x 11%); grand = DPP + PPN bila dokumen hanya baris ini, tanpa diskon header):
+
+| Kasus | Input baris | UnitPrice terpilih | Total baris (DPP sebelum diskon header) | PPN 11% | Grand |
+|---|---|---|---|---|---|
+| A1 batas bawah | qty 1 | Rp100.000 (T1) | Rp100.000 | Rp11.000 | Rp111.000 |
+| A2 di bawah tingkat 5 | qty 4,99 | Rp100.000 (T1) | Rp499.000 | Rp54.890 | Rp553.890 |
+| A3 tepat batas inklusif | qty 5 | Rp95.000 (T5) | Rp475.000 | Rp52.250 | Rp527.250 |
+| A4 pecahan tak dibulatkan | qty 9,99 | Rp95.000 (T5) | Rp949.050 | Rp104.396 (949.050 x 11% = 104.395,5 -> round 104.396) | Rp1.053.446 |
+| A5 tepat batas 10 | qty 10 | Rp88.000 (T10) | Rp880.000 | Rp96.800 | Rp976.800 |
+| A6 tengah tingkat | qty 15 | Rp88.000 (T10) | Rp1.320.000 | Rp145.200 | Rp1.465.200 |
+| A7 tingkat 20 | qty 20 | Rp85.000 (T20) | Rp1.700.000 | Rp187.000 | Rp1.887.000 |
+| A8 tingkat tertinggi | qty 150 | Rp83.000 (T100) | Rp12.450.000 | Rp1.369.500 | Rp13.819.500 |
+| A9 diskon manual di atas tingkat | qty 10, diskon baris Rp50.000 | Rp88.000 (T10) | gross Rp880.000; total sesudah diskon Rp830.000 | Rp91.300 (atas DPP Rp830.000) | Rp921.300 |
+| A10 diskon cap 100% | qty 10, diskon baris Rp999.999.999 | Rp88.000 (T10) | total Rp0 | Rp0 | Rp0 |
+| A11 kategori spesifik menang | qty 10; ada baris (kategori 7, minQty 1, Rp90.000); pelanggan kategori 7 | Rp90.000 (kategori 7, walau minQty-nya 1 < 10) | Rp900.000 | Rp99.000 | Rp999.000 |
+| A12 kategori spesifik + tingkatnya sendiri | qty 10; ada baris (kategori 7, minQty 10, Rp87.000) DAN (null, minQty 10, Rp88.000); pelanggan kategori 7 | Rp87.000 — kategori spesifik disaring DULU (langkah 5), baru minQty terbesar di dalam kelompok itu | Rp870.000 | Rp95.700 | Rp965.700 |
+| A13 pelanggan tanpa kategori cocok | qty 10; hanya baris (kategori 7, minQty 10, Rp87.000) + T1/T5/T10 umum; pelanggan kategori 9 | Rp88.000 (T10 umum) — baris kategori 7 TIDAK bocor ke kategori lain | Rp880.000 | Rp96.800 | Rp976.800 |
+| A14 dua baris pisah tak digabung | dua baris item A qty 6 + qty 6 dalam satu invoice langsung | KEDUA baris Rp95.000 (T5) — TIDAK menjadi tingkat 10 | per baris Rp570.000; subtotal baris Rp1.140.000 | (per dokumen existing) | — |
+| A15 tanggal efektif | qty 10; baris T10 effectiveDate 2026-11-01; tanggal dokumen 2026-10-22 | baris T10 BELUM berlaku -> pemenang berikutnya yang memenuhi (T5 bila ada) Rp95.000 | Rp950.000 | Rp104.500 | Rp1.054.500 |
+| A16 retur parsial | invoice A5 (qty 10 @ Rp88.000); retur qty 3 | harga retur Rp88.000/unit (beku) | kredit DPP retur Rp264.000 | PPN retur pola snapshot existing (tarif efektif faktur asal): Rp29.040 pada ilustrasi 11% | — |
+| A17 retur penuh | invoice A5; retur qty 10 | Rp88.000/unit | kredit DPP Rp880.000 (= DPP baris asal persis) | Rp96.800 pola snapshot | — |
+| A18 di bawah HPP (peringatan lunak) | qty 10, Item.cost Rp90.000 | Rp88.000 (T10) | Rp880.000 < 10 x 90.000 -> belowCost = true, TIDAK diblokir | — | — |
+
+Catatan pembulatan: angka PPN di atas mengikuti pola tes existing
+(`Math.round(DPP x 11/100)`, service test :90-99) dan pola
+`snapshotReturnLine` untuk retur (safeRound 2 desimal lalu tarif
+efektif faktur asal — return-snapshot.ts:39-55; pada invoice satu baris
+tanpa diskon header, tarif efektif = 11% persis sehingga A16/A17
+eksak). Implementasi WAJIB memakai helper uang existing (safeMultiply/
+safeSubtract/safeRound) dan BUKAN aritmetika float mentah baru; bila
+hasil BOT 3 beda sen dari tabel karena jalur pembulatan existing yang
+sah, tabel ini yang disesuaikan ke helper existing — BUKAN sebaliknya
+dibuat jalur pembulatan kedua.
+
+Catatan A11/A12 adalah konsekuensi BR-TIER-03 yang disengaja dan
+paling mudah salah paham: kekhususan kategori MENANG atas kedalaman
+tingkat. Pelanggan kategori 7 dengan baris kategori-nya sendiri
+(minQty 1, Rp90.000) TIDAK mendapat harga umum tingkat 10 (Rp88.000)
+yang lebih murah. Itu meneruskan semantik tahap 1 yang sudah live
+(kategori spesifik > umum, service.ts:56-76). Bila pemilik proses
+menginginkan "ambil yang termurah antara kelompok kategori dan umum",
+itu mengubah BR-TIER-03 langkah 5-6 menjadi perbandingan lintas
+kelompok — keputusan bisnis terpisah (Q2), JANGAN diubah diam-diam
+saat implementasi karena membuat hasil A11/A12 berbalik.
+
+##### Acceptance criteria + edge cases (draf untuk kartu lanjutan)
+
+Untuk BOT 3 (implementasi backend; pemilik: backend-prisma-inventory-workshop):
+- AC-B3-1 Migrasi: tambah `minQty Decimal @default(1.00) @db.Decimal(15,2)`
+  ke CustomerPriceList; unique menjadi
+  [customerCategoryId, itemId, minQty, effectiveDate]; baris lama
+  terbaca sebagai minQty 1 (tanpa backfill manual). Constraint MySQL
+  NULL-di-unique ditangani pola existing (cek aplikasi di action,
+  customer-price-list.actions.ts:29-32 komentar) — duplikat
+  (kategori null, item, minQty, tanggal) ditolak di action.
+- AC-B3-2 Validasi: customerPriceListSchema (price-list.schemas.ts)
+  menerima minQty pola vendorPriceSchema (purchase.schemas.ts:183-190):
+  parse angka locale sadar (BUKAN z.coerce.number mentah untuk string
+  "1.000"), > 0, plafon menjaga Decimal(15,2). create/update action
+  menyimpan minQty; pesan duplikat menyebut (kategori, barang, minQty,
+  tanggal efektif).
+- AC-B3-3 Service: perluas PriceListRow + pickPriceListPrice (atau
+  fungsi qty-aware baru) dengan parameter qty mengikuti urutan pemenang
+  BR-TIER-03 persis; `priceDocumentLines`/`applyPriceListLines`
+  meneruskan qty baris. Tes unit WAJIB mereproduksi tabel A1-A18 di
+  atas (termasuk A11/A12 kategori-dulu, A14 tanpa agregasi, A15
+  tanggal). Falsifikasi: kembalikan perbandingan `>=` ke `>` -> A3/A5
+  harus MERAH; tukar urutan kategori/minQty -> A11/A12 harus MERAH.
+- AC-B3-4 Titik sambung: HANYA applyPriceListLines jalur createSalesInvoice
+  langsung (sales.actions.ts:48-67,1406-1412) yang berubah perilaku.
+  Jalur SO/quotation/updateSalesInvoice/retur TIDAK berubah (tes
+  regresi existing F-PRICELIST-01 di sales.actions.test.ts:1116-1164
+  tetap hijau; baris konversi SO tetap harga SO).
+- AC-B3-5 Pajak/jurnal: tidak ada perubahan urutan diskon-sebelum-pajak;
+  tes ekuivalensi jurnal existing (price-list-journal-equivalence)
+  tetap hijau. Bila implementasi merasa perlu menyentuh urutan pajak:
+  STOP, vonis BOT 4 dulu.
+- AC-B3-6 (kondisional, hanya bila lead menyetujui kolom persist di
+  Q7) Kolom sumber harga di SalesInvoiceItem + resolver menulisnya;
+  nilai mengikuti kosakata BR-TIER-09. Bila tidak disetujui, AC ini
+  gugur dan BOT 2 hanya menampilkan resolusi live (lihat AC-B2-2).
+- AC-B3-7 Data rusak: baris minQty <= 0 / nonaktif / effectiveDate masa
+  depan dilewati resolver (BUKAN clamp, BUKAN error dokumen). Tes:
+  baris rusak tidak pernah terpilih walau satu-satunya baris.
+
+Untuk BOT 2 (frontend; pemilik: frontend-ui-ux-next-js) — HANYA sesudah
+kontrak BOT 3 jelas (kolom persist atau metadata live diputus di Q7):
+- AC-B2-1 Form kelola daftar harga (route /penjualan/harga-pelanggan
+  yang sudah dirujuk REVALIDATE): field minQty tampil dengan label
+  satuan item; daftar baris terurut (kategori, item, minQty naik,
+  effectiveDate). Mengikuti pola form harga pemasok existing
+  (pembelian/harga-pemasok) sebisa mungkin.
+- AC-B2-2 Baris invoice: tampilkan sumber harga terpilih mengikuti
+  BR-TIER-09. Bila persist: label historis dari kolom
+  ("Harga tingkat >= 10 — Daftar Harga" / "Harga daftar" /
+  "Harga master"). Bila hanya live: label hanya untuk baris yang
+  sedang dibuat/diedit, TANPA klaim historis untuk baris lama. Diskon
+  baris manual tetap tampil sebagai diskon terpisah (bukan mengganti
+  label sumber). E2E/selector yang disentuh dicek sebelum commit UI
+  (konvensi repo: ubah label/aria bisa memecah E2E walau lokal hijau).
+- AC-B2-3 Peringatan belowCost existing (peringatan lunak) tetap
+  tampil tidak menghalangi simpan; JANGAN diubah jadi blokir.
+
+Untuk BOT 6 (QA/audit; pemilik: qa-security-reporting-release-auditor):
+- AC-B6-1 Skenario batas: qty = minQty - 0,01 / = minQty / = minQty +
+  0,01 pada dua tingkat berurutan; semantik inklusif terbukti dari
+  hasil unitPrice tersimpan, bukan dari label UI.
+- AC-B6-2 Skenario kategori: A11/A12/A13 direproduksi di jalur
+  createSalesInvoice nyata (bukan hanya unit service): kategori
+  spesifik menang atas tingkat umum walau lebih mahal (A11).
+- AC-B6-3 Skenario retur: retur parsial dan penuh atas invoice tingkat
+  mengkredit harga beku faktur asal (A16/A17); guard kumulatif
+  DPP/PPN existing tetap menolak retur berlebih; TIDAK ada penagihan
+  ulang selisih tingkat atas qty sisa.
+- AC-B6-4 Skenario negatif: form yang ditempel (bypass UI) dengan
+  duplikat (kategori, item, minQty, tanggal) ditolak server; baris
+  minQty <= 0 tidak bisa lahir lewat action; invoice dari SO tidak
+  berubah harga walau qty-nya memenuhi tingkat baru.
+- AC-B6-5 Ekuivalensi uang: invoice tingkat + diskon manual + PPN
+  menghasilkan subtotal/taxAmount/grandTotal identik dengan invoice
+  manual berharga final sama (memperluas pola price-list-journal-equivalence).
+- AC-B6-6 Izin: role tanpa create_customer_price_lists tidak bisa
+  membuat baris tingkat lewat pemanggilan action langsung; label
+  sumber harga tidak membocorkan harga kategori LAIN ke pengguna yang
+  hanya boleh melihat invoice pelanggan ini (sumber tampil = sumber
+  baris ITU, bukan daftar kandidat).
+
+Pertanyaan terbuka tersisa (eksplisit; tidak menghambat penulisan spec,
+menghambat implementasi pada butir terkait saja):
+- Q1 (pemilik proses/team-lead) Semantik batas: inklusif `>=` spec ini
+  vs eksklusif `>` gaya Accurate. Rekomendasi: inklusif (konsistensi
+  VendorItemPrice). WAJIB diputus sebelum migrasi data tingkat diisi.
+- Q2 (pemilik proses) Pemenang lintas kelompok: kategori-dulu-lalu-tingkat
+  (spec, A11 merugikan pelanggan kategori yang baris umumnya lebih
+  murah) vs termurah-lintas-kelompok. Rekomendasi: pertahankan
+  kategori-dulu (konsistensi tahap 1 live). Berdampak ke AC-B3-3/A11/A12.
+- Q3 (pemilik proses) Agregasi qty lintas baris item sama: spec
+  MENOLAK (BR-TIER-04). Konfirmasi bahwa tidak ada pelanggan fleet yang
+  membelah baris sengaja (beda serial/gudang) mengharapkan gabungan.
+- Q4 (pemilik proses/team-lead) Ambang tingkat terhadap qty dokumen
+  (satuan baris) vs qty satuan dasar hasil konversi UoM. Default spec:
+  qty dokumen. Berdampak hanya untuk item multi-satuan.
+- Q5 (pemilik proses) Override unitPrice manual penuh di atas tingkat:
+  spec MENOLAK (hanya diskon baris yang menimpa, BR-TIER-07). Bila
+  bisnis butuh pengecualian harga per transaksi, itu membutuhkan pola
+  persetujuan harga (approval) terpisah, bukan ketik bebas.
+- Q6 (team-lead + BOT 3) Titik resolusi tambahan di masa depan:
+  quotation dan updateSalesInvoice. Spec mempertahankan TIDAK untuk
+  keduanya. Menambahkannya mengubah makna dokumen persetujuan/edit —
+  keputusan terpisah, bukan perluasan diam-diam.
+- Q7 (lead-architect + BOT 3) Kolom persist sumber harga di
+  SalesInvoiceItem (migrasi + kosakata BR-TIER-09) vs metadata live
+  saja. Menentukan apakah AC-B3-6 dan label historis AC-B2-2 berlaku.
+  Rekomendasi: persist — tanpa itu mitigasi backlog "tampilkan sumber
+  harga" tidak terpenuhi untuk baris historis dan audit BOT 6 (AC-B6-1)
+  hanya bisa membaca unitPrice, bukan sumbernya.
+- Q8 (BOT 3) Perlakuan minQty <= 0 di data legacy/rusak: spec
+  merekomendasikan baris dilewati resolver. Konfirmasi tidak ada data
+  produksi dengan minQty non-positif yang bergantung pada clamp.
+- Q9 (pemilik proses) Gerbang approve untuk perubahan daftar harga:
+  spec tidak menambah. Bila daftar harga dianggap data sensitif
+  setara harga persetujuan, perlu workflow approve tersendiri.
+
+Yang TIDAK diusulkan run ini:
+- Target penjualan per sales/periode: DITUNDA SADAR sampai
+  F-2026-10-21-016 atribusi sales dipakai (per backlog F-018 dan
+  perintah kartu ini). Jangan buat model SalesTarget dari spec ini.
+- Aturan promo/diskon persen bertumpuk per tingkat, buy-X-get-Y,
+  harga per pelanggan individual (di luar kategori), harga per gudang/
+  wilayah: tidak ada bukti kebutuhan bengkel saat ini; CustomerPriceList
+  per kategori + minQty menutup kasus grosir/fleet yang dirujuk backlog.
+- Resolusi tingkat di quotation/SO/update invoice/retur: ditolak
+  sadar di BR-TIER-08/10 (dokumen persetujuan dan dokumen beku tidak
+  di-resolve ulang).
+- Jalur override harga bebas oleh operator: ditolak di BR-TIER-07/Q5.
+
+Pemilik implementasi: backend (@backend-prisma-inventory-workshop)
+untuk AC-B3-*; frontend (@frontend-ui-ux-next-js) untuk AC-B2-*
+sesudah Q7 diputus; QA (@qa-security-reporting-release-auditor)
+untuk AC-B6-*. Butuh putusan accountant: TIDAK (selama AC-B3-5
+dijaga). Butuh putusan team-lead/pemilik proses: Q1, Q2, Q4, Q5, Q6,
+Q7, Q9 (di atas).
