@@ -53,6 +53,8 @@ export const PERMISSIONS = [
       "view_tax_payments",
       "create_tax_payments",
       "delete_tax_payments",
+      "create_tax_invoices",
+      "manage_withholding_certificates",
       "view_invoice_exchanges",
       "create_invoice_exchanges",
       "delete_invoice_exchanges",

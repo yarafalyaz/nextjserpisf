@@ -94,6 +94,8 @@ const RESOURCES = [
   ["vendor_bills", "purchase", "Tagihan Vendor"],
   ["vendor_payments", "purchase", "Pembayaran Vendor"],
   ["tax_payments", "finance", "Penyetoran Pajak"],
+  ["tax_invoices", "finance", "Faktur Pajak"],
+  ["withholding_certificates", "finance", "Bukti Potong (Bupot)"],
   ["purchase_returns", "purchase", "Retur Pembelian"],
   ["inventory", "inventory", "Persediaan"],
   ["stock_moves", "inventory", "Mutasi Stok"],
@@ -161,7 +163,10 @@ const RESOURCE_LABEL = Object.fromEntries(RESOURCES.map(([resource, , label]) =>
 /** Baca PERMISSIONS dari base-data.ts (komentar dibuang supaya kata di dalamnya tak ikut). */
 function readPermissions() {
   const source = fs.readFileSync(BASE_DATA, "utf8")
-  const block = source.split("export const PERMISSIONS")[1].split(/^\];/m)[0]
+  // Blok PERMISSIONS diakhiri `] as const;`, bukan `];` — berhenti di situ.
+  // (Pola lama split(/^\];/m) tidak pernah cocok sehingga blok ikut membaca
+  // ROLES di bawahnya dan meledak di "super_admin".)
+  const block = source.split("export const PERMISSIONS")[1].split(/^\]\s+as const;/m)[0]
   const withoutComments = block.replace(/\/\/[^\n]*/g, "")
   const names = [...withoutComments.matchAll(/"([a-z][a-z0-9_]+)"/g)].map((m) => m[1])
   return [...new Set(names)]
