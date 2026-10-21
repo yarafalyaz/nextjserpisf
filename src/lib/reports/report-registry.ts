@@ -105,7 +105,6 @@ import {
   loadStockSummary,
 } from "@/lib/reports/stock-simple-data"
 import {
-  loadTaxSummary,
   loadTaxSummarySpt,
   loadVatReconciliation,
   loadWithholdingSummary,
@@ -881,15 +880,6 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
       const itemId = search.barang && /^\d+$/.test(search.barang) ? Number(search.barang) : null
       const warehouseId = search.gudang && /^\d+$/.test(search.gudang) ? Number(search.gudang) : null
       const report = await loadStockCard(period, itemId, warehouseId)
-      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
-    },
-  },
-  pajak: {
-    title: "Laporan Pajak (PPN)",
-    subtitle: "PPN Keluaran & Masukan",
-    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
-    async load({ period }) {
-      const report = await loadTaxSummary(period)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },

@@ -22,6 +22,9 @@ const reportsDir = path.resolve(__dirname, "../../../app/(dashboard)/laporan")
 
 const KEY_OVERRIDES: Record<string, string> = {
   "laba-rugi-per-pusat-biaya": "laba-rugi-pusat-biaya",
+  // Halaman /laporan/pajak menampilkan read-model SPT; ekspornya memakai
+  // kunci `posisi-spt` (builder sama), bukan kunci pajak rincian dokumen.
+  pajak: "posisi-spt",
 }
 
 function hrefToKey(href: string): string {
