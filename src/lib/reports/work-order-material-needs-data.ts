@@ -54,12 +54,12 @@ export async function getWorkOrderMaterialNeeds(
     ids.length
       ? prisma.item.findMany({
           where: { id: { in: ids } },
-          select: { id: true, name: true, unitOfMeasure: true, qtyOnHand: true },
+          select: { id: true, name: true, unitOfMeasure: true, qtyOnHand: true, defaultWarehouseId: true },
         })
-      : Promise.resolve([] as { id: number; name: string; unitOfMeasure: string; qtyOnHand: unknown }[]),
+      : Promise.resolve([] as { id: number; name: string; unitOfMeasure: string; qtyOnHand: unknown; defaultWarehouseId: number | null }[]),
     prisma.materialIssue.findMany({
       where: { workOrderId, status: "completed" },
-      select: { items: { select: { itemId: true, qty: true } } },
+      select: { warehouseId: true, items: { select: { itemId: true, qty: true } } },
     }),
     prisma.purchaseOrder.findMany({
       where: { workOrderId, deletedAt: null, status: { notIn: ["cancelled"] } },
@@ -140,12 +140,46 @@ export async function getWorkOrderMaterialNeeds(
     required.set(line.itemId, (required.get(line.itemId) ?? 0) + Number(line.qty))
   }
 
+  // F-2026-10-21-012 lapis aman: stok per gudang relevan. Gudang relevan per
+  // item = gudang MI completed WO ini (tempat material benar-benar keluar)
+  // ∪ gudang default item. ATP global lama tetap shortageQty; field baru
+  // menandai sisa yang tak tersedia di gudang relevan walau global cukup.
+  // Bukan reservasi mengikat — inti StockReservation tetap ditunda.
+  const relevantWarehouses = new Map<number, Set<number>>()
+  const addRelevant = (itemId: number, warehouseId: number | null | undefined) => {
+    if (warehouseId == null) return
+    const set = relevantWarehouses.get(itemId) ?? new Set<number>()
+    set.add(warehouseId)
+    relevantWarehouses.set(itemId, set)
+  }
+  for (const mi of issues as { warehouseId?: number; items: { itemId: number }[] }[]) {
+    for (const row of mi.items) addRelevant(row.itemId, mi.warehouseId)
+  }
+  for (const meta of items) addRelevant(meta.id, meta.defaultWarehouseId)
+  const atWarehouse = new Map<number, number>()
+  const warehousePairs: { itemId: number; warehouseId: number }[] = []
+  for (const [itemId, set] of relevantWarehouses) {
+    for (const warehouseId of set) warehousePairs.push({ itemId, warehouseId })
+  }
+  if (warehousePairs.length > 0) {
+    const layerRows = await prisma.inventoryLayer.findMany({
+      where: { OR: warehousePairs, remaining: { gt: 0 } },
+      select: { itemId: true, warehouseId: true, remaining: true },
+    })
+    for (const row of layerRows as { itemId: number; remaining: unknown }[]) {
+      atWarehouse.set(row.itemId, (atWarehouse.get(row.itemId) ?? 0) + Number(row.remaining))
+    }
+  }
+
   const inputs: MaterialNeedInput[] = [...required.entries()].map(([itemId, requiredQty]) => ({
     itemId,
     name: metaById.get(itemId)?.name ?? `Barang #${itemId}`,
     unitOfMeasure: metaById.get(itemId)?.unitOfMeasure ?? "",
     requiredQty,
     qtyOnHand: Number(metaById.get(itemId)?.qtyOnHand ?? 0),
+    qtyOnHandAtWarehouse: relevantWarehouses.has(itemId)
+      ? (atWarehouse.get(itemId) ?? 0)
+      : Number(metaById.get(itemId)?.qtyOnHand ?? 0),
     issuedQty: issued.get(itemId) ?? 0,
     orderedQty: ordered.get(itemId) ?? 0,
     committedOtherQty: committedOther.get(itemId) ?? 0,
