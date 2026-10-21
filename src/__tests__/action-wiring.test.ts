@@ -119,6 +119,13 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
+  // F-2026-10-21-020 Tahap A backend dulu (vonis Lead t_0a5c5eff): kontrak
+  // tahap WO siap; UI progres menyusul di kartu frontend (buang entri ini
+  // saat detail perintah kerja memanggilnya).
+  "src/actions/manufacturing.actions.ts::initializeWorkOrderOperations":
+    "F-2026-10-21-020 Tahap A backend; UI inisialisasi tahap menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::updateWorkOrderOperationStatus":
+    "F-2026-10-21-020 Tahap A backend; UI transisi tahap menyusul (frontend)",
   // F-2026-10-21-030 fase a+b (backend dulu, PR #370): UI RAB Fira DITAHAN
   // menunggu Lead merge builder ini — vonis Lead t_3e892715 komentar #86.
   // Buang ke-9 entri ini saat UI RAB memanggilnya.
