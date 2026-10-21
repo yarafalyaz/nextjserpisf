@@ -74,6 +74,27 @@ export function resolvePph42Rate(
   return safeRound(rate, 2)
 }
 
+/** Tarif PPh 4(2) final sewa tanah/bangunan: TETAP 10% (PP 34/2017). */
+export const PPH42_RENT_RATE = 10
+
+/**
+ * Validasi penerbitan bupot sewa: kode objek WAJIB dipilih per penerbitan
+ * (pola resolvePph23Rate) dan tarif selalu 10. Kode konstruksi (28-409-xx)
+ * DITOLAK di sini — resolver sewa tidak pernah meminjam tarif konstruksi
+ * (vonis BOT 4 F-038/F-041). Nilai kode objek selain seri konstruksi diterima
+ * apa adanya: katalog kode e-Bupot sewa divonis BOT 4 terpisah, jangan karang.
+ */
+export function resolvePph42RentRate(objectCode: string | null | undefined): 10 {
+  const code = (objectCode ?? "").trim()
+  if (code === "") {
+    throw new Error("PPh 4(2) sewa: kode objek wajib dipilih per penerbitan — tanpa kode, bupot sewa tidak diterbitkan.")
+  }
+  if (code.startsWith("28-409")) {
+    throw new Error("PPh 4(2) sewa: kode objek konstruksi tidak berlaku untuk sewa tanah/bangunan — pilih kode objek sewa.")
+  }
+  return PPH42_RENT_RATE
+}
+
 export interface WithholdingComputation {
   dpp: number
   tariff: number

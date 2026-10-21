@@ -869,6 +869,9 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   // 510103 = Penyesuaian Persediaan, DILARANG untuk garansi.
   ["510104", "Beban Garansi", "COGS", "5101"],
   ["210205", "Provisi Garansi", "OCLY", "2102"],
+  // F-041 (vonis BOT 4): liabilitas PPh 4(2) final sewa PP 34/2017.
+  // 210205 = Provisi Garansi, DILARANG reuse untuk pajak.
+  ["210206", "Utang PPh 4(2) Sewa Tanah/Bangunan", "OCLY", "2102"],
   ["110508", "Piutang Klaim Supplier — Garansi", "OCAS", "1105"],
   ["600025", "Diskon Pembelian", "EXPS", "6000"],
   ["600026", "Retur Pembelian", "EXPS", "6000"],
@@ -900,6 +903,11 @@ export const WITHHOLDING_TAX_TYPES: {
   // bupot terbit (PMK-141/2015), jangan satu kode keras untuk semua jasa.
   { code: "PPH23-JUAL", name: "PPh 23 Penjualan", rate: 2, article: "PPh23", receivableAccountCode: "110505" },
   { code: "PPH23-BELI", name: "PPh 23 Pembelian", rate: 2, article: "PPh23", liabilityAccountCode: "210202" },
+  // F-038 + F-041 (vonis BOT 4): PPh 4(2) final sewa tanah/bangunan PP 34/2017
+  // tarif tetap 10%; kode objek wajib dipilih per penerbitan (resolvePph42RentRate).
+  // Liabilitas 210206 KHUSUS sewa — dilarang fallback 210202 (PPh 23) dan
+  // dilarang 210205 (Provisi Garansi). Akun hilang = fail-closed di jalur jurnal.
+  { code: "PPH42-SEWA", name: "PPh 4(2) Sewa Tanah/Bangunan", rate: 10, article: "PPh4(2)", liabilityAccountCode: "210206" },
 ]
 
 /** Default payment methods (codes follow the auto-generated MTP- scheme). */
