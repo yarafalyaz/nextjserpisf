@@ -124,27 +124,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  // F-2026-10-21-030 fase a+b (backend dulu, PR #370): UI RAB Fira DITAHAN
-  // menunggu Lead merge builder ini — vonis Lead t_3e892715 komentar #86.
-  // Buang ke-9 entri ini saat UI RAB memanggilnya.
-  "src/actions/project.actions.ts::setProjectContractFromQuotation":
-    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
-  "src/actions/project.actions.ts::setProjectContractManual":
-    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
-  "src/actions/project.actions.ts::createProjectBudgetItem":
-    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
-  "src/actions/project.actions.ts::updateProjectBudgetItem":
-    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
-  "src/actions/project.actions.ts::deleteProjectBudgetItem":
-    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
-  "src/actions/project.actions.ts::lockProjectBudget":
-    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
-  "src/actions/project.actions.ts::proposeProjectBudgetRevision":
-    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
-  "src/actions/project.actions.ts::applyProjectBudgetRevision":
-    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
-  "src/actions/project.actions.ts::rejectProjectBudgetRevision":
-    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  // F-2026-10-21-030: ke-9 aksi RAB sudah ter-wire UI ProjectBudgetEditor
+  // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3 backend dulu (kartu t_d4ae15cc): pemanggil jurnal
   // E2/E3 rute provisi MATI; tombol posting di halaman /produksi/garansi
   // menyusul di kartu frontend (buang 2 entri ini saat UI memanggilnya).
