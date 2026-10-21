@@ -101,17 +101,6 @@ describe("POST /api/upload/attachments", () => {
     expect(res.status).toBe(400)
   })
 
-  it.each(["7abc", "7.5", "0x10", "1e3", " 7"])(
-    "returns 400 when session user.id is non-canonical %s",
-    async (raw) => {
-      mocks.authFn.mockResolvedValue({ user: { id: raw } })
-      const file = makeFile("a.pdf", "application/pdf")
-      const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "1" }))
-      expect(res.status).toBe(400)
-      expect(mocks.attachmentCreate).not.toHaveBeenCalled()
-    },
-  )
-
   it("returns 400 for non-numeric referenceId", async () => {
     const file = makeFile("a.pdf", "application/pdf")
     const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "abc" }))

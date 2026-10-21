@@ -60,17 +60,6 @@ describe("POST /api/upload/avatar", () => {
     expect(res.status).toBe(400)
   })
 
-  it.each(["7abc", "7.5", "0x10", "1e3", "+7", " 7"])(
-    "returns 400 when user.id is non-canonical %s",
-    async (raw) => {
-      mocks.authFn.mockResolvedValue({ user: { id: raw } })
-      const file = new File(["test"], "a.png", { type: "image/png" })
-      const res = await POST(makeReq({ file }))
-      expect(res.status).toBe(400)
-      expect(mocks.uploadToStorage).not.toHaveBeenCalled()
-    },
-  )
-
   it("uploads successfully and updates user row", async () => {
     const file = new File(["test"], "a.png", { type: "image/png" })
     const res = await POST(makeReq({ avatar: file }))

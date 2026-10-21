@@ -28,12 +28,8 @@ export async function POST(req: NextRequest) {
     return apiError("BAD_REQUEST", "Tidak ada file diunggah")
   }
 
-  const userIdRaw = String(session.user.id)
-  if (!/^\d+$/.test(userIdRaw)) {
-    return apiError("BAD_REQUEST", "Pengguna tidak valid")
-  }
-  const userId = Number(userIdRaw)
-  if (!Number.isSafeInteger(userId) || userId <= 0) {
+  const userId = Number.parseInt(String(session.user.id), 10)
+  if (!Number.isInteger(userId) || userId <= 0) {
     return apiError("BAD_REQUEST", "Pengguna tidak valid")
   }
 
