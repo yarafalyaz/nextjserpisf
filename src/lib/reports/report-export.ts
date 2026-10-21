@@ -71,6 +71,7 @@ export type ReportPdfKey =
   | "buku-besar"
   | "buku-bank"
   | "buku-pembantu-piutang"
+  | "statement-pelanggan"
   | "buku-pembantu-utang"
   | "arus-kas"
 
@@ -155,6 +156,7 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "buku-besar": "Buku-Besar",
     "buku-bank": "Buku-Bank",
     "buku-pembantu-piutang": "Buku-Pembantu-Piutang",
+    "statement-pelanggan": "Statement-Pelanggan",
     "buku-pembantu-utang": "Buku-Pembantu-Utang",
     "arus-kas": "Arus-Kas",
   }

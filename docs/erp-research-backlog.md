@@ -2072,13 +2072,19 @@ tahun dihapus, dsb).
   tes merah. Masa terakhir kedua tahun sama ditolak.
 - **T6 lebih potong wajib kembali (bukan negatif diam).** TK/0,
   gaji Rp5.400.000/bln (TER A 0%), satu bulan terima tambahan tidak
-  teratur Rp50.000.000 (bruto bulan itu Rp55.400.000 → TER A 18%
-  (Lampiran A: >51.400.000–56.300.000) = Rp9.972.000), pengurang 0.
+  teratur Rp50.000.000 (bruto bulan itu Rp55.400.000 → TER A 19%
+  (Lampiran A: >51.400.000–56.300.000) = Rp10.526.000), pengurang 0.
   Tahunan: bruto 114.800.000 − biaya jabatan 5.740.000 − PTKP
   54.000.000 = PKP 55.060.000 → pajak Rp2.753.000. Selisih Des =
-  2.753.000 − 9.972.000 = −Rp7.219.000 → PPh21 Des = Rp0 DAN
-  `overWithheld` tercatat Rp7.219.000 berstatus belum-kembali.
+  2.753.000 − 10.526.000 = −Rp7.773.000 → PPh21 Des = Rp0 DAN
+  `overWithheld` tercatat Rp7.773.000 berstatus belum-kembali.
   Slip Des negatif / pengurang tahun berikut = gagal.
+  **KOREKSI VONIS BOT 4 (2026-10-21): vonis #291 tertulis 18% /
+  Rp7.219.000 — ralat label peringkat dari BOT 4. PP 58/2023
+  Lampiran A (peraturan.go.id): >47.800.000–51.400.000 = 18%;
+  >51.400.000–56.300.000 = 19%. Angka final: 19% / Rp7.773.000,
+  tertulis juga di PR #295 (komentar 6309309583). Implementasi
+  #295 + tes T6 sudah 19% sejak awal; tanpa perubahan kode.**
 - **T7 dua slip se-masa (REGULAR + THR terpisah).** TK/0, slip
   reguler bruto Rp10.000.000 terbit terpotong Rp200.000; slip THR
   Rp10.000.000 bulan sama terbit sesudahnya: target gabungan

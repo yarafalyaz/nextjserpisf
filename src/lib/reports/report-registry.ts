@@ -14,7 +14,7 @@
 
 import { parseStatementOptions } from "@/lib/reports/statement-display"
 import type { ReportPdfKey } from "@/lib/reports/report-export"
-import type { ReportPeriod } from "@/lib/reports/report-period"
+import { formatPeriodLabel, type ReportPeriod } from "@/lib/reports/report-period"
 import type { StatementTable } from "@/lib/reports/statement-table"
 import type { TableDocument } from "@/lib/pdf/engine/types"
 import {
@@ -125,6 +125,7 @@ import {
   loadReceivableSubledger,
 } from "@/lib/reports/ledger-cash-data"
 import { SALES_DIMENSIONS, type SalesDimension } from "@/lib/reports/sales-analytics"
+import { loadCustomerStatement } from "@/lib/reports/customer-statement-data"
 
 /** Isi lembar: statement bergaya kode/nama/kolom angka, atau tabel kolom bebas. */
 export type ReportPayload =
@@ -958,6 +959,34 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     async load({ period, search }) {
       const report = await loadReceivableSubledger(period, search.pihak ?? null)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "statement-pelanggan": {
+    title: "Statement Pelanggan",
+    subtitle: "Mutasi Piutang per Pelanggan",
+    defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), 0, 1), end: now }),
+    async load({ period, search }) {
+      const customerId = Number(search.pelanggan)
+      if (!Number.isSafeInteger(customerId) || customerId <= 0) {
+        return {
+          kind: "table" as const,
+          table: {
+            columns: [
+              { header: "Tanggal", align: "left" as const, width: 30 },
+              { header: "Dokumen", align: "left" as const, width: 38 },
+              { header: "Keterangan", align: "left" as const, width: 62 },
+              { header: "Debit", align: "right" as const, width: 32 },
+              { header: "Kredit", align: "right" as const, width: 32 },
+              { header: "Saldo", align: "right" as const, width: 32 },
+            ],
+            rows: [{ kind: "notice" as const, text: "Pilih pelanggan terlebih dahulu (parameter pelanggan=<id>) untuk mencetak statement pelanggan." }],
+          },
+          periodCaption: formatPeriodLabel(period),
+          landscape: true,
+        }
+      }
+      const report = await loadCustomerStatement(customerId, period)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: false }
     },
   },
   "buku-pembantu-utang": {
