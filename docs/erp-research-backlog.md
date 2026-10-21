@@ -906,3 +906,125 @@ Belum ada / parsial (bukti grep run ini):
 Fokus berikutnya: (d) penjualan/pembelian & CRM — verifikasi status part
 WO (F-105) terhadap pemenuhan SO/DO + komisi/multi-harga Accurate/Zahir.
 
+
+---
+
+## 2026-10-21 10:00 WIB — Domain (d) penjualan/pembelian & CRM
+
+Rotasi: run sebelumnya (c) persediaan F-2026-10-21-011..015. Run ini (d).
+Berikutnya: (e) jadwal bengkel & kapasitas.
+
+Benchmark resmi (akses 2026-10-21):
+- Accurate Komisi Penjualan (per kuantitas / nilai tetap per faktur /
+  target / dibagi beberapa sales):
+  https://help.accurate.id/product/komisi-penjualan/
+- Accurate Penjualan (quotation→SO→DO→invoice, harga grosir per kuantitas,
+  diskon bertingkat): https://help.accurate.id/product/penjualan/
+- Zahir fasilitas Multi-Price, Multi-Discount, Multi-Komisi Penjualan,
+  Sales Quotation, Sales Order, sisa belum kirim per SO:
+  https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+
+### Inventarisasi terverifikasi (2026-10-21, domain d)
+
+Sudah ada (kuat):
+- Rantai Quotation berversi→SO→DO→Invoice→Payment/Return + DP gate 50%
+  (run a-d sebelumnya). Laporan `pemenuhan-pesanan` (order-fulfillment.ts:
+  sisa belum kirim per SO dari DeliveryOrderItem.salesOrderItemId, tanpa
+  akumulator di baris SO — dinyatakan jujur di header file).
+- Multi-harga per kategori pelanggan: `CustomerPriceList`
+  (customerCategoryId, itemId, price, effectiveDate, schema:501-518).
+- `Customer.creditLimit` (schema:309) tersimpan. Lead/LeadActivity +
+  konversi customerId, CrmTicket generik.
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN komisi penjualan: `grep -rni commission|komisi prisma/schema.prisma
+  src/actions src/lib` = hanya akun CoA 600002 "Beban Komisi"
+  (base-data.ts:780). Tidak ada field penjual di dokumen:
+  `grep salesId|salespersonId|salesEmployee` = 0 di schema +
+  sales.actions.ts. Quotation/SO/Invoice tanpa atribusi sales → komisi
+  dihitung manual di luar sistem, akun 600002 tak pernah terisi dari
+  penjualan.
+- PARSIAL (SALAH potensial): creditLimit MATI. `grep creditLimit
+  src/actions src/lib/hooks src/lib/services` non-test = 0 pemakaian.
+  Batas kredit tampil di master tapi tidak pernah menahan/memperingatkan
+  SO/Invoice baru — piutang pelanggan over-limit terbit bebas.
+- ABSEN: harga grosir bertingkat kuantitas di sisi jual. CustomerPriceList
+  tanpa minQty (beda VendorItemPrice schema:479 yang punya minQty);
+  diskon hanya satu lapis per baris (SalesOrderItem.discount tunggal).
+- ABSEN: target penjualan per sales/periode (`grep SalesTarget|
+  targetPenjualan` = 0) — turunan wajar sesudah atribusi sales ada.
+- ABSEN: RFQ/penawaran pemasok (`grep rfq|supplierQuotation` = 0);
+  PurchaseRequest langsung ke PO tanpa banding harga multi-vendor
+  (VendorItemPrice + laporan harga-pemasok sudah ada sebagai bahan).
+
+### Gap
+
+#### F-2026-10-21-016 (d) P1 — Komisi penjualan tidak ada: dokumen tanpa penjual, akun Beban Komisi tak terpakai
+- Kompetitor: Accurate komisi otomatis per faktur/kuantitas/target, bisa
+  dibagi beberapa sales https://help.accurate.id/product/komisi-penjualan/ ;
+  Zahir Multi-Komisi (persen golongan/tabel nilai, jurnal + utang komisi
+  otomatis) https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+- Status Silengkap: ABSEN. Bukti: grep di atas; CoA 600002 yatim.
+- Relevansi: penjualan part/jasa bengkel lewat sales/admin tertentu;
+  komisi manual spreadsheet rawan selisih dan tak tertaut invoice lunas.
+- Adaptasi bertahap: (1) `salesEmployeeId` (Employee) di Quotation,
+  diwariskan SO→Invoice (snapshot, bukan baca master berjalan);
+  (2) read-model rekap komisi informatif: persen per kategori pelanggan
+  (setting sederhana) × grandTotal invoice LUNAS per sales per masa —
+  label "informatif, bukan utang komisi"; (3) inti jurnal Dr Beban
+  Komisi/Cr Utang Komisi hanya sesudah vonis accountant (basis lunas vs
+  terbit, pajak atas komisi).
+- Modul disentuh: prisma/schema.prisma, src/actions/sales.actions.ts,
+  src/lib/reports/ (rekap baru), pengaturan komisi.
+- Effort: S atribusi, M rekap, M inti jurnal. Risiko: komisi dihitung
+  dari invoice belum lunas → wajib basis status pembayaran; mitigasi
+  tahap 2 hanya baca paid.
+- Urutan: atribusi → rekap informatif → vonis accountant → jurnal.
+- Pemilik usulan: backend; vonis uang: accountant (flag YA untuk tahap 3
+  saja; tahap 1-2 TIDAK).
+
+#### F-2026-10-21-017 (d) P1 — Batas kredit pelanggan disimpan tapi tidak pernah ditegakkan (SALAH)
+- Kompetitor: Zahir/Accurate standar pasar: peringatan/blokir dokumen
+  saat piutang + order baru melewati limit (pola limit di laporan
+  piutang-pelanggan Silengkap sendiri sudah menampilkan limit).
+- Status Silengkap: SALAH (kontrol mati). Bukti: grep creditLimit
+  non-test di actions/hooks/services = 0; Customer.creditLimit schema:309.
+- Relevansi: pelanggan fleet/korporat termin panjang; WO besar dikerjakan
+  sebelum invoice lama lunas — risiko piutang macet per kendaraan.
+- Adaptasi lapis aman: builder read-only paparan kredit per pelanggan
+  (piutang terbuka + SO belum tertagih + DP) vs limit, tampil peringatan
+  di form SO/Invoice (tidak menahan dokumen). Inti menahan dokumen =
+  perubahan perilaku, wajib PUTUSAN team-lead + vonis accountant untuk
+  definisi paparan (apakah WO berjalan ikut dihitung).
+- Modul disentuh: src/lib/reports/ (builder paparan), form penjualan,
+  inti: src/actions/sales.actions.ts.
+- Effort: S aman, S-M inti. Risiko: limit 0 = belum diset, JANGAN dibaca
+  "tanpa limit" maupun "blokir semua" — tampilkan "limit belum diatur".
+- Urutan: builder+peringatan → putusan → gerbang opsional per setting.
+- Pemilik usulan: backend (builder), frontend (peringatan). Butuh
+  putusan accountant: YA hanya untuk definisi paparan inti.
+
+#### F-2026-10-21-018 (d) P2 — Harga jual bertingkat kuantitas + target penjualan absen
+- Kompetitor: Accurate harga grosir per kuantitas + target per sales
+  https://help.accurate.id/product/penjualan/ ; Zahir Multi-Price per
+  golongan https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+- Status Silengkap: PARSIAL. Bukti: CustomerPriceList tanpa minQty
+  (schema:501-518); grep SalesTarget = 0.
+- Relevansi: rendah-menengah — penjualan bengkel kebanyakan per job,
+  bukan grosir volume; P2 sampai ada pelanggan fleet beli part berulang.
+- Adaptasi: tambah minQty ke CustomerPriceList (pola VendorItemPrice)
+  + resolusi harga qty-aware di customer-price-list.service.ts; target
+  penjualan ditunda sampai F-016 atribusi sales dipakai.
+- Effort: S-M. Risiko: harga salah tingkat → mitigasi tampilkan sumber
+  harga terpilih di baris invoice.
+- Pemilik usulan: backend. Butuh putusan accountant: TIDAK.
+
+### Yang TIDAK diusulkan run ini
+- RFQ multi-vendor formal: VendorItemPrice + perbandingan manual cukup
+  untuk skala pembelian bengkel sekarang; nilai ulang bila pembelian
+  plat/pipa volume besar berulang (P2 masa depan, tanpa ID dulu).
+- Portal pelanggan / e-sign quotation: tetap P2 lama, tidak diangkat.
+
+Fokus berikutnya: (e) jadwal bengkel & kapasitas — verifikasi klaim
+F-2026-10-20-91 (WorkBay) + F-2026-10-21-012 reservasi terhadap jadwal.
+
