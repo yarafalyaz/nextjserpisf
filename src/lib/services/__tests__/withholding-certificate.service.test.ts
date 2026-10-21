@@ -153,6 +153,53 @@ describe("issueWithholdingCertificate guards", () => {
   })
 })
 
+describe("issueWithholdingCertificate PPH42-SEWA fail-closed (F47-1)", () => {
+  const sewaType = {
+    id: 4, code: "PPH42-SEWA", article: "PPh4(2)", objectCode: "28-403-02",
+    rate: 10, liabilityAccountId: 503, receivableAccountId: null,
+  }
+
+  it("master 28-403-02: bruto 100jt -> potong 10jt (Cr 210206 via liability), snapshot kode beku", async () => {
+    mocks.typeFindUniqueOrThrow.mockResolvedValue(sewaType)
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-SEWA-1",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Properti",
+      withholdingTypeId: 4, dpp: 100_000_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(true)
+    const data = mocks.certCreate.mock.calls[0][0].data
+    expect(data.objectCode).toBe("28-403-02")
+    expect(Number(data.tariff)).toBe(10)
+    expect(Number(data.withheldAmount)).toBe(10_000_000)
+    expect(Number(data.dpp) - Number(data.withheldAmount)).toBe(90_000_000)
+  })
+
+  it("tanpa kode objek master = gagal terbit di level service, certCreate tak dipanggil", async () => {
+    mocks.typeFindUniqueOrThrow.mockResolvedValue({ ...sewaType, objectCode: null })
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-SEWA-2",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Properti",
+      withholdingTypeId: 4, dpp: 100_000_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(r.ambiguous).toBe(false)
+    expect(String(r.error)).toMatch(/kode objek wajib/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+
+  it("kode konstruksi 28-409-xx di master = ditolak service", async () => {
+    mocks.typeFindUniqueOrThrow.mockResolvedValue({ ...sewaType, objectCode: "28-409-01" })
+    const r = await issueWithholdingCertificate({
+      direction: "we_withhold", certificateNumber: "BP-SEWA-3",
+      withholdingDate: new Date(2026, 0, 10), counterpartyName: "PT Properti",
+      withholdingTypeId: 4, dpp: 100_000_000, idempotencyKey: key(),
+    })
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/konstruksi/)
+    expect(mocks.certCreate).not.toHaveBeenCalled()
+  })
+})
+
 describe("settleWithholdingTax", () => {
   it("scope settle terpisah + bind ref TaxPayment + jurnal Dr utang / Cr kas", async () => {
     const r = await settleWithholdingTax({

@@ -207,6 +207,14 @@ model SystemSetting {
   // bukan pengurang piutang. Null = instalasi lama; hook menolak posting DP
   // sampai dimapping (fail-closed), automap menebak dari nama "uang muka".
   customerDownPaymentAccountId     Int?    @map("customer_down_payment_account_id")
+  // F-2026-10-21-021 tahap 3 (rute provisi MATI, vonis BOT 4 + PUTUSAN G1
+  // Lead): mapping jurnal garansi E2/E3. Semua nullable tanpa default tebak;
+  // posting garansi DITOLAK fail-closed bila mapping jalur terpilih kosong.
+  // warrantyProvisionAccountId disiapkan untuk E1/E4 yang masih DITUNDA —
+  // tidak ada pemanggil yang memakainya sampai gerbang data dinilai BOT 4.
+  warrantyExpenseAccountId         Int?    @map("warranty_expense_account_id")
+  warrantyProvisionAccountId       Int?    @map("warranty_provision_account_id")
+  supplierClaimReceivableAccountId Int?    @map("supplier_claim_receivable_account_id")
   inventoryAccountId               Int?    @map("inventory_account_id")
   inventoryAdjustmentAccountId     Int?    @map("inventory_adjustment_account_id")
   stockAdjustmentAccountId         Int?    @map("stock_adjustment_account_id")
@@ -226,6 +234,10 @@ model SystemSetting {
   depreciationExpenseAccountId     Int?    @map("depreciation_expense_account_id")
   accumulatedDepreciationAccountId Int?    @map("accumulated_depreciation_account_id")
   defaultProjectStages             String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_project_stages") @db.VarChar(1000)
+  // F-2026-10-21-020 Tahap A: template tahap perintah kerja (pola
+  // defaultProjectStages). Vonis Lead: isi default 4 nama saja; template
+  // per-Product ditunda (WO tanpa productId andal).
+  defaultWorkOrderStages           String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_work_order_stages") @db.VarChar(1000)
   /**
    * F-006: gerbang jurnal disposisi varians produksi. Default MATI —
    * tanpa mode ini satu pun jurnal varians tak boleh terbit walau order
@@ -799,6 +811,7 @@ model Employee {
   appreciations       Appreciation[]
   attendances         Attendance[]
   employeeLoans       EmployeeLoan[]
+  employeePayrollComponents EmployeePayrollComponent[]
   department          Department?       @relation(fields: [departmentId], references: [id])
   position            Position?         @relation(fields: [positionId], references: [id])
   user                User?             @relation(fields: [userId], references: [id])
@@ -808,6 +821,10 @@ model Employee {
   tasks               Task[]
   timesheets          Timesheet[]
   workSchedules       WorkSchedule[]    @relation("EmployeeWorkSchedules")
+  salesQuotations     Quotation[]       @relation("QuotationSalesEmployee")
+  salesOrdersAsSales  SalesOrder[]      @relation("SalesOrderSalesEmployee")
+  salesInvoicesAsSales SalesInvoice[]   @relation("SalesInvoiceSalesEmployee")
+  workOrderOperations WorkOrderOperation[]
 
   @@index([departmentId], map: "employees_department_id_fkey")
   @@index([positionId], map: "employees_position_id_fkey")
@@ -837,6 +854,7 @@ model Account {
   parent         Account?       @relation("AccountTree", fields: [parentId], references: [id], onDelete: SetNull)
   children       Account[]      @relation("AccountTree")
   journalEntries JournalEntry[]
+  payrollComponents PayrollComponent[]
 
   @@index([parentId], map: "accounts_parent_id_fkey")
   @@index([isActive, deletedAt])
@@ -1190,6 +1208,9 @@ model Quotation {
   documentNo        String             @unique @map("document_no")
   customerId        Int                @map("customer_id")
   customerVehicleId Int?               @map("customer_vehicle_id")
+  // F-2026-10-21-016 tahap 1: atribusi penjual (snapshot; diwariskan
+  // SO -> Invoice). Tanpa jurnal komisi (tahap 3 ditunda vonis Lead).
+  salesEmployeeId   Int?               @map("sales_employee_id")
   date              DateTime
   validUntil        DateTime?          @map("valid_until")
   subtotal          Decimal            @default(0.00) @db.Decimal(15, 2)
@@ -1209,12 +1230,15 @@ model Quotation {
   sections          QuotationSection[]
   customer          Customer           @relation(fields: [customerId], references: [id])
   customerVehicle   CustomerVehicle?   @relation(fields: [customerVehicleId], references: [id])
+  salesEmployee     Employee?          @relation("QuotationSalesEmployee", fields: [salesEmployeeId], references: [id])
   salesInvoices     SalesInvoice[]
   salesOrders       SalesOrder[]
   workOrders        WorkOrder[]
+  contractProjects  Project[]          @relation("ProjectContractQuotation")
 
   @@index([customerId], map: "quotations_customer_id_fkey")
   @@index([customerVehicleId], map: "quotations_customer_vehicle_id_fkey")
+  @@index([salesEmployeeId])
   @@index([status], map: "idx_quotations_status")
   @@index([projectId])
   @@index([createdBy])
@@ -1308,6 +1332,8 @@ model SalesOrder {
   slug              String?          @unique
   id                Int              @id @default(autoincrement())
   customerVehicleId Int?             @map("customer_vehicle_id")
+  // F-2026-10-21-016 tahap 1: snapshot penjual diwariskan dari Quotation.
+  salesEmployeeId   Int?             @map("sales_employee_id")
   totalAmount       Decimal          @default(0.00) @map("total_amount") @db.Decimal(15, 2)
   documentNo        String           @unique @map("document_no")
   customerId        Int              @map("customer_id")
@@ -1329,11 +1355,13 @@ model SalesOrder {
   items             SalesOrderItem[]
   customer          Customer         @relation(fields: [customerId], references: [id])
   quotation         Quotation?       @relation(fields: [quotationId], references: [id])
+  salesEmployee     Employee?        @relation("SalesOrderSalesEmployee", fields: [salesEmployeeId], references: [id])
 
   @@index([customerId], map: "sales_orders_customer_id_fkey")
   @@index([quotationId], map: "sales_orders_quotation_id_fkey")
   @@index([status], map: "idx_sales_orders_status")
   @@index([customerVehicleId])
+  @@index([salesEmployeeId])
   @@index([createdBy])
   @@index([createdAt])
   @@index([deletedAt])
@@ -1361,6 +1389,8 @@ model SalesInvoice {
   id                   Int                   @id @default(autoincrement())
   customerVehicleId    Int?                  @map("customer_vehicle_id")
   projectId            Int?                  @map("project_id")
+  // F-2026-10-21-016 tahap 1: snapshot penjual diwariskan SO/Quotation.
+  salesEmployeeId      Int?                  @map("sales_employee_id")
   // Nomor faktur pajak keluaran (e-Faktur/Coretax). Opsional: faktur pajak
   // terbit di luar Silengkap, jadi dokumen lama/tanpa PPN tetap valid kosong.
   taxInvoiceNumber     String?               @map("tax_invoice_number")
@@ -1388,12 +1418,14 @@ model SalesInvoice {
   customer             Customer              @relation(fields: [customerId], references: [id])
   quotation            Quotation?            @relation(fields: [quotationId], references: [id])
   salesOrder           SalesOrder?           @relation(fields: [salesOrderId], references: [id])
+  salesEmployee        Employee?             @relation("SalesInvoiceSalesEmployee", fields: [salesEmployeeId], references: [id])
   salesReturns         SalesReturn[]
   payments             SalesPayment[]
   invoiceExchangeItems InvoiceExchangeItem[]
   taxInvoices          TaxInvoice[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
+  @@index([salesEmployeeId])
   @@index([quotationId], map: "sales_invoices_quotation_id_fkey")
   @@index([salesOrderId], map: "sales_invoices_sales_order_id_fkey")
   @@index([status], map: "idx_sales_invoices_status")
@@ -2310,6 +2342,14 @@ model ProductionOrder {
   completedQty      Decimal                   @default(0.00) @map("completed_qty") @db.Decimal(15, 2)
   variance          Decimal                   @default(0.00) @db.Decimal(15, 2)
   releasedCost      Decimal                   @default(0.00) @map("released_cost") @db.Decimal(15, 2)
+  // F-2026-10-21-009-V: tutup job (closed != completed). Kolom aditif;
+  // jejak tutup->reopen->tutup utuh, tutup berikutnya tidak menimpa reopen.
+  closedAt          DateTime?                 @map("closed_at")
+  closedBy          Int?                      @map("closed_by")
+  closedReason      String?                   @map("closed_reason") @db.Text
+  reopenedAt        DateTime?                 @map("reopened_at")
+  reopenedBy        Int?                      @map("reopened_by")
+  reopenReason      String?                   @map("reopen_reason") @db.Text
   createdBy         Int?                      @map("created_by")
   createdAt         DateTime                  @default(now()) @map("created_at")
   updatedAt         DateTime                  @updatedAt @map("updated_at")
@@ -2586,11 +2626,21 @@ model WorkOrder {
   date              DateTime
   notes             String?           @db.Text
   status            String            @default("draft")
+  // F-2026-10-21-009-V: tutup job (closed != completed). Kolom aditif;
+  // jejak tutup->reopen->tutup utuh, tutup berikutnya tidak menimpa reopen.
+  closedAt          DateTime?         @map("closed_at")
+  closedBy          Int?              @map("closed_by")
+  closedReason      String?           @map("closed_reason") @db.Text
+  reopenedAt        DateTime?         @map("reopened_at")
+  reopenedBy        Int?              @map("reopened_by")
+  reopenReason      String?           @map("reopen_reason") @db.Text
   createdBy         Int?              @map("created_by")
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   items             WorkOrderItem[]
+  operations        WorkOrderOperation[]
   costs             ProductionCost[]
+  timesheets        Timesheet[]
   purchaseOrders    PurchaseOrder[]
   productionOrders  ProductionOrder[]
   customer          Customer          @relation(fields: [customerId], references: [id])
@@ -2630,6 +2680,39 @@ model WorkOrderItem {
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])
   @@map("work_order_items")
+}
+
+// F-2026-10-21-020 Tahap A: tahap progres perintah kerja (ringan, BUKAN
+// routing costing — tanpa kolom biaya, tanpa jurnal, tanpa WorkCenter).
+// Nama tahap = snapshot dari SystemSetting.defaultWorkOrderStages saat
+// inisialisasi; edit setting sesudahnya tidak mengubah WO berjalan.
+// Status enum aplikasi: pending | in_progress | completed | skipped.
+// Urutan SEQUENSIAL-KERAS (vonis Lead Q1): tahap hanya boleh maju bila
+// semua tahap ber-sortOrder lebih kecil sudah completed/skipped.
+// skipped WAJIB notes (vonis Q2) dan keluar dari denominator progres.
+model WorkOrderOperation {
+  id                 Int       @id @default(autoincrement())
+  workOrderId        Int       @map("work_order_id")
+  name               String
+  sortOrder          Int       @default(0) @map("sort_order")
+  status             String    @default("pending")
+  estimatedHours     Decimal?  @map("estimated_hours") @db.Decimal(15, 2)
+  assignedEmployeeId Int?      @map("assigned_employee_id")
+  startedAt          DateTime? @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+  notes              String?   @db.Text
+  createdBy          Int?      @map("created_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  workOrder          WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  assignedEmployee   Employee? @relation(fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId], map: "work_order_operations_work_order_id_fkey")
+  @@index([workOrderId, sortOrder], map: "work_order_operations_wo_sort_idx")
+  @@index([status])
+  @@index([assignedEmployeeId])
+  @@index([createdAt])
+  @@map("work_order_operations")
 }
 
 // Keep legacy attendance tables available to payroll and prevent db push from
@@ -2904,6 +2987,7 @@ model Payroll {
   createdAt              DateTime    @default(now()) @map("created_at")
   updatedAt              DateTime    @updatedAt @map("updated_at")
   employee               Employee?   @relation(fields: [employeeId], references: [id])
+  componentLines         PayrollComponentLine[]
   costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
   costCenterId           Int?        @map("cost_center_id")
 
@@ -2915,6 +2999,89 @@ model Payroll {
   @@index([createdBy])
   @@index([createdAt])
   @@map("payrolls")
+}
+
+/// F-2026-10-21-027: katalog komponen gaji terstruktur (master perusahaan).
+/// `accountId` hanya disimpan tahap ini — TIDAK dipakai jurnal (jurnal tetap
+/// agregat existing sampai tahap jurnal per komponen diputus terpisah).
+/// `isTaxable` = klasifikasi tersimpan; mode pajak aktif tahap ini tetap
+/// all-taxable-v1 (semua earning kena pajak, angka identik pra-fitur).
+model PayrollComponent {
+  id             Int      @id @default(autoincrement())
+  name           String
+  normalizedName String   @map("normalized_name")
+  kind           String
+  recurrence     String
+  isTaxable      Boolean  @default(false) @map("is_taxable")
+  accountId      Int?     @map("account_id")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdBy      Int?     @map("created_by")
+  updatedBy      Int?     @map("updated_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  account        Account? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  assignments    EmployeePayrollComponent[]
+  lines          PayrollComponentLine[]
+
+  @@index([normalizedName])
+  @@index([isActive])
+  @@index([accountId])
+  @@index([createdAt])
+  @@map("payroll_components")
+}
+
+/// Penugasan komponen tetap ke karyawan. Hanya komponen recurrence=fixed
+/// aktif; berlaku pada periode bila rentang mencakup endDate periode
+/// (tanpa prorata). Baris nol tidak pernah ditarik ke slip.
+model EmployeePayrollComponent {
+  id            Int             @id @default(autoincrement())
+  employeeId    Int             @map("employee_id")
+  componentId   Int             @map("component_id")
+  defaultAmount Decimal         @default(0.00) @map("default_amount") @db.Decimal(15, 2)
+  effectiveFrom DateTime        @map("effective_from")
+  effectiveTo   DateTime?       @map("effective_to")
+  isActive      Boolean         @default(true) @map("is_active")
+  createdBy     Int?            @map("created_by")
+  updatedBy     Int?            @map("updated_by")
+  createdAt     DateTime        @default(now()) @map("created_at")
+  updatedAt     DateTime        @updatedAt @map("updated_at")
+  employee      Employee        @relation(fields: [employeeId], references: [id])
+  component     PayrollComponent @relation(fields: [componentId], references: [id])
+  lines         PayrollComponentLine[]
+
+  @@index([employeeId])
+  @@index([componentId])
+  @@index([createdAt])
+  @@map("employee_payroll_components")
+}
+
+/// Baris snapshot komponen per slip gaji. Snapshot nama/kind/isTaxable/akun
+/// dibekukan saat baris dibuat — master berubah/nonaktif tidak mengubah
+/// slip historis. Payroll.allowances = Σ earning, deductions = Σ deduction
+/// dari baris-baris ini untuk slip yang memilikinya.
+model PayrollComponentLine {
+  id                     Int      @id @default(autoincrement())
+  payrollId              Int      @map("payroll_id")
+  componentId            Int?     @map("component_id")
+  componentNameSnapshot  String   @map("component_name_snapshot")
+  kindSnapshot           String   @map("kind_snapshot")
+  recurrenceSnapshot     String   @map("recurrence_snapshot")
+  isTaxableSnapshot      Boolean  @default(false) @map("is_taxable_snapshot")
+  source                 String
+  assignmentId           Int?     @map("assignment_id")
+  accountIdSnapshot      Int?     @map("account_id_snapshot")
+  amount                 Decimal  @default(0.00) @db.Decimal(15, 2)
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+  payroll                Payroll  @relation(fields: [payrollId], references: [id], onDelete: Cascade)
+  component              PayrollComponent? @relation(fields: [componentId], references: [id], onDelete: SetNull)
+  assignment             EmployeePayrollComponent? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@index([payrollId])
+  @@index([componentId])
+  @@index([assignmentId])
+  @@index([createdAt])
+  @@map("payroll_component_lines")
 }
 
 model EmployeeLoan {
@@ -2944,9 +3111,10 @@ model EmployeeLoan {
 model Timesheet {
   slug        String?  @unique
   id          Int      @id @default(autoincrement())
-  employeeId  Int      @map("employee_id")
-  projectId   Int      @map("project_id")
-  taskId      Int?     @map("task_id")
+  employeeId  Int       @map("employee_id")
+  projectId   Int?      @map("project_id")
+  workOrderId Int?      @map("work_order_id")
+  taskId      Int?      @map("task_id")
   date        DateTime
   startTime   String?  @map("start_time")
   endTime     String?  @map("end_time")
@@ -2954,12 +3122,14 @@ model Timesheet {
   description String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  project     Project  @relation(fields: [projectId], references: [id])
-  task        Task?    @relation(fields: [taskId], references: [id])
+  employee    Employee   @relation(fields: [employeeId], references: [id])
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  task        Task?      @relation(fields: [taskId], references: [id])
 
   @@index([employeeId], map: "timesheets_employee_id_fkey")
   @@index([projectId], map: "timesheets_project_id_fkey")
+  @@index([workOrderId], map: "timesheets_work_order_id_fkey")
   @@index([taskId], map: "timesheets_task_id_fkey")
   @@index([createdAt])
   @@map("timesheets")
@@ -3690,6 +3860,19 @@ model Project {
   description       String?           @db.Text
   notes             String?           @db.Text
   createdBy         Int?              @map("created_by")
+  // F-2026-10-21-030 (RAB): snapshot nilai kontrak. Disalin SEKALI dari
+  // Quotation.grandTotal terpilih (atau diisi manual ber-alasan bila tanpa
+  // quotation) — BUKAN formula berjalan; perubahan quotation sesudahnya
+  // tidak mengubah snapshot ini. Sesudah budgetLockedAt terisi, nilai ini
+  // dan baris RAB hanya boleh berubah lewat revisi tercatat di ProjectLog.
+  contractAmount    Decimal?          @db.Decimal(15, 2) @map("contract_amount")
+  contractQuotationId Int?            @map("contract_quotation_id")
+  contractSetAt     DateTime?         @map("contract_set_at")
+  contractSetBy     Int?              @map("contract_set_by")
+  budgetLockedAt    DateTime?         @map("budget_locked_at")
+  budgetLockedBy    Int?              @map("budget_locked_by")
+  budgetRevisionNo  Int               @default(0) @map("budget_revision_no")
+  contractQuotation Quotation?        @relation("ProjectContractQuotation", fields: [contractQuotationId], references: [id], onDelete: SetNull)
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   overtimeRequests  OvertimeRequest[]
@@ -3707,6 +3890,9 @@ model Project {
   costCenterId      Int?              @map("cost_center_id")
 
   @@index([customerId], map: "projects_customer_id_fkey")
+  @@index([contractQuotationId], map: "projects_contract_quotation_id_fkey")
+  @@index([contractSetBy])
+  @@index([budgetLockedBy])
   @@index([customerVehicleId], map: "projects_customer_vehicle_id_fkey")
   @@index([status], map: "idx_projects_status")
   @@index([workOrderId])
@@ -3717,15 +3903,24 @@ model Project {
 }
 
 model ProjectItem {
-  id          Int     @id @default(autoincrement())
-  projectId   Int     @map("project_id")
-  itemId      Int?    @map("item_id")
-  description String?
-  qty         Decimal @default(1.00) @db.Decimal(15, 2)
-  cost        Decimal @default(0.00) @db.Decimal(15, 2)
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id             Int           @id @default(autoincrement())
+  projectId      Int           @map("project_id")
+  itemId         Int?          @map("item_id")
+  // F-2026-10-21-030 (RAB): tahap + kategori anggaran baris ini. Nullable
+  // demi baris draft/lama; kunci anggaran (BR-02) mewajibkan keduanya.
+  // onDelete Restrict: tahap yang dirujuk baris RAB tidak bisa dihapus
+  // dan meninggalkan baris yatim (BR-07).
+  projectStageId Int?          @map("project_stage_id")
+  category       String?
+  sortOrder      Int           @default(0) @map("sort_order")
+  description    String?
+  qty            Decimal       @default(1.00) @db.Decimal(15, 2)
+  cost           Decimal       @default(0.00) @db.Decimal(15, 2)
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage          ProjectStage? @relation("ProjectStageBudgetItems", fields: [projectStageId], references: [id], onDelete: Restrict)
 
   @@index([projectId], map: "project_items_project_id_fkey")
+  @@index([projectStageId], map: "project_items_project_stage_id_fkey")
   @@index([itemId])
   @@map("project_items")
 }
@@ -3742,6 +3937,7 @@ model ProjectStage {
   createdAt   DateTime               @default(now()) @map("created_at")
   updatedAt   DateTime               @updatedAt @map("updated_at")
   progress    ProjectStageProgress[]
+  budgetItems ProjectItem[]          @relation("ProjectStageBudgetItems")
   project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId], map: "project_stages_project_id_fkey")
@@ -3770,6 +3966,10 @@ model ProjectLog {
   projectId Int      @map("project_id")
   action    String
   notes     String?  @db.Text
+  // F-2026-10-21-030 (RAB): payload terstruktur nilai lama->baru untuk
+  // log rab_* (snapshot kontrak, kunci, revisi) — supaya riwayat revisi
+  // bisa direkonstruksi mesin dari baris log saja (acceptance A6).
+  details   Json?
   userId    Int?     @map("user_id")
   createdAt DateTime @default(now()) @map("created_at")
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)

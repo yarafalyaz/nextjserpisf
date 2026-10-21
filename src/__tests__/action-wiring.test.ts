@@ -104,6 +104,73 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // vehicle-fitment-form memanggilnya).
   "src/actions/vehicle-fitment.actions.ts::checkVehicleFitmentConflicts":
     "F-2026-10-21-025 backend; peringatan konflik di VehicleFitmentForm menyusul (frontend t_6d28c338)",
+  // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
+  // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
+  "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
+    "F-2026-10-21-019 backend; UI pull labor perintah kerja menyusul (frontend)",
+  // F-2026-10-21-009-V backend dulu (vonis BOT 4 PR #349): kontrak tutup/reopen
+  // job siap; tombol UI menyusul di kartu frontend (buang entri ini saat halaman
+  // produksi/perintah kerja memanggilnya).
+  "src/actions/manufacturing.actions.ts::closeProductionOrder":
+    "F-2026-10-21-009-V backend; tombol tutup produksi menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::reopenProductionOrder":
+    "F-2026-10-21-009-V backend; tombol buka-kembali produksi menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::closeWorkOrder":
+    "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::reopenWorkOrder":
+    "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
+  // F-2026-10-21-027 backend dulu (PR #360): kontrak komponen gaji terstruktur;
+  // UI /sdm/penggajian menyusul di kartu frontend Fira (buang entri ini saat UI memanggilnya).
+  "src/actions/hrm.actions.ts::createPayrollComponent":
+    "F-2026-10-21-027 backend; UI kelola komponen gaji menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::updatePayrollComponent":
+    "F-2026-10-21-027 backend; UI kelola komponen gaji menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::setPayrollComponentActive":
+    "F-2026-10-21-027 backend; UI kelola komponen gaji menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::getPayrollComponents":
+    "F-2026-10-21-027 backend; UI kelola komponen gaji menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::assignEmployeePayrollComponent":
+    "F-2026-10-21-027 backend; UI penugasan komponen menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::updateEmployeePayrollComponent":
+    "F-2026-10-21-027 backend; UI penugasan komponen menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::getEmployeePayrollComponents":
+    "F-2026-10-21-027 backend; UI penugasan komponen menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::getPayrollComponentLines":
+    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::addPayrollComponentLine":
+    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::updatePayrollComponentLineAmount":
+    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  "src/actions/hrm.actions.ts::removePayrollComponentLine":
+    "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  // F-2026-10-21-030 fase a+b (backend dulu, PR #370): UI RAB Fira DITAHAN
+  // menunggu Lead merge builder ini — vonis Lead t_3e892715 komentar #86.
+  // Buang ke-9 entri ini saat UI RAB memanggilnya.
+  "src/actions/project.actions.ts::setProjectContractFromQuotation":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::setProjectContractManual":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::createProjectBudgetItem":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::updateProjectBudgetItem":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::deleteProjectBudgetItem":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::lockProjectBudget":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::proposeProjectBudgetRevision":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::applyProjectBudgetRevision":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::rejectProjectBudgetRevision":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  // F-2026-10-21-021 tahap 3 backend dulu (kartu t_d4ae15cc): pemanggil jurnal
+  // E2/E3 rute provisi MATI; tombol posting di halaman /produksi/garansi
+  // menyusul di kartu frontend (buang 2 entri ini saat UI memanggilnya).
+  "src/actions/warranty.actions.ts::postWarrantyClaimCostAction":
+    "F-2026-10-21-021 tahap 3 backend; tombol posting biaya klaim (E2) di halaman garansi menyusul (frontend)",
+  "src/actions/warranty.actions.ts::postWarrantySupplierRecoveryAction":
+    "F-2026-10-21-021 tahap 3 backend; tombol posting recovery supplier (E3) di halaman garansi menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {

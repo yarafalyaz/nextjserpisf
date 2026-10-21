@@ -162,6 +162,25 @@ describe("createEmployee — with login account", () => {
     expect(res.error).toMatch(/sudah terdaftar/i)
     expect(transactionMock).not.toHaveBeenCalled()
   })
+
+  it("membuang ID peran non-desimal-murni dari loginRoleIds", async () => {
+    userFindUniqueMock.mockResolvedValue(null) // email free
+    txUserCreateMock.mockResolvedValue({ id: 7 })
+    txEmployeeCreateMock.mockResolvedValue({ id: 99 })
+
+    const res = await createEmployee(
+      fd(
+        { ...baseFields, email: "budi@corp.id", createLoginAccount: "true", loginPassword: "rahasia123" },
+        { loginRoleIds: ["3", "0x10", "1e3", " 5", "+5", "10.0", "", "abc"] }
+      )
+    )
+
+    expect(res).toEqual({ success: true, id: 99 })
+    // Hanya "3" desimal murni yang lolos; "0x10"->16, "1e3"->1000,
+    // " 5"->5, "+5", "10.0" dibuang — pola safeId taxIds/route.
+    const userArg = txUserCreateMock.mock.calls[0][0]
+    expect(userArg.data.roles.connect).toEqual([{ id: 3 }])
+  })
 })
 
 describe("createEmployee — permission guard", () => {

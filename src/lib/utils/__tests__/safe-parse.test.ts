@@ -28,6 +28,18 @@ describe("safeNumber", () => {
     expect(safeNumber("Infinity")).toBeNull()
     expect(safeNumber("NaN")).toBeNull()
   })
+
+  it("menolak notasi non-desimal-murni yang diterima Number() mentah", () => {
+    // "0x10"->16, "1e3"->1000, "0b101"->5, "0o17"->15, spasi di tepi ->5:
+    // semua lolos Number() mentah sebagai ID/nominal tak terduga.
+    for (const raw of ["0x10", "0XFF", "1e3", "1E3", "2e-2", "0b101", "0o17", " 5", "5 ", "\t7", "+ 5"]) {
+      expect(safeNumber(raw)).toBeNull()
+    }
+    // Notasi desimal murni tetap sah.
+    expect(safeNumber("+5")).toBe(5)
+    expect(safeNumber(".5")).toBe(0.5)
+    expect(safeNumber("5.")).toBe(5)
+  })
 })
 
 describe("requireNumber", () => {
@@ -57,6 +69,15 @@ describe("safeId", () => {
     expect(safeId("abc")).toBeNull()
     expect(safeId(null)).toBeNull()
     expect(safeId("")).toBeNull()
+  })
+
+  it("menolak notasi non-desimal-murni yang diterima Number() mentah", () => {
+    // Sebelum guard /^[0-9]+$/: "0x10"->16, "1e3"->1000, "0b101"->5,
+    // " 5"->5, "+5"->5, "10.0"->10 lolos sebagai ID peran/pajak.
+    for (const raw of ["0x10", "1e3", "0b101", "0o17", " 5", "5 ", "+5", "10.0", "1.0"]) {
+      expect(safeId(raw)).toBeNull()
+    }
+    expect(safeId("007")).toBe(7)
   })
 })
 

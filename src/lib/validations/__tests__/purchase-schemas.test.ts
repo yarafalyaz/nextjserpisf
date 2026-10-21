@@ -31,6 +31,35 @@ describe("validations/purchase.schemas", () => {
     });
   });
 
+  describe("nominal opsional format Indonesia", () => {
+    it("ongkir PO '2.000.000' tersimpan 2000000, kosong tetap undefined", () => {
+      const r = purchaseOrderSchema.safeParse({ vendorId: 1, date: "2026-06-09", shippingCost: "2.000.000", serviceFee: "1.500.000,50" });
+      expect(r.success).toBe(true);
+      if (r.success) {
+        expect(r.data.shippingCost).toBe(2_000_000);
+        expect(r.data.serviceFee).toBe(1_500_000.5);
+      }
+      const kosong = purchaseOrderSchema.safeParse({ vendorId: 1, date: "2026-06-09" });
+      expect(kosong.success).toBe(true);
+      if (kosong.success) expect(kosong.data.shippingCost).toBeUndefined();
+    });
+    it("biaya GR dan potongan tagihan '2.000.000' terbaca penuh", () => {
+      const gr = goodsReceiptSchema.safeParse({ purchaseOrderId: 1, warehouseId: 2, date: "2026-06-09", otherCost: "2.000.000", adminFee: "75.000" });
+      expect(gr.success).toBe(true);
+      if (gr.success) {
+        expect(gr.data.otherCost).toBe(2_000_000);
+        expect(gr.data.adminFee).toBe(75_000);
+      }
+      const bill = vendorBillSchema.safeParse({ vendorId: 1, date: "2026-06-09", withholdingAmount: "2.000.000" });
+      expect(bill.success).toBe(true);
+      if (bill.success) expect(bill.data.withholdingAmount).toBe(2_000_000);
+    });
+    it("admin fee pembayaran negatif ditolak", () => {
+      const r = vendorPaymentSchema.safeParse({ vendorId: 1, amount: 1000, paymentDate: "2026-06-09", paymentMethod: "transfer", adminFee: "-5" });
+      expect(r.success).toBe(false);
+    });
+  });
+
   describe("goodsReceiptSchema", () => {
     it("accepts valid GR", () => {
       expect(goodsReceiptSchema.safeParse({ purchaseOrderId: 1, warehouseId: 2, date: "2026-06-09" }).success).toBe(true);
