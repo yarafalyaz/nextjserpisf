@@ -691,7 +691,14 @@ export async function updateWarehouse(warehouseId: number, formData: FormData) {
 }
 
 
-/** Baca opsi akun login dari form karyawan (dipakai create + update, identik). */
+/** Baca opsi akun login dari form karyawan (dipakai create + update, identik).
+ * ID peran hanya desimal murni via safeId — pola repo (taxIds, route
+ * workflow/print/attachments/notifications, parseId tukar faktur). Number()
+ * mentah menerima "0x10"->16, "1e3"->1000, " 5"->5: ID tak terduga lolos
+ * ke connect/set lalu meledak P2025/P2003 mentah atau menaut peran salah.
+ * Nilai non-ID dibuang diam-diam (bukan menolak): form hanya mengirim string
+ * ID sah dari checkbox peran, tak ada jalur sah yang mengirim "0" — dan
+ * menolak di sini mengubah respons sukses-menjadi-gagal bagi payload lama. */
 function readEmployeeLoginInput(formData: FormData) {
   return {
     wantsLogin:
@@ -701,8 +708,8 @@ function readEmployeeLoginInput(formData: FormData) {
     loginPass: formData.get("loginPassword") as string | null,
     loginRoleIds: formData
       .getAll("loginRoleIds")
-      .map((v) => Number(v))
-      .filter((n) => Number.isFinite(n)),
+      .map((v) => safeId(v))
+      .filter((n): n is number => n !== null),
   };
 }
 

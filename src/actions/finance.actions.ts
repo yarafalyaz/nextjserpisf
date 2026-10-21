@@ -1060,7 +1060,10 @@ export async function createPettyCash(formData: FormData) {
         const sourceEntries = await tx.journalEntry.findMany({
           where: { accountId: sourceId, journal: { status: "POSTED" } },
         });
-        const sourceBalance = sourceEntries.reduce((s, e) => s + Number(e.debit) - Number(e.credit), 0);
+        const sourceBalance = sourceEntries.reduce(
+          (s, e) => safeSubtract(safeAdd(s, Number(e.debit), 2), Number(e.credit), 2),
+          0,
+        );
         if (sourceBalance < amount) {
           throw new Error(
             `Saldo akun Kas/Bank tidak mencukupi: tersedia ${sourceBalance.toLocaleString("id-ID")}, dibutuhkan ${amount.toLocaleString("id-ID")}`,

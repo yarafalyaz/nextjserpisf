@@ -23,6 +23,7 @@ const orderFindUniqueMock = vi.fn()
 const woFindUniqueMock = vi.fn()
 const vendorFindUniqueMock = vi.fn()
 const timesheetFindManyMock = vi.fn()
+const jobGuardMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -36,6 +37,9 @@ vi.mock("@/lib/services/production-cost.service", () => ({
 }))
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: (...a: unknown[]) => periodOpenMock(...a),
+}))
+vi.mock("@/lib/services/job-closeout.service", () => ({
+  assertJobCostMutable: (...a: unknown[]) => jobGuardMock(...a),
 }))
 
 vi.mock("@/lib/db/prisma", () => {
@@ -63,6 +67,7 @@ import {
   updateProductionCost,
   deleteProductionCost,
   pullLaborCostFromTimesheets,
+  pullLaborCostFromWorkOrderTimesheets,
   applyOverheadToProductionOrder,
 } from "../production-cost.actions"
 
@@ -81,6 +86,8 @@ beforeEach(() => {
 
   requirePermissionMock.mockResolvedValue({ id: 5 })
   periodOpenMock.mockResolvedValue(undefined)
+  jobGuardMock.mockReset()
+  jobGuardMock.mockResolvedValue(undefined)
   applyDeltaMock.mockResolvedValue(undefined)
   vi.spyOn(console, "error").mockImplementation(() => {})
 })
@@ -265,6 +272,64 @@ describe("deleteProductionCost", () => {
   })
 })
 
+describe("F-2026-10-21-009-V: guard job closed (production-cost actions)", () => {
+  const CLOSED = new Error("Biaya tidak dapat ditambahkan: perintah kerja sudah ditutup (closed).")
+
+  it("create ke job closed ditolak guard, tanpa tulis", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    jobGuardMock.mockRejectedValue(CLOSED)
+
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 1000 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("sudah ditutup")
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+  })
+
+  it("create WO-only ke WO closed ditolak guard", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7 })
+    jobGuardMock.mockRejectedValue(CLOSED)
+
+    const res = await createProductionCost(fd({ workOrderId: 7, category: "service", amount: 500 }))
+
+    expect(res.success).toBe(false)
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("update biaya job closed ditolak guard", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, workOrderId: null, amount: 100 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    jobGuardMock.mockRejectedValue(CLOSED)
+
+    const res = await updateProductionCost(5, fd({ category: "labor", amount: 300 }))
+
+    expect(res.success).toBe(false)
+    expect(costUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("delete biaya job closed ditolak guard", async () => {
+    costFindUniqueMock.mockResolvedValue({ id: 5, productionOrderId: 1, workOrderId: null, amount: 100 })
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "in_progress" })
+    jobGuardMock.mockRejectedValue(CLOSED)
+
+    const res = await deleteProductionCost(5)
+
+    expect(res.success).toBe(false)
+    expect(costDeleteMock).not.toHaveBeenCalled()
+  })
+
+  it("create PO closed ditolak mutableOrderError menyebut closed", async () => {
+    orderFindUniqueMock.mockResolvedValue({ id: 1, status: "closed" })
+
+    const res = await createProductionCost(fd({ productionOrderId: 1, category: "labor", amount: 1000 }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("closed")
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+})
+
 describe("pullLaborCostFromTimesheets", () => {
   it("refuses to pull timesheets into a completed production order", async () => {
     woFindUniqueMock.mockResolvedValue({ id: 7, projectId: 3 })
@@ -348,6 +413,115 @@ describe("pullLaborCostFromTimesheets", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("Tarif")
     expect(timesheetFindManyMock).not.toHaveBeenCalled()
+  })
+
+  it("menolak tarif 0 di muka (F-2026-10-21-019 putusan final)", async () => {
+    const res = await pullLaborCostFromTimesheets(7, 1, 0)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("Tarif")
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+})
+
+describe("pullLaborCostFromWorkOrderTimesheets — jalur WO langsung (F-2026-10-21-019)", () => {
+  it("WO non-proyek: timesheet WO 8 jam menjadi tepat 1 ProductionCost labor tanpa PO/rollup", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
+    timesheetFindManyMock.mockResolvedValue([
+      { id: 21, hours: 8, date: new Date(), description: null },
+    ])
+    costFindManyMock.mockResolvedValue([])
+    costCreateMock.mockResolvedValue({ id: 1 })
+
+    const res = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+
+    expect(res.success).toBe(true)
+    expect(res.count).toBe(1)
+    expect(res.added).toBe(200000)
+    expect(costCreateMock).toHaveBeenCalledTimes(1)
+    const first = costCreateMock.mock.calls[0][0]
+    expect(first.data).toMatchObject({
+      productionOrderId: null,
+      workOrderId: 7,
+      category: "labor",
+      hours: 8,
+      rate: 25000,
+      amount: 200000,
+      sourceTimesheetId: 21,
+    })
+    // Tanpa ProductionOrder: tidak ada rollup HPP / jurnal baru.
+    expect(applyDeltaMock).not.toHaveBeenCalled()
+    expect(orderFindUniqueMock).not.toHaveBeenCalled()
+  })
+
+  it("pull kedua idempoten: 0 baris baru (semesta global per sourceTimesheetId)", async () => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
+    timesheetFindManyMock.mockResolvedValue([
+      { id: 21, hours: 8, date: new Date(), description: null },
+    ])
+    // Tarikan pertama: belum ada yang tertarik.
+    costFindManyMock.mockResolvedValueOnce([])
+    costCreateMock.mockResolvedValue({ id: 1 })
+    const first = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+    expect(first.success).toBe(true)
+    expect(first.count).toBe(1)
+
+    // Tarikan kedua: sourceTimesheetId 21 sudah punya ProductionCost (konteks mana pun).
+    costFindManyMock.mockResolvedValue([{ sourceTimesheetId: 21 }])
+    costCreateMock.mockClear()
+    const second = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+
+    expect(second.success).toBe(true)
+    expect(second.count).toBe(0)
+    expect(second.added).toBe(0)
+    expect(costCreateMock).not.toHaveBeenCalled()
+    // Penjaga global: query menanyakan sourceTimesheetId kandidat, bukan per-perintah.
+    const lastFindManyCall = costFindManyMock.mock.calls.at(-1)
+    expect(lastFindManyCall?.[0].where).toEqual({ sourceTimesheetId: { in: [21] } })
+  })
+
+  it.each(["completed", "cancelled"])("pull ke WO %s ditolak menyebut status", async (status) => {
+    woFindUniqueMock.mockResolvedValue({ id: 7, status })
+
+    const res = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain(status)
+    expect(timesheetFindManyMock).not.toHaveBeenCalled()
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("menolak tarif <= 0 / tak hingga di muka", async () => {
+    for (const rate of [0, -5, Number.NaN, Number.POSITIVE_INFINITY]) {
+      const res = await pullLaborCostFromWorkOrderTimesheets(7, rate)
+      expect(res.success).toBe(false)
+      expect(res.error).toContain("Tarif")
+    }
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("WO tidak ditemukan ditolak; tanpa timesheet WO ditolak", async () => {
+    woFindUniqueMock.mockResolvedValue(null)
+    const missing = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+    expect(missing.success).toBe(false)
+    expect(missing.error).toContain("Perintah kerja tidak ditemukan")
+
+    woFindUniqueMock.mockResolvedValue({ id: 7, status: "in_progress" })
+    timesheetFindManyMock.mockResolvedValue([])
+    const empty = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+    expect(empty.success).toBe(false)
+    expect(empty.error).toContain("Tidak ada timesheet")
+    expect(costCreateMock).not.toHaveBeenCalled()
+  })
+
+  it("tanpa izin manage_production_costs ditolak sebelum query apa pun", async () => {
+    requirePermissionMock.mockRejectedValue(new Error("Tidak memiliki izin"))
+
+    const res = await pullLaborCostFromWorkOrderTimesheets(7, 25000)
+
+    expect(res.success).toBe(false)
+    expect(woFindUniqueMock).not.toHaveBeenCalled()
+    expect(costCreateMock).not.toHaveBeenCalled()
   })
 })
 
