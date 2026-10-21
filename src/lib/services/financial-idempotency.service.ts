@@ -10,7 +10,16 @@
  * - Replay mengembalikan referensi hasil awal (tipe + id) agar pemanggil bisa
  *   tunjukkan bukti operasi pertama, bukan sukses generik.
  */
-export type IdemScope = "customer_credit_allocate" | "customer_credit_refund"
+export type IdemScope =
+  | "customer_credit_allocate"
+  | "customer_credit_refund"
+  | "tax_invoice_issue"
+  | "tax_invoice_replace"
+  | "tax_invoice_cancel"
+  | "tax_invoice_credit"
+  | "withholding_issue"
+  | "withholding_revoke"
+  | "withholding_settle"
 
 export type IdemExisting = {
   scope: string
@@ -63,6 +72,15 @@ export function payloadFingerprint(parts: Record<string, string | number>): stri
 const EXPECTED_REF_TYPE: Record<IdemScope, string> = {
   customer_credit_allocate: "SalesPayment",
   customer_credit_refund: "Journal",
+  tax_invoice_issue: "TaxInvoice",
+  tax_invoice_replace: "TaxInvoice",
+  tax_invoice_cancel: "TaxInvoice",
+  tax_invoice_credit: "TaxInvoice",
+  withholding_issue: "WithholdingCertificate",
+  withholding_revoke: "WithholdingCertificate",
+  // Setor TaxPayment menghasilkan TaxPayment, bukan bupot: bind manual
+  // di service (bukan via registry ini) — lihat settleWithholdingTax.
+  withholding_settle: "TaxPayment",
 }
 
 export type IdemTx = {

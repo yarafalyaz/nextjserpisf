@@ -64,6 +64,8 @@ const SLUGGED_MODELS = {
   bankTransfer: "bankTransfer",
   purchaseAdvance: "purchaseAdvance",
   taxPayment: "taxPayment",
+  taxInvoice: "taxInvoice",
+  withholdingCertificate: "withholdingCertificate",
   invoiceExchange: "invoiceExchange",
   approvalWorkflow: "approvalWorkflow",
   approval: "approval",

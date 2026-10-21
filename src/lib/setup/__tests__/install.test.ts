@@ -233,6 +233,8 @@ describe("installBaseData", () => {
       code: "PPH22",
       name: "PPh 22",
       rate: 0.5,
+      article: null,
+      objectCode: null,
       liabilityAccountId: null,
       receivableAccountId: idOf("110507"),
     })

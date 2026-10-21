@@ -64,6 +64,7 @@ export type ReportPdfKey =
   | "valuasi-stok"
   | "kartu-stok"
   | "pajak"
+  | "posisi-spt"
   | "rekonsiliasi-ppn"
   | "bukti-potong-pph"
   | "analisis-penjualan"
@@ -148,6 +149,7 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "valuasi-stok": "Valuasi-Stok",
     "kartu-stok": "Kartu-Stok",
     pajak: "Laporan-Pajak-PPN",
+    "posisi-spt": "Posisi-SPT-Masa-PPN",
     "rekonsiliasi-ppn": "Rekonsiliasi-PPN",
     "bukti-potong-pph": "Bukti-Potong-PPh",
     "analisis-penjualan": "Analisis-Penjualan",

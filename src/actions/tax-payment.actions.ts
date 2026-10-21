@@ -89,6 +89,10 @@ export async function createTaxPayment(formData: FormData): Promise<TaxPaymentAc
           date,
           period: rawPeriod || null,
           taxTypeId: taxTypeId ?? null,
+          // F-005: billing/NTPN/jenis terstruktur; kosong = setor legacy.
+          billingCode: v.billingCode ?? null,
+          ntpn: v.ntpn ?? null,
+          taxKind: v.taxKind ?? null,
           taxAccountId,
           paymentAccountId,
           amount: toMoney(amount),

@@ -106,6 +106,7 @@ import {
 } from "@/lib/reports/stock-simple-data"
 import {
   loadTaxSummary,
+  loadTaxSummarySpt,
   loadVatReconciliation,
   loadWithholdingSummary,
 } from "@/lib/reports/tax-summary-data"
@@ -898,6 +899,15 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     defaultPeriod: (now: Date) => ({ start: new Date(now.getFullYear(), now.getMonth(), 1), end: now }),
     async load({ period }) {
       const report = await loadVatReconciliation(period)
+      return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "posisi-spt": {
+    title: "Posisi SPT Masa PPN",
+    subtitle: "Per Masa: Dokumen vs Jurnal POSTED vs Setor",
+    defaultPeriod: startOfYear,
+    async load({ period }) {
+      const report = await loadTaxSummarySpt(period)
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },
