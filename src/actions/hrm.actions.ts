@@ -1626,6 +1626,16 @@ export async function updatePayroll(id: number, formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
+    // F-026 MEDIUM (vonis Bot 4): flag client BUKAN bukti berhenti. Belum ada
+    // tanggal berhenti terstruktur di Employee — fail-closed: tolak flag,
+    // jangan diam-diam final Pasal 17 maupun fallback TER seolah tak terjadi.
+    if (formData.get("resignationFinal") === "true") {
+      throw new Error(
+        "Penanda berhenti bekerja belum bisa dibuktikan dari data berhenti terverifikasi di server. " +
+          "Final berhenti ditolak — gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
+      );
+    }
+
     const employeeId = v.employeeId ?? null;
     const startDate = wibDateToUtcMidnight(v.startDate);
     const endDate = wibDateToUtcMidnight(v.endDate);
@@ -1671,7 +1681,7 @@ export async function updatePayroll(id: number, formData: FormData) {
       employeeId,
       period: v.period,
       excludePayrollId: id,
-      resignationFinal: formData.get("resignationFinal") === "true",
+      resignationFinal: false,
       endDate,
       fallbackLabel: "update slip",
       v: { ...v, lateDeduction, lateMinutes, workingDays, presentDays, absentDays, absentDeduction },
@@ -1723,7 +1733,16 @@ export async function approvePayroll(payrollId: number) {
     // periode ini. Approve = finalisasi angka pajak/BPJS — angka 2024 yang
     // lolos diam-diam adalah kesalahan gaji massal. Snapshot menyimpan
     // fromFallback persis untuk gate ini.
-    const snapshot = payroll.statutorySnapshot as { fromFallback?: boolean; pph21Ter?: { method?: string } } | null;
+    const snapshot = payroll.statutorySnapshot as { fromFallback?: boolean; pph21Ter?: { method?: string; periodKind?: string } } | null;
+    // F-026 HIGH: slip Desember massal masih TER bulanan (pending-final) —
+    // belum hitung ulang Pasal 17. Tolak approve; hitung ulang lewat update
+    // slip draft membuka jalur buildPayrollWrite final-december per karyawan.
+    if (snapshot?.pph21Ter?.periodKind === "bulk-december-pending-final") {
+      throw new Error(
+        "Penggajian Desember ini masih memakai TER bulanan dan belum dihitung ulang Pasal 17. " +
+          "Hitung ulang slip draft ini (edit/update slip) agar memakai hitung final Pasal 17 sebelum approve.",
+      );
+    }
     // F-026: slip metode legacy tidak boleh difinalkan sesudah titik berlaku
     // (tabel TER kini wajib terisi; hitung ulang slip lewat update draft).
     if (snapshot?.pph21Ter?.method === "LEGACY_PRE_TER") {

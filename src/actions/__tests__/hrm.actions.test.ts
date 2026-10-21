@@ -1143,6 +1143,51 @@ describe("Payroll extra branches", () => {
     expect(r?.error).toContain("cadangan (2024)")
   })
 
+  it("approvePayroll menolak slip Desember massal pending-final Pasal 17 (F-026 HIGH)", async () => {
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "draft",
+      statutorySnapshot: { fromFallback: false, pph21Ter: { method: "TER", periodKind: "bulk-december-pending-final" } },
+    })
+    const r = await actions.approvePayroll(1)
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("belum dihitung ulang Pasal 17")
+    expect(r?.error).toContain("Hitung ulang slip draft ini")
+    expect(prismaMock.payroll.updateMany).not.toHaveBeenCalled()
+  })
+
+  it("generateBulkPayroll Desember menandai snapshot pending-final yang tak bisa di-approve (F-026 HIGH)", async () => {
+    prismaMock.employee.findMany.mockResolvedValue([{
+      id: 1, baseSalary: 5000000, maritalStatus: "single",
+      employeeLoans: [],
+    }])
+    const r = await actions.generateBulkPayroll("2026-12", "2026-12-01", "2026-12-31")
+    expect(r?.success).toBe(true)
+    const createManyArg = prismaMock.payroll.createMany.mock.calls.at(-1)?.[0]
+    const rows = createManyArg?.data as Array<{ statutorySnapshot: { pph21Ter: { periodKind: string } } }>
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows[0].statutorySnapshot.pph21Ter.periodKind).toBe("bulk-december-pending-final")
+    // Slip yang sama persis dari generate massal wajib tertolak di approve.
+    prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({
+      id: 1, status: "draft", statutorySnapshot: rows[0].statutorySnapshot,
+    })
+    const blocked = await actions.approvePayroll(1)
+    expect(blocked?.success).toBe(false)
+    expect(blocked?.error).toContain("Pasal 17")
+  })
+
+  it("updatePayroll menolak flag final-resign client tanpa bukti berhenti server (F-026 MEDIUM Bot 4)", async () => {
+    const f = new FormData()
+    f.set("employeeId", "1")
+    f.set("period", "2026-09")
+    f.set("startDate", "2026-09-01")
+    f.set("endDate", "2026-09-30")
+    f.set("resignationFinal", "true")
+    const r = await actions.updatePayroll(1, f)
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("belum bisa dibuktikan")
+    expect(prismaMock.payroll.update).not.toHaveBeenCalled()
+  })
+
   it("markPayrollPaid on non-approved rejects", async () => {
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "paid" })
     const r = await actions.markPayrollPaid(1)
