@@ -28,6 +28,14 @@ describe("safeNumber", () => {
     expect(safeNumber("Infinity")).toBeNull()
     expect(safeNumber("NaN")).toBeNull()
   })
+
+  it("menolak notasi non-desimal murni (0x10/1e3/0b101/spasi) — bukan angka 16/1000/5", () => {
+    for (const weird of ["0x10", "1e3", "0b101", " 5", "5 ", "+5 ", "10.0.0", "--5", "5,5"]) {
+      expect(safeNumber(weird)).toBeNull()
+    }
+    expect(safeNumber("+5")).toBe(5)
+    expect(safeNumber("2.5")).toBe(2.5)
+  })
 })
 
 describe("requireNumber", () => {
@@ -57,6 +65,13 @@ describe("safeId", () => {
     expect(safeId("abc")).toBeNull()
     expect(safeId(null)).toBeNull()
     expect(safeId("")).toBeNull()
+  })
+
+  it("menolak ID non-desimal murni (0x10/1e3/0b101/spasi/+5/10.0) — bukan ID 10/16/1000", () => {
+    for (const weird of ["0x10", "1e3", "0b101", " 10", "10 ", "+10", "10.0", "1_0"]) {
+      expect(safeId(weird)).toBeNull()
+    }
+    expect(safeId("10")).toBe(10)
   })
 })
 
