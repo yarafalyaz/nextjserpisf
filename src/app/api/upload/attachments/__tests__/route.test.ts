@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { POST, GET, resolveAttachmentExt } from "../route"
+import { POST, GET, resolveAttachmentExt, detectMimeFromSignature } from "../route"
 import { NextRequest } from "next/server"
 
 const mocks = vi.hoisted(() => ({
@@ -37,13 +37,24 @@ vi.mock("fs/promises", () => ({
   unlink: (...a: unknown[]) => mocks.unlink(...a),
 }))
 
+function sigFor(type: string): number[] {
+  switch (type) {
+    case "image/jpeg": return [0xff, 0xd8, 0xff, 0xe0, 0, 0, 0, 0, 0, 0, 0, 0]
+    case "image/png": return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]
+    case "image/gif": return [0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0, 0, 0, 0, 0, 0]
+    case "image/webp": return [0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]
+    case "application/pdf": return [0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x37, 0, 0, 0, 0]
+    default: return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]
+  }
+}
+
 function makeFile(name: string, type: string, size = 1024, bytes?: number[]): File {
   const f = new File(["x"], name, { type })
   // Override size getter (File from small content is tiny)
   Object.defineProperty(f, "size", { value: size })
-  // Provide arrayBuffer: default ke signature PNG yang sah supaya tes yang
-  // sudah ada ("upload sukses") tidak ikut merah oleh cek magic bytes.
-  const sig = bytes ?? [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]
+  // Signature sah sesuai MIME terdeklarasi supaya tes sukses tidak merah
+  // oleh cek magic bytes + kecocokan signature↔MIME.
+  const sig = bytes ?? sigFor(type)
   f.arrayBuffer = async () => new Uint8Array(sig).buffer as ArrayBuffer
   return f
 }
@@ -237,6 +248,64 @@ describe("POST /api/upload/attachments", () => {
     expect(resolveAttachmentExt("application/pdf", "nota.php")).toBe("pdf")
     expect(resolveAttachmentExt("image/jpeg", "foto.svg")).toBe("jpg")
     expect(resolveAttachmentExt("image/webp", "x")).toBe("webp")
+  })
+
+  it("detectMimeFromSignature maps tiap signature ke MIME tepat", () => {
+    expect(detectMimeFromSignature(Buffer.from(sigFor("image/jpeg")))).toBe("image/jpeg")
+    expect(detectMimeFromSignature(Buffer.from(sigFor("image/png")))).toBe("image/png")
+    expect(detectMimeFromSignature(Buffer.from(sigFor("image/gif")))).toBe("image/gif")
+    expect(detectMimeFromSignature(Buffer.from(sigFor("image/webp")))).toBe("image/webp")
+    expect(detectMimeFromSignature(Buffer.from(sigFor("application/pdf")))).toBe("application/pdf")
+    expect(detectMimeFromSignature(Buffer.from([0x3c, 0x3f, 0x70, 0x68, 0x70, 0x20, 0]))).toBeNull()
+  })
+
+  it("rejects JPEG bytes declared as application/pdf (temuan BOT 6 PR #344)", async () => {
+    // Isi JPEG sah + header application/pdf: sebelumnya tersimpan .pdf
+    // dengan mimeType DB application/pdf. Harus ditolak — tak ada tulis/DB.
+    const file = makeFile("foto.pdf", "application/pdf", 1024, sigFor("image/jpeg"))
+    const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "5" }))
+    expect(res.status).toBe(400)
+    expect(mocks.writeFile).not.toHaveBeenCalled()
+    expect(mocks.attachmentCreate).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ["jpg→pdf", "application/pdf", "image/jpeg"],
+    ["png→pdf", "application/pdf", "image/png"],
+    ["pdf→png", "image/png", "application/pdf"],
+    ["webp→jpeg", "image/jpeg", "image/webp"],
+    ["gif→webp", "image/webp", "image/gif"],
+  ] as const)("rejects mismatched signature↔declared MIME: %s", async (_label, declared, bytesFor) => {
+    const file = makeFile("x.bin", declared, 1024, sigFor(bytesFor))
+    const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "5" }))
+    expect(res.status).toBe(400)
+    expect(mocks.writeFile).not.toHaveBeenCalled()
+    expect(mocks.attachmentCreate).not.toHaveBeenCalled()
+  })
+
+  it("accepts signature yang cocok dengan MIME terdeklarasi (jpeg/pdf/webp/gif)", async () => {
+    for (const [name, mime] of [["a.jpg", "image/jpeg"], ["b.pdf", "application/pdf"], ["c.webp", "image/webp"], ["d.gif", "image/gif"]] as const) {
+      vi.clearAllMocks()
+      mocks.authFn.mockResolvedValue({ user: { id: 3 } })
+      mocks.canModifyAttachment.mockResolvedValue(true)
+      mocks.attachmentCreate.mockResolvedValue({ id: 1, filename: "x" })
+      mocks.writeFile.mockResolvedValue(undefined)
+      mocks.mkdir.mockResolvedValue(undefined)
+      mocks.unlink.mockResolvedValue(undefined)
+      const file = makeFile(name, mime)
+      const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "5" }))
+      expect(res.status).toBe(200)
+      expect(mocks.attachmentCreate).toHaveBeenCalledWith(expect.objectContaining({
+        data: expect.objectContaining({ mimeType: mime }),
+      }))
+    }
+  })
+
+  it("has no dead code: declared-MIME-mismatch not stored as plain image", async () => {
+    // PNG bytes di-header-kan application/pdf juga ditolak (bukan hanya JPEG).
+    const file = makeFile("scan.pdf", "application/pdf", 1024, sigFor("image/png"))
+    const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "5" }))
+    expect(res.status).toBe(400)
   })
 
   it("returns 500 on internal error", async () => {
