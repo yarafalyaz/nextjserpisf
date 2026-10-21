@@ -46,6 +46,9 @@ function categoryLabel(category: string | null): string {
  */
 export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetForProject }>) {
   const isEmpty = budget.totalBudget === 0 && budget.contractAmount === null && budget.history.length === 0
+  const showUnallocated = budget.unallocatedBudget.total > 0 || budget.unallocatedRealized > 0
+  const budgetUsedPercent =
+    budget.totalBudget > 0 ? (budget.realizedTotal / budget.totalBudget) * 100 : null
 
   return (
     <ReportCardShell
@@ -93,12 +96,16 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
       </div>
 
       {budget.totalBudget > 0 && (
-        <section aria-label="Anggaran per tahap" className="mt-4 border-t border-default/50 pt-3">
-          <h3 className="text-sm font-semibold text-foreground">Anggaran per Tahap</h3>
+        <section aria-label="Anggaran vs realisasi per tahap" className="mt-4 border-t border-default/50 pt-3">
+          <h3 className="text-sm font-semibold text-foreground">Anggaran vs Realisasi per Tahap</h3>
+          <div className="overflow-x-auto">
           <DetailTable>
             <DetailTableHead>
               <DetailTableTh>Tahap / Kategori</DetailTableTh>
               <DetailTableTh align="right">Anggaran</DetailTableTh>
+              <DetailTableTh align="right">Realisasi</DetailTableTh>
+              <DetailTableTh align="right">Selisih</DetailTableTh>
+              <DetailTableTh align="right">% Terpakai</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
               {budget.perStageBudget.map((stage) => (
@@ -106,25 +113,43 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
                   <DetailTableRow>
                     <DetailTableTd>{stage.stageName ?? `Tahap #${stage.projectStageId}`}</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(stage.total)}</DetailTableTd>
+                    <DetailTableTd align="right">-</DetailTableTd>
+                    <DetailTableTd align="right">-</DetailTableTd>
+                    <DetailTableTd align="right">-</DetailTableTd>
                   </DetailTableRow>
                   {stage.categories.map((cat) => (
                     <DetailTableRow key={`cat-${cat.category ?? "null"}`}>
                       <DetailTableTd className="pl-6 text-muted-foreground">{categoryLabel(cat.category)}</DetailTableTd>
                       <DetailTableTd align="right">{formatCurrency(cat.amount)}</DetailTableTd>
+                      <DetailTableTd align="right">-</DetailTableTd>
+                      <DetailTableTd align="right">-</DetailTableTd>
+                      <DetailTableTd align="right">-</DetailTableTd>
                     </DetailTableRow>
                   ))}
                 </Fragment>
               ))}
-              {budget.unallocatedBudget.total > 0 && (
+              {showUnallocated && (
                 <Fragment key="unallocated">
                   <DetailTableRow>
                     <DetailTableTd>Belum Teralokasi</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(budget.unallocatedBudget.total)}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(budget.unallocatedRealized)}</DetailTableTd>
+                    <DetailTableTd align="right">
+                      {formatCurrency(budget.unallocatedBudget.total - budget.unallocatedRealized)}
+                    </DetailTableTd>
+                    <DetailTableTd align="right">
+                      {budget.unallocatedBudget.total > 0
+                        ? `${((budget.unallocatedRealized / budget.unallocatedBudget.total) * 100).toFixed(1)}%`
+                        : "-"}
+                    </DetailTableTd>
                   </DetailTableRow>
                   {budget.unallocatedBudget.categories.map((cat) => (
                     <DetailTableRow key={`unalloc-${cat.category ?? "null"}`}>
                       <DetailTableTd className="pl-6 text-muted-foreground">{categoryLabel(cat.category)}</DetailTableTd>
                       <DetailTableTd align="right">{formatCurrency(cat.amount)}</DetailTableTd>
+                      <DetailTableTd align="right">-</DetailTableTd>
+                      <DetailTableTd align="right">-</DetailTableTd>
+                      <DetailTableTd align="right">-</DetailTableTd>
                     </DetailTableRow>
                   ))}
                 </Fragment>
@@ -132,11 +157,17 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
             </DetailTableBody>
             <DetailTableFoot>
               <DetailTableFootRow>
-                <DetailTableTd>Total RAB</DetailTableTd>
+                <DetailTableTd>Total RAB vs Realisasi</DetailTableTd>
                 <DetailTableTd align="right">{formatCurrency(budget.totalBudget)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrency(budget.realizedTotal)}</DetailTableTd>
+                <DetailTableTd align="right">{formatCurrency(budget.varianceTotal)}</DetailTableTd>
+                <DetailTableTd align="right">
+                  {budgetUsedPercent === null ? "-" : `${budgetUsedPercent.toFixed(1)}%`}
+                </DetailTableTd>
               </DetailTableFootRow>
             </DetailTableFoot>
           </DetailTable>
+          </div>
           <p className="mt-2 text-xs text-muted-foreground">
             Realisasi per tahap belum tersedia — seluruh realisasi {formatCurrency(budget.unallocatedRealized)} tampil sebagai belum teralokasi, tidak dibagi rata ke tahap.
           </p>

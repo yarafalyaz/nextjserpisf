@@ -65,6 +65,31 @@ describe("ProjectBudgetCard F-2026-10-21-030", () => {
     unmountCard(root)
   })
 
+  it("kolom F1: realisasi hanya di baris belum-teralokasi + total; per tahap '-'", () => {
+    const budget = budgetFixture()
+    const { container, root } = renderCard(<ProjectBudgetCard budget={budget} />)
+    const text = container.textContent ?? ""
+    expect(container.querySelector('[aria-label="Anggaran vs realisasi per tahap"]')).not.toBeNull()
+    expect(text).toContain("Anggaran vs Realisasi per Tahap")
+    expect(text).toContain("% Terpakai")
+    // total: 6.000.000 / 14.500.000 = 41.4%; belum-teralokasi: -4.500.000, 400.0%
+    expect(text).toContain("41.4%")
+    expect(text).toContain("400.0%")
+    expect(text).toContain("Rp -4.500.000")
+    unmountCard(root)
+  })
+
+  it("realisasi tampil di baris belum-teralokasi walau anggaran belum-teralokasi 0", () => {
+    const budget = budgetFixture({
+      items: [{ id: 1, projectStageId: 10, category: "material", qty: 1, cost: 2_000_000, sortOrder: 1 }],
+    })
+    const { container, root } = renderCard(<ProjectBudgetCard budget={budget} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Belum Teralokasi")
+    expect(text).toContain("Rp 6.000.000")
+    unmountCard(root)
+  })
+
   it("kontrak belum ditetapkan tampil eksplisit, bukan nol", () => {
     const budget = budgetFixture({ contractAmount: null, contractSource: null, budgetLockedAt: null })
     const { container, root } = renderCard(<ProjectBudgetCard budget={budget} />)
