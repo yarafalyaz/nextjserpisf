@@ -115,6 +115,27 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
+  // F-2026-10-21-030 fase a+b (backend dulu, PR #370): UI RAB Fira DITAHAN
+  // menunggu Lead merge builder ini — vonis Lead t_3e892715 komentar #86.
+  // Buang ke-9 entri ini saat UI RAB memanggilnya.
+  "src/actions/project.actions.ts::setProjectContractFromQuotation":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::setProjectContractManual":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::createProjectBudgetItem":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::updateProjectBudgetItem":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::deleteProjectBudgetItem":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::lockProjectBudget":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::proposeProjectBudgetRevision":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::applyProjectBudgetRevision":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
+  "src/actions/project.actions.ts::rejectProjectBudgetRevision":
+    "F-2026-10-21-030 backend (PR #370); UI RAB menyusul sesudah Lead merge — vonis t_3e892715 #86",
 }
 
 describe("keterhubungan aksi server", () => {
