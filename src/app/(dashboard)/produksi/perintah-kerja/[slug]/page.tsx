@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/ui/print-button";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
 import { WhatsappButton } from "@/components/reports/whatsapp-button";
+import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note";
+import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data";
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { WorkOrderMaterialNeedsCard } from "@/components/reports/work-order-material-needs-card";
 import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs-data";
@@ -180,6 +182,9 @@ export default async function WorkOrderDetailPage({
   // Kartu murni presentasi: tanpa hitung ulang, tanpa tulis WorkOrderItem.status.
   const partStatus = await getWorkOrderPartStatus(wo.id);
 
+  // F-036 tahap 2 + F-035: jejak klik WA terakhir + histori geser endDate.
+  const whatsappTrail = await getWhatsappTrail("WorkOrder", wo.id);
+
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
     0,
@@ -248,6 +253,9 @@ export default async function WorkOrderDetailPage({
             )}
             <WhatsappButton
               phone={wo.customer.phone}
+              modelType="WorkOrder"
+              modelId={wo.id}
+              surface="detail"
               message={buildWhatsappMessage({
                 customerName: wo.customer.name,
                 documentLabel: "Perintah Kerja",
@@ -419,6 +427,8 @@ export default async function WorkOrderDetailPage({
       {partStatus ? (
         <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
       ) : null}
+
+      <WhatsappTrailNote trail={whatsappTrail} />
 
       {/* Pengeluaran material yang lahir dari WO ini. SELALU tampil: tombol
           "Buat Pengeluaran Material" menulis MI langsung lewat aksi (tanpa
