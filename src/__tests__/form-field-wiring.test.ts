@@ -77,18 +77,34 @@ function walk(dir: string, out: string[] = []): string[] {
 
 const isFormFile = (file: string) => /form/i.test(basename(file)) && file.endsWith(".tsx")
 
-function collect(): { fields: Map<string, string[]>; schemaKeys: Set<string>; readKeys: Set<string> } {
+function schemaBody(text: string, schemaName: string): string | null {
+  return (
+    text.match(
+      new RegExp(
+        String.raw`(?:const|let|var)\s+${schemaName}\s*=\s*z\.object\s*\(\s*\{([\s\S]*?)\}\s*\)`,
+      ),
+    )?.[1] ?? null
+  )
+}
+
+function collect(): {
+  fields: Map<string, string[]>
+  schemaKeys: Set<string>
+  readKeys: Set<string>
+  actionSchemaKeys: Set<string>
+  actionFormDataKeys: Set<string>
+} {
   const files = walk(join(ROOT, "src"))
   const fields = new Map<string, string[]>()
   const schemaKeys = new Set<string>()
   const readKeys = new Set<string>()
+  const actionSchemaKeys = new Set<string>()
+  const actionFormDataKeys = new Set<string>()
 
   for (const file of files) {
     const text = readFileSync(file, "utf8")
     const rel = file.replace(ROOT + "/", "")
 
-    // Berkas penjaga ini sendiri menyebut nama field di daftar-beku; itu
-    // bukan bukti field dibaca kode produksi.
     if (rel === "src/__tests__/form-field-wiring.test.ts") continue
 
     if (isFormFile(file)) {
@@ -106,6 +122,26 @@ function collect(): { fields: Map<string, string[]>; schemaKeys: Set<string>; re
 
     if (rel.startsWith("src/lib/validations/")) {
       for (const m of text.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:/gm)) schemaKeys.add(m[1])
+      continue
+    }
+
+    const isActionSource = /^src\/actions\/.+\.actions\.ts$/.test(rel)
+    if (isActionSource && /\bparseFormData\s*\(/.test(text)) {
+      // Generalisasi sempit (Bot 6): panen HANYA kunci z.object lokal dalam
+      // berkas aksi ini yang namanya benar-benar diteruskan ke
+      // parseFormData(...). Bukti dipisah ke actionSchemaKeys supaya
+      // pemalsuan "cabut satu key dari skema ini saja" bisa memerahkan
+      // penjaga di file yang sama — bukan sekadar literal bebas.
+      const usedSchemas = new Set(
+        [...text.matchAll(/\bparseFormData\s*\(\s*([A-Za-z_$][A-Za-z0-9_$]*)/g)].map((m) => m[1]),
+      )
+      for (const schemaName of usedSchemas) {
+        const body = schemaBody(text, schemaName)
+        if (!body) continue
+        for (const m of body.matchAll(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*:/gm)) actionSchemaKeys.add(m[1])
+      }
+      for (const m of text.matchAll(/\bformData\.get(?:All)?\s*\(\s*["']([A-Za-z_][A-Za-z0-9_]*)["']/g)) actionFormDataKeys.add(m[1])
+      continue
     }
 
     // Bukti "dibaca": nama field muncul sebagai literal teks di LUAR berkas form —
@@ -114,12 +150,14 @@ function collect(): { fields: Map<string, string[]>; schemaKeys: Set<string>; re
     for (const m of text.matchAll(/["']([A-Za-z_][A-Za-z0-9_]*)["']/g)) readKeys.add(m[1])
   }
 
-  return { fields, schemaKeys, readKeys }
+  return { fields, schemaKeys, readKeys, actionSchemaKeys, actionFormDataKeys }
 }
 
 describe("field formulir yang tidak dibaca siapa pun (data hilang senyap)", () => {
   it("setiap field form dibaca lewat skema validasi atau FormData langsung", () => {
-    const { fields, schemaKeys, readKeys } = collect()
+    const { fields, schemaKeys, readKeys, actionSchemaKeys, actionFormDataKeys } = collect()
+    const isRead = (f: string) =>
+      schemaKeys.has(f) || readKeys.has(f) || actionSchemaKeys.has(f) || actionFormDataKeys.has(f)
 
     // Sanity: kalau pemindaiannya rusak (mis. path salah), tes ini harus gagal,
     // bukan lulus karena tidak menemukan apa-apa.
@@ -129,20 +167,27 @@ describe("field formulir yang tidak dibaca siapa pun (data hilang senyap)", () =
     const boxed = new Set(KNOWN_UNREAD_FORM_FIELDS.map(([field]) => field))
     const offenders: string[] = []
     for (const [field, where] of fields) {
-      if (schemaKeys.has(field) || readKeys.has(field) || boxed.has(field)) continue
+      if (isRead(field) || boxed.has(field)) continue
       offenders.push(`${field} (dikirim oleh ${where.join(", ")})`)
     }
 
     expect(offenders.sort()).toEqual([])
   })
 
+  it("skema lokal tax-documents.actions.ts yang dipakai parseFormData ikut dipanen", () => {
+    const { fields, actionSchemaKeys } = collect()
+    expect(fields.has("certificateNumber")).toBe(true)
+    expect(actionSchemaKeys.has("certificateNumber")).toBe(true)
+  })
+
   it("daftar-beku tidak menyimpan entri yang sudah usang", () => {
     // Berarah dua: kalau field di daftar-beku ternyata SUDAH dibaca (diperbaiki),
     // entri itu wajib dicabut supaya daftarnya tidak menumpuk kebohongan.
-    const { fields, schemaKeys, readKeys } = collect()
+    const { fields, schemaKeys, readKeys, actionSchemaKeys, actionFormDataKeys } = collect()
     const stale = KNOWN_UNREAD_FORM_FIELDS.filter(([field]) => {
       const isSentByForm = fields.has(field)
-      const isRead = schemaKeys.has(field) || readKeys.has(field)
+      const isRead =
+        schemaKeys.has(field) || readKeys.has(field) || actionSchemaKeys.has(field) || actionFormDataKeys.has(field)
       return !isSentByForm || isRead
     }).map(([field]) => field)
 

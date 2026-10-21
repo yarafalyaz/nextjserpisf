@@ -11,7 +11,6 @@ import { prisma } from "@/lib/db/prisma"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
 import { buildVatPosition } from "@/lib/reports/vat-reconciliation"
 import {
-  buildTaxSummaryTotals,
   buildVatReconciliationTotals,
   buildWithholdingTotal,
   taxDocumentBase,
@@ -35,80 +34,14 @@ const periodOf = (period: { start: Date; end: Date }) => rangePeriodLabels(perio
 
 type Period = { start: Date; end: Date }
 
-const TAX_COLUMNS: TableColumn[] = [
-  { header: "Tanggal", align: "left", width: 28 },
-  { header: "No. Dokumen", align: "left", width: 38 },
-  { header: "Pihak", align: "left", width: 60 },
-  { header: "DPP", align: "right", width: 40 },
-  { header: "PPN", align: "right", width: 36 },
-]
 
-export async function loadTaxSummary(period: Period): Promise<TaxSimpleReport> {
-  const [salesInvoices, vendorBills] = await Promise.all([
-    prisma.salesInvoice.findMany({
-      where: {
-        date: { gte: period.start, lte: period.end },
-        status: { in: ["posted", "partial", "paid"] },
-        deletedAt: null,
-        taxAmount: { gt: 0 },
-      },
-      include: { customer: { select: { name: true } } },
-      orderBy: { date: "asc" },
-    }),
-    prisma.vendorBill.findMany({
-      where: {
-        date: { gte: period.start, lte: period.end },
-        status: { in: ["posted", "partial", "paid"] },
-        deletedAt: null,
-        tax: { gt: 0 },
-      },
-      include: { vendor: { select: { name: true } } },
-      orderBy: { date: "asc" },
-    }),
-  ])
-  const rows: TableRow[] = [{ kind: "group", label: "PPN Keluaran" }]
-  for (const inv of salesInvoices) {
-    rows.push({
-      kind: "data",
-      cells: [
-        shortDate(inv.date),
-        inv.documentNo,
-        inv.customer.name,
-        money(taxDocumentBase(inv.subtotal, inv.discount)),
-        money(Number(inv.taxAmount)),
-      ],
-    })
-  }
-  const taxTotals = buildTaxSummaryTotals(
-    salesInvoices.map((inv) => inv.taxAmount),
-    vendorBills.map((bill) => bill.tax),
-  )
-  const totalOutput = taxTotals.totalOutput
-  rows.push({ kind: "total", label: "Jumlah PPN Keluaran", cells: ["", "", "", "", money(totalOutput)] })
-  rows.push({ kind: "group", label: "PPN Masukan" })
-  for (const bill of vendorBills) {
-    rows.push({
-      kind: "data",
-      cells: [
-        shortDate(bill.date),
-        bill.documentNo,
-        bill.vendor.name,
-        money(taxDocumentBase(bill.subtotal, bill.discountAmount ?? 0)),
-        money(Number(bill.tax)),
-      ],
-    })
-  }
-  const totalInput = taxTotals.totalInput
-  rows.push({ kind: "total", label: "Jumlah PPN Masukan", cells: ["", "", "", "", money(totalInput)] })
-  rows.push({
-    kind: "total",
-    grand: true,
-    label: taxTotals.kurangBayar ? "PPN Kurang Bayar" : "PPN Lebih Bayar",
-    cells: ["", "", "", "", money(Math.abs(taxTotals.difference))],
-  })
-  return { table: { columns: TAX_COLUMNS, rows }, ...periodOf(period) }
-}
-
+/**
+ * loadTaxSummary warisan (rincian per dokumen) dipensiunkan 2026-10-21:
+ * halaman /laporan/pajak dan ekspornya kini murni read-model SPT
+ * (`loadTaxSummarySpt`), jadi tidak ada konsumen tersisa. Fungsi DPP
+ * vendor bill yang dijaga penjaga `vendor-bill-discount-wiring` hidup
+ * di `spt-read-model-data.ts`, bukan di sini.
+ */
 const RECON_COLUMNS: TableColumn[] = [
   { header: "Sisi", align: "left", width: 70 },
   { header: "Per Buku", align: "right", width: 44 },

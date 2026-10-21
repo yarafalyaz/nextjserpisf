@@ -172,6 +172,8 @@ export const navigation: NavItem[] = [
       { label: "Rekonsiliasi Bank", href: "/keuangan/rekonsiliasi-bank", icon: Landmark, permission: "view_bank_reconciliation" },
       { label: "Transfer Bank", href: "/keuangan/transfer-bank", icon: ArrowLeftRight, permission: "view_bank_transfers" },
       { label: "Penyetoran Pajak", href: "/keuangan/penyetoran-pajak", icon: BadgeDollarSign, permission: "view_tax_payments" },
+      { label: "Dokumen Pajak", href: "/keuangan/dokumen-pajak/faktur/tambah", icon: FileCheck, permission: "create_tax_invoices" },
+      { label: "Bukti Potong", href: "/keuangan/dokumen-pajak/bupot/tambah", icon: Receipt, permission: "manage_withholding_certificates" },
       { label: "Giro & Cek", href: "/keuangan/giro", icon: Banknote, permission: "view_cheques" },
     ],
   },
