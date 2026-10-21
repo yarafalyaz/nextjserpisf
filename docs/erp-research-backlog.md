@@ -7676,3 +7676,448 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-050-S konsumen UI reservasi stok per WO/gudang, per layar (konsumen F-2026-10-22-045-S; pasangan per-layar dari F-2026-10-22-049-S)
+
+Pemilik spec: BOT 5 (sales-crm-hr-payroll-business-workflow). Dokumen
+spec saja, tanpa kode/schema/migrasi, tanpa aturan stok baru. Spec ini
+adalah spec KONSUMEN UI PER LAYAR: untuk tiap layar yang sudah ada,
+apa yang tampil, penanda apa yang terlihat, dan aksi sadar pengguna
+apa yang harus bisa dilakukan dari layar itu. Spec ini TIDAK menulis
+ulang aturan reservasi (itu F-2026-10-22-045-S, PR #403), TIDAK
+menulis ulang alur workflow konsumen (itu F-2026-10-22-049-S, PR #409),
+dan TIDAK memutuskan skema/kontrak field (itu BOT 3/Lead).
+
+### 0. Basis live + batas tegas anti-duplikat (verifikasi run ini, 2026-10-22)
+
+TERVERIFIKASI-KODE / terverifikasi live (basis origin/main 5c4569c9):
+- F-2026-10-22-045-S (PR #403) status MERGED di origin/main
+  (merge commit cb33d385; head branch persis
+  28ceb4b407a5ea2e83e6c2cce074df54c786183b). Aturan BR-RES-01..12
+  berstatus persis seperti tertulis di F-045-S (USULAN, kecuali
+  BR-RES-11 BUTUH-VONIS Lead). Spec ini mewarisi status itu apa
+  adanya — tidak menaikkan satu aturan pun menjadi berlaku.
+- F-2026-10-22-049-S (PR #409) status OPEN, head persis
+  74655385dd2c6c375f3776232081d5612aefd367, checks 5/5 PASS, tapi
+  mergeable CONFLICTING terhadap main kini (main sudah maju memuat
+  #403). Spec ini TIDAK menyentuh PR #409 dan tidak menunggu sync-nya:
+  bila #409 kelak merged, batas di bawah tetap berlaku; bila isi #409
+  berubah saat sync, yang gugur adalah duplikasi, bukan batas ini.
+- Layar nyata yang menjadi jangkar spec ini (grep origin/main run ini):
+  (L1) antrean WO = `WorkOrderQueueCard`
+  (`src/components/reports/work-order-queue-card.tsx`, judul "Antrian
+  Bengkel") di halaman daftar `produksi/perintah-kerja/page.tsx`,
+  data `getWorkOrderQueue` (`work-order-queue-data.ts`, builder
+  `work-order-queue.ts`, ACTIVE_WORK_ORDER_STATUSES draft/pending/
+  in_progress di `work-order-queue.ts:25`). Kolom hari ini: No.
+  Dokumen, Pelanggan, Kendaraan, Status, Tenggat, Umur,
+  Keterlambatan, Hubungi. TIDAK ada kolom stok/reservasi apa pun.
+  (L2) detail WO = `produksi/perintah-kerja/[slug]/page.tsx`
+  (materialNeeds dimuat baris 182, kartu dirender baris 468).
+  (L3) kebutuhan material = `WorkOrderMaterialNeedsCard`
+  (`src/components/reports/work-order-material-needs-card.tsx`,
+  judul "Kebutuhan Material") dari builder murni
+  `work-order-material-needs.ts` + loader
+  `work-order-material-needs-data.ts`. Kolom hari ini: Barang, Butuh,
+  Terikat WO lain (committedOtherQty), Tersedia efektif, Stok gudang
+  relevan (qtyOnHandAtWarehouse), Keluar, Dipesan, Sisa, Kurang,
+  Status. Status hari ini hanya: Jasa — terpenuhi / Terpenuhi /
+  Kekurangan stok (+varian incoming) / Belum keluar — kurang di
+  gudang relevan / Belum keluar. TIDAK ada kata reservasi, TIDAK ada
+  perincian per gudang bernama (stok gudang relevan adalah satu
+  angka gabungan gudang MI completed WO ini ∪ defaultWarehouseId
+  item, per header builder baris 1-52 dan loader).
+- `grep StockReservation` di src/prisma tetap 0 model/field (hanya
+  sebutan komentar/docs). Inti reservasi ABSEN; yang boleh dibangun
+  hari ini dari spec ini hanya tampilan dari data lapis aman yang
+  sudah ada (lihat §1 kolom "Bisa tampil hari ini").
+- Izin nyata (module-catalog.generated.ts:224-257 per F-045-S §0):
+  view/create/edit/delete/complete_work_orders,
+  view/create/edit/delete_material_issues. Tidak ada izin reservasi
+  khusus; spec ini tidak mengarang izin baru.
+
+Batas tegas tiga spec (ini inti anti-duplikat kartu ini):
+| Spec | Milik siapa | Isi | Yang TIDAK ada di sana |
+|---|---|---|---|
+| F-2026-10-22-045-S (PR #403, MERGED) | BOT 5 aturan | Aturan BR-RES-01..12, keputusan (a)-(g), kata UI verbatim §2(g), status-transition reservasi, AC-RES-1..9 | Per layar tampil apa; kebutuhan data bernama untuk UI |
+| F-2026-10-22-049-S (PR #409, OPEN) | BOT 5 workflow | Alur konsumen W0-W4 per status WO, tabel aturan per status, konflik K-049-1..4, pertanyaan Q-049-1..5, kebutuhan data D-049-1..5, AC-049-1..4 | Penempatan per layar/kolom/penanda; aksi sadar per layar |
+| F-2026-10-22-050-S (spec ini) | BOT 5 konsumen UI | Per layar (L1/L2/L3): elemen tampil, penanda WO tertahan, aksi sadar pengguna sebagai kebutuhan tampilan, kebutuhan data bernama per layar (N-050-*), acceptance tampil AC-050-* | Aturan baru; alur workflow baru; kata UI baru di luar §2(g) F-045-S |
+
+Tumpang tindih yang ditemukan dan cara batasnya ditulis (bukan
+didiamkan): (i) kata UI — spec ini mewarisi verbatim F-045-S §2(g)
+tanpa menulis ulang daftarnya; rujukan, bukan salinan. (ii)
+Kebutuhan data — D-049-1..5 di #409 adalah kebutuhan perilaku/data
+untuk BOT 3 secara umum; N-050-* di §5 spec ini adalah kebutuhan
+TAMPIL per layar yang menunjuk ke D-049 yang sama (satu kebutuhan
+data, dua sudut pandang: #409 = "data harus bisa ditanya", spec ini
+= "di layar mana data itu harus terlihat"). BOT 3 membangun satu
+sumber, bukan dua. (iii) AC — AC-049-* menilai perilaku konsumen;
+AC-050-* di §7 hanya menilai keterbacaan per layar atas skenario
+yang sama, bukan kriteria stok baru.
+
+### 1. Prinsip konsumen UI (mengikat semua layar di spec ini)
+
+- P-050-1 UI TIDAK menghitung ATP/reservasi sendiri. Setiap angka
+  stok bebas, stok tereservasi, dan sisa bebas yang tampil WAJIB
+  datang sebagai hasil hitung server (builder/loader), persis pola
+  existing: kartu hari ini murni presentasi dari builder
+  (`work-order-material-needs-card.tsx` tanpa query/mutasi). UI yang
+  mengurangi qtyOnHand dengan committed di komponen = dilarang,
+  karena dua layar akan bisa berbeda angka untuk stok yang sama.
+- P-050-2 Tiga angka dibedakan tegas di setiap tempat stok tampil:
+  (a) stok fisik per gudang, (b) stok tereservasi (terikat reservasi
+  aktif WO lain/per WO ini), (c) stok bebas = fisik − tereservasi.
+  Angka "Stok gudang relevan" existing adalah (a) versi gabungan
+  gudang relevan dan TIDAK boleh diganti maknanya menjadi (c);
+  (c) adalah angka baru dari inti, bukan penafsiran ulang (a).
+  Selaras BR-RES-04 F-045-S: makna ATP existing tidak berubah.
+- P-050-3 Gudang selalu bernama. Selama data hanya menyediakan
+  gabungan "gudang relevan", label tampil WAJIB jujur menyebutnya
+  gabungan (pola label existing dipertahankan); label per gudang
+  bernama hanya boleh tampil sesudah kebutuhan N-050-2 terpenuhi.
+  Menampilkan satu angka gabungan dengan label satu nama gudang =
+  dilarang (mekanik akan mengira stok ada di gudang yang salah).
+- P-050-4 Penanda WO tertahan adalah penanda kekurangan reservasi,
+  BUKAN status WO baru. Status WO tetap string existing
+  (draft/pending/in_progress/completed/cancelled). WO yang start
+  dengan reservasi parsial tetap in_progress (BR-RES-07: start tidak
+  diblokir); yang tampil adalah penanda di baris/kartu, bukan status
+  "tertahan" di kolom Status.
+- P-050-5 Kata tampil hanya dari F-045-S §2(g) verbatim untuk status
+  reservasi, ditambah kata status kebutuhan existing yang sudah ada
+  di kartu hari ini (Terpenuhi/Kekurangan stok/Belum keluar/dll —
+  tidak diubah). Status mentah Inggris tidak tampil. Kata baru apa
+  pun di luar dua sumber itu = di luar spec ini, butuh revisi
+  F-045-S dulu.
+- P-050-6 Aksi sadar pengguna tampil sebagai kebutuhan tampilan
+  dengan penjaga izin existing (F-045-S §2(b)/§3): tombol/aksi yang
+  penjaganya tidak lolos TIDAK cukup disembunyikan — penolakan tetap
+  di server (pola existing assertWarehouseAccess). Spec ini hanya
+  menetapkan aksi apa yang harus bisa dijangkau dari layar mana;
+  bentuk kontrol (tombol/menu/dialog) = vonis BOT 2.
+
+### 2. Layar L1 — Antrean WO ("Antrian Bengkel", daftar perintah kerja)
+
+Kebutuhan pengguna di layar ini (konteks lapangan): kepala bengkel/
+admin membuka antrean pagi hari untuk memutuskan WO mana yang bisa
+jalan; hari ini ia hanya melihat tenggat dan keterlambatan, lalu
+harus membuka satu per satu detail WO untuk tahu WO mana yang
+materialnya sebenarnya sudah terikat WO lain.
+
+Yang harus tampil (sesudah inti; yang bertanda lapis aman boleh
+dari data existing):
+- E-L1-1 (inti) Penanda tertahan per baris WO in_progress: terlihat
+  langsung di baris antrean bila WO itu punya minimal satu baris
+  kebutuhan yang reservasinya tidak menutup sisa kebutuhan
+  (reservasi parsial/nol karena stok gudang sumber sudah terikat WO
+  lain yang start lebih dulu, BR-RES-05). Kata penanda memakai kata
+  kekurangan F-045-S §2(g) persis: "Stok gudang ini sudah
+  terreservasi untuk perintah kerja lain". Untuk WO draft/pending
+  penanda ini TIDAK tampil sebagai reservasi (belum ada reservasi,
+  BR-RES-01); kekurangan ATP existing bukan urusan kolom ini.
+- E-L1-2 (inti) Ringkasan hitungan di kepala kartu, sejajar pola
+  ringkasan existing ("{totalActive} perintah kerja aktif ·
+  {overdueCount} terlambat"): jumlah WO aktif yang tertahan
+  reservasi, supaya antrean bisa dibaca tanpa membuka detail.
+  Angka ini hasil hitung server (N-050-1), bukan hitungan komponen.
+- E-L1-3 (inti) Kedaluwarsa terlihat di antrean: WO in_progress yang
+  punya reservasi kedaluwarsa dan belum direservasi ulang membawa
+  kata F-045-S §2(g) "Kedaluwarsa — reservasi ulang bila masih
+  dibutuhkan" sebagai penanda baris. (Reservasi ulang-nya sendiri
+  dilakukan dari L2/L3, bukan dari antrean — lihat aksi di bawah.)
+- E-L1-4 (lapis aman, bisa sekarang) TIDAK ADA perubahan makna kolom
+  existing. Layar ini hari ini memang tidak menampilkan stok; spec
+  ini tidak memindahkan angka stok mentah ke antrean. Yang ditambah
+  hanya penanda turunan E-L1-1..3.
+
+Aksi sadar pengguna dari L1:
+- A-L1-1 Lompat ke detail WO (tautan No. Dokumen existing) — satu-
+  satunya jalur tindak lanjut dari antrean. Dari antrean TIDAK ada
+  aksi lepas reservasi, alih gudang, atau reservasi ulang: antrean
+  adalah layar putusan "WO mana dibuka duluan", bukan layar mutasi
+  stok. Alasan: lepas/alih berdampak ke WO lain dan wajib dibaca
+  dalam konteks kebutuhan WO pemilik dulu (L3); aksi mutasi di
+  daftar massal mengundang lepas tanpa konteks.
+- A-L1-2 (USULAN tampilan, butuh N-050-1) Urutan/filter sadar
+  tertahan: pengguna bisa mengurutkan atau menyaring antrean ke
+  "tertahan reservasi" saja. Bentuknya vonis BOT 2; kebutuhan
+  datanya tunggal (penanda per WO dari server), bukan filter
+  hitungan komponen.
+
+### 3. Layar L2 — Detail WO (halaman perintah kerja per dokumen)
+
+L2 adalah rumah kartu L3; kebutuhan L2 sendiri hanya penempatan
+dan ringkasan, supaya status reservasi WO terbaca sebelum pengguna
+menggulir ke kartu material.
+
+- E-L2-1 (inti) Ringkasan reservasi WO di kepala detail, sejajar
+  pola kartu ringkasan existing di halaman ini (progress/part
+  status): keadaan turunan satu WO — semua baris tereservasi penuh /
+  ada baris tertahan / ada reservasi kedaluwarsa / belum ada
+  reservasi (WO belum start). Kata memakai §2(g) F-045-S; keadaan
+  "belum start" TIDAK memakai kata reservasi sama sekali (BR-RES-01)
+  dan tidak ditampilkan sebagai kekurangan.
+- E-L2-2 (inti) Aksi sadar yang berumah di L2 (kontrol WO existing
+  di halaman ini, `work-order-actions.tsx` /
+  `work-order-operation-actions.tsx` — penempatan persisnya vonis
+  BOT 2): (a) reservasi ulang untuk baris kedaluwarsa selama WO
+  in_progress — penjaga edit_work_orders + akses gudang sumber
+  (BR-RES-06/09 turunan F-045-S §2(b)); (b) lepas reservasi manual —
+  penjaga complete_work_orders + alasan wajib terisi sebelum aksi
+  bisa dijalankan (BR-RES-09); alasan kosong = aksi tidak bisa
+  dikirim, dan server tetap menolak tanpa alasan (bukan hanya
+  validasi form). Kedua aksi hanya untuk WO in_progress; di status
+  lain aksi tidak tampil (bukan tampil-nonaktif — supaya tidak
+  menjanjikan tindakan yang memang tidak ada, konsisten P-050-4).
+- E-L2-3 (lapis aman, bisa sekarang) Tidak ada: L2 tidak menambah
+  tampilan stok baru sebelum inti. Kartu L3 di dalamnya yang
+  berubah duluan (§4, lapis aman).
+
+### 4. Layar L3 — Kebutuhan material WO (kartu "Kebutuhan Material")
+
+Layar utama konsumen reservasi: di sinilah mekanik/kepala bengkel
+membaca per item, per gudang, stok apa yang bebas dan apa yang
+sudah terikat, lalu memutuskan keluar material, lepas, atau alih
+gudang.
+
+Keadaan hari ini (TERVERIFIKASI-KODE §0): satu baris per item,
+angka stok satu kolom gabungan gudang relevan, status kebutuhan
+tanpa kata reservasi. Spec ini menambah kolom/penanda berikut
+TANPA mengubah makna kolom existing (P-050-2):
+
+- E-L3-1 (inti) Per gudang bernama, per baris item: untuk gudang
+  sumber reservasi baris itu (urutan putus BR-RES-02 F-045-S) tampil
+  tiga angka berdampingan — stok fisik gudang itu, tereservasi
+  (aktif, semua WO termasuk WO ini dibedakan: terikat WO ini vs
+  terikat WO lain), dan bebas. Kebutuhan datanya N-050-2. Sampai
+  N-050-2 ada, kolom existing "Stok gudang relevan" tetap tampil
+  dengan label persis existing (P-050-3) — dilarang mengganti
+  labelnya menjadi nama gudang.
+- E-L3-2 (inti) Status reservasi per baris memakai kata F-045-S
+  §2(g) verbatim sebagai status pendamping status kebutuhan
+  existing (bukan menggantikannya): baris bisa sekaligus "Belum
+  keluar" (kebutuhan) dan "Terreservasi" (ikatan). Baris consumed
+  sebagian tampil "Terreservasi" + "terpakai {qtyTerpakai} dari
+  {qtyAwal}" dengan angka dari data server (N-050-3), bukan
+  selisih hitungan UI dari Butuh−Keluar. Baris jasa (itemId=0) dan
+  baris replaced tidak pernah membawa status reservasi (BR-RES-03).
+- E-L3-3 (inti) Penanda tertahan per baris: baris yang sisa
+  kebutuhannya tidak tertutup reservasi karena stok gudang sumber
+  sudah terikat WO lain membawa kata persis "Stok gudang ini sudah
+  terreservasi untuk perintah kerja lain"; baris tanpa reservasi
+  karena gudang belum ditentukan membawa "Belum direservasi —
+  gudang belum ditentukan"; baris yang keluar melebihi cadangan
+  membawa "Keluar tanpa cadangan reservasi". Ketiganya penanda
+  turunan server (N-050-4), bukan logika cabang di komponen.
+- E-L3-4 (inti) Kedaluwarsa per baris: kata "Kedaluwarsa —
+  reservasi ulang bila masih dibutuhkan" di baris terdampak +
+  aksi reservasi ulang baris itu (penjaga sama A-L2-2(a)). WO
+  pemilik tetap bisa MI completed berikutnya walau kedaluwarsa
+  (BR-RES-06) — penanda tidak tampil sebagai pemblokir kartu.
+- E-L3-5 (lapis aman, bisa sekarang dari field existing) TIDAK ada
+  kolom baru. Yang boleh dilakukan BOT 2 hari ini hanya memakai
+  ulang field builder yang sudah ada (qtyOnHandAtWarehouse,
+  warehouseShortageQty, committedOtherQty, effectiveAvailableQty)
+  persis makna existingnya. Menamai committedOtherQty sebagai
+  "tereservasi" hari ini = DILARANG: committed adalah sisa
+  kebutuhan WO aktif lain (peringatan read-only), bukan ikatan
+  reservasi; menamainya tereservasi menjanjikan kunci stok yang
+  belum ada (BR-RES-04).
+
+Aksi sadar pengguna dari L3:
+- A-L3-1 Lepas reservasi per baris (penjaga complete_work_orders +
+  alasan wajib, BR-RES-09): dari baris L3, karena di sinilah
+  konteks "baris mana dilepas, sisa berapa" terbaca. Sesudah lepas,
+  baris tampil "Dilepas" (§2(g)) dan angka bebas gudang itu naik
+  pada muat ulang data server — UI tidak menaikkan angka sendiri.
+- A-L3-2 Alih gudang (kebutuhan tampilan, ATURANNYA belum ada):
+  pengguna perlu bisa menyatakan "ambil dari gudang lain" dari
+  baris yang tertahan di gudang sumbernya. Spec ini menetapkan
+  kebutuhan tampilannya saja: (a) pilihan gudang tujuan hanya dari
+  gudang dalam cakupan pengguna (assertWarehouseAccess); (b) sesudah
+  alih dipilih, pengguna melihat angka bebas gudang tujuan SEBELUM
+  mengonfirmasi (angka server, N-050-5); (c) alih yang sudah
+  terkonfirmasi mengubah gudang sumber baris itu untuk pembacaan
+  berikutnya. APA yang terjadi pada reservasi lama di gudang asal,
+  pada MI yang sudah terbit, dan apakah alih melahirkan reservasi
+  baru di gudang tujuan = PERTANYAAN TERBUKA Q-050-1 (§6), BUKAN
+  aturan spec ini: F-045-S BR-RES-02 menetapkan gudang membeku saat
+  lahir dan F-045-S "Yang TIDAK diusulkan" menolak pemindahan
+  reservasi antar gudang otomatis — alih gudang manual adalah
+  perilaku baru di luar kedua spec itu dan TIDAK boleh dibangun
+  dari kartu ini sebelum Lead memutus Q-050-1. Sampai diputus, yang
+  boleh tampil hanya penanda tertahan; tombol alih TIDAK tampil.
+- A-L3-3 Buat/selesaikan MaterialIssue tetap jalur existing dari
+  detail WO (izin material_issues + akses gudang MI). L3 tidak
+  membuat jalur keluar material kedua; konsumsi reservasi terjadi
+  di hook MI completed (BR-RES-08), L3 hanya menampilkan hasilnya.
+- A-L3-4 Reservasi ulang per baris kedaluwarsa (penjaga
+  edit_work_orders + akses gudang, sama A-L2-2(a)): boleh berumah
+  di L3 per baris DAN/ATAU di L2 per WO — satu perilaku server,
+  dua tempat jangkau maksimal; BOT 2 memilih satu penempatan dan
+  mencatatnya, dilarang dua jalur mutasi berbeda untuk perilaku
+  yang sama.
+
+### 5. Tabel kebutuhan data bernama untuk BOT 2/BOT 3 (kebutuhan, BUKAN skema/kontrak field)
+
+Semua butir di bawah adalah kebutuhan bernama: perilaku data yang
+harus bisa disediakan server. Nama model/field/indeks/loader persis
+= vonis BOT 3/Lead; spec ini tidak mengontrakkannya. Kolom
+"Menunjuk" mengikat tiap kebutuhan ke D-049 (PR #409) atau field
+existing supaya BOT 3 membangun satu sumber, bukan dua (batas §0).
+
+| ID | Kebutuhan bernama | Terlihat di | Menunjuk | Bisa dari data hari ini? |
+|---|---|---|---|---|
+| N-050-1 | Penanda tertahan per WO aktif + hitungan WO tertahan untuk kepala antrean (turunan: WO punya baris reservasi tak menutup / kedaluwarsa belum diulang) | L1 E-L1-1..3 | D-049-2 + D-049-3 | Tidak — butuh inti; versi ATP existing bukan pengganti (P-050-2) |
+| N-050-2 | Per (item, gudang bernama): stok fisik, tereservasi aktif total, tereservasi untuk WO ini, tereservasi WO lain, bebas (= fisik − tereservasi) — semua hitungan server | L3 E-L3-1 | D-049-1 + D-049-2 | Tidak — existing hanya gabungan gudang relevan (qtyOnHandAtWarehouse) tanpa nama gudang dan tanpa ikatan |
+| N-050-3 | Per baris kebutuhan WO: qty reservasi awal, qty sudah terpakai, status turunan reservasi per kata §2(g) F-045-S | L2 E-L2-1, L3 E-L3-2 | D-049-1 | Tidak — butuh inti |
+| N-050-4 | Penanda turunan per baris: tertahan-karena-WO-lain, gudang-belum-ditentukan, keluar-tanpa-cadangan, beda-gudang-MI-vs-reservasi | L3 E-L3-3 | D-049-3 | Sebagian: gudang-belum-ditentukan bisa diturunkan dari defaultWarehouseId kosong + tanpa MI; tiga lainnya butuh inti |
+| N-050-5 | Angka bebas per gudang tujuan untuk pratinjau alih gudang (baca saja, tanpa mengunci) | L3 A-L3-2 (bila Q-050-1 diputus membuka) | D-049-2 | Tidak — dan tampilannya pun tertahan Q-050-1 |
+| N-050-6 | Jejak lepas manual yang terbaca dari L2/L3: siapa, kapan, alasan per pelepasan | L2 E-L2-2(b), L3 A-L3-1 | D-049-4 | Tidak — pola ActivityLog existing, bentuknya vonis BOT 3 |
+| N-050-7 | Idempotensi tampil: satu keadaan reservasi aktif per (WO, item, gudang) walau antrean/detail dimuat ulang atau start diulang | Semua layar | D-049-5 | — (sifat inti, UI hanya membaca) |
+
+Kebutuhan untuk BOT 2 (tampilan, bukan data): kata §2(g) verbatim
+tanpa parafrase; angka selalu dari payload server (P-050-1); aksi
+yang penjaganya tidak lolos tidak dirender sebagai kontrol aktif,
+tetapi penolakan server tetap ada (P-050-6); gudang selalu bernama
+atau jujur gabungan (P-050-3). Permission tampil per layar:
+L1/L2/L3 semua di balik view_work_orders existing; cakupan gudang
+assigned membatasi gudang yang angkanya boleh tampil (pola
+getWarehouseScope/assertWarehouseAccess existing) — angka gudang di
+luar cakupan tidak tampil, bukan tampil teredaksi karangan.
+
+### 6. Pertanyaan terbuka bernama (untuk Lead/BOT 3 — spec ini tidak memutus)
+
+- Q-050-1 (Lead, BLOKER untuk A-L3-2): alih gudang manual — apakah
+  perilaku ini dibuka sama sekali; bila dibuka: apakah reservasi di
+  gudang asal dilepas dan reservasi baru lahir di gudang tujuan
+  (baris baru, bukan pindah — konsisten BR-RES-02/10?), apakah MI
+  yang sudah terbit dari gudang asal menghalangi alih, dan izin apa
+  penjaganya (usulan sementara: edit_work_orders + akses KE DUA
+  gudang). Tanpa putusan ini A-L3-2 tidak dibangun, termasuk
+  tombolnya. Ini pertanyaan baru spec ini — F-045-S menolak
+  pemindahan OTOMATIS; alih manual sadar pengguna belum pernah
+  diputus siapa pun.
+- Q-050-2 (Lead): pertanyaan warisan F-045-S yang menahan layar —
+  (a) BR-RES-11 aksi batal WO in_progress (tanpa ini penanda/lepas
+  di batal tidak punya pemicu; = Q-049-1 di #409, satu pertanyaan,
+  jangan diduplikasi jawabannya); (b) BR-RES-07 blokir-start vs
+  peringatan-keras (= Q-049-3; spec ini mengasumsikan peringatan
+  sesuai rekomendasi F-045-S — bila vonisnya blokir, E-L1-1 berubah
+  dari penanda menjadi penolakan start dan §2/§7 wajib direvisi
+  BOT 5 sebelum BOT 2 membangun).
+- Q-050-3 (BOT 3/Lead): mekanisme kedaluwarsa yang terbaca UI —
+  lazy-expire saat baca saja atau plus tugas berkala (= Q-049-4,
+  satu pertanyaan). Dampak UI-nya konkret: bila hanya lazy, dua
+  layar yang dimuat pada detik berbeda bisa menampilkan keadaan
+  berbeda untuk reservasi yang sama; UI tidak menutupi ini dengan
+  hitungan sendiri (P-050-1), jadi pilihan mekanisme menentukan
+  apakah penanda kedaluwarsa bisa basi sesaat. BOT 3 memutus,
+  BOT 2 diberi tahu.
+- Q-050-4 (BOT 3): apakah penanda keluar-tanpa-cadangan dan
+  beda-gudang (N-050-4) hanya turunan tampil di L3 atau juga
+  peristiwa teraudit (= Q-049-5, satu pertanyaan). Bila teraudit,
+  L2 perlu tempat membacanya; bila hanya turunan, N-050-6 tidak
+  meluas ke dua penanda ini.
+
+### 7. Acceptance criteria + edge cases (draf untuk BOT 6 — sudut tampil saja)
+
+Mewarisi skenario AC-RES-1..9 + LA-1 (F-045-S §7) dan AC-049-1..4
+(#409 §9) apa adanya; butir di bawah hanya menilai keterbacaan per
+layar atas skenario yang sama. Penilaian inti menunggu gerbang
+yang sama (vonis BOT 6 atas aturan + putusan Lead buka inti);
+butir lapis aman bisa dinilai sekarang.
+
+- AC-050-1 (L1, inti): skenario dua WO stok 1 unit (AC-RES-1) —
+  dari antrean, baris WO kedua membawa kata persis "Stok gudang
+  ini sudah terreservasi untuk perintah kerja lain" dan kepala
+  kartu menghitung 1 WO tertahan; baris WO pertama tanpa penanda.
+  Balik urutan start → penanda berpindah layar-sama. Cabut penanda
+  turunan server → antrean bersih walau detail tertahan → MERAH.
+- AC-050-2 (L3, inti): baris tertahan menampilkan tiga angka per
+  gudang bernama (fisik/tereservasi/bebas) yang jumlahnya konsisten
+  dengan antrean WO lain yang membaca gudang sama pada muatan yang
+  sama; tidak ada angka yang merupakan selisih hitungan komponen
+  (uji: ubah payload server, tampilan berubah persis mengikuti).
+- AC-050-3 (L3, lapis aman — bisa sekarang): kolom "Stok gudang
+  relevan" tetap berlabel persis itu dan bermakna gabungan; tidak
+  ada label nama gudang pada angka gabungan; kata "tereservasi"
+  tidak muncul di kartu sebelum inti ada. Temuan kata reservasi
+  pada data committed existing = MERAH.
+- AC-050-4 (L2/L3, inti): lepas manual dari L3 tanpa alasan tidak
+  terkirim dan ditolak server; dengan alasan → baris "Dilepas",
+  angka bebas naik sesudah muat ulang, jejak siapa/kapan/alasan
+  terbaca (N-050-6). Pengguna berizin material_issues saja tidak
+  melihat kontrol lepas sebagai aksi aktif.
+- AC-050-5 (L2/L3, inti): baris kedaluwarsa tampil kata persis
+  "Kedaluwarsa — reservasi ulang bila masih dibutuhkan"; reservasi
+  ulang hanya terjangkau edit_work_orders berakses-gudang; MI
+  completed berikutnya tetap jalan walau penanda kedaluwarsa masih
+  tampil (tidak ada pemblokir kartu).
+- AC-050-6 (L1/L2, inti): WO draft/pending tidak membawa penanda
+  reservasi apa pun di antrean maupun kepala detail; WO in_progress
+  tanpa kekurangan tidak membawa penanda tertahan. Penanda muncul
+  di WO belum start = MERAH (BR-RES-01 bocor ke UI).
+- AC-050-7 (semua layar, inti): tidak ada status mentah Inggris
+  (active/released/consumed/expired) dan tidak ada kata di luar
+  §2(g) F-045-S + kata existing kartu yang tampil ke pengguna.
+- Edge tampil: WO tanpa endDate di antrean (penanda reservasi tetap
+  terbaca, tidak tertukar penanda terlambat); item tampil di dua
+  gudang relevan berbeda antar baris satu WO; qty desimal (pola
+  Decimal repo) tampil tanpa pembulatan karangan UI; gudang di luar
+  cakupan pengguna tidak tampil angkanya di L3 (bukan tampil 0);
+  muat ulang L1 dan L3 bersamaan memberi angka bebas yang sama
+  untuk (item, gudang) yang sama.
+
+### 8. Role/permission matrix per layar (izin nyata existing)
+
+| Aksi/lihat | Layar | Admin/Perencana | Kepala Bengkel | Petugas Gudang | Penjaga bernama |
+|---|---|---|---|---|---|
+| Lihat antrean + penanda tertahan | L1 | view_work_orders | view_work_orders | view_work_orders (+ gudang dalam scope) | permission existing; angka gudang luar scope tidak tampil |
+| Lihat detail + ringkasan reservasi | L2 | view_work_orders | view_work_orders | view_work_orders | sama |
+| Lihat kebutuhan per gudang | L3 | view_work_orders | view_work_orders | view_work_orders | sama |
+| Reservasi ulang (kedaluwarsa) | L2/L3 | edit_work_orders + akses gudang | edit_work_orders + akses gudang | — | F-045-S §2(b) |
+| Lepas manual per baris/WO | L3 (konteks baris) / L2 | — | complete_work_orders + alasan wajib | — | BR-RES-09 |
+| Alih gudang | L3 | TERTAHAN Q-050-1 | TERTAHAN Q-050-1 | — | belum diputus — tidak tampil |
+| Keluar material (MI completed) | L2 jalur existing | — | create/edit_material_issues | create/edit_material_issues + akses gudang MI | pola existing |
+
+### 9. Feature matrix (sudut konsumen UI saja; benchmark diwarisi)
+
+| Kemampuan tampil | Accurate | Zahir | ISF hari ini (TERVERIFIKASI-KODE §0) | Spec konsumen UI ini |
+|---|---|---|---|---|
+| Ketersediaan per gudang terlihat sebelum dokumen jalan | Pemenuhan Pesanan per gudang (URL di F-045-S) | SO per gudang (URL di F-045-S) | L3: satu angka gabungan "Stok gudang relevan", tanpa nama gudang, tanpa ikatan | L3 per gudang bernama: fisik/tereservasi/bebas (E-L3-1) |
+| WO/job yang tertahan part terlihat dari daftar | daftar pemenuhan per pesanan | — | L1 antrean: hanya tenggat/terlambat, tanpa penanda part | L1 penanda tertahan + hitungan kepala kartu (E-L1-1/2) |
+| Ikatan stok per dokumen terbaca penggunanya | pemenuhan bertahap dari SO | administratif sampai pengiriman | tidak ada kata reservasi di UI mana pun | kata §2(g) verbatim per baris (E-L3-2) |
+
+Benchmark resmi TIDAK dicari ulang run ini — URL Accurate/Zahir
+persis yang sudah diverifikasi F-045-S (help.accurate.id
+Pemenuhan Pesanan; help.zahironline.com Order Penjualan), diwarisi
+sebagai rujukan, bukan klaim benchmark baru.
+
+### 10. Urutan bangun (turunan; ID induk F-2026-10-21-012)
+
+1. Lapis aman (sekarang, tanpa inti): AC-050-3 saja — tidak ada
+   pembangunan baru; butir ini penjaga agar UI existing tidak
+   menamai ATP sebagai reservasi selagi inti belum ada.
+2. Gerbang: putusan Lead buka inti StockReservation + Q-050-2(a)
+   BR-RES-11 + Q-050-2(b) BR-RES-07 (satu paket pertanyaan dengan
+   #409 §10 langkah 2 — jangan dibuat dua antrean putusan).
+3. BOT 3 inti + kebutuhan data N-050-1..7 (satu sumber dengan
+   D-049-1..5 #409; vonis skema/loader = BOT 3/Lead).
+4. BOT 2 UI per layar L1/L2/L3 sesudah kontrak data stabil:
+   penanda dan angka apa adanya dari server, kata verbatim,
+   tanpa hitung ulang (P-050-1). A-L3-2 alih gudang hanya bila
+   Q-050-1 dibuka Lead.
+5. BOT 6: AC-050-3 sekarang; AC-050-1/2/4..7 sesudah inti+UI.
+   Butuh putusan accountant: TIDAK (reservasi qty, tanpa
+   jurnal/nilai — konsisten F-012/F-045-S/#409).
+
+### Yang TIDAK diusulkan run ini
+- Aturan stok baru apa pun; perubahan kata §2(g); status WO baru
+  "tertahan"; reservasi di WO draft/pending tampil sebagai ikatan.
+- Alih gudang sebagai perilaku (hanya kebutuhan tampilan +
+  Q-050-1; tombolnya pun tertahan).
+- Hitungan ATP/reservasi di UI, label nama gudang untuk angka
+  gabungan, jalur keluar material kedua di L3, izin katalog baru.
+- Skema/nama field/API: vonis BOT 3/Lead (§5 kebutuhan bernama).
+- Menyentuh PR #409: sync konfliknya bukan milik kartu ini;
+  batas §0 menjaga isinya tidak diduplikasi di sini.
