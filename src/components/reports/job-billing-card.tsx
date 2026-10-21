@@ -12,7 +12,26 @@ function Baris({ label, value, bold }: Readonly<{ label: string; value: number; 
   )
 }
 
-export function JobBillingCard({ summary }: Readonly<{ summary: JobBillingSummaryResult }>) {
+export function JobBillingCard({
+  summary,
+  deltaNilaiCents,
+}: Readonly<{
+  summary: JobBillingSummaryResult
+  /** F-107: delta nilai berjalan vs snapshot revisi terakhir, sen (QuotationRevisionDelta.deltaCents); null/tak diberikan = tak tercatat. */
+  deltaNilaiCents?: number | null
+}>) {
+  const terminDelta =
+    deltaNilaiCents === null || deltaNilaiCents === undefined || deltaNilaiCents === 0
+      ? null
+      : {
+          naik: deltaNilaiCents > 0,
+          nominal: formatCurrency(Math.abs(deltaNilaiCents) / 100),
+          // ponytail: persen presentasi saja dari 2 field builder existing; NaN hanya bila snapshot <=0 (grandTotal sen <=0) — guard null.
+          persen:
+            summary.nilaiBerjalan * 100 - deltaNilaiCents > 0
+              ? (Math.abs(deltaNilaiCents) / (summary.nilaiBerjalan * 100 - deltaNilaiCents)) * 100
+              : null,
+        }
   return (
     <section aria-label={`Ringkasan tagihan ${summary.quotationDocumentNo}`} className="rounded-xl border border-default bg-surface p-5 shadow-sm">
       <h2 className="text-base font-semibold">Tagihan Berjalan — {summary.quotationDocumentNo}</h2>
@@ -40,6 +59,34 @@ export function JobBillingCard({ summary }: Readonly<{ summary: JobBillingSummar
           </>
         ) : null}
       </dl>
+      {terminDelta ? (
+        <section aria-label="Delta nilai termin" className="mt-4 border-t border-default pt-3">
+          <h3 className="text-sm font-semibold">Perubahan nilai sejak snapshot revisi terakhir</h3>
+          <p className="mt-0.5 text-xs text-muted-foreground">Delta turunan dari snapshot, bukan amendemen jadwal</p>
+          <dl className="mt-1 divide-y divide-default">
+            <div className="flex items-center justify-between gap-4 py-1.5">
+              <dt className="text-sm text-muted-foreground">
+                {terminDelta.naik ? "Nilai naik — sisa tagih bertambah" : "Nilai turun — kelebihan menjadi kredit pelanggan"}
+              </dt>
+              <dd
+                className={
+                  terminDelta.naik
+                    ? "text-sm font-semibold tabular-nums text-destructive"
+                    : "text-sm font-semibold tabular-nums text-emerald-600"
+                }
+              >
+                {`${terminDelta.naik ? "+" : "−"}${terminDelta.nominal}${terminDelta.persen === null ? "" : ` (${terminDelta.persen.toFixed(1).replace(".", ",")}%)`}`}
+              </dd>
+            </div>
+            <div className="flex items-center justify-between gap-4 py-1.5">
+              <dt className="text-sm text-muted-foreground">Sisa belum ditagih kini</dt>
+              <dd className="text-sm font-semibold tabular-nums">{formatCurrency(summary.sisaBelumDitagih)}</dd>
+            </div>
+          </dl>
+        </section>
+      ) : (
+        <p className="mt-4 border-t border-default pt-3 text-xs text-muted-foreground">Perubahan nilai sejak snapshot tidak tercatat</p>
+      )}
       {summary.kreditTerbuka > 0 && summary.openCredits.length > 0 ? (
         <ul aria-label="Kredit terbuka" className="mt-3 space-y-1 text-sm">
           {summary.openCredits.map((c) => (

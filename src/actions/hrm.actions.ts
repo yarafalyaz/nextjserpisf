@@ -59,10 +59,12 @@ import { getSystemSettings } from "@/lib/utils/settings";
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
+import { closedWorkOrderError, timesheetContextError } from "@/lib/services/timesheet-context";
 
 function timesheetWriteData(v: {
   employeeId: number;
-  projectId: number;
+  projectId?: number | null;
+  workOrderId?: number | null;
   taskId?: number | null;
   date: string;
   startTime?: string | null;
@@ -72,7 +74,8 @@ function timesheetWriteData(v: {
 }) {
   return {
     employeeId: v.employeeId,
-    projectId: v.projectId,
+    projectId: v.projectId ?? null,
+    workOrderId: v.workOrderId ?? null,
     taskId: v.taskId ?? null,
     date: wibDateToUtcMidnight(v.date),
     startTime: v.startTime ?? null,
@@ -1941,6 +1944,43 @@ export async function createEmployeeLoan(formData: FormData) {
 
 // ==================== TIMESHEET ACTIONS ====================
 
+/**
+ * F-2026-10-21-019: validasi konteks timesheet SEBELUM tulis — XOR tepat satu
+ * konteks (helper murni), konteks WO menunjuk WO nyata yang belum
+ * selesai/batal, dan taskId hanya menempel pada proyek pemiliknya.
+ * Mengembalikan error siap tampil, atau null bila sah.
+ */
+async function timesheetContextGuard(v: {
+  projectId?: number | null;
+  workOrderId?: number | null;
+  taskId?: number | null;
+}): Promise<{ success: false; error: string } | null> {
+  const xorError = timesheetContextError(v);
+  if (xorError) return { success: false, error: xorError };
+
+  if (v.workOrderId != null) {
+    const wo = await prisma.workOrder.findUnique({
+      where: { id: v.workOrderId },
+      select: { id: true, status: true },
+    });
+    if (!wo) return { success: false, error: "Perintah kerja tidak ditemukan" };
+    const closed = closedWorkOrderError(wo.status, "dicatat");
+    if (closed) return { success: false, error: closed };
+  }
+
+  if (v.taskId != null) {
+    const task = await prisma.task.findUnique({
+      where: { id: v.taskId },
+      select: { id: true, projectId: true },
+    });
+    if (!task) return { success: false, error: "Tugas tidak ditemukan" };
+    if (task.projectId !== v.projectId) {
+      return { success: false, error: "Tugas tidak termasuk dalam proyek ini." };
+    }
+  }
+  return null;
+}
+
 export async function createTimesheet(formData: FormData) {
   try {
     const user = await requirePermission("create_timesheets");
@@ -1951,6 +1991,9 @@ export async function createTimesheet(formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
     await assertHrEmployeeAccess(scope, v.employeeId);
+
+    const contextError = await timesheetContextGuard(v);
+    if (contextError) return contextError;
 
     const timesheet = await prisma.timesheet.create({
       data: {
@@ -3033,6 +3076,9 @@ export async function updateTimesheet(id: number, formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
     await assertHrEmployeeAccess(scope, v.employeeId);
+
+    const contextError = await timesheetContextGuard(v);
+    if (contextError) return contextError;
 
     const timesheet = await prisma.timesheet.update({
       where: { id },
