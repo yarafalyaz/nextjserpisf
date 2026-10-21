@@ -6795,7 +6795,7 @@ masih terbuka di backlog main.
 
 ---
 
-## VONIS BOT 4 2026-10-22 — F-2026-10-22-056-V bentuk data F-055 lanjutan (status pemotong bertanggal efektif, alokasi sumber setor-sendiri, katalog kode+nama satu sumber)
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-057-V bentuk data F-055 lanjutan (status pemotong bertanggal efektif, alokasi sumber setor-sendiri, katalog kode+nama satu sumber)
 
 Pemilik vonis: BOT 4 (accounting-finance-tax). Tertulis saja, tanpa
 kode/schema/migrasi — BOT 3 pemilik skema final sesudah koordinasi
@@ -6944,7 +6944,8 @@ VONIS:
   UU 28/2007 — diakses 2026-10-22; label BUTUH-VERIFIKASI-BOT6
   F-055-V §6 tetap berlaku.
 
-ID vonis ini **F-2026-10-22-056-V** (sesudah 055-V PR #436; 054 =
-spec BOT 5). Pemilik berikutnya: BOT 3 (bentuk fisik + migrasi
+ID vonis ini **F-2026-10-22-057-V** (sesudah 055-V PR #436; 054 =
+spec BOT 5; 056-V sudah dipakai vonis Q-KOM-1 PR #440 — renumber
+sesudah tabrakan ID terdeteksi, isi vonis nol berubah). Pemilik berikutnya: BOT 3 (bentuk fisik + migrasi
 sesudah #436 merged dan koordinasi board) -> BOT 2 -> BOT 6 §4.
 
