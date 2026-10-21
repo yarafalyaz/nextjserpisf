@@ -4,7 +4,12 @@ import { describe, it, expect, vi } from "vitest"
 // over brand/model/variant + year/drivetrain/transmission, and `unknown` when no
 // rule matches.
 
-import { evaluateFitment, evaluateProductFitment } from "@/lib/services/vehicle-fitment.service"
+import {
+  evaluateFitment,
+  evaluateProductFitment,
+  findFitmentConflicts,
+  loadFitmentConflicts,
+} from "@/lib/services/vehicle-fitment.service"
 
 function dbWithRules(rules: unknown[]) {
   return {
@@ -96,6 +101,69 @@ describe("evaluateFitment", () => {
       configuration: { vehicleModelId: 20, drivetrain: "4WD" },
     })
     expect(res.result).toBe("unknown")
+  })
+})
+
+describe("findFitmentConflicts / loadFitmentConflicts (F-2026-10-21-025)", () => {
+  const candidate = {
+    itemId: 1,
+    vehicleModelId: 20,
+    drivetrain: "4WD",
+    transmission: "Manual",
+    result: "compatible",
+  }
+
+  it("flags identical scope + same specificity + opposite result", () => {
+    const conflicts = findFitmentConflicts(candidate, [
+      { ...baseRule, id: 7, itemId: 1, vehicleModelId: 20, drivetrain: "4wd", transmission: "manual", result: "incompatible", source: "katalog" },
+    ])
+    expect(conflicts).toHaveLength(1)
+    expect(conflicts[0]).toMatchObject({
+      ruleId: 7,
+      candidateResult: "compatible",
+      conflictResult: "incompatible",
+      specificity: 6, // model 4 + drivetrain 1 + transmission 1
+      source: "katalog",
+      scope: { itemId: 1, vehicleModelId: 20, drivetrain: "4wd", transmission: "manual" },
+    })
+  })
+
+  it("ignores same result, unknown either side, and excluded self", () => {
+    const rules = [
+      { ...baseRule, id: 1, itemId: 1, vehicleModelId: 20, drivetrain: "4WD", transmission: "Manual", result: "compatible" },
+      { ...baseRule, id: 2, itemId: 1, vehicleModelId: 20, drivetrain: "4WD", transmission: "Manual", result: "unknown" },
+    ]
+    expect(findFitmentConflicts(candidate, rules)).toHaveLength(0)
+    expect(findFitmentConflicts({ ...candidate, result: "unknown" }, [
+      { ...baseRule, id: 3, itemId: 1, vehicleModelId: 20, drivetrain: "4WD", transmission: "Manual", result: "incompatible" },
+    ])).toHaveLength(0)
+    expect(findFitmentConflicts(candidate, [
+      { ...baseRule, id: 9, itemId: 1, vehicleModelId: 20, drivetrain: "4WD", transmission: "Manual", result: "incompatible" },
+    ], 9)).toHaveLength(0)
+  })
+
+  it("ignores scope differing in one dimension even at same specificity", () => {
+    // year-bounded rule scores same total (model 4 + year 1) as candidate's
+    // drivetrain point is traded, but scope is not identical -> no conflict.
+    const conflicts = findFitmentConflicts(candidate, [
+      { ...baseRule, id: 4, itemId: 1, vehicleModelId: 20, yearFrom: 2015, transmission: "Manual", result: "incompatible" },
+      { ...baseRule, id: 5, itemId: 2, vehicleModelId: 20, drivetrain: "4WD", transmission: "Manual", result: "incompatible" },
+      { ...baseRule, id: 6, itemId: 1, vehicleModelId: 20, drivetrain: "2WD", transmission: "Manual", result: "incompatible" },
+    ])
+    expect(conflicts).toHaveLength(0)
+  })
+
+  it("loader queries only active rules of the candidate item", async () => {
+    const findMany = vi.fn().mockResolvedValue([
+      { ...baseRule, id: 7, itemId: 1, vehicleModelId: 20, drivetrain: "4WD", transmission: "Manual", result: "incompatible" },
+    ])
+    const db = { vehicleFitmentRule: { findMany } } as never
+    const conflicts = await loadFitmentConflicts(db, { candidate })
+    expect(findMany).toHaveBeenCalledWith({
+      where: { itemId: 1, isActive: true },
+      orderBy: { id: "asc" },
+    })
+    expect(conflicts.map((c) => c.ruleId)).toEqual([7])
   })
 })
 

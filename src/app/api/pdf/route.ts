@@ -1,5 +1,5 @@
 import { auth } from "@/lib/auth/auth"
-import { hasAnyPermission, hasPermission } from "@/lib/auth/permissions"
+import { hasPermission } from "@/lib/auth/permissions"
 import { apiError } from "@/lib/api-response"
 import { parseReportPeriod } from "@/lib/reports/report-period"
 import { reportPdfFilename } from "@/lib/reports/report-export"
@@ -39,11 +39,17 @@ export async function GET(request: Request) {
     return apiError("BAD_REQUEST", "Laporan tidak didukung")
   }
 
-  // Laporan gaji/NPWP (data personalia sensitif) butuh view_payroll_reports.
-  // view_reports umum tetap diterima supaya pemegang lama tidak terkunci.
-  const PAYROLL_PDF_KEYS = new Set(["gaji-karyawan", "pph-21", "porsi-gaji", "bukti-potong-pph"])
+  // Laporan gaji/NPWP (data personalia sensitif) wajib view_payroll_reports SAJA.
+  // view_reports generik TIDAK cukup (fail-closed): pemegang hanya-view_reports
+  // kehilangan akses laporan gaji/PPh21 — role FINANCE whitelist sudah punya
+  // view_payroll_reports, role kustom hanya-view_reports perlu grant ulang admin.
+  // bukti-potong-pph BUKAN laporan payroll: loader-nya VendorBill pemasok
+  // (loadWithholdingSummary), nol data karyawan — tetap gerbang laporan pajak
+  // umum view_reports (vonis BOT 4 F-2026-10-21-034 + putusan Lead opsi (a)
+  // atas sanggahan PR #316). Jangan masukkan kembali ke himpunan ini.
+  const PAYROLL_PDF_KEYS = new Set(["gaji-karyawan", "pph-21", "porsi-gaji"])
   if (PAYROLL_PDF_KEYS.has(report)) {
-    if (!(await hasAnyPermission(["view_payroll_reports", "view_reports"]))) {
+    if (!(await hasPermission("view_payroll_reports"))) {
       return apiError("FORBIDDEN", "Akses ditolak")
     }
   } else if (!(await hasPermission("view_reports"))) {

@@ -36,6 +36,7 @@ const ATTACHMENT_MODEL: Record<string, string> = {
   inventory_transfer: "inventoryTransfer",
   stock_adjustment: "stockAdjustment",
   petty_cash: "pettyCash",
+  WarrantyClaim: "warrantyClaim",
 }
 
 // Maps a transaction-attachment referenceType to the view-permission required

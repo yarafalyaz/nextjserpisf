@@ -4,6 +4,7 @@ import { GET } from "../route"
 const mocks = vi.hoisted(() => ({
   authFn: vi.fn(),
   hasPermission: vi.fn(),
+  grants: new Set<string>(),
   loadBalanceSheetStatement: vi.fn(),
   loadIncomeStatementStatement: vi.fn(),
   loadAssetRegister: vi.fn(),
@@ -11,15 +12,27 @@ const mocks = vi.hoisted(() => ({
   loadAssetDisposals: vi.fn(),
   loadTrialBalanceReport: vi.fn(),
   loadIncomeStatementByCostCenter: vi.fn(),
+  loadPayrollRows: vi.fn(),
+  loadWithholdingSummary: vi.fn(),
   getSystemSettings: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/auth", () => ({ auth: (...args: unknown[]) => mocks.authFn(...args) }))
+// Permission-aware: hasPermission(perm) true hanya bila perm ada di grants.
+// Sengaja TANPA hasAnyPermission — gerbang payroll wajib hasPermission tunggal.
 vi.mock("@/lib/auth/permissions", () => ({
   hasPermission: (...args: unknown[]) => mocks.hasPermission(...args),
-  hasAnyPermission: async (perms: unknown) =>
-    mocks.hasPermission(...(perms as unknown[])),
 }))
+vi.mock("@/lib/reports/payroll-reports-data", () => ({
+  loadPayrollRows: (...args: unknown[]) => mocks.loadPayrollRows(...args),
+}))
+vi.mock("@/lib/reports/tax-summary-data", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/reports/tax-summary-data")>()
+  return {
+    ...actual,
+    loadWithholdingSummary: (...args: unknown[]) => mocks.loadWithholdingSummary(...args),
+  }
+})
 vi.mock("@/lib/reports/statement-data", () => ({
   loadBalanceSheetStatement: (...args: unknown[]) => mocks.loadBalanceSheetStatement(...args),
   loadIncomeStatementStatement: (...args: unknown[]) => mocks.loadIncomeStatementStatement(...args),
@@ -110,9 +123,22 @@ function request(query: string): Request {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.grants = new Set(["view_reports", "view_payroll_reports"])
   mocks.authFn.mockResolvedValue({ user: { name: "Budi", email: "budi@test.com" } })
-  mocks.hasPermission.mockResolvedValue(true)
+  mocks.hasPermission.mockImplementation(async (perm: string) => mocks.grants.has(perm))
   mocks.getSystemSettings.mockResolvedValue(settings)
+  mocks.loadPayrollRows.mockResolvedValue({
+    rows: [],
+    draftSlips: 0,
+    duplicateEmployees: [],
+    periodLabel: "Periode Okt 2026",
+    periodCaption: "Periode Okt 2026",
+  })
+  mocks.loadWithholdingSummary.mockResolvedValue({
+    table: { columns: [{ header: "Jenis", align: "left" }], rows: [] },
+    periodLabel: "Periode 2026",
+    periodCaption: "Periode 2026",
+  })
   mocks.loadBalanceSheetStatement.mockResolvedValue(STATEMENT)
   mocks.loadIncomeStatementStatement.mockResolvedValue(STATEMENT)
   mocks.loadAssetRegister.mockResolvedValue(ASSET_REGISTER)
@@ -137,12 +163,49 @@ beforeEach(() => {
 })
 
 describe("GET /api/pdf", () => {
-  it("menolak laporan gaji tanpa izin gaji bila hanya view_reports yang dicek manual", async () => {
-    // Sanity: mock hasPermission(false) + hasAnyPermission passthrough means
-    // payroll keys follow the any-of gate (covered by route logic).
-    mocks.hasPermission.mockResolvedValue(false)
-    const res = await GET(request("laporan=gaji-karyawan&periode=2026-10"))
-    expect(res.status).toBe(403)
+  describe("gerbang payroll fail-closed (view_payroll_reports saja)", () => {
+    const PAYROLL_KEYS = ["gaji-karyawan", "pph-21", "porsi-gaji"]
+
+    it.each(PAYROLL_KEYS)("menolak %s untuk sesi hanya-view_reports (tanpa menyentuh loader)", async (key) => {
+      mocks.grants = new Set(["view_reports"])
+      const res = await GET(request(`laporan=${key}&periode=2026-10`))
+      expect(res.status).toBe(403)
+      expect(mocks.loadPayrollRows).not.toHaveBeenCalled()
+      expect(mocks.loadWithholdingSummary).not.toHaveBeenCalled()
+    })
+
+    it.each(PAYROLL_KEYS)("mengizinkan %s untuk sesi view_payroll_reports (tanpa view_reports)", async (key) => {
+      mocks.grants = new Set(["view_payroll_reports"])
+      const res = await GET(request(`laporan=${key}&periode=2026-10`))
+      expect(res.status).toBe(200)
+      expect(res.headers.get("content-type")).toBe("application/pdf")
+    })
+
+    it.each(PAYROLL_KEYS)("menolak %s tanpa keduanya", async (key) => {
+      mocks.grants = new Set()
+      const res = await GET(request(`laporan=${key}&periode=2026-10`))
+      expect(res.status).toBe(403)
+    })
+  })
+
+  describe("bukti-potong-pph gerbang laporan pajak umum (bukan payroll)", () => {
+    // Loader-nya VendorBill pemasok (loadWithholdingSummary) — nol data
+    // karyawan. Vonis BOT 4 F-2026-10-21-034: pelaporan bupot tetap
+    // view_reports; putusan Lead opsi (a) atas sanggahan PR #316.
+    it("mengizinkan sesi hanya-view_reports dan memanggil loader bupot", async () => {
+      mocks.grants = new Set(["view_reports"])
+      const res = await GET(request("laporan=bukti-potong-pph&periode=2026-10"))
+      expect(res.status).toBe(200)
+      expect(mocks.loadWithholdingSummary).toHaveBeenCalledTimes(1)
+      expect(mocks.loadPayrollRows).not.toHaveBeenCalled()
+    })
+
+    it("menolak sesi hanya-view_payroll_reports (izin gaji bukan izin pajak)", async () => {
+      mocks.grants = new Set(["view_payroll_reports"])
+      const res = await GET(request("laporan=bukti-potong-pph&periode=2026-10"))
+      expect(res.status).toBe(403)
+      expect(mocks.loadWithholdingSummary).not.toHaveBeenCalled()
+    })
   })
 
   it("menolak permintaan tanpa sesi", async () => {

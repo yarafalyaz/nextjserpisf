@@ -20,6 +20,8 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { JobBillingCard } from "@/components/reports/job-billing-card";
 import { isQuotationExpired } from "@/lib/utils/quotation-expiry";
 import { WhatsappButton } from "@/components/reports/whatsapp-button";
+import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note";
+import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data";
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { DifferenceInvoiceButton } from "@/components/reports/difference-invoice-button";
 import { ProgressInvoiceButton } from "@/components/reports/progress-invoice-button";
@@ -78,6 +80,9 @@ export default async function QuotationDetailPage({
   );
 
   if (!quotation) notFound();
+
+  // F-036 tahap 2: jejak klik tautan WA terakhir (label jujur, bukan terkirim).
+  const whatsappTrail = await getWhatsappTrail("Quotation", quotation.id);
 
   const [billingSummary, approvalGate, revisionDelta] = await Promise.all([
     loadJobBillingSummary(quotation.id),
@@ -194,6 +199,9 @@ export default async function QuotationDetailPage({
             <PrintButton documentType="quotation" documentId={quotation.id} />
             <WhatsappButton
               phone={quotation.customer.phone}
+              modelType="Quotation"
+              modelId={quotation.id}
+              surface="detail"
               message={buildWhatsappMessage({
                 customerName: quotation.customer.name,
                 documentLabel: "Penawaran",
@@ -234,6 +242,8 @@ export default async function QuotationDetailPage({
           </>
         }
       />
+
+      <WhatsappTrailNote trail={whatsappTrail} />
 
       <DetailTabs
         ariaLabel="Tab detail penawaran"

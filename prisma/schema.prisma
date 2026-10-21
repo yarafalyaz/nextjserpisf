@@ -441,6 +441,7 @@ model Vendor {
   expenses          Expense[]
   pettyCash         PettyCash[]
   purchaseAdvances  PurchaseAdvance[]
+  supplierWarrantyClaims WarrantyClaim[] @relation("WarrantyClaimSupplierVendor")
   vendorPrices      VendorItemPrice[]
   paymentTerm       PaymentTerm?      @relation(fields: [paymentTermId], references: [id])
   taxInvoices       TaxInvoice[]
@@ -1766,6 +1767,7 @@ model PurchaseReturn {
   updatedAt       DateTime             @updatedAt @map("updated_at")
   items           PurchaseReturnItem[]
   purchaseOrder   PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id])
+  warrantyClaims  WarrantyClaim[]      @relation("WarrantyClaimPurchaseReturn")
   sourceTaxInvoice TaxInvoice?         @relation(fields: [sourceTaxInvoiceId], references: [id], onDelete: SetNull)
 
   @@index([purchaseOrderId], map: "purchase_returns_purchase_order_id_fkey")
@@ -4038,29 +4040,45 @@ model WarrantyCoverage {
 // TransactionAttachment existing (referenceType = "WarrantyClaim"),
 // bukan tabel lampiran baru. TANPA jurnal/provisi.
 model WarrantyClaim {
-  id                 Int             @id @default(autoincrement())
-  coverageId         Int             @map("coverage_id")
-  customerVehicleId  Int             @map("customer_vehicle_id")
-  reportedAt         DateTime        @map("reported_at")
-  odometerKm         Int?            @map("odometer_km")
-  complaint          String          @db.Text
-  status             String          @default("intake")
-  decisionBy         Int?            @map("decision_by")
-  decisionAt         DateTime?       @map("decision_at")
-  decisionNotes      String?         @db.Text @map("decision_notes")
-  resolutionType     String?         @map("resolution_type")
-  repairWorkOrderId  Int?            @map("repair_work_order_id")
-  createdBy          Int?            @map("created_by")
-  createdAt          DateTime        @default(now()) @map("created_at")
-  updatedAt          DateTime        @updatedAt @map("updated_at")
-  coverage           WarrantyCoverage @relation(fields: [coverageId], references: [id])
-  customerVehicle    CustomerVehicle  @relation(fields: [customerVehicleId], references: [id])
-  repairWorkOrder    WorkOrder?       @relation("WarrantyClaimRepairWorkOrder", fields: [repairWorkOrderId], references: [id], onDelete: SetNull)
+  id                    Int              @id @default(autoincrement())
+  coverageId            Int              @map("coverage_id")
+  customerVehicleId     Int              @map("customer_vehicle_id")
+  reportedAt            DateTime         @map("reported_at")
+  odometerKm            Int?             @map("odometer_km")
+  complaint             String           @db.Text
+  status                String           @default("intake")
+  decisionBy            Int?             @map("decision_by")
+  decisionAt            DateTime?        @map("decision_at")
+  decisionNotes         String?          @db.Text @map("decision_notes")
+  resolutionType        String?          @map("resolution_type")
+  repairWorkOrderId     Int?             @map("repair_work_order_id")
+  // F-2026-10-21-022 — tautan klaim supplier atas part cacat. TAUTAN SAJA,
+  // TANPA jurnal recovery/piutang klaim supplier (vonis accounting tahap 3).
+  // supplierClaimStatus TERPISAH dari status klaim pelanggan: klaim pelanggan
+  // bisa closed sementara recovery supplier masih berjalan. Nilai enum teks
+  // divalidasi service (WARRANTY_SUPPLIER_CLAIM_STATUSES), default "none".
+  supplierClaimVendorId Int?             @map("supplier_claim_vendor_id")
+  purchaseReturnId      Int?             @map("purchase_return_id")
+  supplierClaimStatus   String           @default("none") @map("supplier_claim_status")
+  supplierClaimRefNo    String?          @map("supplier_claim_ref_no")
+  supplierClaimNotes    String?          @db.Text @map("supplier_claim_notes")
+  supplierClaimBy       Int?             @map("supplier_claim_by")
+  supplierClaimAt       DateTime?        @map("supplier_claim_at")
+  createdBy             Int?             @map("created_by")
+  createdAt             DateTime         @default(now()) @map("created_at")
+  updatedAt             DateTime         @updatedAt @map("updated_at")
+  coverage              WarrantyCoverage @relation(fields: [coverageId], references: [id])
+  customerVehicle       CustomerVehicle  @relation(fields: [customerVehicleId], references: [id])
+  repairWorkOrder       WorkOrder?       @relation("WarrantyClaimRepairWorkOrder", fields: [repairWorkOrderId], references: [id], onDelete: SetNull)
+  supplierClaimVendor   Vendor?          @relation("WarrantyClaimSupplierVendor", fields: [supplierClaimVendorId], references: [id], onDelete: SetNull)
+  purchaseReturn        PurchaseReturn?  @relation("WarrantyClaimPurchaseReturn", fields: [purchaseReturnId], references: [id], onDelete: SetNull)
 
   @@index([coverageId])
   @@index([customerVehicleId])
   @@index([status])
   @@index([repairWorkOrderId])
+  @@index([supplierClaimVendorId])
+  @@index([purchaseReturnId])
   @@index([createdAt])
   @@map("warranty_claims")
 }
