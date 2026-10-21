@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, vi } from "vitest"
 import { MaterialIssueForm } from "../material-issue-form"
 import {
-  mountInto, unmount, withContainer, decorativeStars, labelTexts,
+  mountInto, unmount, withContainer, assertOrderComboboxA11yAdd, assertFormEditLabel,
 } from "./form-a11y-test-utils"
 
 vi.mock("next/navigation", async () => (await import("./form-a11y-test-utils")).routerModule)
@@ -23,12 +23,10 @@ describe("MaterialIssueForm — a11y wiring", () => {
   it("form aria-label tambah + aria-busy false; combobox gudang aria-required; bintang dekoratif aria-hidden", () => {
     withContainer((container) => {
       const root = mountInto(container, <MaterialIssueForm warehouses={warehouses} items={items} />)
-      const form = container.querySelector("form")!
-      expect(form.getAttribute("aria-label")).toBe("Formulir tambah pengeluaran material")
-      expect(form.getAttribute("aria-busy")).toBe("false")
-      expect(container.querySelectorAll('[role="combobox"][aria-required="true"]').length).toBe(1)
-      expect(decorativeStars(form).length).toBe(1)
-      expect(labelTexts(form)).toEqual(expect.arrayContaining(["Gudang *"]))
+      assertOrderComboboxA11yAdd(container.querySelector("form")!, container, {
+        addLabel: "Formulir tambah pengeluaran material",
+        requiredLabel: "Gudang *",
+      })
       unmount(root, container)
     })
   })
@@ -42,7 +40,7 @@ describe("MaterialIssueForm — a11y wiring", () => {
           issue={{ id: 3, warehouseId: 1, date: "2026-10-20", items: [{ itemId: 7, qty: 2 }] }}
         />
       ))
-      expect(container.querySelector("form")!.getAttribute("aria-label")).toBe("Formulir ubah pengeluaran material")
+      assertFormEditLabel(container, "Formulir ubah pengeluaran material")
       unmount(root, container)
     })
   })
