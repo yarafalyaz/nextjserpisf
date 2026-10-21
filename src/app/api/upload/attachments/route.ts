@@ -30,6 +30,25 @@ export function resolveAttachmentExt(mimeType: string, filename: string): string
   return raw
 }
 
+/**
+ * MIME dari signature biner (temuan BOT 6 PR #344: signature harus cocok
+ * dengan MIME terdeklarasi, bukan sekadar satu dari allowlist).
+ * Kembalikan null bila tidak cocok dengan signature yang dikenal.
+ */
+export function detectMimeFromSignature(header: Buffer): string | null {
+  // JPEG: FF D8 FF
+  if (header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) return "image/jpeg"
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47) return "image/png"
+  // GIF: "GIF87a" / "GIF89a"
+  if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46) return "image/gif"
+  // WebP: "RIFF"...."WEBP"
+  if (header.toString("ascii", 0, 4) === "RIFF" && header.toString("ascii", 8, 12) === "WEBP") return "image/webp"
+  // PDF: "%PDF-"
+  if (header.toString("ascii", 0, 5) === "%PDF-") return "application/pdf"
+  return null
+}
+
 export async function POST(req: NextRequest) {
   try {
   const session = await auth()
@@ -87,18 +106,15 @@ export async function POST(req: NextRequest) {
   // Jangan percaya `file.type` (header Content-Type kiriman klien): periksa
   // signature binernya. Tanpa ini, skrip .php/.svg yang di-header-kan
   // `image/png` lolos sebagai gambar dan tersimpan di server.
-  const signature = buffer.subarray(0, 12)
-  const looksImage =
-    // JPEG: FF D8 FF
-    (signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff) ||
-    // PNG: 89 50 4E 47 0D 0A 1A 0A
-    (signature[0] === 0x89 && signature[1] === 0x50 && signature[2] === 0x4e && signature[3] === 0x47) ||
-    // GIF: "GIF87a" / "GIF89a"
-    (signature[0] === 0x47 && signature[1] === 0x49 && signature[2] === 0x46) ||
-    // WebP: "RIFF"...."WEBP"
-    (signature.toString("ascii", 0, 4) === "RIFF" && signature.toString("ascii", 8, 12) === "WEBP")
-  const looksPdf = signature.toString("ascii", 0, 5) === "%PDF-"
-  if (!looksImage && !looksPdf) {
+  // Signature juga harus COCOK dengan MIME terdeklarasi (temuan BOT 6 PR #344):
+  // isi JPEG + header application/pdf sebelumnya tersimpan .pdf dengan
+  // mimeType DB application/pdf — ekstensi/mime berbohong terhadap isi.
+  // Pakai MIME hasil deteksi untuk ekstensi + DB, bukan `file.type` klien.
+  const detectedMime = detectMimeFromSignature(buffer.subarray(0, 12))
+  if (!detectedMime) {
+    return apiError("BAD_REQUEST", "Isi berkas tidak sesuai format. Gunakan JPG, PNG, WebP, GIF, atau PDF.")
+  }
+  if (detectedMime !== file.type) {
     return apiError("BAD_REQUEST", "Isi berkas tidak sesuai format. Gunakan JPG, PNG, WebP, GIF, atau PDF.")
   }
 
@@ -130,8 +146,8 @@ export async function POST(req: NextRequest) {
   const uploadDir = path.join(process.cwd(), "private", "uploads", "attachments", safeRefType)
   await mkdir(uploadDir, { recursive: true })
 
-  // Ekstensi dari MIME tervalidasi, bukan nama klien (resolveAttachmentExt).
-  const ext = resolveAttachmentExt(file.type, file.name)
+  // Ekstensi dari MIME hasil deteksi signature, bukan nama klien (resolveAttachmentExt).
+  const ext = resolveAttachmentExt(detectedMime, file.name)
   const filename = `${safeRefType}-${referenceIdNum}-${randomUUID()}.${ext}`
   const filepath = path.join(uploadDir, filename)
 
@@ -156,7 +172,7 @@ export async function POST(req: NextRequest) {
         originalName: file.name,
         fileUrl,
         fileSize: file.size,
-        mimeType: file.type,
+        mimeType: detectedMime,
         uploadedBy: userId,
       },
       // Kontrak POST sama dengan GET: tanpa select, Prisma create mengembalikan
