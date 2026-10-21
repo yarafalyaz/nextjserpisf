@@ -1,5 +1,5 @@
 import { z } from "zod"
-import { parseMoneyAmount } from "@/lib/utils/parse-money"
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money"
 import { dateOnly } from "@/lib/validations/finance.schemas"
 
 const optionalString = (max: number) =>
@@ -11,9 +11,9 @@ const optionalDateOnly = z.preprocess(
 )
 
 /**
- * F-PRICELIST-01 tahap 1: satu baris daftar harga jual.
+ * F-PRICELIST-01 tahap 1 + F-2026-10-21-018: satu baris daftar harga jual.
  * `customerCategoryId` kosong = harga per item berlaku semua kategori.
- * Sengaja TANPA aturan qty/promo/minimum (tahap 2, di luar putusan).
+ * `minQty` = ambang qty INKLUSIF (BR-TIER-01); kosong -> 1.
  */
 export const customerPriceListSchema = z.object({
   customerCategoryId: z.preprocess(
@@ -34,6 +34,15 @@ export const customerPriceListSchema = z.object({
       .number({ message: "Harga wajib diisi" })
       .positive("Harga harus lebih dari 0")
       .max(1_000_000_000_000, "Harga melebihi batas"),
+  ),
+  // Pola vendorPriceSchema.minQty: parse locale sadar ("1.000" = 1000),
+  // kosong/tak-terbaca -> 1; wajib > 0 (data rusak dicegah di gerbang).
+  minQty: z.preprocess(
+    (v) => (typeof v === "string" ? (parseLocaleNumber(v) ?? 1) : v),
+    z.coerce
+      .number({ message: "Minimal qty tidak valid" })
+      .positive("Minimal qty harus lebih dari 0")
+      .max(1_000_000_000, "Minimal qty melebihi batas"),
   ),
   effectiveDate: optionalDateOnly,
   notes: optionalString(2000),
