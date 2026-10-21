@@ -7676,3 +7676,290 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+---
+
+## 2026-10-22 — Domain (k) SLA tiket CRM terukur (F-2026-10-22-001)
+
+Spec ini menutup pertanyaan terbuka domain (k) baris "Yang TIDAK
+diusulkan" di atas: "SLA tiket CRM terukur (target respons per
+prioritas): firstResponseAt sudah tercatat; target SLA belum ada
+aturan bisnisnya". Kartu ini MEMBUAT aturan itu. Spec saja — tanpa
+kode, tanpa schema, tanpa migrasi.
+
+### Inventarisasi terverifikasi (2026-10-22, basis HEAD 8ff0c7a9)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model CrmTicket (prisma/schema.prisma:3385-3416): priority String
+  default "medium" (:3396), status String default "open" (:3397),
+  firstResponseAt (:3399), resolvedAt (:3400), closedAt (:3401),
+  assignedTo (:3398), createdAt (:3405), deletedAt (:3404).
+- Nilai status sah hanya 4: open, in_progress, resolved, closed
+  (src/lib/validations/crm.schemas.ts:40-44). Nilai priority yang
+  ditawarkan form hanya 3: low, medium, high
+  (src/components/forms/ticket-form.tsx:119-123). Kolom priority
+  sendiri String bebas (crm.schemas.ts:23,35 optionalString) —
+  nilai di luar ketiganya bisa masuk lewat jalur non-form.
+- firstResponseAt diisi server sekali saat tiket keluar dari "open"
+  ke status lain (src/actions/crm.actions.ts:125-128); resolvedAt
+  diisi sekali saat masuk resolved/closed (:129-132). Komentar
+  (addTicketComment, :294-334) TIDAK menyentuh keduanya.
+- closedAt TIDAK PERNAH ditulis jalur produk (grep closedAt di src
+  hanya model NCR qc) — tiket closed hanya punya resolvedAt.
+- Permission nyata: view_tickets, create_tickets, edit_tickets,
+  delete_tickets (src/lib/auth/module-catalog.generated.ts:357-360);
+  halaman daftar gerbang view_tickets (crm/tickets/page.tsx:25),
+  update gerbang edit_tickets (crm.actions.ts:90).
+- Infrastruktur notifikasi internal existing: notification.service.ts
+  notifyAdmins (:37), notifyUser (:62), notifyUsersIfNew dedupe
+  per-judul per-periode untuk pemanggil cron (:102-127); cron
+  daily-notifications terjadwal vercel.json (0 7 * * *).
+- Kalender acuan existing: model Holiday (schema:2637-2648) dan
+  WorkSchedule (schema:2677-2692, workDays String + startTime/
+  endTime) sudah dipakai layanan absensi; TZ aplikasi Asia/Jakarta
+  (stale-leads.ts:58-61 pola calendarDay).
+
+Belum ada (bukti grep run ini):
+- ABSEN target SLA, builder antrean lewat-SLA, dan lencana SLA:
+  grep SLA di src = 0 hasil relevan; tidak ada file
+  src/lib/reports/*ticket*/*sla*.
+- ABSEN prioritas "urgent/critical" di tiket CRM — hanya low/medium/
+  high. Spec TIDAK mengarang tingkat keempat (lihat BR-CRM-02).
+
+Benchmark resmi (akses 2026-10-22):
+- Freshdesk SLA Policies — target first-response + resolution per
+  prioritas (Urgent/High/Medium/Low), pilihan hitung jam kerja vs
+  jam kalender, eskalasi saat pelanggaran:
+  https://support.freshdesk.com/support/solutions/articles/37626-understanding-sla-policies
+- Accurate Online dan Zahir TIDAK punya modul tiket/helpdesk CRM
+  dengan target SLA per prioritas pada dokumentasi resminya
+  (pencarian help.accurate.id dan help.zahironline.com 2026-10-22:
+  "tiket" di Zahir = deposit tiket travel, bukan tiket dukungan).
+  SLA tiket ISF = kebutuhan ISF sendiri, bukan klaim paritas vendor.
+
+### Aturan bisnis SLA (register)
+
+Semua angka target di bawah labelnya USULAN — rekomendasi Bot 5 dari
+benchmark Freshdesk dan praktik helpdesk umum, BELUM disetujui
+pemilik proses. Angka tidak mengikat sampai pemilik proses (Lead)
+menyetujui; sesudah disetujui, angka menjadi konstanta builder
+(bukan field konfigurasi per tiket) pada tahap implementasi.
+
+#### BR-CRM-01 (USULAN) — Target per prioritas
+
+Jam kerja acuan: Senin–Jumat 08:00–17:00 WIB (9 jam kerja/hari),
+di luar hari libur pada model Holiday existing. Hitungan SLA =
+JAM KERJA, bukan jam kalender (pilihan Freshdesk "business hours").
+
+| Priority (nilai existing) | Target respons pertama | Target resolusi |
+|---|---|---|
+| high   | 2 jam kerja   | 1 hari kerja (9 jam kerja)  |
+| medium | 4 jam kerja   | 3 hari kerja (27 jam kerja) |
+| low    | 8 jam kerja (1 hari kerja) | 5 hari kerja (45 jam kerja) |
+
+Alasan urutan: benchmark umum menaruh High di 1–2 jam respons dan
+1 hari resolusi, Medium 4 jam / 3 hari, Low 1 hari / 5 hari; angka
+di atas mengambil ujung longgar karena tim bengkel kecil dan tiket
+dibuat manual oleh staf (bukan portal pelanggan 24 jam).
+
+#### BR-CRM-02 (TERVERIFIKASI-KODE + USULAN) — Cakupan prioritas
+
+- Hanya 3 prioritas existing yang punya target: low, medium, high.
+- DILARANG menambah "urgent" pada spec ini. Nilai priority di luar
+  ketiganya (kolom String bebas): builder memperlakukannya sebagai
+  medium (default kolom, schema:3396) DAN barisnya ditandai
+  prioritas-tak-dikenal supaya ketidakberesan data terlihat, bukan
+  diam-diam lolos dari SLA. Menambah tingkat prioritas keempat =
+  keputusan terpisah pemilik proses (BUTUH-VONIS Lead), bukan
+  bagian kartu lanjutan di bawah.
+
+#### BR-CRM-03 (TERVERIFIKASI-KODE) — Definisi terukur
+
+- Awal hitung: CrmTicket.createdAt.
+- Respons pertama tercapai: firstResponseAt terisi. CATATAN JUJUR:
+  hari ini firstResponseAt berarti "tiket pertama kali keluar dari
+  open" (crm.actions.ts:125-128), BUKAN "balasan pertama ke
+  pelanggan" — komentar tidak mengisinya. SLA tahap pertama
+  mengukur perilaku existing apa adanya; mengganti pemicu menjadi
+  komentar publik pertama = perubahan aksi terpisah, di luar spec
+  ini, dicatat di pertanyaan terbuka Q3.
+- Resolusi tercapai: resolvedAt terisi (masuk resolved ATAU closed,
+  crm.actions.ts:129-132). closedAt tidak dipakai (tidak pernah
+  ditulis produk).
+- Lewat-SLA respons: status = open DAN firstResponseAt kosong DAN
+  jam-kerja(createdAt → sekarang) > target respons prioritasnya.
+- Lewat-SLA resolusi: status ∈ {open, in_progress} DAN jam-kerja
+  (createdAt → sekarang) > target resolusi prioritasnya. Tiket
+  resolved/closed tidak pernah lewat-SLA resolusi; keterlambatan
+  historisnya (resolvedAt − createdAt > target) hanya untuk laporan,
+  bukan antrean aktif.
+- Mendekati-SLA (peringatan dini): sisa target ≤ 25% DAN belum
+  lewat. Ambang 25% = USULAN, satu-satunya ambang peringatan tahap
+  pertama.
+- Tiket deletedAt terisi: selalu dikecualikan dari semua hitungan.
+- Prioritas berubah di tengah jalan (edit form mengizinkan): target
+  dihitung ulang dari priority berjalan terhadap createdAt yang
+  sama — tidak ada jam mulai ulang. Konsekuensi jujur: menaikkan
+  prioritas bisa membuat tiket seketika lewat-SLA; itu disengaja
+  (janji ke pelanggan mengikuti prioritas terakhir), dicatat sebagai
+  edge case EC-4.
+
+#### BR-CRM-04 (USULAN) — Eskalasi dan notifikasi internal
+
+- Eskalasi tahap pertama = notifikasi internal saja (pola existing
+  notification.service.ts), TIDAK ke pelanggan (tidak ada kanal
+  keluar ke pelanggan untuk tiket — grep kanal email/WA-gateway
+  tiket = 0; WA manual existing bukan kanal notifikasi tiket).
+- Pemicu: tiket BARU masuk lewat-SLA (respons atau resolusi) pada
+  lari cron harian existing (daily-notifications), bukan real-time.
+- Penerima: assignedTo bila ada (notifyUser), ditambah admin
+  (notifyAdmins) hanya untuk prioritas high. Judul memuat nomor
+  tiket; dedupe notifyUsersIfNew per-judul per-hari supaya cron
+  berulang tidak menghujani notif yang sama.
+- Eskalasi TIDAK mengubah status, prioritas, atau assignedTo secara
+  otomatis. Reassignment manual oleh pemegang edit_tickets.
+  Eskalasi otomatis bertingkat (ke atasan sesudah X jam) = tidak
+  diusulkan (YAGNI, dicatat Q5).
+
+#### BR-CRM-05 (USULAN) — Pengecualian
+
+- Tiket dibuat di luar jam kerja (malam/akhir pekan/libur): jam SLA
+  mulai berjalan pada jam kerja berikutnya 08:00 WIB — konsekuensi
+  alami hitungan jam kerja, dinyatakan eksplisit supaya tidak
+  ditafsir sebagai bug.
+- Tiket tanpa assignedTo tetap dihitung SLA (tanggung jawab antrean,
+  bukan perorangan); notifikasi eskalasi untuknya hanya ke admin.
+- Pengecualian "menunggu pelanggan" (pause SLA): TIDAK ADA pada
+  tahap pertama — tidak ada status on_hold di enum status tiket
+  (crm.schemas.ts:40-44) dan menambah status = migrasi perilaku
+  inti (BUTUH-VONIS Lead, Q4). Selama belum ada, jam terus berjalan.
+
+### Matriks status-transisi (SLA adalah turunan, bukan status baru)
+
+SLA tidak menambah status tiket. Keadaan SLA diturunkan murni dari
+(status, priority, createdAt, firstResponseAt, resolvedAt, now):
+
+| Status tiket | firstResponseAt | Keadaan SLA | Keterangan |
+|---|---|---|---|
+| open | kosong | DALAM-SLA / MENDEKATI / LEWAT-RESPONS | jam-kerja(createdAt→now) vs target respons |
+| in_progress | terisi | DALAM-SLA / MENDEKATI / LEWAT-RESOLUSI | vs target resolusi |
+| open/in_progress | — | LEWAT-RESOLUSI bila jam kerja > target resolusi | respons bisa sudah tercapai, resolusi belum |
+| resolved/closed | terisi | SELESAI (tepat / terlambat historis) | keluar dari antrean aktif |
+| (deletedAt terisi) | — | DIKECUALIKAN | tidak tampil di mana pun |
+
+### Matriks peran/izin
+
+| Aksi | Izin nyata | Peran tipikal |
+|---|---|---|
+| Lihat daftar tiket + lencana SLA | view_tickets | staf CRM, admin |
+| Buat tiket (priority awal) | create_tickets | staf CRM |
+| Ubah prioritas/status/assignee | edit_tickets | staf CRM, admin |
+| Terima notifikasi eskalasi | (penerima notifikasi internal) | assignee tiket, admin (high) |
+| Setujui/ubah angka target SLA | — (keputusan pemilik proses, di luar sistem) | Lead |
+
+Tidak ada izin baru pada tahap pertama: builder antrean adalah
+read-model murni di balik view_tickets yang sama.
+
+### Acceptance criteria kartu lanjutan (usulan, belum dibuat)
+
+#### Kartu BACKEND (builder antrean lewat-SLA) — pemilik: backend
+
+1. Builder murni baru (pola stale-leads.ts) menerima baris tiket
+   (id, slug, ticketNumber, subject, priority, status, assignedTo,
+   createdAt, firstResponseAt, resolvedAt, deletedAt) + now +
+   daftar tanggal libur, mengembalikan baris lewat/mendekati SLA
+   dengan sisa/kelebihan jam kerja terhitung. Tanpa query di dalam
+   builder; loader terpisah satu query massal.
+2. Konstanta target per BR-CRM-01 sebagai satu tabel di file builder
+   (low/medium/high × respons/resolusi dalam menit jam kerja) —
+   bukan kolom DB, bukan konfigurasi UI.
+3. Hitungan jam kerja: Senin–Jumat 08:00–17:00 WIB dikurangi tanggal
+   Holiday yang diberikan loader. Fungsi jam-kerja murni teruji
+   satuan: tiket Jumat 16:00 + target 2 jam kerja → tenggat Senin
+   09:00 (bila Senin bukan libur).
+4. Prioritas tak dikenal diperlakukan sebagai medium + flag
+   prioritas-tak-dikenal (BR-CRM-02). Priority string kosong/null
+   diperlakukan sama (default medium).
+5. Urutan antrean: kelebihan jam kerja terbesar dulu; seri diputus
+   ticketNumber lalu id (pola stale-leads compareRows).
+6. Tes wajib (falsifikasi): (a) pindahkan satu tiket melewati
+   tenggat → muncul di antrean; kembalikan belum tenggat → hilang;
+   (b) tiket resolved tidak pernah di antrean aktif walau historis
+   terlambat; (c) tiket soft-deleted tidak pernah tampil;
+   (d) akhir pekan/libur tidak menambah jam terpakai.
+7. BUKAN bagian kartu ini: notifikasi cron (kartu terpisah sesudah
+   angka disetujui), UI, perubahan aksi tiket, schema.
+
+#### Kartu FRONTEND (lencana SLA) — pemilik: frontend, sesudah backend
+
+1. Daftar tiket (/crm/tickets) menampilkan lencana SLA hanya untuk
+   tiket aktif: "Lewat SLA" (tone danger), "Mendekati SLA" (tone
+   warning), tanpa lencana bila dalam-SLA. Memakai StatusChip
+   existing dengan customLabel/customTone (status-chip.tsx:55-70) —
+   tidak membuat komponen lencana baru.
+2. Lencana membaca keluaran builder/loader yang sama dengan antrean
+   backend — frontend tidak menghitung jam kerja sendiri.
+3. Detail tiket menampilkan tenggat respons + resolusi (tanggal-jam
+   WIB) dan keadaan SLA tiket itu, dari data server yang sama.
+4. Tiket resolved/closed/deleted: tanpa lencana aktif.
+5. E2E selector: teks lencana persis "Lewat SLA" / "Mendekati SLA";
+   grep e2e untuk selector tiket terdampak sebelum commit.
+
+#### Kartu NOTIFIKASI (eskalasi cron) — pemilik: backend, terakhir
+
+Hanya dibuat bila BR-CRM-04 disetujui: cabang baru di cron
+daily-notifications membaca antrean builder, notifyUsersIfNew ke
+assignee (+ admin untuk high), judul mengandung nomor tiket.
+Falsifikasi: lari cron dua kali → notifikasi tidak dobel.
+
+### Edge cases
+
+- EC-1: createdAt di luar jam kerja (Sabtu 10:00) → jam mulai Senin
+  08:00 (atau hari kerja berikutnya sesudah libur).
+- EC-2: firstResponseAt terisi tapi tiket kembali ke open (edit
+  status mundur diizinkan form) → SLA respons dianggap tercapai
+  (cap sekali, tidak dihapus server) — perilaku existing, dicatat.
+- EC-3: resolvedAt terisi lewat jalur closed langsung dari open →
+  firstResponseAt juga terisi pada update yang sama (keluar open) —
+  respons dan resolusi tercapai bersamaan; tidak lewat-SLA.
+- EC-4: prioritas dinaikkan medium→high pada tiket berumur 20 jam
+  kerja → seketika lewat-SLA resolusi high (9 jam). Disengaja
+  (BR-CRM-03); lencana berubah tanpa notifikasi khusus perubahan
+  prioritas pada tahap pertama.
+- EC-5: Holiday jatuh Sabtu → tidak berpengaruh (sudah bukan hari
+  kerja); Holiday Jumat → hari kerja minggu itu 4 hari.
+- EC-6: tiket tanpa assignedTo lewat-SLA → antrean tampil, eskalasi
+  hanya ke admin.
+- EC-7: priority nilai liar dari jalur non-form ("HIGH", "urgent")
+  → diperlakukan medium + flag tak-dikenal (BR-CRM-02); pencocokan
+  prioritas case-sensitive terhadap low/medium/high persis, supaya
+  data liar terlihat sebagai flag, bukan diam-diam cocok.
+
+### Pertanyaan terbuka tersisa (eksplisit)
+
+- Q1 (BUTUH-VONIS Lead/pemilik proses): setujui angka BR-CRM-01 apa
+  adanya, atau ubah? Spec tidak bisa maju ke implementasi sebelum
+  ini dijawab. Ini satu-satunya gerbang.
+- Q2 (BUTUH-VONIS Lead): jam kerja acuan Senin–Jumat 08:00–17:00 —
+  apakah bengkel beroperasi Sabtu? Bila Sabtu hari kerja nyata,
+  WorkSchedule existing per departemen menjadi sumber, bukan
+  konstanta Senin–Jumat. Spec menulis Senin–Jumat sebagai USULAN.
+- Q3: pemicu firstResponseAt tahap lanjut — tetap "keluar dari open"
+  (existing) atau komentar publik pertama ke pelanggan? Mengubahnya
+  menyentuh crm.actions.ts dan definisi historis; keputusan pemilik
+  proses, di luar kartu builder.
+- Q4: status "menunggu pelanggan" (pause SLA) — perlu atau tidak?
+  Menambah status = perubahan enum + form + transisi (BUTUH-VONIS).
+- Q5: eskalasi bertingkat otomatis (assignee → admin → pemilik
+  sesudah ambang kedua) dan kanal ke pelanggan — tidak diusulkan;
+  dibuka lagi hanya bila volume tiket membuktikan perlu.
+
+### Yang TIDAK diusulkan run ini
+- Kode apa pun (builder, UI, cron) — spec saja sesuai kartu.
+- Field/kolom SLA baru (dueAt dsb.), status tiket baru, prioritas
+  "urgent", konfigurasi target per pelanggan/per kategori.
+- Notifikasi ke pelanggan dan SLA berbasis jam kalender 24×7.
+
+F-2026-10-22-001 (k) — Spec aturan SLA tiket CRM (target respons per
+prioritas). Status: SPEC SELESAI run ini; gerbang Q1/Q2 menunggu
+vonis Lead. Kartu lanjutan usulan: backend builder, frontend
+lencana, backend notifikasi (urutan itu).
