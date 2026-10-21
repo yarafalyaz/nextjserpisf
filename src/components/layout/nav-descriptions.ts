@@ -31,6 +31,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/keuangan/giro": "Register giro dan cek beserta jatuh temponya",
   "/laporan/analisis-harga-beli": "Menampilkan perbandingan biaya perolehan barang yang sama antar vendor",
   "/laporan/analisis-penjualan": "Menampilkan penjualan per barang, pelanggan, dan merek beserta tren bulanan",
+  "/laporan/rekap-komisi": "Menampilkan rekap komisi informatif per penjual dari faktur lunas, tanpa pembayaran atau jurnal",
   "/laporan/hasil-penawaran": "Menampilkan ringkasan penawaran diterima, ditolak, tingkat menang, konversi, dan kategori alasan kalah",
   "/laporan/arus-kas": "Menampilkan arus kas masuk dan keluar per aktivitas",
   "/laporan/aset-tetap": "Menampilkan posisi aset tetap per tanggal",

@@ -15,6 +15,7 @@ import { Progress } from "@/components/ui/shadcn/progress"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { ProjectPlDetailCard } from "@/components/reports/project-pl-detail-card"
 import { ProjectBudgetCard } from "@/components/reports/project-budget-card"
+import { ProjectBudgetEditor } from "./_components/project-budget-editor"
 import { loadProjectPlForProject } from "@/lib/reports/project-pl-data"
 import { loadProjectBudgetForProject } from "@/lib/reports/project-budget-data"
 
@@ -66,6 +67,7 @@ export default async function ProjectDetailPage({
   let stages = project.stages
   let stagesInitError: string | null = null
   const canEdit = await hasPermission("edit_projects")
+  const canManageBudget = await hasPermission("manage_projects")
   if (stages.length === 0 && canEdit) {
     try {
       const init = await initializeProjectStages(project.id)
@@ -106,6 +108,38 @@ export default async function ProjectDetailPage({
     loadProjectPlForProject(project.id),
     loadProjectBudgetForProject(project.id),
   ])
+
+  // Usulan revisi terbuka: log rab_revision_proposed terbaru yang belum
+  // diputuskan (details.proposalLogId di log rab_revision/rab_revision_rejected).
+  // Id log tidak diekspos builder riwayat — dibaca langsung di boundary RSC.
+  const pendingProposal = projectBudget?.isLocked
+    ? await (async () => {
+        const [proposals, settledLogs] = await Promise.all([
+          prisma.projectLog.findMany({
+            where: { projectId: project.id, action: "rab_revision_proposed" },
+            select: { id: true, notes: true, details: true },
+            orderBy: { createdAt: "desc" },
+          }),
+          prisma.projectLog.findMany({
+            where: { projectId: project.id, action: { in: ["rab_revision", "rab_revision_rejected"] } },
+            select: { details: true },
+          }),
+        ])
+        const settled = new Set(
+          settledLogs
+            .map((l) => (l.details as { proposalLogId?: unknown } | null)?.proposalLogId)
+            .filter((v): v is number => typeof v === "number"),
+        )
+        const open = proposals.find((p) => !settled.has(p.id))
+        if (!open) return null
+        const details = (open.details ?? {}) as { changes?: unknown; reason?: unknown }
+        return {
+          logId: open.id,
+          reason: typeof details.reason === "string" ? details.reason : (open.notes ?? ""),
+          changesJson: JSON.stringify(details.changes ?? []),
+        }
+      })()
+    : null
 
   // Cari tahapan aktif saat ini
   const activeStage = stages.find(s => s.status === "in_progress") || stages.find(s => s.status === "pending") || stages[0]
@@ -327,7 +361,19 @@ export default async function ProjectDetailPage({
             id: "budget",
             label: "RAB",
             content: projectBudget ? (
-              <ProjectBudgetCard budget={projectBudget} />
+              <>
+                <ProjectBudgetCard budget={projectBudget} />
+                <ProjectBudgetEditor
+                  projectId={project.id}
+                  items={project.items.map((it) => ({ id: it.id, projectStageId: it.projectStageId, category: it.category, description: it.description, qty: Number(it.qty), cost: Number(it.cost), sortOrder: it.sortOrder }))}
+                  stages={stages.map((s) => ({ id: s.id, name: s.name }))}
+                  quotations={quotations.filter((q) => ["accepted", "approved", "converted"].includes(q.status)).map((q) => ({ id: q.id, documentNo: q.documentNo, grandTotal: Number(q.grandTotal) }))}
+                  isLocked={projectBudget.isLocked}
+                  canEdit={canEdit}
+                  canManage={canManageBudget}
+                  pendingProposal={pendingProposal}
+                />
+              </>
             ) : (
               <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
                 <span className="text-sm font-semibold text-muted-foreground">RAB vs Realisasi</span>
