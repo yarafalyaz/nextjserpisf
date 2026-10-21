@@ -162,7 +162,9 @@ export async function GET(request: Request) {
     prisma.attendance.count({ where: lateWhere }),
     prisma.attendance.findMany({
       where: lateWhere,
-      include: { employee: { include: { department: true } } },
+      // Hanya employee.name yang dirender di daftar telat di bawah; tanpa
+      // select, baris absensi utuh + departemen utuh ikut termuat per baris.
+      select: { employee: { select: { name: true } } },
       take: 20,
     }),
   ])

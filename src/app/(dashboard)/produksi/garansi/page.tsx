@@ -8,9 +8,7 @@ import { prisma } from "@/lib/db/prisma"
 import { CanCreate } from "@/components/auth/can-create"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { AppSearchField } from "@/components/ui/search-field"
-import { StatusChip } from "@/components/ui/status-chip"
-import { formatDate, formatNumber } from "@/lib/utils/format"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { WarrantyClaimList } from "./_components/warranty-claim-list"
 
 export const metadata: Metadata = { title: "Klaim Garansi" }
 
@@ -126,55 +124,7 @@ export default async function WarrantyClaimsPage({
       </form>
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        {claims.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-            Belum ada klaim garansi
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" aria-label="Daftar klaim garansi">
-              <thead>
-                <tr className="border-b border-default text-left">
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Tanggal Lapor</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Kendaraan</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Barang Tercakup</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Keluhan</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Odometer</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Status</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-default">
-                {claims.map((claim) => (
-                  <tr key={claim.id}>
-                    <td className="px-5 py-3 text-foreground">{formatDate(claim.reportedAt)}</td>
-                    <td className="px-5 py-3 text-foreground font-mono">{claim.customerVehicle.plateNumber ?? "-"}</td>
-                    <td className="px-5 py-3 text-foreground">{claim.coverage.item.name}</td>
-                    <td className="px-5 py-3 text-foreground">
-                      <span className="line-clamp-2 max-w-72">{claim.complaint}</span>
-                    </td>
-                    <td className="px-5 py-3 text-foreground tabular-nums">
-                      {claim.odometerKm === null ? "-" : `${formatNumber(claim.odometerKm)} km`}
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusChip status={claim.status} />
-                      <span className="sr-only">{statusLabel(claim.status)}</span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <Link
-                        href={`/produksi/garansi/${claim.id}`}
-                        className="text-primary hover:underline"
-                        aria-label={`Lihat detail klaim garansi ${claim.id}`}
-                      >
-                        Detail
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <WarrantyClaimList claims={claims} />
       </div>
 
       <p className="text-sm text-muted-foreground">

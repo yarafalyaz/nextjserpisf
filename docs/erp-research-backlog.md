@@ -5516,3 +5516,288 @@ sumber mengikat = vonis BOT 4 + PER-11/PJ/2025 + file BPPU resmi DJP
   di luar katalog F-051-V, jalur PPh 23 sewa non-tanah/bangunan di
   bupot ini (jenisnya sendiri per vonis), benchmark Accurate/Zahir
   untuk katalog internal — ditolak/ditunda tercatat, bukan hilang.
+
+---
+
+## SPEC BOT 5 2026-10-22 04:59 WIB — F-2026-10-22-053-S konsumen UI rekap komisi informatif (F-2026-10-21-016 tahap 2)
+
+Pemilik spec: BOT 5 (sales-crm-hr-payroll-business-workflow). Dokumen spec
+saja, tanpa kode/schema/migrasi. ID induk tetap F-2026-10-21-016; spec
+konsumen ini F-2026-10-22-053-S (grep origin/main cebc3de9 run ini:
+F-2026-10-22-053 belum terpakai). Label bukti wajib di tiap aturan:
+TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Benchmark resmi (rujukan induk F-016, akses tercatat di entri F-016):
+- Accurate komisi penjualan: https://help.accurate.id/product/komisi-penjualan/
+- Zahir Multi-Komisi: https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang
+  Catatan benchmark: keduanya sampai jurnal + utang komisi otomatis.
+  ISF tahap ini SENGAJA berhenti di rekap informatif (tahap 3 jurnal
+  DITUNDA-TEKNIS vonis Lead 2026-10-21, lihat §5) — benchmark bukan
+  alasan membuka jurnal di UI ini.
+
+### 0. Verifikasi live origin/main cebc3de9 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Builder murni `src/lib/reports/sales-commission.ts`: ekspor
+  `SALES_COMMISSION_NOTICE` verbatim "Rekap informatif dari snapshot
+  penjual di faktur lunas — bukan utang komisi, bukan dasar jurnal atau
+  pembayaran. Persen 0 berarti tarif belum diatur untuk baris itu.";
+  `buildSalesCommissionRecap(invoices)` -> { rows[], unattributed
+  {invoiceCount, paidBase}, totalPaidBase, totalEstimatedCommission,
+  notice }. Baris per penjual: salesEmployeeId, salesEmployeeName,
+  invoiceCount, paidBase (Σ grandTotal faktur lunas), estimatedCommission
+  (Σ per baris: grandTotal baris x commissionPercent baris / 100, sen-aman
+  safeMultiply/safeRound). Urut paidBase desc, tie salesEmployeeId asc.
+  Faktur salesEmployeeId null masuk `unattributed`, TIDAK ditebak dari
+  createdBy. estimatedCommission TIDAK termasuk unattributed.
+- Loader `src/lib/reports/sales-commission-data.ts`:
+  `getSalesCommissionRecap({start, end})` — SATU query
+  `prisma.salesInvoice.findMany` where deletedAt null + status "paid" +
+  date gte/lte periode, select salesEmployeeId/grandTotal/salesEmployee
+  .name, orderBy date,id. commissionPercent diteruskan 0 untuk SEMUA
+  baris (belum ada setting persen per kategori; CustomerCategory hanya
+  downPaymentPercent) — estimasi terbaca 0 jujur. Read-only, tanpa mutasi.
+- Snapshot atribusi tahap 1: `salesEmployeeId` di Quotation
+  (schema.prisma:1213), SalesOrder (:1336), SalesInvoice (:1393) +
+  relasi Employee; builder membaca snapshot faktur, bukan master berjalan.
+- Tes builder+loader: `src/lib/reports/__tests__/sales-commission.test.ts`
+  (agregasi per penjual, persen per baris, unattributed, kosong, loader
+  paid-only + persen 0).
+- Konsumen UI: `grep SALES_COMMISSION/buildSalesCommission di src
+  *.tsx` = 0. Halaman/komponen konsumen ABSEN — persis vonis QA
+  t_5fbcdc2b atas PR #371 ("UI belum ada konsumen"). Spec ini menutupnya.
+- Pola laporan existing sebanding: halaman laporan di
+  `src/app/(dashboard)/laporan/<slug>/[[...segments]]/page.tsx` memakai
+  `requirePermission("view_reports")` (analisis-penjualan/page.tsx:31,
+  histori-penjualan/page.tsx:25, margin-kendaraan page), `ReportPageShell`
+  + `ReportPeriodFilter` (mode range, basePath per laporan) +
+  `reportPeriodFromRoute` (`src/lib/reports/report-period.ts:163`) +
+  `ExportButtons`; kartu tampil di `src/components/reports/*-card.tsx`.
+  Izin katalog: `view_reports` (module-catalog.generated.ts:411,
+  resource reports "Laporan"). TIDAK ada izin komisi khusus di katalog.
+
+Belum ada: halaman rekap komisi, filter penjual di UI, setting persen
+komisi per kategori (loader tetap 0), ekspor khusus komisi. Semua di
+bawah = USULAN kecuali ditandai lain.
+
+### 1. Workflow specification
+
+Aktor: pengguna berizin `view_reports` (peran laporan penjualan existing:
+admin/keuangan/manajemen sesuai pemberian izin di katalog — spec ini
+tidak menambah peran baru). Bukan aktor: karyawan penjual perorangan
+melihat komisi orang lain — halaman ini laporan masa agregat, bukan slip
+perorangan; akses mengikuti view_reports persis laporan penjualan lain.
+
+Dokumen masuk (read-only, semua dari loader/builder existing):
+`getSalesCommissionRecap({start, end})` -> SalesCommissionRecap utuh
+(rows, unattributed, totalPaidBase, totalEstimatedCommission, notice).
+UI TIDAK query Prisma sendiri, TIDAK memanggil builder dengan input
+rakitan sendiri.
+
+Dokumen keluar: satu halaman laporan baca-saja. Tanpa dokumen bisnis
+baru, tanpa status baru, tanpa jurnal, tanpa antrean pembayaran.
+
+Alur:
+A1 Pengguna buka halaman, pilih masa (default: pola laporan sebanding —
+awal bulan berjalan s/d hari ini, mengikuti reportPeriodFromRoute;
+default persis mengikuti helper existing, bukan karangan baru).
+A2 Server panggil loader SATU kali untuk masa itu, teruskan hasil utuh
+ke komponen tampil. Filter penjual (§2) diterapkan pada `rows` hasil
+loader untuk TAMPILAN saja — total masa tetap dari loader (§3 BR-KOM-04).
+A3 Halaman tampil: notice verbatim, tabel per penjual, baris ember
+unattributed eksplisit, total masa, keadaan kosong jujur.
+
+### 2. Spec layar (kontrak untuk BOT 2)
+
+Usulan rute: `/laporan/rekap-komisi` (USULAN — ikuti pola slug laporan
+existing; BOT 2 boleh sesuaikan penamaan mengikuti report-catalog
+existing, isi kontrak tidak berubah).
+
+(a) Kerangka: `ReportPageShell` + `ReportPeriodFilter` mode range
+seperti margin-kendaraan/analisis-penjualan. Judul halaman: "Rekap
+Komisi Penjualan". Subjudul TIDAK menulis ulang makna notice — bila
+perlu subjudul, pakai notice itu sendiri (lihat b).
+
+(b) Notice: tempel `report.notice` (== SALES_COMMISSION_NOTICE dari
+builder) VERBATIM, utuh, terlihat tanpa interaksi (bukan tooltip/
+collapsed). UI dilarang parafrase, memotong, atau mengganti kata
+"bukan utang komisi". Tes konsumen wajib assert string persis.
+
+(c) Filter: (i) masa — ReportPeriodFilter existing (tanggalMulai/
+tanggalSelesai pola repo); (ii) penjual — pemilih dari daftar penjual
+YANG MUNCUL di `rows` masa itu (id+nama dari loader) + opsi "Semua
+penjual". Filter penjual = filter tampil baris; BUKAN parameter loader
+baru dan BUKAN hitung ulang. Ember unattributed tidak punya penjual:
+dengan filter penjual tertentu aktif, ember disembunyikan dari tabel
+TETAPI total masa tetap menampilkan angka loader utuh + keterangan
+"sudah termasuk faktur tanpa penjual" (§3). Tanpa filter (Semua),
+ember tampil sebagai baris tersendiri (lihat d).
+
+(d) Tabel baris per penjual (kolom persis field builder, tanpa kolom
+karangan): Penjual (salesEmployeeName; kosong dari builder tampil
+"—" tanpa menebak nama lain) | Jumlah Faktur Lunas (invoiceCount) |
+Basis Faktur Lunas (paidBase, format mata uang repo) | Estimasi Komisi
+(estimatedCommission). Persen TIDAK ditampilkan sebagai kolom hitungan
+UI: builder tidak mengembalikan persen per baris hasil agregat (persen
+per faktur input loader hari ini 0 semua), jadi menampilkan "%" hasil
+turunan UI = hitung sendiri = dilarang (§5). Kata untuk estimasi saat
+tarif belum diatur mengikuti notice ("Persen 0 berarti tarif belum
+diatur untuk baris itu") — estimasi 0 tampil "0", bukan disembunyikan,
+bukan diganti teks lain yang menjanjikan tarif.
+Baris ember (hanya mode Semua): label persis "Tanpa penjual tercatat"
+| invoiceCount unattributed | paidBase unattributed | kolom estimasi
+"—" (builder memang tidak menghitung estimasi unattributed; UI tidak
+mengalikan apa pun untuk ember ini).
+
+(e) Total masa (selalu dari loader, tak terpengaruh filter penjual):
+Total Basis Faktur Lunas (totalPaidBase — SUDAH termasuk unattributed,
+sesuai builder) + Total Estimasi Komisi (totalEstimatedCommission —
+hanya baris berpenjual). Dua angka diberi label persis nama field
+maknanya di atas; dilarang label "Total Komisi Terutang", "Komisi
+Harus Dibayar", atau sejenisnya.
+
+(f) Keadaan kosong: rows kosong + unattributed 0 -> tampil notice +
+kata "Tidak ada faktur lunas pada masa ini." (USULAN kata UI netral;
+bukan dari builder). Dilarang menampilkan tabel 0 baris tanpa kata,
+dilarang menyembunyikan notice saat kosong (builder menguji notice
+tetap ada di hasil kosong).
+
+(g) Ekspor: tombol ExportButtons pola laporan existing BOLEH disertakan
+(CSV/PDF dari DOM tampil, pola repo) — ekspor memuat notice verbatim
+di berkas hasil (ikuti pola report-letterhead/narration existing bila
+tersedia). Ekspor BUKAN dokumen pembayaran dan tidak menambah kolom.
+
+### 3. Business rules register
+
+- BR-KOM-01 (TERVERIFIKASI-KODE): Sumber angka tunggal = output
+  `getSalesCommissionRecap`/`buildSalesCommissionRecap`. Basis per
+  penjual = Σ grandTotal faktur status paid, deletedAt null, tanggal
+  faktur dalam masa. UI tidak agregasi ulang dari faktur mentah.
+- BR-KOM-02 (TERVERIFIKASI-KODE): Notice tampil verbatim dari
+  `report.notice`; string diuji persis di tes builder existing.
+- BR-KOM-03 (TERVERIFIKASI-KODE): Faktur salesEmployeeId null masuk
+  ember unattributed eksplisit; tidak ditebak dari createdBy/pembuat
+  dokumen; estimasi ember tidak dihitung builder.
+- BR-KOM-04 (USULAN): Filter penjual hanya menyaring baris tampil;
+  total masa selalu angka loader utuh. Alasan: total yang berubah
+  karena filter menyamarkan basis masa dan mengundang baca-salah
+  sebagai "total penjual terpilih terutang".
+- BR-KOM-05 (TERVERIFIKASI-KODE): Persen hari ini 0 untuk semua baris
+  dari loader (belum ada setting persen per kategori pelanggan).
+  Estimasi 0 = tarif belum diatur (makna sudah di notice), BUKAN
+  "komisi penjual ini nol haknya". UI tidak menyediakan input persen.
+- BR-KOM-06 (USULAN): Izin tampil = `view_reports` existing, tanpa
+  izin katalog baru, tanpa scope HR (`getHrScope` tidak berlaku —
+  ini laporan penjualan agregat, bukan data gaji perorangan; jangan
+  campur jalur payroll). Konsisten analisis-penjualan/histori-penjualan.
+- BR-KOM-07 (TERVERIFIKASI-KODE + vonis Lead 2026-10-21): Rekap ini
+  informatif — bukan utang komisi, bukan dasar jurnal/pembayaran.
+  Tahap 3 (jurnal Dr Beban Komisi / Cr Utang Komisi) DITUNDA-TEKNIS;
+  spec ini tidak merancang prasyarat jurnal apa pun.
+- BR-KOM-08 (USULAN): Penjual nonaktif/pensiun tetap tampil bila punya
+  faktur lunas bermasa itu (snapshot historis; builder membaca snapshot
+  faktur + nama relasi saat ini). Menghapus baris karena status
+  karyawan berubah = menulis ulang histori — dilarang.
+- BR-KOM-09 (USULAN): Tidak ada drill-down per faktur di tahap ini.
+  Builder tidak mengembalikan daftar faktur; menambahkannya = kontrak
+  loader baru (urusan BOT 3 bila kelak diminta), bukan tebakan UI.
+
+Pertanyaan terbuka bernama (tidak diputus spec ini):
+- Q-KOM-1 (untuk BOT 4, BUTUH-VONIS bila disentuh): setting persen
+  komisi per kategori pelanggan (sumber tarif tahap berikut) — tarif,
+  basis (grandTotal termasuk PPN atau tidak), dan perlakuan retur.
+  Spec UI ini TIDAK menunggu Q-KOM-1 (persen 0 jujur sudah bermakna)
+  dan TIDAK boleh diisi UI/loader dengan tebakan sebelum vonis.
+- Q-KOM-2 (untuk BOT 1): rute persis + posisi di katalog laporan
+  (report-catalog existing) — penamaan permukaan, bukan isi angka.
+
+### 4. Role/permission matrix
+
+| Aksi | Izin | Penjual/karyawan biasa | Peran laporan (view_reports) | Catatan |
+|---|---|---|---|---|
+| Buka halaman rekap | view_reports (TERVERIFIKASI-KODE katalog:411) | hanya bila diberi view_reports | ya | requirePermission server, pola laporan existing |
+| Ganti masa / filter penjual | sama (query tampil) | sama | ya | tanpa mutasi server |
+| Ekspor CSV/PDF tampil | sama | sama | ya | memuat notice verbatim |
+| Input persen / atur tarif | TIDAK ADA di UI ini | tidak | tidak | Q-KOM-1, bukan wewenang halaman ini |
+| Bayar / posting / jurnal komisi | TIDAK ADA | tidak | tidak | tahap 3 DITUNDA-TEKNIS (BR-KOM-07) |
+
+Tidak ada status-transition matrix: halaman read-only, nol transisi
+status dokumen (sengaja dinyatakan — bukan terlupa).
+
+### 5. Larangan eksplisit (wajib diuji BOT 6)
+
+1. UI tidak hitung komisi sendiri: tidak ada perkalian persen x basis,
+   agregasi faktur, atau rata-rata persen di komponen/halaman. Semua
+   angka dari loader/builder (BR-KOM-01). Satu-satunya aritmetika UI
+   yang sah = format tampil (formatCurrency repo).
+2. Tidak ada tombol/aksi bayar, posting, jurnal, "tandai dibayar",
+   atau tautan yang menyiratkan kewajiban — dalam bentuk apa pun.
+3. Tidak ada input persen/tarif di halaman ini; tidak ada setting
+   komisi baru yang diciptakan demi UI ini.
+4. Notice tidak diparafrase/dipotong; kata "bukan utang komisi" utuh.
+5. Ember unattributed tidak disembunyikan di mode Semua dan tidak
+   diberi estimasi karangan.
+6. Tidak ada data gaji/payroll di halaman ini; jangan tautkan slip
+   gaji atau Payroll dari baris komisi.
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Spec ini |
+|---|---|---|---|---|
+| Komisi per penjual per masa | otomatis per faktur (URL F-016) | Multi-Komisi per golongan (URL F-016) | builder+loader merged, tanpa konsumen | halaman rekap informatif konsumen loader existing |
+| Tarif persen per kategori | ada | tabel/golongan | ABSEN (loader 0 jujur) | tetap absen; Q-KOM-1 BOT 4 |
+| Utang komisi + jurnal otomatis | ada | ada | tahap 3 DITUNDA-TEKNIS | TIDAK dirancang (BR-KOM-07) |
+| Faktur tanpa penjual | — | — | ember unattributed builder | baris eksplisit "Tanpa penjual tercatat" |
+
+### 7. Acceptance criteria + edge cases (untuk BOT 6, falsifikasi)
+
+- AC-KOM-1 Notice: halaman memuat string SALES_COMMISSION_NOTICE
+  persis (ambil dari builder, bukan salinan teks di komponen). Cabut/
+  ubah notice di builder -> tes konsumen MERAH.
+- AC-KOM-2 Angka passthrough: masa dengan 2 penjual + 1 faktur tanpa
+  penjual (pola tes builder existing) tampil rows sesuai urutan
+  builder (paidBase desc), ember terpisah, totalPaidBase termasuk
+  ember, totalEstimatedCommission tanpa ember. Hitung ulang di UI
+  (mis. jumlahkan baris tampil sesudah filter) -> nilai menyimpang
+  dari loader saat filter aktif -> MERAH (BR-KOM-04).
+- AC-KOM-3 Persen 0 jujur: dengan loader hari ini, estimasi semua
+  baris 0 dan tampil 0 (tidak disembunyikan) + notice menjelaskan
+  maknanya. UI menampilkan kolom persen hasil bagi estimasi/basis
+  -> MERAH (§2d/§5.1).
+- AC-KOM-4 Filter penjual: memilih satu penjual hanya menyisakan
+  baris itu; total masa tidak berubah; ember hilang dari tabel dengan
+  keterangan total tetap termasuk faktur tanpa penjual. Kembali ke
+  Semua -> ember muncul lagi.
+- AC-KOM-5 Izin: tanpa view_reports ditolak server (pola
+  requirePermission laporan existing); dengan view_reports terbuka.
+  Halaman dapat diakses lewat jalur tanpa izin -> MERAH.
+- AC-KOM-6 Tanpa aksi uang: DOM halaman tidak memuat tombol/tautan
+  bayar/posting/jurnal dan tidak ada form mutasi apa pun. Muncul
+  satu saja -> MERAH.
+- AC-KOM-7 Kosong: masa tanpa faktur lunas -> notice tetap tampil +
+  kata kosong §2(f), tanpa baris hantu dan total 0 dari loader.
+- AC-KOM-8 Snapshot: faktur penjual yang kini nonaktif tetap tampil
+  (BR-KOM-08); mengganti salesEmployeeId master/quotation berjalan
+  tidak mengubah rekap masa lalu (snapshot faktur).
+- Edge: dua penjual bernama sama (dibedakan salesEmployeeId, bukan
+  digabung berdasar nama); nama penjual kosong dari relasi (tampil
+  "—"); masa satu hari; batas masa inklusif mengikuti loader
+  (date gte/lte); grandTotal desimal (sen-aman builder, UI hanya
+  format); ekspor memuat notice.
+
+### 8. Backlog implementasi (ID induk F-2026-10-21-016; spec ini F-2026-10-22-053-S)
+
+Urutan: (1) BOT 2 bangun halaman + kartu dari §2 memakai loader
+existing apa adanya (tanpa perubahan src/lib/reports/**; bila merasa
+perlu ubah loader = berhenti, HANDOFF BOT 3/BOT 5 — kontrak berubah);
+(2) BOT 6 nilai §7 atas head BOT 2; (3) Q-KOM-1 hanya bila tarif akan
+diatur (BOT 4 vonis dulu, lalu BOT 3 setting+loader, UI persen menyusul
+sesudahnya — bukan di PR UI ini); (4) tahap 3 jurnal tetap
+DITUNDA-TEKNIS sampai vonis Lead + BOT 4 dibuka kembali. Butuh putusan
+accountant untuk UI ini: TIDAK (tidak ada angka baru; Q-KOM-1 terpisah).
+
+### Yang TIDAK diusulkan run ini
+- Setting persen per kategori, drill-down per faktur, target penjualan
+  per penjual (F-2026-10-21-018 wilayahnya), slip/komisi perorangan
+  untuk karyawan, jurnal/pembayaran komisi — ditolak/ditunda dengan
+  alasan di §3/§5; bukan hilang, tercatat di sini.
