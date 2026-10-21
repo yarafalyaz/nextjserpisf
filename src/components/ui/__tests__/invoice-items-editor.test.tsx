@@ -136,4 +136,67 @@ describe("InvoiceItemsEditor", () => {
     unmount(root)
     container.remove()
   })
+
+  it("renders price source chip only for persisted source (BR-TIER-09)", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <InvoiceItemsEditor
+          invoiceId={1}
+          customerId={10}
+          date="2026-06-16"
+          taxRate={11}
+          discountTotal={0}
+          paidAmount={0}
+          editable={false}
+          availableItems={availableItems}
+          items={[
+            { itemId: 1, description: "Keyboard", qty: 10, unitPrice: 400000, discount: 0, total: 4000000, priceSource: "price_list_tier", priceListMinQty: 10 },
+            { itemId: 2, description: "Mouse", qty: 1, unitPrice: 250000, discount: 0, total: 250000 },
+          ]}
+        />
+      )
+    })
+
+    expect(container.textContent).toContain("Harga tingkat >= 10 — Daftar Harga")
+    // Baris tanpa priceSource (lama/konversi/edit) tidak boleh mengklaim sumber.
+    expect(container.textContent).not.toContain("Harga daftar")
+    expect(container.textContent).not.toContain("Harga master")
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("order variant never renders price source chip", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <InvoiceItemsEditor
+          variant="order"
+          invoiceId={1}
+          customerId={10}
+          date="2026-06-16"
+          taxRate={11}
+          discountTotal={0}
+          paidAmount={0}
+          editable={false}
+          availableItems={availableItems}
+          items={[
+            { itemId: 1, description: "Keyboard", qty: 10, unitPrice: 400000, discount: 0, total: 4000000, priceSource: "price_list_tier", priceListMinQty: 10 },
+          ]}
+        />
+      )
+    })
+
+    expect(container.textContent).not.toContain("Harga tingkat")
+
+    unmount(root)
+    container.remove()
+  })
 })
