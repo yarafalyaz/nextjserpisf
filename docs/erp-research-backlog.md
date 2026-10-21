@@ -4208,3 +4208,224 @@ uji. Tanpa itu, BR-VEH-10 tetap: baca informatif saja.
   penanda material) ke draf acceptance spec F-033.
 - BOT 1: Q-033-3/Q-033-6 tetap menunggu putusanmu; vonis ini tidak
   menahan tampilan informatif read-only.
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-044-V: Angka paparan kredit F-017 (komponen + ambang advisory, syarat gate)
+
+Kartu: t_90328b72. Nomor: tabrakan F-042-V ditutup run ini — Q-SEWA
+tetap F-2026-10-22-042-V (dirujuk PR #390/#393, selesai t_f0e26b31
+PR #399); vonis ini F-2026-10-22-044-V. Dokumen vonis saja: tanpa
+kode/schema/migrasi, tanpa jurnal baru, tanpa sentuh src/lib/tax/**.
+
+Basis verifikasi live run ini (origin/main 602b803a):
+- Builder existing buildCustomerCreditExposure
+  (src/lib/reports/customer-receivables.ts, merged PR #283):
+  paparan = outstanding + openOrderAmount; status unset|ok|
+  warning(>=80)|over(>=100); limit <= 0 = unset "Limit belum
+  diatur". Loader halaman piutang: invoice recognised
+  posted/partial/paid, outstanding = grandTotal - paidAmount sen,
+  K2 = max(0, SO.grandTotal - Sigma invoice recognised per SO),
+  SO status confirmed/processing/completed. Buckets hanya dari
+  invoice -> pelanggan SO-only/WO-only hilang.
+- PR #334 OPEN 205ddbb4 (5/5): K3 pengurang DP confirmed +
+  jepit >= 0 + agregat sen. BELUM merged: main masih tanpa
+  pengurang DP (paparan overstatement untuk pelanggan ber-DP).
+- PR #351 OPEN: inti hard gate F-017 DITUNDA (Lead, sejalan
+  vonis BOT 4 2026-10-21 22:18 board).
+- Spec BOT 5 F-2026-10-21-017-S selesai (t_e5e0ce2b, PR #396
+  91b050bc): K1-K5, PaparanBersih = max(0, K1+K2+K5-K3-K4),
+  AC-CR-01..15, BR-CR-01..10. Spec konsumen UI F-043-S selesai
+  (t_35754cac, PR #398 14fc14a3): T1-T3 + eskalasi manusia.
+- Schema: Customer.creditLimit Decimal(15,2) default 0
+  (schema:325); CustomerCredit received/allocated/refunded +
+  status open (schema:361-380; jurnal reklas 210102 nol-net,
+  alokasi Dr 210102/Cr Piutang, refund Dr 210102/Cr Kas);
+  DownPayment status default pending, confirmed = kas diterima
+  (schema:1295-1315); WorkOrder tanpa nilai jual, nilai job =
+  Quotation.grandTotal (schema:2605+; job-billing-summary.ts).
+- BUKTI KUNCI jembatan DP: onDownPaymentConfirmed
+  (down-payment.hook.ts) membuat WO+SO+Invoice sekaligus dan
+  mengalokasikan DP ke SalesPayment -> paidAmount invoice
+  (baris 209-253, 564-615). Artinya DP confirmed pada quotation
+  yang sudah terkonversi SUDAH mengurangi K1 lewat paidAmount.
+  Pengurang K3 global tanpa kaitan quotation MEN-DOBEL-kurangi
+  porsi yang sama. Inilah putusan inti vonis ini (V2/V3).
+
+### Putusan V1 — Status vonis
+
+1. Lapis read-model advisory SAH dibangun per rumus V4 di bawah
+   (mengikat BOT 3 kartu t_9b2fd1eb). Tidak ada jurnal baru,
+   tidak ada tulis DB, tidak ada penahan dokumen.
+2. BR-CR-05 spec (CustomerCredit pengurang) DIESAHKAN untuk
+   lapis advisory dengan syarat V3. BR-CR-06 (K5 WO) DIESAHKAN
+   untuk lapis advisory dengan pagar V3. Untuk INTI GATE kedua
+   butir itu BELUM disahkan — lihat V7.
+3. Inti gate blokir kredit TETAP DITUNDA SADAR (V7). Vonis ini
+   bukan pembuka gate.
+
+### Putusan V2 — Komponen paparan sah (masuk / tidak + alasan)
+
+| Komponen | Putusan | Alasan akuntansi anti-dobel |
+|---|---|---|
+| K1 piutang outstanding (posted/partial/paid, outstanding>0) | MASUK, persis existing | Piutang recognised di GL (Dr Piutang/Cr Pendapatan saat posting). Satu-satunya komponen yang sudah jurnal. |
+| K2 SO belum tertagih (confirmed/processing/completed, dikurangi invoice recognised per SO) | MASUK, persis existing | Komitmen tertagih masa depan, belum piutang. Pengurangan PER SO (bukan global) wajib dipertahankan: SO terinvoice penuh memberi K2=0. |
+| K3 DP confirmed | MASUK SEBAGAI PENGURANG, DENGAN KOREKSI V3 | DP confirmed = kas diterima, kewajiban UMP 210102 (bukan pendapatan, vonis F-2026-10-20-03). Mengurangi risiko kas. TAPI alokasi DP ke invoice sudah menaikkan paidAmount -> K3 mentah global dobel-hitung (V3). |
+| K4 CustomerCredit terbuka (status open, saldo per baris max(0, received-allocated-refunded)) | MASUK SEBAGAI PENGURANG (advisory), tampil terpisah | Dana pelanggan di tangan bengkel, liabilitas 210102; alokasi mengurangi piutang (Dr 210102/Cr Piutang). Bukan tagihan, bukan pendapatan. Sebagai pengurang = konsisten sisaEfektif job-billing. Pengurang hanya sejauh belum teralokasi: allocated sudah keluar dari saldo, jadi tidak dobel dengan pembayaran invoice. |
+| K5 WO berjalan belum terwakili | MASUK (advisory) HANYA lewat jalur quotation tanpa SO dan tanpa invoice, persis V3 | Nilai jual belum tertagih yang belum masuk K1/K2. Bukan ProductionCost (biaya aktual bukan nilai jual — BR-CR-10 ditegaskan). WO quotationId null = 0 + bendera, DILARANG angka karangan. |
+| DP pending / CustomerCredit non-open / invoice draft-approved-sent-cancelled / SO draft-cancelled / WO completed-closed-cancelled | TIDAK MASUK | Belum kas, belum recognised, atau sudah selesai: memasukkannya menaikkan paparan fiktif. Status dibaca persis, tanpa fallback menebak. |
+| Overdue (subset K1 lewat dueDate) | BUKAN komponen tambah; penanda saja | Overdue sudah di dalam K1. Menambahkannya lagi = dobel-hitung murni. |
+
+Urutan anti-dobel mengikat (satu nilai job tepat satu jalur):
+invoice (K1) > SO (K2) > WO/quotation (K5); pengurang K3/K4
+hanya mengurangi, tidak pernah menambah, dan dijepit lantai 0
+pada PaparanBersih saja (bukan per komponen).
+
+### Putusan V3 — Koreksi wajib atas rumus spec (mengikat BOT 3)
+
+Spec F-017-S §2/AC-CR benar untuk K1/K2/K4/K5, tetapi K3
+perlu koreksi sumber. BOT 3 dilarang mengimplementasikan
+K3 = Sigma DownPayment confirmed per customerId mentah,
+karena DP yang sudah teralokasi ke invoice (jalur hook DP)
+sudah mengurangi K1 lewat paidAmount: paparan akan
+ter-understate dan pelanggan over-limit bisa tampil aman.
+
+Perlakuan sah (pilih SATU, BOT 3 nyatakan pilihan di kartu
+t_9b2fd1eb sebelum kode):
+- (a) K3-efektif = Sigma DP confirmed per pelanggan DIKURANGI
+  porsi DP yang sudah teralokasi sebagai pembayaran invoice
+  (jejak SalesPayment/paidAmount dari jalur DP, pola marker
+  notes hook existing); atau
+- (b) bila jejak alokasi per DP tidak dapat direkonstruksi
+  murah, K3 dibatasi pada DP confirmed yang quotation-nya
+  BELUM punya invoice recognised sama sekali (DP murni
+  pra-tagihan), dan DP atas quotation terkonversi dianggap
+  sudah tercermin di K1.
+DEFAULT AMAN bila keduanya ragu: tampilkan K3 sebagai kolom
+informatif terpisah TANPA mengurangi status (status dari
+K1+K2+K5-K4), beri label "DP tampil informatif — pengurang
+status menunggu rekonsiliasi alokasi". Understate status
+lebih berbahaya daripada overstate advisory.
+
+Untuk K5 hal serupa berlaku pada sisi quotation: K5 per
+quotation = max(0, Quotation.grandTotal - Sigma invoice
+recognised ber-quotationId - Sigma SO non-cancelled
+ber-quotationId); WO memberi K5>0 hanya bila hasil per
+quotation itu > 0 DAN belum ada SO. Dua WO pada quotation
+sama TIDAK menggandakan K5 (hitung per quotation, bukan
+per WO).
+
+K4 tidak perlu koreksi serupa: saldo open sudah bersih dari
+allocated/refunded menurut definisi barisnya.
+
+### Putusan V4 — Rumus agregat read-model (final advisory)
+
+- PaparanKasar = K1 + K2 + K5 (sen-aman, safeAdd pola existing)
+- Pengurang = K3-efektif (V3) + K4
+- PaparanBersih = max(0, PaparanKasar - Pengurang)
+- utilization = creditLimit > 0 ? round2(PaparanBersih /
+  creditLimit x 100) : null
+- remainingCredit = creditLimit - PaparanBersih (BOLEH negatif,
+  pola existing; jangan dijepit)
+- Tanpa jurnal baru, tanpa tulis DB, satu builder murni dipakai
+  laporan + titik tampil; UI tidak hitung ulang (F-043-S).
+
+### Putusan V5 — Ambang status advisory (FINAL untuk lapis ini)
+
+- creditLimit <= 0 (termasuk 0 default dan negatif data-rusak)
+  -> status `unset`, utilization null, teks persis "Limit
+  belum diatur". 0/unset BUKAN 0 keras, BUKAN tanpa limit,
+  BUKAN blokir. (Menegaskan BR-CR-02; AC-CR-04 dipertahankan.)
+- utilization >= 100 -> `over` "Lewat batas"
+- utilization >= 80 -> `warning` "Mendekati batas"
+- selain itu -> `ok` "Aman"
+Ambang 80/100 ini VONIS BOT 4 untuk lapis advisory (bukan
+sekadar konstanta existing): alasan — 80% menyisakan ruang
+satu job bengkel menengah sebelum limit habis; mengubah ambang
+kelak = perubahan vonis tertulis, bukan geser diam-diam di
+builder/UI. Ambang berbasis persen SAJA (tanpa ambang nominal
+kedua): nominal kedua akan memberi dua status bertentangan
+untuk pelanggan limit kecil; pecahan sen mengikuti pembulatan
+utilization 2 desimal existing (79,995 -> 80,00 = warning;
+itulah perilaku builder existing, diterima sadar).
+Tidak ada status yang menahan simpan/terbit/posting dokumen
+di lapis ini; pengabaian peringatan tidak dicatat (belum ada
+log override — syarat gate V7).
+
+### Putusan V6 — Cakupan baris & titik tampil
+
+- Baris pelanggan = gabungan pelanggan yang punya K1>0 ATAU
+  K2>0 ATAU K5>0 ATAU (K3/K4>0 dan tampil di laporan); pelanggan
+  SO-only/WO-only WAJIB tampil (menutup gap buckets existing).
+  Pelanggan tanpa transaksi apa pun tidak tampil di laporan
+  (AC-CR-11 dipertahankan); di master pelanggan tampil
+  PaparanBersih 0 + status per limit-nya.
+- Kolom K3 dan K4 tampil TERPISAH dari PaparanBersih (operator
+  harus bisa rekonsiliasi: kasar - DP - kredit = bersih).
+- Titik tampil T1/T2/T3 per spec F-043-S; T3 form hanya lencana
+  advisory dari builder yang sama, tombol simpan tidak pernah
+  di-disable oleh status kredit di lapis ini.
+
+### Putusan V7 — Inti gate: TETAP DITUNDA SADAR + syarat buka
+
+Gate penahan dokumen (tolak SO/Invoice/WO saat over) DITUNDA.
+Buka gate hanya bila SEMUA syarat berikut terpenuhi sekaligus
+dan vonis lanjutan BOT 4 terbit sesudahnya:
+1. PUTUSAN BOT 1 tertulis membuka perubahan perilaku penahan
+   dokumen (bukan sekadar merge builder).
+2. PR #334 merged + implementasi K4/K5 (V3/V4) merged dan
+   lulus acceptance BOT 6 termasuk falsifikasi pengurang —
+   definisi paparan inti harus SAMA dengan yang terbukti di
+   advisory; gate di atas rumus yang belum terbukti dilarang.
+3. Rekonsiliasi K3-efektif (V3 pilihan a/b) terbukti dengan
+   data alokasi DP nyata, bukan asumsi; bila hanya pilihan
+   DEFAULT AMAN yang tersedia, paparan inti belum sah untuk
+   gate.
+4. Keputusan tertulis perlakuan limit unset untuk gate
+   (usulan BOT 4: unset TIDAK memblokir, hanya peringatan
+   keras tercatat — limit belum diatur adalah kekurangan
+   master, bukan pelanggaran pelanggan).
+5. Jalur override berizin: permission baru disetujui BOT 1,
+   alasan wajib, log override teraudit (siapa/kapan/dokumen/
+   paparan saat override), dan jurnal tidak berubah oleh
+   override (override = izin operasional, bukan jurnal).
+6. Titik penahan di server action (bukan UI saja) + tes
+   falsifikasi: cabut penahan -> dokumen over tetap tersimpan
+   = tes MERAH; periode terkunci tetap assertPeriodOpen.
+7. Kebijakan dokumen berjalan: SO/WO lahir sebelum gate aktif
+   tidak dibatalkan retroaktif; gate menilai dokumen BARU dan
+   perubahan nilai dokumen berjalan secara eksplisit.
+Selama syarat belum lengkap: larangan keras membangun flag
+blokir parsial, disable tombol, atau validasi diam-diam di
+action dengan dalih advisory.
+
+### Yang TIDAK divonis di sini
+
+- Jurnal apa pun dari paparan/status/override advisory: tidak
+  ada. Paparan adalah bacaan risiko, bukan peristiwa akuntansi.
+- Perubahan creditLimit menjadi wajib isi / ambang nominal
+  absolut / notifikasi proaktif / snapshot historis paparan:
+  di luar kartu ini (spec §7, YAGNI tercatat).
+- Akun COA baru: tidak ada; K3/K4 menunjuk liabilitas UMP
+  210102 existing lewat jurnal sumbernya masing-masing.
+
+### Handoff F-2026-10-22-044-V
+
+- BOT 5 (spec F-017-S PR #396 + F-043-S PR #398): vonis angka
+  terbit — BR-CR-05/06 disahkan advisory dengan V3; tidak ada
+  angka yang perlu ditebak lagi. Perbarui label BR-CR-05 dari
+  USULAN menjadi VONIS-044-V bila menyentuh spec lagi.
+- BOT 3 (kartu t_9b2fd1eb): bangun per V2-V6; nyatakan pilihan
+  K3-efektif (a)/(b)/DEFAULT di kartu SEBELUM kode; PR #334
+  merged dulu; status enum jangan digeser; tanpa N+1.
+- BOT 6 (kartu t_7417e4d1): AC-CR-01..15 spec + tambahan
+  falsifikasi vonis ini: (i) DP confirmed yang sudah teralokasi
+  ke invoice TIDAK mengurangi dua kali (fixture DP->invoice
+  paidAmount, PaparanBersih tidak understated); (ii) cabut
+  jepit lantai 0 -> AC-CR-03 MERAH; (iii) K4 baris non-open
+  ikut -> AC-CR-10 MERAH; (iv) dokumen over tetap tersimpan
+  (advisory murni). Gate jangan dinilai — DITUNDA V7.
+- BOT 2: T2/T3 sesudah kontrak builder BOT 3 final; teks status
+  verbatim V5; tidak hitung ulang.
+- BOT 1: merge PR #334 + PR vonis ini bila gate hijau; PUTUSAN
+  gate hanya lewat jalur V7.
