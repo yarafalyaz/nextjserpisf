@@ -34,6 +34,16 @@ function categoryLabel(category: string | null): string {
   return CATEGORY_LABELS[category] ?? category
 }
 
+function PendingCells() {
+  return (
+    <>
+      <DetailTableTd align="right">-</DetailTableTd>
+      <DetailTableTd align="right">-</DetailTableTd>
+      <DetailTableTd align="right">-</DetailTableTd>
+    </>
+  )
+}
+
 /**
  * F-2026-10-21-030 (tahap frontend): RAB vs realisasi proyek per tahap.
  *
@@ -113,17 +123,13 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
                   <DetailTableRow>
                     <DetailTableTd>{stage.stageName ?? `Tahap #${stage.projectStageId}`}</DetailTableTd>
                     <DetailTableTd align="right">{formatCurrency(stage.total)}</DetailTableTd>
-                    <DetailTableTd align="right">-</DetailTableTd>
-                    <DetailTableTd align="right">-</DetailTableTd>
-                    <DetailTableTd align="right">-</DetailTableTd>
+                    <PendingCells />
                   </DetailTableRow>
                   {stage.categories.map((cat) => (
                     <DetailTableRow key={`cat-${cat.category ?? "null"}`}>
                       <DetailTableTd className="pl-6 text-muted-foreground">{categoryLabel(cat.category)}</DetailTableTd>
                       <DetailTableTd align="right">{formatCurrency(cat.amount)}</DetailTableTd>
-                      <DetailTableTd align="right">-</DetailTableTd>
-                      <DetailTableTd align="right">-</DetailTableTd>
-                      <DetailTableTd align="right">-</DetailTableTd>
+                      <PendingCells />
                     </DetailTableRow>
                   ))}
                 </Fragment>
@@ -147,9 +153,7 @@ export function ProjectBudgetCard({ budget }: Readonly<{ budget: ProjectBudgetFo
                     <DetailTableRow key={`unalloc-${cat.category ?? "null"}`}>
                       <DetailTableTd className="pl-6 text-muted-foreground">{categoryLabel(cat.category)}</DetailTableTd>
                       <DetailTableTd align="right">{formatCurrency(cat.amount)}</DetailTableTd>
-                      <DetailTableTd align="right">-</DetailTableTd>
-                      <DetailTableTd align="right">-</DetailTableTd>
-                      <DetailTableTd align="right">-</DetailTableTd>
+                      <PendingCells />
                     </DetailTableRow>
                   ))}
                 </Fragment>
