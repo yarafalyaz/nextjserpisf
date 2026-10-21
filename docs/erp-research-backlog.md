@@ -5295,3 +5295,224 @@ inti stabil; (5) BOT 6 acceptance §7. Butuh putusan accountant: TIDAK
   blokir start karena stok, prioritas tenggat, izin katalog baru,
   pemindahan reservasi antar gudang otomatis — semua ditolak/ditunda
   dengan alasan di §2; bukan hilang, tercatat di sini.
+
+---
+
+## SPEC KONSUMEN UI BOT 5 2026-10-22 — F-2026-10-22-052-S bupot sewa katalog kode objek F-051-V
+
+Pemilik spec: BOT 5 (Business), kartu t_9d5a293b. Sumber mengikat:
+vonis BOT 4 F-2026-10-22-051-V (PR #416 OPEN, head `3b1ebdcf`
+dicek live run ini 2026-10-22 04:5x WIB) + F-041 akun 210206
+(merged, backlog di atas) + F-048-S gerbang izin bupot (PR #405).
+Spec ini konsumen UI-nya saja: TIDAK menambah kode/schema/migrasi,
+TIDAK menambah kode objek/tarif/angka di luar vonis BOT 4. Angka di
+luar vonis = pertanyaan terbuka bernama ke BOT 4 (§8), tidak diputus
+di sini. Mengikat penuh sesudah #416 merged Lead dan resolver BOT 3
+menutup lubang PR #408 per F-051-V Putusan 1-3.
+
+### 0. Inventarisasi terverifikasi (2026-10-22, origin/main `633d737a` + head PR #408/#416)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Form terbit bupot live: page gerbang `manage_withholding_certificates`
+  (`src/app/(dashboard)/keuangan/dokumen-pajak/bupot/tambah/page.tsx:30`
+  area, loader jenis aktif `isActive+deletedAt:null`), form pilih
+  **Jenis PPh** (`withholding-certificate-form.tsx`, field
+  `withholdingTypeId`) — pilihan KODE OBJEK per kode belum ada di UI;
+  kode menempel ke jenis master.
+- Service terbit menyalin snapshot `article/objectCode/dpp/tariff/
+  withheldAmount` dari jenis terpilih (`withholding-certificate.service.ts`
+  issue, status langsung `issued`); edit master sesudah terbit tidak
+  mengubah bupot (header service + `snapshotWithholding`). Koreksi =
+  `revoked` + terbit baru, bukan edit.
+- Izin (F-048-S, jangan divonis ulang): terbit/cabut bupot =
+  `manage_withholding_certificates`, setor = `create_tax_payments`,
+  baca laporan = `view_reports`, master jenis potong =
+  `manage_withholding_tax` (izin master, BEDA dari bupot).
+
+Belum ada / parsial (bukti run ini):
+- Master `WithholdingTaxType` (schema.prisma:920) hanya
+  `objectCode` tunggal per jenis + `isActive` — BELUM ada baris
+  katalog per kode, tanggal efektif, atau nama per kode DJP. Master
+  bertanggal efektif F-051-V Putusan 3 = inti BOT 3, bukan dirancang
+  di spec ini.
+- PR #408 head `3c1d9729` (OPEN): resolver sewa `resolvePph42RentRate`
+  baru menolak kode kosong + awalan `28-409`, tarif dipin konstanta
+  10 — katalog dua kode Putusan 1, syarat bukti 28-403-04, dan
+  penolakan 28-402/24-xxx/format-rusak BELUM ditutup di sana. Itulah
+  lubang yang spec ini beri kontrak konsumennya; F51-5 (hardcode
+  daftar kode di luar seed/master = MERAH) dinilai BOT 6 di sana.
+- Bukti dokumen pendukung belum punya tempat di form/service bupot
+  (tidak ada lampiran/tautan bukti) — bentuknya pertanyaan terbuka
+  Q-BUPOT-052-1, jangan dikarang BOT 2/BOT 3.
+
+### 1. Workflow specification (alur UI penerbitan bupot sewa)
+
+Aktor: penerbit bupot (izin §2), pengelola master pajak, penyetor,
+pemilik aset (pihak luar, terima neto + bupot). Dokumen masuk:
+tagihan sewa posted (VendorBill) + katalog master aktif. Dokumen
+keluar: bupot `issued` bersnapshot beku + liabilitas Cr 210206.
+
+1. Penerbit membuka form bupot (gerbang page existing). Pilih arah
+   "Kita memotong (pemasok)" + jenis `PPH42-SEWA`. Jenis lain =
+   alur bupot umum existing, di luar spec ini.
+2. UI meminta **daftar kode objek dari katalog master aktif untuk
+   tanggal potong yang dipilih** (kontrak loader BOT 3: per kode =
+   kode + nama tampil + tarif + penanda syarat-bukti). DILARANG:
+   daftar kode diketik/hardcode di UI, input kode teks bebas, atau
+   menyalin daftar dari vonis ini ke konstanta komponen.
+3. Default terpilih = `28-403-02` bila aktif pada tanggal potong.
+   `28-403-04` hanya muncul bila operator sudah mengaktifkannya di
+   master (bukan seed default, F-051-V Putusan 1).
+4. Bila `28-403-04` dipilih: panel bukti WAJIB muncul — penerbit
+   mengunggah/menunjuk dokumen bukti proyek pemerintah dibiayai
+   hibah/pinjaman luar negeri. Tombol Terbit nonaktif sampai bukti
+   tertaut; submit yang lolos UI tetap divalidasi ulang server
+   (tanpa bukti = TOLAK, F51-3). Jenis dokumen persisnya =
+   Q-BUPOT-052-1 (BOT 4), spec ini hanya mewajibkan tautan buktinya
+   ada sebelum terbit.
+5. DPP bruto diisi dari tagihan. UI menampilkan kode+nama+tarif
+   **sebagaimana kiriman katalog** (label data, bukan hitungan UI);
+   nominal potong final dihitung service saat terbit, galat service
+   tampil verbatim (pola form existing).
+6. Terbit: server memvalidasi ulang katalog per tanggal acuan
+   (Q-BUPOT-052-3) pada saat submit — bukan daftar saat form dibuka
+   — lalu membekukan snapshot (§4). Sukses -> bupot `issued`.
+7. Bupot terbit tampil dari snapshot di detail/rekap/ekspor. Koreksi
+   kode/tarif/DPP = cabut (`revoked`, izin sama) + terbit baru;
+   tidak ada layar edit isi bupot terbit.
+
+### 2. Role/permission matrix (persis F-048-S, dirujuk bukan divonis ulang)
+
+| Aksi | Izin penjaga | Tanpa izin (fail-closed) |
+|---|---|---|
+| Buka form + terbit/cabut bupot sewa | `manage_withholding_certificates` | page `redirect("/")`; aksi server menolak sebelum delegasi |
+| Aktif/nonaktifkan baris katalog, koreksi tarif master | `manage_withholding_tax` (pengelola master) | aksi master menolak; penerbit bupot TIDAK bisa memperbaiki katalog dari form bupot |
+| Setor PPh bupot | `create_tax_payments` | tombol Setor tidak tampil; aksi menolak |
+| Baca rekap/ekspor bupot | `view_reports` | page redirect; PDF 403 |
+
+### 3. Status-transition matrix
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| Form: belum pilih kode | katalog dimuat, 28-403-02 aktif | terpilih default 28-403-02 | loader katalog per tanggal potong |
+| Form: terpilih 28-403-04, bukti kosong | — | TIDAK BISA TERBIT (tombol nonaktif) | syarat bukti F-051-V Putusan 1 |
+| Form: lengkap | submit Terbit lolos validasi server | bupot `issued` + snapshot beku | `manage_withholding_certificates`; katalog aktif + tarif cocok 10% saat submit |
+| Form: lengkap | submit, katalog berubah sejak form dibuka | ditolak berisik (§5), dokumen TIDAK lahir | validasi ulang server |
+| Bupot `issued` | cabut | `revoked` (+ reversal pola existing) | izin bupot; koreksi lanjut = terbit baru |
+| Baris katalog aktif | pengelola master nonaktifkan / tutup tanggal efektif | nonaktif: hanya menolak bupot BARU | `manage_withholding_tax`; bupot lama tak berubah |
+
+### 4. Business rules register + snapshot
+
+- BR-BUPOT-052-01 (vonis BOT 4 F-051-V Putusan 1): Katalog sah
+  `PPH42-SEWA` hanya `28-403-02` (default) + `28-403-04` (bersyarat
+  bukti). UI hanya menawarkan isi katalog master aktif; di luar itu
+  tidak bisa dipilih maupun dikirim.
+- BR-BUPOT-052-02 (vonis BOT 4 Putusan 2): Kode di luar katalog —
+  `28-409-*`, `28-402-*`, `24-100-02`/`24-104-*`, `28-403-*` lain,
+  kosong, format bukan `NN-NNN-NN` — DITOLAK fail-closed berisik di
+  server; UI tidak menyediakan jalan mengirimnya.
+- BR-BUPOT-052-03 (vonis BOT 4 Putusan 1+F51-3): `28-403-04` tanpa
+  bukti dokumen tertaut = terbit ditolak (UI menahan tombol, server
+  menolak submit). Meragukan -> pakai `28-403-02`.
+- BR-BUPOT-052-04 (vonis BOT 4 Putusan 3): Snapshot beku saat terbit
+  = kode objek + nama + tarif + DPP bruto + pasal + akun liabilitas
+  210206. Edit/nonaktif/tambah baris katalog sesudah terbit TIDAK
+  mengubah tampilan bupot lama, rekap masa, maupun ekspor.
+- BR-BUPOT-052-05 (vonis BOT 4 Putusan 2 butir 5): Tarif master kode
+  terpilih != 10% = terbit ditolak sampai master dikoreksi
+  bertanggal efektif; UI dilarang memakai tarif menyimpang diam-diam
+  dan dilarang "membetulkan" tarif di form.
+- BR-BUPOT-052-06 (TERVERIFIKASI-KODE pola existing): Satu bupot =
+  satu kode objek; koreksi bupot terbit hanya revoke + terbit baru.
+- Contoh angka bernama (persis vonis F-041/F-051-V, bukan angka
+  baru): DPP bruto Rp100.000.000, kode `28-403-02`, tarif 10% ->
+  terpungut Rp10.000.000 **Cr 210206**; neto diterima pemilik
+  Rp90.000.000. Sesudah contoh bupot ini terbit, master diubah
+  (tarif/nama/status): bupot contoh tetap tampil 28-403-02 / 10% /
+  Rp10.000.000 / 210206; bupot baru mengikuti master baru.
+
+### 5. Pesan penolakan berisik (kata perilaku bisnis; teks layar persis kolom Kata)
+
+| Kasus | Kapan | Kata di layar | Perilaku wajib |
+|---|---|---|---|
+| Katalog kosong | tak ada kode sewa aktif pada tanggal potong | "Katalog kode objek sewa kosong pada tanggal potong ini — bupot sewa tidak dapat diterbitkan. Hubungi pengelola master pajak." | pilihan kode kosong, Terbit nonaktif; submit paksa ditolak server dengan makna sama |
+| Kode kedaluwarsa/nonaktif | kode terpilih dinonaktifkan / belum efektif saat submit | "Kode objek {kode} tidak aktif pada tanggal potong {tanggal} — pilihan dimuat ulang, silakan pilih lagi." | pilihan lama dibuang (tidak dipertahankan diam-diam), daftar dimuat ulang, dokumen tidak lahir |
+| Bukti 28-403-04 hilang | kode 04 dipilih, bukti belum tertaut | "Kode 28-403-04 hanya untuk sewa proyek pemerintah yang dibiayai hibah atau pinjaman luar negeri — lampirkan bukti dokumennya, atau pakai 28-403-02." | Terbit nonaktif di UI; server menolak submit tanpa bukti |
+| Di luar katalog / format rusak | kode asing terkirim lewat jalur mana pun | "Kode objek {kode} di luar katalog sewa — bupot tidak diterbitkan." | hanya terbaca dari balasan server (UI tak bisa mengirim); dokumen tidak lahir |
+| Tarif master menyimpang | tarif katalog kode terpilih != 10% | "Tarif master kode {kode} sebesar {x}% tidak cocok tarif resmi 10% — pengelola master pajak mengoreksi master dulu." | terbit ditolak; form tidak menawarkan tarif pengganti |
+
+### 6. Feature matrix
+
+Benchmark kompetitor TIDAK ditambah run ini (mengarang perilaku
+Accurate/Zahir untuk katalog DJP internal = noise, pola F-048-S §5);
+sumber mengikat = vonis BOT 4 + PER-11/PJ/2025 + file BPPU resmi DJP
+(URL di PR #416).
+
+| Kemampuan | ISF hari ini (TERVERIFIKASI-KODE) | Spec ini |
+|---|---|---|
+| Pilihan kode objek sewa | menempel ke jenis master; UI pilih jenis saja | per kode dari katalog master aktif per tanggal potong; default 28-403-02 |
+| Kode bersyarat 28-403-04 | tidak dikenal | tampil hanya bila aktif di master + bukti wajib sebelum terbit |
+| Kode luar katalog | PR #408: hanya kosong + 28-409 ditolak | tidak bisa dipilih/dikirim; server tolak berisik semua kasus §5 |
+| Perubahan katalog | edit jenis berlaku seketika, tanpa tanggal efektif | master bertanggal efektif (inti BOT 3); UI selalu baca keadaan per tanggal potong |
+| Bupot lama saat master berubah | snapshot kode/tarif/DPP sudah beku di service | dipertahankan + nama snapshot (§8 Q-2); rekap/ekspor baca snapshot |
+
+### 7. Acceptance criteria + edge cases (draf BOT 6; falsifikasi vonis F51-1..6 tetap milik PR #416)
+
+- AC-BUPOT-052-1: Form sewa hanya merender kode dari respons katalog
+  master; matikan katalog (nol aktif) -> kata Katalog kosong persis
+  §5 + Terbit nonaktif. Hardcode daftar kode di komponen = MERAH.
+- AC-BUPOT-052-2: 28-403-04 aktif dipilih tanpa bukti -> Terbit
+  nonaktif; submit paksa via aksi -> server TOLAK (selaras F51-3).
+  Bukti tertaut -> terbit lolos, snapshot mencatat kode 04.
+- AC-BUPOT-052-3: Nonaktifkan kode terpilih di antara buka-form dan
+  submit -> kata Kode kedaluwarsa persis §5, pilihan dibuang, tidak
+  ada bupot lahir.
+- AC-BUPOT-052-4: Contoh §4: terbit bruto 100.000.000/28-403-02 ->
+  potong 10.000.000 Cr 210206, neto 90.000.000; lalu edit master
+  (tarif/nama/status) -> detail+rekap+ekspor bupot itu TIDAK berubah
+  (selaras F51-4); bupot baru ditolak memakai kode nonaktif.
+- AC-BUPOT-052-5: Kirim kode `28-402-01`/`24-100-02`/`28-403-99`/
+  string acak/kosong langsung ke aksi -> semua ditolak berisik kata
+  Di luar katalog (selaras F51-1/F51-2); tidak ada input teks bebas
+  kode di UI.
+- AC-BUPOT-052-6: Tarif master 28-403-02 diubah menyimpang dari 10%
+  -> terbit ditolak kata Tarif menyimpang; UI tidak menampilkan
+  hitungan memakai tarif menyimpang (selaras F51-6).
+- Edge: tanggal potong diganti sesudah kode dipilih (daftar wajib
+  dimuat ulang per tanggal baru); dua bupot masa sama kode berbeda
+  sah (satu kode per bupot); bupot arah dipotong-pelanggan tidak
+  masuk alur sewa ini; penerbit tanpa `manage_withholding_tax`
+  membaca kata penolakan tanpa tautan perbaikan master yang bisa ia
+  klik sendiri.
+
+### 8. Pertanyaan terbuka bernama (BUTUH-VONIS BOT 4 — jangan diputus BOT 5/2/3)
+
+- Q-BUPOT-052-1: Bukti 28-403-04 persisnya dokumen apa (kontrak/SPK
+  proyek pemerintah, dokumen sumber dana hibah/pinjaman LN, atau
+  keduanya), metadata wajibnya (nomor/tanggal), dan retensinya.
+  Menentukan bentuk lampiran/tautan yang dibangun BOT 3/BOT 2.
+- Q-BUPOT-052-2: Nama snapshot: master hari ini menyimpan nama per
+  JENIS, bukan nama resmi per kode DJP; nama kode tampil/beku dari
+  mana (kolom katalog per kode = inti BOT 3) — UI dilarang mengarang
+  nama dari kode.
+- Q-BUPOT-052-3: Tanggal acuan keaktifan katalog + tarif: USULAN
+  spec ini = tanggal potong (`withholdingDate`, konsisten
+  `taxPeriod`); konfirmasi BOT 4 sebelum loader BOT 3 dibangun.
+
+### 9. Backlog implementasi (turunan spec ini; ID spec F-2026-10-22-052-S)
+
+- BOT 3 (P1, sesudah #416 merged): resolver/katalog master
+  bertanggal efektif menutup Putusan 1-3 + loader opsi kode per
+  tanggal potong untuk UI + penjaga bukti 28-403-04 di server
+  (sesudah Q-BUPOT-052-1 dijawab BOT 4).
+- BOT 2 (P1, sesudah kontrak loader BOT 3 stabil): UI §1/§5 kata
+  persis; nol hardcode kode, nol hitung tarif/potong di komponen.
+- BOT 6 (P1): AC-BUPOT-052-1..6 di atas + F51-1..6 vonis.
+- BOT 4: jawab Q-BUPOT-052-1..3; Lead: urutan merge #416 -> inti
+  BOT 3 -> UI BOT 2. Butuh putusan accountant: YA (Q di §8).
+
+### Yang TIDAK diusulkan run ini
+- Input kode objek teks bebas, edit isi bupot terbit, kode sewa baru
+  di luar katalog F-051-V, jalur PPh 23 sewa non-tanah/bangunan di
+  bupot ini (jenisnya sendiri per vonis), benchmark Accurate/Zahir
+  untuk katalog internal — ditolak/ditunda tercatat, bukan hilang.
