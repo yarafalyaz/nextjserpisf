@@ -35,18 +35,25 @@ function findAccountId(
 ): string {
   const tokensOf = (value: string) => normalize(value).split(" ").filter(Boolean);
 
-  for (const keywords of keywordGroups) {
-    const match = accounts.find((account) => {
-      if (exclude?.has(String(account.id))) return false;
-      const tokens = tokensOf(`${account.code} ${account.name}`);
-      return keywords.every((keyword) => {
-        const needle = normalize(keyword);
-        return tokens.some((token) => token === needle || token.startsWith(needle));
+  // Exact token matches across ALL groups win over prefix matches: needle
+  // "5101" must prefer code 5101 itself (or name rule "harga pokok
+  // penjualan") over child code 510104, otherwise COGS auto-maps onto
+  // Beban Garansi (F-2026-10-21-021). Prefix stays as legacy fallback.
+  const findIn = (exact: boolean) => {
+    for (const keywords of keywordGroups) {
+      const match = accounts.find((account) => {
+        if (exclude?.has(String(account.id))) return false;
+        const tokens = tokensOf(`${account.code} ${account.name}`);
+        return keywords.every((keyword) => {
+          const needle = normalize(keyword);
+          return tokens.some((token) => (exact ? token === needle : token === needle || token.startsWith(needle)));
+        });
       });
-    });
-    if (match) return String(match.id);
-  }
-  return "";
+      if (match) return String(match.id);
+    }
+    return "";
+  };
+  return findIn(true) || findIn(false);
 }
 
 const INVENTORY_GROUPS = [
@@ -164,6 +171,11 @@ export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   // AUD-FIN-01: kewajiban Uang Muka Penjualan (CoA 210102). Grup "uang","muka"
   // duluan agar tak tertukar Piutang ("1103"/"piutang") maupun Utang Usaha.
   { key: "customerDownPaymentAccountId", groups: [["uang", "muka", "penjualan"], ["210102"], ["uang", "muka"], ["down", "payment"]] },
+  // F-2026-10-21-021 tahap 3: akun garansi final vonis BOT 4 (koreksi F-69).
+  // Kode persis didahulukan; 510103 (Penyesuaian Persediaan) DILARANG garansi.
+  { key: "warrantyExpenseAccountId", groups: [["510104"], ["beban", "garansi"], ["warranty", "expense"]] },
+  { key: "warrantyProvisionAccountId", groups: [["210205"], ["provisi", "garansi"], ["warranty", "provision"]] },
+  { key: "supplierClaimReceivableAccountId", groups: [["110508"], ["piutang", "klaim", "supplier"], ["supplier", "claim"]] },
   { key: "salesAccountId", groups: [["pendapatan", "penjualan"], ["400001"], ["akun", "penjualan"], ["sales", "account"], ["penjualan"]] },
   { key: "purchasePayableAccountId", groups: [["hutang", "usaha"], ["utang", "usaha"], ["2101"], ["hutang", "dagang"], ["payable"]] },
   { key: "purchaseTaxAccountId", groups: [["ppn", "masukan"], ["110504"], ["ppn", "masuk"], ["tax", "in"]] },
@@ -177,7 +189,7 @@ export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   { key: "inventoryAdjustmentAccountId", groups: [["penyesuaian", "persediaan"], ["510103"], ["inventory", "adj"]] },
   { key: "stockAdjustmentAccountId", groups: [["penyesuaian", "persediaan"], ["510103"], ["inventory", "adj"], ["stock", "adjustment"]] },
   // Nama standar Accurate: "Beban Pokok Penjualan" (5101), bukan "Harga Pokok Penjualan".
-  { key: "cogsAccountId", groups: [["beban", "pokok", "penjualan"], ["5101"], ["harga", "pokok", "penjualan"], ["hpp"], ["cogs"]] },
+  { key: "cogsAccountId", groups: [["beban", "pokok", "penjualan"], ["harga", "pokok", "penjualan"], ["5101"], ["hpp"], ["cogs"]] },
   { key: "wipAccountId", groups: [["barang", "dalam", "proses"], ["110404"], ["wip"], ["work", "progress"]] },
   { key: "materialExpenseAccountId", groups: [["beban", "material"], ["510102"], ["material", "expense"]] },
   { key: "materialIssueExpenseAccountId", groups: [["beban", "material"], ["510102"], ["material", "issue"], ["consumables"]] },
