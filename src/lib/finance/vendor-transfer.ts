@@ -44,8 +44,13 @@ export function normalizeTransferSelection(rawIds: string[]): { ids: number[]; e
   const ids = [
     ...new Set(
       rawIds
-        .map((raw) => Number(String(raw).trim()))
-        .filter((value) => Number.isInteger(value) && value > 0),
+        // ID desimal murni saja — pola repo (/^[0-9]+$/ di route workflow/print/
+        // attachments/notifications + parseId tukar faktur). Number() mentah
+        // menerima "0x10"->16, "1e3"->1000, " 5"->5: ID tak terduga lolos ke query.
+        .map((raw) => String(raw).trim())
+        .filter((str) => /^[0-9]+$/.test(str))
+        .map((str) => Number(str))
+        .filter((value) => Number.isSafeInteger(value) && value > 0),
     ),
   ]
   if (ids.length === 0) return { ids: [], error: "Pilih minimal satu pembayaran yang mau ditandai." }

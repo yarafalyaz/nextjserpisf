@@ -152,13 +152,24 @@ export function StockAdjustmentForm({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={
+        adjustment?.id
+          ? "Formulir ubah penyesuaian stok"
+          : "Formulir tambah penyesuaian stok"
+      }
+    >
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="warehouseId">Gudang *</Label>
+            <Label htmlFor="warehouseId">
+              Gudang <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <QuickAddSelect
               id="warehouseId"
+              required
               value={warehouseId || null}
               onChange={(key) => setWarehouseId(key ?? "")}
               placeholder="Cari gudang..."
@@ -176,7 +187,9 @@ export function StockAdjustmentForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="type">Tipe *</Label>
+            <Label htmlFor="type">
+              Tipe <span className="text-destructive" aria-hidden="true">*</span>
+            </Label>
             <Combobox
               id="type"
               name="type"

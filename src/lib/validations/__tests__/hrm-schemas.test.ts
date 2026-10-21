@@ -51,8 +51,15 @@ describe("validations/hrm.schemas", () => {
         employeeId: 1, projectId: 2, date: "2026-06-09", hours: 8,
       }).success).toBe(true);
     });
-    it("rejects missing projectId", () => {
-      expect(timesheetSchema.safeParse({ employeeId: 1, date: "2026-06-09", hours: 8 }).success).toBe(false);
+    it("accepts work-order context without projectId (F-2026-10-21-019)", () => {
+      expect(timesheetSchema.safeParse({
+        employeeId: 1, workOrderId: 7, date: "2026-06-09", hours: 8,
+      }).success).toBe(true);
+    });
+    it("rejects hours above the 24h per-row cap (F-2026-10-21-019)", () => {
+      expect(timesheetSchema.safeParse({
+        employeeId: 1, projectId: 2, date: "2026-06-09", hours: 25,
+      }).success).toBe(false);
     });
   });
 

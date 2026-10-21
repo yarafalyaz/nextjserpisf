@@ -33,6 +33,17 @@ export interface LaborRecapCostInput {
   category: string
   hours: number | null
   amount: number
+  /**
+   * Tanggal kerja dari Timesheet.date (F-038). null = tanggal belum terbukti
+   * (baris manual tanpa timesheet / timesheet hilang) — jangan tebak dari
+   * createdAt. Opsional agar pemanggil lama tanpa tanggal tetap jalan.
+   */
+  workDate?: Date | null
+}
+
+export interface LaborRecapPeriod {
+  start: Date
+  end: Date
 }
 
 export interface LaborRecapTechnician {
@@ -56,6 +67,8 @@ export interface LaborRecap {
   technicians: LaborRecapTechnician[]
   /** Baris labor tanpa sourceTimesheetId / timesheet hilang — tanpa teknisi. */
   unattributed: LaborRecapUnattributed
+  /** Baris labor tanggal kerja belum terbukti; di luar total bila periode aktif (F-038). */
+  undated: LaborRecapUnattributed
   totalLaborHours: number
   totalAmount: number
   totalLineCount: number
@@ -65,12 +78,16 @@ function round2(value: number): number {
   return Math.round((value + Number.EPSILON) * 100) / 100
 }
 
-export function buildLaborRecap(costs: readonly LaborRecapCostInput[]): LaborRecap {
+export function buildLaborRecap(
+  costs: readonly LaborRecapCostInput[],
+  period?: LaborRecapPeriod,
+): LaborRecap {
   const perTechnician = new Map<
     number,
     { employeeName: string | null; hours: number; amount: number; lineCount: number }
   >()
   const unattributed = { laborHours: 0, totalAmount: 0, lineCount: 0 }
+  const undated = { laborHours: 0, totalAmount: 0, lineCount: 0 }
   let totalLaborHours = 0
   let totalAmount = 0
   let totalLineCount = 0
@@ -78,6 +95,18 @@ export function buildLaborRecap(costs: readonly LaborRecapCostInput[]): LaborRec
   for (const cost of costs) {
     if (cost.category !== "labor") continue
     const hours = cost.hours ?? 0
+    // F-038: periode aktif — baris bertanggal di luar rentang dibuang;
+    // baris tanpa tanggal terbukti masuk undated, BUKAN total periode.
+    if (period) {
+      const workDate = cost.workDate ?? null
+      if (workDate === null) {
+        undated.laborHours += hours
+        undated.totalAmount += cost.amount
+        undated.lineCount += 1
+        continue
+      }
+      if (workDate < period.start || workDate > period.end) continue
+    }
     totalLaborHours += hours
     totalAmount += cost.amount
     totalLineCount += 1
@@ -125,6 +154,11 @@ export function buildLaborRecap(costs: readonly LaborRecapCostInput[]): LaborRec
       laborHours: round2(unattributed.laborHours),
       totalAmount: round2(unattributed.totalAmount),
       lineCount: unattributed.lineCount,
+    },
+    undated: {
+      laborHours: round2(undated.laborHours),
+      totalAmount: round2(undated.totalAmount),
+      lineCount: undated.lineCount,
     },
     totalLaborHours: round2(totalLaborHours),
     totalAmount: round2(totalAmount),

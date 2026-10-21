@@ -43,7 +43,11 @@ export async function GET(request: Request) {
   // view_reports generik TIDAK cukup (fail-closed): pemegang hanya-view_reports
   // kehilangan akses laporan gaji/PPh21 — role FINANCE whitelist sudah punya
   // view_payroll_reports, role kustom hanya-view_reports perlu grant ulang admin.
-  const PAYROLL_PDF_KEYS = new Set(["gaji-karyawan", "pph-21", "porsi-gaji", "bukti-potong-pph"])
+  // bukti-potong-pph BUKAN laporan payroll: loader-nya VendorBill pemasok
+  // (loadWithholdingSummary), nol data karyawan — tetap gerbang laporan pajak
+  // umum view_reports (vonis BOT 4 F-2026-10-21-034 + putusan Lead opsi (a)
+  // atas sanggahan PR #316). Jangan masukkan kembali ke himpunan ini.
+  const PAYROLL_PDF_KEYS = new Set(["gaji-karyawan", "pph-21", "porsi-gaji"])
   if (PAYROLL_PDF_KEYS.has(report)) {
     if (!(await hasPermission("view_payroll_reports"))) {
       return apiError("FORBIDDEN", "Akses ditolak")

@@ -50,6 +50,16 @@ describe("GET /api/notifications", () => {
     expect(res.status).toBe(400)
   })
 
+  it.each(["7abc", "7.5", "0x10", "1e3", "+7", " 7"])(
+    "returns 400 when user.id is non-canonical %s",
+    async (raw) => {
+      mocks.authFn.mockResolvedValue({ user: { id: raw } })
+      const res = await GET()
+      expect(res.status).toBe(400)
+      expect(mocks.notificationFindMany).not.toHaveBeenCalled()
+    },
+  )
+
   it("returns notifications and unread count", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 7 } })
     mocks.notificationFindMany.mockResolvedValue([{ id: 1, title: "Test" }])
@@ -71,6 +81,24 @@ describe("GET /api/notifications", () => {
         createdAt: true,
       },
     }))
+  })
+
+  it("queries list and count concurrently (single parallel round-trip)", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 7 } })
+    let inFlight = 0
+    let maxInFlight = 0
+    const track = async (v: unknown) => {
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((r) => setTimeout(r, 5))
+      inFlight -= 1
+      return v
+    }
+    mocks.notificationFindMany.mockImplementation(() => track([{ id: 1 }]))
+    mocks.notificationCount.mockImplementation(() => track(3))
+    const res = await GET()
+    expect(res.status).toBe(200)
+    expect(maxInFlight).toBe(2)
   })
 
   it("returns 500 on internal error", async () => {
