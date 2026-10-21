@@ -197,6 +197,18 @@ describe("GET /api/cron/auto-reject-quotations", () => {
     expect(mocks.txQuotationHistoryCreateMany).not.toHaveBeenCalled()
   })
 
+  it("scan luar hanya memuat id (bukan baris Quotation utuh)", async () => {
+    mocks.quotationFindMany.mockResolvedValue([{ id: 7 }])
+    mocks.txQuotationFindMany.mockResolvedValue([{ id: 7, revisionNumber: 1 }])
+    mocks.flippedIds = new Set([7])
+
+    const res = await GET(makeReq())
+    expect(res.status).toBe(200)
+    expect(mocks.quotationFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({ select: { id: true } }),
+    )
+  })
+
   it("passes correct cutoff date (14 days ago)", async () => {
     mocks.quotationFindMany.mockResolvedValue([])
 
