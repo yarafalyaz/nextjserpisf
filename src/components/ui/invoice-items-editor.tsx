@@ -11,6 +11,7 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select";
 import { QUICK_ADD } from "@/lib/quick-add/registry";
 import { showSuccess, showError } from "@/lib/utils/toast";
 import { formatCurrency } from "@/lib/utils/format";
+import { PriceSourceChip } from "@/components/ui/price-source-chip";
 
 interface InvoiceItem {
   id?: number;
@@ -22,6 +23,9 @@ interface InvoiceItem {
   total: number;
   uom?: string | null;
   serialNumbers?: string[];
+  // F-2026-10-21-018 BR-TIER-09: sumber harga persist (null = tanpa klaim).
+  priceSource?: string | null;
+  priceListMinQty?: number | null;
 }
 
 interface AvailableItem {
@@ -242,6 +246,13 @@ export function InvoiceItemsEditor({
                     {formatCurrency(item.total)}
                   </span>
                 </div>
+                {variant === "invoice" && (
+                  <PriceSourceChip
+                    priceSource={item.priceSource}
+                    priceListMinQty={item.priceListMinQty}
+                    className="mt-1.5"
+                  />
+                )}
                 <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
                   <div className="min-w-0">
                     <span className="block text-muted-foreground">Jml</span>
@@ -303,7 +314,14 @@ export function InvoiceItemsEditor({
                 {items.map((item, i) => (
                   <tr key={i} className="border-b border-default/50">
                     <td className="py-2 px-2">
-                      {item.description || `Item #${item.itemId}`}
+                      <span className="block">{item.description || `Item #${item.itemId}`}</span>
+                      {variant === "invoice" && (
+                        <PriceSourceChip
+                          priceSource={item.priceSource}
+                          priceListMinQty={item.priceListMinQty}
+                          className="mt-1"
+                        />
+                      )}
                     </td>
                     <td className="text-right py-2 px-2">
                       {item.qty}
