@@ -44,6 +44,13 @@ describe("GET /api/notifications", () => {
     expect((await res.json()).error.message).toBe("Pengguna tidak valid")
   })
 
+  it.each(["12abc", "1e3", " 7", "7.9"])("returns 400 when user.id=%s is not pure decimal", async (badId) => {
+    mocks.authFn.mockResolvedValue({ user: { id: badId } })
+    const res = await GET()
+    expect(res.status).toBe(400)
+    expect(mocks.notificationFindMany).not.toHaveBeenCalled()
+  })
+
   it("returns 400 when user.id is 0 or negative", async () => {
     mocks.authFn.mockResolvedValue({ user: { id: 0 } })
     const res = await GET()

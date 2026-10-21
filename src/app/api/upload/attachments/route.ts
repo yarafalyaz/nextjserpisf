@@ -47,11 +47,15 @@ export async function POST(req: NextRequest) {
     return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
-  const userId = Number.parseInt(String(session.user.id), 10)
   if (!Number.isSafeInteger(referenceIdNum) || referenceIdNum < 0) {
     return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
-  if (!Number.isInteger(userId) || userId <= 0) {
+  const userIdRaw = String(session.user.id)
+  if (!/^\d+$/.test(userIdRaw)) {
+    return apiError("BAD_REQUEST", "Pengguna tidak valid")
+  }
+  const userId = Number(userIdRaw)
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
     return apiError("BAD_REQUEST", "Pengguna tidak valid")
   }
 
@@ -194,6 +198,8 @@ export async function GET(req: NextRequest) {
   if (!Number.isSafeInteger(referenceIdNum) || referenceIdNum < 0) {
     return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
+  const userIdRawGet = String(session.user.id)
+  const userIdForQuery = /^\d+$/.test(userIdRawGet) ? Number(userIdRawGet) : -1
 
   // Check the specific document and its warehouse scope, not only its module.
   const allowed = referenceIdNum === 0
@@ -207,7 +213,7 @@ export async function GET(req: NextRequest) {
     where: {
       referenceType,
       referenceId: referenceIdNum,
-      ...(referenceIdNum === 0 ? { uploadedBy: Number(session.user.id) } : {}),
+      ...(referenceIdNum === 0 ? { uploadedBy: userIdForQuery } : {}),
     },
     orderBy: { createdAt: "desc" },
     take: 200,

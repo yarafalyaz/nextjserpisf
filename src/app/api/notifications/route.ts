@@ -8,8 +8,12 @@ export async function GET() {
     const session = await auth()
     if (!session?.user) return apiError("UNAUTHORIZED", "Tidak terotorisasi")
 
-    const userId = Number.parseInt(String(session.user.id), 10)
-    if (!Number.isInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Pengguna tidak valid")
+    // parseInt longgar menerima "12abc"/"1e3" sebagai 12/1 (karyawan lain);
+    // desimal murni wajib, pola route [id]/read.
+    const userIdRaw = String(session.user.id)
+    if (!/^\d+$/.test(userIdRaw)) return apiError("BAD_REQUEST", "Pengguna tidak valid")
+    const userId = Number(userIdRaw)
+    if (!Number.isSafeInteger(userId) || userId <= 0) return apiError("BAD_REQUEST", "Pengguna tidak valid")
 
     const notifications = await prisma.notification.findMany({
       where: { userId },

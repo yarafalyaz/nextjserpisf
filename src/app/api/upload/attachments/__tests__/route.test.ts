@@ -126,6 +126,15 @@ describe("POST /api/upload/attachments", () => {
     expect(res.status).toBe(403)
   })
 
+  it.each(["12abc", "1e3"])("returns 400 when user.id=%s is not pure decimal, no write/create", async (badId) => {
+    mocks.authFn.mockResolvedValue({ user: { id: badId } })
+    const file = makeFile("a.pdf", "application/pdf")
+    const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "1" }))
+    expect(res.status).toBe(400)
+    expect(mocks.writeFile).not.toHaveBeenCalled()
+    expect(mocks.attachmentCreate).not.toHaveBeenCalled()
+  })
+
   it("uploads successfully and writes to db", async () => {
     const file = makeFile("invoice.pdf", "application/pdf")
     const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "5" }))

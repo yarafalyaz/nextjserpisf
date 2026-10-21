@@ -60,6 +60,15 @@ describe("POST /api/upload/avatar", () => {
     expect(res.status).toBe(400)
   })
 
+  it.each(["12abc", "1e3"])("returns 400 when user.id=%s is not pure decimal, no upload/update", async (badId) => {
+    mocks.authFn.mockResolvedValue({ user: { id: badId } })
+    const file = new File(["test"], "a.png", { type: "image/png" })
+    const res = await POST(makeReq({ file }))
+    expect(res.status).toBe(400)
+    expect(mocks.uploadToStorage).not.toHaveBeenCalled()
+    expect(mocks.userUpdate).not.toHaveBeenCalled()
+  })
+
   it("uploads successfully and updates user row", async () => {
     const file = new File(["test"], "a.png", { type: "image/png" })
     const res = await POST(makeReq({ avatar: file }))
