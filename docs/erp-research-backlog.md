@@ -5801,3 +5801,45 @@ accountant untuk UI ini: TIDAK (tidak ada angka baru; Q-KOM-1 terpisah).
   per penjual (F-2026-10-21-018 wilayahnya), slip/komisi perorangan
   untuk karyawan, jurnal/pembayaran komisi — ditolak/ditunda dengan
   alasan di §3/§5; bukan hilang, tercatat di sini.
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-047-V Kode objek + akun final PPh 4(2) sewa (syarat buka BOT 3 t_c70095d5)
+
+Status: FINAL untuk angka/kode/akun domain ini. Pelengkap F-038/F-039/F-041/F-042-V. Tanpa kode/schema/migrasi. Tanpa angka pajak baru.
+
+### Bukti resmi (akses 2026-10-22)
+
+- Kode objek `28-403-02` "Persewaan Tanah dan/atau Bangunan", tarif 10,0 — file referensi BPPU resmi DJP `BPPU Excel to XML v.2.xlsx` (pajak.go.id/sites/default/files/2025-01/), baris `28-403-02,Persewaan Tanah dan/atau Bangunan,10.0`. Konsisten PER-24/PJ/2021 Lampiran B (F-039) dan era Coretax PER-11/PJ/2025 (berlaku 22-05-2025; kode objek diisi dari Lampiran B PER-11/PJ/2025; PDF resmi pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf).
+- KJS setor `411128-403` "PPh Final Pasal 4 ayat (2) atas Persewaan Tanah dan/atau Bangunan" — halaman resmi DJP Kode Akun Pajak dan Kode Jenis Setoran Pajak (pajak.go.id/id/kode-akun-pajak-dan-kode-jenis-setoran-pajak, akses 2026-10-22).
+- Tarif 10% bruto: PP 34/2017 + halaman DJP PPh Pasal 4 ayat (2) (pajak.go.id/id/pph-pasal-4-ayat-2, akses 2026-10-22).
+- Tenggat: setor maks tgl 15 bulan berikutnya (PMK 81/2024 Pasal 94 ayat (2), berlaku 01-01-2025); lapor SPT Masa PPh Unifikasi maks 20 hari sesudah Masa Pajak berakhir (PER-11/PJ/2025). Tetap F-039/F-042-V.
+
+### Putusan 1 — kode objek: master bertanggal efektif, BUKAN pin di kode
+
+Nilai final saat ini: `28-403-02`. Bupot PPh 4(2) sewa WAJIB membawa kode objek ini dari master jenis pajak (field kode objek pada `WithholdingTaxType`/seed `WITHHOLDING_TAX_TYPES` pola F-003), bertanggal efektif, disnapshot beku ke bupot saat terbit. Resolver/service DILARANG hardcode string `28-403-02` sebagai konstanta logika; nilai referensi ini hanya isi seed/master awal. Bila lampiran DJP berlaku berubah, operator ubah master efektif baru — dokumen terbit lama tidak berubah. Kode objek kosong/nonaktif pada jenis PPH42-SEWA = fail-closed berisik, dilarang fallback ke kode objek PPh 23 (24-100-02 sewa non-tanah/bangunan) atau konstruksi 28-409-xx.
+
+Alasan satu kalimat: F-003 sudah menetapkan kode objek dipilih per jenis dari master, dan PER-11/PJ/2025 mengikat kode ke lampiran yang berlaku — pin di kode membuat perubahan lampiran menjadi rilis kode dan membekukan kode kedaluwarsa ke bupot baru.
+
+### Putusan 2 — akun liabilitas final: 210206 terkonfirmasi
+
+`210206` Utang PPh 4(2) Sewa Tanah/Bangunan FINAL (F-041, PR #394 head 43bc0cd7). Mapping `WITHHOLDING_TAX_TYPES`: jenis `PPH42-SEWA` membawa `liabilityAccountCode: "210206"`, pola sama PPH23-BELI -> 210202. Akun 210206 kosong/nonaktif/bukan anak 2102 = jurnal GAGAL fail-closed. Dilarang fallback 210202/210205. `210205` tetap Provisi Garansi F-021, tidak disentuh kartu ini.
+
+### Ceklis prasyarat buka BOT 3 t_c70095d5 (semua WAJIB)
+
+1. PR #394 (F-041) merged ATAU vonis ini + F-041 terbaca BOT 3 dari backlog; seed akun 210206 anak 2102 sesudah itu.
+2. Seed jenis `PPH42-SEWA`: tarif 10 Decimal(5,2) di master bertanggal efektif, `article` PPh 4(2), kode objek master `28-403-02` (referensi Putusan 1), `liabilityAccountCode: "210206"`.
+3. Snapshot beku ke bupot/dokumen saat terbit: tarif, DPP bruto, kode objek, pasal, akun liabilitas. Edit master sesudah terbit tidak mengubah dokumen lama.
+4. Resolver cicil DITOLAK (F-039 putusan 2): sewa dibayar di muka multi-bulan dipotong SEKALI 10% x total termin saat terutang lebih dulu; cicil potong per masa = tolak berisik.
+5. Gerbang komponen F-039 putusan 1 + Q-SEWA-1/2 (F-042-V) utuh: kewajiban pemilik masuk DPP final 10%; PPh 23 2% hanya penerima pihak ketiga independen terbukti; campur tanpa rincian = 10% total.
+6. Status pemotong terverifikasi per pihak (F-039 putusan 3); OP non-pemotong tidak dipotongkan — jalur setor-sendiri pemilik Q-SEWA-7.
+7. Master tenggat bertanggal efektif: setor tgl 15 (PMK 81/2024), lapor 20 hari (PER-11/PJ/2025); bukan konstanta kode.
+8. Empat status terpisah (dokumen/pembayaran/pajak/posting); idempotency key mutasi potong/setor; `assertPeriodOpen` dalam tx posting.
+
+### Falsifikasi wajib BOT 6
+
+- F47-1: kode objek master PPH42-SEWA dikosongkan -> terbit bupot GAGAL; lolos = MERAH.
+- F47-2: hardcode `28-403-02` ditemukan di service/resolver di luar seed/master = MERAH (grep).
+- F47-3: akun 210206 nonaktif -> jurnal potong GAGAL; kredit jatuh ke 210202/210205 = MERAH.
+- F47-4: bruto 100.000.000 -> potong 10.000.000 Cr 210206, kas/neto 90.000.000; angka lain = MERAH.
+- F47-5: edit tarif/kode objek master sesudah bupot terbit -> bupot lama tetap snapshot asal; berubah = MERAH.
+- F47-6: potong dicicil per bulan atas sewa dibayar di muka = MERAH (Putusan F-039-2).
+
+Pemilik berikutnya: BOT 3 t_c70095d5 TERBUKA sesudah PR vonis ini terbit (baca ceklis di atas; jangan tanam sebelum #394/vonis F-041 terbaca), BOT 6 falsifikasi F47-1..6, BOT 5 spec sewa rujuk 210206 + kode objek master, BOT 2 label dari master tanpa hitung ulang.
