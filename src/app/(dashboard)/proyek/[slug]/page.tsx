@@ -4,7 +4,7 @@ import { prisma } from "@/lib/db/prisma"
 import { formatDate, formatCurrency } from "@/lib/utils/format"
 import Link from "next/link"
 import { notFound } from "next/navigation"
-import { Pencil, DollarSign, Activity, AlertCircle, Wrench, Shield } from "lucide-react"
+import { Pencil, Activity, AlertCircle, Wrench, Shield } from "lucide-react"
 import { DetailTabs } from "@/components/ui/detail-tabs"
 import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
@@ -13,6 +13,8 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { Progress } from "@/components/ui/shadcn/progress"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
+import { ProjectPlDetailCard } from "@/components/reports/project-pl-detail-card"
+import { loadProjectPlForProject } from "@/lib/reports/project-pl-data"
 
 import type { Metadata } from "next"
 
@@ -84,24 +86,23 @@ export default async function ProjectDetailPage({
     ? await prisma.workOrder.findUnique({ where: { id: project.workOrderId }, select: { id: true, slug: true, documentNo: true, status: true } })
     : null
 
-  const [quotations, invoices] = await Promise.all([
+  // F-2026-10-21-029: penawaran proyek ini = quotation ber-projectId proyek
+  // (bukan lagi semua quotation pelanggan yang tercampur antar proyek).
+  // Ringkasan uang proyek dibaca dari builder tunggal `loadProjectPlForProject`
+  // — UI tidak mengagregasi invoice/material/beban sendiri.
+  const [quotations, invoices, projectPl] = await Promise.all([
     prisma.quotation.findMany({
-      where: { customerId: project.customerId, deletedAt: null },
+      where: { projectId: project.id, deletedAt: null },
       take: 10,
       orderBy: { createdAt: "desc" },
     }),
     prisma.salesInvoice.findMany({
-      where: { customerId: project.customerId, deletedAt: null },
+      where: { projectId: project.id, deletedAt: null },
       take: 10,
       orderBy: { createdAt: "desc" },
     }),
+    loadProjectPlForProject(project.id),
   ])
-
-  // Hitung ringkasan finansial proyek
-  const totalQuotation = quotations.reduce((sum, q) => sum + Number(q.grandTotal), 0)
-  const totalCost = project.items.reduce((sum, item) => sum + (Number(item.qty) * Number(item.cost)), 0)
-  const estimatedProfit = totalQuotation - totalCost
-  const profitMarginPercent = totalQuotation > 0 ? (estimatedProfit / totalQuotation) * 100 : 0
 
   // Cari tahapan aktif saat ini
   const activeStage = stages.find(s => s.status === "in_progress") || stages.find(s => s.status === "pending") || stages[0]
@@ -137,12 +138,12 @@ export default async function ProjectDetailPage({
         }
       />
 
-      {totalQuotation > 0 && estimatedProfit < 0 && (
+      {projectPl && projectPl.profit < 0 && (
         <Alert variant="destructive">
           <AlertCircle />
-          <AlertTitle>Proyek diperkirakan rugi</AlertTitle>
+          <AlertTitle>Proyek rugi menurut L/R proyek</AlertTitle>
           <AlertDescription>
-            Total penawaran ({formatCurrency(totalQuotation)}) lebih rendah dari estimasi biaya material ({formatCurrency(totalCost)}). Tinjau kembali harga penawaran atau biaya proyek.
+            Laba (rugi) proyek dari builder L/R ({formatCurrency(projectPl.profit)}) negatif: pendapatan invoice diakui {formatCurrency(projectPl.revenue)} di bawah total biaya {formatCurrency(projectPl.totalCost)}. Tinjau kembali harga penawaran atau biaya proyek.
           </AlertDescription>
         </Alert>
       )}
@@ -209,33 +210,15 @@ export default async function ProjectDetailPage({
           </div>
         </div>
 
-        {/* Widget 3: Ringkasan Margin / P&L Proyek */}
-        <div className="bg-gradient-to-br from-surface to-surface-secondary rounded-2xl border border-default shadow-sm p-5 flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-8 opacity-5">
-            <DollarSign className="size-28 text-foreground" />
+        {/* Widget 3: Ringkasan L/R Proyek (builder tunggal F-029) */}
+        {projectPl ? (
+          <ProjectPlDetailCard pl={projectPl} />
+        ) : (
+          <div className="bg-surface rounded-2xl border border-default shadow-sm p-5">
+            <span className="text-sm font-semibold text-muted-foreground">Laba Rugi Proyek</span>
+            <p className="mt-3 text-sm text-muted-foreground">Belum ada data laba rugi untuk proyek ini</p>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <span className="text-sm font-semibold text-muted-foreground">Ringkasan Finansial</span>
-            <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-success-soft text-success-soft-foreground">Margin Langsung</span>
-          </div>
-          <div className="my-3">
-            <div className="flex justify-between items-baseline">
-              <p className="text-2xl font-black text-foreground">{formatCurrency(estimatedProfit)}</p>
-              <span className={`text-xs font-bold ${estimatedProfit < 0 ? "text-danger" : "text-success"}`}>{estimatedProfit >= 0 ? "+" : ""}{profitMarginPercent.toFixed(1)}%</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-0.5">Estimasi Keuntungan Bersih Proyek</p>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs border-t border-default/50 pt-2">
-            <div>
-              <span className="text-muted-foreground block">Penawaran:</span>
-              <span className="font-semibold text-foreground">{formatCurrency(totalQuotation)}</span>
-            </div>
-            <div>
-              <span className="text-muted-foreground block">Bahan & Komponen:</span>
-              <span className="font-semibold text-danger">{formatCurrency(totalCost)}</span>
-            </div>
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Main detail content tabs */}
