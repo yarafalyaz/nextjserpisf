@@ -226,6 +226,10 @@ model SystemSetting {
   depreciationExpenseAccountId     Int?    @map("depreciation_expense_account_id")
   accumulatedDepreciationAccountId Int?    @map("accumulated_depreciation_account_id")
   defaultProjectStages             String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_project_stages") @db.VarChar(1000)
+  // F-2026-10-21-020 Tahap A: template tahap perintah kerja (pola
+  // defaultProjectStages). Vonis Lead: isi default 4 nama saja; template
+  // per-Product ditunda (WO tanpa productId andal).
+  defaultWorkOrderStages           String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_work_order_stages") @db.VarChar(1000)
   /**
    * F-006: gerbang jurnal disposisi varians produksi. Default MATI —
    * tanpa mode ini satu pun jurnal varians tak boleh terbit walau order
@@ -811,6 +815,7 @@ model Employee {
   salesQuotations     Quotation[]       @relation("QuotationSalesEmployee")
   salesOrdersAsSales  SalesOrder[]      @relation("SalesOrderSalesEmployee")
   salesInvoicesAsSales SalesInvoice[]   @relation("SalesInvoiceSalesEmployee")
+  workOrderOperations WorkOrderOperation[]
 
   @@index([departmentId], map: "employees_department_id_fkey")
   @@index([positionId], map: "employees_position_id_fkey")
@@ -1219,6 +1224,7 @@ model Quotation {
   salesInvoices     SalesInvoice[]
   salesOrders       SalesOrder[]
   workOrders        WorkOrder[]
+  contractProjects  Project[]          @relation("ProjectContractQuotation")
 
   @@index([customerId], map: "quotations_customer_id_fkey")
   @@index([customerVehicleId], map: "quotations_customer_vehicle_id_fkey")
@@ -2622,7 +2628,9 @@ model WorkOrder {
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   items             WorkOrderItem[]
+  operations        WorkOrderOperation[]
   costs             ProductionCost[]
+  timesheets        Timesheet[]
   purchaseOrders    PurchaseOrder[]
   productionOrders  ProductionOrder[]
   customer          Customer          @relation(fields: [customerId], references: [id])
@@ -2662,6 +2670,39 @@ model WorkOrderItem {
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])
   @@map("work_order_items")
+}
+
+// F-2026-10-21-020 Tahap A: tahap progres perintah kerja (ringan, BUKAN
+// routing costing — tanpa kolom biaya, tanpa jurnal, tanpa WorkCenter).
+// Nama tahap = snapshot dari SystemSetting.defaultWorkOrderStages saat
+// inisialisasi; edit setting sesudahnya tidak mengubah WO berjalan.
+// Status enum aplikasi: pending | in_progress | completed | skipped.
+// Urutan SEQUENSIAL-KERAS (vonis Lead Q1): tahap hanya boleh maju bila
+// semua tahap ber-sortOrder lebih kecil sudah completed/skipped.
+// skipped WAJIB notes (vonis Q2) dan keluar dari denominator progres.
+model WorkOrderOperation {
+  id                 Int       @id @default(autoincrement())
+  workOrderId        Int       @map("work_order_id")
+  name               String
+  sortOrder          Int       @default(0) @map("sort_order")
+  status             String    @default("pending")
+  estimatedHours     Decimal?  @map("estimated_hours") @db.Decimal(15, 2)
+  assignedEmployeeId Int?      @map("assigned_employee_id")
+  startedAt          DateTime? @map("started_at")
+  completedAt        DateTime? @map("completed_at")
+  notes              String?   @db.Text
+  createdBy          Int?      @map("created_by")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  workOrder          WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  assignedEmployee   Employee? @relation(fields: [assignedEmployeeId], references: [id], onDelete: SetNull)
+
+  @@index([workOrderId], map: "work_order_operations_work_order_id_fkey")
+  @@index([workOrderId, sortOrder], map: "work_order_operations_wo_sort_idx")
+  @@index([status])
+  @@index([assignedEmployeeId])
+  @@index([createdAt])
+  @@map("work_order_operations")
 }
 
 // Keep legacy attendance tables available to payroll and prevent db push from
@@ -2976,9 +3017,10 @@ model EmployeeLoan {
 model Timesheet {
   slug        String?  @unique
   id          Int      @id @default(autoincrement())
-  employeeId  Int      @map("employee_id")
-  projectId   Int      @map("project_id")
-  taskId      Int?     @map("task_id")
+  employeeId  Int       @map("employee_id")
+  projectId   Int?      @map("project_id")
+  workOrderId Int?      @map("work_order_id")
+  taskId      Int?      @map("task_id")
   date        DateTime
   startTime   String?  @map("start_time")
   endTime     String?  @map("end_time")
@@ -2986,12 +3028,14 @@ model Timesheet {
   description String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
-  employee    Employee @relation(fields: [employeeId], references: [id])
-  project     Project  @relation(fields: [projectId], references: [id])
-  task        Task?    @relation(fields: [taskId], references: [id])
+  employee    Employee   @relation(fields: [employeeId], references: [id])
+  project     Project?   @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  workOrder   WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: Restrict)
+  task        Task?      @relation(fields: [taskId], references: [id])
 
   @@index([employeeId], map: "timesheets_employee_id_fkey")
   @@index([projectId], map: "timesheets_project_id_fkey")
+  @@index([workOrderId], map: "timesheets_work_order_id_fkey")
   @@index([taskId], map: "timesheets_task_id_fkey")
   @@index([createdAt])
   @@map("timesheets")
@@ -3722,6 +3766,19 @@ model Project {
   description       String?           @db.Text
   notes             String?           @db.Text
   createdBy         Int?              @map("created_by")
+  // F-2026-10-21-030 (RAB): snapshot nilai kontrak. Disalin SEKALI dari
+  // Quotation.grandTotal terpilih (atau diisi manual ber-alasan bila tanpa
+  // quotation) — BUKAN formula berjalan; perubahan quotation sesudahnya
+  // tidak mengubah snapshot ini. Sesudah budgetLockedAt terisi, nilai ini
+  // dan baris RAB hanya boleh berubah lewat revisi tercatat di ProjectLog.
+  contractAmount    Decimal?          @db.Decimal(15, 2) @map("contract_amount")
+  contractQuotationId Int?            @map("contract_quotation_id")
+  contractSetAt     DateTime?         @map("contract_set_at")
+  contractSetBy     Int?              @map("contract_set_by")
+  budgetLockedAt    DateTime?         @map("budget_locked_at")
+  budgetLockedBy    Int?              @map("budget_locked_by")
+  budgetRevisionNo  Int               @default(0) @map("budget_revision_no")
+  contractQuotation Quotation?        @relation("ProjectContractQuotation", fields: [contractQuotationId], references: [id], onDelete: SetNull)
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   overtimeRequests  OvertimeRequest[]
@@ -3739,6 +3796,9 @@ model Project {
   costCenterId      Int?              @map("cost_center_id")
 
   @@index([customerId], map: "projects_customer_id_fkey")
+  @@index([contractQuotationId], map: "projects_contract_quotation_id_fkey")
+  @@index([contractSetBy])
+  @@index([budgetLockedBy])
   @@index([customerVehicleId], map: "projects_customer_vehicle_id_fkey")
   @@index([status], map: "idx_projects_status")
   @@index([workOrderId])
@@ -3749,15 +3809,24 @@ model Project {
 }
 
 model ProjectItem {
-  id          Int     @id @default(autoincrement())
-  projectId   Int     @map("project_id")
-  itemId      Int?    @map("item_id")
-  description String?
-  qty         Decimal @default(1.00) @db.Decimal(15, 2)
-  cost        Decimal @default(0.00) @db.Decimal(15, 2)
-  project     Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id             Int           @id @default(autoincrement())
+  projectId      Int           @map("project_id")
+  itemId         Int?          @map("item_id")
+  // F-2026-10-21-030 (RAB): tahap + kategori anggaran baris ini. Nullable
+  // demi baris draft/lama; kunci anggaran (BR-02) mewajibkan keduanya.
+  // onDelete Restrict: tahap yang dirujuk baris RAB tidak bisa dihapus
+  // dan meninggalkan baris yatim (BR-07).
+  projectStageId Int?          @map("project_stage_id")
+  category       String?
+  sortOrder      Int           @default(0) @map("sort_order")
+  description    String?
+  qty            Decimal       @default(1.00) @db.Decimal(15, 2)
+  cost           Decimal       @default(0.00) @db.Decimal(15, 2)
+  project        Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage          ProjectStage? @relation("ProjectStageBudgetItems", fields: [projectStageId], references: [id], onDelete: Restrict)
 
   @@index([projectId], map: "project_items_project_id_fkey")
+  @@index([projectStageId], map: "project_items_project_stage_id_fkey")
   @@index([itemId])
   @@map("project_items")
 }
@@ -3774,6 +3843,7 @@ model ProjectStage {
   createdAt   DateTime               @default(now()) @map("created_at")
   updatedAt   DateTime               @updatedAt @map("updated_at")
   progress    ProjectStageProgress[]
+  budgetItems ProjectItem[]          @relation("ProjectStageBudgetItems")
   project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   @@index([projectId], map: "project_stages_project_id_fkey")
@@ -3802,6 +3872,10 @@ model ProjectLog {
   projectId Int      @map("project_id")
   action    String
   notes     String?  @db.Text
+  // F-2026-10-21-030 (RAB): payload terstruktur nilai lama->baru untuk
+  // log rab_* (snapshot kontrak, kunci, revisi) — supaya riwayat revisi
+  // bisa direkonstruksi mesin dari baris log saja (acceptance A6).
+  details   Json?
   userId    Int?     @map("user_id")
   createdAt DateTime @default(now()) @map("created_at")
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
