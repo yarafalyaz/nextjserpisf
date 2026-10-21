@@ -49,12 +49,16 @@ export function creditOverLimitLabel(row: CustomerReceivableInput): string | nul
 /**
  * F-2026-10-21-017 lapis aman: paparan kredit penuh per pelanggan =
  * piutang terbuka + SO confirmed/processing/completed yang belum tertagih
- * (grandTotal SO dikurangi porsi yang sudah jadi invoice recognised).
+ * (grandTotal SO dikurangi porsi yang sudah jadi invoice recognised)
+ * dikurangi DP confirmed (uang muka terkonfirmasi sudah diterima kas,
+ * jadi porsi itu tidak lagi berisiko; dijepit >= 0).
  * Advisory saja — tidak menahan dokumen; inti gerbang = putusan team-lead.
  * Limit 0 = belum diatur (BUKAN tanpa limit, BUKAN blokir); status "unset".
  */
 export interface CustomerCreditExposureInput extends CustomerReceivableInput {
   openOrderAmount: number
+  /** Total DP status confirmed per pelanggan; opsional agar pemanggil lama tetap sah. */
+  confirmedDownPayment?: number
 }
 
 export interface CustomerCreditExposureRow extends CustomerCreditExposureInput {
@@ -67,7 +71,8 @@ export interface CustomerCreditExposureRow extends CustomerCreditExposureInput {
 export function buildCustomerCreditExposure(rows: CustomerCreditExposureInput[]): CustomerCreditExposureRow[] {
   return rows
     .map((row) => {
-      const exposure = safeAdd(row.outstanding, row.openOrderAmount, 2)
+      const dp = Math.max(0, row.confirmedDownPayment ?? 0)
+      const exposure = Math.max(0, safeSubtract(safeAdd(row.outstanding, row.openOrderAmount, 2), dp, 2))
       const remainingCredit = safeSubtract(row.creditLimit, exposure, 2)
       const utilization = row.creditLimit > 0 ? Math.round((exposure / row.creditLimit) * 10000) / 100 : null
       const status: CustomerCreditExposureRow["status"] =
