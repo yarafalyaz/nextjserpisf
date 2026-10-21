@@ -76,6 +76,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/tukar-faktur": "Menampilkan rincian tukar faktur beserta status pelunasannya",
   "/laporan/laba-rugi-per-pusat-biaya": "Menampilkan laba rugi per pusat biaya",
   "/laporan/laba-rugi-proyek": "Menampilkan laba rugi per proyek dan perintah kerja",
+  "/laporan/margin-kendaraan": "Menampilkan margin job kendaraan per kendaraan, bukan laba akuntansi",
   "/laporan/multi-periode": "Menampilkan laba rugi atau neraca berdampingan per bulan, kuartal, atau tahun",
   "/laporan/mutasi-aset": "Menampilkan perubahan nilai aset: saldo awal, penambahan, penyusutan, pelepasan",
   "/laporan/mutasi-stok": "Menampilkan mutasi stok masuk dan keluar",

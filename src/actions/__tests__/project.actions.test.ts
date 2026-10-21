@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => {
     materialIssue: buildModelMock(),
     approvalWorkflow: buildModelMock(),
     approval: buildModelMock(),
+    projectItem: buildModelMock(),
+    quotation: buildModelMock(),
 
     $queryRaw: vi.fn().mockResolvedValue([{ id: 1 }]),
 
@@ -996,5 +998,284 @@ describe("addProjectLog", () => {
       expect.stringContaining("#4"),
     )
     expect(mocks.revalidateMock).toHaveBeenCalledWith("/proyek")
+  })
+})
+
+/**
+ * RAB proyek F-2026-10-21-030 fase a+b (vonis Lead t_3e892715 #86).
+ * Kontrak diturunkan per-Perilaku: snapshot sekali dari quotation (BR-01),
+ * manual ber-alasan (BR-04), kunci BR-02/BR-03/BR-13, revisi propose→apply/reject.
+ */
+describe("RAB proyek F-2026-10-21-030", () => {
+  const unlockedProject = (over: Record<string, unknown> = {}) => ({
+    id: 10,
+    status: "active",
+    contractAmount: null,
+    contractQuotationId: null,
+    budgetLockedAt: null,
+    budgetRevisionNo: 0,
+    ...over,
+  })
+
+  it("snapshot kontrak: salin grandTotal quotation proyek, log rab_contract_snapshot", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    mocks.prismaMock.quotation.findFirst.mockResolvedValue({
+      id: 7,
+      documentNo: "Q-007",
+      grandTotal: 55000000,
+    })
+    const res = await actions.setProjectContractFromQuotation(10, 7)
+    expect(res).toEqual({ success: true, contractAmount: 55000000 })
+    expect(mocks.prismaMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 10 },
+        data: expect.objectContaining({
+          contractAmount: 55000000,
+          contractQuotationId: 7,
+          contractSetBy: 1,
+        }),
+      }),
+    )
+    const logArg = mocks.prismaMock.projectLog.create.mock.calls.at(-1)?.[0]
+    expect(logArg.data.action).toBe("rab_contract_snapshot")
+    expect(logArg.data.details.contractAmount).toEqual({ old: null, new: 55000000 })
+    expect(logArg.data.userId).toBe(1)
+  })
+
+  it("snapshot ditolak: quotation proyek lain / belum disetujui (findFirst null)", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    mocks.prismaMock.quotation.findFirst.mockResolvedValue(null)
+    const res = await actions.setProjectContractFromQuotation(10, 99)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("disetujui")
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+  })
+
+  it("BR-03: anggaran terkunci -> edit baris langsung ditolak server, tidak menulis", async () => {
+    mocks.prismaMock.projectItem.findUnique.mockResolvedValue({ id: 5, projectId: 10 })
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    const res = await actions.updateProjectBudgetItem(
+      fdMap({ id: 5, itemId: "", description: "x", qty: 1, cost: 1000, sortOrder: 0 }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("terkunci")
+    expect(mocks.prismaMock.projectItem.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.projectItem.create).not.toHaveBeenCalled()
+  })
+
+  it("BR-13: kunci anggaran ditolak proyek completed", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ status: "completed", contractAmount: 1000 }),
+    )
+    mocks.prismaMock.projectItem.findMany.mockResolvedValue([
+      { id: 1, projectStageId: 11, category: "material", qty: 1, cost: 500, sortOrder: 0 },
+    ])
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { id: 11, name: "Persiapan", sortOrder: 1, status: "completed" },
+    ])
+    const res = await actions.lockProjectBudget(10)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("completed")
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ budgetLockedAt: expect.anything() }) }),
+    )
+  })
+
+  it("kunci sukses: budgetLockedAt terisi + log rab_locked", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ contractAmount: 1000, budgetRevisionNo: 2 }),
+    )
+    mocks.prismaMock.projectItem.findMany.mockResolvedValue([
+      { id: 1, projectStageId: 11, category: "material", qty: 2, cost: 500, sortOrder: 0 },
+    ])
+    mocks.prismaMock.projectStage.findMany.mockResolvedValue([
+      { id: 11, name: "Persiapan", sortOrder: 1, status: "in_progress" },
+    ])
+    const res = await actions.lockProjectBudget(10)
+    expect(res?.success).toBe(true)
+    expect(mocks.requirePermissionMock).toHaveBeenCalledWith("manage_projects")
+    expect(mocks.prismaMock.project.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ budgetLockedBy: 1 }),
+      }),
+    )
+    const logArg = mocks.prismaMock.projectLog.create.mock.calls.at(-1)?.[0]
+    expect(logArg.data.action).toBe("rab_locked")
+    expect(logArg.data.details.totalBudget).toBe(1000)
+  })
+
+  it("usulan revisi: HANYA log rab_revision_proposed, angka belum berubah", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    mocks.prismaMock.projectLog.create.mockResolvedValue({ id: 31 })
+    const payload = JSON.stringify({
+      changes: [{ type: "create", data: { qty: 1, cost: 1000 } }],
+    })
+    const res = await actions.proposeProjectBudgetRevision(
+      10,
+      fdMap({ reason: "Tambah plat", changes: payload }),
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.projectLog.create).toHaveBeenCalled()
+    const logArg = mocks.prismaMock.projectLog.create.mock.calls.at(-1)?.[0]
+    expect(logArg.data.action).toBe("rab_revision_proposed")
+    expect(mocks.prismaMock.projectItem.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+  })
+
+  it("terapkan revisi: ubah baris + budgetRevisionNo+1 + log rab_revision lama->baru", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({
+        budgetLockedAt: new Date(2026, 9, 20),
+        budgetRevisionNo: 1,
+        contractAmount: 2000,
+      }),
+    )
+    mocks.prismaMock.projectLog.findFirst.mockResolvedValue({
+      id: 31,
+      notes: "Naikkan plat",
+      userId: 2,
+      details: {
+        reason: "Naikkan plat",
+        changes: [
+          {
+            type: "update",
+            projectItemId: 5,
+            data: { itemId: 5, projectStageId: 11, category: "material", qty: 1, cost: 900, sortOrder: 0 },
+          },
+        ],
+      },
+    })
+    mocks.prismaMock.projectLog.findMany.mockResolvedValue([])
+    mocks.prismaMock.projectStage.findUnique.mockResolvedValue({ projectId: 10 })
+    mocks.prismaMock.projectItem.findFirst.mockResolvedValue({
+      id: 5,
+      itemId: 5,
+      projectId: 10,
+      projectStageId: 11,
+      category: "material",
+      description: null,
+      qty: 1,
+      cost: 500,
+      sortOrder: 0,
+    })
+    const res = await actions.applyProjectBudgetRevision(10, 31)
+    expect(res?.success).toBe(true)
+    expect(res?.revisionNo).toBe(2)
+    const projArg = mocks.prismaMock.project.update.mock.calls.at(-1)?.[0]
+    expect(projArg.data.budgetRevisionNo).toBe(2)
+    const logArg = mocks.prismaMock.projectLog.create.mock.calls.at(-1)?.[0]
+    expect(logArg.data.action).toBe("rab_revision")
+    expect(logArg.data.details.proposalLogId).toBe(31)
+    expect(logArg.data.details.changes).toContainEqual(
+      expect.objectContaining({ projectItemId: 5, field: "cost", old: 500, new: 900 }),
+    )
+  })
+
+  it("revisi yang sudah diputuskan tidak dapat diterapkan dua kali", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    mocks.prismaMock.projectLog.findFirst.mockResolvedValue({
+      id: 31,
+      notes: "x",
+      userId: 2,
+      details: { reason: "x", changes: [{ type: "delete", projectItemId: 5 }] },
+    })
+    mocks.prismaMock.projectLog.findMany.mockResolvedValue([
+      { details: { proposalLogId: 31 } },
+    ])
+    const res = await actions.applyProjectBudgetRevision(10, 31)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("sudah diputuskan")
+    expect(mocks.prismaMock.projectItem.delete).not.toHaveBeenCalled()
+  })
+
+  it("tolak revisi: hanya log rab_revision_rejected, nol perubahan angka", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    mocks.prismaMock.projectLog.findFirst.mockResolvedValue({
+      id: 31,
+      notes: "x",
+      userId: 2,
+      details: { reason: "x", changes: [{ type: "delete", projectItemId: 5 }] },
+    })
+    mocks.prismaMock.projectLog.findMany.mockResolvedValue([])
+    const res = await actions.rejectProjectBudgetRevision(
+      10,
+      31,
+      fdMap({ reason: "Belum perlu" }),
+    )
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.projectItem.delete).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+    const logArg = mocks.prismaMock.projectLog.create.mock.calls.at(-1)?.[0]
+    expect(logArg.data.action).toBe("rab_revision_rejected")
+    expect(logArg.data.details.proposalLogId).toBe(31)
+  })
+})
+
+describe("RAB F-030 — A7 ganti sumber terkunci + deleteProject ber-RAB", () => {
+  const unlockedProject = (over: Record<string, unknown> = {}) => ({
+    id: 10,
+    status: "active",
+    contractAmount: null,
+    contractQuotationId: null,
+    budgetLockedAt: null,
+    budgetRevisionNo: 0,
+    ...over,
+  })
+
+  it("A7: kontrak manual saat anggaran terkunci ditolak tanpa revisi, tidak menulis", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20), contractAmount: 9000 }),
+    )
+    const res = await actions.setProjectContractManual(
+      10,
+      fdMap({ contractAmount: 12000, reason: "Koreksi manual" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("terkunci")
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.projectLog.create).not.toHaveBeenCalled()
+  })
+
+  it("A7: snapshot quotation saat anggaran terkunci ditolak tanpa revisi", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(
+      unlockedProject({ budgetLockedAt: new Date(2026, 9, 20) }),
+    )
+    const res = await actions.setProjectContractFromQuotation(10, 7)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("terkunci")
+    expect(mocks.prismaMock.project.update).not.toHaveBeenCalled()
+  })
+
+  it("manual berlabel: sumber manual tercatat contractQuotationId=null + log rab_contract_manual", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue(unlockedProject())
+    const res = await actions.setProjectContractManual(
+      10,
+      fdMap({ contractAmount: 12000, reason: "Tanpa quotation, kesepakatan lisan tertulis" }),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.project.update.mock.calls.at(-1)?.[0]
+    expect(arg.data.contractAmount).toBe(12000)
+    expect(arg.data.contractQuotationId).toBeNull()
+    const logArg = mocks.prismaMock.projectLog.create.mock.calls.at(-1)?.[0]
+    expect(logArg.data.action).toBe("rab_contract_manual")
+    expect(logArg.data.details.source).toBe("manual")
+  })
+
+  it("deleteProject proyek ber-RAB tetap lolos: Restrict tahap tidak memblokir cascade dari Project", async () => {
+    mocks.prismaMock.project.findUnique.mockResolvedValue({
+      _count: { workOrders: 0, timesheets: 0, tasks: 0, overtimeRequests: 0 },
+    })
+    mocks.prismaMock.project.delete.mockResolvedValue({})
+    const res = await actions.deleteProject(10)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.project.delete).toHaveBeenCalledWith({ where: { id: 10 } })
   })
 })
