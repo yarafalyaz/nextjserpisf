@@ -178,4 +178,63 @@ describe("GoodsReceiptForm — item row layout", () => {
     unmount(root)
     container.remove()
   })
+
+  it("labels the form tambah/ubah for assistive tech and announces busy state", () => {
+    for (const [receipt, label] of [
+      [undefined, "Formulir tambah penerimaan barang"],
+      [{ id: 9, purchaseOrderId: 5, date: "2026-10-21" }, "Formulir ubah penerimaan barang"],
+    ] as const) {
+      const container = document.createElement("div")
+      document.body.appendChild(container)
+      const { root } = mountInto(container)
+
+      act(() => {
+        root.render(
+          <GoodsReceiptForm
+            purchaseOrders={[mockPO]}
+            warehouses={mockWarehouses}
+            racks={mockRacks}
+            rackRows={mockRackRows}
+            defaultPoId={receipt ? undefined : 5}
+            receipt={receipt}
+          />,
+        )
+      })
+
+      const form = container.querySelector("form")
+      expect(form?.getAttribute("aria-label")).toBe(label)
+      expect(form?.getAttribute("aria-busy")).toBe("false")
+
+      unmount(root)
+      container.remove()
+    }
+  })
+
+  it("marks PO and warehouse as required matching the goodsReceiptSchema", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <GoodsReceiptForm
+          purchaseOrders={[mockPO]}
+          warehouses={mockWarehouses}
+          racks={mockRacks}
+          rackRows={mockRackRows}
+          defaultPoId={5}
+        />,
+      )
+    })
+
+    // Bintang hias disembunyikan dari SR; teks label utuh.
+    const stars = Array.from(container.querySelectorAll('span[aria-hidden="true"]'))
+    expect(stars.some((el) => el.textContent === "*")).toBe(true)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Pesanan Pembelian")
+    expect(text).toContain("Gudang Tujuan (Bawaan)")
+
+    unmount(root)
+    container.remove()
+  })
 })
