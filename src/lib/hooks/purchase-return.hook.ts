@@ -5,6 +5,7 @@ import { slugify } from "@/lib/utils/slug";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { toBaseFactor } from "@/lib/services/uom.service";
+import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 
 /**
  * Purchase Return Hook - Observer pattern replacement.
@@ -189,6 +190,82 @@ export async function onPurchaseReturnProcessed(
     // accounting.hook.onPurchaseReturnProcessed (Dr Hutang / Cr Persediaan).
     // Posting a journal here too would collide on referenceType "PurchaseReturn"
     // and suppress the payable-reducing journal (AP would stay overstated).
+
+    // F-004 sisi beli: bekukan snapshot pajak retur DALAM tx ini (sudah
+    // lock baris retur + assertPeriodOpen di atas). DPP = qty × price beku
+    // baris — `cost` DILARANG jadi DPP. Tanpa price / tanpa tagihan asal:
+    // baris tetap legacy (returnDpp/Vat null). Guard kumulatif vs tagihan
+    // asal; jurnal GL tetap di accounting.hook tanpa kaki PPN.
+    {
+      const bill = await tx.vendorBill.findFirst({
+        where: { purchaseOrderId: purchaseReturn.purchaseOrderId, status: { not: "cancelled" } },
+        orderBy: { id: "desc" },
+        select: { id: true, subtotal: true, discountAmount: true, tax: true },
+      });
+      if (bill) {
+        const source = {
+          subtotal: Number(bill.subtotal),
+          discount: Number(bill.discountAmount ?? 0),
+          taxAmount: Number(bill.tax),
+        };
+        const sourceDpp = source.subtotal - source.discount;
+        const taxInvoice = await tx.taxInvoice.findFirst({
+          where: { direction: "in", vendorBillId: bill.id, djpStatus: { notIn: ["cancelled", "replaced"] } },
+          orderBy: { id: "desc" },
+          select: { id: true },
+        });
+        let candidateDpp = 0;
+        let candidateVat = 0;
+        const lines: { id: number; snap: ReturnType<typeof snapshotReturnLine> }[] = [];
+        for (const item of purchaseReturn.items) {
+          if (item.price == null) continue; // legacy: tanpa harga beku
+          const snap = snapshotReturnLine({ qty: Number(item.qty), price: Number(item.price), source });
+          lines.push({ id: item.id, snap });
+          candidateDpp += snap.returnDpp;
+          candidateVat += snap.returnVat;
+        }
+        if (lines.length > 0) {
+          const completedOthers = await tx.purchaseReturnItem.findMany({
+            where: {
+              purchaseReturn: { purchaseOrderId: purchaseReturn.purchaseOrderId, status: "returned" },
+              returnDpp: { not: null },
+              id: { notIn: lines.map((l) => l.id) },
+            },
+            select: { returnDpp: true, returnVat: true },
+          });
+          const cap = checkCumulativeReturnCap({
+            sourceDpp,
+            sourceVat: source.taxAmount,
+            completedDpp: completedOthers.reduce((s, r) => s + Number(r.returnDpp ?? 0), 0),
+            completedVat: completedOthers.reduce((s, r) => s + Number(r.returnVat ?? 0), 0),
+            candidateDpp,
+            candidateVat,
+          });
+          if (!cap.allowed) {
+            throw new Error(
+              `Potongan retur beli kumulatif (DPP ${cap.projectedDpp} / PPN ${cap.projectedVat}) melebihi tagihan asal (DPP ${sourceDpp} / PPN ${source.taxAmount}) — retur ditolak`,
+            );
+          }
+          for (const line of lines) {
+            await tx.purchaseReturnItem.update({
+              where: { id: line.id },
+              data: {
+                returnDpp: new Prisma.Decimal(line.snap.returnDpp.toFixed(2)),
+                returnVat: new Prisma.Decimal(line.snap.returnVat.toFixed(2)),
+                sourceTaxRate: new Prisma.Decimal(line.snap.sourceTaxRate.toFixed(2)),
+                sourceTaxInvoiceId: taxInvoice?.id ?? null,
+              },
+            });
+          }
+          if (taxInvoice && purchaseReturn.sourceTaxInvoiceId == null) {
+            await tx.purchaseReturn.update({
+              where: { id: returnId },
+              data: { sourceTaxInvoiceId: taxInvoice.id },
+            });
+          }
+        }
+      }
+    }
 
     // Update Purchase Return status
     await tx.purchaseReturn.update({

@@ -226,6 +226,18 @@ model SystemSetting {
   depreciationExpenseAccountId     Int?    @map("depreciation_expense_account_id")
   accumulatedDepreciationAccountId Int?    @map("accumulated_depreciation_account_id")
   defaultProjectStages             String  @default("Persiapan, Pengerjaan, Quality Check, Selesai") @map("default_project_stages") @db.VarChar(1000)
+  /**
+   * F-006: gerbang jurnal disposisi varians produksi. Default MATI —
+   * tanpa mode ini satu pun jurnal varians tak boleh terbit walau order
+   * completed (variance order = angka analitis, bukan saldo menunggu jurnal).
+   */
+  standardCostingEnabled          Boolean @default(false) @map("standard_costing_enabled")
+  /**
+   * F-006: akun selisih biaya produksi, fail-closed (kosong = posting
+   * disposisi ditolak berisik; JANGAN fallback materialExpense/cogs —
+   * fallback itu hanya utk selisih PEMBULATAN < ambang).
+   */
+  productionVarianceAccountId     Int?    @map("production_variance_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -431,6 +443,7 @@ model Vendor {
   purchaseAdvances  PurchaseAdvance[]
   vendorPrices      VendorItemPrice[]
   paymentTerm       PaymentTerm?      @relation(fields: [paymentTermId], references: [id])
+  taxInvoices       TaxInvoice[]
 
   @@index([paymentTermId], map: "vendors_payment_term_id_fkey")
   @@index([isActive, deletedAt])
@@ -875,6 +888,12 @@ model ShippingMethod {
 }
 
 /// Jenis pemotongan PPh (mis. PPh 23 jasa 2%, PPh 4(2) 10%).
+///
+/// F-003: `article` = pasal sumber (PPh21|PPh22|PPh23|PPh4(2)|PPh26|PPh15);
+/// `objectCode` = kode objek e-Bupot per jenis (mis. seri 24-104-xx jasa PPh 23
+/// PMK-141, 28-409-xx konstruksi final) — dipilih per jenis, bukan satu kode
+/// keras. `receivableAccountId` = akun PPh dibayar dimuka (alias konseptual
+/// `prepaidAccountId`; kolom TIDAK di-rename agar migrasi nol).
 model WithholdingTaxType {
   slug                String?        @unique
   id                  Int            @id @default(autoincrement())
@@ -882,11 +901,20 @@ model WithholdingTaxType {
   name                String
   rate                Decimal        @default(0.00) @db.Decimal(5, 2)
   /**
+   * Pasal PPh sumber (PPh21|PPh22|PPh23|PPh4(2)|PPh26|PPh15). Nullable: jenis lama.
+   */
+  article             String?
+  /**
+   * Kode objek e-Bupot per jenis jasa/pekerjaan. Nullable: jenis lama.
+   */
+  objectCode          String?        @map("object_code")
+  /**
    * Akun Hutang PPh (kita memotong vendor).
    */
   liabilityAccountId  Int?           @map("liability_account_id")
   /**
-   * Akun PPh dibayar dimuka (dipotong pelanggan).
+   * Akun PPh dibayar dimuka (dipotong pelanggan). Alias konseptual
+   * `prepaidAccountId` — kolom TIDAK di-rename (migrasi nol).
    */
   receivableAccountId Int?           @map("receivable_account_id")
   isActive            Boolean        @default(true) @map("is_active")
@@ -897,9 +925,161 @@ model WithholdingTaxType {
   vendorBills         VendorBill[]
   salesPayments       SalesPayment[]
   taxPayments         TaxPayment[]
+  withholdingCertificates WithholdingCertificate[]
 
   @@index([isActive, deletedAt])
   @@map("withholding_tax_types")
+}
+
+/// Faktur pajak PPN — SATU dokumen pajak, bukan field tempel (F-001/F-002).
+///
+/// Arah `out` = keluaran (tautan SalesInvoice), `in` = masukan (tautan
+/// VendorBill). `taxPeriod` DITURUNKAN dari `taxInvoiceDate`, bukan input
+/// bebas. `creditPeriod`/`creditStatus` hanya bermakna untuk arah `in`
+/// (masa kredit maks 3 masa sesudah masa faktur; lewat = `expired`).
+/// Pengganti: dokumen baru, nomor seri sama, `replacesId` menunjuk faktur
+/// diganti (unik); SPT efektif per rantai — hanya kepala rantai bernilai.
+/// Batal: status `cancelled`, nomor TIDAK dipakai ulang.
+model TaxInvoice {
+  slug                 String?      @unique
+  id                   Int          @id @default(autoincrement())
+  /**
+   * "out" | "in".
+   */
+  direction            String
+  /**
+   * Kode transaksi PER-11/PJ/2025, string 2 digit kanonik ("01".."10";
+   * Coretax tampil "010" hanya pad untuk kode 10). Default ERP: "04".
+   */
+  transactionCode      String       @map("transaction_code") @db.VarChar(2)
+  taxInvoiceNumber     String       @map("tax_invoice_number")
+  taxInvoiceDate       DateTime     @map("tax_invoice_date")
+  /**
+   * Masa SPT terbit "YYYY-MM", diturunkan dari taxInvoiceDate.
+   */
+  taxPeriod            String       @map("tax_period") @db.VarChar(7)
+  dpp                  Decimal      @db.Decimal(15, 2)
+  taxRate              Decimal      @default(12.00) @map("tax_rate") @db.Decimal(5, 2)
+  taxAmount            Decimal      @map("tax_amount") @db.Decimal(15, 2)
+  /**
+   * draft|approved|rejected|replaced|cancelled.
+   */
+  djpStatus            String       @default("draft") @map("djp_status")
+  salesInvoiceId       Int?         @map("sales_invoice_id")
+  vendorBillId         Int?         @map("vendor_bill_id")
+  vendorId             Int?         @map("vendor_id")
+  /**
+   * Self-FK ke faktur diganti; unik (satu pengganti per faktur).
+   */
+  replacesId           Int?         @unique @map("replaces_id")
+  replaceReason        String?      @map("replace_reason") @db.Text
+  counterpartyTaxId    String?      @map("counterparty_tax_id")
+  counterpartyName     String?      @map("counterparty_name")
+  counterpartyNitku    String?      @map("counterparty_nitku")
+  /**
+   * Masa pengkreditan dipilih (arah in saja), "YYYY-MM".
+   */
+  creditPeriod         String?      @map("credit_period") @db.VarChar(7)
+  creditedAt           DateTime?    @map("credited_at")
+  /**
+   * uncredited|credited|not_creditable|expired (arah in saja).
+   */
+  creditStatus         String       @default("uncredited") @map("credit_status")
+  /**
+   * Alasan wajib bila not_creditable (UU PPN 9(8)): PRE_PKP |
+   * NO_DIRECT_RELATION | VEHICLE_SEDAN_SW | FOREIGN_USE_PRE_PKP |
+   * INVALID_INVOICE | FOREIGN_INVALID | ASSESSED |
+   * UNREPORTED_FOUND_ON_AUDIT | PRE_PRODUCTION_NON_CAPITAL |
+   * BY_POLICY_EXEMPT_OUTPUT.
+   */
+  nonCreditableReason  String?      @map("non_creditable_reason")
+  /**
+   * Porsi kreditabel utk penyerahan campur (pedoman pengkreditan).
+   */
+  creditablePercent    Decimal      @default(100.00) @map("creditable_percent") @db.Decimal(5, 2)
+  xmlPayload           String?      @map("xml_payload") @db.Text
+  xmlHash              String?      @map("xml_hash")
+  xmlImportedAt        DateTime?    @map("xml_imported_at")
+  djpMessage           String?      @map("djp_message") @db.Text
+  createdBy            Int?         @map("created_by")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  updatedAt            DateTime     @updatedAt @map("updated_at")
+  salesInvoice         SalesInvoice? @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
+  vendorBill           VendorBill?  @relation(fields: [vendorBillId], references: [id], onDelete: SetNull)
+  vendor               Vendor?      @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  replaces             TaxInvoice?  @relation("TaxInvoiceReplacement", fields: [replacesId], references: [id], onDelete: SetNull)
+  replacedBy           TaxInvoice?  @relation("TaxInvoiceReplacement")
+  salesReturnNotes     SalesReturn[]
+  purchaseReturnNotes  PurchaseReturn[]
+
+  @@index([direction, taxInvoiceNumber], map: "idx_tax_invoices_direction_number")
+  @@index([taxPeriod], map: "idx_tax_invoices_period")
+  @@index([djpStatus], map: "idx_tax_invoices_status")
+  @@index([creditPeriod], map: "idx_tax_invoices_credit_period")
+  @@index([creditStatus], map: "idx_tax_invoices_credit_status")
+  @@index([salesInvoiceId], map: "idx_tax_invoices_sales_invoice")
+  @@index([vendorBillId], map: "idx_tax_invoices_vendor_bill")
+  @@index([vendorId], map: "idx_tax_invoices_vendor")
+  @@index([direction, creditStatus, creditPeriod], map: "idx_tax_invoices_spt_input")
+  @@map("tax_invoices")
+}
+
+/// Bukti potong PPh / e-Bupot Unifikasi — dokumen sendiri (F-003).
+///
+/// Lahir menyalin pasal+kode objek+tarif+DPP dari WithholdingTaxType
+/// terpilih ke snapshot dokumen; edit tarif master SESUDAH itu tidak
+/// mengubah bupot terbit maupun jurnalnya. Batal = `revoked` + reversal
+/// jurnal dokumen sumber, bukan hapus baris. Rekap SPT Masa Unifikasi per
+/// masa dari `withholdingDate`.
+model WithholdingCertificate {
+  slug                 String?             @unique
+  id                   Int                 @id @default(autoincrement())
+  /**
+   * "we_withhold" (kita potong vendor) | "withheld_from_us" (dipotong pelanggan).
+   */
+  direction            String
+  certificateNumber    String              @map("certificate_number")
+  withholdingDate      DateTime            @map("withholding_date")
+  /**
+   * Masa pajak "YYYY-MM" dari withholdingDate.
+   */
+  taxPeriod            String              @map("tax_period") @db.VarChar(7)
+  counterpartyTaxId    String?             @map("counterparty_tax_id")
+  counterpartyName     String              @map("counterparty_name")
+  withholdingTypeId    Int                 @map("withholding_type_id")
+  /**
+   * Pasal snapshot: PPh21|PPh22|PPh23|PPh4(2)|PPh26|PPh15.
+   */
+  article              String
+  objectCode           String?             @map("object_code")
+  dpp                  Decimal             @db.Decimal(15, 2)
+  tariff               Decimal             @map("tariff") @db.Decimal(5, 2)
+  withheldAmount       Decimal             @map("withheld_amount") @db.Decimal(15, 2)
+  /**
+   * draft|issued|revoked.
+   */
+  status               String              @default("draft")
+  vendorBillId         Int?                @map("vendor_bill_id")
+  salesPaymentId       Int?                @map("sales_payment_id")
+  /**
+   * Fasilitas: SKB | PP23 | DTP | null (tanpa fasilitas).
+   */
+  facility             String?
+  facilityNumber       String?             @map("facility_number")
+  createdBy            Int?                @map("created_by")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+  withholdingType      WithholdingTaxType  @relation(fields: [withholdingTypeId], references: [id])
+  vendorBill           VendorBill?         @relation(fields: [vendorBillId], references: [id], onDelete: SetNull)
+  salesPayment         SalesPayment?       @relation(fields: [salesPaymentId], references: [id], onDelete: SetNull)
+
+  @@unique([certificateNumber], map: "uq_withholding_certificates_number")
+  @@index([taxPeriod], map: "idx_withholding_certificates_period")
+  @@index([status], map: "idx_withholding_certificates_status")
+  @@index([withholdingTypeId], map: "idx_withholding_certificates_type")
+  @@index([vendorBillId], map: "idx_withholding_certificates_vendor_bill")
+  @@index([salesPaymentId], map: "idx_withholding_certificates_sales_payment")
+  @@map("withholding_certificates")
 }
 
 /// Penyetoran pajak (PPh) ke kas negara. Jurnal: **Dr akun utang pajak, Cr kas/bank**.
@@ -913,7 +1093,8 @@ model TaxPayment {
   documentNo       String              @unique @map("document_no")
   date             DateTime
   /**
-   * Masa pajak, mis. "2026-09".
+   * Masa pajak, mis. "2026-09". F-005: divalidasi YYYY-MM di service/Zod;
+   * masa setor dari `period`, bukan tanggal bayar.
    */
   period           String?
   taxTypeId        Int?                @map("tax_type_id")
@@ -921,7 +1102,22 @@ model TaxPayment {
   paymentAccountId Int                 @map("payment_account_id")
   amount           Decimal             @db.Decimal(15, 2)
   /**
-   * Nomor SSP/MPN sebagai bukti setor.
+   * Kode billing MPN 15 digit (nullable: setor legacy/manual).
+   */
+  billingCode      String?             @map("billing_code") @db.VarChar(15)
+  /**
+   * NTPN 16 karakter (nullable: setor legacy/manual).
+   */
+  ntpn             String?             @db.VarChar(16)
+  /**
+   * Jenis pajak terstruktur (ppn|pph21|pph23|pph4_2|pph_badan|other) agar
+   * PPN/PPh badan di luar tipe potong terwakili. taxTypeId TETAP dipakai
+   * (wajib taut di service, bukan kolom baru).
+   */
+  taxKind          String?             @map("tax_kind")
+  /**
+   * Nomor SSP/MPN sebagai bukti setor. Dipertahankan cermin legacy;
+   * sumber baru = billingCode + ntpn.
    */
   reference        String?
   notes            String?             @db.Text
@@ -1190,6 +1386,7 @@ model SalesInvoice {
   salesReturns         SalesReturn[]
   payments             SalesPayment[]
   invoiceExchangeItems InvoiceExchangeItem[]
+  taxInvoices          TaxInvoice[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
   @@index([quotationId], map: "sales_invoices_quotation_id_fkey")
@@ -1302,6 +1499,7 @@ model SalesPayment {
   updatedAt                DateTime            @updatedAt @map("updated_at")
   salesInvoice             SalesInvoice        @relation(fields: [salesInvoiceId], references: [id])
   withholdingType          WithholdingTaxType? @relation(fields: [withholdingTypeId], references: [id], onDelete: SetNull)
+  withholdingCertificates  WithholdingCertificate[]
 
   @@index([salesInvoiceId], map: "sales_payments_sales_invoice_id_fkey")
   @@index([customerId])
@@ -1321,15 +1519,28 @@ model SalesReturn {
   date           DateTime
   reason         String?           @db.Text
   status         String            @default("draft")
+  /**
+   * Nomor nota retur Coretax — dicatat apa adanya; sistem tidak
+   * menerbitkan nomor pajak sendiri (F-004).
+   */
+  taxReturnNoteNumber String?       @map("tax_return_note_number")
+  taxReturnNoteDate   DateTime?     @map("tax_return_note_date")
+  /**
+   * Tautan TaxInvoice asal (nullable: retur komersial murni tanpa
+   * faktur pajak; PPN-retur = 0).
+   */
+  sourceTaxInvoiceId  Int?          @map("source_tax_invoice_id")
   createdBy      Int?              @map("created_by")
   createdAt      DateTime          @default(now()) @map("created_at")
   updatedAt      DateTime          @updatedAt @map("updated_at")
   items          SalesReturnItem[]
   salesInvoice   SalesInvoice?     @relation(fields: [salesInvoiceId], references: [id], onDelete: SetNull)
   customer       Customer          @relation(fields: [customerId], references: [id])
+  sourceTaxInvoice TaxInvoice?     @relation(fields: [sourceTaxInvoiceId], references: [id], onDelete: SetNull)
 
   @@index([status])
   @@index([salesInvoiceId])
+  @@index([sourceTaxInvoiceId], map: "idx_sales_returns_source_tax_invoice")
   @@index([customerId])
   @@index([createdBy])
   @@index([createdAt])
@@ -1345,6 +1556,18 @@ model SalesReturnItem {
   price         Decimal     @default(0.00) @db.Decimal(15, 2)
   serialNumbers Json?       @map("serial_numbers")
   batchNumbers  Json?       @map("batch_numbers")
+  /**
+   * Snapshot pajak saat complete (F-004): DPP = qty × price beku,
+   * PPN = DPP × tarif efektif faktur asal, safeRound sen. Null = baris
+   * legacy (fallback hitung-ulang berlabel, bukan snapshot).
+   */
+  returnDpp     Decimal?    @map("return_dpp") @db.Decimal(15, 2)
+  returnVat     Decimal?    @map("return_vat") @db.Decimal(15, 2)
+  /**
+   * Tarif efektif faktur asal saat snapshot (Decimal 5,2).
+   */
+  sourceTaxRate Decimal?    @map("source_tax_rate") @db.Decimal(5, 2)
+  sourceTaxInvoiceId Int?   @map("source_tax_invoice_id")
   salesReturn   SalesReturn @relation(fields: [salesReturnId], references: [id], onDelete: Cascade)
 
   @@index([salesReturnId], map: "sales_return_items_sales_return_id_fkey")
@@ -1528,14 +1751,22 @@ model PurchaseReturn {
   date            DateTime
   reason          String?              @db.Text
   status          String               @default("draft")
+  /**
+   * Nomor nota retur Coretax — dicatat apa adanya (F-004).
+   */
+  taxReturnNoteNumber String?          @map("tax_return_note_number")
+  taxReturnNoteDate   DateTime?        @map("tax_return_note_date")
+  sourceTaxInvoiceId  Int?             @map("source_tax_invoice_id")
   createdBy       Int?                 @map("created_by")
   createdAt       DateTime             @default(now()) @map("created_at")
   updatedAt       DateTime             @updatedAt @map("updated_at")
   items           PurchaseReturnItem[]
   purchaseOrder   PurchaseOrder        @relation(fields: [purchaseOrderId], references: [id])
+  sourceTaxInvoice TaxInvoice?         @relation(fields: [sourceTaxInvoiceId], references: [id], onDelete: SetNull)
 
   @@index([purchaseOrderId], map: "purchase_returns_purchase_order_id_fkey")
   @@index([status])
+  @@index([sourceTaxInvoiceId], map: "idx_purchase_returns_source_tax_invoice")
   @@index([createdBy])
   @@index([createdAt])
   @@map("purchase_returns")
@@ -1547,6 +1778,17 @@ model PurchaseReturnItem {
   itemId           Int            @map("item_id")
   qty              Decimal        @db.Decimal(15, 2)
   cost             Decimal        @default(0.00) @db.Decimal(15, 2)
+  /**
+   * Snapshot pajak saat returned (F-004). `cost` DILARANG jadi DPP —
+   * DPP = qty × `price` beku baris (harga beli dari tagihan asal, dibekukan
+   * saat retur dibuat). Baris tanpa `price` = legacy tanpa snapshot
+   * (returnDpp/Vat null, fallback hitung-ulang berlabel di read-model).
+   */
+  price            Decimal?       @db.Decimal(15, 2)
+  returnDpp        Decimal?       @map("return_dpp") @db.Decimal(15, 2)
+  returnVat        Decimal?       @map("return_vat") @db.Decimal(15, 2)
+  sourceTaxRate    Decimal?       @map("source_tax_rate") @db.Decimal(5, 2)
+  sourceTaxInvoiceId Int?         @map("source_tax_invoice_id")
   serialNumbers    Json?          @map("serial_numbers")
   purchaseReturn   PurchaseReturn @relation(fields: [purchaseReturnId], references: [id], onDelete: Cascade)
 
@@ -1596,6 +1838,8 @@ model VendorBill {
   withholdingType     WithholdingTaxType?       @relation(fields: [withholdingTypeId], references: [id], onDelete: SetNull)
   allocations         VendorPaymentAllocation[]
   vendorPayments      VendorPayment[]
+  taxInvoices         TaxInvoice[]
+  withholdingCertificates WithholdingCertificate[]
 
   @@index([purchaseOrderId], map: "vendor_bills_purchase_order_id_fkey")
   @@index([projectId])
@@ -1608,6 +1852,9 @@ model VendorBill {
   @@index([createdBy])
   @@index([createdAt])
   @@index([vendorId, status, balanceDue])
+  // F-002: unik (vendorId, nomor) masukan non-batal via guard service
+  // (partial unique tak portabel MySQL) + index komposit ini.
+  @@index([vendorId, taxInvoiceNumber], map: "idx_vendor_bills_tax_invoice")
   @@map("vendor_bills")
 }
 

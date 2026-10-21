@@ -5,6 +5,7 @@ import { slugify } from "@/lib/utils/slug";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { generateDocumentNumberBatch } from "@/lib/utils/document-number";
 import { safeAdd } from "@/lib/utils/math";
+import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot";
 
 /**
  * Accounting Hook - Observer pattern replacement for all accounting journal entries.
@@ -1235,6 +1236,82 @@ export async function onSalesReturnCompleted(
   await assertPeriodOpen(salesReturn.date, txClient);
 
   await executeInTx(txClient, async (tx) => {
+    // F-004: bekukan snapshot pajak retur + guard kumulatif keras DALAM tx.
+    // Baris dengan snapshot = potongan SPT dari snapshot (bukan hitung
+    // ulang); tanpa faktur asal PPN-retur = 0. Jurnal GL tetap tanpa kaki
+    // PPN — lapisan SPT membaca snapshot ini.
+    if (linkedToInvoice && salesReturn.salesInvoiceId != null) {
+      await tx.$queryRaw`SELECT id FROM sales_invoices WHERE id = ${salesReturn.salesInvoiceId} FOR UPDATE`;
+      const invoice = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: salesReturn.salesInvoiceId },
+        select: { subtotal: true, discount: true, taxAmount: true },
+      });
+      const source = {
+        subtotal: Number(invoice.subtotal),
+        discount: Number(invoice.discount),
+        taxAmount: Number(invoice.taxAmount),
+      };
+      const sourceDpp = source.subtotal - source.discount;
+      const candidateLines: { id: number; snap: ReturnType<typeof snapshotReturnLine> }[] = [];
+      let candidateDpp = 0;
+      let candidateVat = 0;
+      for (const item of salesReturn.items) {
+        const snap = snapshotReturnLine({
+          qty: Number(item.qty),
+          price: Number(item.price ?? 0),
+          source,
+        });
+        candidateLines.push({ id: item.id, snap });
+        candidateDpp += snap.returnDpp;
+        candidateVat += snap.returnVat;
+      }
+      const completedOthers = await tx.salesReturnItem.findMany({
+        where: {
+          salesReturn: { salesInvoiceId: salesReturn.salesInvoiceId, status: "completed" },
+          returnDpp: { not: null },
+          id: { notIn: candidateLines.map((c) => c.id) },
+        },
+        select: { returnDpp: true, returnVat: true },
+      });
+      const completedDpp = completedOthers.reduce((s, r) => s + Number(r.returnDpp ?? 0), 0);
+      const completedVat = completedOthers.reduce((s, r) => s + Number(r.returnVat ?? 0), 0);
+      const cap = checkCumulativeReturnCap({
+        sourceDpp,
+        sourceVat: source.taxAmount,
+        completedDpp,
+        completedVat,
+        candidateDpp,
+        candidateVat,
+      });
+      if (!cap.allowed) {
+        throw new Error(
+          `Potongan retur kumulatif (DPP ${cap.projectedDpp} / PPN ${cap.projectedVat}) melebihi faktur asal (DPP ${sourceDpp} / PPN ${source.taxAmount}) — retur ditolak`,
+        );
+      }
+      for (const line of candidateLines) {
+        await tx.salesReturnItem.update({
+          where: { id: line.id },
+          data: {
+            returnDpp: new Prisma.Decimal(line.snap.returnDpp.toFixed(2)),
+            returnVat: new Prisma.Decimal(line.snap.returnVat.toFixed(2)),
+            sourceTaxRate: new Prisma.Decimal(line.snap.sourceTaxRate.toFixed(2)),
+          },
+        });
+      }
+      // Tautan TaxInvoice asal bila sudah ada dokumennya (nullable: belum).
+      const taxInvoice = await tx.taxInvoice.findFirst({
+        where: { direction: "out", salesInvoiceId: salesReturn.salesInvoiceId, djpStatus: { notIn: ["cancelled", "replaced"] } },
+        orderBy: { id: "desc" },
+        select: { id: true },
+      });
+      if (taxInvoice && salesReturn.sourceTaxInvoiceId == null) {
+        await tx.salesReturn.update({
+          where: { id: salesReturn.id },
+          data: { sourceTaxInvoiceId: taxInvoice.id },
+        });
+      }
+    }
+
     // double-check inside tx
     const existingInTx = await tx.journal.findFirst({
       where: { referenceType: "SalesReturn", referenceId: returnId },
