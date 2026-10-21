@@ -29,6 +29,7 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
+BOT 3 | src/actions/master.actions.ts + safe-parse.ts + 2 tes (loginRoleIds safeId, PR #346) | 22:01 WIB — selesai, klaim dilepas
 Bara | src/lib/reports/quotation-approval-gate.ts + quotation-approval-gate-data.ts + __tests__/quotation-approval-gate.test.ts (F-100 lapis aman) | 22:02 WIB — selesai, klaim dilepas
 Salsa | F-71 vonis read-only (tanpa edit berkas kode) | 20:35 WIB — selesai, klaim dilepas
 Salsa | src/actions/finance.actions.ts + src/actions/__tests__/finance.actions.journal-parse-money.test.ts | 19:50 WIB — selesai, klaim dilepas
@@ -779,3 +780,5 @@ HANDOFF Lead ERP Research -> leadfrontend | F-2026-10-21-029 detail proyek berhe
 HANDOFF Lead ERP Research -> leadbackend | F-2026-10-21-030 (i) P1 - RAB per proyek/tahap ABSEN. Target: prisma (Project.contractAmount, ProjectItem.projectStageId/category, budgetLockedAt), src/actions/project.actions.ts. Sesudah F-029. Benchmark: https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang. Uji: RAB terkunci berubah = ProjectLog revisi; realisasi tanpa tahap tampil belum-dialokasi. Effort: M-L. Putusan accountant: TIDAK. | docs/erp-research-backlog.md run (i) | medium
 Lead ERP Research | 2026-10-21 10:30 WIB | STATUS domain (i): gap P0=1 (F-029), P1=1 (F-030), P2=1 (F-031); ID baru F-2026-10-21-029 s/d 031 | BERIKUT: (j) laporan & BI
 Bot5 sales-crm-hr-payroll | 2026-10-21 19:04 WIB | FIX keamanan t_0b908a7b: laporan gaji/PPh21/porsi-gaji/bukti-potong halaman+PDF+nav kini wajib view_payroll_reports SAJA (fail-closed, fallback view_reports dibuang). DAMPAK GRANT: role FINANCE whitelist aman (sudah punya view_payroll_reports); role kustom hanya-view_reports KEHILANGAN akses laporan gaji — admin peran perlu grant view_payroll_reports manual. Tes: PDF 12 kasus per-key + page-context 2, falsifikasi 10 merah dipulihkan, tsc 0. | branch fix/t_0b908a7b-payroll-report-perm | high
+BOT 3 | 2026-10-21 22:05 WIB | loginRoleIds safeId + safe-parse desimal-murni | SELESAI PR #346 beb801b7: readEmployeeLoginInput Number()->safeId (0x10/1e3/spasi dibuang); safeNumber DECIMAL_RE + safeId /^[0-9]+$/; tes safe-parse 24/24 (2 baru) + employee-login 16/16 (1 baru), falsifikasi 3 MERAH pulih identik, tsc0 lint0, tanpa migrasi/schema/UI | bukti=PR #346 beb801b7 | BERIKUT=git-keeper merge #346 bila 5/5 PASS di beb801b7
+HANDOFF BOT 3 -> git-keeper | PR #346 beb801b7 loginRoleIds safeId (4 berkas, tanpa migrasi/schema/UI): merge hanya bila 5/5 PASS di SHA ini | gh pr view 346 | medium
