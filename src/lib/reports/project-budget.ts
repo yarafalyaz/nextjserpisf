@@ -8,12 +8,16 @@
  *
  * Realisasi = output `buildProjectPl` F-029 APA ADANYA (BR-10): builder
  * ini dilarang query agregasi kedua dan dilarang memecah productionCost
- * per kategori (ProjectPlResult memang hanya total datar). Karena kolom
- * tahap di sumber realisasi DITUNDA vonis (BR-09/BR-17c), di fase ini
- * SELURUH realisasi tampil sebagai `unallocatedRealized` = totalCost
- * penuh; perbandingan per kategori menyusul kartu (c). Rekonsiliasi
- * wajib: Σ per tahap + belum-dialokasi (anggaran) = ΣRAB, dan
- * realizedTotal selalu persis totalCost F-029 (selisih 0.00).
+ * per kategori (ProjectPlResult memang hanya total datar). Kolom tahap
+ * di sumber realisasi (MaterialIssue/Expense/ProductionCost/dst.) TIDAK
+ * ADA di schema — penambahan kolom itu tahap (c) BR-09 yang vonis Lead
+ * izinkan ditunda. Karena itu kontrak per tahap diterbitkan JUJUR:
+ * `perStageRealized` memuat semua tahap proyek dengan `realized: null`
+ * + `hasStageAllocation: false` (belum terukur, BUKAN nol terukur), dan
+ * SELURUH realisasi tetap `unallocatedRealized` = totalCost penuh.
+ * Rekonsiliasi wajib: Σ realisasi per tahap teralokasi + belum-dialokasi
+ * = realizedTotal F-029 persis (selisih 0.00). Saat kolom tahap sumber
+ * kelak ada, hanya pengisian `realized`/`hasStageAllocation` yang berubah.
  *
  * contractAmount adalah snapshot nilai JUAL kontrak (dari
  * Quotation.grandTotal terpilih atau manual ber-alasan), RAB adalah
@@ -95,6 +99,18 @@ export interface ProjectBudgetStageTotal {
   total: number
 }
 
+export interface ProjectBudgetStageRealized {
+  projectStageId: number
+  stageName: string | null
+  /**
+   * Realisasi teralokasi ke tahap ini; null = belum terukur (BUKAN nol
+   * terukur). Selalu null selama sumber biaya belum berkolom tahap.
+   */
+  realized: number | null
+  /** false = realisasi tahap belum terukur; UI dilarang menebak angka. */
+  hasStageAllocation: boolean
+}
+
 export interface ProjectBudgetResult {
   projectId: number
   contractAmount: number | null
@@ -105,6 +121,12 @@ export interface ProjectBudgetResult {
   perStageBudget: ProjectBudgetStageTotal[]
   /** Anggaran baris tanpa tahap — ember eksplisit, tidak dibagi rata. */
   unallocatedBudget: { categories: ProjectBudgetCategoryTotal[]; total: number }
+  /**
+   * Realisasi per tahap untuk SEMUA tahap proyek, urut sortOrder tahap.
+   * Selama sumber biaya belum berkolom tahap, tiap baris realized null +
+   * hasStageAllocation false — eksplisit belum-terukur, bukan 0 terukur.
+   */
+  perStageRealized: ProjectBudgetStageRealized[]
   /** Σ semua baris RAB (per tahap + belum teralokasi). */
   totalBudget: number
   /** Realisasi total = pl.totalCost F-029 persis. */
@@ -184,6 +206,18 @@ export function buildProjectBudget(input: ProjectBudgetInput): ProjectBudgetResu
 
   const realizedTotal = input.pl.totalCost
 
+  // Kolom tahap di sumber realisasi belum ada (BR-09 tahap c ditunda):
+  // tiap tahap eksplisit belum-terukur, realisasi penuh tetap di ember
+  // belum-teralokasi → Σ per tahap teralokasi + ember = realizedTotal.
+  const perStageRealized: ProjectBudgetStageRealized[] = [...input.stages]
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id - b.id)
+    .map((stage) => ({
+      projectStageId: stage.id,
+      stageName: stage.name,
+      realized: null,
+      hasStageAllocation: false,
+    }))
+
   return {
     projectId: input.projectId,
     contractAmount: input.contractAmount,
@@ -192,6 +226,7 @@ export function buildProjectBudget(input: ProjectBudgetInput): ProjectBudgetResu
     budgetRevisionNo: input.budgetRevisionNo,
     perStageBudget,
     unallocatedBudget: { categories: unallocatedCategories, total: unallocatedTotal },
+    perStageRealized,
     totalBudget,
     realizedTotal,
     unallocatedRealized: realizedTotal,
