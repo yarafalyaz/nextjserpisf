@@ -18,7 +18,7 @@ import { ReportCardShell } from "./report-card-shell"
  * (barang, gudang) dibandingkan ke minimum global. Komponen ini murni
  * presentasi — tidak menghitung ulang stok, tidak menyentuh notifikasi
  * low-stock; kartu tidak dirender halaman bila daftar kosong.
- * `note` = `MinStockReport.warehouseNote` backend (PR #285) tampil
+ * `note` = `MinStockReport.warehouseNote` backend (PR #285 merged) tampil
  * verbatim, bukan kalimat frontend — vonis Lead-Arch 11:36.
  */
 export function MinStockWarehouseCard({

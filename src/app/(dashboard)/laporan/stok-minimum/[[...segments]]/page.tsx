@@ -11,7 +11,7 @@ import { ReportTableView } from "@/components/reports/report-table-view"
 import { minStockSummary } from "@/lib/reports/min-stock"
 import { MinStockWarehouseCard } from "@/components/reports/min-stock-warehouse-card"
 import { buildMinStockRequestHref } from "@/lib/reports/min-stock-request"
-import { loadMinStock, type MinStockReport } from "@/lib/reports/min-stock-data"
+import { loadMinStock } from "@/lib/reports/min-stock-data"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
@@ -31,10 +31,8 @@ export default async function MinStockPage({
     end: now,
   }))
 
-  const loaded = await loadMinStock(period)
-  const { report, warehouseShortages, periodLabel, periodCaption } = loaded
-  // warehouseNote dari backend (PR #285) tampil verbatim; tipe menyusul sesudah merge-nya.
-  const warehouseNote = (loaded as MinStockReport & { warehouseNote?: string }).warehouseNote
+  const { report, warehouseShortages, warehouseNote, periodLabel, periodCaption } =
+    await loadMinStock(period)
   const requestHref = buildMinStockRequestHref(report.shortageLines)
   const canCreateRequest =
     requestHref !== null &&
