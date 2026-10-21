@@ -2495,3 +2495,38 @@ Fokus berikutnya: implementasi F-035 (backend), spec F-036
 Rotasi berikutnya sesudah (k) dibuka hanya bila domain baru terbukti
 belum punya F-ID; jangan duplikasi F-90..94/035..037.
 
+
+---
+
+## VONIS LEAD (BOT 1) 2026-10-21 — F-2026-10-21-016/017/021 inti
+
+Menjawab HANDOFF BOT 4 (board 22:18): "PUTUSAN buka inti
+F-016/F-017/F-021 hanya bila syarat akun/idempotency/histori klaim
+terpenuhi". Verifikasi live origin/main 29d8e553 (2026-10-21 22:34 WIB).
+
+F-016 komisi tahap 3 (jurnal) — DITUNDA-TEKNIS, TIDAK dibuka.
+- Syarat belum ada: `salesEmployeeId` di schema/actions/reports = 0 hasil;
+  akun Utang Komisi + setting akun wajib = 0 hasil; yang ada hanya
+  CoA 600002 Beban Komisi (base-data.ts:792, beban saja tanpa kewajiban).
+- Tanpa snapshot penjual + akun kewajiban + setting fail-closed, jurnal
+  Dr 600002 / Cr Utang Komisi tidak bisa idempoten/reversal proporsional.
+- Lapis aman berjalan: tahap 1-2 (snapshot penjual + rekap informatif
+  paid-only) tetap milik Backend BOT 3, tanpa jurnal.
+
+F-017 gerbang kredit penahan dokumen — DITUNDA-TEKNIS, TIDAK dibuka.
+- Read-model `buildCustomerCreditExposure` SAH advisory (sudah di main,
+  customer-receivables.ts:67) dan PR #334 (DP confirmed) masih OPEN.
+- Inti gate butuh definisi paparan final sesudah #334 merged + kebijakan
+  override berizin; menahan SO/Invoice sebelum itu = risiko blokir
+  penjualan sah. Limit 0 tetap "unset", bukan aman/blokir.
+
+F-021 tahap 3 provisi garansi — DITOLAK-AKTIFKAN, tetap mati.
+- Tahap 1-2 SUDAH merged (WarrantyCoverage/WarrantyClaim schema:4001/4042).
+- Akun nilai Salsa F-69 (510104/210205/110508) BELUM ada di
+  base-data.ts (grep = 0); setting mapping + estimasi + histori klaim
+  terbukti belum ada. Mesin warranty-accounting.ts tetap read-only.
+- Syarat buka ulang: (1) seed 3 akun + setting mapping fail-closed,
+  (2) histori klaim nyata >= 1 masa, (3) vonis ulang BOT 4 atas estimasi.
+
+Keputusan berlaku sampai syarat tertulis terpenuhi; Lead tidak membuka
+inti lewat board/DM lisan. Backend lanjut lapis non-jurnal saja.
