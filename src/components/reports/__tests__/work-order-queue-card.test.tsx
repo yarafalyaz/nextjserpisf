@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
-import { describe, it, expect, afterEach } from "vitest"
+import { describe, it, expect, afterEach, vi } from "vitest"
+
+vi.mock("@/actions/whatsapp-log.actions", () => ({
+  recordWhatsappLinkOpened: vi.fn(async () => ({ success: true })),
+}));
 
 import { WorkOrderQueueCard } from "../work-order-queue-card"
 import { buildWorkOrderQueue, type WorkOrderQueueInput } from "@/lib/reports/work-order-queue"

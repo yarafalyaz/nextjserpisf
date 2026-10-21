@@ -73,6 +73,24 @@ describe("GET /api/notifications", () => {
     }))
   })
 
+  it("queries list and count concurrently (single parallel round-trip)", async () => {
+    mocks.authFn.mockResolvedValue({ user: { id: 7 } })
+    let inFlight = 0
+    let maxInFlight = 0
+    const track = async (v: unknown) => {
+      inFlight += 1
+      maxInFlight = Math.max(maxInFlight, inFlight)
+      await new Promise((r) => setTimeout(r, 5))
+      inFlight -= 1
+      return v
+    }
+    mocks.notificationFindMany.mockImplementation(() => track([{ id: 1 }]))
+    mocks.notificationCount.mockImplementation(() => track(3))
+    const res = await GET()
+    expect(res.status).toBe(200)
+    expect(maxInFlight).toBe(2)
+  })
+
   it("returns 500 on internal error", async () => {
     mocks.authFn.mockRejectedValue(new Error("boom"))
     const res = await GET()

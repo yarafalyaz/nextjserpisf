@@ -99,6 +99,22 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
   "src/actions/customer-price-list.actions.ts::deleteCustomerPriceList":
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
+  // F-2026-10-21-025 backend dulu: kontrak konflik untuk form aturan fitment;
+  // UI peringatan menyusul di kartu frontend t_6d28c338 (buang entri ini saat
+  // vehicle-fitment-form memanggilnya).
+  "src/actions/vehicle-fitment.actions.ts::checkVehicleFitmentConflicts":
+    "F-2026-10-21-025 backend; peringatan konflik di VehicleFitmentForm menyusul (frontend t_6d28c338)",
+  // F-2026-10-21-009-V backend dulu (vonis BOT 4 PR #349): kontrak tutup/reopen
+  // job siap; tombol UI menyusul di kartu frontend (buang entri ini saat halaman
+  // produksi/perintah kerja memanggilnya).
+  "src/actions/manufacturing.actions.ts::closeProductionOrder":
+    "F-2026-10-21-009-V backend; tombol tutup produksi menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::reopenProductionOrder":
+    "F-2026-10-21-009-V backend; tombol buka-kembali produksi menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::closeWorkOrder":
+    "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::reopenWorkOrder":
+    "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {

@@ -610,12 +610,12 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     title: "Rekap Borongan",
     subtitle: "Upah Borongan per Teknisi (Informatif — Bukan Dasar Bayar/Jurnal)",
     defaultPeriod: startOfYear,
-    async load() {
-      const result = await loadLaborRecapReport()
+    async load({ period }) {
+      const result = await loadLaborRecapReport({ start: period.start, end: period.end })
       return {
         kind: "table",
         table: buildLaborRecapTable(result),
-        periodCaption: "Seluruh baris labor",
+        periodCaption: formatPeriodLabel(period),
         landscape: true,
       }
     },
