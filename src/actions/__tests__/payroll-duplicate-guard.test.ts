@@ -38,8 +38,10 @@ vi.mock("@/lib/db/prisma", () => {
     prisma: {
       payroll: {
         findFirst: (...a: unknown[]) => payrollFindFirstMock(...a),
+        findMany: vi.fn().mockResolvedValue([]),
         create: (...a: unknown[]) => payrollCreateMock(...a),
       },
+      payrollTerBracket: { findMany: vi.fn().mockResolvedValue([]) },
       employee: { findUnique: (...a: unknown[]) => employeeFindUniqueMock(...a) },
       approvalWorkflow: { findFirst: vi.fn().mockResolvedValue(null) },
       approval: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn().mockResolvedValue({}) },
@@ -56,9 +58,22 @@ vi.mock("@/lib/services/attendance-summary.service", () => ({
   calculateAttendanceSummary: vi.fn(async () => ({ workingDays: 20, presentDays: 20, absentDays: 0, absentDeduction: 0 })),
 }))
 vi.mock("@/lib/services/payroll-statutory.service", () => ({
-  getStatutoryParams: vi.fn(async () => ({})),
+  getStatutoryParams: vi.fn(async () => ({ fromFallback: false, asOf: "2026-06-30" })),
   computeBpjsEmployee: () => ({ health: 0, employment: 0, total: 0 }),
   computePph21Monthly: () => 0,
+  // F-026: jalur tulis memakai TER; fixture 0% satu bracket terbuka.
+  getTerBrackets: vi.fn(async () => [
+    { category: "A", lowerBound: 0, upperBound: null, rateMilliPercent: 0, effectiveFrom: "2024-01-01", source: "test" },
+  ]),
+  computePph21Ter: (_gross: number) => ({
+    pph21: 0,
+    ratePct: 0,
+    bracket: { category: "A", lowerBound: 0, upperBound: null, rateMilliPercent: 0, effectiveFrom: "2024-01-01", source: "test" },
+  }),
+  computePph21FinalPeriod: () => ({ pph21: 0, overWithheld: 0, underWithheldExcess: 0, annualTax: 0, pkp: 0, netYear: 0 }),
+  resolveTerPeriod: () => ({ kind: "monthly", monthsInStint: 6, priorEmployerIncomeIncluded: false }),
+  terCategoryFor: () => "A",
+  statusCodeDependents: () => null,
 }))
 vi.mock("@/lib/services/activity-log.service", () => ({ logActivity: (...a: unknown[]) => logActivityMock(...a) }))
 vi.mock("@/lib/services/holiday-sync.service", () => ({ syncNationalHolidays: vi.fn() }))

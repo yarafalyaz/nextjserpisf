@@ -23,7 +23,9 @@ export interface BpjsResult {
   total: number
 }
 
-/** Compute the employee-deducted BPJS portion from monthly base salary. */
+/** Compute the employee-deducted BPJS portion from monthly base salary.
+ * `employment` = JHT + JP karyawan saja — persis pengurang pensiun/hari tua
+ * hitung ulang PPh21 masa terakhir F-026 §4 (BPJS Kesehatan TIDAK mengurangi). */
 export function computeBpjsEmployee(baseSalary: number, p: StatutoryParams | null = null): BpjsResult {
   const q = p ?? { ...FALLBACK_PARAMS, fromFallback: true, asOf: "" } as StatutoryParams
   const base = Math.max(0, baseSalary)
@@ -234,7 +236,9 @@ function isMarriedStatus(maritalStatus?: string | null): boolean {
 }
 
 /**
- * Compute monthly PPh21 using the annualized progressive method.
+ * LEGACY pre-TER monthly PPh21 (annualized progressive method). Dipertahankan
+ * HANYA untuk reproduksi slip pra-titik-berlaku F-026 (vonis §5: slip lama
+ * TIDAK dihitung ulang) — jalur generate payroll berjalan TIDAK memanggilnya.
  * grossMonthly = base + allowances + overtime (regular taxable income).
  * bpjsEmployeeMonthly is deductible (JHT/JP + Kesehatan employee portion).
  */
@@ -274,4 +278,216 @@ export function computePph21Monthly(
   // where taxYear/12 lands on the .50..x.99 range, creating a small but
   // accumulating tax gap the company owed the tax office but never remitted.
   return Math.floor(taxYear / 12)
+}
+
+// ── PPh21 TER (PP 58/2023 + PMK 168/2023) — F-2026-10-21-026 ─────────────────
+// Vonis accountant FINAL di docs/erp-research-backlog.md (VONIS F-026 §1-§6).
+// Tabel TER hidup di `payroll_ter_brackets` (data master berperiode), BUKAN
+// konstanta kode: ketiadaan/ketidaklengkapan tabel = hitung FINAL ditolak
+// (fail-closed), tanpa fallback ke metode disetahunkan.
+
+export type TerCategory = "A" | "B" | "C"
+
+export interface TerBracket {
+  category: TerCategory
+  lowerBound: number // eksklusif
+  upperBound: number | null // inklusif; null = terbuka
+  rateMilliPercent: number // tarif % × 1000 (2% = 2000; 0,25% = 250)
+  effectiveFrom: string
+  source: string | null
+}
+
+/** Kategori TER dari status PTKP awal tahun (PP 58/2023 Pasal 2 ayat (3)-(4)).
+ * Kawin dari `isMarriedStatus` existing (fail-closed TK); tanggungan clamp 3
+ * persis `ptkpFor`. Kode kanonik K/n pada status: angka kode DIABAIKAN untuk
+ * tanggungan — kolom `dependents` satu-satunya sumber terstruktur (vonis §1). */
+export function terCategoryFor(maritalStatus?: string | null, dependents = 0): TerCategory {
+  const married = isMarriedStatus(maritalStatus)
+  const dep = Math.min(3, Math.max(0, Math.floor(dependents)))
+  if (married) return dep >= 3 ? "C" : dep >= 1 ? "B" : "A"
+  return dep >= 2 ? "B" : "A"
+}
+
+/** Kode tanggungan dari kode kanonik `K/1`/`TK/2` … pada status (untuk
+ * peringatan selisih data vs kolom dependents; tidak ikut hitung). */
+export function statusCodeDependents(maritalStatus?: string | null): number | null {
+  const raw = (maritalStatus ?? "").trim()
+  const m = /^(?:tk|k)\/(\d)$/i.exec(raw)
+  return m ? Number(m[1]) : null
+}
+
+function bracketsComplete(brackets: TerBracket[]): boolean {
+  if (brackets.length === 0) return false
+  const sorted = [...brackets].sort((a, b) => a.lowerBound - b.lowerBound)
+  if (sorted[0].lowerBound !== 0) return false
+  let prevUpper: number | null = null
+  let openEnded = 0
+  for (const [i, b] of sorted.entries()) {
+    if (i > 0 && (prevUpper == null || b.lowerBound !== prevUpper)) return false
+    if (b.upperBound == null) openEnded++
+    prevUpper = b.upperBound
+  }
+  return openEnded === 1 && prevUpper == null
+}
+
+export function findTerBracket(brackets: TerBracket[], monthlyGross: number): TerBracket | null {
+  const g = Math.max(0, monthlyGross)
+  // Bracket pertama mulai 0 (bawah eksklusif, § vonis) TETAPI bruto 0/≤batas
+  // pertama tetap bracket pertama (tarifnya 0 di ketiga lampiran) — bruto 0
+  // bukan "di luar tabel".
+  return (
+    brackets.find((b) => g > b.lowerBound && (b.upperBound == null || g <= b.upperBound)) ??
+    (g === 0 ? brackets.find((b) => b.lowerBound === 0) ?? null : null)
+  )
+}
+
+type TerDb = {
+  payrollTerBracket: {
+    findMany: (args: any) => Promise<{
+      category: string; lowerBound: unknown; upperBound: unknown; rateMilliPercent: number;
+      effectiveFrom: Date; effectiveTo: Date | null; source: string | null
+    }[]>
+  }
+}
+
+/** Tabel TER efektif pada tanggal acuan untuk satu kategori. Versi terbaru
+ * (effectiveFrom terbesar ≤ acuan) menang; rantai bracket wajib utuh dari 0
+ * sampai terbuka — selain itu tabel dianggap tidak lengkap (null). */
+export async function getTerBrackets(db: TerDb, category: TerCategory, asOf: Date): Promise<TerBracket[] | null> {
+  const rows = await db.payrollTerBracket.findMany({
+    where: {
+      category,
+      effectiveFrom: { lte: asOf },
+      OR: [{ effectiveTo: null } as never, { effectiveTo: { gt: asOf } } as never],
+    },
+    orderBy: { lowerBound: "asc" },
+  })
+  const latestFrom = rows.reduce((m, r) => Math.max(m, new Date(r.effectiveFrom).getTime()), -Infinity)
+  const brackets = rows
+    .filter((r) => new Date(r.effectiveFrom).getTime() === latestFrom)
+    .map((r) => ({
+      category: category as TerCategory,
+      lowerBound: Number(r.lowerBound),
+      upperBound: r.upperBound == null ? null : Number(r.upperBound),
+      rateMilliPercent: r.rateMilliPercent,
+      effectiveFrom: new Date(r.effectiveFrom).toISOString().slice(0, 10),
+      source: r.source,
+    }))
+  return bracketsComplete(brackets) ? brackets : null
+}
+
+export interface Pph21TerResult {
+  pph21: number
+  bracket: TerBracket
+  ratePct: number
+}
+
+/** PPh21 masa selain masa terakhir: bruto satu masa × TER (vonis §1). Tanpa
+ * pengurang biaya jabatan/BPJS/PTKP — sudah terinternalisasi tabel TER. */
+export function computePph21Ter(monthlyGross: number, brackets: TerBracket[]): Pph21TerResult {
+  const bracket = findTerBracket(brackets, monthlyGross)
+  if (!bracket) throw new Error("Tabel TER tidak memuat bracket untuk bruto masa ini")
+  const ratePct = bracket.rateMilliPercent / 1000
+  // tarif % × 1000: 2000 = 2% → bruto × tarif / 100000. Eksak tanpa float %.
+  const pph21 = Math.round((Math.max(0, monthlyGross) * bracket.rateMilliPercent) / 100000)
+  return { pph21, bracket, ratePct }
+}
+
+function annualProgressiveTax(pkp: number): number {
+  let remaining = pkp
+  let prevCap = 0
+  let tax = 0
+  for (const b of BRACKETS) {
+    if (remaining <= 0) break
+    const slice = Math.min(remaining, b.upTo - prevCap)
+    tax += slice * b.rate
+    remaining -= slice
+    prevCap = b.upTo
+  }
+  return tax
+}
+
+export interface Pph21FinalPeriodResult {
+  pph21: number // terpotong pada slip masa terakhir (tidak pernah negatif)
+  overWithheld: number // > 0 = wajib kembali ke karyawan (PMK 168/2023 Pasal 21)
+  underWithheldExcess: number // sisa kurang potong melebihi bruto slip (temuan terbuka)
+  annualTax: number
+  pkp: number
+  netYear: number
+}
+
+/** Hitung ulang masa pajak terakhir (vonis §4; PMK 168/2023 Pasal 15).
+ * `monthsInStint` = jumlah bulan bagian tahun (12 karyawan penuh; < 12 masuk/
+ * keluar tengah tahun → neto disetahunkan, PTKP penuh, pajak proporsional).
+ * `pensionDeductionYear` = iuran pensiun/hari tua karyawan SAJA (bukan BPJS
+ * total, bukan kesehatan). */
+export function computePph21FinalPeriod(o: {
+  grossYear: number
+  pensionDeductionYear: number
+  maritalStatus?: string | null
+  dependents?: number
+  monthsInStint: number
+  priorWithheld: number
+  finalPeriodGross: number
+  p?: StatutoryParams | null
+}): Pph21FinalPeriodResult {
+  const q = o.p ?? ({ ...FALLBACK_PARAMS } as StatutoryParams)
+  const months = Math.min(12, Math.max(1, Math.floor(o.monthsInStint)))
+  const grossYear = Math.max(0, o.grossYear)
+  const occupationalCost = Math.min(grossYear * q.occupationalCostRate, (q.occupationalCostCeilingYear / 12) * months)
+  const netYear = grossYear - occupationalCost - Math.max(0, o.pensionDeductionYear)
+  const annualisedNet = months === 12 ? netYear : (netYear / months) * 12
+  const ptkp = ptkpFor(o.maritalStatus, o.dependents ?? 0, q)
+  const pkp = Math.floor(Math.max(0, annualisedNet - ptkp) / 1000) * 1000
+  const annualisedTax = annualProgressiveTax(pkp)
+  const annualTax = Math.round(months === 12 ? annualisedTax : (annualisedTax * months) / 12)
+  const diff = annualTax - Math.max(0, o.priorWithheld)
+  if (diff < 0) return { pph21: 0, overWithheld: -diff, underWithheldExcess: 0, annualTax, pkp, netYear }
+  const cap = Math.max(0, o.finalPeriodGross)
+  return {
+    pph21: Math.min(diff, cap),
+    overWithheld: 0,
+    underWithheldExcess: Math.max(0, diff - cap),
+    annualTax,
+    pkp,
+    netYear,
+  }
+}
+
+export type TerPeriodKind = "monthly" | "final-december" | "final-resignation"
+
+export interface TerPeriodResolution {
+  kind: TerPeriodKind
+  /** Jumlah bulan bagian tahun pajak (1-12) untuk hitung ulang masa terakhir. */
+  monthsInStint: number
+  priorEmployerIncomeIncluded: false
+}
+
+/** Klasifikasi masa pajak F-026 §3: Desember ATAU slip final berhenti = masa
+ * terakhir; selain itu TER bulanan. `resignationFinal` WAJIB penanda eksplisit
+ * pemanggil (bukan turunan isActive). Bulan bagian = bulan berpenghasilan
+ * pertama (maks(joinDate, Jan)) s.d. bulan berhenti/periode berjalan. */
+export function resolveTerPeriod(o: {
+  periodYear: number
+  periodMonth: number // 1-12
+  joinDate?: Date | null
+  resignationFinal?: boolean
+  resignationYearMonth?: { year: number; month: number } | null
+}): TerPeriodResolution {
+  // Bulan bagian dihitung DALAM tahun pajak berjalan: karyawan lama mulai
+  // dari Januari tahun ini (12 bulan penuh), bukan sejak joinDate historis.
+  const joinedThisYear = o.joinDate != null && o.joinDate.getFullYear() === o.periodYear
+  const firstMonth = joinedThisYear && o.joinDate ? o.joinDate.getMonth() + 1 : 1
+  const firstIdx = o.periodYear * 12 + (firstMonth - 1)
+  if (o.resignationFinal) {
+    const end = o.resignationYearMonth ?? { year: o.periodYear, month: o.periodMonth }
+    const months = Math.min(12, Math.max(1, end.year * 12 + (end.month - 1) - firstIdx + 1))
+    return { kind: "final-resignation", monthsInStint: months, priorEmployerIncomeIncluded: false }
+  }
+  if (o.periodMonth === 12) {
+    const months = Math.min(12, Math.max(1, o.periodYear * 12 + 11 - firstIdx + 1))
+    return { kind: "final-december", monthsInStint: months, priorEmployerIncomeIncluded: false }
+  }
+  const months = Math.min(12, Math.max(1, o.periodYear * 12 + (o.periodMonth - 1) - firstIdx + 1))
+  return { kind: "monthly", monthsInStint: months, priorEmployerIncomeIncluded: false }
 }
