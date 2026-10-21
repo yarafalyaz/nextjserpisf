@@ -2495,3 +2495,177 @@ Fokus berikutnya: implementasi F-035 (backend), spec F-036
 Rotasi berikutnya sesudah (k) dibuka hanya bila domain baru terbukti
 belum punya F-ID; jangan duplikasi F-90..94/035..037.
 
+---
+
+## VONIS BOT 4 2026-10-21 23:48 WIB — BR-027-07 basis pajak per komponen gaji (FINAL, tertulis saja)
+
+Pemutus: `accounting-finance-tax` (BOT 4 / Salsa). Kartu kanban
+`t_43cdbc95`. Tanpa kode, tanpa migrasi, tanpa sentuh `src/lib/tax/**`.
+Sumber mengikat: spec implementasi Bot 5 `t_2dcbf0f0` komentar #81
+(BR-027-I06/I07), vonis akun F-027-V `t_e7624f49` §2/§4/§7, vonis
+F-026 (TER PP 58/2023 + hitung ulang masa terakhir, FINAL di backlog
+ini). Bukti kode live: `origin/main` 12e7dfc1 + head PR struktur
+F-027 #360 `d1fdb8a0` (OPEN saat vonis terbit; Unit/Build masih
+berjalan — vonis tidak menunggu hijau, tahap jurnal menunggu #360
+merged).
+
+### A. Putusan mode berjalan — `all-taxable-v1` SAH untuk tahap struktur
+
+Mode snapshot `payrollComponents` di PR #360 (`hrm.actions.ts` head
+#360:102-104, 184-197) — `mode:"all-taxable-v1"`,
+`taxableGross = grossSalary`, `nonTaxableEarningTotal = 0`,
+`isTaxableSnapshot` disimpan tapi TIDAK dibaca hitung — dinyatakan
+**SAH dan WAJIB dipertahankan** untuk seluruh tahap struktur F-027
+(model, tarikan generate, agregat turunan, baris draft). Alasan:
+tanpa vonis ini, memecah basis pajak = mengubah PPh21 tanpa dasar
+klasifikasi; mode ini membuat angka hari ini identik pra-fitur
+sambil bentuk snapshot sudah siap dipecah kelak. `mode:"split"`
+**DILARANG ditulis** sebelum syarat §E terpenuhi semua. Flag
+`isTaxable=false` di master/UI tahap ini = klasifikasi tersimpan,
+BUKAN janji bebas pajak aktif; frontend dilarang melabelinya
+"tidak kena pajak" (mengikuti spec Bot 5 E7/F4).
+
+### B. Basis pajak per jenis komponen (keputusan FINAL)
+
+Dasar hukum (akses 2026-10-21, teks resmi JDIH Kemenkeu):
+PMK 168/2023 Pasal 5 ayat (1) huruf a + ayat (3), Pasal 7, Pasal 8,
+Pasal 10, Pasal 15 —
+https://jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023 dan PDF resmi
+https://jdih.kemenkeu.go.id/api/download/e60a82e0-b218-40f5-9d18-b924aa1e11ce/2023pmkeuangan168.pdf ;
+PMK 66/2023 (natura dikecualikan, jenis+batasan) —
+https://jdih.kemenkeu.go.id/dok/pmk-66-tahun-2023/summary ;
+PP 58/2023 (TER) sebagaimana vonis F-026. Berlaku: PMK 168/2023
+dan PP 58/2023 sejak 1 Jan 2024; PMK 66/2023 sejak 2023. Cakupan:
+pegawai tetap penerima penghasilan teratur/tidak teratur di ISF;
+pegawai tidak tetap/bukan pegawai/peserta kegiatan DI LUAR vonis
+ini (vonis F-026 §1).
+
+| Kelas | Perlakuan basis PPh21 (saat mode split aktif kelak) | Syarat keras |
+|---|---|---|
+| Earning teratur kena pajak (gaji pokok, tunjangan tetap, lembur, apresiasi — PMK 168 Pasal 5(3)a) | Masuk bruto masa; TER atas bruto gabungan masa berjalan; ikut bruto tahunan hitung ulang masa terakhir (F-026 §4) | Default semua earning. Keraguan klasifikasi = kena pajak (fail-safe kurang-potong dilarang) |
+| Earning tidak teratur kena pajak (bonus, THR, jasa produksi, tantiem, gratifikasi, premi — Pasal 5(3)b) | Sama: DIGABUNG bruto masa diterima, satu tarif TER atas total (F-026 §2, tes T3/T7 vonis F-026). Bukan tarif terpisah, bukan dirata-rata | `Payroll.type=THR` tidak mengubah metode; dua slip se-masa diagregasi, slip kedua memotong selisih |
+| Earning NON-kena-pajak — hanya 3 pintu sah | Di luar bruto masa DAN di luar bruto tahunan; masuk `nonTaxableEarningTotal`, bukan `taxableGross` | (1) Penggantian biaya kerja terbukti (reimbursement perjalanan dinas/biaya kerja): bukti pengeluaran nyata + sifat penggantian, nominal = bukti, kelebihan di atas bukti = kena pajak. Tanpa bukti = kena pajak. (Dasar sifat: bukan tambahan kemampuan ekonomis; praktik DJP reimbursement ber-bukti bukan objek — label `USULAN-DOKUMENTASI` untuk ambang bukti, lihat §G.) (2) Natura/kenikmatan DIKECUALIKAN per PMK 168 Pasal 7 huruf b jo. PMK 66/2023: wajib kategori terstruktur dari daftar PMK 66 (makanan seluruh pegawai di tempat kerja, natura wajib K3/kerja, daerah tertentu, bingkisan hari raya, peralatan kerja, dst. beserta batasan nilai per jenis) — tanpa kode kategori = kena pajak. (3) Pengecualian Pasal 7 lain yang terverifikasi dokumen (mis. iuran pensiun/hari tua dibayar pemberi kerja ke dana/BPJS berizin, Pasal 7 huruf c — non-tunai, kaki kreditnya DITUNDA-3 vonis akun, tetap dilarang aktif sampai tahap jurnal natura diputus) |
+| Earning natura/kenikmatan kena pajak + premi dibayar pemberi kerja (Pasal 5(3)d-f) | Masuk bruto (nilai natura/premi) | Non-tunai: komponen boleh disimpan master, generate barisnya DITOLAK sampai kaki kredit non-tunai diputus (DITUNDA-3). Jangan dipaksakan tunai |
+| Tunjangan PPh21 / PPh21 ditanggung (gross-up) | **DILARANG** sebagai komponen earning biasa | PP 55/2022 + PMK 66/2023: pajak ditanggung = kenikmatan objek pajak, hitung iteratif. Tetap DITUNDA-2 vonis akun; butuh vonis metode tersendiri |
+| Deduction karyawan (semua baris `kind=deduction` tahap ini) | **TIDAK mengurangi bruto masa berjalan (TER)** dan **TIDAK mengurangi bruto tahunan**, kecuali pengurang Pasal 10 di baris berikut. Hanya mengurangi net diterima | `isTaxable` pada deduction disimpan false, diabaikan (konsisten PR #360). Denda/koperasi/cicilan/potongan disiplin TIDAK BOLEH mengurangi basis — tidak ada pintu di PMK 168 Pasal 10 untuk itu |
+| Pengurang bruto yang SAH — hanya jalur statutori existing, BUKAN baris komponen bebas | Diakui HANYA di hitung ulang masa terakhir (Pasal 15(1)b), tidak di TER masa berjalan: (a) biaya jabatan 5% maks Rp500rb/bln (Pasal 10(2), otomatis mesin — bukan komponen); (b) iuran pensiun/hari tua dibayar karyawan melalui pemberi kerja (JHT/JP karyawan; Pasal 10(1)b) — jalur `bpjsEmploymentEmployee` existing; BPJS Kesehatan karyawan TIDAK mengurangi (F-026 §4); (c) zakat/sumbangan keagamaan wajib melalui pemberi kerja ke badan/lembaga sah (Pasal 10(1)c) — HANYA bila kelak dibuat komponen bertipe khusus `statutoryDeduction` terverifikasi penerima; tahap ini TIDAK ada, jangan buat komponen zakat bebas | Operator dilarang meniru pengurang ini lewat baris deduction biasa. Mesin masa terakhir wajib membaca pengurang dari kolom statutori, bukan dari `Σ deduction lines` |
+
+### C. Siapa boleh menetapkan `isTaxable=false`
+
+- Penetap: hanya peran dengan scope HR `all` (HR/finance/admin/ga —
+  `HR_ALL_ACCESS_ROLES`, hr-scope.ts) DAN permission master
+  `create_employees`/`edit_employees` (spec Bot 5 §C). Scope
+  department/self TIDAK boleh membuat/mengubah flag non-taxable.
+- Setiap master earning `isTaxable=false` WAJIB membawa alasan
+  terstruktur: kelas §B (reimbursement-berbukti / kode kategori
+  PMK 66 / Pasal 7 lain) + rujukan bukti/kebijakan internal.
+  Flag bebas tanpa kelas = simpan DITOLAK (fail-closed pajak).
+  Implementasi kolom alasannya = kartu tahap split (backend),
+  bukan PR struktur — tahap struktur flag tetap tersimpan saja.
+- Perubahan flag master TIDAK berlaku surut: slip terbit membaca
+  `isTaxableSnapshot` beku (pola vonis akun §1 butir 3). Koreksi
+  klasifikasi salah hanya lewat slip koreksi periode terbuka.
+
+### D. Komponen tidak tetap (recurrence=variable)
+
+- Tidak tertarik generate otomatis (tetap: vonis akun §6, spec E12).
+  Masuk manual per slip draft atau run khusus (THR via
+  `Payroll.type=THR` eksplisit).
+- Perlakuan pajaknya mengikuti KELAS-nya (§B), bukan recurrence-nya:
+  variable kena pajak (bonus/THR/dll) digabung bruto masa diterima;
+  variable non-taxable hanya lewat 3 pintu §B dengan syarat sama.
+  Recurrence tidak pernah menjadi alasan bebas pajak.
+- Komponen formula/persen/prorata: tetap DITUNDA-6. Nominal baris
+  selalu angka final terverifikasi operator, bukan rumus bebas.
+
+### E. Syarat buka tahap JURNAL + mode `split` F-027 (semua wajib)
+
+1. PR struktur #360 merged ke `main` (head final terverifikasi;
+   saat vonis terbit masih OPEN) — tahap jurnal di branch terpisah
+   sesudahnya, JANGAN dicampur ke #360.
+2. Mode split dibangun sebagai perubahan basis eksplisit:
+   `taxableGross = base + overtime + appreciation + Σ earning
+   taxable`; `grossSalary` pajak hanya dari itu; earning
+   non-taxable §B tetap masuk `allowances` tampilan + net, di luar
+   `grossSalary`. Mesin TER/hitung-ulang membaca `taxableGross`
+   snapshot, bukan menebak dari flag master berjalan.
+3. Gerbang approve tambahan (menjawab pertanyaan Bot 5 §H(d)):
+   slip `mode:"split"` dengan baris non-taxable WAJIB ditolak
+   approve bila snapshot basis tidak lengkap (kelas/alasan baris
+   non-taxable kosong, atau `taxableGross + nonTaxable ≠ earning
+   bruto kas`). Slip `all-taxable-v1` dan slip warisan tanpa kunci
+   snapshot TIDAK kena gerbang baru ini.
+4. Jurnal tetap SATU per slip paid di `onPayrollPaid`; komponen
+   hanya memecah kaki DEBIT per vonis akun §2-§3 (fallback akun
+   berurutan, fail-closed). Koreksi klasifikasi D1 (potongan
+   pengurang bruto berhenti dikredit ke Hutang Gaji 210204) dikerjakan
+   dalam scope khusus `accounting.hook.ts` yang sama — hotspot
+   sudah ditandai di `t_e7624f49`, jangan dicampur PR struktur.
+5. Deduction liability D2 (akun penampung wajib) aktif hanya dari
+   tahap jurnal; tahap struktur accountId boleh kosong tersimpan.
+6. Angka statutori lain tidak berubah: BPJS basis existing, PTKP/
+   kategori TER F-026, pembulatan `safeRound` sen, uang
+   `Decimal(15,2)`.
+
+### F. Falsifikasi angka — pra vs pasca (pernyataan eksplisit)
+
+**Fixture PR #360 head `d1fdb8a0` membuktikan identitas tahap ini:**
+processPayroll base Rp5.000.000 + 2 penugasan tetap (Transport
+Rp500.000 + Makan Rp300.000) → `allowances=800000`,
+`grossSalary=5800000`, snapshot `mode:"all-taxable-v1",
+taxableGross:5800000, nonTaxableEarningTotal:0, lineCount:2`
+(tes AC-1 `hrm-payroll-components.test.ts:222-247`); bulk data sama
+→ angka sama persis (AC-T4 :281-305); tanpa penugasan → allowances
+input lama berlaku, `grossSalary=5123000` pada allowances 123000
+(:266-280); tarikan dicabut (query kosong) → allowances 0,
+gross 5000000, tanpa baris (:306-318).
+
+**Pernyataan BOT 4:** untuk semua slip yang dibuat/dihitung ulang
+pada mode `all-taxable-v1`, gross/PPh21/net **WAJIB identik** dengan
+formula pra-fitur (`buildPayrollWrite` origin/main: gross = base +
+allowances + overtime + appreciation; TER atas gross gabungan;
+net = gross − withheld, lantai 0). Beda satu sen pun = cacat tahap
+struktur, bukan "efek klasifikasi". Tes pengunci arah sebaliknya
+sudah benar di spec (AC-T3.4): baris `isTaxable=false` Rp1.000.000
+tahap ini PPh21-nya SAMA dengan baris taxable nominal sama — tes
+itu yang kelak diubah saat split dibangun, tidak boleh berbalik
+diam-diam. Saat split aktif, falsifikasi berubah arah: reimbursement
+berbukti Rp1.000.000 → `taxableGross` tidak naik, PPh21 sama dengan
+tanpa baris, net naik penuh; flag dibalik taxable → PPh21 berubah.
+Kedua arah wajib tes merah-bila-penjaga-dicabut.
+
+### G. Yang tetap DITUNDA / risiko
+
+- Ambang bukti reimbursement (jenis bukti minimum per nilai) =
+  `USULAN-DOKUMENTASI`: vonis ini mewajibkan bukti nyata + nominal
+  = bukti; daftar dokumen minimum per kelas disahkan owner/akuntan
+  saat kartu tahap split dibuat, sebelum mode split boleh aktif.
+- Gross-up (DITUNDA-2), kaki kredit natura (DITUNDA-3), BPJS
+  pemberi kerja (DITUNDA-1), pisah akun utang PPh21/BPJS
+  (DITUNDA-4), cost center per baris (DITUNDA-5): tetap tertutup.
+- Risiko utama: operator melabeli tunjangan rutin sebagai
+  "reimbursement" tanpa bukti → kurang potong sistemik. Mitigasi
+  §C (kelas wajib + penetap scope all) + gerbang approve §E.3.
+- Klaim kepatuhan terbatas pada rujukan §B; perlakuan komponen
+  spesifik perusahaan di luar daftar §B = `BUTUH-VONIS-AKUNTAN`
+  per kasus, jangan ditiru dari nama komponen.
+
+### H. Handoff
+
+- **Bara (backend, `t_c48465a9` / PR #360):** tahap struktur LANJUT
+  persis mode `all-taxable-v1`; jangan aktifkan split, jangan baca
+  `isTaxableSnapshot` untuk hitung apa pun, jangan sentuh
+  `accounting.hook.ts` di PR ini. Sesudah #360 merged, kartu tahap
+  jurnal+split dibuat terpisah dengan syarat §E.
+- **Qila (QA):** acceptance tahap struktur = identitas §F (fixture
+  AC-1/AC-T4/pra-fitur identik) + AC-T3.4 mengunci non-taxable
+  belum berpengaruh; acceptance split kelak = falsifikasi dua arah
+  §F + gerbang approve §E.3. Nominal gaji tidak masuk board/log.
+- **Fira (frontend):** flag `isTaxable` tampil sebagai klasifikasi
+  master tersimpan, bukan status bebas pajak; label mode snapshot
+  ditampilkan apa adanya dari backend.
+
+Vonis ini FINAL untuk BR-027-07. BR-027-08 (jurnal) tetap vonis
+akun `t_e7624f49`, aktif dibangun hanya sesudah §E.1 terpenuhi.
+
+
