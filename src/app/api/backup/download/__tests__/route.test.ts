@@ -64,21 +64,16 @@ describe("GET /api/backup/download", () => {
     expect(res.status).toBe(400)
   })
 
-  it("returns 400 when filename is not an allowlisted backup name", async () => {
-    mocks.hasPermission.mockResolvedValue(true)
-    mocks.isValidBackupName.mockReturnValue(false)
-    const res = await GET(new NextRequest("http://localhost/api/backup/download?file=dump.sql"))
-    expect(res.status).toBe(400)
-    expect(mocks.readBackupFile).not.toHaveBeenCalled()
-  })
-
-  it("returns 400 when backup-looking name fails allowlist", async () => {
-    mocks.hasPermission.mockResolvedValue(true)
-    mocks.isValidBackupName.mockReturnValue(false)
-    const res = await GET(new NextRequest("http://localhost/api/backup/download?file=backup-evil.sh"))
-    expect(res.status).toBe(400)
-    expect(mocks.readBackupFile).not.toHaveBeenCalled()
-  })
+  it.each(["dump.sql", "backup-evil.sh"])(
+    "returns 400 when filename %s is not an allowlisted backup name",
+    async (file) => {
+      mocks.hasPermission.mockResolvedValue(true)
+      mocks.isValidBackupName.mockReturnValue(false)
+      const res = await GET(new NextRequest(`http://localhost/api/backup/download?file=${file}`))
+      expect(res.status).toBe(400)
+      expect(mocks.readBackupFile).not.toHaveBeenCalled()
+    },
+  )
 
   it("returns 200 with file stream and audit log on success", async () => {
     mocks.hasPermission.mockResolvedValue(true)
