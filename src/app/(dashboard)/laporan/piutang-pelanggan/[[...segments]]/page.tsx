@@ -6,6 +6,8 @@ import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
+import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+import { safeAdd } from "@/lib/utils/math"
 import { averagePaymentDays, buildCustomerCreditExposure, buildCustomerReceivables } from "@/lib/reports/customer-receivables"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
@@ -69,7 +71,7 @@ export default async function CustomerReceivablesPage({
   const buckets = new Map<number, { customerId: number; customerName: string; creditLimit: number; outstanding: number; overdue: number; invoiceCount: number }>()
 
   for (const invoice of invoices) {
-    const outstanding = Number(invoice.grandTotal) - Number(invoice.paidAmount)
+    const outstanding = receivableOutstanding(invoice.grandTotal, invoice.paidAmount)
     if (outstanding <= 0) continue
     const bucket = buckets.get(invoice.customerId) ?? {
       customerId: invoice.customerId,
@@ -79,8 +81,8 @@ export default async function CustomerReceivablesPage({
       overdue: 0,
       invoiceCount: 0,
     }
-    bucket.outstanding += outstanding
-    if (invoice.dueDate && invoice.dueDate < now) bucket.overdue += outstanding
+    bucket.outstanding = safeAdd(bucket.outstanding, outstanding, 2)
+    if (invoice.dueDate && invoice.dueDate < now) bucket.overdue = safeAdd(bucket.overdue, outstanding, 2)
     bucket.invoiceCount += 1
     buckets.set(invoice.customerId, bucket)
   }
@@ -119,18 +121,32 @@ export default async function CustomerReceivablesPage({
     })
     for (const inv of orderInvoices) {
       if (inv.salesOrderId == null) continue
-      invoicedByOrder.set(inv.salesOrderId, (invoicedByOrder.get(inv.salesOrderId) ?? 0) + Number(inv.grandTotal))
+      invoicedByOrder.set(inv.salesOrderId, safeAdd(invoicedByOrder.get(inv.salesOrderId) ?? 0, inv.grandTotal, 2))
     }
   }
   const openOrderByCustomer = new Map<number, number>()
   for (const order of openOrders) {
-    const open = Math.max(0, Number(order.grandTotal) - (invoicedByOrder.get(order.id) ?? 0))
+    const open = Math.max(0, receivableOutstanding(order.grandTotal, invoicedByOrder.get(order.id) ?? 0))
     if (open <= 0) continue
-    openOrderByCustomer.set(order.customerId, (openOrderByCustomer.get(order.customerId) ?? 0) + open)
+    openOrderByCustomer.set(order.customerId, safeAdd(openOrderByCustomer.get(order.customerId) ?? 0, open, 2))
+  }
+  // F-2026-10-21-017: DP confirmed mengurangi paparan (kas sudah diterima di
+  // muka). Satu query massal; hanya status confirmed (draft/cancelled tak ikut).
+  const confirmedDpByCustomer = new Map<number, number>()
+  const confirmedDps = await prisma.downPayment.findMany({
+    where: { status: "confirmed" },
+    select: { customerId: true, amount: true },
+  })
+  for (const dp of confirmedDps) {
+    confirmedDpByCustomer.set(dp.customerId, safeAdd(confirmedDpByCustomer.get(dp.customerId) ?? 0, dp.amount, 2))
   }
   const exposureByCustomer = new Map(
     buildCustomerCreditExposure(
-      [...buckets.values()].map((b) => ({ ...b, openOrderAmount: openOrderByCustomer.get(b.customerId) ?? 0 })),
+      [...buckets.values()].map((b) => ({
+        ...b,
+        openOrderAmount: openOrderByCustomer.get(b.customerId) ?? 0,
+        confirmedDownPayment: confirmedDpByCustomer.get(b.customerId) ?? 0,
+      })),
     ).map((r) => [r.customerId, r]),
   )
 

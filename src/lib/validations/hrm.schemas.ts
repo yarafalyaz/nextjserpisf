@@ -75,12 +75,16 @@ export const employeeLoanSchema = z.object({
 
 export const timesheetSchema = z.object({
   employeeId: requiredId("Karyawan"),
-  projectId: requiredId("Proyek"),
+  // F-2026-10-21-019: tepat satu konteks (proyek XOR perintah kerja) —
+  // keduanya opsional di skema; XOR ditegakkan di service (timesheet-context).
+  projectId: optionalId,
+  workOrderId: optionalId,
   taskId: optionalId,
   date: requiredDate("Tanggal"),
   startTime: optionalStr(10),
   endTime: optionalStr(10),
-  hours: requiredNum("Jam", 0.01),
+  // Cap per baris 24 jam (satu baris = satu sesi kerja satu hari kalender).
+  hours: z.coerce.number().min(0.01).max(24),
   description: optionalStr(1000),
 })
 

@@ -38,4 +38,33 @@ describe("LaborRecapCard F-2026-10-20-97a", () => {
     expect(container.querySelector("table")).toBeNull()
     unmountCard(root)
   })
+
+  it("F-038: kelompok tanggal belum terbukti tampil di luar total, total tidak berubah", () => {
+    const base = buildLaborRecap([
+      { employeeId: 7, employeeName: "Budi", category: "labor", hours: 8, amount: 500_000 },
+    ])
+    const recap = {
+      ...base,
+      undated: { laborHours: 3, totalAmount: 120_000, lineCount: 2 },
+    } as typeof base & { undated: { laborHours: number; totalAmount: number; lineCount: number } }
+    const { container, root } = renderCard(<LaborRecapCard recap={recap} />)
+    const text = container.textContent ?? ""
+    expect(container.querySelector('[aria-label="Baris labor tanggal kerja belum terbukti"]')).not.toBeNull()
+    expect(text).toContain("Tanggal kerja belum terbukti")
+    expect(text).toContain("di luar total periode")
+    expect(text).toContain("Rp 120.000")
+    // total periode tetap 500rb — undated tidak masuk total
+    expect(text).toContain("total Rp 500.000")
+    unmountCard(root)
+  })
+
+  it("F-038: tanpa kelompok undated, bagian tanggal tidak tampil", () => {
+    const recap = buildLaborRecap([
+      { employeeId: 7, employeeName: "Budi", category: "labor", hours: 8, amount: 500_000 },
+    ])
+    const { container, root } = renderCard(<LaborRecapCard recap={recap} />)
+    expect(container.querySelector('[aria-label="Baris labor tanggal kerja belum terbukti"]')).toBeNull()
+    expect(container.textContent ?? "").not.toContain("Tanggal kerja belum terbukti")
+    unmountCard(root)
+  })
 })

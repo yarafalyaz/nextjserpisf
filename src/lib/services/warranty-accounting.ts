@@ -46,14 +46,21 @@
  * Beban/provisi memakai kelompok COGS 5101 (induk HPP) agar margin job asal
  * terlihat (PRD REP-12 lifetime warranty cost), BUKAN 6000 Beban Operasional:
  * garansi adalah biaya memenuhi penjualan asal, bukan overhead periode.
- * Kode di bawah adalah REKOMENDASI anak baru di bawah 5101 — belum ada di CoA
- * berjalan dan TIDAK dibuat oleh modul ini (menunggu inti dibuka Nara):
- *   510103 Beban Garansi (akrual & realisasi tanpa provisi)  [COGS]
- *   2105xx Provisi Garansi (liabilitas)                      [OCLY/LTLY]
- *   1108xx Piutang Klaim Supplier — Garansi (aset lain)      [OCAS]
+ * Kode FINAL (vonis BOT 4 F-2026-10-21-021 tahap 3, koreksi F-69 — membatalkan
+ * rekomendasi lama 510103/2105xx/1108xx; 510103 = Penyesuaian Persediaan,
+ * DILARANG untuk garansi):
+ *   510104 Beban Garansi                                [COGS di bawah 5101]
+ *   210205 Provisi Garansi                              [OCLY di bawah 2102]
+ *   110508 Piutang Klaim Supplier — Garansi             [OCAS di bawah 1105]
  * Fail-closed berlaku: jurnal garansi inti wajib menolak posting bila akun
- * provisi/beban garansi belum di-mapping di SystemSetting (pola AUD-FIN-01
+ * yang dibutuhkan jalur terpilih belum di-mapping di SystemSetting
+ * (warrantyExpenseAccountId / warrantyProvisionAccountId /
+ * supplierClaimReceivableAccountId; pola AUD-FIN-01
  * customerDownPaymentAccountId), bukan jatuh ke akun tebak.
+ * Status inti: rute provisi MATI — hanya E2 (beban saat terjadi) + E3
+ * (recovery virtually-certain) punya pemanggil; E1/E4 DITUNDA sampai gerbang
+ * data 12 bulan/30 klaim dinilai BOT 4. Fungsi akrual/release di bawah ini
+ * tetap murni tanpa pemanggil produksi.
  */
 
 export type WarrantyCoverage = "part" | "labor"
