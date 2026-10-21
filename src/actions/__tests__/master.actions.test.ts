@@ -633,12 +633,17 @@ describe("TaxGroup Actions", () => {
     const res = await actions.deleteTaxGroup(1)
     expect(res?.success).toBe(true)
   })
-  it("deleteTaxGroup menolak bila masih berisi pajak tanpa menghapus", async () => {
+  it("deleteTaxGroup menghapus keanggotaan lalu grupnya dalam satu transaksi", async () => {
+    // Kontrak baru: grup yang berisi pajak TETAP bisa dihapus (dulu ditolak,
+    // padahal buat/ubah mewajibkan ≥1 pajak sehingga grup tak pernah bisa
+    // dikosongkan — buntu). Keanggotaan dibersihkan lebih dulu.
     mocks.prismaMock.taxGroupTax.count.mockResolvedValueOnce(2)
     const res = await actions.deleteTaxGroup(1)
-    expect(res?.success).toBe(false)
-    expect(String(res?.error)).toContain("2 pajak")
-    expect(mocks.prismaMock.taxGroup.delete).not.toHaveBeenCalled()
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.taxGroupTax.deleteMany).toHaveBeenCalledWith({
+      where: { taxGroupId: 1 },
+    })
+    expect(mocks.prismaMock.taxGroup.delete).toHaveBeenCalledWith({ where: { id: 1 } })
   })
 })
 

@@ -26,7 +26,8 @@ interface PurchaseRequest {
 
 const columnHelper = createColumnHelper<PurchaseRequest>()
 
-const columns = [
+function buildColumns(canCreatePurchaseOrder: boolean) {
+  return [
   columnHelper.accessor("documentNo", {
     header: "No. Dokumen",
     cell: (info) => (
@@ -64,12 +65,15 @@ const columns = [
     enableSorting: false,
     cell: (info) => {
       const pr = info.row.original
+      if (!canCreatePurchaseOrder) {
+        return <span className="text-muted-foreground">-</span>
+      }
       if (pr.status !== "approved" && pr.status !== "partial_ordered") {
         return <span className="text-muted-foreground">-</span>
       }
       return (
         <Link
-          href={`/pembelian/pesanan/tambah/${pr.slug ?? pr.id}`}
+          href={`/pembelian/pesanan/tambah/pr/${pr.slug ?? pr.id}`}
           className="text-primary hover:underline font-medium"
         >
           Buat PO
@@ -91,7 +95,8 @@ const columns = [
       />
     ),
   }),
-]
+  ]
+}
 
 interface PurchaseRequestTableProps {
   data: PurchaseRequest[]
@@ -100,13 +105,15 @@ interface PurchaseRequestTableProps {
   pageSize: number
   toolbar?: React.ReactNode
   filters?: React.ReactNode
+  /** Server-checked (hasPermission "create_purchase_orders") — gates the per-row "Buat PO" create-link, which lives in this client table where the async server <CanCreate> cannot render. */
+  canCreatePurchaseOrder: boolean
 }
 
-export function PurchaseRequestTable({ data, total, page, pageSize, toolbar, filters }: PurchaseRequestTableProps) {
+export function PurchaseRequestTable({ data, total, page, pageSize, toolbar, filters, canCreatePurchaseOrder }: PurchaseRequestTableProps) {
   return (
     <DataTable
       data={data}
-      columns={columns}
+      columns={buildColumns(canCreatePurchaseOrder)}
       ariaLabel="Daftar permintaan pembelian"
       serverPagination={{ total, page, pageSize }}
       selectable={true}

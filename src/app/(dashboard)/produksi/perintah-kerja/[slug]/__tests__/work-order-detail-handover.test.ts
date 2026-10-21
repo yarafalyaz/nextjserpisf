@@ -21,7 +21,7 @@ describe("detail WO: field Inspeksi Serah Terima F-50", () => {
 
   it("href prefill serah terima menunjuk type/reference yang benar", () => {
     expect(src).toContain(
-      "inspectionType=vehicle_handover&referenceType=WorkOrder&referenceId=${wo.id}",
+      "/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_handover",
     )
   })
 

@@ -1,7 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
-import { requirePermission } from "@/lib/auth/permissions";
+import { hasPermission, requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
 import { formatCurrency, formatDate } from "@/lib/utils/format";
@@ -46,6 +46,7 @@ export default async function QuotationDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   await requirePermission("view_quotations");
+  const canApprove = await hasPermission("approve_quotations");
   const { slug } = await params;
 
   const quotationInclude = {
@@ -201,14 +202,14 @@ export default async function QuotationDetailPage({
             {["accepted", "approved"].includes(quotation.status) && (
               <>
                 <Button
-                  href={`/penjualan/uang-muka/tambah?quotationId=${quotation.id}`}
+                  href={`/penjualan/uang-muka/tambah/penawaran/${quotation.slug ?? quotation.id}`}
                   variant="secondary"
                 >
                   + Uang Muka
                 </Button>
                 {quotation.salesOrders.length === 0 ? (
                   <Button
-                    href={`/penjualan/pesanan/tambah?quotationId=${quotation.id}`}
+                    href={`/penjualan/pesanan/tambah/penawaran/${quotation.slug ?? quotation.id}`}
                     variant="primary"
                   >
                     + Pesanan Penjualan
@@ -243,6 +244,7 @@ export default async function QuotationDetailPage({
                   status={quotation.status}
                   id={quotation.id}
                   module="penjualan/penawaran"
+                  canAct={canApprove}
                 />
                 <DetailCard columns={4}>
                   <DetailField

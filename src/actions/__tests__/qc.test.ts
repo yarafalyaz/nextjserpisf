@@ -139,9 +139,22 @@ beforeEach(() => {
 })
 
 describe("createQcInspection", () => {
+  it("menolak checklist yang jenisnya beda dari jenis inspeksi", async () => {
+    qcChecklistFindUniqueMock.mockResolvedValue({
+      id: 5, status: "released", checklistType: "vehicle_intake",
+      items: [{ id: 1, isRequired: true }],
+    })
+
+    const res = await createQcInspection(inspectionForm({ rows: [{ id: 1, result: "pass" }] }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("tidak sesuai dengan jenis inspeksi")
+    expect(qcInspectionCreateMock).not.toHaveBeenCalled()
+  })
+
   it("derives 'passed' when no result fails", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({
-      id: 5, status: "released",
+      id: 5, status: "released", checklistType: "final",
       items: [{ id: 1, isRequired: true }, { id: 2, isRequired: true }],
     })
     qcInspectionCreateMock.mockResolvedValue({ id: 20 })
@@ -157,7 +170,7 @@ describe("createQcInspection", () => {
 
   it("derives 'failed' when any result fails", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({
-      id: 5, status: "released",
+      id: 5, status: "released", checklistType: "final",
       items: [{ id: 1, isRequired: true }, { id: 2, isRequired: true }],
     })
     qcInspectionCreateMock.mockResolvedValue({ id: 21 })
@@ -170,7 +183,7 @@ describe("createQcInspection", () => {
 
   it("auto-raises NCRs from a failed inspection", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({
-      id: 5, status: "released",
+      id: 5, status: "released", checklistType: "final",
       items: [{ id: 1, isRequired: true }, { id: 2, isRequired: true }],
     })
     qcInspectionCreateMock.mockResolvedValue({ id: 21 })
@@ -187,7 +200,7 @@ describe("createQcInspection", () => {
 
   it("does NOT auto-raise NCRs when the inspection passes", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({
-      id: 5, status: "released",
+      id: 5, status: "released", checklistType: "final",
       items: [{ id: 1, isRequired: true }],
     })
     qcInspectionCreateMock.mockResolvedValue({ id: 22 })
@@ -214,7 +227,7 @@ describe("createQcInspection", () => {
 
   it("refuses when a required item is unanswered", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({
-      id: 5, status: "released",
+      id: 5, status: "released", checklistType: "final",
       items: [{ id: 1, isRequired: true }, { id: 2, isRequired: true }],
     })
 
@@ -227,7 +240,7 @@ describe("createQcInspection", () => {
 
   it("refuses when referenced document does not exist", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({
-      id: 5, status: "released",
+      id: 5, status: "released", checklistType: "final",
       items: [{ id: 1, isRequired: true }],
     })
     workOrderFindUniqueQcMock.mockResolvedValue(null)
@@ -241,7 +254,7 @@ describe("createQcInspection", () => {
 
   it("drops results that reference items not on the checklist", async () => {
     qcChecklistFindUniqueMock.mockResolvedValue({
-      id: 5, status: "released",
+      id: 5, status: "released", checklistType: "final",
       items: [{ id: 1, isRequired: true }],
     })
     qcInspectionCreateMock.mockResolvedValue({ id: 22 })

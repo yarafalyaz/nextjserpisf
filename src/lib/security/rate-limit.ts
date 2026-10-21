@@ -45,6 +45,40 @@ export function rateLimitDegradedCount(): number {
   return degradedDecisions
 }
 
+/** Apakah Upstash Redis terkonfigurasi (batas global antar-proses)? */
+export function isRateLimitRedisConfigured(): boolean {
+  return Boolean(
+    process.env.UPSTASH_REDIS_REST_URL && process.env.UPSTASH_REDIS_REST_TOKEN,
+  )
+}
+
+/**
+ * AUD-04 fail-closed: di produksi, keputusan rate limit yang DEGRADED
+ * (fallback memori per-proses) untuk bucket sensitif (auth/upload)
+ * diperlakukan sebagai DITOLAK, supaya brute-force tidak mendapat batas
+ * longgar justru saat Redis mati. Matikan darurat dengan
+ * RATE_LIMIT_FAIL_CLOSED=0 bila fallback harus tetap meloloskan.
+ */
+export function isRateLimitFailClosed(): boolean {
+  return (
+    process.env.NODE_ENV === "production" &&
+    process.env.RATE_LIMIT_FAIL_CLOSED !== "0"
+  )
+}
+
+let warnedMissingRedis = false
+/** Peringatkan sekali per proses bila produksi berjalan tanpa Redis. */
+export function warnRateLimitRedisMissingOnce(): void {
+  if (warnedMissingRedis) return
+  if (process.env.NODE_ENV !== "production") return
+  if (isRateLimitRedisConfigured()) return
+  warnedMissingRedis = true
+  console.warn(
+    "[rate-limit] UPSTASH_REDIS_REST_URL/TOKEN tidak diset di produksi: " +
+      "rate limit memakai fallback per-proses dan bucket sensitif fail-closed (AUD-04).",
+  )
+}
+
 function nowMs() {
   return Date.now()
 }

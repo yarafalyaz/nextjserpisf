@@ -278,6 +278,7 @@ describe("Purchase Order Actions", () => {
   it("createPurchaseOrder links the purchase request (PR -> PO)", async () => {
     const { onPurchaseOrderCreated } = await import("@/lib/hooks/purchase-order.hook")
     vi.mocked(onPurchaseOrderCreated).mockClear()
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValue({ status: "approved", documentNo: "PR-042" })
     const res = await actions.createPurchaseOrder(fdMap({
       vendorId: "1",
       date: "2026-06-12",
@@ -289,6 +290,20 @@ describe("Purchase Order Actions", () => {
     expect(arg.data.purchaseRequestId).toBe(42)
     // The PR-status hook must run for the linked request.
     expect(vi.mocked(onPurchaseOrderCreated)).toHaveBeenCalled()
+  })
+
+  it("createPurchaseOrder menolak PR konsep (gerbang status PR di server)", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValue({ status: "draft", documentNo: "PR-042" })
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      purchaseRequestId: "42",
+      items: JSON.stringify([{ itemId: 1, qty: 5, unitPrice: 1000, discount: 0 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/belum bisa dibuatkan pesanan/i)
+    expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
   })
 
   it("createPurchaseOrder without a purchase request leaves the link null", async () => {
@@ -589,6 +604,49 @@ describe("Vendor Bill Actions", () => {
       grandTotal: "5000",
     }))
     expect(res?.success).toBe(true)
+  })
+
+  it("createVendorBill menerima tagihan PO jasa tanpa GR (plafon total PO)", async () => {
+    // PO jasa tidak punya penerimaan barang; 3-way match untuk jasa adalah
+    // plafon total PO, bukan keberadaan GR.
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, vendorId: 1, documentNo: "PO-SVC", isService: true,
+    })
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
+      isService: true, grandTotal: 5000, documentNo: "PO-SVC",
+    })
+    mocks.prismaMock.goodsReceipt.findMany.mockResolvedValue([])
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { subtotal: 0 } })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      subtotal: "5000",
+      tax: "0",
+      grandTotal: "5000",
+    }))
+    expect(res?.success).toBe(true)
+  })
+
+  it("createVendorBill menolak tagihan PO jasa melebihi total PO", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValue({
+      id: 1, vendorId: 1, documentNo: "PO-SVC", isService: true,
+    })
+    mocks.prismaMock.purchaseOrder.findUnique.mockResolvedValue({
+      isService: true, grandTotal: 5000, documentNo: "PO-SVC",
+    })
+    mocks.prismaMock.vendorBill.aggregate.mockResolvedValue({ _sum: { subtotal: 0 } })
+    const res = await actions.createVendorBill(fdMap({
+      vendorId: "1",
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      subtotal: "9000",
+      tax: "0",
+      grandTotal: "9000",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/melebihi total PO/i)
   })
 
   it("updateVendorBill succeeds", async () => {

@@ -1,5 +1,5 @@
 /**
- * Nilai awal form retur penjualan saat dibuka dari sebuah faktur (`?invoiceId=`).
+ * Nilai awal form retur penjualan saat dibuka dari sebuah faktur (segmen `faktur/<slug>`).
  *
  * Sisa yang boleh diretur per barang = qty yang difakturkan − qty yang sudah
  * diretur pada retur yang tidak dibatalkan. Angka ini adalah cermin dari penjaga

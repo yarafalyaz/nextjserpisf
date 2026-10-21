@@ -16,6 +16,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Pusat Biaya" }
 
 export default async function CostCenterDetailPage({
@@ -53,8 +54,12 @@ export default async function CostCenterDetailPage({
           { label: costCenter.name },
         ]}
         actions={<>
-          <Button href={entityEditHref("/keuangan/pusat-biaya", costCenter)} variant="primary"><Pencil size={14} /> Ubah</Button>
-          <DeleteButton id={costCenter.id} action={deleteCostCenter} />
+          <CanCreate permission="edit_cost_centers">
+            <Button href={entityEditHref("/keuangan/pusat-biaya", costCenter)} variant="primary"><Pencil size={14} /> Ubah</Button>
+          </CanCreate>
+          <CanCreate permission="delete_cost_centers">
+            <DeleteButton id={costCenter.id} action={deleteCostCenter} />
+          </CanCreate>
           <BackButton href="/keuangan/pusat-biaya" />
         </>}
       />

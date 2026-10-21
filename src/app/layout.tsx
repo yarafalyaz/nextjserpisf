@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next"
 import Script from "next/script"
+import { headers } from "next/headers"
 
 export const dynamic = "force-dynamic"
 import { Inter, JetBrains_Mono } from "next/font/google"
@@ -48,12 +49,14 @@ export default async function RootLayout({
 }>) {
   const settings = await getSystemSettings()
   const logoUrl = settings.companyLogo ?? "/favicon.ico"
+  // AUD-03: nonce CSP per-request dari proxy untuk script inline tema.
+  const nonce = (await headers()).get("x-nonce") ?? undefined
 
   return (
     <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <head>
         <link rel="icon" href={logoUrl} />
-        <Script id="theme-init" strategy="beforeInteractive">{`
+        <Script id="theme-init" strategy="beforeInteractive" nonce={nonce}>{`
           (function() {
             try {
               var theme = localStorage.getItem('theme') || 'system';

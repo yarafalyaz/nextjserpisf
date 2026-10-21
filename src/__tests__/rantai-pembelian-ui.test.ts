@@ -7,9 +7,9 @@ import path from "node:path";
  *
  * Bug kelas ini tidak tertangkap unit test aksi: aksinya benar, tetapi UI-nya
  * tidak pernah menawarkan/mengirim apa yang dibutuhkan — tautannya tidak dirender,
- * parameter `?grId=`/`?poId=` tidak dibaca, atau formnya tidak menyertakan
- * `goodsReceiptId`. Test ini membaca halaman yang bersangkutan dan memerahkan diri
- * bila wiring itu hilang.
+ * segmen prefill `penerimaan/<slug>`/`po/<slug>` tidak dibaca, atau formnya tidak
+ * menyertakan `goodsReceiptId`. Test ini membaca halaman yang bersangkutan dan
+ * memerahkan diri bila wiring itu hilang.
  */
 
 const root = process.cwd();
@@ -31,15 +31,16 @@ describe("halaman PO menampilkan retur turunannya", () => {
   });
 
   it("menyediakan jalur 'Buat Retur dari PO'", () => {
-    expect(page).toMatch(/\/pembelian\/retur\/tambah\?poId=\$\{po\.id\}/);
+    expect(page).toMatch(/\/pembelian\/retur\/tambah\/po\/\$\{po\.slug \?\? po\.id\}/);
   });
 });
 
-describe("halaman retur menerima sumber PO (?poId=)", () => {
-  const page = read("src/app/(dashboard)/pembelian/retur/tambah/page.tsx");
+describe("halaman retur menerima sumber PO (segmen po/<slug>)", () => {
+  const page = read("src/app/(dashboard)/pembelian/retur/tambah/[[...segments]]/page.tsx");
 
-  it("membaca parameter poId", () => {
-    expect(page).toMatch(/searchParams/);
+  it("membaca segmen po dan memantulkan query lama", () => {
+    expect(page).toMatch(/parsePrefillSegments\(segments, \["po"\]\)/);
+    expect(page).toMatch(/resolvePrefillId\(prisma\.purchaseOrder, seg\.po/);
     expect(page).toMatch(/params\.poId/);
   });
 
@@ -49,11 +50,12 @@ describe("halaman retur menerima sumber PO (?poId=)", () => {
   });
 });
 
-describe("halaman tagihan menerima sumber penerimaan (?grId=)", () => {
-  const page = read("src/app/(dashboard)/pembelian/tagihan/tambah/page.tsx");
+describe("halaman tagihan menerima sumber penerimaan (segmen penerimaan/<slug>)", () => {
+  const page = read("src/app/(dashboard)/pembelian/tagihan/tambah/[[...segments]]/page.tsx");
 
-  it("membaca parameter grId dan memuat baris penerimaan", () => {
-    expect(page).toMatch(/params\.grId/);
+  it("membaca segmen penerimaan dan memuat barisnya", () => {
+    expect(page).toMatch(/parsePrefillSegments\(segments, \["po", "penerimaan"\]\)/);
+    expect(page).toMatch(/resolvePrefillId\(prisma\.goodsReceipt, seg\.penerimaan/);
     expect(page).toMatch(/goodsReceipt\.findUnique/);
     expect(page).toMatch(/unitCost/);
   });
@@ -72,7 +74,7 @@ describe("halaman penerimaan menautkan ke tagihannya", () => {
   const page = read("src/app/(dashboard)/pembelian/penerimaan/[slug]/page.tsx");
 
   it("menyediakan tombol 'Buat Tagihan dari Penerimaan'", () => {
-    expect(page).toMatch(/\/pembelian\/tagihan\/tambah\?grId=\$\{receipt\.id\}/);
+    expect(page).toMatch(/\/pembelian\/tagihan\/tambah\/penerimaan\/\$\{receipt\.slug \?\? receipt\.id\}/);
   });
 
   it("menampilkan tagihan yang menagih penerimaan ini", () => {

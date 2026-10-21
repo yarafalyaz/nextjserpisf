@@ -8,6 +8,7 @@ import { StatusChip } from "@/components/ui/status-chip"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
+import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd, DetailTableFoot, DetailTableFootRow } from "@/components/ui/detail-table"
 
 import type { Metadata } from "next"
@@ -42,6 +43,9 @@ export default async function JournalDetailPage({
 
   if (!journal) notFound()
 
+  const referenceSlugs = await resolveReferenceSlugs([journal])
+  const journalRefSlug = referenceSlugs.get(referenceSlugKey(journal))
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -63,12 +67,12 @@ export default async function JournalDetailPage({
         <DetailField label="Tanggal Transaksi" value={formatDate(journal.transactionDate)} />
         <DetailField label="Tipe" value={{ GENERAL: "Umum", AUTO: "Otomatis" }[journal.type] ?? journal.type} />
         {journal.referenceType &&
-          (referenceHref(journal.referenceType, journal.referenceId) ? (
+          (referenceHref(journal.referenceType, journal.referenceId, journalRefSlug) ? (
             <DetailField
               label="Referensi"
               value={
                 <Link
-                  href={referenceHref(journal.referenceType, journal.referenceId)!}
+                  href={referenceHref(journal.referenceType, journal.referenceId, journalRefSlug)!}
                   aria-label={`Lihat ${formatReferenceType(journal.referenceType)} #${journal.referenceId}`}
                 >
                   {`${formatReferenceType(journal.referenceType)} #${journal.referenceId}`}

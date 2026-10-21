@@ -16,7 +16,7 @@ import { DetailTabs } from "@/components/ui/detail-tabs"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { deleteSalesInvoice, postInvoice, voidSalesInvoice } from "@/actions/sales.actions"
 import { VoidButton } from "@/components/ui/void-button"
-import { StatusActions } from "@/components/ui/status-actions"
+
 import { PrintButton } from "@/components/ui/print-button"
 import { ProcessButton } from "@/components/ui/process-button"
 import { WhatsappButton } from "@/components/reports/whatsapp-button"
@@ -30,6 +30,8 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { getPaymentMethodMap, resolvePaymentMethodName } from "@/lib/services/method.service"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { DELIVERABLE_ORDER_STATUSES } from "@/lib/validations/sales.schemas"
+import { CanCreate } from "@/components/auth/can-create"
 
 export default async function InvoiceDetailPage({
   params,
@@ -129,14 +131,22 @@ export default async function InvoiceDetailPage({
         badge={<StatusChip status={invoice.status} />}
         actions={
           <>
-            <Button href={entityEditHref("/penjualan/faktur", invoice)} variant="primary">Ubah</Button>
-            {invoice.status !== "paid" && invoice.status !== "cancelled" && (
-              <Button href={`/penjualan/pembayaran/tambah?invoiceId=${invoice.id}`} variant="primary" className="bg-success text-success-foreground">
-                Terima Pembayaran
-              </Button>
+            <CanCreate permission="edit_sales_invoices">
+              <Button href={entityEditHref("/penjualan/faktur", invoice)} variant="primary">Ubah</Button>
+            </CanCreate>
+            {(invoice.status === "posted" || invoice.status === "partial") && (
+              <CanCreate permission="create_sales_payments">
+                <Button href={`/penjualan/pembayaran/tambah/faktur/${invoice.slug ?? invoice.id}`} variant="primary" className="bg-success text-success-foreground">
+                  Terima Pembayaran
+                </Button>
+              </CanCreate>
             )}
-            {invoice.status === "paid" && (
-              <Button href={`/penjualan/surat-jalan/tambah?fakturPenjualanId=${invoice.id}`} variant="primary">+ Surat Jalan</Button>
+            {(invoice.status === "posted" || invoice.status === "partial" || invoice.status === "paid") &&
+              invoice.salesOrder &&
+              (DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(invoice.salesOrder.status) && (
+              <CanCreate permission="create_delivery_orders">
+                <Button href={`/penjualan/surat-jalan/tambah/faktur/${invoice.slug ?? invoice.id}`} variant="primary">+ Surat Jalan</Button>
+              </CanCreate>
             )}
             <WhatsappButton
               phone={invoice.customer.phone}
@@ -161,7 +171,9 @@ export default async function InvoiceDetailPage({
             {invoice.status !== "draft" && invoice.status !== "cancelled" && (
               <VoidButton id={invoice.id} action={voidSalesInvoice} />
             )}
-            <DeleteButton id={invoice.id} action={deleteSalesInvoice} />
+            <CanCreate permission="delete_sales_invoices">
+              <DeleteButton id={invoice.id} action={deleteSalesInvoice} />
+            </CanCreate>
             <BackButton href="/penjualan/faktur" />
           </>
         }
@@ -175,11 +187,12 @@ export default async function InvoiceDetailPage({
             label: "Info",
             content: (
               <>
-                <StatusActions
-                  status={invoice.status}
-                  id={invoice.id}
-                  module="penjualan/faktur"
-                />
+                {/* Sengaja tanpa <StatusActions> generik (Setujui/Tolak): pada
+                    faktur, tombol itu hanya membalik status ke approved tanpa
+                    efek domain apa pun, sementara Posting di header sudah
+                    menerima draft langsung — dua aksi maju yang tumpang tindih
+                    membingungkan operator. Status cukup tampil sebagai chip
+                    di header. */}
                 <DetailCard>
                   <DetailField label="Pelanggan" value={invoice.customer.name} />
                   <DetailField label="Tanggal" value={formatDate(invoice.date)} />
@@ -299,7 +312,9 @@ export default async function InvoiceDetailPage({
                 <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Riwayat Pembayaran</h2>
                   {(invoice.status === "posted" || invoice.status === "partial") && (
-                    <Link href={`/penjualan/pembayaran/tambah?invoiceId=${invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Terima Bayar</Link>
+                    <CanCreate permission="create_sales_payments">
+                      <Link href={`/penjualan/pembayaran/tambah/faktur/${invoice.slug ?? invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Terima Bayar</Link>
+                    </CanCreate>
                   )}
                 </div>
                 <div className="p-4 px-5">
@@ -336,8 +351,10 @@ export default async function InvoiceDetailPage({
               <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
                 <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
                   <h2 className="text-[0.9375rem] font-semibold text-foreground">Retur Penjualan</h2>
-                  {(invoice.status === "posted" || invoice.status === "partial") && (
-                    <Link href={`/penjualan/retur/tambah?invoiceId=${invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
+                  {(invoice.status === "posted" || invoice.status === "partial" || invoice.status === "paid") && (
+                    <CanCreate permission="create_sales_returns">
+                      <Link href={`/penjualan/retur/tambah/faktur/${invoice.slug ?? invoice.id}`} className="inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-default transition-all hover:bg-surface-secondary">+ Buat Retur</Link>
+                    </CanCreate>
                   )}
                 </div>
                 <div className="p-4 px-5">

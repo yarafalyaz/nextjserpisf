@@ -65,6 +65,7 @@ const mocks = vi.hoisted(() => ({
   purchaseReturnFindUniqueOrThrow: vi.fn(),
   downPaymentFindUniqueOrThrow: vi.fn(),
   stockMoveFindMany: vi.fn(),
+  stockMoveFindFirst: vi.fn(),
   queryRaw: vi.fn(),
   executeRaw: vi.fn(),
   stockMoveCreate: vi.fn(),
@@ -197,7 +198,7 @@ function buildSalesInvoiceTx(inventoryLayerGroupBy: unknown) {
     journalEntry: journalEntryBranch(),
     item: { findUnique: mocks.itemFindUnique, findMany: mocks.itemFindMany, update: mocks.itemUpdate },
     uomConversion: { findMany: mocks.uomConversionFindMany },
-    stockMove: { create: mocks.stockMoveCreate },
+    stockMove: { create: mocks.stockMoveCreate, findFirst: mocks.stockMoveFindFirst },
     inventoryLayer: { groupBy: inventoryLayerGroupBy },
     $queryRaw: mocks.queryRaw,
     $executeRaw: mocks.executeRaw,
@@ -442,7 +443,7 @@ describe("onSalesInvoicePosted", () => {
           update: mocks.itemUpdate,
         },
         uomConversion: { findMany: mocks.uomConversionFindMany },
-        stockMove: { create: mocks.stockMoveCreate },
+        stockMove: { create: mocks.stockMoveCreate, findFirst: mocks.stockMoveFindFirst },
         inventoryLayer: {
           groupBy: vi.fn().mockResolvedValue([
             // Ample availability for the fixture items used in these tests.
@@ -454,6 +455,7 @@ describe("onSalesInvoicePosted", () => {
       }),
     );
     mocks.fifoConsume.mockResolvedValue({ consumedCost: 0, shortfall: 0 });
+    mocks.stockMoveFindFirst.mockResolvedValue(null);
     mocks.queryRaw.mockResolvedValue([]);
     mocks.executeRaw.mockResolvedValue(0);
     mocks.stockMoveCreate.mockResolvedValue({ id: 1 });
@@ -488,6 +490,27 @@ describe("onSalesInvoicePosted", () => {
     mocks.journalFindFirst.mockResolvedValue({ id: 99 }); // Existing journal
     await onSalesInvoicePosted(1);
     expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  it("melewati posting bila gerakan stok OUT sudah POSTED walau jurnal absen (idempotensi stok)", async () => {
+    // Jurnal bisa terhapus dari DB sementara gerakan OUT-nya masih ada;
+    // tanpa penjaga ini posting ulang mengeluarkan stok yang sama dua kali.
+    mocks.invoiceFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      date: new Date(),
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+    mocks.invoiceFindUnique.mockResolvedValue({
+      id: 1,
+      totalAmount: 100,
+      taxAmount: 0,
+      date: new Date(),
+      documentNo: "INV-1",
+    });
+    mocks.stockMoveFindFirst.mockResolvedValue({ id: 5 });
+    await onSalesInvoicePosted(1);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.stockMoveCreate).not.toHaveBeenCalled();
   });
 
   it("throws if inner invoice is missing", async () => {

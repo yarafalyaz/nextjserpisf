@@ -1,3 +1,4 @@
+import type { PermissionName } from "@/lib/setup/base-data"
 import { hasPermission } from "@/lib/auth/permissions"
 import type { ReactNode } from "react"
 
@@ -14,7 +15,7 @@ export async function CanCreate({
   permission,
   children,
 }: {
-  permission: string
+  permission: PermissionName
   children: ReactNode
 }) {
   if (await hasPermission(permission)) {

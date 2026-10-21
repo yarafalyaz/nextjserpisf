@@ -11,6 +11,8 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card"
 import type { Metadata } from "next"
 import Link from "next/link"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
+import { entityHref } from "@/lib/utils/entity-url"
+import { resolveReferenceSlugs, referenceSlugKey } from "@/lib/services/reference-slug.service"
 
 export const metadata: Metadata = { title: "Mutasi Stok" }
 
@@ -39,6 +41,9 @@ export default async function StockMoveDetailPage({
   )
   if (!move) notFound()
 
+  const referenceSlugs = await resolveReferenceSlugs([move])
+  const moveRefSlug = referenceSlugs.get(referenceSlugKey(move))
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -54,7 +59,7 @@ export default async function StockMoveDetailPage({
 
       <DetailCard>
         <DetailField label="No. Dokumen" value={move.documentNo} mono />
-        <DetailField label="Barang" value={<Link href={`/master/barang/${move.itemId}`} className="hover:underline">{move.item?.name || `Barang #${move.itemId}`}</Link>} />
+        <DetailField label="Barang" value={<Link href={move.item ? entityHref("/master/barang", move.item) : `/master/barang/${move.itemId}`} className="hover:underline">{move.item?.name || `Barang #${move.itemId}`}</Link>} />
         <DetailField label="Gudang" value={move.warehouse?.name || "-"} />
         <DetailField label="Arah" value={<StatusChip status={move.impact === "IN" ? "received" : "returned"} />} />
         <DetailField label="Jumlah" value={`${Number(move.qty)} ${move.item?.unitOfMeasure ?? ""}`} />
@@ -62,8 +67,8 @@ export default async function StockMoveDetailPage({
         <DetailField
           label="Tipe"
           value={
-            referenceHref(move.referenceType, move.referenceId) ? (
-              <Link href={referenceHref(move.referenceType, move.referenceId)!} className="text-primary hover:underline">
+            referenceHref(move.referenceType, move.referenceId, moveRefSlug) ? (
+              <Link href={referenceHref(move.referenceType, move.referenceId, moveRefSlug)!} className="text-primary hover:underline">
                 {formatReferenceType(move.referenceType || move.moveType)}
               </Link>
             ) : (

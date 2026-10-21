@@ -37,7 +37,11 @@ test.describe("Pindai Barang + Barcode wiring", () => {
       test.skip(true, "Tidak ada baris barcode di DB uji")
     }
     await expect(firstRow).toBeVisible({ timeout: 30000 })
-    await firstRow.getByRole("button", { name: "Buka menu aksi" }).click()
+    // Tunggu tombol benar-benar ter-render (hidrasi selesai) sebelum klik —
+    // klik langsung balapan dengan hidrasi saat server sibuk oleh worker lain.
+    const actionButton = firstRow.getByRole("button", { name: "Buka menu aksi" })
+    await expect(actionButton).toBeVisible({ timeout: 30_000 })
+    await actionButton.click()
 
     await expect(page.getByRole("menuitem", { name: "Lihat Detail" })).toBeVisible()
     await expect(page.getByRole("menuitem", { name: "Ubah" })).toBeVisible()

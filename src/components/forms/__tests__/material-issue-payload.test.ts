@@ -82,9 +82,10 @@ describe("field tautan di form pengeluaran material", () => {
     "utf8",
   )
 
-  it("membaca workOrderId/projectId dari URL (jalur 'buat dari')", () => {
-    expect(source).toMatch(/searchParams\.get\("workOrderId"\)/)
-    expect(source).toMatch(/searchParams\.get\("projectId"\)/)
+  it("menerima workOrderId dari prop defaultWorkOrderId (jalur 'buat dari' segmen path)", () => {
+    expect(source).toMatch(/defaultWorkOrderId/)
+    expect(source).toMatch(/String\(defaultWorkOrderId\)/)
+    expect(source).not.toMatch(/searchParams\.get\("workOrderId"\)/)
   })
 
   it("mengirim ketiga kolom penaut lewat buildMaterialIssueFormData", () => {

@@ -1,13 +1,17 @@
 export const dynamic = "force-dynamic"
 
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { requirePermission } from "@/lib/auth/permissions"
 import { UomForm } from "./form"
 
 import type { Metadata } from "next"
 
 export const metadata: Metadata = { title: "Tambah Satuan" }
 
-export default function CreateUomPage() {
+export default async function CreateUomPage() {
+  // createUom menuntut edit_units; tanpa guard di sini pengguna lihat-saja
+  // bisa membuka & mengisi form lalu baru ditolak saat simpan.
+  await requirePermission("edit_units")
   return (
     <div className="flex flex-col gap-6">
       <AppBreadcrumbs items={[

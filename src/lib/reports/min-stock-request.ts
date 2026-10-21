@@ -1,8 +1,9 @@
 /**
  * Prefill Permintaan Pembelian dari laporan stok minimum (F-2026-10-20-18).
  *
- * Format query: `?item=<id>:<qty>,<id>:<qty>` — qty adalah saran kekurangan
- * (minimum − stok), staf tetap bisa menyuntingnya bebas di form sebelum simpan.
+ * Format segmen path: `item/<id>:<qty>,<id>:<qty>` (ter-encode) — qty adalah
+ * saran kekurangan (minimum − stok), staf tetap bisa menyuntingnya bebas di
+ * form sebelum simpan.
  * Parser pure: id/qty tidak valid dibuang, id duplikat digabung (qty dijumlah).
  */
 
@@ -20,7 +21,7 @@ export function buildMinStockRequestHref(
   )
   if (valid.length === 0) return null
   const param = valid.map((line) => `${line.itemId}:${line.shortage}`).join(",")
-  return `/pembelian/permintaan/tambah?item=${encodeURIComponent(param)}`
+  return `/pembelian/permintaan/tambah/item/${encodeURIComponent(param)}`
 }
 
 export function parseMinStockPrefill(

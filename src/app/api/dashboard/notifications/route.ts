@@ -3,7 +3,7 @@ import { prisma } from "@/lib/db/prisma";
 import { hasPermission, requireAuth } from "@/lib/auth/permissions";
 import { apiError } from "@/lib/api-response";
 import { getDailyAttendanceMetrics } from "@/lib/services/daily-attendance.service";
-import { resolveActivityReferenceLabels } from "@/lib/services/activity-reference.service";
+import { resolveActivityReferenceLabels, resolveActivityReferenceSlugs } from "@/lib/services/activity-reference.service";
 import { activityEntityHref } from "@/lib/utils/activity-href";
 
 export async function GET() {
@@ -95,12 +95,17 @@ export async function GET() {
     const refLabels = await resolveActivityReferenceLabels(
       recentActivities.map((a) => ({ modelType: a.modelType, modelId: a.modelId })),
     );
+    const refSlugs = await resolveActivityReferenceSlugs(
+      recentActivities.map((a) => ({ modelType: a.modelType, modelId: a.modelId })),
+    );
     const liveActivities = recentActivities
       .map((a) => {
         const key = a.modelId != null ? `${a.modelType}:${a.modelId}` : null;
         const refLabel = key ? (refLabels.get(key) ?? null) : null;
         const href =
-          a.modelId != null ? activityEntityHref(a.modelType, a.modelId) : null;
+          a.modelId != null
+            ? activityEntityHref(a.modelType, a.modelId, key ? refSlugs.get(key) : null)
+            : null;
         return { ...a, refLabel, href };
       })
       .filter((a) => a.refLabel !== null || a.modelId == null)

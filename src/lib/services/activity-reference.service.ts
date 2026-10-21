@@ -23,6 +23,52 @@ type PrismaDelegate = {
  * karena modelnya memang tidak dilacak (lihat `isTrackedActivityReference`) atau
  * recordnya sudah dihapus. Pemanggil memakai fallback `#id`.
  */
+/**
+ * Kembalikan peta `"<modelType>:<modelId>"` → slug, untuk tautan log yang
+ * kanonis (bukan id numerik). Model tanpa kolom slug dilewati diam-diam —
+ * pemanggil jatuh kembali ke id, yang tetap diterima resolver halaman.
+ */
+export async function resolveActivityReferenceSlugs(
+  refs: Array<{ modelType: string; modelId: number | null }>,
+): Promise<Map<string, string>> {
+  const idsByType = new Map<string, Set<number>>()
+  for (const ref of refs) {
+    if (ref.modelId == null || !ACTIVITY_REFERENCE_FIELDS[ref.modelType]) continue
+    const set = idsByType.get(ref.modelType) ?? new Set<number>()
+    set.add(ref.modelId)
+    idsByType.set(ref.modelType, set)
+  }
+
+  const slugs = new Map<string, string>()
+  const client = prisma as unknown as Record<string, PrismaDelegate | undefined>
+
+  await Promise.all(
+    [...idsByType.entries()].map(async ([modelType, ids]) => {
+      const { delegate } = ACTIVITY_REFERENCE_FIELDS[modelType]
+      const model = client[delegate]
+      if (!model) return
+      try {
+        const rows = await model.findMany({
+          where: { id: { in: [...ids] } },
+          select: { id: true, slug: true },
+        })
+        for (const row of rows) {
+          if (typeof row.slug === "string" && row.slug) {
+            slugs.set(`${modelType}:${row.id}`, row.slug)
+          }
+        }
+      } catch (error) {
+        console.warn(
+          `[activity-reference] gagal resolve slug ${modelType}:`,
+          error instanceof Error ? error.message : error,
+        )
+      }
+    }),
+  )
+
+  return slugs
+}
+
 export async function resolveActivityReferenceLabels(
   refs: Array<{ modelType: string; modelId: number | null }>,
 ): Promise<Map<string, string>> {

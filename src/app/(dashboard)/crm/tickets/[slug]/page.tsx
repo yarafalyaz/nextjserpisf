@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { prisma } from "@/lib/db/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
+import { CanCreate } from "@/components/auth/can-create";
 import { formatDate } from "@/lib/utils/format";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -104,10 +105,14 @@ export default async function CrmTicketDetailPage({
         }
         actions={
           <>
-            <Button href={entityEditHref("/crm/tickets", ticket)} variant="primary">
-              <Pencil size={14} /> Ubah
-            </Button>
-            <DeleteButton id={ticket.id} action={deleteTicket} />
+            <CanCreate permission="edit_tickets">
+              <Button href={entityEditHref("/crm/tickets", ticket)} variant="primary">
+                <Pencil size={14} /> Ubah
+              </Button>
+            </CanCreate>
+            <CanCreate permission="delete_tickets">
+              <DeleteButton id={ticket.id} action={deleteTicket} />
+            </CanCreate>
             <BackButton href="/crm/tickets" />
           </>
         }

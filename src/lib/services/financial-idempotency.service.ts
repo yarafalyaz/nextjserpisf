@@ -67,11 +67,8 @@ const EXPECTED_REF_TYPE: Record<IdemScope, string> = {
 
 export type IdemTx = {
   financialIdempotencyKey: {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     create: (args: any) => Promise<{ id: number }>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     findUnique: (args: any) => Promise<IdemExisting | null>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     update: (args: any) => Promise<unknown>
   }
 }

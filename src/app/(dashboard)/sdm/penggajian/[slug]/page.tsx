@@ -8,6 +8,7 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { requirePermission } from "@/lib/auth/permissions";
+import { CanCreate } from "@/components/auth/can-create";
 import { getHrScope, hrScopeWhere } from "@/lib/auth/hr-scope";
 import { Pencil } from "lucide-react";
 import { ApprovePayrollButton } from "./_components/approve-button";
@@ -66,12 +67,14 @@ export default async function PayrollDetailPage({
             {payroll.status === "draft" && (
               <>
                 <ApprovePayrollButton payrollId={payroll.id} />
-                <Button
-                  href={entityEditHref("/sdm/penggajian", payroll)}
-                  variant="secondary"
-                >
-                  <Pencil size={14} /> Ubah
-                </Button>
+                <CanCreate permission="edit_payroll">
+                  <Button
+                    href={entityEditHref("/sdm/penggajian", payroll)}
+                    variant="secondary"
+                  >
+                    <Pencil size={14} /> Ubah
+                  </Button>
+                </CanCreate>
               </>
             )}
             {payroll.status === "approved" && (

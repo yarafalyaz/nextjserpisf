@@ -9,6 +9,7 @@ import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
+import { CanCreate } from "@/components/auth/can-create";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityEditHref } from "@/lib/utils/entity-url";
 export const metadata: Metadata = { title: "Akun" };
@@ -44,9 +45,11 @@ export default async function DetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/master/akun", data)} variant="primary">
-              Ubah
-            </Button>
+            <CanCreate permission="edit_accounts">
+              <Button href={entityEditHref("/master/akun", data)} variant="primary">
+                Ubah
+              </Button>
+            </CanCreate>
             <BackButton href="/master/akun" />
           </>
         }

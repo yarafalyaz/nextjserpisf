@@ -141,7 +141,7 @@ beforeEach(() => {
   });
 });
 
-describe("createVendorBill dari penerimaan (?grId=)", () => {
+describe("createVendorBill dari penerimaan (segmen penerimaan/<slug>)", () => {
   it("mengisi VendorBill.goodsReceiptId dan goodsReceiptItemId tiap baris", async () => {
     const res = await createVendorBill(billFromGr());
 

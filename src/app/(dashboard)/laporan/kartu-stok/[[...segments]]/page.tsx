@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { formatAccounting, formatReferenceType, referenceHref } from '@/lib/utils/format'
 import { toLocalDateOnly } from '@/lib/utils/date-only'
 import { buildStockCard, openingBalance, type StockCardMove } from '@/lib/reports/stock-card'
+import { resolveReferenceSlugs, referenceSlugKey } from '@/lib/services/reference-slug.service'
 import { reportPeriodFromRoute } from '@/lib/reports/report-period'
 import { parseReportFilters } from '@/lib/reports/report-href'
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from '@/components/ui/detail-table'
@@ -120,6 +121,11 @@ export default async function StockCardPage({
     card = buildStockCard(moves, opening)
   }
 
+  // Slug dokumen sumber untuk tautan referensi (kanonis, bukan id numerik).
+  const referenceSlugs = card
+    ? await resolveReferenceSlugs(card.rows)
+    : new Map<string, string>()
+
   const periodLabel = `Periode ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
   const eyebrow = selectedItem
     ? `${selectedItem.sku} — ${selectedItem.name} (${selectedItem.unitOfMeasure})`
@@ -207,7 +213,7 @@ export default async function StockCardPage({
                 </DetailTableRow>
 
                 {card.rows.map((row) => {
-                  const href = referenceHref(row.referenceType, row.referenceId)
+                  const href = referenceHref(row.referenceType, row.referenceId, referenceSlugs.get(referenceSlugKey(row)))
                   return (
                     <DetailTableRow key={row.id}>
                       <DetailTableTd>{row.date.toLocaleDateString('id-ID')}</DetailTableTd>

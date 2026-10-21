@@ -8,6 +8,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 
 import { requirePermission } from "@/lib/auth/permissions";
+import { CanCreate } from "@/components/auth/can-create";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityEditHref } from "@/lib/utils/entity-url";
 export const metadata: Metadata = { title: "Barcode" };
@@ -43,12 +44,14 @@ export default async function DetailPage({
       />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Detail Barcode</h1>
-        <Link
-          href={entityEditHref("/master/barcode", data)}
-          className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
-        >
-          Ubah
-        </Link>
+        <CanCreate permission="edit_barcodes">
+          <Link
+            href={entityEditHref("/master/barcode", data)}
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all"
+          >
+            Ubah
+          </Link>
+        </CanCreate>
       </div>
       <div className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
         <div className="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-4">

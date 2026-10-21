@@ -12,6 +12,7 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 export const metadata: Metadata = { title: "Pajak" }
@@ -46,8 +47,12 @@ export default async function TaxDetailPage({
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">{tax.name}</h1>
         <div className="flex gap-2">
-          <Link href={entityEditHref("/master/pajak", tax)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Ubah</Link>
-          <DeleteButton id={tax.id} action={deleteTax} />
+          <CanCreate permission="edit_taxes">
+            <Link href={entityEditHref("/master/pajak", tax)} className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-surface-secondary text-foreground border border-default hover:bg-surface-tertiary transition-all"><Pencil size={14} className="inline" /> Ubah</Link>
+          </CanCreate>
+          <CanCreate permission="delete_taxes">
+            <DeleteButton id={tax.id} action={deleteTax} />
+          </CanCreate>
           <Link href="/master/pajak" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-muted-foreground hover:bg-surface-secondary hover:text-foreground transition-all">← Kembali</Link>
         </div>
       </div>

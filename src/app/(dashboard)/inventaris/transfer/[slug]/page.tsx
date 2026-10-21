@@ -18,6 +18,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Transfer Stok" }
 
 export default async function InventoryTransferDetailPage({
@@ -88,8 +89,12 @@ export default async function InventoryTransferDetailPage({
                   successMessage="Transfer stok berhasil dikirim"
                   label="Kirim"
                 />
-                <Button href={entityEditHref("/inventaris/transfer", transfer)} variant="secondary">Ubah</Button>
-                <DeleteButton id={transfer.id} action={deleteInventoryTransfer} />
+                <CanCreate permission="edit_inventory_transfers">
+                  <Button href={entityEditHref("/inventaris/transfer", transfer)} variant="secondary">Ubah</Button>
+                </CanCreate>
+                <CanCreate permission="delete_inventory_transfers">
+                  <DeleteButton id={transfer.id} action={deleteInventoryTransfer} />
+                </CanCreate>
               </>
             )}
             {transfer.status === "processed" && (

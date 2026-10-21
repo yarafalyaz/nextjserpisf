@@ -32,7 +32,8 @@ import {
 
 import type { Metadata } from "next";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
-import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
+import { entityHref, entityEditHref, entityNestedHref } from "@/lib/utils/entity-url";
+import { CanCreate } from "@/components/auth/can-create";
 
 export const metadata: Metadata = { title: "Perintah Kerja" };
 
@@ -134,9 +135,9 @@ export default async function WorkOrderDetailPage({
     wo.items.length > 0
       ? prisma.product.findMany({
           where: { inventoryItemId: { in: wo.items.map((i) => i.itemId) } },
-          select: { id: true },
+          select: { id: true, slug: true },
         })
-      : Promise.resolve([] as { id: number }[]),
+      : Promise.resolve([] as { id: number; slug: string | null }[]),
     // Semua pengeluaran material yang lahir dari WO ini. Tombol "Buat
     // Pengeluaran Material" menulis MI langsung lewat aksi (tanpa lewat
     // halaman tambah), jadi tanpa daftar ini hasilnya tak terlihat dari sini —
@@ -169,7 +170,7 @@ export default async function WorkOrderDetailPage({
       : Promise.resolve(null),
   ]);
 
-  const suggestedProductId = linkedProducts.length === 1 ? linkedProducts[0].id : null;
+  const suggestedProduct = linkedProducts.length === 1 ? linkedProducts[0] : null;
 
   const materialNeeds = await getWorkOrderMaterialNeeds(wo.id);
 
@@ -191,45 +192,53 @@ export default async function WorkOrderDetailPage({
         badge={<StatusChip status={wo.status} />}
         actions={
           <>
-            <Button
-              href={entityEditHref("/produksi/perintah-kerja", wo)}
-              variant="primary"
-            >
-              Ubah
-            </Button>
+            <CanCreate permission="edit_work_orders">
+              <Button
+                href={entityEditHref("/produksi/perintah-kerja", wo)}
+                variant="primary"
+              >
+                Ubah
+              </Button>
+            </CanCreate>
             {/* WO -> Perintah Produksi: satu-satunya jalur yang mengisi
                 `ProductionOrder.workOrderId` (form manual tak punya input WO).
                 Selalu tampil — satu WO boleh punya beberapa perintah produksi
                 (produksi parsial), jadi turunannya bukan tunggal. */}
-            <Button
-              href={`/produksi/production-orders/tambah?workOrderId=${wo.id}${suggestedProductId ? `&productId=${suggestedProductId}` : ""}`}
-              variant="secondary"
-            >
-              + Perintah Produksi
-            </Button>
+            <CanCreate permission="create_production_orders">
+              <Button
+                href={`/produksi/production-orders/tambah/perintah-kerja/${wo.slug ?? wo.id}${suggestedProduct ? `/produk/${suggestedProduct.slug ?? suggestedProduct.id}` : ""}`}
+                variant="secondary"
+              >
+                + Perintah Produksi
+              </Button>
+            </CanCreate>
             <WorkOrderActions
               workOrderId={wo.id}
               status={wo.status}
               hasCompletedMaterialIssue={!!completedMi}
               defaultWarehouseId={defaultWarehouse?.id ?? null}
               vehicleIntakeBlocked={!!wo.customerVehicleId && !vehicleIntake}
-              vehicleIntakeHref={`/produksi/qc/inspeksi/tambah?inspectionType=vehicle_intake&referenceType=WorkOrder&referenceId=${wo.id}`}
+              vehicleIntakeHref={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_intake`}
               revisableItems={wo.items
                 .filter((i) => i.status !== "replaced")
                 .map((i) => ({ id: i.id, label: itemNameMap.get(i.itemId) || `Barang #${i.itemId}` }))}
             />
-            <CreateServicePoButton
-              workOrderId={wo.id}
-              serviceItems={serviceItems}
-              vendors={serviceVendors}
-            />
+            <CanCreate permission="create_purchase_orders">
+              <CreateServicePoButton
+                workOrderId={wo.id}
+                serviceItems={serviceItems}
+                vendors={serviceVendors}
+              />
+            </CanCreate>
             {wo.status === "completed" && wo.quotationId && (
-              <Button
-                href={`/penjualan/faktur/tambah?quotationId=${wo.quotationId}`}
-                variant="primary"
-              >
-                + Faktur Penjualan
-              </Button>
+              <CanCreate permission="create_sales_invoices">
+                <Button
+                  href={`/penjualan/faktur/tambah/penawaran/${wo.quotation?.slug ?? wo.quotationId}`}
+                  variant="primary"
+                >
+                  + Faktur Penjualan
+                </Button>
+              </CanCreate>
             )}
             <WhatsappButton
               phone={wo.customer.phone}
@@ -243,7 +252,9 @@ export default async function WorkOrderDetailPage({
               })}
             />
             <PrintButton documentType="work-order" documentId={wo.id} />
-            <DeleteButton id={wo.id} action={deleteWorkOrder} />
+            <CanCreate permission="delete_work_orders">
+              <DeleteButton id={wo.id} action={deleteWorkOrder} />
+            </CanCreate>
             <BackButton href="/produksi/perintah-kerja" />
           </>
         }
@@ -280,7 +291,7 @@ export default async function WorkOrderDetailPage({
           <DetailField
             label="Kendaraan"
             value={
-              <Link href={`${entityHref("/master/pelanggan", wo.customer)}/kendaraan/${wo.customerVehicle.slug ?? wo.customerVehicle.id}`} className="hover:underline">
+              <Link href={entityNestedHref("/master/pelanggan", wo.customer, "kendaraan", wo.customerVehicle)} className="hover:underline">
                 {[
                   wo.customerVehicle.vehicle?.variant?.model?.brand?.name,
                   wo.customerVehicle.vehicle?.variant?.model?.name,
@@ -301,7 +312,7 @@ export default async function WorkOrderDetailPage({
                 </Link>
               ) : (
                 <Link
-                  href={`/produksi/qc/inspeksi/tambah?inspectionType=vehicle_intake&referenceType=WorkOrder&referenceId=${wo.id}`}
+                  href={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_intake`}
                   className="hover:underline"
                 >
                   Belum tercatat — buat inspeksi masuk
@@ -320,7 +331,7 @@ export default async function WorkOrderDetailPage({
                 </Link>
               ) : (
                 <Link
-                  href={`/produksi/qc/inspeksi/tambah?inspectionType=vehicle_handover&referenceType=WorkOrder&referenceId=${wo.id}`}
+                  href={`/produksi/qc/inspeksi/tambah/perintah-kerja/${wo.slug ?? wo.id}/tipe/vehicle_handover`}
                   className="hover:underline"
                 >
                   Belum tercatat — buat inspeksi serah terima
@@ -407,12 +418,14 @@ export default async function WorkOrderDetailPage({
         <div className="flex flex-wrap items-center justify-between gap-3 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Pengeluaran Material</h2>
           {wo.status === "in_progress" && !completedMi && (
-            <Button
-              href={`/inventaris/pengeluaran-material/tambah?workOrderId=${wo.id}`}
-              variant="secondary"
-            >
-              + Pengeluaran Material
-            </Button>
+            <CanCreate permission="create_material_issues">
+              <Button
+                href={`/inventaris/pengeluaran-material/tambah/perintah-kerja/${wo.slug ?? wo.id}`}
+                variant="secondary"
+              >
+                + Pengeluaran Material
+              </Button>
+            </CanCreate>
           )}
         </div>
         <div className="p-4 px-5">

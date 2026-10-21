@@ -12,7 +12,15 @@ export const setupSchema = z
   .object({
     companyName: z.string().min(1, "Nama perusahaan wajib diisi").max(200),
     companyAddress: optionalString(500),
-    companyPhone: optionalString(50),
+    // Nomor telepon bukan teks bebas: huruf ditolak di server (form juga
+    // menyaring ketikan), tanda + - ( ) dan spasi tetap sah untuk format
+    // seperti +62-21-555-0100.
+    companyPhone: z
+      .string()
+      .max(50)
+      .regex(/^[0-9+\-\s()]*$/, "Nomor telepon hanya boleh berisi angka dan tanda + - ( )")
+      .optional()
+      .or(z.literal("").transform(() => undefined)),
     companyEmail: z
       .string()
       .email("Email perusahaan tidak valid")

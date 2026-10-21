@@ -6,6 +6,7 @@ import { showSuccess, showError } from "@/lib/utils/toast"
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Button } from "@/components/ui/button"
+import { AppDatePicker } from "@/components/ui/date-picker"
 import { createStatutoryRule, closeStatutoryRule } from "@/actions/hrm.actions"
 
 /** Form tambah baris aturan baru (perubahan tarif = baris baru). */
@@ -42,14 +43,8 @@ export function StatutoryRuleForm() {
         <Label htmlFor="ruleValue">Nilai *</Label>
         <Input id="ruleValue" name="value" type="number" step="any" required />
       </div>
-      <div className="flex flex-1 flex-col gap-1.5">
-        <Label htmlFor="ruleFrom">Berlaku Sejak *</Label>
-        <Input id="ruleFrom" name="effectiveFrom" type="date" required />
-      </div>
-      <div className="flex flex-1 flex-col gap-1.5">
-        <Label htmlFor="ruleTo">Berlaku Sampai</Label>
-        <Input id="ruleTo" name="effectiveTo" type="date" />
-      </div>
+      <AppDatePicker label="Berlaku Sejak *" name="effectiveFrom" required className="flex-1" />
+      <AppDatePicker label="Berlaku Sampai" name="effectiveTo" className="flex-1" />
       <div className="flex flex-1 flex-col gap-1.5">
         <Label htmlFor="ruleSource">Sumber</Label>
         <Input id="ruleSource" name="source" placeholder="PP No. … / PMK …" maxLength={255} />
@@ -82,7 +77,7 @@ export function CloseRuleForm({ id }: { id: number }) {
 
   return (
     <form onSubmit={onSubmit} className="flex items-end gap-2" aria-label={`Tutup aturan ${id}`}>
-      <Input name="effectiveTo" type="date" required aria-label="Tanggal tutup" className="w-36" />
+      <AppDatePicker name="effectiveTo" required placeholder="Tanggal tutup" className="w-36" />
       <Button type="submit" isDisabled={isPending} variant="secondary" size="sm">
         Tutup
       </Button>

@@ -45,10 +45,31 @@ npm run db:seed
 npm run dev
 ```
 
+### Penyiapan Awal (Wizard Installer)
+
+Instalasi baru tidak perlu seed manual. Bila database belum berisi
+pengguna, membuka aplikasi akan mengarahkan ke wizard `/setup`:
+
+1. **Pemeriksaan Sistem** — wizard memeriksa koneksi (`DATABASE_URL` dari
+   konfigurasi server) dan, bila skema masih kosong, membuatnya otomatis
+   dari rantai migrasi (`prisma migrate deploy` dijalankan dari dalam
+   aplikasi).
+2. **Data Perusahaan** — nama, kontak, NPWP, dan alamat; tersimpan sebagai
+   identitas kop laporan.
+3. **Akun Administrator** — membuat super admin pertama beserta data
+   master bawaan: peran & izin RBAC, bagan akun (COA) yang sudah
+   terpetakan otomatis, gudang utama, departemen/jabatan, satuan, metode
+   pembayaran/pengiriman, dan urutan nomor dokumen. Tanpa data demo.
+
+Sesudah terpasang, `/setup` terkunci dan menolak kunjungan berikutnya.
+
 ### Masuk Bawaan
 
-- **Email**: admin@yaraerp.app
-- **Password**: password123
+- Instalasi wizard: akun administrator yang Anda buat di langkah 3.
+- Seed demo (hanya bila `ALLOW_DEMO_SEED=true`): admin
+  `admin@erp.yarasoft.net` dengan kata sandi dari `SEED_ADMIN_PASSWORD`,
+  plus satu pengguna demo per peran (staff, GA, kepala bengkel, karyawan,
+  purchasing, warehouse, finance) dengan kata sandi yang sama.
 
 ## Modul (41 Rute)
 

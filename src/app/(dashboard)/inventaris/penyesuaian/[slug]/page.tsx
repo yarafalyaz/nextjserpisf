@@ -18,6 +18,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { canViewWarehouseScopedDocument } from "@/lib/auth/document-scope"
 import { entityEditHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Penyesuaian Stok" }
 
 export default async function StockAdjustmentDetailPage({
@@ -107,8 +108,12 @@ export default async function StockAdjustmentDetailPage({
                   successMessage="Penyesuaian stok berhasil diposting"
                   label="Posting"
                 />
-                <Button href={entityEditHref("/inventaris/penyesuaian", adjustment)} variant="secondary">Ubah</Button>
-                <DeleteButton id={adjustment.id} action={deleteStockAdjustment} />
+                <CanCreate permission="edit_stock_adjustments">
+                  <Button href={entityEditHref("/inventaris/penyesuaian", adjustment)} variant="secondary">Ubah</Button>
+                </CanCreate>
+                <CanCreate permission="delete_stock_adjustments">
+                  <DeleteButton id={adjustment.id} action={deleteStockAdjustment} />
+                </CanCreate>
               </>
             )}
             <BackButton href="/inventaris/penyesuaian" />

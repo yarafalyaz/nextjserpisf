@@ -92,7 +92,7 @@ export default async function VehicleBrandDetailPage({
             </p>
           </div>
           {canCreateModel && (
-            <Button href={`/kendaraan/model/tambah?merek=${brand.id}`} variant="secondary" size="sm">
+            <Button href={`/kendaraan/model/tambah/merek/${brand.slug ?? brand.id}`} variant="secondary" size="sm">
               Tambah Model
             </Button>
           )}

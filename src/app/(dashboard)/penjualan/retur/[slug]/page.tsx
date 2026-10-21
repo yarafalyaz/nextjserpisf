@@ -19,6 +19,7 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref, entityHref } from "@/lib/utils/entity-url"
+import { CanCreate } from "@/components/auth/can-create"
 export const metadata: Metadata = { title: "Retur" }
 
 export default async function SalesReturnDetailPage({
@@ -77,7 +78,9 @@ export default async function SalesReturnDetailPage({
         badge={<StatusChip status={salesReturn.status} />}
         actions={
           <>
-            <Button href={entityEditHref("/penjualan/retur", salesReturn)} variant="primary">Ubah</Button>
+            <CanCreate permission="edit_sales_returns">
+              <Button href={entityEditHref("/penjualan/retur", salesReturn)} variant="primary">Ubah</Button>
+            </CanCreate>
             <PrintButton documentType="sales-return" documentId={salesReturn.id} />
             {salesReturn.status !== "completed" && (
               <ProcessButton
@@ -89,7 +92,9 @@ export default async function SalesReturnDetailPage({
                 successMessage="Retur berhasil diselesaikan"
               />
             )}
-            <DeleteButton id={salesReturn.id} action={deleteSalesReturn} />
+            <CanCreate permission="delete_sales_returns">
+              <DeleteButton id={salesReturn.id} action={deleteSalesReturn} />
+            </CanCreate>
             <BackButton href="/penjualan/retur" />
           </>
         }

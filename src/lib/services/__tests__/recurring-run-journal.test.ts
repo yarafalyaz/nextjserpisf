@@ -113,7 +113,6 @@ describe("recurringJournalLines", () => {
 })
 
 function expenseSchedule(overrides: Record<string, unknown> = {}) {
-  const runDate = new Date(2026, 9, 17)
   return journalSchedule({
     type: "expense",
     name: "Listrik bulanan",

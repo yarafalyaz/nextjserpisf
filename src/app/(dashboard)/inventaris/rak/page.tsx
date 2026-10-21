@@ -6,6 +6,7 @@ import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { RackTable } from "./_components/rack-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -53,9 +54,11 @@ export default async function RacksPage({
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Rak</h1>
-        <Link href="/inventaris/rak/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-rack-btn">
-          + Tambah Rack
-        </Link>
+        <CanCreate permission="create_warehouses">
+          <Link href="/inventaris/rak/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-rack-btn">
+            + Tambah Rack
+          </Link>
+        </CanCreate>
       </div>
 
       <RackTable data={tableData} total={total} page={page} pageSize={pageSize} />

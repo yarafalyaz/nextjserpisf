@@ -2,6 +2,7 @@ export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
 import { Pencil } from "lucide-react"
@@ -87,12 +88,18 @@ export default async function LeadDetailPage({
         ]}
         badge={<StatusChip status={lead.status} />}
         actions={<>
-          <ConvertLeadButton
-            leadId={lead.id}
-            canConvert={!lead.customerId && (CONVERTIBLE_STATUSES as readonly string[]).includes(lead.status)}
-          />
-          <Button href={entityEditHref("/crm/leads", lead)} variant="secondary"><Pencil size={14} /> Ubah</Button>
-          <DeleteButton id={lead.id} action={deleteLead} />
+          <CanCreate permission="edit_leads">
+            <ConvertLeadButton
+              leadId={lead.id}
+              canConvert={!lead.customerId && (CONVERTIBLE_STATUSES as readonly string[]).includes(lead.status)}
+            />
+          </CanCreate>
+          <CanCreate permission="edit_leads">
+            <Button href={entityEditHref("/crm/leads", lead)} variant="secondary"><Pencil size={14} /> Ubah</Button>
+          </CanCreate>
+          <CanCreate permission="delete_leads">
+            <DeleteButton id={lead.id} action={deleteLead} />
+          </CanCreate>
           <BackButton href="/crm/leads" />
         </>}
       />

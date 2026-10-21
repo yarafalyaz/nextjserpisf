@@ -82,7 +82,7 @@ export const vendorBillSchema = z.object({
   vendorId: z.coerce.number().min(1, "Vendor wajib dipilih"),
   purchaseOrderId: optionalNumber(),
   // Penerimaan yang ditagih — diisi jalur "Buat Tagihan dari Penerimaan"
-  // (tagihan/tambah?grId=). Tanpa entri di sini parseFormData membuang nilainya,
+  // (segmen tagihan/tambah/penerimaan/<slug>). Tanpa entri di sini parseFormData membuang nilainya,
   // jadi VendorBill.goodsReceiptId & VendorBillItem.goodsReceiptItemId tak pernah
   // terisi dan laporan Diterima Belum Ditagih selalu 0.
   goodsReceiptId: optionalNumber(),

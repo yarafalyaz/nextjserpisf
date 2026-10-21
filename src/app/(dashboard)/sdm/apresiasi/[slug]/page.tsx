@@ -8,6 +8,7 @@ import { deleteAppreciation } from "@/actions/hrm.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
+import { CanCreate } from "@/components/auth/can-create"
 
 import type { Metadata } from "next"
 
@@ -53,8 +54,12 @@ export default async function AppreciationDetailPage({
         ]}
         actions={
           <>
-            <Button href={entityEditHref("/sdm/apresiasi", appreciation)} variant="primary">Ubah</Button>
-            <DeleteButton id={appreciation.id} action={deleteAppreciation} />
+            <CanCreate permission="create_appreciations">
+              <Button href={entityEditHref("/sdm/apresiasi", appreciation)} variant="primary">Ubah</Button>
+            </CanCreate>
+            <CanCreate permission="delete_appreciations">
+              <DeleteButton id={appreciation.id} action={deleteAppreciation} />
+            </CanCreate>
             <BackButton href="/sdm/apresiasi" />
           </>
         }

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db/prisma"
 import { parsePagination } from "@/lib/utils/pagination"
 import Link from "next/link"
 import { requirePermission } from "@/lib/auth/permissions"
+import { CanCreate } from "@/components/auth/can-create"
 import { AssetTransferTable } from "./_components/asset-transfer-table"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
@@ -52,9 +53,11 @@ export default async function AssetTransfersPage({
 ]} />
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <h1 className="text-xl font-bold text-foreground sm:text-2xl">Transfer Aset</h1>
-        <Link href="/aset/transfer/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-asset-transfer-btn">
-          + Buat Transfer
-        </Link>
+        <CanCreate permission="create_asset_transfers">
+          <Link href="/aset/transfer/tambah" className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary-hover hover:-translate-y-px hover:shadow-md transition-all" id="create-asset-transfer-btn">
+            + Buat Transfer
+          </Link>
+        </CanCreate>
       </div>
 
       <AssetTransferTable data={data} total={total} page={page} pageSize={pageSize} />

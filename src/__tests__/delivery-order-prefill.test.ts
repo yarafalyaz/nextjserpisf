@@ -9,10 +9,11 @@ import React from "react"
  *
  * Tautan mati itu nyata: detail faktur mengirim `?fakturPenjualanId=` dan detail
  * pesanan mengirim `?salesOrderId=`, tetapi halaman surat jalan tidak membaca
- * `searchParams` sama sekali — klik "buat dari" membuka form kosong. Test ini
- * memanggil komponen halamannya langsung dengan `searchParams` dan memeriksa
- * prop yang sampai ke formnya, jadi menghapus pembacaan parameter itu memerahkan
- * test.
+ * `searchParams` sama sekali — klik "buat dari" membuka form kosong. Parameter
+ * itu kini segmen path (`faktur/<slug>`, `pesanan/<slug>`; query lama memantul
+ * ke sana). Test ini memanggil komponen halamannya langsung dengan segmen dan
+ * memeriksa prop yang sampai ke formnya, jadi menghapus pembacaan segmen itu
+ * memerahkan test.
  */
 
 const mocks = vi.hoisted(() => {
@@ -63,8 +64,8 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
 }))
 
-import CreateDeliveryOrderPage from "../app/(dashboard)/penjualan/surat-jalan/tambah/page"
-import CreateSalesReturnPage from "../app/(dashboard)/penjualan/retur/tambah/page"
+import CreateDeliveryOrderPage from "../app/(dashboard)/penjualan/surat-jalan/tambah/[[...segments]]/page"
+import CreateSalesReturnPage from "../app/(dashboard)/penjualan/retur/tambah/[[...segments]]/page"
 import { DeliveryOrderForm } from "@/components/forms/delivery-order-form"
 import { SalesReturnForm } from "@/components/forms/sales-return-form"
 import { buildDeliveryOrderLines } from "../app/(dashboard)/penjualan/surat-jalan/_lib/order-lines"
@@ -192,25 +193,33 @@ describe("status surat jalan vs laporan pemenuhan", () => {
   })
 })
 
-describe("halaman surat jalan/tambah membaca parameter tautan", () => {
+describe("halaman surat jalan/tambah membaca segmen tautan", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.salesOrder.findMany.mockResolvedValue([SALES_ORDER])
+    mocks.prismaMock.salesOrder.findFirst.mockResolvedValue({ id: 1, slug: "so-001" })
+    mocks.prismaMock.salesInvoice.findFirst.mockResolvedValue({ id: 44, slug: "inv-044" })
     mocks.prismaMock.deliveryOrderItem.findMany.mockResolvedValue([])
     mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 5, name: "Busi" }, { id: 6, name: "Jasa" }])
     mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue(null)
   })
 
+  const callPage = (segments?: string[]) =>
+    CreateDeliveryOrderPage({
+      params: Promise.resolve({ segments }),
+      searchParams: Promise.resolve({}),
+    })
+
   it("menyaring pesanan yang bisa dikirim memakai daftar status bersama", async () => {
-    await CreateDeliveryOrderPage({ searchParams: Promise.resolve({}) })
+    await callPage()
 
     const where = mocks.prismaMock.salesOrder.findMany.mock.calls[0][0].where
     expect(where.status.in).toEqual([...DELIVERABLE_ORDER_STATUSES])
   })
 
-  it("?salesOrderId= memilih pesanan dan mengisi barisnya", async () => {
-    const page = await CreateDeliveryOrderPage({ searchParams: Promise.resolve({ salesOrderId: "1" }) })
+  it("segmen pesanan/<slug> memilih pesanan dan mengisi barisnya", async () => {
+    const page = await callPage(["pesanan", "so-001"])
     const form = findElement(page, DeliveryOrderForm)
 
     expect(form).not.toBeNull()
@@ -221,10 +230,10 @@ describe("halaman surat jalan/tambah membaca parameter tautan", () => {
     ])
   })
 
-  it("?fakturPenjualanId= dari detail faktur memakai pesanan faktur itu", async () => {
+  it("segmen faktur/<slug> dari detail faktur memakai pesanan faktur itu", async () => {
     mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ id: 44, documentNo: "INV-044", salesOrderId: 1 })
 
-    const page = await CreateDeliveryOrderPage({ searchParams: Promise.resolve({ fakturPenjualanId: "44" }) })
+    const page = await callPage(["faktur", "inv-044"])
     const form = findElement(page, DeliveryOrderForm)
 
     expect(mocks.prismaMock.salesInvoice.findUnique).toHaveBeenCalledWith(
@@ -233,18 +242,20 @@ describe("halaman surat jalan/tambah membaca parameter tautan", () => {
     expect(form.props.defaultSalesOrderId).toBe(1)
   })
 
-  it("?fakturPenjualanId= tanpa pesanan dijelaskan, bukan buntu", async () => {
+  it("segmen faktur/<slug> tanpa pesanan dijelaskan, bukan buntu", async () => {
     mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ id: 44, documentNo: "INV-044", salesOrderId: null })
 
-    const page = await CreateDeliveryOrderPage({ searchParams: Promise.resolve({ fakturPenjualanId: "44" }) })
+    const page = await callPage(["faktur", "inv-044"])
     const form = findElement(page, DeliveryOrderForm)
 
     expect(form.props.defaultSalesOrderId).toBeUndefined()
     expect(JSON.stringify(page).includes("tidak punya Pesanan Penjualan")).toBe(true)
   })
 
-  it("?salesOrderId= yang tidak bisa dikirim dijelaskan", async () => {
-    const page = await CreateDeliveryOrderPage({ searchParams: Promise.resolve({ salesOrderId: "999" }) })
+  it("segmen pesanan/<slug> yang tidak bisa dikirim dijelaskan", async () => {
+    mocks.prismaMock.salesOrder.findFirst.mockResolvedValue({ id: 999, slug: "so-999" })
+
+    const page = await callPage(["pesanan", "so-999"])
     const form = findElement(page, DeliveryOrderForm)
 
     expect(form.props.defaultSalesOrderId).toBeUndefined()
@@ -269,11 +280,12 @@ describe("tombol transisi status surat jalan terpasang di halaman detail", () =>
   })
 })
 
-describe("halaman retur/tambah membaca ?invoiceId=", () => {
+describe("halaman retur/tambah membaca segmen faktur/<slug>", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([{ id: 3, documentNo: "INV-003" }])
+    mocks.prismaMock.salesInvoice.findFirst.mockResolvedValue({ id: 3, slug: "inv-003" })
     mocks.prismaMock.customer.findMany.mockResolvedValue([{ id: 7, name: "Toko Maju" }])
     mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 5, sku: "BRG-1", name: "Busi" }])
     mocks.prismaMock.salesReturnItem.findMany.mockResolvedValue([{ itemId: 5, qty: 4 }])
@@ -281,12 +293,19 @@ describe("halaman retur/tambah membaca ?invoiceId=", () => {
       id: 3,
       documentNo: "INV-003",
       customerId: 7,
+      status: "paid",
       items: [{ itemId: 5, qty: 10 }],
     })
   })
 
+  const callPage = (segments?: string[]) =>
+    CreateSalesReturnPage({
+      params: Promise.resolve({ segments }),
+      searchParams: Promise.resolve({}),
+    })
+
   it("mengisi faktur, pelanggan, dan sisa barang yang belum diretur", async () => {
-    const page = await CreateSalesReturnPage({ searchParams: Promise.resolve({ invoiceId: "3" }) })
+    const page = await callPage(["faktur", "inv-003"])
     const form = findElement(page, SalesReturnForm)
 
     expect(form).not.toBeNull()
@@ -298,8 +317,30 @@ describe("halaman retur/tambah membaca ?invoiceId=", () => {
     })
   })
 
-  it("tanpa parameter, form tetap dibuka tanpa prefill", async () => {
-    const page = await CreateSalesReturnPage({ searchParams: Promise.resolve({}) })
+  it("daftar faktur yang bisa diretur memakai RETURNABLE_INVOICE_STATUSES (termasuk lunas)", async () => {
+    await callPage()
+
+    const where = mocks.prismaMock.salesInvoice.findMany.mock.calls[0][0].where
+    expect(where.status.in).toEqual(["posted", "partial", "paid"])
+  })
+
+  it("faktur konsep tidak di-prefill walau barisnya ada", async () => {
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({
+      id: 3,
+      documentNo: "INV-003",
+      customerId: 7,
+      status: "draft",
+      items: [{ itemId: 5, qty: 10 }],
+    })
+
+    const page = await callPage(["faktur", "inv-003"])
+    const form = findElement(page, SalesReturnForm)
+
+    expect(form.props.returnData).toBeUndefined()
+  })
+
+  it("tanpa segmen, form tetap dibuka tanpa prefill", async () => {
+    const page = await callPage()
     const form = findElement(page, SalesReturnForm)
 
     expect(form.props.returnData).toBeUndefined()

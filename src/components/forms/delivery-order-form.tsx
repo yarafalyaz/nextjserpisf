@@ -23,7 +23,7 @@ interface DeliveryOrderSalesOrder {
 
 interface DeliveryOrderFormProps {
   salesOrders: DeliveryOrderSalesOrder[]
-  /** Pilihan awal dari `?salesOrderId=` / `?fakturPenjualanId=`. */
+  /** Pilihan awal dari segmen `pesanan/<slug>` / `faktur/<slug>`. */
   defaultSalesOrderId?: number
   deliveryOrder?: { id: number; salesOrderId: number; date: string; doNumber?: string | null; deliveryDate?: string | null; notes?: string | null; shippingAddress?: string | null; shippingProvince?: string | null; shippingCity?: string | null; shippingDistrict?: string | null; shippingVillage?: string | null; shippingPostalCode?: string | null; shippingPhone?: string | null; vehicleNumber?: string | null; items?: Array<{ itemId: number; qty: number; description?: string | null }> }
 }

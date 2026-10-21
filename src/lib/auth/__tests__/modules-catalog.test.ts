@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import { CATALOG_VERB_ORDER, MODULE_ACTIONS } from "../module-catalog.generated"
 import { MODULES } from "../modules"
-import { PERMISSIONS } from "@/lib/setup/base-data"
+import { PERMISSIONS, type PermissionName } from "@/lib/setup/base-data"
 
 /**
  * Katalog izin adalah satu-satunya sensor "permission mana yang ada di aplikasi".
@@ -24,7 +24,7 @@ describe("katalog izin (module-catalog.generated.ts)", () => {
 
   it("tidak memuat permission yang tidak ada di daftar yang ditegakkan", () => {
     const known = new Set(PERMISSIONS)
-    const extra = [...new Set(permissionNames)].filter((name) => !known.has(name))
+    const extra = [...new Set(permissionNames)].filter((name) => !known.has(name as PermissionName))
     expect(extra).toEqual([])
   })
 

@@ -2,6 +2,7 @@
 
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
+import type { PermissionName } from "@/lib/setup/base-data"
 import { prisma } from "@/lib/db/prisma"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { getSystemSettings } from "@/lib/utils/settings"
@@ -22,7 +23,7 @@ interface MethodConfig {
   model: any
   slugModel: "paymentMethod" | "shippingMethod"
   entity: string
-  permissions: { create: string; edit: string; delete: string }
+  permissions: { create: PermissionName; edit: PermissionName; delete: PermissionName }
   schemas: { create: typeof createPaymentMethodSchema; update: typeof updatePaymentMethodSchema }
   autoCodeFlag: "enableAutoPaymentMethodCode" | "enableAutoShippingMethodCode"
   codePrefix: "MTP" | "MTK"

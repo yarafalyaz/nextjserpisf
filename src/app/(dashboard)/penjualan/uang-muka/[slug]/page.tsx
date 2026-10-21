@@ -24,6 +24,7 @@ import type { Metadata } from "next";
 import { requirePermission } from "@/lib/auth/permissions";
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url";
+import { CanCreate } from "@/components/auth/can-create";
 export const metadata: Metadata = { title: "Uang Muka" };
 
 export default async function DownPaymentDetailPage({
@@ -94,25 +95,31 @@ export default async function DownPaymentDetailPage({
             {dp.status === "draft" && (
               <>
                 <ConfirmDownPaymentButton dpId={dp.id} />
-                <Button
-                  href={entityEditHref("/penjualan/uang-muka", dp)}
-                  variant="primary"
-                >
-                  Ubah
-                </Button>
+                <CanCreate permission="edit_down_payments">
+                  <Button
+                    href={entityEditHref("/penjualan/uang-muka", dp)}
+                    variant="primary"
+                  >
+                    Ubah
+                  </Button>
+                </CanCreate>
               </>
             )}
             {dp.status === "confirmed" && (
-              <Button
-                href={`/produksi/perintah-kerja/tambah?quotationId=${dp.quotationId}`}
-                variant="primary"
-              >
-                + Perintah Kerja
-              </Button>
+              <CanCreate permission="create_work_orders">
+                <Button
+                  href={`/produksi/perintah-kerja/tambah/penawaran/${dp.quotation?.slug ?? dp.quotationId}`}
+                  variant="primary"
+                >
+                  + Perintah Kerja
+                </Button>
+              </CanCreate>
             )}
             <PrintButton documentType="down-payment" documentId={dp.id} />
             {dp.status === "draft" && (
-              <DeleteButton id={dp.id} action={deleteDownPayment} />
+              <CanCreate permission="delete_down_payments">
+                <DeleteButton id={dp.id} action={deleteDownPayment} />
+              </CanCreate>
             )}
             <BackButton href="/penjualan/uang-muka" />
           </>

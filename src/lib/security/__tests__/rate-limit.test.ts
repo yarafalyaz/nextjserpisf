@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest"
-import { takeRateLimit, peekRateLimit, getClientIp, canBlockOnClientIp, clientRateLimitKey, rateLimitDegradedCount } from "../rate-limit"
+import { takeRateLimit, peekRateLimit, getClientIp, canBlockOnClientIp, clientRateLimitKey, rateLimitDegradedCount, isRateLimitRedisConfigured, isRateLimitFailClosed } from "../rate-limit"
 
 describe("takeRateLimit (in-memory fallback)", () => {
   beforeEach(() => {
@@ -13,6 +13,31 @@ describe("takeRateLimit (in-memory fallback)", () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it("isRateLimitRedisConfigured mengikuti kelengkapan env Upstash (AUD-04)", () => {
+    expect(isRateLimitRedisConfigured()).toBe(false)
+    process.env.UPSTASH_REDIS_REST_URL = "https://example.upstash.io"
+    expect(isRateLimitRedisConfigured()).toBe(false)
+    process.env.UPSTASH_REDIS_REST_TOKEN = "test-token"
+    expect(isRateLimitRedisConfigured()).toBe(true)
+    delete process.env.UPSTASH_REDIS_REST_URL
+    delete process.env.UPSTASH_REDIS_REST_TOKEN
+  })
+
+  it("isRateLimitFailClosed hanya aktif di produksi dan bisa dimatikan darurat (AUD-04)", () => {
+    try {
+      vi.stubEnv("NODE_ENV", "test")
+      delete process.env.RATE_LIMIT_FAIL_CLOSED
+      expect(isRateLimitFailClosed()).toBe(false)
+      vi.stubEnv("NODE_ENV", "production")
+      expect(isRateLimitFailClosed()).toBe(true)
+      process.env.RATE_LIMIT_FAIL_CLOSED = "0"
+      expect(isRateLimitFailClosed()).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+      delete process.env.RATE_LIMIT_FAIL_CLOSED
+    }
   })
 
   it("allows requests within the limit", async () => {

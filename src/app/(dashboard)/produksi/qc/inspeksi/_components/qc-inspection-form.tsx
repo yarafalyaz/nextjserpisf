@@ -77,6 +77,14 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
     [checklists, checklistId],
   )
 
+  // Checklist yang ditawarkan hanya yang jenisnya sama dengan jenis
+  // inspeksi: gate WO (Inspeksi Masuk/Serah Terima) tidak boleh terpenuhi
+  // checklist jenis lain. createQcInspection menegakkan hal yang sama.
+  const matchingChecklists = useMemo(
+    () => checklists.filter((c) => c.checklistType === inspectionType),
+    [checklists, inspectionType],
+  )
+
   function setResult(itemId: number, patch: Partial<{ result: ResultValue; measured: string; note: string }>) {
     setResults((prev) => ({
       ...prev,
@@ -152,13 +160,25 @@ export function QcInspectionForm({ checklists, initialInspectionType, initialRef
               setResults({})
             }}
             placeholder="Pilih checklist dirilis..."
-            options={checklists.map((c) => ({ value: String(c.id), label: c.name }))}
+            options={matchingChecklists.map((c) => ({ value: String(c.id), label: c.name }))}
           />
+          {matchingChecklists.length === 0 && (
+            <p className="text-xs text-muted-foreground">
+              Belum ada checklist dirilis untuk jenis inspeksi ini.
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="inspectionType">Jenis Inspeksi *</Label>
-          <Select value={inspectionType} onValueChange={setInspectionType}>
+          <Select value={inspectionType} onValueChange={(value) => {
+            setInspectionType(value)
+            // Checklist terpilih dari jenis lama tidak berlaku untuk jenis baru.
+            if (selectedChecklist && selectedChecklist.checklistType !== value) {
+              setChecklistId(null)
+              setResults({})
+            }
+          }}>
             <SelectTrigger id="inspectionType"><SelectValue /></SelectTrigger>
             <SelectContent>
               {TYPE_OPTIONS.map((o) => (

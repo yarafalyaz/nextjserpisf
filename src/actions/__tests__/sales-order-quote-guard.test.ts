@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest"
 // Kenapa berkas ini ada: aksi convertQuotationToOrder punya kunci baris + cek
 // idempotensi, tetapi TIDAK dipanggil UI mana pun — jalur yang dipakai pengguna
 // adalah form Pesanan Penjualan (createSalesOrder) lewat
-// /penjualan/pesanan/tambah?quotationId=N. Sebelum ini, jalur itu menulis
+// /penjualan/pesanan/tambah/penawaran/<slug>. Sebelum ini, jalur itu menulis
 // quotationId tanpa memeriksa apakah penawaran sudah pernah dikonversi, jadi
 // tombol "+ Pesanan Penjualan" yang diklik dua kali (atau URL yang dipakai
 // ulang) melahirkan dua SO dari satu penawaran. Tes ini menjaga aturannya tetap

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 
 const mocks = vi.hoisted(() => {
   const requirePermissionMock = vi.fn()
@@ -352,8 +353,10 @@ describe("Quotation Actions", () => {
     expect(mocks.prismaMock.quotationHistory.create).not.toHaveBeenCalled()
   })
   it("acceptQuotation succeeds when validUntil is today (WIB, still valid)", async () => {
-    const now = new Date()
-    const todayUtcMidnight = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()))
+    // validUntil disimpan sebagai tengah malam UTC hari kalender WIB — pakai
+    // helper yang sama dengan produksi, bukan tengah malam UTC hari UTC
+    // (antara 00.00–06.59 WIB hari UTC masih kemarin, fixture lama merah).
+    const todayUtcMidnight = getWibTodayUtcDate()
     mocks.prismaMock.quotation.findUniqueOrThrow.mockResolvedValue({
       id: 1, status: "sent", revisionNumber: 1, validUntil: todayUtcMidnight,
     })
@@ -847,6 +850,8 @@ describe("Sales Return Actions", () => {
     vi.clearAllMocks()
     mocks.requirePermissionMock.mockResolvedValue({ id: 1 })
     mocks.generateDocNumMock.mockResolvedValue("SR-001")
+    // Faktur rujukan retur pada fixture ini berstatus posted (bisa diretur).
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "posted" })
   })
 
   // === completeSalesReturn ===
@@ -857,6 +862,13 @@ describe("Sales Return Actions", () => {
   })
 
   // === createSalesReturn over-return branch coverage ===
+  it("createSalesReturn menolak faktur konsep (di luar RETURNABLE_INVOICE_STATUSES)", async () => {
+    mocks.prismaMock.salesInvoice.findUnique.mockResolvedValue({ status: "draft" })
+    const items = JSON.stringify([{ itemId: 1, qty: 1 }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("tidak bisa diretur")
+  })
   it("createSalesReturn fails on over-return violation not_on_invoice", async () => {
     mocks.findOverReturnMock.mockReturnValueOnce({ type: "not_on_invoice", itemId: 99 })
     const items = JSON.stringify([{ itemId: 99, qty: 1 }])
@@ -1012,6 +1024,8 @@ describe("Sales Order Actions (legacy happy paths)", () => {
   it("createSalesOrder menyalin item penawaran (bukan hanya header)", async () => {
     mocks.prismaMock.quotation.findUnique.mockResolvedValue({
       id: 50,
+      status: "accepted",
+      validUntil: null,
       customerId: 7,
       subtotal: 1000,
       discount: 0,
@@ -1038,6 +1052,15 @@ describe("Sales Order Actions (legacy happy paths)", () => {
     expect(Number(arg.data.grandTotal)).toBe(1110)
   })
 
+  it("createSalesOrder menolak penawaran konsep lewat jalur form (gerbang convert)", async () => {
+    mocks.prismaMock.quotation.findUnique.mockResolvedValue({
+      id: 50, status: "draft", validUntil: null, customerId: 7, sections: [],
+    })
+    const res = await actions.createSalesOrder(fdMap({ customerId: "7", date: "2026-06-12", quotationId: "50" }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("approved/accepted")
+  })
+
   // Tanpa penawaran, pesanan tetap boleh dibuat kosong (item diisi belakangan).
   it("createSalesOrder tanpa penawaran tidak membuat item", async () => {
     const res = await actions.createSalesOrder(fdMap({ customerId: "1", date: "2026-06-12" }))
@@ -1050,6 +1073,7 @@ describe("Sales Order Actions (legacy happy paths)", () => {
   // bukan header bertotal 0 yang harus diketik ulang.
   it("createSalesInvoice menyimpan item dan menghitung totalnya", async () => {
     mocks.generateDocNumMock.mockResolvedValue("INV-001")
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed" })
     const items = JSON.stringify([
       { itemId: 11, qty: 2, unitPrice: 300, discount: 0 },
       { itemId: 12, qty: 1, unitPrice: 400, discount: 50 },
@@ -1080,8 +1104,18 @@ describe("Sales Order Actions (legacy happy paths)", () => {
 
   // F-PRICELIST-01: baris langsung dari form menerima harga price-list
   // kategori pelanggan; baris hasil konversi SO mempertahankan harga SO.
+  it("createSalesInvoice menolak pesanan konsep (gerbang DELIVERABLE_ORDER_STATUSES)", async () => {
+    mocks.generateDocNumMock.mockResolvedValue("INV-004")
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "draft" })
+    const res = await actions.createSalesInvoice(
+      fdMap({ customerId: "7", date: "2026-06-12", salesOrderId: "9", items: "[]" }),
+    )
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("belum bisa difaktur")
+  })
   it("createSalesInvoice menerapkan price-list untuk baris form langsung, bukan baris konversi SO", async () => {
     mocks.generateDocNumMock.mockResolvedValue("INV-003")
+    mocks.prismaMock.salesOrder.findUnique.mockResolvedValue({ status: "confirmed" })
     mocks.prismaMock.customer.findUnique.mockResolvedValue({ customerCategoryId: 7 })
     mocks.prismaMock.customerPriceList.findMany.mockResolvedValue([
       { customerCategoryId: 7, itemId: 11, price: 90000, effectiveDate: null, isActive: true },

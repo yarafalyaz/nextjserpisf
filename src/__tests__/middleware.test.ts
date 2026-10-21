@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 
 /**
  * Test the addSecurityHeaders logic from proxy.ts.
@@ -62,6 +64,34 @@ describe("proxy security headers spec", () => {
     const imgSrc = EXPECTED_CSP_DIRECTIVES.find(d => d.startsWith("img-src"))
     expect(imgSrc).toContain("data:")
     expect(imgSrc).toContain("blob:")
+  })
+})
+
+/**
+ * AUD-03/AUD-04 wiring guards: produksi memakai CSP nonce (tanpa
+ * 'unsafe-inline' untuk script) dan bucket sensitif fail-closed.
+ * Dibaca dari sumber karena proxy tidak bisa diimpor murah di unit test.
+ */
+describe("proxy: nonce CSP & fail-closed (AUD-03/AUD-04)", () => {
+  const proxySource = () => readFileSync(join(process.cwd(), "src/proxy.ts"), "utf8")
+
+  it("CSP produksi memakai nonce + strict-dynamic, bukan unsafe-inline script", () => {
+    const src = proxySource()
+    expect(src).toContain("'nonce-${nonce}' 'strict-dynamic'")
+    expect(src).toContain('req.headers.set("x-nonce", nonce)')
+    expect(src).not.toContain("script-src 'self' 'unsafe-inline'\"")
+  })
+
+  it("root layout meneruskan nonce ke script tema inline", () => {
+    const layout = readFileSync(join(process.cwd(), "src/app/layout.tsx"), "utf8")
+    expect(layout).toContain('get("x-nonce")')
+    expect(layout).toContain("nonce={nonce}")
+  })
+
+  it("bucket auth/upload fail-closed saat degraded", () => {
+    const src = proxySource()
+    expect(src).toContain("sensitiveRateLimitBlocked(result)")
+    expect(src).toContain("isRateLimitFailClosed")
   })
 })
 
