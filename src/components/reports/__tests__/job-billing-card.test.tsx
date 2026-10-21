@@ -33,6 +33,77 @@ function render(node: React.ReactNode) {
   return { container, root }
 }
 
+describe("JobBillingCard F-2026-10-21-107 delta nilai termin", () => {
+  it("tanpa prop: fallback tak tercatat, daftar termin tidak tampil", () => {
+    const { container, root } = render(<JobBillingCard summary={base} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Perubahan nilai sejak snapshot tidak tercatat")
+    expect(container.querySelector('[aria-label="Delta nilai termin"]')).toBeNull()
+    expect(text).not.toMatch(/Termin 1|Termin 2|jadwal kontraktual resmi/i)
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("deltaCents null: fallback tak tercatat, daftar termin tidak tampil", () => {
+    const { container, root } = render(<JobBillingCard summary={base} deltaNilaiCents={null} />)
+    expect(container.textContent).toContain("Perubahan nilai sejak snapshot tidak tercatat")
+    expect(container.querySelector('[aria-label="Delta nilai termin"]')).toBeNull()
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("delta 0: fallback tak tercatat, daftar termin tidak tampil", () => {
+    const { container, root } = render(<JobBillingCard summary={base} deltaNilaiCents={0} />)
+    expect(container.textContent).toContain("Perubahan nilai sejak snapshot tidak tercatat")
+    expect(container.querySelector('[aria-label="Delta nilai termin"]')).toBeNull()
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("naik: +Rp 100.000 (11,1% dari snapshot Rp 900.000), teks sisa tagih bertambah, label kejujuran persis", () => {
+    const { container, root } = render(<JobBillingCard summary={base} deltaNilaiCents={10_000_000} />)
+    const block = container.querySelector('[aria-label="Delta nilai termin"]')
+    expect(block).not.toBeNull()
+    const text = block?.textContent ?? ""
+    expect(text).toContain("Delta turunan dari snapshot, bukan amendemen jadwal")
+    expect(text).toContain("Nilai naik — sisa tagih bertambah")
+    expect(text).toContain("+Rp 100.000 (11,1%)")
+    expect(text).toContain("Sisa belum ditagih kini")
+    expect(text).toContain("Rp 600.000")
+    expect(text).not.toMatch(/Termin 1|Termin 2|pelunasan kontraktual/i)
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("turun: −Rp 100.000, teks kredit pelanggan, warna hijau, nominal absolut", () => {
+    const { container, root } = render(<JobBillingCard summary={base} deltaNilaiCents={-10_000_000} />)
+    const block = container.querySelector('[aria-label="Delta nilai termin"]')
+    const text = block?.textContent ?? ""
+    expect(text).toContain("Nilai turun — kelebihan menjadi kredit pelanggan")
+    expect(text).toContain("−Rp 100.000")
+    expect(text).not.toContain("+Rp 100.000")
+    expect(text).toContain("Rp 100.000")
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("snapshot lama 0: persen null, nominal tetap tampil tanpa NaN/Infinity", () => {
+    const { container, root } = render(<JobBillingCard summary={{ ...base, nilaiBerjalan: 0, sudahDitagih: 0, sisaBelumDitagih: 0 }} deltaNilaiCents={10_000_000} />)
+    const block = container.querySelector('[aria-label="Delta nilai termin"]')
+    const text = block?.textContent ?? ""
+    expect(text).toContain("+Rp 100.000")
+    expect(text).not.toContain("NaN")
+    expect(text).not.toContain("Infinity")
+    expect(text).not.toContain("%")
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("sisa negatif: formatCurrency apa adanya, tidak clamp", () => {
+    const { container, root } = render(
+      <JobBillingCard summary={{ ...base, sisaBelumDitagih: -50_000 }} deltaNilaiCents={5_000_000} />,
+    )
+    const block = container.querySelector('[aria-label="Delta nilai termin"]')
+    const text = block?.textContent ?? ""
+    expect(text).toContain("Rp -50.000")
+    act(() => root.unmount()); container.remove()
+  })
+})
+
 describe("JobBillingCard F-2026-10-20-43 kredit terbuka", () => {
   it("kreditTerbuka 0: baris kredit + sisa efektif + daftar kredit tidak tampil, sisa existing utuh", () => {
     const { container, root } = render(<JobBillingCard summary={base} />)
