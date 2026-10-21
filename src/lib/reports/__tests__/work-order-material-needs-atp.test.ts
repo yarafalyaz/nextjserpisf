@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
     item: { findMany: vi.fn() },
     materialIssue: { findMany: vi.fn() },
     purchaseOrder: { findMany: vi.fn() },
+    inventoryLayer: { findMany: vi.fn() },
   },
 }))
 
@@ -54,6 +55,7 @@ beforeEach(() => {
     { id: 11, items: [{ itemId: 1, qty: 8, status: "pending" }] },
   ])
   mocks.prismaMock.purchaseOrder.findMany.mockResolvedValue([])
+  mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([])
 })
 
 describe("getWorkOrderMaterialNeeds ATP", () => {
@@ -149,5 +151,43 @@ describe("buildWorkOrderMaterialNeeds ATP murni", () => {
       { itemId: 5, name: "Plat", unitOfMeasure: "LBR", requiredQty: 3, qtyOnHand: 10, issuedQty: 0, orderedQty: 0 },
     ])
     expect(r.lines[0]).toMatchObject({ committedOtherQty: 0, effectiveAvailableQty: 10, shortageQty: 0 })
+  })
+})
+
+describe("F-012 ATP per gudang relevan", () => {
+  it("builder: global cukup tetapi gudang relevan kurang -> warehouseShortageQty > 0", () => {
+    const r = buildWorkOrderMaterialNeeds([
+      { itemId: 1, name: "Ban", unitOfMeasure: "PCS", requiredQty: 8, qtyOnHand: 10, qtyOnHandAtWarehouse: 3, issuedQty: 0, orderedQty: 0 },
+    ])
+    expect(r.lines[0]).toMatchObject({ shortageQty: 0, qtyOnHandAtWarehouse: 3, warehouseShortageQty: 5 })
+    expect(r.warehouseShortageCount).toBe(1)
+  })
+
+  it("builder: tanpa qtyOnHandAtWarehouse -> fallback global (perilaku lama)", () => {
+    const r = buildWorkOrderMaterialNeeds([
+      { itemId: 1, name: "Ban", unitOfMeasure: "PCS", requiredQty: 8, qtyOnHand: 10, issuedQty: 0, orderedQty: 0 },
+    ])
+    expect(r.lines[0]).toMatchObject({ qtyOnHandAtWarehouse: 10, warehouseShortageQty: 0 })
+    expect(r.warehouseShortageCount).toBe(0)
+  })
+})
+
+describe("F-012 loader gudang relevan", () => {
+  it("stok global 10, lapisan gudang default hanya 3 -> warehouseShortage 5, shortage global 0", async () => {
+    mocks.prismaMock.item.findMany.mockResolvedValue([
+      { id: 1, name: "Plat 6mm", unitOfMeasure: "LBR", qtyOnHand: 10, defaultWarehouseId: 5 },
+    ])
+    mocks.prismaMock.inventoryLayer.findMany.mockResolvedValue([
+      { itemId: 1, warehouseId: 5, remaining: 3 },
+    ])
+    const r = await getWorkOrderMaterialNeeds(9)
+    const plat = r?.lines.find((l) => l.itemId === 1)
+    // committedOther WO lain 8 (fixture beforeEach) -> shortageQty global tetap 6;
+    // yang diuji di sini: gudang relevan hanya 3 dari sisa butuh 8.
+    expect(plat).toMatchObject({ qtyOnHandAtWarehouse: 3, warehouseShortageQty: 5 })
+    expect(r?.warehouseShortageCount).toBe(1)
+    expect(mocks.prismaMock.inventoryLayer.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: expect.objectContaining({ OR: [{ itemId: 1, warehouseId: 5 }] }) }),
+    )
   })
 })

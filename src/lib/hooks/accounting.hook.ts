@@ -598,6 +598,9 @@ export async function onSalesInvoicePosted(
         qty,
         allowShortfall: false,
         serialNumbers: lineSerials,
+        // F-2026-10-21-011: lot kedaluwarsa ditolak + FEFO fisik, sama
+        // seperti material issue (F-79). Biaya tetap lapisan FIFO.
+        documentDate: invoice.date,
       });
       const lineCogs = consumedCost + shortfall * fallbackUnitCost;
       cogsAmount += lineCogs;

@@ -40,4 +40,32 @@ describe("WorkOrderMaterialNeedsCard F-2026-10-20-19", () => {
     expect(container.textContent).toContain("Belum ada kebutuhan material")
     unmountCard(root)
   })
+
+  it("stok global cukup tapi gudang relevan kurang: tampil kolom + status gudang (F-012)", () => {
+    const needs = buildWorkOrderMaterialNeeds([
+      { itemId: 3, name: "Kampas Rem", unitOfMeasure: "set", requiredQty: 10, qtyOnHand: 12, issuedQty: 0, orderedQty: 0, qtyOnHandAtWarehouse: 3 },
+    ])
+    // builder: shortage global 0, warehouseShortageQty 7, count 1
+    expect(needs.shortageCount).toBe(0)
+    expect(needs.warehouseShortageCount).toBe(1)
+    const { container, root } = renderCard(<WorkOrderMaterialNeedsCard needs={needs} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Stok gudang relevan")
+    expect(text).toContain("Belum keluar — kurang di gudang relevan")
+    expect(text).toContain("1 baris kekurangan di gudang relevan")
+    expect(text).not.toContain("Kekurangan stok")
+    unmountCard(root)
+  })
+
+  it("gudang relevan cukup: kolom tampil, status tetap belum keluar biasa (F-012)", () => {
+    const needs = buildWorkOrderMaterialNeeds([
+      { itemId: 4, name: "Filter Oli", unitOfMeasure: "pcs", requiredQty: 5, qtyOnHand: 9, issuedQty: 0, orderedQty: 0, qtyOnHandAtWarehouse: 9 },
+    ])
+    const { container, root } = renderCard(<WorkOrderMaterialNeedsCard needs={needs} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Stok gudang relevan")
+    expect(text).toContain("Belum keluar")
+    expect(text).not.toContain("kurang di gudang relevan")
+    unmountCard(root)
+  })
 })

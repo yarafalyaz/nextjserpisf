@@ -9,6 +9,7 @@ import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { ReportTableView } from "@/components/reports/report-table-view"
 import { minStockSummary } from "@/lib/reports/min-stock"
+import { MinStockWarehouseCard } from "@/components/reports/min-stock-warehouse-card"
 import { buildMinStockRequestHref } from "@/lib/reports/min-stock-request"
 import { loadMinStock } from "@/lib/reports/min-stock-data"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
@@ -30,7 +31,8 @@ export default async function MinStockPage({
     end: now,
   }))
 
-  const { report, periodLabel, periodCaption } = await loadMinStock(period)
+  const { report, warehouseShortages, warehouseNote, periodLabel, periodCaption } =
+    await loadMinStock(period)
   const requestHref = buildMinStockRequestHref(report.shortageLines)
   const canCreateRequest =
     requestHref !== null &&
@@ -78,6 +80,11 @@ export default async function MinStockPage({
       <p className="doc-lines" style={{ marginTop: 8 }}>
         {minStockSummary(report)}
       </p>
+      {warehouseShortages.length > 0 ? (
+        <div style={{ marginTop: 16 }}>
+          <MinStockWarehouseCard shortages={warehouseShortages} note={warehouseNote} />
+        </div>
+      ) : null}
     </ReportPageShell>
   )
 }

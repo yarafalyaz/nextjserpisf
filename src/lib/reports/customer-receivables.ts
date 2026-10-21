@@ -47,6 +47,37 @@ export function creditOverLimitLabel(row: CustomerReceivableInput): string | nul
 }
 
 /**
+ * F-2026-10-21-017 lapis aman: paparan kredit penuh per pelanggan =
+ * piutang terbuka + SO confirmed/processing/completed yang belum tertagih
+ * (grandTotal SO dikurangi porsi yang sudah jadi invoice recognised).
+ * Advisory saja — tidak menahan dokumen; inti gerbang = putusan team-lead.
+ * Limit 0 = belum diatur (BUKAN tanpa limit, BUKAN blokir); status "unset".
+ */
+export interface CustomerCreditExposureInput extends CustomerReceivableInput {
+  openOrderAmount: number
+}
+
+export interface CustomerCreditExposureRow extends CustomerCreditExposureInput {
+  exposure: number
+  remainingCredit: number
+  utilization: number | null
+  status: "unset" | "ok" | "warning" | "over"
+}
+
+export function buildCustomerCreditExposure(rows: CustomerCreditExposureInput[]): CustomerCreditExposureRow[] {
+  return rows
+    .map((row) => {
+      const exposure = safeAdd(row.outstanding, row.openOrderAmount, 2)
+      const remainingCredit = safeSubtract(row.creditLimit, exposure, 2)
+      const utilization = row.creditLimit > 0 ? Math.round((exposure / row.creditLimit) * 10000) / 100 : null
+      const status: CustomerCreditExposureRow["status"] =
+        row.creditLimit <= 0 ? "unset" : utilization != null && utilization >= 100 ? "over" : utilization != null && utilization >= 80 ? "warning" : "ok"
+      return { ...row, exposure, remainingCredit, utilization, status }
+    })
+    .sort((a, b) => b.exposure - a.exposure)
+}
+
+/**
  * Amount-weighted average days between invoice date and payment date.
  * Returns null when there is no payment to average.
  */

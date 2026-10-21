@@ -830,7 +830,7 @@ export async function issueMaterial(
       await tx.$queryRaw`SELECT id FROM production_orders WHERE id = ${productionOrderId} FOR UPDATE`;
       const order = await tx.productionOrder.findUniqueOrThrow({
         where: { id: productionOrderId },
-        select: { id: true, documentNo: true, status: true, totalActualCost: true, workOrderId: true },
+        select: { id: true, documentNo: true, status: true, totalActualCost: true, workOrderId: true, startDate: true, createdAt: true },
       });
       if (order.status !== "confirmed" && order.status !== "in_progress") {
         throw new Error(
@@ -912,6 +912,9 @@ export async function issueMaterial(
           warehouseId,
           qty,
           label: `perintah produksi ${order.documentNo}`,
+          // F-2026-10-21-011: issueMaterial PO juga jalur keluar — lot
+          // kedaluwarsa ditolak per tanggal terbit order (startDate bila ada).
+          documentDate: order.startDate ?? order.createdAt ?? new Date(),
         });
         const unitCost = qty > 0 ? consumedCost / qty : resolveItemCost(itm);
         const lineCost = safeMultiply(qty, unitCost, 2);

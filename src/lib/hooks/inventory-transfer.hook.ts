@@ -100,6 +100,8 @@ export async function onTransferProcessed(
           warehouseId: transfer.sourceWarehouseId,
           qty: qty,
           label: `transfer ${transfer.documentNo}`,
+          // F-2026-10-21-011: lot kedaluwarsa tidak boleh berpindah gudang.
+          documentDate: transfer.date,
         });
         const unitCost = qty > 0 ? consumedCost / qty : 0;
 

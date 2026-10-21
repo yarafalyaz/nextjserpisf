@@ -23,6 +23,13 @@ import { ReportCardShell } from "./report-card-shell"
  * Efektif = qtyOnHand − terikat. Status kekurangan dirinci cakupan
  * incoming: tertutup tepat waktu / terlambat / belum dijadwalkan bila
  * incoming menutup shortage.
+ *
+ * F-2026-10-21-012: kolom Stok gudang relevan & status kekurangan
+ * gudang — controller dibedakan dari jembatan/profil routing — dari field
+ * builder qtyOnHandAtWarehouse/warehouseShortageQty apa adanya (stok
+ * di gudang MI completed WO ini + gudang default item per loader).
+ * Ditampilkan agar material tak terlihat cukup hanya karena stok global
+ * cukup padahal terkunci di gudang lain.
  */
 function fmtDate(d: Date | null | undefined): string {
   if (!d) return ""
@@ -34,17 +41,18 @@ function fmtDate(d: Date | null | undefined): string {
 export function WorkOrderMaterialNeedsCard({
   needs,
 }: Readonly<{ needs: WorkOrderMaterialNeeds }>) {
+  const summary = needs.allFulfilled
+    ? "Semua kebutuhan terpenuhi"
+    : needs.shortageCount > 0
+      ? `${needs.shortageCount} baris kekurangan stok`
+      : needs.warehouseShortageCount > 0
+        ? `${needs.warehouseShortageCount} baris kekurangan di gudang relevan`
+        : "Belum semua material keluar"
   return (
     <ReportCardShell
       label="Kebutuhan Material"
       title="Kebutuhan Material"
-      summary={
-        needs.allFulfilled
-          ? "Semua kebutuhan terpenuhi"
-          : needs.shortageCount > 0
-            ? `${needs.shortageCount} baris kekurangan stok`
-            : "Belum semua material keluar"
-      }
+      summary={summary}
       isEmpty={needs.lines.length === 0}
       emptyText="Belum ada kebutuhan material untuk perintah kerja ini"
     >
@@ -54,6 +62,7 @@ export function WorkOrderMaterialNeedsCard({
               <DetailTableTh align="right">Butuh</DetailTableTh>
               <DetailTableTh align="right">Terikat WO lain</DetailTableTh>
               <DetailTableTh align="right">Tersedia efektif</DetailTableTh>
+              <DetailTableTh align="right">Stok gudang relevan</DetailTableTh>
               <DetailTableTh align="right">Keluar</DetailTableTh>
               <DetailTableTh align="right">Dipesan</DetailTableTh>
               <DetailTableTh align="right">Sisa</DetailTableTh>
@@ -72,6 +81,7 @@ export function WorkOrderMaterialNeedsCard({
                   <DetailTableTd align="right">{line.requiredQty}</DetailTableTd>
                   <DetailTableTd align="right">{line.committedOtherQty}</DetailTableTd>
                   <DetailTableTd align="right">{line.effectiveAvailableQty}</DetailTableTd>
+                  <DetailTableTd align="right">{line.qtyOnHandAtWarehouse}</DetailTableTd>
                   <DetailTableTd align="right">{line.issuedQty}</DetailTableTd>
                   <DetailTableTd align="right">{line.orderedQty}</DetailTableTd>
                   <DetailTableTd align="right">{line.remainingQty}</DetailTableTd>
@@ -89,7 +99,9 @@ export function WorkOrderMaterialNeedsCard({
                               : line.incomingCover === "belum-jadwal"
                                 ? "Kekurangan stok — incoming belum dijadwalkan"
                                 : "Kekurangan stok"
-                          : "Belum keluar"}
+                          : line.warehouseShortageQty > 0
+                            ? "Belum keluar — kurang di gudang relevan"
+                            : "Belum keluar"}
                   </DetailTableTd>
                 </DetailTableRow>
               ))}
@@ -99,9 +111,10 @@ export function WorkOrderMaterialNeedsCard({
                 <DetailTableTd className="font-bold">Total</DetailTableTd>
                 <DetailTableTd align="right" className="font-bold">{needs.totalRequired}</DetailTableTd>
                 <DetailTableTd>{null}</DetailTableTd>
+                <DetailTableTd>{null}</DetailTableTd>
+                <DetailTableTd>{null}</DetailTableTd>
                 <DetailTableTd align="right" className="font-bold">{needs.totalIssued}</DetailTableTd>
                 <DetailTableTd align="right" className="font-bold">{needs.totalOrdered}</DetailTableTd>
-                <DetailTableTd>{null}</DetailTableTd>
                 <DetailTableTd>{null}</DetailTableTd>
                 <DetailTableTd>{null}</DetailTableTd>
               </DetailTableFootRow>

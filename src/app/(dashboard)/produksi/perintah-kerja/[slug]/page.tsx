@@ -18,6 +18,8 @@ import { WhatsappButton } from "@/components/reports/whatsapp-button";
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { WorkOrderMaterialNeedsCard } from "@/components/reports/work-order-material-needs-card";
 import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs-data";
+import { WorkOrderPartStatusCard } from "@/components/reports/work-order-part-status-card";
+import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
   DetailTable,
@@ -173,6 +175,10 @@ export default async function WorkOrderDetailPage({
   const suggestedProduct = linkedProducts.length === 1 ? linkedProducts[0] : null;
 
   const materialNeeds = await getWorkOrderMaterialNeeds(wo.id);
+
+  // F-105: status part turunan read-only per baris WO (builder Bara PR #275).
+  // Kartu murni presentasi: tanpa hitung ulang, tanpa tulis WorkOrderItem.status.
+  const partStatus = await getWorkOrderPartStatus(wo.id);
 
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
@@ -409,6 +415,10 @@ export default async function WorkOrderDetailPage({
       )}
 
       {materialNeeds ? <WorkOrderMaterialNeedsCard needs={materialNeeds} /> : null}
+
+      {partStatus ? (
+        <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
+      ) : null}
 
       {/* Pengeluaran material yang lahir dari WO ini. SELALU tampil: tombol
           "Buat Pengeluaran Material" menulis MI langsung lewat aksi (tanpa

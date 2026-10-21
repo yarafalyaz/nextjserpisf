@@ -132,6 +132,10 @@ export async function onStockAdjustmentProcessed(
             serialNumbers: Array.isArray(item.serialNumbers)
               ? item.serialNumbers.map(String)
               : undefined,
+            // F-2026-10-21-011: pengeluaran penyesuaian juga menolak lot
+            // kedaluwarsa (adjustment OUT bukan jalur buang lot expired —
+            // pakai penyesuaian tercatat khusus bila memang memusnahkan).
+            documentDate: adjustment.date,
           });
           const totalCost = consumedCost + shortfall * enteredUnitCost;
           effectiveUnitCost = qty > 0 ? totalCost / qty : enteredUnitCost;
