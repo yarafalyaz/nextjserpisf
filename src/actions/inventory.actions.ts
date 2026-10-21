@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { safeSubtract, safeMultiply } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { assertJobCostMutable } from "@/lib/services/job-closeout.service";
 import {
   assertApproved,
   requestApprovalIfConfigured,
@@ -530,6 +531,11 @@ export async function createMaterialIssue(formData: FormData) {
       );
     }
 
+    // F-009-V: MI baru ke WO closed ditolak server (draft pun lahir beku).
+    if (v.workOrderId) {
+      await assertJobCostMutable({ workOrderId: v.workOrderId }, "dibuatkan pengeluaran materialnya")
+    }
+
     const issue = await prisma.materialIssue.create({
       data: {
         documentNo,
@@ -614,6 +620,18 @@ export async function completeMaterialIssue(issueId: number) {
       where: { id: issueId },
       select: { workOrderId: true },
     });
+    if (issueWo.workOrderId != null) {
+      // F-009-V: MI draft lama ke WO yang kini closed ikut beku saat complete.
+      try {
+        await assertJobCostMutable({ workOrderId: issueWo.workOrderId }, "diselesaikan pengeluaran materialnya")
+      } catch (closedErr) {
+        await prisma.materialIssue.updateMany({
+          where: { id: issueId, status: "processing" },
+          data: { status: "draft" },
+        });
+        throw closedErr;
+      }
+    }
     if (issueWo.workOrderId != null) {
       const poConsumed = await prisma.productionOrderMaterial.aggregate({
         where: {
