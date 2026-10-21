@@ -739,7 +739,7 @@ export async function createWorkOrder(formData: FormData) {
 
 export async function updateWorkOrder(id: number, formData: FormData) {
   try {
-    await requirePermission("edit_work_orders");
+    const user = await requirePermission("edit_work_orders");
 
     // Status guard: only editable in pre-processing states. Without this, a
     // work order that has already been started (`in_progress`) or completed
@@ -763,6 +763,15 @@ export async function updateWorkOrder(id: number, formData: FormData) {
     const parsed = parseFormData(workOrderSchema, formData);
     if (!parsed.success) return { success: false, error: parsed.error };
     const v = parsed.data;
+
+    // F-2026-10-21-035: histori geser endDate. Nilai tersimpan dibandingkan
+    // dengan nilai form (konversi yang sama persis dengan write path di
+    // bawah) dalam date-only YYYY-MM-DD — format yang sama dengan input
+    // `v.endDate` dari form. Null ↔ tanggal terisi juga perubahan.
+    const newEndDate = v.endDate ? wibDateToUtcMidnight(v.endDate) : null;
+    const endDateChanged =
+      (wo.endDate?.toISOString().slice(0, 10) ?? null) !==
+      (newEndDate?.toISOString().slice(0, 10) ?? null);
 
     const itemsJson = v.items ?? null;
     const items =
@@ -794,7 +803,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
           // Persist optional schedule dates the form sends. Previously dropped
           // silently — the column was nullable but the action never read it.
           startDate: v.startDate ? wibDateToUtcMidnight(v.startDate) : null,
-          endDate: v.endDate ? wibDateToUtcMidnight(v.endDate) : null,
+          endDate: newEndDate,
           notes: v.notes ?? null,
         },
       });
@@ -821,6 +830,29 @@ export async function updateWorkOrder(id: number, formData: FormData) {
         });
       }
     });
+
+    // F-2026-10-21-035: endDate geser → 1 baris ActivityLog tambahan dengan
+    // oldValues/newValues (kolom Json existing, schema:3954-3955).
+    // logActivity existing hanya menulis kolom `metadata`, jadi baris ini
+    // ditulis via Prisma langsung. Gagal tulis log ditelan seperti
+    // logActivity existing (logging tidak boleh menggagalkan update WO).
+    if (endDateChanged) {
+      try {
+        await prisma.activityLog.create({
+          data: {
+            userId: Number(user.id),
+            action: "update",
+            modelType: "WorkOrder",
+            modelId: id,
+            description: `EndDate perintah kerja #${id} berubah dari ${wo.endDate?.toISOString().slice(0, 10) ?? "-"} ke ${newEndDate?.toISOString().slice(0, 10) ?? "-"}`,
+            oldValues: { endDate: wo.endDate?.toISOString().slice(0, 10) ?? null },
+            newValues: { endDate: newEndDate?.toISOString().slice(0, 10) ?? null },
+          },
+        });
+      } catch (logError) {
+        console.error("[updateWorkOrder] gagal menulis histori endDate", logError);
+      }
+    }
 
     await logActivity(
       "update",
