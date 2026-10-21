@@ -2311,6 +2311,228 @@ tahun dihapus, dsb).
 
 ---
 
+## VONIS BOT 4 F-2026-10-21-028 — Format ekspor PPh21 + rekonsiliasi rekap vs slip (2026-10-22)
+
+Pemutus: `accounting-finance-tax` (BOT 4). Kartu: t_a89eab42.
+Sifat: FINAL untuk tahap ekspor F-028. Rekap baca SUDAH jadi
+(BOT 3 t_7c909b7b / PR #309, `src/lib/reports/pph21-recap.ts` +
+`pph21-recap-data.ts` di main) — vonis ini TIDAK membuka kode,
+hanya memutus format ekspor + aturan rekonsiliasi supaya BOT 3
+tidak menebak format DJP kelak. Angka/metode TER TIDAK divonis
+ulang — ikut VONIS F-026 FINAL di atas (§1-§6).
+
+### A. Status verifikasi format DJP resmi (akses 2026-10-22)
+
+TERVERIFIKASI dari sumber resmi DJP (pajak.go.id):
+
+1. Coretax DJP memakai impor **XML**, bukan CSV/e-SPT lama. Halaman
+   resmi "Template XML dan Converter Excel ke XML"
+   (https://www.pajak.go.id/reformdjp/coretax/template-xml-dan-converter-excel-ke-xml,
+   akses 2026-10-22) menyatakan: format impor Coretax = XML;
+   perubahan dari sistem lama termasuk CSV→XML, penambahan kode
+   NITKU, validasi NPWP/NITKU/Kode Objek Pajak/Tarif.
+2. Untuk PPh21 pegawai tetap dokumennya = **BPMP** (Bukti
+   Pemotongan Bulanan Pegawai Tetap). Converter resmi DJP
+   "BPMP Excel to XML v.3.xlsx" (update 17/04/2025, unduh dari
+   halaman di atas, diperiksa langsung run ini) memetakan kolom
+   Excel → elemen XML `MmPayroll` (root `MmPayrollBulk` > `TIN` +
+   `ListOfMmPayroll`). Kolom converter resmi (sheet BPMP):
+   - `TIN` — NPWP Pemotong (16 digit, wajib sama NPWP login)
+   - `TaxPeriodMonth` — Masa Pajak (1-12)
+   - `TaxPeriodYear` — Tahun Pajak
+   - `CounterpartOpt` — `Resident` | `Foreign`
+   - `CounterpartTin` — NPWP/NIK karyawan (15/16 digit, wajib valid)
+   - `CounterpartPassport` — nomor paspor (hanya Foreign)
+   - `StatusTaxExemption` — kode PTKP: TK/0..TK/3, K/0..K/3, HB/0..HB/3
+   - `Position` — posisi/jabatan karyawan
+   - `TaxCertificate` — fasilitas: `N/A` | `DTP` | `ECT`
+     (XSD converter menulis `ECT`; jangan "perbaiki" jadi ETC)
+   - `TaxObjectCode` — kode objek pajak; pegawai tetap = `21-100-01`
+     (sheet REF converter: "Penghasilan yang diterima oleh Pegawai
+     Tetap"); pensiun berkala = `21-100-02` (di luar cakupan slip
+     Payroll berjalan)
+   - `Gross` — penghasilan bruto masa itu (rupiah)
+   - `Rate` — tarif % (desimal titik di XML; koma di Excel
+     dikonversi converter)
+   - `IDPlaceOfBusinessActivity` — ID TKU pemotong (22 digit)
+   - `WithholdingDate` — tanggal pemotongan `YYYY-MM-DD`; validasi
+     converter: tidak boleh lebih rendah dari masa/tahun pajak
+     bukti potong
+   XSD di dalam converter: `CounterpartTin` pola `[0-9]{15,16}`,
+   `TIN` pola `[0-9]{15,16}`.
+3. Dasar e-Bupot 21/26: PER-02/PJ/2024 (DJP, artikel resmi
+   https://pajak.go.id/en/node/104421, akses 2026-10-22) — e-Bupot
+   PPh 21/26 berlaku sejak masa pajak Januari 2024.
+4. Dokumen masa pajak TERAKHIR BUKAN BPMP: BPA1 (pegawai tetap
+   swasta) / BPA2 (instansi pemerintah) — converter + template
+   terpisah di halaman resmi yang sama (BPA1 Excel to XML
+   7/11/2024; BPA2 update 7/11/2024, panduan DJP BPA2 akses
+   2026-10-22). BPMP hanya untuk masa SELAIN masa terakhir.
+
+Yang BELUM terverifikasi resmi (jangan dikarang):
+- Skema XSD BPMP versi template zip (`bpmp.zip` 7/11/2024) tidak
+  dibuka run ini (unduhan gagal); elemen di atas bersumber dari
+  converter resmi v.3 (17/04/2025) yang memuat XSD `MONTHLYPAYROLL`
+  di dalamnya — itu cukup untuk vonis kolom, BUKAN untuk klaim
+  "file ISF pasti diterima Coretax". Uji unggah nyata ke Coretax
+  = syarat buka ekspor (§D), di luar vonis ini.
+- NITKU/ID TKU perusahaan ISF + NPWP pemotong versi 16 digit:
+  data perusahaan berjalan (`schema.prisma:106` companyName,
+  `:319` taxId pada model terkait) belum terbukti memuat ID TKU
+  22 digit. Ekspor WAJIB fail-closed bila ID TKU kosong (§B).
+
+### B. Vonis format ekspor yang SAH untuk tahap ini
+
+Dua lapis, jangan dicampur:
+
+**Lapis 1 — Ekspor internal ISF (SAH dibangun lebih dulu, default).**
+Satu baris per karyawan per masa pajak (agregasi slip se-masa,
+bukan per slip — lihat §C butir 4). Format: CSV UTF-8, pemisah
+`;`, tanpa pemisah ribuan, desimal titik 2 angka (sen), tanggal
+`YYYY-MM-DD`, header persis kolom di bawah. Nama file:
+`pph21-rekap-internal-YYYY-MM.csv` (satu masa) /
+`pph21-rekap-internal-YYYY.csv` (tahunan per karyawan).
+Kolom wajib per baris:
+
+| # | Kolom | Sumber (field nyata) | Aturan |
+|---|-------|----------------------|--------|
+| 1 | `masa_pajak` | `Payroll.period` (YYYY-MM) | dari slip approved/paid saja |
+| 2 | `tahun_pajak` | turunan `period` | 4 digit |
+| 3 | `employee_id` | `Payroll.employeeId` | internal, bukan identitas DJP |
+| 4 | `nama` | `Employee.name` | |
+| 5 | `npwp` | `Employee.npwp` | strip titik/strip; kosong → kosong (temuan §C) |
+| 6 | `nik` | `Employee.idNumber` | strip spasi; sumber NIK berjalan |
+| 7 | `kode_ptkp` | snapshot `pph21Ter` + `maritalStatus`/`dependents` | TK/n/K/n per F-026 §1; tidak terbaca → kosong + temuan |
+| 8 | `kategori_ter` | `statutorySnapshot.pph21Ter.category` | A/B/C; legacy/unknown → kosong + temuan |
+| 9 | `kode_objek_pajak` | konstanta tahap ini `21-100-01` | hanya pegawai tetap; jenis lain DILARANG masuk file ini |
+| 10 | `penghasilan_bruto` | Σ `Payroll.grossSalary` se-masa | Decimal(15,2) → angka sen eksak |
+| 11 | `dpp_pengurang` | — (lihat catatan) | BPMP tidak punya kolom DPP; kolom ini HANYA rekap internal masa final: isi Σ pengurang Pasal 10 dari snapshot final bila ada, selain itu kosong. JANGAN isi 0 palsu |
+| 12 | `tarif_ter_persen` | `statutorySnapshot.pph21Ter.ratePct` | masa final = kosong (tarif Pasal 17 hasil hitung ulang, bukan TER) |
+| 13 | `pph21_terpotong` | Σ `Payroll.pph21` se-masa | angka slip beku; TIDAK dihitung ulang |
+| 14 | `over_withheld` | `statutorySnapshot.pph21Ter.overWithheld` (masa final) | >0 wajib tampil; bukan pengurang baris lain |
+| 15 | `tanggal_pemotongan` | `Payroll.paymentDate` ?? `endDate` | satu tanggal per masa; multi-slip se-masa pakai tanggal slip terakhir terbit pada masa itu |
+| 16 | `metode` | snapshot: `TER`/`LEGACY_PRE_TER`/`UNKNOWN` | dari `parsePph21TerSnapshot` existing |
+| 17 | `jumlah_slip` | hitung slip se-masa | bukti agregasi |
+
+Catatan DPP: permintaan "DPP/pengurang bila ada" terjawab —
+sistem PPh21 TER tidak mengenal DPP per baris bulanan (F-026 §1:
+pengurang terinternalisasi tabel TER). DPP hanya bermakna pada
+hitung ulang masa terakhir (F-026 §4) dan BPMP resmi pun tidak
+membawa kolom DPP — hanya `Gross` + `Rate`. Maka kolom 11 di atas
+bersifat informatif rekap final, BUKAN input DJP.
+
+**Lapis 2 — File impor Coretax BPMP (BELUM DIBUKA; syarat §D).**
+Bila dibuka, targetnya BUKAN CSV ISF: hasil akhir wajib XML
+sesuai template BPMP DJP (atau XLSX persis converter resmi v.3+
+yang kemudian dikonversi converter DJP menjadi XML). Kolom
+pemetaan ISF → BPMP: kolom 1→`TaxPeriodMonth`, 2→`TaxPeriodYear`,
+5/6→`CounterpartTin` (NPWP 16 digit bila ada; selain itu NIK 16
+digit — format `[0-9]{15,16}`), 7→`StatusTaxExemption`,
+9→`TaxObjectCode`, 10→`Gross`, 12→`Rate`, 15→`WithholdingDate`.
+Header file: `TIN` (NPWP pemotong) + `IDPlaceOfBusinessActivity`
+(ID TKU) — keduanya dari master perusahaan, BUKAN dari slip.
+`Position` dari `Employee.positionId`→nama posisi; kosong =
+fail-closed baris itu (converter menuntut terisi).
+Masa pajak terakhir (Desember / final resign) DILARANG masuk
+BPMP — jalurnya BPA1, vonis terpisah sebelum dibangun.
+
+### C. Rekonsiliasi rekap vs slip (mengikat)
+
+Sumber kebenaran tunggal = slip. Rekap/ekspor adalah turunan
+baca; selisih tidak pernah "dipilih" salah satu diam-diam.
+
+1. **Persamaan wajib (persis sen).** Untuk masa `YYYY-MM`:
+   `Σ Payroll.pph21` atas slip `status IN (approved, paid)` dan
+   `period = masa` HARUS sama dengan total baris ekspor masa itu;
+   sama untuk `Σ grossSalary`. Builder berjalan
+   (`buildPph21Recap`, `PPH21_RECAP_STATUSES = [approved, paid]`,
+   akumulasi `safeAdd(...,2)`) sudah menegakkan ini; ekspor wajib
+   memakai builder/loader yang sama (`loadPph21Recap`), dilarang
+   query agregasi kedua yang bisa menyimpang.
+2. **Selisih > 0 sen = BLOKIR ekspor masa itu.** Bukan peringatan.
+   Ekspor yang tidak cocok slip = berkas pajak salah; tidak ada
+   ekspor parsial "yang cocok saja" tanpa daftar pengecualian
+   eksplisit di berkas temuan. Peringatan (tidak memblokir) hanya
+   untuk temuan data non-angka: NPWP/NIK kosong, metode
+   LEGACY_PRE_TER/UNKNOWN ikut teragregasi, `overWithheld > 0`
+   belum kembali, period tak terbaca (`unreadablePeriodSlips`),
+   slip terkecuali (`excludedSlips`) — semuanya sudah dihitung
+   builder dan WAJIB tampil di muka ekspor/rekap, bukan disembunyikan.
+3. **Bukti rekonsiliasi per ekspor (wajib tersimpan bersama berkas):**
+   masa, jumlah slip, jumlah karyawan distinct, Σ bruto, Σ PPh21
+   dari builder, Σ PPh21 hasil jumlah baris file, selisih (wajib
+   0,00), hitungan temuan butir 2, waktu + pelaku ekspor. Tanpa
+   bukti ini berkas dianggap draf, bukan ekspor final.
+4. **Agregasi se-masa.** `@@unique([employeeId, period])` berjalan
+   + slip THR terpisah se-masa (F-026 §2/T7): ekspor mengelompokkan
+   per (employeeId, period) — bruto dan PPh21 dijumlah dari semua
+   slip approved/paid pada masa itu. Satu karyawan dua baris pada
+   masa sama = cacat ekspor (BPMP satu baris per penerima per masa).
+5. **Idempotency.** Ekspor ulang masa yang sama menghasilkan berkas
+   identik (baris terurut employeeId, angka dari slip beku) selama
+   tidak ada slip koreksi baru; koreksi slip sesudah ekspor TIDAK
+   mengubah berkas lama — terbit ekspor pembetulan baru dengan
+   rujukan masa + nomor urut pembetulan, berkas asal tetap.
+
+### D. Syarat buka ekspor (untuk BOT 3, kelak — bukan kartu ini)
+
+Ekspor internal (Lapis 1) boleh dibangun sesudah: (a) penjaga
+rekonsiliasi §C.1-§C.3 teruji (§E); (b) tampilan temuan §C.2 ada.
+Ekspor Coretax BPMP/BPA1 (Lapis 2) DILARANG dibangun sebelum:
+(a) ID TKU + NPWP 16 digit pemotong tersedia di master dan
+terverifikasi; (b) satu berkas hasil konversi converter resmi DJP
+lolos unggah uji nyata di Coretax oleh manusia dan buktinya
+dicatat di backlog; (c) vonis terpisah BOT 4 untuk BPA1 masa
+terakhir. Tanpa (a)-(c), tombol "ekspor DJP/e-Bupot" tidak boleh
+ada — label jujur tahap ini: "Rekap baca dari slip terbit — bukan
+berkas ekspor DJP/e-Bupot" (sudah terpasang di
+`pph21-recap-data.ts:69`, PERTAHANKAN).
+
+### E. Acceptance untuk BOT 6 (kasus uji mengikat bila ekspor dibuka)
+
+1. **Rekap = slip persis sen.** Fixture ≥2 karyawan, ≥2 masa,
+   termasuk satu masa berisi slip REGULAR+THR se-karyawan: Σ baris
+   ekspor per masa == `buildPph21Recap.periods[].pph21/gross`
+   == Σ manual `Payroll.pph21/grossSalary` approved/paid. Selisih
+   0,00. Falsifikasi: ubah satu `Payroll.pph21` sebesar 0,01 →
+   penjaga §C.1 merah / ekspor terblokir.
+2. **Selisih 1 sen tertangkap.** Suntik selisih 0,01 antara total
+   file dan total builder (atau slip draft ikut terhitung): ekspor
+   DITOLAK dengan pesan selisih, berkas final tidak terbit. Cabut
+   penjaga rekonsiliasi → tes ini wajib merah.
+3. **Periode tanpa payroll ditolak kosong.** Masa tanpa slip
+   approved/paid: ekspor menolak "tidak ada data" — dilarang
+   berkas berisi header saja berkedok ekspor sah; rekap tetap
+   menampilkan notice kosong existing. Slip hanya draft pada masa
+   itu = sama: tertolak + `excludedSlips` tampil.
+
+### F. Batas (rujuk, tidak divonis ulang)
+
+- Slip lama pra-TER: F-026 §5 — tidak dihitung ulang, tidak
+  diterbitkan ulang; di ekspor tampil apa adanya dengan
+  `metode=LEGACY_PRE_TER/UNKNOWN` sebagai temuan §C.2.
+- Masuk/keluar tengah tahun + masa terakhir: F-026 §3-§4. Ekspor
+  tidak mengubah perlakuan; masa final keluar dari BPMP (§A.4).
+- Penghasilan tidak teratur: F-026 §2 — sudah tergabung di bruto
+  se-masa; ekspor dilarang memisahkan tarif per komponen.
+- Di luar cakupan: TER harian/bukan-pegawai/peserta kegiatan,
+  PPh 26, bukti potong final pesangon (21-401-xx), jurnal
+  akuntansi PPh21/lebih-potong — masing-masing butuh vonis sendiri.
+
+### Handoff F-028 ekspor
+
+- BOT 3 (backend): rekap baca selesai; ekspor internal hanya
+  sesudah syarat §D lapis 1 + penjaga §C; ekspor Coretax menunggu
+  §D lapis 2 penuh. Jangan buat query agregasi kedua, jangan
+  tebak elemen XML di luar converter resmi v.3 di atas.
+- BOT 6 (QA): acceptance §E.1-§E.3 + falsifikasi wajib (cabut
+  penjaga → merah). Uji unggah Coretax nyata = manusia, bukan CI.
+- BOT 2 (frontend): tampilkan snapshot/temuan backend apa adanya;
+  label "bukan berkas ekspor DJP" dipertahankan sampai §D lapis 2
+  terpenuhi; UI tidak menghitung ulang pajak.
+
+---
+
 ## 2026-10-21 11:03 WIB — Domain (g) kendaraan & fitment
 
 Rotasi: run sebelumnya (f) garansi F-2026-10-21-021..022. Run ini (g)
@@ -2685,10 +2907,7 @@ belum punya F-ID; jangan duplikasi F-90..94/035..037.
 ---
 
 
----
-
 ## VONIS BOT 4 2026-10-22 01:24 WIB — F-2026-10-21-021 TAHAP 3 (provisi + jurnal garansi)
-
 Kartu t_0d982ec6 (ready, klaim 2026-10-22 01:22). Tanpa kode, tanpa
 schema/migrasi, tanpa jurnal nyata. Vonis ini melengkapi vonis BOT 4
 2026-10-21 22:18 (F-021 tahap 3 "DITOLAK-AKTIFKAN" saat data klaim belum
@@ -2699,9 +2918,7 @@ bawah terpenuhi, tahap 3 DIBUKA dengan bentuk di §1-§5. Bila syarat
 belum terpenuhi, default aman existing tetap berlaku: garansi tercatat
 operasional saja, biaya klaim dibebankan saat terjadi lewat jurnal
 manual umum, TANPA provisi dan TANPA piutang klaim supplier.
-
 ### §0 Ringkasan putusan
-
 1. Provisi garansi BOLEH diakui HANYA untuk garansi assurance dengan
    kewajiban kini dari penjualan/serah-terima, arus keluar kemungkinan
    besar, dan estimasi andal dari data klaim historis per kelompok
@@ -2738,23 +2955,19 @@ manual umum, TANPA provisi dan TANPA piutang klaim supplier.
    pembalikan estimasi. Di luar 4 ini TIDAK ada jurnal garansi.
    Klaim rejected, klaim di luar cakupan, dan pekerjaan tertagih
    TIDAK PERNAH memakai jurnal garansi (jalur §3).
-
 ### §1 Matriks posting (event → debit/kredit → syarat)
-
 Semua jurnal: `JournalService.createJournal` existing, status POSTED,
 `assertPeriodOpen(tanggal jurnal)` di dalam transaksi pemanggil,
 uang Decimal(15,2), satu jurnal per peristiwa per dokumen sumber.
 Tanggal jurnal = tanggal peristiwa bisnis (serah-terima / penyelesaian
 biaya klaim / penetapan recovery / akhir masa), BUKAN tanggal input
 mundur ke periode terkunci dan BUKAN tanggal faktur asal diubah.
-
 | Event | Debit | Kredit | Syarat posting (semua wajib) |
 |---|---|---|---|
 | E1 Akrual provisi | 510104 Beban Garansi = estimasi terbaik per coverage/kelompok | 210205 Provisi Garansi | Garansi assurance; serah-terima WO completed (coverage lahir); estimasi > 0 dari metode §2 terdokumentasi; mapping expense+provision terisi; periode tanggal serah-terima terbuka |
 | E2 Realisasi klaim | 210205 sebesar min(biaya aktual, saldo provisi terkait); selisih lebih biaya → 510104 | Akun biaya sumber per bukti: Persediaan/WIP (part FIFO) / Utang / Kas-Bank (jasa dibayar) | Klaim status approved/in_repair→closed dengan decisionBy/decisionAt tercatat; biaya aktual terverifikasi dari WO perbaikan (MaterialIssue/ProductionCost WO repair), BUKAN angka ketik bebas; invoiceForbidden=true ditegakkan (tidak ada SalesInvoice untuk WO repair ini) |
 | E3 Recovery supplier | 110508 Piutang Klaim Supplier | 510104 Beban Garansi (pemulihan biaya, BUKAN pendapatan) | Supplier claim status accepted/closed_recovered DAN bukti hampir-pasti (surat persetujuan supplier/credit note) terlampir TransactionAttachment referenceType="WarrantyClaim"; nominal ≤ biaya klaim yang dibebankan; TIDAK net-off saldo provisi di neraca |
 | E4 Pelepasan provisi | 210205 sebesar saldo tersisa coverage/kelompok | 510104 Beban Garansi (pembalikan beban, BUKAN pendapatan) | Masa garansi berakhir (expiresAt lewat) dan tidak ada klaim terbuka atas coverage terkait; atau telaah periode membuktikan arus keluar tidak lagi kemungkinan besar; jurnal lawan/reversal, BUKAN hapus jurnal E1 |
-
 Koreksi jurnal terposting: SELALU jurnal reversal
 (`JournalService.reverseJournal` existing) + jurnal baru benar di
 periode terbuka. Jurnal terposting TIDAK diedit, TIDAK dihapus.
@@ -2762,9 +2975,7 @@ Reversal E2/E3 memakai tanggal periode berjalan (pola reverseJournal
 existing menanggalkan ke tanggal jurnal asal — inti WAJIB menelaah:
 bila periode asal sudah terkunci, reversal ditolak dan koreksi lewat
 jurnal lawan bertanggal berjalan; JANGAN memaksa backdate).
-
 ### §2 Metode estimasi provisi (PSAK 57 par 14, 24, 36)
-
 - Estimasi = estimasi terbaik arus keluar untuk populasi coverage
   sejenis (kelompok item/jasa + rentang masa garansi), dari data
   historis klaim ISF sendiri: (frekuensi klaim historis) × (rata-rata
@@ -2790,9 +3001,7 @@ jurnal lawan bertanggal berjalan; JANGAN memaksa backdate).
   jenis + alokasi harga (migrasi + vonis lanjutan BOT 4) sebelum
   boleh dijual/dijanjikan. Sampai itu, semua garansi pasang ISF
   diperlakukan assurance.
-
 ### §3 Batas jalur (anti tertagih dobel, WAR-01)
-
 - Klaim covered (dalam masa + approved): invoiceForbidden WAJIB
   ditegakkan di server — WO repair tertaut WarrantyClaim approved
   tidak dapat melahirkan SalesInvoice. Penegakan UI saja TIDAK cukup.
@@ -2811,9 +3020,7 @@ jurnal lawan bertanggal berjalan; JANGAN memaksa backdate).
   `supplierClaimStatus` tahap 2 (none→…→closed_recovered) tetap
   status operasional; jurnal E3 hanya lahir di gerbang virtually-
   certain §1, bukan mengikuti setiap transisi status.
-
 ### §4 Idempotency + referensi jurnal
-
 - `Journal.referenceType/referenceId` unik DB (journals_reference_
   unique). Satu peristiwa = satu jurnal aktif:
   E1 → referenceType="WarrantyProvisionAccrual", referenceId=
@@ -2831,9 +3038,7 @@ jurnal lawan bertanggal berjalan; JANGAN memaksa backdate).
 - Status dokumen, pembayaran, pajak, posting tetap TERPISAH:
   status WarrantyClaim (operasional) tidak menyiratkan jurnal ada;
   keberadaan jurnal dibaca dari Journal reference, bukan flag klaim.
-
 ### §5 Pajak
-
 - Rework garansi covered: TIDAK ada penyerahan kena pajak baru —
   tanpa faktur pajak, tanpa PPN keluaran, tanpa PPh atas "pendapatan
   garansi" (tidak ada pendapatan). Jangan membuat TaxInvoice dari
@@ -2853,9 +3058,7 @@ jurnal lawan bertanggal berjalan; JANGAN memaksa backdate).
   akhir tahun di luar cakupan (tandai BUTUH-VONIS-AKUNTAN bila
   finance hendak memakai angka provisi untuk SPT sebelum biaya
   aktual terjadi; provisi akuntansi ≠ biaya fiskal otomatis).
-
 ### §6 Syarat buka inti (gerbang, semua wajib sebelum BOT 3 bangun)
-
 G1. Lead membuka inti F-021 tahap 3 secara eksplisit (PUTUSAN) —
     vonis ini bukan izin bangun.
 G2. Migrasi inti satu paket: 3 akun CoA (510104/210205/110508, seed
@@ -2874,9 +3077,7 @@ G5. Penegakan invoiceForbidden di server untuk WO repair covered.
 G6. Setiap pemanggil jurnal: assertPeriodOpen + cek anti-dobel §4 +
     resolusi mapping fail-closed §0.4 di dalam satu transaksi.
 G7. Draf acceptance BOT 6 di §7 lulus termasuk falsifikasi.
-
 ### §7 Draf acceptance untuk BOT 6 (Qila)
-
 AC-G1. Coverage assurance, estimasi andal: serah-terima → E1 Dr
   510104 / Cr 210205 seimbang sen; cabut mapping provision → posting
   ditolak berisik, nol jurnal lahir (falsifikasi fail-closed).
@@ -2904,9 +3105,7 @@ AC-G9. Akhir masa tanpa klaim: E4 Dr 210205 / Cr 510104 sebesar
 AC-G10. Rekonsiliasi: saldo GL 210205 = ΣE1−ΣE2−ΣE4 per kelompok;
   laporan lifetime cost job asal menampilkan biaya klaim tanpa
   mengubah invoice asal (WAR-01).
-
 ### §8 Sumber
-
 - PSAK 72 PP28–PP33 (garansi assurance vs service) — IAI,
   ED PSAK 72 Lampiran B (resmi IAI):
   https://web.iaiglobal.or.id/assets/files/file_sak/exposure-draft/ED%20PSAK%2072_Pendapatan%20dari%20Kontrak%20Pelanggan.pdf
@@ -2929,9 +3128,7 @@ AC-G10. Rekonsiliasi: saldo GL 210205 = ΣE1−ΣE2−ΣE4 per kelompok;
   journals_reference_unique:3019/SystemSetting tanpa kolom
   warranty*, base-data.ts 510102/510103:866-867, 210201-210204,
   110501-110507, journal.service.ts create/reverse.
-
 ### §9 Yang TIDAK divonis / ditunda
-
 - Garansi service berbayar: DITUNDA (§2) — butuh desain produk +
   kolom jenis + alokasi harga PSAK 72; vonis lanjutan bila bisnis
   membuka produknya.
@@ -2942,7 +3139,6 @@ AC-G10. Rekonsiliasi: saldo GL 210205 = ΣE1−ΣE2−ΣE4 per kelompok;
   eksternal (§5).
 - UI pengaturan mapping/akun dan layar provisi: BOT 2 sesudah
   kontrak inti BOT 3 stabil; UI tidak menghitung jurnal.
-
 HANDOFF:
 - Lead (Nara): PUTUSAN buka inti tahap 3 = gerbang G1; vonis ini
   siap sebagai lampiran kartu inti BOT 3.
@@ -2954,6 +3150,415 @@ HANDOFF:
   posting.
 - BOT 2 (Fira): tidak ada pekerjaan UI dari vonis ini sampai
   kontrak inti ada.
+
+---
+
+## VONIS BOT 4 F-2026-10-21-028-I — Implementasi ekspor DJP PPh21 (2026-10-22)
+
+Pemutus: `accounting-finance-tax` (BOT 4). Kartu: t_99a85510.
+Sifat: FINAL untuk tahap implementasi ekspor di atas vonis format
+F-028 (PR #379, head `8ea58c53`, gate 5/5 PASS, OPEN/BEHIND saat
+vonis ini ditulis — dibaca dari branch PR itu, TIDAK menunggu
+merge). Vonis ini TIDAK membuka kode, TIDAK mengubah
+`src/lib/tax/*`, TIDAK memutus ulang format §A-§F PR #379. Ia
+memutus detail implementasi supaya BOT 3 membangun ekspor tanpa
+menebak: kontrak data persis, format byte persis, aturan
+gagal-ekspor, dan acceptance terverifikasi untuk kartu backend
+lanjutan.
+
+Bukti live run ini (worktree t_99a85510, basis `8ff0c7a9`):
+- Rekap ADA di main: `src/lib/reports/pph21-recap.ts`
+  (`buildPph21Recap`, `PPH21_RECAP_STATUSES=["approved","paid"]`,
+  akumulasi `safeAdd(...,2)`) + loader `pph21-recap-data.ts`
+  (`loadPph21Recap`, label jujur "bukan berkas ekspor DJP/e-Bupot"
+  di baris 69) + tes `pph21-recap.test.ts` (119 baris) dan
+  `pph21-recap-data.test.ts` (61 baris). Halaman laporan memanggil
+  `loadPph21Recap` (grep `loadPph21Recap` di luar reports = halaman
+  laporan pph-21).
+- Model nyata: `Payroll` (schema:2872) membawa `employeeId`,
+  `period String`, `type String @default("REGULAR")`,
+  `grossSalary/pph21/netSalary Decimal(15,2)`,
+  `statutorySnapshot Json?`, `paymentDate DateTime?`,
+  `startDate/endDate DateTime`, `status String @default("draft")`,
+  `@@unique([employeeId, period])`. `Employee` (schema:764)
+  membawa `npwp String?`, `idNumber String?` (NIK),
+  `maritalStatus String?`, `dependents Int @default(0)`,
+  `positionId Int?` → `Position.name`. `SystemSetting`
+  (schema:103) membawa `companyTaxId String?` — NPWP pemotong
+  hidup di sini; ID TKU 22 digit TIDAK ada field-nya (grep `nitku`
+  di schema hanya `counterpartyNitku` pihak lawan, bukan pemotong).
+- Snapshot TER nyata (`src/actions/hrm.actions.ts:680-750`):
+  `statutorySnapshot.pph21Ter` membawa `method`
+  (TER|LEGACY_PRE_TER), `category` (A/B/C), `ratePct`,
+  `periodKind` (`monthly`|`final-december`|`final-resignation`|
+  `bulk-december-pending-final`), `overWithheld`,
+  `maritalStatusRaw`, `dependentsClamped`. Parser berjalan
+  `parsePph21TerSnapshot` (pph21-recap.ts:63-74) membaca
+  method/category/ratePct/periodKind/overWithheld.
+- GAP LIVE (penting, lihat §I.2): builder berjalan TIDAK
+  mengeluarkan baris per (karyawan, masa). `Pph21RecapPeriodRow`
+  hanya agregat masa; `Pph21RecapEmployeeRow` hanya agregat
+  tahunan per karyawan. Kolom ekspor per baris karyawan-masa
+  (NIK, kode PTKP, tanggal pemotongan, jumlah slip se-masa,
+  periodKind per slip) TIDAK tersedia dari output builder
+  berjalan — ekspor TIDAK boleh merekonstruksi dari dua agregat
+  itu.
+
+### I.1 Keputusan lapis (mengikat, meneruskan §B PR #379)
+
+1. **Lapis 1 — ekspor internal CSV: SAH dibangun sekarang**,
+   sesudah gerbang §I.6. Ini satu-satunya berkas yang boleh lahir
+   dari kartu backend lanjutan. Nama/label jujur tetap "rekap
+   internal", BUKAN "berkas DJP/e-Bupot".
+2. **Lapis 2 — impor Coretax BPMP (XML/converter DJP): TETAP
+   DILARANG** sampai seluruh syarat §D lapis 2 PR #379 terpenuhi
+   (ID TKU 22 digit terverifikasi di master + NPWP pemotong 16
+   digit + satu uji unggah Coretax manusia tercatat + vonis BPA1
+   terpisah). Vonis ini TIDAK membuka lapis 2 dan TIDAK memberi
+   format XML — menebak XSD di luar converter resmi v.3 = dilarang.
+3. **BPA1 masa terakhir: belum divonis formatnya di sini.**
+   Vonis ini hanya memutus perlakuan baris masa terakhir di dalam
+   ekspor internal (§I.5); format BPA1 = vonis BOT 4 terpisah
+   sebelum dibangun (syarat §D(c) PR #379 tetap berlaku).
+
+### I.2 Kontrak data ekspor (prasyarat BOT 3, tanpa migrasi)
+
+Ekspor dibangun di atas read-model rekap yang sama — DILARANG
+query agregasi kedua. Karena output builder berjalan belum cukup
+(GAP live di bukti awal seksi ini), BOT 3 WAJIB memperluas builder murni
+`buildPph21Recap` (atau builder pendamping murni di berkas yang
+sama, tanpa query baru) dengan keluaran baris per karyawan-masa:
+
+```
+Pph21ExportRow {
+  period: string            // "YYYY-MM" dari Payroll.period
+  employeeId: number | null
+  employeeName: string
+  npwp: string | null       // Employee.npwp mentah (format di §I.3)
+  nik: string | null        // Employee.idNumber mentah
+  ptkpCode: string | null   // turunan §I.4; null = temuan
+  terCategory: string | null// snapshot pph21Ter.category
+  taxObjectCode: "21-100-01"
+  gross: number             // Σ grossSalary slip se-(karyawan,masa)
+  terRatePct: number | null // snapshot ratePct; null pada masa final
+  pph21: number             // Σ pph21 slip se-(karyawan,masa)
+  overWithheld: number      // snapshot masa final; 0 selain itu
+  withholdingDate: string   // "YYYY-MM-DD" per §I.3 butir 15
+  method: "TER"|"LEGACY_PRE_TER"|"UNKNOWN"
+  periodKind: string | null // monthly|final-*|bulk-december-pending-final
+  slipCount: number         // jumlah slip tergabung baris ini
+  slipTypes: string[]       // type slip tergabung (REGULAR/THR/dll)
+}
+```
+
+Aturan kontrak:
+- Baris diturunkan dari slip yang sama yang diakui builder:
+  `status IN (approved, paid)` saja, dikelompokkan per
+  `(employeeId ?? nama, period)`. Satu karyawan dua baris pada
+  masa sama = cacat (penjaga §I.7 AC-2).
+- Loader ekspor memakai jalur data yang sama dengan
+  `loadPph21Recap` (satu `prisma.payroll.findMany` rentang yang
+  sama, map Decimal→number yang sama). Bila BOT 3 perlu field
+  tambahan di select (`employee.idNumber`, `startDate/endDate/
+  paymentDate`, `type`, `employee.maritalStatus/dependents/
+  position.name`), tambahkan ke select loader rekap yang sama —
+  JANGAN buat loader kedua. Menambah select = ubah kontrak loader;
+  tes loader existing wajib tetap hijau.
+- Ekspor TIDAK menghitung ulang pajak: `gross`/`pph21` = jumlah
+  angka slip beku (`safeAdd(...,2)`), persis builder.
+- Identitas karyawan dibaca dari master saat ekspor (nama/NPWP/
+  NIK/posisi = nilai berjalan), angka dari slip beku. Bila master
+  berubah sesudah slip terbit, ekspor ulang memuat identitas baru
+  tetapi angka lama — itu sebabnya bukti rekonsiliasi §I.6 wajib
+  tersimpan bersama berkas (jejak nilai saat ekspor).
+
+### I.3 Format file persis (byte-level, mengikat)
+
+Satu masa per berkas. Format:
+
+- **Encoding:** UTF-8 **tanpa BOM**. Baris pertama = header.
+- **Pemisah:** `;` (titik koma). **Akhir baris:** CRLF (`\r\n`)
+  termasuk baris terakhir. (Dipilih CRLF: berkas dibuka
+  spreadsheet Indonesia/Windows; vonis PR #379 menetapkan `;` +
+  UTF-8, akhir baris kini dipersis di sini agar tes byte-persis
+  mungkin.)
+- **Kutip:** field yang mengandung `;`, `"`, atau newline dibungkus
+  `"` ganda, `"` di dalam digandakan (RFC 4180 dengan pemisah `;`).
+  Nama karyawan adalah satu-satunya field bebas-teks; tetap wajib
+  lolos aturan kutip ini — JANGAN sanitasi/mengubah nama.
+- **Angka:** tanpa pemisah ribuan, desimal titik, tepat 2 angka
+  sen (`1234567.89`); nol = `0.00`; negatif dilarang (penjaga
+  menolak, bukan menulis `-`). Tarif: desimal titik, maks 2 angka
+  (`2`, `2.5`, `0.75` — tanpa `,`). Persen tanpa simbol `%`.
+- **Tanggal:** `YYYY-MM-DD`. **Masa:** kolom terpisah bulan (1-12,
+  tanpa nol depan) dan tahun (4 digit) mengikuti kolom BPMP
+  converter, supaya pemetaan lapis 2 kelak mekanis.
+- **Identitas:** NPWP/NIK = digit saja (strip `.`, `-`, spasi dari
+  nilai master); selain digit sesudah strip = temuan pemblokir
+  baris itu (§I.6 kelas B). Kosong = sel kosong, BUKAN `0`/strip.
+- **Urutan baris:** `employeeId` naik, `employeeId` null terakhir
+  lalu nama naik (locale `id-ID`). Urutan deterministik = syarat
+  idempotensi §C.5 PR #379.
+- **Nama file:** `pph21-rekap-internal-YYYY-MM.csv` (satu masa).
+  Pembetulan: `pph21-rekap-internal-YYYY-MM-pembetulan-N.csv`
+  (N mulai 1; berkas asal tidak ditimpa — §I.6 butir 6).
+  Ekspor tahunan per karyawan (untuk bukti potong manual):
+  `pph21-rekap-internal-YYYY.csv` dengan kolom yang sama, satu
+  baris per (karyawan, masa) dalam tahun itu, urut masa lalu
+  employeeId — BUKAN satu baris setahun, agar total tahunan =
+  jumlah baris dan rekonsiliasi tetap per masa.
+- **Header persis** (17 kolom, urutan ini, tanpa spasi):
+
+```
+masa_bulan;masa_tahun;employee_id;nama;npwp;nik;kode_ptkp;kategori_ter;kode_objek_pajak;penghasilan_bruto;tarif_ter_persen;pph21_terpotong;lebih_potong;tanggal_pemotongan;metode;jenis_masa;jumlah_slip
+```
+
+Pemetaan kolom (sumber → kolom):
+
+| # | Kolom file | Sumber | Aturan gagal |
+|---|-----------|--------|--------------|
+| 1 | `masa_bulan` | `parsePph21Period(period).month` | period tak terbaca → slip tak masuk + dihitung `unreadablePeriodSlips`; masa dengan hanya slip tak terbaca = ditolak kosong (§I.6) |
+| 2 | `masa_tahun` | `parsePph21Period(period).year` | sama |
+| 3 | `employee_id` | `Payroll.employeeId` | null → sel kosong + temuan kelas C (identitas DJP tak bisa diturunkan) |
+| 4 | `nama` | `Employee.name` saat ekspor | kosong → BLOKIR baris (kelas A) |
+| 5 | `npwp` | `Employee.npwp` digit-saja | kosong/invalid → temuan kelas B: **memblokir label "siap impor"**, tidak memblokir ekspor internal (lihat §I.6) |
+| 6 | `nik` | `Employee.idNumber` digit-saja | sama kelas B; NPWP dan NIK dua-duanya kosong = kelas B berat (baris tak teridentifikasi DJP) |
+| 7 | `kode_ptkp` | §I.4 dari `maritalStatusRaw`+`dependentsClamped` snapshot (fallback master saat ekspor bila snapshot tak terbaca) | tak terturunkan → kosong + temuan kelas B |
+| 8 | `kategori_ter` | snapshot `pph21Ter.category` | TER tanpa kategori → kosong + temuan kelas B; LEGACY/UNKNOWN → kosong |
+| 9 | `kode_objek_pajak` | konstanta `21-100-01` | subjek bukan pegawai tetap DILARANG masuk berkas ini (§I.5 butir 5) |
+| 10 | `penghasilan_bruto` | Σ `Payroll.grossSalary` se-(karyawan,masa) | < 0 → BLOKIR (kelas A) |
+| 11 | `tarif_ter_persen` | snapshot `pph21Ter.ratePct` slip masa itu | masa final/LEGACY/UNKNOWN → kosong (BUKAN 0); TER bulanan tanpa ratePct → temuan kelas B |
+| 12 | `pph21_terpotong` | Σ `Payroll.pph21` se-(karyawan,masa) | < 0 → BLOKIR (kelas A); selisih vs builder → BLOKIR masa (§I.6) |
+| 13 | `lebih_potong` | snapshot `overWithheld` masa final | selain masa final wajib `0.00`; masa final tanpa snapshot terbaca → kosong + temuan kelas B |
+| 14 | `tanggal_pemotongan` | slip terakhir terbit pada masa itu: `paymentDate ?? endDate`, format `YYYY-MM-DD` | tak ada tanggal terbaca → BLOKIR baris (kelas A); tanggal di luar masa kolom 1-2 → temuan kelas B (converter DJP menolak tanggal < masa; tanggal > akhir masa juga ditandai) |
+| 15 | `metode` | `parsePph21TerSnapshot(...).method` ?? `UNKNOWN` | campuran metode se-(karyawan,masa) → temuan kelas B, metode ditulis dari slip terakhir |
+| 16 | `jenis_masa` | snapshot `periodKind` (`monthly`/`final-december`/`final-resignation`/`bulk-december-pending-final`) | `bulk-december-pending-final` → BLOKIR masa (§I.5 butir 2) |
+| 17 | `jumlah_slip` | hitung slip tergabung | ≥2 wajib konsisten dengan `slipTypes` (REGULAR+THR tergabung, §I.5 butir 4) |
+
+Kolom `dpp_pengurang` pada vonis PR #379 §B kolom 11: **TIDAK
+jadi kolom file.** Alasan dipertahankan dari PR #379: BPMP tidak
+mengenal DPP per baris; DPP/pengurang hanya bermakna di hitung
+ulang masa terakhir dan angkanya sudah terwujud sebagai
+`pph21_terpotong` final + `lebih_potong`. Menulis kolom DPP
+kosong/0 pada berkas = angka palsu. Pengurang Pasal 10 masa final
+(JHT/JP karyawan) tampil di bukti rekonsiliasi (§I.6 butir 5),
+bukan di baris berkas. Ini penyempitan sadar atas tabel PR #379,
+bukan kontradiksi: 17 kolom di sana termasuk kolom informatif
+itu; berkas persis di sini 17 kolom tanpa DPP, dengan
+`jenis_masa` menggantikannya karena `periodKind` menentukan
+jalur DJP baris (BPMP vs BPA1) — informasi yang wajib terlihat
+di berkas, bukan hanya di UI.
+
+### I.4 Kode PTKP dari data berjalan (tanpa field baru)
+
+Kode PTKP (untuk `StatusTaxExemption` BPMP kelak + kolom 7)
+diturunkan, tidak disimpan baru:
+
+- Kawin/tidak: `isMarriedStatus(maritalStatus)` existing
+  (payroll-statutory.service.ts) — DIPAKAI ULANG, dilarang parser
+  kedua (F-026 §1 mengikat).
+- Tanggungan: `dependents` ter-clamp `min(3,max(0,floor))`.
+- Peta: tidak kawin → `TK/<dep>`; kawin → `K/<dep>`; status
+  gabungan penghasilan istri (HB) TIDAK dapat diturunkan dari
+  field berjalan → karyawan HB tampil `K/<dep>` + temuan kelas B
+  "HB tak terverifikasi dari data" (jangan tebak HB).
+- Sumber utama = snapshot slip (`maritalStatusRaw`,
+  `dependentsClamped`) agar konsisten dengan kategori TER slip;
+  snapshot tak terbaca → fallback master saat ekspor + temuan
+  kelas B. Selisih kode-vs-kolom (`statusDependentsMismatch`
+  existing): kolom menang (F-026 §1), selisih = temuan kelas C.
+- Kategori TER (kolom 8) TIDAK diturunkan ulang dari PTKP di
+  ekspor — dibaca dari snapshot slip. Ekspor yang menghitung
+  ulang kategori = melanggar "snapshot, bukan hitung-ulang".
+
+### I.5 Kasus tepi (mengikat)
+
+1. **Masa Desember karyawan penuh-tahun BUKAN otomatis final di
+   berkas.** Baris Desember dengan `periodKind=final-december`
+   adalah hasil hitung ulang Pasal 17 (F-026 §4): kolom 11
+   (tarif TER) kosong, kolom 12 = PPh21 masa terakhir hasil
+   hitung ulang (bisa 0), kolom 13 = `overWithheld`. Di lapis 1
+   baris ini SAH masuk berkas internal dengan `jenis_masa=
+   final-december`; di lapis 2 baris ini DILARANG masuk BPMP —
+   jalurnya BPA1 (belum dibuka, §I.1 butir 3).
+2. **Desember `bulk-december-pending-final` = BLOKIR ekspor masa
+   itu.** Snapshot itu estimasi TER massal yang belum hitung
+   ulang final (penjaga existing di hrm.actions.ts:1740 menolak
+   finalisasi; ekspor meneruskan penolakan yang sama). Pesan
+   wajib mengarahkan: "hitung ulang masa terakhir per karyawan
+   dulu". Ekspor parsial "yang sudah final saja" dalam masa yang
+   sama = DILARANG (satu masa satu berkas utuh).
+3. **Final resignasi tengah tahun:** bulan berhenti =
+   `jenis_masa=final-resignation`, perlakuan sama butir 1
+   (tarif kosong, lebih-potong tampil). Karyawan yang sama TIDAK
+   boleh punya dua baris `final-*` dalam satu tahun di berkas —
+   penjaga existing sudah menolak hitung ulang kedua saat slip
+   dibuat; ekspor memeriksa ulang dan BLOKIR bila menemukan dua
+   (data warisan/korupsi, bukan untuk dipilih diam-diam).
+4. **Penghasilan tidak teratur (THR/bonus/dll): TERGABUNG.**
+   Slip `type != REGULAR` se-(karyawan,masa) digabung ke bruto +
+   PPh21 baris yang sama (F-026 §2); ekspor DILARANG memisah
+   baris/tarif per type. `jumlah_slip` ≥ 2 + `slipTypes` di bukti
+   rekonsiliasi menjadi bukti penggabungan. Baris dengan bruto
+   gabungan tetapi PPh21 hanya dari satu slip (slip kedua belum
+   approved) = bukan kasus ekspor: slip belum final memang tidak
+   ikut; temuan `excludedSlips` wajib tampil agar operator sadar
+   ada slip menggantung pada masa itu.
+5. **Di luar cakupan berkas ini:** bukan-pegawai, TER harian,
+   peserta kegiatan, PPh 26, pesangon final (objek 21-401-xx),
+   pensiun berkala (21-100-02). Data berjalan hanya memuat slip
+   `Payroll` pegawai; bila kelak sumber lain muncul, DILARANG
+   dicampur ke berkas 21-100-01 ini — vonis objek terpisah.
+6. **Slip legacy pra-TER / snapshot rusak:** ikut berkas apa
+   adanya dengan `metode=LEGACY_PRE_TER|UNKNOWN`, tarif/kategori
+   kosong, angka slip beku (F-026 §5). Temuan kelas B, bukan
+   blokir — berkas internal adalah rekap jujur, bukan klaim
+   metode benar.
+7. **Karyawan tanpa `employeeId` (baris warisan):** dikelompokkan
+   per nama persis pola builder (`empKey`); `employee_id` kosong
+   = temuan kelas C; dua nama sama persis tanpa id akan tergabung
+   — temuan wajib menyebut risiko ini bila `employeeId` null > 0.
+8. **Lebih-potong belum dikembalikan** (`overWithheld > 0`):
+   tampil di kolom 13 + bukti rekonsiliasi; BUKAN pengurang baris
+   masa/tahun berikutnya di berkas mana pun (pengembalian =
+   pembayaran nyata, F-026 §4).
+9. **Masa tanpa slip approved/paid:** ekspor DITOLAK "tidak ada
+   data" — dilarang berkas header-saja (PR #379 §E.3
+   dipertahankan). Rekap layar tetap menampilkan notice kosong.
+10. **Koreksi sesudah ekspor:** berkas lama beku. Slip koreksi
+    baru → ekspor pembetulan bernomor (§I.3 nama file) dengan
+    bukti rekonsiliasi baru yang merujuk nomor berkas asal;
+    sistem TIDAK menimpa/menghapus berkas asal.
+
+### I.6 Aturan gagal-ekspor (fail-closed, tiga kelas)
+
+Prinsip: data tak lengkap = TOLAK, bukan berkas parsial. Tiga
+kelas temuan, jangan dicampur:
+
+- **Kelas A — BLOKIR masa (berkas tidak terbit sama sekali):**
+  selisih rekonsiliasi > 0,00 (§C.1 PR #379); nama kosong; angka
+  negatif; tanggal pemotongan tak terbaca; masa mengandung
+  `bulk-december-pending-final`; dua masa-final se-karyawan
+  setahun; masa kosong (butir I.5.9). Pesan penolakan menyebut
+  masa + karyawan + alasan per baris terdampak (daftar, bukan
+  satu pesan umum).
+- **Kelas B — berkas internal terbit, label "BELUM SIAP IMPOR
+  DJP":** NPWP/NIK kosong/invalid, dua-duanya kosong, kode PTKP/
+  kategori/tarif tak terbaca, tanggal di luar masa, metode
+  campuran/legacy/unknown, HB tak terverifikasi. Berkas internal
+  tetap sah sebagai rekap; label siap-impor DILARANG tampil
+  selama satu pun temuan kelas B ada. (Lapis 2 kelak: kelas B =
+  blokir per baris di gerbang konversi, diputus vonis BPA1/BPMP
+  lanjutan — bukan di sini.)
+- **Kelas C — temuan tampil, tidak mengubah label:** slip
+  terkecuali (draft/dll) pada masa itu, period tak terbaca,
+  `employeeId` null, selisih kode PTKP-vs-kolom, lebih-potong
+  belum kembali. Semua dihitung builder/ekspor dan WAJIB tampil
+  di muka hasil ekspor + bukti rekonsiliasi.
+
+Bukti rekonsiliasi per berkas (wajib tersimpan bersama berkas,
+format bebas UI asal terstruktur & terunduh/diarsip): masa,
+nama file + nomor pembetulan, jumlah slip, jumlah karyawan,
+Σ bruto + Σ PPh21 dari builder, Σ bruto + Σ PPh21 hasil jumlah
+baris berkas, selisih (wajib `0.00`), hitungan temuan kelas
+A/B/C per jenis, waktu + pelaku ekspor. Tanpa bukti ini berkas
+= draf. BOT 3 menentukan penyimpanan (tabel/log existing pola
+idempotency finansial) — TANPA migrasi baru tanpa koordinasi
+BOT 3/BOT 4; bila penyimpanan butuh tabel baru, berhenti dan
+eskalasi ke BOT 4, jangan karang schema di kartu ekspor.
+
+Idempotensi ekspor: ekspor ulang masa sama tanpa slip koreksi
+baru menghasilkan byte identik (urutan §I.3 + angka beku).
+Penjaga mutasi finansial existing tidak dipakai ulang untuk
+ekspor baca ini; yang wajib adalah determinisme byte + bukti
+rekonsiliasi, bukan idempotency-key mutasi.
+
+### I.7 Acceptance kartu backend lanjutan (untuk BOT 6, mengikat)
+
+BOT 6 menguji pada implementasi BOT 3 kelak; BOT 4 menetapkan
+kasusnya sekarang:
+
+- **AC-1 Byte-persis.** Fixture 2 karyawan × 1 masa (satu
+  karyawan REGULAR+THR tergabung): berkas hasil dibandingkan
+  byte-per-byte dengan string harapan tertulis di tes (header §I.3
+  + CRLF + urutan + format angka). Bukan "parse lalu bandingkan
+  objek" — byte.
+- **AC-2 Falsifikasi geser kolom (WAJIB MERAH).** Mutasi satu:
+  tukar posisi kolom `penghasilan_bruto` ↔ `pph21_terpotong`
+  (atau geser satu kolom mana pun) pada generator → tes AC-1
+  MERAH. Cabut/pulihkan → hijau. Tes yang tetap hijau sesudah
+  kolom digeser = tes gagal, bukan implementasi lolos.
+- **AC-3 Rekonsiliasi persis sen.** Σ baris berkas per masa ==
+  `buildPph21Recap.periods[].gross/pph21` == Σ manual slip
+  approved/paid. Ubah satu `Payroll.pph21` +0,01 di fixture →
+  ekspor terblokir kelas A dengan pesan selisih. Cabut penjaga
+  rekonsiliasi → tes MERAH.
+- **AC-4 Desember pending-final diblokir.** Fixture slip
+  `bulk-december-pending-final` pada masa 2026-12 → ekspor masa
+  itu ditolak, berkas tidak ada; masa 2026-11 karyawan sama
+  tetap bisa diekspor.
+- **AC-5 Masa final sah.** Slip `final-december` dengan
+  `overWithheld=50000` → baris terbit: tarif kosong,
+  `lebih_potong=50000.00`, `jenis_masa=final-december`; slip
+  `final-resignation` bulan 2026-06 perlakuan sama.
+- **AC-6 Kosong ditolak.** Masa tanpa slip approved/paid (termasuk
+  hanya draft) → penolakan "tidak ada data", tidak ada berkas;
+  `excludedSlips` tampil di pesan/bukti.
+- **AC-7 Kelas B tidak memblokir internal, memblokir label.**
+  Karyawan NPWP+NIK kosong → berkas terbit dengan sel identitas
+  kosong + label siap-impor tidak tampil/bernilai false; perbaiki
+  master → ekspor ulang label bersih, angka tidak berubah.
+- **AC-8 Determinisme.** Ekspor masa yang sama dua kali → hash
+  byte sama. Tambah slip koreksi → nama berkas pembetulan-1,
+  berkas asal tidak berubah byte-nya.
+- **AC-9 Satu sumber.** Tes wiring: ekspor memanggil
+  builder/loader rekap yang sama (mock/spy) — query agregasi
+  kedua (findMany payroll di modul ekspor di luar loader rekap)
+  = tes MERAH.
+- **AC-10 Kutip & identitas.** Nama mengandung `;` dan `"` →
+  ter-escape RFC 4180 dan parse-balik utuh; NPWP berformat
+  `01.234.567.8-091.000` → tertulis digit-saja; NPWP berisi huruf
+  → temuan kelas B (bukan dibersihkan diam-diam).
+
+Gate implementasi BOT 3 (pola repo): `npx tsc --noEmit`,
+eslint berkas terdampak, `npx vitest run` atas tes ekspor baru +
+`pph21-recap.test.ts` + `pph21-recap-data.test.ts` (regresi
+kontrak loader). Tanpa migrasi pada kartu ini.
+
+### I.8 Yang TIDAK divonis di sini
+
+- Format XML BPMP / XLSX converter / BPA1: vonis terpisah BOT 4
+  sesudah syarat §D lapis 2 PR #379 (ID TKU master adalah
+  prasyarat data — field-nya belum ada; usulan field/setting ID
+  TKU = kartu data BOT 3 dengan vonis BOT 4 lanjutan, bukan
+  bagian kartu ekspor ini).
+- Jurnal akuntansi atas ekspor/rekonsiliasi: tidak ada. Ekspor
+  adalah bacaan; kewajiban setor PPh21 tetap dari jalur pajak
+  existing.
+- UI tombol ekspor + unduhan: BOT 2 sesudah kontrak berkas BOT 3
+  stabil; label "bukan berkas ekspor DJP/e-Bupot" dipertahankan
+  sampai lapis 2 dibuka.
+- Angka/metode PPh21: tetap F-026 FINAL; vonis ini tidak
+  menghitung ulang apa pun.
+
+### Handoff F-2026-10-21-028-I
+
+- BOT 3 (backend): bangun Lapis 1 persis §I.2-§I.6 — perluas
+  builder rekap (tanpa query kedua, tanpa migrasi), generator CSV
+  byte-persis §I.3, gerbang kelas A/B/C §I.6. Berhenti-eskalasi
+  bila bukti rekonsiliasi butuh tabel baru. Lapis 2/BPA1 JANGAN
+  dibangun.
+- BOT 6 (QA): acceptance AC-1..AC-10 §I.7; falsifikasi wajib
+  AC-2 (geser kolom) + AC-3 (cabut penjaga). Uji unggah Coretax
+  tetap manusia, di luar CI, hanya sesudah lapis 2 dibuka kelak.
+- BOT 2 (frontend): belum ada pekerjaan UI dari vonis ini;
+  sesudah BOT 3 selesai, tampilkan temuan kelas A/B/C + bukti
+  rekonsiliasi apa adanya, tanpa hitung ulang.
+- Lead: kartu backend lanjutan dapat dibuat dari §I.7 sebagai
+  acceptance; dependensi merge PR #379 tidak menghalangi BOT 3
+  mulai (vonis format terbaca dari branch #379 / seksi ini).
+
+---
 
 ---
 
@@ -3465,3 +4070,141 @@ hanya reversal/jurnal lawan di periode terbuka.
   E1/E4, jangan diuji sebagai kegagalan inti rute ini.
 
 ---
+
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-21-033 Q-033-1/2/4 (margin per kendaraan)
+
+Status: PARSIAL — builder `vehicle-margin` + loader `vehicle-margin-data`
+sudah merged (PR #305), belum ada konsumen UI. Vonis ini menjawab
+Q-033-1/2/4 dari spec BOT 5 (PR #380). Q-033-3 (WO multi-kendaraan)
+dan Q-033-6 (tempat permukaan) tetap milik BOT 1; Q-033-5 milik BOT 3.
+Tanpa kode/schema/migrasi di vonis ini.
+
+Bukti live (origin/main 63027748, diverifikasi ulang run ini):
+- Kelas (a) proyek + (c) invoice langsung: pendapatan `subtotal -
+  discount` (project-pl.ts header + buildProjectPl revenue). Kelas (b)
+  WO non-proyek: `billedAmount` = Σ `grandTotal` invoice
+  (vehicle-margin-data.ts INVOICE_BRIDGE_SELECT memuat grandTotal,
+  bukan subtotal/discount).
+- `SalesInvoice` punya subtotal/discount/taxAmount/grandTotal terpisah
+  (schema.prisma:1393-1399) — basis DPP tersedia tanpa migrasi.
+- Header job-estimate-vs-actual.ts:14-17: "Bahan tidak dijumlahkan
+  terpisah: bahan perintah produksi sudah masuk ProductionCost saat
+  issue, dan menjumlahkan keduanya akan menghitung bahan dua kali."
+- `MaterialIssue` punya projectId + workOrderId nullable
+  (schema.prisma:2179-2180); jalur produksi masuk ProductionCost/
+  totalActualCost lewat issueMaterial (production-cost.service.ts:1-16),
+  sedangkan MI manual langsung ditangani onMaterialIssueCompleted
+  (Dr Beban Material/Cr Persediaan) tanpa baris ProductionCost.
+
+### Q-033-1 — basis pendapatan: SAMAKAN ke DPP (tanpa PPN)
+
+Keputusan: SATU basis untuk margin kendaraan = pendapatan DPP
+`subtotal - discount`, tanpa PPN. Kelas (b) wajib diubah ke basis itu.
+
+Alasan: PPN keluaran bukan pendapatan — ia liabilitas (akun PPN
+Keluaran 210201) yang disetor ke negara; memasukkan PPN ke
+"pendapatan" kelas (b) menaikkan margin% baris kendaraan yang sama
+secara sistematis dibanding kelas (a)/(c), sehingga perbandingan
+antar baris dan marginPercent agregat tidak lagi sebanding. Definisi
+akuntansi pendapatan = DPP, konsisten project-pl yang sudah jadi
+sumber tunggal F-029.
+
+Batas build (BOT 3, kartu terpisah):
+1. Ubah HANYA loader `vehicle-margin-data.ts` kelas (b): select
+   tambah `subtotal` + `discount`, billed per invoice =
+   safeSubtract(subtotal, discount) sen-aman. Field sumber sudah ada;
+   tanpa migrasi.
+2. JANGAN ubah `job-billing-summary` / `BILLED_INVOICE_STATUSES`:
+   "sudah ditagih" = grandTotal bruto adalah definisi piutang yang
+   benar untuk sisa tagihan. Vonis ini hanya menyamakan basis
+   MARGIN, bukan definisi tagihan.
+3. Semantik field builder `VehicleMarginJobInput.billedAmount`
+   berubah menjadi pendapatan DPP; perbarui komentar kontrak di
+   `vehicle-margin.ts` header kelas (b) + `VehicleMarginJobInput`
+   supaya tidak ada pembaca mengira bruto. Nama field boleh tetap
+   (diff terkecil) asal komentar eksplisit "DPP subtotal-diskon".
+4. Falsifikasi wajib (BOT 6): invoice DPP Rp100.000.000 + PPN 11%
+   (grandTotal Rp111.000.000) di WO non-proyek -> revenue kendaraan
+   Rp100.000.000, bukan 111.000.000; cabut pengurangan PPN (kembali
+   grandTotal) -> tes MERAH. Tes vehicle-margin existing yang memakai
+   billedAmount sebagai angka bebas tetap sah (builder tidak tahu
+   sumbernya) — tes baru wajib di lapisan loader.
+
+### Q-033-2 — MaterialIssue WO non-proyek: ProductionCost-only + penanda parsial
+
+Keputusan: kelas (b) TETAP ProductionCost-only. DILARANG menambahkan
+MaterialIssue ke biaya kelas (b).
+
+Alasan: untuk WO ber-ProductionOrder, material sudah masuk
+ProductionCost/totalActualCost saat issueMaterial (bukti header
+job-estimate-vs-actual.ts:14-17 di atas). Menjumlahkan MaterialIssue
+lagi = biaya material dobel, margin kendaraan terlalu rendah secara
+diam-diam — cacat lebih berbahaya daripada kekurangan yang ditandai.
+
+Sisa kekurangan yang nyata (diakui, ditangani dengan label, bukan
+angka): MI manual `completed` yang tertaut langsung ke WO non-proyek
+(workOrderId terisi, tanpa jalur ProductionOrder) membebankan GL lewat
+onMaterialIssueCompleted tetapi tidak melahirkan ProductionCost,
+sehingga tidak terlihat di kelas (b).
+
+Batas build (BOT 3, kartu yang sama dengan Q-033-1):
+1. Loader kelas (b): bila ada MaterialIssue `completed` ber-workOrderId
+   pada WO non-proyek dalam cakupan, baris kendaraan ditandai parsial
+   dengan penanda baru (usulan `hasUnlinkedMaterial: boolean` di
+   VehicleMarginRow, pola `hasUnlinkedRevenue` existing). TIDAK
+   dijumlahkan ke materialCost/productionCost.
+2. UI (BOT 2) wajib menampilkan penanda itu sebagai "biaya material
+   langsung belum termasuk" — bukan menyembunyikan, bukan mengira-ngira
+   nominalnya dari MI (menghindari dobel jalur produksi).
+3. Falsifikasi wajib: WO non-proyek dengan MI completed langsung ->
+   hasUnlinkedMaterial true dan totalCost TIDAK berubah; hapus
+   penanda -> tes MERAH. WO yang materialnya lewat ProductionOrder
+   saja -> penanda false (jangan tandai parsial palsu bila MI tertaut
+   itu sudah tercermin ProductionCost — bila loader tidak bisa
+   membedakan, penanda berbunyi "ada pengeluaran material langsung,
+   periksa rincian", bukan klaim nominal).
+
+Catatan kejujuran batas: loader saat ini tidak punya tautan
+MaterialIssue -> ProductionOrder, jadi penanda bersifat peringatan
+keberadaan, bukan rekonsiliasi nominal. Rekonsiliasi nominal MI vs
+ProductionCost per WO = pekerjaan terpisah bila dibutuhkan, bukan
+syarat F-033.
+
+### Q-033-4 — pemakaian margin: informatif saja, DILARANG jadi dasar harga/komisi/payroll
+
+Keputusan: `profit` dan `marginPercent` kendaraan hanya boleh tampil
+informatif dengan label verbatim "margin job kendaraan". DILARANG
+dipakai sebagai dasar penetapan harga job berikutnya, dasar komisi,
+dasar payroll/bonus, atau dasar jurnal — sampai vonis pemakaian baru
+terbit.
+
+Alasan: angka ini (1) belum memuat alokasi overhead tidak langsung,
+(2) tidak dikurangi retur penjualan (BR-VEH-11: retur terpisah tidak
+mengurangi agregat), (3) periode = tanggal dokumen sumber, bukan
+penyelesaian job — biaya WO lintas periode ikut terbawa, dan (4)
+sesudah Q-033-1 pun tetap read-model tanpa dimensi GL. Memakainya
+untuk harga akan mengunci kesalahan cakupan menjadi keputusan uang.
+
+Yang BOLEH: pertanyaan estimator ("job plat X rugi — buka rincian"),
+penanda parsial, dan perbandingan internal antar kendaraan pada
+periode yang sama sesudah basis DPP seragam (Q-033-1 selesai).
+
+Syarat vonis pemakaian kelak (semua wajib): basis DPP seragam sudah
+merged + retur masuk agregat atau dinyatakan eksplisit + dasar
+alokasi overhead disetujui tertulis + rekonsiliasi ke GL per periode
+uji. Tanpa itu, BR-VEH-10 tetap: baca informatif saja.
+
+### Handoff F-033 vonis
+
+- BOT 3: kartu loader kelas (b) basis DPP + penanda
+  hasUnlinkedMaterial per batas build Q-033-1/Q-033-2 di atas;
+  tanpa migrasi/schema; falsifikasi loader wajib.
+- BOT 2: permukaan F-2026-10-22-001 boleh jalan sesudah Q-033-6
+  diputus BOT 1; tampilkan label verbatim + penanda parsial +
+  hasUnlinkedMaterial; dilarang hitung ulang dan dilarang memakai
+  angka untuk harga/komisi (Q-033-4).
+- BOT 6: acceptance tambah dua falsifikasi di atas (PPN 11% dan
+  penanda material) ke draf acceptance spec F-033.
+- BOT 1: Q-033-3/Q-033-6 tetap menunggu putusanmu; vonis ini tidak
+  menahan tampilan informatif read-only.
