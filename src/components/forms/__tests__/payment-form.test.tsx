@@ -42,6 +42,13 @@ function mount(node: HTMLElement, payment?: { id: number }): Root {
   return root
 }
 
+function expectDecorativeStars(form: HTMLFormElement, expectedLabels: string[]) {
+  const stars = form.querySelectorAll('span[aria-hidden="true"].text-destructive')
+  expect(stars.length).toBe(expectedLabels.length)
+  const labelTexts = new Set(Array.from(form.querySelectorAll("label"), (l) => l.textContent))
+  for (const text of expectedLabels) expect(labelTexts.has(text)).toBe(true)
+}
+
 describe("PaymentForm — a11y wiring", () => {
   it("form punya aria-label tambah + aria-busy false; kontrol wajib aria-required/required; bintang dekoratif aria-hidden", () => {
     const container = document.createElement("div")
@@ -55,12 +62,7 @@ describe("PaymentForm — a11y wiring", () => {
       expect(container.querySelector(`#${id}`)!.getAttribute("aria-required")).toBe("true")
     }
     expect(container.querySelector("#amount")!.getAttribute("required")).not.toBeNull()
-
-    const stars = form.querySelectorAll('span[aria-hidden="true"].text-destructive')
-    expect(stars.length).toBe(3)
-    const labels = Array.from(form.querySelectorAll("label")).map((l) => l.textContent)
-    expect(labels).toContain("Faktur *")
-    expect(labels).toContain("Jumlah Bayar (Rp) *")
+    expectDecorativeStars(form, ["Faktur *", "Metode Bayar *", "Jumlah Bayar (Rp) *"])
     act(() => root.unmount())
     container.remove()
   })
