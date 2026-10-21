@@ -153,7 +153,11 @@ export function PurchaseRequestForm({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={request?.id ? "Ubah permintaan pembelian" : "Tambah permintaan pembelian"}
+    >
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
@@ -274,13 +278,13 @@ export function PurchaseRequestForm({
                       className="text-left py-2 px-2 font-medium text-secondary"
                       style={{ minWidth: "250px" }}
                     >
-                      Item *
+                      Item <span className="text-destructive" aria-hidden="true">*</span>
                     </th>
                     <th
                       className="text-left py-2 px-2 font-medium text-secondary"
                       style={{ width: "100px" }}
                     >
-                      Jml *
+                      Jml <span className="text-destructive" aria-hidden="true">*</span>
                     </th>
                     <th className="text-left py-2 px-2 font-medium text-secondary">
                       Catatan
@@ -293,6 +297,7 @@ export function PurchaseRequestForm({
                     <tr key={item.uid} className="border-b border-default/50">
                       <td className="py-2 px-2">
                         <Combobox
+                          required
                           value={item.itemId ? String(item.itemId) : null}
                           onChange={(key) =>
                             updateItem(i, "itemId", key ? Number(key) : 0)
