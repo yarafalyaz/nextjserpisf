@@ -4002,6 +4002,12 @@ model WarrantyCoverage {
   workOrderId       Int             @map("work_order_id")
   itemId            Int             @map("item_id")
   serialNumber      String?         @map("serial_number")
+  // Jangkar unik DB (F-021-HARDEN-UNIQUE): MySQL tidak menganggap NULL unik,
+  // jadi unique langsung di serialNumber gagal menahan coverage ganda tanpa
+  // serial. serialKey = serialNumber ?? "" ditulis service saat create;
+  // unique (workOrderId, itemId, serialKey) menahan duplikat serial maupun
+  // non-serial. Nilai "" bukan serial asli — jangan tampilkan ke pengguna.
+  serialKey         String          @default("") @map("serial_key")
   installedAt       DateTime        @map("installed_at")
   expiresAt         DateTime        @map("expires_at")
   warrantyMonths    Int             @map("warranty_months")
@@ -4015,6 +4021,7 @@ model WarrantyCoverage {
   item              Item            @relation(fields: [itemId], references: [id])
   claims            WarrantyClaim[]
 
+  @@unique([workOrderId, itemId, serialKey], map: "warranty_coverages_wo_item_serial_key_key")
   @@index([customerVehicleId])
   @@index([workOrderId])
   @@index([itemId])

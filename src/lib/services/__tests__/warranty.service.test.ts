@@ -100,6 +100,44 @@ describe("createWarrantyCoveragesForWorkOrder (F-021 tahap 1)", () => {
     const result = await createWarrantyCoveragesForWorkOrder(99, new Date(), prisma as never)
     expect(result.created).toBe(1)
     expect(p.warrantyCoverage.create.mock.calls[0][0].data.serialNumber).toBeNull()
+    // Jangkar unik DB: serial null ditulis sebagai serialKey "" (bukan null).
+    expect(p.warrantyCoverage.create.mock.calls[0][0].data.serialKey).toBe("")
+  })
+
+  it("F-021-HARDEN-UNIQUE: serialKey = serialNumber saat create", async () => {
+    p.workOrder.findUnique.mockResolvedValue({ customerVehicleId: 7 })
+    p.materialIssue.findMany.mockResolvedValue([
+      { items: [{ itemId: 42, serialNumbers: ["BMP-001"] }] },
+    ])
+    p.item.findMany.mockResolvedValue([{ id: 42, name: "Bumper Baja", sku: "BMP-42", warrantyMonths: 12 }])
+
+    const result = await createWarrantyCoveragesForWorkOrder(99, new Date(), prisma as never)
+    expect(result.created).toBe(1)
+    expect(p.warrantyCoverage.create.mock.calls[0][0].data.serialKey).toBe("BMP-001")
+  })
+
+  it("F-021-HARDEN-UNIQUE: P2002 dari unique DB ditelan sebagai sudah-ada, bukan error", async () => {
+    p.workOrder.findUnique.mockResolvedValue({ customerVehicleId: 7 })
+    p.materialIssue.findMany.mockResolvedValue([
+      { items: [{ itemId: 42, serialNumbers: ["BMP-001"] }] },
+    ])
+    p.item.findMany.mockResolvedValue([{ id: 42, name: "Bumper Baja", sku: "BMP-42", warrantyMonths: 12 }])
+    // Balapan: cek baca melihat kosong, tapi transaksi lain menang create duluan.
+    p.warrantyCoverage.create.mockRejectedValue(Object.assign(new Error("Unique constraint failed"), { code: "P2002" }))
+
+    const result = await createWarrantyCoveragesForWorkOrder(99, new Date(), prisma as never)
+    expect(result.created).toBe(0)
+  })
+
+  it("F-021-HARDEN-UNIQUE: error non-P2002 saat create tetap diteruskan", async () => {
+    p.workOrder.findUnique.mockResolvedValue({ customerVehicleId: 7 })
+    p.materialIssue.findMany.mockResolvedValue([
+      { items: [{ itemId: 42, serialNumbers: ["BMP-001"] }] },
+    ])
+    p.item.findMany.mockResolvedValue([{ id: 42, name: "Bumper Baja", sku: "BMP-42", warrantyMonths: 12 }])
+    p.warrantyCoverage.create.mockRejectedValue(new Error("DB mati"))
+
+    await expect(createWarrantyCoveragesForWorkOrder(99, new Date(), prisma as never)).rejects.toThrow("DB mati")
   })
 })
 
