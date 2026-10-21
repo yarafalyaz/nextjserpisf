@@ -227,17 +227,17 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form onSubmit={handleSubmit(onSubmit)} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah item" : "Formulir tambah item"}>
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5 col-span-full">
-            <Label htmlFor="name">Nama Item *</Label>
-            <Input id="name" {...register("name")} placeholder="Nama item" />
+            <Label htmlFor="name">Nama Item <span className="text-destructive" aria-hidden="true">*</span></Label>
+            <Input id="name" {...register("name")} placeholder="Nama item" required />
             {errors.name && <span className="text-xs text-danger mt-1">{errors.name.message}</span>}
           </div>
           <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-5 items-start">
             <div className="flex flex-col gap-1.5">
-            <Label htmlFor="item-image">Gambar Item *</Label>
+            <Label htmlFor="item-image">Gambar Item <span className="text-destructive" aria-hidden="true">*</span></Label>
             <input type="hidden" {...register("image")} />
             <div className="image-upload-area">
               {imagePreview ? (
@@ -298,9 +298,10 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="brandId">Merek *</Label>
+                  <Label htmlFor="brandId">Merek <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <QuickAddSelect
                     id="brandId"
+                    required
                     options={brandOptions.map((b) => ({ value: String(b.id), label: b.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
@@ -324,9 +325,10 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="categoryId">Kategori *</Label>
+                  <Label htmlFor="categoryId">Kategori <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <QuickAddSelect
                     id="categoryId"
+                    required
                     options={categoryOptions.map((c) => ({ value: String(c.id), label: c.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
@@ -369,9 +371,10 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="vendorId">Pemasok *</Label>
+                  <Label htmlFor="vendorId">Pemasok <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <QuickAddSelect
                     id="vendorId"
+                    required
                     options={vendorOptions.map((v) => ({ value: String(v.id), label: v.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => field.onChange(key ? Number(key) : undefined)}
@@ -414,13 +417,13 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
 
         <FormSection title="Keuangan">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="cost">Harga Beli (Rp) *</Label>
-            <Controller name="cost" control={control} render={({ field: f }) => <CurrencyInput id="cost" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" prefix="Rp" />} />
+            <Label htmlFor="cost">Harga Beli (Rp) <span className="text-destructive" aria-hidden="true">*</span></Label>
+            <Controller name="cost" control={control} render={({ field: f }) => <CurrencyInput id="cost" required value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" prefix="Rp" />} />
             {errors.cost && <span className="text-xs text-danger mt-1">{errors.cost.message}</span>}
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="price">Harga Jual (Rp) *</Label>
-            <Controller name="price" control={control} render={({ field: f }) => <CurrencyInput id="price" value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" prefix="Rp" />} />
+            <Label htmlFor="price">Harga Jual (Rp) <span className="text-destructive" aria-hidden="true">*</span></Label>
+            <Controller name="price" control={control} render={({ field: f }) => <CurrencyInput id="price" required value={f.value} onChange={f.onChange} onBlur={f.onBlur} placeholder="0" prefix="Rp" />} />
             {!priceBelowCost && watchedPrice > 0 && (
               <span className="text-xs text-emerald-600 dark:text-emerald-500 mt-1">
                 Untung {formatCurrency(profit)}{watchedCost > 0 ? ` (${formatPct(marginPct)}% dari modal)` : ""}
@@ -469,9 +472,10 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="defaultWarehouseId">Gudang Bawaan *</Label>
+                  <Label htmlFor="defaultWarehouseId">Gudang Bawaan <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <QuickAddSelect
                     id="defaultWarehouseId"
+                    required
                     options={warehouseOptions.map((w) => ({ value: String(w.id), label: w.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => {
@@ -501,9 +505,10 @@ export function ItemForm({ item, categories, groups, brands, vendors, warehouses
               control={control}
               render={({ field }) => (
                 <>
-                  <Label htmlFor="defaultRackId">Rak *</Label>
+                  <Label htmlFor="defaultRackId">Rak <span className="text-destructive" aria-hidden="true">*</span></Label>
                   <Combobox
                     id="defaultRackId"
+                    required
                     options={filteredRacks.map((r) => ({ value: String(r.id), label: r.name }))}
                     value={field.value ? String(field.value) : null}
                     onChange={(key) => {
