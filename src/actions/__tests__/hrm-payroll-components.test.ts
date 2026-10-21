@@ -107,6 +107,12 @@ function assignment(id: number, componentId: number, name: string, amount: numbe
   }
 }
 
+function deductionAssignment(id: number, componentId: number, name: string, amount: number) {
+  return assignment(id, componentId, name, amount, {
+    component: { name, kind: "deduction", recurrence: "fixed", isTaxable: false, accountId: null },
+  })
+}
+
 const draftPayroll = {
   id: 55, employeeId: 7, period: "2026-05", status: "draft",
   startDate: new Date("2026-05-01"), endDate: END,
@@ -244,6 +250,51 @@ describe("F-027 tarikan generate", () => {
       kindSnapshot: "earning", source: "fixed_assignment", assignmentId: 21, amount: 500000,
     })
     expect(lineArg.data[1]).toMatchObject({ componentId: 4, amount: 300000 })
+  })
+
+  it("deduction end-to-end: baris deduction masuk deductions persis, gross tidak naik, net turun persis (processPayroll)", async () => {
+    const deductionAmount = 700000
+    prismaMock.employeePayrollComponent.findMany.mockResolvedValue([
+      assignment(21, 3, "Transport", 500000),
+      deductionAssignment(22, 5, "Potongan Koperasi", deductionAmount),
+    ])
+    const res = await actions.processPayroll(fd({
+      employeeId: "7", period: "2026-05", startDate: "2026-05-01", endDate: "2026-05-31",
+      baseSalary: "5000000", allowances: "999999", deductions: "999999",
+      // workingDays > 0 mematikan ringkasan absensi otomatis (mock kosong
+      // akan memberi absentDeduction 5jt dan net ter-floor 0).
+      workingDays: "22", presentDays: "22", absentDays: "0", absentDeduction: "0",
+    }))
+    expect(res.success).toBe(true)
+    const createArg = prismaMock.payroll.create.mock.calls.at(-1)[0]
+    expect(createArg.data.allowances).toBe(500000)
+    expect(createArg.data.deductions).toBe(deductionAmount)
+    expect(createArg.data.grossSalary).toBe(5500000)
+
+    // Bandingkan tanpa deduction: gross identik, net berbeda persis nominal deduction.
+    vi.clearAllMocks()
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    prismaMock.payroll.findFirst.mockResolvedValue(null)
+    prismaMock.payrollStatutoryRule.findMany.mockResolvedValue(mocks.rules)
+    prismaMock.payrollTerBracket.findMany.mockImplementation(async (args: any) => [
+      { category: args?.where?.category ?? "A", lowerBound: 0, upperBound: null, rateMilliPercent: 0, effectiveFrom: new Date("2024-01-01"), effectiveTo: null, source: "PP 58/2023" },
+    ])
+    prismaMock.payroll.create.mockResolvedValue({ id: 55 })
+    prismaMock.payrollComponentLine.findMany.mockResolvedValue([])
+    prismaMock.employeePayrollComponent.findMany.mockResolvedValue([
+      assignment(21, 3, "Transport", 500000),
+    ])
+
+    const baselineRes = await actions.processPayroll(fd({
+      employeeId: "7", period: "2026-05", startDate: "2026-05-01", endDate: "2026-05-31",
+      baseSalary: "5000000", allowances: "999999", deductions: "999999",
+      workingDays: "22", presentDays: "22", absentDays: "0", absentDeduction: "0",
+    }))
+    expect(baselineRes.success).toBe(true)
+    const baselineCreateArg = prismaMock.payroll.create.mock.calls.at(-1)[0]
+    expect(baselineCreateArg.data.grossSalary).toBe(createArg.data.grossSalary)
+    expect(baselineCreateArg.data.deductions).toBe(0)
+    expect(baselineCreateArg.data.netSalary - createArg.data.netSalary).toBe(deductionAmount)
   })
 
   it("AC-2: effectiveTo sebelum endDate tidak tertarik; mulai tengah periode tertarik penuh", async () => {
