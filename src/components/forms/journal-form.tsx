@@ -98,7 +98,12 @@ export function JournalForm({ accounts, profitCenters = [], costCenters = [], jo
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form
+      onSubmit={onSubmit}
+      aria-busy={isPending}
+      aria-label={journal?.id ? "Formulir ubah jurnal" : "Formulir tambah jurnal"}
+      className="bg-surface rounded-xl border border-default shadow-sm p-6"
+    >
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <AppDatePicker
