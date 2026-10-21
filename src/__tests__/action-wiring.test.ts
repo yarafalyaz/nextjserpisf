@@ -99,6 +99,12 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
   "src/actions/customer-price-list.actions.ts::deleteCustomerPriceList":
     "F-PRICELIST-01 backend; halaman kelola daftar harga menyusul (tahap UI)",
+  // F-2026-10-21-022 backend dulu (pola F-021): kontrak field+aksi klaim
+  // supplier final di PR ini; UI klaim supplier = task frontend berikutnya.
+  "src/actions/warranty.actions.ts::linkSupplierClaimAction":
+    "F-2026-10-21-022 backend; UI tautan klaim supplier menyusul sesudah kontrak merged",
+  "src/actions/warranty.actions.ts::transitionSupplierClaimAction":
+    "F-2026-10-21-022 backend; UI status recovery klaim supplier menyusul sesudah kontrak merged",
 }
 
 describe("keterhubungan aksi server", () => {
