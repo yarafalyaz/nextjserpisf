@@ -93,6 +93,7 @@ export const navigation: NavItem[] = [
       { label: "Pembayaran", href: "/penjualan/pembayaran", icon: CreditCard, permission: "view_sales_payments" },
       { label: "Retur", href: "/penjualan/retur", icon: RotateCcw, permission: "view_sales_returns" },
       { label: "Tukar Faktur", href: "/penjualan/tukar-faktur", icon: FileCheck, permission: "view_invoice_exchanges" },
+      { label: "Daftar Harga Pelanggan", href: "/penjualan/harga-pelanggan", icon: BadgeDollarSign, permission: "view_customer_price_lists" },
     ],
   },
   {
