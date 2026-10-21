@@ -20,6 +20,8 @@ import { VoidButton } from "@/components/ui/void-button"
 import { PrintButton } from "@/components/ui/print-button"
 import { ProcessButton } from "@/components/ui/process-button"
 import { WhatsappButton } from "@/components/reports/whatsapp-button"
+import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note"
+import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data"
 import { buildWhatsappMessage } from "@/lib/utils/whatsapp"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
@@ -82,6 +84,9 @@ export default async function InvoiceDetailPage({
   )
 
   if (!invoice) notFound()
+
+  // F-036 tahap 2: jejak klik tautan WA terakhir (label jujur, bukan terkirim).
+  const whatsappTrail = await getWhatsappTrail("SalesInvoice", invoice.id)
 
   // Custom fabrication: items stay editable until the customer actually pays.
   // A down payment is only an advance (reconciled at the end) — it does NOT lock
@@ -150,6 +155,9 @@ export default async function InvoiceDetailPage({
             )}
             <WhatsappButton
               phone={invoice.customer.phone}
+              modelType="SalesInvoice"
+              modelId={invoice.id}
+              surface="detail"
               message={buildWhatsappMessage({
                 customerName: invoice.customer.name,
                 documentLabel: "Faktur",
@@ -178,6 +186,8 @@ export default async function InvoiceDetailPage({
           </>
         }
       />
+
+      <WhatsappTrailNote trail={whatsappTrail} />
 
       <DetailTabs
         ariaLabel="Tab detail faktur"

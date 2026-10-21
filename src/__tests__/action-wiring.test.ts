@@ -105,10 +105,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-022 backend; UI tautan klaim supplier menyusul sesudah kontrak merged",
   "src/actions/warranty.actions.ts::transitionSupplierClaimAction":
     "F-2026-10-21-022 backend; UI status recovery klaim supplier menyusul sesudah kontrak merged",
-  // F-2026-10-21-036 backend dulu: aksi catat klik WA final di PR ini; kabel
-  // WhatsappButton 4 callsite = task frontend t_faf7d278 sesudah backend ini.
-  "src/actions/whatsapp-log.actions.ts::recordWhatsappLinkOpened":
-    "F-2026-10-21-036 backend; kabel WhatsappButton menyusul di task frontend t_faf7d278",
 }
 
 describe("keterhubungan aksi server", () => {
