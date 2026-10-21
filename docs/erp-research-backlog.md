@@ -7676,3 +7676,140 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+## SPEC DETAIL F-2026-10-21-020 (Bot 5 Wira, 2026-10-21) — spesifikasi, belum vonis Lead
+
+Status: SPEC-USULAN. ID F-020 sudah ada (bagian e di atas); bagian ini
+detail kontraknya. Bukti live origin/main 12e7dfc1. Tanpa kode run ini.
+
+### Bukti repo (TERVERIFIKASI-KODE)
+- WorkOrder schema.prisma:2575-2618: status draft, startDate/endDate
+  nullable, quotationId/projectId/customerVehicleId/bomRevisionId;
+  TIDAK ada productId langsung, operation/routing, estimatedHours,
+  assignedTo, priority, workCenterId.
+- WorkOrderItem schema.prisma:2619-2632: baris barang
+  (itemId/qty/cost/status pending), bukan operasi.
+- startWorkOrder manufacturing.actions.ts:1378-1445: hanya dari
+  pending/draft, wajib items + intake kendaraan, klaim atomik
+  updateMany, permission edit_work_orders (:1380).
+- completeWorkOrder manufacturing.actions.ts:1459-1560: hanya
+  in_progress/pending, wajib MaterialIssue completed + QC cleared
+  (assertWorkOrderQcCleared), permission complete_work_orders.
+- Permission nyata katalog module-catalog.generated.ts:253-257:
+  view/create/edit/delete/complete_work_orders. Tanpa key operasi.
+- Pola tahap terbukti: ProjectStage (projectId/name/sortOrder/status
+  pending/startedAt/completedAt) + SystemSetting.defaultProjectStages
+  schema:228 default "Persiapan, Pengerjaan, Quality Check, Selesai"
+  + doInitializeProjectStages idempoten kunci FOR UPDATE
+  project.actions.ts:174-212; status sah tahap proyek
+  pending/in_progress/completed/skipped (project.actions.ts:220-330).
+- work-order-load.ts:1-25 builder BEBAN aktual ProductionCost dan
+  headernya melarang urutan operasi karangan; antiganda dengan
+  ProjectStage dinyatakan eksplisit di file yang sama.
+- Kapasitas mentah: WorkSchedule (workDays/startTime/endTime, relasi
+  Employee/Department, schema:2677+) + Holiday global. Belum ada
+  agregasi jam kapasitas mingguan.
+
+### Kontrak data (USULAN, migrasi aditif)
+- Model WorkOrderOperation: id, slug nullable, workOrderId FK
+  onDelete Cascade, name (snapshot saat inisialisasi), sortOrder,
+  status default "pending" (pending|in_progress|completed|skipped),
+  estimatedHours Decimal(15,2) NULLABLE (null = belum diestimasi,
+  bukan 0), assignedEmployeeId nullable FK Employee, startedAt/
+  completedAt nullable, notes Text nullable, createdBy/createdAt/
+  updatedAt pola repo. Index (workOrderId, sortOrder), (status),
+  (assignedEmployeeId). TANPA kolom biaya/FK costing/QC/timesheet.
+- Template Tahap A: setting SystemSetting.defaultWorkOrderStages
+  (pola defaultProjectStages), default usulan "Persiapan, Potong,
+  Las, Finishing, Rakit, Pasang, Quality Check, Selesai". BUKAN
+  template per Product: WorkOrder tak membawa productId, sumber
+  produk saat WO lahir tidak andal. Template per Product = Tahap C.
+- initializeWorkOrderOperations(workOrderId): pola
+  doInitializeProjectStages (transaksi, FOR UPDATE baris WO, sudah
+  ada baris -> no-op). Dipanggil otomatis di transaksi startWorkOrder
+  sesudah klaim menang + manual untuk WO in_progress lama. TIDAK ada
+  backfill massal; WO completed/cancelled legacy tetap tanpa tahap.
+
+### Workflow/status (USULAN)
+- pending -> in_progress (startedAt terisi) -> completed
+  (completedAt terisi); in_progress -> pending (timestamp kosong);
+  pending|in_progress -> skipped (completedAt terisi);
+  completed|skipped -> in_progress (completedAt null) hanya selama
+  induk belum completed. Mutasi tahap HANYA saat WorkOrder induk
+  in_progress; sesudah induk completed semua baris terkunci (server).
+- Urutan BEBAS/paralel (sortOrder = urutan tampil), menyimpang sadar
+  dari guard sekuensial ProjectStage — BUTUH-VONIS Q1.
+- Progres = completed / (total - skipped) x 100, 1 desimal;
+  denominator 0 -> null tampil "—", BUKAN 0%.
+- Tahap A: completeWorkOrder TIDAK diblokir tahap menggantung dan
+  tahap sisa TIDAK di-auto-complete saat WO selesai (riwayat jujur).
+  Guard MaterialIssue+QC existing satu-satunya penahan, tak berubah.
+- QC tetap gerbang assertWorkOrderQcCleared terpisah; tahap bernama
+  "Quality Check" hanya label progres (BR-020-06, vonis Q3 terkait).
+
+### Permission (key nyata saja)
+Baca view_work_orders; inisialisasi/tambah/transisi/ubah tahap
+edit_work_orders; selesaikan WO complete_work_orders. TANPA key baru
+Tahap A/B (Q4). Hapus tahap: hanya baris pending yang belum pernah
+in_progress; yang sudah berjalan hanya boleh skipped.
+
+### Business rules
+- BR-020-01 TERVERIFIKASI-KODE: tahap hidup hanya dalam siklus WO
+  draft/pending/in_progress/completed; mutasi hanya induk in_progress.
+- BR-020-02 USULAN: nama tahap snapshot; ubah setting tak mengubah
+  WO berjalan.
+- BR-020-03 USULAN: estimatedHours null != 0; agregat mengabaikan
+  null + hitung baris tanpa estimasi.
+- BR-020-04 TERVERIFIKASI-KODE (pola work-order-load.ts:13-19):
+  tahap tak menjurnal/tak mengubah ProductionCost/HPP/stok.
+- BR-020-05 USULAN: ProjectStage != WorkOrderOperation; dilarang
+  sinkronisasi dua arah diam-diam.
+- BR-020-06 BUTUH-VONIS: QC gerbang terpisah vs tahap biasa.
+- BR-020-07: tanpa vonis Salsa — nol jurnal/angka uang spec ini.
+
+### Tahapan build + owner
+- Tahap A (Backend Bot 3, M): model+migrasi, setting, initialize di
+  start, aksi transisi, builder murni buildWorkOrderProgress +
+  loader massal tanpa N+1. Tanpa dependensi kartu lain (F-019 tak
+  menghalangi; Tahap A tidak membaca Timesheet).
+- Tahap A-UI (Frontend Bot 2, sesudah builder merged): kartu progres
+  detail WO 1-klik mulai/selesai/lewati + lencana antrean; label
+  "progres tahap, bukan % biaya/janji selesai"; UI tak hitung ulang.
+- Tahap B (Backend, S-M, sesudah Tahap A dipakai): plannedStart/
+  plannedEnd per tahap + beban rencana mingguan per penanggung
+  (Σ estimatedHours baris pending/in_progress ber-window memotong
+  minggu) vs kapasitas WorkSchedule aktif dikurangi Holiday; tanpa
+  window -> ember "belum terjadwal"; tanpa WorkSchedule -> "jadwal
+  kerja belum diatur", bukan kapasitas 0. Label wajib "rencana,
+  bukan kapasitas keras/bukan WorkCenter".
+- Tahap C ditunda tanpa kartu: template per Product, permission
+  teknisi khusus, gerbang complete wajib tahap, WorkCenter/bay.
+
+### Edge cases
+Mulai WO bersamaan (hanya pemenang klaim inisialisasi); setting
+kosong (fallback default kode, jangan blokir job); nama tahap
+duplikat sah (tanpa unique); karyawan nonaktif/hilang (tampil
+riwayat/"mantan karyawan", FK SetNull konsisten migrasi); WO
+dibatalkan (tahap membeku terbaca); semua skipped (progres null);
+estimatedHours 0 eksplisit ikut agregat, null tidak; buka lagi
+tahap sesudah WO completed ditolak server.
+
+### Acceptance (draf Qila; penuh di kanban t_fef03e53 #133 §9-10)
+A1 start melahirkan tahap dari setting, progres 0% jujur; A2 selesai
+2/5=40.0%, skip 1 -> denominator 4 = 50.0%; A3 inisialisasi manual
+idempoten; A4 tahap tanpa jurnal/biaya/stok; A5 mutasi di WO
+draft/completed ditolak; A6 start gagal tanpa baris yatim; B7 tanpa
+window tak masuk beban; B8 tanpa jadwal kerja label jujur; B9
+Holiday kurangi kapasitas tampil.
+Falsifikasi: cabut skipped dari denominator merah; cabut kunci
+induk in_progress merah; initialize 2x ganda merah; denominator-0
+jadi 0% merah; tulis jurnal dari transisi tahap merah.
+
+### Tidak diusulkan
+WorkCenter/bay/kapasitas hingga/drag-drop; routing costing (tahap
+bukan baris biaya kedua); gabung ProjectStage-WorkOrderOperation.
+
+### Pertanyaan vonis Lead (Q1-Q5)
+Q1 urutan bebas (rekomendasi) vs sekuensial; Q2 skipped wajib notes;
+Q3 complete tak diblokir tahap pada Tahap A (rekomendasi) disahkan;
+Q4 permission existing tanpa key baru (rekomendasi); Q5 isi default
+daftar tahap global. Kartu backend dibuka Lead/Bara sesudah vonis.
