@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { POST, GET } from "../route"
+import { POST, GET, resolveAttachmentExt } from "../route"
 import { NextRequest } from "next/server"
 
 const mocks = vi.hoisted(() => ({
@@ -217,6 +217,15 @@ describe("POST /api/upload/attachments", () => {
     const res = await POST(makePostReq({ file, referenceType: "quotation", referenceId: "5" }))
     expect(res.status).toBe(400)
     expect(mocks.writeFile).not.toHaveBeenCalled()
+  })
+
+  it("derives the stored extension from the validated MIME, not the client name", () => {
+    // "laporan.html" + header image/png tanpa fix tersimpan .html dan menipu
+    // konsumen nama/ikon (mutasi: kembalikan ext klien bila MIME dikenal).
+    expect(resolveAttachmentExt("image/png", "laporan.html")).toBe("png")
+    expect(resolveAttachmentExt("application/pdf", "nota.php")).toBe("pdf")
+    expect(resolveAttachmentExt("image/jpeg", "foto.svg")).toBe("jpg")
+    expect(resolveAttachmentExt("image/webp", "x")).toBe("webp")
   })
 
   it("returns 500 on internal error", async () => {
