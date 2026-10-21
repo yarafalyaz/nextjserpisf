@@ -315,3 +315,25 @@ describe("onTransferReceived", () => {
     expect(spies.moveCreate).not.toHaveBeenCalled()
   })
 })
+
+describe("onTransferProcessed expired-lot guard forwarding (F-011)", () => {
+  it("passes transfer.date as documentDate to consumeFifoLayers", async () => {
+    const { spies } = wireTx([{ itemId: 7, qty: 3 }])
+    spies.transferFindUniqueOrThrow.mockResolvedValue({
+      id: 100,
+      documentNo: "TRF-001",
+      sourceWarehouseId: 1,
+      destinationWarehouseId: 2,
+      status: "draft",
+      date: new Date(2026, 0, 15),
+      items: [{ id: 1, itemId: 7, qty: 3 }],
+    })
+
+    await onTransferProcessed(100, 1)
+
+    expect(mocks.consumeFifoLayers).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ documentDate: new Date(2026, 0, 15) }),
+    )
+  })
+})

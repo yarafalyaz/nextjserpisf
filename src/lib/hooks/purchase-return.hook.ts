@@ -144,6 +144,9 @@ export async function onPurchaseReturnProcessed(
           qty: baseQty,
           allowShortfall: false,
           label: `retur pembelian ${purchaseReturn.documentNo}`,
+          // F-2026-10-21-011: lot kedaluwarsa tidak dikembalikan ke vendor
+          // lewat retur biasa tanpa penolakan tercatat.
+          documentDate: purchaseReturn.date,
         });
         const carryingUnitCost = baseQty > 0
           ? consumedCost / baseQty

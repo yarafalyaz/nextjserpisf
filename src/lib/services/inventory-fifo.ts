@@ -151,6 +151,9 @@ export async function consumeFifoLayers(
     if (batchRows.length > 0) {
       const docDay = toCalendarDate(documentDate)
       for (const b of batchRows) {
+        // Lot qty=0 sudah habis fisik — kedaluwarsa lot kosong bukan alasan
+        // menolak pengeluaran dari lot lain yang masih layak (F-011).
+        if (Number(b.qty) <= 0) continue
         if (b.expiryDate && toCalendarDate(b.expiryDate).getTime() < docDay.getTime()) {
           throw new Error(
             `Batch ${b.batchNumber} untuk item #${itemId} sudah kedaluwarsa (${toCalendarDate(b.expiryDate).toISOString().slice(0, 10)}) sebelum tanggal dokumen (${docDay.toISOString().slice(0, 10)}); pengeluaran ditolak.`
