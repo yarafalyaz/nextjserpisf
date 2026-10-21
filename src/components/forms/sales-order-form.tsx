@@ -86,6 +86,7 @@ export function SalesOrderForm({ customers, order, quotationId, defaultCustomerI
       submitId="submit-sales-order"
       isPending={isPending}
       isEditing={Boolean(order?.id)}
+      formLabel={order?.id ? "Formulir ubah pesanan" : "Formulir tambah pesanan"}
     >
 
         <div className="flex flex-col gap-1.5">

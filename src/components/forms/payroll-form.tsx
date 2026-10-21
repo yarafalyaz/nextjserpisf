@@ -125,7 +125,7 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={initialData?.id ? "Formulir ubah penggajian" : "Formulir tambah penggajian"} className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
       <div className="p-4 sm:p-6 border-b border-default bg-surface-secondary/30 flex flex-wrap justify-between items-center gap-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <CheckCircle className="text-primary" size={18} />
@@ -140,10 +140,11 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
 
       <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="employeeId">Karyawan *</Label>
+          <Label htmlFor="employeeId">Karyawan <span aria-hidden="true" className="text-destructive">*</span></Label>
           <QuickAddSelect
             id="employeeId"
             name="employeeId"
+            required
             options={employeeOptions.map((e) => ({ value: String(e.id), label: e.name }))}
             value={employeeId ? String(employeeId) : null}
             onChange={(key) => setEmployeeId(key ? Number(key) : null)}
@@ -159,7 +160,7 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="period">Periode Penggajian *</Label>
+          <Label htmlFor="period">Periode Penggajian <span aria-hidden="true" className="text-destructive">*</span></Label>
           <Input 
             id="period" 
             name="period" 
@@ -210,7 +211,7 @@ export function PayrollForm({ employees, costCenters = [], initialData }: Payrol
 
       <div className="p-4 sm:p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="baseSalary">Gaji Pokok *</Label>
+          <Label htmlFor="baseSalary">Gaji Pokok <span aria-hidden="true" className="text-destructive">*</span></Label>
           <CurrencyInput id="baseSalary" name="baseSalary" placeholder="0" required value={baseSalary} onChange={(v) => setBaseSalary(Number(v) || 0)} prefix="Rp" />
         </div>
         <div className="flex flex-col gap-1.5">

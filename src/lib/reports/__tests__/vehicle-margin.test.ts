@@ -56,7 +56,7 @@ describe("buildVehicleMargin — kriteria terima F-2026-10-21-033", () => {
           },
         ],
         jobs: [
-          { workOrderId: 50, customerVehicleId: 7, vehiclePlate: "B 1234 AA", customerName: "PT A", billedAmount: 4_000_000, actualCost: 1_000_000 },
+          { workOrderId: 50, customerVehicleId: 7, vehiclePlate: "B 1234 AA", customerName: "PT A", billedAmount: 4_000_000, actualCost: 1_000_000, hasUnlinkedMaterial: false },
         ],
       }),
     )
@@ -95,7 +95,7 @@ describe("buildVehicleMargin — kriteria terima F-2026-10-21-033", () => {
           { customerVehicleId: 7, vehiclePlate: "B 1", customerName: "PT A", pl: pl({ revenue: 5_000_000, totalCost: 1_000_000, productionCost: 1_000_000, profit: 4_000_000 }) },
         ],
         jobs: [
-          { workOrderId: 51, customerVehicleId: null, vehiclePlate: null, customerName: "PT B", billedAmount: 3_000_000, actualCost: 500_000 },
+          { workOrderId: 51, customerVehicleId: null, vehiclePlate: null, customerName: "PT B", billedAmount: 3_000_000, actualCost: 500_000, hasUnlinkedMaterial: false },
         ],
       }),
     )
@@ -107,6 +107,19 @@ describe("buildVehicleMargin — kriteria terima F-2026-10-21-033", () => {
     expect(r.totals.revenue).toBe(8_000_000)
     expect(r.totals.totalCost).toBe(1_500_000)
     expect(r.totals.profit).toBe(6_500_000)
+  })
+
+  it("MI langsung WO: penanda true, totalCost tidak berubah (Q-033-2)", () => {
+    const r = buildVehicleMargin(
+      base({
+        jobs: [
+          { workOrderId: 50, customerVehicleId: 7, vehiclePlate: "B 1234 AA", customerName: "PT A", billedAmount: 4_000_000, actualCost: 1_000_000, hasUnlinkedMaterial: true },
+        ],
+      }),
+    )
+    expect(r.rows[0].hasUnlinkedMaterial).toBe(true)
+    expect(r.rows[0].totalCost).toBe(1_000_000)
+    expect(r.rows[0].materialCost).toBe(0)
   })
 
   it("invoice langsung saja: tertanda parsial, bukan margin polos", () => {
@@ -127,8 +140,8 @@ describe("buildVehicleMargin — kriteria terima F-2026-10-21-033", () => {
     const r = buildVehicleMargin(
       base({
         jobs: [
-          { workOrderId: 1, customerVehicleId: 7, vehiclePlate: "B 100", customerName: "PT A", billedAmount: 1_000_000, actualCost: 0 },
-          { workOrderId: 2, customerVehicleId: 8, vehiclePlate: "B 100", customerName: "PT B", billedAmount: 2_000_000, actualCost: 0 },
+          { workOrderId: 1, customerVehicleId: 7, vehiclePlate: "B 100", customerName: "PT A", billedAmount: 1_000_000, actualCost: 0, hasUnlinkedMaterial: false },
+          { workOrderId: 2, customerVehicleId: 8, vehiclePlate: "B 100", customerName: "PT B", billedAmount: 2_000_000, actualCost: 0, hasUnlinkedMaterial: false },
         ],
       }),
     )
