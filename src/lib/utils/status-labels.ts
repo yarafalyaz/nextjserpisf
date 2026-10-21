@@ -45,6 +45,13 @@ export const STATUS_LABELS: Record<string, string> = {
   reversed: "Dibalik",
   reversing: "Sedang Dibalik",
 
+  // Garansi (F-2026-10-21-021)
+  intake: "Masuk",
+  eligibility: "Penilaian",
+  in_repair: "Dalam Perbaikan",
+  expired: "Kedaluwarsa",
+  revoked: "Dicabut",
+
   // CRM
   new: "Baru",
   open: "Terbuka",

@@ -139,6 +139,7 @@ export const navigation: NavItem[] = [
       { label: "Perintah Kerja", href: "/produksi/perintah-kerja", icon: Wrench, permission: "view_work_orders" },
       { label: "Perintah Produksi", href: "/produksi/production-orders", icon: Hammer, permission: "view_production_orders" },
       { label: "Pengendalian Mutu", href: "/produksi/qc", icon: ShieldCheck, permission: "view_qc" },
+      { label: "Klaim Garansi", href: "/produksi/garansi", icon: ShieldCheck, permission: "view_warranty_claims" },
     ],
   },
   {

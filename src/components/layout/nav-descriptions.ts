@@ -152,6 +152,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/produksi/bom-revisi": "Snapshot BOM ber-versi",
   "/produksi/perintah-kerja": "Perintah kerja",
   "/produksi/production-orders": "Perintah produksi",
+  "/produksi/garansi": "Klaim garansi kendaraan",
   "/produksi/products": "Rincian kebutuhan material (BOM)",
   "/produksi/qc": "Checklist, inspeksi, dan NCR",
   "/sdm/absensi": "Absensi kehadiran karyawan",

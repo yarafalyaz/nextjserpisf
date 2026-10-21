@@ -8,6 +8,10 @@ import Link from "next/link"
 import { Pencil } from "lucide-react"
 import { entityHref, entityNestedHref } from "@/lib/utils/entity-url"
 import { loadCustomerVehicleContext } from "../_components/load-customer-vehicle"
+import { listWarrantyCoveragesByVehicle } from "@/actions/warranty.actions"
+import { hasPermission } from "@/lib/auth/permissions"
+import { VehicleWarrantyCard } from "@/components/warranty/vehicle-warranty-card"
+import { prisma } from "@/lib/db/prisma"
 import { getCustomerVehicleHistory, type CustomerVehicleHistoryKind } from "@/lib/reports/customer-vehicle-history-data"
 
 import type { Metadata } from "next"
@@ -33,6 +37,24 @@ export default async function CustomerVehicleDetailPage({
   const { customer, customerKey, cv } = await loadCustomerVehicleContext(slug, vehicleSlug)
 
   const history = await getCustomerVehicleHistory(cv.id)
+
+  // Kartu garansi: cakupan dibaca lewat action existing (izin view terpisah);
+  // tanpa izin itu kartu tidak dirender sama sekali, bukan dirender kosong.
+  const canViewWarranty = await hasPermission("view_warranty_claims")
+  const canCreateWarrantyClaim = await hasPermission("create_warranty_claims")
+  const warrantyResult = canViewWarranty ? await listWarrantyCoveragesByVehicle(cv.id) : null
+  const warrantyCoverages =
+    warrantyResult?.success && warrantyResult.coverages ? warrantyResult.coverages : []
+  const warrantyClaimCounts = canViewWarranty
+    ? await prisma.warrantyClaim.groupBy({
+        by: ["coverageId"],
+        where: { customerVehicleId: cv.id },
+        _count: { _all: true },
+      })
+    : []
+  const claimCountByCoverage = new Map(
+    warrantyClaimCounts.map((g) => [g.coverageId, g._count._all]),
+  )
   const workOrders = history.entries.filter((e) => e.kind === "work_order")
   const quotations = history.entries.filter((e) => e.kind === "quotation")
 
@@ -139,6 +161,27 @@ export default async function CustomerVehicleDetailPage({
           )}
         </div>
       </div>
+
+      {/* Garansi kendaraan */}
+      {canViewWarranty && (
+        <VehicleWarrantyCard
+          vehicleId={cv.id}
+          canCreateClaim={canCreateWarrantyClaim}
+          coverages={warrantyCoverages.map((c) => ({
+            id: c.id,
+            itemName: c.item.name,
+            itemSku: c.item.sku,
+            status: c.status,
+            installedAt: c.installedAt,
+            expiresAt: c.expiresAt,
+            warrantyMonths: c.warrantyMonths,
+            mileageLimitKm: c.mileageLimitKm,
+            serialNumber: c.serialNumber,
+            termsSnapshot: c.termsSnapshot,
+            claimCount: claimCountByCoverage.get(c.id) ?? 0,
+          }))}
+        />
+      )}
 
       {/* Quotations */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
