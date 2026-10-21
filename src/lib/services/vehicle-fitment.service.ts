@@ -70,6 +70,142 @@ function specificity(rule: FitmentRuleRow): number {
   return score
 }
 
+/**
+ * Scope of a candidate fitment rule, as supplied by the fitment form /
+ * create-update actions. `bomRevisionId` is included so rules tied to different
+ * BOM revisions are never treated as the same scope.
+ */
+export interface FitmentRuleScope {
+  itemId: number
+  bomRevisionId?: number | null
+  vehicleBrandId?: number | null
+  vehicleModelId?: number | null
+  vehicleVariantId?: number | null
+  yearFrom?: number | null
+  yearTo?: number | null
+  drivetrain?: string | null
+  transmission?: string | null
+  result: string
+}
+
+/** One active rule whose scope conflicts with a candidate scope. */
+export interface FitmentConflict {
+  /** Id of the existing (opposing) rule. */
+  ruleId: number
+  /** Candidate result normalised via `toFitmentResult`. */
+  candidateResult: FitmentResult
+  /** Opposing rule result normalised via `toFitmentResult`. */
+  conflictResult: FitmentResult
+  /** Specificity score shared by candidate and opposing rule. */
+  specificity: number
+  /** Scope of the opposing rule (raw stored values; UI displays as-is). */
+  scope: {
+    itemId: number
+    bomRevisionId: number | null
+    vehicleBrandId: number | null
+    vehicleModelId: number | null
+    vehicleVariantId: number | null
+    yearFrom: number | null
+    yearTo: number | null
+    drivetrain: string | null
+    transmission: string | null
+  }
+  source: string | null
+  notes: string | null
+}
+
+function sameScope(a: FitmentRuleScope, b: FitmentRuleRow): boolean {
+  return (
+    a.itemId === b.itemId &&
+    (a.bomRevisionId ?? null) === b.bomRevisionId &&
+    (a.vehicleBrandId ?? null) === b.vehicleBrandId &&
+    (a.vehicleModelId ?? null) === b.vehicleModelId &&
+    (a.vehicleVariantId ?? null) === b.vehicleVariantId &&
+    (a.yearFrom ?? null) === b.yearFrom &&
+    (a.yearTo ?? null) === b.yearTo &&
+    norm(a.drivetrain) === norm(b.drivetrain) &&
+    norm(a.transmission) === norm(b.transmission)
+  )
+}
+
+/**
+ * Pure conflict definition for F-2026-10-21-025: an existing rule conflicts
+ * with a candidate when both have the SAME specificity (existing
+ * `specificity()`) AND an identical scope (every scope dimension equal, with
+ * drivetrain/transmission compared via existing `norm()`) AND opposite
+ * results (normalised via `toFitmentResult`, so only compatible vs
+ * incompatible count as opposite; `unknown` never conflicts). UI must display
+ * this result as-is and must not recompute scope equality/specificity.
+ */
+export function findFitmentConflicts(
+  candidate: FitmentRuleScope,
+  rules: FitmentRuleRow[],
+  excludeRuleId?: number | null,
+): FitmentConflict[] {
+  const candidateResult = toFitmentResult(candidate.result)
+  if (candidateResult === "unknown") return []
+  const candidateRow: FitmentRuleRow = {
+    id: 0,
+    itemId: candidate.itemId,
+    bomRevisionId: candidate.bomRevisionId ?? null,
+    vehicleBrandId: candidate.vehicleBrandId ?? null,
+    vehicleModelId: candidate.vehicleModelId ?? null,
+    vehicleVariantId: candidate.vehicleVariantId ?? null,
+    yearFrom: candidate.yearFrom ?? null,
+    yearTo: candidate.yearTo ?? null,
+    drivetrain: candidate.drivetrain ?? null,
+    transmission: candidate.transmission ?? null,
+    result: candidate.result,
+    source: null,
+    notes: null,
+  }
+  const candidateSpecificity = specificity(candidateRow)
+  return rules
+    .filter((rule) => rule.id !== excludeRuleId)
+    .filter((rule) => sameScope(candidate, rule))
+    .filter((rule) => specificity(rule) === candidateSpecificity)
+    .filter((rule) => {
+      const other = toFitmentResult(rule.result)
+      return other !== "unknown" && other !== candidateResult
+    })
+    .map((rule) => ({
+      ruleId: rule.id,
+      candidateResult,
+      conflictResult: toFitmentResult(rule.result),
+      specificity: candidateSpecificity,
+      scope: {
+        itemId: rule.itemId,
+        bomRevisionId: rule.bomRevisionId,
+        vehicleBrandId: rule.vehicleBrandId,
+        vehicleModelId: rule.vehicleModelId,
+        vehicleVariantId: rule.vehicleVariantId,
+        yearFrom: rule.yearFrom,
+        yearTo: rule.yearTo,
+        drivetrain: rule.drivetrain,
+        transmission: rule.transmission,
+      },
+      source: rule.source,
+      notes: rule.notes,
+    }))
+}
+
+/**
+ * Loader for the fitment-rule form (create + edit): returns conflicts between
+ * a candidate scope and the item's other ACTIVE rules. Excludes the rule
+ * being edited (`excludeRuleId`) and, by construction in
+ * `findFitmentConflicts`, never reports unknown-vs-known or same-result pairs.
+ */
+export async function loadFitmentConflicts(
+  db: Prisma.TransactionClient,
+  params: { candidate: FitmentRuleScope; excludeRuleId?: number | null },
+): Promise<FitmentConflict[]> {
+  const rules = (await db.vehicleFitmentRule.findMany({
+    where: { itemId: params.candidate.itemId, isActive: true },
+    orderBy: { id: "asc" },
+  })) as FitmentRuleRow[]
+  return findFitmentConflicts(params.candidate, rules, params.excludeRuleId)
+}
+
 /** Does a rule's scope apply to the queried configuration? */
 function ruleMatches(rule: FitmentRuleRow, q: VehicleConfigurationQuery): boolean {
   if (rule.vehicleBrandId != null && rule.vehicleBrandId !== (q.vehicleBrandId ?? null)) return false

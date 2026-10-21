@@ -10,10 +10,12 @@ import {
   createVehicleFitmentSchema,
   updateVehicleFitmentSchema,
   checkFitmentSchema,
+  checkFitmentConflictSchema,
 } from "@/lib/validations/vehicle-fitment.schemas";
 import {
   evaluateFitment,
   evaluateProductFitment,
+  loadFitmentConflicts,
 } from "@/lib/services/vehicle-fitment.service";
 import { nextSlug } from "@/lib/utils/slug-db";
 
@@ -115,6 +117,52 @@ export async function deleteVehicleFitment(id: number) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteVehicleFitment]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Gagal menghapus aturan fitment") };
+  }
+}
+
+/**
+ * F-2026-10-21-025 — conflict contract for the fitment-rule form. Given the
+ * candidate scope currently in the form, returns active rules of the same
+ * item that are scope-identical + equally specific (existing
+ * specificity()/norm()) with an opposite result. Warning only: create/update
+ * are NOT blocked by this check.
+ * Success return: `{ success: true, conflicts: FitmentConflict[] }` where each
+ * entry has ruleId, candidateResult, conflictResult, specificity, scope
+ * (opposing rule's raw scope incl. itemId/bomRevisionId/brand/model/variant/
+ * yearFrom/yearTo/drivetrain/transmission), source, notes.
+ */
+export async function checkVehicleFitmentConflicts(formData: FormData) {
+  try {
+    await requirePermission("view_vehicle_fitments");
+
+    const parsed = parseFormData(checkFitmentConflictSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    if (v.yearFrom != null && v.yearTo != null && v.yearFrom > v.yearTo) {
+      return { success: false, error: "Tahun awal tidak boleh melebihi tahun akhir." };
+    }
+
+    const conflicts = await loadFitmentConflicts(prisma, {
+      candidate: {
+        itemId: v.itemId,
+        bomRevisionId: v.bomRevisionId ?? null,
+        vehicleBrandId: v.vehicleBrandId ?? null,
+        vehicleModelId: v.vehicleModelId ?? null,
+        vehicleVariantId: v.vehicleVariantId ?? null,
+        yearFrom: v.yearFrom ?? null,
+        yearTo: v.yearTo ?? null,
+        drivetrain: v.drivetrain ?? null,
+        transmission: v.transmission ?? null,
+        result: v.result,
+      },
+      excludeRuleId: v.excludeRuleId ?? null,
+    });
+    return { success: true, conflicts };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[checkVehicleFitmentConflicts]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Gagal memeriksa konflik aturan fitment") };
   }
 }
 
