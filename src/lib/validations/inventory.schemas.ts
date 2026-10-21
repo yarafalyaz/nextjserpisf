@@ -70,6 +70,21 @@ export const materialIssueSchema = z.object({
 
 // ==================== WORK ORDER ====================
 
+// F-2026-10-21-035 (vonis Lead Q-LEAD-2, t_586ab283): daftar tertutup alasan
+// geser endDate WO. Kode = kontrak data (disimpan di metadata ActivityLog);
+// label = teks tampil. Di file skema (bukan actions) supaya bisa dipakai UI
+// dan tidak melanggar aturan ekspor file "use server".
+export const WORK_ORDER_END_DATE_REASONS = {
+  part_delay: "Menunggu suku cadang",
+  scope_change: "Perubahan ruang lingkup pekerjaan",
+  queue_capacity: "Antrean/kapasitas bengkel",
+  customer_request: "Permintaan pelanggan",
+  customer_unavailable: "Kendaraan/pelanggan belum tersedia",
+  technical_issue: "Kendala teknis pengerjaan",
+  other: "Lainnya",
+} as const
+export type WorkOrderEndDateReasonCode = keyof typeof WORK_ORDER_END_DATE_REASONS
+
 export const workOrderSchema = z.object({
   customerId: requiredId("Pelanggan"),
   projectId: optionalId,
@@ -77,6 +92,12 @@ export const workOrderSchema = z.object({
   date: dateString,
   startDate: optionalDateOnly,
   endDate: optionalDateOnly,
+  // F-2026-10-21-035 (vonis Lead Q-LEAD-2): alasan geser endDate. Wajib hanya
+  // bila endDate lama non-null dan berubah — penegakan di aksi (butuh nilai
+  // tersimpan), di sini hanya bentuknya. Kode tertutup di
+  // WORK_ORDER_END_DATE_REASON_CODES (inventory.actions).
+  endDateReasonCode: optionalStr(50),
+  endDateReasonNote: optionalStr(500),
   notes: optionalStr(2000),
   items: optionalStr(50000), // JSON string, parsed separately
 })
@@ -102,6 +123,12 @@ export const reviseWorkOrderItemsSchema = z.object({
     )
     .max(200)
     .default([]),
+  // F-2026-10-21-035 Q-LEAD-3: geser endDate opsional di jalur sempit ini.
+  // `undefined` = tidak digeser; string tanggal = target baru. Alasan wajib
+  // bila nilai lama non-null dan berubah (penegakan di aksi).
+  newEndDate: optionalDateOnly,
+  endDateReasonCode: optionalStr(50),
+  endDateReasonNote: optionalStr(500),
 })
 
 // ==================== RACK ====================
