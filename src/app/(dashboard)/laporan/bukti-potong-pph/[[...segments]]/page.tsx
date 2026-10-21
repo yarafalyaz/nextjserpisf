@@ -39,8 +39,10 @@ export default async function WithholdingTaxReportPage({
   params: Promise<{ segments?: string[] }>
   searchParams: Promise<{ tanggalMulai?: string; tanggalSelesai?: string }>
 }) {
-  // Selaras gerbang PDF payroll: wajib view_payroll_reports saja (fail-closed).
-  await requirePermission("view_payroll_reports")
+  // Laporan pajak pemasok (VendorBill dipotong), bukan data personalia
+  // karyawan: gerbang laporan pajak umum view_reports — selaras
+  // rekonsiliasi-ppn/posisi-spt/faktur-ppn (vonis BOT 4 F-2026-10-21-034).
+  await requirePermission("view_reports")
 
   const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
     start: new Date(now.getFullYear(), 0, 1),
