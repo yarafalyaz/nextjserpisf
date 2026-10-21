@@ -865,6 +865,11 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   ["210204", "Hutang Gaji", "OCLY", "2102"],
   ["510102", "Beban Material", "COGS", "5101"],
   ["510103", "Penyesuaian Persediaan", "COGS", "5101"],
+  // F-2026-10-21-021 tahap 3 (vonis BOT 4, koreksi F-69): akun garansi final.
+  // 510103 = Penyesuaian Persediaan, DILARANG untuk garansi.
+  ["510104", "Beban Garansi", "COGS", "5101"],
+  ["210205", "Provisi Garansi", "OCLY", "2102"],
+  ["110508", "Piutang Klaim Supplier — Garansi", "OCAS", "1105"],
   ["600025", "Diskon Pembelian", "EXPS", "6000"],
   ["600026", "Retur Pembelian", "EXPS", "6000"],
 ]

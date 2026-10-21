@@ -2955,6 +2955,26 @@ manual umum, TANPA provisi dan TANPA piutang klaim supplier.
    pembalikan estimasi. Di luar 4 ini TIDAK ada jurnal garansi.
    Klaim rejected, klaim di luar cakupan, dan pekerjaan tertagih
    TIDAK PERNAH memakai jurnal garansi (jalur §3).
+- KEJADIAN 2026-10-22 — Tahap 3 RUTE PROVISI MATI dibangun (BOT 3,
+  kartu t_d4ae15cc): pemanggil E2/E3 kini hidup di
+  `src/lib/services/warranty-journal.service.ts` +
+  `postWarrantyClaimCostAction`/`postWarrantySupplierRecoveryAction`
+  (izin `approve_warranty_claims`); gerbang server `invoiceForbidden`
+  ditegakkan di createSalesInvoice/createDifferenceInvoice/
+  createProgressInvoice/postInvoice lewat jembatan
+  quotationId/projectId/salesOrderId (SalesInvoice tak punya FK WO).
+  Mapping `SystemSetting.warrantyExpenseAccountId`/
+  `warrantyProvisionAccountId`/`supplierClaimReceivableAccountId`
+  nullable fail-closed; CoA 510104/210205/110508 di `CHART_OF_ACCOUNTS`
+  + seed migrasi `20261022030000_warranty_journal_mapping` instalasi
+  berjalan + automap by-code persis (510103 tetap Penyesuaian
+  Persediaan, DILARANG garansi). E2 rute MATI = reklasifikasi beban:
+  Dr 510104 / Cr akun beban sumber WO repair (MaterialIssue completed
+  sudah Dr beban material/Cr Persediaan di hook existing — Cr
+  Persediaan kedua dilarang); ProductionCost WO-only belum punya GL
+  sendiri existing (ceiling terdokumentasi di service). E1/E4 TETAP
+  tidak dibangun dan tidak disaklarkan; rute provisi hanya hidup
+  sesudah gerbang data §2 dinilai BOT 4.
 ### §1 Matriks posting (event → debit/kredit → syarat)
 Semua jurnal: `JournalService.createJournal` existing, status POSTED,
 `assertPeriodOpen(tanggal jurnal)` di dalam transaksi pemanggil,

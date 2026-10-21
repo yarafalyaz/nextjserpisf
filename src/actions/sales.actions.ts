@@ -19,6 +19,7 @@ import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlem
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
+import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
@@ -1027,6 +1028,14 @@ export async function postInvoice(invoiceId: number) {
 
   // Atomically claim the post and post GL journal in a single transaction.
   await prisma.$transaction(async (tx) => {
+    // Gerbang invoiceForbidden garansi (F-021 tahap 3 G5): WO repair klaim
+    // covered tidak boleh diposting menjadi tagihan pelanggan.
+    await assertInvoiceAllowedForWorkOrderBridges(tx, {
+      quotationId: invoice.quotationId,
+      projectId: invoice.projectId,
+      salesOrderId: invoice.salesOrderId,
+    })
+
     // Claim from EITHER "draft" or "approved". When a SalesInvoice approval
     // workflow is configured, approval.actions sets the document status to
     // "approved" (not "draft"), so a draft-only claim could never match and
@@ -1186,6 +1195,8 @@ export async function createDifferenceInvoice(quotationId: number) {
       // membaca total tertagih lama lalu membuat dua draft selisih.
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
+      await assertInvoiceAllowedForWorkOrderBridges(tx, { quotationId })
+
       const invoices = await collectQuotationInvoices(tx, quotationId)
 
       const candidate = computeDifferenceInvoiceCandidate({
@@ -1259,6 +1270,8 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
 
     const invoice = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      await assertInvoiceAllowedForWorkOrderBridges(tx, { quotationId })
 
       const invoices = await collectQuotationInvoices(tx, quotationId)
       const candidate = computeProgressInvoiceCandidate({
@@ -1410,6 +1423,14 @@ export async function createSalesInvoice(formData: FormData) {
 
   const invoice = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
+
+    // Gerbang invoiceForbidden garansi (F-021 tahap 3 G5, server): faktur
+    // dari jembatan quotation/sales-order milik WO repair klaim covered
+    // ditolak sebelum lahir.
+    await assertInvoiceAllowedForWorkOrderBridges(tx, {
+      quotationId: v.quotationId ?? null,
+      salesOrderId: v.salesOrderId ?? null,
+    })
 
     // Gerbang status pesanan: tombol di detail pesanan dan daftar pemilih di
     // faktur/tambah membaca DELIVERABLE_ORDER_STATUSES; server menegakkan
