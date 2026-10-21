@@ -14,7 +14,9 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { Progress } from "@/components/ui/shadcn/progress"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { ProjectPlDetailCard } from "@/components/reports/project-pl-detail-card"
+import { ProjectBudgetCard } from "@/components/reports/project-budget-card"
 import { loadProjectPlForProject } from "@/lib/reports/project-pl-data"
+import { loadProjectBudgetForProject } from "@/lib/reports/project-budget-data"
 
 import type { Metadata } from "next"
 
@@ -90,7 +92,7 @@ export default async function ProjectDetailPage({
   // (bukan lagi semua quotation pelanggan yang tercampur antar proyek).
   // Ringkasan uang proyek dibaca dari builder tunggal `loadProjectPlForProject`
   // — UI tidak mengagregasi invoice/material/beban sendiri.
-  const [quotations, invoices, projectPl] = await Promise.all([
+  const [quotations, invoices, projectPl, projectBudget] = await Promise.all([
     prisma.quotation.findMany({
       where: { projectId: project.id, deletedAt: null },
       take: 10,
@@ -102,6 +104,7 @@ export default async function ProjectDetailPage({
       orderBy: { createdAt: "desc" },
     }),
     loadProjectPlForProject(project.id),
+    loadProjectBudgetForProject(project.id),
   ])
 
   // Cari tahapan aktif saat ini
@@ -317,6 +320,18 @@ export default async function ProjectDetailPage({
                     </DetailTable>
                   )}
                 </div>
+              </div>
+            ),
+          },
+          {
+            id: "budget",
+            label: "RAB",
+            content: projectBudget ? (
+              <ProjectBudgetCard budget={projectBudget} />
+            ) : (
+              <div className="bg-surface rounded-xl border border-default shadow-sm p-5">
+                <span className="text-sm font-semibold text-muted-foreground">RAB vs Realisasi</span>
+                <p className="mt-3 text-sm text-muted-foreground">Belum ada data RAB untuk proyek ini</p>
               </div>
             ),
           },

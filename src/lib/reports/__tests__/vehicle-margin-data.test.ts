@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => {
     salesOrder: { findMany: vi.fn().mockResolvedValue([]) },
     salesInvoice: { findMany: vi.fn().mockResolvedValue([]) },
     productionCost: { findMany: vi.fn().mockResolvedValue([]) },
+    materialIssue: { findMany: vi.fn().mockResolvedValue([]) },
     customerVehicle: { findMany: vi.fn().mockResolvedValue([]) },
   }
   const projectPlReport = vi.fn()
@@ -46,6 +47,7 @@ function resetMocks() {
   p.salesOrder.findMany.mockResolvedValue([])
   p.salesInvoice.findMany.mockResolvedValue([])
   p.productionCost.findMany.mockResolvedValue([])
+  p.materialIssue.findMany.mockResolvedValue([])
   p.customerVehicle.findMany.mockResolvedValue([])
 }
 
@@ -69,7 +71,7 @@ describe("loadVehicleMarginReport — rantai loader F-2026-10-21-033", () => {
     p.salesOrder.findMany.mockResolvedValue([{ id: 300, quotationId: 100 }])
     const shared = {
       id: 900, quotationId: 100, salesOrderId: 300, projectId: null,
-      status: "posted", grandTotal: 4_000_000, deletedAt: null,
+      status: "posted", grandTotal: 4_000_000, subtotal: 4_000_000, discount: 0, deletedAt: null,
     }
     p.salesInvoice.findMany
       .mockResolvedValueOnce([shared]) // jembatan quotation
@@ -108,7 +110,7 @@ describe("loadVehicleMarginReport — rantai loader F-2026-10-21-033", () => {
     ])
     p.salesInvoice.findMany
       .mockResolvedValueOnce([
-        { id: 901, quotationId: 100, salesOrderId: null, projectId: 3, status: "posted", grandTotal: 9_000_000, deletedAt: null },
+        { id: 901, quotationId: 100, salesOrderId: null, projectId: 3, status: "posted", grandTotal: 9_000_000, subtotal: 9_000_000, discount: 0, deletedAt: null },
       ])
       .mockResolvedValueOnce([])
 
@@ -116,6 +118,66 @@ describe("loadVehicleMarginReport — rantai loader F-2026-10-21-033", () => {
 
     expect(r.rows[0].revenue).toBe(0)
     expect(r.rows[0].jobCount).toBe(1)
+  })
+
+  it("(b) basis DPP: DPP 100jt + PPN 11% grandTotal 111jt -> revenue 100jt minus diskon (Q-033-1)", async () => {
+    const p = mocks.prismaMock
+    p.workOrder.findMany.mockResolvedValue([
+      {
+        id: 50, date: new Date("2026-10-05"), documentNo: "WO-0050",
+        quotationId: 100, customerVehicleId: 7,
+        customer: { name: "PT A" }, customerVehicle: { plateNumber: "B 1234 AA" },
+        productionOrders: [],
+      },
+    ])
+    p.salesInvoice.findMany
+      .mockResolvedValueOnce([
+        {
+          id: 910, quotationId: 100, salesOrderId: null, projectId: null,
+          status: "posted", grandTotal: 111_000_000,
+          subtotal: 100_000_000, discount: 5_000_000, deletedAt: null,
+        },
+      ])
+      .mockResolvedValueOnce([]) // (c) invoice langsung
+
+    const r = await loadVehicleMarginReport(PERIOD)
+
+    expect(r.rows[0].revenue).toBe(95_000_000)
+    expect(r.rows[0].revenue).not.toBe(111_000_000)
+  })
+
+  it("(b) MI completed langsung WO: hasUnlinkedMaterial true, totalCost tetap ProductionCost-only (Q-033-2)", async () => {
+    const p = mocks.prismaMock
+    p.workOrder.findMany.mockResolvedValue([
+      {
+        id: 50, date: new Date("2026-10-05"), documentNo: "WO-0050",
+        quotationId: null, customerVehicleId: 7,
+        customer: { name: "PT A" }, customerVehicle: { plateNumber: "B 1234 AA" },
+        productionOrders: [],
+      },
+      {
+        id: 51, date: new Date("2026-10-06"), documentNo: "WO-0051",
+        quotationId: null, customerVehicleId: 8,
+        customer: { name: "PT B" }, customerVehicle: { plateNumber: "B 8" },
+        productionOrders: [],
+      },
+    ])
+    p.materialIssue.findMany.mockResolvedValue([{ workOrderId: 50 }])
+    p.productionCost.findMany.mockResolvedValue([
+      { workOrderId: 50, amount: 1_000_000, productionOrder: null },
+    ])
+
+    const r = await loadVehicleMarginReport(PERIOD)
+
+    const flagged = r.rows.find((x) => x.customerVehicleId === 7)
+    const clean = r.rows.find((x) => x.customerVehicleId === 8)
+    expect(flagged?.hasUnlinkedMaterial).toBe(true)
+    expect(flagged?.totalCost).toBe(1_000_000)
+    expect(flagged?.materialCost).toBe(0)
+    expect(clean?.hasUnlinkedMaterial).toBe(false)
+    // Penanda keberadaan saja: hanya workOrderId WO cakupan + status completed.
+    const miWhere = p.materialIssue.findMany.mock.calls[0][0].where
+    expect(miWhere).toEqual({ workOrderId: { in: [50, 51] }, status: "completed" })
   })
 
   it("(c) invoice langsung: subtotal-diskon, plat dari query kendaraan terpisah", async () => {

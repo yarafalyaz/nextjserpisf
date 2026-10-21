@@ -124,6 +124,7 @@ export function DownPaymentForm({ customers, quotations, downPayment, defaultQuo
       submitId="submit-down-payment"
       isPending={isPending}
       isEditing={Boolean(downPayment?.id)}
+      formLabel={downPayment?.id ? "Formulir ubah uang muka" : "Formulir tambah uang muka"}
     >
 
         <div className="flex flex-col gap-1.5">
