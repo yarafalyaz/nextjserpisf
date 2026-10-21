@@ -1028,3 +1028,109 @@ Belum ada / parsial (bukti grep run ini):
 Fokus berikutnya: (e) jadwal bengkel & kapasitas — verifikasi klaim
 F-2026-10-20-91 (WorkBay) + F-2026-10-21-012 reservasi terhadap jadwal.
 
+
+---
+
+## 2026-10-21 10:05 WIB — Domain (e) jadwal bengkel & kapasitas
+
+Rotasi: run sebelumnya (d) penjualan/CRM F-2026-10-21-016..018. Run ini
+(e). Berikutnya: (f) garansi & after-sales.
+
+Benchmark resmi (akses 2026-10-21):
+- Accurate Manufaktur: Rencana Produksi → Perintah Kerja (tahapan proses)
+  → Jadwal Produksi + Monitor Perintah Kerja:
+  https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/buat-perintah-kerja/
+  dan https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/rencana-produksi/buat-rencana-produksi/
+- Accurate progres SPK dari bahan/tahapan/finishing:
+  https://help.accurate.id/product/perintah-kerja/
+
+Catatan status lama: P0-2 run (e) 2026-10-20 (WorkCenter/bay) dan
+F-2026-10-20-91/94 (WorkBay + WorkOrder.priority) inti sudah
+DITUNDA-TEKNIS oleh PUTUSAN manager — load read-model F-2026-10-20-02
+sudah dibangun (work-order-load.ts). Run ini verifikasi + sisa gap,
+bukan mengulang usulan yang sama.
+
+### Inventarisasi terverifikasi (2026-10-21, domain e)
+
+Sudah ada:
+- Read-model beban WO aktif per status dari ProductionCost aktual
+  (work-order-load.ts:1-60 + work-order-load-card.tsx) — label beban,
+  bukan kapasitas keras (sesuai PUTUSAN).
+- Papan antrean WO (work-order-queue), WorkSchedule/Holiday/Attendance
+  SDM, timesheet Project/Task.
+
+Belum ada (bukti grep run ini):
+- ABSEN inti (sudah divonis tunda): `grep WorkCenter|WorkBay|bayId`
+  schema+src = hanya komentar penundaan (work-order-load.ts:4-10,
+  work-order-load-card.tsx:23). WorkOrder tanpa assignedTo/estimatedHours/
+  priority/workCenterId; `grep estimatedHours` = 0.
+- ABSEN: operasi/routing per WO. WorkOrderItem = baris item/qty/cost/
+  status pending (schema WorkOrderItem), bukan operasi; tidak ada
+  WorkOrderOperation. Progres WO tidak bisa dibaca per tahap
+  (potong→las→finishing→pasang).
+- PARSIAL putus: Timesheet wajib projectId, tanpa workOrderId
+  (schema Timesheet) — jam aktual teknisi pada WO non-proyek tidak
+  tertaut WO; beban aktual per WO hanya dari ProductionCost yang
+  ditarik manual (pullLaborCostFromTimesheets jalur Project).
+
+### Gap
+
+#### F-2026-10-21-019 (e) P1 — Timesheet tidak tertaut WorkOrder; jam aktual WO non-proyek hilang
+- Kompetitor: Accurate Perintah Kerja mencatat tahapan + biaya produksi
+  per SPK https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/buat-perintah-kerja/
+- Status Silengkap: PARSIAL. Bukti: schema Timesheet (projectId wajib,
+  taskId opsional, tanpa workOrderId); ProductionCost.sourceTimesheetId
+  hanya menjembatani timesheet proyek.
+- Relevansi: mayoritas job bengkel = WO langsung dari quotation tanpa
+  Project; jam las/finishing teknisi tak tercatat per kendaraan → HPP
+  labor job ditebak, estimasi-vs-aktual (F-2026-10-21-007) kekurangan
+  sisi aktual labor.
+- Adaptasi lapis aman: kolom opsional `Timesheet.workOrderId` nullable
+  (projectId jadi opsional bersyarat: salah satu project/WO wajib di
+  service) + pull labor ke ProductionCost WO dari timesheet WO itu
+  (pola existing, tanpa jurnal baru). Tanpa operasi/routing dulu.
+- Modul disentuh: prisma/schema.prisma, src/actions (timesheet),
+  src/lib/services/production-cost.service.ts, form timesheet.
+- Effort: M. Risiko: timesheet ganda tertaut proyek+WO dobel hitung —
+  mitigasi service tolak keduanya terisi.
+- Urutan: kolom+validasi → pull labor WO → laporan beban aktual vs
+  estimasi per WO (makan F-007).
+- Pemilik usulan: backend, frontend form. Butuh putusan accountant:
+  TIDAK (jalur jurnal ProductionCost existing tidak berubah).
+
+#### F-2026-10-21-020 (e) P1 — Progres tahap WO tidak terbaca (tanpa operasi); janji selesai tanpa dasar beban rencana
+- Kompetitor: Accurate progres SPK per tahapan produksi
+  https://help.accurate.id/product/perintah-kerja/ ; Jadwal Produksi
+  dari Rencana Produksi (URL rencana di atas).
+- Status Silengkap: ABSEN operasi, PARSIAL beban aktual (F-02 read-model
+  ada). Bukti: WorkOrderItem bukan operasi; grep WorkOrderOperation = 0;
+  WorkOrder hanya startDate/endDate bebas.
+- Relevansi: pelanggan bertanya "sudah sampai mana" — jawaban lisan;
+  keterlambatan baru ketahuan saat endDate lewat.
+- Adaptasi bertahap TANPA WorkCenter (hormati PUTUSAN tunda inti):
+  (1) tahap ringan: `WorkOrderOperation` minimal (workOrderId, nama tahap
+  bebas dari template Product: Potong/Las/Finishing/Rakit/Pasang/QC,
+  urutan, status belum/mulai/selesai, startedAt/finishedAt,
+  assignedEmployeeId opsional) — BUKAN routing costing, tidak menjurnal;
+  progres WO = tahap selesai/total tampil di detail WO + antrean.
+  (2) estimatedHours per tahap diisi manual kepala bengkel; papan beban
+  rencana = Σ estimatedHours tahap aktif per minggu vs jam kerja
+  WorkSchedule (read-only, label rencana bukan kapasitas keras).
+  WorkCenter/bay fisik tetap ditunda sampai bukti tahap dipakai.
+- Modul disentuh: prisma/schema.prisma, src/actions/manufacturing.actions.ts, detail WO + antrean (frontend), template tahap di Product.
+- Effort: M. Risiko: tahap jadi beban input tanpa dipakai — mitigasi
+  template otomatis dari Product + status 1-klik; ukur pemakaian 1 bulan
+  sebelum usul WorkCenter.
+- Urutan: model tahap+template → progres di detail/antrean → beban
+  rencana mingguan.
+- Pemilik usulan: backend (model), frontend (progres). Butuh putusan
+  accountant: TIDAK.
+
+### Yang TIDAK diusulkan run ini
+- WorkCenter/bay + finite capacity solver: tetap ditunda-teknis per
+  PUTUSAN manager; F-020 sengaja berhenti di tahap tanpa pusat kerja.
+- Penjadwalan drag-and-drop kalender: sesudah F-020 data tahap ada.
+
+Fokus berikutnya: (f) garansi & after-sales — verifikasi model
+WarrantyRecord (F-2026-10-20-69 ditunda) + odometer terhadap klaim nyata.
+
