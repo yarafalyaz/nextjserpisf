@@ -117,6 +117,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
     reports: [
       { href: "/laporan/piutang-jatuh-tempo", family: "Piutang", variant: "Umur" },
       { href: "/laporan/piutang-pelanggan", family: "Piutang", variant: "Per Pelanggan" },
+      { href: "/laporan/statement-pelanggan" },
       { href: "/laporan/hutang-jatuh-tempo", family: "Hutang", variant: "Umur" },
       { href: "/laporan/total-hutang", family: "Hutang", variant: "Total" },
       { href: "/laporan/ringkasan-ar-ap" },
