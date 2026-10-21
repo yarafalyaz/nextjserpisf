@@ -1,21 +1,11 @@
 export const dynamic = "force-dynamic"
 
-import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
-import { receivableOutstanding } from "@/lib/reports/aging-amounts"
-import { safeAdd } from "@/lib/utils/math"
-import {
-  averagePaymentDays,
-  buildCustomerCreditExposure,
-  buildCustomerReceivables,
-  effectiveConfirmedDownPaymentByCustomer,
-  openCustomerCreditByCustomer,
-  woUnrepresentedByCustomer,
-} from "@/lib/reports/customer-receivables"
+import { CREDIT_EXPOSURE_STATUS_LABEL } from "@/lib/reports/customer-receivables"
+import { loadCustomerCreditExposure } from "@/lib/reports/ledger-cash-data"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -33,6 +23,7 @@ export const metadata: Metadata = { title: "Piutang per Pelanggan" }
  * Piutang per pelanggan: saldo belum lunas (posisi per akhir periode), umur
  * jatuh tempo, limit & sisa kredit, plus rata-rata hari bayar (DSO) yang
  * dihitung dari pembayaran pada periode terpilih.
+ * Angka dari loader bersama ekspor PDF: loadCustomerCreditExposure.
  */
 export default async function CustomerReceivablesPage({
   params: routeParams,
@@ -49,233 +40,8 @@ export default async function CustomerReceivablesPage({
   }))
   const { start: startDate, end: endDate } = period
 
-  const [invoices, payments] = await Promise.all([
-    prisma.salesInvoice.findMany({
-      where: {
-        status: { in: [...RECOGNISED_AR_STATUSES] },
-        deletedAt: null,
-        date: { lte: endDate },
-      },
-      select: {
-        customerId: true,
-        grandTotal: true,
-        paidAmount: true,
-        dueDate: true,
-        customer: { select: { name: true, creditLimit: true } },
-      },
-    }),
-    prisma.salesPayment.findMany({
-      where: { paymentDate: { gte: startDate, lte: endDate } },
-      select: {
-        amount: true,
-        paymentDate: true,
-        salesInvoice: { select: { customerId: true, date: true } },
-      },
-    }),
-  ])
-
-  const now = new Date()
-  const buckets = new Map<number, { customerId: number; customerName: string; creditLimit: number; outstanding: number; overdue: number; invoiceCount: number }>()
-
-  for (const invoice of invoices) {
-    const outstanding = receivableOutstanding(invoice.grandTotal, invoice.paidAmount)
-    if (outstanding <= 0) continue
-    const bucket = buckets.get(invoice.customerId) ?? {
-      customerId: invoice.customerId,
-      customerName: invoice.customer.name,
-      creditLimit: Number(invoice.customer.creditLimit ?? 0),
-      outstanding: 0,
-      overdue: 0,
-      invoiceCount: 0,
-    }
-    bucket.outstanding = safeAdd(bucket.outstanding, outstanding, 2)
-    if (invoice.dueDate && invoice.dueDate < now) bucket.overdue = safeAdd(bucket.overdue, outstanding, 2)
-    bucket.invoiceCount += 1
-    buckets.set(invoice.customerId, bucket)
-  }
-
-  // Rata-rata hari bayar per pelanggan (weighted by amount), hanya dari
-  // pembayaran yang fakturnya bisa ditelusuri.
-  const paymentsByCustomer = new Map<number, { invoiceDate: Date; paymentDate: Date; amount: number }[]>()
-  for (const payment of payments) {
-    const customerId = payment.salesInvoice?.customerId
-    if (!customerId) continue
-    const list = paymentsByCustomer.get(customerId) ?? []
-    list.push({
-      invoiceDate: payment.salesInvoice.date,
-      paymentDate: payment.paymentDate,
-      amount: Number(payment.amount),
-    })
-    paymentsByCustomer.set(customerId, list)
-  }
-
-  // F-2026-10-21-017 lapis aman: paparan kredit = piutang + SO terbuka
-  // (confirmed/processing/completed) dikurangi porsi yang sudah jadi
-  // invoice recognised. Advisory saja, tidak menahan dokumen.
-  const openOrders = await prisma.salesOrder.findMany({
-    where: { status: { in: ["confirmed", "processing", "completed"] }, deletedAt: null },
-    select: { id: true, customerId: true, grandTotal: true },
-  })
-  const invoicedByOrder = new Map<number, number>()
-  if (openOrders.length > 0) {
-    const orderInvoices = await prisma.salesInvoice.findMany({
-      where: {
-        salesOrderId: { in: openOrders.map((o) => o.id) },
-        status: { in: [...RECOGNISED_AR_STATUSES] },
-        deletedAt: null,
-      },
-      select: { salesOrderId: true, grandTotal: true },
-    })
-    for (const inv of orderInvoices) {
-      if (inv.salesOrderId == null) continue
-      invoicedByOrder.set(inv.salesOrderId, safeAdd(invoicedByOrder.get(inv.salesOrderId) ?? 0, inv.grandTotal, 2))
-    }
-  }
-  const openOrderByCustomer = new Map<number, number>()
-  for (const order of openOrders) {
-    const open = Math.max(0, receivableOutstanding(order.grandTotal, invoicedByOrder.get(order.id) ?? 0))
-    if (open <= 0) continue
-    openOrderByCustomer.set(order.customerId, safeAdd(openOrderByCustomer.get(order.customerId) ?? 0, open, 2))
-  }
-  // F-2026-10-21-017-S (vonis BOT 4 F-2026-10-22-044-V): K3 efektif pilihan
-  // (b) — hanya DP confirmed yang quotation-nya BELUM punya invoice
-  // recognised; DP terkonversi sudah mengurangi K1 lewat paidAmount
-  // (down-payment.hook), jadi ikut lagi = dobel-kurang. Satu query massal.
-  let confirmedDpByCustomer = new Map<number, number>()
-  const confirmedDps = await prisma.downPayment.findMany({
-    where: { status: "confirmed" },
-    select: { customerId: true, quotationId: true, amount: true },
-  })
-  if (confirmedDps.length > 0) {
-    const dpQuotationIds = [...new Set(confirmedDps.map((d) => d.quotationId))]
-    const recognisedDpInvoices = await prisma.salesInvoice.findMany({
-      where: {
-        quotationId: { in: dpQuotationIds },
-        status: { in: [...RECOGNISED_AR_STATUSES] },
-        deletedAt: null,
-      },
-      select: { quotationId: true },
-    })
-    confirmedDpByCustomer = effectiveConfirmedDownPaymentByCustomer(
-      confirmedDps.map((d) => ({ customerId: d.customerId, quotationId: d.quotationId, amount: Number(d.amount) })),
-      new Set(recognisedDpInvoices.map((i) => i.quotationId).filter((id): id is number => id != null)),
-    )
-  }
-  // K4: CustomerCredit terbuka, saldo per baris max(0, received-allocated-refunded).
-  const openCredits = await prisma.customerCredit.findMany({
-    where: { status: "open" },
-    select: { customerId: true, receivedAmount: true, allocatedAmount: true, refundedAmount: true },
-  })
-  const openCreditByCustomer = openCustomerCreditByCustomer(
-    openCredits.map((c) => ({
-      customerId: c.customerId,
-      receivedAmount: Number(c.receivedAmount),
-      allocatedAmount: Number(c.allocatedAmount),
-      refundedAmount: Number(c.refundedAmount),
-    })),
-  )
-  // K5: WO berjalan (draft/pending/in_progress) belum terwakili. Nilai per
-  // QUOTATION (bukan per WO): max(0, grandTotal - invoice recognised -
-  // SO non-cancelled ber-quotationId), hanya bila belum ada SO sama sekali.
-  // WO quotationId null: K5 0 + bendera jumlah (AC-CR-09), tanpa ProductionCost.
-  const activeWorkOrders = await prisma.workOrder.findMany({
-    where: { status: { in: ["draft", "pending", "in_progress"] } },
-    select: { customerId: true, quotationId: true },
-  })
-  const woQuotationIds = [...new Set(activeWorkOrders.map((w) => w.quotationId).filter((id): id is number => id != null))]
-  let woByCustomer = new Map<number, number>()
-  let woNoQuotationByCustomer = new Map<number, number>()
-  // Nama/limit untuk baris SO-only/WO-only (buckets hanya dari invoice).
-  const extraCustomers = new Map<number, { name: string; creditLimit: number }>()
-  if (woQuotationIds.length > 0) {
-    const [woQuotations, woOrders, woInvoices] = await Promise.all([
-      prisma.quotation.findMany({
-        where: { id: { in: woQuotationIds }, deletedAt: null },
-        select: { id: true, customerId: true, grandTotal: true, customer: { select: { name: true, creditLimit: true } } },
-      }),
-      prisma.salesOrder.findMany({
-        where: { quotationId: { in: woQuotationIds }, status: { not: "cancelled" }, deletedAt: null },
-        select: { quotationId: true, grandTotal: true },
-      }),
-      prisma.salesInvoice.findMany({
-        where: {
-          quotationId: { in: woQuotationIds },
-          status: { in: [...RECOGNISED_AR_STATUSES] },
-          deletedAt: null,
-        },
-        select: { quotationId: true, grandTotal: true },
-      }),
-    ])
-    const woResult = woUnrepresentedByCustomer({
-      workOrders: activeWorkOrders,
-      quotations: woQuotations.map((q) => ({ id: q.id, customerId: q.customerId, grandTotal: Number(q.grandTotal) })),
-      salesOrders: woOrders.map((o) => ({ quotationId: o.quotationId, grandTotal: Number(o.grandTotal) })),
-      invoices: woInvoices.map((i) => ({ quotationId: i.quotationId, grandTotal: Number(i.grandTotal) })),
-    })
-    woByCustomer = woResult.byCustomer
-    woNoQuotationByCustomer = woResult.withoutQuotationByCustomer
-    for (const quotation of woQuotations) {
-      if ((woByCustomer.get(quotation.customerId) ?? 0) <= 0) continue
-      extraCustomers.set(quotation.customerId, {
-        name: quotation.customer.name,
-        creditLimit: Number(quotation.customer.creditLimit ?? 0),
-      })
-    }
-  } else if (activeWorkOrders.length > 0) {
-    woNoQuotationByCustomer = woUnrepresentedByCustomer({
-      workOrders: activeWorkOrders,
-      quotations: [],
-      salesOrders: [],
-      invoices: [],
-    }).withoutQuotationByCustomer
-  }
-  // Baris gabungan: pelanggan dari invoice ATAU SO terbuka ATAU WO berjalan.
-  // Nama/limit SO-only diambil satu query massal (tanpa N+1).
-  const soOnlyIds = [...openOrderByCustomer.keys()].filter((id) => !buckets.has(id) && !extraCustomers.has(id))
-  if (soOnlyIds.length > 0) {
-    const soCustomers = await prisma.customer.findMany({
-      where: { id: { in: soOnlyIds } },
-      select: { id: true, name: true, creditLimit: true },
-    })
-    for (const customer of soCustomers) {
-      extraCustomers.set(customer.id, { name: customer.name, creditLimit: Number(customer.creditLimit ?? 0) })
-    }
-  }
-  const allBuckets = [...buckets.values()]
-  for (const [customerId, info] of extraCustomers) {
-    if (buckets.has(customerId)) continue
-    allBuckets.push({
-      customerId,
-      customerName: info.name,
-      creditLimit: info.creditLimit,
-      outstanding: 0,
-      overdue: 0,
-      invoiceCount: 0,
-    })
-  }
-  const exposureByCustomer = new Map(
-    buildCustomerCreditExposure(
-      allBuckets.map((b) => ({
-        ...b,
-        openOrderAmount: openOrderByCustomer.get(b.customerId) ?? 0,
-        confirmedDownPayment: confirmedDpByCustomer.get(b.customerId) ?? 0,
-        openCustomerCredit: openCreditByCustomer.get(b.customerId) ?? 0,
-        woUnrepresented: woByCustomer.get(b.customerId) ?? 0,
-        woWithoutQuotationCount: woNoQuotationByCustomer.get(b.customerId) ?? 0,
-      })),
-    ).map((r) => [r.customerId, r]),
-  )
-
-  const rows = buildCustomerReceivables(allBuckets).map((row) => ({
-    ...row,
-    avgPaymentDays: averagePaymentDays(paymentsByCustomer.get(row.customerId) ?? []),
-  }))
-
-  const totalOutstanding = rows.reduce((sum, row) => sum + row.outstanding, 0)
-  const totalOverdue = rows.reduce((sum, row) => sum + row.overdue, 0)
-  const totalCreditLimit = rows.reduce((sum, row) => sum + row.creditLimit, 0)
-  const weightedDays = rows.reduce((sum, row) => sum + (row.avgPaymentDays ?? 0) * row.outstanding, 0)
-  const portfolioDso = totalOutstanding > 0 ? weightedDays / totalOutstanding : null
+  const { rows, totalOutstanding, totalOverdue, totalCreditLimit, totalExposure, totalRemainingCredit, portfolioDso } =
+    await loadCustomerCreditExposure({ start: startDate, end: endDate })
   const periodLabel = `Pembayaran ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
@@ -328,16 +94,16 @@ export default async function CustomerReceivablesPage({
                 <DetailTableTd align="right">{formatAccounting(row.creditLimit)}</DetailTableTd>
                 <DetailTableTd align="right" className="font-semibold text-primary">{formatAccounting(row.outstanding)}</DetailTableTd>
                 <DetailTableTd align="right" className={row.overdue > 0 ? "text-danger" : undefined}>{formatAccounting(row.overdue)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposureByCustomer.get(row.customerId)?.remainingCredit ?? row.remainingCredit)}</DetailTableTd>
-                <DetailTableTd align="right" className={(exposureByCustomer.get(row.customerId)?.utilization ?? row.utilization) !== null && (exposureByCustomer.get(row.customerId)?.utilization ?? row.utilization)! > 100 ? "text-danger" : undefined}>
-                  {(exposureByCustomer.get(row.customerId)?.utilization ?? row.utilization) === null ? "–" : `${(exposureByCustomer.get(row.customerId)?.utilization ?? row.utilization)!.toFixed(1)}%`}
+                <DetailTableTd align="right">{formatAccounting(row.remainingCredit)}</DetailTableTd>
+                <DetailTableTd align="right" className={row.utilization !== null && row.utilization > 100 ? "text-danger" : undefined}>
+                  {row.utilization === null ? "–" : `${row.utilization.toFixed(1)}%`}
                 </DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposureByCustomer.get(row.customerId)?.openOrderAmount ?? 0)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposureByCustomer.get(row.customerId)?.woUnrepresented ?? 0)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposureByCustomer.get(row.customerId)?.confirmedDownPayment ?? 0)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposureByCustomer.get(row.customerId)?.openCustomerCredit ?? 0)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposureByCustomer.get(row.customerId)?.exposure ?? row.outstanding)}</DetailTableTd>
-                <DetailTableTd align="right">{({ unset: "Limit belum diatur", ok: "Aman", warning: "Mendekati batas", over: "Lewat batas" } as const)[exposureByCustomer.get(row.customerId)?.status ?? "unset"]}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.openOrderAmount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.woUnrepresented ?? 0)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.confirmedDownPayment ?? 0)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.openCustomerCredit ?? 0)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.exposure)}</DetailTableTd>
+                <DetailTableTd align="right">{CREDIT_EXPOSURE_STATUS_LABEL[row.status]}</DetailTableTd>
                 <DetailTableTd align="right">{row.avgPaymentDays === null ? "–" : row.avgPaymentDays.toLocaleString('id-ID')}</DetailTableTd>
               </DetailTableRow>
             ))}
@@ -350,9 +116,9 @@ export default async function CustomerReceivablesPage({
                 <DetailTableTd align="right">{formatAccounting(totalCreditLimit)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalOverdue)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalCreditLimit - totalOutstanding)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalRemainingCredit)}</DetailTableTd>
                 <DetailTableTd align="right">
-                  {totalCreditLimit > 0 ? `${((totalOutstanding / totalCreditLimit) * 100).toFixed(1)}%` : "–"}
+                  {totalCreditLimit > 0 ? `${((totalExposure / totalCreditLimit) * 100).toFixed(1)}%` : "–"}
                 </DetailTableTd>
                 <DetailTableTd align="right">{portfolioDso === null ? "–" : portfolioDso.toFixed(1)}</DetailTableTd>
               </DetailTableRow>

@@ -145,7 +145,11 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
     key: "penjualan",
     label: "Penjualan",
     icon: ShoppingCart,
-    reports: [{ href: "/laporan/analisis-penjualan" }, { href: "/laporan/pemenuhan-pesanan" }],
+    reports: [
+      { href: "/laporan/analisis-penjualan" },
+      { href: "/laporan/pemenuhan-pesanan" },
+      { href: "/laporan/rekap-komisi" },
+    ],
   },
   {
     key: "pembelian",
