@@ -339,6 +339,26 @@ function parsePurchaseReturnItems(
   return items;
 }
 
+/**
+ * Data baris simpan retur: cost entered-unit dari peta biaya dokumen,
+ * price = harga payload ter-parse, else harga beku tagihan asal (F-004).
+ * Satu sumber create+update (duplikasi blok map pernah kena gerbang Sonar).
+ */
+function purchaseReturnItemData(
+  items: PurchaseReturnItemInput[],
+  documentCostByItem: Map<number, number>,
+  billPriceByItem: Map<number, number>,
+) {
+  return items.map((item) => ({
+    itemId: item.itemId,
+    // qty sudah angka ter-parse (helper parsePurchaseReturnItems):
+    // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
+    qty: item.qty,
+    cost: documentCostByItem.get(item.itemId) ?? 0,
+    price: item.price ?? (billPriceByItem.get(item.itemId) ?? null),
+  }));
+}
+
 function buildPurchaseOrderTotals(lines: PurchaseOrderLine[], shippingCost: number, serviceFee: number) {
   const subtotal = lines.reduce((s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0), 0);
   const discount = lines.reduce((s, it) => safeAdd(s, it.discount || 0, 0), 0);
@@ -1669,15 +1689,7 @@ export async function createPurchaseReturn(formData: FormData) {
           status: "draft",
           createdBy: Number(user.id),
           items: {
-            create: validPrItems.map((item) => ({
-              itemId: item.itemId,
-              // qty sudah angka ter-parse (helper parsePurchaseReturnItems):
-              // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
-              qty: item.qty,
-              cost: prDocumentCostMap.get(item.itemId) ?? 0,
-              // F-004: bekukan harga beli (payload menang, else tagihan asal).
-              price: item.price ?? (billPriceByItem.get(item.itemId) ?? null),
-            })),
+            create: purchaseReturnItemData(validPrItems, prDocumentCostMap, billPriceByItem),
           },
         },
       });
@@ -2778,15 +2790,7 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
           date,
           reason: v.reason ?? null,
           items: {
-            create: validPrItems.map((item) => ({
-              itemId: item.itemId,
-              // qty sudah angka ter-parse (helper parsePurchaseReturnItems):
-              // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
-              qty: item.qty,
-              cost: updPrDocumentCostMap.get(item.itemId) ?? 0,
-              // F-004: bekukan harga beli (payload menang, else tagihan asal).
-              price: item.price ?? (updBillPriceByItem.get(item.itemId) ?? null),
-            })),
+            create: purchaseReturnItemData(validPrItems, updPrDocumentCostMap, updBillPriceByItem),
           },
         },
       });
