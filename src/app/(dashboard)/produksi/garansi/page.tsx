@@ -9,6 +9,9 @@ import { CanCreate } from "@/components/auth/can-create"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { AppSearchField } from "@/components/ui/search-field"
 import { WarrantyClaimList } from "./_components/warranty-claim-list"
+import { getWarrantyExpiryQueue } from "@/lib/reports/warranty-expiry-queue-data"
+import { WARRANTY_EXPIRY_WINDOW_CHOICES } from "@/lib/reports/warranty-expiry-queue"
+import { WarrantyExpiryQueueCard } from "@/components/reports/warranty-expiry-queue-card"
 
 export const metadata: Metadata = { title: "Klaim Garansi" }
 
@@ -33,12 +36,26 @@ const STATUS_FILTERS = [
 export default async function WarrantyClaimsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string }>
+  searchParams: Promise<{ status?: string; cari?: string; jendelaDepan?: string; jendelaLampau?: string }>
 }) {
   await requirePermission("view_warranty_claims")
   const params = await searchParams
   const status = params.status ?? ""
   const cari = (params.cari ?? "").trim()
+  const windowAheadDays = (WARRANTY_EXPIRY_WINDOW_CHOICES as readonly number[]).includes(
+    Number(params.jendelaDepan),
+  )
+    ? Number(params.jendelaDepan)
+    : undefined
+  const windowPastDays = (WARRANTY_EXPIRY_WINDOW_CHOICES as readonly number[]).includes(
+    Number(params.jendelaLampau),
+  )
+    ? Number(params.jendelaLampau)
+    : undefined
+  const expiryQueue = await getWarrantyExpiryQueue("claims_page", {
+    windowAheadDays,
+    windowPastDays,
+  })
 
   const claims = await prisma.warrantyClaim.findMany({
     where: {
@@ -122,6 +139,51 @@ export default async function WarrantyClaimsPage({
           Terapkan
         </button>
       </form>
+
+      <form
+        method="get"
+        aria-label="Filter jendela garansi segera berakhir"
+        className="flex flex-wrap items-end gap-3"
+      >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="warranty-window-ahead" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Jendela ke depan (hari)
+          </label>
+          <select
+            id="warranty-window-ahead"
+            name="jendelaDepan"
+            defaultValue={String(expiryQueue.windowAheadDays)}
+            className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
+          >
+            {WARRANTY_EXPIRY_WINDOW_CHOICES.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="warranty-window-past" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Jendela lampau (hari)
+          </label>
+          <select
+            id="warranty-window-past"
+            name="jendelaLampau"
+            defaultValue={String(expiryQueue.windowPastDays)}
+            className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
+          >
+            {WARRANTY_EXPIRY_WINDOW_CHOICES.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex min-h-11 items-center justify-center rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
+        >
+          Terapkan Jendela
+        </button>
+      </form>
+
+      <WarrantyExpiryQueueCard queue={expiryQueue} />
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <WarrantyClaimList claims={claims} />
