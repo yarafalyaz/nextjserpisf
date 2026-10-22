@@ -1,7 +1,9 @@
 import Link from "next/link"
 import { entityHref } from "@/lib/utils/entity-url"
 import type { JobBillingSummaryResult } from "@/lib/reports/job-billing-summary-data"
+import type { JobPaymentScheduleResult } from "@/lib/reports/job-payment-schedule-data"
 import { formatCurrency, formatPercentage } from "@/lib/utils/format"
+import { JobPaymentScheduleCard } from "./job-payment-schedule-card"
 
 function Baris({ label, value, bold }: Readonly<{ label: string; value: number; bold?: boolean }>) {
   return (
@@ -26,10 +28,16 @@ function BarisProgres({ label, nominal, persen }: Readonly<{ label: string; nomi
 export function JobBillingCard({
   summary,
   deltaNilaiCents,
+  paymentSchedule,
+  canManagePaymentSchedule,
 }: Readonly<{
   summary: JobBillingSummaryResult
   /** F-107: delta nilai berjalan vs snapshot revisi terakhir, sen (QuotationRevisionDelta.deltaCents); null/tak diberikan = tak tercatat. */
   deltaNilaiCents?: number | null
+  /** F-067-S: jadwal termin server; null/tak diberikan = tanpa jadwal (tampil persis seperti hari ini). */
+  paymentSchedule?: JobPaymentScheduleResult | null
+  /** F-067-S: izin kelola jadwal (edit_quotations); tanpa izin = baca-saja. */
+  canManagePaymentSchedule?: boolean
 }>) {
   const terminDelta =
     deltaNilaiCents === null || deltaNilaiCents === undefined || deltaNilaiCents === 0
@@ -101,6 +109,11 @@ export function JobBillingCard({
       ) : (
         <p className="mt-4 border-t border-default pt-3 text-xs text-muted-foreground">Perubahan nilai sejak snapshot tidak tercatat</p>
       )}
+      <JobPaymentScheduleCard
+        schedule={paymentSchedule ?? null}
+        quotationId={summary.quotationId}
+        canManage={canManagePaymentSchedule ?? false}
+      />
       <section aria-label="Progres termin turunan" className="mt-4 border-t border-default pt-3">
         <h3 className="text-sm font-semibold">Progres termin turunan</h3>
         <p className="mt-0.5 text-xs text-muted-foreground">Turunan posisi berjalan, bukan jadwal kontraktual</p>
