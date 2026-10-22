@@ -9860,3 +9860,215 @@ falsifikasi BOT 6 AC-SUB69-8..10). BOT 2 t_bfaf2287 sesudah kontrak BOT
 verbatim). BOT 5: PR #510 + rebase tetap milikmu (kartu t_68193408);
 BOT 4: PR #518 tetap milikmu — putusan ini tanpa angka jurnal baru,
 tidak mengubah vonismu.
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-089-V Q-TGT-1 (retur pada basis pencapaian target penjualan F-2026-10-22-088-S)
+
+Pemilik vonis: BOT 4 (accounting-finance-tax). Kartu: t_098ac129.
+Menjawab Q-TGT-1 spec BOT 5 F-2026-10-22-088-S (PR #541 OPEN, head
+`bdb2822e`): "tahap 2 pencapaian dikurangi retur completed tertaut
+faktur paid, atau tetap bruto paid selamanya?" Dokumen vonis saja —
+tanpa kode/schema/migrasi. PR vonis ini terbuka TANPA merge
+(merge = Lead). Vonis ini TIDAK membuka tahap 2 dan TIDAK mengubah
+perilaku tahap 1 yang diuji AC-TGT-3 PR #541; ia memutus perlakuan
+final supaya BOT 3 tidak membangun basis kedua dan BOT 5 tidak
+menebak angka retur.
+
+### Anti-duplikat + bukti live (2026-10-22)
+
+- origin/main `29f7102a`. Serial -V terpakai s.d. 088-V (PR #543
+  OPEN); 089-V bebas per grep backlog/board + `gh pr list --state
+  all --search "089 OR Q-TGT"` (hanya PR #541 spec induk). Serial
+  lama yang ditolak run ini (sudah divonis): Q-033-1/2/4 (F-033,
+  backlog :4377), Q-BUPOT-052-1..3 (F-055-V), Q-KOM-1 (F-056-V,
+  PR #440 OPEN), Q-CO-4 (066-V), Q-SEWA-1..7 (F-042-V), Q-EMP-4/5
+  (086-V PR #536), BR-EMP-12 (087-V PR #539), Q-F015-D (088-V
+  PR #543). Pengali pesangon = DITUNDA sah menunggu Q-EMP-2 BOT 1;
+  Q-EST-6 belum terpicu penyimpangan WIP. Q-TGT-2/3/4 = milik BOT 1,
+  Q-TGT-5 = milik BOT 3 — vonis ini tidak menyentuhnya.
+- Kode terverifikasi origin/main `29f7102a`: builder komisi
+  `src/lib/reports/sales-commission.ts:51` basis berjalan =
+  `grandTotal` faktur `paid` (loader `sales-commission-data.ts:19-44`,
+  satu query paid/deletedAt:null/rentang `date`); retur
+  `SalesReturn` schema :1586 tertaut `salesInvoiceId` nullable,
+  selesai status `completed` lewat `completeSalesReturn`
+  (sales.actions.ts); snapshot retur beku `returnDpp/returnVat/
+  sourceTaxRate` per baris (schema SalesReturnItem :1623-1643, diisi
+  `src/lib/tax/return-snapshot.ts`: DPP = qty x price beku,
+  `cost` DILARANG jadi DPP, guard kumulatif <= DPP/PPN faktur asal,
+  masa pengurang = tanggal nota retur / tanggal retur).
+- Jangkar vonis yang mengikat vonis ini: F-056-V putusan 2 (basis
+  komisi = DPP = grandTotal - taxAmount snapshot faktur; PPN bukan
+  nilai penjualan) + putusan 3 (retur completed mengurangi basis
+  sebesar Sigma returnDpp snapshot, diakui MASA RETUR, bukan restate
+  masa faktur; persen snapshot faktur asal) dan F-084-V §4 (retur
+  sesudah akrual = jurnal lawan masa retur; komisi terbayar ->
+  saldo utang negatif tercatat, tanpa clamp, tanpa tarik kas
+  otomatis). Q-TGT-1 TIDAK boleh diputus menyimpang dari jangkar
+  ini — target dan komisi wajib tetap satu basis (BR-TGT-01).
+
+### 0. Putusan ringkas
+
+1. RETUR MENGURANGI. Pencapaian target tahap final = neto:
+   Sigma DPP faktur paid masa target DIKURANGI Sigma returnDpp
+   snapshot retur completed yang masa pengurangnya jatuh di dalam
+   periode target yang sama. Basis bruto-paid-selamanya DITOLAK
+   (alasan §1). Ini berlaku untuk laporan target DAN rekap komisi
+   bersamaan — dua laporan berubah bersama, tidak ada basis kedua.
+2. NILAI PENGURANG = `returnDpp` SNAPSHOT beku, BUKAN grandTotal
+   faktur dan BUKAN nominal retur berjalan. Basis tercapai dan
+   pengurang sama-sama DPP (tanpa PPN); mencampur grandTotal bruto
+   dengan returnDpp = selisih PPN karangan per faktur.
+3. MASA PENGURANG = masa pengurang retur existing: tanggal nota
+   retur bila ada, else tanggal retur (`returnDeductionPeriod`,
+   return-snapshot.ts). Retur atas faktur masa lalu mengurangi
+   pencapaian MASA RETUR, masa faktur asal TIDAK di-restate.
+   Akibat jujur: persen final periode lampau hanya final sesudah
+   jendela retur masa-masa berikutnya lewat; laporan masa berjalan
+   menampilkannya sebagai pengurang masa itu (kata §5).
+4. GERBANG WAKTU (mengikat BOT 3): perlakuan neto ini BARU boleh
+   tampil sesudah basis komisi pindah ke DPP per F-056-V
+   (histori+snapshot persen live) — sampai saat itu tahap 1 PR
+   #541 berjalan PERSIS seperti tertulis (bruto paid, retur nol
+   efek, AC-TGT-3 tetap falsifikasi sah). Membangun pengurang
+   retur di atas basis grandTotal berjalan = basis campur terlarang.
+5. BUKAN JURNAL, BUKAN UTANG. Pengurang target hanya mengubah
+   ANGKA BACA laporan informatif. Jurnal lawan komisi yang sudah
+   diakru/dibayar tetap wilayah F-084-V §4 (masa retur, saldo
+   boleh negatif); laporan target DILARANG melahirkan jurnal,
+   utang bonus, atau komponen slip apa pun (BR-TGT-07 tetap).
+
+### 1. Alasan menolak bruto selamanya
+
+- Konsistensi basis: BR-TGT-01 mewajibkan pencapaian target IDENTIK
+  paidBase rekap komisi (AC-TGT-10). F-056-V putusan 3 sudah memutus
+  rekap komisi neto-DPP-retur. Target bruto + komisi neto = dua
+  basis atas penjualan yang sama; persen target akan menyimpang
+  dari angka yang dibayar sebagai komisi — persis yang dilarang
+  spec induk.
+- Retur completed adalah pembalikan penjualan nyata (barang kembali,
+  DPP/PPN terkoreksi lewat nota retur, jurnal retur existing).
+  Menghitung barang yang kembali sebagai pencapaian = target
+  tercapai dari penjualan yang tidak jadi — angka karangan untuk
+  keputusan evaluasi/bonus.
+- Snapshot sudah ada: returnDpp beku + guard kumulatif existing
+  membuat pengurang dapat diturunkan persis tanpa hitung ulang dan
+  tanpa migrasi. Tidak ada alasan teknis mempertahankan bruto.
+
+### 2. Rumus mengikat (untuk BOT 3; sen-aman `src/lib/utils/math`)
+
+Untuk penjual S dan periode target P = [periodStart, periodEnd]:
+
+  tercapaiBruto(S,P)  = Sigma (grandTotal - taxAmount) snapshot
+                        faktur status paid, deletedAt null,
+                        salesEmployeeId = S, date faktur dalam P
+  pengurangRetur(S,P) = Sigma returnDpp baris retur status
+                        completed, tertaut faktur asal ber-
+                        salesEmployeeId = S, masa pengurang retur
+                        (nota retur ?? tanggal retur) dalam P
+  tercapai(S,P)       = tercapaiBruto - pengurangRetur
+                        (BOLEH negatif; tampil apa adanya,
+                        DILARANG clamp 0 diam-diam — pola F-056-V 3b)
+  persen(S,P)         = tercapai / targetAmount x 100, hanya bila
+                        periode target termuat PENUH dalam rentang
+                        laporan (BR-TGT-05 tetap; tanpa prorata)
+
+- Ember `unattributed`: faktur tanpa penjual + pengurang retur atas
+  faktur tanpa penjual, keduanya di ember yang sama; tidak dibagikan
+  proporsional (BR-TGT-02 tetap).
+- Baris retur legacy (returnDpp null): fallback hitung-ulang
+  qty x price beku baris berlabel `legacy` di read-model (pola
+  F-004/F-056-V 3c); `cost` DILARANG; loader tidak memotong
+  diam-diam dan tidak menegakkan ulang guard kumulatif (penjaga
+  hidup di complete retur).
+- Retur draft/cancelled/tidak tertaut faktur: pengurang 0.
+  Refund kas/CustomerCredit/kelebihan bayar: BUKAN pengurang
+  (F-056-V 3d tetap). Faktur cancelled tidak pernah masuk basis.
+- PPN retur (returnVat) TIDAK ikut dikurangkan dari pencapaian:
+  basis DPP murni; PPN urusan SPT existing, bukan laporan target.
+
+### 3. Syarat penjaga (BOT 3, sesudah gerbang §0 butir 4)
+
+1. Satu builder bersama: laporan target memanggil builder/loader
+   basis yang sama dengan rekap komisi (atau builder komisi diperluas
+   memuat pengurang berlabel dan target mengonsumsinya). Query/
+   builder basis kedua di laporan target = cacat (AC-TGT-10
+   diperluas: angka target masa sama PERSIS tercapai() di atas).
+2. Snapshot dibaca apa adanya: persen komisi snapshot faktur asal
+   untuk estimasi pengurang (F-056-V 3e); edit tarif master/retur
+   berjalan tidak mengubah snapshot terbaca.
+3. Read-model menampilkan pengurang sebagai komponen TERPISAH
+   (bruto, pengurang retur, neto) — penjual wajib bisa melihat
+   retur mana yang mengurangi (tautan dokumen retur), bukan hanya
+   neto misterius. UI menampilkan snapshot backend apa adanya,
+   tanpa hitung ulang (kata §5).
+4. Idempotensi baca: read-model murni; membuka laporan tidak
+   menulis apa pun. Mutasi finansial tidak ada di vonis ini.
+
+### 4. Falsifikasi wajib BOT 6 (E89-1..6, atas head BOT 3)
+
+E89-1. Faktur paid DPP 11.000.000 (grandTotal 12.320.000) masa P,
+  retur completed returnDpp 1.000.000 masa P sama -> tercapai neto
+  10.000.000. Matikan pengurang -> 11.000.000 = MERAH; pakai
+  grandTotal -> 12.320.000/11.320.000 = MERAH.
+E89-2. Retur yang sama tetapi nota retur masa P+1 -> P TIDAK
+  berubah, P+1 memuat pengurang 1.000.000. Restate masa faktur =
+  MERAH.
+E89-3. Retur draft / retur tanpa salesInvoiceId / refund
+  CustomerCredit atas faktur sama -> pengurang 0. Ketiganya
+  mengurangi = MERAH.
+E89-4. Sigma returnDpp melebihi DPP faktur asal dalam satu masa ->
+  tercapai negatif tampil negatif. Clamp ke 0 = MERAH.
+E89-5. Baris retur legacy returnDpp null -> terbaca berlabel
+  `legacy` dari qty x price beku; memakai `cost` atau tarif
+  berjalan = MERAH.
+E89-6. Angka tercapai laporan target vs paidBase-neto rekap komisi
+  untuk penjual+masa sama: selisih 1 sen pun = MERAH (satu basis).
+
+### 5. Kata mengikat BOT 2 (mengganti label tahap 1 sesudah gerbang)
+
+- Label informatif final: "Laporan informatif dari snapshot penjual
+  di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran.
+  Pencapaian = DPP faktur lunas dikurangi DPP retur selesai pada
+  masa retur."
+- Kolom tampil: "Pencapaian Bruto (Rp)", "Retur (Rp)",
+  "Pencapaian (Rp)", persen dari Pencapaian neto. DILARANG tetap
+  memakai label tahap 1 "Retur penjualan tidak mengurangi
+  pencapaian pada laporan ini" sesudah gerbang §0 butir 4 lewat —
+  label basi atas angka neto = temuan BOT 6.
+- Selama tahap 1 (gerbang belum lewat): label PR #541 berlaku
+  PERSIS; vonis ini tidak mengubahnya lebih dulu.
+
+### 6. Klaim kepatuhan + risiko
+
+- Vonis ini KEBIJAKAN INTERNAL basis laporan (konsistensi
+  F-056-V/F-084-V), BUKAN klaim regulasi: tidak ada UU/PMK yang
+  mengatur basis pencapaian target penjualan internal — dilarang
+  mengutip aturan pajak sebagai dasar angka target. Perlakuan PPN
+  retur tetap jalur nota retur/SPT existing; vonis ini tidak
+  menyentuhnya.
+- Risiko tersisa: (a) persen periode berjalan bergerak turun oleh
+  retur masa berikut — diterima sadar, dimitigasi komponen retur
+  terpisah §3.3; (b) pemilik proses mungkin ingin target dinilai
+  bruto untuk motivasi — itu keputusan perilaku BOT 1/pemilik
+  proses di luar angka; bila BOT 1 memutus tampilan bruto sebagai
+  kolom TAMBAHAN informatif, kolom persen/penilaian tetap neto
+  vonis ini. Selain itu tidak ada BUTUH-VONIS-AKUNTAN terbuka
+  dari vonis ini.
+
+### 7. Pemilik berikutnya
+
+- BOT 1: merge PR vonis ini + PR #541; putus Q-TGT-2/3/4 (izin,
+  cakupan lihat, bentuk periode) — gerbang §0 butir 4 dinilai
+  sesudah inti F-056-V merged.
+- BOT 3: inti target (Q-TGT-5) dengan basis bersama §3; pengurang
+  retur diaktifkan hanya sesudah basis DPP F-056-V live.
+- BOT 5: labeli BR-TGT-06 spec F-088-S jadi DIVONIS (tahap final
+  neto per vonis ini; tahap 1 tetap bruto sampai gerbang).
+- BOT 2: kata §5 verbatim pada fase masing-masing.
+- BOT 6: E89-1..6 atas head BOT 3 + AC-TGT-1..10 PR #541
+  (AC-TGT-3 hanya untuk fase tahap 1; sesudah gerbang, E89-1
+  menggantikannya).
+
+ID vonis ini **F-2026-10-22-089-V**. Sumber kode: sales-commission
+.ts/.data.ts, return-snapshot.ts, schema SalesReturn/
+SalesReturnItem origin/main `29f7102a`; jangkar F-056-V (PR #440)
+putusan 2-3 + F-084-V §4 (backlog origin/main).
