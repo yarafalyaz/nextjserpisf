@@ -142,15 +142,20 @@ export function WorkOrderForm({
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      aria-label={workOrder?.id ? "Formulir ubah perintah kerja" : "Formulir tambah perintah kerja"}
+      aria-busy={isPending}
+    >
       <input type="hidden" name="quotationId" value={workOrder?.quotationId ?? _quotationId ?? ""} />
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="customerId">Pelanggan *</Label>
+            <Label htmlFor="customerId">Pelanggan <span className="text-destructive" aria-hidden="true">*</span></Label>
             <QuickAddSelect
               id="customerId"
               name="customerId"
+              required
               options={customerOptions.map((c) => ({
                 value: String(c.id),
                 label: c.name,
