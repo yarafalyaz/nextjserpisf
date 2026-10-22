@@ -29,6 +29,7 @@ import { DifferenceInvoiceButton } from "@/components/reports/difference-invoice
 import { ProgressInvoiceButton } from "@/components/reports/progress-invoice-button";
 import { RevisionDownCreditButton } from "@/components/reports/revision-down-credit-button";
 import { loadJobBillingSummary } from "@/lib/reports/job-billing-summary-data";
+import { getJobPaymentScheduleForQuotation } from "@/actions/job-payment-schedule.actions";
 import { loadQuotationApprovalGate } from "@/lib/reports/quotation-approval-gate-data";
 import { QuotationApprovalGateCard } from "@/components/reports/quotation-approval-gate-card";
 import { getQuotationRevisionDelta } from "@/lib/reports/quotation-revision-delta-data";
@@ -54,6 +55,7 @@ export default async function QuotationDetailPage({
 }) {
   await requirePermission("view_quotations");
   const canApprove = await hasPermission("approve_quotations");
+  const canManagePaymentSchedule = await hasPermission("edit_quotations");
   const { slug } = await params;
 
   const quotationInclude = {
@@ -87,10 +89,11 @@ export default async function QuotationDetailPage({
   // F-036 tahap 2: jejak klik tautan WA terakhir (label jujur, bukan terkirim).
   const whatsappTrail = await getWhatsappTrail("Quotation", quotation.id);
 
-  const [billingSummary, approvalGate, revisionDelta] = await Promise.all([
+  const [billingSummary, approvalGate, revisionDelta, paymentSchedule] = await Promise.all([
     loadJobBillingSummary(quotation.id),
     loadQuotationApprovalGate(quotation),
     getQuotationRevisionDelta(quotation.id),
+    getJobPaymentScheduleForQuotation(quotation.id),
   ]);
 
   const itemIds = quotation.sections
@@ -330,7 +333,14 @@ export default async function QuotationDetailPage({
                   />
                 </DetailCard>
 
-                {billingSummary ? <JobBillingCard summary={billingSummary} deltaNilaiCents={revisionDelta?.deltaCents ?? null} /> : null}
+                {billingSummary ? (
+                  <JobBillingCard
+                    summary={billingSummary}
+                    deltaNilaiCents={revisionDelta?.deltaCents ?? null}
+                    paymentSchedule={paymentSchedule}
+                    canManagePaymentSchedule={canManagePaymentSchedule}
+                  />
+                ) : null}
 
                 <QuotationInvoiceThresholdCard
                   info={buildInvoiceThresholdInfo(

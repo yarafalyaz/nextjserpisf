@@ -9434,6 +9434,84 @@ Urutan: BOT 1 putusan → BOT 3 inti → BOT 2 UI → BOT 6. Effort usulan: inti
 | Q-TGT-3 | Lihat = hanya pemegang `view_reports`; tidak ada pandangan per-penjual/self-service tahap 1; data penjual lain terlihat penuh hanya oleh pemegang `view_reports`. | Default-aman spec §5; self-service = kartu terpisah bila diminta pemilik proses. |
 | Q-TGT-4 | Periode = bebas tanggal inklusif dua ujung (`periodStart`/`periodEnd`), bukan bulanan-saja. | Loader komisi sudah rentang-bebas; BR-TGT-05 menahan persen periode tidak utuh; bulanan-saja mengarang batas yang tidak diminta proses ISF. Penjaga overlap BR-TGT-03 wajib di aksi. |
 | Q-TGT-1 | TIDAK dibuka tahap 1 (tetap wilayah BOT 4 + Lead bila tahap 2 dibuka). | BR-TGT-06/07 tahap 1 berlaku apa adanya. |
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-067-S jadwal termin terstruktur per job (inti F-2026-10-20-106; tanpa kode)
+
+Induk: F-2026-10-20-106 (d) P1 "Jadwal termin terstruktur per job tidak ada; termin hanya DP nominal bebas + ambang 50% hardcoded" (backlog origin/main ea430e34). ID 067 bebas terverifikasi run ini: maksimum terpakai 066-S (PR #503 OPEN head 55438f65) + 065-S (PR #502) + 064-S (PR #500); grep `F-2026-10-22-067` di origin/main = 0; tidak ada PR/branch termin-schedule (PR termin existing = master payment_terms vendor, bukan jadwal per job).
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main ea430e34, 2026-10-22)
+
+- Inti ABSEN: `PaymentSchedule|JobPaymentSchedule|paymentScheduleId|billingKind` di `prisma/schema.prisma` + `src/` produksi = 0 hasil selain komentar `src/lib/reports/job-billing-summary-data.ts:12` ("menambah billingKind/paymentScheduleId — inti termin tetap ditunda-teknis (PUTUSAN manager F-2026-10-20-03)"). Tidak ada model jadwal termin, tidak ada nama termin, tidak ada dueDate/milestone per termin.
+- Lapis aman SUDAH merged dan BUKAN jadwal: builder murni `src/lib/reports/job-billing-progress.ts` (target kumulatif persen × `Quotation.grandTotal` berjalan, kandidat progres = target − tertagih; DP BUKAN tagihan per vonis accountant F-03 di header file) + `job-billing-summary.ts`/`-data.ts` (nilaiBerjalan, sudahDitagih posted/partial/paid, sisa, DP confirmed terpisah, ambangInvoice = ceil(nilaiBerjalan/2)) + kartu `src/components/reports/job-billing-card.tsx` (termasuk delta nilai F-107 dari snapshot QuotationHistory). PR #347 progres termin turunan + PR #355 kartu delta F-106/F-107 MERGED. Kartu secara eksplisit melabeli delta "bukan amendemen jadwal" — label jujur itu wajib dipertahankan spec ini.
+- Mesin tagih existing yang WAJIB dipakai ulang (dilarang jalur kedua): `createProgressInvoice(quotationId, targetPercent)` (src/actions/sales.actions.ts:1276), `createDifferenceInvoice` (:1194), `createRevisionDownCredit` (:1349), `createDownPayment` (:630, nominal bebas per quotation, cap kumulatif ≤ grandTotal berjalan dalam tx), `confirmDownPayment` (:871) → hook `src/lib/hooks/down-payment.hook.ts` (ambang invoice konversi hardcoded `thresholdSen = Math.ceil(grandTotalSen / 2)` — keluarga F-2026-10-20-108, spec terpisah F-2026-10-22-065-S PR #502; spec termin ini TIDAK mengubah ambang itu).
+- Model acuan: `Quotation` (schema.prisma:1206-1236; grandTotal Decimal(15,2), status string, revisionNumber, projectId/customerVehicleId nullable, downPayments[]), `DownPayment` (schema.prisma:1308-1330; quotationId+customerId, amount, paymentDate, status string default pending, TANPA kolom termin/jadwal apa pun). Tidak ada FK dari DownPayment/invoice ke jadwal — atribusi aktual-ke-termin hari ini hanya bisa turunan posisi kumulatif.
+- Permission nyata (src/lib/auth/module-catalog.generated.ts): `view/create/edit/delete_down_payments` (:177-180), `confirm_down_payments` (:181), `view/create/edit_quotations` (:155-158), `approve_quotations` (:159), `confirm_quotations` (:160), `view/create/edit_sales_invoices` (:145-147), `view_sales_payments` (:151). Resource `payment_terms` (:131-134) = master termin pembayaran vendor/pelanggan generik — BUKAN izin jadwal termin per job, jangan dicampur. Permission resource baru (mis. `job_payment_schedules`) = keputusan BOT 1 (Q-TM67-5), spec ini tidak mengarangnya.
+- Benchmark (akses 2026-10-22): Accurate — DP dicatat sebagai nominal pada Pesanan Penjualan lalu dipakai memotong faktur, tanpa jadwal termin bernama per job: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pesanan-penjualan/pesanan-penjualan-dengan-down-payment/ ; Zahir — uang muka penerimaan nominal bebas dipilih untuk memotong Faktur Penjualan, termin pembayaran pada order penjualan "hanya bersifat administratif": https://help.zahironline.com/portal/id/kb/articles/uang-muka-penerimaan-pada-zahir-online-versi-2 dan https://help.zahironline.com/portal/id/kb/articles/order-penjualan . BENCHMARK: kedua kompetitor tidak menyediakan jadwal termin kontraktual bernama per job fabrikasi — jadwal ISF adalah kebutuhan internal bengkel (kesepakatan DP 30% → termin rangka 40% → pelunasan serah terima 30%), bukan standar kompetitor.
+
+### 2. Aturan bisnis register (semua berlabel; tidak ada yang ditegaskan sebagai fakta tanpa label)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-TM67-01 | Satu jadwal aktif per Quotation; jadwal menempel di Quotation (bukan WO/SO/Project) karena grandTotal berjalan + DP + invoice progres semua berjangkar quotationId | USULAN — perlu Q-TM67-1 |
+| BR-TM67-02 | Termin dinyatakan persen kumulatif ATAU nominal target, satu basis per baris; jumlah persen kumulatif baris terakhir = 100; persen dihitung dari grandTotal BERJALAN (bukan snapshot beku) supaya perubahan nilai job (F-103/F-107) otomatis mengubah sisa termin — snapshot nilai kontrak per revisi jadwal disimpan hanya sebagai jejak amendemen | USULAN — basis uang perlu Q-TM67-2 BOT 4 |
+| BR-TM67-03 | DP terkonfirmasi dan invoice BUKAN termin: DP = kas diterima (bukan tagihan), invoice progres/selisih tetap lahir lewat `createProgressInvoice`/`createDifferenceInvoice` existing. Jadwal hanya RENCANA + status turunan; membuat/mengubah jadwal TIDAK pernah menerbitkan invoice, DP, pembayaran, atau jurnal | TERVERIFIKASI-KODE (pemisahan DP≠tagihan = vonis accountant F-03 di job-billing-progress.ts) + USULAN batas jadwal |
+| BR-TM67-04 | Status termin DITURUNKAN server dari posisi kumulatif berjalan: `belum_jatuh_tempo` → `jatuh_tempo` (dueDate lewat ATAU milestone terpenuhi, mana yang dipakai = Q-TM67-3) → `terpenuhi_sebagian` → `terpenuhi`; tidak ada status yang diketik manual bebas. "Terpenuhi" diukur terhadap tertagih kumulatif (definisi `billedAmountExcludingCancelled` existing), BUKAN terhadap DP | USULAN |
+| BR-TM67-05 | Perubahan grandTotal (revisi quotation / change order F-2026-10-20-103 sesudah diterapkan) menghitung ulang target nominal semua termin belum-terpenuhi dari persennya; termin sudah-terpenuhi TIDAK ditulis ulang; selisih tampil sebagai delta jadwal (pola delta F-107), bukan amendemen diam-diam | USULAN — interaksi CO perlu Q-TM67-4 |
+| BR-TM67-06 | Jadwal boleh dibuat/diubah hanya selama Quotation belum `converted` selesai ditagih penuh; perubahan sesudah termin pertama terpenuhi wajib alasan (teks bebas tercatat siapa/kapan, pola ActivityLog/QuotationHistory) | USULAN |
+| BR-TM67-07 | dueDate termin adalah tanggal rencana administratif; keterlambatan TIDAK memblokir WO, MaterialIssue, posting invoice, atau serah terima (peringatan saja, pola informatif F-2026-10-20-100) | USULAN — gerbang keras = BUTUH-VONIS BOT 1, tidak diusulkan tahap ini |
+| BR-TM67-08 | Pengakuan pendapatan/PPN/piutang tetap lahir saat invoice terbit/posting lewat jalur existing; jadwal tidak mengubah timing akuntansi apa pun | BUTUH-VONIS BOT 4 konfirmasi (Q-TM67-2) — spec tidak mengklaim dampak pajak |
+| BR-TM67-09 | Tanpa jadwal: kartu tagihan existing tampil persis seperti hari ini (progres turunan berlabel "turunan posisi berjalan, bukan jadwal kontraktual"); jadwal TIDAK di-backfill karangan dari riwayat DP untuk quotation lama | USULAN (default-aman, nol regresi) |
+| BR-TM67-10 | Milestone termin merujuk label teks + opsional ProjectStage/WO status yang sudah ada; jadwal TIDAK membuat status pekerjaan baru dan TIDAK menahan progres tahap | USULAN |
+
+### 3. Pertanyaan terbuka (menahan inti, tidak menahan spec ini)
+
+- Q-TM67-1 (BOT 1 arsitektur): jangkar jadwal final — Quotation saja (rekomendasi USULAN, satu job bisa banyak WO), atau Quotation+WorkOrder opsional untuk job multi-WO bertahap beda? Tanpa putusan ini BOT 3 tidak memilih FK.
+- Q-TM67-2 (BOT 4, vonis uang): (a) basis persen = grandTotal termasuk PPN persis grandTotal berjalan, atau ada basis lain yang sah? (b) konfirmasi BR-TM67-08 tidak ada dampak PPN/umur piutang dari sekadar mencatat jadwal (jadwal bukan dokumen pajak). Spec TIDAK mengklaim angka/timing pajak.
+- Q-TM67-3 (BOT 1): pemicu `jatuh_tempo` — tanggal saja, milestone saja, atau keduanya (yang lebih dulu)? Rekomendasi USULAN: tanggal wajib, milestone opsional tambahan; status tetap turunan server.
+- Q-TM67-4 (BOT 1 + BOT 4): interaksi change order F-2026-10-20-103 — sesudah CO diterapkan dan grandTotal berubah, apakah jadwal wajib amendemen eksplisit beralasan (BR-TM67-06) sebelum termin berikutnya bisa ditagih lewat progres, atau cukup hitung-ulang turunan otomatis + delta tampil? Rekomendasi USULAN: hitung-ulang otomatis, amendemen hanya bila persen/tanggal diubah manusia.
+- Q-TM67-5 (BOT 1): permission — pakai `edit_quotations` existing untuk kelola jadwal (rekomendasi USULAN tahap pertama, tanpa resource baru), atau resource katalog baru yang wajib seed + regenerasi katalog? BOT 3/BOT 2 tidak mengarang permissionKey.
+
+### 4. Alur + status-transition (kontrak, bukan implementasi)
+
+Aktor: Admin Sales (buat/ubah jadwal, izin kelola per Q-TM67-5), Kasir/Finance (confirm DP existing — tidak berubah), BOT 3 (builder status turunan + validasi server), BOT 2 (kartu jadwal di kartu tagihan existing), BOT 6 (falsifikasi).
+
+Alur:
+1. Quotation accepted/berjalan → Admin Sales menyusun jadwal: baris berurutan (nama termin, persen kumulatif, dueDate, milestoneLabel opsional). Server validasi: persen naik ketat, baris terakhir 100, nama+dueDate wajib.
+2. Posisi berjalan (DP confirmed, tertagih, sisa) tetap dari builder job-billing existing — jadwal tidak menduplikasi angka itu, hanya membandingkan target termin vs posisi.
+3. Termin mencapai target: staf menagih lewat `createProgressInvoice` existing persis seperti hari ini (jadwal menampilkan kandidat persen termin berikutnya, manusia yang menekan aksi existing — jadwal tidak menerbitkan apa pun sendiri, BR-TM67-03).
+4. Nilai job berubah (revisi/CO diterapkan) → target nominal termin belum-terpenuhi dihitung ulang dari persen × grandTotal baru; delta tampil di kartu (BR-TM67-05).
+5. Semua termin terpenuhi + sisaBelumDitagih = 0 → jadwal berstatus selesai (turunan, bukan aksi manual).
+
+Status-transition jadwal (per Quotation): `tidak_ada` → `aktif` (jadwal pertama disimpan) → `selesai` (semua termin terpenuhi, turunan) ; `aktif` → `dibatalkan` (quotation cancelled/dibatalkan — termin ikut nonaktif, dokumen DP/invoice existing tidak disentuh).
+Status-transition per termin (turunan server, BR-TM67-04): `belum_jatuh_tempo` → `jatuh_tempo` → `terpenuhi_sebagian` → `terpenuhi`. Tidak ada transisi mundur kecuali grandTotal turun (revisi-turun/CO deduktif) membuat termin terpenuhi kembali ke `terpenuhi_sebagian` — transisi mundur ini WAJIB tampil sebagai delta, bukan disembunyikan.
+Penjaga: transisi jadwal tidak pernah mengubah status Quotation/DP/Invoice/WO; membatalkan jadwal tidak menghapus DP/invoice; quotation cancelled menonaktifkan jadwal tanpa menghapus barisnya (jejak tetap terbaca).
+
+### 5. Edge cases (wajib diuji BOT 3/BOT 6)
+
+- Persen kumulatif tidak naik (30 → 30) atau baris terakhir ≠ 100: ditolak server menyebut barisnya; UI menampilkan pesan server apa adanya.
+- GrandTotal Rp1 / persen 33-33-34: target nominal sen-integer dibulatkan per termin dengan sisa pembulatan di termin terakhir (pola ceil/sen existing) — total target semua termin persis = grandTotal, selisih 1 sen pun gagal uji.
+- Revisi-turun sesudah termin 1 terpenuhi: termin 1 tetap terpenuhi pada nominal lama, kelebihan ditangani kredit revisi-turun existing (BR-TM67-05), jadwal tidak menulis kredit sendiri.
+- Dua jadwal aktif bersamaan untuk satu Quotation (submit konkuren): tepat satu aktif, yang kedua ditolak (penjaga di tx, jangan andalkan cek UI).
+- Quotation tanpa jadwal dibuka: kartu persis perilaku hari ini + label turunan existing (BR-TM67-09) — regresi nol.
+- dueDate lampau saat jadwal dibuat: termin langsung `jatuh_tempo` (bukan ditolak) dan tampil terlambat sejak hari pertama.
+- DP confirmed melebihi target termin 1 tetapi belum ada invoice: termin tetap belum-terpenuhi (DP ≠ tagihan, BR-TM67-03/04) — kasus ini wajib ada fixture-nya karena paling mudah salah.
+- Jadwal diubah sesudah termin pertama terpenuhi tanpa alasan: ditolak (BR-TM67-06); dengan alasan: tersimpan + jejak siapa/kapan/alasan terbaca.
+- Quotation multi-WO: jadwal tetap satu per Quotation (Q-TM67-1); milestone menunjuk tahap WO mana pun hanya sebagai label, progres WO tidak ditahan jadwal.
+
+### 6. Draf acceptance
+
+BOT 3 (backend, inti sesudah Q-TM67-1..5 terjawab): AC-TM67-1 model jadwal+baris dengan penjaga satu-aktif-per-Quotation di dalam tx; AC-TM67-2 validasi persen kumulatif (naik ketat, akhir 100, sen-integer total persis); AC-TM67-3 status termin turunan dari definisi tertagih existing (bukan query agregasi kedua, bukan DP); AC-TM67-4 hitung-ulang target saat grandTotal berubah tanpa menulis ulang termin terpenuhi + delta terbaca builder; AC-TM67-5 membuat/mengubah/membatalkan jadwal tidak pernah membuat invoice/DP/jurnal (fixture menghitung baris dokumen sebelum-sesudah sama).
+BOT 2 (UI fitur didahulukan atas polish): AC-TM67-6 kartu jadwal menyatu di kartu tagihan existing (bukan halaman baru kecuali BOT 1 memutuskan lain di Q-TM67-1): nama termin, target persen+nominal dari server, dueDate, status kata Indonesia persis (`Belum Jatuh Tempo/Jatuh Tempo/Terpenuhi Sebagian/Terpenuhi`), label jujur membedakan "Jadwal kesepakatan" vs label turunan existing; AC-TM67-7 UI tidak menghitung target/status sendiri dan tanpa izin kelola tampil baca-saja; AC-TM67-8 kandidat termin berikutnya menaut ke aksi progres existing, bukan tombol terbit baru.
+BOT 6 (falsifikasi): cabut penjaga satu-aktif = AC-TM67-1 MERAH; ukur terpenuhi dari DP (bukan tertagih) = fixture DP-melebihi-termin MERAH; ubah persen diam-diam sesudah termin terpenuhi tanpa alasan = tersimpan adalah MERAH; jadwal membuat invoice/jurnal = MERAH; total target ≠ grandTotal selisih 1 sen = MERAH; quotation tanpa jadwal berubah tampilannya = MERAH (regresi).
+
+### 7. Yang TIDAK diusulkan
+
+- Mengubah ambang invoice konversi DP 50%: milik F-2026-10-20-108 / spec F-2026-10-22-065-S (PR #502) — jadwal termin tidak menyentuh `down-payment.hook.ts`.
+- Amendemen jadwal bertanda tangan/portal pelanggan: mengikuti inti change order F-2026-10-20-103 (spec F-2026-10-22-066-S PR #503); jejak alasan internal cukup tahap ini.
+- Pengingat termin otomatis ke pelanggan (WA/email): domain notifikasi, sesudah jadwal terbaca stabil; tidak ada kirim otomatis diusulkan run ini.
+- Gerbang keras menahan WO/posting/serah terima karena termin terlambat: BR-TM67-07 informatif; gerbang = vonis BOT 1 terpisah.
+- Backfill jadwal karangan untuk quotation lama dari pola DP: dilarang (BR-TM67-09) — riwayat DP bukan kesepakatan termin.
+
+Pemilik berikutnya: BOT 1 (Q-TM67-1/3/4/5) + BOT 4 (Q-TM67-2/4) → BOT 3 inti → BOT 2 UI → BOT 6 §6. BOT 5 spec saja, tanpa kode.
 ### Yang TIDAK diusulkan run ini
 - Pengingat otomatis WA/email ke pelanggan, denda keterlambatan, penagihan pihak ketiga, alokasi pembayaran parsial per janji, status penagihan tersimpan di SalesInvoice, perubahan aging/statement existing.
 
