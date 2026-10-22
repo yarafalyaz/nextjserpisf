@@ -24,9 +24,12 @@ import { InstalledPartRemovalForm } from "./installed-part-removal-form"
 export function InstalledPartsCard({
   rows,
   canRecordRemoval = false,
+  embedded = false,
 }: {
   rows: InstalledPartRegistryRow[]
   canRecordRemoval?: boolean
+  /** true = seksi di dalam "Linimasa Kendaraan" (riwayat), tanpa shell kartu sendiri. */
+  embedded?: boolean
 }) {
   const installed = rows.filter((r) => r.status !== "DILEPAS")
   const history = rows.filter((r) => r.status === "DILEPAS")
@@ -36,15 +39,8 @@ export function InstalledPartsCard({
     serialNumber: r.serialNumber,
   }))
 
-  return (
-    <section
-      aria-label="Part terpasang"
-      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
-    >
-      <div className="p-4 px-5 border-b border-default">
-        <h2 className="text-[0.9375rem] font-semibold text-foreground">Part Terpasang</h2>
-      </div>
-      <div className="p-4 px-5">
+  const body = (
+      <>
         {rows.length === 0 ? (
           <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
             Belum ada part terpasang tercatat untuk kendaraan ini
@@ -77,7 +73,29 @@ export function InstalledPartsCard({
             )}
           </div>
         )}
+      </>
+  )
+
+  if (embedded) {
+    return (
+      <section aria-label="Part terpasang">
+        <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+          Part Terpasang
+        </h3>
+        <div className="mt-2">{body}</div>
+      </section>
+    )
+  }
+
+  return (
+    <section
+      aria-label="Part terpasang"
+      className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden"
+    >
+      <div className="p-4 px-5 border-b border-default">
+        <h2 className="text-[0.9375rem] font-semibold text-foreground">Part Terpasang</h2>
       </div>
+      <div className="p-4 px-5">{body}</div>
     </section>
   )
 }
