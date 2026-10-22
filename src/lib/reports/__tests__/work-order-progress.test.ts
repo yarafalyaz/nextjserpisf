@@ -3,6 +3,7 @@ import {
   buildWorkOrderProgress,
   evaluateWorkOrderOperationTransition,
   parseWorkOrderStageNames,
+  shouldAutoCompleteWorkOrder,
   WORK_ORDER_PROGRESS_NOTICE,
   type WorkOrderOperationInput,
 } from "../work-order-progress"
@@ -160,5 +161,40 @@ describe("buildWorkOrderProgress", () => {
     expect(r.rows[1].isActionable).toBe(false)
     expect(r.rows[1].blockedByName).toBe("Persiapan")
     expect(r.rows[0].isActionable).toBe(true)
+  })
+})
+
+describe("shouldAutoCompleteWorkOrder (F-020 auto-close)", () => {
+  it("semua tahap completed/skipped dan denominator>0 -> true", () => {
+    expect(
+      shouldAutoCompleteWorkOrder({
+        operations: [{ status: "completed" }, { status: "skipped" }],
+      }),
+    ).toBe(true)
+  })
+
+  it("masih ada tahap pending/in_progress -> false", () => {
+    expect(
+      shouldAutoCompleteWorkOrder({
+        operations: [{ status: "completed" }, { status: "pending" }],
+      }),
+    ).toBe(false)
+    expect(
+      shouldAutoCompleteWorkOrder({
+        operations: [{ status: "in_progress" }],
+      }),
+    ).toBe(false)
+  })
+
+  it("semua skipped (denominator 0) -> false, bukan auto-close karangan", () => {
+    expect(
+      shouldAutoCompleteWorkOrder({
+        operations: [{ status: "skipped" }, { status: "skipped" }],
+      }),
+    ).toBe(false)
+  })
+
+  it("tanpa tahap -> false", () => {
+    expect(shouldAutoCompleteWorkOrder({ operations: [] })).toBe(false)
   })
 })
