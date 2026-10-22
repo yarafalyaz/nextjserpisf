@@ -16,16 +16,15 @@
  *
  * Jalankan: `npm run preflight:deps` (sesudah `npm ci`). Exit 1 = gagal,
  * pesan menyebut perbaikan: `rm -rf node_modules && npm ci`.
- * Path root bisa dioverride argumen pertama untuk pengujian.
+ * Root selalu direktori induk skrip ini — tanpa argumen (S8707: path dari
+ * argv ditolak gerbang keamanan; untuk uji fixture, salin skrip ke fixture).
  */
 import { lstatSync } from "node:fs"
 import { createRequire } from "node:module"
 import path from "node:path"
 import { fileURLToPath } from "node:url"
 
-const root = path.resolve(
-  process.argv[2] ?? path.join(path.dirname(fileURLToPath(import.meta.url)), ".."),
-)
+const root = path.join(path.dirname(fileURLToPath(import.meta.url)), "..")
 
 let failed = false
 const fail = (msg) => {
