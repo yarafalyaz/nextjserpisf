@@ -823,6 +823,16 @@ model Employee {
   departmentId        Int?              @map("department_id")
   positionId          Int?              @map("position_id")
   joinDate            DateTime          @map("join_date")
+  // F-2026-10-22-085-S: status kepegawaian master (kosakata Q-EMP-1/2 putusan
+  // BOT 1 §9A). employmentStatus: PKWTT|PKWT|DAILY|INTERN, null = belum diatur
+  // (tanpa backfill). endReason: contract_completed|resigned|terminated|
+  // retired|deceased|other, wajib pasangan employmentEndedAt. Validasi
+  // enum-teks di aksi (pola WarrantyClaim.supplierClaimStatus).
+  employmentStatus    String?           @map("employment_status")
+  contractStartDate   DateTime?         @map("contract_start_date")
+  contractEndDate     DateTime?         @map("contract_end_date")
+  employmentEndedAt   DateTime?         @map("employment_ended_at")
+  endReason           String?           @map("end_reason")
   paymentFrequency    String            @default("MONTHLY") @map("payment_frequency")
   baseSalary          Decimal           @default(0.00) @map("base_salary") @db.Decimal(15, 2)
   isActive            Boolean           @default(true) @map("is_active")
