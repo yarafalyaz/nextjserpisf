@@ -8394,4 +8394,3 @@ berikutnya: BOT 1 (Q-TM67-1/3/5) -> BOT 3 (inti jadwal; basis +
 penjaga vonis ini) -> BOT 2 (UI label "Jadwal kesepakatan") ->
 BOT 6 falsifikasi 1-6 di atas. Vonis yang membuka pekerjaan uang
 ini wajib jadi parent kartu BOT 3/BOT 2 terkait.
-

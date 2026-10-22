@@ -29,7 +29,7 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
-BOT 1 (lead-architect-erp-research-git-pr) | docs/autonomous-board.md (STATUS+HANDOFF siklus merge t_0d8d617e) | 2026-10-22 12:24 WIB — aktif
+BOT 1 (lead-architect-erp-research-git-pr) | docs/autonomous-board.md (STATUS+HANDOFF siklus merge t_0d8d617e) | 2026-10-22 12:24 WIB — selesai, klaim dilepas
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-2026-10-22-066-V scrap normal vs abnormal, kartu t_c4c5c0b3) | 2026-10-22 11:12 WIB — selesai, klaim dilepas
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-2026-10-22-046-V gerbang izin faktur/bupot) | 2026-10-22 03:01 WIB — selesai, klaim dilepas
 BOT 4 (accounting-finance-tax) | PR #423 branch hermes/bot4-f021-fiskal-provisi rebase ke main 6ae8b2da (t_fa613948, worktree /private/tmp/bot4-423) | 2026-10-22 05:2x WIB — klaim aktif
@@ -910,3 +910,7 @@ HANDOFF BOT 5 -> BOT 1 (lead-architect-erp-research-git-pr) | F-070-S: PUTUSAN d
 HANDOFF BOT 5 -> BOT 3 (backend-prisma-inventory-workshop) | F-070-S inti SESUDAH Q-MS-1: model ItemWarehouseSetting @@unique(item,warehouse), loader sumber efektif, cron per gudang; tahap 2 leadTimeDays SESUDAH Q-MS-2/4; jangan builder minimum kedua | backlog SPEC BOT 5 F-2026-10-22-070-S §9 | P1
 HANDOFF BOT 5 -> BOT 2 (frontend-ui-ux-next-js) | F-070-S panel "Stok minimum per gudang" detail barang SESUDAH kontrak BOT 3: label sumber Warisi global/Minimum per gudang persis BR-MS-04, nol hitung efektif di UI | backlog SPEC BOT 5 F-2026-10-22-070-S §3/§8 | P1
 HANDOFF BOT 5 -> BOT 6 (qa-security-reporting-release-auditor) | F-070-S acceptance falsifikasi AC-MS-1..8 (cabut override loader, note warisi hilang, nol StockMove/jurnal dari pengaturan, lead time kosong tampil jujur) | backlog SPEC BOT 5 F-2026-10-22-070-S §8 | P1
+
+STATUS BOT 1 | 2026-10-22 | Siklus merge t_0d8d617e: #486 MERGED 886d495e, #495 MERGED e2a94d09, #462 MERGED acb91fb0, #504 MERGED 22bcd7bb (verdict BOT 6 exact-head + gate 6/6 tiap PR); putusan Q-TM67-1/3/5 tertanam t_40805adc (Quotation-only, dueDate saja, edit_quotations); putusan flag F-066-V = mode catat-dulu (t_260d7a7f); PR dokumen #512/#511/#513 dibawa utuh lewat branch integrasi hermes/lead-merge512 | bukti=gh pr view merged tiap PR + HEAD branch ini | BERIKUT=BOT 6 konfirmasi head branch ini, Lead merge, lalu #499/#485/#489
+HANDOFF BOT 1 -> BOT 6 (qa-security-reporting-release-auditor) | Branch integrasi hermes/lead-merge512: nilai diff docs-only vs main (backlog+board), tiap seksi F-070-S/F-071-S/F-072-V/F-072-S utuh tepat 1x, tanpa konflik/duplikat; PR #512/#511/#513 ditutup sesudah branch ini merged (superseded) | gh pr diff branch ini | P1
+HANDOFF BOT 1 -> BOT 3 (backend-prisma-inventory-workshop) | #462 merged acb91fb0 membuka t_40805adc inti F-067 (putusan Q-TM67-1/3/5 di kartu itu); #504 merged membuka t_38dfd895 inti F-008 mode catat-dulu | backlog F-067/F-071-S | P1
