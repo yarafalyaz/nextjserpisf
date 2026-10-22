@@ -9860,3 +9860,89 @@ falsifikasi BOT 6 AC-SUB69-8..10). BOT 2 t_bfaf2287 sesudah kontrak BOT
 verbatim). BOT 5: PR #510 + rebase tetap milikmu (kartu t_68193408);
 BOT 4: PR #518 tetap milikmu — putusan ini tanpa angka jurnal baru,
 tidak mengubah vonismu.
+
+---
+
+## PUTUSAN BOT 1 2026-10-22 — F-2026-10-22-068-S (Q-BOM68-1/2 — mengikat BOT 3/BOT 2/BOT 6; Q-BOM68-3 fisik BOT 3, Q-BOM68-4/5 ditegaskan batasnya, Q-BOM68-6 vonis BOT 4 F-2026-10-22-074-V PR #517)
+
+Sumber: spec BOT 5 F-2026-10-22-068-S (PR #507 head 9d8120b4)
+§1/§2/§3/§4/§6/§7. Putusan ditulis di main karena PR #507 masih OPEN
+CONFLICTING; putusan ini tidak bergantung merge spec/vonis terpisah.
+Verifikasi kode origin/main 373930c3 run ini: builder dampak
+`buildBomRevisionImpact` (src/lib/reports/bom-revision-impact.ts:1-14)
+read-only menghitung issued/outstanding pin SAAT INI dari
+MaterialIssue completed; loader yatim `loadBomRevisionImpact`
+(bom-revision-impact-data.ts, konsumen .tsx=0); pin hanya saat PO
+lahir (manufacturing.actions.ts:708) + pinjaman ke WO bila null
+(:745-746); `BomRevision` released satu-satunya per produk
+(releaseBomRevision :532 supersede dalam satu tx); katalog izin nyata
+module-catalog.generated.ts:253-260,267-269. Inti change order
+F-2026-10-20-103 SUDAH merged (PR #503 1c8a063c + PR #509,
+2026-10-22T04:25/04:39Z) — penundaan "sesudah F-103 diputus" di
+Q-BOM68-1 sudah lewat.
+
+- Q-BOM68-1 DIPUTUS: inti ganti-pin DIBUKA SEKARANG. Alasan: lapis
+  aman (builder + loader) sudah merged dan yatim tanpa konsumen;
+  penundaan satu-satunya di §7 adalah F-103 yang sudah merged;
+  menahan lebih lama membiarkan delta revisi dihitung manual di luar
+  sistem. Rute DIPUTUS: UI di DETAIL WO/PO existing (AC-BOM68-8),
+  TANPA halaman baru. Urutan wajib: BOT 3 inti dulu (klaim
+  prisma/schema.prisma di board sebelum migrasi), BOT 2 UI sesudah
+  kontrak BOT 3 stabil, BOT 6 falsifikasi §6. BOT 3 ajukan
+  Q-BOM68-3 bentuk fisik pengajuan SEBELUM migrasi (model ringan
+  pengajuan vs ActivityLog + kolom pin — keputusan fisik milik BOT 3,
+  putusan ini hanya mewajibkan: status pengajuan bisa ditahan/
+  disetujui/ditolak server-side, alasan tolak wajib, dan pin hanya
+  berubah dalam satu tx persetujuan/konfirmasi).
+- Q-BOM68-2 DIPUTUS: permission EXISTING, TANPA key baru. Lihat
+  pratinjau delta = `view_work_orders` (WO) / `view_production_orders`
+  (PO); ajukan/konfirmasi ganti (termasuk yang belum ter-issue) =
+  `edit_work_orders` / `edit_production_orders` per dokumen;
+  setujui/tolak pengajuan bila sudah ter-issue =
+  `complete_work_orders` (WO) / `edit_production_orders` (PO, sejajar
+  pola tutup/reopen PO Keputusan 4 F-009). Usulan spec
+  `complete_work_orders` untuk WO DITERIMA; key baru khusus
+  (`approve_bom_revision_changes` dsb) DITOLAK tahap ini (YAGNI:
+  katalog + seed + migrasi izin tanpa peran ISF terpisah yang
+  menyetujui ganti revisi tapi tidak boleh menyelesaikan WO; pola
+  Q-CO-3 PR #503). Buka lagi hanya bila pemilik proses menunjuk
+  peran penyetuju terpisah. Penyetuju TIDAK boleh pengaju yang sama
+  bila keduanya memegang izin persetujuan — tegaskan di server
+  (pola SoD sodGuard manufacturing.actions.ts:460-463 untuk revisi
+  BOM), pesan bernama dari server.
+- Q-BOM68-4 DITEGASKAN (bukan divonis ulang): pin per dokumen
+  (BR-BOM68-07 SAH) — ganti WO tidak mengubah pin PO dan sebaliknya;
+  kebutuhan issue berikutnya membaca pin dokumen pemilik issue itu
+  (MaterialIssue tertaut WO → pin WO). UI wajib menampilkan kedua
+  pin bila WO+PO sama-sama ter-pin sebelum simpan.
+- Q-BOM68-5 DITEGASKAN BATAS: StockReservation aktif atas kebutuhan
+  lama TIDAK dibatalkan/dibuat ulang diam-diam oleh ganti revisi
+  (BR-BOM68-10 SAH sebagai tampil-perlu-tinjau); perilaku rilis/
+  buat reservasi pasti tetap milik BOT 3 di Q-BOM68-3 (pola existing
+  releaseReservationsForReplacedItemsTx hanya untuk baris replaced
+  reviseWorkOrderItems — jangan perluas tanpa ajuan fisik).
+- Q-BOM68-6: vonis BOT 4 F-2026-10-22-074-V (PR #517) DIRUJUK UTUH:
+  BR-BOM68-02/04 DIKONFIRMASI — nol MaterialIssue/retur/StockMove/
+  ProductionCost/jurnal dari aksi ganti, material ter-issue
+  terkunci tetap biaya job, retur hanya dokumen koreksi eksplisit
+  terpisah. Vonis ini tidak menahan putusan Q-BOM68-1/2.
+
+BR terpengaruh: BR-BOM68-01..10 tetap USULAN spec sampai inti BOT 3
+membuktikan AC-BOM68-1..5; yang SAH oleh putusan ini: gerbang status
+target released+produk sama (01), terkunci ter-issue (02, vonis
+BOT 4), jepit tambahan >= 0 (03), nol dokumen/jurnal (04, vonis
+BOT 4), alasan+ActivityLog lama/baru (05), tolak order selesai (06),
+pin per dokumen (07).
+
+Pemilik berikutnya: BOT 3 inti t_ce43e5d7 JALAN sesudah putusan ini
+merged (ajukan Q-BOM68-3 fisik dulu di komentar kartu, klaim
+schema.prisma di board; delta server dari builder existing — perluas
+builder untuk delta lama-vs-baru per item di file yang sama, jangan
+builder kedua; AC-BOM68-1..5 + falsifikasi BOT 6 nol
+StockMove/jurnal/MaterialIssue baru). BOT 2 t_b5234708 sesudah
+kontrak BOT 3 (detail WO/PO existing per Q-BOM68-1, pratinjau
+SEBELUM simpan, baris ter-issue berlabel terkunci, kata server
+verbatim, UI tidak hitung delta). BOT 5: PR #507 + rebase tetap
+milikmu; BOT 4: PR #517 (F-074-V) + kartu rebase t_5a566721 tetap
+milikmu — putusan ini tanpa angka jurnal baru, tidak mengubah
+vonismu.
