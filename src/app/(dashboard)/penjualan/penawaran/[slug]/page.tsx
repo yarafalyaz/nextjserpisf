@@ -31,6 +31,7 @@ import { loadQuotationApprovalGate } from "@/lib/reports/quotation-approval-gate
 import { QuotationApprovalGateCard } from "@/components/reports/quotation-approval-gate-card";
 import { getQuotationRevisionDelta } from "@/lib/reports/quotation-revision-delta-data";
 import { QuotationRevisionDeltaCard } from "@/components/reports/quotation-revision-delta-card";
+import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
 import {
   DetailTable,
   DetailTableHead,
@@ -402,6 +403,16 @@ export default async function QuotationDetailPage({
             label: "Barang",
             content: (
               <>
+                {/* F-063-S: ringkasan snapshot fitment tersimpan server
+                    (bukan evaluasi ulang); 0 incompatible → senyap. */}
+                <FitmentIncompatibleSummary
+                  incompatibleCount={quotation.sections.reduce(
+                    (sum, section) =>
+                      sum +
+                      section.items.filter((i) => i.fitmentResult === "incompatible").length,
+                    0,
+                  )}
+                />
                 {/* Sections & Items */}
                 {quotation.sections.map((section) => (
                   <div
@@ -438,6 +449,10 @@ export default async function QuotationDetailPage({
                                   ) : (
                                     `Barang #${item.itemId}`
                                   )}
+                                  <FitmentBadge
+                                    fitmentResult={item.fitmentResult}
+                                    fitmentRuleId={item.fitmentRuleId}
+                                  />
                                 </DetailTableTd>
                                 <DetailTableTd>
                                   {item.description || "-"}
