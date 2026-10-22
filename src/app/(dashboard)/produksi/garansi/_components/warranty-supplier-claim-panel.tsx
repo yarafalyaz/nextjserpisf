@@ -98,6 +98,10 @@ export function WarrantySupplierClaimPanel({
   const [purchaseReturnId, setPurchaseReturnId] = useState("")
   const [transitionTo, setTransitionTo] = useState("")
   const [confirmTo, setConfirmTo] = useState<string | null>(null)
+  // Snapshot field form saat dialog konfirmasi dibuka: transisi terkonfirmasi
+  // wajib membawa refNo/catatan yang diketik user (teks form menjanjikan
+  // alasan pada catatan wajib terisi) — FormData kosong membuangnya diam-diam.
+  const [confirmData, setConfirmData] = useState<FormData | null>(null)
 
   const status = facts.supplierClaimStatus
   const supplierStatusLabel = SUPPLIER_CLAIM_LABELS[status] ?? status
@@ -133,11 +137,12 @@ export function WarrantySupplierClaimPanel({
 
   function runConfirmedTransition() {
     if (!confirmTo) return
-    const formData = new FormData()
+    const formData = confirmData ?? new FormData()
     formData.set("claimId", String(facts.claimId))
     formData.set("to", confirmTo)
     run(transitionSupplierClaimAction, formData, "Status klaim supplier diperbarui")
     setConfirmTo(null)
+    setConfirmData(null)
   }
 
   return (
@@ -338,7 +343,11 @@ export function WarrantySupplierClaimPanel({
                 type="button"
                 variant="danger"
                 isDisabled={isPending}
-                onClick={() => setConfirmTo(transitionTo)}
+                onClick={(e) => {
+                  const form = e.currentTarget.form
+                  setConfirmData(form ? new FormData(form) : new FormData())
+                  setConfirmTo(transitionTo)
+                }}
               >
                 {transitionTo === "none" ? "Lepas Tautan…" : "Tutup Tanpa Recovery…"}
               </Button>
@@ -354,7 +363,10 @@ export function WarrantySupplierClaimPanel({
       <ConfirmDialog
         isOpen={confirmTo !== null}
         onOpenChange={(open) => {
-          if (!open) setConfirmTo(null)
+          if (!open) {
+            setConfirmTo(null)
+            setConfirmData(null)
+          }
         }}
         title={confirmTarget?.label ?? "Konfirmasi"}
         body={
