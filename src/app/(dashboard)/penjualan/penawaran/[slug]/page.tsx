@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { JobBillingCard } from "@/components/reports/job-billing-card";
 import { isQuotationExpired } from "@/lib/utils/quotation-expiry";
+import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold";
+import { QuotationInvoiceThresholdCard } from "@/components/reports/quotation-invoice-threshold-card";
 import { WhatsappButton } from "@/components/reports/whatsapp-button";
 import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note";
 import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data";
@@ -329,6 +331,14 @@ export default async function QuotationDetailPage({
                 </DetailCard>
 
                 {billingSummary ? <JobBillingCard summary={billingSummary} deltaNilaiCents={revisionDelta?.deltaCents ?? null} /> : null}
+
+                <QuotationInvoiceThresholdCard
+                  info={buildInvoiceThresholdInfo(
+                    quotation.invoiceThresholdPercent == null
+                      ? null
+                      : Number(quotation.invoiceThresholdPercent),
+                  )}
+                />
 
                 <QuotationApprovalGateCard gate={approvalGate} />
 
