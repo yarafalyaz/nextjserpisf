@@ -9946,3 +9946,139 @@ verbatim, UI tidak hitung delta). BOT 5: PR #507 + rebase tetap
 milikmu; BOT 4: PR #517 (F-074-V) + kartu rebase t_5a566721 tetap
 milikmu — putusan ini tanpa angka jurnal baru, tidak mengubah
 vonismu.
+## 2026-10-22 16:10 WIB — SPEC BOT 5: F-2026-10-22-090-S Papan beban rencana per stasiun kerja (sisa F-2026-10-21-020 / P0-2(e))
+
+Benchmark resmi (akses 2026-10-22):
+- Accurate Tahapan Proses Perintah Kerja (tahap per SPK + progres per tahapan): https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/perintah-kerja-dengan-tahapan/ ; buat Perintah Kerja: https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/buat-perintah-kerja/
+- Zahir Manufacturing (Production Plan berbasis kapasitas mesin & tenaga kerja, WO mencakup fase/mesin/operator/target waktu, master mesin berisi kapasitas + jam operasional, penjadwalan operator anti-overload): https://zahirerp.com/id/zahir-manufacturing/
+
+### Inventarisasi terverifikasi (2026-10-22, basis origin/main 63172b46)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Tahap WO ringan SUDAH terbangun (F-2026-10-21-020 tahap A): model `WorkOrderOperation` (prisma/schema.prisma:2813) berisi name/sortOrder/status/estimatedHours/assignedEmployeeId/startedAt/completedAt — TANPA workCenterId/stasiun. Aksi `initializeWorkOrderOperations` (manufacturing.actions.ts:2315, idempoten, hanya WO in_progress) + `updateWorkOrderOperationStatus` (:2342, sekuensial-keras, skipped wajib notes, izin edit_work_orders); start WO menginisialisasi dalam tx klaim sama (:1566). Nama tahap dari setting `defaultWorkOrderStages`, fallback Persiapan/Pengerjaan/Quality Check/Selesai (work-order-progress.ts).
+- Builder progres murni `work-order-progress.ts` + loader `work-order-progress-data.ts`; UI tahap di detail WO (work-order-operation-actions.tsx).
+- Papan beban EXISTING hanya AKTUAL: `work-order-load.ts:1-20` header eksplisit "PUTUSAN manager: inti model WorkCenter/Operation/RoutingStep ditunda-teknis" — agregasi ProductionCost (hours/amount snapshot) per status WO aktif, dipakai kartu di antrean WO (perintah-kerja/page.tsx:56). Bukan rencana, tanpa kapasitas, tanpa stasiun.
+- Antrean WO read-only `work-order-queue.ts` (status aktif draft/pending/in_progress, bendera terlambat dari endDate, tanpa endDate tidak dituduh terlambat).
+- `WorkSchedule` (schema:2880: workDays teks, startTime/endTime, isActive, relasi Employee/Department) + `Holiday`/`DepartmentHoliday` — bahan jam tersedia mingguan; BELUM ada yang mengubahnya menjadi kapasitas per stasiun.
+- Izin katalog nyata: view/edit/complete_work_orders (module-catalog.generated.ts:253-257).
+
+Belum ada (bukti grep run ini = 0):
+- Master stasiun kerja: grep `WorkCenter|workCenterId` di prisma+src produksi = 0. Tahap WO tidak bisa dikelompokkan per stasiun (Potong/Las/Finishing/dll hanya teks nama bebas per WO).
+- Papan beban RENCANA: tidak ada agregasi Σ estimatedHours tahap belum tuntas per minggu vs jam tersedia; janji selesai ke pelanggan masih ditebak dari endDate bebas. WorkOrderOperation.estimatedHours ada tapi tidak pernah diagregasi lintas WO.
+- Penugasan tahap: assignedEmployeeId ada di model, tidak ada papan beban per orang/stasiun; overload tidak terlihat sebelum endDate lewat.
+
+Anti-duplikat: nomor -S maks di main = 089-S (PR #545 merged 9391de12), PR terbuka maks 089-V; 090 bebas. Gap ini BUKAN F-020 tahap A (sudah terbangun), BUKAN work-order-load existing (aktual ProductionCost, bukan rencana), BUKAN kalender keuangan. Inti WorkCenter penuh + solver APS tetap DITUNDA per putusan manager di header work-order-load.ts — spec ini hanya lapis master stasiun + agregasi rencana read-only.
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: Kepala Bengkel (atur stasiun + estimasi + penugasan), Admin Produksi, Teknisi (lihat tahap miliknya), Viewer laporan.
+Dokumen masuk: WorkOrderOperation existing (nama tahap, estimatedHours, assignedEmployeeId, status), WorkSchedule + Holiday existing, endDate WO.
+Dokumen keluar: baris papan beban rencana per stasiun per minggu (read-model turunan) + master Stasiun Kerja (dokumen master baru tahap inti). Tanpa jurnal, tanpa StockMove.
+
+Alur tahap 1 (master + tautan, SESUDAH Q-LP-1/2 diputus BOT 1):
+1. Kepala Bengkel membuat Stasiun Kerja: nama (mis. Potong, Las, Bubut, Finishing, Perakitan, Pasang), kapasitas jam per hari kerja, jumlah stasiun paralel, aktif/nonaktif. Nonaktif tidak bisa dipilih tahap baru; tahap lama tetap terbaca historis.
+2. Tahap WO mendapat stasiun opsional: WorkOrderOperation.workCenterId nullable (USULAN fisik BOT 3). Tahap tanpa stasiun masuk ember "Belum ada stasiun" — tidak ditebak dari nama teks tahap.
+3. Estimasi jam tahap (estimatedHours existing) + penugasan (assignedEmployeeId existing) diisi Kepala Bengkel; kosong = belum direncanakan, tampil jujur bukan 0.
+
+Alur tahap 2 (papan beban rencana read-only, TANPA migrasi tambahan):
+4. Builder menghitung per stasiun per minggu berjalan + 3 minggu ke depan: Beban Rencana = Σ estimatedHours tahap berstatus pending/in_progress milik WO aktif (draft/pending/in_progress, himpunan work-order-queue existing); tahap completed/skipped keluar beban. Tahap tanpa estimatedHours dihitung terpisah sebagai "tahap belum ada estimasi" (jumlah tahap, bukan jam karangan).
+5. Kapasitas Tersedia = kapasitasJamPerHari stasiun x jumlah hari kerja minggu itu (dari WorkSchedule aktif; hari Holiday/DepartmentHoliday dikurangi bila Q-LP-3 diputus begitu) — rumus final Q-LP-3 BOT 1; tanpa WorkSchedule aktif, kapasitas tampil "—" dan papan hanya menampilkan beban (jujur, tanpa persen beban karangan).
+6. Persen Beban = Beban Rencana / Kapasitas Tersedia bila kapasitas ada; > 100% ditandai teks "Melebihi kapasitas" (bukan warna saja). Papan TIDAK memindah tahap, TIDAK mengubah endDate, TIDAK menolak start WO — peringatan saja (pola peringatan-keras F-045-S BR-RES-07).
+7. Drill per stasiun: daftar tahap penyusun beban (WO, kendaraan/pelanggan label tampil, tahap, estimasi, penanggung jawab, endDate WO + bendera terlambat pola antrean existing).
+
+### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+
+Tahap inti: model usulan `WorkCenter`: id, name (unik di antara aktif), capacityHoursPerDay (Decimal > 0), parallelStations (Int >= 1, default 1), isActive, sortOrder, createdAt/updatedAt. Kolom aditif nullable `WorkOrderOperation.workCenterId` (FK, onDelete Restrict pola ProjectItem.stage BR-07 F-030: stasiun dirujuk tahap tidak bisa dihapus, hanya dinonaktifkan). slug bila pola repo mewajibkan (BOT 3 putus; masuk cakupan backfill slug bila ber-slug). Tanpa kolom status/jadwal tersimpan di WO.
+Tahap papan: nol migrasi. Builder murni + loader (pola work-order-load): input operasi aktif + WO aktif + WorkCenter + WorkSchedule/Holiday; output per stasiun per minggu {workCenterId|null, namaStasiun, bebanJam, tahapTanpaEstimasi, kapasitasJam|null, persenBeban|null, baris tahap}.
+
+### 3. Status-transition matrix
+
+Status tahap memakai kosakata existing (TERVERIFIKASI-KODE work-order-progress.ts): pending -> in_progress -> completed/skipped. Spec ini tidak menambah status tahap.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| Tahap tanpa stasiun | Kepala Bengkel memilih stasiun di tahap | tahap berstasiun (ember keluar) | edit_work_orders, stasiun aktif |
+| Stasiun aktif | dinonaktifkan | nonaktif (tahap lama tetap terbaca; pilihan baru tertutup) | izin master Q-LP-2 |
+| Beban minggu <= kapasitas | tahap baru berestimasi ditambah | Melebihi kapasitas (turunan) | builder, tanpa tulis/blokir |
+| Tahap pending/in_progress | tahap diselesaikan/dilewati aksi existing | keluar dari Beban Rencana | updateWorkOrderOperationStatus existing |
+| WO aktif | WO completed/cancelled/closed | semua tahapnya keluar papan | status WO existing |
+
+### 4. Role/permission matrix (izin katalog TERVERIFIKASI-KODE kecuali ditandai USULAN)
+
+| Aksi | Izin | Catatan |
+|---|---|---|
+| Lihat papan beban rencana | `view_work_orders` (:253) | loader menegakkan di server; tanpa izin papan tertutup fail-closed |
+| Buat/ubah/nonaktifkan Stasiun Kerja | USULAN reuse `edit_work_orders` (Q-LP-2 BOT 1; key master baru hanya bila BOT 1 putus begitu) | jangan pinjam izin laporan |
+| Tetapkan stasiun/estimasi/penanggung jawab tahap | `edit_work_orders` (pola updateWorkOrderOperationStatus) | aksi tahap existing tidak berubah penjaganya |
+| Ubah status tahap | `edit_work_orders` existing | sekuensial-keras existing tetap |
+| Ekspor papan | mengikuti pola ekspor laporan existing bila ditambah | tahap 1 tanpa ekspor; jangan karang |
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-LP-01 | Beban Rencana hanya dari WorkOrderOperation.estimatedHours tahap pending/in_progress pada WO aktif; ProductionCost aktual TIDAK dicampur ke beban rencana (aktual tetap milik work-order-load existing) | USULAN |
+| BR-LP-02 | Tahap tanpa estimatedHours tidak dihitung 0 jam: dihitung sebagai "tahap belum ada estimasi" terpisah per stasiun | USULAN |
+| BR-LP-03 | Tahap tanpa workCenterId masuk ember "Belum ada stasiun"; dilarang menebak stasiun dari teks nama tahap | USULAN |
+| BR-LP-04 | Kapasitas Tersedia per minggu = capacityHoursPerDay x parallelStations x hari kerja (WorkSchedule aktif dikurangi Holiday bila Q-LP-3 begitu); tanpa dasar kapasitas, persen beban tampil "—" | USULAN — Q-LP-3 |
+| BR-LP-05 | Persen beban > 100% = penanda teks "Melebihi kapasitas"; papan tidak memblokir start WO, tidak mengubah endDate, tidak memindah tahap otomatis (tanpa solver APS) | USULAN |
+| BR-LP-06 | Stasiun nonaktif: tidak bisa dipilih tahap baru; tahap historis tetap terbaca dengan nama stasiunnya; stasiun dirujuk tahap tidak bisa dihapus (Restrict) | USULAN |
+| BR-LP-07 | Nama stasiun unik di antara stasiun aktif (duplikat aktif ditolak server, bukan UI saja) | USULAN |
+| BR-LP-08 | Papan beban adalah read-model turunan: tidak ada kolom beban/persen tersimpan, tidak ada jurnal, tidak ada StockMove, tidak mengubah ProductionCost | USULAN |
+| BR-LP-09 | Minggu papan = minggu berjalan + 3 minggu ke depan (WIB, pola TZ repo); tahap tanpa tanggal terencana masuk minggu berjalan (tahap aktif memang sedang/bakal dikerjakan — dinyatakan eksplisit di notice, bukan jadwal presisi) | USULAN — Q-LP-4 |
+| BR-LP-10 | Penanggung jawab tahap = assignedEmployeeId existing; papan per stasiun boleh mengelompokkan per orang di drill, tapi beban resmi tetap per stasiun (orang bisa pindah stasiun) | USULAN |
+| BR-LP-11 | Estimasi jam adalah rencana kasar: UI wajib menampilkan notice kejujuran BR-LP-12 verbatim; dilarang menampilkan persen beban sebagai kapasitas keras/finite-scheduling | USULAN |
+| BR-LP-12 | Kalibrasi estimasi dari aktual (timesheet/ProductionCost) hanya laporan pembanding tahap berikut; spec ini tidak mengubah estimatedHours otomatis dari aktual | USULAN |
+
+### 6. Kata & label UI (mengikat BOT 2; verbatim)
+
+Judul: "Beban Rencana Stasiun Kerja". Kolom papan: Stasiun | Minggu | Beban Rencana (jam) | Tahap Belum Ada Estimasi | Kapasitas Tersedia (jam) | Beban (%) | Keterangan.
+Label ember persis: `Belum ada stasiun`. Penanda persis: `Melebihi kapasitas`. Kapasitas/persen tanpa dasar: `—`. Notice jujur wajib: "Beban rencana dihitung dari estimasi jam tahap yang belum selesai. Ini rencana kasar untuk melihat kepadatan stasiun, bukan jadwal pasti dan tidak mengunci tanggal selesai." Judul drill: "Rincian Tahap Penyusun Beban". Tombol master: `Tambah Stasiun`, `Nonaktifkan Stasiun`. Dilarang kata "kapasitas tersedia" untuk angka turunan tanpa WorkSchedule aktif.
+
+### 7. Feature matrix (BENCHMARK, akses 2026-10-22)
+
+| Fitur | Accurate | Zahir | ISF sekarang |
+|---|---|---|---|
+| Tahap proses per perintah kerja + progres | Ada — https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/perintah-kerja-dengan-tahapan/ | WO mencakup fase produksi — https://zahirerp.com/id/zahir-manufacturing/ | Ada (WorkOrderOperation + progres) |
+| Master mesin/stasiun + kapasitas + jam operasional | Jadwal produksi menyebut bagian/mesin per tahap (Acis) — https://www.acisindonesia.com/jadwal-produksi-di-accurate-online/ | Ada: daftar mesin kapasitas/lokasi/jam/status — URL Zahir di atas | ABSEN (spec ini tahap inti) |
+| Rencana berbasis kapasitas + anti-overload | Rencana produksi mempertimbangkan jadwal/tahapan | Production Plan mempertimbangkan kapasitas mesin & tenaga kerja; jadwal operator menghindari overload — URL Zahir di atas | ABSEN: beban aktual saja (work-order-load) |
+| Solver APS / finite scheduling otomatis | Tidak diverifikasi run ini (jangan klaim) | Tidak diverifikasi run ini | TIDAK diusulkan (putusan manager existing) |
+
+### 8. Acceptance criteria + edge cases (BOT 6, falsifikasi)
+
+| ID | Skenario |
+|---|---|
+| AC-LP-1 | Dua WO aktif, tahap Las berestimasi 10 + 6 jam -> Beban Rencana stasiun Las minggu berjalan 16 jam; cabut satu estimatedHours dari builder input = angka berubah (tes merah bila builder mengarang) |
+| AC-LP-2 | Tahap tanpa estimatedHours: Beban Rencana tidak bertambah, hitungan "tahap belum ada estimasi" bertambah 1; tampil 0 jam = gagal |
+| AC-LP-3 | Tahap tanpa workCenterId tampil di ember "Belum ada stasiun", tidak masuk stasiun mana pun walau nama tahap teksnya "Las" |
+| AC-LP-4 | Tahap completed/skipped dan tahap milik WO completed/cancelled keluar dari beban; cabut filter status = merah |
+| AC-LP-5 | Tanpa WorkSchedule aktif (atau Q-LP-3 tanpa dasar): Kapasitas `—`, Beban (%) `—`, tidak ada persen karangan; beban jam tetap tampil |
+| AC-LP-6 | Beban > kapasitas: penanda teks "Melebihi kapasitas" tampil; start WO tahap baru tetap bisa (tidak diblokir), endDate tidak berubah otomatis |
+| AC-LP-7 | Stasiun dinonaktifkan: tidak bisa dipilih tahap baru (ditolak server), tahap lama tetap tampil namanya; hapus stasiun yang dirujuk tahap ditolak (Restrict) |
+| AC-LP-8 | Nama stasiun duplikat aktif ditolak server; nama sama dengan stasiun nonaktif boleh (bila Q-LP-5 diputus begitu) |
+| AC-LP-9 | Tanpa view_work_orders papan tertutup; ubah status tahap tanpa edit_work_orders ditolak (penjaga existing tidak berubah) |
+| AC-LP-10 | Papan tidak menulis apa pun: sesudah buka papan, Jurnal=0, StockMove=0, WorkOrderOperation tidak berubah, ProductionCost tidak berubah |
+| AC-LP-11 | Drill stasiun: jumlah jam baris rincian = Beban Rencana kartu stasiun (rekonsiliasi builder vs loader) |
+| AC-LP-12 | UI tidak menghitung ulang: ganti builder (beban/penanda/notice) = UI mengikuti tanpa ubah komponen; persen ditampilkan hanya dari loader |
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-LP-1 | Buka inti master WorkCenter + workCenterId sekarang, atau tahap 1 hanya papan dari nama tahap? (Usulan: buka — nama teks bebas tidak bisa jadi kunci beban) | BOT 1 |
+| Q-LP-2 | Izin master stasiun reuse edit_work_orders vs key katalog baru | BOT 1 |
+| Q-LP-3 | Rumus Kapasitas Tersedia final: WorkSchedule mana yang berlaku (per departemen karyawan tahap vs satu jadwal aktif perusahaan) + Holiday mengurangi atau tidak | BOT 1 (fisik hitung BOT 3) |
+| Q-LP-4 | Penempatan tahap tanpa tanggal ke minggu berjalan (BR-LP-09) diterima, atau perlu kolom tanggal rencana per tahap (migrasi tambahan) | BOT 1 |
+| Q-LP-5 | Keunikan nama stasiun: unik global aktif vs boleh sama sesudah nonaktif; fisik indeks | BOT 3 |
+| — | Upah/lembur dari beban rencana, jurnal dari jadwal | BOT 4 — tidak diminta; papan tanpa uang |
+
+### 10. Backlog implementasi (turunan spec ini; ID spec F-2026-10-22-090-S)
+
+1. BOT 1: putus Q-LP-1..4 + merge PR spec ini bila gate hijau.
+2. BOT 3 (@backend-prisma-inventory-workshop): inti SESUDAH Q-LP-1/2 — model WorkCenter + WorkOrderOperation.workCenterId (klaim schema.prisma di board dulu) + aksi master/tetapkan stasiun + builder/loader papan beban rencana (BR-LP-01..08); fisik Q-LP-3/5 milikmu.
+3. BOT 2 (@frontend-ui-ux-next-js): UI SESUDAH kontrak BOT 3 — master Stasiun Kerja + pilihan stasiun di tahap + papan "Beban Rencana Stasiun Kerja" kata §6 verbatim, nol hitung beban/persen di UI. UI fitur ini didahulukan atas polish.
+4. BOT 6: AC-LP-1..12 atas head BOT 3/BOT 2.
+5. BOT 4: tidak ada vonis diminta (BR-LP-08 tanpa jurnal/uang); dipanggil hanya bila beban dikaitkan upah/lembur.
+
+### Yang TIDAK diusulkan run ini
+- Solver APS/finite-capacity otomatis, drag-and-drop kalender jadwal, WorkCenter bay fisik per mesin tunggal, routing/BOM-operation template per Product (tahap nama masih dari setting existing), timesheet per operasi (workOrderOperationId di Timesheet — kartu terpisah sesudah papan terbukti dipakai), kapasitas per orang sebagai kunci resmi, ekspor papan tahap 1.
