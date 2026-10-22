@@ -275,6 +275,67 @@ describe("Purchase Order Actions", () => {
     expect(arg.data.workOrderId).toBe(9)
   })
 
+  it("createPurchaseOrder membaca qty/harga/diskon string format Indonesia penuh", async () => {
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "2.000", unitPrice: "150.000", discount: "5.000" }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseOrder.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0]).toEqual(expect.objectContaining({ itemId: 1, qty: 2000, unitPrice: 150000, discount: 5000, total: 299995000 }))
+    expect(arg.data.subtotal).toBe(300000000)
+    expect(arg.data.grandTotal).toBe(299995000)
+  })
+
+  it("createPurchaseOrder menolak qty tak terbaca tanpa membuat PO", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "abc", unitPrice: 1000 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Kuantitas pesanan item #1 tidak valid/i)
+    expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+  })
+
+  it("createPurchaseOrder menolak harga tak terbaca tanpa membuat PO", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.createPurchaseOrder(fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 2, unitPrice: "xyz" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Harga beli pesanan item #1 tidak valid/i)
+    expect(mocks.prismaMock.purchaseOrder.create).not.toHaveBeenCalled()
+  })
+
+  it("updatePurchaseOrder membaca qty/harga string format Indonesia penuh", async () => {
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "1,5", unitPrice: "2.000.000", discount: "0" }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseOrder.update.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0]).toEqual(expect.objectContaining({ itemId: 1, qty: 1.5, unitPrice: 2000000, total: 3000000 }))
+  })
+
+  it("updatePurchaseOrder menolak qty tak terbaca tanpa menghapus baris lama", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.updatePurchaseOrder(1, fdMap({
+      vendorId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "abc", unitPrice: 1000 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Kuantitas pesanan item #1 tidak valid/i)
+    expect(mocks.prismaMock.purchaseOrderItem.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.purchaseOrder.update).not.toHaveBeenCalled()
+  })
+
   it("createPurchaseOrder links the purchase request (PR -> PO)", async () => {
     const { onPurchaseOrderCreated } = await import("@/lib/hooks/purchase-order.hook")
     vi.mocked(onPurchaseOrderCreated).mockClear()
@@ -1478,6 +1539,66 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("tidak ada dalam pesanan pembelian")
+  })
+
+  it("createGoodsReceipt membaca qty/biaya string format Indonesia penuh", async () => {
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "approved", items: [{ itemId: 1, qty: 3000 }] })
+    const res = await actions.createGoodsReceipt(fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "2.000", unitCost: "150.000" }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.goodsReceipt.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0]).toEqual(expect.objectContaining({ itemId: 1, qty: 2000, unitCost: 150000, qtyOrdered: 3000 }))
+  })
+
+  it("createGoodsReceipt menolak qty tak terbaca tanpa membuat GR", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.createGoodsReceipt(fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "abc", unitCost: 100 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Kuantitas penerimaan item #1 tidak valid/i)
+    expect(mocks.prismaMock.goodsReceipt.create).not.toHaveBeenCalled()
+  })
+
+  it("createGoodsReceipt menolak biaya tak terbaca tanpa membuat GR", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.createGoodsReceipt(fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 2, unitCost: "xyz" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Biaya satuan penerimaan item #1 tidak valid/i)
+    expect(mocks.prismaMock.goodsReceipt.create).not.toHaveBeenCalled()
+  })
+
+  it("updateGoodsReceipt membaca qty/biaya string format Indonesia penuh", async () => {
+    mocks.prismaMock.goodsReceipt.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "draft" })
+    mocks.prismaMock.goodsReceipt.findUnique.mockResolvedValueOnce({ status: "draft" })
+    mocks.prismaMock.purchaseOrder.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "approved", items: [{ itemId: 1, qty: 10 }] })
+    mocks.prismaMock.goodsReceipt.update.mockResolvedValueOnce({ id: 1 })
+    mocks.prismaMock.goodsReceiptItem.createMany.mockResolvedValueOnce({ count: 1 })
+    const res = await actions.updateGoodsReceipt(1, fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "1,5", unitCost: "2.000.000" }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.goodsReceiptItem.createMany.mock.calls.at(-1)![0]
+    expect(arg.data[0]).toEqual(expect.objectContaining({ itemId: 1, qty: 1.5, unitCost: 2000000 }))
+  })
+
+  it("updateGoodsReceipt menolak qty tak terbaca tanpa menghapus baris lama", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.updateGoodsReceipt(1, fdMap({
+      purchaseOrderId: "1", warehouseId: "1", date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "abc", unitCost: 100 }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Kuantitas penerimaan item #1 tidak valid/i)
+    expect(mocks.prismaMock.goodsReceiptItem.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.goodsReceipt.update).not.toHaveBeenCalled()
   })
 
   it("createGoodsReceipt allows drafting qty above the PO (over-receipt is capped at verification)", async () => {

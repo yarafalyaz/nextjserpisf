@@ -67,6 +67,72 @@ type GrItemInput = {
   serialNumbers?: string[] | null;
 };
 
+/**
+ * Baris PO/GR dari JSON FormData `items` (qty/harga/biaya bisa string
+ * berformat Indonesia dari klien non-form: "2.000" = 2000, "150.000" =
+ * 150000) — wajib lewat parser repo; Number() mentah membaca "2.000"
+ * jadi 2 dan "abc" jadi NaN yang lolos filter >0, lalu total/penjaga
+ * over-receive ikut menilai angka rusak dan qty/harga tersimpan menyusut
+ * diam-diam. Baris berkode item dengan angka tak terbaca ditolak
+ * berpesan, bukan dibuang/dinclamp diam-diam. Baris tanpa item
+ * (itemId kosong/0) tetap dibuang (baris kosong form); qty <= 0 pada
+ * baris berkode tetap dibuang (perilaku lama: baris belum diisi).
+ * `parsePurchaseOrderItems` dipakai create+update PO; `parseGrItems`
+ * dipakai create+update GR (satu sumber per dokumen, pola retur).
+ */
+function parsePoGrItemId(raw: unknown): number | null {
+  const itemId = parseLocaleNumber(raw as string | number | null | undefined);
+  return itemId === null || itemId <= 0 ? null : itemId;
+}
+
+function parsePoGrQty(raw: unknown, itemId: number, label: string): number {
+  const qty = parseLocaleNumber(raw as string | number | null | undefined);
+  if (qty === null) {
+    throw new Error(
+      `Kuantitas ${label} item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+    );
+  }
+  return qty;
+}
+
+function parsePoGrMoney(
+  raw: unknown,
+  itemId: number,
+  label: string,
+): number {
+  if (raw == null || raw === "") return 0;
+  const value = parseMoneyAmount(raw as string | number | null | undefined);
+  if (value === null || value < 0) {
+    throw new Error(
+      `${label} item #${itemId} tidak valid — isi angka 0 atau lebih (mis. 150.000).`,
+    );
+  }
+  return value;
+}
+
+function parsePurchaseOrderItems(
+  itemsJson: string | null | undefined,
+): PurchaseOrderLine[] {
+  const rows =
+    safeJsonParse<
+      { itemId?: unknown; qty?: unknown; unitPrice?: unknown; discount?: unknown }[]
+    >(itemsJson ?? null) ?? [];
+  const items: PurchaseOrderLine[] = [];
+  for (const row of rows) {
+    const itemId = parsePoGrItemId(row?.itemId);
+    if (itemId === null) continue;
+    const qty = parsePoGrQty(row.qty, itemId, "pesanan");
+    if (qty <= 0) continue;
+    items.push({
+      itemId,
+      qty,
+      unitPrice: parsePoGrMoney(row.unitPrice, itemId, "Harga beli pesanan"),
+      discount: parsePoGrMoney(row.discount, itemId, "Diskon pesanan"),
+    });
+  }
+  return items;
+}
+
 // expiryDate baris lolos JSON tanpa validasi kalender: "2026-02-30"
 // bergulir ke 2 Mar oleh new Date, string acak jadi Invalid Date.
 function assertGrItemExpiryDates(items: GrItemInput[]) {
@@ -93,8 +159,29 @@ function goodsReceiptItemData(i: GrItemInput, orderedQtyByItem: Map<number, numb
   };
 }
 
-function parseGrItems(items: string | null | undefined) {
-  return safeJsonParse<GrItemInput[]>(items ?? null) ?? [];
+function parseGrItems(items: string | null | undefined): GrItemInput[] {
+  const rows =
+    safeJsonParse<
+      (Omit<GrItemInput, "itemId" | "qty" | "unitCost"> & {
+        itemId?: unknown;
+        qty?: unknown;
+        unitCost?: unknown;
+      })[]
+    >(items ?? null) ?? [];
+  const parsed: GrItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parsePoGrItemId(row?.itemId);
+    if (itemId === null) continue;
+    const qty = parsePoGrQty(row.qty, itemId, "penerimaan");
+    if (qty <= 0) continue;
+    parsed.push({
+      ...row,
+      itemId,
+      qty,
+      unitCost: parsePoGrMoney(row.unitCost, itemId, "Biaya satuan penerimaan"),
+    });
+  }
+  return parsed;
 }
 
 /**
@@ -458,10 +545,12 @@ function buildPurchaseOrderTotals(lines: PurchaseOrderLine[], shippingCost: numb
 
 function purchaseOrderItemData(it: PurchaseOrderLine) {
   return {
-    itemId: Number(it.itemId),
-    qty: Number(it.qty),
-    unitPrice: Number(it.unitPrice),
-    discount: Number(it.discount || 0),
+    // itemId/qty/unitPrice/discount sudah angka ter-parse
+    // (parsePurchaseOrderItems): "2.000" tiba sebagai 2000.
+    itemId: it.itemId,
+    qty: it.qty,
+    unitPrice: it.unitPrice,
+    discount: it.discount || 0,
     total: safeSubtract(safeMultiply(it.qty, it.unitPrice, 0), it.discount || 0, 0),
   };
 }
@@ -582,11 +671,7 @@ export async function createPurchaseOrder(formData: FormData) {
     const documentNo = await generateDocumentNumber("PO");
     const slug = await nextSlug("purchaseOrder", documentNo);
 
-    const poItems = (
-      safeJsonParse<
-        { itemId: number; qty: number; unitPrice: number; discount: number }[]
-      >(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const poItems = parsePurchaseOrderItems(v.items);
 
     const shippingCost = v.shippingCost ?? 0;
     const serviceFee = v.serviceFee ?? 0;
@@ -2372,11 +2457,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
 
     const slug = await nextSlug("purchaseOrder", existingPo.documentNo, { excludeId: id });
 
-    const poItems = (
-      safeJsonParse<
-        { itemId: number; qty: number; unitPrice: number; discount: number }[]
-      >(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const poItems = parsePurchaseOrderItems(v.items);
 
     const shippingCost = v.shippingCost ?? 0;
     const serviceFee = v.serviceFee ?? 0;
