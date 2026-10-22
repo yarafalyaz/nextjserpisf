@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button"
 interface RevisionRow {
   itemId: string
   qty: string
+  scrapPercent: string
 }
 
 interface ProductOption {
@@ -36,7 +37,7 @@ interface BomRevisionEdit {
   productId: number
   effectiveDate: string
   notes: string | null
-  materials: { itemId: number; qty: number }[]
+  materials: { itemId: number; qty: number; scrapPercent?: number | null }[]
 }
 
 /**
@@ -59,8 +60,8 @@ export function BomRevisionForm({
   const [productId, setProductId] = useState<number | null>(revision?.productId ?? null)
   const [lines, setLines] = useState<RevisionRow[]>(
     revision && revision.materials.length > 0
-      ? revision.materials.map((m) => ({ itemId: String(m.itemId), qty: String(m.qty) }))
-      : [{ itemId: "", qty: "" }],
+      ? revision.materials.map((m) => ({ itemId: String(m.itemId), qty: String(m.qty), scrapPercent: m.scrapPercent != null ? String(m.scrapPercent) : "" }))
+      : [{ itemId: "", qty: "", scrapPercent: "" }],
   )
 
   const itemOptions = useMemo(
@@ -74,7 +75,7 @@ export function BomRevisionForm({
   }, [items])
 
   function addLine() {
-    setLines([...lines, { itemId: "", qty: "" }])
+    setLines([...lines, { itemId: "", qty: "", scrapPercent: "" }])
   }
   function removeLine(index: number) {
     setLines(lines.filter((_, i) => i !== index))
@@ -94,6 +95,7 @@ export function BomRevisionForm({
       if (l.itemId && l.qty) {
         formData.append("revisionItemId", l.itemId)
         formData.append("revisionQty", l.qty)
+        formData.append("revisionScrapPercent", l.scrapPercent)
       }
     })
 
@@ -170,6 +172,7 @@ export function BomRevisionForm({
             <DetailTableHead>
               <DetailTableTh>Barang</DetailTableTh>
               <DetailTableTh>Jml</DetailTableTh>
+              <DetailTableTh>Scrap % (allowance)</DetailTableTh>
               <DetailTableTh>Aksi</DetailTableTh>
             </DetailTableHead>
             <DetailTableBody>
@@ -196,6 +199,18 @@ export function BomRevisionForm({
                         {m.itemId ? (uomById.get(m.itemId) ?? "") : ""}
                       </span>
                     </div>
+                  </DetailTableTd>
+                  <DetailTableTd>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      value={m.scrapPercent}
+                      onChange={(e) => updateLine(index, "scrapPercent", e.target.value)}
+                      placeholder="Kosong = belum kalibrasi"
+                      aria-label="Persen allowance scrap baris BOM"
+                    />
                   </DetailTableTd>
                   <DetailTableTd>
                     <Button

@@ -19,7 +19,8 @@ import {
   onTransferProcessed as onInventoryTransferProcessed,
   onTransferReceived as onInventoryTransferReceived,
 } from "@/lib/hooks/inventory-transfer.hook";
-import { onMaterialIssueCompleted as onMaterialIssueStock } from "@/lib/hooks/material-issue.hook";
+import { onMaterialIssueCompleted as onMaterialIssueStock, resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
+import { validateScrapInput } from "@/lib/services/scrap-classification";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
@@ -542,10 +543,21 @@ export async function createMaterialIssue(formData: FormData) {
     const documentNo = await generateDocumentNumber("MI");
 
     const miItems = (
-      safeJsonParse<{ itemId: number; qty: number; unitCost: number }[]>(
-        v.items ?? null,
-      ) ?? []
+      safeJsonParse<
+        {
+          itemId: number; qty: number; unitCost: number;
+          scrapQty?: number; scrapReasonCode?: string | null; scrapNote?: string | null;
+        }[]
+      >(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    // F-008: scrap draft divalidasi saat simpan juga (bukan hanya complete).
+    for (const it of miItems) {
+      const err = validateScrapInput({
+        issueQty: Number(it.qty), scrapQty: Number(it.scrapQty ?? 0),
+        scrapReasonCode: it.scrapReasonCode ?? null, scrapNote: it.scrapNote ?? null,
+      });
+      if (err) throw new Error(`Baris item #${it.itemId}: ${err}`);
+    }
 
     if (miItems.length === 0) {
       throw new Error(
@@ -558,26 +570,36 @@ export async function createMaterialIssue(formData: FormData) {
       await assertJobCostMutable({ workOrderId: v.workOrderId }, "dibuatkan pengeluaran materialnya")
     }
 
-    const issue = await prisma.materialIssue.create({
-      data: {
-        documentNo,
-        slug: await nextSlug("materialIssue", documentNo),
-        warehouseId: v.warehouseId,
-        projectId: v.projectId ?? null,
-        workOrderId: v.workOrderId ?? null,
-        costCenterId: v.costCenterId ?? null,
-        date: wibDateToUtcMidnight(v.date),
-        notes: v.notes ?? null,
-        status: "draft",
-        createdBy: Number(user.id),
-        items: {
-          create: miItems.map((it) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
-            cost: Number(it.unitCost || 0),
-          })),
+    const issue = await prisma.$transaction(async (tx) => {
+      // F-008: snapshot allowance beku saat baris lahir (resolver bersama).
+      const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
+        tx, miItems.map((it) => ({ itemId: Number(it.itemId) })), v.workOrderId ?? null,
+      );
+      return tx.materialIssue.create({
+        data: {
+          documentNo,
+          slug: await nextSlug("materialIssue", documentNo),
+          warehouseId: v.warehouseId,
+          projectId: v.projectId ?? null,
+          workOrderId: v.workOrderId ?? null,
+          costCenterId: v.costCenterId ?? null,
+          date: wibDateToUtcMidnight(v.date),
+          notes: v.notes ?? null,
+          status: "draft",
+          createdBy: Number(user.id),
+          items: {
+            create: miItems.map((it) => ({
+              itemId: Number(it.itemId),
+              qty: Number(it.qty),
+              cost: Number(it.unitCost || 0),
+              scrapQty: Number(it.scrapQty ?? 0),
+              scrapReasonCode: it.scrapReasonCode ?? null,
+              scrapNote: it.scrapNote ?? null,
+              scrapPercentSnapshot: snapshotByItem.get(Number(it.itemId)) ?? null,
+            })),
+          },
         },
-      },
+      });
     });
 
     await logActivity(
@@ -1614,13 +1636,27 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
 
     // Fix #2: Jangan generate documentNo baru saat update
     const miItems = (
-      safeJsonParse<{ itemId: number; qty: number; unitCost: number }[]>(
-        v.items ?? null,
-      ) ?? []
+      safeJsonParse<
+        {
+          itemId: number; qty: number; unitCost: number;
+          scrapQty?: number; scrapReasonCode?: string | null; scrapNote?: string | null;
+        }[]
+      >(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    for (const it of miItems) {
+      const err = validateScrapInput({
+        issueQty: Number(it.qty), scrapQty: Number(it.scrapQty ?? 0),
+        scrapReasonCode: it.scrapReasonCode ?? null, scrapNote: it.scrapNote ?? null,
+      });
+      if (err) throw new Error(`Baris item #${it.itemId}: ${err}`);
+    }
 
     const issue = await prisma.$transaction(async (tx) => {
       await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } });
+      // F-008: baris lahir ulang saat update draft -> snapshot beku ulang.
+      const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
+        tx, miItems.map((it) => ({ itemId: Number(it.itemId) })), mi.workOrderId ?? v.workOrderId ?? null,
+      );
 
       // Re-check status inside transaction (TOCTOU guard)
       const latest = await tx.materialIssue.findUnique({
@@ -1651,6 +1687,10 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
               itemId: Number(it.itemId),
               qty: Number(it.qty),
               cost: Number(it.unitCost || 0),
+              scrapQty: Number(it.scrapQty ?? 0),
+              scrapReasonCode: it.scrapReasonCode ?? null,
+              scrapNote: it.scrapNote ?? null,
+              scrapPercentSnapshot: snapshotByItem.get(Number(it.itemId)) ?? null,
             })),
           },
         },

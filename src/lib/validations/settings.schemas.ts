@@ -159,6 +159,12 @@ export const updateSystemSettingsSchema = z.object({
   wipAccountId: optionalInt(),
   materialExpenseAccountId: optionalInt(),
   materialIssueExpenseAccountId: optionalInt(),
+  // F-008 (tak terbatas; tanpa ini parseFormData membuang field diam-diam)
+  abnormalScrapPostingEnabled: z.preprocess(
+    (v) => (Array.isArray(v) ? v.some((x) => ["on", "true", "1", "yes"].includes(String(x).toLowerCase())) : v),
+    z.boolean().optional(),
+  ),
+  abnormalScrapExpenseAccountId: optionalInt(),
 
   // Accounting - General
   pettyCashAccountId: optionalInt(),
