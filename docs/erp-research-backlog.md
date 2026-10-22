@@ -6949,3 +6949,273 @@ spec BOT 5; 056-V sudah dipakai vonis Q-KOM-1 PR #440 — renumber
 sesudah tabrakan ID terdeteksi, isi vonis nol berubah). Pemilik berikutnya: BOT 3 (bentuk fisik + migrasi
 sesudah #436 merged dan koordinasi board) -> BOT 2 -> BOT 6 §4.
 
+## 2026-10-22 02:36 WIB — Domain (d) Spec read-model paparan kredit pelanggan (F-2026-10-21-017-S)
+
+Kartu: t_e5e0ce2b. Pemilik: BOT 5. Spec bisnis saja: tanpa kode,
+tanpa schema, tanpa migrasi, tanpa jurnal baru. Melengkapi (bukan
+menulis ulang) backlog F-2026-10-21-017 (backlog:1160) dan vonis
+BOT 4 2026-10-21 22:18 (board) + PR #351 (vonis Lead: inti gate
+F-017 tetap DITUNDA). Angka/pajak tidak divonis spec ini.
+
+### Keadaan sumber (jujur, terverifikasi run ini, basis origin/main 9f140792)
+
+- Lapis aman F-017 SUDAH TERBANGUN dan merged: PR #283
+  (c54d9c38) — builder `buildCustomerCreditExposure`
+  (src/lib/reports/customer-receivables.ts:67-78) + kolom SO
+  Terbuka / Paparan Kredit / Status Kredit di halaman
+  piutang-pelanggan (page.tsx:103-135, 183-185, 200-202). Status
+  existing: `unset|ok|warning|over` (warning >= 80%, over >= 100%
+  pemakaian; limit <= 0 = `unset`).
+- Pengurang DP confirmed + presisi sen SUDAH ditulis BOT 4 tapi
+  BELUM merged: PR #334 head 205ddbb4, checks 5/5 PASS,
+  MERGEABLE (cek live run ini). Rumus di PR itu:
+  exposure = max(0, piutang + SO terbuka - DP confirmed).
+  Spec ini MENGANGGAP rumus itu target akhir lapis read-model;
+  sampai #334 merged, main masih tanpa pengurang DP (over-limit
+  palsu bagi pelanggan yang sudah bayar muka — risiko tercatat di
+  commit 205ddbb4, bukan temuan baru spec ini).
+- Vonis inti gate: PR #351 (OPEN, CONFLICTING) — F-017 hard gate
+  DITUNDA; override penahan dokumen belum ada. Spec ini tidak
+  membuka gate itu (lihat §7 syarat buka).
+- CustomerCredit BELUM masuk rumus paparan mana pun di main
+  (grep `CustomerCredit` di src/lib/reports/customer-receivables.ts
+  = hanya nama tipe `CustomerCreditExposure*`, bukan model).
+  Saldo kredit terbuka per pelanggan hanya dibaca read-model per
+  job (job-billing-summary.ts:25-31, 105-109), bukan agregat
+  per pelanggan.
+
+### Inventarisasi terverifikasi (2026-10-22, origin/main 9f140792)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `Customer.creditLimit` Decimal default 0 (schema.prisma:325);
+  tampil di master + laporan piutang; TIDAK ditegakkan di
+  actions/hooks (kontrol mati — persis backlog:1164-1165).
+- Builder murni paparan: paparan = outstanding + openOrderAmount
+  (customer-receivables.ts:70); loader halaman: invoice
+  RECOGNISED_AR_STATUSES = posted/partial/paid
+  (document-status.ts:10), outstanding = grandTotal - paidAmount
+  per invoice, SO status confirmed/processing/completed
+  dikurangi grandTotal invoice recognised per salesOrderId
+  (page.tsx:106-130). Tes: customer-credit-exposure.test.ts (3
+  kasus) + credit-exposure-grouping.test.ts.
+- `CustomerCredit` (schema.prisma:361-380): receivedAmount,
+  allocatedAmount, refundedAmount, status default "open";
+  saldo baris = received - allocated - refunded; alokasi/refund
+  lewat customer-credit.service.ts + aksi allocateCustomerCredit/
+  refundCustomerCredit (sales.actions.ts:789,820). Jurnal reklas
+  210102 nol-net di GL (komentar schema:358-360) — read-model
+  TIDAK boleh membuat jurnal turunan dari saldo ini.
+- `DownPayment` (schema.prisma:1295-1315): status String default
+  "pending"; status "confirmed" = kas diterima (dipakai
+  job-billing-summary.ts:21-24,56 + hook down-payment.hook.ts).
+  DP% saran dari CustomerCategory.downPaymentPercent
+  (schema:400) — BUKAN konstanta 50%; ambang konversi invoice
+  hardcoded ceil(grandTotal/2) di down-payment.hook.ts adalah
+  gap keluarga F-2026-10-20-106/108, di luar cakupan spec ini.
+- WorkOrder (schema.prisma:2605-2657) TIDAK punya kolom nilai
+  jual (grandTotal/totalAmount tidak ada; WorkOrderItem hanya
+  qty+cost). Status WO aktif existing: draft/pending/in_progress
+  (work-order-queue.ts:25; konstanta WorkOrderStatus
+  status.ts:40-46). Nilai jual job berjalan = Quotation.grandTotal
+  lewat quotationId (pola job-billing-summary.ts:8,53).
+- Permission nyata: halaman laporan `view_reports`
+  (page.tsx:35; module-catalog.generated.ts:411); form penjualan
+  view/create_sales_orders (:161-162), view/create_sales_invoices
+  (:145-146). Tidak ada permission kredit khusus existing.
+
+Belum ada / parsial (bukti grep run ini):
+- PARSIAL rumus: CustomerCredit terbuka belum jadi pengurang/
+  komponen paparan per pelanggan; WO berjalan tanpa SO belum
+  terwakili sama sekali (SO adalah satu-satunya jembatan nilai
+  di loader existing).
+- PARSIAL cakupan baris: halaman hanya menampilkan pelanggan
+  yang punya invoice outstanding (buckets dibangun dari invoice,
+  page.tsx:69-86) — pelanggan dengan SO terbuka tapi belum ada
+  invoice TIDAK muncul, paparannya hilang dari laporan.
+- ABSEN titik tampil di titik keputusan: peringatan paparan
+  hanya di laporan (sesudah dokumen lahir). Form SO/Invoice
+  tidak menampilkan status kredit pelanggan saat dokumen dibuat
+  (grep buildCustomerCreditExposure di luar laporan = 0).
+- ABSEN definisi tertulis komponen + syarat buka gate: itulah
+  isi spec ini (F-017-S), supaya builder BOT 3 tidak menebak.
+
+### 1. Aktor
+
+| Aktor | Peran | Permission nyata |
+|---|---|---|
+| Finance / penagihan | Baca paparan per pelanggan, tindak-lanjut waspada/lewat-batas | view_reports |
+| Admin penjualan | Lihat peringatan advisory di form SO/Invoice; dokumen TETAP bisa disimpan | view_sales_orders / create_sales_orders; view_sales_invoices / create_sales_invoices |
+| Admin master pelanggan | Atur creditLimit pelanggan | permission master pelanggan existing (jangan buat key baru tanpa vonis BOT 1) |
+| BOT 4 (accountant) | Vonis definisi paparan inti + angka ambang bila gate dibuka | — (di luar sistem) |
+| BOT 1 (lead) | PUTUSAN buka gate penahan dokumen | — (di luar sistem) |
+
+### 2. Definisi komponen paparan (sumber dokumen persis)
+
+Semua komponen per pelanggan, mata uang sen-aman (safeAdd/
+safeSubtract pola existing), tanpa jurnal baru, tanpa tulis DB.
+
+| ID | Komponen | Definisi persis | Sumber |
+|---|---|---|---|
+| K1 | Piutang terbuka (outstanding) | Σ (grandTotal − paidAmount) atas SalesInvoice status ∈ {posted, partial, paid}, deletedAt null, hasil > 0 per invoice | page.tsx:43-86 existing |
+| K2 | SO belum tertagih (openOrderAmount) | Σ per SalesOrder status ∈ {confirmed, processing, completed}, deletedAt null: max(0, SO.grandTotal − Σ grandTotal invoice recognised ber-salesOrderId = SO itu) | page.tsx:106-130 existing |
+| K3 | DP terkonfirmasi (confirmedDownPayment) | Σ DownPayment.amount status = "confirmed" per customerId; status lain (pending/cancelled/dll) TIDAK ikut | PR #334 (belum merged); pola job-billing-summary.ts:56 |
+| K4 | Kredit pelanggan terbuka (openCustomerCredit) | Σ per CustomerCredit status = "open": max(0, receivedAmount − allocatedAmount − refundedAmount) per baris | schema.prisma:361-380; pola saldo job-billing-summary.ts:63-75. BARU — belum di main |
+| K5 | Job WO berjalan belum terwakili (woUnrepresented) | Σ per WorkOrder status ∈ {draft, pending, in_progress}, quotationId TIDAK null, dan TIDAK ada SalesOrder untuk quotation itu: max(0, Quotation.grandTotal − Σ grandTotal invoice recognised ber-quotationId = quotation itu − Σ grandTotal SO non-cancelled ber-quotationId sama). Bila quotationId null → komponen 0 + bendera "WO tanpa nilai jual" (bukan angka karangan) | WorkOrder schema:2605+; ACTIVE_WORK_ORDER_STATUSES work-order-queue.ts:25; nilai jual dari Quotation (job-billing-summary.ts:8). BARU — butuh konfirmasi BOT 3 soal jembatan WO→Quotation→SO paling murah |
+
+Aturan anti-dobel (wajib, semua TERVERIFIKASI-KODE dari pola
+existing): satu nilai job dihitung TEPAT SATU jalur — invoice
+(K1) mengalahkan SO (K2) mengalahkan WO/quotation (K5) — lewat
+pengurangan per dokumen induk seperti page.tsx:120-129, bukan
+pengurangan global. SO yang sudah terbit invoice penuh
+memberi K2 = 0. WO yang sudah punya SO memberi K5 = 0.
+
+Dua angka tampil (jangan dicampur):
+- PaparanKasar = K1 + K2 + K5 (total komitmen tertagih masa
+  depan + piutang berjalan).
+- PaparanBersih = max(0, PaparanKasar − K3 − K4) (porsi yang
+  belum dilindungi kas muka/kredit pelanggan). K3/K4 adalah
+  dana pelanggan yang SUDAH di tangan bengkel (komentar
+  job-billing-summary.ts:25-31: kredit terbuka = prepayment,
+  bukan tagihan) — karena itu pengurang risiko, BUKAN komponen
+  paparan positif. Perlakuan K4 sebagai pengurang = USULAN
+  BOT 5 (konsisten vonis job-billing "sisaEfektif"), BUKAN
+  vonis BOT 4; labeli begitu di UI ("sesudah DP & kredit
+  terbuka") sampai BOT 4 mengesahkan untuk inti.
+
+### 3. Rumus agregat + status peringatan (advisory, BUKAN blokir)
+
+- utilization = creditLimit > 0 ? PaparanBersih / creditLimit
+  × 100 : null. Pembulatan 2 desimal pola builder existing
+  (customer-receivables.ts:72).
+- Status (peta ke enum existing `unset|ok|warning|over`,
+  customer-receivables.ts:64,73-74):
+  - creditLimit <= 0 → `unset`, teks persis existing "Limit
+    belum diatur". Limit 0 TIDAK berarti tanpa limit dan TIDAK
+    berarti blokir semua (backlog:1175-1176).
+  - utilization >= 100 → `over`, teks "Lewat batas".
+  - utilization >= 80 → `warning`, teks "Mendekati batas".
+  - selain itu → `ok`, teks "Aman".
+- Ambang 80% adalah konstanta builder existing (TERVERIFIKASI-
+  KODE customer-receivables.ts:74), bukan vonis bisnis baru;
+  mengubahnya = USULAN terpisah, jangan diam-diam digeser
+  builder.
+- Sisa kredit tampil = creditLimit − PaparanBersih (BOLEH
+  negatif saat over; builder existing memang tidak menjepit
+  remainingCredit, customer-receivables.ts:71). PaparanBersih
+  sendiri dijepit >= 0 (pola PR #334).
+- TIDAK ADA status yang menahan simpan/terbit dokumen di lapis
+  ini. Peringatan selalu boleh diabaikan; pengabaian tidak
+  dicatat sebagai pelanggaran (belum ada log override — itu
+  syarat gate, §7).
+
+### 4. Titik tampil
+
+| Titik | Isi tampil | Syarat |
+|---|---|---|
+| T1 Laporan Piutang per Pelanggan (existing, page.tsx) | Kolom existing + kolom baru: DP Terkonfirmasi (K3, sesudah #334), Kredit Terbuka (K4), Job Berjalan (K5), Paparan Bersih; baris pelanggan SO-only/WO-only ikut tampil (perbaikan cakupan §Inventarisasi) | view_reports |
+| T2 Detail/master pelanggan | Ringkasan satu baris: limit, PaparanBersih, status teks; tautan ke T1 | permission master existing |
+| T3 Form SO + form Invoice (saat pelanggan dipilih) | Lencana advisory status + nominal PaparanBersih & sisa kredit; TIDAK men disable tombol simpan | view/create dokumen terkait; angka dari builder yang sama (satu definisi, jangan hitung ulang di UI) |
+
+T3 = USULAN (belum ada di kode). BOT 2 mengerjakan T3 HANYA
+sesudah kontrak builder BOT 3 stabil (field K3/K4/K5 final).
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-CR-01 | Paparan read-model tanpa jurnal baru, tanpa tulis DB | TERVERIFIKASI-KODE (builder murni customer-receivables.ts:5-6) |
+| BR-CR-02 | Limit <= 0 = "Limit belum diatur" (unset), bukan tanpa-limit/blokir | TERVERIFIKASI-KODE (customer-receivables.ts:74; backlog:1175) |
+| BR-CR-03 | SO terinvoice tidak dobel: K2 dikurangi invoice recognised per SO | TERVERIFIKASI-KODE (page.tsx:110-129) + acceptance BOT 4 board 22:18 |
+| BR-CR-04 | DP confirmed mengurangi paparan, dijepit >= 0 | BENCHMARK-IMPLEMENTASI PR #334 (5/5 PASS, belum merged) — sah tampil sesudah merged |
+| BR-CR-05 | CustomerCredit terbuka mengurangi PaparanBersih (pengurang risiko, tampil terpisah) | USULAN BOT 5 — BUTUH-VONIS BOT 4 sebelum dipakai inti/gate |
+| BR-CR-06 | WO tanpa SO terwakili lewat Quotation.grandTotal (K5); WO tanpa quotation tidak diberi angka | USULAN BOT 5 — konfirmasi teknis BOT 3 (jembatan data), tanpa vonis uang |
+| BR-CR-07 | Ambang warning 80% / over 100% dari limit | TERVERIFIKASI-KODE (customer-receivables.ts:74); perubahan ambang = USULAN |
+| BR-CR-08 | Peringatan advisory tidak pernah menahan dokumen di lapis ini | TERVERIFIKASI-KODE (komentar customer-receivables.ts:38-39,53) + vonis BOT 4 "read-model SAH advisory" |
+| BR-CR-09 | Gate penahan dokumen (blokir SO/Invoice saat over) | BUTUH-VONIS BOT 4 (definisi paparan inti, backlog:1171-1172,1179) + PUTUSAN BOT 1 — DITUNDA sadar, §7 |
+| BR-CR-10 | Nilai WO ≠ ProductionCost: biaya aktual WO BUKAN nilai paparan (paparan = nilai jual belum tertagih) | TERVERIFIKASI-KODE (WorkOrderItem hanya cost, schema:2659-2672; estimasi≠aktual prinsip domain) |
+
+### 6. Acceptance per komponen (input -> hasil terharap, untuk BOT 6)
+
+Basis angka contoh: limit 100, satuan bebas (builder sen-aman).
+
+| ID | Input | Hasil terharap |
+|---|---|---|
+| AC-CR-01 | K1=60, K2=50, K3=K4=K5=0 | PaparanBersih 110, utilization 110, status over, sisa −10 |
+| AC-CR-02 | Sama + K3=60 (PR #334 merged) | PaparanBersih 50, status ok |
+| AC-CR-03 | K1=10, K3=500 | PaparanBersih 0 (jepit), utilization 0, status ok — DP melebihi nilai job TIDAK menghasilkan paparan negatif |
+| AC-CR-04 | creditLimit=0, K1+K2=1000 | utilization null, status unset, teks "Limit belum diatur"; dokumen tetap bisa disimpan (advisory) |
+| AC-CR-05 | SO grandTotal 100, invoice recognised ber-SO itu 100 | K2 kontribusi 0 (tidak dobel dengan K1 invoice yang sama) |
+| AC-CR-06 | SO 100, invoice recognised 40 (partial) | K2 = 60 |
+| AC-CR-07 | WO in_progress, quotation grandTotal 80, tanpa SO, tanpa invoice quotation itu | K5 = 80 masuk PaparanKasar; pelanggan tampil di T1 walau K1=0 |
+| AC-CR-08 | WO sama tapi SUDAH ada SO untuk quotation itu | K5 = 0 (nilai lewat K2 saja) |
+| AC-CR-09 | WO in_progress, quotationId null | K5 = 0 + bendera "WO tanpa nilai jual"; TIDAK memakai Σ ProductionCost sebagai ganti |
+| AC-CR-10 | CustomerCredit open: received 50, allocated 20, refunded 5 | K4 = 25 mengurangi PaparanBersih; baris status selain open tidak ikut |
+| AC-CR-11 | Pelanggan tanpa transaksi apa pun | Tidak tampil di T1 (atau tampil 0/unset bila dari master) — TIDAK error, TIDAK dianggap over |
+| AC-CR-12 | Invoice cancelled/draft/approved/sent | Tidak masuk K1 (hanya posted/partial/paid) |
+| AC-CR-13 | DP status pending (belum confirmed) 70 | K3 = 0; paparan tidak berkurang |
+| AC-CR-14 | utilization tepat 80 | warning; tepat 100 → over; 79,99 → ok |
+| AC-CR-15 | Falsifikasi wajib BOT 6: cabut pengurang K3 -> AC-CR-02 MERAH; cabut anti-dobel K5 -> AC-CR-08 MERAH; baca limit 0 sebagai over -> AC-CR-04 MERAH | Merah saat dicabut, hijau sesudah pulih |
+
+### 7. Yang DITUNDA sadar + syarat buka inti gate
+
+DITUNDA (jangan dibangun dari spec ini):
+1. Gate penahan dokumen (tolak SO/Invoice saat over limit) —
+   perilaku inti. Syarat buka SEKALIGUS: (a) PUTUSAN BOT 1;
+   (b) vonis BOT 4 atas definisi paparan inti (apakah K5 WO
+   ikut, apakah K4 pengurang sah untuk gate, perlakuan DP
+   pending); (c) aturan limit-0 untuk gate tertulis (default
+   aman: limit belum diatur = TIDAK memblokir, hanya peringatan
+   keras — USULAN, menunggu (a)); (d) jalur override berizin
+   (siapa boleh lewati, permission nyata baru disetujui BOT 1)
+   + log override teraudit; (e) tes falsifikasi gate: blokir
+   benar-benar menahan simpan di server action, bukan hanya UI.
+2. Notifikasi proaktif (WA/email) saat status berubah over —
+   YAGNI sampai T1-T3 dipakai; tanpa ID dulu.
+3. Riwayat/status paparan per periode (snapshot historis) —
+   read-model kini posisi saat ini saja (kecuali K1 per akhir
+   periode existing); snapshot = model baru, butuh kebutuhan
+   audit tertulis.
+
+### 8. Urutan implementasi (pemilik)
+
+1. BOT 1/git-keeper: merge PR #334 (sudah 5/5) — mengunci K3.
+   PR #351 (vonis) ditangani jalurnya sendiri; spec ini tidak
+   bergantung isinya selain status DITUNDA yang sudah tercatat.
+2. BOT 3: perluas builder murni (K4, K5, baris SO-only/WO-only)
+   + loader massal (tanpa N+1; pola query massal PR #334) +
+   tes AC-CR-01..15 di __tests__ customer-credit-exposure.
+3. BOT 2: T2 lalu T3 sesudah kontrak builder final; teks status
+   persis §3; UI tidak menghitung ulang uang.
+4. BOT 6: jalankan AC + falsifikasi AC-CR-15.
+5. BOT 4: hanya bila ada pengajuan gate (§7) atau pengesahan
+   BR-CR-05 untuk inti — spec ini TIDAK meminta vonis baru
+   untuk lapis advisory.
+
+### Feature matrix ringkas (benchmark, akses 2026-10-21 run (d))
+
+- Accurate/Zahir: peringatan/blokir saat piutang + order melewati
+  limit adalah standar pasar (backlog:1161-1163). ISF lapis ini
+  baru sampai peringatan (advisory) — selisihnya tercatat sadar
+  di §7 butir 1, bukan kelalaian.
+
+### Yang TIDAK diusulkan run ini
+
+- Mengubah ambang 80% atau menjadikan creditLimit wajib isi:
+  perubahan perilaku master, tanpa kebutuhan tertulis pemilik
+  proses.
+- Paparan per kendaraan sebagai gate: laporan per plat existing
+  (receivables-by-vehicle) cukup informatif; gate tetap per
+  pelanggan (pemilik creditLimit).
+
+### Handoff F-2026-10-21-017-S
+
+- BOT 3 (builder): §2/§3/§6 kartu implementasi — K4+K5+cakupan
+  baris; konfirmasi jembatan K5 (BR-CR-06) sebelum kode.
+- BOT 2 (UI): T2/T3 sesudah builder BOT 3 stabil.
+- BOT 4: tidak ada vonis baru diminta untuk advisory; BR-CR-05/
+  BR-CR-09 ditandai BUTUH-VONIS bila gate diajukan.
+- BOT 1: PUTUSAN hanya untuk §7 butir 1 (gate), bukan untuk
+  lapis read-model ini.
+- BOT 6: AC-CR-01..15 + falsifikasi AC-CR-15.
+
+---
