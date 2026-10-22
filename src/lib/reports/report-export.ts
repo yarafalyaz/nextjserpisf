@@ -25,6 +25,7 @@ export type ReportPdfKey =
   | "histori-aset"
   | "biaya-pekerjaan"
   | "varians-produksi"
+  | "scrap-material"
   | "estimasi-vs-aktual"
   | "penyelesaian-pekerjaan"
   | "jurnal-pekerjaan"
@@ -55,6 +56,7 @@ export type ReportPdfKey =
   | "total-hutang"
   | "piutang-pelanggan"
   | "umur-stok"
+  | "stok-tidak-bergerak"
   | "wip-berjalan"
   | "hasil-penawaran"
   | "rekap-borongan"
@@ -109,6 +111,7 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "histori-aset": "Histori-Aset-Tetap",
     "biaya-pekerjaan": "Bahan-dan-Biaya-Pekerjaan",
     "varians-produksi": "Varians-Produksi",
+    "scrap-material": "Scrap-Material",
     "estimasi-vs-aktual": "Estimasi-vs-Aktual-Pekerjaan",
     "penyelesaian-pekerjaan": "Penyelesaian-Pesanan",
     "jurnal-pekerjaan": "Jurnal-Pekerjaan-Pesanan",
@@ -139,6 +142,7 @@ export function reportPdfFilename(report: ReportPdfKey, periodSlug: string): str
     "total-hutang": "Total-Hutang",
     "piutang-pelanggan": "Piutang-per-Pelanggan",
     "umur-stok": "Umur-Stok",
+    "stok-tidak-bergerak": "Stok-Tidak-Bergerak",
     "wip-berjalan": "Umur-WIP-Berjalan",
     "hasil-penawaran": "Hasil-Penawaran",
     "rekap-borongan": "Rekap-Borongan",

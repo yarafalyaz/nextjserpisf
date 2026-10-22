@@ -51,7 +51,8 @@ const columns = [
     header: "Status",
     cell: (info) => {
       const val = info.getValue()
-      return <StatusChip status={val} />
+      // F-2026-10-22-081-S §6: processed belum diterima = "Dalam Perjalanan".
+      return <StatusChip status={val} customLabel={val === "processed" ? "Dalam Perjalanan" : undefined} />
     },
   }),
   columnHelper.display({

@@ -65,6 +65,9 @@ interface QuotationFormProps {
   shippingMethods?: { code: string; name: string }[]
   unitOptions?: { name: string; symbol: string; category?: string | null }[]
   quotation?: Record<string, unknown> // for edit mode
+  /** F-065-S AC-DP65-6/8: info ambang server; tanpa edit_quotations baca-saja. */
+  invoiceThreshold?: { percent: number; sourceLabel: string } | null
+  canEditQuotations?: boolean
 }
 
 // ==================== SECTION ITEMS COMPONENT ====================
@@ -557,7 +560,7 @@ function QuotationTotals({ control, setValue }: { control: any; setValue: any })
 
 // ==================== MAIN FORM COMPONENT ====================
 
-export function QuotationForm({ customers, customerVehicles, items, products, generatedCode, paymentMethods = [], shippingMethods = [], unitOptions = [], quotation }: QuotationFormProps) {
+export function QuotationForm({ customers, customerVehicles, items, products, generatedCode, paymentMethods = [], shippingMethods = [], unitOptions = [], quotation, invoiceThreshold = null, canEditQuotations = true }: QuotationFormProps) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [customerOptions, setCustomerOptions] = useState(customers)
@@ -686,6 +689,30 @@ export function QuotationForm({ customers, customerVehicles, items, products, ge
             className="bg-muted"
           />
         </div>
+
+        {/* F-065-S AC-DP65-6/8: persen ambang efektif dari server, bukan hitungan UI.
+            Tanpa edit_quotations tampil baca-saja/disabled; nilai tidak pernah dikirim balik. */}
+        {invoiceThreshold ? (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="invoiceThresholdPercent">Ambang Invoice (%)</Label>
+            <Input
+              id="invoiceThresholdPercent"
+              value={`${invoiceThreshold.percent}%`}
+              readOnly
+              disabled={!canEditQuotations}
+              aria-describedby="invoiceThresholdSource"
+              className="bg-muted"
+            />
+            <p id="invoiceThresholdSource" className="text-xs text-muted-foreground">
+              {invoiceThreshold.sourceLabel}
+            </p>
+            {!canEditQuotations ? (
+              <p className="text-xs text-muted-foreground">
+                Hanya baca: ubah ambang memerlukan izin edit_quotations.
+              </p>
+            ) : null}
+          </div>
+        ) : null}
 
         {/* Customer */}
         <div className="flex flex-col gap-1.5">
