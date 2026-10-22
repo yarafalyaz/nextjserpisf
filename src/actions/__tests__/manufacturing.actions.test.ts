@@ -324,6 +324,62 @@ describe("Product Actions", () => {
       expect(res?.error).toMatch(/Qty terlalu besar/i)
       expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
     })
+
+    it("createProduct membaca qty format Indonesia penuh (1,5 dan 1.000)", async () => {
+      mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+      const fd = fdMap({ name: "Locale Qty" })
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "1,5")
+      fd.append("materialItemId", "2")
+      fd.append("materialQty", "1.000")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(true)
+      expect(mocks.prismaMock.product.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            materials: {
+              create: [
+                { itemId: 1, qty: 1.5 },
+                { itemId: 2, qty: 1000 },
+              ],
+            },
+          }),
+        }),
+      )
+    })
+
+    it("createProduct menolak qty tak terbaca tanpa menulis", async () => {
+      const fd = fdMap({ name: "Bad Locale Qty" })
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "abc")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(false)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+
+    it("updateBomRevision membaca qty revisi format Indonesia penuh", async () => {
+      mocks.prismaMock.bomRevision.findUnique.mockResolvedValue({
+        id: 9,
+        status: "draft",
+        productId: 3,
+      })
+      const fd = fdMap({})
+      fd.append("revisionItemId", "1")
+      fd.append("revisionQty", "2,5")
+      const res = await actions.updateBomRevision(9, fd)
+      expect(res?.success).toBe(true)
+      expect(mocks.prismaMock.bomRevision.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 9 },
+          data: expect.objectContaining({
+            materials: {
+              deleteMany: {},
+              create: [{ itemId: 1, qty: 2.5 }],
+            },
+          }),
+        }),
+      )
+    })
   })
 
   it("deleteProduct succeeds", async () => {
