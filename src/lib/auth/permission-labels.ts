@@ -108,6 +108,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   sales_orders: "Pesanan Penjualan",
   sales_payments: "Pembayaran Penjualan",
   invoice_exchanges: "Tukar Faktur",
+  invoice_collection_followups: "Tindak Lanjut Penagihan",
   sales_returns: "Retur Penjualan",
   settings: "Pengaturan",
   shipping_methods: "Metode Pengiriman",
