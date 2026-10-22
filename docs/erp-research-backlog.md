@@ -7676,3 +7676,95 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+#### SPEC BOT 5 F-2026-10-22-064-S (prasyarat F-2026-10-21-025 kendaraan-pelanggan; anti-duplikat-vs-F-2026-10-22-063-S-PR#497; tanpa-kode; proposal-angka=BOT6)
+
+1. **Maksud + bukti-live.** Checker fitment hari ini hanya di detail
+   Product (`src/app/(dashboard)/produksi/products/[slug]/page.tsx`
+   `FitmentChecker`) memakai `checkVehicleFitment` dgn konfigurasi
+   dirakit manual (brand/model/variant/tahun/drivetrain/transmission
+   bebas). Sales/service-advisor yg memegang unit nyata di detail
+   `CustomerVehicle` tidak bisa bertanya "part X cocok unit ini?" dari
+   kendaraan pelanggan itu sendiri — halaman kendaraan sdh memuat
+   `InstalledPartsCard` (F-024) tapi nol checker. Spec ini kontrak
+   mapan: **produk/proposal baru = checker kendaraan-pelanggan saja**;
+   aturan fitment, evaluator, action terdaftar TIDAK berubah.
+2. **Estimasi (hard-vs-soft).** Kemiripan bootstrap vs scope
+   kendaraan-pelanggan pada tekad di atas **~50%** — cara: bangun
+   konfigurasi kendaraan pelanggan (`customerVehicleId` → variant/
+   model/brand + `vehicle.year` + variant.drivetrain/transmission)
+   lalu panggil action existing yg sama :
+   - **mudah (hard):** satu loader konfigurasi server + satu komponen
+     checker di halaman `CustomerVehicle` persis pola checker Product,
+     opsi item dari katalog existing, ringkasan 3-state, izin
+     `view_vehicle_fitments` ditambah `view_customers` halaman.
+     Include bentuk `cvInclude` existing
+     (`load-customer-vehicle.ts` variant>model>brand; `Vehicle.year`,
+     `VehicleVariant.drivetrain/transmission` nullable) membuktikan
+    .loader konfigurasi 5 lapis tak perlu tabel baru.
+   - **sulit (soft):** (a) walk-up grafis bolehlah urutan panggilan
+     `checkVehicleFitment(itemId, konfigurasi)` per item yg dipilih
+     user dgn pembatalan ganti-item (pola yg checker Product sudah
+     punya dgn `useTransition`); (b) kecocokan
+     `vehicleId`-turunan: `CustomerVehicle.vehicleId` nullable —
+     kendaraan tanpa master `Vehicle` tetap render checker dgn
+     konfigurasi parsial (brand/model/variant null = wildcard,
+     JANGAN error), tetapi hasil satu-satunya yg boleh tampil =
+     `unknown` bila 3 dimensi identitas semua null (evaluator existing
+     most-specific-wins dgn seluruh wildcard).
+   - Urutan pembuktian: loader konfigurasi per unit (tes
+     derivasi+partial-null) -> panel checker halaman kendaraan ->
+     strip "paling sering dicek" (JANGAN sblm dasar stabil; lihat #3).
+3. **Putusan terbuka (OWNER: BOT3 teknis / BOT1 arsitektur):**
+   (a) **Panel permanen vs on-demand:** checker tinggal sebagai kartu
+   di `CustomerVehicle` detail (sejajar `InstalledPartsCard`) vs
+   tab/expand "Cek part"? — tidak bisa keduanya murah: Product sdh
+   punya pola kartu; SALIN pola kartu tapi taruh sesudah Part
+   terpasang agar urutan baca = identitas unit -> riwayat pasang ->
+   cek part baru. Cabut = jalur cadangan.
+   (b) **"Item yg paling sering dicek":** strip statis manual (link
+   ke checker Product dgn item terpilih) vs hitung otomatis dari log
+   panggilan checker (tabel/log baru)? — manual dulu: tanpa tabel
+   riwayat pemakaian, daftar otomatis = spekulasi; strip manual
+   cukup 3-5 item andalan bengkel dirumus pemilik proses.
+   (c) Apakah checker halaman kendaraan perlu mode "bandingkan
+   varian lain" (konfigurasi hipotetik bukan unit ini)? — DILARANG
+   spec ini: checker kendaraan menjawab unit nyata; variasi hipotetik
+   = wilayah checker Product existing. Tambah mode = duplikasi logika
+   persiapan konfigurasi.
+4. **Fungsi yg harus ada (kontrak konsumen, bukan implementasi):**
+   pilih item tunggal -> tampilkan persis 3 state evaluator:
+   `compatible` / `incompatible` / `unknown` + ruleId/source/reason
+   existing dari `evaluateFitment`. Kendaraan `customer.
+   deletedAt != null` / Unit `vehicle == null` -> checker tetap
+   muncul; label "Unit tanpa master kendaraan — hasil Belum
+   Diketahui" verbatim, bukan menyembunyikan panel. Kendaraan
+   `isActive=false` tetap bisa dicek (unit historis). Izin: halaman
+   `view_customers` (existing) + aksi cek mewarisi
+   `view_vehicle_fitments` action guard — tanpa izin fitment panel
+   TIDAK dirender (pola `canViewWarranty` existing), bukan dirender
+   mati. Nol tabel/log/estado baru; nol ubah evaluator/rules/
+   specificity/norm/vocabulary `src/lib/constants/vehicle.ts`.
+5. **Verifikasi saat live (anti-klaim-fiktif):** `grep -rn customerVehicle.*fitment src`
+   dilarang nol; tes loader: kendaraan varian+model+brand lengkap →
+   konfigurasi exact; varian drivetrain null → rule drivetrain-only
+   tidak salah cocok (norm existing); kendaraan `vehicle=null` →
+   hasil unknown + label verbatim §4 tampil di DOM; rute tanpa
+   `view_vehicle_fitments` → panel absen, bukan error 403 kasar.
+   BOT6 hanya bila panel terpasang.
+6. **Proposal angka (utk BOT6, BUKAN vonis):** budget **~50%**
+   sekadar proposal eksperimen: ukur proporsi hasil `unknown` pada
+   20 cek pertama sales; bila >80% unknown, masalahnya cakupan rules
+   (isi master dulu), BUKAN desain checker — jangan simpulkan
+   checker gagal dari statistik cakupan. Validasi wajib: hitung-xor
+   per dimensi (matikan brand → turun spesifik; matikan year →
+   rule tahun-lebar cocok) persis tes evaluator existing.
+7. **Handoff:** Implementor = **BOT3** backend-prisma (loader
+   konfigurasi) + **BOT2** frontend (panel), bila **BOT1** setujui
+   bentuk panel §3(a) && **BOT1** putus strip manual vs log §3(b).
+   BOT5 cuma spec; tidak menulis kode produksi/schema.
+8. **Anti-duplikat:** PR #497 F-2026-10-22-063-S = fitment
+   *peringatan dokumen* (Quotation/WO warn-by-item). Spec ini
+   kendaraan-pelanggan *checker* — surface berbeda, kontrak beda,
+   action yg sama di belakangnya.
+
+---
