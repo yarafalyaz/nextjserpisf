@@ -21,6 +21,7 @@
  */
 
 import { prisma, type TxClient } from "@/lib/db/prisma"
+import { getWarehouseScope } from "@/lib/auth/warehouse-scope"
 import {
   deriveMaterialRequestFulfillment,
   isMaterialRequestFulfillable,
@@ -99,6 +100,36 @@ export async function claimMaterialRequestTransition(
 
 export async function lockMaterialRequestRow(tx: Tx, id: number): Promise<void> {
   await tx.$queryRaw`SELECT id FROM material_requests WHERE id = ${id} FOR UPDATE`
+}
+
+/** AC-MR-6: lihat wajib scope tujuan ATAU sumber. */
+export async function assertMaterialRequestVisible(
+  user: { id: string; roles: string[] },
+  id: number,
+) {
+  const request = await prisma.materialRequest.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      documentNo: true,
+      status: true,
+      createdBy: true,
+      requesterWarehouseId: true,
+      sourceWarehouseId: true,
+      workOrderId: true,
+    },
+  })
+  if (!request) throw new Error("Permintaan tidak ditemukan")
+  const scope = await getWarehouseScope(user)
+  if (scope.kind === "all") return request
+  if (scope.kind === "none") throw new Error("Anda tidak memiliki akses ke gudang mana pun.")
+  if (
+    !scope.warehouseIds.includes(request.requesterWarehouseId) &&
+    !scope.warehouseIds.includes(request.sourceWarehouseId)
+  ) {
+    throw new Error("Anda tidak memiliki akses ke permintaan ini.")
+  }
+  return request
 }
 
 /**

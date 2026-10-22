@@ -95,22 +95,6 @@ async function assertSourceScope(user: ActionUser, warehouseId: number) {
   assertWarehouseAccess(await getWarehouseScope(user), warehouseId)
 }
 
-/** AC-MR-6: lihat wajib scope tujuan ATAU sumber. */
-export async function assertMaterialRequestVisible(user: ActionUser, id: number) {
-  const request = await loadRequestForAction(id)
-  if (!request) throw new Error("Permintaan tidak ditemukan")
-  const scope = await getWarehouseScope(user)
-  if (scope.kind === "all") return request
-  if (scope.kind === "none") throw new Error("Anda tidak memiliki akses ke gudang mana pun.")
-  if (
-    !scope.warehouseIds.includes(request.requesterWarehouseId) &&
-    !scope.warehouseIds.includes(request.sourceWarehouseId)
-  ) {
-    throw new Error("Anda tidak memiliki akses ke permintaan ini.")
-  }
-  return request
-}
-
 function fail(e: unknown, tag: string) {
   if (isNextRedirectError(e)) throw e
   console.error(`[${tag}]`, getErrorMessage(e) || e)

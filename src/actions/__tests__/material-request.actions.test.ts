@@ -67,14 +67,16 @@ vi.mock("@/lib/utils/slug-db", () => ({
 
 import {
   approveMaterialRequest,
-  assertMaterialRequestVisible,
   cancelMaterialRequest,
   closeMaterialRequest,
   createMaterialRequest,
   createTransferFromMaterialRequest,
   rejectMaterialRequest,
 } from "../material-request.actions"
-import { refreshMaterialRequestFulfillmentTx } from "@/lib/services/material-request.service"
+import {
+  assertMaterialRequestVisible,
+  refreshMaterialRequestFulfillmentTx,
+} from "@/lib/services/material-request.service"
 
 const USER = { id: "7", roles: ["super_admin"] }
 
