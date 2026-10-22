@@ -95,6 +95,12 @@ export function validateCloseReason(reason: string | null | undefined): string |
   return trimmed
 }
 
+export function validateCancelReason(reason: string | null | undefined): string | { error: string } {
+  const trimmed = (reason ?? "").trim()
+  if (!trimmed) return { error: "Alasan pembatalan wajib diisi." }
+  return trimmed
+}
+
 export function validateReopenReason(reason: string | null | undefined): string | { error: string } {
   const trimmed = (reason ?? "").trim()
   if (!trimmed) return { error: "Alasan reopen wajib diisi (tidak boleh kosong/spasi)." }

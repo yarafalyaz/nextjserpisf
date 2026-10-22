@@ -125,6 +125,8 @@ export default async function SalesReturnDetailPage({
           }
         />
         <DetailField label="Alasan" value={salesReturn.reason || "-"} colSpan="full" />
+        <DetailField label="Nomor Nota Retur Pajak" value={salesReturn.taxReturnNoteNumber || "-"} mono />
+        <DetailField label="Tanggal Nota Retur Pajak" value={salesReturn.taxReturnNoteDate ? formatDate(salesReturn.taxReturnNoteDate) : "-"} />
       </DetailCard>
 
       {/* Items */}

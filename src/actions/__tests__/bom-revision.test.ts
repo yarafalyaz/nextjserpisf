@@ -115,10 +115,10 @@ describe("createProductionOrder — BOM revision pinning", () => {
     expect(res.success).toBe(true)
     const arg = productionOrderCreateMock.mock.calls[0][0]
     expect(arg.data.bomRevisionId).toBe(42)
-    // frozen lines × order qty
+    // frozen lines × order qty (F-008: snapshot allowance null = belum kalibrasi)
     expect(arg.data.materials.create).toEqual([
-      { itemId: 1, qty: 8, standardCost: 10 },
-      { itemId: 2, qty: 12, standardCost: 5 },
+      { itemId: 1, qty: 8, standardCost: 10, scrapPercentSnapshot: null },
+      { itemId: 2, qty: 12, standardCost: 5, scrapPercentSnapshot: null },
     ])
     // Working BOM must NOT be read when a released revision exists.
     expect(productMaterialFindManyMock).not.toHaveBeenCalled()
@@ -136,7 +136,7 @@ describe("createProductionOrder — BOM revision pinning", () => {
     expect(res.success).toBe(true)
     const arg = productionOrderCreateMock.mock.calls[0][0]
     expect(arg.data.bomRevisionId).toBeNull()
-    expect(arg.data.materials.create).toEqual([{ itemId: 7, qty: 3, standardCost: 4 }])
+    expect(arg.data.materials.create).toEqual([{ itemId: 7, qty: 3, standardCost: 4, scrapPercentSnapshot: null }])
   })
 })
 
@@ -371,8 +371,8 @@ describe("updateBomRevision", () => {
     const arg = bomRevisionUpdateMock.mock.calls[0][0]
     expect(arg.where).toEqual({ id: 1 })
     expect(arg.data.materials.create).toEqual([
-      { itemId: 1, qty: 2 },
-      { itemId: 3, qty: 5 },
+      { itemId: 1, qty: 2, scrapPercent: null },
+      { itemId: 3, qty: 5, scrapPercent: null },
     ])
   })
 })
