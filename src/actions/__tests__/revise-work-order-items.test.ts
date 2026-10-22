@@ -24,6 +24,7 @@ const tx = {
     createMany: (...a: unknown[]) => woiCreateMany(...a),
   },
   materialIssueItem: { findMany: (...a: unknown[]) => miItemFindMany(...a) },
+  stockReservation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
 }
 
 beforeEach(() => {

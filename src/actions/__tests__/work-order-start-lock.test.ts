@@ -22,6 +22,13 @@ const woItemUpdateManyMock = vi.fn()
 const opFindManyMock = vi.fn()
 const opCreateManyMock = vi.fn()
 const settingFindFirstMock = vi.fn()
+// F-2026-10-21-012 inti: start kini juga melahirkan reservasi di tx klaim;
+// mock touchpoint service supaya guard klaim tetap fokus.
+const srFindManyMock = vi.fn()
+const srCreateMock = vi.fn()
+const miFindFirstMock = vi.fn()
+const itemFindManyMock = vi.fn()
+const miItemFindManyMock = vi.fn()
 
 vi.mock("@/lib/auth/permissions", () => ({
   requirePermission: (...a: unknown[]) => requirePermissionMock(...a),
@@ -36,6 +43,14 @@ vi.mock("@/lib/db/prisma", () => {
     workOrderOperation: {
       findMany: (...a: unknown[]) => opFindManyMock(...a),
       createMany: (...a: unknown[]) => opCreateManyMock(...a),
+    },
+    materialIssue: { findFirst: (...a: unknown[]) => miFindFirstMock(...a) },
+    materialIssueItem: { findMany: (...a: unknown[]) => miItemFindManyMock(...a) },
+    item: { findMany: (...a: unknown[]) => itemFindManyMock(...a) },
+    inventoryLayer: { aggregate: vi.fn().mockResolvedValue({ _sum: { remaining: 0 } }) },
+    stockReservation: {
+      findMany: (...a: unknown[]) => srFindManyMock(...a),
+      create: (...a: unknown[]) => srCreateMock(...a),
     },
     systemSetting: { findFirst: (...a: unknown[]) => settingFindFirstMock(...a) },
     $queryRaw: vi.fn().mockResolvedValue([{ id: 10 }]),
@@ -68,11 +83,16 @@ beforeEach(() => {
   ]) m.mockReset()
   opFindManyMock.mockResolvedValue([])
   opCreateManyMock.mockResolvedValue({ count: 4 })
+  srFindManyMock.mockResolvedValue([])
+  srCreateMock.mockResolvedValue({ id: 1 })
+  miFindFirstMock.mockResolvedValue(null)
+  itemFindManyMock.mockResolvedValue([{ id: 7, defaultWarehouseId: 3 }])
+  miItemFindManyMock.mockResolvedValue([])
   settingFindFirstMock.mockResolvedValue(null)
   requirePermissionMock.mockResolvedValue({ id: 5 })
   woFindUniqueOrThrowMock.mockResolvedValue({
     id: 10, status: "pending", documentNo: "WO-0001",
-    items: [{ itemId: 7, qty: 2 }],
+    items: [{ id: 1, itemId: 7, qty: 2, status: "pending" }],
   })
   woUpdateManyMock.mockResolvedValue({ count: 1 })
   woItemUpdateManyMock.mockResolvedValue({ count: 1 })
@@ -100,6 +120,8 @@ describe("startWorkOrder concurrency guard", () => {
 
     expect(result.success).toBe(false)
     expect(woItemUpdateManyMock).not.toHaveBeenCalled()
+    // AC-RES-9: hanya pemenang klaim melahirkan reservasi.
+    expect(srCreateMock).not.toHaveBeenCalled()
   })
 
   it("refuses to start a WO with no items", async () => {
