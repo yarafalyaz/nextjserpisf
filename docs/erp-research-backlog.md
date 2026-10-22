@@ -7379,3 +7379,118 @@ BOT 6 (falsifikasi atas head BOT 3/BOT 2):
 
 Pemilik usulan: BOT 5 (spec). Butuh putusan accountant: YA (Q-CO-4
 saja; pola uang inti sudah vonis BOT 4 2026-10-20 22:38).
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-066-V Q-CO-4 (change order WO F-2026-10-22-066-S)
+
+Pemilik vonis: BOT 4. Pertanyaan: BR-CO-05 spec PR #503 §4/§5 Q-CO-4.
+Bukti kode pada head PR #503 `1b0a8b91` (= isi fungsi sama di
+origin/main ea430e34): `computeQuotationTotals` +
+`computeQuotationLine` (src/actions/sales.actions.ts:727),
+`draftDerivedInvoiceData` (:1151), `createDifferenceInvoice` (:1194),
+`createProgressInvoice` (:1267), `createRevisionDownCredit` (:1349),
+builder `src/lib/reports/job-billing-progress.ts` +
+`quotation-revision-delta.ts`.
+
+### Vonis 1 — hitung ulang: BR-CO-05 DIKONFIRMASI dengan koreksi presisi
+
+- DIKONFIRMASI: terapkan CO yang mengubah nilai WAJIB menulis
+  `Quotation.grandTotal` BARU lewat jalur hitung quotation existing
+  (`computeQuotationTotals`: subtotal baris − diskon header + tax
+  header), BUKAN menyimpan nilai kontrak kedua di dokumen CO
+  (konsisten BR-CO-01 + warisan vonis 2026-10-20 22:38: sumber nilai
+  tunggal `Quotation.grandTotal`, urutan setuju → revisi nilai →
+  panggil jalur uang existing, tanpa jurnal baru dari CO, baris
+  ter-issue terkunci).
+- KOREKSI ISTILAH (mengikat BOT 3): di kode berjalan TIDAK ADA mesin
+  DPP/PPN di quotation. `tax` quotation = angka header bebas
+  (`Number(data.tax)`, sales.actions.ts:732), bukan tarif × DPP, dan
+  tidak ada tarif/DPP per baris. Jadi "hitung ulang PPN" pada CO =
+  hitung ulang `grandTotal` lewat `computeQuotationTotals` apa
+  adanya; JANGAN bangun perhitungan PPN baru (tarif × DPP) di jalur
+  CO/quotation — itu fitur pajak terpisah di luar scope 066-S.
+  Akibatnya: perubahan baris CO mengubah subtotal/diskon/tax-header
+  sesuai input revisi, dan `grandTotal` hasil hitung ulang adalah
+  satu-satunya angka yang mengalir ke faktur selisih/kredit.
+- Faktur selisih tax=0 (`draftDerivedInvoiceData`: `tax:0,
+  taxAmount:0`, baris tunggal tanpa itemId): SAH dan WAJIB dipakai
+  apa adanya, BUKAN cacat yang harus "diperbaiki" jadi ber-PPN.
+  Alasan: nominal selisih dihitung dari `grandTotal` berjalan −
+  Σ invoice non-cancelled, dan `grandTotal` SUDAH memuat komponen
+  tax header; memecah selisih jadi DPP+PPN di faktur selisih akan
+  (a) menebak tarif yang tidak disimpan di quotation, (b) berisiko
+  dobel-hitung komponen pajak yang sudah ada di grandTotal, dan
+  (c) menyimpang dari seluruh rantai existing — faktur progres
+  (`createProgressInvoice`) pun terbit lewat `draftDerivedInvoiceData`
+  tax=0 yang sama, termasuk progres 100%. Konsistensi rantai >
+  rekonstruksi PPN yang sumber datanya tidak ada. Faktur pajak/
+  perlakuan PPN dokumen terbit tetap domain jalur faktur pajak
+  existing saat posting, bukan dokumen CO dan bukan faktur selisih
+  draft ini.
+- Syarat penjaga BOT 3: (i) hitung ulang hanya di server dalam tx
+  terapkan, dari baris quotation hasil perubahan CO — angka kiriman
+  klien untuk subtotal/tax/grandTotal ditolak/dihitung ulang, pola
+  AUD-R10-03 existing; (ii) sesudah grandTotal baru tertulis, uang
+  keluar HANYA lewat `createDifferenceInvoice` (selisih > 0) /
+  `createRevisionDownCredit` (selisih < 0) existing — dilarang
+  logika kandidat kedua di service CO; (iii) terapkan idempoten:
+  status bukan `disetujui` ditolak, panggil 2x = satu dokumen uang.
+
+### Vonis 2 — selisih negatif sesudah progres 100%: KREDIT TURUN, BUKAN faktur negatif
+
+- DIPUTUS: selisih negatif (tertagih/DP terikat > grandTotal baru),
+  termasuk sesudah faktur progres terbit 100%, WAJIB lewat
+  `createRevisionDownCredit` existing: CustomerCredit pasif
+  `sourceType=RevisionDown, sourceId=quotationId`, nominal dari
+  builder `computeRevisionDownCreditCandidate` (kelebihan =
+  max(Σ invoice non-cancelled, DP confirmed) − nilai berjalan,
+  dikurangi kredit RevisionDown + DownPayment existing — anti
+  dobel), TANPA jurnal saat lahir; jurnal hanya saat alokasi ke
+  tagihan lain/refund lewat customer-credit.service existing.
+- FAKTUR NEGATIF DILARANG: tidak ada konsep faktur nominal negatif
+  di jalur existing (`createDifferenceInvoice` menolak selisih ≤ 0;
+  `draftDerivedInvoiceData` mengasumsikan amount positif), dan
+  membuat faktur negatif akan memposting jurnal piutang negatif +
+  berpotensi menggerakkan stok — melanggar BR-CO-02 (jurnal hanya
+  dari posting dokumen uang existing) dan warisan vonis 22:38.
+  Koreksi nilai turun yang sudah terposting = kredit pelanggan
+  pasif (di atas); retur/faktur pajak retur = jalur dokumen retur
+  existing bila barang/dokumen pajak memang harus dikoreksi —
+  BUKAN urusan dokumen CO, jangan digabung ke 066-S.
+- Batas: bila sesudah progres 100% nilai NAIK, tetap faktur selisih
+  positif tax=0 untuk sisa selisih (grandTotal baru − tertagih);
+  bila nilai TETAP/selisih 0, CO tetap `diterapkan` tanpa dokumen
+  uang + catatan alasan (pola edge spec §6), bukan error senyap.
+
+### Falsifikasi wajib BOT 6 (atas head BOT 3)
+
+1. CO menaikkan nilai: grandTotal berubah HANYA lewat hitung ulang
+   server; kirim grandTotal/tax rekayasa dari klien → hasil server
+   berbeda dari kiriman = lolos; hasil mengikuti kiriman = MERAH.
+2. Faktur selisih dari CO: `tax=0, taxAmount=0`, nominal persis
+   grandTotal baru − Σ invoice non-cancelled; ubah builder jadi
+   memecah DPP/PPN bertarif → MERAH (penjaga vonis ini).
+3. Turun nilai pasca progres 100%: lahir CustomerCredit RevisionDown
+   pasif, nol jurnal saat create; buat jalur faktur negatif →
+   MERAH; alokasi/refund kredit baru boleh jurnal.
+4. Jurnal langsung dari aksi CO (tanpa posting faktur selisih) →
+   MERAH (AC-CO-9 spec tetap berlaku).
+5. Terapkan 2x / status bukan `disetujui` → ditolak, dokumen uang
+   tetap satu.
+
+### Klaim kepatuhan
+
+Vonis ini mengatur perlakuan internal dokumen komersial (quotation,
+faktur selisih draft, kredit pelanggan); BUKAN klaim perlakuan faktur
+pajak/SPT. Tidak ada tarif/aturan pajak baru yang diputus di sini —
+justru diputus untuk TIDAK merekonstruksi PPN dari data yang tidak
+menyimpan tarif/DPP. Perlakuan faktur pajak atas faktur yang
+diposting tetap mengikuti jalur faktur pajak existing + tax rules
+register berlaku; bila owner ingin faktur selisih membawa DPP/PPN
+tersendiri, itu keputusan fitur pajak terpisah = `BUTUH-VONIS`
+baru dengan sumber DJP, di luar 066-S.
+
+ID vonis ini **F-2026-10-22-066-V** (pasangan spec F-2026-10-22-066-S
+PR #503; seri -V bebas tabrakan per grep origin/main 2026-10-22,
+maks -V terpakai 057-V). Pemilik berikutnya: BOT 3 (inti t_af177f74
+sesudah PR #503 merged + putusan BOT 1 §5A) -> BOT 2 -> BOT 6
+falsifikasi 1-5 di atas.
+
