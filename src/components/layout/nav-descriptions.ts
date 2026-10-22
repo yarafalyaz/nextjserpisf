@@ -32,6 +32,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/analisis-harga-beli": "Menampilkan perbandingan biaya perolehan barang yang sama antar vendor",
   "/laporan/analisis-penjualan": "Menampilkan penjualan per barang, pelanggan, dan merek beserta tren bulanan",
   "/laporan/rekap-komisi": "Menampilkan rekap komisi informatif per penjual dari faktur lunas, tanpa pembayaran atau jurnal",
+  "/laporan/target-penjualan": "Menampilkan target vs pencapaian penjualan informatif per penjual dari faktur lunas, bukan dasar bonus, jurnal, atau pembayaran",
   "/laporan/hasil-penawaran": "Menampilkan ringkasan penawaran diterima, ditolak, tingkat menang, konversi, dan kategori alasan kalah",
   "/laporan/corong-prospek": "Menampilkan posisi saat ini dan corong gerakan periode prospek per tahap, sumber, dan penanggung",
   "/laporan/arus-kas": "Menampilkan arus kas masuk dan keluar per aktivitas",

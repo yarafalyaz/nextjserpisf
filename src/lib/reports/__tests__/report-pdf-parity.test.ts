@@ -87,6 +87,7 @@ describe("paritas registry PDF laporan", () => {
       "proyeksi-kas",
       "pusat-laba",
       "rekap-komisi",
+      "target-penjualan",
       "serapan-overhead",
     ]
     const hilang = REPORT_CATALOG_HREFS.map(hrefToKey).filter((key) => !(key in REPORTS) && !TANPA_PDF.includes(key))

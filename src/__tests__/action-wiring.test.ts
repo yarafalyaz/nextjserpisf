@@ -151,18 +151,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // di kartu frontend t_e80e8541 (buang entri ini saat UI memanggilnya).
   "src/actions/hrm.actions.ts::getEmployeeLifecycleAttention":
     "F-2026-10-22-085-S inti backend; daftar perhatian siklus hidup menyusul (frontend t_e80e8541)",
-  // F-2026-10-22-088-S tahap 1 inti (t_ce3f60e0): 4 aksi target penjualan
-  // backend dulu; form target + laporan "Target vs Pencapaian Penjualan"
-  // menyusul di kartu frontend t_f605e189 (buang entri ini saat UI
-  // memanggilnya).
-  "src/actions/sales-target.actions.ts::createSalesTarget":
-    "F-2026-10-22-088-S inti backend; form target penjualan menyusul (frontend t_f605e189)",
-  "src/actions/sales-target.actions.ts::updateSalesTarget":
-    "F-2026-10-22-088-S inti backend; form target penjualan menyusul (frontend t_f605e189)",
-  "src/actions/sales-target.actions.ts::deleteSalesTarget":
-    "F-2026-10-22-088-S inti backend; form target penjualan menyusul (frontend t_f605e189)",
-  "src/actions/sales-target.actions.ts::getSalesTargetAchievementReport":
-    "F-2026-10-22-088-S inti backend; laporan Target vs Pencapaian menyusul (frontend t_f605e189)",
+  // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
+  // (halaman + panel kelola /laporan/target-penjualan, t_f605e189)
+  // — entri beku dibuang.
   // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): aksi tindak lanjut
   // penagihan backend dulu; halaman antrean + form Catat Tindak Lanjut
   // menyusul di kartu frontend t_6f73907a (buang entri ini saat UI
