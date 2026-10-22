@@ -7676,3 +7676,143 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-057-S operasional rilis reservasi stok saat WO complete/close/cancel
+
+Pemilik spec: BOT 5 (sales-crm-hr-payroll-business-workflow). Dokumen spec
+saja, tanpa kode/schema/migrasi. Pendamping operasional inti
+StockReservation PR #437 (BOT 3, OPEN head 942d2214 saat spec ditulis).
+Bukan duplikat: F-045-S = aturan reservasi (BR-RES), F-049-S = workflow
+konsumen per status WO, F-050-S = konsumen UI per layar, F-056-S = kata
+ATP lapis aman. Spec ini SATU-SATUNYA yang mengunci alur OPERATOR sesudah
+rilis otomatis terjadi: siapa melihat apa, kata pemberitahuan persis,
+dan jejak yang wajib bisa ditelusur ulang. Aturan stok/angka TIDAK
+diputus ulang di sini — rujuk BR-RES F-045-S; perubahan perilaku inti
+di #437 = ranah BOT 3, vonis uang = BOT 4. Label bukti:
+TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Benchmark resmi (akses 2026-10-22): sama dengan F-045-S —
+Accurate Pemenuhan Pesanan: https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pemenuhan-pesanan/membuat-pemenuhan-barang-sesuai-pesanan/
+Zahir Order Penjualan: https://help.zahironline.com/portal/id/kb/articles/order-penjualan
+
+### 0. Verifikasi live (2026-10-22, run ini)
+
+TERVERIFIKASI-KODE di branch PR #437 (origin/hermes/backend-stock-reservation-f012):
+- Rilis otomatis satu-satunya jalan keluar sisa aktif:
+  `releaseActiveReservationsForWorkOrderTx` (stock-reservation.service.ts:215)
+  dipanggil dalam transaksi yang sama oleh completeWorkOrder
+  (reason persis "Perintah kerja selesai"), closeWorkOrder ("Perintah
+  kerja ditutup"), cancelWorkOrder ("Perintah kerja dibatalkan: {alasan
+  operator}"). Rollback transisi WO ikut menggulung rilis (klaim AC-RES-4).
+- Jejak per baris tersimpan di model StockReservation (schema PR #437):
+  status, qtyReserved, qtyConsumed, releasedAt, releasedBy, releaseReason.
+  ActivityLog WO mencatat transisinya ("Menutup perintah kerja #…",
+  "Membatalkan perintah kerja #…: {alasan}"). TIDAK ada baris
+  ActivityLog khusus per rilis reservasi.
+- PR #437 TIDAK memuat permukaan UI apa pun (diff .tsx = 0): operator
+  hari ini tidak bisa melihat baris reservasi yang terlepas, sisa yang
+  terpakai sebagian, atau alasan rilis dari layar mana pun. Inilah
+  celah spec ini. Kata label status sudah ada sebagai konstanta di
+  `src/lib/reports/stock-reservation.ts` PR #437 (RESERVATION_LABEL_*).
+
+### 1. Matriks transisi → rilis → yang dilihat operator
+
+Penonton semua baris: pemegang view_work_orders di detail WO (gerbang
+existing; memperketat = Q-RIL-1). "Sisa aktif" = qtyReserved −
+qtyConsumed > 0 pada status active saat transisi mulai.
+
+| Transisi WO | Perilaku rilis (rujuk, jangan ubah) | Kata pemberitahuan operator (verbatim) | Permukaan |
+|---|---|---|---|
+| complete (in_progress/pending → completed) | Semua sisa aktif → released, reason "Perintah kerja selesai", satu tx dengan penyelesaian (BR-RES-10) | Bila ada sisa terlepas: "Selesai — {n} reservasi sisa dilepas" ; bila tidak ada sisa aktif: tanpa baris pemberitahuan rilis | Detail WO: bagian reservasi (§2) + hasil aksi complete |
+| close (completed → closed) | Rilis no-op lazimnya (sudah released di complete); baris aktif yang masih ada (jalur tak lazim) → released, reason "Perintah kerja ditutup" | Bila ada baris baru terlepas di close: "Ditutup — {n} reservasi sisa dilepas" ; bila no-op: tanpa pemberitahuan | Detail WO: bagian reservasi |
+| cancel (in_progress → cancelled, izin complete_work_orders + alasan wajib) | Semua sisa aktif → released, reason "Perintah kerja dibatalkan: {alasan}" (BR-RES-11 F-045-S) | Selalu tampil bila ada sisa: "Dibatalkan — {n} reservasi sisa dilepas karena pembatalan" ; WO tanpa reservasi aktif: tanpa pemberitahuan rilis | Detail WO: bagian reservasi + hasil aksi cancel |
+| revisi baris WO (baris diganti/qty turun) | Sisa baris terdampak → released, reason "Baris perintah kerja diganti (revisi item)"; consumed historis tak berubah (AC-RES-8) | "Revisi — {n} reservasi baris terdampak dilepas" pada hasil aksi revisi | Detail WO: bagian reservasi |
+| kedaluwarsa (expiresAt lewat, lazy-expire) | active → expired; BUKAN released dan bukan peristiwa transisi WO | Kata status per baris: "Kedaluwarsa — reservasi ulang bila masih dibutuhkan" (konstanta #437) | Detail WO: bagian reservasi |
+
+Aturan kata (USULAN, BOT 2 pakai verbatim):
+- {n} = jumlah baris reservasi yang berubah status pada peristiwa itu
+  (bukan qty). Qty per baris terlihat di tabel §2, bukan di kalimat.
+- DILARANG kata "stok dibebaskan/dikembalikan" tanpa angka baris;
+  dilarang menampilkan status mentah Inggris ke operator.
+- Transisi gagal/rollback: TIDAK ada pemberitahuan rilis dan TIDAK ada
+  baris released baru (konsekuensi satu-tx #437) — hasil aksi hanya
+  menampilkan error transisi existing.
+
+### 2. Permukaan tampil: bagian reservasi di detail WO (kebutuhan)
+
+Satu tabel read-only di detail perintah kerja (penempatan persis milik
+BOT 2; kebutuhan isi milik spec ini), per baris reservasi WO itu:
+item, gudang, qtyReserved, qtyConsumed, sisa, status berlabel Indonesia
+(konstanta RESERVATION_LABEL_* #437 verbatim), expiresAt bila active,
+dan untuk baris released: releasedAt + releaseReason apa adanya dari
+data. Baris tanpa reservasi karena gudang belum ditentukan tampil
+dengan kata #437 "Belum direservasi — gudang belum ditentukan" —
+BUKAN baris released dan tidak terhitung {n} peristiwa rilis mana pun.
+Larangan: UI tidak menghitung ulang sisa/status dari MI atau lapisan;
+semua passthrough baris StockReservation (pola kartu kebutuhan F-056-S).
+Tidak ada aksi tulis dari tabel ini (lepas manual/reservasi ulang =
+kontrak F-049-S/F-050-S, bukan spec ini).
+
+Kasus parsial (terpakai sebagian lalu WO selesai): baris berakhir
+released dengan qtyConsumed > 0 dan < qtyReserved. Operator membedakan
+tiga angka (direservasi / terpakai / sisa terlepas = qtyReserved −
+qtyConsumed) dari tabel; kata status tetap "Dilepas" (konstanta #437)
+dengan tiga angka itu tampil — DILARANG label baru yang mengarang
+makna ("Dilepas sebagian" bukan kata resmi; BOT 2 jangan menambah).
+
+### 3. Jejak tertelusur (kebutuhan, bukan skema baru)
+
+Sumber kebenaran telusur operator, urut kepercayaan:
+1. Baris StockReservation itu sendiri: status + releasedAt + releasedBy
+   + releaseReason (TERVERIFIKASI-KODE #437). Ini bukti primer rilis.
+2. ActivityLog WO untuk peristiwa transisinya (siapa complete/close/
+   cancel + alasan cancel). Bukti sekunder; menghubungkan releasedBy
+   ke peristiwa.
+Kebutuhan minimum agar telusur utuh tanpa menebak:
+- releasedBy tampil sebagai nama pengguna (resolusi ID→nama di loader,
+  pola existing repo), bukan angka ID mentah.
+- releaseReason tampil apa adanya; reason sistem ("Perintah kerja
+  selesai/ditutup", "Baris perintah kerja diganti (revisi item)")
+  TIDAK diterjemahkan ulang UI.
+- Bila di masa depan rilis perlu jejak ActivityLog per baris, itu
+  keputusan BOT 3/Lead (Q-RIL-2) — spec ini TIDAK mensyaratkannya
+  karena bukti primer per baris sudah ada di data.
+
+### 4. Acceptance untuk BOT 6 (falsifikasi)
+
+- AC-RIL-1 WO in_progress dengan 2 baris active (1 terpakai sebagian)
+  di-complete: hasil aksi memuat "Selesai — 2 reservasi sisa dilepas";
+  tabel menunjukkan consumed historis utuh + sisa terlepas benar;
+  paksa rollback completion (QC gagal) → nol baris released baru dan
+  pemberitahuan rilis tidak tampil. Cabut panggilan rilis di complete
+  → tes MERAH.
+- AC-RIL-2 Cancel tanpa alasan ditolak (perilaku #437); cancel dengan
+  alasan: releaseReason terbaca "Perintah kerja dibatalkan: {alasan}"
+  persis, kata hasil aksi "Dibatalkan — {n} reservasi sisa dilepas
+  karena pembatalan".
+- AC-RIL-3 Close atas WO completed normal: tidak ada pemberitahuan
+  rilis (no-op jujur); buat baris active yatim sebelum close (jalur
+  uji) → close melepasnya dengan reason "Perintah kerja ditutup" dan
+  kata "Ditutup — 1 reservasi sisa dilepas".
+- AC-RIL-4 Baris gudang-belum-ditentukan: tidak terhitung {n} pada
+  transisi mana pun dan kata tampil tetap kata #437, bukan "Dilepas".
+- AC-RIL-5 Pengguna tanpa view_work_orders tidak melihat tabel; UI
+  grep-bersih dari hitung ulang (tidak ada turunan status/sisa lokal
+  selain passthrough baris).
+- AC-RIL-6 Kedaluwarsa sesudah complete tidak mengubah baris released
+  (expired hanya menyentuh active — perilaku service #437); urutan
+  peristiwa di tabel tetap releasedAt transisi, bukan waktu baca.
+
+### 5. Pertanyaan terbuka
+
+- Q-RIL-1 (BUTUH-VONIS Lead): tabel reservasi ikut gerbang
+  view_work_orders saja atau dibatasi getWarehouseScope per gudang
+  baris? (Selaras Q-ATP-1 F-056-S; satu vonis untuk keduanya cukup.)
+- Q-RIL-2 (BOT 3/Lead): cukupkah bukti primer baris StockReservation +
+  ActivityLog WO, atau perlu ActivityLog per peristiwa rilis? Spec
+  merekomendasikan cukup (data sudah memuat siapa/kapan/alasan).
+
+Pemilik berikut: BOT 3 (loader tabel §2/§3 sesudah #437 merged),
+BOT 2 (kata §1 + tabel di detail WO), BOT 6 (AC-RIL-1..6), Lead
+(vonis Q-RIL-1/Q-RIL-2 + merge PR docs ini dan #437).
