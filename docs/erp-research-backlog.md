@@ -9266,3 +9266,132 @@ Dependensi: F-2026-10-21-015 (terima parsial, receivedQty) hanya untuk AC-MR-4 p
 
 ### Yang TIDAK diusulkan run ini
 - Terima parsial/selisih transfer (F-015 sendiri, sudah bervonis BOT 4), permintaan pembelian vendor (sudah ada), persetujuan bertingkat multi-penandatangan, notifikasi WA/email otomatis ke gudang sumber (kanal keluar belum ada — domain k), saran sumber otomatis dari stok (BR-MR-08 informatif saja).
+
+---
+
+## 2026-10-22 — SPEC BOT 5: F-2026-10-22-088-S Target penjualan per penjual (target vs pencapaian)
+
+> **Slot**: F-2026-10-22-088-S. Diperiksa bentrok 2026-10-22 vs `origin/main` (`0bcb8def`): -085-S BOT 5 merged (PR #535), -086-V BOT 4 (PR #536, Q-EMP-4/5), -087-V BOT 4 (PR #539, BR-EMP-12 PPh21 DAILY/INTERN) terpakai; grep `F-2026-10-22-088` di `docs/` = 0, nol PR/spec target penjualan di `gh pr list --state all`. ID 088 bebas. Diverifikasi sebelum tulis, bukan slot tetap. (Catatan: nomor 087 di domain ini sudah milik vonis BOT 4; spec ini TIDAK memakai 087.)
+>
+> **Penulis**: BOT 5 (`@sales-crm-hr-payroll-business-workflow`) — domain penjualan/CRM. USULAN spec; bukan vonis uang/pajak.
+>
+> **Induk**: F-2026-10-21-018 (d) P2 — "Harga jual bertingkat kuantitas + target penjualan absen". Cabang harga bertingkat sudah terspec (SPEC 2026-10-22 01:33, F-2026-10-21-018 harga bertingkat kuantitas); cabang target penjualan ditunda eksplisit di backlog:1181-1195 "target penjualan ditunda sampai F-016 atribusi sales dipakai". Prasyarat itu sekarang terpenuhi (lihat §0 butir 2-3). Spec ini mengangkat HANYA cabang target penjualan; harga bertingkat tidak disentuh ulang.
+>
+> **Bukan PR implementasi**: deliverable spec + backlog + board claim yang bisa langsung dieksekusi BOT 3/BOT 2/BOT 1/BOT 4 tanpa pertanyaan terbuka ke penulis. Tanpa kode.
+
+### 0. Bukti live (TERVERIFIKASI-KODE, `origin/main` @ `0bcb8def`)
+
+1. Target penjualan ABSEN total: grep `SalesTarget|salesTarget|targetPenjualan|sales_target` di `prisma/schema.prisma` + `src/` = **0 hit**. Tidak ada model, aksi, halaman, atau laporan target.
+2. Atribusi penjual SUDAH dipakai (prasyarat F-018 terpenuhi): snapshot `salesEmployeeId` mengalir Quotation (`prisma/schema.prisma:1216`) → SalesOrder (:1352) → SalesInvoice (:1409, relasi `SalesInvoiceSalesEmployee` :1437, index :1444).
+3. Rekap komisi informatif F-2026-10-21-016 tahap 2 SUDAH hidup dan SUDAH dikonsumsi UI: builder murni `src/lib/reports/sales-commission.ts:51` (`buildSalesCommissionRecap`, basis = `grandTotal` faktur status `paid` saja, ember `unattributed` untuk `salesEmployeeId` null :16-18,59-63), loader `src/lib/reports/sales-commission-data.ts:19-44` (satu query `status:"paid"`, `deletedAt:null`, rentang `date` faktur :23-35), halaman konsumen `src/app/(dashboard)/laporan/rekap-komisi/[[...segments]]/page.tsx:37` dengan gerbang `requirePermission("view_reports")` (:22 katalog `view_reports` di `module-catalog.generated.ts:411`), filter penjual tampil-saja dari rows (:39-48). Label jujur existing mengikat: angka INFORMATIF, BUKAN utang komisi, bukan dasar jurnal/pembayaran (`sales-commission.ts:23-26`).
+4. Status faktur: enum `SalesInvoiceStatus` (`prisma/schema.prisma:4527-4535`): draft/sent/posted/partial/paid/cancelled/approved. Basis "lunas" existing = `paid` saja, BUKAN `partial`/`posted`.
+5. Retur penjualan: `SalesReturn` (`prisma/schema.prisma:1572`) tertaut `salesInvoiceId` nullable (:1576), status teks default `draft`, selesai lewat `completeSalesReturn` (`src/actions/sales.actions.ts:1692`, status `completed`); retur hanya boleh dari faktur `posted|partial|paid` (`RETURNABLE_INVOICE_STATUSES`, `src/lib/validations/sales.schemas.ts:180`). Baris retur membawa `qty`/`price` (`SalesReturnItem`, schema :1610 dst.) — nilai retur per faktur bisa diturunkan, tetapi TIDAK ada tautan retur→penjual selain lewat faktur asalnya.
+6. Permission nyata relevan: `view_reports` (katalog :411) untuk laporan; master karyawan `view_employees` (:96). TIDAK ada permission key target/penjualan khusus. Spec ini TIDAK menambah permission key baru (BR-TGT-08).
+
+### 1. Masalah
+
+Pemilik bengkel menetapkan sasaran omzet per penjual per bulan, tetapi hari ini pencapaian hanya bisa direkap manual dari Rekap Komisi (yang memang dirancang informatif per penjual per masa, tanpa pembanding sasaran). Tidak ada tempat mencatat target, tidak ada persen pencapaian, tidak ada selisih. Akibatnya evaluasi penjual bergantung hitung tangan di luar sistem, dan angka "pencapaian" tiap orang bisa beda basis. Spec ini menambah master target per penjual per periode + read-model pencapaian yang MEMAKAI basis yang sama persis dengan rekap komisi existing — satu basis, dua laporan — supaya target dan komisi tidak pernah berbeda angka dasar.
+
+### 2. Fitur & alur
+
+Usulan bentuk fisik (nama model/kolom FINAL milik BOT 3 mengikuti konvensi schema; spec menetapkan makna, bukan nama):
+
+- Master target per penjual per periode (usulan `SalesTarget`): `salesEmployeeId` (FK Employee, wajib), `periodStart`/`periodEnd` (tanggal, inklusif dua ujung — pola rentang loader komisi), `targetAmount` (Decimal 15,2, > 0), `notes` opsional, `createdBy`, timestamps. Satu penjual boleh punya banyak periode; periode BERTUMPAKAN untuk penjual sama = ditolak di aksi (BR-TGT-03). Tidak ada target per barang/kategori/cabang di tahap ini (lihat §10).
+- Read-model murni `sales-target-achievement` (usulan nama BOT 3): untuk rentang laporan, per penjual yang punya target tumpang-tindih rentang: target terprorata TIDAK dihitung — target hanya dinilai utuh bila periode target termuat PENUH dalam rentang laporan; periode target yang hanya bersinggungan sebagian masuk ember "periode tidak utuh" dan TIDAK diberi persen (BR-TGT-05). Pencapaian memakai loader yang sama basisnya dengan komisi: faktur `paid`, `deletedAt:null`, `date` dalam periode target, dikelompokkan per snapshot `salesEmployeeId`.
+- Baris laporan per penjual: nama penjual, periode target, `targetAmount`, `achievedAmount` (Σ grandTotal paid), `achievementPercent` = achieved ÷ target × 100 dihitung dari total (bukan rata-rata persen harian/baris — pola kontrak agregat tertimbang), `gapAmount` = achieved − target (negatif tampil negatif, bukan disembunyikan), jumlah faktur, plus ember `unattributed` (faktur paid tanpa penjual dalam rentang: dihitung di total pencapaian perusahaan, TIDAK dibagikan ke penjual mana pun).
+- Penjual dengan pencapaian tetapi TANPA target pada periode itu tampil sebagai baris "tanpa target" dengan persen kosong (bukan 0%), supaya ketiadaan target tidak terbaca sebagai kegagalan.
+- Alur: admin penjualan menetapkan target di awal periode → selama periode, laporan target membaca pencapaian berjalan dari faktur paid yang sama dengan rekap komisi → akhir periode, persen final terbaca; mengubah target sesudah ada pencapaian TIDAK mengubah faktur/pencapaian, hanya pembanding (jejak perubahan tercatat, BR-TGT-09).
+
+### 3. Aturan bisnis (register)
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-TGT-01 | Basis pencapaian = Σ `grandTotal` faktur status `paid` saja, `deletedAt:null`, dikelompokkan per snapshot `SalesInvoice.salesEmployeeId`, jendela = `date` faktur di dalam periode target. Basis ini IDENTIK dengan rekap komisi F-2026-10-21-016 tahap 2 (`sales-commission-data.ts:23-35`); dilarang basis kedua (mis. `posted`/`partial` ikut, atau basis tanggal bayar) tanpa vonis terpisah. | USULAN (basisnya TERVERIFIKASI-KODE existing) |
+| BR-TGT-02 | Faktur `salesEmployeeId` null masuk ember `unattributed`: terhitung di total perusahaan, tidak ditebak dari `createdBy`, tidak dibagikan proporsional ke penjual. | USULAN (pola TERVERIFIKASI-KODE `sales-commission.ts:16-18`) |
+| BR-TGT-03 | Periode target penjual sama tidak boleh bertumpukan; aksi simpan menolak tumpang tindih dengan pesan menyebut periode yang bertabrakan. Periode bersebelahan (end = H, start berikutnya H+1) sah. | USULAN |
+| BR-TGT-04 | `targetAmount` wajib > 0. Target 0/null tidak disimpan; penjual tanpa target tampil "tanpa target", persen kosong — bukan 0%. | USULAN |
+| BR-TGT-05 | Persen hanya untuk periode target yang termuat PENUH dalam rentang laporan. Prorata target (mis. target bulanan dinilai per 2 minggu) DILARANG di tahap 1 — tidak ada aturan prorata yang disetujui pemilik proses; kebutuhan prorata = usulan tahap 2 terpisah. | USULAN |
+| BR-TGT-06 | Retur penjualan TIDAK mengurangi pencapaian di tahap 1. Alasan tercatat: basis komisi existing juga tidak mengurangi retur; dua laporan wajib satu basis (BR-TGT-01). Nilai retur `completed` tertaut faktur paid memang bisa diturunkan (§0.5) tetapi memakainya = basis kedua. Apakah tahap 2 mengurangi retur (dan sejak status retur apa) = Q-TGT-1 ke BOT 4/BOT 1. | USULAN tahap 1 + BUTUH-VONIS (Q-TGT-1) |
+| BR-TGT-07 | Laporan target INFORMATIF: bukan dasar jurnal, bukan utang bonus/insentif, bukan komponen slip gaji. Mengikat pencapaian ke bonus/komisi berbayar = wilayah F-2026-10-21-016 tahap 3 (jurnal komisi DITUNDA-TEKNIS vonis Lead 2026-10-21, `sales-commission.ts:12-14`) dan vonis BOT 4; spec ini tidak membukanya. Label informatif wajib tampil verbatim (§6). | USULAN (label pola TERVERIFIKASI-KODE) |
+| BR-TGT-08 | Tanpa permission key baru: kelola target memakai izin penjualan existing yang diputus Q-TGT-2; lihat laporan memakai `view_reports`. Penjual yang login TIDAK otomatis berhak melihat target/pencapaian penjual lain — cakupan lihat per-penjual = Q-TGT-3. Nominal gaji/komisi berbayar tidak pernah tampil di laporan ini. | TERVERIFIKASI-KODE (katalog existing) + BUTUH-VONIS BOT 1 (Q-TGT-2/3) |
+| BR-TGT-09 | Perubahan `targetAmount`/periode pada target yang sudah berjalan tercatat di ActivityLog existing dengan old/new (pola F-2026-10-21-035); laporan selalu memakai nilai target TERKINI, dan UI menandai target yang pernah diubah sesudah periode mulai ("target diubah <tanggal>") agar persen tidak dibaca seolah target awal. | USULAN (pola TERVERIFIKASI-KODE F-035) |
+| BR-TGT-10 | Menghapus target = soft-delete/nonaktif tercatat, bukan hapus fisik, bila periode target sudah mulai; target yang belum mulai boleh dihapus dengan jejak. Faktur dan pencapaian tidak pernah berubah oleh operasi target. | USULAN |
+| BR-TGT-11 | Persen agregat perusahaan = Σ achieved ÷ Σ target penjual yang dinilai utuh (tertimbang nilai), bukan rata-rata persen per penjual. | USULAN (pola kontrak agregat repo) |
+| BR-TGT-12 | Karyawan nonaktif tetap tampil pada laporan periode lampau bila punya target/faktur pada periode itu (nama dari snapshot/relasi Employee apa adanya); target baru hanya boleh untuk karyawan `isActive` — daftar penjual aktif difilter di aksi, bukan di UI saja. | USULAN |
+
+### 4. Benchmark (URL resmi; bukan aturan bisnis)
+
+- Accurate Online — Target Penjualan: target bisa per penjual, per barang, per kategori, per bulan, per cabang; ada Laporan Target Penjualan Penjual membandingkan target vs realisasi: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/target-penjualan/mengenal-fitur-target-penjualan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/target-penjualan/target-sales/ (akses 2026-10-22). Tahap 1 spec ini mengambil HANYA dimensi per-penjual per-periode (skala bengkel satu cabang); dimensi per-barang/kategori/cabang = §10 belum diusulkan.
+- Zahir: tidak ditemukan halaman help resmi Zahir yang menetapkan target penjualan per penjual pada URL yang diakses run ini (pencarian help.zahironline.com 2026-10-22 hasil laporan penjualan umum) — ditulis "belum terverifikasi", bukan diklaim.
+
+### 5. Role / permission matrix
+
+| Aksi | Permission key | Catatan |
+|---|---|---|
+| Lihat laporan target vs pencapaian | `view_reports` | Sama dengan Rekap Komisi (pola TERVERIFIKASI-KODE page :22) |
+| Buat/ubah/nonaktifkan target | Q-TGT-2 (BOT 1 putus: reuse izin penjualan existing vs key baru) | Sampai diputus, implementasi TIDAK mulai; spec tidak mengarang key |
+| Lihat target/pencapaian penjual lain | Q-TGT-3 | Default-aman usulan: hanya pemegang `view_reports` penuh; tampilan self-service penjual DITUNDA sampai Q-TGT-3 |
+
+### 6. Kata & label UI (mengikat BOT 2; verbatim)
+
+- Judul laporan: "Target vs Pencapaian Penjualan". Kolom: "Penjual", "Periode Target", "Target (Rp)", "Pencapaian (Rp)", "Pencapaian (%)", "Selisih (Rp)", "Faktur Lunas".
+- Label informatif wajib (verbatim, pola label komisi): "Laporan informatif dari snapshot penjual di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan tidak mengurangi pencapaian pada laporan ini."
+- Baris tanpa target: teks "Tanpa target" pada kolom Target; kolom persen kosong. Ember tanpa penjual: "Tanpa penjual (dokumen lama)".
+- Periode target tidak utuh dalam rentang: lencana "Periode target tidak utuh — persen tidak dihitung".
+- Target diubah sesudah mulai: lencana "Target diubah <dd/mm/yyyy>".
+- DILARANG kata "bonus", "insentif terutang", atau nominal kewajiban apa pun di laporan ini (BR-TGT-07).
+
+### 7. Matriks transisi status
+
+Target tidak punya mesin status dokumen; yang diatur = siklus hidup baris target:
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (tidak ada) | Buat target (periode belum/sudah mulai) | aktif | Q-TGT-2; BR-TGT-03/04/12 |
+| aktif | Ubah nominal/periode | aktif (tercatat) | BR-TGT-09; tumpang tindih ditolak ulang |
+| aktif | Nonaktifkan/hapus lunak (periode sudah mulai) | nonaktif | BR-TGT-10; hilang dari penilaian, jejak tetap |
+| aktif | Periode berakhir | aktif (final terbaca) | Tidak ada transisi paksa; persen final = baca pada rentang penuh |
+
+Pencapaian bukan status: nilai turunan baca dari faktur `paid`; faktur batal (`cancelled`) tidak pernah masuk basis sejak awal.
+
+### 8. Acceptance criteria (draf untuk BOT 6)
+
+- AC-TGT-1: Faktur `posted`/`partial` sebesar berapa pun TIDAK menaikkan pencapaian; hanya `paid` (falsifikasi: ubah status di fixture, persen bergerak = MERAH).
+- AC-TGT-2: Faktur paid tanpa `salesEmployeeId` masuk ember unattributed; total perusahaan memuatnya, tidak ada penjual yang persennya naik karenanya.
+- AC-TGT-3: Retur `completed` atas faktur paid TIDAK mengubah pencapaian tahap 1, dan label §6 tampil (falsifikasi tahap 1; perilaku ini berubah hanya sesudah Q-TGT-1 diputus).
+- AC-TGT-4: Simpan target bertumpukan untuk penjual sama ditolak; periode bersebelahan diterima; penjual berbeda pada periode sama diterima.
+- AC-TGT-5: Rentang laporan memotong periode target sebagian → baris tampil dengan lencana tidak-utuh dan persen kosong (bukan prorata).
+- AC-TGT-6: Penjual berfaktur paid tanpa target tampil "Tanpa target", persen kosong (bukan 0%).
+- AC-TGT-7: Persen perusahaan = tertimbang nilai (fixture dua penjual beda bobot; rata-rata persen sederhana = MERAH).
+- AC-TGT-8: Ubah target sesudah periode mulai → ActivityLog old/new ada, lencana "Target diubah" tampil, pencapaian tidak berubah.
+- AC-TGT-9: Pengguna tanpa `view_reports` ditolak halaman laporan; tanpa izin Q-TGT-2 ditolak aksi simpan target (server-side, bukan tombol hilang saja).
+- AC-TGT-10: Angka pencapaian laporan target untuk periode+penjual yang sama PERSIS sama dengan `paidBase` Rekap Komisi periode itu (satu basis, dibuktikan fixture bersama).
+
+### 9. Pertanyaan terbuka & pemilik vonis
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-TGT-1 | Tahap 2: pencapaian dikurangi retur `completed` tertaut faktur paid, atau tetap bruto paid selamanya? Menyentuh konsistensi basis komisi (F-016) — bila berubah, kedua laporan berubah bersama. | BOT 4 (basis uang) + BOT 1 (perilaku inti) |
+| Q-TGT-2 | Permission kelola target: reuse izin penjualan existing (sebutkan key-nya) atau key baru di katalog? | BOT 1 |
+| Q-TGT-3 | Penjual boleh melihat target/pencapaian dirinya sendiri (dan apakah milik orang lain disembunyikan total atau diagregasi)? | BOT 1 (+ pemilik proses) |
+| Q-TGT-4 | Periode target: bebas tanggal (pola Accurate) atau hanya bulanan kalender? Usulan spec = bebas tanggal; bulanan-saja menyederhanakan BR-TGT-05. | BOT 1 |
+| Q-TGT-5 | Bentuk fisik master: model baru per penjual-periode (usulan §2) vs kolom di master lain? | BOT 3 (klaim schema.prisma di board dulu) |
+
+### 10. Yang TIDAK diusulkan run ini
+
+- Target per barang/kategori/cabang (ada di Accurate): skala bengkel satu cabang, penjualan per job; nilai ulang bila ada cabang kedua atau penjualan part berulang per kategori terukur.
+- Prorata pencapaian periode sebagian: tidak ada aturan pemilik proses; memaksakan prorata = angka karangan.
+- Ikatan pencapaian → bonus/komisi berbayar/slip gaji: gerbang F-2026-10-21-016 tahap 3 + vonis BOT 4, bukan spec ini.
+- Target tim/cabang agregat di luar penjumlahan tertimbang BR-TGT-11, kuota jumlah faktur/unit sebagai basis utama (basis nilai dipilih karena identik dengan komisi; kuota unit = usulan terpisah bila diminta pemilik proses).
+
+### 11. Backlog implementasi (ID induk F-2026-10-21-018; spec ini F-2026-10-22-088-S)
+
+1. BOT 1: putus Q-TGT-2/3/4 (+ Q-TGT-1 bersama BOT 4 bila tahap 2 dibuka) dan merge PR docs spec ini bila gate hijau.
+2. BOT 3 (@backend-prisma-inventory-workshop): inti SESUDAH Q-TGT-2/4 — master target (fisik Q-TGT-5) + builder/loader pencapaian memakai basis loader komisi (AC-TGT-10 dibuktikan tes bersama), penjaga tumpang tindih/aktif, ActivityLog.
+3. BOT 2 (@frontend-ui-ux-next-js): UI SESUDAH kontrak BOT 3 — form target per penjual/periode + halaman "Target vs Pencapaian Penjualan", kata §6 verbatim, nol hitung persen di client (server/builder penentu). UI fitur didahulukan atas polish.
+4. BOT 6: AC-TGT-1..10 atas head BOT 3/BOT 2.
+5. BOT 4 (@accounting-finance-tax): hanya dipanggil untuk Q-TGT-1; tidak ada jurnal/angka kewajiban di tahap 1 (BR-TGT-07).
+
+Urutan: BOT 1 putusan → BOT 3 inti → BOT 2 UI → BOT 6. Effort usulan: inti M, UI S-M. Risiko: basis pencapaian menyimpang dari komisi → mitigasi AC-TGT-10; persen dibaca sebagai janji bonus → mitigasi label verbatim BR-TGT-07/§6.
+
+---
