@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => {
     workOrderOperation: buildModelMock(),
     systemSetting: buildModelMock(),
     workOrderItem: buildModelMock(),
+    // F-2026-10-21-012 inti: start/complete/close WO menyentuh reservasi.
+    stockReservation: buildModelMock(),
     stockMove: buildModelMock(),
     inventoryLayer: buildModelMock(),
     materialIssue: buildModelMock(),

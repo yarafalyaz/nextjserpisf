@@ -173,6 +173,67 @@ describe("Item Actions", () => {
   })
 })
 
+describe("UoM conversion factorToBase parser", () => {
+  const convFd = (rows: unknown) =>
+    fdMap({
+      name: "Item Test",
+      cost: "100",
+      price: "200",
+      uomConversions: JSON.stringify(rows),
+    })
+
+  it("createItem: faktor format Indonesia \"1.000\" terbaca 1000, \"1,5\" terbaca 1.5", async () => {
+    const res = await actions.createItem(
+      convFd([
+        { code: "TON", factorToBase: "1.000" },
+        { code: "KG", factorToBase: "1,5" },
+      ]),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.uomConversion.createMany.mock.calls.at(-1)?.[0]
+    expect(arg.data).toEqual([
+      { itemId: 1, code: "TON", factorToBase: 1000 },
+      { itemId: 1, code: "KG", factorToBase: 1.5 },
+    ])
+  })
+
+  it("updateItem: faktor format Indonesia \"2.000.000\" terbaca 2000000", async () => {
+    const res = await actions.updateItem(
+      1,
+      convFd([{ code: "GRAM", factorToBase: "2.000.000" }]),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.uomConversion.createMany.mock.calls.at(-1)?.[0]
+    expect(arg.data).toEqual([{ itemId: 1, code: "GRAM", factorToBase: 2000000 }])
+  })
+
+  it("createItem: faktor tak terbaca ditolak berpesan, tidak ada createMany", async () => {
+    const res = await actions.createItem(convFd([{ code: "BOX", factorToBase: "abc" }]))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Faktor konversi satuan")
+    expect(mocks.prismaMock.uomConversion.createMany).not.toHaveBeenCalled()
+  })
+
+  it("updateItem: faktor 0 ditolak berpesan, konversi lama tidak dihapus", async () => {
+    const res = await actions.updateItem(1, convFd([{ code: "BOX", factorToBase: 0 }]))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Faktor konversi satuan")
+    expect(mocks.prismaMock.uomConversion.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it("baris tanpa kode tetap dibuang tanpa error", async () => {
+    const res = await actions.createItem(
+      convFd([
+        { code: "", factorToBase: "abc" },
+        { code: "PCS", factorToBase: 12 },
+      ]),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.uomConversion.createMany.mock.calls.at(-1)?.[0]
+    expect(arg.data).toEqual([{ itemId: 1, code: "PCS", factorToBase: 12 }])
+  })
+})
+
 describe("Warehouse Actions", () => {
   it("createWarehouse succeeds", async () => {
     const res = await actions.createWarehouse(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))

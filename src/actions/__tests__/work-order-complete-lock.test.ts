@@ -35,6 +35,7 @@ vi.mock("@/lib/db/prisma", () => {
     },
     workOrderItem: { updateMany: (...a: unknown[]) => woItemUpdateManyMock(...a) },
     materialIssue: { findFirst: (...a: unknown[]) => miFindFirstMock(...a) },
+    stockReservation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     salesOrder: { findFirst: (...a: unknown[]) => soFindFirstMock(...a) },
     deliveryOrder: { create: (...a: unknown[]) => doCreateMock(...a) },
     deliveryOrderItem: { createMany: (...a: unknown[]) => doItemCreateManyMock(...a) },

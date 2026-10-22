@@ -27,6 +27,14 @@ export interface VendorPriceInitial {
   notes: string
 }
 
+function RequiredMark() {
+  return (
+    <span className="text-destructive" aria-hidden="true">
+      *
+    </span>
+  )
+}
+
 export function VendorPriceForm({
   vendorOptions,
   itemOptions,
@@ -80,13 +88,18 @@ export function VendorPriceForm({
   return (
     <form
       onSubmit={handleSubmit}
+      aria-label={isEdit ? "Formulir ubah harga pemasok" : "Formulir tambah harga pemasok"}
+      aria-busy={isPending}
       className="flex flex-col gap-5 rounded-xl border border-default bg-surface p-6 shadow-sm"
     >
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="vendorId">Pemasok *</Label>
+          <Label htmlFor="vendorId">
+            Pemasok <RequiredMark />
+          </Label>
           <Combobox
             id="vendorId"
+            required
             options={vendorOptions}
             value={vendorId || null}
             onChange={(value) => setVendorId(value ?? "")}
@@ -95,9 +108,12 @@ export function VendorPriceForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="itemId">Barang *</Label>
+          <Label htmlFor="itemId">
+            Barang <RequiredMark />
+          </Label>
           <Combobox
             id="itemId"
+            required
             options={itemOptions}
             value={itemId || null}
             onChange={(value) => setItemId(value ?? "")}
@@ -106,7 +122,9 @@ export function VendorPriceForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="price">Harga *</Label>
+          <Label htmlFor="price">
+            Harga <RequiredMark />
+          </Label>
           <CurrencyInput
             id="price"
             value={price}
@@ -117,7 +135,9 @@ export function VendorPriceForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="minQty">Minimal Jml *</Label>
+          <Label htmlFor="minQty">
+            Minimal Jml <RequiredMark />
+          </Label>
           <CurrencyInput
             id="minQty"
             value={minQty === "" ? null : Number(minQty)}

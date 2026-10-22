@@ -27,6 +27,12 @@ describe("SalesCustomerFormShell — a11y wiring", () => {
       expect(form.getAttribute("aria-label")).toBe("Formulir tambah uang muka")
       expect(form.getAttribute("aria-busy")).toBe("false")
       expect(container.querySelector("#customerId")!.getAttribute("aria-required")).toBe("true")
+      // Label bersih; bintang wajib hanya dekoratif (pola AppDatePicker #458).
+      const label = container.querySelector('label[for="customerId"]')!
+      expect(label.textContent).toBe("Pelanggan *")
+      const star = label.querySelector('span[aria-hidden="true"]')
+      expect(star?.textContent).toBe("*")
+      expect(star?.classList.contains("text-destructive")).toBe(true)
       unmount(root, container)
     })
   })

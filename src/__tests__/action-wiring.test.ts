@@ -111,6 +111,15 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
+  // F-2026-10-21-012 inti (t_34bb293d): aksi batal WO + lepas/reservasi ulang
+  // stok backend dulu; tombol UI menyusul di kartu frontend sesudah PR inti
+  // merge (buang 3 entri ini saat halaman produksi/perintah kerja memanggilnya).
+  "src/actions/manufacturing.actions.ts::cancelWorkOrder":
+    "F-2026-10-21-012 inti backend; tombol batal perintah kerja menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::releaseStockReservation":
+    "F-2026-10-21-012 inti backend; tombol lepas reservasi menyusul (frontend)",
+  "src/actions/manufacturing.actions.ts::reserveStockForWorkOrder":
+    "F-2026-10-21-012 inti backend; tombol reservasi ulang menyusul (frontend)",
   // F-2026-10-21-027 backend dulu (PR #360): 10 aksi komponen gaji sudah
   // dirujuk UI PR #374 (entri bekunya dibuang); tersisa getPayrollComponentLines.
   // Buang entri ini saat UI memanggilnya.
