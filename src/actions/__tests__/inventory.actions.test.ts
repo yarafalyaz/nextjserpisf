@@ -242,6 +242,40 @@ describe("Inventory Transfer Actions", () => {
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.inventoryTransfer.create).toHaveBeenCalledTimes(1);
   });
+  it("createInventoryTransfer parses qty string format Indonesia penuh", async () => {
+    mocks.prismaMock.inventoryTransfer.create.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.createInventoryTransfer(
+      transferFd({ items: itemsJson([{ itemId: 1, qty: "2.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
+  it("createInventoryTransfer menolak qty tak terbaca tanpa create", async () => {
+    const res = await actions.createInventoryTransfer(
+      transferFd({ items: itemsJson([{ itemId: 1, qty: "abc" }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Kuantitas tidak valid");
+    expect(mocks.prismaMock.inventoryTransfer.create).not.toHaveBeenCalled();
+  });
+  it("updateInventoryTransfer parses qty string format Indonesia penuh", async () => {
+    seedDraft(mocks.prismaMock.inventoryTransfer);
+    mocks.prismaMock.inventoryTransfer.update.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.updateInventoryTransfer(
+      1,
+      transferFd({ items: itemsJson([{ itemId: 1, qty: "2.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
   it("updateInventoryTransfer succeeds", async () => {
     seedDraft(mocks.prismaMock.inventoryTransfer);
     const res = await actions.updateInventoryTransfer(1, transferFd());
@@ -273,6 +307,46 @@ describe("Material Issue Actions", () => {
     const res = await actions.createMaterialIssue(miFd());
     expect(res?.success).toBe(true);
     expect(mocks.prismaMock.materialIssue.create).toHaveBeenCalledTimes(1);
+  });
+  it("createMaterialIssue parses qty/unitCost string format Indonesia penuh", async () => {
+    mocks.prismaMock.materialIssue.create.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        expect(data.items.create[0].cost).toBe(2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.createMaterialIssue(
+      miFd({
+        items: itemsJson([{ itemId: 1, qty: "2.000", unitCost: "2.000.000" }]),
+      }),
+    );
+    expect(res?.success).toBe(true);
+  });
+  it("createMaterialIssue menolak unitCost tak terbaca tanpa create", async () => {
+    const res = await actions.createMaterialIssue(
+      miFd({ items: itemsJson([{ itemId: 1, qty: 5, unitCost: "abc" }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Biaya satuan tidak valid");
+    expect(mocks.prismaMock.materialIssue.create).not.toHaveBeenCalled();
+  });
+  it("updateMaterialIssue parses qty/unitCost string format Indonesia penuh", async () => {
+    seedDraft(mocks.prismaMock.materialIssue);
+    mocks.prismaMock.materialIssue.update.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        expect(data.items.create[0].cost).toBe(2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.updateMaterialIssue(
+      1,
+      miFd({
+        items: itemsJson([{ itemId: 1, qty: "2.000", unitCost: "2.000.000" }]),
+      }),
+    );
+    expect(res?.success).toBe(true);
   });
   it("updateMaterialIssue succeeds", async () => {
     seedDraft(mocks.prismaMock.materialIssue);
