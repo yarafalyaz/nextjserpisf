@@ -39,6 +39,23 @@ export interface BomRevisionChangeDeltaPreview {
   hasGenuinelyNew: boolean
 }
 
+/** Gerbang Kirim Pengajuan: nonaktif selama pengiriman/muat pratinjau, atau pratinjau/tujuan/alasan belum ada. */
+export function isBomRevisionSubmitDisabled(input: {
+  isPending: boolean
+  previewLoading: boolean
+  preview: unknown
+  toRevisionId: string
+  reason: string
+}): boolean {
+  return (
+    input.isPending ||
+    input.previewLoading ||
+    !input.preview ||
+    !input.toRevisionId ||
+    !input.reason.trim()
+  )
+}
+
 interface Props {
   owner: { workOrderId: number } | { productionOrderId: number }
   /** Status dokumen pemilik; panel senyap total bila tidak ada revisi ter-pin. */
@@ -436,7 +453,15 @@ export function BomRevisionChangePanel({
                   reservasi stok.
                 </p>
               </div>
-            ) : null}
+            ) : toRevisionId ? (
+              <p role="note" className="text-sm text-muted-foreground">
+                Pratinjau selisih revisi belum tampil; pengajuan belum dapat dikirim.
+              </p>
+            ) : (
+              <p role="note" className="text-sm text-muted-foreground">
+                Pilih revisi tujuan untuk melihat pratinjau selisih sebelum mengirim pengajuan.
+              </p>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button variant="secondary" isDisabled={isPending} onPress={() => setFormOpen(false)}>
@@ -444,7 +469,7 @@ export function BomRevisionChangePanel({
               </Button>
               <Button
                 variant="primary"
-                isDisabled={isPending || !toRevisionId || !reason.trim()}
+                isDisabled={isBomRevisionSubmitDisabled({ isPending, previewLoading, preview, toRevisionId, reason })}
                 onPress={submitRequest}
               >
                 Kirim Pengajuan
