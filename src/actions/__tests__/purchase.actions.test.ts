@@ -1558,17 +1558,25 @@ describe("Purchase Actions Additional Branch Coverage", () => {
   })
 
   it("deleteVendorBill fails if status not draft", async () => {
-    mocks.prismaMock.vendorBill.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "posted" })
+    // Baca luar transaksi (hanya purchaseOrderId) draft, baca ulang di
+    // dalam transaksi SESUDAH kunci baris = posted: delete wajib ditolak
+    // dari baca fresh, bukan dari snapshot luar (TOCTOU confirm konkuren).
+    mocks.prismaMock.vendorBill.findUniqueOrThrow
+      .mockResolvedValueOnce({ id: 1, status: "draft", purchaseOrderId: 42 })
+      .mockResolvedValueOnce({ id: 1, status: "posted", purchaseOrderId: 42 })
     const res = await actions.deleteVendorBill(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Hanya tagihan draft yang dapat dihapus")
+    expect(mocks.prismaMock.vendorBill.delete).not.toHaveBeenCalled()
   })
 
   it("deleteVendorPayment fails if status not draft", async () => {
+    // Hanya satu baca (di dalam transaksi, sesudah kunci baris).
     mocks.prismaMock.vendorPayment.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "completed" })
     const res = await actions.deleteVendorPayment(1)
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("Hanya pembayaran draft yang dapat dihapus")
+    expect(mocks.prismaMock.vendorPayment.delete).not.toHaveBeenCalled()
   })
 
   it("updatePurchaseRequest fails if status not draft", async () => {
