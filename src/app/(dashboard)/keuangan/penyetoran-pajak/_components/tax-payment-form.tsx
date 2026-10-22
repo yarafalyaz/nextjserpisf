@@ -79,7 +79,7 @@ export function TaxPaymentForm({
       className="flex flex-col gap-5 rounded-xl border border-default bg-surface p-6 shadow-sm"
     >
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <AppDatePicker label="Tanggal Setor *" name="date" value={date} onChange={setDate} />
+        <AppDatePicker label="Tanggal Setor *" name="date" value={date} onChange={setDate} required />
 
         <div className="flex flex-col gap-1.5">
           <AppMonthPicker label="Masa Pajak" name="period" value={period} onChange={setPeriod} />
