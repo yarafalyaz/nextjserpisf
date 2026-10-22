@@ -26,6 +26,8 @@ import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/f
 import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
 import { WorkOrderProgressCard } from "@/components/reports/work-order-progress-card";
 import { getWorkOrderProgress } from "@/lib/reports/work-order-progress-data";
+import { getJobChangeOrdersForWorkOrder } from "@/actions/job-change-order.actions";
+import { JobChangeOrderPanel } from "./_components/job-change-order-panel";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
   DetailTable,
@@ -193,6 +195,23 @@ export default async function WorkOrderDetailPage({
 
   // F-036 tahap 2 + F-035: jejak klik WA terakhir + histori geser endDate.
   const whatsappTrail = await getWhatsappTrail("WorkOrder", wo.id);
+
+  // F-066-S UI (t_b1b321cb): panel Change Order — konsumen 7 aksi BOT 3.
+  // Nilai kontrak tunggal dari quotation berjalan (BR-CO-01); daftar item
+  // master hanya opsi baris tambah (harga awal dari master, server snapshot).
+  const [changeOrders, inventoryItemOptions, canCreateCo, canEditCo, canApplyCo] =
+    await Promise.all([
+      getJobChangeOrdersForWorkOrder(wo.id),
+      prisma.item.findMany({
+        where: { isActive: true, deletedAt: null },
+        select: { id: true, name: true, price: true },
+        orderBy: { name: "asc" },
+        take: 200,
+      }),
+      hasPermission("create_work_orders"),
+      hasPermission("edit_work_orders"),
+      hasPermission("complete_work_orders"),
+    ]);
 
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
@@ -471,6 +490,32 @@ export default async function WorkOrderDetailPage({
       {partStatus ? (
         <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
       ) : null}
+
+      <JobChangeOrderPanel
+        workOrderId={wo.id}
+        workOrderStatus={wo.status}
+        hasQuotation={!!wo.quotationId}
+        contractGrandTotal={wo.quotation ? Number(wo.quotation.grandTotal) : null}
+        changeOrders={changeOrders}
+        workOrderItems={wo.items
+          .filter((i) => i.status !== "replaced")
+          .map((i) => ({
+            workOrderItemId: i.id,
+            itemId: i.itemId,
+            label: itemNameMap.get(i.itemId) || `Barang #${i.itemId}`,
+            qty: Number(i.qty),
+            cost: Number(i.cost),
+          }))}
+        inventoryItems={inventoryItemOptions.map((i) => ({
+          id: i.id,
+          label: i.name,
+          price: Number(i.price),
+        }))}
+        itemNameById={Object.fromEntries(itemNameMap)}
+        canCreate={canCreateCo}
+        canEdit={canEditCo}
+        canApply={canApplyCo}
+      />
 
       <WhatsappTrailNote trail={whatsappTrail} />
 
