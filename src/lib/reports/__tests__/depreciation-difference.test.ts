@@ -14,13 +14,19 @@ function asset(overrides: Partial<DepreciationAssetInput> = {}): DepreciationAss
     name: "Laptop",
     categoryName: "Elektronik",
     purchaseCost: 12_000_000,
-    currentValue: 12_000_000,
+    bookValue: 12_000_000,
     residualValue: 0,
     depreciationMethod: "straight_line",
     categoryDepreciationRate: null,
     categoryUsefulLife: 5,
     taxDepreciationRate: null,
     taxUsefulLife: null,
+    // Default: kelompok fiskal kosong pada jenis yang TERCANTUM =
+    // belum dapat dihitung (F62-7a); aset yang mau terhitung harus
+    // mengisi taxGroupCode eksplisit.
+    taxGroupCode: null,
+    taxTypeListed: true,
+    taxDjpDetermination: false,
     ...overrides,
   }
 }
@@ -47,19 +53,42 @@ describe("accountingAnnualDepreciation", () => {
 })
 
 describe("fiscalAnnualDepreciation", () => {
-  it("mengembalikan null bila tarif/umur fiskal belum diisi", () => {
+  it("mengembalikan null bila kelompok fiskal belum dapat ditentukan (F62-7a)", () => {
+    // Jenis tercantum + kelompok kosong = belum-dihitung.
     expect(fiscalAnnualDepreciation(asset())).toBeNull()
   })
 
-  it("menghitung garis lurus dari harga perolehan memakai umur fiskal", () => {
+  it("menghitung garis lurus dari harga perolehan memakai umur statutoris kelompok 1", () => {
     // 12.000.000 / 4 tahun = 3.000.000/tahun.
-    expect(fiscalAnnualDepreciation(asset({ taxUsefulLife: 4 }))).toBe(3_000_000)
+    expect(fiscalAnnualDepreciation(asset({ taxGroupCode: "GROUP_1" }))).toBe(3_000_000)
+  })
+
+  it("F62-7b: jenis tidak tercantum tanpa kelompok memakai kelompok 3 statutoris (terhitung)", () => {
+    // Kelompok 3: 6,25%/tahun dari 12.000.000 = 750.000/tahun.
+    expect(
+      fiscalAnnualDepreciation(asset({ taxTypeListed: false })),
+    ).toBe(750_000)
+  })
+
+  it("F62-10: penetapan DJP dengan kelompok terisi mengalahkan default statutoris", () => {
+    // Tidak tercantum + penetapan DJP + kelompok 1 = 25%, bukan 6,25%.
+    expect(
+      fiscalAnnualDepreciation(
+        asset({ taxTypeListed: false, taxDjpDetermination: true, taxGroupCode: "GROUP_1" }),
+      ),
+    ).toBe(3_000_000)
+  })
+
+  it("mengembalikan null bila kelompok tidak dikenal (unknown-group)", () => {
+    expect(
+      fiscalAnnualDepreciation(asset({ taxGroupCode: "KELAS_X" })),
+    ).toBeNull()
   })
 })
 
 describe("buildDepreciationDifference", () => {
   it("membandingkan penyusutan akuntansi dan fiskal per aset", () => {
-    const result = buildDepreciationDifference([asset({ taxUsefulLife: 4 })])
+    const result = buildDepreciationDifference([asset({ taxGroupCode: "GROUP_1" })])
 
     expect(result.totals.accountingComparable).toBe(2_400_000)
     expect(result.totals.fiscalAnnual).toBe(3_000_000)
@@ -73,13 +102,22 @@ describe("buildDepreciationDifference", () => {
     expect(result.totals.withoutFiscal).toBe(1)
     expect(result.totals.fiscalAnnual).toBe(0)
     expect(result.totals.difference).toBe(0)
-    expect(texts(result)).toContain("belum diisi tarif/umur fiskal")
-    expect(depreciationDifferenceSummary(result)).toContain("belum diisi")
+    expect(texts(result)).toContain("belum dapat dihitung fiskalnya")
+    expect(depreciationDifferenceSummary(result)).toContain("belum dapat dihitung")
+  })
+
+  it("F62-7b: jenis tidak tercantum tanpa kelompok tetap terhitung kelompok 3, tanpa daftar tanpa-fiskal", () => {
+    const result = buildDepreciationDifference([
+      asset({ code: "A", taxTypeListed: false }),
+    ])
+
+    expect(result.totals.withoutFiscal).toBe(0)
+    expect(result.totals.fiscalAnnual).toBe(750_000)
   })
 
   it("total selisih hanya mencakup aset yang fiskalnya terisi (apel-ke-apel)", () => {
     const result = buildDepreciationDifference([
-      asset({ code: "A", taxUsefulLife: 4 }),
+      asset({ code: "A", taxGroupCode: "GROUP_1" }),
       asset({ code: "B", categoryUsefulLife: 6 }),
     ])
 
@@ -92,8 +130,8 @@ describe("buildDepreciationDifference", () => {
   it("menyatakan bila semua aset belum diisi fiskal", () => {
     const result = buildDepreciationDifference([asset(), asset({ code: "B" })])
 
-    expect(result.verdict).toContain("belum diisi")
-    expect(depreciationDifferenceSummary(result)).toContain("belum diisi untuk aset mana pun")
+    expect(result.verdict).toContain("belum dapat dihitung")
+    expect(depreciationDifferenceSummary(result)).toContain("belum dapat dihitung untuk aset mana pun")
   })
 
   it("mengelompokkan baris per kategori", () => {

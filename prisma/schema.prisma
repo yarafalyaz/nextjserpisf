@@ -3923,6 +3923,14 @@ model AssetCategory {
   /// Terpisah dari tarif/umur akuntansi supaya keduanya bisa dibandingkan.
   taxDepreciationRate              Decimal? @map("tax_depreciation_rate") @db.Decimal(5, 2)
   taxUsefulLife                    Int?     @map("tax_useful_life")
+  /// Kelompok fiskal PMK 72/2023 (vonis F-2026-10-22-062-V Putusan 2):
+  /// GROUP_1..GROUP_4 / BUILDING_PERMANENT / BUILDING_NON_PERMANENT.
+  /// Tarif statutoris hidup di tabel validasi `asset-fiscal-groups.ts`.
+  taxGroupCode                     String?  @map("tax_group_code") @db.VarChar(30)
+  /// Jenis harta tercantum di lampiran PMK 72/2023? null = belum dinyatakan.
+  taxTypeListed                    Boolean? @map("tax_type_listed")
+  /// Ada penetapan DJP (mengalahkan default kelompok 3 jenis tak tercantum).
+  taxDjpDetermination              Boolean  @default(false) @map("tax_djp_determination")
   assetAccountId                   Int?     @map("asset_account_id")
   accumulatedDepreciationAccountId Int?     @map("accumulated_depreciation_account_id")
   depreciationExpenseAccountId     Int?     @map("depreciation_expense_account_id")
