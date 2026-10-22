@@ -21,6 +21,7 @@ import {
   onTransferReceived as onInventoryTransferReceived,
 } from "@/lib/hooks/inventory-transfer.hook";
 import { onMaterialIssueCompleted as onMaterialIssueStock, resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
+import { refreshMaterialRequestFulfillmentTx } from "@/lib/services/material-request.service";
 import { createInstalledPartsForMaterialIssue } from "@/lib/services/installed-part.service";
 import { validateScrapInput } from "@/lib/services/scrap-classification";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
@@ -570,6 +571,12 @@ export async function receiveInventoryTransfer(transferId: number) {
           where: { id: transferId },
           data: { status: "received" },
         });
+
+        // F-078-S BR-MR-04: permintaan tertaut dihitung ulang dari qty
+        // DITERIMA kumulatif dalam tx yang sama (bukan dari transfer lahir).
+        if (transfer.materialRequestId) {
+          await refreshMaterialRequestFulfillmentTx(tx, transfer.materialRequestId);
+        }
       });
     } catch (e) {
       // Receiving failed after the claim flipped processed -> receiving. Restore

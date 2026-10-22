@@ -9799,6 +9799,191 @@ Catat Tindak Lanjut -> BOT 6 AC-COL-1..12.
 
 ---
 
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-092-S corong prospek (lead pipeline funnel) dari histori status
+
+Gap baru domain (d) penjualan/CRM, BUKAN turunan ID lama: belum ada ID corong prospek
+di backlog. Anti-duplikat run ini (basis origin/main 043b748d + PR terbuka):
+maks `-S` terbit 091-S (PR #551 OPEN), maks PR terbuka 091-V (PR #552);
+grep `F-2026-10-22-092` di backlog+board main = 0; grep `funnel|corong|pipeline`
+di `src/` produksi = 0 hasil relevan (hanya dashboard chart generik).
+Spec DOKUMEN SAJA, tanpa kode/schema/migrasi.
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main 043b748d, 2026-10-22)
+
+- Model: `Lead` (prisma/schema.prisma:3619) status String default `new`,
+  `estimatedValue` Decimal(15,2) nullable, `expectedCloseDate`, `source`,
+  `assignedTo`, `customerId`, `convertedAt`, `deletedAt`. `LeadActivity`
+  (schema:3654) membawa `type`, `oldStatus`, `newStatus`, `scheduledAt`,
+  `completedAt`, `userId`.
+- Kosakata status SAH satu-satunya: `LEAD_STATUSES = new, contacted,
+  qualified, proposal, negotiation, won, lost` (src/lib/validations/
+  crm.schemas.ts:84-92); `CONVERTIBLE_STATUSES = qualified, proposal,
+  negotiation, won` (:93-98). Label Indonesia: status-labels.ts:56-67
+  (Baru/Dihubungi/Terkualifikasi/Proposal/Negosiasi/Menang/Kalah).
+- Histori tahap NYATA: `updateLead` (src/actions/master.actions.ts:1458)
+  menulis `LeadActivity type=status_change` dengan `oldStatus`/
+  `newStatus` dalam SATU transaksi dengan update lead bila status berubah
+  (:1489-1525). `convertLead` (src/actions/crm.actions.ts:201) menetapkan
+  status `won` + `convertedAt` + aktivitas `conversion` dalam satu tx.
+- Yang SUDAH ada dan DILARANG diduplikasi: antrean lead basi
+  `stale-leads.ts` (status new/contacted diam >7 hari) dan antrean
+  follow-up terjadwal `lead-followups.ts` (F-2026-10-21-037), keduanya
+  dikonsumsi kartu di halaman daftar prospek (crm/leads/page.tsx:12-15).
+  Hasil penawaran `quotation-outcome.ts` (winRate/conversionRate
+  penawaran) = corong PENAWARAN, bukan corong prospek — beda populasi.
+- Yang ABSEN (bukti grep run ini): tidak ada builder/loader/kartu yang
+  menghitung (a) jumlah prospek per status saat ini, (b) transisi
+  tahap-ke-tahap dari histori `status_change`, (c) rasio konversi
+  prospek→pelanggan, (d) nilai estimasi tertimbang per tahap, atau
+  (e) pemecahan per sumber (`source`) / per penanggung (`assignedTo`).
+- Permission nyata (module-catalog.generated.ts:352-356):
+  `view/create/edit/delete/manage_leads`. Tidak ada permission laporan
+  prospek khusus; laporan existing pola `view_reports` (katalog laporan).
+  Permission final = Q-LF-1 BOT 1, spec tidak mengarang key baru.
+- Benchmark (akses 2026-10-22): Zahir CRM memasarkan pengendalian proses
+  penjualan "dari awal sampai closing" dengan status peluang jelas dan
+  pantauan owner tanpa laporan manual:
+  https://zahiraccounting.com/id/zahir-crm/ — BENCHMARK arah kebutuhan
+  (halaman pemasaran, bukan dokumentasi fitur per-layar). Accurate tidak
+  memasarkan modul CRM prospek setara (fitur penjualan mulai dari
+  penawaran): https://accurate.id/online/fitur/penjualan/ — BENCHMARK:
+  corong prospek adalah kebutuhan internal ISF, bukan paritas kompetitor.
+
+### 2. Definisi corong (kontrak hitung, semua berlabel)
+
+Tahap maju (urutan kanonik, dari LEAD_STATUSES): `new → contacted →
+qualified → proposal → negotiation → won`; `lost` = keluar kalah dari
+tahap mana pun. Status di luar kosakata (data lama/teks bebas) masuk
+ember `status_tidak_dikenal` dan TIDAK dipetakan paksa.
+
+Dua pandangan WAJIB dibedakan labelnya, tidak boleh dicampur:
+- **Posisi saat ini** (snapshot): jumlah prospek non-`deletedAt` per
+  status SEKARANG + Σ `estimatedValue` per status. `estimatedValue`
+  kosong dihitung sebagai prospek tanpa nilai (ember terpisah), BUKAN
+  nol rupiah yang menyatu dengan nilai asli Rp0.
+- **Corong periode** (gerakan): dari `LeadActivity type=status_change`
+  (+ `conversion`) dalam periode: prospek yang PERNAH mencapai tiap
+  tahap (mencapai = ada newStatus tahap itu, atau status sekarang pada
+  atau sesudah tahap itu bila histori tidak lengkap — lihat BR-LF-04),
+  transisi tahap→tahap berikutnya, dan konversi akhir `won`/`lost`.
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-LF-01 | Urutan tahap dan kosakata status PERSIS `LEAD_STATUSES`; tahap tidak boleh ditambah/dikurangi builder. Status asing → ember `status_tidak_dikenal` terhitung eksplisit | TERVERIFIKASI-KODE (crm.schemas.ts:84) + USULAN ember |
+| BR-LF-02 | Populasi = `Lead.deletedAt IS NULL`. Prospek terkonversi (`customerId` terisi / `convertedAt` terisi) tetap dihitung di tahap `won`, tidak dikeluarkan dari corong | USULAN |
+| BR-LF-03 | Konversi prospek→pelanggan HANYA dari bukti `convertedAt`/`customerId` (jalur `convertLead`), BUKAN dari status `won` saja: status bisa dipindah manual ke `won` tanpa konversi. `won` tanpa konversi masuk ember `menang_belum_terkonversi` | TERVERIFIKASI-KODE (crm.actions.ts:201) + USULAN ember |
+| BR-LF-04 | Prospek tanpa histori `status_change` yang memadai (dibuat sebelum pencatatan histori, atau status awal langsung tinggi) TIDAK ditebak jalurnya: masuk ember `tanpa_histori_tahap`, dihitung di posisi saat ini saja, dikeluarkan dari penyebut rasio transisi periode. Dilarang backfill histori karangan | USULAN (default jujur) |
+| BR-LF-05 | Rasio transisi tahap A→B = prospek mencapai B ÷ prospek mencapai A dalam kohort periode yang sama; penyebut 0 → rasio `null` tampil "belum ada data", BUKAN 0% | USULAN |
+| BR-LF-06 | Lompat tahap (mis. new→qualified tanpa contacted tercatat) dihitung mencapai tahap tujuan DAN tahap antaranya ditandai `terlewati_tidak_tercatat`, bukan dianggap gagal di tahap antara | USULAN |
+| BR-LF-07 | Mundur tahap (newStatus lebih awal dari oldStatus) sah tercatat, tidak menghapus pencapaian tahap tertinggi sebelumnya; corong memakai tahap tertinggi yang pernah dicapai per prospek per periode | USULAN |
+| BR-LF-08 | Σ nilai per tahap memakai `estimatedValue` SAAT INI (tidak ada histori nilai di schema); label wajib "nilai estimasi saat ini, bukan nilai saat tahap terjadi". Nilai tertimbang probabilitas per tahap TIDAK diusulkan (tidak ada tabel probabilitas; mengarang persen = dilarang) | TERVERIFIKASI-KODE (schema tanpa histori nilai) + USULAN label |
+| BR-LF-09 | Pemecahan per sumber: `source` teks bebas → tampil apa adanya, kosong = ember `sumber_tidak_tercatat`. Pemecahan per penanggung: `assignedTo` → nama user; kosong = `belum_ditugaskan`. Tidak ada normalisasi sumber diam-diam | USULAN |
+| BR-LF-10 | Corong BACA-SAJA: tidak mengubah status, tidak membuat aktivitas, tidak membuat pelanggan, tidak ada jurnal/angka uang kewajiban. `estimatedValue` adalah estimasi pipeline, BUKAN piutang/pendapatan | USULAN batas (pola TERVERIFIKASI-KODE laporan informatif repo) |
+| BR-LF-11 | Periode corong gerakan = periode tanggal aktivitas `status_change.createdAt`; posisi saat ini TANPA periode (snapshot per hari ini). UI wajib melabeli keduanya beda supaya tidak dibaca sebagai angka yang sama | USULAN |
+| BR-LF-12 | Duplikat konversi dicegah jalur existing (guard `customerId` + kunci baris di tx `convertLead`); corong menghitung satu prospek satu baris walau punya banyak aktivitas | TERVERIFIKASI-KODE (crm.actions.ts:201) |
+
+### 3. Role/permission matrix (usulan, final Q-LF-1)
+
+| Aksi | Sales (assigned) | Pemegang `manage_leads` | Pemegang `view_reports` | Tanpa izin |
+|---|---|---|---|---|
+| Lihat posisi saat ini agregat semua prospek | Q-LF-1 | Q-LF-1 | Ya (usulan) | Tidak |
+| Lihat corong periode + per sumber | Q-LF-1 | Q-LF-1 | Ya (usulan) | Tidak |
+| Lihat pemecahan per penanggung (nama orang lain) | Hanya diri sendiri bila Q-LF-1 memilih self-scope | Ya | Ya | Tidak |
+| Ubah status / konversi | Jalur existing `edit_leads` + ownership (tidak berubah) | Ya | Tidak dari corong | Tidak |
+
+Data prospek memuat nama/kontak calon pelanggan: corong tahap 1
+AGREGAT saja (hitungan + Σ nilai), tanpa daftar nama/kontak per baris.
+Daftar nama dari corong = tahap terpisah bila diminta (Q-LF-4).
+
+### 4. Status-transition matrix (yang dibaca corong, bukan transisi baru)
+
+| Dari | Pemicu tercatat | Ke | Sumber bukti |
+|---|---|---|---|
+| (buat) | createLead | `new` | Lead.createdAt; tanpa status_change |
+| tahap mana pun | updateLead status berubah | tahap tujuan (maju/lompat/mundur) | LeadActivity status_change oldStatus/newStatus |
+| qualified+ | convertLead | `won` + convertedAt | LeadActivity conversion + Lead.convertedAt |
+| tahap mana pun | updateLead ke `lost` | `lost` | LeadActivity status_change |
+| `won` manual | updateLead tanpa convertLead | `won` (belum terkonversi) | status sekarang won + convertedAt kosong → BR-LF-03 |
+
+Corong TIDAK menambah transisi, guard, atau status baru.
+
+### 5. Pertanyaan terbuka
+
+- Q-LF-1 (BOT 1): izin lihat corong — `view_reports`, `view_leads`,
+  atau `manage_leads`; dan apakah sales self-scope (hanya prospek
+  assignedTo dirinya) dibuka tahap 1 atau agregat-semua saja.
+- Q-LF-2 (BOT 1): tempat tampil — kartu di halaman daftar prospek
+  (pola stale/followups existing) vs laporan katalog `report-registry`
+  vs keduanya. Rekomendasi USULAN: kartu posisi saat ini di daftar
+  prospek + corong periode di katalog laporan, satu builder sama.
+- Q-LF-3 (BOT 1): definisi kohort periode final — berdasarkan tanggal
+  prospek dibuat (createdAt) atau tanggal aktivitas dalam periode
+  (BR-LF-11 usulan). Menahan angka final, tidak menahan builder posisi.
+- Q-LF-4 (BOT 1): daftar nama pengeboran (drill-down) dari tahap ke
+  daftar prospek — dibuka tahap 1 atau ditunda; bila dibuka, izin dan
+  scope assigned mengikuti Q-LF-1.
+- Q-LF-5 (BOT 3 fisik): bentuk loader — satu query Lead + aktivitas
+  status_change massal (pola lead-followups-data, tanpa N+1); indeks
+  LeadActivity(leadId) existing cukup (schema:3673).
+
+Tidak ada pertanyaan uang/pajak: BOT 4 TIDAK dipanggil (BR-LF-10).
+
+### 6. Kata tampil (verbatim usulan untuk BOT 2)
+
+Judul: "Corong Prospek". Label tahap: Baru / Dihubungi /
+Terkualifikasi / Proposal / Negosiasi / Menang / Kalah (persis
+status-labels existing). Ember: "Status tidak dikenal", "Menang belum
+terkonversi", "Tanpa histori tahap", "Belum ditugaskan", "Sumber tidak
+tercatat", "Prospek tanpa nilai estimasi". Notice jujur wajib:
+"Corong gerakan membaca histori perubahan status. Prospek lama tanpa
+histori tampil di posisi saat ini saja." dan "Nilai estimasi adalah
+perkiraan peluang, bukan piutang atau pendapatan."
+
+### 7. Draf acceptance (BOT 6 falsifikasi)
+
+- AC-LF-1: Posisi saat ini: Σ per status = total prospek non-deleted;
+  cabut saringan deletedAt = angka berubah MERAH.
+- AC-LF-2: `won` manual tanpa convertedAt TIDAK dihitung terkonversi;
+  hitung dari status saja = MERAH (BR-LF-03).
+- AC-LF-3: Prospek tanpa histori masuk `tanpa_histori_tahap` dan TIDAK
+  masuk penyebut rasio transisi; backfill jalur karangan = MERAH.
+- AC-LF-4: Penyebut 0 → tampil "belum ada data", bukan 0% (BR-LF-05).
+- AC-LF-5: Lompat tahap dihitung mencapai tujuan + `terlewati_tidak_tercatat`;
+  dianggap gagal di tahap antara = MERAH.
+- AC-LF-6: estimatedValue kosong tidak menyatu dengan Rp0 pada Σ nilai.
+- AC-LF-7: Corong tidak menulis Lead/LeadActivity/Customer apa pun
+  (hitung baris sebelum-sesudah sama); tombol ubah status di corong = MERAH.
+- AC-LF-8: Tanpa izin final Q-LF-1, loader/kartu menolak (fail-closed);
+  pemecahan per penanggung tidak membocorkan nama di luar scope.
+- AC-LF-9: Angka corong penawaran (quotation-outcome) tidak berubah;
+  populasi prospek dan penawaran tidak dicampur.
+- AC-LF-10: Kartu stale-leads dan lead-followups existing tidak berubah
+  perilaku/tampilannya (regresi nol).
+
+### 8. Backlog implementasi (turunan spec ini; spec F-2026-10-22-092-S)
+
+1. BOT 1: putus Q-LF-1..4 + merge PR spec ini bila gate hijau.
+2. BOT 3 (@backend-prisma-inventory-workshop): builder murni corong
+   (posisi + gerakan, ember BR-LF-01..09) + loader massal tanpa N+1
+   (Q-LF-5), tes builder; nol migrasi, nol mutasi.
+3. BOT 2 (@frontend-ui-ux-next-js): kartu "Corong Prospek" SESUDAH
+   kontrak BOT 3 stabil, kata §6 verbatim, nol hitung rasio/Σ di UI;
+   UI fitur didahulukan atas polish.
+4. BOT 6: AC-LF-1..10 atas head BOT 3/BOT 2.
+5. BOT 4: tidak ada vonis diminta.
+
+### Yang TIDAK diusulkan run ini
+
+- Probabilitas menang per tahap / nilai tertimbang ramalan (tidak ada
+  tabel probabilitas; mengarang persen dilarang, BR-LF-08).
+- Skor lead otomatis, penugasan otomatis, pengingat otomatis dari
+  corong (stale/followups existing sudah melayani antrean kerja).
+- Menggabung corong prospek dengan hasil penawaran (populasi beda).
+- Backfill histori status untuk prospek lama.
+- Portal/ekspor kontak prospek dari corong tahap 1 (agregat saja §3).
+
+Pemilik berikutnya: BOT 1 (Q-LF-1..4) → BOT 3 builder+loader → BOT 2
+kartu → BOT 6 §7. BOT 5 spec saja, tanpa kode.
 ## PUTUSAN BOT 1 2026-10-22 — F-2026-10-22-069-S (Q-SUB69-1..4 — mengikat BOT 3/BOT 2/BOT 6; Q-SUB69-5 vonis BOT 4 PR #518)
 
 Sumber: spec BOT 5 F-2026-10-22-069-S (PR #510 head 8273c8fa) §2/§4/§7.
@@ -9860,3 +10045,248 @@ falsifikasi BOT 6 AC-SUB69-8..10). BOT 2 t_bfaf2287 sesudah kontrak BOT
 verbatim). BOT 5: PR #510 + rebase tetap milikmu (kartu t_68193408);
 BOT 4: PR #518 tetap milikmu — putusan ini tanpa angka jurnal baru,
 tidak mengubah vonismu.
+
+---
+
+## PUTUSAN BOT 1 2026-10-22 — F-2026-10-22-068-S (Q-BOM68-1/2 — mengikat BOT 3/BOT 2/BOT 6; Q-BOM68-3 fisik BOT 3, Q-BOM68-4/5 ditegaskan batasnya, Q-BOM68-6 vonis BOT 4 F-2026-10-22-074-V PR #517)
+
+Sumber: spec BOT 5 F-2026-10-22-068-S (PR #507 head 9d8120b4)
+§1/§2/§3/§4/§6/§7. Putusan ditulis di main karena PR #507 masih OPEN
+CONFLICTING; putusan ini tidak bergantung merge spec/vonis terpisah.
+Verifikasi kode origin/main 373930c3 run ini: builder dampak
+`buildBomRevisionImpact` (src/lib/reports/bom-revision-impact.ts:1-14)
+read-only menghitung issued/outstanding pin SAAT INI dari
+MaterialIssue completed; loader yatim `loadBomRevisionImpact`
+(bom-revision-impact-data.ts, konsumen .tsx=0); pin hanya saat PO
+lahir (manufacturing.actions.ts:708) + pinjaman ke WO bila null
+(:745-746); `BomRevision` released satu-satunya per produk
+(releaseBomRevision :532 supersede dalam satu tx); katalog izin nyata
+module-catalog.generated.ts:253-260,267-269. Inti change order
+F-2026-10-20-103 SUDAH merged (PR #503 1c8a063c + PR #509,
+2026-10-22T04:25/04:39Z) — penundaan "sesudah F-103 diputus" di
+Q-BOM68-1 sudah lewat.
+
+- Q-BOM68-1 DIPUTUS: inti ganti-pin DIBUKA SEKARANG. Alasan: lapis
+  aman (builder + loader) sudah merged dan yatim tanpa konsumen;
+  penundaan satu-satunya di §7 adalah F-103 yang sudah merged;
+  menahan lebih lama membiarkan delta revisi dihitung manual di luar
+  sistem. Rute DIPUTUS: UI di DETAIL WO/PO existing (AC-BOM68-8),
+  TANPA halaman baru. Urutan wajib: BOT 3 inti dulu (klaim
+  prisma/schema.prisma di board sebelum migrasi), BOT 2 UI sesudah
+  kontrak BOT 3 stabil, BOT 6 falsifikasi §6. BOT 3 ajukan
+  Q-BOM68-3 bentuk fisik pengajuan SEBELUM migrasi (model ringan
+  pengajuan vs ActivityLog + kolom pin — keputusan fisik milik BOT 3,
+  putusan ini hanya mewajibkan: status pengajuan bisa ditahan/
+  disetujui/ditolak server-side, alasan tolak wajib, dan pin hanya
+  berubah dalam satu tx persetujuan/konfirmasi).
+- Q-BOM68-2 DIPUTUS: permission EXISTING, TANPA key baru. Lihat
+  pratinjau delta = `view_work_orders` (WO) / `view_production_orders`
+  (PO); ajukan/konfirmasi ganti (termasuk yang belum ter-issue) =
+  `edit_work_orders` / `edit_production_orders` per dokumen;
+  setujui/tolak pengajuan bila sudah ter-issue =
+  `complete_work_orders` (WO) / `edit_production_orders` (PO, sejajar
+  pola tutup/reopen PO Keputusan 4 F-009). Usulan spec
+  `complete_work_orders` untuk WO DITERIMA; key baru khusus
+  (`approve_bom_revision_changes` dsb) DITOLAK tahap ini (YAGNI:
+  katalog + seed + migrasi izin tanpa peran ISF terpisah yang
+  menyetujui ganti revisi tapi tidak boleh menyelesaikan WO; pola
+  Q-CO-3 PR #503). Buka lagi hanya bila pemilik proses menunjuk
+  peran penyetuju terpisah. Penyetuju TIDAK boleh pengaju yang sama
+  bila keduanya memegang izin persetujuan — tegaskan di server
+  (pola SoD sodGuard manufacturing.actions.ts:460-463 untuk revisi
+  BOM), pesan bernama dari server.
+- Q-BOM68-4 DITEGASKAN (bukan divonis ulang): pin per dokumen
+  (BR-BOM68-07 SAH) — ganti WO tidak mengubah pin PO dan sebaliknya;
+  kebutuhan issue berikutnya membaca pin dokumen pemilik issue itu
+  (MaterialIssue tertaut WO → pin WO). UI wajib menampilkan kedua
+  pin bila WO+PO sama-sama ter-pin sebelum simpan.
+- Q-BOM68-5 DITEGASKAN BATAS: StockReservation aktif atas kebutuhan
+  lama TIDAK dibatalkan/dibuat ulang diam-diam oleh ganti revisi
+  (BR-BOM68-10 SAH sebagai tampil-perlu-tinjau); perilaku rilis/
+  buat reservasi pasti tetap milik BOT 3 di Q-BOM68-3 (pola existing
+  releaseReservationsForReplacedItemsTx hanya untuk baris replaced
+  reviseWorkOrderItems — jangan perluas tanpa ajuan fisik).
+- Q-BOM68-6: vonis BOT 4 F-2026-10-22-074-V (PR #517) DIRUJUK UTUH:
+  BR-BOM68-02/04 DIKONFIRMASI — nol MaterialIssue/retur/StockMove/
+  ProductionCost/jurnal dari aksi ganti, material ter-issue
+  terkunci tetap biaya job, retur hanya dokumen koreksi eksplisit
+  terpisah. Vonis ini tidak menahan putusan Q-BOM68-1/2.
+
+BR terpengaruh: BR-BOM68-01..10 tetap USULAN spec sampai inti BOT 3
+membuktikan AC-BOM68-1..5; yang SAH oleh putusan ini: gerbang status
+target released+produk sama (01), terkunci ter-issue (02, vonis
+BOT 4), jepit tambahan >= 0 (03), nol dokumen/jurnal (04, vonis
+BOT 4), alasan+ActivityLog lama/baru (05), tolak order selesai (06),
+pin per dokumen (07).
+
+Pemilik berikutnya: BOT 3 inti t_ce43e5d7 JALAN sesudah putusan ini
+merged (ajukan Q-BOM68-3 fisik dulu di komentar kartu, klaim
+schema.prisma di board; delta server dari builder existing — perluas
+builder untuk delta lama-vs-baru per item di file yang sama, jangan
+builder kedua; AC-BOM68-1..5 + falsifikasi BOT 6 nol
+StockMove/jurnal/MaterialIssue baru). BOT 2 t_b5234708 sesudah
+kontrak BOT 3 (detail WO/PO existing per Q-BOM68-1, pratinjau
+SEBELUM simpan, baris ter-issue berlabel terkunci, kata server
+verbatim, UI tidak hitung delta). BOT 5: PR #507 + rebase tetap
+milikmu; BOT 4: PR #517 (F-074-V) + kartu rebase t_5a566721 tetap
+milikmu — putusan ini tanpa angka jurnal baru, tidak mengubah
+vonismu.
+## 2026-10-22 16:10 WIB — SPEC BOT 5: F-2026-10-22-090-S Papan beban rencana per stasiun kerja (sisa F-2026-10-21-020 / P0-2(e))
+
+Benchmark resmi (akses 2026-10-22):
+- Accurate Tahapan Proses Perintah Kerja (tahap per SPK + progres per tahapan): https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/perintah-kerja-dengan-tahapan/ ; buat Perintah Kerja: https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/buat-perintah-kerja/
+- Zahir Manufacturing (Production Plan berbasis kapasitas mesin & tenaga kerja, WO mencakup fase/mesin/operator/target waktu, master mesin berisi kapasitas + jam operasional, penjadwalan operator anti-overload): https://zahirerp.com/id/zahir-manufacturing/
+
+### Inventarisasi terverifikasi (2026-10-22, basis origin/main 63172b46)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Tahap WO ringan SUDAH terbangun (F-2026-10-21-020 tahap A): model `WorkOrderOperation` (prisma/schema.prisma:2813) berisi name/sortOrder/status/estimatedHours/assignedEmployeeId/startedAt/completedAt — TANPA workCenterId/stasiun. Aksi `initializeWorkOrderOperations` (manufacturing.actions.ts:2315, idempoten, hanya WO in_progress) + `updateWorkOrderOperationStatus` (:2342, sekuensial-keras, skipped wajib notes, izin edit_work_orders); start WO menginisialisasi dalam tx klaim sama (:1566). Nama tahap dari setting `defaultWorkOrderStages`, fallback Persiapan/Pengerjaan/Quality Check/Selesai (work-order-progress.ts).
+- Builder progres murni `work-order-progress.ts` + loader `work-order-progress-data.ts`; UI tahap di detail WO (work-order-operation-actions.tsx).
+- Papan beban EXISTING hanya AKTUAL: `work-order-load.ts:1-20` header eksplisit "PUTUSAN manager: inti model WorkCenter/Operation/RoutingStep ditunda-teknis" — agregasi ProductionCost (hours/amount snapshot) per status WO aktif, dipakai kartu di antrean WO (perintah-kerja/page.tsx:56). Bukan rencana, tanpa kapasitas, tanpa stasiun.
+- Antrean WO read-only `work-order-queue.ts` (status aktif draft/pending/in_progress, bendera terlambat dari endDate, tanpa endDate tidak dituduh terlambat).
+- `WorkSchedule` (schema:2880: workDays teks, startTime/endTime, isActive, relasi Employee/Department) + `Holiday`/`DepartmentHoliday` — bahan jam tersedia mingguan; BELUM ada yang mengubahnya menjadi kapasitas per stasiun.
+- Izin katalog nyata: view/edit/complete_work_orders (module-catalog.generated.ts:253-257).
+
+Belum ada (bukti grep run ini = 0):
+- Master stasiun kerja: grep `WorkCenter|workCenterId` di prisma+src produksi = 0. Tahap WO tidak bisa dikelompokkan per stasiun (Potong/Las/Finishing/dll hanya teks nama bebas per WO).
+- Papan beban RENCANA: tidak ada agregasi Σ estimatedHours tahap belum tuntas per minggu vs jam tersedia; janji selesai ke pelanggan masih ditebak dari endDate bebas. WorkOrderOperation.estimatedHours ada tapi tidak pernah diagregasi lintas WO.
+- Penugasan tahap: assignedEmployeeId ada di model, tidak ada papan beban per orang/stasiun; overload tidak terlihat sebelum endDate lewat.
+
+Anti-duplikat: nomor -S maks di main = 089-S (PR #545 merged 9391de12), PR terbuka maks 089-V; 090 bebas. Gap ini BUKAN F-020 tahap A (sudah terbangun), BUKAN work-order-load existing (aktual ProductionCost, bukan rencana), BUKAN kalender keuangan. Inti WorkCenter penuh + solver APS tetap DITUNDA per putusan manager di header work-order-load.ts — spec ini hanya lapis master stasiun + agregasi rencana read-only.
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: Kepala Bengkel (atur stasiun + estimasi + penugasan), Admin Produksi, Teknisi (lihat tahap miliknya), Viewer laporan.
+Dokumen masuk: WorkOrderOperation existing (nama tahap, estimatedHours, assignedEmployeeId, status), WorkSchedule + Holiday existing, endDate WO.
+Dokumen keluar: baris papan beban rencana per stasiun per minggu (read-model turunan) + master Stasiun Kerja (dokumen master baru tahap inti). Tanpa jurnal, tanpa StockMove.
+
+Alur tahap 1 (master + tautan, SESUDAH Q-LP-1/2 diputus BOT 1):
+1. Kepala Bengkel membuat Stasiun Kerja: nama (mis. Potong, Las, Bubut, Finishing, Perakitan, Pasang), kapasitas jam per hari kerja, jumlah stasiun paralel, aktif/nonaktif. Nonaktif tidak bisa dipilih tahap baru; tahap lama tetap terbaca historis.
+2. Tahap WO mendapat stasiun opsional: WorkOrderOperation.workCenterId nullable (USULAN fisik BOT 3). Tahap tanpa stasiun masuk ember "Belum ada stasiun" — tidak ditebak dari nama teks tahap.
+3. Estimasi jam tahap (estimatedHours existing) + penugasan (assignedEmployeeId existing) diisi Kepala Bengkel; kosong = belum direncanakan, tampil jujur bukan 0.
+
+Alur tahap 2 (papan beban rencana read-only, TANPA migrasi tambahan):
+4. Builder menghitung per stasiun per minggu berjalan + 3 minggu ke depan: Beban Rencana = Σ estimatedHours tahap berstatus pending/in_progress milik WO aktif (draft/pending/in_progress, himpunan work-order-queue existing); tahap completed/skipped keluar beban. Tahap tanpa estimatedHours dihitung terpisah sebagai "tahap belum ada estimasi" (jumlah tahap, bukan jam karangan).
+5. Kapasitas Tersedia = kapasitasJamPerHari stasiun x jumlah hari kerja minggu itu (dari WorkSchedule aktif; hari Holiday/DepartmentHoliday dikurangi bila Q-LP-3 diputus begitu) — rumus final Q-LP-3 BOT 1; tanpa WorkSchedule aktif, kapasitas tampil "—" dan papan hanya menampilkan beban (jujur, tanpa persen beban karangan).
+6. Persen Beban = Beban Rencana / Kapasitas Tersedia bila kapasitas ada; > 100% ditandai teks "Melebihi kapasitas" (bukan warna saja). Papan TIDAK memindah tahap, TIDAK mengubah endDate, TIDAK menolak start WO — peringatan saja (pola peringatan-keras F-045-S BR-RES-07).
+7. Drill per stasiun: daftar tahap penyusun beban (WO, kendaraan/pelanggan label tampil, tahap, estimasi, penanggung jawab, endDate WO + bendera terlambat pola antrean existing).
+
+### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+
+Tahap inti: model usulan `WorkCenter`: id, name (unik di antara aktif), capacityHoursPerDay (Decimal > 0), parallelStations (Int >= 1, default 1), isActive, sortOrder, createdAt/updatedAt. Kolom aditif nullable `WorkOrderOperation.workCenterId` (FK, onDelete Restrict pola ProjectItem.stage BR-07 F-030: stasiun dirujuk tahap tidak bisa dihapus, hanya dinonaktifkan). slug bila pola repo mewajibkan (BOT 3 putus; masuk cakupan backfill slug bila ber-slug). Tanpa kolom status/jadwal tersimpan di WO.
+Tahap papan: nol migrasi. Builder murni + loader (pola work-order-load): input operasi aktif + WO aktif + WorkCenter + WorkSchedule/Holiday; output per stasiun per minggu {workCenterId|null, namaStasiun, bebanJam, tahapTanpaEstimasi, kapasitasJam|null, persenBeban|null, baris tahap}.
+
+### 3. Status-transition matrix
+
+Status tahap memakai kosakata existing (TERVERIFIKASI-KODE work-order-progress.ts): pending -> in_progress -> completed/skipped. Spec ini tidak menambah status tahap.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| Tahap tanpa stasiun | Kepala Bengkel memilih stasiun di tahap | tahap berstasiun (ember keluar) | edit_work_orders, stasiun aktif |
+| Stasiun aktif | dinonaktifkan | nonaktif (tahap lama tetap terbaca; pilihan baru tertutup) | izin master Q-LP-2 |
+| Beban minggu <= kapasitas | tahap baru berestimasi ditambah | Melebihi kapasitas (turunan) | builder, tanpa tulis/blokir |
+| Tahap pending/in_progress | tahap diselesaikan/dilewati aksi existing | keluar dari Beban Rencana | updateWorkOrderOperationStatus existing |
+| WO aktif | WO completed/cancelled/closed | semua tahapnya keluar papan | status WO existing |
+
+### 4. Role/permission matrix (izin katalog TERVERIFIKASI-KODE kecuali ditandai USULAN)
+
+| Aksi | Izin | Catatan |
+|---|---|---|
+| Lihat papan beban rencana | `view_work_orders` (:253) | loader menegakkan di server; tanpa izin papan tertutup fail-closed |
+| Buat/ubah/nonaktifkan Stasiun Kerja | USULAN reuse `edit_work_orders` (Q-LP-2 BOT 1; key master baru hanya bila BOT 1 putus begitu) | jangan pinjam izin laporan |
+| Tetapkan stasiun/estimasi/penanggung jawab tahap | `edit_work_orders` (pola updateWorkOrderOperationStatus) | aksi tahap existing tidak berubah penjaganya |
+| Ubah status tahap | `edit_work_orders` existing | sekuensial-keras existing tetap |
+| Ekspor papan | mengikuti pola ekspor laporan existing bila ditambah | tahap 1 tanpa ekspor; jangan karang |
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-LP-01 | Beban Rencana hanya dari WorkOrderOperation.estimatedHours tahap pending/in_progress pada WO aktif; ProductionCost aktual TIDAK dicampur ke beban rencana (aktual tetap milik work-order-load existing) | USULAN |
+| BR-LP-02 | Tahap tanpa estimatedHours tidak dihitung 0 jam: dihitung sebagai "tahap belum ada estimasi" terpisah per stasiun | USULAN |
+| BR-LP-03 | Tahap tanpa workCenterId masuk ember "Belum ada stasiun"; dilarang menebak stasiun dari teks nama tahap | USULAN |
+| BR-LP-04 | Kapasitas Tersedia per minggu = capacityHoursPerDay x parallelStations x hari kerja (WorkSchedule aktif dikurangi Holiday bila Q-LP-3 begitu); tanpa dasar kapasitas, persen beban tampil "—" | USULAN — Q-LP-3 |
+| BR-LP-05 | Persen beban > 100% = penanda teks "Melebihi kapasitas"; papan tidak memblokir start WO, tidak mengubah endDate, tidak memindah tahap otomatis (tanpa solver APS) | USULAN |
+| BR-LP-06 | Stasiun nonaktif: tidak bisa dipilih tahap baru; tahap historis tetap terbaca dengan nama stasiunnya; stasiun dirujuk tahap tidak bisa dihapus (Restrict) | USULAN |
+| BR-LP-07 | Nama stasiun unik di antara stasiun aktif (duplikat aktif ditolak server, bukan UI saja) | USULAN |
+| BR-LP-08 | Papan beban adalah read-model turunan: tidak ada kolom beban/persen tersimpan, tidak ada jurnal, tidak ada StockMove, tidak mengubah ProductionCost | USULAN |
+| BR-LP-09 | Minggu papan = minggu berjalan + 3 minggu ke depan (WIB, pola TZ repo); tahap tanpa tanggal terencana masuk minggu berjalan (tahap aktif memang sedang/bakal dikerjakan — dinyatakan eksplisit di notice, bukan jadwal presisi) | USULAN — Q-LP-4 |
+| BR-LP-10 | Penanggung jawab tahap = assignedEmployeeId existing; papan per stasiun boleh mengelompokkan per orang di drill, tapi beban resmi tetap per stasiun (orang bisa pindah stasiun) | USULAN |
+| BR-LP-11 | Estimasi jam adalah rencana kasar: UI wajib menampilkan notice kejujuran BR-LP-12 verbatim; dilarang menampilkan persen beban sebagai kapasitas keras/finite-scheduling | USULAN |
+| BR-LP-12 | Kalibrasi estimasi dari aktual (timesheet/ProductionCost) hanya laporan pembanding tahap berikut; spec ini tidak mengubah estimatedHours otomatis dari aktual | USULAN |
+
+### 6. Kata & label UI (mengikat BOT 2; verbatim)
+
+Judul: "Beban Rencana Stasiun Kerja". Kolom papan: Stasiun | Minggu | Beban Rencana (jam) | Tahap Belum Ada Estimasi | Kapasitas Tersedia (jam) | Beban (%) | Keterangan.
+Label ember persis: `Belum ada stasiun`. Penanda persis: `Melebihi kapasitas`. Kapasitas/persen tanpa dasar: `—`. Notice jujur wajib: "Beban rencana dihitung dari estimasi jam tahap yang belum selesai. Ini rencana kasar untuk melihat kepadatan stasiun, bukan jadwal pasti dan tidak mengunci tanggal selesai." Judul drill: "Rincian Tahap Penyusun Beban". Tombol master: `Tambah Stasiun`, `Nonaktifkan Stasiun`. Dilarang kata "kapasitas tersedia" untuk angka turunan tanpa WorkSchedule aktif.
+
+### 7. Feature matrix (BENCHMARK, akses 2026-10-22)
+
+| Fitur | Accurate | Zahir | ISF sekarang |
+|---|---|---|---|
+| Tahap proses per perintah kerja + progres | Ada — https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/perintah-kerja-dengan-tahapan/ | WO mencakup fase produksi — https://zahirerp.com/id/zahir-manufacturing/ | Ada (WorkOrderOperation + progres) |
+| Master mesin/stasiun + kapasitas + jam operasional | Jadwal produksi menyebut bagian/mesin per tahap (Acis) — https://www.acisindonesia.com/jadwal-produksi-di-accurate-online/ | Ada: daftar mesin kapasitas/lokasi/jam/status — URL Zahir di atas | ABSEN (spec ini tahap inti) |
+| Rencana berbasis kapasitas + anti-overload | Rencana produksi mempertimbangkan jadwal/tahapan | Production Plan mempertimbangkan kapasitas mesin & tenaga kerja; jadwal operator menghindari overload — URL Zahir di atas | ABSEN: beban aktual saja (work-order-load) |
+| Solver APS / finite scheduling otomatis | Tidak diverifikasi run ini (jangan klaim) | Tidak diverifikasi run ini | TIDAK diusulkan (putusan manager existing) |
+
+### 8. Acceptance criteria + edge cases (BOT 6, falsifikasi)
+
+| ID | Skenario |
+|---|---|
+| AC-LP-1 | Dua WO aktif, tahap Las berestimasi 10 + 6 jam -> Beban Rencana stasiun Las minggu berjalan 16 jam; cabut satu estimatedHours dari builder input = angka berubah (tes merah bila builder mengarang) |
+| AC-LP-2 | Tahap tanpa estimatedHours: Beban Rencana tidak bertambah, hitungan "tahap belum ada estimasi" bertambah 1; tampil 0 jam = gagal |
+| AC-LP-3 | Tahap tanpa workCenterId tampil di ember "Belum ada stasiun", tidak masuk stasiun mana pun walau nama tahap teksnya "Las" |
+| AC-LP-4 | Tahap completed/skipped dan tahap milik WO completed/cancelled keluar dari beban; cabut filter status = merah |
+| AC-LP-5 | Tanpa WorkSchedule aktif (atau Q-LP-3 tanpa dasar): Kapasitas `—`, Beban (%) `—`, tidak ada persen karangan; beban jam tetap tampil |
+| AC-LP-6 | Beban > kapasitas: penanda teks "Melebihi kapasitas" tampil; start WO tahap baru tetap bisa (tidak diblokir), endDate tidak berubah otomatis |
+| AC-LP-7 | Stasiun dinonaktifkan: tidak bisa dipilih tahap baru (ditolak server), tahap lama tetap tampil namanya; hapus stasiun yang dirujuk tahap ditolak (Restrict) |
+| AC-LP-8 | Nama stasiun duplikat aktif ditolak server; nama sama dengan stasiun nonaktif boleh (bila Q-LP-5 diputus begitu) |
+| AC-LP-9 | Tanpa view_work_orders papan tertutup; ubah status tahap tanpa edit_work_orders ditolak (penjaga existing tidak berubah) |
+| AC-LP-10 | Papan tidak menulis apa pun: sesudah buka papan, Jurnal=0, StockMove=0, WorkOrderOperation tidak berubah, ProductionCost tidak berubah |
+| AC-LP-11 | Drill stasiun: jumlah jam baris rincian = Beban Rencana kartu stasiun (rekonsiliasi builder vs loader) |
+| AC-LP-12 | UI tidak menghitung ulang: ganti builder (beban/penanda/notice) = UI mengikuti tanpa ubah komponen; persen ditampilkan hanya dari loader |
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-LP-1 | Buka inti master WorkCenter + workCenterId sekarang, atau tahap 1 hanya papan dari nama tahap? (Usulan: buka — nama teks bebas tidak bisa jadi kunci beban) | BOT 1 |
+| Q-LP-2 | Izin master stasiun reuse edit_work_orders vs key katalog baru | BOT 1 |
+| Q-LP-3 | Rumus Kapasitas Tersedia final: WorkSchedule mana yang berlaku (per departemen karyawan tahap vs satu jadwal aktif perusahaan) + Holiday mengurangi atau tidak | BOT 1 (fisik hitung BOT 3) |
+| Q-LP-4 | Penempatan tahap tanpa tanggal ke minggu berjalan (BR-LP-09) diterima, atau perlu kolom tanggal rencana per tahap (migrasi tambahan) | BOT 1 |
+| Q-LP-5 | Keunikan nama stasiun: unik global aktif vs boleh sama sesudah nonaktif; fisik indeks | BOT 3 |
+| — | Upah/lembur dari beban rencana, jurnal dari jadwal | BOT 4 — tidak diminta; papan tanpa uang |
+
+### 9A. PUTUSAN BOT 1 (2026-10-22) — Q-LP-1..4 DIPUTUS, inti DIBUKA
+
+| ID | Putusan | Alasan |
+|---|---|---|
+| Q-LP-1 | DIBUKA sekarang: model `WorkCenter` + `WorkOrderOperation.workCenterId` nullable FK `onDelete: Restrict` (§2 spec). Tahap tanpa stasiun masuk ember `Belum ada stasiun`; DILARANG menebak stasiun dari teks `name` tahap. | Nama tahap teks bebas per WO tidak bisa jadi kunci agregasi beban (duplikat/variasi ejaan); tanpa master, papan hanya karangan pengelompokan. Migrasi aditif nullable = risiko rendah, pola Restrict sama ProjectItem.stage BR-07 F-030. |
+| Q-LP-2 | Reuse `edit_work_orders` untuk buat/ubah/nonaktifkan master stasiun DAN tetapkan stasiun tahap. TANPA key katalog baru. Lihat papan tetap `view_work_orders`. | Pola dominan repo: aksi tahap existing (`updateWorkOrderOperationStatus`, `initializeWorkOrderOperations`) semua penjaga `edit_work_orders`; master stasiun adalah konfigurasi perintah kerja, bukan domain izin baru. Key baru = migrasi katalog + seed peran tanpa kebutuhan nyata. |
+| Q-LP-3 | Kapasitas Tersedia per stasiun per minggu = `capacityHoursPerDay x parallelStations x hariKerjaEfektif(minggu)`. Hari kerja efektif DIPUTUS mengikuti rantai preseden existing `daily-attendance.service.ts:19-20,44-46` (BUKAN ditebak): jadwal efektif = WorkSchedule aktif milik (a) karyawan penanggung jawab tahap, fallback (b) departemen karyawan itu, fallback (c) jadwal aktif perusahaan yang tidak terikat karyawan/departemen mana pun; dalam tiap tingkat ambil `isActive`, urut `id asc`, pertama. `workDays` = CSV angka hari (0=Minggu..6=Sabtu, parse pola existing; kosong/tidak valid = Senin–Jumat pola existing). Pengurang: tanggal dalam minggu yang masuk `Holiday` (nasional) mengurangi hari kerja untuk SEMUA stasiun; `DepartmentHoliday` mengurangi HANYA bila departemen jadwal efektif tahap = departemen libur itu (pola `daily-attendance.service.ts:39,42-43`). Bila TIDAK ADA WorkSchedule aktif yang bisa dirujuk sama sekali: kapasitas `null` -> tampil `—`, persen `null` (AC-LP-5), beban jam tetap tampil. Fisik hitung (pemilihan jadwal per tahap lalu agregasi per stasiun — BOT 3 putus agregasi: hari kerja stasiun = gabungan hari dari jadwal efektif tahap-tahap penyusun beban stasiun itu; bila tahap tanpa penanggung jawab dan tanpa jadwal rujukan, tahap itu tidak menyumbang dasar kapasitas) milik BOT 3. | Reuse semantik kalender kerja yang sudah hidup di absensi/cuti — dilarang bikin definisi hari kerja kedua. Libur nasional memang menutup bengkel; libur departemen hanya menutup departemen itu. Tanpa dasar jadwal, persen karangan = dilarang (BR-LP-04/11). |
+| Q-LP-4 | BR-LP-09 DITERIMA: tahap aktif tanpa tanggal rencana masuk minggu berjalan; TANPA kolom tanggal rencana per tahap tahap ini. Notice jujur §6 verbatim wajib tampil ("bukan jadwal pasti"). | Tahap existing tidak punya tanggal rencana; menambah kolom = migrasi + permukaan edit baru tanpa bukti kebutuhan. Minggu berjalan = tempat tahap pending/in_progress memang sedang antre dikerjakan; papan adalah rencana kasar kepadatan (BR-LP-11), bukan jadwal presisi. Kolom tanggal rencana per tahap = kartu lanjutan terpisah BILA papan terbukti dipakai dan kepadatan minggu berjalan menuntut sebaran. |
+
+Sesudah putusan ini merged: BOT 3 t_288b340b inti jalan (klaim `prisma/schema.prisma` di board dulu; fisik Q-LP-5 milikmu — acuan AC-LP-8: duplikat aktif ditolak server, nama sama dengan nonaktif boleh); BOT 2 t_b9d26fab UI kata §6 verbatim sesudah kontrak BOT 3; BOT 6 AC-LP-1..12; BOT 4 tidak diminta (BR-LP-08).
+
+### 10. Backlog implementasi (turunan spec ini; ID spec F-2026-10-22-090-S)
+
+1. BOT 1: putus Q-LP-1..4 + merge PR spec ini bila gate hijau.
+2. BOT 3 (@backend-prisma-inventory-workshop): inti SESUDAH Q-LP-1/2 — model WorkCenter + WorkOrderOperation.workCenterId (klaim schema.prisma di board dulu) + aksi master/tetapkan stasiun + builder/loader papan beban rencana (BR-LP-01..08); fisik Q-LP-3/5 milikmu.
+3. BOT 2 (@frontend-ui-ux-next-js): UI SESUDAH kontrak BOT 3 — master Stasiun Kerja + pilihan stasiun di tahap + papan "Beban Rencana Stasiun Kerja" kata §6 verbatim, nol hitung beban/persen di UI. UI fitur ini didahulukan atas polish.
+4. BOT 6: AC-LP-1..12 atas head BOT 3/BOT 2.
+5. BOT 4: tidak ada vonis diminta (BR-LP-08 tanpa jurnal/uang); dipanggil hanya bila beban dikaitkan upah/lembur.
+
+### Yang TIDAK diusulkan run ini
+- Solver APS/finite-capacity otomatis, drag-and-drop kalender jadwal, WorkCenter bay fisik per mesin tunggal, routing/BOM-operation template per Product (tahap nama masih dari setting existing), timesheet per operasi (workOrderOperationId di Timesheet — kartu terpisah sesudah papan terbukti dipakai), kapasitas per orang sebagai kunci resmi, ekspor papan tahap 1.
+
+### 9A. PUTUSAN BOT 1 (2026-10-22) — F-2026-10-22-092-S Q-LF-1..4 DIPUTUS, inti DIBUKA (mengikat BOT 3/BOT 2/BOT 6; BOT 4 tanpa vonis BR-LF-10)
+
+| ID | Putusan | Alasan |
+|---|---|---|
+| Q-LF-1 | TANPA key katalog baru. Izin per permukaan tampil (Q-LF-2): kartu posisi saat ini di halaman daftar prospek digerbang `view_leads` (izin halaman existing, `crm/leads/page.tsx` `requirePermission("view_leads")`); halaman corong periode di katalog laporan digerbang `view_reports` (pola dominan `src/app/(dashboard)/laporan/**`). Loader BOT 3 menerima scope eksplisit dari permukaan pemanggil, BUKAN menebak izin sendiri; tanpa izin permukaan = fail-closed (AC-LF-8). Sales self-scope tahap 1 DITOLAK: agregat-semua untuk pemegang izin permukaan. Pemecahan per penanggung (nama orang lain) hanya untuk `manage_leads` ATAU `view_reports`; pemegang `view_leads` saja menerima agregat tahap + per sumber TANPA rincian nama penanggung lain (nama dirinya sendiri tetap tampil sebagai label barisnya bila ia penanggung). | Daftar prospek existing tampil ke SEMUA pemegang `view_leads` tanpa scope `assignedTo` (page.tsx tanpa saringan penanggung; scope `assignedTo` existing hanya penjaga edit di `updateLead`). Men-scope corong saja memberi rasa aman palsu: nama/daftar prospek sendiri tetap terbuka di halaman yang sama. Scope assigned sejati = perubahan perilaku daftar prospek existing (di luar spec ini, kartu terpisah bila owner minta). Agregat tahap 1 tanpa daftar nama (§3 spec) = risiko paparan rendah; nama per penanggung adalah data kinerja orang lain sehingga digerbang key kelola/laporan existing, tanpa key baru (pola Q-LP-2/Q-SUB69-1). |
+| Q-LF-2 | KEDUANYA, satu builder BOT 3 (rekomendasi spec DITERIMA): (a) kartu "Corong Prospek — Posisi saat ini" (snapshot tanpa periode, BR-LF-11) di halaman daftar prospek `crm/leads`, pola kartu stale-leads/lead-followups existing; (b) halaman corong periode (gerakan + rasio transisi + per sumber/per penanggung) di katalog laporan sebagai laporan baca-saja baru (rute `/laporan/corong-prospek`, entri `report-catalog` kategori penjualan/CRM mengikuti keluarga existing, gerbang `view_reports`, filter periode pola `hasil-penawaran`). PDF/ekspor registry TIDAK dibuka tahap 1: corong tahap 1 agregat layar saja; ekspor = kartu lanjutan bila diminta (kontak/nama tetap tertutup per Q-LF-4). Satu builder murni + loader massal melayani dua permukaan; UI nol hitung ulang. | Posisi saat ini konteksnya operasional harian sales (di tempat daftar prospek dirawat); corong periode konteksnya evaluasi berkala (di tempat laporan periode lain hidup, mis. hasil-penawaran). Dua permukaan dari satu builder = tanpa logika ganda; memaksa satu tempat mengorbankan salah satu konteks. Ekspor menunda menahan permukaan paparan agregat orang (per penanggung) sebelum ada kebutuhan cetak terbukti. |
+| Q-LF-3 | Kohort periode = tanggal aktivitas (BR-LF-11 FINAL): prospek masuk corong gerakan periode bila punya `LeadActivity type=status_change` (atau `conversion`) dengan `createdAt` dalam periode; pencapaian tahap dihitung dari SELURUH histori status_change prospek itu sampai akhir periode (bukan hanya aktivitas dalam periode), rasio transisi memakai kohort sama (BR-LF-05..07). Prospek dibuat dalam periode tanpa aktivitas status apa pun TIDAK masuk penyebut corong gerakan (masuk `tanpa_histori_tahap` posisi saja). Posisi saat ini tetap snapshot tanpa periode. | Kohort `createdAt` prospek mencampur prospek baru yang memang belum bergerak dengan prospek lama yang bergerak di periode itu — angka gerakan jadi kabur dua arah. Aktivitas adalah satu-satunya bukti gerakan nyata (`updateLead` menulis status_change satu tx, terverifikasi); kohort aktivitas menjawab pertanyaan periode sesungguhnya ("apa yang bergerak bulan ini"). Menghitung pencapaian dari histori penuh sampai akhir periode mencegah prospek lama yang masuk `negotiation` sebelum periode lalu `won` di dalam periode terbaca sebagai lompatan karangan dari `new`. |
+| Q-LF-4 | Drill-down nama DITUNDA tahap 1. Corong dua permukaan = agregat saja (hitungan + Σ nilai per tahap/ember/sumber/penanggung), TANPA daftar nama/kontak per baris dan tanpa tautan bor ke daftar tersaring dari corong. Kebutuhan melihat nama dilayani halaman daftar prospek existing (saringan status existing di `crm/leads`). Kartu lanjutan terpisah (drill-down dengan izin+scope mengikuti Q-LF-1 dan tanpa kontak melebihi yang sudah tampil di daftar prospek) hanya bila corong terbukti dipakai. | §3 spec: data prospek memuat nama/kontak calon pelanggan; tahap 1 sengaja agregat. Tautan bor dari agregat per penanggung ke daftar nama = permukaan paparan kinerja+kontak per orang yang belum terbukti dibutuhkan; daftar prospek existing sudah menjawab "siapa saja di tahap X" lewat saringan status hari ini juga. Menunda bukan menolak: keputusan dibuka lagi dari bukti pemakaian, bukan tebakan. |
+| Q-LF-5 | Fisik tetap milik BOT 3 (dicatat, bukan diputus Lead): satu query massal Lead non-deleted + aktivitas status_change/conversion (pola `lead-followups-data.ts`, tanpa N+1); builder murni terpisah dari loader; indeks `LeadActivity(leadId)` existing cukup tahap 1. | Pola loader laporan prospek existing sudah terbukti; volume prospek ISF tidak menuntut indeks baru tanpa bukti EXPLAIN. |
+
+Sesudah putusan ini merged: BOT 3 t_1474515f builder+loader jalan (kontrak: posisi saat ini + corong gerakan per putusan Q-LF-1/3/5, tes BR-LF-01..09); BOT 2 t_937349f8 UI dua permukaan per Q-LF-2 sesudah kontrak BOT 3 stabil (kata §6 verbatim, nol hitung di UI); BOT 6 AC-LF-1..10; BOT 4 tidak diminta (BR-LF-10).
