@@ -20,6 +20,7 @@ import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-dif
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
 import { stampQuotationFitmentSnapshot } from "@/lib/services/vehicle-fitment.service"
+import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold"
 import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -154,6 +155,28 @@ async function resolveSalesEmployeeId(
   return emp.id
 }
 
+/**
+ * F-2026-10-22-065-S: snapshot persen ambang invoice dari kategori pelanggan
+ * saat quotation dibuat. Pelanggan/kategori tak ditemukan atau persen
+ * kategori tak sah (0/negatif/>100) → null (helper fail-closed ke 50).
+ * Master kategori yang berubah sesudahnya TIDAK mengubah snapshot ini.
+ */
+async function resolveInvoiceThresholdPercent(
+  tx: Prisma.TransactionClient,
+  customerId: unknown,
+): Promise<number | null> {
+  const id = Number(customerId)
+  if (!Number.isInteger(id) || id <= 0) return null
+  const customer = await tx.customer.findFirst({
+    where: { id },
+    select: { customerCategory: { select: { downPaymentPercent: true } } },
+  })
+  const pct = customer?.customerCategory?.downPaymentPercent
+  if (pct === null || pct === undefined) return null
+  const n = Number(pct)
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : null
+}
+
 export async function createQuotation(formData: FormData) {
   try {
   const user = await requirePermission("create_quotations")
@@ -198,6 +221,7 @@ export async function createQuotation(formData: FormData) {
           ? Number(data.customerVehicleId)
           : null,
         salesEmployeeId: await resolveSalesEmployeeId(tx, data.salesEmployeeId),
+        invoiceThresholdPercent: await resolveInvoiceThresholdPercent(tx, data.customerId),
         date: wibDateToUtcMidnight(data.date),
         validUntil: data.validUntil ? wibDateToUtcMidnight(data.validUntil) : null,
         subtotal: computedSubtotal,
@@ -232,7 +256,14 @@ export async function createQuotation(formData: FormData) {
 
   await logActivity("create", "Quotation", quotation.id, `Membuat penawaran #${quotation.id}`)
   revalidatePath("/penjualan/penawaran")
-  return { success: true, id: quotation.id, slug }
+  return {
+    success: true,
+    id: quotation.id,
+    slug,
+    invoiceThreshold: buildInvoiceThresholdInfo(
+      quotation.invoiceThresholdPercent == null ? null : Number(quotation.invoiceThresholdPercent),
+    ),
+  }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
