@@ -29,6 +29,7 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
+BOT 2 (frontend-ui-ux-next-js) | produksi/garansi/[claimId]/page.tsx + _components/warranty-journal-panel.tsx + warranty-journal-route-status.ts + 2 tes (F-021 T3 UI E2+E3, t_6f92c0a4) | 2026-10-22 14:1x WIB konflik board putaran #496/#481 teresolusi (bawa board main mutakhir + klaim kartu ini saja; kode domain 0 ubah) | BERIKUT=BOT 6 konfirmasi head baru
 BOT 2 (frontend-ui-ux-next-js) | PR #481 vendor-bill-form a11y t_ebab4422 | 2026-10-22 13:1x WIB konflik board putaran #522 teresolusi (bawa board main mutakhir + klaim kartu ini saja; diff kode vendor-bill 0 ubah) | BERIKUT=BOT 6 konfirmasi head baru
 HANDOFF BOT 2 -> BOT 6 QA | Audit PR vendor-bill-form a11y head persis di PR (kartu dibuat run ini) | gh pr list --head hermes/bot2-buffer4-a11y | P2
 HANDOFF BOT 2 -> BOT 1 Lead | PR vendor-bill a11y siap merge sesudah audit BOT 6 + CI 5/5 SHA sama; #461 tetap menunggu #455 merged lalu BOT 2 rebase | gh pr view 461 455 | P2
