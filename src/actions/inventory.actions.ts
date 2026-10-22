@@ -23,7 +23,7 @@ import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
-import { parseMoneyAmount } from "@/lib/utils/parse-money";
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import {
   stockAdjustmentSchema,
   inventoryTransferSchema,
@@ -85,6 +85,54 @@ function assertUniqueAdjustmentItems(items: { itemId: number }[]) {
   }
 }
 
+type AdjustmentItemInput = {
+  itemId: number;
+  currentQty?: number | string;
+  newQty: number | string;
+  unitCost?: number | string;
+  reason?: string;
+  serialNumbers?: string[];
+};
+
+/**
+ * Normalisasi satu baris item penyesuaian stok dari JSON `items`.
+ * `unitCost` nominal uang + `newQty` qty: wajib parser repo
+ * (`parseMoneyAmount`/`parseLocaleNumber`) — `Number("2.000.000")` = 2 dan
+ * `Number("2.000")` = 2 merusak `unitCost`/`totalCost`/`actualQty` diam-diam
+ * (pola sama createRemnant di file ini). Tak terbaca/negatif ditolak
+ * berpesan, bukan diam-diam 0; baris tanpa newQty/unitCost (klien lama)
+ * berperilaku lama: 0.
+ */
+function normalizeAdjustmentItem(it: AdjustmentItemInput): {
+  itemId: number;
+  actualQty: number;
+  unitCost: number;
+  reason?: string;
+  serialNumbers?: string[];
+} {
+  const actualQty =
+    it.newQty === undefined || it.newQty === null || it.newQty === ""
+      ? 0
+      : parseLocaleNumber(it.newQty);
+  if (actualQty === null)
+    throw new Error("Kuantitas fisik (actual) tidak valid");
+  if (actualQty < 0)
+    throw new Error("Kuantitas fisik (actual) tidak boleh negatif");
+  const unitCost =
+    it.unitCost === undefined || it.unitCost === null || it.unitCost === ""
+      ? 0
+      : parseMoneyAmount(it.unitCost);
+  if (unitCost === null || unitCost < 0)
+    throw new Error("Biaya satuan tidak valid");
+  return {
+    itemId: Number(it.itemId),
+    actualQty,
+    unitCost,
+    reason: it.reason,
+    serialNumbers: it.serialNumbers,
+  };
+}
+
 
 // ID desimal murni saja — pola repo (/^[0-9]+$/ di route workflow/print/
 // attachments/notifications + invoice-exchange.actions.ts parseId). Number()
@@ -125,24 +173,16 @@ export async function createStockAdjustment(formData: FormData) {
     const documentNo = await generateDocumentNumber("ADJ");
 
     const adjItems = (
-      safeJsonParse<
-        {
-          itemId: number;
-          currentQty: number;
-          newQty: number;
-          unitCost: number;
-          reason?: string;
-          serialNumbers?: string[];
-        }[]
-      >(v.items ?? null) ?? []
+      safeJsonParse<AdjustmentItemInput[]>(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0);
     assertUniqueAdjustmentItems(adjItems);
+    const adjRows = adjItems.map(normalizeAdjustmentItem);
 
 
     // Fetch latest system quantity for each item in the warehouse to prevent
     // client-side tampering of 'currentQty'.
     // Since Silengkap calculates stock dynamically from StockMove:
-    const itemIds = adjItems.map((it) => Number(it.itemId));
+    const itemIds = adjRows.map((it) => it.itemId);
     const stockMoves = await prisma.stockMove.groupBy({
       by: ["itemId", "impact"],
       where: {
@@ -174,20 +214,17 @@ export async function createStockAdjustment(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: adjItems.map((it) => {
-            const systemQty = Number(stockMap.get(Number(it.itemId)) || 0);
-            const actualQty = Number(it.newQty || 0);
-            if (actualQty < 0)
-              throw new Error("Kuantitas fisik (actual) tidak boleh negatif");
-            const difference = safeSubtract(actualQty, systemQty, 0);
+          create: adjRows.map((it) => {
+            const systemQty = Number(stockMap.get(it.itemId) || 0);
+            const difference = safeSubtract(it.actualQty, systemQty, 0);
             return {
-              itemId: Number(it.itemId),
+              itemId: it.itemId,
               serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers : undefined,
               systemQty,
-              actualQty,
+              actualQty: it.actualQty,
               difference,
-              unitCost: Number(it.unitCost || 0),
-              totalCost: safeMultiply(difference, Number(it.unitCost || 0), 0),
+              unitCost: it.unitCost,
+              totalCost: safeMultiply(difference, it.unitCost, 0),
               notes: it.reason || null,
             };
           }),
@@ -1473,21 +1510,13 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
 
     // Fix #2: Jangan generate documentNo baru saat update
     const adjItems = (
-      safeJsonParse<
-        {
-          itemId: number;
-          currentQty: number;
-          newQty: number;
-          unitCost: number;
-          reason?: string;
-          serialNumbers?: string[];
-        }[]
-      >(v.items ?? null) ?? []
+      safeJsonParse<AdjustmentItemInput[]>(v.items ?? null) ?? []
     ).filter((it) => Number(it.itemId) > 0);
     assertUniqueAdjustmentItems(adjItems);
+    const adjRows = adjItems.map(normalizeAdjustmentItem);
 
     const warehouseId = v.warehouseId;
-    const itemIds = adjItems.map((it) => Number(it.itemId));
+    const itemIds = adjRows.map((it) => it.itemId);
     const stockMoves = await prisma.stockMove.groupBy({
       by: ["itemId", "impact"],
       where: { warehouseId, itemId: { in: itemIds }, status: "posted" },
@@ -1527,22 +1556,19 @@ export async function updateStockAdjustment(id: number, formData: FormData) {
           type: v.type || "increase",
           notes: v.notes ?? null,
           items: {
-            create: adjItems.map((it) => {
-              const systemQty = Number(stockMap.get(Number(it.itemId)) || 0);
-              const actualQty = Number(it.newQty || 0);
-              if (actualQty < 0)
-                throw new Error("Kuantitas fisik (actual) tidak boleh negatif");
-              const difference = safeSubtract(actualQty, systemQty, 0);
+            create: adjRows.map((it) => {
+              const systemQty = Number(stockMap.get(it.itemId) || 0);
+              const difference = safeSubtract(it.actualQty, systemQty, 0);
               return {
-                itemId: Number(it.itemId),
+                itemId: it.itemId,
                 systemQty,
-                actualQty,
+                actualQty: it.actualQty,
                 difference,
-                unitCost: Number(it.unitCost || 0),
+                unitCost: it.unitCost,
                 serialNumbers: Array.isArray(it.serialNumbers) ? it.serialNumbers : undefined,
                 totalCost: safeMultiply(
                   difference,
-                  Number(it.unitCost || 0),
+                  it.unitCost,
                   0,
                 ),
                 notes: it.reason || null,

@@ -578,6 +578,78 @@ describe("Stock Adjustment Error & Edge Paths", () => {
     );
   });
 
+  it("createStockAdjustment membaca unitCost/newQty format Indonesia penuh, bukan 2", async () => {
+    // Regresi: Number("2.000.000")=2 dan Number("2.000")=2 merusak
+    // unitCost/totalCost/actualQty diam-diam (pola createRemnant).
+    // Mock stockMove default: qty 5 tanpa impact -> systemQty -5,
+    // difference = 2000 - (-5) = 2005, totalCost = 2005 * 2000000.
+    mocks.prismaMock.stockAdjustment.create.mockImplementationOnce(
+      ({ data }: any) => {
+        const item = data.items.create[0];
+        expect(item.actualQty).toBe(2000);
+        expect(item.unitCost).toBe(2000000);
+        expect(item.totalCost).toBe(2005 * 2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.createStockAdjustment(
+      saFd({ items: itemsJson([{ itemId: 1, newQty: "2.000", unitCost: "2.000.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
+
+  it("createStockAdjustment menolak unitCost/newQty tak terbaca atau negatif, bukan diam-diam 0", async () => {
+    const badCost = await actions.createStockAdjustment(
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 10, unitCost: "bukan-angka" }]) }),
+    );
+    expect(badCost?.success).toBe(false);
+    expect(badCost?.error).toContain("Biaya satuan tidak valid");
+
+    const negCost = await actions.createStockAdjustment(
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 10, unitCost: "-5" }]) }),
+    );
+    expect(negCost?.success).toBe(false);
+    expect(negCost?.error).toContain("Biaya satuan tidak valid");
+
+    const badQty = await actions.createStockAdjustment(
+      saFd({ items: itemsJson([{ itemId: 1, newQty: "bukan-angka", unitCost: 100 }]) }),
+    );
+    expect(badQty?.success).toBe(false);
+    expect(badQty?.error).toContain("Kuantitas fisik (actual) tidak valid");
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
+  it("updateStockAdjustment membaca newQty/unitCost format Indonesia penuh, bukan 2", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({ id: 1, status: "draft" });
+    mocks.prismaMock.stockAdjustment.update.mockImplementationOnce(
+      ({ data }: any) => {
+        const item = data.items.create[0];
+        expect(item.actualQty).toBe(2000);
+        expect(item.unitCost).toBe(2000000);
+        expect(item.totalCost).toBe(item.difference * 2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await (actions as any).updateStockAdjustment(
+      1,
+      saFd({ items: itemsJson([{ itemId: 1, newQty: "2.000", unitCost: "2.000.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
+
+  it("updateStockAdjustment menolak unitCost tak terbaca, bukan diam-diam 0", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({ id: 1, status: "draft" });
+    const res = await (actions as any).updateStockAdjustment(
+      1,
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 10, unitCost: "bukan-angka" }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Biaya satuan tidak valid");
+    expect(mocks.prismaMock.stockAdjustment.update).not.toHaveBeenCalled();
+  });
+
   it("updateStockAdjustment fails if status changed inside transaction", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment);
     mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({
