@@ -32,11 +32,8 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { prisma, TxClient } from "@/lib/db/prisma"
 import { logActivity } from "@/lib/services/activity-log.service"
 import { nextSlug } from "@/lib/utils/slug-db"
-import {
-  computeQuotationTotals,
-  createDifferenceInvoice,
-  createRevisionDownCredit,
-} from "./sales.actions"
+import { computeQuotationTotals } from "@/lib/sales/quotation-totals"
+import { createDifferenceInvoice, createRevisionDownCredit } from "./sales.actions"
 import {
   assertChangeOrderTransition,
   assertLinesNotLocked,
