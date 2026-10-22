@@ -10658,3 +10658,167 @@ BOT 3 (dokumen denda) -> BOT 2 (tampil) -> BOT 6 (E93-1..7).
 BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
 
 ---
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-095-V Q-TGT-1 tahap 2: retur mengurangi pencapaian DAN komisi (sisi uang; gerbang perilaku tetap BOT 1)
+
+Pemilik vonis: BOT 4 (accounting-finance-tax). Pertanyaan: Q-TGT-1
+spec BOT 5 F-2026-10-22-088-S §9 (BR-TGT-06): "Tahap 2: pencapaian
+dikurangi retur `completed` tertaut faktur paid, atau tetap bruto
+paid selamanya? Menyentuh konsistensi basis komisi (F-016) — bila
+berubah, kedua laporan berubah bersama." Kartu siklus standby
+t_2c60b0cb. Dokumen vonis saja — tanpa kode/schema/migrasi.
+
+### 0. Snapshot antrean saat mulai (batas siklus)
+
+- origin/main `9ca74eba` (sesudah fetch 2026-10-22 19:3x WIB).
+  Semua permintaan vonis lama terverifikasi SUDAH tertutup:
+  Q-033-1/2/4 (backlog baris 4377), Q-BUPOT-052-1..3 = F-055-V,
+  Q-KOM-1 = F-056-V (PR #440 OPEN CONFLICTING — vonis terbit,
+  menunggu merge Lead, BUKAN menunggu vonis), Q-CO-4 = 066-V,
+  Q-TM67-2/4 = F-072-V (sudah di main), Q-EMP-4/5 = PR #536,
+  Q-SEWA = F-042-V. Q-TGT-1 adalah satu-satunya pertanyaan uang
+  bernama yang belum divonis DAN prasyaratnya bebas: PUTUSAN
+  BOT 1 §9A F-088-S sudah merged (PR #541 MERGED; §9A baris 9429:
+  "Q-TGT-1 TIDAK dibuka tahap 1 (tetap wilayah BOT 4 + Lead bila
+  tahap 2 dibuka)").
+- Batas siklus: snapshot di atas; item yang masuk sesudah snapshot
+  = milik siklus berikut, tidak dikerjakan run ini.
+
+### 1. Bukti live (origin/main 9ca74eba)
+
+- Rekap komisi existing: `src/lib/reports/sales-commission.ts`
+  builder murni — basis per baris = `grandTotal` faktur `paid`,
+  estimasi = basis x commissionPercent/100, ember `unattributed`
+  tanpa estimasi; `sales-commission-data.ts` loader massal
+  paid-only, commissionPercent diteruskan 0 jujur (tarif belum
+  diatur hari ini — vonis F-056-V PR #440 belum merged/build).
+- Vonis F-056-V (PR #440, head d6c94383) Putusan 3 SUDAH memutus
+  retur untuk KOMISI: retur `completed` tertaut mengurangi basis
+  sebesar Sigma `returnDpp` snapshot baris, diakui di MASA RETUR
+  (bukan restate masa faktur), persen snapshot faktur asal,
+  plafon oleh guard kumulatif existing, `cost` dilarang jadi DPP,
+  baris legacy returnDpp null = fallback qty x price beku berlabel
+  `legacy`. Vonis ini TIDAK memutus ulang angka itu — mengikatnya
+  sebagai satu-satunya definisi pengurang retur domain penjualan.
+- Retur: `SalesReturn` (schema: salesInvoiceId nullable, date,
+  status String default draft) + `SalesReturnItem.returnDpp/
+  returnVat/sourceTaxRate` snapshot beku saat complete (F-004);
+  guard kumulatif <= DPP/PPN faktur asal saat complete existing.
+- Spec F-088-S BR-TGT-01: basis pencapaian target WAJIB IDENTIK
+  basis komisi (AC-TGT-10: angka pencapaian = paidBase komisi
+  persis). BR-TGT-06 tahap 1: retur TIDAK mengurangi (label §6
+  verbatim memuat kalimat itu). SalesTarget ABSEN di schema
+  (grep = 0) — inti target belum dibangun; tahap 2 belum dibuka
+  siapa pun.
+
+### 2. Vonis (sisi uang — mengikat bila tahap 2 dibuka)
+
+V1. SATU definisi pengurang retur untuk kedua laporan. Bila tahap
+2 dibuka, pencapaian target DAN basis komisi dikurangi retur
+dengan definisi PERSIS F-056-V Putusan 3: hanya retur status
+`completed` dengan `salesInvoiceId` tertaut; nominal =
+Sigma `returnDpp` snapshot baris retur (sen-aman, pola
+safeAdd/safeRound repo); baris legacy returnDpp null = fallback
+qty x price BEKU baris berlabel `legacy` di read-model; `cost`
+(HPP) DILARANG sebagai DPP retur dalam konteks apa pun.
+Dua definisi pengurang (satu untuk target, satu untuk komisi)
+DILARANG — itu basis kedua yang dilarang BR-TGT-01.
+
+V2. Basis nilai yang dikurangi HARUS basis yang sama dengan yang
+dinaikkan. Konsekuensi yang wajib dinyatakan eksplisit karena
+F-056-V Putusan 2 mengubah basis komisi menjadi DPP
+(grandTotal - taxAmount): pengurang `returnDpp` adalah angka DPP,
+maka hanya boleh mengurangi basis DPP. Selama basis berjalan
+masih grandTotal (sebelum build F-056-V), mengurangi grandTotal
+dengan returnDpp = mengurangi DPP dari angka berisi PPN =
+salah satuan, DILARANG. Urutan build mengikat: pengurang retur
+tahap 2 hanya boleh AKTIF sesudah basis DPP F-056-V aktif di
+builder yang sama; mengaktifkan pengurang di atas basis
+grandTotal = temuan BOT 6 (falsifikasi TGT1-2).
+
+V3. Masa pengakuan = masa retur, BUKAN restate masa faktur
+(selaras F-056-V 3b). Pencapaian/komisi masa faktur yang sudah
+terbaca tidak ditulis ulang; pengurang tampil di masa
+`SalesReturn.date` retur completed, teratribusi ke penjual
+snapshot faktur asal (SalesReturn tidak punya salesEmployeeId —
+dilarang menebak penjual dari dokumen retur/createdBy). Neto
+masa retur boleh negatif dan tampil negatif apa adanya; clamp
+0 diam-diam DILARANG (selaras F-056-V 3b). Label §6 spec F-088-S
+("Retur penjualan tidak mengurangi pencapaian pada laporan ini")
+WAJIB diganti BOT 2 pada rilis yang sama dengan pengaktifan
+pengurang — label lama di atas perilaku baru = laporan bohong.
+
+V4. Yang BUKAN pengurang (mengikat): retur draft/cancelled;
+retur tak tertaut faktur (salesInvoiceId null — tidak ada hak
+yang lahir, selaras jurnal retur existing); refund kas /
+CustomerCredit / kelebihan bayar (saldo dana pelanggan, bukan
+pembalikan penjualan); pembatalan faktur (faktur cancelled tidak
+pernah masuk basis paid — tidak ada pengurang tambahan).
+Plafon kumulatif per faktur = guard complete existing; loader
+TIDAK menegakkan ulang dan TIDAK memotong diam-diam — selisih
+di luar snapshot tampil sebagai temuan, bukan dipilih diam-diam.
+
+V5. Batas vonis: vonis ini memutus SISI UANG saja. MEMBUKA tahap
+2 (mengubah perilaku tahap 1 yang sudah diputus Lead §9A) tetap
+keputusan BOT 1 bersama pemilik proses — BOT 4 tidak membuka
+tahap 2 lewat vonis ini. Sampai BOT 1 membuka tahap 2: BR-TGT-06
+tahap 1 berlaku apa adanya (retur tidak mengurangi, label §6
+tetap), dan angka vonis ini TIDAK boleh dipakai sebagian
+(mis. hanya di komisi tanpa target, atau sebaliknya) karena
+V1 mewajibkan kedua laporan bergerak bersama.
+
+### 3. Paket eksekusi (bila BOT 1 membuka tahap 2)
+
+- BOT 3: builder bersama target+komisi menerima baris pengurang
+  retur berlabel per V1-V4 dari loader yang sama (satu query
+  retur completed per masa, tanpa N+1); aktifkan HANYA sesudah
+  basis DPP F-056-V live (V2); penjaga di builder murni, tes
+  per falsifikasi di bawah. Klaim schema.prisma di board dulu
+  bila snapshot berubah — vonis ini tidak meminta kolom baru.
+- BOT 2: ganti label §6 pada rilis yang sama (V3); tampilkan
+  pengurang dari field builder apa adanya; nol hitung ulang
+  persen/neto di UI; tetap tanpa kata bonus/utang (BR-TGT-07).
+- BOT 6: falsifikasi TGT1-1..5 di bawah + AC-TGT-3 diperbarui
+  (perilaku tahap 1 hanya berlaku sebelum tahap 2 dibuka).
+
+### 4. Falsifikasi wajib BOT 6 (MERAH bila penjaga dicabut)
+
+- TGT1-1: Retur completed tertaut Rp11.000.000 returnDpp atas
+  faktur paid DPP Rp100.000.000 -> pencapaian DAN paidBase
+  komisi masa retur berkurang persis Rp11.000.000. Salah satu
+  laporan tidak berkurang = MERAH (V1).
+- TGT1-2: Pengurang aktif di atas basis grandTotal (PPN masih
+  di dalam basis): fixture faktur grandTotal 111.000.000 (DPP
+  100jt + PPN 11jt) + retur returnDpp 11.000.000 -> neto basis
+  WAJIB 89.000.000 (basis DPP), BUKAN 100.000.000. Hasil
+  100.000.000 = MERAH (V2, salah satuan).
+- TGT1-3: Retur completed di masa M+1 atas faktur masa M ->
+  angka masa M sesudah retur SAMA persis dengan sebelum retur
+  (tanpa restate); pengurang muncul di M+1. Masa M berubah =
+  MERAH (V3).
+- TGT1-4: Retur draft, retur tak tertaut, dan CustomerCredit
+  atas faktur yang sama -> pengurang 0 di kedua laporan.
+  Berkurang = MERAH (V4).
+- TGT1-5: Baris retur memakai `cost` sebagai DPP (returnDpp
+  null tanpa label legacy, atau loader membaca cost) -> MERAH;
+  jalur sah hanya snapshot returnDpp atau fallback qty x price
+  beku berlabel `legacy` (V1).
+
+### 5. Klaim kepatuhan
+
+Bukan klaim pajak: basis komisi/target = KEBIJAKAN INTERNAL
+(F-056-V Putusan 2b — tidak ada UU/PMK mengatur komisi/target
+penjualan internal; dilarang mengutip regulasi sebagai dasar).
+Angka retur berpijak pada snapshot pajak dokumen asal (F-004)
+yang sudah menjadi perlakuan SPT existing — vonis ini tidak
+mengubah perlakuan PPN retur apa pun. PPh atas komisi yang kelak
+dibayar = wilayah tahap pembayaran/payroll, TIDAK diputus di
+sini (selaras F-056-V "Yang TIDAK berubah").
+
+ID vonis ini **F-2026-10-22-095-V** (anti-tabrakan 2026-10-22:
+maks -V di origin/main 093-V PR #563; 094 terpakai sebagai
+-094-S spec BOT 5 (PR #568 MERGED) — sufiks beda domain nomor;
+095 bebas per grep backlog + gh pr list). Pemilik berikutnya:
+BOT 1 (putus buka/tidak tahap 2) -> BOT 3 (builder bersama,
+sesudah F-056-V build) -> BOT 2 (label) -> BOT 6 (TGT1-1..5).
