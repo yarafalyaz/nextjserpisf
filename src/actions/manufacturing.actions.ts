@@ -34,15 +34,23 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import {
   assertJobCostMutable,
   productionOrderCloseBlocker,
+  validateCancelReason,
   validateCloseReason,
   validateReopenReason,
 } from "@/lib/services/job-closeout.service";
+import {
+  createReservationsForWorkOrderStartTx,
+  expireOverdueReservationsTx,
+  releaseActiveReservationsForWorkOrderTx,
+  releaseStockReservationTx,
+} from "@/lib/services/stock-reservation.service";
 import { assertWarehouseAccess, getWarehouseScope } from "@/lib/auth/warehouse-scope";
 import {
   evaluateWorkOrderOperationTransition,
   parseWorkOrderStageNames,
 } from "@/lib/reports/work-order-progress";
 import { nextSlug } from "@/lib/utils/slug-db";
+import { reservationExpiresAt } from "@/lib/reports/stock-reservation";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { Prisma } from "@prisma/client";
 
@@ -1389,7 +1397,7 @@ export async function completeProductionOrder(
  */
 export async function startWorkOrder(workOrderId: number) {
   try {
-    await requirePermission("edit_work_orders");
+    const user = await requirePermission("edit_work_orders");
 
     const wo = await prisma.workOrder.findUniqueOrThrow({
       where: { id: workOrderId },
@@ -1447,6 +1455,14 @@ export async function startWorkOrder(workOrderId: number) {
       // dengan klaim start — start gagal tidak meninggalkan baris yatim,
       // dan hanya pemenang klaim yang menginisialisasi (idempoten).
       await doInitializeWorkOrderOperationsTx(tx, workOrderId);
+
+      // F-2026-10-21-012 inti (BR-RES-01/07): reservasi lahir di tx klaim
+      // yang sama, hanya oleh pemenang klaim (AC-RES-9). Kekurangan stok
+      // TIDAK menolak start — baris parsial + shortageQty tercatat.
+      await createReservationsForWorkOrderStartTx(tx, {
+        workOrderId,
+        createdBy: Number(user.id),
+      });
     });
 
     await logActivity(
@@ -1541,6 +1557,15 @@ export async function completeWorkOrder(workOrderId: number) {
       await tx.workOrderItem.updateMany({
         where: { workOrderId },
         data: { status: "completed" },
+      });
+
+      // F-2026-10-21-012 inti (BR-RES-10): sisa reservasi aktif lepas di
+      // tx penyelesaian yang sama; rollback completion (QC/DO gagal)
+      // ikut menggulung pelepasan ini (AC-RES-4).
+      await releaseActiveReservationsForWorkOrderTx(tx, {
+        workOrderId,
+        releasedBy: Number(user.id),
+        reason: "Perintah kerja selesai",
       });
 
       // F-2026-10-21-021 tahap 1: coverage garansi pasang lahir otomatis
@@ -2300,6 +2325,13 @@ export async function closeWorkOrder(workOrderId: number, reason?: string) {
         data: { status: "closed", closedAt: new Date(), closedBy: Number(user.id), closedReason: parsed },
       });
       if (claim.count === 0) throw new Error("Perintah kerja sudah ditutup atau sedang diproses pengguna lain.");
+      // F-2026-10-21-012 inti (BR-RES-10): tutup job ikut melepas sisa
+      // aktif (biasanya sudah released saat complete — updateMany no-op).
+      await releaseActiveReservationsForWorkOrderTx(tx, {
+        workOrderId,
+        releasedBy: Number(user.id),
+        reason: "Perintah kerja ditutup",
+      });
     });
 
     await logActivity("close", "WorkOrder", workOrderId, `Menutup perintah kerja #${workOrderId}: ${parsed}`);
@@ -2346,6 +2378,193 @@ export async function reopenWorkOrder(workOrderId: number, reason?: string) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[reopenWorkOrder]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== STOCK RESERVATION ACTIONS (F-2026-10-21-012 inti) ====================
+
+/**
+ * Batalkan WO in_progress (BR-RES-11, vonis Lead F-045-S): izin existing
+ * complete_work_orders (TANPA izin baru), alasan wajib tercatat, sisa
+ * reservasi aktif lepas di transaksi yang sama. Status tujuan memakai
+ * konstanta existing `cancelled`. Reservasi yang sudah consumed tetap
+ * consumed — riwayat tak diubah (BR-RES-10).
+ */
+export async function cancelWorkOrder(workOrderId: number, reason?: string) {
+  try {
+    const user = await requirePermission("complete_work_orders");
+    const parsed = validateCancelReason(reason);
+    if (typeof parsed !== "string") return { success: false, error: parsed.error };
+
+    await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
+      const wo = await tx.workOrder.findUniqueOrThrow({
+        where: { id: workOrderId },
+        select: { id: true, status: true },
+      });
+      if (wo.status !== "in_progress") {
+        throw new Error(
+          `Perintah kerja hanya dapat dibatalkan dari status 'in_progress' (saat ini '${wo.status}').`,
+        );
+      }
+      const claim = await tx.workOrder.updateMany({
+        where: { id: workOrderId, status: "in_progress" },
+        data: { status: "cancelled" },
+      });
+      if (claim.count === 0) {
+        throw new Error("Perintah kerja sudah dibatalkan atau sedang diproses pengguna lain.");
+      }
+      await releaseActiveReservationsForWorkOrderTx(tx, {
+        workOrderId,
+        releasedBy: Number(user.id),
+        reason: `Perintah kerja dibatalkan: ${parsed}`,
+      });
+    });
+
+    await logActivity(
+      "cancel",
+      "WorkOrder",
+      workOrderId,
+      `Membatalkan perintah kerja #${workOrderId}: ${parsed}`,
+    );
+    revalidatePath("/produksi/perintah-kerja");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[cancelWorkOrder]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Lepas manual satu reservasi aktif (BR-RES-09): hanya
+ * complete_work_orders + alasan wajib; jejak siapa/kapan/alasan di baris
+ * reservasi + ActivityLog. Tanpa keduanya → ditolak server (AC-RES-6).
+ */
+export async function releaseStockReservation(reservationId: number, reason?: string) {
+  try {
+    const user = await requirePermission("complete_work_orders");
+    const parsed = validateCancelReason(reason);
+    if (typeof parsed !== "string") {
+      return { success: false, error: "Alasan pelepasan reservasi wajib diisi." };
+    }
+
+    const released = await prisma.$transaction(async (tx) => {
+      await expireOverdueReservationsTx(tx, {});
+      return releaseStockReservationTx(tx, {
+        reservationId,
+        releasedBy: Number(user.id),
+        reason: parsed,
+      });
+    });
+    if (!released) {
+      return { success: false, error: "Reservasi tidak ditemukan atau sudah tidak aktif." };
+    }
+
+    await logActivity(
+      "release",
+      "StockReservation",
+      reservationId,
+      `Melepas reservasi stok #${reservationId}: ${parsed}`,
+    );
+    revalidatePath("/produksi/perintah-kerja");
+    return { success: true };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[releaseStockReservation]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Reservasi ulang/manual (BR-RES-06, §2b): edit_work_orders + akses gudang
+ * sumber; hanya untuk WO in_progress; melahirkan baris active BARU
+ * (baris expired/released lama tak dihidupkan). Idempoten per
+ * (workOrderId,itemId,warehouseId) aktif — baris aktif yang ada ditolak.
+ */
+export async function reserveStockForWorkOrder(input: {
+  workOrderId: number;
+  workOrderItemId: number;
+  warehouseId: number;
+  qty: number;
+}) {
+  try {
+    const user = await requirePermission("edit_work_orders");
+    if (!Number.isFinite(input.qty) || input.qty <= 0) {
+      return { success: false, error: "Qty reservasi harus lebih dari 0." };
+    }
+    assertWarehouseAccess(await getWarehouseScope(user), input.warehouseId);
+
+    const created = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${input.workOrderId} FOR UPDATE`;
+      const wo = await tx.workOrder.findUniqueOrThrow({
+        where: { id: input.workOrderId },
+        select: { id: true, status: true, startDate: true, endDate: true },
+      });
+      if (wo.status !== "in_progress") {
+        throw new Error(
+          `Reservasi hanya dapat dibuat untuk perintah kerja 'in_progress' (saat ini '${wo.status}').`,
+        );
+      }
+      const line = await tx.workOrderItem.findFirst({
+        where: { id: input.workOrderItemId, workOrderId: input.workOrderId },
+        select: { id: true, itemId: true, qty: true, status: true },
+      });
+      if (!line || line.itemId <= 0 || line.status === "replaced") {
+        throw new Error("Baris perintah kerja tidak ditemukan atau tidak dapat direservasi.");
+      }
+      await expireOverdueReservationsTx(tx, { workOrderId: input.workOrderId });
+      const existing = await tx.stockReservation.findFirst({
+        where: {
+          workOrderId: input.workOrderId,
+          itemId: line.itemId,
+          warehouseId: input.warehouseId,
+          status: "active",
+        },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new Error("Reservasi aktif untuk item dan gudang ini sudah ada pada perintah kerja ini.");
+      }
+      const issued = await tx.materialIssueItem.aggregate({
+        where: {
+          workOrderItemId: line.id,
+          materialIssue: { workOrderId: input.workOrderId, status: "completed" },
+        },
+        _sum: { qty: true },
+      });
+      const remainingNeed = Math.max(0, Number(line.qty) - Number(issued._sum.qty ?? 0));
+      if (input.qty > remainingNeed + 1e-9) {
+        throw new Error("Qty reservasi melebihi sisa kebutuhan baris perintah kerja.");
+      }
+      return tx.stockReservation.create({
+        data: {
+          workOrderId: input.workOrderId,
+          workOrderItemId: line.id,
+          itemId: line.itemId,
+          warehouseId: input.warehouseId,
+          qtyReserved: new Prisma.Decimal(input.qty),
+          qtyConsumed: new Prisma.Decimal(0),
+          shortageQty: new Prisma.Decimal(0),
+          status: "active",
+          expiresAt: reservationExpiresAt(wo.startDate ?? new Date(), wo.endDate),
+          createdBy: Number(user.id),
+        },
+      });
+    });
+
+    await logActivity(
+      "reserve",
+      "StockReservation",
+      created.id,
+      `Reservasi stok manual perintah kerja #${input.workOrderId}: ${input.qty} item #${created.itemId} gudang #${input.warehouseId}`,
+    );
+    revalidatePath("/produksi/perintah-kerja");
+    return { success: true, id: created.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[reserveStockForWorkOrder]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
