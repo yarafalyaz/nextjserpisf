@@ -731,7 +731,7 @@ export async function createDownPayment(formData: FormData) {
  * AUD-R10-03: recompute total quotation server-side (dedup create/update).
  * Jangan percaya subtotal/grandTotal kiriman klien — hitung ulang + clamp.
  */
-function computeQuotationTotals(data: any): {
+export function computeQuotationTotals(data: any): {
   computedSubtotal: number
   headerDiscount: number
   headerTax: number
@@ -753,7 +753,7 @@ function computeQuotationTotals(data: any): {
  * AUD-R10-03: computeLine quotation di module-scope (dedup create/update).
  * Murni: clamp qty/diskon anti-tamper, hitung via safe* decimal-safe.
  */
-function computeQuotationLine(item: any): { discountAmount: number; total: number } {
+export function computeQuotationLine(item: any): { discountAmount: number; total: number } {
   const qty = Math.max(0.01, Number(item.qty) || 0)
   const unitPrice = Number(item.unitPrice) || 0
   const lineSubtotal = safeMultiply(qty, unitPrice, 0)

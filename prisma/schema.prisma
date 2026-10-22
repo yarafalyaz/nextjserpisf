@@ -1237,6 +1237,7 @@ model Quotation {
   salesInvoices     SalesInvoice[]
   salesOrders       SalesOrder[]
   workOrders        WorkOrder[]
+  changeOrders      JobChangeOrder[]
   contractProjects  Project[]          @relation("ProjectContractQuotation")
 
   @@index([customerId], map: "quotations_customer_id_fkey")
@@ -2667,6 +2668,7 @@ model WorkOrder {
   bomRevision       BomRevision?      @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
   warrantyCoverages WarrantyCoverage[] @relation("WorkOrderWarrantyCoverages")
   warrantyRepairClaims WarrantyClaim[] @relation("WarrantyClaimRepairWorkOrder")
+  changeOrders      JobChangeOrder[]
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
@@ -2699,6 +2701,7 @@ model WorkOrderItem {
   workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   materialIssueItems MaterialIssueItem[]
   stockReservations StockReservation[]
+  changeOrderItems JobChangeOrderItem[]
 
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])
@@ -4563,4 +4566,130 @@ model IdempotencyKey {
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("idempotency_keys")
+}
+
+// F-2026-10-22-066-S inti (induk F-2026-10-20-103; putusan BOT 1 §5A +
+// vonis BOT 4 F-2026-10-22-066-V): dokumen persetujuan pelanggan untuk
+// perubahan tengah-job pada WorkOrder yang tertaut Quotation. Sumber
+// nilai kontrak TUNGGAL tetap Quotation.grandTotal (BR-CO-01): dokumen
+// ini TIDAK membuat jurnal/piutang/payment dan TIDAK menyimpan nilai
+// kontrak kedua — selisihNilai hanya snapshot informasi persetujuan
+// saat kirim (sen Decimal). Status ditegakkan server:
+// draft -> menunggu_pelanggan -> disetujui -> diterapkan; cabang
+// ditolak (dari menunggu_pelanggan) dan dibatalkan (dari draft/
+// menunggu_pelanggan) terminal. Terapkan satu tx: klaim kondisional
+// disetujui->diterapkan, kunci baris dibaca ulang, revisi grandTotal
+// lewat computeQuotationTotals server, lalu uang keluar HANYA lewat
+// createDifferenceInvoice/createRevisionDownCredit existing (BR-CO-02).
+// Baris WorkOrderItem yang sudah punya MaterialIssueItem
+// (workOrderItemId terisi, SEMUA status MaterialIssue) TERKUNCI
+// total (BR-CO-03); penggantian part terpasang lewat jalur
+// MaterialIssue/retur existing. Satu CO aktif (draft/menunggu_
+// pelanggan/disetujui) per WO dijaga service di dalam tx (BR-CO-06;
+// unique parsial tak tersedia di MySQL). CO TIDAK menyentuh
+// bomRevisionId (Q-CO-5; F-104 terpisah). CO pada WO tanpa
+// quotationId ditolak (BR-CO-10).
+model JobChangeOrder {
+  id        Int      @id @default(autoincrement())
+  slug      String?  @unique
+  // Nomor urut per WO (CO-001, CO-002, ...) dari nomor dokumen CO
+  // sendiri (BR-CO-06) — bukan DocumentSequenceService (tak ada prefix CO).
+  documentNo String  @unique @map("document_no")
+  sequence   Int
+  // FK denormal dari WO (WO.quotationId) disimpan sekali saat buat
+  // supaya jalur terapkan/riwayat tak menerka ulang (BR-CO-10: WO tanpa
+  // quotationId ditolak sebelum baris ini lahir).
+  workOrderId Int     @map("work_order_id")
+  quotationId Int     @map("quotation_id")
+  status      String  @default("draft")
+  // Alasan perubahan WAJIB sejak draf (penjaga kirim §3).
+  reason      String  @db.Text
+  // Timestamp snapshot terkirim (null sebelum kirim). Isi snapshot
+  // adalah baris items CO itu sendiri; baca ulang di tx terapkan.
+  sentAt  DateTime? @map("sent_at")
+  sentBy  Int?      @map("sent_by")
+  // Nilai informasi persetujuan saat kirim; snapshot quote saat kirim.
+  // BUKAN dasar jurnal (BR-CO-01) — uang selalu dari grandTotal berjalan.
+  selisihNilai       Decimal? @map("selisih_nilai") @db.Decimal(15, 2)
+  grandTotalSebelum  Decimal? @map("grand_total_sebelum") @db.Decimal(15, 2)
+  grandTotalSesudah  Decimal? @map("grand_total_sesudah") @db.Decimal(15, 2)
+  // Bukti persetujuan pelanggan dicatat staf (Q-CO-2/BR-CO-07): referensi
+  // bebas WAJIB non-kosong sesudah trim + timestamp + pencatat. Sistem
+  // TIDAK mengklaim pelanggan menyetujui langsung di sistem (tanpa portal).
+  approvalReference        String?   @map("approval_reference") @db.Text
+  disetujuiOlehPelangganAt DateTime? @map("disetujui_oleh_pelanggan_at")
+  disetujuiDicatatOleh     Int?      @map("disetujui_dicatat_oleh")
+  // Lampiran/tautan bukti opsional (Q-CO-2: bukan syarat).
+  approvalAttachmentUrl    String?   @map("approval_attachment_url")
+  // Jejak penolakan/pembatalan (alasan wajib; §3).
+  rejectionReason String? @map("rejection_reason") @db.Text
+  rejectedAt      DateTime? @map("rejected_at")
+  rejectedBy      Int?      @map("rejected_by")
+  cancelReason    String?  @map("cancel_reason") @db.Text
+  cancelledAt     DateTime? @map("cancelled_at")
+  cancelledBy     Int?      @map("cancelled_by")
+  // Hasil terapkan: status diterapkan + jejak dokumen uang existing yang
+  // menjadi konsekuensi (bukan jurnal dari CO — BR-CO-02).
+  appliedAt          DateTime? @map("applied_at")
+  appliedBy          Int?      @map("applied_by")
+  appliedGrandTotal  Decimal?  @map("applied_grand_total") @db.Decimal(15, 2)
+  appliedInvoiceId   Int?      @map("applied_invoice_id")
+  appliedCreditId    Int?      @map("applied_credit_id")
+  appliedNote        String?   @map("applied_note") @db.Text
+  createdBy Int?     @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  workOrder WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  quotation Quotation @relation(fields: [quotationId], references: [id])
+  items     JobChangeOrderItem[]
+
+  @@unique([workOrderId, sequence], map: "job_change_orders_wo_sequence_unique")
+  @@index([workOrderId, status])
+  @@index([quotationId])
+  @@index([status])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("job_change_orders")
+}
+
+// Baris perubahan CO. action: tambah | ubah | hapus (BR-CO-04). Untuk
+// tambah: workOrderItemId null (baris WO lahir saat terapkan), before*
+// null, after* dari input. Untuk ubah/hapus: workOrderItemId menunjuk
+// baris WO existing; before* = snapshot nilai WO saat draf dibuat,
+// after* = nilai sesudah (hapus: after* menggemakan before* — jejak
+// audit, bukan hard-delete baris WO; baris WO ditandai status replaced
+// saat terapkan, pola reviseWorkOrderItems existing). costBefore/
+// costAfter = WorkOrderItem.cost snapshot (biaya baris WO, BUKAN
+// ProductionCost — AC-CO-3: ProductionCost/totalActualCost tak berubah
+// oleh perubahan nilai tagih).
+model JobChangeOrderItem {
+  id              Int  @id @default(autoincrement())
+  changeOrderId   Int  @map("change_order_id")
+  workOrderItemId Int? @map("work_order_item_id")
+  // Item stok baris (0 = jasa/custom pola WorkOrderItem AUD-NEXT-07).
+  itemId      Int
+  action      String
+  description String?
+  uom         String?
+  qtyBefore   Decimal? @map("qty_before") @db.Decimal(15, 2)
+  qtyAfter    Decimal? @map("qty_after") @db.Decimal(15, 2)
+  costBefore  Decimal? @map("cost_before") @db.Decimal(15, 2)
+  costAfter   Decimal? @map("cost_after") @db.Decimal(15, 2)
+  // Nilai tagih per baris (basis QuotationItem.unitPrice/discount) —
+  // sumber revisi grandTotal di tx terapkan.
+  unitPriceBefore Decimal? @map("unit_price_before") @db.Decimal(15, 2)
+  unitPriceAfter  Decimal? @map("unit_price_after") @db.Decimal(15, 2)
+  discountBefore  Decimal? @map("discount_before") @db.Decimal(15, 2)
+  discountAfter   Decimal? @map("discount_after") @db.Decimal(15, 2)
+  discountType    String?  @map("discount_type")
+  sortOrder       Int      @default(0) @map("sort_order")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  changeOrder JobChangeOrder @relation(fields: [changeOrderId], references: [id], onDelete: Cascade)
+  workOrderItem WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: SetNull)
+
+  @@index([changeOrderId])
+  @@index([workOrderItemId])
+  @@index([itemId])
+  @@map("job_change_order_items")
 }
