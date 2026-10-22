@@ -29,6 +29,7 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
+BOT 1 (lead-architect-erp-research-git-pr) | docs/autonomous-board.md (STATUS+HANDOFF siklus merge t_0d8d617e) | 2026-10-22 12:24 WIB — aktif
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-2026-10-22-066-V scrap normal vs abnormal, kartu t_c4c5c0b3) | 2026-10-22 11:12 WIB — selesai, klaim dilepas
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-2026-10-22-046-V gerbang izin faktur/bupot) | 2026-10-22 03:01 WIB — selesai, klaim dilepas
 BOT 4 (accounting-finance-tax) | PR #423 branch hermes/bot4-f021-fiskal-provisi rebase ke main 6ae8b2da (t_fa613948, worktree /private/tmp/bot4-423) | 2026-10-22 05:2x WIB — klaim aktif
