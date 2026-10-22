@@ -6,7 +6,7 @@ import { notFound } from "next/navigation"
 import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { ProcessButton } from "@/components/ui/process-button"
-import { deleteInventoryTransfer, processInventoryTransfer, receiveInventoryTransfer } from "@/actions/inventory.actions"
+import { closeInventoryTransferShortage, deleteInventoryTransfer, processInventoryTransfer, receiveInventoryTransfer } from "@/actions/inventory.actions"
 import { PageHeader, BackButton } from "@/components/ui/page-header"
 import { Button } from "@/components/ui/button"
 import { DetailCard, DetailField } from "@/components/ui/detail-card"
@@ -97,15 +97,27 @@ export default async function InventoryTransferDetailPage({
                 </CanCreate>
               </>
             )}
-            {transfer.status === "processed" && (
-              <ProcessButton
-                id={transfer.id}
-                action={receiveInventoryTransfer}
-                confirmTitle="Terima transfer barang ini?"
-                confirmBody="Menerima transfer barang akan memperbarui stok di gudang tujuan."
-                successMessage="Transfer stok berhasil diterima"
-                label="Terima"
-              />
+            {(transfer.status === "processed" || transfer.status === "partially_received") && (
+              <>
+                <ProcessButton
+                  id={transfer.id}
+                  action={receiveInventoryTransfer}
+                  confirmTitle="Terima transfer barang ini?"
+                  confirmBody="Menerima transfer barang akan memperbarui stok di gudang tujuan. Sisa yang belum diterima tetap berstatus diterima sebagian dan tampil di Laporan Stok Dalam Perjalanan."
+                  successMessage="Transfer stok berhasil diterima"
+                  label="Terima"
+                />
+                <CanCreate permission="create_stock_adjustments">
+                  <ProcessButton
+                    id={transfer.id}
+                    action={closeInventoryTransferShortage}
+                    confirmTitle="Tutup selisih transfer ini?"
+                    confirmBody="Membuat draf penyesuaian selisih transfer di gudang tujuan. Transfer baru tertutup setelah draf itu diproses dan disetujui. Setelah ditutup, sisa tidak lagi bisa diterima."
+                    successMessage="Draf penutupan selisih berhasil dibuat"
+                    label="Tutup Selisih"
+                  />
+                </CanCreate>
+              </>
             )}
             <BackButton href="/inventaris/transfer" />
           </>
@@ -136,12 +148,16 @@ export default async function InventoryTransferDetailPage({
               <DetailTableHead>
                 <DetailTableTh>Nama Barang</DetailTableTh>
                 <DetailTableTh align="right">Jml</DetailTableTh>
+                <DetailTableTh align="right">Diterima</DetailTableTh>
+                <DetailTableTh align="right">Sisa</DetailTableTh>
               </DetailTableHead>
               <DetailTableBody>
                 {transfer.items.map((item) => (
                   <DetailTableRow key={item.id}>
                     <DetailTableTd>{itemNameMap.get(item.itemId) || `Item #${item.itemId}`}</DetailTableTd>
                     <DetailTableTd align="right">{Number(item.qty)}</DetailTableTd>
+                    <DetailTableTd align="right">{Number(item.receivedQty)}</DetailTableTd>
+                    <DetailTableTd align="right">{Math.max(0, Number(item.qty) - Number(item.receivedQty))}</DetailTableTd>
                   </DetailTableRow>
                 ))}
               </DetailTableBody>

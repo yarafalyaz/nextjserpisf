@@ -2154,9 +2154,18 @@ model StockAdjustment {
   deletedAt   DateTime?             @map("deleted_at")
   createdAt   DateTime              @default(now()) @map("created_at")
   updatedAt   DateTime              @updatedAt @map("updated_at")
+  // F-2026-10-22-081-S (Q-TP-3 BOT 3): penutupan selisih transfer tertaut.
+  // Adjustment alasan persis "selisih transfer" dengan kolom ini terisi =
+  // jurnal-saja (nol StockMove): sisa sudah OUT dari sumber & tak pernah
+  // masuk tujuan, jadi tak ada stok fisik yang dipotong di gudang mana pun.
+  // TANPA @unique: penutupan ditolak/batal boleh diajukan ulang (spec §3) —
+  // "satu penutupan aktif per transfer" dijaga server (status draft saja).
+  inventoryTransferId Int?            @map("inventory_transfer_id")
+  inventoryTransfer   InventoryTransfer? @relation(fields: [inventoryTransferId], references: [id], onDelete: SetNull)
   items       StockAdjustmentItem[]
   warehouse   Warehouse             @relation(fields: [warehouseId], references: [id])
 
+  @@index([inventoryTransferId])
   @@index([warehouseId], map: "stock_adjustments_warehouse_id_fkey")
   @@index([status])
   @@index([approvedBy])
@@ -2256,6 +2265,8 @@ model InventoryTransfer {
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
   items                  InventoryTransferItem[]
+  receipts               InventoryTransferReceipt[]
+  shortageAdjustments    StockAdjustment[]
   materialRequest        MaterialRequest?        @relation(fields: [materialRequestId], references: [id], onDelete: SetNull)
   destinationWarehouse   Warehouse               @relation("TransferDest", fields: [destinationWarehouseId], references: [id])
   sourceWarehouse        Warehouse               @relation("TransferSource", fields: [sourceWarehouseId], references: [id])
@@ -2274,6 +2285,10 @@ model InventoryTransferItem {
   inventoryTransferId Int               @map("inventory_transfer_id")
   itemId              Int               @map("item_id")
   qty                 Decimal           @db.Decimal(15, 2)
+  // F-2026-10-22-081-S: qty diterima kumulatif per BARIS (pola
+  // PurchaseOrderItem.receivedQty, vonis BOT 4 V-5(e)). Server menjaga
+  // 0 <= receivedQty <= qty; sisa = qty - receivedQty.
+  receivedQty         Decimal           @default(0) @map("received_qty") @db.Decimal(15, 2)
   // FIFO lot/serial attribution captured at process time. A transfer is a MOVE,
   // not a sale: the batch lots and serials consumed from the source warehouse must
   // be re-created/revived in the destination warehouse on receive. Without these
@@ -2282,10 +2297,47 @@ model InventoryTransferItem {
   serialNumbers       Json?             @map("serial_numbers")
   batchAllocations    Json?             @map("batch_allocations")
   inventoryTransfer   InventoryTransfer @relation(fields: [inventoryTransferId], references: [id], onDelete: Cascade)
+  receiptItems        InventoryTransferReceiptItem[]
 
   @@index([inventoryTransferId], map: "inventory_transfer_items_inventory_transfer_id_fkey")
   @@index([itemId])
   @@map("inventory_transfer_items")
+}
+
+// F-2026-10-22-081-S (Q-TP-2 BOT 3): SATU baris per KEJADIAN terima.
+// Idempotency per kejadian (BR-TP-06): idempotencyKey unik per submit —
+// retry submit yang sama menabrak unique, bukan menggandakan StockMove IN.
+// receivedDate = tanggal kejadian sendiri (Q-TP-1 BOT 1): assertPeriodOpen
+// dinilai per tanggal ini, bukan tanggal kirim transfer.
+model InventoryTransferReceipt {
+  id                  Int      @id @default(autoincrement())
+  inventoryTransferId Int      @map("inventory_transfer_id")
+  receivedDate        DateTime @map("received_date")
+  receivedBy          Int?     @map("received_by")
+  idempotencyKey      String   @unique @map("idempotency_key")
+  createdAt           DateTime @default(now()) @map("created_at")
+  inventoryTransfer   InventoryTransfer @relation(fields: [inventoryTransferId], references: [id], onDelete: Cascade)
+  items               InventoryTransferReceiptItem[]
+
+  @@index([inventoryTransferId])
+  @@index([receivedBy])
+  @@index([receivedDate])
+  @@map("inventory_transfer_receipts")
+}
+
+model InventoryTransferReceiptItem {
+  id                      Int     @id @default(autoincrement())
+  receiptId               Int     @map("receipt_id")
+  inventoryTransferItemId Int     @map("inventory_transfer_item_id")
+  qty                     Decimal @db.Decimal(15, 2)
+  serialNumbers           Json?   @map("serial_numbers")
+  batchAllocations        Json?   @map("batch_allocations")
+  receipt                 InventoryTransferReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+  transferItem            InventoryTransferItem @relation(fields: [inventoryTransferItemId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+  @@index([inventoryTransferItemId])
+  @@map("inventory_transfer_receipt_items")
 }
 
 model MaterialIssue {

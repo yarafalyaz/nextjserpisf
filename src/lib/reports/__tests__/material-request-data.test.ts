@@ -43,8 +43,8 @@ function row(over: Record<string, unknown> = {}) {
       },
     ],
     transfers: [
-      { status: "draft", items: [{ itemId: 1, qty: 10 }] },
-      { status: "received", items: [{ itemId: 1, qty: 4 }] },
+      { status: "draft", items: [{ itemId: 1, qty: 10, receivedQty: 0 }] },
+      { status: "received", items: [{ itemId: 1, qty: 4, receivedQty: 4 }] },
     ],
     ...over,
   }
