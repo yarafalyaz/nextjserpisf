@@ -7676,3 +7676,313 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-049-S workflow konsumen reservasi stok per WO/gudang (tahap konsumen F-2026-10-22-045-S)
+
+Pemilik spec: BOT 5 (sales-crm-hr-payroll-business-workflow). Dokumen spec
+saja, tanpa kode/schema/migrasi. Spec ini menurunkan spec aturan
+F-2026-10-22-045-S (PR #403, head a5cd7f0914c69f09b079c64dcb8fa48fade944a4,
+OPEN saat spec ini ditulis) menjadi alur kerja konsumen yang bisa
+dibangun BOT 3 (backend, sesudah inti dibuka Lead) lalu dipakai BOT 2
+(UI, kata persis F-045-S §2(g)). Spec ini TIDAK membuat aturan stok baru,
+TIDAK mengubah keputusan F-045-S, dan TIDAK mendahului vonis siapa pun.
+
+Status gerbang saat spec ditulis (verifikasi live run ini, 2026-10-22):
+- PR #403 (F-045-S) OPEN, MERGEABLE, head persis a5cd7f09 — belum merged,
+  jadi aturan BR-RES-01..12 di bawah masih berstatus persis seperti di
+  F-045-S (USULAN / BUTUH-VONIS), bukan aturan berlaku.
+- Audit BOT 6 atas PR #403 = kartu t_5010232b, masih `scheduled` saat
+  run ini jalan — vonis BELUM terbit. Spec ini ditulis dari PR #403 apa
+  adanya dan ditandai MENUNGGU VONIS BOT 6: bila vonis BOT 6 mengubah
+  atau menolak bagian F-045-S, bagian terkait di spec ini ikut gugur
+  dan wajib direvisi BOT 5 sebelum BOT 3/BOT 2 membangun di atasnya.
+- Putusan Lead yang masih terbuka dari F-045-S §8 tetap terbuka di
+  sini: (1) buka inti StockReservation F-2026-10-21-012, (2) BR-RES-11
+  aksi batal WO in_progress, (3) BR-RES-07 blokir-start vs
+  peringatan-keras. Tanpa ketiganya, yang boleh dibangun hanya lapis
+  aman ATP per gudang yang sudah ada (lihat §0).
+- Putusan accountant: TIDAK dibutuhkan (reservasi qty, tanpa
+  jurnal/nilai — konsisten F-012/F-045-S).
+
+### 0. Verifikasi live origin/main 775d6253 (2026-10-22, run ini)
+
+TERVERIFIKASI-KODE (basis origin/main 775d625343e65586fd02aecf6b6b23cdd6f6bd72):
+- `grep StockReservation` di src/prisma hanya menemukan sebutan di
+  komentar `src/lib/reports/work-order-material-needs.ts:25` dan
+  `work-order-material-needs-data.ts:18,147` ("BUKAN StockReservation
+  mengikat"). Model/field reservasi mengikat ABSEN.
+- Builder kebutuhan material WO: header
+  `src/lib/reports/work-order-material-needs.ts:1-52` menyatakan ATP
+  read-only; interface baris memuat `qtyOnHandAtWarehouse` +
+  `warehouseShortageQty` (F-012 lapis aman) dan `committedOtherQty`
+  (F-2026-10-20-51(a), peringatan WO aktif lain, BUKAN kunci stok).
+  Loader `work-order-material-needs-data.ts` memakai
+  `ACTIVE_WORK_ORDER_STATUSES` dari `work-order-queue.ts` dan gudang
+  relevan = gudang MI `completed` WO ini ∪ `Item.defaultWarehouseId`.
+- Status WO: `src/lib/constants/status.ts:40-46` =
+  draft/pending/in_progress/completed/cancelled (string). Status
+  turunan `closed` dipakai `closeWorkOrder`/`reopenWorkOrder`
+  (`manufacturing.actions.ts:2260/:2315`, izin `complete_work_orders`).
+- Transisi WO nyata di `src/actions/manufacturing.actions.ts`:
+  `startWorkOrder:1390` (izin `edit_work_orders`; guard status
+  pending/draft; klaim atomik `updateMany` status IN (pending,draft)
+  → in_progress + flip item satu transaksi), `completeWorkOrder:1476`
+  (izin `complete_work_orders`; guard in_progress/pending; wajib ada
+  MaterialIssue `completed` tertaut WO; guard QC), `deleteWorkOrder:1893`
+  (draft/pending saja per F-045-S §0). TIDAK ada aksi cancel WO —
+  `cancelWorkOrder` tidak ditemukan grep run ini; status `cancelled`
+  di konstanta belum punya aksi lahir (akar BR-RES-11).
+- MaterialIssue: konsumsi stok hanya saat MI `completed` via
+  `onMaterialIssueCompleted` (`src/lib/hooks/material-issue.hook.ts:26`);
+  `warehouseId` MI dipilih pembuat + `assertWarehouseAccess`
+  (`manufacturing.actions.ts:1691`; pola juga :919/:1120). WorkOrder
+  TIDAK punya warehouseId (F-045-S §0); gudang WO tersirat dari MI.
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:224-257`):
+  view/create/edit/delete_material_issues,
+  view/create/edit/delete/complete_work_orders. TIDAK ada izin
+  reservasi khusus — spec ini tidak mengarang izin baru (F-045-S §2(b)).
+
+### 1. Workflow specification (konsumen, turunan F-045-S §1/§2)
+
+Aktor: Admin/Perencana bengkel (membuat WO), Kepala Bengkel (memulai
+WO, menyetujui lepas manual), Petugas Gudang (membuat/menyelesaikan
+MI), Sistem (lahir/konsumsi/lepas otomatis).
+Dokumen masuk: WorkOrder + WorkOrderItem, Item + defaultWarehouseId,
+InventoryLayer per gudang, MaterialIssue. Dokumen keluar: baris
+reservasi aktif per (WO, item, gudang), status turunan reservasi per
+baris kebutuhan, peringatan kartu kebutuhan material WO.
+
+Urutan konsumen (semua langkah inti = USULAN F-045-S, berlaku hanya
+sesudah gerbang §pembuka lolos):
+- W0 WO draft/pending: tidak ada reservasi. Kartu kebutuhan hanya
+  menampilkan ATP peringatan per gudang existing (BR-RES-04) — makna
+  angka ATP untuk WO belum start TIDAK berubah oleh spec ini.
+- W1 Kepala Bengkel menjalankan start WO dan menang klaim start:
+  dalam transaksi klaim yang sama, lahir reservasi per baris stok
+  menurut BR-RES-01/02/03 (gudang putus MI WO → defaultWarehouseId
+  item → tidak direservasi + penanda; qty = sisa kebutuhan baris
+  non-replaced itemId>0). Kekurangan stok tidak menolak start
+  (BR-RES-07): baris tak tertutup lahir parsial + penanda kekurangan.
+- W2 Selama WO in_progress, Petugas Gudang menyelesaikan MI: MI
+  `completed` mengonsumsi reservasi WO pemilik dulu (gudang sama),
+  selebihnya jalur keluar-tanpa-cadangan (BR-RES-08). Reservasi ulang
+  sesudah kedaluwarsa dan tambah reservasi manual hanya oleh pemegang
+  `edit_work_orders` + akses gudang sumber (BR-RES-06/09 turunan
+  F-045-S §2(b)); lepas manual hanya `complete_work_orders` + alasan
+  tercatat (BR-RES-09).
+- W3 WO selesai (completed lalu closed) atau dibatalkan: sisa aktif
+  dilepas otomatis dalam transaksi penyelesaian yang sama
+  (BR-RES-10); WO in_progress yang dibatalkan menunggu aksi batal
+  BR-RES-11 (BUTUH-VONIS Lead — belum ada di kode, lihat §5 Q-049-1).
+- W4 Kedaluwarsa berjalan sebagai perilaku baca/sistem (lazy-expire +
+  tugas berkala per F-045-S §2(c)): stok kembali tersedia untuk ATP
+  WO lain; WO pemilik melihat penanda kedaluwarsa persis §4 dan boleh
+  reservasi ulang selama masih in_progress. Kedaluwarsa tidak
+  membatalkan WO dan tidak memblokir MI berikutnya.
+
+### 2. Tabel aturan reservasi per status WO (aturan bernama F-045-S)
+
+| Status WO | Reservasi lahir? | Konsumsi | Lepas | Aturan bernama (sumber F-045-S) |
+|---|---|---|---|---|
+| draft | Tidak | — | — | BR-RES-01 (lahir hanya di start); kartu hanya ATP peringatan BR-RES-04 |
+| pending | Tidak | — | — | BR-RES-01; WO pending tetap dilayani ATP existing, bukan ikatan |
+| in_progress (baru menang start) | Ya, satu transaksi dengan klaim start; per (item stok, gudang sumber); parsial bila stok tak menutup + penanda kekurangan | Belum, sampai MI completed | — | BR-RES-01, BR-RES-02 (urutan putus gudang), BR-RES-03 (qty sisa kebutuhan), BR-RES-05 (prioritas urutan start), BR-RES-07 (start tak diblokir stok) |
+| in_progress (berjalan) | Reservasi ulang/manual boleh lahir untuk baris kedaluwarsa/tanpa reservasi | MI completed WO pemilik, gudang sama, mengurangi sisa aktif WO itu saja | Lepas manual beralasan; kedaluwarsa di expiresAt | BR-RES-06 (expiresAt min(endDate, start+14 hari)), BR-RES-08 (isolasi konsumsi), BR-RES-09 (lepas manual complete_work_orders + alasan) |
+| in_progress dibatalkan | — (yang sudah consumed tetap consumed) | — | Semua sisa aktif → released dalam transaksi batal | BR-RES-10 + BR-RES-11 (aksi batalnya sendiri BUTUH-VONIS Lead, belum ada di kode) |
+| completed | Tidak lahir baru | — | Sisa aktif → released dalam transaksi penyelesaian sama | BR-RES-10 |
+| closed | Tidak | — | Sudah released di completed; close tidak mengubah reservasi | BR-RES-10 |
+| reopen dari completed | Tidak lahir otomatis | — | Reservasi released/expired TIDAK hidup lagi | BR-RES-10 |
+| (baris WO diganti/qty turun/replaced saat in_progress) | Tambah sebatas tersedia bila qty naik + penanda bila kurang | — | Selisih belum terpakai → released sejumlah selisih | F-045-S §2(a)/(f) (turunan BR-RES-03/BR-RES-10) |
+| WO dihapus sebelum start (draft/pending) | Belum pernah lahir | — | Tidak ada yang dilepas | F-045-S §1 S4 |
+
+Per gudang (mengikat di semua baris tabel): reservasi selalu per
+(item, gudang sumber yang disimpan saat lahir); perubahan
+defaultWarehouseId item sesudah lahir TIDAK memindahkan reservasi
+berjalan (BR-RES-02). MI dari gudang berbeda dari gudang reservasi =
+porsi itu jalur tanpa cadangan + peringatan beda gudang (F-045-S
+§2(e)). Reservasi adalah ikatan qty per (WO, item, gudang), BUKAN
+pemesanan lapisan/batch/serial tertentu (BR-RES-12).
+
+### 3. Konflik reservasi (perilaku bisnis eksplisit per F-045-S)
+
+K-049-1 Dua WO berebut item+gudang sama: prioritas = urutan start
+yang menang klaim (first-started, first-reserved), BUKAN tenggat
+endDate (BR-RES-05; endDate hanya informasi tampil). WO kedua yang
+start saat stok tak menutup: start TETAP jalan, reservasinya parsial
+sebatas sisa tersedia (bisa 0), baris ditandai kata persis "Stok
+gudang ini sudah terreservasi untuk perintah kerja lain" (§4).
+Pemenang bertukar bila urutan start dibalik (acceptance AC-RES-1
+F-045-S §7, diwarisi §7 di bawah).
+K-049-2 Stok fisik negatif / MI melebihi cadangan: MI `completed`
+TIDAK PERNAH ditolak karena reservasi dan TIDAK PERNAH mengonsumsi
+reservasi WO lain (BR-RES-08). Kelebihan di atas sisa reservasi
+pemilik mengikuti perilaku FIFO existing (hook MI menoleransi
+shortfall lapisan) dan tertanda "Keluar tanpa cadangan reservasi";
+tidak ada reservasi negatif lahir. Item/WO tanpa reservasi sama
+sekali (kedaluwarsa, gudang belum ditentukan, MI manual tertaut WO
+belum start) berjalan seperti hari ini. Menolak MI completed demi
+reservasi = mengubah guard MI existing — di luar spec ini (lihat
+Q-049-2).
+K-049-3 Start konkuren WO sama dua kali: hanya pemenang klaim start
+existing yang melahirkan reservasi; tidak ada baris ganda per
+(WO, item, gudang) aktif (idempoten, AC-RES-9 F-045-S).
+K-049-4 Yang TIDAK diputus F-045-S dan TIDAK diputus spec ini —
+pertanyaan terbuka bernama (bukan karangan, bukan aturan):
+- Q-049-1 (Lead): aksi batal WO in_progress — siapa boleh, izin apa
+  (usulan F-045-S: complete_work_orders), dan apakah lepas-di-batal
+  ditunda bersama aksinya. (= BR-RES-11, BUTUH-VONIS; tanpa putusan
+  ini baris "in_progress dibatalkan" di §2 belum bisa dibangun.)
+- Q-049-2 (Lead/BOT 3): apakah kelak ada keadaan di mana MI completed
+  boleh ditahan demi reservasi (mis. stok akan negatif). F-045-S
+  memutuskan TIDAK untuk inti ini; mengubahnya = vonis terpisah,
+  bukan penafsiran spec ini.
+- Q-049-3 (Lead/pemilik proses): blokir start karena stok (lawan
+  BR-RES-07 peringatan-keras). Spec merekomendasikan peringatan
+  sampai pemilik proses menyatakan job boleh ditolak mulai karena
+  part; nilai ambang blokir apa pun = di luar spec.
+- Q-049-4 (BOT 3/Lead): mekanisme kedaluwarsa — lazy-expire saat
+  baca saja, tugas terjadwal saja, atau keduanya (F-045-S §2(c)
+  menyebut lazy + berkala tanpa memilih penanggung jawab jadwal);
+  pilihan teknis + pemilik jadwalnya = vonis implementasi BOT 3.
+- Q-049-5 (BOT 3): keterbacaan "keluar tanpa cadangan" dan "beda
+  gudang" — penanda turunan di kartu kebutuhan saja atau tercatat
+  sebagai peristiwa yang bisa diaudit; F-045-S hanya mewajibkan
+  tertanda di kartu (§2(e)), bentuk catatannya belum diputus.
+
+### 4. Kata UI Indonesia persis (diwarisi verbatim F-045-S §2(g))
+
+BOT 2 memakai kata ini persis, jangan parafrase; status mentah
+Inggris tidak tampil ke pengguna:
+- active → "Terreservasi"
+- consumed habis → "Terpakai Habis"
+- consumed sebagian → tetap "Terreservasi" + teks pendamping
+  "terpakai {qtyTerpakai} dari {qtyAwal}"
+- released → "Dilepas"
+- expired → "Kedaluwarsa — reservasi ulang bila masih dibutuhkan"
+- baris tanpa reservasi karena gudang kosong → "Belum direservasi —
+  gudang belum ditentukan"
+- kekurangan karena WO lain mengikat → "Stok gudang ini sudah
+  terreservasi untuk perintah kerja lain"
+- keluar tanpa cadangan → "Keluar tanpa cadangan reservasi"
+
+### 5. Role/permission matrix (izin nyata, nama TERVERIFIKASI-KODE)
+
+| Aksi konsumen | Admin/Perencana | Kepala Bengkel | Petugas Gudang | Sistem |
+|---|---|---|---|---|
+| Lihat kartu kebutuhan + status reservasi WO | view_work_orders | view_work_orders | view_work_orders (+ gudang dalam scope) | — |
+| Start WO (reservasi lahir otomatis) | edit_work_orders | edit_work_orders | — | lahirkan baris di tx klaim start |
+| Reservasi ulang / tambah manual | edit_work_orders + akses gudang sumber | edit_work_orders + akses gudang sumber | — | — |
+| Lepas manual (wajib alasan tercatat) | — | complete_work_orders | — | — |
+| Konsumsi lewat MI completed | — | create/edit_material_issues | create/edit_material_issues + akses gudang MI | kurangi sisa aktif WO pemilik |
+| Lepas otomatis selesai/batal/kedaluwarsa | — | — | — | ya |
+
+Semua aksi server yang menyentuh gudang juga lolos
+`assertWarehouseAccess` bila pengguna bercakupan assigned
+(TERVERIFIKASI-KODE pola MI). Tidak ada izin katalog baru di spec
+ini; izin khusus `release_stock_reservations` = penambahan katalog
+terpisah BUTUH-VONIS Lead (F-045-S §2(b)), bukan syarat inti.
+
+### 6. Status-transition matrix reservasi (konsumen, turunan F-045-S §4)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada) | startWorkOrder menang klaim | active (atau parsial active + penanda kurang) | edit_work_orders; satu tx dengan klaim start; gudang putus BR-RES-02 |
+| active | MI completed WO pemilik, gudang sama, qty ≤ sisa | active berkurang / consumed bila habis | hook MI; tak sentuh reservasi WO lain (BR-RES-08) |
+| active | MI completed melebihi / gudang beda / tanpa reservasi | consumed porsi tertutup + catatan keluar-tanpa-cadangan | perilaku FIFO existing tak ditolak (BR-RES-08) |
+| active | WO completed/closed | released | satu tx penyelesaian WO (BR-RES-10) |
+| active | WO in_progress dibatalkan / baris diganti / qty turun | released (selisih) | aksi batal BR-RES-11 (BUTUH-VONIS) / revisi baris existing |
+| active | lepas manual beralasan | released | complete_work_orders + alasan + jejak audit (BR-RES-09) |
+| active | lewat expiresAt | expired | BR-RES-06; mekanisme Q-049-4 |
+| expired/released | reservasi ulang manual (WO masih in_progress) | active baru | edit_work_orders + akses gudang; baris baru, bukan menghidupkan baris lama |
+| consumed | — | (terminal) | riwayat tak diubah reopen/batal (BR-RES-10) |
+
+### 7. Kebutuhan data untuk BOT 3 (kebutuhan, BUKAN skema)
+
+Dinyatakan sebagai kebutuhan perilaku/data saja — bentuk model,
+nama field persis, indeks, dan migrasi = vonis BOT 3/Lead, tidak
+diputus spec ini:
+- D-049-1 Catatan reservasi per (WO, item, gudang) yang bisa ditanya
+  per WO dan per (item, gudang): qty awal, qty sudah terpakai, status
+  turunan (aktif/terpakai-habis/dilepas/kedaluwarsa per §4), gudang
+  sumber yang membeku saat lahir, dan batas kedaluwarsa per baris.
+- D-049-2 Agregat "sudah terreservasi WO lain" per (item, gudang)
+  untuk kartu kebutuhan WO berjalan — pembeda dari `committedOtherQty`
+  existing yang berbasis sisa kebutuhan, bukan ikatan (BR-RES-04:
+  angka ATP existing tetap tampil dengan makna lama).
+- D-049-3 Penanda turunan per baris kebutuhan: kekurangan karena
+  terikat WO lain, keluar-tanpa-cadangan, beda gudang MI vs gudang
+  reservasi, gudang belum ditentukan — semua bisa diturunkan tanpa
+  UI menghitung ulang (BOT 2 dilarang hitung ulang, F-045-S board
+  HANDOFF).
+- D-049-4 Jejak lepas manual: siapa, kapan, alasan (pola ActivityLog
+  existing cukup; bentuknya vonis BOT 3).
+- D-049-5 Idempotensi lahir: satu baris aktif per (WO, item, gudang)
+  walau start dijalankan konkuren/berulang (K-049-3).
+
+### 8. Feature matrix (diwarisi F-045-S §6, tanpa klaim baru)
+
+| Kemampuan | Accurate | Zahir | ISF hari ini (TERVERIFIKASI-KODE §0) | Spec konsumen ini |
+|---|---|---|---|---|
+| Ketersediaan vs pesanan per gudang | Pemenuhan Pesanan per gudang (URL F-045-S) | SO per gudang, stok berkurang saat kirim (URL F-045-S) | ATP peringatan per gudang relevan di builder/loader | dipertahankan apa adanya (BR-RES-04) |
+| Ikatan stok ke dokumen sumber | pemenuhan bertahap dari SO | administratif sampai pengiriman | ABSEN (grep §0) | reservasi per WO saat start (BR-RES-01) |
+| Konsumsi sebagian | pengiriman sebagian | pengiriman/invoice dari SO | MI completed mengurangi issued | consumed proporsional per MI, terisolasi per WO (BR-RES-08) |
+| Lepas ikatan | pesanan tuntas hilang dari daftar | — | — | released/expired otomatis + manual beralasan (BR-RES-09/10) |
+
+Benchmark resmi (akses 2026-10-22, sama dengan F-045-S — tidak
+dicari ulang run ini): Accurate
+https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pemenuhan-pesanan/membuat-pemenuhan-barang-sesuai-pesanan/
+dan Zahir https://help.zahironline.com/portal/id/kb/articles/order-penjualan .
+
+### 9. Acceptance criteria + edge cases (untuk BOT 6)
+
+Menunggu vonis BOT 6 atas PR #403 (t_5010232b) dulu: AC di bawah
+mewarisi AC-RES-1..9 + LA-1 F-045-S §7 apa adanya dan menambah hanya
+sudut konsumen (tampil/terbaca), bukan kriteria stok baru.
+- LA-1 (lapis aman, bisa dinilai sekarang): loader kartu kebutuhan —
+  WO dengan MI completed di gudang A dan default item gudang B
+  menampilkan qtyOnHandAtWarehouse = jumlah lapisan A∪B; cabut field
+  gudang → warehouseShortageQty salah → tes MERAH.
+- AC-049-1 (konsumen konflik): skenario AC-RES-1 dibaca dari kartu
+  WO kedua — kata persis "Stok gudang ini sudah terreservasi untuk
+  perintah kerja lain" tampil di baris kekurangan, start kedua tidak
+  error, dan tidak ada kata status Inggris yang bocor ke tampilan.
+- AC-049-2 (konsumen isolasi): sesudah MI WO kedua keluar tanpa
+  cadangan (AC-RES-2/3), kartu WO pertama tetap "Terreservasi"
+  penuh dan kartu WO kedua menandai "Keluar tanpa cadangan
+  reservasi"; cabut penjaga isolasi → kedua kartu salah → MERAH.
+- AC-049-3 (konsumen kedaluwarsa/lepas): baris expired tampil
+  "Kedaluwarsa — reservasi ulang bila masih dibutuhkan" + tombol
+  reservasi ulang hanya bagi edit_work_orders berakses-gudang;
+  lepas manual tanpa alasan ditolak server (bukan tombol hilang).
+- AC-049-4 (konsumen kata sebagian): baris consumed sebagian tampil
+  "Terreservasi" + "terpakai {qtyTerpakai} dari {qtyAwal}" dengan
+  angka dari data reservasi, bukan hitungan UI.
+- Edge diwarisi: WO tanpa endDate; startDate masa depan; MI gudang
+  beda; reopen completed tanpa reservasi baru; qty desimal
+  (perbandingan epsilon pola builder existing); baris jasa itemId=0
+  dan baris replaced tidak pernah berstatus reservasi.
+
+### 10. Urutan bangun (backlog turunan; ID induk F-2026-10-21-012)
+
+1. Lapis aman ATP per gudang: SUDAH di builder/loader origin/main
+   (bukti §0) — tidak dibangun ulang.
+2. Gerbang: vonis BOT 6 atas PR #403 terbit → BOT 5 sesuaikan spec
+   ini bila vonis mengubah F-045-S; Lead putus buka inti +
+   Q-049-1 (BR-RES-11) + Q-049-3 (BR-RES-07). Tanpa gerbang ini
+   langkah 3-4 TIDAK mulai.
+3. BOT 3 inti (satu PR tanpa UI): kebutuhan D-049-1..5, lahir di tx
+   start, konsumsi di hook MI, lepas otomatis, kedaluwarsa (Q-049-4
+   diputus di kartu itu). Vonis skema/migrasi = BOT 3/Lead.
+4. BOT 2 UI (sesudah kontrak inti stabil): kata §4 verbatim, penanda
+   D-049-3, tanpa hitung ulang.
+5. BOT 6: LA-1 sekarang; AC-RES-1..9 (F-045-S) + AC-049-1..4 sesudah
+   inti ada. Butuh putusan accountant: TIDAK.
+
+### Yang TIDAK diusulkan run ini
+- Aturan stok apa pun di luar BR-RES-01..12 F-045-S: reservasi di
+  pending/approved, prioritas tenggat, blokir start, izin katalog
+  baru, reservasi per batch/serial, pindah gudang otomatis — tetap
+  ditolak/ditunda persis alasan F-045-S §"Yang TIDAK diusulkan".
+- Skema, nama tabel/field, indeks, migrasi, bentuk API/loader: vonis
+  BOT 3/Lead (§7 hanya kebutuhan).
+- Mengubah makna ATP existing atau guard MI existing demi reservasi
+  (Q-049-2 di luar spec sampai divonis terpisah).
