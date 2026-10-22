@@ -22,6 +22,8 @@ import { buildProductionVariance } from "@/lib/reports/production-variance"
 import { CanCreate } from "@/components/auth/can-create"
 import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions"
 import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel"
+import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card"
+import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data"
 export const metadata: Metadata = { title: "Perintah Produksi" }
 
 export default async function ProductionOrderDetailPage({
@@ -366,6 +368,13 @@ export default async function ProductionOrderDetailPage({
           )}
         </div>
       </div>
+
+      {order.bomRevision ? (
+        <BomRevisionImpactCard
+          impact={await loadBomRevisionImpact(order.bomRevision.id)}
+          currentRevisionNo={order.bomRevision.revisionNo}
+        />
+      ) : null}
 
       <BomRevisionChangePanel
         owner={{ productionOrderId: order.id }}

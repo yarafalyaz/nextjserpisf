@@ -436,7 +436,15 @@ export function BomRevisionChangePanel({
                   reservasi stok.
                 </p>
               </div>
-            ) : null}
+            ) : toRevisionId ? (
+              <p role="note" className="text-sm text-muted-foreground">
+                Pratinjau selisih revisi belum tampil; pengajuan belum dapat dikirim.
+              </p>
+            ) : (
+              <p role="note" className="text-sm text-muted-foreground">
+                Pilih revisi tujuan untuk melihat pratinjau selisih sebelum mengirim pengajuan.
+              </p>
+            )}
 
             <div className="flex justify-end gap-2">
               <Button variant="secondary" isDisabled={isPending} onPress={() => setFormOpen(false)}>
@@ -444,7 +452,7 @@ export function BomRevisionChangePanel({
               </Button>
               <Button
                 variant="primary"
-                isDisabled={isPending || !toRevisionId || !reason.trim()}
+                isDisabled={isPending || previewLoading || !preview || !toRevisionId || !reason.trim()}
                 onPress={submitRequest}
               >
                 Kirim Pengajuan
