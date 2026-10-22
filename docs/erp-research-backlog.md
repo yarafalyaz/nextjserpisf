@@ -7330,3 +7330,185 @@ maks -V terpakai 057-V). Pemilik berikutnya: BOT 3 (inti t_af177f74
 sesudah PR #503 merged + putusan BOT 1 §5A) -> BOT 2 -> BOT 6
 falsifikasi 1-5 di atas.
 
+
+## SPEC BOT 5 — Registri part terpasang per kendaraan (F-2026-10-22-072-S, induk F-2026-10-21-024)
+
+Status: SPEC (dokumen saja, tanpa kode). Basis verifikasi live
+origin/main `acb91fb0` (2026-10-22). Dipicu kartu t_612e3065.
+Anti-duplikat: ID -S bebas tabrakan per grep origin/main + semua
+branch `hermes/bot5-*` terbuka (maks terpakai F-2026-10-22-071-S
+PR #512); tidak ada PR/spec InstalledPart atau "part terpasang"
+(grep backlog/board/PR all-state = 0 selain baris induk 024).
+
+### 1. Masalah terverifikasi (TERVERIFIKASI-KODE)
+
+1. `InstalledPart` ABSEN: `grep "model InstalledPart"
+   prisma/schema.prisma` origin/main = 0. Tidak ada model
+   "apa terpasang di kendaraan mana, kapan dilepas/diganti".
+2. Satu-satunya catatan mirip = `WarrantyCoverage`
+   (schema.prisma:4001-4038): dibuat
+   `recordWarrantyCoverages` (src/lib/services/warranty.service.ts:65-164)
+   di hook selesai WO (manufacturing.actions.ts:1793), TAPI
+   hanya item `item.warrantyMonths != null` (baris 100-102,
+   skip diam-diam). Part non-garansi yang terpasang TIDAK
+   tercatat di mana pun sebagai "terpasang".
+3. Coverage juga tidak punya siklus lepas/ganti: tak ada
+   `removedAt`/`replacedBy`/status dilepas; `WarrantyClaim`
+   (schema:4040-4095) hanya menaut `coverageId`+serial.
+   Akibat: admin tidak bisa menjawab "part apa saja sekarang
+   terpasang di kendaraan X" dan "part ini dulu diganti kapan".
+4. Serial ter-konsumsi memang tersimpan per baris issue
+   (`MaterialIssueItem.serialNumbers` Json, diisi
+   material-issue.hook.ts:104-110) dan batch terpasang
+   (baris 114-123, komentar F-2026-10-20-39(a)), tetapi itu
+   atribut dokumen issue — bukan registri per kendaraan yang
+   bisa ditanya status terakhirnya.
+5. Layar riwayat kendaraan existing
+   (src/lib/reports/customer-vehicle-history-data.ts) hanya
+   mendaftar DOKUMEN (quotation/SO/project/WO/invoice/claim),
+   bukan part terpasang. Halaman kendaraan
+   (master/pelanggan/[slug]/kendaraan/[vehicleSlug]/page.tsx:51-62)
+   menampilkan coverage garansi saja, gate `view_warranties`.
+
+### 2. Keputusan spec (USULAN kecuali ditandai lain)
+
+Satu model registri baru (nama usulan `InstalledPart`; nama
+fisik final milik BOT 3), lahir OTOMATIS dari transaksi
+inventory sah, bukan form bebas:
+
+| Kolom (usulan) | Isi |
+|---|---|
+| customerVehicleId | kendaraan penerima (dari WO/proyek, §3) |
+| itemId | part terpasang |
+| materialIssueItemId | baris issue sumber (WAJIB, bukti transaksi) |
+| serialNumber | 1 baris per unit serial; null utk non-serial |
+| qty / qtyRemoved | non-serial: per baris issue + kumulatif dilepas |
+| installedAt | tanggal dokumen issue |
+| warrantyCoverageId | taut coverage bila item bergaransi (nullable) |
+| removedAt / removedById / removalReason | saat dicatat lepas |
+| replacedByInstalledPartId | part pengganti (self-relation, nullable) |
+| notes | bebas |
+
+Status TURUNAN (tidak disimpan bebas): TERPASANG
+(qtyRemoved=0) -> SEBAGIAN_DILEPAS (0<qtyRemoved<qty) ->
+DILEPAS (qtyRemoved=qty). Baris serial selalu qty=1.
+
+Aturan lahir (satu-satunya jalan masuk): di transaksi yang sama
+dengan `recordWarrantyCoverages` saat WO selesai
+(completeWorkOrder), untuk SETIAP baris MaterialIssue WO itu
+(bukan hanya bergaransi): buat baris InstalledPart per serial
+ter-konsumsi; item non-serial satu baris per baris issue.
+Kendaraan dari `WO.customerVehicleId`. Bila coverage lahir
+untuk baris yang sama, tautkan `warrantyCoverageId` (jangan
+duplikasi logika garansi; coverage tetap sumber klaim).
+
+Jalan keluar: aksi catat-lepas (usulan
+`recordInstalledPartRemoval`): isi qty/serial dilepas, alasan
+wajib, waktu+petugas dari sesi. Bila part pengganti sudah
+terpasang lewat issue berikutnya, tautkan
+`replacedByInstalledPartId`. Pencatatan lepas TIDAK mengubah
+stok/jurnal (part lama tidak otomatis kembali ke gudang;
+pengembalian fisik = dokumen inventory existing bila memang
+kembali — di luar spec ini).
+
+Tampilan: panel "Part terpasang" di halaman kendaraan yang
+sama (di bawah coverage), kolom part/serial/tgl pasang/status/
+garansi-sampai; riwayat kendaraan (customer-vehicle-history)
+menambah seksi part terpasang dari registri ini, BUKAN dari
+dokumen issue mentah.
+
+### 3. Atribusi kendaraan (penjaga)
+
+| Sumber issue | Kendaraan | Lahir? |
+|---|---|---|
+| MI taut WO (workOrderId) | WO.customerVehicleId | YA |
+| MI taut proyek tanpa WO | Project.customerVehicleId bila terisi | YA (Q-IP-1) |
+| MI bebas / penjualan langsung | tidak teratribusi | TIDAK — jangan tebak |
+
+MI yang WO-nya tanpa customerVehicleId: tidak lahir, dicatat
+di hasil aksi sebagai terlewati (pola `skipped` existing
+warranty.service.ts:83) — jangan gagalkan selesai WO.
+
+### 4. Matriks peran/izin (katalog TERVERIFIKASI-KODE)
+
+Katalog live (src/lib/auth/module-catalog.generated.ts):
+`view_warranties`/`manage_warranties` (baris 527-531),
+`view_material_issues`/`create_material_issues`,
+`view_work_orders`/`complete_work_orders` (baris ~493-503).
+
+| Aksi | Izin usulan | Status |
+|---|---|---|
+| Lihat panel part terpasang | `view_warranties` (gate halaman existing) | USULAN Q-IP-2 |
+| Catat lepas/ganti | `manage_warranties` | USULAN Q-IP-2 |
+| Lahir otomatis | sistem di tx selesai WO (tanpa izin user baru) | USULAN |
+| Ubah/hapus baris registri manual | DILARANG (koreksi = catat lepas + lahir baru) | USULAN |
+
+Tidak ada key izin baru di spec ini; bila BOT 1 ingin pisah
+dari garansi, itu perubahan katalog = keputusan BOT 1.
+
+### 5. Register aturan bisnis
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-IP-01 | Registri hanya lahir dari MaterialIssueItem nyata; form bebas dilarang | USULAN |
+| BR-IP-02 | Coverage garansi tetap hanya item warrantyMonths!=null; registri mencakup SEMUA part terpasang | TERVERIFIKASI-KODE (perilaku coverage) + USULAN (cakupan registri) |
+| BR-IP-03 | Serial-tracked: 1 baris/unit dari serialNumbers ter-konsumsi; non-serial per baris issue | USULAN |
+| BR-IP-04 | Idempoten: lahir ulang WO sama tidak menggandakan (unik materialIssueItemId+serialNumber) | USULAN |
+| BR-IP-05 | Status turunan dari qtyRemoved; tidak ada edit status bebas | USULAN |
+| BR-IP-06 | Catat lepas tidak membuat StockMove/jurnal/retur otomatis | USULAN |
+| BR-IP-07 | Tanpa kendaraan teratribusi = tidak lahir + terhitung skipped, WO tetap selesai | USULAN |
+| BR-IP-08 | Klaim garansi tetap lewat WarrantyCoverage; registri hanya menaut, bukan mengganti | TERVERIFIKASI-KODE (klaim pakai coverageId) |
+| BR-IP-09 | Backfill MI historis sebelum fitur ini | BUTUH-VONIS Q-IP-4 (BOT 1) |
+| BR-IP-10 | Perilaku saat WO/issue sumber dibatalkan/dikoreksi sesudah lahir | BUTUH-VONIS Q-IP-5 (BOT 1+BOT 3) |
+
+### 6. Benchmark (BENCHMARK, URL resmi)
+
+| Aspek | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Serial per barang | Profil nomor seri di Penjualan/Pembelian/Stok + penyesuaian (help.accurate.id/pencatatan-no-seri-pada-transaksi/, help.accurate.id/nomor-seri/) | Fasilitas Serial Number untuk barang elektronik/sparepart bergaransi, incl. laporan mutasi serial (help.zahironline.com .../fasilitas-serial-number-di-zahir-online/) | Serial ter-konsumsi sudah per baris issue (§1.4) |
+| Klaim garansi | Accurate Online Klaim Garansi: pilih no seri/barang/pelanggan, tgl terima & pengembalian (accurate.id/fitur/klaim-garansi/) | Serial tertelusur per penjualan (URL sama) | Klaim existing taut coverage+serial |
+| Registri terpasang per kendaraan + lepas/ganti | Tidak ditemukan fitur registri terpasang per aset pelanggan di URL resmi di atas | Tidak ditemukan | Inti spec ini (celah nyata, bukan tiruan) |
+
+### 7. Acceptance criteria (BOT 6, falsifikasi)
+
+1. AC-IP-1: WO selesai berisi part non-garansi -> baris
+   InstalledPart lahir; paksa hanya-bergaransi -> MERAH.
+2. AC-IP-2: completeWorkOrder dipanggil 2x / retry -> jumlah
+   baris registri tetap (unik dilanggar = MERAH).
+3. AC-IP-3: Item serial 3 unit ter-konsumsi -> 3 baris qty=1
+   serial persis serialNumbers issue; serial karangan -> MERAH.
+4. AC-IP-4: WO tanpa customerVehicleId -> WO tetap completed,
+   registri 0 baris, hasil memuat skipped; gagalkan WO = MERAH.
+5. AC-IP-5: Catat lepas sebagian non-serial -> status
+   SEBAGIAN_DILEPAS; lepas penuh -> DILEPAS + removedAt/By terisi;
+   stok & jurnal sesudah catat lepas berubah = MERAH.
+6. AC-IP-6: Baris bergaransi: warrantyCoverageId tertaut
+   coverage yang sama dengan jalur klaim; klaim dari coverage
+   itu tetap jalan (regresi F-021).
+7. AC-IP-7: Role tanpa izin lihat (§4) membuka halaman
+   kendaraan -> panel part terpasang tak tampil; catat lepas
+   tanpa izin kelola -> ditolak server.
+8. AC-IP-8: Edit/hapus langsung baris registri lewat aksi apa
+   pun -> tidak ada jalurnya; temukan jalur edit bebas = MERAH.
+9. AC-IP-9: Riwayat kendaraan menampilkan part terpasang dari
+   registri; part dari MI bebas (tanpa kendaraan) tampil di
+   kendaraan mana pun = MERAH.
+10. AC-IP-10: Issue proyek tanpa WO dengan kendaraan terisi
+    mengikuti putusan Q-IP-1 persis (lahir bila diputus YA).
+
+### 8. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-IP-1 | MI proyek langsung (tanpa WO): lahir juga? Usulan YA bila Project.customerVehicleId terisi | BOT 1 |
+| Q-IP-2 | Izin lihat/catat-lepas reuse warranties, atau key baru terpisah dari garansi? | BOT 1 |
+| Q-IP-3 | Fisik baris serial per-unit + constraint unik final | BOT 3 |
+| Q-IP-4 | Backfill historis dari MI lama ber-WO (sekali jalan, ditandai sumber backfill)? | BOT 1 |
+| Q-IP-5 | WO/issue dibatalkan sesudah lahir: baris ditandai batal atau dibiarkan + catatan? | BOT 1 + BOT 3 |
+
+Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
+2-3 hari; BOT 2 panel kendaraan 1 hari; BOT 6 AC-IP-1..10.
+
+Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
+(Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
+dibutuhkan (nol jurnal/angka uang di spec ini).
