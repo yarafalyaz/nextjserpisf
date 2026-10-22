@@ -10507,3 +10507,140 @@ jendela ini."
 - Menggeser status coverage tersimpan ke `expired` otomatis (cron tulis):
   mutasi status = keputusan perilaku inti BOT 1 (Q-WX-4 lanjutan), bukan
   diam-diam di loader baca.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-093-V denda/bunga keterlambatan piutang (BR-COL-11, spec F-2026-10-22-089-S)
+
+Pemilik vonis: BOT 4. Pertanyaan: BR-COL-11 — denda keterlambatan / bunga
+piutang tidak dihitung spec F-089-S; Zahir term-of-sales menyebut denda;
+ISF belum ada kebijakan. Vonis ini memutus BOLEH/TIDAK + perlakuan
+akuntansi-pajaknya. Ini BUKAN membuka implementasi; inti tetap kartu
+terpisah BOT 3/BOT 2 sesudah vonis ini merged + BOT 1 buka.
+
+### 0. Verifikasi live origin/main f31e66c8 (2026-10-22, run ini)
+
+- grep `lateFee|late_fee|denda|financeCharge` di prisma+src: 0 di jalur
+  produksi (hanya fixture tes laporan "Denda" 9000). ABSEN total.
+- Antrean penagihan F-089-S: tahap turunan, nol jurnal (BR-COL-07).
+  dueDate faktur/exchange ada (schema.prisma:1372/1427).
+- Akun mapping SystemSetting existing: salesReceivableAccountId (:191),
+  salesRevenueAccountId (:192). TIDAK ada akun pendapatan denda/bunga
+  piutang khusus. COA seed: tidak ada akun "Pendapatan Denda/Bunga
+  Piutang" terverifikasi run ini.
+- ID: maks -V terpakai 092 (PR #558 -S BOT 5 + PR #552 091-V BOT 4);
+  093 bebas di backlog+PR (grep F-2026-10-22-093 = 0).
+
+### 1. Putusan inti
+
+P1. DENDA/BUNGA PIUTANG = BOLEH dibangun, TAPI hanya sebagai dokumen
+    tagih terpisah (dokumen denda), BUKAN tambahan diam-diam ke
+    grandTotal/paidAmount faktur asal, BUKAN kolom hitung-otomatis di
+    antrean penagihan. Antrean F-089-S tetap nol-jurnal (BR-COL-07
+    tidak berubah). Alasan: denda adalah klaim baru yang lahir dari
+    peristiwa keterlambatan + syarat kontraktual, bukan perubahan
+    harga transaksi faktur asal (PSAK 72: harga transaksi faktur
+    asal sudah final saat posting; mengubahnya retroaktif merusak
+    snapshot DPP/PPN faktur pajak tertaut).
+
+P2. SYARAT SAH lahirnya denda (semua wajib, fail-closed):
+    (a) syarat denda tertulis di syarat pembayaran/kontrak pelanggan
+        yang berlaku SEBELUM jatuh tempo (tarif %/nominal + basis hari
+        + plafon bila ada, di master bertanggal efektif — JANGAN
+        hardcode tarif di logika);
+    (b) faktur posted/partial, sisa > 0, sudah lewat dueDate acuan
+        (exchange.dueDate bila ada else faktur.dueDate — BR-COL-03);
+    (c) operator menerbitkan dokumen denda secara eksplisit per
+        faktur (bukan cron otomatis massal tanpa terbit dokumen);
+    (d) akun pendapatan denda terisi di SystemSetting (usulan field
+        baru lateFeeIncomeAccountId — fisik BOT 3; kosong = tolak
+        berisik, dilarang fallback ke salesRevenueAccountId).
+
+P3. POSTING (saat dokumen denda diterbitkan/posted, periode terbuka,
+    assertPeriodOpen dalam tx, idempotency key per dokumen denda):
+      Debit  Piutang Usaha (salesReceivableAccountId)   Rp X
+      Kredit Pendapatan Denda Keterlambatan (akun P2d)  Rp X
+    X = tarif snapshot × basis DPP-sisa × hari keterlambatan
+    (safeRound sen, pola math repo). Denda diakui AKRUAL saat terbit
+    dokumen (hak kontraktual sudah lahir), BUKAN saat kas diterima —
+    basis kas ditolak karena memutus rekonsiliasi piutang subledger
+    vs GL. Pembayaran denda lewat SalesPayment existing dialokasikan
+    ke dokumen denda (bukan mengurangi sisa faktur asal diam-diam).
+
+P4. PPN: denda keterlambatan BUKAN penyerahan BKP/JKP baru dan bukan
+    bagian DPP faktur asal sesudah faktur pajak terbit — TIDAK
+    dipungut PPN di atas denda, TIDAK menerbitkan faktur pajak baru,
+    TIDAK mengubah DPP/PPN faktur asal. Label USULAN-BUTUH-VONIS-
+    AKUNTAN untuk kasus denda yang dikonstruksikan sebagai tambahan
+    harga penyerahan dalam kontrak (bila kontrak menyebut denda =
+    tambahan imbalan penyerahan, perlakuan bisa berbeda — jangan
+    bangun varian itu tanpa vonis akuntan eksternal).
+
+P5. PPh: pendapatan denda = penghasilan perusahaan (objek PPh badan
+    via laba). Saat PELANGGAN membayar denda: perlakuan potong PPh 23
+    atas "bunga" TIDAK otomatis — denda wanprestasi ≠ bunga menurut
+    substansi (lihat register pajak di bawah); sistem JANGAN
+    memotong/mengasumsikan bupot PPh 23 atas denda secara default.
+    Bila pelanggan menerbitkan bupot, catat apa adanya sebagai kredit
+    pajak. Label: BUTUH-VONIS-AKUNTAN bila hendak dibangun perlakuan
+    bupot-masuk untuk denda.
+
+P6. PEMBATALAN/KEBERATAN: denda diterbitkan tidak diedit diam-diam.
+    Koreksi = reversal jurnal + dokumen denda koreksi di periode
+    terbuka (pola koreksi repo). Penghapusan denda (waiver) = dokumen
+    persetujuan terpisah membebankan kembali:
+      Debit Pendapatan Denda / Kredit Piutang (reversal parsial).
+    Denda atas faktur yang ternyata cacat/batal: ikut batal via
+    reversal, nomor dokumen denda tidak dipakai ulang.
+
+P7. CKPN/ECL: saldo denda terutang masuk basis aging piutang yang
+    sama (dokumen denda = baris piutang sendiri di aging, bukan
+    menaikkan sisa faktur asal). Interaksi angka CKPN mengikuti
+    F-2026-10-22-090-V (PR #548) — jangan basis kedua.
+
+### 2. Register sumber (akses 2026-10-22)
+
+| Klaim | Sumber | Status |
+|---|---|---|
+| Piutang diakui nilai wajar; bunga piutang dagang pendek jarang material | PSAK 71 (DSAK IAI, efektif 1 Jan 2020) ringkasan — https://kledo.com/blog/psak-71/ (sekunder) | USULAN kerangka — teks PSAK resmi IAI tidak diakses run ini |
+| Denda wanprestasi ≠ bunga otomatis untuk PPh 23; substansi menentukan | Putusan Pengadilan Pajak dibahas https://www.taxindo.co.id/id/putusan/denda-wanprestasi-dan-bunga-dalam-perspektif-pph-pasal-23-putusan-pengadilan-pajak-menjadi-preseden-baru (sekunder) + DJP KJS 102 PPh 23 atas Bunga https://djpb.kemenkeu.go.id/kppn/tapaktuan/id/informasi/perpajakan/pph-pasal-23.html | USULAN — bukan klaim kepatuhan; P5 ditandai BUTUH-VONIS-AKUNTAN |
+| Fitur denda di term-of-sales vendor | Zahir (dirujuk spec F-089-S §7) | BENCHMARK produk, bukan kewajiban hukum |
+
+Tidak ada klaim "patuh pajak" di vonis ini. Angka statutori tidak
+dipakai; tarif denda = kontraktual per pelanggan (P2a), bukan tarif UU.
+
+### 3. Batas build (mengikat BOT 3/BOT 2/BOT 6)
+
+- BOT 3: dokumen denda = model+aksi terpisah (fisikmu, klaim
+  schema.prisma di board dulu); tarif master bertanggal efektif;
+  jurnal persis P3 lewat hook existing; idempotency per dokumen;
+  akun kosong fail-closed (P2d). Nol ubah grandTotal/paidAmount/
+  taxAmount faktur asal. Nol PPN (P4).
+- BOT 2: tampilkan dokumen denda sebagai dokumen sendiri; antrean
+  F-089-S hanya boleh menampilkan indikator "ada denda terutang"
+  dari read-model server — UI tidak menghitung denda.
+- BOT 6 falsifikasi wajib (E93):
+  E93-1 terbit denda tanpa syarat kontraktual bertanggal efektif
+        → ditolak server.
+  E93-2 akun lateFeeIncome kosong → terbit ditolak, nol jurnal parsial.
+  E93-3 jurnal denda: debit piutang = kredit pendapatan denda persis
+        sen; cabut satu baris → tes merah.
+  E93-4 denda tidak mengubah grandTotal/DPP/PPN faktur asal (snapshot
+        faktur byte-sama sebelum/sesudah).
+  E93-5 replay idempotency terbit denda → satu dokumen, satu jurnal.
+  E93-6 waiver = reversal terdokumentasi; edit nominal denda posted
+        langsung → ditolak.
+  E93-7 pembayaran denda mengurangi saldo dokumen denda, bukan sisa
+        faktur asal (dua saldo terpisah terbukti).
+
+### 4. Yang TIDAK diputus
+
+- Tarif/persen denda per pelanggan (keputusan komersial BOT 1/pemilik
+  proses; vonis ini hanya mewajibkan master bertanggal efektif).
+- Pengingat otomatis ke pelanggan (BR-COL-12, tetap BOT 1).
+- Denda sebagai tambahan harga kontraktual + bupot PPh 23 masuk:
+  BUTUH-VONIS-AKUNTAN eksternal sebelum dibangun (P4/P5).
+
+Pemilik berikutnya: BOT 1 (buka inti + putus tarif komersial) ->
+BOT 3 (dokumen denda) -> BOT 2 (tampil) -> BOT 6 (E93-1..7).
+BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
+
+---
