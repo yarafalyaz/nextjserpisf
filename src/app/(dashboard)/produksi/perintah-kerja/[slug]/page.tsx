@@ -29,6 +29,9 @@ import { WorkOrderProgressCard } from "@/components/reports/work-order-progress-
 import { getWorkOrderProgress } from "@/lib/reports/work-order-progress-data";
 import { getJobChangeOrdersForWorkOrder } from "@/actions/job-change-order.actions";
 import { JobChangeOrderPanel } from "./_components/job-change-order-panel";
+import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions";
+import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel";
+import { auth } from "@/lib/auth/auth";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
   DetailTable,
@@ -215,6 +218,57 @@ export default async function WorkOrderDetailPage({
       hasPermission("edit_work_orders"),
       hasPermission("complete_work_orders"),
     ]);
+
+  // F-068-S UI (t_b60d664d): panel ganti revisi BOM — konsumen aksi BOT 3
+  // PR #589. Opsi = revisi released produk pin saat ini (beda dari pin);
+  // daftar pengajuan dari aksi list existing. Nama pengaju/item dari sini.
+  const [bomChangeList, canManageBomChange, bomSession] = await Promise.all([
+    listBomRevisionChangeRequests({ workOrderId: wo.id }),
+    hasPermission("edit_work_orders"),
+    auth(),
+  ]);
+  const bomChangeRequests = bomChangeList.success ? bomChangeList.requests : [];
+  const bomRevisionOptions = wo.bomRevision
+    ? await prisma.bomRevision.findMany({
+        where: {
+          productId: (
+            await prisma.bomRevision.findFirst({
+              where: { id: wo.bomRevision.id },
+              select: { productId: true },
+            })
+          )?.productId,
+          status: "released",
+          id: { not: wo.bomRevision.id },
+        },
+        select: { id: true, revisionNo: true },
+        orderBy: { revisionNo: "asc" },
+      })
+    : [];
+  const bomRevIds = [
+    ...new Set([
+      ...(wo.bomRevision ? [wo.bomRevision.id] : []),
+      ...bomRevisionOptions.map((r) => r.id),
+      ...bomChangeRequests.flatMap((r) => [r.fromRevisionId, r.toRevisionId]),
+    ]),
+  ];
+  const bomRevRows = bomRevIds.length
+    ? await prisma.bomRevision.findMany({
+        where: { id: { in: bomRevIds } },
+        select: { id: true, revisionNo: true, materials: { select: { itemId: true } } },
+      })
+    : [];
+  const bomUserIds = [
+    ...new Set(
+      bomChangeRequests.flatMap((r) => [r.requestedBy, r.decidedBy]).filter((x): x is number => x != null),
+    ),
+  ];
+  const bomUserRows = bomUserIds.length
+    ? await prisma.user.findMany({ where: { id: { in: bomUserIds } }, select: { id: true, name: true } })
+    : [];
+  const bomItemIds = [...new Set(bomRevRows.flatMap((r) => r.materials.map((m) => m.itemId)))];
+  const bomItemRows = bomItemIds.length
+    ? await prisma.item.findMany({ where: { id: { in: bomItemIds } }, select: { id: true, name: true } })
+    : [];
 
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
@@ -499,6 +553,19 @@ export default async function WorkOrderDetailPage({
       {partStatus ? (
         <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
       ) : null}
+
+      <BomRevisionChangePanel
+        owner={{ workOrderId: wo.id }}
+        documentStatus={wo.status}
+        currentRevision={wo.bomRevision}
+        revisionOptions={bomRevisionOptions}
+        requests={bomChangeRequests}
+        revisionNoById={Object.fromEntries(bomRevRows.map((r) => [r.id, r.revisionNo]))}
+        userNameById={Object.fromEntries(bomUserRows.map((u) => [u.id, u.name]))}
+        itemNameById={Object.fromEntries(bomItemRows.map((i) => [i.id, i.name]))}
+        canManage={canManageBomChange}
+        currentUserId={bomSession?.user?.id ? Number(bomSession.user.id) : null}
+      />
 
       <JobChangeOrderPanel
         workOrderId={wo.id}
