@@ -7,6 +7,7 @@ import { safeSubtract, safeMultiply } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { assertJobCostMutable } from "@/lib/services/job-closeout.service";
+import { releaseReservationsForReplacedItemsTx } from "@/lib/services/stock-reservation.service";
 import {
   assertApproved,
   requestApprovalIfConfigured,
@@ -1118,6 +1119,14 @@ export async function reviseWorkOrderItems(input: {
         await tx.workOrderItem.updateMany({
           where: { id: { in: replacedIds }, workOrderId: v.workOrderId },
           data: { status: "replaced" },
+        });
+
+        // F-2026-10-21-012 inti (AC-RES-8): baris diganti → sisa reservasi
+        // aktif baris itu released sejumlah belum terpakai; yang sudah
+        // consumed tak berubah (guard di atas menolak baris ter-issue).
+        await releaseReservationsForReplacedItemsTx(tx, {
+          workOrderId: v.workOrderId,
+          workOrderItemIds: replacedIds,
         });
       }
 

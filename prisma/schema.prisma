@@ -649,6 +649,7 @@ model Item {
   warehouse            Warehouse?           @relation("ItemDefaultWarehouse", fields: [defaultWarehouseId], references: [id], onDelete: SetNull)
   vendor               Vendor?              @relation(fields: [vendorId], references: [id])
   stockMoves           StockMove[]
+  stockReservations    StockReservation[]
   stocktakeLines       StocktakeLine[]
   remnants             Remnant[]
   manufacturedProducts Product[]            @relation("ProductInventoryItem")
@@ -691,6 +692,7 @@ model Warehouse {
   racks             Rack[]
   stockAdjustments  StockAdjustment[]
   stockMoves        StockMove[]
+  stockReservations StockReservation[]
   userWarehouses    UserWarehouse[]
   stocktakeSessions StocktakeSession[]
   remnants          Remnant[]
@@ -2645,6 +2647,7 @@ model WorkOrder {
   createdAt         DateTime          @default(now()) @map("created_at")
   updatedAt         DateTime          @updatedAt @map("updated_at")
   items             WorkOrderItem[]
+  stockReservations StockReservation[]
   operations        WorkOrderOperation[]
   costs             ProductionCost[]
   timesheets        Timesheet[]
@@ -2683,10 +2686,48 @@ model WorkOrderItem {
   status      String    @default("pending")
   workOrder   WorkOrder @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
   materialIssueItems MaterialIssueItem[]
+  stockReservations StockReservation[]
 
   @@index([workOrderId], map: "work_order_items_work_order_id_fkey")
   @@index([itemId])
   @@map("work_order_items")
+}
+
+// F-2026-10-21-012 inti (spec F-2026-10-22-045-S, vonis Lead F-045-S):
+// ikatan qty stok per (WO, baris WO, gudang) — BUKAN pemesanan lapisan/
+// batch/serial (BR-RES-12); biaya tetap FIFO lapisan existing. Status:
+// active | consumed | released | expired. qtyReserved = qty awal baris;
+// sisa aktif = qtyReserved - qtyConsumed selama status active. Satu baris
+// aktif per (workOrderId, itemId, warehouseId) dijaga service di tx yang
+// sama dengan klaim start (AC-RES-9) — unique parsial tak tersedia di
+// MySQL, jadi idempotensi ditegakkan cek-di-tx + index komposit ini.
+model StockReservation {
+  id              Int           @id @default(autoincrement())
+  workOrderId     Int           @map("work_order_id")
+  workOrderItemId Int?          @map("work_order_item_id")
+  itemId          Int           @map("item_id")
+  warehouseId     Int           @map("warehouse_id")
+  qtyReserved     Decimal       @map("qty_reserved") @db.Decimal(15, 2)
+  qtyConsumed     Decimal       @default(0.00) @map("qty_consumed") @db.Decimal(15, 2)
+  status          String        @default("active")
+  shortageQty     Decimal       @default(0.00) @map("shortage_qty") @db.Decimal(15, 2)
+  expiresAt       DateTime?     @map("expires_at")
+  releasedAt      DateTime?     @map("released_at")
+  releasedBy      Int?          @map("released_by")
+  releaseReason   String?       @map("release_reason") @db.Text
+  createdBy       Int?          @map("created_by")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  workOrder       WorkOrder     @relation(fields: [workOrderId], references: [id], onDelete: Cascade)
+  workOrderItem   WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: SetNull)
+  item            Item          @relation(fields: [itemId], references: [id])
+  warehouse       Warehouse     @relation(fields: [warehouseId], references: [id])
+
+  @@index([workOrderId, status])
+  @@index([itemId, warehouseId, status])
+  @@index([workOrderId, itemId, warehouseId, status])
+  @@index([expiresAt])
+  @@map("stock_reservations")
 }
 
 // F-2026-10-21-020 Tahap A: tahap progres perintah kerja (ringan, BUKAN
