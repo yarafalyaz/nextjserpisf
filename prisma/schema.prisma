@@ -1107,6 +1107,14 @@ model WithholdingCertificate {
    */
   article              String
   objectCode           String?             @map("object_code")
+  /**
+   * Nama resmi kode objek katalog SATU sumber (F-055-V §2) — snapshot saat terbit.
+   */
+  objectName           String?             @map("object_name")
+  /**
+   * Bukti dokumen dasar terstruktur kode bersyarat bukti (F-055-V §1) — snapshot saat terbit.
+   */
+  rentObjectEvidence   String?             @map("rent_object_evidence") @db.Text
   dpp                  Decimal             @db.Decimal(15, 2)
   tariff               Decimal             @map("tariff") @db.Decimal(5, 2)
   withheldAmount       Decimal             @map("withheld_amount") @db.Decimal(15, 2)

@@ -16,9 +16,14 @@ import type { Metadata } from "next"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
+import { auth } from "@/lib/auth/auth"
 import { buildProductionVariance } from "@/lib/reports/production-variance"
 import { CanCreate } from "@/components/auth/can-create"
+import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions"
+import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel"
+import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card"
+import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data"
 export const metadata: Metadata = { title: "Perintah Produksi" }
 
 export default async function ProductionOrderDetailPage({
@@ -137,6 +142,51 @@ export default async function ProductionOrderDetailPage({
     id: m.itemId,
     label: `${itemNameMap.get(m.itemId) ?? `Barang #${m.itemId}`}`,
   }))
+
+  // F-068-S UI (t_b60d664d): panel ganti revisi BOM — konsumen aksi BOT 3
+  // PR #589. Opsi = revisi released produk PO ini (beda dari pin).
+  const [bomChangeList, canManageBomChange, bomSession] = await Promise.all([
+    listBomRevisionChangeRequests({ productionOrderId: order.id }),
+    hasPermission("edit_production_orders"),
+    auth(),
+  ])
+  const bomChangeRequests = bomChangeList.success ? bomChangeList.requests : []
+  const bomRevisionOptions = order.bomRevision
+    ? await prisma.bomRevision.findMany({
+        where: {
+          productId: order.productId,
+          status: "released",
+          id: { not: order.bomRevision.id },
+        },
+        select: { id: true, revisionNo: true },
+        orderBy: { revisionNo: "asc" },
+      })
+    : []
+  const bomRevIds = [
+    ...new Set([
+      ...(order.bomRevision ? [order.bomRevision.id] : []),
+      ...bomRevisionOptions.map((r) => r.id),
+      ...bomChangeRequests.flatMap((r) => [r.fromRevisionId, r.toRevisionId]),
+    ]),
+  ]
+  const bomRevRows = bomRevIds.length
+    ? await prisma.bomRevision.findMany({
+        where: { id: { in: bomRevIds } },
+        select: { id: true, revisionNo: true, materials: { select: { itemId: true } } },
+      })
+    : []
+  const bomUserIds = [
+    ...new Set(
+      bomChangeRequests.flatMap((r) => [r.requestedBy, r.decidedBy]).filter((x): x is number => x != null),
+    ),
+  ]
+  const bomUserRows = bomUserIds.length
+    ? await prisma.user.findMany({ where: { id: { in: bomUserIds } }, select: { id: true, name: true } })
+    : []
+  const bomItemIds = [...new Set(bomRevRows.flatMap((r) => r.materials.map((m) => m.itemId)))]
+  const bomItemRows = bomItemIds.length
+    ? await prisma.item.findMany({ where: { id: { in: bomItemIds } }, select: { id: true, name: true } })
+    : []
 
   const productionVariance = buildProductionVariance({
     orders: [
@@ -318,6 +368,26 @@ export default async function ProductionOrderDetailPage({
           )}
         </div>
       </div>
+
+      {order.bomRevision ? (
+        <BomRevisionImpactCard
+          impact={await loadBomRevisionImpact(order.bomRevision.id)}
+          currentRevisionNo={order.bomRevision.revisionNo}
+        />
+      ) : null}
+
+      <BomRevisionChangePanel
+        owner={{ productionOrderId: order.id }}
+        documentStatus={order.status}
+        currentRevision={order.bomRevision}
+        revisionOptions={bomRevisionOptions}
+        requests={bomChangeRequests}
+        revisionNoById={Object.fromEntries(bomRevRows.map((r) => [r.id, r.revisionNo]))}
+        userNameById={Object.fromEntries(bomUserRows.map((u) => [u.id, u.name]))}
+        itemNameById={Object.fromEntries(bomItemRows.map((i) => [i.id, i.name]))}
+        canManage={canManageBomChange}
+        currentUserId={bomSession?.user?.id ? Number(bomSession.user.id) : null}
+      />
 
       {/* Non-material costs (labor / overhead / subcontract / service) */}
       <ProductionCostSection
