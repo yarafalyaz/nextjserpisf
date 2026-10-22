@@ -124,6 +124,7 @@ const issueBupotSchema = z.object({
     z.enum(["SKB", "PP23", "DTP"]).optional(),
   ),
   facilityNumber: optionalText,
+  rentObjectEvidence: optionalText,
   idempotencyKey: z.string().trim().min(8, "Idempotency key wajib"),
 })
 
