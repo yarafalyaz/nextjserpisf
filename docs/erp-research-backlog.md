@@ -7676,3 +7676,299 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+---
+
+## 2026-10-22 04:21 WIB — Spec aturan bisnis F-2026-10-21-014-S: Permintaan Antar Gudang (BOT 5, tanpa kode)
+
+Kartu: t_86b366f5. Spec saja — TANPA kode/schema/migrasi, TANPA aturan
+stok baru di luar backlog F-2026-10-21-014 (baris 1034-1054 file ini).
+Kebutuhan data di bawah dinyatakan sebagai KEBUTUHAN untuk BOT 3,
+bukan rancangan skema. ID spec ini: `F-2026-10-21-014-S`.
+
+Sumber mengikat:
+- F-2026-10-21-014 (c) P1 di file ini: model kebutuhan `MaterialRequest`
+  status `draft→approved→fulfilled/rejected`, `fulfilledTransferId` →
+  InventoryTransfer draft; nama UI "Permintaan Antar Gudang" vs
+  "Permintaan Pembelian" wajib beda tegas.
+- Benchmark resmi (akses 2026-10-22):
+  - Accurate Permintaan Barang: satu form, Tipe Permintaan = "Beli
+    Barang" vs "Kirim Barang"; Kirim Barang menentukan gudang asal,
+    lalu diproses lewat Pemindahan Barang ("Ambil → Permintaan"):
+    https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/permintaan-barang/mencatat-permintaan-barang
+    dan
+    https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/permintaan-barang/cara-mencatat-permintaan-kirim-barang
+  - Adaptasi ISF (USULAN, bukan salinan Accurate): dua dokumen UI
+    terpisah tegas — "Permintaan Antar Gudang" (dokumen baru ini) vs
+    "Permintaan Pembelian" (PurchaseRequest existing) — sesuai mitigasi
+    backlog F-014, BUKAN satu form bertipe seperti Accurate.
+
+### Inventarisasi terverifikasi (2026-10-22, basis origin/main 5a31db83)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `MaterialRequest`: ABSEN. `grep -rn MaterialRequest src prisma` = 0.
+- `PurchaseRequest` (schema:1615-1644) + `PurchaseRequestItem`
+  (schema:1646-1657): permintaan PEMBELIAN ke vendor — status String
+  default `draft`, `approvedBy/approvedAt/rejectionReason`,
+  `requestedBy`; permission katalog `view/create/edit/delete/approve_
+  purchase_requests` (module-catalog.generated.ts:198-202); aksi
+  `createPurchaseRequest` purchase.actions.ts:307. Ini BUKAN dokumen
+  antar gudang dan TIDAK boleh dipakai ulang namanya.
+- `InventoryTransfer` (schema:2141-2163): `sourceWarehouseId`,
+  `destinationWarehouseId`, status String default `draft`; alur live
+  draft→processed→received (klaim atomik `processing`/`receiving`
+  sesaat) di inventory.actions.ts:319 (create), :373 (process), :447
+  (receive); permission `view/create/edit/delete_inventory_transfers`
+  (module-catalog.generated.ts:238-241). Transfer TIDAK punya tautan
+  ke dokumen permintaan apa pun hari ini.
+- Scope gudang: `getWarehouseScope`/`assertWarehouseAccess(Multi)`
+  (warehouse-scope.ts) — all-access hanya role di
+  `WAREHOUSE_ALL_ACCESS_ROLES` = super_admin/admin (role-names.ts:14);
+  role lain dari penugasan `UserWarehouse` (schema:4488-4498);
+  tanpa penugasan = `none` (fail-closed). Pola live transfer:
+  create wajib akses KEDUA gudang (inventory.actions.ts:329-330),
+  process wajib akses gudang ASAL (:383-384), receive wajib akses
+  gudang TUJUAN (:457-458).
+- `WorkOrder` (schema:2615+): TANPA warehouseId sendiri; gudang WO
+  hidup tersirat lewat MaterialIssue WO. `workOrderId nullable` di
+  kebutuhan F-014 karena itu sah: permintaan boleh tanpa WO.
+- ATP kebutuhan WO read-only per gudang relevan
+  (work-order-material-needs.ts:25-52 + `qtyOnHandAtWarehouse`):
+  peringatan saja, BUKAN reservasi mengikat (F-2026-10-21-012).
+  Spec ini TIDAK mengubah itu.
+- Tombol "Buat Permintaan" di laporan stok minimum hari ini membuka
+  form Permintaan PEMBELIAN ter-prefill (min-stock-request.ts;
+  stok-minimum page.tsx:65; pembelian/permintaan/tambah page.tsx:62)
+  — bukti nyata risiko salah-klik dua dokumen bernama mirip.
+
+### Aktor (nama peran bisnis, bukan role teknis)
+
+| Aktor | Siapa di bengkel | Gudang yang dilihat |
+|---|---|---|
+| Peminta | mekanik / kepala regu / staf gudang tujuan yang butuh part | gudang TUJUAN (requester) tempat ia ditugaskan |
+| Penyetuju | kepala bengkel / kepala gudang (penanggung jawab gudang ASAL) | gudang ASAL yang akan mengeluarkan stok |
+| Pemenuh | staf gudang ASAL yang menyiapkan + membuat transfer | gudang ASAL |
+| Penerima transfer | staf gudang TUJUAN | gudang TUJUAN (alur InventoryTransfer existing, di luar dokumen ini) |
+
+Pemetaan aktor → permission/role teknis = kebutuhan data D-06 di
+bawah; spec ini TIDAK menetapkan nama permission baru (katalog
+`module-catalog.generated.ts` belum punya resource permintaan antar
+gudang — TERVERIFIKASI-KODE baris 222-242 hanya stock_moves,
+material_issues, stock_adjustments, inventory, racks, stock_opname,
+inventory_transfers).
+
+### Tabel aturan per status (tiap aturan bernama)
+
+Status dokumen (dari backlog F-014, mengikat): `draft`, `approved`,
+`fulfilled`, `rejected`. Transisi lain TIDAK ada di backlog — jangan
+ditambah diam-diam; kebutuhan transisi tambahan = pertanyaan terbuka.
+| ID aturan | Status | Siapa boleh | Aksi | Penjaga (guard) |
+|---|---|---|---|---|
+| BR-MR-01 Buat-draft | (baru) → `draft` | Peminta | Buat permintaan: gudang tujuan (=gudang peminta), gudang asal, item+qty+satuan, tautan WO boleh kosong | Peminta wajib punya akses scope ke gudang TUJUAN; gudang asal ≠ gudang tujuan; qty > 0 |
+| BR-MR-02 Ubah-draft | `draft` | Peminta pembuat dokumen | Ubah item/qty/gudang asal/WO, hapus draft | Hanya pembuat atau penyetuju gudang tujuan; dokumen `approved` ke atas TIDAK bisa diubah — buat dokumen baru |
+| BR-MR-03 Setujui | `draft` → `approved` | Penyetuju (penanggung jawab gudang ASAL) | Setujui (boleh setujui qty berbeda dari yang diminta? — lihat Q-MR-02) | Penyetuju wajib scope gudang ASAL; penyetuju ≠ peminta (pemisahan tugas, pola approval independen stocktake existing) |
+| BR-MR-04 Tolak | `draft` → `rejected` | Penyetuju gudang ASAL | Tolak WAJIB isi alasan tolak | Alasan kosong = tolak aksi; `rejected` terminal — peminta buat dokumen baru, bukan buka ulang |
+| BR-MR-05 Penuhi | `approved` → `fulfilled` | Pemenuh gudang ASAL | "Buat Transfer": lahirkan SATU InventoryTransfer status `draft` terisi dari permintaan; tautkan sebagai transfer pemenuh | Hanya dari `approved`; satu permintaan → maksimal satu transfer pemenuh aktif (lihat BR-MR-08); stok TIDAK diperiksa ulang sebagai gerbang di sini — pemeriksaan stok hidup di proses transfer existing (Q-MR-03) |
+| BR-MR-06 Terima-di-tujuan | (di luar dokumen) | Penerima transfer | Receive lewat alur InventoryTransfer existing draft→processed→received | Dokumen permintaan TIDAK punya status "diterima"; status transfer bukan status permintaan. Jangan cerminkan status transfer ke permintaan selain tautan pemenuh |
+| BR-MR-07 Tanpa-WO-sah | semua | Peminta | Permintaan tanpa tautan WO = kebutuhan stok gudang umum (isi ulang rak bengkel) | WO terisi wajib WO yang masih hidup (bukan cancelled/completed tertutup) — validasi persisnya Q-MR-05 |
+| BR-MR-08 Anti-dobel-penuh | `approved`/`fulfilled` | Sistem | Permintaan yang sudah `fulfilled` tidak bisa dipenuhi lagi; tombol Buat Transfer hilang/nonaktif | Satu `fulfilledTransferId` per permintaan (kebutuhan backlog); transfer pemenuh yang masih draft dibatalkan → perilaku permintaan = Q-MR-04 |
+
+Per gudang, ringkas:
+- Gudang TUJUAN (requester): buat/ubah draft, lihat semua status
+  permintaan yang menujunya, terima barang lewat transfer existing.
+- Gudang ASAL (source): setujui/tolak, penuhi (buat transfer), lihat
+  permintaan yang meminta darinya.
+- Gudang ketiga (tidak terkait): tidak lihat, tidak bisa aksi apa pun
+  (scope fail-closed pola warehouse-scope existing).
+
+### Status-transition matrix
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| — | Buat (BR-MR-01) | `draft` | scope tujuan; asal≠tujuan; qty>0 |
+| `draft` | Setujui (BR-MR-03) | `approved` | scope asal; penyetuju≠peminta |
+| `draft` | Tolak (BR-MR-04) | `rejected` | scope asal; alasan wajib |
+| `draft` | Hapus (BR-MR-02) | (hapus) | hanya pembuat; hanya draft |
+| `approved` | Buat Transfer (BR-MR-05) | `fulfilled` | scope asal; belum punya transfer pemenuh |
+| `approved` | ??? batal oleh peminta | ??? | TIDAK diputus backlog — Q-MR-01 |
+| `fulfilled` | — | terminal | transfer berjalan sendiri sesudah ini |
+| `rejected` | — | terminal | buat dokumen baru |
+
+### Aturan konflik (perilaku eksplisit)
+
+1. **Permintaan ganda untuk kebutuhan WO sama** (dua mekanik minta
+   shock sama untuk WO sama dari gudang asal sama):
+   - BR-MR-09 (USULAN): sistem TIDAK menolak dokumen kedua. Permintaan
+     adalah antrean kebutuhan, bukan kunci stok; menolak akan
+     memaksa mekanik berkoordinasi lisan lagi — persis masalah yang
+     dokumen ini hilangkan.
+   - BR-MR-10 (USULAN): daftar permintaan untuk penyetuju WAJIB
+     menampilkan peringatan "sudah ada permintaan aktif (draft/
+     approved) untuk WO+item+gudang asal yang sama" di kedua dokumen,
+     dengan tautan silang. Keputusan gabung/tolak-satu = manusia
+     (penyetuju), bukan sistem.
+   - Batas keras satu-satunya: BR-MR-08 (satu permintaan hanya bisa
+     dipenuhi satu kali). Dua permintaan berbeda yang dua-duanya
+     disetujui+ dipenuhi = dua transfer sah; itu keputusan penyetuju
+     yang terlihat di daftar, bukan bug sistem.
+   - Yang TIDAK boleh: menggabungkan qty dua dokumen diam-diam, atau
+     menganggap permintaan = reservasi stok (reservasi = domain
+     F-2026-10-21-012/F-049, di luar spec ini).
+2. **Stok asal tidak cukup saat dipenuhi**:
+   - BR-MR-11 (USULAN, merujuk perilaku existing): "Buat Transfer"
+     tetap melahirkan InventoryTransfer `draft` — dokumen permintaan
+     menjadi `fulfilled` karena tugasnya (menghubungkan kebutuhan ke
+     transfer) selesai; KECUKUPAN stok dinilai di gerbang proses
+     transfer existing, yang memang menolak stok kurang (pola
+     consumeFifoLayers `allowShortfall:false`). Permintaan JANGAN
+     memblokir pembuatan transfer hanya karena stok saat ini kurang:
+     stok bisa masuk (goods receipt) sebelum transfer diproses.
+   - BR-MR-12 (USULAN): saat penyetujuan DAN saat buka daftar,
+     tampilkan stok tersedia gudang asal per item sebagai INFORMASI
+     (baca ATP per gudang pola work-order-material-needs), label
+     jelas "informasi, bukan kunci stok". Penyetuju boleh menolak
+     dengan alasan "stok asal tidak cukup" (BR-MR-04) — itu jalur
+     penolakan bisnisnya, bukan kegagalan sistem.
+   - Pemenuhan SEBAGIAN (transfer qty < qty disetujui, sisa menyusul):
+     backlog F-014 tidak menyebut status parsial — JANGAN karang
+     status `partially_fulfilled`. Perilaku sampai diputus: Q-MR-03.
+3. **Permintaan basi** (draft/approved menggantung, WO sudah selesai/
+   batal, kebutuhan sudah lewat):
+   - BR-MR-13 (USULAN): TIDAK ada kedaluwarsa otomatis dan TIDAK ada
+     penghapusan otomatis. Dokumen yang basi tetap terlihat di daftar
+     dengan penanda umur (tanggal buat + tanggal butuh bila diisi).
+   - BR-MR-14 (USULAN): permintaan ber-WO yang WO-nya cancelled/
+     completed WAJIB tampil dengan penanda "WO sudah tutup" di
+     daftar penyetuju/peminta — sinyal untuk ditolak/dibatalkan
+     manual, bukan transisi otomatis (dokumen tidak boleh berubah
+     status tanpa aktor manusia; pola audit dokumen lain di repo).
+   - Umur ambang penanda basi (mis. > N hari) = Q-MR-06 (angka
+     kebijakan, jangan karang konstanta).
+
+### Kebutuhan data untuk BOT 3 (kebutuhan, BUKAN skema)
+
+- D-01: dokumen permintaan punya nomor dokumen unik tampil,
+  tanggal permintaan, tanggal-dibutuhkan (boleh kosong), catatan,
+  alasan tolak (wajib terisi bila rejected), siapa pembuat/
+  penyetuju + kapan disetujui — setara jejak PurchaseRequest
+  existing (requestedBy/approvedBy/approvedAt/rejectionReason).
+- D-02: dokumen menunjuk TEPAT satu gudang tujuan (requester) dan
+  TEPAT satu gudang asal (source); baris-baris item (item, qty,
+  satuan tampil) — satu dokumen boleh banyak item (mengikuti bentuk
+  kebutuhan backlog: itemId/qty/uom per kebutuhan; multi-baris =
+  Q-MR-07 bila BOT 3 menilai backlog menghendaki satu item saja).
+- D-03: tautan WO boleh kosong (nullable); bila terisi, daftar dan
+  detail menampilkan nomor WO + status WO live (untuk BR-MR-14).
+- D-04: tautan satu arah permintaan → transfer pemenuh
+  (fulfilledTransferId kebutuhan backlog); dari transfer, pengguna
+  bisa kembali melihat permintaan asalnya (tautan balik tampil).
+- D-05: daftar permintaan bisa disaring per gudang tujuan, per
+  gudang asal, per status, per WO — antrean penyetuju = saringan
+  "menunggu persetujuan untuk gudang asal saya".
+- D-06: resource permission BARU untuk dokumen ini di katalog
+  (usulan bentuk mengikuti pola existing: view/create/edit/delete/
+  approve pada resource sendiri) — nama persis resource/permission
+  = keputusan BOT 3 + BOT 1 (Q-MR-08); JANGAN pinjam permission
+  `*_purchase_requests` atau `*_inventory_transfers` untuk aksi
+  setujui/tolak permintaan.
+- D-07: scope gudang ditegakkan server per BR-MR-01/03/05 memakai
+  pola warehouse-scope existing (bukan filter tampilan saja).
+- D-08: aktivitas dokumen (buat/setujui/tolak/penuhi) tercatat di
+  log aktivitas pola dokumen lain, supaya antrean lisan lama bisa
+  diaudit mundur.
+
+### Penamaan UI (mengikat dari backlog F-014)
+
+- BR-MR-15: menu/dokumen baru bernama persis "Permintaan Antar
+  Gudang". Dokumen existing tetap "Permintaan Pembelian". Dua nama
+  TIDAK boleh disingkat sama ("Permintaan" saja) di menu, judul
+  form, tombol, atau notifikasi.
+- BR-MR-16 (USULAN): tombol "Buat Permintaan" di laporan stok
+  minimum tetap membuka Permintaan Pembelian (perilaku existing);
+  spec ini TIDAK mengubahnya. Bila kelak stok minimum per gudang
+  (F-2026-10-21-013) butuh antar-gudang, itu keputusan terpisah.
+
+### Draf acceptance (untuk BOT 3 / BOT 2 / BOT 6)
+
+BOT 3 (implementasi sesudah Q-MR tertutup secukupnya):
+1. Buat draft (asal≠tujuan, WO kosong) → setujui oleh penyetuju
+   gudang asal → Buat Transfer → permintaan `fulfilled` + tepat
+   satu InventoryTransfer `draft` terisi item/qty/gudang yang sama.
+2. Tolak tanpa alasan = gagal; tolak beralasan = `rejected`
+   terminal, Buat Transfer tidak tersedia.
+3. Falsifikasi scope: user tanpa penugasan gudang asal tidak bisa
+   setujui/penuhi (fail-closed); user gudang ketiga tidak melihat
+   dokumen di daftar.
+4. Falsifikasi dobel-penuh: penuhi permintaan yang sama dua kali →
+   upaya kedua tertolak, tetap satu transfer pemenuh.
+5. Penyetuju = peminta (orang sama) → setujui tertolak (BR-MR-03).
+
+BOT 2 (halaman):
+1. Menu tampil "Permintaan Antar Gudang" terpisah dari "Permintaan
+   Pembelian"; tidak ada label "Permintaan" telanjang.
+2. Daftar penyetuju menampilkan penanda duplikat WO+item (BR-MR-10),
+   stok asal informatif berlabel bukan-kunci (BR-MR-12), penanda
+   WO-tutup (BR-MR-14), umur dokumen (BR-MR-13).
+3. Form: gudang asal ≠ tujuan divalidasi di layar + server; WO
+   opsional dengan penjelas "kosong = kebutuhan stok umum".
+
+BOT 6 (audit):
+1. Matriks transisi di atas diuji satu-satu termasuk transisi
+   ilegal (draft→fulfilled langsung, rejected→approved) tertolak.
+2. Dua permintaan WO+item sama: keduanya hidup, penanda silang
+   tampil, masing-masing hanya terpenuhi ≤1 kali.
+3. Stok asal kurang: transfer draft tetap lahir, proses transfer
+   menolak sesuai gerbang existing; tidak ada stok negatif.
+4. Tidak ada nominal uang/gaji di dokumen ini; permission resource
+   baru tidak membuka akses purchase_requests/inventory_transfers.
+
+### Pertanyaan terbuka bernama (belum diputus backlog)
+
+- Q-MR-01 → BOT 1 (Lead): bolehkah peminta MEMBATALKAN permintaan
+  `approved` yang belum dipenuhi (status `cancelled` baru), atau
+  approved hanya bisa mati lewat ditolak-penyetuju/dipenuhi?
+  Backlog hanya punya draft→approved→fulfilled/rejected. Sampai
+  diputus: tidak ada batal dari approved.
+- Q-MR-02 → BOT 1 + BOT 3: penyetuju boleh mengubah qty saat
+  menyetujui (setujui-sebagian di level qty dokumen), atau setujui
+  = qty persis diminta? Berdampak ke D-02 (perlu qty diminta vs
+  qty disetujui terpisah atau tidak).
+- Q-MR-03 → BOT 1 + BOT 3: pemenuhan sebagian — transfer pertama
+  qty < disetujui: permintaan tetap `fulfilled` (sisa dianggap
+  selesai/ditangani manual) atau butuh status/mekanisme sisa?
+  Spec ini melarang karang status parsial sebelum putusan ini.
+- Q-MR-04 → BOT 3: transfer pemenuh yang masih `draft` dibatalkan/
+  dihapus — permintaan `fulfilled` kembali ke `approved`, tetap
+  `fulfilled` dengan tautan mati, atau terminal gagal? Backlog
+  diam; jangan tebak di implementasi.
+- Q-MR-05 → BOT 3: validasi WO tertaut — WO status apa saja yang
+  boleh ditaut (draft/in-progress saja?), dan WO terhapus/cancel
+  sesudah permintaan dibuat: penanda BR-MR-14 cukup atau tautan
+  diputus sistem?
+- Q-MR-06 → BOT 1 / pemilik proses: ambang umur "basi" untuk
+  penanda daftar (hari) + tanggal-dibutuhkan wajib atau opsional?
+  Angka kebijakan — bukan konstanta karangan BOT 5.
+- Q-MR-07 → BOT 3: satu dokumen multi-item atau satu item per
+  dokumen? Backlog menulis itemId tunggal per kebutuhan; bentuk
+  baris jamak = pola PurchaseRequestItem existing. Putuskan
+  sebelum skema.
+- Q-MR-08 → BOT 1 + BOT 3: nama resource permission baru (usulan
+  pola `*_material_requests` mengikuti nama model backlog) +
+  pemetaan aktor ke role existing (siapa "penyetuju gudang asal"
+  dalam role katalog hari ini). Tanpa ini D-06 tidak bisa dibangun
+  konsisten.
+
+### Yang TIDAK diusulkan run ini
+- Reservasi/kunci stok oleh permintaan: domain F-2026-10-21-012
+  (StockReservation) + F-2026-10-22-049-S; permintaan adalah antrean
+  dokumen, bukan pengikat stok.
+- Penerimaan parsial/selisih transfer: F-2026-10-21-015, dokumen
+  terpisah; permintaan tidak menilai qty diterima.
+- Permintaan pembelian dari permintaan antar gudang (rantai
+  antar-gudang-kurang→beli): tidak ada di backlog F-014; Accurate
+  menggabungkannya lewat Tipe Permintaan, ISF memisahkan dokumen —
+  rantai otomatis = kebutuhan baru, bukan turunan spec ini.
+- Notifikasi/push ke penyetuju: tidak dispesifikasikan; antrean
+  daftar (D-05) adalah permukaan v1. Notifikasi = follow-up terpisah
+  bila pemilik proses meminta.
+- Mengubah nama/alur PurchaseRequest atau tombol stok minimum
+  existing (BR-MR-16).
