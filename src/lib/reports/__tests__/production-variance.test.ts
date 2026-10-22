@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest"
 
 import {
   buildProductionVariance,
+  findRecalibrationCandidates,
   productionVarianceSummary,
   splitMaterialVariance,
   type ProductionVarianceOrderInput,
@@ -154,5 +155,90 @@ describe("buildProductionVariance", () => {
     expect(result.orderCount).toBe(0)
     expect(result.table.rows).toHaveLength(1)
     expect(result.table.rows[0].kind).toBe("notice")
+  })
+})
+
+describe("findRecalibrationCandidates (F-2026-10-21-010)", () => {
+  // Item 7: standar 10 × 50.000; aktual/unit 56.000 (+12%) tiap periode.
+  const hotOrder = (id: number): ProductionVarianceOrderInput =>
+    order({
+      id,
+      materials: [{ itemId: 7, qty: 10, actualQty: 10, standardCost: 50_000, actualCost: 560_000 }],
+      costs: [],
+    })
+
+  it("3 periode beruntun di atas ambang 5% → kandidat + standar usulan rata-rata aktual", () => {
+    const candidates = findRecalibrationCandidates({
+      periods: [[hotOrder(1)], [hotOrder(2)], [hotOrder(3)]],
+      thresholdPct: 5,
+      consecutivePeriods: 3,
+    })
+    expect(candidates).toHaveLength(1)
+    expect(candidates[0].itemId).toBe(7)
+    expect(candidates[0].consecutivePeriods).toBe(3)
+    expect(candidates[0].maxAbsVariancePct).toBe(12)
+    expect(candidates[0].suggestedStandardCost).toBe(56_000)
+  })
+
+  it("falsifikasi: rantai putus satu periode (item absen) → bukan kandidat", () => {
+    const candidates = findRecalibrationCandidates({
+      periods: [[hotOrder(1)], [], [hotOrder(3)], [hotOrder(4)]],
+      thresholdPct: 5,
+      consecutivePeriods: 3,
+    })
+    expect(candidates).toHaveLength(0)
+  })
+
+  it("falsifikasi: di bawah ambang → bukan kandidat walau beruntun", () => {
+    const cool = (id: number): ProductionVarianceOrderInput =>
+      order({
+        id,
+        materials: [{ itemId: 7, qty: 10, actualQty: 10, standardCost: 50_000, actualCost: 510_000 }],
+        costs: [],
+      })
+    const candidates = findRecalibrationCandidates({
+      periods: [[cool(1)], [cool(2)], [cool(3)]],
+      thresholdPct: 5,
+      consecutivePeriods: 3,
+    })
+    expect(candidates).toHaveLength(0)
+  })
+
+  it("baris standar nol (uncalibrated) tidak pernah jadi kandidat", () => {
+    const zero = (id: number): ProductionVarianceOrderInput =>
+      order({
+        id,
+        materials: [{ itemId: 9, qty: 5, actualQty: 5, standardCost: 0, actualCost: 999_000 }],
+        costs: [],
+      })
+    const candidates = findRecalibrationCandidates({
+      periods: [[zero(1)], [zero(2)], [zero(3)]],
+      thresholdPct: 5,
+      consecutivePeriods: 3,
+    })
+    expect(candidates).toHaveLength(0)
+  })
+
+  it("kandidat tampil sebagai notice di laporan dengan label tinjau manual", () => {
+    const result = buildProductionVariance({
+      orders: [order()],
+      start: period.start,
+      end: period.end,
+      recalibrationCandidates: [
+        { itemId: 7, consecutivePeriods: 3, periodsOverThreshold: 3, maxAbsVariancePct: 12, suggestedStandardCost: 56_000 },
+      ],
+      itemNames: new Map([[7, "Plat Baja (SKU-7)"]]),
+      recalibrationMeta: { periodCount: 12, thresholdPct: 5, consecutivePeriods: 3 },
+    })
+    expect(result.recalibrationCandidates).toHaveLength(1)
+    const notices = result.table.rows.filter((r) => r.kind === "notice").map((r) => r.text ?? "")
+    expect(notices.some((t) => t.includes("Kandidat re-cost standar") && t.includes("Plat Baja (SKU-7)") && t.includes("bukan tulisan otomatis"))).toBe(true)
+  })
+
+  it("tanpa kandidat → tidak ada notice re-cost (regresi laporan lama)", () => {
+    const result = buildProductionVariance({ orders: [order()], start: period.start, end: period.end })
+    expect(result.recalibrationCandidates).toEqual([])
+    const notices = result.table.rows.filter((r) => r.kind === "notice").map((r) => r.text ?? "")
+    expect(notices.some((t) => t.includes("Kandidat re-cost"))).toBe(false)
   })
 })

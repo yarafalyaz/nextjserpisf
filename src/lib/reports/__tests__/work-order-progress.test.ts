@@ -15,6 +15,7 @@ function op(over: Partial<WorkOrderOperationInput> = {}): WorkOrderOperationInpu
     status: "pending",
     assignedEmployeeId: null,
     estimatedHours: null,
+        workCenterId: null,
     notes: null,
     ...over,
   }

@@ -45,14 +45,10 @@ const KNOWN_UNUSED: string[] = [
   // ketiganya 0 rujukan kode produk; `cleared` tetap dipakai matematika
   // outstanding `completeReconciliation`; guard berarah dua memerah saat
   // pembuangan mendarat.)
-  // (F-2026-10-21-001..006, 2026-10-21) `SalesReturn.taxReturnNoteNumber` +
-  // `PurchaseReturn.taxReturnNoteNumber`: nomor nota retur pajak dicatat apa
-  // adanya dari nota DJP; masa pengurang dibaca dari `taxReturnNoteDate`
-  // (dipakai read-model SPT), nomornya bukti dokumen untuk rekonsiliasi —
-  // ditulis jalur retur berikutnya (UI nota retur belum ada), bukan kolom mati
-  // tanpa keputusan. Guard berarah dua memerah saat penulisan mendarat.
-  "PurchaseReturn.taxReturnNoteNumber",
-  "SalesReturn.taxReturnNoteNumber",
+  // (`SalesReturn.taxReturnNoteNumber` + `PurchaseReturn.taxReturnNoteNumber`
+  // PERNAH di sini — ditutup F-004 §3: create/update kedua retur kini menulis
+  // nomor + tanggal nota retur apa adanya; guard berarah dua memerah saat
+  // entri basi ini dibiarkan sesudah penulisan mendarat.)
 ].sort()
 
 const ROOT = path.resolve(__dirname, "../..")

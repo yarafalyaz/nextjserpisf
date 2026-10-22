@@ -227,6 +227,10 @@ export async function updateSystemSettings(formData: FormData) {
       wipAccountId: intNull("wipAccountId"),
       materialExpenseAccountId: intNull("materialExpenseAccountId"),
       materialIssueExpenseAccountId: intNull("materialIssueExpenseAccountId"),
+      // F-008: penampung beban kerugian produksi (usulan 510105, menunggu
+      // vonis BOT 4) + gerbang jurnal abnormal. Default false = catat-dulu.
+      abnormalScrapPostingEnabled: bool("abnormalScrapPostingEnabled"),
+      abnormalScrapExpenseAccountId: intNull("abnormalScrapExpenseAccountId"),
 
       // Accounting - General
       pettyCashAccountId: intNull("pettyCashAccountId"),
