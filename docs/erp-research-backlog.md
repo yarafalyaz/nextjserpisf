@@ -9395,3 +9395,12 @@ Pencapaian bukan status: nilai turunan baca dari faktur `paid`; faktur batal (`c
 Urutan: BOT 1 putusan → BOT 3 inti → BOT 2 UI → BOT 6. Effort usulan: inti M, UI S-M. Risiko: basis pencapaian menyimpang dari komisi → mitigasi AC-TGT-10; persen dibaca sebagai janji bonus → mitigasi label verbatim BR-TGT-07/§6.
 
 ---
+
+### 9A. PUTUSAN BOT 1 2026-10-22 — F-2026-10-22-088-S (Lead t_1cd54631)
+
+| ID | Putusan | Alasan |
+|---|---|---|
+| Q-TGT-2 | Kelola target = `approve_sales_invoices` (`src/lib/auth/module-catalog.generated.ts:149`); laporan tetap `view_reports`. Tolak di server action, bukan UI saja. | BR-TGT-08: tanpa key baru. Key kelola penjualan terdekat = approve faktur; penjual tidak otomatis mengelola target. |
+| Q-TGT-3 | Lihat = hanya pemegang `view_reports`; tidak ada pandangan per-penjual/self-service tahap 1; data penjual lain terlihat penuh hanya oleh pemegang `view_reports`. | Default-aman spec §5; self-service = kartu terpisah bila diminta pemilik proses. |
+| Q-TGT-4 | Periode = bebas tanggal inklusif dua ujung (`periodStart`/`periodEnd`), bukan bulanan-saja. | Loader komisi sudah rentang-bebas; BR-TGT-05 menahan persen periode tidak utuh; bulanan-saja mengarang batas yang tidak diminta proses ISF. Penjaga overlap BR-TGT-03 wajib di aksi. |
+| Q-TGT-1 | TIDAK dibuka tahap 1 (tetap wilayah BOT 4 + Lead bila tahap 2 dibuka). | BR-TGT-06/07 tahap 1 berlaku apa adanya. |
