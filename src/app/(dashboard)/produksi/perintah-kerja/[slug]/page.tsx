@@ -22,6 +22,7 @@ import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { WorkOrderMaterialNeedsCard } from "@/components/reports/work-order-material-needs-card";
 import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs-data";
 import { WorkOrderPartStatusCard } from "@/components/reports/work-order-part-status-card";
+import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
 import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
 import { WorkOrderProgressCard } from "@/components/reports/work-order-progress-card";
 import { getWorkOrderProgress } from "@/lib/reports/work-order-progress-data";
@@ -522,6 +523,11 @@ export default async function WorkOrderDetailPage({
       </div>
 
       {/* Items / Materials */}
+      {/* F-063-S: ringkasan snapshot fitment tersimpan server (bukan
+          evaluasi ulang); 0 incompatible → senyap. */}
+      <FitmentIncompatibleSummary
+        incompatibleCount={wo.items.filter((i) => i.fitmentResult === "incompatible").length}
+      />
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
           <h2 className="text-[0.9375rem] font-semibold text-foreground">
@@ -546,7 +552,15 @@ export default async function WorkOrderDetailPage({
               <DetailTableBody>
                 {wo.items.map((item) => (
                   <DetailTableRow key={item.id}>
-                    <DetailTableTd>{itemNameMap.get(item.itemId) || `Barang #${item.itemId}`}</DetailTableTd>
+                    <DetailTableTd>
+                      <div className="flex flex-col">
+                        <span>{itemNameMap.get(item.itemId) || `Barang #${item.itemId}`}</span>
+                        <FitmentBadge
+                          fitmentResult={item.fitmentResult}
+                          fitmentRuleId={item.fitmentRuleId}
+                        />
+                      </div>
+                    </DetailTableTd>
                     <DetailTableTd>{item.description || "-"}</DetailTableTd>
                     <DetailTableTd>
                       <StatusChip status={item.status || "pending"} />
