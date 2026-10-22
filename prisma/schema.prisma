@@ -673,6 +673,7 @@ model Item {
   customerPrices       CustomerPriceList[]
   warrantyCoverages    WarrantyCoverage[]
   installedParts       InstalledPart[]
+  materialRequestItems MaterialRequestItem[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -700,6 +701,8 @@ model Warehouse {
   goodsReceipts     GoodsReceipt[]
   transfersIn       InventoryTransfer[] @relation("TransferDest")
   transfersOut      InventoryTransfer[] @relation("TransferSource")
+  materialRequestsAsRequester MaterialRequest[] @relation("MaterialRequestRequester")
+  materialRequestsAsSource    MaterialRequest[] @relation("MaterialRequestSource")
   itemBatches       ItemBatch[]
   itemSerials       ItemSerial[]
   defaultItems      Item[]              @relation("ItemDefaultWarehouse")
@@ -2176,12 +2179,66 @@ model StockAdjustmentItem {
   @@map("stock_adjustment_items")
 }
 
+// F-2026-10-22-078-S inti (induk F-2026-10-21-014): permintaan barang
+// antar gudang. Dokumen pendahulu InventoryTransfer — permintaan TIDAK
+// menggerakkan stok, TIDAK membuat StockMove/jurnal/issue (BR-MR-02);
+// satu-satunya gerak stok = InventoryTransfer tertaut lewat kolom
+// materialRequestId di sisi transfer (Q-MR-4 BOT 3). Status internal
+// sederhana pola PurchaseRequest (Q-MR-2); self-approve dilarang
+// (Q-MR-3). Tanpa harga/biaya: permintaan bukan dokumen nilai.
+model MaterialRequest {
+  slug                 String?   @unique
+  id                   Int       @id @default(autoincrement())
+  documentNo           String    @unique @map("document_no")
+  requesterWarehouseId Int       @map("requester_warehouse_id")
+  sourceWarehouseId    Int       @map("source_warehouse_id")
+  workOrderId          Int?      @map("work_order_id")
+  neededBy             DateTime? @map("needed_by")
+  status               String    @default("draft")
+  rejectionReason      String?   @map("rejection_reason") @db.Text
+  approvedBy           Int?      @map("approved_by")
+  approvedAt           DateTime? @map("approved_at")
+  createdBy            Int?      @map("created_by")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  items              MaterialRequestItem[]
+  transfers          InventoryTransfer[]
+  requesterWarehouse Warehouse @relation("MaterialRequestRequester", fields: [requesterWarehouseId], references: [id])
+  sourceWarehouse    Warehouse @relation("MaterialRequestSource", fields: [sourceWarehouseId], references: [id])
+  workOrder          WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  @@index([status], map: "idx_material_requests_status")
+  @@index([requesterWarehouseId])
+  @@index([sourceWarehouseId])
+  @@index([workOrderId])
+  @@index([approvedBy])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("material_requests")
+}
+
+model MaterialRequestItem {
+  id                Int             @id @default(autoincrement())
+  materialRequestId Int             @map("material_request_id")
+  itemId            Int             @map("item_id")
+  qty               Decimal         @db.Decimal(15, 2)
+  notes             String?
+  materialRequest   MaterialRequest @relation(fields: [materialRequestId], references: [id], onDelete: Cascade)
+  item              Item            @relation(fields: [itemId], references: [id])
+
+  @@index([materialRequestId], map: "material_request_items_material_request_id_fkey")
+  @@index([itemId])
+  @@map("material_request_items")
+}
+
 model InventoryTransfer {
   slug                   String?                 @unique
   id                     Int                     @id @default(autoincrement())
   documentNo             String                  @unique @map("document_no")
   sourceWarehouseId      Int                     @map("source_warehouse_id")
   destinationWarehouseId Int                     @map("destination_warehouse_id")
+  materialRequestId      Int?                    @map("material_request_id")
   date                   DateTime
   notes                  String?                 @db.Text
   status                 String                  @default("draft")
@@ -2189,11 +2246,13 @@ model InventoryTransfer {
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
   items                  InventoryTransferItem[]
+  materialRequest        MaterialRequest?        @relation(fields: [materialRequestId], references: [id], onDelete: SetNull)
   destinationWarehouse   Warehouse               @relation("TransferDest", fields: [destinationWarehouseId], references: [id])
   sourceWarehouse        Warehouse               @relation("TransferSource", fields: [sourceWarehouseId], references: [id])
 
   @@index([destinationWarehouseId], map: "inventory_transfers_destination_warehouse_id_fkey")
   @@index([sourceWarehouseId], map: "inventory_transfers_source_warehouse_id_fkey")
+  @@index([materialRequestId])
   @@index([status])
   @@index([createdBy])
   @@index([createdAt])
@@ -2729,6 +2788,7 @@ model WorkOrder {
   warrantyCoverages WarrantyCoverage[] @relation("WorkOrderWarrantyCoverages")
   warrantyRepairClaims WarrantyClaim[] @relation("WarrantyClaimRepairWorkOrder")
   changeOrders      JobChangeOrder[]
+  materialRequests  MaterialRequest[]
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
