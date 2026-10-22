@@ -9796,3 +9796,191 @@ Catat Tindak Lanjut -> BOT 6 AC-COL-1..12.
 
 ### Yang TIDAK diusulkan run ini
 - Pengingat otomatis WA/email ke pelanggan, denda keterlambatan, penagihan pihak ketiga, alokasi pembayaran parsial per janji, status penagihan tersimpan di SalesInvoice, perubahan aging/statement existing.
+
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-092-S corong prospek (lead pipeline funnel) dari histori status
+
+Gap baru domain (d) penjualan/CRM, BUKAN turunan ID lama: belum ada ID corong prospek
+di backlog. Anti-duplikat run ini (basis origin/main 043b748d + PR terbuka):
+maks `-S` terbit 091-S (PR #551 OPEN), maks PR terbuka 091-V (PR #552);
+grep `F-2026-10-22-092` di backlog+board main = 0; grep `funnel|corong|pipeline`
+di `src/` produksi = 0 hasil relevan (hanya dashboard chart generik).
+Spec DOKUMEN SAJA, tanpa kode/schema/migrasi.
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main 043b748d, 2026-10-22)
+
+- Model: `Lead` (prisma/schema.prisma:3619) status String default `new`,
+  `estimatedValue` Decimal(15,2) nullable, `expectedCloseDate`, `source`,
+  `assignedTo`, `customerId`, `convertedAt`, `deletedAt`. `LeadActivity`
+  (schema:3654) membawa `type`, `oldStatus`, `newStatus`, `scheduledAt`,
+  `completedAt`, `userId`.
+- Kosakata status SAH satu-satunya: `LEAD_STATUSES = new, contacted,
+  qualified, proposal, negotiation, won, lost` (src/lib/validations/
+  crm.schemas.ts:84-92); `CONVERTIBLE_STATUSES = qualified, proposal,
+  negotiation, won` (:93-98). Label Indonesia: status-labels.ts:56-67
+  (Baru/Dihubungi/Terkualifikasi/Proposal/Negosiasi/Menang/Kalah).
+- Histori tahap NYATA: `updateLead` (src/actions/master.actions.ts:1458)
+  menulis `LeadActivity type=status_change` dengan `oldStatus`/
+  `newStatus` dalam SATU transaksi dengan update lead bila status berubah
+  (:1489-1525). `convertLead` (src/actions/crm.actions.ts:201) menetapkan
+  status `won` + `convertedAt` + aktivitas `conversion` dalam satu tx.
+- Yang SUDAH ada dan DILARANG diduplikasi: antrean lead basi
+  `stale-leads.ts` (status new/contacted diam >7 hari) dan antrean
+  follow-up terjadwal `lead-followups.ts` (F-2026-10-21-037), keduanya
+  dikonsumsi kartu di halaman daftar prospek (crm/leads/page.tsx:12-15).
+  Hasil penawaran `quotation-outcome.ts` (winRate/conversionRate
+  penawaran) = corong PENAWARAN, bukan corong prospek — beda populasi.
+- Yang ABSEN (bukti grep run ini): tidak ada builder/loader/kartu yang
+  menghitung (a) jumlah prospek per status saat ini, (b) transisi
+  tahap-ke-tahap dari histori `status_change`, (c) rasio konversi
+  prospek→pelanggan, (d) nilai estimasi tertimbang per tahap, atau
+  (e) pemecahan per sumber (`source`) / per penanggung (`assignedTo`).
+- Permission nyata (module-catalog.generated.ts:352-356):
+  `view/create/edit/delete/manage_leads`. Tidak ada permission laporan
+  prospek khusus; laporan existing pola `view_reports` (katalog laporan).
+  Permission final = Q-LF-1 BOT 1, spec tidak mengarang key baru.
+- Benchmark (akses 2026-10-22): Zahir CRM memasarkan pengendalian proses
+  penjualan "dari awal sampai closing" dengan status peluang jelas dan
+  pantauan owner tanpa laporan manual:
+  https://zahiraccounting.com/id/zahir-crm/ — BENCHMARK arah kebutuhan
+  (halaman pemasaran, bukan dokumentasi fitur per-layar). Accurate tidak
+  memasarkan modul CRM prospek setara (fitur penjualan mulai dari
+  penawaran): https://accurate.id/online/fitur/penjualan/ — BENCHMARK:
+  corong prospek adalah kebutuhan internal ISF, bukan paritas kompetitor.
+
+### 2. Definisi corong (kontrak hitung, semua berlabel)
+
+Tahap maju (urutan kanonik, dari LEAD_STATUSES): `new → contacted →
+qualified → proposal → negotiation → won`; `lost` = keluar kalah dari
+tahap mana pun. Status di luar kosakata (data lama/teks bebas) masuk
+ember `status_tidak_dikenal` dan TIDAK dipetakan paksa.
+
+Dua pandangan WAJIB dibedakan labelnya, tidak boleh dicampur:
+- **Posisi saat ini** (snapshot): jumlah prospek non-`deletedAt` per
+  status SEKARANG + Σ `estimatedValue` per status. `estimatedValue`
+  kosong dihitung sebagai prospek tanpa nilai (ember terpisah), BUKAN
+  nol rupiah yang menyatu dengan nilai asli Rp0.
+- **Corong periode** (gerakan): dari `LeadActivity type=status_change`
+  (+ `conversion`) dalam periode: prospek yang PERNAH mencapai tiap
+  tahap (mencapai = ada newStatus tahap itu, atau status sekarang pada
+  atau sesudah tahap itu bila histori tidak lengkap — lihat BR-LF-04),
+  transisi tahap→tahap berikutnya, dan konversi akhir `won`/`lost`.
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-LF-01 | Urutan tahap dan kosakata status PERSIS `LEAD_STATUSES`; tahap tidak boleh ditambah/dikurangi builder. Status asing → ember `status_tidak_dikenal` terhitung eksplisit | TERVERIFIKASI-KODE (crm.schemas.ts:84) + USULAN ember |
+| BR-LF-02 | Populasi = `Lead.deletedAt IS NULL`. Prospek terkonversi (`customerId` terisi / `convertedAt` terisi) tetap dihitung di tahap `won`, tidak dikeluarkan dari corong | USULAN |
+| BR-LF-03 | Konversi prospek→pelanggan HANYA dari bukti `convertedAt`/`customerId` (jalur `convertLead`), BUKAN dari status `won` saja: status bisa dipindah manual ke `won` tanpa konversi. `won` tanpa konversi masuk ember `menang_belum_terkonversi` | TERVERIFIKASI-KODE (crm.actions.ts:201) + USULAN ember |
+| BR-LF-04 | Prospek tanpa histori `status_change` yang memadai (dibuat sebelum pencatatan histori, atau status awal langsung tinggi) TIDAK ditebak jalurnya: masuk ember `tanpa_histori_tahap`, dihitung di posisi saat ini saja, dikeluarkan dari penyebut rasio transisi periode. Dilarang backfill histori karangan | USULAN (default jujur) |
+| BR-LF-05 | Rasio transisi tahap A→B = prospek mencapai B ÷ prospek mencapai A dalam kohort periode yang sama; penyebut 0 → rasio `null` tampil "belum ada data", BUKAN 0% | USULAN |
+| BR-LF-06 | Lompat tahap (mis. new→qualified tanpa contacted tercatat) dihitung mencapai tahap tujuan DAN tahap antaranya ditandai `terlewati_tidak_tercatat`, bukan dianggap gagal di tahap antara | USULAN |
+| BR-LF-07 | Mundur tahap (newStatus lebih awal dari oldStatus) sah tercatat, tidak menghapus pencapaian tahap tertinggi sebelumnya; corong memakai tahap tertinggi yang pernah dicapai per prospek per periode | USULAN |
+| BR-LF-08 | Σ nilai per tahap memakai `estimatedValue` SAAT INI (tidak ada histori nilai di schema); label wajib "nilai estimasi saat ini, bukan nilai saat tahap terjadi". Nilai tertimbang probabilitas per tahap TIDAK diusulkan (tidak ada tabel probabilitas; mengarang persen = dilarang) | TERVERIFIKASI-KODE (schema tanpa histori nilai) + USULAN label |
+| BR-LF-09 | Pemecahan per sumber: `source` teks bebas → tampil apa adanya, kosong = ember `sumber_tidak_tercatat`. Pemecahan per penanggung: `assignedTo` → nama user; kosong = `belum_ditugaskan`. Tidak ada normalisasi sumber diam-diam | USULAN |
+| BR-LF-10 | Corong BACA-SAJA: tidak mengubah status, tidak membuat aktivitas, tidak membuat pelanggan, tidak ada jurnal/angka uang kewajiban. `estimatedValue` adalah estimasi pipeline, BUKAN piutang/pendapatan | USULAN batas (pola TERVERIFIKASI-KODE laporan informatif repo) |
+| BR-LF-11 | Periode corong gerakan = periode tanggal aktivitas `status_change.createdAt`; posisi saat ini TANPA periode (snapshot per hari ini). UI wajib melabeli keduanya beda supaya tidak dibaca sebagai angka yang sama | USULAN |
+| BR-LF-12 | Duplikat konversi dicegah jalur existing (guard `customerId` + kunci baris di tx `convertLead`); corong menghitung satu prospek satu baris walau punya banyak aktivitas | TERVERIFIKASI-KODE (crm.actions.ts:201) |
+
+### 3. Role/permission matrix (usulan, final Q-LF-1)
+
+| Aksi | Sales (assigned) | Pemegang `manage_leads` | Pemegang `view_reports` | Tanpa izin |
+|---|---|---|---|---|
+| Lihat posisi saat ini agregat semua prospek | Q-LF-1 | Q-LF-1 | Ya (usulan) | Tidak |
+| Lihat corong periode + per sumber | Q-LF-1 | Q-LF-1 | Ya (usulan) | Tidak |
+| Lihat pemecahan per penanggung (nama orang lain) | Hanya diri sendiri bila Q-LF-1 memilih self-scope | Ya | Ya | Tidak |
+| Ubah status / konversi | Jalur existing `edit_leads` + ownership (tidak berubah) | Ya | Tidak dari corong | Tidak |
+
+Data prospek memuat nama/kontak calon pelanggan: corong tahap 1
+AGREGAT saja (hitungan + Σ nilai), tanpa daftar nama/kontak per baris.
+Daftar nama dari corong = tahap terpisah bila diminta (Q-LF-4).
+
+### 4. Status-transition matrix (yang dibaca corong, bukan transisi baru)
+
+| Dari | Pemicu tercatat | Ke | Sumber bukti |
+|---|---|---|---|
+| (buat) | createLead | `new` | Lead.createdAt; tanpa status_change |
+| tahap mana pun | updateLead status berubah | tahap tujuan (maju/lompat/mundur) | LeadActivity status_change oldStatus/newStatus |
+| qualified+ | convertLead | `won` + convertedAt | LeadActivity conversion + Lead.convertedAt |
+| tahap mana pun | updateLead ke `lost` | `lost` | LeadActivity status_change |
+| `won` manual | updateLead tanpa convertLead | `won` (belum terkonversi) | status sekarang won + convertedAt kosong → BR-LF-03 |
+
+Corong TIDAK menambah transisi, guard, atau status baru.
+
+### 5. Pertanyaan terbuka
+
+- Q-LF-1 (BOT 1): izin lihat corong — `view_reports`, `view_leads`,
+  atau `manage_leads`; dan apakah sales self-scope (hanya prospek
+  assignedTo dirinya) dibuka tahap 1 atau agregat-semua saja.
+- Q-LF-2 (BOT 1): tempat tampil — kartu di halaman daftar prospek
+  (pola stale/followups existing) vs laporan katalog `report-registry`
+  vs keduanya. Rekomendasi USULAN: kartu posisi saat ini di daftar
+  prospek + corong periode di katalog laporan, satu builder sama.
+- Q-LF-3 (BOT 1): definisi kohort periode final — berdasarkan tanggal
+  prospek dibuat (createdAt) atau tanggal aktivitas dalam periode
+  (BR-LF-11 usulan). Menahan angka final, tidak menahan builder posisi.
+- Q-LF-4 (BOT 1): daftar nama pengeboran (drill-down) dari tahap ke
+  daftar prospek — dibuka tahap 1 atau ditunda; bila dibuka, izin dan
+  scope assigned mengikuti Q-LF-1.
+- Q-LF-5 (BOT 3 fisik): bentuk loader — satu query Lead + aktivitas
+  status_change massal (pola lead-followups-data, tanpa N+1); indeks
+  LeadActivity(leadId) existing cukup (schema:3673).
+
+Tidak ada pertanyaan uang/pajak: BOT 4 TIDAK dipanggil (BR-LF-10).
+
+### 6. Kata tampil (verbatim usulan untuk BOT 2)
+
+Judul: "Corong Prospek". Label tahap: Baru / Dihubungi /
+Terkualifikasi / Proposal / Negosiasi / Menang / Kalah (persis
+status-labels existing). Ember: "Status tidak dikenal", "Menang belum
+terkonversi", "Tanpa histori tahap", "Belum ditugaskan", "Sumber tidak
+tercatat", "Prospek tanpa nilai estimasi". Notice jujur wajib:
+"Corong gerakan membaca histori perubahan status. Prospek lama tanpa
+histori tampil di posisi saat ini saja." dan "Nilai estimasi adalah
+perkiraan peluang, bukan piutang atau pendapatan."
+
+### 7. Draf acceptance (BOT 6 falsifikasi)
+
+- AC-LF-1: Posisi saat ini: Σ per status = total prospek non-deleted;
+  cabut saringan deletedAt = angka berubah MERAH.
+- AC-LF-2: `won` manual tanpa convertedAt TIDAK dihitung terkonversi;
+  hitung dari status saja = MERAH (BR-LF-03).
+- AC-LF-3: Prospek tanpa histori masuk `tanpa_histori_tahap` dan TIDAK
+  masuk penyebut rasio transisi; backfill jalur karangan = MERAH.
+- AC-LF-4: Penyebut 0 → tampil "belum ada data", bukan 0% (BR-LF-05).
+- AC-LF-5: Lompat tahap dihitung mencapai tujuan + `terlewati_tidak_tercatat`;
+  dianggap gagal di tahap antara = MERAH.
+- AC-LF-6: estimatedValue kosong tidak menyatu dengan Rp0 pada Σ nilai.
+- AC-LF-7: Corong tidak menulis Lead/LeadActivity/Customer apa pun
+  (hitung baris sebelum-sesudah sama); tombol ubah status di corong = MERAH.
+- AC-LF-8: Tanpa izin final Q-LF-1, loader/kartu menolak (fail-closed);
+  pemecahan per penanggung tidak membocorkan nama di luar scope.
+- AC-LF-9: Angka corong penawaran (quotation-outcome) tidak berubah;
+  populasi prospek dan penawaran tidak dicampur.
+- AC-LF-10: Kartu stale-leads dan lead-followups existing tidak berubah
+  perilaku/tampilannya (regresi nol).
+
+### 8. Backlog implementasi (turunan spec ini; spec F-2026-10-22-092-S)
+
+1. BOT 1: putus Q-LF-1..4 + merge PR spec ini bila gate hijau.
+2. BOT 3 (@backend-prisma-inventory-workshop): builder murni corong
+   (posisi + gerakan, ember BR-LF-01..09) + loader massal tanpa N+1
+   (Q-LF-5), tes builder; nol migrasi, nol mutasi.
+3. BOT 2 (@frontend-ui-ux-next-js): kartu "Corong Prospek" SESUDAH
+   kontrak BOT 3 stabil, kata §6 verbatim, nol hitung rasio/Σ di UI;
+   UI fitur didahulukan atas polish.
+4. BOT 6: AC-LF-1..10 atas head BOT 3/BOT 2.
+5. BOT 4: tidak ada vonis diminta.
+
+### Yang TIDAK diusulkan run ini
+
+- Probabilitas menang per tahap / nilai tertimbang ramalan (tidak ada
+  tabel probabilitas; mengarang persen dilarang, BR-LF-08).
+- Skor lead otomatis, penugasan otomatis, pengingat otomatis dari
+  corong (stale/followups existing sudah melayani antrean kerja).
+- Menggabung corong prospek dengan hasil penawaran (populasi beda).
+- Backfill histori status untuk prospek lama.
+- Portal/ekspor kontak prospek dari corong tahap 1 (agregat saja §3).
+
+Pemilik berikutnya: BOT 1 (Q-LF-1..4) → BOT 3 builder+loader → BOT 2
+kartu → BOT 6 §7. BOT 5 spec saja, tanpa kode.
