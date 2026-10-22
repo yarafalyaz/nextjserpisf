@@ -2059,21 +2059,38 @@ export async function deleteVendorBill(id: number) {
   try {
     await requirePermission("delete_vendor_bills");
 
-    const bill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } });
-    if (bill.status !== "draft") {
-      throw new Error("Hanya tagihan draft yang dapat dihapus");
-    }
+    // Baca di luar transaksi hanya untuk PO-linked HPP resync di bawah;
+    // status yang dipercaya adalah baca ulang SESUDAH baris dikunci di
+    // dalam transaksi. Tanpa itu confirmVendorBill konkuren bisa posting
+    // (status posted + jurnal posted baru) tepat sesudah cek draft ini,
+    // lalu delete tetap jalan: jurnal posted terhapus hard-delete tanpa
+    // reversal dan baris bill hilang (GL/AP yatim).
+    const billRef = await prisma.vendorBill.findUniqueOrThrow({
+      where: { id },
+      select: { purchaseOrderId: true },
+    });
 
     // ATOMICITY: deleting the bill row while leaving its draft journal behind
     // would orphan Dr Expense / Cr AP in the GL (no source document to reverse
     // later) — a silent balance-sheet drift. Wrapping the journal-delete + bill
     // delete in one tx guarantees the GL is clean iff the bill row is gone.
     await prisma.$transaction(async (tx) => {
+      // Kunci baris bill: serial dengan confirmVendorBill (yang juga
+      // mengunci PO; kunci PO diambil lebih dulu di jalur confirm, dan di
+      // sini kunci bill dulu — tidak ada jalur yang mengunci bill lalu PO
+      // sesudahnya, jadi urutan tidak membentuk deadlock baru).
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${id} FOR UPDATE`;
+      }
+      const fresh = await tx.vendorBill.findUniqueOrThrow({ where: { id } });
+      if (fresh.status !== "draft") {
+        throw new Error("Hanya tagihan draft yang dapat dihapus");
+      }
       // Reverse any journal posted at draft creation before removing the record.
       await deleteJournalByReferenceTx(tx, "VendorBill", id);
       await tx.vendorBill.delete({ where: { id } });
       // Recompute the service PO's subcontract HPP after removing the bill.
-      await syncServicePoCostFromBills(tx, bill.purchaseOrderId, null);
+      await syncServicePoCostFromBills(tx, billRef.purchaseOrderId, null);
     });
 
     await logActivity(
@@ -2095,18 +2112,19 @@ export async function deleteVendorPayment(id: number) {
   try {
     await requirePermission("delete_vendor_payments");
 
-    const payment = await prisma.vendorPayment.findUniqueOrThrow({
-      where: { id },
-    });
-    if (payment.status !== "draft") {
-      throw new Error("Hanya pembayaran draft yang dapat dihapus");
-    }
-
-    // ATOMICITY: same as deleteVendorBill — the draft journal (Dr AP / Cr Bank
-    // for confirm-time, or reversing for void) must move with the payment row.
-    // A half-deleted state leaves the GL out of balance with no orphan-reversal
-    // hook to clean it up later.
+    // Status dipercaya dari baca ulang SESUDAH baris dikunci di dalam
+    // transaksi (pola sama deleteVendorBill). confirmVendorPayment juga
+    // mengunci baris payment, jadi delete konkuren serial: bila confirm
+    // menang, status fresh = completed dan delete ditolak, bukan menghapus
+    // pembayaran terposting beserta jurnalnya.
     await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id = ${id} FOR UPDATE`;
+      }
+      const fresh = await tx.vendorPayment.findUniqueOrThrow({ where: { id } });
+      if (fresh.status !== "draft") {
+        throw new Error("Hanya pembayaran draft yang dapat dihapus");
+      }
       // Reverse any journal posted at draft creation before removing the record.
       await deleteJournalByReferenceTx(tx, "VendorPayment", id);
       await tx.vendorPayment.delete({ where: { id } });
