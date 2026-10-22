@@ -32,6 +32,8 @@ export interface WorkOrderOperationInput {
   assignedEmployeeId: number | null
   estimatedHours: number | null
   notes: string | null
+  /** Stasiun kerja tahap (F-2026-10-22-090-S); null = ember "Belum ada stasiun". */
+  workCenterId: number | null
 }
 
 export interface WorkOrderOperationRow extends WorkOrderOperationInput {
