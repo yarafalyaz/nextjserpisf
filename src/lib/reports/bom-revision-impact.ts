@@ -128,3 +128,56 @@ export function buildBomRevisionImpact(input: {
     issuedWorkOrderCount: workOrders.filter((w) => w.issuedQty > 0).length,
   }
 }
+
+// ---------------------------------------------------------------------
+// F-2026-10-22-068-S: delta kebutuhan genuinely-new antar revisi untuk
+// panel usulan ganti revisi pada order berjalan (BR-BOM68-08/10).
+// Kebutuhan baru per item = qty-baru × plannedQty − max(qty-lama ×
+// plannedQty, issued dokumen ini untuk item itu) (Q-BOM68-2: issued
+// hanya WO/PO ini, bukan global). Reservasi TIDAK disentuh: status
+// hanya tampil (tercakup | kurang | perlu-tinjau) supaya pengguna
+// memutuskan sendiri (BR-BOM68-10) — tanpa transisi StockReservation.
+// ponytail: plannedQty WO diturunkan loader dari rasio WorkOrderItem
+// terhadap revisi lama (fallback 1); PO memakai ProductionOrder.qty.
+export interface BomRevisionDeltaLine {
+  itemId: number
+  oldQtyPerUnit: number
+  newQtyPerUnit: number
+  /** Kebutuhan genuinely-new: max(new×planned − max(old×planned, issued), 0). */
+  newNeededQty: number
+  coverage: "tercakup" | "kurang" | "perlu-tinjau"
+}
+
+export function buildBomRevisionDelta(input: {
+  oldMaterials: { itemId: number; qty: number }[]
+  newMaterials: { itemId: number; qty: number }[]
+  plannedQty: number
+  issuedByItem: { itemId: number; qty: number }[]
+  /** Stok tersedia per item bila loader mengisinya; kosong = perlu-tinjau semua baris baru. */
+  availableByItem?: { itemId: number; qty: number }[]
+}): { lines: BomRevisionDeltaLine[]; hasGenuinelyNew: boolean } {
+  const oldByItem = new Map<number, number>()
+  for (const m of input.oldMaterials) oldByItem.set(m.itemId, round2((oldByItem.get(m.itemId) ?? 0) + m.qty))
+  const issuedByItem = new Map<number, number>()
+  for (const m of input.issuedByItem) issuedByItem.set(m.itemId, round2((issuedByItem.get(m.itemId) ?? 0) + m.qty))
+  const availableByItem = new Map<number, number>()
+  for (const m of input.availableByItem ?? []) availableByItem.set(m.itemId, m.qty)
+
+  const lines: BomRevisionDeltaLine[] = []
+  for (const m of input.newMaterials) {
+    const oldQtyPerUnit = oldByItem.get(m.itemId) ?? 0
+    const newQtyPerUnit = m.qty
+    const issued = issuedByItem.get(m.itemId) ?? 0
+    const newNeededQty = round2(
+      Math.max(newQtyPerUnit * input.plannedQty - Math.max(oldQtyPerUnit * input.plannedQty, issued), 0),
+    )
+    const needsMore = newNeededQty > 0
+    let coverage: BomRevisionDeltaLine["coverage"] = "perlu-tinjau"
+    if (!needsMore) coverage = "tercakup"
+    else if (availableByItem.has(m.itemId)) {
+      coverage = (availableByItem.get(m.itemId) ?? 0) >= newNeededQty ? "tercakup" : "kurang"
+    }
+    lines.push({ itemId: m.itemId, oldQtyPerUnit, newQtyPerUnit, newNeededQty, coverage })
+  }
+  return { lines, hasGenuinelyNew: lines.some((l) => l.oldQtyPerUnit === 0 && l.newNeededQty > 0) }
+}
