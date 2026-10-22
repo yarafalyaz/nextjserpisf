@@ -855,6 +855,7 @@ model Employee {
   salesQuotations     Quotation[]       @relation("QuotationSalesEmployee")
   salesOrdersAsSales  SalesOrder[]      @relation("SalesOrderSalesEmployee")
   salesInvoicesAsSales SalesInvoice[]   @relation("SalesInvoiceSalesEmployee")
+  salesTargets         SalesTarget[]
   workOrderOperations WorkOrderOperation[]
 
   @@index([departmentId], map: "employees_department_id_fkey")
@@ -5030,4 +5031,37 @@ model JobPaymentScheduleTerm {
 
   @@index([scheduleId, sortOrder])
   @@map("job_payment_schedule_terms")
+}
+
+// F-2026-10-22-088-S tahap 1 (Q-TGT-5): master target penjualan per
+// penjual-periode. Bentuk fisik milik BOT 3 per spec §9. Pencapaian
+// TIDAK disimpan di sini: selalu diturunkan dari faktur paid snapshot
+// salesEmployeeId (basis IDENTIK rekap komisi F-2026-10-21-016,
+// loader sales-target-achievement-data.ts). Penjaga mengikat di aksi:
+// periode penjual sama tidak bertumpukan (BR-TGT-03), targetAmount > 0
+// (BR-TGT-04), target baru hanya karyawan isActive (BR-TGT-12),
+// perubahan tercatat ActivityLog old/new (BR-TGT-09), nonaktif =
+// soft-delete deletedAt bukan hapus fisik (BR-TGT-10). Laporan ini
+// informatif: bukan dasar bonus/jurnal/pembayaran (BR-TGT-07).
+model SalesTarget {
+  id              Int       @id @default(autoincrement())
+  salesEmployeeId Int       @map("sales_employee_id")
+  // Periode bebas inklusif dua ujung (Q-TGT-4); disimpan tengah malam
+  // UTC hari kalender WIB (pola wibDateToUtcMidnight).
+  periodStart     DateTime  @map("period_start")
+  periodEnd       DateTime  @map("period_end")
+  targetAmount    Decimal   @map("target_amount") @db.Decimal(15, 2)
+  notes           String?   @db.Text
+  createdBy       Int?      @map("created_by")
+  updatedBy       Int?      @map("updated_by")
+  deletedAt       DateTime? @map("deleted_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  salesEmployee Employee @relation(fields: [salesEmployeeId], references: [id])
+
+  @@index([salesEmployeeId, periodStart, periodEnd])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("sales_targets")
 }
