@@ -7676,3 +7676,183 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-080-V: kerangka deductibility fiskal kerugian scrap abnormal per kasus dokumen (menjawab Q-SC-5 bersyarat, F-2026-10-22-071-S / inti F-2026-10-21-008)
+
+Pemutus: BOT 4 (accounting-finance-tax). Kartu: t_ffdae98b
+(buffer kondektur sesudah F-2026-10-22-079-V PR #526). Tertulis
+saja — tanpa kode/schema/migrasi, tanpa merge oleh BOT 4.
+
+### 0. Anti-duplikat + bukti live (origin/main 209e89e1, 2026-10-22)
+
+- Serial terpakai maks F-2026-10-22-079-V (PR #526 OPEN head
+  8322bc9e); 080 bebas di backlog main + semua judul PR all-state.
+  Vonis yang dilarang kartu ini sudah terbit semua: F-079-V
+  (Q-SC-4/Q-SC-5 parsial), F-078-V (akun 510105), F-077-V
+  (Q-PF-2/4), F-075-V, F-074-V, F-072-V, F-066-V, F-058-V.
+- Q-SC-5 (spec BOT 5 F-2026-10-22-071-S PR #512 OPEN): "BOT 4
+  (hanya bila kasus nyata muncul): deductibility fiskal kerugian
+  scrap abnormal per kasus dokumen — vonis 066-V §3 sengaja
+  tidak memutus; jangan dibangun sebagai aturan." Vonis
+  F-2026-10-22-066-V §3 (merged PR #504) dan F-2026-10-22-078-V
+  (PR #523) sama-sama MENUNDA Q-SC-5 sebagai BUTUH-VONIS-
+  AKUNTAN per kasus. Vonis ini TIDAK mengarang kasus nyata:
+  ia memutus KERANGKA keputusan + bukti wajib per kasus supaya
+  (a) inti scrap BOT 3 (t_38dfd895) tidak perlu menebak label
+  fiskal apa pun, dan (b) kasus nyata pertama langsung bisa
+  dinilai tanpa riset ulang dari nol. Status fiskal per kasus
+  tetap terbuka sampai dokumen kasus itu dinilai.
+- Bukti kode live: `MaterialIssueItem` (schema.prisma:2228)
+  belum punya scrapQty/scrapReasonCode (inti F-008 belum
+  dibangun — nol kolom scrap di origin/main); `Remnant`
+  scrapReason teks bebas VarChar(500) (:2945); akun 510105
+  belum di-seed (baru disetujui F-078-V). Jadi belum ada data
+  scrap abnormal berjalan yang bisa dinilai fiskalnya hari
+  ini — vonis kerangka adalah satu-satunya vonis jujur.
+- Gate merah domain uang dicek run ini dan BUKAN milik vonis
+  baru: PR #525 (F-065-S ambang DP) Unit Tests merah di head
+  3fea604d (6 tes createQuotation — mock tx tanpa cabang
+  customer) SUDAH diperbaiki BOT 1 di cb592b34 (head live
+  sekarang, fokus 23/23 per pesan commit; gate CI head baru
+  yang menilai). PR #515 (inti JobChangeOrder) merah karena
+  BEHIND main 6 commit: Build gagal `export function
+  computeQuotationTotals/computeQuotationLine` di
+  sales.actions.ts versi basis lama (di origin/main sudah
+  `function` non-export) + action-wiring/slug-coverage untuk
+  model barunya — obatnya update-branch + penjaga BOT 3,
+  bukan vonis BOT 4. Keduanya dicatat supaya tidak ada yang
+  mengira gate merah itu menunggu angka BOT 4.
+
+### 1. Putusan kerangka (mengikat)
+
+K1. Perlakuan komersial TIDAK berubah: scrap abnormal = beban
+    periode Dr 510105 / Cr WIP per vonis 066-V P2(b) + 078-V,
+    lepas dari nilai persediaan (PSAK 14 par. 16(a)). Vonis
+    fiskal ini tidak pernah menulis ulang jurnal komersial.
+K2. Klasifikasi fiskal DEFAULT (dapat dibantah per kasus):
+    kerugian scrap abnormal yang (a) benar-benar terjadi pada
+    bahan yang dibeli/dipakai untuk kegiatan usaha, (b) bukan
+    untuk kepentingan pribadi/di luar usaha, dan (c) terbukti
+    dokumen per §2, adalah biaya yang boleh dikurangkan
+    menurut uji 3M Pasal 6 ayat (1) UU PPh (termasuk huruf a
+    biaya pembelian bahan dan huruf d kerugian atas harta
+    yang dipakai dalam perusahaan). Scrap NORMAL tidak butuh
+    vonis fiskal terpisah: biayanya mengalir lewat HPP
+    persediaan secara normal.
+K3. Yang DILARANG sistem lakukan selamanya: label fiskal
+    otomatis per baris/klasifikasi. scrapReasonCode
+    (salah_potong/gagal_las/rusak_material/sisa_tak_terpakai/
+    lainnya) adalah klasifikasi OPERASIONAL-akuntansi, bukan
+    penentu deductibility. Sistem dilarang menurunkan status
+    fiskal dari kode alasan, dari persen allowance, atau dari
+    akun 510105. Penilaian fiskal = penilaian manusia (BOT 4 /
+    akuntan) per kasus dokumen, dicatat di luar jurnal.
+K4. Koreksi fiskal hanya di lapis SPT/rekonsiliasi fiskal
+    tahunan, BUKAN jurnal balik, BUKAN penghapusan beban
+    510105 dari GL (pola sama vonis F-021 §9 04:50 WIB).
+    Bila satu kasus dinilai TIDAK dapat dikurangkan (mis.
+    bukti tidak cukup, atau sifatnya masuk larangan Pasal 9),
+    perlakuannya = koreksi fiskal positif sebesar nilai kasus
+    itu pada SPT Tahunan tahun terjadinya; beban komersial
+    tetap berdiri.
+K5. Kasus yang WAJIB eskalasi `BUTUH-VONIS-AKUNTAN` (manusia
+    profesional, bukan BOT 4 sendiri) sebelum diklaim dapat
+    dikurangkan: (a) nilai material satu peristiwa/kasus
+    (ambang materialitas ditetapkan owner/akuntan — BOT 4
+    tidak mengarang angka ambang); (b) scrap akibat kejadian
+    luar biasa (kebakaran/bencana/pencurian) yang mungkin
+    tertutup asuransi/recovery — recovery mengikuti pola
+    virtually-certain vonis F-021, jangan net-off diam-diam;
+    (c) bahan yang ternyata dipakai untuk pekerjaan yang
+    penghasilannya dikecualikan/final terpisah; (d) dokumen
+    kasus tidak lengkap sesudah diminta. Di luar itu, kasus
+    rutin terdokumentasi cukup vonis BOT 4 per kasus.
+K6. Saat klaim: beban scrap abnormal tahun berjalan masuk
+    kertas kerja fiskal sebagai komponen HPP/biaya produksi
+    yang dapat dikurangkan (K2), ditelusur per kasus dari
+    laporan scrap F-008 (nilai abnormal rekonsiliasi jurnal
+    510105 per vonis 066-V P5/S8). Selisih laporan vs jurnal
+    = temuan, bukan dipilih diam-diam.
+
+### 2. Bukti wajib per kasus (tanpa ini = belum dapat dikurangkan)
+
+B1. Dokumen issue completed tertaut (MaterialIssue + baris,
+    qty scrap abnormal, cost FIFO terbawa beku saat complete)
+    — sumber angka satu-satunya; angka ketik ulang dilarang.
+B2. scrapReasonCode terstruktur per baris + catatan wajib
+    untuk `lainnya_dengan_catatan` (066-V P4).
+B3. Bukti kejadian proporsional sifatnya: berita acara/foto/
+    persetujuan penanggung jawab produksi untuk kasus di luar
+    pola rutin; kasus rutin cukup rantai dokumen B1+B2 +
+    allowance BOM baris itu (kalibrasi allowance terbukti,
+    bukan allowance karangan sesudah kejadian).
+B4. Jejak bahwa bahan bukan untuk kepentingan pribadi/di
+    luar usaha: tautan WO/job dokumen issue itu sendiri;
+    issue manual tanpa WO/BOM (kasus F-079-V) wajib catatan
+    tujuan pemakaian — tanpa itu kasusnya naik ke K5(d).
+
+### 3. Dasar resmi (akses 2026-10-22)
+
+- UU PPh (UU 7/1983 stdtd UU 36/2008 stdtd UU HPP): Pasal 6
+  ayat (1) — Penghasilan Kena Pajak = penghasilan bruto
+  dikurangi biaya untuk mendapatkan, menagih, dan memelihara
+  penghasilan (3M), termasuk (a) biaya yang langsung/tidak
+  langsung berkaitan dengan kegiatan usaha (antara lain biaya
+  pembelian bahan) dan (d) kerugian karena penjualan atau
+  pengalihan harta yang dimiliki dan digunakan dalam
+  perusahaan atau yang dimiliki untuk 3M. Pasal 9 ayat (1) —
+  daftar yang TIDAK boleh dikurangkan (antara lain biaya
+  kepentingan pribadi pemegang saham/sekutu/anggota dan
+  pembentukan dana cadangan di luar daftar tertutup).
+  Sumber resmi DJP: UU 36/2008 PDF
+  https://pajak.go.id/sites/default/files/UU%20PPh%20No%2036%20Th%202008.pdf
+  dan ringkasan DJP "Biaya Yang Diakui Sebagai Pengurang
+  Penghasilan Bruto" https://pajak.go.id/id/biaya-yang-diakui-sebagai-pengurang-penghasilan-bruto
+  (akses 2026-10-22). Cakupan klaim: kerangka uji 3M untuk
+  kerugian bahan produksi — BUKAN jaminan hasil pemeriksaan
+  per kasus; hasil akhir per kasus mengikuti bukti §2 dan,
+  untuk K5, vonis akuntan manusia.
+- PSAK 14 par. 16(a) (komersial, bukan fiskal): per vonis
+  066-V §3 — pemborosan tidak normal dikeluarkan dari biaya
+  perolehan persediaan, beban periode. Fiskal tidak
+  membatalkan pengakuan komersial ini (konsisten F-021 §9).
+
+### 4. Batas build + acceptance BOT 6 (draf)
+
+- BOT 3 (inti F-008 t_38dfd895): TIDAK ada field/kolom status
+  fiskal yang dibangun dari vonis ini. Dilarang menambah
+  `fiscalDeductible`/label fiskal apa pun ke baris issue,
+  laporan scrap, atau jurnal 510105. Yang dibangun tetap
+  persis 066-V/078-V/079-V (klasifikasi + alasan + laporan
+  rekonsiliasi jurnal). Laporan scrap WAJIB bisa ditelusur
+  per dokumen issue (B1) — itu satu-satunya syarat fiskal
+  tidak langsung dari vonis ini.
+- BOT 2: laporan scrap tidak menampilkan label/kolom fiskal
+  apa pun; status kalibrasi + nilai normal/abnormal apa
+  adanya dari backend (066-V §4).
+- BOT 6 (falsifikasi — MERAH bila penjaga dicabut):
+  F80-1 fixture kasus rutin lengkap (B1-B4) -> kertas kerja
+  fiskal uji memuat nilai abnormal persis jurnal 510105
+  periode itu, sen sama; ubah satu angka jurnal -> selisih
+  tampil sebagai temuan (bukan nol diam-diam).
+  F80-2 baris scrap dengan status/kolom fiskal apa pun di
+  skema/laporan/UI -> MERAH (K3: tidak boleh ada).
+  F80-3 kasus tanpa B2/B4 (alasan kosong / issue manual
+  tanpa catatan tujuan) -> kasus tertandai belum-lengkap
+  dan TIDAK masuk klaim dapat-dikurangkan.
+  F80-4 jurnal balik/penghapus beban 510105 dengan alasan
+  fiskal -> tidak ada jalurnya; temukan jalur = MERAH (K4).
+- Risiko: menganggap K2 sebagai "semua scrap abnormal pasti
+  deductible" — mitigasi K3/K5 + §2; vonis ini kerangka,
+  bukan blanket approval. Risiko sebaliknya (semua dikoreksi
+  positif karena takut) juga ditolak: K2 default dapat
+  dikurangkan bila bukti lengkap adalah posisi yang dapat
+  dipertahankan per Pasal 6.
+
+ID vonis ini **F-2026-10-22-080-V** (080 bebas terverifikasi
+§0). Pemilik berikutnya: BOT 1 (merge PR vonis ini) → BOT 3
+inti F-008 tanpa label fiskal (K3/§4) → BOT 6 F80-1..4 saat
+inti scrap + laporan live → BOT 4/akuntan menilai kasus nyata
+pertama per §1-§2 bila muncul. Tanpa kode dari BOT 4.
