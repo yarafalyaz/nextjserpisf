@@ -5,6 +5,12 @@ import { slugify } from "@/lib/utils/slug";
 import { consumeFifoLayers, createInLayer, ConsumedBatch } from "@/lib/services/inventory-fifo";
 import { safeAdd } from "@/lib/utils/math";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import {
+  deriveTransferStatusAfterReceipt,
+  validateReceiptLines,
+  type ReceiptLineInput,
+  type TransferLineState,
+} from "@/lib/services/inventory-transfer-receipt.service";
 
 
 const executeInTx = async (
@@ -149,13 +155,198 @@ export async function onTransferProcessed(
 // ─────────────────────────────────────────────────────────────────────────────
 // onTransferReceived
 // Creates Stock Move IN to destination warehouse for each item.
-// Idempotent: returns silently if IN moves already exist for this transfer.
+//
+// Dua jalur:
+// - TANPA `receipt`: perilaku lama all-or-nothing (terima penuh). Idempotent
+//   per transfer: skip total bila IN moves sudah ada. Dipakai pemanggil lama.
+// - DENGAN `receipt` (F-2026-10-22-081-S): SATU kejadian terima parsial.
+//   Guard skip-total lama DILARANG di sini (BR-TP-06) — idempotency per
+//   kejadian lewat InventoryTransferReceipt.idempotencyKey unik. Hanya qty
+//   kejadian ini yang masuk, pada carried cost OUT; receivedQty per baris
+//   bertambah; status sesudahnya dikembalikan untuk ditulis aksi.
+//   NOL jurnal dari kedua jalur (vonis BOT 4).
 // ─────────────────────────────────────────────────────────────────────────────
+
+export interface TransferReceiptInput {
+  receivedDate: Date;
+  idempotencyKey: string;
+  lines: ReceiptLineInput[];
+}
+
+interface InboundEntry {
+  itemId: number;
+  qty: number;
+  serials: string[];
+  batches: ConsumedBatch[];
+}
+
+async function carriedCostByItem(tx: TxClient, transferId: number, itemIds: number[]): Promise<Map<number, number>> {
+  const outMoves =
+    itemIds.length === 0
+      ? []
+      : await tx.stockMove.findMany({
+          where: {
+            referenceType: "InventoryTransfer",
+            referenceId: transferId,
+            impact: "OUT",
+            itemId: { in: itemIds },
+          },
+          select: { itemId: true, cost: true },
+        });
+  const map = new Map<number, number>();
+  for (const om of outMoves) {
+    if (!map.has(om.itemId)) map.set(om.itemId, Number(om.cost));
+  }
+  return map;
+}
+
+async function createInboundMoves(
+  tx: TxClient,
+  transfer: { id: number; documentNo: string; sourceWarehouseId: number; destinationWarehouseId: number },
+  entries: InboundEntry[],
+  userId?: number,
+): Promise<void> {
+  if (entries.length === 0) return;
+  const costs = await carriedCostByItem(tx, transfer.id, entries.map((e) => e.itemId));
+
+  // P1-1: item batch-tracked wajib bawa alokasi lot eksplisit per kejadian.
+  const trackedRows = await tx.item.findMany({
+    where: { id: { in: entries.map((e) => e.itemId) } },
+    select: { id: true, trackBatch: true },
+  });
+  const trackBatchByItem = new Map(trackedRows.map((r) => [r.id, r.trackBatch]));
+  for (const entry of entries) {
+    if (trackBatchByItem.get(entry.itemId) && entry.batches.length === 0) {
+      throw new Error(
+        `Item batch #${entry.itemId} memerlukan alokasi nomor batch untuk penerimaan transfer ${transfer.documentNo}.`,
+      );
+    }
+  }
+
+  const smDocNos = await generateDocumentNumberBatch("SM", entries.length);
+  let docIdx = 0;
+  for (const entry of entries) {
+    const smDocNo = smDocNos[docIdx++];
+    const carriedUnitCost = costs.get(entry.itemId) ?? 0;
+    const createdMove = await tx.stockMove.create({
+      data: {
+        documentNo: smDocNo,
+        slug: slugify(smDocNo),
+        itemId: entry.itemId,
+        warehouseId: transfer.destinationWarehouseId,
+        qty: entry.qty,
+        cost: carriedUnitCost,
+        impact: "IN",
+        status: "posted",
+        referenceType: "InventoryTransfer",
+        referenceId: transfer.id,
+        notes: `Transfer IN dari WH#${transfer.sourceWarehouseId} - ${transfer.documentNo}`,
+        createdBy: userId ?? null,
+      },
+      select: { id: true },
+    });
+
+    await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${entry.qty} WHERE id = ${entry.itemId}`;
+
+    if (entry.serials.length > 0) {
+      const restored = await tx.itemSerial.updateMany({
+        where: { itemId: entry.itemId, serialNumber: { in: entry.serials }, status: "used" },
+        data: { status: "available", warehouseId: transfer.destinationWarehouseId },
+      });
+      if (restored.count !== entry.serials.length) {
+        throw new Error(`Alokasi nomor seri transfer ${transfer.documentNo} tidak cocok dengan serial berstatus used untuk item #${entry.itemId}.`);
+      }
+    }
+
+    const batchQtyByNumber = new Map<string, number>();
+    for (const allocation of entry.batches) {
+      batchQtyByNumber.set(
+        allocation.batchNumber,
+        safeAdd(batchQtyByNumber.get(allocation.batchNumber) ?? 0, allocation.qty, 2),
+      );
+    }
+    const allocatedBatchQty = Array.from(batchQtyByNumber.values()).reduce((total, value) => safeAdd(total, value, 2), 0);
+    if (allocatedBatchQty > entry.qty) {
+      throw new Error(`Alokasi batch transfer ${transfer.documentNo} melebihi kuantitas transfer untuk item #${entry.itemId}.`);
+    }
+
+    const batchNumbers = Array.from(batchQtyByNumber.keys());
+    const sourceBatches = batchNumbers.length > 0
+      ? await tx.itemBatch.findMany({
+          where: { itemId: entry.itemId, warehouseId: transfer.sourceWarehouseId, batchNumber: { in: batchNumbers } },
+          select: { batchNumber: true, manufacturingDate: true, expiryDate: true, notes: true },
+        })
+      : [];
+    const sourceBatchByNumber = new Map(sourceBatches.map((batch) => [batch.batchNumber, batch]));
+
+    for (const [batchNumber, batchQty] of batchQtyByNumber) {
+      const sourceBatch = sourceBatchByNumber.get(batchNumber);
+      const destinationBatch = await tx.itemBatch.findFirst({
+        where: { itemId: entry.itemId, warehouseId: transfer.destinationWarehouseId, batchNumber },
+        select: { id: true },
+      });
+      if (destinationBatch) {
+        await tx.itemBatch.update({ where: { id: destinationBatch.id }, data: { qty: { increment: batchQty } } });
+      } else {
+        await tx.itemBatch.create({
+          data: {
+            itemId: entry.itemId,
+            warehouseId: transfer.destinationWarehouseId,
+            batchNumber,
+            qty: batchQty,
+            manufacturingDate: sourceBatch?.manufacturingDate ?? null,
+            expiryDate: sourceBatch?.expiryDate ?? null,
+            notes: sourceBatch?.notes ?? null,
+          },
+        });
+      }
+      await createInLayer(tx, {
+        itemId: entry.itemId,
+        warehouseId: transfer.destinationWarehouseId,
+        batchNumber,
+        stockMoveId: createdMove.id,
+        qty: batchQty,
+        unitCost: carriedUnitCost,
+      });
+    }
+
+    const unbatchedQty = safeAdd(entry.qty - allocatedBatchQty, 0, 2);
+    if (unbatchedQty > 0 || batchQtyByNumber.size === 0) {
+      await createInLayer(tx, {
+        itemId: entry.itemId,
+        warehouseId: transfer.destinationWarehouseId,
+        stockMoveId: createdMove.id,
+        qty: batchQtyByNumber.size === 0 ? entry.qty : unbatchedQty,
+        unitCost: carriedUnitCost,
+      });
+    }
+  }
+}
+
+function parseStoredSerials(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((serial): serial is string => typeof serial === "string" && serial.length > 0)
+    : [];
+}
+
+function parseStoredBatches(value: unknown, sourceWarehouseId: number): ConsumedBatch[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry): ConsumedBatch[] => {
+    if (entry === null || Array.isArray(entry) || typeof entry !== "object") return [];
+    const allocation = entry as { batchNumber?: unknown; qty?: unknown };
+    const qty = Number(allocation.qty);
+    if (typeof allocation.batchNumber !== "string" || !Number.isFinite(qty) || qty <= 0) return [];
+    return [{ batchNumber: allocation.batchNumber, warehouseId: sourceWarehouseId, qty }];
+  });
+}
 
 export async function onTransferReceived(
   transferId: number,
-  userId?: number
-, txClient?: TxClient): Promise<void> {
+  userId?: number,
+  txClient?: TxClient,
+  receipt?: TransferReceiptInput,
+): Promise<"received" | "partially_received" | undefined> {
+  let nextStatus: "received" | "partially_received" | undefined;
   await executeInTx(txClient, async (tx) => {
     // Serialize concurrent calls for the same transfer.
     await tx.$queryRaw`SELECT id FROM inventory_transfers WHERE id = ${transferId} FOR UPDATE`;
@@ -164,6 +355,100 @@ export async function onTransferReceived(
       include: { items: true },
     });
 
+    if (receipt) {
+      // Q-TP-1: periode dinilai per TANGGAL KEJADIAN, bukan tanggal kirim.
+      await assertPeriodOpen(receipt.receivedDate, tx);
+      if (
+        transfer.status !== "processed" &&
+        transfer.status !== "partially_received" &&
+        transfer.status !== "receiving"
+      ) {
+        throw new Error("Transfer harus berstatus 'processed' untuk diterima.");
+      }
+
+      const priorReceiptItems = await tx.inventoryTransferReceiptItem.findMany({
+        where: { receipt: { inventoryTransferId: transferId } },
+        select: { inventoryTransferItemId: true, serialNumbers: true },
+      });
+      const receivedSerialsByLine = new Map<number, string[]>();
+      for (const prior of priorReceiptItems) {
+        const serials = parseStoredSerials(prior.serialNumbers);
+        if (serials.length > 0) {
+          receivedSerialsByLine.set(prior.inventoryTransferItemId, [
+            ...(receivedSerialsByLine.get(prior.inventoryTransferItemId) ?? []),
+            ...serials,
+          ]);
+        }
+      }
+
+      const lineStates: TransferLineState[] = transfer.items.map((it) => ({
+        id: it.id,
+        itemId: it.itemId,
+        qty: Number(it.qty),
+        receivedQty: Number(it.receivedQty),
+        serialNumbers: parseStoredSerials(it.serialNumbers),
+      }));
+      const lines = validateReceiptLines(lineStates, receipt.lines, receivedSerialsByLine);
+      const lineById = new Map(lineStates.map((l) => [l.id, l]));
+
+      // Satu StockMove IN per item per kejadian (agregasi pola existing);
+      // receivedQty tetap bertambah PER BARIS di bawah.
+      const entriesByItem = new Map<number, InboundEntry>();
+      for (const line of lines) {
+        const state = lineById.get(line.transferItemId)!;
+        const entry = entriesByItem.get(state.itemId) ?? { itemId: state.itemId, qty: 0, serials: [], batches: [] };
+        entry.qty = safeAdd(entry.qty, line.qty, 2);
+        entry.serials.push(...(line.serialNumbers ?? []));
+        entry.batches.push(
+          ...(line.batchAllocations ?? []).map((b) => ({
+            batchNumber: b.batchNumber,
+            warehouseId: transfer.sourceWarehouseId,
+            qty: b.qty,
+          })),
+        );
+        entriesByItem.set(state.itemId, entry);
+      }
+      // Batch-tracked tanpa alokasi lot pada KEJADIAN ini ditolak walau
+      // transfer membawa alokasi kirim: penerima wajib menyebut lot tiba.
+      await createInboundMoves(tx, transfer, Array.from(entriesByItem.values()), userId);
+
+      await tx.inventoryTransferReceipt.create({
+        data: {
+          inventoryTransferId: transferId,
+          receivedDate: receipt.receivedDate,
+          receivedBy: userId ?? null,
+          idempotencyKey: receipt.idempotencyKey,
+          items: {
+            create: lines.map((line) => ({
+              inventoryTransferItemId: line.transferItemId,
+              qty: line.qty,
+              ...(line.serialNumbers ? { serialNumbers: [...line.serialNumbers] } : {}),
+              ...(line.batchAllocations
+                ? { batchAllocations: line.batchAllocations as unknown as Prisma.InputJsonValue }
+                : {}),
+            })),
+          },
+        },
+        select: { id: true },
+      });
+
+      const updatedLines = lineStates.map((line) => {
+        const received = lines
+          .filter((l) => l.transferItemId === line.id)
+          .reduce((sum, l) => safeAdd(sum, l.qty, 2), 0);
+        return { ...line, receivedQty: safeAdd(line.receivedQty, received, 2) };
+      });
+      for (const line of lines) {
+        await tx.inventoryTransferItem.update({
+          where: { id: line.transferItemId },
+          data: { receivedQty: { increment: line.qty } },
+        });
+      }
+      nextStatus = deriveTransferStatusAfterReceipt(updatedLines);
+      return;
+    }
+
+    // ── Jalur lama: terima penuh all-or-nothing ──
     // Enforce period lock — transfer date must fall in an open period.
     await assertPeriodOpen(transfer.date, tx);
 
@@ -186,202 +471,24 @@ export async function onTransferReceived(
     // action also accepts the transient "receiving" claim state — it flips
     // processed -> receiving as an atomic claim BEFORE calling this hook
     // (without a txClient), so the hook re-reads committed "receiving" state.
-    // Mirrors onTransferProcessed, which has no guard and relies on idempotency.
     if (transfer.status !== "processed" && transfer.status !== "receiving") {
       throw new Error("Transfer harus berstatus 'processed' untuk diterima.");
     }
 
     // Aggregate by itemId — mirrors onTransferProcessed so each item has exactly
-    // one IN move matching its single OUT move. Prevents duplicate item rows from
-    // each grabbing the first OUT move's cost via findFirst (cost-basis drift).
-    const aggregated = new Map<number, number>();
+    // one IN move matching its single OUT move.
+    const entriesByItem = new Map<number, InboundEntry>();
     for (const it of transfer.items) {
       const q = Number(it.qty);
-      if (q > 0) aggregated.set(it.itemId, safeAdd(aggregated.get(it.itemId) ?? 0, q, 2));
+      if (q <= 0) continue;
+      const entry = entriesByItem.get(it.itemId) ?? { itemId: it.itemId, qty: 0, serials: [], batches: [] };
+      entry.qty = safeAdd(entry.qty, q, 2);
+      entry.serials.push(...parseStoredSerials(it.serialNumbers));
+      entry.batches.push(...parseStoredBatches(it.batchAllocations, transfer.sourceWarehouseId));
+      entriesByItem.set(it.itemId, entry);
     }
-
-    // The OUT-side FIFO allocation is stored on one transfer row per item.
-    // Merge all rows defensively so duplicate rows do not lose attribution.
-    const serialsByItem = new Map<number, string[]>();
-    const batchesByItem = new Map<number, ConsumedBatch[]>();
-    for (const it of transfer.items) {
-      const serials = Array.isArray(it.serialNumbers)
-        ? it.serialNumbers.filter((serial): serial is string => typeof serial === "string" && serial.length > 0)
-        : [];
-      if (serials.length > 0) {
-        serialsByItem.set(it.itemId, [...(serialsByItem.get(it.itemId) ?? []), ...serials]);
-      }
-
-      const batches = Array.isArray(it.batchAllocations)
-        ? it.batchAllocations.flatMap((value): ConsumedBatch[] => {
-            if (value === null || Array.isArray(value) || typeof value !== "object") return [];
-            const allocation = value as { batchNumber?: unknown; qty?: unknown };
-            const batchNumber = allocation.batchNumber;
-            const qty = Number(allocation.qty);
-            if (typeof batchNumber !== "string" || !Number.isFinite(qty) || qty <= 0) return [];
-            return [{ batchNumber, warehouseId: transfer.sourceWarehouseId, qty }];
-          })
-        : [];
-      if (batches.length > 0) {
-        batchesByItem.set(it.itemId, [...(batchesByItem.get(it.itemId) ?? []), ...batches]);
-      }
-    }
-
-    // Pre-fetch all OUT moves for this transfer in one query (was N+1: one
-    // stockMove.findFirst per item). With one OUT move per item (see
-    // onTransferProcessed), the (referenceId, impact, itemId) tuple is unique
-    // — pick the first row per itemId below to be defensive.
-    const outMoves =
-      aggregated.size === 0
-        ? []
-        : await tx.stockMove.findMany({
-            where: {
-              referenceType: "InventoryTransfer",
-              referenceId: transfer.id,
-              impact: "OUT",
-              itemId: { in: Array.from(aggregated.keys()) },
-            },
-            select: { itemId: true, cost: true },
-          });
-    const carriedCostByItem = new Map<number, number>();
-    for (const om of outMoves) {
-      if (!carriedCostByItem.has(om.itemId)) {
-        carriedCostByItem.set(om.itemId, Number(om.cost));
-      }
-    }
-
-    // Create Stock Move IN per item to destination warehouse
-    const aggregatedItems = Array.from(aggregated.entries());
-    if (aggregatedItems.length > 0) {
-      // P1-1: item batch-tracked wajib bawa alokasi lot eksplisit (kebijakan
-      // batch eksplisit, pola adjustment :176-186) — jangan ciptakan stok
-      // tujuan tanpa lot saat sumbernya teralokasi batch.
-      const itemIds = aggregatedItems.map(([id]) => id);
-      const trackedRows = await tx.item.findMany({
-        where: { id: { in: itemIds } },
-        select: { id: true, trackBatch: true },
-      });
-      const trackBatchByItem = new Map(trackedRows.map((r) => [r.id, r.trackBatch]));
-      for (const [itemId] of aggregatedItems) {
-        if (trackBatchByItem.get(itemId) && !batchesByItem.has(itemId)) {
-          throw new Error(
-            `Item batch #${itemId} memerlukan alokasi nomor batch untuk penerimaan transfer ${transfer.documentNo}.`,
-          );
-        }
-      }
-
-      // Batch-generate one document number per item (was N serial round-trips).
-      const smDocNos = await generateDocumentNumberBatch("SM", aggregatedItems.length);
-
-      let docIdx = 0;
-      for (const [itemId, qty] of aggregatedItems) {
-        const smDocNo = smDocNos[docIdx++];
-
-        // Preserve the cost basis carried by the matching OUT move (FIFO cost
-        // captured when the transfer was processed) instead of zeroing it.
-        const carriedUnitCost = carriedCostByItem.get(itemId) ?? 0;
-
-        // Capture the id from the create return value — eliminates the previous
-        // tx.stockMove.findFirst({ where: { documentNo: smDocNo } }) round-trip
-        // that was running once per item.
-        const createdMove = await tx.stockMove.create({
-          data: {
-            documentNo: smDocNo,
-            slug: slugify(smDocNo),
-            itemId: itemId,
-            warehouseId: transfer.destinationWarehouseId,
-            qty: qty,
-            cost: carriedUnitCost,
-            impact: "IN",
-            status: "posted",
-            referenceType: "InventoryTransfer",
-            referenceId: transfer.id,
-            notes: `Transfer IN dari WH#${transfer.sourceWarehouseId} - ${transfer.documentNo}`,
-            createdBy: userId ?? null,
-          },
-          select: { id: true },
-        });
-
-        // Update item qtyOnHand (global total).
-        await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand + ${qty} WHERE id = ${itemId}`;
-
-        const serialNumbers = serialsByItem.get(itemId) ?? [];
-        if (serialNumbers.length > 0) {
-          const restored = await tx.itemSerial.updateMany({
-            where: { itemId, serialNumber: { in: serialNumbers }, status: "used" },
-            data: { status: "available", warehouseId: transfer.destinationWarehouseId },
-          });
-          if (restored.count !== serialNumbers.length) {
-            throw new Error(`Alokasi nomor seri transfer ${transfer.documentNo} tidak cocok dengan serial berstatus used untuk item #${itemId}.`);
-          }
-        }
-
-        const batchQtyByNumber = new Map<string, number>();
-        for (const allocation of batchesByItem.get(itemId) ?? []) {
-          batchQtyByNumber.set(
-            allocation.batchNumber,
-            safeAdd(batchQtyByNumber.get(allocation.batchNumber) ?? 0, allocation.qty, 2),
-          );
-        }
-        const allocatedBatchQty = Array.from(batchQtyByNumber.values()).reduce((total, value) => safeAdd(total, value, 2), 0);
-        if (allocatedBatchQty > qty) {
-          throw new Error(`Alokasi batch transfer ${transfer.documentNo} melebihi kuantitas transfer untuk item #${itemId}.`);
-        }
-
-        const batchNumbers = Array.from(batchQtyByNumber.keys());
-        const sourceBatches = batchNumbers.length > 0
-          ? await tx.itemBatch.findMany({
-              where: { itemId, warehouseId: transfer.sourceWarehouseId, batchNumber: { in: batchNumbers } },
-              select: { batchNumber: true, manufacturingDate: true, expiryDate: true, notes: true },
-            })
-          : [];
-        const sourceBatchByNumber = new Map(sourceBatches.map((batch) => [batch.batchNumber, batch]));
-
-        // Create one destination FIFO layer per lot so later consumption keeps
-        // decrementing the correct ItemBatch. Any consumed stock with no lot
-        // attribution remains an unbatched layer, preserving total received qty.
-        for (const [batchNumber, batchQty] of batchQtyByNumber) {
-          const sourceBatch = sourceBatchByNumber.get(batchNumber);
-          const destinationBatch = await tx.itemBatch.findFirst({
-            where: { itemId, warehouseId: transfer.destinationWarehouseId, batchNumber },
-            select: { id: true },
-          });
-          if (destinationBatch) {
-            await tx.itemBatch.update({ where: { id: destinationBatch.id }, data: { qty: { increment: batchQty } } });
-          } else {
-            await tx.itemBatch.create({
-              data: {
-                itemId,
-                warehouseId: transfer.destinationWarehouseId,
-                batchNumber,
-                qty: batchQty,
-                manufacturingDate: sourceBatch?.manufacturingDate ?? null,
-                expiryDate: sourceBatch?.expiryDate ?? null,
-                notes: sourceBatch?.notes ?? null,
-              },
-            });
-          }
-          await createInLayer(tx, {
-            itemId,
-            warehouseId: transfer.destinationWarehouseId,
-            batchNumber,
-            stockMoveId: createdMove.id,
-            qty: batchQty,
-            unitCost: carriedUnitCost,
-          });
-        }
-
-        const unbatchedQty = safeAdd(qty - allocatedBatchQty, 0, 2);
-        if (unbatchedQty > 0 || batchQtyByNumber.size === 0) {
-          await createInLayer(tx, {
-            itemId,
-            warehouseId: transfer.destinationWarehouseId,
-            stockMoveId: createdMove.id,
-            qty: batchQtyByNumber.size === 0 ? qty : unbatchedQty,
-            unitCost: carriedUnitCost,
-          });
-        }
-      }
-    }
+    await createInboundMoves(tx, transfer, Array.from(entriesByItem.values()), userId);
+    nextStatus = "received";
   });
+  return nextStatus;
 }

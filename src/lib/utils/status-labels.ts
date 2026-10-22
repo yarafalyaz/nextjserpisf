@@ -32,6 +32,7 @@ export const STATUS_LABELS: Record<string, string> = {
   replaced: "Diganti",
   in_transit: "Dalam Perjalanan",
   received: "Diterima",
+  partially_received: "Diterima Sebagian",
 
   // Inventory
   processed: "Diproses",
