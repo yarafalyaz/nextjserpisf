@@ -9,15 +9,23 @@ COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
 
 # Copy the rest of the application code
+# `next-env.d.ts` is gitignored (Next regenerates it during build/dev), so a
+# COPY of it breaks every fresh-checkout build. It stays out of this list.
 COPY src/ ./src/
 COPY public/ ./public/
 COPY prisma/ ./prisma/
 COPY scripts/pre-migrate-column-audit.mjs ./scripts/pre-migrate-column-audit.mjs
-COPY next.config.ts tsconfig.json tsconfig.build.json postcss.config.mjs next-env.d.ts eslint.config.mjs prisma.config.ts ./
+COPY next.config.ts tsconfig.json tsconfig.build.json postcss.config.mjs eslint.config.mjs prisma.config.ts ./
 
 # Generate Prisma Client (local binary — no npx registry fetch)
-ENV DATABASE_URL="mysql://build:build@localhost:3306/build"
+ENV DATABASE_URL="mysql://build:***@localhost:3306/build"
 RUN ./node_modules/.bin/prisma generate
+
+# Fail fast with a clear error when the Tailwind stylesheet entry cannot be
+# read by the build (npm ci is run with --ignore-scripts, so a file-mode or
+# umask problem in the layer would surface later as a cryptic EACCES from
+# Turbopack instead of this).
+RUN test -r /app/node_modules/tailwindcss/index.css
 
 # Build the Next.js application
 ENV NEXT_TELEMETRY_DISABLED=1

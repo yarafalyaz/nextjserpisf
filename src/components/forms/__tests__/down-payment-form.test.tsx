@@ -17,9 +17,9 @@ describe("DownPaymentForm — a11y wiring", () => {
       const root = mountInto(container, <DownPaymentForm customers={[]} quotations={[]} />)
       const form = container.querySelector("form")!
       expect(form.getAttribute("aria-label")).toBe("Formulir tambah uang muka")
-      expect(decorativeStars(form).length).toBe(3)
+      expect(decorativeStars(form).length).toBe(4)
       expect(labelTexts(form)).toEqual(
-        expect.arrayContaining(["Penawaran *", "Jumlah DP (Rp) *", "Metode Pembayaran *", "Bukti Pembayaran", "Catatan"]),
+        expect.arrayContaining(["Pelanggan *", "Penawaran *", "Jumlah DP (Rp) *", "Metode Pembayaran *", "Bukti Pembayaran", "Catatan"]),
       )
       expect(container.querySelector("#quotationId")!.getAttribute("aria-required")).toBe("true")
       expect(container.querySelector("#paymentMethod")!.getAttribute("aria-required")).toBe("true")

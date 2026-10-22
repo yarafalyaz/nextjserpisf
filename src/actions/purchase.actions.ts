@@ -42,6 +42,7 @@ import {
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import { PurchaseStatus, Status } from "@/lib/constants";
 import {
   purchaseRequestSchema,
@@ -65,6 +66,72 @@ type GrItemInput = {
   expiryDate?: string | null;
   serialNumbers?: string[] | null;
 };
+
+/**
+ * Baris PO/GR dari JSON FormData `items` (qty/harga/biaya bisa string
+ * berformat Indonesia dari klien non-form: "2.000" = 2000, "150.000" =
+ * 150000) — wajib lewat parser repo; Number() mentah membaca "2.000"
+ * jadi 2 dan "abc" jadi NaN yang lolos filter >0, lalu total/penjaga
+ * over-receive ikut menilai angka rusak dan qty/harga tersimpan menyusut
+ * diam-diam. Baris berkode item dengan angka tak terbaca ditolak
+ * berpesan, bukan dibuang/dinclamp diam-diam. Baris tanpa item
+ * (itemId kosong/0) tetap dibuang (baris kosong form); qty <= 0 pada
+ * baris berkode tetap dibuang (perilaku lama: baris belum diisi).
+ * `parsePurchaseOrderItems` dipakai create+update PO; `parseGrItems`
+ * dipakai create+update GR (satu sumber per dokumen, pola retur).
+ */
+function parsePoGrItemId(raw: unknown): number | null {
+  const itemId = parseLocaleNumber(raw as string | number | null | undefined);
+  return itemId === null || itemId <= 0 ? null : itemId;
+}
+
+function parsePoGrQty(raw: unknown, itemId: number, label: string): number {
+  const qty = parseLocaleNumber(raw as string | number | null | undefined);
+  if (qty === null) {
+    throw new Error(
+      `Kuantitas ${label} item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+    );
+  }
+  return qty;
+}
+
+function parsePoGrMoney(
+  raw: unknown,
+  itemId: number,
+  label: string,
+): number {
+  if (raw == null || raw === "") return 0;
+  const value = parseMoneyAmount(raw as string | number | null | undefined);
+  if (value === null || value < 0) {
+    throw new Error(
+      `${label} item #${itemId} tidak valid — isi angka 0 atau lebih (mis. 150.000).`,
+    );
+  }
+  return value;
+}
+
+function parsePurchaseOrderItems(
+  itemsJson: string | null | undefined,
+): PurchaseOrderLine[] {
+  const rows =
+    safeJsonParse<
+      { itemId?: unknown; qty?: unknown; unitPrice?: unknown; discount?: unknown }[]
+    >(itemsJson ?? null) ?? [];
+  const items: PurchaseOrderLine[] = [];
+  for (const row of rows) {
+    const itemId = parsePoGrItemId(row?.itemId);
+    if (itemId === null) continue;
+    const qty = parsePoGrQty(row.qty, itemId, "pesanan");
+    if (qty <= 0) continue;
+    items.push({
+      itemId,
+      qty,
+      unitPrice: parsePoGrMoney(row.unitPrice, itemId, "Harga beli pesanan"),
+      discount: parsePoGrMoney(row.discount, itemId, "Diskon pesanan"),
+    });
+  }
+  return items;
+}
 
 // expiryDate baris lolos JSON tanpa validasi kalender: "2026-02-30"
 // bergulir ke 2 Mar oleh new Date, string acak jadi Invalid Date.
@@ -92,8 +159,29 @@ function goodsReceiptItemData(i: GrItemInput, orderedQtyByItem: Map<number, numb
   };
 }
 
-function parseGrItems(items: string | null | undefined) {
-  return safeJsonParse<GrItemInput[]>(items ?? null) ?? [];
+function parseGrItems(items: string | null | undefined): GrItemInput[] {
+  const rows =
+    safeJsonParse<
+      (Omit<GrItemInput, "itemId" | "qty" | "unitCost"> & {
+        itemId?: unknown;
+        qty?: unknown;
+        unitCost?: unknown;
+      })[]
+    >(items ?? null) ?? [];
+  const parsed: GrItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parsePoGrItemId(row?.itemId);
+    if (itemId === null) continue;
+    const qty = parsePoGrQty(row.qty, itemId, "penerimaan");
+    if (qty <= 0) continue;
+    parsed.push({
+      ...row,
+      itemId,
+      qty,
+      unitCost: parsePoGrMoney(row.unitCost, itemId, "Biaya satuan penerimaan"),
+    });
+  }
+  return parsed;
 }
 
 /**
@@ -282,6 +370,169 @@ import { logActivity } from "@/lib/services/activity-log.service";
 
 type PurchaseOrderLine = { itemId: number; qty: number; unitPrice: number; discount: number };
 
+/**
+ * Baris retur pembelian dari JSON FormData `items`
+ * ([{ itemId, qty, price? }]). qty/harga bisa string berformat Indonesia
+ * dari klien non-form ("2.000" = 2000, "150.000" = 150000) — wajib lewat
+ * parser repo; Number() mentah membaca "2.000" jadi 2 dan "abc" jadi NaN
+ * yang lolos filter >0, lalu penjaga over-return ikut menilai angka rusak
+ * dan qty tersimpan menyusut diam-diam (harga beku F-004 ikut salah).
+ * Baris berkode item dengan qty/harga tak terbaca ditolak berpesan, bukan
+ * dibuang/dinclamp diam-diam. Baris tanpa item (itemId kosong/0) tetap
+ * dibuang (baris kosong form); qty <= 0 pada baris berkode tetap dibuang
+ * (perilaku lama: baris belum diisi).
+ */
+type PurchaseReturnItemInput = {
+  itemId: number;
+  qty: number;
+  price: number | null;
+};
+
+function parsePurchaseReturnItems(
+  itemsJson: string | null | undefined,
+): PurchaseReturnItemInput[] {
+  const rows =
+    safeJsonParse<
+      { itemId?: unknown; qty?: unknown; price?: unknown }[]
+    >(itemsJson ?? null) ?? [];
+  const items: PurchaseReturnItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parseLocaleNumber(
+      row?.itemId as string | number | null | undefined,
+    );
+    if (itemId === null || itemId <= 0) continue;
+    const qty = parseLocaleNumber(
+      row.qty as string | number | null | undefined,
+    );
+    if (qty === null) {
+      throw new Error(
+        `Kuantitas retur item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+      );
+    }
+    if (qty <= 0) continue;
+    let price: number | null = null;
+    if (row.price != null && row.price !== "") {
+      price = parseMoneyAmount(
+        row.price as string | number | null | undefined,
+      );
+      if (price === null || price <= 0) {
+        throw new Error(
+          `Harga beli retur item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 150.000).`,
+        );
+      }
+    }
+    items.push({ itemId, qty, price });
+  }
+  return items;
+}
+
+/**
+ * Data baris simpan retur: cost entered-unit dari peta biaya dokumen,
+ * price = harga payload ter-parse, else harga beku tagihan asal (F-004).
+ * Satu sumber create+update (duplikasi blok map pernah kena gerbang Sonar).
+ */
+function purchaseReturnItemData(
+  items: PurchaseReturnItemInput[],
+  documentCostByItem: Map<number, number>,
+  billPriceByItem: Map<number, number>,
+) {
+  return items.map((item) => ({
+    itemId: item.itemId,
+    // qty sudah angka ter-parse (helper parsePurchaseReturnItems):
+    // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
+    qty: item.qty,
+    cost: documentCostByItem.get(item.itemId) ?? 0,
+    price: item.price ?? (billPriceByItem.get(item.itemId) ?? null),
+  }));
+}
+
+/**
+ * Penjaga over-return di dalam transaksi (kunci baris PO di pemanggil):
+ * qty diterima kumulatif (GR verified/completed) vs qty sudah diretur
+ * (non-cancelled, excludeReturnId = retur yang sedang diedit). Biaya
+ * dokumen entered-unit = cost dasar x faktor UoM baris GR pertama.
+ * Satu sumber create+update (duplikasi blok pernah kena gerbang Sonar).
+ * Return: peta biaya dokumen; melempar Error berpesan bila melanggar.
+ */
+async function assertPurchaseReturnWithinReceived(
+  tx: Prisma.TransactionClient,
+  purchaseOrderId: number,
+  items: PurchaseReturnItemInput[],
+  baseCostByItem: Map<number, number>,
+  excludeReturnId?: number,
+): Promise<Map<number, number>> {
+  const itemIds = items.map((it) => it.itemId);
+  const grItems = await tx.goodsReceiptItem.findMany({
+    where: {
+      goodsReceipt: {
+        purchaseOrderId,
+        status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
+      },
+      itemId: { in: itemIds },
+    },
+    select: { itemId: true, qty: true, uom: true },
+  });
+  const uomByItem = new Map<number, string | null>();
+  for (const line of grItems) {
+    if (!uomByItem.has(line.itemId)) uomByItem.set(line.itemId, line.uom);
+  }
+  const factorRows = await Promise.all(
+    itemIds.map(
+      async (itemId) =>
+        [itemId, await toBaseFactor(tx, itemId, uomByItem.get(itemId))] as const,
+    ),
+  );
+  const factorByItem = new Map(factorRows);
+  const documentCostByItem = new Map(
+    [...baseCostByItem].map(([itemId, cost]) => [
+      itemId,
+      cost * (factorByItem.get(itemId) ?? 1),
+    ]),
+  );
+  const receivedQtyByItem = new Map<number, number>();
+  for (const it of grItems) {
+    receivedQtyByItem.set(
+      it.itemId,
+      (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
+    );
+  }
+  const priorReturns = await tx.purchaseReturnItem.findMany({
+    where: {
+      purchaseReturn: {
+        purchaseOrderId,
+        status: { not: "cancelled" },
+        ...(excludeReturnId ? { id: { not: excludeReturnId } } : {}),
+      },
+      itemId: { in: itemIds },
+    },
+    select: { itemId: true, qty: true },
+  });
+  const alreadyReturnedByItem = new Map<number, number>();
+  for (const r of priorReturns) {
+    alreadyReturnedByItem.set(
+      r.itemId,
+      (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
+    );
+  }
+  const violation = findOverReturn(
+    items.map((it) => ({ itemId: it.itemId, qty: it.qty })),
+    receivedQtyByItem,
+    alreadyReturnedByItem,
+  );
+  if (violation) {
+    if (violation.type === "not_on_invoice") {
+      throw new Error(
+        `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
+      );
+    }
+    throw new Error(
+      `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
+        `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
+    );
+  }
+  return documentCostByItem;
+}
+
 function buildPurchaseOrderTotals(lines: PurchaseOrderLine[], shippingCost: number, serviceFee: number) {
   const subtotal = lines.reduce((s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0), 0);
   const discount = lines.reduce((s, it) => safeAdd(s, it.discount || 0, 0), 0);
@@ -294,12 +545,60 @@ function buildPurchaseOrderTotals(lines: PurchaseOrderLine[], shippingCost: numb
 
 function purchaseOrderItemData(it: PurchaseOrderLine) {
   return {
-    itemId: Number(it.itemId),
-    qty: Number(it.qty),
-    unitPrice: Number(it.unitPrice),
-    discount: Number(it.discount || 0),
+    // itemId/qty/unitPrice/discount sudah angka ter-parse
+    // (parsePurchaseOrderItems): "2.000" tiba sebagai 2000.
+    itemId: it.itemId,
+    qty: it.qty,
+    unitPrice: it.unitPrice,
+    discount: it.discount || 0,
     total: safeSubtract(safeMultiply(it.qty, it.unitPrice, 0), it.discount || 0, 0),
   };
+}
+
+type PurchaseRequestItemInput = {
+  itemId: number;
+  qty: number;
+  notes: string | null;
+};
+
+/**
+ * Baris item Permintaan Pembelian dari JSON `items` via parser repo;
+ * Number() mentah membaca "2.000" jadi 2 dan "abc" jadi NaN yang lolos
+ * filter >0, lalu qty tersimpan menyusut diam-diam. Baris berkode item
+ * dengan qty tak terbaca ditolak berpesan, bukan dibuang diam-diam.
+ * Baris tanpa item (itemId kosong/0) tetap dibuang (baris kosong form);
+ * qty <= 0 pada baris berkode tetap dibuang (perilaku lama: baris belum
+ * diisi). Satu sumber create+update.
+ */
+function parsePurchaseRequestItems(
+  itemsJson: string | null | undefined,
+): PurchaseRequestItemInput[] {
+  const rows =
+    safeJsonParse<
+      { itemId?: unknown; qty?: unknown; notes?: unknown }[]
+    >(itemsJson ?? null) ?? [];
+  const items: PurchaseRequestItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parseLocaleNumber(
+      row?.itemId as string | number | null | undefined,
+    );
+    if (itemId === null || itemId <= 0) continue;
+    const qty = parseLocaleNumber(
+      row.qty as string | number | null | undefined,
+    );
+    if (qty === null) {
+      throw new Error(
+        `Kuantitas permintaan item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+      );
+    }
+    if (qty <= 0) continue;
+    items.push({
+      itemId,
+      qty,
+      notes: typeof row.notes === "string" && row.notes ? row.notes : null,
+    });
+  }
+  return items;
 }
 
 // ==================== PURCHASE REQUEST ACTIONS ====================
@@ -315,10 +614,7 @@ export async function createPurchaseRequest(formData: FormData) {
     const documentNo = await generateDocumentNumber("PR");
     const slug = await nextSlug("purchaseRequest", documentNo);
     const requestedBy = v.requestedBy || Number(user.id);
-    const items =
-      safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(
-        v.items ?? null,
-      ) ?? [];
+    const items = parsePurchaseRequestItems(v.items);
 
     const requestDateRaw = v.requestDate;
     const description = v.description ?? null;
@@ -337,13 +633,11 @@ export async function createPurchaseRequest(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: items
-            .filter((i) => i.itemId > 0)
-            .map((i) => ({
-              itemId: i.itemId,
-              qty: i.qty,
-              notes: i.notes || null,
-            })),
+          create: items.map((i) => ({
+            itemId: i.itemId,
+            qty: i.qty,
+            notes: i.notes,
+          })),
         },
       },
     });
@@ -377,11 +671,7 @@ export async function createPurchaseOrder(formData: FormData) {
     const documentNo = await generateDocumentNumber("PO");
     const slug = await nextSlug("purchaseOrder", documentNo);
 
-    const poItems = (
-      safeJsonParse<
-        { itemId: number; qty: number; unitPrice: number; discount: number }[]
-      >(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const poItems = parsePurchaseOrderItems(v.items);
 
     const shippingCost = v.shippingCost ?? 0;
     const serviceFee = v.serviceFee ?? 0;
@@ -1513,11 +1803,8 @@ export async function createPurchaseReturn(formData: FormData) {
     const documentNo = await generateDocumentNumber("PRET");
     const slug = await nextSlug("purchaseReturn", documentNo);
 
-    const items = safeJsonParse<any[]>(v.items ?? null) ?? [];
-    const validPrItems = items.filter(
-      (item: any) => item.itemId > 0 && item.qty > 0,
-    );
-    const prItemIds = validPrItems.map((it: any) => Number(it.itemId));
+    const validPrItems = parsePurchaseReturnItems(v.items);
+    const prItemIds = validPrItems.map((it) => it.itemId);
     const prCostRows = prItemIds.length
       ? await prisma.item.findMany({
           where: { id: { in: prItemIds } },
@@ -1539,69 +1826,13 @@ export async function createPurchaseReturn(formData: FormData) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
       }
 
-      if (prItemIds.length) {
-        const grItems = await tx.goodsReceiptItem.findMany({
-          where: {
-            goodsReceipt: {
-              purchaseOrderId: v.purchaseOrderId,
-              status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
-            },
-            itemId: { in: prItemIds },
-          },
-          select: { itemId: true, qty: true, uom: true },
-        });
-        const uomByItem = new Map<number, string | null>();
-        for (const line of grItems) {
-          if (!uomByItem.has(line.itemId)) uomByItem.set(line.itemId, line.uom);
-        }
-        const prFactorRows = await Promise.all(prItemIds.map(async (itemId) => [itemId, await toBaseFactor(tx, itemId, uomByItem.get(itemId))] as const));
-        const prFactorByItem = new Map(prFactorRows);
-        prDocumentCostMap = new Map([...prCostMap].map(([itemId, cost]) => [itemId, cost * (prFactorByItem.get(itemId) ?? 1)]));
-        const receivedQtyByItem = new Map<number, number>();
-        for (const it of grItems) {
-          receivedQtyByItem.set(
-            it.itemId,
-            (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
-          );
-        }
-
-        const priorReturns = await tx.purchaseReturnItem.findMany({
-          where: {
-            purchaseReturn: {
-              purchaseOrderId: v.purchaseOrderId,
-              status: { not: "cancelled" },
-            },
-            itemId: { in: prItemIds },
-          },
-          select: { itemId: true, qty: true },
-        });
-        const alreadyReturnedByItem = new Map<number, number>();
-        for (const r of priorReturns) {
-          alreadyReturnedByItem.set(
-            r.itemId,
-            (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
-          );
-        }
-
-        const violation = findOverReturn(
-          validPrItems.map((it: any) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
-          })),
-          receivedQtyByItem,
-          alreadyReturnedByItem,
+      if (prItemIds.length && v.purchaseOrderId) {
+        prDocumentCostMap = await assertPurchaseReturnWithinReceived(
+          tx,
+          v.purchaseOrderId,
+          validPrItems,
+          prCostMap,
         );
-        if (violation) {
-          if (violation.type === "not_on_invoice") {
-            throw new Error(
-              `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
-            );
-          }
-          throw new Error(
-            `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
-              `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
-          );
-        }
       }
 
       const billPriceByItem = await loadBillUnitPriceByItem(tx, v.purchaseOrderId, prItemIds);
@@ -1615,20 +1846,7 @@ export async function createPurchaseReturn(formData: FormData) {
           status: "draft",
           createdBy: Number(user.id),
           items: {
-            create: validPrItems.map((item: any) => ({
-              itemId: Number(item.itemId),
-              // qty arrives as a string from safeJsonParse; the purchase_return_items
-              // table expects a number. Clamp to >= 0.01 (matching the createQuotation
-              // pattern) so a tampered 0/undefined qty is treated as essentially zero
-              // rather than crashing the Prisma insert with a string-to-Int error.
-              qty: Math.max(0.01, Number(item.qty) || 0),
-              cost: prDocumentCostMap.get(Number(item.itemId)) ?? 0,
-              // F-004: bekukan harga beli (payload menang, else tagihan asal).
-              price:
-                item.price != null && Number(item.price) > 0
-                  ? Number(item.price)
-                  : (billPriceByItem.get(Number(item.itemId)) ?? null),
-            })),
+            create: purchaseReturnItemData(validPrItems, prDocumentCostMap, billPriceByItem),
           },
         },
       });
@@ -2059,21 +2277,38 @@ export async function deleteVendorBill(id: number) {
   try {
     await requirePermission("delete_vendor_bills");
 
-    const bill = await prisma.vendorBill.findUniqueOrThrow({ where: { id } });
-    if (bill.status !== "draft") {
-      throw new Error("Hanya tagihan draft yang dapat dihapus");
-    }
+    // Baca di luar transaksi hanya untuk PO-linked HPP resync di bawah;
+    // status yang dipercaya adalah baca ulang SESUDAH baris dikunci di
+    // dalam transaksi. Tanpa itu confirmVendorBill konkuren bisa posting
+    // (status posted + jurnal posted baru) tepat sesudah cek draft ini,
+    // lalu delete tetap jalan: jurnal posted terhapus hard-delete tanpa
+    // reversal dan baris bill hilang (GL/AP yatim).
+    const billRef = await prisma.vendorBill.findUniqueOrThrow({
+      where: { id },
+      select: { purchaseOrderId: true },
+    });
 
     // ATOMICITY: deleting the bill row while leaving its draft journal behind
     // would orphan Dr Expense / Cr AP in the GL (no source document to reverse
     // later) — a silent balance-sheet drift. Wrapping the journal-delete + bill
     // delete in one tx guarantees the GL is clean iff the bill row is gone.
     await prisma.$transaction(async (tx) => {
+      // Kunci baris bill: serial dengan confirmVendorBill (yang juga
+      // mengunci PO; kunci PO diambil lebih dulu di jalur confirm, dan di
+      // sini kunci bill dulu — tidak ada jalur yang mengunci bill lalu PO
+      // sesudahnya, jadi urutan tidak membentuk deadlock baru).
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendor_bills WHERE id = ${id} FOR UPDATE`;
+      }
+      const fresh = await tx.vendorBill.findUniqueOrThrow({ where: { id } });
+      if (fresh.status !== "draft") {
+        throw new Error("Hanya tagihan draft yang dapat dihapus");
+      }
       // Reverse any journal posted at draft creation before removing the record.
       await deleteJournalByReferenceTx(tx, "VendorBill", id);
       await tx.vendorBill.delete({ where: { id } });
       // Recompute the service PO's subcontract HPP after removing the bill.
-      await syncServicePoCostFromBills(tx, bill.purchaseOrderId, null);
+      await syncServicePoCostFromBills(tx, billRef.purchaseOrderId, null);
     });
 
     await logActivity(
@@ -2095,18 +2330,19 @@ export async function deleteVendorPayment(id: number) {
   try {
     await requirePermission("delete_vendor_payments");
 
-    const payment = await prisma.vendorPayment.findUniqueOrThrow({
-      where: { id },
-    });
-    if (payment.status !== "draft") {
-      throw new Error("Hanya pembayaran draft yang dapat dihapus");
-    }
-
-    // ATOMICITY: same as deleteVendorBill — the draft journal (Dr AP / Cr Bank
-    // for confirm-time, or reversing for void) must move with the payment row.
-    // A half-deleted state leaves the GL out of balance with no orphan-reversal
-    // hook to clean it up later.
+    // Status dipercaya dari baca ulang SESUDAH baris dikunci di dalam
+    // transaksi (pola sama deleteVendorBill). confirmVendorPayment juga
+    // mengunci baris payment, jadi delete konkuren serial: bila confirm
+    // menang, status fresh = completed dan delete ditolak, bukan menghapus
+    // pembayaran terposting beserta jurnalnya.
     await prisma.$transaction(async (tx) => {
+      if (typeof tx.$executeRaw === "function") {
+        await tx.$executeRaw`SELECT id FROM vendor_payments WHERE id = ${id} FOR UPDATE`;
+      }
+      const fresh = await tx.vendorPayment.findUniqueOrThrow({ where: { id } });
+      if (fresh.status !== "draft") {
+        throw new Error("Hanya pembayaran draft yang dapat dihapus");
+      }
       // Reverse any journal posted at draft creation before removing the record.
       await deleteJournalByReferenceTx(tx, "VendorPayment", id);
       await tx.vendorPayment.delete({ where: { id } });
@@ -2147,10 +2383,9 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
     const slug = await nextSlug("purchaseRequest", existingPr.documentNo, { excludeId: id });
 
     const requestedBy = v.requestedBy || Number(user.id);
-    const items =
-      safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(
-        v.items ?? null,
-      ) ?? [];
+    // Parse sebelum transaksi: qty tak terbaca ditolak sebelum deleteMany
+    // menghapus baris lama.
+    const items = parsePurchaseRequestItems(v.items);
 
     const pr = await prisma.$transaction(async (tx) => {
       const latestStatus = await tx.purchaseRequest.findUnique({
@@ -2178,13 +2413,11 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
           description,
           notes: v.notes ?? null,
           items: {
-            create: items
-              .filter((i) => i.itemId > 0)
-              .map((i) => ({
-                itemId: i.itemId,
-                qty: i.qty,
-                notes: i.notes || null,
-              })),
+            create: items.map((i) => ({
+              itemId: i.itemId,
+              qty: i.qty,
+              notes: i.notes,
+            })),
           },
         },
       });
@@ -2224,11 +2457,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
 
     const slug = await nextSlug("purchaseOrder", existingPo.documentNo, { excludeId: id });
 
-    const poItems = (
-      safeJsonParse<
-        { itemId: number; qty: number; unitPrice: number; discount: number }[]
-      >(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const poItems = parsePurchaseOrderItems(v.items);
 
     const shippingCost = v.shippingCost ?? 0;
     const serviceFee = v.serviceFee ?? 0;
@@ -2583,11 +2812,8 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
 
     const slug = await nextSlug("purchaseReturn", ret.documentNo, { excludeId: id });
 
-    const items = safeJsonParse<any[]>(v.items ?? null) ?? [];
-    const validPrItems = items.filter(
-      (item: any) => item.itemId > 0 && item.qty > 0,
-    );
-    const updPrIds = validPrItems.map((it: any) => Number(it.itemId));
+    const validPrItems = parsePurchaseReturnItems(v.items);
+    const updPrIds = validPrItems.map((it) => it.itemId);
     const updPrCostRows = updPrIds.length
       ? await prisma.item.findMany({
           where: { id: { in: updPrIds } },
@@ -2620,85 +2846,15 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
       }
 
       if (updPrIds.length && v.purchaseOrderId) {
-        const grItems = await tx.goodsReceiptItem.findMany({
-          where: {
-            goodsReceipt: {
-              purchaseOrderId: v.purchaseOrderId,
-              status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
-            },
-            itemId: { in: updPrIds },
-          },
-          select: { itemId: true, qty: true, uom: true },
-        });
-        // Entered-unit cost = base cost × UoM factor, exactly as the create path
-        // does. PurchaseReturnItem.qty is stored in the ENTERED unit (the stock
-        // hook multiplies by the same factor to reach base), so storing the base
-        // cost verbatim here would book the AP-relief journal factor× too small
-        // for any item with a UoM conversion — a create/edit asymmetry.
-        const updUomByItem = new Map<number, string | null>();
-        for (const line of grItems) {
-          if (!updUomByItem.has(line.itemId)) updUomByItem.set(line.itemId, line.uom);
-        }
-        const updFactorRows = await Promise.all(
-          updPrIds.map(
-            async (itemId) =>
-              [itemId, await toBaseFactor(tx, itemId, updUomByItem.get(itemId))] as const,
-          ),
+        // Biaya entered-unit + penjaga over-return: helper bersama
+        // assertPurchaseReturnWithinReceived (exclude retur ini sendiri).
+        updPrDocumentCostMap = await assertPurchaseReturnWithinReceived(
+          tx,
+          v.purchaseOrderId,
+          validPrItems,
+          updPrCostMap,
+          id,
         );
-        const updFactorByItem = new Map(updFactorRows);
-        updPrDocumentCostMap = new Map(
-          [...updPrCostMap].map(([itemId, cost]) => [
-            itemId,
-            cost * (updFactorByItem.get(itemId) ?? 1),
-          ]),
-        );
-
-        const receivedQtyByItem = new Map<number, number>();
-        for (const it of grItems) {
-          receivedQtyByItem.set(
-            it.itemId,
-            (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
-          );
-        }
-
-        const priorReturns = await tx.purchaseReturnItem.findMany({
-          where: {
-            purchaseReturn: {
-              purchaseOrderId: v.purchaseOrderId,
-              status: { not: "cancelled" },
-              id: { not: id },
-            },
-            itemId: { in: updPrIds },
-          },
-          select: { itemId: true, qty: true },
-        });
-        const alreadyReturnedByItem = new Map<number, number>();
-        for (const r of priorReturns) {
-          alreadyReturnedByItem.set(
-            r.itemId,
-            (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
-          );
-        }
-
-        const violation = findOverReturn(
-          validPrItems.map((it: any) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
-          })),
-          receivedQtyByItem,
-          alreadyReturnedByItem,
-        );
-        if (violation) {
-          if (violation.type === "not_on_invoice") {
-            throw new Error(
-              `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
-            );
-          }
-          throw new Error(
-            `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
-              `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
-          );
-        }
       }
 
       await tx.purchaseReturnItem.deleteMany({
@@ -2714,20 +2870,7 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
           date,
           reason: v.reason ?? null,
           items: {
-            create: validPrItems.map((item: any) => ({
-              itemId: Number(item.itemId),
-              // qty arrives as a string from safeJsonParse; the purchase_return_items
-              // table expects a number. Clamp to >= 0.01 (matching the createQuotation
-              // pattern) so a tampered 0/undefined qty is treated as essentially zero
-              // rather than crashing the Prisma insert with a string-to-Int error.
-              qty: Math.max(0.01, Number(item.qty) || 0),
-              cost: updPrDocumentCostMap.get(Number(item.itemId)) ?? 0,
-              // F-004: bekukan harga beli (payload menang, else tagihan asal).
-              price:
-                item.price != null && Number(item.price) > 0
-                  ? Number(item.price)
-                  : (updBillPriceByItem.get(Number(item.itemId)) ?? null),
-            })),
+            create: purchaseReturnItemData(validPrItems, updPrDocumentCostMap, updBillPriceByItem),
           },
         },
       });

@@ -174,6 +174,17 @@ fi
 PIPELINE_START=$(date +%s)
 RESULTS=()
 
+# ── Preflight install ─────────────────────────────────────────────────────────
+# Tolak node_modules/node_modules sampah + pastikan auth ter-resolve sebelum
+# stage mahal jalan (insiden 2026-10-22). Lewati di mode --e2e-only: stage
+# build tidak jalan di sana.
+if ! $E2E_ONLY; then
+  if ! node scripts/preflight-node-modules.mjs; then
+    echo -e "${RED}✖ Preflight install gagal — pipeline berhenti.${NC}" >&2
+    exit 1
+  fi
+fi
+
 # ══════════════════════════════════════════════════════════════════════════════
 # STAGE 1: Lint
 # ══════════════════════════════════════════════════════════════════════════════
