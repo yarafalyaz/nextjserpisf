@@ -11232,3 +11232,336 @@ Pemilik berikutnya: BOT 1 putus Q-PF-1/5 -> BOT 4 jawab
 Q-PF-2/4 (dependensi eksplisit, jangan diputus Bot 5) ->
 BOT 3 inti (Q-PF-3) -> BOT 2 UI -> BOT 6 AC-PF-1..8.
 Tanpa kode di kartu spec ini.
+
+## VONIS BOT 4 — F-2026-10-22-077-V: Q-PF-2 masa PPh21/BPJS + Q-PF-4 cicilan pinjaman pada slip mingguan (spec F-2026-10-22-076-S, PR #519)
+
+Status: VONIS (dokumen saja, tanpa kode/schema/migrasi).
+Basis live: origin/main `22bcd7bb` + branch PR #519
+`hermes/bot5-f076-payroll-freq-spec` head `cfec4b38`
+(spec F-076-S §2(b)/§8 Q-PF-2 + Q-PF-4 eksplisit pemilik
+BOT 4, "jangan diputus Bot 5"). Kartu t_bea3101a.
+Anti-duplikat: serial -V terpakai maks F-2026-10-22-075-V
+(PR #518); 076 = -S BOT 5 (PR #519); grep "077" di
+backlog+board+semua PR all-state run ini = 0 bebas.
+F-075-V/F-074-V/F-072-V/F-066-V/F-058-V tidak diulang.
+
+### 0. Bukti repo live (TERVERIFIKASI-KODE, origin/main 22bcd7bb)
+
+1. Mesin PPh21 final existing SUDAH gabungan se-masa,
+   bukan per-slip berdiri sendiri: `computePph21ForPeriod`
+   (src/actions/hrm.actions.ts:1345) — `samePeriod` = slip
+   karyawan sama dengan `period` string sama (selain
+   cancelled, dikurangi excludePayrollId); masa selain
+   terakhir: target = TER atas `combinedGross` (Σ bruto
+   slip se-masa + slip berjalan), PPh21 slip berjalan =
+   `max(0, targetGabungan - Σ pph21 slip se-masa lain)`
+   (hrm.actions.ts:1436-1437). Masa terakhir: hitung ulang
+   Pasal 17 tahunan atas Σ bruto final tahun berjalan
+   (FINAL_PAYROLL_STATUSES = approved/paid) + slip berjalan,
+   kurangi Σ terpotong final (hrm.actions.ts:1396-1428).
+2. Identitas masa existing = `periodYearMonth(period,
+   endDate)`: regex `YYYY-MM` dari string period, fallback
+   ke endDate bila tidak cocok (hrm.actions.ts:1323-1327);
+   pemanggil menulis default `period = YYYY-MM` dari
+   endDate persis (hrm.actions.ts:725). `resolveTerPeriod`
+   (payroll-statutory.service.ts:470): bulan 12 =
+   `final-december` (Pasal 17), resignationFinal eksplisit
+   = `final-resignation`, selain itu `monthly` (TER).
+   Penjaga approve menolak slip Desember massal yang masih
+   `bulk-december-pending-final` dan slip LEGACY_PRE_TER
+   (hrm.actions.ts:2384-2399).
+3. Tabel TER (`PayrollTerBracket`) adalah tarif efektif
+   BULANAN per kategori PTKP — diterapkan ke bruto gabungan
+   se-masa, bukan tarif mingguan/harian. Mesin estimasi
+   preview per-slip (`computePayrollEstimation`,
+   hrm.actions.ts:1211-1222) menerapkan TER ke bruto slip
+   berjalan SAJA (preview non-final berlabel; jalur tulis
+   final = butir 1 yang menggabungkan).
+4. BPJS karyawan existing dihitung PER SLIP dari
+   `baseSalary` slip itu utuh: `computeBpjsEmployee(base,
+   ruleset)` (payroll-statutory.service.ts:29-38) —
+   Kesehatan = min(base, ceiling ruleset) x tarif karyawan;
+   JHT = base x tarif; JP = min(base, ceiling JP) x tarif.
+   Basis input pemanggil = baseSalary slip (hrm.actions.ts:
+   719, 1211, 1817). TIDAK ada agregasi BPJS se-masa seperti
+   PPh21 butir 1.
+5. Pinjaman: `EmployeeLoan.monthlyInstallment` Decimal(15,2)
+   "per bulan" menurut nama+skema (schema.prisma:3153);
+   estimasi menjumlah `min(monthlyInstallment, remaining)`
+   TIAP slip (hrm.actions.ts:1185, 1711), cap tulis
+   `capLoanDeduction` sama per slip (hrm.actions.ts:1099-
+   1126), amortisasi onPayrollPaid mendistribusi
+   loanDeduction slip itu oldest-first cap installment+
+   remaining per pinjaman (hrm.actions.ts:2473). Jadi tanpa
+   vonis: karyawan mingguan berpinjaman terpotong cicilan
+   bulanan PENUH 4-5x per bulan kalender.
+6. Kunci unik existing `@@unique([employeeId, period])`
+   (schema.prisma:3054) — bentuk fisik pengganti = Q-PF-3
+   milik BOT 3, di luar vonis ini; vonis ini hanya memutus
+   SEMANTIK masa + angka statutori + cicilan.
+
+### 1. Dasar regulasi (sumber resmi, akses 2026-10-22)
+
+1. PP Nomor 58 Tahun 2023 tentang Tarif Pemotongan PPh
+   Pasal 21 (berlaku 1 Jan 2024) + PMK Nomor 168 Tahun 2023
+   tentang Petunjuk Pelaksanaan Pemotongan Pajak atas
+   Penghasilan sehubungan dengan Pekerjaan/Jasa/Kegiatan
+   Orang Pribadi: pegawai tetap — TER bulanan dipakai pada
+   setiap masa pajak SELAIN masa pajak terakhir; masa pajak
+   terakhir (Desember atau masa berhenti bekerja) memakai
+   tarif Pasal 17 ayat (1) huruf a UU PPh atas penghasilan
+   setahun/bagian tahun. Masa pajak PPh 21 = bulan kalender;
+   tidak ada masa pajak "mingguan" untuk pegawai tetap.
+   Frekuensi BAYAR internal (mingguan) tidak menciptakan
+   masa pajak baru.
+   - https://pajak.go.id/id/pmk-168-tahun-2023-pph-pasal-21-ter
+   - https://pajak.go.id/en/node/105641 (TER bulanan Jan-Nov,
+     Desember Pasal 17; bruto setahun dikurangi biaya
+     jabatan/iuran pensiun pada masa terakhir)
+   - https://jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023/summary
+2. TER harian PP 58/2023 (0% <= Rp450rb/hari; 0,5%
+   Rp450rb-Rp2,5jt/hari) berlaku untuk pegawai tidak tetap/
+   bukan pegawai dengan penghasilan HARIAN — BUKAN pegawai
+   tetap yang dibayar mingguan. Karyawan WEEKLY di spec ini
+   adalah pegawai tetap (master Employee + baseSalary) yang
+   frekuensi bayarnya mingguan; klasifikasinya tidak berubah
+   menjadi pegawai lepas harian hanya karena dibayar per
+   minggu. Menerapkan TER harian ke mereka = salah subjek.
+   - https://stats.pajak.go.id/id/artikel/tarif-efektif-rata-rata-penyempurnaan-perhitungan-pph-pasal-21
+3. BPJS Kesehatan PPU: Perpres 82/2018 jo. Perpres 64/2020
+   Pasal 30 (iuran 5% dari Gaji atau Upah PER BULAN: 4%
+   pemberi kerja, 1% peserta) + Pasal 32 (batas atas dasar
+   perhitungan Rp12.000.000 per bulan; batas bawah upah
+   minimum kab/kota). Iuran BPJS Ketenagakerjaan (JHT/JP/
+   JKK/JKM) sama-sama iuran per bulan atas upah sebulan
+   (UU 40/2004 SJSN + PP pelaksana JHT/JP; ceiling JP hidup
+   di ruleset statutori existing, jangan hardcode baru).
+   Konsekuensi: dasar BPJS adalah upah SEBULAN kalender,
+   bukan upah per slip pembayaran.
+   - https://jdih.kemenkeu.go.id/api/download/179608f7-a2a0-41c0-aaec-e7d60eb36054/64TAHUN2020PERPRES.pdf
+     (Pasal 30-32 salinan Perpres 64/2020)
+4. Pemotongan upah untuk utang/cicilan utang pekerja: PP
+   36/2021 tentang Pengupahan Pasal 63 ayat (1) huruf e +
+   ayat (3) — wajib berdasarkan kesepakatan/perjanjian
+   tertulis. Perjanjian pinjaman existing menyatakan
+   cicilan PER BULAN (`monthlyInstallment`); mengubah ritme
+   potong menjadi per minggu (bagi 4/5, penuh per minggu,
+   atau tahan ke slip terakhir) mengubah jadwal perjanjian
+   — tidak boleh ditebak mesin; butuh dasar tertulis.
+   - https://peraturan.go.id/files/pp36-2021bt.pdf (Pasal 63)
+   - https://peraturan.bpk.go.id/Details/161909/pp-no-36-tahun-2021
+   Catatan: PP 51/2023 mengubah PP 36/2021 (formula upah
+   minimum) — tidak mengubah Pasal 63 pada cakupan ini.
+
+### 2. VONIS Q-PF-2 — masa PPh21/BPJS slip mingguan
+
+V-PF2-1 (masa pajak = bulan endDate — DIKONFIRMASI):
+Masa PPh21/BPJS setiap slip (mingguan maupun bulanan) =
+bulan kalender dari `endDate` slip itu, dan `period` wajib
+tetap "YYYY-MM" bulan endDate tersebut. Q-PF-2 usulan spec
+§2(b) SAH. Slip mingguan yang rentangnya melintasi dua
+bulan kalender: masanya = bulan endDate (konsisten default
+existing hrm.actions.ts:725); rentang lintas bulan TIDAK
+dipecah dua slip/dipro-rata oleh vonis ini (peringatan
+BR-PF-07 spec tetap berlaku). Alasan: masa pajak bulan
+kalender (dasar §1.1); endDate adalah acuan ruleset existing
+(getStatutoryParams(endDate)) — mengganti acuan ke
+startDate/mayoritas hari = mesin kedua tanpa dasar.
+
+V-PF2-2 (PPh21 mingguan = TER gabungan se-masa existing,
+NOL mesin baru): Slip mingguan ke-1..n dalam masa yang sama
+WAJIB lewat `computePph21ForPeriod` apa adanya: TER bulanan
+x bruto GABUNGAN masa itu, slip berjalan menanggung selisih
+target gabungan dikurangi PPh21 slip se-masa sebelumnya
+(butir 0.1). DILARANG: (a) TER harian untuk pegawai tetap
+mingguan (salah subjek, §1.2); (b) TER bulanan diterapkan
+ke bruto mingguan SAJA sebagai angka final per slip
+(bracket TER bulanan atas basis mingguan = tarif salah,
+dan tanpa gabungan akan kurang/lebih potong sistematis);
+(c) annualisasi bruto mingguan x 52/12 karangan. Preview
+estimasi per-slip boleh tetap bruto-slip (sudah berlabel
+preview non-final existing) — angka FINAL hanya dari jalur
+gabungan. Syarat BOT 3: penjaga irisan Q-PF-3 harus tetap
+menjamin `samePeriod` menemukan semua slip se-masa
+karyawan itu (period identik "YYYY-MM"); ganti kunci unik
+tidak boleh memecah pengelompokan masa ini.
+
+V-PF2-3 (Desember/masa terakhir TIDAK berubah oleh
+frekuensi): Slip mingguan yang endDate-nya di bulan
+Desember = bagian dari masa pajak terakhir: hitung ulang
+Pasal 17 tahunan atas SEMUA bruto final tahun itu (slip
+mingguan + bulanan karyawan sama, FINAL_PAYROLL_STATUSES)
+kurangi Σ terpotong — persis mesin existing (butir 0.1-0.2).
+Slip mingguan Desember BUKAN final per-slip; yang final
+adalah MASA Desember gabungan. Penjaga existing tetap:
+slip pending-final/LEGACY ditolak approve (butir 0.2);
+slip mingguan Desember pertama-terbit tidak boleh
+mengunci "sudah final" sebelum slip minggu berikutnya
+se-masa dihitung — mesin existing menolak hitung final
+kedua ("Masa pajak terakhir tahun ini sudah terbit",
+hrm.actions.ts:1396-1400): maka urutan terbit Desember
+wajib slip mingguan terakhir tahun itu yang membawa
+hitung final, atau hitung final ditunda sampai slip
+Desember terakhir dibuat. Ini batas operasional BOT 3,
+bukan pengecualian angka. Resign final sama: final hanya
+dari flag resignationFinal eksplisit existing, bukan dari
+"slip mingguan terakhir yang kebetulan terbit".
+
+V-PF2-4 (BPJS = temuan vonis: basis SEBULAN, per-slip
+penuh DITOLAK untuk mingguan): Karena iuran BPJS berdasar
+upah sebulan dengan ceiling per bulan (§1.3), menjalankan
+`computeBpjsEmployee(baseSalary mingguan)` pada SETIAP
+slip mingguan memotong Kesehatan/JHT/JP 4-5x sebulan dan
+menerapkan ceiling bulanan 4-5x — SALAH, dilarang build
+seperti itu. Perlakuan wajib sampai mesin agregat diputus
+di bawah: iuran karyawan sebulan penuh dipotong pada SATU
+slip penanggung per masa per karyawan. Vonis memilih:
+slip PERTAMA terbit dalam masa itu menanggung BPJS
+karyawan sebulan penuh atas basis upah sebulan; slip
+mingguan berikutnya se-masa BPJS karyawan = 0.
+   Basis upah sebulan untuk karyawan WEEKLY diturunkan
+   BUKAN dari tebakan: basis = Σ baseSalary slip-slip masa
+   itu yang sudah terbit + slip berjalan bila slip
+   penanggung adalah slip pertama (dengan kata lain basis
+   final masa hanya pasti sesudah masa tutup). Karena itu
+   vonis ini menetapkan batas aman bertahap:
+   (i) TAHAP spec F-076-S (inti pertama): karyawan WEEKLY
+       yang ikut run mingguan WAJIB lolos gerbang yang sama
+       dengan pinjaman di §3 — yaitu BPJS per-slip existing
+       TIDAK boleh jalan apa adanya; BOT 3 DILARANG
+       mengaktifkan potongan BPJS mingguan per-slip penuh.
+   (ii) Bentuk final (butuh kartu BOT 3 tersendiri, BUKAN
+       bagian inti F-076-S pertama): agregator BPJS se-masa
+       meniru pola PPh21 butir 0.1 — target sebulan dari
+       basis Σ bruto/base masa, slip berjalan = max(0,
+       target - Σ bpjs slip se-masa lain), ceiling ruleset
+       diterapkan SEKALI per masa. Sampai bentuk final itu
+       diputus BOT 4 di kartu turunannya (data basis final
+       masa + koreksi bila slip dibatalkan), populasi
+       WEEKLY diperlakukan: BPJS dipotong HANYA pada slip
+       bulanan bila ada; karyawan murni WEEKLY tanpa slip
+       bulanan = di luar cakupan inti pertama dan wajib
+       terlewati-terhitung seperti gerbang §3 (fail-closed),
+       BUKAN dipotong per-slip menebak.
+   Alasan memilih fail-closed di tahap pertama: angka
+   BPJS salah 4-5x adalah kesalahan statutori nyata per
+   karyawan per bulan; menunda populasi murni-mingguan
+   lebih aman daripada memotong salah sambil menunggu
+   agregator. BUTUH-VONIS lanjutan (BOT 4, kartu turunan
+   BOT 3): rumus basis final + perlakuan koreksi BPJS bila
+   slip penanggung dibatalkan/diganti — JANGAN diputus
+   BOT 3/BOT 5 sendiri.
+
+V-PF2-5 (slip mingguan karyawan yang juga punya slip
+bulanan masa sama): diperlakukan SATU masa gabungan untuk
+PPh21 (butir V-PF2-2) — period sama membuatnya otomatis
+se-masa di mesin existing; dilarang memberi period
+pembeda karangan ("2026-10-W2") karena merusak
+pengelompokan itu + rekap F-2026-10-21-028 (spec §1.3).
+
+### 3. VONIS Q-PF-4 — cicilan pinjaman pada slip mingguan
+
+V-PF4-1 (fail-closed spec DIKONFIRMASI sebagai vonis):
+Inti F-076-S TIDAK boleh memotong cicilan pinjaman apa pun
+pada slip mingguan, dan karyawan WEEKLY dengan pinjaman
+aktif (status active, remainingAmount > 0) WAJIB terlewati
++ terhitung pada run mingguan sampai perjanjian tertulis
+per karyawan menyatakan jadwal potong mingguannya. Ini
+bukan penundaan selamanya: ini satu-satunya pilihan yang
+tidak melanggar Pasal 63 ayat (3) PP 36/2021 (§1.4) —
+`monthlyInstallment` adalah janji per bulan; mesin existing
+(butir 0.5) akan memotongnya penuh tiap slip mingguan =
+4-5x janji tertulis per bulan.
+
+V-PF4-2 (tiga opsi spec DITOLAK sebagai default mesin):
+(a) penuh tiap slip mingguan — ditolak (4-5x perjanjian);
+(b) bulanan/4 atau /5 — ditolak sebagai DEFAULT: pembagi
+tidak ada di perjanjian, bulan berisi 4 atau 5 minggu
+bayar bergantian, sisa sen pembulatan tak berdasar;
+menjadi sah HANYA bila perjanjian tertulis karyawan itu
+menyebut cicilan per minggu nominal tetap (nominal baru
+tersimpan, bukan hasil bagi runtime);
+(c) ditahan ke slip mingguan terakhir bulan — ditolak
+sebagai default: "terakhir" baru pasti sesudah masa tutup,
+slip terakhir bisa batal/absen, dan potongan menumpuk
+sebulan pada satu slip mingguan kecil (net bisa negatif;
+mesin existing men-cap net >= 0 dan menggeser beban diam-
+diam). Sah hanya bila tertulis.
+V-PF4-3 (jalur sah membuka kunci): potongan mingguan boleh
+dibangun BOT 3 HANYA sebagai nominal cicilan per-slip yang
+tersimpan eksplisit per pinjaman (diisi dari perjanjian
+tertulis; BUKAN turunan monthlyInstallment/4 di kode),
+dengan cap existing tetap: min(nominal tersimpan,
+remainingAmount) per slip + amortisasi oldest-first
+existing tidak berubah. Kolom/field fisiknya = rancangan
+BOT 3 diajukan ke BOT 4 sebelum migrasi. Sampai itu ada:
+V-PF4-1 berlaku penuh. Pinjaman karyawan MONTHLY tidak
+berubah sama sekali.
+
+### 4. Batas build (mengikat)
+
+BOT 3 (inti F-076-S, sesudah Q-PF-1/3/5 BOT 1/BOT 3):
+- WAJIB: period slip mingguan = "YYYY-MM" endDate
+  (V-PF2-1); PPh21 final lewat gabungan se-masa existing
+  tanpa cabang TER harian/mingguan (V-PF2-2); penjaga
+  irisan Q-PF-3 menjaga pengelompokan samePeriod.
+- DILARANG: BPJS per-slip penuh pada slip mingguan
+  (V-PF2-4i); potongan pinjaman apa pun pada slip mingguan
+  (V-PF4-1) — kedua populasi itu terlewati-terhitung
+  dengan alasan terpisah di hasil run (selaras AC-PF-4/5
+  spec), tanpa nominal per orang di log.
+- Desember: jangan terbitkan hitung final pada slip
+  mingguan Desember sebelum slip terakhir masa itu
+  (V-PF2-3); penjaga pending-final existing tidak dilemahkan.
+BOT 5: spec F-076-S §8 Q-PF-2/Q-PF-4 tertutup oleh vonis
+ini; BR-PF-04 naik BUTUH-VONIS -> VONIS (V-PF2-1..5);
+BR-PF-05 naik -> VONIS fail-closed permanen-sampai-tertulis
+(V-PF4-1..3). Jangan putus sendiri turunan BPJS agregat.
+BOT 2: UI menampilkan status terlewati + alasan (frekuensi
+lain/pinjaman/BPJS-belum-didukung/irisan) dari backend apa
+adanya; UI tidak menghitung masa/cicilan/BPJS.
+BOT 1: Q-PF-1/5 tetap milik BOT 1; merge PR #519 (spec)
+dan PR vonis ini milik Lead. Vonis ini TIDAK membuka inti
+sebelum Q-PF-1 diputus.
+BOT 6: acceptance tambahan mengikat:
+  AC-PF2-1: 4 slip mingguan se-masa: Σ pph21 keempat slip
+    = TER x Σ bruto masa (bukan Σ TER per bruto mingguan);
+    paksa TER per-slip final -> MERAH.
+  AC-PF2-2: slip mingguan endDate Desember + slip bulanan
+    Jan-Nov karyawan sama: hitung final Pasal 17 atas
+    gabungan tahun; slip mingguan Desember membawa TER
+    final sendiri-sendiri -> MERAH.
+  AC-PF2-3: karyawan WEEKLY berpinjaman aktif terlewati
+    run mingguan + terhitung, remainingAmount utuh; potong
+    monthlyInstallment pada slip mingguan -> MERAH.
+  AC-PF2-4: slip mingguan terbit dengan potongan BPJS
+    per-slip penuh (computeBpjsEmployee atas base mingguan
+    tiap slip) -> MERAH (gerbang V-PF2-4i bekerja).
+  AC-PF2-5: period karangan "YYYY-MM-Wn" lolos validasi
+    tulis -> MERAH (V-PF2-5).
+Risiko sisa (jujur): (1) basis BPJS final masa + koreksi
+pembatalan slip penanggung BELUM diputus — kartu turunan
+wajib sebelum populasi murni-WEEKLY dibuka; (2) karyawan
+mingguan tanpa pinjaman tahap pertama tetap terpotong
+PPh21 benar tetapi BPJS-nya tertunda masa itu — kewajiban
+iuran perusahaan tidak hilang, hanya belum terpotong lewat
+slip; HR wajib menyetor basis sebulan lewat jalur existing
+di luar run mingguan sampai agregator jadi (catatan
+operasional, bukan angka baru); (3) TER preview per-slip
+bisa berbeda dari final gabungan — label preview existing
+wajib dipertahankan BOT 2.
+
+### 5. Yang SENGAJA tidak diputus di sini
+Bentuk fisik kunci anti-dobel rentang (Q-PF-3, BOT 3);
+buka/tunda inti (Q-PF-1) + ganti frekuensi tengah periode
+(Q-PF-5/BR-PF-08) (BOT 1); rumus agregator BPJS final +
+koreksi batal (vonis BOT 4 lanjutan di kartu turunan
+BOT 3); nominal cicilan mingguan per karyawan (perjanjian
+tertulis per karyawan, bukan vonis umum); jurnal payroll
+(tidak berubah, jalur onPayrollPaid existing).
+
+Pemilik berikutnya: BOT 1 (Q-PF-1/5 + merge PR #519 & PR
+vonis ini) -> BOT 3 (inti dalam batas §4 + ajukan rancangan
+field cicilan-mingguan & agregator BPJS ke BOT 4) ->
+BOT 2 (label/alasan backend) -> BOT 6 (AC-PF-1..8 spec +
+AC-PF2-1..5 vonis ini).
