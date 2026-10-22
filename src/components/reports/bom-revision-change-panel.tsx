@@ -39,6 +39,23 @@ export interface BomRevisionChangeDeltaPreview {
   hasGenuinelyNew: boolean
 }
 
+/** Gerbang Kirim Pengajuan: nonaktif selama pengiriman/muat pratinjau, atau pratinjau/tujuan/alasan belum ada. */
+export function isBomRevisionSubmitDisabled(input: {
+  isPending: boolean
+  previewLoading: boolean
+  preview: unknown
+  toRevisionId: string
+  reason: string
+}): boolean {
+  return (
+    input.isPending ||
+    input.previewLoading ||
+    !input.preview ||
+    !input.toRevisionId ||
+    !input.reason.trim()
+  )
+}
+
 interface Props {
   owner: { workOrderId: number } | { productionOrderId: number }
   /** Status dokumen pemilik; panel senyap total bila tidak ada revisi ter-pin. */
@@ -452,7 +469,7 @@ export function BomRevisionChangePanel({
               </Button>
               <Button
                 variant="primary"
-                isDisabled={isPending || previewLoading || !preview || !toRevisionId || !reason.trim()}
+                isDisabled={isBomRevisionSubmitDisabled({ isPending, previewLoading, preview, toRevisionId, reason })}
                 onPress={submitRequest}
               >
                 Kirim Pengajuan

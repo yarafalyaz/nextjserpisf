@@ -21,6 +21,7 @@ vi.mock("@/lib/utils/toast", () => ({ showError: vi.fn(), showSuccess: vi.fn() }
 
 import {
   BomRevisionChangePanel,
+  isBomRevisionSubmitDisabled,
   type BomRevisionChangeRequestRow,
 } from "../bom-revision-change-panel"
 import { renderCard, unmountCard, clickButtonByText, setFieldValue } from "./card-test-utils"
@@ -165,5 +166,36 @@ describe("BomRevisionChangePanel F-2026-10-22-068-S", () => {
     expect(submit).toBeDefined()
     expect(submit!.hasAttribute("disabled")).toBe(true)
     unmountCard(root)
+  })
+})
+
+describe("isBomRevisionSubmitDisabled gerbang pratinjau F-2026-10-22-068-S", () => {
+  const siap = {
+    isPending: false,
+    previewLoading: false,
+    preview: { lines: [], hasGenuinelyNew: false },
+    toRevisionId: "11",
+    reason: "Perbaiki komposisi bahan",
+  }
+
+  it("semua siap -> aktif", () => {
+    expect(isBomRevisionSubmitDisabled(siap)).toBe(false)
+  })
+
+  it("pratinjau belum tampil (null) -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, preview: null })).toBe(true)
+  })
+
+  it("pratinjau dimuat ulang -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, previewLoading: true })).toBe(true)
+  })
+
+  it("pengiriman berjalan -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, isPending: true })).toBe(true)
+  })
+
+  it("tujuan/alasan kosong -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, toRevisionId: "" })).toBe(true)
+    expect(isBomRevisionSubmitDisabled({ ...siap, reason: "  " })).toBe(true)
   })
 })
