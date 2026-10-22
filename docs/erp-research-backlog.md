@@ -7996,3 +7996,253 @@ tetap boleh jalan lebih dulu: D-01/D-02/D-03 pencatatan +
 klasifikasi + D-05 laporan mode catat-dulu (nol jurnal) — persis
 gerbang mati pola F-006 di vonis §4.
 
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-070-S stok minimum per gudang + lead time (inti F-2026-10-21-013)
+
+Spec dokumen saja, tanpa kode/schema/migrasi. Dipilih sesudah anti-duplikat
+live 2026-10-22 atas `origin/main` 8506a72f: lapis aman F-013 SUDAH merged
+(builder `buildMinStockByWarehouse` + loader + note verbatim, tes
+min-stock-warehouse), tetapi inti `ItemWarehouseSetting` + lead time BELUM
+terspec sebagai -S — grep `ItemWarehouseSetting` hanya 2 penyebutan
+"komentar ditunda" (src/lib/reports/min-stock.ts:66,
+min-stock-data.ts:17), nol model, nol PR/kartu -S untuk F-013. Serial
+063-S..069-S (PR #497/#500/#502/#506/#507/#510) tidak disentuh. Induk
+tetap F-2026-10-21-013 (c) P1; spec ini TIDAK membuat ID gap baru.
+ID spec bebas: maks -S terpakai 069-S (PR #510 OPEN), jadi 070-S.
+
+### 0. Status bukti induk (jangan dibaca ulang sebagai janji)
+
+- `TERVERIFIKASI-KODE`: minimum hari ini SATU global per barang —
+  `Item.minStock` Decimal (prisma/schema.prisma:622), ditulis master di
+  src/actions/master.actions.ts:492,576. Tidak ada min per gudang,
+  tidak ada lead time / safety stock / reorder point: grep
+  `leadTimeDays|reorderPoint|safetyStock` di schema+reports = 0.
+- `TERVERIFIKASI-KODE`: lapis aman per gudang sudah jadi dan JUJUR:
+  `buildMinStockByWarehouse` membandingkan minStock GLOBAL yang sama ke
+  sisa lapisan tiap gudang; gudang tanpa lapisan tidak dinilai (bukan 0).
+  Note verbatim `MIN_STOCK_WAREHOUSE_NOTE` (min-stock-data.ts:21):
+  "Per gudang: minimum masih global — batas Item.minStock yang sama
+  dibandingkan ke stok tiap gudang; minimum per gudang belum diatur."
+  Rute `/laporan/stok-minimum` (report-catalog.ts:139, registry:624).
+  Spec ini mengganti SUMBER minimum builder itu, bukan builder kedua.
+- `TERVERIFIKASI-KODE`: peringatan menipis masih global-total:
+  `checkAndNotifyLowStock(Batch)` membandingkan `qtyOnHand <= minStock`
+  total semua gudang (notification.service.ts:135,150), dipanggil cron
+  src/app/api/cron/route.ts:169. Gudang bengkel kosong tertutup stok
+  pusat = tidak pernah menipis di notifikasi. Itu celah inti persis.
+- `TERVERIFIKASI-KODE`: bahan saran pesan parsial sudah ada —
+  `VendorItemPrice` (schema:505) murni rujukan harga per vendor+item+
+  minQty, TANPA leadTimeDays; `PurchaseOrder` (schema:1675) status
+  string `draft` default + `PurchaseOrderItem.receivedQty`
+  (schema:1722-an) untuk hitung incoming. Tidak ada builder "saran qty
+  pesan" hari ini (grep incoming di min-stock* = 0).
+- `TERVERIFIKASI-KODE`: izin nyata katalog — `view_items`/`edit_items`
+  (module-catalog.generated.ts:70,72), `view_warehouses`/
+  `edit_warehouses` (:88,90), `view_inventory` (:233), `view_reports`
+  (:411), `view/create_purchase_orders` (:203,204). Tidak ada izin
+  khusus pengaturan stok minimum hari ini.
+
+### 1. Benchmark resmi (akses 2026-10-22)
+
+- Accurate — Cara Mengatur Stok Minimum Barang: batas minimum diisi di
+  detail Barang & Jasa tab Penjualan/Pembelian; daftar "Barang Stok
+  Minimum" menampilkan yang di bawah batas sesudah Refresh:
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-stok-minimum/stok-minimum-barang/
+- Accurate — Mencatat Pembelian dari Stok Minimum: dari daftar stok
+  minimum, isi tab Gudang + Pemasok, ceklis barang, tombol Pesan membuat
+  pesanan pembelian dengan qty menyesuaikan batas minimum:
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/mencatat-pembelian-barang-sesuai-stok-minimum-persediaan/
+- Accurate — Permintaan Barang (dari stok minimum antar gudang/cabang),
+  rujukan induk F-013/F-014: https://help.accurate.id/product/permintaan-barang/
+- Zahir: stok minimum per gudang + lead time belum terverifikasi dari
+  help resmi run ini — label `BENCHMARK-BELUM-TERVERIFIKASI`, jangan
+  dikutip sebagai fakta vendor.
+
+Kesimpulan benchmark: Accurate membuktikan pola (a) minimum sebagai
+pengingat + dasar buat PO, (b) pilihan gudang pada daftar minimum.
+Minimum PER GUDANG dengan angka beda per gudang + lead time pemasok
+adalah kebutuhan ISF (gudang bengkel vs pusat) — `USULAN`, bukan klaim
+paritas vendor.
+
+### 2. Workflow specification (USULAN)
+
+Aktor: Admin gudang / kepala bengkel (atur), staf gudang (lihat),
+purchasing (pakai saran), sistem cron (peringatan).
+
+1. Admin membuka detail barang → panel "Stok minimum per gudang":
+   daftar semua gudang aktif; tiap baris menampilkan stok lapisan
+   gudang itu (dari builder existing), minimum efektif, dan sumbernya
+   ("Warisi global" / "Diatur per gudang").
+2. Admin mengisi/mengubah minimum per gudang (kosongkan = kembali
+   warisi global `Item.minStock`). Simpan per baris, tercatat siapa+kapan
+   (createdBy/updatedBy pola master existing).
+3. Laporan stok-minimum + notifikasi membaca minimum EFEKTIF per
+   (barang, gudang): override per gudang bila baris setting ada dan
+   aktif, selain itu `Item.minStock` global. Note verbatim lama
+   diganti hanya untuk baris yang sudah punya override (lihat BR-MS-04).
+4. (Tahap 2, terpisah) Purchasing melihat kolom tambahan di laporan:
+   titik pesan-ulang tampil + saran qty pesan per barang-gudang,
+   lalu membuat PO manual seperti biasa. Spec ini TIDAK membuat PO
+   otomatis.
+
+Dokumen masuk: master Item, master Warehouse, lapisan stok existing,
+(opsional tahap 2) VendorItemPrice + PO terbuka. Dokumen keluar: tidak
+ada dokumen transaksi baru — hanya baris pengaturan + tampilan laporan/
+notifikasi. Nol jurnal, nol StockMove dari pengaturan.
+
+### 3. Role / permission matrix (USULAN, izin dari katalog nyata)
+
+| Aksi | Admin gudang / Kepala bengkel | Staf gudang | Purchasing | Finance |
+|---|---|---|---|---|
+| Lihat panel minimum per gudang (di detail barang) | `view_items` | `view_items` | `view_items` | — |
+| Atur/hapus override minimum per gudang | `edit_items` (reuse; Q-MS-1) | — | — | — |
+| Atur leadTimeDays di harga pemasok (tahap 2) | `edit_items` (reuse; Q-MS-1) | — | `edit_items` (reuse) | — |
+| Lihat laporan stok-minimum per gudang | `view_reports` | `view_reports` | `view_reports` | `view_reports` |
+| Buat PO dari saran (manual, tahap 2) | — | — | `create_purchase_orders` (jalur existing) | — |
+
+Tidak ada permission key baru diusulkan; key khusus (mis.
+`edit_item_warehouse_settings`) = Q-MS-1 ke BOT 1 — menambah key =
+perubahan katalog + seed, jangan diam-diam reuse bila BOT 1 menolak.
+
+### 4. Status-transition matrix
+
+Pengaturan bukan dokumen berstatus; transisi = keadaan baris setting:
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada baris) | admin isi minimum gudang | override aktif | qty >= 0; item aktif & bukan jasa; gudang aktif |
+| override aktif | admin ubah angka | override aktif (angka baru) | terbaca laporan mulai muat berikutnya; tanpa histori versi (Q-MS-3) |
+| override aktif | admin kosongkan/hapus | warisi global | laporan kembali pakai `Item.minStock`; baris terhapus tercatat di ActivityLog pola master |
+| warisi global | `Item.minStock` global diubah | warisi global (angka baru) | jalur master existing, tidak diubah spec ini |
+| baris setting | item dinonaktifkan / gudang dinonaktifkan | tidak dinilai | builder melewati pasangan nonaktif; baris setting tidak ikut terhapus diam-diam |
+
+Turunan laporan (bukan status tersimpan): stok gudang <= minimum
+efektif → baris "menipis" di laporan; titik pesan-ulang & saran qty
+(tahap 2) selalu dihitung saat baca, tidak pernah disimpan.
+
+### 5. Business rules register
+
+- BR-MS-01 `TERVERIFIKASI-KODE`: hari ini minimum tunggal global
+  `Item.minStock` (schema:622); lapis aman membandingkannya ke tiap
+  gudang dengan note verbatim jujur (min-stock-data.ts:21). Spec ini
+  tidak menulis ulang fakta itu sebagai "sudah per gudang".
+- BR-MS-02 `USULAN`: sumber minimum efektif per (item, gudang) =
+  override `ItemWarehouseSetting.minStock` bila baris ada; selain itu
+  warisi `Item.minStock`. Default SEMUA barang = warisi (tanpa migrasi
+  data massal); override hanya lahir dari tindakan admin eksplisit.
+  Mitigasi risiko induk: total minimum lintas gudang tidak pernah
+  dijumlahkan jadi target stok oleh sistem.
+- BR-MS-03 `USULAN`: pasangan (item, gudang) tanpa lapisan stok tetap
+  TIDAK dinilai (perilaku lapis aman dipertahankan) — override pada
+  gudang yang tidak menyimpan barang itu tidak melahirkan baris
+  "menipis 0" karangan.
+- BR-MS-04 `USULAN`: kejujuran label — note laporan diganti per cakupan:
+  baris ber-override tampil "Minimum per gudang"; baris warisi tetap
+  membawa makna note lama. Dilarang melepas `MIN_STOCK_WAREHOUSE_NOTE`
+  global sebelum semua baris benar-benar per gudang. Kata persis =
+  kontrak BOT 2 (§8), jangan parafrase.
+- BR-MS-05 `USULAN`: notifikasi cron ikut sumber efektif per gudang
+  (gudang bengkel menipis walau pusat penuh = terbit peringatan menyebut
+  nama gudang). Dedupe per (item, gudang, periode) mengikuti pola dedupe
+  cron existing; jangan kirim dobel untuk pasangan sama.
+- BR-MS-06 `USULAN` (tahap 2): `leadTimeDays` menempel di
+  `VendorItemPrice` per (vendor, item) — pemasok utama = baris aktif
+  termurah? TIDAK ditebak: pilihan pemasok untuk lead time = Q-MS-2.
+  Tanpa lead time terisi, titik pesan-ulang tidak ditampilkan
+  (tampil "lead time belum diatur"), bukan 0 hari karangan.
+- BR-MS-07 `USULAN` (tahap 2): titik pesan-ulang tampil =
+  minimum efektif + kebutuhan selama lead time; kebutuhan harian TANPA
+  sumber pemakaian sah tidak boleh dikarang — sumber yang sah hanya
+  riwayat MaterialIssue/penjualan terbaca builder (kontrak BOT 3
+  tentukan jendela), selain itu kolom tampil "belum bisa dihitung".
+- BR-MS-08 `USULAN` (tahap 2): saran qty pesan = maks(0, titik
+  pesan-ulang − stok gudang − incoming PO terbuka untuk gudang itu).
+  Incoming = Σ(qty − receivedQty) PO non-draft/non-cancelled; definisi
+  status PO terhitung persis = kontrak BOT 3, jangan ditebak UI.
+  Saran = angka tampil saja; pembuatan PO tetap manual berizin.
+- BR-MS-09 `USULAN`: pengaturan tidak pernah menggerakkan stok/uang —
+  simpan/hapus override menghasilkan nol StockMove, nol jurnal, nol
+  reservasi. Falsifikasi BOT 6 AC-MS-6.
+- BR-MS-10 `BUTUH-VONIS`: tidak ada angka uang/pajak di spec ini;
+  nilai kekurangan laporan tetap qty × cost existing (bukan vonis
+  baru). Bila kelak saran qty jadi dasar PO otomatis bernilai, itu
+  kartu terpisah lewat BOT 4 — tahap ini TIDAK.
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Usulan 070-S |
+|---|---|---|---|---|
+| Batas minimum per barang | Ada (help resmi §1) | belum terverifikasi | Ada, global (schema:622) | tetap, jadi fallback |
+| Minimum beda per gudang | Pilihan gudang di daftar minimum (help §1) | belum terverifikasi | Note jujur "masih global" | override per (item, gudang) |
+| Buat PO dari daftar minimum | Ada, qty menyesuaikan batas (help §1) | belum terverifikasi | Manual dari laporan | tetap manual; saran qty tampil (tahap 2) |
+| Lead time pemasok → titik pesan-ulang | tidak diklaim run ini | belum terverifikasi | ABSEN (grep=0) | `VendorItemPrice.leadTimeDays` + turunan baca (tahap 2) |
+| Peringatan menipis per gudang | tidak diklaim run ini | belum terverifikasi | Global-total saja (cron) | per (item, gudang) efektif |
+
+### 7. Pertanyaan terbuka (jawaban menentukan implementasi; jangan ditebak)
+
+- Q-MS-1 → BOT 1: reuse `edit_items` untuk override + lead time, atau
+  key katalog baru? (menentukan seed/katalog; spec default reuse)
+- Q-MS-2 → BOT 1/BOT 3: pemasok acuan lead time per item dipilih
+  bagaimana (vendor master `Item.vendorId` vs baris VendorItemPrice
+  aktif termurah vs pilihan eksplisit per setting)? Jangan bangun
+  turunan reorder sebelum ini diputus.
+- Q-MS-3 → BOT 1: histori perubahan override perlu tabel versi, atau
+  cukup ActivityLog pola master existing? (spec usulkan ActivityLog)
+- Q-MS-4 → BOT 3: jendela + sumber hitung kebutuhan harian untuk
+  BR-MS-07 (MaterialIssue saja / + penjualan, berapa hari)? Tanpa
+  jawaban, tahap 2 berhenti di lead time tampil saja.
+- Q-MS-5 → BOT 1: tahap 2 (lead time + saran) satu kartu inti dengan
+  tahap 1, atau dipisah? (spec usulkan pisah: tahap 1 tidak menunggu
+  Q-MS-2/4)
+
+### 8. Draf acceptance (untuk BOT 6; falsifikasi wajib)
+
+- AC-MS-1 (BOT 3): barang minStock global 5, override gudang bengkel 2,
+  stok lapisan bengkel 3 + pusat 100 → laporan TIDAK menandai bengkel
+  menipis (3 > 2), note baris bengkel "Minimum per gudang". Cabut
+  pembacaan override di loader → bengkel tertandai (3 <= 5) = MERAH.
+- AC-MS-2 (BOT 3): tanpa override apa pun, keluaran builder+loader
+  identik perilaku lapis aman hari ini termasuk `MIN_STOCK_WAREHOUSE_NOTE`
+  verbatim. Satu saja baris warisi kehilangan note kejujuran = MERAH.
+- AC-MS-3 (BOT 3): override di gudang tanpa lapisan untuk barang itu →
+  tidak lahir baris menipis; paksa nilai 0 ikut dinilai = MERAH (BR-MS-03).
+- AC-MS-4 (BOT 3): notifikasi cron — bengkel di bawah minimum efektif,
+  total global di atas minimum → peringatan terbit menyebut gudang;
+  matikan sumber per-gudang di cron → peringatan hilang = MERAH.
+- AC-MS-5 (BOT 2): panel detail barang tanpa `edit_items`: angka
+  override tampil baca-saja, nol input aktif di DOM; dengan izin: simpan
+  kosong mengembalikan label "Warisi global". UI menghitung ulang
+  minimum efektif sendiri (bukan dari loader) = MERAH.
+- AC-MS-6 (BOT 6): simpan/hapus override lalu hitung StockMove + jurnal
+  periode itu: keduanya 0 dari aksi pengaturan (BR-MS-09).
+- AC-MS-7 (BOT 6, tahap 2): lead time kosong → kolom titik pesan-ulang
+  tampil "lead time belum diatur"; isi 0 karangan / saran qty lahir
+  dari kebutuhan harian tanpa sumber = MERAH (BR-MS-06/07).
+- AC-MS-8 (BOT 6, tahap 2): PO terbuka qty 10 received 4 untuk gudang
+  tujuan sama → incoming terhitung 6; PO draft/cancelled ikut terhitung
+  = MERAH (definisi status persis kontrak BOT 3 per BR-MS-08).
+
+### 9. Backlog implementasi (turunan spec ini; induk F-2026-10-21-013)
+
+- F-2026-10-22-070-S (spec ini, BOT 5, dokumen saja) — selesai run ini.
+- Kartu BOT 3 (backend, SESUDAH Q-MS-1): model `ItemWarehouseSetting`
+  (itemId, warehouseId, minStock, isActive warisan pola master,
+  @@unique [itemId, warehouseId]) + aksi simpan/hapus berizin +
+  loader min-stock membaca sumber efektif + cron per gudang.
+  Pasangan kartu BOT 2 (frontend): panel "Stok minimum per gudang" di
+  detail barang + label sumber per baris laporan, kata dari §5/BR-MS-04
+  persis. UI TIDAK menunggu polish — panel fitur dulu.
+- Kartu BOT 3 tahap 2 (SESUDAH Q-MS-2/4): `VendorItemPrice.leadTimeDays`
+  + turunan titik pesan-ulang/saran qty di builder existing.
+- Kartu BOT 6: falsifikasi AC-MS-1..8 di atas atas head BOT 3/BOT 2.
+
+### Yang TIDAK diusulkan run ini
+
+- PO otomatis dari stok minimum (Accurate punya tombol Pesan): ISF
+  tetap manual berizin — otomatisasi pembelian = keputusan proses
+  terpisah, bukan diam-diam di spec pengaturan.
+- Safety stock sebagai kolom terpisah: induk menyebutnya, tetapi tanpa
+  Q-MS-4 (sumber kebutuhan harian) angka safety = karangan; masuk
+  tahap 2 atau tidak sama sekali, jangan kolom mati.
+- Minimum per rak/row: Rack/RackRow existing cukup; per gudang saja.
