@@ -120,6 +120,32 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-012 inti backend; tombol lepas reservasi menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reserveStockForWorkOrder":
     "F-2026-10-21-012 inti backend; tombol reservasi ulang menyusul (frontend)",
+  // F-2026-10-22-072-S inti (t_f1358a33): aksi catat-lepas registri
+  // InstalledPart backend dulu; form catat-lepas di kartu part terpasang
+  // menyusul (frontend Fira; buang entri ini saat UI memanggilnya).
+  "src/actions/warranty.actions.ts::recordInstalledPartRemovalAction":
+    "F-2026-10-22-072-S inti backend; form catat-lepas part terpasang menyusul (frontend)",
+  // F-2026-10-22-078-S inti (t_7de0eff1): 9 aksi Permintaan Antar Gudang
+  // backend dulu; halaman /inventaris/permintaan-gudang menyusul di kartu
+  // frontend t_7bfec14e (buang entri ini saat UI memanggilnya).
+  "src/actions/material-request.actions.ts::createMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::updateMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::deleteMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::submitMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::approveMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::rejectMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::cancelMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::closeMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::createTransferFromMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
   // F-2026-10-21-027 backend dulu (PR #360): 10 aksi komponen gaji sudah
   // dirujuk UI PR #374 (entri bekunya dibuang); tersisa getPayrollComponentLines.
   // Buang entri ini saat UI memanggilnya.
@@ -131,17 +157,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
   // F-2026-10-22-066-S: 7 aksi JobChangeOrder kini dirujuk panel Change Order
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
-  // F-2026-10-22-067-S backend dulu: kontrak jadwal termin siap; kartu
-  // jadwal di JobBillingCard menyusul di kartu frontend t_ba8fe9ef
-  // (buang 4 entri ini saat komponen kartu jadwal memanggilnya).
-  "src/actions/job-payment-schedule.actions.ts::createJobPaymentSchedule":
-    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
-  "src/actions/job-payment-schedule.actions.ts::updateJobPaymentScheduleTerms":
-    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
-  "src/actions/job-payment-schedule.actions.ts::cancelJobPaymentSchedule":
-    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
-  "src/actions/job-payment-schedule.actions.ts::getJobPaymentScheduleForQuotation":
-    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
+  // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal
+  // di JobBillingCard (t_ba8fe9ef) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {
