@@ -2507,6 +2507,8 @@ model BomRevision {
   productionOrders ProductionOrder[]
   workOrders       WorkOrder[]
   fitmentRules     VehicleFitmentRule[]
+  changeRequestsFrom BomRevisionChangeRequest[] @relation("ChangeFromRevision")
+  changeRequestsTo   BomRevisionChangeRequest[] @relation("ChangeToRevision")
 
   @@unique([productId, revisionNo], map: "bom_revisions_product_revision_unique")
   @@index([productId], map: "bom_revisions_product_id_fkey")
@@ -2570,6 +2572,7 @@ model ProductionOrder {
   product           Product                   @relation(fields: [productId], references: [id])
   bomRevision       BomRevision?              @relation(fields: [bomRevisionId], references: [id], onDelete: SetNull)
   workOrder         WorkOrder?                @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+  bomChangeRequests BomRevisionChangeRequest[]
 
   @@index([productId], map: "production_orders_product_id_fkey")
   @@index([bomRevisionId])
@@ -2881,6 +2884,7 @@ model WorkOrder {
   warrantyRepairClaims WarrantyClaim[] @relation("WarrantyClaimRepairWorkOrder")
   changeOrders      JobChangeOrder[]
   materialRequests  MaterialRequest[]
+  bomChangeRequests BomRevisionChangeRequest[]
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
@@ -5093,4 +5097,41 @@ model SalesTarget {
   @@index([deletedAt])
   @@index([createdAt])
   @@map("sales_targets")
+}
+
+// F-2026-10-22-068-S (Q-BOM68-3 fisik BOT 3): pengajuan ganti revisi BOM
+// pada order berjalan — perubahan terkendali, bukan revisi diam-diam.
+// Status bebas: menunggu | disetujui | ditolak | diterapkan_langsung.
+// Penjaga mengikat di aksi bom-revision-change.actions, BUKAN skema:
+// belum ter-issue = langsung diterapkan dalam satu transaksi
+// (BR-BOM68-02); sudah ter-issue = usulan wajib diputus, penyetuju !=
+// pengaju (SoD BR-BOM68-05), tolak wajib alasan, pin dokumen diganti di
+// transaksi persetujuan yang sama (BR-BOM68-06). Semua aksi TIDAK
+// PERNAH membuat StockMove/MaterialIssue/ProductionCost/jurnal (vonis
+// F-074-V dirujuk BR-BOM68-09). Satu dokumen pemilik per pengajuan
+// (BR-BOM68-07): workOrderId ATAU productionOrderId.
+model BomRevisionChangeRequest {
+  id                Int       @id @default(autoincrement())
+  workOrderId       Int?      @map("work_order_id")
+  productionOrderId Int?      @map("production_order_id")
+  fromRevisionId    Int       @map("from_revision_id")
+  toRevisionId      Int       @map("to_revision_id")
+  reason            String    @db.Text
+  status            String    @default("menunggu") @db.VarChar(30)
+  requestedBy       Int?      @map("requested_by")
+  decidedBy         Int?      @map("decided_by")
+  decidedAt         DateTime? @map("decided_at")
+  decisionReason    String?   @map("decision_reason") @db.Text
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  workOrder       WorkOrder?       @relation(fields: [workOrderId], references: [id])
+  productionOrder ProductionOrder? @relation(fields: [productionOrderId], references: [id])
+  fromRevision    BomRevision      @relation("ChangeFromRevision", fields: [fromRevisionId], references: [id])
+  toRevision      BomRevision      @relation("ChangeToRevision", fields: [toRevisionId], references: [id])
+
+  @@index([workOrderId, status])
+  @@index([productionOrderId, status])
+  @@index([createdAt])
+  @@map("bom_revision_change_requests")
 }
