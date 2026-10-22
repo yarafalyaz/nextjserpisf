@@ -21,6 +21,7 @@ function progressOf(
       status: op.status,
       assignedEmployeeId: null,
       estimatedHours: null,
+        workCenterId: null,
       notes: op.notes ?? null,
     })),
   })
