@@ -6949,3 +6949,167 @@ spec BOT 5; 056-V sudah dipakai vonis Q-KOM-1 PR #440 — renumber
 sesudah tabrakan ID terdeteksi, isi vonis nol berubah). Pemilik berikutnya: BOT 3 (bentuk fisik + migrasi
 sesudah #436 merged dan koordinasi board) -> BOT 2 -> BOT 6 §4.
 
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-066-V: scrap/yield produksi — batas normal vs abnormal + akun beban periode (pelengkap F-2026-10-21-008)
+
+Pemutus: BOT 4 (accounting-finance-tax). Kartu: t_c4c5c0b3 (siklus
+standby 11:06 — antrean vonis terbit terbukti semua ter-gate merge
+Lead, lihat §0; vonis ini = riset bebas-dependensi berikutnya).
+Tertulis saja — tanpa kode/schema/migrasi. TIDAK membuka inti
+F-008 (kolom `scrapQty`/`scrapReasonCode`/`scrapPercent` tetap
+pekerjaan BOT 3); vonis ini MEMUTUS perlakuan akuntansinya supaya
+inti itu tidak dibangun dengan asumsi "semua scrap = biaya job"
+yang keliru sebagian.
+
+### 0. Bukti antrean ter-gate (live 2026-10-22 11:06-11:08 WIB, origin/main ea430e34)
+
+Semua vonis BOT 4 yang sudah terbit masih OPEN menunggu merge Lead
+(CI hijau di head persis; beberapa sudah LOLOS BOT 6 di head itu):
+#490 F-062-V (6/6, audit BOT 6 diminta Lead 03:34Z), #459 F-060-V
+(5/5, BOT 6 LOLOS final dc6b2368), #454 F-059-V (5/5, BOT 6 LOLOS
+d309e141), #443 F-058-V (5/5, BOT 6 LOLOS db8b8df6), #440 F-056-V
+(5/5, BOT 6 LOLOS-BERSYARAT d6c94383), #411 F-050-V (6/6, BOT 6
+LOLOS 437d4792), #406 F-048-V (6/6, BOT 6 nol-berubah 3fc23cb3),
+#498 F-063-V (6/6 BLOCKED, belum ada verdict BOT 6). Pertanyaan
+terbuka lama yang dicek ulang run ini SUDAH terjawab semua:
+Q-033-1/2/4 (vonis F-033 di backlog baris 4377), Q-BUPOT-052-1..3
+(vonis F-055-V), Q-SEWA-1..7 (F-042-V), label BUTUH-VONIS-AKUNTAN
+F-021 §9 (vonis 04:50 WIB). Jadi tidak ada vonis tertunda yang
+prasyaratnya bebas; yang dipilih = F-008 scrap, satu-satunya item
+domain (b)/(c) yang catatannya masih berbunyi "tanpa vonis
+accountant" padahal batas normal/abnormal-nya keputusan akuntansi.
+
+### 1. Koreksi premis lama
+
+Catatan F-008 (baris ~762): "tanpa vonis accountant (tidak mengubah
+posting; scrap tetap biaya job)". BENAR untuk scrap NORMAL, SALAH
+sebagai pernyataan umum: PSAK 14 par. 16(a) mengeluarkan "jumlah
+pemborosan bahan, tenaga kerja, atau biaya produksi lainnya yang
+TIDAK NORMAL" dari biaya perolehan persediaan — diakui sebagai
+BEBAN periode terjadinya. Scrap abnormal yang tetap menumpuk di
+WIP → FG menaikkan nilai persediaan dan menunda beban; itu cacat
+pengukuran, bukan pilihan tampilan. Maka F-008 butuh vonis ini
+SEBELUM kolom scrap dibangun, supaya klasifikasi tercatat sejak
+baris pertama (retrofit klasifikasi sesudah data menumpuk =
+tebakan ulang).
+
+### 2. Putusan (mengikat)
+
+P1. Definisi. Scrap NORMAL = pemakaian berlebih bahan yang melekat
+    pada proses yang efisien untuk output yang benar-benar dicapai
+    (sisa potong tak terhindarkan, process loss wajar), dibatasi
+    allowance per baris BOM. Scrap ABNORMAL = pemborosan di luar
+    allowance itu (salah potong, gagal las, rusak material, pengerjaan
+    ulang bahan). Allowance NOL (belum diatur di BOM) → seluruh
+    scrap baris itu ABNORMAL. Dilarang allowance global/default
+    karangan di service — allowance hidup per baris BOM
+    (`scrapPercent` Decimal(5,2) di `BomRevisionMaterial`, usulan
+    F-008), nol = belum dikalibrasi, tampil sebagai temuan
+    kalibrasi, bukan dianggap normal.
+P2. Perlakuan jurnal.
+    (a) Scrap NORMAL tetap biaya job: jalur existing tidak berubah
+        (Dr WIP setting `wipAccountId` / Cr Persediaan saat issue;
+        mengalir ke FG saat completion). TANPA jurnal baru.
+    (b) Scrap ABNORMAL = beban periode, WAJIB keluar dari WIP pada
+        periode terjadinya: Dr Beban Kerugian Produksi (akun BARU
+        setting `abnormalScrapExpenseAccountId`, fail-closed) /
+        Cr WIP, sebesar nilai scrap abnormal baris (qty abnormal ×
+        cost terbawa FIFO baris, safeRound sen). Jurnal pada event
+        yang sama dengan complete issue (tx sama, `assertPeriodOpen`,
+        idempotency key mutasi finansial, referenceType bernama per
+        dokumen issue — BOT 3 tetapkan nama persis, anti-dobel
+        per dokumen). Akun kosong saat ada scrap abnormal → complete
+        DITOLAK berisik; DILARANG fallback ke `materialExpenseAccountId`/
+        `cogsAccountId` (fallback itu hanya untuk selisih PEMBULATAN
+        < ambang di `onProductionOrderCostRoundingVariance`, beda
+        sifat). Seed COA akun baru = keputusan BOT 3 mengusulkan kode
+        di keluarga 5101 ke BOT 4/Lead sebelum migrasi — vonis ini
+        TIDAK menetapkan nomor akun.
+    (c) FG/completion tidak berubah: WIP yang dilepas ke FG hanya
+        biaya normal + aktual sah; scrap abnormal tidak pernah
+        masuk nilai FG maupun COGS penjualan.
+P3. Sisa usable (Remnant) BUKAN scrap: tidak ada jurnal nilai baru;
+    Remnant tetap catatan kuantitas di luar stok (konvensi existing
+    dipertahankan — qtyOnHand tidak bertambah). Nilai bahan yang
+    menjadi remnant usable tetap biaya job (sudah keluar ke WIP);
+    bila remnant kelak terpakai di job lain TANPA movement stok,
+    dilarang mengkredit WIP/beban job asal (tidak ada nilai stok
+    untuk dipindah) — pemakaian berikutnya = memo kuantitas saja.
+    Remnant yang akhirnya di-scrap (status scrap existing): nilai
+    yang dulu masuk WIP job asal TIDAK direklasifikasi retroaktif;
+    kerugian diakui hanya bila remnant itu sebelumnya tercatat
+    sebagai aset — ia tidak, jadi nol jurnal; alasan scrap wajib
+    (penjaga existing `scrapRemnant`).
+P4. Klasifikasi ABNORMAL wajib alasan terstruktur per baris
+    (`scrapReasonCode` enum bernama: salah_potong/gagal_las/
+    rusak_material/sisa_tak_terpakai/lainnya_dengan_catatan);
+    `lainnya` tanpa catatan = DITOLAK. Scrap ≤ allowance dengan
+    kode alasan tetap tercatat untuk laporan yield, tanpa jurnal
+    abnormal. Koreksi klasifikasi sesudah issue completed HANYA
+    lewat jurnal koreksi/reversal di periode terbuka — dilarang
+    edit baris issue completed (konsisten prinsip posting).
+P5. Laporan (read-model, tanpa hitung ulang di UI): scrap rate per
+    item/job/periode = qty scrap ÷ qty issue baris; nilai Rp normal
+    vs abnormal terpisah; total beban abnormal rekonsiliasi ke
+    jurnal akun P2(b) periode itu — selisih tampil sebagai temuan,
+    dilarang dipilih diam-diam. Laporan varians produksi existing
+    (`production-variance.ts`) TIDAK diubah vonis ini; scrap
+    abnormal tampil di laporan scrap F-008, dan catatan silang:
+    usage variance laporan varians MEMUAT scrap (normal+abnormal)
+    karena ia membandingkan qty aktual vs BOM — jangan dijumlahkan
+    dua kali dengan laporan scrap saat membaca keduanya.
+
+### 3. Dasar
+
+- PSAK 14 (Persediaan) par. 10, 15, 16(a), 34, 38 — konvergen IAS 2
+  par. 16(a): pemborosan TIDAK NORMAL dikeluarkan dari biaya
+  perolehan persediaan, diakui beban periode terjadinya; overhead
+  tak teralokasi + jumlah abnormal masuk beban periode (par. 38).
+  Sumber resmi IFRS (IAS 2 issued 2024, diakses 2026-10-22):
+  https://www.ifrs.org/content/dam/ifrs/publications/pdf-standards/english/2024/issued/part-a/ias-2-inventories.pdf
+  Teks PSAK 14 par. 16(a) identik substansi (DSAK IAI mengadopsi
+  IAS 2). Klaim terbatas: dasar klasifikasi biaya persediaan —
+  BUKAN klaim kepatuhan SPT; deductibility fiskal kerugian produksi
+  mengikuti uji 3M Pasal 6 UU PPh per kasus dokumen, tidak diputus
+  vonis ini (tandai BUTUH-VONIS-AKUNTAN bila ada kasus sengketa).
+- Kode berjalan diverifikasi run ini di origin/main ea430e34:
+  `onProductionOrderMaterialIssue` Dr WIP/Cr Persediaan
+  (stock-journal.service.ts:496-540); completion Dr Persediaan/Cr
+  WIP nilai aktual penuh (:601-642); `BomRevisionMaterial` hanya
+  qty; `MaterialIssueItem` tanpa plannedQty/scrapQty; `Remnant`
+  sourceType/sourceId generik nullable + scrapReason teks bebas.
+
+### 4. Batas build + acceptance BOT 6 (draf)
+
+- BOT 3: inti F-008 (kolom BOM/issue + kode alasan) SESUDAH klaim
+  schema di board & usulan kode akun P2(b); penjaga P2/P4 di service
+  dalam tx; snapshot cost baris beku saat complete (edit master
+  tidak mengubah klasifikasi lama).
+- BOT 2: tampilkan qty/nilai scrap normal vs abnormal + status
+  kalibrasi allowance apa adanya dari backend; UI tidak menentukan
+  normal/abnormal dan tidak menghitung rate sendiri.
+- BOT 6 (falsifikasi — MERAH bila penjaga dicabut): S1 scrap dalam
+  allowance → nol jurnal abnormal, WIP utuh; S2 scrap melewati
+  allowance → jurnal Dr beban abnormal/Cr WIP sen persis atas
+  porsi abnormal saja; S3 allowance 0 → seluruh scrap abnormal;
+  S4 akun setting kosong + ada scrap abnormal → complete ditolak,
+  nol jurnal parsial; S5 ganti fallback akun ke materialExpense →
+  tes S4 MERAH (penjaga fail-closed terbukti); S6 edit baris issue
+  completed mengubah klasifikasi → ditolak; S7 remnant usable dari
+  baris scrap → nol movement stok + nol jurnal nilai; S8 total
+  laporan abnormal ≠ jurnal periode → tampil selisih, bukan nol
+  diam-diam; S9 `lainnya` tanpa catatan → ditolak.
+- Risiko: allowance BOM belum dikalibrasi massal → gelombang scrap
+  abnormal palsu saat go-live. Mitigasi: mode catat-dulu (klasifikasi
+  + laporan jalan, jurnal P2(b) hanya bila setting akun terisi DAN
+  flag tenant eksplisit diusulkan BOT 3 ke Lead — pola gerbang mati
+  F-006); tanpa flag, scrap abnormal tampil sebagai temuan laporan,
+  belum beban jurnal. Keputusan flag = Lead atas usulan BOT 3,
+  bukan diam-diam aktif.
+
+ID vonis ini **F-2026-10-22-066-V** (066 bebas: 063-V arus kas PR
+#498, 063-S/064-S/065-S spec BOT 5). Pemilik berikutnya: Lead
+(merge vonis + putusan flag §4) → BOT 3 (inti F-008 + akun) →
+BOT 2 → BOT 6 S1-S9.
