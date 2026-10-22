@@ -2,19 +2,23 @@
  * Pemuatan data laporan pemeriksaan **Stok Tidak Bergerak**.
  *
  * Sumber:
- * - Sisa + nilai: lapisan FIFO (`InventoryLayer.remaining > 0`) diagregat
- *   per barang — basis yang sama dengan Valuasi Stok, bukan `qtyOnHand`.
- * - Keluar terakhir: StockMove posted impact OUT terbaru per barang
- *   (groupBy itemId, _max date). Tanggal pakai `date` dokumen bila ada,
- *   jatuh ke `createdAt` — dipilih di builder lewat fakta yang sama agar
- *   loader tetap tipis: di sini _max atas `date`; baris tanpa tanggal
- *   dokumen (date null) tetap terhitung lewat createdAt cadangan.
+ * - Sisa + nilai: lapisan sisa > 0 dimuat `findMany`, dipetakan lewat
+ *   `toValuationLayers` lalu dinilai per barang lewat jalur kanonis
+ *   Valuasi Stok (`resolveCostingMethod` + `layerValue`: average dari
+ *   `Item.cost`, fifo dari harga lapisan) — bukan `qtyOnHand`.
+ * - Keluar terakhir: StockMove posted impact OUT barang bersisa dimuat
+ *   `findMany`, lalu tanggal efektif terbaru dipilih di memori per
+ *   barang (tanggal dokumen bila ada, jatuh ke `createdAt` — lihat
+ *   `effectiveOutDate`). Tanpa batas baris; diterima untuk laporan
+ *   pemeriksaan, utang performa bila volume move besar.
  *
  * Hanya barang aktif non-jasa. Tanpa jurnal, tanpa tulis.
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { getSystemSettings } from "@/lib/utils/settings"
 import { rangePeriodLabels } from "@/lib/reports/period-label"
+import { toValuationLayers } from "@/lib/reports/stock-valuation"
 import {
   buildSlowMovingStock,
   slowMovingValueOfLayers,
@@ -41,47 +45,38 @@ export async function loadSlowMovingStock(input?: {
   const asOf = input?.asOf ?? new Date()
   const thresholdDays = input?.thresholdDays ?? SLOW_MOVING_DEFAULT_THRESHOLD_DAYS
 
-  const layers = await prisma.inventoryLayer.findMany({
-    where: { remaining: { gt: 0 } },
-    select: { itemId: true, remaining: true, unitCost: true },
-  })
-  const layersByItem = new Map<number, { remaining: unknown; unitCost: unknown }[]>()
-  for (const layer of layers) {
-    const list = layersByItem.get(layer.itemId) ?? []
-    list.push(layer)
-    layersByItem.set(layer.itemId, list)
-  }
+  const settings = await getSystemSettings()
 
-  const itemIds = [...layersByItem.keys()]
-  const [items, lastOutMoves] = await Promise.all([
-    itemIds.length
-      ? prisma.item.findMany({
-          where: { id: { in: itemIds }, isActive: true, deletedAt: null, isService: false },
-          select: {
-            id: true,
-            sku: true,
-            name: true,
-            unitOfMeasure: true,
-            category: { select: { name: true } },
-          },
-        })
-      : Promise.resolve(
-          [] as {
-            id: number
-            sku: string
-            name: string
-            unitOfMeasure: string
-            category: { name: string } | null
-          }[],
-        ),
-    itemIds.length
-      ? prisma.stockMove.findMany({
-          where: { itemId: { in: itemIds }, impact: "OUT", status: "posted" },
-          select: { itemId: true, date: true, createdAt: true },
-          orderBy: { createdAt: "desc" },
-        })
-      : Promise.resolve([] as { itemId: number; date: Date | null; createdAt: Date }[]),
-  ])
+  const rawLayers = await prisma.inventoryLayer.findMany({
+    where: {
+      remaining: { gt: 0 },
+      item: { isActive: true, deletedAt: null, isService: false },
+    },
+    select: {
+      itemId: true,
+      warehouseId: true,
+      remaining: true,
+      unitCost: true,
+      item: {
+        select: {
+          sku: true,
+          name: true,
+          unitOfMeasure: true,
+          cost: true,
+          costingMethod: true,
+          category: { select: { name: true, costingMethod: true } },
+        },
+      },
+    },
+  })
+
+  const itemIds = [...new Set(rawLayers.map((layer) => layer.itemId))]
+  const lastOutMoves = itemIds.length
+    ? await prisma.stockMove.findMany({
+        where: { itemId: { in: itemIds }, impact: "OUT", status: "posted" },
+        select: { itemId: true, date: true, createdAt: true },
+      })
+    : []
 
   const lastOutByItem = new Map<number, Date>()
   for (const move of lastOutMoves) {
@@ -92,17 +87,25 @@ export async function loadSlowMovingStock(input?: {
     }
   }
 
+  const layersByItem = new Map<number, ReturnType<typeof toValuationLayers>>()
+  for (const layer of toValuationLayers(rawLayers)) {
+    const list = layersByItem.get(layer.itemId) ?? []
+    list.push(layer)
+    layersByItem.set(layer.itemId, list)
+  }
+
   const report = buildSlowMovingStock({
-    items: items.map((item) => {
-      const totals = slowMovingValueOfLayers(layersByItem.get(item.id) ?? [])
+    items: [...layersByItem.entries()].map(([itemId, itemLayers]) => {
+      const first = itemLayers[0]
+      const totals = slowMovingValueOfLayers(itemLayers, settings.costingMethod)
       return {
-        sku: item.sku,
-        name: item.name,
-        categoryName: item.category?.name ?? null,
-        unit: item.unitOfMeasure,
+        sku: first.item.sku,
+        name: first.item.name,
+        categoryName: first.item.category?.name ?? null,
+        unit: first.item.unitOfMeasure,
         remainingQty: totals.remainingQty,
         remainingValue: totals.remainingValue,
-        lastOutDate: lastOutByItem.get(item.id) ?? null,
+        lastOutDate: lastOutByItem.get(itemId) ?? null,
       }
     }),
     asOf,

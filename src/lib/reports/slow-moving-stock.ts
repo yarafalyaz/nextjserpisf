@@ -17,15 +17,17 @@
  *   dinyatakan di catatan, bukan disembunyikan.
  * - Barang yang tidak pernah keluar sama sekali tampil dengan label
  *   "Belum pernah keluar", bukan umur karangan 0 hari.
- * - Nilai = sisa lapisan x unitCost lapisan (basis FIFO yang sama
- *   dengan Valuasi Stok), persis sen; qty tidak dijumlah lintas satuan.
+ * - Nilai per barang menurut metode barangnya (average dari harga
+ *   pokok barang, fifo dari harga lapisan) — basis yang sama dengan
+ *   Valuasi Stok, persis sen; qty tidak dijumlah lintas satuan.
  * - Ambang baku 90 hari; pemanggil boleh mengganti.
  *
  * Pure (tanpa Prisma/DOM).
  */
 
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
-import { safeAdd, safeMultiply } from "@/lib/utils/math"
+import { safeAdd } from "@/lib/utils/math"
+import { layerValue, resolveCostingMethod } from "@/lib/reports/stock-valuation"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 export const SLOW_MOVING_DEFAULT_THRESHOLD_DAYS = 90
@@ -46,9 +48,9 @@ export interface SlowMovingItemInput {
   name: string
   categoryName: string | null
   unit: string | null
-  /** Sisa kuantitas lapisan FIFO (agregat semua gudang). */
+  /** Sisa kuantitas lapisan (agregat semua gudang). */
   remainingQty: number
-  /** Nilai sisa lapisan FIFO, persis sen. */
+  /** Nilai sisa menurut metode barang, persis sen. */
   remainingValue: number
   /** Tanggal StockMove OUT posted terakhir; null = belum pernah keluar. */
   lastOutDate: Date | null
@@ -168,7 +170,7 @@ export function buildSlowMovingStock(input: {
     rows.push({
       kind: "notice",
       text:
-        "Nilai sisa dari lapisan FIFO (sisa x harga lapisan), sama dengan basis Valuasi Stok. " +
+        "Nilai sisa menurut metode barang (average dari harga pokok barang, fifo dari harga lapisan), sama dengan basis Valuasi Stok. " +
         "Pergerakan keluar transfer antar gudang terhitung sebagai keluar — barang yang hanya " +
         "berpindah gudang tidak masuk daftar ini. Barang \"Belum pernah keluar\" belum pernah " +
         "mencatat pergerakan keluar posted sejak tercatat di sistem.",
@@ -201,18 +203,32 @@ export function buildSlowMovingStock(input: {
   }
 }
 
-/** Nilai lapisan -> input barang (dipakai loader; persis sen per lapisan). */
+/**
+ * Nilai lapisan kanonis -> input barang (dipakai loader; persis sen).
+ * Input = keluaran `toValuationLayers`; metode efektif per barang lewat
+ * `resolveCostingMethod` (kategori > barang > global > fifo), nilai per
+ * lapisan lewat `layerValue` — persis jalur `buildStockValuation`, supaya
+ * nominal per barang identik Valuasi Stok untuk fifo DAN average.
+ */
 export function slowMovingValueOfLayers(
-  layers: { remaining: unknown; unitCost: unknown }[],
+  layers: {
+    remaining: number
+    unitCost: number
+    item: {
+      cost: number
+      costingMethod: string | null
+      category: { costingMethod: string | null } | null
+    }
+  }[],
+  globalMethod?: string | null,
 ): { remainingQty: number; remainingValue: number } {
   let remainingQty = 0
   let remainingValue = 0
   for (const layer of layers) {
-    const remaining = Number(layer.remaining)
-    remainingQty = safeAdd(remainingQty, remaining, 2)
+    remainingQty = safeAdd(remainingQty, layer.remaining, 2)
     remainingValue = safeAdd(
       remainingValue,
-      safeMultiply(remaining, Number(layer.unitCost), 2),
+      layerValue(layer, resolveCostingMethod(layer.item, globalMethod)),
       2,
     )
   }

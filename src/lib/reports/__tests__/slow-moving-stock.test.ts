@@ -87,13 +87,64 @@ describe("buildSlowMovingStock", () => {
 })
 
 describe("slowMovingValueOfLayers + effectiveOutDate (lapis loader)", () => {
-  it("nilai persis sen per lapisan, qty agregat", () => {
+  const layer = (
+    remaining: number,
+    unitCost: number,
+    over: {
+      cost?: number
+      costingMethod?: string | null
+      categoryMethod?: string | null
+    } = {},
+  ) => ({
+    remaining,
+    unitCost,
+    item: {
+      cost: over.cost ?? 0,
+      costingMethod: over.costingMethod ?? null,
+      category:
+        over.categoryMethod === undefined
+          ? null
+          : { costingMethod: over.categoryMethod },
+    },
+  })
+
+  it("nilai fifo persis sen per lapisan, qty agregat", () => {
     const totals = slowMovingValueOfLayers([
-      { remaining: "2.00", unitCost: "150000.50" },
-      { remaining: "1.00", unitCost: "100000.25" },
+      layer(2, 150_000.5),
+      layer(1, 100_000.25),
     ])
     expect(totals.remainingQty).toBe(3)
     expect(totals.remainingValue).toBe(400_001.25)
+  })
+
+  it("metode average dinilai dari cost barang, bukan harga lapisan", () => {
+    const layers = [
+      layer(2, 150_000.5, { cost: 120_000, costingMethod: "average" }),
+      layer(1, 100_000.25, { cost: 120_000, costingMethod: "average" }),
+    ]
+    expect(slowMovingValueOfLayers(layers)).toEqual({
+      remainingQty: 3,
+      remainingValue: 360_000,
+    })
+    expect(
+      slowMovingValueOfLayers(
+        layers.map((l) => ({ ...l, item: { ...l.item, costingMethod: "fifo" } })),
+      ).remainingValue,
+    ).toBe(400_001.25)
+  })
+
+  it("metode kategori menang atas barang; global dipakai bila keduanya kosong", () => {
+    const byCategory = [
+      layer(2, 150_000.5, {
+        cost: 120_000,
+        costingMethod: "fifo",
+        categoryMethod: "average",
+      }),
+    ]
+    expect(slowMovingValueOfLayers(byCategory).remainingValue).toBe(240_000)
+    const byGlobal = [layer(2, 150_000.5, { cost: 120_000 })]
+    expect(slowMovingValueOfLayers(byGlobal, "average").remainingValue).toBe(240_000)
+    expect(slowMovingValueOfLayers(byGlobal, "fifo").remainingValue).toBe(300_001)
   })
 
   it("tanggal dokumen didahulukan; null jatuh ke createdAt", () => {
