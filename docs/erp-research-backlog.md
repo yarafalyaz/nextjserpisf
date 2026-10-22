@@ -7493,6 +7493,195 @@ PR #503; seri -V bebas tabrakan per grep origin/main 2026-10-22,
 maks -V terpakai 057-V). Pemilik berikutnya: BOT 3 (inti t_af177f74
 sesudah PR #503 merged + putusan BOT 1 §5A) -> BOT 2 -> BOT 6
 falsifikasi 1-5 di atas.
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-068-S ganti revisi BOM pada order berjalan (inti F-2026-10-20-104)
+
+Status: SPEC DOKUMEN SAJA (tanpa kode/schema/migrasi). Induk F-2026-10-20-104 (c) P1.
+ID bebas terverifikasi: maks -S terpakai 067-S (PR #506 OPEN); 068-S belum ada di
+origin/main ea430e34 maupun PR terbuka (gh pr list 2026-10-22).
+
+Benchmark resmi (akses 2026-10-22):
+- Cetec ERP Change Rev pada WO terbuka: unpick material revisi lama lalu re-pick
+  ke suborder revisi baru, peringatan eksplisit sebelum konfirmasi:
+  https://cetecerp.com/blog/production-management/updating-bom-revisions-on-open-work-orders-in-cetec-erp/
+- Accurate Perintah Kerja: kuantitas bahan baku bisa diubah langsung di formulir
+  Perintah Kerja (tanpa prosedur ganti revisi terpisah di help resmi):
+  https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/buat-perintah-kerja/
+- Zahir: tidak ditemukan prosedur ganti revisi BOM pada order berjalan di help
+  resmi pada akses ini — jangan klaim paritas Zahir (belum terverifikasi).
+
+### 0. Verifikasi live origin/main ea430e34 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `BomRevision` immutable berversi draft→released→superseded per Product
+  (`prisma/schema.prisma:2288-2333`, `@@unique([productId, revisionNo])`);
+  `BomRevisionMaterial` qty per revisi (`:2322-2332`).
+- Pin revisi HANYA saat ProductionOrder lahir: `createProductionOrder`
+  `effectiveBom.revisionId` → `ProductionOrder.bomRevisionId`
+  (`src/actions/manufacturing.actions.ts:668,700`) dan pin pinjaman ke WO
+  hanya bila `WorkOrder.bomRevisionId == null`
+  (`manufacturing.actions.ts:733-734`). WO tanpa PO tidak pernah ter-pin.
+- Lapis aman SUDAH merged: builder dampak revisi
+  `src/lib/reports/bom-revision-impact.ts:1-14` (header tegas: "Tidak ada
+  mutasi, tidak ada unpick/re-pick (inti F-41(b) ditunda-teknis)") +
+  loader `bom-revision-impact-data.ts` + `buildBomRevisionImpact`
+  menghitung issued/outstanding per baris WO dari MaterialIssue completed.
+  Grep konsumen UI (src/app/src/components *.tsx) = 0 pada run ini.
+
+Belum ada / parsial (TERVERIFIKASI-KODE, grep run ini):
+- ABSEN aksi ganti revisi pada order berjalan: grep
+  `changeBom|ganti revisi|unpick|re-pick` di src/ = 0 aksi; tidak ada aksi
+  yang mengubah `WorkOrder.bomRevisionId`/`ProductionOrder.bomRevisionId`
+  sesudah pin, membekukan material ter-issue, atau mencatat alasan ganti.
+- `ProductionOrderMaterial` dibekukan saat PO lahir
+  (`manufacturing.actions.ts:710-714`); ganti revisi tidak menyentuh baris
+  material PO berjalan — kebutuhan sesudah ganti tidak terhitung.
+- Reservasi stok per WO (F-2026-10-22-045-S/`StockReservation`) membaca
+  kebutuhan WO berjalan; interaksi ganti revisi → reservasi belum diatur
+  di spec mana pun (pertanyaan terbuka Q-BOM68-5 di bawah).
+
+### 1. Workflow specification
+
+Aktor: Kepala Produksi/Kepala Bengkel (pengaju), Pimpinan Produksi
+(persetujuan bila material sudah ter-issue), Operator Produksi (eksekusi
+issue lanjutan), Admin (baca jejak).
+
+Alur (USULAN — belum disetujui pemilik proses):
+1. Di detail WO/PO berstatus berjalan, pengaju memilih "Ganti Revisi BOM",
+   memilih revisi target (hanya revisi `released` produk yang sama) dan
+   wajib mengisi alasan.
+2. Sistem menampilkan pratinjau delta SEBELUM simpan (memakai builder
+   `bom-revision-impact` existing, bukan hitungan baru): per item —
+   kebutuhan revisi lama, sudah ter-issue (MaterialIssue completed),
+   kebutuhan revisi baru, selisih tambahan/kembali. Baris sudah ter-issue
+   ditandai TERKUNCI (tidak diubah, tidak di-unpick otomatis).
+3. Bila belum ada material ter-issue: ganti pin langsung sesudah konfirmasi.
+   Bila sudah ada ter-issue: wajib persetujuan Pimpinan Produksi (status
+   pengajuan menunggu → disetujui/ditolak) sebelum pin berubah.
+4. Sesudah pin berubah: kebutuhan tambahan = selisih positif per item
+   (kebutuhan baru − sudah ter-issue, jepit ≥ 0); kekurangan kebutuhan
+   (selisih negatif) TIDAK menarik kembali stok yang sudah keluar —
+   tampil sebagai "kelebihan ter-issue terhadap revisi baru", bukan
+   retur otomatis. Issue berikutnya membaca kebutuhan revisi baru.
+5. Jejak wajib: ActivityLog nilai lama/baru (bomRevisionId lama→baru,
+   alasan, pengaju, penyetuju) — pola histori endDate F-2026-10-21-035.
+
+Dokumen masuk: WO/PO berjalan + revisi BOM released target.
+Dokumen keluar: TIDAK ada dokumen baru; pin berubah + delta tampil +
+ActivityLog. DILARANG membuat MaterialIssue/retur/jurnal otomatis dari
+aksi ganti revisi (lihat BR-BOM68-04).
+
+### 2. Role/permission matrix (permission nyata katalog)
+
+Baris = aksi, kolom = peran. Permission dari
+`src/lib/auth/module-catalog.generated.ts` (TERVERIFIKASI-KODE run ini):
+`view_work_orders` (:253), `edit_work_orders` (:255),
+`complete_work_orders` (:257), `view_production_orders` (:258),
+`edit_production_orders` (:260), `view_material_issues` (:224).
+
+| Aksi | Pengaju | Penyetuju | Operator | Admin baca |
+|---|---|---|---|---|
+| Lihat pratinjau delta revisi | view_work_orders | view_work_orders | view_work_orders | view_work_orders |
+| Ajukan ganti revisi (belum ter-issue) | edit_work_orders | — | — | — |
+| Ajukan ganti revisi (sudah ter-issue) | edit_work_orders | — | — | — |
+| Setujui/tolak pengajuan | — | complete_work_orders (USULAN, Q-BOM68-2) | — | — |
+| Issue material sesudah ganti | — | — | create_material_issues | — |
+
+Permission BARU khusus ganti revisi = Q-BOM68-2 ke BOT 1; jangan
+mengarang permission key di spec ini.
+
+### 3. Status-transition matrix
+
+| Objek | Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|---|
+| Pin revisi WO/PO | revisi lama | ganti disetujui/dikonfirmasi | revisi baru (released, produk sama) | status order berjalan; revisi target released |
+| Pin revisi WO/PO | revisi lama | order completed/closed/cancelled | DITOLAK | F-2026-10-21-009 tutup job |
+| Pengajuan (bila ter-issue) | menunggu | penyetuju setuju | diterapkan (pin berubah satu tx) | complete_work_orders (USULAN) |
+| Pengajuan | menunggu | penyetuju tolak | ditolak (pin tetap) | alasan tolak wajib (USULAN) |
+| Baris material ter-issue | ter-issue | ganti revisi | TETAP ter-issue, terkunci | tidak ada unpick otomatis |
+| Kebutuhan baris | kebutuhan lama | pin berubah | kebutuhan baru; selisih tampil | jepit ≥ 0 untuk tambahan |
+
+Status pengajuan disimpan di mana (model/kolom/ActivityLog) = kebutuhan
+data untuk BOT 3, BUKAN skema di spec ini (Q-BOM68-3).
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-BOM68-01 | Revisi target hanya `released` dan produk sama dengan order; revisi draft/superseded ditolak berisik menyebut statusnya | USULAN (pola status BomRevision schema:2295 TERVERIFIKASI-KODE) |
+| BR-BOM68-02 | Material sudah ter-issue (MaterialIssue completed) TIDAK PERNAH di-unpick/di-retur otomatis oleh ganti revisi; ia terkunci dan tetap biaya job | USULAN — menyentuh stok/biaya: BUTUH-VONIS BOT 4 bila ada yang mengusulkan unpick berjurnal |
+| BR-BOM68-03 | Kebutuhan tambahan = max(kebutuhan revisi baru − sudah ter-issue, 0) per item; tidak ada pengeluaran ulang penuh (anti dobel stok keluar) | USULAN (pola builder bom-revision-impact.ts:8-10 TERVERIFIKASI-KODE) |
+| BR-BOM68-04 | Aksi ganti revisi TIDAK menerbitkan MaterialIssue, retur, ProductionCost, atau jurnal apa pun; ia hanya mengubah pin + mencatat jejak | USULAN — BUTUH-VONIS BOT 4 untuk pengecualian apa pun |
+| BR-BOM68-05 | Alasan ganti wajib; jejak ActivityLog simpan revisi lama/baru + pengaju + penyetuju | USULAN (pola F-2026-10-21-035) |
+| BR-BOM68-06 | Order completed/closed/cancelled tidak bisa ganti revisi | USULAN (guard tutup job F-2026-10-21-009 TERVERIFIKASI-KODE) |
+| BR-BOM68-07 | Bila PO dan WO sama-sama ter-pin, ganti berlaku per dokumen yang dipilih; sistem wajib menampilkan keduanya dan melarang ganti diam-diam salah satu (satu sumber pin per dokumen, bukan pin global produk) | USULAN — Q-BOM68-4 ke BOT 1/BOT 3 |
+| BR-BOM68-08 | Baris WO tanpa tautan baris issue (workOrderItemId null, legacy) dihitung per itemId seperti builder existing dan ditandai tak-tertaut-baris; jangan ditebak ke baris tertentu | TERVERIFIKASI-KODE pola (bom-revision-impact.ts:71-90) |
+| BR-BOM68-09 | Selisih harga/biaya akibat ganti revisi TIDAK mengubah harga jual/quotation; perubahan nilai jual = change order F-2026-10-20-103 (F-2026-10-22-066-S), bukan jalur ini | USULAN (pemisahan domain F-103) |
+| BR-BOM68-10 | Reservasi stok aktif (F-045-S) atas kebutuhan lama tidak dibatalkan diam-diam; tampilkan sebagai perlu-tinjau sesudah ganti (perilaku pasti = Q-BOM68-5) | USULAN — Q-BOM68-5 |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (help resmi) | Zahir (help resmi) | ISF hari ini |
+|---|---|---|---|
+| Ubah qty bahan langsung di Perintah Kerja | ADA (URL §benchmark) | belum terverifikasi | pin revisi saja, qty WO bisa edit form |
+| Ganti revisi BOM order berjalan + unpick/re-pick | tidak ditemukan di help resmi (bukan klaim absen vendor) | belum terverifikasi | ABSEN (spec ini) |
+| Pratinjau dampak revisi ke order terbuka | tidak ditemukan | belum terverifikasi | builder ADA, UI ABSEN |
+
+### 6. Acceptance criteria + edge cases (draf)
+
+BOT 3 (backend, AC-BOM68-1..5): (1) ganti pin WO tanpa issue: pin berubah,
+delta benar, ActivityLog lama/baru; (2) sudah ter-issue 3 dari 5, revisi
+baru butuh 4 → tambahan terbaca 1, yang 3 terkunci; (3) revisi baru butuh
+2 < ter-issue 3 → tambahan 0, kelebihan tampil, stok tidak bergerak;
+(4) revisi target draft/produk lain/order completed → ditolak, pin tetap;
+(5) cabut penjaga status target = tes MERAH (revisi draft bisa ter-pin).
+
+BOT 2 (UI fitur dulu, AC-BOM68-6..8): (6) pratinjau delta tampil SEBELUM
+tombol simpan aktif, baris terkunci berlabel eksplisit; (7) kata UI
+verbatim dari server, UI tidak menghitung delta sendiri; (8) konsumen UI
+untuk `loadBomRevisionImpact` yang hari ini yatim (grep=0) dibangun di
+detail WO/PO, bukan halaman baru tanpa putusan rute BOT 1.
+
+BOT 6 (falsifikasi): ganti revisi tidak melahirkan StockMove/jurnal/
+MaterialIssue (query nol baris baru); dua pengajuan bersamaan pada order
+sama → satu menang, satu ditolak konflik; issue sesudah ganti membaca
+kebutuhan baru (bukan lama); cabut ActivityLog = MERAH.
+
+Edge: WO tanpa PO (pin hanya di WO), PO tanpa WO, item baru hanya ada di
+revisi baru (ter-issue=0), item hilang di revisi baru tapi sudah ter-issue
+(terkunci + kelebihan), satuan sama diasumsikan — konversi satuan di luar
+spec ini.
+
+### 7. Pertanyaan terbuka
+
+- Q-BOM68-1 (BOT 1): buka inti ganti-pin sekarang, atau tetap ditunda
+  sesudah F-103 inti (PR #503) diputus? Lapis aman builder sudah merged.
+- Q-BOM68-2 (BOT 1): permission persetujuan — pakai `complete_work_orders`
+  existing atau key baru? Jangan bangun key sebelum putusan.
+- Q-BOM68-3 (BOT 3): tempat status pengajuan (model ringan vs ActivityLog
+  + kolom pin) — ajukan bentuk fisik sebelum migrasi.
+- Q-BOM68-4 (BOT 1/BOT 3): pin WO vs PO berbeda sesudah ganti parsial —
+  sumber kebenaran kebutuhan issue yang mana?
+- Q-BOM68-5 (BOT 1 + pemilik F-045-S): nasib StockReservation aktif saat
+  kebutuhan berubah.
+- Q-BOM68-6 (BOT 4, BUTUH-VONIS): konfirmasi BR-BOM68-02/04 — tanpa
+  unpick berjurnal dan tanpa jurnal dari aksi ganti. Tampilan delta saja
+  TIDAK ditahan vonis ini.
+
+### 8. Backlog implementasi (turunan spec ini; induk F-2026-10-20-104)
+
+1. BOT 3 (@backend-prisma-inventory-workshop): inti ganti pin + pengajuan
+   + delta server, SESUDAH Q-BOM68-1/2/3 diputus BOT 1. Parent = kartu spec ini.
+2. BOT 2 (@frontend-ui-ux-next-js): UI pratinjau delta + aksi ganti di
+   detail WO/PO (fitur, bukan polish), SESUDAH kontrak BOT 3 stabil.
+   Parent = kartu spec ini.
+3. BOT 6: falsifikasi §6 atas head BOT 3/BOT 2.
+
+### Yang TIDAK diusulkan run ini
+- Unpick/re-pick otomatis ala Cetec penuh: stok sudah keluar ke WIP;
+  tanpa vonis BOT 4 + bukti kebutuhan, default TERKUNCI (BR-BOM68-02).
+- Item alternatif/substitusi otomatis: sesudah status part + ganti revisi
+  terbaca (lanjutan F-2026-10-20-105), bukan sekarang.
+- Mengubah ProductionOrderMaterial beku order completed: dilarang.
 
 
 ## SPEC BOT 5 — Registri part terpasang per kendaraan (F-2026-10-22-072-S, induk F-2026-10-21-024)
@@ -10659,7 +10848,6 @@ BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
 
 ---
 
-<<<<<<< HEAD
 ## VONIS BOT 4 2026-10-22 — F-2026-10-22-075-V Q-SUB69-5 (substitusi part baris WO, spec F-2026-10-22-069-S PR #510)
 
 Pemilik vonis: BOT 4. Pertanyaan: Q-SUB69-5 + BR-SUB69-07 spec
@@ -10759,7 +10947,9 @@ Pemilik berikutnya: BOT 1 putus Q-SUB69-1/2/3/4 → BOT 3 inti
 substitusi → BOT 2 UI → BOT 6 AC-SUB69-1..10 + V1..V4 di atas.
 BOT 4 selesai untuk Q-SUB69-5; tidak ada angka statutori/pajak
 baru (nol PPN/PPh berubah: faktur tetap dari grandTotal berjalan).
-=======
+
+---
+
 ## SPEC BOT 5 2026-10-22 — F-2026-10-22-069-S item alternatif (substitusi part) untuk baris WorkOrder
 
 Status: SPEC DOKUMEN SAJA (tanpa kode/schema/migrasi). Tindak lanjut eksplisit
@@ -11009,7 +11199,6 @@ saran ulang); relasi dinonaktifkan di antara saran tampil dan simpan
   tahap ini).
 - Mengubah kolom `WorkOrderItem.status` terkelola (inti F-105 yang
   ditunda-teknis) — spec ini hanya membaca status turunan existing.
->>>>>>> 2e3a2def (docs(business): spec F-2026-10-22-069-S item alternatif part WO (lanjutan backlog F-105))
 
 ## SPEC BOT 5 — Pisah run payroll mingguan/bulanan (F-2026-10-22-076-S, gap domain h tanpa F-ID induk baru)
 

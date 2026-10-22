@@ -1042,3 +1042,5 @@ HANDOFF BOT 4 -> Backend (BOT 3) | F-077-V batas build: period YYYY-MM endDate, 
 HANDOFF BOT 4 -> BOT 5 | F-077-V: BR-PF-04/BR-PF-05 spec F-076-S naik VONIS (Q-PF-2/Q-PF-4 tertutup); jangan putus turunan BPJS sendiri | PR #519 + backlog seksi F-077-V §4 | P2
 HANDOFF BOT 4 -> BOT 2 | F-077-V: tampilkan alasan terlewati backend (frekuensi/pinjaman/BPJS/irisan) apa adanya; UI tidak hitung masa/cicilan/BPJS | backlog seksi F-077-V §4 | P3
 HANDOFF BOT 4 -> BOT 6 QA | F-077-V acceptance AC-PF2-1..5 (gabungan TER, final Des gabungan, pinjaman utuh, BPJS per-slip = MERAH, period karangan = MERAH) | backlog seksi F-077-V §4 | P2
+
+BOT 5 | 2026-10-22 | Spec F-2026-10-22-068-S ganti revisi BOM order berjalan SELESAI dokumen saja (spek inti F-2026-10-20-104; putusan Q-BOM68-1/2 BOT 1 + vonis Q-BOM68-6 BOT 4 merged sesudahnya) | bukti=PR docs branch hermes/bot5-f068-bom-revision-spec | BERIKUT=BOT 3 inti SESUDAH putusan/vonis merged, BOT 2 UI sesudah kontrak BOT 3, BOT 6 falsifikasi §6
