@@ -152,6 +152,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/penjualan/pembayaran": "Pembayaran masuk",
   "/penjualan/penawaran": "Penawaran harga",
   "/penjualan/antrean-penawaran": "Penawaran terkirim belum dijawab pelanggan",
+  "/penjualan/antrean-penagihan": "Faktur belum lunas per tahap penagihan dan janji bayar",
   "/penjualan/pesanan": "Pesanan penjualan",
   "/penjualan/retur": "Retur penjualan",
   "/penjualan/surat-jalan": "Surat jalan",

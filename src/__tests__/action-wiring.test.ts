@@ -163,12 +163,10 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-22-088-S inti backend; form target penjualan menyusul (frontend t_f605e189)",
   "src/actions/sales-target.actions.ts::getSalesTargetAchievementReport":
     "F-2026-10-22-088-S inti backend; laporan Target vs Pencapaian menyusul (frontend t_f605e189)",
-  // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): aksi tindak lanjut
-  // penagihan backend dulu; halaman antrean + form Catat Tindak Lanjut
-  // menyusul di kartu frontend t_6f73907a (buang entri ini saat UI
-  // memanggilnya).
-  "src/actions/invoice-collection.actions.ts::createInvoiceCollectionFollowUp":
-    "F-2026-10-22-089-S inti backend; form Catat Tindak Lanjut menyusul (frontend t_6f73907a)",
+  // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): createInvoiceCollectionFollowUp
+  // kini dirujuk CollectionFollowUpForm di antrean penagihan (t_6f73907a) —
+  // entri beku dibuang. deleteInvoiceCollectionFollowUp tetap beku: loader
+  // antrean belum menampilkan daftar jejak per faktur untuk dipilih.
   "src/actions/invoice-collection.actions.ts::deleteInvoiceCollectionFollowUp":
     "F-2026-10-22-089-S inti backend; tombol hapus tindak lanjut menyusul (frontend t_6f73907a)",
   // F-2026-10-22-090-S: 4 aksi stasiun kerja kini dirujuk UI master
