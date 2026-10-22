@@ -8924,3 +8924,130 @@ Dependensi BOT 4 (eksplisit): untuk inti spec ini **tidak ada vonis baru yang di
 
 ### Yang TIDAK diusulkan run ini
 - Modul WIP/Persediaan dalam Proses & jurnal dari estimasi (BR-EST-12, vonis BOT 4 dulu), snapshot per tahap/operasi WorkOrderOperation (cukup per WO dulu), estimasi terikat Project (Q-EST-3 dulu), otomatis menaikkan harga quotation dari selisih historis, backfill WO historis, membuka snapshot terkunci (Q-EST-4 dulu), permission baru (kandidat existing dulu, BR-EST-10).
+---
+
+## 2026-10-22 — SPEC BOT 5: F-2026-10-22-085-S Status kepegawaian & siklus hidup karyawan (master HR)
+
+> **Slot**: F-2026-10-22-085-S. Diperiksa bentrok 2026-10-22 vs `origin/main` (`9d5ea988`): -084-S BOT 5 (PR #532) + -084-V BOT 4 (PR #534) terpakai, 085 bebas di backlog/board/PR manapun; grep `employmentStatus|PKWT|contractEnd` di schema+aksi HR = 0. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Penulis**: BOT 5 (`@sales-crm-hr-payroll-business-workflow`) — domain HR/payroll. USULAN spec; bukan vonis uang/pajak/ketenagakerjaan.
+>
+> **Induk**: gap master HR (domain h) — bukan F-ID lama: F-2026-10-21-026 (TER), -027 (komponen), -028 (rekap SPT) semuanya sudah terspec/terimplementasi di main; yang belum pernah dicatat sebagai gap ber-ID adalah status kepegawaian di master `Employee` itu sendiri. Spec ini mencatatnya sebagai inti baru di bawah F-2026-10-22-085-S.
+>
+> **Bukan PR implementasi**: deliverable spec + backlog + board claim yang bisa langsung dieksekusi BOT 3/BOT 2/BOT 1/BOT 4 tanpa pertanyaan terbuka ke penulis. Tanpa kode.
+
+### 0. Bukti live (TERVERIFIKASI-KODE, `origin/main` @ `9d5ea988`)
+
+1. `Employee` (`prisma/schema.prisma:779`): `joinDate` (:807 relatif model), `paymentFrequency` default `MONTHLY`, `isActive` Boolean. TIDAK ada `employmentStatus`/jenis hubungan kerja, TIDAK ada tanggal akhir kontrak, TIDAK ada tanggal/alasan berhenti. Grep `employmentStatus|PKWT|PKWTT|contractEnd|resignedAt|terminationDate` di `prisma/schema.prisma` + `src/actions/hrm.actions.ts` + halaman `sdm/` = **0 hit**.
+2. Berhenti kerja hari ini hanya dikenal sebagai bendera PER-SLIP: `resignationFinal?: boolean` (`src/actions/hrm.actions.ts:683,1355`), dibaca dari form per generate (`:2269` `formData.get("resignationFinal")`), diteruskan sebagai `finalReason: "resign"` (:734) untuk hitung ulang PPh21 masa terakhir (F-026). Master tidak tahu karyawan sudah berhenti; staf wajib ingat mencentang per slip, dan slip berikutnya untuk orang yang sama tidak dicegah oleh master.
+3. Populasi payroll massal menyaring `isActive: true` (`hrm.actions.ts:212,283`) — satu-satunya gerbang keanggotaan run. Karyawan yang kontraknya berakhir tetapi `isActive` belum dimatikan tetap masuk run; karyawan nonaktif tidak bisa dibedakan "kontrak selesai" vs "resign" vs "PHK" vs "pensiun" dari data.
+4. Izin nyata (katalog `module-catalog.generated.ts:96-99,301-305`): `view/create/edit/delete_employees`; `view/create/edit/update/process_payroll`. Scope data gaji: `getHrScope` (`src/lib/auth/hr-scope.ts`, fail-closed: role rusak/hilang = self employeeId -1; kepala_bengkel = departemen; HR/finance/admin/ga = all). Spec ini TIDAK menambah permission key baru (lihat BR-EMP-08).
+5. Pola repo yang dirujuk: kolom aditif nullable di model existing + nilai enum teks divalidasi service (pola `WarrantyClaim.supplierClaimStatus`, F-2026-10-21-022); snapshot beku di slip TIDAK dihitung ulang dari master berjalan (F-026 §5, pola pph21-recap).
+
+### 1. Masalah
+
+Admin bengkel mempekerjakan mekanik kontrak (PKWT), staf tetap (PKWTT), dan harian lepas. Hari ini Silengkap tidak bisa menjawab dari data: (a) siapa yang kontraknya berakhir bulan ini dan berhak uang kompensasi; (b) siapa yang sudah berhenti sehingga slip bulan depan tidak boleh lahir; (c) apakah slip final seseorang sudah diperlakukan sebagai masa terakhir PPh21. Akibatnya: kompensasi PKWT bergantung ingatan admin (risiko tunggakan kewajiban), dan perlakuan pajak masa terakhir bergantung centang manual per slip tanpa penanda master. Spec ini membangun lapisan master + penjaga workflow; ia TIDAK menghitung kompensasi/pesangon (angka = vonis BOT 4, lihat §9).
+
+### 2. Fitur & alur
+
+Usulan bentuk fisik (nama kolom FINAL milik BOT 3 mengikuti konvensi schema; spec menetapkan makna, bukan nama):
+
+- `employmentStatus` (teks, divalidasi service): `PKWTT` | `PKWT` | `DAILY` (harian lepas) | `INTERN` (magang) — kosakata awal USULAN, lihat Q-EMP-1. Default baris lama: null = "belum diatur" (BUKAN ditebak PKWTT).
+- `contractStartDate` / `contractEndDate` (nullable): wajib bermakna hanya untuk PKWT; PKWT tanpa `contractEndDate` = data belum lengkap (temuan tampil, bukan blokir simpan master — lihat BR-EMP-04).
+- `employmentEndedAt` (nullable) + `endReason` (teks tervalidasi): `contract_completed` | `resigned` | `terminated` | `retired` | `deceased` | `other` — USULAN, Q-EMP-2. Mengisi `employmentEndedAt` TIDAK otomatis mengubah `isActive` (dua fakta berbeda: tanggal berhenti vs keanggotaan run payroll — BR-EMP-05).
+- Read-model murni `employee-lifecycle` (usulan nama BOT 3): daftar (a) PKWT berakhir dalam 30 hari / sudah lewat tanpa `employmentEndedAt`; (b) karyawan `employmentEndedAt` terisi tetapi masih `isActive`; (c) karyawan berstatus null ("belum diatur"). Tanpa migrasi di lapis baca selain kolom di atas; tanpa jurnal.
+
+Alur: HR mengisi status saat master dibuat/diubah → menjelang akhir kontrak, read-model menampilkan daftar (a) → HR mencatat berakhir/perpanjang (perpanjang = `contractEndDate` baru + jejak ActivityLog existing, pola F-035) → saat hubungan kerja berakhir, HR mengisi `employmentEndedAt`+`endReason` dan menonaktifkan; generate payroll menolak/ menandai karyawan yang `employmentEndedAt` <= akhir periode tetapi belum pernah slip final (BR-EMP-06, bentuk penolakan = Q-EMP-3).
+
+### 3. Aturan bisnis (register)
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-EMP-01 | Master karyawan membawa jenis hubungan kerja (`employmentStatus`) sebagai fakta master, bukan turunan slip/absensi. | USULAN |
+| BR-EMP-02 | Nilai status tervalidasi service dari kosakata tertutup; teks bebas ditolak di aksi (pola enum-teks repo). Kosakata awal: PKWTT/PKWT/DAILY/INTERN. | USULAN; kosakata final Q-EMP-1 (pemilik proses) |
+| BR-EMP-03 | Baris lama tanpa status terbaca "belum diatur" di UI/laporan; sistem TIDAK mengisi PKWTT diam-diam (backfill tebak dilarang). | USULAN |
+| BR-EMP-04 | PKWT tanpa tanggal akhir kontrak = temuan data tampil di read-model; simpan master TIDAK diblokir (data historis tidak boleh terkunci), tetapi karyawan itu masuk daftar perhatian sampai lengkap. | USULAN |
+| BR-EMP-05 | `employmentEndedAt` dan `isActive` fakta terpisah: tanggal berhenti dicatat dulu, penonaktifan run payroll tindakan sadar terpisah; UI menampilkan keduanya berdampingan agar tidak tertukar. | USULAN |
+| BR-EMP-06 | Karyawan dengan `employmentEndedAt` terisi TIDAK boleh menerima slip reguler baru untuk periode sesudah tanggal berhenti; slip final masa terakhir hanya lewat jalur final existing (`resignationFinal`/final PPh21 F-026). Bentuk gerbang (tolak keras vs peringatan wajib-konfirmasi) = Q-EMP-3. | USULAN + BUTUH-VONIS BOT 1 (perilaku inti payroll) |
+| BR-EMP-07 | Spec ini TIDAK menghitung dan TIDAK menampilkan nominal uang kompensasi PKWT, pesangon, UPMK, atau penggantian hak. Kewajiban itu nyata (PP 35/2021 Pasal 15: kompensasi PKWT saat berakhir, masa kerja >= 1 bulan; Pasal 40 dst. untuk PHK) tetapi rumus, basis upah, dan akun jurnalnya = vonis BOT 4. UI hanya boleh menampilkan fakta tanggal/status, bukan angka kewajiban. | BUTUH-VONIS BOT 4 (angka/akun); fakta regulasi BENCHMARK resmi §4 |
+| BR-EMP-08 | Tanpa permission key baru: lihat/buat/ubah master memakai `view/create/edit_employees` existing; penonaktifan memakai `edit_employees`; read-model perhatian mengikuti `view_employees` + `getHrScope` (self hanya melihat barisnya sendiri; daftar perhatian lintas karyawan hanya scope department/all). Nominal gaji TIDAK pernah tampil di read-model ini. | TERVERIFIKASI-KODE (katalog+scope existing) + USULAN pemakaian |
+| BR-EMP-09 | Perubahan `employmentStatus`/`contractEndDate`/`employmentEndedAt`/`endReason` tercatat di ActivityLog existing dengan old/new (pola F-2026-10-21-035 histori geser endDate WO); riwayat kontrak tidak ditimpa tanpa jejak. | USULAN (pola TERVERIFIKASI-KODE F-035) |
+| BR-EMP-10 | Slip yang sudah terbit TIDAK berubah makna oleh perubahan master sesudahnya: perubahan status hanya berlaku ke depan (pola F-026 §5 titik berlaku). | USULAN (pola TERVERIFIKASI-KODE) |
+| BR-EMP-11 | Perpanjang PKWT = tanggal akhir baru pada baris yang sama + jejak BR-EMP-09; sistem TIDAK membuat baris karyawan kedua dan TIDAK menghitung kompensasi perpanjangan (itu peristiwa bayar terpisah sesudah vonis BOT 4). | USULAN; perlakuan kompensasi BUTUH-VONIS BOT 4 |
+| BR-EMP-12 | Harian lepas (DAILY) dan magang (INTERN) tercatat statusnya, tetapi spec ini TIDAK menetapkan perlakuan payroll/pajaknya (TER harian dsb. di luar cakupan; pola F-028-I §I.5 butir 5: subjek di luar pegawai tetap tidak dicampur tanpa vonis objek terpisah). | USULAN + BUTUH-VONIS BOT 4 bila hendak dihitung |
+
+### 4. Benchmark (URL resmi; bukan aturan bisnis)
+
+- Accurate Online — Karyawan: data karyawan sebagai dasar payroll + PPh 21; ada panduan khusus mencatat karyawan resign + PPh 21 bulan terakhir: https://help.accurate.id/product/karyawan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/karyawan/cara-menambahkan-data-karyawan/ (akses 2026-10-22).
+- PP No. 35 Tahun 2021 (PKWT, uang kompensasi Pasal 15, PHK/pesangon): https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021 ; teks PDF JDIH Kemenaker: https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf (akses 2026-10-22). Dipakai hanya untuk membuktikan kewajiban itu ada; rumus final milik BOT 4.
+- Zahir: daftar fitur HR/payroll dibandingkan pada level "master karyawan + status" saja; tidak ditemukan halaman help resmi Zahir yang menetapkan kosakata PKWT/PKWT di URL yang diakses run ini — ditulis "belum terverifikasi", bukan diklaim.
+
+### 5. Role / permission matrix
+
+| Aksi | Permission key | Scope tambahan |
+|---|---|---|
+| Lihat master + status kepegawaian | `view_employees` | `getHrScope`: self = baris sendiri saja |
+| Buat karyawan + status awal | `create_employees` | all-scope (HR/admin) secara praktik; aksi existing yang memutuskan |
+| Ubah status/tanggal kontrak/berhenti | `edit_employees` | department/all untuk orang lain; self TIDAK boleh mengubah statusnya sendiri (aksi master existing, bukan self-service) |
+| Nonaktifkan dari run payroll | `edit_employees` | sama seperti ubah master |
+| Lihat daftar perhatian siklus hidup | `view_employees` | self: hanya temuan atas barisnya sendiri; department/all: daftar sesuai scope |
+| Generate/proses payroll (gerbang BR-EMP-06) | `create_payroll`/`process_payroll` | penjaga server membaca master; UI tidak menentukan lolos/tidak |
+
+Tidak ada baris yang mengekspos `baseSalary`/`netSalary`: read-model siklus hidup hanya memuat nama, status, tanggal kontrak/berhenti, alasan — tanpa nominal (BR-EMP-08).
+
+### 6. Kata & label UI (mengikat BOT 2; verbatim)
+
+- Label field: "Status Kepegawaian", "Tanggal Mulai Kontrak", "Tanggal Akhir Kontrak", "Tanggal Berhenti Bekerja", "Alasan Berhenti".
+- Pilihan status tampil: "Tetap (PKWTT)", "Kontrak (PKWT)", "Harian Lepas", "Magang". Nilai kosong tampil: "Belum diatur".
+- Pilihan alasan tampil: "Kontrak Selesai", "Mengundurkan Diri", "Diberhentikan", "Pensiun", "Meninggal Dunia", "Lainnya".
+- Lencana daftar perhatian: "Kontrak berakhir <= 30 hari", "Kontrak lewat, belum dicatat berhenti", "Sudah berhenti, masih aktif payroll", "Status belum diatur". DILARANG label yang memuat nominal kewajiban (mis. "kompensasi Rp...") sebelum vonis BOT 4.
+- Pesan gerbang payroll (bila Q-EMP-3 = tolak keras): "Karyawan sudah berhenti bekerja pada <tanggal>. Slip reguler tidak dapat dibuat; gunakan slip final masa terakhir." Bila Q-EMP-3 = peringatan: teks sama + tombol konfirmasi eksplisit tercatat. Kata final mengikuti putusan Q-EMP-3; draf ini yang dipakai BOT 2 sebagai titik mulai, bukan karangan ulang.
+
+### 7. Matriks transisi status
+
+Status yang diatur spec ini = status kepegawaian master (bukan status slip):
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum diatur) | HR mengisi pertama kali | PKWTT/PKWT/DAILY/INTERN | `edit_employees` (atau `create_employees` saat buat); jejak BR-EMP-09 |
+| PKWT | perpanjang kontrak | PKWT (tanggal akhir baru) | `edit_employees`; jejak old/new tanggal |
+| PKWT/PKWTT/DAILY/INTERN | ganti jenis hubungan kerja (mis. PKWT diangkat tetap) | status baru | `edit_employees`; jejak; tidak mengubah slip lama (BR-EMP-10) |
+| status apa pun | hubungan kerja berakhir | status tetap + `employmentEndedAt`+`endReason` terisi | `edit_employees`; `isActive` tidak ikut berubah otomatis (BR-EMP-05) |
+| berhenti tercatat | dinonaktifkan | `isActive=false` | `edit_employees`; keluar dari populasi run berikutnya |
+| berhenti tercatat | koreksi salah catat | `employmentEndedAt` dikosongkan/alasan diperbaiki | `edit_employees`; jejak wajib memuat nilai lama (koreksi tidak menghapus riwayat) |
+
+### 8. Acceptance criteria (untuk BOT 6)
+
+- AC-EMP-1: Buat karyawan PKWT tanpa tanggal akhir -> tersimpan, tampil "Belum diatur"-bukan; masuk daftar perhatian "Status belum diatur" TIDAK, melainkan temuan kontrak-tak-lengkap sesuai BR-EMP-04 (label §6). Cabut kolom tanggal dari payload aksi -> aksi menolak/tidak menyimpan diam-diam setengah.
+- AC-EMP-2: Karyawan `employmentEndedAt` = 2026-10-15, masih `isActive`: muncul di daftar "Sudah berhenti, masih aktif payroll"; generate reguler periode 2026-11 diperlakukan persis Q-EMP-3 yang diputus (tolak/pesan §6). Falsifikasi: kosongkan penjaga -> slip lahir = MERAH.
+- AC-EMP-3: Slip final lewat jalur final existing untuk karyawan berhenti: lolos; slip reguler kedua sesudah final untuk periode lebih akhir: ditolak penjaga yang sama.
+- AC-EMP-4: Ubah PKWT -> PKWTT: ActivityLog memuat old/new; slip bulan lalu tidak berubah status/angkanya (BR-EMP-10).
+- AC-EMP-5: Perpanjang PKWT: tanggal akhir baru tersimpan + jejak; tidak lahir baris karyawan kedua; tidak tampil nominal kompensasi di layar mana pun (BR-EMP-07).
+- AC-EMP-6: Scope: user self membuka daftar perhatian hanya melihat barisnya sendiri; kepala_bengkel hanya departemennya; role tanpa `view_employees` ditolak aksi langsung (bypass UI).
+- AC-EMP-7: Read-model tidak memuat field gaji: respons/HTML daftar perhatian tanpa `baseSalary`/`netSalary`/nominal apa pun (grep keluaran).
+- AC-EMP-8: Baris lama (status null) tampil "Belum diatur" dan tidak terhitung PKWTT di rekap status mana pun.
+- AC-EMP-9: PKWT berakhir 20 hari lagi tampil di daftar "<= 30 hari"; yang berakhir 31 hari lagi tidak tampil; batas dihitung tanggal WIB.
+- AC-EMP-10: Koreksi `employmentEndedAt` yang salah: nilai lama tetap terbaca di jejak; status keanggotaan run mengikuti data terkoreksi.
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+- Q-EMP-1 (pemilik proses/BOT 1): kosakata `employmentStatus` final (apakah DAILY/INTERN dipisah atau cukup PKWT/PKWTT + lainnya). Menghambat migrasi BOT 3, bukan penulisan spec.
+- Q-EMP-2 (pemilik proses): kosakata `endReason` final + apakah "kontrak selesai" untuk PKWT yang tidak diperpanjang dibedakan dari PHK di data (penting untuk laporan, bukan angka).
+- Q-EMP-3 (BOT 1, perilaku inti payroll): gerbang BR-EMP-06 tolak keras vs peringatan wajib-konfirmasi. Rekomendasi BOT 5: tolak keras untuk periode yang seluruhnya sesudah tanggal berhenti; peringatan hanya bila periode memotong tanggal berhenti (slip final parsial bulan berhenti ditangani jalur final existing).
+- Q-EMP-4 (BOT 4): rumus + basis upah + akun untuk uang kompensasi PKWT (PP 35/2021 Pasal 15-17), pesangon/UPMK/penggantian hak PHK, dan perlakuan PPh21 atasnya (objek 21-401-xx dsb.). TANPA vonis ini, tidak ada angka kewajiban dibangun siapa pun.
+- Q-EMP-5 (BOT 4): apakah peristiwa berakhirnya PKWT/perpanjangan memicu slip komponen khusus lewat PayrollComponent existing (F-027) atau dokumen bayar terpisah.
+- Q-EMP-6 (BOT 3): bentuk fisik final (kolom di `Employee` vs tabel riwayat kontrak terpisah bila perpanjangan berlapis perlu riwayat penuh). Spec merekomendasikan kolom di `Employee` + jejak ActivityLog dulu (YAGNI: tabel riwayat hanya bila Q-EMP-6 membuktikan perpanjangan berlapis tak cukup dijejaki log).
+
+### 10. Backlog implementasi (turunan spec ini)
+
+1. BOT 1: putus Q-EMP-1/2/3 (kosakata + gerbang payroll). Tanpa ini BOT 3 tidak migrasi.
+2. BOT 4: vonis Q-EMP-4/5 (angka kompensasi/pesangon + jalur bayar). Dependensi eksplisit; BOT 5 tidak memutus angka.
+3. BOT 3 (@backend-prisma-inventory-workshop): migrasi kolom aditif + validasi service + jejak ActivityLog + read-model daftar perhatian + gerbang generate sesuai Q-EMP-3. Klaim `prisma/schema.prisma` di board sebelum edit; tes falsifikasi AC-EMP-2/4.
+4. BOT 2 (@frontend-ui-ux-next-js): field master + daftar perhatian SESUDAH kontrak BOT 3, kata §6 verbatim, tanpa nominal kewajiban, tanpa hitung status di UI. UI fitur didahulukan atas polish.
+5. BOT 6: AC-EMP-1..10 atas head BOT 3/BOT 2, termasuk falsifikasi cabut penjaga payroll + cek scope/gaji tak bocor.
+
+### Yang TIDAK diusulkan run ini
+- Hitung/tampil nominal kompensasi, pesangon, UPMK, penggantian hak (Q-EMP-4, vonis BOT 4 dulu).
+- Tabel riwayat kontrak berlapis, e-sign kontrak, portal karyawan, pengingat otomatis ke karyawan (WA/email keluar tidak ada infrastrukturnya — pola domain k).
+- Mengubah metode PPh21 masa terakhir (F-026 FINAL; spec ini hanya memberi penanda master supaya jalurnya tidak bergantung ingatan).
+- Backfill status dari data slip/absensi (tebakan retroaktif dilarang, BR-EMP-03).
