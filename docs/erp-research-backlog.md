@@ -8246,3 +8246,152 @@ efektif → baris "menipis" di laporan; titik pesan-ulang & saran qty
   Q-MS-4 (sumber kebutuhan harian) angka safety = karangan; masuk
   tahap 2 atau tidak sama sekali, jangan kolom mati.
 - Minimum per rak/row: Rack/RackRow existing cukup; per gudang saja.
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-072-V Q-TM67-2/4 jadwal termin per job (spec F-2026-10-22-067-S PR #506)
+
+Pemilik vonis: BOT 4. Pertanyaan: Q-TM67-2 (basis persen + dampak
+PPN/umur piutang) dan sisi uang Q-TM67-4 (hitung-ulang termin
+pasca change order) dari spec BOT 5 F-2026-10-22-067-S (PR #506
+OPEN). Kartu: t_4ce12073. Dokumen saja; tanpa kode/schema/migrasi.
+
+### Anti-duplikat + bukti live (2026-10-22)
+
+- origin/main `886d495e`. ID -V terpakai maks 066-V (PR #509
+  MERGED); 072-V bebas per grep backlog + `gh pr list --search 072`.
+- Q-BUPOT-052-1..3 SUDAH terjawab F-055-V (PR #436 MERGED) — tidak
+  divonis ulang. Q-KOM-1 SUDAH divonis F-056-V (PR #440 OPEN).
+  Q-CO-4 SUDAH divonis 066-V. Q-SEWA SUDAH F-042-V. Item terbuka
+  bebas-dependensi berikutnya yang benar-benar belum divonis =
+  Q-TM67-2/4. Hormati t_1f126c6e blocked (penutup F-058-V) — vonis
+  ini tidak menyentuh rekonsiliasi F-057/F-056.
+- Kode terverifikasi origin/main: builder murni
+  `src/lib/reports/job-billing-progress.ts` — target kumulatif =
+  persen × `Quotation.grandTotal` berjalan; `billedAmountExcludingCancelled`
+  = Σ `grandTotal` invoice non-cancelled; header file: "DP BUKAN
+  tagihan (vonis accountant F-03)". Loader
+  `job-billing-summary-data.ts:12` menegaskan inti termin belum
+  ada. Aging AR existing (`src/lib/reports/aging.ts`) bucket dari
+  `dueDate` invoice, bukan dari jadwal.
+
+### Vonis 1 — Q-TM67-2(a): basis persen = grandTotal berjalan TERMASUK PPN, tanpa basis kedua
+
+SAH dan mengikat: target termin = persen kumulatif ×
+`Quotation.grandTotal` berjalan persis seperti builder existing.
+Alasan: (1) grandTotal adalah nilai kontraktual yang disetujui
+pelanggan (DPP + PPN + komponen lain sebagaimana terbit di
+quotation); memecah basis ke DPP-saja akan melahirkan angka termin
+yang tidak pernah disetujui pelanggan dan tidak rekonsiliasi ke
+Σ invoice (yang juga grandTotal per baris
+`billedAmountExcludingCancelled`). (2) Jadwal adalah RENCANA
+penagihan komersial, bukan dokumen pajak — basisnya mengikuti
+dokumen komersial sumbernya.
+
+Syarat:
+- Satu basis saja. Dilarang menambah basis DPP, basis ex-PPN, atau
+  toggle basis di UI/loader. Bila kelak ada kebutuhan termin atas
+  DPP (mis. kontrak pemerintah pemungut), itu fitur terpisah
+  BUTUH-VONIS baru.
+- Persen `Decimal(5,2)`, target sen via pola existing
+  (`safeMultiply`/`safeRound` sen); total target semua termin
+  persis = grandTotal berjalan, sisa pembulatan di termin
+  terakhir (persis edge spec §5 PR #506).
+- Snapshot jejak amendemen (BR-TM67-02) hanya jejak historis;
+  target aktif selalu dihitung dari grandTotal berjalan, bukan
+  dari snapshot.
+
+### Vonis 2 — Q-TM67-2(b): jadwal TIDAK berdampak PPN, pendapatan, piutang, maupun umur piutang
+
+DIKONFIRMASI BR-TM67-08. Mencatat/mengubah/membatalkan jadwal
+termin:
+- TIDAK menerbitkan invoice, DP, pembayaran, jurnal, faktur
+  pajak, atau dokumen pajak apa pun (selaras BR-TM67-03).
+- TIDAK mengubah saat terutang PPN. Saat terutang tetap mengikuti
+  peristiwa penyerahan/pembayaran pada dokumen nyata (invoice/DP
+  existing), bukan tanggal rencana di jadwal. Dasar: UU PPN
+  (UU 8/1983 jo. UU 42/2009 jo. UU 7/2021 HPP) Pasal 11 —
+  terutang saat penyerahan BKP/JKP, atau saat pembayaran bila
+  pembayaran diterima sebelum penyerahan. URL resmi DJP:
+  https://pajak.go.id/id/undang-undang-nomor-8-tahun-1983
+  (diakses 2026-10-22). Jadwal tidak memuat penyerahan maupun
+  pembayaran, maka tidak memicu ayat mana pun.
+- TIDAK mengubah umur piutang (aging). Aging tetap dihitung dari
+  `dueDate` invoice terbit (`aging.ts` existing). `dueDate` di
+  baris jadwal adalah tanggal rencana administratif (BR-TM67-07)
+  dan DILARANG dipakai sebagai input aging, denda, atau provisi
+  piutang. Bila UI menampilkan keduanya, label wajib beda:
+  "Jadwal kesepakatan" vs jatuh tempo invoice.
+- TIDAK mengubah pengakuan pendapatan/piutang: tetap lahir saat
+  invoice terbit/posting lewat jalur existing.
+
+### Vonis 3 — Q-TM67-4 sisi uang: hitung-ulang otomatis, termin terpenuhi TIDAK ditulis ulang, kelebihan lewat kredit existing
+
+Sesudah change order/revisi menaikkan atau menurunkan grandTotal:
+1. Target nominal termin BELUM terpenuhi dihitung ulang otomatis
+   dari persen × grandTotal baru. Tidak perlu amendemen manusia
+   hanya karena nilai berubah (mengikuti rekomendasi USULAN spec).
+   Amendemen beralasan (BR-TM67-06) hanya bila manusia mengubah
+   persen/tanggal/nama termin.
+2. Termin sudah terpenuhi TIDAK ditulis ulang dan TIDAK ditagih
+   ulang. Status terpenuhi diukur dari tertagih kumulatif
+   (`billedAmountExcludingCancelled`), bukan dari target baru.
+3. Bila grandTotal TURUN sehingga tertagih/DP-confirmed melebihi
+   nilai baru: kelebihan ditangani jalur existing
+   `createRevisionDownCredit` / kredit DownPayment per DP sumber
+   (pola header job-billing-progress.ts F-59-aman), BUKAN kredit
+   baru dari jadwal, BUKAN faktur negatif, BUKAN jurnal langsung
+   dari jadwal. Selaras vonis 066-V Vonis 2.
+4. Transisi mundur status termin karena nilai turun (terpenuhi →
+   terpenuhi_sebagian) WAJIB tampil sebagai delta, tidak
+   disembunyikan (persis spec §4).
+5. Jadwal tidak pernah menjadi jalur nilai kedua: perubahan nilai
+   jual tetap lewat quotation revisi/change order
+   (F-2026-10-20-103), jadwal hanya membaca hasilnya.
+
+### Larangan
+
+- Basis DPP/ex-PPN, toggle basis, atau persen dihitung UI.
+- dueDate jadwal sebagai input aging/denda/provisi.
+- Invoice/DP/jurnal/faktur pajak lahir dari aksi jadwal.
+- Menulis ulang termin terpenuhi atau menagih ulang porsinya.
+- Kredit/faktur negatif/jurnal penyeimbang lahir dari jadwal saat
+  nilai turun.
+
+### Falsifikasi wajib BOT 6 (atas head BOT 3)
+
+1. Jadwal dibuat/diubah/dibatalkan → jumlah baris invoice, DP,
+   jurnal, faktur pajak sebelum-sesudah SAMA. Menambah satu saja
+   = MERAH.
+2. Basis: quotation grandTotal Rp111.000.000 (DPP 100jt + PPN
+   11jt), termin 50% → target persis Rp55.500.000. Target
+   Rp50.000.000 (basis DPP) = MERAH.
+3. Aging: invoice dueDate lewat 40 hari tanpa jadwal & dengan
+   jadwal dueDate lampau → bucket sama persis dari dueDate
+   invoice. Bucket berubah karena jadwal = MERAH.
+4. CO naik: grandTotal 100jt → 120jt, termin 1 50% sudah
+   tertagih 50jt → termin 1 tetap terpenuhi 50jt (tidak ditagih
+   ulang), termin belum-terpenuhi dihitung dari 120jt.
+5. CO turun: grandTotal 100jt → 80jt, tertagih 90jt → kelebihan
+   hanya kandidat kredit RevisionDown existing; jadwal sendiri
+   melahirkan 0 kredit/jurnal/faktur negatif.
+6. Pembulatan: grandTotal Rp1, persen 33/33/34 → Σ target persis
+   Rp1 (selisih 1 sen = MERAH).
+
+### Klaim kepatuhan
+
+Klaim PPN di Vonis 2 berdasar UU PPN Pasal 11 (UU 8/1983 jo.
+UU 42/2009 jo. UU 7/2021), teks resmi DJP
+https://pajak.go.id/id/undang-undang-nomor-8-tahun-1983, diakses
+2026-10-22; cakupan: saat terutang atas penyerahan/pembayaran
+nyata. Sisanya perlakuan internal dokumen komersial (jadwal,
+quotation, invoice) — bukan klaim SPT. Q-TM67-1/3/5 tetap milik
+BOT 1; bentuk fisik jadwal tetap BOT 3 sesudah putusan itu.
+
+ID vonis ini **F-2026-10-22-072-V** (pasangan spec
+F-2026-10-22-067-S PR #506; seri -V bebas tabrakan per grep
+origin/main + PR live 2026-10-22, maks -V 066-V). Pemilik
+berikutnya: BOT 1 (Q-TM67-1/3/5) -> BOT 3 (inti jadwal; basis +
+penjaga vonis ini) -> BOT 2 (UI label "Jadwal kesepakatan") ->
+BOT 6 falsifikasi 1-6 di atas. Vonis yang membuka pekerjaan uang
+ini wajib jadi parent kartu BOT 3/BOT 2 terkait.
+
