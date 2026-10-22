@@ -67,11 +67,11 @@ export function RackCreateForm({ enableAutoCode, warehouses, defaultWarehouseId 
   }
 
   return (
-    <form onSubmit={handleSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
+    <form onSubmit={handleSubmit} aria-label="Formulir tambah rak" aria-busy={isPending} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <input type="hidden" name="warehouseId" value={warehouseId} />
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="code">Kode Rak {enableAutoCode ? "" : "*"}</Label>
+          <Label htmlFor="code">Kode Rak{enableAutoCode ? null : <>{" "}<span className="text-destructive" aria-hidden="true">*</span></>}</Label>
           <Input
             id="code"
             name="code"
@@ -85,14 +85,15 @@ export function RackCreateForm({ enableAutoCode, warehouses, defaultWarehouseId 
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="name">Nama Rak *</Label>
+          <Label htmlFor="name">Nama Rak <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="name" name="name" placeholder="Nama rak" required />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="warehouseIdSelect">Gudang *</Label>
+          <Label htmlFor="warehouseIdSelect">Gudang <span className="text-destructive" aria-hidden="true">*</span></Label>
           <QuickAddSelect
             id="warehouseIdSelect"
+            required
             value={warehouseId || null}
             onChange={handleWarehouseChange}
             placeholder="Cari gudang..."
