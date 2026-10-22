@@ -74,6 +74,7 @@ describe("paritas registry PDF laporan", () => {
     // tombolnya tetap cetak/CSV, bukan pipeline /api/pdf.
     const TANPA_PDF = [
       "analisis-harga-beli",
+      "corong-prospek",
       "grafik-keuangan",
       "giro-mundur",
       "harga-pemasok",
@@ -86,6 +87,7 @@ describe("paritas registry PDF laporan", () => {
       "proyeksi-kas",
       "pusat-laba",
       "rekap-komisi",
+      "target-penjualan",
       "serapan-overhead",
     ]
     const hilang = REPORT_CATALOG_HREFS.map(hrefToKey).filter((key) => !(key in REPORTS) && !TANPA_PDF.includes(key))

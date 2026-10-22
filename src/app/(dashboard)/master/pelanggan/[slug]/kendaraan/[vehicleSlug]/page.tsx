@@ -13,7 +13,6 @@ import { hasPermission } from "@/lib/auth/permissions"
 import { VehicleWarrantyCard } from "@/components/warranty/vehicle-warranty-card"
 import { prisma } from "@/lib/db/prisma"
 import { getCustomerVehicleHistory, type CustomerVehicleHistoryKind } from "@/lib/reports/customer-vehicle-history-data"
-import { getInstalledParts } from "@/lib/reports/installed-parts-data"
 import { InstalledPartsCard } from "@/components/warranty/installed-parts-card"
 
 import type { Metadata } from "next"
@@ -40,13 +39,10 @@ export default async function CustomerVehicleDetailPage({
 
   const history = await getCustomerVehicleHistory(cv.id)
 
-  // Part terpasang: read-model builder F-024 (status diputus builder,
-  // UI hanya menampilkan). Read-only, kendaraan tanpa part = daftar kosong.
-  const installedParts = await getInstalledParts(cv.id)
-
   // Kartu garansi: cakupan dibaca lewat action existing (izin view terpisah);
   // tanpa izin itu kartu tidak dirender sama sekali, bukan dirender kosong.
   const canViewWarranty = await hasPermission("view_warranty_claims")
+  const canRecordRemoval = await hasPermission("edit_warranty_claims")
   const canCreateWarrantyClaim = await hasPermission("create_warranty_claims")
   const warrantyResult = canViewWarranty ? await listWarrantyCoveragesByVehicle(cv.id) : null
   const warrantyCoverages =
@@ -168,13 +164,11 @@ export default async function CustomerVehicleDetailPage({
         </div>
       </div>
 
-      {/* Part terpasang (F-024) */}
-      <InstalledPartsCard rows={installedParts.rows} />
-
       {/* Garansi kendaraan */}
       {canViewWarranty && (
         <VehicleWarrantyCard
           vehicleId={cv.id}
+          vehicleSlug={cv.slug}
           canCreateClaim={canCreateWarrantyClaim}
           coverages={warrantyCoverages.map((c) => ({
             id: c.id,
@@ -221,9 +215,15 @@ export default async function CustomerVehicleDetailPage({
           <h2 className="text-[0.9375rem] font-semibold text-foreground">Linimasa Kendaraan</h2>
         </div>
         <div className="p-4 px-5">
-          {history.entries.length === 0 ? (
+          {/* Seksi part terpasang dari registri (F-072-S §2/AC-IP-9): tanpa izin lihat garansi tidak tampil */}
+          {canViewWarranty && (
+            <div className="mb-6 border-b border-default pb-6">
+              <InstalledPartsCard embedded rows={history.installedParts.rows} canRecordRemoval={canRecordRemoval} />
+            </div>
+          )}
+          {history.entries.length === 0 && (!canViewWarranty || history.installedParts.rows.length === 0) ? (
             <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">Belum ada riwayat</p>
-          ) : (
+          ) : history.entries.length === 0 ? null : (
             <ol className="flex flex-col divide-y divide-default">
               {history.entries.map((entry) => {
                 const kind = HISTORY_KIND[entry.kind]

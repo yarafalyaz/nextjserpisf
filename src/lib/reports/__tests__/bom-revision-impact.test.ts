@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { buildBomRevisionImpact } from "@/lib/reports/bom-revision-impact"
+import { buildBomRevisionImpact, buildBomRevisionDelta } from "@/lib/reports/bom-revision-impact"
 
 describe("buildBomRevisionImpact (F-2026-10-20-41(a))", () => {
   it("hitung issued/outstanding per baris WO + PO terbuka neto sisa", () => {
@@ -74,5 +74,72 @@ describe("buildBomRevisionImpact (F-2026-10-20-41(a))", () => {
   it("revisi tanpa dokumen tertaut: semua nol", () => {
     const r = buildBomRevisionImpact({ workOrders: [], productionOrderCount: 0, purchaseOrders: [] })
     expect(r).toMatchObject({ openPurchaseQty: 0, activeWorkOrderCount: 0, issuedWorkOrderCount: 0 })
+  })
+})
+
+describe("buildBomRevisionDelta (F-2026-10-22-068-S)", () => {
+  it("genuinely-new: kebutuhan = qty-baru x planned - issued dokumen ini; cakupan dari stok", () => {
+    const r = buildBomRevisionDelta({
+      oldMaterials: [{ itemId: 1, qty: 2 }],
+      newMaterials: [
+        { itemId: 1, qty: 2 },
+        { itemId: 2, qty: 3 },
+      ],
+      plannedQty: 10,
+      issuedByItem: [{ itemId: 2, qty: 5 }],
+      availableByItem: [{ itemId: 2, qty: 30 }],
+    })
+    expect(r.hasGenuinelyNew).toBe(true)
+    expect(r.lines.find((l) => l.itemId === 2)).toMatchObject({
+      oldQtyPerUnit: 0,
+      newNeededQty: 25,
+      issuedQty: 5,
+      coverage: "tercakup",
+    })
+    expect(r.lines.find((l) => l.itemId === 1)).toMatchObject({
+      newNeededQty: 0,
+      issuedQty: 0,
+      coverage: "tercakup",
+    })
+  })
+
+  it("issued melebihi kebutuhan lama: kenaikan qty tetap genuinely perlu sisanya", () => {
+    const r = buildBomRevisionDelta({
+      oldMaterials: [{ itemId: 1, qty: 1 }],
+      newMaterials: [{ itemId: 1, qty: 4 }],
+      plannedQty: 10,
+      issuedByItem: [{ itemId: 1, qty: 25 }],
+      availableByItem: [{ itemId: 1, qty: 10 }],
+    })
+    // 4x10 - max(1x10, 25) = 15; stok 10 < 15 -> kurang
+    expect(r.lines[0]).toMatchObject({ newNeededQty: 15, issuedQty: 25, coverage: "kurang" })
+    expect(r.hasGenuinelyNew).toBe(false)
+  })
+
+  it("tanpa data stok: baris genuinely-new perlu-tinjau (reservasi tak disentuh)", () => {
+    const r = buildBomRevisionDelta({
+      oldMaterials: [],
+      newMaterials: [{ itemId: 9, qty: 1 }],
+      plannedQty: 2,
+      issuedByItem: [],
+    })
+    expect(r.lines[0]).toMatchObject({ newNeededQty: 2, issuedQty: 0, coverage: "perlu-tinjau" })
+  })
+
+  it("issuedQty per item: akumulasi issuedByItem duplikat & item absen = 0", () => {
+    const r = buildBomRevisionDelta({
+      oldMaterials: [{ itemId: 1, qty: 1 }],
+      newMaterials: [
+        { itemId: 1, qty: 1 },
+        { itemId: 2, qty: 1 },
+      ],
+      plannedQty: 3,
+      issuedByItem: [
+        { itemId: 1, qty: 1.5 },
+        { itemId: 1, qty: 2.25 },
+      ],
+    })
+    expect(r.lines.find((l) => l.itemId === 1)?.issuedQty).toBe(3.75)
+    expect(r.lines.find((l) => l.itemId === 2)?.issuedQty).toBe(0)
   })
 })

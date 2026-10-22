@@ -42,6 +42,7 @@ const TABLE_SOURCES = {
   projects: "name", tasks: "name",
   // produksi
   products: "name", bom_revisions: "revision_no", work_orders: "document_no",
+  job_change_orders: "document_no",
   production_orders: "document_no", qc_checklists: "name",
   qc_inspections: "document_no", nonconformances: "document_no",
   // keuangan
@@ -58,7 +59,7 @@ const TABLE_SOURCES = {
   // inventaris
   rack_rows: "code", stock_moves: "document_no", material_issues: "document_no",
   stock_adjustments: "document_no", racks: "name",
-  inventory_transfers: "document_no", stocktake_sessions: "document_no",
+  inventory_transfers: "document_no", material_requests: "document_no", stocktake_sessions: "document_no",
   // penjualan
   sales_invoices: "document_no", sales_payments: "document_no", quotations: "document_no",
   sales_orders: "document_no", sales_returns: "document_no",

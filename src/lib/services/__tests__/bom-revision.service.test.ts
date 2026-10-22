@@ -37,8 +37,8 @@ describe("resolveEffectiveBom", () => {
     expect(bom.revisionId).toBe(42)
     expect(bom.revisionNo).toBe(3)
     expect(bom.lines).toEqual([
-      { itemId: 1, qtyPerUnit: 2 },
-      { itemId: 2, qtyPerUnit: 4.5 },
+      { itemId: 1, qtyPerUnit: 2, scrapPercent: null },
+      { itemId: 2, qtyPerUnit: 4.5, scrapPercent: null },
     ])
     // The query must explicitly ask for the released revision, newest first.
     const arg = bomRevisionFindFirstMock.mock.calls[0][0]
