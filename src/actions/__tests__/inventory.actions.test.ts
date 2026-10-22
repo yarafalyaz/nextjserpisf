@@ -578,6 +578,52 @@ describe("Stock Adjustment Error & Edge Paths", () => {
     );
   });
 
+  it("createStockAdjustment membaca unitCost/newQty format Indonesia penuh, bukan 2", async () => {
+    // Regresi: Number("2.000.000")=2 dan Number("2.000")=2 merusak
+    // unitCost/totalCost/actualQty diam-diam (pola createRemnant).
+    mocks.prismaMock.stockAdjustment.create.mockImplementationOnce(
+      ({ data }: any) => {
+        const item = data.items.create[0];
+        expect(item.actualQty).toBe(2000);
+        expect(item.unitCost).toBe(2000000);
+        // systemQty mock default: groupBy {qty:5} tanpa impact -> -5.
+        expect(item.totalCost).toBe(item.difference * 2000000);
+        expect(item.difference).toBe(2005);
+        return { id: 1 };
+      },
+    );
+    const res = await actions.createStockAdjustment(
+      saFd({ items: itemsJson([{ itemId: 1, newQty: "2.000", unitCost: "2.000.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
+
+  it("createStockAdjustment menolak unitCost tak terbaca, bukan diam-diam 0", async () => {
+    const res = await actions.createStockAdjustment(
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 10, unitCost: "bukan-angka" }]) }),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Biaya satuan tidak valid");
+    expect(mocks.prismaMock.stockAdjustment.create).not.toHaveBeenCalled();
+  });
+
+  it("updateStockAdjustment membaca unitCost format Indonesia penuh, bukan 2", async () => {
+    seedDraft(mocks.prismaMock.stockAdjustment);
+    mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({ id: 1, status: "draft" });
+    mocks.prismaMock.stockAdjustment.update.mockImplementationOnce(
+      ({ data }: any) => {
+        const item = data.items.create[0];
+        expect(item.unitCost).toBe(2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await (actions as any).updateStockAdjustment(
+      1,
+      saFd({ items: itemsJson([{ itemId: 1, newQty: 10, unitCost: "2.000.000" }]) }),
+    );
+    expect(res?.success).toBe(true);
+  });
+
   it("updateStockAdjustment fails if status changed inside transaction", async () => {
     seedDraft(mocks.prismaMock.stockAdjustment);
     mocks.prismaMock.stockAdjustment.findUnique.mockResolvedValue({
