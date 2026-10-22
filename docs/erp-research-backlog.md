@@ -8394,3 +8394,377 @@ berikutnya: BOT 1 (Q-TM67-1/3/5) -> BOT 3 (inti jadwal; basis +
 penjaga vonis ini) -> BOT 2 (UI label "Jadwal kesepakatan") ->
 BOT 6 falsifikasi 1-6 di atas. Vonis yang membuka pekerjaan uang
 ini wajib jadi parent kartu BOT 3/BOT 2 terkait.
+
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-081-S penerimaan transfer parsial + tutup selisih (inti F-2026-10-21-015)
+
+Spec dokumen saja, tanpa kode/schema/migrasi. Induk: F-2026-10-21-015
+(c) P2 — Penerimaan transfer selalu penuh; selisih/rusak di perjalanan
+tak tercatat. Spec ini = F-2026-10-22-081-S. Anti-duplikat run ini:
+maks ID terbuka terverifikasi = F-2026-10-22-080-V (PR #527); grep
+backlog origin/main + `gh pr list` untuk 081 = 0; tidak ada kartu
+kanban / PR / spec untuk inti F-015 (yang ada hanya vonis BOT 4
+t_0e45367a, PR #410 MERGED). Hindari serial F-063..F-080 yang sudah
+terbit.
+
+### 0. Verifikasi live origin/main b4046e30 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `InventoryTransfer` + `InventoryTransferItem`
+  (prisma/schema.prisma:2157,2181): sourceWarehouseId,
+  destinationWarehouseId, `status` String default `draft`, item hanya
+  `qty` Decimal(15,2) + `serialNumbers`/`batchAllocations` Json?
+  (atribusi lot/serial saat process). TIDAK ada `receivedQty`,
+  tidak ada status parsial.
+- Aksi existing (src/actions/inventory.actions.ts):
+  `createInventoryTransfer` (:321, izin `create_inventory_transfers`),
+  `processInventoryTransfer` (:375, izin `edit_inventory_transfers`,
+  klaim atomik draft->processing->processed),
+  `receiveInventoryTransfer` (:449, izin `edit_inventory_transfers`,
+  klaim atomik processed->receiving->received dalam SATU transaksi).
+  Receive saat ini all-or-nothing: hook mengakumulasi SELURUH qty
+  per item lalu status langsung `received`.
+- Hook (src/lib/hooks/inventory-transfer.hook.ts):
+  `onTransferProcessed` consume FIFO sumber + StockMove OUT pada
+  carried cost; `onTransferReceived` (:155 dst) menjaga idempotency
+  dengan "IN moves sudah ada -> lewati total" (:170-183), lalu
+  StockMove IN tujuan per item teragregasi pada `carriedCostByItem`
+  dari OUT move, `createInLayer` tujuan, revive serial berstatus
+  `used`->`available`, lot tujuan per alokasi batch; item
+  batch-tracked tanpa alokasi lot DITOLAK (:265-271).
+- Transfer = subledger-only, NOL jurnal GL (vonis BOT 4 §Fakta,
+  komentar kartu t_0e45367a #361/#365; grep InventoryTransfer di
+  jalur jurnal = 0). Nilai pindah lokasi, total persediaan GL tidak
+  berubah selama barang di jalan.
+- Laporan pemeriksaan existing: `transfer-in-transit.ts` +
+  `transfer-in-transit-data.ts` membaca transfer berstatus persis
+  `processed` (`IN_TRANSIT_TRANSFER_STATUS = "processed"`) dan
+  menilai dari StockMove OUT (qty x cost terbawa); peringatan umur
+  >60 hari sudah ada. Laporan ini BELUM mengenal sisa parsial.
+- `StockAdjustment` (schema:2105) + `StockAdjustmentItem` (:2135):
+  reason Text, status draft->processed, approvedBy/approvedAt dari
+  mesin approval; `createStockAdjustment`
+  (inventory.actions.ts:113) memanggil
+  `requestApprovalIfConfigured("StockAdjustment", ...)`;
+  `processStockAdjustment` (:219) menuntut `assertApproved` +
+  izin `process_stock_adjustments`; jurnal existing Dr/Cr
+  Persediaan vs Akun Penyesuaian Stok dari SystemSetting,
+  fail-closed bila akun kosong (stock-adjustment.hook.ts,
+  stock-journal.service.ts — pola vonis BOT 4).
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:
+  238-241): view/create/edit/delete_inventory_transfers — TIDAK
+  ada key process/receive/approve terpisah untuk transfer; aksi
+  process/receive existing memakai `edit_inventory_transfers`.
+  Izin penyesuaian (:228-232): view/create/edit/delete/
+  process_stock_adjustments.
+- Scope gudang: `getWarehouseScope` (src/lib/auth/warehouse-scope.ts:
+  22, all/assigned/none fail-closed); receive existing menjaga
+  `assertWarehouseAccess(destinationWarehouseId)` — penerima wajib
+  punya scope gudang TUJUAN.
+- Halaman detail transfer existing
+  (src/app/(dashboard)/inventaris/transfer/[slug]/page.tsx:100-107):
+  tombol "Terima" hanya status `processed`, konfirmasi generik,
+  TANPA input qty terima per baris. Form transfer
+  (inventory-transfer-form.tsx) hanya qty kirim.
+- Label status existing (src/lib/utils/status-labels.ts):
+  `processed` = "Diproses", `received` = "Diterima",
+  `partial` = "Sebagian" (generik). Status `processed` saat ini
+  bermakna ganda: "sudah dikirim, belum diterima sama sekali".
+
+Belum ada / salah (TERVERIFIKASI-KODE, grep origin/main run ini):
+- `receivedQty` di InventoryTransferItem = 0; status
+  `partially_received` = 0 di schema+src. Terima 8 dari 10 hari ini
+  MUSTAHIL dicatat: receive selalu memasukkan 10 dan menutup
+  `received`; selisih 2 hilang dari semua catatan (bukan stok
+  tujuan, bukan in-transit, bukan selisih).
+- Idempotency receive per-transfer ("IN pertama ada -> skip
+  total") MEMBLOKIR terima susulan secara desain; wajib diganti
+  per kejadian terima (vonis BOT 4 V-5(b)).
+- Tidak ada kejadian/riwayat terima per tanggal: tanggal terima
+  sendiri tidak tercatat (hanya `transfer.date` kirim); pertanyaan
+  vonis Q-F015-A (tanggal kejadian untuk period-lock + potong
+  laporan) belum terjawab di kode.
+- Tidak ada jalan "tutup selisih": status `received` bisa dicapai
+  tanpa keputusan apa pun atas sisa; larangan vonis BOT 4
+  ("status received saat receivedQty < qty tanpa keputusan
+  tutup-selisih eksplisit") belum terimplementasi.
+
+Keputusan yang TIDAK diambil spec ini: akun/jurnal baru (DILARANG
+vonis BOT 4 — jurnal hanya lewat StockAdjustment existing saat
+disposisi final), gudang virtual in-transit (DILARANG vonis —
+sisa tampil sebagai turunan terkirim-diterima), klaim
+kurir/asuransi (Q-015-3, di luar spec), ongkir dikapitalisasi
+(Q-F015-D, pola existing = tidak), mutu barang rusak yang qty-nya
+utuh (diterima dulu, musnahkan lewat adjustment — vonis BOT 4
+V-2(d)).
+
+### 1. Workflow specification
+
+Aktor: Pengirim (staf gudang sumber), Penerima (staf gudang
+tujuan, scope tujuan), Penutup selisih (staf tujuan yang membuat
+StockAdjustment), Penyetuju penyesuaian (orang BERBEDA dari
+pembuat, lewat mesin approval StockAdjustment existing).
+
+Dokumen masuk: InventoryTransfer berstatus `processed` (StockMove
+OUT + alokasi serial/batch sudah beku dari process existing).
+Dokumen keluar: (a) StockMove IN per KEJADIAN terima sebesar qty
+diterima pada carried cost OUT; (b) bila ditutup bersisa:
+StockAdjustment alasan persis "selisih transfer" tertaut transfer
+ini; (c) TIDAK ada dokumen/jurnal lain dari receive parsial.
+
+Alur:
+1. Penerima buka detail transfer `processed` atau
+   `partially_received`, klik "Terima Barang". Form terima per
+   baris: kolom Terkirim (qty dokumen), Sudah Diterima
+   (receivedQty kumulatif tersimpan), Diterima Kali Ini (input,
+   default = sisa), satuan tampil. Untuk item berserial: pilih
+   serial yang tiba dari daftar serial terkirim (sumber:
+   `serialNumbers` baris transfer); untuk batch-tracked: alokasi
+   lot per qty diterima wajib (pola penolakan existing).
+2. Simpan terima = SATU kejadian: server validasi per baris
+   (lihat BR-TP), buat StockMove IN + layer tujuan HANYA sebesar
+   qty kali ini pada carried cost, revive HANYA serial yang
+   dipilih, tambah receivedQty kumulatif, catat kejadian (tanggal
+   terima + penerima + qty per baris — bentuk fisik Q-TP-2 BOT 3).
+   Status sesudahnya: semua baris penuh -> `received`; masih ada
+   sisa -> `partially_received`.
+3. Terima susulan: langkah 1-2 berulang dari
+   `partially_received` untuk sisa; idempotency per kejadian
+   (BUKAN per transfer): kejadian yang sama di-retry tidak
+   menggandakan IN (kunci fisik Q-TP-2, mis. baris kejadian unik
+   per submit / klaim status transien pola existing).
+4. Keputusan sisa tidak tiba: penerima memilih "Tutup Selisih"
+   pada transfer `partially_received` (atau `processed` yang tak
+   pernah diterima sama sekali) -> sistem membuat DRAF
+   StockAdjustment di gudang TUJUAN? BUKAN — lihat BR-TP-07:
+   selisih mengurangi nilai yang sudah KELUAR dari sumber dan
+   tidak pernah masuk tujuan; adjustment dibuat pada konteks
+   yang diputus BOT 3 mengikuti pola subledger existing
+   (Q-TP-3), alasan wajib persis "selisih transfer", baris per
+   item sisa dengan serial/batch sisa tertera, nilai = sisa x
+   carried cost OUT. Draf itu lalu wajib approval orang berbeda
+   + process lewat jalur StockAdjustment existing persis
+   (assertApproved, akun setting fail-closed). Transfer menjadi
+   `received` (tertutup) HANYA sesudah adjustment itu processed;
+   sebelum itu status tampil "menunggu penutupan selisih"
+   (status fisik Q-TP-2 — usulan `partially_received` tetap,
+   penanda turunan dari adjustment tertaut belum processed).
+5. Barang tiba rusak tapi qty utuh: diterima PENUH sebagai
+   diterima (bukan selisih); pemusnahan = StockAdjustment
+   terpisah di tujuan sesudah diterima, di luar alur ini
+   (vonis BOT 4 V-2(d)).
+
+### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+
+- `InventoryTransferItem.receivedQty` Decimal(15,2) default 0
+  (pola persis `PurchaseOrderItem.receivedQty` schema:1709 —
+  preseden vonis BOT 4). Backfill baris lama = 0; transfer lama
+  berstatus `received` diperlakukan penuh secara turunan
+  (receivedQty efektif = qty bila status received pra-fitur —
+  tampilkan dari status, JANGAN tulis ulang massal diam-diam;
+  keputusan backfill fisik = Q-TP-2).
+- Riwayat kejadian terima: bentuk final BOT 3 (tabel kejadian
+  per terima: transferId, tanggal terima, receivedBy, baris
+  itemId+qty+serial/batch terpilih). Spec mengikat ISI (tanggal
+  kejadian sendiri untuk assertPeriodOpen per kejadian — vonis
+  V-5(d); penerima; rincian serial/batch), bukan nama tabel.
+- Tautan penutupan: StockAdjustment tertaut transfer (kolom/
+  relasi final BOT 3) supaya "satu transfer, satu penutupan" bisa
+  dijaga unik dan sisa tidak ditutup dua kali.
+- TIDAK ada kolom harga baru: carried cost selalu dibaca dari
+  StockMove OUT existing per (transfer,item), tidak pernah dari
+  Item.cost/harga master berjalan.
+- TIDAK ubah `InventoryTransferItem.qty` (terkirim beku),
+  TIDAK akun COA baru, TIDAK gudang virtual.
+
+### 3. Status-transition matrix (USULAN; status String pola repo)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| draft | proses kirim (existing) | processed | existing, tidak berubah |
+| processed | terima, semua baris penuh dalam 1 kejadian | received | izin terima §4 + scope tujuan; receivedQty akhir = qty per baris |
+| processed | terima, ada baris bersisa | partially_received | sama; sisa = qty - receivedQty > 0 terbaca per baris |
+| partially_received | terima susulan, kini penuh | received | klaim atomik status; kumulatif tidak boleh > terkirim |
+| partially_received | terima susulan, masih bersisa | partially_received | sama |
+| processed / partially_received | ajukan tutup selisih | (tetap) + draf StockAdjustment "selisih transfer" tertaut lahir | alasan konteks wajib; hanya SATU draf penutupan aktif per transfer |
+| (penutupan diajukan) | adjustment tertaut processed (approval orang lain) | received | sistem dari jalur adjustment; sisa dianggap hilang/rusak final |
+| (penutupan diajukan) | adjustment tertaut ditolak/dibatalkan | partially_received (atau processed bila belum pernah terima) | sisa kembali terbuka; boleh terima susulan atau ajukan ulang |
+| received | terima / tutup selisih lagi | DITOLAK | terminal; koreksi hanya dokumen baru terpisah |
+
+Status transien klaim (`receiving` existing) dipertahankan di
+dalam satu kejadian saja; kegagalan mengembalikan ke status
+sebelum kejadian (processed/partially_received), pola restore
+existing. Kata tampil §6.
+
+### 4. Role/permission matrix (izin katalog TERVERIFIKASI-KODE)
+
+| Aksi | Izin | Scope | Status |
+|---|---|---|---|
+| Lihat daftar/detail transfer | view_inventory_transfers | dokumen scope existing | TERVERIFIKASI-KODE |
+| Proses kirim | edit_inventory_transfers | gudang sumber | TERVERIFIKASI-KODE (existing) |
+| Terima (penuh/parsial/susulan) | edit_inventory_transfers | gudang TUJUAN wajib | TERVERIFIKASI-KODE izinnya; perilaku parsial USULAN spec ini |
+| Ajukan tutup selisih (lahirkan draf adjustment) | create_stock_adjustments | gudang konteks adjustment Q-TP-3 | USULAN memakai izin existing adjustment |
+| Setujui penyesuaian selisih | mesin approval StockAdjustment (assertApproved) | orang berbeda dari pembuat | TERVERIFIKASI-KODE pola existing |
+| Proses penyesuaian selisih | process_stock_adjustments | sama | TERVERIFIKASI-KODE |
+| Ubah qty terkirim sesudah processed | DILARANG siapa pun | - | USULAN (qty beku; koreksi = transfer baru) |
+
+Tidak ada key izin baru di spec ini. Bila BOT 1 menghendaki izin
+terima terpisah dari edit transfer, itu perubahan katalog =
+keputusan BOT 1 di luar spec (jangan karang key di implementasi).
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-TP-01 | Terima diakui PER KEJADIAN sebesar qty benar-benar diterima, pada carried cost StockMove OUT (FIFO sumber); bukan qty terkirim penuh, bukan harga master | VONIS BOT 4 V-1 (t_0e45367a) + TERVERIFIKASI-KODE pola carried cost hook existing |
+| BR-TP-02 | receivedQty kumulatif per baris: 0 <= receivedQty <= qty terkirim; terima kali ini > sisa = DITOLAK keras server | VONIS BOT 4 V-5(e) |
+| BR-TP-03 | Status `received` HANYA bila (semua baris penuh) ATAU (sisa ditutup adjustment processed); received bersisa tanpa penutupan = dilarang | VONIS BOT 4 (larangan eksplisit) |
+| BR-TP-04 | Selama belum ditutup: sisa tetap in-transit (terkirim - diterima), NOL jurnal, NOL beban, tampil di laporan terkirim-belum-diterima sebagai SISA (bukan qty penuh) | VONIS BOT 4 V-2(a) + USULAN perluasan laporan existing §7 |
+| BR-TP-05 | Jurnal hanya SATU titik: StockAdjustment alasan persis "selisih transfer" saat disposisi final, Dr Akun Penyesuaian Stok / Cr Persediaan = sisa x carried cost OUT; akun dari SystemSetting existing, kosong = fail-closed berisik | VONIS BOT 4 V-3 (mengikat BOT 4: angka/akun ini BUKAN usulan BOT 5) |
+| BR-TP-06 | Idempotency per KEJADIAN terima, bukan per transfer; guard lama "IN ada -> lewati total" dilarang untuk jalur parsial; retry kejadian sama tidak menggandakan stok | VONIS BOT 4 V-5(b) |
+| BR-TP-07 | Konteks gudang adjustment penutupan + apakah subledger sisa perlu StockMove penyeimbang: rancangan BOT 3 (Q-TP-3) dengan syarat hasil akhir: GL turun persis sisa x carried cost DAN laporan per-gudang/in-transit tidak menghitung sisa tertutup lagi | BUTUH-VONIS Q-TP-3 (BOT 3, eskalasi BOT 1 bila menyentuh makna stok per gudang) |
+| BR-TP-08 | Serial: hanya serial terpilih kali ini yang revive ke tujuan; serial sisa tetap tercatat belum diterima DAN wajib tertera di draf penutupan; batch: alokasi lot per qty diterima wajib, tanpa lot = ditolak (pola existing) | VONIS BOT 4 V-5(c) + TERVERIFIKASI-KODE penolakan batch existing |
+| BR-TP-09 | Setiap kejadian terima memakai TANGGAL KEJADIAN sendiri untuk assertPeriodOpen + jejak penerima; tanggal kirim tidak dipakai ulang untuk terima lintas periode | BUTUH-VONIS Q-TP-1 (BOT 1/BOT 3; vonis BOT 4 Q-F015-A menamai, belum memutus) |
+| BR-TP-10 | Barang rusak qty utuh = diterima penuh; bukan selisih; musnahkan lewat adjustment terpisah di tujuan | VONIS BOT 4 V-2(d) |
+| BR-TP-11 | Klaim kurir/ekspedisi atas selisih: TIDAK dibangun; selisih final = beban penyesuaian (BR-TP-05) sampai ada putusan proses bisnis lain | VONIS BOT 4 V-4/Q-015-3 (BUTUH-VONIS pemilik proses bila kelak dibuka) |
+| BR-TP-12 | Siapa berwenang menyatakan sisa hilang/rusak final + batas umur tunggu sebelum wajib ditutup: spec mengusulkan yang berwenang = pemegang create_stock_adjustments di konteks tujuan DENGAN approval orang berbeda (pola existing), dan laporan in-transit menandai umur >60 hari (peringatan existing); angka batas wajib-tutup TIDAK ditebak | USULAN + BUTUH-VONIS Q-TP-4 (BOT 1/pemilik proses) |
+| BR-TP-13 | MaterialRequest F-078 (F-2026-10-22-078-S): pemenuhan permintaan dihitung dari receivedQty kumulatif spec ini; sebelum spec ini live, terima = penuh per transfer (label jujur di spec F-078 §8) | TERVERIFIKASI-KODE (ketergantungan tercatat dua arah) |
+| BR-TP-14 | Ongkir transfer internal TIDAK dikapitalisasi ke layer tujuan; layer tujuan = carried cost murni pola existing | TERVERIFIKASI-KODE pola existing; mengubahnya = kebijakan akuntansi baru BUTUH-VONIS BOT 4 (Q-F015-D) — spec ini tidak meminta |
+
+### 6. Feature matrix (BENCHMARK, akses 2026-10-22)
+
+| Aspek | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Kirim-terima dua tahap | Pemindahan Barang: Proses Kirim lalu Terima mengambil dokumen kirim — https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pemindahan-barang/mencatat-pemindahan-barang-antar-gudang/ | Transfer Barang Antar Gudang satu dokumen gudang asal->tujuan + jurnal — https://help.zahironline.com/portal/id/kb/articles/trans | Dua tahap existing dipertahankan (processed -> terima) |
+| Terima sebagian + sisa belum diterima | Terima menampilkan rincian kirim; kasus hilang/rusak: terima yang baik, sisa dikeluarkan via Penyesuaian Persediaan (Ambil dari Pemindahan, menampilkan sisa belum diterima), status menjadi Diterima Seluruhnya dengan kolom Kts. Tidak Diterima — https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/gudang/mencatat-persediaan-yg-hilang-rusak-saat-pengiriman-antar-gudang/ | Tidak ditemukan terima parsial/selisih perjalanan di URL resmi di atas | Samakan pola Accurate: terima parsial berulang + penutupan sisa via Penyesuaian Stok tertaut; beda sadar: adjustment ISF wajib approval orang berbeda (pola opname existing) |
+| Akun selisih | Akun penyesuaian dipetakan di Preferensi (contoh Beban Barang Rusak) | Adjustment per gudang berjenjang kewenangan — https://www.zahironline.com/kontrol-gudang/ | Akun Penyesuaian Stok SystemSetting existing, fail-closed (vonis BOT 4, tanpa akun baru) |
+
+Kata tampil UI (USULAN, untuk BOT 2 verbatim sesudah kontrak
+BOT 3): status tampil: `processed` yang belum diterima sama
+sekali = "Dalam Perjalanan"; `partially_received` = "Diterima
+Sebagian"; `received` = "Diterima" (existing); kolom baris:
+"Terkirim", "Sudah Diterima", "Belum Diterima", dan saat terima:
+"Diterima Kali Ini"; tombol: "Terima Barang", "Terima Susulan",
+"Tutup Selisih"; draf penutupan berlabel alasan persis
+"selisih transfer". Peringatan jujur wajib tampil di form
+tutup: "Sisa akan dihapus dari persediaan lewat Penyesuaian
+Stok sesudah disetujui. Barang yang ternyata tiba sesudah
+ditutup tidak bisa diterima dari transfer ini."
+
+### 7. Dampak laporan existing (wajib, bukan tambahan bebas)
+
+- `transfer-in-transit-data.ts`: himpunan "masih di jalan"
+  menjadi status `processed` (sisa = qty penuh) DITAMBAH
+  `partially_received` (sisa = qty - receivedQty per baris);
+  nilai sisa = sisa x carried cost OUT per baris, BUKAN qty
+  penuh. Transfer `received` (termasuk yang ditutup selisih)
+  keluar dari daftar. Tanpa perubahan ini laporan menghitung
+  barang yang sudah diterima sebagian seolah masih utuh di
+  jalan (SALAH sesudah fitur live).
+- Umur dihitung dari tanggal kirim (existing); kejadian terima
+  terakhir boleh tampil sebagai info, tidak mengganti umur.
+- MaterialRequest (F-078) membaca receivedQty yang sama; tidak
+  ada hitungan pemenuhan kedua.
+
+### 8. Acceptance criteria + edge cases (BOT 6, falsifikasi)
+
+1. AC-TP-1: Kirim 10, terima 8 -> tujuan +8 lapis @ carried
+   cost, receivedQty=8, status Diterima Sebagian, GL jurnal
+   bertambah = MERAH; sisa tampil 2 di laporan in-transit
+   senilai 2 x carried cost (bukan 10).
+2. AC-TP-2: Susulan terima 2 -> total IN = 10 = OUT, status
+   received, adjustment lahir = MERAH. Cabut perbaikan
+   idempotency per kejadian (pulihkan guard skip-total lama)
+   -> terima susulan tertolak/dilewati = MERAH.
+3. AC-TP-3: Terima kali ini 3 dari sisa 2 -> ditolak server;
+   receivedQty melebihi terkirim di data = MERAH.
+4. AC-TP-4: Tutup selisih 2 hilang -> draf adjustment alasan
+   persis "selisih transfer"; sesudah approval orang berbeda +
+   processed: jurnal Dr Penyesuaian/Cr Persediaan = 2 x carried
+   cost OUT, seimbang; transfer menjadi received; sisa hilang
+   dari laporan in-transit. Jurnal lahir saat receive parsial
+   = MERAH (vonis V-3).
+5. AC-TP-5: Self-approve penutupan (pembuat = penyetuju) ->
+   ditolak mesin approval existing; stockAdjustmentAccountId
+   kosong -> gagal berisik, transfer TIDAK menjadi received.
+6. AC-TP-6: Penutupan ditolak/dibatalkan -> transfer kembali
+   terbuka (partially_received), terima susulan 2 masih bisa
+   dan menutup penuh tanpa adjustment; status received
+   prematur = MERAH.
+7. AC-TP-7: Item berserial 5: terima 3 serial terpilih ->
+   hanya 3 revive available di tujuan; 2 sisa tertera di draf
+   penutupan; tutup selisih tanpa menyebut serial sisa = MERAH.
+   Item batch-tracked: terima parsial tanpa alokasi lot ->
+   ditolak (pola existing).
+8. AC-TP-8: Dua penerima bersamaan atas sisa sama (klaim
+   atomik): total diterima kumulatif tidak melebihi terkirim;
+   kejadian ganda dari retry submit sama tidak menggandakan
+   StockMove IN.
+9. AC-TP-9: Role tanpa edit_inventory_transfers / tanpa scope
+   gudang tujuan menjalankan terima langsung (panggil aksi)
+   -> ditolak server; tombol hilang saja tidak cukup.
+10. AC-TP-10: Terima penuh satu kejadian pada transfer biasa
+    (regresi existing): perilaku = received langsung, tes
+    transfer existing hijau; transfer lama pra-fitur berstatus
+    received tampil penuh (bukan sisa qty).
+11. AC-TP-11: Barang rusak qty utuh diterima penuh lalu
+    dimusnahkan adjustment tujuan terpisah: alur tutup selisih
+    transfer tidak ikut campur; receivedQty berkurang karena
+    rusak = MERAH.
+12. AC-TP-12: Periode kejadian terima tertutup (sesudah
+    Q-TP-1 diputus): terima ditolak fail-closed menyebut
+    periode; memakai tanggal kirim untuk lolos = MERAH.
+
+Edge: baris qty pecahan (Decimal 15,2 — terima 2,50 dari 10);
+item sama muncul dua baris dalam satu transfer (agregasi
+existing dipertahankan per item untuk cost, receivedQty tetap
+per BARIS dokumen — konflik fisik = Q-TP-2 BOT 3, jangan
+digabung diam-diam); transfer processed pra-fitur yang belum
+diterima (receivedQty=0 sah, langsung bisa parsial); gudang
+tujuan dinonaktifkan sesudah kirim (tampil, aksi ditolak
+beralasan — perilaku final BOT 3).
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-TP-1 | Tanggal kejadian terima sendiri (field + assertPeriodOpen per kejadian + potong laporan) — vonis BOT 4 Q-F015-A menamai, belum memutus bentuknya | BOT 1 putus perilaku; BOT 3 fisik |
+| Q-TP-2 | Fisik riwayat kejadian terima + kunci idempotency per kejadian + receivedQty per baris vs per item teragregasi + backfill transfer received pra-fitur | BOT 3 |
+| Q-TP-3 | Konteks gudang StockAdjustment penutupan + perlakuan subledger sisa (BR-TP-07) | BOT 3; eskalasi BOT 1 bila mengubah makna stok per gudang |
+| Q-TP-4 | Pejabat penentu hilang/rusak final + batas umur wajib-tutup (BR-TP-12) | BOT 1 / pemilik proses |
+| Q-TP-5 | Buka inti migrasi receivedQty + status parsial (vonis BOT 4 Q-015-1) — tanpa ini DEFAULT-AMAN existing tetap all-or-nothing | BOT 1 |
+
+Dependensi BOT 4 (eksplisit): vonis uang/akun untuk inti ini
+SUDAH TURUN (t_0e45367a, PR #410 MERGED): BR-TP-01/02/03/05/06/08
+mengikat, BOT 3/BOT 2 TIDAK menunggu vonis baru untuk mulai
+sesudah Q-TP-5 dibuka BOT 1. BOT 4 dipanggil lagi HANYA bila
+implementasi menyimpang dari vonis (akun baru, jurnal di receive,
+klaim kurir BR-TP-11, kapitalisasi ongkir BR-TP-14) — itu
+BUTUH-VONIS baru, jangan diputus BOT 3/BOT 5.
+
+### 10. Backlog implementasi (turunan spec ini; induk tetap F-2026-10-21-015)
+
+1. BOT 1: putus Q-TP-5 (buka inti) + Q-TP-1/Q-TP-4 (+ merge PR
+   spec ini). Tanpa Q-TP-5, berhenti di spec.
+2. BOT 3 (@backend-prisma-inventory-workshop): migrasi
+   receivedQty + status partially_received + riwayat kejadian
+   (Q-TP-2) + penutupan tertaut (Q-TP-3), aksi terima per
+   kejadian dalam klaim atomik (ganti guard idempotency hook),
+   perluasan laporan in-transit §7, tes falsifikasi AC-TP-1..12.
+   Effort M-L. Klaim schema.prisma di board sebelum edit.
+3. BOT 2 (@frontend-ui-ux-next-js): form "Terima Barang" per
+   baris di detail transfer + kolom Terkirim/Sudah/Belum +
+   tombol Terima Susulan/Tutup Selisih, SESUDAH kontrak BOT 3,
+   kata §6 verbatim, nol hitung sisa/status di UI (server yang
+   menentukan), label peringatan tutup persis §6. UI fitur ini
+   didahulukan atas polish.
+4. BOT 6: AC-TP-1..12 atas head BOT 3/BOT 2, termasuk falsifikasi
+   vonis BOT 4 (cabut carried cost -> MERAH).
+
+### Yang TIDAK diusulkan run ini
+- Akun in-transit / gudang virtual / klaim kurir (DILARANG /
+  ditunda vonis BOT 4), terima parsial PurchaseOrder/GR (sudah
+  ada receivedQty sendiri), ubah perilaku MaterialRequest selain
+  membaca receivedQty yang sama (F-078), portal/pelacakan kurir
+  eksternal, auto-tutup selisih berumur (Q-TP-4 dulu).
