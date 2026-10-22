@@ -6,6 +6,8 @@ import {
   initializeWorkOrderOperations,
   updateWorkOrderOperationStatus,
 } from "@/actions/manufacturing.actions"
+import { setWorkOrderOperationWorkCenter } from "@/actions/work-center.actions"
+import { FormSelect } from "@/components/ui/form-select"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { showError, showSuccess } from "@/lib/utils/toast"
@@ -185,6 +187,85 @@ export function WorkOrderOperationActions({
           </p>
         </div>
       </ConfirmDialog>
+    </span>
+  )
+}
+
+export interface WorkCenterOption {
+  id: number
+  name: string
+  isActive: boolean
+}
+
+/**
+ * F-2026-10-22-090-S (BOT 2): pilihan stasiun di tahap WO.
+ * Pilihan baru hanya stasiun aktif (server juga menolak nonaktif);
+ * stasiun lama nonaktif tetap tampil sebagai nilai terpilih supaya
+ * tahap historis terbaca (BR-LP-06). Kosong = "Belum ada stasiun".
+ * Dirender hanya untuk pemegang edit_work_orders; tidak memblokir
+ * start WO (BR-LP-05).
+ */
+export function WorkOrderOperationWorkCenterSelect({
+  workOrderId,
+  row,
+  centers,
+}: Readonly<{
+  workOrderId: number
+  row: WorkOrderOperationRow
+  centers: WorkCenterOption[]
+}>) {
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
+
+  const currentCenter = centers.find((c) => c.id === row.workCenterId)
+  const options = [
+    { value: "", label: "Belum ada stasiun" },
+    ...centers
+      .filter((c) => c.isActive || c.id === row.workCenterId)
+      .map((c) => ({
+        value: String(c.id),
+        label: c.isActive ? c.name : `${c.name} (nonaktif)`,
+      })),
+  ]
+
+  return (
+    <span className="flex items-center gap-2">
+      <span className="text-xs text-muted-foreground">Stasiun: {currentCenter?.name ?? "Belum ada stasiun"}</span>
+      <FormSelect
+        aria-label={`Stasiun tahap ${row.name}`}
+        options={options}
+        value={row.workCenterId === null ? "" : String(row.workCenterId)}
+        disabled={isPending}
+        onValueChange={(value) => {
+          const nextId = value === "" ? null : Number(value)
+          if (nextId === row.workCenterId) return
+          startTransition(async () => {
+            try {
+              const res = await setWorkOrderOperationWorkCenter(
+                workOrderId,
+                row.id,
+                nextId,
+              )
+              if (res?.success) {
+                showSuccess(
+                  nextId === null
+                    ? `Stasiun tahap ${row.name} dikosongkan`
+                    : `Stasiun tahap ${row.name} ditetapkan`,
+                )
+                router.refresh()
+              } else {
+                showError(res?.error || "Gagal menetapkan stasiun tahap")
+              }
+            } catch (e) {
+              showError(
+                e instanceof Error
+                  ? e.message
+                  : "Gagal menetapkan stasiun tahap",
+              )
+            }
+          })
+        }}
+      />
     </span>
   )
 }

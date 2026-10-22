@@ -9,7 +9,8 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteWorkOrder } from "@/actions/manufacturing.actions";
 import { WorkOrderActions } from "./_components/work-order-actions";
-import { WorkOrderOperationActions, InitializeStagesButton } from "./_components/work-order-operation-actions";
+import { WorkOrderOperationActions, InitializeStagesButton, WorkOrderOperationWorkCenterSelect } from "./_components/work-order-operation-actions";
+import { getWorkCenters } from "@/lib/reports/work-center-load-plan-data";
 import { CreateServicePoButton } from "./_components/create-service-po-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -192,6 +193,8 @@ export default async function WorkOrderDetailPage({
   // Aksi tahap hanya dirender bila izin edit_work_orders; server penegak.
   const stageProgress = await getWorkOrderProgress(wo.id);
   const canEditStages = await hasPermission("edit_work_orders");
+  // F-090-S: pilihan stasiun tahap dari master WorkCenter (BOT 3 PR #569).
+  const workCenters = canEditStages ? await getWorkCenters() : [];
 
   // F-036 tahap 2 + F-035: jejak klik WA terakhir + histori geser endDate.
   const whatsappTrail = await getWhatsappTrail("WorkOrder", wo.id);
@@ -466,12 +469,18 @@ export default async function WorkOrderDetailPage({
                 ? Object.fromEntries(
                     stageProgress.rows.map((row) => [
                       row.id,
-                      <WorkOrderOperationActions
-                        key={row.id}
-                        workOrderId={wo.id}
-                        workOrderStatus={wo.status}
-                        row={row}
-                      />,
+                      <span key={row.id} className="flex flex-col items-end gap-2">
+                        <WorkOrderOperationActions
+                          workOrderId={wo.id}
+                          workOrderStatus={wo.status}
+                          row={row}
+                        />
+                        <WorkOrderOperationWorkCenterSelect
+                          workOrderId={wo.id}
+                          row={row}
+                          centers={workCenters}
+                        />
+                      </span>,
                     ]),
                   )
                 : undefined
