@@ -99,6 +99,14 @@ const localeQty = () =>
 const bomRevisionLineSchema = z.object({
   itemId: z.coerce.number().int().positive("Material item tidak valid"),
   qty: localeQty(),
+  // F-008: allowance scrap global per baris (%), 0–100; field kosong = null
+  // (belum dikalibrasi). Murni data master — tanpa dampak jurnal saat diisi.
+  scrapPercent: z
+    .preprocess(
+      (v) => (v == null || (typeof v === "string" && v.trim() === "") ? null : typeof v === "string" ? parseLocaleNumber(v) : v),
+      z.coerce.number().min(0, "Persen scrap allowance minimal 0").max(100, "Persen scrap allowance maksimal 100").nullable(),
+    )
+    .default(null),
 })
 
 export const createBomRevisionSchema = z.object({
@@ -117,8 +125,9 @@ export const updateBomRevisionSchema = z.object({
 export function parseRevisionRows(
   itemIds: string[],
   qtys: string[],
-): { success: true; data: { itemId: number; qty: number }[] } | { success: false; error: string } {
-  const merged = new Map<number, number>()
+  scrapPercents: string[] = [],
+): { success: true; data: { itemId: number; qty: number; scrapPercent: number | null }[] } | { success: false; error: string } {
+  const merged = new Map<number, { qty: number; scrapPercent: number | null }>()
   const errors: string[] = []
 
   for (let i = 0; i < itemIds.length; i++) {
@@ -126,18 +135,18 @@ export function parseRevisionRows(
     const rawQty = (qtys[i] ?? "").trim()
     if (rawId === "" || rawQty === "" || rawId === "0" || rawQty === "0") continue
 
-    const r = bomRevisionLineSchema.safeParse({ itemId: rawId, qty: rawQty })
+    const r = bomRevisionLineSchema.safeParse({ itemId: rawId, qty: rawQty, scrapPercent: scrapPercents[i] })
     if (!r.success) {
       errors.push(`Baris #${i + 1}: ${r.error.issues.map((iss) => iss.message).join(", ")}`)
       continue
     }
-    merged.set(r.data.itemId, (merged.get(r.data.itemId) ?? 0) + r.data.qty)
+    merged.set(r.data.itemId, { qty: (merged.get(r.data.itemId)?.qty ?? 0) + r.data.qty, scrapPercent: r.data.scrapPercent })
   }
 
   if (errors.length > 0) {
     return { success: false, error: "Validasi gagal: " + errors.join("; ") }
   }
-  return { success: true, data: Array.from(merged, ([itemId, qty]) => ({ itemId, qty })) }
+  return { success: true, data: Array.from(merged, ([itemId, m]) => ({ itemId, qty: m.qty, scrapPercent: m.scrapPercent })) }
 }
 
 // ==================== PRODUCT MATERIALS (BOM rows) ====================

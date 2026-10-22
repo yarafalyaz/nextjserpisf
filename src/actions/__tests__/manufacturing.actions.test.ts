@@ -88,6 +88,7 @@ vi.mock("@/lib/services/stock-journal.service", () => ({
     onProductionOrderMaterialIssue: (...args: any[]) => mocks.productionIssueJournalMock(...args),
     onProductionOrderCompleted: (...args: any[]) => mocks.productionCompletionJournalMock(...args),
     onProductionOrderCostRoundingVariance: (...args: any[]) => mocks.productionRoundingJournalMock(...args),
+    onProductionOrderAbnormalScrap: vi.fn(async () => undefined),
   },
 }))
 vi.mock("@/lib/services/period-lock.service", () => ({
@@ -374,7 +375,7 @@ describe("Product Actions", () => {
           data: expect.objectContaining({
             materials: {
               deleteMany: {},
-              create: [{ itemId: 1, qty: 2.5 }],
+              create: [{ itemId: 1, qty: 2.5, scrapPercent: null }],
             },
           }),
         }),
@@ -856,8 +857,8 @@ describe("Production Order Actions", () => {
         totalStandardCost: 5000,
         materials: {
           create: [
-            { itemId: 1, qty: 10, standardCost: 100 },
-            { itemId: 2, qty: 15, standardCost: 200 },
+            { itemId: 1, qty: 10, standardCost: 100, scrapPercentSnapshot: null },
+            { itemId: 2, qty: 15, standardCost: 200, scrapPercentSnapshot: null },
           ]
         }
       })
@@ -877,7 +878,7 @@ describe("Production Order Actions", () => {
     expect(res?.success).toBe(true)
     const arg = mocks.prismaMock.productionOrder.create.mock.calls[0][0]
     expect(arg.data.bomRevisionId).toBe(77)
-    expect(arg.data.materials.create).toEqual([{ itemId: 9, qty: 8, standardCost: 25 }])
+    expect(arg.data.materials.create).toEqual([{ itemId: 9, qty: 8, standardCost: 25, scrapPercentSnapshot: null }])
     // Working BOM must not be consulted when a released revision exists.
     expect(mocks.prismaMock.productMaterial.findMany).not.toHaveBeenCalled()
   })

@@ -7670,6 +7670,32 @@ dari garansi, itu perubahan katalog = keputusan BOT 1.
 | Q-IP-4 | Backfill historis dari MI lama ber-WO (sekali jalan, ditandai sumber backfill)? | BOT 1 |
 | Q-IP-5 | WO/issue dibatalkan sesudah lahir: baris ditandai batal atau dibiarkan + catatan? | BOT 1 + BOT 3 |
 
+### 8A. PUTUSAN BOT 1 2026-10-22 (Q-IP-1/2/4/5 — mengikat BOT 3/BOT 2/BOT 6)
+
+- Q-IP-1 DIPUTUS: YA. MI taut proyek tanpa WO lahir juga bila
+  Project.customerVehicleId terisi. Alasan: atribusi kendaraan
+  eksplisit dari dokumen sumber, bukan tebakan; MI bebas/penjualan
+  tetap TIDAK lahir. BOT 3 bangun jalur lahir kedua di complete
+  material issue proyek; hasil aksi memuat hitungan terlewati
+  (pola skipped) untuk MI tanpa kendaraan.
+- Q-IP-2 DIPUTUS: REUSE `view_warranties` (lihat) +
+  `manage_warranties` (catat lepas/ganti). Tanpa key baru tahap
+  ini: panel hidup di halaman kendaraan yang sudah ter-gate
+  warranties, dan tidak ada peran ISF hari ini yang boleh melihat
+  registri tetapi tidak boleh melihat garansi. Key terpisah hanya
+  dibuka kembali bila owner menunjuk peran itu nyata.
+- Q-IP-4 DIPUTUS: TIDAK ada backfill historis tahap ini. Registri
+  mulai dari fitur live; baris lama tidak direkonstruksi supaya
+  tidak lahir registri semu dari issue yang konteks kendaraannya
+  sudah tidak bisa dibuktikan ulang. Dibuka kembali hanya atas
+  permintaan eksplisit owner + rancangan penanda sumber.
+- Q-IP-5 DIPUTUS: baris TIDAK dihapus dan status turunan TIDAK
+  dibekukan. BOT 3 tambah penanda batal sumber (flag + waktu dari
+  dokumen sumber) bila WO/issue sumber dibatalkan/dikoreksi;
+  status lepas/ganti turunan tetap berjalan normal. Alasan:
+  registri adalah jejak fisik kendaraan, koreksi sumber tidak
+  menghapus fakta part pernah terpasang.
+
 Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 2-3 hari; BOT 2 panel kendaraan 1 hari; BOT 6 AC-IP-1..10.
 
@@ -8743,6 +8769,45 @@ implementasi menyimpang dari vonis (akun baru, jurnal di receive,
 klaim kurir BR-TP-11, kapitalisasi ongkir BR-TP-14) — itu
 BUTUH-VONIS baru, jangan diputus BOT 3/BOT 5.
 
+### 8B. PUTUSAN BOT 1 2026-10-22 (Q-MR-1/2/3 — dicatat juga di spec F-078-S PR #524 §8A)
+
+- Q-MR-1 DIPUTUS (b): resource baru `material_requests` di katalog
+  izin — view/create/edit/delete + `approve_material_requests`
+  terpisah dari edit. Alasan: `inventory_transfers` existing tidak
+  punya aksi approve; persetujuan oleh gudang sumber tidak boleh
+  diberikan ke semua editor transfer. Pola approve_purchase_requests
+  existing.
+- Q-MR-2 DIPUTUS: status internal sederhana (approvedBy/approvedAt/
+  rejectionReason di MaterialRequest, pola PurchaseRequest).
+  ApprovalWorkflow generik TIDAK dipakai tahap ini — kebutuhan
+  nyata ISF = satu langkah setuju/tolak oleh gudang sumber.
+- Q-MR-3 DIPUTUS: self-approve DILARANG. Penyetuju != pembuat,
+  ditegakkan penjaga server.
+
+### 9A. PUTUSAN BOT 1 2026-10-22 (Q-TP-5/1/4 — mengikat BOT 3/BOT 2/BOT 6)
+
+- Q-TP-5 DIPUTUS: INTI DIBUKA. BOT 3 bangun migrasi receivedQty
+  per baris + status `partially_received` + terima per kejadian
+  dalam klaim atomik, mengganti perilaku all-or-nothing existing.
+  Perilaku lama hanya bertahan untuk transfer yang sudah received
+  sebelum fitur live (backfill fisik = Q-TP-2 milik BOT 3).
+  Vonis BOT 4 yang sudah turun (BR-TP-01/02/03/05/06/08) mengikat
+  penuh; tidak ada jurnal dari receive.
+- Q-TP-1 DIPUTUS: YA — setiap kejadian terima memakai tanggal
+  kejadian sendiri: assertPeriodOpen dinilai per tanggal kejadian,
+  laporan stok/in-transit memotong per tanggal kejadian, tanggal
+  kirim tidak dipakai ulang untuk terima lintas periode. Bentuk
+  field fisik = Q-TP-2 (BOT 3).
+- Q-TP-4 DIPUTUS: yang berwenang menyatakan sisa hilang/rusak
+  final = pemegang `create_stock_adjustments` di konteks gudang
+  tujuan DENGAN approval orang berbeda (pola approval adjustment
+  existing). Batas umur: laporan in-transit WAJIB menandai sisa
+  berumur >60 hari; penutupan selisih untuk sisa itu WAJIB
+  ditawarkan/dikejar mulai umur 60 hari, tetapi sistem TIDAK
+  auto-menutup (keputusan final tetap manusia berwenang di atas).
+  Angka 60 hari = ambang peringatan existing yang dinaikkan jadi
+  kewajiban tindak lanjut, bukan auto-eksekusi.
+
 ### 10. Backlog implementasi (turunan spec ini; induk tetap F-2026-10-21-015)
 
 1. BOT 1: putus Q-TP-5 (buka inti) + Q-TP-1/Q-TP-4 (+ merge PR
@@ -8924,3 +8989,280 @@ Dependensi BOT 4 (eksplisit): untuk inti spec ini **tidak ada vonis baru yang di
 
 ### Yang TIDAK diusulkan run ini
 - Modul WIP/Persediaan dalam Proses & jurnal dari estimasi (BR-EST-12, vonis BOT 4 dulu), snapshot per tahap/operasi WorkOrderOperation (cukup per WO dulu), estimasi terikat Project (Q-EST-3 dulu), otomatis menaikkan harga quotation dari selisih historis, backfill WO historis, membuka snapshot terkunci (Q-EST-4 dulu), permission baru (kandidat existing dulu, BR-EST-10).
+---
+
+## 2026-10-22 — SPEC BOT 5: F-2026-10-22-085-S Status kepegawaian & siklus hidup karyawan (master HR)
+
+> **Slot**: F-2026-10-22-085-S. Diperiksa bentrok 2026-10-22 vs `origin/main` (`9d5ea988`): -084-S BOT 5 (PR #532) + -084-V BOT 4 (PR #534) terpakai, 085 bebas di backlog/board/PR manapun; grep `employmentStatus|PKWT|contractEnd` di schema+aksi HR = 0. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Penulis**: BOT 5 (`@sales-crm-hr-payroll-business-workflow`) — domain HR/payroll. USULAN spec; bukan vonis uang/pajak/ketenagakerjaan.
+>
+> **Induk**: gap master HR (domain h) — bukan F-ID lama: F-2026-10-21-026 (TER), -027 (komponen), -028 (rekap SPT) semuanya sudah terspec/terimplementasi di main; yang belum pernah dicatat sebagai gap ber-ID adalah status kepegawaian di master `Employee` itu sendiri. Spec ini mencatatnya sebagai inti baru di bawah F-2026-10-22-085-S.
+>
+> **Bukan PR implementasi**: deliverable spec + backlog + board claim yang bisa langsung dieksekusi BOT 3/BOT 2/BOT 1/BOT 4 tanpa pertanyaan terbuka ke penulis. Tanpa kode.
+
+### 0. Bukti live (TERVERIFIKASI-KODE, `origin/main` @ `9d5ea988`)
+
+1. `Employee` (`prisma/schema.prisma:779`): `joinDate` (:807 relatif model), `paymentFrequency` default `MONTHLY`, `isActive` Boolean. TIDAK ada `employmentStatus`/jenis hubungan kerja, TIDAK ada tanggal akhir kontrak, TIDAK ada tanggal/alasan berhenti. Grep `employmentStatus|PKWT|PKWTT|contractEnd|resignedAt|terminationDate` di `prisma/schema.prisma` + `src/actions/hrm.actions.ts` + halaman `sdm/` = **0 hit**.
+2. Berhenti kerja hari ini hanya dikenal sebagai bendera PER-SLIP: `resignationFinal?: boolean` (`src/actions/hrm.actions.ts:683,1355`), dibaca dari form per generate (`:2269` `formData.get("resignationFinal")`), diteruskan sebagai `finalReason: "resign"` (:734) untuk hitung ulang PPh21 masa terakhir (F-026). Master tidak tahu karyawan sudah berhenti; staf wajib ingat mencentang per slip, dan slip berikutnya untuk orang yang sama tidak dicegah oleh master.
+3. Populasi payroll massal menyaring `isActive: true` (`hrm.actions.ts:212,283`) — satu-satunya gerbang keanggotaan run. Karyawan yang kontraknya berakhir tetapi `isActive` belum dimatikan tetap masuk run; karyawan nonaktif tidak bisa dibedakan "kontrak selesai" vs "resign" vs "PHK" vs "pensiun" dari data.
+4. Izin nyata (katalog `module-catalog.generated.ts:96-99,301-305`): `view/create/edit/delete_employees`; `view/create/edit/update/process_payroll`. Scope data gaji: `getHrScope` (`src/lib/auth/hr-scope.ts`, fail-closed: role rusak/hilang = self employeeId -1; kepala_bengkel = departemen; HR/finance/admin/ga = all). Spec ini TIDAK menambah permission key baru (lihat BR-EMP-08).
+5. Pola repo yang dirujuk: kolom aditif nullable di model existing + nilai enum teks divalidasi service (pola `WarrantyClaim.supplierClaimStatus`, F-2026-10-21-022); snapshot beku di slip TIDAK dihitung ulang dari master berjalan (F-026 §5, pola pph21-recap).
+
+### 1. Masalah
+
+Admin bengkel mempekerjakan mekanik kontrak (PKWT), staf tetap (PKWTT), dan harian lepas. Hari ini Silengkap tidak bisa menjawab dari data: (a) siapa yang kontraknya berakhir bulan ini dan berhak uang kompensasi; (b) siapa yang sudah berhenti sehingga slip bulan depan tidak boleh lahir; (c) apakah slip final seseorang sudah diperlakukan sebagai masa terakhir PPh21. Akibatnya: kompensasi PKWT bergantung ingatan admin (risiko tunggakan kewajiban), dan perlakuan pajak masa terakhir bergantung centang manual per slip tanpa penanda master. Spec ini membangun lapisan master + penjaga workflow; ia TIDAK menghitung kompensasi/pesangon (angka = vonis BOT 4, lihat §9).
+
+### 2. Fitur & alur
+
+Usulan bentuk fisik (nama kolom FINAL milik BOT 3 mengikuti konvensi schema; spec menetapkan makna, bukan nama):
+
+- `employmentStatus` (teks, divalidasi service): `PKWTT` | `PKWT` | `DAILY` (harian lepas) | `INTERN` (magang) — kosakata awal USULAN, lihat Q-EMP-1. Default baris lama: null = "belum diatur" (BUKAN ditebak PKWTT).
+- `contractStartDate` / `contractEndDate` (nullable): wajib bermakna hanya untuk PKWT; PKWT tanpa `contractEndDate` = data belum lengkap (temuan tampil, bukan blokir simpan master — lihat BR-EMP-04).
+- `employmentEndedAt` (nullable) + `endReason` (teks tervalidasi): `contract_completed` | `resigned` | `terminated` | `retired` | `deceased` | `other` — USULAN, Q-EMP-2. Mengisi `employmentEndedAt` TIDAK otomatis mengubah `isActive` (dua fakta berbeda: tanggal berhenti vs keanggotaan run payroll — BR-EMP-05).
+- Read-model murni `employee-lifecycle` (usulan nama BOT 3): daftar (a) PKWT berakhir dalam 30 hari / sudah lewat tanpa `employmentEndedAt`; (b) karyawan `employmentEndedAt` terisi tetapi masih `isActive`; (c) karyawan berstatus null ("belum diatur"). Tanpa migrasi di lapis baca selain kolom di atas; tanpa jurnal.
+
+Alur: HR mengisi status saat master dibuat/diubah → menjelang akhir kontrak, read-model menampilkan daftar (a) → HR mencatat berakhir/perpanjang (perpanjang = `contractEndDate` baru + jejak ActivityLog existing, pola F-035) → saat hubungan kerja berakhir, HR mengisi `employmentEndedAt`+`endReason` dan menonaktifkan; generate payroll menolak/ menandai karyawan yang `employmentEndedAt` <= akhir periode tetapi belum pernah slip final (BR-EMP-06, bentuk penolakan = Q-EMP-3).
+
+### 3. Aturan bisnis (register)
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-EMP-01 | Master karyawan membawa jenis hubungan kerja (`employmentStatus`) sebagai fakta master, bukan turunan slip/absensi. | USULAN |
+| BR-EMP-02 | Nilai status tervalidasi service dari kosakata tertutup; teks bebas ditolak di aksi (pola enum-teks repo). Kosakata awal: PKWTT/PKWT/DAILY/INTERN. | USULAN; kosakata final Q-EMP-1 (pemilik proses) |
+| BR-EMP-03 | Baris lama tanpa status terbaca "belum diatur" di UI/laporan; sistem TIDAK mengisi PKWTT diam-diam (backfill tebak dilarang). | USULAN |
+| BR-EMP-04 | PKWT tanpa tanggal akhir kontrak = temuan data tampil di read-model; simpan master TIDAK diblokir (data historis tidak boleh terkunci), tetapi karyawan itu masuk daftar perhatian sampai lengkap. | USULAN |
+| BR-EMP-05 | `employmentEndedAt` dan `isActive` fakta terpisah: tanggal berhenti dicatat dulu, penonaktifan run payroll tindakan sadar terpisah; UI menampilkan keduanya berdampingan agar tidak tertukar. | USULAN |
+| BR-EMP-06 | Karyawan dengan `employmentEndedAt` terisi TIDAK boleh menerima slip reguler baru untuk periode sesudah tanggal berhenti; slip final masa terakhir hanya lewat jalur final existing (`resignationFinal`/final PPh21 F-026). Bentuk gerbang (tolak keras vs peringatan wajib-konfirmasi) = Q-EMP-3. | USULAN + BUTUH-VONIS BOT 1 (perilaku inti payroll) |
+| BR-EMP-07 | Spec ini TIDAK menghitung dan TIDAK menampilkan nominal uang kompensasi PKWT, pesangon, UPMK, atau penggantian hak. Kewajiban itu nyata (PP 35/2021 Pasal 15: kompensasi PKWT saat berakhir, masa kerja >= 1 bulan; Pasal 40 dst. untuk PHK) tetapi rumus, basis upah, dan akun jurnalnya = vonis BOT 4. UI hanya boleh menampilkan fakta tanggal/status, bukan angka kewajiban. | BUTUH-VONIS BOT 4 (angka/akun); fakta regulasi BENCHMARK resmi §4 |
+| BR-EMP-08 | Tanpa permission key baru: lihat/buat/ubah master memakai `view/create/edit_employees` existing; penonaktifan memakai `edit_employees`; read-model perhatian mengikuti `view_employees` + `getHrScope` (self hanya melihat barisnya sendiri; daftar perhatian lintas karyawan hanya scope department/all). Nominal gaji TIDAK pernah tampil di read-model ini. | TERVERIFIKASI-KODE (katalog+scope existing) + USULAN pemakaian |
+| BR-EMP-09 | Perubahan `employmentStatus`/`contractEndDate`/`employmentEndedAt`/`endReason` tercatat di ActivityLog existing dengan old/new (pola F-2026-10-21-035 histori geser endDate WO); riwayat kontrak tidak ditimpa tanpa jejak. | USULAN (pola TERVERIFIKASI-KODE F-035) |
+| BR-EMP-10 | Slip yang sudah terbit TIDAK berubah makna oleh perubahan master sesudahnya: perubahan status hanya berlaku ke depan (pola F-026 §5 titik berlaku). | USULAN (pola TERVERIFIKASI-KODE) |
+| BR-EMP-11 | Perpanjang PKWT = tanggal akhir baru pada baris yang sama + jejak BR-EMP-09; sistem TIDAK membuat baris karyawan kedua dan TIDAK menghitung kompensasi perpanjangan (itu peristiwa bayar terpisah sesudah vonis BOT 4). | USULAN; perlakuan kompensasi BUTUH-VONIS BOT 4 |
+| BR-EMP-12 | Harian lepas (DAILY) dan magang (INTERN) tercatat statusnya, tetapi spec ini TIDAK menetapkan perlakuan payroll/pajaknya (TER harian dsb. di luar cakupan; pola F-028-I §I.5 butir 5: subjek di luar pegawai tetap tidak dicampur tanpa vonis objek terpisah). | USULAN + BUTUH-VONIS BOT 4 bila hendak dihitung |
+
+### 4. Benchmark (URL resmi; bukan aturan bisnis)
+
+- Accurate Online — Karyawan: data karyawan sebagai dasar payroll + PPh 21; ada panduan khusus mencatat karyawan resign + PPh 21 bulan terakhir: https://help.accurate.id/product/karyawan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/karyawan/cara-menambahkan-data-karyawan/ (akses 2026-10-22).
+- PP No. 35 Tahun 2021 (PKWT, uang kompensasi Pasal 15, PHK/pesangon): https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021 ; teks PDF JDIH Kemenaker: https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf (akses 2026-10-22). Dipakai hanya untuk membuktikan kewajiban itu ada; rumus final milik BOT 4.
+- Zahir: daftar fitur HR/payroll dibandingkan pada level "master karyawan + status" saja; tidak ditemukan halaman help resmi Zahir yang menetapkan kosakata PKWT/PKWT di URL yang diakses run ini — ditulis "belum terverifikasi", bukan diklaim.
+
+### 5. Role / permission matrix
+
+| Aksi | Permission key | Scope tambahan |
+|---|---|---|
+| Lihat master + status kepegawaian | `view_employees` | `getHrScope`: self = baris sendiri saja |
+| Buat karyawan + status awal | `create_employees` | all-scope (HR/admin) secara praktik; aksi existing yang memutuskan |
+| Ubah status/tanggal kontrak/berhenti | `edit_employees` | department/all untuk orang lain; self TIDAK boleh mengubah statusnya sendiri (aksi master existing, bukan self-service) |
+| Nonaktifkan dari run payroll | `edit_employees` | sama seperti ubah master |
+| Lihat daftar perhatian siklus hidup | `view_employees` | self: hanya temuan atas barisnya sendiri; department/all: daftar sesuai scope |
+| Generate/proses payroll (gerbang BR-EMP-06) | `create_payroll`/`process_payroll` | penjaga server membaca master; UI tidak menentukan lolos/tidak |
+
+Tidak ada baris yang mengekspos `baseSalary`/`netSalary`: read-model siklus hidup hanya memuat nama, status, tanggal kontrak/berhenti, alasan — tanpa nominal (BR-EMP-08).
+
+### 6. Kata & label UI (mengikat BOT 2; verbatim)
+
+- Label field: "Status Kepegawaian", "Tanggal Mulai Kontrak", "Tanggal Akhir Kontrak", "Tanggal Berhenti Bekerja", "Alasan Berhenti".
+- Pilihan status tampil: "Tetap (PKWTT)", "Kontrak (PKWT)", "Harian Lepas", "Magang". Nilai kosong tampil: "Belum diatur".
+- Pilihan alasan tampil: "Kontrak Selesai", "Mengundurkan Diri", "Diberhentikan", "Pensiun", "Meninggal Dunia", "Lainnya".
+- Lencana daftar perhatian: "Kontrak berakhir <= 30 hari", "Kontrak lewat, belum dicatat berhenti", "Sudah berhenti, masih aktif payroll", "Status belum diatur". DILARANG label yang memuat nominal kewajiban (mis. "kompensasi Rp...") sebelum vonis BOT 4.
+- Pesan gerbang payroll (bila Q-EMP-3 = tolak keras): "Karyawan sudah berhenti bekerja pada <tanggal>. Slip reguler tidak dapat dibuat; gunakan slip final masa terakhir." Bila Q-EMP-3 = peringatan: teks sama + tombol konfirmasi eksplisit tercatat. Kata final mengikuti putusan Q-EMP-3; draf ini yang dipakai BOT 2 sebagai titik mulai, bukan karangan ulang.
+
+### 7. Matriks transisi status
+
+Status yang diatur spec ini = status kepegawaian master (bukan status slip):
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum diatur) | HR mengisi pertama kali | PKWTT/PKWT/DAILY/INTERN | `edit_employees` (atau `create_employees` saat buat); jejak BR-EMP-09 |
+| PKWT | perpanjang kontrak | PKWT (tanggal akhir baru) | `edit_employees`; jejak old/new tanggal |
+| PKWT/PKWTT/DAILY/INTERN | ganti jenis hubungan kerja (mis. PKWT diangkat tetap) | status baru | `edit_employees`; jejak; tidak mengubah slip lama (BR-EMP-10) |
+| status apa pun | hubungan kerja berakhir | status tetap + `employmentEndedAt`+`endReason` terisi | `edit_employees`; `isActive` tidak ikut berubah otomatis (BR-EMP-05) |
+| berhenti tercatat | dinonaktifkan | `isActive=false` | `edit_employees`; keluar dari populasi run berikutnya |
+| berhenti tercatat | koreksi salah catat | `employmentEndedAt` dikosongkan/alasan diperbaiki | `edit_employees`; jejak wajib memuat nilai lama (koreksi tidak menghapus riwayat) |
+
+### 8. Acceptance criteria (untuk BOT 6)
+
+- AC-EMP-1: Buat karyawan PKWT tanpa tanggal akhir -> tersimpan, tampil "Belum diatur"-bukan; masuk daftar perhatian "Status belum diatur" TIDAK, melainkan temuan kontrak-tak-lengkap sesuai BR-EMP-04 (label §6). Cabut kolom tanggal dari payload aksi -> aksi menolak/tidak menyimpan diam-diam setengah.
+- AC-EMP-2: Karyawan `employmentEndedAt` = 2026-10-15, masih `isActive`: muncul di daftar "Sudah berhenti, masih aktif payroll"; generate reguler periode 2026-11 diperlakukan persis Q-EMP-3 yang diputus (tolak/pesan §6). Falsifikasi: kosongkan penjaga -> slip lahir = MERAH.
+- AC-EMP-3: Slip final lewat jalur final existing untuk karyawan berhenti: lolos; slip reguler kedua sesudah final untuk periode lebih akhir: ditolak penjaga yang sama.
+- AC-EMP-4: Ubah PKWT -> PKWTT: ActivityLog memuat old/new; slip bulan lalu tidak berubah status/angkanya (BR-EMP-10).
+- AC-EMP-5: Perpanjang PKWT: tanggal akhir baru tersimpan + jejak; tidak lahir baris karyawan kedua; tidak tampil nominal kompensasi di layar mana pun (BR-EMP-07).
+- AC-EMP-6: Scope: user self membuka daftar perhatian hanya melihat barisnya sendiri; kepala_bengkel hanya departemennya; role tanpa `view_employees` ditolak aksi langsung (bypass UI).
+- AC-EMP-7: Read-model tidak memuat field gaji: respons/HTML daftar perhatian tanpa `baseSalary`/`netSalary`/nominal apa pun (grep keluaran).
+- AC-EMP-8: Baris lama (status null) tampil "Belum diatur" dan tidak terhitung PKWTT di rekap status mana pun.
+- AC-EMP-9: PKWT berakhir 20 hari lagi tampil di daftar "<= 30 hari"; yang berakhir 31 hari lagi tidak tampil; batas dihitung tanggal WIB.
+- AC-EMP-10: Koreksi `employmentEndedAt` yang salah: nilai lama tetap terbaca di jejak; status keanggotaan run mengikuti data terkoreksi.
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+- Q-EMP-1 (pemilik proses/BOT 1): kosakata `employmentStatus` final (apakah DAILY/INTERN dipisah atau cukup PKWT/PKWTT + lainnya). Menghambat migrasi BOT 3, bukan penulisan spec.
+- Q-EMP-2 (pemilik proses): kosakata `endReason` final + apakah "kontrak selesai" untuk PKWT yang tidak diperpanjang dibedakan dari PHK di data (penting untuk laporan, bukan angka).
+- Q-EMP-3 (BOT 1, perilaku inti payroll): gerbang BR-EMP-06 tolak keras vs peringatan wajib-konfirmasi. Rekomendasi BOT 5: tolak keras untuk periode yang seluruhnya sesudah tanggal berhenti; peringatan hanya bila periode memotong tanggal berhenti (slip final parsial bulan berhenti ditangani jalur final existing).
+- Q-EMP-4 (BOT 4): rumus + basis upah + akun untuk uang kompensasi PKWT (PP 35/2021 Pasal 15-17), pesangon/UPMK/penggantian hak PHK, dan perlakuan PPh21 atasnya (objek 21-401-xx dsb.). TANPA vonis ini, tidak ada angka kewajiban dibangun siapa pun.
+- Q-EMP-5 (BOT 4): apakah peristiwa berakhirnya PKWT/perpanjangan memicu slip komponen khusus lewat PayrollComponent existing (F-027) atau dokumen bayar terpisah.
+- Q-EMP-6 (BOT 3): bentuk fisik final (kolom di `Employee` vs tabel riwayat kontrak terpisah bila perpanjangan berlapis perlu riwayat penuh). Spec merekomendasikan kolom di `Employee` + jejak ActivityLog dulu (YAGNI: tabel riwayat hanya bila Q-EMP-6 membuktikan perpanjangan berlapis tak cukup dijejaki log).
+
+### 10. Backlog implementasi (turunan spec ini)
+
+1. BOT 1: putus Q-EMP-1/2/3 (kosakata + gerbang payroll). Tanpa ini BOT 3 tidak migrasi.
+2. BOT 4: vonis Q-EMP-4/5 (angka kompensasi/pesangon + jalur bayar). Dependensi eksplisit; BOT 5 tidak memutus angka.
+3. BOT 3 (@backend-prisma-inventory-workshop): migrasi kolom aditif + validasi service + jejak ActivityLog + read-model daftar perhatian + gerbang generate sesuai Q-EMP-3. Klaim `prisma/schema.prisma` di board sebelum edit; tes falsifikasi AC-EMP-2/4.
+4. BOT 2 (@frontend-ui-ux-next-js): field master + daftar perhatian SESUDAH kontrak BOT 3, kata §6 verbatim, tanpa nominal kewajiban, tanpa hitung status di UI. UI fitur didahulukan atas polish.
+5. BOT 6: AC-EMP-1..10 atas head BOT 3/BOT 2, termasuk falsifikasi cabut penjaga payroll + cek scope/gaji tak bocor.
+
+### Yang TIDAK diusulkan run ini
+- Hitung/tampil nominal kompensasi, pesangon, UPMK, penggantian hak (Q-EMP-4, vonis BOT 4 dulu).
+- Tabel riwayat kontrak berlapis, e-sign kontrak, portal karyawan, pengingat otomatis ke karyawan (WA/email keluar tidak ada infrastrukturnya — pola domain k).
+- Mengubah metode PPh21 masa terakhir (F-026 FINAL; spec ini hanya memberi penanda master supaya jalurnya tidak bergantung ingatan).
+- Backfill status dari data slip/absensi (tebakan retroaktif dilarang, BR-EMP-03).
+
+
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-078-S Permintaan Barang Antar Gudang (inti F-2026-10-21-014)
+
+Spec dokumen saja, tanpa kode/schema/migrasi. Induk: F-2026-10-21-014 (c) P1 — Permintaan barang antar gudang tidak ada sebagai dokumen. Spec ini = F-2026-10-22-078-S (nomor -S berikutnya sesudah 076-S PR #519; 077 dipakai vonis BOT 4 PR #521; tabrakan 078 diperiksa: grep backlog + gh pr list = 0).
+
+### 0. Verifikasi live origin/main 209e89e1 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `InventoryTransfer` + `InventoryTransferItem` (prisma/schema.prisma:2157,2181): sourceWarehouseId/destinationWarehouseId, status String default draft, items qty Decimal(15,2) + serialNumbers/batchAllocations Json? (atribusi lot/serial saat process). Aksi existing: createInventoryTransfer (src/actions/inventory.actions.ts:321), processInventoryTransfer (:375), receiveInventoryTransfer — transfer lahir langsung, tanpa dokumen permintaan pendahulu.
+- `PurchaseRequest`/`PurchaseRequestItem` (schema:1631,1662) = permintaan PEMBELIAN ke vendor (vendorId, requestedBy, status draft, approvedBy/At, rejectionReason) — BUKAN antar gudang. Halaman pembelian/permintaan existing. Dilarang memakai ulang model ini untuk antar gudang (nama UI akan tabrakan makna).
+- `Warehouse` (schema:675) + scope gudang `getWarehouseScope` (src/lib/auth/warehouse-scope.ts:22, kind all/assigned via UserWarehouse, fail-closed) + penjaga dokumen `canAccessWarehouseScopedDocument` pola inventory_transfer (document-scope.ts:20 — kedua gudang wajib dalam scope).
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:238-241): view/create/edit/delete_inventory_transfers. Navigasi Transfer existing: /inventaris/transfer (navigation.ts:127, view_inventory_transfers).
+- MaterialIssue tertambat workOrderId/projectId (fondasi atribusi kebutuhan per WO; spec ini hanya menaut permintaan ke WO, tidak mengubah issue).
+
+Belum ada (TERVERIFIKASI-KODE, grep origin/main run ini):
+- `MaterialRequest` = 0 di prisma + src. Tidak ada model/aksi/halaman permintaan antar gudang. Transfer lahir langsung tanpa permintaan/approval gudang tujuan; antrean "part diminta untuk job mana / sejak kapan / dari gudang mana yang sanggup" tidak bisa dijawab.
+- InventoryTransfer tanpa fulfilledRequestId/tautan permintaan apa pun; tidak ada status permintaan draft→approved→fulfilled/rejected di mana pun untuk antar gudang.
+
+Keputusan yang TIDAK diambil spec ini: jurnal/akun (transfer existing subledger-only, tanpa jurnal GL baru — lihat batas §9), terima parsial/selisih transfer (itu F-2026-10-21-015 terpisah, vonis BOT 4 sudah ada di board; spec ini tidak mencampur), approval generik multi-langkah (ApprovalWorkflow existing untuk PurchaseRequest — reuse-nya = Q-MR-2 untuk BOT 1, bukan asumsi).
+
+### 1. Workflow specification
+
+Aktor: Peminta (staf gudang tujuan / mekanik lewat kepala bengkel), Penyetuju (kepala gudang sumber atau pemegang izin approve usulan §4), Pelaksana transfer (staf gudang sumber).
+
+Alur:
+1. Peminta buat Permintaan Antar Gudang: gudang tujuan (requesterWarehouseId = gudang yang butuh), gudang sumber yang diminta (sourceWarehouseId), tanggal butuh (neededBy opsional), workOrderId opsional (bila part untuk job tertentu), baris item + qty + satuan tampil dari master item + catatan per baris. Simpan draft. Dokumen masuk: kebutuhan job/WO atau stok menipis tujuan. Dokumen keluar: nomor permintaan (prefix usulan MRQ, penomoran = pola generateDocumentNumber existing, final BOT 3).
+2. Peminta ajukan (draft → diajukan). Hanya diajukan yang bisa disetujui/ditolak.
+3. Penyetuju di gudang sumber: Setujui (diajukan → disetujui, catat approvedBy/At pola PurchaseRequest) atau Tolak (→ ditolak, rejectionReason wajib). Penyetuju TIDAK boleh menyetujui permintaan yang dia buat sendiri bila BOT 1 memutus Q-MR-3 = pisah orang (usulan: ya, pola approval existing).
+4. Pelaksana: dari permintaan disetujui, tombol "Buat Transfer" membuat SATU InventoryTransfer draft terisi (source/destination/baris qty persis permintaan) + tautan balik. Status permintaan tidak berubah saat draft transfer lahir; berubah saat transfer terkait diterima (received). Bila qty diterima < diminta (sesudah F-015 live), sisa tetap terbuka dan boleh lahir transfer susulan kedua dari permintaan sama.
+5. Pembatalan: peminta batalkan draft/diajukan (→ dibatalkan, alasan wajib). Permintaan disetujui yang sudah punya transfer lahir TIDAK bisa dibatalkan; tutup sisa lewat status ditutup_manual §3 dengan alasan.
+
+Dokumen keluar akhir: InventoryTransfer existing (satu-satunya dokumen gerak stok; permintaan TIDAK menggerakkan stok, TIDAK membuat StockMove/jurnal).
+
+### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+
+Model `MaterialRequest`: id, slug?, documentNo unik, requesterWarehouseId (tujuan), sourceWarehouseId, workOrderId nullable (SetNull), neededBy DateTime?, status String default draft, rejectionReason Text?, approvedBy/approvedAt, createdBy, createdAt/updatedAt, tautan banyak transfer lewat kolom `materialRequestId` nullable di InventoryTransfer (usulan; tabel relasi = alternatif) — pilihan fisik = Q-MR-4 BOT 3.
+Model `MaterialRequestItem`: id, materialRequestId (Cascade), itemId, qty Decimal(15,2), notes?. Tanpa harga/biaya (permintaan bukan dokumen nilai).
+Constraint: unik documentNo; index status, kedua gudang, workOrderId. TANPA backfill. TANPA ubah InventoryTransferItem.
+
+### 3. Status-transition matrix (USULAN)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (baru) | simpan | draft | izin create usulan; gudang tujuan dalam warehouse-scope peminta |
+| draft | ajukan | diajukan | pembuat atau izin edit; baris ≥1, qty >0 |
+| draft/diajukan | batalkan | dibatalkan | alasan wajib; belum ada transfer lahir |
+| diajukan | setujui | disetujui | izin approve usulan + scope gudang SUMBER; Q-MR-3 pisah-orang |
+| diajukan | tolak | ditolak | izin approve + scope sumber; rejectionReason wajib |
+| disetujui | buat transfer | disetujui (tetap) + InventoryTransfer draft lahir tertaut | izin create_inventory_transfers existing + scope kedua gudang (document-scope existing) |
+| disetujui/terpenuhi_sebagian | transfer tertaut diterima penuh untuk semua sisa baris | terpenuhi | sistem saat receiveInventoryTransfer; hitung dari qty diterima kumulatif per baris (bergantung F-015 receivedQty; sebelum F-015 live: terima = penuh per transfer existing) |
+| disetujui/terpenuhi_sebagian | transfer diterima sebagian | terpenuhi_sebagian | sistem; sisa qty per baris terbaca, bukan status bebas |
+| disetujui/terpenuhi_sebagian | tutup manual | ditutup_manual | izin approve + alasan wajib; sisa dianggap tidak lagi dibutuhkan |
+
+Status String (pola repo), bukan enum Prisma. Spec mengikat MAKNA transisi; ejaan status final disamakan BOT 3 dengan pola repo, kecuali kata tampil UI §6.
+
+### 4. Role/permission matrix (izin katalog TERVERIFIKASI-KODE + usulan bernama)
+
+Katalog live TIDAK punya resource material_requests. Dua jalan: (a) reuse inventory_transfers untuk semua aksi permintaan, atau (b) tambah resource baru material_requests (view/create/edit/delete/approve) di katalog — itu perubahan katalog = Q-MR-1 BOT 1. Spec TIDAK mengasumsikan key baru sudah ada.
+
+| Aksi | Jalan (a) reuse (USULAN sementara) | Jalan (b) key baru (USULAN, butuh Q-MR-1) | Scope gudang |
+|---|---|---|---|
+| Lihat daftar/detail permintaan | view_inventory_transfers | view_material_requests | tujuan ATAU sumber dalam scope; di luar keduanya = tak tampil |
+| Buat/edit draft, ajukan, batalkan | create/edit_inventory_transfers | create/edit_material_requests | gudang tujuan wajib dalam scope |
+| Setujui/tolak/tutup manual | edit_inventory_transfers (lemah — tak ada approve di resource transfer) | approve_material_requests | gudang SUMBER wajib dalam scope |
+| Buat Transfer dari disetujui | create_inventory_transfers (existing, TERVERIFIKASI-KODE) | sama (tetap transfer) | kedua gudang (document-scope existing) |
+| Hapus | hanya draft, delete_inventory_transfers | delete_material_requests | tujuan dalam scope |
+
+Rekomendasi BOT 5 (USULAN): jalan (b) — approve terpisah dari edit supaya persetujuan gudang sumber tidak melebar ke semua editor transfer. Tanpa putusan Q-MR-1, BOT 3 jangan bangun dengan key karangan.
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-MR-01 | Permintaan antar gudang = dokumen baru MaterialRequest; PurchaseRequest (pembelian vendor) tidak dipakai ulang | USULAN |
+| BR-MR-02 | Permintaan tidak menggerakkan stok, tidak membuat StockMove/jurnal/issue; satu-satunya gerak stok = InventoryTransfer tertaut | USULAN (konsisten transfer subledger-only TERVERIFIKASI-KODE) |
+| BR-MR-03 | Satu permintaan boleh melahirkan banyak transfer (pemenuhan bertahap); tautan di sisi transfer (materialRequestId) | USULAN Q-MR-4 |
+| BR-MR-04 | Terpenuhi dihitung dari qty DITERIMA kumulatif per baris, bukan dari transfer lahir/dikirim | USULAN (bergantung F-015 untuk parsial) |
+| BR-MR-05 | Tolak dan batal dan tutup manual wajib alasan; disetujui ber-transfer tidak bisa dibatalkan | USULAN |
+| BR-MR-06 | workOrderId hanya penanda kebutuhan job; permintaan tanpa WO sah (restok gudang); penjaga status WO = Q-MR-5 BOT 3 | USULAN |
+| BR-MR-07 | Gudang sumber = gudang yang menyetujui; gudang tujuan = yang meminta; sumber ≠ tujuan (validasi server) | USULAN |
+| BR-MR-08 | Qty permintaan adalah kebutuhan, bukan janji stok sumber; ketersediaan sumber ditampilkan informatif (ATP/loader existing), tidak menahan persetujuan | USULAN |
+| BR-MR-09 | Key izin final (reuse vs resource baru material_requests + approve) | BUTUH-VONIS Q-MR-1 (BOT 1) |
+| BR-MR-10 | Approval generik ApprovalWorkflow (pola PurchaseRequest requestApprovalIfConfigured) dipakai atau status internal sederhana saja | BUTUH-VONIS Q-MR-2 (BOT 1) |
+| BR-MR-11 | Penyetuju boleh = pembuat (self-approve)? Usulan TIDAK | BUTUH-VONIS Q-MR-3 (BOT 1) |
+| BR-MR-12 | Jurnal/akun untuk gerak antar gudang: TIDAK ADA di spec ini; bila kelak transfer berubah nilai, itu wilayah BOT 4 — spec ini tidak meminta vonis uang | TERVERIFIKASI-KODE (transfer existing tanpa jurnal permintaan) |
+
+### 6. Feature matrix (BENCHMARK, akses 2026-10-22)
+
+| Aspek | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Permintaan antar gudang/cabang sebagai dokumen pendahulu | Permintaan Barang tipe "Kirim Barang": tanggal, gudang asal, barang+qty, lalu diproses lewat Pemindahan Barang "Ambil dari Permintaan" — https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/permintaan-barang/cara-mencatat-permintaan-kirim-barang/ dan https://help.accurate.id/product/permintaan-barang/ | Tidak ditemukan dokumen permintaan antar gudang terpisah; yang ada Transfer Barang Antar Gudang langsung (gudang asal→tujuan, item, jumlah, job) — https://help.zahironline.com/portal/id/kb/articles/trans | Samakan Accurate: permintaan dulu (draft→diajukan→disetujui), transfer lahir dari yang disetujui |
+| Eksekusi pindah | Pemindahan Barang mengambil permintaan | Transfer langsung tercatat + jurnal di Zahir | InventoryTransfer existing tetap satu-satunya eksekusi; tanpa jurnal baru (beda Zahir — disadari, BR-MR-02) |
+| Penolakan/alasan + antrean per gudang | Tidak dirinci di URL di atas | Tidak dirinci | Inti nilai ISF: antrean permintaan masuk per gudang sumber + alasan tolak wajib |
+
+Kata tampil UI (USULAN, untuk BOT 2 verbatim sesudah kontrak BOT 3): judul "Permintaan Antar Gudang" (bedakan dari "Permintaan Pembelian"), status tampil: Draft / Diajukan / Disetujui / Ditolak / Terpenuhi / Terpenuhi Sebagian / Ditutup Manual / Dibatalkan; tombol: "Ajukan", "Setujui", "Tolak", "Buat Transfer", "Tutup Sisa Permintaan".
+
+### 7. Acceptance criteria + edge cases (BOT 6, falsifikasi)
+
+1. AC-MR-1: Buat permintaan tanpa baris / qty 0 / sumber = tujuan → ditolak server; lolos = MERAH.
+2. AC-MR-2: Transfer lahir hanya dari status disetujui; coba dari draft/diajukan/ditolak → ditolak; lahir dari ditolak = MERAH.
+3. AC-MR-3: Satu permintaan disetujui melahirkan 2 transfer bertahap; sesudah terima penuh kumulatif status = terpenuhi; terpenuhi hanya dari transfer lahir (belum diterima) = MERAH.
+4. AC-MR-4: Terima sebagian (sesudah F-015 live): status terpenuhi_sebagian + sisa per baris benar; sisa dihitung dari qty terkirim (bukan diterima) = MERAH.
+5. AC-MR-5: Tolak/batal/tutup manual tanpa alasan → ditolak; permintaan disetujui ber-transfer dibatalkan → ditolak.
+6. AC-MR-6: Role tanpa izin lihat / di luar scope kedua gudang membuka detail permintaan langsung (URL tebak) → ditolak server, bukan hanya tombol hilang.
+7. AC-MR-7: Setujui dari scope gudang tujuan saja (sumber di luar scope) → ditolak; self-approve mengikuti Q-MR-3 persis.
+8. AC-MR-8: Permintaan tidak mengubah stok/StockMove/jurnal apa pun sebelum transfer diproses (bandingkan saldo + jurnal sebelum/sesudah approve); berubah = MERAH.
+9. AC-MR-9: workOrderId terisi → permintaan tampil tertaut WO; WO dihapus (SetNull) → permintaan tetap ada tanpa job tebakan.
+10. AC-MR-10: Nama/permukaan "Permintaan Pembelian" (PurchaseRequest) tidak berubah perilaku; regresi tes purchase existing hijau.
+
+Edge: permintaan untuk item nonaktif; gudang dinonaktifkan sesudah diajukan (tampil, aksi ditolak beralasan — perilaku final BOT 3); dua penyetuju bersamaan (klaim atomik pola updateMany status penjaga, pola repo); neededBy lewat saat masih diajukan (tampil terlambat, bukan auto-tolak).
+
+### 8. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-MR-1 | Key izin: resource baru material_requests (+approve) atau reuse inventory_transfers? | BOT 1 |
+| Q-MR-2 | ApprovalWorkflow generik (pola PurchaseRequest) atau status internal sederhana? | BOT 1 |
+| Q-MR-3 | Self-approve dilarang? (usulan ya) | BOT 1 |
+| Q-MR-4 | Fisik tautan banyak-transfer: kolom materialRequestId di InventoryTransfer vs tabel relasi + constraint/idempotensi buat-transfer dobel | BOT 3 |
+| Q-MR-5 | Penjaga status WO tertaut (WO selesai/batal masih boleh dipenuhi?) + prefix nomor dokumen | BOT 3 (perilaku inti: eskalasi BOT 1 bila ragu) |
+
+Dependensi: F-2026-10-21-015 (terima parsial, receivedQty) hanya untuk AC-MR-4 penuh; tanpa F-015, spec tetap bisa dibangun dengan terima-penuh existing dan status terpenuhi_sebagian belum terjangkau (labeli jujur). BOT 4: TIDAK dibutuhkan (nol jurnal/angka uang/pajak — BR-MR-12); panggil BOT 4 hanya bila kelak ada usulan nilai/jurnal transfer.
+
+### 8A. PUTUSAN BOT 1 2026-10-22 (Q-MR-1/2/3 — mengikat BOT 3/BOT 2/BOT 6)
+
+- Q-MR-1 DIPUTUS (b): resource baru `material_requests` di katalog
+  izin — view/create/edit/delete + `approve_material_requests`
+  terpisah dari edit. Alasan: `inventory_transfers` existing tidak
+  punya aksi approve; persetujuan oleh gudang sumber tidak boleh
+  diberikan ke semua editor transfer. Pola approve_purchase_requests
+  existing.
+- Q-MR-2 DIPUTUS: status internal sederhana (approvedBy/approvedAt/
+  rejectionReason di MaterialRequest, pola PurchaseRequest).
+  ApprovalWorkflow generik TIDAK dipakai tahap ini — kebutuhan
+  nyata ISF = satu langkah setuju/tolak oleh gudang sumber.
+- Q-MR-3 DIPUTUS: self-approve DILARANG. Penyetuju != pembuat,
+  ditegakkan penjaga server.
+
+### 9. Backlog implementasi (turunan spec ini; induk tetap F-2026-10-21-014)
+
+1. BOT 1: putus Q-MR-1/2/3 (+ merge PR spec ini).
+2. BOT 3 (@backend-prisma-inventory-workshop): model MaterialRequest(+Item) + tautan transfer (Q-MR-4), aksi transisi §3 dengan klaim atomik + warehouse-scope, loader antrean per gudang (masuk ke sumber / keluar dari tujuan), tes falsifikasi AC-MR-1..3,5..9. Effort M.
+3. BOT 2 (@frontend-ui-ux-next-js): halaman inventaris/permintaan-gudang (daftar antrean + detail + form) SESUDAH kontrak BOT 3, kata §6 verbatim, tombol Buat Transfer hanya disetujui + izin transfer, tanpa hitung stok/status di UI. UI fitur ini didahulukan atas polish.
+4. BOT 6: AC-MR-1..10 atas head BOT 3/BOT 2.
+
+### Yang TIDAK diusulkan run ini
+- Terima parsial/selisih transfer (F-015 sendiri, sudah bervonis BOT 4), permintaan pembelian vendor (sudah ada), persetujuan bertingkat multi-penandatangan, notifikasi WA/email otomatis ke gudang sumber (kanal keluar belum ada — domain k), saran sumber otomatis dari stok (BR-MR-08 informatif saja).

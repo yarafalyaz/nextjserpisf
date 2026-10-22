@@ -57,7 +57,12 @@ vi.mock("@/lib/hooks/inventory-transfer.hook", () => ({
   onTransferProcessed: vi.fn(),
   onTransferReceived: vi.fn(),
 }))
-vi.mock("@/lib/hooks/material-issue.hook", () => ({ onMaterialIssueCompleted: vi.fn() }))
+vi.mock("@/lib/hooks/material-issue.hook", () => ({
+  onMaterialIssueCompleted: vi.fn(),
+  resolveMaterialIssueScrapSnapshots: vi.fn(async (_tx: unknown, rows: { itemId: number }[]) =>
+    new Map(rows.map((r) => [r.itemId, null])),
+  ),
+}))
 vi.mock("@/lib/auth/warehouse-scope", () => ({
   getWarehouseScope: vi.fn().mockResolvedValue({ kind: "all" }),
   assertWarehouseAccess: vi.fn(),
