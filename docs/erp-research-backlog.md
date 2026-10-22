@@ -10658,3 +10658,211 @@ BOT 3 (dokumen denda) -> BOT 2 (tampil) -> BOT 6 (E93-1..7).
 BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
 
 ---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-101-V PPN Masukan kredit parsial (creditablePercent) di read-model SPT + ember belum-dikreditkan (siklus standby 00:30, kartu t_872fda5c)
+
+Pemilik vonis: BOT 4. Pertanyaan: (a) faktur masukan
+`creditStatus=credited` dengan `creditablePercent < 100` — berapa PPN
+Masukan yang masuk posisi SPT masa kreditnya: penuh atau hanya porsi
+kreditabel? (b) faktur masukan `uncredited`/`not_creditable`/`expired`
+tidak tampil sama sekali di read-model SPT — bolehkah read-model
+menambah ember pengingat tanpa mengubah neto SPT? Ini BUKAN membuka
+implementasi; inti = kartu BOT 3/BOT 2 sesudah vonis ini merged +
+BOT 1 buka. Tanpa kode produksi run ini.
+
+### 0. Siklus + verifikasi live origin/main 858002b8 (2026-10-23 00:31 WIB)
+
+Snapshot siklus: origin/main 858002b86cc1de76afc712cefa1f9650d686fc93
+(naik dari 1e2a6b3c siklus 00:00 via #589/#469/#585 merged).
+Antrean vonis bebas-dependensi KOSONG dibuktikan ulang:
+(a) kanban assignee `accounting-finance-tax` status bukan
+done/archived: hanya kartu siklus ini (t_872fda5c running) +
+t_f15ecf3b placeholder salah-alamat scheduled; nol kartu vonis
+todo/blocked baru;
+(b) HANDOFF BOT 4 terakhir di board main semua berbentuk "tidak ada
+vonis diminta / dipanggil hanya bila menyimpang" (F-094-S, F-090-S,
+F-089-S, F-084-S, F-081-S) atau sudah divonis (Q-CO-4=F-066-V,
+Q-TM67-2/4=F-072-V, Q-EMP-4/5=F-086-V PR#536, Q-TGT-1=F-089-V/095-V);
+(c) PR BOT 4 terbit dan ter-gate, BUKAN vonis baru: #588
+(F-100-V) OPEN MERGEABLE BEHIND head 26e4a0ef checks 6/6 SUCCESS,
+#586/#584/#581/#518/#490 MERGEABLE BEHIND 6/6, #521 MERGEABLE
+BLOCKED checks belum jalan — semua menunggu merge Lead; sisa PR
+BOT 4 lama CONFLICTING menunggu rebase Lead. Item baru sesudah
+snapshot = milik siklus berikut. Karena semua ter-gate, riset
+vonis berikutnya ini dikerjakan.
+
+Celah terbukti live (grep/read pada origin/main 858002b8):
+
+- `buildInputSptRows` (src/lib/tax/spt-read-model.ts:75-92): hanya
+  `creditStatus === "credited"`, lalu
+  `row.vat = safeAdd(row.vat, inv.taxAmount, 2)` — PPN PENUH faktur,
+  `creditablePercent` TIDAK dibaca sama sekali (interface
+  `InputInvoiceRow` bahkan tidak punya field itu).
+- Loader (src/lib/reports/spt-read-model-data.ts:157-168): memetakan
+  hanya `taxPeriod/creditPeriod/creditStatus/dpp/taxAmount` ke
+  builder — persen kreditabel hilang di loader.
+- Service `creditInputInvoice` (src/lib/services/tax-invoice.service.ts:441-453):
+  MENGHITUNG `const split = creditableSplit(Number(inv.taxAmount), pct)`
+  lalu `void split` — split DIBUANG; yang disimpan hanya
+  `creditablePercent: toRate(pct)` + status. Tidak ada kolom porsi
+  beku; tidak ada jurnal koreksi dari jalur kredit ini.
+- `creditableSplit` murni ADA dan teruji konsepnya
+  (src/lib/tax/tax-invoice.ts:195-199; falsifikasi (e) di tax-verdicts:
+  persen 0 → PPN Masukan 0), tetapi konsumen produksi SPT tidak
+  memakainya. Jurnal PPN Masukan VendorBill existing
+  (accounting.hook.ts:860-897, 1731-1752) memakai `bill.tax` penuh —
+  itu jalur jurnal dokumen beli, BUKAN posisi SPT dokumen faktur;
+  vonis ini tidak mengubah jurnal itu (lihat P4).
+- Akibat angka: faktur taxAmount Rp1.320.000 dikreditkan 60% →
+  SPT menampilkan PPN Masukan 1.320.000 (harusnya 792.000);
+  neto masa understated Rp528.000, dan `journalVsSptDiff` ikut
+  bergeser palsu. Ini SALAH baca, bukan selisih temuan sah.
+- Ember hilang: `uncredited` tidak masuk baris mana pun (tes
+  spt-read-model.test.ts:39-47 membuktikan ketiganya dibuang
+  diam-diam); tidak ada hitungan/notice "faktur belum dikreditkan /
+  tidak dapat dikreditkan / kedaluwarsa" di builder tabel
+  (buildSptTableRows hanya notice legacy/selisih/lebih-bayar).
+- ID: grep `F-2026-10-23-101` di backlog main + judul PR terbuka
+  = 0; 101-V bebas (100-V = PR #588 OPEN).
+
+### 1. Putusan inti
+
+P1. PORSI KREDITABEL ADALAH ANGKA SPT. Untuk faktur masukan
+    `credited`, PPN Masukan yang masuk posisi SPT masa
+    `creditPeriod` = `creditableSplit(taxAmount, creditablePercent).creditable`
+    — yaitu `safeRound(taxAmount × pct/100, 2)` via fungsi murni
+    EXISTING, dibaca dari snapshot `creditablePercent` tersimpan di
+    dokumen (Decimal(5,2), default 100). BUKAN taxAmount penuh.
+    DPP baris masukan ikut porsi yang sama:
+    `dppKredit = safeRound(dpp × pct/100, 2)` (DPP faktur tidak
+    dipecah di dokumen; read-model menurunkan porsi konsisten
+    sen — rumus satu-satunya, jangan dua rumus DPP vs PPN).
+    Alasan: UU PPN 9(5)-(6) + PMK-186/PMK.03/2022 Pasal 5:
+    P = PM × Z; yang dikreditkan memang hanya porsi itu. Menampilkan
+    penuh = SPT mengklaim kredit yang tidak pernah diambil.
+
+P2. SUMBER PERSEN = SNAPSHOT DOKUMEN, BUKAN HITUNG-ULANG MASTER.
+    `creditablePercent` sudah dibekukan service saat kredit
+    (tax-invoice.service.ts:453). Read-model WAJIB membaca field
+    tersimpan itu; edit master/persen di dokumen lain sesudahnya
+    tidak mengubah masa lalu. Baris legacy fallback VendorBill
+    (tanpa TaxInvoice) TIDAK punya persen: perlakukan 100% DAN
+    tetap berlabel `legacy` — dilarang mengarang persen untuk
+    legacy. Faktur `credited` dengan persen tersimpan null/rusak
+    (di luar 0-100): fail-closed tampil sebagai temuan data
+    (masuk ember cacat P3, PPN kredit 0 di neto) — jangan diam-diam
+    anggap 100.
+
+P3. EMBER PENGINGAT TURUNAN (baca-saja, TIDAK masuk neto).
+    Read-model menambah hitungan turunan per masa FAKTUR
+    (`taxPeriod`, bukan creditPeriod — faktur belum dikreditkan
+    belum punya masa kredit):
+    (i) `belumDikreditkan`: status `uncredited`, jendela kredit
+        masih terbuka (monthDiff(taxPeriod, masaLaporanTerakhir) <= 3);
+    (ii) `kedaluwarsaBelumKredit`: `uncredited` yang jendela 3 masa
+        sudah lewat pada akhir rentang laporan, DITAMBAH status
+        tersimpan `expired`;
+    (iii) `tidakDapatDikreditkan`: status `not_creditable` +
+        agregat per `nonCreditableReason` (alasan tampil, bukan
+        hanya jumlah);
+    (iv) `parsial`: faktur `credited` dengan 0 < pct < 100,
+        menampilkan Rp kreditabel vs Rp tidak-kreditabel
+        (split P1) supaya sisa yang jadi beban/kapitalisasi
+        terlihat.
+    Ember (i)-(iv) adalah NOTICE/daftar pengingat: TIDAK mengubah
+    `inputVat`, `net`, `balance` P1/F-001/F-002 sedikit pun,
+    TIDAK mewarnai `kurangBayar`. Alasan pisah: neto SPT hanya
+    berisi yang benar-benar dikreditkan; ember menjawab "apa yang
+    belum diputuskan operator" tanpa mencemari posisi lapor.
+
+P4. JURNAL TIDAK BERUBAH OLEH VONIS INI. Vonis ini read-model
+    SPT saja. Jurnal PPN Masukan dari VendorBill (hook existing,
+    `bill.tax` penuh) dan kapitalisasi porsi non-kreditabel ke
+    HPP/beban adalah jalur JURNAL terpisah: BILA kelak porsi
+    non-kreditabel dari faktur `credited` parsial harus pindah
+    dari PPN Masukan ke beban, itu wajib jurnal koreksi di periode
+    terbuka lewat hook/service existing dengan idempotency —
+    kartu BOT 3 terpisah, BUKAN bagian build P1/P3, dan DILARANG
+    menyimpulkan dari read-model bahwa jurnal sudah benar.
+    Selisih jurnal-vs-SPT yang berubah karena P1 tetap tampil
+    sebagai `journalVsSptDiff` TEMUAN (prinsip F-005), bukan
+    dipilih diam-diam salah satu.
+
+P5. HITUNG-KEMBALI TAHUNAN PMK-186 TIDAK DIBANGUN. Penghitungan
+    kembali berdasarkan realisasi penyerahan (PMK-186 Pasal 6-8,
+    alokasi masa manfaat 1/4/10 tahun + penyesuaian paling lambat
+    masa ke-3 tahun berikutnya) adalah rezim tahunan terpisah.
+    `creditablePercent` per faktur di sistem ini = persen yang
+    diputuskan operator saat kredit (perkiraan Pasal 5); vonis ini
+    hanya membenarkan PEMBACAANNYA di SPT. Membangun mesin
+    hitung-kembali (Z' realisasi, alokasi T, jurnal penyesuaian)
+    = BUTUH-VONIS lanjutan BOT 4 bila ISF benar-benar punya
+    penyerahan campur terutang/tidak-terutang yang tidak dapat
+    diketahui pasti dari pembukuan — jangan bangun diam-diam
+    dari persen per faktur ini.
+
+### 2. Register sumber (akses 2026-10-23)
+
+| Klaim | Sumber | Status |
+|---|---|---|
+| PKP penyerahan campur: PM dapat dikreditkan hanya yang berkenaan penyerahan terutang; bila tidak diketahui pasti, pakai pedoman PMK | UU PPN Pasal 9 ayat (5)/(6) (UU 8/1983 s.t.d.t.d. UU 7/2021 HPP), dirujuk laman DJP https://www.pajak.go.id/id/pajak-masukan dan https://www.pajak.go.id/id/deemed-tax | TERVERIFIKASI laman resmi DJP (teks pasal tidak dibuka kata-per-kata run ini) |
+| Pedoman perkiraan P = PM x Z; hitung-kembali realisasi per Tahun Pajak dengan alokasi masa manfaat 1/4/10 tahun; penyesuaian diperhitungkan paling lambat Masa Pajak ketiga tahun dilakukannya hitung kembali | PMK-186/PMK.03/2022 Pasal 4-8, ditetapkan+diundangkan 12 Des 2022, BN 2022 No. 1241 — https://pajak.go.id/id/peraturan/pedoman-pengkreditan-pajak-masukan-bagi-pengusaha-kena-pajak-yang-melakukan-penyerahan-0 (teks penuh dibaca run ini) + PDF JDIH https://jdih.kemenkeu.go.id/api/download/2fbbf7e4-26e6-4a89-bb99-0ba876196196/186~PMK.03~2022.pdf | TERVERIFIKASI resmi DJP/JDIH; berlaku sejak diundangkan (Pasal 12); mencabut PMK-78/PMK.03/2010 s.t.d.t.d. 135/PMK.011/2014 (Pasal 11) |
+| Jendela kredit masukan maks 3 masa sesudah masa faktur; lewat = expired | UU PPN Pasal 9 ayat (2)/(9) sebagaimana diterapkan vonis F-002 + `checkCreditEligibility` existing (tax-invoice.ts) | TERVERIFIKASI-KODE + vonis FINAL F-002 (tidak dibuka ulang) |
+
+Tidak ada klaim "patuh pajak" di vonis ini. Vonis hanya memutus
+perlakuan read-model atas persen yang sudah tersimpan; kebenaran
+persen itu sendiri (Z perkiraan vs realisasi) tanggung jawab
+keputusan operator + rezim P5.
+
+### 3. Batas build (mengikat BOT 3/BOT 2/BOT 6; berlaku sesudah vonis merged + BOT 1 buka)
+
+- BOT 3: (a) `InputInvoiceRow` + loader membawa `creditablePercent`
+  tersimpan; `buildInputSptRows` memakai `creditableSplit` EXISTING
+  untuk vat dan porsi DPP P1; (b) builder ember P3 murni terpisah
+  (input baris TaxInvoice `in` + masa akhir rentang; output hitungan
+  + Rp per ember + rincian alasan (iii)); loader hanya menambah
+  select field, TANPA migrasi/kolom baru (field sudah ada
+  schema:1054); (c) service `creditInputInvoice`: `void split`
+  diganti bukti — split hasil hitung WAJIB sama dengan yang
+  diturunkan read-model dari persen tersimpan (tes kontrak
+  service<->builder), tanpa kolom snapshot baru tahap ini.
+  Falsifikasi wajib (E101):
+  E101-1 faktur credited 60% taxAmount 1.320.000 -> SPT masa kredit
+        vat 792.000 (bukan 1.320.000); cabut split di builder ->
+        MERAH.
+  E101-2 persen 100 dan persen 0: 100 -> penuh; 0 credited ->
+        vat 0 + masuk ember parsial; mutasi status 0% dianggap
+        penuh -> MERAH.
+  E101-3 uncredited dalam jendela vs lewat 3 masa terpisah ember
+        (i)/(ii) pada batas persis bulan ke-3/ke-4; geser batas ->
+        MERAH.
+  E101-4 not_creditable tampil per alasan; hapus rincian alasan ->
+        MERAH. Neto SPT byte-sama dengan/tanpa ember (cabut ember
+        tidak mengubah net) — dibuktikan tes terpisah.
+  E101-5 persen tersimpan rusak (null / >100) -> kredit 0 + temuan
+        cacat, BUKAN default 100; longgarkan jadi 100 -> MERAH.
+  E101-6 edit persen dokumen LAIN / master sesudah kredit tidak
+        mengubah baris masa terbaca (snapshot P2); hitung-ulang
+        dari master -> MERAH.
+- BOT 2: tampilkan kolom PPN Masukan dari builder apa adanya +
+  notice ember P3 (kata server verbatim, termasuk label
+  "belum dikreditkan — bukan angka SPT"); UI nol hitung split/
+  persen/jendela.
+- BOT 1: buka inti sesudah PR vonis merged; putus apakah jurnal
+  kapitalisasi porsi non-kreditabel (P4) dibuka sebagai kartu
+  BOT 3 terpisah atau ditunda sampai ada faktur parsial nyata.
+
+### 4. Yang TIDAK diputus
+
+- Mesin hitung-kembali tahunan PMK-186 Pasal 6-8 + jurnal
+  penyesuaiannya: BUTUH-VONIS lanjutan (P5), bukan syarat P1/P3.
+- Jurnal kapitalisasi/beban porsi non-kreditabel (P4): kartu
+  terpisah BOT 3 bila BOT 1 buka; read-model tidak mengklaimnya.
+- Persen kreditabel untuk legacy VendorBill tanpa TaxInvoice:
+  tetap 100% berlabel legacy (P2), bukan persen karangan.
+
+Pemilik berikutnya: BOT 1 (merge + buka inti + putus P4) ->
+BOT 3 (builder+loader+tes E101) -> BOT 2 (kolom+notice) ->
+BOT 6 (E101-1..6). BOT 5 tidak diminta.
+
+---
