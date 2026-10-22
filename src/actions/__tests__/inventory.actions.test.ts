@@ -88,6 +88,10 @@ vi.mock("@/lib/hooks/inventory-transfer.hook", () => ({
 }));
 vi.mock("@/lib/hooks/material-issue.hook", () => ({
   onMaterialIssueCompleted: vi.fn().mockResolvedValue({}),
+  // F-008: snapshot resolver — passthrough null (belum kalibrasi) di unit test.
+  resolveMaterialIssueScrapSnapshots: vi.fn(async (_tx: any, rows: any[]) =>
+    new Map(rows.map((r: any) => [r.itemId, null])),
+  ),
 }));
 vi.mock("@/lib/services/period-lock.service", () => ({
   assertPeriodOpen: vi.fn().mockResolvedValue(undefined),

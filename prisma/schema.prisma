@@ -250,6 +250,20 @@ model SystemSetting {
    * fallback itu hanya utk selisih PEMBULATAN < ambang).
    */
   productionVarianceAccountId     Int?    @map("production_variance_account_id")
+  /**
+   * F-2026-10-21-008 (vonis BOT 4 F-2026-10-22-066-V, putusan flag Lead
+   * MODE CATAT-DULU): gerbang jurnal scrap abnormal P2(b). Default MATI —
+   * klasifikasi + snapshot + laporan scrap jalan penuh tanpa jurnal;
+   * complete TIDAK ditolak karena akun kosong. ON = jurnal Dr
+   * abnormalScrapExpenseAccountId / Cr WIP dalam tx issue yang sama.
+   */
+  abnormalScrapPostingEnabled     Boolean @default(false) @map("abnormal_scrap_posting_enabled")
+  /**
+   * Akun Beban Kerugian Produksi (usulan BOT 3: kode 510105, anak 5101;
+   * menunggu persetujuan BOT 4). Fail-closed saat flag ON: kosong =
+   * complete ditolak berisik; DILARANG fallback materialExpense/cogs.
+   */
+  abnormalScrapExpenseAccountId   Int?    @map("abnormal_scrap_expense_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -2240,6 +2254,22 @@ model MaterialIssueItem {
   workOrderItemId Int?          @map("work_order_item_id")
   qty             Decimal       @db.Decimal(15, 2)
   cost            Decimal       @default(0.00) @db.Decimal(15, 2)
+  // F-2026-10-21-008: scrap terstruktur per baris (vonis BOT 4
+  // F-2026-10-22-066-V). scrapQty/scrapReasonCode/scrapNote = input operator
+  // di draft; scrapPercentSnapshot = allowance BOM (%) dibekukan saat baris
+  // issue dibuat (dilarang baca master hidup saat complete); kolom
+  // *Snapshot lain dibekukan saat complete dari cost FIFO baris.
+  scrapQty             Decimal  @default(0.00) @map("scrap_qty") @db.Decimal(15, 2)
+  scrapReasonCode      String?  @map("scrap_reason_code") @db.VarChar(32)
+  scrapNote            String?  @map("scrap_note") @db.VarChar(500)
+  scrapPercentSnapshot Decimal? @map("scrap_percent_snapshot") @db.Decimal(5, 2)
+  scrapClassifiedAt    DateTime? @map("scrap_classified_at")
+  scrapPlannedQtySnapshot Decimal? @map("scrap_planned_qty_snapshot") @db.Decimal(15, 2)
+  scrapNormalQtySnapshot  Decimal? @map("scrap_normal_qty_snapshot") @db.Decimal(15, 2)
+  scrapAbnormalQtySnapshot Decimal? @map("scrap_abnormal_qty_snapshot") @db.Decimal(15, 2)
+  scrapUnitCostSnapshot   Decimal? @map("scrap_unit_cost_snapshot") @db.Decimal(15, 2)
+  scrapNormalValueSnapshot Decimal? @map("scrap_normal_value_snapshot") @db.Decimal(15, 2)
+  scrapAbnormalValueSnapshot Decimal? @map("scrap_abnormal_value_snapshot") @db.Decimal(15, 2)
   serialNumbers   Json?         @map("serial_numbers")
   // Batch/lot yang benar-benar ter-konsumsi FIFO saat complete (dari
   // consumedBatches hook); null sampai baris ter-issue.
@@ -2337,6 +2367,11 @@ model BomRevisionMaterial {
   bomRevisionId Int         @map("bom_revision_id")
   itemId        Int         @map("item_id")
   qty           Decimal     @db.Decimal(15, 2)
+  // F-2026-10-21-008: allowance scrap normal per baris BOM (%), vonis BOT 4
+  // F-2026-10-22-066-V P1. Null/0 = BELUM dikalibrasi → seluruh scrap baris
+  // terbaca abnormal; dilarang default global. Dibekukan ke baris issue
+  // (scrapPercentSnapshot) saat issue dibuat.
+  scrapPercent  Decimal?    @map("scrap_percent") @db.Decimal(5, 2)
   bomRevision   BomRevision @relation(fields: [bomRevisionId], references: [id], onDelete: Cascade)
 
   @@index([bomRevisionId], map: "bom_revision_materials_bom_revision_id_fkey")
@@ -2399,6 +2434,23 @@ model ProductionOrderMaterial {
   actualQty         Decimal?        @map("actual_qty") @db.Decimal(15, 2)
   standardCost      Decimal         @default(0.00) @map("standard_cost") @db.Decimal(15, 2)
   actualCost        Decimal         @default(0.00) @map("actual_cost") @db.Decimal(15, 2)
+  // F-2026-10-21-008: scrap terstruktur jalur PO (vonis BOT 4
+  // F-2026-10-22-066-V). scrapPercentSnapshot dibekukan saat PO dibuat dari
+  // revisi BOM ter-pin (createProductionOrder); scrapQty/scrapReasonCode/
+  // scrapNote input operator per kejadian issueMaterial; kolom *Snapshot
+  // klasifikasi KUMULATIF dibekukan/diakumulasi saat issue dari cost FIFO
+  // kejadian itu (baris PO terbit berkali-kali — beda MaterialIssueItem
+  // yang terklasifikasi sekali saat complete).
+  scrapPercentSnapshot Decimal? @map("scrap_percent_snapshot") @db.Decimal(5, 2)
+  scrapQty             Decimal  @default(0.00) @map("scrap_qty") @db.Decimal(15, 2)
+  scrapReasonCode      String?  @map("scrap_reason_code") @db.VarChar(32)
+  scrapNote            String?  @map("scrap_note") @db.VarChar(500)
+  scrapClassifiedAt    DateTime? @map("scrap_classified_at")
+  scrapNormalQtySnapshot  Decimal? @map("scrap_normal_qty_snapshot") @db.Decimal(15, 2)
+  scrapAbnormalQtySnapshot Decimal? @map("scrap_abnormal_qty_snapshot") @db.Decimal(15, 2)
+  scrapUnitCostSnapshot   Decimal? @map("scrap_unit_cost_snapshot") @db.Decimal(15, 2)
+  scrapNormalValueSnapshot Decimal? @map("scrap_normal_value_snapshot") @db.Decimal(15, 2)
+  scrapAbnormalValueSnapshot Decimal? @map("scrap_abnormal_value_snapshot") @db.Decimal(15, 2)
   // Lot/serial attribution of the material actually issued (PRD line 369 / REP-13).
   // Captured at issue time from the FIFO consumption so the production genealogy
   // can answer "which source serials/lots went into this finished unit".

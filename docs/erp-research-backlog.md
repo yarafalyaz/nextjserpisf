@@ -7670,6 +7670,32 @@ dari garansi, itu perubahan katalog = keputusan BOT 1.
 | Q-IP-4 | Backfill historis dari MI lama ber-WO (sekali jalan, ditandai sumber backfill)? | BOT 1 |
 | Q-IP-5 | WO/issue dibatalkan sesudah lahir: baris ditandai batal atau dibiarkan + catatan? | BOT 1 + BOT 3 |
 
+### 8A. PUTUSAN BOT 1 2026-10-22 (Q-IP-1/2/4/5 — mengikat BOT 3/BOT 2/BOT 6)
+
+- Q-IP-1 DIPUTUS: YA. MI taut proyek tanpa WO lahir juga bila
+  Project.customerVehicleId terisi. Alasan: atribusi kendaraan
+  eksplisit dari dokumen sumber, bukan tebakan; MI bebas/penjualan
+  tetap TIDAK lahir. BOT 3 bangun jalur lahir kedua di complete
+  material issue proyek; hasil aksi memuat hitungan terlewati
+  (pola skipped) untuk MI tanpa kendaraan.
+- Q-IP-2 DIPUTUS: REUSE `view_warranties` (lihat) +
+  `manage_warranties` (catat lepas/ganti). Tanpa key baru tahap
+  ini: panel hidup di halaman kendaraan yang sudah ter-gate
+  warranties, dan tidak ada peran ISF hari ini yang boleh melihat
+  registri tetapi tidak boleh melihat garansi. Key terpisah hanya
+  dibuka kembali bila owner menunjuk peran itu nyata.
+- Q-IP-4 DIPUTUS: TIDAK ada backfill historis tahap ini. Registri
+  mulai dari fitur live; baris lama tidak direkonstruksi supaya
+  tidak lahir registri semu dari issue yang konteks kendaraannya
+  sudah tidak bisa dibuktikan ulang. Dibuka kembali hanya atas
+  permintaan eksplisit owner + rancangan penanda sumber.
+- Q-IP-5 DIPUTUS: baris TIDAK dihapus dan status turunan TIDAK
+  dibekukan. BOT 3 tambah penanda batal sumber (flag + waktu dari
+  dokumen sumber) bila WO/issue sumber dibatalkan/dikoreksi;
+  status lepas/ganti turunan tetap berjalan normal. Alasan:
+  registri adalah jejak fisik kendaraan, koreksi sumber tidak
+  menghapus fakta part pernah terpasang.
+
 Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 2-3 hari; BOT 2 panel kendaraan 1 hari; BOT 6 AC-IP-1..10.
 
@@ -8743,6 +8769,45 @@ implementasi menyimpang dari vonis (akun baru, jurnal di receive,
 klaim kurir BR-TP-11, kapitalisasi ongkir BR-TP-14) — itu
 BUTUH-VONIS baru, jangan diputus BOT 3/BOT 5.
 
+### 8B. PUTUSAN BOT 1 2026-10-22 (Q-MR-1/2/3 — dicatat juga di spec F-078-S PR #524 §8A)
+
+- Q-MR-1 DIPUTUS (b): resource baru `material_requests` di katalog
+  izin — view/create/edit/delete + `approve_material_requests`
+  terpisah dari edit. Alasan: `inventory_transfers` existing tidak
+  punya aksi approve; persetujuan oleh gudang sumber tidak boleh
+  diberikan ke semua editor transfer. Pola approve_purchase_requests
+  existing.
+- Q-MR-2 DIPUTUS: status internal sederhana (approvedBy/approvedAt/
+  rejectionReason di MaterialRequest, pola PurchaseRequest).
+  ApprovalWorkflow generik TIDAK dipakai tahap ini — kebutuhan
+  nyata ISF = satu langkah setuju/tolak oleh gudang sumber.
+- Q-MR-3 DIPUTUS: self-approve DILARANG. Penyetuju != pembuat,
+  ditegakkan penjaga server.
+
+### 9A. PUTUSAN BOT 1 2026-10-22 (Q-TP-5/1/4 — mengikat BOT 3/BOT 2/BOT 6)
+
+- Q-TP-5 DIPUTUS: INTI DIBUKA. BOT 3 bangun migrasi receivedQty
+  per baris + status `partially_received` + terima per kejadian
+  dalam klaim atomik, mengganti perilaku all-or-nothing existing.
+  Perilaku lama hanya bertahan untuk transfer yang sudah received
+  sebelum fitur live (backfill fisik = Q-TP-2 milik BOT 3).
+  Vonis BOT 4 yang sudah turun (BR-TP-01/02/03/05/06/08) mengikat
+  penuh; tidak ada jurnal dari receive.
+- Q-TP-1 DIPUTUS: YA — setiap kejadian terima memakai tanggal
+  kejadian sendiri: assertPeriodOpen dinilai per tanggal kejadian,
+  laporan stok/in-transit memotong per tanggal kejadian, tanggal
+  kirim tidak dipakai ulang untuk terima lintas periode. Bentuk
+  field fisik = Q-TP-2 (BOT 3).
+- Q-TP-4 DIPUTUS: yang berwenang menyatakan sisa hilang/rusak
+  final = pemegang `create_stock_adjustments` di konteks gudang
+  tujuan DENGAN approval orang berbeda (pola approval adjustment
+  existing). Batas umur: laporan in-transit WAJIB menandai sisa
+  berumur >60 hari; penutupan selisih untuk sisa itu WAJIB
+  ditawarkan/dikejar mulai umur 60 hari, tetapi sistem TIDAK
+  auto-menutup (keputusan final tetap manusia berwenang di atas).
+  Angka 60 hari = ambang peringatan existing yang dinaikkan jadi
+  kewajiban tindak lanjut, bukan auto-eksekusi.
+
 ### 10. Backlog implementasi (turunan spec ini; induk tetap F-2026-10-21-015)
 
 1. BOT 1: putus Q-TP-5 (buka inti) + Q-TP-1/Q-TP-4 (+ merge PR
@@ -9276,3 +9341,151 @@ Label bukti: TERVERIFIKASI-KODE (rujukan berkas/schema origin/
 main 6fc3aa92); REGULASI (PMK 168/2023 Pasal 5/8/10, URL DJP di
 atas, berlaku 1 Jan 2024); KEBIJAKAN INTERNAL (titik akrual,
 akun 210207, larangan jalur bayar kedua — bukan klaim regulasi).
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-078-S Permintaan Barang Antar Gudang (inti F-2026-10-21-014)
+
+Spec dokumen saja, tanpa kode/schema/migrasi. Induk: F-2026-10-21-014 (c) P1 — Permintaan barang antar gudang tidak ada sebagai dokumen. Spec ini = F-2026-10-22-078-S (nomor -S berikutnya sesudah 076-S PR #519; 077 dipakai vonis BOT 4 PR #521; tabrakan 078 diperiksa: grep backlog + gh pr list = 0).
+
+### 0. Verifikasi live origin/main 209e89e1 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `InventoryTransfer` + `InventoryTransferItem` (prisma/schema.prisma:2157,2181): sourceWarehouseId/destinationWarehouseId, status String default draft, items qty Decimal(15,2) + serialNumbers/batchAllocations Json? (atribusi lot/serial saat process). Aksi existing: createInventoryTransfer (src/actions/inventory.actions.ts:321), processInventoryTransfer (:375), receiveInventoryTransfer — transfer lahir langsung, tanpa dokumen permintaan pendahulu.
+- `PurchaseRequest`/`PurchaseRequestItem` (schema:1631,1662) = permintaan PEMBELIAN ke vendor (vendorId, requestedBy, status draft, approvedBy/At, rejectionReason) — BUKAN antar gudang. Halaman pembelian/permintaan existing. Dilarang memakai ulang model ini untuk antar gudang (nama UI akan tabrakan makna).
+- `Warehouse` (schema:675) + scope gudang `getWarehouseScope` (src/lib/auth/warehouse-scope.ts:22, kind all/assigned via UserWarehouse, fail-closed) + penjaga dokumen `canAccessWarehouseScopedDocument` pola inventory_transfer (document-scope.ts:20 — kedua gudang wajib dalam scope).
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:238-241): view/create/edit/delete_inventory_transfers. Navigasi Transfer existing: /inventaris/transfer (navigation.ts:127, view_inventory_transfers).
+- MaterialIssue tertambat workOrderId/projectId (fondasi atribusi kebutuhan per WO; spec ini hanya menaut permintaan ke WO, tidak mengubah issue).
+
+Belum ada (TERVERIFIKASI-KODE, grep origin/main run ini):
+- `MaterialRequest` = 0 di prisma + src. Tidak ada model/aksi/halaman permintaan antar gudang. Transfer lahir langsung tanpa permintaan/approval gudang tujuan; antrean "part diminta untuk job mana / sejak kapan / dari gudang mana yang sanggup" tidak bisa dijawab.
+- InventoryTransfer tanpa fulfilledRequestId/tautan permintaan apa pun; tidak ada status permintaan draft→approved→fulfilled/rejected di mana pun untuk antar gudang.
+
+Keputusan yang TIDAK diambil spec ini: jurnal/akun (transfer existing subledger-only, tanpa jurnal GL baru — lihat batas §9), terima parsial/selisih transfer (itu F-2026-10-21-015 terpisah, vonis BOT 4 sudah ada di board; spec ini tidak mencampur), approval generik multi-langkah (ApprovalWorkflow existing untuk PurchaseRequest — reuse-nya = Q-MR-2 untuk BOT 1, bukan asumsi).
+
+### 1. Workflow specification
+
+Aktor: Peminta (staf gudang tujuan / mekanik lewat kepala bengkel), Penyetuju (kepala gudang sumber atau pemegang izin approve usulan §4), Pelaksana transfer (staf gudang sumber).
+
+Alur:
+1. Peminta buat Permintaan Antar Gudang: gudang tujuan (requesterWarehouseId = gudang yang butuh), gudang sumber yang diminta (sourceWarehouseId), tanggal butuh (neededBy opsional), workOrderId opsional (bila part untuk job tertentu), baris item + qty + satuan tampil dari master item + catatan per baris. Simpan draft. Dokumen masuk: kebutuhan job/WO atau stok menipis tujuan. Dokumen keluar: nomor permintaan (prefix usulan MRQ, penomoran = pola generateDocumentNumber existing, final BOT 3).
+2. Peminta ajukan (draft → diajukan). Hanya diajukan yang bisa disetujui/ditolak.
+3. Penyetuju di gudang sumber: Setujui (diajukan → disetujui, catat approvedBy/At pola PurchaseRequest) atau Tolak (→ ditolak, rejectionReason wajib). Penyetuju TIDAK boleh menyetujui permintaan yang dia buat sendiri bila BOT 1 memutus Q-MR-3 = pisah orang (usulan: ya, pola approval existing).
+4. Pelaksana: dari permintaan disetujui, tombol "Buat Transfer" membuat SATU InventoryTransfer draft terisi (source/destination/baris qty persis permintaan) + tautan balik. Status permintaan tidak berubah saat draft transfer lahir; berubah saat transfer terkait diterima (received). Bila qty diterima < diminta (sesudah F-015 live), sisa tetap terbuka dan boleh lahir transfer susulan kedua dari permintaan sama.
+5. Pembatalan: peminta batalkan draft/diajukan (→ dibatalkan, alasan wajib). Permintaan disetujui yang sudah punya transfer lahir TIDAK bisa dibatalkan; tutup sisa lewat status ditutup_manual §3 dengan alasan.
+
+Dokumen keluar akhir: InventoryTransfer existing (satu-satunya dokumen gerak stok; permintaan TIDAK menggerakkan stok, TIDAK membuat StockMove/jurnal).
+
+### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+
+Model `MaterialRequest`: id, slug?, documentNo unik, requesterWarehouseId (tujuan), sourceWarehouseId, workOrderId nullable (SetNull), neededBy DateTime?, status String default draft, rejectionReason Text?, approvedBy/approvedAt, createdBy, createdAt/updatedAt, tautan banyak transfer lewat kolom `materialRequestId` nullable di InventoryTransfer (usulan; tabel relasi = alternatif) — pilihan fisik = Q-MR-4 BOT 3.
+Model `MaterialRequestItem`: id, materialRequestId (Cascade), itemId, qty Decimal(15,2), notes?. Tanpa harga/biaya (permintaan bukan dokumen nilai).
+Constraint: unik documentNo; index status, kedua gudang, workOrderId. TANPA backfill. TANPA ubah InventoryTransferItem.
+
+### 3. Status-transition matrix (USULAN)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (baru) | simpan | draft | izin create usulan; gudang tujuan dalam warehouse-scope peminta |
+| draft | ajukan | diajukan | pembuat atau izin edit; baris ≥1, qty >0 |
+| draft/diajukan | batalkan | dibatalkan | alasan wajib; belum ada transfer lahir |
+| diajukan | setujui | disetujui | izin approve usulan + scope gudang SUMBER; Q-MR-3 pisah-orang |
+| diajukan | tolak | ditolak | izin approve + scope sumber; rejectionReason wajib |
+| disetujui | buat transfer | disetujui (tetap) + InventoryTransfer draft lahir tertaut | izin create_inventory_transfers existing + scope kedua gudang (document-scope existing) |
+| disetujui/terpenuhi_sebagian | transfer tertaut diterima penuh untuk semua sisa baris | terpenuhi | sistem saat receiveInventoryTransfer; hitung dari qty diterima kumulatif per baris (bergantung F-015 receivedQty; sebelum F-015 live: terima = penuh per transfer existing) |
+| disetujui/terpenuhi_sebagian | transfer diterima sebagian | terpenuhi_sebagian | sistem; sisa qty per baris terbaca, bukan status bebas |
+| disetujui/terpenuhi_sebagian | tutup manual | ditutup_manual | izin approve + alasan wajib; sisa dianggap tidak lagi dibutuhkan |
+
+Status String (pola repo), bukan enum Prisma. Spec mengikat MAKNA transisi; ejaan status final disamakan BOT 3 dengan pola repo, kecuali kata tampil UI §6.
+
+### 4. Role/permission matrix (izin katalog TERVERIFIKASI-KODE + usulan bernama)
+
+Katalog live TIDAK punya resource material_requests. Dua jalan: (a) reuse inventory_transfers untuk semua aksi permintaan, atau (b) tambah resource baru material_requests (view/create/edit/delete/approve) di katalog — itu perubahan katalog = Q-MR-1 BOT 1. Spec TIDAK mengasumsikan key baru sudah ada.
+
+| Aksi | Jalan (a) reuse (USULAN sementara) | Jalan (b) key baru (USULAN, butuh Q-MR-1) | Scope gudang |
+|---|---|---|---|
+| Lihat daftar/detail permintaan | view_inventory_transfers | view_material_requests | tujuan ATAU sumber dalam scope; di luar keduanya = tak tampil |
+| Buat/edit draft, ajukan, batalkan | create/edit_inventory_transfers | create/edit_material_requests | gudang tujuan wajib dalam scope |
+| Setujui/tolak/tutup manual | edit_inventory_transfers (lemah — tak ada approve di resource transfer) | approve_material_requests | gudang SUMBER wajib dalam scope |
+| Buat Transfer dari disetujui | create_inventory_transfers (existing, TERVERIFIKASI-KODE) | sama (tetap transfer) | kedua gudang (document-scope existing) |
+| Hapus | hanya draft, delete_inventory_transfers | delete_material_requests | tujuan dalam scope |
+
+Rekomendasi BOT 5 (USULAN): jalan (b) — approve terpisah dari edit supaya persetujuan gudang sumber tidak melebar ke semua editor transfer. Tanpa putusan Q-MR-1, BOT 3 jangan bangun dengan key karangan.
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-MR-01 | Permintaan antar gudang = dokumen baru MaterialRequest; PurchaseRequest (pembelian vendor) tidak dipakai ulang | USULAN |
+| BR-MR-02 | Permintaan tidak menggerakkan stok, tidak membuat StockMove/jurnal/issue; satu-satunya gerak stok = InventoryTransfer tertaut | USULAN (konsisten transfer subledger-only TERVERIFIKASI-KODE) |
+| BR-MR-03 | Satu permintaan boleh melahirkan banyak transfer (pemenuhan bertahap); tautan di sisi transfer (materialRequestId) | USULAN Q-MR-4 |
+| BR-MR-04 | Terpenuhi dihitung dari qty DITERIMA kumulatif per baris, bukan dari transfer lahir/dikirim | USULAN (bergantung F-015 untuk parsial) |
+| BR-MR-05 | Tolak dan batal dan tutup manual wajib alasan; disetujui ber-transfer tidak bisa dibatalkan | USULAN |
+| BR-MR-06 | workOrderId hanya penanda kebutuhan job; permintaan tanpa WO sah (restok gudang); penjaga status WO = Q-MR-5 BOT 3 | USULAN |
+| BR-MR-07 | Gudang sumber = gudang yang menyetujui; gudang tujuan = yang meminta; sumber ≠ tujuan (validasi server) | USULAN |
+| BR-MR-08 | Qty permintaan adalah kebutuhan, bukan janji stok sumber; ketersediaan sumber ditampilkan informatif (ATP/loader existing), tidak menahan persetujuan | USULAN |
+| BR-MR-09 | Key izin final (reuse vs resource baru material_requests + approve) | BUTUH-VONIS Q-MR-1 (BOT 1) |
+| BR-MR-10 | Approval generik ApprovalWorkflow (pola PurchaseRequest requestApprovalIfConfigured) dipakai atau status internal sederhana saja | BUTUH-VONIS Q-MR-2 (BOT 1) |
+| BR-MR-11 | Penyetuju boleh = pembuat (self-approve)? Usulan TIDAK | BUTUH-VONIS Q-MR-3 (BOT 1) |
+| BR-MR-12 | Jurnal/akun untuk gerak antar gudang: TIDAK ADA di spec ini; bila kelak transfer berubah nilai, itu wilayah BOT 4 — spec ini tidak meminta vonis uang | TERVERIFIKASI-KODE (transfer existing tanpa jurnal permintaan) |
+
+### 6. Feature matrix (BENCHMARK, akses 2026-10-22)
+
+| Aspek | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Permintaan antar gudang/cabang sebagai dokumen pendahulu | Permintaan Barang tipe "Kirim Barang": tanggal, gudang asal, barang+qty, lalu diproses lewat Pemindahan Barang "Ambil dari Permintaan" — https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/permintaan-barang/cara-mencatat-permintaan-kirim-barang/ dan https://help.accurate.id/product/permintaan-barang/ | Tidak ditemukan dokumen permintaan antar gudang terpisah; yang ada Transfer Barang Antar Gudang langsung (gudang asal→tujuan, item, jumlah, job) — https://help.zahironline.com/portal/id/kb/articles/trans | Samakan Accurate: permintaan dulu (draft→diajukan→disetujui), transfer lahir dari yang disetujui |
+| Eksekusi pindah | Pemindahan Barang mengambil permintaan | Transfer langsung tercatat + jurnal di Zahir | InventoryTransfer existing tetap satu-satunya eksekusi; tanpa jurnal baru (beda Zahir — disadari, BR-MR-02) |
+| Penolakan/alasan + antrean per gudang | Tidak dirinci di URL di atas | Tidak dirinci | Inti nilai ISF: antrean permintaan masuk per gudang sumber + alasan tolak wajib |
+
+Kata tampil UI (USULAN, untuk BOT 2 verbatim sesudah kontrak BOT 3): judul "Permintaan Antar Gudang" (bedakan dari "Permintaan Pembelian"), status tampil: Draft / Diajukan / Disetujui / Ditolak / Terpenuhi / Terpenuhi Sebagian / Ditutup Manual / Dibatalkan; tombol: "Ajukan", "Setujui", "Tolak", "Buat Transfer", "Tutup Sisa Permintaan".
+
+### 7. Acceptance criteria + edge cases (BOT 6, falsifikasi)
+
+1. AC-MR-1: Buat permintaan tanpa baris / qty 0 / sumber = tujuan → ditolak server; lolos = MERAH.
+2. AC-MR-2: Transfer lahir hanya dari status disetujui; coba dari draft/diajukan/ditolak → ditolak; lahir dari ditolak = MERAH.
+3. AC-MR-3: Satu permintaan disetujui melahirkan 2 transfer bertahap; sesudah terima penuh kumulatif status = terpenuhi; terpenuhi hanya dari transfer lahir (belum diterima) = MERAH.
+4. AC-MR-4: Terima sebagian (sesudah F-015 live): status terpenuhi_sebagian + sisa per baris benar; sisa dihitung dari qty terkirim (bukan diterima) = MERAH.
+5. AC-MR-5: Tolak/batal/tutup manual tanpa alasan → ditolak; permintaan disetujui ber-transfer dibatalkan → ditolak.
+6. AC-MR-6: Role tanpa izin lihat / di luar scope kedua gudang membuka detail permintaan langsung (URL tebak) → ditolak server, bukan hanya tombol hilang.
+7. AC-MR-7: Setujui dari scope gudang tujuan saja (sumber di luar scope) → ditolak; self-approve mengikuti Q-MR-3 persis.
+8. AC-MR-8: Permintaan tidak mengubah stok/StockMove/jurnal apa pun sebelum transfer diproses (bandingkan saldo + jurnal sebelum/sesudah approve); berubah = MERAH.
+9. AC-MR-9: workOrderId terisi → permintaan tampil tertaut WO; WO dihapus (SetNull) → permintaan tetap ada tanpa job tebakan.
+10. AC-MR-10: Nama/permukaan "Permintaan Pembelian" (PurchaseRequest) tidak berubah perilaku; regresi tes purchase existing hijau.
+
+Edge: permintaan untuk item nonaktif; gudang dinonaktifkan sesudah diajukan (tampil, aksi ditolak beralasan — perilaku final BOT 3); dua penyetuju bersamaan (klaim atomik pola updateMany status penjaga, pola repo); neededBy lewat saat masih diajukan (tampil terlambat, bukan auto-tolak).
+
+### 8. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-MR-1 | Key izin: resource baru material_requests (+approve) atau reuse inventory_transfers? | BOT 1 |
+| Q-MR-2 | ApprovalWorkflow generik (pola PurchaseRequest) atau status internal sederhana? | BOT 1 |
+| Q-MR-3 | Self-approve dilarang? (usulan ya) | BOT 1 |
+| Q-MR-4 | Fisik tautan banyak-transfer: kolom materialRequestId di InventoryTransfer vs tabel relasi + constraint/idempotensi buat-transfer dobel | BOT 3 |
+| Q-MR-5 | Penjaga status WO tertaut (WO selesai/batal masih boleh dipenuhi?) + prefix nomor dokumen | BOT 3 (perilaku inti: eskalasi BOT 1 bila ragu) |
+
+Dependensi: F-2026-10-21-015 (terima parsial, receivedQty) hanya untuk AC-MR-4 penuh; tanpa F-015, spec tetap bisa dibangun dengan terima-penuh existing dan status terpenuhi_sebagian belum terjangkau (labeli jujur). BOT 4: TIDAK dibutuhkan (nol jurnal/angka uang/pajak — BR-MR-12); panggil BOT 4 hanya bila kelak ada usulan nilai/jurnal transfer.
+
+### 8A. PUTUSAN BOT 1 2026-10-22 (Q-MR-1/2/3 — mengikat BOT 3/BOT 2/BOT 6)
+
+- Q-MR-1 DIPUTUS (b): resource baru `material_requests` di katalog
+  izin — view/create/edit/delete + `approve_material_requests`
+  terpisah dari edit. Alasan: `inventory_transfers` existing tidak
+  punya aksi approve; persetujuan oleh gudang sumber tidak boleh
+  diberikan ke semua editor transfer. Pola approve_purchase_requests
+  existing.
+- Q-MR-2 DIPUTUS: status internal sederhana (approvedBy/approvedAt/
+  rejectionReason di MaterialRequest, pola PurchaseRequest).
+  ApprovalWorkflow generik TIDAK dipakai tahap ini — kebutuhan
+  nyata ISF = satu langkah setuju/tolak oleh gudang sumber.
+- Q-MR-3 DIPUTUS: self-approve DILARANG. Penyetuju != pembuat,
+  ditegakkan penjaga server.
+
+### 9. Backlog implementasi (turunan spec ini; induk tetap F-2026-10-21-014)
+
+1. BOT 1: putus Q-MR-1/2/3 (+ merge PR spec ini).
+2. BOT 3 (@backend-prisma-inventory-workshop): model MaterialRequest(+Item) + tautan transfer (Q-MR-4), aksi transisi §3 dengan klaim atomik + warehouse-scope, loader antrean per gudang (masuk ke sumber / keluar dari tujuan), tes falsifikasi AC-MR-1..3,5..9. Effort M.
+3. BOT 2 (@frontend-ui-ux-next-js): halaman inventaris/permintaan-gudang (daftar antrean + detail + form) SESUDAH kontrak BOT 3, kata §6 verbatim, tombol Buat Transfer hanya disetujui + izin transfer, tanpa hitung stok/status di UI. UI fitur ini didahulukan atas polish.
+4. BOT 6: AC-MR-1..10 atas head BOT 3/BOT 2.
+
+### Yang TIDAK diusulkan run ini
+- Terima parsial/selisih transfer (F-015 sendiri, sudah bervonis BOT 4), permintaan pembelian vendor (sudah ada), persetujuan bertingkat multi-penandatangan, notifikasi WA/email otomatis ke gudang sumber (kanal keluar belum ada — domain k), saran sumber otomatis dari stok (BR-MR-08 informatif saja).
