@@ -126,27 +126,10 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-012 inti backend; tombol lepas reservasi menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reserveStockForWorkOrder":
     "F-2026-10-21-012 inti backend; tombol reservasi ulang menyusul (frontend)",
-  // F-2026-10-22-078-S inti (t_7de0eff1): 9 aksi Permintaan Antar Gudang
-  // backend dulu; halaman /inventaris/permintaan-gudang menyusul di kartu
-  // frontend t_7bfec14e (buang entri ini saat UI memanggilnya).
-  "src/actions/material-request.actions.ts::createMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::updateMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::deleteMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::submitMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::approveMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::rejectMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::cancelMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::closeMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::createTransferFromMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  // F-2026-10-22-072-S + F-2026-10-22-078-S: aksi catat-lepas registri
+  // InstalledPart dan 9 aksi Permintaan Antar Gudang kini dirujuk UI
+  // (form catat-lepas + halaman /inventaris/permintaan-gudang) — entri
+  // beku keduanya dibuang.
   // F-2026-10-21-027 backend dulu (PR #360): 10 aksi komponen gaji sudah
   // dirujuk UI PR #374 (entri bekunya dibuang); tersisa getPayrollComponentLines.
   // Buang entri ini saat UI memanggilnya.
