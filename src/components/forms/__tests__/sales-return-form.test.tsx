@@ -6,6 +6,7 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
 import { SalesReturnForm } from "../sales-return-form"
+import { decorativeStars, labelTexts } from "./form-a11y-test-utils"
 
 function mountInto(node: HTMLElement) {
   const root: Root = createRoot(node)
@@ -80,6 +81,51 @@ describe("SalesReturnForm", () => {
     const qtyInput = container.querySelector("input[type='number']") as HTMLInputElement
     expect(qtyInput).not.toBeNull()
     expect(qtyInput.value).toBe("5")
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("a11y: aria-label tambah + aria-busy false; Pelanggan wajib aria-required + bintang dekoratif; Faktur tetap opsional", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <SalesReturnForm invoices={mockInvoices} customers={mockCustomers} items={mockItems} />
+      )
+    })
+
+    const form = container.querySelector("form")!
+    expect(form.getAttribute("aria-label")).toBe("Formulir tambah retur penjualan")
+    expect(form.getAttribute("aria-busy")).toBe("false")
+    expect(container.querySelector("#customerId")!.getAttribute("aria-required")).toBe("true")
+    expect(container.querySelector("#salesInvoiceId")!.getAttribute("aria-required")).toBeNull()
+    expect(decorativeStars(form).length).toBe(1)
+    expect(labelTexts(form)).toEqual(expect.arrayContaining(["Pelanggan *", "Faktur (Opsional)"]))
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("a11y mode ubah: aria-label ubah retur penjualan", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <SalesReturnForm
+          invoices={mockInvoices}
+          customers={mockCustomers}
+          items={mockItems}
+          returnData={{ id: 5, salesInvoiceId: 1, date: "2026-06-16" }}
+        />
+      )
+    })
+
+    expect(container.querySelector("form")!.getAttribute("aria-label")).toBe("Formulir ubah retur penjualan")
 
     unmount(root)
     container.remove()
