@@ -7676,3 +7676,151 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-056-S konsumen UI kartu kebutuhan ATP per gudang (lapis aman F-012)
+
+Pemilik spec: BOT 5 (sales-crm-hr-payroll-business-workflow). Dokumen spec
+saja, tanpa kode/schema/migrasi. Pasangan konsumen dari SPEC
+F-2026-10-22-045-S §1/§2(g)/§7 (lapis aman): mengunci perilaku tampil
+kartu kebutuhan material WO untuk field ATP per gudang yang SUDAH live,
+dan menutup satu celah kata yang terbukti belum ada (keadaan "gudang
+belum ditentukan"). Label bukti wajib di tiap aturan:
+TERVERIFIKASI-KODE / BENCHMARK / USULAN / BUTUH-VONIS.
+
+Benchmark resmi (akses 2026-10-22): sama dengan F-045-S —
+Accurate Pemenuhan Pesanan (ketersediaan per gudang):
+https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pemenuhan-pesanan/membuat-pemenuhan-barang-sesuai-pesanan/
+Zahir Order Penjualan (gudang per transaksi):
+https://help.zahironline.com/portal/id/kb/articles/order-penjualan
+
+### 0. Verifikasi live origin/main a8185d95 (2026-10-22, run ini)
+
+Sudah live (TERVERIFIKASI-KODE) — JANGAN dibangun ulang:
+- Kartu konsumen SUDAH ADA: `src/components/reports/work-order-material-needs-card.tsx`
+  dirender di detail WO `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx:468`
+  (`{materialNeeds ? <WorkOrderMaterialNeedsCard needs={materialNeeds} /> : null}`),
+  gerbang halaman `requirePermission("view_work_orders")` (page.tsx:52).
+  Kolom "Stok gudang relevan" menampilkan `line.qtyOnHandAtWarehouse`
+  apa adanya dari builder; status "Belum keluar — kurang di gudang relevan"
+  bila `warehouseShortageQty > 0`. Tes kartu existing:
+  `work-order-material-needs-card.test.tsx` (kasus gudang kurang/cukup).
+- Builder `src/lib/reports/work-order-material-needs.ts`: field
+  `qtyOnHandAtWarehouse` opsional; pemanggil lama tanpa field dianggap
+  = qtyOnHand global. Loader `work-order-material-needs-data.ts:180-183`:
+  gudang relevan = gudang MI completed WO ini ∪ `Item.defaultWarehouseId`;
+  stok dari `InventoryLayer.remaining` per pasangan (item,gudang).
+
+Celah terbukti (TERVERIFIKASI-KODE, inti spec ini):
+- Item TANPA MI completed dan `defaultWarehouseId` null → himpunan gudang
+  relevan kosong → loader mengisi `qtyOnHandAtWarehouse` = stok GLOBAL
+  (`work-order-material-needs-data.ts:180-183`, cabang `: Number(metaById...qtyOnHand)`).
+  Kartu lalu menampilkan angka global di kolom berlabel "Stok gudang
+  relevan" TANPA penanda apa pun — pembaca mengira stok ada di gudang
+  yang relevan padahal gudang belum ditentukan sama sekali.
+  `grep "gudang belum ditentukan"` di src = 0 kata. Kata F-045-S §2(g)
+  "Belum direservasi — gudang belum ditentukan" adalah kata status
+  RESERVASI (inti, PR #437 BOT 3 sedang berjalan) — BUKAN kata untuk
+  keadaan ATP lapis aman ini; memakainya di sini akan mencampur dua
+  makna (belum direservasi vs gudang sumber belum diketahui).
+
+### 1. Permukaan UI persis (yang dikunci, bukan dibangun baru)
+
+- Halaman: detail perintah kerja `/produksi/perintah-kerja/[slug]`,
+  kartu "Kebutuhan Material" (ReportCardShell label "Kebutuhan Material").
+- Komponen: `WorkOrderMaterialNeedsCard` existing. Spec ini hanya
+  menambah SATU keadaan tampil per baris + kata ringkasan terkait;
+  tidak ada halaman/route/komponen baru (USULAN penempatan: kolom
+  "Stok gudang relevan" dan sel Status baris itu — BOT 2 yang menata,
+  kata persis §2 tidak boleh diparafrase).
+- Penonton: pemegang `view_work_orders` (gerbang halaman existing,
+  TERVERIFIKASI-KODE). Loader kartu saat ini TIDAK menerapkan
+  `getWarehouseScope` per pengguna — angka stok per gudang terlihat
+  oleh semua pemegang view_work_orders. Memperketat ke cakupan gudang
+  per pengguna = perubahan perilaku izin: BUTUH-VONIS Lead (Q-ATP-1),
+  TIDAK diubah oleh spec ini.
+
+### 2. Kata Indonesia verbatim per keadaan (BOT 2 pakai persis)
+
+Keadaan ditentukan per baris dari field builder/loader apa adanya:
+(a) Gudang relevan diketahui dan stok gudang >= sisa kebutuhan:
+    angka tampil biasa, tanpa kata tambahan (perilaku existing).
+(b) Gudang relevan diketahui dan `warehouseShortageQty > 0`:
+    "Belum keluar — kurang di gudang relevan" (existing, TERVERIFIKASI-KODE).
+(c) Gudang relevan TIDAK diketahui (himpunan kosong: belum ada MI
+    completed untuk item itu di WO ini DAN defaultWarehouseId item
+    kosong): sel "Stok gudang relevan" menampilkan "—" dan sel Status
+    menampilkan persis: "Gudang sumber belum ditentukan"
+    Teks pendamping ringkasan kartu bila >= 1 baris keadaan (c):
+    "{n} baris gudang sumber belum ditentukan"
+    DILARANG menampilkan angka stok global pada keadaan (c) di kolom
+    gudang relevan (itulah celah §0). Angka global tetap terlihat di
+    kolom "Tersedia efektif" seperti existing — tidak dipindah, tidak
+    dihitung ulang.
+(d) Baris jasa (itemId<=0): "Jasa — terpenuhi" (existing).
+Kata keadaan (c) SENGAJA berbeda dari kata reservasi F-045-S §2(g)
+("Belum direservasi — gudang belum ditentukan"): lapis aman tidak
+membicarakan reservasi sama sekali. Mencampur keduanya = cacat spec.
+
+### 3. Kontrak data minimum (kebutuhan, bukan skema)
+
+Agar UI bisa membedakan (c) dari (a)/(b), builder/loader perlu
+menyatakan per baris apakah gudang relevan diketahui. Kebutuhan data:
+satu penanda boolean per baris (nama final milik BOT 3; usulan makna:
+"gudang relevan diketahui" = himpunan gudang relevan tidak kosong).
+Tanpa penanda ini UI TIDAK BOLEH menebak dari angka (angka global ==
+angka gudang bisa kebetulan sama). Ini kebutuhan kontrak ke BOT 3,
+bukan perubahan builder yang dikerjakan spec ini. Sesudah inti
+StockReservation PR #437 merged, penanda ini tetap bermakna lapis aman
+dan tidak digantikan status reservasi.
+
+### 4. Larangan (fail-closed)
+
+- UI dilarang menghitung ulang ATP: tidak ada penjumlahan InventoryLayer,
+  tidak ada pengurangan committedOtherQty, tidak ada turunan shortage
+  di komponen. Semua angka passthrough builder (TERVERIFIKASI-KODE pola
+  existing kartu).
+- UI dilarang menyimpulkan gudang dari urutan gudang pertama/default
+  lain selain yang dinyatakan loader.
+- Keadaan (c) dilarang diberi warna/status "aman" atau digabung ke
+  ringkasan "Semua kebutuhan terpenuhi": baris (c) dengan sisa
+  kebutuhan > 0 tidak pernah terhitung terpenuhi oleh stok gudang.
+- Tidak ada aksi tulis apa pun dari kartu ini (reservasi ulang, lepas,
+  pilih gudang): semua itu milik inti F-045-S/F-049-S/F-050-S.
+
+### 5. Acceptance falsifikasi untuk BOT 6
+
+- AC-ATP-1 (LA-1 F-045-S §7, sudah bisa dinilai): WO dengan MI completed
+  di gudang A dan default item gudang B menampilkan qtyOnHandAtWarehouse
+  = jumlah lapisan A∪B; cabut field gudang di loader → warehouseShortageQty
+  salah → tes MERAH.
+- AC-ATP-2 Item tanpa MI completed dan defaultWarehouseId null, stok
+  global 10, butuh 4: kolom gudang relevan tampil "—", status persis
+  "Gudang sumber belum ditentukan", ringkasan memuat "1 baris gudang
+  sumber belum ditentukan", dan angka 10 TIDAK muncul di kolom gudang
+  relevan. Kembalikan fallback global lama → tes MERAH.
+- AC-ATP-3 Item sama sesudah MI completed pertama terbit dari gudang A:
+  keadaan berpindah ke (a)/(b) berdasar lapisan A, kata (c) hilang.
+- AC-ATP-4 Penanda kontrak dicabut (builder mengembalikan angka tanpa
+  penanda gudang-diketahui): UI menampilkan keadaan (c), BUKAN menebak
+  dari kesamaan angka. Matikan penanda → tes MERAH bila UI menebak.
+- AC-ATP-5 Pengguna tanpa view_work_orders: halaman WO tertolak seperti
+  existing (kartu tidak bocor lewat jalur lain); nol hitung ulang ATP
+  di DOM (grep komponen: tidak ada akses InventoryLayer/komputasi
+  shortage lokal selain passthrough field).
+- AC-ATP-6 Kata reservasi inti ("Terreservasi", "Dilepas",
+  "Kedaluwarsa — reservasi ulang bila masih dibutuhkan") TIDAK tampil
+  di kartu lapis aman ini sebelum/sesudah PR #437 merged.
+
+### 6. Pertanyaan terbuka
+
+- Q-ATP-1 (BUTUH-VONIS Lead): apakah angka stok per gudang di kartu
+  perlu dibatasi `getWarehouseScope` pengguna, atau view_work_orders
+  cukup seperti hari ini? Spec ini mempertahankan perilaku existing
+  sampai vonis turun.
+- Q-ATP-2 (untuk BOT 3): nama + tempat penanda "gudang relevan
+  diketahui" di kontrak builder (field baris baru vs turunan loader).
+  UI menunggu kontrak ini; tidak ada tebakan di sisi BOT 2.
+
+Pemilik berikut: BOT 3 (penanda kontrak §3), BOT 2 (kata §2 di kartu
+existing), BOT 6 (AC-ATP-1..6). Lead: vonis Q-ATP-1 + merge PR docs ini.
