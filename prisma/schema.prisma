@@ -3301,7 +3301,7 @@ model Payroll {
   costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
   costCenterId           Int?        @map("cost_center_id")
 
-  @@unique([employeeId, period], map: "uq_payroll_employee_period")
+  @@unique([employeeId, startDate, endDate], map: "uq_payroll_employee_range")
   @@index([employeeId], map: "payrolls_employee_id_fkey")
   @@index([status], map: "idx_payrolls_status")
   @@index([costCenterId])
