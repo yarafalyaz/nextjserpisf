@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 337 permission dikelompokkan per modul (15 modul). */
+/** 342 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -230,6 +230,11 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "edit", resource: "stock_adjustments", permissionKey: "edit_stock_adjustments", label: "Penyesuaian Stok" },
     { key: "delete", resource: "stock_adjustments", permissionKey: "delete_stock_adjustments", label: "Penyesuaian Stok" },
     { key: "process", resource: "stock_adjustments", permissionKey: "process_stock_adjustments", label: "Penyesuaian Stok" },
+    { key: "view", resource: "material_requests", permissionKey: "view_material_requests", label: "Permintaan Antar Gudang" },
+    { key: "create", resource: "material_requests", permissionKey: "create_material_requests", label: "Permintaan Antar Gudang" },
+    { key: "edit", resource: "material_requests", permissionKey: "edit_material_requests", label: "Permintaan Antar Gudang" },
+    { key: "delete", resource: "material_requests", permissionKey: "delete_material_requests", label: "Permintaan Antar Gudang" },
+    { key: "approve", resource: "material_requests", permissionKey: "approve_material_requests", label: "Permintaan Antar Gudang" },
     { key: "view", resource: "inventory", permissionKey: "view_inventory", label: "Persediaan" },
     { key: "edit", resource: "inventory", permissionKey: "edit_inventory", label: "Persediaan" },
     { key: "manage", resource: "inventory", permissionKey: "manage_inventory", label: "Persediaan" },

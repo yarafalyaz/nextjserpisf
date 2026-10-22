@@ -672,6 +672,8 @@ model Item {
   vendorPrices         VendorItemPrice[]
   customerPrices       CustomerPriceList[]
   warrantyCoverages    WarrantyCoverage[]
+  installedParts       InstalledPart[]
+  materialRequestItems MaterialRequestItem[]
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -699,6 +701,8 @@ model Warehouse {
   goodsReceipts     GoodsReceipt[]
   transfersIn       InventoryTransfer[] @relation("TransferDest")
   transfersOut      InventoryTransfer[] @relation("TransferSource")
+  materialRequestsAsRequester MaterialRequest[] @relation("MaterialRequestRequester")
+  materialRequestsAsSource    MaterialRequest[] @relation("MaterialRequestSource")
   itemBatches       ItemBatch[]
   itemSerials       ItemSerial[]
   defaultItems      Item[]              @relation("ItemDefaultWarehouse")
@@ -2175,12 +2179,66 @@ model StockAdjustmentItem {
   @@map("stock_adjustment_items")
 }
 
+// F-2026-10-22-078-S inti (induk F-2026-10-21-014): permintaan barang
+// antar gudang. Dokumen pendahulu InventoryTransfer — permintaan TIDAK
+// menggerakkan stok, TIDAK membuat StockMove/jurnal/issue (BR-MR-02);
+// satu-satunya gerak stok = InventoryTransfer tertaut lewat kolom
+// materialRequestId di sisi transfer (Q-MR-4 BOT 3). Status internal
+// sederhana pola PurchaseRequest (Q-MR-2); self-approve dilarang
+// (Q-MR-3). Tanpa harga/biaya: permintaan bukan dokumen nilai.
+model MaterialRequest {
+  slug                 String?   @unique
+  id                   Int       @id @default(autoincrement())
+  documentNo           String    @unique @map("document_no")
+  requesterWarehouseId Int       @map("requester_warehouse_id")
+  sourceWarehouseId    Int       @map("source_warehouse_id")
+  workOrderId          Int?      @map("work_order_id")
+  neededBy             DateTime? @map("needed_by")
+  status               String    @default("draft")
+  rejectionReason      String?   @map("rejection_reason") @db.Text
+  approvedBy           Int?      @map("approved_by")
+  approvedAt           DateTime? @map("approved_at")
+  createdBy            Int?      @map("created_by")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+
+  items              MaterialRequestItem[]
+  transfers          InventoryTransfer[]
+  requesterWarehouse Warehouse @relation("MaterialRequestRequester", fields: [requesterWarehouseId], references: [id])
+  sourceWarehouse    Warehouse @relation("MaterialRequestSource", fields: [sourceWarehouseId], references: [id])
+  workOrder          WorkOrder? @relation(fields: [workOrderId], references: [id], onDelete: SetNull)
+
+  @@index([status], map: "idx_material_requests_status")
+  @@index([requesterWarehouseId])
+  @@index([sourceWarehouseId])
+  @@index([workOrderId])
+  @@index([approvedBy])
+  @@index([createdBy])
+  @@index([createdAt])
+  @@map("material_requests")
+}
+
+model MaterialRequestItem {
+  id                Int             @id @default(autoincrement())
+  materialRequestId Int             @map("material_request_id")
+  itemId            Int             @map("item_id")
+  qty               Decimal         @db.Decimal(15, 2)
+  notes             String?
+  materialRequest   MaterialRequest @relation(fields: [materialRequestId], references: [id], onDelete: Cascade)
+  item              Item            @relation(fields: [itemId], references: [id])
+
+  @@index([materialRequestId], map: "material_request_items_material_request_id_fkey")
+  @@index([itemId])
+  @@map("material_request_items")
+}
+
 model InventoryTransfer {
   slug                   String?                 @unique
   id                     Int                     @id @default(autoincrement())
   documentNo             String                  @unique @map("document_no")
   sourceWarehouseId      Int                     @map("source_warehouse_id")
   destinationWarehouseId Int                     @map("destination_warehouse_id")
+  materialRequestId      Int?                    @map("material_request_id")
   date                   DateTime
   notes                  String?                 @db.Text
   status                 String                  @default("draft")
@@ -2188,11 +2246,13 @@ model InventoryTransfer {
   createdAt              DateTime                @default(now()) @map("created_at")
   updatedAt              DateTime                @updatedAt @map("updated_at")
   items                  InventoryTransferItem[]
+  materialRequest        MaterialRequest?        @relation(fields: [materialRequestId], references: [id], onDelete: SetNull)
   destinationWarehouse   Warehouse               @relation("TransferDest", fields: [destinationWarehouseId], references: [id])
   sourceWarehouse        Warehouse               @relation("TransferSource", fields: [sourceWarehouseId], references: [id])
 
   @@index([destinationWarehouseId], map: "inventory_transfers_destination_warehouse_id_fkey")
   @@index([sourceWarehouseId], map: "inventory_transfers_source_warehouse_id_fkey")
+  @@index([materialRequestId])
   @@index([status])
   @@index([createdBy])
   @@index([createdAt])
@@ -2277,6 +2337,7 @@ model MaterialIssueItem {
   batchNumbers    Json?         @map("batch_numbers")
   materialIssue   MaterialIssue @relation(fields: [materialIssueId], references: [id], onDelete: Cascade)
   workOrderItem   WorkOrderItem? @relation(fields: [workOrderItemId], references: [id], onDelete: SetNull)
+  installedParts  InstalledPart[]
 
   @@index([materialIssueId], map: "material_issue_items_material_issue_id_fkey")
   @@index([itemId])
@@ -2727,6 +2788,7 @@ model WorkOrder {
   warrantyCoverages WarrantyCoverage[] @relation("WorkOrderWarrantyCoverages")
   warrantyRepairClaims WarrantyClaim[] @relation("WarrantyClaimRepairWorkOrder")
   changeOrders      JobChangeOrder[]
+  materialRequests  MaterialRequest[]
 
   @@index([customerId], map: "work_orders_customer_id_fkey")
   @@index([quotationId], map: "work_orders_quotation_id_fkey")
@@ -3959,6 +4021,7 @@ model CustomerVehicle {
   workOrders    WorkOrder[]
   warrantyCoverages WarrantyCoverage[]
   warrantyClaims    WarrantyClaim[]
+  installedParts    InstalledPart[]
 
   @@index([customerId], map: "customer_vehicles_customer_id_fkey")
   @@index([vehicleId], map: "customer_vehicles_vehicle_id_fkey")
@@ -4343,6 +4406,7 @@ model WarrantyCoverage {
   workOrder         WorkOrder       @relation("WorkOrderWarrantyCoverages", fields: [workOrderId], references: [id])
   item              Item            @relation(fields: [itemId], references: [id])
   claims            WarrantyClaim[]
+  installedParts    InstalledPart[]
 
   @@unique([workOrderId, itemId, serialKey], map: "warranty_coverages_wo_item_serial_key_key")
   @@index([customerVehicleId])
@@ -4351,6 +4415,65 @@ model WarrantyCoverage {
   @@index([status])
   @@index([expiresAt])
   @@map("warranty_coverages")
+}
+
+// F-2026-10-22-072-S (inti F-2026-10-21-024) — registri part terpasang per
+// kendaraan. Lahir OTOMATIS (satu-satunya jalan masuk; form bebas dilarang,
+// BR-IP-01) dari baris MaterialIssue completed: di tx completeWorkOrder
+// untuk MI taut WO, dan di tx completeMaterialIssue untuk MI taut proyek
+// tanpa WO bila Project.customerVehicleId terisi (putusan BOT 1 Q-IP-1).
+// MI bebas tidak pernah ditebak kendaraannya (BR-IP-07: tanpa kendaraan =
+// tidak lahir + terhitung skipped, dokumen sumber tetap selesai).
+//
+// Q-IP-3 (fisik BOT 3): serial-tracked = 1 baris per unit, qty selalu 1,
+// dari MaterialIssueItem.serialNumbers ter-konsumsi; non-serial = 1 baris
+// per baris issue dengan qty = MaterialIssueItem.qty. serialKey =
+// serialNumber ?? "" (pola WarrantyCoverage F-021-HARDEN: MySQL tidak
+// menganggap NULL unik) ikut @@unique(materialIssueItemId, serialKey)
+// menahan duplikat retry complete (BR-IP-04); pelanggar kedua = P2002
+// ditelan service sebagai "sudah ada". Nilai "" bukan serial asli.
+//
+// Status TIDAK disimpan: diturunkan dari qtyRemoved — TERPASANG (0),
+// SEBAGIAN_DILEPAS (0 < qtyRemoved < qty), DILEPAS (qtyRemoved = qty)
+// (BR-IP-05). removedAt/removedById/removalReason merekam kejadian lepas
+// TERAKHIR (removedAt hanya terisi saat DILEPAS penuh). Catat lepas TIDAK
+// membuat StockMove/jurnal/retur (BR-IP-06) — pengembalian fisik part =
+// dokumen inventory existing. warrantyCoverageId menaut coverage garansi
+// baris yang sama bila lahir (BR-IP-08: klaim tetap lewat coverage).
+// Q-IP-4: tanpa backfill historis. Q-IP-5: baris tidak pernah dihapus;
+// penanda batal sumber diturunkan pembaca dari status dokumen sumber.
+model InstalledPart {
+  id                        Int       @id @default(autoincrement())
+  customerVehicleId         Int       @map("customer_vehicle_id")
+  itemId                    Int       @map("item_id")
+  materialIssueItemId       Int       @map("material_issue_item_id")
+  serialNumber              String?   @map("serial_number")
+  serialKey                 String    @default("") @map("serial_key")
+  qty                       Decimal   @db.Decimal(15, 2)
+  qtyRemoved                Decimal   @default(0.00) @map("qty_removed") @db.Decimal(15, 2)
+  installedAt               DateTime  @map("installed_at")
+  warrantyCoverageId        Int?      @map("warranty_coverage_id")
+  removedAt                 DateTime? @map("removed_at")
+  removedById               Int?      @map("removed_by")
+  removalReason             String?   @map("removal_reason") @db.Text
+  replacedByInstalledPartId Int?      @map("replaced_by_installed_part_id")
+  notes                     String?   @db.Text
+  createdAt                 DateTime  @default(now()) @map("created_at")
+  updatedAt                 DateTime  @updatedAt @map("updated_at")
+
+  customerVehicle   CustomerVehicle   @relation(fields: [customerVehicleId], references: [id])
+  item              Item              @relation(fields: [itemId], references: [id])
+  materialIssueItem MaterialIssueItem @relation(fields: [materialIssueItemId], references: [id], onDelete: Cascade)
+  warrantyCoverage  WarrantyCoverage? @relation(fields: [warrantyCoverageId], references: [id], onDelete: SetNull)
+  replacedBy        InstalledPart?    @relation("InstalledPartReplacement", fields: [replacedByInstalledPartId], references: [id], onDelete: SetNull)
+  replacements      InstalledPart[]   @relation("InstalledPartReplacement")
+
+  @@unique([materialIssueItemId, serialKey], map: "installed_parts_issue_item_serial_key_key")
+  @@index([customerVehicleId])
+  @@index([itemId])
+  @@index([warrantyCoverageId])
+  @@index([replacedByInstalledPartId])
+  @@map("installed_parts")
 }
 
 // F-2026-10-21-021 tahap 2 — klaim garansi. State machine:

@@ -21,6 +21,8 @@ import {
   onTransferReceived as onInventoryTransferReceived,
 } from "@/lib/hooks/inventory-transfer.hook";
 import { onMaterialIssueCompleted as onMaterialIssueStock, resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
+import { refreshMaterialRequestFulfillmentTx } from "@/lib/services/material-request.service";
+import { createInstalledPartsForMaterialIssue } from "@/lib/services/installed-part.service";
 import { validateScrapInput } from "@/lib/services/scrap-classification";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { statusLabel } from "@/lib/utils/status-labels";
@@ -569,6 +571,12 @@ export async function receiveInventoryTransfer(transferId: number) {
           where: { id: transferId },
           data: { status: "received" },
         });
+
+        // F-078-S BR-MR-04: permintaan tertaut dihitung ulang dari qty
+        // DITERIMA kumulatif dalam tx yang sama (bukan dari transfer lahir).
+        if (transfer.materialRequestId) {
+          await refreshMaterialRequestFulfillmentTx(tx, transfer.materialRequestId);
+        }
       });
     } catch (e) {
       // Receiving failed after the claim flipped processed -> receiving. Restore
@@ -807,6 +815,11 @@ export async function completeMaterialIssue(issueId: number) {
       await prisma.$transaction(async (tx) => {
         // Hook creates Stock Moves OUT per item + Accounting journal
         await onMaterialIssueStock(issueId, Number(user.id), tx);
+        // F-2026-10-22-072-S (Q-IP-1): MI proyek tanpa WO melahirkan
+        // registri part di tx yang sama bila proyek ber-kendaraan; MI
+        // taut WO dilewati service (lahir saat WO selesai), MI bebas
+        // tidak ditebak kendaraannya.
+        await createInstalledPartsForMaterialIssue(issueId, tx);
       });
     } catch (e) {
       // Complete failed after the claim flipped draft -> processing. The hook
