@@ -1,127 +1,75 @@
 import { describe, it, expect } from "vitest"
 
 import {
-  buildInstalledParts,
-  type InstalledCoverageInput,
-  type InstalledIssueInput,
+  buildInstalledPartsRegistry,
+  type InstalledPartRegistryInput,
 } from "../installed-parts"
 
 /**
- * F-2026-10-21-024 jalur b. Yang dijaga:
- * - coverage active + issue completed berserial untuk unit SAMA melebur satu
- *   baris (dedup per workOrderId+itemId+serial) — falsifikasi: cabut satu
- *   sumber, baris tetap ada tapi `source` menyempit; cabut keduanya, hilang.
- * - part non-garansi hanya dari issue; issue draft / tanpa serial tidak masuk.
- * - replaced (klaim replace disetujui) > revoked > expired > active.
+ * F-2026-10-22-072-S — builder registri part terpasang. Yang dijaga:
+ * - status turunan qtyRemoved verbatim: TERPASANG / SEBAGIAN_DILEPAS /
+ *   DILEPAS (falsifikasi: ubah ambang di service → merah di sini),
+ * - qtyRemaining = qty - qtyRemoved (tidak negatif),
+ * - sourceStatus bukan completed → sourceCancelled (Q-IP-5, baris
+ *   tidak dihapus, status lepas tetap berjalan),
  * - kendaraan tanpa part = daftar kosong, bukan error.
  */
 
-const NOW = new Date("2026-10-21T00:00:00Z")
 const D = (iso: string) => new Date(iso)
 
-function coverage(over: Partial<InstalledCoverageInput> = {}): InstalledCoverageInput {
+function part(over: Partial<InstalledPartRegistryInput> = {}): InstalledPartRegistryInput {
   return {
-    id: 1, workOrderId: 10, itemId: 100, itemName: "Aki 12V", itemSku: "AKI-12",
-    serialNumber: "SN-1", installedAt: D("2026-01-10"), expiresAt: D("2027-01-10"),
-    status: "active", ...over,
-  }
-}
-
-function issue(over: Partial<InstalledIssueInput> = {}): InstalledIssueInput {
-  return {
-    workOrderId: 10, date: D("2026-01-10"), status: "completed",
-    lines: [{ itemId: 100, itemName: "Aki 12V", itemSku: "AKI-12", serialNumbers: ["SN-1"] }],
+    id: 1, itemId: 100, itemName: "Aki 12V", itemSku: "AKI-12",
+    serialNumber: "SN-1", qty: 1, qtyRemoved: 0,
+    installedAt: D("2026-01-10"), warrantyExpiresAt: D("2027-01-10"),
+    removedAt: null, removalReason: null, replacedByInstalledPartId: null,
+    sourceStatus: "completed", sourceWorkOrderId: 10, sourceProjectId: null,
     ...over,
   }
 }
 
-describe("buildInstalledParts", () => {
-  it("coverage + issue untuk unit sama = SATU baris sumber gabungan", () => {
-    const r = buildInstalledParts({ coverages: [coverage()], issues: [issue()], claims: [] }, NOW)
-    expect(r.total).toBe(1)
-    expect(r.rows[0]).toMatchObject({ source: "coverage+material_issue", status: "active", serialNumber: "SN-1" })
+describe("buildInstalledPartsRegistry", () => {
+  it("qtyRemoved 0 → TERPASANG, activeCount menghitungnya", () => {
+    const r = buildInstalledPartsRegistry({ parts: [part()] })
+    expect(r.rows[0]).toMatchObject({ status: "TERPASANG", statusLabel: "TERPASANG", qtyRemaining: 1 })
     expect(r.activeCount).toBe(1)
-  })
-
-  it("cabut coverage: baris tetap dari issue saja, tanpa masa garansi", () => {
-    const r = buildInstalledParts({ coverages: [], issues: [issue()], claims: [] }, NOW)
     expect(r.total).toBe(1)
-    expect(r.rows[0]).toMatchObject({ source: "material_issue", warrantyExpiresAt: null })
   })
 
-  it("cabut issue: baris tetap dari coverage saja", () => {
-    const r = buildInstalledParts({ coverages: [coverage()], issues: [], claims: [] }, NOW)
-    expect(r.total).toBe(1)
-    expect(r.rows[0]).toMatchObject({ source: "coverage", warrantyExpiresAt: D("2027-01-10") })
+  it("lepas sebagian → SEBAGIAN_DILEPAS + sisa benar", () => {
+    const r = buildInstalledPartsRegistry({ parts: [part({ qty: 4, qtyRemoved: 1 })] })
+    expect(r.rows[0]).toMatchObject({ status: "SEBAGIAN_DILEPAS", qtyRemaining: 3 })
+    expect(r.activeCount).toBe(0)
   })
 
-  it("cabut kedua sumber: daftar kosong jujur, bukan error", () => {
-    const r = buildInstalledParts({ coverages: [], issues: [], claims: [] }, NOW)
-    expect(r).toEqual({ rows: [], total: 0, activeCount: 0 })
+  it("lepas penuh → DILEPAS + removedAt/alasan diteruskan", () => {
+    const r = buildInstalledPartsRegistry({
+      parts: [part({ qty: 2, qtyRemoved: 2, removedAt: D("2026-03-01"), removalReason: "Diganti baru" })],
+    })
+    expect(r.rows[0]).toMatchObject({
+      status: "DILEPAS", qtyRemaining: 0, removalReason: "Diganti baru",
+    })
+    expect(r.rows[0].removedAt?.toISOString().slice(0, 10)).toBe("2026-03-01")
   })
 
-  it("part non-garansi dua serial dari satu baris issue = dua baris", () => {
-    const r = buildInstalledParts({
-      coverages: [], claims: [],
-      issues: [issue({ lines: [{ itemId: 200, itemName: "Ban", itemSku: null, serialNumbers: ["B-1", "B-2", " "] }] })],
-    }, NOW)
-    expect(r.rows.map((x) => x.serialNumber)).toEqual(["B-1", "B-2"])
+  it("sumber tidak lagi completed → sourceCancelled, status lepas tidak berubah (Q-IP-5)", () => {
+    const r = buildInstalledPartsRegistry({ parts: [part({ sourceStatus: "cancelled" })] })
+    expect(r.rows[0]).toMatchObject({ sourceCancelled: true, status: "TERPASANG" })
   })
 
-  it("issue belum completed dan baris tanpa serial tidak masuk registri", () => {
-    const r = buildInstalledParts({
-      coverages: [], claims: [],
-      issues: [
-        issue({ status: "draft" }),
-        issue({ workOrderId: 11, lines: [{ itemId: 300, itemName: "Oli", itemSku: null, serialNumbers: null }] }),
-      ],
-    }, NOW)
-    expect(r.total).toBe(0)
+  it("tanpa coverage → warrantyExpiresAt null diteruskan", () => {
+    const r = buildInstalledPartsRegistry({ parts: [part({ warrantyExpiresAt: null })] })
+    expect(r.rows[0].warrantyExpiresAt).toBeNull()
   })
 
-  it("klaim replace disetujui menandai replaced + WO pengganti; klaim intake tidak", () => {
-    const base = { coverages: [coverage()], issues: [] }
-    const intake = buildInstalledParts(
-      { ...base, claims: [{ id: 5, coverageId: 1, status: "intake", resolutionType: "replace", repairWorkOrderId: null }] }, NOW)
-    expect(intake.rows[0].status).toBe("active")
-
-    const replaced = buildInstalledParts(
-      { ...base, claims: [{ id: 5, coverageId: 1, status: "closed", resolutionType: "replace", repairWorkOrderId: 99 }] }, NOW)
-    expect(replaced.rows[0]).toMatchObject({ status: "replaced", replacedByWorkOrderId: 99, replacementClaimId: 5 })
-    expect(replaced.activeCount).toBe(0)
+  it("kendaraan tanpa part: daftar kosong jujur, bukan error", () => {
+    expect(buildInstalledPartsRegistry({ parts: [] })).toEqual({ rows: [], total: 0, activeCount: 0 })
   })
 
-  it("revoked dan expired (status maupun tanggal) kalah dari replaced, menang dari active", () => {
-    const revoked = buildInstalledParts({ coverages: [coverage({ status: "revoked" })], issues: [], claims: [] }, NOW)
-    expect(revoked.rows[0].status).toBe("revoked")
-
-    const expiredByDate = buildInstalledParts(
-      { coverages: [coverage({ expiresAt: D("2026-01-01") })], issues: [], claims: [] }, NOW)
-    expect(expiredByDate.rows[0].status).toBe("expired")
-
-    const replacedWins = buildInstalledParts({
-      coverages: [coverage({ status: "revoked", expiresAt: D("2026-01-01") })], issues: [],
-      claims: [{ id: 5, coverageId: 1, status: "approved", resolutionType: "replace", repairWorkOrderId: null }],
-    }, NOW)
-    expect(replacedWins.rows[0].status).toBe("replaced")
-  })
-
-  it("coverage ganda (workOrderId,itemId,serial sama) terdedup; serial beda tetap dua baris", () => {
-    const r = buildInstalledParts({
-      coverages: [coverage(), coverage({ id: 2 }), coverage({ id: 3, serialNumber: "SN-2" })],
-      issues: [], claims: [],
-    }, NOW)
-    expect(r.total).toBe(2)
-  })
-
-  it("urut installedAt desc deterministik", () => {
-    const r = buildInstalledParts({
-      coverages: [
-        coverage({ id: 1, workOrderId: 10, serialNumber: "SN-OLD", installedAt: D("2025-01-01") }),
-        coverage({ id: 2, workOrderId: 11, serialNumber: "SN-NEW", installedAt: D("2026-06-01") }),
-      ],
-      issues: [], claims: [],
-    }, NOW)
-    expect(r.rows.map((x) => x.serialNumber)).toEqual(["SN-NEW", "SN-OLD"])
+  it("urut tanggal pasang terbaru dulu", () => {
+    const r = buildInstalledPartsRegistry({
+      parts: [part({ id: 1, installedAt: D("2026-01-01") }), part({ id: 2, installedAt: D("2026-02-01") })],
+    })
+    expect(r.rows.map((x) => x.id)).toEqual([2, 1])
   })
 })

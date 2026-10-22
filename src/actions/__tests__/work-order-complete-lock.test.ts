@@ -35,6 +35,7 @@ vi.mock("@/lib/db/prisma", () => {
     },
     workOrderItem: { updateMany: (...a: unknown[]) => woItemUpdateManyMock(...a) },
     materialIssue: { findFirst: (...a: unknown[]) => miFindFirstMock(...a) },
+    stockReservation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
     salesOrder: { findFirst: (...a: unknown[]) => soFindFirstMock(...a) },
     deliveryOrder: { create: (...a: unknown[]) => doCreateMock(...a) },
     deliveryOrderItem: { createMany: (...a: unknown[]) => doItemCreateManyMock(...a) },
@@ -65,6 +66,12 @@ vi.mock("@/lib/services/qc.service", () => ({
 const createWarrantyCoveragesMock = vi.fn().mockResolvedValue({ created: 0 })
 vi.mock("@/lib/services/warranty.service", () => ({
   createWarrantyCoveragesForWorkOrder: (...a: unknown[]) => createWarrantyCoveragesMock(...a),
+}))
+// F-2026-10-22-072-S: registri InstalledPart lahir dalam tx completion yang
+// sama, sesudah coverage. Cabut panggilan di completeWorkOrder = tes merah.
+const createInstalledPartsMock = vi.fn().mockResolvedValue({ created: 0, skipped: 0 })
+vi.mock("@/lib/services/installed-part.service", () => ({
+  createInstalledPartsForWorkOrder: (...a: unknown[]) => createInstalledPartsMock(...a),
 }))
 
 import { completeWorkOrder } from "../manufacturing.actions"
@@ -103,6 +110,9 @@ describe("completeWorkOrder concurrency guard", () => {
     // F-2026-10-21-021 tahap 1: coverage garansi dibuat dalam tx completion.
     expect(createWarrantyCoveragesMock).toHaveBeenCalledTimes(1)
     expect(createWarrantyCoveragesMock.mock.calls[0][0]).toBe(10)
+    // F-2026-10-22-072-S: registri part terpasang lahir di tx yang sama.
+    expect(createInstalledPartsMock).toHaveBeenCalledTimes(1)
+    expect(createInstalledPartsMock.mock.calls[0][0]).toBe(10)
   })
 
   it("aborts WITHOUT creating a delivery order when the claim is lost (count===0)", async () => {

@@ -14,6 +14,7 @@ interface CustomerSelectFieldProps<
   options: { id: number; name: string }[]
   onCustomerCreated: (created: { id: number; name: string }) => void
   error?: string
+  /** Teks label tanpa bintang; bintang wajib dirender dekoratif saat required. */
   label?: string
   /** Pelanggan wajib dipilih (schema min(1)) — teruskan required ke QuickAdd. */
   required?: boolean
@@ -28,12 +29,20 @@ export function CustomerSelectField<
   options,
   onCustomerCreated,
   error,
-  label = "Pelanggan *",
+  label = "Pelanggan",
   required,
 }: CustomerSelectFieldProps<TFieldValues, TName>) {
   return (
     <div className="flex flex-col gap-1.5">
-      <Label htmlFor="customerId">{label}</Label>
+      <Label htmlFor="customerId">
+        {label}
+        {required && (
+          <>
+            {" "}
+            <span className="text-destructive" aria-hidden="true">*</span>
+          </>
+        )}
+      </Label>
       <Controller
         name={name}
         control={control}
