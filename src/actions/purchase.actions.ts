@@ -42,6 +42,7 @@ import {
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import { PurchaseStatus, Status } from "@/lib/constants";
 import {
   purchaseRequestSchema,
@@ -281,6 +282,62 @@ async function syncServicePoCostFromBills(
 import { logActivity } from "@/lib/services/activity-log.service";
 
 type PurchaseOrderLine = { itemId: number; qty: number; unitPrice: number; discount: number };
+
+/**
+ * Baris retur pembelian dari JSON FormData `items`
+ * ([{ itemId, qty, price? }]). qty/harga bisa string berformat Indonesia
+ * dari klien non-form ("2.000" = 2000, "150.000" = 150000) — wajib lewat
+ * parser repo; Number() mentah membaca "2.000" jadi 2 dan "abc" jadi NaN
+ * yang lolos filter >0, lalu penjaga over-return ikut menilai angka rusak
+ * dan qty tersimpan menyusut diam-diam (harga beku F-004 ikut salah).
+ * Baris berkode item dengan qty/harga tak terbaca ditolak berpesan, bukan
+ * dibuang/dinclamp diam-diam. Baris tanpa item (itemId kosong/0) tetap
+ * dibuang (baris kosong form); qty <= 0 pada baris berkode tetap dibuang
+ * (perilaku lama: baris belum diisi).
+ */
+type PurchaseReturnItemInput = {
+  itemId: number;
+  qty: number;
+  price: number | null;
+};
+
+function parsePurchaseReturnItems(
+  itemsJson: string | null | undefined,
+): PurchaseReturnItemInput[] {
+  const rows =
+    safeJsonParse<
+      { itemId?: unknown; qty?: unknown; price?: unknown }[]
+    >(itemsJson ?? null) ?? [];
+  const items: PurchaseReturnItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parseLocaleNumber(
+      row?.itemId as string | number | null | undefined,
+    );
+    if (itemId === null || itemId <= 0) continue;
+    const qty = parseLocaleNumber(
+      row.qty as string | number | null | undefined,
+    );
+    if (qty === null) {
+      throw new Error(
+        `Kuantitas retur item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+      );
+    }
+    if (qty <= 0) continue;
+    let price: number | null = null;
+    if (row.price != null && row.price !== "") {
+      price = parseMoneyAmount(
+        row.price as string | number | null | undefined,
+      );
+      if (price === null || price <= 0) {
+        throw new Error(
+          `Harga beli retur item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 150.000).`,
+        );
+      }
+    }
+    items.push({ itemId, qty, price });
+  }
+  return items;
+}
 
 function buildPurchaseOrderTotals(lines: PurchaseOrderLine[], shippingCost: number, serviceFee: number) {
   const subtotal = lines.reduce((s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0), 0);
@@ -1513,11 +1570,8 @@ export async function createPurchaseReturn(formData: FormData) {
     const documentNo = await generateDocumentNumber("PRET");
     const slug = await nextSlug("purchaseReturn", documentNo);
 
-    const items = safeJsonParse<any[]>(v.items ?? null) ?? [];
-    const validPrItems = items.filter(
-      (item: any) => item.itemId > 0 && item.qty > 0,
-    );
-    const prItemIds = validPrItems.map((it: any) => Number(it.itemId));
+    const validPrItems = parsePurchaseReturnItems(v.items);
+    const prItemIds = validPrItems.map((it) => it.itemId);
     const prCostRows = prItemIds.length
       ? await prisma.item.findMany({
           where: { id: { in: prItemIds } },
@@ -1584,9 +1638,9 @@ export async function createPurchaseReturn(formData: FormData) {
         }
 
         const violation = findOverReturn(
-          validPrItems.map((it: any) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
+          validPrItems.map((it) => ({
+            itemId: it.itemId,
+            qty: it.qty,
           })),
           receivedQtyByItem,
           alreadyReturnedByItem,
@@ -1615,19 +1669,14 @@ export async function createPurchaseReturn(formData: FormData) {
           status: "draft",
           createdBy: Number(user.id),
           items: {
-            create: validPrItems.map((item: any) => ({
-              itemId: Number(item.itemId),
-              // qty arrives as a string from safeJsonParse; the purchase_return_items
-              // table expects a number. Clamp to >= 0.01 (matching the createQuotation
-              // pattern) so a tampered 0/undefined qty is treated as essentially zero
-              // rather than crashing the Prisma insert with a string-to-Int error.
-              qty: Math.max(0.01, Number(item.qty) || 0),
-              cost: prDocumentCostMap.get(Number(item.itemId)) ?? 0,
+            create: validPrItems.map((item) => ({
+              itemId: item.itemId,
+              // qty sudah angka ter-parse (helper parsePurchaseReturnItems):
+              // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
+              qty: item.qty,
+              cost: prDocumentCostMap.get(item.itemId) ?? 0,
               // F-004: bekukan harga beli (payload menang, else tagihan asal).
-              price:
-                item.price != null && Number(item.price) > 0
-                  ? Number(item.price)
-                  : (billPriceByItem.get(Number(item.itemId)) ?? null),
+              price: item.price ?? (billPriceByItem.get(item.itemId) ?? null),
             })),
           },
         },
@@ -2601,11 +2650,8 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
 
     const slug = await nextSlug("purchaseReturn", ret.documentNo, { excludeId: id });
 
-    const items = safeJsonParse<any[]>(v.items ?? null) ?? [];
-    const validPrItems = items.filter(
-      (item: any) => item.itemId > 0 && item.qty > 0,
-    );
-    const updPrIds = validPrItems.map((it: any) => Number(it.itemId));
+    const validPrItems = parsePurchaseReturnItems(v.items);
+    const updPrIds = validPrItems.map((it) => it.itemId);
     const updPrCostRows = updPrIds.length
       ? await prisma.item.findMany({
           where: { id: { in: updPrIds } },
@@ -2699,9 +2745,9 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
         }
 
         const violation = findOverReturn(
-          validPrItems.map((it: any) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
+          validPrItems.map((it) => ({
+            itemId: it.itemId,
+            qty: it.qty,
           })),
           receivedQtyByItem,
           alreadyReturnedByItem,
@@ -2732,19 +2778,14 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
           date,
           reason: v.reason ?? null,
           items: {
-            create: validPrItems.map((item: any) => ({
-              itemId: Number(item.itemId),
-              // qty arrives as a string from safeJsonParse; the purchase_return_items
-              // table expects a number. Clamp to >= 0.01 (matching the createQuotation
-              // pattern) so a tampered 0/undefined qty is treated as essentially zero
-              // rather than crashing the Prisma insert with a string-to-Int error.
-              qty: Math.max(0.01, Number(item.qty) || 0),
-              cost: updPrDocumentCostMap.get(Number(item.itemId)) ?? 0,
+            create: validPrItems.map((item) => ({
+              itemId: item.itemId,
+              // qty sudah angka ter-parse (helper parsePurchaseReturnItems):
+              // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
+              qty: item.qty,
+              cost: updPrDocumentCostMap.get(item.itemId) ?? 0,
               // F-004: bekukan harga beli (payload menang, else tagihan asal).
-              price:
-                item.price != null && Number(item.price) > 0
-                  ? Number(item.price)
-                  : (updBillPriceByItem.get(Number(item.itemId)) ?? null),
+              price: item.price ?? (updBillPriceByItem.get(item.itemId) ?? null),
             })),
           },
         },
