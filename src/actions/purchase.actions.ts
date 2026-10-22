@@ -359,6 +359,93 @@ function purchaseReturnItemData(
   }));
 }
 
+/**
+ * Penjaga over-return di dalam transaksi (kunci baris PO di pemanggil):
+ * qty diterima kumulatif (GR verified/completed) vs qty sudah diretur
+ * (non-cancelled, excludeReturnId = retur yang sedang diedit). Biaya
+ * dokumen entered-unit = cost dasar x faktor UoM baris GR pertama.
+ * Satu sumber create+update (duplikasi blok pernah kena gerbang Sonar).
+ * Return: peta biaya dokumen; melempar Error berpesan bila melanggar.
+ */
+async function assertPurchaseReturnWithinReceived(
+  tx: Prisma.TransactionClient,
+  purchaseOrderId: number,
+  items: PurchaseReturnItemInput[],
+  baseCostByItem: Map<number, number>,
+  excludeReturnId?: number,
+): Promise<Map<number, number>> {
+  const itemIds = items.map((it) => it.itemId);
+  const grItems = await tx.goodsReceiptItem.findMany({
+    where: {
+      goodsReceipt: {
+        purchaseOrderId,
+        status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
+      },
+      itemId: { in: itemIds },
+    },
+    select: { itemId: true, qty: true, uom: true },
+  });
+  const uomByItem = new Map<number, string | null>();
+  for (const line of grItems) {
+    if (!uomByItem.has(line.itemId)) uomByItem.set(line.itemId, line.uom);
+  }
+  const factorRows = await Promise.all(
+    itemIds.map(
+      async (itemId) =>
+        [itemId, await toBaseFactor(tx, itemId, uomByItem.get(itemId))] as const,
+    ),
+  );
+  const factorByItem = new Map(factorRows);
+  const documentCostByItem = new Map(
+    [...baseCostByItem].map(([itemId, cost]) => [
+      itemId,
+      cost * (factorByItem.get(itemId) ?? 1),
+    ]),
+  );
+  const receivedQtyByItem = new Map<number, number>();
+  for (const it of grItems) {
+    receivedQtyByItem.set(
+      it.itemId,
+      (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
+    );
+  }
+  const priorReturns = await tx.purchaseReturnItem.findMany({
+    where: {
+      purchaseReturn: {
+        purchaseOrderId,
+        status: { not: "cancelled" },
+        ...(excludeReturnId ? { id: { not: excludeReturnId } } : {}),
+      },
+      itemId: { in: itemIds },
+    },
+    select: { itemId: true, qty: true },
+  });
+  const alreadyReturnedByItem = new Map<number, number>();
+  for (const r of priorReturns) {
+    alreadyReturnedByItem.set(
+      r.itemId,
+      (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
+    );
+  }
+  const violation = findOverReturn(
+    items.map((it) => ({ itemId: it.itemId, qty: it.qty })),
+    receivedQtyByItem,
+    alreadyReturnedByItem,
+  );
+  if (violation) {
+    if (violation.type === "not_on_invoice") {
+      throw new Error(
+        `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
+      );
+    }
+    throw new Error(
+      `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
+        `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
+    );
+  }
+  return documentCostByItem;
+}
+
 function buildPurchaseOrderTotals(lines: PurchaseOrderLine[], shippingCost: number, serviceFee: number) {
   const subtotal = lines.reduce((s, it) => safeAdd(s, safeMultiply(it.qty, it.unitPrice, 0), 0), 0);
   const discount = lines.reduce((s, it) => safeAdd(s, it.discount || 0, 0), 0);
@@ -1613,69 +1700,13 @@ export async function createPurchaseReturn(formData: FormData) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
       }
 
-      if (prItemIds.length) {
-        const grItems = await tx.goodsReceiptItem.findMany({
-          where: {
-            goodsReceipt: {
-              purchaseOrderId: v.purchaseOrderId,
-              status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
-            },
-            itemId: { in: prItemIds },
-          },
-          select: { itemId: true, qty: true, uom: true },
-        });
-        const uomByItem = new Map<number, string | null>();
-        for (const line of grItems) {
-          if (!uomByItem.has(line.itemId)) uomByItem.set(line.itemId, line.uom);
-        }
-        const prFactorRows = await Promise.all(prItemIds.map(async (itemId) => [itemId, await toBaseFactor(tx, itemId, uomByItem.get(itemId))] as const));
-        const prFactorByItem = new Map(prFactorRows);
-        prDocumentCostMap = new Map([...prCostMap].map(([itemId, cost]) => [itemId, cost * (prFactorByItem.get(itemId) ?? 1)]));
-        const receivedQtyByItem = new Map<number, number>();
-        for (const it of grItems) {
-          receivedQtyByItem.set(
-            it.itemId,
-            (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
-          );
-        }
-
-        const priorReturns = await tx.purchaseReturnItem.findMany({
-          where: {
-            purchaseReturn: {
-              purchaseOrderId: v.purchaseOrderId,
-              status: { not: "cancelled" },
-            },
-            itemId: { in: prItemIds },
-          },
-          select: { itemId: true, qty: true },
-        });
-        const alreadyReturnedByItem = new Map<number, number>();
-        for (const r of priorReturns) {
-          alreadyReturnedByItem.set(
-            r.itemId,
-            (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
-          );
-        }
-
-        const violation = findOverReturn(
-          validPrItems.map((it) => ({
-            itemId: it.itemId,
-            qty: it.qty,
-          })),
-          receivedQtyByItem,
-          alreadyReturnedByItem,
+      if (prItemIds.length && v.purchaseOrderId) {
+        prDocumentCostMap = await assertPurchaseReturnWithinReceived(
+          tx,
+          v.purchaseOrderId,
+          validPrItems,
+          prCostMap,
         );
-        if (violation) {
-          if (violation.type === "not_on_invoice") {
-            throw new Error(
-              `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
-            );
-          }
-          throw new Error(
-            `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
-              `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
-          );
-        }
       }
 
       const billPriceByItem = await loadBillUnitPriceByItem(tx, v.purchaseOrderId, prItemIds);
@@ -2696,85 +2727,15 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
       }
 
       if (updPrIds.length && v.purchaseOrderId) {
-        const grItems = await tx.goodsReceiptItem.findMany({
-          where: {
-            goodsReceipt: {
-              purchaseOrderId: v.purchaseOrderId,
-              status: { in: [PurchaseStatus.VERIFIED, Status.COMPLETED] },
-            },
-            itemId: { in: updPrIds },
-          },
-          select: { itemId: true, qty: true, uom: true },
-        });
-        // Entered-unit cost = base cost × UoM factor, exactly as the create path
-        // does. PurchaseReturnItem.qty is stored in the ENTERED unit (the stock
-        // hook multiplies by the same factor to reach base), so storing the base
-        // cost verbatim here would book the AP-relief journal factor× too small
-        // for any item with a UoM conversion — a create/edit asymmetry.
-        const updUomByItem = new Map<number, string | null>();
-        for (const line of grItems) {
-          if (!updUomByItem.has(line.itemId)) updUomByItem.set(line.itemId, line.uom);
-        }
-        const updFactorRows = await Promise.all(
-          updPrIds.map(
-            async (itemId) =>
-              [itemId, await toBaseFactor(tx, itemId, updUomByItem.get(itemId))] as const,
-          ),
+        // Biaya entered-unit + penjaga over-return: helper bersama
+        // assertPurchaseReturnWithinReceived (exclude retur ini sendiri).
+        updPrDocumentCostMap = await assertPurchaseReturnWithinReceived(
+          tx,
+          v.purchaseOrderId,
+          validPrItems,
+          updPrCostMap,
+          id,
         );
-        const updFactorByItem = new Map(updFactorRows);
-        updPrDocumentCostMap = new Map(
-          [...updPrCostMap].map(([itemId, cost]) => [
-            itemId,
-            cost * (updFactorByItem.get(itemId) ?? 1),
-          ]),
-        );
-
-        const receivedQtyByItem = new Map<number, number>();
-        for (const it of grItems) {
-          receivedQtyByItem.set(
-            it.itemId,
-            (receivedQtyByItem.get(it.itemId) ?? 0) + Number(it.qty),
-          );
-        }
-
-        const priorReturns = await tx.purchaseReturnItem.findMany({
-          where: {
-            purchaseReturn: {
-              purchaseOrderId: v.purchaseOrderId,
-              status: { not: "cancelled" },
-              id: { not: id },
-            },
-            itemId: { in: updPrIds },
-          },
-          select: { itemId: true, qty: true },
-        });
-        const alreadyReturnedByItem = new Map<number, number>();
-        for (const r of priorReturns) {
-          alreadyReturnedByItem.set(
-            r.itemId,
-            (alreadyReturnedByItem.get(r.itemId) ?? 0) + Number(r.qty),
-          );
-        }
-
-        const violation = findOverReturn(
-          validPrItems.map((it) => ({
-            itemId: it.itemId,
-            qty: it.qty,
-          })),
-          receivedQtyByItem,
-          alreadyReturnedByItem,
-        );
-        if (violation) {
-          if (violation.type === "not_on_invoice") {
-            throw new Error(
-              `Item #${violation.itemId} belum pernah diterima untuk PO ini, tidak bisa diretur.`,
-            );
-          }
-          throw new Error(
-            `Jumlah retur item #${violation.itemId} melebihi yang diterima ` +
-              `(diterima: ${violation.invoiced}, sudah diretur: ${violation.alreadyReturned}, sisa: ${violation.remaining}).`,
-          );
-        }
       }
 
       await tx.purchaseReturnItem.deleteMany({
