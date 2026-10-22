@@ -7676,6 +7676,1381 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-071-S scrap/yield terstruktur per baris issue (inti F-2026-10-21-008, pelengkap vonis BOT 4 F-2026-10-22-066-V PR #504)
+
+Spec dokumen saja, tanpa kode/schema/migrasi. Dipilih sesudah
+anti-duplikat live 2026-10-22 atas `origin/main` 8506a72f + fetch
+886d495e: serial -S Bot 5 terakhir 070-S (PR #511 OPEN); inti
+F-2026-10-21-014..037 ditelusur satu per satu — 014 spec PR #418,
+015 vonis BOT 4 PR #410 merged (inti receivedQty menunggu putusan
+BOT 1 Q-015-1, bukan spec Bot 5), 016/017/018/019/020/022/024/025/
+027/028/029/030/031/032/033/035/036/037 semua sudah spec dan/atau
+implementasi merged (PR #290..#463), 021/023/026/034 domain vonis
+BOT 4, 007 estimasi-vs-aktual sudah read-model merged
+(`job-estimate-vs-actual.ts`, headernya sendiri menyatakan biaya
+estimasi per job TIDAK punya sumber — snapshot estimasi biaya =
+inti baru, di luar spec workflow ini). Tersisa F-2026-10-21-008
+(b) P1 scrap/yield: vonis akuntansinya BARU terbit (BOT 4
+F-2026-10-22-066-V, PR #504 OPEN head 77840139) tetapi workflow
+operasionalnya — siapa mencatat scrap di jalur mana, klasifikasi
+di titik apa, kata UI apa — belum pernah terspec sebagai -S.
+Grep `scrapPercent|scrapQty|scrapReasonCode` di schema+src main =
+0 (hanya `Remnant.scrapReason` teks bebas). Induk tetap
+F-2026-10-21-008; spec ini TIDAK membuat ID gap baru. ID spec
+bebas: maks -S terpakai 070-S, jadi 071-S. Vonis 066-V dan spec ini
+memakai nomor seri 066 berbeda domain suffix (-V vs -S) — bukan
+tabrakan, pola sama 063-S/063-V.
+
+### 0. Status bukti induk (jangan dibaca ulang sebagai janji)
+
+- `TERVERIFIKASI-KODE`: `BomRevisionMaterial` hanya `qty`
+  Decimal(15,2) (prisma/schema.prisma, model BomRevisionMaterial);
+  tanpa allowance scrap. `MaterialIssueItem` hanya
+  qty/cost/serialNumbers/batchNumbers + `workOrderItemId` nullable;
+  tanpa plannedQty/scrapQty/alasan. `ProductionOrderMaterial` punya
+  qty rencana + actualQty + standardCost/actualCost — selisih
+  pemakaian terlihat sebagai angka, tanpa pemisahan scrap.
+- `TERVERIFIKASI-KODE`: dua jalur keluar bahan yang sah dan saling
+  mengunci per WO: `issueMaterial` PO langsung
+  (src/actions/manufacturing.actions.ts:825, izin
+  `edit_production_orders`, tolak bila WO sudah konsumsi via MI)
+  dan MaterialIssue resmi (`createMaterialIssueFromWorkOrder`
+  :1706; MaterialIssue.workOrderId/projectId). Aktual job WAJIB
+  dari dua jalur ini + ProductionCost — spec tidak membuat jalur
+  keluar ketiga.
+- `TERVERIFIKASI-KODE`: Remnant existing = catatan kuantitas di
+  luar stok: model Remnant (sourceType/sourceId generik nullable,
+  scrapReason String VarChar(500) teks bebas, status default
+  usable); aksi createRemnant/consumeRemnant/scrapRemnant
+  (src/actions/inventory.actions.ts:2176/2230/2259), scrapRemnant
+  sudah mewajibkan alasan teks. Remnant BUKAN stok gudang kedua
+  (komentar schema P1-5).
+- `TERVERIFIKASI-KODE`: laporan varians existing
+  `production-variance.ts` memecah selisih harga/pemakaian dari
+  ProductionOrderMaterial; baris standar 0 ditandai `uncalibrated`
+  dan dilarang ikut jurnal disposisi. Usage variance laporan itu
+  MEMUAT scrap (vonis 066-V P5) — laporan scrap spec ini dilarang
+  dijumlahkan dengannya.
+- `BUTUH-VONIS` SUDAH TERJAWAB untuk uang: BOT 4
+  F-2026-10-22-066-V (PR #504) P1-P5 mengikat — normal ≤ allowance
+  tetap biaya job nol jurnal baru; abnormal > allowance (allowance
+  0 = semua abnormal) = beban periode Dr akun setting baru
+  fail-closed / Cr WIP saat complete issue, tx sama,
+  assertPeriodOpen, idempotency; alasan terstruktur wajib,
+  `lainnya` tanpa catatan ditolak; remnant usable nol jurnal/nol
+  movement; koreksi hanya reversal periode terbuka. Spec ini
+  TIDAK memutus ulang satu pun angka/akun itu; yang belum diputus
+  vonis = flag mode catat-dulu vs jurnal langsung (milik BOT 1
+  atas usulan BOT 3, vonis §4) dan kode akun 5101 (BOT 3 usulkan
+  ke BOT 4/BOT 1).
+
+### 1. Benchmark resmi (akses 2026-10-22)
+
+- Zahir Manufacturing — Production Formula/Recipe + BOM:
+  formula menyesuaikan yield, waste, shrinkage; BOM multi-level
+  memuat "Waste allowance" eksplisit per bahan:
+  https://zahirerp.com/en/zahir-manufacturing/
+- Accurate manufaktur: Formula Produksi/BOM sebagai dasar
+  kebutuhan bahan + Pengambilan Bahan Baku tercatat per proses;
+  hak akses "Mengambil barang melebihi perintah kerja" bisa
+  dimatikan per grup (kontrol pemakaian berlebih di titik ambil):
+  https://accurate.id/solusi/manufaktur/ dan
+  https://help.accurate.id/product/Manufaktur/
+- Vonis akuntansi (bukan benchmark vendor): PSAK 14 par.16(a) via
+  BOT 4 F-2026-10-22-066-V — abnormal keluar dari biaya perolehan
+  persediaan, beban periode.
+
+Kesimpulan benchmark (`BENCHMARK`): allowance waste hidup di
+BOM/formula per bahan (Zahir), dan kontrol kelebihan ambil hidup
+di titik pengeluaran (Accurate). Keduanya cocok dengan bentuk
+induk F-008 existing. Klasifikasi normal/abnormal + jurnalnya =
+vonis BOT 4, bukan perilaku vendor.
+
+### 2. Workflow specification (USULAN di luar yang sudah divonis)
+
+Aktor: estimator/kepala bengkel (kalibrasi allowance di BOM),
+operator produksi/teknisi (catat scrap saat issue), kepala
+bengkel (tinjau temuan abnormal), finance (pemilik akun setting —
+wilayah BOT 4/BOT 3, bukan spec ini).
+
+Alur A — kalibrasi (sebelum job jalan):
+1. Saat BOM revision dibuat/disunting, tiap baris bahan boleh
+   membawa allowance scrap persen (kebutuhan data D-01).
+   Kosong/nol = BELUM dikalibrasi — tampil apa adanya sebagai
+   temuan kalibrasi, dilarang sistem mengisi default global
+   (vonis P1). Revisi BOM immutable existing tidak berubah:
+   allowance adalah atribut baris revisi itu, revisi baru =
+   kalibrasi baru.
+2. Qty rencana issue baris = qty BOM × (1 + allowance) hanya
+   sebagai TAMPILAN rencana di layar issue (dibulatkan pola qty
+   existing Decimal(15,2)); allowance TIDAK mengubah qty stok
+   yang benar-benar keluar — yang keluar tetap qty yang dicatat
+   operator (BR-SC-03).
+
+Alur B — pencatatan saat issue (titik satu-satunya):
+3. Operator mengeluarkan bahan lewat jalur sah existing
+   (issueMaterial PO atau MaterialIssue WO — pilih satu per WO,
+   guard existing tetap). Di baris issue yang sama, operator
+   boleh mencatat: qty scrap baris itu + kode alasan terstruktur
+   (D-02/D-03). Default scrap 0 tanpa alasan = baris bersih,
+   nol beban input tambahan (induk F-008).
+4. Sistem mengklasifikasikan per baris saat COMPLETE issue
+   (bukan saat draft disimpan): porsi scrap ≤ allowance baris
+   BOM tertaut = NORMAL; sisanya ABNORMAL; allowance 0/kosong =
+   seluruh scrap ABNORMAL (vonis P1). Snapshot klasifikasi +
+   cost terbawa FIFO baris dibekukan saat complete; edit master
+   BOM/item sesudah itu tidak mengubah klasifikasi lama
+   (vonis §4 BOT 3).
+5. Perlakuan uang mengikuti vonis persis: normal nol jurnal
+   baru; abnormal mengikuti mode yang diputus BOT 1 (catat-dulu:
+   tampil temuan laporan, belum jurnal; jurnal-langsung: jurnal
+   P2(b) vonis dalam tx complete yang sama, akun kosong =
+   complete DITOLAK berisik). Spec tidak memilih mode (Q-SC-1).
+6. Sisa potong usable TIDAK dicatat sebagai scrap: operator
+   membuat Remnant existing tertaut dokumen issue asal
+   (kebutuhan tautan D-04; hari ini sourceType/sourceId generik
+   nullable — spec mewajibkan terisi untuk remnant dari issue,
+   tanpa ubah konvensi nol-stok/nol-jurnal vonis P3).
+
+Alur C — tinjauan:
+7. Kepala bengkel membuka laporan scrap (read-model baru,
+   kebutuhan D-05): per item/job/periode — qty issue, qty scrap,
+   rate scrap, nilai normal vs abnormal terpisah, status
+   kalibrasi allowance, dan total abnormal yang direkonsiliasi
+   ke jurnal akun abnormal periode itu (mode jurnal-langsung);
+   selisih tampil sebagai temuan, bukan nol diam-diam (vonis P5).
+8. Baris issue completed TIDAK bisa diedit klasifikasinya;
+   salah catat = koreksi jurnal reversal periode terbuka oleh
+   finance (vonis P4), bukan edit baris.
+
+Dokumen masuk: BomRevision(+baris), MaterialIssue/issue PO,
+Remnant existing. Dokumen keluar: snapshot klasifikasi per baris
+issue + laporan scrap. Tidak ada dokumen transaksi baru.
+
+### 3. Role / permission matrix (USULAN, izin dari katalog nyata)
+
+Izin nyata terverifikasi module-catalog.generated.ts:253-269:
+view/create/edit/delete/complete_work_orders,
+view/create/edit/delete_production_orders, view/edit_production,
+view_bom_revisions/manage_bom_revisions/approve_bom_revisions,
+view/create/edit/delete_material_issues (:224-227),
+view_reports (:411).
+
+| Aksi | Estimator / Kepala bengkel | Operator produksi | Finance | Sales/Admin |
+|---|---|---|---|---|
+| Isi/ubah allowance baris BOM | `manage_bom_revisions` (reuse) | — | — | — |
+| Setujui revisi BOM ber-allowance baru | `approve_bom_revisions` (reuse) | — | — | — |
+| Catat scrapQty + alasan di baris issue (draft) | `edit_production_orders` / `edit_material_issues` sesuai jalur (reuse) | sama, sesuai jalur | — | — |
+| Complete issue (klasifikasi terkunci; abnormal diproses per mode) | `edit_production_orders` / `edit_material_issues` sesuai jalur existing complete (reuse; Q-SC-2) | sama | — | — |
+| Buat Remnant dari sisa issue | `create_material_issues` jalur existing remnant (reuse izin remnant existing; verifikasi BOT 3) | sama | — | — |
+| Lihat laporan scrap + temuan kalibrasi | `view_reports` | `view_reports` | `view_reports` | — |
+| Koreksi klasifikasi (reversal) | — | — | jalur jurnal manual existing (di luar spec; vonis P4) | — |
+
+Tidak ada permission key baru yang diusulkan spec ini (Q-SC-2
+membuka kemungkinan key khusus complete-ber-scrap-abnormal bila
+BOT 1 menilai risiko akun; default USULAN = reuse).
+
+### 4. Status-transition matrix
+
+Transisi dokumen issue existing tidak berubah; yang baru =
+status klasifikasi per baris (bukan status dokumen):
+
+| Objek | Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|---|
+| Baris issue | draft (scrap boleh diisi/diubah) | complete issue | terklasifikasi (snapshot beku: normalQty, abnormalQty, costSnapshot) | klasifikasi dihitung server dari allowance BOM tertaut saat complete; izin jalur existing |
+| Baris issue | terklasifikasi | — (terminal) | — | edit klasifikasi DITOLAK; koreksi = reversal jurnal (vonis P4) |
+| Temuan abnormal | tercatat (mode catat-dulu) | flag mode diputus BOT 1 + akun terisi | terjurnal (mode jurnal-langsung, hanya baris BARU) | dilarang menjurnalkan mundur baris lama tanpa putusan eksplisit BOT 1/BOT 4 (Q-SC-1) |
+| Remnant dari issue | belum ada | operator catat sisa usable | usable (existing) | tautan sumber issue wajib (D-04); nol movement stok, nol jurnal nilai |
+| Allowance baris BOM | belum dikalibrasi (0/kosong) | revisi BOM baru disetujui | terkalibrasi | hanya lewat revisi BOM baru; revisi berjalan immutable |
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SC-01 | Scrap dicatat HANYA di baris issue pada jalur keluar sah existing (issueMaterial PO / MaterialIssue WO); tidak ada jalur keluar atau form scrap terpisah | USULAN (pola guard silang existing TERVERIFIKASI-KODE manufacturing.actions.ts:825+) |
+| BR-SC-02 | allowance hidup per baris BOM (D-01); 0/kosong = belum dikalibrasi = seluruh scrap abnormal; dilarang default/allowance global karangan | TERVERIFIKASI-VONIS BOT 4 066-V P1 |
+| BR-SC-03 | allowance hanya memengaruhi tampilan qty rencana + klasifikasi; qty stok keluar = qty dicatat operator | USULAN |
+| BR-SC-04 | klasifikasi dihitung server saat complete, snapshot cost FIFO baris dibekukan; edit master sesudahnya tidak mengubah baris lama | TERVERIFIKASI-VONIS 066-V §4 + USULAN titik complete |
+| BR-SC-05 | scrap normal: nol jurnal baru, tetap biaya job. scrap abnormal: beban periode per vonis P2(b) — akun setting baru fail-closed, tanpa fallback materialExpense/cogs | TERVERIFIKASI-VONIS 066-V P2 |
+| BR-SC-06 | alasan terstruktur per baris wajib bila scrapQty > 0; enum: salah_potong / gagal_las / rusak_material / sisa_tak_terpakai / lainnya_dengan_catatan; lainnya tanpa catatan = DITOLAK | TERVERIFIKASI-VONIS 066-V P4 + USULAN penempatan validasi di complete |
+| BR-SC-07 | remnant usable bukan scrap: nol movement stok, nol jurnal nilai; remnant dari issue wajib tautan sumber issue (D-04) | TERVERIFIKASI-VONIS 066-V P3 + USULAN kewajiban tautan |
+| BR-SC-08 | baris issue completed terkunci klasifikasinya; koreksi hanya reversal jurnal periode terbuka | TERVERIFIKASI-VONIS 066-V P4 |
+| BR-SC-09 | laporan scrap read-model server; UI tidak menentukan normal/abnormal dan tidak menghitung rate/nilai sendiri | TERVERIFIKASI-VONIS 066-V §4 (batas BOT 2) |
+| BR-SC-10 | usage variance laporan varians existing tetap memuat scrap; dua laporan dilarang dijumlahkan — laporan scrap wajib memuat catatan silang verbatim (kata persis Q-SC-3) | TERVERIFIKASI-VONIS 066-V P5 |
+| BR-SC-11 | mode go-live (catat-dulu vs jurnal langsung) + perlakuan baris lama saat flag menyala | BUTUH-VONIS BOT 1 (atas usulan BOT 3; vonis 066-V §4) — BUKAN keputusan spec ini |
+| BR-SC-12 | scrap pada MaterialIssue manual tanpa WO/BOM tertaut (plannedQty tak ada): allowance dibaca 0 → abnormal, kecuali baris tanpa scrap | USULAN (konsekuensi jujur BR-SC-02; Q-SC-4 untuk BOT 1/BOT 3) |
+
+### 6. Kebutuhan data (untuk BOT 3 — kebutuhan, BUKAN skema final)
+
+- D-01: allowance persen per baris BOM revision (Decimal,
+  nullable/0 = belum kalibrasi), tampil di form BOM existing.
+- D-02: per baris issue (kedua jalur): scrapQty Decimal ≥ 0,
+  ≤ qty baris; scrapReasonCode enum BR-SC-06 + catatan bebas
+  pendamping.
+- D-03: snapshot saat complete per baris: plannedQty acuan,
+  allowance terpakai, normalQty, abnormalQty, cost per unit
+  terbawa FIFO + total nilai normal/abnormal (sen, safeRound
+  pola repo).
+- D-04: tautan remnant→dokumen issue asal wajib terisi bila
+  remnant lahir dari issue (memakai sourceType/sourceId existing;
+  bentuk pengetatan milik BOT 3).
+- D-05: read-model laporan scrap per item/job/periode +
+  rekonsiliasi total abnormal vs jurnal akun setting periode.
+- D-06: penanda kalibrasi per baris/item (allowance kosong) untuk
+  daftar temuan kalibrasi di laporan.
+- Jurnal, akun, idempotency, referenceType: persis vonis 066-V
+  P2(b) — BOT 3 tetapkan nama referenceType + usulan kode akun
+  keluarga 5101 ke BOT 4/BOT 1 sebelum migrasi. Spec ini tidak
+  menetapkan nomor akun.
+
+### 7. Feature matrix
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Spec ini |
+|---|---|---|---|---|
+| Waste allowance per bahan di BOM/formula | belum terverifikasi help resmi run ini (kontrol ambil berlebih per hak akses: BENCHMARK URL §1) | ADA — BOM "Waste allowance", formula yield/waste/shrinkage (BENCHMARK §1) | ABSEN (BomRevisionMaterial qty saja) | D-01 per baris revisi BOM |
+| Catat scrap qty + alasan terstruktur saat issue | pemakaian bahan tercatat per perintah kerja (BENCHMARK §1) | belum terverifikasi | ABSEN (actualQty polos; Remnant.scrapReason teks bebas manual) | D-02 di baris issue jalur existing |
+| Pisah normal vs abnormal + beban periode | tidak diklaim | tidak diklaim | ABSEN | vonis BOT 4 066-V P1/P2 (sudah diputus, menunggu inti) |
+| Laporan scrap rate/nilai per item/job | tidak diklaim | tidak diklaim | ABSEN (varians existing memuat scrap tanpa label scrap) | D-05 + catatan silang BR-SC-10 |
+| Sisa usable tertaut issue asal | tidak diklaim | tidak diklaim | PARSIAL (Remnant ada, tautan generik nullable) | D-04 kewajiban tautan dari issue |
+
+### 8. Pertanyaan terbuka
+
+- Q-SC-1 → BOT 1 (atas usulan BOT 3): mode go-live catat-dulu
+  vs jurnal-langsung + apakah baris abnormal lama ikut dijurnal
+  saat flag menyala (USULAN spec: TIDAK mundur; hanya baris
+  complete sesudah flag aktif). Menahan inti jurnal, TIDAK
+  menahan pencatatan klasifikasi + laporan.
+- Q-SC-2 → BOT 1: reuse izin complete jalur existing vs key
+  khusus untuk complete yang memuat scrap abnormal (risiko
+  beban periode lahir dari izin operator biasa).
+- Q-SC-3 → BOT 1/BOT 2: kata verbatim catatan silang laporan
+  varians↔scrap + label status kalibrasi ("Belum dikalibrasi —
+  seluruh scrap terbaca abnormal") tampil persis dari backend.
+- Q-SC-4 → BOT 1/BOT 3: MaterialIssue manual tanpa BOM (BR-SC-12)
+  diterima sebagai abnormal-penuh, atau wajib tautan WO/BOM
+  sebelum boleh mencatat scrap?
+- Q-SC-5 → BOT 4 (hanya bila kasus nyata muncul): deductibility
+  fiskal kerugian scrap abnormal per kasus dokumen — vonis
+  066-V §3 sengaja tidak memutus; jangan dibangun sebagai aturan.
+
+### 9. Draf acceptance
+
+BOT 3 (backend, sesudah Q-SC-1/Q-SC-2 diputus BOT 1):
+- AC-SC-B3-1: allowance baris BOM tersimpan per revisi; revisi
+  lama tidak berubah saat revisi baru dikalibrasi.
+- AC-SC-B3-2: complete issue dengan scrap ≤ allowance → snapshot
+  normal penuh, nol jurnal abnormal (falsifikasi vonis S1).
+- AC-SC-B3-3: scrap melewati allowance → hanya porsi abnormal
+  yang keluar dari WIP sen persis (S2); allowance 0 → seluruhnya
+  abnormal (S3) — mode jurnal-langsung saja.
+- AC-SC-B3-4: akun setting kosong + ada abnormal (mode
+  jurnal-langsung) → complete ditolak, nol jurnal parsial (S4);
+  fallback akun diganti materialExpense → tes MERAH (S5).
+- AC-SC-B3-5: edit baris issue completed (qty/scrap/alasan) →
+  ditolak (S6); `lainnya` tanpa catatan → ditolak (S9).
+- AC-SC-B3-6: remnant dari baris issue → tertaut sumber, nol
+  StockMove, nol jurnal nilai (S7); laporan abnormal vs jurnal
+  selisih → tampil temuan (S8).
+
+BOT 2 (UI, sesudah kontrak BOT 3; UI fitur didahulukan):
+- AC-SC-B2-1: form BOM tampil kolom allowance per baris + label
+  belum-kalibrasi verbatim backend; UI tidak mengisi default.
+- AC-SC-B2-2: form issue (kedua jalur) tampil input scrapQty +
+  kode alasan per baris, qty rencana termasuk allowance tampil
+  sebagai rencana (bukan qty keluar); UI tidak menghitung
+  normal/abnormal/rate/nilai.
+- AC-SC-B2-3: halaman laporan scrap menampilkan kolom backend
+  apa adanya + catatan silang BR-SC-10 verbatim + penanda
+  temuan kalibrasi/rekonsiliasi.
+
+BOT 6 (QA):
+- AC-SC-B6-1: falsifikasi S1-S9 vonis 066-V §4 di head persis
+  inti BOT 3 (cabut penjaga = MERAH).
+- AC-SC-B6-2: izin dicabut per matriks §3 → aksi tertolak;
+  role tanpa view_reports tidak dapat laporan scrap.
+- AC-SC-B6-3: mode catat-dulu: abnormal tampil di laporan,
+  jurnal akun abnormal periode = 0 dan tampil sebagai mode,
+  bukan selisih temuan palsu.
+
+### 10. Yang TIDAK diusulkan run ini
+
+- Yield/output scrap (barang jadi cacat/reject QC): domain QC/NCR
+  existing (ProductionCost rework via NCR) — jangan jalur kedua.
+- Scrap labor/overhead abnormal: vonis hanya bahan; jam rusak
+  tetap ProductionCost existing.
+- Kalibrasi allowance massal otomatis dari histori: data histori
+  belum punya scrapQty; saran statistik = P2 masa depan tanpa ID.
+- Blokir pengambilan melebihi perintah kerja ala Accurate:
+  perilaku menahan dokumen — butuh putusan BOT 1 terpisah,
+  tidak dicampur spec pencatatan ini.
+
+### 11. Backlog implementasi (induk tetap F-2026-10-21-008; spec ini F-2026-10-22-071-S)
+
+Urutan: BOT 1 putus Q-SC-1/Q-SC-2 (+ kata Q-SC-3) → BOT 3 inti
+(D-01..D-06, penjaga vonis S1-S9, usulan kode akun ke BOT 4)
+→ BOT 2 UI (AC-SC-B2) → BOT 6 acceptance (AC-SC-B6). BOT 4 hanya
+kembali bila Q-SC-5 nyata. Tanpa putusan Q-SC-1, lapis aman yang
+tetap boleh jalan lebih dulu: D-01/D-02/D-03 pencatatan +
+klasifikasi + D-05 laporan mode catat-dulu (nol jurnal) — persis
+gerbang mati pola F-006 di vonis §4.
+
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-070-S stok minimum per gudang + lead time (inti F-2026-10-21-013)
+
+Spec dokumen saja, tanpa kode/schema/migrasi. Dipilih sesudah anti-duplikat
+live 2026-10-22 atas `origin/main` 8506a72f: lapis aman F-013 SUDAH merged
+(builder `buildMinStockByWarehouse` + loader + note verbatim, tes
+min-stock-warehouse), tetapi inti `ItemWarehouseSetting` + lead time BELUM
+terspec sebagai -S — grep `ItemWarehouseSetting` hanya 2 penyebutan
+"komentar ditunda" (src/lib/reports/min-stock.ts:66,
+min-stock-data.ts:17), nol model, nol PR/kartu -S untuk F-013. Serial
+063-S..069-S (PR #497/#500/#502/#506/#507/#510) tidak disentuh. Induk
+tetap F-2026-10-21-013 (c) P1; spec ini TIDAK membuat ID gap baru.
+ID spec bebas: maks -S terpakai 069-S (PR #510 OPEN), jadi 070-S.
+
+### 0. Status bukti induk (jangan dibaca ulang sebagai janji)
+
+- `TERVERIFIKASI-KODE`: minimum hari ini SATU global per barang —
+  `Item.minStock` Decimal (prisma/schema.prisma:622), ditulis master di
+  src/actions/master.actions.ts:492,576. Tidak ada min per gudang,
+  tidak ada lead time / safety stock / reorder point: grep
+  `leadTimeDays|reorderPoint|safetyStock` di schema+reports = 0.
+- `TERVERIFIKASI-KODE`: lapis aman per gudang sudah jadi dan JUJUR:
+  `buildMinStockByWarehouse` membandingkan minStock GLOBAL yang sama ke
+  sisa lapisan tiap gudang; gudang tanpa lapisan tidak dinilai (bukan 0).
+  Note verbatim `MIN_STOCK_WAREHOUSE_NOTE` (min-stock-data.ts:21):
+  "Per gudang: minimum masih global — batas Item.minStock yang sama
+  dibandingkan ke stok tiap gudang; minimum per gudang belum diatur."
+  Rute `/laporan/stok-minimum` (report-catalog.ts:139, registry:624).
+  Spec ini mengganti SUMBER minimum builder itu, bukan builder kedua.
+- `TERVERIFIKASI-KODE`: peringatan menipis masih global-total:
+  `checkAndNotifyLowStock(Batch)` membandingkan `qtyOnHand <= minStock`
+  total semua gudang (notification.service.ts:135,150), dipanggil cron
+  src/app/api/cron/route.ts:169. Gudang bengkel kosong tertutup stok
+  pusat = tidak pernah menipis di notifikasi. Itu celah inti persis.
+- `TERVERIFIKASI-KODE`: bahan saran pesan parsial sudah ada —
+  `VendorItemPrice` (schema:505) murni rujukan harga per vendor+item+
+  minQty, TANPA leadTimeDays; `PurchaseOrder` (schema:1675) status
+  string `draft` default + `PurchaseOrderItem.receivedQty`
+  (schema:1722-an) untuk hitung incoming. Tidak ada builder "saran qty
+  pesan" hari ini (grep incoming di min-stock* = 0).
+- `TERVERIFIKASI-KODE`: izin nyata katalog — `view_items`/`edit_items`
+  (module-catalog.generated.ts:70,72), `view_warehouses`/
+  `edit_warehouses` (:88,90), `view_inventory` (:233), `view_reports`
+  (:411), `view/create_purchase_orders` (:203,204). Tidak ada izin
+  khusus pengaturan stok minimum hari ini.
+
+### 1. Benchmark resmi (akses 2026-10-22)
+
+- Accurate — Cara Mengatur Stok Minimum Barang: batas minimum diisi di
+  detail Barang & Jasa tab Penjualan/Pembelian; daftar "Barang Stok
+  Minimum" menampilkan yang di bawah batas sesudah Refresh:
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-stok-minimum/stok-minimum-barang/
+- Accurate — Mencatat Pembelian dari Stok Minimum: dari daftar stok
+  minimum, isi tab Gudang + Pemasok, ceklis barang, tombol Pesan membuat
+  pesanan pembelian dengan qty menyesuaikan batas minimum:
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/mencatat-pembelian-barang-sesuai-stok-minimum-persediaan/
+- Accurate — Permintaan Barang (dari stok minimum antar gudang/cabang),
+  rujukan induk F-013/F-014: https://help.accurate.id/product/permintaan-barang/
+- Zahir: stok minimum per gudang + lead time belum terverifikasi dari
+  help resmi run ini — label `BENCHMARK-BELUM-TERVERIFIKASI`, jangan
+  dikutip sebagai fakta vendor.
+
+Kesimpulan benchmark: Accurate membuktikan pola (a) minimum sebagai
+pengingat + dasar buat PO, (b) pilihan gudang pada daftar minimum.
+Minimum PER GUDANG dengan angka beda per gudang + lead time pemasok
+adalah kebutuhan ISF (gudang bengkel vs pusat) — `USULAN`, bukan klaim
+paritas vendor.
+
+### 2. Workflow specification (USULAN)
+
+Aktor: Admin gudang / kepala bengkel (atur), staf gudang (lihat),
+purchasing (pakai saran), sistem cron (peringatan).
+
+1. Admin membuka detail barang → panel "Stok minimum per gudang":
+   daftar semua gudang aktif; tiap baris menampilkan stok lapisan
+   gudang itu (dari builder existing), minimum efektif, dan sumbernya
+   ("Warisi global" / "Diatur per gudang").
+2. Admin mengisi/mengubah minimum per gudang (kosongkan = kembali
+   warisi global `Item.minStock`). Simpan per baris, tercatat siapa+kapan
+   (createdBy/updatedBy pola master existing).
+3. Laporan stok-minimum + notifikasi membaca minimum EFEKTIF per
+   (barang, gudang): override per gudang bila baris setting ada dan
+   aktif, selain itu `Item.minStock` global. Note verbatim lama
+   diganti hanya untuk baris yang sudah punya override (lihat BR-MS-04).
+4. (Tahap 2, terpisah) Purchasing melihat kolom tambahan di laporan:
+   titik pesan-ulang tampil + saran qty pesan per barang-gudang,
+   lalu membuat PO manual seperti biasa. Spec ini TIDAK membuat PO
+   otomatis.
+
+Dokumen masuk: master Item, master Warehouse, lapisan stok existing,
+(opsional tahap 2) VendorItemPrice + PO terbuka. Dokumen keluar: tidak
+ada dokumen transaksi baru — hanya baris pengaturan + tampilan laporan/
+notifikasi. Nol jurnal, nol StockMove dari pengaturan.
+
+### 3. Role / permission matrix (USULAN, izin dari katalog nyata)
+
+| Aksi | Admin gudang / Kepala bengkel | Staf gudang | Purchasing | Finance |
+|---|---|---|---|---|
+| Lihat panel minimum per gudang (di detail barang) | `view_items` | `view_items` | `view_items` | — |
+| Atur/hapus override minimum per gudang | `edit_items` (reuse; Q-MS-1) | — | — | — |
+| Atur leadTimeDays di harga pemasok (tahap 2) | `edit_items` (reuse; Q-MS-1) | — | `edit_items` (reuse) | — |
+| Lihat laporan stok-minimum per gudang | `view_reports` | `view_reports` | `view_reports` | `view_reports` |
+| Buat PO dari saran (manual, tahap 2) | — | — | `create_purchase_orders` (jalur existing) | — |
+
+Tidak ada permission key baru diusulkan; key khusus (mis.
+`edit_item_warehouse_settings`) = Q-MS-1 ke BOT 1 — menambah key =
+perubahan katalog + seed, jangan diam-diam reuse bila BOT 1 menolak.
+
+### 4. Status-transition matrix
+
+Pengaturan bukan dokumen berstatus; transisi = keadaan baris setting:
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada baris) | admin isi minimum gudang | override aktif | qty >= 0; item aktif & bukan jasa; gudang aktif |
+| override aktif | admin ubah angka | override aktif (angka baru) | terbaca laporan mulai muat berikutnya; tanpa histori versi (Q-MS-3) |
+| override aktif | admin kosongkan/hapus | warisi global | laporan kembali pakai `Item.minStock`; baris terhapus tercatat di ActivityLog pola master |
+| warisi global | `Item.minStock` global diubah | warisi global (angka baru) | jalur master existing, tidak diubah spec ini |
+| baris setting | item dinonaktifkan / gudang dinonaktifkan | tidak dinilai | builder melewati pasangan nonaktif; baris setting tidak ikut terhapus diam-diam |
+
+Turunan laporan (bukan status tersimpan): stok gudang <= minimum
+efektif → baris "menipis" di laporan; titik pesan-ulang & saran qty
+(tahap 2) selalu dihitung saat baca, tidak pernah disimpan.
+
+### 5. Business rules register
+
+- BR-MS-01 `TERVERIFIKASI-KODE`: hari ini minimum tunggal global
+  `Item.minStock` (schema:622); lapis aman membandingkannya ke tiap
+  gudang dengan note verbatim jujur (min-stock-data.ts:21). Spec ini
+  tidak menulis ulang fakta itu sebagai "sudah per gudang".
+- BR-MS-02 `USULAN`: sumber minimum efektif per (item, gudang) =
+  override `ItemWarehouseSetting.minStock` bila baris ada; selain itu
+  warisi `Item.minStock`. Default SEMUA barang = warisi (tanpa migrasi
+  data massal); override hanya lahir dari tindakan admin eksplisit.
+  Mitigasi risiko induk: total minimum lintas gudang tidak pernah
+  dijumlahkan jadi target stok oleh sistem.
+- BR-MS-03 `USULAN`: pasangan (item, gudang) tanpa lapisan stok tetap
+  TIDAK dinilai (perilaku lapis aman dipertahankan) — override pada
+  gudang yang tidak menyimpan barang itu tidak melahirkan baris
+  "menipis 0" karangan.
+- BR-MS-04 `USULAN`: kejujuran label — note laporan diganti per cakupan:
+  baris ber-override tampil "Minimum per gudang"; baris warisi tetap
+  membawa makna note lama. Dilarang melepas `MIN_STOCK_WAREHOUSE_NOTE`
+  global sebelum semua baris benar-benar per gudang. Kata persis =
+  kontrak BOT 2 (§8), jangan parafrase.
+- BR-MS-05 `USULAN`: notifikasi cron ikut sumber efektif per gudang
+  (gudang bengkel menipis walau pusat penuh = terbit peringatan menyebut
+  nama gudang). Dedupe per (item, gudang, periode) mengikuti pola dedupe
+  cron existing; jangan kirim dobel untuk pasangan sama.
+- BR-MS-06 `USULAN` (tahap 2): `leadTimeDays` menempel di
+  `VendorItemPrice` per (vendor, item) — pemasok utama = baris aktif
+  termurah? TIDAK ditebak: pilihan pemasok untuk lead time = Q-MS-2.
+  Tanpa lead time terisi, titik pesan-ulang tidak ditampilkan
+  (tampil "lead time belum diatur"), bukan 0 hari karangan.
+- BR-MS-07 `USULAN` (tahap 2): titik pesan-ulang tampil =
+  minimum efektif + kebutuhan selama lead time; kebutuhan harian TANPA
+  sumber pemakaian sah tidak boleh dikarang — sumber yang sah hanya
+  riwayat MaterialIssue/penjualan terbaca builder (kontrak BOT 3
+  tentukan jendela), selain itu kolom tampil "belum bisa dihitung".
+- BR-MS-08 `USULAN` (tahap 2): saran qty pesan = maks(0, titik
+  pesan-ulang − stok gudang − incoming PO terbuka untuk gudang itu).
+  Incoming = Σ(qty − receivedQty) PO non-draft/non-cancelled; definisi
+  status PO terhitung persis = kontrak BOT 3, jangan ditebak UI.
+  Saran = angka tampil saja; pembuatan PO tetap manual berizin.
+- BR-MS-09 `USULAN`: pengaturan tidak pernah menggerakkan stok/uang —
+  simpan/hapus override menghasilkan nol StockMove, nol jurnal, nol
+  reservasi. Falsifikasi BOT 6 AC-MS-6.
+- BR-MS-10 `BUTUH-VONIS`: tidak ada angka uang/pajak di spec ini;
+  nilai kekurangan laporan tetap qty × cost existing (bukan vonis
+  baru). Bila kelak saran qty jadi dasar PO otomatis bernilai, itu
+  kartu terpisah lewat BOT 4 — tahap ini TIDAK.
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Usulan 070-S |
+|---|---|---|---|---|
+| Batas minimum per barang | Ada (help resmi §1) | belum terverifikasi | Ada, global (schema:622) | tetap, jadi fallback |
+| Minimum beda per gudang | Pilihan gudang di daftar minimum (help §1) | belum terverifikasi | Note jujur "masih global" | override per (item, gudang) |
+| Buat PO dari daftar minimum | Ada, qty menyesuaikan batas (help §1) | belum terverifikasi | Manual dari laporan | tetap manual; saran qty tampil (tahap 2) |
+| Lead time pemasok → titik pesan-ulang | tidak diklaim run ini | belum terverifikasi | ABSEN (grep=0) | `VendorItemPrice.leadTimeDays` + turunan baca (tahap 2) |
+| Peringatan menipis per gudang | tidak diklaim run ini | belum terverifikasi | Global-total saja (cron) | per (item, gudang) efektif |
+
+### 7. Pertanyaan terbuka (jawaban menentukan implementasi; jangan ditebak)
+
+- Q-MS-1 → BOT 1: reuse `edit_items` untuk override + lead time, atau
+  key katalog baru? (menentukan seed/katalog; spec default reuse)
+- Q-MS-2 → BOT 1/BOT 3: pemasok acuan lead time per item dipilih
+  bagaimana (vendor master `Item.vendorId` vs baris VendorItemPrice
+  aktif termurah vs pilihan eksplisit per setting)? Jangan bangun
+  turunan reorder sebelum ini diputus.
+- Q-MS-3 → BOT 1: histori perubahan override perlu tabel versi, atau
+  cukup ActivityLog pola master existing? (spec usulkan ActivityLog)
+- Q-MS-4 → BOT 3: jendela + sumber hitung kebutuhan harian untuk
+  BR-MS-07 (MaterialIssue saja / + penjualan, berapa hari)? Tanpa
+  jawaban, tahap 2 berhenti di lead time tampil saja.
+- Q-MS-5 → BOT 1: tahap 2 (lead time + saran) satu kartu inti dengan
+  tahap 1, atau dipisah? (spec usulkan pisah: tahap 1 tidak menunggu
+  Q-MS-2/4)
+
+### 8. Draf acceptance (untuk BOT 6; falsifikasi wajib)
+
+- AC-MS-1 (BOT 3): barang minStock global 5, override gudang bengkel 2,
+  stok lapisan bengkel 3 + pusat 100 → laporan TIDAK menandai bengkel
+  menipis (3 > 2), note baris bengkel "Minimum per gudang". Cabut
+  pembacaan override di loader → bengkel tertandai (3 <= 5) = MERAH.
+- AC-MS-2 (BOT 3): tanpa override apa pun, keluaran builder+loader
+  identik perilaku lapis aman hari ini termasuk `MIN_STOCK_WAREHOUSE_NOTE`
+  verbatim. Satu saja baris warisi kehilangan note kejujuran = MERAH.
+- AC-MS-3 (BOT 3): override di gudang tanpa lapisan untuk barang itu →
+  tidak lahir baris menipis; paksa nilai 0 ikut dinilai = MERAH (BR-MS-03).
+- AC-MS-4 (BOT 3): notifikasi cron — bengkel di bawah minimum efektif,
+  total global di atas minimum → peringatan terbit menyebut gudang;
+  matikan sumber per-gudang di cron → peringatan hilang = MERAH.
+- AC-MS-5 (BOT 2): panel detail barang tanpa `edit_items`: angka
+  override tampil baca-saja, nol input aktif di DOM; dengan izin: simpan
+  kosong mengembalikan label "Warisi global". UI menghitung ulang
+  minimum efektif sendiri (bukan dari loader) = MERAH.
+- AC-MS-6 (BOT 6): simpan/hapus override lalu hitung StockMove + jurnal
+  periode itu: keduanya 0 dari aksi pengaturan (BR-MS-09).
+- AC-MS-7 (BOT 6, tahap 2): lead time kosong → kolom titik pesan-ulang
+  tampil "lead time belum diatur"; isi 0 karangan / saran qty lahir
+  dari kebutuhan harian tanpa sumber = MERAH (BR-MS-06/07).
+- AC-MS-8 (BOT 6, tahap 2): PO terbuka qty 10 received 4 untuk gudang
+  tujuan sama → incoming terhitung 6; PO draft/cancelled ikut terhitung
+  = MERAH (definisi status persis kontrak BOT 3 per BR-MS-08).
+
+### 9. Backlog implementasi (turunan spec ini; induk F-2026-10-21-013)
+
+- F-2026-10-22-070-S (spec ini, BOT 5, dokumen saja) — selesai run ini.
+- Kartu BOT 3 (backend, SESUDAH Q-MS-1): model `ItemWarehouseSetting`
+  (itemId, warehouseId, minStock, isActive warisan pola master,
+  @@unique [itemId, warehouseId]) + aksi simpan/hapus berizin +
+  loader min-stock membaca sumber efektif + cron per gudang.
+  Pasangan kartu BOT 2 (frontend): panel "Stok minimum per gudang" di
+  detail barang + label sumber per baris laporan, kata dari §5/BR-MS-04
+  persis. UI TIDAK menunggu polish — panel fitur dulu.
+- Kartu BOT 3 tahap 2 (SESUDAH Q-MS-2/4): `VendorItemPrice.leadTimeDays`
+  + turunan titik pesan-ulang/saran qty di builder existing.
+- Kartu BOT 6: falsifikasi AC-MS-1..8 di atas atas head BOT 3/BOT 2.
+
+### Yang TIDAK diusulkan run ini
+
+- PO otomatis dari stok minimum (Accurate punya tombol Pesan): ISF
+  tetap manual berizin — otomatisasi pembelian = keputusan proses
+  terpisah, bukan diam-diam di spec pengaturan.
+- Safety stock sebagai kolom terpisah: induk menyebutnya, tetapi tanpa
+  Q-MS-4 (sumber kebutuhan harian) angka safety = karangan; masuk
+  tahap 2 atau tidak sama sekali, jangan kolom mati.
+- Minimum per rak/row: Rack/RackRow existing cukup; per gudang saja.
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-072-V Q-TM67-2/4 jadwal termin per job (spec F-2026-10-22-067-S PR #506)
+
+Pemilik vonis: BOT 4. Pertanyaan: Q-TM67-2 (basis persen + dampak
+PPN/umur piutang) dan sisi uang Q-TM67-4 (hitung-ulang termin
+pasca change order) dari spec BOT 5 F-2026-10-22-067-S (PR #506
+OPEN). Kartu: t_4ce12073. Dokumen saja; tanpa kode/schema/migrasi.
+
+### Anti-duplikat + bukti live (2026-10-22)
+
+- origin/main `886d495e`. ID -V terpakai maks 066-V (PR #509
+  MERGED); 072-V bebas per grep backlog + `gh pr list --search 072`.
+- Q-BUPOT-052-1..3 SUDAH terjawab F-055-V (PR #436 MERGED) — tidak
+  divonis ulang. Q-KOM-1 SUDAH divonis F-056-V (PR #440 OPEN).
+  Q-CO-4 SUDAH divonis 066-V. Q-SEWA SUDAH F-042-V. Item terbuka
+  bebas-dependensi berikutnya yang benar-benar belum divonis =
+  Q-TM67-2/4. Hormati t_1f126c6e blocked (penutup F-058-V) — vonis
+  ini tidak menyentuh rekonsiliasi F-057/F-056.
+- Kode terverifikasi origin/main: builder murni
+  `src/lib/reports/job-billing-progress.ts` — target kumulatif =
+  persen × `Quotation.grandTotal` berjalan; `billedAmountExcludingCancelled`
+  = Σ `grandTotal` invoice non-cancelled; header file: "DP BUKAN
+  tagihan (vonis accountant F-03)". Loader
+  `job-billing-summary-data.ts:12` menegaskan inti termin belum
+  ada. Aging AR existing (`src/lib/reports/aging.ts`) bucket dari
+  `dueDate` invoice, bukan dari jadwal.
+
+### Vonis 1 — Q-TM67-2(a): basis persen = grandTotal berjalan TERMASUK PPN, tanpa basis kedua
+
+SAH dan mengikat: target termin = persen kumulatif ×
+`Quotation.grandTotal` berjalan persis seperti builder existing.
+Alasan: (1) grandTotal adalah nilai kontraktual yang disetujui
+pelanggan (DPP + PPN + komponen lain sebagaimana terbit di
+quotation); memecah basis ke DPP-saja akan melahirkan angka termin
+yang tidak pernah disetujui pelanggan dan tidak rekonsiliasi ke
+Σ invoice (yang juga grandTotal per baris
+`billedAmountExcludingCancelled`). (2) Jadwal adalah RENCANA
+penagihan komersial, bukan dokumen pajak — basisnya mengikuti
+dokumen komersial sumbernya.
+
+Syarat:
+- Satu basis saja. Dilarang menambah basis DPP, basis ex-PPN, atau
+  toggle basis di UI/loader. Bila kelak ada kebutuhan termin atas
+  DPP (mis. kontrak pemerintah pemungut), itu fitur terpisah
+  BUTUH-VONIS baru.
+- Persen `Decimal(5,2)`, target sen via pola existing
+  (`safeMultiply`/`safeRound` sen); total target semua termin
+  persis = grandTotal berjalan, sisa pembulatan di termin
+  terakhir (persis edge spec §5 PR #506).
+- Snapshot jejak amendemen (BR-TM67-02) hanya jejak historis;
+  target aktif selalu dihitung dari grandTotal berjalan, bukan
+  dari snapshot.
+
+### Vonis 2 — Q-TM67-2(b): jadwal TIDAK berdampak PPN, pendapatan, piutang, maupun umur piutang
+
+DIKONFIRMASI BR-TM67-08. Mencatat/mengubah/membatalkan jadwal
+termin:
+- TIDAK menerbitkan invoice, DP, pembayaran, jurnal, faktur
+  pajak, atau dokumen pajak apa pun (selaras BR-TM67-03).
+- TIDAK mengubah saat terutang PPN. Saat terutang tetap mengikuti
+  peristiwa penyerahan/pembayaran pada dokumen nyata (invoice/DP
+  existing), bukan tanggal rencana di jadwal. Dasar: UU PPN
+  (UU 8/1983 jo. UU 42/2009 jo. UU 7/2021 HPP) Pasal 11 —
+  terutang saat penyerahan BKP/JKP, atau saat pembayaran bila
+  pembayaran diterima sebelum penyerahan. URL resmi DJP:
+  https://pajak.go.id/id/undang-undang-nomor-8-tahun-1983
+  (diakses 2026-10-22). Jadwal tidak memuat penyerahan maupun
+  pembayaran, maka tidak memicu ayat mana pun.
+- TIDAK mengubah umur piutang (aging). Aging tetap dihitung dari
+  `dueDate` invoice terbit (`aging.ts` existing). `dueDate` di
+  baris jadwal adalah tanggal rencana administratif (BR-TM67-07)
+  dan DILARANG dipakai sebagai input aging, denda, atau provisi
+  piutang. Bila UI menampilkan keduanya, label wajib beda:
+  "Jadwal kesepakatan" vs jatuh tempo invoice.
+- TIDAK mengubah pengakuan pendapatan/piutang: tetap lahir saat
+  invoice terbit/posting lewat jalur existing.
+
+### Vonis 3 — Q-TM67-4 sisi uang: hitung-ulang otomatis, termin terpenuhi TIDAK ditulis ulang, kelebihan lewat kredit existing
+
+Sesudah change order/revisi menaikkan atau menurunkan grandTotal:
+1. Target nominal termin BELUM terpenuhi dihitung ulang otomatis
+   dari persen × grandTotal baru. Tidak perlu amendemen manusia
+   hanya karena nilai berubah (mengikuti rekomendasi USULAN spec).
+   Amendemen beralasan (BR-TM67-06) hanya bila manusia mengubah
+   persen/tanggal/nama termin.
+2. Termin sudah terpenuhi TIDAK ditulis ulang dan TIDAK ditagih
+   ulang. Status terpenuhi diukur dari tertagih kumulatif
+   (`billedAmountExcludingCancelled`), bukan dari target baru.
+3. Bila grandTotal TURUN sehingga tertagih/DP-confirmed melebihi
+   nilai baru: kelebihan ditangani jalur existing
+   `createRevisionDownCredit` / kredit DownPayment per DP sumber
+   (pola header job-billing-progress.ts F-59-aman), BUKAN kredit
+   baru dari jadwal, BUKAN faktur negatif, BUKAN jurnal langsung
+   dari jadwal. Selaras vonis 066-V Vonis 2.
+4. Transisi mundur status termin karena nilai turun (terpenuhi →
+   terpenuhi_sebagian) WAJIB tampil sebagai delta, tidak
+   disembunyikan (persis spec §4).
+5. Jadwal tidak pernah menjadi jalur nilai kedua: perubahan nilai
+   jual tetap lewat quotation revisi/change order
+   (F-2026-10-20-103), jadwal hanya membaca hasilnya.
+
+### Larangan
+
+- Basis DPP/ex-PPN, toggle basis, atau persen dihitung UI.
+- dueDate jadwal sebagai input aging/denda/provisi.
+- Invoice/DP/jurnal/faktur pajak lahir dari aksi jadwal.
+- Menulis ulang termin terpenuhi atau menagih ulang porsinya.
+- Kredit/faktur negatif/jurnal penyeimbang lahir dari jadwal saat
+  nilai turun.
+
+### Falsifikasi wajib BOT 6 (atas head BOT 3)
+
+1. Jadwal dibuat/diubah/dibatalkan → jumlah baris invoice, DP,
+   jurnal, faktur pajak sebelum-sesudah SAMA. Menambah satu saja
+   = MERAH.
+2. Basis: quotation grandTotal Rp111.000.000 (DPP 100jt + PPN
+   11jt), termin 50% → target persis Rp55.500.000. Target
+   Rp50.000.000 (basis DPP) = MERAH.
+3. Aging: invoice dueDate lewat 40 hari tanpa jadwal & dengan
+   jadwal dueDate lampau → bucket sama persis dari dueDate
+   invoice. Bucket berubah karena jadwal = MERAH.
+4. CO naik: grandTotal 100jt → 120jt, termin 1 50% sudah
+   tertagih 50jt → termin 1 tetap terpenuhi 50jt (tidak ditagih
+   ulang), termin belum-terpenuhi dihitung dari 120jt.
+5. CO turun: grandTotal 100jt → 80jt, tertagih 90jt → kelebihan
+   hanya kandidat kredit RevisionDown existing; jadwal sendiri
+   melahirkan 0 kredit/jurnal/faktur negatif.
+6. Pembulatan: grandTotal Rp1, persen 33/33/34 → Σ target persis
+   Rp1 (selisih 1 sen = MERAH).
+
+### Klaim kepatuhan
+
+Klaim PPN di Vonis 2 berdasar UU PPN Pasal 11 (UU 8/1983 jo.
+UU 42/2009 jo. UU 7/2021), teks resmi DJP
+https://pajak.go.id/id/undang-undang-nomor-8-tahun-1983, diakses
+2026-10-22; cakupan: saat terutang atas penyerahan/pembayaran
+nyata. Sisanya perlakuan internal dokumen komersial (jadwal,
+quotation, invoice) — bukan klaim SPT. Q-TM67-1/3/5 tetap milik
+BOT 1; bentuk fisik jadwal tetap BOT 3 sesudah putusan itu.
+
+ID vonis ini **F-2026-10-22-072-V** (pasangan spec
+F-2026-10-22-067-S PR #506; seri -V bebas tabrakan per grep
+origin/main + PR live 2026-10-22, maks -V 066-V). Pemilik
+berikutnya: BOT 1 (Q-TM67-1/3/5) -> BOT 3 (inti jadwal; basis +
+penjaga vonis ini) -> BOT 2 (UI label "Jadwal kesepakatan") ->
+BOT 6 falsifikasi 1-6 di atas. Vonis yang membuka pekerjaan uang
+ini wajib jadi parent kartu BOT 3/BOT 2 terkait.
+
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-081-S penerimaan transfer parsial + tutup selisih (inti F-2026-10-21-015)
+
+Spec dokumen saja, tanpa kode/schema/migrasi. Induk: F-2026-10-21-015
+(c) P2 — Penerimaan transfer selalu penuh; selisih/rusak di perjalanan
+tak tercatat. Spec ini = F-2026-10-22-081-S. Anti-duplikat run ini:
+maks ID terbuka terverifikasi = F-2026-10-22-080-V (PR #527); grep
+backlog origin/main + `gh pr list` untuk 081 = 0; tidak ada kartu
+kanban / PR / spec untuk inti F-015 (yang ada hanya vonis BOT 4
+t_0e45367a, PR #410 MERGED). Hindari serial F-063..F-080 yang sudah
+terbit.
+
+### 0. Verifikasi live origin/main b4046e30 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `InventoryTransfer` + `InventoryTransferItem`
+  (prisma/schema.prisma:2157,2181): sourceWarehouseId,
+  destinationWarehouseId, `status` String default `draft`, item hanya
+  `qty` Decimal(15,2) + `serialNumbers`/`batchAllocations` Json?
+  (atribusi lot/serial saat process). TIDAK ada `receivedQty`,
+  tidak ada status parsial.
+- Aksi existing (src/actions/inventory.actions.ts):
+  `createInventoryTransfer` (:321, izin `create_inventory_transfers`),
+  `processInventoryTransfer` (:375, izin `edit_inventory_transfers`,
+  klaim atomik draft->processing->processed),
+  `receiveInventoryTransfer` (:449, izin `edit_inventory_transfers`,
+  klaim atomik processed->receiving->received dalam SATU transaksi).
+  Receive saat ini all-or-nothing: hook mengakumulasi SELURUH qty
+  per item lalu status langsung `received`.
+- Hook (src/lib/hooks/inventory-transfer.hook.ts):
+  `onTransferProcessed` consume FIFO sumber + StockMove OUT pada
+  carried cost; `onTransferReceived` (:155 dst) menjaga idempotency
+  dengan "IN moves sudah ada -> lewati total" (:170-183), lalu
+  StockMove IN tujuan per item teragregasi pada `carriedCostByItem`
+  dari OUT move, `createInLayer` tujuan, revive serial berstatus
+  `used`->`available`, lot tujuan per alokasi batch; item
+  batch-tracked tanpa alokasi lot DITOLAK (:265-271).
+- Transfer = subledger-only, NOL jurnal GL (vonis BOT 4 §Fakta,
+  komentar kartu t_0e45367a #361/#365; grep InventoryTransfer di
+  jalur jurnal = 0). Nilai pindah lokasi, total persediaan GL tidak
+  berubah selama barang di jalan.
+- Laporan pemeriksaan existing: `transfer-in-transit.ts` +
+  `transfer-in-transit-data.ts` membaca transfer berstatus persis
+  `processed` (`IN_TRANSIT_TRANSFER_STATUS = "processed"`) dan
+  menilai dari StockMove OUT (qty x cost terbawa); peringatan umur
+  >60 hari sudah ada. Laporan ini BELUM mengenal sisa parsial.
+- `StockAdjustment` (schema:2105) + `StockAdjustmentItem` (:2135):
+  reason Text, status draft->processed, approvedBy/approvedAt dari
+  mesin approval; `createStockAdjustment`
+  (inventory.actions.ts:113) memanggil
+  `requestApprovalIfConfigured("StockAdjustment", ...)`;
+  `processStockAdjustment` (:219) menuntut `assertApproved` +
+  izin `process_stock_adjustments`; jurnal existing Dr/Cr
+  Persediaan vs Akun Penyesuaian Stok dari SystemSetting,
+  fail-closed bila akun kosong (stock-adjustment.hook.ts,
+  stock-journal.service.ts — pola vonis BOT 4).
+- Izin katalog nyata (src/lib/auth/module-catalog.generated.ts:
+  238-241): view/create/edit/delete_inventory_transfers — TIDAK
+  ada key process/receive/approve terpisah untuk transfer; aksi
+  process/receive existing memakai `edit_inventory_transfers`.
+  Izin penyesuaian (:228-232): view/create/edit/delete/
+  process_stock_adjustments.
+- Scope gudang: `getWarehouseScope` (src/lib/auth/warehouse-scope.ts:
+  22, all/assigned/none fail-closed); receive existing menjaga
+  `assertWarehouseAccess(destinationWarehouseId)` — penerima wajib
+  punya scope gudang TUJUAN.
+- Halaman detail transfer existing
+  (src/app/(dashboard)/inventaris/transfer/[slug]/page.tsx:100-107):
+  tombol "Terima" hanya status `processed`, konfirmasi generik,
+  TANPA input qty terima per baris. Form transfer
+  (inventory-transfer-form.tsx) hanya qty kirim.
+- Label status existing (src/lib/utils/status-labels.ts):
+  `processed` = "Diproses", `received` = "Diterima",
+  `partial` = "Sebagian" (generik). Status `processed` saat ini
+  bermakna ganda: "sudah dikirim, belum diterima sama sekali".
+
+Belum ada / salah (TERVERIFIKASI-KODE, grep origin/main run ini):
+- `receivedQty` di InventoryTransferItem = 0; status
+  `partially_received` = 0 di schema+src. Terima 8 dari 10 hari ini
+  MUSTAHIL dicatat: receive selalu memasukkan 10 dan menutup
+  `received`; selisih 2 hilang dari semua catatan (bukan stok
+  tujuan, bukan in-transit, bukan selisih).
+- Idempotency receive per-transfer ("IN pertama ada -> skip
+  total") MEMBLOKIR terima susulan secara desain; wajib diganti
+  per kejadian terima (vonis BOT 4 V-5(b)).
+- Tidak ada kejadian/riwayat terima per tanggal: tanggal terima
+  sendiri tidak tercatat (hanya `transfer.date` kirim); pertanyaan
+  vonis Q-F015-A (tanggal kejadian untuk period-lock + potong
+  laporan) belum terjawab di kode.
+- Tidak ada jalan "tutup selisih": status `received` bisa dicapai
+  tanpa keputusan apa pun atas sisa; larangan vonis BOT 4
+  ("status received saat receivedQty < qty tanpa keputusan
+  tutup-selisih eksplisit") belum terimplementasi.
+
+Keputusan yang TIDAK diambil spec ini: akun/jurnal baru (DILARANG
+vonis BOT 4 — jurnal hanya lewat StockAdjustment existing saat
+disposisi final), gudang virtual in-transit (DILARANG vonis —
+sisa tampil sebagai turunan terkirim-diterima), klaim
+kurir/asuransi (Q-015-3, di luar spec), ongkir dikapitalisasi
+(Q-F015-D, pola existing = tidak), mutu barang rusak yang qty-nya
+utuh (diterima dulu, musnahkan lewat adjustment — vonis BOT 4
+V-2(d)).
+
+### 1. Workflow specification
+
+Aktor: Pengirim (staf gudang sumber), Penerima (staf gudang
+tujuan, scope tujuan), Penutup selisih (staf tujuan yang membuat
+StockAdjustment), Penyetuju penyesuaian (orang BERBEDA dari
+pembuat, lewat mesin approval StockAdjustment existing).
+
+Dokumen masuk: InventoryTransfer berstatus `processed` (StockMove
+OUT + alokasi serial/batch sudah beku dari process existing).
+Dokumen keluar: (a) StockMove IN per KEJADIAN terima sebesar qty
+diterima pada carried cost OUT; (b) bila ditutup bersisa:
+StockAdjustment alasan persis "selisih transfer" tertaut transfer
+ini; (c) TIDAK ada dokumen/jurnal lain dari receive parsial.
+
+Alur:
+1. Penerima buka detail transfer `processed` atau
+   `partially_received`, klik "Terima Barang". Form terima per
+   baris: kolom Terkirim (qty dokumen), Sudah Diterima
+   (receivedQty kumulatif tersimpan), Diterima Kali Ini (input,
+   default = sisa), satuan tampil. Untuk item berserial: pilih
+   serial yang tiba dari daftar serial terkirim (sumber:
+   `serialNumbers` baris transfer); untuk batch-tracked: alokasi
+   lot per qty diterima wajib (pola penolakan existing).
+2. Simpan terima = SATU kejadian: server validasi per baris
+   (lihat BR-TP), buat StockMove IN + layer tujuan HANYA sebesar
+   qty kali ini pada carried cost, revive HANYA serial yang
+   dipilih, tambah receivedQty kumulatif, catat kejadian (tanggal
+   terima + penerima + qty per baris — bentuk fisik Q-TP-2 BOT 3).
+   Status sesudahnya: semua baris penuh -> `received`; masih ada
+   sisa -> `partially_received`.
+3. Terima susulan: langkah 1-2 berulang dari
+   `partially_received` untuk sisa; idempotency per kejadian
+   (BUKAN per transfer): kejadian yang sama di-retry tidak
+   menggandakan IN (kunci fisik Q-TP-2, mis. baris kejadian unik
+   per submit / klaim status transien pola existing).
+4. Keputusan sisa tidak tiba: penerima memilih "Tutup Selisih"
+   pada transfer `partially_received` (atau `processed` yang tak
+   pernah diterima sama sekali) -> sistem membuat DRAF
+   StockAdjustment di gudang TUJUAN? BUKAN — lihat BR-TP-07:
+   selisih mengurangi nilai yang sudah KELUAR dari sumber dan
+   tidak pernah masuk tujuan; adjustment dibuat pada konteks
+   yang diputus BOT 3 mengikuti pola subledger existing
+   (Q-TP-3), alasan wajib persis "selisih transfer", baris per
+   item sisa dengan serial/batch sisa tertera, nilai = sisa x
+   carried cost OUT. Draf itu lalu wajib approval orang berbeda
+   + process lewat jalur StockAdjustment existing persis
+   (assertApproved, akun setting fail-closed). Transfer menjadi
+   `received` (tertutup) HANYA sesudah adjustment itu processed;
+   sebelum itu status tampil "menunggu penutupan selisih"
+   (status fisik Q-TP-2 — usulan `partially_received` tetap,
+   penanda turunan dari adjustment tertaut belum processed).
+5. Barang tiba rusak tapi qty utuh: diterima PENUH sebagai
+   diterima (bukan selisih); pemusnahan = StockAdjustment
+   terpisah di tujuan sesudah diterima, di luar alur ini
+   (vonis BOT 4 V-2(d)).
+
+### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+
+- `InventoryTransferItem.receivedQty` Decimal(15,2) default 0
+  (pola persis `PurchaseOrderItem.receivedQty` schema:1709 —
+  preseden vonis BOT 4). Backfill baris lama = 0; transfer lama
+  berstatus `received` diperlakukan penuh secara turunan
+  (receivedQty efektif = qty bila status received pra-fitur —
+  tampilkan dari status, JANGAN tulis ulang massal diam-diam;
+  keputusan backfill fisik = Q-TP-2).
+- Riwayat kejadian terima: bentuk final BOT 3 (tabel kejadian
+  per terima: transferId, tanggal terima, receivedBy, baris
+  itemId+qty+serial/batch terpilih). Spec mengikat ISI (tanggal
+  kejadian sendiri untuk assertPeriodOpen per kejadian — vonis
+  V-5(d); penerima; rincian serial/batch), bukan nama tabel.
+- Tautan penutupan: StockAdjustment tertaut transfer (kolom/
+  relasi final BOT 3) supaya "satu transfer, satu penutupan" bisa
+  dijaga unik dan sisa tidak ditutup dua kali.
+- TIDAK ada kolom harga baru: carried cost selalu dibaca dari
+  StockMove OUT existing per (transfer,item), tidak pernah dari
+  Item.cost/harga master berjalan.
+- TIDAK ubah `InventoryTransferItem.qty` (terkirim beku),
+  TIDAK akun COA baru, TIDAK gudang virtual.
+
+### 3. Status-transition matrix (USULAN; status String pola repo)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| draft | proses kirim (existing) | processed | existing, tidak berubah |
+| processed | terima, semua baris penuh dalam 1 kejadian | received | izin terima §4 + scope tujuan; receivedQty akhir = qty per baris |
+| processed | terima, ada baris bersisa | partially_received | sama; sisa = qty - receivedQty > 0 terbaca per baris |
+| partially_received | terima susulan, kini penuh | received | klaim atomik status; kumulatif tidak boleh > terkirim |
+| partially_received | terima susulan, masih bersisa | partially_received | sama |
+| processed / partially_received | ajukan tutup selisih | (tetap) + draf StockAdjustment "selisih transfer" tertaut lahir | alasan konteks wajib; hanya SATU draf penutupan aktif per transfer |
+| (penutupan diajukan) | adjustment tertaut processed (approval orang lain) | received | sistem dari jalur adjustment; sisa dianggap hilang/rusak final |
+| (penutupan diajukan) | adjustment tertaut ditolak/dibatalkan | partially_received (atau processed bila belum pernah terima) | sisa kembali terbuka; boleh terima susulan atau ajukan ulang |
+| received | terima / tutup selisih lagi | DITOLAK | terminal; koreksi hanya dokumen baru terpisah |
+
+Status transien klaim (`receiving` existing) dipertahankan di
+dalam satu kejadian saja; kegagalan mengembalikan ke status
+sebelum kejadian (processed/partially_received), pola restore
+existing. Kata tampil §6.
+
+### 4. Role/permission matrix (izin katalog TERVERIFIKASI-KODE)
+
+| Aksi | Izin | Scope | Status |
+|---|---|---|---|
+| Lihat daftar/detail transfer | view_inventory_transfers | dokumen scope existing | TERVERIFIKASI-KODE |
+| Proses kirim | edit_inventory_transfers | gudang sumber | TERVERIFIKASI-KODE (existing) |
+| Terima (penuh/parsial/susulan) | edit_inventory_transfers | gudang TUJUAN wajib | TERVERIFIKASI-KODE izinnya; perilaku parsial USULAN spec ini |
+| Ajukan tutup selisih (lahirkan draf adjustment) | create_stock_adjustments | gudang konteks adjustment Q-TP-3 | USULAN memakai izin existing adjustment |
+| Setujui penyesuaian selisih | mesin approval StockAdjustment (assertApproved) | orang berbeda dari pembuat | TERVERIFIKASI-KODE pola existing |
+| Proses penyesuaian selisih | process_stock_adjustments | sama | TERVERIFIKASI-KODE |
+| Ubah qty terkirim sesudah processed | DILARANG siapa pun | - | USULAN (qty beku; koreksi = transfer baru) |
+
+Tidak ada key izin baru di spec ini. Bila BOT 1 menghendaki izin
+terima terpisah dari edit transfer, itu perubahan katalog =
+keputusan BOT 1 di luar spec (jangan karang key di implementasi).
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-TP-01 | Terima diakui PER KEJADIAN sebesar qty benar-benar diterima, pada carried cost StockMove OUT (FIFO sumber); bukan qty terkirim penuh, bukan harga master | VONIS BOT 4 V-1 (t_0e45367a) + TERVERIFIKASI-KODE pola carried cost hook existing |
+| BR-TP-02 | receivedQty kumulatif per baris: 0 <= receivedQty <= qty terkirim; terima kali ini > sisa = DITOLAK keras server | VONIS BOT 4 V-5(e) |
+| BR-TP-03 | Status `received` HANYA bila (semua baris penuh) ATAU (sisa ditutup adjustment processed); received bersisa tanpa penutupan = dilarang | VONIS BOT 4 (larangan eksplisit) |
+| BR-TP-04 | Selama belum ditutup: sisa tetap in-transit (terkirim - diterima), NOL jurnal, NOL beban, tampil di laporan terkirim-belum-diterima sebagai SISA (bukan qty penuh) | VONIS BOT 4 V-2(a) + USULAN perluasan laporan existing §7 |
+| BR-TP-05 | Jurnal hanya SATU titik: StockAdjustment alasan persis "selisih transfer" saat disposisi final, Dr Akun Penyesuaian Stok / Cr Persediaan = sisa x carried cost OUT; akun dari SystemSetting existing, kosong = fail-closed berisik | VONIS BOT 4 V-3 (mengikat BOT 4: angka/akun ini BUKAN usulan BOT 5) |
+| BR-TP-06 | Idempotency per KEJADIAN terima, bukan per transfer; guard lama "IN ada -> lewati total" dilarang untuk jalur parsial; retry kejadian sama tidak menggandakan stok | VONIS BOT 4 V-5(b) |
+| BR-TP-07 | Konteks gudang adjustment penutupan + apakah subledger sisa perlu StockMove penyeimbang: rancangan BOT 3 (Q-TP-3) dengan syarat hasil akhir: GL turun persis sisa x carried cost DAN laporan per-gudang/in-transit tidak menghitung sisa tertutup lagi | BUTUH-VONIS Q-TP-3 (BOT 3, eskalasi BOT 1 bila menyentuh makna stok per gudang) |
+| BR-TP-08 | Serial: hanya serial terpilih kali ini yang revive ke tujuan; serial sisa tetap tercatat belum diterima DAN wajib tertera di draf penutupan; batch: alokasi lot per qty diterima wajib, tanpa lot = ditolak (pola existing) | VONIS BOT 4 V-5(c) + TERVERIFIKASI-KODE penolakan batch existing |
+| BR-TP-09 | Setiap kejadian terima memakai TANGGAL KEJADIAN sendiri untuk assertPeriodOpen + jejak penerima; tanggal kirim tidak dipakai ulang untuk terima lintas periode | BUTUH-VONIS Q-TP-1 (BOT 1/BOT 3; vonis BOT 4 Q-F015-A menamai, belum memutus) |
+| BR-TP-10 | Barang rusak qty utuh = diterima penuh; bukan selisih; musnahkan lewat adjustment terpisah di tujuan | VONIS BOT 4 V-2(d) |
+| BR-TP-11 | Klaim kurir/ekspedisi atas selisih: TIDAK dibangun; selisih final = beban penyesuaian (BR-TP-05) sampai ada putusan proses bisnis lain | VONIS BOT 4 V-4/Q-015-3 (BUTUH-VONIS pemilik proses bila kelak dibuka) |
+| BR-TP-12 | Siapa berwenang menyatakan sisa hilang/rusak final + batas umur tunggu sebelum wajib ditutup: spec mengusulkan yang berwenang = pemegang create_stock_adjustments di konteks tujuan DENGAN approval orang berbeda (pola existing), dan laporan in-transit menandai umur >60 hari (peringatan existing); angka batas wajib-tutup TIDAK ditebak | USULAN + BUTUH-VONIS Q-TP-4 (BOT 1/pemilik proses) |
+| BR-TP-13 | MaterialRequest F-078 (F-2026-10-22-078-S): pemenuhan permintaan dihitung dari receivedQty kumulatif spec ini; sebelum spec ini live, terima = penuh per transfer (label jujur di spec F-078 §8) | TERVERIFIKASI-KODE (ketergantungan tercatat dua arah) |
+| BR-TP-14 | Ongkir transfer internal TIDAK dikapitalisasi ke layer tujuan; layer tujuan = carried cost murni pola existing | TERVERIFIKASI-KODE pola existing; mengubahnya = kebijakan akuntansi baru BUTUH-VONIS BOT 4 (Q-F015-D) — spec ini tidak meminta |
+
+### 6. Feature matrix (BENCHMARK, akses 2026-10-22)
+
+| Aspek | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Kirim-terima dua tahap | Pemindahan Barang: Proses Kirim lalu Terima mengambil dokumen kirim — https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pemindahan-barang/mencatat-pemindahan-barang-antar-gudang/ | Transfer Barang Antar Gudang satu dokumen gudang asal->tujuan + jurnal — https://help.zahironline.com/portal/id/kb/articles/trans | Dua tahap existing dipertahankan (processed -> terima) |
+| Terima sebagian + sisa belum diterima | Terima menampilkan rincian kirim; kasus hilang/rusak: terima yang baik, sisa dikeluarkan via Penyesuaian Persediaan (Ambil dari Pemindahan, menampilkan sisa belum diterima), status menjadi Diterima Seluruhnya dengan kolom Kts. Tidak Diterima — https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/gudang/mencatat-persediaan-yg-hilang-rusak-saat-pengiriman-antar-gudang/ | Tidak ditemukan terima parsial/selisih perjalanan di URL resmi di atas | Samakan pola Accurate: terima parsial berulang + penutupan sisa via Penyesuaian Stok tertaut; beda sadar: adjustment ISF wajib approval orang berbeda (pola opname existing) |
+| Akun selisih | Akun penyesuaian dipetakan di Preferensi (contoh Beban Barang Rusak) | Adjustment per gudang berjenjang kewenangan — https://www.zahironline.com/kontrol-gudang/ | Akun Penyesuaian Stok SystemSetting existing, fail-closed (vonis BOT 4, tanpa akun baru) |
+
+Kata tampil UI (USULAN, untuk BOT 2 verbatim sesudah kontrak
+BOT 3): status tampil: `processed` yang belum diterima sama
+sekali = "Dalam Perjalanan"; `partially_received` = "Diterima
+Sebagian"; `received` = "Diterima" (existing); kolom baris:
+"Terkirim", "Sudah Diterima", "Belum Diterima", dan saat terima:
+"Diterima Kali Ini"; tombol: "Terima Barang", "Terima Susulan",
+"Tutup Selisih"; draf penutupan berlabel alasan persis
+"selisih transfer". Peringatan jujur wajib tampil di form
+tutup: "Sisa akan dihapus dari persediaan lewat Penyesuaian
+Stok sesudah disetujui. Barang yang ternyata tiba sesudah
+ditutup tidak bisa diterima dari transfer ini."
+
+### 7. Dampak laporan existing (wajib, bukan tambahan bebas)
+
+- `transfer-in-transit-data.ts`: himpunan "masih di jalan"
+  menjadi status `processed` (sisa = qty penuh) DITAMBAH
+  `partially_received` (sisa = qty - receivedQty per baris);
+  nilai sisa = sisa x carried cost OUT per baris, BUKAN qty
+  penuh. Transfer `received` (termasuk yang ditutup selisih)
+  keluar dari daftar. Tanpa perubahan ini laporan menghitung
+  barang yang sudah diterima sebagian seolah masih utuh di
+  jalan (SALAH sesudah fitur live).
+- Umur dihitung dari tanggal kirim (existing); kejadian terima
+  terakhir boleh tampil sebagai info, tidak mengganti umur.
+- MaterialRequest (F-078) membaca receivedQty yang sama; tidak
+  ada hitungan pemenuhan kedua.
+
+### 8. Acceptance criteria + edge cases (BOT 6, falsifikasi)
+
+1. AC-TP-1: Kirim 10, terima 8 -> tujuan +8 lapis @ carried
+   cost, receivedQty=8, status Diterima Sebagian, GL jurnal
+   bertambah = MERAH; sisa tampil 2 di laporan in-transit
+   senilai 2 x carried cost (bukan 10).
+2. AC-TP-2: Susulan terima 2 -> total IN = 10 = OUT, status
+   received, adjustment lahir = MERAH. Cabut perbaikan
+   idempotency per kejadian (pulihkan guard skip-total lama)
+   -> terima susulan tertolak/dilewati = MERAH.
+3. AC-TP-3: Terima kali ini 3 dari sisa 2 -> ditolak server;
+   receivedQty melebihi terkirim di data = MERAH.
+4. AC-TP-4: Tutup selisih 2 hilang -> draf adjustment alasan
+   persis "selisih transfer"; sesudah approval orang berbeda +
+   processed: jurnal Dr Penyesuaian/Cr Persediaan = 2 x carried
+   cost OUT, seimbang; transfer menjadi received; sisa hilang
+   dari laporan in-transit. Jurnal lahir saat receive parsial
+   = MERAH (vonis V-3).
+5. AC-TP-5: Self-approve penutupan (pembuat = penyetuju) ->
+   ditolak mesin approval existing; stockAdjustmentAccountId
+   kosong -> gagal berisik, transfer TIDAK menjadi received.
+6. AC-TP-6: Penutupan ditolak/dibatalkan -> transfer kembali
+   terbuka (partially_received), terima susulan 2 masih bisa
+   dan menutup penuh tanpa adjustment; status received
+   prematur = MERAH.
+7. AC-TP-7: Item berserial 5: terima 3 serial terpilih ->
+   hanya 3 revive available di tujuan; 2 sisa tertera di draf
+   penutupan; tutup selisih tanpa menyebut serial sisa = MERAH.
+   Item batch-tracked: terima parsial tanpa alokasi lot ->
+   ditolak (pola existing).
+8. AC-TP-8: Dua penerima bersamaan atas sisa sama (klaim
+   atomik): total diterima kumulatif tidak melebihi terkirim;
+   kejadian ganda dari retry submit sama tidak menggandakan
+   StockMove IN.
+9. AC-TP-9: Role tanpa edit_inventory_transfers / tanpa scope
+   gudang tujuan menjalankan terima langsung (panggil aksi)
+   -> ditolak server; tombol hilang saja tidak cukup.
+10. AC-TP-10: Terima penuh satu kejadian pada transfer biasa
+    (regresi existing): perilaku = received langsung, tes
+    transfer existing hijau; transfer lama pra-fitur berstatus
+    received tampil penuh (bukan sisa qty).
+11. AC-TP-11: Barang rusak qty utuh diterima penuh lalu
+    dimusnahkan adjustment tujuan terpisah: alur tutup selisih
+    transfer tidak ikut campur; receivedQty berkurang karena
+    rusak = MERAH.
+12. AC-TP-12: Periode kejadian terima tertutup (sesudah
+    Q-TP-1 diputus): terima ditolak fail-closed menyebut
+    periode; memakai tanggal kirim untuk lolos = MERAH.
+
+Edge: baris qty pecahan (Decimal 15,2 — terima 2,50 dari 10);
+item sama muncul dua baris dalam satu transfer (agregasi
+existing dipertahankan per item untuk cost, receivedQty tetap
+per BARIS dokumen — konflik fisik = Q-TP-2 BOT 3, jangan
+digabung diam-diam); transfer processed pra-fitur yang belum
+diterima (receivedQty=0 sah, langsung bisa parsial); gudang
+tujuan dinonaktifkan sesudah kirim (tampil, aksi ditolak
+beralasan — perilaku final BOT 3).
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-TP-1 | Tanggal kejadian terima sendiri (field + assertPeriodOpen per kejadian + potong laporan) — vonis BOT 4 Q-F015-A menamai, belum memutus bentuknya | BOT 1 putus perilaku; BOT 3 fisik |
+| Q-TP-2 | Fisik riwayat kejadian terima + kunci idempotency per kejadian + receivedQty per baris vs per item teragregasi + backfill transfer received pra-fitur | BOT 3 |
+| Q-TP-3 | Konteks gudang StockAdjustment penutupan + perlakuan subledger sisa (BR-TP-07) | BOT 3; eskalasi BOT 1 bila mengubah makna stok per gudang |
+| Q-TP-4 | Pejabat penentu hilang/rusak final + batas umur wajib-tutup (BR-TP-12) | BOT 1 / pemilik proses |
+| Q-TP-5 | Buka inti migrasi receivedQty + status parsial (vonis BOT 4 Q-015-1) — tanpa ini DEFAULT-AMAN existing tetap all-or-nothing | BOT 1 |
+
+Dependensi BOT 4 (eksplisit): vonis uang/akun untuk inti ini
+SUDAH TURUN (t_0e45367a, PR #410 MERGED): BR-TP-01/02/03/05/06/08
+mengikat, BOT 3/BOT 2 TIDAK menunggu vonis baru untuk mulai
+sesudah Q-TP-5 dibuka BOT 1. BOT 4 dipanggil lagi HANYA bila
+implementasi menyimpang dari vonis (akun baru, jurnal di receive,
+klaim kurir BR-TP-11, kapitalisasi ongkir BR-TP-14) — itu
+BUTUH-VONIS baru, jangan diputus BOT 3/BOT 5.
+
+### 10. Backlog implementasi (turunan spec ini; induk tetap F-2026-10-21-015)
+
+1. BOT 1: putus Q-TP-5 (buka inti) + Q-TP-1/Q-TP-4 (+ merge PR
+   spec ini). Tanpa Q-TP-5, berhenti di spec.
+2. BOT 3 (@backend-prisma-inventory-workshop): migrasi
+   receivedQty + status partially_received + riwayat kejadian
+   (Q-TP-2) + penutupan tertaut (Q-TP-3), aksi terima per
+   kejadian dalam klaim atomik (ganti guard idempotency hook),
+   perluasan laporan in-transit §7, tes falsifikasi AC-TP-1..12.
+   Effort M-L. Klaim schema.prisma di board sebelum edit.
+3. BOT 2 (@frontend-ui-ux-next-js): form "Terima Barang" per
+   baris di detail transfer + kolom Terkirim/Sudah/Belum +
+   tombol Terima Susulan/Tutup Selisih, SESUDAH kontrak BOT 3,
+   kata §6 verbatim, nol hitung sisa/status di UI (server yang
+   menentukan), label peringatan tutup persis §6. UI fitur ini
+   didahulukan atas polish.
+4. BOT 6: AC-TP-1..12 atas head BOT 3/BOT 2, termasuk falsifikasi
+   vonis BOT 4 (cabut carried cost -> MERAH).
+
+### Yang TIDAK diusulkan run ini
+- Akun in-transit / gudang virtual / klaim kurir (DILARANG /
+  ditunda vonis BOT 4), terima parsial PurchaseOrder/GR (sudah
+  ada receivedQty sendiri), ubah perilaku MaterialRequest selain
+  membaca receivedQty yang sama (F-078), portal/pelacakan kurir
+  eksternal, auto-tutup selisih berumur (Q-TP-4 dulu).
+
+## 2026-10-22 — SPEC BOT 5: F-2026-10-22-084-S Snapshot estimasi biaya per job (estimasi vs selisih biaya)
+
+> **Slot**: F-2026-10-22-084-S. Diperiksa bentrok 2026-10-22 ~13:20 WIB vs `origin/main` (`f0b98632`): -081-S TERKINI di main (#528 MERGED), -082-V/-083-V terpakai BOT 4 (PR #530/#531), 084 bebas di backlog-main/board-aktif/PR manapun. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Penulis**: BOT 5 (`@sales-crm-hr-payroll-business-workflow`) — domain project & layanan (koordinasi workflow project kendaraan dengan BOT 3). USULAN spec; bukan vonis uang/pajak.
+>
+> **Induk**: F-2026-10-21-007 (P0-2(b)) "Estimasi vs Aktual per Job". Induk itu punya negeri UNTUK: modul `lib/reports/job-estimate-vs-actual*` (nilai jual vs penagihan vs biaya aktual) SUDAH ADA di main. Negeri BELUM ADA: snapshot estimasi BIAYA (bukan harga jual) per kategori sehingga selisih biaya (estimasi-biaya minus aktual-biaya) hitungable. Referensi lapangan: PRD roadmap P0-2(b) ("estimasi awal terkunci per kategori: material, jasa, biaya luar, overhead; aktual ditarik dari biaya terhubung", lihat @P0-2 di `docs/erp-research-backlog.md` §2026-10-20) + `work-order-list-columns.md` ("estimasi = angka penawaran disetujui. Terwujud bahan+bahan lain dari costFact").
+>
+> **Model kolaborasi**: tanpa panggilan balik (callback) ke penulis — BACA & JALANKAN. BOT 3 punya fakta model & fisik estimasi; BOT 1 putus perilaku kunci & pembukaan inti; BOT 4 vonis uang (§9); BOT 2 UI dari §6. BOT 5 revise spec bila BOT 3 tunjukkan fakta model berlawanan.
+>
+> **Bukan PR implementasi**: deliverable spec + backlog + board claim yang bisa langsung dieksekusi BOT 3/BOT 2/BOT 1 tanpa pertanyaan terbuka ke penulis.
+
+### 0. Bukti live (TERVERIFIKASI-KODE, `origin/main` @ `f0b98632`)
+
+1. `grep WorkOrderCostEstimate` di `prisma/schema.prisma` origin/main = **0 hit**. Model estimasi biaya belum ada.
+2. `grep "Biaya estimasi tidak punya sumber"` di `src/lib/reports/job-estimate-vs-actual.ts:8-14` menyatakan eksplisit: estimasi biaya per WO tidak ada sumbernya di schema; estimasi yang ditampilkan `buildJobEstimateVsActual` adalah `Quotation.grandTotal` (nilai JUAL). `job-estimate-vs-actual.ts:51` `estimateAmount: number | null // Quotation.grandTotal yang disetujui`.
+3. `src/lib/reports/job-estimate-vs-actual-data.ts:268`: `estimateAmount: approved ? Number(w.quotation?.grandTotal ?? 0) : null` — tanpa `approved` quotation, estimasi = null ("belum ada penawaran disetujui").
+4. Komponen biaya aktual sudah faktual & terkategori:
+   - `MaterialIssue` (bahan WO, `category` dan `totalCost` harga korban terdokumentasi) — dihitung di `job-estimate-vs-actual-data.ts:8-69` (dijumlahkan ke `actualCost`).
+   - `ProductionCost` (`prisma/schema.prisma:2286-2313`) per WO: `category` ∈ {'labor','machine','overhead','subcontract','rework','other'} (per header `job-order-cost.ts`), `amount Decimal(15,2)`, `workOrderId`, `productionOrderId`.
+   - `Timesheet` per WO (`Timesheet.workOrderId`) — tidak langsung membawa biaya; biaya lembur tersembunyi lewat `ProductionCost.sourceTimesheetId`. Lihat P0-2(d) F-2026-10-21-019 (penggerak biaya non-potong langsung ke WO) yang secara eksplisit peringatan mengubah *bukan* snapshot ini.
+5. WO start atomik: `src/actions/manufacturing.actions.ts:1398` `startWorkOrder` dalam satu `prisma.$transaction` (klaim status → item `in_progress` → `doInitializeWorkOrderOperationsTx` → `createReservationsForWorkOrderStartTx`). Hook penetapan estimasi (BR-EST-04) bisa ditanam di pola tx sama tanpa pola baru.
+6. Pola "snapshot terkunci saat momen-X, tidak tertimpa retroaktif" sudah mapan di repo: F-2026-10-22-065-S (harga ambang DP, PR #502), F-2026-10-22-067-S (termin snapshot saat approve), F-2026-10-22-068-S (BOM Revision `bomRevisionId` nullable di WorkOrder, snapshot versi SAAT start, `prisma/schema.prisma` `WorkOrder.bomRevisionId Int?`), F-2026-10-22-075-S (gaji snapshot saat generate). Pola ini slijepi (ikuti), bukan dibuat ulang.
+7. Fakta reseacrh backlog P0-2(b): label `Asumsi` ("perlu … snapshot konsumsi/persediaan versus aktual saat job ditutup", @l-729 di backlog versi lama) — spec ini mengubah Asumsi jadi rangkaian aturan terlabel USULAN/BUTUH-VONIS.
+
+### 1. Masalah
+
+Job di bengkel karoseri ditawar dengan susunan biaya: bahan plat paku dsb., jasa/lembur teknisi, biaya luar (subkon, cat luar, transportasi), overhead. Setelah pekerjaan jalan berbulan-bulan, pemilik nanya: "kenapa margin job ini turun?" Hari ini jawabannya di Silengkap cuma separuh: `job-estimate-vs-actual` membandingkan **nilai jual** vs **penagihan** vs **biaya aktual** (sudah ada), tapi tidak ada angka "biaya yang dulu diperkirakan" untuk membedakan:
+
+- Job rugi karena **biaya melampaui perkiraannya sendiri** (estimasi terlalu optimistis / ada kebocoran biaya),
+- Job rugi karena **harga jual terlalu murah** relatif ke biaya (masalah pricing, bukan operasional),
+- Job untung karena biaya aktual di bawah perkiraan (potensi menaikkan harga jual berikutnya di quotation sejenis).
+
+Tanpa snapshot estimasi biaya, selisih biaya (cost variance per kategori) tidak bisa dihitung, dan Standard-Cost variance (`lib/reports/production-variance.ts`) memakai `Item.standardCost` — angka master barang, bukan janji estimasi per job yang pernah disampaikan ke pelanggan. Keduanya beda makna: yang pertama benchmark katalog; yang kedua ekspektasi proyek konkret.
+
+### 2. Fitur & alur
+
+Snapshot estimasi biaya dibuat **sekali** saat momen yang disepakati (BR-EST-04, USULAN: saat WO pertama kali di-`start`, seiring pola `bomRevisionId` dan pola operasi/reservasi lahir di tx yang sama) dari sumber yang sudah disetujui — bukan angka bebas baru. Sesudah snapshot lahir, tidak pernah menimpa (BR-EST-02): revisi quotation, ubah `Item.standardCost`, ubah quotation items tidak mengubah snapshot historis. Selisih tampil per kategori yang sejajar dengan kategori biaya aktual yang sudah ada (§3), di laporan yang sudah ada `job-estimate-vs-actual` (diperluas, bukan laporan baru), dan detail WO (BOT 2, §6).
+
+**Aktor**:
+| Aktor | Hak |
+|---|---|
+| Sales/admin quotation | Menyusun perkiraan biaya per kategori (manual atau turunan dari quotation items) sebelum WO jalan |
+| HO produksi / admin WO | Membuka kunci estimasi (BR-EST-10, USULAN) satu kali sebelum momen snapshot, mengisi manual karena opsi otomatis tidak cukup |
+| Pemilik / report viewer | Membaca selisih biaya per job/kategori (permission laporan existing) |
+
+**Dokumen masuk**: quotation disetujui terhubung WO (`WorkOrder.quotationId` + item quotation), master `Item.standardCost` (sumber opsi turunan), `Item.cost`.
+**Dokumen keluar**: laporan `job-estimate-vs-actual` yang diperluas (kolom estimasi biaya, selisih biaya), tanpa mengubah arti kolom existing `estimateAmount` (tetap nilai jual — BR-EST-08).
+**Dokumen TIDAK berubah**: quotation (tetap nilai jual), ProductionCost (aktual tetap apa adanya), jurnal (tak ada jurnal baru di spec ini — angka estimasi tidak pernah menyentuh GL; vonis BOT 4 §9).
+
+### 3. Aturan bisnis (register; format F-063/F-078)
+
+| ID | Label | Aturan |
+|---|---|---|
+| BR-EST-01 | USULAN | Kategori estimasi biaya MENYESUAIKAN kategori biaya aktual yang sudah ada, bukan himpunan baru: `material` (bahan), `labor` (tenaga kerja langsung), `machine` (mesin), `overhead` (overhead), `subcontract` (biaya luar/subkon), `other` (lain-lain). Sumber: kategori `ProductionCost.category` di `prisma/schema.prisma:2286-2313` default `'labor'` + pemisahan bahan dari `MaterialIssue` di `job-estimate-vs-actual-data.ts`. Konsekuensi: estimasi "rework" (`ProductionCost.category='rework'` eksisting) BUKAN kategori estimasi — rework adalah kejadian tak direncanakan; masuk `other` bila perlu direncanakan. BOT 3 verifikasi himpunan final category string yang benar-benar dipakai di data prod sebelum migrasi (jangan asumsikan daftar ini lengkap bila ada nilai bebas lain). |
+| BR-EST-02 | USULAN (pola TERVERIFIKASI dari F-2026-10-22-067-S/-075-S) | Snapshot SATU KALI saat lahir; kolom `lockedAt` terisi; sesudah terkunci, revisi quotation/master item/tombol apapun TIDAK mengubah snapshot. Koreksi hanya via revisi eksplisit (BR-EST-11) yang meninggalkan jejak lama (simpan riwayat perubahan, bukan menimpa diam). |
+| BR-EST-03 | USULAN (sumber turunan) | Ada DUA sumber resmi untuk mengisi snapshot, admin pilih salah satu per job — bukan menggabungkan: (a) **Turunan otomatis** dari quotation items disetujui: per item, estimasi bahan = `item.qty × Item.standardCost` (fallback `Item.cost` bila standardCost=0 — mekanisme fallback HARUS diberi label eksplisit di UI agar tidak diam-diam mencampur basis; lihat BR-EST-09). Kategori `labor/machine/overhead/subcontract/other` BUKAN turunan dari item — harus diisi manual (nol diperbolehkan, "belum dianggarkan" ≠ 0 nyata — lihat BR-EST-07). (b) **Manual** per kategori oleh aktor berhak (BR-EST-10). Keduanya menghasilkan snapshot bernilai KATEGORI yang sama; sumber tercatat (`source ∈ {derived, manual}`) agar audit tahu angka lahir dari mana. |
+| BR-EST-04 | USULAN (momen lahir) | Momen snapshot = saat `startWorkOrder` pertama kali memenangkan klaim atomik (pola tx sama dengan `doInitializeWorkOrderOperationsTx` dan `createReservationsForWorkOrderStartTx`, `manufacturing.actions.ts:1398+`). Alasan: sebelum start, quotation masih bisa direvisi dan WO masih bisa batal; sesudah start, biaya mulai terjadi dan pertanyaan "dibanding perkiraan mana?" mulai bermakna. Alternatif (BUTUH-VONIS BOT 1, bukan menebak): snapshot saat quotation disetujui. Konsekuensi yang harus dipahami pemutus: bila snapshot di momen approve, perubahan scope sebelum start (change order) punya dua makna berbeda. BOT 1 putus satu; jangan dukung dua makna. |
+| BR-EST-05 | USULAN | Estimasi biaya ≠ harga jual. `Quotation.grandTotal` tetap kolom `estimateAmount` laporan existing (BR-EST-08). Snapshot ini murni rencana biaya; TIDAK dipakai menilai layak/tidaknya harga, hanya membandingkan ke biaya aktual per kategori sesudah pekerjaan berjalan. Mencampur keduanya (mis: menampilkan margin terhadap estimasi biaya seolah harga minus estimasi = keuntungan yang dijanjikan pelanggan) DILARANG di UI (BOT 2, §6). |
+| BR-EST-06 | USULAN (aktual tetap existing) | Sumber aktual per kategori untuk selisih: `material` ← `MaterialIssue.totalCost` status sah selesai per existing (`job-estimate-vs-actual-data.ts:8-69`); `labor/machine/overhead/subcontract/other` ← `ProductionCost` per kategori per existing. Rework aktual tetap terpisah di kategorinya sendiri (`rework`) dan TIDAK dimasukkan ke selisih `other` — melainkan ditampilkan sebagai baris "biaya tak direncanakan (rework)" yang estimasinya selalu 0 menurut definisi (BR-EST-01). Nilai kurs/uang: Decimal(15,2) konsisten existing, `safeAdd/safeRound/safeSubtract` (`lib/utils/math`), bukan float. |
+| BR-EST-07 | USULAN | `null`/absen ≠ 0. Snapshot kategori yang tidak diisi (sumber turunan dan kategori bukan material) TIDAK lahir sebagai 0 — kolom null, label UI "belum dianggarkan", dan selisih untuk kategori itu tidak dihitung (bukan "selisih -X seolah boros"). Job tanpa snapshot sama sekali (WO lahir sebelum fitur, atau snapshot gagal BR-EST-09) tampil eksplisit "belum ada snapshot estimasi biaya" — beda arti dari estimasi 0. |
+| BR-EST-08 | USULAN (tanpa regresi) | Arti kolom laporan existing TIDAK berubah: `estimateAmount` tetap `Quotation.grandTotal` disetujui. Perluasan laporan menambah kolom baru (estimasi biaya + selisih per kategori), bukan menafsir ulang kolom lama. Tes regresi: baris WO tanpa snapshot menghasilkan keluaran identik ke perilaku hari ini. |
+| BR-EST-09 | USULAN (fail-closed turunan) | Bila sumber turunan (BR-EST-03a) tidak bisa dihitung untuk satu baris material pun (item tanpa itemId, atau Item.standardCost=0 dan Item.cost=0 secara bersamaan di semua baris), snapshot TIDAK lahir sebagian diam-diam: lahir hanya kategori yang bisa dihitung, kategori material tetap null + label jujur "estimasi material tidak bisa diturunkan — isi manual". Jangan pernah menganggap `standardCost=0` sebagai estimasi 0 yang sah. |
+| BR-EST-10 | BUTUH-VONIS BOT 1 (hak & momen edit) | Siapa boleh mengisi/mengubah estimasi SEBELUM snapshot terkunci, dan apakah snapshot boleh dibuat SEBELUM WO start (di quotation tahap akhir): kandidat permission `view_work_orders`/`create_work_orders`/`edit_work_orders` (TERVERIFIKASI di `src/lib/setup/base-data.ts:165-169`, bukan permission baru by default), tapi pilihan antara (i) admin WO saja, (ii) sales yang menyusun quotation, (iii) HO/kepala produksi, adalah perilaku inti — BOT 1 putus. Tanpa vonis ini, DEFAULT-AMAN: isi manual ditolak, hanya turunan otomatis (BR-EST-03a) yang berjalan. |
+| BR-EST-11 | BUTUH-VONIS BOT 1 (koreksi pasca-kunci) | Bolehkah snapshot terkunci dibuka lagi (revisi estimasi) bila scope benar-benar berubah (change order besar)? Pola repo (termin, BOM revision) condong TIDAK membuka yang lama melainkan lahir versi baru. Kandidat: tetap immutable selamanya; perubahan scope tercermin di aktual saja. Jangan putus sendiri. |
+| BR-EST-12 | USULAN (PERHATIAN BOT 4, bukan vonis) | Snapshot ini tidak menyentuh GL, tidak dipakai untuk jurnal, tidak mengubah `ProductionCost`. Begitu implementasi memakai angka snapshot untuk hal yang berbau jurnal/COGS/persediaan dalam proses (WIP), berhenti — status berubah BUTUH-VONIS BOT 4. Akun "Persediaan dalam Proses" (WIP) yang disebut di dokumen Accurate BENCHMARK §4 TIDAK termasuk spec ini. |
+
+### 4. Benchmark (URL resmi; bukan aturan bisnis)
+
+| Aspek | Accurate Online | Zahir |
+|---|---|---|
+| Pekerjaan pesanan/proyek | "Pekerjaan Pesanan" mencatat bahan baku, biaya tenaga kerja, biaya lainnya ke akun Persediaan dalam Proses; selisih biaya pesanan dijelaskan penyebabnya. https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pekerjaan-pesanan/mencatat-pekerjaan-pesanan/ , https://help.accurate.id/product/pekerjaan-pesanan/ | "Data Proyek": "Estimasi Biaya … anggaran biaya dan pendapatan untuk proyek ini … Job Costing terisi otomatis dengan realisasi" + multi-fase dengan anggaran per fase. https://help.zahironline.com/portal/id/kb/articles/memasukkan-data-proye , https://help.zahironline.com/portal/id/kb/articles/cara-membuat-data-proyek-zahir-online-v2 |
+
+ISF (Silengkap) memilih model yang lebih sempit: hanya snapshot estimasi biaya per job yang bisa divisualkan selisihnya ke aktual kategori existing — bukan modul WIP akuntansi penuh (BR-EST-12). Pilihan sempit ini BENCHMARK-informed tapi tetap USULAN sampai BOT 1/BOT 4 menyetujui.
+
+### 5. Role / permission matrix
+
+| Aksi | Permission (TERVERIFIKASI existing) | Catatan |
+|---|---|---|
+| Lihat laporan selisih (termasuk snapshot) | permission laporan existing `job-estimate-vs-actual` (ikuti pola permission report yang sudah ada; BOT 3 verifikasi nama persisnya) | Tanpa permission laporan, snapshot tidak boleh bocor lewat endpoint lain |
+| Isi manual estimasi sebelum kunci | kandidat `edit_work_orders` — BUTUH-VONIS BR-EST-10 | Default-aman: ditolak sampai vonis turun |
+| Picu snapshot (turunan) | otomatis dalam `startWorkOrder` (`edit_work_orders`, TERVERIFIKASI di action) | Bukan aksi terpisah; tidak ada tombol "kunci estimasi" terpisah sebelum vonis BR-EST-10 |
+| Koreksi pasca-kunci | TIDAK ADA sampai vonis BR-EST-11 | UI tidak menampilkan tombol yang selalu gagal |
+
+### 6. Kata & label UI (mengikat BOT 2; verbatim; tanpa mode gelap)
+
+Di laporan/detail WO (mengikuti pola kata F-2026-10-22-078-S):
+
+| Konteks | Kata persis |
+|---|---|
+| Judul bagian di detail WO | "Estimasi Biaya Pekerjaan" |
+| Kategori | "Bahan", "Tenaga Kerja", "Mesin", "Overhead", "Biaya Luar (Subkon)", "Lain-lain" |
+| Sumber turunan bahan | "Ditaksir dari harga standar barang saat pekerjaan dimulai" |
+| Sumber manual | "Diisi manual" |
+| Kategori null | "belum dianggarkan" |
+| Belum ada snapshot sama sekali | "Belum ada snapshot estimasi biaya — perbandingan biaya menunggu pekerjaan dimulai." (bila momen BR-EST-04 sudah lewat: sebut alasannya dari BR-EST-09, bukan generik) |
+| Selisih boros (aktual > estimasi) | label teks "melebihi estimasi" |
+| Selisih hemat | label teks "di bawah estimasi" |
+| Rework | baris terpisah "Biaya tak direncanakan (perbaikan ulang)" — tidak pernah digabung diam ke "Lain-lain" |
+| Peringatan BR-EST-05 | "Estimasi biaya adalah rencana biaya internal, bukan harga yang ditawarkan ke pelanggan." (ditampilkan sekali di bagian ini, bukan tooltip tersembunyi) |
+
+Aturan UI: warna tidak pernah jadi satu-satunya pembawa makna selisih (label teks wajib); angka snapshot tidak boleh dihitung ulang di client — server kirim nilai final + status per kategori; persen selisih hanya tampil bila estimasi > 0 (bagi nol tidak dirender sebagai ∞ atau 0%).
+
+### 7. Matriks transisi status (yang mengunci, bukan status WO itu sendiri)
+
+Status WO existing (`draft/pending/in_progress/completed/cancelled`, plus tutup job F-2026-10-21-009 `closedAt`) tidak ditambah nilai baru oleh spec ini. Yang bertransisi adalah snapshot:
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada) | Quotation disetujui terhubung WO | (masih belum ada snapshot — hanya kandidat BR-EST-03a bisa dihitung) | — |
+| (belum ada) | `startWorkOrder` menang klaim atomik | `snapshot lahir, lockedAt terisi` | Tx yang sama dengan klaim start (BR-EST-04); turunan gagal sebagian → kategori itu null (BR-EST-09), bukan tx gagal |
+| `snapshot lahir` | Revisi quotation / ubah master item / ubah quotation items | `snapshot lahir` (tidak berubah) | BR-EST-02; tak ada jalur update |
+| `snapshot lahir` | WO dibatalkan (`cancelled`) | `snapshot lahir` tetap terbaca di laporan sebagai historis, WO keluar dari daftar "menunggu snapshot" | Keputusan tampil/sembunyi di laporan: USULAN tampil dengan label batal, BOT 1 boleh putus sembunyikan |
+| (belum ada, WO start sebelum fitur) | Fitur meluncur | tetap tidak ada — TIDAK di-backfill diam-diam | Backfill = migrasi tersendiri, bukan perilaku otomatis deploy (keputusan BOT 3/BOT 1) |
+
+### 8. Acceptance criteria (untuk BOT 6)
+
+1. AC-EST-1: WO tanpa quotation disetujui di-start → pekerjaan mulai normal, laporan menampilkan "Belum ada snapshot estimasi biaya" (bukan 0, bukan error) — BR-EST-07.
+2. AC-EST-2: WO dengan quotation disetujui berisi 3 baris item ber-`standardCost` → snapshot material = Σ qty × standardCost saat momen start; ubah `Item.standardCost` sesudahnya → snapshot TIDAK berubah (BR-EST-02).
+3. AC-EST-3: Revisi quotation (grandTotal berubah) sesudah start → `estimateAmount` laporan tetap mengikuti aturan existing untuk baris tanpa snapshot; snapshot biaya TIDAK ikut berubah.
+4. AC-EST-4: Semua item quotation tanpa standardCost dan cost (=0) → kategori material snapshot null + label jujur BR-EST-09; start tidak gagal.
+5. AC-EST-5: Biaya aktual `ProductionCost` kategori `rework` 500rb masuk → tampil sebagai baris tak direncanakan terpisah; selisih kategori `other` tidak berubah karenanya (BR-EST-06).
+6. AC-EST-6: Material aktual (MaterialIssue selesai) melebihi estimasi bahan → label "melebihi estimasi" tampil dengan teks (bukan hanya warna) (BR-EST-05/§6).
+7. AC-EST-7: Kategori tidak dianggarkan (mis. mesin null) → selisih tidak dihitung untuk kategori itu; total estimasi laporan tidak menganggapnya 0 (BR-EST-07).
+8. AC-EST-8: Dua klik start bersamaan (atau retry) → maksimal satu snapshot; idempoten mengikuti pola klaim atomik existing (mengikuti AC pola `startWorkOrder`).
+9. AC-EST-9: WO historis (start sebelum fitur) dibuka di laporan → keluaran identik ke perilaku hari ini (regresi F-105-style: tidak memecah `job-estimate-vs-actual` existing) — BR-EST-08.
+10. AC-EST-10: User tanpa permission laporan mencoba membaca snapshot via endpoint/detail lain → ditolak/diabaikan konsisten (§5); tidak ada bocoran kategori biaya lewat search/tooltip.
+11. AC-EST-11: Isi manual sebelum vonis BR-EST-10 turun diaktifkan diam-diam → MERAH (harus tetap default-aman ditolak sampai BOT 1 putus).
+12. AC-EST-12: Persen selisih untuk estimasi 0/null → tidak tampil, bukan 0%/∞.
+
+Edge: WO tanpa item saat start (sudah ditolak existing); quotation multi-section (agregasi item lintas section untuk turunan — verifikasi BOT 3 ke `QuotationSection→QuotationItem`); item quotation bebas tanpa itemId (dilewati turunan, dihitung jujur bukan 0); WO kendaraan vs produksi umum (snapshot berlaku untuk keduanya — jangan batasi ke kendaraan saja); WO dari Project (tahap Project tetap baca Milestone/WorkOrder existing; snapshot tidak menduplikasi anggaran `ProjectItem` F-2026-10-21-030/F-2026-10-22-076-S — bila keduanya ada, UI harus menyebut angka ini per-WO, bukan per-proyek, agar tidak dobel makna (Q-EST-3)).
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-EST-1 | Momen snapshot final: saat start WO (BR-EST-04 USULAN) vs saat quotation disetujui | BOT 1 |
+| Q-EST-2 | Hak isi manual + momen edit pra-kunci (BR-EST-10) | BOT 1 |
+| Q-EST-3 | Hubungan ke anggaran per-proyek F-2026-10-21-030 / F-2026-10-22-076-S (`ProjectItem.totalBudget`): apakah estimasi WO harus menjumlah konsisten ke anggaran proyek induknya, atau independen? Jangan gabung diam. | BOT 1 (koordinasi BOT 5) |
+| Q-EST-4 | Koreksi pasca-kunci: immutable selamanya atau versi baru (BR-EST-11) | BOT 1 |
+| Q-EST-5 | Fisik model: satu tabel `WorkOrderCostEstimate` (baris per kategori) vs kolom lebar per kategori di WorkOrder; status null per kategori (BR-EST-07) cenderung membenarkan baris-per-kategori, tapi fisik final milik BOT 3 | BOT 3 |
+| Q-EST-6 | Apakah snapshot dipakai untuk hal berbau WIP/COGS di masa depan (kalau iya: vonis baru wajib) | BOT 4 (dipanggil hanya bila penyimpangan itu muncul) |
+
+Dependensi BOT 4 (eksplisit): untuk inti spec ini **tidak ada vonis baru yang diminta** — angka estimasi tidak menyentuh jurnal/GL/WIP (BR-EST-12). BOT 4 dipanggil lagi hanya bila implementasi menyimpang dari batas itu.
+
+### 10. Backlog implementasi (turunan spec ini; induk tetap F-2026-10-21-007)
+
+1. BOT 1: putus Q-EST-1/Q-EST-2/Q-EST-4 (+ merge PR spec ini). Tanpa putusan itu, inti berhenti di turunan-otomatis-saat-start saja (default-aman BR-EST-10).
+2. BOT 3 (@backend-prisma-inventory-workshop): fisik `WorkOrderCostEstimate` (Q-EST-5; klaim `schema.prisma` di board dulu) + turunan BR-EST-03a dalam tx `startWorkOrder` (BR-EST-04, pola idempotency klaim menang-kalah) + perluasan `job-estimate-vs-actual` (kategori estimasi + selisih, BR-EST-06/08) + tes falsifikasi AC-EST-1..12. Effort M.
+3. BOT 2 (@frontend-ui-ux-next-js): bagian "Estimasi Biaya Pekerjaan" di detail WO + kolom laporan, SESUDAH kontrak BOT 3, kata §6 verbatim, label teks selisih (bukan warna saja), tanpa hitung ulang di client. UI fitur ini didahulukan atas polish.
+4. BOT 6: AC-EST-1..12 atas head BOT 3/BOT 2, termasuk falsifikasi default-aman (AC-EST-11: buka isi manual tanpa vonis → MERAH).
+5. BOT 5: sinkronkan makna ke anggaran proyek (Q-EST-3) bersama spec F-2026-10-22-076-S sesudah BOT 1 putus — jangan duplikasi angka anggaran di dua tempat tanpa label.
+
+### Yang TIDAK diusulkan run ini
+- Modul WIP/Persediaan dalam Proses & jurnal dari estimasi (BR-EST-12, vonis BOT 4 dulu), snapshot per tahap/operasi WorkOrderOperation (cukup per WO dulu), estimasi terikat Project (Q-EST-3 dulu), otomatis menaikkan harga quotation dari selisih historis, backfill WO historis, membuka snapshot terkunci (Q-EST-4 dulu), permission baru (kandidat existing dulu, BR-EST-10).
+---
+
+## 2026-10-22 — SPEC BOT 5: F-2026-10-22-085-S Status kepegawaian & siklus hidup karyawan (master HR)
+
+> **Slot**: F-2026-10-22-085-S. Diperiksa bentrok 2026-10-22 vs `origin/main` (`9d5ea988`): -084-S BOT 5 (PR #532) + -084-V BOT 4 (PR #534) terpakai, 085 bebas di backlog/board/PR manapun; grep `employmentStatus|PKWT|contractEnd` di schema+aksi HR = 0. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Penulis**: BOT 5 (`@sales-crm-hr-payroll-business-workflow`) — domain HR/payroll. USULAN spec; bukan vonis uang/pajak/ketenagakerjaan.
+>
+> **Induk**: gap master HR (domain h) — bukan F-ID lama: F-2026-10-21-026 (TER), -027 (komponen), -028 (rekap SPT) semuanya sudah terspec/terimplementasi di main; yang belum pernah dicatat sebagai gap ber-ID adalah status kepegawaian di master `Employee` itu sendiri. Spec ini mencatatnya sebagai inti baru di bawah F-2026-10-22-085-S.
+>
+> **Bukan PR implementasi**: deliverable spec + backlog + board claim yang bisa langsung dieksekusi BOT 3/BOT 2/BOT 1/BOT 4 tanpa pertanyaan terbuka ke penulis. Tanpa kode.
+
+### 0. Bukti live (TERVERIFIKASI-KODE, `origin/main` @ `9d5ea988`)
+
+1. `Employee` (`prisma/schema.prisma:779`): `joinDate` (:807 relatif model), `paymentFrequency` default `MONTHLY`, `isActive` Boolean. TIDAK ada `employmentStatus`/jenis hubungan kerja, TIDAK ada tanggal akhir kontrak, TIDAK ada tanggal/alasan berhenti. Grep `employmentStatus|PKWT|PKWTT|contractEnd|resignedAt|terminationDate` di `prisma/schema.prisma` + `src/actions/hrm.actions.ts` + halaman `sdm/` = **0 hit**.
+2. Berhenti kerja hari ini hanya dikenal sebagai bendera PER-SLIP: `resignationFinal?: boolean` (`src/actions/hrm.actions.ts:683,1355`), dibaca dari form per generate (`:2269` `formData.get("resignationFinal")`), diteruskan sebagai `finalReason: "resign"` (:734) untuk hitung ulang PPh21 masa terakhir (F-026). Master tidak tahu karyawan sudah berhenti; staf wajib ingat mencentang per slip, dan slip berikutnya untuk orang yang sama tidak dicegah oleh master.
+3. Populasi payroll massal menyaring `isActive: true` (`hrm.actions.ts:212,283`) — satu-satunya gerbang keanggotaan run. Karyawan yang kontraknya berakhir tetapi `isActive` belum dimatikan tetap masuk run; karyawan nonaktif tidak bisa dibedakan "kontrak selesai" vs "resign" vs "PHK" vs "pensiun" dari data.
+4. Izin nyata (katalog `module-catalog.generated.ts:96-99,301-305`): `view/create/edit/delete_employees`; `view/create/edit/update/process_payroll`. Scope data gaji: `getHrScope` (`src/lib/auth/hr-scope.ts`, fail-closed: role rusak/hilang = self employeeId -1; kepala_bengkel = departemen; HR/finance/admin/ga = all). Spec ini TIDAK menambah permission key baru (lihat BR-EMP-08).
+5. Pola repo yang dirujuk: kolom aditif nullable di model existing + nilai enum teks divalidasi service (pola `WarrantyClaim.supplierClaimStatus`, F-2026-10-21-022); snapshot beku di slip TIDAK dihitung ulang dari master berjalan (F-026 §5, pola pph21-recap).
+
+### 1. Masalah
+
+Admin bengkel mempekerjakan mekanik kontrak (PKWT), staf tetap (PKWTT), dan harian lepas. Hari ini Silengkap tidak bisa menjawab dari data: (a) siapa yang kontraknya berakhir bulan ini dan berhak uang kompensasi; (b) siapa yang sudah berhenti sehingga slip bulan depan tidak boleh lahir; (c) apakah slip final seseorang sudah diperlakukan sebagai masa terakhir PPh21. Akibatnya: kompensasi PKWT bergantung ingatan admin (risiko tunggakan kewajiban), dan perlakuan pajak masa terakhir bergantung centang manual per slip tanpa penanda master. Spec ini membangun lapisan master + penjaga workflow; ia TIDAK menghitung kompensasi/pesangon (angka = vonis BOT 4, lihat §9).
+
+### 2. Fitur & alur
+
+Usulan bentuk fisik (nama kolom FINAL milik BOT 3 mengikuti konvensi schema; spec menetapkan makna, bukan nama):
+
+- `employmentStatus` (teks, divalidasi service): `PKWTT` | `PKWT` | `DAILY` (harian lepas) | `INTERN` (magang) — kosakata awal USULAN, lihat Q-EMP-1. Default baris lama: null = "belum diatur" (BUKAN ditebak PKWTT).
+- `contractStartDate` / `contractEndDate` (nullable): wajib bermakna hanya untuk PKWT; PKWT tanpa `contractEndDate` = data belum lengkap (temuan tampil, bukan blokir simpan master — lihat BR-EMP-04).
+- `employmentEndedAt` (nullable) + `endReason` (teks tervalidasi): `contract_completed` | `resigned` | `terminated` | `retired` | `deceased` | `other` — USULAN, Q-EMP-2. Mengisi `employmentEndedAt` TIDAK otomatis mengubah `isActive` (dua fakta berbeda: tanggal berhenti vs keanggotaan run payroll — BR-EMP-05).
+- Read-model murni `employee-lifecycle` (usulan nama BOT 3): daftar (a) PKWT berakhir dalam 30 hari / sudah lewat tanpa `employmentEndedAt`; (b) karyawan `employmentEndedAt` terisi tetapi masih `isActive`; (c) karyawan berstatus null ("belum diatur"). Tanpa migrasi di lapis baca selain kolom di atas; tanpa jurnal.
+
+Alur: HR mengisi status saat master dibuat/diubah → menjelang akhir kontrak, read-model menampilkan daftar (a) → HR mencatat berakhir/perpanjang (perpanjang = `contractEndDate` baru + jejak ActivityLog existing, pola F-035) → saat hubungan kerja berakhir, HR mengisi `employmentEndedAt`+`endReason` dan menonaktifkan; generate payroll menolak/ menandai karyawan yang `employmentEndedAt` <= akhir periode tetapi belum pernah slip final (BR-EMP-06, bentuk penolakan = Q-EMP-3).
+
+### 3. Aturan bisnis (register)
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-EMP-01 | Master karyawan membawa jenis hubungan kerja (`employmentStatus`) sebagai fakta master, bukan turunan slip/absensi. | USULAN |
+| BR-EMP-02 | Nilai status tervalidasi service dari kosakata tertutup; teks bebas ditolak di aksi (pola enum-teks repo). Kosakata awal: PKWTT/PKWT/DAILY/INTERN. | USULAN; kosakata final Q-EMP-1 (pemilik proses) |
+| BR-EMP-03 | Baris lama tanpa status terbaca "belum diatur" di UI/laporan; sistem TIDAK mengisi PKWTT diam-diam (backfill tebak dilarang). | USULAN |
+| BR-EMP-04 | PKWT tanpa tanggal akhir kontrak = temuan data tampil di read-model; simpan master TIDAK diblokir (data historis tidak boleh terkunci), tetapi karyawan itu masuk daftar perhatian sampai lengkap. | USULAN |
+| BR-EMP-05 | `employmentEndedAt` dan `isActive` fakta terpisah: tanggal berhenti dicatat dulu, penonaktifan run payroll tindakan sadar terpisah; UI menampilkan keduanya berdampingan agar tidak tertukar. | USULAN |
+| BR-EMP-06 | Karyawan dengan `employmentEndedAt` terisi TIDAK boleh menerima slip reguler baru untuk periode sesudah tanggal berhenti; slip final masa terakhir hanya lewat jalur final existing (`resignationFinal`/final PPh21 F-026). Bentuk gerbang (tolak keras vs peringatan wajib-konfirmasi) = Q-EMP-3. | USULAN + BUTUH-VONIS BOT 1 (perilaku inti payroll) |
+| BR-EMP-07 | Spec ini TIDAK menghitung dan TIDAK menampilkan nominal uang kompensasi PKWT, pesangon, UPMK, atau penggantian hak. Kewajiban itu nyata (PP 35/2021 Pasal 15: kompensasi PKWT saat berakhir, masa kerja >= 1 bulan; Pasal 40 dst. untuk PHK) tetapi rumus, basis upah, dan akun jurnalnya = vonis BOT 4. UI hanya boleh menampilkan fakta tanggal/status, bukan angka kewajiban. | BUTUH-VONIS BOT 4 (angka/akun); fakta regulasi BENCHMARK resmi §4 |
+| BR-EMP-08 | Tanpa permission key baru: lihat/buat/ubah master memakai `view/create/edit_employees` existing; penonaktifan memakai `edit_employees`; read-model perhatian mengikuti `view_employees` + `getHrScope` (self hanya melihat barisnya sendiri; daftar perhatian lintas karyawan hanya scope department/all). Nominal gaji TIDAK pernah tampil di read-model ini. | TERVERIFIKASI-KODE (katalog+scope existing) + USULAN pemakaian |
+| BR-EMP-09 | Perubahan `employmentStatus`/`contractEndDate`/`employmentEndedAt`/`endReason` tercatat di ActivityLog existing dengan old/new (pola F-2026-10-21-035 histori geser endDate WO); riwayat kontrak tidak ditimpa tanpa jejak. | USULAN (pola TERVERIFIKASI-KODE F-035) |
+| BR-EMP-10 | Slip yang sudah terbit TIDAK berubah makna oleh perubahan master sesudahnya: perubahan status hanya berlaku ke depan (pola F-026 §5 titik berlaku). | USULAN (pola TERVERIFIKASI-KODE) |
+| BR-EMP-11 | Perpanjang PKWT = tanggal akhir baru pada baris yang sama + jejak BR-EMP-09; sistem TIDAK membuat baris karyawan kedua dan TIDAK menghitung kompensasi perpanjangan (itu peristiwa bayar terpisah sesudah vonis BOT 4). | USULAN; perlakuan kompensasi BUTUH-VONIS BOT 4 |
+| BR-EMP-12 | Harian lepas (DAILY) dan magang (INTERN) tercatat statusnya, tetapi spec ini TIDAK menetapkan perlakuan payroll/pajaknya (TER harian dsb. di luar cakupan; pola F-028-I §I.5 butir 5: subjek di luar pegawai tetap tidak dicampur tanpa vonis objek terpisah). | USULAN + BUTUH-VONIS BOT 4 bila hendak dihitung |
+
+### 4. Benchmark (URL resmi; bukan aturan bisnis)
+
+- Accurate Online — Karyawan: data karyawan sebagai dasar payroll + PPh 21; ada panduan khusus mencatat karyawan resign + PPh 21 bulan terakhir: https://help.accurate.id/product/karyawan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/karyawan/cara-menambahkan-data-karyawan/ (akses 2026-10-22).
+- PP No. 35 Tahun 2021 (PKWT, uang kompensasi Pasal 15, PHK/pesangon): https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021 ; teks PDF JDIH Kemenaker: https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf (akses 2026-10-22). Dipakai hanya untuk membuktikan kewajiban itu ada; rumus final milik BOT 4.
+- Zahir: daftar fitur HR/payroll dibandingkan pada level "master karyawan + status" saja; tidak ditemukan halaman help resmi Zahir yang menetapkan kosakata PKWT/PKWT di URL yang diakses run ini — ditulis "belum terverifikasi", bukan diklaim.
+
+### 5. Role / permission matrix
+
+| Aksi | Permission key | Scope tambahan |
+|---|---|---|
+| Lihat master + status kepegawaian | `view_employees` | `getHrScope`: self = baris sendiri saja |
+| Buat karyawan + status awal | `create_employees` | all-scope (HR/admin) secara praktik; aksi existing yang memutuskan |
+| Ubah status/tanggal kontrak/berhenti | `edit_employees` | department/all untuk orang lain; self TIDAK boleh mengubah statusnya sendiri (aksi master existing, bukan self-service) |
+| Nonaktifkan dari run payroll | `edit_employees` | sama seperti ubah master |
+| Lihat daftar perhatian siklus hidup | `view_employees` | self: hanya temuan atas barisnya sendiri; department/all: daftar sesuai scope |
+| Generate/proses payroll (gerbang BR-EMP-06) | `create_payroll`/`process_payroll` | penjaga server membaca master; UI tidak menentukan lolos/tidak |
+
+Tidak ada baris yang mengekspos `baseSalary`/`netSalary`: read-model siklus hidup hanya memuat nama, status, tanggal kontrak/berhenti, alasan — tanpa nominal (BR-EMP-08).
+
+### 6. Kata & label UI (mengikat BOT 2; verbatim)
+
+- Label field: "Status Kepegawaian", "Tanggal Mulai Kontrak", "Tanggal Akhir Kontrak", "Tanggal Berhenti Bekerja", "Alasan Berhenti".
+- Pilihan status tampil: "Tetap (PKWTT)", "Kontrak (PKWT)", "Harian Lepas", "Magang". Nilai kosong tampil: "Belum diatur".
+- Pilihan alasan tampil: "Kontrak Selesai", "Mengundurkan Diri", "Diberhentikan", "Pensiun", "Meninggal Dunia", "Lainnya".
+- Lencana daftar perhatian: "Kontrak berakhir <= 30 hari", "Kontrak lewat, belum dicatat berhenti", "Sudah berhenti, masih aktif payroll", "Status belum diatur". DILARANG label yang memuat nominal kewajiban (mis. "kompensasi Rp...") sebelum vonis BOT 4.
+- Pesan gerbang payroll (bila Q-EMP-3 = tolak keras): "Karyawan sudah berhenti bekerja pada <tanggal>. Slip reguler tidak dapat dibuat; gunakan slip final masa terakhir." Bila Q-EMP-3 = peringatan: teks sama + tombol konfirmasi eksplisit tercatat. Kata final mengikuti putusan Q-EMP-3; draf ini yang dipakai BOT 2 sebagai titik mulai, bukan karangan ulang.
+
+### 7. Matriks transisi status
+
+Status yang diatur spec ini = status kepegawaian master (bukan status slip):
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum diatur) | HR mengisi pertama kali | PKWTT/PKWT/DAILY/INTERN | `edit_employees` (atau `create_employees` saat buat); jejak BR-EMP-09 |
+| PKWT | perpanjang kontrak | PKWT (tanggal akhir baru) | `edit_employees`; jejak old/new tanggal |
+| PKWT/PKWTT/DAILY/INTERN | ganti jenis hubungan kerja (mis. PKWT diangkat tetap) | status baru | `edit_employees`; jejak; tidak mengubah slip lama (BR-EMP-10) |
+| status apa pun | hubungan kerja berakhir | status tetap + `employmentEndedAt`+`endReason` terisi | `edit_employees`; `isActive` tidak ikut berubah otomatis (BR-EMP-05) |
+| berhenti tercatat | dinonaktifkan | `isActive=false` | `edit_employees`; keluar dari populasi run berikutnya |
+| berhenti tercatat | koreksi salah catat | `employmentEndedAt` dikosongkan/alasan diperbaiki | `edit_employees`; jejak wajib memuat nilai lama (koreksi tidak menghapus riwayat) |
+
+### 8. Acceptance criteria (untuk BOT 6)
+
+- AC-EMP-1: Buat karyawan PKWT tanpa tanggal akhir -> tersimpan, tampil "Belum diatur"-bukan; masuk daftar perhatian "Status belum diatur" TIDAK, melainkan temuan kontrak-tak-lengkap sesuai BR-EMP-04 (label §6). Cabut kolom tanggal dari payload aksi -> aksi menolak/tidak menyimpan diam-diam setengah.
+- AC-EMP-2: Karyawan `employmentEndedAt` = 2026-10-15, masih `isActive`: muncul di daftar "Sudah berhenti, masih aktif payroll"; generate reguler periode 2026-11 diperlakukan persis Q-EMP-3 yang diputus (tolak/pesan §6). Falsifikasi: kosongkan penjaga -> slip lahir = MERAH.
+- AC-EMP-3: Slip final lewat jalur final existing untuk karyawan berhenti: lolos; slip reguler kedua sesudah final untuk periode lebih akhir: ditolak penjaga yang sama.
+- AC-EMP-4: Ubah PKWT -> PKWTT: ActivityLog memuat old/new; slip bulan lalu tidak berubah status/angkanya (BR-EMP-10).
+- AC-EMP-5: Perpanjang PKWT: tanggal akhir baru tersimpan + jejak; tidak lahir baris karyawan kedua; tidak tampil nominal kompensasi di layar mana pun (BR-EMP-07).
+- AC-EMP-6: Scope: user self membuka daftar perhatian hanya melihat barisnya sendiri; kepala_bengkel hanya departemennya; role tanpa `view_employees` ditolak aksi langsung (bypass UI).
+- AC-EMP-7: Read-model tidak memuat field gaji: respons/HTML daftar perhatian tanpa `baseSalary`/`netSalary`/nominal apa pun (grep keluaran).
+- AC-EMP-8: Baris lama (status null) tampil "Belum diatur" dan tidak terhitung PKWTT di rekap status mana pun.
+- AC-EMP-9: PKWT berakhir 20 hari lagi tampil di daftar "<= 30 hari"; yang berakhir 31 hari lagi tidak tampil; batas dihitung tanggal WIB.
+- AC-EMP-10: Koreksi `employmentEndedAt` yang salah: nilai lama tetap terbaca di jejak; status keanggotaan run mengikuti data terkoreksi.
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+- Q-EMP-1 (pemilik proses/BOT 1): kosakata `employmentStatus` final (apakah DAILY/INTERN dipisah atau cukup PKWT/PKWTT + lainnya). Menghambat migrasi BOT 3, bukan penulisan spec.
+- Q-EMP-2 (pemilik proses): kosakata `endReason` final + apakah "kontrak selesai" untuk PKWT yang tidak diperpanjang dibedakan dari PHK di data (penting untuk laporan, bukan angka).
+- Q-EMP-3 (BOT 1, perilaku inti payroll): gerbang BR-EMP-06 tolak keras vs peringatan wajib-konfirmasi. Rekomendasi BOT 5: tolak keras untuk periode yang seluruhnya sesudah tanggal berhenti; peringatan hanya bila periode memotong tanggal berhenti (slip final parsial bulan berhenti ditangani jalur final existing).
+- Q-EMP-4 (BOT 4): rumus + basis upah + akun untuk uang kompensasi PKWT (PP 35/2021 Pasal 15-17), pesangon/UPMK/penggantian hak PHK, dan perlakuan PPh21 atasnya (objek 21-401-xx dsb.). TANPA vonis ini, tidak ada angka kewajiban dibangun siapa pun.
+- Q-EMP-5 (BOT 4): apakah peristiwa berakhirnya PKWT/perpanjangan memicu slip komponen khusus lewat PayrollComponent existing (F-027) atau dokumen bayar terpisah.
+- Q-EMP-6 (BOT 3): bentuk fisik final (kolom di `Employee` vs tabel riwayat kontrak terpisah bila perpanjangan berlapis perlu riwayat penuh). Spec merekomendasikan kolom di `Employee` + jejak ActivityLog dulu (YAGNI: tabel riwayat hanya bila Q-EMP-6 membuktikan perpanjangan berlapis tak cukup dijejaki log).
+
+### 10. Backlog implementasi (turunan spec ini)
+
+1. BOT 1: putus Q-EMP-1/2/3 (kosakata + gerbang payroll). Tanpa ini BOT 3 tidak migrasi.
+2. BOT 4: vonis Q-EMP-4/5 (angka kompensasi/pesangon + jalur bayar). Dependensi eksplisit; BOT 5 tidak memutus angka.
+3. BOT 3 (@backend-prisma-inventory-workshop): migrasi kolom aditif + validasi service + jejak ActivityLog + read-model daftar perhatian + gerbang generate sesuai Q-EMP-3. Klaim `prisma/schema.prisma` di board sebelum edit; tes falsifikasi AC-EMP-2/4.
+4. BOT 2 (@frontend-ui-ux-next-js): field master + daftar perhatian SESUDAH kontrak BOT 3, kata §6 verbatim, tanpa nominal kewajiban, tanpa hitung status di UI. UI fitur didahulukan atas polish.
+5. BOT 6: AC-EMP-1..10 atas head BOT 3/BOT 2, termasuk falsifikasi cabut penjaga payroll + cek scope/gaji tak bocor.
+
+### Yang TIDAK diusulkan run ini
+- Hitung/tampil nominal kompensasi, pesangon, UPMK, penggantian hak (Q-EMP-4, vonis BOT 4 dulu).
+- Tabel riwayat kontrak berlapis, e-sign kontrak, portal karyawan, pengingat otomatis ke karyawan (WA/email keluar tidak ada infrastrukturnya — pola domain k).
+- Mengubah metode PPh21 masa terakhir (F-026 FINAL; spec ini hanya memberi penanda master supaya jalurnya tidak bergantung ingatan).
+- Backfill status dari data slip/absensi (tebakan retroaktif dilarang, BR-EMP-03).
 
 
 ---

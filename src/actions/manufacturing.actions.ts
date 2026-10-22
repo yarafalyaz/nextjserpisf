@@ -29,6 +29,11 @@ import {
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
+import { resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
+import {
+  classifyScrapLine,
+  validateScrapInput,
+} from "@/lib/services/scrap-classification";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import {
@@ -367,7 +372,8 @@ export async function updateBomRevision(id: number, formData: FormData) {
 
     const itemIds = formData.getAll("revisionItemId") as string[];
     const qtys = formData.getAll("revisionQty") as string[];
-    const linesParsed = parseRevisionRows(itemIds, qtys);
+    const scrapPercents = formData.getAll("revisionScrapPercent") as string[];
+    const linesParsed = parseRevisionRows(itemIds, qtys, scrapPercents);
     if (!linesParsed.success) return { success: false, error: linesParsed.error };
     const refsError = await bomRefsError(linesParsed.data.map((m) => m.itemId));
     if (refsError) return { success: false, error: refsError };
@@ -392,7 +398,7 @@ export async function updateBomRevision(id: number, formData: FormData) {
           notes: v.notes ?? null,
           materials: {
             deleteMany: {},
-            create: linesParsed.data.map((m) => ({ itemId: m.itemId, qty: m.qty })),
+            create: linesParsed.data.map((m) => ({ itemId: m.itemId, qty: m.qty, scrapPercent: m.scrapPercent })),
           },
         },
       });
@@ -712,6 +718,10 @@ export async function createProductionOrder(formData: FormData) {
             itemId: m.itemId,
             qty: safeMultiply(m.qtyPerUnit, v.qty, 4),
             standardCost: bomCostMap.get(m.itemId) ?? 0,
+            // F-008: beku allowance revisi ter-pin saat PO dibuat (null =
+            // belum kalibrasi). Tanpa kolom ini jalur PO tak pernah bisa
+            // klasifikasi normal — complete dilarang baca BOM hidup.
+            scrapPercentSnapshot: m.scrapPercent ?? null,
           })),
         },
       },
@@ -824,20 +834,63 @@ export async function startProductionOrder(id: number) {
  */
 export async function issueMaterial(
   productionOrderId: number,
-  items: { itemId: number; qty: number }[],
+  items: {
+    itemId: number
+    qty: number
+    /** F-008: scrap kejadian ini per baris (opsional — nol scrap sah). */
+    scrapQty?: number
+    scrapReasonCode?: string | null
+    scrapNote?: string | null
+  }[],
 ) {
   try {
     const user = await requirePermission("edit_production_orders");
     if (!items?.length) throw new Error("Tidak ada material yang dikeluarkan");
 
     const requested = new Map<number, number>();
+    const scrapInputs = new Map<
+      number,
+      { scrapQty: number; scrapReasonCode: string | null; scrapNote: string | null }
+    >();
     for (const row of items) {
       const itemId = Number(row.itemId);
       const qty = Number(row.qty);
       if (!Number.isInteger(itemId) || itemId <= 0 || !Number.isFinite(qty) || qty <= 0) {
         throw new Error("Item dan kuantitas material harus valid dan lebih dari 0");
       }
+      // F-008: validasi scrap kejadian ini SEBELUM stok bergerak. Dua baris
+      // item sama dengan scrap berbeda ditolak — gabungan per item tidak
+      // bisa diputuskan tanpa menebak.
+      const sr = scrapInputs.get(itemId);
+      const rowScrap = {
+        scrapQty: Number(row.scrapQty ?? 0),
+        scrapReasonCode: row.scrapReasonCode ?? null,
+        scrapNote: row.scrapNote ?? null,
+      };
+      if (sr) {
+        const same =
+          sr.scrapQty === rowScrap.scrapQty &&
+          sr.scrapReasonCode === rowScrap.scrapReasonCode &&
+          sr.scrapNote === rowScrap.scrapNote;
+        if (!same) {
+          throw new Error(
+            `Baris duplikat item #${itemId} dengan scrap berbeda — satukan menjadi satu baris per item.`,
+          );
+        }
+      } else {
+        scrapInputs.set(itemId, rowScrap);
+      }
       requested.set(itemId, safeAdd(requested.get(itemId) ?? 0, qty, 2));
+    }
+    for (const [itemId, qty] of requested) {
+      const s = scrapInputs.get(itemId)!;
+      const err = validateScrapInput({
+        issueQty: qty,
+        scrapQty: s.scrapQty,
+        scrapReasonCode: s.scrapReasonCode,
+        scrapNote: s.scrapNote,
+      });
+      if (err) throw new Error(`Item #${itemId}: ${err}`);
     }
     const warehouseScope = await getWarehouseScope(user);
     if (warehouseScope.kind === "none") throw new Error("Anda tidak memiliki akses ke gudang mana pun.");
@@ -917,6 +970,7 @@ export async function issueMaterial(
       const validWarehouseIds = new Set(validDefaultWarehouses.map((warehouse) => warehouse.id));
 
       let runningActual = 0;
+      let runningAbnormalValue = 0;
       const movementLines: { itemId: number; qty: number; cost: number; warehouseId: number }[] = [];
       for (const [itemId, qty] of requested) {
         const itm = itemMap.get(itemId);
@@ -953,8 +1007,50 @@ export async function issueMaterial(
 
         const existing = await tx.productionOrderMaterial.findFirst({
           where: { productionOrderId, itemId },
-          select: { id: true, actualQty: true, actualCost: true, serialNumbers: true, batchNumbers: true },
+          select: {
+            id: true,
+            actualQty: true,
+            actualCost: true,
+            serialNumbers: true,
+            batchNumbers: true,
+            qty: true,
+            scrapPercentSnapshot: true,
+            scrapQty: true,
+            scrapNormalQtySnapshot: true,
+            scrapAbnormalQtySnapshot: true,
+            scrapNormalValueSnapshot: true,
+            scrapAbnormalValueSnapshot: true,
+          },
         });
+        // F-008: klasifikasi scrap kejadian ini dari cost FIFO kejadian
+        // ini (bukan snapshot lama). Allowance dari snapshot PO beku;
+        // baris unplanned qty=0 → seluruh scrap abnormal. Akumulasi
+        // dibekukan per kejadian — PO yang sama terbit berkali-kali.
+        const scrapIn = scrapInputs.get(itemId)!;
+        const classification = classifyScrapLine({
+          issueQty: qty,
+          plannedQty: existing ? Number(existing.qty) : 0,
+          scrapQty: scrapIn.scrapQty,
+          scrapReasonCode: scrapIn.scrapReasonCode,
+          scrapNote: scrapIn.scrapNote,
+          scrapPercentSnapshot:
+            existing?.scrapPercentSnapshot != null ? Number(existing.scrapPercentSnapshot) : null,
+          unitCost,
+        });
+        const cumulativeScrap =
+          scrapIn.scrapQty > 0
+            ? {
+                scrapQty: safeAdd(Number(existing?.scrapQty ?? 0), scrapIn.scrapQty, 2),
+                scrapReasonCode: scrapIn.scrapReasonCode,
+                scrapNote: scrapIn.scrapNote,
+                scrapClassifiedAt: new Date(),
+                scrapNormalQtySnapshot: safeAdd(Number(existing?.scrapNormalQtySnapshot ?? 0), classification.normalQty, 2),
+                scrapAbnormalQtySnapshot: safeAdd(Number(existing?.scrapAbnormalQtySnapshot ?? 0), classification.abnormalQty, 2),
+                scrapUnitCostSnapshot: unitCost,
+                scrapNormalValueSnapshot: safeAdd(Number(existing?.scrapNormalValueSnapshot ?? 0), classification.normalValue, 2),
+                scrapAbnormalValueSnapshot: safeAdd(Number(existing?.scrapAbnormalValueSnapshot ?? 0), classification.abnormalValue, 2),
+              }
+            : {};
         if (existing) {
           const prevSerials = toStringArray(existing.serialNumbers);
           const prevBatches = toStringArray(existing.batchNumbers);
@@ -965,6 +1061,7 @@ export async function issueMaterial(
               actualCost: safeAdd(Number(existing.actualCost), lineCost, 2),
               serialNumbers: mergeUnique(prevSerials, newSerials),
               batchNumbers: mergeUnique(prevBatches, newBatchNumbers),
+              ...cumulativeScrap,
             },
           });
         } else {
@@ -979,9 +1076,11 @@ export async function issueMaterial(
               actualCost: lineCost,
               serialNumbers: newSerials.length ? newSerials : undefined,
               batchNumbers: newBatchNumbers.length ? newBatchNumbers : undefined,
+              ...cumulativeScrap,
             },
           });
         }
+        runningAbnormalValue = safeAdd(runningAbnormalValue, classification.abnormalValue, 2);
         runningActual = safeAdd(runningActual, lineCost, 2);
       }
 
@@ -1014,6 +1113,16 @@ export async function issueMaterial(
         await stockJournalService.onProductionOrderMaterialIssue(
           tx,
           movementLines,
+          order.documentNo,
+          postedMoves[0].id,
+          Number(user.id),
+        );
+        // F-008 P2(b): jurnal abnormal kejadian ini DALAM tx yang sama —
+        // fail-closed saat flag ON (throw = rollback total). Flag OFF:
+        // no-op, nilai abnormal hidup di snapshot + laporan.
+        await stockJournalService.onProductionOrderAbnormalScrap(
+          tx,
+          runningAbnormalValue,
           order.documentNo,
           postedMoves[0].id,
           Number(user.id),
@@ -1774,6 +1883,16 @@ export async function createMaterialIssueFromWorkOrder(
       // Auto-create MI items from WO items (same tx). F-2026-10-20-39(a):
       // simpan baris WO asal tiap baris issue supaya guard revisi bisa
       // memutuskan per baris WO, bukan menebak dari itemId yang sama.
+      // F-008: beku allowance scrap dari revisi BOM ter-pin WO (bila ada) —
+      // tanpa pin, snapshot null = belum kalibrasi (klasifikasi abnormal
+      // jujur, bukan tebakan dari master hidup saat complete). Snapshot
+      // LENGKAP: baris di luar revisi ikut null.
+      const snapshotByItem = await resolveMaterialIssueScrapSnapshots(
+        tx,
+        wo.items.map((i) => ({ itemId: i.itemId, workOrderItemId: i.id })),
+        workOrderId,
+      );
+
       await tx.materialIssueItem.createMany({
         data: wo.items
           .filter((i) => Number(i.qty) > 0)
@@ -1783,6 +1902,7 @@ export async function createMaterialIssueFromWorkOrder(
             workOrderItemId: i.id,
             qty: i.qty,
             cost: i.cost,
+            scrapPercentSnapshot: snapshotByItem.get(i.itemId) ?? null,
           })),
       });
 
