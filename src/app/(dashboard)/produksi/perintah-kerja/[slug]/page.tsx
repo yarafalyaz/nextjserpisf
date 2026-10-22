@@ -25,6 +25,8 @@ import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-nee
 import { WorkOrderPartStatusCard } from "@/components/reports/work-order-part-status-card";
 import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
 import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
+import { WorkOrderReservationsCard } from "@/components/reports/work-order-reservations-card";
+import { getWorkOrderReservations } from "@/lib/reports/work-order-reservations-data";
 import { WorkOrderProgressCard } from "@/components/reports/work-order-progress-card";
 import { getWorkOrderProgress } from "@/lib/reports/work-order-progress-data";
 import { getJobChangeOrdersForWorkOrder } from "@/actions/job-change-order.actions";
@@ -191,6 +193,12 @@ export default async function WorkOrderDetailPage({
   // F-105: status part turunan read-only per baris WO (builder Bara PR #275).
   // Kartu murni presentasi: tanpa hitung ulang, tanpa tulis WorkOrderItem.status.
   const partStatus = await getWorkOrderPartStatus(wo.id);
+
+  // F-057-S §2/§3: tabel reservasi stok — baris StockReservation passthrough
+  // loader (status/sisa builder, jejak rilis apa adanya). Izin view_work_orders
+  // sudah digerbang di atas. Q-RIL-1 saring per gudang belum diputus — loader
+  // tidak menyaring, kartu menampilkan semua baris apa adanya.
+  const reservations = await getWorkOrderReservations(wo.id);
 
   // F-020-B: progres tahap WO dari builder Bara (PR #377) — tampil apa adanya.
   // Aksi tahap hanya dirender bila izin edit_work_orders; server penegak.
@@ -592,6 +600,7 @@ export default async function WorkOrderDetailPage({
         canEdit={canEditCo}
         canApply={canApplyCo}
       />
+      {reservations ? <WorkOrderReservationsCard reservations={reservations} /> : null}
 
       <WhatsappTrailNote trail={whatsappTrail} />
 
