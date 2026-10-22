@@ -3,6 +3,7 @@ import { safeSum } from "@/lib/utils/math";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { notificationService } from "@/lib/services/notification.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
 import { Status, WorkOrderStatus, SalesStatus } from "@/lib/constants";
 
 /**
@@ -479,6 +480,9 @@ export async function onDownPaymentConfirmed(
           })),
       });
     }
+
+    // F-2026-10-22-063-S: snapshot PERINGATAN fitment baris WO turunan.
+    await stampWorkOrderFitmentSnapshot(tx, workOrder.id);
 
     // ─── 2. Create Project ───────────────────────────────────────────
     const projectDocNo = await generateDocumentNumber("PRJ");
