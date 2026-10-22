@@ -57,6 +57,7 @@ export const PERMISSIONS = [
       "manage_withholding_certificates",
       "view_invoice_exchanges",
       "create_invoice_exchanges",
+      "create_invoice_collection_followups",
       "delete_invoice_exchanges",
       "view_brands",
       "create_brands",

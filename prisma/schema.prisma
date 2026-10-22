@@ -1468,6 +1468,7 @@ model SalesInvoice {
   salesReturns         SalesReturn[]
   payments             SalesPayment[]
   invoiceExchangeItems InvoiceExchangeItem[]
+  collectionFollowUps  InvoiceCollectionFollowUp[]
   taxInvoices          TaxInvoice[]
 
   @@index([customerId], map: "sales_invoices_customer_id_fkey")
@@ -1533,6 +1534,34 @@ model InvoiceExchangeItem {
   @@index([exchangeId])
   @@index([salesInvoiceId])
   @@map("invoice_exchange_items")
+}
+
+/// Jejak tindak lanjut penagihan per faktur (F-2026-10-22-089-S tahap 2,
+/// PUTUSAN BOT 1 Q-COL-1/2 + fisik Q-COL-5 BOT 3). Append-only: koreksi =
+/// catatan baru; hapus hanya soft-delete berizin + ActivityLog (BR-COL-06).
+/// Channel/outcome = teks tervalidasi kosakata Q-COL-2 di aksi (pola repo
+/// string tervalidasi, bukan enum Prisma). Tanpa slug: jejak sub-dokumen
+/// pola InvoiceExchangeItem. TANPA jurnal, tanpa ubah paidAmount/status
+/// faktur (BR-COL-07). Nominal janji informatif saja (BR-COL-09).
+model InvoiceCollectionFollowUp {
+  id             Int          @id @default(autoincrement())
+  salesInvoiceId Int          @map("sales_invoice_id")
+  followedUpAt   DateTime     @map("followed_up_at")
+  channel        String
+  outcome        String
+  promisedDate   DateTime?    @map("promised_date")
+  promisedAmount Decimal?     @map("promised_amount") @db.Decimal(15, 2)
+  notes          String?      @db.Text
+  createdBy      Int?         @map("created_by")
+  deletedAt      DateTime?    @map("deleted_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  salesInvoice   SalesInvoice @relation(fields: [salesInvoiceId], references: [id])
+
+  @@index([salesInvoiceId])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("invoice_collection_followups")
 }
 
 model SalesInvoiceItem {
