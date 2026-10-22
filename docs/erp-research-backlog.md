@@ -7670,6 +7670,32 @@ dari garansi, itu perubahan katalog = keputusan BOT 1.
 | Q-IP-4 | Backfill historis dari MI lama ber-WO (sekali jalan, ditandai sumber backfill)? | BOT 1 |
 | Q-IP-5 | WO/issue dibatalkan sesudah lahir: baris ditandai batal atau dibiarkan + catatan? | BOT 1 + BOT 3 |
 
+### 8A. PUTUSAN BOT 1 2026-10-22 (Q-IP-1/2/4/5 — mengikat BOT 3/BOT 2/BOT 6)
+
+- Q-IP-1 DIPUTUS: YA. MI taut proyek tanpa WO lahir juga bila
+  Project.customerVehicleId terisi. Alasan: atribusi kendaraan
+  eksplisit dari dokumen sumber, bukan tebakan; MI bebas/penjualan
+  tetap TIDAK lahir. BOT 3 bangun jalur lahir kedua di complete
+  material issue proyek; hasil aksi memuat hitungan terlewati
+  (pola skipped) untuk MI tanpa kendaraan.
+- Q-IP-2 DIPUTUS: REUSE `view_warranties` (lihat) +
+  `manage_warranties` (catat lepas/ganti). Tanpa key baru tahap
+  ini: panel hidup di halaman kendaraan yang sudah ter-gate
+  warranties, dan tidak ada peran ISF hari ini yang boleh melihat
+  registri tetapi tidak boleh melihat garansi. Key terpisah hanya
+  dibuka kembali bila owner menunjuk peran itu nyata.
+- Q-IP-4 DIPUTUS: TIDAK ada backfill historis tahap ini. Registri
+  mulai dari fitur live; baris lama tidak direkonstruksi supaya
+  tidak lahir registri semu dari issue yang konteks kendaraannya
+  sudah tidak bisa dibuktikan ulang. Dibuka kembali hanya atas
+  permintaan eksplisit owner + rancangan penanda sumber.
+- Q-IP-5 DIPUTUS: baris TIDAK dihapus dan status turunan TIDAK
+  dibekukan. BOT 3 tambah penanda batal sumber (flag + waktu dari
+  dokumen sumber) bila WO/issue sumber dibatalkan/dikoreksi;
+  status lepas/ganti turunan tetap berjalan normal. Alasan:
+  registri adalah jejak fisik kendaraan, koreksi sumber tidak
+  menghapus fakta part pernah terpasang.
+
 Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 2-3 hari; BOT 2 panel kendaraan 1 hari; BOT 6 AC-IP-1..10.
 
@@ -8742,6 +8768,45 @@ sesudah Q-TP-5 dibuka BOT 1. BOT 4 dipanggil lagi HANYA bila
 implementasi menyimpang dari vonis (akun baru, jurnal di receive,
 klaim kurir BR-TP-11, kapitalisasi ongkir BR-TP-14) — itu
 BUTUH-VONIS baru, jangan diputus BOT 3/BOT 5.
+
+### 8B. PUTUSAN BOT 1 2026-10-22 (Q-MR-1/2/3 — dicatat juga di spec F-078-S PR #524 §8A)
+
+- Q-MR-1 DIPUTUS (b): resource baru `material_requests` di katalog
+  izin — view/create/edit/delete + `approve_material_requests`
+  terpisah dari edit. Alasan: `inventory_transfers` existing tidak
+  punya aksi approve; persetujuan oleh gudang sumber tidak boleh
+  diberikan ke semua editor transfer. Pola approve_purchase_requests
+  existing.
+- Q-MR-2 DIPUTUS: status internal sederhana (approvedBy/approvedAt/
+  rejectionReason di MaterialRequest, pola PurchaseRequest).
+  ApprovalWorkflow generik TIDAK dipakai tahap ini — kebutuhan
+  nyata ISF = satu langkah setuju/tolak oleh gudang sumber.
+- Q-MR-3 DIPUTUS: self-approve DILARANG. Penyetuju != pembuat,
+  ditegakkan penjaga server.
+
+### 9A. PUTUSAN BOT 1 2026-10-22 (Q-TP-5/1/4 — mengikat BOT 3/BOT 2/BOT 6)
+
+- Q-TP-5 DIPUTUS: INTI DIBUKA. BOT 3 bangun migrasi receivedQty
+  per baris + status `partially_received` + terima per kejadian
+  dalam klaim atomik, mengganti perilaku all-or-nothing existing.
+  Perilaku lama hanya bertahan untuk transfer yang sudah received
+  sebelum fitur live (backfill fisik = Q-TP-2 milik BOT 3).
+  Vonis BOT 4 yang sudah turun (BR-TP-01/02/03/05/06/08) mengikat
+  penuh; tidak ada jurnal dari receive.
+- Q-TP-1 DIPUTUS: YA — setiap kejadian terima memakai tanggal
+  kejadian sendiri: assertPeriodOpen dinilai per tanggal kejadian,
+  laporan stok/in-transit memotong per tanggal kejadian, tanggal
+  kirim tidak dipakai ulang untuk terima lintas periode. Bentuk
+  field fisik = Q-TP-2 (BOT 3).
+- Q-TP-4 DIPUTUS: yang berwenang menyatakan sisa hilang/rusak
+  final = pemegang `create_stock_adjustments` di konteks gudang
+  tujuan DENGAN approval orang berbeda (pola approval adjustment
+  existing). Batas umur: laporan in-transit WAJIB menandai sisa
+  berumur >60 hari; penutupan selisih untuk sisa itu WAJIB
+  ditawarkan/dikejar mulai umur 60 hari, tetapi sistem TIDAK
+  auto-menutup (keputusan final tetap manusia berwenang di atas).
+  Angka 60 hari = ambang peringatan existing yang dinaikkan jadi
+  kewajiban tindak lanjut, bukan auto-eksekusi.
 
 ### 10. Backlog implementasi (turunan spec ini; induk tetap F-2026-10-21-015)
 
