@@ -136,4 +136,42 @@ describe("WorkOrderOperationActions F-2026-10-21-020 Tahap B", () => {
     expect(buttonByLabel(container, "Mulai tahap Pengerjaan")).toBeNull()
     unmountCard(root)
   })
+
+  it("autoCompleted true: toast WO otomatis selesai + refresh", async () => {
+    mocks.updateWorkOrderOperationStatus.mockResolvedValue({
+      success: true,
+      autoCompleted: true,
+    })
+    const row = rowOf("in_progress", 2)
+    const { container, root } = renderCard(
+      <WorkOrderOperationActions workOrderId={7} workOrderStatus="in_progress" row={row} />,
+    )
+    await act(async () => {
+      buttonByLabel(container, "Selesaikan tahap Pengerjaan")!.click()
+    })
+    expect(mocks.showSuccess).toHaveBeenCalledWith(
+      "Perintah kerja otomatis selesai — semua tahap tuntas",
+    )
+    expect(mocks.refresh).toHaveBeenCalled()
+    unmountCard(root)
+  })
+
+  it("autoCompleted false: toast tahap biasa, tanpa pesan selesai", async () => {
+    mocks.updateWorkOrderOperationStatus.mockResolvedValue({
+      success: true,
+      autoCompleted: false,
+    })
+    const row = rowOf("in_progress", 2)
+    const { container, root } = renderCard(
+      <WorkOrderOperationActions workOrderId={7} workOrderStatus="in_progress" row={row} />,
+    )
+    await act(async () => {
+      buttonByLabel(container, "Selesaikan tahap Pengerjaan")!.click()
+    })
+    expect(mocks.showSuccess).toHaveBeenCalledWith("Tahap Pengerjaan selesai")
+    expect(mocks.showSuccess).not.toHaveBeenCalledWith(
+      expect.stringContaining("otomatis selesai"),
+    )
+    unmountCard(root)
+  })
 })

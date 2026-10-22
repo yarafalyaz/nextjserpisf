@@ -34,14 +34,18 @@ export function WorkOrderOperationActions({
   if (workOrderStatus !== "in_progress") return null
 
   function run(
-    fn: () => Promise<{ success: boolean; error?: string }>,
+    fn: () => Promise<{ success: boolean; error?: string; autoCompleted?: boolean }>,
     okMsg: string,
   ) {
     startTransition(async () => {
       try {
         const res = await fn()
         if (res?.success) {
-          showSuccess(okMsg)
+          showSuccess(
+            res.autoCompleted
+              ? "Perintah kerja otomatis selesai — semua tahap tuntas"
+              : okMsg,
+          )
           router.refresh()
         } else {
           showError(res?.error || "Gagal memproses tahap")
