@@ -63,46 +63,34 @@ export default async function WorkOrderDetailPage({
   await requirePermission("view_work_orders");
   const { slug } = await params;
 
+  const workOrderInclude = {
+    customer: true,
+    quotation: true,
+    customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
+    project: { select: { id: true, name: true, slug: true } },
+    bomRevision: { select: { id: true, revisionNo: true, slug: true } },
+    items: true,
+    purchaseOrders: {
+      where: { status: { notIn: ["cancelled"] } },
+      select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
+    },
+    productionOrders: {
+      select: { id: true, documentNo: true, status: true, qty: true, slug: true, bomRevision: { select: { revisionNo: true } } },
+    },
+  };
+
   const wo = await resolveEntity(
     { segment: slug },
     {
       bySlug: (s) =>
         prisma.workOrder.findFirst({
           where: { slug: s },
-          include: {
-            customer: true,
-            quotation: true,
-            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true, slug: true } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            items: true,
-            purchaseOrders: {
-              where: { status: { notIn: ["cancelled"] } },
-              select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
-            },
-            productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true, bomRevision: { select: { revisionNo: true } } },
-            },
-          },
+          include: workOrderInclude,
         }),
       byId: (id) =>
         prisma.workOrder.findUnique({
           where: { id },
-          include: {
-            customer: true,
-            quotation: true,
-            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true, slug: true } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            items: true,
-            purchaseOrders: {
-              where: { status: { notIn: ["cancelled"] } },
-              select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
-            },
-            productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true, bomRevision: { select: { revisionNo: true } } },
-            },
-          },
+          include: workOrderInclude,
         }),
     },
   );
@@ -582,13 +570,11 @@ export default async function WorkOrderDetailPage({
         itemNameById={Object.fromEntries(bomItemRows.map((i) => [i.id, i.name]))}
         canManage={canManageBomChange}
         currentUserId={bomSession?.user?.id ? Number(bomSession.user.id) : null}
-        pairedPins={wo.productionOrders
-          .filter((po) => po.bomRevision)
-          .map((po) => ({
-            label: "order produksi",
-            documentNo: po.documentNo,
-            revisionNo: po.bomRevision?.revisionNo ?? null,
-          }))}
+        pairedPins={wo.productionOrders.flatMap((po) =>
+          po.bomRevision
+            ? [{ label: "order produksi", documentNo: po.documentNo, revisionNo: po.bomRevision.revisionNo }]
+            : [],
+        )}
       />
 
       <JobChangeOrderPanel

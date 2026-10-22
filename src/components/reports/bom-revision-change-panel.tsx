@@ -34,11 +34,11 @@ export interface BomRevisionOption {
   revisionNo: number
 }
 
-/** Pin pasangan WO↔PO (Q-BOM68-4/BR-BOM68-07): pin dokumen tertaut, ditampilkan sebelum simpan. null = pasangan tidak ter-pin. */
+/** Pin pasangan WO↔PO (Q-BOM68-4/BR-BOM68-07): pin dokumen tertaut, ditampilkan sebelum simpan. */
 export interface BomRevisionPairedPin {
   label: string
   documentNo: string
-  revisionNo: number | null
+  revisionNo: number
 }
 
 export interface BomRevisionChangeDeltaPreview {
@@ -257,9 +257,7 @@ export function BomRevisionChangePanel({
           {pairedPins.map((pin) => (
             <p key={`${pin.label}-${pin.documentNo}`} role="note" className="text-xs text-muted-foreground">
               Pin {pin.label} {pin.documentNo}:{" "}
-              <span className="font-medium text-foreground">
-                {pin.revisionNo != null ? `Rev. ${pin.revisionNo}` : "Belum ter-pin"}
-              </span>{" "}
+              <span className="font-medium text-foreground">Rev. {pin.revisionNo}</span>{" "}
               — ganti revisi dokumen ini tidak mengubah pin {pin.label}.
             </p>
           ))}

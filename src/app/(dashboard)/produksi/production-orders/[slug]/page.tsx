@@ -37,50 +37,38 @@ export default async function ProductionOrderDetailPage({
 
   const { slug } = await params
 
+  const workOrderPinSelect = { id: true, documentNo: true, projectId: true, slug: true, bomRevision: { select: { revisionNo: true } } }
+
+  const productionOrderInclude = {
+    product: { include: { inventoryItem: { select: { trackSerial: true } } } },
+    bomRevision: { select: { id: true, revisionNo: true, slug: true } },
+    workOrder: { select: workOrderPinSelect },
+    materials: true,
+    costs: {
+      orderBy: { createdAt: "asc" as const },
+      include: {
+        vendor: { select: { name: true } },
+        purchaseOrder: { select: { id: true, documentNo: true, slug: true } },
+        nonconformance: { select: { id: true, documentNo: true, slug: true } },
+      },
+    },
+    genealogy: {
+      include: { materials: true },
+    },
+  }
+
   const order = await resolveEntity(
     { segment: slug },
     {
       bySlug: (s) =>
         prisma.productionOrder.findFirst({
           where: { slug: s },
-          include: {
-            product: { include: { inventoryItem: { select: { trackSerial: true } } } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            workOrder: { select: { id: true, documentNo: true, projectId: true, slug: true, bomRevision: { select: { revisionNo: true } } } },
-            materials: true,
-            costs: {
-              orderBy: { createdAt: "asc" },
-              include: {
-                vendor: { select: { name: true } },
-                purchaseOrder: { select: { id: true, documentNo: true, slug: true } },
-                nonconformance: { select: { id: true, documentNo: true, slug: true } },
-              },
-            },
-            genealogy: {
-              include: { materials: true },
-            },
-          },
+          include: productionOrderInclude,
         }),
       byId: (id) =>
         prisma.productionOrder.findUnique({
           where: { id },
-          include: {
-            product: { include: { inventoryItem: { select: { trackSerial: true } } } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            workOrder: { select: { id: true, documentNo: true, projectId: true, slug: true, bomRevision: { select: { revisionNo: true } } } },
-            materials: true,
-            costs: {
-              orderBy: { createdAt: "asc" },
-              include: {
-                vendor: { select: { name: true } },
-                purchaseOrder: { select: { id: true, documentNo: true, slug: true } },
-                nonconformance: { select: { id: true, documentNo: true, slug: true } },
-              },
-            },
-            genealogy: {
-              include: { materials: true },
-            },
-          },
+          include: productionOrderInclude,
         }),
     },
   )
@@ -104,7 +92,7 @@ export default async function ProductionOrderDetailPage({
     ?? (order.product.inventoryItemId
       ? await prisma.workOrder.findFirst({
           where: { items: { some: { itemId: order.product.inventoryItemId } } },
-          select: { id: true, documentNo: true, projectId: true, slug: true, bomRevision: { select: { revisionNo: true } } },
+          select: workOrderPinSelect,
           orderBy: { createdAt: "desc" },
         })
       : null)
