@@ -8394,3 +8394,219 @@ berikutnya: BOT 1 (Q-TM67-1/3/5) -> BOT 3 (inti jadwal; basis +
 penjaga vonis ini) -> BOT 2 (UI label "Jadwal kesepakatan") ->
 BOT 6 falsifikasi 1-6 di atas. Vonis yang membuka pekerjaan uang
 ini wajib jadi parent kartu BOT 3/BOT 2 terkait.
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-082-V: tanggal kejadian terima transfer parsial (Q-TP-1 spec F-2026-10-22-081-S PR #528)
+
+Pemilik vonis: BOT 4 (@accounting-finance-tax). Kartu: t_95d12eb2
+(buffer kondektur sesudah F-081-V PR #529). Dokumen saja — tanpa
+kode/schema/migrasi, tanpa merge oleh BOT 4. Menjawab Q-TP-1 /
+BR-TP-09 / AC-TP-12 spec BOT 5 F-2026-10-22-081-S (PR #528 OPEN):
+bentuk tanggal kejadian terima untuk period-lock + potong
+laporan. Ini sisi periode akuntansi dari inti F-2026-10-21-015;
+akun/jurnal transfer TIDAK divonis ulang (sudah F-015 PR #410
+MERGED: subledger-only, nol jurnal GL di receive, jurnal hanya
+StockAdjustment "selisih transfer" saat disposisi final).
+
+### 0. Pemilihan + anti-duplikat (live 2026-10-22, origin/main 9f0e5a62)
+
+Sudah tertutup, TIDAK divonis ulang: Q-PF-2/4 = F-077-V PR #521;
+agregator BPJS lanjutan = F-081-V PR #529; Q-SC-4/5 = F-079-V
+PR #526 + F-080-V PR #527; Q-SUB69-5 = F-075-V PR #518;
+Q-BOM68-6 = F-074-V PR #517; Q-TM67-2/4 = F-072-V (gabungan
+PR #522); Q-DP65-2 = F-073-V (dirujuk PR #525 MERGED); DPP
+Kasus C = F-059-V PR #454 OPEN. Q-IP-1..5 + Q-MR-1..5 + Q-TP-2..5
+milik BOT 1/BOT 3 (spec masing-masing menyatakan BOT 4 tidak
+dibutuhkan, kecuali butir di bawah). Satu-satunya butir uang/
+periode yang spec PR #528 nyatakan eksplisit "vonis BOT 4
+Q-F015-A menamai, belum memutus" = Q-TP-1. ID bebas: grep
+"F-2026-10-22-082" backlog+board+`gh pr list` all-state = 0;
+maks -V terpakai 081-V (PR #529 OPEN).
+
+### 1. Bukti repo live (TERVERIFIKASI-KODE, origin/main 9f0e5a62)
+
+1. `InventoryTransfer` hanya punya SATU tanggal: `date`
+   (schema.prisma model InventoryTransfer) = tanggal dokumen/
+   kirim. Tidak ada tanggal terima, tidak ada `receivedQty`
+   (InventoryTransferItem: qty + serialNumbers +
+   batchAllocations saja).
+2. Jalur terima berjalan memakai tanggal kirim untuk period-
+   lock di TIGA titik: aksi `receiveInventoryTransfer`
+   (`assertPeriodOpen(transfer.date)`), hook
+   `onTransferReceived` (`assertPeriodOpen(transfer.date, tx)`),
+   dan StockMove IN yang lahir TIDAK menulis kolom `date`
+   (StockMove.date nullable `transaction_date` — IN transfer
+   mengisinya kosong; yang tercatat hanya `createdAt` sistem).
+   Akibat berjalan: kirim di periode terbuka, terima fisik di
+   periode berikutnya yang sudah ditutup sebagian (lock date
+   maju melewati tanggal kirim) = terima DITOLAK walau barang
+   nyata tiba di periode terbuka; sebaliknya terima yang
+   dipaksa memakai tanggal kirim menulis stok masuk secara
+   ekonomis ke periode kirim (potong subledger/laporan salah
+   masa). Keduanya SALAH untuk fitur terima parsial lintas
+   hari/periode.
+3. `assertPeriodOpen(date, tx)` (period-lock.service.ts) =
+   penjaga kalender-hari: tanggal <= periodLockDate ditolak;
+   pola repo yang benar = setiap peristiwa posting membawa
+   tanggal peristiwanya sendiri (pola sama StockAdjustment:
+   `assertPeriodOpen(adjustment.date, tx)` sebelum jurnalnya).
+4. Laporan `transfer-in-transit-data.ts` berjalan: himpunan
+   "di jalan" = status `processed` saja, saringan periode atas
+   `InventoryTransfer.date` (tanggal kirim), nilai dari
+   StockMove OUT. Umur dihitung dari tanggal kirim
+   (`transfer-in-transit.ts`). Spec PR #528 §7 sudah mewajibkan
+   perluasan ke `partially_received` dengan sisa per baris —
+   vonis ini memutus sumbu tanggalnya.
+5. Transfer subledger-only: hook OUT/IN tanpa jurnal GL
+   (inventory-transfer.hook.ts); jurnal persediaan antar-gudang
+   tidak berubah nilai total (kirim dan terima pada carried
+   cost OUT yang sama). Maka tanggal terima TIDAK menggeser
+   jurnal apa pun — ia menggeser (a) gerbang period-lock stok,
+   (b) potong ketersediaan stok per periode di subledger/
+   laporan, (c) jejak audit kapan barang diakui tiba.
+
+### 2. Dasar perlakuan (regulasi + kebijakan internal, dipisah tegas)
+
+- Periode akuntansi & period-lock: KEBIJAKAN INTERNAL ISF
+  (SystemSetting.periodLockDate + `assertPeriodOpen`), bukan
+  kewajiban DJP. Klaim kepatuhan pajak TIDAK dibuat di vonis
+  ini. Prinsip yang dipakai = pengakuan peristiwa pada tanggal
+  peristiwa ekonomisnya, konsisten dengan basis akrual
+  (SAK: persediaan diakui saat manfaat/kendali berpindah —
+  di ISF titik itu untuk stok tujuan adalah kejadian terima,
+  bukan tanggal dokumen kirim). Label: `KEBIJAKAN-INTERNAL`,
+  bukan regulasi.
+- Tidak ada tarif/kode pajak di vonis ini. Bila kelak tanggal
+  terima dipakai untuk dokumen pajak apa pun = vonis baru.
+
+### 3. VONIS (mengikat untuk inti BOT 3 sesudah Q-TP-5 dibuka BOT 1)
+
+V-T1 (satu tanggal per kejadian, dibekukan). Setiap KEJADIAN
+terima (penuh, parsial, maupun susulan) wajib membawa
+`receivedDate` sendiri: tanggal kalender barang fisik diterima
+di gudang tujuan pada kejadian itu. Satu transfer dengan tiga
+kejadian terima punya tiga tanggal berbeda. Tanggal kejadian
+adalah FAKTA peristiwa, bukan turunan `transfer.date` dan
+bukan `createdAt` sistem (createdAt tetap jejak sistem,
+receivedDate tetap fakta operator — keduanya disimpan, tidak
+saling menggantikan).
+
+V-T2 (period-lock per kejadian, di dalam tx). Penjaga periode
+untuk kejadian terima = `assertPeriodOpen(receivedDate, tx)`
+di dalam transaksi yang menulis StockMove IN + layer +
+receivedQty kejadian itu. `transfer.date` TIDAK lagi menjadi
+tanggal penjaga untuk terima (ia tetap penjaga untuk proses
+kirim/OUT, tidak berubah). Kejadian terima yang receivedDate-
+nya jatuh pada/sesudah periodLockDate berjalan = DITOLAK
+fail-closed berisik menyebut tanggal kejadian + tanggal kunci;
+DILARANG menggeser receivedDate diam-diam ke hari terbuka
+berikutnya dan DILARANG memakai tanggal kirim untuk lolos.
+
+V-T3 (tanggal terima tidak boleh mendahului kirim). receivedDate
+< tanggal kalender `transfer.date` = DITOLAK (barang tidak bisa
+diterima sebelum dikirim). receivedDate sesudah hari ini
+(tanggal masa depan menurut tanggal server saat simpan) =
+DITOLAK. Backdate ke periode yang MASIH terbuka SAH (terima
+fisik kemarin dicatat hari ini dengan receivedDate kemarin) —
+itulah guna tanggal kejadian terpisah dari createdAt.
+
+V-T4 (potong laporan & subledger). (a) Stok tujuan bertambah
+secara ekonomis per receivedDate kejadian (StockMove IN
+kejadian itu wajib menulis tanggal transaksinya = receivedDate,
+bukan kosong/bukan tanggal kirim) supaya potong stok per
+periode konsisten dengan period-lock V-T2. (b) Laporan
+terkirim-belum-diterima: keanggotaan "masih di jalan" tetap
+diturunkan dari STATUS + sisa qty (processed = sisa penuh,
+partially_received = sisa per baris, received = keluar) per
+spec PR #528 §7; saringan periode laporan atas tanggal KIRIM
+dipertahankan untuk daftar kiriman masa itu, dan umur tetap
+dari tanggal kirim. receivedDate TIDAK menyaring ulang daftar
+itu (mencegah sisa hilang dari laporan hanya karena terima
+parsialnya masuk periode berikut) — kejadian terima tampil
+sebagai informasi per transfer (tanggal terima terakhir),
+bukan sumbu saring. (c) Tutup selisih: tanggal StockAdjustment
+penutupan mengikuti aturan adjustment existing sendiri
+(`assertPeriodOpen(adjustment.date)`) dan TIDAK diwarisi dari
+receivedDate maupun transfer.date; keterkaitan hanya dokumen.
+
+V-T5 (koreksi tanggal). receivedDate kejadian yang sudah
+terposting (StockMove IN sudah lahir) TIDAK diedit diam-diam.
+Salah tanggal = koreksi dokumen: batalkan/kejadian koreksi
+mengikuti pola koreksi subledger yang diputus BOT 3 di Q-TP-2,
+dengan jejak tanggal lama-baru di ActivityLog. Bila periode
+tanggal lama sudah ditutup sesudahnya, koreksi hanya sah di
+periode terbuka berjalan (pola assertPeriodOpen koreksi
+existing) — jangan buka kunci periode demi memperbaiki
+tanggal terima.
+
+### 4. Syarat & larangan
+
+S1. Default receivedDate di form = hari ini (tanggal server),
+boleh diganti operator ke tanggal fisik sebenarnya dalam
+batas V-T3; kosong = DITOLAK (bukan fallback ke transfer.date).
+S2. Semua kejadian pada transfer sama memakai aturan sama;
+terima penuh satu kejadian = satu receivedDate (kasus existing
+adalah kejadian tunggal — regresi AC-TP-10 spec tidak berubah
+selain tanggal penjaganya menjadi receivedDate).
+S3. Bentuk fisik kolom/tabel kejadian = Q-TP-2 milik BOT 3;
+vonis ini hanya mengikat MAKNA: kolom tanggal kejadian wajib
+ada per kejadian, terindeks cukup untuk potong laporan, dan
+tidak boleh diturunkan dari createdAt saat baca.
+L1. DILARANG memakai `transfer.date` sebagai tanggal terima,
+tanggal StockMove IN, atau kunci lolos period-lock terima.
+L2. DILARANG fallback diam-diam: receivedDate kosong/rusak ->
+turun ke tanggal kirim atau hari ini saat simpan/baca.
+L3. DILARANG mengubah `transfer.date` (tanggal kirim beku)
+sebagai cara memperbaiki terima lintas periode.
+L4. Vonis ini TIDAK membuka inti: Q-TP-5 (BOT 1) tetap gerbang
+migrasi; tanpa itu perilaku existing all-or-nothing dengan
+tanggal kirim tetap DEFAULT-AMAN berjalan apa adanya.
+
+### 5. Batas build
+
+- BOT 1: putus Q-TP-5 + Q-TP-4; vonis ini menutup sisi BOT 4
+  dari Q-TP-1 (perilaku periode), sisa perilaku non-periode
+  Q-TP-1 mengikuti putusan BOT 1.
+- BOT 3 (sesudah Q-TP-5): terapkan V-T1..V-T5 dalam rancangan
+  Q-TP-2/Q-TP-3; ganti tiga titik penjaga terima di §1.2 ke
+  receivedDate; StockMove IN tulis tanggal transaksi.
+  Klaim schema.prisma di board + koordinasi sebelum migrasi.
+- BOT 2: tampilkan receivedDate per kejadian apa adanya dari
+  backend; UI tidak menurunkan tanggal dari kirim/createdAt.
+- BOT 6: falsifikasi §6.
+
+### 6. Falsifikasi wajib BOT 6 (atas head BOT 3)
+
+1. Kirim periode terbuka, kunci periode maju melewati tanggal
+   kirim, terima receivedDate hari ini (terbuka) -> LOLOS;
+   ganti penjaga kembali ke transfer.date -> terima tertolak
+   = MERAH (AC-TP-12 spec arah sebaliknya tetap berlaku:
+   receivedDate di periode tertutup -> DITOLAK menyebut
+   periode, lolos memakai tanggal kirim = MERAH).
+2. receivedDate < transfer.date atau > hari ini -> DITOLAK;
+   receivedDate kosong -> DITOLAK (fallback kirim = MERAH).
+3. Dua kejadian parsial beda tanggal/periode: StockMove IN
+   masing-masing bertanggal receivedDate-nya; potong stok
+   periode pertama hanya memuat kejadian pertama.
+4. Transfer partially_received lintas periode tetap tampil
+   bersisa di laporan in-transit masa lapor berjalan (tidak
+   hilang karena terima parsial masuk periode berikut); sesudah
+   received penuh/tertutup selisih -> keluar dari daftar.
+5. Edit receivedDate kejadian terposting langsung di data =
+   tidak ada jalur aksi yang mengizinkan; koreksi tanpa jejak
+   ActivityLog tanggal lama-baru = MERAH.
+
+### 7. Klaim kepatuhan
+
+Tidak ada klaim kepatuhan pajak di vonis ini (tidak ada PPN/
+PPh/faktur/bupot tersentuh; transfer internal subledger-only
+per F-015). Label perlakuan: `KEBIJAKAN-INTERNAL` periode
+akuntansi ISF (period-lock + tanggal peristiwa), akses bukti
+repo 2026-10-22 origin/main 9f0e5a62. Q-TP-2/3 tetap BOT 3,
+Q-TP-4/5 tetap BOT 1/pemilik proses.
+
+ID vonis ini **F-2026-10-22-082-V** (turunan Q-TP-1 spec
+F-2026-10-22-081-S PR #528; induk F-2026-10-21-015). Pemilik
+berikutnya: BOT 1 (Q-TP-5/4) -> BOT 3 (inti Q-TP-2/3 dengan
+V-T1..V-T5) -> BOT 2 (tampil tanggal kejadian) -> BOT 6 §6.
