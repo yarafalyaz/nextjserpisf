@@ -42,6 +42,7 @@ const TABLE_SOURCES = {
   projects: "name", tasks: "name",
   // produksi
   products: "name", bom_revisions: "revision_no", work_orders: "document_no",
+  job_change_orders: "document_no",
   production_orders: "document_no", qc_checklists: "name",
   qc_inspections: "document_no", nonconformances: "document_no",
   // keuangan
