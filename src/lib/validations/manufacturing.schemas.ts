@@ -170,6 +170,26 @@ export const materialRowSchema = z.object({
 
 export type MaterialRow = z.infer<typeof materialRowSchema>
 
+// ==================== WORK CENTER (F-2026-10-22-090-S) ====================
+// Master stasiun kerja papan beban rencana. capacityHoursPerDay Decimal(15,2)
+// > 0; parallelStations Int >= 1. Keunikan nama aktif ditegakkan aksi server
+// lewat normalizedName (Q-LP-5), bukan zod.
+
+export const workCenterSchema = z.object({
+  name: z.string().trim().min(1, "Nama stasiun wajib diisi").max(150, "Nama stasiun maksimal 150 karakter"),
+  capacityHoursPerDay: z.coerce
+    .number({ error: "Kapasitas jam per hari wajib diisi" })
+    .positive("Kapasitas jam per hari harus lebih dari 0")
+    .max(24, "Kapasitas jam per hari maksimal 24"),
+  parallelStations: z.coerce
+    .number({ error: "Jumlah stasiun paralel wajib diisi" })
+    .int("Jumlah stasiun paralel harus bilangan bulat")
+    .min(1, "Jumlah stasiun paralel minimal 1")
+    .max(100, "Jumlah stasiun paralel maksimal 100"),
+  sortOrder: z.coerce.number().int("Urutan tampil harus bilangan bulat").min(0).optional(),
+  isActive: z.boolean().optional(),
+})
+
 /**
  * Validate + normalise the parallel `materialItemId[]` / `materialQty[]` arrays
  * posted by the product (BOM) form. Returns the de-duped, validated rows, or a
