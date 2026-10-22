@@ -1269,6 +1269,13 @@ model QuotationItem {
   id          Int              @id @default(autoincrement())
   sectionId   Int              @map("section_id")
   itemId      Int?             @map("item_id")
+  // F-2026-10-22-063-S (induk F-2026-10-21-023): snapshot PERINGATAN fitment
+  // saat baris terakhir disimpan (BR-FIT-03). Nullable; null = belum/tidak
+  // dievaluasi (tanpa kendaraan, baris bebas itemId null, atau evaluasi
+  // gagal BR-FIT-09). Tidak pernah memblokir simpan (BR-FIT-01).
+  fitmentResult      String?   @map("fitment_result")
+  fitmentRuleId      Int?      @map("fitment_rule_id")
+  fitmentEvaluatedAt DateTime? @map("fitment_evaluated_at")
   description String?
   uom         String?
   qty         Decimal          @default(1.00) @db.Decimal(15, 2)
@@ -2680,6 +2687,11 @@ model WorkOrderItem {
   id          Int       @id @default(autoincrement())
   workOrderId Int       @map("work_order_id")
   itemId      Int       @map("item_id")
+  // F-2026-10-22-063-S: snapshot PERINGATAN fitment, pola sama QuotationItem.
+  // Baris jasa itemId=0 dilewati (BR-FIT-04) — kolom tetap null.
+  fitmentResult      String?   @map("fitment_result")
+  fitmentRuleId      Int?      @map("fitment_rule_id")
+  fitmentEvaluatedAt DateTime? @map("fitment_evaluated_at")
   description String?
   qty         Decimal   @db.Decimal(15, 2)
   cost        Decimal   @default(0.00) @db.Decimal(15, 2)
