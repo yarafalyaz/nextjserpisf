@@ -129,23 +129,19 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3: pemanggil jurnal E2/E3 kini dirujuk UI
   // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
-  // F-2026-10-22-066-S inti backend (PR #515): 7 aksi JobChangeOrder WO;
-  // UI konsumsi = kartu BOT 2 t_b1b321cb (buang 7 entri ini saat panel
-  // change order di halaman perintah kerja memanggilnya).
-  "src/actions/job-change-order.actions.ts::createJobChangeOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::updateJobChangeOrderLines":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::sendJobChangeOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::recordJobChangeOrderApproval":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::cancelJobChangeOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::applyJobChangeOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::getJobChangeOrdersForWorkOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
+  // F-2026-10-22-066-S: 7 aksi JobChangeOrder kini dirujuk panel Change Order
+  // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
+  // F-2026-10-22-067-S backend dulu: kontrak jadwal termin siap; kartu
+  // jadwal di JobBillingCard menyusul di kartu frontend t_ba8fe9ef
+  // (buang 4 entri ini saat komponen kartu jadwal memanggilnya).
+  "src/actions/job-payment-schedule.actions.ts::createJobPaymentSchedule":
+    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
+  "src/actions/job-payment-schedule.actions.ts::updateJobPaymentScheduleTerms":
+    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
+  "src/actions/job-payment-schedule.actions.ts::cancelJobPaymentSchedule":
+    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
+  "src/actions/job-payment-schedule.actions.ts::getJobPaymentScheduleForQuotation":
+    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
 }
 
 describe("keterhubungan aksi server", () => {

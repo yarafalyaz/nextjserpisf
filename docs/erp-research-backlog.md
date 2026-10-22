@@ -9489,3 +9489,133 @@ Dependensi: F-2026-10-21-015 (terima parsial, receivedQty) hanya untuk AC-MR-4 p
 
 ### Yang TIDAK diusulkan run ini
 - Terima parsial/selisih transfer (F-015 sendiri, sudah bervonis BOT 4), permintaan pembelian vendor (sudah ada), persetujuan bertingkat multi-penandatangan, notifikasi WA/email otomatis ke gudang sumber (kanal keluar belum ada — domain k), saran sumber otomatis dari stok (BR-MR-08 informatif saja).
+
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-089-S antrean penagihan piutang + jejak tindak lanjut & janji bayar (gap baru domain d/j)
+
+### 0. Verifikasi live origin/main 29f7102a (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Aging piutang agregat per faktur: `loadReceivablesAging` (`src/lib/reports/aging-reports-data.ts:88`) — status diakui `RECOGNISED_AR_STATUSES = ["posted","partial","paid"]` (`document-status.ts:10`), sisa > 0, wajib dueDate; tanpa tahap penagihan, tanpa kontak tindak lanjut per baris, tanpa jejak.
+- Tukar faktur: model `InvoiceExchange/InvoiceExchangeItem` (schema.prisma ~:1476), aksi `createInvoiceExchange` (invoice-exchange.actions.ts:47) — faktur boleh diserahkan hanya `EXCHANGEABLE_STATUSES=["posted","partial"]` (:22), satu faktur tidak boleh diserahkan dua kali, tanpa jurnal (piutang sudah tercatat faktur). Laporan daftar: `loadInvoiceExchanges` + `buildInvoiceExchangeListing` (settlement dari paidAmount).
+- Notifikasi overdue ke admin: cron `daily-notifications/route.ts:98-117` + `api/cron` task overdue-invoice — hitungan agregat ke admin, BUKAN antrean kerja per faktur untuk petugas penagih.
+- Jejak klik WA: `WhatsappButton` (whatsapp-button.tsx:22) + pola F-2026-10-21-036 (klik tercatat); pola antrean terjadwal: `lead-followups.ts` (F-037, builder murni tanpa migrasi).
+- Izin katalog nyata: `view_reports` (module-catalog.generated.ts:411), `view_sales_invoices` (:145), `view/create_invoice_exchanges` (:174-175).
+
+Belum ada (bukti grep run ini = 0):
+- Model/aksi jejak tindak lanjut penagihan per faktur: grep `CollectionFollow|InvoiceFollow|janji bayar|promise` di prisma+src = 0. ActivityLog generik ada tapi bukan jadwal janji bayar terstruktur (tanggal janji + hasil tindak lanjut per faktur).
+- Antrean kerja penagihan: tidak ada builder yang menggabungkan (a) faktur terbit belum diserahkan tukar faktur, (b) sudah diserahkan belum lunas, (c) janji bayar lewat — jadi petugas membuka aging + daftar tukar faktur + daftar faktur terpisah dan menebak prioritas.
+
+Anti-duplikat: nomor -S maks di main = 085-S, PR terbuka maks 088-S/088-V; 089 bebas. Gap ini bukan F-032 (statement per pelanggan, sudah terbangun), bukan F-017 (paparan kredit), bukan laporan aging existing.
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: Petugas Penagihan / Admin Penjualan (kolektor), Supervisor Penjualan, Admin (lihat semua).
+Dokumen masuk: SalesInvoice (posted/partial, sisa > 0), InvoiceExchange+Item (bila sudah diserahkan), Customer (nama/kontak).
+Dokumen keluar: baris antrean turunan (read-model, tanpa dokumen baru tahap 1) + Catatan Tindak Lanjut Penagihan per faktur (dokumen baru tahap 2, tanpa jurnal).
+
+Alur:
+1. Sistem menurunkan tahap penagihan per faktur dari dokumen existing (tahap 1, tanpa kolom baru):
+   - `BELUM_DISERAHKAN`: faktur posted/partial, sisa > 0, belum ada InvoiceExchangeItem aktif (exchange deletedAt null).
+   - `SUDAH_DISERAHKAN`: sudah ada tukar faktur aktif, sisa > 0, belum lewat janji/due tukar faktur.
+   - `LEWAT_JANJI`: sisa > 0 DAN (janji bayar terakhir tanggalnya < hari ini WIB, ATAU belum ada janji DAN dueDate acuan < hari ini). Acuan due: InvoiceExchange.dueDate bila ada, else SalesInvoice.dueDate. Faktur tanpa dueDate apa pun: tahap dari tukar faktur saja, kolom umur tampil "—" jujur, tidak ditebak.
+   - Faktur lunas (sisa <= 0,005 pola repo) / cancelled / draft / deletedAt: tidak masuk antrean.
+2. Petugas membuka antrean terurut: LEWAT_JANJI paling lama dulu, lalu jatuh tempo terdekat, lalu sisa terbesar (urutan final Q-COL-3 BOT 1).
+3. Petugas mencatat tindak lanjut (tahap 2): tanggal, kanal (telepon/WA/kunjungan/email/lainnya — kosakata Q-COL-2), hasil, janji bayar (tanggal + nominal opsional), catatan. WA memakai WhatsappButton existing; klik saja bukan tindak lanjut — tindak lanjut wajib disimpan eksplisit (pola jujur F-036).
+4. Janji bayar terlewat tanpa pembayaran: faktur naik ke LEWAT_JANJI otomatis dari turunan (tanpa cron tulis status).
+5. Pembayaran tetap lewat SalesPayment existing; antrean membaca paidAmount — antrean tidak pernah mencatat pembayaran.
+
+### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+
+Tahap 1: nol migrasi. Builder murni + loader (pola lead-followups): input faktur + exchange items + tindak lanjut terakhir; output baris {invoiceId, documentNo, customerId/Name, phone/contactPerson, date, dueAcuan, sisaSen, tahap, umurHari|null, exchangeDocumentNo|null, lastFollowUpAt|null, promiseDate|null}.
+Tahap 2: model usulan `InvoiceCollectionFollowUp`: id, salesInvoiceId (FK, index), followedUpAt (tanggal kejadian), channel (teks tervalidasi), outcome (teks tervalidasi: terhubung_janji_bayar / terhubung_tanpa_janji / tidak_terhubung / sengketa / lainnya — final Q-COL-2), promisedDate (nullable), promisedAmountSen (nullable, >0 bila terisi), notes, createdBy, createdAt, deletedAt (soft, pola repo). Tanpa kolom status tersimpan di SalesInvoice. slug bila pola repo mewajibkan (BOT 3 putus, masuk cakupan backfill slug bila ber-slug).
+
+### 3. Status-transition matrix (turunan, bukan kolom)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| BELUM_DISERAHKAN | createInvoiceExchange memuat faktur | SUDAH_DISERAHKAN | aksi existing, create_invoice_exchanges |
+| SUDAH_DISERAHKAN / BELUM_DISERAHKAN | due acuan atau janji terakhir lewat, sisa > 0 | LEWAT_JANJI | turunan builder, tanpa tulis |
+| LEWAT_JANJI | janji baru tanggal >= hari ini dicatat | SUDAH_DISERAHKAN / BELUM_DISERAHKAN (sesuai exchange) | catat tindak lanjut berizin |
+| tahap apa pun | pembayaran membuat sisa <= 0,005 | keluar antrean | SalesPayment existing |
+| tahap apa pun | faktur cancelled/deleted | keluar antrean | status existing |
+
+### 4. Role/permission matrix (izin katalog TERVERIFIKASI-KODE)
+
+| Aksi | Izin | Catatan |
+|---|---|---|
+| Lihat antrean | `view_reports` (:411) DAN `view_sales_invoices` (:145) | keduanya wajib; loader menegakkan di server |
+| Lihat kontak pelanggan di baris | turunan izin di atas | phone tampil hanya di antrean, bukan ekspor laporan umum (Q-COL-4) |
+| Catat tindak lanjut + janji | usulan key baru `create_invoice_collection_followups` (Q-COL-1 BOT 1) | jangan pinjam create_invoice_exchanges — beda tugas |
+| Hapus/ubah tindak lanjut | tahap 1: tidak ada (append-only + soft-delete admin) | Q-COL-1 |
+| Buat tukar faktur dari antrean | `create_invoice_exchanges` existing | tombol hanya tampil bila berizin + tahap BELUM_DISERAHKAN |
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-COL-01 | Tahap penagihan selalu turunan builder dari faktur+exchange+janji terakhir; tidak ada kolom status penagihan tersimpan tahap 1-2 | USULAN |
+| BR-COL-02 | Sisa = grandTotal - paidAmount presisi sen pola aging-amounts; lunas bila sisa <= 0,005 (pola exchange existing) | TERVERIFIKASI-KODE (pola) |
+| BR-COL-03 | Due acuan = InvoiceExchange.dueDate bila exchange aktif ada, else SalesInvoice.dueDate; keduanya kosong = umur "—", tidak ditebak | USULAN |
+| BR-COL-04 | Satu faktur satu baris antrean walau exchange historis ganda (exchange aktif terakhir yang dipakai); faktur di exchange terhapus (deletedAt) dianggap belum diserahkan | USULAN |
+| BR-COL-05 | Janji bayar terakhir = promisedDate maksimum dari tindak lanjut tidak terhapus dengan outcome janji; janji lewat + sisa > 0 = LEWAT_JANJI | USULAN |
+| BR-COL-06 | Catat tindak lanjut append-only; koreksi = catatan baru, bukan edit diam-diam; hapus hanya soft-delete berizin + ActivityLog | USULAN |
+| BR-COL-07 | Antrean dan tindak lanjut tidak membuat jurnal, tidak mengubah paidAmount/status faktur, tidak mencatat pembayaran | USULAN (konsisten tanpa-jurnal exchange) |
+| BR-COL-08 | Klik WA bukan tindak lanjut; tindak lanjut wajib simpan eksplisit (kanal WA dipilih manual) | USULAN (pola F-036) |
+| BR-COL-09 | Nominal janji informatif; tidak mengunci pembayaran, tidak menjadi piutang kedua, tidak masuk aging/statement | USULAN |
+| BR-COL-10 | Kontak pelanggan (phone/contactPerson) hanya tampil ke pemegang izin antrean; ekspor tahap 1 tanpa kolom kontak | USULAN — Q-COL-4 |
+| BR-COL-11 | Denda keterlambatan / bunga piutang tidak dihitung spec ini (Zahir term-of-sales menyebut denda — ISF belum ada kebijakan) | BUTUH-VONIS BOT 4 bila kelak diusulkan |
+| BR-COL-12 | Pengiriman pengingat otomatis ke pelanggan (WA/email) tidak dibangun; kanal keluar + persetujuan isi = keputusan terpisah | BUTUH-VONIS BOT 1 |
+
+### 6. Kata & label UI (mengikat BOT 2; verbatim)
+
+Judul: "Antrean Penagihan Piutang". Kolom: Pelanggan | No. Faktur | Tahap | Jatuh Tempo Acuan | Umur | Nilai Faktur | Dibayar | Sisa | Tindak Lanjut Terakhir | Janji Bayar | Aksi.
+Label tahap persis: `Belum Diserahkan`, `Sudah Diserahkan`, `Lewat Janji`. Tombol: `Buat Tukar Faktur` (tahap Belum Diserahkan + berizin), `Catat Tindak Lanjut`, `Hubungi via WhatsApp` (bila phone ada). Notice jujur wajib: "Tahap dan umur dihitung dari faktur, tukar faktur, dan janji bayar terakhir. Mencatat tindak lanjut tidak mencatat pembayaran dan tidak membuat jurnal." Baris tanpa due acuan: Umur `—`. Janji kosong: `—`.
+
+### 7. Feature matrix (BENCHMARK, akses 2026-10-22)
+
+| Fitur | Accurate | Zahir | ISF sekarang |
+|---|---|---|---|
+| Umur piutang dari jatuh tempo / tukar faktur | Ada: umur faktur + kolom Jatuh Tempo (Tukar Faktur) di Faktur Belum Lunas — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/umur-faktur-penjualan/ ; https://help.accurate.id/product/accurate-online/fitur-aol/laporan/daftar-laporan/umur-piutang/ | Aging custom + reminder jatuh tempo piutang — https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang | Aging agregat ada; umur berbasis due tukar faktur belum ditampilkan per antrean kerja |
+| Syarat pembayaran + monitoring jatuh tempo | Ada — https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/syarat-pembayaran/mengenal-fitur-syarat-pembayaran/ | Term of sales per pelanggan + denda — URL fasilitas di atas | dueDate per faktur/exchange ada; antrean tindak lanjut belum |
+| Jejak tindak lanjut + janji bayar per faktur | Tidak diverifikasi run ini (jangan klaim) | Tidak diverifikasi run ini | ABSEN (spec ini) |
+
+### 8. Acceptance criteria + edge cases (BOT 6, falsifikasi)
+
+| ID | Skenario |
+|---|---|
+| AC-COL-1 | Faktur posted sisa > 0 tanpa exchange tampil BELUM_DISERAHKAN; sesudah createInvoiceExchange memuatnya, baris berubah SUDAH_DISERAHKAN tanpa tulis status |
+| AC-COL-2 | Cabut pembacaan InvoiceExchangeItem di builder = faktur terserahkan tampil salah tahap (tes merah) |
+| AC-COL-3 | Janji kemarin + sisa > 0 = LEWAT_JANJI; catat janji besok = keluar LEWAT_JANJI; cabut promisedDate dari builder = merah |
+| AC-COL-4 | Faktur lunas via SalesPayment hilang dari antrean; draft/cancelled/deleted tidak pernah tampil |
+| AC-COL-5 | Tanpa dueDate faktur maupun exchange: baris tampil, Umur `—`, tidak masuk LEWAT_JANJI dari due (hanya janji bisa) |
+| AC-COL-6 | Exchange di-soft-delete: faktur kembali BELUM_DISERAHKAN; exchange ganda aktif: satu baris, acuan terakhir |
+| AC-COL-7 | Catat tindak lanjut tanpa izin baru ditolak server; tanpa view_reports/view_sales_invoices antrean tertutup (fail-closed) |
+| AC-COL-8 | Catat tindak lanjut: Jurnal=0, paidAmount/status faktur tidak berubah, ActivityLog tercatat |
+| AC-COL-9 | Klik WA saja tidak membuat baris tindak lanjut; simpan kanal WA manual yang membuat |
+| AC-COL-10 | UI tidak menghitung ulang tahap/sisa: ganti builder notice/label = UI mengikuti; ekspor tanpa kolom phone |
+| AC-COL-11 | promisedAmount <= 0 atau promisedDate sebelum followedUpAt ditolak validasi server (janji lampau hanya lewat outcome tanpa janji) |
+| AC-COL-12 | Dua tindak lanjut bersamaan: keduanya tersimpan (append), janji terakhir menurut promisedDate maksimum, bukan urutan input |
+
+### 9. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-COL-1 | Key izin catat tindak lanjut baru vs reuse edit_sales_invoices; siapa boleh soft-delete | BOT 1 |
+| Q-COL-2 | Kosakata final channel + outcome (usulan §2) | BOT 1 |
+| Q-COL-3 | Urutan antrean final (usulan: lewat janji tertua > due terdekat > sisa terbesar) + rute persis (usulan /penjualan/antrean-penagihan vs laporan) | BOT 1 |
+| Q-COL-4 | Kontak tampil di antrean saja vs boleh ekspor berizin khusus | BOT 1 |
+| Q-COL-5 | Fisik model tahap 2 + apakah promisedAmount dalam sen Decimal pola repo | BOT 3 |
+| — | Denda/bunga keterlambatan, pengingat otomatis ke pelanggan | BOT 4 (uang) / BOT 1 (kanal) — tidak menahan tahap 1-2 |
+
+### 10. Backlog implementasi (turunan spec ini; ID spec F-2026-10-22-089-S)
+
+1. BOT 1: putus Q-COL-1..4 + merge PR spec ini bila gate hijau.
+2. BOT 3 (@backend-prisma-inventory-workshop): tahap 1 builder+loader antrean (nol migrasi) sesudah Q-COL-3; tahap 2 model InvoiceCollectionFollowUp + aksi catat (append-only, klaim pola repo) sesudah Q-COL-1/2/5. Klaim schema.prisma di board sebelum edit tahap 2. Effort S (tahap 1) / M (tahap 2).
+3. BOT 2 (@frontend-ui-ux-next-js): halaman antrean + form Catat Tindak Lanjut SESUDAH kontrak BOT 3, kata §6 verbatim, tombol tukar faktur/WA bersyarat izin+tahap, nol hitung tahap/sisa di UI. UI fitur ini didahulukan atas polish.
+4. BOT 6: AC-COL-1..12 atas head BOT 3/BOT 2.
+5. BOT 4: tidak ada vonis diminta tahap ini (BR-COL-07/11); dipanggil hanya bila denda/bunga diusulkan.
+
+### Yang TIDAK diusulkan run ini
+- Pengingat otomatis WA/email ke pelanggan, denda keterlambatan, penagihan pihak ketiga, alokasi pembayaran parsial per janji, status penagihan tersimpan di SalesInvoice, perubahan aging/statement existing.
