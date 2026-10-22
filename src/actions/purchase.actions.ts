@@ -466,6 +466,52 @@ function purchaseOrderItemData(it: PurchaseOrderLine) {
   };
 }
 
+type PurchaseRequestItemInput = {
+  itemId: number;
+  qty: number;
+  notes: string | null;
+};
+
+/**
+ * Baris item Permintaan Pembelian dari JSON `items` via parser repo;
+ * Number() mentah membaca "2.000" jadi 2 dan "abc" jadi NaN yang lolos
+ * filter >0, lalu qty tersimpan menyusut diam-diam. Baris berkode item
+ * dengan qty tak terbaca ditolak berpesan, bukan dibuang diam-diam.
+ * Baris tanpa item (itemId kosong/0) tetap dibuang (baris kosong form);
+ * qty <= 0 pada baris berkode tetap dibuang (perilaku lama: baris belum
+ * diisi). Satu sumber create+update.
+ */
+function parsePurchaseRequestItems(
+  itemsJson: string | null | undefined,
+): PurchaseRequestItemInput[] {
+  const rows =
+    safeJsonParse<
+      { itemId?: unknown; qty?: unknown; notes?: unknown }[]
+    >(itemsJson ?? null) ?? [];
+  const items: PurchaseRequestItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parseLocaleNumber(
+      row?.itemId as string | number | null | undefined,
+    );
+    if (itemId === null || itemId <= 0) continue;
+    const qty = parseLocaleNumber(
+      row.qty as string | number | null | undefined,
+    );
+    if (qty === null) {
+      throw new Error(
+        `Kuantitas permintaan item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+      );
+    }
+    if (qty <= 0) continue;
+    items.push({
+      itemId,
+      qty,
+      notes: typeof row.notes === "string" && row.notes ? row.notes : null,
+    });
+  }
+  return items;
+}
+
 // ==================== PURCHASE REQUEST ACTIONS ====================
 
 export async function createPurchaseRequest(formData: FormData) {
@@ -479,10 +525,7 @@ export async function createPurchaseRequest(formData: FormData) {
     const documentNo = await generateDocumentNumber("PR");
     const slug = await nextSlug("purchaseRequest", documentNo);
     const requestedBy = v.requestedBy || Number(user.id);
-    const items =
-      safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(
-        v.items ?? null,
-      ) ?? [];
+    const items = parsePurchaseRequestItems(v.items);
 
     const requestDateRaw = v.requestDate;
     const description = v.description ?? null;
@@ -501,13 +544,11 @@ export async function createPurchaseRequest(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: items
-            .filter((i) => i.itemId > 0)
-            .map((i) => ({
-              itemId: i.itemId,
-              qty: i.qty,
-              notes: i.notes || null,
-            })),
+          create: items.map((i) => ({
+            itemId: i.itemId,
+            qty: i.qty,
+            notes: i.notes,
+          })),
         },
       },
     });
@@ -2257,10 +2298,9 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
     const slug = await nextSlug("purchaseRequest", existingPr.documentNo, { excludeId: id });
 
     const requestedBy = v.requestedBy || Number(user.id);
-    const items =
-      safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(
-        v.items ?? null,
-      ) ?? [];
+    // Parse sebelum transaksi: qty tak terbaca ditolak sebelum deleteMany
+    // menghapus baris lama.
+    const items = parsePurchaseRequestItems(v.items);
 
     const pr = await prisma.$transaction(async (tx) => {
       const latestStatus = await tx.purchaseRequest.findUnique({
@@ -2288,13 +2328,11 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
           description,
           notes: v.notes ?? null,
           items: {
-            create: items
-              .filter((i) => i.itemId > 0)
-              .map((i) => ({
-                itemId: i.itemId,
-                qty: i.qty,
-                notes: i.notes || null,
-              })),
+            create: items.map((i) => ({
+              itemId: i.itemId,
+              qty: i.qty,
+              notes: i.notes,
+            })),
           },
         },
       });
