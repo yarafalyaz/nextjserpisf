@@ -11011,6 +11011,230 @@ saran ulang); relasi dinonaktifkan di antara saran tampil dan simpan
   ditunda-teknis) — spec ini hanya membaca status turunan existing.
 >>>>>>> 2e3a2def (docs(business): spec F-2026-10-22-069-S item alternatif part WO (lanjutan backlog F-105))
 
+## SPEC BOT 5 — Pisah run payroll mingguan/bulanan (F-2026-10-22-076-S, gap domain h tanpa F-ID induk baru)
+
+Status: SPEC (dokumen saja, tanpa kode). Basis verifikasi live
+origin/main `57fa0556` (2026-10-22). Dipicu kartu t_8fc7f6c0.
+Anti-duplikat: serial -S terpakai maks F-2026-10-22-072-S
+(PR #516 MERGED); -V terpakai maks F-2026-10-22-075-V
+(PR #518 OPEN, BOT 4). Nomor 073 terpakai vonis BOT 4
+(F-2026-10-22-073-V, kartu t_4dd6d5b1), 074/075 juga -V;
+076 bebas di backlog+board+semua PR all-state+kanban
+(grep run ini = 0). Inti F-2026-10-21-012/013/014/015/022/
+032/035/036/037 semua SUDAH terimplementasi di main
+(verifikasi ls-tree run ini: customer-statement, lead-
+followups, whatsapp-log, WarrantyClaim.supplierClaimStatus,
+InventoryTransferItem.receivedQty schema:1727) dan inti
+F-2026-10-20-103..108/104/105/106 + F-2026-10-21-008..033
+sudah terspec (063-S..072-S) — tidak diduplikasi. Gap ini
+belum pernah ber-ID: backlog hanya menyebutnya sekali di
+catatan Bot 5 baris 2693 ("generateBulkPayroll tanpa filter
+paymentFrequency") tanpa entri F-* dan tanpa spec.
+
+### 1. Masalah terverifikasi (TERVERIFIKASI-KODE)
+
+1. Master karyawan SUDAH membedakan frekuensi bayar:
+   `Employee.paymentFrequency` String default "MONTHLY"
+   (prisma/schema.prisma:808), form karyawan menawarkan
+   WEEKLY/MONTHLY dan label gaji pokok berubah "Per Minggu/
+   Per Bulan" mengikuti pilihan (employee-form.tsx:355-368).
+   Artinya `baseSalary` karyawan WEEKLY adalah nominal
+   PER MINGGU, bukan per bulan — fakta master, bukan tebakan.
+2. Run massal TIDAK membedakan: `generateBulkPayroll`
+   (src/actions/hrm.actions.ts:1909) mengambil SEMUA
+   karyawan aktif (`where: { isActive: true, deletedAt:
+   null }`, tanpa paymentFrequency) lalu membuat slip untuk
+   semuanya pada `period` yang sama. Tombol UI-nya pun
+   bernama persis "Buat Gaji Bulanan" dan teksnya "semua
+   karyawan yang aktif" (bulk-generate-payroll-button.tsx:
+   86,92,97). Karyawan mingguan ikut terbit slip "bulanan"
+   sebesar baseSalary mingguan penuh per bulan kalender —
+   salah nominal 4x lipat ke bawah bila dibayar lewat jalur
+   ini, atau admin terpaksa memproses mingguan satu-satu
+   lewat processPayroll manual tanpa perlindungan massal.
+3. Tabrakan kunci periode: `Payroll @@unique([employeeId,
+   period])` (schema:3054) dan penjaga duplikat processPayroll
+   (hrm.actions.ts, findFirst employeeId+period) memakai
+   `period` String "YYYY-MM". Karyawan mingguan butuh 4-5
+   slip dalam satu bulan kalender — slip minggu ke-2 pada
+   bulan yang sama DITOLAK sebagai duplikat walau rentang
+   tanggalnya berbeda dan sah. Jadi hari ini karyawan
+   WEEKLY secara struktural tidak bisa digaji mingguan
+   lewat sistem: satu-satunya jalan = period karangan
+   (mis. "2026-10-W2") yang merusak rekap masa PPh21/
+   laporan yang mengelompokkan per period (F-2026-10-21-028
+   rekap membaca period apa adanya).
+4. Estimasi per slip membaca rentang tanggal apa adanya
+   (computePayrollEstimation: lembur/absensi/komponen per
+   startDate..endDate) — mesin hitungnya sendiri NETRAL
+   frekuensi dan sudah benar untuk rentang seminggu; yang
+   hilang murni (a) pemilihan populasi per frekuensi dan
+   (b) identitas periode yang membedakan minggu. Tidak ada
+   prorata gaji pokok per hari di jalur massal: baseSalary
+   dipakai utuh (hrm.actions.ts computeBulkPayrollEstimations)
+   — benar untuk slip yang rentangnya memang satu satuan
+   frekuensi karyawan itu, salah bila rentang massal bulanan
+   diterapkan ke karyawan mingguan (butir 2).
+
+### 2. Keputusan spec (USULAN kecuali ditandai lain)
+
+Satu parameter frekuensi run, tanpa model baru di tahap
+pertama:
+
+(a) `generateBulkPayroll` menerima parameter frekuensi
+    (`MONTHLY` | `WEEKLY`, cocok persis nilai master
+    existing) dan populasinya = karyawan aktif dengan
+    `paymentFrequency` sama. Default pemanggil existing
+    (tombol bulanan) = MONTHLY supaya perilaku hari ini
+    untuk populasi bulanan tidak berubah. Karyawan
+    frekuensi lain TIDAK ikut, dan hasil run menyebut
+    jumlah terlewati per frekuensi lain (bukan diam).
+(b) Identitas periode mingguan: usulan `period` tetap
+    "YYYY-MM" (bulan masa pajak slip) DITAMBAH pembeda
+    rentang yang sudah ada — kunci duplikat digeser dari
+    (employeeId, period) menjadi (employeeId, startDate,
+    endDate) untuk SEMUA frekuensi, dengan penjaga tumpang-
+    tindih: slip baru yang rentangnya beririsan slip existing
+    karyawan sama (status draft/approved/paid, bukan
+    cancelled) DITOLAK menyebut nomor slip penabrak. Ini
+    BUTUH-VONIS BOT 3 untuk bentuk fisik final (indeks/
+    migrasi unik) dan BUTUH-VONIS BOT 4 hanya untuk
+    konfirmasi bahwa masa PPh21/BPJS tetap dibaca dari
+    bulan endDate (bukan dari string period) — lihat Q-PF.
+(c) Tombol kedua "Buat Gaji Mingguan" di halaman
+    penggajian: pemilih minggu = tanggal mulai (Senin) +
+    tanggal selesai turunan 7 hari kalender (boleh disunting
+    manual pola existing), period terisi otomatis dari bulan
+    tanggal selesai. TIDAK ada cutoffDay bulanan untuk
+    mingguan.
+(d) Slip tunggal (processPayroll) ikut penjaga irisan (b);
+    label form menampilkan frekuensi karyawan terpilih dan
+    peringatan bila rentang != 7 hari untuk WEEKLY / rentang
+    melintasi 2 bulan untuk MONTHLY (peringatan, bukan
+    blokir — blokir hanya irisan duplikat).
+(e) Rekap/laporan TIDAK berubah kontrak: pengelompokan
+    masa tetap per bulan kalender dari endDate/period
+    existing; slip mingguan tampil sebagai baris-baris
+    dalam bulan masanya. Jangan buat laporan mingguan
+    terpisah.
+
+Yang SENGAJA tidak diubah: mesin TER PPh21/BPJS per slip
+(F-2026-10-21-026/027 sudah berjalan di jalur estimasi),
+jurnal onPayrollPaid, amortisasi pinjaman per slip, status
+draft→approved→paid. Catatan jujur: pinjaman karyawan
+bercicilan "per bulan" (EmployeeLoan.monthlyInstallment)
+akan terpotong TIAP slip mingguan bila karyawan mingguan
+punya pinjaman aktif — itu perilaku mesin existing per
+slip, spec ini TIDAK mengarang konversi mingguan; masuk
+Q-PF-4 untuk BOT 4 (apakah cicilan mingguan = bulanan/4,
+tetap penuh, atau ditahan ke slip terakhir bulan) dan
+inti TIDAK boleh jalan untuk karyawan berpinjaman aktif
+sampai Q-PF-4 dijawab (fail-closed: terlewati + terhitung,
+bukan dipotong menebak).
+
+### 3. Alur & status (TERVERIFIKASI-KODE untuk status existing)
+
+Status slip tidak berubah: draft → approved → paid;
+approve menolak snapshot fromFallback; paid atomik +
+jurnal (jalur existing, jangan disentuh spec ini).
+Transisi BARU hanya di pembuatan:
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada slip) | generateBulkPayroll(frekuensi) | draft per karyawan sefrekuensi | create_payroll + scope all (pola bulk existing); karyawan frekuensi lain terlewati terhitung |
+| (belum ada slip) | processPayroll tunggal | draft | create_payroll + penjaga irisan rentang (b) |
+| draft existing beririsan | generate/process ulang | DITOLAK per karyawan | pesan menyebut documentNo slip penabrak; karyawan lain tetap terbit (pola skip existing diperluas, bukan gagal total) |
+
+### 4. Matriks peran/izin (katalog TERVERIFIKASI-KODE)
+
+Katalog live (src/lib/auth/module-catalog.generated.ts:
+301-305): view_payroll/create_payroll/edit_payroll/
+process_payroll; laporan view_payroll_reports (:412).
+Scope gaji: getHrScope fail-closed (src/lib/auth/hr-scope.ts)
+— self hanya slip sendiri, kepala_bengkel se-departemen,
+HR/finance/admin all. Spec ini TIDAK menambah key izin:
+
+| Aksi | Izin | Scope |
+|---|---|---|
+| Buat massal mingguan/bulanan | create_payroll (existing, pola bulk) | all saja (bulk existing memang populasi penuh) |
+| Buat slip tunggal | create_payroll | per penjaga existing |
+| Lihat slip mingguan | view_payroll | hrScopeWhere existing (self/department/all) |
+| Approve / tandai dibayar | process_payroll (approvePayroll/markPayrollPaid existing) | existing |
+
+Nominal gaji karyawan mingguan TIDAK tampil di permukaan
+apa pun di luar scope di atas; log hasil run hanya memuat
+JUMLAH slip + jumlah terlewati, tanpa nominal per orang.
+
+### 5. Register aturan bisnis
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PF-01 | baseSalary WEEKLY = nominal per minggu (label form existing) | TERVERIFIKASI-KODE (employee-form.tsx:368) |
+| BR-PF-02 | Run massal hanya memproses karyawan sefrekuensi; frekuensi lain terlewati + terhitung | USULAN |
+| BR-PF-03 | Duplikat = irisan rentang slip aktif karyawan sama, bukan string period sama | USULAN (fisik BUTUH-VONIS BOT 3, Q-PF-3) |
+| BR-PF-04 | Masa pajak slip = bulan endDate walau period mingguan | BUTUH-VONIS BOT 4 (Q-PF-2) |
+| BR-PF-05 | Karyawan mingguan berpinjaman aktif terlewati fail-closed sampai cicilan mingguan diputus | USULAN + BUTUH-VONIS BOT 4 (Q-PF-4) |
+| BR-PF-06 | Mesin TER/BPJS/jurnal/pinjaman per slip tidak diubah spec ini | TERVERIFIKASI-KODE (jalur existing) |
+| BR-PF-07 | Peringatan rentang tak lazim (mingguan != 7 hari) = peringatan, bukan blokir | USULAN |
+| BR-PF-08 | Frekuensi karyawan diganti di master: slip draft lama tetap frekuensi saat lahir; run berikut memakai nilai baru | USULAN (Q-PF-5 BOT 1) |
+
+### 6. Benchmark (BENCHMARK, URL resmi)
+
+| Aspek | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Periode bayar dipilih saat run | Pencatatan Gaji: pilih tipe Bulanan lalu Ambil karyawan (trainingaccurate.com/blog/bayar-gaji-karyawan-di-accurate-online/) | Multi Payslip: gaji harian/mingguan di luar gaji bulanan (zahirerp.com/id/all-features-of-zahir-products/) | Parameter frekuensi run (BR-PF-02) |
+| Populasi per run | Karyawan dipilih per transaksi gaji | Run payroll per daftar karyawan | Sefrekuensi otomatis dari master |
+| Slip per karyawan per periode | Satu transaksi gaji per periode bayar | Slip dari run payroll | Banyak slip per bulan dibedakan rentang (BR-PF-03) |
+
+### 7. Acceptance criteria (BOT 6, falsifikasi)
+
+1. AC-PF-1: Populasi campuran 1 MONTHLY + 1 WEEKLY; run
+   MONTHLY hanya menerbitkan slip MONTHLY; paksa tanpa
+   filter frekuensi -> slip WEEKLY ikut = MERAH.
+2. AC-PF-2: Karyawan WEEKLY digaji 2 minggu berurutan dalam
+   bulan sama -> 2 slip sah; paksa kunci (employeeId,period)
+   lama -> slip ke-2 tertolak = MERAH.
+3. AC-PF-3: Rentang baru beririsan slip draft existing ->
+   ditolak menyebut documentNo penabrak; rentang bersebelahan
+   persis (selesai = mulai slip lain) -> lolos.
+4. AC-PF-4: Karyawan WEEKLY berpinjaman aktif pada run
+   mingguan -> terlewati + terhitung di hasil, tanpa slip;
+   potong cicilan menebak = MERAH (sampai Q-PF-4 dijawab).
+5. AC-PF-5: Hasil run memuat count terbit + count terlewati
+   per alasan (frekuensi lain / pinjaman / irisan) tanpa
+   nominal gaji siapa pun di log/respons di luar scope.
+6. AC-PF-6: Role self (getHrScope) membuka daftar penggajian
+   -> hanya slip sendiri (mingguan+bulanan); slip mingguan
+   rekan tampil = MERAH.
+7. AC-PF-7: Slip mingguan di-approve -> dibayar: jurnal +
+   status paid identik jalur bulanan existing (regresi);
+   approve snapshot fromFallback tetap ditolak.
+8. AC-PF-8: Ganti paymentFrequency karyawan di master di
+   tengah bulan: draft lama tak berubah, run frekuensi baru
+   berikutnya mengambilnya; slip dobel satu rentang = MERAH.
+
+### 8. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-PF-1 | Buka inti ini sekarang (P1 domain h) atau tunggu kebutuhan mingguan tercatat dari pemilik proses? | BOT 1 |
+| Q-PF-2 | Masa PPh21/BPJS slip mingguan dibaca dari bulan endDate (usulan) — konfirmasi, termasuk TER Desember untuk slip mingguan terakhir tahun | BOT 4 |
+| Q-PF-3 | Bentuk fisik kunci anti-dobel rentang: ganti @@unique ke (employeeId,startDate,endDate) + cek irisan di tx, atau tetap period + kolom pembeda minggu? | BOT 3 |
+| Q-PF-4 | Cicilan pinjaman pada slip mingguan: penuh/dibagi/ditahan ke slip terakhir — inti ditahan untuk populasi ini sampai dijawab | BOT 4 |
+| Q-PF-5 | Ganti frekuensi tengah periode berjalan (BR-PF-08) disahkan? | BOT 1 |
+
+Estimasi: BOT 3 filter populasi + penjaga irisan + tombol
+parameter 2-3 hari (migrasi unik hanya bila Q-PF-3 memutus
+ganti indeks); BOT 2 tombol mingguan + label frekuensi form
+slip 1 hari; BOT 6 AC-PF-1..8.
+
+Pemilik berikutnya: BOT 1 putus Q-PF-1/5 -> BOT 4 jawab
+Q-PF-2/4 (dependensi eksplisit, jangan diputus Bot 5) ->
+BOT 3 inti (Q-PF-3) -> BOT 2 UI -> BOT 6 AC-PF-1..8.
+Tanpa kode di kartu spec ini.
+
+---
+
 ---
 
 ## VONIS BOT 4 2026-10-23 — F-2026-10-23-102-V hitung-kembali tahunan PPN Masukan penyerahan campur (PMK-186/PMK.03/2022 Pasal 6-8): mesin hitung-kembali DITOLAK dibangun sekarang; kertas kerja baca-saja bersyarat pemicu (lanjutan F-2026-10-23-101-V P5, siklus standby 01:00, kartu t_0a95fe6e)
