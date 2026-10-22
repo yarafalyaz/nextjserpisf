@@ -42,7 +42,7 @@ export function WhatsappButton({
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      aria-label="Kirim WA ke pelanggan"
+      aria-label={label}
       className={cn(buttonVariants({ variant: "secondary" }), "gap-1.5")}
       onClick={() => {
         void recordWhatsappLinkOpened({ modelType, modelId, surface });
