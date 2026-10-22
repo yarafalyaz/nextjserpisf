@@ -131,6 +131,17 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
   // F-2026-10-22-066-S: 7 aksi JobChangeOrder kini dirujuk panel Change Order
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
+  // F-2026-10-22-067-S backend dulu: kontrak jadwal termin siap; kartu
+  // jadwal di JobBillingCard menyusul di kartu frontend t_ba8fe9ef
+  // (buang 4 entri ini saat komponen kartu jadwal memanggilnya).
+  "src/actions/job-payment-schedule.actions.ts::createJobPaymentSchedule":
+    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
+  "src/actions/job-payment-schedule.actions.ts::updateJobPaymentScheduleTerms":
+    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
+  "src/actions/job-payment-schedule.actions.ts::cancelJobPaymentSchedule":
+    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
+  "src/actions/job-payment-schedule.actions.ts::getJobPaymentScheduleForQuotation":
+    "F-2026-10-22-067-S backend; kartu jadwal termin di JobBillingCard menyusul (frontend t_ba8fe9ef)",
 }
 
 describe("keterhubungan aksi server", () => {
