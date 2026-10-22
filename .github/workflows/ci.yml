@@ -201,4 +201,4 @@ jobs:
       - name: Build production image
         run: docker buildx build --load --progress=plain --platform linux/amd64 -t silengkap:ci .
       - name: Smoke test production image
-        run: docker run --rm silengkap:ci sh -c 'test -r /app/server.js; test ! -e /app/node_modules/tailwindcss/index.css; id'
+        run: docker run --rm silengkap:ci sh -c 'test -r /app/server.js && test ! -e /app/node_modules/tailwindcss/index.css && id -u | grep -qx 1001'
