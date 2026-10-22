@@ -7676,3 +7676,4 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+Spec F-2026-10-22-063-S (BOT 5, kartu t_d6a46f04): file spec lengkap `docs/spec-f023-fitment-enforcement-lapis-aman.md` di branch PR ini — fitment peringatan (bukan blokir) di Quotation/WO, induk F-2026-10-21-023. Ringkas: BR-FIT-01..10, Q-FIT-1..2 BUTUH-VONIS Lead, AC-FIT3-1..7 (BOT 3) + AC-FIT2-1..6 (BOT 2) + falsifikasi BOT 6. Tanpa kode/schema di spec ini.
