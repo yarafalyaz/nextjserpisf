@@ -171,6 +171,15 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-22-089-S inti backend; form Catat Tindak Lanjut menyusul (frontend t_6f73907a)",
   "src/actions/invoice-collection.actions.ts::deleteInvoiceCollectionFollowUp":
     "F-2026-10-22-089-S inti backend; tombol hapus tindak lanjut menyusul (frontend t_6f73907a)",
+  // F-2026-10-22-068-S inti (t_e2496e00, PR #589): aksi ganti revisi BOM
+  // order berjalan backend dulu; panel usulan di detail WO/PO menyusul
+  // di kartu frontend t_b60d664d (buang entri ini saat UI memanggilnya).
+  "src/actions/bom-revision-change.actions.ts::requestBomRevisionChange":
+    "F-2026-10-22-068-S inti backend; panel ganti revisi BOM menyusul (frontend t_b60d664d)",
+  "src/actions/bom-revision-change.actions.ts::decideBomRevisionChange":
+    "F-2026-10-22-068-S inti backend; tombol putusan usulan menyusul (frontend t_b60d664d)",
+  "src/actions/bom-revision-change.actions.ts::listBomRevisionChangeRequests":
+    "F-2026-10-22-068-S inti backend; daftar usulan di panel menyusul (frontend t_b60d664d)",
   // F-2026-10-22-090-S: 4 aksi stasiun kerja kini dirujuk UI master
   // Stasiun Kerja + pilihan stasiun tahap WO (t_b9d26fab) — entri beku dibuang.
   // F-2026-10-21-030: ke-9 aksi RAB sudah ter-wire UI ProjectBudgetEditor
