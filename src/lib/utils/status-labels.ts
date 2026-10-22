@@ -11,6 +11,11 @@ export const STATUS_LABELS: Record<string, string> = {
   approved: "Disetujui",
   rejected: "Ditolak",
   completed: "Selesai",
+  // F-2026-10-22-068-S: status pengajuan ganti revisi BOM (backend PR #589)
+  menunggu: "Menunggu",
+  disetujui: "Disetujui",
+  ditolak: "Ditolak",
+  diterapkan_langsung: "Diterapkan Langsung",
   active: "Aktif",
   inactive: "Nonaktif",
 
