@@ -1,11 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
-
 const generateBulkPayroll = vi.fn()
 const showSuccess = vi.fn()
 const showError = vi.fn()
@@ -26,51 +21,25 @@ vi.mock("@/lib/utils/toast", () => ({
 }))
 
 vi.mock("@/components/ui/month-picker", () => ({
-  AppMonthPicker: ({
-    label,
-    name,
-    value,
-    onChange,
-  }: {
-    label?: string
-    name: string
-    value?: string
-    onChange?: (v: string) => void
-  }) => (
+  AppMonthPicker: (p: { label?: string; name: string; value?: string; onChange?: (v: string) => void }) => (
     <div>
-      <label htmlFor={`${name}-test`}>{label}</label>
-      <input
-        id={`${name}-test`}
-        value={value ?? ""}
-        onChange={(e) => onChange?.(e.target.value)}
-      />
+      <label htmlFor={`${p.name}-test`}>{p.label}</label>
+      <input id={`${p.name}-test`} value={p.value ?? ""} onChange={(e) => p.onChange?.(e.target.value)} />
     </div>
   ),
 }))
 
 vi.mock("@/components/ui/date-picker", () => ({
-  AppDatePicker: ({
-    label,
-    name,
-    value,
-    onChange,
-  }: {
-    label?: string
-    name: string
-    value?: string
-    onChange?: (v: string) => void
-  }) => (
+  AppDatePicker: (p: { label?: string; name: string; value?: string; onChange?: (v: string) => void }) => (
     <div>
-      <label htmlFor={`${name}-test`}>{label}</label>
-      <input
-        id={`${name}-test`}
-        value={value ?? ""}
-        onChange={(e) => onChange?.(e.target.value)}
-      />
+      <label htmlFor={`${p.name}-test`}>{p.label}</label>
+      <input id={`${p.name}-test`} value={p.value ?? ""} onChange={(e) => p.onChange?.(e.target.value)} />
     </div>
   ),
 }))
 
+import { mount, act } from "@/components/payroll/__tests__/mount"
+import type { Root } from "react-dom/client"
 import { BulkGeneratePayrollButton } from "../bulk-generate-payroll-button"
 import {
   mondayOnOrBefore,
@@ -81,14 +50,9 @@ import {
 
 const roots: Root[] = []
 
-function mount(): HTMLElement {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root = createRoot(container)
+function renderButton(): HTMLElement {
+  const { container, root } = mount(<BulkGeneratePayrollButton cutoffDay={25} />)
   roots.push(root)
-  act(() => {
-    root.render(<BulkGeneratePayrollButton cutoffDay={25} />)
-  })
   return container
 }
 
@@ -199,7 +163,7 @@ describe("helper run mingguan (murni, tanpa hitung payroll)", () => {
 
 describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", () => {
   it("default Bulanan terpilih; pemilih bulan tampil, pemilih Senin tidak", () => {
-    const container = mount()
+    const container = renderButton()
     openDialog(container)
 
     expect(radioByText("Bulanan").getAttribute("aria-checked")).toBe("true")
@@ -210,7 +174,7 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
   })
 
   it("pilih Mingguan: pemilih Senin tampil tanpa cut-off, period turunan dari selesai", () => {
-    const container = mount()
+    const container = renderButton()
     openDialog(container)
     click(radioByText("Mingguan"))
 
@@ -226,7 +190,7 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
   })
 
   it("run Mingguan memanggil action argumen (period-dari-selesai, mulai, selesai, WEEKLY)", async () => {
-    const container = mount()
+    const container = renderButton()
     openDialog(container)
     click(radioByText("Mingguan"))
 
@@ -247,7 +211,7 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
       skippedTotal: 5,
       skippedByReason: { frekuensiLain: 1, pinjaman: 1, bpjsBelumDidukung: 3, irisan: 0, berhenti: 0 },
     })
-    const container = mount()
+    const container = renderButton()
     openDialog(container)
     click(radioByText("Mingguan"))
 
@@ -265,7 +229,7 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
   })
 
   it("run Bulanan tetap memanggil action argumen existing + MONTHLY eksplisit", async () => {
-    const container = mount()
+    const container = renderButton()
     openDialog(container)
 
     const periodInput = document.body.querySelector<HTMLInputElement>("#period-test")!
@@ -285,7 +249,7 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
       success: false,
       error: 'Periode penggajian "2026-10-W2" tidak valid — wajib format "YYYY-MM" (bulan masa dari tanggal selesai).',
     })
-    const container = mount()
+    const container = renderButton()
     openDialog(container)
     click(radioByText("Mingguan"))
 
