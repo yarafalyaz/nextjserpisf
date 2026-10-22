@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { renderToStaticMarkup } from "react-dom/server"
+import { act } from "react"
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
@@ -20,8 +21,10 @@ vi.mock("@/lib/utils/toast", () => ({ showError: vi.fn(), showSuccess: vi.fn() }
 
 import {
   BomRevisionChangePanel,
+  isBomRevisionSubmitDisabled,
   type BomRevisionChangeRequestRow,
 } from "../bom-revision-change-panel"
+import { renderCard, unmountCard, clickButtonByText, setFieldValue } from "./card-test-utils"
 
 afterEach(() => {
   document.body.replaceChildren()
@@ -129,5 +132,70 @@ describe("BomRevisionChangePanel F-2026-10-22-068-S", () => {
     const html = render({ revisionOptions: [] })
     expect(html).not.toContain("+ Ganti Revisi BOM")
     expect(html).toContain("Belum ada revisi BOM released lain")
+  })
+
+  it("gerbang pratinjau AC-BOM68-6: dialog terbuka tanpa pratinjau -> Kirim nonaktif + petunjuk pilih revisi", () => {
+    const { container, root } = renderCard(
+      <BomRevisionChangePanel
+        owner={{ workOrderId: 5 }}
+        documentStatus="in_progress"
+        currentRevision={{ id: 10, revisionNo: 2 }}
+        revisionOptions={[{ id: 11, revisionNo: 3 }]}
+        requests={[]}
+        revisionNoById={{ 10: 2, 11: 3 }}
+        userNameById={{ 7: "Andi", 8: "Budi" }}
+        itemNameById={{ 100: "Kampas Rem" }}
+        canManage
+        currentUserId={8}
+      />,
+    )
+    act(() => {
+      clickButtonByText(container, "+ Ganti Revisi BOM")
+    })
+    // alasan terisi, revisi tujuan belum dipilih -> pratinjau belum ada
+    act(() => {
+      setFieldValue(container, "#bom-change-reason", "Perbaiki komposisi bahan")
+    })
+    const text = container.textContent ?? ""
+    expect(text).toContain(
+      "Pilih revisi tujuan untuk melihat pratinjau selisih sebelum mengirim pengajuan.",
+    )
+    const submit = [...container.querySelectorAll("button")].find(
+      (b) => b.textContent === "Kirim Pengajuan",
+    )
+    expect(submit).toBeDefined()
+    expect(submit!.hasAttribute("disabled")).toBe(true)
+    unmountCard(root)
+  })
+})
+
+describe("isBomRevisionSubmitDisabled gerbang pratinjau F-2026-10-22-068-S", () => {
+  const siap = {
+    isPending: false,
+    previewLoading: false,
+    preview: { lines: [], hasGenuinelyNew: false },
+    toRevisionId: "11",
+    reason: "Perbaiki komposisi bahan",
+  }
+
+  it("semua siap -> aktif", () => {
+    expect(isBomRevisionSubmitDisabled(siap)).toBe(false)
+  })
+
+  it("pratinjau belum tampil (null) -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, preview: null })).toBe(true)
+  })
+
+  it("pratinjau dimuat ulang -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, previewLoading: true })).toBe(true)
+  })
+
+  it("pengiriman berjalan -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, isPending: true })).toBe(true)
+  })
+
+  it("tujuan/alasan kosong -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, toRevisionId: "" })).toBe(true)
+    expect(isBomRevisionSubmitDisabled({ ...siap, reason: "  " })).toBe(true)
   })
 })

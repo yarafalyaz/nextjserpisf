@@ -33,6 +33,8 @@ import { getJobChangeOrdersForWorkOrder } from "@/actions/job-change-order.actio
 import { JobChangeOrderPanel } from "./_components/job-change-order-panel";
 import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions";
 import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel";
+import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card";
+import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data";
 import { auth } from "@/lib/auth/auth";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
@@ -560,6 +562,13 @@ export default async function WorkOrderDetailPage({
 
       {partStatus ? (
         <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
+      ) : null}
+
+      {wo.bomRevision ? (
+        <BomRevisionImpactCard
+          impact={await loadBomRevisionImpact(wo.bomRevision.id)}
+          currentRevisionNo={wo.bomRevision.revisionNo}
+        />
       ) : null}
 
       <BomRevisionChangePanel
