@@ -907,6 +907,70 @@ describe("WorkOrder Coverage", () => {
 });
 
 describe("WorkOrder Item Map Coverage", () => {
+  it("createWorkOrder parses qty/cost string format Indonesia penuh", async () => {
+    mocks.prismaMock.workOrder.create.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data.items.create[0].qty).toBe(2000);
+        expect(data.items.create[0].cost).toBe(2000000);
+        return { id: 1 };
+      },
+    );
+    const res = await (actions as any).createWorkOrder(
+      woFd({}, [{ itemId: 1, qty: "2.000", cost: "2.000.000" }]),
+    );
+    expect(res?.success).toBe(true);
+  });
+  it("createWorkOrder menolak qty tak terbaca tanpa create", async () => {
+    const res = await (actions as any).createWorkOrder(
+      woFd({}, [{ itemId: 1, qty: "abc", cost: 100 }]),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Kuantitas tidak valid");
+    expect(mocks.prismaMock.workOrder.create).not.toHaveBeenCalled();
+  });
+  it("createWorkOrder menolak cost tak terbaca tanpa create", async () => {
+    const res = await (actions as any).createWorkOrder(
+      woFd({}, [{ itemId: 1, qty: 5, cost: "abc" }]),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Biaya satuan tidak valid");
+    expect(mocks.prismaMock.workOrder.create).not.toHaveBeenCalled();
+  });
+  it("updateWorkOrder parses qty/cost string format Indonesia penuh", async () => {
+    seedDraft(mocks.prismaMock.workOrder);
+    mocks.prismaMock.workOrderItem.createMany.mockImplementationOnce(
+      ({ data }: any) => {
+        expect(data[0].qty).toBe(2000);
+        expect(data[0].cost).toBe(2000000);
+        return { count: 1 };
+      },
+    );
+    const res = await (actions as any).updateWorkOrder(
+      1,
+      woFd({}, [{ itemId: 1, qty: "2.000", cost: "2.000.000" }]),
+    );
+    expect(res?.success).toBe(true);
+  });
+  it("updateWorkOrder menolak qty tak terbaca tanpa transaksi", async () => {
+    seedDraft(mocks.prismaMock.workOrder);
+    const res = await (actions as any).updateWorkOrder(
+      1,
+      woFd({}, [{ itemId: 1, qty: "abc", cost: 100 }]),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Kuantitas tidak valid");
+    expect(mocks.prismaMock.workOrderItem.createMany).not.toHaveBeenCalled();
+  });
+  it("updateWorkOrder menolak cost negatif tanpa transaksi", async () => {
+    seedDraft(mocks.prismaMock.workOrder);
+    const res = await (actions as any).updateWorkOrder(
+      1,
+      woFd({}, [{ itemId: 1, qty: 5, cost: -1 }]),
+    );
+    expect(res?.success).toBe(false);
+    expect(res?.error).toContain("Biaya satuan tidak valid");
+    expect(mocks.prismaMock.workOrderItem.createMany).not.toHaveBeenCalled();
+  });
   it("createWorkOrder creates items when valid itemId provided", async () => {
     const res = await (actions as any).createWorkOrder(
       woFd({}, [{ itemId: 5, qty: 3, cost: 200, description: "d", status: "pending" }]),
