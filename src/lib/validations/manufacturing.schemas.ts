@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { dateOnly } from "@/lib/validations/finance.schemas";
+import { parseLocaleNumber } from "@/lib/utils/parse-money";
 
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
@@ -76,6 +77,19 @@ export const updateProductionOrderSchema = z.object({
   notes: optionalString(1000),
 })
 
+/**
+ * Qty BOM/revisi: string berformat Indonesia ("1,5", "1.000", "1.000,5")
+ * dinormalisasi lewat parser repo sebelum koersi zod. z.coerce.number()
+ * mentah membaca "1,5" -> NaN (ditolak pesan zod menyesatkan) dan "1.000"
+ * -> 1 (menyusut diam-diam). String tak terbaca -> null -> gerbang number
+ * menolak. itemId tetap strict (id bukan qty; "1.000" bukan id sah).
+ */
+const localeQty = () =>
+  z.preprocess(
+    (v) => (typeof v === "string" ? parseLocaleNumber(v) : v),
+    z.coerce.number().positive("Qty material harus > 0").max(1_000_000, "Qty terlalu besar"),
+  )
+
 // ==================== BOM REVISION ====================
 // A revision is a frozen snapshot of the product's working BOM
 // (Product.materials). Creating one snapshots the current lines; releasing it
@@ -84,7 +98,7 @@ export const updateProductionOrderSchema = z.object({
 
 const bomRevisionLineSchema = z.object({
   itemId: z.coerce.number().int().positive("Material item tidak valid"),
-  qty: z.coerce.number().positive("Qty material harus > 0").max(1_000_000, "Qty terlalu besar"),
+  qty: localeQty(),
 })
 
 export const createBomRevisionSchema = z.object({
@@ -142,7 +156,7 @@ export function parseRevisionRows(
 
 export const materialRowSchema = z.object({
   itemId: z.coerce.number().int().positive("Material item tidak valid"),
-  qty: z.coerce.number().positive("Qty material harus > 0").max(1_000_000, "Qty terlalu besar"),
+  qty: localeQty(),
 })
 
 export type MaterialRow = z.infer<typeof materialRowSchema>
