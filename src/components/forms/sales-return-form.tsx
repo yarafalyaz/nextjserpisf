@@ -87,7 +87,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={returnData?.id ? "Formulir ubah retur penjualan" : "Formulir tambah retur penjualan"} className="bg-surface rounded-xl border border-default shadow-sm p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="salesInvoiceId">Faktur (Opsional)</Label>
@@ -102,10 +102,11 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="customerId">Pelanggan</Label>
+          <Label htmlFor="customerId">Pelanggan <span className="text-destructive" aria-hidden="true">*</span></Label>
           <QuickAddSelect
             id="customerId"
             name="customerId"
+            required
             value={customerId || null}
             onChange={(key) => setCustomerId(key ?? "")}
             placeholder="Cari pelanggan..."
