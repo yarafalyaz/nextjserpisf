@@ -9796,3 +9796,94 @@ Catat Tindak Lanjut -> BOT 6 AC-COL-1..12.
 
 ### Yang TIDAK diusulkan run ini
 - Pengingat otomatis WA/email ke pelanggan, denda keterlambatan, penagihan pihak ketiga, alokasi pembayaran parsial per janji, status penagihan tersimpan di SalesInvoice, perubahan aging/statement existing.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-074-V Q-BOM68-6 (ganti revisi BOM order berjalan F-2026-10-22-068-S)
+
+Pemilik vonis: BOT 4. Pertanyaan: Q-BOM68-6 spec BOT 5 PR #507
+(head d48eb24b) §7 — konfirmasi BR-BOM68-02/04: tanpa unpick
+berjurnal dan tanpa jurnal dari aksi ganti revisi. Bukti live
+origin/main acb91fb0 (2026-10-22): builder
+`src/lib/reports/bom-revision-impact.ts:1-11` read-only eksplisit
+("Tidak ada mutasi, tidak ada unpick/re-pick"); grep
+`unpick` di `src/` = hanya komentar itu (nol jalur unpick);
+jurnal issue lahir HANYA dari
+`stockJournalService.onMaterialIssue`
+(`src/lib/services/stock-journal.service.ts:350-390`,
+referenceType `MaterialIssue`, Dr Beban Material/Cr Persediaan,
+akun dari SystemSetting fail-closed) dipanggil
+`src/lib/hooks/material-issue.hook.ts:154-163` sesudah StockMove
+OUT + konsumsi FIFO di tx yang sama; pola koreksi jurnal
+terposting existing = `reverseJournalsByReferenceTx`
+(`src/lib/hooks/accounting.hook.ts:180`, tes
+`journal-reversal.test.ts`). Anti-duplikat: F-073-V = vonis
+Q-DP65-2 (PR #502, kartu t_4dd6d5b1 done), F-072-V PR #513 OPEN;
+073-V/074-V bebas di origin/main maupun PR terbuka live.
+
+### Putusan (mengikat BOT 3/BOT 2; BOT 6 nilai)
+
+1. **BR-BOM68-04 DIKONFIRMASI PENUH.** Aksi ganti revisi BOM
+   (pin lama -> pin baru + ActivityLog) DILARANG menerbitkan
+   MaterialIssue, retur, StockMove, ProductionCost, atau jurnal
+   apa pun — dalam tx yang sama maupun tx lanjutan otomatis.
+   Alasan: pin adalah metadata perencanaan, bukan peristiwa
+   ekonomi; jurnal tanpa peristiwa = jurnal fiktif, melanggar
+   prinsip posting (jurnal hanya dari event dokumen).
+2. **BR-BOM68-02 DIKONFIRMASI.** MaterialIssue `completed`
+   TIDAK PERNAH di-unpick/di-retur otomatis oleh ganti revisi.
+   Baris ter-issue terkunci dan tetap biaya job persis seperti
+   terjurnal (`MaterialIssue` referenceId jurnal asal tidak
+   berubah). Kelebihan ter-issue terhadap revisi baru (selisih
+   negatif, BR-BOM68-03 jepit >= 0) tampil sebagai informasi
+   delta saja — bukan retur, bukan jurnal koreksi.
+3. **Satu-satunya jalur sah material benar-benar kembali ke
+   gudang** = dokumen retur/koreksi NYATA yang dibuat operator
+   secara eksplisit (bukan efek samping ganti revisi), di
+   periode terbuka (`assertPeriodOpen` dalam tx), memakai pola
+   reversal existing `reverseJournalsByReferenceTx` atas jurnal
+   `MaterialIssue` asal — jurnal asal TIDAK diubah/dihapus.
+   Jalur ini di luar scope 068-S; membangunnya = kebutuhan
+   terpisah dengan kartu sendiri, bukan pengecualian vonis ini.
+4. **Biaya job tidak dihitung ulang mundur.** Selisih kebutuhan
+   revisi baru hanya memengaruhi issue BERIKUTNYA (issue baru
+   membaca kebutuhan revisi baru dan terjurnal normal lewat
+   `onMaterialIssue`). Harga jual/quotation tidak disentuh
+   (BR-BOM68-09 sah: nilai jual = domain change order
+   F-2026-10-22-066-S/Q-CO-4, vonis 066-V).
+5. **Pajak: nol dampak.** Ganti revisi tidak mengubah DPP/PPN/
+   PPh apa pun; tidak ada faktur/dokumen pajak dari aksi ini.
+   Klaim ini perlakuan internal persediaan/biaya — bukan klaim
+   kepatuhan pajak, tidak ada tarif/aturan baru diputus.
+
+### Batas build
+
+- BOT 3 (inti ganti pin, sesudah Q-BOM68-1/2/3 BOT 1/BOT 3):
+  guard server di aksi ganti — tx ganti hanya update pin +
+  ActivityLog; penjaga tes: query nol baris baru di StockMove/
+  Journal/MaterialIssue/ProductionCost sesudah ganti (termasuk
+  kasus sudah ter-issue dan selisih negatif).
+- BOT 2: pratinjau delta murni tampilan builder existing; UI
+  dilarang memicu/menjanjikan unpick, retur, atau penyesuaian
+  biaya dari layar ganti revisi.
+- Pengecualian apa pun atas butir 1-2 = `BUTUH-VONIS` BOT 4
+  baru dengan bukti kebutuhan operasional; jangan bangun diam-diam.
+
+### Falsifikasi wajib (BOT 6)
+
+1. Ganti revisi pada WO sudah ter-issue 3/5, revisi baru butuh
+   2: pin berubah, StockMove/Journal/MaterialIssue baru = 0,
+   kelebihan tampil sebagai delta. Tambah jurnal/StockMove dari
+   aksi ganti -> MERAH.
+2. Cabut guard nol-jurnal (panggil `onMaterialIssue` dari aksi
+   ganti) -> tes pengunci MERAH.
+3. Retur material hanya lahir dari dokumen koreksi eksplisit
+   terpisah (butir 3), jurnal reversal menunjuk jurnal asal;
+   edit/hapus jurnal asal langsung -> ditolak pola existing.
+
+ID vonis ini **F-2026-10-22-074-V** (pasangan spec
+F-2026-10-22-068-S PR #507; seri -V bebas tabrakan per grep
+origin/main + PR terbuka 2026-10-22: -V terpakai maks 066-V di
+main, 072-V di PR #513, 073-V vonis Q-DP65-2 kartu t_4dd6d5b1).
+Pemilik berikutnya: BOT 1 (Q-BOM68-1/2 tetap milikmu — vonis ini
+tidak menahan tampilan delta), BOT 3 inti sesudah putusan BOT 1,
+BOT 6 falsifikasi 1-3 di atas. Peminta vonis: BOT 5 (spec PR #507).
+
