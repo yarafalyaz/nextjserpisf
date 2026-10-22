@@ -9051,3 +9051,359 @@ Status yang diatur spec ini = status kepegawaian master (bukan status slip):
 - Tabel riwayat kontrak berlapis, e-sign kontrak, portal karyawan, pengingat otomatis ke karyawan (WA/email keluar tidak ada infrastrukturnya — pola domain k).
 - Mengubah metode PPh21 masa terakhir (F-026 FINAL; spec ini hanya memberi penanda master supaya jalurnya tidak bergantung ingatan).
 - Backfill status dari data slip/absensi (tebakan retroaktif dilarang, BR-EMP-03).
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-087-V: BR-EMP-12 perlakuan PPh 21 pegawai tidak tetap (DAILY) + peserta magang (INTERN) — objek di luar pegawai tetap (spec F-2026-10-22-085-S PR #535 MERGED)
+
+Pemutus: BOT 4 (accounting-finance-tax). Kartu: t_d2c01368 (buffer
+kondektur sesudah t_4800fa73 / F-086-V PR #536). Tertulis saja —
+tanpa kode/schema/migrasi, tanpa merge oleh BOT 4. Menjawab
+BR-EMP-12 spec BOT 5 F-2026-10-22-085-S §3: "Harian lepas (DAILY)
+dan magang (INTERN) tercatat statusnya, tetapi spec ini TIDAK
+menetapkan perlakuan payroll/pajaknya (TER harian dsb. di luar
+cakupan; pola F-028-I §I.5 butir 5: subjek di luar pegawai tetap
+tidak dicampur tanpa vonis objek terpisah)."
+
+Vonis ini TIDAK membuka inti hitung apa pun sebelum gerbang §7.
+Ia memutus klasifikasi subjek + rumus + snapshot + larangan,
+supaya BOT 3/BOT 5 tidak menebak objek pajak dari label status.
+
+### 0. Anti-duplikat + bukti live (2026-10-22)
+
+- origin/main `8d7a09d1` (PR #537 merged). ID -V terpakai maks
+  086-V (PR #536 OPEN); 085-S = spec BOT 5 PR #535 MERGED
+  b0d72d4b; 087 bebas per grep backlog origin/main +
+  `gh pr list` live (all-state grep "087" = 0) + kanban
+  open/done <48 jam (Q-KOM-1 sudah F-056-V PR #440 done
+  t_567b49fd; Q-EMP-4/5 sudah F-086-V — tidak divonis ulang).
+- Hormati tertutup: 086-V #536, 084-V #534, 083-V #531, 082-V
+  #530, 081-V #529, 080/079/078/077/075/074/066/062-V,
+  F-058-V #443, REK-1..5 milik t_1f126c6e.
+- Kandidat lain diperiksa dan DITOLAK run ini:
+  (a) Vonis pengali pesangon Pasal 41-52 — DITUNDA sah:
+      menunggu Q-EMP-2 BOT 1 (kosakata endReason final);
+      BOT 1 belum memutus (kartu BOT 3 t_7b33102f masih
+      `ready` menunggu putusan itu). Memutus pengali tanpa
+      kosakata alasan = menebak.
+  (b) Q-KOM-1 — sudah F-056-V.
+  (c) Q-EST-6 (WIP dari snapshot estimasi) — spec F-084-S
+      sendiri menyatakan BOT 4 hanya dipanggil BILA
+      penyimpangan muncul; belum ada implementasi menyimpang.
+  (d) Q-SC-5 deductibility — sudah F-080-V kerangka.
+  BR-EMP-12 adalah satu-satunya label BUTUH-VONIS BOT 4 yang
+  benar-benar terbuka, bernama, dan tidak bergantung putusan
+  pihak lain untuk klasifikasinya.
+- Kode terverifikasi origin/main `8d7a09d1`:
+  - Employee (schema.prisma:793): `paymentFrequency`
+    WEEKLY/MONTHLY existing, `baseSalary` Decimal(15,2),
+    `joinDate`, `isActive`; employmentStatus BELUM ada
+    (F-085-S menunggu Q-EMP-1/2/3 BOT 1 + inti BOT 3
+    t_7b33102f). Jadi label DAILY/INTERN belum bisa dibaca
+    dari data terstruktur hari ini — gerbang G1 §7.
+  - Mesin PPh 21 berjalan (payroll-statutory.service.ts):
+    hanya TER bulanan pegawai tetap (`computePph21Ter`,
+    kategori A/B/C dari `payroll_ter_brackets`) + hitung
+    ulang masa terakhir Pasal 17 (`computePph21FinalPeriod`)
+    + legacy. TIDAK ada TER harian, TIDAK ada jalur
+    50% x Pasal 17 bukan-pegawai/peserta-kegiatan di kode
+    (grep `computePph21Ter` di hrm.actions.ts:1214/1435/
+    1831 — semua pemanggil memakai bruto bulanan pegawai).
+  - Vonis F-026 §1 + F-028 §F + F-028-I §I.5 butir 5 secara
+    eksplisit menaruh TER harian / bukan-pegawai / peserta
+    kegiatan DI LUAR cakupan dan melarang mencampurnya ke
+    berkas/objek 21-100-01. Vonis ini adalah "vonis objek
+    terpisah" yang diminta ketiga seksi itu.
+
+### 1. Klasifikasi subjek (mengikat; label status != objek pajak)
+
+Dasar: PMK 168/2023 Pasal 1 angka 9-14 + Pasal 3 ayat (1)
+(PDF resmi JDIH Kemenkeu
+https://jdih.kemenkeu.go.id/api/download/e60a82e0-b218-40f5-9d18-b924aa1e11ce/2023pmkeuangan168.pdf;
+halaman DJP https://www.pajak.go.id/id/artikel/yuk-taaruf-dengan-ter;
+diakses 2026-10-22).
+
+1.1 Tiga ember subjek, jangan dicampur:
+    (a) Pegawai Tidak Tetap (Pasal 1 angka 11): pegawai —
+        termasuk tenaga kerja lepas — yang HANYA menerima
+        penghasilan bila bekerja, berdasar jumlah hari kerja,
+        jumlah unit hasil, atau penyelesaian jenis pekerjaan
+        yang diminta pemberi kerja. Label ISF `DAILY` masuk
+        ember ini HANYA bila fakta itu benar (ada hubungan
+        kerja pegawai, upah per hari/unit/borongan).
+    (b) Bukan Pegawai (Pasal 1 angka 12): orang pribadi SELAIN
+        pegawai tetap/tidak tetap yang memperoleh imbalan atas
+        Pekerjaan Bebas/jasa berdasar perintah/permintaan
+        pemberi penghasilan (tenaga ahli, pemberi jasa segala
+        bidang, dll — Pasal 3 ayat (2)). Freelancer/mekanik
+        panggilan tanpa hubungan kerja pegawai masuk sini,
+        BUKAN ember (a), walau sama-sama "harian" di jadwal.
+    (c) Peserta Kegiatan (Pasal 1 angka 14): imbalan sehubungan
+        keikutsertaan dalam suatu kegiatan, selain yang diterima
+        pegawai tetap dari pemberi kerja — termasuk peserta
+        pendidikan, pelatihan, dan MAGANG (Pasal 3 ayat (3)
+        huruf d). Label ISF `INTERN` masuk ember ini HANYA
+        bila magangnya adalah keikutsertaan pelatihan (uang
+        saku/imbalan kegiatan), BUKAN hubungan kerja pegawai.
+1.2 Penjaga klasifikasi: objek pajak DITURUNKAN dari fakta
+    hubungan (perjanjian/kesepakatan kerja pegawai vs jasa
+    bebas vs keikutsertaan kegiatan), dibekukan sebagai
+    snapshot klasifikasi per orang/per peristiwa bayar.
+    Label `employmentStatus` saja TIDAK cukup membuktikan
+    ember: `DAILY` tanpa fakta pegawai = klasifikasi DITOLAK,
+    eskalasi manusia; `INTERN` yang faktanya bekerja sebagai
+    pegawai (jam/jabatan diperintah seperti pegawai, upah
+    periodik) = BUKAN peserta kegiatan — perlakukan sebagai
+    pegawai (tetap/tidak tetap menurut faktanya), jangan
+    pakai jalur peserta kegiatan untuk menghindari TER/BPJS.
+    Meragukan = `BUTUH-VONIS-AKUNTAN` per kasus, jangan
+    diputus diam-diam di kode/UI.
+1.3 Yang BUKAN cakupan vonis ini: peserta kegiatan non-magang
+    (lomba/rapat/hadiah), bukan-pegawai jasa profesional
+    umum (jalur §3.3 hanya disebut sebagai pembatas — build
+    dokumen bayar bukan-pegawai di luar payroll = spec/
+    vonis tersendiri bila hendak dibangun), PPh 26 orang
+    pribadi luar negeri (Pasal 14 PMK 168/2023, 20% final/
+    P3B), pensiunan, mantan pegawai (sudah F-086-V §3.3).
+
+### 2. Pegawai tidak tetap dibayar TIDAK bulanan (TER harian / Pasal 17 x 50%)
+
+Dasar: PMK 168/2023 Pasal 12 ayat (2) + Pasal 16 ayat (2);
+tarif efektif harian di PP 58/2023 Lampiran tarif efektif
+harian (peraturan.go.id/files/pp-no-58-tahun-2023.pdf;
+ringkasan resmi DJP pajak.go.id/id/artikel/mengulik-pp-582023;
+diakses 2026-10-22).
+
+2.1 Tentukan dulu "sehari": penghasilan bruto sehari bila
+    diterima harian; bila diterima mingguan/satuan/borongan/
+    selain harian, RATA-RATA bruto sehari = bruto masa bayar
+    dibagi jumlah hari kerja yang dipakai menghasilkan bruto
+    itu (Penjelasan PP 58/2023: rata-rata upah mingguan/
+    satuan/borongan untuk setiap hari kerja yang digunakan).
+    Hari kerja penyebut = hari kerja nyata terverifikasi
+    (absensi/timesheet), BUKAN hari kalender, BUKAN tebakan
+    5/6/7. Tanpa data hari kerja: hitung DITOLAK.
+2.2 Lapisan (atas bruto sehari / rata-rata sehari):
+    - <= Rp450.000: tarif efektif harian 0% -> PPh 21 Rp0.
+    - > Rp450.000 s.d. Rp2.500.000: 0,5% x bruto sehari.
+    - > Rp2.500.000: keluar dari TER harian — tarif Pasal 17
+      ayat (1) huruf a UU PPh x 50% x jumlah bruto (Pasal 12
+      ayat (2) huruf b jo. Pasal 16 ayat (2) huruf b).
+      DPP-nya 50% dari bruto masa itu, bukan bruto sehari
+      dikali hari.
+    Contoh mengikat: upah Rp600.000/hari -> 0,5% x 600.000 =
+    Rp3.000/hari. Upah Rp300.000/hari -> Rp0. Mingguan
+    Rp3.500.000 atas 5 hari kerja -> rata-rata 700.000 ->
+    0,5% x 700.000 = Rp3.500/hari, total masa Rp17.500.
+    Bruto sehari Rp3.000.000 -> 50% x 3.000.000 = DPP
+    Rp1.500.000 x tarif Pasal 17 lapis pertama 5% =
+    Rp75.000 (sepanjang DPP masih di lapis 5%).
+2.3 TER harian TIDAK memakai kategori A/B/C, TIDAK memakai
+    PTKP/status kawin/tanggungan, TIDAK ada hitung ulang
+    masa terakhir Pasal 17 ala pegawai tetap, dan TIDAK ada
+    lebih-potong yang dikembalikan pemberi kerja lewat
+    mekanisme F-026 §4. PPh 21 non-final ini kredit pajak
+    penerima di SPT Tahunan-nya (Pasal 22 ayat (3) PMK
+    168/2023). Sistem DILARANG menjanjikan/menghitung
+    restitusi pemberi kerja untuk ember ini.
+2.4 Bukti potong tetap wajib walau tarif 0% (kewajiban
+    pemotong Pasal 20 PMK 168/2023 tetap berlaku bila ada
+    pemberian penghasilan, termasuk potong nihil). Nol
+    potong BUKAN berarti nol dokumen.
+
+### 3. Pegawai tidak tetap dibayar bulanan + magang + pembatas bukan-pegawai
+
+3.1 Pegawai tidak tetap yang penghasilannya diterima/
+    diperoleh SECARA BULANAN: DPP = jumlah bruto bulanan
+    penuh; tarif = tarif efektif BULANAN (TER bulanan)
+    (Pasal 12 ayat (2) huruf c jo. Pasal 16 ayat (2)
+    huruf c). Kategori TER bulanan untuk pegawai tidak
+    tetap: PMK/PP tidak memberi kategori PTKP pegawai
+    tidak tetap terpisah di mesin berjalan; vonis ini:
+    kategori diturunkan dengan fungsi kategori existing
+    dari status PTKP orang itu (satu-satunya sumber
+    terstruktur) DAN dibekukan di snapshot dengan penanda
+    subjek `pegawai-tidak-tetap-bulanan`. Bila BOT 3
+    menemukan dasar DJP tertulis yang menetapkan kategori
+    lain khusus pegawai tidak tetap bulanan, BERHENTI —
+    eskalasi BOT 4, jangan ganti diam-diam. Tidak ada
+    hitung ulang masa terakhir untuk ember ini (sama §2.3).
+    Contoh: bruto bulanan Rp6.000.000 kategori A -> bracket
+    TER A atas 6.000.000 dari tabel master berjalan (bukan
+    angka karangan di vonis ini; tabel = master
+    `payroll_ter_brackets` bertanggal efektif).
+3.2 Magang peserta kegiatan (ember §1.1c): DPP = jumlah
+    bruto yang pembayarannya bersifat utuh dan tidak
+    dipecah (Pasal 12 ayat (6)); tarif = Pasal 17 ayat (1)
+    huruf a x DPP penuh (Pasal 16 ayat (4)) — TANPA faktor
+    50%, TANPA TER, TANPA PTKP/biaya jabatan. Pemecahan
+    pembayaran untuk menurunkan lapis = DILARANG (frasa
+    "utuh dan tidak dipecah" adalah penjaga anti-pecah).
+    Contoh mengikat: uang saku magang Rp2.000.000 utuh ->
+    DPP Rp2.000.000 x 5% = Rp100.000. Rp400.000 -> Rp20.000
+    (tetap dipotong walau kecil; tidak ada ambang 450rb —
+    ambang itu khusus TER harian pegawai tidak tetap).
+    Magang TANPA imbalan apa pun = tidak ada objek, tidak
+    ada bupot, tidak ada slip.
+3.3 Pembatas bukan-pegawai (hanya penegasan, bukan build):
+    DPP = 50% x bruto (Pasal 12 ayat (3), dengan pengurang
+    bruto Pasal 12 ayat (4)-(5) hanya bila bukti kontrak/
+    faktur terpenuhi); tarif Pasal 17 x DPP (Pasal 16 ayat
+    (3)); kumulatif se-tahun untuk lapis Pasal 17 menurut
+    sifat berkesinambungan — perlakuan kumulatif persisnya
+    = vonis tersendiri bila jalur bukan-pegawai dibangun.
+    Mencampur orang ember ini ke run payroll karyawan =
+    DILARANG (mereka bukan populasi Employee payroll).
+
+### 4. BPJS + akun + jalur bayar (batas, bukan mesin baru)
+
+4.1 BPJS: vonis ini TIDAK menetapkan iuran BPJS untuk
+    pegawai tidak tetap/magang. Basis F-083-V adalah upah
+    pegawai (baseSalary + tunjangan tetap) — memperluasnya
+    ke upah harian/borongan atau uang saku magang tanpa
+    dasar kepesertaan tertulis = DILARANG. Kepesertaan
+    pekerja harian lepas/magang menurut aturan BPJS =
+    pertanyaan terpisah; bila kasus nyata muncul tandai
+    `BUTUH-VONIS BOT 4` lanjutan, jangan pinjam basis
+    F-083-V diam-diam dan jangan pula mengklaim "pasti
+    nol iuran" sebagai fakta hukum umum.
+4.2 Akun/jurnal: pembayaran upah pegawai tidak tetap yang
+    berjalan LEWAT payroll memakai jalur jurnal payroll
+    existing (beban gaji + utang PPh 21 payroll existing);
+    vonis ini tidak membuat akun baru dan tidak mengubah
+    mapping F-083/F-086. Pembayaran magang peserta kegiatan
+    BUKAN beban gaji karyawan: akun bebannya mengikuti
+    sifat kegiatan (beban pelatihan/kegiatan dari COA
+    aktif via mapping setting, fail-closed kosong =
+    ditolak) — nomor akun persis DITENTUKAN saat build
+    dari COA aktif terverifikasi, vonis ini melarang
+    memaksanya ke akun beban gaji 600004/600005.
+4.3 Jalur dokumen: pegawai tidak tetap boleh lahir di run
+    payroll HANYA bila mesin hitungnya sudah membedakan
+    mode §2 vs §3.1 dari snapshot subjek; sebelum itu,
+    memasukkan orang DAILY ke run bulanan pegawai tetap
+    (TER kategori + hitung ulang final) = DILARANG.
+    Magang peserta kegiatan = dokumen bayar peristiwa
+    tersendiri di luar run payroll karyawan (sama pola
+    §5.2 F-086-V: rezim potong berbeda, populasi berbeda).
+
+### 5. Snapshot + kode objek + ekspor (fail-closed)
+
+5.1 Snapshot wajib per slip/dokumen bayar: ember subjek
+    (§1.1), mode bayar (harian/mingguan/satuan/borongan/
+    bulanan), bruto, hari kerja penyebut + rata-rata sehari
+    (mode §2), lapisan/tarif terpilih atau DPP 50%/DPP
+    penuh, PPh 21, tanggal acuan tabel. Edit master/status
+    sesudahnya tidak menghitung ulang dokumen terbit.
+5.2 Kode objek pajak: dari katalog master pajak bertanggal
+    efektif saat build (pola F-086-V §3.3) — vonis ini
+    TIDAK mengunci nomor kode (keluarga objek pegawai
+    tidak tetap / peserta kegiatan di katalog Coretax
+    dikonfirmasi BOT 3+BOT 4 saat wiring). Hardcode kode
+    objek di service = DILARANG. Berkas ekspor pegawai
+    tetap 21-100-01 F-028-I DILARANG memuat baris ember
+    vonis ini (F-028-I §I.5 butir 5 tetap mengikat);
+    ekspor/rekap ember ini = jalur bupot objeknya sendiri
+    bila dibangun, bukan penumpang berkas pegawai tetap.
+5.3 Tarif bukan hardcode: TER harian 0%/0,5% + ambang
+    450rb/2,5jt + faktor 50% hidup sebagai parameter
+    statutori bertanggal efektif (pola `payroll_ter_
+    brackets`/ruleset existing diperluas BOT 3, bukan
+    konstanta di service). Ambang berubah oleh PP/PMK baru
+    = data berubah, bukan deploy kode.
+
+### 6. Larangan
+
+L1. Menghitung orang DAILY/INTERN dengan mesin pegawai
+    tetap (TER bulanan kategori + hitung ulang masa
+    terakhir + lebih-potong F-026) sebelum gerbang §7.
+L2. Menurunkan ember subjek dari label status/teks bebas/
+    flag FormData client. Klasifikasi = fakta hubungan
+    terverifikasi + snapshot (§1.2); flag client hanya
+    permintaan operator (pola skill BOT 4).
+L3. Penyebut rata-rata sehari dari hari kalender/asumsi
+    hari kerja; TER harian untuk pembayaran bulanan;
+    TER bulanan untuk pembayaran harian/mingguan.
+L4. Faktor 50% untuk peserta kegiatan; TER/ambang 450rb
+    untuk magang; memecah pembayaran utuh peserta
+    kegiatan.
+L5. Mencampur baris ember ini ke ekspor 21-100-01, ke
+    agregator BPJS F-081-V, atau ke basis BPJS F-083-V.
+L6. Hardcode tarif/ambang/kode objek; akun fallback;
+    jurnal/dokumen bayar tanpa snapshot klasifikasi.
+
+### 7. Syarat buka inti hitung (gerbang, sebelum BOT 3 bangun)
+
+G1. Field status kepegawaian F-085-S live (Q-EMP-1 BOT 1 +
+    inti BOT 3 t_7b33102f) + fakta hubungan kerja dapat
+    dicatat terstruktur. Tanpa itu klasifikasi §1 tidak
+    punya sumber — hitung tetap DITOLAK.
+G2. Parameter statutori §5.3 ter-seed bertanggal efektif
+    dari PP 58/2023 + tabel TER bulanan existing terbukti
+    dibaca untuk mode §3.1; kosong/tidak lengkap =
+    fail-closed (pola bracketsComplete existing).
+G3. Mode bayar + hari kerja nyata tersedia dari data
+    (absensi/timesheet terverifikasi); tanpa penyebut
+    hari, mode §2 ditolak berisik.
+G4. Tes falsifikasi §8 hijau di head inti persis; BOT 6
+    audit sebelum Lead merge inti.
+
+### 8. Draf acceptance BOT 6 (falsifikasi; cabut penjaga -> MERAH)
+
+E87-1. Harian Rp600.000 -> PPh Rp3.000; Rp300.000 -> Rp0
+  tetap bupot; terapkan TER bulanan/hitung-ulang final ke
+  orang ini -> MERAH.
+E87-2. Mingguan Rp3.500.000/5 hari -> rata-rata 700.000 ->
+  total Rp17.500; ganti penyebut ke 7 hari kalender ->
+  MERAH (angka berubah = penjaga penyebut bekerja).
+E87-3. Bruto sehari Rp3.000.000 -> DPP 50% Rp1.500.000 x
+  Pasal 17; pakai TER harian 0,5% di atas 2,5jt -> MERAH.
+E87-4. Pegawai tidak tetap bulanan: TER bulanan atas bruto
+  penuh dari tabel master; cabut tabel/kategori -> ditolak
+  fail-closed, nol slip parsial.
+E87-5. Magang Rp2.000.000 utuh -> PPh Rp100.000; terapkan
+  50% atau ambang 450rb -> MERAH; bayar dipecah dua untuk
+  turun lapis -> ditolak.
+E87-6. Label INTERN dengan fakta pegawai -> jalur peserta
+  kegiatan ditolak (klasifikasi §1.2); label DAILY tanpa
+  fakta pegawai -> hitung ditolak, eskalasi tercatat.
+E87-7. Baris ember ini masuk ekspor 21-100-01 / agregator
+  BPJS / basis F-083-V -> MERAH (L5).
+E87-8. Edit status/master sesudah terbit -> snapshot +
+  PPh dokumen lama tidak berubah; hardcode tarif di
+  service (mutasi parameter master tidak mengubah hasil)
+  -> MERAH.
+
+### 9. Klaim kepatuhan
+
+REGULASI (bukan fitur software): PMK 168/2023 Pasal 1
+angka 9-14, Pasal 3 ayat (1)-(3), Pasal 5 ayat (1) huruf
+d/f, Pasal 12 ayat (2)/(6), Pasal 16 ayat (2)/(4), Pasal
+20/22 (JDIH Kemenkeu
+https://jdih.kemenkeu.go.id/api/download/e60a82e0-b218-40f5-9d18-b924aa1e11ce/2023pmkeuangan168.pdf;
+ringkasan resmi DJP https://jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023/summary;
+diakses 2026-10-22) untuk klasifikasi subjek, DPP, dan
+tarif per ember; PP 58/2023 Lampiran tarif efektif harian
++ Penjelasannya (peraturan.go.id/files/pp-no-58-tahun-2023.pdf;
+artikel resmi DJP https://www.pajak.go.id/index.php/id/artikel/mengulik-pp-582023-ter-dan-perhitungan-pph-yang-lebih-simpel,
+https://www.pajak.go.id/id/artikel/yuk-taaruf-dengan-ter;
+diakses 2026-10-22) untuk lapisan 0% <=450rb dan 0,5%
+>450rb-2,5jt. Berlaku sejak masa Januari 2024 bersama
+rezim TER. Cakupan vonis: hanya klasifikasi + PPh 21
+pegawai tidak tetap (DAILY) dan magang peserta kegiatan
+(INTERN) + batas BPJS/akun/ekspor di atas. Di luar
+cakupan: BPJS kepesertaan harian/magang, bukan-pegawai
+umum sebagai build, peserta kegiatan non-magang, PPh 26,
+kasus klasifikasi ragu (§1.2) — semua BUTUH-VONIS
+lanjutan/AKUNTAN, jangan diputus diam-diam.
+
+ID vonis ini **F-2026-10-22-087-V** (087 bebas: 086-V PR
+#536, 085-S PR #535 MERGED, 084-V PR #534). Pemilik
+berikutnya: BOT 1 (merge PR vonis ini; putus Q-EMP-1/2/3)
+-> BOT 3 (inti F-085-S lalu mesin §2/§3 sesudah G1-G3;
+klaim schema.prisma di board dulu) -> BOT 5 (spec
+konsumen payroll subjek non-tetap bila diperlukan) ->
+BOT 2 (tampilkan snapshot backend apa adanya) ->
+BOT 6 E87-1..8.
+
+---
