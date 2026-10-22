@@ -257,6 +257,7 @@ export const navigation: NavItem[] = [
       { label: "Jurnal Aset Tetap", href: "/laporan/jurnal-aset", icon: BookOpen, permission: "view_reports" },
       { label: "Histori Aset Tetap", href: "/laporan/histori-aset", icon: Clock, permission: "view_reports" },
       { label: "Perbedaan Penyusutan", href: "/laporan/perbedaan-penyusutan", icon: Scale, permission: "view_reports" },
+      { label: "Rekonsiliasi Aset Tetap", href: "/laporan/rekonsiliasi-aset", icon: Scale, permission: "view_reports" },
       { label: "Arus Kas", href: "/laporan/arus-kas", icon: Coins, permission: "view_reports" },
       { label: "Proyeksi Kas", href: "/laporan/proyeksi-kas", icon: Coins, permission: "view_reports" },
       { label: "Perbandingan Periode", href: "/laporan/perbandingan-periode", icon: Scale, permission: "view_reports" },
