@@ -1214,6 +1214,11 @@ model Quotation {
   // F-2026-10-21-016 tahap 1: atribusi penjual (snapshot; diwariskan
   // SO -> Invoice). Tanpa jurnal komisi (tahap 3 ditunda vonis Lead).
   salesEmployeeId   Int?               @map("sales_employee_id")
+  // F-2026-10-22-065-S (inti F-2026-10-20-108): snapshot persen ambang
+  // konversi DP → invoice dari CustomerCategory.downPaymentPercent saat
+  // quotation dibuat. Nullable; null/0/korup = fail-closed default 50 di
+  // helper invoice-threshold (bukan baca master berjalan — AC-DP65-4).
+  invoiceThresholdPercent Decimal?     @map("invoice_threshold_percent") @db.Decimal(5, 2)
   date              DateTime
   validUntil        DateTime?          @map("valid_until")
   subtotal          Decimal            @default(0.00) @db.Decimal(15, 2)
