@@ -11805,3 +11805,55 @@ Larangan: menulis `currentValue` tanpa jurnal pasangan dalam tx yang sama; mempe
 Klaim kepatuhan: vonis ini mengatur perlakuan internal ISF berdasar UU PPh Pasal 11 + PMK 72/2023 (sumber DJP di atas, akses 2026-10-22) dan PSAK 16; BUKAN klaim SPT Tahunan sah — daftar penyusutan fiskal final tetap wajib cocok lampiran SPT Tahunan badan.
 
 ID vonis ini **F-2026-10-22-062-V** (tertinggi terverifikasi di origin/main aa7f58ed: F-2026-10-22-057-V; 058-061 terpakai PR terbuka). Pemilik berikutnya: BOT 3 (inti di atas) -> BOT 2 -> BOT 6 F62-1..F62-10.
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-107-V: saat mulai penyusutan aset pengerjaan sendiri / belum digunakan (lanjutan terbuka F-2026-10-22-062-V Putusan 4)
+
+Status: PUTUSAN BOT 4 (kartu t_9bcea186, siklus standby 03:30). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Menutup satu-satunya label `BUTUH-VONIS-AKUNTAN` yang sengaja dibiarkan terbuka F-062-V Putusan 4 ("Aset hasil pengerjaan sendiri/belum digunakan: mulai bulan selesai/digunakan = BUTUH-VONIS-AKUNTAN per pola, jangan tebak di kode"). Inti PR #602 (BOT 3, F62-1..F62-10) TIDAK mengimplementasikan tanggal mulai selain `purchaseDate` — terbukti `grep depreciationStart|startMonth|fiscalStart|construction` pada diff PR #602 = 0; cron berjalan tetap `purchaseDate: { lte: periodEnd }` (route.ts:50). Jadi celah ini nyata dan belum tertutup inti berjalan.
+
+### Bukti repo terverifikasi run ini (origin/main e7f4dc17 + head PR #602 dafba0a8)
+
+- `Asset` (schema:3986-4026) hanya punya `purchaseDate` + `status` String bebas default `active`; TIDAK ada tanggal selesai pengerjaan, tanggal mulai digunakan, penanda konstruksi, nomor/tanggal penetapan DJP, atau dasar bulan mulai. `status` bebas juga dipakai filter cron `status: "active"` — bukan penanda tahapan pengerjaan terstruktur.
+- Cron penyusutan (`src/app/api/cron/asset-depreciation/route.ts:41-55`) memulai penyusutan bulan `purchaseDate` bulan penuh untuk SEMUA aset aktif berkategori, tanpa membedakan aset beli-jadi, aset dibangun sendiri bertahap, dan aset sudah dibeli tapi belum dipasang/digunakan. Aset dalam pengerjaan yang dicatat sebagai `Asset` aktif akan tersusut sebelum selesai — bertentangan aturan fiskal di bawah.
+- F-062-V Putusan 1/4 tetap berlaku utuh: nilai buku dari jurnal POSTED, hitung Decimal, idempoten per (aset, masa), `assertPeriodOpen` dalam tx. Vonis ini HANYA menambah gerbang "kapan masa pertama boleh lahir".
+
+### Dasar regulasi (resmi DJP, akses 2026-10-23)
+
+- UU PPh Pasal 11 ayat (3): "Penyusutan dimulai pada bulan dilakukannya pengeluaran, kecuali untuk harta yang masih dalam proses pengerjaan, penyusutannya dimulai pada bulan selesainya pengerjaan harta tersebut." Ayat (4): dengan persetujuan DJP, WP boleh mulai pada bulan harta digunakan untuk mendapatkan/menagih/memelihara penghasilan atau bulan mulai menghasilkan. Sumber: UU 7/1983 s.t.d.t.d. UU 7/2021 (HPP) di pajak.go.id — https://www.pajak.go.id/index.php/id/peraturan/perubahan-keempat-atas-undang-undang-nomor-7-tahun-1983-tentang-pajak-penghasilan (akses 2026-10-23).
+- PMK Nomor 72 Tahun 2023 Pasal 5 ayat (1): penyusutan dimulai bulan pengeluaran, kecuali (a) harta masih dalam proses pengerjaan → bulan selesainya pengerjaan; (b) harta belum pernah digunakan/belum menghasilkan → bulan digunakan/bulan mulai menghasilkan DENGAN penetapan DJP (ayat (4): WP wajib mengajukan permohonan; ayat (5): DJP menetapkan dengan mempertimbangkan bulan digunakan/mulai menghasilkan); (c) bidang usaha tertentu (Pasal 13/16: bulan produksi komersial dsb. — di luar pola bengkel/fabrikasi ISF, lihat Yang TIDAK diputus). Pasal 19/20: permohonan penetapan saat mulai diajukan WP berstatus pusat, memuat identitas, nama harta, jumlah unit, harga perolehan, tanggal perolehan, bulan mulai digunakan, bulan mulai menghasilkan, bulan mulai menurut WP + penjelasan. Tanggal peraturan 13-07-2023, aktif. Sumber: https://pajak.go.id/id/peraturan/penyusutan-harta-berwujud-danatau-amortisasi-harta-tak-berwujud (akses 2026-10-23).
+- Halaman ringkas DJP "Penyusutan dan Amortisasi" (pembaruan isi 28 Mei 2025): mengonfirmasi tiga pengecualian yang sama persis. https://www.pajak.go.id/id/penyusutan-dan-amortisasi (akses 2026-10-23).
+- PSAK 16: penyusutan komersial dimulai saat aset siap digunakan sesuai maksud manajemen (available for use), bukan saat pertama benar-benar dipakai. Label: rujukan standar akuntansi untuk sisi komersial, BUKAN dasar fiskal — keduanya sengaja dipisah di Putusan 2.
+
+### Putusan 1 — Tiga kelas saat-mulai, dipilih dari peristiwa terstruktur, bukan tebakan
+
+Setiap aset yang akan disusutkan wajib terklasifikasi tepat satu:
+
+- **Kelas A — Beli jadi / pengeluaran langsung (DEFAULT existing):** fiskal DAN komersial mulai bulan `purchaseDate`, bulan penuh, pola cron existing DIPERTAHANKAN. Berlaku hanya bila aset bukan pengerjaan sendiri bertahap dan tidak diajukan penundaan ayat (4).
+- **Kelas B — Masih dalam pengerjaan (pengerjaan sendiri / dibangun bertahap):** fiskal mulai **bulan selesainya pengerjaan** (UU PPh 11(3) eksepsi pertama; PMK 72/2023 Pasal 5(1)(a)) — persetujuan DJP TIDAK diperlukan untuk kelas ini. Selama belum selesai: NOL jurnal penyusutan fiskal maupun komersial (aset belum siap digunakan, PSAK 16). Tanggal selesai = peristiwa terstruktur bertanggal (tanggal penyelesaian/serah-terima internal tercatat), BUKAN diturunkan dari `purchaseDate`, status bebas, atau tanggal jurnal perolehan terakhir.
+- **Kelas C — Selesai/dibeli tetapi belum digunakan atau belum menghasilkan, minta mulai lebih lambat:** fiskal mulai bulan digunakan/mulai menghasilkan **HANYA bila ada penetapan DJP** (UU PPh 11(4); PMK 72/2023 Pasal 5(1)(b)+(4)+(5)). Tanpa nomor+tanggal penetapan tercatat: kelas C TIDAK SAH — aset diperlakukan Kelas A (fiskal tetap bulan pengeluaran). Sistem DILARANG menunda fiskal hanya dari flag/status "belum digunakan" tanpa bukti penetapan; itu penundaan tanpa dasar = risiko koreksi fiskal positif di SPT Tahunan.
+
+### Putusan 2 — Fiskal dan komersial boleh beda bulan mulai; keduanya dibekukan per aset
+
+- Sisi FISKAL mengikuti Putusan 1 persis (A: bulan pengeluaran; B: bulan selesai; C: bulan penetapan DJP).
+- Sisi KOMERSIAL (jurnal GL berjalan) mengikuti PSAK 16: mulai bulan aset **siap digunakan** (selesai pengerjaan / selesai dipasang), yang untuk Kelas B sama bulannya dengan fiskal, untuk Kelas A bulan perolehan, untuk Kelas C bulan siap-digunakan walau fiskal sah lebih lambat karena penetapan. Selisih bulan-mulai fiskal vs komersial adalah selisih temporer biasa: masuk daftar selisih fiskal existing (`depreciation-difference`), TIDAK melahirkan jurnal GL kedua dan TIDAK mengubah jurnal komersial.
+- Bulan-mulai fiskal dan komersial yang terpilih DIBEKUKAN sebagai snapshot per aset saat masa pertama lahir (bertanggal efektif); edit master/tanggal sesudahnya tidak menggeser masa yang sudah berjurnal. Perpindahan kelas sesudah masa pertama (mis. penetapan DJP terbit belakangan untuk Kelas C) hanya berlaku PROSPEKTIF dari bulan penetapan: masa lampau yang sudah terlanjur disusutkan fiskal TIDAK dihitung ulang diam-diam; selisihnya = koreksi fiskal di SPT Tahunan oleh akuntan, ditandai `BUTUH-VONIS-AKUNTAN` per kasus, bukan jurnal balik otomatis.
+
+### Putusan 3 — Gerbang cron fail-closed (mengikat inti BOT 3)
+
+- Cron WAJIB melewati aset yang terklasifikasi Kelas B belum-selesai dengan catatan hasil cron berisik (aset + alasan "dalam pengerjaan, belum selesai"), BUKAN skip diam dan BUKAN disusutkan. Penyelesaian tanpa tanggal selesai terstruktur = tetap terlewati berisik.
+- Kelas C tanpa nomor+tanggal penetapan DJP terisi = diperlakukan Kelas A oleh mesin fiskal DAN tampil di daftar temuan "klaim belum digunakan tanpa penetapan DJP — fiskal tetap bulan pengeluaran" (pola jujur F-062 daftar belum-dapat-dihitung). UI tidak boleh menampilkan klaim itu sebagai sudah disetujui.
+- Tanggal mulai yang dipilih (kelas + tanggal peristiwa + nomor/tanggal penetapan bila Kelas C) wajib terbaca read-model rekonsiliasi aset F-062 sebagai bagian temuan; selisih tiga jalur F-062 Putusan 1 tetap berlaku.
+- Bidang usaha tertentu PMK 72/2023 Pasal 13/16 (perkebunan/peternakan/kehutanan dsb., mulai bulan produksi komersial) TIDAK didukung: aset yang diklaim masuk rezim itu ditolak berisik ke daftar temuan, jangan dipetakan diam-diam ke Kelas A/B/C. Dibuka hanya lewat vonis tersendiri bila bisnis nyata membutuhkannya.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 3 (inti terpisah, SESUDAH vonis ini + PR #602 masuk main; klaim `prisma/schema.prisma` di board dulu, koordinasi BOT 4 sebelum migrasi): bentuk fisik tanggal selesai pengerjaan/tanggal siap-digunakan + penanda kelas + nomor/tanggal penetapan DJP (kolom aditif bertanggal efektif pola F-062), gerbang cron Putusan 3, snapshot bulan-mulai per aset, daftar temuan Kelas C tanpa penetapan. JANGAN bangun sebelum #602 merged — gerbang ini menempel pada jalur cron yang sama.
+- BOT 2: tampilkan kelas + tanggal mulai fiskal/komersial + status penetapan apa adanya dari backend; UI tidak memilih kelas dan tidak menghitung bulan mulai.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E107-1 aset Kelas B belum selesai, cron 3 bulan berturut = nol jurnal/history/currentValue berubah + tercatat berisik tiap run; E107-2 tanggal selesai diisi bulan M → jurnal pertama bertanggal bulan M, bukan bulan purchaseDate; E107-3 Kelas C tanpa penetapan: fiskal terhitung dari bulan pengeluaran (bukan bulan digunakan) + tampil di temuan; E107-4 Kelas C dengan penetapan: fiskal mulai bulan penetapan, komersial mulai bulan siap-digunakan, selisih tampil di depreciation-difference tanpa jurnal kedua; E107-5 penetapan terbit sesudah 2 masa fiskal Kelas A terjurnal → masa lampau tidak berubah, hanya masa berikutnya bergeser + temuan koreksi; E107-6 klaim bidang-usaha-tertentu ditolak berisik, nol jurnal.
+
+### Yang TIDAK diputus
+
+Amortisasi harta tak berwujud (UU PPh Pasal 11A/PMK 72/2023 Bab amortisasi), biaya perbaikan yang menambah masa manfaat (PMK 72/2023 Pasal 7 — ditambah ke nilai sisa buku fiskal, mulai bulan pengeluaran perbaikan/selesai pengerjaan perbaikan), dan persetujuan perubahan metode = vonis tersendiri bila kasus nyata muncul. Vonis ini bukan penetapan DJP dan bukan klaim SPT Tahunan sah; penetapan Kelas C tetap kewenangan DJP per permohonan WP.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 11 ayat (3)-(4) + PMK 72/2023 Pasal 5 (sumber DJP di atas, akses 2026-10-23) dan PSAK 16 untuk sisi komersial.
+
+ID vonis ini **F-2026-10-23-107-V** (tertinggi terverifikasi run ini: F-2026-10-23-106-V di PR #608; main e7f4dc17 + PR terbuka dicek). Pemilik berikutnya: BOT 1 merge vonis + PR #602 -> BOT 3 inti gerbang saat-mulai -> BOT 2 -> BOT 6 E107-1..6.
