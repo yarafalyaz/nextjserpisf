@@ -86,6 +86,7 @@ export const navigation: NavItem[] = [
     icon: DollarSign,
     children: [
       { label: "Penawaran", href: "/penjualan/penawaran", icon: FileText, permission: "view_quotations" },
+      { label: "Antrean Penawaran", href: "/penjualan/antrean-penawaran", icon: ListTodo, permission: "view_quotations" },
       { label: "Uang Muka", href: "/penjualan/uang-muka", icon: Wallet, permission: "view_down_payments" },
       { label: "Pesanan Penjualan", href: "/penjualan/pesanan", icon: ShoppingCart, permission: "view_sales_orders" },
       { label: "Surat Jalan", href: "/penjualan/surat-jalan", icon: Truck, permission: "view_delivery_orders" },

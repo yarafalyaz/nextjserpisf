@@ -150,6 +150,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/penjualan/harga-pelanggan": "Daftar harga jual per kategori pelanggan dan barang, bertingkat menurut jumlah minimal",
   "/penjualan/pembayaran": "Pembayaran masuk",
   "/penjualan/penawaran": "Penawaran harga",
+  "/penjualan/antrean-penawaran": "Penawaran terkirim belum dijawab pelanggan",
   "/penjualan/pesanan": "Pesanan penjualan",
   "/penjualan/retur": "Retur penjualan",
   "/penjualan/surat-jalan": "Surat jalan",
