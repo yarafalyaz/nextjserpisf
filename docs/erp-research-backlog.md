@@ -7676,3 +7676,72 @@ Estimasi: BOT 3 model+lahir di tx selesai WO+aksi lepas
 Pemilik berikutnya: BOT 1 putus Q-IP-1/2/4/5 -> BOT 3 inti
 (Q-IP-3) -> BOT 2 panel -> BOT 6 AC-IP-1..10. BOT 4 tidak
 dibutuhkan (nol jurnal/angka uang di spec ini).
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-065-S ambang konversi DP→invoice terkonfigurasi (inti F-2026-10-20-108; tanpa kode)
+
+Induk: F-2026-10-20-108 (d) P2 "Ambang invoice otomatis 50% hardcoded, tidak per kesepakatan job" (backlog baris 291 origin/main ea430e34). ID 065 bebas terverifikasi run ini: maksimum terpakai 064-S (PR #500 OPEN) + 063-V (PR #498); grep `F-2026-10-22-065` di origin/main + `gh pr list --state all --search 108` = 0 hasil untuk 108.
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main ea430e34, 2026-10-22)
+
+- Ambang hardcoded: `src/lib/hooks/down-payment.hook.ts` seksi invoice (baris relatif 549-569 dari awal file; teks persis: `const thresholdSen = Math.ceil(grandTotalSen / 2)` + komentar "Ambang 50% dibulatkan KE ATAS ke sen"). Invoice konversi lahir SEKALI sebagai DRAFT hanya bila kumulatif DP CONFIRMED (sen integer, Decimal-safe) >= thresholdSen; WO/SO/Project dibuat tanpa memandang ambang. Posting tetap manual lewat `postInvoice` (izin+approval+period-lock) — pembuatan invoice BUKAN posting, stok/pendapatan lahir saat posting.
+- Persen terkonfigurasi SUDAH ada tapi hanya saran nominal form: `CustomerCategory.downPaymentPercent Decimal(5,2) @default(0)` (prisma/schema.prisma:404-408); dipakai `down-payment-form.tsx:83-85,155,210-214` + `down-payment-options.ts:27,64` untuk menghitung saran nominal DP. Hook konversi TIDAK membaca persen ini sama sekali (grep `downPaymentPercent` di `src/lib/hooks/` = 0).
+- Quotation tidak punya kolom ambang/persen apa pun (model `Quotation` schema: tidak ada `invoiceThresholdPercent`/`downPaymentPercent`); `Customer.customerCategoryId` nullable (schema Customer) — rantai Quotation→Customer→CustomerCategory dapat dijangkau tanpa skema baru untuk SUMBER persen, tapi snapshot per-quotation butuh kolom baru (lihat Q-DP65-1).
+- Tes ambang existing: `src/lib/hooks/__tests__/down-payment-threshold.test.ts` ("DP 300 dari 1000 (30%): WO/SO dibuat, invoice TIDAK dibuat") — perilaku 50% terkunci tes ini; perubahan ambang WAJIB memperbarui fixture ini, bukan menimpa diam-diam.
+- Permission nyata (module-catalog.generated.ts): `view/create/edit/delete_down_payments` (:177-180), `confirm_down_payments` (:181), `view/create/edit_quotations` (:155-157), `view_sales_invoices` (:145). Tidak ada permission ambang khusus dan spec ini tidak mengusulkan permission baru.
+- Benchmark (akses 2026-10-22): Accurate — DP dicatat sebagai nominal pada Pesanan Penjualan lalu dipakai memotong faktur, tanpa ambang persen tetap untuk menerbitkan faktur: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pesanan-penjualan/pesanan-penjualan-dengan-down-payment/ dan https://help.accurate.id/product/uang-muka-penjualan/ ; Zahir — uang muka penerimaan nominal bebas, dipilih untuk memotong Faktur Penjualan: https://help.zahironline.com/portal/id/kb/articles/uang-muka-penerimaan-pada-zahir-online-versi-2 . BENCHMARK: kedua kompetitor tidak mengenal "invoice baru boleh lahir pada X% DP" — ambang ISF adalah kebijakan internal bengkel, bukan standar kompetitor.
+
+### 2. Aturan bisnis register (semua berlabel; tidak ada yang ditegaskan sebagai fakta tanpa label)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-DP65-01 | Ambang efektif = persen snapshot di Quotation saat quotation dibuat/disetujui; sumber awal = `CustomerCategory.downPaymentPercent` pelanggan; snapshot TIDAK berubah bila master kategori diubah sesudahnya | USULAN — perlu Q-DP65-1 |
+| BR-DP65-02 | Kategori tanpa persen (0/null) atau pelanggan tanpa kategori → ambang efektif 50 (perilaku berjalan hari ini, nol regresi) | USULAN (default-aman) |
+| BR-DP65-03 | Persen sah: >0 dan <=100, maksimal 2 desimal (Decimal(5,2)); 0 di snapshot berarti "pakai default 50", BUKAN "invoice lahir pada DP Rp0" | USULAN |
+| BR-DP65-04 | Pembulatan tetap ke sen integer, ambang dibulatkan KE ATAS (`Math.ceil(persen% x grandTotalSen)`), Decimal-safe persis pola existing | TERVERIFIKASI-KODE (pola existing) + USULAN rumus persen |
+| BR-DP65-05 | Invoice tetap lahir SEKALI sebagai DRAFT; ambang hanya mengatur SAAT lahir, tidak mengubah status/posting/stok/jurnal. DP lanjutan sesudah invoice ada tetap alokasi SalesPayment idempoten per nomor DP (pola P0-1 existing) | TERVERIFIKASI-KODE |
+| BR-DP65-06 | Mengubah persen quotation yang SUDAH punya DP CONFIRMED atau invoice konversi: DILARANG diam-diam; hanya boleh sebelum DP pertama confirmed, tercatat ActivityLog (siapa/kapan/dari-berapa-ke-berapa) | USULAN |
+| BR-DP65-07 | Saat invoice lahir berubah = saat piutang draft + kesiapan posting berubah; pengakuan pendapatan/stok tetap saat posting manual — vonis akuntansi atas perubahan timing dokumen | BUTUH-VONIS BOT 4 (Q-DP65-2) |
+| BR-DP65-08 | Persen per-quotation boleh menyimpang dari persen kategori (kesepakatan korporat 30%) — siapa boleh menyimpang dan apakah perlu approval | BUTUH-VONIS BOT 1 (Q-DP65-3) |
+
+### 3. Pertanyaan terbuka (menahan inti, tidak menahan spec ini)
+
+- Q-DP65-1 (BOT 1 arsitektur + BOT 3 teknis): sumber ambang final — (a) kolom snapshot `Quotation.invoiceThresholdPercent` diisi dari kategori saat buat (rekomendasi USULAN: snapshot, supaya ubah master tidak menulis ulang kesepakatan berjalan), atau (b) baca live kategori saat confirm DP (lebih murah, tapi kesepakatan berubah diam-diam mengikuti master). Tanpa putusan ini BOT 3 tidak memilih kolom.
+- Q-DP65-2 (BOT 4, vonis uang): ambang <50% mempercepat lahirnya invoice draft — apakah ada dampak PPN/faktur pajak/umur piutang yang harus dijaga (mis. larangan ambang di bawah persen tertentu untuk pelanggan kena pajak)? Spec ini TIDAK mengklaim dampak pajak apa pun.
+- Q-DP65-3 (BOT 1): penyimpangan persen per-quotation dari kategori — bebas oleh pembuat quotation (izin `create/edit_quotations` existing), atau wajib approval (`approve_quotations`)? Rekomendasi USULAN: tahap pertama TANPA approval baru (informatif + log), gerbang approval hanya bila BOT 1 memutuskan.
+- Q-DP65-4 (BOT 3): backfill quotation berjalan — quotation existing tanpa snapshot diperlakukan 50 persis BR-DP65-02 (nol migrasi data bermakna); konfirmasi tidak ada jalur konversi kedua (convertQuotationToOrder dsb.) yang juga membaca ambang 50% di luar hook ini (grep ambang run ini hanya menemukan hook; BOT 3 verifikasi ulang saat implementasi).
+
+### 4. Alur + status-transition (kontrak, bukan implementasi)
+
+Aktor: Admin Sales (buat/ubah quotation + DP), Kasir/Finance (confirm DP, `confirm_down_payments`), BOT 3 (hook server), BOT 2 (tampil persen efektif).
+
+1. Quotation dibuat → persen efektif tertera (dari kategori pelanggan; label sumber: "dari kategori X" / "default 50%").
+2. DP dibuat (nominal bebas, saran form dari persen kategori existing — tidak berubah) → DP draft.
+3. DP di-confirm → kumulatif CONFIRMED dibandingkan ke ambang efektif snapshot: di bawah ambang = WO/SO/Project lahir, invoice TIDAK; mencapai/melewati = invoice DRAFT lahir sekali + alokasi semua DP terverifikasi belum teralokasi.
+4. Invoice DRAFT → posting manual existing (tidak berubah oleh spec ini).
+
+Transisi yang TIDAK berubah: status Quotation `draft→sent→accepted/rejected→converted`, status DP, status invoice enum. Spec ini hanya mengganti SATU penjaga numerik (thresholdSen) dari konstanta 1/2 menjadi persen efektif.
+
+### 5. Edge cases (wajib diuji BOT 3/BOT 6)
+
+- GrandTotal Rp1, persen 30 → ambang ceil(30 sen)=30 sen? Rumus sen: `Math.ceil(grandTotalSen * pct / 100)`; uji Rp1/33%/99%.
+- Persen 100 → invoice hanya lahir saat DP lunas penuh; DP 99,9% tidak melahirkan invoice.
+- Kategori diubah dari 30→50 sesudah quotation dibuat: quotation lama tetap snapshot-nya (bila Q-DP65-1=a).
+- Pelanggan pindah kategori sesudah DP pertama confirmed: ambang quotation berjalan tidak berubah.
+- Dua DP confirmed konkuren melewati ambang bersamaan: tetap satu invoice (kunci baris quotation existing, jangan buat kunci kedua).
+- Invoice konversi cancelled lalu DP baru masuk: pola existing (invoice pengganti, bukan menempel ke cancelled) tidak berubah oleh persen.
+- Persen snapshot korup (0 negatif/>100 dari impor/manual DB): fail ke default 50 + log, jangan lahirkan invoice pada DP Rp0.
+
+### 6. Draf acceptance
+
+BOT 3 (backend, inti sesudah Q-DP65-1..3 terjawab): AC-DP65-1 ambang dibaca dari snapshot quotation (bukan konstanta, bukan live master); AC-DP65-2 default 50 untuk snapshot kosong (fixture threshold existing hijau tanpa ubah makna); AC-DP65-3 fixture baru: kategori 30% → invoice lahir pada kumulatif 30%, kategori 100% → hanya saat lunas; AC-DP65-4 ubah master kategori tidak mengubah quotation berjalan; AC-DP65-5 persen korup fail-closed ke 50.
+
+BOT 2 (UI fitur didahulukan atas polish): AC-DP65-6 form/detail quotation menampilkan persen efektif + label sumber verbatim ("Ambang invoice dari kategori pelanggan: 30%" / "Ambang invoice default: 50%"); AC-DP65-7 UI tidak menghitung ambang sendiri — tampilkan nilai dari server; AC-DP65-8 tanpa izin `edit_quotations` field persen tampil baca-saja.
+
+BOT 6 (falsifikasi): cabut snapshot (paksa baca live) = AC-DP65-4 MERAH; ganti konstanta ke persen kategori tanpa snapshot untuk quotation lama = MERAH; kirim persen 0/-5/150 dari klien = ditolak/default, invoice TIDAK lahir pada DP Rp0; dua confirm konkuren = tepat satu invoice.
+
+### 7. Yang TIDAK diusulkan
+
+- Jadwal termin terstruktur (F-2026-10-20-106 inti `JobPaymentSchedule`): lapis amannya sudah merged (PR #347/#355); inti termin tetap menunggu putusan sendiri, bukan bagian spec ini.
+- Mengubah persen menjadi syarat posting invoice: posting tetap gerbang existing.
+- Permission baru khusus ambang: tidak diusulkan (Q-DP65-3 dulu).
+
+Pemilik berikutnya: BOT 1 (Q-DP65-1/3) + BOT 4 (Q-DP65-2) → BOT 3 inti → BOT 2 UI → BOT 6 §6. BOT 5 spec saja, tanpa kode.
