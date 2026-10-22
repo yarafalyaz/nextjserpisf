@@ -10658,3 +10658,103 @@ BOT 3 (dokumen denda) -> BOT 2 (tampil) -> BOT 6 (E93-1..7).
 BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
 
 ---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-075-V Q-SUB69-5 (substitusi part baris WO, spec F-2026-10-22-069-S PR #510)
+
+Pemilik vonis: BOT 4. Pertanyaan: Q-SUB69-5 + BR-SUB69-07 spec
+F-2026-10-22-069-S (head PR #510 `194a9827`): bila harga/biaya
+pengganti berbeda dari part asal, apakah selisih boleh memengaruhi
+nilai job lewat change order F-2026-10-20-103, dan apakah HPP part
+pengganti mengikuti biaya item pengganti itu sendiri?
+
+Bukti kode origin/main `57fa0556`:
+- `reviseWorkOrderItems` (src/actions/inventory.actions.ts:1008):
+  jalur sempit revisi baris WO `in_progress` — baris lama ditandai
+  `replaced`, baris baru `pending`; baris yang sudah ter-issue lewat
+  MaterialIssue `completed` DITOLAK diganti di sini (stok sudah OUT:
+  FIFO + jurnal sudah jalan); nol StockMove/jurnal/reservasi lahir
+  dari langkah revisi itu sendiri.
+- `material-issue.hook.ts:87-157`: saat MaterialIssue completed,
+  biaya yang dikonsumsi = biaya FIFO aktual item yang DI-ISSUE
+  (`consumeFifoLayers` per itemId baris issue), fallback snapshot
+  `item.cost` hanya untuk porsi shortfall; StockMove OUT dan jurnal
+  Dr Material Expense / Cr Inventory memakai `unitCost` aktual yang
+  sama persis.
+- Rantai nilai tagih: `Quotation.grandTotal` sumber tunggal
+  (warisan vonis F-2026-10-22-066-V Q-CO-4); change order resmi
+  F-2026-10-20-103 / spec F-2026-10-22-066-S adalah satu-satunya
+  jalur mengubah nilai kontrak sesudah WO berjalan.
+
+### Vonis 1 — HPP pengganti: DIKONFIRMASI, biaya item pengganti sendiri
+
+- HPP/biaya material part pengganti WAJIB mengikuti biaya aktual
+  item PENGGANTI itu sendiri, lewat jalur yang sudah berjalan:
+  FIFO lapisan item pengganti pada MaterialIssue completed (fallback
+  snapshot `item.cost` pengganti hanya untuk shortfall). TIDAK ada
+  perlakuan baru yang perlu dibangun — substitusi cukup mengganti
+  `itemId` baris WO lewat `reviseWorkOrderItems`; mesin biaya
+  existing otomatis membebankan biaya pengganti.
+- DILARANG: membebankan biaya part ASAL ke issue pengganti,
+  mengkredit/mendebit selisih biaya antar-item ke akun selisih
+  harga saat substitusi, atau menulis jurnal apa pun pada langkah
+  terapkan substitusi. Selisih biaya asal vs pengganti adalah
+  realitas biaya job (masuk varians estimasi-vs-aktual laporan WO),
+  BUKAN peristiwa jurnal tersendiri.
+- Alasan satu kalimat: persediaan keluar dicatat sebesar biaya
+  perolehan barang yang benar-benar keluar (prinsip biaya historis
+  persediaan, PSAK 202 tentang Persediaan — pengukuran sebesar
+  biaya perolehan); barang yang keluar adalah pengganti, jadi
+  biayanya biaya pengganti.
+
+### Vonis 2 — Selisih harga jual: HANYA lewat change order disetujui
+
+- Substitusi sendiri TIDAK mengubah nilai tagih job, `grandTotal`,
+  jadwal termin, atau estimasi pendapatan — walau harga jual/biaya
+  pengganti berbeda berapa pun. Langkah terapkan = nol jurnal, nol
+  dokumen uang, nol perubahan nilai kontrak (menguatkan
+  BR-SUB69-06/07 spec).
+- Bila selisih MAU ditagih/dikreditkan ke pelanggan, satu-satunya
+  jalur sah = change order resmi F-2026-10-20-103 (spec
+  F-2026-10-22-066-S) dengan persetujuan pelanggan terdokumentasi,
+  yang menulis ulang `Quotation.grandTotal` lewat
+  `computeQuotationTotals` existing; faktur selisih/kredit mengalir
+  dari grandTotal baru itu sesuai vonis F-2026-10-22-066-V.
+  Substitusi tanpa CO = selisih ditanggung margin job, tampil apa
+  adanya di estimasi-vs-aktual.
+- DILARANG: tombol/alur substitusi menawarkan "sesuaikan harga"
+  diam-diam, mengubah harga baris WO/quotation tanpa CO, atau
+  menautkan substitusi langsung ke faktur selisih.
+
+### Batas build (mengikat BOT 3/BOT 5/BOT 2)
+
+- BOT 3: penerapan substitusi hanya ganti baris via
+  `reviseWorkOrderItems` existing; JANGAN tambah kolom harga/biaya
+  khusus substitusi, JANGAN hitung selisih di server substitusi.
+  Bila UI butuh tampilkan perbandingan biaya untuk keputusan
+  manusia, ambil dari biaya master/FIFO existing sebagai label
+  informatif read-only — bukan angka yang disimpan/ditagih.
+- BOT 2: UI substitusi TIDAK menampilkan kolom selisih-sebagai-
+  tagihan dan TIDAK menghitung ulang biaya di UI; angka biaya yang
+  tampil = dari server apa adanya.
+- Q-SUB69-5 TIDAK menahan inti substitusi informatif (sesuai spec
+  §8): BOT 3 boleh jalan sesudah Q-SUB69-1/2/3 diputus BOT 1.
+
+### Draf acceptance BOT 6 (falsifikasi)
+
+- AC-SUB69-V1: terapkan substitusi lalu complete MaterialIssue
+  pengganti → jurnal Dr Material Expense = qty × biaya FIFO aktual
+  PENGGANTI; pakai biaya asal = MERAH.
+- AC-SUB69-V2: terapkan substitusi (pengganti lebih mahal/lebih
+  murah) tanpa CO → `Quotation.grandTotal`, jadwal termin, dan
+  jurnal berubah = MERAH; hanya baris WO + ActivityLog berubah.
+- AC-SUB69-V3: substitusi + CO disetujui yang mengubah nilai →
+  grandTotal baru persis hasil `computeQuotationTotals`; CO tanpa
+  substitusi dan substitusi tanpa CO masing-masing tidak saling
+  memicu = MERAH bila tertaut otomatis.
+- AC-SUB69-V4: baris ter-issue disubstitusi lewat jalur substitusi
+  = MERAH (guard existing tetap).
+
+Pemilik berikutnya: BOT 1 putus Q-SUB69-1/2/3/4 → BOT 3 inti
+substitusi → BOT 2 UI → BOT 6 AC-SUB69-1..10 + V1..V4 di atas.
+BOT 4 selesai untuk Q-SUB69-5; tidak ada angka statutori/pajak
+baru (nol PPN/PPh berubah: faktur tetap dari grandTotal berjalan).
