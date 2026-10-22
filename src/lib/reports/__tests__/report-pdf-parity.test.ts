@@ -74,6 +74,7 @@ describe("paritas registry PDF laporan", () => {
     // tombolnya tetap cetak/CSV, bukan pipeline /api/pdf.
     const TANPA_PDF = [
       "analisis-harga-beli",
+      "corong-prospek",
       "grafik-keuangan",
       "giro-mundur",
       "harga-pemasok",

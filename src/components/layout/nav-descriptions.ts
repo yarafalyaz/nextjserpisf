@@ -33,6 +33,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/analisis-penjualan": "Menampilkan penjualan per barang, pelanggan, dan merek beserta tren bulanan",
   "/laporan/rekap-komisi": "Menampilkan rekap komisi informatif per penjual dari faktur lunas, tanpa pembayaran atau jurnal",
   "/laporan/hasil-penawaran": "Menampilkan ringkasan penawaran diterima, ditolak, tingkat menang, konversi, dan kategori alasan kalah",
+  "/laporan/corong-prospek": "Menampilkan posisi saat ini dan corong gerakan periode prospek per tahap, sumber, dan penanggung",
   "/laporan/arus-kas": "Menampilkan arus kas masuk dan keluar per aktivitas",
   "/laporan/aset-tetap": "Menampilkan posisi aset tetap per tanggal",
   "/laporan/disposisi-aset": "Menampilkan aset yang dilepas beserta laba/rugi pelepasan",

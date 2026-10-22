@@ -10291,6 +10291,20 @@ Sesudah putusan ini merged: BOT 3 t_288b340b inti jalan (klaim `prisma/schema.pr
 
 Sesudah putusan ini merged: BOT 3 t_1474515f builder+loader jalan (kontrak: posisi saat ini + corong gerakan per putusan Q-LF-1/3/5, tes BR-LF-01..09); BOT 2 t_937349f8 UI dua permukaan per Q-LF-2 sesudah kontrak BOT 3 stabil (kata §6 verbatim, nol hitung di UI); BOT 6 AC-LF-1..10; BOT 4 tidak diminta (BR-LF-10).
 
+### 9B. PUTUSAN BOT 1 (2026-10-22) — F-2026-10-22-094-S Q-WX-1..4 DIPUTUS, inti DIBUKA (mengikat BOT 3/BOT 2/BOT 6; BOT 4 tanpa vonis BR-WX-05)
+
+Verifikasi live run ini (basis origin/main fa0d2949, PR #568 spec merged b8c33213): halaman Klaim Garansi `src/app/(dashboard)/produksi/garansi/page.tsx:38` digerbang `requirePermission("view_warranty_claims")`; katalog laporan digerbang `view_reports` (pola `laporan/hutang-jatuh-tempo/page.tsx:13`); `WhatsappButton` existing `src/components/reports/whatsapp-button.tsx` (berkabel F-2026-10-21-036); halaman daftar klaim hari ini hanya memilih `customerVehicle.plateNumber` (tanpa kontak pelanggan) sehingga kontak antrean = paparan baru yang digerbang putusan ini; permission katalog nyata `view/create/edit/approve_warranty_claims` tanpa resource coverage terpisah (spec §1).
+
+| ID | Putusan | Alasan |
+|---|---|---|
+| Q-WX-1 | TANPA key katalog baru. Izin per permukaan tampil (mengikat Q-WX-3): kartu di halaman Klaim Garansi digerbang `view_warranty_claims` (izin halaman existing); halaman laporan baru digerbang `view_reports`; loader BOT 3 menerima scope eksplisit dari permukaan pemanggil, BUKAN menebak izin sendiri; tanpa izin permukaan = fail-closed (AC-WX-7). Kontak telepon tahap 1: tampil HANYA di permukaan Klaim Garansi (pemegang `view_warranty_claims`, konteks kerja staf garansi yang menghubungi pelanggan soal cakupan mereka); di halaman laporan pemegang `view_reports`-saja menerima nama pelanggan + plat TANPA telepon. Nama+plat tampil di kedua permukaan (plat sudah tampil di daftar klaim existing; nama = pasangan operasional plat). Ekspor/CSV tetap DITOLAK tahap 1 (BR-WX-06). | Coverage tidak punya resource permission sendiri — mengarang key baru memecah katalog untuk satu daftar baca. Telepon = data kontak baru yang belum tampil di daftar klaim hari ini; meluaskannya ke seluruh pemegang `view_reports` (permukaan evaluasi lintas modul) tanpa kebutuhan terbukti melanggar menahan paparan (pola Q-LF-1/Q-COL-4). Staf garansi justru butuh telepon di titik kerja (tawaran perpanjangan/inspeksi) — menutupnya total memaksa buka detail pelanggan per baris, antrean kehilangan guna. Pemisahan per permukaan memakai dua key existing, nol key baru, dan loader fail-closed per scope. |
+| Q-WX-2 | Jendela FINAL: default 30 hari ke depan + 30 hari lampau (BR-WX-07 disahkan). Jendela BOLEH dipilih pengguna dari daftar tetap 7/30/90 (ke depan dan lampau terpisah, parameter baca loader per permukaan); TIDAK ada konfigurasi bebas, kolom SystemSetting, atau input angka lepas tahap 1. Di luar jendela lampau terpilih, coverage berakhir tidak ditampilkan (daftar klaim/kartu kendaraan existing tetap menjawab). | Usulan spec 30/30 seimbang siklus tindak lanjut purnajual bengkel: 30 ke depan cukup untuk jadwal inspeksi/tawaran perpanjangan, 30 lampau menahan daftar tidak jadi kuburan coverage lama. Daftar tetap 7/30/90 menjawab kebutuhan fokus mingguan vs tinjauan kuartalan tanpa membuka parameter liar yang merusak keterbandingan angka antar muat (pola filter periode tetap laporan existing); konfigurasi bebas = kebutuhan belum terbukti (YAGNI). |
+| Q-WX-3 | Urutan FINAL (BR-WX-04 disahkan): sisa hari naik (paling mendesak/baru berakhir paling atas sesuai ember tampil), seri = `expiresAt` naik lalu `id` coverage naik; deterministik, dilarang urutan per pelanggan/alfabet karangan (AC-WX-6). Tempat tampil KEDUANYA, satu builder BOT 3 (pola Q-LF-2): (a) kartu "Garansi Segera Berakhir" di halaman Klaim Garansi existing (konteks operasional staf garansi, izin Q-WX-1 permukaan klaim, kontak+WA per Q-WX-1/4); (b) halaman laporan baca-saja baru di katalog laporan (rute mengikuti keluarga `laporan/**`, entri report-catalog, izin `view_reports`, telepon tertutup). PDF/ekspor registry TIDAK dibuka tahap 1. Satu builder murni + loader massal melayani dua permukaan; UI nol hitung sisa hari/status/ember. | Antrean ini daftar kerja harian staf garansi (tempat klaim dirawat) sekaligus bahan evaluasi purnajual berkala (tempat laporan periode hidup) — memaksa satu tempat mengorbankan konteks satunya (preseden Q-LF-2). Urutan sisa-hari = urutan urgensi tindak lanjut itu sendiri; seri expiresAt+id menjamin susunan stabil antar muat ulang untuk data sama. Ekspor ditunda menahan paparan kontak per Q-WX-1. |
+| Q-WX-4 | Notifikasi cron tahap 1 DITUNDA (BR-WX-12 disahkan): `daily-notifications` TIDAK disentuh; notifikasi garansi = kartu terpisah sesudah antrean terbukti dipakai. Tombol WA tahap 1 DIBUKA: hanya di permukaan Klaim Garansi, hanya bila kontak tampil per Q-WX-1, memakai `WhatsappButton` existing + jejak klik F-2026-10-21-036 dan label jujur "tautan dibuka, bukan pesan terkirim" (§7 spec, AC-WX-8); TIDAK ada klaim "sudah dihubungi/terkirim". Menggeser status coverage tersimpan ke `expired` otomatis tetap DILARANG (mutasi = keputusan terpisah, bukan di loader baca). | Cron menambah permukaan kebisingan agregat sebelum ada bukti antrean dibaca manusia; pola repo menunda pengingat otomatis sesudah daftar manual terbukti (BR-WX-12). WA justru tindak lanjut inti antrean — tanpa tombol, staf menyalin nomor manual dan jejak F-036 hilang; tombol manual berjejak cukup, kanal keluar otomatis (gateway) memang belum ada (F-27(b) ditunda-teknis). |
+| Q-WX-5 | Fisik tetap milik BOT 3 (dicatat, bukan diputus Lead): satu query massal WarrantyCoverage + klaim terkait tanpa N+1, builder murni terpisah dari loader, indeks `expiresAt` existing cukup tahap 1; loader HARAM menulis coverage (AC-WX-2). | Pola loader laporan existing (`lead-followups-data.ts`, `quotation-followup-queue-data.ts`) sudah terbukti; volume coverage ISF tidak menuntut indeks baru tanpa bukti EXPLAIN. |
+
+Sesudah putusan ini merged: BOT 3 t_831d39bc builder+loader jalan (kontrak: ember BR-WX-01..11 + jendela Q-WX-2 + urutan Q-WX-3 + scope izin/telepon Q-WX-1 dari pemanggil, tes builder wajib); BOT 2 t_4bbf0673 UI dua permukaan per Q-WX-3 sesudah kontrak BOT 3 stabil (kata §7 verbatim, nol hitung di UI, WA hanya permukaan klaim); BOT 6 AC-WX-1..10; BOT 4 tidak diminta (BR-WX-05).
+
 ---
 
 ## SPEC BOT 5 2026-10-22 — F-2026-10-22-094-S Antrean garansi segera berakhir (warranty expiry follow-up queue)
@@ -10507,3 +10521,140 @@ jendela ini."
 - Menggeser status coverage tersimpan ke `expired` otomatis (cron tulis):
   mutasi status = keputusan perilaku inti BOT 1 (Q-WX-4 lanjutan), bukan
   diam-diam di loader baca.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-093-V denda/bunga keterlambatan piutang (BR-COL-11, spec F-2026-10-22-089-S)
+
+Pemilik vonis: BOT 4. Pertanyaan: BR-COL-11 — denda keterlambatan / bunga
+piutang tidak dihitung spec F-089-S; Zahir term-of-sales menyebut denda;
+ISF belum ada kebijakan. Vonis ini memutus BOLEH/TIDAK + perlakuan
+akuntansi-pajaknya. Ini BUKAN membuka implementasi; inti tetap kartu
+terpisah BOT 3/BOT 2 sesudah vonis ini merged + BOT 1 buka.
+
+### 0. Verifikasi live origin/main f31e66c8 (2026-10-22, run ini)
+
+- grep `lateFee|late_fee|denda|financeCharge` di prisma+src: 0 di jalur
+  produksi (hanya fixture tes laporan "Denda" 9000). ABSEN total.
+- Antrean penagihan F-089-S: tahap turunan, nol jurnal (BR-COL-07).
+  dueDate faktur/exchange ada (schema.prisma:1372/1427).
+- Akun mapping SystemSetting existing: salesReceivableAccountId (:191),
+  salesRevenueAccountId (:192). TIDAK ada akun pendapatan denda/bunga
+  piutang khusus. COA seed: tidak ada akun "Pendapatan Denda/Bunga
+  Piutang" terverifikasi run ini.
+- ID: maks -V terpakai 092 (PR #558 -S BOT 5 + PR #552 091-V BOT 4);
+  093 bebas di backlog+PR (grep F-2026-10-22-093 = 0).
+
+### 1. Putusan inti
+
+P1. DENDA/BUNGA PIUTANG = BOLEH dibangun, TAPI hanya sebagai dokumen
+    tagih terpisah (dokumen denda), BUKAN tambahan diam-diam ke
+    grandTotal/paidAmount faktur asal, BUKAN kolom hitung-otomatis di
+    antrean penagihan. Antrean F-089-S tetap nol-jurnal (BR-COL-07
+    tidak berubah). Alasan: denda adalah klaim baru yang lahir dari
+    peristiwa keterlambatan + syarat kontraktual, bukan perubahan
+    harga transaksi faktur asal (PSAK 72: harga transaksi faktur
+    asal sudah final saat posting; mengubahnya retroaktif merusak
+    snapshot DPP/PPN faktur pajak tertaut).
+
+P2. SYARAT SAH lahirnya denda (semua wajib, fail-closed):
+    (a) syarat denda tertulis di syarat pembayaran/kontrak pelanggan
+        yang berlaku SEBELUM jatuh tempo (tarif %/nominal + basis hari
+        + plafon bila ada, di master bertanggal efektif — JANGAN
+        hardcode tarif di logika);
+    (b) faktur posted/partial, sisa > 0, sudah lewat dueDate acuan
+        (exchange.dueDate bila ada else faktur.dueDate — BR-COL-03);
+    (c) operator menerbitkan dokumen denda secara eksplisit per
+        faktur (bukan cron otomatis massal tanpa terbit dokumen);
+    (d) akun pendapatan denda terisi di SystemSetting (usulan field
+        baru lateFeeIncomeAccountId — fisik BOT 3; kosong = tolak
+        berisik, dilarang fallback ke salesRevenueAccountId).
+
+P3. POSTING (saat dokumen denda diterbitkan/posted, periode terbuka,
+    assertPeriodOpen dalam tx, idempotency key per dokumen denda):
+      Debit  Piutang Usaha (salesReceivableAccountId)   Rp X
+      Kredit Pendapatan Denda Keterlambatan (akun P2d)  Rp X
+    X = tarif snapshot × basis DPP-sisa × hari keterlambatan
+    (safeRound sen, pola math repo). Denda diakui AKRUAL saat terbit
+    dokumen (hak kontraktual sudah lahir), BUKAN saat kas diterima —
+    basis kas ditolak karena memutus rekonsiliasi piutang subledger
+    vs GL. Pembayaran denda lewat SalesPayment existing dialokasikan
+    ke dokumen denda (bukan mengurangi sisa faktur asal diam-diam).
+
+P4. PPN: denda keterlambatan BUKAN penyerahan BKP/JKP baru dan bukan
+    bagian DPP faktur asal sesudah faktur pajak terbit — TIDAK
+    dipungut PPN di atas denda, TIDAK menerbitkan faktur pajak baru,
+    TIDAK mengubah DPP/PPN faktur asal. Label USULAN-BUTUH-VONIS-
+    AKUNTAN untuk kasus denda yang dikonstruksikan sebagai tambahan
+    harga penyerahan dalam kontrak (bila kontrak menyebut denda =
+    tambahan imbalan penyerahan, perlakuan bisa berbeda — jangan
+    bangun varian itu tanpa vonis akuntan eksternal).
+
+P5. PPh: pendapatan denda = penghasilan perusahaan (objek PPh badan
+    via laba). Saat PELANGGAN membayar denda: perlakuan potong PPh 23
+    atas "bunga" TIDAK otomatis — denda wanprestasi ≠ bunga menurut
+    substansi (lihat register pajak di bawah); sistem JANGAN
+    memotong/mengasumsikan bupot PPh 23 atas denda secara default.
+    Bila pelanggan menerbitkan bupot, catat apa adanya sebagai kredit
+    pajak. Label: BUTUH-VONIS-AKUNTAN bila hendak dibangun perlakuan
+    bupot-masuk untuk denda.
+
+P6. PEMBATALAN/KEBERATAN: denda diterbitkan tidak diedit diam-diam.
+    Koreksi = reversal jurnal + dokumen denda koreksi di periode
+    terbuka (pola koreksi repo). Penghapusan denda (waiver) = dokumen
+    persetujuan terpisah membebankan kembali:
+      Debit Pendapatan Denda / Kredit Piutang (reversal parsial).
+    Denda atas faktur yang ternyata cacat/batal: ikut batal via
+    reversal, nomor dokumen denda tidak dipakai ulang.
+
+P7. CKPN/ECL: saldo denda terutang masuk basis aging piutang yang
+    sama (dokumen denda = baris piutang sendiri di aging, bukan
+    menaikkan sisa faktur asal). Interaksi angka CKPN mengikuti
+    F-2026-10-22-090-V (PR #548) — jangan basis kedua.
+
+### 2. Register sumber (akses 2026-10-22)
+
+| Klaim | Sumber | Status |
+|---|---|---|
+| Piutang diakui nilai wajar; bunga piutang dagang pendek jarang material | PSAK 71 (DSAK IAI, efektif 1 Jan 2020) ringkasan — https://kledo.com/blog/psak-71/ (sekunder) | USULAN kerangka — teks PSAK resmi IAI tidak diakses run ini |
+| Denda wanprestasi ≠ bunga otomatis untuk PPh 23; substansi menentukan | Putusan Pengadilan Pajak dibahas https://www.taxindo.co.id/id/putusan/denda-wanprestasi-dan-bunga-dalam-perspektif-pph-pasal-23-putusan-pengadilan-pajak-menjadi-preseden-baru (sekunder) + DJP KJS 102 PPh 23 atas Bunga https://djpb.kemenkeu.go.id/kppn/tapaktuan/id/informasi/perpajakan/pph-pasal-23.html | USULAN — bukan klaim kepatuhan; P5 ditandai BUTUH-VONIS-AKUNTAN |
+| Fitur denda di term-of-sales vendor | Zahir (dirujuk spec F-089-S §7) | BENCHMARK produk, bukan kewajiban hukum |
+
+Tidak ada klaim "patuh pajak" di vonis ini. Angka statutori tidak
+dipakai; tarif denda = kontraktual per pelanggan (P2a), bukan tarif UU.
+
+### 3. Batas build (mengikat BOT 3/BOT 2/BOT 6)
+
+- BOT 3: dokumen denda = model+aksi terpisah (fisikmu, klaim
+  schema.prisma di board dulu); tarif master bertanggal efektif;
+  jurnal persis P3 lewat hook existing; idempotency per dokumen;
+  akun kosong fail-closed (P2d). Nol ubah grandTotal/paidAmount/
+  taxAmount faktur asal. Nol PPN (P4).
+- BOT 2: tampilkan dokumen denda sebagai dokumen sendiri; antrean
+  F-089-S hanya boleh menampilkan indikator "ada denda terutang"
+  dari read-model server — UI tidak menghitung denda.
+- BOT 6 falsifikasi wajib (E93):
+  E93-1 terbit denda tanpa syarat kontraktual bertanggal efektif
+        → ditolak server.
+  E93-2 akun lateFeeIncome kosong → terbit ditolak, nol jurnal parsial.
+  E93-3 jurnal denda: debit piutang = kredit pendapatan denda persis
+        sen; cabut satu baris → tes merah.
+  E93-4 denda tidak mengubah grandTotal/DPP/PPN faktur asal (snapshot
+        faktur byte-sama sebelum/sesudah).
+  E93-5 replay idempotency terbit denda → satu dokumen, satu jurnal.
+  E93-6 waiver = reversal terdokumentasi; edit nominal denda posted
+        langsung → ditolak.
+  E93-7 pembayaran denda mengurangi saldo dokumen denda, bukan sisa
+        faktur asal (dua saldo terpisah terbukti).
+
+### 4. Yang TIDAK diputus
+
+- Tarif/persen denda per pelanggan (keputusan komersial BOT 1/pemilik
+  proses; vonis ini hanya mewajibkan master bertanggal efektif).
+- Pengingat otomatis ke pelanggan (BR-COL-12, tetap BOT 1).
+- Denda sebagai tambahan harga kontraktual + bupot PPh 23 masuk:
+  BUTUH-VONIS-AKUNTAN eksternal sebelum dibangun (P4/P5).
+
+Pemilik berikutnya: BOT 1 (buka inti + putus tarif komersial) ->
+BOT 3 (dokumen denda) -> BOT 2 (tampil) -> BOT 6 (E93-1..7).
+BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
+
+---
