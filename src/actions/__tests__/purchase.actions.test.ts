@@ -1388,6 +1388,51 @@ describe("Purchase Actions Additional Branch Coverage", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createPurchaseRequest membaca qty format Indonesia penuh, bukan 2", async () => {
+    // Regresi: Number("2.000")=2 merusak qty permintaan diam-diam.
+    const res = await actions.createPurchaseRequest(fdMap({
+      date: "2026-06-12", title: "PR Test",
+      items: JSON.stringify([{ itemId: 1, qty: "2.000", notes: "penting" }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseRequest.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create).toEqual([{ itemId: 1, qty: 2000, notes: "penting" }])
+  })
+
+  it("createPurchaseRequest menolak qty tak terbaca tanpa create", async () => {
+    const res = await actions.createPurchaseRequest(fdMap({
+      date: "2026-06-12", title: "PR Test",
+      items: JSON.stringify([{ itemId: 1, qty: "bukan-angka" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Kuantitas permintaan item #1 tidak valid")
+    expect(mocks.prismaMock.purchaseRequest.create).not.toHaveBeenCalled()
+  })
+
+  it("updatePurchaseRequest membaca qty format Indonesia penuh, bukan 2", async () => {
+    mocks.prismaMock.purchaseRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", documentNo: "PR-001" })
+    mocks.prismaMock.purchaseRequest.findUnique.mockResolvedValue({ status: "draft" })
+    const res = await actions.updatePurchaseRequest(1, fdMap({
+      date: "2026-06-12", title: "PR Test Updated",
+      items: JSON.stringify([{ itemId: 1, qty: "2.000", notes: "baru" }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseRequest.update.mock.calls.at(-1)![0]
+    expect(arg.data.items.create).toEqual([{ itemId: 1, qty: 2000, notes: "baru" }])
+  })
+
+  it("updatePurchaseRequest menolak qty tak terbaca sebelum deleteMany", async () => {
+    mocks.prismaMock.purchaseRequest.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft", documentNo: "PR-001" })
+    const res = await actions.updatePurchaseRequest(1, fdMap({
+      date: "2026-06-12", title: "PR Test Updated",
+      items: JSON.stringify([{ itemId: 1, qty: "bukan-angka" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Kuantitas permintaan item #1 tidak valid")
+    expect(mocks.prismaMock.purchaseRequestItem.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.purchaseRequest.update).not.toHaveBeenCalled()
+  })
+
   it("createPurchaseRequest filters items with itemId <= 0", async () => {
     const res = await actions.createPurchaseRequest(fdMap({
       date: "2026-06-12", title: "PR Test",
