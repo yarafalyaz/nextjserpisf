@@ -6949,3 +6949,164 @@ spec BOT 5; 056-V sudah dipakai vonis Q-KOM-1 PR #440 — renumber
 sesudah tabrakan ID terdeteksi, isi vonis nol berubah). Pemilik berikutnya: BOT 3 (bentuk fisik + migrasi
 sesudah #436 merged dan koordinasi board) -> BOT 2 -> BOT 6 §4.
 
+
+---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-063-V klasifikasi aktivitas Laporan Arus Kas (investasi aset tetap tak terdeteksi COA berjalan)
+
+Pemutus: `accounting-finance-tax` (BOT 4), kartu t_5f530e46 (siklus
+standby: antrean vonis terbit semua ter-gate merge — bukti §0; vonis
+ini riset bebas-dependensi berikutnya). Dokumen vonis saja: tanpa
+kode/schema/migrasi. Bukti live: origin/main `ea430e34` (fetch
+2026-10-22 run ini).
+
+### 0. Bukti antrean ter-gate (mengapa riset ini dipilih)
+
+Vonis BOT 4 yang sudah terbit dan menunggu merge Lead (BUKAN vonis
+baru yang bisa diputus run ini): PR #490 F-062-V (BOT 6 audit diminta
+Lead), #459 F-060-V, #454 F-059-V, #443 F-058-V (BOT 6 LOLOS head
+db8b8df6), #440 F-056-V, #411 F-050-V (BOT 6 LOLOS head 437d4792),
+#406 F-048-V (BOT 6 konfirmasi head 3fc23cb3, CI 6/6). Semua
+BEHIND/BLOCKED menunggu merge, bukan menunggu putusan angka BOT 4.
+Label BUTUH-VONIS tersisa di backlog main seluruhnya sudah terjawab
+(F-026 FINAL, F-021 §9 FINAL, Q-033-1/2/4, Q-BUPOT-052, Q-KOM-1,
+Q-SEWA-1..7) atau milik Lead/BOT 1. Karena itu run ini mengambil
+cacat akuntansi terverifikasi yang belum punya F-ID.
+
+### 1. Fakta terverifikasi live (origin/main ea430e34)
+
+1. Laporan `/laporan/arus-kas` mengklasifikasi aktivitas per jurnal
+   lewat `classifyJournal`/`classifyCounterpart`
+   (`src/lib/finance/cash-flow.ts:44-68`): akun lawan ASSET hanya
+   jadi `investing` bila kode mulai `1-3`/`13` ATAU nama mengandung
+   `aset tetap`/`tetap`; selain itu `operating`.
+2. COA seed berjalan (`src/lib/setup/base-data.ts:769+`): Aset Tetap
+   induk `1200` (reportGroup `FASS`), anak `120001` Tanah,
+   `120002` Gedung, `120003` Kendaraan, `120004` Peralatan,
+   `120005` Inventaris Kantor; Akumulasi `120006` (`DEPR`).
+   TIDAK ada kode `1-3*`/`13*`; nama anak TIDAK mengandung kata
+   "tetap" (kecuali induk `1200` "Aset Tetap" yang jarang jadi akun
+   posting). Akibat: jurnal beli mesin/kendaraan tunai
+   (Dr 120004 / Cr 110102) terklasifikasi OPERASI, bukan investasi.
+   Tes existing `cash-flow.test.ts` hanya memakai kode fiktif
+   `1300`/`1-3-01` — hijau semu terhadap COA nyata.
+3. Heuristik nama `tetap` juga positif-palsu: akun ASSET bernama
+   mengandung "tetap" non-aset-tetap akan jadi investasi.
+4. Klasifikasi memakai SATU lawan dominan per jurnal
+   (`cash-flow.ts:104-107`): jurnal gabung (mis. bayar aset +
+   beban dalam satu jurnal kas) seluruh delta kas masuk satu
+   aktivitas; porsi minor hilang dari aktivitasnya.
+5. `Account.reportGroup` (schema:848-851; peta
+   `ACCURATE_TYPE_TO_ACCOUNT_TYPE` base-data.ts:751-767: FASS/DEPR=
+   ASSET) TIDAK diteruskan halaman ke classifier: halaman hanya
+   kirim `type/code/name` (`arus-kas page.tsx:133-141`). Padahal
+   `statement-data.ts:206,220` sudah membawa reportGroup untuk
+   laporan lain — sumber klasifikasi struktural tersedia, tak dipakai.
+6. Kelompok pendanaan sempit: LIABILITY hanya `financing` bila nama
+   mengandung pinjaman/hutang bank/loan/modal (cash-flow.ts:56-65).
+   Utang jangka panjang seed `2201` "Hutang Jangka Panjang" (LTLY)
+   TIDAK cocok satu pun kata itu -> operasi. Setara kas `1102/110201`
+   Deposito (BANK) ikut himpunan kas halaman (nama "Bank"/mapping),
+   jadi mutasi kas<->deposito tak tampak — perlakuan setara kas sah
+   hanya bila deposito memenuhi definisi setara kas (jatuh tempo
+   <=3 bulan, PSAK 207); hari ini tanpa penanda/penjelasan.
+7. Ayat jurnal REVERSED ikut POSTED+REVERSED
+   (`report-aggregation.service.ts:19`) — pasangan reversal neto 0
+   benar untuk total kas; klasifikasi aktivitas juga neto 0 selama
+   jurnal asal dan reversal sama-sama dalam periode dan sama-sama
+   terklasifikasi aktivitas yang sama. Reversal lintas periode
+   menggeser aktivitas antarperiode (bukan salah total) — wajib
+   tampil sebagai catatan metode, bukan diperbaiki diam-diam.
+
+### 2. Putusan (mengikat build berikutnya)
+
+V1. **Sumber klasifikasi = `reportGroup` akun, bukan pola kode/nama.**
+    `FASS` dan `DEPR` (akumulasi penyusutan, kontra-aset tetap) =
+    INVESTASI untuk arus kas terkait; `BANK/AREC/INTR/OCAS` = bukan
+    investasi. Classifier wajib menerima reportGroup; akun tanpa
+    reportGroup (COA kustom lama) fallback ke `type` saja
+    (ASSET non-FASS = operasi) — pola kode `1-3`/`13` dan kata nama
+    `tetap`/`aset tetap` DIHAPUS sebagai penentu (boleh tetap jadi
+    sinyal di tes warisan, bukan logika produksi).
+V2. **Pendanaan dari struktur, bukan kata nama.** LIABILITY dengan
+    reportGroup `LTLY` = pendanaan; `APAY/OCLY` = operasi, KECUALI
+    akun kewajiban yang merupakan utang berbunga/pinjaman yang
+    dipetakan eksplisit di setting (lihat V4). EQUITY = pendanaan.
+    Kata nama pinjaman/hutang bank/loan/modal DIHAPUS sebagai
+    penentu produksi.
+V3. **Pecah per baris lawan, bukan dominan tunggal.** Delta kas
+    jurnal dialokasi ke aktivitas SEBESAR porsi lawan masing-masing
+    (jurnal seimbang: total lawan = delta kas; alokasi proporsional
+    per baris lawan, pembulatan sen safeRound, sisa sen ke baris
+    lawan terbesar — terdokumentasi). Jurnal satu lawan = hasil sama
+    seperti sekarang. Dilarang menjatuhkan seluruh delta ke aktivitas
+    dominan.
+V4. **Tanpa tebak akun: pemetaan eksplisit fail-visible.** Bila ada
+    akun lawan yang reportGroup/type-nya tidak terklasifikasi tegas
+    (reportGroup null pada COA kustom), baris itu masuk ember
+    "Belum terklasifikasi" yang TAMPIL di laporan (bukan dipaksa
+    operasi). Ember non-nol = temuan rekonsiliasi untuk dilengkapi
+    pemetaan COA, bukan angka yang disembunyikan.
+V5. **Setara kas dinyatakan.** Himpunan kas laporan = akun BANK dari
+    mapping SystemSetting (cashBankAccountId/pettyCashAccountId)
+    plus akun BANK lain aktif; deposito/setara kas hanya masuk
+    himpunan bila ditandai setara kas di master akun (penanda
+    eksplisit, bukan nama "Deposito"). Sampai penanda ada: deposito
+    diperlakukan BUKAN kas (mutasinya = investasi), dan catatan
+    metode laporan menyebut perlakuan ini. (Penanda = keputusan
+    bentuk data BOT 3 sesudah vonis ini merged; vonis ini hanya
+    memutus perlakuannya.)
+V6. **Metode laporan dinyatakan jujur.** Halaman hari ini menyajikan
+    total per aktivitas hasil klasifikasi jurnal kas — itu metode
+    LANGSUNG berbasis jurnal (bukan metode tidak langsung dari laba
+    bersih). Label laporan wajib menyebut "klasifikasi per jurnal
+    kas (metode langsung)" + catatan reversal lintas periode (butir
+    1.7). Dilarang menyebutnya rekonsiliasi laba bersih.
+V7. **Total tak berubah.** Sigma aktivitas (termasuk ember V4) wajib
+    = kenaikan kas bersih baris total existing, sen persis;
+    rekonsiliasi halaman: operasi+investasi+pendanaan+belum
+    terklasifikasi = neto kas. Selisih != 0 = laporan menolak tampil
+    angka aktivitas (fail-visible), bukan memilih salah satu.
+
+### 3. Dasar standar (label jujur)
+
+PSAK 207 Laporan Arus Kas (nomor lama PSAK 2; penomoran baru efektif
+1 Jan 2024 — IAI, "Perubahan Penomoran PSAK dan ISAK dalam SAK
+Indonesia", web.iaiglobal.or.id, diakses 2026-10-22): arus kas
+dilaporkan menurut aktivitas operasi/investasi/pendanaan; metode
+langsung dianjurkan untuk aktivitas operasi. Vonis ini TIDAK
+mengklaim laporan existing sudah patuh PSAK 207 — ia memutus
+klasifikasi internal yang benar terhadap COA repo. Klaim kepatuhan
+penuh (pengungkapan setara kas, bunga/pajak, transaksi non-kas) =
+`BUTUH-VONIS-AKUNTAN` terpisah bila laporan akan diterbitkan eksternal.
+
+### 4. Batas build + acceptance BOT 6 (draf siap angkat)
+
+- BOT 3: ubah `classifyCounterpart/classifyJournal` di
+  `src/lib/finance/cash-flow.ts` (murni, tanpa Prisma) + teruskan
+  `reportGroup` dari halaman arus-kas; TANPA migrasi di lapis ini
+  (penanda setara kas V5 = kartu terpisah berschema, klaim board).
+  UI tidak klasifikasi ulang.
+- BOT 2: tampilkan ember "Belum terklasifikasi" + label metode V6
+  apa adanya dari backend; nol hitung ulang.
+- Acceptance BOT 6 (falsifikasi — MERAH bila penjaga dicabut):
+  F63-1 jurnal Dr `120004` Peralatan / Cr `110102` Bank 5.000.000
+  dengan reportGroup FASS -> investasi -5.000.000 (kode/nama lama
+  akan bilang operasi: tes ini MERAH di logika hari ini);
+  F63-2 akun ASSET OCAS bernama mengandung "tetap" -> BUKAN
+  investasi; F63-3 Dr `2201` LTLY / Cr Bank -> pendanaan;
+  F63-4 jurnal gabung kas keluar 3.000.000 (beban operasi 2.000.000
+  + peralatan FASS 1.000.000) -> operasi -2.000.000 DAN investasi
+  -1.000.000 (bukan dominan tunggal); F63-5 lawan reportGroup null
+  -> ember Belum terklasifikasi tampil, sigma aktivitas+ember =
+  neto kas sen persis; F63-6 cabut alokasi per-baris (kembali
+  dominan) -> F63-4 MERAH; F63-7 pasangan POSTED+REVERSED satu
+  periode neto aktivitas 0; F63-8 ganti reportGroup akun FASS->OCAS
+  di fixture -> klasifikasi ikut berubah (bukti sumber = reportGroup,
+  bukan kode).
+
+ID vonis ini **F-2026-10-22-063-V** (bebas di main ea430e34 dan di
+seluruh PR terbuka saat terbit; 058-V..062-V terpakai PR #443/#440/
+#454/#459/#490). Pemilik berikutnya: BOT 3 (classifier murni + wiring
+reportGroup) -> BOT 2 (ember + label metode) -> BOT 6 F63-1..8.
+Tanpa merge oleh BOT 4.
