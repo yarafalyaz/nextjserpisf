@@ -77,6 +77,47 @@ function normalizeQtyItems(
     .filter((it) => it.itemId > 0);
 }
 
+type WorkOrderItemInput = QtyItemInput & {
+  cost?: number | string;
+  description?: string;
+  status?: string;
+};
+
+/**
+ * Daftar baris perintah kerja dari JSON `items` (create+update, satu sumber).
+ * `qty` -> `parseLocaleNumber`, `cost` (nominal uang) -> `parseMoneyAmount`;
+ * cost kosong tetap 0, tak terbaca/negatif ditolak berpesan. Placeholder
+ * itemId <= 0 tetap dibuang; description/status diteruskan apa adanya.
+ */
+function normalizeWorkOrderItems(
+  raw: string | null | undefined,
+): {
+  itemId: number;
+  qty: number;
+  cost: number;
+  description?: string;
+  status?: string;
+}[] {
+  return (safeJsonParse<WorkOrderItemInput[]>(raw) ?? []).flatMap((it) => {
+    const base = normalizeQtyItem(it);
+    if (base.itemId === 0) return [];
+    const cost =
+      it.cost === undefined || it.cost === null || it.cost === ""
+        ? 0
+        : parseMoneyAmount(it.cost as string | number);
+    if (cost === null || cost < 0)
+      throw new Error("Biaya satuan tidak valid");
+    return [
+      {
+        ...base,
+        cost,
+        ...(it.description !== undefined ? { description: it.description } : {}),
+        ...(it.status !== undefined ? { status: it.status } : {}),
+      },
+    ];
+  });
+}
+
 async function warehouseScopeFor(user: WarehouseActionUser) {
   return getWarehouseScope({ id: String(user.id), roles: user.roles });
 }
@@ -811,17 +852,7 @@ export async function createWorkOrder(formData: FormData) {
     const v = parsed.data;
 
     const documentNo = await generateDocumentNumber("WO");
-    const itemsJson = v.items ?? null;
-    const items =
-      safeJsonParse<
-        {
-          itemId: number;
-          qty: number;
-          cost: number;
-          description?: string;
-          status?: string;
-        }[]
-      >(itemsJson) ?? [];
+    const items = normalizeWorkOrderItems(v.items ?? null);
 
     const wo = await prisma.workOrder.create({
       data: {
@@ -839,15 +870,13 @@ export async function createWorkOrder(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: items
-            .filter((i) => i.itemId > 0)
-            .map((i) => ({
-              itemId: i.itemId,
-              qty: i.qty,
-              cost: i.cost || 0,
-              description: i.description || null,
-              status: i.status || "pending",
-            })),
+          create: items.map((i) => ({
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost,
+            description: i.description || null,
+            status: i.status || "pending",
+          })),
         },
       },
     });
@@ -997,17 +1026,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       if (reasonError) return { success: false, error: reasonError };
     }
 
-    const itemsJson = v.items ?? null;
-    const items =
-      safeJsonParse<
-        {
-          itemId: number;
-          qty: number;
-          cost: number;
-          description?: string;
-          status?: string;
-        }[]
-      >(itemsJson) ?? [];
+    const items = normalizeWorkOrderItems(v.items ?? null);
 
     await prisma.$transaction(async (tx) => {
       // Re-verify status inside the transaction (TOCTOU guard): two concurrent
@@ -1041,16 +1060,14 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       await tx.workOrderItem.deleteMany({ where: { workOrderId: id } });
       if (items.length > 0) {
         await tx.workOrderItem.createMany({
-          data: items
-            .filter((i) => i.itemId > 0)
-            .map((i) => ({
-              workOrderId: id,
-              itemId: i.itemId,
-              qty: i.qty,
-              cost: i.cost || 0,
-              description: i.description || null,
-              status: i.status || "pending",
-            })),
+          data: items.map((i) => ({
+            workOrderId: id,
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost,
+            description: i.description || null,
+            status: i.status || "pending",
+          })),
         });
       }
 
