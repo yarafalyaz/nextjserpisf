@@ -24,3 +24,22 @@ export function unmountCard(root: Root) {
 export function clearRenderedCards() {
   document.body.replaceChildren()
 }
+
+/** Isi input/textarea React terkontrol di jsdom (setter native + event input). */
+export function setFieldValue(container: HTMLElement, selector: string, value: string) {
+  const el = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)
+  if (!el) throw new Error(`Field tidak ditemukan: ${selector}`)
+  const proto = el instanceof HTMLTextAreaElement ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype
+  const setter = Object.getOwnPropertyDescriptor(proto, "value")!.set!
+  setter.call(el, value)
+  el.dispatchEvent(new Event("input", { bubbles: true }))
+  return el
+}
+
+/** Klik tombol pertama yang teksnya persis sama. */
+export function clickButtonByText(container: HTMLElement, text: string) {
+  const btn = [...container.querySelectorAll("button")].find((b) => b.textContent === text)
+  if (!btn) throw new Error(`Tombol tidak ditemukan: ${text}`)
+  btn.click()
+  return btn as HTMLButtonElement
+}

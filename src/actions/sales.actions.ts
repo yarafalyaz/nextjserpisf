@@ -4,6 +4,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
+import { computeQuotationTotals, computeQuotationLine } from "@/lib/sales/quotation-totals"
 import { prisma } from "@/lib/db/prisma"
 import { toBaseFactor } from "@/lib/services/uom.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
@@ -19,6 +20,8 @@ import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlem
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
+import { stampQuotationFitmentSnapshot } from "@/lib/services/vehicle-fitment.service"
+import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold"
 import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -32,6 +35,7 @@ import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, re
 import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight, getWibTodayUtcDate } from "@/lib/utils/attendance-time"
+import { parseLocaleNumber } from "@/lib/utils/parse-money"
 import { Prisma } from "@prisma/client"
 import {
   loadPriceListRows,
@@ -153,6 +157,28 @@ async function resolveSalesEmployeeId(
   return emp.id
 }
 
+/**
+ * F-2026-10-22-065-S: snapshot persen ambang invoice dari kategori pelanggan
+ * saat quotation dibuat. Pelanggan/kategori tak ditemukan atau persen
+ * kategori tak sah (0/negatif/>100) → null (helper fail-closed ke 50).
+ * Master kategori yang berubah sesudahnya TIDAK mengubah snapshot ini.
+ */
+async function resolveInvoiceThresholdPercent(
+  tx: Prisma.TransactionClient,
+  customerId: unknown,
+): Promise<number | null> {
+  const id = Number(customerId)
+  if (!Number.isInteger(id) || id <= 0) return null
+  const customer = await tx.customer.findFirst({
+    where: { id },
+    select: { customerCategory: { select: { downPaymentPercent: true } } },
+  })
+  const pct = customer?.customerCategory?.downPaymentPercent
+  if (pct === null || pct === undefined) return null
+  const n = Number(pct)
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : null
+}
+
 export async function createQuotation(formData: FormData) {
   try {
   const user = await requirePermission("create_quotations")
@@ -197,6 +223,7 @@ export async function createQuotation(formData: FormData) {
           ? Number(data.customerVehicleId)
           : null,
         salesEmployeeId: await resolveSalesEmployeeId(tx, data.salesEmployeeId),
+        invoiceThresholdPercent: await resolveInvoiceThresholdPercent(tx, data.customerId),
         date: wibDateToUtcMidnight(data.date),
         validUntil: data.validUntil ? wibDateToUtcMidnight(data.validUntil) : null,
         subtotal: computedSubtotal,
@@ -223,12 +250,22 @@ export async function createQuotation(formData: FormData) {
       })
     }
 
+    // F-2026-10-22-063-S: snapshot PERINGATAN fitment baris (tak memblokir).
+    await stampQuotationFitmentSnapshot(tx, q.id)
+
     return q
   })
 
   await logActivity("create", "Quotation", quotation.id, `Membuat penawaran #${quotation.id}`)
   revalidatePath("/penjualan/penawaran")
-  return { success: true, id: quotation.id, slug }
+  return {
+    success: true,
+    id: quotation.id,
+    slug,
+    invoiceThreshold: buildInvoiceThresholdInfo(
+      quotation.invoiceThresholdPercent == null ? null : Number(quotation.invoiceThresholdPercent),
+    ),
+  }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -609,6 +646,9 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
         sections: quotationSectionsCreate(data, computeQuotationLine),
       },
     })
+
+    // F-2026-10-22-063-S: evaluasi ulang snapshot fitment tiap simpan.
+    await stampQuotationFitmentSnapshot(tx, quotationId)
   })
 
   // Re-sync linked SO/Invoice items
@@ -720,44 +760,6 @@ export async function createDownPayment(formData: FormData) {
  * Cap 5MB + whitelist ekstensi + magic-bytes SEBELUM tulis (anti Stored XSS
  * via public/uploads). Return path public atau null bila tak ada file.
  */
-/**
- * AUD-R10-03: recompute total quotation server-side (dedup create/update).
- * Jangan percaya subtotal/grandTotal kiriman klien — hitung ulang + clamp.
- */
-function computeQuotationTotals(data: any): {
-  computedSubtotal: number
-  headerDiscount: number
-  headerTax: number
-  computedGrandTotal: number
-} {
-  const rawHeaderDiscount = Number(data.discount) || 0
-  const headerTax = Math.max(0, Number(data.tax) || 0)
-  const computedSubtotal = (data.sections || []).reduce(
-    (acc: number, section: any) =>
-      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeQuotationLine(it).total, 0), 0), 0),
-    0,
-  )
-  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
-  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
-  return { computedSubtotal, headerDiscount, headerTax, computedGrandTotal }
-}
-
-/**
- * AUD-R10-03: computeLine quotation di module-scope (dedup create/update).
- * Murni: clamp qty/diskon anti-tamper, hitung via safe* decimal-safe.
- */
-function computeQuotationLine(item: any): { discountAmount: number; total: number } {
-  const qty = Math.max(0.01, Number(item.qty) || 0)
-  const unitPrice = Number(item.unitPrice) || 0
-  const lineSubtotal = safeMultiply(qty, unitPrice, 0)
-  let discountAmount = Number(item.discount) || 0
-  if (item.discountType === "percent") {
-    const percent = Math.min(100, Math.max(0, discountAmount))
-    discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
-  }
-  return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
-}
-
 /**
  * AUD-R10-03: helper sections-create quotation (dedup create/update).
  * Cast itemId string→number di boundary + clamp via computeLine pemanggil.
@@ -1763,6 +1765,45 @@ function parseReturnIdentity(value: unknown): string[] | undefined {
   return clean.length ? clean : undefined;
 }
 
+type SalesReturnItemInput = {
+  itemId: number;
+  qty: number;
+  serialNumbers?: string[];
+  batchNumbers?: string[];
+};
+
+/**
+ * Baris retur penjualan dari JSON FormData `items` ([{ itemId, qty, ... }]).
+ * qty bisa string berformat Indonesia dari klien non-form ("2.000" = 2000,
+ * "1,5" = 1.5) — wajib lewat parser repo; Number() mentah membaca "2.000"
+ * jadi 2 dan "abc" jadi NaN yang lolos filter >0 lalu diclamp 0.01 diam-diam,
+ * dan penjaga over-return ikut menilai angka rusak. Baris berkode item dengan
+ * qty tak terbaca ditolak berpesan, bukan dibuang/dinclamp diam-diam. Baris
+ * tanpa item (itemId kosong/0) tetap dibuang (baris kosong form); qty <= 0
+ * pada baris berkode tetap dibuang (perilaku lama: baris belum diisi).
+ * Harga/cost TIDAK dari payload: server resolve dari faktur/master.
+ */
+function parseSalesReturnItems(itemsJson: string | null | undefined): SalesReturnItemInput[] {
+  const rows = safeJsonParse<{ itemId?: unknown; qty?: unknown; serialNumbers?: unknown; batchNumbers?: unknown }[]>(itemsJson ?? null) ?? [];
+  const items: SalesReturnItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parseLocaleNumber(row?.itemId as string | number | null | undefined);
+    if (itemId === null || itemId <= 0) continue;
+    const qty = parseLocaleNumber(row.qty as string | number | null | undefined);
+    if (qty === null) {
+      throw new Error(`Kuantitas retur item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`);
+    }
+    if (qty <= 0) continue;
+    items.push({
+      itemId,
+      qty,
+      serialNumbers: parseReturnIdentity(row.serialNumbers),
+      batchNumbers: parseReturnIdentity(row.batchNumbers),
+    });
+  }
+  return items;
+}
+
 export async function createSalesReturn(formData: FormData) {
   try {
   const user = await requirePermission("create_sales_returns")
@@ -1775,9 +1816,8 @@ export async function createSalesReturn(formData: FormData) {
   const slug = await nextSlug("salesReturn", documentNo)
 
   const itemsJson = v.items
-  const items = safeJsonParse<any[]>(itemsJson) ?? []
-  const validItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
-  const returnItemIds = validItems.map((it: any) => Number(it.itemId))
+  const validItems = parseSalesReturnItems(itemsJson)
+  const returnItemIds = validItems.map((it) => it.itemId)
   const returnCostRows = returnItemIds.length
     ? await prisma.item.findMany({ where: { id: { in: returnItemIds } }, select: { id: true, cost: true, price: true } })
     : []
@@ -1845,7 +1885,7 @@ export async function createSalesReturn(formData: FormData) {
       }
 
       const violation = findOverReturn(
-        validItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+        validItems.map((it) => ({ itemId: it.itemId, qty: it.qty })),
         invoicedQtyByItem,
         alreadyReturnedByItem
       )
@@ -1871,18 +1911,16 @@ export async function createSalesReturn(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: validItems.map((item: any) => ({
-            itemId: Number(item.itemId),
-            // qty arrives as a string from safeJsonParse; the sales_return_items
-            // table expects a number. Clamp to >= 0.01 (matching the createQuotation
-            // pattern) so a tampered 0/undefined qty is treated as essentially zero
-            // rather than crashing the Prisma insert with a string-to-Int error.
-            qty: Math.max(0.01, Number(item.qty) || 0),
-            cost: returnCostMap.get(Number(item.itemId)) ?? 0,
-            price: resolvePrice(Number(item.itemId)),
+          create: validItems.map((item) => ({
+            itemId: item.itemId,
+            // qty sudah angka ter-parse (helper parseSalesReturnItems):
+            // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
+            qty: item.qty,
+            cost: returnCostMap.get(item.itemId) ?? 0,
+            price: resolvePrice(item.itemId),
             // P1-1: identitas fisik yang benar-benar kembali.
-            serialNumbers: parseReturnIdentity(item.serialNumbers),
-            batchNumbers: parseReturnIdentity(item.batchNumbers),
+            serialNumbers: item.serialNumbers,
+            batchNumbers: item.batchNumbers,
           })),
         },
       },
@@ -2768,9 +2806,8 @@ export async function updateSalesReturn(id: number, formData: FormData) {
 
   // Fix #10: Jangan generate documentNo baru, hapus items lama dulu
   const itemsJson = input.items
-  const items = safeJsonParse<any[]>(itemsJson) ?? []
-  const validReturnItems = items.filter((item: any) => item.itemId > 0 && item.qty > 0)
-  const updReturnIds = validReturnItems.map((it: any) => Number(it.itemId))
+  const validReturnItems = parseSalesReturnItems(itemsJson)
+  const updReturnIds = validReturnItems.map((it) => it.itemId)
   const updReturnCostRows = updReturnIds.length
     ? await prisma.item.findMany({ where: { id: { in: updReturnIds } }, select: { id: true, cost: true, price: true } })
     : []
@@ -2858,7 +2895,7 @@ export async function updateSalesReturn(id: number, formData: FormData) {
       }
 
       const txViolation = findOverReturn(
-        validReturnItems.map((it: any) => ({ itemId: Number(it.itemId), qty: Number(it.qty) })),
+        validReturnItems.map((it) => ({ itemId: it.itemId, qty: it.qty })),
         txInvoicedQtyByItem,
         txAlreadyReturnedByItem
       )
@@ -2895,18 +2932,16 @@ export async function updateSalesReturn(id: number, formData: FormData) {
         reason: input.reason ?? null,
         items: {
           create: validReturnItems
-            .map((item: any) => ({
-              itemId: Number(item.itemId),
-              // qty arrives as a string from safeJsonParse; the sales_return_items
-              // table expects a number. Clamp to >= 0.01 (matching the createQuotation
-              // pattern) so a tampered 0/undefined qty is treated as essentially zero
-              // rather than crashing the Prisma insert with a string-to-Int error.
-              qty: Math.max(0.01, Number(item.qty) || 0),
-              cost: updReturnCostMap.get(Number(item.itemId)) ?? 0,
-              price: resolveUpdPrice(Number(item.itemId)),
+            .map((item) => ({
+              itemId: item.itemId,
+              // qty sudah angka ter-parse (helper parseSalesReturnItems):
+              // "2.000" tiba sebagai 2000, bukan menyusut jadi 2 / NaN->0.01.
+              qty: item.qty,
+              cost: updReturnCostMap.get(item.itemId) ?? 0,
+              price: resolveUpdPrice(item.itemId),
               // P1-1: identitas fisik yang benar-benar kembali.
-              serialNumbers: parseReturnIdentity(item.serialNumbers),
-              batchNumbers: parseReturnIdentity(item.batchNumbers),
+              serialNumbers: item.serialNumbers,
+              batchNumbers: item.batchNumbers,
             })),
         },
       },

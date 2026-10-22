@@ -1,7 +1,27 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { createRoot } from "react-dom/client"
 import { act } from "react"
+
+// JobBillingCard kini menyatu kartu jadwal termin (F-067-S) yang memanggil
+// server action; mock supaya tes kartu murni tidak menarik rantai server.
+vi.mock("@/actions/job-payment-schedule.actions", () => ({
+  createJobPaymentSchedule: vi.fn(),
+  updateJobPaymentScheduleTerms: vi.fn(),
+  cancelJobPaymentSchedule: vi.fn(),
+  getJobPaymentScheduleForQuotation: vi.fn(),
+}))
+vi.mock("@/actions/sales.actions", () => ({
+  createProgressInvoice: vi.fn(),
+}))
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+}))
+vi.mock("@/lib/utils/toast", () => ({
+  showError: vi.fn(),
+  showSuccess: vi.fn(),
+}))
+
 import { JobBillingCard } from "../job-billing-card"
 import type { JobBillingSummaryResult } from "@/lib/reports/job-billing-summary-data"
 
@@ -204,6 +224,52 @@ describe("JobBillingCard F-2026-10-20-60 jarak ambang invoice", () => {
     const text = container.textContent ?? ""
     expect(text).toContain("Ambang invoice konversi DP tercapai")
     expect(text).not.toContain("Kekurangan DP menuju invoice")
+    act(() => root.unmount()); container.remove()
+  })
+})
+
+describe("JobBillingCard F-2026-10-22-067-S kartu jadwal termin menyatu", () => {
+  const scheduleFixture = {
+    scheduleId: 3,
+    quotationId: 9,
+    contractValue: 1_000_000,
+    billedAmount: 400_000,
+    scheduleLabel: "Jadwal kesepakatan" as const,
+    nextTermId: null,
+    allFulfilled: true,
+    terms: [
+      {
+        id: 11,
+        name: "Pelunasan",
+        cumulativePercent: 100,
+        targetAmount: 1_000_000,
+        termAmount: 1_000_000,
+        fulfilledAmount: 400_000,
+        dueDate: new Date("2026-12-01T00:00:00.000Z"),
+        milestoneLabel: null,
+        sortOrder: 0,
+        status: "terpenuhi_sebagian" as const,
+        statusLabel: "Terpenuhi Sebagian",
+        overdue: false,
+      },
+    ],
+  }
+
+  it("dengan jadwal: seksi Jadwal kesepakatan tampil di kartu sama, label turunan tetap", () => {
+    const { container, root } = render(<JobBillingCard summary={base} paymentSchedule={scheduleFixture} />)
+    const block = container.querySelector('[aria-label="Jadwal termin"]')
+    expect(block).not.toBeNull()
+    expect(block?.textContent).toContain("Jadwal kesepakatan")
+    expect(block?.textContent).toContain("Terpenuhi Sebagian")
+    expect(container.textContent).toContain("Turunan posisi berjalan, bukan jadwal kontraktual")
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("tanpa jadwal (BR-TM67-09): kartu persis perilaku lama, label turunan tetap, tanpa label kesepakatan", () => {
+    const { container, root } = render(<JobBillingCard summary={base} />)
+    expect(container.textContent).toContain("Turunan posisi berjalan, bukan jadwal kontraktual")
+    expect(container.textContent).not.toContain("Jadwal kesepakatan")
+    expect(container.textContent).toContain("Belum ada jadwal termin untuk penawaran ini.")
     act(() => root.unmount()); container.remove()
   })
 })
