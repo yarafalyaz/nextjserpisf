@@ -27,6 +27,14 @@ export interface VendorPriceInitial {
   notes: string
 }
 
+function RequiredMark() {
+  return (
+    <span className="text-destructive" aria-hidden="true">
+      *
+    </span>
+  )
+}
+
 export function VendorPriceForm({
   vendorOptions,
   itemOptions,
@@ -86,7 +94,9 @@ export function VendorPriceForm({
     >
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="vendorId">Pemasok <span className="text-destructive" aria-hidden="true">*</span></Label>
+          <Label htmlFor="vendorId">
+            Pemasok <RequiredMark />
+          </Label>
           <Combobox
             id="vendorId"
             required
@@ -98,7 +108,9 @@ export function VendorPriceForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="itemId">Barang <span className="text-destructive" aria-hidden="true">*</span></Label>
+          <Label htmlFor="itemId">
+            Barang <RequiredMark />
+          </Label>
           <Combobox
             id="itemId"
             required
@@ -110,7 +122,9 @@ export function VendorPriceForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="price">Harga <span className="text-destructive" aria-hidden="true">*</span></Label>
+          <Label htmlFor="price">
+            Harga <RequiredMark />
+          </Label>
           <CurrencyInput
             id="price"
             value={price}
@@ -121,7 +135,9 @@ export function VendorPriceForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="minQty">Minimal Jml <span className="text-destructive" aria-hidden="true">*</span></Label>
+          <Label htmlFor="minQty">
+            Minimal Jml <RequiredMark />
+          </Label>
           <CurrencyInput
             id="minQty"
             value={minQty === "" ? null : Number(minQty)}

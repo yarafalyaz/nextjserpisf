@@ -32,16 +32,38 @@ const vendorOptions = [{ value: "1", label: "Pemasok A" }]
 const itemOptions = [{ value: "7", label: "Baut M8" }]
 
 describe("vendor-price-form — a11y wiring", () => {
-  it("tambah: aria-label + aria-busy false, combobox wajib aria-required, 4 bintang dekoratif", () => {
-    const { container, root } = mount(<VendorPriceForm vendorOptions={vendorOptions} itemOptions={itemOptions} />)
+  function assertA11y(container: HTMLElement, expectedLabel: string) {
     const form = container.querySelector("form")!
-    expect(form.getAttribute("aria-label")).toBe("Formulir tambah harga pemasok")
+    expect(form.getAttribute("aria-label")).toBe(expectedLabel)
     expect(form.getAttribute("aria-busy")).toBe("false")
     const requiredComboboxes = container.querySelectorAll('[role="combobox"][aria-required="true"]')
     expect(requiredComboboxes.length).toBe(2)
     expect(form.querySelectorAll('span[aria-hidden="true"].text-destructive').length).toBe(4)
     const labels = Array.from(form.querySelectorAll("label")).map((l) => l.textContent)
     expect(labels).toEqual(expect.arrayContaining(["Pemasok *", "Barang *", "Harga *", "Minimal Jml *"]))
+  }
+
+  it("tambah: aria-label + aria-busy false, combobox wajib aria-required, 4 bintang dekoratif", () => {
+    const { container, root } = mount(<VendorPriceForm vendorOptions={vendorOptions} itemOptions={itemOptions} />)
+    assertA11y(container, "Formulir tambah harga pemasok")
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it("ubah: aria-label ubah + aria-busy false, combobox wajib aria-required, 4 bintang dekoratif", () => {
+    const initial = {
+      id: 3,
+      vendorId: "1",
+      itemId: "7",
+      price: "12500",
+      minQty: "2",
+      effectiveDate: "2026-10-22",
+      notes: "Catatan edit",
+    }
+    const { container, root } = mount(
+      <VendorPriceForm vendorOptions={vendorOptions} itemOptions={itemOptions} initial={initial} />,
+    )
+    assertA11y(container, "Formulir ubah harga pemasok")
     act(() => root.unmount())
     container.remove()
   })
