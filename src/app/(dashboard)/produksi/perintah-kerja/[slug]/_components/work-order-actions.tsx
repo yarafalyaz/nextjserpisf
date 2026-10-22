@@ -32,12 +32,17 @@ export function WorkOrderActions({ workOrderId, status, hasCompletedMaterialIssu
   const [reviseOpen, setReviseOpen] = useState(false)
   const [picked, setPicked] = useState<number[]>([])
 
-  function run(fn: () => Promise<{ success: boolean; error?: string }>, okMsg: string) {
+  function run(
+    fn: () => Promise<{ success: boolean; error?: string; releaseNotice?: string | null }>,
+    okMsg: string,
+  ) {
     startTransition(async () => {
       try {
         const res = await fn()
         if (res?.success) {
-          showSuccess(okMsg)
+          // F-057-S §1: kata rilis verbatim dari aksi (releaseNotice) menggantikan
+          // pesan generik bila ada baris reservasi terlepas; null = tanpa notice.
+          showSuccess(res.releaseNotice ?? okMsg)
           router.refresh()
         } else {
           showError(res?.error || "Gagal memproses")
