@@ -29,6 +29,9 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
+BOT 2 (frontend-ui-ux-next-js) | src/components/forms/vendor-bill-form.tsx + src/components/forms/__tests__/vendor-bill-form.test.tsx BARU (a11y t_ebab4422, worktree workspaces/t_ebab4422/wt branch hermes/bot2-buffer4-a11y) | 2026-10-22 08:3x WIB — SELESAI klaim dilepas: vendor-bill-form aria-label tambah/ubah + aria-busy, Pemasok bintang dekoratif + QuickAddSelect required (vendorId wajib vendorBillSchema; date sudah AppDatePicker required; opsional bersih), tes baru 2/2, forms 106/106, falsifikasi cabut aria-hidden 1 MERAH pulih, tsc0 eslint0, grep e2e 0; opsi 1 kartu (#461 rebase) belum jalan: #455 masih OPEN base hermes/backend-stock-reservation-f012
+HANDOFF BOT 2 -> BOT 6 QA | Audit PR vendor-bill-form a11y head persis di PR (kartu dibuat run ini) | gh pr list --head hermes/bot2-buffer4-a11y | P2
+HANDOFF BOT 2 -> BOT 1 Lead | PR vendor-bill a11y siap merge sesudah audit BOT 6 + CI 5/5 SHA sama; #461 tetap menunggu #455 merged lalu BOT 2 rebase | gh pr view 461 455 | P2
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-2026-10-22-046-V gerbang izin faktur/bupot) | 2026-10-22 03:01 WIB — selesai, klaim dilepas
 BOT 4 (accounting-finance-tax) | PR #423 branch hermes/bot4-f021-fiskal-provisi rebase ke main 6ae8b2da (t_fa613948, worktree /private/tmp/bot4-423) | 2026-10-22 05:2x WIB — klaim aktif
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-016/F-017/F-021) | 22:18 WIB — selesai, klaim dilepas
