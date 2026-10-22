@@ -16,6 +16,13 @@ password terpisah per layanan).
 
 ## Urutan rilis
 
+0. PR rilis wajib lolos gerbang **Docker Image Build** di CI (job `docker` di
+   `.github/workflows/ci.yml`): buildx `linux/amd64` + smoke test image
+   (server.js terbaca, tailwind ter-prune, runtime non-root nextjs:1001).
+   Tanpa itu build image tidak boleh di-merge secara manual — kegagalan
+   perizinan di layer `npm ci --ignore-scripts` (mis. EACCES
+   `tailwindcss/index.css` di Turbopack saat build, atau COPY `next-env.d.ts`
+   gitignored) hanya ketahuan dari gerbang ini.
 1. Backup DB + uploads; verifikasi restore di environment disposable.
 2. `node scripts/pre-migrate-column-audit.mjs` — GAGAL = STOP, jangan lanjut.
 3. `docker compose -f docker-compose.prod.yml up migrate` — gagal = rilis gagal.

@@ -58,6 +58,8 @@ import { logActivity } from "@/lib/services/activity-log.service";
 import { onPayrollPaid, deleteJournalByReferenceTx } from "@/lib/hooks/accounting.hook";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertHrEmployeeAccess, getHrScope, hrEmployeeScopeWhere } from "@/lib/auth/hr-scope";
+import { evaluatePayrollEmploymentGate } from "@/lib/reports/employee-lifecycle";
+import { loadEmployeeLifecycleAttention } from "@/lib/reports/employee-lifecycle-data";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
 import { closedWorkOrderError, timesheetContextError } from "@/lib/services/timesheet-context";
@@ -1921,16 +1923,39 @@ export async function generateBulkPayroll(
 
     const employees = await prisma.employee.findMany({
       where: { isActive: true, deletedAt: null },
-      select: { id: true },
+      select: { id: true, employmentEndedAt: true },
     });
+
+    // F-085-S gerbang BR-EMP-06 (Q-EMP-3): karyawan berhenti tidak boleh
+    // menerima slip reguler massal. Periode seluruhnya sesudah berhenti
+    // atau memotong tanpa jalur final -> dikeluarkan dari populasi massal
+    // (slip final dibuat lewat jalur single processPayroll). Tercatat log.
+    const periodStart = new Date(startDateStr);
+    const periodEnd = new Date(endDateStr);
+    const gatedOut: number[] = [];
+    const eligibleEmployees = employees.filter((e) => {
+      const gate = evaluatePayrollEmploymentGate({
+        employmentEndedAt: e.employmentEndedAt,
+        periodStart,
+        periodEnd,
+        isFinalSlip: false,
+      });
+      if (!gate.allowed) gatedOut.push(e.id);
+      return gate.allowed;
+    });
+    if (gatedOut.length > 0) {
+      console.warn(
+        `[generateBulkPayroll] ${gatedOut.length} karyawan berhenti dikeluarkan dari generate massal periode ${period}: ${gatedOut.join(",")}`,
+      );
+    }
 
     // Batch: fetch all existing payrolls for this period in one query (eliminates N+1)
     const existingPayrolls = await prisma.payroll.findMany({
-      where: { period, employeeId: { in: employees.map((e) => e.id) } },
+      where: { period, employeeId: { in: eligibleEmployees.map((e) => e.id) } },
       select: { employeeId: true },
     });
     const existingSet = new Set(existingPayrolls.map((p) => p.employeeId));
-    const targetIds = employees
+    const targetIds = eligibleEmployees
       .filter((e) => !existingSet.has(e.id))
       .map((e) => e.id);
 
@@ -2128,6 +2153,47 @@ export async function processPayroll(formData: FormData) {
       return { success: false, error: "Karyawan wajib dipilih" };
     }
 
+    // F-085-S gerbang BR-EMP-06 (Q-EMP-3): bukti berhenti dibaca dari master
+    // server (employmentEndedAt), BUKAN flag client. Flag resignationFinal
+    // hanya sah bila master membuktikan karyawan sudah berhenti; periode
+    // seluruhnya sesudah berhenti tanpa flag = tolak keras pesan §6;
+    // periode memotong tanpa flag = wajib konfirmasi tercatat
+    // (confirmEmploymentEndedCuttingPeriod) atau jalur final.
+    const employeeLifecycle = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      select: { employmentEndedAt: true },
+    });
+    const wantsFinal = formData.get("resignationFinal") === "true";
+    if (wantsFinal && !employeeLifecycle?.employmentEndedAt) {
+      throw new Error(
+        "Penanda berhenti bekerja belum bisa dibuktikan dari data berhenti terverifikasi di server. " +
+          "Final berhenti ditolak — gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
+      );
+    }
+    const employmentGate = evaluatePayrollEmploymentGate({
+      employmentEndedAt: employeeLifecycle?.employmentEndedAt ?? null,
+      periodStart: startDate,
+      periodEnd: endDate,
+      isFinalSlip: wantsFinal,
+      confirmCuttingPeriod:
+        formData.get("confirmEmploymentEndedCuttingPeriod") === "true",
+    });
+    if (!employmentGate.allowed) {
+      throw new Error(employmentGate.message);
+    }
+    if (
+      employeeLifecycle?.employmentEndedAt &&
+      !wantsFinal &&
+      formData.get("confirmEmploymentEndedCuttingPeriod") === "true"
+    ) {
+      await logActivity(
+        "payroll_cutting_period_confirmed",
+        "Employee",
+        employeeId,
+        `Konfirmasi slip periode memotong tanggal berhenti ${employeeLifecycle.employmentEndedAt.toISOString().slice(0, 10)} periode ${period}`,
+      );
+    }
+
     // Idempotency: prevent duplicate payroll for same employee+period.
     if (employeeId && period) {
       const exists = await prisma.payroll.findFirst({
@@ -2182,6 +2248,7 @@ export async function processPayroll(formData: FormData) {
       employeeId,
       period,
       endDate,
+      resignationFinal: wantsFinal,
       fallbackLabel: "pembuatan slip",
       componentLines,
       v: {
@@ -2264,14 +2331,34 @@ export async function updatePayroll(id: number, formData: FormData) {
       return { success: false, error: `Validasi gagal: ${parsed.error}` };
     const v = parsed.data;
 
-    // F-026 MEDIUM (vonis Bot 4): flag client BUKAN bukti berhenti. Belum ada
-    // tanggal berhenti terstruktur di Employee — fail-closed: tolak flag,
-    // jangan diam-diam final Pasal 17 maupun fallback TER seolah tak terjadi.
-    if (formData.get("resignationFinal") === "true") {
+    // F-026 MEDIUM (vonis Bot 4) + F-085-S: flag client BUKAN bukti berhenti.
+    // Bukti = Employee.employmentEndedAt server. Flag tanpa bukti = tolak;
+    // dengan bukti, update slip draft hanya untuk periode tidak sesudah
+    // berhenti (gerbang sama seperti create; slip final lewat processPayroll).
+    const wantsFinalUpdate = formData.get("resignationFinal") === "true";
+    const updateEmployeeId = v.employeeId ?? existing.employeeId ?? null;
+    const updateLifecycle = updateEmployeeId
+      ? await prisma.employee.findUnique({
+          where: { id: updateEmployeeId },
+          select: { employmentEndedAt: true },
+        })
+      : null;
+    if (wantsFinalUpdate && !updateLifecycle?.employmentEndedAt) {
       throw new Error(
         "Penanda berhenti bekerja belum bisa dibuktikan dari data berhenti terverifikasi di server. " +
           "Final berhenti ditolak — gunakan workflow berhenti terverifikasi bila sudah tersedia, atau hitung slip ini tanpa penanda final.",
       );
+    }
+    if (updateEmployeeId) {
+      const gate = evaluatePayrollEmploymentGate({
+        employmentEndedAt: updateLifecycle?.employmentEndedAt ?? null,
+        periodStart: wibDateToUtcMidnight(v.startDate),
+        periodEnd: wibDateToUtcMidnight(v.endDate),
+        isFinalSlip: false,
+        confirmCuttingPeriod:
+          formData.get("confirmEmploymentEndedCuttingPeriod") === "true",
+      });
+      if (!gate.allowed) throw new Error(gate.message);
     }
 
     const employeeId = v.employeeId ?? null;
@@ -3922,6 +4009,23 @@ export async function deleteStatutoryRule(id: number) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[deleteStatutoryRule]", getErrorMessage(e) || e);
+    return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * F-2026-10-22-085-S: daftar perhatian siklus hidup karyawan (BR-EMP-08).
+ * Izin view_employees + scope HR; keluaran tanpa field gaji (builder murni).
+ */
+export async function getEmployeeLifecycleAttention() {
+  try {
+    const user = await requirePermission("view_employees");
+    const scope = await getHrScope(user);
+    const rows = await loadEmployeeLifecycleAttention(scope);
+    return { success: true as const, rows };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[getEmployeeLifecycleAttention]", getErrorMessage(e) || e);
     return { success: false as const, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

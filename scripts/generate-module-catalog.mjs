@@ -103,6 +103,7 @@ const RESOURCES = [
   ["stock_opname", "inventory", "Stok Opname"],
   ["stock_adjustments", "inventory", "Penyesuaian Stok"],
   ["inventory_transfers", "inventory", "Transfer Gudang"],
+  ["material_requests", "inventory", "Permintaan Antar Gudang"],
   ["material_issues", "inventory", "Pengeluaran Material"],
   ["production", "manufacturing", "Produksi"],
   ["production_orders", "manufacturing", "Perintah Produksi"],
