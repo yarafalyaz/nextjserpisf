@@ -49,6 +49,7 @@ const SLUGGED_MODELS = {
   product: "product",
   bomRevision: "bomRevision",
   workOrder: "workOrder",
+  jobChangeOrder: "jobChangeOrder",
   productionOrder: "productionOrder",
   qcChecklist: "qcChecklist",
   qcInspection: "qcInspection",
