@@ -7109,6 +7109,47 @@ Dilarang: transisi `menunggu_pelanggan → diterapkan` melewati
   (pin ulang `bomRevisionId`) atau hanya baris WO? Induk F-104
   (unpick/re-pick) sengaja TIDAK digabung spec ini; gabung = scope naik.
 
+### 5A. PUTUSAN BOT 1 2026-10-22 (Q-CO-1/2/3/5 — mengikat BOT 3/BOT 2)
+
+Bukti live: status WO nyata `draft/pending/in_progress/completed/
+closed/cancelled` (schema.prisma status String default draft;
+ACTIVE_WORK_ORDER_STATUSES=[draft,pending,in_progress] di
+src/lib/reports/work-order-queue.ts:25; closeWorkOrder hanya dari
+`completed` → `closed`, manufacturing.actions.ts:2286-2298). Katalog
+izin nyata: `view/create/edit/complete_work_orders` — tidak ada
+`approve_work_orders`/`approve_change_orders`/`apply_change_orders`
+(module-catalog.generated.ts).
+
+- Q-CO-1 DIPUTUS: CO boleh dibuka pada WO `pending`, `in_progress`,
+  `completed` (belum closed). DITOLAK pada `draft` (belum berjalan,
+  ubah langsung di WO), `closed` (terminal tagihan), `cancelled`.
+  Penjaga dibaca ulang di tx buat + tx terapkan.
+- Q-CO-2 DIPUTUS: bukti minimum = referensi bebas WAJIB (teks
+  non-kosong sesudah trim: nomor chat WA/tanggal persetujuan/nomor
+  surat) + `disetujuiOlehPelangganAt` + dicatat-oleh (user pencatat).
+  Lampiran file/tautan URL = opsional, bukan syarat. Tanpa referensi,
+  transisi ke `disetujui` ditolak server. Label jujur "dicatat staf"
+  tetap (§2/BR-CO-07).
+- Q-CO-3 DIPUTUS: REUSE izin existing, TANPA key baru. Buat/edit/
+  kirim/catat persetujuan = `edit_work_orders` (buat draf tetap
+  `create_work_orders`); terapkan = `complete_work_orders` (penjaga
+  sama kelasnya dengan close WO). Alasan: tidak ada peran ISF terpisah
+  hari ini yang menyetujui CO tetapi tidak boleh menyelesaikan WO;
+  key baru = migrasi katalog+seed tanpa pemisah peran nyata. Key baru
+  hanya dibuka kembali bila owner menunjuk peran penegak terpisah.
+- Q-CO-5 DIPUTUS: CO TIDAK boleh pin ulang `bomRevisionId`. CO hanya
+  mengubah baris WorkOrderItem (tambah/ubah qty-harga/hapus lunak
+  baris belum ter-issue, BR-CO-04). Baris §3 yang menyebut "pin ulang
+  bomRevisionId bila BOM berubah" DICORET oleh putusan ini. F-104
+  (unpick/re-pick BOM) tetap spec terpisah, tidak digabung.
+
+BR-CO-08 (ambang internal): tetap tanpa gerbang internal tambahan
+tahap ini — approval pelanggan + izin terapkan di atas cukup; pola
+F-100 informatif tidak dijadikan penahan tanpa kebutuhan ISF nyata.
+
+Q-CO-4 tetap milik BOT 4 (kartu t_0287629e) — inti BOT 3 tetap
+menunggu vonis itu sesudah PR spec ini merged.
+
 ### 6. Alur ringkas (aktor → dokumen masuk/keluar)
 
 1. Service advisor membuka WO berjalan → buat draf CO (dokumen masuk:
