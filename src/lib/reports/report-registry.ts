@@ -78,6 +78,7 @@ import { loadInventoryReconciliation } from "@/lib/reports/inventory-reconciliat
 import { loadReceivedNotBilled } from "@/lib/reports/received-not-billed-data"
 import { loadTransferInTransit } from "@/lib/reports/transfer-in-transit-data"
 import { loadMinStock } from "@/lib/reports/min-stock-data"
+import { loadSlowMovingStock } from "@/lib/reports/slow-moving-stock-data"
 import {
   buildWipAgingTable,
   loadWipAgingReport,
@@ -835,6 +836,18 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
     async load() {
       const report = await loadStockAging()
       return { kind: "table", table: report.table, periodCaption: report.periodCaption, landscape: true }
+    },
+  },
+  "stok-tidak-bergerak": {
+    title: "Stok Tidak Bergerak",
+    subtitle: "Pemeriksaan Persediaan",
+    async load({ search }) {
+      const parsed =
+        search.ambang && /^\d+$/.test(search.ambang) ? Number(search.ambang) : null
+      const thresholdDays =
+        parsed !== null && parsed >= 1 && parsed <= 3650 ? parsed : undefined
+      const report = await loadSlowMovingStock({ thresholdDays })
+      return { kind: "table", table: report.report.table, periodCaption: report.periodCaption, landscape: true }
     },
   },
   "ringkasan-stok": {
