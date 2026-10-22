@@ -674,6 +674,8 @@ model Item {
   warrantyCoverages    WarrantyCoverage[]
   installedParts       InstalledPart[]
   materialRequestItems MaterialRequestItem[]
+  substitutes          ItemSubstitute[]     @relation("ItemSubstitutes")
+  substitutedFor       ItemSubstitute[]     @relation("ItemSubstitutedFor")
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -5134,4 +5136,34 @@ model BomRevisionChangeRequest {
   @@index([productionOrderId, status])
   @@index([createdAt])
   @@map("bom_revision_change_requests")
+}
+
+// F-2026-10-22-069-S inti (spec BOT 5 + PUTUSAN BOT 1 Q-SUB69-1..4 +
+// vonis BOT 4 F-2026-10-22-075-V): relasi substitusi part SATU ARAH di
+// master barang. Satu baris = satu arah; arah balik wajib baris sendiri;
+// TIDAK ada inferensi transitif (BR-SUB69-02). Penjaga mengikat hidup di
+// aksi item-substitute.actions (bukan skema): asal != pengganti, kedua
+// item stok aktif & satuan dasar sama, pasangan aktif ganda ditolak
+// (@@unique pasangan sebagai jaring DB). Nonaktifkan = isActive=false —
+// baris tidak dihapus supaya riwayat saran/log utuh (BR-SUB69-10).
+// Penerapan ke WO TIDAK memakai tabel ini untuk menulis: hanya lewat
+// reviseWorkOrderItems existing; tabel ini sumber saran read-only
+// (BR-SUB69-04/06, vonis Q-SUB69-5: nol harga/biaya khusus substitusi).
+model ItemSubstitute {
+  id               Int      @id @default(autoincrement())
+  itemId           Int      @map("item_id")
+  substituteItemId Int      @map("substitute_item_id")
+  notes            String?  @db.Text
+  isActive         Boolean  @default(true) @map("is_active")
+  createdBy        Int?     @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  item           Item @relation("ItemSubstitutes", fields: [itemId], references: [id], onDelete: Cascade)
+  substituteItem Item @relation("ItemSubstitutedFor", fields: [substituteItemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, substituteItemId], map: "item_substitutes_pair_key")
+  @@index([itemId, isActive])
+  @@index([substituteItemId])
+  @@map("item_substitutes")
 }
