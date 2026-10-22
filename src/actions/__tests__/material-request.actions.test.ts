@@ -291,15 +291,28 @@ describe("refreshMaterialRequestFulfillmentTx (AC-MR-3/8)", () => {
       status: "terpenuhi_sebagian",
       items: [{ itemId: 1, qty: 10 }],
     })
+    // F-081-S: pemenuhan dari receivedQty per baris (4 + 6 = 10 penuh).
     mocks.txMock.inventoryTransfer.findMany.mockResolvedValue([
-      { items: [{ itemId: 1, qty: 4 }] },
-      { items: [{ itemId: 1, qty: 6 }] },
+      { items: [{ itemId: 1, receivedQty: 4 }] },
+      { items: [{ itemId: 1, receivedQty: 6 }] },
     ])
     const status = await refreshMaterialRequestFulfillmentTx(mocks.txMock as never, 1)
     expect(status).toBe("terpenuhi")
     const arg = mocks.txMock.materialRequest.updateMany.mock.calls[0][0]
     expect(arg.where).toEqual({ id: 1, status: "terpenuhi_sebagian" })
     expect(arg.data).toEqual({ status: "terpenuhi" })
+  })
+
+  it("parsial receivedQty (4/10) tidak menaikkan ke terpenuhi (F-081-S)", async () => {
+    mocks.txMock.materialRequest.findUnique.mockResolvedValue({
+      status: "disetujui",
+      items: [{ itemId: 1, qty: 10 }],
+    })
+    mocks.txMock.inventoryTransfer.findMany.mockResolvedValue([
+      { items: [{ itemId: 1, receivedQty: 4 }] },
+    ])
+    const status = await refreshMaterialRequestFulfillmentTx(mocks.txMock as never, 1)
+    expect(status).not.toBe("terpenuhi")
   })
 
   it("status ditutup_manual tidak ditimpa turunan", async () => {
