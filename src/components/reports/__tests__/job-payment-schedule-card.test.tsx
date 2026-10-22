@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest"
 import { act } from "react"
-import { renderCard as render, unmountCard } from "./card-test-utils"
+import { renderCard as render, unmountCard, setFieldValue, clickButtonByText } from "./card-test-utils"
 import type { JobPaymentScheduleResult } from "@/lib/reports/job-payment-schedule-data"
 
 const mocks = vi.hoisted(() => ({
@@ -105,13 +105,6 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-function setInput(container: HTMLElement, selector: string, value: string) {
-  const input = container.querySelector<HTMLInputElement>(selector)!
-  const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")!.set!
-  setter.call(input, value)
-  input.dispatchEvent(new Event("input", { bubbles: true }))
-}
-
 describe("JobPaymentScheduleCard F-2026-10-22-067-S (AC-TM67-6)", () => {
   it("render jadwal server apa adanya: label kesepakatan, nama, persen+nominal, dueDate, status persis", () => {
     const { container, root } = render(<JobPaymentScheduleCard schedule={schedule} quotationId={9} canManage />)
@@ -214,18 +207,16 @@ describe("JobPaymentScheduleCard F-2026-10-22-067-S kelola (izin edit_quotations
   it("buat jadwal: kirim baris termin ke createJobPaymentSchedule", async () => {
     createJobPaymentSchedule.mockResolvedValue({ success: true, id: 5 })
     const { container, root } = render(<JobPaymentScheduleCard schedule={null} quotationId={9} canManage />)
-    const openBtn = [...container.querySelectorAll("button")].find((b) => b.textContent?.includes("+ Jadwal Termin"))!
     await act(async () => {
-      openBtn.click()
+      clickButtonByText(container, "+ Jadwal Termin")
     })
     await act(async () => {
-      setInput(container, 'input[aria-label="Nama termin 1"]', "DP Awal")
-      setInput(container, 'input[aria-label="Persen kumulatif termin 1"]', "100")
-      setInput(container, 'input[aria-label="Tanggal jatuh tempo termin 1"]', "2026-11-01")
+      setFieldValue(container, 'input[aria-label="Nama termin 1"]', "DP Awal")
+      setFieldValue(container, 'input[aria-label="Persen kumulatif termin 1"]', "100")
+      setFieldValue(container, 'input[aria-label="Tanggal jatuh tempo termin 1"]', "2026-11-01")
     })
-    const submit = [...container.querySelectorAll("button")].find((b) => b.textContent === "Buat Jadwal")!
     await act(async () => {
-      submit.click()
+      clickButtonByText(container, "Buat Jadwal")
     })
     expect(createJobPaymentSchedule).toHaveBeenCalledWith({
       quotationId: 9,
@@ -239,21 +230,17 @@ describe("JobPaymentScheduleCard F-2026-10-22-067-S kelola (izin edit_quotations
   it("ubah jadwal sesudah termin terpenuhi: alasan wajib tampil + terkirim ke update", async () => {
     updateJobPaymentScheduleTerms.mockResolvedValue({ success: true, id: 3 })
     const { container, root } = render(<JobPaymentScheduleCard schedule={schedule} quotationId={9} canManage />)
-    const openBtn = [...container.querySelectorAll("button")].find((b) => b.textContent === "Ubah Jadwal")!
     await act(async () => {
-      openBtn.click()
+      clickButtonByText(container, "Ubah Jadwal")
     })
     expect(container.textContent).toContain("Wajib sesudah ada termin terpenuhi.")
     const reason = container.querySelector<HTMLTextAreaElement>("#jadwal-termin-reason")!
     expect(reason.required).toBe(true)
     await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!
-      setter.call(reason, "Geser termin rangka")
-      reason.dispatchEvent(new Event("input", { bubbles: true }))
+      setFieldValue(container, "#jadwal-termin-reason", "Geser termin rangka")
     })
-    const submit = [...container.querySelectorAll("button")].find((b) => b.textContent === "Simpan Jadwal")!
     await act(async () => {
-      submit.click()
+      clickButtonByText(container, "Simpan Jadwal")
     })
     expect(updateJobPaymentScheduleTerms).toHaveBeenCalledTimes(1)
     const arg = updateJobPaymentScheduleTerms.mock.calls[0][0]
@@ -268,18 +255,13 @@ describe("JobPaymentScheduleCard F-2026-10-22-067-S kelola (izin edit_quotations
   it("batalkan jadwal: alasan wajib, tombol nonaktif tanpa alasan, kirim ke cancel", async () => {
     cancelJobPaymentSchedule.mockResolvedValue({ success: true, id: 3 })
     const { container, root } = render(<JobPaymentScheduleCard schedule={schedule} quotationId={9} canManage />)
-    const openBtn = [...container.querySelectorAll("button")].find((b) => b.textContent === "Batalkan Jadwal")!
     await act(async () => {
-      openBtn.click()
+      clickButtonByText(container, "Batalkan Jadwal")
     })
     const confirm = [...container.querySelectorAll("button")].filter((b) => b.textContent === "Batalkan Jadwal").at(-1)!
     expect(confirm.disabled).toBe(true)
-    const reason = container.querySelector<HTMLTextAreaElement>("#jadwal-termin-cancel-reason")!
-    await act(async () => {
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value")!.set!
-      setter.call(reason, "Kesepakatan dibatalkan pelanggan")
-      reason.dispatchEvent(new Event("input", { bubbles: true }))
-    })
+    const reasonEl = setFieldValue(container, "#jadwal-termin-cancel-reason", "Kesepakatan dibatalkan pelanggan")
+    expect(reasonEl).not.toBeNull()
     expect(confirm.disabled).toBe(false)
     await act(async () => {
       confirm.click()
@@ -296,18 +278,16 @@ describe("JobPaymentScheduleCard F-2026-10-22-067-S kelola (izin edit_quotations
       error: "Penawaran ini sudah memiliki jadwal termin aktif; ubah jadwal yang ada",
     })
     const { container, root } = render(<JobPaymentScheduleCard schedule={null} quotationId={9} canManage />)
-    const openBtn = [...container.querySelectorAll("button")].find((b) => b.textContent?.includes("+ Jadwal Termin"))!
     await act(async () => {
-      openBtn.click()
+      clickButtonByText(container, "+ Jadwal Termin")
     })
     await act(async () => {
-      setInput(container, 'input[aria-label="Nama termin 1"]', "DP")
-      setInput(container, 'input[aria-label="Persen kumulatif termin 1"]', "100")
-      setInput(container, 'input[aria-label="Tanggal jatuh tempo termin 1"]', "2026-11-01")
+      setFieldValue(container, 'input[aria-label="Nama termin 1"]', "DP")
+      setFieldValue(container, 'input[aria-label="Persen kumulatif termin 1"]', "100")
+      setFieldValue(container, 'input[aria-label="Tanggal jatuh tempo termin 1"]', "2026-11-01")
     })
-    const submit = [...container.querySelectorAll("button")].find((b) => b.textContent === "Buat Jadwal")!
     await act(async () => {
-      submit.click()
+      clickButtonByText(container, "Buat Jadwal")
     })
     expect(showError).toHaveBeenCalledWith("Penawaran ini sudah memiliki jadwal termin aktif; ubah jadwal yang ada")
     expect(showSuccess).not.toHaveBeenCalled()
