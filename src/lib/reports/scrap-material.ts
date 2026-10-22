@@ -89,3 +89,60 @@ export function buildScrapMaterialReport(input: {
     },
   }
 }
+
+import { formatAccounting, formatDate, formatNumber } from "@/lib/utils/format"
+import type { TableDocument } from "@/lib/pdf/engine/types"
+
+export function buildScrapMaterialTable(report: ScrapReportResult): TableDocument["table"] {
+  const columns: TableDocument["table"]["columns"] = [
+    { header: "Dokumen", align: "left", width: 30 },
+    { header: "Tanggal", align: "left", width: 24 },
+    { header: "Barang", align: "left", width: 36 },
+    { header: "Qty Issue", align: "right", width: 20 },
+    { header: "Qty Scrap", align: "right", width: 20 },
+    { header: "Alasan Scrap", align: "left", width: 30 },
+    { header: "Normal", align: "right", width: 20 },
+    { header: "Abnormal", align: "right", width: 20 },
+    { header: "Nilai Abnormal", align: "right", width: 28 },
+    { header: "Scrap %", align: "right", width: 18 },
+    { header: "Kalibrasi", align: "left", width: 21 },
+  ]
+  if (report.lines.length === 0) {
+    return { columns, rows: [{ kind: "notice", text: "Belum ada baris scrap pada periode ini." }] }
+  }
+  const t = report.totals
+  const rows: TableDocument["table"]["rows"] = [
+    ...report.lines.map((l): TableDocument["table"]["rows"][number] => ({
+      kind: "data",
+      cells: [
+        `${l.source} ${l.documentNo}`,
+        formatDate(l.date, { format: "numeric" }),
+        l.itemName ?? "-",
+        formatNumber(l.issueQty, 2),
+        formatNumber(l.scrapQty, 2),
+        l.scrapReasonLabel ?? l.scrapReasonCode ?? "-",
+        formatNumber(l.normalQty, 2),
+        formatNumber(l.abnormalQty, 2),
+        formatAccounting(l.abnormalValue, { zeroDash: false }),
+        l.lineRatePct == null ? "-" : `${formatNumber(l.lineRatePct, 2)}%`,
+        l.uncalibrated ? "Belum kalibrasi" : "Terkalibrasi",
+      ],
+    })),
+    { kind: "total", label: `Total (${t.lineCount} baris)`, grand: true, cells: [
+      formatNumber(t.issueQty, 2), formatNumber(t.scrapQty, 2), "",
+      formatNumber(t.normalQty, 2), formatNumber(t.abnormalQty, 2),
+      formatAccounting(t.abnormalValue, { zeroDash: false }),
+      t.aggregateRatePct == null ? "-" : `${formatNumber(t.aggregateRatePct, 2)}%`, "",
+    ]},
+  ]
+  return { columns, rows }
+}
+
+export function scrapMaterialSummary(report: ScrapReportResult, postingEnabled: boolean): string {
+  const t = report.totals
+  const flag = postingEnabled ? "Mode posting: jurnal abnormal posting" : "Mode catat-dulu: jurnal abnormal tidak posting"
+  const parts = [flag, `Nilai abnormal ${formatAccounting(t.abnormalValue, { zeroDash: false })}`, `Terjurnal ${formatAccounting(t.abnormalJournalValue, { zeroDash: false })}`]
+  if (t.abnormalUnjournaledValue > 0) parts.push(`Temuan: abnormal belum terjurnal ${formatAccounting(t.abnormalUnjournaledValue, { zeroDash: false })}`)
+  if (t.uncalibratedLines > 0) parts.push(`${t.uncalibratedLines} baris belum kalibrasi`)
+  return parts.join(" · ")
+}
