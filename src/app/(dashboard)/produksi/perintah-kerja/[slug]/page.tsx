@@ -81,7 +81,7 @@ export default async function WorkOrderDetailPage({
               select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
             },
             productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true },
+              select: { id: true, documentNo: true, status: true, qty: true, slug: true, bomRevision: { select: { revisionNo: true } } },
             },
           },
         }),
@@ -100,7 +100,7 @@ export default async function WorkOrderDetailPage({
               select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
             },
             productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true },
+              select: { id: true, documentNo: true, status: true, qty: true, slug: true, bomRevision: { select: { revisionNo: true } } },
             },
           },
         }),
@@ -582,6 +582,13 @@ export default async function WorkOrderDetailPage({
         itemNameById={Object.fromEntries(bomItemRows.map((i) => [i.id, i.name]))}
         canManage={canManageBomChange}
         currentUserId={bomSession?.user?.id ? Number(bomSession.user.id) : null}
+        pairedPins={wo.productionOrders
+          .filter((po) => po.bomRevision)
+          .map((po) => ({
+            label: "order produksi",
+            documentNo: po.documentNo,
+            revisionNo: po.bomRevision?.revisionNo ?? null,
+          }))}
       />
 
       <JobChangeOrderPanel

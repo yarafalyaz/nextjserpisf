@@ -46,7 +46,7 @@ export default async function ProductionOrderDetailPage({
           include: {
             product: { include: { inventoryItem: { select: { trackSerial: true } } } },
             bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            workOrder: { select: { id: true, documentNo: true, projectId: true, slug: true } },
+            workOrder: { select: { id: true, documentNo: true, projectId: true, slug: true, bomRevision: { select: { revisionNo: true } } } },
             materials: true,
             costs: {
               orderBy: { createdAt: "asc" },
@@ -67,7 +67,7 @@ export default async function ProductionOrderDetailPage({
           include: {
             product: { include: { inventoryItem: { select: { trackSerial: true } } } },
             bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            workOrder: { select: { id: true, documentNo: true, projectId: true, slug: true } },
+            workOrder: { select: { id: true, documentNo: true, projectId: true, slug: true, bomRevision: { select: { revisionNo: true } } } },
             materials: true,
             costs: {
               orderBy: { createdAt: "asc" },
@@ -104,7 +104,7 @@ export default async function ProductionOrderDetailPage({
     ?? (order.product.inventoryItemId
       ? await prisma.workOrder.findFirst({
           where: { items: { some: { itemId: order.product.inventoryItemId } } },
-          select: { id: true, documentNo: true, projectId: true, slug: true },
+          select: { id: true, documentNo: true, projectId: true, slug: true, bomRevision: { select: { revisionNo: true } } },
           orderBy: { createdAt: "desc" },
         })
       : null)
@@ -387,6 +387,11 @@ export default async function ProductionOrderDetailPage({
         itemNameById={Object.fromEntries(bomItemRows.map((i) => [i.id, i.name]))}
         canManage={canManageBomChange}
         currentUserId={bomSession?.user?.id ? Number(bomSession.user.id) : null}
+        pairedPins={
+          linkedWorkOrder?.bomRevision
+            ? [{ label: "perintah kerja", documentNo: linkedWorkOrder.documentNo, revisionNo: linkedWorkOrder.bomRevision.revisionNo }]
+            : []
+        }
       />
 
       {/* Non-material costs (labor / overhead / subcontract / service) */}

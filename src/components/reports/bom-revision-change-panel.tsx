@@ -34,6 +34,13 @@ export interface BomRevisionOption {
   revisionNo: number
 }
 
+/** Pin pasangan WO↔PO (Q-BOM68-4/BR-BOM68-07): pin dokumen tertaut, ditampilkan sebelum simpan. null = pasangan tidak ter-pin. */
+export interface BomRevisionPairedPin {
+  label: string
+  documentNo: string
+  revisionNo: number | null
+}
+
 export interface BomRevisionChangeDeltaPreview {
   lines: (BomRevisionDeltaLine & { itemName: string })[]
   hasGenuinelyNew: boolean
@@ -69,6 +76,8 @@ interface Props {
   canManage: boolean
   /** userId sesi saat ini; penyetuju == pengaju disembunyikan (SoD server tetap menegakkan). */
   currentUserId: number | null
+  /** Pin pasangan tertaut (Q-BOM68-4); kosong = tidak ada pasangan ter-pin untuk ditampilkan. */
+  pairedPins?: BomRevisionPairedPin[]
 }
 
 const CLOSED = ["completed", "cancelled", "closed"]
@@ -127,6 +136,7 @@ export function BomRevisionChangePanel({
   itemNameById,
   canManage,
   currentUserId,
+  pairedPins = [],
 }: Readonly<Props>) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
@@ -244,6 +254,15 @@ export function BomRevisionChangePanel({
             Revisi terpasang:{" "}
             <span className="font-medium text-foreground">Rev. {currentRevision.revisionNo}</span>
           </p>
+          {pairedPins.map((pin) => (
+            <p key={`${pin.label}-${pin.documentNo}`} role="note" className="text-xs text-muted-foreground">
+              Pin {pin.label} {pin.documentNo}:{" "}
+              <span className="font-medium text-foreground">
+                {pin.revisionNo != null ? `Rev. ${pin.revisionNo}` : "Belum ter-pin"}
+              </span>{" "}
+              — ganti revisi dokumen ini tidak mengubah pin {pin.label}.
+            </p>
+          ))}
           {canRequest ? (
             <Button
               variant="primary"
