@@ -1133,10 +1133,10 @@ export async function verifyGoodsReceipt(grId: number) {
 
 type VendorBillItemInput = {
   itemId?: number | string | null;
-  qty?: number;
-  unitPrice?: number;
-  discountPercent?: number;
-  taxPercent?: number;
+  qty?: number | string;
+  unitPrice?: number | string;
+  discountPercent?: number | string;
+  taxPercent?: number | string;
 };
 
 type ItemMeta = { sku: string; name: string; unitOfMeasure: string | null };
@@ -1185,7 +1185,7 @@ function mapVendorBillItems(
   grLineQueues?: GrLineQueues,
 ) {
   return rows
-    .filter((r) => safeRound(r.qty ?? 0, 2) > 0)
+    .filter((r) => safeRound(parseLocaleNumber(r.qty) ?? 0, 2) > 0)
     .map((r) => {
       const itemId =
         r.itemId != null && r.itemId !== "" ? Number(r.itemId) : null;
