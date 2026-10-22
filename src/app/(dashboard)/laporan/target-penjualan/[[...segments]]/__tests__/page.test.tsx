@@ -5,7 +5,6 @@ import { resolve } from "node:path"
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
-import { createRoot, type Root } from "react-dom/client"
 import { act } from "react"
 
 const mocks = vi.hoisted(() => ({
@@ -37,9 +36,9 @@ vi.mock("@/lib/db/prisma", () => ({
 }))
 
 vi.mock("next/navigation", () => ({
-  useRouter() {
-    return { refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }
-  },
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+  usePathname: () => "/laporan/target-penjualan",
+  useSearchParams: () => new URLSearchParams(),
 }))
 
 vi.mock("@/components/reports/report-page-shell", () => ({
@@ -57,6 +56,7 @@ vi.mock("@/components/reports/export-buttons", () => ({
 
 import SalesTargetPage from "../page"
 import { buildSalesTargetAchievement } from "@/lib/reports/sales-target-achievement"
+import { renderPageNode } from "@/components/reports/__tests__/card-test-utils"
 
 function source(rel: string): string {
   return readFileSync(resolve(process.cwd(), rel), "utf8")
@@ -67,13 +67,7 @@ async function renderPage() {
     params: Promise.resolve({ segments: [] }),
     searchParams: Promise.resolve({}),
   })
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root: Root = createRoot(container)
-  act(() => {
-    root.render(node)
-  })
-  return { container, root }
+  return renderPageNode(node)
 }
 
 const RANGE = { start: new Date("2026-10-01T00:00:00Z"), end: new Date("2026-10-31T23:59:59Z") }

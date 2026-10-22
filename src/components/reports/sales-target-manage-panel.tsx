@@ -1,14 +1,13 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
 import {
   createSalesTarget,
   deleteSalesTarget,
   updateSalesTarget,
 } from "@/actions/sales-target.actions"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
-import { showError, showSuccess } from "@/lib/utils/toast"
+import { useActionRunner } from "./use-action-runner"
 import { Button } from "@/components/ui/button"
 import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { CurrencyInput } from "@/components/ui/currency-input"
@@ -58,8 +57,7 @@ export function SalesTargetManagePanel({
   employees: SalesTargetEmployeeOption[]
   canManage: boolean
 }>) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const { isPending, run } = useActionRunner("Gagal menyimpan target penjualan")
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<SalesTargetManageRow | null>(null)
   const [deleteFor, setDeleteFor] = useState<SalesTargetManageRow | null>(null)
@@ -68,23 +66,6 @@ export function SalesTargetManagePanel({
   const [periodEnd, setPeriodEnd] = useState("")
   const [targetAmount, setTargetAmount] = useState<number>(0)
   const [notes, setNotes] = useState("")
-
-  function run(fn: () => Promise<{ success: boolean; error?: string }>, okMsg: string, after?: () => void) {
-    startTransition(async () => {
-      try {
-        const res = await fn()
-        if (res?.success) {
-          showSuccess(okMsg)
-          after?.()
-          router.refresh()
-        } else {
-          showError(res?.error || "Gagal menyimpan target penjualan")
-        }
-      } catch (e) {
-        showError(e instanceof Error ? e.message : "Gagal menyimpan target penjualan")
-      }
-    })
-  }
 
   function openCreate() {
     setEditing(null)
