@@ -127,13 +127,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
   // F-2026-10-21-030: ke-9 aksi RAB sudah ter-wire UI ProjectBudgetEditor
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
-  // F-2026-10-21-021 tahap 3 backend dulu (kartu t_d4ae15cc): pemanggil jurnal
-  // E2/E3 rute provisi MATI; tombol posting di halaman /produksi/garansi
-  // menyusul di kartu frontend (buang 2 entri ini saat UI memanggilnya).
-  "src/actions/warranty.actions.ts::postWarrantyClaimCostAction":
-    "F-2026-10-21-021 tahap 3 backend; tombol posting biaya klaim (E2) di halaman garansi menyusul (frontend)",
-  "src/actions/warranty.actions.ts::postWarrantySupplierRecoveryAction":
-    "F-2026-10-21-021 tahap 3 backend; tombol posting recovery supplier (E3) di halaman garansi menyusul (frontend)",
+  // F-2026-10-21-021 tahap 3: pemanggil jurnal E2/E3 kini dirujuk UI
+  // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {
