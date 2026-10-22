@@ -90,6 +90,31 @@ describe("cancelWorkOrder (BR-RES-11)", () => {
     expect(logActivityMock).toHaveBeenCalledWith("cancel", "WorkOrder", 9, expect.stringContaining("pelanggan batal"))
   })
 
+  it("AC-RIL-2: cancel dengan alasan → releaseNotice verbatim + releaseReason persis memuat alasan", async () => {
+    woFindUniqueOrThrowMock.mockResolvedValue({ id: 9, status: "in_progress" })
+    srUpdateManyMock.mockResolvedValue({ count: 2 })
+    const res = await cancelWorkOrder(9, "pelanggan batal")
+    expect(res.success).toBe(true)
+    expect((res as { releaseNotice?: string | null }).releaseNotice).toBe(
+      "Dibatalkan — 2 reservasi sisa dilepas karena pembatalan",
+    )
+    expect(srUpdateManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          releaseReason: "Perintah kerja dibatalkan: pelanggan batal",
+        }),
+      }),
+    )
+  })
+
+  it("cancel tanpa sisa aktif → releaseNotice null (tanpa pemberitahuan rilis)", async () => {
+    woFindUniqueOrThrowMock.mockResolvedValue({ id: 9, status: "in_progress" })
+    srUpdateManyMock.mockResolvedValue({ count: 0 })
+    const res = await cancelWorkOrder(9, "pelanggan batal")
+    expect(res.success).toBe(true)
+    expect((res as { releaseNotice?: string | null }).releaseNotice).toBeNull()
+  })
+
   it("WO bukan in_progress → ditolak", async () => {
     woFindUniqueOrThrowMock.mockResolvedValue({ id: 9, status: "pending" })
     const res = await cancelWorkOrder(9, "alasan sah")

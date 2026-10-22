@@ -9,6 +9,7 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { assertJobCostMutable } from "@/lib/services/job-closeout.service";
 import { releaseReservationsForReplacedItemsTx } from "@/lib/services/stock-reservation.service";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
+import { reservationReleaseNotice } from "@/lib/reports/stock-reservation-release";
 import {
   assertApproved,
   requestApprovalIfConfigured,
@@ -1176,7 +1177,7 @@ export async function reviseWorkOrderItems(input: {
       };
     }
 
-    await prisma.$transaction(async (tx) => {
+    const releasedCount = await prisma.$transaction(async (tx) => {
       // Klaim kondisional: serialkan revisi konkuren pada WO yang sama.
       const claim = await tx.workOrder.updateMany({
         where: { id: v.workOrderId, status: "in_progress" },
@@ -1189,6 +1190,7 @@ export async function reviseWorkOrderItems(input: {
         throw new Error("Status Perintah Kerja sudah berubah; muat ulang halaman.");
       }
 
+      let released = 0;
       if (replacedIds.length > 0) {
         const targets = await tx.workOrderItem.findMany({
           where: { id: { in: replacedIds }, workOrderId: v.workOrderId },
@@ -1236,7 +1238,7 @@ export async function reviseWorkOrderItems(input: {
         // F-2026-10-21-012 inti (AC-RES-8): baris diganti → sisa reservasi
         // aktif baris itu released sejumlah belum terpakai; yang sudah
         // consumed tak berubah (guard di atas menolak baris ter-issue).
-        await releaseReservationsForReplacedItemsTx(tx, {
+        released = await releaseReservationsForReplacedItemsTx(tx, {
           workOrderId: v.workOrderId,
           workOrderItemIds: replacedIds,
         });
@@ -1257,6 +1259,7 @@ export async function reviseWorkOrderItems(input: {
 
       // F-2026-10-22-063-S: snapshot fitment baris baru revisi.
       await stampWorkOrderFitmentSnapshot(tx, v.workOrderId);
+      return released;
     });
 
     // Q-LEAD-3: geser endDate di WO berjalan → baris histori yang sama persis
@@ -1279,7 +1282,8 @@ export async function reviseWorkOrderItems(input: {
       `Merevisi item perintah kerja #${v.workOrderId}: ${replacedIds.length} diganti, ${v.newItems.length} baru`,
     );
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true };
+    // F-2026-10-22-057-S §1: kata rilis verbatim; null = tak ada baris terdampak terlepas.
+    return { success: true, releaseNotice: reservationReleaseNotice("revise", releasedCount) };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[reviseWorkOrderItems]", getErrorMessage(e) || e);
