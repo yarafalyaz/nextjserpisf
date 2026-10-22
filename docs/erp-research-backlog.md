@@ -7802,6 +7802,21 @@ Edge: permintaan untuk item nonaktif; gudang dinonaktifkan sesudah diajukan (tam
 
 Dependensi: F-2026-10-21-015 (terima parsial, receivedQty) hanya untuk AC-MR-4 penuh; tanpa F-015, spec tetap bisa dibangun dengan terima-penuh existing dan status terpenuhi_sebagian belum terjangkau (labeli jujur). BOT 4: TIDAK dibutuhkan (nol jurnal/angka uang/pajak — BR-MR-12); panggil BOT 4 hanya bila kelak ada usulan nilai/jurnal transfer.
 
+### 8A. PUTUSAN BOT 1 2026-10-22 (Q-MR-1/2/3 — mengikat BOT 3/BOT 2/BOT 6)
+
+- Q-MR-1 DIPUTUS (b): resource baru `material_requests` di katalog
+  izin — view/create/edit/delete + `approve_material_requests`
+  terpisah dari edit. Alasan: `inventory_transfers` existing tidak
+  punya aksi approve; persetujuan oleh gudang sumber tidak boleh
+  diberikan ke semua editor transfer. Pola approve_purchase_requests
+  existing.
+- Q-MR-2 DIPUTUS: status internal sederhana (approvedBy/approvedAt/
+  rejectionReason di MaterialRequest, pola PurchaseRequest).
+  ApprovalWorkflow generik TIDAK dipakai tahap ini — kebutuhan
+  nyata ISF = satu langkah setuju/tolak oleh gudang sumber.
+- Q-MR-3 DIPUTUS: self-approve DILARANG. Penyetuju != pembuat,
+  ditegakkan penjaga server.
+
 ### 9. Backlog implementasi (turunan spec ini; induk tetap F-2026-10-21-014)
 
 1. BOT 1: putus Q-MR-1/2/3 (+ merge PR spec ini).
