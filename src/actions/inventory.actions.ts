@@ -8,6 +8,7 @@ import { prisma } from "@/lib/db/prisma";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { assertJobCostMutable } from "@/lib/services/job-closeout.service";
 import { releaseReservationsForReplacedItemsTx } from "@/lib/services/stock-reservation.service";
+import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
 import {
   assertApproved,
   requestApprovalIfConfigured,
@@ -763,6 +764,9 @@ export async function createWorkOrder(formData: FormData) {
       },
     });
 
+    // F-2026-10-22-063-S: snapshot PERINGATAN fitment baris (tak memblokir).
+    await stampWorkOrderFitmentSnapshot(prisma, wo.id);
+
     await logActivity(
       "create",
       "WorkOrder",
@@ -961,6 +965,9 @@ export async function updateWorkOrder(id: number, formData: FormData) {
             })),
         });
       }
+
+      // F-2026-10-22-063-S: evaluasi ulang snapshot fitment tiap simpan.
+      await stampWorkOrderFitmentSnapshot(tx, id);
     });
 
     // F-2026-10-21-035: endDate berubah → tepat 1 baris histori
@@ -1142,6 +1149,9 @@ export async function reviseWorkOrderItems(input: {
           })),
         });
       }
+
+      // F-2026-10-22-063-S: snapshot fitment baris baru revisi.
+      await stampWorkOrderFitmentSnapshot(tx, v.workOrderId);
     });
 
     // Q-LEAD-3: geser endDate di WO berjalan → baris histori yang sama persis

@@ -4,6 +4,7 @@
 import { getErrorMessage, isNextRedirectError } from "@/lib/utils/error"
 import { requirePermission } from "@/lib/auth/permissions"
 import { safeAdd, safeSubtract, safeMultiply, safeDivide, safeRound } from "@/lib/utils/math"
+import { computeQuotationTotals, computeQuotationLine } from "@/lib/sales/quotation-totals"
 import { prisma } from "@/lib/db/prisma"
 import { toBaseFactor } from "@/lib/services/uom.service"
 import { checkIdempotency } from "@/lib/utils/idempotency"
@@ -19,6 +20,8 @@ import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlem
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
+import { stampQuotationFitmentSnapshot } from "@/lib/services/vehicle-fitment.service"
+import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold"
 import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -154,6 +157,28 @@ async function resolveSalesEmployeeId(
   return emp.id
 }
 
+/**
+ * F-2026-10-22-065-S: snapshot persen ambang invoice dari kategori pelanggan
+ * saat quotation dibuat. Pelanggan/kategori tak ditemukan atau persen
+ * kategori tak sah (0/negatif/>100) → null (helper fail-closed ke 50).
+ * Master kategori yang berubah sesudahnya TIDAK mengubah snapshot ini.
+ */
+async function resolveInvoiceThresholdPercent(
+  tx: Prisma.TransactionClient,
+  customerId: unknown,
+): Promise<number | null> {
+  const id = Number(customerId)
+  if (!Number.isInteger(id) || id <= 0) return null
+  const customer = await tx.customer.findFirst({
+    where: { id },
+    select: { customerCategory: { select: { downPaymentPercent: true } } },
+  })
+  const pct = customer?.customerCategory?.downPaymentPercent
+  if (pct === null || pct === undefined) return null
+  const n = Number(pct)
+  return Number.isFinite(n) && n > 0 && n <= 100 ? n : null
+}
+
 export async function createQuotation(formData: FormData) {
   try {
   const user = await requirePermission("create_quotations")
@@ -198,6 +223,7 @@ export async function createQuotation(formData: FormData) {
           ? Number(data.customerVehicleId)
           : null,
         salesEmployeeId: await resolveSalesEmployeeId(tx, data.salesEmployeeId),
+        invoiceThresholdPercent: await resolveInvoiceThresholdPercent(tx, data.customerId),
         date: wibDateToUtcMidnight(data.date),
         validUntil: data.validUntil ? wibDateToUtcMidnight(data.validUntil) : null,
         subtotal: computedSubtotal,
@@ -224,12 +250,22 @@ export async function createQuotation(formData: FormData) {
       })
     }
 
+    // F-2026-10-22-063-S: snapshot PERINGATAN fitment baris (tak memblokir).
+    await stampQuotationFitmentSnapshot(tx, q.id)
+
     return q
   })
 
   await logActivity("create", "Quotation", quotation.id, `Membuat penawaran #${quotation.id}`)
   revalidatePath("/penjualan/penawaran")
-  return { success: true, id: quotation.id, slug }
+  return {
+    success: true,
+    id: quotation.id,
+    slug,
+    invoiceThreshold: buildInvoiceThresholdInfo(
+      quotation.invoiceThresholdPercent == null ? null : Number(quotation.invoiceThresholdPercent),
+    ),
+  }
 
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e
@@ -610,6 +646,9 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
         sections: quotationSectionsCreate(data, computeQuotationLine),
       },
     })
+
+    // F-2026-10-22-063-S: evaluasi ulang snapshot fitment tiap simpan.
+    await stampQuotationFitmentSnapshot(tx, quotationId)
   })
 
   // Re-sync linked SO/Invoice items
@@ -721,44 +760,6 @@ export async function createDownPayment(formData: FormData) {
  * Cap 5MB + whitelist ekstensi + magic-bytes SEBELUM tulis (anti Stored XSS
  * via public/uploads). Return path public atau null bila tak ada file.
  */
-/**
- * AUD-R10-03: recompute total quotation server-side (dedup create/update).
- * Jangan percaya subtotal/grandTotal kiriman klien — hitung ulang + clamp.
- */
-function computeQuotationTotals(data: any): {
-  computedSubtotal: number
-  headerDiscount: number
-  headerTax: number
-  computedGrandTotal: number
-} {
-  const rawHeaderDiscount = Number(data.discount) || 0
-  const headerTax = Math.max(0, Number(data.tax) || 0)
-  const computedSubtotal = (data.sections || []).reduce(
-    (acc: number, section: any) =>
-      safeAdd(acc, (section.items || []).reduce((s: number, it: any) => safeAdd(s, computeQuotationLine(it).total, 0), 0), 0),
-    0,
-  )
-  const headerDiscount = Math.min(Math.max(0, rawHeaderDiscount), computedSubtotal)
-  const computedGrandTotal = Math.max(0, safeSubtract(safeAdd(computedSubtotal, headerTax, 0), headerDiscount, 0))
-  return { computedSubtotal, headerDiscount, headerTax, computedGrandTotal }
-}
-
-/**
- * AUD-R10-03: computeLine quotation di module-scope (dedup create/update).
- * Murni: clamp qty/diskon anti-tamper, hitung via safe* decimal-safe.
- */
-function computeQuotationLine(item: any): { discountAmount: number; total: number } {
-  const qty = Math.max(0.01, Number(item.qty) || 0)
-  const unitPrice = Number(item.unitPrice) || 0
-  const lineSubtotal = safeMultiply(qty, unitPrice, 0)
-  let discountAmount = Number(item.discount) || 0
-  if (item.discountType === "percent") {
-    const percent = Math.min(100, Math.max(0, discountAmount))
-    discountAmount = safeRound(safeDivide(safeMultiply(lineSubtotal, percent, 4), 100, 4), 0)
-  }
-  return { discountAmount, total: Math.max(0, safeSubtract(lineSubtotal, discountAmount, 0)) }
-}
-
 /**
  * AUD-R10-03: helper sections-create quotation (dedup create/update).
  * Cast itemId string→number di boundary + clamp via computeLine pemanggil.
