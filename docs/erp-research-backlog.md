@@ -6949,3 +6949,228 @@ spec BOT 5; 056-V sudah dipakai vonis Q-KOM-1 PR #440 — renumber
 sesudah tabrakan ID terdeteksi, isi vonis nol berubah). Pemilik berikutnya: BOT 3 (bentuk fisik + migrasi
 sesudah #436 merged dan koordinasi board) -> BOT 2 -> BOT 6 §4.
 
+
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-066-S change order resmi terhubung WorkOrder (inti F-2026-10-20-103)
+
+Spec dokumen saja, tanpa kode/schema/migrasi. Dipilih sesudah anti-duplikat
+live 2026-10-22 atas `origin/main` ea430e34: F-032/035/036/037/013/019/
+022/027/028/030/032 statement sudah merged; F-106/107 lapis aman merged
+(PR #347/#355, JobBillingCard); F-103 lapis aman read-model selisih revisi
+merged (PR #275, `quotation-revision-delta`); inti JobChangeOrder belum
+terspec — grep `JobChangeOrder|changeOrder` di src = 0, satu-satunya
+penyebutan model usulan = backlog baris 229 entri induk. ID spec bebas:
+maksimum -S terpakai = 065-S (PR #502 OPEN), jadi spec ini 066-S.
+Induk tetap F-2026-10-20-103; spec ini TIDAK membuat ID gap baru.
+
+### 0. Status bukti induk (jangan dibaca ulang sebagai janji)
+
+- `TERVERIFIKASI-KODE`: `reviseQuotation` hanya untuk quotation status
+  `sent`, snapshot ke QuotationHistory lalu status kembali `draft`
+  (src/actions/sales.actions.ts:375, guard :395-397). Sesudah WO lahir
+  (quotation converted), jalur revisi ini tertutup — perubahan tengah
+  job hari ini tanpa dokumen persetujuan. Itu gap induk persis.
+- `TERVERIFIKASI-KODE`: jalur uang selisih SUDAH ada dan jadi satu-satunya
+  jalur sah: `createDifferenceInvoice` (sales.actions.ts:1194, izin
+  `create_sales_invoices`) dan `createRevisionDownCredit` (:1349, izin
+  `confirm_down_payments`), keduanya membaca `Quotation.grandTotal`
+  berjalan; vonis BOT 4 di board 2026-10-20 22:38 (Salsa) mengikat:
+  sumber nilai tunggal grandTotal, urutan setuju → revisi nilai →
+  panggil aksi existing, tanpa jurnal baru dari change order, baris
+  ter-issue terkunci. Spec ini mewarisi vonis itu, tidak menulis ulang.
+- `TERVERIFIKASI-KODE`: kunci baris ter-issue bisa dibaca dari
+  `MaterialIssueItem.workOrderItemId` (schema.prisma:2227, nullable;
+  MI manual tanpa WO tetap sah). `WorkOrderItem.status` string existing
+  (schema:2691-an, builder work-order-part-status.ts). WorkOrder terikat
+  quotation lewat `quotationId` (schema.prisma:2629).
+- `TERVERIFIKASI-KODE`: izin nyata katalog — `view/edit/approve/
+  confirm_quotations`, `view/create/edit_work_orders`,
+  `complete_work_orders`, `create_sales_invoices`,
+  `confirm_down_payments` (module-catalog.generated.ts:155-160,253-257).
+  Approval generik existing: `requestApprovalIfConfigured` +
+  ambang informatif F-100 (`quotation-approval-gate.ts`: minDiscountPercent/
+  minAmount, TIDAK menahan dokumen). Menahan = keputusan terpisah di §5.
+
+### 1. Benchmark resmi (akses 2026-10-22)
+
+- Accurate — Pesanan Penjualan dari Penawaran (konversi tanpa input
+  ulang; tidak ada dokumen change order tengah-job):
+  https://help.accurate.id/product/pesanan-penjualan/
+- Accurate — Faktur Penjualan dari penawaran/pesanan:
+  https://help.accurate.id/product/faktur-penjualan/
+- ERPNext — Work Order: BOM boleh diganti di WO sebelum submit, item
+  kebutuhan terambil dari BOM terpilih (perubahan = ganti dokumen,
+  bukan dokumen persetujuan pelanggan):
+  https://docs.frappe.io/erpnext/work-order
+- Cetakan induk (backlog F-103): Cetec Change Rev pada WO terbuka
+  dengan unpick/re-pick — rujukan perilaku, bukan URL resmi yang
+  diverifikasi ulang run ini; label `BENCHMARK-LEMAH`, jangan kutip
+  sebagai fakta vendor.
+
+Kesimpulan benchmark: tidak ada vendor rujukan yang menyediakan
+dokumen persetujuan pelanggan tengah-job persis skenario bengkel ISF
+(ganti winch 4,5t → 6t + tambah lampu saat kendaraan dibongkar).
+Fitur ini kebutuhan ISF sendiri (`USULAN`), bukan klaim paritas.
+
+### 2. Aktor dan permission matrix (USULAN, izin dari katalog nyata)
+
+| Aksi | Sales/Admin | Kepala bengkel / Service advisor | Finance | Pelanggan |
+|---|---|---|---|---|
+| Buat draf change order | `create_work_orders` (usulan reuse; Q-CO-3) | sama | — | — |
+| Edit draf (baris/alasan) | `edit_work_orders` | sama | — | — |
+| Kirim ke pelanggan (→ menunggu_pelanggan) | `edit_work_orders` | sama | — | — |
+| Catat persetujuan/penolakan pelanggan | `edit_work_orders` + bukti wajib §4 | sama | — | menyetujui di luar sistem (WA/tanda tangan) — TIDAK ada portal; yang dicatat staf = klaim persetujuan + bukti, label jujur "dicatat staf" |
+| Terapkan (apply) | — | `complete_work_orders` (usulan reuse; Q-CO-3) | — | — |
+| Panggil faktur selisih / kredit turun | (jalur existing) | — | `create_sales_invoices` / `confirm_down_payments` | — |
+| Lihat daftar/riwayat | `view_work_orders` + `view_quotations` | sama | `view_quotations` | — |
+
+Tidak ada permission key baru diusulkan tahap ini; kebutuhan key
+khusus `approve_change_orders` = Q-CO-3 ke BOT 1 (menambah key =
+migrasi katalog + seed, jangan diam-diam reuse bila BOT 1 menolak).
+
+### 3. Status-transition matrix (USULAN — model JobChangeOrder belum ada)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| — | buat dari WO berstatus in_progress/completed-sebagian (Q-CO-1) | `draft` | WO punya quotationId; WO belum closed |
+| `draft` | edit baris/alasan | `draft` | hanya pembuat/izin edit; baris ter-issue terkunci sejak draf |
+| `draft` | kirim | `menunggu_pelanggan` | selisihNilai terhitung; alasan wajib; snapshot baris dibekukan |
+| `menunggu_pelanggan` | pelanggan menolak (dicatat staf + bukti) | `ditolak` | terminal; tidak mengubah nilai/baris apa pun |
+| `menunggu_pelanggan` | pelanggan setuju (dicatat staf + bukti + timestamp) | `disetujui` | bukti persetujuan wajib (Q-CO-2 bentuk bukti) |
+| `disetujui` | terapkan | `diterapkan` | satu tx: revisi grandTotal lewat jalur hitung penawaran existing → ubah WorkOrderItem belum-terpasang → pin ulang bomRevisionId bila BOM berubah → panggil kandidat faktur selisih/kredit existing (hasil boleh "tidak ada faktur" bila selisih 0 sesudah kandidat ditolak builder — catat alasannya) |
+| `draft`/`menunggu_pelanggan` | batalkan staf | `dibatalkan` | alasan wajib; terminal |
+| `ditolak`/`dibatalkan`/`diterapkan` | — | — | terminal, tidak bisa dibuka lagi; perubahan baru = dokumen baru bernomor urut berikutnya |
+
+Dilarang: transisi `menunggu_pelanggan → diterapkan` melewati
+`disetujui`; edit baris sesudah `dikirim`; terapkan dua kali
+(idempotensi: terapkan pada status bukan `disetujui` ditolak server).
+
+### 4. Business rules register
+
+- BR-CO-01 `TERVERIFIKASI-KODE` (vonis BOT 4 board 22:38): satu sumber
+  nilai kontrak = `Quotation.grandTotal` berjalan. Change order TIDAK
+  menyimpan nilai kontrak kedua; `selisihNilai` di dokumen = snapshot
+  informasi persetujuan (Decimal sen) saat kirim, bukan dasar jurnal.
+- BR-CO-02 `TERVERIFIKASI-KODE`: jurnal hanya lahir dari posting faktur
+  selisih existing / alokasi kredit existing. Dokumen change order
+  sendiri tidak pernah membuat jurnal, piutang, atau payment.
+- BR-CO-03 `USULAN`: baris WorkOrderItem yang sudah punya
+  MaterialIssueItem (`workOrderItemId` terisi) terkunci total dari
+  perubahan qty/item/harga di change order; penggantian part terpasang
+  berjalan lewat jalur MaterialIssue/retur existing, bukan suntingan
+  baris lama. Falsifikasi BOT 6 AC-CO-3.
+- BR-CO-04 `USULAN`: perubahan hanya boleh (a) tambah baris baru,
+  (b) ubah qty/harga baris belum ter-issue, (c) hapus baris belum
+  ter-issue (status baris ditandai, bukan hard-delete — jejak audit).
+- BR-CO-05 `USULAN`: PPN tidak ditebak di change order. Bila baris
+  berubah menaikkan nilai, terapkan wajib melewati hitung ulang
+  penawaran existing (computeQuotationTotals) supaya tax konsisten;
+  faktur selisih murni penyesuaian tetap tax=0 pola existing
+  (draftDerivedInvoiceData). Angka/pajak final = `BUTUH-VONIS` BOT 4
+  bila Q-CO-4 dijawab berbeda.
+- BR-CO-06 `USULAN`: nomor dokumen urut per WO (CO-001, CO-002, ...)
+  dari nomor dokumen change order sendiri; dua draf aktif bersamaan
+  untuk WO sama DILARANG (satu `draft`/`menunggu_pelanggan`/
+  `disetujui`-belum-diterapkan per WO) — mencegah dua selisih dihitung
+  dari basis yang sama.
+- BR-CO-07 `USULAN`: persetujuan pelanggan dicatat staf dengan bukti
+  tertaut (lampiran/URL chat/nomor referensi) + `disetujuiOlehPelangganAt`;
+  tanpa bukti, transisi ke `disetujui` ditolak. Sistem tidak mengklaim
+  pelanggan menyetujui langsung di sistem (tidak ada portal).
+- BR-CO-08 `BUTUH-VONIS` (BOT 1): ambang internal — apakah selisih di
+  atas ambang tertentu (pola conditions F-100) wajib approval internal
+  SEBELUM kirim ke pelanggan, dan apakah approval itu menahan (bukan
+  informatif). Spec tidak memutuskan; default aman sampai vonis:
+  tanpa gerbang internal tambahan selain status pelanggan.
+- BR-CO-09 `USULAN`: sesudah `diterapkan`, kartu tagihan job existing
+  (JobBillingCard F-106/107) harus membaca nilai baru apa adanya —
+  tidak ada tampilan selisih kedua; delta revisi existing tetap
+  sumber tampil delta.
+- BR-CO-10 `USULAN`: change order pada WO tanpa quotationId (WO manual)
+  ditolak dengan pesan eksplisit — tidak ada sumber nilai tunggal,
+  jangan buat jalur nilai WO kedua (konsisten vonis BOT 4 (a)).
+
+### 5. Pertanyaan terbuka (jawaban menentukan implementasi; jangan ditebak)
+
+- Q-CO-1 → BOT 1/BOT 3: WO status apa saja yang boleh dibuka change
+  order-nya (in_progress saja, atau juga WO completed yang belum
+  closed)? Default usulan: bukan draft, bukan closed/cancelled.
+- Q-CO-2 → BOT 1: bentuk bukti persetujuan pelanggan minimum (lampiran
+  file, tautan WA, atau referensi bebas wajib)? Menentukan kolom/UI.
+- Q-CO-3 → BOT 1: reuse permission existing (§2) atau key baru
+  `approve_change_orders`/`apply_change_orders`? Key baru = kerja
+  katalog+seed BOT 3, bukan keputusan BOT 5.
+- Q-CO-4 → BOT 4 (`BUTUH-VONIS` uang/pajak): konfirmasi BR-CO-05 —
+  perubahan nilai yang mengubah DPP/PPN quotation wajib hitung ulang
+  penuh vs faktur selisih tax=0; perlakuan selisih negatif sesudah
+  faktur progres terbit 100% (kredit vs faktur negatif)?
+- Q-CO-5 → BOT 1: apakah change order boleh mengubah BOM revision WO
+  (pin ulang `bomRevisionId`) atau hanya baris WO? Induk F-104
+  (unpick/re-pick) sengaja TIDAK digabung spec ini; gabung = scope naik.
+
+### 6. Alur ringkas (aktor → dokumen masuk/keluar)
+
+1. Service advisor membuka WO berjalan → buat draf CO (dokumen masuk:
+   WO + quotation tertaut; keluar: draf bernomor).
+2. Edit baris belum-terpasang, isi alasan → kirim (keluar: snapshot
+   selisih untuk pelanggan; kanal kirim di luar sistem, WA manual
+   existing — klik WA tercatat pola F-036, bukan bukti terkirim).
+3. Pelanggan setuju/tolak di luar sistem → staf catat + bukti.
+4. Terapkan (satu tx §3) → nilai kontrak berubah di quotation →
+   faktur selisih/kredit lahir lewat aksi existing bila kandidat > 0.
+5. Kartu tagihan job + statement pelanggan membaca nilai berjalan
+   seperti biasa; CO tampil di riwayat WO sebagai dokumen persetujuan.
+
+Edge cases: selisih 0 saat terapkan (kandidat ditolak builder — CO
+tetap `diterapkan` dengan catatan "tanpa faktur selisih", bukan error
+senyap); WO di-close di antara setuju→terapkan (terapkan ditolak,
+CO wajib dibatalkan/dibuat ulang); baris ter-issue di antara draf→
+terapkan (kunci dibaca ulang di tx terapkan, konflik = tolak dengan
+daftar baris); quotation terhapus lunak (tolak); dua staf membuka
+draf bersamaan (BR-CO-06 penjaga server, bukan UI).
+
+### 7. Draf acceptance
+
+BOT 3 (backend, sesudah Q-CO-1..3 + vonis BOT 4 Q-CO-4):
+- AC-CO-1 model+aksi: transisi §3 ditegakkan server; terapkan pada
+  status bukan `disetujui` ditolak; nomor urut per WO monoton.
+- AC-CO-2 terapkan menaikkan grandTotal lewat jalur hitung existing
+  lalu memanggil kandidat faktur selisih yang sama (bukan logika
+  kandidat kedua); panggil terapkan 2x = satu faktur, kedua ditolak.
+- AC-CO-3 falsifikasi kunci: baris ter-issue diubah lewat CO →
+  ditolak; ProductionCost/totalActualCost tidak berubah oleh
+  perubahan nilai tagih.
+- AC-CO-4 turun nilai: lahir CustomerCredit pasif jalur existing,
+  tanpa jurnal sampai alokasi/refund.
+- AC-CO-5 BR-CO-06: draf aktif kedua untuk WO sama ditolak server.
+
+BOT 2 (frontend, sesudah kontrak BOT 3 stabil; fitur didahulukan):
+- AC-CO-6 panel CO di detail WO: status kata Indonesia persis
+  (Draf/Menunggu Pelanggan/Disetujui/Ditolak/Diterapkan/Dibatalkan),
+  baris terkunci tampil berlabel "Sudah terpasang — terkunci", tombol
+  Terapkan hanya pada status Disetujui + permission §2.
+- AC-CO-7 UI tidak menghitung selisih/jurnal sendiri; selisih tampil
+  dari server; bukti persetujuan wajib sebelum tombol Setujui aktif.
+- AC-CO-8 pesan jujur: "Persetujuan dicatat staf dari bukti pelanggan"
+  (bukan "pelanggan menyetujui di sistem").
+
+BOT 6 (falsifikasi atas head BOT 3/BOT 2):
+- AC-CO-9 cabut penjaga status di aksi terapkan → CO draft bisa
+  diterapkan = MERAH; cabut kunci baris ter-issue = MERAH; jurnal
+  langsung dari aksi CO = MERAH (cek tidak ada jurnal tanpa posting
+  faktur selisih); permission dicabut → aksi ditolak.
+
+### 8. Backlog implementasi (turunan spec ini; induk F-2026-10-20-103)
+
+- F-2026-10-22-066-S (spec ini) → BOT 1 putus Q-CO-1/2/3/5, BOT 4
+  vonis Q-CO-4 → BOT 3 inti (model JobChangeOrder + baris perubahan +
+  aksi §3, migrasi klaim `prisma/schema.prisma` di board dulu) →
+  BOT 2 panel detail WO → BOT 6 AC-CO-1..9.
+- Yang TIDAK diusulkan: portal persetujuan pelanggan, tanda tangan
+  digital, gabung F-104 unpick/re-pick BOM, jadwal termin kontraktual
+  F-106 inti (tetap menunggu inti ini sesuai PUTUSAN board 106/107),
+  jurnal baru apa pun dari dokumen CO.
+
+Pemilik usulan: BOT 5 (spec). Butuh putusan accountant: YA (Q-CO-4
+saja; pola uang inti sudah vonis BOT 4 2026-10-20 22:38).
