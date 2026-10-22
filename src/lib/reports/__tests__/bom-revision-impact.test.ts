@@ -93,10 +93,12 @@ describe("buildBomRevisionDelta (F-2026-10-22-068-S)", () => {
     expect(r.lines.find((l) => l.itemId === 2)).toMatchObject({
       oldQtyPerUnit: 0,
       newNeededQty: 25,
+      issuedQty: 5,
       coverage: "tercakup",
     })
     expect(r.lines.find((l) => l.itemId === 1)).toMatchObject({
       newNeededQty: 0,
+      issuedQty: 0,
       coverage: "tercakup",
     })
   })
@@ -110,7 +112,7 @@ describe("buildBomRevisionDelta (F-2026-10-22-068-S)", () => {
       availableByItem: [{ itemId: 1, qty: 10 }],
     })
     // 4x10 - max(1x10, 25) = 15; stok 10 < 15 -> kurang
-    expect(r.lines[0]).toMatchObject({ newNeededQty: 15, coverage: "kurang" })
+    expect(r.lines[0]).toMatchObject({ newNeededQty: 15, issuedQty: 25, coverage: "kurang" })
     expect(r.hasGenuinelyNew).toBe(false)
   })
 
@@ -121,6 +123,23 @@ describe("buildBomRevisionDelta (F-2026-10-22-068-S)", () => {
       plannedQty: 2,
       issuedByItem: [],
     })
-    expect(r.lines[0]).toMatchObject({ newNeededQty: 2, coverage: "perlu-tinjau" })
+    expect(r.lines[0]).toMatchObject({ newNeededQty: 2, issuedQty: 0, coverage: "perlu-tinjau" })
+  })
+
+  it("issuedQty per item: akumulasi issuedByItem duplikat & item absen = 0", () => {
+    const r = buildBomRevisionDelta({
+      oldMaterials: [{ itemId: 1, qty: 1 }],
+      newMaterials: [
+        { itemId: 1, qty: 1 },
+        { itemId: 2, qty: 1 },
+      ],
+      plannedQty: 3,
+      issuedByItem: [
+        { itemId: 1, qty: 1.5 },
+        { itemId: 1, qty: 2.25 },
+      ],
+    })
+    expect(r.lines.find((l) => l.itemId === 1)?.issuedQty).toBe(3.75)
+    expect(r.lines.find((l) => l.itemId === 2)?.issuedQty).toBe(0)
   })
 })
