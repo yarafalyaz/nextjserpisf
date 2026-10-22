@@ -152,15 +152,21 @@ export async function refreshMaterialRequestFulfillmentTx(
   })
   if (!request || !isMaterialRequestFulfillable(request.status)) return request?.status ?? null
 
+  // F-2026-10-22-081-S BR-TP-13: pemenuhan dari receivedQty kumulatif per
+  // baris atas SEMUA transfer tertaut yang sudah dikirim (processed/
+  // partially_received/received) — bukan lagi qty penuh transfer received.
   const receivedTransfers = await tx.inventoryTransfer.findMany({
-    where: { materialRequestId, status: "received" },
-    select: { items: { select: { itemId: true, qty: true } } },
+    where: {
+      materialRequestId,
+      status: { in: ["processed", "partially_received", "received"] },
+    },
+    select: { items: { select: { itemId: true, receivedQty: true } } },
   })
 
   const { status } = deriveMaterialRequestFulfillment({
     requested: request.items.map((i) => ({ itemId: i.itemId, qty: Number(i.qty) })),
     receivedLines: receivedTransfers.flatMap((t) =>
-      t.items.map((i) => ({ itemId: i.itemId, qty: Number(i.qty) })),
+      t.items.map((i) => ({ itemId: i.itemId, qty: Number(i.receivedQty) })),
     ),
   })
 

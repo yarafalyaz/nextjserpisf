@@ -107,7 +107,7 @@ async function loadRows(where: Record<string, unknown>, now: Date): Promise<Mate
       transfers: {
         select: {
           status: true,
-          items: { select: { itemId: true, qty: true } },
+          items: { select: { itemId: true, qty: true, receivedQty: true } },
         },
       },
     },
@@ -115,9 +115,11 @@ async function loadRows(where: Record<string, unknown>, now: Date): Promise<Mate
   })
 
   return requests.map((r) => {
+    // F-2026-10-22-081-S BR-TP-13: diterima = receivedQty kumulatif per
+    // baris dari transfer terkirim (bukan qty penuh transfer received).
     const receivedLines = r.transfers
-      .filter((t) => t.status === "received")
-      .flatMap((t) => t.items.map((i) => ({ itemId: i.itemId, qty: Number(i.qty) })))
+      .filter((t) => ["processed", "partially_received", "received"].includes(t.status))
+      .flatMap((t) => t.items.map((i) => ({ itemId: i.itemId, qty: Number(i.receivedQty) })))
     const { lines } = deriveMaterialRequestFulfillment({
       requested: r.items.map((i) => ({ itemId: i.itemId, qty: Number(i.qty) })),
       receivedLines,
