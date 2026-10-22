@@ -23,7 +23,7 @@ import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
-import { parseMoneyAmount } from "@/lib/utils/parse-money";
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import {
   stockAdjustmentSchema,
   inventoryTransferSchema,
@@ -40,6 +40,30 @@ import { dateOnly } from "@/lib/validations/finance.schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 type WarehouseActionUser = { id: number | string; roles: string[] };
+
+type QtyItemInput = {
+  itemId: number | string;
+  qty?: number | string;
+};
+
+/**
+ * Normalisasi baris qty dokumen stok dari JSON `items` (transfer inventaris +
+ * pengeluaran material). `qty` wajib parser repo (`parseLocaleNumber`) —
+ * `Number("2.000")` = 2 merusak qty diam-diam (pola sama StockAdjustment).
+ * qty tak terbaca/tidak > 0/itemId tak valid ditolak berpesan, bukan dibuang
+ * diam-diam via `.filter()`. Baris itemId = 0/negatif tetap placeholder form
+ * (dibuang) — form resmi prefilters itemId > 0; baris tak lengkap selain itu
+ * adalah payload rusak, bukan baris kosong.
+ */
+function normalizeQtyItem(it: QtyItemInput): { itemId: number; qty: number } {
+  const itemId = parseLocaleNumber(it.itemId as string | number);
+  if (itemId === null || !Number.isInteger(itemId))
+    throw new Error("Item tidak valid");
+  if (itemId <= 0) return { itemId: 0, qty: 0 };
+  const qty = parseLocaleNumber(it.qty as string | number);
+  if (qty === null || qty <= 0) throw new Error("Kuantitas tidak valid");
+  return { itemId, qty };
+}
 
 async function warehouseScopeFor(user: WarehouseActionUser) {
   return getWarehouseScope({ id: String(user.id), roles: user.roles });
@@ -332,9 +356,13 @@ export async function createInventoryTransfer(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("TRF");
 
-    const transferItems = (
-      safeJsonParse<{ itemId: number; qty: number }[]>(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const rawTransferItems =
+      safeJsonParse<{ itemId: number | string; qty?: number | string }[]>(
+        v.items ?? null,
+      ) ?? [];
+    const transferItems = rawTransferItems
+      .map(normalizeQtyItem)
+      .filter((it) => it.itemId > 0);
 
     const transfer = await prisma.inventoryTransfer.create({
       data: {
@@ -348,8 +376,8 @@ export async function createInventoryTransfer(formData: FormData) {
         createdBy: Number(user.id),
         items: {
           create: transferItems.map((it) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
+            itemId: it.itemId,
+            qty: it.qty,
           })),
         },
       },
@@ -539,11 +567,32 @@ export async function createMaterialIssue(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("MI");
 
-    const miItems = (
-      safeJsonParse<{ itemId: number; qty: number; unitCost: number }[]>(
-        v.items ?? null,
-      ) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const rawMiItems =
+      safeJsonParse<
+        {
+          itemId: number | string;
+          qty?: number | string;
+          unitCost?: number | string;
+        }[]
+      >(v.items ?? null) ?? [];
+    // unitCost nominal uang -> parseMoneyAmount; kosong tetap 0 (biaya
+    // opsional, pola StockAdjustment), tak terbaca/negatif ditolak berpesan.
+    const miItems = rawMiItems
+      .map((it) => {
+        const base = normalizeQtyItem(it);
+        if (base.itemId === 0) return null;
+        const cost =
+          it.unitCost === undefined || it.unitCost === null || it.unitCost === ""
+            ? 0
+            : parseMoneyAmount(it.unitCost as string | number);
+        if (cost === null || cost < 0)
+          throw new Error("Biaya satuan tidak valid");
+        return { ...base, cost };
+      })
+      .filter(
+        (it): it is { itemId: number; qty: number; cost: number } =>
+          it !== null,
+      );
 
     if (miItems.length === 0) {
       throw new Error(
@@ -570,9 +619,9 @@ export async function createMaterialIssue(formData: FormData) {
         createdBy: Number(user.id),
         items: {
           create: miItems.map((it) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
-            cost: Number(it.unitCost || 0),
+            itemId: it.itemId,
+            qty: it.qty,
+            cost: it.cost,
           })),
         },
       },
@@ -1594,11 +1643,32 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
     }
 
     // Fix #2: Jangan generate documentNo baru saat update
-    const miItems = (
-      safeJsonParse<{ itemId: number; qty: number; unitCost: number }[]>(
-        v.items ?? null,
-      ) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const rawMiItems =
+      safeJsonParse<
+        {
+          itemId: number | string;
+          qty?: number | string;
+          unitCost?: number | string;
+        }[]
+      >(v.items ?? null) ?? [];
+    // unitCost nominal uang -> parseMoneyAmount; kosong tetap 0 (biaya
+    // opsional, pola StockAdjustment), tak terbaca/negatif ditolak berpesan.
+    const miItems = rawMiItems
+      .map((it) => {
+        const base = normalizeQtyItem(it);
+        if (base.itemId === 0) return null;
+        const cost =
+          it.unitCost === undefined || it.unitCost === null || it.unitCost === ""
+            ? 0
+            : parseMoneyAmount(it.unitCost as string | number);
+        if (cost === null || cost < 0)
+          throw new Error("Biaya satuan tidak valid");
+        return { ...base, cost };
+      })
+      .filter(
+        (it): it is { itemId: number; qty: number; cost: number } =>
+          it !== null,
+      );
 
     const issue = await prisma.$transaction(async (tx) => {
       await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } });
@@ -1629,9 +1699,9 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
           notes: v.notes ?? null,
           items: {
             create: miItems.map((it) => ({
-              itemId: Number(it.itemId),
-              qty: Number(it.qty),
-              cost: Number(it.unitCost || 0),
+              itemId: it.itemId,
+              qty: it.qty,
+              cost: it.cost,
             })),
           },
         },
@@ -1680,9 +1750,13 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     }
 
     // Fix #2: Jangan generate documentNo baru saat update
-    const transferItems = (
-      safeJsonParse<{ itemId: number; qty: number }[]>(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const rawTransferItems =
+      safeJsonParse<{ itemId: number | string; qty?: number | string }[]>(
+        v.items ?? null,
+      ) ?? [];
+    const transferItems = rawTransferItems
+      .map(normalizeQtyItem)
+      .filter((it) => it.itemId > 0);
 
     const transfer = await prisma.$transaction(async (tx) => {
       await tx.inventoryTransferItem.deleteMany({
@@ -1708,8 +1782,8 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
           notes: v.notes ?? null,
           items: {
             create: transferItems.map((it) => ({
-              itemId: Number(it.itemId),
-              qty: Number(it.qty),
+              itemId: it.itemId,
+              qty: it.qty,
             })),
           },
         },
