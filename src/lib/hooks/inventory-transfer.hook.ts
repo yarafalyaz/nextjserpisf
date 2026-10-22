@@ -6,7 +6,10 @@ import { consumeFifoLayers, createInLayer, ConsumedBatch } from "@/lib/services/
 import { safeAdd } from "@/lib/utils/math";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import {
+  carriedCostMapFromOutMoves,
   deriveTransferStatusAfterReceipt,
+  groupReceivedSerialsByLine,
+  parseStoredSerials,
   validateReceiptLines,
   type ReceiptLineInput,
   type TransferLineState,
@@ -193,11 +196,7 @@ async function carriedCostByItem(tx: TxClient, transferId: number, itemIds: numb
           },
           select: { itemId: true, cost: true },
         });
-  const map = new Map<number, number>();
-  for (const om of outMoves) {
-    if (!map.has(om.itemId)) map.set(om.itemId, Number(om.cost));
-  }
-  return map;
+  return carriedCostMapFromOutMoves(outMoves);
 }
 
 async function createInboundMoves(
@@ -323,12 +322,6 @@ async function createInboundMoves(
   }
 }
 
-function parseStoredSerials(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.filter((serial): serial is string => typeof serial === "string" && serial.length > 0)
-    : [];
-}
-
 function parseStoredBatches(value: unknown, sourceWarehouseId: number): ConsumedBatch[] {
   if (!Array.isArray(value)) return [];
   return value.flatMap((entry): ConsumedBatch[] => {
@@ -370,16 +363,7 @@ export async function onTransferReceived(
         where: { receipt: { inventoryTransferId: transferId } },
         select: { inventoryTransferItemId: true, serialNumbers: true },
       });
-      const receivedSerialsByLine = new Map<number, string[]>();
-      for (const prior of priorReceiptItems) {
-        const serials = parseStoredSerials(prior.serialNumbers);
-        if (serials.length > 0) {
-          receivedSerialsByLine.set(prior.inventoryTransferItemId, [
-            ...(receivedSerialsByLine.get(prior.inventoryTransferItemId) ?? []),
-            ...serials,
-          ]);
-        }
-      }
+      const receivedSerialsByLine = groupReceivedSerialsByLine(priorReceiptItems);
 
       const lineStates: TransferLineState[] = transfer.items.map((it) => ({
         id: it.id,

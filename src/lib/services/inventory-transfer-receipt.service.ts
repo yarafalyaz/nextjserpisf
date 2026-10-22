@@ -158,6 +158,38 @@ export interface ShortageLine {
   value: number
 }
 
+/** Serial tersimpan (Json) -> string[] bersih; nilai non-array = kosong. */
+export function parseStoredSerials(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((s): s is string => typeof s === "string" && s.length > 0)
+    : []
+}
+
+/** Grup serial yang sudah diterima (riwayat kejadian) per baris transfer. */
+export function groupReceivedSerialsByLine(
+  rows: readonly { inventoryTransferItemId: number; serialNumbers: unknown }[],
+): Map<number, string[]> {
+  const byLine = new Map<number, string[]>()
+  for (const row of rows) {
+    const serials = parseStoredSerials(row.serialNumbers)
+    if (serials.length > 0) {
+      byLine.set(row.inventoryTransferItemId, [...(byLine.get(row.inventoryTransferItemId) ?? []), ...serials])
+    }
+  }
+  return byLine
+}
+
+/** Carried cost per item dari StockMove OUT (move pertama per item menang). */
+export function carriedCostMapFromOutMoves(
+  moves: readonly { itemId: number; cost: unknown }[],
+): Map<number, number> {
+  const map = new Map<number, number>()
+  for (const move of moves) {
+    if (!map.has(move.itemId)) map.set(move.itemId, Number(move.cost))
+  }
+  return map
+}
+
 /** Baris penutupan selisih: hanya baris yang masih bersisa. */
 export function buildShortageLines(
   lines: readonly TransferLineState[],

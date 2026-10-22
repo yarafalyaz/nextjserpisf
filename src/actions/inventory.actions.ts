@@ -25,6 +25,9 @@ import { refreshMaterialRequestFulfillmentTx } from "@/lib/services/material-req
 import {
   TRANSFER_SHORTAGE_REASON,
   buildShortageLines,
+  carriedCostMapFromOutMoves,
+  groupReceivedSerialsByLine,
+  parseStoredSerials,
   type ReceiptLineInput,
   type TransferLineState,
 } from "@/lib/services/inventory-transfer-receipt.service";
@@ -383,34 +386,16 @@ export async function processStockAdjustment(adjustmentId: number) {
               select: { itemId: true, cost: true },
             }),
           ]);
-          const receivedSerialsByLine = new Map<number, string[]>();
-          for (const row of receiptItems) {
-            const serials = Array.isArray(row.serialNumbers)
-              ? row.serialNumbers.filter((s): s is string => typeof s === "string" && s.length > 0)
-              : [];
-            if (serials.length > 0) {
-              receivedSerialsByLine.set(row.inventoryTransferItemId, [
-                ...(receivedSerialsByLine.get(row.inventoryTransferItemId) ?? []),
-                ...serials,
-              ]);
-            }
-          }
-          const carriedCostByItem = new Map<number, number>();
-          for (const move of outMoves) {
-            if (!carriedCostByItem.has(move.itemId)) carriedCostByItem.set(move.itemId, Number(move.cost));
-          }
           const shortage = buildShortageLines(
             transfer.items.map((it) => ({
               id: it.id,
               itemId: it.itemId,
               qty: Number(it.qty),
               receivedQty: Number(it.receivedQty),
-              serialNumbers: Array.isArray(it.serialNumbers)
-                ? it.serialNumbers.filter((s): s is string => typeof s === "string" && s.length > 0)
-                : [],
+              serialNumbers: parseStoredSerials(it.serialNumbers),
             })),
-            receivedSerialsByLine,
-            carriedCostByItem,
+            groupReceivedSerialsByLine(receiptItems),
+            carriedCostMapFromOutMoves(outMoves),
           );
           if (shortage.length === 0) {
             throw new Error("Transfer tertaut tidak lagi memiliki sisa untuk ditutup.");
@@ -842,34 +827,16 @@ async function loadTransferShortageState(transferId: number) {
       select: { itemId: true, cost: true },
     }),
   ]);
-  const receivedSerialsByLine = new Map<number, string[]>();
-  for (const row of receiptItems) {
-    const serials = Array.isArray(row.serialNumbers)
-      ? row.serialNumbers.filter((s): s is string => typeof s === "string" && s.length > 0)
-      : [];
-    if (serials.length > 0) {
-      receivedSerialsByLine.set(row.inventoryTransferItemId, [
-        ...(receivedSerialsByLine.get(row.inventoryTransferItemId) ?? []),
-        ...serials,
-      ]);
-    }
-  }
-  const carriedCostByItem = new Map<number, number>();
-  for (const move of outMoves) {
-    if (!carriedCostByItem.has(move.itemId)) carriedCostByItem.set(move.itemId, Number(move.cost));
-  }
   const lineStates: TransferLineState[] = transfer.items.map((it) => ({
     id: it.id,
     itemId: it.itemId,
     qty: Number(it.qty),
     receivedQty: Number(it.receivedQty),
-    serialNumbers: Array.isArray(it.serialNumbers)
-      ? it.serialNumbers.filter((s): s is string => typeof s === "string" && s.length > 0)
-      : [],
+    serialNumbers: parseStoredSerials(it.serialNumbers),
   }));
   return {
     transfer,
-    shortage: buildShortageLines(lineStates, receivedSerialsByLine, carriedCostByItem),
+    shortage: buildShortageLines(lineStates, groupReceivedSerialsByLine(receiptItems), carriedCostMapFromOutMoves(outMoves)),
   };
 }
 
