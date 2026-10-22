@@ -913,6 +913,80 @@ describe("Purchase Return Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  it("createPurchaseReturn membaca qty/harga string format Indonesia penuh", async () => {
+    const res = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "2.000", price: "150.000" }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0].qty).toBe(2000)
+    expect(arg.data.items.create[0].price).toBe(150000)
+  })
+
+  it("createPurchaseReturn menolak qty tak terbaca tanpa membuat retur", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "abc" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Kuantitas retur item #1 tidak valid/i)
+    expect(mocks.prismaMock.purchaseReturn.create).not.toHaveBeenCalled()
+  })
+
+  it("createPurchaseReturn menolak harga tak terbaca tanpa membuat retur", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: 2, price: "xyz" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Harga beli retur item #1 tidak valid/i)
+    expect(mocks.prismaMock.purchaseReturn.create).not.toHaveBeenCalled()
+  })
+
+  it("createPurchaseReturn membuang baris tanpa item / qty nol (baris kosong form)", async () => {
+    const res = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 0, qty: 5 }, { itemId: 1, qty: 0 }, { itemId: 2, qty: 3 }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create).toEqual([
+      expect.objectContaining({ itemId: 2, qty: 3 }),
+    ])
+  })
+
+  it("updatePurchaseReturn membaca qty string format Indonesia penuh", async () => {
+    const res = await actions.updatePurchaseReturn(1, fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "1,5", price: "2.000.000" }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseReturn.update.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0].qty).toBe(1.5)
+    expect(arg.data.items.create[0].price).toBe(2000000)
+  })
+
+  it("updatePurchaseReturn menolak qty tak terbaca tanpa menghapus baris lama", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const res = await actions.updatePurchaseReturn(1, fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      items: JSON.stringify([{ itemId: 1, qty: "abc" }])
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Kuantitas retur item #1 tidak valid/i)
+    expect(mocks.prismaMock.purchaseReturnItem.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.purchaseReturn.update).not.toHaveBeenCalled()
+  })
+
   it("updatePurchaseReturn succeeds", async () => {
     const res = await actions.updatePurchaseReturn(1, fdMap({
       purchaseOrderId: "1",

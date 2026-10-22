@@ -23,7 +23,7 @@ RUN npm ci --ignore-scripts
 COPY --chown=root:root --chmod=755 src/ ./src/
 COPY --chown=root:root --chmod=755 public/ ./public/
 COPY --chown=root:root --chmod=755 prisma/ ./prisma/
-COPY --chown=root:root --chmod=644 next.config.ts tsconfig.json postcss.config.mjs next-env.d.ts eslint.config.js prisma.config.ts ./
+COPY --chown=root:root --chmod=644 next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs prisma.config.ts ./
 COPY --chown=root:root --chmod=755 docker/entrypoint.dev.sh /usr/local/bin/entrypoint.dev.sh
 
 # Generate Prisma Client (local binary — no npx registry fetch)
