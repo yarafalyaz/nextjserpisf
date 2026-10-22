@@ -1,12 +1,11 @@
 export const dynamic = "force-dynamic"
 
-import { prisma } from "@/lib/db/prisma"
 import { requirePermission } from "@/lib/auth/permissions"
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
-import { RECOGNISED_AR_STATUSES } from "@/lib/reports/document-status"
-import { averagePaymentDays, buildCustomerCreditExposure, buildCustomerReceivables } from "@/lib/reports/customer-receivables"
+import { CREDIT_EXPOSURE_STATUS_LABEL } from "@/lib/reports/customer-receivables"
+import { loadCustomerCreditExposure } from "@/lib/reports/ledger-cash-data"
 import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTableRow, DetailTableTd } from "@/components/ui/detail-table"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { buildReportPdfHref } from "@/lib/reports/report-export"
@@ -24,6 +23,7 @@ export const metadata: Metadata = { title: "Piutang per Pelanggan" }
  * Piutang per pelanggan: saldo belum lunas (posisi per akhir periode), umur
  * jatuh tempo, limit & sisa kredit, plus rata-rata hari bayar (DSO) yang
  * dihitung dari pembayaran pada periode terpilih.
+ * Angka dari loader bersama ekspor PDF: loadCustomerCreditExposure.
  */
 export default async function CustomerReceivablesPage({
   params: routeParams,
@@ -40,110 +40,8 @@ export default async function CustomerReceivablesPage({
   }))
   const { start: startDate, end: endDate } = period
 
-  const [invoices, payments] = await Promise.all([
-    prisma.salesInvoice.findMany({
-      where: {
-        status: { in: [...RECOGNISED_AR_STATUSES] },
-        deletedAt: null,
-        date: { lte: endDate },
-      },
-      select: {
-        customerId: true,
-        grandTotal: true,
-        paidAmount: true,
-        dueDate: true,
-        customer: { select: { name: true, creditLimit: true } },
-      },
-    }),
-    prisma.salesPayment.findMany({
-      where: { paymentDate: { gte: startDate, lte: endDate } },
-      select: {
-        amount: true,
-        paymentDate: true,
-        salesInvoice: { select: { customerId: true, date: true } },
-      },
-    }),
-  ])
-
-  const now = new Date()
-  const buckets = new Map<number, { customerId: number; customerName: string; creditLimit: number; outstanding: number; overdue: number; invoiceCount: number }>()
-
-  for (const invoice of invoices) {
-    const outstanding = Number(invoice.grandTotal) - Number(invoice.paidAmount)
-    if (outstanding <= 0) continue
-    const bucket = buckets.get(invoice.customerId) ?? {
-      customerId: invoice.customerId,
-      customerName: invoice.customer.name,
-      creditLimit: Number(invoice.customer.creditLimit ?? 0),
-      outstanding: 0,
-      overdue: 0,
-      invoiceCount: 0,
-    }
-    bucket.outstanding += outstanding
-    if (invoice.dueDate && invoice.dueDate < now) bucket.overdue += outstanding
-    bucket.invoiceCount += 1
-    buckets.set(invoice.customerId, bucket)
-  }
-
-  // Rata-rata hari bayar per pelanggan (weighted by amount), hanya dari
-  // pembayaran yang fakturnya bisa ditelusuri.
-  const paymentsByCustomer = new Map<number, { invoiceDate: Date; paymentDate: Date; amount: number }[]>()
-  for (const payment of payments) {
-    const customerId = payment.salesInvoice?.customerId
-    if (!customerId) continue
-    const list = paymentsByCustomer.get(customerId) ?? []
-    list.push({
-      invoiceDate: payment.salesInvoice.date,
-      paymentDate: payment.paymentDate,
-      amount: Number(payment.amount),
-    })
-    paymentsByCustomer.set(customerId, list)
-  }
-
-  // F-2026-10-21-017 lapis aman: paparan kredit = piutang + SO terbuka
-  // (confirmed/processing/completed) dikurangi porsi yang sudah jadi
-  // invoice recognised. Advisory saja, tidak menahan dokumen.
-  const openOrders = await prisma.salesOrder.findMany({
-    where: { status: { in: ["confirmed", "processing", "completed"] }, deletedAt: null },
-    select: { id: true, customerId: true, grandTotal: true },
-  })
-  const invoicedByOrder = new Map<number, number>()
-  if (openOrders.length > 0) {
-    const orderInvoices = await prisma.salesInvoice.findMany({
-      where: {
-        salesOrderId: { in: openOrders.map((o) => o.id) },
-        status: { in: [...RECOGNISED_AR_STATUSES] },
-        deletedAt: null,
-      },
-      select: { salesOrderId: true, grandTotal: true },
-    })
-    for (const inv of orderInvoices) {
-      if (inv.salesOrderId == null) continue
-      invoicedByOrder.set(inv.salesOrderId, (invoicedByOrder.get(inv.salesOrderId) ?? 0) + Number(inv.grandTotal))
-    }
-  }
-  const openOrderByCustomer = new Map<number, number>()
-  for (const order of openOrders) {
-    const open = Math.max(0, Number(order.grandTotal) - (invoicedByOrder.get(order.id) ?? 0))
-    if (open <= 0) continue
-    openOrderByCustomer.set(order.customerId, (openOrderByCustomer.get(order.customerId) ?? 0) + open)
-  }
-  const exposureByCustomer = new Map(
-    buildCustomerCreditExposure(
-      [...buckets.values()].map((b) => ({ ...b, openOrderAmount: openOrderByCustomer.get(b.customerId) ?? 0 })),
-    ).map((r) => [r.customerId, r]),
-  )
-
-  const rows = buildCustomerReceivables([...buckets.values()]).map((row) => ({
-    ...row,
-    avgPaymentDays: averagePaymentDays(paymentsByCustomer.get(row.customerId) ?? []),
-  }))
-
-  const totalOutstanding = rows.reduce((sum, row) => sum + row.outstanding, 0)
-  const totalOverdue = rows.reduce((sum, row) => sum + row.overdue, 0)
-  const totalCreditLimit = rows.reduce((sum, row) => sum + row.creditLimit, 0)
-  const weightedDays = rows.reduce((sum, row) => sum + (row.avgPaymentDays ?? 0) * row.outstanding, 0)
-  const portfolioDso = totalOutstanding > 0 ? weightedDays / totalOutstanding : null
+  const { rows, totalOutstanding, totalOverdue, totalCreditLimit, totalExposure, totalRemainingCredit, portfolioDso } =
+    await loadCustomerCreditExposure({ start: startDate, end: endDate })
   const periodLabel = `Pembayaran ${startDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })} – ${endDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`
 
   return (
@@ -181,6 +79,9 @@ export default async function CustomerReceivablesPage({
             <DetailTableTh align="right">Sisa Kredit</DetailTableTh>
             <DetailTableTh align="right">Pemakaian</DetailTableTh>
             <DetailTableTh align="right">SO Terbuka</DetailTableTh>
+            <DetailTableTh align="right">Job Berjalan</DetailTableTh>
+            <DetailTableTh align="right">DP Terkonfirmasi</DetailTableTh>
+            <DetailTableTh align="right">Kredit Terbuka</DetailTableTh>
             <DetailTableTh align="right">Paparan Kredit</DetailTableTh>
             <DetailTableTh align="right">Status Kredit</DetailTableTh>
             <DetailTableTh align="right">Rata-rata Bayar (hari)</DetailTableTh>
@@ -197,14 +98,17 @@ export default async function CustomerReceivablesPage({
                 <DetailTableTd align="right" className={row.utilization !== null && row.utilization > 100 ? "text-danger" : undefined}>
                   {row.utilization === null ? "–" : `${row.utilization.toFixed(1)}%`}
                 </DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposureByCustomer.get(row.customerId)?.openOrderAmount ?? 0)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(exposureByCustomer.get(row.customerId)?.exposure ?? row.outstanding)}</DetailTableTd>
-                <DetailTableTd align="right">{({ unset: "Limit belum diatur", ok: "Aman", warning: "Mendekati batas", over: "Lewat batas" } as const)[exposureByCustomer.get(row.customerId)?.status ?? "unset"]}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.openOrderAmount)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.woUnrepresented ?? 0)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.confirmedDownPayment ?? 0)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.openCustomerCredit ?? 0)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(row.exposure)}</DetailTableTd>
+                <DetailTableTd align="right">{CREDIT_EXPOSURE_STATUS_LABEL[row.status]}</DetailTableTd>
                 <DetailTableTd align="right">{row.avgPaymentDays === null ? "–" : row.avgPaymentDays.toLocaleString('id-ID')}</DetailTableTd>
               </DetailTableRow>
             ))}
             {rows.length === 0 && (
-              <DetailTableRow><DetailTableTd colSpan={11} className="text-center text-muted-foreground py-6">Tidak ada piutang belum lunas</DetailTableTd></DetailTableRow>
+              <DetailTableRow><DetailTableTd colSpan={14} className="text-center text-muted-foreground py-6">Tidak ada piutang belum lunas</DetailTableTd></DetailTableRow>
             )}
             {rows.length > 0 && (
               <DetailTableRow className="font-bold border-t-2 border-default">
@@ -212,9 +116,9 @@ export default async function CustomerReceivablesPage({
                 <DetailTableTd align="right">{formatAccounting(totalCreditLimit)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalOutstanding)}</DetailTableTd>
                 <DetailTableTd align="right">{formatAccounting(totalOverdue)}</DetailTableTd>
-                <DetailTableTd align="right">{formatAccounting(totalCreditLimit - totalOutstanding)}</DetailTableTd>
+                <DetailTableTd align="right">{formatAccounting(totalRemainingCredit)}</DetailTableTd>
                 <DetailTableTd align="right">
-                  {totalCreditLimit > 0 ? `${((totalOutstanding / totalCreditLimit) * 100).toFixed(1)}%` : "–"}
+                  {totalCreditLimit > 0 ? `${((totalExposure / totalCreditLimit) * 100).toFixed(1)}%` : "–"}
                 </DetailTableTd>
                 <DetailTableTd align="right">{portfolioDso === null ? "–" : portfolioDso.toFixed(1)}</DetailTableTd>
               </DetailTableRow>

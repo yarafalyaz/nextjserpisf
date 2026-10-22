@@ -243,6 +243,8 @@ export default async function InvoiceDetailPage({
                   discount: Number(item.discount ?? 0),
                   total: Number(item.total),
                   uom: item.uom ?? null,
+                  priceSource: item.priceSource ?? null,
+                  priceListMinQty: item.priceListMinQty != null ? Number(item.priceListMinQty) : null,
                   serialNumbers: Array.isArray(item.serialNumbers)
                     ? (item.serialNumbers as unknown[]).map((s) => String(s))
                     : [],

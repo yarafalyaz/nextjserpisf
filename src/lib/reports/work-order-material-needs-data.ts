@@ -24,6 +24,7 @@
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { expireOverdueReservationsTx } from "@/lib/services/stock-reservation.service"
 import {
   buildWorkOrderMaterialNeeds,
   type MaterialNeedInput,
@@ -34,6 +35,17 @@ import { ACTIVE_WORK_ORDER_STATUSES } from "@/lib/reports/work-order-queue"
 export async function getWorkOrderMaterialNeeds(
   workOrderId: number,
 ): Promise<WorkOrderMaterialNeeds | null> {
+  // F-2026-10-21-012 inti (BR-RES-06 lazy-expire): baris aktif WO ini yang
+  // lewat expiresAt → expired saat dibaca, supaya ATP/reservasi WO lain
+  // melihat stok bebas. Idempoten; kegagalan expire tak menggagalkan baca.
+  try {
+    await prisma.$transaction(async (tx) => {
+      await expireOverdueReservationsTx(tx, { workOrderId })
+    })
+  } catch (e) {
+    // Read-model tetap tampil; expire dicoba lagi pada baca berikutnya.
+    console.error("[work-order-material-needs] lazy-expire reservasi gagal", e)
+  }
   const wo = await prisma.workOrder.findUnique({
     where: { id: workOrderId },
     select: {

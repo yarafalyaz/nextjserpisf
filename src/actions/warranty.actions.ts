@@ -10,9 +10,15 @@ import {
   createWarrantyClaimSchema,
   decideWarrantyClaimSchema,
   linkSupplierClaimSchema,
+  postWarrantyClaimCostSchema,
+  postWarrantySupplierRecoverySchema,
   transitionSupplierClaimSchema,
   transitionWarrantyClaimSchema,
 } from "@/lib/validations/warranty.schemas";
+import {
+  postWarrantyClaimCostJournal,
+  postWarrantySupplierRecoveryJournal,
+} from "@/lib/services/warranty-journal.service";
 import {
   assessWarrantyEligibility,
   createWarrantyClaim,
@@ -208,6 +214,55 @@ export async function getWarrantyClaimDetail(claimId: number) {
     console.error("[getWarrantyClaimDetail]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Gagal memuat klaim garansi") };
   }
+}
+
+// ==================== JURNAL GARANSI TAHAP 3 RUTE MATI (E2/E3) ====================
+// Posting jurnal = aksi finansial: izin menyetujui klaim (pejabat yang sama
+// yang memutus klaim). Syarat jurnal hidup di warranty-journal.service.ts.
+
+async function runWarrantyJournalAction(
+  tag: string,
+  fallback: string,
+  post: () => Promise<{ journalId: number; journalNumber: string; amount: number }>,
+  label: (r: { journalNumber: string }) => string,
+) {
+  try {
+    const result = await post();
+    revalidatePath("/produksi/garansi");
+    await logActivity("create", "Journal", result.journalId, label(result));
+    return { success: true, journalId: result.journalId, journalNumber: result.journalNumber, amount: result.amount };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error(`[${tag}]`, getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, fallback) };
+  }
+}
+
+export async function postWarrantyClaimCostAction(formData: FormData) {
+  const parsed = parseFormData(postWarrantyClaimCostSchema, formData);
+  if (!parsed.success) return { success: false, error: parsed.error };
+  const v = parsed.data;
+  const user = await requirePermission("approve_warranty_claims");
+  return runWarrantyJournalAction(
+    "postWarrantyClaimCostAction",
+    "Gagal memposting jurnal biaya garansi",
+    () => postWarrantyClaimCostJournal({ claimId: v.claimId, eventDate: v.eventDate ?? new Date(), createdBy: Number(user.id) }),
+    (r) => `Posting jurnal biaya klaim garansi #${v.claimId} (${r.journalNumber})`,
+  );
+}
+
+export async function postWarrantySupplierRecoveryAction(formData: FormData) {
+  const parsed = parseFormData(postWarrantySupplierRecoverySchema, formData);
+  if (!parsed.success) return { success: false, error: parsed.error };
+  const v = parsed.data;
+  const user = await requirePermission("approve_warranty_claims");
+  return runWarrantyJournalAction(
+    "postWarrantySupplierRecoveryAction",
+    "Gagal memposting jurnal recovery supplier",
+    () =>
+      postWarrantySupplierRecoveryJournal({ claimId: v.claimId, amount: v.amount, eventDate: v.eventDate ?? new Date(), createdBy: Number(user.id) }),
+    (r) => `Posting jurnal recovery supplier garansi #${v.claimId} (${r.journalNumber})`,
+  );
 }
 
 /** Cakupan aktif satu kendaraan — titik mulai intake klaim dari detail kendaraan. */

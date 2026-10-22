@@ -6,6 +6,7 @@ import { slugify } from "@/lib/utils/slug";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { consumeReservationsForMaterialIssueTx } from "@/lib/services/stock-reservation.service";
 import { Status } from "@/lib/constants";
 
 
@@ -160,6 +161,16 @@ export async function onMaterialIssueCompleted(
       issue.costCenterId,
       issue.date
     );
+
+    // F-2026-10-21-012 inti (BR-RES-08): konsumsi reservasi aktif WO
+    // pemilik di gudang MI ini, di tx yang sama dengan pengeluaran stok.
+    // MI tanpa WO / tanpa reservasi tetap jalan — kelebihan tercatat
+    // sebagai keluar tanpa cadangan, reservasi WO lain tak disentuh.
+    await consumeReservationsForMaterialIssueTx(tx, {
+      workOrderId: issue.workOrderId,
+      warehouseId: issue.warehouseId,
+      items: activeItems.map((item) => ({ itemId: item.itemId, qty: Number(item.qty) })),
+    });
 
     // Update Material Issue status
     await tx.materialIssue.update({

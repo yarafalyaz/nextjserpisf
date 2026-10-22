@@ -93,6 +93,7 @@ export const navigation: NavItem[] = [
       { label: "Pembayaran", href: "/penjualan/pembayaran", icon: CreditCard, permission: "view_sales_payments" },
       { label: "Retur", href: "/penjualan/retur", icon: RotateCcw, permission: "view_sales_returns" },
       { label: "Tukar Faktur", href: "/penjualan/tukar-faktur", icon: FileCheck, permission: "view_invoice_exchanges" },
+      { label: "Daftar Harga Pelanggan", href: "/penjualan/harga-pelanggan", icon: BadgeDollarSign, permission: "view_customer_price_lists" },
     ],
   },
   {
@@ -241,6 +242,7 @@ export const navigation: NavItem[] = [
       { label: "Penyetoran Pajak", href: "/laporan/penyetoran-pajak", icon: BadgeDollarSign, permission: "view_reports" },
       { label: "Tukar Faktur", href: "/laporan/tukar-faktur", icon: FileCheck, permission: "view_reports" },
       { label: "Laba Rugi per Proyek", href: "/laporan/laba-rugi-proyek", icon: FolderKanban, permission: "view_reports" },
+      { label: "Margin Job Kendaraan", href: "/laporan/margin-kendaraan", icon: TrendingUp, permission: "view_reports" },
       { label: "Laba Rugi per Pusat Biaya", href: "/laporan/laba-rugi-per-pusat-biaya", icon: TrendingUp, permission: "view_reports" },
       { label: "Neraca Saldo", href: "/laporan/neraca-saldo", icon: Scale, permission: "view_reports" },
       { label: "Neraca", href: "/laporan/neraca", icon: BookOpen, permission: "view_reports" },
@@ -290,6 +292,7 @@ export const navigation: NavItem[] = [
       { label: "Pusat Laba", href: "/laporan/pusat-laba", icon: TrendingUp, permission: "view_reports" },
       { label: "Harga Beli Multi-Sumber", href: "/laporan/analisis-harga-beli", icon: Package, permission: "view_reports" },
       { label: "Analisis Penjualan", href: "/laporan/analisis-penjualan", icon: BarChart3, permission: "view_reports" },
+      { label: "Rekap Komisi Penjualan", href: "/laporan/rekap-komisi", icon: Banknote, permission: "view_reports" },
       { label: "Hasil Penawaran", href: "/laporan/hasil-penawaran", icon: BarChart3, permission: "view_reports" },
       { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, permission: "view_reports" },
       { label: "Bahan & Biaya Pekerjaan", href: "/laporan/biaya-pekerjaan", icon: Hammer, permission: "view_reports" },

@@ -19,6 +19,7 @@ import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlem
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
+import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
@@ -31,12 +32,19 @@ import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, re
 import { assertMagicBytes } from "@/lib/storage/storage"
 import { nextSlug } from "@/lib/utils/slug-db"
 import { wibDateToUtcMidnight, getWibTodayUtcDate } from "@/lib/utils/attendance-time"
-import type { Prisma } from "@prisma/client"
+import { Prisma } from "@prisma/client"
 import {
   loadPriceListRows,
-  pickPriceListPrice,
+  pickPriceListRow,
   resolveLinePricing,
+  type PriceSource,
 } from "@/lib/services/customer-price-list.service"
+
+export interface PricedLineMeta {
+  priceSource?: PriceSource | null
+  priceListId?: number | null
+  priceListMinQty?: number | null
+}
 
 // F-PRICELIST-01 tahap 1: terapkan daftar harga pelanggan ke baris dokumen
 // yang dibuat LANGSUNG dari form (bukan hasil konversi penawaran/pesanan —
@@ -47,22 +55,43 @@ import {
 // HPP sendiri dan peringatan margin tidak pernah memblokir simpan.
 async function applyPriceListLines<
   T extends { itemId: number | null; qty: number; unitPrice: number; discount?: number },
->(tx: Prisma.TransactionClient, customerId: number, date: Date, lines: readonly T[]): Promise<T[]> {
+>(
+  tx: Prisma.TransactionClient,
+  customerId: number,
+  date: Date,
+  lines: readonly T[],
+): Promise<(T & PricedLineMeta)[]> {
   const itemIds = lines.map((l) => l.itemId).filter((id): id is number => id != null)
   if (itemIds.length === 0) return [...lines]
   const { customerCategoryId, rows } = await loadPriceListRows(tx, { customerId, itemIds, date })
   if (rows.length === 0) return [...lines]
   return lines.map((line) => {
     if (line.itemId == null) return line
-    const priceListPrice = pickPriceListPrice(rows, { itemId: line.itemId, customerCategoryId, date })
-    if (priceListPrice === null) return line
+    // F-018: resolusi qty-aware per baris (BR-TIER-01..06), tanpa agregasi.
+    const winner = pickPriceListRow(rows, {
+      itemId: line.itemId,
+      customerCategoryId,
+      date,
+      qty: line.qty,
+    })
+    if (winner === null) {
+      return { ...line, priceSource: "item_master" as const, priceListId: null, priceListMinQty: null }
+    }
     const r = resolveLinePricing({
       qty: line.qty,
       itemPrice: line.unitPrice,
-      priceListPrice,
+      priceListPrice: winner.price,
+      priceListRow: winner,
       manualDiscount: line.discount,
     })
-    return { ...line, unitPrice: r.unitPrice, discount: r.discount }
+    return {
+      ...line,
+      unitPrice: r.unitPrice,
+      discount: r.discount,
+      priceSource: r.priceSource,
+      priceListId: r.priceListId,
+      priceListMinQty: r.priceListMinQty,
+    }
   })
 }
 
@@ -101,6 +130,27 @@ async function decideQuotation(
       })
     }
   })
+}
+
+/**
+ * F-2026-10-21-016 tahap 1: resolve atribusi penjual opsional.
+ * Nilai kosong -> null (dokumen tanpa penjual sah, komisi tak dihitung).
+ * Nilai terisi wajib menunjuk Employee aktif belum terhapus; selain itu
+ * ditolak agar snapshot tidak menunjuk orang fiktif/nonaktif.
+ */
+async function resolveSalesEmployeeId(
+  tx: Prisma.TransactionClient,
+  raw: unknown,
+): Promise<number | null> {
+  if (raw === null || raw === undefined || raw === "") return null
+  const id = Number(raw)
+  if (!Number.isInteger(id) || id <= 0) throw new Error("Penjual (sales) tidak valid")
+  const emp = await tx.employee.findFirst({
+    where: { id, isActive: true, deletedAt: null },
+    select: { id: true },
+  })
+  if (!emp) throw new Error("Penjual (sales) tidak ditemukan atau sudah nonaktif")
+  return emp.id
 }
 
 export async function createQuotation(formData: FormData) {
@@ -146,6 +196,7 @@ export async function createQuotation(formData: FormData) {
         customerVehicleId: data.customerVehicleId
           ? Number(data.customerVehicleId)
           : null,
+        salesEmployeeId: await resolveSalesEmployeeId(tx, data.salesEmployeeId),
         date: wibDateToUtcMidnight(data.date),
         validUntil: data.validUntil ? wibDateToUtcMidnight(data.validUntil) : null,
         subtotal: computedSubtotal,
@@ -428,6 +479,7 @@ export async function convertQuotationToOrder(quotationId: number) {
         customerId: quotation.customerId,
         quotationId: quotation.id,
         customerVehicleId: quotation.customerVehicleId,
+        salesEmployeeId: quotation.salesEmployeeId,
         date: new Date(),
         subtotal: quotation.subtotal,
         discount: quotation.discount ?? 0,
@@ -893,6 +945,7 @@ export async function createSalesOrder(formData: FormData) {
       total: number
     }> = []
     let quotationTaxRate = 0
+    let quotationSalesEmployeeId: number | null = null
 
     if (v.quotationId) {
       const quotation = await tx.quotation.findUnique({
@@ -900,6 +953,7 @@ export async function createSalesOrder(formData: FormData) {
         include: { sections: { include: { items: true } } },
       })
       if (quotation) {
+        quotationSalesEmployeeId = quotation.salesEmployeeId
         // Gerbang yang sama dengan convertQuotationToOrder: jalur form tidak
         // boleh menjadi jalan pintas mengonversi penawaran konsep/ditolak/
         // kedaluwarsa yang jalur resminya menolak.
@@ -937,6 +991,7 @@ export async function createSalesOrder(formData: FormData) {
         slug,
         customerId: v.customerId,
         quotationId: v.quotationId ?? null,
+        salesEmployeeId: quotationSalesEmployeeId,
                 date: wibDateToUtcMidnight(v.date),
         deliveryDate: v.deliveryDate ? wibDateToUtcMidnight(v.deliveryDate) : null,
         notes: v.notes ?? null,
@@ -1001,6 +1056,14 @@ export async function postInvoice(invoiceId: number) {
 
   // Atomically claim the post and post GL journal in a single transaction.
   await prisma.$transaction(async (tx) => {
+    // Gerbang invoiceForbidden garansi (F-021 tahap 3 G5): WO repair klaim
+    // covered tidak boleh diposting menjadi tagihan pelanggan.
+    await assertInvoiceAllowedForWorkOrderBridges(tx, {
+      quotationId: invoice.quotationId,
+      projectId: invoice.projectId,
+      salesOrderId: invoice.salesOrderId,
+    })
+
     // Claim from EITHER "draft" or "approved". When a SalesInvoice approval
     // workflow is configured, approval.actions sets the document status to
     // "approved" (not "draft"), so a draft-only claim could never match and
@@ -1160,6 +1223,8 @@ export async function createDifferenceInvoice(quotationId: number) {
       // membaca total tertagih lama lalu membuat dua draft selisih.
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
 
+      await assertInvoiceAllowedForWorkOrderBridges(tx, { quotationId })
+
       const invoices = await collectQuotationInvoices(tx, quotationId)
 
       const candidate = computeDifferenceInvoiceCandidate({
@@ -1233,6 +1298,8 @@ export async function createProgressInvoice(quotationId: number, targetPercent: 
 
     const invoice = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM quotations WHERE id = ${quotationId} FOR UPDATE`
+
+      await assertInvoiceAllowedForWorkOrderBridges(tx, { quotationId })
 
       const invoices = await collectQuotationInvoices(tx, quotationId)
       const candidate = computeProgressInvoiceCandidate({
@@ -1385,15 +1452,24 @@ export async function createSalesInvoice(formData: FormData) {
   const invoice = await prisma.$transaction(async (tx) => {
     await checkIdempotency(idempotencyKey, tx, user.id)
 
+    // Gerbang invoiceForbidden garansi (F-021 tahap 3 G5, server): faktur
+    // dari jembatan quotation/sales-order milik WO repair klaim covered
+    // ditolak sebelum lahir.
+    await assertInvoiceAllowedForWorkOrderBridges(tx, {
+      quotationId: v.quotationId ?? null,
+      salesOrderId: v.salesOrderId ?? null,
+    })
+
     // Gerbang status pesanan: tombol di detail pesanan dan daftar pemilih di
     // faktur/tambah membaca DELIVERABLE_ORDER_STATUSES; server menegakkan
     // daftar yang sama supaya URL/form yang ditempel tidak bisa memfakturkan
     // pesanan konsep/ditolak. Faktur langsung dari penawaran (quotationId
     // tanpa salesOrderId) tetap boleh.
+    let inheritedSalesEmployeeId: number | null = null
     if (v.salesOrderId) {
       const so = await tx.salesOrder.findUnique({
         where: { id: v.salesOrderId },
-        select: { status: true },
+        select: { status: true, salesEmployeeId: true, quotationId: true },
       })
       if (!so) throw new Error("Pesanan Penjualan tidak ditemukan")
       if (!(DELIVERABLE_ORDER_STATUSES as readonly string[]).includes(so.status)) {
@@ -1401,6 +1477,20 @@ export async function createSalesInvoice(formData: FormData) {
           `Pesanan Penjualan berstatus '${so.status}' belum bisa difaktur (harus ${DELIVERABLE_ORDER_STATUS_LABELS})`,
         )
       }
+      inheritedSalesEmployeeId = so.salesEmployeeId
+      if (inheritedSalesEmployeeId === null && so.quotationId) {
+        const q = await tx.quotation.findUnique({
+          where: { id: so.quotationId },
+          select: { salesEmployeeId: true },
+        })
+        inheritedSalesEmployeeId = q?.salesEmployeeId ?? null
+      }
+    } else if (v.quotationId) {
+      const q = await tx.quotation.findUnique({
+        where: { id: v.quotationId },
+        select: { salesEmployeeId: true },
+      })
+      inheritedSalesEmployeeId = q?.salesEmployeeId ?? null
     }
 
     // F-PRICELIST-01: baris langsung dari form mendapat harga price-list
@@ -1436,6 +1526,7 @@ export async function createSalesInvoice(formData: FormData) {
         customerId: v.customerId,
         salesOrderId: v.salesOrderId ?? null,
         quotationId: v.quotationId ?? null,
+        salesEmployeeId: inheritedSalesEmployeeId,
         date: wibDateToUtcMidnight(v.date),
         dueDate: v.dueDate ? wibDateToUtcMidnight(v.dueDate) : null,
         taxInvoiceNumber: v.taxInvoiceNumber ?? null,
@@ -1462,6 +1553,14 @@ export async function createSalesInvoice(formData: FormData) {
                     unitPrice: safePrice,
                     discount: safeDiscount,
                     total: Math.max(0, safeSubtract(safeMultiply(safeQty, safePrice, 0), safeDiscount, 0)),
+                    // F-018 BR-TIER-09: hanya baris langsung hasil resolver
+                    // yang membawa sumber; konversi SO tetap null (bukan klaim).
+                    priceSource: "priceSource" in item ? (item.priceSource ?? null) : null,
+                    priceListId: "priceListId" in item ? (item.priceListId ?? null) : null,
+                    priceListMinQty:
+                      "priceListMinQty" in item && item.priceListMinQty != null
+                        ? new Prisma.Decimal(Number(item.priceListMinQty).toFixed(2))
+                        : null,
                   }
                 }),
               },

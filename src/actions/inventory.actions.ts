@@ -6,6 +6,8 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { safeSubtract, safeMultiply } from "@/lib/utils/math";
 import { prisma } from "@/lib/db/prisma";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { assertJobCostMutable } from "@/lib/services/job-closeout.service";
+import { releaseReservationsForReplacedItemsTx } from "@/lib/services/stock-reservation.service";
 import {
   assertApproved,
   requestApprovalIfConfigured,
@@ -84,6 +86,26 @@ function assertUniqueAdjustmentItems(items: { itemId: number }[]) {
   }
 }
 
+
+// ID desimal murni saja — pola repo (/^[0-9]+$/ di route workflow/print/
+// attachments/notifications + invoice-exchange.actions.ts parseId). Number()
+// mentah menerima "0x10"->16, "1e3"->1000, "0b101"->5, " 5"->5: ID tak
+// terduga lolos ke query.
+function parseStrictId(raw: FormDataEntryValue | string | null): number | null {
+  const str = String(raw ?? "");
+  if (!/^[0-9]+$/.test(str)) return null;
+  const value = Number(str);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+/** Qty desimal wajar dari form — tolak kosong/NaN/tak hingga (keputusan: pesan "Qty tidak valid"). */
+function parseStrictQty(raw: FormDataEntryValue | null): number | null {
+  if (raw === null || raw === "") return null;
+  const str = String(raw);
+  if (!/^[0-9]+(\.[0-9]+)?$/.test(str)) return null;
+  const value = Number(str);
+  return Number.isFinite(value) ? value : null;
+}
 
 // ==================== STOCK ADJUSTMENT ACTIONS ====================
 
@@ -530,6 +552,11 @@ export async function createMaterialIssue(formData: FormData) {
       );
     }
 
+    // F-009-V: MI baru ke WO closed ditolak server (draft pun lahir beku).
+    if (v.workOrderId) {
+      await assertJobCostMutable({ workOrderId: v.workOrderId }, "dibuatkan pengeluaran materialnya")
+    }
+
     const issue = await prisma.materialIssue.create({
       data: {
         documentNo,
@@ -614,6 +641,18 @@ export async function completeMaterialIssue(issueId: number) {
       where: { id: issueId },
       select: { workOrderId: true },
     });
+    if (issueWo.workOrderId != null) {
+      // F-009-V: MI draft lama ke WO yang kini closed ikut beku saat complete.
+      try {
+        await assertJobCostMutable({ workOrderId: issueWo.workOrderId }, "diselesaikan pengeluaran materialnya")
+      } catch (closedErr) {
+        await prisma.materialIssue.updateMany({
+          where: { id: issueId, status: "processing" },
+          data: { status: "draft" },
+        });
+        throw closedErr;
+      }
+    }
     if (issueWo.workOrderId != null) {
       const poConsumed = await prisma.productionOrderMaterial.aggregate({
         where: {
@@ -1080,6 +1119,14 @@ export async function reviseWorkOrderItems(input: {
         await tx.workOrderItem.updateMany({
           where: { id: { in: replacedIds }, workOrderId: v.workOrderId },
           data: { status: "replaced" },
+        });
+
+        // F-2026-10-21-012 inti (AC-RES-8): baris diganti → sisa reservasi
+        // aktif baris itu released sejumlah belum terpakai; yang sudah
+        // consumed tak berubah (guard di atas menolak baris ter-issue).
+        await releaseReservationsForReplacedItemsTx(tx, {
+          workOrderId: v.workOrderId,
+          workOrderItemIds: replacedIds,
         });
       }
 
@@ -1850,7 +1897,8 @@ async function liveQtyByItem(
 export async function createStocktakeSession(formData: FormData) {
   try {
     const user = await requirePermission("create_stock_adjustments");
-    const warehouseId = Number(formData.get("warehouseId"));
+    const warehouseId = parseStrictId(formData.get("warehouseId"));
+    if (warehouseId === null) throw new Error("Gudang tidak valid");
     const dateRaw = (formData.get("date") as string | null) ?? "";
     const notesRaw = (formData.get("notes") as string | null) ?? null;
     const notes = notesRaw ? notesRaw.slice(0, 1000) : null;
@@ -2118,24 +2166,24 @@ export async function postStocktakeSession(id: number) {
 export async function createRemnant(formData: FormData) {
   try {
     const user = await requirePermission("create_material_issues");
-    const itemId = Number(formData.get("itemId"));
-    const warehouseId = Number(formData.get("warehouseId"));
-    const qty = Number(formData.get("qty"));
+    const itemId = parseStrictId(formData.get("itemId"));
+    const warehouseId = parseStrictId(formData.get("warehouseId"));
+    const qty = parseStrictQty(formData.get("qty"));
+    if (itemId === null) throw new Error("Item tidak valid");
+    if (warehouseId === null) throw new Error("Gudang tidak valid");
+    if (qty === null || qty <= 0) throw new Error("Qty sisa harus > 0");
     await assertWarehouseIdInScope(user, warehouseId);
-    if (!Number.isSafeInteger(itemId) || itemId <= 0) throw new Error("Item tidak valid");
     const [item, warehouse] = await Promise.all([
       prisma.item.findUnique({ where: { id: itemId }, select: { id: true } }),
       prisma.warehouse.findUnique({ where: { id: warehouseId }, select: { id: true } }),
     ]);
     if (!item) throw new Error("Barang tidak ditemukan");
     if (!warehouse) throw new Error("Gudang tidak ditemukan");
-    if (!Number.isFinite(qty) || qty <= 0) throw new Error("Qty sisa harus > 0");
     // Biaya satuan nominal uang: wajib parser repo — Number("2.000.000")=2.
     const unitCostRaw = parseMoneyAmount(formData.get("unitCost"));
     if (unitCostRaw === null || !Number.isFinite(unitCostRaw) || unitCostRaw < 0) throw new Error("Biaya satuan tidak valid");
-    const sourceIdRaw = formData.get("sourceId");
-    const sourceId = sourceIdRaw ? Number(sourceIdRaw) : null;
-    if (sourceId !== null && (!Number.isSafeInteger(sourceId) || sourceId <= 0)) {
+    const sourceId = parseStrictId(formData.get("sourceId"));
+    if (formData.get("sourceId") && sourceId === null) {
       throw new Error("Sumber tidak valid");
     }
     const cap = (v: FormDataEntryValue | null, n: number) => {

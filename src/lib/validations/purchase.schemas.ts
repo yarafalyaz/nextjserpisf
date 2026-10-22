@@ -11,6 +11,17 @@ const optionalNumber = (min?: number) => {
   return base.optional()
 }
 
+// Nominal opsional berkaki ganda: kosong = undefined (aksi yang membaca), string
+// format Indonesia ("2.000.000" / "2.000.000,50") wajib lewat parseMoneyAmount —
+// z.coerce.number() mentah menelan NaN dan ditolak zod, dan CurrencyInput
+// mengirim string terformat dari form PO/GR/pembayaran. ID murni & kuantitas
+// tetap optionalNumber (bukan nominal rupiah).
+const optionalMoney = (min = 0) =>
+  z.preprocess(
+    (v) => (v === "" || v == null ? undefined : typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().min(min).optional(),
+  )
+
 const optionalDateOnly = z.preprocess(
   (v) => (v === "" || v == null ? undefined : v),
   dateOnly.optional(),
@@ -42,8 +53,8 @@ export const purchaseOrderSchema = z.object({
   date: dateOnly,
   expectedDate: optionalDateOnly,
   paymentTerm: optionalString(200),
-  shippingCost: optionalNumber(0),
-  serviceFee: optionalNumber(0),
+  shippingCost: optionalMoney(),
+  serviceFee: optionalMoney(),
   notes: optionalString(1000),
   items: optionalString(50000), // JSON string, parsed separately
 })
@@ -68,11 +79,11 @@ export const goodsReceiptSchema = z.object({
   notes: optionalString(1000),
   // Actual landed costs for this receipt. Optional: when omitted/0 the hook
   // falls back to this receipt's proportional share of the PO estimate.
-  shippingCost: optionalNumber(0),
-  otherCost: optionalNumber(0),
+  shippingCost: optionalMoney(),
+  otherCost: optionalMoney(),
   // Bank/payment admin fee (e.g. "Admin BCA"). Capitalised into HPP and posted
   // to its own expense account.
-  adminFee: optionalNumber(0),
+  adminFee: optionalMoney(),
   items: optionalString(50000), // JSON string, parsed separately
 })
 
@@ -89,7 +100,7 @@ export const vendorBillSchema = z.object({
   // Jasa maklon per proyek (coating/bending): tagihan ikut HPP proyek.
   projectId: optionalNumber(),
   withholdingTypeId: optionalNumber(),
-  withholdingAmount: optionalNumber(0),
+  withholdingAmount: optionalMoney(),
   date: dateOnly,
   dueDate: optionalDateOnly,
   vendorInvoiceNumber: optionalString(100),
@@ -123,7 +134,7 @@ export const vendorPaymentSchema = z.object({
   ),
   // Bank/transfer admin fee (a real cost of paying, expensed separately — never
   // allocated to a bill).
-  adminFee: optionalNumber(0),
+  adminFee: optionalMoney(),
   // Tagihan spesifik yang dibayar (dipilih lewat tombol "Bayar" di tagihan).
   // Opsional: bila kosong, alokasi konfirmasi murni oldest-first seperti semula.
   vendorBillId: optionalNumber(),

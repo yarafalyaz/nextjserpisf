@@ -8,7 +8,7 @@ import {
   creditableSplit,
   effectiveChainHead,
 } from "@/lib/tax/tax-invoice"
-import { computeWithheld, snapshotWithholding, resolvePph23Rate, resolvePph42Rate } from "@/lib/tax/withholding-certificate"
+import { computeWithheld, snapshotWithholding, resolvePph23Rate, resolvePph42Rate, resolvePph42RentRate } from "@/lib/tax/withholding-certificate"
 import { snapshotReturnLine, checkCumulativeReturnCap } from "@/lib/tax/return-snapshot"
 import { buildTaxLiability, isValidTaxPeriod, isValidBillingCode, isValidNtpn } from "@/lib/tax/tax-liability"
 import { assertDispositionAllowed } from "@/lib/tax/production-variance-gate"
@@ -80,6 +80,64 @@ describe("F-003 (f) edit tarif master tak ubah bupot terbit", () => {
     expect(resolvePph23Rate("24-104-07")).toBe(2)
     expect(resolvePph42Rate("28-409-01", { "28-409-01": 1.75 })).toBe(1.75)
     expect(() => resolvePph42Rate(null, {})).toThrow()
+  })
+})
+
+describe("F-038/F-041 PPh 4(2) final sewa: 10% tetap, kode objek wajib, bukan tarif konstruksi", () => {
+  // Katalog contoh sebagaimana dibaca service dari master aktif.
+  const katalogUmum = [{ objectCode: "28-403-02", rate: 10, requiresEvidence: false }]
+
+  it("bruto 100jt -> potong 10jt, neto 90jt (snapshot bupot sewa)", () => {
+    const snap = snapshotWithholding({
+      article: "PPh4(2)",
+      objectCode: "28-403-02",
+      rate: resolvePph42RentRate("28-403-02", katalogUmum),
+      dpp: 100_000_000,
+    })
+    expect(snap.tariff).toBe(10)
+    expect(snap.withheldAmount).toBe(10_000_000)
+    expect(snap.dpp - snap.withheldAmount).toBe(90_000_000)
+  })
+
+  it("tanpa kode objek = tolak (falsifikasi: cabut penjaga ini wajib merah)", () => {
+    expect(() => resolvePph42RentRate(null, katalogUmum)).toThrow(/kode objek wajib/)
+    expect(() => resolvePph42RentRate("  ", katalogUmum)).toThrow(/kode objek wajib/)
+  })
+
+  it("kode konstruksi 28-409-xx ditolak — resolver sewa tak meminjam tarif 1,75%", () => {
+    expect(() => resolvePph42RentRate("28-409-01", katalogUmum)).toThrow(/konstruksi/)
+    // Jalur konstruksi sendiri tetap utuh dan terpisah:
+    expect(resolvePph42Rate("28-409-01", { "28-409-01": 1.75 })).toBe(1.75)
+  })
+
+  it("F51-1/2: kode di luar katalog master aktif ditolak fail-closed", () => {
+    for (const luar of ["28-403-99", "28-402-01", "24-104-01", "28-403-04"]) {
+      expect(() => resolvePph42RentRate(luar, katalogUmum), luar).toThrow(/di luar katalog/)
+    }
+  })
+
+  it("F51-3: kode katalog bersyarat bukti wajib bukti dokumen non-kosong", () => {
+    const katalogPP = [...katalogUmum, { objectCode: "28-403-04", rate: 10, requiresEvidence: true }]
+    expect(() => resolvePph42RentRate("28-403-04", katalogPP)).toThrow(/bukti dokumen/)
+    expect(() => resolvePph42RentRate("28-403-04", katalogPP, { evidence: "  " })).toThrow(/bukti dokumen/)
+    expect(resolvePph42RentRate("28-403-04", katalogPP, { evidence: "Kontrak proyek pemerintah No. 12/2026" })).toBe(10)
+  })
+
+  it("F51-6: tarif master menyimpang dari 10 ditolak, tidak dipakai diam-diam", () => {
+    const menyimpang = [{ objectCode: "28-403-02", rate: 5, requiresEvidence: false }]
+    expect(() => resolvePph42RentRate("28-403-02", menyimpang)).toThrow(/menyimpang/)
+  })
+
+  it("F51-1: format kode rusak ditolak berisik", () => {
+    expect(() => resolvePph42RentRate("SEWA-TANAH-BANGUNAN", katalogUmum)).toThrow(/format rusak/)
+    expect(() => resolvePph42RentRate("2840302", katalogUmum)).toThrow(/format rusak/)
+  })
+
+  it("edit tarif master sesudah bupot terbit tak mengubah snapshot sewa", () => {
+    const snap = snapshotWithholding({ article: "PPh4(2)", objectCode: "SEWA-TANAH-BANGUNAN", rate: 10, dpp: 100_000_000 })
+    const afterMasterChange = computeWithheld(snap.dpp, snap.tariff)
+    expect(afterMasterChange.withheldAmount).toBe(10_000_000)
+    expect(snap.tariff).toBe(10)
   })
 })
 
