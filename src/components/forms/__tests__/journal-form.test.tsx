@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach } from "vitest"
+import { act } from "react"
 import { JournalForm } from "../journal-form"
 import { mountInto, unmount, withContainer } from "./form-a11y-test-utils"
 
@@ -58,25 +59,20 @@ describe("JournalForm — a11y wiring", () => {
     vi.mocked(createJournal).mockImplementation(
       () => new Promise((r) => { resolveCreate = r }),
     )
-    await new Promise<void>((done) => {
-      withContainer((container) => {
-        const root = mountInto(container, <JournalForm accounts={accounts} />)
-        const form = container.querySelector("form")!
-        expect(form.getAttribute("aria-busy")).toBe("false")
-        // Entri default 0/0 seimbang -> submit lolos guard isBalanced.
-        form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
-        // startTransition pending: React flush mikrotask dulu.
-        setTimeout(() => {
-          expect(form.getAttribute("aria-busy")).toBe("true")
-          resolveCreate({ success: true })
-          setTimeout(() => {
-            expect(form.getAttribute("aria-busy")).toBe("false")
-            unmount(root, container)
-            done()
-          }, 0)
-        }, 0)
-      })
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root = mountInto(container, <JournalForm accounts={accounts} />)
+    const form = container.querySelector("form")!
+    expect(form.getAttribute("aria-busy")).toBe("false")
+    // Entri default 0/0 seimbang -> submit lolos guard isBalanced.
+    // act async: flush startTransition pending tanpa tebak jumlah macrotask.
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
     })
+    expect(form.getAttribute("aria-busy")).toBe("true")
+    await act(async () => { resolveCreate({ success: true }) })
+    expect(form.getAttribute("aria-busy")).toBe("false")
+    unmount(root, container)
     expect(createJournal).toHaveBeenCalledTimes(1)
     expect(updateJournal).not.toHaveBeenCalled()
   })
