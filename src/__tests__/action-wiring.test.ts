@@ -120,6 +120,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-012 inti backend; tombol lepas reservasi menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reserveStockForWorkOrder":
     "F-2026-10-21-012 inti backend; tombol reservasi ulang menyusul (frontend)",
+  // F-2026-10-22-072-S inti (t_f1358a33): aksi catat-lepas registri
+  // InstalledPart backend dulu; form catat-lepas di kartu part terpasang
+  // menyusul (frontend Fira; buang entri ini saat UI memanggilnya).
+  "src/actions/warranty.actions.ts::recordInstalledPartRemovalAction":
+    "F-2026-10-22-072-S inti backend; form catat-lepas part terpasang menyusul (frontend)",
   // F-2026-10-21-027 backend dulu (PR #360): 10 aksi komponen gaji sudah
   // dirujuk UI PR #374 (entri bekunya dibuang); tersisa getPayrollComponentLines.
   // Buang entri ini saat UI memanggilnya.

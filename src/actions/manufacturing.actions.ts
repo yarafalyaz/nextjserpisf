@@ -28,6 +28,7 @@ import {
 } from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.service";
+import { createInstalledPartsForWorkOrder } from "@/lib/services/installed-part.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
 import {
@@ -1683,6 +1684,12 @@ export async function completeWorkOrder(workOrderId: number) {
       // atas). Satu transaksi dengan klaim status WO: coverage gagal dibuat
       // = completion rollback. Tanpa jurnal/provisi (tahap 3 ditahan).
       await createWarrantyCoveragesForWorkOrder(workOrderId, new Date(), tx);
+
+      // F-2026-10-22-072-S: registri part terpasang lahir di tx yang sama
+      // untuk SEMUA baris issue (bukan hanya bergaransi), menaut coverage
+      // yang baru lahir di atas. Tanpa kendaraan: nol baris (BR-IP-07),
+      // WO tetap completed — hasil skipped tidak menggagalkan klaim ini.
+      await createInstalledPartsForWorkOrder(workOrderId, new Date(), tx);
 
       // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
       // the atomic claim above so only the winning request reaches here).

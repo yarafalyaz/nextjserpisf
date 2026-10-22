@@ -21,6 +21,7 @@ import {
   onTransferReceived as onInventoryTransferReceived,
 } from "@/lib/hooks/inventory-transfer.hook";
 import { onMaterialIssueCompleted as onMaterialIssueStock, resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
+import { createInstalledPartsForMaterialIssue } from "@/lib/services/installed-part.service";
 import { validateScrapInput } from "@/lib/services/scrap-classification";
 import { generateDocumentNumber } from "@/lib/utils/document-number";
 import { statusLabel } from "@/lib/utils/status-labels";
@@ -807,6 +808,11 @@ export async function completeMaterialIssue(issueId: number) {
       await prisma.$transaction(async (tx) => {
         // Hook creates Stock Moves OUT per item + Accounting journal
         await onMaterialIssueStock(issueId, Number(user.id), tx);
+        // F-2026-10-22-072-S (Q-IP-1): MI proyek tanpa WO melahirkan
+        // registri part di tx yang sama bila proyek ber-kendaraan; MI
+        // taut WO dilewati service (lahir saat WO selesai), MI bebas
+        // tidak ditebak kendaraannya.
+        await createInstalledPartsForMaterialIssue(issueId, tx);
       });
     } catch (e) {
       // Complete failed after the claim flipped draft -> processing. The hook
