@@ -168,6 +168,7 @@ export default async function CustomerVehicleDetailPage({
       {canViewWarranty && (
         <VehicleWarrantyCard
           vehicleId={cv.id}
+          vehicleSlug={cv.slug}
           canCreateClaim={canCreateWarrantyClaim}
           coverages={warrantyCoverages.map((c) => ({
             id: c.id,
