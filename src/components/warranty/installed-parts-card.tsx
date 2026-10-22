@@ -1,9 +1,14 @@
+"use client"
+
 import Link from "next/link"
+import { useState } from "react"
 
 import { formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
+import { Button } from "@/components/ui/button"
 import { entityHref } from "@/lib/utils/entity-url"
 import type { InstalledPartRegistryRow } from "@/lib/reports/installed-parts"
+import { InstalledPartRemovalForm } from "./installed-part-removal-form"
 
 /**
  * Kartu "Part terpasang" di detail CustomerVehicle (F-2026-10-22-072-S).
@@ -16,9 +21,20 @@ import type { InstalledPartRegistryRow } from "@/lib/reports/installed-parts"
  * Serial kosong tidak pernah dirender sebagai nomor serial; baris
  * tanpa coverage menampilkan "Tanpa cakupan garansi".
  */
-export function InstalledPartsCard({ rows }: { rows: InstalledPartRegistryRow[] }) {
+export function InstalledPartsCard({
+  rows,
+  canRecordRemoval = false,
+}: {
+  rows: InstalledPartRegistryRow[]
+  canRecordRemoval?: boolean
+}) {
   const installed = rows.filter((r) => r.status !== "DILEPAS")
   const history = rows.filter((r) => r.status === "DILEPAS")
+  const replacementOptions = installed.map((r) => ({
+    id: r.id,
+    itemName: r.itemName,
+    serialNumber: r.serialNumber,
+  }))
 
   return (
     <section
@@ -38,7 +54,12 @@ export function InstalledPartsCard({ rows }: { rows: InstalledPartRegistryRow[] 
             {installed.length > 0 && (
               <div className="flex flex-col divide-y divide-default">
                 {installed.map((row) => (
-                  <InstalledPartEntry key={row.id} row={row} />
+                  <InstalledPartEntry
+                    key={row.id}
+                    row={row}
+                    canRecordRemoval={canRecordRemoval}
+                    replacementOptions={replacementOptions.filter((o) => o.id !== row.id)}
+                  />
                 ))}
               </div>
             )}
@@ -61,7 +82,16 @@ export function InstalledPartsCard({ rows }: { rows: InstalledPartRegistryRow[] 
   )
 }
 
-function InstalledPartEntry({ row }: { row: InstalledPartRegistryRow }) {
+function InstalledPartEntry({
+  row,
+  canRecordRemoval = false,
+  replacementOptions = [],
+}: {
+  row: InstalledPartRegistryRow
+  canRecordRemoval?: boolean
+  replacementOptions?: { id: number; itemName: string; serialNumber: string | null }[]
+}) {
+  const [removalOpen, setRemovalOpen] = useState(false)
   const serial = row.serialNumber?.trim() ? row.serialNumber : null
   return (
     <article aria-label={`Part terpasang ${row.itemName}`} className="py-4">
@@ -127,6 +157,27 @@ function InstalledPartEntry({ row }: { row: InstalledPartRegistryRow }) {
           </div>
         )}
       </dl>
+      {canRecordRemoval && row.status !== "DILEPAS" && row.qtyRemaining > 0 && (
+        removalOpen ? (
+          <InstalledPartRemovalForm
+            installedPartId={row.id}
+            qtyRemaining={row.qtyRemaining}
+            replacementOptions={replacementOptions}
+            onDone={() => setRemovalOpen(false)}
+          />
+        ) : (
+          <div className="mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              aria-label={`Catat lepas ${row.itemName}`}
+              onClick={() => setRemovalOpen(true)}
+            >
+              Catat Lepas
+            </Button>
+          </div>
+        )
+      )}
     </article>
   )
 }

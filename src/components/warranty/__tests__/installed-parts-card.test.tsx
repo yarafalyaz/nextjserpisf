@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
+
+vi.mock("@/actions/warranty.actions", () => ({
+  recordInstalledPartRemovalAction: vi.fn(),
+}))
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+}))
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
@@ -107,5 +114,29 @@ describe("InstalledPartsCard — status verbatim server, riwayat terpisah, koson
     expect(container.textContent).not.toContain("Riwayat Dilepas / Diganti")
     expect(container.querySelector("article")).toBeNull()
     act(() => root.unmount())
+  })
+
+  it("tanpa izin catat-lepas: tombol Catat Lepas tidak tampil; DILEPAS tidak dapat dicatat lagi", () => {
+    const { container, root } = mount(
+      <InstalledPartsCard
+        canRecordRemoval
+        rows={[
+          row(),
+          row({
+            id: 5, itemId: 11, itemName: "Filter Oli", serialNumber: null,
+            qty: 1, qtyRemoved: 1, qtyRemaining: 0,
+            status: "DILEPAS", statusLabel: "DILEPAS", warrantyExpiresAt: null,
+            removedAt: new Date("2026-03-01T00:00:00Z"), removalReason: "Diganti baru",
+          }),
+        ]}
+      />,
+    )
+    expect(container.querySelector('button[aria-label="Catat lepas Aki 12V 100Ah"]')).not.toBeNull()
+    expect(container.querySelector('button[aria-label="Catat lepas Filter Oli"]')).toBeNull()
+    act(() => root.unmount())
+
+    const denied = mount(<InstalledPartsCard rows={[row()]} />)
+    expect(denied.container.querySelector('button[aria-label="Catat lepas Aki 12V 100Ah"]')).toBeNull()
+    act(() => denied.root.unmount())
   })
 })
