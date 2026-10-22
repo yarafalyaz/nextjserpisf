@@ -30,6 +30,7 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 
 ## KLAIM (job | file | jam WIB)
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-2026-10-22-066-V scrap normal vs abnormal, kartu t_c4c5c0b3) | 2026-10-22 11:12 WIB — selesai, klaim dilepas
+BOT 5 | docs/erp-research-backlog.md (spec F-2026-10-22-064-S z prasyarat F-2026-10-21-025) + docs/autonomous-board.md | 2026-10-22 10:47 WIB — klaim aktif
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-2026-10-22-046-V gerbang izin faktur/bupot) | 2026-10-22 03:01 WIB — selesai, klaim dilepas
 BOT 4 (accounting-finance-tax) | PR #423 branch hermes/bot4-f021-fiskal-provisi rebase ke main 6ae8b2da (t_fa613948, worktree /private/tmp/bot4-423) | 2026-10-22 05:2x WIB — klaim aktif
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-016/F-017/F-021) | 22:18 WIB — selesai, klaim dilepas
