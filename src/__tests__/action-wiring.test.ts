@@ -151,6 +151,17 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // di kartu frontend t_e80e8541 (buang entri ini saat UI memanggilnya).
   "src/actions/hrm.actions.ts::getEmployeeLifecycleAttention":
     "F-2026-10-22-085-S inti backend; daftar perhatian siklus hidup menyusul (frontend t_e80e8541)",
+  // F-2026-10-22-090-S inti (t_288b340b): 4 aksi stasiun kerja backend dulu;
+  // master Stasiun Kerja + papan Beban Rencana menyusul di kartu frontend
+  // t_b9d26fab (buang entri ini saat UI memanggilnya).
+  "src/actions/work-center.actions.ts::createWorkCenter":
+    "F-2026-10-22-090-S inti backend; master stasiun kerja menyusul (frontend t_b9d26fab)",
+  "src/actions/work-center.actions.ts::updateWorkCenter":
+    "F-2026-10-22-090-S inti backend; master stasiun kerja menyusul (frontend t_b9d26fab)",
+  "src/actions/work-center.actions.ts::deactivateWorkCenter":
+    "F-2026-10-22-090-S inti backend; master stasiun kerja menyusul (frontend t_b9d26fab)",
+  "src/actions/work-center.actions.ts::setWorkOrderOperationWorkCenter":
+    "F-2026-10-22-090-S inti backend; pilihan stasiun tahap WO menyusul (frontend t_b9d26fab)",
   // F-2026-10-21-030: ke-9 aksi RAB sudah ter-wire UI ProjectBudgetEditor
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3: pemanggil jurnal E2/E3 kini dirujuk UI
