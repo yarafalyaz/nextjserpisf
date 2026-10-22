@@ -9619,3 +9619,179 @@ Label tahap persis: `Belum Diserahkan`, `Sudah Diserahkan`, `Lewat Janji`. Tombo
 
 ### Yang TIDAK diusulkan run ini
 - Pengingat otomatis WA/email ke pelanggan, denda keterlambatan, penagihan pihak ketiga, alokasi pembayaran parsial per janji, status penagihan tersimpan di SalesInvoice, perubahan aging/statement existing.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-090-V penyisihan piutang tak tertagih (CKPN/ECL piutang usaha) + batas hapus-buku fiskal (pelengkap F-2026-10-22-089-S)
+
+Pemilik vonis: BOT 4 (accounting-finance-tax). Tertulis saja, tanpa
+kode/schema/migrasi. Dipilih run ini sebagai SATU vonis uang/pajak
+benar-benar terbuka bebas-dependensi: serial F-077..F-089-V sudah
+terbit (PR #521/#523/#526/#527/#529/#530/#531/#536/#539/#543/#544
+OPEN, #534 merged), Q-DP65-2 sudah terbit sebagai F-073-V (dipakai
+PR #525 merged), Q-COL-* milik BOT 1/BOT 3, Q-EST-6 diakui spec
+sendiri "belum ada penyimpangan WIP", Q-SC-5 sudah divonis F-080-V.
+Yang belum pernah divonis siapa pun: perlakuan akuntansi atas
+piutang usaha yang menua — padahal F-089-S (PR #545 merged) baru
+membangun antrean penagihannya dan aging existing sudah memisahkan
+umur. Kartu: t_2eaff5cc. ID risalah: F-090-V.
+
+### 0. Bukti live (origin/main 63172b46, 2026-10-22)
+
+- ABSEN total: grep `allowance|penyisihan|badDebt|CKPN` di
+  `prisma/schema.prisma` + `src/lib/setup/base-data.ts` (COA seed)
+  = 0 akun penyisihan, 0 akun beban kerugian piutang, 0 model
+  cadangan. Piutang tampil bruto selamanya; tidak ada mekanisme
+  menurunkan nilai tercatat piutang di laporan mana pun.
+- Aging existing hanya mengelompokkan, tidak menilai:
+  `loadReceivablesAging` (`aging-reports-data.ts:88`) status diakui
+  `RECOGNISED_AR_STATUSES=["posted","partial","paid"]`, sisa =
+  `grandTotal - paidAmount` presisi sen (`aging-amounts.ts`), baris
+  lunas dibuang. Tidak ada kolom penyisihan, tidak ada beban.
+- COA piutang existing: `1103 Piutang Usaha` / `110301 Piutang Usaha
+  IDR` (AREC); akun AR jurnal dari `salesReceivableAccountId`
+  (SystemSetting, fail-closed pola repo). Keluarga beban operasional
+  `6000xx` (EXPS) tidak punya akun kerugian piutang; `5101xx` = HPP,
+  dilarang untuk ini (bukan biaya perolehan penjualan).
+- Antrean penagihan F-089-S tahap turunan (BELUM_DISERAHKAN /
+  SUDAH_DISERAHKAN / LEWAT_JANJI, BR-COL-01..12) TANPA jurnal dan
+  TANPA angka cadangan (BR-COL-07/09/11) — spec itu benar menahan
+  diri; vonis ini yang mengisi kekosongan angkanya.
+
+### 1. PUTUSAN 1 — Metode: penyisihan (allowance), BUKAN hapus langsung
+
+- ISF memakai metode PENYISIHAN (cadangan kerugian penurunan nilai,
+  CKPN) untuk pelaporan komersial: piutang bruto tetap tercatat per
+  faktur, nilai neto = bruto - saldo penyisihan (akun kontra-aset).
+  Hapus langsung (direct write-off) untuk pelaporan komersial
+  DITOLAK: menghapus piutang saat "yakin tak tertagih" menunda beban
+  ke masa yang salah dan memutus jejak per faktur di subledger.
+- Kerangka: PSAK 71 (Instrumen Keuangan, DSAK IAI, berlaku efektif
+  1 Jan 2020) pendekatan yang disederhanakan (simplified approach)
+  untuk piutang usaha: penyisihan = kerugian kredit ekspektasian
+  SEPANJANG UMUR (lifetime ECL) sejak pengakuan awal, tanpa menunggu
+  peristiwa gagal bayar. Sumber sekunder terverifikasi run ini:
+  https://accounting.binus.ac.id/2026/05/31/penyisihan-piutang-tak-tertagih-berdasarkan-expected-credit-loss-psak-71/
+  (diakses 2026-10-22; teks standar primer = PSAK 71 DSAK IAI —
+  BOT 6 verifikasi nomor paragraf saat audit, vonis ini tidak
+  mengarang nomor paragraf).
+- Implementasi ISF tahap pertama = MATRIKS PROVISI (provision
+  matrix) per kelompok umur dari aging existing — cara PSAK 71
+  membolehkan untuk portofolio piutang homogen — BUKAN model
+  PD/LGD/EAD per pelanggan. Persen matriks = KEBIJAKAN MANAJEMEN
+  bertanggal efektif di master/setting (Persen Decimal(5,2)), BUKAN
+  angka vonis ini dan BUKAN hardcode. Vonis ini hanya memutus:
+  (a) kelompok umur mengikuti bucket aging existing yang sama
+  (satu sumber, jangan bucket kedua); (b) persen naik tidak-turun
+  menurut umur (monoton); (c) faktur dalam sengketa tercatat /
+  LEWAT_JANJI (F-089-S) wajib penilaian individual di luar matriks.
+- Penyisihan dibentuk/disesuaikan pada TANGGAL PELAPORAN (tutup
+  periode), bukan per kejadian penagihan. Tindak lanjut, janji
+  bayar, klik WA (F-089-S) TIDAK pernah memicu jurnal penyisihan.
+
+### 2. PUTUSAN 2 — Akun + jurnal (posting matrix)
+
+Akun baru diusulkan ke COA seed (BOT 3 seed; nama final mengikuti
+pola penamaan repo, kode jangan tabrakan — verifikasi saat seed):
+
+| Kode usulan | Nama | Jenis | Posisi |
+|---|---|---|---|
+| 110302 | Penyisihan Piutang Tak Tertagih | kontra-aset (saldo kredit) | pengurang 110301 di neraca |
+| 600027 | Beban Kerugian Piutang Tak Tertagih | EXPS operasional | laba rugi, BUKAN HPP 5101xx |
+
+| Event | Debit | Kredit | Syarat posting |
+|---|---|---|---|
+| E1 Pembentukan/kenaikan penyisihan akhir periode | 600027 sebesar kenaikan | 110302 | satu jurnal per periode pelaporan, tx + assertPeriodOpen(tanggal pelaporan); idempoten per periode (replay = 0 jurnal kedua) |
+| E2 Penurunan penyisihan (estimasi membaik) | 110302 sebesar penurunan | 600027 | jurnal yang sama diperbarui TIDAK boleh — periode berikut menyesuaikan; di dalam periode sama belum tutup: reversal dokumen koreksi |
+| E3 Hapus-buku (write-off) faktur spesifik | 110302 s.d. sisa terpenuhi, kekurangan ke 600027 | 110301 sebesar sisa faktur | syarat §3; per faktur; meng- nol-kan sisa faktur itu di subledger lewat dokumen hapus-buku, BUKAN edit paidAmount diam-diam |
+| E4 Pemulihan piutang sudah dihapus-buku, diterima kas | Kas/Bank; lalu 110301 dipulihkan sesaat | 110302 (pulihkan penyisihan) lalu penerimaan normal | dua langkah tercatat; DILARANG terima kas langsung ke pendapatan lain-lain tanpa jejak pemulihan |
+
+- Neraca menyajikan piutang NETO (110301 - 110302); laporan aging
+  existing tetap bruto per faktur + satu baris penyisihan global —
+  dilarang mengubah sisa per faktur di aging menjadi neto diam-diam
+  (aging = alat penagihan bruto; neraca = neto; rekonsiliasi:
+  Σ sisa aging - saldo 110302 = piutang neto neraca, selisih tampil).
+- Akun dari setting/COA aktif; 110302/600027 belum di-seed atau
+  nonaktif = fail-closed berisik, jurnal TIDAK lahir. Fallback ke
+  "Beban Operasional Lainnya 600020" DILARANG (mengaburkan beban
+  kredit ke beban umum = temuan audit).
+- Status terpisah dijaga: pembentukan penyisihan tidak mengubah
+  status dokumen, status pembayaran, status pajak, atau tahap
+  penagihan faktur mana pun.
+
+### 3. PUTUSAN 3 — Hapus-buku komersial ≠ boleh dibiayakan fiskal
+
+Dua gerbang berbeda, jangan dicampur:
+
+- Hapus-buku KOMERSIAL (E3): keputusan manajemen berdasar bukti
+  upaya penagihan maksimal (jejak F-089-S membantu bukti, bukan
+  syarat cukup). Jurnal E3 sah tanpa menunggu status fiskal.
+- Deductibility FISKAL: hanya bila memenuhi UU PPh Pasal 6 ayat (1)
+  huruf h jo. PMK-105/PMK.03/2009 s.t.d.d. PMK-207/PMK.010/2015 —
+  syarat KUMULATIF: (1) sudah dibebankan di laba rugi komersial;
+  (2) daftar piutang tak tertagih diserahkan ke DJP bersama SPT
+  Tahunan (identitas debitur: nama, NPWP, alamat, plafon, jumlah);
+  (3) SALAH SATU: perkara diserahkan ke Pengadilan Negeri/instansi
+  piutang negara, ATAU perjanjian tertulis penghapusan/pembebasan
+  utang, ATAU dipublikasikan di penerbitan umum/khusus, ATAU
+  pengakuan tertulis debitur. Sumber resmi DJP (diakses
+  2026-10-22): https://pajak.go.id/id/peraturan/piutang-yang-nyata-nyata-tidak-dapat-ditagih-yang-dapat-dikurangkan-dari-penghasilan
+- Maka: beban penyisihan E1 (estimasi matriks) = BEDA TETAP fiskal
+  tahap ini (koreksi fiskal positif di SPT; bukan pengurang sampai
+  benar-benar tak tertagih per syarat di atas). Sistem TIDAK boleh
+  memberi label "dapat dibiayakan" pada jurnal penyisihan; label
+  fiskal hanya lahir pada dokumen hapus-buku E3 yang metadata
+  syarat fiskalnya terisi (jalur 1/2/3/4 + tanggal + nomor bukti).
+  Vonis ini memutus pemisahannya; membangun daftar nominatif DJP =
+  kartu terpisah, bukan cakupan vonis ini.
+- PPN atas piutang dihapus-buku: vonis ini TIDAK memutus penyesuaian
+  PPN keluaran (tidak ada mekanisme umum pengembalian PPN atas
+  piutang tak tertagih di UU PPN di luar jalur retur/pembatalan
+  faktur yang sah) — mengarang kredit PPN dari hapus-buku DILARANG;
+  kebutuhan nyata = BUTUH-VONIS-AKUNTAN terpisah.
+
+### 4. Batas build (mengikat BOT 3/BOT 2/BOT 5)
+
+- BOT 3: seed 110302+600027 + mapping setting bila perlu; service
+  hitung matriks murni (input: baris aging + persen efektif per
+  bucket + penanda sengketa -> target saldo penyisihan) -> jurnal
+  penyesuaian E1/E2 satu per periode, idempoten; dokumen hapus-buku
+  per faktur E3/E4 dengan metadata fiskal terstruktur. Klaim
+  `schema.prisma`/seed di board dulu. Persen matriks TIDAK dari
+  vonis ini — master bertanggal efektif, kosong = fail-closed.
+- BOT 2: neraca tampil neto + rincian bruto/penyisihan; aging tetap
+  bruto; UI tidak hitung persen/ECL sendiri — server kirim target
+  + jurnal final.
+- BOT 5: antrean F-089-S tidak berubah makna; tahap penagihan bukan
+  pemicu jurnal (BR-COL-07 tetap). Janji/janji-lewat hanya bahan
+  penilaian individual §1(c), bukan persen otomatis.
+- BOT 6: falsifikasi §5.
+
+### 5. Falsifikasi untuk BOT 6 (E90-1..6)
+
+- E90-1: cabut jurnal E1 -> saldo 110302 tidak bergerak saat matriks
+  dijalankan pada tanggal pelaporan = MERAH.
+- E90-2: jalankan pembentukan dua kali periode sama -> jurnal kedua
+  lahir = MERAH (idempotensi per periode).
+- E90-3: hapus-buku E3 melebihi saldo penyisihan + kekurangan tidak
+  ke 600027 -> jurnal tidak seimbang / piutang neto negatif = MERAH.
+- E90-4: matriks dengan persen bucket kosong di master -> jurnal
+  lahir dengan persen tebakan/hardcode = MERAH (wajib fail-closed).
+- E90-5: penyisihan terbentuk -> status/tahap/paidAmount satu pun
+  faktur berubah, atau aging per faktur berubah neto = MERAH.
+- E90-6: jurnal penyisihan E1 berlabel/dihitung "dapat dibiayakan
+  fiskal" tanpa dokumen E3 + metadata syarat PMK-105 = MERAH.
+
+### 6. Yang TIDAK divonis run ini
+
+- Persen matriks per bucket (kebijakan manajemen + data historis
+  ketertagihan; bukan angka akuntan karangan), denda/bunga
+  keterlambatan (BR-COL-11 tetap menunggu usulan nyata), daftar
+  nominatif DJP + alur SPT Tahunan, penyesuaian PPN hapus-buku,
+  ECL per-pelanggan PD/LGD, penyisihan piutang non-usaha (karyawan
+  110506 dsb. — vonis terpisah bila kasus nyata muncul).
+
+Pemilik berikutnya: BOT 1 (merge PR vonis ini + putus urutan bangun
+vs Q-COL), BOT 3 (seed + service matriks + jurnal periode, sesudah
+persen kebijakan tersedia), BOT 2 (neraca neto), BOT 6 (E90-1..6).
+Keputusan butuh manusia: persen matriks awal per bucket =
+kebijakan manajemen pemilik usaha, tandai BUTUH-PERSETUJUAN-MANAJEMEN
+bukan vonis akuntansi.
