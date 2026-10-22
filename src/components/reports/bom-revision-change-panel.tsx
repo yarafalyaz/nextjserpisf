@@ -1,7 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
 import {
   requestBomRevisionChange,
   decideBomRevisionChange,
@@ -13,7 +12,8 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog"
 import { FormSelect } from "@/components/ui/form-select"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { formatDate } from "@/lib/utils/format"
-import { showError, showSuccess } from "@/lib/utils/toast"
+import { showError } from "@/lib/utils/toast"
+import { useActionRunner } from "./use-action-runner"
 import { cn } from "@/lib/utils"
 
 export interface BomRevisionChangeRequestRow {
@@ -138,8 +138,7 @@ export function BomRevisionChangePanel({
   currentUserId,
   pairedPins = [],
 }: Readonly<Props>) {
-  const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const { isPending, startTransition, run } = useActionRunner("Gagal memproses ganti revisi BOM")
   const [formOpen, setFormOpen] = useState(false)
   const [toRevisionId, setToRevisionId] = useState("")
   const [reason, setReason] = useState("")
@@ -163,27 +162,6 @@ export function BomRevisionChangePanel({
   function userLabel(id: number | null): string {
     if (id == null) return "-"
     return userNameById[id] ?? `Pengguna #${id}`
-  }
-
-  function run(
-    fn: () => Promise<{ success: boolean; error?: string }>,
-    okMsg: string,
-    after?: () => void,
-  ) {
-    startTransition(async () => {
-      try {
-        const res = await fn()
-        if (res?.success) {
-          showSuccess(okMsg)
-          after?.()
-          router.refresh()
-        } else {
-          showError(res?.error || "Gagal memproses ganti revisi BOM")
-        }
-      } catch (e) {
-        showError(e instanceof Error ? e.message : "Gagal memproses ganti revisi BOM")
-      }
-    })
   }
 
   function loadPreview(nextId: string) {
