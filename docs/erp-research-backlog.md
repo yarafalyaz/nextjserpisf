@@ -9796,3 +9796,67 @@ Catat Tindak Lanjut -> BOT 6 AC-COL-1..12.
 
 ### Yang TIDAK diusulkan run ini
 - Pengingat otomatis WA/email ke pelanggan, denda keterlambatan, penagihan pihak ketiga, alokasi pembayaran parsial per janji, status penagihan tersimpan di SalesInvoice, perubahan aging/statement existing.
+
+---
+
+## PUTUSAN BOT 1 2026-10-22 — F-2026-10-22-069-S (Q-SUB69-1..4 — mengikat BOT 3/BOT 2/BOT 6; Q-SUB69-5 vonis BOT 4 PR #518)
+
+Sumber: spec BOT 5 F-2026-10-22-069-S (PR #510 head 8273c8fa) §2/§4/§7.
+Putusan ditulis di main karena PR #510 masih OPEN CONFLICTING; putusan ini
+tidak bergantung mergespec/vonis terpisah. Verifikasi kode origin/main
+43eace3d run ini: `reviseWorkOrderItems`
+(src/actions/inventory.actions.ts:1121) menjaga `edit_work_orders`,
+menolak baris ter-issue, dan di dalam transaksinya sudah memanggil
+`releaseReservationsForReplacedItemsTx` (F-2026-10-21-012 inti /
+F-2026-10-22-057-S) untuk baris `replaced`; baris baru dari `newItems`
+lahir `pending` tanpa reservasi baru. StockReservation
+(prisma/schema.prisma:2777) tidak punya lahir-otomatis di luar start WO.
+
+- Q-SUB69-1 DIPUTUS: permission EXISTING cukup tahap 1, TANPA key baru.
+  Kelola relasi substitusi di master = `edit_products`; lihat master =
+  `view_products`; saran di WO = `view_work_orders`; terapkan =
+  `edit_work_orders` (bukan `create_material_issues` — itu hanya issue
+  sesudahnya). `manage_item_substitutes` DITOLAK tahap ini (YAGNI:
+  katalog + seed + migrasi izin untuk satu aksi master yang sudah
+  dicakup `edit_products`; buka lagi hanya bila pemilik proses menunjuk
+  peran yang boleh edit produk tapi tidak boleh kelola substitusi).
+- Q-SUB69-2 DIPUTUS: fitment `incompatible` = TOLAK KERAS di server
+  khusus substitusi (BR-SUB69-05 SAH). Alasan konteks-aksi: substitusi
+  adalah pilihan aktif operator sesudah status part terbaca — tidak ada
+  alasan "dokumen terlanjur terbit" yang membenarkan blokir-lembut
+  F-2026-10-22-063-S (peringatan snapshot untuk baris yang sudah ada).
+  Tolak berlaku di saran->terapkan dan divalidasi ulang saat simpan;
+  pesan bernama dari server, bukan hitungan UI. `unknown` (termasuk WO
+  tanpa kendaraan) lolos dengan peringatan tampil + wajib tercatat di
+  ActivityLog penerapan. Fitment `compatible` lolos biasa.
+- Q-SUB69-3 DIPUTUS: reservasi mengikuti perilaku `reviseWorkOrderItems`
+  EXISTING persis — baris lama `replaced` melepaskan sisa reservasi
+  aktifnya (qtyReserved - qtyConsumed) lewat
+  `releaseReservationsForReplacedItemsTx` dalam transaksi yang sama;
+  baris pengganti TIDAK otomatis tereservasi (nol baris StockReservation
+  baru dari langkah terapkan, BR-SUB69-06). Pengganti mengikuti
+  kebutuhan material biasa sampai MaterialIssue; stok efektif dibaca
+  dari builder existing (sudah mengurangi committed WO lain). Membuat
+  reservasi otomatis DITOLAK tahap ini: reservasi lahir hanya di start
+  WO (F-012), reservasi susulan = perubahan perilaku terpisah yang
+  perlu spec sendiri.
+- Q-SUB69-4 DIPUTUS: permukaan master = TAB di detail barang EXISTING
+  (pola Accurate "Substitusi dengan" + pola ERPNext Item Alternative
+  per Item), TANPA halaman daftar substitusi tersendiri tahap 1. Daftar
+  pengganti aktif/nonaktif per item di tab itu; halaman daftar lintas-
+  item DITUNDA sampai ada keluhan operasi yang ditunjuk.
+
+BR terpengaruh: BR-SUB69-05 SAH (tolak keras incompatible);
+BR-SUB69-06 DITEGASKAN (baris lama dilepas reservasi existing, baris
+pengganti tidak direservasi otomatis). Selisih harga/biaya tetap
+wilayah vonis BOT 4 Q-SUB69-5 (PR #518): HPP pengganti = biaya item
+pengganti sendiri, nol jurnal selisih di substitusi, selisih jual
+hanya lewat change order F-2026-10-20-103 — tidak menahan inti.
+
+Pemilik berikutnya: BOT 3 inti t_73bdb74a JALAN sesudah putusan ini
+merged (klaim prisma/schema.prisma di board dulu; AC-SUB69-1..4 +
+falsifikasi BOT 6 AC-SUB69-8..10). BOT 2 t_bfaf2287 sesudah kontrak BOT
+3 (tab master per Q-SUB69-4 + penanda/aksi kartu part WO, kata server
+verbatim). BOT 5: PR #510 + rebase tetap milikmu (kartu t_68193408);
+BOT 4: PR #518 tetap milikmu — putusan ini tanpa angka jurnal baru,
+tidak mengubah vonismu.
