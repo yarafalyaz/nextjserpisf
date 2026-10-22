@@ -19,6 +19,7 @@ import { quotationHasRealSettlement, salesOrderHasRealSettlement, hasRealSettlem
 import { computeDifferenceInvoiceCandidate } from "@/lib/reports/job-billing-difference"
 import { computeProgressInvoiceCandidate, computeRevisionDownCreditCandidate } from "@/lib/reports/job-billing-progress"
 import { reverseSalesInvoicePostingTx } from "@/lib/services/sales-invoice-posting.service"
+import { stampQuotationFitmentSnapshot } from "@/lib/services/vehicle-fitment.service"
 import { assertInvoiceAllowedForWorkOrderBridges } from "@/lib/services/warranty-journal.service"
 import { generateDocumentNumber } from "@/lib/utils/document-number"
 import { revalidatePath } from "next/cache"
@@ -222,6 +223,9 @@ export async function createQuotation(formData: FormData) {
         },
       })
     }
+
+    // F-2026-10-22-063-S: snapshot PERINGATAN fitment baris (tak memblokir).
+    await stampQuotationFitmentSnapshot(tx, q.id)
 
     return q
   })
@@ -609,6 +613,9 @@ export async function updateQuotation(quotationId: number, formData: FormData) {
         sections: quotationSectionsCreate(data, computeQuotationLine),
       },
     })
+
+    // F-2026-10-22-063-S: evaluasi ulang snapshot fitment tiap simpan.
+    await stampQuotationFitmentSnapshot(tx, quotationId)
   })
 
   // Re-sync linked SO/Invoice items
