@@ -88,6 +88,7 @@ vi.mock("@/lib/services/stock-journal.service", () => ({
     onProductionOrderMaterialIssue: (...args: any[]) => mocks.productionIssueJournalMock(...args),
     onProductionOrderCompleted: (...args: any[]) => mocks.productionCompletionJournalMock(...args),
     onProductionOrderCostRoundingVariance: (...args: any[]) => mocks.productionRoundingJournalMock(...args),
+    onProductionOrderAbnormalScrap: vi.fn(async () => undefined),
   },
 }))
 vi.mock("@/lib/services/period-lock.service", () => ({
@@ -323,6 +324,62 @@ describe("Product Actions", () => {
       expect(res?.success).toBe(false)
       expect(res?.error).toMatch(/Qty terlalu besar/i)
       expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+
+    it("createProduct membaca qty format Indonesia penuh (1,5 dan 1.000)", async () => {
+      mocks.prismaMock.item.findMany.mockResolvedValue([{ id: 1 }, { id: 2 }])
+      const fd = fdMap({ name: "Locale Qty" })
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "1,5")
+      fd.append("materialItemId", "2")
+      fd.append("materialQty", "1.000")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(true)
+      expect(mocks.prismaMock.product.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            materials: {
+              create: [
+                { itemId: 1, qty: 1.5 },
+                { itemId: 2, qty: 1000 },
+              ],
+            },
+          }),
+        }),
+      )
+    })
+
+    it("createProduct menolak qty tak terbaca tanpa menulis", async () => {
+      const fd = fdMap({ name: "Bad Locale Qty" })
+      fd.append("materialItemId", "1")
+      fd.append("materialQty", "abc")
+      const res = await actions.createProduct(fd)
+      expect(res?.success).toBe(false)
+      expect(mocks.prismaMock.product.create).not.toHaveBeenCalled()
+    })
+
+    it("updateBomRevision membaca qty revisi format Indonesia penuh", async () => {
+      mocks.prismaMock.bomRevision.findUnique.mockResolvedValue({
+        id: 9,
+        status: "draft",
+        productId: 3,
+      })
+      const fd = fdMap({})
+      fd.append("revisionItemId", "1")
+      fd.append("revisionQty", "2,5")
+      const res = await actions.updateBomRevision(9, fd)
+      expect(res?.success).toBe(true)
+      expect(mocks.prismaMock.bomRevision.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 9 },
+          data: expect.objectContaining({
+            materials: {
+              deleteMany: {},
+              create: [{ itemId: 1, qty: 2.5, scrapPercent: null }],
+            },
+          }),
+        }),
+      )
     })
   })
 
@@ -800,8 +857,8 @@ describe("Production Order Actions", () => {
         totalStandardCost: 5000,
         materials: {
           create: [
-            { itemId: 1, qty: 10, standardCost: 100 },
-            { itemId: 2, qty: 15, standardCost: 200 },
+            { itemId: 1, qty: 10, standardCost: 100, scrapPercentSnapshot: null },
+            { itemId: 2, qty: 15, standardCost: 200, scrapPercentSnapshot: null },
           ]
         }
       })
@@ -821,7 +878,7 @@ describe("Production Order Actions", () => {
     expect(res?.success).toBe(true)
     const arg = mocks.prismaMock.productionOrder.create.mock.calls[0][0]
     expect(arg.data.bomRevisionId).toBe(77)
-    expect(arg.data.materials.create).toEqual([{ itemId: 9, qty: 8, standardCost: 25 }])
+    expect(arg.data.materials.create).toEqual([{ itemId: 9, qty: 8, standardCost: 25, scrapPercentSnapshot: null }])
     // Working BOM must not be consulted when a released revision exists.
     expect(mocks.prismaMock.productMaterial.findMany).not.toHaveBeenCalled()
   })
@@ -1041,6 +1098,21 @@ describe("Work Order Actions", () => {
     mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
     const res = await actions.completeWorkOrder(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("AC-RIL-1 completeWorkOrder: sisa aktif terlepas → releaseNotice verbatim; tanpa sisa → null", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "in_progress", items: [{ id: 1 }] })
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue({ id: 1, status: "completed" })
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.stockReservation.updateMany.mockResolvedValue({ count: 2 })
+    const withRemainder = await actions.completeWorkOrder(1)
+    expect(withRemainder?.success).toBe(true)
+    expect((withRemainder as { releaseNotice?: string | null }).releaseNotice).toBe(
+      "Selesai — 2 reservasi sisa dilepas",
+    )
+    mocks.prismaMock.stockReservation.updateMany.mockResolvedValue({ count: 0 })
+    const noRemainder = await actions.completeWorkOrder(1)
+    expect((noRemainder as { releaseNotice?: string | null }).releaseNotice).toBeNull()
   })
 
   it("completeWorkOrder fails when status wrong", async () => {
@@ -1405,6 +1477,28 @@ describe("F-2026-10-21-009-V: tutup/reopen job", () => {
     expect(upd.data.status).toBe("closed")
     expect(upd.data.closedReason).toBe("selesai")
     expect(mocks.logActivityMock).toHaveBeenCalledWith("close", "WorkOrder", 1, expect.stringContaining("selesai"))
+  })
+
+  it("AC-RIL-3 closeWorkOrder: no-op sesudah complete → notice null; baris aktif yatim → kata Ditutup + reason persis", async () => {
+    mocks.prismaMock.workOrder.findUniqueOrThrow.mockResolvedValue({ id: 1, documentNo: "WO-001", status: "completed" })
+    mocks.prismaMock.productionOrder.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.materialIssue.findFirst.mockResolvedValue(null)
+    mocks.prismaMock.productionCost = { findFirst: vi.fn().mockResolvedValue(null) }
+    mocks.prismaMock.workOrder.updateMany.mockResolvedValue({ count: 1 })
+    mocks.prismaMock.stockReservation.updateMany.mockResolvedValue({ count: 0 })
+    const noop = await actions.closeWorkOrder(1, "selesai")
+    expect((noop as { releaseNotice?: string | null }).releaseNotice).toBeNull()
+    mocks.prismaMock.stockReservation.updateMany.mockResolvedValue({ count: 1 })
+    const orphan = await actions.closeWorkOrder(1, "selesai")
+    expect((orphan as { releaseNotice?: string | null }).releaseNotice).toBe(
+      "Ditutup — 1 reservasi sisa dilepas",
+    )
+    expect(mocks.prismaMock.stockReservation.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workOrderId: 1, status: "active" },
+        data: expect.objectContaining({ status: "released", releaseReason: "Perintah kerja ditutup" }),
+      }),
+    )
   })
 
   it("closeWorkOrder: tanpa alasan ditolak, tanpa tulis", async () => {

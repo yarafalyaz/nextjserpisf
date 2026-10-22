@@ -25,6 +25,10 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci --ignore-scripts
+      # Preflight install: tolak node_modules/node_modules sampah + pastikan
+      # next-auth/@auth/core/jwt ter-resolve sebelum kerja mahal jalan
+      # (insiden 2026-10-22: symlink sampah lolos, build gagal di tengah).
+      - run: npm run preflight:deps
       # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
       # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate
@@ -43,6 +47,10 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci --ignore-scripts
+      # Preflight install: tolak node_modules/node_modules sampah + pastikan
+      # next-auth/@auth/core/jwt ter-resolve sebelum kerja mahal jalan
+      # (insiden 2026-10-22: symlink sampah lolos, build gagal di tengah).
+      - run: npm run preflight:deps
       # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
       # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate
@@ -83,6 +91,10 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci --ignore-scripts
+      # Preflight install: tolak node_modules/node_modules sampah + pastikan
+      # next-auth/@auth/core/jwt ter-resolve sebelum kerja mahal jalan
+      # (insiden 2026-10-22: symlink sampah lolos, build gagal di tengah).
+      - run: npm run preflight:deps
       # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
       # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate
@@ -139,6 +151,10 @@ jobs:
           node-version: 26
           cache: npm
       - run: npm ci --ignore-scripts
+      # Preflight install: tolak node_modules/node_modules sampah + pastikan
+      # next-auth/@auth/core/jwt ter-resolve sebelum kerja mahal jalan
+      # (insiden 2026-10-22: symlink sampah lolos, build gagal di tengah).
+      - run: npm run preflight:deps
       # S6505: lifecycle script paket = kode tak terpercaya saat install. Prisma
       # client dibuat eksplisit via langkah `prisma generate` sesudah ini.
       - run: ./node_modules/.bin/prisma generate
@@ -201,4 +217,4 @@ jobs:
       - name: Build production image
         run: docker buildx build --load --progress=plain --platform linux/amd64 -t silengkap:ci .
       - name: Smoke test production image
-        run: docker run --rm silengkap:ci sh -c 'test -r /app/server.js; test ! -e /app/node_modules/tailwindcss/index.css; id'
+        run: docker run --rm silengkap:ci sh -c 'test -r /app/server.js && test ! -e /app/node_modules/tailwindcss/index.css && id -u | grep -qx 1001'

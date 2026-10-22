@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { JobBillingCard } from "@/components/reports/job-billing-card";
 import { isQuotationExpired } from "@/lib/utils/quotation-expiry";
+import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold";
+import { QuotationInvoiceThresholdCard } from "@/components/reports/quotation-invoice-threshold-card";
 import { WhatsappButton } from "@/components/reports/whatsapp-button";
 import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note";
 import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data";
@@ -31,6 +33,7 @@ import { loadQuotationApprovalGate } from "@/lib/reports/quotation-approval-gate
 import { QuotationApprovalGateCard } from "@/components/reports/quotation-approval-gate-card";
 import { getQuotationRevisionDelta } from "@/lib/reports/quotation-revision-delta-data";
 import { QuotationRevisionDeltaCard } from "@/components/reports/quotation-revision-delta-card";
+import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
 import {
   DetailTable,
   DetailTableHead,
@@ -329,6 +332,14 @@ export default async function QuotationDetailPage({
 
                 {billingSummary ? <JobBillingCard summary={billingSummary} deltaNilaiCents={revisionDelta?.deltaCents ?? null} /> : null}
 
+                <QuotationInvoiceThresholdCard
+                  info={buildInvoiceThresholdInfo(
+                    quotation.invoiceThresholdPercent == null
+                      ? null
+                      : Number(quotation.invoiceThresholdPercent),
+                  )}
+                />
+
                 <QuotationApprovalGateCard gate={approvalGate} />
 
                 <QuotationRevisionDeltaCard delta={revisionDelta} />
@@ -402,6 +413,16 @@ export default async function QuotationDetailPage({
             label: "Barang",
             content: (
               <>
+                {/* F-063-S: ringkasan snapshot fitment tersimpan server
+                    (bukan evaluasi ulang); 0 incompatible → senyap. */}
+                <FitmentIncompatibleSummary
+                  incompatibleCount={quotation.sections.reduce(
+                    (sum, section) =>
+                      sum +
+                      section.items.filter((i) => i.fitmentResult === "incompatible").length,
+                    0,
+                  )}
+                />
                 {/* Sections & Items */}
                 {quotation.sections.map((section) => (
                   <div
@@ -438,6 +459,10 @@ export default async function QuotationDetailPage({
                                   ) : (
                                     `Barang #${item.itemId}`
                                   )}
+                                  <FitmentBadge
+                                    fitmentResult={item.fitmentResult}
+                                    fitmentRuleId={item.fitmentRuleId}
+                                  />
                                 </DetailTableTd>
                                 <DetailTableTd>
                                   {item.description || "-"}
