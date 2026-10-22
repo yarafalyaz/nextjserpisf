@@ -68,6 +68,15 @@ function normalizeQtyItem(it: QtyItemInput): { itemId: number; qty: number } {
   return { itemId, qty };
 }
 
+/** Daftar baris qty dari JSON `items`; placeholder itemId <= 0 dibuang. */
+function normalizeQtyItems(
+  raw: string | null | undefined,
+): { itemId: number; qty: number }[] {
+  return (safeJsonParse<QtyItemInput[]>(raw) ?? [])
+    .map(normalizeQtyItem)
+    .filter((it) => it.itemId > 0);
+}
+
 async function warehouseScopeFor(user: WarehouseActionUser) {
   return getWarehouseScope({ id: String(user.id), roles: user.roles });
 }
@@ -359,13 +368,7 @@ export async function createInventoryTransfer(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("TRF");
 
-    const rawTransferItems =
-      safeJsonParse<{ itemId: number | string; qty?: number | string }[]>(
-        v.items ?? null,
-      ) ?? [];
-    const transferItems = rawTransferItems
-      .map(normalizeQtyItem)
-      .filter((it) => it.itemId > 0);
+    const transferItems = normalizeQtyItems(v.items);
 
     const transfer = await prisma.inventoryTransfer.create({
       data: {
@@ -1782,13 +1785,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     }
 
     // Fix #2: Jangan generate documentNo baru saat update
-    const rawTransferItems =
-      safeJsonParse<{ itemId: number | string; qty?: number | string }[]>(
-        v.items ?? null,
-      ) ?? [];
-    const transferItems = rawTransferItems
-      .map(normalizeQtyItem)
-      .filter((it) => it.itemId > 0);
+    const transferItems = normalizeQtyItems(v.items);
 
     const transfer = await prisma.$transaction(async (tx) => {
       await tx.inventoryTransferItem.deleteMany({
