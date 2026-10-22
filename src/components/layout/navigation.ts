@@ -288,6 +288,7 @@ export const navigation: NavItem[] = [
       { label: "Hutang Jatuh Tempo", href: "/laporan/hutang-jatuh-tempo", icon: Clock, permission: "view_reports" },
       { label: "Total Hutang", href: "/laporan/total-hutang", icon: Banknote, permission: "view_reports" },
       { label: "Umur Stok", href: "/laporan/umur-stok", icon: Package, permission: "view_reports" },
+      { label: "Stok Tidak Bergerak", href: "/laporan/stok-tidak-bergerak", icon: Package, permission: "view_reports" },
       { label: "Lembar Penghitungan Stok", href: "/laporan/penghitungan-stok", icon: ClipboardList, permission: "view_reports" },
       { label: "Pusat Laba", href: "/laporan/pusat-laba", icon: TrendingUp, permission: "view_reports" },
       { label: "Harga Beli Multi-Sumber", href: "/laporan/analisis-harga-beli", icon: Package, permission: "view_reports" },
