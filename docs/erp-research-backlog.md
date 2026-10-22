@@ -10290,3 +10290,220 @@ Sesudah putusan ini merged: BOT 3 t_288b340b inti jalan (klaim `prisma/schema.pr
 | Q-LF-5 | Fisik tetap milik BOT 3 (dicatat, bukan diputus Lead): satu query massal Lead non-deleted + aktivitas status_change/conversion (pola `lead-followups-data.ts`, tanpa N+1); builder murni terpisah dari loader; indeks `LeadActivity(leadId)` existing cukup tahap 1. | Pola loader laporan prospek existing sudah terbukti; volume prospek ISF tidak menuntut indeks baru tanpa bukti EXPLAIN. |
 
 Sesudah putusan ini merged: BOT 3 t_1474515f builder+loader jalan (kontrak: posisi saat ini + corong gerakan per putusan Q-LF-1/3/5, tes BR-LF-01..09); BOT 2 t_937349f8 UI dua permukaan per Q-LF-2 sesudah kontrak BOT 3 stabil (kata §6 verbatim, nol hitung di UI); BOT 6 AC-LF-1..10; BOT 4 tidak diminta (BR-LF-10).
+
+---
+
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-094-S Antrean garansi segera berakhir (warranty expiry follow-up queue)
+
+Gap baru domain (f) garansi/purnajual + CRM, BUKAN turunan ID lama: belum ada ID
+antrean berakhir garansi di backlog. Anti-duplikat run ini (basis origin/main
+dfd5cb29 + PR terbuka/done <24 jam ditelusur): maks `-S` terbit di main 092-S
+(PR #558 merged via #565); 093 sudah terpakai sebagai `F-2026-10-22-093-V` BOT 4
+(PR #563 OPEN, denda piutang) sehingga nomor spec ini 094; grep
+`F-2026-10-22-094` di backlog+board main = 0; grep antrean berakhir garansi /
+`warranty.*expir.*queue|expiring` di `src/` produksi = 0 hasil relevan (hanya
+tampil `expiresAt` per baris di detail klaim/kendaraan). F-2026-10-21-021
+(coverage+claim), F-2026-10-21-022 (klaim supplier), F-2026-10-22-072-S (part
+terpasang) SEMUA sudah terbangun — spec ini TIDAK mengulang ketiganya; yang
+absen adalah pandangan operasional "cakupan mana yang segera berakhir dan
+belum ditindaklanjuti" untuk ditawari perpanjangan/inspeksi purnajual.
+Spec DOKUMEN SAJA, tanpa kode/schema/migrasi.
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main dfd5cb29, 2026-10-22)
+
+- Model: `WarrantyCoverage` (prisma/schema.prisma, model sesudah
+  `InstalledPart`): `customerVehicleId`, `workOrderId`, `itemId`,
+  `serialNumber` nullable + `serialKey`, `installedAt`, `expiresAt` (DateTime,
+  `@@index([expiresAt])` ada), `warrantyMonths`, `mileageLimitKm` nullable,
+  `termsSnapshot`, `status` default `active`. Kosakata status SAH:
+  `WARRANTY_COVERAGE_STATUSES = active, expired, revoked`
+  (src/lib/services/warranty.service.ts:27). `expiresAt = installedAt +
+  warrantyMonths` bulan kalender (:200), coverage lahir di tx complete WO
+  (:136-226) hanya untuk baris `warrantyMonths != null`.
+- Klaim: `WarrantyClaim` (schema, model sesudah coverage): `coverageId`,
+  `customerVehicleId`, `reportedAt`, `status` default `intake`
+  (intake→eligibility→approved/rejected→in_repair→closed), tautan supplier
+  F-022 terpisah. Eligibility membaca `withinPeriod = reportedAt <=
+  expiresAt` (warranty.service.ts:243-279) — TANPA mengubah status klaim.
+- Yang SUDAH ada dan DILARANG diduplikasi: daftar klaim
+  (`produksi/garansi/page.tsx`, gerbang `view_warranty_claims`, saringan
+  status klaim + cari plat/keluhan); kartu garansi per kendaraan di detail
+  kendaraan (`VehicleWarrantyCard`, map `expiresAt` :188) — daftar per satu
+  kendaraan, bukan antrean lintas pelanggan; form klaim baru menampilkan
+  label "berakhir <tanggal>" per coverage (`tambah/page.tsx:44`);
+  `installed-parts-data.ts:37-61` membawa `warrantyExpiresAt` per part
+  terpasang (konteks registri part, bukan antrean tindak lanjut);
+  notifikasi harian cron (`api/cron/daily-notifications/route.ts`) hanya
+  stok minimum + piutang overdue agregat ke admin — TANPA garansi.
+- Yang ABSEN (bukti grep run ini): tidak ada builder/loader/halaman yang
+  (a) mendaftar coverage `active` dengan `expiresAt` dalam jendela ke depan
+  atau baru lewat, (b) mengurutkan lintas pelanggan per sisa hari,
+  (c) menandai coverage yang sudah punya klaim terbuka vs belum pernah
+  klaim, atau (d) memberi jalur tindak lanjut (tautan kendaraan/klaim/WA)
+  dari daftar itu. Staf hari ini hanya tahu garansi berakhir bila membuka
+  satu-satu detail kendaraan/klaim.
+- Permission nyata (module-catalog.generated.ts:253-256):
+  `view/create/edit/approve_warranty_claims`. Tidak ada resource coverage
+  terpisah; coverage dibaca lewat konteks klaim/kendaraan existing.
+  Permission final antrean = Q-WX-1 BOT 1, spec tidak mengarang key baru.
+- Kontak tindak lanjut: `Customer.phone/email/contactPerson` +
+  `CustomerVehicle.plateNumber` (schema model Customer/CustomerVehicle);
+  tombol WA existing `WhatsappButton` (components/reports/whatsapp-button.tsx)
+  sudah berkabel jejak klik F-2026-10-21-036 di detail WO — pola label
+  jujur "tautan dibuka, bukan pesan terkirim" WAJIB diwarisi bila dipakai.
+- Benchmark (akses 2026-10-22): Accurate punya fitur Klaim Pelanggan
+  (terima barang klaim → jurnal klaim persediaan), BUKAN antrean pengingat
+  berakhir garansi: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/klaim-pelanggan/mengenal-fitur-klaim-pelanggan/
+  — BENCHMARK: pencatatan klaim setara sudah dimiliki Silengkap (F-021).
+  Zahir memasarkan Reminder untuk jatuh tempo piutang/utang/giro, tanpa
+  garansi: https://www.zahironline.com/reminder/ — BENCHMARK arah pola
+  "daftar jatuh tempo untuk ditindaklanjuti", bukan paritas fitur garansi.
+  Antrean berakhir garansi = kebutuhan internal ISF (ceruk purnajual
+  bengkel), bukan klaim paritas kompetitor.
+
+### 2. Definisi antrean (kontrak hitung, semua berlabel)
+
+Antrean membaca `WarrantyCoverage` lintas kendaraan/pelanggan. Status
+tampil TURUNAN dari `status` tersimpan + `expiresAt` vs hari WIB berjalan,
+BUKAN kolom baru dan BUKAN mutasi status tersimpan:
+
+| Ember turunan | Definisi | Label aturan |
+|---|---|---|
+| `segera_berakhir` | status tersimpan `active` DAN hari ini <= expiresAt <= hari ini + jendela hari (Q-WX-2) | USULAN |
+| `baru_berakhir` | status tersimpan `active` DAN expiresAt < hari ini (status tersimpan belum digeser siapa pun) ATAU status tersimpan `expired` dengan expiresAt dalam jendela lampau (Q-WX-2) | USULAN — tampil apa adanya, loader TIDAK menulis `expired` |
+| `tanpa_batas_jelas` | `expiresAt` kosong/rusak — schema mewajibkan terisi, jadi ember ini seharusnya selalu 0; tampil terhitung supaya cacat data terlihat, bukan disembunyikan | USULAN ember jujur |
+
+Coverage `revoked` TIDAK masuk antrean (sudah dicabut manusia).
+Sisa hari = selisih hari kalender WIB (expiresAt − hari ini WIB), boleh
+negatif untuk `baru_berakhir`; UI tampil kata §6, bukan angka mentah saja.
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-WX-01 | Populasi antrean = `WarrantyCoverage` status tersimpan `active`/`expired` saja; `revoked` dikeluarkan. Status tampil turunan per tabel di atas; loader TIDAK PERNAH menulis status/`updatedAt` coverage | USULAN (batas baca-saja; pola TERVERIFIKASI-KODE laporan informatif repo) |
+| BR-WX-02 | Batas kilometer TIDAK ditebak dari tanggal: coverage dengan `mileageLimitKm` terisi dan `lastOdometerKm` kendaraan >= batas tampil dengan penanda "batas km tercapai/mendekati menurut odometer terakhir tercatat" — odometer adalah snapshot check-in terakhir (schema CustomerVehicle.lastOdometerKm), BUKAN odometer hari ini; label wajib menyebut "odometer terakhir tercatat". Tanpa penanda itu, antrean murni berbasis tanggal | TERVERIFIKASI-KODE (snapshot odometer) + USULAN penanda |
+| BR-WX-03 | Satu coverage satu baris antrean walau punya banyak klaim. Penanda klaim: `ada_klaim_terbuka` bila ada WarrantyClaim coverage itu berstatus non-terminal (bukan `closed` dan bukan `rejected` — kosakata final mengikuti transisi existing warranty.service.ts:76); `pernah_klaim` bila hanya klaim terminal; `belum_pernah_klaim` bila nol klaim | USULAN di atas kosakata TERVERIFIKASI-KODE |
+| BR-WX-04 | Urutan antrean: `baru_berakhir` paling lama berakhir dulu? TIDAK — urutan DIPUTUS Q-WX-3. Usulan default: sisa hari naik (paling mendesak dulu), seri = expiresAt lalu id coverage naik; deterministik, tanpa urutan karangan per pelanggan | USULAN (final Q-WX-3) |
+| BR-WX-05 | Antrean BACA-SAJA tahap 1: tidak membuat klaim, tidak memperpanjang garansi, tidak mengubah coverage, tidak ada jurnal/StockMove/angka kewajiban. Perpanjangan garansi berbayar = dokumen penjualan existing (quotation/invoice) di luar antrean; antrean hanya menaut ke kendaraan/pelanggan | USULAN batas |
+| BR-WX-06 | Kontak pelanggan (nama/telepon) hanya tampil ke pemegang izin final Q-WX-1; ekspor/CSV tahap 1 DITOLAK (menahan paparan kontak, pola Q-COL-4/Q-LF-4). Tombol WA bila dibuka memakai `WhatsappButton` existing + jejak klik F-036 dengan label "tautan dibuka", BUKAN "sudah dihubungi" | USULAN (pola TERVERIFIKASI-KODE F-036) |
+| BR-WX-07 | Jendela hari ke depan/lampau = parameter baca (default USULAN 30 hari ke depan, 30 hari lampau), BUKAN kolom konfigurasi baru tahap 1; nilai final Q-WX-2. Di luar jendela lampau, coverage berakhir tidak ditampilkan (daftar klaim/kendaraan existing tetap menjawab) | USULAN (final Q-WX-2) |
+| BR-WX-08 | Coverage kendaraan nonaktif/terhapus (`CustomerVehicle.deletedAt` terisi / `isActive=false`) dikeluarkan dari antrean dan dihitung di ember `kendaraan_nonaktif` supaya selisih total bisa dijelaskan, bukan hilang diam-diam | USULAN ember |
+| BR-WX-09 | Penyebut ringkasan (total coverage aktif) memakai populasi sama sesudah saringan BR-WX-08; ember kosong tampil 0 jujur, bukan disembunyikan — kecuali `tanpa_batas_jelas` selalu tampil walau 0 (penjaga cacat data) | USULAN |
+| BR-WX-10 | Duplikat coverage dicegah jangkar existing `@@unique(workOrderId, itemId, serialKey)`; antrean menghitung per coverage id, serial kosong tampil "tanpa serial tercatat", tidak digabung per item | TERVERIFIKASI-KODE (schema unique) + USULAN label |
+| BR-WX-11 | Tanggal memakai hari kalender WIB (pola `getWibTodayUtcDate` sales.actions existing); expiresAt tengah malam WIB dari pola F-36 — jangan bandingkan timestamp mentah UTC yang menggeser sehari | TERVERIFIKASI-KODE pola + USULAN penerapan |
+| BR-WX-12 | Tidak ada notifikasi cron/push tahap 1. Menambah garansi ke `daily-notifications` = tahap terpisah sesudah antrean terbukti dipakai (Q-WX-4) | USULAN batas |
+
+### 3. Role/permission matrix (usulan, final Q-WX-1)
+
+| Aksi | Pemegang `view_warranty_claims` | Pemegang `view_reports` | Tanpa izin klaim/laporan |
+|---|---|---|---|
+| Lihat antrean agregat (hitungan per ember) | Q-WX-1 | Q-WX-1 | Tidak |
+| Lihat baris per coverage (plat, item, serial, sisa hari) | Q-WX-1 | Q-WX-1 | Tidak |
+| Lihat nama + telepon pelanggan per baris | Q-WX-1 (kontak hanya bila izin final membuka) | Q-WX-1 | Tidak |
+| Buat klaim dari baris | Jalur existing `create_warranty_claims` (halaman tambah klaim, tidak berubah) | Tidak dari antrean | Tidak |
+| Klik WA pelanggan | `WhatsappButton` existing + jejak F-036, hanya bila kontak tampil | Sama | Tidak |
+
+Data antrean memuat plat + nama/telepon pelanggan: tahap 1 agregat +
+daftar operasional untuk staf garansi, tanpa ekspor (BR-WX-06).
+
+### 4. Status-transition matrix (yang dibaca antrean, bukan transisi baru)
+
+| Dari (tersimpan) | Pemicu tercatat | Ke (tersimpan) | Peran antrean |
+|---|---|---|---|
+| (lahir) | WO completed, baris warrantyMonths != null | `active` (expiresAt terisi) | Masuk antrean saat masuk jendela BR-WX-07 |
+| `active` | Hari WIB melewati expiresAt | (tetap `active` tersimpan sampai ada jalur tulis) | Tampil turunan `baru_berakhir`; loader tidak menggeser |
+| `active` | Dicabut pejabat (jalur existing bila ada) | `revoked` | Keluar antrean (BR-WX-01) |
+| klaim intake→…→closed | Transisi klaim existing | status klaim | Hanya mengubah penanda BR-WX-03 |
+
+Antrean TIDAK menambah transisi, guard, status, atau kolom baru.
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF hari ini | Usulan 094-S |
+|---|---|---|---|---|
+| Catat klaim garansi pelanggan | Ada (Klaim Pelanggan, URL §1) | Tanpa modul garansi resmi | Ada F-021 tahap 1-3 | Tidak diubah |
+| Daftar cakupan per kendaraan | Tidak diteliti sebagai antrean | Tidak ada | Ada (kartu kendaraan) | Tidak diduplikasi |
+| Antrean coverage segera berakhir lintas pelanggan | Tidak ditemukan di help resmi | Reminder hanya piutang/utang/giro | ABSEN (grep §1) | Baru: antrean baca-saja BR-WX-01..12 |
+| Tindak lanjut kontak dari antrean | Tidak diteliti | Reminder tanpa WA garansi | WA berjejak F-036 di detail WO | Taut kendaraan/klaim + WA berjejak (Q-WX-1/4) |
+| Perpanjangan garansi sebagai penjualan | Penjualan umum | Penjualan umum | Quotation/invoice existing | Di luar antrean (BR-WX-05) |
+
+### 6. Pertanyaan terbuka
+
+- Q-WX-1 (BOT 1): izin lihat antrean + kontak — reuse
+  `view_warranty_claims`, atau `view_reports`, atau keduanya per
+  permukaan (pola Q-LF-1); dan apakah kontak telepon tampil tahap 1.
+- Q-WX-2 (BOT 1): jendela final — hari ke depan + hari lampau
+  (usulan 30/30, BR-WX-07) dan apakah jendela boleh dipilih pengguna
+  dari daftar tetap (mis. 7/30/90) tanpa konfigurasi bebas.
+- Q-WX-3 (BOT 1): urutan final antrean (usulan BR-WX-04 sisa hari naik)
+  + tempat tampil: kartu di halaman Klaim Garansi existing vs halaman
+  laporan baru vs keduanya satu builder (pola Q-LF-2).
+- Q-WX-4 (BOT 1): tahap notifikasi cron garansi dibuka atau ditunda
+  (BR-WX-12) + apakah tombol WA dibuka tahap 1.
+- Q-WX-5 (BOT 3 fisik): bentuk loader — satu query coverage + klaim
+  massal tanpa N+1 (pola lead-followups-data); indeks `expiresAt`
+  existing cukup; status turunan di builder murni terpisah dari loader.
+
+Tidak ada pertanyaan uang/pajak tahap 1: BOT 4 TIDAK dipanggil
+(BR-WX-05 tanpa jurnal/perpanjangan berbayar). Dipanggil lagi hanya
+bila perpanjangan garansi berbayar atau provisi dikaitkan ke antrean.
+
+### 7. Kata tampil (verbatim usulan untuk BOT 2)
+
+Judul: "Garansi Segera Berakhir". Ember: "Segera berakhir",
+"Baru berakhir", "Kendaraan nonaktif", "Tanpa batas jelas".
+Penanda klaim: "Ada klaim terbuka", "Pernah klaim", "Belum pernah klaim".
+Penanda km: "Batas km menurut odometer terakhir tercatat".
+Notice jujur wajib: "Daftar ini membaca tanggal berakhir cakupan
+garansi. Status tersimpan tidak diubah oleh daftar ini." dan
+"Menghubungi pelanggan dicatat sebagai tautan dibuka, bukan pesan
+terkirim." Kosong: "Tidak ada garansi yang segera berakhir pada
+jendela ini."
+
+### 8. Draf acceptance (BOT 6 falsifikasi)
+
+- AC-WX-1: Coverage `revoked` dan kendaraan nonaktif tidak masuk baris
+  antrean; cabut saringan = angka berubah MERAH (BR-WX-01/08).
+- AC-WX-2: Loader tidak menulis coverage apa pun (status + `updatedAt`
+  sebelum-sesudah sama); antrean menggeser status ke `expired` = MERAH.
+- AC-WX-3: Coverage lewat expiresAt tampil `Baru berakhir` walau status
+  tersimpan masih `active`; memaksa baca status tersimpan saja = MERAH.
+- AC-WX-4: Penanda km hanya dari `lastOdometerKm` tercatat + label
+  odometer terakhir; menebak odometer hari ini = MERAH (BR-WX-02).
+- AC-WX-5: Satu coverage banyak klaim tetap satu baris; penanda
+  terbuka/hanya-terminal/nol klaim tepat (BR-WX-03/10).
+- AC-WX-6: Urutan deterministik sesuai putusan Q-WX-3; seri berubah
+  antar muat ulang tanpa data berubah = MERAH.
+- AC-WX-7: Tanpa izin final Q-WX-1 loader/halaman menolak fail-closed;
+  kontak tidak bocor ke pemegang tanpa hak kontak; ekspor tahap 1
+  tidak ada = tombol/endpoint ekspor garansi MERAH bila muncul.
+- AC-WX-8: Klik WA tercatat jejak F-036 berlabel tautan dibuka; klaim
+  "sudah dihubungi/terkirim" di UI = MERAH (BR-WX-06).
+- AC-WX-9: Daftar klaim existing, kartu garansi kendaraan, registri
+  part terpasang tidak berubah perilaku (regresi nol).
+- AC-WX-10: Batas hari WIB: coverage berakhir hari ini masuk
+  `Segera berakhir`, kemarin masuk `Baru berakhir` (BR-WX-11);
+  geser zona waktu = MERAH.
+
+### 9. Backlog implementasi (turunan spec ini; spec F-2026-10-22-094-S)
+
+1. BOT 1: putus Q-WX-1..4 + merge PR spec ini bila gate hijau.
+2. BOT 3 (@backend-prisma-inventory-workshop): builder murni antrean
+   (ember + penanda BR-WX-01..11) + loader massal tanpa N+1 (Q-WX-5),
+   tes builder; nol migrasi, nol mutasi, nol jurnal.
+3. BOT 2 (@frontend-ui-ux-next-js): UI antrean SESUDAH kontrak BOT 3
+   stabil, kata §7 verbatim, nol hitung sisa hari/status di UI;
+   UI fitur didahulukan atas polish.
+4. BOT 6: AC-WX-1..10 atas head BOT 3/BOT 2.
+5. BOT 4: tidak ada vonis diminta tahap 1 (BR-WX-05).
+
+### Yang TIDAK diusulkan run ini
+- Perpanjangan garansi berbayar / paket servis berkala berbayar sebagai
+  produk: penjualan existing cukup; tanpa bukti permintaan, YAGNI.
+- Pengingat servis berkala berbasis odometer/tanggal servis berikutnya:
+  tidak ada kolom jadwal servis berikutnya di schema — domain berbeda
+  dari berakhirnya cakupan garansi, jangan dicampur ke antrean ini.
+- Notifikasi otomatis ke pelanggan (WA gateway/email keluar): kanal
+  keluar tidak ada (F-27(b) ditunda-teknis); klik WA manual berjejak cukup.
+- Menggeser status coverage tersimpan ke `expired` otomatis (cron tulis):
+  mutasi status = keputusan perilaku inti BOT 1 (Q-WX-4 lanjutan), bukan
+  diam-diam di loader baca.
