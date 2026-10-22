@@ -1,27 +1,40 @@
+"use client"
+
 import Link from "next/link"
+import { useState } from "react"
 
 import { formatDate } from "@/lib/utils/format"
 import { StatusChip } from "@/components/ui/status-chip"
+import { Button } from "@/components/ui/button"
 import { entityHref } from "@/lib/utils/entity-url"
-import type { InstalledPartRow } from "@/lib/reports/installed-parts"
+import type { InstalledPartRegistryRow } from "@/lib/reports/installed-parts"
+import { InstalledPartRemovalForm } from "./installed-part-removal-form"
 
 /**
- * Kartu "Part terpasang" di detail CustomerVehicle (F-2026-10-21-024 UI).
+ * Kartu "Part terpasang" di detail CustomerVehicle (F-2026-10-22-072-S).
  *
- * Murni presentasi: baris dari builder `buildInstalledParts` (lewat loader
- * `getInstalledParts`) ditampilkan apa adanya — UI tidak menurunkan status
- * pasang sendiri. Pemisahan seksi hanya mengelompokkan status yang sudah
- * diputus builder: terpasang (active; expired = garansi selesai, part masih
- * terpasang) dan riwayat dilepas/diganti (replaced, revoked).
- *
- * Serial kosong/null tidak pernah dirender sebagai nomor serial; status
- * "belum ada nomor serial tercatat" dinyatakan eksplisit (pola F-021).
- * Baris tanpa coverage menampilkan "Tanpa cakupan garansi", bukan tanggal
- * berakhir kosong.
+ * Murni presentasi: baris registri `InstalledPart` dari builder
+ * `buildInstalledPartsRegistry` (lewat loader `getInstalledParts`)
+ * ditampilkan apa adanya — UI tidak menurunkan status sendiri. Kata
+ * status verbatim server: TERPASANG / SEBAGIAN_DILEPAS / DILEPAS.
+ * Baris DILEPAS masuk seksi riwayat; sisanya terpasang.
+ * Serial kosong tidak pernah dirender sebagai nomor serial; baris
+ * tanpa coverage menampilkan "Tanpa cakupan garansi".
  */
-export function InstalledPartsCard({ rows }: { rows: InstalledPartRow[] }) {
-  const installed = rows.filter((r) => r.status === "active" || r.status === "expired")
-  const history = rows.filter((r) => r.status === "replaced" || r.status === "revoked")
+export function InstalledPartsCard({
+  rows,
+  canRecordRemoval = false,
+}: {
+  rows: InstalledPartRegistryRow[]
+  canRecordRemoval?: boolean
+}) {
+  const installed = rows.filter((r) => r.status !== "DILEPAS")
+  const history = rows.filter((r) => r.status === "DILEPAS")
+  const replacementOptions = installed.map((r) => ({
+    id: r.id,
+    itemName: r.itemName,
+    serialNumber: r.serialNumber,
+  }))
 
   return (
     <section
@@ -41,7 +54,12 @@ export function InstalledPartsCard({ rows }: { rows: InstalledPartRow[] }) {
             {installed.length > 0 && (
               <div className="flex flex-col divide-y divide-default">
                 {installed.map((row) => (
-                  <InstalledPartEntry key={rowKey(row)} row={row} />
+                  <InstalledPartEntry
+                    key={row.id}
+                    row={row}
+                    canRecordRemoval={canRecordRemoval}
+                    replacementOptions={replacementOptions.filter((o) => o.id !== row.id)}
+                  />
                 ))}
               </div>
             )}
@@ -52,7 +70,7 @@ export function InstalledPartsCard({ rows }: { rows: InstalledPartRow[] }) {
                 </h3>
                 <div className="flex flex-col divide-y divide-default">
                   {history.map((row) => (
-                    <InstalledPartEntry key={rowKey(row)} row={row} />
+                    <InstalledPartEntry key={row.id} row={row} />
                   ))}
                 </div>
               </div>
@@ -64,11 +82,16 @@ export function InstalledPartsCard({ rows }: { rows: InstalledPartRow[] }) {
   )
 }
 
-function rowKey(row: InstalledPartRow): string {
-  return `${row.workOrderId}-${row.itemId}-${row.serialNumber ?? ""}`
-}
-
-function InstalledPartEntry({ row }: { row: InstalledPartRow }) {
+function InstalledPartEntry({
+  row,
+  canRecordRemoval = false,
+  replacementOptions = [],
+}: {
+  row: InstalledPartRegistryRow
+  canRecordRemoval?: boolean
+  replacementOptions?: { id: number; itemName: string; serialNumber: string | null }[]
+}) {
+  const [removalOpen, setRemovalOpen] = useState(false)
   const serial = row.serialNumber?.trim() ? row.serialNumber : null
   return (
     <article aria-label={`Part terpasang ${row.itemName}`} className="py-4">
@@ -77,7 +100,7 @@ function InstalledPartEntry({ row }: { row: InstalledPartRow }) {
           {row.itemName}
           {row.itemSku ? <span className="text-muted-foreground"> · {row.itemSku}</span> : null}
         </span>
-        <StatusChip status={row.status} />
+        <StatusChip status={row.status} customLabel={row.statusLabel} />
       </div>
       <dl className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-3">
         <div className="flex flex-col gap-1">
@@ -91,16 +114,24 @@ function InstalledPartEntry({ row }: { row: InstalledPartRow }) {
           </dd>
         </div>
         <div className="flex flex-col gap-1">
-          <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Perintah Kerja Asal</dt>
+          <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Jumlah Terpasang</dt>
           <dd className="text-sm text-foreground">
-            <Link
-              href={entityHref("/produksi/perintah-kerja", { id: row.workOrderId })}
-              className="font-mono text-primary hover:underline"
-            >
-              #{row.workOrderId}
-            </Link>
+            {row.qtyRemoved > 0 ? `${row.qtyRemaining} dari ${row.qty}` : `${row.qty}`}
           </dd>
         </div>
+        {row.sourceWorkOrderId != null && (
+          <div className="flex flex-col gap-1">
+            <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Perintah Kerja Asal</dt>
+            <dd className="text-sm text-foreground">
+              <Link
+                href={entityHref("/produksi/perintah-kerja", { id: row.sourceWorkOrderId })}
+                className="font-mono text-primary hover:underline"
+              >
+                #{row.sourceWorkOrderId}
+              </Link>
+            </dd>
+          </div>
+        )}
         <div className="flex flex-col gap-1">
           <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tanggal Pasang</dt>
           <dd className="text-sm text-foreground">{formatDate(row.installedAt)}</dd>
@@ -113,24 +144,40 @@ function InstalledPartEntry({ row }: { row: InstalledPartRow }) {
               : formatDate(row.warrantyExpiresAt)}
           </dd>
         </div>
-        {row.status === "replaced" && (
+        {row.status === "DILEPAS" && row.removedAt && (
           <div className="flex flex-col gap-1">
-            <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Diganti Lewat</dt>
-            <dd className="text-sm text-foreground">
-              {row.replacedByWorkOrderId === null ? (
-                "WO pengganti belum tercatat"
-              ) : (
-                <Link
-                  href={entityHref("/produksi/perintah-kerja", { id: row.replacedByWorkOrderId })}
-                  className="font-mono text-primary hover:underline"
-                >
-                  #{row.replacedByWorkOrderId}
-                </Link>
-              )}
-            </dd>
+            <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tanggal Lepas</dt>
+            <dd className="text-sm text-foreground">{formatDate(row.removedAt)}</dd>
+          </div>
+        )}
+        {row.sourceCancelled && (
+          <div className="flex flex-col gap-1">
+            <dt className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Dokumen Sumber</dt>
+            <dd className="text-sm text-foreground">Sumber tidak lagi selesai</dd>
           </div>
         )}
       </dl>
+      {canRecordRemoval && row.status !== "DILEPAS" && row.qtyRemaining > 0 && (
+        removalOpen ? (
+          <InstalledPartRemovalForm
+            installedPartId={row.id}
+            qtyRemaining={row.qtyRemaining}
+            replacementOptions={replacementOptions}
+            onDone={() => setRemovalOpen(false)}
+          />
+        ) : (
+          <div className="mt-4">
+            <Button
+              type="button"
+              variant="outline"
+              aria-label={`Catat lepas ${row.itemName}`}
+              onClick={() => setRemovalOpen(true)}
+            >
+              Catat Lepas
+            </Button>
+          </div>
+        )
+      )}
     </article>
   )
 }

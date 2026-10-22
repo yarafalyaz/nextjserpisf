@@ -6,6 +6,9 @@ import { slugify } from "@/lib/utils/slug";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { consumeReservationsForMaterialIssueTx } from "@/lib/services/stock-reservation.service";
+import { classifyScrapLine, validateScrapInput } from "@/lib/services/scrap-classification";
+import { safeAdd } from "@/lib/utils/math";
 import { Status } from "@/lib/constants";
 
 
@@ -15,6 +18,47 @@ const executeInTx = async (
 ) => {
   return txClient ? callback(txClient) : prisma.$transaction(callback);
 };
+
+/**
+ * Beku snapshot scrap per baris issue (F-2026-10-21-008, vonis BOT 4
+ * F-2026-10-22-066-V). Satu-satunya penulis snapshot MI: dipanggil dari
+ * ketiga titik lahir baris (buat-dari-WO di manufacturing, create/update
+ * draft di inventory) supaya izin snapshot IDENTIK — complete dilarang
+ * membaca master/BOM hidup. Baris tanpa WO / revisi tak ter-pin / baris
+ * di luar revisi → snapshot LENGKAP (null = belum kalibrasi → seluruh
+ * scrap abnormal + temuan kalibrasi), tidak pernah gaduhan parsial.
+ */
+export async function resolveMaterialIssueScrapSnapshots(
+  tx: TxClient,
+  rows: { itemId: number; workOrderItemId?: number | null }[],
+  workOrderId: number | null | undefined,
+): Promise<Map<number, number | null>> {
+  const fallbackAll = () => new Map<number, number | null>(rows.map((r) => [r.itemId, null]));
+  if (workOrderId == null) return fallbackAll();
+  const wo = await tx.workOrder.findUnique({
+    where: { id: workOrderId },
+    select: { bomRevisionId: true },
+  });
+  if (!wo || wo.bomRevisionId == null) return fallbackAll();
+  const revLines = await tx.bomRevisionMaterial.findMany({
+    where: { bomRevisionId: wo.bomRevisionId },
+    select: { itemId: true, scrapPercent: true },
+  });
+  const byItem = new Map(
+    revLines.map((l) => [l.itemId, l.scrapPercent != null ? Number(l.scrapPercent) : null]),
+  );
+  const out = new Map<number, number | null>();
+  for (const r of rows) {
+    const v = byItem.get(r.itemId) ?? null;
+    if (v != null && (v < 0 || v > 100)) {
+      throw new Error(
+        `Allowance scrap item #${r.itemId} di luar rentang 0–100% — perbaiki revisi BOM, penyelesaian tidak memakai nilai karangan.`,
+      );
+    }
+    out.set(r.itemId, v);
+  }
+  return out;
+}
 
 /**
  * Material Issue Hook - Observer pattern replacement.
@@ -55,8 +99,32 @@ export async function onMaterialIssueCompleted(
     // material issues can back-date GL into a closed period.
     await assertPeriodOpen(issue.date, tx);
 
+    // F-008 (vonis BOT 4 F-066-V): validasi scrap baris SEBELUM stok
+    // bergerak, direncanakan dari BARIS WO asal (planned = qty baris WO
+    // yang dirujuk materialIssueItem.workOrderItemId persis, BUKAN qty
+    // issue — batch kecil tidak boleh mewarisi budget allowance penuh).
+    const plannedByItemId = new Map<number, number>();
+    if (issue.workOrderId != null) {
+      const woLines = await tx.workOrderItem.findMany({
+        where: { workOrderId: issue.workOrderId },
+        select: { id: true, qty: true },
+      });
+      for (const wl of woLines) plannedByItemId.set(wl.id, Number(wl.qty));
+    }
+    for (const item of issue.items) {
+      const err = validateScrapInput({
+        issueQty: Number(item.qty),
+        scrapQty: Number(item.scrapQty ?? 0),
+        scrapReasonCode: item.scrapReasonCode,
+        scrapNote: item.scrapNote,
+      });
+      if (err) throw new Error(`Baris item #${item.itemId}: ${err}`);
+    }
+
     // Create Stock Move OUT per item
     const journalItems: { qty: number; cost: number }[] = [];
+    let runningAbnormalValue = 0;
+    let firstMoveId: number | null = null;
     
     // Filter active items
     const activeItems = issue.items.filter((item) => Number(item.qty) > 0);
@@ -124,8 +192,39 @@ export async function onMaterialIssueCompleted(
         const totalCost = consumedCost + shortfall * fallback;
         const unitCost = qty > 0 ? totalCost / qty : fallback;
 
+        // F-008: klasifikasi SEKALI per baris di complete, unit cost FIFO
+        // aktual baris ini (konsisten StockMove). Snapshot input dibaca
+        // dari kolom beku baris (scrapQty/scrapPercentSnapshot), BUKAN
+        // master BOM hidup. planned = qty BARIS WO asal persis baris ini
+        // (workOrderItemId); tanpa rujukan → rencana issue baris ini.
+        const plannedQty =
+          item.workOrderItemId != null ? (plannedByItemId.get(item.workOrderItemId) ?? qty) : qty;
+        const classification = classifyScrapLine({
+          issueQty: qty,
+          plannedQty,
+          scrapQty: Number(item.scrapQty ?? 0),
+          scrapReasonCode: item.scrapReasonCode,
+          scrapNote: item.scrapNote,
+          scrapPercentSnapshot:
+            item.scrapPercentSnapshot != null ? Number(item.scrapPercentSnapshot) : null,
+          unitCost,
+        });
+        await tx.materialIssueItem.update({
+          where: { id: item.id },
+          data: {
+            scrapClassifiedAt: new Date(),
+            scrapPlannedQtySnapshot: plannedQty,
+            scrapNormalQtySnapshot: classification.normalQty,
+            scrapAbnormalQtySnapshot: classification.abnormalQty,
+            scrapUnitCostSnapshot: unitCost,
+            scrapNormalValueSnapshot: classification.normalValue,
+            scrapAbnormalValueSnapshot: classification.abnormalValue,
+          },
+        });
+        runningAbnormalValue = safeAdd(runningAbnormalValue, classification.abnormalValue, 2);
+
         const smDocNo = smDocNos[docIdx++];
-        await tx.stockMove.create({
+        const createdMove = await tx.stockMove.create({
           data: {
             documentNo: smDocNo,
             slug: slugify(smDocNo),
@@ -140,7 +239,9 @@ export async function onMaterialIssueCompleted(
             notes: `Pengeluaran Material ${issue.documentNo}`,
             createdBy: userId ?? null,
           },
+          select: { id: true },
         });
+        if (firstMoveId == null) firstMoveId = createdMove.id;
 
         // Update item qtyOnHand (global total)
         await tx.$executeRaw`UPDATE items SET qty_on_hand = qty_on_hand - ${qty} WHERE id = ${item.itemId}`;
@@ -160,6 +261,24 @@ export async function onMaterialIssueCompleted(
       issue.costCenterId,
       issue.date
     );
+
+    // F-008 jalur MI: klasifikasi + snapshot + laporan saja. Jurnal
+    // issue jalur ini Dr Beban Material / Cr Persediaan (onMaterialIssue
+    // di atas) — TIDAK ada debit WIP, jadi jurnal P2(b) Dr Beban Kerugian
+    // / Cr WIP vonis F-066-V tidak diposting di sini (kredit WIP hantu).
+    // Nilai abnormal jalur MI sudah terbenam di beban material; pola
+    // reklasifikasi jalur MI menunggu vonis BOT 4 lanjutan. Jurnal P2(b)
+    // hanya jalur ProductionOrder (Dr WIP / Cr Persediaan saat issue).
+
+    // F-2026-10-21-012 inti (BR-RES-08): konsumsi reservasi aktif WO
+    // pemilik di gudang MI ini, di tx yang sama dengan pengeluaran stok.
+    // MI tanpa WO / tanpa reservasi tetap jalan — kelebihan tercatat
+    // sebagai keluar tanpa cadangan, reservasi WO lain tak disentuh.
+    await consumeReservationsForMaterialIssueTx(tx, {
+      workOrderId: issue.workOrderId,
+      warehouseId: issue.warehouseId,
+      items: activeItems.map((item) => ({ itemId: item.itemId, qty: Number(item.qty) })),
+    });
 
     // Update Material Issue status
     await tx.materialIssue.update({

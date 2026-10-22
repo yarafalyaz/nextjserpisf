@@ -65,6 +65,7 @@ export const PERMISSION_SUBJECTS: Record<string, string> = {
   holidays: "Hari Libur",
   inventory: "Inventaris",
   inventory_transfers: "Transfer Stok",
+  material_requests: "Permintaan Antar Gudang",
   item_categories: "Kategori Barang",
   item_groups: "Grup Barang",
   items: "Barang",

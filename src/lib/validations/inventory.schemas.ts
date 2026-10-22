@@ -56,6 +56,20 @@ export const inventoryTransferSchema = z.object({
   path: ["destinationWarehouseId"],
 })
 
+
+// ==================== MATERIAL REQUEST (F-2026-10-22-078-S) ====================
+
+export const materialRequestSchema = z.object({
+  requesterWarehouseId: z.coerce.number().min(1, "Gudang tujuan wajib dipilih"),
+  sourceWarehouseId: z.coerce.number().min(1, "Gudang sumber wajib dipilih"),
+  workOrderId: optionalNumber(),
+  neededBy: optionalDateOnly,
+  items: optionalString(50000), // JSON string, parsed separately
+}).refine((data) => data.requesterWarehouseId !== data.sourceWarehouseId, {
+  message: "Gudang sumber dan gudang tujuan tidak boleh sama",
+  path: ["sourceWarehouseId"],
+})
+
 // ==================== MATERIAL ISSUE ====================
 
 export const materialIssueSchema = z.object({

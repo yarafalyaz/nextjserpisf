@@ -40,13 +40,14 @@ export default async function CustomerVehicleDetailPage({
 
   const history = await getCustomerVehicleHistory(cv.id)
 
-  // Part terpasang: read-model builder F-024 (status diputus builder,
-  // UI hanya menampilkan). Read-only, kendaraan tanpa part = daftar kosong.
+  // Part terpasang: registri InstalledPart F-072-S (status diputus builder,
+  // UI hanya menampilkan). Kendaraan tanpa part = daftar kosong.
   const installedParts = await getInstalledParts(cv.id)
 
   // Kartu garansi: cakupan dibaca lewat action existing (izin view terpisah);
   // tanpa izin itu kartu tidak dirender sama sekali, bukan dirender kosong.
   const canViewWarranty = await hasPermission("view_warranty_claims")
+  const canRecordRemoval = await hasPermission("edit_warranty_claims")
   const canCreateWarrantyClaim = await hasPermission("create_warranty_claims")
   const warrantyResult = canViewWarranty ? await listWarrantyCoveragesByVehicle(cv.id) : null
   const warrantyCoverages =
@@ -168,8 +169,10 @@ export default async function CustomerVehicleDetailPage({
         </div>
       </div>
 
-      {/* Part terpasang (F-024) */}
-      <InstalledPartsCard rows={installedParts.rows} />
+      {/* Part terpasang (F-072-S): tanpa izin lihat garansi panel tidak tampil sama sekali */}
+      {canViewWarranty && (
+        <InstalledPartsCard rows={installedParts.rows} canRecordRemoval={canRecordRemoval} />
+      )}
 
       {/* Garansi kendaraan */}
       {canViewWarranty && (
