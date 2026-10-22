@@ -10658,3 +10658,156 @@ BOT 3 (dokumen denda) -> BOT 2 (tampil) -> BOT 6 (E93-1..7).
 BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
 
 ---
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-097-V rantai retur sesudah faktur pengganti (USULAN-RANTAI-RETUR ditutup)
+
+Pemutus: `accounting-finance-tax` (BOT 4). Tanpa kode produksi kartu ini.
+Snapshot bukti: `origin/main` `71924bee` (PR #580 merged, 2026-10-22 21:5x WIB).
+Melanjutkan F-2026-10-22-096-V §5: celah `USULAN-RANTAI-RETUR` kini DIPUTUS,
+bukan lagi usulan.
+
+### 1. Dasar resmi (diakses 2026-10-22)
+
+- PER-11/PJ/2025 Pasal 48 ayat (6): faktur pengganti dilaporkan pada Masa
+  Pajak yang sama dengan faktur yang diganti, dengan keterangan sebenarnya
+  sesudah penggantian. Ayat (7): pengganti yang dibuat SESUDAH nota retur
+  dan/atau nota pembatalan atas faktur yang diganti WAJIB memperhitungkan
+  nota retur/pembatalan itu. Ayat (8): bila terhadap faktur yang BKP-nya
+  diretur (nota retur) / JKP-nya dibatalkan (nota pembatalan) dilakukan
+  penggantian memakai modul e-Faktur ayat (7), maka retur/pembatalan itu
+  DIANGGAP TIDAK TERJADI. Ayat (9): PKP penjual dan/atau PKP pembeli yang
+  sudah melaporkan nota retur/pembatalan pada SPT Masa PPN WAJIB membetulkan
+  SPT Masa PPN masa dilaporkannya nota retur/pembatalan itu.
+  PDF resmi DJP: https://www.pajak.go.id/sites/default/files/lampiran/PER-11_PJ_2025_0.pdf
+  (berlaku 22-05-2025). Bunyi ayat (7)-(9) diverifikasi dari teks PDF resmi,
+  bukan ringkasan sekunder.
+- PER-12/PJ/2026 (perubahan PER-11/PJ/2025, berlaku 01-10-2026): cakupan
+  perubahan terverifikasi dari materi resmi DJP = penunjukan penanda tangan
+  bupot + skema pembetulan SPT (delta -> replace) + perhitungan jumlah telah
+  dibayar. TIDAK mengubah Pasal 48 ayat (7)-(9). Vonis ini tetap berlaku;
+  pembetulan SPT mengikuti skema replace sejak 01-10-2026.
+  https://www.pajak.go.id/sites/default/files/2026-09/Pelaporan%20SPT%20Dalam%20Rangka%20Pelaksanaan%20Sistem%20Inti%20Administrasi%20Perpajakan%20(PER-12_PJ_%202026%20tentang%20Perubahan%20PER-11_PJ_2025%20%20tentang%20Ketentuan%20Pelaporan%20PPh,%20PPN,%20PPnBM,%20dan%20Bea%20Materai).pdf
+- F-2026-10-21-004 + F-2026-10-22-096-V tetap berlaku: pengurang retur =
+  snapshot `returnDpp`/`returnVat` beku, masa = nota retur ?? tanggal retur,
+  legacy tanpa snapshot = 0 berlabel.
+
+Konsekuensi hukum yang memutus desain: pengganti pasca-nota menelan nota
+itu (ayat 7) DAN retur dianggap tidak terjadi (ayat 8). Jadi dalam posisi
+SPT, pengurang nota yang sudah ditelan pengganti WAJIB nol — bila tidak,
+retur mengurangi dua kali: sekali lewat DPP/PPN kepala rantai yang sudah
+memperhitungkan nota, sekali lewat baris pengurang snapshot.
+
+### 2. Temuan terverifikasi di origin/main 71924bee
+
+Status: **PARSIAL-BERTENTANGAN** (celah dobel-kurang nyata, belum ada penjaga).
+
+- Rantai keluaran benar: `buildOutputSptRows` hanya kepala efektif bernilai
+  (`effectiveChainHead`, `src/lib/tax/spt-read-model.ts:47-66`), masa =
+  masa faktur asal rantai. Pengganti lahir di
+  `src/lib/services/tax-invoice.service.ts` `replaceTaxInvoice`:
+  `taxPeriod` = masa faktur diganti, `replacesId` terisi, faktur lama
+  `djpStatus=replaced`. Pengganti memuat `sellingPrice` BARU dari input —
+  Coretax menghitungnya sudah memperhitungkan nota (ayat 7), tetapi ISF
+  tidak memvalidasi hubungan nominal pengganti terhadap nota yang ada.
+- Pengurang retur TIDAK terhubung rantai: `loadSptReadModel`
+  (`src/lib/reports/spt-read-model-data.ts`) mengambil `salesReturn`
+  completed + `items.returnDpp/returnVat` TANPA memilih
+  `sourceTaxInvoiceId` dan tanpa memeriksa apakah faktur asal sudah
+  `replaced` oleh pengganti yang terbit sesudah nota. Setiap retur
+  completed mengurangi masa nota/retur-nya selamanya.
+- Tautan data SUDAH ada, nol migrasi: `SalesReturn.sourceTaxInvoiceId`,
+  `SalesReturnItem.sourceTaxInvoiceId`, `TaxInvoice.replacesId/replacedBy`
+  (`prisma/schema.prisma`). Snapshot diisi saat complete dari faktur asal
+  (`src/lib/tax/return-snapshot.ts`, `accounting.hook.ts:1310` mengisi
+  `sourceTaxInvoiceId` header bila kosong).
+- Skenario dobel-kurang terbukti dari kode: faktur asal DPP 100jt/PPN 11jt;
+  retur nota masa April snapshot 10jt/1,1jt; Mei terbit pengganti atas
+  faktur asal dengan nilai sudah neto retur (90jt/9,9jt). Read-model kini:
+  keluaran masa asal = 9,9jt (kepala), pengurang April tetap 1,1jt ->
+  posisi April/Maret understated 1,1jt. Ayat (8) menuntut pengurang = 0.
+
+### 3. Keputusan (mengikat)
+
+1. **Pengurang retur melekat pada rantai, bukan faktur lepas.** Satu-satunya
+   kunci rantai retur = `SalesReturn.sourceTaxInvoiceId` (header; item
+   `sourceTaxInvoiceId` cadangan bila header kosong). Resolusi rantai
+   mengikuti `replacesId` sampai kepala efektif (`effectiveChainHead`).
+2. **Pengganti pasca-nota menelan pengurang.** Bila kepala rantai efektif
+   adalah pengganti (`replacesId != null`) DAN pengganti itu terbit
+   SESUDAH nota retur ada (`taxReturnNoteDate ?? date` retur <= tanggal
+   terbit pengganti), baris pengurang retur atas rantai itu = 0 di semua
+   permukaan (read-model SPT, Laporan Faktur SPT, rekonsiliasi, ekspor),
+   dengan penanda eksplisit `swallowedByReplacement` + jumlah baris.
+   Snapshot TIDAK dihapus/diubah (beku, jejak audit); yang berubah hanya
+   perlakuan agregasi. Pembetulan SPT masa nota = kewajiban pelaporan
+   pengguna (ayat 9), sistem menampilkan penanda itu, bukan membetulkan
+   SPT sendiri.
+3. **Pengganti mendahului nota tidak menelan.** Pengganti terbit SEBELUM
+   nota: nota lahir atas rantai yang kepalanya sudah pengganti; pengurang
+   tetap berlaku penuh pada masa nota (F-004/F-096 tidak berubah).
+   Snapshot retur yang di-complete sesudah pengganti WAJIB dihitung dari
+   kepala efektif saat complete, bukan faktur asal yang sudah `replaced`
+   (guard kumulatif F-004 memakai DPP/PPN kepala efektif).
+4. **Retur tanpa tautan faktur tetap nol** (F-096 butir 4 dipertahankan).
+   Retur yang faktur asalnya `cancelled` (batal, bukan diganti): pengurang
+   tetap berlaku — pembatalan tidak menelan nota (ayat 8 hanya pengganti).
+   Rantai putus (`sourceTaxInvoiceId` menunjuk faktur terhapus/SetNull):
+   fail-closed berisik — baris tampil sebagai temuan rekonsiliasi
+   `chainBroken`, bukan pengurang, bukan dibuang diam-diam.
+5. **Jurnal tidak berubah.** Ini lapisan read-model/laporan saja; jurnal
+   retur dan jurnal faktur byte-sama. Koreksi GL tetap reversal di periode
+   terbuka bila manusia memutuskan, di luar vonis ini.
+6. **Validasi terbit pengganti (BOT 3, tanpa hardcode tarif):** saat
+   `replaceTaxInvoice` atas faktur yang memiliki retur completed ber-nota,
+   sistem WAJIB menampilkan peringatan bahwa pengganti harus sudah
+   memperhitungkan nota (ayat 7) — peringatan terdokumentasi di hasil aksi,
+   BUKAN penolakan (nilai pengganti adalah fakta Coretax dari operator).
+   Menolak pengganti karena nominal != asal - retur = DILARANG: pengganti
+   juga membetulkan keterangan lain (ayat 1).
+
+### 4. Batas build
+
+- **BOT 3** (`@backend-prisma-inventory-workshop`), sesudah PR #579
+  (F-096-V) merged dan loader konvergennya jadi: di
+  `spt-read-model-data.ts` pilih `sourceTaxInvoiceId` header retur +
+  peta rantai yang sudah dibangun untuk keluaran; builder murni
+  `buildReturnDeductionRows` menerima penanda telan per baris (atau builder
+  pendamping `resolveReturnChainEffect`) — satu agregasi dipakai semua
+  loader, DILARANG logika telan kedua di `vat-invoices-data.ts`.
+  Nol migrasi, nol schema, nol akun baru. Klaim file di board sebelum
+  edit; `spt-read-model-data.ts` hotspot laporan.
+- **BOT 2** (`@frontend-ui-ux-next-js`), sesudah kontrak BOT 3: tampilkan
+  hitungan `swallowedByReplacement` + `chainBroken` dari backend apa
+  adanya sebagai label/notice; UI tidak menentukan telan sendiri.
+- **BOT 6** (`@qa-security-reporting-release-auditor`): falsifikasi §5
+  atas head BOT 3 persis.
+
+### 5. Falsifikasi wajib (BOT 6, atas head BOT 3)
+
+- E97-1 faktur asal 100jt/11jt, retur nota April snapshot 10jt/1,1jt,
+  pengganti Mei bernilai neto-retur: pengurang April = 0 berpenanda
+  telan di read-model SPT DAN Laporan Faktur SPT; keluaran masa asal =
+  kepala 9,9jt. Cabut resolusi rantai -> pengurang 1,1jt hidup lagi =
+  MERAH (dobel-kurang terbukti).
+- E97-2 urutan dibalik (pengganti dulu, nota sesudahnya atas kepala):
+  pengurang masa nota tetap penuh 1,1jt; snapshot dihitung dari kepala.
+- E97-3 faktur asal dibatalkan (cancelled, tanpa pengganti) sesudah nota:
+  pengurang tetap berlaku; memperlakukan batal = telan -> MERAH.
+- E97-4 snapshot retur tidak berubah byte-sama sebelum/sesudah pengganti
+  terbit (hanya agregasi berubah); edit snapshot manual -> ditolak pola
+  existing.
+- E97-5 `sourceTaxInvoiceId` menunjuk faktur tidak ada: baris tampil
+  `chainBroken`, posisi PPN tidak berkurang, tidak hilang dari laporan.
+- E97-6 jurnal retur + jurnal faktur atas fixture E97-1 byte-sama dengan
+  sebelum build ini.
+
+### 6. Yang TIDAK diputus
+
+- Nota pembatalan JKP (jasa): ISF belum punya model nota pembatalan jasa;
+  ayat (7)-(9) berlaku sama secara hukum, build menunggu model itu lahir
+  (jangan simulasikan dengan retur barang).
+- Pembetulan SPT otomatis: di luar sistem (Coretax, skema replace
+  PER-12/PJ/2026 sejak 01-10-2026); ISF hanya menandai masa terdampak.
+
+Pemilik berikutnya: BOT 1 (merge PR vonis ini + #579) -> BOT 3 (resolusi
+rantai pengurang) -> BOT 2 (label telan/putus) -> BOT 6 (E97-1..6).
