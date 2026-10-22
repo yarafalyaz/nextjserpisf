@@ -44,18 +44,18 @@ export function UserCreateForm({ roles }: UserCreateFormProps) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-8">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label="Formulir tambah pengguna" className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-8">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div className="flex flex-col gap-2">
-          <Label htmlFor="name" className="text-sm font-semibold">Nama</Label>
+          <Label htmlFor="name" className="text-sm font-semibold">Nama <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="name" name="name" placeholder="Nama lengkap" required />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="email" className="text-sm font-semibold">Email</Label>
+          <Label htmlFor="email" className="text-sm font-semibold">Email <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="email" name="email" type="email" placeholder="email@example.com" required />
         </div>
         <div className="flex flex-col gap-2">
-          <Label htmlFor="password" className="text-sm font-semibold">Kata Sandi</Label>
+          <Label htmlFor="password" className="text-sm font-semibold">Kata Sandi <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="password" name="password" type="password" placeholder="Minimal 8 karakter" required minLength={8} />
         </div>
         <div className="flex flex-col gap-2">
