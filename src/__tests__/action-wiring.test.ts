@@ -134,6 +134,23 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-021 tahap 3 backend; tombol posting biaya klaim (E2) di halaman garansi menyusul (frontend)",
   "src/actions/warranty.actions.ts::postWarrantySupplierRecoveryAction":
     "F-2026-10-21-021 tahap 3 backend; tombol posting recovery supplier (E3) di halaman garansi menyusul (frontend)",
+  // F-2026-10-22-066-S inti backend (PR #515): 7 aksi JobChangeOrder WO;
+  // UI konsumsi = kartu BOT 2 t_b1b321cb (buang 7 entri ini saat panel
+  // change order di halaman perintah kerja memanggilnya).
+  "src/actions/job-change-order.actions.ts::createJobChangeOrder":
+    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
+  "src/actions/job-change-order.actions.ts::updateJobChangeOrderLines":
+    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
+  "src/actions/job-change-order.actions.ts::sendJobChangeOrder":
+    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
+  "src/actions/job-change-order.actions.ts::recordJobChangeOrderApproval":
+    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
+  "src/actions/job-change-order.actions.ts::cancelJobChangeOrder":
+    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
+  "src/actions/job-change-order.actions.ts::applyJobChangeOrder":
+    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
+  "src/actions/job-change-order.actions.ts::getJobChangeOrdersForWorkOrder":
+    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
 }
 
 describe("keterhubungan aksi server", () => {
