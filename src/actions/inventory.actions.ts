@@ -26,7 +26,7 @@ import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
-import { parseMoneyAmount } from "@/lib/utils/parse-money";
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import {
   stockAdjustmentSchema,
   inventoryTransferSchema,
@@ -43,6 +43,39 @@ import { dateOnly } from "@/lib/validations/finance.schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 type WarehouseActionUser = { id: number | string; roles: string[] };
+
+type QtyItemInput = {
+  itemId: number | string;
+  qty?: number | string;
+};
+
+/**
+ * Normalisasi baris qty dokumen stok dari JSON `items` (transfer inventaris +
+ * pengeluaran material). `qty` wajib parser repo (`parseLocaleNumber`) —
+ * `Number("2.000")` = 2 merusak qty diam-diam (pola sama StockAdjustment).
+ * qty tak terbaca/tidak > 0/itemId tak valid ditolak berpesan, bukan dibuang
+ * diam-diam via `.filter()`. Baris itemId = 0/negatif tetap placeholder form
+ * (dibuang) — form resmi prefilters itemId > 0; baris tak lengkap selain itu
+ * adalah payload rusak, bukan baris kosong.
+ */
+function normalizeQtyItem(it: QtyItemInput): { itemId: number; qty: number } {
+  const itemId = parseLocaleNumber(it.itemId as string | number);
+  if (itemId === null || !Number.isInteger(itemId))
+    throw new Error("Item tidak valid");
+  if (itemId <= 0) return { itemId: 0, qty: 0 };
+  const qty = parseLocaleNumber(it.qty as string | number);
+  if (qty === null || qty <= 0) throw new Error("Kuantitas tidak valid");
+  return { itemId, qty };
+}
+
+/** Daftar baris qty dari JSON `items`; placeholder itemId <= 0 dibuang. */
+function normalizeQtyItems(
+  raw: string | null | undefined,
+): { itemId: number; qty: number }[] {
+  return (safeJsonParse<QtyItemInput[]>(raw) ?? [])
+    .map(normalizeQtyItem)
+    .filter((it) => it.itemId > 0);
+}
 
 async function warehouseScopeFor(user: WarehouseActionUser) {
   return getWarehouseScope({ id: String(user.id), roles: user.roles });
@@ -335,9 +368,7 @@ export async function createInventoryTransfer(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("TRF");
 
-    const transferItems = (
-      safeJsonParse<{ itemId: number; qty: number }[]>(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const transferItems = normalizeQtyItems(v.items);
 
     const transfer = await prisma.inventoryTransfer.create({
       data: {
@@ -351,8 +382,8 @@ export async function createInventoryTransfer(formData: FormData) {
         createdBy: Number(user.id),
         items: {
           create: transferItems.map((it) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
+            itemId: it.itemId,
+            qty: it.qty,
           })),
         },
       },
@@ -529,17 +560,40 @@ export async function receiveInventoryTransfer(transferId: number) {
 
 /** F-008: baris payload MI bersama create/update — parse + validasi scrap draft. */
 type MaterialIssuePayloadItem = {
-  itemId: number; qty: number; unitCost: number;
+  itemId: number; qty: number; unitCost: number; cost: number;
   scrapQty?: number; scrapReasonCode?: string | null; scrapNote?: string | null;
 };
 
 function parseMaterialIssuePayloadItems(raw: string | null | undefined): MaterialIssuePayloadItem[] {
-  const items = (safeJsonParse<MaterialIssuePayloadItem[]>(raw ?? null) ?? [])
-    .filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+  const rawItems = safeJsonParse<{
+    itemId: number | string; qty?: number | string;
+    unitCost?: number | string; cost?: number | string;
+    scrapQty?: number | string; scrapReasonCode?: string | null; scrapNote?: string | null;
+  }[]>(raw ?? null) ?? [];
+  const items: MaterialIssuePayloadItem[] = [];
+  for (const it of rawItems) {
+    const base = normalizeQtyItem(it);
+    if (base.itemId === 0) continue;
+    // unitCost nominal uang -> parseMoneyAmount; kosong tetap 0 (biaya
+    // opsional, pola StockAdjustment), tak terbaca/negatif ditolak berpesan.
+    const rawCost = it.unitCost ?? it.cost;
+    const cost = rawCost === undefined || rawCost === null || rawCost === ""
+      ? 0
+      : parseMoneyAmount(rawCost as string | number);
+    if (cost === null || cost < 0) throw new Error("Biaya satuan tidak valid");
+    const scrapQty = it.scrapQty === undefined || it.scrapQty === null || it.scrapQty === ""
+      ? 0
+      : parseLocaleNumber(it.scrapQty as string | number);
+    if (scrapQty === null) throw new Error("Qty scrap tidak valid");
+    items.push({
+      itemId: base.itemId, qty: base.qty, unitCost: cost, cost,
+      scrapQty, scrapReasonCode: it.scrapReasonCode ?? null, scrapNote: it.scrapNote ?? null,
+    });
+  }
   // Scrap draft divalidasi saat simpan juga (bukan hanya complete).
   for (const it of items) {
     const err = validateScrapInput({
-      issueQty: Number(it.qty), scrapQty: Number(it.scrapQty ?? 0),
+      issueQty: it.qty, scrapQty: it.scrapQty ?? 0,
       scrapReasonCode: it.scrapReasonCode ?? null, scrapNote: it.scrapNote ?? null,
     });
     if (err) throw new Error(`Baris item #${it.itemId}: ${err}`);
@@ -549,10 +603,10 @@ function parseMaterialIssuePayloadItems(raw: string | null | undefined): Materia
 
 function materialIssueItemCreateData(it: MaterialIssuePayloadItem, scrapPercentSnapshot: number | null) {
   return {
-    itemId: Number(it.itemId),
-    qty: Number(it.qty),
-    cost: Number(it.unitCost || 0),
-    scrapQty: Number(it.scrapQty ?? 0),
+    itemId: it.itemId,
+    qty: it.qty,
+    cost: it.cost,
+    scrapQty: it.scrapQty ?? 0,
     scrapReasonCode: it.scrapReasonCode ?? null,
     scrapNote: it.scrapNote ?? null,
     scrapPercentSnapshot,
@@ -1731,9 +1785,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     }
 
     // Fix #2: Jangan generate documentNo baru saat update
-    const transferItems = (
-      safeJsonParse<{ itemId: number; qty: number }[]>(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const transferItems = normalizeQtyItems(v.items);
 
     const transfer = await prisma.$transaction(async (tx) => {
       await tx.inventoryTransferItem.deleteMany({
@@ -1759,8 +1811,8 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
           notes: v.notes ?? null,
           items: {
             create: transferItems.map((it) => ({
-              itemId: Number(it.itemId),
-              qty: Number(it.qty),
+              itemId: it.itemId,
+              qty: it.qty,
             })),
           },
         },
