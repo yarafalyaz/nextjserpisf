@@ -10659,6 +10659,7 @@ BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
 
 ---
 
+<<<<<<< HEAD
 ## VONIS BOT 4 2026-10-22 — F-2026-10-22-075-V Q-SUB69-5 (substitusi part baris WO, spec F-2026-10-22-069-S PR #510)
 
 Pemilik vonis: BOT 4. Pertanyaan: Q-SUB69-5 + BR-SUB69-07 spec
@@ -10758,3 +10759,254 @@ Pemilik berikutnya: BOT 1 putus Q-SUB69-1/2/3/4 → BOT 3 inti
 substitusi → BOT 2 UI → BOT 6 AC-SUB69-1..10 + V1..V4 di atas.
 BOT 4 selesai untuk Q-SUB69-5; tidak ada angka statutori/pajak
 baru (nol PPN/PPh berubah: faktur tetap dari grandTotal berjalan).
+=======
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-069-S item alternatif (substitusi part) untuk baris WorkOrder
+
+Status: SPEC DOKUMEN SAJA (tanpa kode/schema/migrasi). Tindak lanjut eksplisit
+backlog `docs/erp-research-backlog.md:249` ("Item alternatif otomatis: ERPNext
+[2] relevan hanya sesudah F-105 status part terbaca") — prasyarat kini
+terpenuhi: status part per baris WO sudah terbaca (builder + loader + kartu UI,
+PR #275 merged). ID bebas terverifikasi run ini: maks -S terpakai 068-S
+(PR #507 OPEN); grep `F-2026-10-22-069` di origin/main ea430e34 = 0; tidak ada
+kartu/PR/branch substitusi part (grep kanban + `gh pr list` 2026-10-22).
+
+Benchmark resmi (akses 2026-10-22):
+- Accurate Online Barang Substitusi: substitusi ditentukan di master barang
+  (tab Penjualan/Pembelian, kolom "Substitusi dengan"); saat faktur penjualan
+  dan stok utama tidak cukup, tombol "Penggantian" menampilkan daftar
+  substitusi yang sudah ditentukan; hanya untuk Jenis Barang Persediaan:
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-dan-jasa/barang-substitusi/
+- ERPNext Item Alternative: alternatif didefinisikan per Item (Item
+  Alternative), diaktifkan per BOM/Work Order ("Allow Alternative Item"), dan
+  dipilih saat material BOM tidak tersedia:
+  https://docs.frappe.io/erpnext/item-alternative
+  https://docs.frappe.io/erpnext/work-order
+- Zahir: tidak ditemukan fitur substitusi part per baris order di help resmi
+  pada akses ini — jangan klaim paritas Zahir (belum terverifikasi).
+
+### 0. Verifikasi live origin/main ea430e34 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Status part turunan per baris WO SUDAH terbaca penuh: builder murni
+  `src/lib/reports/work-order-part-status.ts` (status
+  menunggu/dipesan/datang/terpasang-sebagian/terpasang/diganti/tak-tertaut,
+  precedence diganti > terpasang > datang > dipesan > menunggu),
+  loader `src/lib/reports/work-order-part-status-data.ts`
+  (`getWorkOrderPartStatus`), kartu UI
+  `src/components/reports/work-order-part-status-card.tsx` terpasang di
+  detail WO (`src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx:186,471`)
+  — PR #275 merged.
+- Kebutuhan material + kekurangan stok SUDAH terbaca: builder
+  `src/lib/reports/work-order-material-needs.ts` (required/issued/ordered/
+  tersedia efektif sesudah committed WO lain; baris jasa selalu terpenuhi).
+- Jalur ganti baris berjalan SUDAH ada: `reviseWorkOrderItems`
+  (`src/actions/inventory.actions.ts:1008`, izin `edit_work_orders`):
+  WO wajib `in_progress`, baris ter-issue (MaterialIssue completed) tidak
+  bisa ditandai `replaced` (guard per baris lewat `workOrderItemId`,
+  F-2026-10-20-39(a)), baris baru ditambah lewat `newItems`. Inilah
+  satu-satunya jalur sah mengganti part di WO berjalan — spec ini TIDAK
+  membuat jalur ganti kedua.
+- Fitment per item SUDAH ada: `src/lib/services/vehicle-fitment.service.ts`
+  (`evaluateFitment`, compatible/incompatible/unknown + ruleId) dan snapshot
+  peringatan per baris Quotation/WO sedang dibangun F-2026-10-22-063-S.
+- Reservasi stok per WO SUDAH ada: `StockReservation`
+  (`prisma/schema.prisma:2704-2728`, lahir di startWorkOrder satu tx,
+  F-2026-10-21-012 inti).
+
+Belum ada / parsial (TERVERIFIKASI-KODE, grep run ini):
+- ABSEN relasi substitusi antar-item: grep `substitut|alternat` di
+  `prisma/schema.prisma` + `src/` produksi hanya menemukan satuan
+  alternatif Multi-UoM (`UomConversion`) — domain berbeda. Tidak ada model
+  `ItemSubstitute`/`ItemAlternative`, tidak ada kolom substitusi di `Item`
+  (`prisma/schema.prisma` model Item, tanpa field substitusi).
+- ABSEN saran pengganti di mana pun: kartu status part dan kartu kebutuhan
+  material hanya menampilkan status/kekurangan; operator yang melihat
+  baris `menunggu` + stok kurang harus mencari pengganti secara manual di
+  luar sistem, lalu mengganti lewat revisi item tanpa jejak "ini
+  substitusi dari part X".
+
+### 1. Workflow specification
+
+Aktor: Admin Master Data (mengelola relasi substitusi di master barang),
+Kepala Bengkel/Kepala Produksi (memutuskan memakai substitusi di WO),
+Operator Produksi (eksekusi issue), Admin (baca jejak).
+
+Alur (USULAN — belum disetujui pemilik proses):
+1. Di master barang, Admin Master Data menetapkan daftar substitusi per
+   item: item pengganti, arah (satu arah secara eksplisit; arah balik
+   dicatat sebagai baris sendiri bila memang sah), catatan kesetaraan
+   (mis. "setara fungsi, beda merek"), status aktif/nonaktif. Relasi
+   substitusi TIDAK transitif otomatis: A→B dan B→C tidak menyimpulkan
+   A→C; yang tampil hanya baris langsung yang aktif.
+2. Di detail WO, pada kartu Status Part / Kebutuhan Material existing,
+   baris part berstatus `menunggu` atau kekurangan stok efektif
+   (kebutuhan > tersedia efektif dari builder material-needs existing)
+   menampilkan penanda "ada substitusi" beserta daftar pengganti aktif
+   untuk item baris itu — masing-masing dengan stok tersedia efektif dan
+   hasil fitment pengganti terhadap kendaraan WO (bila WO punya kendaraan
+   tertaut; tanpa kendaraan tampil `unknown`, jangan ditebak cocok).
+3. Kepala Bengkel/Kepala Produksi memilih satu pengganti dan menekan
+   "Pakai Substitusi". Sistem menjalankan jalur existing
+   `reviseWorkOrderItems` persis: baris lama ditandai `replaced`, baris
+   pengganti ditambah dengan qty sama secara default (qty boleh diubah
+   pengaju sebelum simpan), semua guard existing berlaku (WO
+   `in_progress`, baris ter-issue ditolak, klaim kondisional anti revisi
+   bersamaan). Tidak ada pengeluaran stok di langkah ini — stok pengganti
+   bergerak hanya lewat MaterialIssue existing sesudahnya.
+4. Penerapan substitusi tercatat di ActivityLog dengan pasangan eksplisit
+   (baris lama → baris pengganti, WO, pengaju) sehingga riwayat part
+   terpasang dan status part turunan tetap bisa menjawab "part ini
+   pengganti apa".
+5. Substitusi yang hasil fitment-nya `incompatible` terhadap kendaraan WO
+   DITOLAK di server (bukan sekadar peringatan); `unknown` boleh lanjut
+   dengan peringatan tampil dan wajib tercatat di log. Ini mengikuti arah
+   F-2026-10-22-063-S (peringatan, bukan blokir umum) — blokir khusus
+   substitusi `incompatible` adalah USULAN spec ini, perlu Q-SUB69-2.
+
+Dokumen masuk: relasi substitusi master (baru), baris WO berjalan.
+Dokumen keluar: tidak ada dokumen baru — keluaran berupa baris WO hasil
+revisi existing + jejak ActivityLog.
+
+### 2. Role/permission matrix (permission nyata katalog)
+
+| Aksi | Permission (module-catalog.generated.ts) | Role pemegang lazim |
+|---|---|---|
+| Lihat daftar substitusi di master barang | `view_products` (katalog produk existing) | semua pembaca master |
+| Tambah/ubah/nonaktifkan relasi substitusi | `edit_products` (sama dengan aksi master barang existing, master.actions.ts) | Admin Master Data |
+| Lihat penanda + daftar substitusi di detail WO | `view_work_orders` (:253) | Kepala Bengkel, Operator, Admin |
+| Pakai substitusi (jalur revisi baris WO) | `edit_work_orders` (:255; permission yang sama dengan `reviseWorkOrderItems` existing) | Kepala Bengkel/Kepala Produksi |
+| Eksekusi pengeluaran part pengganti | `create_material_issues` (:225) | Operator Produksi |
+
+USULAN: tidak ada permission baru tahap ini. Permission khusus substitusi
+(mis. `manage_item_substitutes`) hanya bila Q-SUB69-1 diputus perlu —
+menambah permission = migrasi katalog + seed, jangan dilakukan diam-diam.
+
+### 3. Status-transition matrix
+
+| Objek | Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|---|
+| Relasi substitusi | — | Admin Master Data tambah baris | aktif | `edit_products`; item pengganti ≠ item asal; pasangan (asal, pengganti) aktif ganda ditolak |
+| Relasi substitusi | aktif | Admin Master Data nonaktifkan | nonaktif | `edit_products`; baris nonaktif tidak tampil sebagai saran, riwayat log tidak berubah |
+| Baris WO | menunggu/dipesan (turunan F-105) + stok kurang | "Pakai Substitusi" dipilih | baris lama `replaced` + baris pengganti baru (stored `in_progress` mengikuti pola revisi existing) | `reviseWorkOrderItems` existing: WO `in_progress`, baris ter-issue ditolak, fitment pengganti bukan `incompatible` |
+| Baris WO | terpasang-sebagian / terpasang (turunan) | "Pakai Substitusi" | DITOLAK | sudah ada MaterialIssue completed — mengikuti guard F-2026-10-20-39(a) existing, jangan longgarkan |
+| Baris WO jasa (itemId ≤ 0) | tak-tertaut | — | tidak ada saran substitusi | baris jasa bukan item stok (builder part-status existing) |
+
+Status part tampil tetap TURUNAN dari builder
+`work-order-part-status.ts` — spec ini tidak menambah nilai status
+tersimpan baru selain `replaced` yang sudah dipakai revisi existing.
+
+### 4. Business rules register
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-SUB69-01 | Substitusi hanya antar item stok aktif; item jasa dan item nonaktif tidak bisa jadi asal maupun pengganti | USULAN |
+| BR-SUB69-02 | Relasi satu arah per baris; arah balik wajib baris sendiri; tidak ada inferensi transitif | USULAN |
+| BR-SUB69-03 | Saran hanya tampil bila baris belum ter-issue dan (status turunan menunggu/dipesan atau stok efektif kurang); saran tidak pernah mengganti otomatis | USULAN |
+| BR-SUB69-04 | Penerapan hanya lewat `reviseWorkOrderItems` existing dalam transaksinya; dilarang jalur update baris WO kedua untuk substitusi | USULAN (konsisten guard F-2026-10-20-39(a) TERVERIFIKASI-KODE) |
+| BR-SUB69-05 | Pengganti berfitment `incompatible` ke kendaraan WO ditolak server; `unknown` lolos dengan peringatan + jejak log | USULAN — Q-SUB69-2 |
+| BR-SUB69-06 | Substitusi tidak menggerakkan stok, reservasi, atau jurnal apa pun; stok hanya bergerak lewat MaterialIssue completed existing; reservasi baris lama yang dilepas/diganti mengikuti aturan rilis reservasi existing (F-2026-10-22-057-S) | USULAN — interaksi reservasi Q-SUB69-3 |
+| BR-SUB69-07 | Selisih harga jual/biaya antara part asal dan pengganti TIDAK diatur spec ini; apakah selisih mengubah nilai tagih job = jalur change order F-2026-10-20-103 (spec F-2026-10-22-066-S), bukan substitusi | BUTUH-VONIS BOT 4 untuk sisi uang bila selisih akan ditagih/dikreditkan |
+| BR-SUB69-08 | Setiap penerapan tercatat ActivityLog berpasangan (baris lama → pengganti, alasan wajib) | USULAN (pola histori F-2026-10-21-035) |
+| BR-SUB69-09 | Qty pengganti default = qty baris asal; perubahan qty oleh pengaju tampil eksplisit sebelum simpan dan ikut tercatat | USULAN |
+| BR-SUB69-10 | Daftar substitusi di master adalah data master, bukan harga/kontrak: mengubah relasi tidak mengubah WO berjalan dan tidak menulis ulang log lama | USULAN |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate Online | ERPNext | Zahir | ISF hari ini |
+|---|---|---|---|---|
+| Relasi substitusi di master item | Ada ("Substitusi dengan" per barang, hanya persediaan) | Ada (Item Alternative per Item) | belum terverifikasi | ABSEN (grep run ini) |
+| Saran pengganti saat stok kurang | Ada di faktur penjualan (tombol Penggantian) | Ada di Work Order (Allow Alternative Item) | belum terverifikasi | ABSEN — status part terbaca, saran belum |
+| Penerapan tercatat di dokumen berjalan | barang baris faktur berubah | baris WO memakai alternatif | belum terverifikasi | parsial: revisi baris WO ada, jejak "substitusi dari" belum |
+
+URL benchmark: lihat daftar Benchmark resmi di atas.
+
+### 6. Acceptance criteria + edge cases (draf)
+
+BOT 3 (backend):
+- AC-SUB69-1: model relasi substitusi (bentuk fisik pilihan BOT 3,
+  klaim `prisma/schema.prisma` di board dulu) dengan penjaga server:
+  pasangan aktif ganda ditolak, asal = pengganti ditolak, item nonaktif
+  ditolak; nonaktifkan tidak menghapus riwayat.
+- AC-SUB69-2: builder/loader saran read-only memperluas data existing
+  (part-status + material-needs), bukan agregasi stok kedua: baris
+  ter-issue tidak pernah dapat saran; baris jasa tidak dapat saran.
+- AC-SUB69-3: penerapan memanggil jalur revisi existing; cabut guard
+  baris ter-issue = tes MERAH; penerapan substitusi menghasilkan nol
+  StockMove/jurnal/reservasi baru di langkah terapkan.
+- AC-SUB69-4: pengganti `incompatible` (fitment) ditolak server dengan
+  pesan bernama; `unknown` tercatat di ActivityLog.
+
+BOT 2 (UI, fitur didahulukan atas polish):
+- AC-SUB69-5: kelola substitusi di tab/detail master barang existing —
+  daftar pengganti aktif/nonaktif, tanpa halaman master baru bila tab
+  existing cukup (putusan BOT 1 di Q-SUB69-4).
+- AC-SUB69-6: penanda "ada substitusi" + daftar pengganti (stok efektif
+  + fitment dari server, nol hitung di UI) pada kartu Status Part /
+  Kebutuhan Material existing di detail WO; kata status persis label
+  server; tombol "Pakai Substitusi" hanya tampil untuk pemegang
+  `edit_work_orders`.
+- AC-SUB69-7: substitusi `incompatible` tampil sebagai ditolak dengan
+  alasan server verbatim, bukan disembunyikan dari daftar.
+
+BOT 6 (falsifikasi):
+- AC-SUB69-8: relasi transitif karangan (A→B, B→C lalu A ditawari C) =
+  MERAH; pasangan aktif ganda tersimpan = MERAH.
+- AC-SUB69-9: terapkan substitusi pada baris terpasang-sebagian lolos =
+  MERAH; terapkan tanpa `edit_work_orders` lolos = MERAH.
+- AC-SUB69-10: penerapan substitusi mengubah stok/jurnal = MERAH;
+  jejak ActivityLog tanpa pasangan lama→baru = MERAH.
+
+Edge cases: pengganti stoknya juga kurang (tampil apa adanya, jangan
+rantai saran otomatis ke substitusi tingkat dua); dua WO bersamaan
+memakai pengganti yang sama (stok efektif dari builder existing sudah
+mengurangi committed WO lain — jangan hitung ulang); WO tanpa kendaraan
+(fitment `unknown`); part asal sudah `replaced` sebelumnya (tidak dapat
+saran ulang); relasi dinonaktifkan di antara saran tampil dan simpan
+(server validasi ulang saat simpan, tolak dengan pesan bernama).
+
+### 7. Pertanyaan terbuka
+
+- Q-SUB69-1 (BOT 1): permission existing (`edit_products` /
+  `edit_work_orders`) cukup, atau perlu permission khusus substitusi?
+  Rekomendasi USULAN: existing dulu (BR §2).
+- Q-SUB69-2 (BOT 1): fitment `incompatible` = tolak keras khusus
+  substitusi (BR-SUB69-05), atau tetap peringatan seperti arah
+  F-2026-10-22-063-S? Rekomendasi USULAN: tolak keras — substitusi adalah
+  pilihan aktif operator, bukan dokumen yang sudah terlanjur terbit.
+- Q-SUB69-3 (BOT 1 + BOT 3): interaksi reservasi — baris lama
+  `replaced` melepas reservasi aktifnya mengikuti aturan rilis existing
+  (F-2026-10-22-057-S); apakah baris pengganti otomatis ikut
+  tereservasi pada WO `in_progress` (reservasi lahir hanya di start)?
+  Rekomendasi USULAN: tidak otomatis; pengganti mengikuti kebutuhan
+  material biasa sampai issue.
+- Q-SUB69-4 (BOT 1): permukaan master — tab di detail barang existing
+  vs halaman daftar substitusi tersendiri. Rekomendasi USULAN: tab di
+  detail barang (pola Accurate "Substitusi dengan").
+- Q-SUB69-5 (BOT 4, BUTUH-VONIS): bila harga/biaya pengganti berbeda,
+  apakah selisih boleh memengaruhi nilai job lewat change order
+  F-2026-10-20-103, dan perlakuan HPP part pengganti mengikuti biaya
+  item pengganti itu sendiri? Spec ini tidak menegaskan angka apa pun
+  sebelum vonis ini.
+
+### 8. Backlog implementasi (turunan spec ini)
+
+- F-2026-10-22-069-S (spec ini) → kartu BOT 3: inti relasi substitusi +
+  loader saran + penjaga terapkan (sesudah Q-SUB69-1/2/3 diputus BOT 1).
+- Kartu BOT 2: UI master (tab substitusi) + penanda/aksi di kartu part
+  WO existing (sesudah kontrak BOT 3 stabil; UI fitur didahulukan atas
+  polish).
+- Kartu BOT 6: acceptance AC-SUB69-1..10 sesudah implementasi.
+- Vonis BOT 4 hanya untuk Q-SUB69-5 bila selisih nilai akan ditagih —
+  tidak menahan inti substitusi informatif.
+
+### Yang TIDAK diusulkan run ini
+- Substitusi otomatis tanpa keputusan manusia (sistem hanya menyarankan).
+- Substitusi di Quotation/SalesOrder/faktur penjualan (pola Accurate ada
+  di penjualan; domain WO dulu karena prasyarat F-105 ada di WO —
+  perluasan ke penjualan = spec terpisah bila diminta pemilik proses).
+- Rantai substitusi bertingkat dan substitusi lintas satuan (UoM beda
+  wajib konversi — di luar cakupan; pengganti beda satuan dasar ditolak
+  tahap ini).
+- Mengubah kolom `WorkOrderItem.status` terkelola (inti F-105 yang
+  ditunda-teknis) — spec ini hanya membaca status turunan existing.
+>>>>>>> 2e3a2def (docs(business): spec F-2026-10-22-069-S item alternatif part WO (lanjutan backlog F-105))
