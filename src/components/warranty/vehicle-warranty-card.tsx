@@ -29,10 +29,12 @@ export interface WarrantyCoverageCardRow {
 export function VehicleWarrantyCard({
   coverages,
   vehicleId,
+  vehicleSlug,
   canCreateClaim,
 }: {
   coverages: WarrantyCoverageCardRow[]
   vehicleId: number
+  vehicleSlug?: string | null
   canCreateClaim: boolean
 }) {
   return (
@@ -44,7 +46,7 @@ export function VehicleWarrantyCard({
         <h2 className="text-[0.9375rem] font-semibold text-foreground">Garansi</h2>
         {canCreateClaim && coverages.length > 0 && (
           <Link
-            href={`/produksi/garansi/tambah?kendaraan=${vehicleId}`}
+            href={`/produksi/garansi/tambah?kendaraan=${vehicleSlug ?? vehicleId}`}
             className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
           >
             Buat Klaim Garansi

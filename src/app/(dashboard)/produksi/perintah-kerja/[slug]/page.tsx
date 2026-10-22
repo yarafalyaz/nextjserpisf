@@ -9,7 +9,8 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteWorkOrder } from "@/actions/manufacturing.actions";
 import { WorkOrderActions } from "./_components/work-order-actions";
-import { WorkOrderOperationActions, InitializeStagesButton } from "./_components/work-order-operation-actions";
+import { WorkOrderOperationActions, InitializeStagesButton, WorkOrderOperationWorkCenterSelect } from "./_components/work-order-operation-actions";
+import { getWorkCenters } from "@/lib/reports/work-center-load-plan-data";
 import { CreateServicePoButton } from "./_components/create-service-po-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,8 @@ import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/f
 import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
 import { WorkOrderProgressCard } from "@/components/reports/work-order-progress-card";
 import { getWorkOrderProgress } from "@/lib/reports/work-order-progress-data";
+import { getJobChangeOrdersForWorkOrder } from "@/actions/job-change-order.actions";
+import { JobChangeOrderPanel } from "./_components/job-change-order-panel";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
   DetailTable,
@@ -190,9 +193,28 @@ export default async function WorkOrderDetailPage({
   // Aksi tahap hanya dirender bila izin edit_work_orders; server penegak.
   const stageProgress = await getWorkOrderProgress(wo.id);
   const canEditStages = await hasPermission("edit_work_orders");
+  // F-090-S: pilihan stasiun tahap dari master WorkCenter (BOT 3 PR #569).
+  const workCenters = canEditStages ? await getWorkCenters() : [];
 
   // F-036 tahap 2 + F-035: jejak klik WA terakhir + histori geser endDate.
   const whatsappTrail = await getWhatsappTrail("WorkOrder", wo.id);
+
+  // F-066-S UI (t_b1b321cb): panel Change Order — konsumen 7 aksi BOT 3.
+  // Nilai kontrak tunggal dari quotation berjalan (BR-CO-01); daftar item
+  // master hanya opsi baris tambah (harga awal dari master, server snapshot).
+  const [changeOrders, inventoryItemOptions, canCreateCo, canEditCo, canApplyCo] =
+    await Promise.all([
+      getJobChangeOrdersForWorkOrder(wo.id),
+      prisma.item.findMany({
+        where: { isActive: true, deletedAt: null },
+        select: { id: true, name: true, price: true },
+        orderBy: { name: "asc" },
+        take: 200,
+      }),
+      hasPermission("create_work_orders"),
+      hasPermission("edit_work_orders"),
+      hasPermission("complete_work_orders"),
+    ]);
 
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
@@ -447,12 +469,18 @@ export default async function WorkOrderDetailPage({
                 ? Object.fromEntries(
                     stageProgress.rows.map((row) => [
                       row.id,
-                      <WorkOrderOperationActions
-                        key={row.id}
-                        workOrderId={wo.id}
-                        workOrderStatus={wo.status}
-                        row={row}
-                      />,
+                      <span key={row.id} className="flex flex-col items-end gap-2">
+                        <WorkOrderOperationActions
+                          workOrderId={wo.id}
+                          workOrderStatus={wo.status}
+                          row={row}
+                        />
+                        <WorkOrderOperationWorkCenterSelect
+                          workOrderId={wo.id}
+                          row={row}
+                          centers={workCenters}
+                        />
+                      </span>,
                     ]),
                   )
                 : undefined
@@ -471,6 +499,32 @@ export default async function WorkOrderDetailPage({
       {partStatus ? (
         <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
       ) : null}
+
+      <JobChangeOrderPanel
+        workOrderId={wo.id}
+        workOrderStatus={wo.status}
+        hasQuotation={!!wo.quotationId}
+        contractGrandTotal={wo.quotation ? Number(wo.quotation.grandTotal) : null}
+        changeOrders={changeOrders}
+        workOrderItems={wo.items
+          .filter((i) => i.status !== "replaced")
+          .map((i) => ({
+            workOrderItemId: i.id,
+            itemId: i.itemId,
+            label: itemNameMap.get(i.itemId) || `Barang #${i.itemId}`,
+            qty: Number(i.qty),
+            cost: Number(i.cost),
+          }))}
+        inventoryItems={inventoryItemOptions.map((i) => ({
+          id: i.id,
+          label: i.name,
+          price: Number(i.price),
+        }))}
+        itemNameById={Object.fromEntries(itemNameMap)}
+        canCreate={canCreateCo}
+        canEdit={canEditCo}
+        canApply={canApplyCo}
+      />
 
       <WhatsappTrailNote trail={whatsappTrail} />
 

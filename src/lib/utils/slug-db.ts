@@ -76,6 +76,7 @@ const SLUGGED_MODELS = {
   stockAdjustment: "stockAdjustment",
   rack: "rack",
   inventoryTransfer: "inventoryTransfer",
+  materialRequest: "materialRequest",
   stocktakeSession: "stocktakeSession",
   salesInvoice: "salesInvoice",
   salesPayment: "salesPayment",

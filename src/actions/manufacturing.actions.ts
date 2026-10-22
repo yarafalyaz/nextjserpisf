@@ -28,6 +28,7 @@ import {
 } from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.service";
+import { createInstalledPartsForWorkOrder } from "@/lib/services/installed-part.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
 import {
@@ -56,6 +57,7 @@ import {
 } from "@/lib/reports/work-order-progress";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { reservationExpiresAt } from "@/lib/reports/stock-reservation";
+import { reservationReleaseNotice } from "@/lib/reports/stock-reservation-release";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { Prisma } from "@prisma/client";
 
@@ -1646,7 +1648,7 @@ export async function completeWorkOrder(workOrderId: number) {
     // even though the WO says it is done. Both helpers accept an optional
     // txClient and are called below with this transaction's `tx`, so all
     // four writes commit or roll back together.
-    await prisma.$transaction(async (tx) => {
+    const releasedCount = await prisma.$transaction(async (tx) => {
       // Atomically claim completion: only the request that flips status away from
       // in_progress/pending wins. Without this, two concurrent "selesai" clicks
       // could both pass the status guard above and each run autoCreateDeliveryOrder
@@ -1671,7 +1673,7 @@ export async function completeWorkOrder(workOrderId: number) {
       // F-2026-10-21-012 inti (BR-RES-10): sisa reservasi aktif lepas di
       // tx penyelesaian yang sama; rollback completion (QC/DO gagal)
       // ikut menggulung pelepasan ini (AC-RES-4).
-      await releaseActiveReservationsForWorkOrderTx(tx, {
+      const released = await releaseActiveReservationsForWorkOrderTx(tx, {
         workOrderId,
         releasedBy: Number(user.id),
         reason: "Perintah kerja selesai",
@@ -1682,6 +1684,12 @@ export async function completeWorkOrder(workOrderId: number) {
       // atas). Satu transaksi dengan klaim status WO: coverage gagal dibuat
       // = completion rollback. Tanpa jurnal/provisi (tahap 3 ditahan).
       await createWarrantyCoveragesForWorkOrder(workOrderId, new Date(), tx);
+
+      // F-2026-10-22-072-S: registri part terpasang lahir di tx yang sama
+      // untuk SEMUA baris issue (bukan hanya bergaransi), menaut coverage
+      // yang baru lahir di atas. Tanpa kendaraan: nol baris (BR-IP-07),
+      // WO tetap completed — hasil skipped tidak menggagalkan klaim ini.
+      await createInstalledPartsForWorkOrder(workOrderId, new Date(), tx);
 
       // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
       // the atomic claim above so only the winning request reaches here).
@@ -1694,6 +1702,7 @@ export async function completeWorkOrder(workOrderId: number) {
       if (wo.projectId) {
         await syncProjectStatus(wo.projectId, tx);
       }
+      return released;
     });
 
     await logActivity(
@@ -1705,7 +1714,8 @@ export async function completeWorkOrder(workOrderId: number) {
     revalidatePath("/produksi/perintah-kerja");
     revalidatePath("/inventaris/mutasi-stok");
     revalidatePath("/pengiriman");
-    return { success: true };
+    // F-2026-10-22-057-S §1: kata rilis verbatim; null = tak ada sisa aktif.
+    return { success: true, releaseNotice: reservationReleaseNotice("complete", releasedCount) };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[completeWorkOrder]", getErrorMessage(e) || e);
@@ -2408,7 +2418,7 @@ export async function closeWorkOrder(workOrderId: number, reason?: string) {
     const parsed = validateCloseReason(reason);
     if (typeof parsed !== "string") return { success: false, error: parsed.error };
 
-    await prisma.$transaction(async (tx) => {
+    const releasedCount = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
       const wo = await tx.workOrder.findUniqueOrThrow({
         where: { id: workOrderId },
@@ -2447,16 +2457,18 @@ export async function closeWorkOrder(workOrderId: number, reason?: string) {
       if (claim.count === 0) throw new Error("Perintah kerja sudah ditutup atau sedang diproses pengguna lain.");
       // F-2026-10-21-012 inti (BR-RES-10): tutup job ikut melepas sisa
       // aktif (biasanya sudah released saat complete — updateMany no-op).
-      await releaseActiveReservationsForWorkOrderTx(tx, {
+      const released = await releaseActiveReservationsForWorkOrderTx(tx, {
         workOrderId,
         releasedBy: Number(user.id),
         reason: "Perintah kerja ditutup",
       });
+      return released;
     });
 
     await logActivity("close", "WorkOrder", workOrderId, `Menutup perintah kerja #${workOrderId}: ${parsed}`);
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true };
+    // F-2026-10-22-057-S §1: no-op lazim sesudah complete → notice null.
+    return { success: true, releaseNotice: reservationReleaseNotice("close", releasedCount) };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[closeWorkOrder]", getErrorMessage(e) || e);
@@ -2517,7 +2529,7 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
     const parsed = validateCancelReason(reason);
     if (typeof parsed !== "string") return { success: false, error: parsed.error };
 
-    await prisma.$transaction(async (tx) => {
+    const releasedCount = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
       const wo = await tx.workOrder.findUniqueOrThrow({
         where: { id: workOrderId },
@@ -2535,11 +2547,12 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
       if (claim.count === 0) {
         throw new Error("Perintah kerja sudah dibatalkan atau sedang diproses pengguna lain.");
       }
-      await releaseActiveReservationsForWorkOrderTx(tx, {
+      const released = await releaseActiveReservationsForWorkOrderTx(tx, {
         workOrderId,
         releasedBy: Number(user.id),
         reason: `Perintah kerja dibatalkan: ${parsed}`,
       });
+      return released;
     });
 
     await logActivity(
@@ -2549,7 +2562,8 @@ export async function cancelWorkOrder(workOrderId: number, reason?: string) {
       `Membatalkan perintah kerja #${workOrderId}: ${parsed}`,
     );
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true };
+    // F-2026-10-22-057-S §1: kata rilis verbatim; null = tak ada sisa aktif.
+    return { success: true, releaseNotice: reservationReleaseNotice("cancel", releasedCount) };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[cancelWorkOrder]", getErrorMessage(e) || e);

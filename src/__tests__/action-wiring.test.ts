@@ -120,32 +120,67 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-012 inti backend; tombol lepas reservasi menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reserveStockForWorkOrder":
     "F-2026-10-21-012 inti backend; tombol reservasi ulang menyusul (frontend)",
+  // F-2026-10-22-078-S inti (t_7de0eff1): 9 aksi Permintaan Antar Gudang
+  // backend dulu; halaman /inventaris/permintaan-gudang menyusul di kartu
+  // frontend t_7bfec14e (buang entri ini saat UI memanggilnya).
+  "src/actions/material-request.actions.ts::createMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::updateMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::deleteMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::submitMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::approveMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::rejectMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::cancelMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::closeMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  "src/actions/material-request.actions.ts::createTransferFromMaterialRequest":
+    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
   // F-2026-10-21-027 backend dulu (PR #360): 10 aksi komponen gaji sudah
   // dirujuk UI PR #374 (entri bekunya dibuang); tersisa getPayrollComponentLines.
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  // F-2026-10-22-085-S inti (t_7b33102f): read-model daftar perhatian
+  // siklus hidup backend dulu; field master + daftar perhatian menyusul
+  // di kartu frontend t_e80e8541 (buang entri ini saat UI memanggilnya).
+  "src/actions/hrm.actions.ts::getEmployeeLifecycleAttention":
+    "F-2026-10-22-085-S inti backend; daftar perhatian siklus hidup menyusul (frontend t_e80e8541)",
+  // F-2026-10-22-088-S tahap 1 inti (t_ce3f60e0): 4 aksi target penjualan
+  // backend dulu; form target + laporan "Target vs Pencapaian Penjualan"
+  // menyusul di kartu frontend t_f605e189 (buang entri ini saat UI
+  // memanggilnya).
+  "src/actions/sales-target.actions.ts::createSalesTarget":
+    "F-2026-10-22-088-S inti backend; form target penjualan menyusul (frontend t_f605e189)",
+  "src/actions/sales-target.actions.ts::updateSalesTarget":
+    "F-2026-10-22-088-S inti backend; form target penjualan menyusul (frontend t_f605e189)",
+  "src/actions/sales-target.actions.ts::deleteSalesTarget":
+    "F-2026-10-22-088-S inti backend; form target penjualan menyusul (frontend t_f605e189)",
+  "src/actions/sales-target.actions.ts::getSalesTargetAchievementReport":
+    "F-2026-10-22-088-S inti backend; laporan Target vs Pencapaian menyusul (frontend t_f605e189)",
+  // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): aksi tindak lanjut
+  // penagihan backend dulu; halaman antrean + form Catat Tindak Lanjut
+  // menyusul di kartu frontend t_6f73907a (buang entri ini saat UI
+  // memanggilnya).
+  "src/actions/invoice-collection.actions.ts::createInvoiceCollectionFollowUp":
+    "F-2026-10-22-089-S inti backend; form Catat Tindak Lanjut menyusul (frontend t_6f73907a)",
+  "src/actions/invoice-collection.actions.ts::deleteInvoiceCollectionFollowUp":
+    "F-2026-10-22-089-S inti backend; tombol hapus tindak lanjut menyusul (frontend t_6f73907a)",
+  // F-2026-10-22-090-S: 4 aksi stasiun kerja kini dirujuk UI master
+  // Stasiun Kerja + pilihan stasiun tahap WO (t_b9d26fab) — entri beku dibuang.
   // F-2026-10-21-030: ke-9 aksi RAB sudah ter-wire UI ProjectBudgetEditor
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3: pemanggil jurnal E2/E3 kini dirujuk UI
   // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
-  // F-2026-10-22-066-S inti backend (PR #515): 7 aksi JobChangeOrder WO;
-  // UI konsumsi = kartu BOT 2 t_b1b321cb (buang 7 entri ini saat panel
-  // change order di halaman perintah kerja memanggilnya).
-  "src/actions/job-change-order.actions.ts::createJobChangeOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::updateJobChangeOrderLines":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::sendJobChangeOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::recordJobChangeOrderApproval":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::cancelJobChangeOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::applyJobChangeOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
-  "src/actions/job-change-order.actions.ts::getJobChangeOrdersForWorkOrder":
-    "F-2026-10-22-066-S inti backend; UI change order WO menyusul (frontend t_b1b321cb)",
+  // F-2026-10-22-066-S: 7 aksi JobChangeOrder kini dirujuk panel Change Order
+  // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
+  // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal
+  // di JobBillingCard (t_ba8fe9ef) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {

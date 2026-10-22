@@ -70,6 +70,8 @@ import {
 } from "@/lib/reports/job-order-data"
 import { loadBankMovements } from "@/lib/reports/bank-movements-data"
 import { loadProductionVariance } from "@/lib/reports/production-variance-data"
+import { loadScrapMaterialReport } from "@/lib/reports/scrap-material-data"
+import { buildScrapMaterialTable } from "@/lib/reports/scrap-material"
 import { loadJobEstimateVsActual } from "@/lib/reports/job-estimate-vs-actual-data"
 import { loadStockCount } from "@/lib/reports/stock-count-data"
 import { loadPaymentExpenses } from "@/lib/reports/payment-expenses-data"
@@ -394,6 +396,16 @@ export const REPORTS: Record<ReportPdfKey, ReportDefinition> = {
         periodCaption: report.periodCaption,
         landscape: true,
       }
+    },
+  },
+
+  "scrap-material": {
+    title: "Scrap Material",
+    subtitle: "Scrap per Baris Issue — Normal vs Abnormal",
+    defaultPeriod: startOfYear,
+    async load({ period }) {
+      const { report } = await loadScrapMaterialReport(period.start, period.end)
+      return { kind: "table", table: buildScrapMaterialTable(report), periodCaption: "", landscape: true }
     },
   },
 

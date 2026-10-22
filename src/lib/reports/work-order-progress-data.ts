@@ -23,6 +23,7 @@ export async function getWorkOrderProgress(
           assignedEmployeeId: true,
           estimatedHours: true,
           notes: true,
+          workCenterId: true,
         },
         orderBy: [{ sortOrder: "asc" }, { id: "asc" }],
       },
@@ -41,6 +42,7 @@ export async function getWorkOrderProgress(
         assignedEmployeeId: op.assignedEmployeeId,
         estimatedHours: op.estimatedHours == null ? null : Number(op.estimatedHours),
         notes: op.notes,
+        workCenterId: op.workCenterId,
       })),
     }),
   }
