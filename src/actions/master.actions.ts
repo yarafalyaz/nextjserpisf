@@ -31,7 +31,7 @@ import {
 } from "@/lib/validations/schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseFormData } from "@/lib/validations/parse-form";
-import { parseMoneyAmount } from "@/lib/utils/parse-money";
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import {
   createLeadSchema,
   updateLeadSchema,
@@ -39,6 +39,38 @@ import {
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
+
+/**
+ * Konversi satuan alternatif dari JSON FormData `uomConversions`
+ * ([{ code, factorToBase }]). factorToBase bisa string berformat Indonesia
+ * dari klien non-form ("1.000" = 1000, "1,5" = 1.5) — wajib lewat
+ * parseLocaleNumber; Number() mentah membaca "1.000" jadi 1 dan "abc" jadi
+ * NaN yang lolos filter >0 secara diam-diam. Baris berkode dengan faktor tak
+ * terbaca / tidak > 0 ditolak berpesan, bukan dibuang diam-diam (konversi
+ * hilang = qty transaksi dihitung 1:1 tanpa jejak). Baris tanpa kode tetap
+ * dibuang (baris kosong form).
+ */
+function parseUomConversions(
+  convJson: string | null,
+): { code: string; factorToBase: number }[] {
+  const rows =
+    safeJsonParse<{ code: string; factorToBase: unknown }[]>(convJson) ?? [];
+  const conversions: { code: string; factorToBase: number }[] = [];
+  for (const c of rows) {
+    const code = typeof c?.code === "string" ? c.code.trim() : "";
+    if (!code) continue;
+    const factor = parseLocaleNumber(
+      c.factorToBase as string | number | null | undefined,
+    );
+    if (factor === null || factor <= 0) {
+      throw new Error(
+        `Faktor konversi satuan "${code}" tidak valid — isi angka lebih dari 0 (mis. 12 atau 1.000).`,
+      );
+    }
+    conversions.push({ code, factorToBase: factor });
+  }
+  return conversions;
+}
 
 /**
  * Privilege-escalation guard for Employee → User creation/sync flows.
@@ -472,16 +504,15 @@ export async function createItem(formData: FormData) {
       });
 
       // Multi-UoM alternate unit conversions (JSON: [{ code, factorToBase }])
-      const convJson = formData.get("uomConversions") as string | null;
-      const conversions = (
-        safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? []
-      ).filter((c) => c.code?.trim() && Number(c.factorToBase) > 0);
+      const conversions = parseUomConversions(
+        formData.get("uomConversions") as string | null,
+      );
       if (conversions.length > 0) {
         await tx.uomConversion.createMany({
           data: conversions.map((c) => ({
             itemId: created.id,
             code: c.code.trim(),
-            factorToBase: Number(c.factorToBase),
+            factorToBase: c.factorToBase,
           })),
           skipDuplicates: true,
         });
@@ -558,16 +589,14 @@ export async function updateItem(itemId: number, formData: FormData) {
       // Replace alternate-unit conversions
       const convJson = formData.get("uomConversions") as string | null;
       if (convJson !== null) {
-        const conversions = (
-          safeJsonParse<{ code: string; factorToBase: number }[]>(convJson) ?? []
-        ).filter((c) => c.code?.trim() && Number(c.factorToBase) > 0);
+        const conversions = parseUomConversions(convJson);
         await tx.uomConversion.deleteMany({ where: { itemId } });
         if (conversions.length > 0) {
           await tx.uomConversion.createMany({
             data: conversions.map((c) => ({
               itemId,
               code: c.code.trim(),
-              factorToBase: Number(c.factorToBase),
+              factorToBase: c.factorToBase,
             })),
             skipDuplicates: true,
           });
