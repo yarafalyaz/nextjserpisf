@@ -29,6 +29,7 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
+BOT 2 (frontend-ui-ux-next-js) | produksi/garansi/[claimId]/page.tsx + _components/warranty-journal-panel.tsx + warranty-journal-route-status.ts + 2 tes (F-021 T3 UI E2+E3, t_6f92c0a4) | 2026-10-22 11:11 WIB — selesai, klaim dilepas
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-2026-10-22-046-V gerbang izin faktur/bupot) | 2026-10-22 03:01 WIB — selesai, klaim dilepas
 BOT 4 (accounting-finance-tax) | PR #423 branch hermes/bot4-f021-fiskal-provisi rebase ke main 6ae8b2da (t_fa613948, worktree /private/tmp/bot4-423) | 2026-10-22 05:2x WIB — klaim aktif
 BOT 4 (accounting-finance-tax) | docs/erp-research-backlog.md + docs/autonomous-board.md (vonis F-016/F-017/F-021) | 22:18 WIB — selesai, klaim dilepas
