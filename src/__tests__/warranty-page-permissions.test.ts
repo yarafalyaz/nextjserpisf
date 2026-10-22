@@ -63,14 +63,18 @@ describe("pemetaan izin halaman garansi", () => {
     expect(source).not.toContain(APPROVE)
   })
 
-  it("kartu garansi kendaraan hanya memakai view untuk tampil dan create untuk tombol klaim", () => {
+  it("halaman kendaraan: kartu garansi view+create; edit hanya untuk catat-lepas part terpasang", () => {
     const source = read(CUSTOMER_VEHICLE_PAGE)
 
     expect(source).toContain(`hasPermission("${VIEW}")`)
     expect(source).toContain(`hasPermission("${CREATE}")`)
     expect(source).toContain("const canViewWarranty = await hasPermission")
     expect(source).toContain("const canCreateWarrantyClaim = await hasPermission")
-    expect(source).not.toContain(EDIT)
+    // F-072-S: edit_warranty_claims sah SATU pemakaian — gerbang tombol
+    // catat-lepas registri InstalledPart (kontrak aksi BOT 3), bukan kartu garansi.
+    expect(source).toContain(`const canRecordRemoval = await hasPermission("${EDIT}")`)
+    expect(source).toContain("canRecordRemoval={canRecordRemoval}")
+    expect(source.match(new RegExp(EDIT, "g"))).toHaveLength(1)
     expect(source).not.toContain(APPROVE)
   })
 })

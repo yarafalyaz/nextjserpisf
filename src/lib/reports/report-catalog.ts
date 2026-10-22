@@ -74,6 +74,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/profitabilitas" },
       { href: "/laporan/histori-penjualan" },
       { href: "/laporan/hasil-penawaran" },
+      { href: "/laporan/corong-prospek" },
       { href: "/laporan/histori-pembelian" },
       { href: "/laporan/pembelian" },
       { href: "/laporan/neraca", family: "Neraca", variant: "Standar" },
@@ -136,6 +137,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/ringkasan-stok" },
       { href: "/laporan/rekonsiliasi-stok" },
       { href: "/laporan/umur-stok" },
+      { href: "/laporan/stok-tidak-bergerak" },
       { href: "/laporan/stok-minimum" },
       { href: "/laporan/penghitungan-stok" },
       { href: "/laporan/nomor-seri-batch" },
@@ -182,6 +184,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
     reports: [
       { href: "/laporan/biaya-pekerjaan" },
       { href: "/laporan/varians-produksi" },
+      { href: "/laporan/scrap-material" },
       { href: "/laporan/estimasi-vs-aktual" },
       { href: "/laporan/penyelesaian-pekerjaan" },
       { href: "/laporan/jurnal-pekerjaan" },

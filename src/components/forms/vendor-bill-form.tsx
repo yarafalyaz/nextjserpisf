@@ -224,14 +224,19 @@ export function VendorBillForm({ vendors, projects = [], items, purchaseOrders =
   }
 
   return (
-    <form onSubmit={onSubmit}>
+    <form
+      onSubmit={onSubmit}
+      aria-label={bill?.id ? "Formulir ubah tagihan pemasok" : "Formulir tambah tagihan pemasok"}
+      aria-busy={isPending}
+    >
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorId">Pemasok *</Label>
+            <Label htmlFor="vendorId">Pemasok <span className="text-destructive" aria-hidden="true">*</span></Label>
             <QuickAddSelect
               id="vendorId"
               name="vendorId"
+              required
               options={vendorOptions.map((v) => ({
                 value: String(v.id),
                 label: v.name,

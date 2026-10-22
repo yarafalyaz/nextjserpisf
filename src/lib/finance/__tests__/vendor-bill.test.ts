@@ -78,3 +78,46 @@ describe("kop tagihan dihitung ulang dari baris (summarizeBillItems)", () => {
     expect(summarizeBillItems(JSON.stringify([{ qty: 0, unitPrice: 100 }]))).toBeNull()
   })
 })
+
+describe("string format Indonesia di JSON items (parser repo)", () => {
+  it("computeBillLineAmounts membaca qty/unitPrice/persen string id-ID penuh", () => {
+    const a = computeBillLineAmounts({ qty: "2", unitPrice: "2.000.000", discountPercent: "10", taxPercent: "11" })
+    expect(a.qty).toBe(2)
+    expect(a.unitPrice).toBe(2_000_000)
+    expect(a.gross).toBe(4_000_000)
+    expect(a.discountAmount).toBe(400_000)
+    expect(a.subtotal).toBe(3_600_000)
+    expect(a.taxAmount).toBe(396_000)
+    expect(a.total).toBe(3_996_000)
+  })
+
+  it("qty string '2.000' terbaca 2000, bukan 2 (kelas bug Number mentah)", () => {
+    const a = computeBillLineAmounts({ qty: "2.000", unitPrice: "1.000" })
+    expect(a.qty).toBe(2000)
+    expect(a.unitPrice).toBe(1000)
+    expect(a.gross).toBe(2_000_000)
+  })
+
+  it("summarizeBillItems mengakui baris qty string id-ID, bukan null", async () => {
+    const { summarizeBillItems } = await import("@/lib/finance/vendor-bill")
+    const h = summarizeBillItems(JSON.stringify([
+      { itemId: 9, qty: "2", unitPrice: "2.000.000", discountPercent: "10", taxPercent: "11" },
+    ]))
+    expect(h).toEqual({ subtotal: 4_000_000, discountAmount: 400_000, tax: 396_000, grandTotal: 3_996_000 })
+  })
+
+  it("sumBillItemDiscount membaca persen string id-ID", () => {
+    const json = JSON.stringify([
+      { itemId: 1, qty: "3", unitPrice: "100.000", discountPercent: "10" },
+    ])
+    expect(sumBillItemDiscount(json)).toBe(30_000)
+  })
+
+  it("string tak terbaca jadi 0, bukan NaN", () => {
+    const a = computeBillLineAmounts({ qty: "bukan-angka", unitPrice: "xyz" })
+    expect(a.qty).toBe(0)
+    expect(a.unitPrice).toBe(0)
+    expect(a.gross).toBe(0)
+    expect(Number.isFinite(a.total)).toBe(true)
+  })
+})

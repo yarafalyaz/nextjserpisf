@@ -330,3 +330,148 @@ export async function evaluateProductFitment(
     evaluation: r.evaluation,
   }))
 }
+
+/**
+ * F-2026-10-22-063-S (induk F-2026-10-21-023): rakit konfigurasi kendaraan
+ * dari rantai master existing CustomerVehicle → Vehicle → VehicleVariant →
+ * VehicleModel (brand dari model). Null bila kendaraan tak ditemukan /
+ * terhapus. Tanpa field baru — semua FK existing.
+ */
+export async function configurationFromCustomerVehicle(
+  db: Prisma.TransactionClient,
+  customerVehicleId: number,
+): Promise<VehicleConfigurationQuery | null> {
+  const cv = await db.customerVehicle.findFirst({
+    where: { id: customerVehicleId, deletedAt: null },
+    select: {
+      vehicle: {
+        select: {
+          year: true,
+          variant: {
+            select: {
+              id: true,
+              drivetrain: true,
+              transmission: true,
+              model: { select: { id: true, vehicleBrandId: true } },
+            },
+          },
+        },
+      },
+    },
+  })
+  if (!cv) return null
+  const variant = cv.vehicle.variant
+  return {
+    vehicleBrandId: variant.model.vehicleBrandId,
+    vehicleModelId: variant.model.id,
+    vehicleVariantId: variant.id,
+    year: cv.vehicle.year,
+    drivetrain: variant.drivetrain,
+    transmission: variant.transmission,
+  }
+}
+
+/**
+ * F-2026-10-22-063-S: tulis snapshot PERINGATAN fitment ke baris Quotation
+ * yang baru disimpan (BR-FIT-03: evaluasi ulang tiap simpan). Dokumen tanpa
+ * kendaraan → diam (W1). Baris itemId null dilewati (BR-FIT-04). Hasil apa
+ * pun TIDAK memblokir dokumen (BR-FIT-01); evaluasi gagal ditelan supaya
+ * simpan tetap jalan (BR-FIT-09) — snapshot baris itu tetap null.
+ */
+export async function stampQuotationFitmentSnapshot(
+  db: Prisma.TransactionClient,
+  quotationId: number,
+): Promise<void> {
+  try {
+    const quotation = await db.quotation.findFirst({
+      where: { id: quotationId },
+      select: {
+        customerVehicleId: true,
+        sections: {
+          select: {
+            items: {
+              where: { itemId: { not: null } },
+              select: { id: true, itemId: true },
+            },
+          },
+        },
+      },
+    })
+    if (!quotation?.customerVehicleId) return
+    const configuration = await configurationFromCustomerVehicle(
+      db,
+      quotation.customerVehicleId,
+    )
+    if (!configuration) return
+    const evaluatedAt = new Date()
+    for (const section of quotation.sections) {
+      for (const line of section.items) {
+        if (line.itemId == null) continue
+        const evaluation = await evaluateFitment(db, {
+          itemId: line.itemId,
+          configuration,
+        })
+        await db.quotationItem.update({
+          where: { id: line.id },
+          data: {
+            fitmentResult: evaluation.result,
+            fitmentRuleId: evaluation.ruleId,
+            fitmentEvaluatedAt: evaluatedAt,
+          },
+        })
+      }
+    }
+  } catch (error) {
+    // BR-FIT-09: snapshot gagal tidak boleh menggagalkan simpan dokumen.
+    console.error("[fitment] snapshot Quotation gagal (simpan tetap jalan)", error)
+  }
+}
+
+/**
+ * F-2026-10-22-063-S: snapshot PERINGATAN fitment baris WorkOrder, pola sama
+ * stampQuotationFitmentSnapshot. Baris jasa itemId=0 dilewati (BR-FIT-04).
+ * bomRevisionId WO diteruskan ke evaluator (aturan scoped-revisi berlaku).
+ */
+export async function stampWorkOrderFitmentSnapshot(
+  db: Prisma.TransactionClient,
+  workOrderId: number,
+): Promise<void> {
+  try {
+    const workOrder = await db.workOrder.findFirst({
+      where: { id: workOrderId },
+      select: {
+        customerVehicleId: true,
+        bomRevisionId: true,
+        items: {
+          where: { itemId: { gt: 0 } },
+          select: { id: true, itemId: true },
+        },
+      },
+    })
+    if (!workOrder?.customerVehicleId) return
+    const configuration = await configurationFromCustomerVehicle(
+      db,
+      workOrder.customerVehicleId,
+    )
+    if (!configuration) return
+    const evaluatedAt = new Date()
+    for (const line of workOrder.items) {
+      const evaluation = await evaluateFitment(db, {
+        itemId: line.itemId,
+        bomRevisionId: workOrder.bomRevisionId,
+        configuration,
+      })
+      await db.workOrderItem.update({
+        where: { id: line.id },
+        data: {
+          fitmentResult: evaluation.result,
+          fitmentRuleId: evaluation.ruleId,
+          fitmentEvaluatedAt: evaluatedAt,
+        },
+      })
+    }
+  } catch (error) {
+    // BR-FIT-09: snapshot gagal tidak boleh menggagalkan simpan dokumen.
+    console.error("[fitment] snapshot WorkOrder gagal (simpan tetap jalan)", error)
+  }
+}

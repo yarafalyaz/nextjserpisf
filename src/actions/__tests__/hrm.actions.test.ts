@@ -1192,6 +1192,45 @@ describe("Payroll extra branches", () => {
     expect(prismaMock.payroll.update).not.toHaveBeenCalled()
   })
 
+  it("F-085-S AC-EMP-2: processPayroll reguler periode sesudah employmentEndedAt ditolak keras", async () => {
+    prismaMock.employee.findUnique.mockResolvedValue({
+      id: 1, maritalStatus: "single", dependents: 0,
+      employmentEndedAt: new Date("2026-10-15T00:00:00.000Z"),
+    })
+    const r = await actions.processPayroll(fd({
+      employeeId: "1", period: "2026-11",
+      startDate: "2026-11-01", endDate: "2026-11-30",
+    }))
+    expect(r?.success).toBe(false)
+    expect(r?.error).toContain("Slip reguler tidak dapat dibuat; gunakan slip final masa terakhir.")
+    expect(prismaMock.payroll.create).not.toHaveBeenCalled()
+  })
+
+  it("F-085-S AC-EMP-3: slip final terverifikasi master lolos gerbang", async () => {
+    prismaMock.employee.findUnique.mockResolvedValue({
+      id: 1, maritalStatus: "single", dependents: 0,
+      employmentEndedAt: new Date("2026-10-15T00:00:00.000Z"),
+    })
+    const r = await actions.processPayroll(fd({
+      employeeId: "1", period: "2026-10",
+      startDate: "2026-10-01", endDate: "2026-10-31",
+      resignationFinal: "true",
+    }))
+    expect(r?.success).toBe(true)
+    expect(prismaMock.payroll.create).toHaveBeenCalled()
+  })
+
+  it("F-085-S: generateBulkPayroll mengeluarkan karyawan berhenti dari populasi", async () => {
+    prismaMock.employee.findMany.mockResolvedValue([{
+      id: 1, baseSalary: 5000000, maritalStatus: "single",
+      employeeLoans: [], employmentEndedAt: new Date("2026-10-15T00:00:00.000Z"),
+    }])
+    const r = await actions.generateBulkPayroll("2026-11", "2026-11-01", "2026-11-30")
+    expect(r?.success).toBe(true)
+    expect(r?.count).toBe(0)
+    expect(prismaMock.payroll.createMany).not.toHaveBeenCalled()
+  })
+
   it("markPayrollPaid on non-approved rejects", async () => {
     prismaMock.payroll.findUniqueOrThrow.mockResolvedValueOnce({ id: 1, status: "paid" })
     const r = await actions.markPayrollPaid(1)
