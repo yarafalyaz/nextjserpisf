@@ -11754,3 +11754,54 @@ vonis ini) -> BOT 3 (inti dalam batas §4 + ajukan rancangan
 field cicilan-mingguan & agregator BPJS ke BOT 4) ->
 BOT 2 (label/alasan backend) -> BOT 6 (AC-PF-1..8 spec +
 AC-PF2-1..5 vonis ini).
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-062-V Aset tetap & penyusutan: sumber nilai buku tunggal, gerbang metode, perolehan fail-closed
+
+Status: PUTUSAN BOT 4 (kartu t_f71c3193). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Domain BOT 4 #6 (aset tetap & penyusutan) belum pernah punya F-ID/vonis, padahal perolehan, cron penyusutan bulanan, disposal, dan laporan selisih fiskal sudah memposting/membaca angka di main. Vonis ini menutup celah itu. Setiap migrasi dari vonis ini = kartu BOT 3 terpisah, klaim `prisma/schema.prisma` di board, sesudah vonis ini masuk main.
+
+### Bukti repo terverifikasi run ini (origin/main aa7f58ed)
+
+- Perolehan: `createAsset` (`src/actions/asset.actions.ts:749-755`) memposting Dr Aset Tetap / Cr Kas-Bank HANYA bila `gl.fixedAsset && gl.cashBank` terpetakan; bila tidak, aset lahir TANPA jurnal dan TANPA pesan kegagalan ke operator (komentar kode: "Skipped silently"). Aset yang sama lalu tetap disusutkan cron (akumulasi bertambah tanpa saldo bruto lawan di GL).
+- Penyusutan: cron `src/app/api/cron/asset-depreciation/route.ts` membaca `Asset.currentValue` (kolom cache, schema:3737) lewat `Number(...)` (route:120-122), menghitung dengan float JS di `computeMonthlyDepreciation` (`src/lib/finance/asset-depreciation.ts:35-75`), lalu menulis TIGA representasi sekaligus dalam satu tx: `Asset.currentValue` baru, baris `AssetHistory type=depreciation`, dan jurnal POSTED `referenceType=ASSET_DEPRECIATION_YYYYMM` (route:178-231).
+- Metode: `Asset.depreciationMethod` = String bebas (`optionalStr(50)`, `src/lib/validations/asset.schemas.ts:128`); `computeMonthlyDepreciation` hanya mengenal `declining_balance`, string lain APA PUN jatuh ke garis lurus lewat usefulLife/tarif (asset-depreciation.ts:52-66). Metode komersial sah lain (unit produksi, jumlah angka tahun) tidak dibedakan dari salah ketik.
+- Fiskal: `AssetCategory.taxDepreciationRate`/`taxUsefulLife` (schema:3658-3662) bebas tanpa kelompok fiskal; laporan `src/lib/reports/depreciation-difference.ts` menghitung fiskal straight-line dari harga perolehan dan akuntansi dari `currentValue` HARI INI (baris 79, 100) — angka akuntansi laporan tahun lalu berubah bila cron bulan ini jalan.
+- Nilai buku laporan: `src/lib/reports/asset-ledger.ts:9` sudah menyatakan aturan benar (akumulasi HANYA dari AssetHistory, currentValue = snapshot hari ini) tetapi tidak ada rekonsiliasi yang membuktikan ketiga jalur (jurnal, history, currentValue) sama.
+- Disposal SUDAH fail-closed untuk aset berjurnal (asset.actions.ts:996-1010) — vonis ini menegaskan pola itu dan melarang regresi.
+
+### Dasar regulasi (diakses 2026-10-22)
+
+- UU PPh Pasal 11 (penyusutan harta berwujud): metode fiskal hanya garis lurus dan saldo menurun (bangunan hanya garis lurus); kelompok bukan bangunan 1/2/3/4 masa manfaat 4/8/16/20 tahun, tarif garis lurus 25%/12,5%/6,25%/5%, saldo menurun 50%/25%/12,5%/10%; bangunan permanen 20 tahun 5%, tidak permanen 10 tahun 10%; penyusutan dimulai bulan dilakukannya pengeluaran. Ringkasan resmi DJP: https://www.pajak.go.id/id/penyusutan-dan-amortisasi (akses 2026-10-22).
+- PMK Nomor 72 Tahun 2023: lampiran jenis harta per kelompok fiskal; jenis tidak tercantum memakai kelompok 3 atau penetapan DJP (dirujuk halaman DJP di atas).
+- PSAK 16 (aset tetap): metode penyusutan mencerminkan pola konsumsi manfaat (garis lurus, saldo menurun, unit produksi sah secara komersial); nilai residu dan masa manfaat ditelaah berkala. Label: rujukan standar akuntansi, bukan dasar tarif fiskal.
+
+### Putusan 1 — Sumber nilai buku tunggal = jurnal POSTED
+
+Nilai buku akuntansi satu aset pada satu tanggal = harga perolehan berjurnal − Σ kredit akun akumulasi penyusutan pada `JournalEntry` POSTED (status POSTED, bukan DRAFT/deleted) yang tertaut jurnal perolehan/penyusutan/disposal aset itu. `Asset.currentValue` dan Σ `AssetHistory type=depreciation` adalah CACHE turunan: wajib sama dengan angka jurnal; selisih antara ketiga jalur tampil sebagai TEMUAN rekonsiliasi aset (per aset, per akun) di read-model, TIDAK dipilih diam-diam salah satu dan TIDAK menimpa jurnal. Mutasi berikutnya (penyusutan bulan berikut, disposal) WAJIB membaca dasar dari jurnal POSTED, bukan dari `currentValue`. Disposal yang memakai `currentValue` sebagai nilai buku (asset.actions.ts:945) wajib diganti dasar jurnal sebelum inti ini ditutup.
+
+Larangan: menulis `currentValue` tanpa jurnal pasangan dalam tx yang sama; memperbaiki selisih dengan mengedit `currentValue`/`AssetHistory` langsung (koreksi hanya jurnal koreksi/reversal di periode terbuka, `assertPeriodOpen` dalam tx).
+
+### Putusan 2 — Gerbang metode: fiskal dua metode, komersial terdaftar
+
+- Metode FISKAL yang boleh dipakai menghitung sisi pajak hanya `straight_line` dan `declining_balance`, dengan kelompok fiskal PMK 72/2023 (kelompok 1/2/3/4, bangunan permanen, bangunan tidak permanen) dan tarif statutoris UU PPh Pasal 11 sebagai tabel VALIDASI di master bertanggal efektif — bukan konstanta hitung di logika. Penentuan kelompok dibedakan tegas: (a) jenis harta TERCANTUM di lampiran PMK 72/2023 → kelompok lampiran WAJIB terisi; kategori dengan tarif/umur fiskal terisi tetapi kelompok fiskal kosong = konfigurasi tidak lengkap: sisi fiskal TIDAK dihitung dan aset tampil di daftar "fiskal belum dapat dihitung" (pola jujur existing depreciation-difference dipertahankan). (b) jenis harta TIDAK tercantum di lampiran PMK 72/2023 → kelompok 3 ADALAH default statutoris UU PPh Pasal 11 ayat (6)/PMK 72/2023 (atau kelompok 1/2/4 bila ada penetapan DJP), BUKAN tebakan kode: kelompok fiskal kosong pada jenis tidak tercantum = fiskal TETAP dihitung sebagai kelompok 3, dan penetapan DJP bila ada mengalahkan default itu.
+- Metode KOMERSIAL di luar dua itu (mis. unit produksi, jumlah angka tahun) sah sebagai kebijakan akuntansi PSAK 16 tetapi statusnya ANALITIS NON-GL: tidak boleh melahirkan jurnal penyusutan sampai mesin hitung + vonis lanjutannya ada. Cron WAJIB menolak (error berisik per aset, tercatat di hasil cron), bukan menjatuhkannya diam-diam ke garis lurus.
+- `depreciationMethod` string bebas di luar daftar terdaftar = ditolak saat simpan aset/kategori (validasi Zod enum) DAN ditolak lagi di cron (data lama). Daftar terdaftar hidup satu tempat diekspor konstan: `straight_line`, `declining_balance`, plus metode analitis terdaftar eksplisit bila ditambah lewat vonis.
+
+### Putusan 3 — Perolehan tanpa akun = fail-closed berisik
+
+`createAsset` dengan `purchaseCost > 0`: bila akun Aset Tetap atau Kas/Bank tidak terpetakan, pembuatan DITOLAK dengan pesan menyebut akun yang hilang + arah melengkapi (kategori aset / Pengaturan Mapping Akun), pola sama disposal (asset.actions.ts:996-1010). "Skipped silently" (baris 749-755 + komentar helper baris 33-34) DILARANG untuk perolehan berharga. Aset `purchaseCost = 0` tetap boleh lahir tanpa jurnal. Aset legacy subledger-only (sudah terlanjur lahir tanpa jurnal perolehan): tampil di temuan rekonsiliasi Putusan 1 sebagai "belum berjurnal", disposalnya tetap jalur non-GL existing; DILARANG memposting jurnal perolehan susulan bertanggal lampau tanpa jurnal koreksi berperiode terbuka.
+
+### Putusan 4 — Hitung uang Decimal, mulai bulan pengeluaran, idempoten per (aset, masa)
+
+- Seluruh hitung penyusutan (dasar, tarif, clamp residu) memakai Decimal/`safeRound` sen dari `src/lib/utils/math`; `Number(...)` + float di jalur uang cron DILARANG. Pembulatan: bulanan dibulatkan ke sen saat jurnal; bulan terakhir clamp agar nilai buku jurnal berhenti PERSIS di nilai residu (bukan lewat, bukan kurang).
+- Mulai penyusutan = bulan pengeluaran perolehan (UU PPh Pasal 11), bulan penuh, tanggal jurnal = awal masa — perilaku cron existing (route:41-46) DIPERTAHANKAN sebagai putusan, bukan kebetulan. Aset hasil pengerjaan sendiri/belum digunakan: mulai bulan selesai/digunakan = `BUTUH-VONIS-AKUNTAN` per pola, jangan tebak di kode.
+- Satu jurnal penyusutan per (aset, masa): kunci `referenceType=ASSET_DEPRECIATION_YYYYMM` + `referenceId=assetId` dengan unique (referenceType, referenceId) schema dipertahankan; replay cron bulan sama = nol jurnal baru. `assertPeriodOpen` WAJIB di dalam tx posting per aset (bukan hanya sebelum loop), dan penolakan periode tertutup = error tercatat, bukan skip.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 3 (inti, kartu terpisah sesudah vonis masuk main; klaim schema di board dulu): (1) rekonsiliasi tiga jalur + read-model temuan; (2) dasar mutasi dari jurnal POSTED; (3) enum metode + gerbang cron; (4) kelompok fiskal di kategori (kolom baru = migrasi, koordinasi BOT 4); (5) perolehan fail-closed; (6) hitung Decimal. Tanpa migrasi di kartu vonis ini.
+- BOT 2: tampilkan temuan rekonsiliasi + daftar fiskal-belum-dihitung apa adanya dari backend; UI tidak menentukan metode/kelompok dan tidak menghitung ulang penyusutan.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): F62-1 edit `currentValue` manual tidak mengubah nilai buku read-model (dasar jurnal); F62-2 selisih history vs jurnal tampil sebagai temuan, bukan ditimpa; F62-3 metode `units_of_production` tersimpan/diproses cron tanpa jurnal + error berisik; F62-4 string metode ngawur ditolak Zod; F62-5 perolehan Rp10.000.000 tanpa akun Aset Tetap ditolak berisik, nol baris Asset lahir; F62-6 replay cron bulan sama = jurnal tetap 1 per aset; F62-7 tarif fiskal terisi tanpa kelompok: (i) jenis tercantum PMK 72/2023 = fiskal tidak dihitung + tampil belum-dihitung; (ii) jenis tidak tercantum + kelompok kosong = fiskal TETAP terhitung kelompok 3 statutoris (F62-10); F62-8 bulan terakhir nilai buku jurnal berhenti persis di residu (uji cost 1.000.000, residu 100.000, umur 3 tahun); F62-9 periode tertutup: cron menolak dalam tx, nol jurnal/history/currentValue berubah; F62-10 jenis tidak tercantum PMK 72/2023 + kelompok kosong → fiskal kelompok 3 statutoris terhitung, dan penetapan DJP bila ada mengalahkan default; jenis tercantum + kelompok kosong → tetap belum-dihitung (bukan kelompok 3).
+
+Klaim kepatuhan: vonis ini mengatur perlakuan internal ISF berdasar UU PPh Pasal 11 + PMK 72/2023 (sumber DJP di atas, akses 2026-10-22) dan PSAK 16; BUKAN klaim SPT Tahunan sah — daftar penyusutan fiskal final tetap wajib cocok lampiran SPT Tahunan badan.
+
+ID vonis ini **F-2026-10-22-062-V** (tertinggi terverifikasi di origin/main aa7f58ed: F-2026-10-22-057-V; 058-061 terpakai PR terbuka). Pemilik berikutnya: BOT 3 (inti di atas) -> BOT 2 -> BOT 6 F62-1..F62-10.
