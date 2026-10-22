@@ -9,6 +9,7 @@ import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { assertJobCostMutable } from "@/lib/services/job-closeout.service";
 import { releaseReservationsForReplacedItemsTx } from "@/lib/services/stock-reservation.service";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
+import { reservationReleaseNotice } from "@/lib/reports/stock-reservation-release";
 import {
   assertApproved,
   requestApprovalIfConfigured,
@@ -26,7 +27,7 @@ import { statusLabel } from "@/lib/utils/status-labels";
 import { safeJsonParse } from "@/lib/utils/safe-parse";
 import { logActivity } from "@/lib/services/activity-log.service";
 import { parseFormData } from "@/lib/validations/parse-form";
-import { parseMoneyAmount } from "@/lib/utils/parse-money";
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import {
   stockAdjustmentSchema,
   inventoryTransferSchema,
@@ -43,6 +44,80 @@ import { dateOnly } from "@/lib/validations/finance.schemas";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 
 type WarehouseActionUser = { id: number | string; roles: string[] };
+
+type QtyItemInput = {
+  itemId: number | string;
+  qty?: number | string;
+};
+
+/**
+ * Normalisasi baris qty dokumen stok dari JSON `items` (transfer inventaris +
+ * pengeluaran material). `qty` wajib parser repo (`parseLocaleNumber`) —
+ * `Number("2.000")` = 2 merusak qty diam-diam (pola sama StockAdjustment).
+ * qty tak terbaca/tidak > 0/itemId tak valid ditolak berpesan, bukan dibuang
+ * diam-diam via `.filter()`. Baris itemId = 0/negatif tetap placeholder form
+ * (dibuang) — form resmi prefilters itemId > 0; baris tak lengkap selain itu
+ * adalah payload rusak, bukan baris kosong.
+ */
+function normalizeQtyItem(it: QtyItemInput): { itemId: number; qty: number } {
+  const itemId = parseLocaleNumber(it.itemId as string | number);
+  if (itemId === null || !Number.isInteger(itemId))
+    throw new Error("Item tidak valid");
+  if (itemId <= 0) return { itemId: 0, qty: 0 };
+  const qty = parseLocaleNumber(it.qty as string | number);
+  if (qty === null || qty <= 0) throw new Error("Kuantitas tidak valid");
+  return { itemId, qty };
+}
+
+/** Daftar baris qty dari JSON `items`; placeholder itemId <= 0 dibuang. */
+function normalizeQtyItems(
+  raw: string | null | undefined,
+): { itemId: number; qty: number }[] {
+  return (safeJsonParse<QtyItemInput[]>(raw) ?? [])
+    .map(normalizeQtyItem)
+    .filter((it) => it.itemId > 0);
+}
+
+type WorkOrderItemInput = QtyItemInput & {
+  cost?: number | string;
+  description?: string;
+  status?: string;
+};
+
+/**
+ * Daftar baris perintah kerja dari JSON `items` (create+update, satu sumber).
+ * `qty` -> `parseLocaleNumber`, `cost` (nominal uang) -> `parseMoneyAmount`;
+ * cost kosong tetap 0, tak terbaca/negatif ditolak berpesan. Placeholder
+ * itemId <= 0 tetap dibuang; description/status diteruskan apa adanya.
+ */
+function normalizeWorkOrderItems(
+  raw: string | null | undefined,
+): {
+  itemId: number;
+  qty: number;
+  cost: number;
+  description?: string;
+  status?: string;
+}[] {
+  return (safeJsonParse<WorkOrderItemInput[]>(raw) ?? []).flatMap((it) => {
+    const base = normalizeQtyItem(it);
+    if (base.itemId === 0) return [];
+    const cost =
+      it.cost === undefined || it.cost === null || it.cost === ""
+        ? 0
+        : parseMoneyAmount(it.cost as string | number);
+    if (cost === null || cost < 0)
+      throw new Error("Biaya satuan tidak valid");
+    return [
+      {
+        ...base,
+        cost,
+        ...(it.description !== undefined ? { description: it.description } : {}),
+        ...(it.status !== undefined ? { status: it.status } : {}),
+      },
+    ];
+  });
+}
 
 async function warehouseScopeFor(user: WarehouseActionUser) {
   return getWarehouseScope({ id: String(user.id), roles: user.roles });
@@ -335,9 +410,7 @@ export async function createInventoryTransfer(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("TRF");
 
-    const transferItems = (
-      safeJsonParse<{ itemId: number; qty: number }[]>(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const transferItems = normalizeQtyItems(v.items);
 
     const transfer = await prisma.inventoryTransfer.create({
       data: {
@@ -351,8 +424,8 @@ export async function createInventoryTransfer(formData: FormData) {
         createdBy: Number(user.id),
         items: {
           create: transferItems.map((it) => ({
-            itemId: Number(it.itemId),
-            qty: Number(it.qty),
+            itemId: it.itemId,
+            qty: it.qty,
           })),
         },
       },
@@ -529,17 +602,40 @@ export async function receiveInventoryTransfer(transferId: number) {
 
 /** F-008: baris payload MI bersama create/update — parse + validasi scrap draft. */
 type MaterialIssuePayloadItem = {
-  itemId: number; qty: number; unitCost: number;
+  itemId: number; qty: number; unitCost: number; cost: number;
   scrapQty?: number; scrapReasonCode?: string | null; scrapNote?: string | null;
 };
 
 function parseMaterialIssuePayloadItems(raw: string | null | undefined): MaterialIssuePayloadItem[] {
-  const items = (safeJsonParse<MaterialIssuePayloadItem[]>(raw ?? null) ?? [])
-    .filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+  const rawItems = safeJsonParse<{
+    itemId: number | string; qty?: number | string;
+    unitCost?: number | string; cost?: number | string;
+    scrapQty?: number | string; scrapReasonCode?: string | null; scrapNote?: string | null;
+  }[]>(raw ?? null) ?? [];
+  const items: MaterialIssuePayloadItem[] = [];
+  for (const it of rawItems) {
+    const base = normalizeQtyItem(it);
+    if (base.itemId === 0) continue;
+    // unitCost nominal uang -> parseMoneyAmount; kosong tetap 0 (biaya
+    // opsional, pola StockAdjustment), tak terbaca/negatif ditolak berpesan.
+    const rawCost = it.unitCost ?? it.cost;
+    const cost = rawCost === undefined || rawCost === null || rawCost === ""
+      ? 0
+      : parseMoneyAmount(rawCost as string | number);
+    if (cost === null || cost < 0) throw new Error("Biaya satuan tidak valid");
+    const scrapQty = it.scrapQty === undefined || it.scrapQty === null || it.scrapQty === ""
+      ? 0
+      : parseLocaleNumber(it.scrapQty as string | number);
+    if (scrapQty === null) throw new Error("Qty scrap tidak valid");
+    items.push({
+      itemId: base.itemId, qty: base.qty, unitCost: cost, cost,
+      scrapQty, scrapReasonCode: it.scrapReasonCode ?? null, scrapNote: it.scrapNote ?? null,
+    });
+  }
   // Scrap draft divalidasi saat simpan juga (bukan hanya complete).
   for (const it of items) {
     const err = validateScrapInput({
-      issueQty: Number(it.qty), scrapQty: Number(it.scrapQty ?? 0),
+      issueQty: it.qty, scrapQty: it.scrapQty ?? 0,
       scrapReasonCode: it.scrapReasonCode ?? null, scrapNote: it.scrapNote ?? null,
     });
     if (err) throw new Error(`Baris item #${it.itemId}: ${err}`);
@@ -549,10 +645,10 @@ function parseMaterialIssuePayloadItems(raw: string | null | undefined): Materia
 
 function materialIssueItemCreateData(it: MaterialIssuePayloadItem, scrapPercentSnapshot: number | null) {
   return {
-    itemId: Number(it.itemId),
-    qty: Number(it.qty),
-    cost: Number(it.unitCost || 0),
-    scrapQty: Number(it.scrapQty ?? 0),
+    itemId: it.itemId,
+    qty: it.qty,
+    cost: it.cost,
+    scrapQty: it.scrapQty ?? 0,
     scrapReasonCode: it.scrapReasonCode ?? null,
     scrapNote: it.scrapNote ?? null,
     scrapPercentSnapshot,
@@ -757,17 +853,7 @@ export async function createWorkOrder(formData: FormData) {
     const v = parsed.data;
 
     const documentNo = await generateDocumentNumber("WO");
-    const itemsJson = v.items ?? null;
-    const items =
-      safeJsonParse<
-        {
-          itemId: number;
-          qty: number;
-          cost: number;
-          description?: string;
-          status?: string;
-        }[]
-      >(itemsJson) ?? [];
+    const items = normalizeWorkOrderItems(v.items ?? null);
 
     const wo = await prisma.workOrder.create({
       data: {
@@ -785,15 +871,13 @@ export async function createWorkOrder(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: items
-            .filter((i) => i.itemId > 0)
-            .map((i) => ({
-              itemId: i.itemId,
-              qty: i.qty,
-              cost: i.cost || 0,
-              description: i.description || null,
-              status: i.status || "pending",
-            })),
+          create: items.map((i) => ({
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost,
+            description: i.description || null,
+            status: i.status || "pending",
+          })),
         },
       },
     });
@@ -943,17 +1027,7 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       if (reasonError) return { success: false, error: reasonError };
     }
 
-    const itemsJson = v.items ?? null;
-    const items =
-      safeJsonParse<
-        {
-          itemId: number;
-          qty: number;
-          cost: number;
-          description?: string;
-          status?: string;
-        }[]
-      >(itemsJson) ?? [];
+    const items = normalizeWorkOrderItems(v.items ?? null);
 
     await prisma.$transaction(async (tx) => {
       // Re-verify status inside the transaction (TOCTOU guard): two concurrent
@@ -987,16 +1061,14 @@ export async function updateWorkOrder(id: number, formData: FormData) {
       await tx.workOrderItem.deleteMany({ where: { workOrderId: id } });
       if (items.length > 0) {
         await tx.workOrderItem.createMany({
-          data: items
-            .filter((i) => i.itemId > 0)
-            .map((i) => ({
-              workOrderId: id,
-              itemId: i.itemId,
-              qty: i.qty,
-              cost: i.cost || 0,
-              description: i.description || null,
-              status: i.status || "pending",
-            })),
+          data: items.map((i) => ({
+            workOrderId: id,
+            itemId: i.itemId,
+            qty: i.qty,
+            cost: i.cost,
+            description: i.description || null,
+            status: i.status || "pending",
+          })),
         });
       }
 
@@ -1105,7 +1177,7 @@ export async function reviseWorkOrderItems(input: {
       };
     }
 
-    await prisma.$transaction(async (tx) => {
+    const releasedCount = await prisma.$transaction(async (tx) => {
       // Klaim kondisional: serialkan revisi konkuren pada WO yang sama.
       const claim = await tx.workOrder.updateMany({
         where: { id: v.workOrderId, status: "in_progress" },
@@ -1118,6 +1190,7 @@ export async function reviseWorkOrderItems(input: {
         throw new Error("Status Perintah Kerja sudah berubah; muat ulang halaman.");
       }
 
+      let released = 0;
       if (replacedIds.length > 0) {
         const targets = await tx.workOrderItem.findMany({
           where: { id: { in: replacedIds }, workOrderId: v.workOrderId },
@@ -1165,7 +1238,7 @@ export async function reviseWorkOrderItems(input: {
         // F-2026-10-21-012 inti (AC-RES-8): baris diganti → sisa reservasi
         // aktif baris itu released sejumlah belum terpakai; yang sudah
         // consumed tak berubah (guard di atas menolak baris ter-issue).
-        await releaseReservationsForReplacedItemsTx(tx, {
+        released = await releaseReservationsForReplacedItemsTx(tx, {
           workOrderId: v.workOrderId,
           workOrderItemIds: replacedIds,
         });
@@ -1186,6 +1259,7 @@ export async function reviseWorkOrderItems(input: {
 
       // F-2026-10-22-063-S: snapshot fitment baris baru revisi.
       await stampWorkOrderFitmentSnapshot(tx, v.workOrderId);
+      return released;
     });
 
     // Q-LEAD-3: geser endDate di WO berjalan → baris histori yang sama persis
@@ -1208,7 +1282,8 @@ export async function reviseWorkOrderItems(input: {
       `Merevisi item perintah kerja #${v.workOrderId}: ${replacedIds.length} diganti, ${v.newItems.length} baru`,
     );
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true };
+    // F-2026-10-22-057-S §1: kata rilis verbatim; null = tak ada baris terdampak terlepas.
+    return { success: true, releaseNotice: reservationReleaseNotice("revise", releasedCount) };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[reviseWorkOrderItems]", getErrorMessage(e) || e);
@@ -1731,9 +1806,7 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
     }
 
     // Fix #2: Jangan generate documentNo baru saat update
-    const transferItems = (
-      safeJsonParse<{ itemId: number; qty: number }[]>(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const transferItems = normalizeQtyItems(v.items);
 
     const transfer = await prisma.$transaction(async (tx) => {
       await tx.inventoryTransferItem.deleteMany({
@@ -1759,8 +1832,8 @@ export async function updateInventoryTransfer(id: number, formData: FormData) {
           notes: v.notes ?? null,
           items: {
             create: transferItems.map((it) => ({
-              itemId: Number(it.itemId),
-              qty: Number(it.qty),
+              itemId: it.itemId,
+              qty: it.qty,
             })),
           },
         },

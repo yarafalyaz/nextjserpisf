@@ -9117,230 +9117,7 @@ Status yang diatur spec ini = status kepegawaian master (bukan status slip):
 - Mengubah metode PPh21 masa terakhir (F-026 FINAL; spec ini hanya memberi penanda master supaya jalurnya tidak bergantung ingatan).
 - Backfill status dari data slip/absensi (tebakan retroaktif dilarang, BR-EMP-03).
 
----
 
-## VONIS BOT 4 2026-10-22 — F-2026-10-22-084-V tahap 3 komisi: syarat buka jurnal + perlakuan PPh (lanjutan F-2026-10-22-056-V)
-
-Pemilik vonis: BOT 4 (accounting-finance-tax). Kartu: t_6284b0f7.
-Menjawab sisa terbuka F-056-V (PR #440 OPEN): "tahap 3 jurnal/bayar
-komisi + perlakuan PPh atas komisi" dinyatakan BUTUH-VONIS lanjutan,
-jangan dibangun. Dokumen saja; tanpa kode/schema/migrasi; PR terbuka
-TANPA merge (merge = Lead).
-
-### Anti-duplikat + bukti live (2026-10-22)
-
-- origin/main `6fc3aa92`. ID -V terpakai maks 083-V (PR #531 OPEN);
-  084-V bebas per grep backlog origin/main + `gh pr list` live.
-  F-084-S (PR #532 OPEN) BEDA wilayah: snapshot estimasi job,
-  eksplisit "BOT 4 tidak diminta vonis baru" (Q-EST-6 masa depan) —
-  vonis ini tidak menyentuhnya.
-- Hormati tertutup: 081-V #529, 082-V #530, 083-V #531, 080/079/078/
-  077/075/074/066/062-V, 058-V #443, REK-1..5 milik t_1f126c6e.
-- Kode terverifikasi origin/main `6fc3aa92`: tahap 1-2 F-016 LIVE —
-  snapshot `salesEmployeeId` Quotation->SO->Invoice (schema
-  SalesInvoice.salesEmployeeId), builder `sales-commission.ts` +
-  loader `sales-commission-data.ts` paid-only grandTotal, persen
-  loader 0 jujur (histori tarif F-056-V BELUM dibangun); UI #435
-  MERGED. CoA: 600002 Beban Komisi ADA (base-data.ts:792); akun
-  Utang Komisi = 0 hasil; setting komisi = 0 hasil; jurnal komisi =
-  0 hasil. Payroll jurnal existing: Dr salaryExpense / Cr
-  payrollBank + Cr salariesPayable (statutori) pola
-  `onPayrollPaid` accounting.hook.ts — komisi karyawan kelak masuk
-  pola ini, bukan jalur bayar kedua.
-- PUTUSAN Lead 2026-10-21 (commit 6fc7021e): F-016 tahap 3
-  DITUNDA-TEKNIS, syarat buka = snapshot penjual + akun kewajiban +
-  setting fail-closed. Snapshot kini ADA; dua syarat lain belum.
-  Vonis ini TIDAK membuka inti — membuka inti = PUTUSAN Lead
-  sesudah syarat §1 terpenuhi.
-
-### 0. Putusan ringkas
-
-1. Tahap 3 TETAP TERTUTUP sampai: (a) PUTUSAN Lead buka inti,
-   (b) histori tarif + snapshot persen F-056-V live, (c) akun +
-   mapping §2 live. Vonis ini memutus PERLAKUAN bila dibuka —
-   bukan izin bangun.
-2. Akrual: Dr 600002 Beban Komisi / Cr Utang Komisi (akun baru
-   §2) pada transisi faktur ke `paid`, sebesar snapshot F-056-V
-   (DPP x persen snapshot, sen). Bukan saat terbit, bukan saat
-   rekap dibaca.
-3. Penerima = Employee snapshot faktur (salesEmployeeId). Bukan
-   pegawai / bukan Employee = DI LUAR tahap 3 ini (§5).
-4. Bayar komisi karyawan = lewat payroll sebagai komponen
-   earning tidak teratur (T2 F-027), PPh 21 TER gabungan se-masa
-   (PMK 168/2023). Jalur bayar tunai terpisah di luar payroll
-   DILARANG untuk karyawan.
-5. Retur completed sesudah akrual = jurnal lawan (reversal)
-   pengurang di masa retur, BUKAN edit jurnal akrual asal.
-
-### 1. Syarat buka (gerbang, semua wajib sebelum BOT 3 bangun)
-
-G1. PUTUSAN Lead buka inti tahap 3 tertulis (pola G1 F-021).
-    Tanpa itu BOT 3 dilarang sentuh schema/jurnal komisi.
-G2. Inti F-056-V live lebih dulu: histori persen per kategori
-    (rentang tak tumpang tindih) + snapshot persen/kategori di
-    SalesInvoice pada transisi paid + basis loader DPP
-    (grandTotal - taxAmount). Akrual membaca SNAPSHOT itu;
-    snapshot kosong = akrual 0 dan tidak lahir jurnal (bukan
-    tebak tarif berjalan).
-G3. Akun + mapping §2 ter-seed dan terkonfigurasi; mapping
-    kosong = posting ditolak berisik (fail-closed), nol jurnal
-    setengah.
-G4. Titik akrual idempoten teruji: satu jurnal akrual per
-    (faktur, kejadian paid) — referenceType/referenceId unik
-    pola jurnal repo; retry/klik ulang tidak dobel.
-G5. Tes falsifikasi §7 hijau di head inti persis + gate repo.
-    BOT 6 audit sebelum Lead merge.
-
-### 2. Akun dan mapping (final)
-
-1. Debit: 600002 Beban Komisi (EXPS, existing base-data.ts:792).
-    Bukan akun baru; dilarang membuat Beban Komisi kedua.
-2. Kredit: akun BARU 210207 "Utang Komisi Penjualan" (anak 2102
-    OCLY, sesudah 210206). Verifikasi live: 210201-210206 terpakai
-    (210205 Provisi Garansi, 210206 Utang PPh 4(2) Sewa — keduanya
-    DILARANG dipakai ulang). 210207 bebas di COA bawaan.
-3. Mapping: SystemSetting baru `commissionExpenseAccountId` +
-    `commissionPayableAccountId` (nullable, tanpa default tebak),
-    pola mapping F-021. Seed menunjuk 600002 / 210207; instalasi
-    berjalan tanpa seed = mapping diisi admin, kosong = fail-closed.
-    Dilarang fallback ke Hutang Gaji 210204 (komisi belum tentu
-    dibayar lewat siklus gaji berjalan; mencampur = rekonsiliasi
-    gaji tercemar) dan dilarang fallback akun beban lain.
-4. Jurnal bayar (karyawan, lewat payroll): komponen komisi pada
-    slip membayar Dr Utang Komisi / Cr komponen payroll — BUKAN
-    Dr 600002 kedua kali. Beban diakui SEKALI di akrual.
-
-### 3. Akrual: titik, rumus, tanggal
-
-1. Titik: transisi SalesInvoice -> paid (lunas penuh). Faktur
-   partial/posted/draft/cancelled: nol akrual. Nilai dibekukan =
-   hasil resolusi F-056-V per TANGGAL FAKTUR (persen snapshot),
-   ditulis pada transisi paid persis seperti titik snapshot
-   F-056-V putusan 1(d) — satu titik, satu tx dengan perubahan
-   status.
-2. Rumus per faktur: komisi = safeRound(DPP x persen/100) sen;
-   DPP = grandTotal - taxAmount snapshot faktur. Contoh mengikat
-   F-056-V: DPP 11.000.000, 2% -> 220.000 (bukan 246.400).
-3. Tanggal jurnal akrual = tanggal transisi paid (tanggal kas
-   pelunasan terakhir), `assertPeriodOpen(tanggal, tx)`. Periode
-   terkunci = posting ditolak, tanggal TIDAK digeser diam-diam.
-4. Penjual null (ember unattributed): nol akrual walau faktur
-   paid — tanpa penerima tidak ada utang. Dilarang atribusi
-   dari createdBy.
-
-### 4. Koreksi: retur, batal, reversal
-
-1. Retur completed tertaut faktur yang sudah diakru: jurnal
-   LAWAN Dr Utang Komisi / Cr 600002 sebesar returnDpp snapshot
-   x persen snapshot faktur asal, di MASA RETUR (F-056-V putusan
-   3), tanggal retur completed + assertPeriodOpen. Jurnal akrual
-   asal TIDAK diubah/dihapus.
-2. Kumulatif lawan per faktur <= akrual faktur itu (guard
-   kumulatif retur existing menahan di sumber; loader/jurnal
-   tidak memotong diam-diam).
-3. Faktur dibatalkan sesudah paid (jalur koreksi existing):
-   reversal penuh akrual lewat mekanisme reversal jurnal repo
-   (jurnal lawan + asal REVERSED), bukan hapus baris.
-4. Komisi sudah TERBAYAR lewat payroll lalu retur lahir: lawan
-   akrual tetap terbit; utang komisi penjual boleh negatif
-   sebagai SALDO tercatat, ditagih/dipotong dari komisi/payroll
-   berikutnya oleh proses payroll — sistem TIDAK menarik kas
-   otomatis dan TIDAK meng-clamp 0. Penagihan manual berizin
-   di luar sistem = catatan, bukan jurnal karangan.
-
-### 5. Pajak atas komisi (PPh)
-
-Dasar: PMK 168/2023 (berlaku 1 Jan 2024; PDF resmi DJP
-https://pajak.go.id/sites/default/files/2024-02/PMK%20168%20Tahun%202023%20Tentang%20PPh%20Pasal%2021%20TER.pdf,
-diakses 2026-10-22): Pasal 5 ayat (1) huruf a (Pegawai Tetap:
-teratur maupun tidak teratur), huruf e angka 2 (Bukan Pegawai:
-komisi), Pasal 8/10 (TER + hitung ulang masa terakhir).
-
-1. Penerima KARYAWAN (Pegawai Tetap): komisi = penghasilan
-   tidak teratur; digabung bruto masa diterima/dibayar lalu
-   TER se-masa (basis F-027 T2, F-026). Bukan tarif sendiri,
-   bukan dipisah dari gaji masa sama. Wajib masuk slip payroll
-   masa bayar sebagai komponen earning; PPh 21 dipotong pemberi
-   kerja saat bayar.
-2. Penerima karyawan TIDAK tetap: ikut rezim payroll existing
-   statusnya (F-077-V); komisi tidak menciptakan rezim baru.
-3. Penerima BUKAN pegawai (agen/perantara non-Employee):
-   PMK 168/2023 Pasal 5 ayat (1) huruf e — PPh 21 Bukan Pegawai
-   (50% x bruto x Pasal 17), BUKAN PPh 23 (jasa yang sudah
-   dipotong PPh 21 dikecualikan dari PPh 23). Tahap 3 ini
-   DILARANG membayar penerima non-Employee: model penerima
-   tahap 3 = Employee saja. Agen eksternal = kartu/vonis
-   terpisah (master penerima + bupot non-pegawai) bila bisnis
-   membuktikan kebutuhan.
-4. PPh 21 atas komisi TIDAK dipotong saat akrual — akrual =
-   bruto penuh ke Utang Komisi. Potong hanya saat bayar lewat
-   payroll. Mengkredit utang neto-PPh saat akrual = DILARANG
-   (utang tercatat bukan hak penerima sebenarnya).
-5. Komisi BUKAN objek PPN (penghasilan orang pribadi, bukan
-   penyerahan jasa kena pajak oleh PKP OP dalam konteks ini);
-   jangan buat TaxInvoice dari pembayaran komisi karyawan.
-
-### 6. Yang TIDAK diputus / dilarang
-
-- Split komisi multi-penjual per faktur (Accurate bisa bagi):
-  schema 1 salesEmployeeId per faktur; split = inti model
-  terpisah, jangan karang persen pembagi.
-- Pembayaran komisi di luar payroll untuk karyawan, tunai
-  langsung dari kas tanpa slip: DILARANG (memutus rantai
-  PPh 21 + BPJS bila komponen terkait).
-- Pertanyaan BPJS atas komisi: komisi karyawan sebagai upah
-  komponen BPJS mengikuti definisi basis upah F-083-V
-  (tunjangan tetap vs tidak tetap) — komisi tidak tetap TIDAK
-  masuk basis rutin; bila kelak ada komisi bersifat tetap
-  berkala, itu BUTUH-VONIS baru, jangan simpulkan di sini.
-- Backfill akrual faktur paid historis sebelum snapshot
-  F-056-V ada: DILARANG (persen 0 jujur; mengarang tarif
-  mundur = utang karangan).
-
-### 7. Draf acceptance BOT 6 (falsifikasi; cabut penjaga -> MERAH)
-
-KOM3-1. Faktur DPP 11.000.000 PPN 1.320.000 tarif snapshot 2%
-  mencapai paid -> satu jurnal Dr 600002 / Cr 210207 220.000.
-  Basis grandTotal (246.400) atau jurnal dobel saat retry =
-  MERAH.
-KOM3-2. Mapping commissionPayableAccountId dikosongkan ->
-  transisi paid menolak jurnal berisik, nol jurnal setengah;
-  fallback ke 210204/210205/210206 terbit = MERAH.
-KOM3-3. Faktur partial lalu paid: akrual hanya sekali saat
-  paid penuh; akrual saat partial = MERAH.
-KOM3-4. Retur completed masa berikut returnDpp 1.000.000 atas
-  faktur KOM3-1 -> jurnal lawan 20.000 di masa retur; jurnal
-  akrual asal berubah/dihapus = MERAH.
-KOM3-5. Slip payroll memuat komponen komisi 220.000: PPh 21 =
-  TER atas gabungan bruto masa itu (bukan tarif komisi
-  sendiri); jurnal slip Dr Utang Komisi (bukan 600002 kedua).
-  Beban ganda = MERAH.
-KOM3-6. Penerima non-Employee diajukan ke jalur bayar tahap 3
-  -> ditolak; terbayar tanpa vonis terpisah = MERAH.
-KOM3-7. Faktur paid tanpa penjual / tanpa snapshot persen ->
-  nol akrual, nol utang karangan; akrual dari tarif berjalan
-  hari baca = MERAH.
-
-### 8. Batas build per bot
-
-- BOT 1: PUTUSAN buka inti (G1) sesudah G2-G3 siap dinilai;
-  merge PR vonis ini milikmu. Vonis ini bukan izin bangun.
-- BOT 3: inti hanya sesudah G1-G4 — seed 210207 + 2 mapping +
-  hook akrual di tx transisi paid + jurnal lawan di complete
-  retur + komponen payroll pembayar utang. Klaim
-  schema.prisma di board sebelum edit; jangan bangun sebelum
-  inti F-056-V (histori+snapshot) merged.
-- BOT 5: workflow bayar komisi = run payroll existing (komponen
-  T2); jangan rancang jalur bayar terpisah. Sinkronkan spec
-  bila menyentuh komisi non-karyawan: berhenti, vonis terpisah.
-- BOT 2: tampilkan saldo Utang Komisi + riwayat dari loader apa
-  adanya sesudah kontrak BOT 3; UI tidak hitung PPh/komisi.
-- BOT 6: KOM3-1..7 di atas atas head inti persis.
-
-Label bukti: TERVERIFIKASI-KODE (rujukan berkas/schema origin/
-main 6fc3aa92); REGULASI (PMK 168/2023 Pasal 5/8/10, URL DJP di
-atas, berlaku 1 Jan 2024); KEBIJAKAN INTERNAL (titik akrual,
-akun 210207, larangan jalur bayar kedua — bukan klaim regulasi).
 ---
 
 ## SPEC BOT 5 2026-10-22 — F-2026-10-22-078-S Permintaan Barang Antar Gudang (inti F-2026-10-21-014)
@@ -9492,130 +9269,138 @@ Dependensi: F-2026-10-21-015 (terima parsial, receivedQty) hanya untuk AC-MR-4 p
 
 ---
 
-## SPEC BOT 5 2026-10-22 — F-2026-10-22-089-S antrean penagihan piutang + jejak tindak lanjut & janji bayar (gap baru domain d/j)
+## 2026-10-22 — SPEC BOT 5: F-2026-10-22-088-S Target penjualan per penjual (target vs pencapaian)
 
-### 0. Verifikasi live origin/main 29f7102a (2026-10-22, run ini)
+> **Slot**: F-2026-10-22-088-S. Diperiksa bentrok 2026-10-22 vs `origin/main` (`0bcb8def`): -085-S BOT 5 merged (PR #535), -086-V BOT 4 (PR #536, Q-EMP-4/5), -087-V BOT 4 (PR #539, BR-EMP-12 PPh21 DAILY/INTERN) terpakai; grep `F-2026-10-22-088` di `docs/` = 0, nol PR/spec target penjualan di `gh pr list --state all`. ID 088 bebas. Diverifikasi sebelum tulis, bukan slot tetap. (Catatan: nomor 087 di domain ini sudah milik vonis BOT 4; spec ini TIDAK memakai 087.)
+>
+> **Penulis**: BOT 5 (`@sales-crm-hr-payroll-business-workflow`) — domain penjualan/CRM. USULAN spec; bukan vonis uang/pajak.
+>
+> **Induk**: F-2026-10-21-018 (d) P2 — "Harga jual bertingkat kuantitas + target penjualan absen". Cabang harga bertingkat sudah terspec (SPEC 2026-10-22 01:33, F-2026-10-21-018 harga bertingkat kuantitas); cabang target penjualan ditunda eksplisit di backlog:1181-1195 "target penjualan ditunda sampai F-016 atribusi sales dipakai". Prasyarat itu sekarang terpenuhi (lihat §0 butir 2-3). Spec ini mengangkat HANYA cabang target penjualan; harga bertingkat tidak disentuh ulang.
+>
+> **Bukan PR implementasi**: deliverable spec + backlog + board claim yang bisa langsung dieksekusi BOT 3/BOT 2/BOT 1/BOT 4 tanpa pertanyaan terbuka ke penulis. Tanpa kode.
 
-Sudah ada (TERVERIFIKASI-KODE):
-- Aging piutang agregat per faktur: `loadReceivablesAging` (`src/lib/reports/aging-reports-data.ts:88`) — status diakui `RECOGNISED_AR_STATUSES = ["posted","partial","paid"]` (`document-status.ts:10`), sisa > 0, wajib dueDate; tanpa tahap penagihan, tanpa kontak tindak lanjut per baris, tanpa jejak.
-- Tukar faktur: model `InvoiceExchange/InvoiceExchangeItem` (schema.prisma ~:1476), aksi `createInvoiceExchange` (invoice-exchange.actions.ts:47) — faktur boleh diserahkan hanya `EXCHANGEABLE_STATUSES=["posted","partial"]` (:22), satu faktur tidak boleh diserahkan dua kali, tanpa jurnal (piutang sudah tercatat faktur). Laporan daftar: `loadInvoiceExchanges` + `buildInvoiceExchangeListing` (settlement dari paidAmount).
-- Notifikasi overdue ke admin: cron `daily-notifications/route.ts:98-117` + `api/cron` task overdue-invoice — hitungan agregat ke admin, BUKAN antrean kerja per faktur untuk petugas penagih.
-- Jejak klik WA: `WhatsappButton` (whatsapp-button.tsx:22) + pola F-2026-10-21-036 (klik tercatat); pola antrean terjadwal: `lead-followups.ts` (F-037, builder murni tanpa migrasi).
-- Izin katalog nyata: `view_reports` (module-catalog.generated.ts:411), `view_sales_invoices` (:145), `view/create_invoice_exchanges` (:174-175).
+### 0. Bukti live (TERVERIFIKASI-KODE, `origin/main` @ `0bcb8def`)
 
-Belum ada (bukti grep run ini = 0):
-- Model/aksi jejak tindak lanjut penagihan per faktur: grep `CollectionFollow|InvoiceFollow|janji bayar|promise` di prisma+src = 0. ActivityLog generik ada tapi bukan jadwal janji bayar terstruktur (tanggal janji + hasil tindak lanjut per faktur).
-- Antrean kerja penagihan: tidak ada builder yang menggabungkan (a) faktur terbit belum diserahkan tukar faktur, (b) sudah diserahkan belum lunas, (c) janji bayar lewat — jadi petugas membuka aging + daftar tukar faktur + daftar faktur terpisah dan menebak prioritas.
+1. Target penjualan ABSEN total: grep `SalesTarget|salesTarget|targetPenjualan|sales_target` di `prisma/schema.prisma` + `src/` = **0 hit**. Tidak ada model, aksi, halaman, atau laporan target.
+2. Atribusi penjual SUDAH dipakai (prasyarat F-018 terpenuhi): snapshot `salesEmployeeId` mengalir Quotation (`prisma/schema.prisma:1216`) → SalesOrder (:1352) → SalesInvoice (:1409, relasi `SalesInvoiceSalesEmployee` :1437, index :1444).
+3. Rekap komisi informatif F-2026-10-21-016 tahap 2 SUDAH hidup dan SUDAH dikonsumsi UI: builder murni `src/lib/reports/sales-commission.ts:51` (`buildSalesCommissionRecap`, basis = `grandTotal` faktur status `paid` saja, ember `unattributed` untuk `salesEmployeeId` null :16-18,59-63), loader `src/lib/reports/sales-commission-data.ts:19-44` (satu query `status:"paid"`, `deletedAt:null`, rentang `date` faktur :23-35), halaman konsumen `src/app/(dashboard)/laporan/rekap-komisi/[[...segments]]/page.tsx:37` dengan gerbang `requirePermission("view_reports")` (:22 katalog `view_reports` di `module-catalog.generated.ts:411`), filter penjual tampil-saja dari rows (:39-48). Label jujur existing mengikat: angka INFORMATIF, BUKAN utang komisi, bukan dasar jurnal/pembayaran (`sales-commission.ts:23-26`).
+4. Status faktur: enum `SalesInvoiceStatus` (`prisma/schema.prisma:4527-4535`): draft/sent/posted/partial/paid/cancelled/approved. Basis "lunas" existing = `paid` saja, BUKAN `partial`/`posted`.
+5. Retur penjualan: `SalesReturn` (`prisma/schema.prisma:1572`) tertaut `salesInvoiceId` nullable (:1576), status teks default `draft`, selesai lewat `completeSalesReturn` (`src/actions/sales.actions.ts:1692`, status `completed`); retur hanya boleh dari faktur `posted|partial|paid` (`RETURNABLE_INVOICE_STATUSES`, `src/lib/validations/sales.schemas.ts:180`). Baris retur membawa `qty`/`price` (`SalesReturnItem`, schema :1610 dst.) — nilai retur per faktur bisa diturunkan, tetapi TIDAK ada tautan retur→penjual selain lewat faktur asalnya.
+6. Permission nyata relevan: `view_reports` (katalog :411) untuk laporan; master karyawan `view_employees` (:96). TIDAK ada permission key target/penjualan khusus. Spec ini TIDAK menambah permission key baru (BR-TGT-08).
 
-Anti-duplikat: nomor -S maks di main = 085-S, PR terbuka maks 088-S/088-V; 089 bebas. Gap ini bukan F-032 (statement per pelanggan, sudah terbangun), bukan F-017 (paparan kredit), bukan laporan aging existing.
+### 1. Masalah
 
-### 1. Workflow specification (USULAN kecuali ditandai lain)
+Pemilik bengkel menetapkan sasaran omzet per penjual per bulan, tetapi hari ini pencapaian hanya bisa direkap manual dari Rekap Komisi (yang memang dirancang informatif per penjual per masa, tanpa pembanding sasaran). Tidak ada tempat mencatat target, tidak ada persen pencapaian, tidak ada selisih. Akibatnya evaluasi penjual bergantung hitung tangan di luar sistem, dan angka "pencapaian" tiap orang bisa beda basis. Spec ini menambah master target per penjual per periode + read-model pencapaian yang MEMAKAI basis yang sama persis dengan rekap komisi existing — satu basis, dua laporan — supaya target dan komisi tidak pernah berbeda angka dasar.
 
-Aktor: Petugas Penagihan / Admin Penjualan (kolektor), Supervisor Penjualan, Admin (lihat semua).
-Dokumen masuk: SalesInvoice (posted/partial, sisa > 0), InvoiceExchange+Item (bila sudah diserahkan), Customer (nama/kontak).
-Dokumen keluar: baris antrean turunan (read-model, tanpa dokumen baru tahap 1) + Catatan Tindak Lanjut Penagihan per faktur (dokumen baru tahap 2, tanpa jurnal).
+### 2. Fitur & alur
 
-Alur:
-1. Sistem menurunkan tahap penagihan per faktur dari dokumen existing (tahap 1, tanpa kolom baru):
-   - `BELUM_DISERAHKAN`: faktur posted/partial, sisa > 0, belum ada InvoiceExchangeItem aktif (exchange deletedAt null).
-   - `SUDAH_DISERAHKAN`: sudah ada tukar faktur aktif, sisa > 0, belum lewat janji/due tukar faktur.
-   - `LEWAT_JANJI`: sisa > 0 DAN (janji bayar terakhir tanggalnya < hari ini WIB, ATAU belum ada janji DAN dueDate acuan < hari ini). Acuan due: InvoiceExchange.dueDate bila ada, else SalesInvoice.dueDate. Faktur tanpa dueDate apa pun: tahap dari tukar faktur saja, kolom umur tampil "—" jujur, tidak ditebak.
-   - Faktur lunas (sisa <= 0,005 pola repo) / cancelled / draft / deletedAt: tidak masuk antrean.
-2. Petugas membuka antrean terurut: LEWAT_JANJI paling lama dulu, lalu jatuh tempo terdekat, lalu sisa terbesar (urutan final Q-COL-3 BOT 1).
-3. Petugas mencatat tindak lanjut (tahap 2): tanggal, kanal (telepon/WA/kunjungan/email/lainnya — kosakata Q-COL-2), hasil, janji bayar (tanggal + nominal opsional), catatan. WA memakai WhatsappButton existing; klik saja bukan tindak lanjut — tindak lanjut wajib disimpan eksplisit (pola jujur F-036).
-4. Janji bayar terlewat tanpa pembayaran: faktur naik ke LEWAT_JANJI otomatis dari turunan (tanpa cron tulis status).
-5. Pembayaran tetap lewat SalesPayment existing; antrean membaca paidAmount — antrean tidak pernah mencatat pembayaran.
+Usulan bentuk fisik (nama model/kolom FINAL milik BOT 3 mengikuti konvensi schema; spec menetapkan makna, bukan nama):
 
-### 2. Bentuk data usulan (USULAN — fisik final BOT 3)
+- Master target per penjual per periode (usulan `SalesTarget`): `salesEmployeeId` (FK Employee, wajib), `periodStart`/`periodEnd` (tanggal, inklusif dua ujung — pola rentang loader komisi), `targetAmount` (Decimal 15,2, > 0), `notes` opsional, `createdBy`, timestamps. Satu penjual boleh punya banyak periode; periode BERTUMPAKAN untuk penjual sama = ditolak di aksi (BR-TGT-03). Tidak ada target per barang/kategori/cabang di tahap ini (lihat §10).
+- Read-model murni `sales-target-achievement` (usulan nama BOT 3): untuk rentang laporan, per penjual yang punya target tumpang-tindih rentang: target terprorata TIDAK dihitung — target hanya dinilai utuh bila periode target termuat PENUH dalam rentang laporan; periode target yang hanya bersinggungan sebagian masuk ember "periode tidak utuh" dan TIDAK diberi persen (BR-TGT-05). Pencapaian memakai loader yang sama basisnya dengan komisi: faktur `paid`, `deletedAt:null`, `date` dalam periode target, dikelompokkan per snapshot `salesEmployeeId`.
+- Baris laporan per penjual: nama penjual, periode target, `targetAmount`, `achievedAmount` (Σ grandTotal paid), `achievementPercent` = achieved ÷ target × 100 dihitung dari total (bukan rata-rata persen harian/baris — pola kontrak agregat tertimbang), `gapAmount` = achieved − target (negatif tampil negatif, bukan disembunyikan), jumlah faktur, plus ember `unattributed` (faktur paid tanpa penjual dalam rentang: dihitung di total pencapaian perusahaan, TIDAK dibagikan ke penjual mana pun).
+- Penjual dengan pencapaian tetapi TANPA target pada periode itu tampil sebagai baris "tanpa target" dengan persen kosong (bukan 0%), supaya ketiadaan target tidak terbaca sebagai kegagalan.
+- Alur: admin penjualan menetapkan target di awal periode → selama periode, laporan target membaca pencapaian berjalan dari faktur paid yang sama dengan rekap komisi → akhir periode, persen final terbaca; mengubah target sesudah ada pencapaian TIDAK mengubah faktur/pencapaian, hanya pembanding (jejak perubahan tercatat, BR-TGT-09).
 
-Tahap 1: nol migrasi. Builder murni + loader (pola lead-followups): input faktur + exchange items + tindak lanjut terakhir; output baris {invoiceId, documentNo, customerId/Name, phone/contactPerson, date, dueAcuan, sisaSen, tahap, umurHari|null, exchangeDocumentNo|null, lastFollowUpAt|null, promiseDate|null}.
-Tahap 2: model usulan `InvoiceCollectionFollowUp`: id, salesInvoiceId (FK, index), followedUpAt (tanggal kejadian), channel (teks tervalidasi), outcome (teks tervalidasi: terhubung_janji_bayar / terhubung_tanpa_janji / tidak_terhubung / sengketa / lainnya — final Q-COL-2), promisedDate (nullable), promisedAmountSen (nullable, >0 bila terisi), notes, createdBy, createdAt, deletedAt (soft, pola repo). Tanpa kolom status tersimpan di SalesInvoice. slug bila pola repo mewajibkan (BOT 3 putus, masuk cakupan backfill slug bila ber-slug).
+### 3. Aturan bisnis (register)
 
-### 3. Status-transition matrix (turunan, bukan kolom)
-
-| Dari | Pemicu | Ke | Penjaga |
-|---|---|---|---|
-| BELUM_DISERAHKAN | createInvoiceExchange memuat faktur | SUDAH_DISERAHKAN | aksi existing, create_invoice_exchanges |
-| SUDAH_DISERAHKAN / BELUM_DISERAHKAN | due acuan atau janji terakhir lewat, sisa > 0 | LEWAT_JANJI | turunan builder, tanpa tulis |
-| LEWAT_JANJI | janji baru tanggal >= hari ini dicatat | SUDAH_DISERAHKAN / BELUM_DISERAHKAN (sesuai exchange) | catat tindak lanjut berizin |
-| tahap apa pun | pembayaran membuat sisa <= 0,005 | keluar antrean | SalesPayment existing |
-| tahap apa pun | faktur cancelled/deleted | keluar antrean | status existing |
-
-### 4. Role/permission matrix (izin katalog TERVERIFIKASI-KODE)
-
-| Aksi | Izin | Catatan |
+| ID | Aturan | Status |
 |---|---|---|
-| Lihat antrean | `view_reports` (:411) DAN `view_sales_invoices` (:145) | keduanya wajib; loader menegakkan di server |
-| Lihat kontak pelanggan di baris | turunan izin di atas | phone tampil hanya di antrean, bukan ekspor laporan umum (Q-COL-4) |
-| Catat tindak lanjut + janji | usulan key baru `create_invoice_collection_followups` (Q-COL-1 BOT 1) | jangan pinjam create_invoice_exchanges — beda tugas |
-| Hapus/ubah tindak lanjut | tahap 1: tidak ada (append-only + soft-delete admin) | Q-COL-1 |
-| Buat tukar faktur dari antrean | `create_invoice_exchanges` existing | tombol hanya tampil bila berizin + tahap BELUM_DISERAHKAN |
+| BR-TGT-01 | Basis pencapaian = Σ `grandTotal` faktur status `paid` saja, `deletedAt:null`, dikelompokkan per snapshot `SalesInvoice.salesEmployeeId`, jendela = `date` faktur di dalam periode target. Basis ini IDENTIK dengan rekap komisi F-2026-10-21-016 tahap 2 (`sales-commission-data.ts:23-35`); dilarang basis kedua (mis. `posted`/`partial` ikut, atau basis tanggal bayar) tanpa vonis terpisah. | USULAN (basisnya TERVERIFIKASI-KODE existing) |
+| BR-TGT-02 | Faktur `salesEmployeeId` null masuk ember `unattributed`: terhitung di total perusahaan, tidak ditebak dari `createdBy`, tidak dibagikan proporsional ke penjual. | USULAN (pola TERVERIFIKASI-KODE `sales-commission.ts:16-18`) |
+| BR-TGT-03 | Periode target penjual sama tidak boleh bertumpukan; aksi simpan menolak tumpang tindih dengan pesan menyebut periode yang bertabrakan. Periode bersebelahan (end = H, start berikutnya H+1) sah. | USULAN |
+| BR-TGT-04 | `targetAmount` wajib > 0. Target 0/null tidak disimpan; penjual tanpa target tampil "tanpa target", persen kosong — bukan 0%. | USULAN |
+| BR-TGT-05 | Persen hanya untuk periode target yang termuat PENUH dalam rentang laporan. Prorata target (mis. target bulanan dinilai per 2 minggu) DILARANG di tahap 1 — tidak ada aturan prorata yang disetujui pemilik proses; kebutuhan prorata = usulan tahap 2 terpisah. | USULAN |
+| BR-TGT-06 | Retur penjualan TIDAK mengurangi pencapaian di tahap 1. Alasan tercatat: basis komisi existing juga tidak mengurangi retur; dua laporan wajib satu basis (BR-TGT-01). Nilai retur `completed` tertaut faktur paid memang bisa diturunkan (§0.5) tetapi memakainya = basis kedua. Apakah tahap 2 mengurangi retur (dan sejak status retur apa) = Q-TGT-1 ke BOT 4/BOT 1. | USULAN tahap 1 + BUTUH-VONIS (Q-TGT-1) |
+| BR-TGT-07 | Laporan target INFORMATIF: bukan dasar jurnal, bukan utang bonus/insentif, bukan komponen slip gaji. Mengikat pencapaian ke bonus/komisi berbayar = wilayah F-2026-10-21-016 tahap 3 (jurnal komisi DITUNDA-TEKNIS vonis Lead 2026-10-21, `sales-commission.ts:12-14`) dan vonis BOT 4; spec ini tidak membukanya. Label informatif wajib tampil verbatim (§6). | USULAN (label pola TERVERIFIKASI-KODE) |
+| BR-TGT-08 | Tanpa permission key baru: kelola target memakai izin penjualan existing yang diputus Q-TGT-2; lihat laporan memakai `view_reports`. Penjual yang login TIDAK otomatis berhak melihat target/pencapaian penjual lain — cakupan lihat per-penjual = Q-TGT-3. Nominal gaji/komisi berbayar tidak pernah tampil di laporan ini. | TERVERIFIKASI-KODE (katalog existing) + BUTUH-VONIS BOT 1 (Q-TGT-2/3) |
+| BR-TGT-09 | Perubahan `targetAmount`/periode pada target yang sudah berjalan tercatat di ActivityLog existing dengan old/new (pola F-2026-10-21-035); laporan selalu memakai nilai target TERKINI, dan UI menandai target yang pernah diubah sesudah periode mulai ("target diubah <tanggal>") agar persen tidak dibaca seolah target awal. | USULAN (pola TERVERIFIKASI-KODE F-035) |
+| BR-TGT-10 | Menghapus target = soft-delete/nonaktif tercatat, bukan hapus fisik, bila periode target sudah mulai; target yang belum mulai boleh dihapus dengan jejak. Faktur dan pencapaian tidak pernah berubah oleh operasi target. | USULAN |
+| BR-TGT-11 | Persen agregat perusahaan = Σ achieved ÷ Σ target penjual yang dinilai utuh (tertimbang nilai), bukan rata-rata persen per penjual. | USULAN (pola kontrak agregat repo) |
+| BR-TGT-12 | Karyawan nonaktif tetap tampil pada laporan periode lampau bila punya target/faktur pada periode itu (nama dari snapshot/relasi Employee apa adanya); target baru hanya boleh untuk karyawan `isActive` — daftar penjual aktif difilter di aksi, bukan di UI saja. | USULAN |
 
-### 5. Business rules register
+### 4. Benchmark (URL resmi; bukan aturan bisnis)
 
-| ID | Aturan | Label |
+- Accurate Online — Target Penjualan: target bisa per penjual, per barang, per kategori, per bulan, per cabang; ada Laporan Target Penjualan Penjual membandingkan target vs realisasi: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/target-penjualan/mengenal-fitur-target-penjualan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/target-penjualan/target-sales/ (akses 2026-10-22). Tahap 1 spec ini mengambil HANYA dimensi per-penjual per-periode (skala bengkel satu cabang); dimensi per-barang/kategori/cabang = §10 belum diusulkan.
+- Zahir: tidak ditemukan halaman help resmi Zahir yang menetapkan target penjualan per penjual pada URL yang diakses run ini (pencarian help.zahironline.com 2026-10-22 hasil laporan penjualan umum) — ditulis "belum terverifikasi", bukan diklaim.
+
+### 5. Role / permission matrix
+
+| Aksi | Permission key | Catatan |
 |---|---|---|
-| BR-COL-01 | Tahap penagihan selalu turunan builder dari faktur+exchange+janji terakhir; tidak ada kolom status penagihan tersimpan tahap 1-2 | USULAN |
-| BR-COL-02 | Sisa = grandTotal - paidAmount presisi sen pola aging-amounts; lunas bila sisa <= 0,005 (pola exchange existing) | TERVERIFIKASI-KODE (pola) |
-| BR-COL-03 | Due acuan = InvoiceExchange.dueDate bila exchange aktif ada, else SalesInvoice.dueDate; keduanya kosong = umur "—", tidak ditebak | USULAN |
-| BR-COL-04 | Satu faktur satu baris antrean walau exchange historis ganda (exchange aktif terakhir yang dipakai); faktur di exchange terhapus (deletedAt) dianggap belum diserahkan | USULAN |
-| BR-COL-05 | Janji bayar terakhir = promisedDate maksimum dari tindak lanjut tidak terhapus dengan outcome janji; janji lewat + sisa > 0 = LEWAT_JANJI | USULAN |
-| BR-COL-06 | Catat tindak lanjut append-only; koreksi = catatan baru, bukan edit diam-diam; hapus hanya soft-delete berizin + ActivityLog | USULAN |
-| BR-COL-07 | Antrean dan tindak lanjut tidak membuat jurnal, tidak mengubah paidAmount/status faktur, tidak mencatat pembayaran | USULAN (konsisten tanpa-jurnal exchange) |
-| BR-COL-08 | Klik WA bukan tindak lanjut; tindak lanjut wajib simpan eksplisit (kanal WA dipilih manual) | USULAN (pola F-036) |
-| BR-COL-09 | Nominal janji informatif; tidak mengunci pembayaran, tidak menjadi piutang kedua, tidak masuk aging/statement | USULAN |
-| BR-COL-10 | Kontak pelanggan (phone/contactPerson) hanya tampil ke pemegang izin antrean; ekspor tahap 1 tanpa kolom kontak | USULAN — Q-COL-4 |
-| BR-COL-11 | Denda keterlambatan / bunga piutang tidak dihitung spec ini (Zahir term-of-sales menyebut denda — ISF belum ada kebijakan) | BUTUH-VONIS BOT 4 bila kelak diusulkan |
-| BR-COL-12 | Pengiriman pengingat otomatis ke pelanggan (WA/email) tidak dibangun; kanal keluar + persetujuan isi = keputusan terpisah | BUTUH-VONIS BOT 1 |
+| Lihat laporan target vs pencapaian | `view_reports` | Sama dengan Rekap Komisi (pola TERVERIFIKASI-KODE page :22) |
+| Buat/ubah/nonaktifkan target | Q-TGT-2 (BOT 1 putus: reuse izin penjualan existing vs key baru) | Sampai diputus, implementasi TIDAK mulai; spec tidak mengarang key |
+| Lihat target/pencapaian penjual lain | Q-TGT-3 | Default-aman usulan: hanya pemegang `view_reports` penuh; tampilan self-service penjual DITUNDA sampai Q-TGT-3 |
 
 ### 6. Kata & label UI (mengikat BOT 2; verbatim)
 
-Judul: "Antrean Penagihan Piutang". Kolom: Pelanggan | No. Faktur | Tahap | Jatuh Tempo Acuan | Umur | Nilai Faktur | Dibayar | Sisa | Tindak Lanjut Terakhir | Janji Bayar | Aksi.
-Label tahap persis: `Belum Diserahkan`, `Sudah Diserahkan`, `Lewat Janji`. Tombol: `Buat Tukar Faktur` (tahap Belum Diserahkan + berizin), `Catat Tindak Lanjut`, `Hubungi via WhatsApp` (bila phone ada). Notice jujur wajib: "Tahap dan umur dihitung dari faktur, tukar faktur, dan janji bayar terakhir. Mencatat tindak lanjut tidak mencatat pembayaran dan tidak membuat jurnal." Baris tanpa due acuan: Umur `—`. Janji kosong: `—`.
+- Judul laporan: "Target vs Pencapaian Penjualan". Kolom: "Penjual", "Periode Target", "Target (Rp)", "Pencapaian (Rp)", "Pencapaian (%)", "Selisih (Rp)", "Faktur Lunas".
+- Label informatif wajib (verbatim, pola label komisi): "Laporan informatif dari snapshot penjual di faktur lunas — bukan dasar bonus, jurnal, atau pembayaran. Retur penjualan tidak mengurangi pencapaian pada laporan ini."
+- Baris tanpa target: teks "Tanpa target" pada kolom Target; kolom persen kosong. Ember tanpa penjual: "Tanpa penjual (dokumen lama)".
+- Periode target tidak utuh dalam rentang: lencana "Periode target tidak utuh — persen tidak dihitung".
+- Target diubah sesudah mulai: lencana "Target diubah <dd/mm/yyyy>".
+- DILARANG kata "bonus", "insentif terutang", atau nominal kewajiban apa pun di laporan ini (BR-TGT-07).
 
-### 7. Feature matrix (BENCHMARK, akses 2026-10-22)
+### 7. Matriks transisi status
 
-| Fitur | Accurate | Zahir | ISF sekarang |
+Target tidak punya mesin status dokumen; yang diatur = siklus hidup baris target:
+
+| Dari | Pemicu | Ke | Penjaga |
 |---|---|---|---|
-| Umur piutang dari jatuh tempo / tukar faktur | Ada: umur faktur + kolom Jatuh Tempo (Tukar Faktur) di Faktur Belum Lunas — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/umur-faktur-penjualan/ ; https://help.accurate.id/product/accurate-online/fitur-aol/laporan/daftar-laporan/umur-piutang/ | Aging custom + reminder jatuh tempo piutang — https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang | Aging agregat ada; umur berbasis due tukar faktur belum ditampilkan per antrean kerja |
-| Syarat pembayaran + monitoring jatuh tempo | Ada — https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/syarat-pembayaran/mengenal-fitur-syarat-pembayaran/ | Term of sales per pelanggan + denda — URL fasilitas di atas | dueDate per faktur/exchange ada; antrean tindak lanjut belum |
-| Jejak tindak lanjut + janji bayar per faktur | Tidak diverifikasi run ini (jangan klaim) | Tidak diverifikasi run ini | ABSEN (spec ini) |
+| (tidak ada) | Buat target (periode belum/sudah mulai) | aktif | Q-TGT-2; BR-TGT-03/04/12 |
+| aktif | Ubah nominal/periode | aktif (tercatat) | BR-TGT-09; tumpang tindih ditolak ulang |
+| aktif | Nonaktifkan/hapus lunak (periode sudah mulai) | nonaktif | BR-TGT-10; hilang dari penilaian, jejak tetap |
+| aktif | Periode berakhir | aktif (final terbaca) | Tidak ada transisi paksa; persen final = baca pada rentang penuh |
 
-### 8. Acceptance criteria + edge cases (BOT 6, falsifikasi)
+Pencapaian bukan status: nilai turunan baca dari faktur `paid`; faktur batal (`cancelled`) tidak pernah masuk basis sejak awal.
 
-| ID | Skenario |
-|---|---|
-| AC-COL-1 | Faktur posted sisa > 0 tanpa exchange tampil BELUM_DISERAHKAN; sesudah createInvoiceExchange memuatnya, baris berubah SUDAH_DISERAHKAN tanpa tulis status |
-| AC-COL-2 | Cabut pembacaan InvoiceExchangeItem di builder = faktur terserahkan tampil salah tahap (tes merah) |
-| AC-COL-3 | Janji kemarin + sisa > 0 = LEWAT_JANJI; catat janji besok = keluar LEWAT_JANJI; cabut promisedDate dari builder = merah |
-| AC-COL-4 | Faktur lunas via SalesPayment hilang dari antrean; draft/cancelled/deleted tidak pernah tampil |
-| AC-COL-5 | Tanpa dueDate faktur maupun exchange: baris tampil, Umur `—`, tidak masuk LEWAT_JANJI dari due (hanya janji bisa) |
-| AC-COL-6 | Exchange di-soft-delete: faktur kembali BELUM_DISERAHKAN; exchange ganda aktif: satu baris, acuan terakhir |
-| AC-COL-7 | Catat tindak lanjut tanpa izin baru ditolak server; tanpa view_reports/view_sales_invoices antrean tertutup (fail-closed) |
-| AC-COL-8 | Catat tindak lanjut: Jurnal=0, paidAmount/status faktur tidak berubah, ActivityLog tercatat |
-| AC-COL-9 | Klik WA saja tidak membuat baris tindak lanjut; simpan kanal WA manual yang membuat |
-| AC-COL-10 | UI tidak menghitung ulang tahap/sisa: ganti builder notice/label = UI mengikuti; ekspor tanpa kolom phone |
-| AC-COL-11 | promisedAmount <= 0 atau promisedDate sebelum followedUpAt ditolak validasi server (janji lampau hanya lewat outcome tanpa janji) |
-| AC-COL-12 | Dua tindak lanjut bersamaan: keduanya tersimpan (append), janji terakhir menurut promisedDate maksimum, bukan urutan input |
+### 8. Acceptance criteria (draf untuk BOT 6)
 
-### 9. Pertanyaan terbuka & pemilik berikut
+- AC-TGT-1: Faktur `posted`/`partial` sebesar berapa pun TIDAK menaikkan pencapaian; hanya `paid` (falsifikasi: ubah status di fixture, persen bergerak = MERAH).
+- AC-TGT-2: Faktur paid tanpa `salesEmployeeId` masuk ember unattributed; total perusahaan memuatnya, tidak ada penjual yang persennya naik karenanya.
+- AC-TGT-3: Retur `completed` atas faktur paid TIDAK mengubah pencapaian tahap 1, dan label §6 tampil (falsifikasi tahap 1; perilaku ini berubah hanya sesudah Q-TGT-1 diputus).
+- AC-TGT-4: Simpan target bertumpukan untuk penjual sama ditolak; periode bersebelahan diterima; penjual berbeda pada periode sama diterima.
+- AC-TGT-5: Rentang laporan memotong periode target sebagian → baris tampil dengan lencana tidak-utuh dan persen kosong (bukan prorata).
+- AC-TGT-6: Penjual berfaktur paid tanpa target tampil "Tanpa target", persen kosong (bukan 0%).
+- AC-TGT-7: Persen perusahaan = tertimbang nilai (fixture dua penjual beda bobot; rata-rata persen sederhana = MERAH).
+- AC-TGT-8: Ubah target sesudah periode mulai → ActivityLog old/new ada, lencana "Target diubah" tampil, pencapaian tidak berubah.
+- AC-TGT-9: Pengguna tanpa `view_reports` ditolak halaman laporan; tanpa izin Q-TGT-2 ditolak aksi simpan target (server-side, bukan tombol hilang saja).
+- AC-TGT-10: Angka pencapaian laporan target untuk periode+penjual yang sama PERSIS sama dengan `paidBase` Rekap Komisi periode itu (satu basis, dibuktikan fixture bersama).
+
+### 9. Pertanyaan terbuka & pemilik vonis
 
 | ID | Pertanyaan | Pemilik |
 |---|---|---|
-| Q-COL-1 | Key izin catat tindak lanjut baru vs reuse edit_sales_invoices; siapa boleh soft-delete | BOT 1 |
-| Q-COL-2 | Kosakata final channel + outcome (usulan §2) | BOT 1 |
-| Q-COL-3 | Urutan antrean final (usulan: lewat janji tertua > due terdekat > sisa terbesar) + rute persis (usulan /penjualan/antrean-penagihan vs laporan) | BOT 1 |
-| Q-COL-4 | Kontak tampil di antrean saja vs boleh ekspor berizin khusus | BOT 1 |
-| Q-COL-5 | Fisik model tahap 2 + apakah promisedAmount dalam sen Decimal pola repo | BOT 3 |
-| — | Denda/bunga keterlambatan, pengingat otomatis ke pelanggan | BOT 4 (uang) / BOT 1 (kanal) — tidak menahan tahap 1-2 |
+| Q-TGT-1 | Tahap 2: pencapaian dikurangi retur `completed` tertaut faktur paid, atau tetap bruto paid selamanya? Menyentuh konsistensi basis komisi (F-016) — bila berubah, kedua laporan berubah bersama. | BOT 4 (basis uang) + BOT 1 (perilaku inti) |
+| Q-TGT-2 | Permission kelola target: reuse izin penjualan existing (sebutkan key-nya) atau key baru di katalog? | BOT 1 |
+| Q-TGT-3 | Penjual boleh melihat target/pencapaian dirinya sendiri (dan apakah milik orang lain disembunyikan total atau diagregasi)? | BOT 1 (+ pemilik proses) |
+| Q-TGT-4 | Periode target: bebas tanggal (pola Accurate) atau hanya bulanan kalender? Usulan spec = bebas tanggal; bulanan-saja menyederhanakan BR-TGT-05. | BOT 1 |
+| Q-TGT-5 | Bentuk fisik master: model baru per penjual-periode (usulan §2) vs kolom di master lain? | BOT 3 (klaim schema.prisma di board dulu) |
 
-### 10. Backlog implementasi (turunan spec ini; ID spec F-2026-10-22-089-S)
+### 10. Yang TIDAK diusulkan run ini
 
-1. BOT 1: putus Q-COL-1..4 + merge PR spec ini bila gate hijau.
-2. BOT 3 (@backend-prisma-inventory-workshop): tahap 1 builder+loader antrean (nol migrasi) sesudah Q-COL-3; tahap 2 model InvoiceCollectionFollowUp + aksi catat (append-only, klaim pola repo) sesudah Q-COL-1/2/5. Klaim schema.prisma di board sebelum edit tahap 2. Effort S (tahap 1) / M (tahap 2).
-3. BOT 2 (@frontend-ui-ux-next-js): halaman antrean + form Catat Tindak Lanjut SESUDAH kontrak BOT 3, kata §6 verbatim, tombol tukar faktur/WA bersyarat izin+tahap, nol hitung tahap/sisa di UI. UI fitur ini didahulukan atas polish.
-4. BOT 6: AC-COL-1..12 atas head BOT 3/BOT 2.
-5. BOT 4: tidak ada vonis diminta tahap ini (BR-COL-07/11); dipanggil hanya bila denda/bunga diusulkan.
+- Target per barang/kategori/cabang (ada di Accurate): skala bengkel satu cabang, penjualan per job; nilai ulang bila ada cabang kedua atau penjualan part berulang per kategori terukur.
+- Prorata pencapaian periode sebagian: tidak ada aturan pemilik proses; memaksakan prorata = angka karangan.
+- Ikatan pencapaian → bonus/komisi berbayar/slip gaji: gerbang F-2026-10-21-016 tahap 3 + vonis BOT 4, bukan spec ini.
+- Target tim/cabang agregat di luar penjumlahan tertimbang BR-TGT-11, kuota jumlah faktur/unit sebagai basis utama (basis nilai dipilih karena identik dengan komisi; kuota unit = usulan terpisah bila diminta pemilik proses).
 
-### Yang TIDAK diusulkan run ini
-- Pengingat otomatis WA/email ke pelanggan, denda keterlambatan, penagihan pihak ketiga, alokasi pembayaran parsial per janji, status penagihan tersimpan di SalesInvoice, perubahan aging/statement existing.
+### 11. Backlog implementasi (ID induk F-2026-10-21-018; spec ini F-2026-10-22-088-S)
+
+1. BOT 1: putus Q-TGT-2/3/4 (+ Q-TGT-1 bersama BOT 4 bila tahap 2 dibuka) dan merge PR docs spec ini bila gate hijau.
+2. BOT 3 (@backend-prisma-inventory-workshop): inti SESUDAH Q-TGT-2/4 — master target (fisik Q-TGT-5) + builder/loader pencapaian memakai basis loader komisi (AC-TGT-10 dibuktikan tes bersama), penjaga tumpang tindih/aktif, ActivityLog.
+3. BOT 2 (@frontend-ui-ux-next-js): UI SESUDAH kontrak BOT 3 — form target per penjual/periode + halaman "Target vs Pencapaian Penjualan", kata §6 verbatim, nol hitung persen di client (server/builder penentu). UI fitur didahulukan atas polish.
+4. BOT 6: AC-TGT-1..10 atas head BOT 3/BOT 2.
+5. BOT 4 (@accounting-finance-tax): hanya dipanggil untuk Q-TGT-1; tidak ada jurnal/angka kewajiban di tahap 1 (BR-TGT-07).
+
+Urutan: BOT 1 putusan → BOT 3 inti → BOT 2 UI → BOT 6. Effort usulan: inti M, UI S-M. Risiko: basis pencapaian menyimpang dari komisi → mitigasi AC-TGT-10; persen dibaca sebagai janji bonus → mitigasi label verbatim BR-TGT-07/§6.
+
+---
+
+### 9A. PUTUSAN BOT 1 2026-10-22 — F-2026-10-22-088-S (Lead t_1cd54631)
+
+| ID | Putusan | Alasan |
+|---|---|---|
+| Q-TGT-2 | Kelola target = `approve_sales_invoices` (`src/lib/auth/module-catalog.generated.ts:149`); laporan tetap `view_reports`. Tolak di server action, bukan UI saja. | BR-TGT-08: tanpa key baru. Key kelola penjualan terdekat = approve faktur; penjual tidak otomatis mengelola target. |
+| Q-TGT-3 | Lihat = hanya pemegang `view_reports`; tidak ada pandangan per-penjual/self-service tahap 1; data penjual lain terlihat penuh hanya oleh pemegang `view_reports`. | Default-aman spec §5; self-service = kartu terpisah bila diminta pemilik proses. |
+| Q-TGT-4 | Periode = bebas tanggal inklusif dua ujung (`periodStart`/`periodEnd`), bukan bulanan-saja. | Loader komisi sudah rentang-bebas; BR-TGT-05 menahan persen periode tidak utuh; bulanan-saja mengarang batas yang tidak diminta proses ISF. Penjaga overlap BR-TGT-03 wajib di aksi. |
+| Q-TGT-1 | TIDAK dibuka tahap 1 (tetap wilayah BOT 4 + Lead bila tahap 2 dibuka). | BR-TGT-06/07 tahap 1 berlaku apa adanya. |

@@ -298,6 +298,7 @@ export const navigation: NavItem[] = [
       { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, permission: "view_reports" },
       { label: "Bahan & Biaya Pekerjaan", href: "/laporan/biaya-pekerjaan", icon: Hammer, permission: "view_reports" },
       { label: "Varians Produksi", href: "/laporan/varians-produksi", icon: TrendingUp, permission: "view_reports" },
+      { label: "Scrap Material", href: "/laporan/scrap-material", icon: Factory, permission: "view_reports" },
       { label: "Estimasi vs Aktual Pekerjaan", href: "/laporan/estimasi-vs-aktual", icon: TrendingUp, permission: "view_reports" },
       { label: "Penyelesaian Pesanan", href: "/laporan/penyelesaian-pekerjaan", icon: PackageCheck, permission: "view_reports" },
       { label: "Umur WIP Berjalan", href: "/laporan/wip-berjalan", icon: Factory, permission: "view_reports" },
