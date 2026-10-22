@@ -23,11 +23,11 @@ describe("validations/manufacturing qty BOM format Indonesia", () => {
   it("parseRevisionRows membaca qty format Indonesia penuh", () => {
     expect(parseRevisionRows(["2"], ["2,5"])).toEqual({
       success: true,
-      data: [{ itemId: 2, qty: 2.5 }],
+      data: [{ itemId: 2, qty: 2.5, scrapPercent: null }],
     });
     expect(parseRevisionRows(["2"], ["2.000"])).toEqual({
       success: true,
-      data: [{ itemId: 2, qty: 2000 }],
+      data: [{ itemId: 2, qty: 2000, scrapPercent: null }],
     });
   });
 

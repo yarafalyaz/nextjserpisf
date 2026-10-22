@@ -20,6 +20,8 @@ import { prisma, TxClient } from "@/lib/db/prisma"
 export interface EffectiveBomLine {
   itemId: number
   qtyPerUnit: number
+  /** F-008: allowance scrap (%) baris revisi BOM; null = belum kalibrasi / BOM kerja. */
+  scrapPercent?: number | null
 }
 
 export interface EffectiveBom {
@@ -45,6 +47,7 @@ export async function resolveEffectiveBom(
       lines: released.materials.map((m) => ({
         itemId: m.itemId,
         qtyPerUnit: Number(m.qty),
+        scrapPercent: m.scrapPercent != null ? Number(m.scrapPercent) : null,
       })),
     }
   }
