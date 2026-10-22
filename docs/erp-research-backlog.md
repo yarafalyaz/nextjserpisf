@@ -10658,3 +10658,577 @@ BOT 3 (dokumen denda) -> BOT 2 (tampil) -> BOT 6 (E93-1..7).
 BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
 
 ---
+
+<<<<<<< HEAD
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-075-V Q-SUB69-5 (substitusi part baris WO, spec F-2026-10-22-069-S PR #510)
+
+Pemilik vonis: BOT 4. Pertanyaan: Q-SUB69-5 + BR-SUB69-07 spec
+F-2026-10-22-069-S (head PR #510 `194a9827`): bila harga/biaya
+pengganti berbeda dari part asal, apakah selisih boleh memengaruhi
+nilai job lewat change order F-2026-10-20-103, dan apakah HPP part
+pengganti mengikuti biaya item pengganti itu sendiri?
+
+Bukti kode origin/main `57fa0556`:
+- `reviseWorkOrderItems` (src/actions/inventory.actions.ts:1008):
+  jalur sempit revisi baris WO `in_progress` — baris lama ditandai
+  `replaced`, baris baru `pending`; baris yang sudah ter-issue lewat
+  MaterialIssue `completed` DITOLAK diganti di sini (stok sudah OUT:
+  FIFO + jurnal sudah jalan); nol StockMove/jurnal/reservasi lahir
+  dari langkah revisi itu sendiri.
+- `material-issue.hook.ts:87-157`: saat MaterialIssue completed,
+  biaya yang dikonsumsi = biaya FIFO aktual item yang DI-ISSUE
+  (`consumeFifoLayers` per itemId baris issue), fallback snapshot
+  `item.cost` hanya untuk porsi shortfall; StockMove OUT dan jurnal
+  Dr Material Expense / Cr Inventory memakai `unitCost` aktual yang
+  sama persis.
+- Rantai nilai tagih: `Quotation.grandTotal` sumber tunggal
+  (warisan vonis F-2026-10-22-066-V Q-CO-4); change order resmi
+  F-2026-10-20-103 / spec F-2026-10-22-066-S adalah satu-satunya
+  jalur mengubah nilai kontrak sesudah WO berjalan.
+
+### Vonis 1 — HPP pengganti: DIKONFIRMASI, biaya item pengganti sendiri
+
+- HPP/biaya material part pengganti WAJIB mengikuti biaya aktual
+  item PENGGANTI itu sendiri, lewat jalur yang sudah berjalan:
+  FIFO lapisan item pengganti pada MaterialIssue completed (fallback
+  snapshot `item.cost` pengganti hanya untuk shortfall). TIDAK ada
+  perlakuan baru yang perlu dibangun — substitusi cukup mengganti
+  `itemId` baris WO lewat `reviseWorkOrderItems`; mesin biaya
+  existing otomatis membebankan biaya pengganti.
+- DILARANG: membebankan biaya part ASAL ke issue pengganti,
+  mengkredit/mendebit selisih biaya antar-item ke akun selisih
+  harga saat substitusi, atau menulis jurnal apa pun pada langkah
+  terapkan substitusi. Selisih biaya asal vs pengganti adalah
+  realitas biaya job (masuk varians estimasi-vs-aktual laporan WO),
+  BUKAN peristiwa jurnal tersendiri.
+- Alasan satu kalimat: persediaan keluar dicatat sebesar biaya
+  perolehan barang yang benar-benar keluar (prinsip biaya historis
+  persediaan, PSAK 202 tentang Persediaan — pengukuran sebesar
+  biaya perolehan); barang yang keluar adalah pengganti, jadi
+  biayanya biaya pengganti.
+
+### Vonis 2 — Selisih harga jual: HANYA lewat change order disetujui
+
+- Substitusi sendiri TIDAK mengubah nilai tagih job, `grandTotal`,
+  jadwal termin, atau estimasi pendapatan — walau harga jual/biaya
+  pengganti berbeda berapa pun. Langkah terapkan = nol jurnal, nol
+  dokumen uang, nol perubahan nilai kontrak (menguatkan
+  BR-SUB69-06/07 spec).
+- Bila selisih MAU ditagih/dikreditkan ke pelanggan, satu-satunya
+  jalur sah = change order resmi F-2026-10-20-103 (spec
+  F-2026-10-22-066-S) dengan persetujuan pelanggan terdokumentasi,
+  yang menulis ulang `Quotation.grandTotal` lewat
+  `computeQuotationTotals` existing; faktur selisih/kredit mengalir
+  dari grandTotal baru itu sesuai vonis F-2026-10-22-066-V.
+  Substitusi tanpa CO = selisih ditanggung margin job, tampil apa
+  adanya di estimasi-vs-aktual.
+- DILARANG: tombol/alur substitusi menawarkan "sesuaikan harga"
+  diam-diam, mengubah harga baris WO/quotation tanpa CO, atau
+  menautkan substitusi langsung ke faktur selisih.
+
+### Batas build (mengikat BOT 3/BOT 5/BOT 2)
+
+- BOT 3: penerapan substitusi hanya ganti baris via
+  `reviseWorkOrderItems` existing; JANGAN tambah kolom harga/biaya
+  khusus substitusi, JANGAN hitung selisih di server substitusi.
+  Bila UI butuh tampilkan perbandingan biaya untuk keputusan
+  manusia, ambil dari biaya master/FIFO existing sebagai label
+  informatif read-only — bukan angka yang disimpan/ditagih.
+- BOT 2: UI substitusi TIDAK menampilkan kolom selisih-sebagai-
+  tagihan dan TIDAK menghitung ulang biaya di UI; angka biaya yang
+  tampil = dari server apa adanya.
+- Q-SUB69-5 TIDAK menahan inti substitusi informatif (sesuai spec
+  §8): BOT 3 boleh jalan sesudah Q-SUB69-1/2/3 diputus BOT 1.
+
+### Draf acceptance BOT 6 (falsifikasi)
+
+- AC-SUB69-V1: terapkan substitusi lalu complete MaterialIssue
+  pengganti → jurnal Dr Material Expense = qty × biaya FIFO aktual
+  PENGGANTI; pakai biaya asal = MERAH.
+- AC-SUB69-V2: terapkan substitusi (pengganti lebih mahal/lebih
+  murah) tanpa CO → `Quotation.grandTotal`, jadwal termin, dan
+  jurnal berubah = MERAH; hanya baris WO + ActivityLog berubah.
+- AC-SUB69-V3: substitusi + CO disetujui yang mengubah nilai →
+  grandTotal baru persis hasil `computeQuotationTotals`; CO tanpa
+  substitusi dan substitusi tanpa CO masing-masing tidak saling
+  memicu = MERAH bila tertaut otomatis.
+- AC-SUB69-V4: baris ter-issue disubstitusi lewat jalur substitusi
+  = MERAH (guard existing tetap).
+
+Pemilik berikutnya: BOT 1 putus Q-SUB69-1/2/3/4 → BOT 3 inti
+substitusi → BOT 2 UI → BOT 6 AC-SUB69-1..10 + V1..V4 di atas.
+BOT 4 selesai untuk Q-SUB69-5; tidak ada angka statutori/pajak
+baru (nol PPN/PPh berubah: faktur tetap dari grandTotal berjalan).
+=======
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-069-S item alternatif (substitusi part) untuk baris WorkOrder
+
+Status: SPEC DOKUMEN SAJA (tanpa kode/schema/migrasi). Tindak lanjut eksplisit
+backlog `docs/erp-research-backlog.md:249` ("Item alternatif otomatis: ERPNext
+[2] relevan hanya sesudah F-105 status part terbaca") — prasyarat kini
+terpenuhi: status part per baris WO sudah terbaca (builder + loader + kartu UI,
+PR #275 merged). ID bebas terverifikasi run ini: maks -S terpakai 068-S
+(PR #507 OPEN); grep `F-2026-10-22-069` di origin/main ea430e34 = 0; tidak ada
+kartu/PR/branch substitusi part (grep kanban + `gh pr list` 2026-10-22).
+
+Benchmark resmi (akses 2026-10-22):
+- Accurate Online Barang Substitusi: substitusi ditentukan di master barang
+  (tab Penjualan/Pembelian, kolom "Substitusi dengan"); saat faktur penjualan
+  dan stok utama tidak cukup, tombol "Penggantian" menampilkan daftar
+  substitusi yang sudah ditentukan; hanya untuk Jenis Barang Persediaan:
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/barang-dan-jasa/barang-substitusi/
+- ERPNext Item Alternative: alternatif didefinisikan per Item (Item
+  Alternative), diaktifkan per BOM/Work Order ("Allow Alternative Item"), dan
+  dipilih saat material BOM tidak tersedia:
+  https://docs.frappe.io/erpnext/item-alternative
+  https://docs.frappe.io/erpnext/work-order
+- Zahir: tidak ditemukan fitur substitusi part per baris order di help resmi
+  pada akses ini — jangan klaim paritas Zahir (belum terverifikasi).
+
+### 0. Verifikasi live origin/main ea430e34 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Status part turunan per baris WO SUDAH terbaca penuh: builder murni
+  `src/lib/reports/work-order-part-status.ts` (status
+  menunggu/dipesan/datang/terpasang-sebagian/terpasang/diganti/tak-tertaut,
+  precedence diganti > terpasang > datang > dipesan > menunggu),
+  loader `src/lib/reports/work-order-part-status-data.ts`
+  (`getWorkOrderPartStatus`), kartu UI
+  `src/components/reports/work-order-part-status-card.tsx` terpasang di
+  detail WO (`src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx:186,471`)
+  — PR #275 merged.
+- Kebutuhan material + kekurangan stok SUDAH terbaca: builder
+  `src/lib/reports/work-order-material-needs.ts` (required/issued/ordered/
+  tersedia efektif sesudah committed WO lain; baris jasa selalu terpenuhi).
+- Jalur ganti baris berjalan SUDAH ada: `reviseWorkOrderItems`
+  (`src/actions/inventory.actions.ts:1008`, izin `edit_work_orders`):
+  WO wajib `in_progress`, baris ter-issue (MaterialIssue completed) tidak
+  bisa ditandai `replaced` (guard per baris lewat `workOrderItemId`,
+  F-2026-10-20-39(a)), baris baru ditambah lewat `newItems`. Inilah
+  satu-satunya jalur sah mengganti part di WO berjalan — spec ini TIDAK
+  membuat jalur ganti kedua.
+- Fitment per item SUDAH ada: `src/lib/services/vehicle-fitment.service.ts`
+  (`evaluateFitment`, compatible/incompatible/unknown + ruleId) dan snapshot
+  peringatan per baris Quotation/WO sedang dibangun F-2026-10-22-063-S.
+- Reservasi stok per WO SUDAH ada: `StockReservation`
+  (`prisma/schema.prisma:2704-2728`, lahir di startWorkOrder satu tx,
+  F-2026-10-21-012 inti).
+
+Belum ada / parsial (TERVERIFIKASI-KODE, grep run ini):
+- ABSEN relasi substitusi antar-item: grep `substitut|alternat` di
+  `prisma/schema.prisma` + `src/` produksi hanya menemukan satuan
+  alternatif Multi-UoM (`UomConversion`) — domain berbeda. Tidak ada model
+  `ItemSubstitute`/`ItemAlternative`, tidak ada kolom substitusi di `Item`
+  (`prisma/schema.prisma` model Item, tanpa field substitusi).
+- ABSEN saran pengganti di mana pun: kartu status part dan kartu kebutuhan
+  material hanya menampilkan status/kekurangan; operator yang melihat
+  baris `menunggu` + stok kurang harus mencari pengganti secara manual di
+  luar sistem, lalu mengganti lewat revisi item tanpa jejak "ini
+  substitusi dari part X".
+
+### 1. Workflow specification
+
+Aktor: Admin Master Data (mengelola relasi substitusi di master barang),
+Kepala Bengkel/Kepala Produksi (memutuskan memakai substitusi di WO),
+Operator Produksi (eksekusi issue), Admin (baca jejak).
+
+Alur (USULAN — belum disetujui pemilik proses):
+1. Di master barang, Admin Master Data menetapkan daftar substitusi per
+   item: item pengganti, arah (satu arah secara eksplisit; arah balik
+   dicatat sebagai baris sendiri bila memang sah), catatan kesetaraan
+   (mis. "setara fungsi, beda merek"), status aktif/nonaktif. Relasi
+   substitusi TIDAK transitif otomatis: A→B dan B→C tidak menyimpulkan
+   A→C; yang tampil hanya baris langsung yang aktif.
+2. Di detail WO, pada kartu Status Part / Kebutuhan Material existing,
+   baris part berstatus `menunggu` atau kekurangan stok efektif
+   (kebutuhan > tersedia efektif dari builder material-needs existing)
+   menampilkan penanda "ada substitusi" beserta daftar pengganti aktif
+   untuk item baris itu — masing-masing dengan stok tersedia efektif dan
+   hasil fitment pengganti terhadap kendaraan WO (bila WO punya kendaraan
+   tertaut; tanpa kendaraan tampil `unknown`, jangan ditebak cocok).
+3. Kepala Bengkel/Kepala Produksi memilih satu pengganti dan menekan
+   "Pakai Substitusi". Sistem menjalankan jalur existing
+   `reviseWorkOrderItems` persis: baris lama ditandai `replaced`, baris
+   pengganti ditambah dengan qty sama secara default (qty boleh diubah
+   pengaju sebelum simpan), semua guard existing berlaku (WO
+   `in_progress`, baris ter-issue ditolak, klaim kondisional anti revisi
+   bersamaan). Tidak ada pengeluaran stok di langkah ini — stok pengganti
+   bergerak hanya lewat MaterialIssue existing sesudahnya.
+4. Penerapan substitusi tercatat di ActivityLog dengan pasangan eksplisit
+   (baris lama → baris pengganti, WO, pengaju) sehingga riwayat part
+   terpasang dan status part turunan tetap bisa menjawab "part ini
+   pengganti apa".
+5. Substitusi yang hasil fitment-nya `incompatible` terhadap kendaraan WO
+   DITOLAK di server (bukan sekadar peringatan); `unknown` boleh lanjut
+   dengan peringatan tampil dan wajib tercatat di log. Ini mengikuti arah
+   F-2026-10-22-063-S (peringatan, bukan blokir umum) — blokir khusus
+   substitusi `incompatible` adalah USULAN spec ini, perlu Q-SUB69-2.
+
+Dokumen masuk: relasi substitusi master (baru), baris WO berjalan.
+Dokumen keluar: tidak ada dokumen baru — keluaran berupa baris WO hasil
+revisi existing + jejak ActivityLog.
+
+### 2. Role/permission matrix (permission nyata katalog)
+
+| Aksi | Permission (module-catalog.generated.ts) | Role pemegang lazim |
+|---|---|---|
+| Lihat daftar substitusi di master barang | `view_products` (katalog produk existing) | semua pembaca master |
+| Tambah/ubah/nonaktifkan relasi substitusi | `edit_products` (sama dengan aksi master barang existing, master.actions.ts) | Admin Master Data |
+| Lihat penanda + daftar substitusi di detail WO | `view_work_orders` (:253) | Kepala Bengkel, Operator, Admin |
+| Pakai substitusi (jalur revisi baris WO) | `edit_work_orders` (:255; permission yang sama dengan `reviseWorkOrderItems` existing) | Kepala Bengkel/Kepala Produksi |
+| Eksekusi pengeluaran part pengganti | `create_material_issues` (:225) | Operator Produksi |
+
+USULAN: tidak ada permission baru tahap ini. Permission khusus substitusi
+(mis. `manage_item_substitutes`) hanya bila Q-SUB69-1 diputus perlu —
+menambah permission = migrasi katalog + seed, jangan dilakukan diam-diam.
+
+### 3. Status-transition matrix
+
+| Objek | Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|---|
+| Relasi substitusi | — | Admin Master Data tambah baris | aktif | `edit_products`; item pengganti ≠ item asal; pasangan (asal, pengganti) aktif ganda ditolak |
+| Relasi substitusi | aktif | Admin Master Data nonaktifkan | nonaktif | `edit_products`; baris nonaktif tidak tampil sebagai saran, riwayat log tidak berubah |
+| Baris WO | menunggu/dipesan (turunan F-105) + stok kurang | "Pakai Substitusi" dipilih | baris lama `replaced` + baris pengganti baru (stored `in_progress` mengikuti pola revisi existing) | `reviseWorkOrderItems` existing: WO `in_progress`, baris ter-issue ditolak, fitment pengganti bukan `incompatible` |
+| Baris WO | terpasang-sebagian / terpasang (turunan) | "Pakai Substitusi" | DITOLAK | sudah ada MaterialIssue completed — mengikuti guard F-2026-10-20-39(a) existing, jangan longgarkan |
+| Baris WO jasa (itemId ≤ 0) | tak-tertaut | — | tidak ada saran substitusi | baris jasa bukan item stok (builder part-status existing) |
+
+Status part tampil tetap TURUNAN dari builder
+`work-order-part-status.ts` — spec ini tidak menambah nilai status
+tersimpan baru selain `replaced` yang sudah dipakai revisi existing.
+
+### 4. Business rules register
+
+| ID | Aturan | Status |
+|---|---|---|
+| BR-SUB69-01 | Substitusi hanya antar item stok aktif; item jasa dan item nonaktif tidak bisa jadi asal maupun pengganti | USULAN |
+| BR-SUB69-02 | Relasi satu arah per baris; arah balik wajib baris sendiri; tidak ada inferensi transitif | USULAN |
+| BR-SUB69-03 | Saran hanya tampil bila baris belum ter-issue dan (status turunan menunggu/dipesan atau stok efektif kurang); saran tidak pernah mengganti otomatis | USULAN |
+| BR-SUB69-04 | Penerapan hanya lewat `reviseWorkOrderItems` existing dalam transaksinya; dilarang jalur update baris WO kedua untuk substitusi | USULAN (konsisten guard F-2026-10-20-39(a) TERVERIFIKASI-KODE) |
+| BR-SUB69-05 | Pengganti berfitment `incompatible` ke kendaraan WO ditolak server; `unknown` lolos dengan peringatan + jejak log | USULAN — Q-SUB69-2 |
+| BR-SUB69-06 | Substitusi tidak menggerakkan stok, reservasi, atau jurnal apa pun; stok hanya bergerak lewat MaterialIssue completed existing; reservasi baris lama yang dilepas/diganti mengikuti aturan rilis reservasi existing (F-2026-10-22-057-S) | USULAN — interaksi reservasi Q-SUB69-3 |
+| BR-SUB69-07 | Selisih harga jual/biaya antara part asal dan pengganti TIDAK diatur spec ini; apakah selisih mengubah nilai tagih job = jalur change order F-2026-10-20-103 (spec F-2026-10-22-066-S), bukan substitusi | BUTUH-VONIS BOT 4 untuk sisi uang bila selisih akan ditagih/dikreditkan |
+| BR-SUB69-08 | Setiap penerapan tercatat ActivityLog berpasangan (baris lama → pengganti, alasan wajib) | USULAN (pola histori F-2026-10-21-035) |
+| BR-SUB69-09 | Qty pengganti default = qty baris asal; perubahan qty oleh pengaju tampil eksplisit sebelum simpan dan ikut tercatat | USULAN |
+| BR-SUB69-10 | Daftar substitusi di master adalah data master, bukan harga/kontrak: mengubah relasi tidak mengubah WO berjalan dan tidak menulis ulang log lama | USULAN |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate Online | ERPNext | Zahir | ISF hari ini |
+|---|---|---|---|---|
+| Relasi substitusi di master item | Ada ("Substitusi dengan" per barang, hanya persediaan) | Ada (Item Alternative per Item) | belum terverifikasi | ABSEN (grep run ini) |
+| Saran pengganti saat stok kurang | Ada di faktur penjualan (tombol Penggantian) | Ada di Work Order (Allow Alternative Item) | belum terverifikasi | ABSEN — status part terbaca, saran belum |
+| Penerapan tercatat di dokumen berjalan | barang baris faktur berubah | baris WO memakai alternatif | belum terverifikasi | parsial: revisi baris WO ada, jejak "substitusi dari" belum |
+
+URL benchmark: lihat daftar Benchmark resmi di atas.
+
+### 6. Acceptance criteria + edge cases (draf)
+
+BOT 3 (backend):
+- AC-SUB69-1: model relasi substitusi (bentuk fisik pilihan BOT 3,
+  klaim `prisma/schema.prisma` di board dulu) dengan penjaga server:
+  pasangan aktif ganda ditolak, asal = pengganti ditolak, item nonaktif
+  ditolak; nonaktifkan tidak menghapus riwayat.
+- AC-SUB69-2: builder/loader saran read-only memperluas data existing
+  (part-status + material-needs), bukan agregasi stok kedua: baris
+  ter-issue tidak pernah dapat saran; baris jasa tidak dapat saran.
+- AC-SUB69-3: penerapan memanggil jalur revisi existing; cabut guard
+  baris ter-issue = tes MERAH; penerapan substitusi menghasilkan nol
+  StockMove/jurnal/reservasi baru di langkah terapkan.
+- AC-SUB69-4: pengganti `incompatible` (fitment) ditolak server dengan
+  pesan bernama; `unknown` tercatat di ActivityLog.
+
+BOT 2 (UI, fitur didahulukan atas polish):
+- AC-SUB69-5: kelola substitusi di tab/detail master barang existing —
+  daftar pengganti aktif/nonaktif, tanpa halaman master baru bila tab
+  existing cukup (putusan BOT 1 di Q-SUB69-4).
+- AC-SUB69-6: penanda "ada substitusi" + daftar pengganti (stok efektif
+  + fitment dari server, nol hitung di UI) pada kartu Status Part /
+  Kebutuhan Material existing di detail WO; kata status persis label
+  server; tombol "Pakai Substitusi" hanya tampil untuk pemegang
+  `edit_work_orders`.
+- AC-SUB69-7: substitusi `incompatible` tampil sebagai ditolak dengan
+  alasan server verbatim, bukan disembunyikan dari daftar.
+
+BOT 6 (falsifikasi):
+- AC-SUB69-8: relasi transitif karangan (A→B, B→C lalu A ditawari C) =
+  MERAH; pasangan aktif ganda tersimpan = MERAH.
+- AC-SUB69-9: terapkan substitusi pada baris terpasang-sebagian lolos =
+  MERAH; terapkan tanpa `edit_work_orders` lolos = MERAH.
+- AC-SUB69-10: penerapan substitusi mengubah stok/jurnal = MERAH;
+  jejak ActivityLog tanpa pasangan lama→baru = MERAH.
+
+Edge cases: pengganti stoknya juga kurang (tampil apa adanya, jangan
+rantai saran otomatis ke substitusi tingkat dua); dua WO bersamaan
+memakai pengganti yang sama (stok efektif dari builder existing sudah
+mengurangi committed WO lain — jangan hitung ulang); WO tanpa kendaraan
+(fitment `unknown`); part asal sudah `replaced` sebelumnya (tidak dapat
+saran ulang); relasi dinonaktifkan di antara saran tampil dan simpan
+(server validasi ulang saat simpan, tolak dengan pesan bernama).
+
+### 7. Pertanyaan terbuka
+
+- Q-SUB69-1 (BOT 1): permission existing (`edit_products` /
+  `edit_work_orders`) cukup, atau perlu permission khusus substitusi?
+  Rekomendasi USULAN: existing dulu (BR §2).
+- Q-SUB69-2 (BOT 1): fitment `incompatible` = tolak keras khusus
+  substitusi (BR-SUB69-05), atau tetap peringatan seperti arah
+  F-2026-10-22-063-S? Rekomendasi USULAN: tolak keras — substitusi adalah
+  pilihan aktif operator, bukan dokumen yang sudah terlanjur terbit.
+- Q-SUB69-3 (BOT 1 + BOT 3): interaksi reservasi — baris lama
+  `replaced` melepas reservasi aktifnya mengikuti aturan rilis existing
+  (F-2026-10-22-057-S); apakah baris pengganti otomatis ikut
+  tereservasi pada WO `in_progress` (reservasi lahir hanya di start)?
+  Rekomendasi USULAN: tidak otomatis; pengganti mengikuti kebutuhan
+  material biasa sampai issue.
+- Q-SUB69-4 (BOT 1): permukaan master — tab di detail barang existing
+  vs halaman daftar substitusi tersendiri. Rekomendasi USULAN: tab di
+  detail barang (pola Accurate "Substitusi dengan").
+- Q-SUB69-5 (BOT 4, BUTUH-VONIS): bila harga/biaya pengganti berbeda,
+  apakah selisih boleh memengaruhi nilai job lewat change order
+  F-2026-10-20-103, dan perlakuan HPP part pengganti mengikuti biaya
+  item pengganti itu sendiri? Spec ini tidak menegaskan angka apa pun
+  sebelum vonis ini.
+
+### 8. Backlog implementasi (turunan spec ini)
+
+- F-2026-10-22-069-S (spec ini) → kartu BOT 3: inti relasi substitusi +
+  loader saran + penjaga terapkan (sesudah Q-SUB69-1/2/3 diputus BOT 1).
+- Kartu BOT 2: UI master (tab substitusi) + penanda/aksi di kartu part
+  WO existing (sesudah kontrak BOT 3 stabil; UI fitur didahulukan atas
+  polish).
+- Kartu BOT 6: acceptance AC-SUB69-1..10 sesudah implementasi.
+- Vonis BOT 4 hanya untuk Q-SUB69-5 bila selisih nilai akan ditagih —
+  tidak menahan inti substitusi informatif.
+
+### Yang TIDAK diusulkan run ini
+- Substitusi otomatis tanpa keputusan manusia (sistem hanya menyarankan).
+- Substitusi di Quotation/SalesOrder/faktur penjualan (pola Accurate ada
+  di penjualan; domain WO dulu karena prasyarat F-105 ada di WO —
+  perluasan ke penjualan = spec terpisah bila diminta pemilik proses).
+- Rantai substitusi bertingkat dan substitusi lintas satuan (UoM beda
+  wajib konversi — di luar cakupan; pengganti beda satuan dasar ditolak
+  tahap ini).
+- Mengubah kolom `WorkOrderItem.status` terkelola (inti F-105 yang
+  ditunda-teknis) — spec ini hanya membaca status turunan existing.
+>>>>>>> 2e3a2def (docs(business): spec F-2026-10-22-069-S item alternatif part WO (lanjutan backlog F-105))
+
+## SPEC BOT 5 — Pisah run payroll mingguan/bulanan (F-2026-10-22-076-S, gap domain h tanpa F-ID induk baru)
+
+Status: SPEC (dokumen saja, tanpa kode). Basis verifikasi live
+origin/main `57fa0556` (2026-10-22). Dipicu kartu t_8fc7f6c0.
+Anti-duplikat: serial -S terpakai maks F-2026-10-22-072-S
+(PR #516 MERGED); -V terpakai maks F-2026-10-22-075-V
+(PR #518 OPEN, BOT 4). Nomor 073 terpakai vonis BOT 4
+(F-2026-10-22-073-V, kartu t_4dd6d5b1), 074/075 juga -V;
+076 bebas di backlog+board+semua PR all-state+kanban
+(grep run ini = 0). Inti F-2026-10-21-012/013/014/015/022/
+032/035/036/037 semua SUDAH terimplementasi di main
+(verifikasi ls-tree run ini: customer-statement, lead-
+followups, whatsapp-log, WarrantyClaim.supplierClaimStatus,
+InventoryTransferItem.receivedQty schema:1727) dan inti
+F-2026-10-20-103..108/104/105/106 + F-2026-10-21-008..033
+sudah terspec (063-S..072-S) — tidak diduplikasi. Gap ini
+belum pernah ber-ID: backlog hanya menyebutnya sekali di
+catatan Bot 5 baris 2693 ("generateBulkPayroll tanpa filter
+paymentFrequency") tanpa entri F-* dan tanpa spec.
+
+### 1. Masalah terverifikasi (TERVERIFIKASI-KODE)
+
+1. Master karyawan SUDAH membedakan frekuensi bayar:
+   `Employee.paymentFrequency` String default "MONTHLY"
+   (prisma/schema.prisma:808), form karyawan menawarkan
+   WEEKLY/MONTHLY dan label gaji pokok berubah "Per Minggu/
+   Per Bulan" mengikuti pilihan (employee-form.tsx:355-368).
+   Artinya `baseSalary` karyawan WEEKLY adalah nominal
+   PER MINGGU, bukan per bulan — fakta master, bukan tebakan.
+2. Run massal TIDAK membedakan: `generateBulkPayroll`
+   (src/actions/hrm.actions.ts:1909) mengambil SEMUA
+   karyawan aktif (`where: { isActive: true, deletedAt:
+   null }`, tanpa paymentFrequency) lalu membuat slip untuk
+   semuanya pada `period` yang sama. Tombol UI-nya pun
+   bernama persis "Buat Gaji Bulanan" dan teksnya "semua
+   karyawan yang aktif" (bulk-generate-payroll-button.tsx:
+   86,92,97). Karyawan mingguan ikut terbit slip "bulanan"
+   sebesar baseSalary mingguan penuh per bulan kalender —
+   salah nominal 4x lipat ke bawah bila dibayar lewat jalur
+   ini, atau admin terpaksa memproses mingguan satu-satu
+   lewat processPayroll manual tanpa perlindungan massal.
+3. Tabrakan kunci periode: `Payroll @@unique([employeeId,
+   period])` (schema:3054) dan penjaga duplikat processPayroll
+   (hrm.actions.ts, findFirst employeeId+period) memakai
+   `period` String "YYYY-MM". Karyawan mingguan butuh 4-5
+   slip dalam satu bulan kalender — slip minggu ke-2 pada
+   bulan yang sama DITOLAK sebagai duplikat walau rentang
+   tanggalnya berbeda dan sah. Jadi hari ini karyawan
+   WEEKLY secara struktural tidak bisa digaji mingguan
+   lewat sistem: satu-satunya jalan = period karangan
+   (mis. "2026-10-W2") yang merusak rekap masa PPh21/
+   laporan yang mengelompokkan per period (F-2026-10-21-028
+   rekap membaca period apa adanya).
+4. Estimasi per slip membaca rentang tanggal apa adanya
+   (computePayrollEstimation: lembur/absensi/komponen per
+   startDate..endDate) — mesin hitungnya sendiri NETRAL
+   frekuensi dan sudah benar untuk rentang seminggu; yang
+   hilang murni (a) pemilihan populasi per frekuensi dan
+   (b) identitas periode yang membedakan minggu. Tidak ada
+   prorata gaji pokok per hari di jalur massal: baseSalary
+   dipakai utuh (hrm.actions.ts computeBulkPayrollEstimations)
+   — benar untuk slip yang rentangnya memang satu satuan
+   frekuensi karyawan itu, salah bila rentang massal bulanan
+   diterapkan ke karyawan mingguan (butir 2).
+
+### 2. Keputusan spec (USULAN kecuali ditandai lain)
+
+Satu parameter frekuensi run, tanpa model baru di tahap
+pertama:
+
+(a) `generateBulkPayroll` menerima parameter frekuensi
+    (`MONTHLY` | `WEEKLY`, cocok persis nilai master
+    existing) dan populasinya = karyawan aktif dengan
+    `paymentFrequency` sama. Default pemanggil existing
+    (tombol bulanan) = MONTHLY supaya perilaku hari ini
+    untuk populasi bulanan tidak berubah. Karyawan
+    frekuensi lain TIDAK ikut, dan hasil run menyebut
+    jumlah terlewati per frekuensi lain (bukan diam).
+(b) Identitas periode mingguan: usulan `period` tetap
+    "YYYY-MM" (bulan masa pajak slip) DITAMBAH pembeda
+    rentang yang sudah ada — kunci duplikat digeser dari
+    (employeeId, period) menjadi (employeeId, startDate,
+    endDate) untuk SEMUA frekuensi, dengan penjaga tumpang-
+    tindih: slip baru yang rentangnya beririsan slip existing
+    karyawan sama (status draft/approved/paid, bukan
+    cancelled) DITOLAK menyebut nomor slip penabrak. Ini
+    BUTUH-VONIS BOT 3 untuk bentuk fisik final (indeks/
+    migrasi unik) dan BUTUH-VONIS BOT 4 hanya untuk
+    konfirmasi bahwa masa PPh21/BPJS tetap dibaca dari
+    bulan endDate (bukan dari string period) — lihat Q-PF.
+(c) Tombol kedua "Buat Gaji Mingguan" di halaman
+    penggajian: pemilih minggu = tanggal mulai (Senin) +
+    tanggal selesai turunan 7 hari kalender (boleh disunting
+    manual pola existing), period terisi otomatis dari bulan
+    tanggal selesai. TIDAK ada cutoffDay bulanan untuk
+    mingguan.
+(d) Slip tunggal (processPayroll) ikut penjaga irisan (b);
+    label form menampilkan frekuensi karyawan terpilih dan
+    peringatan bila rentang != 7 hari untuk WEEKLY / rentang
+    melintasi 2 bulan untuk MONTHLY (peringatan, bukan
+    blokir — blokir hanya irisan duplikat).
+(e) Rekap/laporan TIDAK berubah kontrak: pengelompokan
+    masa tetap per bulan kalender dari endDate/period
+    existing; slip mingguan tampil sebagai baris-baris
+    dalam bulan masanya. Jangan buat laporan mingguan
+    terpisah.
+
+Yang SENGAJA tidak diubah: mesin TER PPh21/BPJS per slip
+(F-2026-10-21-026/027 sudah berjalan di jalur estimasi),
+jurnal onPayrollPaid, amortisasi pinjaman per slip, status
+draft→approved→paid. Catatan jujur: pinjaman karyawan
+bercicilan "per bulan" (EmployeeLoan.monthlyInstallment)
+akan terpotong TIAP slip mingguan bila karyawan mingguan
+punya pinjaman aktif — itu perilaku mesin existing per
+slip, spec ini TIDAK mengarang konversi mingguan; masuk
+Q-PF-4 untuk BOT 4 (apakah cicilan mingguan = bulanan/4,
+tetap penuh, atau ditahan ke slip terakhir bulan) dan
+inti TIDAK boleh jalan untuk karyawan berpinjaman aktif
+sampai Q-PF-4 dijawab (fail-closed: terlewati + terhitung,
+bukan dipotong menebak).
+
+### 3. Alur & status (TERVERIFIKASI-KODE untuk status existing)
+
+Status slip tidak berubah: draft → approved → paid;
+approve menolak snapshot fromFallback; paid atomik +
+jurnal (jalur existing, jangan disentuh spec ini).
+Transisi BARU hanya di pembuatan:
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada slip) | generateBulkPayroll(frekuensi) | draft per karyawan sefrekuensi | create_payroll + scope all (pola bulk existing); karyawan frekuensi lain terlewati terhitung |
+| (belum ada slip) | processPayroll tunggal | draft | create_payroll + penjaga irisan rentang (b) |
+| draft existing beririsan | generate/process ulang | DITOLAK per karyawan | pesan menyebut documentNo slip penabrak; karyawan lain tetap terbit (pola skip existing diperluas, bukan gagal total) |
+
+### 4. Matriks peran/izin (katalog TERVERIFIKASI-KODE)
+
+Katalog live (src/lib/auth/module-catalog.generated.ts:
+301-305): view_payroll/create_payroll/edit_payroll/
+process_payroll; laporan view_payroll_reports (:412).
+Scope gaji: getHrScope fail-closed (src/lib/auth/hr-scope.ts)
+— self hanya slip sendiri, kepala_bengkel se-departemen,
+HR/finance/admin all. Spec ini TIDAK menambah key izin:
+
+| Aksi | Izin | Scope |
+|---|---|---|
+| Buat massal mingguan/bulanan | create_payroll (existing, pola bulk) | all saja (bulk existing memang populasi penuh) |
+| Buat slip tunggal | create_payroll | per penjaga existing |
+| Lihat slip mingguan | view_payroll | hrScopeWhere existing (self/department/all) |
+| Approve / tandai dibayar | process_payroll (approvePayroll/markPayrollPaid existing) | existing |
+
+Nominal gaji karyawan mingguan TIDAK tampil di permukaan
+apa pun di luar scope di atas; log hasil run hanya memuat
+JUMLAH slip + jumlah terlewati, tanpa nominal per orang.
+
+### 5. Register aturan bisnis
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-PF-01 | baseSalary WEEKLY = nominal per minggu (label form existing) | TERVERIFIKASI-KODE (employee-form.tsx:368) |
+| BR-PF-02 | Run massal hanya memproses karyawan sefrekuensi; frekuensi lain terlewati + terhitung | USULAN |
+| BR-PF-03 | Duplikat = irisan rentang slip aktif karyawan sama, bukan string period sama | USULAN (fisik BUTUH-VONIS BOT 3, Q-PF-3) |
+| BR-PF-04 | Masa pajak slip = bulan endDate walau period mingguan | BUTUH-VONIS BOT 4 (Q-PF-2) |
+| BR-PF-05 | Karyawan mingguan berpinjaman aktif terlewati fail-closed sampai cicilan mingguan diputus | USULAN + BUTUH-VONIS BOT 4 (Q-PF-4) |
+| BR-PF-06 | Mesin TER/BPJS/jurnal/pinjaman per slip tidak diubah spec ini | TERVERIFIKASI-KODE (jalur existing) |
+| BR-PF-07 | Peringatan rentang tak lazim (mingguan != 7 hari) = peringatan, bukan blokir | USULAN |
+| BR-PF-08 | Frekuensi karyawan diganti di master: slip draft lama tetap frekuensi saat lahir; run berikut memakai nilai baru | USULAN (Q-PF-5 BOT 1) |
+
+### 6. Benchmark (BENCHMARK, URL resmi)
+
+| Aspek | Accurate | Zahir | ISF (spec ini) |
+|---|---|---|---|
+| Periode bayar dipilih saat run | Pencatatan Gaji: pilih tipe Bulanan lalu Ambil karyawan (trainingaccurate.com/blog/bayar-gaji-karyawan-di-accurate-online/) | Multi Payslip: gaji harian/mingguan di luar gaji bulanan (zahirerp.com/id/all-features-of-zahir-products/) | Parameter frekuensi run (BR-PF-02) |
+| Populasi per run | Karyawan dipilih per transaksi gaji | Run payroll per daftar karyawan | Sefrekuensi otomatis dari master |
+| Slip per karyawan per periode | Satu transaksi gaji per periode bayar | Slip dari run payroll | Banyak slip per bulan dibedakan rentang (BR-PF-03) |
+
+### 7. Acceptance criteria (BOT 6, falsifikasi)
+
+1. AC-PF-1: Populasi campuran 1 MONTHLY + 1 WEEKLY; run
+   MONTHLY hanya menerbitkan slip MONTHLY; paksa tanpa
+   filter frekuensi -> slip WEEKLY ikut = MERAH.
+2. AC-PF-2: Karyawan WEEKLY digaji 2 minggu berurutan dalam
+   bulan sama -> 2 slip sah; paksa kunci (employeeId,period)
+   lama -> slip ke-2 tertolak = MERAH.
+3. AC-PF-3: Rentang baru beririsan slip draft existing ->
+   ditolak menyebut documentNo penabrak; rentang bersebelahan
+   persis (selesai = mulai slip lain) -> lolos.
+4. AC-PF-4: Karyawan WEEKLY berpinjaman aktif pada run
+   mingguan -> terlewati + terhitung di hasil, tanpa slip;
+   potong cicilan menebak = MERAH (sampai Q-PF-4 dijawab).
+5. AC-PF-5: Hasil run memuat count terbit + count terlewati
+   per alasan (frekuensi lain / pinjaman / irisan) tanpa
+   nominal gaji siapa pun di log/respons di luar scope.
+6. AC-PF-6: Role self (getHrScope) membuka daftar penggajian
+   -> hanya slip sendiri (mingguan+bulanan); slip mingguan
+   rekan tampil = MERAH.
+7. AC-PF-7: Slip mingguan di-approve -> dibayar: jurnal +
+   status paid identik jalur bulanan existing (regresi);
+   approve snapshot fromFallback tetap ditolak.
+8. AC-PF-8: Ganti paymentFrequency karyawan di master di
+   tengah bulan: draft lama tak berubah, run frekuensi baru
+   berikutnya mengambilnya; slip dobel satu rentang = MERAH.
+
+### 8. Pertanyaan terbuka & pemilik berikut
+
+| ID | Pertanyaan | Pemilik |
+|---|---|---|
+| Q-PF-1 | Buka inti ini sekarang (P1 domain h) atau tunggu kebutuhan mingguan tercatat dari pemilik proses? | BOT 1 |
+| Q-PF-2 | Masa PPh21/BPJS slip mingguan dibaca dari bulan endDate (usulan) — konfirmasi, termasuk TER Desember untuk slip mingguan terakhir tahun | BOT 4 |
+| Q-PF-3 | Bentuk fisik kunci anti-dobel rentang: ganti @@unique ke (employeeId,startDate,endDate) + cek irisan di tx, atau tetap period + kolom pembeda minggu? | BOT 3 |
+| Q-PF-4 | Cicilan pinjaman pada slip mingguan: penuh/dibagi/ditahan ke slip terakhir — inti ditahan untuk populasi ini sampai dijawab | BOT 4 |
+| Q-PF-5 | Ganti frekuensi tengah periode berjalan (BR-PF-08) disahkan? | BOT 1 |
+
+Estimasi: BOT 3 filter populasi + penjaga irisan + tombol
+parameter 2-3 hari (migrasi unik hanya bila Q-PF-3 memutus
+ganti indeks); BOT 2 tombol mingguan + label frekuensi form
+slip 1 hari; BOT 6 AC-PF-1..8.
+
+Pemilik berikutnya: BOT 1 putus Q-PF-1/5 -> BOT 4 jawab
+Q-PF-2/4 (dependensi eksplisit, jangan diputus Bot 5) ->
+BOT 3 inti (Q-PF-3) -> BOT 2 UI -> BOT 6 AC-PF-1..8.
+Tanpa kode di kartu spec ini.
