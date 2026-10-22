@@ -7493,6 +7493,195 @@ PR #503; seri -V bebas tabrakan per grep origin/main 2026-10-22,
 maks -V terpakai 057-V). Pemilik berikutnya: BOT 3 (inti t_af177f74
 sesudah PR #503 merged + putusan BOT 1 §5A) -> BOT 2 -> BOT 6
 falsifikasi 1-5 di atas.
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-068-S ganti revisi BOM pada order berjalan (inti F-2026-10-20-104)
+
+Status: SPEC DOKUMEN SAJA (tanpa kode/schema/migrasi). Induk F-2026-10-20-104 (c) P1.
+ID bebas terverifikasi: maks -S terpakai 067-S (PR #506 OPEN); 068-S belum ada di
+origin/main ea430e34 maupun PR terbuka (gh pr list 2026-10-22).
+
+Benchmark resmi (akses 2026-10-22):
+- Cetec ERP Change Rev pada WO terbuka: unpick material revisi lama lalu re-pick
+  ke suborder revisi baru, peringatan eksplisit sebelum konfirmasi:
+  https://cetecerp.com/blog/production-management/updating-bom-revisions-on-open-work-orders-in-cetec-erp/
+- Accurate Perintah Kerja: kuantitas bahan baku bisa diubah langsung di formulir
+  Perintah Kerja (tanpa prosedur ganti revisi terpisah di help resmi):
+  https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/buat-perintah-kerja/
+- Zahir: tidak ditemukan prosedur ganti revisi BOM pada order berjalan di help
+  resmi pada akses ini — jangan klaim paritas Zahir (belum terverifikasi).
+
+### 0. Verifikasi live origin/main ea430e34 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `BomRevision` immutable berversi draft→released→superseded per Product
+  (`prisma/schema.prisma:2288-2333`, `@@unique([productId, revisionNo])`);
+  `BomRevisionMaterial` qty per revisi (`:2322-2332`).
+- Pin revisi HANYA saat ProductionOrder lahir: `createProductionOrder`
+  `effectiveBom.revisionId` → `ProductionOrder.bomRevisionId`
+  (`src/actions/manufacturing.actions.ts:668,700`) dan pin pinjaman ke WO
+  hanya bila `WorkOrder.bomRevisionId == null`
+  (`manufacturing.actions.ts:733-734`). WO tanpa PO tidak pernah ter-pin.
+- Lapis aman SUDAH merged: builder dampak revisi
+  `src/lib/reports/bom-revision-impact.ts:1-14` (header tegas: "Tidak ada
+  mutasi, tidak ada unpick/re-pick (inti F-41(b) ditunda-teknis)") +
+  loader `bom-revision-impact-data.ts` + `buildBomRevisionImpact`
+  menghitung issued/outstanding per baris WO dari MaterialIssue completed.
+  Grep konsumen UI (src/app/src/components *.tsx) = 0 pada run ini.
+
+Belum ada / parsial (TERVERIFIKASI-KODE, grep run ini):
+- ABSEN aksi ganti revisi pada order berjalan: grep
+  `changeBom|ganti revisi|unpick|re-pick` di src/ = 0 aksi; tidak ada aksi
+  yang mengubah `WorkOrder.bomRevisionId`/`ProductionOrder.bomRevisionId`
+  sesudah pin, membekukan material ter-issue, atau mencatat alasan ganti.
+- `ProductionOrderMaterial` dibekukan saat PO lahir
+  (`manufacturing.actions.ts:710-714`); ganti revisi tidak menyentuh baris
+  material PO berjalan — kebutuhan sesudah ganti tidak terhitung.
+- Reservasi stok per WO (F-2026-10-22-045-S/`StockReservation`) membaca
+  kebutuhan WO berjalan; interaksi ganti revisi → reservasi belum diatur
+  di spec mana pun (pertanyaan terbuka Q-BOM68-5 di bawah).
+
+### 1. Workflow specification
+
+Aktor: Kepala Produksi/Kepala Bengkel (pengaju), Pimpinan Produksi
+(persetujuan bila material sudah ter-issue), Operator Produksi (eksekusi
+issue lanjutan), Admin (baca jejak).
+
+Alur (USULAN — belum disetujui pemilik proses):
+1. Di detail WO/PO berstatus berjalan, pengaju memilih "Ganti Revisi BOM",
+   memilih revisi target (hanya revisi `released` produk yang sama) dan
+   wajib mengisi alasan.
+2. Sistem menampilkan pratinjau delta SEBELUM simpan (memakai builder
+   `bom-revision-impact` existing, bukan hitungan baru): per item —
+   kebutuhan revisi lama, sudah ter-issue (MaterialIssue completed),
+   kebutuhan revisi baru, selisih tambahan/kembali. Baris sudah ter-issue
+   ditandai TERKUNCI (tidak diubah, tidak di-unpick otomatis).
+3. Bila belum ada material ter-issue: ganti pin langsung sesudah konfirmasi.
+   Bila sudah ada ter-issue: wajib persetujuan Pimpinan Produksi (status
+   pengajuan menunggu → disetujui/ditolak) sebelum pin berubah.
+4. Sesudah pin berubah: kebutuhan tambahan = selisih positif per item
+   (kebutuhan baru − sudah ter-issue, jepit ≥ 0); kekurangan kebutuhan
+   (selisih negatif) TIDAK menarik kembali stok yang sudah keluar —
+   tampil sebagai "kelebihan ter-issue terhadap revisi baru", bukan
+   retur otomatis. Issue berikutnya membaca kebutuhan revisi baru.
+5. Jejak wajib: ActivityLog nilai lama/baru (bomRevisionId lama→baru,
+   alasan, pengaju, penyetuju) — pola histori endDate F-2026-10-21-035.
+
+Dokumen masuk: WO/PO berjalan + revisi BOM released target.
+Dokumen keluar: TIDAK ada dokumen baru; pin berubah + delta tampil +
+ActivityLog. DILARANG membuat MaterialIssue/retur/jurnal otomatis dari
+aksi ganti revisi (lihat BR-BOM68-04).
+
+### 2. Role/permission matrix (permission nyata katalog)
+
+Baris = aksi, kolom = peran. Permission dari
+`src/lib/auth/module-catalog.generated.ts` (TERVERIFIKASI-KODE run ini):
+`view_work_orders` (:253), `edit_work_orders` (:255),
+`complete_work_orders` (:257), `view_production_orders` (:258),
+`edit_production_orders` (:260), `view_material_issues` (:224).
+
+| Aksi | Pengaju | Penyetuju | Operator | Admin baca |
+|---|---|---|---|---|
+| Lihat pratinjau delta revisi | view_work_orders | view_work_orders | view_work_orders | view_work_orders |
+| Ajukan ganti revisi (belum ter-issue) | edit_work_orders | — | — | — |
+| Ajukan ganti revisi (sudah ter-issue) | edit_work_orders | — | — | — |
+| Setujui/tolak pengajuan | — | complete_work_orders (USULAN, Q-BOM68-2) | — | — |
+| Issue material sesudah ganti | — | — | create_material_issues | — |
+
+Permission BARU khusus ganti revisi = Q-BOM68-2 ke BOT 1; jangan
+mengarang permission key di spec ini.
+
+### 3. Status-transition matrix
+
+| Objek | Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|---|
+| Pin revisi WO/PO | revisi lama | ganti disetujui/dikonfirmasi | revisi baru (released, produk sama) | status order berjalan; revisi target released |
+| Pin revisi WO/PO | revisi lama | order completed/closed/cancelled | DITOLAK | F-2026-10-21-009 tutup job |
+| Pengajuan (bila ter-issue) | menunggu | penyetuju setuju | diterapkan (pin berubah satu tx) | complete_work_orders (USULAN) |
+| Pengajuan | menunggu | penyetuju tolak | ditolak (pin tetap) | alasan tolak wajib (USULAN) |
+| Baris material ter-issue | ter-issue | ganti revisi | TETAP ter-issue, terkunci | tidak ada unpick otomatis |
+| Kebutuhan baris | kebutuhan lama | pin berubah | kebutuhan baru; selisih tampil | jepit ≥ 0 untuk tambahan |
+
+Status pengajuan disimpan di mana (model/kolom/ActivityLog) = kebutuhan
+data untuk BOT 3, BUKAN skema di spec ini (Q-BOM68-3).
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-BOM68-01 | Revisi target hanya `released` dan produk sama dengan order; revisi draft/superseded ditolak berisik menyebut statusnya | USULAN (pola status BomRevision schema:2295 TERVERIFIKASI-KODE) |
+| BR-BOM68-02 | Material sudah ter-issue (MaterialIssue completed) TIDAK PERNAH di-unpick/di-retur otomatis oleh ganti revisi; ia terkunci dan tetap biaya job | USULAN — menyentuh stok/biaya: BUTUH-VONIS BOT 4 bila ada yang mengusulkan unpick berjurnal |
+| BR-BOM68-03 | Kebutuhan tambahan = max(kebutuhan revisi baru − sudah ter-issue, 0) per item; tidak ada pengeluaran ulang penuh (anti dobel stok keluar) | USULAN (pola builder bom-revision-impact.ts:8-10 TERVERIFIKASI-KODE) |
+| BR-BOM68-04 | Aksi ganti revisi TIDAK menerbitkan MaterialIssue, retur, ProductionCost, atau jurnal apa pun; ia hanya mengubah pin + mencatat jejak | USULAN — BUTUH-VONIS BOT 4 untuk pengecualian apa pun |
+| BR-BOM68-05 | Alasan ganti wajib; jejak ActivityLog simpan revisi lama/baru + pengaju + penyetuju | USULAN (pola F-2026-10-21-035) |
+| BR-BOM68-06 | Order completed/closed/cancelled tidak bisa ganti revisi | USULAN (guard tutup job F-2026-10-21-009 TERVERIFIKASI-KODE) |
+| BR-BOM68-07 | Bila PO dan WO sama-sama ter-pin, ganti berlaku per dokumen yang dipilih; sistem wajib menampilkan keduanya dan melarang ganti diam-diam salah satu (satu sumber pin per dokumen, bukan pin global produk) | USULAN — Q-BOM68-4 ke BOT 1/BOT 3 |
+| BR-BOM68-08 | Baris WO tanpa tautan baris issue (workOrderItemId null, legacy) dihitung per itemId seperti builder existing dan ditandai tak-tertaut-baris; jangan ditebak ke baris tertentu | TERVERIFIKASI-KODE pola (bom-revision-impact.ts:71-90) |
+| BR-BOM68-09 | Selisih harga/biaya akibat ganti revisi TIDAK mengubah harga jual/quotation; perubahan nilai jual = change order F-2026-10-20-103 (F-2026-10-22-066-S), bukan jalur ini | USULAN (pemisahan domain F-103) |
+| BR-BOM68-10 | Reservasi stok aktif (F-045-S) atas kebutuhan lama tidak dibatalkan diam-diam; tampilkan sebagai perlu-tinjau sesudah ganti (perilaku pasti = Q-BOM68-5) | USULAN — Q-BOM68-5 |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (help resmi) | Zahir (help resmi) | ISF hari ini |
+|---|---|---|---|
+| Ubah qty bahan langsung di Perintah Kerja | ADA (URL §benchmark) | belum terverifikasi | pin revisi saja, qty WO bisa edit form |
+| Ganti revisi BOM order berjalan + unpick/re-pick | tidak ditemukan di help resmi (bukan klaim absen vendor) | belum terverifikasi | ABSEN (spec ini) |
+| Pratinjau dampak revisi ke order terbuka | tidak ditemukan | belum terverifikasi | builder ADA, UI ABSEN |
+
+### 6. Acceptance criteria + edge cases (draf)
+
+BOT 3 (backend, AC-BOM68-1..5): (1) ganti pin WO tanpa issue: pin berubah,
+delta benar, ActivityLog lama/baru; (2) sudah ter-issue 3 dari 5, revisi
+baru butuh 4 → tambahan terbaca 1, yang 3 terkunci; (3) revisi baru butuh
+2 < ter-issue 3 → tambahan 0, kelebihan tampil, stok tidak bergerak;
+(4) revisi target draft/produk lain/order completed → ditolak, pin tetap;
+(5) cabut penjaga status target = tes MERAH (revisi draft bisa ter-pin).
+
+BOT 2 (UI fitur dulu, AC-BOM68-6..8): (6) pratinjau delta tampil SEBELUM
+tombol simpan aktif, baris terkunci berlabel eksplisit; (7) kata UI
+verbatim dari server, UI tidak menghitung delta sendiri; (8) konsumen UI
+untuk `loadBomRevisionImpact` yang hari ini yatim (grep=0) dibangun di
+detail WO/PO, bukan halaman baru tanpa putusan rute BOT 1.
+
+BOT 6 (falsifikasi): ganti revisi tidak melahirkan StockMove/jurnal/
+MaterialIssue (query nol baris baru); dua pengajuan bersamaan pada order
+sama → satu menang, satu ditolak konflik; issue sesudah ganti membaca
+kebutuhan baru (bukan lama); cabut ActivityLog = MERAH.
+
+Edge: WO tanpa PO (pin hanya di WO), PO tanpa WO, item baru hanya ada di
+revisi baru (ter-issue=0), item hilang di revisi baru tapi sudah ter-issue
+(terkunci + kelebihan), satuan sama diasumsikan — konversi satuan di luar
+spec ini.
+
+### 7. Pertanyaan terbuka
+
+- Q-BOM68-1 (BOT 1): buka inti ganti-pin sekarang, atau tetap ditunda
+  sesudah F-103 inti (PR #503) diputus? Lapis aman builder sudah merged.
+- Q-BOM68-2 (BOT 1): permission persetujuan — pakai `complete_work_orders`
+  existing atau key baru? Jangan bangun key sebelum putusan.
+- Q-BOM68-3 (BOT 3): tempat status pengajuan (model ringan vs ActivityLog
+  + kolom pin) — ajukan bentuk fisik sebelum migrasi.
+- Q-BOM68-4 (BOT 1/BOT 3): pin WO vs PO berbeda sesudah ganti parsial —
+  sumber kebenaran kebutuhan issue yang mana?
+- Q-BOM68-5 (BOT 1 + pemilik F-045-S): nasib StockReservation aktif saat
+  kebutuhan berubah.
+- Q-BOM68-6 (BOT 4, BUTUH-VONIS): konfirmasi BR-BOM68-02/04 — tanpa
+  unpick berjurnal dan tanpa jurnal dari aksi ganti. Tampilan delta saja
+  TIDAK ditahan vonis ini.
+
+### 8. Backlog implementasi (turunan spec ini; induk F-2026-10-20-104)
+
+1. BOT 3 (@backend-prisma-inventory-workshop): inti ganti pin + pengajuan
+   + delta server, SESUDAH Q-BOM68-1/2/3 diputus BOT 1. Parent = kartu spec ini.
+2. BOT 2 (@frontend-ui-ux-next-js): UI pratinjau delta + aksi ganti di
+   detail WO/PO (fitur, bukan polish), SESUDAH kontrak BOT 3 stabil.
+   Parent = kartu spec ini.
+3. BOT 6: falsifikasi §6 atas head BOT 3/BOT 2.
+
+### Yang TIDAK diusulkan run ini
+- Unpick/re-pick otomatis ala Cetec penuh: stok sudah keluar ke WIP;
+  tanpa vonis BOT 4 + bukti kebutuhan, default TERKUNCI (BR-BOM68-02).
+- Item alternatif/substitusi otomatis: sesudah status part + ganti revisi
+  terbaca (lanjutan F-2026-10-20-105), bukan sekarang.
+- Mengubah ProductionOrderMaterial beku order completed: dilarang.
 
 
 ## SPEC BOT 5 — Registri part terpasang per kendaraan (F-2026-10-22-072-S, induk F-2026-10-21-024)
@@ -10659,7 +10848,6 @@ BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
 
 ---
 
-<<<<<<< HEAD
 ## VONIS BOT 4 2026-10-22 — F-2026-10-22-075-V Q-SUB69-5 (substitusi part baris WO, spec F-2026-10-22-069-S PR #510)
 
 Pemilik vonis: BOT 4. Pertanyaan: Q-SUB69-5 + BR-SUB69-07 spec
@@ -10759,7 +10947,9 @@ Pemilik berikutnya: BOT 1 putus Q-SUB69-1/2/3/4 → BOT 3 inti
 substitusi → BOT 2 UI → BOT 6 AC-SUB69-1..10 + V1..V4 di atas.
 BOT 4 selesai untuk Q-SUB69-5; tidak ada angka statutori/pajak
 baru (nol PPN/PPh berubah: faktur tetap dari grandTotal berjalan).
-=======
+
+---
+
 ## SPEC BOT 5 2026-10-22 — F-2026-10-22-069-S item alternatif (substitusi part) untuk baris WorkOrder
 
 Status: SPEC DOKUMEN SAJA (tanpa kode/schema/migrasi). Tindak lanjut eksplisit
@@ -11009,7 +11199,6 @@ saran ulang); relasi dinonaktifkan di antara saran tampil dan simpan
   tahap ini).
 - Mengubah kolom `WorkOrderItem.status` terkelola (inti F-105 yang
   ditunda-teknis) — spec ini hanya membaca status turunan existing.
->>>>>>> 2e3a2def (docs(business): spec F-2026-10-22-069-S item alternatif part WO (lanjutan backlog F-105))
 
 ## SPEC BOT 5 — Pisah run payroll mingguan/bulanan (F-2026-10-22-076-S, gap domain h tanpa F-ID induk baru)
 
@@ -11232,3 +11421,387 @@ Pemilik berikutnya: BOT 1 putus Q-PF-1/5 -> BOT 4 jawab
 Q-PF-2/4 (dependensi eksplisit, jangan diputus Bot 5) ->
 BOT 3 inti (Q-PF-3) -> BOT 2 UI -> BOT 6 AC-PF-1..8.
 Tanpa kode di kartu spec ini.
+
+## VONIS BOT 4 — F-2026-10-22-077-V: Q-PF-2 masa PPh21/BPJS + Q-PF-4 cicilan pinjaman pada slip mingguan (spec F-2026-10-22-076-S, PR #519)
+
+Status: VONIS (dokumen saja, tanpa kode/schema/migrasi).
+Basis live: origin/main `22bcd7bb` + branch PR #519
+`hermes/bot5-f076-payroll-freq-spec` head `cfec4b38`
+(spec F-076-S §2(b)/§8 Q-PF-2 + Q-PF-4 eksplisit pemilik
+BOT 4, "jangan diputus Bot 5"). Kartu t_bea3101a.
+Anti-duplikat: serial -V terpakai maks F-2026-10-22-075-V
+(PR #518); 076 = -S BOT 5 (PR #519); grep "077" di
+backlog+board+semua PR all-state run ini = 0 bebas.
+F-075-V/F-074-V/F-072-V/F-066-V/F-058-V tidak diulang.
+
+### 0. Bukti repo live (TERVERIFIKASI-KODE, origin/main 22bcd7bb)
+
+1. Mesin PPh21 final existing SUDAH gabungan se-masa,
+   bukan per-slip berdiri sendiri: `computePph21ForPeriod`
+   (src/actions/hrm.actions.ts:1345) — `samePeriod` = slip
+   karyawan sama dengan `period` string sama (selain
+   cancelled, dikurangi excludePayrollId); masa selain
+   terakhir: target = TER atas `combinedGross` (Σ bruto
+   slip se-masa + slip berjalan), PPh21 slip berjalan =
+   `max(0, targetGabungan - Σ pph21 slip se-masa lain)`
+   (hrm.actions.ts:1436-1437). Masa terakhir: hitung ulang
+   Pasal 17 tahunan atas Σ bruto final tahun berjalan
+   (FINAL_PAYROLL_STATUSES = approved/paid) + slip berjalan,
+   kurangi Σ terpotong final (hrm.actions.ts:1396-1428).
+2. Identitas masa existing = `periodYearMonth(period,
+   endDate)`: regex `YYYY-MM` dari string period, fallback
+   ke endDate bila tidak cocok (hrm.actions.ts:1323-1327);
+   pemanggil menulis default `period = YYYY-MM` dari
+   endDate persis (hrm.actions.ts:725). `resolveTerPeriod`
+   (payroll-statutory.service.ts:470): bulan 12 =
+   `final-december` (Pasal 17), resignationFinal eksplisit
+   = `final-resignation`, selain itu `monthly` (TER).
+   Penjaga approve menolak slip Desember massal yang masih
+   `bulk-december-pending-final` dan slip LEGACY_PRE_TER
+   (hrm.actions.ts:2384-2399).
+3. Tabel TER (`PayrollTerBracket`) adalah tarif efektif
+   BULANAN per kategori PTKP — diterapkan ke bruto gabungan
+   se-masa, bukan tarif mingguan/harian. Mesin estimasi
+   preview per-slip (`computePayrollEstimation`,
+   hrm.actions.ts:1211-1222) menerapkan TER ke bruto slip
+   berjalan SAJA (preview non-final berlabel; jalur tulis
+   final = butir 1 yang menggabungkan).
+4. BPJS karyawan existing dihitung PER SLIP dari
+   `baseSalary` slip itu utuh: `computeBpjsEmployee(base,
+   ruleset)` (payroll-statutory.service.ts:29-38) —
+   Kesehatan = min(base, ceiling ruleset) x tarif karyawan;
+   JHT = base x tarif; JP = min(base, ceiling JP) x tarif.
+   Basis input pemanggil = baseSalary slip (hrm.actions.ts:
+   719, 1211, 1817). TIDAK ada agregasi BPJS se-masa seperti
+   PPh21 butir 1.
+5. Pinjaman: `EmployeeLoan.monthlyInstallment` Decimal(15,2)
+   "per bulan" menurut nama+skema (schema.prisma:3153);
+   estimasi menjumlah `min(monthlyInstallment, remaining)`
+   TIAP slip (hrm.actions.ts:1185, 1711), cap tulis
+   `capLoanDeduction` sama per slip (hrm.actions.ts:1099-
+   1126), amortisasi onPayrollPaid mendistribusi
+   loanDeduction slip itu oldest-first cap installment+
+   remaining per pinjaman (hrm.actions.ts:2473). Jadi tanpa
+   vonis: karyawan mingguan berpinjaman terpotong cicilan
+   bulanan PENUH 4-5x per bulan kalender.
+6. Kunci unik existing `@@unique([employeeId, period])`
+   (schema.prisma:3054) — bentuk fisik pengganti = Q-PF-3
+   milik BOT 3, di luar vonis ini; vonis ini hanya memutus
+   SEMANTIK masa + angka statutori + cicilan.
+
+### 1. Dasar regulasi (sumber resmi, akses 2026-10-22)
+
+1. PP Nomor 58 Tahun 2023 tentang Tarif Pemotongan PPh
+   Pasal 21 (berlaku 1 Jan 2024) + PMK Nomor 168 Tahun 2023
+   tentang Petunjuk Pelaksanaan Pemotongan Pajak atas
+   Penghasilan sehubungan dengan Pekerjaan/Jasa/Kegiatan
+   Orang Pribadi: pegawai tetap — TER bulanan dipakai pada
+   setiap masa pajak SELAIN masa pajak terakhir; masa pajak
+   terakhir (Desember atau masa berhenti bekerja) memakai
+   tarif Pasal 17 ayat (1) huruf a UU PPh atas penghasilan
+   setahun/bagian tahun. Masa pajak PPh 21 = bulan kalender;
+   tidak ada masa pajak "mingguan" untuk pegawai tetap.
+   Frekuensi BAYAR internal (mingguan) tidak menciptakan
+   masa pajak baru.
+   - https://pajak.go.id/id/pmk-168-tahun-2023-pph-pasal-21-ter
+   - https://pajak.go.id/en/node/105641 (TER bulanan Jan-Nov,
+     Desember Pasal 17; bruto setahun dikurangi biaya
+     jabatan/iuran pensiun pada masa terakhir)
+   - https://jdih.kemenkeu.go.id/dok/pmk-168-tahun-2023/summary
+2. TER harian PP 58/2023 (0% <= Rp450rb/hari; 0,5%
+   Rp450rb-Rp2,5jt/hari) berlaku untuk pegawai tidak tetap/
+   bukan pegawai dengan penghasilan HARIAN — BUKAN pegawai
+   tetap yang dibayar mingguan. Karyawan WEEKLY di spec ini
+   adalah pegawai tetap (master Employee + baseSalary) yang
+   frekuensi bayarnya mingguan; klasifikasinya tidak berubah
+   menjadi pegawai lepas harian hanya karena dibayar per
+   minggu. Menerapkan TER harian ke mereka = salah subjek.
+   - https://stats.pajak.go.id/id/artikel/tarif-efektif-rata-rata-penyempurnaan-perhitungan-pph-pasal-21
+3. BPJS Kesehatan PPU: Perpres 82/2018 jo. Perpres 64/2020
+   Pasal 30 (iuran 5% dari Gaji atau Upah PER BULAN: 4%
+   pemberi kerja, 1% peserta) + Pasal 32 (batas atas dasar
+   perhitungan Rp12.000.000 per bulan; batas bawah upah
+   minimum kab/kota). Iuran BPJS Ketenagakerjaan (JHT/JP/
+   JKK/JKM) sama-sama iuran per bulan atas upah sebulan
+   (UU 40/2004 SJSN + PP pelaksana JHT/JP; ceiling JP hidup
+   di ruleset statutori existing, jangan hardcode baru).
+   Konsekuensi: dasar BPJS adalah upah SEBULAN kalender,
+   bukan upah per slip pembayaran.
+   - https://jdih.kemenkeu.go.id/api/download/179608f7-a2a0-41c0-aaec-e7d60eb36054/64TAHUN2020PERPRES.pdf
+     (Pasal 30-32 salinan Perpres 64/2020)
+4. Pemotongan upah untuk utang/cicilan utang pekerja: PP
+   36/2021 tentang Pengupahan Pasal 63 ayat (1) huruf e +
+   ayat (3) — wajib berdasarkan kesepakatan/perjanjian
+   tertulis. Perjanjian pinjaman existing menyatakan
+   cicilan PER BULAN (`monthlyInstallment`); mengubah ritme
+   potong menjadi per minggu (bagi 4/5, penuh per minggu,
+   atau tahan ke slip terakhir) mengubah jadwal perjanjian
+   — tidak boleh ditebak mesin; butuh dasar tertulis.
+   - https://peraturan.go.id/files/pp36-2021bt.pdf (Pasal 63)
+   - https://peraturan.bpk.go.id/Details/161909/pp-no-36-tahun-2021
+   Catatan: PP 51/2023 mengubah PP 36/2021 (formula upah
+   minimum) — tidak mengubah Pasal 63 pada cakupan ini.
+
+### 2. VONIS Q-PF-2 — masa PPh21/BPJS slip mingguan
+
+V-PF2-1 (masa pajak = bulan endDate — DIKONFIRMASI):
+Masa PPh21/BPJS setiap slip (mingguan maupun bulanan) =
+bulan kalender dari `endDate` slip itu, dan `period` wajib
+tetap "YYYY-MM" bulan endDate tersebut. Q-PF-2 usulan spec
+§2(b) SAH. Slip mingguan yang rentangnya melintasi dua
+bulan kalender: masanya = bulan endDate (konsisten default
+existing hrm.actions.ts:725); rentang lintas bulan TIDAK
+dipecah dua slip/dipro-rata oleh vonis ini (peringatan
+BR-PF-07 spec tetap berlaku). Alasan: masa pajak bulan
+kalender (dasar §1.1); endDate adalah acuan ruleset existing
+(getStatutoryParams(endDate)) — mengganti acuan ke
+startDate/mayoritas hari = mesin kedua tanpa dasar.
+
+V-PF2-2 (PPh21 mingguan = TER gabungan se-masa existing,
+NOL mesin baru): Slip mingguan ke-1..n dalam masa yang sama
+WAJIB lewat `computePph21ForPeriod` apa adanya: TER bulanan
+x bruto GABUNGAN masa itu, slip berjalan menanggung selisih
+target gabungan dikurangi PPh21 slip se-masa sebelumnya
+(butir 0.1). DILARANG: (a) TER harian untuk pegawai tetap
+mingguan (salah subjek, §1.2); (b) TER bulanan diterapkan
+ke bruto mingguan SAJA sebagai angka final per slip
+(bracket TER bulanan atas basis mingguan = tarif salah,
+dan tanpa gabungan akan kurang/lebih potong sistematis);
+(c) annualisasi bruto mingguan x 52/12 karangan. Preview
+estimasi per-slip boleh tetap bruto-slip (sudah berlabel
+preview non-final existing) — angka FINAL hanya dari jalur
+gabungan. Syarat BOT 3: penjaga irisan Q-PF-3 harus tetap
+menjamin `samePeriod` menemukan semua slip se-masa
+karyawan itu (period identik "YYYY-MM"); ganti kunci unik
+tidak boleh memecah pengelompokan masa ini.
+
+V-PF2-3 (Desember/masa terakhir TIDAK berubah oleh
+frekuensi): Slip mingguan yang endDate-nya di bulan
+Desember = bagian dari masa pajak terakhir: hitung ulang
+Pasal 17 tahunan atas SEMUA bruto final tahun itu (slip
+mingguan + bulanan karyawan sama, FINAL_PAYROLL_STATUSES)
+kurangi Σ terpotong — persis mesin existing (butir 0.1-0.2).
+Slip mingguan Desember BUKAN final per-slip; yang final
+adalah MASA Desember gabungan. Penjaga existing tetap:
+slip pending-final/LEGACY ditolak approve (butir 0.2);
+slip mingguan Desember pertama-terbit tidak boleh
+mengunci "sudah final" sebelum slip minggu berikutnya
+se-masa dihitung — mesin existing menolak hitung final
+kedua ("Masa pajak terakhir tahun ini sudah terbit",
+hrm.actions.ts:1396-1400): maka urutan terbit Desember
+wajib slip mingguan terakhir tahun itu yang membawa
+hitung final, atau hitung final ditunda sampai slip
+Desember terakhir dibuat. Ini batas operasional BOT 3,
+bukan pengecualian angka. Resign final sama: final hanya
+dari flag resignationFinal eksplisit existing, bukan dari
+"slip mingguan terakhir yang kebetulan terbit".
+
+V-PF2-4 (BPJS = temuan vonis: basis SEBULAN, per-slip
+penuh DITOLAK untuk mingguan): Karena iuran BPJS berdasar
+upah sebulan dengan ceiling per bulan (§1.3), menjalankan
+`computeBpjsEmployee(baseSalary mingguan)` pada SETIAP
+slip mingguan memotong Kesehatan/JHT/JP 4-5x sebulan dan
+menerapkan ceiling bulanan 4-5x — SALAH, dilarang build
+seperti itu. Perlakuan wajib sampai mesin agregat diputus
+di bawah: iuran karyawan sebulan penuh dipotong pada SATU
+slip penanggung per masa per karyawan. Vonis memilih:
+slip PERTAMA terbit dalam masa itu menanggung BPJS
+karyawan sebulan penuh atas basis upah sebulan; slip
+mingguan berikutnya se-masa BPJS karyawan = 0.
+   Basis upah sebulan untuk karyawan WEEKLY diturunkan
+   BUKAN dari tebakan: basis = Σ baseSalary slip-slip masa
+   itu yang sudah terbit + slip berjalan bila slip
+   penanggung adalah slip pertama (dengan kata lain basis
+   final masa hanya pasti sesudah masa tutup). Karena itu
+   vonis ini menetapkan batas aman bertahap:
+   (i) TAHAP spec F-076-S (inti pertama): karyawan WEEKLY
+       yang ikut run mingguan WAJIB lolos gerbang yang sama
+       dengan pinjaman di §3 — yaitu BPJS per-slip existing
+       TIDAK boleh jalan apa adanya; BOT 3 DILARANG
+       mengaktifkan potongan BPJS mingguan per-slip penuh.
+   (ii) Bentuk final (butuh kartu BOT 3 tersendiri, BUKAN
+       bagian inti F-076-S pertama): agregator BPJS se-masa
+       meniru pola PPh21 butir 0.1 — target sebulan dari
+       basis Σ bruto/base masa, slip berjalan = max(0,
+       target - Σ bpjs slip se-masa lain), ceiling ruleset
+       diterapkan SEKALI per masa. Sampai bentuk final itu
+       diputus BOT 4 di kartu turunannya (data basis final
+       masa + koreksi bila slip dibatalkan), populasi
+       WEEKLY diperlakukan: BPJS dipotong HANYA pada slip
+       bulanan bila ada; karyawan murni WEEKLY tanpa slip
+       bulanan = di luar cakupan inti pertama dan wajib
+       terlewati-terhitung seperti gerbang §3 (fail-closed),
+       BUKAN dipotong per-slip menebak.
+   Alasan memilih fail-closed di tahap pertama: angka
+   BPJS salah 4-5x adalah kesalahan statutori nyata per
+   karyawan per bulan; menunda populasi murni-mingguan
+   lebih aman daripada memotong salah sambil menunggu
+   agregator. BUTUH-VONIS lanjutan (BOT 4, kartu turunan
+   BOT 3): rumus basis final + perlakuan koreksi BPJS bila
+   slip penanggung dibatalkan/diganti — JANGAN diputus
+   BOT 3/BOT 5 sendiri.
+
+V-PF2-5 (slip mingguan karyawan yang juga punya slip
+bulanan masa sama): diperlakukan SATU masa gabungan untuk
+PPh21 (butir V-PF2-2) — period sama membuatnya otomatis
+se-masa di mesin existing; dilarang memberi period
+pembeda karangan ("2026-10-W2") karena merusak
+pengelompokan itu + rekap F-2026-10-21-028 (spec §1.3).
+
+### 3. VONIS Q-PF-4 — cicilan pinjaman pada slip mingguan
+
+V-PF4-1 (fail-closed spec DIKONFIRMASI sebagai vonis):
+Inti F-076-S TIDAK boleh memotong cicilan pinjaman apa pun
+pada slip mingguan, dan karyawan WEEKLY dengan pinjaman
+aktif (status active, remainingAmount > 0) WAJIB terlewati
++ terhitung pada run mingguan sampai perjanjian tertulis
+per karyawan menyatakan jadwal potong mingguannya. Ini
+bukan penundaan selamanya: ini satu-satunya pilihan yang
+tidak melanggar Pasal 63 ayat (3) PP 36/2021 (§1.4) —
+`monthlyInstallment` adalah janji per bulan; mesin existing
+(butir 0.5) akan memotongnya penuh tiap slip mingguan =
+4-5x janji tertulis per bulan.
+
+V-PF4-2 (tiga opsi spec DITOLAK sebagai default mesin):
+(a) penuh tiap slip mingguan — ditolak (4-5x perjanjian);
+(b) bulanan/4 atau /5 — ditolak sebagai DEFAULT: pembagi
+tidak ada di perjanjian, bulan berisi 4 atau 5 minggu
+bayar bergantian, sisa sen pembulatan tak berdasar;
+menjadi sah HANYA bila perjanjian tertulis karyawan itu
+menyebut cicilan per minggu nominal tetap (nominal baru
+tersimpan, bukan hasil bagi runtime);
+(c) ditahan ke slip mingguan terakhir bulan — ditolak
+sebagai default: "terakhir" baru pasti sesudah masa tutup,
+slip terakhir bisa batal/absen, dan potongan menumpuk
+sebulan pada satu slip mingguan kecil (net bisa negatif;
+mesin existing men-cap net >= 0 dan menggeser beban diam-
+diam). Sah hanya bila tertulis.
+V-PF4-3 (jalur sah membuka kunci): potongan mingguan boleh
+dibangun BOT 3 HANYA sebagai nominal cicilan per-slip yang
+tersimpan eksplisit per pinjaman (diisi dari perjanjian
+tertulis; BUKAN turunan monthlyInstallment/4 di kode),
+dengan cap existing tetap: min(nominal tersimpan,
+remainingAmount) per slip + amortisasi oldest-first
+existing tidak berubah. Kolom/field fisiknya = rancangan
+BOT 3 diajukan ke BOT 4 sebelum migrasi. Sampai itu ada:
+V-PF4-1 berlaku penuh. Pinjaman karyawan MONTHLY tidak
+berubah sama sekali.
+
+### 4. Batas build (mengikat)
+
+BOT 3 (inti F-076-S, sesudah Q-PF-1/3/5 BOT 1/BOT 3):
+- WAJIB: period slip mingguan = "YYYY-MM" endDate
+  (V-PF2-1); PPh21 final lewat gabungan se-masa existing
+  tanpa cabang TER harian/mingguan (V-PF2-2); penjaga
+  irisan Q-PF-3 menjaga pengelompokan samePeriod.
+- DILARANG: BPJS per-slip penuh pada slip mingguan
+  (V-PF2-4i); potongan pinjaman apa pun pada slip mingguan
+  (V-PF4-1) — kedua populasi itu terlewati-terhitung
+  dengan alasan terpisah di hasil run (selaras AC-PF-4/5
+  spec), tanpa nominal per orang di log.
+- Desember: jangan terbitkan hitung final pada slip
+  mingguan Desember sebelum slip terakhir masa itu
+  (V-PF2-3); penjaga pending-final existing tidak dilemahkan.
+BOT 5: spec F-076-S §8 Q-PF-2/Q-PF-4 tertutup oleh vonis
+ini; BR-PF-04 naik BUTUH-VONIS -> VONIS (V-PF2-1..5);
+BR-PF-05 naik -> VONIS fail-closed permanen-sampai-tertulis
+(V-PF4-1..3). Jangan putus sendiri turunan BPJS agregat.
+BOT 2: UI menampilkan status terlewati + alasan (frekuensi
+lain/pinjaman/BPJS-belum-didukung/irisan) dari backend apa
+adanya; UI tidak menghitung masa/cicilan/BPJS.
+BOT 1: Q-PF-1/5 tetap milik BOT 1; merge PR #519 (spec)
+dan PR vonis ini milik Lead. Vonis ini TIDAK membuka inti
+sebelum Q-PF-1 diputus.
+BOT 6: acceptance tambahan mengikat:
+  AC-PF2-1: 4 slip mingguan se-masa: Σ pph21 keempat slip
+    = TER x Σ bruto masa (bukan Σ TER per bruto mingguan);
+    paksa TER per-slip final -> MERAH.
+  AC-PF2-2: slip mingguan endDate Desember + slip bulanan
+    Jan-Nov karyawan sama: hitung final Pasal 17 atas
+    gabungan tahun; slip mingguan Desember membawa TER
+    final sendiri-sendiri -> MERAH.
+  AC-PF2-3: karyawan WEEKLY berpinjaman aktif terlewati
+    run mingguan + terhitung, remainingAmount utuh; potong
+    monthlyInstallment pada slip mingguan -> MERAH.
+  AC-PF2-4: slip mingguan terbit dengan potongan BPJS
+    per-slip penuh (computeBpjsEmployee atas base mingguan
+    tiap slip) -> MERAH (gerbang V-PF2-4i bekerja).
+  AC-PF2-5: period karangan "YYYY-MM-Wn" lolos validasi
+    tulis -> MERAH (V-PF2-5).
+Risiko sisa (jujur): (1) basis BPJS final masa + koreksi
+pembatalan slip penanggung BELUM diputus — kartu turunan
+wajib sebelum populasi murni-WEEKLY dibuka; (2) karyawan
+mingguan tanpa pinjaman tahap pertama tetap terpotong
+PPh21 benar tetapi BPJS-nya tertunda masa itu — kewajiban
+iuran perusahaan tidak hilang, hanya belum terpotong lewat
+slip; HR wajib menyetor basis sebulan lewat jalur existing
+di luar run mingguan sampai agregator jadi (catatan
+operasional, bukan angka baru); (3) TER preview per-slip
+bisa berbeda dari final gabungan — label preview existing
+wajib dipertahankan BOT 2.
+
+### 5. Yang SENGAJA tidak diputus di sini
+Bentuk fisik kunci anti-dobel rentang (Q-PF-3, BOT 3);
+buka/tunda inti (Q-PF-1) + ganti frekuensi tengah periode
+(Q-PF-5/BR-PF-08) (BOT 1); rumus agregator BPJS final +
+koreksi batal (vonis BOT 4 lanjutan di kartu turunan
+BOT 3); nominal cicilan mingguan per karyawan (perjanjian
+tertulis per karyawan, bukan vonis umum); jurnal payroll
+(tidak berubah, jalur onPayrollPaid existing).
+
+Pemilik berikutnya: BOT 1 (Q-PF-1/5 + merge PR #519 & PR
+vonis ini) -> BOT 3 (inti dalam batas §4 + ajukan rancangan
+field cicilan-mingguan & agregator BPJS ke BOT 4) ->
+BOT 2 (label/alasan backend) -> BOT 6 (AC-PF-1..8 spec +
+AC-PF2-1..5 vonis ini).
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-062-V Aset tetap & penyusutan: sumber nilai buku tunggal, gerbang metode, perolehan fail-closed
+
+Status: PUTUSAN BOT 4 (kartu t_f71c3193). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Domain BOT 4 #6 (aset tetap & penyusutan) belum pernah punya F-ID/vonis, padahal perolehan, cron penyusutan bulanan, disposal, dan laporan selisih fiskal sudah memposting/membaca angka di main. Vonis ini menutup celah itu. Setiap migrasi dari vonis ini = kartu BOT 3 terpisah, klaim `prisma/schema.prisma` di board, sesudah vonis ini masuk main.
+
+### Bukti repo terverifikasi run ini (origin/main aa7f58ed)
+
+- Perolehan: `createAsset` (`src/actions/asset.actions.ts:749-755`) memposting Dr Aset Tetap / Cr Kas-Bank HANYA bila `gl.fixedAsset && gl.cashBank` terpetakan; bila tidak, aset lahir TANPA jurnal dan TANPA pesan kegagalan ke operator (komentar kode: "Skipped silently"). Aset yang sama lalu tetap disusutkan cron (akumulasi bertambah tanpa saldo bruto lawan di GL).
+- Penyusutan: cron `src/app/api/cron/asset-depreciation/route.ts` membaca `Asset.currentValue` (kolom cache, schema:3737) lewat `Number(...)` (route:120-122), menghitung dengan float JS di `computeMonthlyDepreciation` (`src/lib/finance/asset-depreciation.ts:35-75`), lalu menulis TIGA representasi sekaligus dalam satu tx: `Asset.currentValue` baru, baris `AssetHistory type=depreciation`, dan jurnal POSTED `referenceType=ASSET_DEPRECIATION_YYYYMM` (route:178-231).
+- Metode: `Asset.depreciationMethod` = String bebas (`optionalStr(50)`, `src/lib/validations/asset.schemas.ts:128`); `computeMonthlyDepreciation` hanya mengenal `declining_balance`, string lain APA PUN jatuh ke garis lurus lewat usefulLife/tarif (asset-depreciation.ts:52-66). Metode komersial sah lain (unit produksi, jumlah angka tahun) tidak dibedakan dari salah ketik.
+- Fiskal: `AssetCategory.taxDepreciationRate`/`taxUsefulLife` (schema:3658-3662) bebas tanpa kelompok fiskal; laporan `src/lib/reports/depreciation-difference.ts` menghitung fiskal straight-line dari harga perolehan dan akuntansi dari `currentValue` HARI INI (baris 79, 100) — angka akuntansi laporan tahun lalu berubah bila cron bulan ini jalan.
+- Nilai buku laporan: `src/lib/reports/asset-ledger.ts:9` sudah menyatakan aturan benar (akumulasi HANYA dari AssetHistory, currentValue = snapshot hari ini) tetapi tidak ada rekonsiliasi yang membuktikan ketiga jalur (jurnal, history, currentValue) sama.
+- Disposal SUDAH fail-closed untuk aset berjurnal (asset.actions.ts:996-1010) — vonis ini menegaskan pola itu dan melarang regresi.
+
+### Dasar regulasi (diakses 2026-10-22)
+
+- UU PPh Pasal 11 (penyusutan harta berwujud): metode fiskal hanya garis lurus dan saldo menurun (bangunan hanya garis lurus); kelompok bukan bangunan 1/2/3/4 masa manfaat 4/8/16/20 tahun, tarif garis lurus 25%/12,5%/6,25%/5%, saldo menurun 50%/25%/12,5%/10%; bangunan permanen 20 tahun 5%, tidak permanen 10 tahun 10%; penyusutan dimulai bulan dilakukannya pengeluaran. Ringkasan resmi DJP: https://www.pajak.go.id/id/penyusutan-dan-amortisasi (akses 2026-10-22).
+- PMK Nomor 72 Tahun 2023: lampiran jenis harta per kelompok fiskal; jenis tidak tercantum memakai kelompok 3 atau penetapan DJP (dirujuk halaman DJP di atas).
+- PSAK 16 (aset tetap): metode penyusutan mencerminkan pola konsumsi manfaat (garis lurus, saldo menurun, unit produksi sah secara komersial); nilai residu dan masa manfaat ditelaah berkala. Label: rujukan standar akuntansi, bukan dasar tarif fiskal.
+
+### Putusan 1 — Sumber nilai buku tunggal = jurnal POSTED
+
+Nilai buku akuntansi satu aset pada satu tanggal = harga perolehan berjurnal − Σ kredit akun akumulasi penyusutan pada `JournalEntry` POSTED (status POSTED, bukan DRAFT/deleted) yang tertaut jurnal perolehan/penyusutan/disposal aset itu. `Asset.currentValue` dan Σ `AssetHistory type=depreciation` adalah CACHE turunan: wajib sama dengan angka jurnal; selisih antara ketiga jalur tampil sebagai TEMUAN rekonsiliasi aset (per aset, per akun) di read-model, TIDAK dipilih diam-diam salah satu dan TIDAK menimpa jurnal. Mutasi berikutnya (penyusutan bulan berikut, disposal) WAJIB membaca dasar dari jurnal POSTED, bukan dari `currentValue`. Disposal yang memakai `currentValue` sebagai nilai buku (asset.actions.ts:945) wajib diganti dasar jurnal sebelum inti ini ditutup.
+
+Larangan: menulis `currentValue` tanpa jurnal pasangan dalam tx yang sama; memperbaiki selisih dengan mengedit `currentValue`/`AssetHistory` langsung (koreksi hanya jurnal koreksi/reversal di periode terbuka, `assertPeriodOpen` dalam tx).
+
+### Putusan 2 — Gerbang metode: fiskal dua metode, komersial terdaftar
+
+- Metode FISKAL yang boleh dipakai menghitung sisi pajak hanya `straight_line` dan `declining_balance`, dengan kelompok fiskal PMK 72/2023 (kelompok 1/2/3/4, bangunan permanen, bangunan tidak permanen) dan tarif statutoris UU PPh Pasal 11 sebagai tabel VALIDASI di master bertanggal efektif — bukan konstanta hitung di logika. Penentuan kelompok dibedakan tegas: (a) jenis harta TERCANTUM di lampiran PMK 72/2023 → kelompok lampiran WAJIB terisi; kategori dengan tarif/umur fiskal terisi tetapi kelompok fiskal kosong = konfigurasi tidak lengkap: sisi fiskal TIDAK dihitung dan aset tampil di daftar "fiskal belum dapat dihitung" (pola jujur existing depreciation-difference dipertahankan). (b) jenis harta TIDAK tercantum di lampiran PMK 72/2023 → kelompok 3 ADALAH default statutoris UU PPh Pasal 11 ayat (6)/PMK 72/2023 (atau kelompok 1/2/4 bila ada penetapan DJP), BUKAN tebakan kode: kelompok fiskal kosong pada jenis tidak tercantum = fiskal TETAP dihitung sebagai kelompok 3, dan penetapan DJP bila ada mengalahkan default itu.
+- Metode KOMERSIAL di luar dua itu (mis. unit produksi, jumlah angka tahun) sah sebagai kebijakan akuntansi PSAK 16 tetapi statusnya ANALITIS NON-GL: tidak boleh melahirkan jurnal penyusutan sampai mesin hitung + vonis lanjutannya ada. Cron WAJIB menolak (error berisik per aset, tercatat di hasil cron), bukan menjatuhkannya diam-diam ke garis lurus.
+- `depreciationMethod` string bebas di luar daftar terdaftar = ditolak saat simpan aset/kategori (validasi Zod enum) DAN ditolak lagi di cron (data lama). Daftar terdaftar hidup satu tempat diekspor konstan: `straight_line`, `declining_balance`, plus metode analitis terdaftar eksplisit bila ditambah lewat vonis.
+
+### Putusan 3 — Perolehan tanpa akun = fail-closed berisik
+
+`createAsset` dengan `purchaseCost > 0`: bila akun Aset Tetap atau Kas/Bank tidak terpetakan, pembuatan DITOLAK dengan pesan menyebut akun yang hilang + arah melengkapi (kategori aset / Pengaturan Mapping Akun), pola sama disposal (asset.actions.ts:996-1010). "Skipped silently" (baris 749-755 + komentar helper baris 33-34) DILARANG untuk perolehan berharga. Aset `purchaseCost = 0` tetap boleh lahir tanpa jurnal. Aset legacy subledger-only (sudah terlanjur lahir tanpa jurnal perolehan): tampil di temuan rekonsiliasi Putusan 1 sebagai "belum berjurnal", disposalnya tetap jalur non-GL existing; DILARANG memposting jurnal perolehan susulan bertanggal lampau tanpa jurnal koreksi berperiode terbuka.
+
+### Putusan 4 — Hitung uang Decimal, mulai bulan pengeluaran, idempoten per (aset, masa)
+
+- Seluruh hitung penyusutan (dasar, tarif, clamp residu) memakai Decimal/`safeRound` sen dari `src/lib/utils/math`; `Number(...)` + float di jalur uang cron DILARANG. Pembulatan: bulanan dibulatkan ke sen saat jurnal; bulan terakhir clamp agar nilai buku jurnal berhenti PERSIS di nilai residu (bukan lewat, bukan kurang).
+- Mulai penyusutan = bulan pengeluaran perolehan (UU PPh Pasal 11), bulan penuh, tanggal jurnal = awal masa — perilaku cron existing (route:41-46) DIPERTAHANKAN sebagai putusan, bukan kebetulan. Aset hasil pengerjaan sendiri/belum digunakan: mulai bulan selesai/digunakan = `BUTUH-VONIS-AKUNTAN` per pola, jangan tebak di kode.
+- Satu jurnal penyusutan per (aset, masa): kunci `referenceType=ASSET_DEPRECIATION_YYYYMM` + `referenceId=assetId` dengan unique (referenceType, referenceId) schema dipertahankan; replay cron bulan sama = nol jurnal baru. `assertPeriodOpen` WAJIB di dalam tx posting per aset (bukan hanya sebelum loop), dan penolakan periode tertutup = error tercatat, bukan skip.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 3 (inti, kartu terpisah sesudah vonis masuk main; klaim schema di board dulu): (1) rekonsiliasi tiga jalur + read-model temuan; (2) dasar mutasi dari jurnal POSTED; (3) enum metode + gerbang cron; (4) kelompok fiskal di kategori (kolom baru = migrasi, koordinasi BOT 4); (5) perolehan fail-closed; (6) hitung Decimal. Tanpa migrasi di kartu vonis ini.
+- BOT 2: tampilkan temuan rekonsiliasi + daftar fiskal-belum-dihitung apa adanya dari backend; UI tidak menentukan metode/kelompok dan tidak menghitung ulang penyusutan.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): F62-1 edit `currentValue` manual tidak mengubah nilai buku read-model (dasar jurnal); F62-2 selisih history vs jurnal tampil sebagai temuan, bukan ditimpa; F62-3 metode `units_of_production` tersimpan/diproses cron tanpa jurnal + error berisik; F62-4 string metode ngawur ditolak Zod; F62-5 perolehan Rp10.000.000 tanpa akun Aset Tetap ditolak berisik, nol baris Asset lahir; F62-6 replay cron bulan sama = jurnal tetap 1 per aset; F62-7 tarif fiskal terisi tanpa kelompok: (i) jenis tercantum PMK 72/2023 = fiskal tidak dihitung + tampil belum-dihitung; (ii) jenis tidak tercantum + kelompok kosong = fiskal TETAP terhitung kelompok 3 statutoris (F62-10); F62-8 bulan terakhir nilai buku jurnal berhenti persis di residu (uji cost 1.000.000, residu 100.000, umur 3 tahun); F62-9 periode tertutup: cron menolak dalam tx, nol jurnal/history/currentValue berubah; F62-10 jenis tidak tercantum PMK 72/2023 + kelompok kosong → fiskal kelompok 3 statutoris terhitung, dan penetapan DJP bila ada mengalahkan default; jenis tercantum + kelompok kosong → tetap belum-dihitung (bukan kelompok 3).
+
+Klaim kepatuhan: vonis ini mengatur perlakuan internal ISF berdasar UU PPh Pasal 11 + PMK 72/2023 (sumber DJP di atas, akses 2026-10-22) dan PSAK 16; BUKAN klaim SPT Tahunan sah — daftar penyusutan fiskal final tetap wajib cocok lampiran SPT Tahunan badan.
+
+ID vonis ini **F-2026-10-22-062-V** (tertinggi terverifikasi di origin/main aa7f58ed: F-2026-10-22-057-V; 058-061 terpakai PR terbuka). Pemilik berikutnya: BOT 3 (inti di atas) -> BOT 2 -> BOT 6 F62-1..F62-10.
