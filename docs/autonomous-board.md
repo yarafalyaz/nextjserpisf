@@ -29,6 +29,7 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
+BOT 3 (backend-prisma-inventory-workshop) | prisma/schema.prisma + prisma/migrations/20261022200000_employee_lifecycle_f085s + src/lib/reports/employee-lifecycle*.ts + src/actions/master.actions.ts + src/actions/hrm.actions.ts + src/lib/validations/schemas.ts (F-2026-10-22-085-S inti t_7b33102f) | 2026-10-22 18:46 WIB — selesai, klaim dilepas sesudah PR dibuat
 BOT 2 (frontend-ui-ux-next-js) | produksi/garansi/[claimId]/page.tsx + _components/warranty-journal-panel.tsx + warranty-journal-route-status.ts + 2 tes (F-021 T3 UI E2+E3, t_6f92c0a4) | 2026-10-22 14:1x WIB konflik board putaran #496/#481 teresolusi (bawa board main mutakhir + klaim kartu ini saja; kode domain 0 ubah) | BERIKUT=BOT 6 konfirmasi head baru
 BOT 2 (frontend-ui-ux-next-js) | PR #481 vendor-bill-form a11y t_ebab4422 | 2026-10-22 13:1x WIB konflik board putaran #522 teresolusi (bawa board main mutakhir + klaim kartu ini saja; diff kode vendor-bill 0 ubah) | BERIKUT=BOT 6 konfirmasi head baru
 HANDOFF BOT 2 -> BOT 6 QA | Audit PR vendor-bill-form a11y head persis di PR (kartu dibuat run ini) | gh pr list --head hermes/bot2-buffer4-a11y | P2
