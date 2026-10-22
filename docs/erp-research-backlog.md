@@ -6993,9 +6993,18 @@ undang-undang (PP 34/2017 Pasal 3(2)), bukan karena dokumen
 penunjukan per pihak. Orang pribadi hanya pemotong bila DITUNJUK
 DJP. Inilah yang membuat kategori basisType bisa ditutup persis.
 
-### 1. Putusan 1 — Katalog basisType DITUTUP (enum persis, 6 nilai)
+### 1. Putusan 1 — Katalog basisType DITUTUP (enum persis, 7 nilai final)
 
-`basisType` WAJIB salah satu dari enam nilai ini; nilai lain
+> KOREKSI FINAL BOT 4 (sesudah audit BOT 6 CONDITIONAL + konfirmasi
+> LOLOS seksi ini): P5 `pemotong_memotong_sendiri` DICABUT — kontrak
+> privat tidak menciptakan status pemotong (PP 34/2017 Pasal 3(2)
+> limitatif; perantara menyalurkan atas nama penyewa principal ->
+> pemotong tetap principal; perantara badan/OP/instansi memakai
+> kategorinya sendiri P1/P2/P3/P4). Angka 9/6/8 sebelumnya DICABUT;
+> katalog final = 7 nilai. `pemotong_memotong_sendiri` DILARANG
+> dalam bentuk apa pun (F60-3).
+
+`basisType` WAJIB salah satu dari tujuh nilai ini; nilai lain
 DITOLAK di service. Untuk `status=pemotong`:
 
 | # | basisType | Untuk pihak | Dokumen dasar wajib (basisNumber+basisDate) |
@@ -7004,7 +7013,6 @@ DITOLAK di service. Untuk `status=pemotong`:
 | P2 | `badan_dalam_negeri` | subjek pajak badan dalam negeri (PT/CV/koperasi/yayasan/BUT/kerja sama operasi/perwakilan LN) pada posisi PENYEWA | nomor+tanggal akta/dokumen legalitas badan ATAU NIB; status pemotong melekat oleh PP 34/2017 Pasal 3(2), dokumen = bukti jenis badan, bukan izin potong |
 | P3 | `penyelenggara_kegiatan` | penyelenggara kegiatan pada posisi penyewa | nomor+tanggal dokumen legalitas penyelenggara (izin/akta/NIB) |
 | P4 | `op_ditunjuk_djp` | orang pribadi WPDN HANYA bila ditunjuk DJP | nomor+tanggal surat/keputusan penunjukan DJP — TANPA ini klaim pemotong OP DITOLAK mutlak |
-| P5 | `pemotong_memotong_sendiri` | pihak yang menurut F-042-V Q7/F-055-V memang memotong atas pembayaran sewa yang IA terima sebagai perantara yang ditunjuk tertulis dalam kontrak induk pemerintah (Kasus rantai penunjukan, mis. pengelola yang ditunjuk instansi) | nomor+tanggal dokumen penunjukan tertulis dari instansi/pemberi kuasa |
 
 Untuk `status=non_pemotong`:
 
@@ -7015,7 +7023,7 @@ Untuk `status=non_pemotong`:
 | N3 | `pihak_bukan_penyewa_pemotong` | pihak yang arah transaksinya bukan penyewa-pemotong (mis. pemilik OP dalam Kasus C: ISF penyewa badan memotong; pemilik OP penerima = non_pemotong yang setor-sendiri ditangani jalur Kasus C F-059-V) | `basisNote` WAJIB menyebut arah peran ("pemilik OP, bukan penyewa") |
 
 LARANGAN katalog:
-- Nilai `lainnya` / teks bebas sebagai basisType DITOLAK. Enam+
+- Nilai `lainnya` / teks bebas sebagai basisType DITOLAK. Empat+
   tiga nilai di atas adalah katalog TERTUTUP. Kebutuhan kategori
   baru = vonis BOT 4 lanjutan, bukan entri operator.
 - `basisNote` tidak pernah MENGGANTIKAN basisType; note kosong
@@ -7030,7 +7038,7 @@ BR-PMT-12.
 
 ### 2. Putusan 2 — basisNumber/basisDate wajib per kategori
 
-- P1-P5: basisNumber + basisDate WAJIB terisi (mempertahankan
+- P1-P4: basisNumber + basisDate WAJIB terisi (mempertahankan
   F-057-V §1: klaim pemotong tanpa nomor/tanggal dasar DITOLAK).
   Nomor = nomor dokumen pada tabel Putusan 1; tanggal = tanggal
   dokumen itu, BUKAN tanggal input operator.
@@ -7076,7 +7084,7 @@ VONIS:
 
 Syarat (BOT 3, kartu bentuk fisik PR #449/#450 sesudah #439
 merged):
-- Enum basisType = 9 nilai Putusan 1 sebagai daftar beku di
+- Enum basisType = 7 nilai final Putusan 1 sebagai daftar beku di
   service (bukan tabel master bebas edit operator); validasi
   kombinasi (status x pihak x basisType) di server dalam tx:
   pemotong+OP tanpa P4 DITOLAK; non_pemotong+badan dalam negeri
@@ -7106,9 +7114,9 @@ Batas build: vonis ini TIDAK membuka migrasi. Urutan tetap:
 - F60-2: badan dalam negeri posisi penyewa diklaim non_pemotong
   dengan basisNote internal -> tersimpan = MERAH (pengecualian
   keras Putusan 3); cabut penjaga kombinasi -> MERAH.
-- F60-3: basisType di luar 9 nilai katalog (termasuk "lainnya")
+- F60-3: basisType di luar 7 nilai katalog final (termasuk "lainnya" dan `pemotong_memotong_sendiri`)
   lewat API langsung -> tersimpan = MERAH.
-- F60-4: pemotong P1-P5 tanpa basisNumber/basisDate -> tersimpan
+- F60-4: pemotong P1-P4 tanpa basisNumber/basisDate -> tersimpan
   = MERAH; non_pemotong N1-N3 tanpa basisNote -> tersimpan =
   MERAH.
 - F60-5: ubah pemotong->non_pemotong badan luar negeri (N2)
