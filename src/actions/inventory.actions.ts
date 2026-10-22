@@ -526,6 +526,39 @@ export async function receiveInventoryTransfer(transferId: number) {
 
 // ==================== MATERIAL ISSUE ACTIONS ====================
 
+
+/** F-008: baris payload MI bersama create/update — parse + validasi scrap draft. */
+type MaterialIssuePayloadItem = {
+  itemId: number; qty: number; unitCost: number;
+  scrapQty?: number; scrapReasonCode?: string | null; scrapNote?: string | null;
+};
+
+function parseMaterialIssuePayloadItems(raw: string | null | undefined): MaterialIssuePayloadItem[] {
+  const items = (safeJsonParse<MaterialIssuePayloadItem[]>(raw ?? null) ?? [])
+    .filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+  // Scrap draft divalidasi saat simpan juga (bukan hanya complete).
+  for (const it of items) {
+    const err = validateScrapInput({
+      issueQty: Number(it.qty), scrapQty: Number(it.scrapQty ?? 0),
+      scrapReasonCode: it.scrapReasonCode ?? null, scrapNote: it.scrapNote ?? null,
+    });
+    if (err) throw new Error(`Baris item #${it.itemId}: ${err}`);
+  }
+  return items;
+}
+
+function materialIssueItemCreateData(it: MaterialIssuePayloadItem, scrapPercentSnapshot: number | null) {
+  return {
+    itemId: Number(it.itemId),
+    qty: Number(it.qty),
+    cost: Number(it.unitCost || 0),
+    scrapQty: Number(it.scrapQty ?? 0),
+    scrapReasonCode: it.scrapReasonCode ?? null,
+    scrapNote: it.scrapNote ?? null,
+    scrapPercentSnapshot,
+  };
+}
+
 export async function createMaterialIssue(formData: FormData) {
   try {
     const user = await requirePermission("create_material_issues");
@@ -542,22 +575,7 @@ export async function createMaterialIssue(formData: FormData) {
 
     const documentNo = await generateDocumentNumber("MI");
 
-    const miItems = (
-      safeJsonParse<
-        {
-          itemId: number; qty: number; unitCost: number;
-          scrapQty?: number; scrapReasonCode?: string | null; scrapNote?: string | null;
-        }[]
-      >(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
-    // F-008: scrap draft divalidasi saat simpan juga (bukan hanya complete).
-    for (const it of miItems) {
-      const err = validateScrapInput({
-        issueQty: Number(it.qty), scrapQty: Number(it.scrapQty ?? 0),
-        scrapReasonCode: it.scrapReasonCode ?? null, scrapNote: it.scrapNote ?? null,
-      });
-      if (err) throw new Error(`Baris item #${it.itemId}: ${err}`);
-    }
+    const miItems = parseMaterialIssuePayloadItems(v.items);
 
     if (miItems.length === 0) {
       throw new Error(
@@ -588,15 +606,9 @@ export async function createMaterialIssue(formData: FormData) {
           status: "draft",
           createdBy: Number(user.id),
           items: {
-            create: miItems.map((it) => ({
-              itemId: Number(it.itemId),
-              qty: Number(it.qty),
-              cost: Number(it.unitCost || 0),
-              scrapQty: Number(it.scrapQty ?? 0),
-              scrapReasonCode: it.scrapReasonCode ?? null,
-              scrapNote: it.scrapNote ?? null,
-              scrapPercentSnapshot: snapshotByItem.get(Number(it.itemId)) ?? null,
-            })),
+            create: miItems.map((it) =>
+              materialIssueItemCreateData(it, snapshotByItem.get(Number(it.itemId)) ?? null),
+            ),
           },
         },
       });
@@ -1635,21 +1647,7 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
     }
 
     // Fix #2: Jangan generate documentNo baru saat update
-    const miItems = (
-      safeJsonParse<
-        {
-          itemId: number; qty: number; unitCost: number;
-          scrapQty?: number; scrapReasonCode?: string | null; scrapNote?: string | null;
-        }[]
-      >(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
-    for (const it of miItems) {
-      const err = validateScrapInput({
-        issueQty: Number(it.qty), scrapQty: Number(it.scrapQty ?? 0),
-        scrapReasonCode: it.scrapReasonCode ?? null, scrapNote: it.scrapNote ?? null,
-      });
-      if (err) throw new Error(`Baris item #${it.itemId}: ${err}`);
-    }
+    const miItems = parseMaterialIssuePayloadItems(v.items);
 
     const issue = await prisma.$transaction(async (tx) => {
       await tx.materialIssueItem.deleteMany({ where: { materialIssueId: id } });
@@ -1683,15 +1681,9 @@ export async function updateMaterialIssue(id: number, formData: FormData) {
           date: wibDateToUtcMidnight(v.date),
           notes: v.notes ?? null,
           items: {
-            create: miItems.map((it) => ({
-              itemId: Number(it.itemId),
-              qty: Number(it.qty),
-              cost: Number(it.unitCost || 0),
-              scrapQty: Number(it.scrapQty ?? 0),
-              scrapReasonCode: it.scrapReasonCode ?? null,
-              scrapNote: it.scrapNote ?? null,
-              scrapPercentSnapshot: snapshotByItem.get(Number(it.itemId)) ?? null,
-            })),
+            create: miItems.map((it) =>
+              materialIssueItemCreateData(it, snapshotByItem.get(Number(it.itemId)) ?? null),
+            ),
           },
         },
       });
