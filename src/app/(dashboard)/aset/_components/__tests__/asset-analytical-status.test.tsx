@@ -54,10 +54,11 @@ describe("AssetAnalyticalStatus — render loader apa adanya", () => {
       unmount(r, c)
     })
   })
-  it("skip held-for-sale/already-posted/not-started + reject unregistered", () => {
+  it("skip held-for-sale/disposed/already-posted/not-started + reject unregistered", () => {
     withContainer((c) => {
       for (const [status, text] of [
         [{ status: "skip", reason: "held-for-sale" }, "ditahan untuk dijual"],
+        [{ status: "skip", reason: "disposed" }, "Aset sudah dilepas — tidak ada beban analitis"],
         [{ status: "skip", reason: "already-posted" }, "sudah berjurnal"],
         [{ status: "skip", reason: "not-started" }, "belum mulai"],
         [{ status: "reject", reason: "unregistered-status", method: "aneh" }, "tidak terdaftar"],
