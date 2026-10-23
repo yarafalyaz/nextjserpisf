@@ -107,6 +107,21 @@ describe("SYD — Putusan 3 contoh wajib", () => {
     expect(book.toFixed(2)).toBe("1000000.00")
   })
 
+  it("non-integer N/k = reject missing-parameter (syarat inti BOT 6 PR #633)", () => {
+    expect(
+      computeSumOfYearsDigitsDepreciation({
+        purchaseCost: 90_000_000, bookValue: 90_000_000, residualValue: 0,
+        usefulLifeMonths: 3.5, monthIndex: 1,
+      }),
+    ).toMatchObject({ status: "reject", reason: "missing-parameter", parameter: "usefulLifeMonths" })
+    expect(
+      computeSumOfYearsDigitsDepreciation({
+        purchaseCost: 90_000_000, bookValue: 90_000_000, residualValue: 0,
+        usefulLifeMonths: 3, monthIndex: 1.5,
+      }),
+    ).toMatchObject({ status: "reject", reason: "missing-parameter", parameter: "monthIndex" })
+  })
+
   it("parameter kosong = reject; bulan lewat N = skip at-residual", () => {
     expect(computeSumOfYearsDigitsDepreciation({
       purchaseCost: 1, bookValue: 1, residualValue: 0,

@@ -4023,10 +4023,18 @@ model Asset {
   location           String?
   status             String          @default("active")
   notes              String?         @db.Text
+  /// Parameter komersial terbekukan per aset (vonis BOT 4 F-2026-10-23-118-V
+  /// Putusan 2a): UOP = total estimasi unit seumur aset; SYD = masa manfaat
+  /// komersial dalam bulan. NULL = belum dibekukan, mesin wajib menolak
+  /// berisik; DILARANG menebak dari kategori fiskal.
+  totalEstimatedUnits Decimal?       @map("total_estimated_units") @db.Decimal(15, 2)
+  productionUnitName String?         @map("production_unit_name") @db.VarChar(50)
+  usefulLifeMonths   Int?            @map("useful_life_months")
   createdAt          DateTime        @default(now()) @map("created_at")
   updatedAt          DateTime        @updatedAt @map("updated_at")
   histories          AssetHistory[]
   transfers          AssetTransfer[]
+  usageRecords       AssetUsageRecord[]
   category           AssetCategory?  @relation(fields: [categoryId], references: [id])
   group              AssetGroup?     @relation(fields: [groupId], references: [id])
 
@@ -4038,6 +4046,30 @@ model Asset {
   @@index([assetBrandId])
   @@index([createdAt])
   @@map("assets")
+}
+
+/// Dokumen unit aktual bernama per (aset, masa) — vonis BOT 4
+/// F-2026-10-23-118-V Putusan 2b. Sumber `actualUnits` UOP; tanpa baris
+/// untuk masa itu, mesin menolak `missing-parameter:actualUnits`.
+/// Unik per (assetId, periodYear, periodMonth) = satu dokumen per masa;
+/// koreksi = timpa baris ini (belum ada jurnal) atau reversal jurnal.
+model AssetUsageRecord {
+  id          Int      @id @default(autoincrement())
+  assetId     Int      @map("asset_id")
+  periodYear  Int      @map("period_year")
+  periodMonth Int      @map("period_month")
+  actualUnits Decimal  @map("actual_units") @db.Decimal(15, 2)
+  sourceName  String   @map("source_name") @db.VarChar(200)
+  sourceRef   String?  @map("source_ref") @db.VarChar(200)
+  createdBy   Int?     @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  asset       Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, periodYear, periodMonth], map: "asset_usage_records_asset_period_unique")
+  @@index([assetId], map: "asset_usage_records_asset_id_fkey")
+  @@index([createdAt])
+  @@map("asset_usage_records")
 }
 
 model AssetHistory {

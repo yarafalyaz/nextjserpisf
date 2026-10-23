@@ -7,6 +7,7 @@ import {
   isAnalyticalDepreciationMethod,
   isRegisteredDepreciationMethod,
 } from "@/lib/finance/asset-depreciation"
+import { resolveAnalyticalAssetStatus } from "@/lib/finance/asset-analytical-posting"
 import { journalBookValue } from "@/lib/finance/asset-book-value"
 import {
   resolveDepreciationAccounts,
@@ -25,8 +26,7 @@ import { DocumentSequenceService } from "@/lib/services/document-sequence.servic
  *    `Asset.currentValue`. Aset tanpa jurnal perolehan (legacy subledger-only)
  *    tidak disusutkan GL; tampil sebagai error berisik "belum berjurnal".
  *  - Metode di luar daftar terdaftar ditolak Zod saat simpan dan ditolak lagi
- *    di sini; metode analitis NON-GL (`units_of_production`,
- *    `sum_of_years_digits`) ditolak berisik per aset, tanpa jurnal (Putusan 2).
+ *    di sini (Putusan 2).
  *  - Hitung Decimal, bulanan dibulatkan ke sen, bulan terakhir berhenti persis
  *    di residu (Putusan 4, di `computeMonthlyDepreciation`).
  *  - Satu jurnal per (aset, masa): unique (referenceType, referenceId) schema
@@ -34,6 +34,15 @@ import { DocumentSequenceService } from "@/lib/services/document-sequence.servic
  *    nol jurnal baru. `assertPeriodOpen` di dalam tx posting per aset.
  *  - Mulai penyusutan = bulan pengeluaran, bulan penuh, jurnal bertanggal
  *    awal masa (perilaku existing dipertahankan sebagai putusan).
+ *
+ * Vonis BOT 4 F-2026-10-23-118-V Putusan 2: metode analitis
+ * (`units_of_production`, `sum_of_years_digits`) BOLEH GL hanya lewat inti
+ * ini — parameter terbekukan per aset + dokumen unit aktual +
+ * `assertPeriodOpen` dalam tx + idempotensi per masa, tanpa kategori
+ * fiskal. Aset analitis melewati gerbang kategori (rate/usefulLife fiskal
+ * tidak dipakai komersial); `held_for_sale` tidak dipilih sama sekali dan
+ * `status` tak terdaftar di query top-level dibatalkan berisik di
+ * `resolveAnalyticalAssetStatus`.
  */
 export async function GET(request: Request) {
   if (!isValidCronRequest(request)) {
@@ -48,20 +57,38 @@ export async function GET(request: Request) {
     const periodStart = new Date(year, month - 1, 1)
     const referenceType = `ASSET_DEPRECIATION_${year}${String(month).padStart(2, "0")}`
 
+    // Aset analitis melewati gerbang kategori (rate/usefulLife fiskal tidak
+    // dipakai komersial, F-118-V Putusan 2); GL standar tetap wajib kategori.
     const assets = await prisma.asset.findMany({
       where: {
         status: "active",
         purchaseDate: { lte: periodEnd },
-        category: {
-          OR: [{ depreciationRate: { gt: 0 } }, { usefulLife: { gt: 0 } }],
+        OR: [
+          {
+            depreciationMethod: {
+              in: ["units_of_production", "sum_of_years_digits"],
+            },
+          },
+          {
+            category: {
+              OR: [{ depreciationRate: { gt: 0 } }, { usefulLife: { gt: 0 } }],
+            },
+          },
+        ],
+      },
+      include: {
+        category: true,
+        usageRecords: {
+          where: { periodYear: year, periodMonth: month },
+          take: 1,
         },
       },
-      include: { category: true },
     })
 
     let processed = 0
     let errors = 0
     let skipped = 0
+    let analyticalSkipped = 0
     const errorDetails: string[] = []
 
     const settings = await prisma.systemSetting.findFirst({
@@ -131,7 +158,8 @@ export async function GET(request: Request) {
 
     for (const asset of assets) {
       const category = asset.category
-      if (!category) continue
+      const analytical = isAnalyticalDepreciationMethod(asset.depreciationMethod)
+      if (!category && !analytical) continue
       if (depreciatedAssetIds.has(asset.id)) {
         skipped++
         continue
@@ -147,20 +175,12 @@ export async function GET(request: Request) {
         )
         continue
       }
-      if (isAnalyticalDepreciationMethod(asset.depreciationMethod)) {
-        rejectedMethods++
-        errors++
-        errorDetails.push(
-          `Asset ${asset.id} (${asset.name}): metode ${asset.depreciationMethod} analitis NON-GL, tidak diposting jurnal`,
-        )
-        continue
-      }
-
       const fixedAssetAccountId =
-        category.assetAccountId ?? (envAccount("FIXED_ASSET_ACCOUNT_ID") || null)
+        category?.assetAccountId ?? (envAccount("FIXED_ASSET_ACCOUNT_ID") || null)
       const accounts = resolveDepreciationAccounts({
-        categoryExpenseAccountId: category.depreciationExpenseAccountId,
-        categoryAccumDepAccountId: category.accumulatedDepreciationAccountId,
+        categoryExpenseAccountId: category?.depreciationExpenseAccountId ?? null,
+        categoryAccumDepAccountId:
+          category?.accumulatedDepreciationAccountId ?? null,
         settingsExpenseAccountId: settings?.depreciationExpenseAccountId ?? null,
         settingsAccumDepAccountId: settings?.accumulatedDepreciationAccountId ?? null,
         envExpenseAccountId: process.env.DEPRECIATION_EXPENSE_ACCOUNT_ID,
@@ -192,24 +212,52 @@ export async function GET(request: Request) {
         continue
       }
 
-      const result = computeMonthlyDepreciation({
-        purchaseCost: posted.grossCostPosted,
-        bookValue: posted.bookValue,
-        residualValue: asset.residualValue,
-        depreciationMethod: asset.depreciationMethod,
-        categoryDepreciationRate: category.depreciationRate ?? null,
-        categoryUsefulLife: category.usefulLife ?? null,
-      })
+      // F-118-V Putusan 2: analitis lewat resolver inti (parameter beku +
+      // dokumen unit). skip/reject berisik, tanpa jurnal; fiskal tak ikut.
+      const result = analytical
+        ? resolveAnalyticalAssetStatus({
+            depreciationMethod: asset.depreciationMethod,
+            status: asset.status,
+            purchaseCost: posted.grossCostPosted,
+            bookValue: posted.bookValue,
+            residualValue: asset.residualValue,
+            totalEstimatedUnits: asset.totalEstimatedUnits,
+            usefulLifeMonths: asset.usefulLifeMonths,
+            actualUnits: asset.usageRecords?.[0]?.actualUnits ?? null,
+            purchaseDate: asset.purchaseDate,
+            periodYear: year,
+            periodMonth: month,
+            alreadyPosted: false,
+          })
+        : computeMonthlyDepreciation({
+            purchaseCost: posted.grossCostPosted,
+            bookValue: posted.bookValue,
+            residualValue: asset.residualValue,
+            depreciationMethod: asset.depreciationMethod,
+            categoryDepreciationRate: category?.depreciationRate ?? null,
+            categoryUsefulLife: category?.usefulLife ?? null,
+          })
       if (result.status === "reject") {
         rejectedMethods++
         errors++
-        errorDetails.push(
-          `Asset ${asset.id} (${asset.name}): metode penyusutan "${result.method}" ditolak cron`,
-        )
+        const rejectMessage =
+          analytical && result.reason === "missing-parameter"
+            ? `Asset ${asset.id} (${asset.name}): parameter analitis "${result.parameter}" belum dibekukan/dicatat, tidak diposting jurnal`
+            : analytical && result.reason === "unregistered-status"
+              ? `Asset ${asset.id} (${asset.name}): status "${result.method}" tidak terdaftar, penyusutan analitis dibatalkan`
+              : `Asset ${asset.id} (${asset.name}): metode penyusutan "${"method" in result ? result.method : ""}" ditolak cron`
+        errorDetails.push(rejectMessage)
         continue
       }
       if (result.status === "skip") {
-        skipped++
+        if (analytical) {
+          analyticalSkipped++
+          errorDetails.push(
+            `Asset ${asset.id} (${asset.name}): skip analitis ${result.reason}`,
+          )
+        } else {
+          skipped++
+        }
         continue
       }
 
@@ -303,6 +351,7 @@ export async function GET(request: Request) {
       totalAssets: assets.length,
       processed,
       skipped,
+      analyticalSkipped,
       errors,
       missingAccounts,
       notJournaled,
