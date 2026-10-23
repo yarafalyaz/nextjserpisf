@@ -11879,6 +11879,65 @@ ID vonis ini **F-2026-10-23-108-V** (tertinggi terverifikasi run ini: F-2026-10-
 
 ---
 
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-113-V: ekspor XML Coretax faktur pajak keluaran dari TaxInvoice terbekukan (gap P0-1 domain (a) "ekspor XML Coretax", lanjutan F-2026-10-21-001)
+
+Status: PUTUSAN BOT 4 (kartu t_4f0723f4, siklus standby 07:13). Dokumen saja; TANPA kode/schema/migrasi di kartu ini.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 07:13, origin/main 751c07ef)
+
+- Kanban non-done saat mulai: BOT 4 hanya kartu ini (t_4f0723f4 running). Nol kartu peminta vonis baru yang prasyaratnya bebas.
+- Peminta terkait semua ter-gate BUKAN oleh BOT 4: BOT 3 t_99cb19e4 (blocked) menunggu merge BOT 1 atas PR #599 (OPEN; #521 MERGED) — vonisnya F-103-V/F-105-V sudah terbit (PR #597/#605 OPEN ter-gate merge); BOT 3 t_af177f74 (ready) prasyaratnya putusan BOT 1 Q-CO-1/2/3/5 + PR #503 SUDAH MERGED, vonis Q-CO-4 SUDAH terbit (F-2026-10-20-103 vonis Salsa 22:38 + batas build BOT 3 t_73bdb74a Q-SUB69-5 sudah divonis F-075-V); BOT 6 t_18d07a19 menunggu #592 merged. Q-BUPOT-052-1..3 sudah terjawab F-055-V.
+- PR vonis BOT 4 terbit (terbaru F-109-V #613, F-110-V #616, F-111-V #617, F-112-V #618) semua OPEN ter-gate merge BOT 1 — isi vonis nol menunggu BOT 4.
+- Rantai aset tetap F-062-V→F-112-V tertutup (F-112-V Putusan 4: sisa hanya per-kasus `BUTUH-VONIS-AKUNTAN`). Maka riset berikutnya = gap bebas domain (a) tertua belum bervonis: ekspor XML Coretax faktur keluaran (adaptasi P0-1 backlog baris 92-98: "+ ekspor XML Coretax dari TaxInvoice terpilih ... Effort: L (XML saja M)").
+
+### Bukti repo terverifikasi run ini (origin/main 751c07ef)
+
+- Model `TaxInvoice` (schema:998-1075) SUDAH memuat semua bahan ekspor: `direction`, `transactionCode` kanonik 2 digit, `taxInvoiceNumber`, `taxInvoiceDate`, `taxPeriod` diturunkan, `dpp`/`taxRate`/`taxAmount` Decimal terbekukan, `djpStatus` (draft|approved|rejected|replaced|cancelled), `replacesId` self-FK unik, snapshot lawan transaksi (`counterpartyTaxId/Name/Nitku`), arah masukan `creditPeriod/creditStatus/nonCreditableReason/creditablePercent`, dan kolom impor `xmlPayload/xmlHash/xmlImportedAt/djpMessage`. Baris detail sumber = `SalesInvoiceItem` (schema:1575-1597: qty/uom/unitPrice/discount/total Decimal).
+- Impor XML SUDAH ada satu arah: `tax-invoice.service.ts:185-192` menyimpan xmlPayload + hash SHA-256 + pesan "Diimpor dari XML Coretax" saat faktur dibuat dari XML. GENERATE/ekspor XML dari TaxInvoice terpilih = NOL (grep `coretax|xml` di src/lib/tax + services + actions tax hanya hit impor + komentar katalog PPh 4(2)). Nomor faktur di sistem adalah nomor dari DJP/Coretax yang dicatat apa adanya (prinsip BOT 4: nomor pajak bukan buatan sistem) — ekspor di sini BUKAN menerbitkan nomor, melainkan membentuk berkas impor Coretax untuk faktur yang datanya sudah terbekukan.
+- Matematika PPN sudah terbekukan di `src/lib/tax/tax-invoice.ts`: kode 04 DPP nilai lain 11/12 × tarif nominal 12% (PMK-131/2024), jurnal Dr Piutang (DPP+PPN)/Cr Pendapatan harga PENUH/Cr PPN Keluaran 12%×DPP faktur; pengganti dilaporkan pada masa faktur diganti (PER-11/PJ/2025), hanya kepala rantai terakhir bernilai.
+
+### Dasar resmi (akses 2026-10-23)
+
+- DJP menyediakan Template XML + Converter Excel→XML Coretax resmi: halaman "Template XML dan Converter Excel ke XML" https://www.pajak.go.id/id/reformdjp/coretax/template-xml-dan-converter-excel-ke-xml (kategori Faktur: "Faktur Keluaran", template diperbarui 1/03/2025, converter 23/01/2026) — format impor Coretax = XML per dokumen (Faktur/Dok Lain/Bupot), dengan validasi NPWP, NITKU, kode objek/tarif mengikuti referensi DJP. File template XML resmi itulah SATU-SATUNYA sumber skema elemen ekspor; dilarang mengarang nama elemen dari ingatan/contoh pihak ketiga.
+- Mekanisme upload faktur via XML (DJP, PDF resmi): https://www.pajak.go.id/sites/default/files/2025-01/Mekanisme%20Upload%20Faktur%20via%20XML.pdf — alur: bentuk XML → menu Faktur Keluaran → Impor Data → XML Monitoring (VALIDATING DATA → VALIDATING FAILED/CREATING INVOICE FINISHED) → faktur tampil di grid Pajak Keluaran → submit bulk + tanda tangan elektronik di Coretax. Status DJP final lahir DI Coretax, bukan di ISF.
+- Keterangan tertulis implementasi Coretax DJP: https://www.pajak.go.id/index.php/id/siaran-pers/implementasi-coretax-djp — faktur bentuk *.xml diterima sampai 100 faktur per pengiriman (kapasitas saat keterangan itu; angka kapasitas BUKAN aturan sistem — jangan hardcode sebagai batas validasi, hanya batas batching usulan di bawah).
+- Kode transaksi + DPP nilai lain: PER-11/PJ/2025 + PMK-131/2024 sebagaimana sudah divonis F-001 (dirujuk, tidak divonis ulang).
+
+### Putusan 1 — Apa yang boleh diekspor (gerbang status, fail-closed)
+
+- Ekspor XML hanya untuk `TaxInvoice direction="out"` berstatus internal SIAP-EKSPOR: dokumen sumber (SalesInvoice) sudah terposting jurnalnya, snapshot DPP/PPN/tarif/kode transaksi terbekukan, nomor faktur pajak non-kosong, lawan transaksi punya NPWP/NIK + nama + NITKU bila wajib per template resmi. Satu syarat gugur = faktur itu DITOLAK dari batch dengan alasan bernama per faktur; batch tidak gugur total karenanya (pola gerbang parsial F-028-I).
+- Yang DILARANG diekspor: faktur `cancelled`/`replaced` (yang diganti = nol-efek, hanya kepala rantai terakhir bernilai); faktur arah `in` (masukan bukan dokumen keluaran ISF); faktur tanpa nomor (nomor lahir di Coretax — ekspor tidak boleh mengarang nomor seri); dokumen komersial tanpa TaxInvoice (dilarang membentuk XML langsung dari SalesInvoice — sumber tunggal = TaxInvoice terbekukan, pola snapshot F-001).
+- Pengganti: XML pengganti hanya dari TaxInvoice pengganti (replacesId terisi) dan wajib membawa rujukan faktur diganti sesuai elemen template resmi; mengekspor faktur asal DAN penggantinya dalam satu batch untuk rantai yang sama = DITOLAK (dobel nilai di Coretax).
+
+### Putusan 2 — Isi XML = snapshot terbekukan, nol hitung ulang saat ekspor
+
+- Setiap elemen nilai (DPP, PPN, tarif, kode transaksi, tanggal, masa, identitas lawan) dibaca dari kolom TaxInvoice + baris SalesInvoiceItem tertaut PERSIS seperti tersimpan; ekspor DILARANG menghitung ulang DPP/PPN dari harga jual, dilarang membaca tarif master berjalan, dilarang mengubah kode transaksi. Bila Σ baris ≠ DPP header terbekukan: faktur ditolak dari batch sebagai temuan rekonsiliasi (selisih ditampilkan), BUKAN dibulatkan/disesuaikan diam-diam.
+- Kode transaksi ditulis bentuk kanonik sistem (2 digit) dipetakan ke bentuk tampil Coretax hanya bila template resmi mensyaratkannya (mis. pad kode 10) — pemetaan bentuk ini satu-satunya transformasi yang sah dan wajib terdaftar eksplisit per kode, bukan tebakan umum.
+- Uang ditulis sen persis Decimal(15,2) tanpa float; format angka/tanggal mengikuti template XML resmi DJP versi yang dipakai (catat versi template + tanggal unduh di register ekspor). Berkas hasil di-hash SHA-256 dan hash + daftar ID faktur + versi template dibekukan sebagai peristiwa ekspor (pola kolom xmlHash existing diperluas maknanya untuk ekspor; jangan timpa jejak impor).
+
+### Putusan 3 — Status, idempotensi, dan batas klaim kepatuhan
+
+- Empat status tetap terpisah: ekspor XML TIDAK mengubah status dokumen/pembayaran/pajak/posting faktur. Status DJP (`approved` di Coretax) hanya boleh diperbarui dari bukti Coretax (impor balik XML/status atau input manual bernomor referensi), BUKAN dari keberhasilan membentuk berkas. Label UI wajib verbatim: "berkas XML dibentuk" ≠ "faktur disetujui DJP".
+- Idempotensi: peristiwa ekspor per (TaxInvoice, versi template) — mengekspor ulang faktur yang sama pada versi template sama menghasilkan hash sama dan TIDAK melahirkan peristiwa ganda; ekspor ulang sesudah snapshot berubah mustahil karena snapshot beku (perubahan hanya lewat pengganti = TaxInvoice baru). Batch diusulkan maks 100 faktur mengikuti kapasitas keterangan DJP di atas sebagai batas batching operasional (bukan validasi regulasi; bila DJP mengubah kapasitas, ubah setting, bukan kode).
+- Klaim kepatuhan: berkas yang lolos validasi lokal (skema XML + gerbang Putusan 1) hanya boleh diklaim "siap impor Coretax", BUKAN "terkirim/terdaftar di DJP". Penolakan Coretax (VALIDATING FAILED) dicatat apa adanya di `djpMessage` lewat jalur impor balik existing; sistem tidak menebak penyebab di luar pesan DJP.
+
+### Putusan 4 — Yang tetap di luar / ditolak
+
+- Host-to-host PJAP, tanda tangan elektronik, submit otomatis ke Coretax: di luar vonis ini (butuh kontrak PJAP + sertifikat; backlog "Yang TIDAK diusulkan" domain (a) tetap berlaku). Penomoran otomatis faktur: DITOLAK (nomor dari DJP).
+- Ekspor Dok Lain Keluaran/Masukan dan Retur Dok Lain (kategori template DJP nomor 11-14 di halaman yang sama): TIDAK diputus di sini — nota retur pajak mengikuti rantai retur F-004/F-096-V/F-097-V; ekspor retur = vonis tersendiri bila inti ekspor keluaran ini terbukti dipakai.
+- Elemen XML yang tidak dapat dipetakan dari kolom existing (mis. elemen detail yang template resmi wajibkan tetapi ISF belum menyimpan sumbernya): ekspor faktur itu DITOLAK berisik dengan nama elemennya — dilarang mengisi elemen wajib dengan nilai karangan/kosong yang lolos skema tetapi salah makna. Kesenjangan elemen = temuan ke BOT 4/BOT 3 sebelum inti dibangun, bukan diisi diam-diam.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge rantai vonis berjalan; putuskan prioritas inti ekspor ini terhadap antrean merge (inti TIDAK ter-gate PR aset/payroll mana pun — hanya ter-gate unduhan template XML resmi versi terdaftar).
+- BOT 3 (inti terpisah; unduh Template XML "Faktur Keluaran" dari halaman DJP resmi di atas, catat versi/tanggal di register): (1) builder murni TaxInvoice terbekukan → XML sesuai template resmi + validasi skema lokal; (2) gerbang Putusan 1 per faktur dengan alasan bernama; (3) peristiwa ekspor idempoten (ID faktur + versi template + SHA-256) tanpa mengubah status apa pun; (4) jalur catat hasil Coretax (djpMessage/status) hanya dari bukti impor balik/manual bernomor. Contoh angka wajib: faktur kode 04 harga 12.000.000 → XML memuat DPP 11.000.000 + PPN 1.320.000 persis snapshot (bukan hitung ulang dari total baris sesudah diskon master berubah).
+- BOT 2: permukaan unduh XML menampilkan status verbatim server ("siap impor Coretax", daftar faktur tertolak + alasannya); UI tidak membentuk elemen dan tidak menjanjikan status DJP.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E113-1 faktur cancelled/replaced ikut terekspor = MERAH; E113-2 ekspor menghitung ulang DPP dari harga berjalan (ubah master/harga sesudah snapshot → XML berubah) = MERAH, wajib byte-sama dengan snapshot; E113-3 Σ baris ≠ DPP header tetap diekspor dengan penyesuaian diam-diam = MERAH (wajib tertolak bernama); E113-4 ekspor mengubah djpStatus/status dokumen = MERAH; E113-5 ekspor ulang versi template sama melahirkan peristiwa/hash ganda = MERAH; E113-6 faktur tanpa nomor/NPWP lawan tetap masuk batch = MERAH; E113-7 rantai asal+pengganti satu batch = MERAH; E113-8 elemen wajib tak terpetakan diisi karangan agar lolos skema = MERAH (wajib tolak bernama); E113-9 label UI/server menyatakan "terkirim ke DJP" dari sekadar berkas terbentuk = MERAH.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar template + mekanisme impor XML resmi DJP (URL di atas, akses 2026-10-23) dan vonis F-001 (PER-11/PJ/2025, PMK-131/2024); BUKAN klaim faktur terdaftar/disahkan DJP — pengesahan hanya lahir di Coretax sesudah impor + submit + tanda tangan oleh WP.
+
+ID vonis ini **F-2026-10-23-113-V** (tertinggi terverifikasi run ini: F-2026-10-23-112-V di PR #618; grep F-2026-10-23-113 di backlog main + PR terbuka = 0 sebelum vonis ini ditulis). Pemilik berikutnya: BOT 1 merge vonis + putus prioritas inti -> BOT 3 builder XML dari template resmi -> BOT 2 -> BOT 6 E113-1..9.
+
 ## VONIS BOT 4 2026-10-23 — F-2026-10-23-111-V: revaluasi (penilaian kembali) + penurunan nilai (impairment) aset (lanjutan terbuka F-2026-10-23-108-V Putusan 4 + F-2026-10-23-110-V PR #616 Putusan 4)
 
 Status: PUTUSAN BOT 4 (kartu t_3ef36441, siklus standby 06:00). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Menutup butir terakhir yang sengaja TIDAK diputus F-108-V ("Revaluasi/penilaian kembali, penurunan nilai (impairment) ... TIDAK diputus vonis ini") dan F-110-V PR #616 Putusan 4 butir pertama. Sesudah vonis ini, rantai terbuka F-062-V (nilai buku tunggal + gerbang metode + perolehan fail-closed) -> F-107-V (saat mulai) -> F-108-V (kapitalisasi perbaikan) -> F-109-V (fiskal saldo menurun, PR #613) -> F-110-V (tak berwujud + perubahan metode, PR #616) TIDAK menyisakan butir aset tetap yang belum divonis; sisa sesudah ini hanya kasus per-peristiwa `BUTUH-VONIS-AKUNTAN` (penetapan DJP, penghentian komponen tak tentu).
@@ -12256,3 +12315,73 @@ Pemilik vonis: BOT 4. Pertanyaan (sisa eksplisit V-PF4-3 di F-2026-10-22-077-V P
 Klaim kepatuhan: vonis ini menetapkan rancangan field + penjaga berdasar PP 36/2021 Pasal 63(3)/65 (sumber resmi di atas, akses 2026-10-23); bukan pendapat hukum atas perjanjian karyawan individual — isi nominal tetap dokumen HR per karyawan.
 
 ID vonis ini **F-2026-10-23-105-V** (tertinggi terverifikasi di origin/main b69e36ff + PR terbuka: 104-V PR #601; grep `F-2026-10-23-105` di backlog/board/PR = 0 sebelum tulis). Pemilik berikutnya: BOT 1 (merge PR vonis ini) -> BOT 3 (inti di t_99cb19e4 sesudah #599 merged, dalam batas §Batas build) -> BOT 2 (field/label) -> BOT 6 (E105-1..7).
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-118-V: gerbang mesin metode analitis NON-GL (`units_of_production`, `sum_of_years_digits`) — syarat boleh memposting, pisah tegas komersial vs fiskal (lanjutan terbuka F-2026-10-22-062-V Putusan 2)
+
+Status: PUTUSAN BOT 4 (kartu t_c5bf63ed, siklus standby 10:00). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Menutup butir terbuka eksplisit F-062-V Putusan 2: "metode analitis terdaftar eksplisit bila ditambah lewat vonis" + "tidak boleh melahirkan jurnal penyusutan sampai mesin hitung + vonis lanjutannya ada". Mesin hitung belum ada (terverifikasi di bawah); vonis ini memutus SYARAT dan BATAS mesin itu supaya BOT 3 tidak mengarang rumus, dan supaya fiskal tidak pernah tercemar metode komersial.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 10:00, origin/main bf491f67 -> ba9d20e9 selama run)
+
+- Kanban BOT 4 non-done/archived saat snapshot: hanya kartu ini (t_c5bf63ed running). Nol kartu peminta vonis baru bebas-dependensi untuk BOT 4.
+- Peminta lama BOT 3 t_99cb19e4: gerbang vonis sudah bebas sejak siklus 09:30 (#599+F-103-V #597+F-105-V #605 merged) dan inti sudah dieksekusi BOT 3 — PR #626 (agregator BPJS se-masa + cicilan mingguan) OPEN selama snapshot, merged sebagai ba9d20e9 selama run ini. BUKAN menunggu vonis BOT 4 baru; tidak ada vonis teratas yang perlu diterbitkan ulang.
+- PR vonis BOT 4 terbit semua ter-gate merge BOT 1 di head masing-masing (#625 F-117-V BEHIND eff9c556; #623/#621/#620/#619/#618/#616/#614/#613/#611/#608 OPEN) — isi vonis nol berubah, merge milik BOT 1. BOT 4 tidak merge PR sendiri.
+- Maka sesuai badan kartu: buktikan antrean kosong (di atas), lalu ambil riset vonis berikutnya = celah gerbang analitis ini.
+
+### Bukti repo terverifikasi run ini (origin/main bf491f67)
+
+- Daftar terdaftar sudah hidup satu tempat: `DEPRECIATION_METHODS = [straight_line, declining_balance, units_of_production, sum_of_years_digits]`, `GL_DEPRECIATION_METHODS` hanya dua pertama, `ANALYTICAL_DEPRECIATION_METHODS` dua terakhir (`src/lib/finance/asset-depreciation.ts:20-46`, inti F-062 merged).
+- Mesin murni `computeMonthlyDepreciation` mengembalikan `{status:"reject", reason:"analytical-method"}` untuk kedua metode analitis dan cron mencatat error berisik per aset tanpa jurnal (route asset-depreciation) — perilaku tolak yang benar hari ini. TIDAK ada rumus UOP/SYD di mana pun: UOP butuh unit aktual + total estimasi unit (tidak ada kolomnya di `Asset`/`AssetCategory` schema:4000+); SYD butuh sisa masa manfaat berjalan dalam bulan (dapat diturunkan dari masa manfaat komersial, tetapi tidak dibekukan per aset).
+- Fiskal tidak mengenal kedua metode ini: PMK 72/2023 Pasal 2 ayat (1)-(2) — penyusutan fiskal hanya bagian sama besar (garis lurus) atau bagian menurun atas nilai sisa buku (saldo menurun, bukan bangunan), taat asas (JDIH Kemenkeu, https://jdih.kemenkeu.go.id/dok/pmk-72-tahun-2023/summary + teks pasal DDTC, akses 2026-10-23). Metode yang dipilih komersial TIDAK mengubah metode fiskal aset (sudah dipisah F-062-V Putusan 2 + snapshot fiskal F-109/F-110).
+
+### Dasar regulasi & standar (akses 2026-10-23)
+
+- FISKAL: UU PPh Pasal 11 + PMK 72/2023 Pasal 2(1)-(2) di atas — fiskal hanya garis lurus / saldo menurun. Tidak ada jalur fiskal UOP/SYD; jangan karang.
+- KOMERSIAL (label: rujukan standar IAI, BUKAN dasar fiskal): PSAK 16 — metode penyusutan mencerminkan pola konsumsi manfaat ekonomis aset; unit produksi dan jumlah angka tahun (sum-of-years-digits) adalah metode sah komersial bila pola konsumsi memang begitu. Masa manfaat, nilai residu, dan total estimasi unit ditelaah berkala; perubahan metode/estimasi = perubahan estimasi (PSAK 25), prospektif. Nomor paragraf persis diverifikasi BOT 3/BOT 6 dari teks PSAK berlaku saat inti dibangun.
+
+### Putusan 1 — Status hari ini dipertahankan: analitis = NON-GL sampai gerbang Putusan 2 terpenuhi semua
+
+Aset bermetode `units_of_production`/`sum_of_years_digits` TIDAK memposting jurnal penyusutan GL; cron tetap menolak berisik per aset dengan alasan terdaftar `analytical-method`. DILARANG: (a) menjatuhkannya diam-diam ke garis lurus (sudah dilarang F-062-V, ditegaskan — garis lurus palsu menipu laba dan rekonsiliasi); (b) menghitungnya di UI/laporan sebagai angka jurnal; (c) memakai tarif/umur fiskal sebagai pengganti parameter komersial. Aset seperti itu WAJIB tampil di daftar temuan "metode analitis belum bermesin — belum disusutkan GL" (pola jujur fiskal-belum-dihitung F-062), bukan hilang dari hasil cron.
+
+### Putusan 2 — Gerbang boleh memposting (SEMUA wajib; satu gugur = tetap NON-GL)
+
+Metode analitis hanya boleh naik dari analitis ke GL bila SEMUA terpenuhi dan terbekukan per aset:
+
+- (a) Parameter komersial terstruktur lengkap: UOP = total estimasi unit produksi/jam pakai seumur aset + satuan unit terdaftar + nilai residu; SYD = masa manfaat komersial dalam bulan + nilai residu. Parameter kosong/nol = mesin menolak berisik, bukan menebak dari kategori fiskal.
+- (b) Masukan aktual per masa tercatat sebagai dokumen: UOP = unit aktual masa itu dari catatan produksi/pakai bernama (bukan ketikan bebas tanpa sumber); SYD tidak butuh masukan bulanan (deterministik dari sisa masa manfaat beku).
+- (c) Rumus Decimal sen persis (Putusan 3) + clamp residu F-062-V Putusan 4: nilai buku jurnal POSTED tidak pernah di bawah residu; masa terakhir berhenti PERSIS di residu.
+- (d) `assertPeriodOpen` dalam tx posting + idempotensi satu jurnal per (aset, masa) kunci `ASSET_DEPRECIATION_YYYYMM` pola existing; replay = nol jurnal baru.
+- (e) Akun beban penyusutan + akumulasi dari mapping kategori/setting existing fail-closed (pola F-062-V Putusan 3): kosong = tolak berisik, nol jurnal.
+- (f) Fiskal TIDAK ikut metode ini: snapshot/saldo fiskal aset tetap metode fiskal terdaftarnya (garis lurus/saldo menurun + kelompok); selisih beban komersial-vs-fiskal tampil di `depreciation-difference` existing tanpa jurnal kedua.
+
+### Putusan 3 — Rumus yang divonis (Decimal, sen, tanpa float)
+
+- UOP masa m: beban = (nilai buku jurnal POSTED awal masa − residu) tidak dipakai; rumus unit: beban_m = (harga perolehan berjurnal − residu) × unit_aktual_m / total_estimasi_unit_awal, dibulatkan sen, lalu di-clamp supaya nilai buku sesudahnya >= residu. Sisa belum teralokasi karena total estimasi direvisi = perubahan estimasi prospektif: penyebut baru = sisa unit estimasi sejak bulan revisi atas nilai buku saat itu, dibekukan sebagai peristiwa (pola perubahan metode F-110-V Putusan 3); dilarang hitung ulang masa lampau. Unit aktual 0 pada masa berjalan = beban 0 masa itu (bukan tolak, bukan garis lurus); unit aktual kumulatif melebihi total estimasi = beban masa itu hanya sampai residu, kelebihan unit dicatat temuan, bukan beban negatif.
+- SYD: dengan N = masa manfaat komersial dalam bulan dibekukan, S = N(N+1)/2, beban bulan ke-k (k=1..N) = (harga perolehan berjurnal − residu) × (N−k+1)/S, dibulatkan sen per bulan, bulan terakhir clamp persis ke residu (penjumlahan bulanan wajib berhenti di harga perolehan − residu, selisih pembulatan masuk bulan terakhir, pola clamp F-062-V). Revisi masa manfaat = prospektif atas sisa masa manfaat baru sejak bulan revisi, jurnal lampau tidak diubah.
+- Kedua rumus membaca dasar dari jurnal POSTED (F-062-V Putusan 1), bukan `Asset.currentValue`. Angka contoh wajib BOT 6: UOP cost 120.000.000, residu 0, total 10.000 unit, aktual bulan1 1.000 unit → 12.000.000; bulan2 500 unit → 6.000.000. SYD cost 90.000.000, residu 0, N=3 bulan (ilustrasi pendek): S=6 → bulan1 45.000.000, bulan2 30.000.000, bulan3 15.000.000, total persis 90.000.000.
+
+### Putusan 4 — Pisah tegas dari fiskal dan dari status guna
+
+- Metode analitis TIDAK PERNAH menjadi metode fiskal dan tidak mengubah kelompok/tarif/saldo fiskal; bila operator memilih metode fiskal = UOP/SYD, simpan DITOLAK (daftar fiskal hanya dua metode F-062-V Putusan 2).
+- Interaksi status guna F-117-V tetap berlaku: menganggur tidak menghentikan komersial (UOP: beban 0 karena unit 0 adalah hasil rumus, bukan penghentian status — tampilkan alasan `unit-nol`, bedakan dari `held-for-sale`); `held_for_sale` menghentikan komersial apa pun metodenya; tersusutkan penuh berhenti karena residu, bukan status.
+- Perubahan dari/ke metode analitis = peristiwa perubahan metode F-110-V Putusan 3 (prospektif, terbekukan, bernama); dilarang timpa kolom `depreciationMethod` tanpa peristiwa (larangan existing ditegaskan untuk jalur ini).
+
+### Putusan 5 — Yang tetap di luar / ditolak
+
+- (a) Metode analitis untuk harta tak berwujud fiskal 11A: tidak dibuka vonis ini (fiskal 11A tetap dua metode; komersial tak berwujud mengikuti F-110-V).
+- (b) UOP tanpa catatan unit aktual bernama (spreadsheet lepas, ingatan operator): tetap NON-GL; jangan bangun input unit tanpa dokumen sumber.
+- (c) Plafon/ambang rupiah untuk memilih metode: ditolak (pilihan metode = pola konsumsi PSAK 16, bukan nominal).
+- (d) Klaim SPT: daftar fiskal final tetap dari metode fiskal terdaftar; beban analitis komersial tidak pernah masuk lampiran penyusutan fiskal.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge PR vonis ini; inti mesin menempel sesudah inti aset berjalan (#602/#622/#624 sudah di main) — tanpa konflik schema dengan BOT 3 yang sedang jalan, klaim `prisma/schema.prisma` di board dulu.
+- BOT 3 (inti terpisah, koordinasi BOT 4 sebelum migrasi): (1) parameter komersial terbekukan per aset Putusan 2(a) + dokumen unit aktual UOP Putusan 2(b); (2) rumus Putusan 3 di mesin murni Decimal + perluasan `MonthlyDepreciationResult` tanpa mengubah kontrak garis lurus/saldo menurun existing; (3) gerbang Putusan 2 di cron (`assertPeriodOpen` dalam tx, idempotensi existing, akun fail-closed) + daftar temuan analitis-belum-bermesin dan alasan `unit-nol`; (4) peristiwa revisi estimasi UOP/SYD prospektif pola F-110-V. Dilarang membaca `currentValue` sebagai dasar.
+- BOT 2: tampilkan metode, parameter, unit aktual, dan alasan lewatan apa adanya dari backend; UI tidak menghitung beban UOP/SYD dan tidak menawarkan metode fiskal analitis.
+- BOT 5: tidak ada angka statutori baru; spec pola pakai aset rujuk Putusan 2(b) untuk dokumen unit, bukan mengarang satuan.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E118-1 aset UOP tanpa parameter lengkap memposting jurnal = MERAH (wajib tetap NON-GL berisik); E118-2 contoh UOP Putusan 3 sen persis (12.000.000 lalu 6.000.000), dan mengganti penyebut dengan tarif fiskal = MERAH; E118-3 unit aktual 0 → beban 0 alasan `unit-nol`, bukan garis lurus dan bukan tolak; E118-4 unit kumulatif lewat total estimasi → nilai buku berhenti persis di residu, beban negatif = MERAH; E118-5 contoh SYD 45/30/15 juta total persis 90.000.000, clamp bulan terakhir menelan selisih pembulatan sen; E118-6 revisi total estimasi/masa manfaat mengubah jurnal masa lampau = MERAH (wajib prospektif terbekukan); E118-7 metode fiskal diset UOP/SYD diterima simpan = MERAH; fiskal aset analitis tetap metode fiskalnya dan selisih tampil tanpa jurnal kedua; E118-8 akun mapping kosong → tolak berisik nol jurnal; replay masa sama → tetap satu jurnal; E118-9 aset UOP `held_for_sale` memposting beban unit = MERAH; menganggur UOP unit>0 tetap memposting.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar PMK 72/2023 Pasal 2 (sumber resmi JDIH Kemenkeu di atas, akses 2026-10-23) untuk batas fiskal dan PSAK 16/25 untuk sisi komersial sebagai rujukan standar (bukan dasar fiskal). BUKAN klaim SPT Tahunan sah — daftar penyusutan fiskal final tetap wajib cocok lampiran SPT Tahunan badan.
+
+ID vonis ini **F-2026-10-23-118-V** (tertinggi terverifikasi run ini di origin/main bf491f67+ba9d20e9: F-2026-10-23-111-V tertinggi merged di main, 117-V tertinggi di PR terbuka #625; grep `F-2026-10-23-118` di backlog main + PR terbuka #608-#626 = 0 sebelum tulis). Pemilik berikutnya: BOT 1 merge vonis ini -> BOT 3 inti mesin analitis -> BOT 2 -> BOT 6 E118-1..9.
