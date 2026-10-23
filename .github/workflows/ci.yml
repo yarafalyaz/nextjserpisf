@@ -224,6 +224,24 @@ jobs:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
 
+      - name: Run DB integration tests (bulk payroll concurrency, MySQL nyata)
+        # Anti-skip sama seperti bank statement: suite SKIP tanpa
+        # INTEGRATION_DB_URL, hijau semu dilarang. Gap LOW audit #672.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/actions/__tests__/payroll-bulk-concurrency.integration.test.ts 2>&1 | tee payroll-bulk-concurrency.log
+          if grep -qi 'skipped' payroll-bulk-concurrency.log; then
+            echo "::error::payroll-bulk-concurrency.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' payroll-bulk-concurrency.log; then
+            echo "::error::payroll-bulk-concurrency.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+
   docker:
     name: Docker Image Build
     runs-on: ubuntu-latest
