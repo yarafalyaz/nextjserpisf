@@ -7,6 +7,7 @@ const SKIP_TEXT: Record<string, string> = {
   "at-residual": "Nilai buku sudah mencapai nilai residu — tidak ada beban periode ini.",
   "unit-nol": "Unit aktual periode ini 0 — beban Rp0.",
   "held-for-sale": "Aset ditahan untuk dijual — penyusutan komersial dihentikan.",
+  disposed: "Aset sudah dilepas — tidak ada beban analitis.",
   "already-posted": "Penyusutan masa ini sudah berjurnal.",
   "not-started": "Penyusutan belum mulai pada masa ini.",
 }
