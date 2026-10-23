@@ -62,7 +62,7 @@ describe("WarrantyExpiryQueueCard F-2026-10-22-094-S", () => {
       (a.getAttribute("href") ?? "").startsWith("https://wa.me/6281234567890"),
     )
     expect(wa.length).toBeGreaterThan(0)
-    expect(wa[0]?.getAttribute("aria-label")).toBe("Kirim WA ke pelanggan")
+    expect(wa[0]?.getAttribute("aria-label")).toBe("Kirim WA")
     // Urutan server ditempel: sisa -3 (baru berakhir) sebelum sisa 10.
     expect(text.indexOf("Baru berakhir")).toBeLessThan(text.indexOf("Segera berakhir"))
   })
