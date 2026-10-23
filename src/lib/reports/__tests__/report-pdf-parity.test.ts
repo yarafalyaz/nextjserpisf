@@ -84,6 +84,7 @@ describe("paritas registry PDF laporan", () => {
       "nomor-seri-batch",
       "perbandingan-periode",
       "perbedaan-penyusutan",
+      "pajak-tangguhan",
       "rekonsiliasi-aset",
       "proyeksi-kas",
       "pusat-laba",

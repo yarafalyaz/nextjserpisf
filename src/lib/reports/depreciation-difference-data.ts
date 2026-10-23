@@ -26,6 +26,65 @@ export interface DepreciationDifferenceReport {
   report: DepreciationDifferenceResult
 }
 
+export interface AssetJournalBookRow {
+  id: number
+  code: string
+  name: string
+  categoryName: string | null
+  purchaseDate: Date | null
+  purchaseCost: number
+  bookValue: number
+  hasPostedBooks: boolean
+  taxGroupCode: string | null
+  taxTypeListed: boolean | null
+  taxDjpDetermination: boolean
+}
+
+/** Dasar bersama laporan aset berbasis jurnal POSTED (dipakai juga deferred-tax-data). */
+export async function loadAssetJournalBookRows(): Promise<AssetJournalBookRow[]> {
+  const [assets, journals, settings] = await Promise.all([
+    prisma.asset.findMany({
+      where: { status: { not: "disposed" } },
+      select: {
+        id: true, code: true, name: true, purchaseDate: true, purchaseCost: true,
+        category: { select: { name: true, taxGroupCode: true, taxTypeListed: true, taxDjpDetermination: true, assetAccountId: true, accumulatedDepreciationAccountId: true } },
+      },
+      orderBy: { code: "asc" },
+    }),
+    prisma.journal.findMany({
+      where: { deletedAt: null, status: "POSTED", OR: [{ referenceType: ASSET_ACQUISITION_TYPE }, { referenceType: ASSET_DISPOSAL_TYPE }, { referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX } }] },
+      select: { referenceType: true, referenceId: true, entries: { select: { accountId: true, debit: true, credit: true } } },
+    }),
+    prisma.systemSetting.findFirst({ select: { accumulatedDepreciationAccountId: true } }),
+  ])
+  const journalsByAsset = new Map<number, AssetJournalInput[]>()
+  for (const journal of journals) {
+    if (journal.referenceId == null || !journal.referenceType) continue
+    const list: AssetJournalInput[] = journalsByAsset.get(journal.referenceId) ?? []
+    list.push({ referenceType: journal.referenceType, lines: journal.entries.map((entry) => ({ accountId: entry.accountId, debit: entry.debit, credit: entry.credit })) })
+    journalsByAsset.set(journal.referenceId, list)
+  }
+  const envAssetAccount = Number.parseInt(process.env.FIXED_ASSET_ACCOUNT_ID || "0") || null
+  const envAccumAccount = Number.parseInt(process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID || "0") || null
+  return assets.map((asset) => {
+    const posted = journalBookValue(journalsByAsset.get(asset.id) ?? [], {
+      fixedAssetAccountId: asset.category?.assetAccountId ?? envAssetAccount,
+      accumulatedDepreciationAccountId: asset.category?.accumulatedDepreciationAccountId ?? settings?.accumulatedDepreciationAccountId ?? envAccumAccount,
+    })
+    return {
+      id: asset.id, code: asset.code, name: asset.name,
+      categoryName: asset.category?.name ?? null,
+      purchaseDate: asset.purchaseDate ?? null,
+      purchaseCost: Number(asset.purchaseCost),
+      bookValue: posted.bookValue.toNumber(),
+      hasPostedBooks: posted.hasAcquisitionJournal,
+      taxGroupCode: asset.category?.taxGroupCode ?? null,
+      taxTypeListed: asset.category?.taxTypeListed ?? null,
+      taxDjpDetermination: asset.category?.taxDjpDetermination ?? false,
+    }
+  })
+}
+
 export async function loadDepreciationDifference(): Promise<DepreciationDifferenceReport> {
   const [assets, journals, settings] = await Promise.all([
     prisma.asset.findMany({
