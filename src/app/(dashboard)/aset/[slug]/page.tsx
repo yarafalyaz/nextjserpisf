@@ -5,7 +5,6 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { formatCurrency, formatDate } from "@/lib/utils/format"
 import { notFound } from "next/navigation"
-import { StatusChip } from "@/components/ui/status-chip"
 import { DeleteButton } from "@/components/ui/delete-button"
 import { DisposeAssetButton } from "./_components/dispose-asset-button"
 import { deleteAsset } from "@/actions/asset.actions"
@@ -18,6 +17,9 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { ASSET_HISTORY_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
 import { AssetFiscalStatus, DEPRECIATION_METHOD_LABELS } from "../_components/asset-fiscal-status"
+import { AssetCronDisposition, AssetUseStatus } from "../_components/asset-use-status"
+import { classifyCronDisposition } from "@/lib/finance/asset-use-status"
+import { ASSET_DEPRECIATION_PREFIX } from "@/lib/reports/asset-journal"
 
 import type { Metadata } from "next"
 
@@ -53,14 +55,31 @@ export default async function AssetDetailPage({
   // `assetBrandModelId` bare int tanpa relasi — resolve manual. Dua query
   // paralel, masing-masing nullable (merek/tipe bisa dihapus guardnya... merek
   // justru DITOLAK hapusnya bila dipakai, jadi ini murni defensif).
-  const [brand, brandModel] = await Promise.all([
+  const [brand, brandModel, postedDepreciation] = await Promise.all([
     asset.assetBrandId
       ? prisma.assetBrand.findUnique({ where: { id: asset.assetBrandId }, select: { name: true } })
       : null,
     asset.assetBrandModelId
       ? prisma.assetBrandModel.findUnique({ where: { id: asset.assetBrandModelId }, select: { name: true } })
       : null,
+    // Nilai buku acuan kontrak F-117-V: jurnal penyusutan POSTED, bukan cache.
+    prisma.journal.aggregate({
+      where: {
+        status: "POSTED",
+        referenceType: { startsWith: ASSET_DEPRECIATION_PREFIX },
+        referenceId: asset.id,
+      },
+      _sum: { totalDebit: true },
+    }),
   ])
+  const postedBookValue =
+    Number(asset.purchaseCost) - Number(postedDepreciation._sum.totalDebit ?? 0)
+  const cronDisposition = classifyCronDisposition({
+    status: asset.status,
+    idleActive: false,
+    bookValue: postedBookValue,
+    residualValue: asset.residualValue,
+  })
 
   return (
     <div className="flex flex-col gap-6">
@@ -71,7 +90,7 @@ export default async function AssetDetailPage({
           { label: "Aset", href: "/aset" },
           { label: asset.name },
         ]}
-        badge={<StatusChip status={asset.status} />}
+        badge={<AssetUseStatus status={asset.status} />}
         actions={<>
           <CanCreate permission="edit_assets">
             <Button href={entityEditHref("/aset", asset)} variant="primary"><Pencil size={14} /> Ubah</Button>
@@ -101,6 +120,9 @@ export default async function AssetDetailPage({
         <DetailField label="Akumulasi Penyusutan" value={<span className="text-danger">{formatCurrency(depreciation)}</span>} />
         <DetailField label="Metode Penyusutan (komersial)" value={asset.depreciationMethod ? (DEPRECIATION_METHOD_LABELS[asset.depreciationMethod] ?? asset.depreciationMethod) : "-"} />
         <DetailField label="Status Penyusutan Fiskal" value={asset.category ? <AssetFiscalStatus taxGroupCode={asset.category.taxGroupCode} taxTypeListed={asset.category.taxTypeListed} taxDjpDetermination={asset.category.taxDjpDetermination} /> : "Tanpa kategori — fiskal belum dihitung"} />
+        <DetailField label="Status Guna" value={<AssetUseStatus status={asset.status} />} />
+        <DetailField label="Nilai Buku (jurnal POSTED)" value={formatCurrency(postedBookValue)} />
+        <DetailField label="Disposisi Penyusutan" value={<AssetCronDisposition disposition={cronDisposition} />} />
         {/* The asset form labels this field "Deskripsi" and createAsset/
             updateAsset persist it to `notes` (the `description` column is
             unused), so read it back from `notes` — otherwise the text a user
