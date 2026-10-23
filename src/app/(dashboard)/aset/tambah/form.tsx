@@ -183,7 +183,12 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
           <Input id="location" name="location" placeholder="Lokasi aset" defaultValue={asset?.location || ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status">Status Guna</Label>
+          {/* Hanya status terdaftar F-2026-10-23-117-V. held_for_sale tidak
+              ditawarkan di sini: klasifikasinya butuh 5 fakta terstruktur +
+              peristiwa status (inti BOT 3 ditunda); disposed hanya lewat
+              aksi Pelepasan. Status lama tak terdaftar tetap tampil apa
+              adanya supaya user melihat temuan, bukan label sah palsu. */}
           <FormSelect
             id="status"
             name="status"
@@ -191,9 +196,18 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
             placeholder="Aktif"
             options={[
               { value: "active", label: "Aktif" },
-              { value: "maintenance", label: "Pemeliharaan" },
+              ...(asset?.status && !["active", "disposed"].includes(asset.status)
+                ? [{ value: asset.status, label: `Status tidak terdaftar: ${asset.status}` }]
+                : []),
+              ...(asset?.status === "disposed"
+                ? [{ value: "disposed", label: "Dilepas" }]
+                : []),
             ]}
           />
+          <p className="text-xs text-muted-foreground">
+            Menganggur sementara tetap Aktif. Dimiliki untuk Dijual diatur
+            lewat klasifikasi khusus; Dilepas lewat aksi Pelepasan Aset.
+          </p>
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
