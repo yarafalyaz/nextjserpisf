@@ -177,6 +177,16 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3: pemanggil jurnal E2/E3 kini dirujuk UI
   // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
+  // F-2026-10-23-121-V inti (PR #655): 3 aksi YearEndClosing
+  // (minta persetujuan / posting / balik) backend dulu; UI di
+  // kartu BOT 2 t_8c34abc8 belum tersambung (buang 3 entri ini
+  // saat UI memanggilnya).
+  "src/actions/year-end-closing.actions.ts::requestYearEndClosingApprovalAction":
+    "F-2026-10-23-121-V inti backend (PR #655); UI tutup buku akhir tahun menyusul (frontend t_8c34abc8)",
+  "src/actions/year-end-closing.actions.ts::postYearEndClosingAction":
+    "F-2026-10-23-121-V inti backend (PR #655); UI posting tutup buku menyusul (frontend t_8c34abc8)",
+  "src/actions/year-end-closing.actions.ts::reverseYearEndClosingAction":
+    "F-2026-10-23-121-V inti backend (PR #655); UI balik tutup buku menyusul (frontend t_8c34abc8)",
   // F-2026-10-22-066-S: 7 aksi JobChangeOrder kini dirujuk panel Change Order
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
   // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal

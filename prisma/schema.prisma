@@ -264,6 +264,13 @@ model SystemSetting {
    * complete ditolak berisik; DILARANG fallback materialExpense/cogs.
    */
   abnormalScrapExpenseAccountId   Int?    @map("abnormal_scrap_expense_account_id")
+  /**
+   * F-2026-10-23-121-V Putusan 1: akun laba ditahan tujuan jurnal penutup
+   * tahunan (YearEndClosing). Nullable fail-closed: kosong/nonaktif/
+   * non-EQTY/bukan laba ditahan = posting ditolak berisik. TANPA default
+   * tebakan (jangan hardcode 300002); operator memetakan di Pengaturan.
+   */
+  retainedEarningsAccountId       Int?    @map("retained_earnings_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
