@@ -189,6 +189,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
   // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal
   // di JobBillingCard (t_ba8fe9ef) — entri beku dibuang.
+  // F-2026-10-23-118-V inti (t_271e14d1): aksi dokumen unit aktual backend
+  // dulu; form input unit aktual menyusul di kartu frontend t_0a054d1a
+  // (buang entri ini saat UI memanggilnya).
+  "src/actions/asset.actions.ts::upsertAssetUsageRecord":
+    "F-2026-10-23-118-V inti backend; form dokumen unit aktual menyusul (frontend t_0a054d1a)",
 }
 
 describe("keterhubungan aksi server", () => {

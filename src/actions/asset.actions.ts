@@ -18,6 +18,7 @@ import {
   assetTransferSchema,
   assetSchema,
   assetDisposalSchema,
+  assetUsageRecordSchema,
 } from "@/lib/validations/asset.schemas";
 import { Prisma } from "@prisma/client";
 import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
@@ -766,6 +767,13 @@ export async function createAsset(formData: FormData) {
           currentValue: purchaseCost,
           residualValue: data.residualValue ?? 0,
           depreciationMethod: data.depreciationMethod || "straight_line",
+          // Parameter terbekukan F-118-V Putusan 2a (null = belum dibekukan).
+          totalEstimatedUnits:
+            data.totalEstimatedUnits != null
+              ? new Prisma.Decimal(data.totalEstimatedUnits.toFixed(2))
+              : null,
+          productionUnitName: data.productionUnitName || null,
+          usefulLifeMonths: data.usefulLifeMonths ?? null,
           location: data.location || null,
           status: data.status || "active",
           notes: data.description || null,
@@ -914,6 +922,14 @@ export async function updateAsset(id: number, formData: FormData) {
         purchaseCost,
         residualValue: data.residualValue ?? 0,
         depreciationMethod: data.depreciationMethod || "straight_line",
+        // Parameter terbekukan F-118-V Putusan 2a; mengosongkan = mesin
+        // menolak berisik masa berikutnya, jurnal lampau tidak berubah.
+        totalEstimatedUnits:
+          data.totalEstimatedUnits != null
+            ? new Prisma.Decimal(data.totalEstimatedUnits.toFixed(2))
+            : null,
+        productionUnitName: data.productionUnitName || null,
+        usefulLifeMonths: data.usefulLifeMonths ?? null,
         location: data.location || null,
         status: nextStatus,
         notes: data.description || null,
@@ -1124,6 +1140,91 @@ export async function disposeAsset(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[disposeAsset]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Catat dokumen unit aktual bernama per (aset, masa) — vonis BOT 4
+ * F-2026-10-23-118-V Putusan 2b, sumber `actualUnits` metode UOP.
+ * Satu dokumen per masa (unik assetId+period); memanggil ulang untuk
+ * masa sama menimpa dokumen itu SELAMA jurnal masa itu belum lahir —
+ * sesudah berjurnal, koreksi hanya lewat reversal jurnal.
+ */
+export async function upsertAssetUsageRecord(formData: FormData) {
+  "use server";
+  try {
+    const user = await requirePermission("edit_assets");
+
+    const parsed = parseFormData(assetUsageRecordSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const { data } = parsed;
+
+    const asset = await prisma.asset.findUnique({
+      where: { id: data.assetId },
+      select: { id: true, depreciationMethod: true },
+    });
+    if (!asset) return { success: false, error: "Aset tidak ditemukan." };
+    if (asset.depreciationMethod !== "units_of_production") {
+      return {
+        success: false,
+        error: "Dokumen unit aktual hanya untuk aset metode Unit Produksi.",
+      };
+    }
+
+    const referenceType = `ASSET_DEPRECIATION_${data.periodYear}${String(data.periodMonth).padStart(2, "0")}`;
+    const posted = await prisma.journal.findFirst({
+      where: {
+        referenceType,
+        referenceId: data.assetId,
+        status: "POSTED",
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (posted) {
+      return {
+        success: false,
+        error:
+          "Penyusutan masa ini sudah berjurnal; koreksi unit hanya lewat reversal jurnal.",
+      };
+    }
+
+    const record = await prisma.assetUsageRecord.upsert({
+      where: {
+        assetId_periodYear_periodMonth: {
+          assetId: data.assetId,
+          periodYear: data.periodYear,
+          periodMonth: data.periodMonth,
+        },
+      },
+      create: {
+        assetId: data.assetId,
+        periodYear: data.periodYear,
+        periodMonth: data.periodMonth,
+        actualUnits: new Prisma.Decimal(data.actualUnits.toFixed(2)),
+        sourceName: data.sourceName,
+        sourceRef: data.sourceRef || null,
+        createdBy: Number(user.id) || null,
+      },
+      update: {
+        actualUnits: new Prisma.Decimal(data.actualUnits.toFixed(2)),
+        sourceName: data.sourceName,
+        sourceRef: data.sourceRef || null,
+      },
+    });
+
+    await logActivity(
+      "update",
+      "AssetUsageRecord",
+      record.id,
+      `Mencatat unit aktual aset ${data.assetId} masa ${data.periodMonth}/${data.periodYear}`,
+    );
+    revalidatePath("/aset");
+    return { success: true, id: record.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[upsertAssetUsageRecord]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
