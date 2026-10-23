@@ -118,6 +118,7 @@ export default async function AccountMappingPage() {
       title: "Penutup Tahun",
       items: [
         { label: "Laba Ditahan (Tujuan Penutup Tahun)", value: accountName(settings?.retainedEarningsAccountId) },
+        { label: "Pendapatan Denda Keterlambatan Piutang", value: accountName(settings?.lateFeeIncomeAccountId) },
       ],
     },
   ]
