@@ -24,6 +24,9 @@ import { isAnalyticalDepreciationMethod } from "@/lib/finance/asset-depreciation
 import { loadAssetAnalyticalStatuses } from "@/lib/reports/asset-analytical-status-data"
 import { AssetAnalyticalStatus } from "../_components/asset-analytical-status"
 import { AssetUsageRecordForm } from "./_components/asset-usage-record-form"
+import { AssetChangeEventPanel, type AssetChangeEventRow } from "./_components/asset-change-event-panel"
+import { AssetEventMappingStatus } from "../_components/asset-change-event"
+import { hasPermission } from "@/lib/auth/permissions"
 
 import type { Metadata } from "next"
 
@@ -91,6 +94,86 @@ export default async function AssetDetailPage({
     : null
   const periodLabel = `${now.getMonth() + 1}/${now.getFullYear()}`
 
+  // Peristiwa perubahan aset terbekukan (F-111-V/F-115-V): riwayat dibaca dari
+  // baris AssetChangeEvent apa adanya (snapshot akun id+kode di baris), bukan
+  // join ulang mapping kategori berjalan. Nomor jurnal pasangan POSTED lewat
+  // journalId baris. Kategori untuk pilihan reklasifikasi + status mapping
+  // peristiwa kategori aset ini (NULL = ditolak fail-closed, tampil apa adanya).
+  const [changeEvents, allCategories, canManageAssets, categoryRow] = await Promise.all([
+    prisma.assetChangeEvent.findMany({
+      where: { assetId: asset.id },
+      orderBy: [{ effectiveDate: "desc" }, { id: "desc" }],
+    }),
+    prisma.assetCategory.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } }),
+    hasPermission("manage_assets"),
+    asset.categoryId
+      ? prisma.assetCategory.findUnique({
+          where: { id: asset.categoryId },
+          select: {
+            revaluationSurplusAccountId: true,
+            impairmentLossAccountId: true,
+            accumulatedImpairmentAccountId: true,
+          },
+        })
+      : null,
+  ])
+  const journalIds = changeEvents.map((ev) => ev.journalId).filter((id): id is number => id != null)
+  const eventAccountIds = [
+    categoryRow?.revaluationSurplusAccountId,
+    categoryRow?.impairmentLossAccountId,
+    categoryRow?.accumulatedImpairmentAccountId,
+  ].filter((id): id is number => id != null)
+  const [eventJournals, eventAccounts] = await Promise.all([
+    journalIds.length
+      ? prisma.journal.findMany({ where: { id: { in: journalIds } }, select: { id: true, journalNumber: true } })
+      : [],
+    eventAccountIds.length
+      ? prisma.account.findMany({ where: { id: { in: eventAccountIds } }, select: { id: true, code: true } })
+      : [],
+  ])
+  const journalNumberById = new Map(eventJournals.map((j) => [j.id, j.journalNumber]))
+  const accountById = new Map(eventAccounts.map((a) => [a.id, a]))
+  const mappingAccount = (id: number | null | undefined) => (id != null ? (accountById.get(id) ?? null) : null)
+  const eventMapping = {
+    revaluationSurplus: mappingAccount(categoryRow?.revaluationSurplusAccountId),
+    impairmentLoss: mappingAccount(categoryRow?.impairmentLossAccountId),
+    accumulatedImpairment: mappingAccount(categoryRow?.accumulatedImpairmentAccountId),
+  }
+  const categoryById = new Map(allCategories.map((c) => [c.id, c.name]))
+  const eventRows: AssetChangeEventRow[] = changeEvents.map((ev) => ({
+    id: ev.id,
+    kind: ev.kind,
+    status: ev.status,
+    effectiveDate: ev.effectiveDate.toISOString(),
+    sourceDocumentKey: ev.sourceDocumentKey,
+    journalNumber: ev.journalId != null ? (journalNumberById.get(ev.journalId) ?? null) : null,
+    carryingBefore: ev.carryingBefore?.toString() ?? null,
+    carryingAfter: ev.carryingAfter?.toString() ?? null,
+    revaluationSurplusAfter: ev.revaluationSurplusAfter?.toString() ?? null,
+    fiscalBaseBefore: ev.fiscalBaseBefore?.toString() ?? null,
+    fiscalBaseAfter: ev.fiscalBaseAfter?.toString() ?? null,
+    finalTaxAmount: ev.finalTaxAmount?.toString() ?? null,
+    finalTaxRatePercent: ev.finalTaxRatePercent?.toString() ?? null,
+    surplusAccountCode: ev.surplusAccountCode,
+    impairmentLossAccountCode: ev.impairmentLossAccountCode,
+    accumulatedImpairmentAccountCode: ev.accumulatedImpairmentAccountCode,
+    taxPayableAccountCode: ev.taxPayableAccountCode,
+    fromCategoryName: ev.fromCategoryId != null ? (categoryById.get(ev.fromCategoryId) ?? `#${ev.fromCategoryId}`) : null,
+    toCategoryName: ev.toCategoryId != null ? (categoryById.get(ev.toCategoryId) ?? `#${ev.toCategoryId}`) : null,
+    reasonCode: ev.reasonCode,
+    approvedByName: ev.approvedByName,
+    appraiserName: ev.appraiserName,
+    impairmentIndicator: ev.impairmentIndicator,
+    recoverableBasis: ev.recoverableBasis,
+    recoverableAmount: ev.recoverableAmount?.toString() ?? null,
+    djpApprovalNumber: ev.djpApprovalNumber,
+    oldMethod: ev.oldMethod,
+    newMethod: ev.newMethod,
+    newUsefulLifeMonths: ev.newUsefulLifeMonths,
+    newResidualValue: ev.newResidualValue?.toString() ?? null,
+    reversesEventId: ev.reversesEventId,
+  }))
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -148,6 +231,34 @@ export default async function AssetDetailPage({
           )}
         </DetailCard>
       )}
+
+      {/* Peristiwa perubahan aset (F-111-V/F-115-V) */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Peristiwa Perubahan Aset</h2>
+        </div>
+        <div className="flex flex-col gap-4 p-4 px-5">
+          {asset.category ? (
+            <div className="flex flex-col gap-1.5">
+              <p className="text-sm font-medium text-foreground">
+                Pemetaan Akun Peristiwa — Kategori {asset.category.name}
+              </p>
+              <AssetEventMappingStatus mapping={eventMapping} />
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Aset tanpa kategori — pemetaan akun peristiwa belum tersedia; peristiwa berharga ditolak server.
+            </p>
+          )}
+          <AssetChangeEventPanel
+            assetId={asset.id}
+            events={eventRows}
+            categories={allCategories}
+            currentCategoryId={asset.categoryId ?? null}
+            canManage={canManageAssets}
+          />
+        </div>
+      </div>
 
       {/* History */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">

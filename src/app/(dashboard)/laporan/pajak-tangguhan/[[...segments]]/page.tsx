@@ -11,6 +11,8 @@ import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { splitReportSegments } from "@/lib/reports/report-period"
 import { loadDeferredTax } from "@/lib/reports/deferred-tax-data"
 import { loadDeferredTaxValueEventSource } from "@/lib/reports/deferred-tax-value-events-data"
+import { loadDeferredTaxNonAssetSources } from "@/lib/reports/deferred-tax-nonaset-data"
+import { DeferredTaxNonAssetCard } from "@/components/reports/deferred-tax-nonaset-card"
 
 export const metadata: Metadata = { title: "Pajak Tangguhan" }
 
@@ -32,6 +34,11 @@ export const metadata: Metadata = { title: "Pajak Tangguhan" }
  * peristiwa revaluasi/impairment belum terbekukan (inti F-111 belum ada),
  * jadi kartu kedua tampil notice "belum tersedia" bernama dari builder —
  * bukan angka nol — dan PPh final tampil terpisah dari indikasi tangguhan.
+ *
+ * Sumber NON-ASET F-2026-10-23-126-V (`loadDeferredTaxNonAssetSources`):
+ * kartu ketiga tampil baris provisi/CKPN/rugi fiskal apa adanya — hari ini
+ * provisi nol terverifikasi/belum terpetakan dari jurnal POSTED, CKPN dan
+ * rugi fiskal belum-tersedia bernama (inti F-090/register belum ada).
  */
 export default async function DeferredTaxPage({
   params: routeParams,
@@ -51,6 +58,7 @@ export default async function DeferredTaxPage({
   const asOf = new Date(Date.UTC(now.getFullYear(), 11, 31))
   const { report } = await loadDeferredTax({ taxRatePercent, asOf })
   const { report: valueEventReport } = await loadDeferredTaxValueEventSource({ taxRatePercent, asOf })
+  const { report: nonAssetReport } = await loadDeferredTaxNonAssetSources({ taxRatePercent, asOf })
   const periodLabel = `Per 31 Desember ${now.getFullYear()}`
 
   return (
@@ -86,6 +94,7 @@ export default async function DeferredTaxPage({
     >
       <DeferredTaxCard report={report} />
       <DeferredTaxValueEventCard report={valueEventReport} />
+      <DeferredTaxNonAssetCard report={nonAssetReport} />
     </ReportPageShell>
   )
 }
