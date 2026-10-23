@@ -12074,3 +12074,56 @@ Harga perolehan aset (basis penyusutan komersial) = jumlah lawan di atas sen per
 Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 10/11 + PMK 72/2023 + PMK-90/PMK.03/2020 (sumber resmi DJP di atas, akses 2026-10-23) sisi fiskal dan PSAK 16 sisi komersial (rujukan standar, bukan dasar fiskal). BUKAN penetapan DJP, bukan penilaian harga pasar sah, bukan klaim SPT Tahunan — harga pasar final dan status pengecualian hibah per kasus tetap dokumen penilai/dasar nyata, sengketa = `BUTUH-VONIS-AKUNTAN`.
 
 ID vonis ini **F-2026-10-23-120-V** (tertinggi terverifikasi run ini di origin/main 7bf0933a + PR terbuka: 119-V di PR #632, 118-V merged #627, 120 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini -> BOT 3 inti perolehan non-kas -> BOT 2 -> BOT 6 E120-1..10.
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-121-V: inti posting jurnal penutup tahunan (YearEndClosing) — buka gerbang inti F-2026-10-20-86
+
+Status: PUTUSAN BOT 4 (kartu t_8f0fd77f, siklus standby 11:30; branch prior hermes/bot4-f121-yearend kosong tanpa commit — dikonfirmasi `git log origin/main..branch` nol). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Vonis ini MEMUTUS detail inti yang F-2026-10-20-86 (vonis Salsa 2026-10-20 20:10, board) sengaja tunda-teknis: kolom setting + aksi posting + approval. Pratinjau read-only F-86 sudah merged (PR #250): builder `src/lib/reports/year-end-closing.ts` + loader `year-end-closing-data.ts` + tes. Inti posting BELUM ada.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 11:30, origin/main 39df4118)
+
+- Kanban BOT 4: hanya kartu ini. Nol kartu peminta vonis baru.
+- PR vonis BOT 4 terbuka semua ter-gate merge BOT 1 (bukan menunggu vonis): #635 F-120-V BEHIND (merged selama snapshot jadi 39df4118), #632 F-119-V DIRTY, #623 F-116-V DIRTY, #620/#616/#613/#611/#608/#601/#593/#590/#588/#586/#584/#581/#579/#574-docs/#571/#552/#548/#544 semua DIRTY/BEHIND — isi nol menunggu BOT 4. Peminta BOT 3 t_99cb19e4 ter-gate merge BOT 1; t_af177f74 prasyarat BOT 1. Maka riset berikutnya = butir terbuka eksplisit F-86: inti posting ditunda-teknis menunggu vonis lengkap — vonis F-86 sendiri sudah terbit, yang belum diputus = detail eksekusi inti (urutan kunci, status sesudah posting, koreksi, tahun fiskal tak-kalendar). Vonis ini menutupnya sebagai F-121-V supaya BOT 1 bisa buka inti tanpa vonis lanjutan.
+
+### Bukti repo terverifikasi run ini (origin/main 39df4118)
+
+- Pratinjau merged: `buildYearEndClosingPreview` per (akun P&L REVENUE/EXPENSE, profitCenterId), hanya POSTED, kontra terbalik otomatis, lawan laba ditahan per profitCenterId, `balanced` hanya debet=kredit persis sen, `alreadyClosed` dari cek `referenceType="YearEndClosing" + referenceId=tahun + POSTED`. Loader komentar `ponytail`: `retainedEarningsAccountId: null` selalu — kolom setting belum ada.
+- `SystemSetting` (schema.prisma:105+) punya pola mapping akun nullable `salesReceivableAccountId` dll (baris 191-227) + `fiscalYearStartMonth Int @default(1)` (baris 122) + `periodLockDate` — kolom `retainedEarningsAccountId` BELUM ada (grep=0).
+- CoA: `300002 Laba Ditahan EQTY` di bawah `3000 Modal` (base-data.ts) existing; `isRetainedEarningsAccount(name)` regex nama di equity-changes.ts:62. Laporan perubahan ekuitas/laba ditahan menampilkan "belum ditutup" + baris "Saldo Akhir Bila Laba Ditutup" — posting inti mengubah baris itu jadi nol-selisih nyata.
+- Kunci periode: `assertPeriodOpen(date, tx)` locking-read `system_settings FOR UPDATE` (period-lock.service.ts); tutup/buka periode di period-close.actions.ts protokol kunci sama (R-09, tanpa siklus deadlock). Jurnal penutup WAJIB ikut protokol sama.
+- Approval: `approval-workflow.service.ts` + `requestApprovalIfConfigured` existing (pola Expense/F-87 dirujuk vonis F-86 butir 6).
+- Unik DB `(referenceType, referenceId)` jurnal (dirujuk vonis F-86 butir 3) = anti-dobel fisik.
+
+### Putusan 1 — Kolom setting: satu akun laba ditahan, fail-closed, validasi tipe
+
+- Migrasi inti menambah `SystemSetting.retainedEarningsAccountId Int?` nullable (pola baris 191-227, `@map("retained_earnings_account_id")`), TANPA akun CoA baru dan TANPA default tebakan di kode/migrasi. Seed/install boleh mengarahkan ke akun existing bernama laba ditahan HANYA lewat mekanisme mapping existing yang terlihat operator di pengaturan — bukan hardcode `300002` di service.
+- Resolver posting: kolom kosong / akun nonaktif / akun terhapus = posting DITOLAK berisik ("Akun laba ditahan belum dipetakan di Pengaturan") nol jurnal. Akun terpilih WAJIB `type=EQUITY` DAN lolos `isRetainedEarningsAccount(name)` ATAU ditandai eksplisit operator sebagai akun laba ditahan di pengaturan; akun EQTY lain (Modal Saham 300003, Equitas Saldo Awal 300001) DITOLAK sebagai tujuan penutup — menutup laba ke modal disetor = salah saji ekuitas. Ganti akun setting sesudah ada jurnal penutup POSTED: tahun tertutup TIDAK berubah (jurnal snapshot akun tujuan saat posting); pratinjau tahun belum tertutup memakai setting berjalan.
+
+### Putusan 2 — Aksi posting: satu tx, urutan kunci tetap, snapshot dari pratinjau
+
+- Posting = server action/service tipis `postYearEndClosing(fiscalYear)` dalam SATU tx: (1) `assertApproved` gerbang Putusan 4; (2) kunci baris `system_settings FOR UPDATE` lalu `assertPeriodOpen(tanggalPenutup, tx)` — tanggal penutup = akhir tahun fiskal dari `fiscalYearPeriod(fiscalYear, fiscalYearStartMonth)` (bukan 31 Des kalender bila startMonth!=1); (3) cek anti-dobel `findFirst(referenceType="YearEndClosing", referenceId=fiscalYear, status=POSTED, deletedAt=null)` di dalam tx — ada = tolak berisik sebut tahun; (4) hitung saldo dari jurnal POSTED tahun fiskal itu memakai builder pratinjau yang SAMA (satu sumber rumus; service dilarang hitung ulang rumus sendiri); (5) `balanced=false` atau selisih != 0 sen = tolak, nol jurnal; (6) tulis SATU Jurnal POSTED: baris penutup per (akun P&L, profitCenterId) membalik saldo penuh + baris lawan per profitCenterId ke akun Putusan 1, `referenceType="YearEndClosing"`, `referenceId=fiscalYear`, tanggal = tanggal penutup, idempotency key scope `year-end-closing:<fiscalYear>`.
+- Baris bersaldo nol tidak ditulis. Akun P&L yang muncul hanya sesudah penutup (jurnal koreksi tahun sama di periode masih terbuka sebelum kunci melewati tanggal penutup) TIDAK melahirkan jurnal susulan — vonis F-86 butir 3 ditegaskan: satu tahun = satu jurnal penutup aktif; koreksi hanya lewat Putusan 3.
+- Empat status tetap terpisah: status jurnal penutup (POSTED) tidak mengubah status dokumen sumber apa pun; tahun "tertutup" diturunkan dari keberadaan jurnal penutup POSTED + periodLockDate, bukan flag baru di setting.
+
+### Putusan 3 — Koreksi & buka kembali: reversal penuh, bukan edit, bukan hapus
+
+- Jurnal penutup terposting BEKU: koreksi hanya reversal jurnal penutup (jurnal lawan REVERSED pola hook existing) di periode terbuka (`assertPeriodOpen` tanggal penutup dalam tx sama), sesudah itu tahun kembali "belum ditutup" dan posting ulang dibolehkan. Edit baris jurnal penutup / hapus / ubah referenceId = DILARANG di inti.
+- Buka kunci periode (periodLockDate dimundurkan melewati tanggal penutup) TIDAK otomatis membatalkan jurnal penutup: laporan tetap membaca jurnal POSTED apa adanya; reversal tetap aksi eksplisit tercatat. Selisih sesudah buka-kunci tampil sebagai fakta (akun P&L tahun tertutup bersaldo lagi di pratinjau dengan `alreadyClosed=true`) dan pratinjau WAJIB menandainya, bukan menyembunyikan.
+- Tahun fiskal dengan jurnal DRAFT/REVERSED penutup saja = belum tertutup; cek anti-dobel hanya menghitung POSTED non-REVERSED (selaras loader existing).
+
+### Putusan 4 — Approval & izin: gerbang existing, tanpa key baru tahap ini
+
+- `requestApprovalIfConfigured("YearEndClosing", fiscalYear)` saat pengajuan + `assertApproved` SEBELUM tx posting (pola vonis F-86 butir 6); tanpa workflow terkonfigurasi = no-op mundur-kompatibel; pengaju tidak menyetujui sendiri (mesin approval existing). Aksi posting memakai izin pengaturan existing yang sama dengan tutup periode (`manage_settings`, period-close.actions.ts) — pemisahan verba posting-vs-kunci ditunda sampai ada peran nyata berbeda; nyatakan di PR inti bahwa pemegang `manage_settings` non-admin mendapat aksi posting juga.
+- Pajak: jurnal penutup murni reklasifikasi ekuitas internal — TANPA PPN/PPh/faktur/bupot; laba fiskal SPT Tahunan TIDAK diturunkan dari jurnal penutup ini dan koreksi fiskal akhir tahun tetap jalur terpisah. Menampilkan laba ditahan hasil penutup sebagai "laba fiskal" = DILARANG di UI/laporan.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge PR vonis ini; putus buka-inti F-121 (migrasi 1 kolom + aksi posting) — prasyarat nol PR lain; inti BUKAN membuka jurnal baru selain YearEndClosing.
+- BOT 3 (inti terpisah, klaim `prisma/schema.prisma` di board dulu, koordinasi BOT 4): (1) migrasi `retained_earnings_account_id` nullable + resolver fail-closed Putusan 1; (2) service posting Putusan 2 memakai builder pratinjau existing persis (impor, bukan salin rumus), ganti komentar `ponytail` loader jadi baca kolom nyata; (3) reversal Putusan 3 lewat hook reversal existing; (4) tes: posting seimbang sen, per-profitCenter termasuk null, tahun fiskal startMonth!=1.
+- BOT 2: tombol posting dari pratinjau existing, nonaktif bila `balanced=false`/`alreadyClosed=true`/belum dipetakan, tampilkan alasan backend apa adanya; UI tidak hitung saldo/selisih.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E121-1 setting kosong/bukan EQTY-laba-ditahan -> posting ditolak, nol jurnal; E121-2 posting kedua tahun sama ditolak di dalam tx (bukan hanya P2002 mentah); E121-3 selisih != 0 sen -> nol jurnal; E121-4 dua pusat laba + null -> tiga baris lawan terpisah, lintas-pusat digabung = MERAH; E121-5 tanggal penutup startMonth!=1 bukan 31 Des kalender + posting ke periode terkunci ditolak; E121-6 edit/hapus jurnal penutup tanpa reversal mengubah laba ditahan = MERAH; E121-7 pengaju menyetujui sendiri / assertApproved dicabut -> posting lolos = MERAH; E121-8 sesudah posting: pratinjau tahun itu saldo P&L nol + laporan laba ditahan "belum ditutup" nol, reversal mengembalikan keduanya; E121-9 ganti setting sesudah posting mengubah jurnal tahun tertutup = MERAH; E121-10 jurnal DRAFT/REVERSED ikut saldo posting = MERAH.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar PSAK 1/PSAK 25 sebagai rujukan standar penyajian ekuitas (bukan dasar fiskal) + vonis F-2026-10-20-86. BUKAN klaim laporan keuangan/SPT Tahunan sah — jurnal penutup tidak menggantikan koreksi fiskal, daftar penyusutan, atau SPT; angka fiskal tetap jalurnya sendiri.
+
+ID vonis ini **F-2026-10-23-121-V** (tertinggi terverifikasi run ini di origin/main 39df4118: F-2026-10-23-120-V merged #635; 119-V PR #632, 118-V merged; 121 belum terpakai di main maupun PR terbuka yang dicek; branch prior hermes/bot4-f121-yearend kosong). Pemilik berikutnya: BOT 1 merge + buka inti -> BOT 3 migrasi+posting -> BOT 2 -> BOT 6 E121-1..10.
