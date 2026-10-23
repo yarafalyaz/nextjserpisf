@@ -1,12 +1,12 @@
 /**
- * Mesin analitis NON-GL UOP/SYD — vonis BOT 4 F-2026-10-23-118-V Putusan 2-3.
+ * Mesin analitis UOP/SYD — vonis BOT 4 F-2026-10-23-118-V Putusan 2-3.
  *
- * Lapis aman: fungsi murni Decimal, TANPA DB, TANPA jurnal, TANPA cron.
- * Hasil fungsi ini ANALITIS saja — `computeMonthlyDepreciation` tetap
- * menolak kedua metode untuk GL (`analytical-method`) sampai gerbang
- * Putusan 2 F-118-V terpenuhi semua di inti terpisah (parameter terbekukan
- * per aset + dokumen unit aktual + posting tx). Jangan panggil dari jalur
- * posting jurnal.
+ * Fungsi murni Decimal, TANPA DB, TANPA jurnal. Hasil fungsi ini boleh
+ * diposting hanya lewat inti `asset-analytical-posting.ts` (gerbang
+ * Putusan 2: parameter terbekukan per aset + dokumen unit aktual +
+ * `assertPeriodOpen` dalam tx + idempotensi per masa). Jangan panggil
+ * langsung dari jalur posting jurnal lain. `computeMonthlyDepreciation`
+ * tetap menolak kedua metode untuk GL (`analytical-method`).
  *
  * Rumus (Putusan 3, Decimal sen, tanpa float):
  *  - UOP: (harga perolehan − residu) × unitAktual / totalEstimasiUnit,
@@ -86,10 +86,20 @@ export function computeUnitsOfProductionDepreciation(
 export function computeSumOfYearsDigitsDepreciation(
   input: SumOfYearsDigitsInput,
 ): AnalyticalDepreciationResult {
-  if (!input.usefulLifeMonths || input.usefulLifeMonths <= 0) {
+  // Syarat inti posting (review BOT 6 PR #633, low): nilai non-integer
+  // wajib ditolak berisik — N=3.5 / k=1.5 bukan masa manfaat/bulan sah.
+  if (
+    input.usefulLifeMonths == null ||
+    !Number.isInteger(input.usefulLifeMonths) ||
+    input.usefulLifeMonths <= 0
+  ) {
     return { status: "reject", reason: "missing-parameter", parameter: "usefulLifeMonths" }
   }
-  if (!input.monthIndex || input.monthIndex < 1) {
+  if (
+    input.monthIndex == null ||
+    !Number.isInteger(input.monthIndex) ||
+    input.monthIndex < 1
+  ) {
     return { status: "reject", reason: "missing-parameter", parameter: "monthIndex" }
   }
   const n = input.usefulLifeMonths
