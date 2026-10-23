@@ -41,6 +41,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/laporan/jurnal-aset": "Menampilkan jurnal aset tetap: perolehan, penyusutan bulanan, dan pelepasan",
   "/laporan/histori-aset": "Menampilkan garis waktu aset tetap: perolehan, penyusutan, pelepasan, perpindahan lokasi",
   "/laporan/perbedaan-penyusutan": "Menampilkan selisih penyusutan akuntansi dengan penyusutan fiskal per aset per tahun",
+  "/laporan/pajak-tangguhan": "Menampilkan perbedaan temporer pajak tangguhan tahap stok per aset beserta arah dan indikasi tangguhannya, bukan dasar jurnal",
   "/laporan/rekonsiliasi-aset": "Menampilkan perbandingan nilai buku jurnal POSTED dengan cache currentValue dan riwayat penyusutan per aset",
   "/laporan/bukti-potong-pph": "Menampilkan daftar pemotongan PPh atas tagihan vendor",
   "/laporan/buku-bank": "Menampilkan mutasi bank dan kas",
