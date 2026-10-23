@@ -1,7 +1,9 @@
 import { z } from "zod"
 import { dateOnly } from "@/lib/validations/finance.schemas"
 import {
+  fiscalGroupRule,
   isFiscalGroupCode,
+  isFiscalMethodAllowed,
 } from "@/lib/finance/asset-fiscal-groups"
 import { DEPRECIATION_METHODS } from "@/lib/finance/asset-depreciation"
 
@@ -60,10 +62,34 @@ export const assetCategorySchema = z.object({
   // string kosong menjadi undefined, jadi di sini cukup boolean opsional.
   taxTypeListed: z.boolean().optional(),
   taxDjpDetermination: z.boolean().optional(),
+  // Metode fiskal terpilih (vonis F-2026-10-23-109-V P1): kosong = belum
+  // dipilih (fiskal belum-dihitung, bukan fallback garis lurus). Nilai di
+  // luar dua metode sah ditolak; bangunan + saldo menurun ditolak di
+  // `superRefine` bawah (butuh kelompok fiskal).
+  fiscalMethod: z
+    .enum(["straight_line", "declining_balance"], {
+      error: "Metode fiskal tidak dikenal",
+    })
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   assetAccountId: optionalRefId,
   accumulatedDepreciationAccountId: optionalRefId,
   depreciationExpenseAccountId: optionalRefId,
   gainLossAccountId: optionalRefId,
+}).superRefine((data, ctx) => {
+  // Bangunan hanya garis lurus (UU PPh Pasal 11, vonis F-109-V P1/F109-3):
+  // saldo menurun pada kelompok bangunan ditolak saat simpan. Kelompok
+  // kosong/tak dikenal tidak ditebak di sini — read-model menolaknya lagi.
+  if (data.fiscalMethod && data.taxGroupCode) {
+    const rule = fiscalGroupRule(data.taxGroupCode)
+    if (rule && !isFiscalMethodAllowed(data.fiscalMethod, rule)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["fiscalMethod"],
+        message: "Bangunan hanya boleh garis lurus; metode saldo menurun ditolak untuk kelompok bangunan.",
+      })
+    }
+  }
 })
 
 // ==================== Asset Brand ====================
@@ -194,4 +220,30 @@ export const assetUsageRecordSchema = z.object({
     .min(0, "Unit aktual tidak boleh negatif"),
   sourceName: requiredStr("Nama dokumen sumber wajib diisi", 200),
   sourceRef: optionalStr(200),
+})
+
+// ==================== Asset Fiscal Year Generate (F-109-V P4) ====================
+
+const fiscalYearField = (label: string) => z.coerce
+  .number({ error: `${label} wajib diisi` })
+  .int(`${label} harus bilangan bulat`)
+  .min(2000, `${label} tidak sah`)
+  .max(2100, `${label} tidak sah`)
+
+/** Generate baris tahun saldo fiskal satu aset sampai `throughYear` (idempoten). */
+export const assetFiscalYearGenerateSchema = z.object({
+  assetId: requiredId("Aset"),
+  throughYear: fiscalYearField("Tahun sampai"),
+  // Rekonstruksi aset lama (P3): saldo pembuka bertanggal berlabel opening.
+  // Keduanya wajib berpasangan; tanpa pasangan = mulai dari purchaseCost.
+  openingBalance: optionalNum(0),
+  openingYear: fiscalYearField("Tahun pembuka").optional(),
+}).superRefine((data, ctx) => {
+  if ((data.openingBalance == null) !== (data.openingYear == null)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["openingYear"],
+      message: "Saldo pembuka dan tahun pembuka wajib diisi berpasangan.",
+    })
+  }
 })

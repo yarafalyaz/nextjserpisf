@@ -19,9 +19,12 @@ import {
   assetSchema,
   assetDisposalSchema,
   assetUsageRecordSchema,
+  assetFiscalYearGenerateSchema,
 } from "@/lib/validations/asset.schemas";
 import { Prisma } from "@prisma/client";
 import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
+import { buildFiscalYearRows } from "@/lib/finance/asset-fiscal-balance";
+import { resolveFiscalGroup } from "@/lib/finance/asset-fiscal-groups";
 import { journalBookValue } from "@/lib/finance/asset-book-value";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { nextSlug } from "@/lib/utils/slug-db";
@@ -134,6 +137,7 @@ export async function createAssetCategory(formData: FormData) {
         taxGroupCode: data.taxGroupCode ?? null,
         taxTypeListed: data.taxTypeListed ?? null,
         taxDjpDetermination: data.taxDjpDetermination ?? false,
+        fiscalMethod: data.fiscalMethod ?? null,
         assetAccountId: data.assetAccountId ?? null,
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
@@ -567,6 +571,7 @@ export async function updateAssetCategory(id: number, formData: FormData) {
         taxGroupCode: data.taxGroupCode ?? null,
         taxTypeListed: data.taxTypeListed ?? null,
         taxDjpDetermination: data.taxDjpDetermination ?? false,
+        fiscalMethod: data.fiscalMethod ?? null,
         assetAccountId: data.assetAccountId ?? null,
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
@@ -1225,6 +1230,116 @@ export async function upsertAssetUsageRecord(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[upsertAssetUsageRecord]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Bekukan baris tahun saldo fiskal satu aset sampai `throughYear`
+ * (vonis BOT 4 F-2026-10-23-109-V P4). Idempoten per (assetId, taxYear):
+ * baris yang sudah terbit dipakai apa adanya dan TIDAK ditulis ulang
+ * (snapshot beku — edit master kategori sesudahnya tidak menghitung
+ * ulang baris lama, P6 prospektif); replay generate = nol baris baru.
+ * Baris tahun BUKAN jurnal — tidak ada posting GL di sini. Fiskal
+ * belum-dihitung (metode NULL / bangunan-SM / tanpa tanggal / kelompok
+ * belum ditentukan) ditolak berisik dengan alasan builder apa adanya.
+ */
+export async function generateAssetFiscalYearRows(formData: FormData) {
+  "use server";
+  try {
+    await requirePermission("edit_assets");
+
+    const parsed = parseFormData(assetFiscalYearGenerateSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const { data } = parsed;
+
+    const asset = await prisma.asset.findUnique({
+      where: { id: data.assetId },
+      select: {
+        id: true,
+        purchaseCost: true,
+        purchaseDate: true,
+        category: {
+          select: {
+            fiscalMethod: true,
+            taxGroupCode: true,
+            taxTypeListed: true,
+            taxDjpDetermination: true,
+          },
+        },
+        fiscalYearRows: { orderBy: { taxYear: "asc" } },
+      },
+    });
+    if (!asset) return { success: false, error: "Aset tidak ditemukan." };
+
+    const resolution = resolveFiscalGroup({
+      taxGroupCode: asset.category?.taxGroupCode,
+      taxTypeListed: asset.category?.taxTypeListed,
+      taxDjpDetermination: asset.category?.taxDjpDetermination,
+    });
+    if (resolution.status !== "resolved") {
+      return {
+        success: false,
+        error: "Kelompok fiskal belum dapat ditentukan pada kategori aset ini.",
+      };
+    }
+
+    const built = buildFiscalYearRows({
+      purchaseCost: asset.purchaseCost,
+      fiscalMethod: asset.category?.fiscalMethod ?? null,
+      fiscalGroup: resolution.group,
+      purchaseDate: asset.purchaseDate,
+      throughYear: data.throughYear,
+      openingBalance: data.openingBalance ?? null,
+      openingYear: data.openingYear ?? null,
+    });
+    if (built.rows === null) {
+      const messages: Record<string, string> = {
+        "metode-belum-dipilih": "Metode fiskal belum dipilih pada kategori aset ini.",
+        "bangunan-saldo-menurun": "Bangunan hanya boleh garis lurus; metode saldo menurun ditolak.",
+        "metode-tidak-sah": "Metode fiskal tidak sah untuk kelompok fiskal kategori ini.",
+        "tanpa-tanggal-perolehan": "Tanggal perolehan aset belum terisi; fiskal belum dapat dihitung.",
+        "saldo-pembuka-tidak-valid": "Saldo pembuka tidak valid (negatif atau tahun pembuka sebelum tahun perolehan).",
+      };
+      return { success: false, error: messages[built.reason] ?? built.reason };
+    }
+
+    const existingYears = new Set(asset.fiscalYearRows.map((row) => row.taxYear));
+    const fresh = built.rows.filter((row) => !existingYears.has(row.taxYear));
+    let created = 0;
+    if (fresh.length > 0) {
+      const batch = await prisma.assetFiscalYearRow.createMany({
+        data: fresh.map((row) => ({
+          assetId: asset.id,
+          taxYear: row.taxYear,
+          yearIndex: row.yearIndex,
+          openingBalance: row.openingBalance,
+          depreciation: row.depreciation,
+          closingBalance: row.closingBalance,
+          method: row.method,
+          groupCode: row.groupCode,
+          ratePercent: row.ratePercent,
+          source: row.source,
+        })),
+        skipDuplicates: true,
+      });
+      created = batch.count;
+    }
+
+    if (created > 0) {
+      await logActivity(
+        "create",
+        "AssetFiscalYearRow",
+        asset.id,
+        `Membekukan ${created} baris tahun fiskal aset ${asset.id} sampai ${data.throughYear}`,
+      );
+    }
+    revalidatePath("/aset");
+    revalidatePath("/laporan/perbedaan-penyusutan");
+    return { success: true, created, existing: built.rows.length - fresh.length };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[generateAssetFiscalYearRows]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
