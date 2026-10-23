@@ -1306,21 +1306,24 @@ describe("F-076-S pisah run payroll mingguan/bulanan", () => {
     expect(rows.map((x) => x.employeeId)).toEqual([1])
   })
 
-  it("AC-PF-1 sebaliknya: run WEEKLY tidak menarik MONTHLY (frekuensiLain) dan WEEKLY fail-closed BPJS", async () => {
+  it("turunan F-076-S: run WEEKLY tidak menarik MONTHLY (frekuensiLain); WEEKLY tanpa pinjaman LOLOS agregator BPJS se-masa", async () => {
     prismaMock.employee.findMany
       .mockResolvedValueOnce([empRow(1, "MONTHLY"), empRow(2, "WEEKLY")])
       .mockResolvedValue([empRow(1, "MONTHLY"), empRow(2, "WEEKLY")])
     const r = await actions.generateBulkPayroll("2026-05", "2026-05-04", "2026-05-10", "WEEKLY")
     expect(r?.success).toBe(true)
     if (r?.success) {
-      expect(r.count).toBe(0)
-      expect(r.skippedByReason).toMatchObject({ frekuensiLain: 1, bpjsBelumDidukung: 1 })
+      expect(r.count).toBe(1)
+      expect(r.skippedByReason).toMatchObject({ frekuensiLain: 1 })
+      expect(r.skippedByReason?.bpjsBelumDidukung ?? 0).toBe(0)
     }
-    expect(prismaMock.payroll.createMany).not.toHaveBeenCalled()
+    const rows = prismaMock.payroll.createMany.mock.calls.at(-1)?.[0].data as Array<{ employeeId: number; statutorySnapshot: Record<string, unknown> }>
+    expect(rows.map((x) => x.employeeId)).toEqual([2])
+    expect(rows[0]?.statutorySnapshot?.bpjsAggregate).toBeTruthy()
   })
 
-  it("AC-PF-4/AC-PF2-3: run WEEKLY karyawan berpinjaman aktif terlewati alasan pinjaman, tanpa slip", async () => {
-    const loanEmp = empRow(2, "WEEKLY", [{ id: 9 }])
+  it("AC-PF-4/AC-PF2-3 + F-105-V: run WEEKLY karyawan berpinjaman tanpa nominal mingguan terlewati alasan pinjaman, tanpa slip", async () => {
+    const loanEmp = empRow(2, "WEEKLY", [{ id: 9, weeklyInstallment: null, remainingAmount: 600000 }])
     prismaMock.employee.findMany.mockResolvedValueOnce([loanEmp]).mockResolvedValue([loanEmp])
     const r = await actions.generateBulkPayroll("2026-05", "2026-05-04", "2026-05-10", "WEEKLY")
     expect(r?.success).toBe(true)
@@ -1335,7 +1338,7 @@ describe("F-076-S pisah run payroll mingguan/bulanan", () => {
     const monthly = empRow(1, "MONTHLY")
     prismaMock.employee.findMany.mockResolvedValueOnce([monthly]).mockResolvedValue([monthly])
     prismaMock.payroll.findMany.mockResolvedValue([
-      { employeeId: 1, startDate: new Date("2026-05-04"), endDate: new Date("2026-05-10"), status: "paid", documentNo: "PAY-202605-0001" },
+      { employeeId: 1, startDate: new Date("2026-05-04"), endDate: new Date("2026-05-10"), status: "paid", documentNo: "PAY-202605-0001", baseSalary: 1000000, bpjsHealthEmployee: 10000, bpjsEmploymentEmployee: 30000, statutorySnapshot: { bpjsAggregate: { basis: 1000000, targetHealth: 10000, targetEmployment: 30000, withheldHealth: 0, withheldEmployment: 0 } } },
     ])
     const r = await actions.generateBulkPayroll("2026-05", "2026-05-11", "2026-05-17")
     expect(r?.success).toBe(true)
@@ -1348,7 +1351,7 @@ describe("F-076-S pisah run payroll mingguan/bulanan", () => {
     const e2 = empRow(2, "MONTHLY")
     prismaMock.employee.findMany.mockResolvedValueOnce([e1, e2]).mockResolvedValue([e1, e2])
     prismaMock.payroll.findMany.mockResolvedValue([
-      { employeeId: 1, startDate: new Date("2026-05-01"), endDate: new Date("2026-05-31"), status: "draft", documentNo: "PAY-202605-0007" },
+      { employeeId: 1, startDate: new Date("2026-05-01"), endDate: new Date("2026-05-31"), status: "draft", documentNo: "PAY-202605-0007", baseSalary: 5000000, bpjsHealthEmployee: 50000, bpjsEmploymentEmployee: 150000, statutorySnapshot: { bpjsAggregate: { basis: 5000000, targetHealth: 50000, targetEmployment: 150000, withheldHealth: 0, withheldEmployment: 0 } } },
     ])
     const r = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
     expect(r?.success).toBe(true)
@@ -1374,7 +1377,7 @@ describe("F-076-S pisah run payroll mingguan/bulanan", () => {
     expect(r?.error).toMatch(/MONTHLY atau WEEKLY/)
   })
 
-  it("AC-PF2-4 lewat processPayroll: karyawan WEEKLY tanpa pinjaman ditolak BPJS fail-closed", async () => {
+  it("turunan F-076-S lewat processPayroll: karyawan WEEKLY tanpa pinjaman LOLOS agregator BPJS se-masa (F-103-V)", async () => {
     prismaMock.employee.findUnique.mockResolvedValue({ id: 2, paymentFrequency: "WEEKLY", employeeLoans: [] })
     const f = new FormData()
     f.set("employeeId", "2")
@@ -1382,13 +1385,13 @@ describe("F-076-S pisah run payroll mingguan/bulanan", () => {
     f.set("startDate", "2026-05-04")
     f.set("endDate", "2026-05-10")
     const r = await actions.processPayroll(f)
-    expect(r?.success).toBe(false)
-    expect(r?.error).toMatch(/BPJS/)
-    expect(prismaMock.payroll.create).not.toHaveBeenCalled()
+    expect(r?.success).toBe(true)
+    const arg = prismaMock.payroll.create.mock.calls.at(-1)?.[0]
+    expect(arg?.data?.statutorySnapshot?.bpjsAggregate).toBeTruthy()
   })
 
   it("AC-PF2-3 lewat processPayroll: karyawan WEEKLY berpinjaman ditolak alasan pinjaman", async () => {
-    prismaMock.employee.findUnique.mockResolvedValue({ id: 2, paymentFrequency: "WEEKLY", employeeLoans: [{ id: 9 }] })
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 2, paymentFrequency: "WEEKLY", employeeLoans: [{ id: 9, weeklyInstallment: null, remainingAmount: 600000 }] })
     const f = new FormData()
     f.set("employeeId", "2")
     f.set("period", "2026-05")

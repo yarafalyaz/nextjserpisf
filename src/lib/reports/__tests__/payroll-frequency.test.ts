@@ -29,8 +29,8 @@ describe("F-076-S builder payroll-frequency", () => {
   it("AC-PF-1: run MONTHLY hanya populasi MONTHLY; WEEKLY terlewati terhitung", () => {
     const { targetIds, skips } = classifyPayrollRunPopulation(
       [
-        { id: 1, paymentFrequency: "MONTHLY", hasActiveLoan: false },
-        { id: 2, paymentFrequency: "WEEKLY", hasActiveLoan: false },
+        { id: 1, paymentFrequency: "MONTHLY", hasActiveLoanWithoutWeeklyInstallment: false },
+        { id: 2, paymentFrequency: "WEEKLY", hasActiveLoanWithoutWeeklyInstallment: false },
       ],
       "MONTHLY",
     )
@@ -41,36 +41,36 @@ describe("F-076-S builder payroll-frequency", () => {
   it("AC-PF-1 sebaliknya: run WEEKLY tidak menarik MONTHLY", () => {
     const { targetIds, skips } = classifyPayrollRunPopulation(
       [
-        { id: 1, paymentFrequency: "MONTHLY", hasActiveLoan: false },
-        { id: 2, paymentFrequency: "WEEKLY", hasActiveLoan: false },
+        { id: 1, paymentFrequency: "MONTHLY", hasActiveLoanWithoutWeeklyInstallment: false },
+        { id: 2, paymentFrequency: "WEEKLY", hasActiveLoanWithoutWeeklyInstallment: false },
       ],
       "WEEKLY",
     )
-    expect(targetIds).toEqual([])
-    expect(skips.map((s) => s.reason)).toEqual(["frekuensiLain", "bpjsBelumDidukung"])
+    expect(targetIds).toEqual([2])
+    expect(skips.map((s) => s.reason)).toEqual(["frekuensiLain"])
   })
 
-  it("AC-PF-4 + V-PF4-1: WEEKLY berpinjaman aktif terlewati alasan pinjaman (dicek sebelum BPJS)", () => {
+  it("AC-PF-4 + F-105-V: WEEKLY berpinjaman tanpa nominal mingguan terlewati alasan pinjaman", () => {
     const { targetIds, skips } = classifyPayrollRunPopulation(
-      [{ id: 2, paymentFrequency: "WEEKLY", hasActiveLoan: true }],
+      [{ id: 2, paymentFrequency: "WEEKLY", hasActiveLoanWithoutWeeklyInstallment: true }],
       "WEEKLY",
     )
     expect(targetIds).toEqual([])
     expect(skips).toEqual([{ employeeId: 2, reason: "pinjaman", conflictDocumentNo: null }])
   })
 
-  it("V-PF2-4(i): WEEKLY tanpa pinjaman tetap fail-closed alasan bpjsBelumDidukung", () => {
+  it("turunan F-076-S: WEEKLY tanpa pinjaman tanpa nominal LOLOS (agregator BPJS se-masa F-103-V)", () => {
     const { targetIds, skips } = classifyPayrollRunPopulation(
-      [{ id: 2, paymentFrequency: "WEEKLY", hasActiveLoan: false }],
+      [{ id: 2, paymentFrequency: "WEEKLY", hasActiveLoanWithoutWeeklyInstallment: false }],
       "WEEKLY",
     )
-    expect(targetIds).toEqual([])
-    expect(skips[0]?.reason).toBe("bpjsBelumDidukung")
+    expect(targetIds).toEqual([2])
+    expect(skips).toEqual([])
   })
 
   it("MONTHLY berpinjaman tetap lolos (perilaku existing tidak berubah)", () => {
     const { targetIds, skips } = classifyPayrollRunPopulation(
-      [{ id: 1, paymentFrequency: "MONTHLY", hasActiveLoan: true }],
+      [{ id: 1, paymentFrequency: "MONTHLY", hasActiveLoanWithoutWeeklyInstallment: true }],
       "MONTHLY",
     )
     expect(targetIds).toEqual([1])
@@ -86,7 +86,7 @@ describe("F-076-S builder payroll-frequency", () => {
       { employeeId: 5, reason: "berhenti", conflictDocumentNo: null },
       { employeeId: 6, reason: "frekuensiLain", conflictDocumentNo: null },
     ])
-    expect(counts).toEqual({ frekuensiLain: 2, pinjaman: 1, bpjsBelumDidukung: 1, irisan: 1, berhenti: 1 })
+    expect(counts).toEqual({ frekuensiLain: 2, pinjaman: 1, bpjsBelumDidukung: 1, plafonPotongan: 0, irisan: 1, berhenti: 1 })
     for (const reason of Object.keys(counts) as (keyof typeof counts)[]) {
       expect(PAYROLL_RUN_SKIP_LABELS[reason].length).toBeGreaterThan(0)
     }

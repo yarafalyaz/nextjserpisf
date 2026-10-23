@@ -3411,6 +3411,10 @@ model EmployeeLoan {
   loanDate           DateTime @map("loan_date")
   totalAmount        Decimal  @map("total_amount") @db.Decimal(15, 2)
   monthlyInstallment Decimal  @map("monthly_installment") @db.Decimal(15, 2)
+  // F-2026-10-23-105-V (vonis BOT 4): nominal cicilan mingguan dari
+  // perjanjian tertulis; NULL = tanpa jadwal mingguan (gerbang WEEKLY
+  // menahan karyawan). Dilarang auto-fill monthlyInstallment/4.
+  weeklyInstallment  Decimal? @map("weekly_installment") @db.Decimal(15, 2)
   remainingAmount    Decimal  @map("remaining_amount") @db.Decimal(15, 2)
   status             String   @default("active")
   notes              String?  @db.Text
