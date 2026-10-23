@@ -44,4 +44,36 @@ describe("EmployeeLoanForm — a11y wiring", () => {
       unmount(root, container)
     })
   })
+
+  it("weeklyInstallment opsional: tanpa bintang dekoratif, hint terhubung aria-describedby, tidak wajib", () => {
+    withContainer((container) => {
+      const root = mountInto(container, <EmployeeLoanForm employees={employees} />)
+      const form = container.querySelector("form")!
+      expect(labelTexts(form)).toEqual(
+        expect.arrayContaining(["Cicilan Mingguan (Perjanjian Tertulis, Rp)"]),
+      )
+      const input = container.querySelector("#weeklyInstallment")!
+      expect(input.getAttribute("required")).toBeNull()
+      expect(input.getAttribute("aria-describedby")).toBe("weeklyInstallment-hint")
+      const hint = container.querySelector("#weeklyInstallment-hint")!
+      expect(hint.textContent).toContain("WEEKLY")
+      // Tetap 3 bintang: mingguan bukan field wajib.
+      expect(decorativeStars(form).length).toBe(3)
+      // Hidden submit field kosong (tanpa pre-fill dari monthlyInstallment).
+      expect(container.querySelector<HTMLInputElement>('input[name="weeklyInstallment"]')!.value).toBe("0")
+      unmount(root, container)
+    })
+  })
+
+  it("mode ubah: weeklyInstallment tersimpan tampil apa adanya dari loan", () => {
+    withContainer((container) => {
+      const root = mountInto(
+        container,
+        <EmployeeLoanForm employees={employees} loan={{ ...loan, weeklyInstallment: 25000 }} />,
+      )
+      expect(container.querySelector<HTMLInputElement>("#weeklyInstallment")!.value).toBe("25.000")
+      expect(container.querySelector<HTMLInputElement>('input[name="weeklyInstallment"]')!.value).toBe("25000")
+      unmount(root, container)
+    })
+  })
 })

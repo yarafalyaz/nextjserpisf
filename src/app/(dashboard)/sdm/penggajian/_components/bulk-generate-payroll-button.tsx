@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { AppMonthPicker } from "@/components/ui/month-picker"
 import { generateBulkPayroll } from "@/actions/hrm.actions"
+import { payrollSkipSummary } from "@/lib/reports/payroll-run-skip-summary"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { useRouter } from "next/navigation"
 import { Sparkles, Loader2 } from "lucide-react"
@@ -65,7 +66,12 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
       try {
         const res = await generateBulkPayroll(period, startDate, endDate)
         if (res.success) {
-          showSuccess(`Berhasil membuat ${res.count} draf slip gaji untuk periode ${period}!`)
+          const skipped = "skippedByReason" in res ? res.skippedByReason : undefined
+          const summary = skipped ? payrollSkipSummary(skipped) : ""
+          showSuccess(
+            `Berhasil membuat ${res.count} draf slip gaji untuk periode ${period}!`,
+            summary ? `Terlewati — ${summary}` : undefined,
+          )
           setIsOpen(false)
           router.refresh()
         }
