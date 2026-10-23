@@ -160,12 +160,10 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
   // (halaman + panel kelola /laporan/target-penjualan, t_f605e189)
   // — entri beku dibuang.
-  // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): aksi tindak lanjut
-  // penagihan backend dulu; halaman antrean + form Catat Tindak Lanjut
-  // menyusul di kartu frontend t_6f73907a (buang entri ini saat UI
-  // memanggilnya).
-  "src/actions/invoice-collection.actions.ts::createInvoiceCollectionFollowUp":
-    "F-2026-10-22-089-S inti backend; form Catat Tindak Lanjut menyusul (frontend t_6f73907a)",
+  // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): createInvoiceCollectionFollowUp
+  // kini dirujuk CollectionFollowUpForm di antrean penagihan (t_6f73907a) —
+  // entri beku dibuang. deleteInvoiceCollectionFollowUp tetap beku: loader
+  // antrean belum menampilkan daftar jejak per faktur untuk dipilih.
   "src/actions/invoice-collection.actions.ts::deleteInvoiceCollectionFollowUp":
     "F-2026-10-22-089-S inti backend; tombol hapus tindak lanjut menyusul (frontend t_6f73907a)",
   // F-2026-10-23-109-V inti backend (t_7931ae08): generate baris tahun
@@ -182,10 +180,17 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3: pemanggil jurnal E2/E3 kini dirujuk UI
   // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
+  // F-2026-10-23-121-V inti (PR #655): 3 aksi YearEndClosing kini dirujuk
+  // YearEndClosingPanel di proses akhir bulan (t_8c34abc8) — entri beku dibuang.
   // F-2026-10-22-066-S: 7 aksi JobChangeOrder kini dirujuk panel Change Order
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
   // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal
   // di JobBillingCard (t_ba8fe9ef) — entri beku dibuang.
+  // F-2026-10-23-113-V: aksi ekspor XML Coretax kini dirujuk CoretaxExportPanel
+  // di page faktur tambah (t_4cba1a22) — entri beku dibuang.
+  // F-2026-10-23-111-V + F-2026-10-23-115-V inti (t_17e469e7): 3 aksi
+  // peristiwa perubahan aset kini dirujuk AssetChangeEventPanel di detail
+  // aset (t_311cfc07) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {

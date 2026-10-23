@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest"
+import { describe, it, expect, vi, beforeEach } from "vitest"
 
 /**
  * Laporan target vs pencapaian (F-2026-10-22-088-S tahap 1).
@@ -11,6 +11,7 @@ import { describe, it, expect, vi } from "vitest"
  */
 
 const mocks = vi.hoisted(() => ({
+  requirePermission: vi.fn(),
   prismaMock: {
     salesTarget: { findMany: vi.fn() },
     salesInvoice: { findMany: vi.fn() },
@@ -18,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   },
 }))
 
+vi.mock("@/lib/auth/permissions", () => ({
+  requirePermission: mocks.requirePermission,
+}))
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
 
 import {
@@ -29,7 +33,10 @@ import {
   SALES_TARGET_UNATTRIBUTED_LABEL,
 } from "../sales-target-achievement"
 import { buildSalesCommissionRecap } from "../sales-commission"
-import { getSalesTargetAchievement } from "../sales-target-achievement-data"
+import {
+  getSalesTargetAchievement,
+  listSalesTargets,
+} from "../sales-target-achievement-data"
 
 const OCT = { start: new Date(Date.UTC(2026, 9, 1)), end: new Date(Date.UTC(2026, 9, 31)) }
 
@@ -152,6 +159,11 @@ describe("BR-TGT-03/04: penjaga periode & nominal", () => {
 })
 
 describe("loader getSalesTargetAchievement", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.requirePermission.mockResolvedValue({ id: 7 })
+  })
+
   it("memakai basis komisi (paid, deletedAt null) + lencana diubah dari ActivityLog", async () => {
     mocks.prismaMock.salesTarget.findMany.mockResolvedValue([
       {
@@ -172,6 +184,7 @@ describe("loader getSalesTargetAchievement", () => {
       { modelId: 1, createdAt: new Date(Date.UTC(2026, 9, 10)) },
     ])
     const r = await getSalesTargetAchievement(OCT)
+    expect(mocks.requirePermission).toHaveBeenCalledWith("view_reports")
     expect(mocks.prismaMock.salesInvoice.findMany).toHaveBeenCalledTimes(1)
     const where = mocks.prismaMock.salesInvoice.findMany.mock.calls[0][0].where
     expect(where.status).toBe("paid")
@@ -179,5 +192,48 @@ describe("loader getSalesTargetAchievement", () => {
     expect(r.rows[0].achievedAmount).toBe(500_000)
     expect(r.rows[0].modifiedAfterPeriodStartAt).toEqual(new Date(Date.UTC(2026, 9, 10)))
     expect(r.unattributed.invoiceCount).toBe(1)
+  })
+
+  // LOW-2 audit #583: loader menolak sebelum query bila izin tiada.
+  it("tanpa view_reports: melempar sebelum query apa pun", async () => {
+    mocks.requirePermission.mockRejectedValue(new Error("NEXT_REDIRECT"))
+    await expect(getSalesTargetAchievement(OCT)).rejects.toThrow("NEXT_REDIRECT")
+    expect(mocks.prismaMock.salesTarget.findMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.salesInvoice.findMany).not.toHaveBeenCalled()
+  })
+})
+
+describe("loader listSalesTargets (LOW-2 audit #583)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.requirePermission.mockResolvedValue({ id: 7 })
+  })
+
+  it("gerbang approve_sales_invoices sebelum query target aktif", async () => {
+    mocks.prismaMock.salesTarget.findMany.mockResolvedValue([
+      {
+        id: 1,
+        salesEmployeeId: 7,
+        periodStart: OCT.start,
+        periodEnd: OCT.end,
+        targetAmount: 1_000_000,
+        notes: null,
+        updatedAt: new Date(),
+        salesEmployee: { name: "Rina", isActive: true },
+      },
+    ])
+    const rows = await listSalesTargets()
+    expect(mocks.requirePermission).toHaveBeenCalledWith("approve_sales_invoices")
+    expect(mocks.prismaMock.salesTarget.findMany).toHaveBeenCalledTimes(1)
+    expect(mocks.prismaMock.salesTarget.findMany.mock.calls[0][0].where).toEqual({
+      deletedAt: null,
+    })
+    expect(rows).toHaveLength(1)
+  })
+
+  it("tanpa approve_sales_invoices: melempar sebelum query", async () => {
+    mocks.requirePermission.mockRejectedValue(new Error("NEXT_REDIRECT"))
+    await expect(listSalesTargets()).rejects.toThrow("NEXT_REDIRECT")
+    expect(mocks.prismaMock.salesTarget.findMany).not.toHaveBeenCalled()
   })
 })

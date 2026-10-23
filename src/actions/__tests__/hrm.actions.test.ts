@@ -1859,3 +1859,74 @@ describe("Absensi Actions", () => {
   })
 })
 
+
+describe("F-2026-10-22-076-S generateBulkPayroll penjaga irisan bertransaksi (audit t_a92d0da1)", () => {
+  // Prisma mock tidak bisa menegakkan locking nyata. Kontrak yang diuji:
+  // (1) karyawan populasi target dikunci FOR UPDATE (urutan id menaik,
+  //     anti-deadlock) DI DALAM transaksi yang sama dengan createMany;
+  // (2) irisan dicek ULANG terhadap slip aktif di dalam transaksi sesudah
+  //     kunci — slip yang masuk sesudah baca luar (run konkuren) terlewat
+  //     alasan "irisan", BUKAN ikut dibuat (sebelum fix: dua run konkuren
+  //     rentang beririsan tak identik sama-sama lolos createMany).
+  const emitOrder: string[] = []
+  let inTxPayrolls: Array<Record<string, unknown>> = []
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    restoreTerBracketMock()
+    emitOrder.length = 0
+    inTxPayrolls = [
+      { employeeId: 1, startDate: new Date("2026-05-01"), endDate: new Date("2026-05-15"), status: "draft", documentNo: "PAY-RACE-0001" },
+    ]
+    requirePermissionMock.mockResolvedValue({ id: 1, roles: ["admin"] })
+    prismaMock.employee.findMany.mockResolvedValue([
+      { id: 2, baseSalary: 5000000, maritalStatus: "single", dependents: 0, departmentId: null, paymentFrequency: "MONTHLY", employeeLoans: [], employmentEndedAt: null },
+      { id: 1, baseSalary: 5000000, maritalStatus: "single", dependents: 0, departmentId: null, paymentFrequency: "MONTHLY", employeeLoans: [], employmentEndedAt: null },
+    ])
+    prismaMock.payroll.findMany.mockImplementation(async (args: any) => {
+      if (args?.where?.status === "draft" && args?.select?.componentLines) return []
+      return []
+    })
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 1 })
+    prismaMock.employee.findFirst.mockResolvedValue({ id: 1 })
+    prismaMock.$queryRaw.mockImplementation(async (strings: TemplateStringsArray, ...values: unknown[]) => {
+      const sql = strings.join("?")
+      if (sql.includes("FOR UPDATE") && sql.includes("employees")) {
+        const joined = (values[0] as { values?: unknown[] } | undefined)?.values ?? values
+        emitOrder.push(`lock:${joined.map(String).join(",")}`)
+        return joined.map((v) => ({ id: Number(v) }))
+      }
+      return [{ id: 1 }]
+    })
+    prismaMock.$transaction.mockImplementation(async (fn: any) => {
+      const tx = {
+        $queryRaw: prismaMock.$queryRaw,
+        payroll: {
+          findMany: vi.fn(async () => { emitOrder.push("txFindMany"); return inTxPayrolls }),
+          createMany: vi.fn(async (args: any) => {
+            emitOrder.push("txCreateMany")
+            return prismaMock.payroll.createMany(args)
+          }),
+        },
+      }
+      return fn(tx)
+    })
+  })
+
+  it("kunci FOR UPDATE + cek ulang irisan di transaksi sama mendahului createMany; slip race terlewat irisan", async () => {
+    const r = await actions.generateBulkPayroll("2026-05", "2026-05-01", "2026-05-31")
+    expect(r?.success).toBe(true)
+    if (r?.success) {
+      expect(r.count).toBe(1)
+      expect(r.skippedByReason?.irisan).toBe(1)
+    }
+    expect(emitOrder[0]).toBe("lock:1,2")
+    const lockIdx = emitOrder.indexOf("lock:1,2")
+    const findIdx = emitOrder.indexOf("txFindMany")
+    const createIdx = emitOrder.indexOf("txCreateMany")
+    expect(findIdx).toBeGreaterThan(lockIdx)
+    expect(createIdx).toBeGreaterThan(findIdx)
+    const rows = prismaMock.payroll.createMany.mock.calls.at(-1)?.[0].data as Array<{ employeeId: number }>
+    expect(rows.map((x) => x.employeeId)).toEqual([2])
+  })
+})

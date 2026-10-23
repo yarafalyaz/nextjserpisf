@@ -333,7 +333,11 @@ describe("F-027 tarikan generate", () => {
     prismaMock.employee.findMany
       .mockResolvedValueOnce([{ id: 7 }])
       .mockResolvedValue([{ id: 7, baseSalary: 5000000, maritalStatus: "single", dependents: 0, departmentId: null, employeeLoans: [] }])
+    // Urutan findMany bulk: (1) baca luar irisan, (2) baca ulang komponen
+    // estimasi, (3) cek ulang irisan DI DALAM transaksi kunci (t_a92d0da1 —
+    // wajib kosong agar tidak bentrok diri), (4) baca ulang slip terbit.
     prismaMock.payroll.findMany
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValue([{ id: 55, employeeId: 7, componentLines: [] }])
