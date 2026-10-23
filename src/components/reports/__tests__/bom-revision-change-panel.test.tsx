@@ -123,6 +123,18 @@ describe("BomRevisionChangePanel F-2026-10-22-068-S", () => {
     expect(ditolak).not.toContain("Tolak")
   })
 
+  it("pin pasangan Q-BOM68-4: kedua pin tampil + ganti dokumen ini tidak mengubah pin pasangan", () => {
+    const html = render({
+      pairedPins: [{ label: "order produksi", documentNo: "PO-001", revisionNo: 4 }],
+    })
+    expect(html).toContain("Pin order produksi PO-001")
+    expect(html).toContain("Rev. 4")
+    expect(html).toContain("tidak mengubah pin order produksi")
+    // tanpa pasangan: tidak ada catatan pin pasangan
+    expect(render()).not.toContain("Pin order produksi")
+    expect(render()).not.toContain("tidak mengubah pin")
+  })
+
   it("dokumen tutup: tanpa tombol ajukan + catatan tutup", () => {
     const html = render({ documentStatus: "completed" })
     expect(html).not.toContain("+ Ganti Revisi BOM")
