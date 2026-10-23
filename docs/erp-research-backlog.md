@@ -12006,3 +12006,124 @@ Status: PUTUSAN BOT 4 (kartu t_8c31f925, siklus standby 08:20). Dokumen saja; TA
 Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 11 + PMK 72/2023 (sumber resmi DJP di atas, akses 2026-10-23) untuk sisi fiskal dan PSAK 16/25/48 sebagai rujukan standar komersial (bukan dasar fiskal). BUKAN persetujuan DJP, bukan penetapan, dan bukan klaim SPT Tahunan/laporan keuangan sah — perubahan metode fiskal final tetap lewat persetujuan DJP, daftar penyusutan final wajib cocok lampiran SPT Tahunan badan.
 
 ID vonis ini **F-2026-10-23-115-V** (tertinggi terverifikasi run ini di origin/main 41b81748: F-2026-10-23-111-V merged #617; 112-V–114-V di PR terbuka #618/#619/#620; 115 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini + putus prioritas inti sesudah saldo fiskal F-109/F-110 -> BOT 3 inti peristiwa perubahan aset -> BOT 2 -> BOT 6 E115-1..10.
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-120-V: perolehan aset tetap non-kas (utang usaha, hibah/sumbangan, setoran modal non-tunai, tukar-menukar/tukar tambah)
+
+Status: PUTUSAN BOT 4 (kartu t_3c05feab, siklus standby 11:00). Dokumen saja; TANPA kode/schema/migrasi di kartu ini.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 11:00, origin/main 7bf0933a)
+
+- Kanban BOT 4 non-done/archived: hanya kartu ini (t_3c05feab running). Nol kartu peminta vonis baru bebas-dependensi. Open lain: BOT 3 t_f2f7647b siklus sendiri, BOT 1 t_9bed3c01 siklus merge sendiri — bukan peminta vonis BOT 4.
+- PR vonis BOT 4 terbit semua ter-gate merge BOT 1: #632 F-119-V CONFLICTING head 984e4e35 CI 6/6 hijau, #623 F-116-V CONFLICTING, #620 F-114-V CONFLICTING — konflik append backlog semata, isi nol menunggu vonis baru. Inti BOT 3 #633 F-118 lapis aman MERGEABLE CI 6/6 — bukan tunggu vonis.
+- Maka riset vonis berikutnya diambil dari celah live di bawah.
+
+### Bukti repo terverifikasi run ini (origin/main 7bf0933a)
+
+- Satu-satunya jalur perolehan: `createAsset` (src/actions/asset.actions.ts:693+) — `purchaseCost > 0` wajib akun Aset Tetap + Kas/Bank, jurnal tunggal `Dr Aset Tetap / Cr Kas-Bank` referenceType `ASSET_ACQUISITION` (baris 781-820). Tidak ada jenis sumber perolehan: aset dibeli kredit (utang vendor belum bayar), diterima hibah, disetor pemegang saham sebagai modal non-tunai, atau tukar tambah SEMUA dipaksa jadi Cr Kas/Bank — kas terpotong fiktif, utang/ekuitas/pendapatan hibah tak pernah tercatat, rekonsiliasi kas-bank vs jurnal pecah.
+- `Asset` (schema:4000-4041) tanpa kolom jenis/sumber perolehan, tanpa tautan VendorBill/dokumen sumber, tanpa nilai pasar tercatat. COA seed punya `300003 Modal Saham` EQTY (base-data.ts:841); akun utang usaha + PPN Masukan hidup di mapping SystemSetting existing (jalur VendorBill) — tidak dirujuk jalur aset sama sekali.
+- F-062-V Putusan 3 fail-closed perolehan berharga tetap berlaku: akun kosong = tolak berisik. Vonis ini HANYA menambah lawan kredit per JENIS perolehan; gerbang, Decimal, idempoten (referenceType,referenceId), `assertPeriodOpen` dalam tx pola existing tidak berubah.
+
+### Dasar resmi (akses 2026-10-23)
+
+- UU PPh Pasal 10 (UU 36/2008, teks resmi DJP https://www.pajak.go.id/sites/default/files/UU%20PPh%20No%2036%20Th%202008.pdf): (1) jual beli tanpa hubungan istimewa = jumlah sesungguhnya dikeluarkan/diterima; ada hubungan istimewa = jumlah seharusnya (harga pasar). (2) tukar-menukar = harga pasar. (4) hibah/bantuan/sumbangan memenuhi Pasal 4(3)(a)/warisan: nilai perolehan penerima = nilai sisa buku fiskal pemberi (pemberi tak berpembukuan → penetapan DJP); tidak memenuhi syarat = harga pasar. (6) setoran modal berupa harta = harga pasar harta dialihkan.
+- DJP "Bantuan atau Sumbangan, serta Harta Hibahan yang Dikecualikan sebagai Objek PPh" https://www.pajak.go.id/id/bantuan-atau-sumbangan-serta-harta-hibahan-yang-dikecualikan-sebagai-objek-pajak-penghasilan + PMK-90/PMK.03/2020 dirujuk halaman itu: nilai perolehan penerima dibukukan per status pengecualian; penyusutan atas harta barang dari bantuan/sumbangan/hibah yang dikecualikan TIDAK dapat dikurangkan fiskal (Pasal terkait di halaman peraturan DJP sama). Status pengecualian per kasus = fakta dokumen, bukan tebakan sistem.
+- UU PPh Pasal 11 + PMK 72/2023 (halaman DJP Penyusutan dan Amortisasi, pembaruan 2025-05-28, https://www.pajak.go.id/id/penyusutan-dan-amortisasi): penyusutan mulai bulan pengeluaran perolehan; dasar = harga perolehan Pasal 10 di atas.
+- PSAK 16 (label standar komersial, bukan dasar fiskal): harga perolehan = harga beli + biaya langsung terkait; aset diperoleh tukar-menukar diukur nilai wajar kecuali transaksi tanpa substansi komersial/nilai wajar tak andal (maka nilai tercatat aset diserahkan); hibah pemerintah/aset donasi diakui nilai wajar dengan pendapatan ditangguhkan/pendapatan terkait.
+
+### Putusan 1 — Jenis perolehan terstruktur wajib; lawan kredit mengikuti jenis, bukan selalu Kas/Bank
+
+Perolehan berharga (`purchaseCost > 0`) wajib mencatat JENIS PEROLEHAN terstruktur dari daftar terdaftar saja: `CASH_PURCHASE` (tunai, perilaku existing), `CREDIT_PURCHASE` (utang usaha/vendor bill), `GRANT_DONATION` (hibah/bantuan/sumbangan/donasi), `CAPITAL_CONTRIBUTION` (setoran modal non-tunai pemegang saham/pemilik), `EXCHANGE` (tukar-menukar/tukar tambah dengan aset lain ± boot kas). Jenis kosong/teks bebas pada perolehan berharga = DITOLAK berisik. Jurnal perolehan per jenis (Dr selalu akun Aset Tetap kategori, fail-closed F-062-V):
+
+- `CASH_PURCHASE`: Dr Aset Tetap / Cr Kas-Bank — persis existing, tidak berubah.
+- `CREDIT_PURCHASE`: Dr Aset Tetap / Cr Utang Usaha (akun mapping utang usaha existing) sebesar harga perolehan; pembayaran kemudian = peristiwa bayar utang existing (Dr Utang / Cr Kas), DILARANG jurnal perolehan kedua saat bayar. Bila VendorBill sudah mencatat utang + aset/persediaan untuk aset sama, perolehan aset DILARANG menjurnal utang kedua — satu dokumen sumber satu jurnal (idempoten referenceType/referenceId); jalur bill-vs-aset langsung dipilih operator per dokumen, bukan keduanya.
+- `GRANT_DONATION`: Dr Aset Tetap / Cr Pendapatan Hibah-Ditangguhkan atau akun ekuitas/pendapatan hibah dari mapping terpetakan fail-closed (usulan kode akun ke BOT 4 dulu, jangan karang di kode) sebesar NILAI tercatat fiskal per Putusan 2; pengakuan pendapatan mengikuti sifat hibah tercatat (ditangguhkan diamortisasi pola standar bila terkait aset — pilihan model = peristiwa terstruktur, bukan default diam-diam).
+- `CAPITAL_CONTRIBUTION`: Dr Aset Tetap / Cr Modal Saham/penyetaraan modal (300003 atau akun ekuitas terpetakan kategori) sebesar harga pasar terstruktur; selisih nilai disepakati vs pasar TIDAK dikarang sistem — dicatat dokumen setoran (akta/berita acara) sebagai sumber.
+- `EXCHANGE`: aset baru Dr sebesar dasar Putusan 2; aset diserahkan dihentikan per F-116-V (nilai tercatat jurnal POSTED); boot kas dibayar Dr selisih / diterima Cr; selisih = laba/rugi pelepasan jalur gainLoss existing F-116-V, DILARANG ditanam ke harga perolehan aset baru melebihi dasar Putusan 2.
+
+Harga perolehan aset (basis penyusutan komersial) = jumlah lawan di atas sen persis Decimal; biaya langsung perolehan (angkut/pasang/uji) yang memenuhi PSAK 16 ditambah ke Dr aset dari dokumen sumbernya sendiri, bukan ditebak persen.
+
+### Putusan 2 — Dasar fiskal per jenis (Pasal 10); fiskal tidak meniru lawan komersial membabi buta
+
+- `CASH_PURCHASE`/`CREDIT_PURCHASE` tanpa hubungan istimewa: dasar fiskal = harga sesungguhnya (Pasal 10(1)); ada hubungan istimewa terstruktur (penanda pihak terkait + dasar harga pasar penilai bernama) → dasar fiskal = harga pasar, selisih komersial-vs-fiskal tampil di daftar selisih, BUKAN jurnal kedua.
+- `EXCHANGE`: dasar fiskal aset diterima = harga pasar aset diterima/diserahkan per Pasal 10(2) dari penilaian terstruktur; tanpa penilaian terstruktur dapat diverifikasi → peristiwa fiskal DITOLAK berisik (komersial boleh nilai tercatat aset diserahkan per PSAK 16 tanpa-substansi, fiskal tetap menuntut pasar — selisih tampil, jangan dipaksa sama).
+- `GRANT_DONATION`: dasar fiskal = nilai sisa buku fiskal pemberi bila hibah memenuhi pengecualian Pasal 4(3)(a) (fakta terstruktur: status pemberi + dokumen hibah), selain itu harga pasar (Pasal 10(4)). Penyusutan fiskal atas harta hibah yang DIKECUALIKAN: TIDAK dapat dikurangkan — aset itu ditandai fiskal-tidak-dapat-disusutkan terstruktur sehingga daftar penyusutan fiskal melewatinya berlabel, bukan menyusutkan diam-diam lalu dikoreksi manual di SPT. Status pengecualian ragu = `BUTUH-VONIS-AKUNTAN` per kasus, jangan dipilih operator bebas.
+- `CAPITAL_CONTRIBUTION`: dasar fiskal = harga pasar Pasal 10(6) snapshot peristiwa; bukan objek PPh penerima sebagai pengganti saham (Pasal 4(3) dirujuk label saja) — sistem hanya membekukan dasar, tidak menerbitkan dokumen pajak apa pun.
+- Semua dasar fiskal dibekukan sebagai snapshot peristiwa perolehan per (aset) pola saldo fiskal F-109-V; edit master/penilaian sesudahnya tidak menghitung ulang perolehan lampau. Kelompok fiskal + saat mulai tetap F-062-V/F-107-V dari bulan perolehan.
+
+### Putusan 3 — PPN dan dokumen sumber: tidak dikarang dari jalur aset
+
+- Perolehan aset BUKAN peristiwa terbit PPN Keluaran. PPN Masukan hanya dari faktur pajak masukan tertaut dokumen pembelian (jalur TaxInvoice/VendorBill existing F-001/F-002); `CREDIT_PURCHASE` tanpa faktur pajak tercatat = PPN Masukan nol, ditampilkan belum-ada-faktur, DILARANG mengkredit dari nominal purchaseCost x tarif.
+- Hibah/setoran modal/tukar-menukar sisi PPN (penyerahan BKP Pasal 16D pemberi, DPP nilai lain, faktur 09) = kewajiban PEMBERI; ISF sebagai penerima hanya mencatat faktur pajak diterima bila ada. Perlakuan PPN atas tukar tambah kendaraan/aset ISF sendiri yang diserahkan mengikuti F-116-V Putusan 2 bila EXCHANGE melepas aset terdaftar — jangan jalur PPN kedua di peristiwa perolehan.
+- Dokumen sumber wajib per peristiwa: nomor/tanggal dokumen (faktur vendor/akta hibah/berita acara setoran/berita acara tukar), pihak lawan terstruktur, penilai bernama bila harga pasar dipakai. Tanpa dokumen sumber, perolehan non-kas DITOLAK berisik; `CASH_PURCHASE` existing tidak diperketat surut.
+
+### Putusan 4 — Pembekuan, koreksi, status
+
+- Empat status tetap terpisah: dokumen perolehan, pembayaran (hanya CREDIT/CASH), pajak (faktur masukan tertaut), posting jurnal. Jenis perolehan adalah fakta dokumen, bukan status pembayaran.
+- Koreksi jenis/nilai perolehan terposting = reversal jurnal + dokumen koreksi di periode terbuka (`assertPeriodOpen` dalam tx); dilarang edit `purchaseCost`/jenis diam-diam sesudah jurnal lahir. Replay dokumen sumber sama = satu aset/jurnal (idempoten existing).
+- Aset `purchaseCost = 0` warisan tetap boleh tanpa jurnal (existing); mengisi nilai belakangan = peristiwa perolehan baru terbekukan, bukan edit kolom.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge PR vonis ini + #632/#623/#620 bila gate hijau head persis, lalu putus prioritas inti F-120 sesudah inti aset berjalan.
+- BOT 3 (inti terpisah, klaim schema di board dulu, koordinasi BOT 4 sebelum migrasi): kolom jenis perolehan + dokumen sumber + dasar fiskal snapshot di peristiwa perolehan; resolver lawan kredit per jenis dari mapping fail-closed (usulan kode akun pendapatan hibah/ekuitas ke BOT 4 sebelum migrasi — TIDAK ada akun baru divonis di sini selain rujukan 300003 existing); gerbang pihak-terkait/penilaian pasar; penanda fiskal-tidak-dapat-disusutkan untuk hibah dikecualikan; pembayaran CREDIT lewat jalur utang existing tanpa jurnal perolehan kedua.
+- BOT 2: tampilkan jenis perolehan + dokumen sumber + dasar fiskal snapshot apa adanya; UI tidak memilih dasar fiskal dan tidak menghitung harga pasar.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E120-1 perolehan kredit menjurnal Cr Kas/Bank atau jurnal kedua saat bayar = MERAH; E120-2 jenis kosong/teks bebas pada perolehan berharga diterima = MERAH; E120-3 hibah dikecualikan masuk daftar penyusutan fiskal terkurangkan = MERAH; E120-4 EXCHANGE tanpa penilaian pasar terstruktur mengubah dasar fiskal = MERAH; E120-5 setoran modal dikredit ke pendapatan/kas bukan ekuitas terpetakan = MERAH; E120-6 PPN Masukan lahir dari purchaseCost tanpa faktur pajak tertaut = MERAH; E120-7 akun lawan jenis kosong -> perolehan ditolak berisik, nol aset/jurnal posted; E120-8 replay dokumen sumber sama = aset/jurnal ganda MERAH; E120-9 edit purchaseCost/jenis terposting tanpa reversal mengubah jurnal lampau = MERAH; E120-10 hubungan istimewa tanpa dasar pasar bernama memakai harga transaksi sebagai dasar fiskal diam-diam = MERAH.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 10/11 + PMK 72/2023 + PMK-90/PMK.03/2020 (sumber resmi DJP di atas, akses 2026-10-23) sisi fiskal dan PSAK 16 sisi komersial (rujukan standar, bukan dasar fiskal). BUKAN penetapan DJP, bukan penilaian harga pasar sah, bukan klaim SPT Tahunan — harga pasar final dan status pengecualian hibah per kasus tetap dokumen penilai/dasar nyata, sengketa = `BUTUH-VONIS-AKUNTAN`.
+
+ID vonis ini **F-2026-10-23-120-V** (tertinggi terverifikasi run ini di origin/main 7bf0933a + PR terbuka: 119-V di PR #632, 118-V merged #627, 120 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini -> BOT 3 inti perolehan non-kas -> BOT 2 -> BOT 6 E120-1..10.
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-121-V: inti posting jurnal penutup tahunan (YearEndClosing) — buka gerbang inti F-2026-10-20-86
+
+Status: PUTUSAN BOT 4 (kartu t_8f0fd77f, siklus standby 11:30; branch prior hermes/bot4-f121-yearend kosong tanpa commit — dikonfirmasi `git log origin/main..branch` nol). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Vonis ini MEMUTUS detail inti yang F-2026-10-20-86 (vonis Salsa 2026-10-20 20:10, board) sengaja tunda-teknis: kolom setting + aksi posting + approval. Pratinjau read-only F-86 sudah merged (PR #250): builder `src/lib/reports/year-end-closing.ts` + loader `year-end-closing-data.ts` + tes. Inti posting BELUM ada.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 11:30, origin/main 39df4118)
+
+- Kanban BOT 4: hanya kartu ini. Nol kartu peminta vonis baru.
+- PR vonis BOT 4 terbuka semua ter-gate merge BOT 1 (bukan menunggu vonis): #635 F-120-V BEHIND (merged selama snapshot jadi 39df4118), #632 F-119-V DIRTY, #623 F-116-V DIRTY, #620/#616/#613/#611/#608/#601/#593/#590/#588/#586/#584/#581/#579/#574-docs/#571/#552/#548/#544 semua DIRTY/BEHIND — isi nol menunggu BOT 4. Peminta BOT 3 t_99cb19e4 ter-gate merge BOT 1; t_af177f74 prasyarat BOT 1. Maka riset berikutnya = butir terbuka eksplisit F-86: inti posting ditunda-teknis menunggu vonis lengkap — vonis F-86 sendiri sudah terbit, yang belum diputus = detail eksekusi inti (urutan kunci, status sesudah posting, koreksi, tahun fiskal tak-kalendar). Vonis ini menutupnya sebagai F-121-V supaya BOT 1 bisa buka inti tanpa vonis lanjutan.
+
+### Bukti repo terverifikasi run ini (origin/main 39df4118)
+
+- Pratinjau merged: `buildYearEndClosingPreview` per (akun P&L REVENUE/EXPENSE, profitCenterId), hanya POSTED, kontra terbalik otomatis, lawan laba ditahan per profitCenterId, `balanced` hanya debet=kredit persis sen, `alreadyClosed` dari cek `referenceType="YearEndClosing" + referenceId=tahun + POSTED`. Loader komentar `ponytail`: `retainedEarningsAccountId: null` selalu — kolom setting belum ada.
+- `SystemSetting` (schema.prisma:105+) punya pola mapping akun nullable `salesReceivableAccountId` dll (baris 191-227) + `fiscalYearStartMonth Int @default(1)` (baris 122) + `periodLockDate` — kolom `retainedEarningsAccountId` BELUM ada (grep=0).
+- CoA: `300002 Laba Ditahan EQTY` di bawah `3000 Modal` (base-data.ts) existing; `isRetainedEarningsAccount(name)` regex nama di equity-changes.ts:62. Laporan perubahan ekuitas/laba ditahan menampilkan "belum ditutup" + baris "Saldo Akhir Bila Laba Ditutup" — posting inti mengubah baris itu jadi nol-selisih nyata.
+- Kunci periode: `assertPeriodOpen(date, tx)` locking-read `system_settings FOR UPDATE` (period-lock.service.ts); tutup/buka periode di period-close.actions.ts protokol kunci sama (R-09, tanpa siklus deadlock). Jurnal penutup WAJIB ikut protokol sama.
+- Approval: `approval-workflow.service.ts` + `requestApprovalIfConfigured` existing (pola Expense/F-87 dirujuk vonis F-86 butir 6).
+- Unik DB `(referenceType, referenceId)` jurnal (dirujuk vonis F-86 butir 3) = anti-dobel fisik.
+
+### Putusan 1 — Kolom setting: satu akun laba ditahan, fail-closed, validasi tipe
+
+- Migrasi inti menambah `SystemSetting.retainedEarningsAccountId Int?` nullable (pola baris 191-227, `@map("retained_earnings_account_id")`), TANPA akun CoA baru dan TANPA default tebakan di kode/migrasi. Seed/install boleh mengarahkan ke akun existing bernama laba ditahan HANYA lewat mekanisme mapping existing yang terlihat operator di pengaturan — bukan hardcode `300002` di service.
+- Resolver posting: kolom kosong / akun nonaktif / akun terhapus = posting DITOLAK berisik ("Akun laba ditahan belum dipetakan di Pengaturan") nol jurnal. Akun terpilih WAJIB `type=EQUITY` DAN lolos `isRetainedEarningsAccount(name)` ATAU ditandai eksplisit operator sebagai akun laba ditahan di pengaturan; akun EQTY lain (Modal Saham 300003, Equitas Saldo Awal 300001) DITOLAK sebagai tujuan penutup — menutup laba ke modal disetor = salah saji ekuitas. Ganti akun setting sesudah ada jurnal penutup POSTED: tahun tertutup TIDAK berubah (jurnal snapshot akun tujuan saat posting); pratinjau tahun belum tertutup memakai setting berjalan.
+
+### Putusan 2 — Aksi posting: satu tx, urutan kunci tetap, snapshot dari pratinjau
+
+- Posting = server action/service tipis `postYearEndClosing(fiscalYear)` dalam SATU tx: (1) `assertApproved` gerbang Putusan 4; (2) kunci baris `system_settings FOR UPDATE` lalu `assertPeriodOpen(tanggalPenutup, tx)` — tanggal penutup = akhir tahun fiskal dari `fiscalYearPeriod(fiscalYear, fiscalYearStartMonth)` (bukan 31 Des kalender bila startMonth!=1); (3) cek anti-dobel `findFirst(referenceType="YearEndClosing", referenceId=fiscalYear, status=POSTED, deletedAt=null)` di dalam tx — ada = tolak berisik sebut tahun; (4) hitung saldo dari jurnal POSTED tahun fiskal itu memakai builder pratinjau yang SAMA (satu sumber rumus; service dilarang hitung ulang rumus sendiri); (5) `balanced=false` atau selisih != 0 sen = tolak, nol jurnal; (6) tulis SATU Jurnal POSTED: baris penutup per (akun P&L, profitCenterId) membalik saldo penuh + baris lawan per profitCenterId ke akun Putusan 1, `referenceType="YearEndClosing"`, `referenceId=fiscalYear`, tanggal = tanggal penutup, idempotency key scope `year-end-closing:<fiscalYear>`.
+- Baris bersaldo nol tidak ditulis. Akun P&L yang muncul hanya sesudah penutup (jurnal koreksi tahun sama di periode masih terbuka sebelum kunci melewati tanggal penutup) TIDAK melahirkan jurnal susulan — vonis F-86 butir 3 ditegaskan: satu tahun = satu jurnal penutup aktif; koreksi hanya lewat Putusan 3.
+- Empat status tetap terpisah: status jurnal penutup (POSTED) tidak mengubah status dokumen sumber apa pun; tahun "tertutup" diturunkan dari keberadaan jurnal penutup POSTED + periodLockDate, bukan flag baru di setting.
+
+### Putusan 3 — Koreksi & buka kembali: reversal penuh, bukan edit, bukan hapus
+
+- Jurnal penutup terposting BEKU: koreksi hanya reversal jurnal penutup (jurnal lawan REVERSED pola hook existing) di periode terbuka (`assertPeriodOpen` tanggal penutup dalam tx sama), sesudah itu tahun kembali "belum ditutup" dan posting ulang dibolehkan. Edit baris jurnal penutup / hapus / ubah referenceId = DILARANG di inti.
+- Buka kunci periode (periodLockDate dimundurkan melewati tanggal penutup) TIDAK otomatis membatalkan jurnal penutup: laporan tetap membaca jurnal POSTED apa adanya; reversal tetap aksi eksplisit tercatat. Selisih sesudah buka-kunci tampil sebagai fakta (akun P&L tahun tertutup bersaldo lagi di pratinjau dengan `alreadyClosed=true`) dan pratinjau WAJIB menandainya, bukan menyembunyikan.
+- Tahun fiskal dengan jurnal DRAFT/REVERSED penutup saja = belum tertutup; cek anti-dobel hanya menghitung POSTED non-REVERSED (selaras loader existing).
+
+### Putusan 4 — Approval & izin: gerbang existing, tanpa key baru tahap ini
+
+- `requestApprovalIfConfigured("YearEndClosing", fiscalYear)` saat pengajuan + `assertApproved` SEBELUM tx posting (pola vonis F-86 butir 6); tanpa workflow terkonfigurasi = no-op mundur-kompatibel; pengaju tidak menyetujui sendiri (mesin approval existing). Aksi posting memakai izin pengaturan existing yang sama dengan tutup periode (`manage_settings`, period-close.actions.ts) — pemisahan verba posting-vs-kunci ditunda sampai ada peran nyata berbeda; nyatakan di PR inti bahwa pemegang `manage_settings` non-admin mendapat aksi posting juga.
+- Pajak: jurnal penutup murni reklasifikasi ekuitas internal — TANPA PPN/PPh/faktur/bupot; laba fiskal SPT Tahunan TIDAK diturunkan dari jurnal penutup ini dan koreksi fiskal akhir tahun tetap jalur terpisah. Menampilkan laba ditahan hasil penutup sebagai "laba fiskal" = DILARANG di UI/laporan.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge PR vonis ini; putus buka-inti F-121 (migrasi 1 kolom + aksi posting) — prasyarat nol PR lain; inti BUKAN membuka jurnal baru selain YearEndClosing.
+- BOT 3 (inti terpisah, klaim `prisma/schema.prisma` di board dulu, koordinasi BOT 4): (1) migrasi `retained_earnings_account_id` nullable + resolver fail-closed Putusan 1; (2) service posting Putusan 2 memakai builder pratinjau existing persis (impor, bukan salin rumus), ganti komentar `ponytail` loader jadi baca kolom nyata; (3) reversal Putusan 3 lewat hook reversal existing; (4) tes: posting seimbang sen, per-profitCenter termasuk null, tahun fiskal startMonth!=1.
+- BOT 2: tombol posting dari pratinjau existing, nonaktif bila `balanced=false`/`alreadyClosed=true`/belum dipetakan, tampilkan alasan backend apa adanya; UI tidak hitung saldo/selisih.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E121-1 setting kosong/bukan EQTY-laba-ditahan -> posting ditolak, nol jurnal; E121-2 posting kedua tahun sama ditolak di dalam tx (bukan hanya P2002 mentah); E121-3 selisih != 0 sen -> nol jurnal; E121-4 dua pusat laba + null -> tiga baris lawan terpisah, lintas-pusat digabung = MERAH; E121-5 tanggal penutup startMonth!=1 bukan 31 Des kalender + posting ke periode terkunci ditolak; E121-6 edit/hapus jurnal penutup tanpa reversal mengubah laba ditahan = MERAH; E121-7 pengaju menyetujui sendiri / assertApproved dicabut -> posting lolos = MERAH; E121-8 sesudah posting: pratinjau tahun itu saldo P&L nol + laporan laba ditahan "belum ditutup" nol, reversal mengembalikan keduanya; E121-9 ganti setting sesudah posting mengubah jurnal tahun tertutup = MERAH; E121-10 jurnal DRAFT/REVERSED ikut saldo posting = MERAH.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar PSAK 1/PSAK 25 sebagai rujukan standar penyajian ekuitas (bukan dasar fiskal) + vonis F-2026-10-20-86. BUKAN klaim laporan keuangan/SPT Tahunan sah — jurnal penutup tidak menggantikan koreksi fiskal, daftar penyusutan, atau SPT; angka fiskal tetap jalurnya sendiri.
+
+ID vonis ini **F-2026-10-23-121-V** (tertinggi terverifikasi run ini di origin/main 39df4118: F-2026-10-23-120-V merged #635; 119-V PR #632, 118-V merged; 121 belum terpakai di main maupun PR terbuka yang dicek; branch prior hermes/bot4-f121-yearend kosong). Pemilik berikutnya: BOT 1 merge + buka inti -> BOT 3 migrasi+posting -> BOT 2 -> BOT 6 E121-1..10.
