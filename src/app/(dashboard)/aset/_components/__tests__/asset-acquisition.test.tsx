@@ -15,6 +15,16 @@ vi.mock("next/navigation", async () => (await import("@/components/forms/__tests
 
 const D = (v: string) => new Prisma.Decimal(v)
 
+function expectAcquisitionRender(node: React.ReactElement, expected: string[]) {
+  withContainer((container) => {
+    const root = mountInto(container, node)
+    for (const text of expected) {
+      expect(container.textContent).toContain(text)
+    }
+    unmount(root, container)
+  })
+}
+
 describe("AssetAcquisitionTypeBadge — jenis apa adanya", () => {
   it("jenis terdaftar berlabel resmi tanpa nilai mentah", () => {
     withContainer((container) => {
@@ -29,126 +39,96 @@ describe("AssetAcquisitionTypeBadge — jenis apa adanya", () => {
   })
 
   it("jenis tak terdaftar = temuan + nilai mentah, bukan label sah", () => {
-    withContainer((container) => {
-      const root = mountInto(
-        container,
-        <AssetAcquisitionTypeBadge type="tunai" />,
-      )
-      expect(container.textContent).toContain("Jenis perolehan tidak terdaftar")
-      expect(container.textContent).toContain("Nilai tersimpan: tunai")
-      unmount(root, container)
-    })
+    expectAcquisitionRender(<AssetAcquisitionTypeBadge type="tunai" />, [
+      "Jenis perolehan tidak terdaftar",
+      "Nilai tersimpan: tunai",
+    ])
   })
 })
 
 describe("AssetAcquisitionSummary — snapshot builder apa adanya", () => {
   it("resolved kredit: lawan utang + dokumen + dasar fiskal tampil", () => {
-    withContainer((container) => {
-      const root = mountInto(
-        container,
-        <AssetAcquisitionSummary
-          result={{
-            status: "resolved",
-            acquisitionType: "CREDIT_PURCHASE",
-            counterpartKind: "accounts-payable",
-            commercialBasis: D("50000000"),
-            fiscalBasis: D("50000000"),
-            fiscalBasisSource: "actual-price",
-            fiscalDepreciable: true,
-            inputVatAmount: D("0"),
-            vatEvidence: "none",
-          }}
-          sourceDocumentRef="INV-VENDOR-001"
-        />,
-      )
-      expect(container.textContent).toContain("Pembelian Kredit (Utang Usaha)")
-      expect(container.textContent).toContain("INV-VENDOR-001")
-      expect(container.textContent).toContain("Utang Usaha")
-      expect(container.textContent).toContain("Harga Sesungguhnya")
-      expect(container.textContent).toContain("Dapat disusutkan secara fiskal")
-      expect(container.textContent).toContain("Belum ada faktur pajak tertaut")
-      unmount(root, container)
-    })
+    expectAcquisitionRender(
+      <AssetAcquisitionSummary
+        result={{
+          status: "resolved",
+          acquisitionType: "CREDIT_PURCHASE",
+          counterpartKind: "accounts-payable",
+          commercialBasis: D("50000000"),
+          fiscalBasis: D("50000000"),
+          fiscalBasisSource: "actual-price",
+          fiscalDepreciable: true,
+          inputVatAmount: D("0"),
+          vatEvidence: "none",
+        }}
+        sourceDocumentRef="INV-VENDOR-001"
+      />,
+      [
+        "Pembelian Kredit (Utang Usaha)",
+        "INV-VENDOR-001",
+        "Utang Usaha",
+        "Harga Sesungguhnya",
+        "Dapat disusutkan secara fiskal",
+        "Belum ada faktur pajak tertaut",
+      ],
+    )
   })
 
   it("hibah terkecuali: dasar buku pemberi + fiskal tidak disusutkan", () => {
-    withContainer((container) => {
-      const root = mountInto(
-        container,
-        <AssetAcquisitionSummary
-          result={{
-            status: "resolved",
-            acquisitionType: "GRANT_DONATION",
-            counterpartKind: "grant-income",
-            commercialBasis: D("80000000"),
-            fiscalBasis: D("30000000"),
-            fiscalBasisSource: "grantor-fiscal-book-value",
-            fiscalDepreciable: false,
-            inputVatAmount: D("0"),
-            vatEvidence: "none",
-          }}
-          sourceDocumentRef="AKTA-HIBAH-01"
-        />,
-      )
-      expect(container.textContent).toContain("Hibah / Sumbangan")
-      expect(container.textContent).toContain("Nilai Sisa Buku Fiskal Pemberi")
-      expect(container.textContent).toContain(
+    expectAcquisitionRender(
+      <AssetAcquisitionSummary
+        result={{
+          status: "resolved",
+          acquisitionType: "GRANT_DONATION",
+          counterpartKind: "grant-income",
+          commercialBasis: D("80000000"),
+          fiscalBasis: D("30000000"),
+          fiscalBasisSource: "grantor-fiscal-book-value",
+          fiscalDepreciable: false,
+          inputVatAmount: D("0"),
+          vatEvidence: "none",
+        }}
+        sourceDocumentRef="AKTA-HIBAH-01"
+      />,
+      [
+        "Hibah / Sumbangan",
+        "Nilai Sisa Buku Fiskal Pemberi",
         "Tidak dapat disusutkan secara fiskal",
-      )
-      unmount(root, container)
-    })
+      ],
+    )
   })
 
   it("reject bernama tampil; no-journal warisan tampil eksplisit", () => {
-    withContainer((container) => {
-      const root = mountInto(
-        container,
-        <AssetAcquisitionSummary
-          result={{ status: "reject", reason: "missing-source-document" }}
-        />,
-      )
-      expect(container.textContent).toContain(
-        "Dokumen sumber perolehan belum tercatat",
-      )
-      unmount(root, container)
-    })
-    withContainer((container) => {
-      const root = mountInto(
-        container,
-        <AssetAcquisitionSummary
-          result={{ status: "no-journal", reason: "zero-cost-legacy" }}
-        />,
-      )
-      expect(container.textContent).toContain(
-        "Aset warisan tanpa harga perolehan",
-      )
-      unmount(root, container)
-    })
+    expectAcquisitionRender(
+      <AssetAcquisitionSummary
+        result={{ status: "reject", reason: "missing-source-document" }}
+      />,
+      ["Dokumen sumber perolehan belum tercatat"],
+    )
+    expectAcquisitionRender(
+      <AssetAcquisitionSummary
+        result={{ status: "no-journal", reason: "zero-cost-legacy" }}
+      />,
+      ["Aset warisan tanpa harga perolehan"],
+    )
   })
 
   it("dokumen sumber kosong = status eksplisit, bukan nilai kosong", () => {
-    withContainer((container) => {
-      const root = mountInto(
-        container,
-        <AssetAcquisitionSummary
-          result={{
-            status: "resolved",
-            acquisitionType: "CASH_PURCHASE",
-            counterpartKind: "cash-bank",
-            commercialBasis: D("1000000"),
-            fiscalBasis: D("1000000"),
-            fiscalBasisSource: "actual-price",
-            fiscalDepreciable: true,
-            inputVatAmount: D("110000"),
-            vatEvidence: "linked-invoice",
-          }}
-        />,
-      )
-      expect(container.textContent).toContain(
-        "Belum ada dokumen sumber tercatat",
-      )
-      expect(container.textContent).toContain("Faktur pajak masukan tertaut")
-      unmount(root, container)
-    })
+    expectAcquisitionRender(
+      <AssetAcquisitionSummary
+        result={{
+          status: "resolved",
+          acquisitionType: "CASH_PURCHASE",
+          counterpartKind: "cash-bank",
+          commercialBasis: D("1000000"),
+          fiscalBasis: D("1000000"),
+          fiscalBasisSource: "actual-price",
+          fiscalDepreciable: true,
+          inputVatAmount: D("110000"),
+          vatEvidence: "linked-invoice",
+        }}
+      />,
+      ["Belum ada dokumen sumber tercatat", "Faktur pajak masukan tertaut"],
+    )
   })
 })
