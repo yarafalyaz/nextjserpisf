@@ -19,6 +19,9 @@ export async function loadSettingsForEdit() {
     attendanceRadiusKm: Number(settings.attendanceRadiusKm),
     latePenaltyPerMinute: Number(settings.latePenaltyPerMinute),
     periodLockDate: settings.periodLockDate ? settings.periodLockDate.toISOString().split("T")[0] : null,
+    assetFiscalRevaluationFinalTaxRatePercent: settings.assetFiscalRevaluationFinalTaxRatePercent
+      ? Number(settings.assetFiscalRevaluationFinalTaxRatePercent)
+      : null,
   }
 
   return { settings: serializedSettings, accounts }

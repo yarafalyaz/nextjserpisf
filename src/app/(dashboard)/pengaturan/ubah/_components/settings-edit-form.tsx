@@ -34,6 +34,8 @@ interface SettingsEditFormProps {
 }
 
 interface SettingsFormValues {
+  assetFiscalRevaluationFinalTaxRatePercent?: number | null
+  assetFiscalRevaluationTaxPayableAccountId?: number | null
   assetPrefix?: string | null
   attendanceRadiusKm?: number | null
   cashBankAccountId?: number | null
@@ -283,6 +285,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [depreciationExpense, setDepreciationExpense] = useState(settings.depreciationExpenseAccountId ? String(settings.depreciationExpenseAccountId) : "")
   const [accumulatedDepreciation, setAccumulatedDepreciation] = useState(settings.accumulatedDepreciationAccountId ? String(settings.accumulatedDepreciationAccountId) : "")
   const [retainedEarnings, setRetainedEarnings] = useState(settings.retainedEarningsAccountId ? String(settings.retainedEarningsAccountId) : "")
+  const [fiscalRevalTaxPayable, setFiscalRevalTaxPayable] = useState(settings.assetFiscalRevaluationTaxPayableAccountId ? String(settings.assetFiscalRevaluationTaxPayableAccountId) : "")
   const [accountOptions, setAccountOptions] = useState(accounts)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const signatureInputRef = useRef<HTMLInputElement>(null)
@@ -368,6 +371,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       items: [
         { name: "depreciationExpenseAccountId", label: "Beban Penyusutan", value: depreciationExpense, onChange: setDepreciationExpense },
         { name: "accumulatedDepreciationAccountId", label: "Akumulasi Penyusutan", value: accumulatedDepreciation, onChange: setAccumulatedDepreciation },
+        { name: "assetFiscalRevaluationTaxPayableAccountId", label: "Utang PPh Final Revaluasi Fiskal", value: fiscalRevalTaxPayable, onChange: setFiscalRevalTaxPayable },
       ],
     },
     {
@@ -1055,6 +1059,28 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <input type="hidden" name="payrollJournalTypeId" value={payrollJournalType} />
             <input type="hidden" name="depreciationExpenseAccountId" value={depreciationExpense} />
             <input type="hidden" name="accumulatedDepreciationAccountId" value={accumulatedDepreciation} />
+            <input type="hidden" name="assetFiscalRevaluationTaxPayableAccountId" value={fiscalRevalTaxPayable} />
+            <div className="mb-4 rounded-xl border border-default bg-surface-secondary/50 p-4">
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="assetFiscalRevaluationFinalTaxRatePercent">Tarif PPh Final Revaluasi Fiskal (%)</Label>
+                <Input
+                  id="assetFiscalRevaluationFinalTaxRatePercent"
+                  name="assetFiscalRevaluationFinalTaxRatePercent"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  placeholder="Belum diatur"
+                  defaultValue={settings.assetFiscalRevaluationFinalTaxRatePercent ?? ""}
+                  className="max-w-xs"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Tarif master revaluasi fiskal berpersetujuan DJP (F-111). Kosong = peristiwa revaluasi fiskal
+                  ditolak berisik oleh server. Tarif dibekukan sebagai snapshot pada tiap peristiwa; mengubah
+                  isian ini tidak mengubah peristiwa lama.
+                </p>
+              </div>
+            </div>
             <input type="hidden" name="retainedEarningsAccountId" value={retainedEarnings} />
             <div className="mb-4 rounded-xl border border-default bg-surface-secondary/50 p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
