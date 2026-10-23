@@ -15,14 +15,18 @@ import { loadDeferredTaxValueEventSource } from "@/lib/reports/deferred-tax-valu
 export const metadata: Metadata = { title: "Pajak Tangguhan" }
 
 /**
- * F-2026-10-23-112 tahap stok: laporan Perbedaan Temporer Pajak Tangguhan.
+ * F-2026-10-23-112 tahap stok + konvergensi F-2026-10-23-124-V: laporan
+ * Perbedaan Temporer Pajak Tangguhan.
  *
- * Data dari loader `loadDeferredTax` (PR #628): tabel, totals, verdict, dan
- * notice tampil apa adanya lewat `DeferredTaxCard` — halaman ini tidak
- * menghitung ulang dan tidak menyediakan tombol jurnal. Tarif badan belum
- * punya master bertanggal efektif (F-112-V Putusan 3), jadi dipasok lewat
- * path `tarif/<persen>`; kosong/tidak sah diteruskan apa adanya dan builder
- * menolak menghitung (fail-closed). `asOf` = akhir tahun pajak berjalan.
+ * Data dari loader `loadDeferredTax`: tabel, totals, verdict, dan notice
+ * tampil apa adanya lewat `DeferredTaxCard` — halaman ini tidak menghitung
+ * ulang dan tidak menyediakan tombol jurnal. Tarif badan belum punya master
+ * bertanggal efektif, jadi tarif dari path `tarif/<persen>` adalah pasokan
+ * operator: diteruskan apa adanya (`loadDeferredTax` menandainya
+ * `rateSource: "operator"`) dan caption menyebutnya verbatim dari
+ * `report.rateSourceLabel` — bukan tarif resmi/master. Kosong/tidak sah
+ * diteruskan apa adanya dan builder menolak menghitung (fail-closed).
+ * `asOf` = akhir tahun pajak berjalan.
  *
  * Sumber KEDUA F-2026-10-23-125-V (`loadDeferredTaxValueEventSource`):
  * peristiwa revaluasi/impairment belum terbekukan (inti F-111 belum ada),
@@ -55,7 +59,13 @@ export default async function DeferredTaxPage({
       sheetTitle="Pajak Tangguhan"
       subtitle="Perbedaan Temporer Pajak Tangguhan (Tahap Stok)"
       periodLabel={periodLabel}
-      periodCaption={`${periodLabel} · tarif badan ${report.taxRatePercent === null ? "belum dipasok" : `${report.taxRatePercent}%`}`}
+      periodCaption={`${periodLabel} · tarif badan ${
+        report.taxRatePercent === null
+          ? "belum dipasok"
+          : report.rateSourceLabel
+            ? `${report.taxRatePercent}% (${report.rateSourceLabel})`
+            : `${report.taxRatePercent}%`
+      } · ${report.totals.fiscalNotFrozen} fiskal belum terbekukan`}
       printedBy={user.name ?? user.email}
       wide
       filter={
@@ -65,7 +75,7 @@ export default async function DeferredTaxPage({
           defaultStartDate=""
           numberField={{
             param: "tarif",
-            label: "Tarif Pajak Badan (%)",
+            label: "Tarif Pajak Badan (%) — pasokan operator",
             value: taxRatePercent === null ? "" : String(taxRatePercent),
             min: 0,
             max: 100,

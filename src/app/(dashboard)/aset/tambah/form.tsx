@@ -29,6 +29,9 @@ interface AssetFormProps {
     purchasePrice?: number | null
     residualValue?: number | null
     depreciationMethod?: string | null
+    totalEstimatedUnits?: number | null
+    productionUnitName?: string | null
+    usefulLifeMonths?: number | null
     location?: string | null
     status?: string | null
     description?: string | null
@@ -48,6 +51,7 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
   const [selectedModelId, setSelectedModelId] = useState<string | null>(
     asset?.assetBrandModelId ? String(asset.assetBrandModelId) : null,
   )
+  const [selectedMethod, setSelectedMethod] = useState<string | null>(asset?.depreciationMethod || "straight_line")
   const modelOptions =
     brands.find((b) => String(b.id) === selectedBrandId)?.models.map((m) => ({
       value: String(m.id),
@@ -147,7 +151,8 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
           <FormSelect
             id="depreciationMethod"
             name="depreciationMethod"
-            defaultValue={asset?.depreciationMethod || "straight_line"}
+            value={selectedMethod}
+            onValueChange={setSelectedMethod}
             placeholder="Garis Lurus"
             options={[
               { value: "straight_line", label: "Garis Lurus" },
@@ -157,6 +162,22 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
             ]}
           />
         </div>
+        {selectedMethod === "units_of_production" && (<>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="totalEstimatedUnits">Total Estimasi Unit (terbekukan)</Label>
+            <Input id="totalEstimatedUnits" name="totalEstimatedUnits" type="number" step="any" min={0} placeholder="0" defaultValue={asset?.totalEstimatedUnits ?? ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="productionUnitName">Satuan Produksi</Label>
+            <Input id="productionUnitName" name="productionUnitName" placeholder="cth. unit, km, jam" defaultValue={asset?.productionUnitName || ""} />
+          </div>
+        </>)}
+        {selectedMethod === "sum_of_years_digits" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="usefulLifeMonths">Masa Manfaat (bulan, terbekukan)</Label>
+            <Input id="usefulLifeMonths" name="usefulLifeMonths" type="number" step={1} min={1} placeholder="cth. 60" defaultValue={asset?.usefulLifeMonths ?? ""} />
+          </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="location">Lokasi</Label>
           <Input id="location" name="location" placeholder="Lokasi aset" defaultValue={asset?.location || ""} />

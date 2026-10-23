@@ -10,7 +10,6 @@ import {
   VALUE_EVENT_RECOGNITION_UNTESTED_LABEL,
   VALUE_EVENT_SOURCE_UNAVAILABLE_LABEL,
 } from "@/lib/reports/deferred-tax-value-events"
-
 import { valueEventFixture as event } from "./deferred-tax-value-event-fixtures"
 
 const AS_OF = new Date(Date.UTC(2026, 11, 31))
@@ -115,6 +114,29 @@ describe("sumber revaluasi/impairment pajak tangguhan F-125-V", () => {
     expect(facility.totals.unavailable).toBe(1)
     expect(facility.totals.taxableDifference).toBe(0)
     expect(texts(facility)).toContain(VALUE_EVENT_FACILITY_LABEL)
+  })
+
+  it("E125-7b/F1: label pengakuan per-peristiwa — impairment tanpa dasar laba sesudah peristiwa berdasar-laba tetap belum-teruji", () => {
+    const result = buildDeferredTaxValueEventSource({
+      events: [
+        event({ profitBasisFrozen: true }),
+        event({
+          kind: "IMPAIRMENT",
+          effectiveDate: new Date(Date.UTC(2026, 6, 31)),
+          carryingBefore: 150_000_000,
+          carryingAfter: 70_000_000,
+          depreciationTemporaryDifference: 100_000_000,
+          profitBasisFrozen: false,
+        }),
+      ],
+      taxRatePercent: 22,
+      asOf: AS_OF,
+    })
+    // Plafon: kena-pajak pernah lahir 50jt + selisih penyusutan 100jt; stok akhir
+    // 50jt - 80jt = -30jt dapat-dikurangkan, DTA 6,6jt — TANPA dasar laba peristiwa ini.
+    expect(result.totals.deductibleDifference).toBe(30_000_000)
+    expect(result.totals.deferredTaxAssetIndication).toBe(6_600_000)
+    expect(result.recognitionLabel).toBe(VALUE_EVENT_RECOGNITION_UNTESTED_LABEL)
   })
 
   it("E125-6: pembalikan melebihi kumulatif penurunan aset yang sama ditolak", () => {
