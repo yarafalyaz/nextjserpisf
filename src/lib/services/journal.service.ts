@@ -1,6 +1,8 @@
 
 import { PrismaClient, Prisma } from '@prisma/client'
 
+import { YEAR_END_CLOSING_REFERENCE_TYPE } from '@/lib/reports/year-end-closing'
+
 interface JournalEntryInput {
   accountId: number
   debit: number
@@ -21,6 +23,16 @@ interface CreateJournalInput {
 }
 
 type PrismaLike = PrismaClient | Prisma.TransactionClient
+
+/**
+ * Jurnal penutup tahun (F-2026-10-23-121-V Putusan 3) HANYA boleh di-reversal
+ * lewat `reverseYearEndClosing` (gerbang manage_settings + assertApproved di
+ * lapisan action/service itu). Jalur generik di bawah tidak menyalin
+ * profitCenterId, jadi me-reversal jurnal penutup dari sini akan merusak
+ * jejak pusat laba — ditolak berisik, tanpa pengecualian.
+ */
+export const YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR =
+  "Jurnal penutup tahun hanya boleh di-reversal lewat reversal penutup tahun (izin manage_settings), bukan reversal jurnal umum."
 
 export class JournalService {
   constructor(private prisma: PrismaLike) {}
@@ -135,6 +147,10 @@ export class JournalService {
 
         if (original.status === 'REVERSED') {
           throw new Error(`Journal ${original.journalNumber} sudah di-reverse.`)
+        }
+
+        if (original.referenceType === YEAR_END_CLOSING_REFERENCE_TYPE) {
+          throw new Error(YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR)
         }
 
         // Create reversal entries (swap debit/credit)
