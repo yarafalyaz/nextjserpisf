@@ -11876,3 +11876,65 @@ Satu syarat gugur = beban periode lewat jalur biaya existing, TANPA jurnal kapit
 Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 11 ayat (1) + PMK 72/2023 Pasal 7 (sumber resmi DJP di atas, akses 2026-10-23) dan PSAK 16 untuk sisi komersial; contoh angka mengikuti ilustrasi DJP (artikel pegawai DJP = pendapat pribadi penulis, bukan sikap instansi). BUKAN klaim SPT Tahunan sah — daftar penyusutan fiskal final tetap wajib cocok lampiran SPT Tahunan badan.
 
 ID vonis ini **F-2026-10-23-108-V** (tertinggi terverifikasi run ini: F-2026-10-23-107-V di PR #611; main cc2bb835 + PR terbuka dicek). Pemilik berikutnya: BOT 1 merge vonis ini + PR #611/#602 -> BOT 3 inti kapitalisasi perbaikan -> BOT 2 -> BOT 6 E108-1..9.
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-113-V: ekspor XML Coretax faktur pajak keluaran dari TaxInvoice terbekukan (gap P0-1 domain (a) "ekspor XML Coretax", lanjutan F-2026-10-21-001)
+
+Status: PUTUSAN BOT 4 (kartu t_4f0723f4, siklus standby 07:13). Dokumen saja; TANPA kode/schema/migrasi di kartu ini.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 07:13, origin/main 751c07ef)
+
+- Kanban non-done saat mulai: BOT 4 hanya kartu ini (t_4f0723f4 running). Nol kartu peminta vonis baru yang prasyaratnya bebas.
+- Peminta terkait semua ter-gate BUKAN oleh BOT 4: BOT 3 t_99cb19e4 (blocked) menunggu merge BOT 1 atas PR #599 (OPEN; #521 MERGED) — vonisnya F-103-V/F-105-V sudah terbit (PR #597/#605 OPEN ter-gate merge); BOT 3 t_af177f74 (ready) prasyaratnya putusan BOT 1 Q-CO-1/2/3/5 + PR #503 SUDAH MERGED, vonis Q-CO-4 SUDAH terbit (F-2026-10-20-103 vonis Salsa 22:38 + batas build BOT 3 t_73bdb74a Q-SUB69-5 sudah divonis F-075-V); BOT 6 t_18d07a19 menunggu #592 merged. Q-BUPOT-052-1..3 sudah terjawab F-055-V.
+- PR vonis BOT 4 terbit (terbaru F-109-V #613, F-110-V #616, F-111-V #617, F-112-V #618) semua OPEN ter-gate merge BOT 1 — isi vonis nol menunggu BOT 4.
+- Rantai aset tetap F-062-V→F-112-V tertutup (F-112-V Putusan 4: sisa hanya per-kasus `BUTUH-VONIS-AKUNTAN`). Maka riset berikutnya = gap bebas domain (a) tertua belum bervonis: ekspor XML Coretax faktur keluaran (adaptasi P0-1 backlog baris 92-98: "+ ekspor XML Coretax dari TaxInvoice terpilih ... Effort: L (XML saja M)").
+
+### Bukti repo terverifikasi run ini (origin/main 751c07ef)
+
+- Model `TaxInvoice` (schema:998-1075) SUDAH memuat semua bahan ekspor: `direction`, `transactionCode` kanonik 2 digit, `taxInvoiceNumber`, `taxInvoiceDate`, `taxPeriod` diturunkan, `dpp`/`taxRate`/`taxAmount` Decimal terbekukan, `djpStatus` (draft|approved|rejected|replaced|cancelled), `replacesId` self-FK unik, snapshot lawan transaksi (`counterpartyTaxId/Name/Nitku`), arah masukan `creditPeriod/creditStatus/nonCreditableReason/creditablePercent`, dan kolom impor `xmlPayload/xmlHash/xmlImportedAt/djpMessage`. Baris detail sumber = `SalesInvoiceItem` (schema:1575-1597: qty/uom/unitPrice/discount/total Decimal).
+- Impor XML SUDAH ada satu arah: `tax-invoice.service.ts:185-192` menyimpan xmlPayload + hash SHA-256 + pesan "Diimpor dari XML Coretax" saat faktur dibuat dari XML. GENERATE/ekspor XML dari TaxInvoice terpilih = NOL (grep `coretax|xml` di src/lib/tax + services + actions tax hanya hit impor + komentar katalog PPh 4(2)). Nomor faktur di sistem adalah nomor dari DJP/Coretax yang dicatat apa adanya (prinsip BOT 4: nomor pajak bukan buatan sistem) — ekspor di sini BUKAN menerbitkan nomor, melainkan membentuk berkas impor Coretax untuk faktur yang datanya sudah terbekukan.
+- Matematika PPN sudah terbekukan di `src/lib/tax/tax-invoice.ts`: kode 04 DPP nilai lain 11/12 × tarif nominal 12% (PMK-131/2024), jurnal Dr Piutang (DPP+PPN)/Cr Pendapatan harga PENUH/Cr PPN Keluaran 12%×DPP faktur; pengganti dilaporkan pada masa faktur diganti (PER-11/PJ/2025), hanya kepala rantai terakhir bernilai.
+
+### Dasar resmi (akses 2026-10-23)
+
+- DJP menyediakan Template XML + Converter Excel→XML Coretax resmi: halaman "Template XML dan Converter Excel ke XML" https://www.pajak.go.id/id/reformdjp/coretax/template-xml-dan-converter-excel-ke-xml (kategori Faktur: "Faktur Keluaran", template diperbarui 1/03/2025, converter 23/01/2026) — format impor Coretax = XML per dokumen (Faktur/Dok Lain/Bupot), dengan validasi NPWP, NITKU, kode objek/tarif mengikuti referensi DJP. File template XML resmi itulah SATU-SATUNYA sumber skema elemen ekspor; dilarang mengarang nama elemen dari ingatan/contoh pihak ketiga.
+- Mekanisme upload faktur via XML (DJP, PDF resmi): https://www.pajak.go.id/sites/default/files/2025-01/Mekanisme%20Upload%20Faktur%20via%20XML.pdf — alur: bentuk XML → menu Faktur Keluaran → Impor Data → XML Monitoring (VALIDATING DATA → VALIDATING FAILED/CREATING INVOICE FINISHED) → faktur tampil di grid Pajak Keluaran → submit bulk + tanda tangan elektronik di Coretax. Status DJP final lahir DI Coretax, bukan di ISF.
+- Keterangan tertulis implementasi Coretax DJP: https://www.pajak.go.id/index.php/id/siaran-pers/implementasi-coretax-djp — faktur bentuk *.xml diterima sampai 100 faktur per pengiriman (kapasitas saat keterangan itu; angka kapasitas BUKAN aturan sistem — jangan hardcode sebagai batas validasi, hanya batas batching usulan di bawah).
+- Kode transaksi + DPP nilai lain: PER-11/PJ/2025 + PMK-131/2024 sebagaimana sudah divonis F-001 (dirujuk, tidak divonis ulang).
+
+### Putusan 1 — Apa yang boleh diekspor (gerbang status, fail-closed)
+
+- Ekspor XML hanya untuk `TaxInvoice direction="out"` berstatus internal SIAP-EKSPOR: dokumen sumber (SalesInvoice) sudah terposting jurnalnya, snapshot DPP/PPN/tarif/kode transaksi terbekukan, nomor faktur pajak non-kosong, lawan transaksi punya NPWP/NIK + nama + NITKU bila wajib per template resmi. Satu syarat gugur = faktur itu DITOLAK dari batch dengan alasan bernama per faktur; batch tidak gugur total karenanya (pola gerbang parsial F-028-I).
+- Yang DILARANG diekspor: faktur `cancelled`/`replaced` (yang diganti = nol-efek, hanya kepala rantai terakhir bernilai); faktur arah `in` (masukan bukan dokumen keluaran ISF); faktur tanpa nomor (nomor lahir di Coretax — ekspor tidak boleh mengarang nomor seri); dokumen komersial tanpa TaxInvoice (dilarang membentuk XML langsung dari SalesInvoice — sumber tunggal = TaxInvoice terbekukan, pola snapshot F-001).
+- Pengganti: XML pengganti hanya dari TaxInvoice pengganti (replacesId terisi) dan wajib membawa rujukan faktur diganti sesuai elemen template resmi; mengekspor faktur asal DAN penggantinya dalam satu batch untuk rantai yang sama = DITOLAK (dobel nilai di Coretax).
+
+### Putusan 2 — Isi XML = snapshot terbekukan, nol hitung ulang saat ekspor
+
+- Setiap elemen nilai (DPP, PPN, tarif, kode transaksi, tanggal, masa, identitas lawan) dibaca dari kolom TaxInvoice + baris SalesInvoiceItem tertaut PERSIS seperti tersimpan; ekspor DILARANG menghitung ulang DPP/PPN dari harga jual, dilarang membaca tarif master berjalan, dilarang mengubah kode transaksi. Bila Σ baris ≠ DPP header terbekukan: faktur ditolak dari batch sebagai temuan rekonsiliasi (selisih ditampilkan), BUKAN dibulatkan/disesuaikan diam-diam.
+- Kode transaksi ditulis bentuk kanonik sistem (2 digit) dipetakan ke bentuk tampil Coretax hanya bila template resmi mensyaratkannya (mis. pad kode 10) — pemetaan bentuk ini satu-satunya transformasi yang sah dan wajib terdaftar eksplisit per kode, bukan tebakan umum.
+- Uang ditulis sen persis Decimal(15,2) tanpa float; format angka/tanggal mengikuti template XML resmi DJP versi yang dipakai (catat versi template + tanggal unduh di register ekspor). Berkas hasil di-hash SHA-256 dan hash + daftar ID faktur + versi template dibekukan sebagai peristiwa ekspor (pola kolom xmlHash existing diperluas maknanya untuk ekspor; jangan timpa jejak impor).
+
+### Putusan 3 — Status, idempotensi, dan batas klaim kepatuhan
+
+- Empat status tetap terpisah: ekspor XML TIDAK mengubah status dokumen/pembayaran/pajak/posting faktur. Status DJP (`approved` di Coretax) hanya boleh diperbarui dari bukti Coretax (impor balik XML/status atau input manual bernomor referensi), BUKAN dari keberhasilan membentuk berkas. Label UI wajib verbatim: "berkas XML dibentuk" ≠ "faktur disetujui DJP".
+- Idempotensi: peristiwa ekspor per (TaxInvoice, versi template) — mengekspor ulang faktur yang sama pada versi template sama menghasilkan hash sama dan TIDAK melahirkan peristiwa ganda; ekspor ulang sesudah snapshot berubah mustahil karena snapshot beku (perubahan hanya lewat pengganti = TaxInvoice baru). Batch diusulkan maks 100 faktur mengikuti kapasitas keterangan DJP di atas sebagai batas batching operasional (bukan validasi regulasi; bila DJP mengubah kapasitas, ubah setting, bukan kode).
+- Klaim kepatuhan: berkas yang lolos validasi lokal (skema XML + gerbang Putusan 1) hanya boleh diklaim "siap impor Coretax", BUKAN "terkirim/terdaftar di DJP". Penolakan Coretax (VALIDATING FAILED) dicatat apa adanya di `djpMessage` lewat jalur impor balik existing; sistem tidak menebak penyebab di luar pesan DJP.
+
+### Putusan 4 — Yang tetap di luar / ditolak
+
+- Host-to-host PJAP, tanda tangan elektronik, submit otomatis ke Coretax: di luar vonis ini (butuh kontrak PJAP + sertifikat; backlog "Yang TIDAK diusulkan" domain (a) tetap berlaku). Penomoran otomatis faktur: DITOLAK (nomor dari DJP).
+- Ekspor Dok Lain Keluaran/Masukan dan Retur Dok Lain (kategori template DJP nomor 11-14 di halaman yang sama): TIDAK diputus di sini — nota retur pajak mengikuti rantai retur F-004/F-096-V/F-097-V; ekspor retur = vonis tersendiri bila inti ekspor keluaran ini terbukti dipakai.
+- Elemen XML yang tidak dapat dipetakan dari kolom existing (mis. elemen detail yang template resmi wajibkan tetapi ISF belum menyimpan sumbernya): ekspor faktur itu DITOLAK berisik dengan nama elemennya — dilarang mengisi elemen wajib dengan nilai karangan/kosong yang lolos skema tetapi salah makna. Kesenjangan elemen = temuan ke BOT 4/BOT 3 sebelum inti dibangun, bukan diisi diam-diam.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge rantai vonis berjalan; putuskan prioritas inti ekspor ini terhadap antrean merge (inti TIDAK ter-gate PR aset/payroll mana pun — hanya ter-gate unduhan template XML resmi versi terdaftar).
+- BOT 3 (inti terpisah; unduh Template XML "Faktur Keluaran" dari halaman DJP resmi di atas, catat versi/tanggal di register): (1) builder murni TaxInvoice terbekukan → XML sesuai template resmi + validasi skema lokal; (2) gerbang Putusan 1 per faktur dengan alasan bernama; (3) peristiwa ekspor idempoten (ID faktur + versi template + SHA-256) tanpa mengubah status apa pun; (4) jalur catat hasil Coretax (djpMessage/status) hanya dari bukti impor balik/manual bernomor. Contoh angka wajib: faktur kode 04 harga 12.000.000 → XML memuat DPP 11.000.000 + PPN 1.320.000 persis snapshot (bukan hitung ulang dari total baris sesudah diskon master berubah).
+- BOT 2: permukaan unduh XML menampilkan status verbatim server ("siap impor Coretax", daftar faktur tertolak + alasannya); UI tidak membentuk elemen dan tidak menjanjikan status DJP.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E113-1 faktur cancelled/replaced ikut terekspor = MERAH; E113-2 ekspor menghitung ulang DPP dari harga berjalan (ubah master/harga sesudah snapshot → XML berubah) = MERAH, wajib byte-sama dengan snapshot; E113-3 Σ baris ≠ DPP header tetap diekspor dengan penyesuaian diam-diam = MERAH (wajib tertolak bernama); E113-4 ekspor mengubah djpStatus/status dokumen = MERAH; E113-5 ekspor ulang versi template sama melahirkan peristiwa/hash ganda = MERAH; E113-6 faktur tanpa nomor/NPWP lawan tetap masuk batch = MERAH; E113-7 rantai asal+pengganti satu batch = MERAH; E113-8 elemen wajib tak terpetakan diisi karangan agar lolos skema = MERAH (wajib tolak bernama); E113-9 label UI/server menyatakan "terkirim ke DJP" dari sekadar berkas terbentuk = MERAH.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar template + mekanisme impor XML resmi DJP (URL di atas, akses 2026-10-23) dan vonis F-001 (PER-11/PJ/2025, PMK-131/2024); BUKAN klaim faktur terdaftar/disahkan DJP — pengesahan hanya lahir di Coretax sesudah impor + submit + tanda tangan oleh WP.
+
+ID vonis ini **F-2026-10-23-113-V** (tertinggi terverifikasi run ini: F-2026-10-23-112-V di PR #618; grep F-2026-10-23-113 di backlog main + PR terbuka = 0 sebelum vonis ini ditulis). Pemilik berikutnya: BOT 1 merge vonis + putus prioritas inti -> BOT 3 builder XML dari template resmi -> BOT 2 -> BOT 6 E113-1..9.
+
