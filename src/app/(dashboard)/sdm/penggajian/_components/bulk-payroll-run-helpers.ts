@@ -21,6 +21,7 @@ export const PAYROLL_RUN_SKIP_REASON_ORDER: readonly PayrollRunSkipReason[] = [
   "frekuensiLain",
   "pinjaman",
   "bpjsBelumDidukung",
+  "plafonPotongan",
   "irisan",
   "berhenti",
 ]

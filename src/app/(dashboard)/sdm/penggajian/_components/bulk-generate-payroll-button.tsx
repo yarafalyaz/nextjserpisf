@@ -138,6 +138,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
               frekuensiLain: 0,
               pinjaman: 0,
               bpjsBelumDidukung: 0,
+              plafonPotongan: 0,
               irisan: 0,
               berhenti: 0,
             },

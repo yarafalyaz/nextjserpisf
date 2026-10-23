@@ -105,7 +105,7 @@ beforeEach(() => {
     success: true,
     count: 3,
     skippedTotal: 0,
-    skippedByReason: { frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, irisan: 0, berhenti: 0 },
+    skippedByReason: { frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0 },
   })
 })
 
@@ -142,6 +142,7 @@ describe("helper run mingguan (murni, tanpa hitung payroll)", () => {
       frekuensiLain: 2,
       pinjaman: 1,
       bpjsBelumDidukung: 4,
+      plafonPotongan: 6,
       irisan: 0,
       berhenti: 3,
     })
@@ -153,10 +154,15 @@ describe("helper run mingguan (murni, tanpa hitung payroll)", () => {
         label: "BPJS mingguan belum didukung (agregator se-masa belum tersedia)",
         count: 4,
       },
+      {
+        reason: "plafonPotongan",
+        label: "Potongan melebihi plafon 50% upah (PP 36/2021 Pasal 65)",
+        count: 6,
+      },
       { reason: "berhenti", label: "Karyawan berhenti — di luar populasi massal", count: 3 },
     ])
     expect(
-      payrollRunSkipLines({ frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, irisan: 0, berhenti: 0 }),
+      payrollRunSkipLines({ frekuensiLain: 0, pinjaman: 0, bpjsBelumDidukung: 0, plafonPotongan: 0, irisan: 0, berhenti: 0 }),
     ).toEqual([])
   })
 })
@@ -208,8 +214,8 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
     generateBulkPayroll.mockResolvedValue({
       success: true,
       count: 0,
-      skippedTotal: 5,
-      skippedByReason: { frekuensiLain: 1, pinjaman: 1, bpjsBelumDidukung: 3, irisan: 0, berhenti: 0 },
+      skippedTotal: 6,
+      skippedByReason: { frekuensiLain: 1, pinjaman: 1, bpjsBelumDidukung: 3, plafonPotongan: 1, irisan: 0, berhenti: 0 },
     })
     const container = renderButton()
     openDialog(container)
@@ -221,7 +227,8 @@ describe("BulkGeneratePayrollButton — pemilih run mingguan/bulanan F-076-S", (
 
     const status = document.body.querySelector('[role="status"]')
     expect(status).not.toBeNull()
-    expect(status?.textContent).toContain("0 draf slip dibuat, 5 karyawan terlewati")
+    expect(status?.textContent).toContain("0 draf slip dibuat, 6 karyawan terlewati")
+    expect(status?.textContent).toContain("Potongan melebihi plafon 50% upah (PP 36/2021 Pasal 65)")
     expect(status?.textContent).toContain("BPJS mingguan belum didukung (agregator se-masa belum tersedia)")
     expect(status?.textContent).toContain("Pinjaman aktif — cicilan mingguan belum diatur tertulis")
     expect(status?.textContent).toContain("Frekuensi bayar berbeda")
