@@ -11942,317 +11942,257 @@ Status: PUTUSAN BOT 4 (kartu t_3ef36441, siklus standby 06:00). Dokumen saja; TA
 Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 19 + Pasal 11 ayat (5) dan PMK 79/PMK.03/2008 (sumber resmi DJP di atas, akses 2026-10-23) untuk sisi fiskal, PSAK 16/48 untuk sisi komersial sebagai rujukan standar (bukan dasar fiskal). BUKAN persetujuan DJP, bukan penetapan, dan bukan klaim SPT Tahunan/laporan keuangan sah — penilaian kembali fiskal final tetap lewat permohonan WP ke DJP, daftar penyusutan/amortisasi final tetap wajib cocok lampiran SPT Tahunan badan.
 
 ID vonis ini **F-2026-10-23-111-V** (tertinggi terverifikasi run ini di origin/main 751c07ef: F-2026-10-23-108-V merged #612; 109-V PR #613, 110-V PR #616 terbuka; 111 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini + #616/#613/#611/#602 -> BOT 3 usulan kode akun + inti peristiwa penyesuaian nilai -> BOT 2 -> BOT 6 E111-1..10.
-## VONIS BOT 4 2026-10-23 — F-2026-10-23-103-V agregator BPJS final masa + koreksi pembatalan untuk slip mingguan (turunan wajib F-2026-10-22-077-V V-PF2-4(ii); siklus standby 01:30, kartu t_cb14f9f1)
 
-Pemilik vonis: BOT 4. Pertanyaan (dinyatakan BUTUH-VONIS
-lanjutan di F-077-V §2 V-PF2-4(ii) + §5, PR #521 merged):
-rumus basis BPJS final se-masa untuk karyawan WEEKLY dengan
-beberapa slip per bulan kalender, dan perlakuan koreksi bila
-slip penanggung BPJS dibatalkan/diganti. Vonis ini MEMUTUS
-rumus itu. Ini BUKAN membuka populasi murni-WEEKLY; gerbang
-V-PF2-4(i) tetap berlaku sampai agregator ini dibangun BOT 3
-+ lulus acceptance BOT 6 di bawah. Tanpa kode produksi run
-ini. ID diperiksa bebas: grep `F-2026-10-23-103` di backlog
-main + `gh pr list --search` = 0 (F-2026-10-20-103 change
-order = ID tanggal lain, tidak tabrakan).
+---
 
-### 0. Siklus + verifikasi live (2026-10-23 01:30 WIB)
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-115-V: perlakuan reklasifikasi kategori/aset, perubahan metode komersial/fsikal, perubahan estimasi aset tetap
 
-Snapshot siklus: origin/main 8aeecc40. Antrean vonis
-bebas-dependensi KOSONG dibuktikan ulang:
-(a) kanban assignee `accounting-finance-tax` status bukan
-done: hanya kartu siklus ini (t_cb14f9f1 running); nol kartu
-vonis todo/blocked baru;
-(b) PR BOT 4 terbit semua ter-gate merge/rebase Lead, BUKAN
-vonis baru: #593 (F-102-V) head 7b001841, #590/#588/#586/
-#584/#581/#571/#552/#548 CONFLICTING walau checks hijau;
-#490 (F-062-V) MERGEABLE head 0ea1e9a4 menunggu merge Lead
-(kartu BOT 3 t_aef6848b blocked karenanya);
-(c) pertanyaan BOT 4 bernama di backlog main semua sudah
-terjawab (Q-CO-4, Q-TM67-2/4, Q-EMP-4/5, Q-TGT-1, Q-PF-2/4,
-Q-SUB69-5, BR-COL-11). Karena semua ter-gate, riset vonis
-berikutnya dikerjakan: turunan eksplisit F-077-V ini.
+Status: PUTUSAN BOT 4 (kartu t_8c31f925, siklus standby 08:20). Dokumen saja; TANPA kode/schema/migrasi di kartu ini.
 
-Fakta ISF terverifikasi (grep/read basis 8aeecc40):
-- `computeBpjsEmployee(baseSalary, ruleset)` per slip
-  (payroll-statutory.service.ts:29-41): Kesehatan =
-  round(min(base, ceilingKes) x tarif), JHT+JP dibulatkan
-  gabungan; basis pemanggil = baseSalary slip itu SAJA
-  (hrm.actions.ts:721 buildPayrollWrite, :1213 estimasi,
-  :1819 bulk). TIDAK ada agregasi BPJS se-masa.
-- PPh21 se-masa SUDAH agregat: `computePph21ForPeriod`
-  (hrm.actions.ts:1345-1448) mengelompokkan slip karyawan
-  dengan `period` string sama, mengecualikan status
-  cancelled/canceled (:1390), slip berjalan menanggung
-  max(0, targetGabungan - Sigma terpotong se-masa)
-  (:1446-1448). Pola inilah yang ditiru agregator BPJS.
-- `period` = "YYYY-MM" bulan endDate (hrm.actions.ts:725,
-  periodYearMonth :1323-1327); kunci unik existing
-  @@unique([employeeId, period]) (schema.prisma:3304) —
-  bentuk fisik penggantinya Q-PF-3 milik BOT 3.
-- Siklus hidup slip: draft -> approved -> paid
-  (approvePayroll :2453, markPayrollPaid :2514). TIDAK ADA
-  aksi cancel/delete slip di hrm.actions.ts (grep cancelled
-  hanya filter agregasi PPh21 :1390). Slip paid sudah
-  menjurnal via onPayrollPaid (accounting.hook.ts:2033,
-  statutory = bpjsHealth+bpjsEmployment+pph21 :2072-2075,
-  idempoten per (Payroll, id)).
-- Ruleset statutori berperiode DB (`payroll_statutory_rules`
-  via getStatutoryParams(endDate)); approve menolak snapshot
-  fromFallback (hrm.actions.ts:2480-2487). Ceiling/tarif
-  BPJS final WAJIB dari ruleset ini, bukan konstanta kode.
-- statutorySnapshot Json? (schema.prisma:3285) — perluasan
-  snapshot agregator muat di kolom ini, TANPA migrasi.
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 08:20, origin/main 41b81748)
 
-### 1. Dasar regulasi (sumber resmi, akses 2026-10-23)
+- Kanban BOT 4 non-done/archived: hanya kartu ini (t_8c31f925 running). Nol kartu peminta vonis baru bebas-dependensi.
+- Peminta terkait semua ter-gate BUKAN oleh BOT 4: BOT 3 t_99cb19e4 (blocked) ter-gate merge BOT 1 atas PR #599 (vonisnya F-103-V/F-105-V sudah terbit) + agregator BPJS/f076; BOT 3 t_af177f74 (ready) prasyaratnya putusan BOT 1 atas F-2026-10-22-066-S/Q-CO-4 (vonis F-2026-10-22-066-V sudah terbit). PR vonis BOT 4 terbit #613 F-109-V CONFLICTING, #616 F-110-V BEHIND, #617 F-111-V BLOCKED, #618 F-112-V BLOCKED, #619 F-113-V BLOCKED, #620 F-114-V OPEN — semua ter-gate merge BOT 1, isi nol menunggu vonis BOT 4.
+- Riset berikutnya sesuai Instruksi: domain (b) aset: perubahan metode/umur/residu/reklasifikasi. F-062-V gerbang metode statis; F-110-V persetujuan perubahan metode fiskal tak berwujud; F-111-V revaluasi/impairment; F-112 taxReview tersimpan; F-109 saldo fiskal per (aset,tahun). Belum divonis: reklasifikasi aset/kategori, perubahan metode KOMERSIAL+fiskal BERWUJUD prospektif, perubahan estimasi (umur/residu) berwujud. Vonis ini menutup ketiganya.
 
-| Klaim | Sumber | Status |
-|---|---|---|
-| Iuran JKN PPU 5% dari Gaji/Upah PER BULAN (4% pemberi kerja, 1% peserta); batas atas dasar Rp12.000.000/bulan; batas bawah UMK | Perpres 64/2020 Pasal 30 + Pasal 32 (mengubah Perpres 82/2018) — https://peraturan.go.id/files/ps64-2020.pdf | TERVERIFIKASI resmi; tarif/ceiling operasional ISF tetap dari ruleset DB bertanggal efektif, bukan hardcode vonis |
-| Iuran JHT penerima upah 5,7% dari Upah (2% pekerja, 3,7% pemberi kerja); Upah sebulan = upah pokok + tunjangan tetap; upah harian -> sebulan = sehari x 25 | PP 46/2015 Pasal 16-17 — https://peraturan.go.id/files/pp46-2015bt.pdf | TERVERIFIKASI resmi |
-| Iuran JP 3% dari Upah per bulan (1% pekerja, 2% pemberi kerja), dibayar setiap bulan; Upah = pokok + tunjangan tetap bulan bersangkutan; batas atas upah per bulan | PP 45/2015 Pasal 28-29 — https://www.peraturan.go.id/files/pp45-2015bt.pdf | TERVERIFIKASI resmi; ceiling JP berjalan di ruleset (sudah dievaluasi berkala pemerintah) |
+### Bukti repo terverifikasi run ini (origin/main 41b81748)
 
-Konsekuensi mengikat: dasar iuran adalah upah SEBULAN
-kalender. Frekuensi bayar mingguan TIDAK mengubah masa
-iuran (paralel masa pajak V-PF2-1). Rumus x25 PP 46/2015
-Pasal 17(3) berlaku untuk upah yang DIBAYARKAN HARIAN;
-karyawan WEEKLY spec F-076-S adalah pegawai tetap bergaji
-pokok bulanan yang dibayar bertahap mingguan (F-077-V §1.2)
-— menurunkan basis dari upah harian x25 = salah subjek,
-DILARANG di agregator ini.
+- Inti F-062-V sudah merged (#602): `Asset` schema:3953+ punya `bookValueSource`/`journalLinked`, `AssetCategory.taxGroupCode`, `AssetFiscalBalance` saldo fiskal tersimpan; cron memakai dasar `journalBookValue` (JournalEntry POSTED) bukan `currentValue`, gerbang metode fail-closed, kelompok fiskal PMK 72/2023.
+- Laporan selisih: `depreciation-difference.ts` header menyatakan sisi fiskal SELALU garis lurus statutoris (komentar `ponytail`: saldo menurun butuh saldo fiskal awal tahun yang tidak dilacak terpisah). Artinya metode fiskal saldo-menurun BELUM benar-benar dihitung laporan — selisih saldo-menurun hari ini belum jujur.
+- Reklasifikasi NOL: aset hanya punya satu `categoryId` kolom; tidak ada peristiwa perpindahan kategori, tidak ada reklasifikasi HGB/Hak Pakai→aset tetap/investasi, tidak ada reklasifikasi antar kelas revaluasi per F-111-V. `AssetChangeEvent` (F-108/F-111) belum ada entitas reklasifikasi.
+- Perubahan metode/estimasi NOL: `depreciationMethod`/umur/residu ditimpa edit aset/kategori; laporan selisih menghitung ulang dari nilai berjalan sehingga ubah metode/umur mengubah angka tahun lalu diam-diam — sama seperti cela F-062-V Putusan 1 untuk nilai buku.
 
-### 2. VONIS — rumus agregator BPJS final masa
+### Dasar resmi (akses 2026-10-23)
 
-B1. BASIS MASA = Sigma baseSalary slip AKTIF se-masa.
-    Untuk karyawan + masa "YYYY-MM": basisFinal =
-    Sigma baseSalary semua slip karyawan itu dengan period
-    sama, status bukan cancelled/canceled, selain slip
-    berjalan. Basis slip berjalan = basisFinal + baseSalary
-    slip berjalan. "Aktif" mengikuti filter existing
-    computePph21ForPeriod (hrm.actions.ts:1390) — SATU
-    definisi untuk PPh21 dan BPJS; dilarang definisi kedua.
-    Komponen basis TETAP baseSalary saja seperti existing:
-    allowances ISF tidak terklasifikasi tetap/tidak-tetap,
-    jadi memasukkan allowances ke basis = menebak
-    "tunjangan tetap" PP 46/2015 Pasal 17(2). Perluasan
-    basis ke tunjangan tetap = vonis lanjutan sesudah ada
-    klasifikasi komponen tetap di master komponen gaji;
-    BUKAN efek samping agregator ini. Batas bawah UMK
-    (Perpres 64/2020 Pasal 32(2)) TIDAK diterapkan: tidak
-    ada master UMK terverifikasi di repo; jangan tebak.
+- DJP “Penyusutan dan Amortisasi” (pembaruan isi 2025-05-28): https://www.pajak.go.id/id/penyusutan-dan-amortisasi — metode fiskal berwujud: garis lurus/saldo menurun (selain bangunan), bangunan hanya garis lurus, wajib taat asas; penyusutan dimulai bulan dilakukannya pengeluaran (pengecualian pengerjaan/belum digunakan/dengan persetujuan DJP); kelompok 1/2/3/4 + bangunan per UU PPh Pasal 11; jenis tidak tercantum PMK 72/2023 → kelompok 3 atau penetapan DJP 1/2/4.
+- UU PPh Pasal 11 ayat (1),(2),(5),(6) dirujuk halaman DJP sama: taat asas; perubahan metode fiskal bukan hak sepihak (perubahan metode pembukuan wajib persetujuan DJP per hasil pencarian resmi DJP tata cara pencatatan/pembukuan — dirujuk sebagai prinsip, nomor persetujuan jadi gate peristiwa).
+- PSAK 16/PSAK 48/PSAK 25 dirujuk label standar saja (bukan dasar fiskal): perubahan estimasi (umur/residu/pola manfaat) = prospektif, bukan restatement; perubahan metode komersial = perubahan estimasi bila pola konsumsi berubah, didokumentasikan; reklasifikasi = pemindahan antar kelas/kategori pada nilai tercatat, bukan keuntungan.
 
-B2. TARGET MASA diterapkan ceiling SEKALI.
-    targetMasa = computeBpjsEmployee(basisKumulatif,
-    ruleset(endDate slip berjalan)) — fungsi existing apa
-    adanya, ruleset masa itu. Kesehatan dan JP masing-masing
-    kena ceiling-nya satu kali per masa, bukan per slip.
-    Health dan employment dihitung & disimpan TERPISAH
-    persis kolom existing (bpjsHealthEmployee /
-    bpjsEmploymentEmployee), karena hanya employment
-    (JHT+JP) yang mengurangi PPh21 masa terakhir
-    (payroll-statutory.service.ts:27-28).
+### Putusan 1 — Reklasifikasi: peristiwa terbekukan, nilai tercatat pindah utuh, nol laba-rugi
 
-B3. ALOKASI SLIP BERJALAN = SELISIH KUMULATIF, lantai nol.
-    potongSlipIni.health     = max(0, target.health
-                               - Sigma bpjsHealthEmployee
-                               slip se-masa lain aktif)
-    potongSlipIni.employment = max(0, target.employment
-                               - Sigma bpjsEmploymentEmployee
-                               slip se-masa lain aktif)
-    Dihitung per komponen, bukan atas total gabungan —
-    selisih health tidak boleh menutup kekurangan
-    employment atau sebaliknya (dua program, dua setor).
-    Potongan slip TIDAK PERNAH negatif. Pola ini meniru
-    PPh21 existing (hrm.actions.ts:1446-1448) supaya satu
-    masa punya satu semantik selisih untuk dua potongan.
+- Reklasifikasi = peristiwa `AssetChangeEvent`-sejenis terbekukan per aset: dari-kategori/kelas → ke-kategori/kelas, tanggal efektif bulan, nilai tercatat SEBELUM dari jurnal POSTED, alasan terstruktur dari daftar terdaftar (salah kategori awal, perubahan penggunaan, tanah hak→bangunan selesai, aset→properti investasi/dll bila kelasnya ada), penilai/penyetuju bernama. Nilai tercatat pindah UTUH: Dr akun aset kelas tujuan / Cr akun aset kelas asal sebesar nilai tercatat jurnal (bukan harga perolehan dan bukan `currentValue`); akumulasi penyusutan + kontra impairment ikut pindah ke akun akumulasi kelas tujuan bila akunnya berbeda (pindah bruto+akumulasi supaya umur histori terbaca).
+- DILARANG: reklasifikasi melahirkan keuntungan/kerugian, revaluasi diam-diam saat pindah, atau jurnal ke laba-rugi/ekuitas kecuali perlakuan khusus yang sudah divonis (F-111-V revaluasi). Pindah kategori fiskal TIDAK mengubah kelompok fiskal statutoris lampau: kelompok baru berlaku prospektif dari bulan reklasifikasi; saldo fiskal tersimpan per (aset,tahun) tahun lampau TIDAK dihitung ulang.
+- Aset sudah disposal / nilai tercatat nol tanpa bruto: reklasifikasi ditolak berisik. Aset dalam kelas revaluasi F-111-V: surplus revaluasi per-aset IKUT kelas tujuan terikat aset sama (tidak boleh dipakai aset lain).
+- Koreksi reklasifikasi salah = reversal peristiwa di periode terbuka (`assertPeriodOpen` dalam tx), dilarang edit baris peristiwa atau timpa `categoryId` langsung.
 
-B4. DEGRADASI BULANAN = NOL PERUBAHAN ANGKA (mengikat).
-    Karyawan dengan satu slip per masa: Sigma lain = 0 dan
-    basis = baseSalary slip itu, sehingga B2+B3 menghasilkan
-    persis computeBpjsEmployee(base) existing. Agregator
-    WAJIB diterapkan seragam lewat jalur yang sama (bukan
-    cabang khusus WEEKLY yang bisa divergen), dan regresi
-    bulanan dibuktikan acceptance E103-1. Cabang "bila
-    mingguan baru agregat" DILARANG: dua jalur = dua angka
-    untuk masa yang sama bila karyawan campuran.
+### Putusan 2 — Perubahan metode komersial: prospektif dari nilai tercatat, terdokumentasi, nol restatement
 
-B5. KELEBIHAN POTONG TIDAK DIPOTONG NEGATIF, TIDAK DIJURNAL
-    OTOMATIS. Bila basis kumulatif turun sesudah potongan
-    terlanjur besar (slip se-masa dihapus/diedit turun/
-    dibatalkan sebelum paid), target menyusut di bawah
-    Sigma terpotong: slip berjalan berikutnya se-masa
-    menyerap lewat lantai nol B3 (potong 0 sampai target
-    mengejar). Bila masa tutup dan kelebihan masih ada:
-    selisih tampil sebagai temuan rekonsiliasi masa
-    (Sigma bpjs slip masa vs target final masa) di read-model
-    payroll/statutory existing — BUKAN potongan negatif,
-    BUKAN jurnal koreksi otomatis, BUKAN pengurang PPh21
-    tambahan. Penyelesaian uangnya = pembetulan iuran ke
-    BPJS di luar sistem + jurnal koreksi manual periode
-    terbuka oleh accountant; sistem hanya menampilkan
-    selisihnya (prinsip rekonsiliasi F-005: selisih =
-    temuan, bukan dipilih diam-diam).
+- Perubahan metode KOMERSIAL (mis. garis lurus↔saldo menurun komersial, penambahan metode analitis terdaftar F-062-V/F-110-V) berlaku PROSPEKTIF dari nilai tercatat jurnal POSTED pada bulan efektif: beban sesudahnya = metode baru atas nilai tercatat saat itu selama sisa umur sesudah telaah. Tahun/bulan lampau TIDAK dihitung ulang, jurnal lampau byte-sama.
+- Syarat peristiwa terstruktur: metode lama, metode baru, alasan perubahan pola konsumsi manfaat (daftar terdaftar + uraian), bulan efektif, nilai tercatat dasar (jurnal POSTED), sisa umur + residu hasil telaah. Tanpa alasan terstruktur/dasar jurnal = ditolak berisik. `depreciationMethod` kolom berjalan boleh berubah HANYA lewat peristiwa ini (edit aset langsung yang menimpa metode DILARANG di inti).
+- Metode analitis non-GL F-062-V (unit produksi dll) tetap NON-GL sampai mesin+vonisnya ada: reklasifikasi/perubahan metode ke metode itu TIDAK melahirkan jurnal penyusutan.
+- Fiskal TIDAK ikut perubahan metode komersial: metode/kelompok/saldo fiskal tetap jalurnya sendiri (Putusan 3).
 
-B6. SNAPSHOT WAJIB. statutorySnapshot slip yang dihitung
-    agregator menambah (Json existing, tanpa migrasi):
-    basis masa kumulatif saat hitung, target masa per
-    komponen, Sigma terpotong se-masa lain per komponen,
-    dan penanda agregat (mis. bpjsAggregate: {basis,
-    targetHealth, targetEmployment, withheldHealth,
-    withheldEmployment}). Slip tanpa penanda ini = slip
-    legacy per-slip; read-model/acceptance membedakannya
-    eksplisit, tidak mencampur dua semantik dalam satu masa
-    tanpa label. Edit ruleset/master sesudahnya tidak
-    mengubah snapshot (prinsip snapshot repo).
+### Putusan 3 — Perubahan metode FISKAL berwujud: gerbang persetujuan DJP bernama; tanpa itu fiskal diam
 
-B7. INTERAKSI PPh21 TIDAK BERUBAH TOTAL. Distribusi BPJS
-    antar slip berubah, Sigma masa tidak: hitung final
-    Pasal 17 memakai Sigma bpjsEmploymentEmployee slip
-    final se-tahun (hrm.actions.ts:1405) + slip berjalan,
-    jadi total pengurang pensiun tahunan identik. TER
-    bulanan tidak memakai BPJS sama sekali (atas bruto
-    gabungan, :1444-1448). Maka agregator DILARANG mengubah
-    computePph21ForPeriod; bila implementasi menyentuhnya,
-    berhenti dan eskalasi ke BOT 4.
+- Default: metode fiskal berwujud TIDAK berubah. Permintaan perubahan metode fiskal (garis lurus↔saldo menurun, selain bangunan yang memang hanya garis lurus) hanya boleh dicatat sebagai peristiwa bila ada persetujuan/perubahan metode pembukuan DJP terstruktur: nomor + tanggal persetujuan, metode lama/baru, bulan efektif fiskal. Tanpa nomor+tanggal itu peristiwa fiskal DITOLAK berisik; fiskal berjalan terus metode lama (taat asas).
+- Bila berpersetujuan: saldo fiskal tersimpan per (aset,tahun) dibekukan prospektif — tahun lampau byte-sama; mulai bulan efektif, saldo fiskal awal = nilai sisa buku fiskal saat itu, tarif metode baru statutoris kelompok yang sama (kelompok tidak berubah oleh ganti metode). Bangunan: perubahan ke saldo menurun DITOLAK mutlak (statutoris garis lurus).
+- Laporan selisih WAJIB jujur metode: aset saldo-menurun fiskal TIDAK boleh ditampilkan seolah garis lurus dari harga perolehan; bila saldo fiskal tersimpan tidak tersedia untuk tahun itu, aset tampil “fiskal belum dapat dihitung untuk tahun ini” (pola F-062/F-109), bukan diisi garis lurus karangan. Komentar `ponytail` garis-lurus-saja di `depreciation-difference.ts` gugur oleh vonis ini sebagai batas: inti BOT 3 wajib membaca `fiscalMethod`+saldo tersimpan, bukan mengarang.
+- Berlaku sama tak berwujud dirujuk F-110-V (tidak divonis ulang): tak berwujud sudah punya gerbang persetujuan DJP di F-110-V.
 
-### 3. VONIS — koreksi pembatalan/penggantian slip penanggung
+### Putusan 4 — Perubahan estimasi: umur/residu komersial prospektif; umur fiskal TIDAK diedit bebas
 
-K1. SLIP DRAFT PENANGGUNG DIBATALKAN/DIHAPUS: potongannya
-    belum pernah ada secara hukum gaji (belum approve/paid,
-    belum jurnal). Slip se-masa berikutnya menghitung ulang
-    B2-B3 dari slip aktif — otomatis menanggung kembali
-    tanpa dokumen koreksi. Ini alasan filter cancelled
-    existing (B1) WAJIB dipakai agregator juga: slip batal
-    yang tetap dihitung = target benar, alokasi salah.
+- Perubahan ESTIMASI komersial (masa manfaat komersial, nilai residu, pola manfaat) = peristiwa terbekukan prospektif: nilai tercatat jurnal dibagi sisa umur BARU (setelah dikurangi residu BARU) dari bulan efektif; lampau tidak diubah. Telaah wajib dicatat (alasan terdaftar: keausan lebih cepat, teknolog usang, perbaikan kapital F-108 yang mengubah umur, dll + penelaah bernama). Edit kategori yang mengubah umur/residu untuk aset berjalan DILARANG berlaku surut: aset existing mempertahankan snapshot estimasi sampai peristiwa perubahan estimasi per aset dibuat.
+- Umur/kelompok FISKAL tidak ikut estimasi komersial: masa manfaat fiskal tetap kelompok statutoris/penetapan DJP; memperpendek umur komersial TIDAK mempercepat fiskal, memperpanjang TIDAK memperlambat. Pengecualian statutoris yang ada (bangunan permanen masa manfaat sebenarnya dengan pemberitahuan DJP; tak berwujud >20th sebenarnya) hanya lewat field terstruktur nomor/tanggal pemberitahuan/persetujuan existing — bukan ketikan umur fiskal bebas.
+- Nilai residu fiskal tetap nol per statutoris (penyusutan fiskal dari harga perolehan tanpa residu) — residu komersial baru tidak masuk hitung fiskal.
+- Semua peristiwa (reklasifikasi, ganti metode komersial/fiskal, ganti estimasi) satu pola: idempoten per dokumen sumber (referenceType/referenceId unik), satu peristiwa satu jurnal pasangan POSTED bila memang berjurnal (perubahan estimasi/metode murni boleh nol-jurnal reklasifikasi nilai? — vonis: perubahan estimasi/metode TIDAK berjurnal saat peristiwa; efeknya hanya jadwal penyusutan berikutnya; reklasifikasi berjurnal hanya bila akun kelas asal≠tujuan).
 
-K2. SLIP APPROVED BELUM PAID: perubahan angka hanya lewat
-    jalur edit/hitung-ulang existing yang mengembalikan
-    slip ke perhitungan draft (bila jalur itu ada) atau
-    pembatalan administratif sebelum paid; sesudahnya masa
-    dihitung ulang B2-B3 dari nol alokasi. DILARANG mengubah
-    bpjsHealthEmployee/bpjsEmploymentEmployee slip approved
-    lewat update langsung tanpa hitung ulang agregat —
-    Sigma masa akan menyimpang dari target tanpa jejak.
+### Batas build (pemilik berikutnya)
 
-K3. SLIP PAID TIDAK DIBATALKAN. Tidak ada aksi cancel slip
-    di kode (bukti §0) dan jurnalnya sudah terposting
-    (onPayrollPaid idempoten per slip). Koreksi BPJS atas
-    slip paid HANYA: (a) reversal jurnal slip itu lewat
-    jalur koreksi periode terbuka existing bila seluruh
-    slip dikoreksi, lalu slip pengganti dihitung agregat
-    B2-B3; atau (b) bila hanya porsi BPJS yang salah, jurnal
-    koreksi manual accountant di periode terbuka + temuan
-    rekonsiliasi B5 — agregator TIDAK membuat jurnal
-    penyesuaian BPJS sendiri. Menambah aksi "cancel payroll
-    paid" = kartu terpisah dengan vonis baru; DILARANG
-    sebagai efek samping agregator.
+- BOT 1: merge rantai vonis berjalan (#613/#616/#617/#618/#619/#620 bila gate hijau) lalu putus prioritas inti F-115 sesudah inti saldo fiskal F-109/F-110 merged (saldo tersimpan prasyarat Putusan 3 laporan jujur).
+- BOT 3 (inti terpisah, klaim schema di board dulu, koordinasi BOT 4): (1) entitas peristiwa perubahan aset (jenis reklasifikasi/ganti-metode-komersial/ganti-metode-fiskal/ganti-estimasi) terbekukan + idempoten; (2) gerbang edit aset/kategori: metode/umur/residu berjalan berubah hanya lewat peristiwa; (3) reklasifikasi jurnal nilai tercatat bruto+akumulasi+surplus terikat; (4) fiskal: field persetujuan DJP ganti metode + penolakan bangunan saldo-menurun + laporan selisih membaca fiscalMethod/saldo tersimpan (ganti komentar ponytail garis-lurus); (5) jadwal komersial prospektif dari peristiwa terakhir. Usulan kode akun reklasifikasi = akun kelas existing, TIDAK ada akun baru di vonis ini.
+- BOT 2: tampilkan riwayat peristiwa per aset + status fiskal per tahun apa adanya (termasuk “belum dapat dihitung”); UI tidak memilih metode/kelompok, tidak hitung ulang jadwal.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E115-1 reklasifikasi memposting laba/ekuitas atau memakai currentValue bukan nilai tercatat jurnal = MERAH; E115-2 edit categoryId/metode/umur langsung tanpa peristiwa mengubah jadwal/laporan tahun lampau = MERAH (wajib ditolak/peristiwa); E115-3 ganti metode komersial menghitung ulang tahun lalu = MERAH; E115-4 ganti metode fiskal tanpa nomor+tanggal persetujuan DJP mengubah fiscalMethod/saldo = MERAH (fiskal byte-sama); E115-5 bangunan fiskal saldo-menurun diterima = MERAH; E115-6 aset fiskal saldo-menurun tampil garis-lurus harga perolehan di laporan = MERAH (wajib saldo tersimpan/belum-dihitung); E115-7 perubahan estimasi komersial mengubah fiskal (kelompok/umur fiskal ikut) = MERAH; E115-8 replay peristiwa sama melahirkan jurnal/peristiwa ganda = MERAH; E115-9 reklasifikasi aset disposed / surplus revaluasi dipakai aset lain = MERAH; E115-10 koreksi peristiwa lewat edit baris/currentValue tanpa reversal periode terbuka = MERAH.
 
-K4. MASA LINTAS STATUS CAMPURAN. Saat slip berjalan
-    dihitung, slip se-masa lain yang masih draft IKUT
-    basis + Sigma terpotongnya (konsisten samePeriod
-    existing yang tidak memfilter draft untuk TER).
-    Konsekuensi jujur: mengedit/menghapus draft se-masa
-    sesudah slip lain terbit mengubah target retroaktif —
-    ditangani B5/K1 (selisih tampil / serap lantai nol),
-    bukan kunci masa prematur. Mengunci masa pada slip
-    pertama = mesin kedua, ditolak.
+Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 11 + PMK 72/2023 (sumber resmi DJP di atas, akses 2026-10-23) untuk sisi fiskal dan PSAK 16/25/48 sebagai rujukan standar komersial (bukan dasar fiskal). BUKAN persetujuan DJP, bukan penetapan, dan bukan klaim SPT Tahunan/laporan keuangan sah — perubahan metode fiskal final tetap lewat persetujuan DJP, daftar penyusutan final wajib cocok lampiran SPT Tahunan badan.
 
-### 4. Batas build (mengikat BOT 3/BOT 2/BOT 6)
+ID vonis ini **F-2026-10-23-115-V** (tertinggi terverifikasi run ini di origin/main 41b81748: F-2026-10-23-111-V merged #617; 112-V–114-V di PR terbuka #618/#619/#620; 115 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini + putus prioritas inti sesudah saldo fiskal F-109/F-110 -> BOT 3 inti peristiwa perubahan aset -> BOT 2 -> BOT 6 E115-1..10.
 
-- BOT 3: agregator = perluasan buildPayrollWrite jalur
-  existing (hrm.actions.ts:721 + pemanggil estimasi/bulk
-  selaras), fungsi murni target/selisih dapat diuji tanpa
-  Prisma mengikuti pola computePph21ForPeriod; WAJIB
-  B1-B7 + K1-K4. DILARANG: migrasi (snapshot Json cukup),
-  cabang WEEKLY khusus (B4), cancel-paid baru (K3), ubah
-  computePph21ForPeriod (B7), basis allowances/x25 (B1).
-  Gerbang V-PF2-4(i) F-077-V (populasi murni-WEEKLY
-  terlewati-terhitung) DICABUT hanya untuk karyawan yang
-  semua slip se-masanya terhitung agregator berpenanda B6
-  DAN acceptance E103 lulus; campuran slip berpenanda +
-  tanpa penanda dalam satu masa = masa itu tetap
-  fail-closed untuk klaim final BPJS-nya (tampil alasannya).
-- BOT 2: tampilkan per masa: target, terpotong, sisa/lebih
-  dari snapshot backend apa adanya + label slip legacy vs
-  agregat; UI tidak menghitung target/selisih sendiri.
-- BOT 6 falsifikasi wajib (E103):
-  E103-1 satu slip bulanan base 8.000.000: health/
-         employment byte-sama dengan computeBpjsEmployee
-         existing (regresi B4); ubah agregator agar cabang
-         khusus = MERAH bila angka bulanan bergeser.
-  E103-2 4 slip mingguan base 2.000.000 se-masa (basis masa
-         8.000.000, ceiling tidak kena): Sigma health =
-         health(8jt) target sekali, BUKAN 4 x health(2jt)
-         dibulatkan per slip bila selisih pembulatan ada;
-         paksa per-slip penuh -> MERAH.
-  E103-3 basis masa 20.000.000 terpotong 4 slip: ceiling
-         Kesehatan 12jt + JP ruleset diterapkan SEKALI
-         (Sigma potongan = target basis 20jt); ceiling per
-         slip -> MERAH.
-  E103-4 slip penanggung draft dihapus, slip berikut
-         terbit: menanggung selisih penuh target - 0;
-         slip batal tetap dihitung basis/Sigma -> MERAH.
-  E103-5 basis turun sesudah potong (slip se-masa diedit
-         turun): potongan slip berjalan = 0 (lantai), tidak
-         negatif; paksa negatif -> MERAH. Kelebihan akhir
-         masa tampil temuan B5, bukan jurnal otomatis.
-  E103-6 health kurang tidak tertutup employment lebih:
-         alokasi per komponen; gabung total -> MERAH.
-  E103-7 slip paid: tidak ada jalur agregator mengubah/
-         membatalkan potongannya; jurnal koreksi otomatis
-         dari agregator -> MERAH (K3).
-  E103-8 masa campuran slip berpenanda agregat + slip
-         legacy tanpa penanda: klaim final masa ditolak/
-         terlabeli, tidak dicampur diam-diam (B6).
+---
 
-### 5. Yang TIDAK diputus
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-120-V: perolehan aset tetap non-kas (utang usaha, hibah/sumbangan, setoran modal non-tunai, tukar-menukar/tukar tambah)
 
-- Perluasan basis ke tunjangan tetap (butuh klasifikasi
-  komponen tetap di master + vonis lanjutan; B1).
-- Batas bawah UMK sebagai lantai basis (master UMK belum
-  ada; jangan tebak dari teks upah bebas).
-- Porsi pemberi kerja BPJS (existing hanya menghitung
-  porsi karyawan di jalur potong slip; jurnal beban porsi
-  pemberi kerja = cakupan onPayrollPaid existing, tidak
-  diubah vonis ini).
-- Bentuk fisik kunci unik rentang slip (Q-PF-3, BOT 3) dan
-  buka inti F-076-S (Q-PF-1/5, BOT 1) — tetap pemiliknya.
-- Klaim patuh BPJS per entitas nyata (peserta/program yang
-  diikuti perusahaan = fakta HR/legal, bukan vonis sistem).
+Status: PUTUSAN BOT 4 (kartu t_3c05feab, siklus standby 11:00). Dokumen saja; TANPA kode/schema/migrasi di kartu ini.
 
-Pemilik berikutnya: BOT 1 (merge PR vonis ini; buka kartu
-agregator BOT 3 bila setuju) -> BOT 3 (agregator B1-B7/K1-K4
-+ snapshot B6) -> BOT 2 (tampil target/sisa per masa) ->
-BOT 6 (E103-1..8). BOT 5: BR-PF turunan BPJS agregat
-tertutup oleh vonis ini; jangan putus rumus sendiri.
-## VONIS BOT 4 2026-10-23 — F-2026-10-23-105-V rancangan field cicilan mingguan tersimpan per pinjaman (V-PF4-3) + amortisasi slip mingguan (siklus standby 02:30, kartu t_b7dd816d)
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 11:00, origin/main 7bf0933a)
 
-Pemilik vonis: BOT 4. Pertanyaan (sisa eksplisit V-PF4-3 di F-2026-10-22-077-V PR #521 merged + kartu BOT 3 t_99cb19e4): field apa yang sah menyimpan cicilan mingguan supaya karyawan WEEKLY berpinjaman boleh dipotong pada slip mingguan, dan bagaimana amortisasi `remainingAmount` berjalan tanpa melanggar perjanjian tertulis?
+- Kanban BOT 4 non-done/archived: hanya kartu ini (t_3c05feab running). Nol kartu peminta vonis baru bebas-dependensi. Open lain: BOT 3 t_f2f7647b siklus sendiri, BOT 1 t_9bed3c01 siklus merge sendiri — bukan peminta vonis BOT 4.
+- PR vonis BOT 4 terbit semua ter-gate merge BOT 1: #632 F-119-V CONFLICTING head 984e4e35 CI 6/6 hijau, #623 F-116-V CONFLICTING, #620 F-114-V CONFLICTING — konflik append backlog semata, isi nol menunggu vonis baru. Inti BOT 3 #633 F-118 lapis aman MERGEABLE CI 6/6 — bukan tunggu vonis.
+- Maka riset vonis berikutnya diambil dari celah live di bawah.
 
-### Bukti repo terverifikasi run ini (origin/main b69e36ff + head PR #599)
+### Bukti repo terverifikasi run ini (origin/main 7bf0933a)
 
-- `EmployeeLoan` (schema:3397-3419 di worktree; 3363 di main checkout): hanya `monthlyInstallment Decimal(15,2)` + `remainingAmount Decimal(15,2)` + `status`; TIDAK ada nominal mingguan, frekuensi cicilan, atau referensi perjanjian. Skema Zod `employeeLoanSchema.monthlyInstallment: requiredNum(...,1)` (hrm.schemas.ts:70) mewajibkan cicilan bulanan > 0 untuk semua pinjaman.
-- Tiga jalur potong semua membaca `monthlyInstallment` penuh: estimasi `computePayrollEstimation` (hrm.actions.ts:1182-1191, cap min(installment, remaining)), batch massal (hrm.actions.ts:1707-1719), `capLoanDeduction` (hrm.actions.ts:1107-1127, cap Σ min per pinjaman). Jalur mingguan menjalankan salah satunya apa adanya = memotong janji bulanan penuh 4-5x sebulan — persis yang dilarang V-PF4-2(a).
-- Amortisasi saat bayar `markPayrollPaid` (hrm.actions.ts:2551-2580): budget = `payroll.loanDeduction`, didistribusikan oldest-first (orderBy loanDate asc), per pinjaman `applied = min(monthlyInstallment, remaining, budget)`, `remainingAmount` berkurang, lunas -> `paid_off`. Batas per-pinjaman di langkah ini memakai `monthlyInstallment` — nominal mingguan HARUS menggantikannya di jalur mingguan, bukan ditambah di atasnya.
-- PR #599 (head `hermes/backend-payroll-freq`, OPEN belum merged): gerbang WEEKLY fail-closed V-PF4-1 sudah dibangun persis — populasi WEEKLY berpinjaman aktif terlewati alasan `pinjaman`, selainnya `bpjsBelumDidukung` (hrm.actions.ts head #599:2004-2006); `Payroll @@unique(employeeId, period)` diganti `(employeeId, startDate, endDate)`. Jadi satu-satunya kunci tersisa membuka populasi ini = field nominal mingguan tersimpan + cabang potong/amortisasi mingguan.
-- Dasar hukum: PP 36/2021 Pasal 63 ayat (1) huruf e + ayat (3) — potongan upah untuk utang/cicilan utang WAJIB berdasar kesepakatan/perjanjian tertulis; Pasal 65 — total seluruh potongan Pasal 63 paling banyak 50% dari setiap pembayaran upah yang diterima. Sumber: https://peraturan.go.id/id/pp-no-36-tahun-2021 + PDF resmi https://peraturan.go.id/files/pp36-2021bt.pdf (akses 2026-10-23). Diubah PP 51/2023 (pengupahan) — pasal pemotongan tidak berubah substansi untuk butir ini; label: verifikasi redaksi konsolidasi tetap kewajiban implementasi, vonis tidak bergantung nomor pasal berubah.
+- Satu-satunya jalur perolehan: `createAsset` (src/actions/asset.actions.ts:693+) — `purchaseCost > 0` wajib akun Aset Tetap + Kas/Bank, jurnal tunggal `Dr Aset Tetap / Cr Kas-Bank` referenceType `ASSET_ACQUISITION` (baris 781-820). Tidak ada jenis sumber perolehan: aset dibeli kredit (utang vendor belum bayar), diterima hibah, disetor pemegang saham sebagai modal non-tunai, atau tukar tambah SEMUA dipaksa jadi Cr Kas/Bank — kas terpotong fiktif, utang/ekuitas/pendapatan hibah tak pernah tercatat, rekonsiliasi kas-bank vs jurnal pecah.
+- `Asset` (schema:4000-4041) tanpa kolom jenis/sumber perolehan, tanpa tautan VendorBill/dokumen sumber, tanpa nilai pasar tercatat. COA seed punya `300003 Modal Saham` EQTY (base-data.ts:841); akun utang usaha + PPN Masukan hidup di mapping SystemSetting existing (jalur VendorBill) — tidak dirujuk jalur aset sama sekali.
+- F-062-V Putusan 3 fail-closed perolehan berharga tetap berlaku: akun kosong = tolak berisik. Vonis ini HANYA menambah lawan kredit per JENIS perolehan; gerbang, Decimal, idempoten (referenceType,referenceId), `assertPeriodOpen` dalam tx pola existing tidak berubah.
 
-### Putusan
+### Dasar resmi (akses 2026-10-23)
 
-1. **Satu-satunya field baru yang disetujui: `weeklyInstallment Decimal(15,2) NULL` di `EmployeeLoan`.** Nullable, `NULL` = pinjaman TIDAK punya jadwal cicilan mingguan tertulis. Bukan kolom frekuensi generik, bukan tabel jadwal cicilan, bukan `installmentFrequency` string bebas. Alasan menolak generalisasi: perjanjian nyata hanya mengenal dua janji nominal di repo ini (per bulan existing, per minggu yang diminta V-PF4-3); kolom ketiga karangan = YAGNI dan membuka permukaan salah isi. Migrasi aditif nullable saja; baris existing semua `NULL` (aman: tidak ada perilaku berubah tanpa isi eksplisit).
-2. **Isi = nominal perjanjian tertulis, bukan turunan.** `weeklyInstallment` diisi operator HR dari perjanjian tertulis karyawan itu (Pasal 63 ayat (3)); sistem DILARANG menghitung/mengisi otomatis dari `monthlyInstallment/4`, `/5`, atau pembagi kalender apa pun (V-PF4-2(b) tetap ditolak sebagai default mesin — menjadi sah hanya sebagai angka yang manusia ketik dari dokumen). Validasi: bila terisi wajib > 0 sen; mengosongkan kembali ke `NULL` = mencabut jadwal mingguan (slip mingguan berikutnya kembali fail-closed V-PF4-1). Perubahan nilai berlaku prospektif slip berikutnya; slip terbit tidak dihitung ulang (snapshot `loanDeduction` di `Payroll` tetap sumber amortisasi).
-3. **Syarat lolos gerbang mingguan diperketat per pinjaman, bukan per karyawan saja.** Karyawan WEEKLY boleh dipotong pada slip mingguan hanya bila SETIAP pinjaman aktifnya (`status=active, remainingAmount>0`) punya `weeklyInstallment` terisi. Satu pinjaman aktif tanpa nominal mingguan = seluruh karyawan tetap terlewati-terhitung alasan `pinjaman` (fail-closed campuran dilarang setengah-setengah: memotong sebagian pinjaman menebak jadwal sisanya). Gerbang PR #599 `hasActiveLoan` wajib diperhalus BOT 3 menjadi `hasActiveLoanWithoutWeeklyInstallment`.
-4. **Rumus potong slip mingguan.** Per pinjaman: `potong = min(weeklyInstallment, remainingAmount)` presisi sen via `safeRound`/Decimal (pola cap existing dipertahankan); `loanDeduction` slip = Σ potong seluruh pinjaman aktif. `monthlyInstallment` TIDAK dibaca sama sekali di jalur WEEKLY; jalur MONTHLY byte-sama dengan hari ini (nol regresi). `computePayrollEstimation`, batch massal, dan `capLoanDeduction` wajib memilih nominal berdasar `paymentFrequency` karyawan dari SATU helper bersama — tiga salinan rumus terpisah yang bisa divergen = cacat.
-5. **Amortisasi oldest-first memakai nominal frekuensi slip.** Di `markPayrollPaid`, batas per pinjaman `applied = min(nominalSesuaiFrekuensiSlip, remaining, budget)`; frekuensi dibaca dari snapshot slip/karyawan saat slip dibuat, bukan dari master pinjaman yang mungkin sudah berubah. Distribusi oldest-first, `paid_off` saat remaining 0, dan budget dari `payroll.loanDeduction` ter-snapshot TIDAK berubah. DILARANG amortisasi ganda: satu slip hanya boleh memakai satu nominal per pinjaman.
-6. **Plafon 50% Pasal 65 ditegakkan di gerbang slip, bukan laporan.** Total potongan Pasal 63 pada satu slip (cicilan pinjaman + denda + ganti rugi + uang muka yang terpotong lewat slip itu) wajib `<= 50%` upah pembayaran slip itu; pelampauan = slip ditolak berisik saat generate/finalisasi dengan pesan menyebut plafon, BUKAN dipangkas diam-diam ke 50% (pemangkasan diam-diam mengubah janji cicilan tanpa dokumen). Penjaga ini berlaku kedua frekuensi; bila jalur MONTHLY existing ternyata belum menegakkannya, itu temuan terpisah wajib dilaporkan BOT 3 di PR inti — vonis ini tidak mengklaim existing sudah menegakkan.
-7. **Jurnal tidak berubah.** Potongan cicilan tetap mengurangi net slip lewat `loanDeduction` existing; jurnal payroll `onPayrollPaid` existing (Dr beban gaji / Cr piutang karyawan dst. sesuai mapping berjalan) tidak ditambah kaki baru. Piutang karyawan berkurang sebesar `applied` amortisasi aktual, selalu sama dengan yang dipotong — selisih potong vs amortisasi = temuan rekonsiliasi, bukan jurnal penyeimbang otomatis.
+- UU PPh Pasal 10 (UU 36/2008, teks resmi DJP https://www.pajak.go.id/sites/default/files/UU%20PPh%20No%2036%20Th%202008.pdf): (1) jual beli tanpa hubungan istimewa = jumlah sesungguhnya dikeluarkan/diterima; ada hubungan istimewa = jumlah seharusnya (harga pasar). (2) tukar-menukar = harga pasar. (4) hibah/bantuan/sumbangan memenuhi Pasal 4(3)(a)/warisan: nilai perolehan penerima = nilai sisa buku fiskal pemberi (pemberi tak berpembukuan → penetapan DJP); tidak memenuhi syarat = harga pasar. (6) setoran modal berupa harta = harga pasar harta dialihkan.
+- DJP "Bantuan atau Sumbangan, serta Harta Hibahan yang Dikecualikan sebagai Objek PPh" https://www.pajak.go.id/id/bantuan-atau-sumbangan-serta-harta-hibahan-yang-dikecualikan-sebagai-objek-pajak-penghasilan + PMK-90/PMK.03/2020 dirujuk halaman itu: nilai perolehan penerima dibukukan per status pengecualian; penyusutan atas harta barang dari bantuan/sumbangan/hibah yang dikecualikan TIDAK dapat dikurangkan fiskal (Pasal terkait di halaman peraturan DJP sama). Status pengecualian per kasus = fakta dokumen, bukan tebakan sistem.
+- UU PPh Pasal 11 + PMK 72/2023 (halaman DJP Penyusutan dan Amortisasi, pembaruan 2025-05-28, https://www.pajak.go.id/id/penyusutan-dan-amortisasi): penyusutan mulai bulan pengeluaran perolehan; dasar = harga perolehan Pasal 10 di atas.
+- PSAK 16 (label standar komersial, bukan dasar fiskal): harga perolehan = harga beli + biaya langsung terkait; aset diperoleh tukar-menukar diukur nilai wajar kecuali transaksi tanpa substansi komersial/nilai wajar tak andal (maka nilai tercatat aset diserahkan); hibah pemerintah/aset donasi diakui nilai wajar dengan pendapatan ditangguhkan/pendapatan terkait.
 
-### Batas build (mengikat)
+### Putusan 1 — Jenis perolehan terstruktur wajib; lawan kredit mengikuti jenis, bukan selalu Kas/Bank
 
-- BOT 3 (inti, kartu turunan t_99cb19e4 sesudah PR #599 merged + vonis ini merged): migrasi aditif `weeklyInstallment` nullable; klaim `prisma/schema.prisma` di board sebelum migrasi; helper nominal-per-frekuensi satu tempat dipakai 3 jalur potong + amortisasi; gerbang per butir 3; penjaga plafon butir 6; form pinjaman menambah field opsional berlabel perjanjian mingguan (BOT 2 menampilkan, BOT 3 wiring). DILARANG: auto-fill `/4`, kolom frekuensi generik, potong campuran.
-- BOT 2: field tampil hanya bila karyawan WEEKLY relevan; label wajib menyebut sumber perjanjian tertulis; UI tidak menghitung nominal.
-- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E105-1 pinjaman `weeklyInstallment=NULL` pada karyawan WEEKLY -> terlewati alasan `pinjaman`, `remainingAmount` byte-sama. E105-2 `weeklyInstallment=250.000`, remaining `600.000`, 3 slip mingguan se-masa -> potong 250rb/250rb/100rb, remaining akhir 0 + `paid_off`; ganti nominal mingguan dengan `/4` runtime -> MERAH. E105-3 dua pinjaman aktif, satu tanpa nominal mingguan -> nol potong keduanya. E105-4 slip MONTHLY karyawan sama byte-sama dengan perilaku existing (monthlyInstallment penuh tercap remaining). E105-5 Σ potongan Pasal 63 > 50% upah slip -> generate ditolak berisik; pangkas diam-diam ke 50% -> MERAH. E105-6 ubah `weeklyInstallment` master sesudah slip terbit -> amortisasi slip itu tetap nominal snapshot saat terbit. E105-7 edit `monthlyInstallment` tidak mengubah potong slip mingguan (jalur frekuensi terpisah).
+Perolehan berharga (`purchaseCost > 0`) wajib mencatat JENIS PEROLEHAN terstruktur dari daftar terdaftar saja: `CASH_PURCHASE` (tunai, perilaku existing), `CREDIT_PURCHASE` (utang usaha/vendor bill), `GRANT_DONATION` (hibah/bantuan/sumbangan/donasi), `CAPITAL_CONTRIBUTION` (setoran modal non-tunai pemegang saham/pemilik), `EXCHANGE` (tukar-menukar/tukar tambah dengan aset lain ± boot kas). Jenis kosong/teks bebas pada perolehan berharga = DITOLAK berisik. Jurnal perolehan per jenis (Dr selalu akun Aset Tetap kategori, fail-closed F-062-V):
 
-Klaim kepatuhan: vonis ini menetapkan rancangan field + penjaga berdasar PP 36/2021 Pasal 63(3)/65 (sumber resmi di atas, akses 2026-10-23); bukan pendapat hukum atas perjanjian karyawan individual — isi nominal tetap dokumen HR per karyawan.
+- `CASH_PURCHASE`: Dr Aset Tetap / Cr Kas-Bank — persis existing, tidak berubah.
+- `CREDIT_PURCHASE`: Dr Aset Tetap / Cr Utang Usaha (akun mapping utang usaha existing) sebesar harga perolehan; pembayaran kemudian = peristiwa bayar utang existing (Dr Utang / Cr Kas), DILARANG jurnal perolehan kedua saat bayar. Bila VendorBill sudah mencatat utang + aset/persediaan untuk aset sama, perolehan aset DILARANG menjurnal utang kedua — satu dokumen sumber satu jurnal (idempoten referenceType/referenceId); jalur bill-vs-aset langsung dipilih operator per dokumen, bukan keduanya.
+- `GRANT_DONATION`: Dr Aset Tetap / Cr Pendapatan Hibah-Ditangguhkan atau akun ekuitas/pendapatan hibah dari mapping terpetakan fail-closed (usulan kode akun ke BOT 4 dulu, jangan karang di kode) sebesar NILAI tercatat fiskal per Putusan 2; pengakuan pendapatan mengikuti sifat hibah tercatat (ditangguhkan diamortisasi pola standar bila terkait aset — pilihan model = peristiwa terstruktur, bukan default diam-diam).
+- `CAPITAL_CONTRIBUTION`: Dr Aset Tetap / Cr Modal Saham/penyetaraan modal (300003 atau akun ekuitas terpetakan kategori) sebesar harga pasar terstruktur; selisih nilai disepakati vs pasar TIDAK dikarang sistem — dicatat dokumen setoran (akta/berita acara) sebagai sumber.
+- `EXCHANGE`: aset baru Dr sebesar dasar Putusan 2; aset diserahkan dihentikan per F-116-V (nilai tercatat jurnal POSTED); boot kas dibayar Dr selisih / diterima Cr; selisih = laba/rugi pelepasan jalur gainLoss existing F-116-V, DILARANG ditanam ke harga perolehan aset baru melebihi dasar Putusan 2.
 
-ID vonis ini **F-2026-10-23-105-V** (tertinggi terverifikasi di origin/main b69e36ff + PR terbuka: 104-V PR #601; grep `F-2026-10-23-105` di backlog/board/PR = 0 sebelum tulis). Pemilik berikutnya: BOT 1 (merge PR vonis ini) -> BOT 3 (inti di t_99cb19e4 sesudah #599 merged, dalam batas §Batas build) -> BOT 2 (field/label) -> BOT 6 (E105-1..7).
+Harga perolehan aset (basis penyusutan komersial) = jumlah lawan di atas sen persis Decimal; biaya langsung perolehan (angkut/pasang/uji) yang memenuhi PSAK 16 ditambah ke Dr aset dari dokumen sumbernya sendiri, bukan ditebak persen.
+
+### Putusan 2 — Dasar fiskal per jenis (Pasal 10); fiskal tidak meniru lawan komersial membabi buta
+
+- `CASH_PURCHASE`/`CREDIT_PURCHASE` tanpa hubungan istimewa: dasar fiskal = harga sesungguhnya (Pasal 10(1)); ada hubungan istimewa terstruktur (penanda pihak terkait + dasar harga pasar penilai bernama) → dasar fiskal = harga pasar, selisih komersial-vs-fiskal tampil di daftar selisih, BUKAN jurnal kedua.
+- `EXCHANGE`: dasar fiskal aset diterima = harga pasar aset diterima/diserahkan per Pasal 10(2) dari penilaian terstruktur; tanpa penilaian terstruktur dapat diverifikasi → peristiwa fiskal DITOLAK berisik (komersial boleh nilai tercatat aset diserahkan per PSAK 16 tanpa-substansi, fiskal tetap menuntut pasar — selisih tampil, jangan dipaksa sama).
+- `GRANT_DONATION`: dasar fiskal = nilai sisa buku fiskal pemberi bila hibah memenuhi pengecualian Pasal 4(3)(a) (fakta terstruktur: status pemberi + dokumen hibah), selain itu harga pasar (Pasal 10(4)). Penyusutan fiskal atas harta hibah yang DIKECUALIKAN: TIDAK dapat dikurangkan — aset itu ditandai fiskal-tidak-dapat-disusutkan terstruktur sehingga daftar penyusutan fiskal melewatinya berlabel, bukan menyusutkan diam-diam lalu dikoreksi manual di SPT. Status pengecualian ragu = `BUTUH-VONIS-AKUNTAN` per kasus, jangan dipilih operator bebas.
+- `CAPITAL_CONTRIBUTION`: dasar fiskal = harga pasar Pasal 10(6) snapshot peristiwa; bukan objek PPh penerima sebagai pengganti saham (Pasal 4(3) dirujuk label saja) — sistem hanya membekukan dasar, tidak menerbitkan dokumen pajak apa pun.
+- Semua dasar fiskal dibekukan sebagai snapshot peristiwa perolehan per (aset) pola saldo fiskal F-109-V; edit master/penilaian sesudahnya tidak menghitung ulang perolehan lampau. Kelompok fiskal + saat mulai tetap F-062-V/F-107-V dari bulan perolehan.
+
+### Putusan 3 — PPN dan dokumen sumber: tidak dikarang dari jalur aset
+
+- Perolehan aset BUKAN peristiwa terbit PPN Keluaran. PPN Masukan hanya dari faktur pajak masukan tertaut dokumen pembelian (jalur TaxInvoice/VendorBill existing F-001/F-002); `CREDIT_PURCHASE` tanpa faktur pajak tercatat = PPN Masukan nol, ditampilkan belum-ada-faktur, DILARANG mengkredit dari nominal purchaseCost x tarif.
+- Hibah/setoran modal/tukar-menukar sisi PPN (penyerahan BKP Pasal 16D pemberi, DPP nilai lain, faktur 09) = kewajiban PEMBERI; ISF sebagai penerima hanya mencatat faktur pajak diterima bila ada. Perlakuan PPN atas tukar tambah kendaraan/aset ISF sendiri yang diserahkan mengikuti F-116-V Putusan 2 bila EXCHANGE melepas aset terdaftar — jangan jalur PPN kedua di peristiwa perolehan.
+- Dokumen sumber wajib per peristiwa: nomor/tanggal dokumen (faktur vendor/akta hibah/berita acara setoran/berita acara tukar), pihak lawan terstruktur, penilai bernama bila harga pasar dipakai. Tanpa dokumen sumber, perolehan non-kas DITOLAK berisik; `CASH_PURCHASE` existing tidak diperketat surut.
+
+### Putusan 4 — Pembekuan, koreksi, status
+
+- Empat status tetap terpisah: dokumen perolehan, pembayaran (hanya CREDIT/CASH), pajak (faktur masukan tertaut), posting jurnal. Jenis perolehan adalah fakta dokumen, bukan status pembayaran.
+- Koreksi jenis/nilai perolehan terposting = reversal jurnal + dokumen koreksi di periode terbuka (`assertPeriodOpen` dalam tx); dilarang edit `purchaseCost`/jenis diam-diam sesudah jurnal lahir. Replay dokumen sumber sama = satu aset/jurnal (idempoten existing).
+- Aset `purchaseCost = 0` warisan tetap boleh tanpa jurnal (existing); mengisi nilai belakangan = peristiwa perolehan baru terbekukan, bukan edit kolom.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge PR vonis ini + #632/#623/#620 bila gate hijau head persis, lalu putus prioritas inti F-120 sesudah inti aset berjalan.
+- BOT 3 (inti terpisah, klaim schema di board dulu, koordinasi BOT 4 sebelum migrasi): kolom jenis perolehan + dokumen sumber + dasar fiskal snapshot di peristiwa perolehan; resolver lawan kredit per jenis dari mapping fail-closed (usulan kode akun pendapatan hibah/ekuitas ke BOT 4 sebelum migrasi — TIDAK ada akun baru divonis di sini selain rujukan 300003 existing); gerbang pihak-terkait/penilaian pasar; penanda fiskal-tidak-dapat-disusutkan untuk hibah dikecualikan; pembayaran CREDIT lewat jalur utang existing tanpa jurnal perolehan kedua.
+- BOT 2: tampilkan jenis perolehan + dokumen sumber + dasar fiskal snapshot apa adanya; UI tidak memilih dasar fiskal dan tidak menghitung harga pasar.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E120-1 perolehan kredit menjurnal Cr Kas/Bank atau jurnal kedua saat bayar = MERAH; E120-2 jenis kosong/teks bebas pada perolehan berharga diterima = MERAH; E120-3 hibah dikecualikan masuk daftar penyusutan fiskal terkurangkan = MERAH; E120-4 EXCHANGE tanpa penilaian pasar terstruktur mengubah dasar fiskal = MERAH; E120-5 setoran modal dikredit ke pendapatan/kas bukan ekuitas terpetakan = MERAH; E120-6 PPN Masukan lahir dari purchaseCost tanpa faktur pajak tertaut = MERAH; E120-7 akun lawan jenis kosong -> perolehan ditolak berisik, nol aset/jurnal posted; E120-8 replay dokumen sumber sama = aset/jurnal ganda MERAH; E120-9 edit purchaseCost/jenis terposting tanpa reversal mengubah jurnal lampau = MERAH; E120-10 hubungan istimewa tanpa dasar pasar bernama memakai harga transaksi sebagai dasar fiskal diam-diam = MERAH.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 10/11 + PMK 72/2023 + PMK-90/PMK.03/2020 (sumber resmi DJP di atas, akses 2026-10-23) sisi fiskal dan PSAK 16 sisi komersial (rujukan standar, bukan dasar fiskal). BUKAN penetapan DJP, bukan penilaian harga pasar sah, bukan klaim SPT Tahunan — harga pasar final dan status pengecualian hibah per kasus tetap dokumen penilai/dasar nyata, sengketa = `BUTUH-VONIS-AKUNTAN`.
+
+ID vonis ini **F-2026-10-23-120-V** (tertinggi terverifikasi run ini di origin/main 7bf0933a + PR terbuka: 119-V di PR #632, 118-V merged #627, 120 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini -> BOT 3 inti perolehan non-kas -> BOT 2 -> BOT 6 E120-1..10.
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-121-V: inti posting jurnal penutup tahunan (YearEndClosing) — buka gerbang inti F-2026-10-20-86
+
+Status: PUTUSAN BOT 4 (kartu t_8f0fd77f, siklus standby 11:30; branch prior hermes/bot4-f121-yearend kosong tanpa commit — dikonfirmasi `git log origin/main..branch` nol). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Vonis ini MEMUTUS detail inti yang F-2026-10-20-86 (vonis Salsa 2026-10-20 20:10, board) sengaja tunda-teknis: kolom setting + aksi posting + approval. Pratinjau read-only F-86 sudah merged (PR #250): builder `src/lib/reports/year-end-closing.ts` + loader `year-end-closing-data.ts` + tes. Inti posting BELUM ada.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 11:30, origin/main 39df4118)
+
+- Kanban BOT 4: hanya kartu ini. Nol kartu peminta vonis baru.
+- PR vonis BOT 4 terbuka semua ter-gate merge BOT 1 (bukan menunggu vonis): #635 F-120-V BEHIND (merged selama snapshot jadi 39df4118), #632 F-119-V DIRTY, #623 F-116-V DIRTY, #620/#616/#613/#611/#608/#601/#593/#590/#588/#586/#584/#581/#579/#574-docs/#571/#552/#548/#544 semua DIRTY/BEHIND — isi nol menunggu BOT 4. Peminta BOT 3 t_99cb19e4 ter-gate merge BOT 1; t_af177f74 prasyarat BOT 1. Maka riset berikutnya = butir terbuka eksplisit F-86: inti posting ditunda-teknis menunggu vonis lengkap — vonis F-86 sendiri sudah terbit, yang belum diputus = detail eksekusi inti (urutan kunci, status sesudah posting, koreksi, tahun fiskal tak-kalendar). Vonis ini menutupnya sebagai F-121-V supaya BOT 1 bisa buka inti tanpa vonis lanjutan.
+
+### Bukti repo terverifikasi run ini (origin/main 39df4118)
+
+- Pratinjau merged: `buildYearEndClosingPreview` per (akun P&L REVENUE/EXPENSE, profitCenterId), hanya POSTED, kontra terbalik otomatis, lawan laba ditahan per profitCenterId, `balanced` hanya debet=kredit persis sen, `alreadyClosed` dari cek `referenceType="YearEndClosing" + referenceId=tahun + POSTED`. Loader komentar `ponytail`: `retainedEarningsAccountId: null` selalu — kolom setting belum ada.
+- `SystemSetting` (schema.prisma:105+) punya pola mapping akun nullable `salesReceivableAccountId` dll (baris 191-227) + `fiscalYearStartMonth Int @default(1)` (baris 122) + `periodLockDate` — kolom `retainedEarningsAccountId` BELUM ada (grep=0).
+- CoA: `300002 Laba Ditahan EQTY` di bawah `3000 Modal` (base-data.ts) existing; `isRetainedEarningsAccount(name)` regex nama di equity-changes.ts:62. Laporan perubahan ekuitas/laba ditahan menampilkan "belum ditutup" + baris "Saldo Akhir Bila Laba Ditutup" — posting inti mengubah baris itu jadi nol-selisih nyata.
+- Kunci periode: `assertPeriodOpen(date, tx)` locking-read `system_settings FOR UPDATE` (period-lock.service.ts); tutup/buka periode di period-close.actions.ts protokol kunci sama (R-09, tanpa siklus deadlock). Jurnal penutup WAJIB ikut protokol sama.
+- Approval: `approval-workflow.service.ts` + `requestApprovalIfConfigured` existing (pola Expense/F-87 dirujuk vonis F-86 butir 6).
+- Unik DB `(referenceType, referenceId)` jurnal (dirujuk vonis F-86 butir 3) = anti-dobel fisik.
+
+### Putusan 1 — Kolom setting: satu akun laba ditahan, fail-closed, validasi tipe
+
+- Migrasi inti menambah `SystemSetting.retainedEarningsAccountId Int?` nullable (pola baris 191-227, `@map("retained_earnings_account_id")`), TANPA akun CoA baru dan TANPA default tebakan di kode/migrasi. Seed/install boleh mengarahkan ke akun existing bernama laba ditahan HANYA lewat mekanisme mapping existing yang terlihat operator di pengaturan — bukan hardcode `300002` di service.
+- Resolver posting: kolom kosong / akun nonaktif / akun terhapus = posting DITOLAK berisik ("Akun laba ditahan belum dipetakan di Pengaturan") nol jurnal. Akun terpilih WAJIB `type=EQUITY` DAN lolos `isRetainedEarningsAccount(name)` ATAU ditandai eksplisit operator sebagai akun laba ditahan di pengaturan; akun EQTY lain (Modal Saham 300003, Equitas Saldo Awal 300001) DITOLAK sebagai tujuan penutup — menutup laba ke modal disetor = salah saji ekuitas. Ganti akun setting sesudah ada jurnal penutup POSTED: tahun tertutup TIDAK berubah (jurnal snapshot akun tujuan saat posting); pratinjau tahun belum tertutup memakai setting berjalan.
+
+### Putusan 2 — Aksi posting: satu tx, urutan kunci tetap, snapshot dari pratinjau
+
+- Posting = server action/service tipis `postYearEndClosing(fiscalYear)` dalam SATU tx: (1) `assertApproved` gerbang Putusan 4; (2) kunci baris `system_settings FOR UPDATE` lalu `assertPeriodOpen(tanggalPenutup, tx)` — tanggal penutup = akhir tahun fiskal dari `fiscalYearPeriod(fiscalYear, fiscalYearStartMonth)` (bukan 31 Des kalender bila startMonth!=1); (3) cek anti-dobel `findFirst(referenceType="YearEndClosing", referenceId=fiscalYear, status=POSTED, deletedAt=null)` di dalam tx — ada = tolak berisik sebut tahun; (4) hitung saldo dari jurnal POSTED tahun fiskal itu memakai builder pratinjau yang SAMA (satu sumber rumus; service dilarang hitung ulang rumus sendiri); (5) `balanced=false` atau selisih != 0 sen = tolak, nol jurnal; (6) tulis SATU Jurnal POSTED: baris penutup per (akun P&L, profitCenterId) membalik saldo penuh + baris lawan per profitCenterId ke akun Putusan 1, `referenceType="YearEndClosing"`, `referenceId=fiscalYear`, tanggal = tanggal penutup, idempotency key scope `year-end-closing:<fiscalYear>`.
+- Baris bersaldo nol tidak ditulis. Akun P&L yang muncul hanya sesudah penutup (jurnal koreksi tahun sama di periode masih terbuka sebelum kunci melewati tanggal penutup) TIDAK melahirkan jurnal susulan — vonis F-86 butir 3 ditegaskan: satu tahun = satu jurnal penutup aktif; koreksi hanya lewat Putusan 3.
+- Empat status tetap terpisah: status jurnal penutup (POSTED) tidak mengubah status dokumen sumber apa pun; tahun "tertutup" diturunkan dari keberadaan jurnal penutup POSTED + periodLockDate, bukan flag baru di setting.
+
+### Putusan 3 — Koreksi & buka kembali: reversal penuh, bukan edit, bukan hapus
+
+- Jurnal penutup terposting BEKU: koreksi hanya reversal jurnal penutup (jurnal lawan REVERSED pola hook existing) di periode terbuka (`assertPeriodOpen` tanggal penutup dalam tx sama), sesudah itu tahun kembali "belum ditutup" dan posting ulang dibolehkan. Edit baris jurnal penutup / hapus / ubah referenceId = DILARANG di inti.
+- Buka kunci periode (periodLockDate dimundurkan melewati tanggal penutup) TIDAK otomatis membatalkan jurnal penutup: laporan tetap membaca jurnal POSTED apa adanya; reversal tetap aksi eksplisit tercatat. Selisih sesudah buka-kunci tampil sebagai fakta (akun P&L tahun tertutup bersaldo lagi di pratinjau dengan `alreadyClosed=true`) dan pratinjau WAJIB menandainya, bukan menyembunyikan.
+- Tahun fiskal dengan jurnal DRAFT/REVERSED penutup saja = belum tertutup; cek anti-dobel hanya menghitung POSTED non-REVERSED (selaras loader existing).
+
+### Putusan 4 — Approval & izin: gerbang existing, tanpa key baru tahap ini
+
+- `requestApprovalIfConfigured("YearEndClosing", fiscalYear)` saat pengajuan + `assertApproved` SEBELUM tx posting (pola vonis F-86 butir 6); tanpa workflow terkonfigurasi = no-op mundur-kompatibel; pengaju tidak menyetujui sendiri (mesin approval existing). Aksi posting memakai izin pengaturan existing yang sama dengan tutup periode (`manage_settings`, period-close.actions.ts) — pemisahan verba posting-vs-kunci ditunda sampai ada peran nyata berbeda; nyatakan di PR inti bahwa pemegang `manage_settings` non-admin mendapat aksi posting juga.
+- Pajak: jurnal penutup murni reklasifikasi ekuitas internal — TANPA PPN/PPh/faktur/bupot; laba fiskal SPT Tahunan TIDAK diturunkan dari jurnal penutup ini dan koreksi fiskal akhir tahun tetap jalur terpisah. Menampilkan laba ditahan hasil penutup sebagai "laba fiskal" = DILARANG di UI/laporan.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge PR vonis ini; putus buka-inti F-121 (migrasi 1 kolom + aksi posting) — prasyarat nol PR lain; inti BUKAN membuka jurnal baru selain YearEndClosing.
+- BOT 3 (inti terpisah, klaim `prisma/schema.prisma` di board dulu, koordinasi BOT 4): (1) migrasi `retained_earnings_account_id` nullable + resolver fail-closed Putusan 1; (2) service posting Putusan 2 memakai builder pratinjau existing persis (impor, bukan salin rumus), ganti komentar `ponytail` loader jadi baca kolom nyata; (3) reversal Putusan 3 lewat hook reversal existing; (4) tes: posting seimbang sen, per-profitCenter termasuk null, tahun fiskal startMonth!=1.
+- BOT 2: tombol posting dari pratinjau existing, nonaktif bila `balanced=false`/`alreadyClosed=true`/belum dipetakan, tampilkan alasan backend apa adanya; UI tidak hitung saldo/selisih.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E121-1 setting kosong/bukan EQTY-laba-ditahan -> posting ditolak, nol jurnal; E121-2 posting kedua tahun sama ditolak di dalam tx (bukan hanya P2002 mentah); E121-3 selisih != 0 sen -> nol jurnal; E121-4 dua pusat laba + null -> tiga baris lawan terpisah, lintas-pusat digabung = MERAH; E121-5 tanggal penutup startMonth!=1 bukan 31 Des kalender + posting ke periode terkunci ditolak; E121-6 edit/hapus jurnal penutup tanpa reversal mengubah laba ditahan = MERAH; E121-7 pengaju menyetujui sendiri / assertApproved dicabut -> posting lolos = MERAH; E121-8 sesudah posting: pratinjau tahun itu saldo P&L nol + laporan laba ditahan "belum ditutup" nol, reversal mengembalikan keduanya; E121-9 ganti setting sesudah posting mengubah jurnal tahun tertutup = MERAH; E121-10 jurnal DRAFT/REVERSED ikut saldo posting = MERAH.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar PSAK 1/PSAK 25 sebagai rujukan standar penyajian ekuitas (bukan dasar fiskal) + vonis F-2026-10-20-86. BUKAN klaim laporan keuangan/SPT Tahunan sah — jurnal penutup tidak menggantikan koreksi fiskal, daftar penyusutan, atau SPT; angka fiskal tetap jalurnya sendiri.
+
+ID vonis ini **F-2026-10-23-121-V** (tertinggi terverifikasi run ini di origin/main 39df4118: F-2026-10-23-120-V merged #635; 119-V PR #632, 118-V merged; 121 belum terpakai di main maupun PR terbuka yang dicek; branch prior hermes/bot4-f121-yearend kosong). Pemilik berikutnya: BOT 1 merge + buka inti -> BOT 3 migrasi+posting -> BOT 2 -> BOT 6 E121-1..10.
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-126-V: pajak tangguhan atas sumber temporer NON-ASET — provisi garansi, CKPN piutang, akumulasi rugi fiskal (sumber 4/5/7 read-model F-112-V Putusan 1; basis fiskal nol/terealisasi terstruktur, kedaluwarsa 5 tahun UU PPh Pasal 6 ayat (2)) (lanjutan terbuka F-2026-10-23-112-V Putusan 1 daftar sumber (4)(5)(7) + F-2026-10-23-124-V Putusan 3 + F-2026-10-23-125-V Putusan 1/4)
+
+Status: PUTUSAN BOT 4 (kartu t_e4c1531c, siklus standby 14:00). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. F-112-V Putusan 1 mewajibkan read-model tangguhan mencakup tujuh sumber; F-124-V (PR #646) menutup sumber (1) penyusutan ke saldo fiskal terbekukan dan F-125-V (PR #648) menutup sumber (2)(3) revaluasi/impairment. Sumber (4) provisi garansi, (5) CKPN piutang, dan (7) akumulasi rugi fiskal BELUM punya vonis syarat-masuk: tanpa vonis ini, inti kelak menggoda menghitung temporer dari saldo GL berjalan (provisi), dari matriks ECL belum berpersen-manajemen (CKPN), atau dari rugi GL ditebak sebagai rugi fiskal. Vonis ini menutup ketiganya. Sumber (6) kapitalisasi perbaikan mengikuti basis peristiwa F-108-V/F-122-V sendiri (selisih basis komersial-vs-fiskal aset induk, bukan sumber liabilitas terpisah) — TIDAK diputus ulang di sini. Gerbang jurnal tangguhan TETAP tertutup (F-112-V Putusan 2 + F-124-V Putusan 3 tidak diubah).
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 14:00, origin/main 0ad8f864 -> c74bb5f3 selama run)
+
+- Snapshot awal run: origin/main 0ad8f864 (sama dengan snapshot 13:30 t_4410ee95). Selama run, #649 (inti konvergensi F-124-V BOT 3) merged -> main c74bb5f3; vonis ini ditulis di atas c74bb5f3. Item yang lahir sesudah snapshot awal = milik siklus berikut, bukan digarap ulang di sini.
+- Kanban BOT 4: hanya kartu ini (t_e4c1531c running). Nol kartu peminta vonis baru bebas-dependensi; kartu lain yang berjalan = eksekutor vonis terbit (BOT 3 inti, BOT 2 UI, BOT 1 siklus merge).
+- PR vonis BOT 4 terbuka semua ter-gate merge BOT 1/BOT 6, BUKAN menunggu vonis baru: #648 F-125-V MERGEABLE/BLOCKED head 252da8ab CI 6/6; #646 F-124-V MERGEABLE/BEHIND c7b2cca1 6/6; #640 F-122-V MERGEABLE/BLOCKED 661889df 6/6 (konfirmasi BOT 6 terikat head lama — milik BOT 6/BOT 1); #643 F-123-V CONFLICTING 5c5178a8 6/6; #632/#623/#620/#616/#613/#611 dst CONFLICTING append-only backlog, isi nol berubah. Inti berjalan: #649 MERGED selama run, #650 konsumen F-124 MERGEABLE/CLEAN, #647 analitis F-118 menunggu verdict BOT 6. BOT 4 tidak merge.
+- Maka riset vonis berikutnya = butir terbuka eksplisit F-112-V Putusan 1 sumber (4)(5)(7) yang ditegaskan ulang F-124-V Putusan 3 ("sumber lain tampil belum tersedia bernama sampai peristiwa sumber + dasar fiskalnya sendiri terbekukan").
+
+### Bukti repo terverifikasi run ini (origin/main c74bb5f3)
+
+- Read-model tangguhan berjalan (`src/lib/reports/deferred-tax.ts` + `deferred-tax-data.ts`, konvergensi #649): HANYA sumber aset — `DeferredTaxAssetInput[]` per aset, dasar fiskal `frozenClosingBalance` (hari ini loader meneruskan null semua = belum-terbekukan bernama), tarif `rateSource: operator|master` berlabel. Tidak ada baris sumber non-aset sama sekali: provisi/CKPN/rugi fiskal tidak tampil bahkan sebagai "belum tersedia" — daftar sumber F-112-V Putusan 1 belum utuh di permukaan.
+- Provisi garansi: rute provisi MATI merged — `warranty-journal.service.ts` memaksa `provisionBalance: 0` eksplisit; hanya E2 reklasifikasi beban klaim (Dr 510104) + E3 recovery virtually-certain (Dr 110508/Cr 510104) yang berjurnal. E1 akrual provisi (Dr Beban Garansi / Cr 210205) TIDAK dibangun dan TIDAK disaklarkan — menunggu gerbang data 12 bulan/30 klaim dinilai BOT 4 (vonis F-021 lanjutan). Saldo provisi POSTED hari ini karena itu NOL secara konstruksi, bukan estimasi.
+- CKPN: ABSEN total di main (vonis F-090-V PR #548 CONFLICTING belum merged): grep akun 110302/600027, model penyisihan, matriks provisi = 0 di schema/COA/service. Persen matriks awal = BUTUH-PERSETUJUAN-MANAJEMEN (F-090-V §6), belum diputus siapa pun.
+- Rugi fiskal: grep `rugi fiskal|fiscalLoss|kompensasi|carryforward` di src/prisma/backlog main = 0. Tidak ada input terstruktur kertas kerja SPT Tahunan, tidak ada register tahun rugi/sisa kompensasi/kedaluwarsa.
+- Tarif: master tarif badan bertanggal efektif belum ada (F-124-V Putusan 2); read-model berjalan memakai tarif pasokan operator berlabel `OPERATOR_RATE_LABEL`. Vonis ini merujuk rezim tarif itu, tidak mengulang.
+
+### Dasar resmi (akses 2026-10-23)
+
+- UU PPh Pasal 6 ayat (2) (UU 36/2008, teks resmi DJP https://www.pajak.go.id/id/undang-undang-nomor-36-tahun-2008): kerugian fiskal dikompensasikan dengan penghasilan mulai tahun pajak berikutnya berturut-turut sampai 5 tahun. Penjelasan DJP memberi contoh mengikat cara hitung jendela: rugi 2009 sisa di akhir 2014 TIDAK boleh dikompensasi 2015; rugi 2011 hanya sampai laba 2016. Jendela dihitung per tahun rugi, bukan satu tanggal global.
+- UU PPh Pasal 6 ayat (1) huruf h + PMK-105/PMK.03/2009 s.t.d.d. perubahan keduanya (halaman peraturan DJP https://pajak.go.id/id/peraturan/piutang-yang-nyata-nyata-tidak-dapat-ditagih-yang-dapat-dikurangkan-dari-penghasilan): piutang nyata-nyata tidak dapat ditagih dapat dikurangkan fiskal hanya bila syarat kumulatif terpenuhi — dibebankan di laba rugi komersial, penagihan diserahkan ke Pengadilan Negeri/BUPLN atau perjanjian tertulis penghapusan, dipublikasikan, dan daftar nominatif (nama, NPWP, alamat, jumlah) diserahkan ke DJP. Penyisihan/estimasi ECL TIDAK memenuhi syarat itu: beban penyisihan komersial = koreksi fiskal positif sampai peristiwa hapus-buku yang memenuhi syarat lahir.
+- UU PPh Pasal 6 ayat (1) kerangka 3M: provisi/estimasi yang belum terealisasi bukan biaya fiskal tahun pembentukan; biaya garansi fiskal lahir saat klaim nyata terjadi (biaya terealisasi), bukan saat akrual komersial dibentuk.
+- PSAK 46 (label standar komersial, BUKAN dasar fiskal): perbedaan temporer atas liabilitas = jumlah tercatat liabilitas > dasar pengenaan pajaknya (dasar pajak liabilitas provisi/penyisihan = tercatat dikurangi jumlah yang dapat dikurangkan fiskal masa depan; provisi yang baru dapat dikurangkan saat terealisasi -> dasar pajak NOL -> seluruh tercatat = temporer dapat dikurangkan). Aset pajak tangguhan (termasuk dari rugi fiskal belum dikompensasi) diakui hanya sepanjang probable laba kena pajak masa depan tersedia; ditelaah tiap tanggal pelaporan. Rujukan bunyi standar: ED PSAK 46 IAI (dirujuk F-112-V; konfirmasi paragraf final saat inti dibangun).
+- Tarif badan statutori 22% (UU PPh Pasal 17(1)(b) ub. UU 7/2021) hidup sebagai DATA master bertanggal efektif per F-124-V Putusan 2 — dirujuk, tidak diulang, tidak dihardcode.
+
+### Putusan 1 — Provisi garansi: sumber hanya dari saldo provisi POSTED; rute MATI = nol bernama, bukan belum-tersedia
+
+- Sumber (4) HANYA boleh terhitung bila saldo provisi garansi dapat dibuktikan dari jurnal POSTED akun provisi terpetakan (210205 per F-021) pada tanggal neraca: jumlah tercatat = saldo kredit provisi POSTED; dasar fiskal = NOL (provisi belum dapat dikurangkan fiskal sampai klaim terealisasi, Pasal 6 kerangka di atas); perbedaan temporer dapat dikurangkan = seluruh saldo tercatat sen persis.
+- Selama rute provisi MATI berjalan (E1 belum dibuka; `provisionBalance: 0` konstruksi service), baris sumber tampil sebagai "provisi garansi: rute provisi mati — saldo provisi nol terverifikasi jurnal" dengan temporer NOL bernama. Ini BUKAN status "belum tersedia": nol di sini fakta terverifikasi (tidak ada jurnal E1 yang bisa lahir), dan read-model WAJIB membuktikan nol itu dari ketiadaan jurnal provisi POSTED, bukan dari asumsi flag rute. Bila kelak jurnal provisi POSTED pertama lahir tanpa vonis ini diperbarui, baris otomatis beralih terhitung Putusan ini — flag rute TIDAK boleh menjadi penentu klasifikasi (pola skill: flag lunak bukan fakta).
+- Beban klaim E2 rute MATI (beban-saat-terjadi) TIDAK melahirkan temporer: beban komersial = biaya terealisasi yang sama jalurnya dengan fiskal; selisihnya nol secara definisi dan DILARANG ditampilkan sebagai sumber dapat-dikurangkan. Recovery E3 virtually-certain (aset 110508) juga bukan sumber tangguhan di sini: pengakuan fiskalnya mengikuti realisasi penerimaan — sengketa per kasus, tampil tidak terhitung beralasan, jangan dikarang temporernya.
+- E1 kelak dibuka (gerbang data F-021 terpenuhi + vonis pembuka): snapshot peristiwa perhitungan membaca saldo provisi POSTED tanggal neraca persis; pembentukan/pelepasan provisi sesudah tanggal neraca tidak mengubah stok tahun itu.
+
+### Putusan 2 — CKPN piutang: penyisihan komersial temporer dapat dikurangkan; deductibility fiskal HANYA peristiwa hapus-buku bersyarat PMK-105
+
+- Sumber (5) HANYA boleh terhitung sesudah inti F-090-V merged DAN saldo penyisihan terbukti dari jurnal POSTED akun kontra terpetakan (110302 usulan F-090-V): jumlah tercatat pengurang = saldo penyisihan POSTED; dasar fiskal penyisihan = NOL (estimasi ECL tidak memenuhi Pasal 6(1)(h)); temporer dapat dikurangkan = seluruh saldo penyisihan sen persis. Sebelum inti itu ada, baris tampil "CKPN: belum tersedia — inti penyisihan belum terbekukan" bernama (F-124-V Putusan 3); DILARANG menghitung ECL bayangan di read-model tangguhan dari aging berjalan.
+- Peristiwa hapus-buku (E3 F-090-V) mengubah peta secara prospektif: bagian piutang yang dihapus-buku DENGAN syarat PMK-105 lengkap terstruktur (daftar nominatif nama/NPWP/alamat/jumlah + penyerahan penagihan/perjanjian tertulis + publikasi + dibebankan komersial — masing-masing fakta dokumen bertanggal, bukan centang bebas) menjadi dapat dikurangkan fiskal pada tahun peristiwa itu: temporer atas bagian itu TERTUTUP (bukan lagi dapat-dikurangkan masa depan), dan read-model menampilkan penutupan itu sebagai mutasi sumber tahun berjalan, bukan mengedit stok tahun lampau.
+- Hapus-buku TANPA syarat PMK-105 lengkap: komersial boleh (E3 berjalan), fiskal TETAP tidak dapat dikurangkan — temporer ditutup tanpa manfaat fiskal terealisasi, ditampilkan sebagai "hapus-buku tidak memenuhi syarat fiskal" terpisah; mesin DILARANG memberi label dapat-dibiayakan pada jurnal penyisihan/hapus-buku mana pun (pola E90-6). Status per piutang (bersyarat-lengkap vs tidak) = fakta dokumen peristiwa hapus-buku, dibekukan; kelengkapan yang diragukan = `BUTUH-VONIS-AKUNTAN` per kasus, jangan dipilih operator bebas.
+- Pemulihan piutang terhapus (E4 F-090-V dua langkah) membalikkan perlakuan tahun pemulihan, bukan tahun hapus-buku: stok temporer tahun-tahun lampau byte-sama.
+
+### Putusan 3 — Akumulasi rugi fiskal: input terstruktur kertas kerja SPT per tahun rugi; jendela 5 tahun per tahun; kedaluwarsa menutup stok
+
+- Sumber (7) HANYA dari register input terstruktur per (tahun rugi): jumlah rugi fiskal awal menurut SPT Tahunan/kertas kerja bertanda tangan penanggung jawab bernama, kompensasi terpakai per tahun berikutnya, sisa, dan status ketetapan/pembetulan yang mengubah angka (SKP/pembetulan = peristiwa input baru bertanggal, bukan edit angka lama diam-diam). DILARANG menurunkan rugi fiskal dari laba/rugi GL, dari jurnal penutup F-121-V, atau dari selisih komersial-fiskal read-model — ketiganya bukan rugi fiskal SPT.
+- Jendela kompensasi per tahun rugi = tahun rugi + 5 tahun pajak berikutnya berturut-turut (Pasal 6 ayat (2) + contoh penjelasan DJP di atas): sisa yang belum terkompensasi pada akhir tahun ke-5 KEDALUWARSA — read-model menampilkannya sebagai mutasi kedaluwarsa tahun itu dan mengeluarkannya dari stok dapat-dikurangkan; sisa kedaluwarsa DILARANG terus dibawa sebagai aset tangguhan analitis. Perpanjangan jendela karena fasilitas penanaman modal/kawasan tertentu = fakta ketetapan terstruktur per kasus (`BUTUH-VONIS-AKUNTAN` bila diklaim), bukan input tahun bebas.
+- Stok temporer sumber (7) per tanggal neraca = Σ sisa belum terkompensasi yang jendelanya belum berakhir pada tanggal itu, per tahun rugi ditampilkan terpisah (tahun rugi, awal, terpakai, sisa, tahun kedaluwarsa). Kompensasi tahun berjalan mengurangi tahun rugi TERTUA lebih dulu (urutan berturut-turut bunyi pasal); urutan lain = ditolak berisik.
+- Label pengakuan mengikuti F-125-V Putusan 4 tanpa pengecualian: stok rugi fiskal adalah arah ASET tangguhan analitis — label "dapat diakui analitis" hanya dengan dasar laba kena pajak masa depan terstruktur terbekukan; tanpa itu "belum teruji — bukan angka pengakuan". Kedaluwarsa yang pasti (sisa besar, jendela sisa pendek) WAJIB tampil sebagai penanda risiko pada barisnya, bukan disembunyikan di total.
+
+### Putusan 4 — Bentuk bersama tiga sumber di read-model: stok liabilitas/aset non-aset, nol-netting sumber, jurnal tetap tertutup
+
+- Tiga sumber ini masuk sebagai baris sumber NON-ASET bernama di read-model yang sama (perluasan kontrak `deferred-tax.ts`, bukan laporan kedua): per sumber tampil jumlah tercatat (dasar jurnal/input terbekukan), dasar fiskal (NOL terstruktur untuk provisi/CKPN; stok sisa untuk rugi fiskal), temporer bertanda, arah, tarif master/operator berlabel persis rezim F-124-V Putusan 2, dan status (terhitung / nol terverifikasi / belum tersedia bernama / belum teruji).
+- Arah: provisi garansi dan CKPN menaikkan temporer dapat-dikurangkan (sisi aset tangguhan analitis); rugi fiskal sisi yang sama. Ketiganya DILARANG disalinghapus dengan temporer kena pajak aset (sisi liabilitas) di dalam baris sumber — total analitis berlabel boleh menjumlah per arah (pola totals existing), GL/netting penyajian tetap F-112-V Putusan 2/3. Penutupan temporer CKPN oleh hapus-buku bersyarat (Putusan 2) tampil sebagai mutasi, bukan pengurang diam-diam stok aset.
+- Jurnal tetap TERTUTUP: vonis ini hanya mengatur syarat tampil/terhitung di read-model analitis. Tanpa gerbang kebijakan BOT 1 + peristiwa Perhitungan Pajak Tangguhan tahunan terbekukan (F-112-V Putusan 2), tidak ada jurnal dari ketiga sumber ini; `DEFERRED_TAX_NOTICE` wajib tampil verbatim di konsumen.
+- Empat status tetap terpisah dan pembekuan berlaku penuh: edit master (persen CKPN kelak, akun mapping, tarif) tidak menghitung ulang stok terbekukan tahun lampau; koreksi input rugi fiskal/status PMK-105 hanya peristiwa koreksi bertanggal di periode terbuka, stok tahun tertutup byte-sama sampai peristiwa perhitungan tahun itu sendiri dikoreksi lewat reversal pola F-112-V.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge PR vonis ini + #648/#646/#643/#640 bila gate hijau head persis; urutan inti tetap: saldo fiskal F-109 terbekukan -> konvergensi F-124 (merged #649/#650) -> peristiwa F-111/F-125 -> sumber non-aset vonis ini. Gerbang jurnal tangguhan + gerbang data E1 provisi + persen matriks CKPN (BUTUH-PERSETUJUAN-MANAJEMEN F-090-V) = tiga keputusan terpisah; kartu sumber ini tidak membuka satu pun.
+- BOT 3 (inti terpisah, klaim `prisma/schema.prisma` di board dulu, koordinasi BOT 4 sebelum migrasi): (1) perluas builder/loader tangguhan dengan baris sumber non-aset Putusan 4 (provisi dari saldo jurnal POSTED 210205 — hari ini nol terverifikasi; CKPN label belum-tersedia sampai inti F-090-V ada; rugi fiskal label belum-tersedia sampai register input dibangun); (2) register rugi fiskal per tahun rugi Putusan 3 (input bertanda tangan bernama, mutasi kompensasi tertua-dulu, kedaluwarsa otomatis per jendela) — usulkan bentuk datanya ke BOT 4 sebelum migrasi; (3) penanda kelengkapan PMK-105 terstruktur pada peristiwa hapus-buku F-090-V saat inti CKPN dibangun. Tanpa migrasi di kartu vonis ini.
+- BOT 2: tampilkan baris sumber non-aset per Putusan 4 apa adanya (status bernama verbatim, risiko kedaluwarsa rugi fiskal terlihat, notice verbatim); UI tidak menghitung temporer/ECL/rugi fiskal dan tidak menyediakan tombol jurnal.
+- BOT 5: tidak ada angka statutori baru; spec piutang/garansi rujuk vonis ini untuk status sumber tangguhan, bukan mengarang saldo provisi/penyisihan.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E126-1 rute MATI tetapi jurnal provisi POSTED ada -> baris provisi terhitung dari jurnal (flag rute penentu = MERAH); E126-2 beban klaim E2 ditampilkan sebagai temporer dapat-dikurangkan = MERAH; E126-3 CKPN dihitung dari aging/matriks bayangan sebelum inti F-090-V + saldo POSTED ada = MERAH (wajib belum-tersedia bernama); E126-4 hapus-buku tanpa fakta PMK-105 lengkap diberi label dapat-dibiayakan fiskal / temporer ditutup sebagai terealisasi = MERAH; E126-5 rugi fiskal diturunkan dari laba GL/jurnal penutup = MERAH (wajib input terstruktur bertanda tangan); E126-6 sisa rugi tahun ke-6 sesudah tahun rugi masih masuk stok (kedaluwarsa tidak menutup) atau kompensasi melompati tahun tertua = MERAH; E126-7 tiga sumber disalinghapus dengan temporer aset di baris sumber, atau label dapat-diakui tanpa dasar laba terbekukan (Putusan 3/F-125 Putusan 4) = MERAH; E126-8 jurnal tangguhan lahir dari sumber mana pun tanpa peristiwa tahunan terbekukan + gerbang kebijakan = MERAH; E126-9 edit persen/master/input sesudah tahun terbekukan mengubah stok tahun lampau = MERAH; E126-10 contoh angka: provisi POSTED 10.000.000 -> temporer dapat-dikurangkan 10.000.000 (dasar fiskal 0), indikasi aset tangguhan 2.200.000 pada tarif master 22% hanya berlabel dapat-diakui bila dasar laba terbekukan ada; rugi fiskal 2026 sisa 50.000.000 pada neraca 2032 (tahun ke-6) -> stok NOL + mutasi kedaluwarsa tampil.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 6 ayat (1) huruf h + Pasal 6 ayat (2) + PMK-105/PMK.03/2009 s.t.d.d. (sumber resmi DJP di atas, akses 2026-10-23) sisi fiskal dan PSAK 46/57/71 sebagai rujukan standar komersial (bukan dasar fiskal). BUKAN klaim laporan keuangan/SPT Tahunan sah, bukan penetapan DJP — probable laba masa depan, kelengkapan PMK-105 per piutang, dan perpanjangan jendela kompensasi per kasus tetap `BUTUH-VONIS-AKUNTAN`/keputusan manajemen bernama.
+
+ID vonis ini **F-2026-10-23-126-V** (tertinggi terverifikasi run ini di origin/main c74bb5f3 + PR terbuka: 125-V di PR #648, 124-V #646, 123-V #643, 122-V #640; 126 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini + putus urutan inti sumber -> BOT 3 baris sumber non-aset + register rugi fiskal -> BOT 2 -> BOT 6 E126-1..10.
