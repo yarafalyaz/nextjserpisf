@@ -148,9 +148,25 @@ describe("sumber temporer non-aset F-2026-10-23-126-V", () => {
       ckpn: ckpn({ postedAllowanceBalance: 5_000_000, profitBasisFrozen: false }),
     })
     expect(result.totals.deductibleBySource).toEqual({ "warranty-provision": 10_000_000, ckpn: 5_000_000, "fiscal-loss": 0 })
+    // Total indikasi agregat = jumlah persis indikasi per sumber (tanpa timpa/salinghapus):
+    // provisi 10jt @22% = 2.200.000 + CKPN 5jt @22% = 1.100.000.
+    expect(line(result, "warranty-provision").deferredTaxAssetIndication).toBe(2_200_000)
+    expect(line(result, "ckpn").deferredTaxAssetIndication).toBe(1_100_000)
+    expect(result.totals.deferredTaxAssetIndication).toBe(3_300_000)
     expect(line(result, "warranty-provision").recognitionLabel).toBe(NONASET_RECOGNITION_ELIGIBLE_LABEL)
     // Sumber kedua tanpa dasar laba sendiri tetap belum-teruji walau sumber pertama eligible.
     expect(line(result, "ckpn").recognitionLabel).toBe(NONASET_RECOGNITION_UNTESTED_LABEL)
+  })
+
+  it("E126-7b: total indikasi agregat tiga sumber computed = jumlah persis per sumber", () => {
+    const result = build({
+      provision: provision({ postedProvisionBalance: 10_000_000, postedProvisionJournalCount: 1 }),
+      ckpn: ckpn({ postedAllowanceBalance: 5_000_000 }),
+      fiscalLossYears: [loss()],
+    })
+    // 2.200.000 (provisi) + 1.100.000 (CKPN) + 11.000.000 (rugi fiskal 50jt) @22%.
+    expect(line(result, "fiscal-loss").deferredTaxAssetIndication).toBe(11_000_000)
+    expect(result.totals.deferredTaxAssetIndication).toBe(14_300_000)
   })
 
   it("E126-8: jurnal tetap tertutup — notice verbatim, hasil read-model bukan jurnal", () => {
