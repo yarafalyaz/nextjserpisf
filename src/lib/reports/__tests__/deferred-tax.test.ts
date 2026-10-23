@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest"
 
 import {
-  assetTaxBaseAt,
   buildDeferredTaxTemporaryDifference,
   deferredTaxSummary,
   DEFERRED_TAX_NOTICE,
+  FISCAL_NOT_FROZEN_LABEL,
+  OPERATOR_RATE_LABEL,
   type DeferredTaxAssetInput,
 } from "@/lib/reports/deferred-tax"
 
@@ -22,6 +23,7 @@ function asset(overrides: Partial<DeferredTaxAssetInput> = {}): DeferredTaxAsset
     taxTypeListed: true,
     taxDjpDetermination: false,
     hasPostedBooks: true,
+    frozenClosingBalance: 9_000_000,
     ...overrides,
   }
 }
@@ -39,22 +41,6 @@ function texts(result: ReturnType<typeof buildDeferredTaxTemporaryDifference>) {
     )
     .join("\n")
 }
-
-describe("assetTaxBaseAt", () => {
-  it("menghitung dasar fiskal garis lurus kumulatif, tahun perolehan = tahun 1", () => {
-    // GROUP_1 25%: tahunan 3.000.000; 2025 -> akumulasi 3.000.000 -> 9.000.000.
-    expect(assetTaxBaseAt(asset(), AS_OF_2025)).toBe(9_000_000)
-    // 2026 -> akumulasi 6.000.000 -> 6.000.000; 2028 -> 0 (lantai).
-    expect(assetTaxBaseAt(asset(), new Date(Date.UTC(2026, 11, 31)))).toBe(6_000_000)
-    expect(assetTaxBaseAt(asset(), new Date(Date.UTC(2028, 11, 31)))).toBe(0)
-  })
-
-  it("mengembalikan null bila kelompok fiskal belum dapat ditentukan", () => {
-    expect(
-      assetTaxBaseAt(asset({ taxGroupCode: null, taxTypeListed: true }), AS_OF_2025),
-    ).toBeNull()
-  })
-})
 
 describe("buildDeferredTaxTemporaryDifference", () => {
   it("menandakan liabilitas bila nilai buku komersial di atas dasar fiskal", () => {
@@ -114,7 +100,7 @@ describe("buildDeferredTaxTemporaryDifference", () => {
       assets: [
         asset({ code: "A", bookValue: 12_000_000 }),
         asset({ code: "B", hasPostedBooks: false }),
-        asset({ code: "C", taxGroupCode: null, taxTypeListed: true }),
+        asset({ code: "C", taxGroupCode: null, taxTypeListed: true, frozenClosingBalance: null }),
       ],
       taxRatePercent: 22,
       asOf: AS_OF_2025,
@@ -124,6 +110,75 @@ describe("buildDeferredTaxTemporaryDifference", () => {
     // Hanya aset A masuk total apel-ke-apel.
     expect(result.totals.carryingAmount).toBe(12_000_000)
     expect(result.totals.deferredTaxLiability).toBe(660_000)
+  })
+
+  it("E124-1/E124-4: tanpa baris terbekukan = belum-terbekukan bernama, selisih tidak dihitung (bukan garis lurus, bukan nol terbaca sama)", () => {
+    const result = buildDeferredTaxTemporaryDifference({
+      assets: [
+        asset({ code: "SM", bookValue: 212_500_000, frozenClosingBalance: null }),
+        asset({ code: "OK", bookValue: 212_500_000, frozenClosingBalance: 170_000_000 }),
+      ],
+      taxRatePercent: 22,
+      rateSource: "master",
+      asOf: AS_OF_2025,
+    })
+    expect(result.totals.fiscalNotFrozen).toBe(1)
+    expect(result.totals.excluded).toBe(1)
+    // Hanya aset terbekukan masuk: 212.500.000 - 170.000.000 = 42.500.000; 22% = 9.350.000 (E124-6).
+    expect(result.totals.temporaryDifference).toBe(42_500_000)
+    expect(result.totals.deferredTaxLiability).toBe(9_350_000)
+    expect(texts(result)).toContain(FISCAL_NOT_FROZEN_LABEL)
+  })
+
+  it("E124-4: alasan penolakan F-109 tampil apa adanya di baris belum-terbekukan", () => {
+    const result = buildDeferredTaxTemporaryDifference({
+      assets: [asset({ frozenClosingBalance: null, frozenRejectionReason: "metode-belum-dipilih" })],
+      taxRatePercent: 22,
+      asOf: AS_OF_2025,
+    })
+    expect(texts(result)).toContain("metode-belum-dipilih")
+    expect(result.totals.temporaryDifference).toBe(0)
+    expect(result.totals.deferredTaxLiability).toBe(0)
+  })
+
+  it("E124: tarif operator berlabel pasokan operator di verdict + summary (bukan tarif resmi)", () => {
+    const result = buildDeferredTaxTemporaryDifference({
+      assets: [asset({ bookValue: 12_000_000 })],
+      taxRatePercent: 22,
+      asOf: AS_OF_2025,
+    })
+    expect(result.rateSource).toBe("operator")
+    expect(result.rateSourceLabel).toBe(OPERATOR_RATE_LABEL)
+    expect(result.verdict).toContain(OPERATOR_RATE_LABEL)
+    expect(deferredTaxSummary(result)).toContain(OPERATOR_RATE_LABEL)
+    expect(texts(result)).toContain(OPERATOR_RATE_LABEL)
+  })
+
+  it("tarif master: label operator hilang, verdict menyebut tarif master", () => {
+    const result = buildDeferredTaxTemporaryDifference({
+      assets: [asset({ bookValue: 12_000_000 })],
+      taxRatePercent: 22,
+      rateSource: "master",
+      asOf: AS_OF_2025,
+    })
+    expect(result.rateSource).toBe("master")
+    expect(result.rateSourceLabel).toBeNull()
+    expect(result.verdict).toContain("tarif master")
+    expect(result.verdict).not.toContain(OPERATOR_RATE_LABEL)
+    expect(deferredTaxSummary(result)).toContain("tarif master")
+  })
+
+  it("semua aset belum terbekukan: verdict bernama, nol tangguhan", () => {
+    const result = buildDeferredTaxTemporaryDifference({
+      assets: [asset({ frozenClosingBalance: null }), asset({ code: "B", frozenClosingBalance: undefined })],
+      taxRatePercent: 22,
+      asOf: AS_OF_2025,
+    })
+    expect(result.totals.fiscalNotFrozen).toBe(2)
+    expect(result.verdict).toContain(FISCAL_NOT_FROZEN_LABEL)
+    expect(deferredTaxSummary(result)).toContain(FISCAL_NOT_FROZEN_LABEL)
+    expect(result.totals.deferredTaxLiability).toBe(0)
+    expect(result.totals.deferredTaxAsset).toBe(0)
   })
 
   it("mengembalikan nol tangguhan saat tidak ada aset", () => {

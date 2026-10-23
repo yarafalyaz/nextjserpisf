@@ -27,6 +27,7 @@ function asset(overrides: Partial<DeferredTaxAssetInput> = {}): DeferredTaxAsset
     taxTypeListed: true,
     taxDjpDetermination: false,
     hasPostedBooks: true,
+    frozenClosingBalance: 9_000_000,
     ...overrides,
   }
 }
@@ -46,6 +47,7 @@ describe("DeferredTaxCard F-2026-10-23-112", () => {
     const text = container.textContent ?? ""
     expect(container.querySelector('[aria-label="Perbedaan Temporer Pajak Tangguhan"]')).not.toBeNull()
     expect(text).toContain("Kena pajak (liabilitas)")
+    expect(text).toContain("tarif pasokan operator — bukan master")
     expect(text).toContain("Dapat dikurangkan (aset)")
     expect(text).toContain("Belum dapat dihitung")
     expect(text).toContain(DEFERRED_TAX_NOTICE)

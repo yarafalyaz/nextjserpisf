@@ -5,6 +5,13 @@
  * jurnal aset POSTED, nilai buku dari `journalBookValue`) supaya dasar
  * jurnal tidak menghitung ulang dengan cara berbeda. Aset legacy tanpa
  * jurnal perolehan POSTED dikecualikan builder lewat `hasPostedBooks`.
+ *
+ * F-2026-10-23-124-V transisi: dasar fiskal WAJIB baris saldo terbekukan
+ * `closingBalance` inti F-109 — tabel/loader itu belum dibangun, jadi loader
+ * meneruskan `frozenClosingBalance: null` (belum-terbekukan bernama), BUKAN
+ * hitung ulang garis lurus dari `purchaseCost`. Tarif: selama master
+ * bertanggal efektif belum ada, tarif dari pemanggil adalah pasokan
+ * operator (`rateSource: "operator"`, berlabel di hasil).
  * Tarif badan dan tanggal akhir tahun pajak dipasok pemanggil.
  */
 
@@ -13,6 +20,7 @@ import {
   buildDeferredTaxTemporaryDifference,
   DEFERRED_TAX_NOTICE,
   type DeferredTaxAssetInput,
+  type DeferredTaxRateSource,
   type DeferredTaxResult,
 } from "@/lib/reports/deferred-tax"
 
@@ -24,8 +32,10 @@ export interface DeferredTaxReport {
 }
 
 export async function loadDeferredTax(input: {
-  /** Tarif badan persen dari master bertanggal efektif; null = belum dipasok. */
+  /** Tarif badan persen; master bertanggal efektif kelak, transisi pasokan operator. */
   taxRatePercent: number | null
+  /** Asal tarif; default `operator` selama master belum ada. */
+  rateSource?: DeferredTaxRateSource
   /** Tanggal akhir tahun pajak yang dinilai. */
   asOf: Date
 }): Promise<DeferredTaxReport> {
@@ -41,10 +51,15 @@ export async function loadDeferredTax(input: {
     taxTypeListed: row.taxTypeListed,
     taxDjpDetermination: row.taxDjpDetermination,
     hasPostedBooks: row.hasPostedBooks,
+    // Inti F-109 (tabel baris tahun terbekukan) belum dibangun: tidak ada
+    // closingBalance terbekukan untuk dibaca. Jangan karang dari master.
+    frozenClosingBalance: null,
+    frozenRejectionReason: null,
   }))
   const report = buildDeferredTaxTemporaryDifference({
     assets: inputs,
     taxRatePercent: input.taxRatePercent,
+    rateSource: input.rateSource ?? "operator",
     asOf: input.asOf,
   })
   return { report, notice: DEFERRED_TAX_NOTICE }
