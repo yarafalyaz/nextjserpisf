@@ -181,6 +181,38 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     expect(mocks.docSeqNextBatch).toHaveBeenCalledWith("JOURNAL", 0)
   })
 
+  it("penjaga POSTED: kedua kueri jurnal menyaring status POSTED + deletedAt null (Putusan 1)", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    await GET(makeReq())
+
+    // Falsifikasi kartu t_d34601a0: mock tidak memeriksa argumen where,
+    // jadi sabotase POSTED->DRAFT dulu tetap hijau. Assert argumen langsung.
+    expect(mocks.journalFindMany).toHaveBeenCalledTimes(2)
+    const [idempotentWhere, bookWhere] = mocks.journalFindMany.mock.calls.map(
+      (c: unknown[]) => (c[0] as { where: Record<string, unknown> }).where,
+    )
+    expect(idempotentWhere).toMatchObject({
+      status: "POSTED",
+      deletedAt: null,
+      referenceType: expect.stringMatching(/^ASSET_DEPRECIATION_\d{6}$/),
+      referenceId: { in: [1] },
+    })
+    expect(bookWhere).toMatchObject({
+      status: "POSTED",
+      deletedAt: null,
+      referenceId: { in: [1] },
+    })
+    expect(bookWhere.OR).toEqual([
+      { referenceType: "ASSET_ACQUISITION" },
+      { referenceType: "ASSET_DISPOSAL" },
+      { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+    ])
+  })
+
   it("aset legacy tanpa jurnal perolehan = error berisik belum berjurnal, nol jurnal", async () => {
     mocks.assetFindMany.mockResolvedValue([assetRow()])
     mocks.journalFindMany.mockResolvedValue([]) // tidak ada jurnal sama sekali
