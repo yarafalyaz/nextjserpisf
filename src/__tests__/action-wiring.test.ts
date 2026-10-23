@@ -191,11 +191,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
   // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal
   // di JobBillingCard (t_ba8fe9ef) — entri beku dibuang.
-  // F-2026-10-23-113-V inti backend (t_0abc55bf): aksi ekspor XML Coretax
-  // faktur keluaran; permukaan unduh + daftar tertolak menyusul di kartu
-  // frontend BOT 2 (buang entri ini saat UI memanggilnya).
-  "src/actions/tax-documents.actions.ts::exportCoretaxOutputXmlAction":
-    "F-2026-10-23-113-V inti backend; UI unduh XML Coretax menyusul (frontend BOT 2)",
+  // F-2026-10-23-113-V: aksi ekspor XML Coretax kini dirujuk CoretaxExportPanel
+  // di page faktur tambah (t_4cba1a22) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {
