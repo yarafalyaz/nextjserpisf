@@ -21,6 +21,7 @@ vi.mock("@/lib/utils/toast", () => ({ showError: vi.fn(), showSuccess: vi.fn() }
 
 import {
   BomRevisionChangePanel,
+  BomRevisionDeltaPreviewTable,
   isBomRevisionSubmitDisabled,
   type BomRevisionChangeRequestRow,
 } from "../bom-revision-change-panel"
@@ -122,6 +123,18 @@ describe("BomRevisionChangePanel F-2026-10-22-068-S", () => {
     expect(ditolak).not.toContain("Tolak")
   })
 
+  it("pin pasangan Q-BOM68-4: kedua pin tampil + ganti dokumen ini tidak mengubah pin pasangan", () => {
+    const html = render({
+      pairedPins: [{ label: "order produksi", documentNo: "PO-001", revisionNo: 4 }],
+    })
+    expect(html).toContain("Pin order produksi PO-001")
+    expect(html).toContain("Rev. 4")
+    expect(html).toContain("tidak mengubah pin order produksi")
+    // tanpa pasangan: tidak ada catatan pin pasangan
+    expect(render()).not.toContain("Pin order produksi")
+    expect(render()).not.toContain("tidak mengubah pin")
+  })
+
   it("dokumen tutup: tanpa tombol ajukan + catatan tutup", () => {
     const html = render({ documentStatus: "completed" })
     expect(html).not.toContain("+ Ganti Revisi BOM")
@@ -167,6 +180,42 @@ describe("BomRevisionChangePanel F-2026-10-22-068-S", () => {
     expect(submit!.hasAttribute("disabled")).toBe(true)
     unmountCard(root)
   })
+
+  it("pratinjau delta: baris issuedQty > 0 berlabel Terkunci verbatim, baris 0 tanpa label", () => {
+    const html = renderToStaticMarkup(
+      <BomRevisionDeltaPreviewTable
+        lines={[
+          {
+            itemId: 100,
+            itemName: "Kampas Rem",
+            oldQtyPerUnit: 2,
+            newQtyPerUnit: 3,
+            newNeededQty: 30,
+            issuedQty: 7,
+            coverage: "kurang",
+          },
+          {
+            itemId: 101,
+            itemName: "Baut Roda",
+            oldQtyPerUnit: 4,
+            newQtyPerUnit: 4,
+            newNeededQty: 40,
+            issuedQty: 0,
+            coverage: "tercakup",
+          },
+        ]}
+      />,
+    )
+    expect(html).toContain("Kampas Rem")
+    // label persis kontrak BOT 3 PR #606; angka issuedQty verbatim (7), bukan turunan newNeededQty (30)
+    expect(html).toContain("Terkunci — sudah keluar 7")
+    expect(html).not.toContain("Terkunci — sudah keluar 30")
+    // baris issuedQty 0 tidak berlabel terkunci
+    expect(html.match(/Terkunci — sudah keluar/g)).toHaveLength(1)
+    expect(html).toContain("Baut Roda")
+    expect(html).toContain("Kurang")
+    expect(html).toContain("Tercakup")
+  })
 })
 
 describe("isBomRevisionSubmitDisabled gerbang pratinjau F-2026-10-22-068-S", () => {
@@ -197,5 +246,5 @@ describe("isBomRevisionSubmitDisabled gerbang pratinjau F-2026-10-22-068-S", () 
   it("tujuan/alasan kosong -> nonaktif", () => {
     expect(isBomRevisionSubmitDisabled({ ...siap, toRevisionId: "" })).toBe(true)
     expect(isBomRevisionSubmitDisabled({ ...siap, reason: "  " })).toBe(true)
-  })
+})
 })

@@ -78,7 +78,7 @@ export function AssetTable({
     {
       id: "currentValue",
       accessorKey: "currentValue",
-      header: "Nilai Saat Ini",
+      header: "Nilai Saat Ini (cache)",
       cell: ({ row }) => (
         <span className="tabular-nums">{formatCurrency(row.original.currentValue)}</span>
       ),

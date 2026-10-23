@@ -17,6 +17,7 @@ import { Pencil } from "lucide-react"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { ASSET_HISTORY_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
+import { AssetFiscalStatus, DEPRECIATION_METHOD_LABELS } from "../_components/asset-fiscal-status"
 
 import type { Metadata } from "next"
 
@@ -96,8 +97,10 @@ export default async function AssetDetailPage({
         <DetailField label="Lokasi" value={asset.location || "-"} />
         <DetailField label="Tanggal Beli" value={formatDate(asset.purchaseDate)} />
         <DetailField label="Nilai Beli" value={formatCurrency(Number(asset.purchaseCost))} />
-        <DetailField label="Nilai Saat Ini" value={formatCurrency(Number(asset.currentValue))} />
+        <DetailField label="Nilai Saat Ini (cache)" value={formatCurrency(Number(asset.currentValue))} />
         <DetailField label="Akumulasi Penyusutan" value={<span className="text-danger">{formatCurrency(depreciation)}</span>} />
+        <DetailField label="Metode Penyusutan (komersial)" value={asset.depreciationMethod ? (DEPRECIATION_METHOD_LABELS[asset.depreciationMethod] ?? asset.depreciationMethod) : "-"} />
+        <DetailField label="Status Penyusutan Fiskal" value={asset.category ? <AssetFiscalStatus taxGroupCode={asset.category.taxGroupCode} taxTypeListed={asset.category.taxTypeListed} taxDjpDetermination={asset.category.taxDjpDetermination} /> : "Tanpa kategori — fiskal belum dihitung"} />
         {/* The asset form labels this field "Deskripsi" and createAsset/
             updateAsset persist it to `notes` (the `description` column is
             unused), so read it back from `notes` — otherwise the text a user

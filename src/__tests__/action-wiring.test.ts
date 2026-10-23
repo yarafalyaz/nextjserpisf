@@ -111,6 +111,20 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
+  // F-2026-10-22-069-S inti (t_0f358bbb/t_73bdb74a): master substitusi +
+  // saran/terapkan perintah kerja backend dulu; panel saran di detail WO +
+  // panel kelola relasi di master barang menyusul kartu frontend
+  // t_bfaf2287 (buang entri ini saat UI memanggilnya).
+  "src/actions/item-substitute.actions.ts::listItemSubstitutes":
+    "F-2026-10-22-069-S backend; panel kelola relasi di master barang menyusul (frontend t_bfaf2287)",
+  "src/actions/item-substitute.actions.ts::createItemSubstitute":
+    "F-2026-10-22-069-S backend; form tambah relasi substitusi menyusul (frontend t_bfaf2287)",
+  "src/actions/item-substitute.actions.ts::setItemSubstituteActive":
+    "F-2026-10-22-069-S backend; tombol nonaktifkan/aktifkan relasi menyusul (frontend t_bfaf2287)",
+  "src/actions/item-substitute.actions.ts::getSubstituteSuggestionsForWorkOrder":
+    "F-2026-10-22-069-S backend; panel saran substitusi di detail perintah kerja menyusul (frontend t_bfaf2287)",
+  "src/actions/item-substitute.actions.ts::applyWorkOrderItemSubstitute":
+    "F-2026-10-22-069-S backend; tombol terapkan substitusi di panel saran menyusul (frontend t_bfaf2287)",
   // F-2026-10-21-012 inti (t_34bb293d): aksi batal WO + lepas/reservasi ulang
   // stok backend dulu; tombol UI menyusul di kartu frontend sesudah PR inti
   // merge (buang 3 entri ini saat halaman produksi/perintah kerja memanggilnya).
