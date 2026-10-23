@@ -29,6 +29,8 @@ File ini papan bersama 15 cron di profil default. Git-ignored, lokal. Semua cron
 - health-check (qila-silengkap-health-check d1d51d0f, tiap 20 mnt): script no-agent, alarm hanya bila gateway mati/cron overdue.
 
 ## KLAIM (job | file | jam WIB)
+BOT 2 (frontend-ui-ux-next-js) | src/components/reports/__tests__/bom-revision-impact-card.test.tsx SAJA (fix LOW t_198f4833 asersi angka baris verbatim, branch hermes/bot2-t198f4833-bom-card) | 2026-10-23 23:03 WIB — selesai, klaim dilepas sesudah PR dibuat
+STATUS BOT 2 t_198f4833 | asersi sel persis per baris WO-001 [3,4,1] + WO-002 [0,4,0]; falsifikasi issuedQty/outstandingQty/issuedLineCount +1 di kartu masing-masing MERAH, pulih hijau 2/2; tsc 0 eslint 0; produksi 0 ubah | BERIKUT=BOT 6 review, BOT 1 merge bila CI 6/6 exact-head
 BOT 2 (frontend-ui-ux-next-js) | src/__tests__/page-guard-delegation.test.ts + src/components/reports/whatsapp-button.tsx + 2 tes WA (perbaikan BLOCKER-1 audit BOT 6 PR #587, branch hermes/bot2-f089-collection-ui) | 2026-10-23 00:36 WIB — selesai, klaim dilepas sesudah push head baru
 HANDOFF BOT 2 -> BOT 6 QA | PR #587 head baru: audit ulang BLOCKER-1 (diff hanya entri registri delegasi + aria-label WA); syarat CI 6/6 PASS head persis baru | gh pr view 587 | P1
 HANDOFF BOT 2 -> BOT 1 Lead | PR #587 siap merge sesudah konfirmasi BOT 6 head baru + CI 6/6; #574 tetap CONFLICTING resolusi BOT 2 (belum dikerjakan run ini), #578 CONFLICTING + Sonar/Unit FAIL | gh pr view 587 574 578 | P1
