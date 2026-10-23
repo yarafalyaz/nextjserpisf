@@ -35,6 +35,7 @@ export type PayrollRunSkipReason =
   | "frekuensiLain"
   | "pinjaman"
   | "bpjsBelumDidukung"
+  | "plafonPotongan"
   | "irisan"
   | "berhenti"
 
@@ -42,6 +43,7 @@ export const PAYROLL_RUN_SKIP_LABELS: Record<PayrollRunSkipReason, string> = {
   frekuensiLain: "Frekuensi bayar berbeda",
   pinjaman: "Pinjaman aktif — cicilan mingguan belum diatur tertulis",
   bpjsBelumDidukung: "BPJS mingguan belum didukung (agregator se-masa belum tersedia)",
+  plafonPotongan: "Potongan melebihi plafon 50% upah (PP 36/2021 Pasal 65)",
   irisan: "Rentang beririsan slip existing",
   berhenti: "Karyawan berhenti — di luar populasi massal",
 }
@@ -100,8 +102,12 @@ export function findPayrollRangeConflict(
 export interface PayrollPopulationEmployee {
   id: number
   paymentFrequency: string
-  /** Pinjaman aktif dengan sisa > 0 (V-PF4-1). */
-  hasActiveLoan: boolean
+  /**
+   * Pinjaman aktif (remaining > 0) tanpa nominal cicilan mingguan
+   * tersimpan (F-105-V butir 3). Field `hasActiveLoan` lama dihapus:
+   * gerbang mingguan kini per-pinjaman ternominal, bukan per-karyawan.
+   */
+  hasActiveLoanWithoutWeeklyInstallment: boolean
 }
 
 /**
@@ -125,11 +131,14 @@ export function classifyPayrollRunPopulation(
       continue
     }
     if (runFrequency === "WEEKLY") {
-      if (employee.hasActiveLoan) {
+      // Turunan F-076-S (vonis BOT 4 F-2026-10-23-103-V + F-105-V butir 3):
+      // gerbang BPJS dicabut — agregator se-masa tersedia. Sisa gerbang
+      // hanya pinjaman aktif tanpa nominal mingguan tersimpan.
+      if (employee.hasActiveLoanWithoutWeeklyInstallment) {
         skips.push({ employeeId: employee.id, reason: "pinjaman", conflictDocumentNo: null })
         continue
       }
-      skips.push({ employeeId: employee.id, reason: "bpjsBelumDidukung", conflictDocumentNo: null })
+      targetIds.push(employee.id)
       continue
     }
     targetIds.push(employee.id)
@@ -145,6 +154,7 @@ export function countPayrollRunSkips(
     frekuensiLain: 0,
     pinjaman: 0,
     bpjsBelumDidukung: 0,
+    plafonPotongan: 0,
     irisan: 0,
     berhenti: 0,
   }

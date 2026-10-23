@@ -64,8 +64,21 @@ import {
   countPayrollRunSkips,
   findPayrollRangeConflict,
   isPayrollFrequency,
+  type PayrollFrequency,
   type PayrollRunSkip,
 } from "@/lib/reports/payroll-frequency";
+import {
+  allocateBpjsForPeriod,
+  buildBpjsAggregateSnapshot,
+  capLoanDeductionForFrequency,
+  evaluateDeductionCeiling,
+  hasActiveLoanWithoutWeeklyInstallment,
+  loanInstallmentForFrequency,
+  readBpjsAggregateSnapshot,
+  sumLoanDeductionForFrequency,
+  type BpjsAggregateSnapshot,
+  type BpjsPeriodSlip,
+} from "@/lib/reports/payroll-weekly";
 import { loadEmployeeLifecycleAttention } from "@/lib/reports/employee-lifecycle-data";
 import { requestApprovalIfConfigured, assertApproved } from "@/lib/services/approval-workflow.service";
 import { endOfUtcDayExclusive } from "@/lib/utils/date-only";
@@ -686,6 +699,26 @@ export async function removePayrollComponentLine(lineId: number) {
 // Single payroll write builder shared by create/update slips: loan-deduction
 // cap, statutory ruleset gate (reject fallback, AUD-R3-02), BPJS/PPh21 with
 // snapshot, net floored at 0 (total mirrors net).
+function assertDeductionCeilingOrThrow(o: {
+  gross: number;
+  cappedLoan: number;
+  lateDeduction: number;
+  componentDeductions: number;
+  fallbackLabel: string;
+}): void {
+  const breach = evaluateDeductionCeiling({
+    wageBase: o.gross,
+    loanDeduction: o.cappedLoan,
+    lateDeduction: o.lateDeduction,
+    componentDeductions: o.componentDeductions,
+  });
+  if (breach) {
+    throw new Error(
+      `Total potongan Pasal 63 (cicilan pinjaman + denda + potongan absen + komponen potongan) Rp${breach.totalDeductions.toLocaleString("id-ID")} melebihi plafon 50% upah slip ini Rp${breach.ceiling.toLocaleString("id-ID")} (PP 36/2021 Pasal 65) — ${o.fallbackLabel} ditolak. Sesuaikan perjanjian/potongan, jangan dipangkas diam-diam.`,
+    );
+  }
+}
+
 async function buildPayrollWrite(o: {
   employeeId: number | null;
   period?: string;
@@ -711,13 +744,18 @@ async function buildPayrollWrite(o: {
   };
 }) {
   const { v } = o;
-  const cappedLoan = await capLoanDeduction(prisma, o.employeeId, v.loanDeduction ?? 0);
-  const taxProfile = o.employeeId
+  const period = o.period ?? `${o.endDate.getFullYear()}-${String(o.endDate.getMonth() + 1).padStart(2, "0")}`;
+  // Frekuensi dari master karyawan server (bukan client): WEEKLY memakai
+  // agregator BPJS se-masa + nominal cicilan mingguan tersimpan.
+  const employeeMaster = o.employeeId
     ? await prisma.employee.findUnique({
         where: { id: o.employeeId },
-        select: { maritalStatus: true, dependents: true },
+        select: { maritalStatus: true, dependents: true, paymentFrequency: true },
       })
     : null;
+  const frequency: PayrollFrequency = employeeMaster?.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY";
+  const cappedLoan = await capLoanDeduction(prisma, o.employeeId, v.loanDeduction ?? 0, frequency);
+  const taxProfile = employeeMaster;
   const base = v.baseSalary ?? 0;
   const gross = safeSum([base, v.allowances ?? 0, v.overtimeTotal ?? 0, v.appreciationTotal ?? 0], 0);
   const ruleset = await getStatutoryParams(prisma, o.endDate);
@@ -726,7 +764,26 @@ async function buildPayrollWrite(o: {
       `Ruleset statutori periode ini belum lengkap/valid — ${o.fallbackLabel} ditolak. Minta accountant melengkapi ruleset, lalu hitung ulang.`,
     );
   }
-  const bpjsParts = computeBpjsEmployee(base, ruleset);
+  assertDeductionCeilingOrThrow({
+    gross,
+    cappedLoan,
+    lateDeduction: v.lateDeduction,
+    componentDeductions: v.deductions ?? 0,
+    fallbackLabel: o.fallbackLabel,
+  });
+  // F-103-V agregator BPJS final masa (B1-B6): dipakai SERAGAM semua
+  // frekuensi (B4 — tanpa cabang WEEKLY). Slip se-masa lain aktif dibaca
+  // per period; campuran slip berpenanda + legacy dalam satu masa =
+  // klaim final masa ditolak (B8), bukan dicampur diam-diam.
+  const bpjsComputed = await computeBpjsForPeriod({
+    employeeId: o.employeeId,
+    period,
+    currentBase: base,
+    ruleset,
+    excludePayrollId: o.excludePayrollId,
+  });
+  const bpjsParts = bpjsComputed.bpjs;
+  const bpjsAggregate = bpjsComputed.aggregate;
   // F-026: masa berjalan = TER atas bruto gabungan se-masa; masa terakhir
   // (Des / final-resign) = hitung ulang Pasal 17. Legacy TIDAK lagi dipanggil
   // jalur tulis — dipertahankan hanya reproduksi slip pra-titik-berlaku.
@@ -746,6 +803,7 @@ async function buildPayrollWrite(o: {
   const pph = pphResult.pph21;
   const snapshot = {
     ...buildStatutorySnapshot(ruleset, taxProfile?.maritalStatus, taxProfile?.dependents ?? 0, pphResult.ter),
+    ...buildBpjsAggregateSnapshot(bpjsAggregate),
     ...(o.componentLines
       ? { payrollComponents: payrollComponentsSnapshotValue(o.componentLines, gross) }
       : {}),
@@ -770,7 +828,7 @@ async function buildPayrollWrite(o: {
     bpjsHealthEmployee: bpjsParts.health,
     bpjsEmploymentEmployee: bpjsParts.employment,
     pph21: pph,
-    statutorySnapshot: snapshot as Prisma.InputJsonValue,
+    statutorySnapshot: snapshot as unknown as Prisma.InputJsonValue,
     netSalary: net,
     totalAmount: net,
     paymentDate: v.paymentDate ? wibDateToUtcMidnight(v.paymentDate) : null,
@@ -1116,22 +1174,22 @@ async function capLoanDeduction(
   db: typeof prisma,
   employeeId: number | null,
   requested: number,
+  frequency: PayrollFrequency = "MONTHLY",
 ): Promise<number> {
   if (!employeeId || requested <= 0) return Math.max(0, requested || 0);
   const loans = await db.employeeLoan.findMany({
     where: { employeeId, status: "active" },
-    select: { monthlyInstallment: true, remainingAmount: true },
+    select: { monthlyInstallment: true, weeklyInstallment: true, remainingAmount: true },
   });
-  const cap = loans.reduce(
-    (sum, loan) =>
-      safeAdd(
-        sum,
-        Math.min(Number(loan.monthlyInstallment) || 0, Number(loan.remainingAmount) || 0),
-        0,
-      ),
-    0,
+  return capLoanDeductionForFrequency(
+    loans.map((loan) => ({
+      monthlyInstallment: Number(loan.monthlyInstallment) || 0,
+      weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+      remainingAmount: Number(loan.remainingAmount) || 0,
+    })),
+    frequency,
+    requested,
   );
-  return Math.min(requested, cap);
 }
 
 async function computePayrollEstimation(
@@ -1156,6 +1214,7 @@ async function computePayrollEstimation(
           baseSalary: true,
           maritalStatus: true,
           dependents: true,
+          paymentFrequency: true,
           employeeLoans: {
             where: { status: "active" },
           },
@@ -1185,18 +1244,18 @@ async function computePayrollEstimation(
   if (!employee) throw new Error("Karyawan tidak ditemukan");
 
   const baseSalary = Number(employee.baseSalary);
-  // Loan deduction capped to what each loan actually still owes (remaining), so the
-  // final-installment scenario doesn't over-deduct the employee.
-  const loanDeduction = employee.employeeLoans.reduce(
-    (sum, loan) =>
-      sum +
-      safeAdd(
-        0,
-        Math.min(Number(loan.monthlyInstallment), Number(loan.remainingAmount)),
-        0,
-      ),
-    0,
-  );
+  // F-105-V: nominal per frekuensi karyawan dari SATU helper — WEEKLY
+  // hanya weeklyInstallment tersimpan; tanpa nominal = 0 di preview ini
+  // (gerbang tulis/run menahan karyawan itu alasan pinjaman).
+  const frequency: PayrollFrequency = employee.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY";
+  const loanDeduction = sumLoanDeductionForFrequency(
+    employee.employeeLoans.map((loan) => ({
+      monthlyInstallment: Number(loan.monthlyInstallment),
+      weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+      remainingAmount: Number(loan.remainingAmount),
+    })),
+    frequency,
+  ) ?? 0;
 
   const overtimeTotal = overtimes.reduce(
     (sum, ot) => safeAdd(sum, ot.calculatedValue ?? 0, 0),
@@ -1218,7 +1277,24 @@ async function computePayrollEstimation(
   // Estimasi = PREVIEW non-final (R3-02): tabel TER tersedia → TER atas bruto
   // masa ini; belum tersedia → legacy berlabel LEGACY_PRE_TER di snapshot.
   // Yang fail-closed = tulis-final (bulk/single/update) + approve.
-  const bpjs = computeBpjsEmployee(baseSalary, statutoryParams);
+  // F-103-V: preview memakai agregator se-masa yang sama (basis Σ slip
+  // aktif period endDate + slip berjalan); penanda ikut snapshot preview.
+  const estPeriod = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, "0")}`;
+  const bpjsComputed = await computeBpjsForPeriod({
+    employeeId,
+    period: estPeriod,
+    currentBase: baseSalary,
+    ruleset: statutoryParams,
+  });
+  const bpjs = bpjsComputed.bpjs;
+  // Plafon Pasal 65 TIDAK menolak preview (vonis butir 6: gerbang slip =
+  // generate/finalisasi tulis) — pelampauan tampil di snapshot preview.
+  const ceilingFinding = evaluateDeductionCeiling({
+    wageBase: baseSalary,
+    loanDeduction,
+    lateDeduction: latePenalty.totalPenalty,
+    componentDeductions: 0,
+  });
   const estCategory = terCategoryFor(employee.maritalStatus, employee.dependents ?? 0);
   const estBrackets = await getTerBrackets(prisma as never, estCategory, new Date(endDateStr));
   const estTer = estBrackets ? computePph21Ter(grossSalary, estBrackets) : null;
@@ -1244,13 +1320,14 @@ async function computePayrollEstimation(
     leaveDays: attendance.leaveDays,
     holidayDays: attendance.holidayDays,
     absentDays: attendance.absentDays,
-    dailyRate: attendance.dailyRate,
     absentDeduction: attendance.absentDeduction,
+    dailyRate: attendance.dailyRate,
     grossSalary,
     bpjsHealthEmployee: bpjs.health,
     bpjsEmploymentEmployee: bpjs.employment,
     pph21,
-    statutorySnapshot: buildStatutorySnapshot(
+    statutorySnapshot: {
+      ...buildStatutorySnapshot(
       statutoryParams,
       employee.maritalStatus,
       employee.dependents ?? 0,
@@ -1262,7 +1339,10 @@ async function computePayrollEstimation(
         periodKind: "preview",
         monthsInStint: null,
       }),
-    ),
+      ),
+      ...buildBpjsAggregateSnapshot(bpjsComputed.aggregate),
+      ...(ceilingFinding ? { deductionCeilingFinding: ceilingFinding } : {}),
+    },
   };
 }
 
@@ -1352,6 +1432,48 @@ interface Pph21PeriodComputation {
  *   Σ terpotong final masa sebelumnya; lebih potong → snapshot, bukan negatif.
  * Tabel TER kosong/tidak lengkap → throw (fail-closed, tanpa fallback legacy).
  */
+/**
+ * F-2026-10-23-103-V agregator BPJS final masa (B1-B6 + gerbang B8):
+ * target masa dari basis Σ baseSalary slip aktif se-masa (ceiling SEKALI),
+ * slip berjalan = max(0, target − Σ terpotong slip se-masa lain aktif).
+ * Slip se-masa lain tanpa penanda agregat = masa campuran -> ditolak
+ * berisik (B8); tanpa karyawan -> basis slip berjalan saja (preview).
+ */
+async function computeBpjsForPeriod(o: {
+  employeeId: number | null;
+  period: string;
+  currentBase: number;
+  ruleset: StatutoryParams;
+  excludePayrollId?: number;
+}): Promise<{ bpjs: ReturnType<typeof computeBpjsEmployee>; aggregate: BpjsAggregateSnapshot }> {
+  let others: BpjsPeriodSlip[] = [];
+  if (o.employeeId) {
+    const rows = await prisma.payroll.findMany({
+      where: { employeeId: o.employeeId, period: o.period },
+      select: {
+        id: true, baseSalary: true, bpjsHealthEmployee: true,
+        bpjsEmploymentEmployee: true, status: true, statutorySnapshot: true,
+      },
+    });
+    others = rows
+      .filter((r) => !(o.excludePayrollId && r.id === o.excludePayrollId))
+      .filter((r) => r.status !== "cancelled" && r.status !== "canceled")
+      .map((r) => ({
+        baseSalary: Number(r.baseSalary),
+        bpjsHealthEmployee: Number(r.bpjsHealthEmployee),
+        bpjsEmploymentEmployee: Number(r.bpjsEmploymentEmployee),
+        status: r.status,
+        statutorySnapshot: r.statutorySnapshot,
+      }));
+    if (others.some((s) => readBpjsAggregateSnapshot(s.statutorySnapshot) == null)) {
+      throw new Error(
+        "Masa ini masih memuat slip BPJS per-slip (legacy tanpa penanda agregat) — klaim final BPJS masa ditolak sampai slip legacy dihitung ulang/diganti (vonis BOT 4 F-103-V B6/B8).",
+      );
+    }
+  }
+  return allocateBpjsForPeriod({ currentBase: o.currentBase, otherActiveSlips: others, ruleset: o.ruleset });
+}
+
 async function computePph21ForPeriod(o: {
   employeeId: number | null
   period: string
@@ -1619,6 +1741,7 @@ async function computeBulkPayrollEstimations(
         maritalStatus: true,
         dependents: true,
         departmentId: true,
+        paymentFrequency: true,
         employeeLoans: { where: { status: "active" } },
       },
     }),
@@ -1709,22 +1832,43 @@ async function computeBulkPayrollEstimations(
     departmentHolidaySet.set(holiday.departmentId, dates);
   }
 
+  // F-103-V: slip aktif se-masa populasi batch (untuk agregator BPJS) —
+  // satu query per run, bukan per karyawan. Slip batal dikeluarkan (B1).
+  const bulkPeriodSlips = employeeIds.length === 0
+    ? []
+    : await prisma.payroll.findMany({
+        where: { employeeId: { in: employeeIds }, period: bulkPeriod },
+        select: {
+          employeeId: true, baseSalary: true, bpjsHealthEmployee: true,
+          bpjsEmploymentEmployee: true, status: true, statutorySnapshot: true,
+        },
+      });
+  const bulkSlipsByEmployee = new Map<number, BpjsPeriodSlip[]>();
+  for (const row of bulkPeriodSlips) {
+    if (row.employeeId == null || row.status === "cancelled" || row.status === "canceled") continue;
+    const arr = bulkSlipsByEmployee.get(row.employeeId) ?? [];
+    arr.push({
+      baseSalary: Number(row.baseSalary),
+      bpjsHealthEmployee: Number(row.bpjsHealthEmployee),
+      bpjsEmploymentEmployee: Number(row.bpjsEmploymentEmployee),
+      status: row.status,
+      statutorySnapshot: row.statutorySnapshot,
+    });
+    bulkSlipsByEmployee.set(row.employeeId, arr);
+  }
+
   for (const employee of employees) {
     // 1. Base salary + loan deduction (capped at remaining balance).
     const baseSalary = Number(employee.baseSalary);
-    const loanDeduction = employee.employeeLoans.reduce(
-      (sum, loan) =>
-        sum +
-        safeAdd(
-          0,
-          Math.min(
-            Number(loan.monthlyInstallment),
-            Number(loan.remainingAmount),
-          ),
-          0,
-        ),
-      0,
-    );
+    // F-105-V: nominal per frekuensi karyawan (helper bersama).
+    const loanDeduction = sumLoanDeductionForFrequency(
+      employee.employeeLoans.map((loan) => ({
+        monthlyInstallment: Number(loan.monthlyInstallment),
+        weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+        remainingAmount: Number(loan.remainingAmount),
+      })),
+      employee.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY",
+    ) ?? 0;
 
     // 2. Overtime total.
     const empOvertimes = overtimeMap.get(employee.id) ?? [];
@@ -1824,7 +1968,20 @@ async function computeBulkPayrollEstimations(
       [baseSalary, componentSummary.allowances, overtimeTotal, appreciationTotal],
       0,
     );
-    const bpjs = computeBpjsEmployee(baseSalary, bulkStatutoryParams);
+    // F-103-V agregator se-masa (basis Σ slip aktif period ini + berjalan).
+    const bulkOthers = bulkSlipsByEmployee.get(employee.id) ?? [];
+    if (bulkOthers.some((slip) => readBpjsAggregateSnapshot(slip.statutorySnapshot) == null)) {
+      throw new Error(
+        "Masa ini masih memuat slip BPJS per-slip (legacy tanpa penanda agregat) — klaim final BPJS masa ditolak sampai slip legacy dihitung ulang/diganti (vonis BOT 4 F-103-V B6/B8).",
+      );
+    }
+    const bpjsAllocated = allocateBpjsForPeriod({
+      currentBase: baseSalary,
+      otherActiveSlips: bulkOthers,
+      ruleset: bulkStatutoryParams,
+    });
+    const bpjs = bpjsAllocated.bpjs;
+
     // F-026 jalur tulis massal: TER masa berjalan atas bruto karyawan ini
     // (generate melewati karyawan yang sudah ber-slip periode ini, jadi tidak
     // ada slip se-masa lain). Snapshot Desember ditandai pending-final:
@@ -1877,6 +2034,7 @@ async function computeBulkPayrollEstimations(
           }),
         ),
         payrollComponents: payrollComponentsSnapshotValue(componentLines, grossSalary),
+        ...buildBpjsAggregateSnapshot(bpjsAllocated.aggregate),
       },
     });
   }
@@ -1972,7 +2130,7 @@ export async function generateBulkPayroll(
         paymentFrequency: true,
         employeeLoans: {
           where: { status: "active", remainingAmount: { gt: 0 } },
-          select: { id: true },
+          select: { id: true, weeklyInstallment: true, remainingAmount: true },
         },
       },
     });
@@ -2000,16 +2158,21 @@ export async function generateBulkPayroll(
       );
     }
 
-    // F-076-S BR-PF-02 + vonis BOT 4 V-PF2-4(i)/V-PF4-1: populasi run =
+    // F-076-S BR-PF-02 + turunan (F-103-V/F-105-V): populasi run =
     // karyawan sefrekuensi; frekuensi lain terlewati-terhitung. WEEKLY
-    // fail-closed tahap pertama: berpinjaman aktif -> "pinjaman", selain
-    // itu -> "bpjsBelumDidukung" (agregator BPJS se-masa belum diputus);
-    // keduanya TANPA slip dan tanpa nominal di hasil (AC-PF-4/5).
+    // kini lolos via agregator BPJS se-masa; sisa gerbang hanya pinjaman
+    // aktif tanpa nominal mingguan tersimpan -> "pinjaman" (F-105-V
+    // butir 3), TANPA slip dan tanpa nominal di hasil (AC-PF-4/5).
     const classified = classifyPayrollRunPopulation(
       employmentEligible.map((e) => ({
         id: e.id,
         paymentFrequency: e.paymentFrequency ?? "MONTHLY",
-        hasActiveLoan: (e.employeeLoans ?? []).length > 0,
+        hasActiveLoanWithoutWeeklyInstallment: hasActiveLoanWithoutWeeklyInstallment(
+          (e.employeeLoans ?? []).map((loan) => ({
+            weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+            remainingAmount: Number(loan.remainingAmount),
+          })),
+        ),
       })),
       paymentFrequency,
     );
@@ -2119,6 +2282,19 @@ export async function generateBulkPayroll(
       const empId = targetIds[i];
       const est = estimations.get(empId);
       if (!est) continue;
+      // Plafon Pasal 65 run massal (F-105-V butir 6): karyawan pelanggar
+      // terlewati-terhitung, bukan menggagalkan seluruh run / dipangkas.
+      if (
+        evaluateDeductionCeiling({
+          wageBase: est.baseSalary ?? 0,
+          loanDeduction: est.loanDeduction ?? 0,
+          lateDeduction: est.lateDeduction ?? 0,
+          componentDeductions: 0,
+        })
+      ) {
+        runSkips.push({ employeeId: empId, reason: "plafonPotongan", conflictDocumentNo: null });
+        continue;
+      }
       const documentNo = docNumbers[i];
 
       const statutory =
@@ -2285,21 +2461,25 @@ export async function processPayroll(formData: FormData) {
         paymentFrequency: true,
         employeeLoans: {
           where: { status: "active", remainingAmount: { gt: 0 } },
-          select: { id: true },
+          select: { id: true, weeklyInstallment: true, remainingAmount: true },
         },
       },
     });
-    // F-076-S + vonis BOT 4 (V-PF2-1/5, V-PF2-4(i), V-PF4-1): period wajib
-    // "YYYY-MM" bulan endDate; slip untuk karyawan WEEKLY fail-closed
-    // tahap pertama (BPJS per-slip penuh dilarang, cicilan pinjaman pada
-    // slip mingguan dilarang) — buat lewat run bulanan bila ada, atau
-    // tunggu agregator BPJS se-masa di kartu turunan.
+    // F-076-S + turunan (F-103-V/F-105-V): period wajib "YYYY-MM" bulan
+    // endDate; slip WEEKLY kini dihitung agregator BPJS se-masa. Sisa
+    // gerbang: pinjaman aktif tanpa nominal mingguan tersimpan.
     assertPayrollPeriodMatchesEndDate(period, endDate);
-    if (employeeLifecycle?.paymentFrequency === "WEEKLY") {
+    if (
+      employeeLifecycle?.paymentFrequency === "WEEKLY" &&
+      hasActiveLoanWithoutWeeklyInstallment(
+        (employeeLifecycle.employeeLoans ?? []).map((loan) => ({
+          weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+          remainingAmount: Number(loan.remainingAmount),
+        })),
+      )
+    ) {
       throw new Error(
-        employeeLifecycle.employeeLoans.length > 0
-          ? "Slip mingguan untuk karyawan berpinjaman aktif ditahan: cicilan pinjaman per minggu belum diatur tertulis (vonis BOT 4 V-PF4-1). Slip tidak dibuat."
-          : "Slip mingguan belum didukung tahap ini: potongan BPJS per slip mingguan dilarang sebelum agregator BPJS se-masa tersedia (vonis BOT 4 V-PF2-4). Slip tidak dibuat.",
+        "Slip mingguan untuk karyawan ini ditahan: ada pinjaman aktif tanpa cicilan mingguan tertulis tersimpan (vonis BOT 4 F-105-V). Isi nominal mingguan dari perjanjian tertulis dulu. Slip tidak dibuat.",
       );
     }
     const wantsFinal = formData.get("resignationFinal") === "true";
@@ -2500,7 +2680,7 @@ export async function updatePayroll(id: number, formData: FormData) {
             paymentFrequency: true,
             employeeLoans: {
               where: { status: "active", remainingAmount: { gt: 0 } },
-              select: { id: true },
+              select: { id: true, weeklyInstallment: true, remainingAmount: true },
             },
           },
         })
@@ -2510,11 +2690,17 @@ export async function updatePayroll(id: number, formData: FormData) {
     // V-PF4-1). Slip draft WEEKLY existing dari masa pra-inti tidak bisa
     // dihitung ulang per-slip sebelum agregator BPJS se-masa tersedia.
     assertPayrollPeriodMatchesEndDate(v.period, wibDateToUtcMidnight(v.endDate));
-    if (updateLifecycle?.paymentFrequency === "WEEKLY") {
+    if (
+      updateLifecycle?.paymentFrequency === "WEEKLY" &&
+      hasActiveLoanWithoutWeeklyInstallment(
+        (updateLifecycle.employeeLoans ?? []).map((loan) => ({
+          weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+          remainingAmount: Number(loan.remainingAmount),
+        })),
+      )
+    ) {
       throw new Error(
-        updateLifecycle.employeeLoans.length > 0
-          ? "Slip mingguan untuk karyawan berpinjaman aktif ditahan: cicilan pinjaman per minggu belum diatur tertulis (vonis BOT 4 V-PF4-1). Slip tidak diubah."
-          : "Slip mingguan belum didukung tahap ini: potongan BPJS per slip mingguan dilarang sebelum agregator BPJS se-masa tersedia (vonis BOT 4 V-PF2-4). Slip tidak diubah.",
+        "Slip mingguan untuk karyawan ini ditahan: ada pinjaman aktif tanpa cicilan mingguan tertulis tersimpan (vonis BOT 4 F-105-V). Isi nominal mingguan dari perjanjian tertulis dulu. Slip tidak diubah.",
       );
     }
     if (wantsFinalUpdate && !updateLifecycle?.employmentEndedAt) {
@@ -2748,11 +2934,25 @@ export async function markPayrollPaid(payrollId: number) {
           where: { employeeId: payroll.employeeId, status: "active" },
           orderBy: { loanDate: "asc" },
         });
+        // F-105-V butir 5: nominal amortisasi = frekuensi SLIP (master
+        // karyawan saat dibayar; snapshot nominal per pinjaman tidak
+        // disimpan — loanDeduction slip adalah budget ter-snapshot).
+        const slipEmployee = await tx.employee.findUnique({
+          where: { id: payroll.employeeId },
+          select: { paymentFrequency: true },
+        });
+        const slipFrequency: PayrollFrequency = slipEmployee?.paymentFrequency === "WEEKLY" ? "WEEKLY" : "MONTHLY";
         let budget = Number(payroll.loanDeduction);
         const updates: Promise<unknown>[] = [];
         for (const loan of activeLoans) {
           if (budget <= 0) break;
-          const installment = Number(loan.monthlyInstallment);
+          const installment = loanInstallmentForFrequency(
+            {
+              monthlyInstallment: Number(loan.monthlyInstallment),
+              weeklyInstallment: loan.weeklyInstallment == null ? null : Number(loan.weeklyInstallment),
+            },
+            slipFrequency,
+          ) ?? 0;
           const remaining = Number(loan.remainingAmount);
           if (remaining <= 0) continue;
           const applied = Math.min(installment, remaining, budget);
@@ -2839,6 +3039,7 @@ export async function createEmployeeLoan(formData: FormData) {
           loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,
           monthlyInstallment: v.monthlyInstallment,
+          weeklyInstallment: v.weeklyInstallment ?? null,
           remainingAmount: totalAmount,
           status: "pending",
           notes: v.notes ?? null,
@@ -3953,6 +4154,7 @@ export async function updateEmployeeLoan(id: number, formData: FormData) {
           loanDate: wibDateToUtcMidnight(v.loanDate),
           totalAmount,
           monthlyInstallment: v.monthlyInstallment,
+          weeklyInstallment: v.weeklyInstallment ?? null,
           remainingAmount: newRemaining,
           notes: v.notes ?? null,
         },
