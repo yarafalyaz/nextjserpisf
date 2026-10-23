@@ -152,6 +152,8 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
             options={[
               { value: "straight_line", label: "Garis Lurus" },
               { value: "declining_balance", label: "Saldo Menurun" },
+              { value: "units_of_production", label: "Unit Produksi (analitis, tanpa jurnal)" },
+              { value: "sum_of_years_digits", label: "Jumlah Angka Tahun (analitis, tanpa jurnal)" },
             ]}
           />
         </div>
