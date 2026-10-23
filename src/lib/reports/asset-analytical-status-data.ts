@@ -3,8 +3,9 @@
  *
  * Mengembalikan status per aset untuk satu masa dari
  * `resolveAnalyticalAssetStatus`: computed / skip{at-residual,unit-nol,
- * held-for-sale,already-posted,not-started} /
- * reject{missing-parameter,unregistered-status}. Dasar = nilai buku
+ * held-for-sale,disposed,already-posted,not-started} /
+ * reject{missing-parameter,unregistered-status}. Aset `disposed` tetap
+ * tampil sebagai skip{disposed} (bukan disembunyikan, bukan computed). Dasar = nilai buku
  * jurnal POSTED (F-062-V Putusan 1); aset tanpa jurnal perolehan tampil
  * `notJournaled`, bukan angka karangan. Konsumen (BOT 2) menampilkan
  * apa adanya — tanpa hitung ulang, tanpa tombol posting analitis.
