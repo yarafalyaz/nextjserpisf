@@ -47,7 +47,14 @@ describe("DeferredTaxValueEventCard F-2026-10-23-125-V", () => {
     expect(text).toContain("PPh Final (pajak kini)")
     expect(text).toContain("Revaluasi naik")
     expect(text).toContain("Kena pajak (liabilitas)")
-    expect(text).toContain(report.recognitionLabel)
+    // Isolasi summary kartu (<p> di header shell): verdict/tabel builder ikut
+    // memuat recognitionLabel, jadi toContain pada seluruh teks tidak
+    // membuktikan segmen ini dirender summary.
+    const summaryText =
+      container.querySelector(
+        'section[aria-label="Sumber Nilai Pajak Tangguhan (Revaluasi/Impairment)"] div p',
+      )?.textContent ?? ""
+    expect(summaryText).toContain(`(${report.recognitionLabel})`)
     expect(text).toContain(DEFERRED_TAX_NOTICE)
     expect(text).toContain(report.verdict)
     // Ringkasan: indikasi liabilitas 22% x 50jt = Rp 11.000.000; PPh final
