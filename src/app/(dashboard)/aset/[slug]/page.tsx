@@ -18,6 +18,10 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { ASSET_HISTORY_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
 import { AssetFiscalStatus, DEPRECIATION_METHOD_LABELS } from "../_components/asset-fiscal-status"
+import { isAnalyticalDepreciationMethod } from "@/lib/finance/asset-depreciation"
+import { loadAssetAnalyticalStatuses } from "@/lib/reports/asset-analytical-status-data"
+import { AssetAnalyticalStatus } from "../_components/asset-analytical-status"
+import { AssetUsageRecordForm } from "./_components/asset-usage-record-form"
 
 import type { Metadata } from "next"
 
@@ -61,6 +65,12 @@ export default async function AssetDetailPage({
       ? prisma.assetBrandModel.findUnique({ where: { id: asset.assetBrandModelId }, select: { name: true } })
       : null,
   ])
+
+  const now = new Date()
+  const analytical = isAnalyticalDepreciationMethod(asset.depreciationMethod)
+    ? (await loadAssetAnalyticalStatuses(now.getFullYear(), now.getMonth() + 1)).rows.find((r) => r.assetId === asset.id) ?? null
+    : null
+  const periodLabel = `${now.getMonth() + 1}/${now.getFullYear()}`
 
   return (
     <div className="flex flex-col gap-6">
@@ -107,6 +117,15 @@ export default async function AssetDetailPage({
             typed was stored but never shown anywhere. */}
         <DetailField label="Deskripsi" value={asset.notes || "-"} colSpan="full" />
       </DetailCard>
+
+      {analytical && (
+        <DetailCard title="Penyusutan Analitis (tanpa jurnal)">
+          <DetailField label={`Status Analitis ${periodLabel}`} value={<AssetAnalyticalStatus row={analytical} periodLabel={periodLabel} />} colSpan="full" />
+          {asset.depreciationMethod === "units_of_production" && (
+            <DetailField label="Dokumen Unit Aktual" value={<CanCreate permission="edit_assets"><AssetUsageRecordForm assetId={asset.id} defaultYear={now.getFullYear()} defaultMonth={now.getMonth() + 1} /></CanCreate>} colSpan="full" />
+          )}
+        </DetailCard>
+      )}
 
       {/* History */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
