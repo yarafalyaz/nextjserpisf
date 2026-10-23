@@ -11949,3 +11949,75 @@ Status: PUTUSAN BOT 4 (kartu t_086d564d, siklus standby 06:30). Dokumen saja; TA
 Klaim kepatuhan: kerangka perlakuan internal ISF berdasar PSAK 46 (standar IAI, label bukan dasar fiskal) dan tarif statutori UU PPh Pasal 17 sebagaimana diubah UU 7/2021 (HPP); BUKAN klaim laporan keuangan teraudit sah, bukan penetapan DJP, dan bukan klaim SPT sah. Penerapan per perusahaan mengikuti Keputusan gerbang + vonis akuntan per kasus.
 
 ID vonis ini **F-2026-10-23-112-V** (tertinggi terverifikasi run ini di origin/main 751c07ef: F-2026-10-23-108-V merged #612; 109-V PR #613, 110-V PR #616, 111-V PR #617 terbuka; 112 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 putus Keputusan gerbang + merge rantai aset -> BOT 3 read-model Putusan 1 lalu inti jurnal Putusan 2 -> BOT 2 -> BOT 6 E112-1..10.
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-119-V: basis BPJS tunjangan tetap — klasifikasi master, basis masa diperluas, lantai UMK JKN (lanjutan terbuka F-2026-10-23-103-V B1 "Yang TIDAK diputus")
+
+Status: PUTUSAN BOT 4 (kartu t_1586f3a8, siklus standby 10:30). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Menutup dua butir yang sengaja TIDAK diputus F-103-V B1: (i) "Perluasan basis ke tunjangan tetap = vonis lanjutan sesudah ada klasifikasi komponen tetap di master komponen gaji" dan (ii) "Batas bawah UMK (Perpres 64/2020 Pasal 32(2)) TIDAK diterapkan: tidak ada master UMK terverifikasi di repo; jangan tebak." Vonis ini memutus SYARAT klasifikasi, rumus basis baru, dan gerbang lantai UMK supaya BOT 3 tidak mengarang makna "tetap" dari nama komponen dan lantai tidak ditebak dari teks upah bebas.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 10:30, origin/main 0e1b17a8 -> 05e81f40 selama run)
+
+- Kanban BOT 4 non-done/archived saat snapshot: hanya kartu ini (t_1586f3a8 running). Nol kartu peminta vonis baru bebas-dependensi untuk BOT 4.
+- Peminta lama BOT 3 t_99cb19e4: gerbang vonis sudah bebas dan inti tereksekusi PR #626 merged (ba9d20e9); turunan BOT 2 t_43bca8b5 (field weeklyInstallment, PR #631) berjalan — bukan menunggu vonis BOT 4 baru. Tidak ada vonis teratas untuk diterbitkan ulang.
+- PR vonis BOT 4 terbit semua ter-gate merge BOT 1 di head masing-masing (#625 F-117-V MERGEABLE 3e79d525; #623/#621/#620/#616/#614/#613/#611/#608 CONFLICTING; #618 MERGEABLE) — isi vonis nol berubah, merge milik BOT 1. BOT 4 tidak merge PR sendiri.
+- Maka sesuai badan kartu: buktikan antrean kosong (di atas), lalu ambil riset vonis berikutnya = dua butir terbuka F-103-V B1 ini.
+
+### Bukti repo terverifikasi run ini (origin/main 05e81f40)
+
+- Basis BPJS hari ini = `baseSalary` saja: `allocateBpjsForPeriod`/`evaluateBpjsPeriodRecon` menjumlah `Number(s.baseSalary)` (`src/lib/reports/payroll-weekly.ts:85,128`); `computeBpjsEmployee(baseSalary, ruleset)` menerapkan ceiling Kesehatan/JP sekali (`src/lib/services/payroll-statutory.service.ts:29-40`). F-103-V B1 menegaskan allowances tidak masuk karena "allowances ISF tidak terklasifikasi tetap/tidak-tetap".
+- Klasifikasi tetap SUDAH ada sebagian: `PayrollComponent.recurrence` hanya `fixed|variable` (validasi `src/actions/hrm.actions.ts:285`), `kind` hanya `earning|deduction` (:282); penugasan hanya komponen `recurrence="fixed"` aktif (`:238`). TETAPI `recurrence=fixed` berarti "ditarik otomatis tiap slip", BUKAN vonis hukum "tunjangan tetap": komponen fixed bisa saja tunjangan tidak tetap yang dibayar rutin, dan komponen variable bisa saja tetap secara substansi. Snapshot baris slip membekukan `kindSnapshot`/`recurrenceSnapshot`/`isTaxableSnapshot` (`PayrollComponentLine`, schema) — belum ada penanda basis BPJS.
+- `Payroll.allowances = Sigma earning` dari baris komponen (`hrm.actions.ts:169`); slip tanpa baris komponen memakai allowances header lepas. Tidak ada master UMK/UMP di repo (grep master upah minimum = 0 di F-103-V, terverifikasi ulang run ini).
+- Tarif/ceiling operasional tetap dari `PayrollStatutoryRule` bertanggal efektif (`getStatutoryParams`), bukan konstanta vonis — dipertahankan.
+
+### Dasar regulasi (sumber resmi, akses 2026-10-23)
+
+| Klaim | Sumber resmi | Status |
+|---|---|---|
+| JHT: Upah sebulan = upah pokok + tunjangan tetap; harian x25; borongan rata-rata 3 bulan | PP 46/2015 Pasal 17(1)-(4) — https://peraturan.go.id/files/pp46-2015bt.pdf | TERVERIFIKASI resmi |
+| JP: Upah sebulan dasar iuran = upah pokok + tunjangan tetap bulan bersangkutan; batas atas disesuaikan tahunan | PP 45/2015 Pasal 29(1)-(3) — https://www.peraturan.go.id/files/pp45-2015bt.pdf | TERVERIFIKASI resmi |
+| JKN PPU: iuran 5% Gaji/Upah per bulan; batas atas Rp12.000.000; batas bawah UMK (UMP bila kabupaten/kota tidak menetapkan) | Perpres 64/2020 Pasal 30 + Pasal 32(1)-(3) — https://jdih.kemenkeu.go.id/api/download/179608f7-a2a0-41c0-aaec-e7d60eb36054/64TAHUN2020PERPRES.pdf | TERVERIFIKASI resmi; tarif/ceiling operasional tetap ruleset DB |
+| Komponen upah: upah pokok + tunjangan tetap (+ tidak tetap); pokok >=75% dari pokok+tetap bila ada tunjangan tetap | PP 36/2021 Pasal 7(1)-(3) — https://peraturan.go.id/files/pp36-2021bt.pdf | TERVERIFIKASI resmi |
+| "Tunjangan tetap" = pembayaran teratur, tidak dikaitkan kehadiran/prestasi tertentu | Penjelasan PP 36/2021 / PP 78/2015 Pasal 5 penjelasan — https://peraturan.go.id/files/PP_Nomor_78_Tahun_2015.pdf | TERVERIFIKASI resmi (definisi) |
+
+Konsekuensi mengikat: "tetap" adalah sifat pembayaran (teratur, tidak tergantung hadir/prestasi), BUKAN label nama komponen dan BUKAN sinonim `recurrence=fixed`. Klasifikasi wajib keputusan manusia di master, dibekukan per slip.
+
+### Putusan 1 — Klasifikasi basis BPJS hidup di master, dibekukan per baris slip (fail-closed)
+
+- (a) Master `PayrollComponent` menambah penanda terstruktur `countsTowardBpjsWage` (nama final BOT 3, boolean, default `false`) HANYA bermakna untuk `kind=earning`. Default mati disengaja: komponen existing tidak berubah basis sampai manusia mengklasifikasikan satu per satu — dilarang migrasi massal `recurrence=fixed -> true`.
+- (b) Syarat boleh `true`: komponen earning yang pembayarannya teratur dan tidak dikaitkan kehadiran/prestasi (definisi tunjangan tetap di atas), ditetapkan dalam perjanjian kerja/peraturan perusahaan/PKB. Nama komponen ("Tunjangan ...") bukan bukti; operator wajib dasar dokumen kerja — sistem menyimpan siapa/kapan mengaktifkan (audit existing), bukan memvalidasi isi PKB.
+- (c) Snapshot: `PayrollComponentLine` membekukan penanda itu (`countsTowardBpjsWageSnapshot`) saat baris dibuat, pola snapshot existing. Edit master sesudahnya tidak mengubah slip lama; hitung ulang masa hanya dari snapshot baris + `baseSalary` slip.
+- (d) Deduction/variable-earning tanpa penanda = tidak masuk basis. Earning `recurrence=fixed` tanpa penanda = tidak masuk basis (fail-closed berisik di laporan temuan, bukan tebak). Lembur, bonus, THR, reimbursement, tunjangan kehadiran/prestasi = `false` selamanya kecuali vonis per kasus.
+- (e) Tanpa migrasi penanda (kolom belum ada): basis tetap Putusan F-103-V (baseSalary saja). Vonis ini tidak mengubah angka sebelum BOT 3 membangun (a)+(c) dan HR mengklasifikasi.
+
+### Putusan 2 — Rumus basis masa baru (sesudah gerbang Putusan 1 terpenuhi)
+
+- Basis slip = `baseSalary + Sigma amount PayrollComponentLine slip itu dengan kindSnapshot=earning DAN countsTowardBpjsWageSnapshot=true`. Basis masa = Sigma basis slip aktif se-masa, definisi "aktif" SATU existing F-103-V B1 (bukan cancelled/canceled). Selain itu rumus F-103-V TIDAK berubah: target masa `computeBpjsEmployee(basisKumulatif, ruleset)` ceiling sekali per masa (B2), alokasi selisih kumulatif lantai nol per komponen (B3), snapshot agregator B6 diperluas memuat `basisBaseSalary` + `basisFixedAllowance` terpisah supaya rekonsiliasi bisa membuktikan komposisi.
+- Slip legacy (tanpa snapshot penanda / tanpa penanda agregat B6) TIDAK dicampur diam-diam: masa campuran tampil `hasLegacySlip` existing dan basis tunjangannya dihitung 0 dengan label legacy — dilarang merekonstruksi klasifikasi dari master hari ini untuk slip lama.
+- Angka contoh wajib BOT 6: baseSalary 5.000.000 + tunjangan tetap terklasifikasi 1.000.000 + tunjangan kehadiran (false) 500.000 → basis 6.000.000 (bukan 6.500.000, bukan 5.000.000). Dua slip mingguan se-masa masing-masing basis 3.000.000 → target masa dari 6.000.000, ceiling sekali.
+- PPh21 TIDAK berubah (F-103-V B7 dipertahankan): perluasan basis BPJS tidak mengubah bruto/TER; hanya employment (JHT+JP) terpotong yang sudah menjadi pengurang existing mengikuti nominal barunya lewat jalur existing.
+
+### Putusan 3 — Lantai UMK JKN: hanya dari master upah minimum bertanggal efektif, per program
+
+- (a) Lantai Perpres 64/2020 Pasal 32(2) berlaku HANYA komponen Kesehatan (JKN), BUKAN JHT/JP (PP 46/2015 dan PP 45/2015 tidak mengenal lantai UMK; JP hanya batas atas). Menerapkan lantai ke employment = cacat.
+- (b) Syarat boleh aktif: master upah minimum terstruktur per kabupaten/kota (atau provinsi bila kabupaten/kota tidak menetapkan, Pasal 32(3)) bertanggal efektif + sumber ketetapan gubernur, dipilih per lokasi kerja karyawan terdaftar. Satu angka UMK global perusahaan = ditolak bila karyawan berlokasi beda.
+- (c) Rumus bila aktif: basis Kesehatan masa = `min(max(basisMasa, lantaiBerlaku), ceilingKesehatan)`; basis JHT/JP tetap basisMasa (JP tetap `min(basis, ceilingJP)`). Lantai diterapkan SEKALI di target masa (di dalam varian target Kesehatan), bukan per slip mingguan — per slip akan menggelembungkan lantai 4x.
+- (d) Master UMK kosong/lokasi karyawan kosong = lantai TIDAK diterapkan dan masa tampil temuan "lantai UMK belum terverifikasi" (fail-closed berisik, angka existing). Dilarang menebak UMK dari `baseSalary`, teks bebas, atau konstanta kode. Nominal lantai hidup di master bertanggal efektif, bukan hardcode vonis (mengikuti pola `PayrollStatutoryRule`).
+- (e) Pengecualian penangguhan Pasal 32(4) dan perubahan Perpres 59/2024 untuk usaha mikro/kecil = fakta hukum per perusahaan, `BUTUH-VONIS-AKUNTAN` per entitas; sistem hanya menyimpan status penanda dari keputusan itu, tidak menentukannya.
+
+### Putusan 4 — Yang tetap di luar / ditolak
+
+- (a) Rumus harian x25 / borongan rata-rata 3-12 bulan (PP 46/2015 Pasal 17(3)-(5)): tidak dibuka — karyawan ISF bergaji pokok bulanan (F-103-V); pekerja harian/borongan nyata = spec frekuensi tersendiri, jangan selipkan ke agregator.
+- (b) Mengklasifikasi dari nama komponen, dari `isTaxable`, atau dari `recurrence` secara otomatis: ditolak (tiga sumbu berbeda: pajak, penarikan slip, basis BPJS).
+- (c) Mengubah basis slip yang sudah paid / membetulkan iuran lampau otomatis: ditolak — koreksi = pembetulan ke BPJS di luar sistem + jurnal koreksi manual periode terbuka (F-103-V B5 dipertahankan).
+- (d) Klaim patuh per entitas (program diikuti, lokasi, penangguhan): bukan vonis sistem; label `BUTUH-VONIS-AKUNTAN`/HR-legal per perusahaan.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge PR vonis ini; putus urutan: klasifikasi master (BOT 3) -> pengisian klasifikasi oleh HR (di luar sistem) -> lantai UMK hanya bila master lokasi+UMK dibangun terpisah.
+- BOT 3 (inti terpisah, koordinasi BOT 4 sebelum migrasi): (1) migrasi aditif penanda master + snapshot baris Putusan 1(a)(c), default false, tanpa backfill; (2) perluasan basis Putusan 2 di agregator murni + snapshot agregator memuat dua komponen basis; (3) varian target Kesehatan berlantai Putusan 3(c) di belakang master UMK/lokasi — bila master itu belum dibangun, kirim (1)(2) dulu dan lantai tetap mati berlabel; (4) temuan masa: komponen fixed-earning belum terklasifikasi + lantai belum terverifikasi. Klaim `prisma/schema.prisma` di board dulu.
+- BOT 2: tampilkan penanda master apa adanya + komposisi basis (pokok vs tunjangan tetap) dari snapshot backend; UI tidak mengklasifikasi dan tidak menghitung BPJS.
+- BOT 5: spec HR wajib menyebut dasar PK/PP/PKB per komponen yang diaktifkan; jangan putus klasifikasi dari nama tunjangan.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E119-1 komponen earning fixed tanpa penanda masuk basis = MERAH; E119-2 contoh Putusan 2 sen persis (basis 6.000.000; memasukkan tunjangan kehadiran 500.000 -> MERAH); E119-3 edit master (matikan penanda) mengubah slip lama = MERAH (snapshot beku); E119-4 migrasi massal fixed->true terdeteksi (komponen existing berubah basis tanpa aktivasi manusia) = MERAH; E119-5 lantai UMK diterapkan ke JHT/JP = MERAH; diterapkan per slip mingguan (4x lantai) = MERAH; E119-6 master UMK kosong tetapi lantai diterapkan dari tebakan = MERAH (wajib mati + temuan); E119-7 dua slip mingguan: ceiling + lantai masing-masing sekali per masa, alokasi selisih lantai nol tetap; E119-8 slip legacy dicampur tanpa label / klasifikasi master hari ini direkonstruksi ke slip lama = MERAH; E119-9 deduction atau lembur/bonus berpenanda true tersimpan untuk basis = MERAH (hanya earning tetap boleh).
+
+Klaim kepatuhan: perlakuan internal ISF berdasar PP 46/2015 Pasal 17, PP 45/2015 Pasal 29, Perpres 64/2020 Pasal 30+32, PP 36/2021 Pasal 7 (sumber resmi peraturan.go.id / JDIH Kemenkeu di atas, akses 2026-10-23). Tarif/ceiling/bracket operasional tetap dari ruleset DB bertanggal efektif. BUKAN klaim iuran entitas nyata sah — kepesertaan, lokasi kerja, dan penangguhan per perusahaan wajib fakta HR/legal.
+
+ID vonis ini **F-2026-10-23-119-V** (tertinggi terverifikasi run ini di origin/main 05e81f40: F-2026-10-23-118-V tertinggi merged di main via #627, 117-V tertinggi di PR terbuka #625; grep `F-2026-10-23-119` di backlog main + PR terbuka = 0 sebelum tulis). Pemilik berikutnya: BOT 1 merge vonis ini -> BOT 3 inti klasifikasi+basis -> BOT 2 -> BOT 6 E119-1..9.
