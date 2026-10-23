@@ -107,6 +107,9 @@ const mocks = vi.hoisted(() => {
     generateDocNumBatchMock,
     prismaMock,
     restoreTerBracketMock,
+    getHrScopeMock: vi.fn(),
+    hrScopeOverride: { current: null as unknown },
+    loadLifecycleMock: vi.fn().mockResolvedValue([]),
   }
 })
 
@@ -160,6 +163,68 @@ vi.mock("@/lib/utils/error", () => ({
     e instanceof Error ? e.message : fallback ?? "error",
   isNextRedirectError: (e: unknown) =>
     e instanceof Error && (e as { digest?: string }).digest?.startsWith("NEXT_REDIRECT") === true,
+}))
+
+// F-2026-10-22-085-S (F-2 audit t_07ba8f0c): gerbang aksi lifecycle.
+// getHrScope dikendalikan; fungsi where/assert tetap perilaku asli (dipakai
+// aksi lain di file ini) — refleksikan di sini karena partial mock lewat
+// importOriginal tidak ter-register di setup repo ini. Loader di-mock supaya
+// tes berhenti di kontrak aksi (izin + scope), bukan query DB.
+vi.mock("@/lib/auth/hr-scope", () => ({
+  getHrScope: async (user: { id: string | number; roles?: string[] }) => {
+    mocks.getHrScopeMock(user)
+    if (mocks.hrScopeOverride.current != null) return mocks.hrScopeOverride.current
+    // Perilaku asli getHrScope (fail-closed), tanpa impor modul asli.
+    const roles = Array.isArray(user?.roles) ? user.roles : null
+    if (!roles) return { kind: "self" as const, employeeId: -1 }
+    if (roles.some((r: string) => ["super_admin", "admin", "finance", "ga"].includes(r))) {
+      return { kind: "all" as const }
+    }
+    const me = await mocks.prismaMock.employee.findFirst({
+      where: { userId: Number(user.id) },
+      select: { id: true, departmentId: true },
+    })
+    if (!me) return { kind: "self" as const, employeeId: -1 }
+    if (roles.includes("kepala_bengkel")) {
+      return { kind: "department" as const, departmentId: me.departmentId, employeeId: me.id }
+    }
+    return { kind: "self" as const, employeeId: me.id }
+  },
+  hrEmployeeScopeWhere: (scope: { kind: string; departmentId?: number | null; employeeId?: number }) => {
+    if (scope.kind === "all") return {}
+    if (scope.kind === "self") return { id: scope.employeeId }
+    if (scope.departmentId == null) return { id: scope.employeeId }
+    return { departmentId: scope.departmentId }
+  },
+  hrScopeWhere: (scope: { kind: string; departmentId?: number | null; employeeId?: number }) => {
+    if (scope.kind === "all") return {}
+    if (scope.kind === "self") return { employeeId: scope.employeeId }
+    if (scope.departmentId == null) return { employeeId: scope.employeeId }
+    return { employee: { departmentId: scope.departmentId } }
+  },
+  assertHrEmployeeAccess: async (
+    scope: { kind: string; departmentId?: number | null; employeeId?: number },
+    employeeId: number,
+  ) => {
+    if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid")
+    if (scope.kind === "all") return
+    if (scope.kind === "self" || scope.departmentId == null) {
+      if (scope.employeeId !== employeeId) throw new Error("Anda tidak memiliki akses ke data karyawan ini")
+      return
+    }
+    const employee = await mocks.prismaMock.employee.findUnique({
+      where: { id: employeeId },
+      select: { departmentId: true },
+    })
+    if (!employee || employee.departmentId !== scope.departmentId) {
+      throw new Error("Anda tidak memiliki akses ke data karyawan ini")
+    }
+  },
+  canSearchAcrossEmployees: (scope: { kind: string }) => scope.kind === "all",
+}))
+
+vi.mock("@/lib/reports/employee-lifecycle-data", () => ({
+  loadEmployeeLifecycleAttention: (...a: unknown[]) => mocks.loadLifecycleMock(...a),
 }))
 
 function fd(entries: Record<string, string | string[]>): FormData {
@@ -1928,5 +1993,45 @@ describe("F-2026-10-22-076-S generateBulkPayroll penjaga irisan bertransaksi (au
     expect(createIdx).toBeGreaterThan(findIdx)
     const rows = prismaMock.payroll.createMany.mock.calls.at(-1)?.[0].data as Array<{ employeeId: number }>
     expect(rows.map((x) => x.employeeId)).toEqual([2])
+  })
+})
+
+describe("getEmployeeLifecycleAttention — gerbang aksi F-085-S (F-2)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.hrScopeOverride.current = { kind: "self", employeeId: 9 }
+    mocks.loadLifecycleMock.mockResolvedValue([{ employeeId: 9, kind: "statusUnset" }])
+  })
+
+  it("izin ditolak -> success:false, scope & loader 0x dipanggil", async () => {
+    requirePermissionMock.mockRejectedValue(new Error("Anda tidak memiliki izin view_employees"))
+
+    const res = await actions.getEmployeeLifecycleAttention()
+
+    expect(res.success).toBe(false)
+    if (!res.success) expect(res.error).toMatch(/view_employees/)
+    expect(requirePermissionMock).toHaveBeenCalledWith("view_employees")
+    expect(mocks.getHrScopeMock).not.toHaveBeenCalled()
+    expect(mocks.loadLifecycleMock).not.toHaveBeenCalled()
+  })
+
+  it("lolos: requirePermission(view_employees) -> getHrScope(user) -> loader(scope) -> rows apa adanya", async () => {
+    const user = { id: 42, roles: ["kepala_bengkel"] }
+    const scope = { kind: "department", departmentId: 7, employeeId: 42 }
+    const rows = [{ employeeId: 42, kind: "contractExpiring" }]
+    requirePermissionMock.mockResolvedValue(user)
+    mocks.hrScopeOverride.current = scope
+    mocks.loadLifecycleMock.mockResolvedValue(rows)
+
+    const res = await actions.getEmployeeLifecycleAttention()
+
+    expect(requirePermissionMock).toHaveBeenCalledTimes(1)
+    expect(requirePermissionMock).toHaveBeenCalledWith("view_employees")
+    expect(mocks.getHrScopeMock).toHaveBeenCalledTimes(1)
+    expect(mocks.getHrScopeMock).toHaveBeenCalledWith(user)
+    expect(mocks.loadLifecycleMock).toHaveBeenCalledTimes(1)
+    expect(mocks.loadLifecycleMock).toHaveBeenCalledWith(scope)
+    expect(res).toEqual({ success: true, rows })
   })
 })
