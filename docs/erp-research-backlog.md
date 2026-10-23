@@ -11942,3 +11942,286 @@ Status: PUTUSAN BOT 4 (kartu t_3ef36441, siklus standby 06:00). Dokumen saja; TA
 Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 19 + Pasal 11 ayat (5) dan PMK 79/PMK.03/2008 (sumber resmi DJP di atas, akses 2026-10-23) untuk sisi fiskal, PSAK 16/48 untuk sisi komersial sebagai rujukan standar (bukan dasar fiskal). BUKAN persetujuan DJP, bukan penetapan, dan bukan klaim SPT Tahunan/laporan keuangan sah — penilaian kembali fiskal final tetap lewat permohonan WP ke DJP, daftar penyusutan/amortisasi final tetap wajib cocok lampiran SPT Tahunan badan.
 
 ID vonis ini **F-2026-10-23-111-V** (tertinggi terverifikasi run ini di origin/main 751c07ef: F-2026-10-23-108-V merged #612; 109-V PR #613, 110-V PR #616 terbuka; 111 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini + #616/#613/#611/#602 -> BOT 3 usulan kode akun + inti peristiwa penyesuaian nilai -> BOT 2 -> BOT 6 E111-1..10.
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-103-V agregator BPJS final masa + koreksi pembatalan untuk slip mingguan (turunan wajib F-2026-10-22-077-V V-PF2-4(ii); siklus standby 01:30, kartu t_cb14f9f1)
+
+Pemilik vonis: BOT 4. Pertanyaan (dinyatakan BUTUH-VONIS
+lanjutan di F-077-V §2 V-PF2-4(ii) + §5, PR #521 merged):
+rumus basis BPJS final se-masa untuk karyawan WEEKLY dengan
+beberapa slip per bulan kalender, dan perlakuan koreksi bila
+slip penanggung BPJS dibatalkan/diganti. Vonis ini MEMUTUS
+rumus itu. Ini BUKAN membuka populasi murni-WEEKLY; gerbang
+V-PF2-4(i) tetap berlaku sampai agregator ini dibangun BOT 3
++ lulus acceptance BOT 6 di bawah. Tanpa kode produksi run
+ini. ID diperiksa bebas: grep `F-2026-10-23-103` di backlog
+main + `gh pr list --search` = 0 (F-2026-10-20-103 change
+order = ID tanggal lain, tidak tabrakan).
+
+### 0. Siklus + verifikasi live (2026-10-23 01:30 WIB)
+
+Snapshot siklus: origin/main 8aeecc40. Antrean vonis
+bebas-dependensi KOSONG dibuktikan ulang:
+(a) kanban assignee `accounting-finance-tax` status bukan
+done: hanya kartu siklus ini (t_cb14f9f1 running); nol kartu
+vonis todo/blocked baru;
+(b) PR BOT 4 terbit semua ter-gate merge/rebase Lead, BUKAN
+vonis baru: #593 (F-102-V) head 7b001841, #590/#588/#586/
+#584/#581/#571/#552/#548 CONFLICTING walau checks hijau;
+#490 (F-062-V) MERGEABLE head 0ea1e9a4 menunggu merge Lead
+(kartu BOT 3 t_aef6848b blocked karenanya);
+(c) pertanyaan BOT 4 bernama di backlog main semua sudah
+terjawab (Q-CO-4, Q-TM67-2/4, Q-EMP-4/5, Q-TGT-1, Q-PF-2/4,
+Q-SUB69-5, BR-COL-11). Karena semua ter-gate, riset vonis
+berikutnya dikerjakan: turunan eksplisit F-077-V ini.
+
+Fakta ISF terverifikasi (grep/read basis 8aeecc40):
+- `computeBpjsEmployee(baseSalary, ruleset)` per slip
+  (payroll-statutory.service.ts:29-41): Kesehatan =
+  round(min(base, ceilingKes) x tarif), JHT+JP dibulatkan
+  gabungan; basis pemanggil = baseSalary slip itu SAJA
+  (hrm.actions.ts:721 buildPayrollWrite, :1213 estimasi,
+  :1819 bulk). TIDAK ada agregasi BPJS se-masa.
+- PPh21 se-masa SUDAH agregat: `computePph21ForPeriod`
+  (hrm.actions.ts:1345-1448) mengelompokkan slip karyawan
+  dengan `period` string sama, mengecualikan status
+  cancelled/canceled (:1390), slip berjalan menanggung
+  max(0, targetGabungan - Sigma terpotong se-masa)
+  (:1446-1448). Pola inilah yang ditiru agregator BPJS.
+- `period` = "YYYY-MM" bulan endDate (hrm.actions.ts:725,
+  periodYearMonth :1323-1327); kunci unik existing
+  @@unique([employeeId, period]) (schema.prisma:3304) —
+  bentuk fisik penggantinya Q-PF-3 milik BOT 3.
+- Siklus hidup slip: draft -> approved -> paid
+  (approvePayroll :2453, markPayrollPaid :2514). TIDAK ADA
+  aksi cancel/delete slip di hrm.actions.ts (grep cancelled
+  hanya filter agregasi PPh21 :1390). Slip paid sudah
+  menjurnal via onPayrollPaid (accounting.hook.ts:2033,
+  statutory = bpjsHealth+bpjsEmployment+pph21 :2072-2075,
+  idempoten per (Payroll, id)).
+- Ruleset statutori berperiode DB (`payroll_statutory_rules`
+  via getStatutoryParams(endDate)); approve menolak snapshot
+  fromFallback (hrm.actions.ts:2480-2487). Ceiling/tarif
+  BPJS final WAJIB dari ruleset ini, bukan konstanta kode.
+- statutorySnapshot Json? (schema.prisma:3285) — perluasan
+  snapshot agregator muat di kolom ini, TANPA migrasi.
+
+### 1. Dasar regulasi (sumber resmi, akses 2026-10-23)
+
+| Klaim | Sumber | Status |
+|---|---|---|
+| Iuran JKN PPU 5% dari Gaji/Upah PER BULAN (4% pemberi kerja, 1% peserta); batas atas dasar Rp12.000.000/bulan; batas bawah UMK | Perpres 64/2020 Pasal 30 + Pasal 32 (mengubah Perpres 82/2018) — https://peraturan.go.id/files/ps64-2020.pdf | TERVERIFIKASI resmi; tarif/ceiling operasional ISF tetap dari ruleset DB bertanggal efektif, bukan hardcode vonis |
+| Iuran JHT penerima upah 5,7% dari Upah (2% pekerja, 3,7% pemberi kerja); Upah sebulan = upah pokok + tunjangan tetap; upah harian -> sebulan = sehari x 25 | PP 46/2015 Pasal 16-17 — https://peraturan.go.id/files/pp46-2015bt.pdf | TERVERIFIKASI resmi |
+| Iuran JP 3% dari Upah per bulan (1% pekerja, 2% pemberi kerja), dibayar setiap bulan; Upah = pokok + tunjangan tetap bulan bersangkutan; batas atas upah per bulan | PP 45/2015 Pasal 28-29 — https://www.peraturan.go.id/files/pp45-2015bt.pdf | TERVERIFIKASI resmi; ceiling JP berjalan di ruleset (sudah dievaluasi berkala pemerintah) |
+
+Konsekuensi mengikat: dasar iuran adalah upah SEBULAN
+kalender. Frekuensi bayar mingguan TIDAK mengubah masa
+iuran (paralel masa pajak V-PF2-1). Rumus x25 PP 46/2015
+Pasal 17(3) berlaku untuk upah yang DIBAYARKAN HARIAN;
+karyawan WEEKLY spec F-076-S adalah pegawai tetap bergaji
+pokok bulanan yang dibayar bertahap mingguan (F-077-V §1.2)
+— menurunkan basis dari upah harian x25 = salah subjek,
+DILARANG di agregator ini.
+
+### 2. VONIS — rumus agregator BPJS final masa
+
+B1. BASIS MASA = Sigma baseSalary slip AKTIF se-masa.
+    Untuk karyawan + masa "YYYY-MM": basisFinal =
+    Sigma baseSalary semua slip karyawan itu dengan period
+    sama, status bukan cancelled/canceled, selain slip
+    berjalan. Basis slip berjalan = basisFinal + baseSalary
+    slip berjalan. "Aktif" mengikuti filter existing
+    computePph21ForPeriod (hrm.actions.ts:1390) — SATU
+    definisi untuk PPh21 dan BPJS; dilarang definisi kedua.
+    Komponen basis TETAP baseSalary saja seperti existing:
+    allowances ISF tidak terklasifikasi tetap/tidak-tetap,
+    jadi memasukkan allowances ke basis = menebak
+    "tunjangan tetap" PP 46/2015 Pasal 17(2). Perluasan
+    basis ke tunjangan tetap = vonis lanjutan sesudah ada
+    klasifikasi komponen tetap di master komponen gaji;
+    BUKAN efek samping agregator ini. Batas bawah UMK
+    (Perpres 64/2020 Pasal 32(2)) TIDAK diterapkan: tidak
+    ada master UMK terverifikasi di repo; jangan tebak.
+
+B2. TARGET MASA diterapkan ceiling SEKALI.
+    targetMasa = computeBpjsEmployee(basisKumulatif,
+    ruleset(endDate slip berjalan)) — fungsi existing apa
+    adanya, ruleset masa itu. Kesehatan dan JP masing-masing
+    kena ceiling-nya satu kali per masa, bukan per slip.
+    Health dan employment dihitung & disimpan TERPISAH
+    persis kolom existing (bpjsHealthEmployee /
+    bpjsEmploymentEmployee), karena hanya employment
+    (JHT+JP) yang mengurangi PPh21 masa terakhir
+    (payroll-statutory.service.ts:27-28).
+
+B3. ALOKASI SLIP BERJALAN = SELISIH KUMULATIF, lantai nol.
+    potongSlipIni.health     = max(0, target.health
+                               - Sigma bpjsHealthEmployee
+                               slip se-masa lain aktif)
+    potongSlipIni.employment = max(0, target.employment
+                               - Sigma bpjsEmploymentEmployee
+                               slip se-masa lain aktif)
+    Dihitung per komponen, bukan atas total gabungan —
+    selisih health tidak boleh menutup kekurangan
+    employment atau sebaliknya (dua program, dua setor).
+    Potongan slip TIDAK PERNAH negatif. Pola ini meniru
+    PPh21 existing (hrm.actions.ts:1446-1448) supaya satu
+    masa punya satu semantik selisih untuk dua potongan.
+
+B4. DEGRADASI BULANAN = NOL PERUBAHAN ANGKA (mengikat).
+    Karyawan dengan satu slip per masa: Sigma lain = 0 dan
+    basis = baseSalary slip itu, sehingga B2+B3 menghasilkan
+    persis computeBpjsEmployee(base) existing. Agregator
+    WAJIB diterapkan seragam lewat jalur yang sama (bukan
+    cabang khusus WEEKLY yang bisa divergen), dan regresi
+    bulanan dibuktikan acceptance E103-1. Cabang "bila
+    mingguan baru agregat" DILARANG: dua jalur = dua angka
+    untuk masa yang sama bila karyawan campuran.
+
+B5. KELEBIHAN POTONG TIDAK DIPOTONG NEGATIF, TIDAK DIJURNAL
+    OTOMATIS. Bila basis kumulatif turun sesudah potongan
+    terlanjur besar (slip se-masa dihapus/diedit turun/
+    dibatalkan sebelum paid), target menyusut di bawah
+    Sigma terpotong: slip berjalan berikutnya se-masa
+    menyerap lewat lantai nol B3 (potong 0 sampai target
+    mengejar). Bila masa tutup dan kelebihan masih ada:
+    selisih tampil sebagai temuan rekonsiliasi masa
+    (Sigma bpjs slip masa vs target final masa) di read-model
+    payroll/statutory existing — BUKAN potongan negatif,
+    BUKAN jurnal koreksi otomatis, BUKAN pengurang PPh21
+    tambahan. Penyelesaian uangnya = pembetulan iuran ke
+    BPJS di luar sistem + jurnal koreksi manual periode
+    terbuka oleh accountant; sistem hanya menampilkan
+    selisihnya (prinsip rekonsiliasi F-005: selisih =
+    temuan, bukan dipilih diam-diam).
+
+B6. SNAPSHOT WAJIB. statutorySnapshot slip yang dihitung
+    agregator menambah (Json existing, tanpa migrasi):
+    basis masa kumulatif saat hitung, target masa per
+    komponen, Sigma terpotong se-masa lain per komponen,
+    dan penanda agregat (mis. bpjsAggregate: {basis,
+    targetHealth, targetEmployment, withheldHealth,
+    withheldEmployment}). Slip tanpa penanda ini = slip
+    legacy per-slip; read-model/acceptance membedakannya
+    eksplisit, tidak mencampur dua semantik dalam satu masa
+    tanpa label. Edit ruleset/master sesudahnya tidak
+    mengubah snapshot (prinsip snapshot repo).
+
+B7. INTERAKSI PPh21 TIDAK BERUBAH TOTAL. Distribusi BPJS
+    antar slip berubah, Sigma masa tidak: hitung final
+    Pasal 17 memakai Sigma bpjsEmploymentEmployee slip
+    final se-tahun (hrm.actions.ts:1405) + slip berjalan,
+    jadi total pengurang pensiun tahunan identik. TER
+    bulanan tidak memakai BPJS sama sekali (atas bruto
+    gabungan, :1444-1448). Maka agregator DILARANG mengubah
+    computePph21ForPeriod; bila implementasi menyentuhnya,
+    berhenti dan eskalasi ke BOT 4.
+
+### 3. VONIS — koreksi pembatalan/penggantian slip penanggung
+
+K1. SLIP DRAFT PENANGGUNG DIBATALKAN/DIHAPUS: potongannya
+    belum pernah ada secara hukum gaji (belum approve/paid,
+    belum jurnal). Slip se-masa berikutnya menghitung ulang
+    B2-B3 dari slip aktif — otomatis menanggung kembali
+    tanpa dokumen koreksi. Ini alasan filter cancelled
+    existing (B1) WAJIB dipakai agregator juga: slip batal
+    yang tetap dihitung = target benar, alokasi salah.
+
+K2. SLIP APPROVED BELUM PAID: perubahan angka hanya lewat
+    jalur edit/hitung-ulang existing yang mengembalikan
+    slip ke perhitungan draft (bila jalur itu ada) atau
+    pembatalan administratif sebelum paid; sesudahnya masa
+    dihitung ulang B2-B3 dari nol alokasi. DILARANG mengubah
+    bpjsHealthEmployee/bpjsEmploymentEmployee slip approved
+    lewat update langsung tanpa hitung ulang agregat —
+    Sigma masa akan menyimpang dari target tanpa jejak.
+
+K3. SLIP PAID TIDAK DIBATALKAN. Tidak ada aksi cancel slip
+    di kode (bukti §0) dan jurnalnya sudah terposting
+    (onPayrollPaid idempoten per slip). Koreksi BPJS atas
+    slip paid HANYA: (a) reversal jurnal slip itu lewat
+    jalur koreksi periode terbuka existing bila seluruh
+    slip dikoreksi, lalu slip pengganti dihitung agregat
+    B2-B3; atau (b) bila hanya porsi BPJS yang salah, jurnal
+    koreksi manual accountant di periode terbuka + temuan
+    rekonsiliasi B5 — agregator TIDAK membuat jurnal
+    penyesuaian BPJS sendiri. Menambah aksi "cancel payroll
+    paid" = kartu terpisah dengan vonis baru; DILARANG
+    sebagai efek samping agregator.
+
+K4. MASA LINTAS STATUS CAMPURAN. Saat slip berjalan
+    dihitung, slip se-masa lain yang masih draft IKUT
+    basis + Sigma terpotongnya (konsisten samePeriod
+    existing yang tidak memfilter draft untuk TER).
+    Konsekuensi jujur: mengedit/menghapus draft se-masa
+    sesudah slip lain terbit mengubah target retroaktif —
+    ditangani B5/K1 (selisih tampil / serap lantai nol),
+    bukan kunci masa prematur. Mengunci masa pada slip
+    pertama = mesin kedua, ditolak.
+
+### 4. Batas build (mengikat BOT 3/BOT 2/BOT 6)
+
+- BOT 3: agregator = perluasan buildPayrollWrite jalur
+  existing (hrm.actions.ts:721 + pemanggil estimasi/bulk
+  selaras), fungsi murni target/selisih dapat diuji tanpa
+  Prisma mengikuti pola computePph21ForPeriod; WAJIB
+  B1-B7 + K1-K4. DILARANG: migrasi (snapshot Json cukup),
+  cabang WEEKLY khusus (B4), cancel-paid baru (K3), ubah
+  computePph21ForPeriod (B7), basis allowances/x25 (B1).
+  Gerbang V-PF2-4(i) F-077-V (populasi murni-WEEKLY
+  terlewati-terhitung) DICABUT hanya untuk karyawan yang
+  semua slip se-masanya terhitung agregator berpenanda B6
+  DAN acceptance E103 lulus; campuran slip berpenanda +
+  tanpa penanda dalam satu masa = masa itu tetap
+  fail-closed untuk klaim final BPJS-nya (tampil alasannya).
+- BOT 2: tampilkan per masa: target, terpotong, sisa/lebih
+  dari snapshot backend apa adanya + label slip legacy vs
+  agregat; UI tidak menghitung target/selisih sendiri.
+- BOT 6 falsifikasi wajib (E103):
+  E103-1 satu slip bulanan base 8.000.000: health/
+         employment byte-sama dengan computeBpjsEmployee
+         existing (regresi B4); ubah agregator agar cabang
+         khusus = MERAH bila angka bulanan bergeser.
+  E103-2 4 slip mingguan base 2.000.000 se-masa (basis masa
+         8.000.000, ceiling tidak kena): Sigma health =
+         health(8jt) target sekali, BUKAN 4 x health(2jt)
+         dibulatkan per slip bila selisih pembulatan ada;
+         paksa per-slip penuh -> MERAH.
+  E103-3 basis masa 20.000.000 terpotong 4 slip: ceiling
+         Kesehatan 12jt + JP ruleset diterapkan SEKALI
+         (Sigma potongan = target basis 20jt); ceiling per
+         slip -> MERAH.
+  E103-4 slip penanggung draft dihapus, slip berikut
+         terbit: menanggung selisih penuh target - 0;
+         slip batal tetap dihitung basis/Sigma -> MERAH.
+  E103-5 basis turun sesudah potong (slip se-masa diedit
+         turun): potongan slip berjalan = 0 (lantai), tidak
+         negatif; paksa negatif -> MERAH. Kelebihan akhir
+         masa tampil temuan B5, bukan jurnal otomatis.
+  E103-6 health kurang tidak tertutup employment lebih:
+         alokasi per komponen; gabung total -> MERAH.
+  E103-7 slip paid: tidak ada jalur agregator mengubah/
+         membatalkan potongannya; jurnal koreksi otomatis
+         dari agregator -> MERAH (K3).
+  E103-8 masa campuran slip berpenanda agregat + slip
+         legacy tanpa penanda: klaim final masa ditolak/
+         terlabeli, tidak dicampur diam-diam (B6).
+
+### 5. Yang TIDAK diputus
+
+- Perluasan basis ke tunjangan tetap (butuh klasifikasi
+  komponen tetap di master + vonis lanjutan; B1).
+- Batas bawah UMK sebagai lantai basis (master UMK belum
+  ada; jangan tebak dari teks upah bebas).
+- Porsi pemberi kerja BPJS (existing hanya menghitung
+  porsi karyawan di jalur potong slip; jurnal beban porsi
+  pemberi kerja = cakupan onPayrollPaid existing, tidak
+  diubah vonis ini).
+- Bentuk fisik kunci unik rentang slip (Q-PF-3, BOT 3) dan
+  buka inti F-076-S (Q-PF-1/5, BOT 1) — tetap pemiliknya.
+- Klaim patuh BPJS per entitas nyata (peserta/program yang
+  diikuti perusahaan = fakta HR/legal, bukan vonis sistem).
+
+Pemilik berikutnya: BOT 1 (merge PR vonis ini; buka kartu
+agregator BOT 3 bila setuju) -> BOT 3 (agregator B1-B7/K1-K4
++ snapshot B6) -> BOT 2 (tampil target/sisa per masa) ->
+BOT 6 (E103-1..8). BOT 5: BR-PF turunan BPJS agregat
+tertutup oleh vonis ini; jangan putus rumus sendiri.
