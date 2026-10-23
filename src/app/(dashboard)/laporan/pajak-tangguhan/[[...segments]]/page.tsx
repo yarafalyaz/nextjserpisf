@@ -5,10 +5,12 @@ import type { Metadata } from "next"
 import { requirePermission } from "@/lib/auth/permissions"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { DeferredTaxCard } from "@/components/reports/deferred-tax-card"
+import { DeferredTaxValueEventCard } from "@/components/reports/deferred-tax-value-event-card"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { ReportPeriodFilter } from "@/components/reports/report-period-filter"
 import { splitReportSegments } from "@/lib/reports/report-period"
 import { loadDeferredTax } from "@/lib/reports/deferred-tax-data"
+import { loadDeferredTaxValueEventSource } from "@/lib/reports/deferred-tax-value-events-data"
 import { loadDeferredTaxNonAssetSources } from "@/lib/reports/deferred-tax-nonaset-data"
 import { DeferredTaxNonAssetCard } from "@/components/reports/deferred-tax-nonaset-card"
 
@@ -27,6 +29,11 @@ export const metadata: Metadata = { title: "Pajak Tangguhan" }
  * `report.rateSourceLabel` — bukan tarif resmi/master. Kosong/tidak sah
  * diteruskan apa adanya dan builder menolak menghitung (fail-closed).
  * `asOf` = akhir tahun pajak berjalan.
+ *
+ * Sumber KEDUA F-2026-10-23-125-V (`loadDeferredTaxValueEventSource`):
+ * peristiwa revaluasi/impairment belum terbekukan (inti F-111 belum ada),
+ * jadi kartu kedua tampil notice "belum tersedia" bernama dari builder —
+ * bukan angka nol — dan PPh final tampil terpisah dari indikasi tangguhan.
  *
  * Sumber NON-ASET F-2026-10-23-126-V (`loadDeferredTaxNonAssetSources`):
  * kartu ketiga tampil baris provisi/CKPN/rugi fiskal apa adanya — hari ini
@@ -50,6 +57,7 @@ export default async function DeferredTaxPage({
   const now = new Date()
   const asOf = new Date(Date.UTC(now.getFullYear(), 11, 31))
   const { report } = await loadDeferredTax({ taxRatePercent, asOf })
+  const { report: valueEventReport } = await loadDeferredTaxValueEventSource({ taxRatePercent, asOf })
   const { report: nonAssetReport } = await loadDeferredTaxNonAssetSources({ taxRatePercent, asOf })
   const periodLabel = `Per 31 Desember ${now.getFullYear()}`
 
@@ -85,6 +93,7 @@ export default async function DeferredTaxPage({
       actions={<ExportButtons title="Pajak_Tangguhan" />}
     >
       <DeferredTaxCard report={report} />
+      <DeferredTaxValueEventCard report={valueEventReport} />
       <DeferredTaxNonAssetCard report={nonAssetReport} />
     </ReportPageShell>
   )
