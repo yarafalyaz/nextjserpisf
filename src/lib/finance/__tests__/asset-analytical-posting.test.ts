@@ -101,6 +101,25 @@ describe("resolveAnalyticalAssetStatus (F-118-V Putusan 2)", () => {
     }
   })
 
+  it("disposed never computed, UOP and SYD (M-1 t_1d595a1e)", () => {
+    for (const method of ["units_of_production", "sum_of_years_digits"]) {
+      const r = resolveAnalyticalAssetStatus({
+        ...base,
+        depreciationMethod: method,
+        status: "disposed",
+      })
+      expect(r).toEqual({ status: "skip", reason: "disposed" })
+    }
+    // Parameter lengkap + dokumen lengkap tetap skip — disposed menang.
+    const r = resolveAnalyticalAssetStatus({
+      ...base,
+      depreciationMethod: "units_of_production",
+      status: "disposed",
+      actualUnits: dec("1000"),
+    })
+    expect(r).toEqual({ status: "skip", reason: "disposed" })
+  })
+
   it("already posted skips (idempotency per period)", () => {
     const r = resolveAnalyticalAssetStatus({
       ...base,
