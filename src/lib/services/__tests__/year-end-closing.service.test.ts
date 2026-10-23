@@ -10,8 +10,10 @@ const mocks = vi.hoisted(() => ({
   journalFindFirst: vi.fn(),
   journalCreate: vi.fn(),
   journalUpdate: vi.fn(),
+  journalUpdateMany: vi.fn(),
   journalEntryCreateMany: vi.fn(),
   queryRaw: vi.fn(),
+  executeRaw: vi.fn(),
   generateDocumentNumber: vi.fn(),
 }))
 
@@ -35,8 +37,10 @@ vi.mock("@/lib/db/prisma", () => {
       findFirst: (...a: unknown[]) => mocks.journalFindFirst(...a),
       create: (...a: unknown[]) => mocks.journalCreate(...a),
       update: (...a: unknown[]) => mocks.journalUpdate(...a),
+      updateMany: (...a: unknown[]) => mocks.journalUpdateMany(...a),
     },
     $queryRaw: (...a: unknown[]) => mocks.queryRaw(...a),
+    $executeRaw: (...a: unknown[]) => mocks.executeRaw(...a),
   }
   return {
     prisma: {
@@ -66,6 +70,8 @@ beforeEach(() => {
   mocks.generateDocumentNumber.mockResolvedValue("JRN-2026-0001")
   mocks.approvalFindFirst.mockResolvedValue(null) // tanpa workflow = no-op
   mocks.queryRaw.mockResolvedValue([{ id: 1, period_lock_date: null }])
+  mocks.executeRaw.mockResolvedValue(1)
+  mocks.journalUpdateMany.mockResolvedValue({ count: 1 })
   mocks.settingsFindFirst.mockResolvedValue({ fiscalYearStartMonth: 1, retainedEarningsAccountId: 7 })
   mocks.accountFindFirst.mockResolvedValue(RETAINED)
   mocks.accountFindMany.mockResolvedValue([
@@ -185,6 +191,27 @@ describe("reverseYearEndClosing", () => {
     expect(rows).toContainEqual(expect.objectContaining({ accountId: 1, debit: 0, credit: 1000, profitCenterId: 5 }))
     expect(rows).toContainEqual(expect.objectContaining({ accountId: 7, debit: 1000, credit: 0, profitCenterId: 5 }))
     expect(mocks.journalUpdate).toHaveBeenCalledWith({ where: { id: 42 }, data: { status: "REVERSED" } })
+    // Kunci baris + klaim atomik sebelum jurnal lawan dibuat.
+    expect(mocks.executeRaw).toHaveBeenCalled()
+    expect(mocks.journalUpdateMany).toHaveBeenCalledWith({
+      where: { id: 42, status: "POSTED" },
+      data: { status: "REVERSING" },
+    })
+  })
+
+  it("E121-6b: klaim atomik kalah (reversal bersamaan) -> ditolak, nol jurnal lawan", async () => {
+    mocks.journalFindFirst.mockResolvedValue({
+      id: 42,
+      journalNumber: "JRN-2025-0099",
+      transactionDate: new Date("2025-12-31T23:59:59.999Z"),
+      type: "GENERAL",
+      totalDebit: 1000,
+      totalCredit: 1000,
+      entries: [{ accountId: 1, debit: 1000, credit: 0, memo: "Penutup", profitCenterId: 5 }],
+    })
+    mocks.journalUpdateMany.mockResolvedValue({ count: 0 })
+    await expect(reverseYearEndClosing(2025, 3)).rejects.toThrow("konflik konkurensi")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 
   it("tanpa jurnal penutup POSTED -> ditolak berisik", async () => {

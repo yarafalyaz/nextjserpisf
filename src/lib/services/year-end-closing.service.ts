@@ -226,6 +226,13 @@ export async function reverseYearEndClosing(
   const reversalNumber = await generateDocumentNumber("JRN")
 
   return prisma.$transaction(async (tx) => {
+    // Kunci baris dulu lalu klaim atomik POSTED->REVERSING (pola jalur
+    // generik finance.actions reverseJournal): dua reversal bersamaan
+    // terserialisasi di kunci baris; yang kalah membaca REVERSING lalu
+    // klaim bersyaratnya 0 baris -> error konflik, nol jurnal lawan dobel.
+    // Klaim + reversal + REVERSED commit atomik dalam tx yang sama.
+    await tx.$executeRaw`SELECT id FROM journals WHERE reference_type = ${YEAR_END_CLOSING_REFERENCE_TYPE} AND reference_id = ${fiscalYear} AND status = 'POSTED' AND deleted_at IS NULL FOR UPDATE`
+
     const original = await tx.journal.findFirst({
       where: {
         referenceType: YEAR_END_CLOSING_REFERENCE_TYPE,
@@ -237,6 +244,14 @@ export async function reverseYearEndClosing(
     })
     if (!original) {
       throw new Error(`Jurnal penutup tahun fiskal ${fiscalYear} tidak ditemukan atau sudah di-reversal.`)
+    }
+
+    const claim = await tx.journal.updateMany({
+      where: { id: original.id, status: "POSTED" },
+      data: { status: "REVERSING" },
+    })
+    if (claim.count === 0) {
+      throw new Error("Jurnal penutup tidak bisa di-reversal (konflik konkurensi — coba lagi)")
     }
 
     await assertPeriodOpen(original.transactionDate, tx)
