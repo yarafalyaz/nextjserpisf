@@ -68,6 +68,13 @@ export const employeeLoanSchema = z.object({
   loanDate: requiredDate("Tanggal pinjaman"),
   totalAmount: requiredNum("Total pinjaman", 1),
   monthlyInstallment: requiredNum("Cicilan bulanan", 1),
+  // F-2026-10-23-105-V: nominal cicilan mingguan dari perjanjian tertulis.
+  // Kosong = null (tanpa jadwal mingguan); terisi wajib > 0 sen. TIDAK
+  // dihitung otomatis dari monthlyInstallment.
+  weeklyInstallment: z.preprocess(
+    (v) => (v === "" || v === undefined ? null : v),
+    z.coerce.number().positive("Cicilan mingguan harus lebih dari 0").nullable(),
+  ),
   notes: optionalStr(500),
 })
 

@@ -335,6 +335,7 @@ describe("F-027 tarikan generate", () => {
       .mockResolvedValue([{ id: 7, baseSalary: 5000000, maritalStatus: "single", dependents: 0, departmentId: null, employeeLoans: [] }])
     prismaMock.payroll.findMany
       .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValue([{ id: 55, employeeId: 7, componentLines: [] }])
     prismaMock.payroll.findUnique.mockResolvedValue({ status: "draft", componentLines: [] })
     prismaMock.employeePayrollComponent.findMany.mockResolvedValue([
