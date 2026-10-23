@@ -11,6 +11,8 @@ import { notFound, redirect } from "next/navigation"
 import { loadPeriodClose } from "@/lib/settings/period-close-data"
 import { parsePathFilterSegments } from "@/lib/utils/path-filters"
 import { PeriodClosePanel } from "../_components/period-close-panel"
+import { getYearEndClosingPreview } from "@/lib/reports/year-end-closing-data"
+import { YearEndClosingPanel } from "../_components/year-end-closing-panel"
 
 export const metadata: Metadata = { title: "Proses Akhir Bulan" }
 
@@ -32,6 +34,12 @@ export default async function PeriodClosePage({
   if (!filters) notFound()
 
   const { month, result } = await loadPeriodClose(filters.periode)
+  const parsedYear = Number(params.tahun)
+  const fiscalYear =
+    /^\d{4}$/.test(params.tahun ?? "") && parsedYear >= 1900 && parsedYear <= 2200
+      ? parsedYear
+      : new Date().getFullYear()
+  const yearEndPreview = await getYearEndClosingPreview(fiscalYear)
   const monthEnd = [
     month.end.getFullYear(),
     String(month.end.getMonth() + 1).padStart(2, "0"),
@@ -118,6 +126,37 @@ export default async function PeriodClosePage({
             Temuan di atas bersifat informatif, bukan penghalang: menutup periode tetap keputusan Anda.
             Buka kunci juga tersedia sebagai jalan koreksi dan tercatat di log aktivitas.
           </p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Penutup Tahun {fiscalYear}</CardTitle>
+          <CardDescription>
+            {yearEndPreview.alreadyClosed
+              ? "Jurnal penutup tahun ini sudah terposting."
+              : "Pratinjau jurnal penutup dari jurnal terposting; posting menutup akun pendapatan/beban ke laba ditahan."}
+          </CardDescription>
+          <CardAction>
+            {yearEndPreview.alreadyClosed ? (
+              <Badge variant="outline" className="gap-1 text-emerald-600">
+                <CheckCircle2 className="size-3.5" /> Sudah ditutup
+              </Badge>
+            ) : yearEndPreview.balanced && yearEndPreview.retainedEarningsMapped ? (
+              <Badge variant="outline" className="gap-1 text-emerald-600">
+                <CheckCircle2 className="size-3.5" /> Siap posting
+              </Badge>
+            ) : (
+              <Badge variant="outline" className="gap-1 text-amber-600">
+                <AlertTriangle className="size-3.5" /> Belum siap
+              </Badge>
+            )}
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <YearEndClosingPanel
+            preview={{ ...yearEndPreview, closingDate: yearEndPreview.closingDate.toISOString() }}
+          />
         </CardContent>
       </Card>
     </div>

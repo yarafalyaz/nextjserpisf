@@ -24,6 +24,7 @@ interface Account {
   id: number
   code: string
   name: string
+  type?: string
 }
 interface SettingsEditFormProps {
   settings: SettingsFormValues
@@ -149,6 +150,7 @@ interface SettingsFormValues {
   warehouseCodePrefix?: string | null
   wipAccountId?: number | null
   workOrderPrefix?: string | null
+  retainedEarningsAccountId?: number | null
 }
 
 interface AccountMappingField {
@@ -280,6 +282,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [payrollJournalType, setPayrollJournalType] = useState(settings.payrollJournalTypeId ? String(settings.payrollJournalTypeId) : "")
   const [depreciationExpense, setDepreciationExpense] = useState(settings.depreciationExpenseAccountId ? String(settings.depreciationExpenseAccountId) : "")
   const [accumulatedDepreciation, setAccumulatedDepreciation] = useState(settings.accumulatedDepreciationAccountId ? String(settings.accumulatedDepreciationAccountId) : "")
+  const [retainedEarnings, setRetainedEarnings] = useState(settings.retainedEarningsAccountId ? String(settings.retainedEarningsAccountId) : "")
   const [accountOptions, setAccountOptions] = useState(accounts)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const signatureInputRef = useRef<HTMLInputElement>(null)
@@ -367,7 +370,21 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
         { name: "accumulatedDepreciationAccountId", label: "Akumulasi Penyusutan", value: accumulatedDepreciation, onChange: setAccumulatedDepreciation },
       ],
     },
+    {
+      // F-2026-10-23-121-V Putusan 1: opsi hanya akun EQUITY aktif bernama
+      // laba ditahan (isRetainedEarningsAccount backend); akun lain tidak
+      // ditawarkan supaya posting penutup tidak ditolak resolver.
+      title: "Penutup Tahun",
+      items: [
+        { name: "retainedEarningsAccountId", label: "Laba Ditahan (Tujuan Penutup Tahun)", value: retainedEarnings, onChange: setRetainedEarnings },
+      ],
+    },
   ]
+
+  // Opsi dropdown laba ditahan disaring terpisah dari daftar akun umum.
+  const retainedEarningsOptions = accountOptions.filter(
+    (a) => a.type === "EQUITY" && /laba\s*ditahan/i.test(a.name),
+  )
 
   const allMappingItems = mappingSections.flatMap((section) => section.items)
   const mappedCount = allMappingItems.filter((item) => Boolean(item.value)).length
@@ -1038,6 +1055,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
             <input type="hidden" name="payrollJournalTypeId" value={payrollJournalType} />
             <input type="hidden" name="depreciationExpenseAccountId" value={depreciationExpense} />
             <input type="hidden" name="accumulatedDepreciationAccountId" value={accumulatedDepreciation} />
+            <input type="hidden" name="retainedEarningsAccountId" value={retainedEarnings} />
             <div className="mb-4 rounded-xl border border-default bg-surface-secondary/50 p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
@@ -1072,7 +1090,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
                   key={mapSection.title}
                   title={mapSection.title}
                   items={mapSection.items}
-                  accounts={accountOptions}
+                  accounts={mapSection.title === "Penutup Tahun" ? retainedEarningsOptions : accountOptions}
                   onAccountCreated={(created) =>
                     setAccountOptions((prev) => [...prev, { id: created.id, code: "", name: created.label }])
                   }
