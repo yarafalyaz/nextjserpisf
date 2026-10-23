@@ -57,6 +57,7 @@ export const PERMISSIONS = [
       "manage_withholding_certificates",
       "view_invoice_exchanges",
       "create_invoice_exchanges",
+      "create_invoice_collection_followups",
       "delete_invoice_exchanges",
       "view_brands",
       "create_brands",
@@ -880,6 +881,13 @@ export const CHART_OF_ACCOUNTS: [string, string, AccurateAccountType, string][] 
   ["110508", "Piutang Klaim Supplier — Garansi", "OCAS", "1105"],
   ["600025", "Diskon Pembelian", "EXPS", "6000"],
   ["600026", "Retur Pembelian", "EXPS", "6000"],
+  // F-2026-10-23-128-V (vonis BOT 4): akun peristiwa penyesuaian nilai aset
+  // F-2026-10-23-111-V. 300004 = surplus revaluasi (EQTY, BUKAN 710004
+  // laba-rugi); 120007 = kontra impairment (DEPR, saudara induk 120006 di
+  // bawah 1200, BUKAN anak 120006xx); 600027 = beban penurunan nilai (EXPS).
+  ["300004", "Surplus Revaluasi Aset Tetap", "EQTY", "3000"],
+  ["120007", "Akumulasi Penurunan Nilai Aset Tetap", "DEPR", "1200"],
+  ["600027", "Beban Penurunan Nilai Aset", "EXPS", "6000"],
 ]
 
 /**

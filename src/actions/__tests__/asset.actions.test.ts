@@ -53,6 +53,10 @@ const mocks = vi.hoisted(() => {
       findFirst: vi.fn().mockResolvedValue(null),
       updateMany: vi.fn(),
     },
+    // Dokumen unit aktual UOP (F-118-V Putusan 2b).
+    assetUsageRecord: {
+      upsert: vi.fn().mockResolvedValue({ id: 1 }),
+    },
     assetGroup: {
       create: vi.fn(),
       update: vi.fn(),
@@ -65,6 +69,9 @@ const mocks = vi.hoisted(() => {
     journal: {
       count: vi.fn(),
       findFirst: vi.fn(),
+      // Dipakai disposeAsset untuk nilai buku dasar jurnal POSTED
+      // (vonis F-2026-10-22-062-V Putusan 1). Default kosong = legacy.
+      findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
     },
     documentSequence: {
@@ -161,6 +168,7 @@ import {
   updateAsset,
   deleteAsset,
   disposeAsset,
+  upsertAssetUsageRecord,
   createAssetGroup,
   updateAssetGroup,
   deleteAssetGroup,
@@ -832,8 +840,11 @@ describe("createAsset / updateAsset", () => {
     prismaMock.asset.create.mockResolvedValue({ id: 100, name: "Laptop", code: "AST-001" })
     prismaMock.documentSequence.upsert.mockResolvedValue({ currentValue: 1 })
     generateDocNumMock.mockResolvedValue("AST-001")
-    process.env.FIXED_ASSET_ACCOUNT_ID = "0"
-    process.env.ASSET_CASH_ACCOUNT_ID = "0"
+    // Akun perolehan terpetakan untuk tes umum create/update: vonis
+    // F-2026-10-22-062-V Putusan 3 menolak aset berharga tanpa akun. Tes
+    // fail-closed menimpa env ini menjadi 0 sendiri.
+    process.env.FIXED_ASSET_ACCOUNT_ID = "200"
+    process.env.ASSET_CASH_ACCOUNT_ID = "201"
   })
 
   it("fails validation with empty form on create", async () => {
@@ -877,11 +888,31 @@ describe("createAsset / updateAsset", () => {
     expect(arg.data.purchaseDate.toISOString()).toBe("2026-06-12T00:00:00.000Z")
   })
 
-  it("creates asset without GL posting when env vars missing", async () => {
+  // F62-5 (vonis F-2026-10-22-062-V Putusan 3): perolehan berharga tanpa akun
+  // Aset Tetap/Kas-Bank DITOLAK berisik, nol baris Asset lahir. Dulu aset
+  // lahir tanpa jurnal ("skipped silently") — perilaku itu dilarang.
+  it("F62-5: menolak perolehan berharga tanpa akun perolehan, nol baris Asset lahir", async () => {
+    process.env.FIXED_ASSET_ACCOUNT_ID = "0"
+    process.env.ASSET_CASH_ACCOUNT_ID = "0"
     const res = await createAsset(fd({
       name: "Laptop",
       code: "LAP-01",
-      purchasePrice: "1000",
+      purchasePrice: "10000000",
+    }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("akun Aset Tetap")
+    expect(String(res.error)).toContain("akun Kas/Bank")
+    expect(prismaMock.asset.create).not.toHaveBeenCalled()
+    expect(prismaMock.journal.create).not.toHaveBeenCalled()
+  })
+
+  it("aset purchaseCost = 0 tetap boleh lahir tanpa akun perolehan dan tanpa jurnal", async () => {
+    process.env.FIXED_ASSET_ACCOUNT_ID = "0"
+    process.env.ASSET_CASH_ACCOUNT_ID = "0"
+    const res = await createAsset(fd({
+      name: "Aset Hibah",
+      code: "LAP-01",
+      purchasePrice: "0",
     }))
     expect(res.success).toBe(true)
     expect(prismaMock.asset.create).toHaveBeenCalled()
@@ -1357,5 +1388,73 @@ describe("disposeAsset", () => {
     ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
     prismaMock.asset.findUniqueOrThrow.mockRejectedValue(redirectErr)
     await expect(disposeAsset(fd({ assetId: "100" }))).rejects.toThrow(redirectErr)
+  })
+})
+
+describe("upsertAssetUsageRecord (F-118-V Putusan 2b)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    requirePermissionMock.mockResolvedValue({ id: 7 })
+    prismaMock.assetUsageRecord.upsert.mockResolvedValue({ id: 1 })
+    prismaMock.journal.findFirst.mockResolvedValue(null)
+  })
+
+  const usageFd = (over: Record<string, string> = {}) =>
+    fd({
+      assetId: "100",
+      periodYear: "2026",
+      periodMonth: "10",
+      actualUnits: "120",
+      sourceName: "Laporan produksi Oktober",
+      ...over,
+    })
+
+  it("records named document for UOP asset", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100,
+      depreciationMethod: "units_of_production",
+    })
+    const res = await upsertAssetUsageRecord(usageFd())
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.assetUsageRecord.upsert.mock.calls[0][0]
+    expect(arg.where.assetId_periodYear_periodMonth).toEqual({
+      assetId: 100,
+      periodYear: 2026,
+      periodMonth: 10,
+    })
+    expect(arg.create.actualUnits.toString()).toBe("120")
+    expect(arg.create.sourceName).toBe("Laporan produksi Oktober")
+    expect(arg.create.createdBy).toBe(7)
+  })
+
+  it("rejects asset not found and non-UOP asset", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(null)
+    expect((await upsertAssetUsageRecord(usageFd()))?.success).toBe(false)
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100,
+      depreciationMethod: "straight_line",
+    })
+    const res = await upsertAssetUsageRecord(usageFd())
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Unit Produksi")
+    expect(prismaMock.assetUsageRecord.upsert).not.toHaveBeenCalled()
+  })
+
+  it("rejects overwrite after period journal posted", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100,
+      depreciationMethod: "units_of_production",
+    })
+    prismaMock.journal.findFirst.mockResolvedValue({ id: 9 })
+    const res = await upsertAssetUsageRecord(usageFd())
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("reversal")
+    expect(prismaMock.assetUsageRecord.upsert).not.toHaveBeenCalled()
+  })
+
+  it("fails validation without source name", async () => {
+    const res = await upsertAssetUsageRecord(usageFd({ sourceName: "" }))
+    expect(res?.success).toBe(false)
   })
 })

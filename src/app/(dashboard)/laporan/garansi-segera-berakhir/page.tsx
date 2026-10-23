@@ -3,7 +3,7 @@ export const dynamic = "force-dynamic"
 import type { Metadata } from "next"
 
 import { requirePermission } from "@/lib/auth/permissions"
-import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
+import { ReportPageShell } from "@/components/reports/report-page-shell"
 import { getWarrantyExpiryQueue } from "@/lib/reports/warranty-expiry-queue-data"
 import { WARRANTY_EXPIRY_WINDOW_CHOICES } from "@/lib/reports/warranty-expiry-queue"
 import { WarrantyExpiryQueueCard } from "@/components/reports/warranty-expiry-queue-card"
@@ -36,16 +36,10 @@ export default async function WarrantyExpiryReportPage({
   const queue = await getWarrantyExpiryQueue("report", { windowAheadDays, windowPastDays })
 
   return (
-    <div className="flex flex-col gap-6">
-      <AppBreadcrumbs
-        items={[
-          { label: "Dasbor", href: "/" },
-          { label: "Laporan", href: "/laporan" },
-          { label: "Garansi Segera Berakhir" },
-        ]}
-      />
-      <h1 className="text-2xl font-bold text-foreground">Garansi Segera Berakhir</h1>
-
+    <ReportPageShell
+      title="Garansi Segera Berakhir"
+      sheet={false}
+      filter={
       <form
         method="get"
         aria-label="Filter jendela garansi segera berakhir"
@@ -88,8 +82,9 @@ export default async function WarrantyExpiryReportPage({
           Terapkan Jendela
         </button>
       </form>
-
+      }
+    >
       <WarrantyExpiryQueueCard queue={queue} />
-    </div>
+    </ReportPageShell>
   )
 }

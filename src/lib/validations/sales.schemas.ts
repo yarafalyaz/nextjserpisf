@@ -141,6 +141,11 @@ export const createSalesReturnSchema = z.object({
   salesInvoiceId: optionalId,
   date: dateOnly,
   reason: optionalString(500),
+  // F-004 §3: nomor/tanggal nota retur pajak dicatat apa adanya dari nota
+  // Coretax (sistem tidak menerbitkan nomor sendiri). Opsional: retur
+  // komersial tanpa nota tetap sah, masa pengurang jatuh ke tanggal retur.
+  taxReturnNoteNumber: optionalString(100),
+  taxReturnNoteDate: optionalDate,
   items: z.string().min(1, "Items wajib diisi").max(50000),
 });
 

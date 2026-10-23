@@ -111,6 +111,12 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
+  // F-2026-10-22-069-S: 4 aksi substitusi kini dirujuk UI (tab Substitusi
+  // master barang + panel saran WO, t_bfaf2287) — entri beku dibuang.
+  // getSubstituteSuggestionsForWorkOrder tetap beku: page detail WO membaca
+  // loader data langsung (pola RSC existing), aksi ini jalur client setara.
+  "src/actions/item-substitute.actions.ts::getSubstituteSuggestionsForWorkOrder":
+    "F-2026-10-22-069-S: detail WO membaca getWorkOrderSubstituteSuggestions-data langsung di RSC; aksi setara untuk pemanggil client",
   // F-2026-10-21-012 inti (t_34bb293d): aksi batal WO + lepas/reservasi ulang
   // stok backend dulu; tombol UI menyusul di kartu frontend sesudah PR inti
   // merge (buang 3 entri ini saat halaman produksi/perintah kerja memanggilnya).
@@ -151,25 +157,37 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // di kartu frontend t_e80e8541 (buang entri ini saat UI memanggilnya).
   "src/actions/hrm.actions.ts::getEmployeeLifecycleAttention":
     "F-2026-10-22-085-S inti backend; daftar perhatian siklus hidup menyusul (frontend t_e80e8541)",
-  // F-2026-10-22-090-S inti (t_288b340b): 4 aksi stasiun kerja backend dulu;
-  // master Stasiun Kerja + papan Beban Rencana menyusul di kartu frontend
-  // t_b9d26fab (buang entri ini saat UI memanggilnya).
-  "src/actions/work-center.actions.ts::createWorkCenter":
-    "F-2026-10-22-090-S inti backend; master stasiun kerja menyusul (frontend t_b9d26fab)",
-  "src/actions/work-center.actions.ts::updateWorkCenter":
-    "F-2026-10-22-090-S inti backend; master stasiun kerja menyusul (frontend t_b9d26fab)",
-  "src/actions/work-center.actions.ts::deactivateWorkCenter":
-    "F-2026-10-22-090-S inti backend; master stasiun kerja menyusul (frontend t_b9d26fab)",
-  "src/actions/work-center.actions.ts::setWorkOrderOperationWorkCenter":
-    "F-2026-10-22-090-S inti backend; pilihan stasiun tahap WO menyusul (frontend t_b9d26fab)",
+  // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
+  // (halaman + panel kelola /laporan/target-penjualan, t_f605e189)
+  // — entri beku dibuang.
+  // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): aksi tindak lanjut
+  // penagihan backend dulu; halaman antrean + form Catat Tindak Lanjut
+  // menyusul di kartu frontend t_6f73907a (buang entri ini saat UI
+  // memanggilnya).
+  "src/actions/invoice-collection.actions.ts::createInvoiceCollectionFollowUp":
+    "F-2026-10-22-089-S inti backend; form Catat Tindak Lanjut menyusul (frontend t_6f73907a)",
+  "src/actions/invoice-collection.actions.ts::deleteInvoiceCollectionFollowUp":
+    "F-2026-10-22-089-S inti backend; tombol hapus tindak lanjut menyusul (frontend t_6f73907a)",
+  // F-2026-10-22-068-S: 3 aksi ganti revisi BOM + aksi pratinjau delta
+  // kini dirujuk panel BomRevisionChangePanel di detail WO/PO
+  // (t_b60d664d) — entri beku dibuang.
+  // F-2026-10-22-090-S: 4 aksi stasiun kerja kini dirujuk UI master
+  // Stasiun Kerja + pilihan stasiun tahap WO (t_b9d26fab) — entri beku dibuang.
   // F-2026-10-21-030: ke-9 aksi RAB sudah ter-wire UI ProjectBudgetEditor
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3: pemanggil jurnal E2/E3 kini dirujuk UI
   // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
+  // F-2026-10-23-121-V inti (PR #655): 3 aksi YearEndClosing kini dirujuk
+  // YearEndClosingPanel di proses akhir bulan (t_8c34abc8) — entri beku dibuang.
   // F-2026-10-22-066-S: 7 aksi JobChangeOrder kini dirujuk panel Change Order
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
   // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal
   // di JobBillingCard (t_ba8fe9ef) — entri beku dibuang.
+  // F-2026-10-23-113-V: aksi ekspor XML Coretax kini dirujuk CoretaxExportPanel
+  // di page faktur tambah (t_4cba1a22) — entri beku dibuang.
+  // F-2026-10-23-111-V + F-2026-10-23-115-V inti (t_17e469e7): 3 aksi
+  // peristiwa perubahan aset kini dirujuk AssetChangeEventPanel di detail
+  // aset (t_311cfc07) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {

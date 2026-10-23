@@ -934,6 +934,42 @@ describe("Sales Return Actions", () => {
     expect(arg.data.items.create[0].qty).toBe(2000)
   })
 
+  // F-004 §3: nomor + tanggal nota retur pajak ditulis apa adanya (sebelumnya
+  // kolom hanya dibaca read-model SPT, tidak pernah ada jalur tulis produk).
+  it("createSalesReturn menulis nomor + tanggal nota retur pajak", async () => {
+    const items = JSON.stringify([{ itemId: 1, qty: 1 }])
+    const res = await actions.createSalesReturn(fdMap({
+      customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items,
+      taxReturnNoteNumber: "000000.0100000001", taxReturnNoteDate: "2026-07-01",
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.taxReturnNoteNumber).toBe("000000.0100000001")
+    expect(arg.data.taxReturnNoteDate).toEqual(new Date(Date.UTC(2026, 6, 1)))
+  })
+
+  it("createSalesReturn tanpa nota retur pajak menulis null (masa jatuh ke tanggal retur)", async () => {
+    const items = JSON.stringify([{ itemId: 1, qty: 1 }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.taxReturnNoteNumber).toBeNull()
+    expect(arg.data.taxReturnNoteDate).toBeNull()
+  })
+
+  it("updateSalesReturn menulis nomor + tanggal nota retur pajak", async () => {
+    mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ status: "draft" })
+    const items = JSON.stringify([{ itemId: 1, qty: 1 }])
+    const res = await actions.updateSalesReturn(1, fdMap({
+      customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items,
+      taxReturnNoteNumber: "NR-2026-001", taxReturnNoteDate: "2026-08-15",
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.update.mock.calls.at(-1)![0]
+    expect(arg.data.taxReturnNoteNumber).toBe("NR-2026-001")
+    expect(arg.data.taxReturnNoteDate).toEqual(new Date(Date.UTC(2026, 7, 15)))
+  })
+
   it("createSalesReturn menolak qty tak terbaca tanpa membuat retur", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {})
     const items = JSON.stringify([{ itemId: 1, qty: "abc" }])

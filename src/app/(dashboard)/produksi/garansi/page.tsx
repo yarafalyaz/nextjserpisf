@@ -106,9 +106,10 @@ export default async function WarrantyClaimsPage({
         </CanCreate>
       </div>
 
+      <div className="flex flex-wrap items-end gap-3" role="group" aria-label="Filter klaim garansi">
       <form
         method="get"
-        aria-label="Filter klaim garansi"
+        aria-label="Filter status klaim garansi"
         className="flex flex-wrap items-end gap-3"
       >
         <div className="flex flex-col gap-1.5">
@@ -128,10 +129,7 @@ export default async function WarrantyClaimsPage({
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cari</span>
-          <AppSearchField action="/produksi/garansi" placeholder="Keluhan, plat nomor, atau barang" />
-        </div>
+        <input type="hidden" name="cari" defaultValue={cari} />
         <button
           type="submit"
           className="inline-flex min-h-11 items-center justify-center rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
@@ -139,6 +137,11 @@ export default async function WarrantyClaimsPage({
           Terapkan
         </button>
       </form>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cari</span>
+          <AppSearchField action="/produksi/garansi" placeholder="Keluhan, plat nomor, atau barang" />
+        </div>
+      </div>
 
       <form
         method="get"

@@ -10,44 +10,12 @@ vi.mock("@/actions/whatsapp-log.actions", () => ({
 import type { Root } from "react-dom/client"
 import { WarrantyExpiryQueueCard } from "../warranty-expiry-queue-card"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
+import { buildWarrantyExpiryQueue } from "@/lib/reports/warranty-expiry-queue"
 import {
-  buildWarrantyExpiryQueue,
-  type WarrantyExpiryCoverageInput,
-} from "@/lib/reports/warranty-expiry-queue"
-import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
-
-const NOW = new Date("2026-10-21T22:00:00.000Z")
-const TODAY = getWibTodayUtcDate(NOW)
-const day = (offset: number) => new Date(TODAY.getTime() + offset * 86_400_000)
-
-function input(
-  overrides: Partial<WarrantyExpiryCoverageInput> = {},
-): WarrantyExpiryCoverageInput {
-  return {
-    coverageId: 1,
-    storedStatus: "active",
-    expiresAt: day(10),
-    installedAt: day(-350),
-    warrantyMonths: 12,
-    serialNumber: "SN-1",
-    mileageLimitKm: null,
-    customerVehicleId: 11,
-    plateNumber: "B 1234 CD",
-    vehicleName: "Kendaraan Uji",
-    vehicleIsActive: true,
-    vehicleDeletedAt: null,
-    lastOdometerKm: null,
-    customerId: 21,
-    customerName: "Pelanggan Uji",
-    customerPhone: "081234567890",
-    itemId: 31,
-    itemName: "Item Uji",
-    itemSku: "SKU-1",
-    workOrderId: 41,
-    claimStatuses: [],
-    ...overrides,
-  }
-}
+  WARRANTY_EXPIRY_NOW as NOW,
+  warrantyExpiryDay as day,
+  warrantyExpiryInput as input,
+} from "@/lib/reports/__tests__/warranty-expiry-test-fixtures"
 
 describe("WarrantyExpiryQueueCard F-2026-10-22-094-S", () => {
   let root: Root | undefined

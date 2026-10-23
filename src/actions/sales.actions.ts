@@ -1908,6 +1908,8 @@ export async function createSalesReturn(formData: FormData) {
         customerId: v.customerId,
         date: wibDateToUtcMidnight(v.date),
         reason: v.reason ?? null,
+        taxReturnNoteNumber: v.taxReturnNoteNumber ?? null,
+        taxReturnNoteDate: v.taxReturnNoteDate ? wibDateToUtcMidnight(v.taxReturnNoteDate) : null,
         status: "draft",
         createdBy: Number(user.id),
         items: {
@@ -2930,6 +2932,8 @@ export async function updateSalesReturn(id: number, formData: FormData) {
         customerId: input.customerId,
         date: wibDateToUtcMidnight(input.date),
         reason: input.reason ?? null,
+        taxReturnNoteNumber: input.taxReturnNoteNumber ?? null,
+        taxReturnNoteDate: input.taxReturnNoteDate ? wibDateToUtcMidnight(input.taxReturnNoteDate) : null,
         items: {
           create: validReturnItems
             .map((item) => ({
