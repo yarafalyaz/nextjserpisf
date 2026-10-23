@@ -74,6 +74,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/profitabilitas" },
       { href: "/laporan/histori-penjualan" },
       { href: "/laporan/hasil-penawaran" },
+      { href: "/laporan/garansi-segera-berakhir" },
       { href: "/laporan/corong-prospek" },
       { href: "/laporan/histori-pembelian" },
       { href: "/laporan/pembelian" },
@@ -151,6 +152,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/analisis-penjualan" },
       { href: "/laporan/pemenuhan-pesanan" },
       { href: "/laporan/rekap-komisi" },
+      { href: "/laporan/target-penjualan" },
     ],
   },
   {
@@ -175,6 +177,8 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/jurnal-aset" },
       { href: "/laporan/histori-aset" },
       { href: "/laporan/perbedaan-penyusutan" },
+      { href: "/laporan/pajak-tangguhan" },
+      { href: "/laporan/rekonsiliasi-aset" },
     ],
   },
   {
