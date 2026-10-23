@@ -248,6 +248,10 @@ export async function updateSystemSettings(formData: FormData) {
       // Accounting - Fixed Assets
       depreciationExpenseAccountId: intNull("depreciationExpenseAccountId"),
       accumulatedDepreciationAccountId: intNull("accumulatedDepreciationAccountId"),
+
+      // Accounting - Year-End Closing (F-2026-10-23-121-V Putusan 1):
+      // akun laba ditahan tujuan jurnal penutup; kosong = posting ditolak.
+      retainedEarningsAccountId: intNull("retainedEarningsAccountId"),
     },
   })
 

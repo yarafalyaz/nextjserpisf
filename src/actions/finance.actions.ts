@@ -30,6 +30,8 @@ import {
 import { logActivity } from "@/lib/services/activity-log.service";
 import { getSystemSettings } from "@/lib/utils/settings";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
+import { YEAR_END_CLOSING_REFERENCE_TYPE } from "@/lib/reports/year-end-closing";
+import { YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR } from "@/lib/services/journal.service";
 import {
   requestApprovalIfConfigured,
   assertApproved,
@@ -2030,6 +2032,13 @@ export async function reverseJournal(journalId: number) {
             ? "Jurnal sudah pernah dibalik"
             : `Jurnal tidak bisa dibalik (status: ${current})`,
         );
+      }
+
+      // F-121-V Putusan 3: jurnal penutup tahun tidak boleh lewat jalur
+      // generik ini (izin post_journals, tanpa gerbang penutup) — arahkan ke
+      // reverseYearEndClosing (manage_settings + approval penutup).
+      if (journal.referenceType === YEAR_END_CLOSING_REFERENCE_TYPE) {
+        throw new Error(YEAR_END_CLOSING_GENERIC_REVERSAL_ERROR);
       }
 
       // Atomic conditional claim — serialize concurrent reverse requests so only one
