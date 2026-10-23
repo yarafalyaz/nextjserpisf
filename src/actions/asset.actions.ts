@@ -19,7 +19,15 @@ import {
   assetSchema,
   assetDisposalSchema,
   assetUsageRecordSchema,
+  assetChangeEventSchema,
+  assetReclassificationSchema,
+  assetChangeEventReversalSchema,
 } from "@/lib/validations/asset.schemas";
+import {
+  postAssetChangeEvent,
+  postAssetReclassification,
+  reverseAssetChangeEvent,
+} from "@/lib/services/asset-change-event.service";
 import { Prisma } from "@prisma/client";
 import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
 import { journalBookValue } from "@/lib/finance/asset-book-value";
@@ -93,12 +101,18 @@ async function assetCategoryAccountError(v: {
   accumulatedDepreciationAccountId?: number | null
   depreciationExpenseAccountId?: number | null
   gainLossAccountId?: number | null
+  revaluationSurplusAccountId?: number | null
+  impairmentLossAccountId?: number | null
+  accumulatedImpairmentAccountId?: number | null
 }): Promise<string | null> {
   const slots: Array<[number | null | undefined, string]> = [
     [v.assetAccountId, "Akun Aset Tetap tidak ditemukan"],
     [v.accumulatedDepreciationAccountId, "Akun Akumulasi Penyusutan tidak ditemukan"],
     [v.depreciationExpenseAccountId, "Akun Beban Penyusutan tidak ditemukan"],
     [v.gainLossAccountId, "Akun Laba/Rugi Pelepasan tidak ditemukan"],
+    [v.revaluationSurplusAccountId, "Akun Surplus Revaluasi tidak ditemukan"],
+    [v.impairmentLossAccountId, "Akun Beban Penurunan Nilai tidak ditemukan"],
+    [v.accumulatedImpairmentAccountId, "Akun Akumulasi Penurunan Nilai tidak ditemukan"],
   ]
   for (const [accountId, message] of slots) {
     if (accountId == null) continue
@@ -138,6 +152,9 @@ export async function createAssetCategory(formData: FormData) {
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
         gainLossAccountId: data.gainLossAccountId ?? null,
+        revaluationSurplusAccountId: data.revaluationSurplusAccountId ?? null,
+        impairmentLossAccountId: data.impairmentLossAccountId ?? null,
+        accumulatedImpairmentAccountId: data.accumulatedImpairmentAccountId ?? null,
       },
     });
 
@@ -571,6 +588,9 @@ export async function updateAssetCategory(id: number, formData: FormData) {
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
         gainLossAccountId: data.gainLossAccountId ?? null,
+        revaluationSurplusAccountId: data.revaluationSurplusAccountId ?? null,
+        impairmentLossAccountId: data.impairmentLossAccountId ?? null,
+        accumulatedImpairmentAccountId: data.accumulatedImpairmentAccountId ?? null,
       },
     });
 
@@ -1225,6 +1245,138 @@ export async function upsertAssetUsageRecord(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[upsertAssetUsageRecord]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== PERISTIWA PERUBAHAN ASET (F-111-V + F-115-V) ====================
+
+/**
+ * Posting peristiwa perubahan aset terbekukan (revaluasi, impairment,
+ * pembalikan impairment, revaluasi fiskal berpersetujuan, perubahan metode
+ * komersial/fiskal, perubahan estimasi). Seluruh aturan jurnal ada di
+ * service + builder murni; aksi hanya gerbang izin + validasi bentuk.
+ * Koreksi lewat `reverseAssetChangeEventAction`. Fiskal tidak bergerak
+ * tanpa persetujuan DJP terstruktur; pajak tangguhan tidak dijurnal di
+ * sini (read-model F-125 mengonsumsi peristiwa POSTED).
+ */
+export async function postAssetChangeEventAction(formData: FormData) {
+  try {
+    const user = await requirePermission("manage_assets");
+    const parsed = parseFormData(assetChangeEventSchema, formData);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error };
+    }
+    const data = parsed.data;
+    const result = await postAssetChangeEvent({
+      assetId: data.assetId,
+      createdBy: Number(user.id) || null,
+      request: {
+        kind: data.kind,
+        effectiveDate: wibDateToUtcMidnight(data.effectiveDate),
+        sourceDocumentKey: data.sourceDocumentKey,
+        fairValue: data.fairValue != null ? new Prisma.Decimal(data.fairValue.toFixed(2)) : null,
+        appraiserName: data.appraiserName || null,
+        appraiserReportRef: data.appraiserReportRef || null,
+        revaluedClassName: data.revaluedClassName || null,
+        impairmentIndicator: data.impairmentIndicator || null,
+        recoverableBasis: data.recoverableBasis || null,
+        recoverableAmount:
+          data.recoverableAmount != null ? new Prisma.Decimal(data.recoverableAmount.toFixed(2)) : null,
+        carryingWithoutImpairment:
+          data.carryingWithoutImpairment != null
+            ? new Prisma.Decimal(data.carryingWithoutImpairment.toFixed(2))
+            : null,
+        isGoodwillOrNonAmortizing: data.isGoodwillOrNonAmortizing ?? false,
+        djpApprovalNumber: data.djpApprovalNumber || null,
+        djpApprovalDate: data.djpApprovalDate ? wibDateToUtcMidnight(data.djpApprovalDate) : null,
+        reasonCode: data.reasonCode || null,
+        approvedByName: data.approvedByName || null,
+        newMethod: data.newMethod || null,
+        newUsefulLifeMonths: data.newUsefulLifeMonths ?? null,
+        newResidualValue:
+          data.newResidualValue != null ? new Prisma.Decimal(data.newResidualValue.toFixed(2)) : null,
+        isBuildingFiscal: data.isBuildingFiscal ?? false,
+      },
+    });
+    await logActivity(
+      "create",
+      "AssetChangeEvent",
+      result.eventId,
+      `Peristiwa ${result.kind} aset ${data.assetId} (jurnal ${result.journalNumber ?? "-"})`,
+    );
+    revalidatePath("/aset");
+    revalidatePath("/jurnal");
+    return { success: true, id: result.eventId, journalNumber: result.journalNumber };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[postAssetChangeEventAction]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function postAssetReclassificationAction(formData: FormData) {
+  try {
+    const user = await requirePermission("manage_assets");
+    const parsed = parseFormData(assetReclassificationSchema, formData);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error };
+    }
+    const data = parsed.data;
+    const result = await postAssetReclassification({
+      assetId: data.assetId,
+      toCategoryId: data.toCategoryId,
+      createdBy: Number(user.id) || null,
+      request: {
+        kind: "RECLASSIFICATION",
+        effectiveDate: wibDateToUtcMidnight(data.effectiveDate),
+        sourceDocumentKey: data.sourceDocumentKey,
+        reasonCode: data.reasonCode,
+        approvedByName: data.approvedByName,
+      },
+    });
+    await logActivity(
+      "create",
+      "AssetChangeEvent",
+      result.eventId,
+      `Reklasifikasi aset ${data.assetId} ke kategori ${data.toCategoryId} (jurnal ${result.journalNumber ?? "-"})`,
+    );
+    revalidatePath("/aset");
+    revalidatePath("/jurnal");
+    return { success: true, id: result.eventId, journalNumber: result.journalNumber };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[postAssetReclassificationAction]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function reverseAssetChangeEventAction(formData: FormData) {
+  try {
+    const user = await requirePermission("manage_assets");
+    const parsed = parseFormData(assetChangeEventReversalSchema, formData);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error };
+    }
+    const data = parsed.data;
+    const result = await reverseAssetChangeEvent({
+      eventId: data.eventId,
+      reversalDate: wibDateToUtcMidnight(data.reversalDate),
+      sourceDocumentKey: data.sourceDocumentKey,
+      createdBy: Number(user.id) || null,
+    });
+    await logActivity(
+      "create",
+      "AssetChangeEvent",
+      result.eventId,
+      `Reversal peristiwa ${data.eventId} (jurnal ${result.journalNumber ?? "-"})`,
+    );
+    revalidatePath("/aset");
+    revalidatePath("/jurnal");
+    return { success: true, id: result.eventId, journalNumber: result.journalNumber };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[reverseAssetChangeEventAction]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }
