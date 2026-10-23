@@ -61,6 +61,10 @@ export const NONASET_FISCAL_LOSS_UNAVAILABLE_LABEL =
 export const NONASET_RECOGNITION_ELIGIBLE_LABEL = "dapat diakui analitis"
 export const NONASET_RECOGNITION_UNTESTED_LABEL =
   "belum teruji — bukan angka pengakuan"
+export const NONASET_NEGATIVE_BALANCE_LABEL =
+  "saldo tidak sah — negatif; gagal tertutup bernama (tidak dihitung sebagai temporer)"
+export const NONASET_WRITEOFF_INVALID_AMOUNT_LABEL =
+  "hapus-buku jumlah tidak sah — wajib positif terhingga; ditolak tanpa total"
 export const NONASET_WRITEOFF_NOT_FISCALLY_QUALIFIED_LABEL =
   "hapus-buku tidak memenuhi syarat fiskal"
 export const NONASET_WRITEOFF_REALIZED_LABEL =
@@ -263,6 +267,20 @@ export function buildDeferredTaxNonAssetSources(input: {
       expiryRiskLabel: null,
       detail: NONASET_PROVISION_UNMAPPED_LABEL,
     })
+  } else if (prov.postedProvisionBalance < 0) {
+    // Gagal tertutup: saldo negatif (debit anomali) bukan temporer negatif.
+    lines.push({
+      source: "warranty-provision",
+      label: "Provisi garansi",
+      status: "unavailable",
+      carryingAmount: 0,
+      taxBase: 0,
+      deductibleDifference: 0,
+      deferredTaxAssetIndication: 0,
+      recognitionLabel: NONASET_RECOGNITION_UNTESTED_LABEL,
+      expiryRiskLabel: null,
+      detail: `provisi garansi: ${NONASET_NEGATIVE_BALANCE_LABEL}`,
+    })
   } else if (prov.postedProvisionJournalCount <= 0 || prov.postedProvisionBalance === 0) {
     // Nol terverifikasi dari ketiadaan jurnal POSTED — bukan flag rute.
     lines.push({
@@ -299,6 +317,10 @@ export function buildDeferredTaxNonAssetSources(input: {
   // ── Putusan 2: CKPN — penyisihan POSTED; hapus-buku bersyarat PMK-105 ───
   const ckpn = input.ckpn
   for (const wo of ckpn.writeOffs) {
+    if (!Number.isFinite(wo.amount) || wo.amount <= 0) {
+      mutations.push(`${wo.receivableLabel}: ${NONASET_WRITEOFF_INVALID_AMOUNT_LABEL}`)
+      continue
+    }
     if (wo.pmk105Complete) {
       totals.realizedWriteOff = safeAdd(totals.realizedWriteOff, wo.amount, 2)
       mutations.push(
@@ -323,6 +345,19 @@ export function buildDeferredTaxNonAssetSources(input: {
       recognitionLabel: NONASET_RECOGNITION_UNTESTED_LABEL,
       expiryRiskLabel: null,
       detail: NONASET_CKPN_UNAVAILABLE_LABEL,
+    })
+  } else if (ckpn.postedAllowanceBalance < 0) {
+    lines.push({
+      source: "ckpn",
+      label: "CKPN piutang",
+      status: "unavailable",
+      carryingAmount: 0,
+      taxBase: 0,
+      deductibleDifference: 0,
+      deferredTaxAssetIndication: 0,
+      recognitionLabel: NONASET_RECOGNITION_UNTESTED_LABEL,
+      expiryRiskLabel: null,
+      detail: `CKPN: ${NONASET_NEGATIVE_BALANCE_LABEL}`,
     })
   } else {
     // Stok penyisihan POSTED kini; penutupan hapus-buku tampil mutasi di atas,
@@ -357,7 +392,17 @@ export function buildDeferredTaxNonAssetSources(input: {
   const fiscalDetails: string[] = []
   // Sisa berjalan per tahun rugi untuk penegakan tertua-dulu.
   const remaining = new Map<number, number>()
+  const yearCounts = new Map<number, number>()
+  for (const y of signedYears) yearCounts.set(y.lossYear, (yearCounts.get(y.lossYear) ?? 0) + 1)
   for (const y of signedYears) {
+    // Register satu baris per tahun rugi: duplikat ditolak semua entri tahun
+    // itu (dilarang agregasi diam-diam / tertimpa Map + sisa ganda).
+    if ((yearCounts.get(y.lossYear) ?? 0) > 1) {
+      rejected.push(
+        `rugi fiskal ${y.lossYear}: tahun rugi duplikat pada register — semua entri tahun ini ditolak (wajib satu baris per tahun rugi)`,
+      )
+      continue
+    }
     if (!y.signedBy?.trim() || !(y.initialLoss > 0)) {
       rejected.push(
         `rugi fiskal ${y.lossYear}: register tidak sah (wajib rugi awal positif + penanda tangan bernama) — tidak masuk stok`,

@@ -191,6 +191,46 @@ describe("sumber temporer non-aset F-2026-10-23-126-V", () => {
     expect(line(risky, "fiscal-loss").expiryRiskLabel).toContain("risiko kedaluwarsa")
   })
 
+  it("E126-11 F1: saldo provisi/CKPN negatif + write-off negatif/NaN gagal-tertutup bernama, tanpa angka negatif", () => {
+    const negProv = build({ provision: provision({ postedProvisionBalance: -5_000_000, postedProvisionJournalCount: 3 }) })
+    expect(line(negProv, "warranty-provision").deductibleDifference).toBe(0)
+    expect(line(negProv, "warranty-provision").deferredTaxAssetIndication).toBe(0)
+    expect(line(negProv, "warranty-provision").status).not.toBe("computed")
+    expect(texts(negProv)).toContain("tidak sah")
+
+    const negCkpn = build({
+      ckpn: ckpn({
+        postedAllowanceBalance: -2_000_000,
+        writeOffs: [
+          { receivableLabel: "Piutang Neg", amount: -1_000_000, pmk105Complete: true },
+          { receivableLabel: "Piutang NaN", amount: Number.NaN, pmk105Complete: true },
+        ],
+      }),
+    })
+    expect(line(negCkpn, "ckpn").deductibleDifference).toBe(0)
+    expect(line(negCkpn, "ckpn").deferredTaxAssetIndication).toBe(0)
+    expect(negCkpn.totals.realizedWriteOff).toBe(0)
+    expect(negCkpn.totals.nonQualifiedWriteOff).toBe(0)
+    expect(negCkpn.mutations.every((m) => !m.includes("terealisasi fiskal"))).toBe(true)
+    expect(texts(negCkpn)).toContain("tidak sah")
+  })
+
+  it("E126-12 F2: tahun rugi duplikat ditolak bernama — tanpa tertimpa Map / sisa ganda", () => {
+    const dup = build({
+      fiscalLossYears: [
+        loss({ lossYear: 2024, initialLoss: 10_000_000, compensations: [{ year: 2025, amount: 4_000_000 }] }),
+        loss({ lossYear: 2024, initialLoss: 5_000_000 }),
+      ],
+    })
+    // Kedua entri 2024 ditolak; tidak ada stok maupun carrying dari tahun itu.
+    expect(line(dup, "fiscal-loss").deductibleDifference).toBe(0)
+    expect(line(dup, "fiscal-loss").carryingAmount).toBe(0)
+    expect(dup.totals.expiredFiscalLoss).toBe(0)
+    expect(
+      dup.rejectedCompensations.filter((r) => r.includes("2024") && r.includes("duplikat")).length,
+    ).toBeGreaterThanOrEqual(1)
+  })
+
   it("tarif tidak sah fail-closed; tarif operator berlabel", () => {
     const bad = build({ taxRatePercent: null })
     expect(bad.taxRatePercent).toBeNull()
