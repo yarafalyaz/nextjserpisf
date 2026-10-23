@@ -3,14 +3,16 @@
  * dengan penyusutan **fiskal** (pajak) per aset, per tahun.
  *
  * Sisi akuntansi memakai mesin yang sama dengan cron penyusutan bulanan
- * (`computeMonthlyDepreciation`), lalu dikalikan dua belas; jadi angka di sini
- * tidak bisa berbeda dari jurnal penyusutan yang benar-benar diposting.
+ * (`computeMonthlyDepreciation`), lalu dikalikan dua belas; dasarnya nilai
+ * buku JURNAL POSTED dari loader (`journalBookValue`, Putusan 1), bukan
+ * cache `currentValue` — jadi angka di sini tidak bisa berbeda dari jurnal.
  *
- * Sisi fiskal straight-line dari **harga perolehan** (bukan nilai buku) dan tanpa
- * nilai residu komersial, sesuai kebiasaan fiskal; tarif/umur fiskal diambil dari
- * kategori aset. Bila kategori belum diisi tarif/umur fiskal, aset tetap
- * ditampilkan tetapi **tidak** dihitung selisihnya — nilai yang dibiarkan kosong
- * dinyatakan, bukan diisi nol yang terbaca "tidak ada perbedaan".
+ * Sisi fiskal garis lurus dari **harga perolehan** (bukan nilai buku) tanpa
+ * nilai residu, tarif/umur dari kelompok fiskal PMK 72/2023 kategori
+ * (`resolveFiscalGroup`, Putusan 2): jenis tercantum tanpa kelompok = tidak
+ * dihitung dan tampil di daftar "fiskal belum dapat dihitung"; jenis tidak
+ * tercantum tanpa kelompok = kelompok 3 statutoris TERHITUNG; penetapan DJP
+ * mengalahkan default. Aset belum-dihitung dinyatakan, bukan diisi nol.
  *
  * Angka tahunan (bukan per periode berjalan): perbedaan penyusutan adalah
  * perbedaan temporer yang dibaca per tahun pajak.
@@ -18,9 +20,16 @@
  * Pure (tanpa Prisma/DOM) kecuali `computeMonthlyDepreciation` yang juga pure.
  */
 
-import { computeMonthlyDepreciation } from "@/lib/finance/asset-depreciation"
+import {
+  computeMonthlyDepreciation,
+} from "@/lib/finance/asset-depreciation"
+import {
+  fiscalAnnualRatePercent,
+  fiscalGroupRule,
+  resolveFiscalGroup,
+} from "@/lib/finance/asset-fiscal-groups"
 import { formatAccounting, formatCurrency } from "@/lib/utils/format"
-import { safeAdd, safeMultiply, safeSubtract } from "@/lib/utils/math"
+import { safeAdd, safeDivide, safeMultiply, safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 262mm, area isi A4 mendatar. */
@@ -38,13 +47,23 @@ export interface DepreciationAssetInput {
   name: string
   categoryName: string | null
   purchaseCost: number
-  currentValue: number
+  /**
+   * Nilai buku SEBELUM periode ini — wajib dasar jurnal POSTED
+   * (`journalBookValue`), bukan cache `Asset.currentValue` (Putusan 1).
+   */
+  bookValue: number
   residualValue: number
   depreciationMethod: string | null
   categoryDepreciationRate: number | null
   categoryUsefulLife: number | null
   taxDepreciationRate: number | null
   taxUsefulLife: number | null
+  /** Kelompok fiskal PMK 72/2023 terisi di kategori, atau null. */
+  taxGroupCode: string | null
+  /** Jenis tercantum di lampiran PMK 72/2023? null = belum dinyatakan. */
+  taxTypeListed: boolean | null
+  /** Ada penetapan DJP (mengalahkan default statutoris kelompok 3). */
+  taxDjpDetermination: boolean
 }
 
 export interface DepreciationDifferenceResult {
@@ -76,34 +95,65 @@ function assetLabel(asset: DepreciationAssetInput): string {
 export function accountingAnnualDepreciation(asset: DepreciationAssetInput): number {
   const monthly = computeMonthlyDepreciation({
     purchaseCost: asset.purchaseCost,
-    currentValue: asset.currentValue,
+    bookValue: asset.bookValue,
     residualValue: asset.residualValue,
     depreciationMethod: asset.depreciationMethod,
     categoryDepreciationRate: asset.categoryDepreciationRate,
     categoryUsefulLife: asset.categoryUsefulLife,
   })
-  return safeMultiply(monthly, 12, 2)
+  if (monthly.status !== "computed") return 0
+  return safeMultiply(monthly.amount.toNumber(), 12, 2)
 }
 
 /**
- * Penyusutan fiskal setahun penuh, atau `null` bila tarif/umur fiskal belum
- * diisi (dibedakan dari 0 yang berarti "memang tidak disusutkan").
+ * Penyusutan fiskal setahun penuh, atau `null` bila kelompok fiskal belum
+ * dapat ditentukan (vonis F-2026-10-22-062-V Putusan 2, F62-7/F62-10).
+ * Kelompok fiskal efektif dari `resolveFiscalGroup` — jenis tercantum
+ * tanpa kelompok = belum-dihitung; jenis tidak tercantum tanpa kelompok =
+ * kelompok 3 statutoris TERHITUNG; penetapan DJP dengan kelompok terisi
+ * mengalahkan default. Tarif dari tabel statutoris kelompok (bukan kolom
+ * tarif bebas kategori; kolom bebas itu hanya divalidasi terhadapnya).
+ * Fiskal dari harga perolehan tanpa residu; bangunan hanya garis lurus.
  */
 export function fiscalAnnualDepreciation(asset: DepreciationAssetInput): number | null {
-  const hasRate = asset.taxDepreciationRate !== null && asset.taxDepreciationRate > 0
-  const hasLife = asset.taxUsefulLife !== null && asset.taxUsefulLife > 0
-  if (!hasRate && !hasLife) return null
-
-  const monthly = computeMonthlyDepreciation({
-    purchaseCost: asset.purchaseCost,
-    // Fiskal dihitung dari harga perolehan, bukan nilai buku berjalan.
-    currentValue: asset.purchaseCost,
-    residualValue: 0,
-    depreciationMethod: "straight_line",
-    categoryDepreciationRate: hasRate ? asset.taxDepreciationRate : null,
-    categoryUsefulLife: hasLife ? asset.taxUsefulLife : null,
+  const resolution = resolveFiscalGroup({
+    taxGroupCode: asset.taxGroupCode,
+    taxTypeListed: asset.taxTypeListed,
+    taxDjpDetermination: asset.taxDjpDetermination,
   })
-  return safeMultiply(monthly, 12, 2)
+  if (resolution.status !== "resolved") return null
+
+  const rule = resolution.group
+  // ponytail: fiskal tahunan read-model ini selalu garis lurus statutoris
+  // kelompok; saldo menurun fiskal butuh saldo fiskal awal tahun yang tidak
+  // dilacak terpisah — jangan karang dari harga perolehan. Naikkan bila
+  // saldo fiskal per aset sudah disimpan.
+  const ratePercent = fiscalAnnualRatePercent("straight_line", rule)
+  if (ratePercent === null) return null
+
+  // Tahunan dihitung LANGSUNG dari harga perolehan x tarif statutoris dan
+  // dibulatkan sekali ke sen. Jangan lewat penyusutan bulanan x12: bulanan
+  // dibulatkan ke sen dulu (mis. 0,025 -> 0,03) sehingga tahunan meleset.
+  return safeDivide(safeMultiply(asset.purchaseCost, ratePercent, 2), 100, 2)
+}
+
+/** Kelompok fiskal efektif (untuk label laporan); null = belum dapat dihitung. */
+export function fiscalGroupLabel(asset: DepreciationAssetInput): string | null {
+  const resolution = resolveFiscalGroup({
+    taxGroupCode: asset.taxGroupCode,
+    taxTypeListed: asset.taxTypeListed,
+    taxDjpDetermination: asset.taxDjpDetermination,
+  })
+  if (resolution.status !== "resolved") return null
+  const rule = fiscalGroupRule(resolution.group.code)
+  if (!rule) return null
+  const suffix =
+    resolution.source === "statutory-default"
+      ? " (default statutoris)"
+      : resolution.source === "djp"
+        ? " (penetapan DJP)"
+        : ""
+  return `${rule.label}${suffix}`
 }
 
 export function buildDepreciationDifference(
@@ -180,9 +230,9 @@ export function buildDepreciationDifference(
       rows.push({
         kind: "notice",
         text:
-          `${totals.withoutFiscal} aset belum diisi tarif/umur fiskal pada kategorinya, sehingga ` +
-          "penyusutan fiskalnya tidak dihitung dan tidak ikut pada kolom Selisih. Isi bagian " +
-          "\"Penyusutan Fiskal\" di master kategori aset untuk melengkapinya.",
+          `${totals.withoutFiscal} aset belum dapat dihitung fiskalnya (kelompok fiskal PMK 72/2023 belum ditentukan pada kategori, jenis tercantum tanpa kelompok), sehingga ` +
+          "penyusutan fiskalnya tidak dihitung dan tidak ikut pada kolom Selisih. Tentukan " +
+          "kelompok fiskal di master kategori aset; jenis TIDAK tercantum otomatis memakai kelompok 3 statutoris.",
       })
     }
     rows.push({
@@ -199,9 +249,9 @@ export function buildDepreciationDifference(
     sorted.length === 0
       ? "Tidak ada aset untuk dinilai"
       : totals.withoutFiscal === sorted.length
-        ? "Penyusutan fiskal belum diisi untuk aset mana pun"
+        ? "Penyusutan fiskal belum dapat dihitung untuk aset mana pun"
         : `Selisih penyusutan tahunan ${formatCurrency(totals.difference)}` +
-          (totals.withoutFiscal > 0 ? ` · ${totals.withoutFiscal} aset belum diisi fiskal` : "")
+          (totals.withoutFiscal > 0 ? ` · ${totals.withoutFiscal} aset belum dapat dihitung fiskal` : "")
 
   return { table: { columns: COLUMNS, rows }, totals, verdict }
 }
@@ -210,11 +260,11 @@ export function buildDepreciationDifference(
 export function depreciationDifferenceSummary(result: DepreciationDifferenceResult): string {
   if (result.totals.assets === 0) return "Tidak ada aset untuk dinilai"
   if (result.totals.withoutFiscal === result.totals.assets) {
-    return "Penyusutan fiskal belum diisi untuk aset mana pun"
+    return "Penyusutan fiskal belum dapat dihitung untuk aset mana pun"
   }
   return (
     `Akuntansi ${formatCurrency(result.totals.accountingComparable)} vs fiskal ` +
     `${formatCurrency(result.totals.fiscalAnnual)} · selisih ${formatCurrency(result.totals.difference)}` +
-    (result.totals.withoutFiscal > 0 ? ` · ${result.totals.withoutFiscal} aset belum diisi fiskal` : "")
+    (result.totals.withoutFiscal > 0 ? ` · ${result.totals.withoutFiscal} aset belum dapat dihitung fiskal` : "")
   )
 }

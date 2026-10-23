@@ -314,4 +314,61 @@ describe("applyJobChangeOrder — klaim + uang existing", () => {
     expect(claimArg.where).toEqual({ id: 77, status: "disetujui" })
     expect(claimArg.data.status).toBe("diterapkan")
   })
+
+  // Audit #515 gap MEDIUM-1: WO berubah status tidak-layak ANTARA
+  // persetujuan dan terapkan (mis. di-close) wajib ditolak oleh
+  // assertWorkOrderEligibleForChangeOrder yang dibaca ulang di tx
+  // terapkan — bukan hanya saat buat/kirim. Falsifikasi: cabut
+  // pemanggilan penjaga itu di applyJobChangeOrder -> tes ini MERAH
+  // (apply lanjut merevisi quotation).
+  it("WO berubah closed sesudah disetujui: terapkan ditolak, quotation tak disentuh", async () => {
+    woFindUniqueMock.mockResolvedValue({ ...WO, status: "closed" })
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/pending, in_progress, atau completed/)
+    expect(qUpdateMock).not.toHaveBeenCalled()
+    expect(qItemUpdateMock).not.toHaveBeenCalled()
+    expect(woItemUpdateMock).not.toHaveBeenCalled()
+    expect(createDifferenceInvoiceMock).not.toHaveBeenCalled()
+    expect(createRevisionDownCreditMock).not.toHaveBeenCalled()
+  })
+
+  it("WO kehilangan penawaran tertaut sesudah disetujui: terapkan ditolak", async () => {
+    woFindUniqueMock.mockResolvedValue({ ...WO, quotationId: null })
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/tanpa penawaran tertaut/)
+    expect(qUpdateMock).not.toHaveBeenCalled()
+    expect(createDifferenceInvoiceMock).not.toHaveBeenCalled()
+  })
+
+  // Audit #515 gap MEDIUM-2: baris WorkOrderItem yang ter-issue ANTARA
+  // persetujuan dan terapkan wajib terkunci oleh assertLinesNotLocked
+  // yang dibaca ulang di tx terapkan (BR-CO-03, SEMUA status
+  // MaterialIssue). Falsifikasi: cabut pemanggilan penjaga itu di
+  // applyJobChangeOrder -> tes ini MERAH (baris ter-issue ter-update).
+  it("baris ter-issue sesudah disetujui: ubah ditolak di terapkan, baris WO tak disentuh", async () => {
+    miItemFindManyMock.mockResolvedValue([{ workOrderItemId: 11, itemId: 101 }])
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/terkunci/)
+    expect(woItemUpdateMock).not.toHaveBeenCalled()
+    expect(qUpdateMock).not.toHaveBeenCalled()
+    expect(qItemUpdateMock).not.toHaveBeenCalled()
+    expect(createDifferenceInvoiceMock).not.toHaveBeenCalled()
+  })
+
+  it("baris ter-issue sesudah disetujui: hapus juga ditolak di terapkan (bukan hanya ubah)", async () => {
+    coFindUniqueMock.mockResolvedValue({
+      ...CO_APPROVED,
+      items: [{ ...CO_APPROVED.items[0], action: "hapus" }],
+    })
+    miItemFindManyMock.mockResolvedValue([{ workOrderItemId: 11, itemId: 101 }])
+    const r = await applyJobChangeOrder(77)
+    expect(r.success).toBe(false)
+    expect(String(r.error)).toMatch(/terkunci/)
+    expect(woItemUpdateMock).not.toHaveBeenCalled()
+    expect(qItemDeleteMock).not.toHaveBeenCalled()
+    expect(qUpdateMock).not.toHaveBeenCalled()
+  })
 })

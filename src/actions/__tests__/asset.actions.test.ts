@@ -65,6 +65,9 @@ const mocks = vi.hoisted(() => {
     journal: {
       count: vi.fn(),
       findFirst: vi.fn(),
+      // Dipakai disposeAsset untuk nilai buku dasar jurnal POSTED
+      // (vonis F-2026-10-22-062-V Putusan 1). Default kosong = legacy.
+      findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn(),
     },
     documentSequence: {
@@ -832,8 +835,11 @@ describe("createAsset / updateAsset", () => {
     prismaMock.asset.create.mockResolvedValue({ id: 100, name: "Laptop", code: "AST-001" })
     prismaMock.documentSequence.upsert.mockResolvedValue({ currentValue: 1 })
     generateDocNumMock.mockResolvedValue("AST-001")
-    process.env.FIXED_ASSET_ACCOUNT_ID = "0"
-    process.env.ASSET_CASH_ACCOUNT_ID = "0"
+    // Akun perolehan terpetakan untuk tes umum create/update: vonis
+    // F-2026-10-22-062-V Putusan 3 menolak aset berharga tanpa akun. Tes
+    // fail-closed menimpa env ini menjadi 0 sendiri.
+    process.env.FIXED_ASSET_ACCOUNT_ID = "200"
+    process.env.ASSET_CASH_ACCOUNT_ID = "201"
   })
 
   it("fails validation with empty form on create", async () => {
@@ -877,11 +883,31 @@ describe("createAsset / updateAsset", () => {
     expect(arg.data.purchaseDate.toISOString()).toBe("2026-06-12T00:00:00.000Z")
   })
 
-  it("creates asset without GL posting when env vars missing", async () => {
+  // F62-5 (vonis F-2026-10-22-062-V Putusan 3): perolehan berharga tanpa akun
+  // Aset Tetap/Kas-Bank DITOLAK berisik, nol baris Asset lahir. Dulu aset
+  // lahir tanpa jurnal ("skipped silently") — perilaku itu dilarang.
+  it("F62-5: menolak perolehan berharga tanpa akun perolehan, nol baris Asset lahir", async () => {
+    process.env.FIXED_ASSET_ACCOUNT_ID = "0"
+    process.env.ASSET_CASH_ACCOUNT_ID = "0"
     const res = await createAsset(fd({
       name: "Laptop",
       code: "LAP-01",
-      purchasePrice: "1000",
+      purchasePrice: "10000000",
+    }))
+    expect(res.success).toBe(false)
+    expect(String(res.error)).toContain("akun Aset Tetap")
+    expect(String(res.error)).toContain("akun Kas/Bank")
+    expect(prismaMock.asset.create).not.toHaveBeenCalled()
+    expect(prismaMock.journal.create).not.toHaveBeenCalled()
+  })
+
+  it("aset purchaseCost = 0 tetap boleh lahir tanpa akun perolehan dan tanpa jurnal", async () => {
+    process.env.FIXED_ASSET_ACCOUNT_ID = "0"
+    process.env.ASSET_CASH_ACCOUNT_ID = "0"
+    const res = await createAsset(fd({
+      name: "Aset Hibah",
+      code: "LAP-01",
+      purchasePrice: "0",
     }))
     expect(res.success).toBe(true)
     expect(prismaMock.asset.create).toHaveBeenCalled()
