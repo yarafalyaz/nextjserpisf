@@ -46,6 +46,10 @@ vi.mock("@/lib/services/activity-log.service", () => ({
   reportPostCommitAuditFailure: vi.fn(),
 }))
 
+vi.mock("@/lib/reports/sales-target-achievement-data", () => ({
+  getSalesTargetAchievement: vi.fn().mockResolvedValue({}),
+}))
+
 import {
   createSalesTarget,
   updateSalesTarget,
@@ -138,6 +142,31 @@ describe("createSalesTarget", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("lebih besar dari 0")
     expect(mocks.txMock.salesTarget.create).not.toHaveBeenCalled()
+  })
+
+  // LOW-1 audit #583: guard normalizeInput penjual belum terkunci regresi.
+  it.each([
+    ["kosong (undefined)", undefined],
+    ["nol", 0],
+    ["NaN", Number.NaN],
+    ["negatif", -3],
+    ["non-bilangan bulat", 1.5],
+  ])("penjual %s ditolak sebelum tulis", async (_label, salesEmployeeId) => {
+    const res = await createSalesTarget({
+      ...INPUT,
+      salesEmployeeId: salesEmployeeId as number,
+    })
+    expect(res.success).toBe(false)
+    expect(res.error).toBe("Penjual wajib dipilih")
+    expect(mocks.txMock.salesTarget.create).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.$transaction).not.toHaveBeenCalled()
+  })
+
+  it("penjual kosong juga ditolak di update sebelum tulis", async () => {
+    const res = await updateSalesTarget({ id: 1, ...INPUT, salesEmployeeId: 0 })
+    expect(res.success).toBe(false)
+    expect(res.error).toBe("Penjual wajib dipilih")
+    expect(mocks.txMock.salesTarget.update).not.toHaveBeenCalled()
   })
 })
 
