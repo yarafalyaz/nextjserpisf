@@ -20,6 +20,9 @@ const optionalDecimal = () =>
 const boundedInt = (min: number, max: number) =>
   z.coerce.number().int().min(min).max(max).nullable().optional()
 
+const boundedDecimal = (min: number, max: number) =>
+  z.coerce.number().min(min).max(max).nullable().optional()
+
 const nonNegativeDecimal = () =>
   z.coerce.number().min(0).nullable().optional()
 
@@ -145,6 +148,10 @@ export const updateSystemSettingsSchema = z.object({
   purchasePayableAccountId: optionalInt(),
   purchaseInventoryAccountId: optionalInt(),
   purchaseTaxAccountId: optionalInt(),
+  // F-2026-10-23-111-V Putusan 2: tarif PPh final revaluasi fiskal sebagai
+  // data master (0..100%), snapshot per peristiwa; kosong = tolak berisik.
+  assetFiscalRevaluationFinalTaxRatePercent: boundedDecimal(0, 100),
+  assetFiscalRevaluationTaxPayableAccountId: optionalInt(),
   purchaseExpenseAccountId: optionalInt(),
   purchaseDiscountAccountId: optionalInt(),
   purchaseShippingAccountId: optionalInt(),
@@ -182,6 +189,11 @@ export const updateSystemSettingsSchema = z.object({
   // Accounting - Fixed Assets
   depreciationExpenseAccountId: optionalInt(),
   accumulatedDepreciationAccountId: optionalInt(),
+
+  // Accounting - Year-End Closing (F-2026-10-23-121-V): akun laba ditahan
+  // tujuan jurnal penutup dari form Mapping Akun; tanpa kunci ini zod
+  // membuang field diam-diam dan akun tidak pernah tersimpan.
+  retainedEarningsAccountId: optionalInt(),
 
   // Internal
   _redirectTo: optionalString(500),

@@ -1843,6 +1843,8 @@ export async function createPurchaseReturn(formData: FormData) {
           purchaseOrderId: v.purchaseOrderId,
           date: wibDateToUtcMidnight(v.date),
           reason: v.reason ?? null,
+          taxReturnNoteNumber: v.taxReturnNoteNumber ?? null,
+          taxReturnNoteDate: v.taxReturnNoteDate ? wibDateToUtcMidnight(v.taxReturnNoteDate) : null,
           status: "draft",
           createdBy: Number(user.id),
           items: {
@@ -2869,6 +2871,8 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
           purchaseOrderId: v.purchaseOrderId,
           date,
           reason: v.reason ?? null,
+          taxReturnNoteNumber: v.taxReturnNoteNumber ?? null,
+          taxReturnNoteDate: v.taxReturnNoteDate ? wibDateToUtcMidnight(v.taxReturnNoteDate) : null,
           items: {
             create: purchaseReturnItemData(validPrItems, updPrDocumentCostMap, updBillPriceByItem),
           },

@@ -16,6 +16,7 @@
  */
 
 import { safeMultiply, safeRound } from "@/lib/utils/math"
+import { findPph42RentCatalogEntry, parseRentObjectEvidence } from "@/lib/tax/pph42-rent-catalog"
 
 /** Pasal PPh snapshot. */
 export const WITHHOLDING_ARTICLES = ["PPh21", "PPh22", "PPh23", "PPh4(2)", "PPh26", "PPh15"] as const
@@ -96,24 +97,41 @@ export interface Pph42RentCatalogEntry {
 }
 
 /**
- * Validasi penerbitan bupot sewa terhadap katalog master (vonis BOT 4
- * F-2026-10-22-051-V Putusan 1+2, menutup lubang PR #408):
- * - kode wajib terisi, format NN-NNN-NN;
- * - kode WAJIB ada di katalog master aktif yang diteruskan pemanggil —
- *   di luar katalog (konstruksi 28-409-*, pengalihan 28-402-*, PPh 23
- *   24-*, 28-403 karangan, acak) TOLAK fail-closed berisik;
- * - tarif baris katalog wajib tepat tarif resmi sewa (10) — tarif master
- *   menyimpang ditolak, jangan dipakai diam-diam (F51-6);
- * - kode bersyarat bukti (`requiresEvidence`) wajib bukti dokumen
- *   non-kosong (F51-3).
- * Mengembalikan tarif resmi 10 untuk snapshot. Master belum bertanggal
- * efektif/histori — katalog = baris aktif saat terbit, dibekukan snapshot.
+ * Hasil resolusi bupot sewa: tarif 10 + nama resmi katalog yang WAJIB
+ * dibekukan ke snapshot bupot (objectName), ditambah metadata bukti
+ * terverifikasi untuk kode bersyarat bukti.
  */
-export function resolvePph42RentRate(
+export interface Pph42RentResolution {
+  rate: 10
+  objectName: string
+  evidence?: { docType: string; docNumber: string; docDate: string; issuer: string; link: string | null }
+}
+
+/**
+ * Validasi penerbitan bupot sewa — katalog-resmi tanggal-sadar
+ * (vonis BOT 4 F-2026-10-22-051-V Putusan 1+2 + F-2026-10-22-055-V
+ * Putusan 1..3, menutup lubang PR #408):
+ * - kode wajib terisi, format NN-NNN-NN;
+ * - kode WAJIB ada di katalog master aktif yang diteruskan pemanggil
+ *   (katalog MASTER = kewenangan kode boleh terbit; di luar katalog
+ *   — konstruksi 28-409-*, pengalihan 28-402-*, PPh 23 24-*, 28-403
+ *   karangan, acak — TOLAK fail-closed berisik);
+ * - kode WAJIB punya nama di katalog resmi SATU sumber (`pph42-rent-catalog`)
+ *   yang berlaku pada `withholdingDate` — tanpa mama = FAIL-CLOSED
+ *   "nama katalog belum tersedia", nama tidak pernah dikarang;
+ * - tarif batch katalog master + tarif resmi katalog wajib tepat 10 —
+ *   menyimpang ditolak, jangan dipakai diam-diam (F51-6);
+ * - kode bersyarat bukti (`requiresEvidence` katalog resmi, bukan
+ *   tebakan nama kode master) wajib bukti berformat terstruktur
+ *   `JENIS | NOMOR | TANGGAL(YYYY-MM-DD) | PENERBIT | TAUTAN`
+ *   ter-parse (vonis 055-V §1).
+ */
+export function resolvePph42RentRateEntry(
   objectCode: string | null | undefined,
   catalog: readonly Pph42RentCatalogEntry[],
+  withholdingDate: Date,
   opts?: { evidence?: string | null },
-): 10 {
+): Pph42RentResolution {
   const code = (objectCode ?? "").trim()
   if (code === "") {
     throw new Error("PPh 4(2) sewa: kode objek wajib terisi di master jenis PPH42-SEWA — tanpa kode, bupot sewa tidak diterbitkan.")
@@ -131,10 +149,36 @@ export function resolvePph42RentRate(
   if (safeRound(entry.rate, 2) !== PPH42_RENT_RATE) {
     throw new Error(`PPh 4(2) sewa: tarif master untuk kode objek "${code}" menyimpang dari tarif resmi ${PPH42_RENT_RATE}% — koreksi master sebelum bupot diterbitkan.`)
   }
-  if (entry.requiresEvidence && !(opts?.evidence ?? "").trim()) {
-    throw new Error(`PPh 4(2) sewa: kode objek "${code}" hanya untuk sewa terbukti dokumen dasarnya (proyek pemerintah hibah/pinjaman luar negeri) — tanpa bukti dokumen, pakai kode objek sewa umum di master.`)
+  const official = findPph42RentCatalogEntry(code, withholdingDate)
+  if (!official) {
+    throw new Error(`PPh 4(2) sewa: nama katalog belum tersedia untuk kode objek "${code}" — nama kode tidak dikarang dari string kode; lengkapi katalog resmi sebelum bupot diterbitkan.`)
   }
-  return PPH42_RENT_RATE
+  if (safeRound(official.rate, 2) !== PPH42_RENT_RATE) {
+    throw new Error(`PPh 4(2) sewa: tarif resmi katalog untuk kode objek "${code}" menyimpang dari tarif resmi ${PPH42_RENT_RATE}% — koreksi katalog sebelum bupot diterbitkan.`)
+  }
+  let evidence: Pph42RentResolution["evidence"]
+  if (official.requiresEvidence) {
+    try {
+      evidence = parseRentObjectEvidence(opts?.evidence)
+    } catch (e) {
+      throw new Error(e instanceof Error ? e.message : String(e))
+    }
+  }
+  return { rate: PPH42_RENT_RATE, objectName: official.objectName, evidence }
+}
+
+/**
+ * Kompat tipis atas `resolvePph42RentRateEntry` — pemanggil lama hanya
+ * butuh tarif; snapshot nama katalog memilih entry-API.
+ * ponytail: shim sekali-pakai; hapus saat semua pemanggil bermigrasi
+ * ke `resolvePph42RentRateEntry`.
+ */
+export function resolvePph42RentRate(
+  objectCode: string | null | undefined,
+  catalog: readonly Pph42RentCatalogEntry[],
+  opts?: { evidence?: string | null },
+): 10 {
+  return resolvePph42RentRateEntry(objectCode, catalog, new Date(), opts).rate
 }
 
 export interface WithholdingComputation {

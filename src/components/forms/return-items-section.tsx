@@ -3,6 +3,7 @@
 import type { ReactNode } from "react"
 import { AppDatePicker } from "@/components/ui/date-picker"
 import { Label } from "@/components/ui/shadcn/label"
+import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
 import { Combobox } from "@/components/ui/combobox"
 import { Button } from "@/components/ui/button"
@@ -139,6 +140,49 @@ export function ReturnDateAndReason({
       <div className="flex flex-col gap-1.5 col-span-full">
         <Label htmlFor="reason">Alasan Retur</Label>
         <Textarea id="reason" name="reason" rows={3} placeholder={reasonPlaceholder} defaultValue={reasonDefault} />
+      </div>
+    </>
+  )
+}
+
+/**
+ * Field opsional nota retur pajak (F-004 §3): nomor dicatat apa adanya dari
+ * nota Coretax/DJP (sistem tidak menerbitkan nomor); tanggal nota menentukan
+ * masa pengurang SPT (fallback tanggal retur di backend). Keduanya kosong =
+ * dikirim kosong dan server menyimpan null — perilaku lama tidak berubah.
+ * Nomor lewat FormData langsung dari `name`; tanggal lewat state form induk
+ * supaya nilai tersimpan tampil lagi di mode ubah.
+ */
+export function ReturnTaxNoteFields({
+  taxReturnNoteNumberDefault,
+  taxReturnNoteDate,
+  setTaxReturnNoteDate,
+}: {
+  taxReturnNoteNumberDefault: string
+  taxReturnNoteDate: string
+  setTaxReturnNoteDate: (value: string) => void
+}) {
+  return (
+    <>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="taxReturnNoteNumber">Nomor Nota Retur Pajak (Opsional)</Label>
+        <Input
+          id="taxReturnNoteNumber"
+          name="taxReturnNoteNumber"
+          type="text"
+          maxLength={100}
+          defaultValue={taxReturnNoteNumberDefault}
+          placeholder="Nomor dari nota Coretax/DJP"
+        />
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <AppDatePicker
+          label="Tanggal Nota Retur Pajak (Opsional)"
+          name="taxReturnNoteDate"
+          value={taxReturnNoteDate}
+          onChange={(val) => setTaxReturnNoteDate(val)}
+        />
       </div>
     </>
   )

@@ -206,6 +206,23 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (JobChangeOrder apply atomicity, MySQL nyata)
+        # Anti-skip sama seperti bank statement: suite SKIP tanpa
+        # INTEGRATION_DB_URL, hijau semu dilarang. Audit #515 gap MEDIUM-3.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/actions/__tests__/job-change-order-apply-atomicity.integration.test.ts 2>&1 | tee jco-apply-atomicity.log
+          if grep -qi 'skipped' jco-apply-atomicity.log; then
+            echo "::error::job-change-order-apply-atomicity.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' jco-apply-atomicity.log; then
+            echo "::error::job-change-order-apply-atomicity.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
 
   docker:
     name: Docker Image Build
