@@ -18,6 +18,8 @@ import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { ASSET_HISTORY_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
 import { AssetFiscalStatus, DEPRECIATION_METHOD_LABELS } from "../_components/asset-fiscal-status"
+import { AssetAcquisitionSummary } from "../_components/asset-acquisition"
+import { resolveAssetAcquisition } from "@/lib/finance/asset-acquisition"
 
 import type { Metadata } from "next"
 
@@ -49,6 +51,24 @@ export default async function AssetDetailPage({
   if (!asset) notFound()
 
   const depreciation = Number(asset.purchaseCost) - Number(asset.currentValue)
+
+  // Snapshot perolehan F-2026-10-23-120-V: kolom jenis/dokumen/dasar fiskal
+  // inti BOT 3 belum ada — fakta yang belum tercatat diteruskan apa adanya
+  // (jenis/dokumen kosong), builder memutuskan; UI tidak mengarang jenis.
+  const acquisition = resolveAssetAcquisition({
+    acquisitionType: null,
+    purchaseCost: asset.purchaseCost,
+    sourceDocumentRef: null,
+    isRelatedParty: null,
+    marketValue: null,
+    marketValueAssessor: null,
+    grantIsExempt: null,
+    grantorFiscalBookValue: null,
+    surrenderedAssetCarryingAmount: null,
+    hasLinkedTaxInvoice: null,
+    linkedInputVatAmount: null,
+    counterpartMapped: null,
+  })
 
   // `assetBrandModelId` bare int tanpa relasi — resolve manual. Dua query
   // paralel, masing-masing nullable (merek/tipe bisa dihapus guardnya... merek
@@ -107,6 +127,19 @@ export default async function AssetDetailPage({
             typed was stored but never shown anywhere. */}
         <DetailField label="Deskripsi" value={asset.notes || "-"} colSpan="full" />
       </DetailCard>
+
+      {/* Perolehan — snapshot builder F-2026-10-23-120-V apa adanya */}
+      <section
+        aria-label="Perolehan aset"
+        className="rounded-xl border border-default bg-surface p-4 shadow-sm sm:p-5"
+      >
+        <h2 className="text-[0.9375rem] font-semibold text-foreground">
+          Perolehan
+        </h2>
+        <div className="mt-3">
+          <AssetAcquisitionSummary result={acquisition} />
+        </div>
+      </section>
 
       {/* History */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
