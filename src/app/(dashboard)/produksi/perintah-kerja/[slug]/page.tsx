@@ -23,6 +23,8 @@ import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { WorkOrderMaterialNeedsCard } from "@/components/reports/work-order-material-needs-card";
 import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs-data";
 import { WorkOrderPartStatusCard } from "@/components/reports/work-order-part-status-card";
+import { WorkOrderSubstituteSuggestionsPanel } from "@/components/reports/work-order-substitute-suggestions-panel";
+import { getWorkOrderSubstituteSuggestions } from "@/lib/reports/item-substitute-suggestions-data";
 import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
 import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
 import { WorkOrderReservationsCard } from "@/components/reports/work-order-reservations-card";
@@ -183,6 +185,13 @@ export default async function WorkOrderDetailPage({
   // F-105: status part turunan read-only per baris WO (builder Bara PR #275).
   // Kartu murni presentasi: tanpa hitung ulang, tanpa tulis WorkOrderItem.status.
   const partStatus = await getWorkOrderPartStatus(wo.id);
+
+  // F-2026-10-22-069-S: saran substitusi read-only dari loader BOT 3 —
+  // tampil verbatim; terapkan digerbang edit_work_orders (server menegakkan).
+  const [substituteSuggestions, canApplySubstitute] = await Promise.all([
+    getWorkOrderSubstituteSuggestions(wo.id),
+    hasPermission("edit_work_orders"),
+  ]);
 
   // F-057-S §2/§3: tabel reservasi stok — baris StockReservation passthrough
   // loader (status/sisa builder, jejak rilis apa adanya). Izin view_work_orders
@@ -550,6 +559,14 @@ export default async function WorkOrderDetailPage({
 
       {partStatus ? (
         <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
+      ) : null}
+
+      {substituteSuggestions ? (
+        <WorkOrderSubstituteSuggestionsPanel
+          workOrderId={wo.id}
+          report={substituteSuggestions}
+          canApply={canApplySubstitute}
+        />
       ) : null}
 
       {wo.bomRevision ? (

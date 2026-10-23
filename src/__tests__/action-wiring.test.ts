@@ -111,20 +111,12 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
-  // F-2026-10-22-069-S inti (t_0f358bbb/t_73bdb74a): master substitusi +
-  // saran/terapkan perintah kerja backend dulu; panel saran di detail WO +
-  // panel kelola relasi di master barang menyusul kartu frontend
-  // t_bfaf2287 (buang entri ini saat UI memanggilnya).
-  "src/actions/item-substitute.actions.ts::listItemSubstitutes":
-    "F-2026-10-22-069-S backend; panel kelola relasi di master barang menyusul (frontend t_bfaf2287)",
-  "src/actions/item-substitute.actions.ts::createItemSubstitute":
-    "F-2026-10-22-069-S backend; form tambah relasi substitusi menyusul (frontend t_bfaf2287)",
-  "src/actions/item-substitute.actions.ts::setItemSubstituteActive":
-    "F-2026-10-22-069-S backend; tombol nonaktifkan/aktifkan relasi menyusul (frontend t_bfaf2287)",
+  // F-2026-10-22-069-S: 4 aksi substitusi kini dirujuk UI (tab Substitusi
+  // master barang + panel saran WO, t_bfaf2287) — entri beku dibuang.
+  // getSubstituteSuggestionsForWorkOrder tetap beku: page detail WO membaca
+  // loader data langsung (pola RSC existing), aksi ini jalur client setara.
   "src/actions/item-substitute.actions.ts::getSubstituteSuggestionsForWorkOrder":
-    "F-2026-10-22-069-S backend; panel saran substitusi di detail perintah kerja menyusul (frontend t_bfaf2287)",
-  "src/actions/item-substitute.actions.ts::applyWorkOrderItemSubstitute":
-    "F-2026-10-22-069-S backend; tombol terapkan substitusi di panel saran menyusul (frontend t_bfaf2287)",
+    "F-2026-10-22-069-S: detail WO membaca getWorkOrderSubstituteSuggestions-data langsung di RSC; aksi setara untuk pemanggil client",
   // F-2026-10-21-012 inti (t_34bb293d): aksi batal WO + lepas/reservasi ulang
   // stok backend dulu; tombol UI menyusul di kartu frontend sesudah PR inti
   // merge (buang 3 entri ini saat halaman produksi/perintah kerja memanggilnya).
@@ -185,10 +177,17 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3: pemanggil jurnal E2/E3 kini dirujuk UI
   // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
+  // F-2026-10-23-121-V inti (PR #655): 3 aksi YearEndClosing kini dirujuk
+  // YearEndClosingPanel di proses akhir bulan (t_8c34abc8) — entri beku dibuang.
   // F-2026-10-22-066-S: 7 aksi JobChangeOrder kini dirujuk panel Change Order
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
   // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal
   // di JobBillingCard (t_ba8fe9ef) — entri beku dibuang.
+  // F-2026-10-23-113-V inti backend (t_0abc55bf): aksi ekspor XML Coretax
+  // faktur keluaran; permukaan unduh + daftar tertolak menyusul di kartu
+  // frontend BOT 2 (buang entri ini saat UI memanggilnya).
+  "src/actions/tax-documents.actions.ts::exportCoretaxOutputXmlAction":
+    "F-2026-10-23-113-V inti backend; UI unduh XML Coretax menyusul (frontend BOT 2)",
 }
 
 describe("keterhubungan aksi server", () => {

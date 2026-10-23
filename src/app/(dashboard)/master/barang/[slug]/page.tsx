@@ -2,7 +2,7 @@ import { Pencil, AlertTriangle } from "lucide-react"
 export const dynamic = "force-dynamic"
 
 import { prisma } from "@/lib/db/prisma"
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
@@ -20,6 +20,7 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { QrCodeDisplay } from "@/components/ui/qr-code-display"
 import { ItemImageLightbox } from "@/components/ui/item-image-lightbox"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
+import { ItemSubstitutesPanel } from "@/components/items/item-substitutes-panel"
 
 import type { Metadata } from "next"
 
@@ -104,6 +105,18 @@ export default async function ItemDetailPage({
   )
 
   if (!item) notFound()
+
+  // F-2026-10-22-069-S: tab Substitusi (Q-SUB69-4) — opsi pengganti dari
+  // master existing, kelola digerbang edit_items di page + server.
+  const [canManageSubstitutes, substituteItemOptions] = await Promise.all([
+    hasPermission("edit_items"),
+    prisma.item.findMany({
+      where: { isActive: true, deletedAt: null, isService: false },
+      select: { id: true, name: true, sku: true },
+      orderBy: { name: "asc" },
+      take: 500,
+    }),
+  ])
 
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.AUTH_URL || process.env.NEXTAUTH_URL || ""
   const trackCode = item.sku
@@ -422,6 +435,20 @@ export default async function ItemDetailPage({
                   </DetailTable>
                 )}
               </DetailSection>
+            ),
+          },
+          {
+            id: "substitusi",
+            label: "Substitusi",
+            content: (
+              <ItemSubstitutesPanel
+                itemId={item.id}
+                itemOptions={substituteItemOptions.map((o) => ({
+                  id: o.id,
+                  label: `${o.name} (${o.sku})`,
+                }))}
+                canManage={canManageSubstitutes}
+              />
             ),
           },
           {

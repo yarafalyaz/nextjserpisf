@@ -1,19 +1,18 @@
 /**
- * Loader read-only pratinjau jurnal penutup tahunan (F-2026-10-20-86).
+ * Loader pratinjau jurnal penutup tahunan (F-2026-10-20-86) + pengumpul
+ * baris bersama untuk inti posting (F-2026-10-23-121-V).
  *
- * Tiga query massal: pengaturan (bulan mulai tahun fiskal), akun P&L aktif,
- * baris jurnal POSTED dalam tahun fiskal, plus satu cek anti-dobel jurnal
- * penutup. Tanpa N+1, tanpa mutasi, tanpa jurnal. Posting penutup adalah
- * INTI ditunda-teknis (PUTUSAN manager 20:04) — loader ini tidak menulis
- * apa pun.
+ * Query massal tanpa N+1: akun P&L aktif, baris jurnal POSTED dalam tahun
+ * fiskal, pusat laba, cek anti-dobel jurnal penutup. Loader publik tetap
+ * read-only; `collectYearEndClosingEntries` diekspor agar service posting
+ * menjalankan query yang SAMA di dalam transaksinya (satu sumber rumus —
+ * builder `buildYearEndClosingPreview` tidak pernah disalin).
  *
- * Batasan jujur:
- * - Kolom pengaturan `retainedEarningsAccountId` BELUM ada di skema (inti
- *   migrasi ditunda), jadi akun tujuan selalu dilaporkan belum dipetakan
- *   (`null`) — jangan menebak akun laba ditahan dari nama/kode di sini.
- * - Hanya jurnal POSTED yang dihitung; builder menyaring ulang status dan
- *   tipe akun, jadi perubahan loader tidak membocorkan DRAFT/REVERSED atau
- *   akun neraca ke pratinjau.
+ * Sejak inti F-121-V: akun tujuan dibaca dari kolom nyata
+ * `SystemSetting.retainedEarningsAccountId` (migrasi 20261023150000).
+ * Kolom kosong tetap dilaporkan belum dipetakan (`null`) — jangan menebak
+ * akun laba ditahan dari nama/kode di sini; validasi tipe akun adalah
+ * urusan resolver posting (fail-closed di service).
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -22,20 +21,24 @@ import {
   buildYearEndClosingPreview,
   fiscalYearPeriod,
   YEAR_END_CLOSING_REFERENCE_TYPE,
+  type YearEndClosingEntryInput,
   type YearEndClosingPreview,
 } from "@/lib/reports/year-end-closing"
 
-export async function getYearEndClosingPreview(fiscalYear: number): Promise<YearEndClosingPreview> {
-  const settings = await getSystemSettings()
-  const fiscalYearStartMonth = settings.fiscalYearStartMonth
-  const { start, end } = fiscalYearPeriod(fiscalYear, fiscalYearStartMonth)
+type YearEndClosingDb = Pick<typeof prisma, "account" | "journalEntry" | "profitCenter">
 
-  const [accounts, rows, profitCenters, existingClosing] = await Promise.all([
-    prisma.account.findMany({
+/** Baris masukan builder dari jurnal POSTED tahun fiskal, via client apa pun (prisma/tx). */
+export async function collectYearEndClosingEntries(
+  db: YearEndClosingDb,
+  start: Date,
+  end: Date,
+): Promise<YearEndClosingEntryInput[]> {
+  const [accounts, rows, profitCenters] = await Promise.all([
+    db.account.findMany({
       where: { type: { in: ["REVENUE", "EXPENSE"] }, deletedAt: null },
       select: { id: true, code: true, name: true, type: true },
     }),
-    prisma.journalEntry.findMany({
+    db.journalEntry.findMany({
       where: {
         journal: {
           status: "POSTED",
@@ -52,7 +55,38 @@ export async function getYearEndClosingPreview(fiscalYear: number): Promise<Year
         journal: { select: { status: true } },
       },
     }),
-    prisma.profitCenter.findMany({ select: { id: true, code: true } }),
+    db.profitCenter.findMany({ select: { id: true, code: true } }),
+  ])
+
+  const accountById = new Map(accounts.map((account) => [account.id, account]))
+  const profitCenterCodeById = new Map(profitCenters.map((center) => [center.id, center.code]))
+
+  return rows.flatMap((row) => {
+    const account = accountById.get(row.accountId)
+    if (!account) return []
+    return [
+      {
+        accountId: row.accountId,
+        accountCode: account.code,
+        accountName: account.name,
+        accountType: account.type,
+        profitCenterId: row.profitCenterId,
+        profitCenterCode: row.profitCenterId === null ? null : (profitCenterCodeById.get(row.profitCenterId) ?? null),
+        journalStatus: row.journal.status,
+        debit: Number(row.debit),
+        credit: Number(row.credit),
+      },
+    ]
+  })
+}
+
+export async function getYearEndClosingPreview(fiscalYear: number): Promise<YearEndClosingPreview> {
+  const settings = await getSystemSettings()
+  const fiscalYearStartMonth = settings.fiscalYearStartMonth
+  const { start, end } = fiscalYearPeriod(fiscalYear, fiscalYearStartMonth)
+
+  const [entries, existingClosing] = await Promise.all([
+    collectYearEndClosingEntries(prisma, start, end),
     prisma.journal.findFirst({
       where: {
         referenceType: YEAR_END_CLOSING_REFERENCE_TYPE,
@@ -64,31 +98,11 @@ export async function getYearEndClosingPreview(fiscalYear: number): Promise<Year
     }),
   ])
 
-  const accountById = new Map(accounts.map((account) => [account.id, account]))
-  const profitCenterCodeById = new Map(profitCenters.map((center) => [center.id, center.code]))
-
   return buildYearEndClosingPreview({
     fiscalYear,
     fiscalYearStartMonth,
-    // ponytail: kolom setting inti belum ada (migrasi ditunda) — selalu belum dipetakan sampai inti dibuka.
-    retainedEarningsAccountId: null,
+    retainedEarningsAccountId: settings.retainedEarningsAccountId ?? null,
     alreadyClosed: existingClosing !== null,
-    entries: rows.flatMap((row) => {
-      const account = accountById.get(row.accountId)
-      if (!account) return []
-      return [
-        {
-          accountId: row.accountId,
-          accountCode: account.code,
-          accountName: account.name,
-          accountType: account.type,
-          profitCenterId: row.profitCenterId,
-          profitCenterCode: row.profitCenterId === null ? null : (profitCenterCodeById.get(row.profitCenterId) ?? null),
-          journalStatus: row.journal.status,
-          debit: Number(row.debit),
-          credit: Number(row.credit),
-        },
-      ]
-    }),
+    entries,
   })
 }

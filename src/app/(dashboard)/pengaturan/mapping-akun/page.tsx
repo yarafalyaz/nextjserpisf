@@ -114,6 +114,12 @@ export default async function AccountMappingPage() {
         { label: "Akumulasi Penyusutan", value: accountName(settings?.accumulatedDepreciationAccountId) },
       ],
     },
+    {
+      title: "Penutup Tahun",
+      items: [
+        { label: "Laba Ditahan (Tujuan Penutup Tahun)", value: accountName(settings?.retainedEarningsAccountId) },
+      ],
+    },
   ]
 
   const allMappings = mappingGroups.flatMap((g) => g.items)
