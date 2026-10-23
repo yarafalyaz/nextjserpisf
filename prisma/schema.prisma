@@ -674,6 +674,8 @@ model Item {
   warrantyCoverages    WarrantyCoverage[]
   installedParts       InstalledPart[]
   materialRequestItems MaterialRequestItem[]
+  substitutes          ItemSubstitute[]     @relation("ItemSubstitutes")
+  substitutedFor       ItemSubstitute[]     @relation("ItemSubstitutedFor")
 
   @@index([brandId], map: "items_brand_id_fkey")
   @@index([categoryId], map: "items_category_id_fkey")
@@ -1107,6 +1109,14 @@ model WithholdingCertificate {
    */
   article              String
   objectCode           String?             @map("object_code")
+  /**
+   * Nama resmi kode objek katalog SATU sumber (F-055-V §2) — snapshot saat terbit.
+   */
+  objectName           String?             @map("object_name")
+  /**
+   * Bukti dokumen dasar terstruktur kode bersyarat bukti (F-055-V §1) — snapshot saat terbit.
+   */
+  rentObjectEvidence   String?             @map("rent_object_evidence") @db.Text
   dpp                  Decimal             @db.Decimal(15, 2)
   tariff               Decimal             @map("tariff") @db.Decimal(5, 2)
   withheldAmount       Decimal             @map("withheld_amount") @db.Decimal(15, 2)
@@ -3301,7 +3311,7 @@ model Payroll {
   costCenter             CostCenter? @relation(fields: [costCenterId], references: [id])
   costCenterId           Int?        @map("cost_center_id")
 
-  @@unique([employeeId, period], map: "uq_payroll_employee_period")
+  @@unique([employeeId, startDate, endDate], map: "uq_payroll_employee_range")
   @@index([employeeId], map: "payrolls_employee_id_fkey")
   @@index([status], map: "idx_payrolls_status")
   @@index([costCenterId])
@@ -3401,6 +3411,10 @@ model EmployeeLoan {
   loanDate           DateTime @map("loan_date")
   totalAmount        Decimal  @map("total_amount") @db.Decimal(15, 2)
   monthlyInstallment Decimal  @map("monthly_installment") @db.Decimal(15, 2)
+  // F-2026-10-23-105-V (vonis BOT 4): nominal cicilan mingguan dari
+  // perjanjian tertulis; NULL = tanpa jadwal mingguan (gerbang WEEKLY
+  // menahan karyawan). Dilarang auto-fill monthlyInstallment/4.
+  weeklyInstallment  Decimal? @map("weekly_installment") @db.Decimal(15, 2)
   remainingAmount    Decimal  @map("remaining_amount") @db.Decimal(15, 2)
   status             String   @default("active")
   notes              String?  @db.Text
@@ -3923,6 +3937,14 @@ model AssetCategory {
   /// Terpisah dari tarif/umur akuntansi supaya keduanya bisa dibandingkan.
   taxDepreciationRate              Decimal? @map("tax_depreciation_rate") @db.Decimal(5, 2)
   taxUsefulLife                    Int?     @map("tax_useful_life")
+  /// Kelompok fiskal PMK 72/2023 (vonis F-2026-10-22-062-V Putusan 2):
+  /// GROUP_1..GROUP_4 / BUILDING_PERMANENT / BUILDING_NON_PERMANENT.
+  /// Tarif statutoris hidup di tabel validasi `asset-fiscal-groups.ts`.
+  taxGroupCode                     String?  @map("tax_group_code") @db.VarChar(30)
+  /// Jenis harta tercantum di lampiran PMK 72/2023? null = belum dinyatakan.
+  taxTypeListed                    Boolean? @map("tax_type_listed")
+  /// Ada penetapan DJP (mengalahkan default kelompok 3 jenis tak tercantum).
+  taxDjpDetermination              Boolean  @default(false) @map("tax_djp_determination")
   assetAccountId                   Int?     @map("asset_account_id")
   accumulatedDepreciationAccountId Int?     @map("accumulated_depreciation_account_id")
   depreciationExpenseAccountId     Int?     @map("depreciation_expense_account_id")
@@ -5134,4 +5156,34 @@ model BomRevisionChangeRequest {
   @@index([productionOrderId, status])
   @@index([createdAt])
   @@map("bom_revision_change_requests")
+}
+
+// F-2026-10-22-069-S inti (spec BOT 5 + PUTUSAN BOT 1 Q-SUB69-1..4 +
+// vonis BOT 4 F-2026-10-22-075-V): relasi substitusi part SATU ARAH di
+// master barang. Satu baris = satu arah; arah balik wajib baris sendiri;
+// TIDAK ada inferensi transitif (BR-SUB69-02). Penjaga mengikat hidup di
+// aksi item-substitute.actions (bukan skema): asal != pengganti, kedua
+// item stok aktif & satuan dasar sama, pasangan aktif ganda ditolak
+// (@@unique pasangan sebagai jaring DB). Nonaktifkan = isActive=false —
+// baris tidak dihapus supaya riwayat saran/log utuh (BR-SUB69-10).
+// Penerapan ke WO TIDAK memakai tabel ini untuk menulis: hanya lewat
+// reviseWorkOrderItems existing; tabel ini sumber saran read-only
+// (BR-SUB69-04/06, vonis Q-SUB69-5: nol harga/biaya khusus substitusi).
+model ItemSubstitute {
+  id               Int      @id @default(autoincrement())
+  itemId           Int      @map("item_id")
+  substituteItemId Int      @map("substitute_item_id")
+  notes            String?  @db.Text
+  isActive         Boolean  @default(true) @map("is_active")
+  createdBy        Int?     @map("created_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  item           Item @relation("ItemSubstitutes", fields: [itemId], references: [id], onDelete: Cascade)
+  substituteItem Item @relation("ItemSubstitutedFor", fields: [substituteItemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, substituteItemId], map: "item_substitutes_pair_key")
+  @@index([itemId, isActive])
+  @@index([substituteItemId])
+  @@map("item_substitutes")
 }

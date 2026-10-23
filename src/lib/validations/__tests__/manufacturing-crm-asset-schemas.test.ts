@@ -85,6 +85,20 @@ describe("validations/asset.schemas", () => {
   it("assetSchema rejects negative purchasePrice", () => {
     expect(assetSchema.safeParse({ name: "X", purchasePrice: -100 }).success).toBe(false);
   });
+  it("F62-4: string metode penyusutan ngawur ditolak Zod; metode terdaftar diterima", () => {
+    expect(
+      assetSchema.safeParse({ name: "X", depreciationMethod: "metode_ngawur" }).success,
+    ).toBe(false);
+    expect(
+      assetSchema.safeParse({ name: "X", depreciationMethod: "straight_line" }).success,
+    ).toBe(true);
+    expect(
+      assetSchema.safeParse({ name: "X", depreciationMethod: "declining_balance" }).success,
+    ).toBe(true);
+    expect(
+      assetSchema.safeParse({ name: "X", depreciationMethod: "units_of_production" }).success,
+    ).toBe(true);
+  });
   it("assetDisposalSchema requires assetId", () => {
     expect(assetDisposalSchema.safeParse({ assetId: 1 }).success).toBe(true);
     expect(assetDisposalSchema.safeParse({}).success).toBe(false);

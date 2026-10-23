@@ -21,6 +21,7 @@ import {
 } from "@/lib/validations/asset.schemas";
 import { Prisma } from "@prisma/client";
 import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
+import { journalBookValue } from "@/lib/finance/asset-book-value";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { nextSlug } from "@/lib/utils/slug-db";
 
@@ -31,7 +32,9 @@ import { nextSlug } from "@/lib/utils/slug-db";
 // A category account, when set, overrides the global one for that asset class
 // (e.g. vehicles vs machinery may post to different fixed-asset accounts).
 // When a slot is unset everywhere the matching journal is skipped silently, the
-// same convention stock journaling uses.
+// same convention stock journaling uses. Pengecualian fail-closed vonis
+// F-2026-10-22-062-V Putusan 3: perolehan berharga (purchaseCost > 0) TIDAK
+// boleh skip senyap — createAsset menolaknya berisik (lihat createAsset).
 type AssetGlCategory = {
   assetAccountId?: number | null
   accumulatedDepreciationAccountId?: number | null
@@ -127,6 +130,9 @@ export async function createAssetCategory(formData: FormData) {
         usefulLife: data.usefulLife ?? null,
         taxDepreciationRate: data.taxDepreciationRate ?? null,
         taxUsefulLife: data.taxUsefulLife ?? null,
+        taxGroupCode: data.taxGroupCode ?? null,
+        taxTypeListed: data.taxTypeListed ?? null,
+        taxDjpDetermination: data.taxDjpDetermination ?? false,
         assetAccountId: data.assetAccountId ?? null,
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
@@ -557,6 +563,9 @@ export async function updateAssetCategory(id: number, formData: FormData) {
         usefulLife: data.usefulLife ?? null,
         taxDepreciationRate: data.taxDepreciationRate ?? null,
         taxUsefulLife: data.taxUsefulLife ?? null,
+        taxGroupCode: data.taxGroupCode ?? null,
+        taxTypeListed: data.taxTypeListed ?? null,
+        taxDjpDetermination: data.taxDjpDetermination ?? false,
         assetAccountId: data.assetAccountId ?? null,
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
@@ -723,6 +732,23 @@ export async function createAsset(formData: FormData) {
         })
       : null;
     const gl = await getAssetGlAccounts(category);
+
+    // Fail-closed perolehan berharga (vonis F-2026-10-22-062-V Putusan 3):
+    // purchaseCost > 0 tanpa akun Aset Tetap atau Kas/Bank = pembuatan
+    // DITOLAK berisik sebelum baris Asset lahir. Dulu jalur ini "skipped
+    // silently": aset lahir tanpa jurnal lalu tetap disusutkan cron.
+    // purchaseCost = 0 tetap boleh lahir tanpa jurnal.
+    if (purchaseCost > 0 && (!gl.fixedAsset || !gl.cashBank)) {
+      const missing: string[] = [];
+      if (!gl.fixedAsset) missing.push("akun Aset Tetap");
+      if (!gl.cashBank) missing.push("akun Kas/Bank");
+      return {
+        success: false,
+        error:
+          `Akun perolehan aset belum dipetakan: ${missing.join(", ")}. ` +
+          `Lengkapi pemetaan pada kategori aset / Pengaturan Mapping Akun sebelum membuat aset berharga.`,
+      };
+    }
 
     const asset = await prisma.$transaction(async (tx) => {
       const created = await tx.asset.create({
@@ -941,9 +967,6 @@ export async function disposeAsset(formData: FormData) {
     // If an "Asset" workflow is configured, this document must be approved before disposal.
     await assertApproved("Asset", data.assetId);
 
-    const grossCost = Number(asset.purchaseCost);
-    const bookValue = Number(asset.currentValue);
-    const gainLoss = safeSubtract(proceeds, bookValue, 0); // positive = gain, negative = loss
     // Resolve GL accounts from the asset's category mapping (falls back to the
     // global Mapping Akun, then env vars).
     const category = asset.categoryId
@@ -953,6 +976,44 @@ export async function disposeAsset(formData: FormData) {
         })
       : null;
     const gl = await getAssetGlAccounts(category);
+
+    // Nilai buku dasar disposal = jurnal POSTED (vonis F-2026-10-22-062-V
+    // Putusan 1), BUKAN cache `currentValue`. Aset berjurnal memakai angka
+    // jurnal; aset legacy tanpa jurnal perolehan tetap jalur subledger
+    // existing (currentValue) supaya bukunya tidak rusak.
+    const postedJournals = await prisma.journal.findMany({
+      where: {
+        referenceId: data.assetId,
+        status: "POSTED",
+        deletedAt: null,
+        OR: [
+          { referenceType: "ASSET_ACQUISITION" },
+          { referenceType: "ASSET_DISPOSAL" },
+          { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+        ],
+      },
+      select: {
+        referenceType: true,
+        entries: { select: { accountId: true, debit: true, credit: true } },
+      },
+    });
+    const posted = journalBookValue(
+      postedJournals.map((j) => ({
+        referenceType: j.referenceType ?? "",
+        lines: j.entries.map((e) => ({ accountId: e.accountId, debit: e.debit, credit: e.credit })),
+      })),
+      {
+        fixedAssetAccountId: gl.fixedAsset || null,
+        accumulatedDepreciationAccountId: gl.accumDep || null,
+      },
+    );
+    const grossCost = posted.hasAcquisitionJournal
+      ? posted.grossCostPosted.toNumber()
+      : Number(asset.purchaseCost);
+    const bookValue = posted.hasAcquisitionJournal
+      ? posted.bookValue.toNumber()
+      : Number(asset.currentValue);
+    const gainLoss = safeSubtract(proceeds, bookValue, 0); // positive = gain, negative = loss
 
     await prisma.$transaction(async (tx) => {
       // Atomically claim the disposal: only the request that flips status away

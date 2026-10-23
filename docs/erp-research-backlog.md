@@ -7493,6 +7493,195 @@ PR #503; seri -V bebas tabrakan per grep origin/main 2026-10-22,
 maks -V terpakai 057-V). Pemilik berikutnya: BOT 3 (inti t_af177f74
 sesudah PR #503 merged + putusan BOT 1 §5A) -> BOT 2 -> BOT 6
 falsifikasi 1-5 di atas.
+## SPEC BOT 5 2026-10-22 — F-2026-10-22-068-S ganti revisi BOM pada order berjalan (inti F-2026-10-20-104)
+
+Status: SPEC DOKUMEN SAJA (tanpa kode/schema/migrasi). Induk F-2026-10-20-104 (c) P1.
+ID bebas terverifikasi: maks -S terpakai 067-S (PR #506 OPEN); 068-S belum ada di
+origin/main ea430e34 maupun PR terbuka (gh pr list 2026-10-22).
+
+Benchmark resmi (akses 2026-10-22):
+- Cetec ERP Change Rev pada WO terbuka: unpick material revisi lama lalu re-pick
+  ke suborder revisi baru, peringatan eksplisit sebelum konfirmasi:
+  https://cetecerp.com/blog/production-management/updating-bom-revisions-on-open-work-orders-in-cetec-erp/
+- Accurate Perintah Kerja: kuantitas bahan baku bisa diubah langsung di formulir
+  Perintah Kerja (tanpa prosedur ganti revisi terpisah di help resmi):
+  https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/buat-perintah-kerja/
+- Zahir: tidak ditemukan prosedur ganti revisi BOM pada order berjalan di help
+  resmi pada akses ini — jangan klaim paritas Zahir (belum terverifikasi).
+
+### 0. Verifikasi live origin/main ea430e34 (2026-10-22, run ini)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- `BomRevision` immutable berversi draft→released→superseded per Product
+  (`prisma/schema.prisma:2288-2333`, `@@unique([productId, revisionNo])`);
+  `BomRevisionMaterial` qty per revisi (`:2322-2332`).
+- Pin revisi HANYA saat ProductionOrder lahir: `createProductionOrder`
+  `effectiveBom.revisionId` → `ProductionOrder.bomRevisionId`
+  (`src/actions/manufacturing.actions.ts:668,700`) dan pin pinjaman ke WO
+  hanya bila `WorkOrder.bomRevisionId == null`
+  (`manufacturing.actions.ts:733-734`). WO tanpa PO tidak pernah ter-pin.
+- Lapis aman SUDAH merged: builder dampak revisi
+  `src/lib/reports/bom-revision-impact.ts:1-14` (header tegas: "Tidak ada
+  mutasi, tidak ada unpick/re-pick (inti F-41(b) ditunda-teknis)") +
+  loader `bom-revision-impact-data.ts` + `buildBomRevisionImpact`
+  menghitung issued/outstanding per baris WO dari MaterialIssue completed.
+  Grep konsumen UI (src/app/src/components *.tsx) = 0 pada run ini.
+
+Belum ada / parsial (TERVERIFIKASI-KODE, grep run ini):
+- ABSEN aksi ganti revisi pada order berjalan: grep
+  `changeBom|ganti revisi|unpick|re-pick` di src/ = 0 aksi; tidak ada aksi
+  yang mengubah `WorkOrder.bomRevisionId`/`ProductionOrder.bomRevisionId`
+  sesudah pin, membekukan material ter-issue, atau mencatat alasan ganti.
+- `ProductionOrderMaterial` dibekukan saat PO lahir
+  (`manufacturing.actions.ts:710-714`); ganti revisi tidak menyentuh baris
+  material PO berjalan — kebutuhan sesudah ganti tidak terhitung.
+- Reservasi stok per WO (F-2026-10-22-045-S/`StockReservation`) membaca
+  kebutuhan WO berjalan; interaksi ganti revisi → reservasi belum diatur
+  di spec mana pun (pertanyaan terbuka Q-BOM68-5 di bawah).
+
+### 1. Workflow specification
+
+Aktor: Kepala Produksi/Kepala Bengkel (pengaju), Pimpinan Produksi
+(persetujuan bila material sudah ter-issue), Operator Produksi (eksekusi
+issue lanjutan), Admin (baca jejak).
+
+Alur (USULAN — belum disetujui pemilik proses):
+1. Di detail WO/PO berstatus berjalan, pengaju memilih "Ganti Revisi BOM",
+   memilih revisi target (hanya revisi `released` produk yang sama) dan
+   wajib mengisi alasan.
+2. Sistem menampilkan pratinjau delta SEBELUM simpan (memakai builder
+   `bom-revision-impact` existing, bukan hitungan baru): per item —
+   kebutuhan revisi lama, sudah ter-issue (MaterialIssue completed),
+   kebutuhan revisi baru, selisih tambahan/kembali. Baris sudah ter-issue
+   ditandai TERKUNCI (tidak diubah, tidak di-unpick otomatis).
+3. Bila belum ada material ter-issue: ganti pin langsung sesudah konfirmasi.
+   Bila sudah ada ter-issue: wajib persetujuan Pimpinan Produksi (status
+   pengajuan menunggu → disetujui/ditolak) sebelum pin berubah.
+4. Sesudah pin berubah: kebutuhan tambahan = selisih positif per item
+   (kebutuhan baru − sudah ter-issue, jepit ≥ 0); kekurangan kebutuhan
+   (selisih negatif) TIDAK menarik kembali stok yang sudah keluar —
+   tampil sebagai "kelebihan ter-issue terhadap revisi baru", bukan
+   retur otomatis. Issue berikutnya membaca kebutuhan revisi baru.
+5. Jejak wajib: ActivityLog nilai lama/baru (bomRevisionId lama→baru,
+   alasan, pengaju, penyetuju) — pola histori endDate F-2026-10-21-035.
+
+Dokumen masuk: WO/PO berjalan + revisi BOM released target.
+Dokumen keluar: TIDAK ada dokumen baru; pin berubah + delta tampil +
+ActivityLog. DILARANG membuat MaterialIssue/retur/jurnal otomatis dari
+aksi ganti revisi (lihat BR-BOM68-04).
+
+### 2. Role/permission matrix (permission nyata katalog)
+
+Baris = aksi, kolom = peran. Permission dari
+`src/lib/auth/module-catalog.generated.ts` (TERVERIFIKASI-KODE run ini):
+`view_work_orders` (:253), `edit_work_orders` (:255),
+`complete_work_orders` (:257), `view_production_orders` (:258),
+`edit_production_orders` (:260), `view_material_issues` (:224).
+
+| Aksi | Pengaju | Penyetuju | Operator | Admin baca |
+|---|---|---|---|---|
+| Lihat pratinjau delta revisi | view_work_orders | view_work_orders | view_work_orders | view_work_orders |
+| Ajukan ganti revisi (belum ter-issue) | edit_work_orders | — | — | — |
+| Ajukan ganti revisi (sudah ter-issue) | edit_work_orders | — | — | — |
+| Setujui/tolak pengajuan | — | complete_work_orders (USULAN, Q-BOM68-2) | — | — |
+| Issue material sesudah ganti | — | — | create_material_issues | — |
+
+Permission BARU khusus ganti revisi = Q-BOM68-2 ke BOT 1; jangan
+mengarang permission key di spec ini.
+
+### 3. Status-transition matrix
+
+| Objek | Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|---|
+| Pin revisi WO/PO | revisi lama | ganti disetujui/dikonfirmasi | revisi baru (released, produk sama) | status order berjalan; revisi target released |
+| Pin revisi WO/PO | revisi lama | order completed/closed/cancelled | DITOLAK | F-2026-10-21-009 tutup job |
+| Pengajuan (bila ter-issue) | menunggu | penyetuju setuju | diterapkan (pin berubah satu tx) | complete_work_orders (USULAN) |
+| Pengajuan | menunggu | penyetuju tolak | ditolak (pin tetap) | alasan tolak wajib (USULAN) |
+| Baris material ter-issue | ter-issue | ganti revisi | TETAP ter-issue, terkunci | tidak ada unpick otomatis |
+| Kebutuhan baris | kebutuhan lama | pin berubah | kebutuhan baru; selisih tampil | jepit ≥ 0 untuk tambahan |
+
+Status pengajuan disimpan di mana (model/kolom/ActivityLog) = kebutuhan
+data untuk BOT 3, BUKAN skema di spec ini (Q-BOM68-3).
+
+### 4. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-BOM68-01 | Revisi target hanya `released` dan produk sama dengan order; revisi draft/superseded ditolak berisik menyebut statusnya | USULAN (pola status BomRevision schema:2295 TERVERIFIKASI-KODE) |
+| BR-BOM68-02 | Material sudah ter-issue (MaterialIssue completed) TIDAK PERNAH di-unpick/di-retur otomatis oleh ganti revisi; ia terkunci dan tetap biaya job | USULAN — menyentuh stok/biaya: BUTUH-VONIS BOT 4 bila ada yang mengusulkan unpick berjurnal |
+| BR-BOM68-03 | Kebutuhan tambahan = max(kebutuhan revisi baru − sudah ter-issue, 0) per item; tidak ada pengeluaran ulang penuh (anti dobel stok keluar) | USULAN (pola builder bom-revision-impact.ts:8-10 TERVERIFIKASI-KODE) |
+| BR-BOM68-04 | Aksi ganti revisi TIDAK menerbitkan MaterialIssue, retur, ProductionCost, atau jurnal apa pun; ia hanya mengubah pin + mencatat jejak | USULAN — BUTUH-VONIS BOT 4 untuk pengecualian apa pun |
+| BR-BOM68-05 | Alasan ganti wajib; jejak ActivityLog simpan revisi lama/baru + pengaju + penyetuju | USULAN (pola F-2026-10-21-035) |
+| BR-BOM68-06 | Order completed/closed/cancelled tidak bisa ganti revisi | USULAN (guard tutup job F-2026-10-21-009 TERVERIFIKASI-KODE) |
+| BR-BOM68-07 | Bila PO dan WO sama-sama ter-pin, ganti berlaku per dokumen yang dipilih; sistem wajib menampilkan keduanya dan melarang ganti diam-diam salah satu (satu sumber pin per dokumen, bukan pin global produk) | USULAN — Q-BOM68-4 ke BOT 1/BOT 3 |
+| BR-BOM68-08 | Baris WO tanpa tautan baris issue (workOrderItemId null, legacy) dihitung per itemId seperti builder existing dan ditandai tak-tertaut-baris; jangan ditebak ke baris tertentu | TERVERIFIKASI-KODE pola (bom-revision-impact.ts:71-90) |
+| BR-BOM68-09 | Selisih harga/biaya akibat ganti revisi TIDAK mengubah harga jual/quotation; perubahan nilai jual = change order F-2026-10-20-103 (F-2026-10-22-066-S), bukan jalur ini | USULAN (pemisahan domain F-103) |
+| BR-BOM68-10 | Reservasi stok aktif (F-045-S) atas kebutuhan lama tidak dibatalkan diam-diam; tampilkan sebagai perlu-tinjau sesudah ganti (perilaku pasti = Q-BOM68-5) | USULAN — Q-BOM68-5 |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate (help resmi) | Zahir (help resmi) | ISF hari ini |
+|---|---|---|---|
+| Ubah qty bahan langsung di Perintah Kerja | ADA (URL §benchmark) | belum terverifikasi | pin revisi saja, qty WO bisa edit form |
+| Ganti revisi BOM order berjalan + unpick/re-pick | tidak ditemukan di help resmi (bukan klaim absen vendor) | belum terverifikasi | ABSEN (spec ini) |
+| Pratinjau dampak revisi ke order terbuka | tidak ditemukan | belum terverifikasi | builder ADA, UI ABSEN |
+
+### 6. Acceptance criteria + edge cases (draf)
+
+BOT 3 (backend, AC-BOM68-1..5): (1) ganti pin WO tanpa issue: pin berubah,
+delta benar, ActivityLog lama/baru; (2) sudah ter-issue 3 dari 5, revisi
+baru butuh 4 → tambahan terbaca 1, yang 3 terkunci; (3) revisi baru butuh
+2 < ter-issue 3 → tambahan 0, kelebihan tampil, stok tidak bergerak;
+(4) revisi target draft/produk lain/order completed → ditolak, pin tetap;
+(5) cabut penjaga status target = tes MERAH (revisi draft bisa ter-pin).
+
+BOT 2 (UI fitur dulu, AC-BOM68-6..8): (6) pratinjau delta tampil SEBELUM
+tombol simpan aktif, baris terkunci berlabel eksplisit; (7) kata UI
+verbatim dari server, UI tidak menghitung delta sendiri; (8) konsumen UI
+untuk `loadBomRevisionImpact` yang hari ini yatim (grep=0) dibangun di
+detail WO/PO, bukan halaman baru tanpa putusan rute BOT 1.
+
+BOT 6 (falsifikasi): ganti revisi tidak melahirkan StockMove/jurnal/
+MaterialIssue (query nol baris baru); dua pengajuan bersamaan pada order
+sama → satu menang, satu ditolak konflik; issue sesudah ganti membaca
+kebutuhan baru (bukan lama); cabut ActivityLog = MERAH.
+
+Edge: WO tanpa PO (pin hanya di WO), PO tanpa WO, item baru hanya ada di
+revisi baru (ter-issue=0), item hilang di revisi baru tapi sudah ter-issue
+(terkunci + kelebihan), satuan sama diasumsikan — konversi satuan di luar
+spec ini.
+
+### 7. Pertanyaan terbuka
+
+- Q-BOM68-1 (BOT 1): buka inti ganti-pin sekarang, atau tetap ditunda
+  sesudah F-103 inti (PR #503) diputus? Lapis aman builder sudah merged.
+- Q-BOM68-2 (BOT 1): permission persetujuan — pakai `complete_work_orders`
+  existing atau key baru? Jangan bangun key sebelum putusan.
+- Q-BOM68-3 (BOT 3): tempat status pengajuan (model ringan vs ActivityLog
+  + kolom pin) — ajukan bentuk fisik sebelum migrasi.
+- Q-BOM68-4 (BOT 1/BOT 3): pin WO vs PO berbeda sesudah ganti parsial —
+  sumber kebenaran kebutuhan issue yang mana?
+- Q-BOM68-5 (BOT 1 + pemilik F-045-S): nasib StockReservation aktif saat
+  kebutuhan berubah.
+- Q-BOM68-6 (BOT 4, BUTUH-VONIS): konfirmasi BR-BOM68-02/04 — tanpa
+  unpick berjurnal dan tanpa jurnal dari aksi ganti. Tampilan delta saja
+  TIDAK ditahan vonis ini.
+
+### 8. Backlog implementasi (turunan spec ini; induk F-2026-10-20-104)
+
+1. BOT 3 (@backend-prisma-inventory-workshop): inti ganti pin + pengajuan
+   + delta server, SESUDAH Q-BOM68-1/2/3 diputus BOT 1. Parent = kartu spec ini.
+2. BOT 2 (@frontend-ui-ux-next-js): UI pratinjau delta + aksi ganti di
+   detail WO/PO (fitur, bukan polish), SESUDAH kontrak BOT 3 stabil.
+   Parent = kartu spec ini.
+3. BOT 6: falsifikasi §6 atas head BOT 3/BOT 2.
+
+### Yang TIDAK diusulkan run ini
+- Unpick/re-pick otomatis ala Cetec penuh: stok sudah keluar ke WIP;
+  tanpa vonis BOT 4 + bukti kebutuhan, default TERKUNCI (BR-BOM68-02).
+- Item alternatif/substitusi otomatis: sesudah status part + ganti revisi
+  terbaca (lanjutan F-2026-10-20-105), bukan sekarang.
+- Mengubah ProductionOrderMaterial beku order completed: dilarang.
 
 
 ## SPEC BOT 5 — Registri part terpasang per kendaraan (F-2026-10-22-072-S, induk F-2026-10-21-024)
@@ -10659,7 +10848,6 @@ BOT 5: antrean F-089-S tidak berubah oleh vonis ini.
 
 ---
 
-<<<<<<< HEAD
 ## VONIS BOT 4 2026-10-22 — F-2026-10-22-075-V Q-SUB69-5 (substitusi part baris WO, spec F-2026-10-22-069-S PR #510)
 
 Pemilik vonis: BOT 4. Pertanyaan: Q-SUB69-5 + BR-SUB69-07 spec
@@ -10759,7 +10947,9 @@ Pemilik berikutnya: BOT 1 putus Q-SUB69-1/2/3/4 → BOT 3 inti
 substitusi → BOT 2 UI → BOT 6 AC-SUB69-1..10 + V1..V4 di atas.
 BOT 4 selesai untuk Q-SUB69-5; tidak ada angka statutori/pajak
 baru (nol PPN/PPh berubah: faktur tetap dari grandTotal berjalan).
-=======
+
+---
+
 ## SPEC BOT 5 2026-10-22 — F-2026-10-22-069-S item alternatif (substitusi part) untuk baris WorkOrder
 
 Status: SPEC DOKUMEN SAJA (tanpa kode/schema/migrasi). Tindak lanjut eksplisit
@@ -11009,7 +11199,6 @@ saran ulang); relasi dinonaktifkan di antara saran tampil dan simpan
   tahap ini).
 - Mengubah kolom `WorkOrderItem.status` terkelola (inti F-105 yang
   ditunda-teknis) — spec ini hanya membaca status turunan existing.
->>>>>>> 2e3a2def (docs(business): spec F-2026-10-22-069-S item alternatif part WO (lanjutan backlog F-105))
 
 ## SPEC BOT 5 — Pisah run payroll mingguan/bulanan (F-2026-10-22-076-S, gap domain h tanpa F-ID induk baru)
 
@@ -11565,3 +11754,255 @@ vonis ini) -> BOT 3 (inti dalam batas §4 + ajukan rancangan
 field cicilan-mingguan & agregator BPJS ke BOT 4) ->
 BOT 2 (label/alasan backend) -> BOT 6 (AC-PF-1..8 spec +
 AC-PF2-1..5 vonis ini).
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-062-V Aset tetap & penyusutan: sumber nilai buku tunggal, gerbang metode, perolehan fail-closed
+
+Status: PUTUSAN BOT 4 (kartu t_f71c3193). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Domain BOT 4 #6 (aset tetap & penyusutan) belum pernah punya F-ID/vonis, padahal perolehan, cron penyusutan bulanan, disposal, dan laporan selisih fiskal sudah memposting/membaca angka di main. Vonis ini menutup celah itu. Setiap migrasi dari vonis ini = kartu BOT 3 terpisah, klaim `prisma/schema.prisma` di board, sesudah vonis ini masuk main.
+
+### Bukti repo terverifikasi run ini (origin/main aa7f58ed)
+
+- Perolehan: `createAsset` (`src/actions/asset.actions.ts:749-755`) memposting Dr Aset Tetap / Cr Kas-Bank HANYA bila `gl.fixedAsset && gl.cashBank` terpetakan; bila tidak, aset lahir TANPA jurnal dan TANPA pesan kegagalan ke operator (komentar kode: "Skipped silently"). Aset yang sama lalu tetap disusutkan cron (akumulasi bertambah tanpa saldo bruto lawan di GL).
+- Penyusutan: cron `src/app/api/cron/asset-depreciation/route.ts` membaca `Asset.currentValue` (kolom cache, schema:3737) lewat `Number(...)` (route:120-122), menghitung dengan float JS di `computeMonthlyDepreciation` (`src/lib/finance/asset-depreciation.ts:35-75`), lalu menulis TIGA representasi sekaligus dalam satu tx: `Asset.currentValue` baru, baris `AssetHistory type=depreciation`, dan jurnal POSTED `referenceType=ASSET_DEPRECIATION_YYYYMM` (route:178-231).
+- Metode: `Asset.depreciationMethod` = String bebas (`optionalStr(50)`, `src/lib/validations/asset.schemas.ts:128`); `computeMonthlyDepreciation` hanya mengenal `declining_balance`, string lain APA PUN jatuh ke garis lurus lewat usefulLife/tarif (asset-depreciation.ts:52-66). Metode komersial sah lain (unit produksi, jumlah angka tahun) tidak dibedakan dari salah ketik.
+- Fiskal: `AssetCategory.taxDepreciationRate`/`taxUsefulLife` (schema:3658-3662) bebas tanpa kelompok fiskal; laporan `src/lib/reports/depreciation-difference.ts` menghitung fiskal straight-line dari harga perolehan dan akuntansi dari `currentValue` HARI INI (baris 79, 100) — angka akuntansi laporan tahun lalu berubah bila cron bulan ini jalan.
+- Nilai buku laporan: `src/lib/reports/asset-ledger.ts:9` sudah menyatakan aturan benar (akumulasi HANYA dari AssetHistory, currentValue = snapshot hari ini) tetapi tidak ada rekonsiliasi yang membuktikan ketiga jalur (jurnal, history, currentValue) sama.
+- Disposal SUDAH fail-closed untuk aset berjurnal (asset.actions.ts:996-1010) — vonis ini menegaskan pola itu dan melarang regresi.
+
+### Dasar regulasi (diakses 2026-10-22)
+
+- UU PPh Pasal 11 (penyusutan harta berwujud): metode fiskal hanya garis lurus dan saldo menurun (bangunan hanya garis lurus); kelompok bukan bangunan 1/2/3/4 masa manfaat 4/8/16/20 tahun, tarif garis lurus 25%/12,5%/6,25%/5%, saldo menurun 50%/25%/12,5%/10%; bangunan permanen 20 tahun 5%, tidak permanen 10 tahun 10%; penyusutan dimulai bulan dilakukannya pengeluaran. Ringkasan resmi DJP: https://www.pajak.go.id/id/penyusutan-dan-amortisasi (akses 2026-10-22).
+- PMK Nomor 72 Tahun 2023: lampiran jenis harta per kelompok fiskal; jenis tidak tercantum memakai kelompok 3 atau penetapan DJP (dirujuk halaman DJP di atas).
+- PSAK 16 (aset tetap): metode penyusutan mencerminkan pola konsumsi manfaat (garis lurus, saldo menurun, unit produksi sah secara komersial); nilai residu dan masa manfaat ditelaah berkala. Label: rujukan standar akuntansi, bukan dasar tarif fiskal.
+
+### Putusan 1 — Sumber nilai buku tunggal = jurnal POSTED
+
+Nilai buku akuntansi satu aset pada satu tanggal = harga perolehan berjurnal − Σ kredit akun akumulasi penyusutan pada `JournalEntry` POSTED (status POSTED, bukan DRAFT/deleted) yang tertaut jurnal perolehan/penyusutan/disposal aset itu. `Asset.currentValue` dan Σ `AssetHistory type=depreciation` adalah CACHE turunan: wajib sama dengan angka jurnal; selisih antara ketiga jalur tampil sebagai TEMUAN rekonsiliasi aset (per aset, per akun) di read-model, TIDAK dipilih diam-diam salah satu dan TIDAK menimpa jurnal. Mutasi berikutnya (penyusutan bulan berikut, disposal) WAJIB membaca dasar dari jurnal POSTED, bukan dari `currentValue`. Disposal yang memakai `currentValue` sebagai nilai buku (asset.actions.ts:945) wajib diganti dasar jurnal sebelum inti ini ditutup.
+
+Larangan: menulis `currentValue` tanpa jurnal pasangan dalam tx yang sama; memperbaiki selisih dengan mengedit `currentValue`/`AssetHistory` langsung (koreksi hanya jurnal koreksi/reversal di periode terbuka, `assertPeriodOpen` dalam tx).
+
+### Putusan 2 — Gerbang metode: fiskal dua metode, komersial terdaftar
+
+- Metode FISKAL yang boleh dipakai menghitung sisi pajak hanya `straight_line` dan `declining_balance`, dengan kelompok fiskal PMK 72/2023 (kelompok 1/2/3/4, bangunan permanen, bangunan tidak permanen) dan tarif statutoris UU PPh Pasal 11 sebagai tabel VALIDASI di master bertanggal efektif — bukan konstanta hitung di logika. Penentuan kelompok dibedakan tegas: (a) jenis harta TERCANTUM di lampiran PMK 72/2023 → kelompok lampiran WAJIB terisi; kategori dengan tarif/umur fiskal terisi tetapi kelompok fiskal kosong = konfigurasi tidak lengkap: sisi fiskal TIDAK dihitung dan aset tampil di daftar "fiskal belum dapat dihitung" (pola jujur existing depreciation-difference dipertahankan). (b) jenis harta TIDAK tercantum di lampiran PMK 72/2023 → kelompok 3 ADALAH default statutoris UU PPh Pasal 11 ayat (6)/PMK 72/2023 (atau kelompok 1/2/4 bila ada penetapan DJP), BUKAN tebakan kode: kelompok fiskal kosong pada jenis tidak tercantum = fiskal TETAP dihitung sebagai kelompok 3, dan penetapan DJP bila ada mengalahkan default itu.
+- Metode KOMERSIAL di luar dua itu (mis. unit produksi, jumlah angka tahun) sah sebagai kebijakan akuntansi PSAK 16 tetapi statusnya ANALITIS NON-GL: tidak boleh melahirkan jurnal penyusutan sampai mesin hitung + vonis lanjutannya ada. Cron WAJIB menolak (error berisik per aset, tercatat di hasil cron), bukan menjatuhkannya diam-diam ke garis lurus.
+- `depreciationMethod` string bebas di luar daftar terdaftar = ditolak saat simpan aset/kategori (validasi Zod enum) DAN ditolak lagi di cron (data lama). Daftar terdaftar hidup satu tempat diekspor konstan: `straight_line`, `declining_balance`, plus metode analitis terdaftar eksplisit bila ditambah lewat vonis.
+
+### Putusan 3 — Perolehan tanpa akun = fail-closed berisik
+
+`createAsset` dengan `purchaseCost > 0`: bila akun Aset Tetap atau Kas/Bank tidak terpetakan, pembuatan DITOLAK dengan pesan menyebut akun yang hilang + arah melengkapi (kategori aset / Pengaturan Mapping Akun), pola sama disposal (asset.actions.ts:996-1010). "Skipped silently" (baris 749-755 + komentar helper baris 33-34) DILARANG untuk perolehan berharga. Aset `purchaseCost = 0` tetap boleh lahir tanpa jurnal. Aset legacy subledger-only (sudah terlanjur lahir tanpa jurnal perolehan): tampil di temuan rekonsiliasi Putusan 1 sebagai "belum berjurnal", disposalnya tetap jalur non-GL existing; DILARANG memposting jurnal perolehan susulan bertanggal lampau tanpa jurnal koreksi berperiode terbuka.
+
+### Putusan 4 — Hitung uang Decimal, mulai bulan pengeluaran, idempoten per (aset, masa)
+
+- Seluruh hitung penyusutan (dasar, tarif, clamp residu) memakai Decimal/`safeRound` sen dari `src/lib/utils/math`; `Number(...)` + float di jalur uang cron DILARANG. Pembulatan: bulanan dibulatkan ke sen saat jurnal; bulan terakhir clamp agar nilai buku jurnal berhenti PERSIS di nilai residu (bukan lewat, bukan kurang).
+- Mulai penyusutan = bulan pengeluaran perolehan (UU PPh Pasal 11), bulan penuh, tanggal jurnal = awal masa — perilaku cron existing (route:41-46) DIPERTAHANKAN sebagai putusan, bukan kebetulan. Aset hasil pengerjaan sendiri/belum digunakan: mulai bulan selesai/digunakan = `BUTUH-VONIS-AKUNTAN` per pola, jangan tebak di kode.
+- Satu jurnal penyusutan per (aset, masa): kunci `referenceType=ASSET_DEPRECIATION_YYYYMM` + `referenceId=assetId` dengan unique (referenceType, referenceId) schema dipertahankan; replay cron bulan sama = nol jurnal baru. `assertPeriodOpen` WAJIB di dalam tx posting per aset (bukan hanya sebelum loop), dan penolakan periode tertutup = error tercatat, bukan skip.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 3 (inti, kartu terpisah sesudah vonis masuk main; klaim schema di board dulu): (1) rekonsiliasi tiga jalur + read-model temuan; (2) dasar mutasi dari jurnal POSTED; (3) enum metode + gerbang cron; (4) kelompok fiskal di kategori (kolom baru = migrasi, koordinasi BOT 4); (5) perolehan fail-closed; (6) hitung Decimal. Tanpa migrasi di kartu vonis ini.
+- BOT 2: tampilkan temuan rekonsiliasi + daftar fiskal-belum-dihitung apa adanya dari backend; UI tidak menentukan metode/kelompok dan tidak menghitung ulang penyusutan.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): F62-1 edit `currentValue` manual tidak mengubah nilai buku read-model (dasar jurnal); F62-2 selisih history vs jurnal tampil sebagai temuan, bukan ditimpa; F62-3 metode `units_of_production` tersimpan/diproses cron tanpa jurnal + error berisik; F62-4 string metode ngawur ditolak Zod; F62-5 perolehan Rp10.000.000 tanpa akun Aset Tetap ditolak berisik, nol baris Asset lahir; F62-6 replay cron bulan sama = jurnal tetap 1 per aset; F62-7 tarif fiskal terisi tanpa kelompok: (i) jenis tercantum PMK 72/2023 = fiskal tidak dihitung + tampil belum-dihitung; (ii) jenis tidak tercantum + kelompok kosong = fiskal TETAP terhitung kelompok 3 statutoris (F62-10); F62-8 bulan terakhir nilai buku jurnal berhenti persis di residu (uji cost 1.000.000, residu 100.000, umur 3 tahun); F62-9 periode tertutup: cron menolak dalam tx, nol jurnal/history/currentValue berubah; F62-10 jenis tidak tercantum PMK 72/2023 + kelompok kosong → fiskal kelompok 3 statutoris terhitung, dan penetapan DJP bila ada mengalahkan default; jenis tercantum + kelompok kosong → tetap belum-dihitung (bukan kelompok 3).
+
+Klaim kepatuhan: vonis ini mengatur perlakuan internal ISF berdasar UU PPh Pasal 11 + PMK 72/2023 (sumber DJP di atas, akses 2026-10-22) dan PSAK 16; BUKAN klaim SPT Tahunan sah — daftar penyusutan fiskal final tetap wajib cocok lampiran SPT Tahunan badan.
+
+ID vonis ini **F-2026-10-22-062-V** (tertinggi terverifikasi di origin/main aa7f58ed: F-2026-10-22-057-V; 058-061 terpakai PR terbuka). Pemilik berikutnya: BOT 3 (inti di atas) -> BOT 2 -> BOT 6 F62-1..F62-10.
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-108-V: biaya perbaikan menambah masa manfaat (kapitalisasi sesudah perolehan, PMK 72/2023 Pasal 7) (lanjutan terbuka F-2026-10-22-062-V "Yang TIDAK diputus" + F-2026-10-23-107-V)
+
+Status: PUTUSAN BOT 4 (kartu t_3078688c, siklus standby 04:00). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Menutup butir terbuka yang sengaja TIDAK diputus F-107-V ("biaya perbaikan yang menambah masa manfaat (PMK 72/2023 Pasal 7 — ditambah ke nilai sisa buku fiskal, mulai bulan pengeluaran perbaikan/selesai pengerjaan perbaikan) = vonis tersendiri bila kasus nyata muncul") dan ketiadaan perlakuan apa pun di F-062-V untuk pengeluaran sesudah perolehan. Amortisasi tak berwujud (UU PPh 11A) dan persetujuan perubahan metode tetap TIDAK diputus di sini.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 04:00, origin/main cc2bb835)
+
+- Kanban BOT 4 non-done: hanya kartu ini (t_3078688c running) + t_f15ecf3b scheduled placeholder salah-alamat (Lead sendiri menyatakan abaikan). Kartu peminta BOT 3 t_99cb19e4 (blocked) ter-gate merge BOT 1 atas #599+#597+#605 — vonisnya (F-103-V/F-105-V) sudah terbit, BUKAN menunggu vonis baru.
+- PR vonis BOT 4 terbit semua ter-gate merge Lead/BOT 6: #611 (F-107-V) MERGEABLE/BLOCKED head fa2c409e CI 6/6 hijau; #608/#605/#597 MERGEABLE/BEHIND; #602 (inti F-062 BOT 3) MERGEABLE/BEHIND head dafba0a8 CI 6/6 hijau — inti perbaikan di bawah menempel sesudah #602 merged.
+- Sisa label BUTUH-VONIS-AKUNTAN di backlog main semuanya per-kasus (sewa mess ragu Q-SEWA-3, PPN masukan kegiatan dibebaskan Q-SEWA-6, pengalihan hak PP 34/2016 sudah bervonis F-050-V PR #411, scrap sengketa, koreksi Kelas C F-107) — butuh kasus nyata, bukan riset bebas. Maka riset berikutnya = butir terbuka F-107-V ini.
+
+### Bukti repo terverifikasi run ini (origin/main cc2bb835 + head PR #602 dafba0a8)
+
+- Model `Asset` (schema:3986-4026) tanpa field apa pun untuk pengeluaran sesudah perolehan: tidak ada kapitalisasi/penambahan biaya, tanggal selesai pengerjaan perbaikan, atau masa manfaat sesudah perbaikan. Satu-satunya jalur menaikkan nilai = buat aset baru.
+- Mesin penyusutan (main `src/lib/finance/asset-depreciation.ts:35-75`; versi #602 Decimal, struktur sama): garis lurus bulanan = `(purchaseCost − residu) / (categoryUsefulLife × 12)` dari `purchaseCost` AWAL selamanya; tidak ada basis nilai-buku-plus-kapitalisasi, tidak ada sisa masa manfaat yang dihitung ulang, tidak ada plafon kelompok. Biaya perbaikan nyata hari ini hanya bisa dibebankan langsung (beban periode) atau dipaksa jadi aset baru terpisah — keduanya salah perlakuan untuk perbaikan bermasa manfaat > 1 tahun (PMK 72/2023 Pasal 7 ayat (1)).
+- F-062-V Putusan 1/4 tetap berlaku utuh: nilai buku dari jurnal POSTED, hitung Decimal, idempoten per (aset, masa), `assertPeriodOpen` dalam tx, bulan terakhir clamp persis ke residu. Vonis ini HANYA menambah peristiwa kapitalisasi + basis fiskal sesudahnya.
+- Catatan jujur: belum ada bukti kasus perbaikan ISF nyata tercatat di repo/board; vonis ini menutup celah aturan SEBELUM inti dibangun dengan asumsi "perbaikan = beban langsung / aset baru", bukan mengklaim kasus sudah terjadi.
+
+### Dasar regulasi (resmi DJP, akses 2026-10-23)
+
+- UU PPh Pasal 11 ayat (1): penyusutan atas "pengeluaran untuk pembelian, pendirian, penambahan, perbaikan, atau perubahan harta berwujud ... yang mempunyai masa manfaat lebih dari 1 (satu) tahun" dilakukan dalam bagian sama besar (garis lurus) atau menurun (saldo menurun, bukan bangunan) selama masa manfaat. Sumber: halaman DJP "Penyusutan dan Amortisasi" (pembaruan 2025-05-28): https://www.pajak.go.id/id/penyusutan-dan-amortisasi (akses 2026-10-23).
+- PMK Nomor 72 Tahun 2023 Pasal 7: (1) biaya perbaikan atas harta berwujud yang dimiliki dan digunakan untuk 3M, bermasa manfaat > 1 tahun, dibebankan melalui penyusutan; (2) biaya perbaikan DITAMBAHKAN pada nilai sisa buku fiskal harta tersebut; penghitungan sesudahnya: perbaikan TIDAK menambah masa manfaat → sesuai SISA masa manfaat fiskal; perbaikan MENAMBAH masa manfaat → sesuai sisa masa manfaat fiskal DITAMBAH tambahan masa manfaat akibat perbaikan, PALING LAMA masa manfaat kelompok harta itu (kecuali bangunan permanen yang disusutkan menurut masa manfaat sebenarnya berdasar pembukuan WP). Penyusutan atas hasil penjumlahan dimulai bulan pengeluaran perbaikan, kecuali perbaikan masih dalam pengerjaan → bulan selesainya pengerjaan perbaikan. Bunyi diringkas halaman DJP di atas bagian "Penyusutan atas Biaya Perbaikan Harta Berwujud" + siaran pers DJP PMK-72/2023: https://www.pajak.go.id/index.php/id/siaran-pers/pmk-72-tahun-2023-terbit-berikut-pokok-aturannya (akses 2026-10-23).
+- Contoh resmi DJP (artikel pegawai DJP di pajak.go.id, pendapat pribadi penulis, BUKAN sikap instansi — label jujur): truk kelompok 2 Rp300.000.000 (masa manfaat fiskal 8 tahun, garis lurus 12,5%); sesudah 5 tahun nilai sisa buku fiskal Rp112.500.000; ganti komponen mesin Rp100.000.000 menambah masa manfaat 2 tahun → nilai sesudah perbaikan Rp212.500.000 disusutkan selama 5 tahun (sisa 3 + tambah 2), tarif terhitung ulang 20%/tahun; tambahan yang membuat sisa manfaat 9 tahun DITOLAK — tetap plafon kelompok 8 tahun. https://www.pajak.go.id/index.php/id/artikel/biaya-perbaikan-menambah-masa-manfaat-aset-begini-pengaturannya (akses 2026-10-23).
+- PSAK 16: pengeluaran sesudah perolehan awal yang kemungkinan besar memberi manfaat ekonomis masa depan (kapasitas, mutu, standar kinerja, perpanjangan masa manfaat) diakui dalam jumlah tercatat aset; biaya servis/pemeliharaan rutin harian = beban periode. Komponen signifikan yang diganti: nilai tercatat komponen lama dihentikan pengakuannya. Label: rujukan standar akuntansi sisi komersial, BUKAN dasar fiskal.
+
+### Putusan 1 — Gerbang kapitalisasi vs beban (fail-closed, satu-satunya pintu)
+
+Pengeluaran atas aset existing hanya boleh dikapitalisasi bila SEMUA terpenuhi dan tercatat terstruktur per peristiwa:
+
+- (a) aset terdaftar dan masih dimiliki+digunakan untuk 3M (aset sudah disposal/dijual = pengeluaran atasnya bukan kapitalisasi aset ini);
+- (b) masa manfaat pengeluaran itu sendiri > 1 tahun — perawatan/servis rutin yang berulang ≤ 1 tahun (servis berkala, ganti suku cadang rutin tahunan) = BEBAN periode, DILARANG dikapitalisasi walau nominal besar;
+- (c) memberi manfaat masa depan terukur: memperpanjang masa manfaat, menambah kapasitas, menaikkan mutu produksi/standar kinerja (bukti: uraian pekerjaan + dasar penilai bernama, bukan label bebas "perbaikan besar");
+- (d) jumlah dapat diukur andal dari dokumen sumber (VendorBill/faktur/bukti bayar tertaut).
+
+Satu syarat gugur = beban periode lewat jalur biaya existing, TANPA jurnal kapitalisasi. Klasifikasi tidak boleh dipilih diam-diam oleh mesin dari nominal: ambang rupiah semata DITOLAK sebagai penentu (nominal besar ≠ kapitalisasi; nominal kecil yang memenuhi (a)-(d) tetap kapitalisasi).
+
+### Putusan 2 — Perlakuan fiskal atas kapitalisasi (PMK 72/2023 Pasal 7, mengikat)
+
+- Nilai sisa buku FISKAL sesudah perbaikan = nilai sisa buku fiskal sebelum perbaikan + biaya perbaikan (sen persis, Decimal). TIDAK ada aset fiskal baru dan TIDAK ada kelompok/tarif fiskal baru untuk biaya perbaikan itu sendiri; ia mengikuti kelompok + metode fiskal aset induk (F-062-V Putusan 2: hanya garis lurus/saldo menurun fiskal).
+- Sisa masa manfaat fiskal penghitungan ulang: (i) perbaikan tidak menambah masa manfaat → sisa masa manfaat fiskal aset berjalan; (ii) menambah → sisa + tambahan masa manfaat akibat perbaikan, dengan PLAFON TOTAL tidak melebihi masa manfaat kelompok aset (PMK 72/2023 Pasal 7; contoh DJP: sisa terhitung 9 tahun pada kelompok 2 (8 tahun) → dipakai 8 tahun). Tambahan masa manfaat wajib angka terstruktur (bulan) dari penilai bernama, bukan tebakan operator; klaim tambahan tanpa dasar = diperlakukan (i).
+- Saat mulai penyusutan atas hasil penjumlahan = bulan pengeluaran perbaikan; perbaikan masih dalam pengerjaan = bulan selesai pengerjaan perbaikan (peristiwa bertanggal terstruktur, pola Kelas B F-107-V). Bulan-bulan sebelum peristiwa itu tetap tarif/jadwal lama — TIDAK ada hitung ulang retroaktif masa yang sudah berjurnal fiskal/komersial.
+- Metode fiskal tidak berubah oleh perbaikan (taat asas): aset garis lurus tetap garis lurus atas basis baru selama sisa masa manfaat terhitung ulang (tarif efektif = 1/sisa masa manfaat untuk garis lurus, contoh DJP 20% pada sisa 5 tahun); aset saldo menurun tetap menerapkan tarif kelompok atas nilai sisa buku baru. Bangunan hanya garis lurus.
+- Contoh wajib (angka DJP di atas): perolehan 300.000.000, kelompok 2, fiskal garis lurus; kapitalisasi 100.000.000 pada awal tahun ke-6; nilai sisa buku fiskal sebelum 112.500.000 → sesudah 212.500.000; tambahan manfaat 2 tahun → sisa terhitung 5 tahun → beban fiskal 42.500.000/tahun (3.541.666,67/bulan, sen dibulatkan, bulan terakhir clamp). Bila tambahan manfaat diklaim 6 tahun (sisa terhitung 9 tahun) → plafon kelompok 8 tahun yang dipakai.
+
+### Putusan 3 — Sisi komersial (GL) dan hubungannya dengan fiskal
+
+- Kapitalisasi yang lolos Putusan 1 dijurnal ke akun Aset Tetap aset yang sama (Dr Aset Tetap / Cr Kas-Bank atau Utang Usaha dari dokumen sumber), akun dari mapping/kategori existing fail-closed (pola F-062-V Putusan 3: akun kosong = tolak berisik, nol jurnal, nol baris kapitalisasi lahir). Bukan akun beban, bukan aset baru.
+- Nilai buku komersial sesudahnya mengikuti Putusan 1 F-062-V (jurnal POSTED); masa manfaat komersial ditelaah ulang PSAK 16 sejak bulan kapitalisasi: sisa masa manfaat komersial baru (boleh berbeda dari fiskal Putusan 2) dibekukan prospektif; jurnal penyusutan bulan-bulan lampau TIDAK diubah. Selisih basis/jadwal fiskal vs komersial masuk daftar selisih fiskal existing (`depreciation-difference`), tanpa jurnal GL kedua.
+- Penggantian komponen: bagian yang diganti yang nilai tercatatnya masih ada wajib dihentikan pengakuannya komersial (rugi penghentian = selisih nilai tercatat komponen lama, hanya bila nilai komponen lama dapat ditentukan dari data tercatat saat perolehan/kapitalisasi sebelumnya). Nilai komponen lama TIDAK dapat ditentukan = jangan karang angka penghentian; catat sebagai temuan `BUTUH-VONIS-AKUNTAN` per kasus dan kapitalisasi hanya biaya baru. Sisi fiskal tidak mengenal penghentian komponen terpisah: basis fiskal tetap Putusan 2 (nilai sisa buku fiskal + biaya perbaikan) — jangan paksa simetri komersial-fiskal.
+- Satu peristiwa kapitalisasi = satu dokumen peristiwa per aset (tanggal pengeluaran, tanggal selesai pengerjaan bila bertahap, jumlah, dokumen sumber, klasifikasi (a)-(d), tambahan masa manfaat + penilai). Replay/idempoten: peristiwa yang sama (dokumen sumber sama) tidak boleh terkapitalisasi dua kali — penjaga referenceType/referenceId jurnal pola F-062-V/F-021; koreksi kapitalisasi terlanjur salah hanya reversal/dokumen koreksi di periode terbuka (`assertPeriodOpen` dalam tx), dilarang edit baris peristiwa.
+
+### Putusan 4 — Yang tetap di luar / ditolak
+
+- Biaya perbaikan bermasa manfaat ≤ 1 tahun, servis rutin, dan biaya mengembalikan kondisi tanpa manfaat tambahan terukur: beban periode (Putusan 1), walau vendor menyebutnya "overhaul".
+- Tanah hak milik/HGB/HGU/hak pakai: tidak disusutkan fiskal (UU PPh 11(1)); pengeluaran perbaikan atas tanah tidak melahirkan penyusutan lewat vonis ini.
+- Perbaikan atas aset yang belum selesai pengerjaannya (Kelas B F-107-V belum selesai): biaya itu bagian harga perolehan pengerjaan, masuk basis saat bulan selesai pengerjaan — bukan peristiwa Pasal 7 terpisah. Membedakannya = tanggal selesai pengerjaan induk; ragu = eskalasi BOT 4, jangan putus sendiri.
+- Revaluasi/penilaian kembali, penurunan nilai (impairment), dan perubahan metode penyusutan: TIDAK diputus vonis ini (vonis tersendiri bila kasus nyata); mesin dilarang menerima input "nilai wajar baru" sebagai kapitalisasi.
+- Vonis ini bukan penetapan DJP dan bukan klaim SPT Tahunan sah; daftar penyusutan fiskal final (termasuk peristiwa Pasal 7) tetap wajib cocok lampiran SPT Tahunan badan.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 3 (inti terpisah, SESUDAH vonis ini + PR #602 masuk main; klaim `prisma/schema.prisma` di board dulu, koordinasi BOT 4 sebelum migrasi): model peristiwa kapitalisasi per aset + gerbang Putusan 1 di service dalam tx; jurnal kapitalisasi fail-closed mapping; hitung ulang basis + sisa masa manfaat fiskal Putusan 2 (termasuk plafon kelompok) sebagai snapshot terbekukan per peristiwa; mesin penyusutan membaca basis komersial dari jurnal POSTED (F-062 Putusan 1) — dilarang memperpanjang rumus `(purchaseCost awal − residu)/umur awal` untuk aset berkapitalisasi; tanggal mulai Pasal 7 (pengeluaran vs selesai pengerjaan perbaikan); idempotency per dokumen sumber. JANGAN bangun sebelum #602 merged — menempel jalur cron/mesin yang sama.
+- BOT 2: tampilkan peristiwa kapitalisasi (jumlah, tanggal mulai, sisa masa manfaat fiskal/komersial sesudahnya, status plafon) apa adanya dari backend; UI tidak menentukan kapitalisasi-vs-beban dan tidak menghitung ulang tarif.
+- BOT 5: tidak ada angka statutori baru; spec dokumen perbaikan rujuk vonis ini untuk klasifikasi, bukan mengarang ambang rupiah.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E108-1 servis rutin tahunan (manfaat ≤ 1 tahun) terkapitalisasi = MERAH (wajib beban); E108-2 contoh DJP: 300jt kelompok 2 + kapitalisasi 100jt awal tahun ke-6, tambah manfaat 2 tahun → basis fiskal 212.500.000, beban 42.500.000/tahun sen persis; E108-3 klaim tambah manfaat 6 tahun → sisa dipakai plafon 8 tahun, bukan 9; E108-4 kapitalisasi dengan akun Aset Tetap kosong → ditolak berisik, nol jurnal + nol peristiwa tersimpan sebagai posted; E108-5 replay dokumen sumber sama → kapitalisasi tetap satu, jurnal tetap satu; E108-6 perbaikan dalam pengerjaan: nol beban atas hasil penjumlahan sebelum bulan selesai pengerjaan perbaikan, bulan pertama = bulan selesai; E108-7 masa lampau sebelum kapitalisasi tidak terhitung ulang (jurnal bulan-bulan lalu byte-sama) dan selisih fiskal-komersial tampil di depreciation-difference tanpa jurnal kedua; E108-8 kapitalisasi atas aset sudah disposal ditolak; E108-9 tambahan masa manfaat tanpa penilai/dasar terstruktur → diperlakukan tidak menambah (sisa berjalan), bukan diterima diam-diam.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 11 ayat (1) + PMK 72/2023 Pasal 7 (sumber resmi DJP di atas, akses 2026-10-23) dan PSAK 16 untuk sisi komersial; contoh angka mengikuti ilustrasi DJP (artikel pegawai DJP = pendapat pribadi penulis, bukan sikap instansi). BUKAN klaim SPT Tahunan sah — daftar penyusutan fiskal final tetap wajib cocok lampiran SPT Tahunan badan.
+
+ID vonis ini **F-2026-10-23-108-V** (tertinggi terverifikasi run ini: F-2026-10-23-107-V di PR #611; main cc2bb835 + PR terbuka dicek). Pemilik berikutnya: BOT 1 merge vonis ini + PR #611/#602 -> BOT 3 inti kapitalisasi perbaikan -> BOT 2 -> BOT 6 E108-1..9.
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-111-V: revaluasi (penilaian kembali) + penurunan nilai (impairment) aset (lanjutan terbuka F-2026-10-23-108-V Putusan 4 + F-2026-10-23-110-V PR #616 Putusan 4)
+
+Status: PUTUSAN BOT 4 (kartu t_3ef36441, siklus standby 06:00). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Menutup butir terakhir yang sengaja TIDAK diputus F-108-V ("Revaluasi/penilaian kembali, penurunan nilai (impairment) ... TIDAK diputus vonis ini") dan F-110-V PR #616 Putusan 4 butir pertama. Sesudah vonis ini, rantai terbuka F-062-V (nilai buku tunggal + gerbang metode + perolehan fail-closed) -> F-107-V (saat mulai) -> F-108-V (kapitalisasi perbaikan) -> F-109-V (fiskal saldo menurun, PR #613) -> F-110-V (tak berwujud + perubahan metode, PR #616) TIDAK menyisakan butir aset tetap yang belum divonis; sisa sesudah ini hanya kasus per-peristiwa `BUTUH-VONIS-AKUNTAN` (penetapan DJP, penghentian komponen tak tentu).
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 06:00, origin/main 751c07ef)
+
+- Kanban BOT 4 non-done: hanya kartu ini (t_3ef36441 running). Nol kartu peminta vonis baru. Satu-satunya peminta terkait BOT 3 t_99cb19e4 (blocked) ter-gate merge BOT 1 atas #599/#597/#605 — vonisnya (F-103-V PR #597, F-105-V PR #605) sudah terbit, BUKAN menunggu vonis baru; #599 masih OPEN belum merged saat snapshot.
+- origin/main maju dari 9c8d2224 (siklus 05:30) ke 751c07ef: #612 (F-108-V) sudah merged, #615 (frontend TOTAL piutang) merged. PR vonis BOT 4 terbit semua ter-gate merge BOT 1: #616 (F-110-V) MERGEABLE head 20d33b6e CI 6/6 hijau; #611/#613/#608/#605/#597 CONFLICTING (konflik append-only backlog, isi vonis nol berubah) CI 6/6 hijau di head persis; #614 (rebase F-074-V) MERGEABLE. Merge milik BOT 1; BOT 4 tidak merge PR sendiri.
+- Sisa label BUTUH-VONIS-AKUNTAN di backlog main semuanya per-kasus nyata (Q-SEWA-3, Q-SEWA-6, scrap sengketa, Kelas C F-107, penghentian komponen F-108 Putusan 3) — bukan riset bebas. Maka riset berikutnya = butir terbuka terakhir rantai aset ini.
+
+### Bukti repo terverifikasi run ini (origin/main 751c07ef)
+
+- Model `Asset` (schema:3986-4026) tanpa field revaluasi/penurunan nilai: tidak ada nilai wajar, tanggal penilaian, penilai, cadangan penurunan nilai, jumlah terpulihkan, atau peristiwa penyesuaian nilai. `AssetCategory` (schema:3923) hanya membawa empat akun mapping (aset/akumulasi/beban penyusutan/laba-rugi disposisi) — tidak ada akun surplus revaluasi maupun beban penurunan nilai.
+- Satu-satunya jejak revaluasi di CoA existing: akun `710004 "Laba/Rugi Revaluasi Aset"` [OINC di bawah 7100] (base-data.ts:837) — akun LABA-RUGI, bukan ekuitas. Tidak ada akun ekuitas surplus revaluasi di keluarga 3000 (300001 Equitas Saldo Awal, 300002 Laba Ditahan, 300003 Modal Saham). Memposting kenaikan revaluasi ke 710004 sebagai pendapatan berjalan = perlakuan yang DITOLAK Putusan 1 di bawah; akun itu tidak boleh diam-diam jadi tujuan surplus.
+- Nilai berjalan aset hari ini = `Asset.currentValue` cache + `AssetHistory` + jurnal (tiga representasi, vonis F-062-V Putusan 1: jurnal POSTED sumber tunggal). Operator yang mengetik "nilai wajar baru" hari ini hanya bisa mengedit `currentValue`/`purchaseCost` — persis jalur yang dilarang F-108-V penutup ("mesin dilarang menerima input nilai wajar baru sebagai kapitalisasi"). Penurunan nilai hari ini tidak punya jalur sama sekali selain penyusutan dipercepat diam-diam (mengubah umur/tarif), yang merusak taat asas fiskal.
+- F-062-V Putusan 1/3/4, F-108-V, F-109-V (PR #613), F-110-V (PR #616) tetap berlaku utuh. Vonis ini HANYA menambah dua peristiwa penyesuaian nilai (revaluasi, penurunan nilai) di atas kerangka itu; TIDAK membuka kembali putusan lain.
+
+### Dasar regulasi & standar (resmi, akses 2026-10-23)
+
+- FISKAL — penilaian kembali: UU PPh Pasal 19 + PMK Nomor 79/PMK.03/2008. Halaman resmi DJP "PPh Pasal 19" (https://pajak.go.id/en/node/34295, akses 2026-10-23): WP badan dalam negeri/BUT dapat menilai kembali aktiva tetap berwujud (seluruh, termasuk tanah hak milik/HGB; atau seluruh tidak termasuk tanah) yang di Indonesia, dimiliki, dipakai 3M, HANYA dengan persetujuan DJP; dasar = nilai pasar/wajar saat penilaian kembali yang ditetapkan perusahaan jasa penilai/ahli penilai berizin pemerintah (DJP dapat menetapkan kembali bila tidak mencerminkan keadaan); tidak dapat dinilai kembali sebelum lewat 5 tahun sejak penilaian kembali terakhir; atas SELISIH LEBIH penilaian kembali di atas nilai sisa buku fiskal semula dikenakan PPh FINAL 10%; sesudah persetujuan, dasar penyusutan fiskal = nilai sesudah penilaian kembali, masa manfaat fiskal disesuaikan kembali menjadi masa manfaat PENUH kelompoknya, penyusutan dimulai bulan dilakukannya penilaian kembali. Halaman DJP "Penyusutan dan Amortisasi" (pembaruan 2025-05-28, https://www.pajak.go.id/id/penyusutan-dan-amortisasi, akses 2026-10-23) menegaskan UU PPh Pasal 11 ayat (5): bila WP melakukan penilaian kembali berdasar Pasal 19, dasar penyusutan = nilai sesudah penilaian kembali.
+- FISKAL — penurunan nilai: halaman DJP di atas dan UU PPh Pasal 11/11A TIDAK mengenal beban penurunan nilai (impairment) sebagai pengurang/pengubah basis fiskal. Basis fiskal hanya bergerak lewat pengeluaran/koreksi yang diakui aturan (perolehan, kapitalisasi Pasal 7 PMK 72/2023, penilaian kembali Pasal 19 berpersetujuan). Kerugian fiskal atas aset hanya terwujud lewat peristiwa terealisasi (penjualan/pengalihan/penarikan — rujukan UU PPh Pasal 4 ayat (1) huruf d dan Pasal 6; label: kerangka umum, bukan penetapan per kasus). Label jujur: TIDAK ada dasar DJP untuk jurnal fiskal impairment — karena itu Putusan 3 menahan impairment di sisi komersial saja.
+- KOMERSIAL (label: rujukan standar akuntansi, BUKAN dasar fiskal): PSAK 16 model revaluasi — kenaikan nilai tercatat diakui di penghasilan komprehensif lain dan diakumulasi di ekuitas sebagai surplus revaluasi (kecuali membalik penurunan revaluasi aset sama yang dulu diakui di laba rugi, sebesar itu diakui di laba rugi); penurunan diakui di laba rugi (kecuali membalik surplus existing aset sama, sebesar itu menghabiskan surplus dulu). Revaluasi dilakukan dengan keteraturan cukup, atas KELAS aset, berdasar nilai wajar tanggal revaluasi (penilai). PSAK 48 — penurunan nilai: jumlah tercatat melebihi jumlah terpulihkan (lebih tinggi dari nilai wajar kurang biaya pelepasan dan nilai pakai) = rugi penurunan nilai di laba rugi (model biaya) / perlakuan tolakan surplus dulu (model revaluasi); pembalikan penurunan nilai dibatasi sampai jumlah tercatat yang seandainya tanpa penurunan nilai dulu, dan aset goodwill TIDAK boleh dibalik. Angka PSAK di sini kerangka perlakuan internal, bukan klaim laporan keuangan teraudit sah.
+
+### Putusan 1 — Revaluasi komersial: surplus ke ekuitas, BUKAN pendapatan (fail-closed)
+
+- Kenaikan nilai tercatat karena revaluasi DILARANG diposting ke akun laba-rugi mana pun (termasuk `710004 Laba/Rugi Revaluasi Aset` existing): jurnal = Dr Akumulasi Penyusutan (menutup ke bruto) / Dr Aset Tetap (selisih bruto) / Cr Surplus Revaluasi (EKUITAS). Akun surplus = akun EQTY BARU di keluarga 3000 yang wajib diusulkan BOT 3 -> divonis BOT 4/Lead kodenya sebelum migrasi (pola usulan kode F-066-V); selama akun surplus belum terpetakan di kategori/setting, peristiwa revaluasi berharga DITOLAK berisik fail-closed (pola F-062-V Putusan 3), nol jurnal. Satu-satunya pengecualian laba-rugi: porsi kenaikan yang membalik penurunan revaluasi/penurunan nilai aset SAMA yang dulu dibebankan ke laba rugi, sebesar beban lampau itu, ke akun beban asal — dibuktikan dari jurnal POSTED lampau aset itu, bukan klaim operator.
+- Penurunan revaluasi: Dr Surplus Revaluasi sebesar surplus tersisa aset itu (snapshot per aset, tidak boleh negatif dan tidak boleh memakan surplus aset lain) / Dr Beban Penurunan Nilai (laba rugi, akun EXPS baru terpetakan fail-closed seperti di atas) untuk sisanya / Cr Akumulasi/Aset. Dilarang memakai surplus kelas/aset lain.
+- Syarat peristiwa (SEMUA wajib, terstruktur, dibekukan): tanggal penilaian, nilai wajar sen persis dari laporan penilai bernama (perusahaan jasa penilai/ahli penilai; nama+rujukan laporan tercatat), KELAS aset yang direvaluasi (revaluasi per aset tunggal cherry-pick dalam satu kelas DITOLAK — PSAK 16 keteraturan per kelas), nilai tercatat jurnal-POSTED sebelum peristiwa (F-062-V Putusan 1, bukan `currentValue` ketikan). Tanpa penilai/laporan terstruktur = peristiwa ditolak, bukan diterima sebagai ketikan bebas.
+- Sesudah revaluasi naik, penyusutan komersial prospektif atas nilai tercatat baru selama SISA masa manfaat komersial yang ditelaah ulang (peristiwa terbekukan, pola F-110-V Putusan 3); jurnal bulan lampau TIDAK dihitung ulang. Revaluasi turun yang bukan impairment (kelas memang direvaluasi berkala) mengikuti butir penurunan di atas; membedakan revaluasi-turun vs impairment = kelas aset memakai model revaluasi atau model biaya, dibekukan di kategori — jangan dipilih per peristiwa.
+
+### Putusan 2 — Revaluasi fiskal: hanya lewat persetujuan DJP Pasal 19; tanpa itu fiskal TIDAK bergerak
+
+- Sistem DILARANG mengubah basis/saldo fiskal, kelompok, atau masa manfaat fiskal karena revaluasi komersial semata. Revaluasi komersial Putusan 1 hidup di GL; selisih basis komersial-vs-fiskal sesudahnya tampil di `depreciation-difference` existing tanpa jurnal fiskal kedua (pola F-108-V Putusan 3).
+- Basis fiskal HANYA berubah bila peristiwa mencatat persetujuan DJP terstruktur: nomor + tanggal keputusan persetujuan penilaian kembali, nilai sisa buku fiskal semula, nilai hasil penilaian kembali, dan selisih lebihnya. Atas selisih lebih itu terutang PPh final 10% — sistem mencatat liabilitasnya lewat mapping akun pajak terpetakan fail-closed (akun utang PPh dari setting existing; kosong = peristiwa fiskal ditolak berisik, komersialnya pun ditahan sampai operator memilih jalur komersial-saja secara eksplisit tercatat). Angka 10% dan dasar selisih dibekukan sebagai snapshot peristiwa; tarif TIDAK dihardcode di logika hitung (hidup di master/setting bertanggal efektif pola tax rules register; nilai statutoris saat ini 10% dicatat sebagai data master, bukan konstanta kode).
+- Sesudah persetujuan: dasar penyusutan fiskal = nilai sesudah penilaian kembali, masa manfaat fiskal = masa manfaat PENUH kelompok aset itu (reset penuh, bukan sisa), mulai bulan dilakukannya penilaian kembali; saldo fiskal tersimpan (pola F-109-V P2 / F-110-V Putusan 2) dibekukan prospektif per (aset, tahun pajak) — tahun lampau tidak dihitung ulang. Gerbang 5 tahun: peristiwa penilaian kembali fiskal atas aset/kelas yang sama dalam 5 tahun sejak penilaian kembali fiskal terakhir DITOLAK berisik (operator wajib menandai kasusnya `BUTUH-VONIS-AKUNTAN` bila mengklaim pengecualian).
+- Tanpa nomor persetujuan DJP, mesin tidak boleh menerima input "nilai fiskal baru", "reset masa manfaat fiskal", atau tarif revaluasi apa pun. Vonis ini BUKAN persetujuan DJP dan bukan klaim SPT sah; penilaian kembali fiskal final tetap urusan permohonan WP ke DJP di luar sistem.
+
+### Putusan 3 — Penurunan nilai (impairment): komersial saja, terpulihkan terstruktur, fiskal diam
+
+- Gerbang peristiwa (SEMUA wajib terstruktur): indikator penurunan nilai tercatat (kerusakan fisik, keusangan, penghentian pakai, perubahan rencana pakai — dipilih dari daftar terdaftar + uraian penilai internal bernama), jumlah terpulihkan (recoverable amount) sen persis dengan dasar terstruktur (nilai wajar kurang biaya pelepasan ATAU nilai pakai — basis dipilih dan dicatat, angka bukan ketikan tanpa dasar). Tanpa indikator + dasar terpulihkan = ditolak berisik.
+- Jurnal komersial (model biaya): Dr Beban Penurunan Nilai (akun EXPS terpetakan fail-closed, usulan kode seperti Putusan 1) / Cr Akumulasi Penurunan Nilai (akun kontra-aset terpetakan; BUKAN mengedit `purchaseCost`/`currentValue` langsung dan bukan menambah akumulasi penyusutan biasa — kontra terpisah supaya penyusutan dan penurunan nilai tidak tercampur di rekonsiliasi F-062-V). Nilai tercatat sesudahnya = jurnal-POSTED dikurangi kontra ini. Aset model revaluasi: penurunan mengikuti tolakan surplus Putusan 1 dulu.
+- Fiskal TIDAK bergerak oleh impairment: basis, kelompok, metode, dan saldo fiskal tersimpan tetap; TIDAK ada jurnal/beban fiskal penurunan nilai; selisih tampil di `depreciation-difference`. Penyusutan fiskal berjalan terus atas basis lama. Dilarang meniru impairment ke fiskal lewat mempercepat penyusutan fiskal, mengganti kelompok, atau memperpendek masa manfaat fiskal (taat asas F-110-V).
+- Penyusutan komersial sesudah impairment: atas nilai tercatat baru (sesudah kontra) selama sisa masa manfaat komersial ditelaah ulang prospektif; nilai residu komersial ditelaah pada peristiwa yang sama dan dibekukan. Pembalikan impairment (jumlah terpulihkan pulih): hanya lewat peristiwa pembalikan terstruktur berdasar terpulihkan baru, DIBATASI maksimum sampai nilai tercatat yang seandainya TIDAK pernah ada penurunan nilai (dihitung dari jurnal + jadwal komersial beku, bukan tebakan), jurnal membalik kontra sebesar itu; kelebihan di atas plafon itu DITOLAK (bukan pendapatan). Goodwill/tak berwujud tanpa amortisasi komersial: pembalikan DILARANG sama sekali (PSAK 48). Aset sudah disposal: peristiwa impairment/pembalikan ditolak.
+- Tanah dan aset tidak disusutkan komersial tetap dapat mengalami impairment komersial (jumlah tercatat vs terpulihkan); tanah TIDAK melahirkan penyusutan fiskal karena peristiwa ini (tetap UU PPh Pasal 11 ayat (1)).
+
+### Putusan 4 — Pembekuan peristiwa, koreksi, dan yang tetap di luar
+
+- Satu peristiwa = satu dokumen terbekukan per aset (jenis: revaluasi-naik / revaluasi-turun / impairment / pembalikan-impairment / revaluasi-fiskal-berpersetujuan; tanggal efektif bulan; nilai sebelum dari jurnal POSTED; nilai/dasar baru; penilai/dasar terstruktur; akun snapshot). Replay dokumen sumber/penilaian yang sama ditolak idempoten (penjaga referenceType/referenceId jurnal pola F-062-V/F-108-V); jurnal pasangan memakai referenceType peristiwa itu, satu peristiwa satu jurnal POSTED.
+- Koreksi peristiwa salah = reversal/dokumen koreksi di periode terbuka (`assertPeriodOpen` dalam tx yang sama), DILARANG edit baris peristiwa, edit `currentValue`, atau edit jurnal lampau. Peristiwa di periode terkunci ditolak berisik.
+- TETAP di luar vonis ini: (a) permohonan persetujuan DJP itu sendiri (eksternal; sistem hanya mencatat hasilnya); (b) penetapan kembali nilai oleh DJP sesudah penilaian (peristiwa koreksi fiskal per kasus `BUTUH-VONIS-AKUNTAN`); (c) aset yang jumlah terpulihkannya bergantung arus kas unit penghasil kas (UPK/CGU) multi-aset — vonis ini hanya per aset/unit yang terpulihkannya dapat ditentukan terstruktur; alokasi UPK = `BUTUH-VONIS-AKUNTAN` per kasus, jangan dibagi rata diam-diam; (d) pajak tangguhan atas selisih revaluasi/impairment (PSAK 46) — TIDAK diputus dan TIDAK boleh dikarang akun/jurnalnya dari vonis ini; dicatat sebagai risiko terbuka, bukan angka; (e) revaluasi untuk tujuan non-pajak di luar pembukuan WP ini.
+- Risiko jujur: belum ada bukti kasus revaluasi/impairment ISF nyata di repo/board; vonis ini menutup celah SEBELUM inti dibangun dengan asumsi "nilai wajar = edit currentValue / impairment = percepat penyusutan", bukan mengklaim kasus sudah terjadi. Usulan kode akun surplus/beban/kontra di Batas build = USULAN bernama ke BOT 4/Lead, bukan akun jadi.
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge PR vonis ini + #616/#613/#611 + #602 (inti F-062 BOT 3) lebih dulu; inti di bawah menempel SESUDAH #602 merged — jalur cron/mesin/schema aset yang sama. Tanpa itu jangan mulai migrasi.
+- BOT 3 (inti terpisah, klaim `prisma/schema.prisma` di board + koordinasi BOT 4 sebelum migrasi): (1) model peristiwa penyesuaian nilai terbekukan Putusan 4 + gerbang terstruktur Putusan 1/2/3 di service dalam tx (`assertPeriodOpen` dalam tx, idempotency per dokumen penilaian); (2) usulkan kode akun Surplus Revaluasi (EQTY 3000-an), Beban Penurunan Nilai (EXPS), Akumulasi Penurunan Nilai (kontra FASS) ke BOT 4/Lead sebelum seed/migrasi — selama mapping kosong peristiwa berharga ditolak berisik; akun `710004` existing JANGAN dipakai tujuan surplus; (3) basis nilai sebelum/sesudah dari jurnal POSTED + kontra impairment terpisah (F-062-V Putusan 1), mesin penyusutan komersial membaca basis peristiwa prospektif, fiskal hanya bergerak lewat peristiwa berpersetujuan Putusan 2 (snapshot saldo tahunan pola F-109-V, reset masa manfaat penuh kelompok, gerbang 5 tahun); (4) PPh final 10% sebagai data master bertanggal efektif + snapshot peristiwa, liabilitas lewat mapping fail-closed.
+- BOT 2: tampilkan peristiwa (jenis, nilai sebelum/sesudah, penilai/dasar, status persetujuan fiskal, surplus tersisa per aset) apa adanya dari backend; UI tidak menentukan nilai wajar/terpulihkan, tidak memilih model, tidak menghitung ulang penyusutan/saldo fiskal.
+- BOT 5: tidak ada angka statutori baru; spec perolehan/penilaian aset rujuk vonis ini, bukan mengarang nilai wajar.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E111-1 revaluasi naik diposting ke laba-rugi/710004 = MERAH (wajib Cr surplus ekuitas); E111-2 revaluasi turun memakan surplus aset lain / surplus per aset negatif = MERAH; E111-3 revaluasi fiskal tanpa nomor+tanggal persetujuan DJP mengubah basis/saldo fiskal = MERAH (fiskal byte-sama); E111-4 fiskal berpersetujuan: dasar baru = nilai penilaian kembali, masa manfaat reset PENUH kelompok, mulai bulan penilaian kembali, PPh final = 10% x selisih lebih atas nilai sisa buku fiskal semula sen persis sebagai snapshot; ganti tarif master sesudahnya tidak mengubah peristiwa lama; E111-5 penilaian kembali fiskal kedua < 5 tahun atas kelas sama ditolak berisik; E111-6 impairment tanpa indikator terdaftar/dasar terpulihkan ditolak, nol jurnal + nol kontra; E111-7 impairment mengubah basis/saldo fiskal atau mempercepat penyusutan fiskal = MERAH; E111-8 pembalikan impairment melebihi plafon nilai-tanpa-impairment atau pada goodwill ditolak; E111-9 mapping surplus/beban/kontra kosong -> peristiwa berharga ditolak berisik, nol jurnal; E111-10 replay laporan penilaian sama -> tetap satu peristiwa/jurnal, jurnal bulan lampau byte-sama, koreksi hanya reversal periode terbuka.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 19 + Pasal 11 ayat (5) dan PMK 79/PMK.03/2008 (sumber resmi DJP di atas, akses 2026-10-23) untuk sisi fiskal, PSAK 16/48 untuk sisi komersial sebagai rujukan standar (bukan dasar fiskal). BUKAN persetujuan DJP, bukan penetapan, dan bukan klaim SPT Tahunan/laporan keuangan sah — penilaian kembali fiskal final tetap lewat permohonan WP ke DJP, daftar penyusutan/amortisasi final tetap wajib cocok lampiran SPT Tahunan badan.
+
+ID vonis ini **F-2026-10-23-111-V** (tertinggi terverifikasi run ini di origin/main 751c07ef: F-2026-10-23-108-V merged #612; 109-V PR #613, 110-V PR #616 terbuka; 111 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini + #616/#613/#611/#602 -> BOT 3 usulan kode akun + inti peristiwa penyesuaian nilai -> BOT 2 -> BOT 6 E111-1..10.
+
+---
+
+## VONIS BOT 4 2026-10-23 — F-2026-10-23-115-V: perlakuan reklasifikasi kategori/aset, perubahan metode komersial/fsikal, perubahan estimasi aset tetap
+
+Status: PUTUSAN BOT 4 (kartu t_8c31f925, siklus standby 08:20). Dokumen saja; TANPA kode/schema/migrasi di kartu ini.
+
+### Bukti antrean bebas-dependensi kosong (snapshot siklus 08:20, origin/main 41b81748)
+
+- Kanban BOT 4 non-done/archived: hanya kartu ini (t_8c31f925 running). Nol kartu peminta vonis baru bebas-dependensi.
+- Peminta terkait semua ter-gate BUKAN oleh BOT 4: BOT 3 t_99cb19e4 (blocked) ter-gate merge BOT 1 atas PR #599 (vonisnya F-103-V/F-105-V sudah terbit) + agregator BPJS/f076; BOT 3 t_af177f74 (ready) prasyaratnya putusan BOT 1 atas F-2026-10-22-066-S/Q-CO-4 (vonis F-2026-10-22-066-V sudah terbit). PR vonis BOT 4 terbit #613 F-109-V CONFLICTING, #616 F-110-V BEHIND, #617 F-111-V BLOCKED, #618 F-112-V BLOCKED, #619 F-113-V BLOCKED, #620 F-114-V OPEN — semua ter-gate merge BOT 1, isi nol menunggu vonis BOT 4.
+- Riset berikutnya sesuai Instruksi: domain (b) aset: perubahan metode/umur/residu/reklasifikasi. F-062-V gerbang metode statis; F-110-V persetujuan perubahan metode fiskal tak berwujud; F-111-V revaluasi/impairment; F-112 taxReview tersimpan; F-109 saldo fiskal per (aset,tahun). Belum divonis: reklasifikasi aset/kategori, perubahan metode KOMERSIAL+fiskal BERWUJUD prospektif, perubahan estimasi (umur/residu) berwujud. Vonis ini menutup ketiganya.
+
+### Bukti repo terverifikasi run ini (origin/main 41b81748)
+
+- Inti F-062-V sudah merged (#602): `Asset` schema:3953+ punya `bookValueSource`/`journalLinked`, `AssetCategory.taxGroupCode`, `AssetFiscalBalance` saldo fiskal tersimpan; cron memakai dasar `journalBookValue` (JournalEntry POSTED) bukan `currentValue`, gerbang metode fail-closed, kelompok fiskal PMK 72/2023.
+- Laporan selisih: `depreciation-difference.ts` header menyatakan sisi fiskal SELALU garis lurus statutoris (komentar `ponytail`: saldo menurun butuh saldo fiskal awal tahun yang tidak dilacak terpisah). Artinya metode fiskal saldo-menurun BELUM benar-benar dihitung laporan — selisih saldo-menurun hari ini belum jujur.
+- Reklasifikasi NOL: aset hanya punya satu `categoryId` kolom; tidak ada peristiwa perpindahan kategori, tidak ada reklasifikasi HGB/Hak Pakai→aset tetap/investasi, tidak ada reklasifikasi antar kelas revaluasi per F-111-V. `AssetChangeEvent` (F-108/F-111) belum ada entitas reklasifikasi.
+- Perubahan metode/estimasi NOL: `depreciationMethod`/umur/residu ditimpa edit aset/kategori; laporan selisih menghitung ulang dari nilai berjalan sehingga ubah metode/umur mengubah angka tahun lalu diam-diam — sama seperti cela F-062-V Putusan 1 untuk nilai buku.
+
+### Dasar resmi (akses 2026-10-23)
+
+- DJP “Penyusutan dan Amortisasi” (pembaruan isi 2025-05-28): https://www.pajak.go.id/id/penyusutan-dan-amortisasi — metode fiskal berwujud: garis lurus/saldo menurun (selain bangunan), bangunan hanya garis lurus, wajib taat asas; penyusutan dimulai bulan dilakukannya pengeluaran (pengecualian pengerjaan/belum digunakan/dengan persetujuan DJP); kelompok 1/2/3/4 + bangunan per UU PPh Pasal 11; jenis tidak tercantum PMK 72/2023 → kelompok 3 atau penetapan DJP 1/2/4.
+- UU PPh Pasal 11 ayat (1),(2),(5),(6) dirujuk halaman DJP sama: taat asas; perubahan metode fiskal bukan hak sepihak (perubahan metode pembukuan wajib persetujuan DJP per hasil pencarian resmi DJP tata cara pencatatan/pembukuan — dirujuk sebagai prinsip, nomor persetujuan jadi gate peristiwa).
+- PSAK 16/PSAK 48/PSAK 25 dirujuk label standar saja (bukan dasar fiskal): perubahan estimasi (umur/residu/pola manfaat) = prospektif, bukan restatement; perubahan metode komersial = perubahan estimasi bila pola konsumsi berubah, didokumentasikan; reklasifikasi = pemindahan antar kelas/kategori pada nilai tercatat, bukan keuntungan.
+
+### Putusan 1 — Reklasifikasi: peristiwa terbekukan, nilai tercatat pindah utuh, nol laba-rugi
+
+- Reklasifikasi = peristiwa `AssetChangeEvent`-sejenis terbekukan per aset: dari-kategori/kelas → ke-kategori/kelas, tanggal efektif bulan, nilai tercatat SEBELUM dari jurnal POSTED, alasan terstruktur dari daftar terdaftar (salah kategori awal, perubahan penggunaan, tanah hak→bangunan selesai, aset→properti investasi/dll bila kelasnya ada), penilai/penyetuju bernama. Nilai tercatat pindah UTUH: Dr akun aset kelas tujuan / Cr akun aset kelas asal sebesar nilai tercatat jurnal (bukan harga perolehan dan bukan `currentValue`); akumulasi penyusutan + kontra impairment ikut pindah ke akun akumulasi kelas tujuan bila akunnya berbeda (pindah bruto+akumulasi supaya umur histori terbaca).
+- DILARANG: reklasifikasi melahirkan keuntungan/kerugian, revaluasi diam-diam saat pindah, atau jurnal ke laba-rugi/ekuitas kecuali perlakuan khusus yang sudah divonis (F-111-V revaluasi). Pindah kategori fiskal TIDAK mengubah kelompok fiskal statutoris lampau: kelompok baru berlaku prospektif dari bulan reklasifikasi; saldo fiskal tersimpan per (aset,tahun) tahun lampau TIDAK dihitung ulang.
+- Aset sudah disposal / nilai tercatat nol tanpa bruto: reklasifikasi ditolak berisik. Aset dalam kelas revaluasi F-111-V: surplus revaluasi per-aset IKUT kelas tujuan terikat aset sama (tidak boleh dipakai aset lain).
+- Koreksi reklasifikasi salah = reversal peristiwa di periode terbuka (`assertPeriodOpen` dalam tx), dilarang edit baris peristiwa atau timpa `categoryId` langsung.
+
+### Putusan 2 — Perubahan metode komersial: prospektif dari nilai tercatat, terdokumentasi, nol restatement
+
+- Perubahan metode KOMERSIAL (mis. garis lurus↔saldo menurun komersial, penambahan metode analitis terdaftar F-062-V/F-110-V) berlaku PROSPEKTIF dari nilai tercatat jurnal POSTED pada bulan efektif: beban sesudahnya = metode baru atas nilai tercatat saat itu selama sisa umur sesudah telaah. Tahun/bulan lampau TIDAK dihitung ulang, jurnal lampau byte-sama.
+- Syarat peristiwa terstruktur: metode lama, metode baru, alasan perubahan pola konsumsi manfaat (daftar terdaftar + uraian), bulan efektif, nilai tercatat dasar (jurnal POSTED), sisa umur + residu hasil telaah. Tanpa alasan terstruktur/dasar jurnal = ditolak berisik. `depreciationMethod` kolom berjalan boleh berubah HANYA lewat peristiwa ini (edit aset langsung yang menimpa metode DILARANG di inti).
+- Metode analitis non-GL F-062-V (unit produksi dll) tetap NON-GL sampai mesin+vonisnya ada: reklasifikasi/perubahan metode ke metode itu TIDAK melahirkan jurnal penyusutan.
+- Fiskal TIDAK ikut perubahan metode komersial: metode/kelompok/saldo fiskal tetap jalurnya sendiri (Putusan 3).
+
+### Putusan 3 — Perubahan metode FISKAL berwujud: gerbang persetujuan DJP bernama; tanpa itu fiskal diam
+
+- Default: metode fiskal berwujud TIDAK berubah. Permintaan perubahan metode fiskal (garis lurus↔saldo menurun, selain bangunan yang memang hanya garis lurus) hanya boleh dicatat sebagai peristiwa bila ada persetujuan/perubahan metode pembukuan DJP terstruktur: nomor + tanggal persetujuan, metode lama/baru, bulan efektif fiskal. Tanpa nomor+tanggal itu peristiwa fiskal DITOLAK berisik; fiskal berjalan terus metode lama (taat asas).
+- Bila berpersetujuan: saldo fiskal tersimpan per (aset,tahun) dibekukan prospektif — tahun lampau byte-sama; mulai bulan efektif, saldo fiskal awal = nilai sisa buku fiskal saat itu, tarif metode baru statutoris kelompok yang sama (kelompok tidak berubah oleh ganti metode). Bangunan: perubahan ke saldo menurun DITOLAK mutlak (statutoris garis lurus).
+- Laporan selisih WAJIB jujur metode: aset saldo-menurun fiskal TIDAK boleh ditampilkan seolah garis lurus dari harga perolehan; bila saldo fiskal tersimpan tidak tersedia untuk tahun itu, aset tampil “fiskal belum dapat dihitung untuk tahun ini” (pola F-062/F-109), bukan diisi garis lurus karangan. Komentar `ponytail` garis-lurus-saja di `depreciation-difference.ts` gugur oleh vonis ini sebagai batas: inti BOT 3 wajib membaca `fiscalMethod`+saldo tersimpan, bukan mengarang.
+- Berlaku sama tak berwujud dirujuk F-110-V (tidak divonis ulang): tak berwujud sudah punya gerbang persetujuan DJP di F-110-V.
+
+### Putusan 4 — Perubahan estimasi: umur/residu komersial prospektif; umur fiskal TIDAK diedit bebas
+
+- Perubahan ESTIMASI komersial (masa manfaat komersial, nilai residu, pola manfaat) = peristiwa terbekukan prospektif: nilai tercatat jurnal dibagi sisa umur BARU (setelah dikurangi residu BARU) dari bulan efektif; lampau tidak diubah. Telaah wajib dicatat (alasan terdaftar: keausan lebih cepat, teknolog usang, perbaikan kapital F-108 yang mengubah umur, dll + penelaah bernama). Edit kategori yang mengubah umur/residu untuk aset berjalan DILARANG berlaku surut: aset existing mempertahankan snapshot estimasi sampai peristiwa perubahan estimasi per aset dibuat.
+- Umur/kelompok FISKAL tidak ikut estimasi komersial: masa manfaat fiskal tetap kelompok statutoris/penetapan DJP; memperpendek umur komersial TIDAK mempercepat fiskal, memperpanjang TIDAK memperlambat. Pengecualian statutoris yang ada (bangunan permanen masa manfaat sebenarnya dengan pemberitahuan DJP; tak berwujud >20th sebenarnya) hanya lewat field terstruktur nomor/tanggal pemberitahuan/persetujuan existing — bukan ketikan umur fiskal bebas.
+- Nilai residu fiskal tetap nol per statutoris (penyusutan fiskal dari harga perolehan tanpa residu) — residu komersial baru tidak masuk hitung fiskal.
+- Semua peristiwa (reklasifikasi, ganti metode komersial/fiskal, ganti estimasi) satu pola: idempoten per dokumen sumber (referenceType/referenceId unik), satu peristiwa satu jurnal pasangan POSTED bila memang berjurnal (perubahan estimasi/metode murni boleh nol-jurnal reklasifikasi nilai? — vonis: perubahan estimasi/metode TIDAK berjurnal saat peristiwa; efeknya hanya jadwal penyusutan berikutnya; reklasifikasi berjurnal hanya bila akun kelas asal≠tujuan).
+
+### Batas build (pemilik berikutnya)
+
+- BOT 1: merge rantai vonis berjalan (#613/#616/#617/#618/#619/#620 bila gate hijau) lalu putus prioritas inti F-115 sesudah inti saldo fiskal F-109/F-110 merged (saldo tersimpan prasyarat Putusan 3 laporan jujur).
+- BOT 3 (inti terpisah, klaim schema di board dulu, koordinasi BOT 4): (1) entitas peristiwa perubahan aset (jenis reklasifikasi/ganti-metode-komersial/ganti-metode-fiskal/ganti-estimasi) terbekukan + idempoten; (2) gerbang edit aset/kategori: metode/umur/residu berjalan berubah hanya lewat peristiwa; (3) reklasifikasi jurnal nilai tercatat bruto+akumulasi+surplus terikat; (4) fiskal: field persetujuan DJP ganti metode + penolakan bangunan saldo-menurun + laporan selisih membaca fiscalMethod/saldo tersimpan (ganti komentar ponytail garis-lurus); (5) jadwal komersial prospektif dari peristiwa terakhir. Usulan kode akun reklasifikasi = akun kelas existing, TIDAK ada akun baru di vonis ini.
+- BOT 2: tampilkan riwayat peristiwa per aset + status fiskal per tahun apa adanya (termasuk “belum dapat dihitung”); UI tidak memilih metode/kelompok, tidak hitung ulang jadwal.
+- BOT 6 falsifikasi (MERAH bila penjaga dicabut): E115-1 reklasifikasi memposting laba/ekuitas atau memakai currentValue bukan nilai tercatat jurnal = MERAH; E115-2 edit categoryId/metode/umur langsung tanpa peristiwa mengubah jadwal/laporan tahun lampau = MERAH (wajib ditolak/peristiwa); E115-3 ganti metode komersial menghitung ulang tahun lalu = MERAH; E115-4 ganti metode fiskal tanpa nomor+tanggal persetujuan DJP mengubah fiscalMethod/saldo = MERAH (fiskal byte-sama); E115-5 bangunan fiskal saldo-menurun diterima = MERAH; E115-6 aset fiskal saldo-menurun tampil garis-lurus harga perolehan di laporan = MERAH (wajib saldo tersimpan/belum-dihitung); E115-7 perubahan estimasi komersial mengubah fiskal (kelompok/umur fiskal ikut) = MERAH; E115-8 replay peristiwa sama melahirkan jurnal/peristiwa ganda = MERAH; E115-9 reklasifikasi aset disposed / surplus revaluasi dipakai aset lain = MERAH; E115-10 koreksi peristiwa lewat edit baris/currentValue tanpa reversal periode terbuka = MERAH.
+
+Klaim kepatuhan: perlakuan internal ISF berdasar UU PPh Pasal 11 + PMK 72/2023 (sumber resmi DJP di atas, akses 2026-10-23) untuk sisi fiskal dan PSAK 16/25/48 sebagai rujukan standar komersial (bukan dasar fiskal). BUKAN persetujuan DJP, bukan penetapan, dan bukan klaim SPT Tahunan/laporan keuangan sah — perubahan metode fiskal final tetap lewat persetujuan DJP, daftar penyusutan final wajib cocok lampiran SPT Tahunan badan.
+
+ID vonis ini **F-2026-10-23-115-V** (tertinggi terverifikasi run ini di origin/main 41b81748: F-2026-10-23-111-V merged #617; 112-V–114-V di PR terbuka #618/#619/#620; 115 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini + putus prioritas inti sesudah saldo fiskal F-109/F-110 -> BOT 3 inti peristiwa perubahan aset -> BOT 2 -> BOT 6 E115-1..10.

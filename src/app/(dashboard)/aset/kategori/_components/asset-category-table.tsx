@@ -7,6 +7,7 @@ import { ActionDropdown } from "@/components/ui/action-dropdown"
 import { deleteAssetCategory } from "@/actions/asset.actions"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { AssetFiscalStatus } from "../../_components/asset-fiscal-status"
 
 interface AssetCategoryData {
   id: number
@@ -14,6 +15,9 @@ interface AssetCategoryData {
   name: string
   depreciationRate: number | null
   usefulLife: number | null
+  taxGroupCode: string | null
+  taxTypeListed: boolean | null
+  taxDjpDetermination: boolean
 }
 
 const columnHelper = createColumnHelper<AssetCategoryData>()
@@ -40,6 +44,12 @@ const columns = [
       const val = info.getValue()
       return val ? `${val} tahun` : "-"
     },
+  }),
+  columnHelper.display({
+    id: "fiscalStatus",
+    header: "Status Fiskal",
+    enableSorting: false,
+    cell: (info) => <AssetFiscalStatus {...info.row.original} />,
   }),
   columnHelper.display({
     id: "actions",

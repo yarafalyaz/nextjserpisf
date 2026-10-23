@@ -1,5 +1,9 @@
 import { z } from "zod"
 import { dateOnly } from "@/lib/validations/finance.schemas"
+import {
+  isFiscalGroupCode,
+} from "@/lib/finance/asset-fiscal-groups"
+import { DEPRECIATION_METHODS } from "@/lib/finance/asset-depreciation"
 
 // ==================== Helpers ====================
 
@@ -45,6 +49,17 @@ export const assetCategorySchema = z.object({
   usefulLife: optionalNum(0),
   taxDepreciationRate: optionalNum(0),
   taxUsefulLife: optionalNum(0),
+  // Kelompok fiskal PMK 72/2023 (vonis F-2026-10-22-062-V Putusan 2): kode di
+  // luar daftar statutoris ditolak; kosong = belum dinyatakan (bukan tebakan).
+  taxGroupCode: z
+    .string()
+    .refine((v) => isFiscalGroupCode(v), "Kelompok fiskal tidak dikenal")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  // parseFormData sudah mengubah "true"/"false" FormData menjadi boolean dan
+  // string kosong menjadi undefined, jadi di sini cukup boolean opsional.
+  taxTypeListed: z.boolean().optional(),
+  taxDjpDetermination: z.boolean().optional(),
   assetAccountId: optionalRefId,
   accumulatedDepreciationAccountId: optionalRefId,
   depreciationExpenseAccountId: optionalRefId,
@@ -125,7 +140,15 @@ export const assetSchema = z.object({
   purchaseDate: optionalDate,
   purchasePrice: optionalNum(0),
   residualValue: optionalNum(0),
-  depreciationMethod: optionalStr(50),
+  // Metode penyusutan hanya dari daftar terdaftar (vonis F-2026-10-22-062-V
+  // Putusan 2): string bebas di luar daftar ditolak di sini, dan metode
+  // analitis NON-GL ditolak lagi oleh cron saat akan memposting jurnal.
+  depreciationMethod: z
+    .enum(DEPRECIATION_METHODS, {
+      error: "Metode penyusutan tidak dikenal",
+    })
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   location: optionalStr(200),
   status: optionalStr(50),
   description: optionalStr(1000),

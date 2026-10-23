@@ -31,6 +31,11 @@ import { WorkOrderProgressCard } from "@/components/reports/work-order-progress-
 import { getWorkOrderProgress } from "@/lib/reports/work-order-progress-data";
 import { getJobChangeOrdersForWorkOrder } from "@/actions/job-change-order.actions";
 import { JobChangeOrderPanel } from "./_components/job-change-order-panel";
+import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions";
+import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel";
+import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card";
+import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data";
+import { auth } from "@/lib/auth/auth";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
   DetailTable,
@@ -58,46 +63,34 @@ export default async function WorkOrderDetailPage({
   await requirePermission("view_work_orders");
   const { slug } = await params;
 
+  const workOrderInclude = {
+    customer: true,
+    quotation: true,
+    customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
+    project: { select: { id: true, name: true, slug: true } },
+    bomRevision: { select: { id: true, revisionNo: true, slug: true } },
+    items: true,
+    purchaseOrders: {
+      where: { status: { notIn: ["cancelled"] } },
+      select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
+    },
+    productionOrders: {
+      select: { id: true, documentNo: true, status: true, qty: true, slug: true, bomRevision: { select: { revisionNo: true } } },
+    },
+  };
+
   const wo = await resolveEntity(
     { segment: slug },
     {
       bySlug: (s) =>
         prisma.workOrder.findFirst({
           where: { slug: s },
-          include: {
-            customer: true,
-            quotation: true,
-            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true, slug: true } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            items: true,
-            purchaseOrders: {
-              where: { status: { notIn: ["cancelled"] } },
-              select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
-            },
-            productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true },
-            },
-          },
+          include: workOrderInclude,
         }),
       byId: (id) =>
         prisma.workOrder.findUnique({
           where: { id },
-          include: {
-            customer: true,
-            quotation: true,
-            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true, slug: true } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            items: true,
-            purchaseOrders: {
-              where: { status: { notIn: ["cancelled"] } },
-              select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
-            },
-            productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true },
-            },
-          },
+          include: workOrderInclude,
         }),
     },
   );
@@ -223,6 +216,57 @@ export default async function WorkOrderDetailPage({
       hasPermission("edit_work_orders"),
       hasPermission("complete_work_orders"),
     ]);
+
+  // F-068-S UI (t_b60d664d): panel ganti revisi BOM — konsumen aksi BOT 3
+  // PR #589. Opsi = revisi released produk pin saat ini (beda dari pin);
+  // daftar pengajuan dari aksi list existing. Nama pengaju/item dari sini.
+  const [bomChangeList, canManageBomChange, bomSession] = await Promise.all([
+    listBomRevisionChangeRequests({ workOrderId: wo.id }),
+    hasPermission("edit_work_orders"),
+    auth(),
+  ]);
+  const bomChangeRequests = bomChangeList.success ? bomChangeList.requests : [];
+  const bomRevisionOptions = wo.bomRevision
+    ? await prisma.bomRevision.findMany({
+        where: {
+          productId: (
+            await prisma.bomRevision.findFirst({
+              where: { id: wo.bomRevision.id },
+              select: { productId: true },
+            })
+          )?.productId,
+          status: "released",
+          id: { not: wo.bomRevision.id },
+        },
+        select: { id: true, revisionNo: true },
+        orderBy: { revisionNo: "asc" },
+      })
+    : [];
+  const bomRevIds = [
+    ...new Set([
+      ...(wo.bomRevision ? [wo.bomRevision.id] : []),
+      ...bomRevisionOptions.map((r) => r.id),
+      ...bomChangeRequests.flatMap((r) => [r.fromRevisionId, r.toRevisionId]),
+    ]),
+  ];
+  const bomRevRows = bomRevIds.length
+    ? await prisma.bomRevision.findMany({
+        where: { id: { in: bomRevIds } },
+        select: { id: true, revisionNo: true, materials: { select: { itemId: true } } },
+      })
+    : [];
+  const bomUserIds = [
+    ...new Set(
+      bomChangeRequests.flatMap((r) => [r.requestedBy, r.decidedBy]).filter((x): x is number => x != null),
+    ),
+  ];
+  const bomUserRows = bomUserIds.length
+    ? await prisma.user.findMany({ where: { id: { in: bomUserIds } }, select: { id: true, name: true } })
+    : [];
+  const bomItemIds = [...new Set(bomRevRows.flatMap((r) => r.materials.map((m) => m.itemId)))];
+  const bomItemRows = bomItemIds.length
+    ? await prisma.item.findMany({ where: { id: { in: bomItemIds } }, select: { id: true, name: true } })
+    : [];
 
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
@@ -507,6 +551,31 @@ export default async function WorkOrderDetailPage({
       {partStatus ? (
         <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
       ) : null}
+
+      {wo.bomRevision ? (
+        <BomRevisionImpactCard
+          impact={await loadBomRevisionImpact(wo.bomRevision.id)}
+          currentRevisionNo={wo.bomRevision.revisionNo}
+        />
+      ) : null}
+
+      <BomRevisionChangePanel
+        owner={{ workOrderId: wo.id }}
+        documentStatus={wo.status}
+        currentRevision={wo.bomRevision}
+        revisionOptions={bomRevisionOptions}
+        requests={bomChangeRequests}
+        revisionNoById={Object.fromEntries(bomRevRows.map((r) => [r.id, r.revisionNo]))}
+        userNameById={Object.fromEntries(bomUserRows.map((u) => [u.id, u.name]))}
+        itemNameById={Object.fromEntries(bomItemRows.map((i) => [i.id, i.name]))}
+        canManage={canManageBomChange}
+        currentUserId={bomSession?.user?.id ? Number(bomSession.user.id) : null}
+        pairedPins={wo.productionOrders.flatMap((po) =>
+          po.bomRevision
+            ? [{ label: "order produksi", documentNo: po.documentNo, revisionNo: po.bomRevision.revisionNo }]
+            : [],
+        )}
+      />
 
       <JobChangeOrderPanel
         workOrderId={wo.id}
