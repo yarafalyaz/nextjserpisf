@@ -84,6 +84,8 @@ describe("transfer-receive-panel — F-2026-10-22-081-S §6", () => {
     const { container, root } = mount(
       <TransferReceivePanel transferId={7} status="processed" lines={[plainLine]} canCloseShortage />,
     )
+    // LOW-2 F-081-S: aria-label form penerimaan terkunci persis.
+    expect(container.querySelector("form")?.getAttribute("aria-label")).toBe("Formulir terima barang transfer")
     const headers = Array.from(container.querySelectorAll("th")).map((th) => th.textContent?.trim())
     expect(headers).toEqual(expect.arrayContaining(["Terkirim", "Sudah Diterima", "Belum Diterima", "Diterima Kali Ini"]))
     expect(container.querySelector('button[type="submit"]')?.textContent).toContain("Terima Barang")
