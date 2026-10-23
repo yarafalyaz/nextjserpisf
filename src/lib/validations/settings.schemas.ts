@@ -195,6 +195,11 @@ export const updateSystemSettingsSchema = z.object({
   // membuang field diam-diam dan akun tidak pernah tersimpan.
   retainedEarningsAccountId: optionalInt(),
 
+  // Accounting - Denda Piutang (F-2026-10-22-093-V P2d): akun pendapatan
+  // denda dari form Mapping Akun; tanpa kunci ini zod membuang field
+  // diam-diam dan terbit denda selamanya fail-closed.
+  lateFeeIncomeAccountId: optionalInt(),
+
   // Internal
   _redirectTo: optionalString(500),
 })
