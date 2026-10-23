@@ -121,6 +121,11 @@ export function CollectionQueueCard({
                           Tukar Faktur {row.exchangeDocumentNo}
                         </span>
                       ) : null}
+                      {row.hasOutstandingLateFee ? (
+                        <span className="block text-xs font-medium text-destructive">
+                          Ada denda terutang {formatCurrency(row.lateFeeOutstanding)}
+                        </span>
+                      ) : null}
                     </DetailTableTd>
                     <DetailTableTd>
                       <StatusChip
