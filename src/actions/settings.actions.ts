@@ -253,6 +253,10 @@ export async function updateSystemSettings(formData: FormData) {
       // akun laba ditahan tujuan jurnal penutup; kosong = posting ditolak.
       retainedEarningsAccountId: intNull("retainedEarningsAccountId"),
 
+      // Accounting - Denda Piutang (F-2026-10-22-093-V P2d):
+      // akun pendapatan denda; kosong = terbit dokumen denda ditolak.
+      lateFeeIncomeAccountId: intNull("lateFeeIncomeAccountId"),
+
       // Accounting - Fixed Asset Change Events (F-2026-10-23-111-V P2):
       // akun utang PPh final + tarif master revaluasi fiskal berpersetujuan.
       assetFiscalRevaluationTaxPayableAccountId: intNull("assetFiscalRevaluationTaxPayableAccountId"),

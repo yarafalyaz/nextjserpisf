@@ -153,6 +153,7 @@ interface SettingsFormValues {
   wipAccountId?: number | null
   workOrderPrefix?: string | null
   retainedEarningsAccountId?: number | null
+  lateFeeIncomeAccountId?: number | null
 }
 
 interface AccountMappingField {
@@ -285,6 +286,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
   const [depreciationExpense, setDepreciationExpense] = useState(settings.depreciationExpenseAccountId ? String(settings.depreciationExpenseAccountId) : "")
   const [accumulatedDepreciation, setAccumulatedDepreciation] = useState(settings.accumulatedDepreciationAccountId ? String(settings.accumulatedDepreciationAccountId) : "")
   const [retainedEarnings, setRetainedEarnings] = useState(settings.retainedEarningsAccountId ? String(settings.retainedEarningsAccountId) : "")
+  const [lateFeeIncome, setLateFeeIncome] = useState(settings.lateFeeIncomeAccountId ? String(settings.lateFeeIncomeAccountId) : "")
   const [fiscalRevalTaxPayable, setFiscalRevalTaxPayable] = useState(settings.assetFiscalRevaluationTaxPayableAccountId ? String(settings.assetFiscalRevaluationTaxPayableAccountId) : "")
   const [accountOptions, setAccountOptions] = useState(accounts)
   const logoInputRef = useRef<HTMLInputElement>(null)
@@ -381,6 +383,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
       title: "Penutup Tahun",
       items: [
         { name: "retainedEarningsAccountId", label: "Laba Ditahan (Tujuan Penutup Tahun)", value: retainedEarnings, onChange: setRetainedEarnings },
+        { name: "lateFeeIncomeAccountId", label: "Pendapatan Denda Keterlambatan Piutang", value: lateFeeIncome, onChange: setLateFeeIncome },
       ],
     },
   ]
@@ -1082,6 +1085,7 @@ export function SettingsEditForm({ settings, accounts, section, redirectTo }: Se
               </div>
             </div>
             <input type="hidden" name="retainedEarningsAccountId" value={retainedEarnings} />
+            <input type="hidden" name="lateFeeIncomeAccountId" value={lateFeeIncome} />
             <div className="mb-4 rounded-xl border border-default bg-surface-secondary/50 p-4">
               <div className="flex items-start justify-between gap-4 flex-wrap">
                 <div>
