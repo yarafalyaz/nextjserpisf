@@ -188,6 +188,14 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // frontend BOT 2 (buang entri ini saat UI memanggilnya).
   "src/actions/tax-documents.actions.ts::exportCoretaxOutputXmlAction":
     "F-2026-10-23-113-V inti backend; UI unduh XML Coretax menyusul (frontend BOT 2)",
+  // F-2026-10-23-111-V + F-2026-10-23-115-V inti (t_17e469e7): 3 aksi
+  // peristiwa perubahan aset backend dulu; UI menyusul kartu BOT 2.
+  "src/actions/asset.actions.ts::postAssetChangeEventAction":
+    "F-2026-10-23-111-V/115-V inti backend (t_17e469e7); UI peristiwa perubahan aset menyusul (frontend)",
+  "src/actions/asset.actions.ts::postAssetReclassificationAction":
+    "F-2026-10-23-111-V/115-V inti backend (t_17e469e7); UI reklasifikasi aset menyusul (frontend)",
+  "src/actions/asset.actions.ts::reverseAssetChangeEventAction":
+    "F-2026-10-23-111-V/115-V inti backend (t_17e469e7); UI balik peristiwa aset menyusul (frontend)",
 }
 
 describe("keterhubungan aksi server", () => {

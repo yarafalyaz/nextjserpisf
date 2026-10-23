@@ -252,6 +252,11 @@ export async function updateSystemSettings(formData: FormData) {
       // Accounting - Year-End Closing (F-2026-10-23-121-V Putusan 1):
       // akun laba ditahan tujuan jurnal penutup; kosong = posting ditolak.
       retainedEarningsAccountId: intNull("retainedEarningsAccountId"),
+
+      // Accounting - Fixed Asset Change Events (F-2026-10-23-111-V P2):
+      // akun utang PPh final + tarif master revaluasi fiskal berpersetujuan.
+      assetFiscalRevaluationTaxPayableAccountId: intNull("assetFiscalRevaluationTaxPayableAccountId"),
+      assetFiscalRevaluationFinalTaxRatePercent: decimalNull("assetFiscalRevaluationFinalTaxRatePercent"),
     },
   })
 
