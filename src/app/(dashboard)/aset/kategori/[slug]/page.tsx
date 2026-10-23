@@ -19,6 +19,7 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { AssetFiscalStatus } from "../../_components/asset-fiscal-status"
 export const metadata: Metadata = { title: "Kategori" }
 
 export default async function AssetCategoryDetailPage({
@@ -73,6 +74,7 @@ export default async function AssetCategoryDetailPage({
         <DetailField label="Nama" value={category.name} />
         <DetailField label="Tingkat Depresiasi" value={category.depreciationRate ? `${Number(category.depreciationRate)}%` : "-"} />
         <DetailField label="Umur Manfaat (tahun)" value={category.usefulLife || "-"} />
+        <DetailField label="Status Penyusutan Fiskal" value={<AssetFiscalStatus taxGroupCode={category.taxGroupCode} taxTypeListed={category.taxTypeListed} taxDjpDetermination={category.taxDjpDetermination} />} />
         <DetailField label="Dibuat" value={formatDate(category.createdAt)} />
       </DetailCard>
 

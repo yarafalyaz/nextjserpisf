@@ -34,6 +34,13 @@ export interface BomRevisionOption {
   revisionNo: number
 }
 
+/** Pin pasangan WO↔PO (Q-BOM68-4/BR-BOM68-07): pin dokumen tertaut, ditampilkan sebelum simpan. */
+export interface BomRevisionPairedPin {
+  label: string
+  documentNo: string
+  revisionNo: number
+}
+
 export interface BomRevisionChangeDeltaPreview {
   lines: (BomRevisionDeltaLine & { itemName: string })[]
   hasGenuinelyNew: boolean
@@ -69,6 +76,8 @@ interface Props {
   canManage: boolean
   /** userId sesi saat ini; penyetuju == pengaju disembunyikan (SoD server tetap menegakkan). */
   currentUserId: number | null
+  /** Pin pasangan tertaut (Q-BOM68-4); kosong = tidak ada pasangan ter-pin untuk ditampilkan. */
+  pairedPins?: BomRevisionPairedPin[]
 }
 
 const CLOSED = ["completed", "cancelled", "closed"]
@@ -110,6 +119,61 @@ function coverageTone(coverage: BomRevisionDeltaLine["coverage"]): string {
 }
 
 /**
+ * Tabel pratinjau delta revisi BOM. Murni presentasi: baris hasil builder
+ * ditampilkan apa adanya. Baris dengan issuedQty > 0 (kontrak BOT 3 PR #606)
+ * ditandai "Terkunci — sudah keluar {issuedQty}" — qty sudah keluar tidak
+ * dihitung ulang dari newNeededQty.
+ */
+export function BomRevisionDeltaPreviewTable({
+  lines,
+}: Readonly<{ lines: BomRevisionChangeDeltaPreview["lines"] }>) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs text-muted-foreground">
+            <th scope="col" className="py-1 pr-2 font-medium">Barang</th>
+            <th scope="col" className="py-1 pr-2 font-medium text-right">Qty/unit lama</th>
+            <th scope="col" className="py-1 pr-2 font-medium text-right">Qty/unit baru</th>
+            <th scope="col" className="py-1 pr-2 font-medium text-right">Kebutuhan baru</th>
+            <th scope="col" className="py-1 font-medium">Status cakupan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {lines.map((line) => (
+            <tr key={line.itemId} className="border-t border-default">
+              <td className="py-1 pr-2">
+                <span className="flex flex-col gap-0.5">
+                  <span>{line.itemName}</span>
+                  {line.issuedQty > 0 ? (
+                    <span className="inline-flex w-fit rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-500/15 dark:text-amber-400">
+                      Terkunci — sudah keluar {line.issuedQty}
+                    </span>
+                  ) : null}
+                </span>
+              </td>
+              <td className="py-1 pr-2 text-right">{line.oldQtyPerUnit}</td>
+              <td className="py-1 pr-2 text-right">{line.newQtyPerUnit}</td>
+              <td className="py-1 pr-2 text-right">{line.newNeededQty}</td>
+              <td className="py-1">
+                <span
+                  className={cn(
+                    "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
+                    coverageTone(line.coverage),
+                  )}
+                >
+                  {coverageLabel(line.coverage)}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+/**
  * Panel "Ganti revisi BOM" order berjalan (F-2026-10-22-068-S, t_b60d664d).
  * Konsumen aksi BOT 3 PR #589: request/decide/list (muat di page) +
  * loadBomRevisionChangeDelta lewat aksi pratinjau. UI menampilkan hasil
@@ -127,6 +191,7 @@ export function BomRevisionChangePanel({
   itemNameById,
   canManage,
   currentUserId,
+  pairedPins = [],
 }: Readonly<Props>) {
   const { isPending, startTransition, run } = useActionRunner("Gagal memproses ganti revisi BOM")
   const [formOpen, setFormOpen] = useState(false)
@@ -222,6 +287,13 @@ export function BomRevisionChangePanel({
             Revisi terpasang:{" "}
             <span className="font-medium text-foreground">Rev. {currentRevision.revisionNo}</span>
           </p>
+          {pairedPins.map((pin) => (
+            <p key={`${pin.label}-${pin.documentNo}`} role="note" className="text-xs text-muted-foreground">
+              Pin {pin.label} {pin.documentNo}:{" "}
+              <span className="font-medium text-foreground">Rev. {pin.revisionNo}</span>{" "}
+              — ganti revisi dokumen ini tidak mengubah pin {pin.label}.
+            </p>
+          ))}
           {canRequest ? (
             <Button
               variant="primary"
@@ -392,39 +464,7 @@ export function BomRevisionChangePanel({
                     Revisi tujuan tidak memuat baris bahan.
                   </p>
                 ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-left text-xs text-muted-foreground">
-                          <th scope="col" className="py-1 pr-2 font-medium">Barang</th>
-                          <th scope="col" className="py-1 pr-2 font-medium text-right">Qty/unit lama</th>
-                          <th scope="col" className="py-1 pr-2 font-medium text-right">Qty/unit baru</th>
-                          <th scope="col" className="py-1 pr-2 font-medium text-right">Kebutuhan baru</th>
-                          <th scope="col" className="py-1 font-medium">Status cakupan</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {preview.lines.map((line) => (
-                          <tr key={line.itemId} className="border-t border-default">
-                            <td className="py-1 pr-2">{line.itemName}</td>
-                            <td className="py-1 pr-2 text-right">{line.oldQtyPerUnit}</td>
-                            <td className="py-1 pr-2 text-right">{line.newQtyPerUnit}</td>
-                            <td className="py-1 pr-2 text-right">{line.newNeededQty}</td>
-                            <td className="py-1">
-                              <span
-                                className={cn(
-                                  "inline-flex rounded-full px-2 py-0.5 text-xs font-medium",
-                                  coverageTone(line.coverage),
-                                )}
-                              >
-                                {coverageLabel(line.coverage)}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+                  <BomRevisionDeltaPreviewTable lines={preview.lines} />
                 )}
                 <p role="note" className="text-xs text-muted-foreground">
                   Status cakupan hanya tampilan untuk pertimbangan Anda; pengajuan ini tidak membuat
