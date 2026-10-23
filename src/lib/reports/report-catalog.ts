@@ -176,6 +176,7 @@ export const REPORT_CATEGORIES: ReportCategory[] = [
       { href: "/laporan/jurnal-aset" },
       { href: "/laporan/histori-aset" },
       { href: "/laporan/perbedaan-penyusutan" },
+      { href: "/laporan/pajak-tangguhan" },
       { href: "/laporan/rekonsiliasi-aset" },
     ],
   },

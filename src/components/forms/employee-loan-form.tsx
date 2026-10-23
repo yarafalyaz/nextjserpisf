@@ -141,6 +141,7 @@ export function EmployeeLoanForm({ employees, loan }: LoanFormProps) {
               placeholder="Opsional"
               defaultValue={loan?.weeklyInstallment}
               prefix="Rp"
+              emptyAsNull
               aria-describedby="weeklyInstallment-hint"
             />
             <p id="weeklyInstallment-hint" className="text-xs text-muted-foreground">
