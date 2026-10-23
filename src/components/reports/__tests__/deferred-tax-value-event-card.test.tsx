@@ -6,8 +6,8 @@ import { DEFERRED_TAX_NOTICE } from "@/lib/reports/deferred-tax"
 import {
   buildDeferredTaxValueEventSource,
   VALUE_EVENT_SOURCE_UNAVAILABLE_LABEL,
-  type AssetValueEventInput,
 } from "@/lib/reports/deferred-tax-value-events"
+import { valueEventFixture as event } from "@/lib/reports/__tests__/deferred-tax-value-event-fixtures"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 
 afterEach(() => {
@@ -15,26 +15,6 @@ afterEach(() => {
 })
 
 const AS_OF = new Date(Date.UTC(2026, 11, 31))
-
-function event(overrides: Partial<AssetValueEventInput> = {}): AssetValueEventInput {
-  return {
-    assetCode: "AST-1",
-    assetName: "Truk",
-    categoryName: "Kendaraan",
-    kind: "REVALUATION_UP",
-    effectiveDate: new Date(Date.UTC(2026, 5, 30)),
-    status: "POSTED",
-    carryingBefore: 100_000_000,
-    carryingAfter: 150_000_000,
-    fiscalBaseBefore: 80_000_000,
-    fiscalBaseAfter: 80_000_000,
-    finalTaxAmount: null,
-    depreciationTemporaryDifference: 0,
-    profitBasisFrozen: false,
-    facilityRateCase: false,
-    ...overrides,
-  }
-}
 
 describe("DeferredTaxValueEventCard F-2026-10-23-125-V", () => {
   it("sumber belum tersedia: notice belum-terbekukan verbatim, nol angka Rp tampil", () => {

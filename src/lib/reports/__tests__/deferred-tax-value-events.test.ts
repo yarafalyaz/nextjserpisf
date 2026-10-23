@@ -9,30 +9,11 @@ import {
   VALUE_EVENT_RECOGNITION_ELIGIBLE_LABEL,
   VALUE_EVENT_RECOGNITION_UNTESTED_LABEL,
   VALUE_EVENT_SOURCE_UNAVAILABLE_LABEL,
-  type AssetValueEventInput,
 } from "@/lib/reports/deferred-tax-value-events"
 
-const AS_OF = new Date(Date.UTC(2026, 11, 31))
+import { valueEventFixture as event } from "./deferred-tax-value-event-fixtures"
 
-function event(overrides: Partial<AssetValueEventInput> = {}): AssetValueEventInput {
-  return {
-    assetCode: "AST-1",
-    assetName: "Truk",
-    categoryName: "Kendaraan",
-    kind: "REVALUATION_UP",
-    effectiveDate: new Date(Date.UTC(2026, 5, 30)),
-    status: "POSTED",
-    carryingBefore: 100_000_000,
-    carryingAfter: 150_000_000,
-    fiscalBaseBefore: 80_000_000,
-    fiscalBaseAfter: 80_000_000,
-    finalTaxAmount: null,
-    depreciationTemporaryDifference: 0,
-    profitBasisFrozen: false,
-    facilityRateCase: false,
-    ...overrides,
-  }
-}
+const AS_OF = new Date(Date.UTC(2026, 11, 31))
 
 function texts(result: ReturnType<typeof buildDeferredTaxValueEventSource>) {
   return result.table.rows
