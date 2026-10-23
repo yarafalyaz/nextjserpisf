@@ -140,6 +140,17 @@ export const assetSchema = z.object({
   purchaseDate: optionalDate,
   purchasePrice: optionalNum(0),
   residualValue: optionalNum(0),
+  // Parameter terbekukan per aset (vonis F-2026-10-23-118-V Putusan 2a):
+  // UOP wajib total estimasi unit + satuan bernama; SYD wajib masa manfaat
+  // bulan integer. Kosong pada metode analitis = mesin menolak berisik
+  // (missing-parameter), bukan ditebak dari kategori fiskal.
+  totalEstimatedUnits: optionalNum(0),
+  productionUnitName: optionalStr(50),
+  usefulLifeMonths: z.coerce
+    .number()
+    .int("Masa manfaat harus bilangan bulat bulan")
+    .positive("Masa manfaat harus lebih dari 0")
+    .optional(),
   // Metode penyusutan hanya dari daftar terdaftar (vonis F-2026-10-22-062-V
   // Putusan 2): string bebas di luar daftar ditolak di sini, dan metode
   // analitis NON-GL ditolak lagi oleh cron saat akan memposting jurnal.
@@ -161,4 +172,26 @@ export const assetDisposalSchema = z.object({
   proceeds: optionalNum(0),
   disposalDate: optionalDate,
   reason: optionalStr(500),
+})
+
+// ==================== Asset Usage Record (F-118-V Putusan 2b) ====================
+
+/** Dokumen unit aktual bernama per (aset, masa) untuk metode UOP. */
+export const assetUsageRecordSchema = z.object({
+  assetId: requiredId("Aset"),
+  periodYear: z.coerce
+    .number({ error: "Tahun masa wajib diisi" })
+    .int("Tahun masa harus bilangan bulat")
+    .min(2000, "Tahun masa tidak sah")
+    .max(2100, "Tahun masa tidak sah"),
+  periodMonth: z.coerce
+    .number({ error: "Bulan masa wajib diisi" })
+    .int("Bulan masa harus bilangan bulat")
+    .min(1, "Bulan masa 1-12")
+    .max(12, "Bulan masa 1-12"),
+  actualUnits: z.coerce
+    .number({ error: "Unit aktual wajib diisi" })
+    .min(0, "Unit aktual tidak boleh negatif"),
+  sourceName: requiredStr("Nama dokumen sumber wajib diisi", 200),
+  sourceRef: optionalStr(200),
 })
