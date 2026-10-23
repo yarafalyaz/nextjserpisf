@@ -149,7 +149,6 @@ interface AssetState {
   cumulativeDecrease: number
   /** Kumulatif komponen positif yang pernah lahir, plafon arah dapat-dikurangkan. */
   taxableEverBorn: number
-  profitBasisFrozen: boolean
 }
 
 export function buildDeferredTaxValueEventSource(input: {
@@ -292,7 +291,6 @@ export function buildDeferredTaxValueEventSource(input: {
       stock: 0,
       cumulativeDecrease: 0,
       taxableEverBorn: 0,
-      profitBasisFrozen: event.profitBasisFrozen,
     }
     states.set(key, state)
 
@@ -343,7 +341,7 @@ export function buildDeferredTaxValueEventSource(input: {
     totals.computed += 1
     if (effective < 0) {
       anyDeductibleComputed = true
-      if (!state.profitBasisFrozen) allDeductibleProfitFrozen = false
+      if (!event.profitBasisFrozen) allDeductibleProfitFrozen = false
     }
 
     const indication = safeDivide(safeMultiply(Math.abs(effective), rate, 2), 100, 2)
