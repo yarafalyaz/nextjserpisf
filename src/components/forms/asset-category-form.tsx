@@ -23,6 +23,9 @@ export interface AssetCategoryFormValue {
   usefulLife?: number | null
   taxDepreciationRate?: number | null
   taxUsefulLife?: number | null
+  taxGroupCode?: string | null
+  taxTypeListed?: boolean | null
+  taxDjpDetermination?: boolean | null
   assetAccountId?: number | null
   accumulatedDepreciationAccountId?: number | null
   depreciationExpenseAccountId?: number | null
@@ -87,10 +90,32 @@ export function AssetCategoryForm({
 
         <FormSection title="Penyusutan Fiskal (Pajak)">
           <p className="text-xs text-muted-foreground">
-            Dipakai laporan Perbedaan Penyusutan untuk membandingkan penyusutan akuntansi dengan
-            penyusutan fiskal. Kosongkan bila kategori ini belum dihitung secara fiskal — asetnya
-            tetap tampil di laporan, tetapi tidak ikut dihitung selisihnya.
+            Kelompok fiskal PMK 72/2023 menentukan tarif statutoris laporan Perbedaan Penyusutan.
+            Jenis tercantum tanpa kelompok = fiskal belum dihitung; jenis tidak tercantum tanpa
+            kelompok = Kelompok 3 (default statutoris). Penetapan DJP mengalahkan default.
           </p>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="taxGroupCode">Kelompok Fiskal</Label>
+            <FormSelect id="taxGroupCode" name="taxGroupCode" placeholder="-- Belum ditentukan --" options={[
+              { value: "GROUP_1", label: "Kelompok 1 (4 tahun)" },
+              { value: "GROUP_2", label: "Kelompok 2 (8 tahun)" },
+              { value: "GROUP_3", label: "Kelompok 3 (16 tahun)" },
+              { value: "GROUP_4", label: "Kelompok 4 (20 tahun)" },
+              { value: "BUILDING_PERMANENT", label: "Bangunan permanen (20 tahun)" },
+              { value: "BUILDING_NON_PERMANENT", label: "Bangunan tidak permanen (10 tahun)" },
+            ]} defaultValue={category?.taxGroupCode ?? ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="taxTypeListed">Jenis Harta di Lampiran PMK 72/2023</Label>
+            <FormSelect id="taxTypeListed" name="taxTypeListed" placeholder="-- Belum dinyatakan --" options={[
+              { value: "true", label: "Tercantum" },
+              { value: "false", label: "Tidak tercantum" },
+            ]} defaultValue={category?.taxTypeListed == null ? "" : String(category.taxTypeListed)} />
+          </div>
+          <div className="flex items-center gap-2">
+            <input id="taxDjpDetermination" name="taxDjpDetermination" type="checkbox" value="true" defaultChecked={!!category?.taxDjpDetermination} className="size-4 min-h-11 min-w-11 rounded border-default sm:min-h-4 sm:min-w-4" />
+            <Label htmlFor="taxDjpDetermination">Ada penetapan DJP untuk jenis ini</Label>
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="taxDepreciationRate">Tarif Fiskal (%)</Label>
             <Input id="taxDepreciationRate" name="taxDepreciationRate" type="number" step="0.01" min="0" placeholder="0" defaultValue={category?.taxDepreciationRate ?? ""} />
