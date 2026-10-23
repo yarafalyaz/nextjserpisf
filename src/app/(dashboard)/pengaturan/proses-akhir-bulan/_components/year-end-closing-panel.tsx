@@ -37,7 +37,7 @@ export function YearEndClosingPanel({ preview }: { preview: YearEndClosingPrevie
 
   function changeYear(value: string) {
     if (!/^\d{4}$/.test(value)) return
-    router.push(`/pengaturan/proses-akhir-bulan?tahun=${value}`)
+    router.push(`/pengaturan/proses-akhir-bulan/tahun/${value}`)
   }
 
   const postDisabledReason = preview.alreadyClosed

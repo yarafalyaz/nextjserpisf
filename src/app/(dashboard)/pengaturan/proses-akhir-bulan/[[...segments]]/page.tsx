@@ -30,13 +30,20 @@ export default async function PeriodClosePage({
   if (params.periode) redirect(`/pengaturan/proses-akhir-bulan/periode/${params.periode}`)
 
   const { segments } = await routeParams
-  const filters = parsePathFilterSegments(segments, { periode: /^\d{4}-\d{2}$/ })
+  const filters = parsePathFilterSegments(segments, {
+    periode: /^\d{4}-\d{2}$/,
+    tahun: /^\d{4}$/,
+  })
   if (!filters) notFound()
 
   const { month, result } = await loadPeriodClose(filters.periode)
-  const parsedYear = Number(params.tahun)
+  // Tautan lama `?tahun=YYYY` diarahkan ke bentuk path `tahun/<yyyy>`.
+  if (params.tahun !== undefined) {
+    redirect(`/pengaturan/proses-akhir-bulan/tahun/${params.tahun}`)
+  }
+  const parsedYear = Number(filters.tahun)
   const fiscalYear =
-    /^\d{4}$/.test(params.tahun ?? "") && parsedYear >= 1900 && parsedYear <= 2200
+    /^\d{4}$/.test(filters.tahun ?? "") && parsedYear >= 1900 && parsedYear <= 2200
       ? parsedYear
       : new Date().getFullYear()
   const yearEndPreview = await getYearEndClosingPreview(fiscalYear)
