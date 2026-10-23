@@ -22,6 +22,8 @@ import { isAnalyticalDepreciationMethod } from "@/lib/finance/asset-depreciation
 import { loadAssetAnalyticalStatuses } from "@/lib/reports/asset-analytical-status-data"
 import { AssetAnalyticalStatus } from "../_components/asset-analytical-status"
 import { AssetUsageRecordForm } from "./_components/asset-usage-record-form"
+import { AssetFiscalYearFreezeForm } from "./_components/asset-fiscal-year-freeze-form"
+import { fiscalMethodLabel } from "../_components/asset-fiscal-status"
 
 import type { Metadata } from "next"
 
@@ -38,6 +40,7 @@ export default async function AssetDetailPage({
   const assetInclude = {
     category: true,
     group: true,
+    fiscalYearRows: { orderBy: { taxYear: "asc" as const } },
     histories: { orderBy: { date: "desc" as const }, take: 10 },
     transfers: { orderBy: { transferDate: "desc" as const }, take: 5 },
   }
@@ -110,7 +113,7 @@ export default async function AssetDetailPage({
         <DetailField label="Nilai Saat Ini (cache)" value={formatCurrency(Number(asset.currentValue))} />
         <DetailField label="Akumulasi Penyusutan" value={<span className="text-danger">{formatCurrency(depreciation)}</span>} />
         <DetailField label="Metode Penyusutan (komersial)" value={asset.depreciationMethod ? (DEPRECIATION_METHOD_LABELS[asset.depreciationMethod] ?? asset.depreciationMethod) : "-"} />
-        <DetailField label="Status Penyusutan Fiskal" value={asset.category ? <AssetFiscalStatus taxGroupCode={asset.category.taxGroupCode} taxTypeListed={asset.category.taxTypeListed} taxDjpDetermination={asset.category.taxDjpDetermination} /> : "Tanpa kategori — fiskal belum dihitung"} />
+        <DetailField label="Status Penyusutan Fiskal" value={asset.category ? <AssetFiscalStatus taxGroupCode={asset.category.taxGroupCode} taxTypeListed={asset.category.taxTypeListed} taxDjpDetermination={asset.category.taxDjpDetermination} fiscalMethod={asset.category.fiscalMethod} /> : "Tanpa kategori — fiskal belum dihitung"} />
         {/* The asset form labels this field "Deskripsi" and createAsset/
             updateAsset persist it to `notes` (the `description` column is
             unused), so read it back from `notes` — otherwise the text a user
@@ -126,6 +129,46 @@ export default async function AssetDetailPage({
           )}
         </DetailCard>
       )}
+
+      {/* Saldo fiskal tahunan terbekukan (F-109-V): snapshot server apa adanya */}
+      <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-4 p-4 px-5 border-b border-default">
+          <h2 className="text-[0.9375rem] font-semibold text-foreground">Saldo Fiskal Tahunan</h2>
+          <CanCreate permission="edit_assets">
+            <AssetFiscalYearFreezeForm assetId={asset.id} defaultThroughYear={now.getFullYear()} />
+          </CanCreate>
+        </div>
+        <div className="p-4 px-5">
+          {asset.fiscalYearRows.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              Belum ada baris tahun fiskal terbekukan. Angka fiskal tahun berjalan di laporan berlabel estimasi-tahun-berjalan sampai baris tahun dibuat.
+            </p>
+          ) : (
+            <DetailTable>
+              <DetailTableHead>
+                <DetailTableTh>Tahun Pajak</DetailTableTh>
+                <DetailTableTh>Metode</DetailTableTh>
+                <DetailTableTh>Sumber</DetailTableTh>
+                <DetailTableTh align="right">Saldo Awal</DetailTableTh>
+                <DetailTableTh align="right">Penyusutan</DetailTableTh>
+                <DetailTableTh align="right">Saldo Akhir</DetailTableTh>
+              </DetailTableHead>
+              <DetailTableBody>
+                {asset.fiscalYearRows.map((row) => (
+                  <DetailTableRow key={row.id}>
+                    <DetailTableTd>{row.taxYear}</DetailTableTd>
+                    <DetailTableTd>{fiscalMethodLabel(row.method)}</DetailTableTd>
+                    <DetailTableTd>{row.source}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(Number(row.openingBalance))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(Number(row.depreciation))}</DetailTableTd>
+                    <DetailTableTd align="right">{formatCurrency(Number(row.closingBalance))}</DetailTableTd>
+                  </DetailTableRow>
+                ))}
+              </DetailTableBody>
+            </DetailTable>
+          )}
+        </div>
+      </div>
 
       {/* History */}
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
