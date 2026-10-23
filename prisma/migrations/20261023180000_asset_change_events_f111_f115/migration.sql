@@ -32,6 +32,7 @@ CREATE TABLE `asset_change_events` (
     `gross_before` DECIMAL(15, 2) NULL,
     `accumulated_before` DECIMAL(15, 2) NULL,
     `accumulated_impairment_before` DECIMAL(15, 2) NULL,
+    `revaluation_surplus_before` DECIMAL(15, 2) NULL,
     `revaluation_surplus_after` DECIMAL(15, 2) NULL,
     `appraiser_name` VARCHAR(200) NULL,
     `revalued_class_name` VARCHAR(200) NULL,

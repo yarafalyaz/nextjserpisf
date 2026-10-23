@@ -4144,8 +4144,11 @@ model AssetChangeEvent {
   grossBefore          Decimal? @map("gross_before") @db.Decimal(15, 2)
   accumulatedBefore    Decimal? @map("accumulated_before") @db.Decimal(15, 2)
   accumulatedImpairmentBefore Decimal? @map("accumulated_impairment_before") @db.Decimal(15, 2)
-  /// Surplus revaluasi per-aset sesudah peristiwa (snapshot; tidak boleh
-  /// negatif, tidak boleh memakan surplus aset lain — E111-2).
+  /// Surplus revaluasi per-aset sebelum/sesudah peristiwa (snapshot; tidak
+  /// boleh negatif, tidak boleh memakan surplus aset lain — E111-2). Before
+  /// dibekukan supaya reversal menulis surplus sesudah = before peristiwa
+  /// asal persis (mirror), tanpa menurunkan ulang dari rantai.
+  revaluationSurplusBefore Decimal? @map("revaluation_surplus_before") @db.Decimal(15, 2)
   revaluationSurplusAfter Decimal? @map("revaluation_surplus_after") @db.Decimal(15, 2)
 
   /// Penilai/dasar terstruktur: nama penilai/penelaah + rujukan laporan.

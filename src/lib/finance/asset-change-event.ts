@@ -152,6 +152,7 @@ export interface BuiltAssetChangeEvent {
   grossBefore: Prisma.Decimal
   accumulatedBefore: Prisma.Decimal
   accumulatedImpairmentBefore: Prisma.Decimal
+  revaluationSurplusBefore: Prisma.Decimal
   revaluationSurplusAfter: Prisma.Decimal
   fiscalBaseBefore: Prisma.Decimal | null
   fiscalBaseAfter: Prisma.Decimal | null
@@ -284,6 +285,7 @@ export function buildAssetChangeEvent(input: {
     grossBefore: sen(gross),
     accumulatedBefore: sen(accumulated),
     accumulatedImpairmentBefore: sen(accumulatedImpairment),
+    revaluationSurplusBefore: sen(surplusBefore),
     revaluationSurplusAfter: sen(surplusBefore),
     fiscalBaseBefore: null as Prisma.Decimal | null,
     fiscalBaseAfter: null as Prisma.Decimal | null,

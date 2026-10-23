@@ -11,6 +11,13 @@
  * Koreksi = reversal periode terbuka membaca snapshot akun peristiwa asal,
  * bukan mapping berjalan (E128-4). Pajak tangguhan TIDAK dijurnal di sini
  * (F-111-V Putusan 4(d) di luar vonis; read-model F-125 membaca peristiwa).
+ *
+ * Semantik referensi jurnal: jurnal peristiwa menunjuk ASET
+ * (`referenceId = assetId`, `referenceType = ASSET_CHANGE_EVENT`) — pola
+ * sama ASSET_ACQUISITION, supaya pembaca per-aset menemukannya. Fakta
+ * POSTED peristiwa sendiri dibaca lewat join `AssetChangeEvent.journalId`
+ * (satu jurnal per peristiwa), BUKAN dari referenceId: peristiwa ke-2 dst
+ * aset sama wajib melihat jurnal peristiwa sebelumnya persis.
  */
 
 import { Prisma } from "@prisma/client"
@@ -24,6 +31,7 @@ import {
   type AssetChangeEventKind,
   type AssetChangeEventRequest,
   type AssetPostedFacts,
+  type BuiltAssetChangeEvent,
   type CategoryAccountMapping,
   type MappedAccount,
 } from "@/lib/finance/asset-change-event"
@@ -36,6 +44,15 @@ interface AccountRow {
   type: string
   reportGroup: string | null
   isActive: boolean
+}
+
+interface CategoryRow {
+  name: string
+  assetAccountId: number | null
+  accumulatedDepreciationAccountId: number | null
+  revaluationSurplusAccountId: number | null
+  impairmentLossAccountId: number | null
+  accumulatedImpairmentAccountId: number | null
 }
 
 function toMapped(row: AccountRow | null | undefined): MappedAccount | null {
@@ -52,17 +69,7 @@ async function loadAccount(tx: TxClient, id: number | null | undefined): Promise
   return toMapped(row)
 }
 
-async function loadMapping(
-  tx: TxClient,
-  category: {
-    name: string
-    assetAccountId: number | null
-    accumulatedDepreciationAccountId: number | null
-    revaluationSurplusAccountId: number | null
-    impairmentLossAccountId: number | null
-    accumulatedImpairmentAccountId: number | null
-  },
-): Promise<CategoryAccountMapping> {
+async function loadMapping(tx: TxClient, category: CategoryRow): Promise<CategoryAccountMapping> {
   const [assetAccount, accumulatedDepreciationAccount, revaluationSurplusAccount, impairmentLossAccount, accumulatedImpairmentAccount] =
     await Promise.all([
       loadAccount(tx, category.assetAccountId),
@@ -92,16 +99,33 @@ const CATEGORY_SELECT = {
   taxGroupCode: true,
 } as const
 
+type JournalEntryRow = { accountId: number; debit: Prisma.Decimal; credit: Prisma.Decimal }
+type JournalRow = { referenceType: string | null; entries: JournalEntryRow[] }
+
+function sumAccountNet(journals: JournalRow[], accountId: number | null, side: "debit" | "credit"): Prisma.Decimal {
+  if (accountId == null) return new Prisma.Decimal(0)
+  const other = side === "debit" ? "credit" : "debit"
+  let total = new Prisma.Decimal(0)
+  for (const j of journals) {
+    for (const e of j.entries) {
+      if (e.accountId !== accountId) continue
+      total = total.add(e[side]).sub(e[other])
+    }
+  }
+  return total
+}
+
 /** Nilai tercatat jurnal POSTED termasuk kontra impairment peristiwa F-111. */
 async function loadPostedFacts(tx: TxClient, assetId: number, mapping: CategoryAccountMapping): Promise<{
   facts: AssetPostedFacts
-  assetStatus: string
 }> {
   const asset = await tx.asset.findUniqueOrThrow({
     where: { id: assetId },
     select: { status: true },
   })
-  const journals = await tx.journal.findMany({
+  // Jurnal siklus hidup per-aset (perolehan/pelepasan/penyusutan) menunjuk
+  // aset lewat referenceId — pola existing.
+  const lifecycleJournals: JournalRow[] = await tx.journal.findMany({
     where: {
       referenceId: assetId,
       status: "POSTED",
@@ -110,7 +134,6 @@ async function loadPostedFacts(tx: TxClient, assetId: number, mapping: CategoryA
         { referenceType: "ASSET_ACQUISITION" },
         { referenceType: "ASSET_DISPOSAL" },
         { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
-        { referenceType: ASSET_CHANGE_EVENT_REFERENCE_TYPE },
       ],
     },
     select: {
@@ -118,8 +141,32 @@ async function loadPostedFacts(tx: TxClient, assetId: number, mapping: CategoryA
       entries: { select: { accountId: true, debit: true, credit: true } },
     },
   })
+  // Jurnal peristiwa dibaca lewat join peristiwa POSTED (journalId), bukan
+  // referenceId — peristiwa susulan wajib melihat jurnal peristiwa lampau.
+  const events = await tx.assetChangeEvent.findMany({
+    where: { assetId, status: "POSTED" },
+    select: {
+      kind: true,
+      effectiveDate: true,
+      journalId: true,
+      revaluationSurplusAfter: true,
+      fiscalBaseAfter: true,
+    },
+    orderBy: [{ effectiveDate: "asc" }, { id: "asc" }],
+  })
+  const eventJournalIds = events.map((e) => e.journalId).filter((id): id is number => id != null)
+  const eventJournals: JournalRow[] = eventJournalIds.length
+    ? await tx.journal.findMany({
+        where: { id: { in: eventJournalIds }, status: "POSTED", deletedAt: null },
+        select: {
+          referenceType: true,
+          entries: { select: { accountId: true, debit: true, credit: true } },
+        },
+      })
+    : []
+  const allJournals = [...lifecycleJournals, ...eventJournals]
   const posted = journalBookValue(
-    journals.map((j) => ({
+    allJournals.map((j) => ({
       referenceType: j.referenceType ?? "",
       lines: j.entries.map((e) => ({ accountId: e.accountId, debit: e.debit, credit: e.credit })),
     })),
@@ -128,36 +175,6 @@ async function loadPostedFacts(tx: TxClient, assetId: number, mapping: CategoryA
       accumulatedDepreciationAccountId: mapping.accumulatedDepreciationAccount?.id ?? null,
     },
   )
-  // Kontra impairment + surplus + beban lampau dibaca dari JURNAL peristiwa
-  // POSTED pada akun snapshot mapping berjalan (akun kontra/beban/surplus
-  // kategori ini); peristiwa REVERSED dikecualikan karena jurnal pasangannya
-  // sudah meniadakan lewat JurnalService pola existing (status REVERSED).
-  const eventJournals = journals.filter((j) => j.referenceType === ASSET_CHANGE_EVENT_REFERENCE_TYPE)
-  const sumAccount = (accountId: number | null, side: "debit" | "credit", other: "debit" | "credit") => {
-    if (accountId == null) return new Prisma.Decimal(0)
-    let total = new Prisma.Decimal(0)
-    for (const j of eventJournals) {
-      for (const e of j.entries) {
-        if (e.accountId !== accountId) continue
-        total = total.add(side === "debit" ? e.debit : e.credit).sub(other === "debit" ? e.debit : e.credit)
-      }
-    }
-    return total
-  }
-  const accumulatedImpairmentPosted = Prisma.Decimal.max(
-    new Prisma.Decimal(0),
-    sumAccount(mapping.accumulatedImpairmentAccount?.id ?? null, "credit", "debit"),
-  )
-  const events = await tx.assetChangeEvent.findMany({
-    where: { assetId, status: "POSTED" },
-    select: {
-      kind: true,
-      effectiveDate: true,
-      revaluationSurplusAfter: true,
-      fiscalBaseAfter: true,
-    },
-    orderBy: [{ effectiveDate: "asc" }, { id: "asc" }],
-  })
   const lastEvent = events[events.length - 1]
   const lastFiscal = [...events].reverse().find((e) => e.kind === "FISCAL_REVALUATION_APPROVED")
   const facts: AssetPostedFacts = {
@@ -165,18 +182,19 @@ async function loadPostedFacts(tx: TxClient, assetId: number, mapping: CategoryA
     hasAcquisitionJournal: posted.hasAcquisitionJournal,
     grossCostPosted: posted.grossCostPosted,
     accumulatedPosted: posted.accumulatedPosted,
-    accumulatedImpairmentPosted,
+    accumulatedImpairmentPosted: Prisma.Decimal.max(
+      new Prisma.Decimal(0),
+      sumAccountNet(eventJournals, mapping.accumulatedImpairmentAccount?.id ?? null, "credit"),
+    ),
     disposalGrossPosted: posted.disposalGrossPosted,
     revaluationSurplusPerAsset: lastEvent?.revaluationSurplusAfter ?? new Prisma.Decimal(0),
-    // Beban lampau aset sama = debit bersih akun beban penurunan pada jurnal
-    // peristiwa (revaluasi turun/impairment), bukti jurnal POSTED (P1).
     priorLossChargedToProfitOrLoss: Prisma.Decimal.max(
       new Prisma.Decimal(0),
-      sumAccount(mapping.impairmentLossAccount?.id ?? null, "debit", "credit"),
+      sumAccountNet(eventJournals, mapping.impairmentLossAccount?.id ?? null, "debit"),
     ),
     lastFiscalRevaluationDate: lastFiscal?.effectiveDate ?? null,
   }
-  return { facts, assetStatus: asset.status }
+  return { facts }
 }
 
 async function nextJournalNumber(tx: TxClient, date: Date): Promise<string> {
@@ -198,6 +216,137 @@ function isSourceKeyConflict(error: unknown): boolean {
   const target = meta ? String(meta.target ?? "") : ""
   const message = error instanceof Error ? error.message : ""
   return /source_document|reference/i.test(target) || /source_document|reference/i.test(message)
+}
+
+async function assertSourceDocumentUnused(tx: TxClient, sourceDocumentKey: string): Promise<void> {
+  const replay = await tx.assetChangeEvent.findUnique({
+    where: { sourceDocumentKey },
+    select: { id: true },
+  })
+  if (replay) {
+    throw new Error(
+      `Dokumen sumber "${sourceDocumentKey}" sudah melahirkan peristiwa #${replay.id}; replay ditolak (satu dokumen satu peristiwa).`,
+    )
+  }
+}
+
+interface SnapshotAccounts {
+  surplusAccountId: number | null
+  surplusAccountCode: string | null
+  impairmentLossAccountId: number | null
+  impairmentLossAccountCode: string | null
+  accumulatedImpairmentAccountId: number | null
+  accumulatedImpairmentAccountCode: string | null
+  fixedAssetAccountId: number | null
+  fixedAssetAccountCode: string | null
+  accumulatedDepreciationAccountId: number | null
+  accumulatedDepreciationAccountCode: string | null
+  taxPayableAccountId: number | null
+  taxPayableAccountCode: string | null
+  toFixedAssetAccountId: number | null
+  toFixedAssetAccountCode: string | null
+  toAccumulatedDepreciationAccountId: number | null
+  toAccumulatedDepreciationAccountCode: string | null
+  toAccumulatedImpairmentAccountId: number | null
+  toAccumulatedImpairmentAccountCode: string | null
+}
+
+function snapshotOf(mapping: CategoryAccountMapping, toMapping: CategoryAccountMapping | null, taxPayable: MappedAccount | null | undefined): SnapshotAccounts {
+  const pair = (a: MappedAccount | null | undefined) => ({ id: a?.id ?? null, code: a?.code ?? null })
+  const surplus = pair(mapping.revaluationSurplusAccount)
+  const loss = pair(mapping.impairmentLossAccount)
+  const contra = pair(mapping.accumulatedImpairmentAccount)
+  const asset = pair(mapping.assetAccount)
+  const accum = pair(mapping.accumulatedDepreciationAccount)
+  const toAsset = pair(toMapping?.assetAccount)
+  const toAccum = pair(toMapping?.accumulatedDepreciationAccount)
+  const toContra = pair(toMapping?.accumulatedImpairmentAccount)
+  const tax = pair(taxPayable)
+  return {
+    surplusAccountId: surplus.id, surplusAccountCode: surplus.code,
+    impairmentLossAccountId: loss.id, impairmentLossAccountCode: loss.code,
+    accumulatedImpairmentAccountId: contra.id, accumulatedImpairmentAccountCode: contra.code,
+    fixedAssetAccountId: asset.id, fixedAssetAccountCode: asset.code,
+    accumulatedDepreciationAccountId: accum.id, accumulatedDepreciationAccountCode: accum.code,
+    taxPayableAccountId: tax.id, taxPayableAccountCode: tax.code,
+    toFixedAssetAccountId: toAsset.id, toFixedAssetAccountCode: toAsset.code,
+    toAccumulatedDepreciationAccountId: toAccum.id, toAccumulatedDepreciationAccountCode: toAccum.code,
+    toAccumulatedImpairmentAccountId: toContra.id, toAccumulatedImpairmentAccountCode: toContra.code,
+  }
+}
+
+/**
+ * Tulis jurnal pasangan (bila ada baris) + baris peristiwa — langkah bersama
+ * posting/reklasifikasi. Jurnal menunjuk aset (referenceId = assetId);
+ * tautan jurnal <-> peristiwa lewat `AssetChangeEvent.journalId`.
+ */
+async function createJournalAndEvent(
+  tx: TxClient,
+  args: {
+    assetId: number
+    assetLabel: string
+    descriptionPrefix: string
+    event: BuiltAssetChangeEvent
+    effectiveDate: Date
+    sourceDocumentKey: string
+    createdBy: number | null | undefined
+    eventData: Record<string, unknown>
+  },
+): Promise<{ eventId: number; journalId: number | null; journalNumber: string | null }> {
+  const { event } = args
+  let journalId: number | null = null
+  let journalNumber: string | null = null
+  if (event.lines.length > 0) {
+    journalNumber = await nextJournalNumber(tx, args.effectiveDate)
+    const totalDebit = event.lines.reduce((sum, l) => sum.add(l.debit), new Prisma.Decimal(0))
+    const totalCredit = event.lines.reduce((sum, l) => sum.add(l.credit), new Prisma.Decimal(0))
+    const journal = await tx.journal.create({
+      data: {
+        journalNumber,
+        transactionDate: args.effectiveDate,
+        referenceType: ASSET_CHANGE_EVENT_REFERENCE_TYPE,
+        referenceId: args.assetId,
+        description: `${args.descriptionPrefix} aset: ${args.assetLabel}`,
+        type: ASSET_CHANGE_EVENT_REFERENCE_TYPE,
+        status: "POSTED",
+        totalDebit,
+        totalCredit,
+        createdBy: args.createdBy ?? null,
+        entries: {
+          create: event.lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit, memo: l.memo })),
+        },
+      },
+      select: { id: true },
+    })
+    journalId = journal.id
+  }
+  const created = await tx.assetChangeEvent.create({
+    data: {
+      assetId: args.assetId,
+      kind: event.kind,
+      status: "POSTED",
+      effectiveDate: args.effectiveDate,
+      sourceDocumentKey: args.sourceDocumentKey,
+      journalId,
+      carryingBefore: event.carryingBefore,
+      carryingAfter: event.carryingAfter,
+      grossBefore: event.grossBefore,
+      accumulatedBefore: event.accumulatedBefore,
+      accumulatedImpairmentBefore: event.accumulatedImpairmentBefore,
+      revaluationSurplusBefore: event.revaluationSurplusBefore,
+      revaluationSurplusAfter: event.revaluationSurplusAfter,
+      fiscalBaseBefore: event.fiscalBaseBefore,
+      fiscalBaseAfter: event.fiscalBaseAfter,
+      fiscalSurplusAmount: event.fiscalSurplusAmount,
+      finalTaxRatePercent: event.finalTaxRatePercent,
+      finalTaxAmount: event.finalTaxAmount,
+      fiscalUsefulLifeMonthsAfter: event.fiscalUsefulLifeMonthsAfter,
+      createdBy: args.createdBy ?? null,
+      ...args.eventData,
+    } as Prisma.AssetChangeEventUncheckedCreateInput,
+    select: { id: true },
+  })
+  return { eventId: created.id, journalId, journalNumber }
 }
 
 export interface PostAssetChangeEventInput {
@@ -242,30 +391,18 @@ export async function postAssetChangeEvent(
         throw new Error("Aset belum berkategori; peristiwa perubahan aset wajib kategori terpetakan.")
       }
 
-      // Anti-replay dokumen sumber SEBELUM kerja lain (E111-10/E115-8).
-      const replay = await tx.assetChangeEvent.findUnique({
-        where: { sourceDocumentKey: request.sourceDocumentKey },
-        select: { id: true },
-      })
-      if (replay) {
-        throw new Error(
-          `Dokumen sumber "${request.sourceDocumentKey}" sudah melahirkan peristiwa #${replay.id}; replay ditolak (satu dokumen satu peristiwa).`,
-        )
-      }
-
-      const mapping = await loadMapping(tx, asset.category)
-
-      // Reklasifikasi: pindah lewat postAssetReclassification (tujuan eksplisit).
-      const toMapping: CategoryAccountMapping | null = null
-      const toCategoryId: number | null = null
       if (request.kind === "RECLASSIFICATION") {
         throw new Error("Reklasifikasi wajib lewat postAssetReclassification (kategori tujuan eksplisit).")
       }
 
+      await assertSourceDocumentUnused(tx, request.sourceDocumentKey)
+
+      const mapping = await loadMapping(tx, asset.category)
+
       const { facts } = await loadPostedFacts(tx, assetId, mapping)
 
       // Tarif + akun pajak fiskal dari master setting (data, bukan konstanta).
-      let enriched: AssetChangeEventRequest = { ...request, toMapping }
+      let enriched: AssetChangeEventRequest = { ...request }
       if (request.kind === "FISCAL_REVALUATION_APPROVED") {
         const settings = await tx.systemSetting.findFirst({
           select: {
@@ -274,11 +411,6 @@ export async function postAssetChangeEvent(
           },
         })
         const taxPayableAccount = await loadAccount(tx, settings?.assetFiscalRevaluationTaxPayableAccountId)
-        const priorFiscal = await tx.assetChangeEvent.findFirst({
-          where: { assetId, kind: "FISCAL_REVALUATION_APPROVED", status: "POSTED" },
-          orderBy: [{ effectiveDate: "desc" }, { id: "desc" }],
-          select: { fiscalBaseAfter: true },
-        })
         const lastFiscalEvent = await tx.assetChangeEvent.findFirst({
           where: { assetId, status: "POSTED", fiscalBaseAfter: { not: null } },
           orderBy: [{ effectiveDate: "desc" }, { id: "desc" }],
@@ -288,7 +420,7 @@ export async function postAssetChangeEvent(
           ...enriched,
           taxPayableAccount,
           finalTaxRatePercent: settings?.assetFiscalRevaluationFinalTaxRatePercent ?? null,
-          fiscalBaseBefore: request.fiscalBaseBefore ?? lastFiscalEvent?.fiscalBaseAfter ?? priorFiscal?.fiscalBaseAfter ?? null,
+          fiscalBaseBefore: request.fiscalBaseBefore ?? lastFiscalEvent?.fiscalBaseAfter ?? null,
           fiscalGroupCode: request.fiscalGroupCode ?? asset.category.taxGroupCode,
         }
       }
@@ -305,54 +437,16 @@ export async function postAssetChangeEvent(
 
       await assertPeriodOpen(request.effectiveDate, tx)
 
-      let journalId: number | null = null
-      let journalNumber: string | null = null
-      if (event.lines.length > 0) {
-        journalNumber = await nextJournalNumber(tx, request.effectiveDate)
-        const totalDebit = event.lines.reduce((s, l) => s.add(l.debit), new Prisma.Decimal(0))
-        const totalCredit = event.lines.reduce((s, l) => s.add(l.credit), new Prisma.Decimal(0))
-        const journal = await tx.journal.create({
-          data: {
-            journalNumber,
-            transactionDate: request.effectiveDate,
-            // referenceId diisi sesudah peristiwa lahir (id peristiwa), lihat bawah.
-            referenceType: ASSET_CHANGE_EVENT_REFERENCE_TYPE,
-            referenceId: null,
-            description: `Peristiwa ${event.kind} aset: ${asset.name} (${asset.code})`,
-            type: ASSET_CHANGE_EVENT_REFERENCE_TYPE,
-            status: "POSTED",
-            totalDebit,
-            totalCredit,
-            createdBy: input.createdBy ?? null,
-            entries: {
-              create: event.lines.map((l) => ({
-                accountId: l.accountId,
-                debit: l.debit,
-                credit: l.credit,
-                memo: l.memo,
-              })),
-            },
-          },
-          select: { id: true },
-        })
-        journalId = journal.id
-      }
-
-      const created = await tx.assetChangeEvent.create({
-        data: {
-          assetId,
-          kind: event.kind,
-          status: "POSTED",
-          effectiveDate: request.effectiveDate,
-          sourceDocumentKey: request.sourceDocumentKey,
+      const result = await createJournalAndEvent(tx, {
+        assetId,
+        assetLabel: `${asset.name} (${asset.code})`,
+        descriptionPrefix: `Peristiwa ${event.kind}`,
+        event,
+        effectiveDate: request.effectiveDate,
+        sourceDocumentKey: request.sourceDocumentKey,
+        createdBy: input.createdBy,
+        eventData: {
           sourceDocumentRef: request.appraiserReportRef ?? null,
-          journalId,
-          carryingBefore: event.carryingBefore,
-          carryingAfter: event.carryingAfter,
-          grossBefore: event.grossBefore,
-          accumulatedBefore: event.accumulatedBefore,
-          accumulatedImpairmentBefore: event.accumulatedImpairmentBefore,
-          revaluationSurplusAfter: event.revaluationSurplusAfter,
           appraiserName: request.appraiserName ?? null,
           revaluedClassName: request.revaluedClassName ?? null,
           impairmentIndicator: request.impairmentIndicator ?? null,
@@ -361,7 +455,7 @@ export async function postAssetChangeEvent(
           carryingWithoutImpairment: request.carryingWithoutImpairment != null ? new Prisma.Decimal(request.carryingWithoutImpairment) : null,
           isGoodwillOrNonAmortizing: request.isGoodwillOrNonAmortizing ?? false,
           fromCategoryId: asset.categoryId,
-          toCategoryId,
+          toCategoryId: null,
           reasonCode: request.reasonCode ?? null,
           approvedByName: request.approvedByName ?? null,
           oldMethod: enriched.oldMethod ?? null,
@@ -372,38 +466,12 @@ export async function postAssetChangeEvent(
           newResidualValue: request.newResidualValue != null ? new Prisma.Decimal(request.newResidualValue) : null,
           djpApprovalNumber: request.djpApprovalNumber ?? null,
           djpApprovalDate: request.djpApprovalDate ?? null,
-          fiscalBaseBefore: event.fiscalBaseBefore,
-          fiscalBaseAfter: event.fiscalBaseAfter,
-          fiscalSurplusAmount: event.fiscalSurplusAmount,
-          finalTaxRatePercent: event.finalTaxRatePercent,
-          finalTaxAmount: event.finalTaxAmount,
-          fiscalUsefulLifeMonthsAfter: event.fiscalUsefulLifeMonthsAfter,
           fiscalGroupCode: enriched.fiscalGroupCode ?? null,
           fiscalMethodBefore: request.kind === "FISCAL_METHOD_CHANGE" ? (request.oldMethod ?? null) : null,
           fiscalMethodAfter: request.kind === "FISCAL_METHOD_CHANGE" ? (request.newMethod ?? null) : null,
-          surplusAccountId: mapping.revaluationSurplusAccount?.id ?? null,
-          surplusAccountCode: mapping.revaluationSurplusAccount?.code ?? null,
-          impairmentLossAccountId: mapping.impairmentLossAccount?.id ?? null,
-          impairmentLossAccountCode: mapping.impairmentLossAccount?.code ?? null,
-          accumulatedImpairmentAccountId: mapping.accumulatedImpairmentAccount?.id ?? null,
-          accumulatedImpairmentAccountCode: mapping.accumulatedImpairmentAccount?.code ?? null,
-          fixedAssetAccountId: mapping.assetAccount?.id ?? null,
-          fixedAssetAccountCode: mapping.assetAccount?.code ?? null,
-          accumulatedDepreciationAccountId: mapping.accumulatedDepreciationAccount?.id ?? null,
-          accumulatedDepreciationAccountCode: mapping.accumulatedDepreciationAccount?.code ?? null,
-          taxPayableAccountId: enriched.taxPayableAccount?.id ?? null,
-          taxPayableAccountCode: enriched.taxPayableAccount?.code ?? null,
-          createdBy: input.createdBy ?? null,
+          ...snapshotOf(mapping, null, enriched.taxPayableAccount),
         },
-        select: { id: true },
       })
-
-      if (journalId != null) {
-        await tx.journal.update({
-          where: { id: journalId },
-          data: { referenceId: created.id },
-        })
-      }
 
       // Efek berjalan — HANYA lewat peristiwa ini (F-115 P2/P4).
       if (event.kind === "COMMERCIAL_METHOD_CHANGE" && request.newMethod) {
@@ -426,7 +494,7 @@ export async function postAssetChangeEvent(
         })
       }
 
-      return { eventId: created.id, journalId, journalNumber, kind: event.kind }
+      return { eventId: result.eventId, journalId: result.journalId, journalNumber: result.journalNumber, kind: event.kind }
     })
   } catch (error) {
     if (isSourceKeyConflict(error)) {
@@ -459,13 +527,7 @@ export async function postAssetReclassification(input: {
       if (!asset.category) throw new Error("Aset belum berkategori; reklasifikasi wajib kategori asal terpetakan.")
       if (asset.categoryId === toCategoryId) throw new Error("Kategori tujuan reklasifikasi harus berbeda dari kategori asal.")
 
-      const replay = await tx.assetChangeEvent.findUnique({
-        where: { sourceDocumentKey: request.sourceDocumentKey },
-        select: { id: true },
-      })
-      if (replay) {
-        throw new Error(`Dokumen sumber "${request.sourceDocumentKey}" sudah melahirkan peristiwa #${replay.id}; replay ditolak.`)
-      }
+      await assertSourceDocumentUnused(tx, request.sourceDocumentKey)
 
       const toCategory = await tx.assetCategory.findUnique({
         where: { id: toCategoryId },
@@ -487,81 +549,84 @@ export async function postAssetReclassification(input: {
 
       await assertPeriodOpen(request.effectiveDate, tx)
 
-      let journalId: number | null = null
-      let journalNumber: string | null = null
-      if (event.lines.length > 0) {
-        journalNumber = await nextJournalNumber(tx, request.effectiveDate)
-        const totalDebit = event.lines.reduce((s, l) => s.add(l.debit), new Prisma.Decimal(0))
-        const totalCredit = event.lines.reduce((s, l) => s.add(l.credit), new Prisma.Decimal(0))
-        const journal = await tx.journal.create({
-          data: {
-            journalNumber,
-            transactionDate: request.effectiveDate,
-            referenceType: ASSET_CHANGE_EVENT_REFERENCE_TYPE,
-            referenceId: null,
-            description: `Reklasifikasi aset: ${asset.name} (${asset.code})`,
-            type: ASSET_CHANGE_EVENT_REFERENCE_TYPE,
-            status: "POSTED",
-            totalDebit,
-            totalCredit,
-            createdBy: input.createdBy ?? null,
-            entries: { create: event.lines.map((l) => ({ accountId: l.accountId, debit: l.debit, credit: l.credit, memo: l.memo })) },
-          },
-          select: { id: true },
-        })
-        journalId = journal.id
-      }
-
-      const created = await tx.assetChangeEvent.create({
-        data: {
-          assetId,
-          kind: "RECLASSIFICATION",
-          status: "POSTED",
-          effectiveDate: request.effectiveDate,
-          sourceDocumentKey: request.sourceDocumentKey,
+      const result = await createJournalAndEvent(tx, {
+        assetId,
+        assetLabel: `${asset.name} (${asset.code})`,
+        descriptionPrefix: "Reklasifikasi",
+        event,
+        effectiveDate: request.effectiveDate,
+        sourceDocumentKey: request.sourceDocumentKey,
+        createdBy: input.createdBy,
+        eventData: {
           sourceDocumentRef: request.appraiserReportRef ?? null,
-          journalId,
-          carryingBefore: event.carryingBefore,
-          carryingAfter: event.carryingAfter,
-          grossBefore: event.grossBefore,
-          accumulatedBefore: event.accumulatedBefore,
-          accumulatedImpairmentBefore: event.accumulatedImpairmentBefore,
-          revaluationSurplusAfter: event.revaluationSurplusAfter,
           fromCategoryId: asset.categoryId,
           toCategoryId,
           reasonCode: request.reasonCode ?? null,
           approvedByName: request.approvedByName ?? null,
-          surplusAccountId: mapping.revaluationSurplusAccount?.id ?? null,
-          surplusAccountCode: mapping.revaluationSurplusAccount?.code ?? null,
-          impairmentLossAccountId: mapping.impairmentLossAccount?.id ?? null,
-          impairmentLossAccountCode: mapping.impairmentLossAccount?.code ?? null,
-          accumulatedImpairmentAccountId: mapping.accumulatedImpairmentAccount?.id ?? null,
-          accumulatedImpairmentAccountCode: mapping.accumulatedImpairmentAccount?.code ?? null,
-          fixedAssetAccountId: mapping.assetAccount?.id ?? null,
-          fixedAssetAccountCode: mapping.assetAccount?.code ?? null,
-          accumulatedDepreciationAccountId: mapping.accumulatedDepreciationAccount?.id ?? null,
-          accumulatedDepreciationAccountCode: mapping.accumulatedDepreciationAccount?.code ?? null,
-          toFixedAssetAccountId: toMapping.assetAccount?.id ?? null,
-          toFixedAssetAccountCode: toMapping.assetAccount?.code ?? null,
-          toAccumulatedDepreciationAccountId: toMapping.accumulatedDepreciationAccount?.id ?? null,
-          toAccumulatedDepreciationAccountCode: toMapping.accumulatedDepreciationAccount?.code ?? null,
-          toAccumulatedImpairmentAccountId: toMapping.accumulatedImpairmentAccount?.id ?? null,
-          toAccumulatedImpairmentAccountCode: toMapping.accumulatedImpairmentAccount?.code ?? null,
-          createdBy: input.createdBy ?? null,
+          ...snapshotOf(mapping, toMapping, null),
         },
-        select: { id: true },
       })
-      if (journalId != null) {
-        await tx.journal.update({ where: { id: journalId }, data: { referenceId: created.id } })
-      }
       await tx.asset.update({ where: { id: assetId }, data: { categoryId: toCategoryId } })
-      return { eventId: created.id, journalId, journalNumber, kind: "RECLASSIFICATION" as const }
+      return { eventId: result.eventId, journalId: result.journalId, journalNumber: result.journalNumber, kind: "RECLASSIFICATION" as const }
     })
   } catch (error) {
     if (isSourceKeyConflict(error)) {
       throw new Error(`Dokumen sumber "${request.sourceDocumentKey}" sudah melahirkan peristiwa; replay ditolak.`)
     }
     throw error
+  }
+}
+
+type OriginalEvent = Prisma.AssetChangeEventGetPayload<{
+  include: { asset: { select: { name: true; code: true; categoryId: true } } }
+}>
+
+/**
+ * Snapshot reversal = mirror persis peristiwa asal: akun tujuan dibalik
+ * (to* reversal = akun asal peristiwa asal; akun asal reversal = akun
+ * tujuan asal bila ada), dan seluruh konteks terstruktur asal disalin.
+ */
+function reversalEventData(original: OriginalEvent): Record<string, unknown> {
+  const mirrorAccounts: SnapshotAccounts = {
+    surplusAccountId: original.surplusAccountId, surplusAccountCode: original.surplusAccountCode,
+    impairmentLossAccountId: original.impairmentLossAccountId, impairmentLossAccountCode: original.impairmentLossAccountCode,
+    accumulatedImpairmentAccountId: original.accumulatedImpairmentAccountId, accumulatedImpairmentAccountCode: original.accumulatedImpairmentAccountCode,
+    fixedAssetAccountId: original.toFixedAssetAccountId ?? original.fixedAssetAccountId,
+    fixedAssetAccountCode: original.toFixedAssetAccountCode ?? original.fixedAssetAccountCode,
+    accumulatedDepreciationAccountId: original.toAccumulatedDepreciationAccountId ?? original.accumulatedDepreciationAccountId,
+    accumulatedDepreciationAccountCode: original.toAccumulatedDepreciationAccountCode ?? original.accumulatedDepreciationAccountCode,
+    taxPayableAccountId: original.taxPayableAccountId, taxPayableAccountCode: original.taxPayableAccountCode,
+    toFixedAssetAccountId: original.fixedAssetAccountId, toFixedAssetAccountCode: original.fixedAssetAccountCode,
+    toAccumulatedDepreciationAccountId: original.accumulatedDepreciationAccountId, toAccumulatedDepreciationAccountCode: original.accumulatedDepreciationAccountCode,
+    toAccumulatedImpairmentAccountId: original.accumulatedImpairmentAccountId, toAccumulatedImpairmentAccountCode: original.accumulatedImpairmentAccountCode,
+  }
+  return {
+    sourceDocumentRef: original.sourceDocumentRef,
+    reversesEventId: original.id,
+    appraiserName: original.appraiserName,
+    revaluedClassName: original.revaluedClassName,
+    impairmentIndicator: original.impairmentIndicator,
+    recoverableBasis: original.recoverableBasis,
+    recoverableAmount: original.recoverableAmount,
+    carryingWithoutImpairment: original.carryingWithoutImpairment,
+    isGoodwillOrNonAmortizing: original.isGoodwillOrNonAmortizing,
+    fromCategoryId: original.toCategoryId,
+    toCategoryId: original.fromCategoryId,
+    reasonCode: original.reasonCode,
+    reasonNote: original.reasonNote,
+    approvedByName: original.approvedByName,
+    oldMethod: original.newMethod,
+    newMethod: original.oldMethod,
+    oldUsefulLifeMonths: original.newUsefulLifeMonths,
+    newUsefulLifeMonths: original.oldUsefulLifeMonths,
+    oldResidualValue: original.newResidualValue,
+    newResidualValue: original.oldResidualValue,
+    djpApprovalNumber: original.djpApprovalNumber,
+    djpApprovalDate: original.djpApprovalDate,
+    fiscalGroupCode: original.fiscalGroupCode,
+    fiscalMethodBefore: original.fiscalMethodAfter,
+    fiscalMethodAfter: original.fiscalMethodBefore,
+    ...mirrorAccounts,
   }
 }
 
@@ -585,12 +650,7 @@ export async function reverseAssetChangeEvent(input: {
       if (!original) throw new Error("Peristiwa perubahan aset tidak ditemukan.")
       if (original.status !== "POSTED") throw new Error("Peristiwa sudah dibalik atau tidak POSTED.")
 
-      const replay = await tx.assetChangeEvent.findUnique({
-        where: { sourceDocumentKey: input.sourceDocumentKey },
-        select: { id: true },
-      })
-      if (replay) throw new Error(`Dokumen sumber "${input.sourceDocumentKey}" sudah dipakai peristiwa #${replay.id}.`)
-
+      await assertSourceDocumentUnused(tx, input.sourceDocumentKey)
       await assertPeriodOpen(input.reversalDate, tx)
 
       let journalId: number | null = null
@@ -609,7 +669,7 @@ export async function reverseAssetChangeEvent(input: {
             journalNumber,
             transactionDate: input.reversalDate,
             referenceType: ASSET_CHANGE_EVENT_REFERENCE_TYPE,
-            referenceId: null,
+            referenceId: original.assetId,
             description: `Reversal peristiwa ${original.kind} #${original.id} aset: ${original.asset.name} (${original.asset.code})`,
             type: ASSET_CHANGE_EVENT_REFERENCE_TYPE,
             status: "POSTED",
@@ -631,44 +691,45 @@ export async function reverseAssetChangeEvent(input: {
         await tx.journal.update({ where: { id: originalJournal.id }, data: { status: "REVERSED" } })
       }
 
+      // Surplus mirror: sesudah reversal = sebelum peristiwa asal (kolom
+      // terbekukan asal). Baris lama tanpa kolom before diturunkan dari
+      // rantai peristiwa POSTED lain aset sama sebagai cadangan.
+      let surplusAfterReversal = original.revaluationSurplusBefore
+      if (surplusAfterReversal == null) {
+        const prior = await tx.assetChangeEvent.findFirst({
+          where: { assetId: original.assetId, status: "POSTED", id: { not: original.id } },
+          orderBy: [{ effectiveDate: "desc" }, { id: "desc" }],
+          select: { revaluationSurplusAfter: true },
+        })
+        surplusAfterReversal = prior?.revaluationSurplusAfter ?? new Prisma.Decimal(0)
+      }
+
       const reversal = await tx.assetChangeEvent.create({
         data: {
+          ...(reversalEventData(original) as Prisma.AssetChangeEventUncheckedCreateInput),
           assetId: original.assetId,
           kind: original.kind,
           status: "POSTED",
           effectiveDate: input.reversalDate,
           sourceDocumentKey: input.sourceDocumentKey,
           journalId,
-          reversesEventId: original.id,
           carryingBefore: original.carryingAfter,
           carryingAfter: original.carryingBefore,
           grossBefore: original.grossBefore,
           accumulatedBefore: original.accumulatedBefore,
           accumulatedImpairmentBefore: original.accumulatedImpairmentBefore,
-          revaluationSurplusAfter: original.carryingBefore != null && original.kind === "RECLASSIFICATION"
-            ? original.revaluationSurplusAfter
-            : null,
-          fromCategoryId: original.toCategoryId,
-          toCategoryId: original.fromCategoryId,
-          surplusAccountId: original.surplusAccountId,
-          surplusAccountCode: original.surplusAccountCode,
-          impairmentLossAccountId: original.impairmentLossAccountId,
-          impairmentLossAccountCode: original.impairmentLossAccountCode,
-          accumulatedImpairmentAccountId: original.accumulatedImpairmentAccountId,
-          accumulatedImpairmentAccountCode: original.accumulatedImpairmentAccountCode,
-          fixedAssetAccountId: original.fixedAssetAccountId,
-          fixedAssetAccountCode: original.fixedAssetAccountCode,
-          accumulatedDepreciationAccountId: original.accumulatedDepreciationAccountId,
-          accumulatedDepreciationAccountCode: original.accumulatedDepreciationAccountCode,
-          taxPayableAccountId: original.taxPayableAccountId,
-          taxPayableAccountCode: original.taxPayableAccountCode,
+          revaluationSurplusBefore: original.revaluationSurplusAfter,
+          revaluationSurplusAfter: surplusAfterReversal,
+          fiscalBaseBefore: original.fiscalBaseAfter,
+          fiscalBaseAfter: original.fiscalBaseBefore,
+          fiscalSurplusAmount: original.fiscalSurplusAmount != null ? original.fiscalSurplusAmount.negated() : null,
+          finalTaxRatePercent: original.finalTaxRatePercent,
+          finalTaxAmount: original.finalTaxAmount != null ? original.finalTaxAmount.negated() : null,
+          fiscalUsefulLifeMonthsAfter: null,
           createdBy: input.createdBy ?? null,
-        },
+        } as Prisma.AssetChangeEventUncheckedCreateInput,
         select: { id: true },
       })
-      if (journalId != null) {
-        await tx.journal.update({ where: { id: journalId }, data: { referenceId: reversal.id } })
-      }
       await tx.assetChangeEvent.update({ where: { id: original.id }, data: { status: "REVERSED" } })
 
       // Balikkan efek berjalan peristiwa asal.
