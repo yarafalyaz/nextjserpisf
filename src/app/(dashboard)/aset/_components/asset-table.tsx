@@ -8,6 +8,7 @@ import { formatCurrency } from "@/lib/utils/format"
 import { DataTable } from "@/components/ui/data-table"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref } from "@/lib/utils/entity-url"
+import { AssetUseStatus } from "./asset-use-status"
 import type { ErpColumnDef as ColumnDef } from "@/lib/table"
 
 interface AssetRow {
@@ -109,25 +110,9 @@ export function AssetTable({
     {
       id: "status",
       accessorKey: "status",
-      header: "Status",
-      cell: ({ row }) => {
-        const s = row.original.status
-        return (
-          <Badge
-            variant="outline"
-            className={cn(
-              "font-medium border-transparent",
-              s === "active" && "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400",
-              s === "inactive" && "bg-muted text-muted-foreground",
-              s === "disposed" && "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400",
-              s === "maintenance" && "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400",
-            )}
-          >
-            {s === "active" ? "Aktif" : s === "inactive" ? "Nonaktif" : s === "disposed" ? "Dibuang" : s === "maintenance" ? "Perbaikan" : s}
-          </Badge>
-        )
-      },
-      size: 110,
+      header: "Status Guna",
+      cell: ({ row }) => <AssetUseStatus status={row.original.status} />,
+      size: 150,
     },
     {
       id: "actions",
