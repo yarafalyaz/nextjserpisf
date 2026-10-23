@@ -87,8 +87,7 @@ function receiptFormData() {
   return f
 }
 
-function wireReceive() {
-  const m = mocks.prismaMock
+function wireTransferModel(m: any) {
   m.inventoryTransfer = {
     findUniqueOrThrow: vi.fn().mockResolvedValue({
       id: TRANSFER_ID,
@@ -97,16 +96,22 @@ function wireReceive() {
       date: new Date(2026, 9, 20),
       destinationWarehouseId: 2,
       materialRequestId: null,
+      items: [{ id: 11, itemId: 7, qty: 10, receivedQty: 4, serialNumbers: null }],
     }),
     findUnique: vi.fn().mockResolvedValue({ status: "partially_received" }),
     updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     update: vi.fn().mockResolvedValue({}),
   }
+  m.inventoryTransferReceiptItem = { findMany: vi.fn().mockResolvedValue([]) }
+  m.stockMove = { findMany: vi.fn().mockResolvedValue([{ itemId: 7, cost: 15 }]) }
+}
+
+function wireReceive() {
+  const m = mocks.prismaMock
+  wireTransferModel(m)
   m.inventoryTransferReceipt = {
     findUnique: vi.fn().mockResolvedValue(null),
   }
-  m.inventoryTransferReceiptItem = { findMany: vi.fn().mockResolvedValue([]) }
-  m.stockMove = { findMany: vi.fn().mockResolvedValue([{ itemId: 7, cost: 15 }]) }
   return m
 }
 
@@ -118,6 +123,8 @@ function wireClosureProcess() {
   }
   const m = mocks.prismaMock
   m.$queryRaw = vi.fn().mockResolvedValue([])
+  wireTransferModel(m)
+  m.inventoryTransfer.update = spies.transferUpdate
   m.stockAdjustment = {
     findUniqueOrThrow: vi.fn().mockResolvedValue({
       id: 9,
@@ -133,18 +140,6 @@ function wireClosureProcess() {
     updateMany: spies.stockAdjustmentUpdateMany,
     update: spies.adjustmentUpdate,
   }
-  m.inventoryTransfer = {
-    findUniqueOrThrow: vi.fn().mockResolvedValue({
-      id: TRANSFER_ID,
-      documentNo: "TRF-100",
-      status: "partially_received",
-      materialRequestId: null,
-      items: [{ id: 11, itemId: 7, qty: 10, receivedQty: 4, serialNumbers: null }],
-    }),
-    update: spies.transferUpdate,
-  }
-  m.inventoryTransferReceiptItem = { findMany: vi.fn().mockResolvedValue([]) }
-  m.stockMove = { findMany: vi.fn().mockResolvedValue([{ itemId: 7, cost: 15 }]) }
   m.journal = { findFirst: vi.fn().mockResolvedValue({ id: 555 }) }
   return spies
 }
