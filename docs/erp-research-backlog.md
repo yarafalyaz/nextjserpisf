@@ -24102,3 +24102,363 @@ usulan: Business (spec), Lead (putusan angka/jam kerja),
 Backend (builder), Frontend (konsumen 001-U), QA
 (falsifikasi). Butuh putusan accountant: TIDAK (tanpa
 uang/pajak/jurnal).
+
+## SPEC BUSINESS 2026-10-24 — F-2026-10-24-141-S peringatan duplikat lead saat createLead + daftar kandidat duplikat read-only (CRM leads)
+
+Spec dokumen saja, tanpa kode/schema/migrasi/UI. Basis
+`origin/main` `0395e9cb` (2026-10-24, run ini). Anti-tabrakan:
+grep `F-2026-10-24-141` di backlog+board origin/main = 0;
+tertinggi `-S` terbit di main = F-2026-10-24-099-S; tertinggi
+-S di PR saat spec ditulis = F-2026-10-24-135-S (PR #743 kala
+itu OPEN head c4b10f27; kini MERGED head akhir 595f817e —
+penanda waktu-tulis, diperbarui saat penggabungan kanonik
+2026-10-24, bukan klaim head berjalan);
+136-140 tidak terpakai di main/PR terbuka yang dicek run ini.
+ID spec ini **F-2026-10-24-141-S** bebas. Grep
+`duplikat lead|lead duplikat|peringatan duplikat` di
+backlog origin/main = 0 sebelum append ini — belum ada spec
+duplikat lead; spec ini bukan duplikasi spec lain.
+
+### 0. Bukti live (TERVERIFIKASI-KODE, origin/main 0395e9cb)
+
+Sudah ada — TIDAK diduplikasi spec ini:
+1. `createLead` (`src/actions/master.actions.ts:1557`):
+   `requirePermission("create_leads")` -> `parseFormData(createLeadSchema)`
+   -> `generateDocumentNumber("LEAD")` -> `prisma.lead.create`
+   langsung. Nol query kandidat, nol peringatan, nol blokir.
+   Status awal selalu `"new"`. Redirect `/crm/leads` sesudah sukses.
+2. `updateLead` (`master.actions.ts:1600`): `edit_leads` +
+   ownership guard (non-admin hanya lead `assignedTo` sendiri;
+   reassign hanya admin/`manage_leads`) + transaksi update +
+   `LeadActivity status_change` bila status berubah. Nol cek
+   duplikat phone/email/company juga di jalur edit.
+3. Skema lead (`src/lib/validations/crm.schemas.ts:61-85`):
+   `createLeadSchema` — `name` wajib, `email/phone/company`
+   `optionalString` nullable; `updateLeadSchema` = extend +
+   `status` enum `LEAD_STATUSES`
+   (`new/contacted/qualified/proposal/negotiation/won/lost`).
+   Nol normalisasi phone/email di schema.
+4. Model `Lead` (`prisma/schema.prisma:4163-4193`): `email`,
+   `phone`, `company` nullable TANPA `@unique`; hanya
+   `slug`+`leadNumber` unique. Index: status, customerId,
+   assignedTo, createdBy, createdAt. Soft-delete `deletedAt`
+   ada. Konsekuensi: unique constraint DB untuk phone/email
+   TIDAK mungkin tanpa migrasi + keputusan data kotor existing
+   — spec ini TIDAK mengusulkan unique DB (lihat §9).
+5. `convertLead` (`src/actions/crm.actions.ts:201-245`):
+   guard `edit_leads` + ownership + status >= qualified +
+   `lead.customerId` sudah terisi -> tolak; transaksi
+   `FOR UPDATE` + re-check customerId cegah customer ganda
+   konkuren. Guard ini cegah duplikat KONVERSI, bukan duplikat
+   LEAD: dua lead berbeda untuk orang sama tetap bisa dibuat,
+   dan lead kedua baru tertahan di convert (sesudah kerja sales
+   terlanjur ganda).
+6. Pola repo tetangga: `createCustomer`
+   (`master.actions.ts:182-195`) quick-add upsert diam-diam —
+   name+phone cocok customer aktif non-deleted -> return baris
+   existing TANPA memberi tahu user bahwa data sudah ada.
+   Pola "reuse senyap" ini TIDAK diterapkan ke lead dan TIDAK
+   cocok untuk lead: lead punya pipeline/status/owner sendiri;
+   reuse senyap akan menyembunyikan kepemilikan sales lain.
+   Spec ini memilih peringatan eksplisit (§2), bukan reuse.
+7. Izin katalog nyata (`src/lib/auth/module-catalog.generated.ts:362-366`):
+   `view_leads`, `create_leads`, `edit_leads`, `delete_leads`,
+   `manage_leads` (label "Prospek"). Halaman:
+   `crm/leads/page.tsx:31` `view_leads`,
+   `crm/leads/tambah/page.tsx:12` `create_leads`,
+   `crm/leads/[slug]/page.tsx:34` `view_leads`. TIDAK ada izin
+   `override_duplicate_lead` / `view_all_leads` di katalog
+   (grep run ini) — izin baru TIDAK dipakai; putusan Q-DUP-2
+   reuse izin asal + `manage_leads` (§4/§11).
+8. Normalisasi nomor existing: `normalizeWhatsappPhone`
+   (`src/lib/utils/whatsapp.ts:11-19`): strip non-digit,
+   `0...` -> `62...`, wajib prefix `62` + panjang >= 11, selain
+   itu null. Ini SATU-SATUNYA normalisasi phone di repo
+   (grep `normalizePhone` lain = 0 untuk keperluan matching).
+   Kontrak matching §3 mewajibkan Backend memutuskan reuse
+   helper ini vs helper matching baru — JANGAN karang aturan
+   normalisasi kedua yang bisa selisih dari wa.me.
+9. Daftar lead existing (`crm/leads/page.tsx:44-60`): query
+   `deletedAt: null` + cari name/email/company `contains`;
+   kartu read-model existing di halaman sama: stale leads
+   (hanya `new/contacted`, `deletedAt: null` —
+   `src/lib/reports/stale-leads-data.ts:19`), follow-ups,
+   funnel. Daftar kandidat duplikat spec ini = permukaan
+   read-only BARU saat create (bukan kartu laporan keempat)
+   kecuali putusan tahap 2 Q-DUP-5 (§11: tahap 1 panel saja).
+
+Belum ada (TERVERIFIKASI-KODE, grep run ini = 0):
+- Query kandidat duplikat apa pun di createLead/updateLead;
+  peringatan/banner duplikat di form tambah lead; daftar
+  "kemungkinan duplikat" read-only; alasan override tercatat;
+  pencocokan lintas `Customer` dari form lead.
+
+### 1. Workflow specification
+
+Aktor: Sales rep pembuat (pemegang `create_leads`), Sales rep
+pemilik lead existing (tidak bertindak; datanya tampil terbatas
+§4), Admin/`manage_leads` (melihat semua kandidat + memutuskan
+override bila model blokir dipilih), Sistem (cek pra-simpan).
+
+Dokumen masuk: form tambah lead (name wajib; email/phone/
+company opsional). Dokumen keluar: (a) lead baru status `new`
+seperti existing, atau (b) peringatan kandidat + keputusan user
+tercatat, atau (c) penolakan tersimpan-batal dengan alasan —
+sesuai putusan Q-DUP-1 = Model C (§11). TIDAK ada dokumen/status baru.
+
+Alur usulan (USULAN; perilaku inti diputus Lead Q-DUP-1 = Model C, §11):
+1. User isi form tambah lead, tekan simpan. Validasi schema
+   existing berjalan dulu (identik; error schema tetap error).
+2. SEBELUM `prisma.lead.create`, server normalisasi kunci
+   kontak (§3) dan query kandidat: lead `deletedAt: null`
+   dengan phone ternormalisasi sama ATAU email ternormalisasi
+   sama; company cocok-saja TIDAK cukup berdiri sendiri (§3).
+3. Nol kandidat: simpan persis jalur existing (satu query
+   tambah; latency create bertambah satu findMany terindeks
+   sempit — Backend ukur, jangan klaim angka).
+4. Ada kandidat: server TIDAK menyimpan dulu. User menerima
+   daftar kandidat read-only (§6 kata tampil): leadNumber,
+   name, company, status label, pemilik (nama assignee),
+   tanggal buat, jenis cocok (Telepon sama / Email sama),
+   tautan buka lead (hanya bila user boleh melihat lead itu —
+   §4). Nilai phone/email kandidat TIDAK ditampilkan penuh
+   ke user yang tidak berhak atas lead itu (§4 privasi kontak).
+5. Keputusan user:
+   a. "Buka lead existing" — batal buat, navigasi ke existing.
+   b. "Tetap buat baru" — Model C terpilih (Q-DUP-1, §11);
+      alasan wajib teks (min. ditetapkan Lead, usul 10 karakter)
+      tersimpan (§3 BR-DUP-06).
+   c. Model blokir TIDAK terpilih (Q-DUP-1 = C, §11) — baris
+      ini historis perbandingan §2, bukan perilaku tahap 1.
+6. Bila lanjut: create berjalan dalam transaksi yang RE-CHECK
+   kandidat (pola FOR UPDATE convertLead tidak berlaku persis
+   untuk create tanpa baris kunci — Backend putuskan mekanik
+   anti-TOCTOU: re-query di dalam transaksi + terima sisa risiko
+   konkuren terdokumentasi, ATAU advisory lock per kunci
+   ternormalisasi; JANGAN klaim atomik tanpa mekanik terbukti).
+7. Jejak: `logActivity` existing tetap; override tercatat
+   (§3 BR-DUP-06 — permukaan fisik = keputusan Backend:
+   ActivityLog LeadActivity type baru vs kolom; spec melarang
+   alasan hanya di log server/console).
+8. updateLead: cek di edit DIPUTUS ya (Q-DUP-3, §11). Default spec:
+   cek berjalan dengan kandidat mengecualikan lead itu sendiri,
+   HANYA bila phone/email BERUBAH dari nilai tersimpan; status-
+   only edit tidak memicu peringatan.
+
+### 2. Pilihan perilaku inti (DIPUTUS Lead Q-DUP-1 = Model C, §11)
+
+| Model | Perilaku | Risiko |
+|---|---|---|
+| A. Blokir keras | cocok phone/email = simpan ditolak | lead sah beda orang satu nomor kantor (114/ växel, nomor admin perusahaan) terkunci; sales buat jalan pintas data kotor |
+| B. Peringatkan + boleh lanjut tanpa alasan | banner + "Tetap buat" | peringatan diabaikan massal; tidak ada jejak audit keputusan |
+| C. Peringatkan + lanjut wajib alasan tercatat | banner + alasan wajib + jejak | gesekan kecil; audit lengkap; nomor kantor sah tetap bisa dibuat dengan alasan "nomor sentral perusahaan" |
+
+Rekomendasi Business (USULAN): **C**. Alasan: phone perusahaan
+bersama & email generik (`info@`, `admin@`) nyata di bengkel/
+fleet; blokir keras memindahkan duplikat jadi data kotor
+(phone diubah satu digit supaya lolos — lebih buruk dari
+duplikat terang). Model B tanpa alasan = audit kosong.
+Vonis final Lead 2026-10-24: Model C terpilih (§11).
+
+### 3. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-DUP-01 | createLead existing langsung create tanpa cek duplikat; status awal `new` | TERVERIFIKASI-KODE master.actions.ts:1557 |
+| BR-DUP-02 | Lead.phone/email/company nullable tanpa unique DB; duplikat fisik mungkin hari ini | TERVERIFIKASI-KODE schema.prisma:4168-4170 |
+| BR-DUP-03 | Kandidat kuat = phone ternormalisasi sama ATAU email ternormalisasi sama, pada lead `deletedAt: null`; company-saja = cocok lemah, TIDAK memicu peringatan sendiri | USULAN |
+| BR-DUP-04 | Normalisasi phone: strip non-digit; `08...`->`628...`; `+62...`/`62...`->`62...`; bandingkan string digit ternormalisasi penuh. Email: trim + lowercase penuh. String kosong/null TIDAK pernah cocok (dua lead tanpa phone BUKAN duplikat) | USULAN (reuse `normalizeWhatsappPhone` whatsapp.ts:11 = keputusan Backend; perhatikan helper itu return null untuk nomor <11 digit / non-62 — nomor pendek/asing gagal normalisasi = tidak cocok, bukan error) |
+| BR-DUP-05 | Cakupan status kandidat: sertakan `new/contacted/qualified/proposal/negotiation` + `won` berlabel "Sudah dikonversi"; `lost` tampil terpisah label "Pernah lost" bukan pemicu utama | DIPUTUS Lead Q-DUP-4 (§11) |
+| BR-DUP-06 | Bila lanjut sesudah peringatan: alasan wajib + tercatat menempel ke lead baru (siapa, kapan, kandidat yang dilewati ID-nya); alasan tidak terhapus saat lead diedit | USULAN (fisik Backend) |
+| BR-DUP-07 | Kandidat tidak pernah auto-merge, auto-delete, atau auto-assign; daftar murni read-only; membuka existing = navigasi, bukan mutasi | USULAN |
+| BR-DUP-08 | Cek lintas Customer (phone/email cocok Customer aktif) = fase terpisah; BUKAN fase 1. Bila kelak disetujui: label kandidat "Sudah pelanggan", tanpa tampil data customer di luar hak `view_customers` user | DITUNDA Lead Q-DUP-6 (§11) |
+| BR-DUP-09 | Tidak ada unique constraint phone/email Lead di spec ini; penegakan = peringatan server, bukan DB. Unique = migrasi + kurasi data kotor = keputusan terpisah Lead/Backend bila duplikat terbukti tetap lolos | USULAN |
+| BR-DUP-10 | Peringatan TIDAK mengubah status lead mana pun, TIDAK membuat LeadActivity di lead EXISTING (lead orang lain tidak boleh tercemar jejak percobaan duplikat); jejak hanya di lead baru yang jadi dibuat | USULAN |
+
+### 4. Role / permission matrix
+
+Izin existing dari katalog (TERVERIFIKASI-KODE §0.7). Baris
+bertanda * = perilaku DIPUTUS Lead Q-DUP-2 (§11): tanpa izin
+baru; override = pembuat berizin asal + alasan wajib;
+lihat-penuh lintas-sales hanya `manage_leads`.
+
+| Aksi | Sales rep (create_leads) | Sales rep pemilik existing | manage_leads / super_admin | Tanpa view_leads |
+|---|---|---|---|---|
+| Buat lead, nol kandidat | create_leads: ya | — | ya | tidak |
+| Terima peringatan + lihat kandidat milik sendiri | ya, kontak penuh | — | ya | tidak |
+| Lihat kandidat milik sales LAIN | terbatas: leadNumber/name/company/status/pemilik/jenis cocok; phone/email kandidat DIMASK (2 digit akhir phone, domain email saja) * | — | penuh | tidak |
+| Tetap buat sesudah peringatan (Model C) | create_leads + alasan wajib * | — | ya | tidak |
+| Override blokir (Model A TIDAK terpilih, Q-DUP-1 = C) | n/a tahap 1 | n/a | n/a | tidak |
+| Buka detail lead kandidat | hanya bila lolos view halaman existing (view_leads + aturan tampil existing; spec TIDAK melonggarkan ownership buka-detail) | ya | ya | tidak |
+
+Catatan privasi kontak: menampilkan phone/email penuh lead
+milik sales lain ke pembuat baru = kebocoran buku kontak antar
+sales. Masking di atas = USULAN minimum; Backend/Frontend
+dilarang menampilkan kontak penuh kandidat lintas-pemilik
+tanpa putusan Lead eksplisit. Jumlah kandidat lintas-pemilik
+tetap boleh tampil ("1 lead lain cocok") tanpa identitas kontak.
+
+### 5. Status-transition matrix
+
+Tidak ada transisi status baru. Peringatan = gerbang pra-simpan.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada lead) | submit form valid, nol kandidat | Lead `new` (existing) | create_leads |
+| (belum ada lead) | submit form valid, ada kandidat | TETAP belum tersimpan; peringatan tampil | create_leads; server re-check saat lanjut |
+| (belum ada lead) | user pilih buka existing | batal buat; nol baris baru | — |
+| (belum ada lead) | tetap buat + alasan (Model C) | Lead `new` + jejak override | create_leads + alasan wajib (BR-DUP-06) |
+| Lead existing kandidat | percobaan duplikat orang lain | TIDAK BERUBAH (status/owner/aktivitas utuh) | BR-DUP-07/10 |
+| Lead `won` (customerId terisi) | jadi kandidat | TIDAK BERUBAH; tampil label konversi | convertLead guard existing tidak disentuh |
+
+### 6. Feature matrix Accurate / Zahir / ISF
+
+Benchmark diakses 2026-10-24. Jujur terbatas: TIDAK ditemukan
+dokumentasi resmi Accurate/Zahir tentang peringatan duplikat
+LEAD/prospek — keduanya tidak mempublikasikan modul lead
+setara pipeline ISF pada sumber resmi yang diakses; fitur
+terdekat = master Pelanggan. Jangan klaim "Accurate punya
+duplicate lead warning".
+
+| Kemampuan | Accurate Online (BENCHMARK) | Zahir Online (BENCHMARK) | ISF hari ini (TERVERIFIKASI-KODE) | ISF spec ini (USULAN) |
+|---|---|---|---|---|
+| Master pelanggan terstruktur (kontak, alamat, NPWP, limit) | Ada — https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pelanggan/mengenal-fitur-pelanggan/ | Ada (Data Nama & Alamat untuk pelanggan/pemasok/karyawan) — https://help.zahironline.com/portal/id/kb/customer-support/zahir-online/guidance/master-data | Ada (Customer + quick-add reuse senyap master.actions.ts:182-195) | tidak diubah |
+| Peringatan duplikat saat buat pelanggan | Tidak terdokumentasi di help resmi yang diakses | Tidak terdokumentasi; KB Zahir hanya kenal peringatan nomor referensi transaksi terpakai (domain transaksi, bukan master lead) | ABSEN untuk lead; reuse senyap untuk customer | peringatan kandidat lead §1-§3 |
+| Pipeline lead/prospek (new->won/lost) | Tidak ditemukan modul setara di help resmi yang diakses | Tidak ditemukan modul setara di help resmi yang diakses | Ada penuh (LEAD_STATUSES crm.schemas.ts:88) | tidak diubah |
+| Daftar kandidat duplikat read-only + alasan override tercatat | Tidak terdokumentasi | Tidak terdokumentasi | ABSEN | USULAN fase 1 |
+
+### 7. Kata tampil (usul Frontend, verbatim untuk diadopsi/diubah Lead)
+
+- Judul: "Kemungkinan lead duplikat"
+- Isi: "Kontak ini cocok dengan lead yang sudah ada. Periksa
+  dulu — membuat ganda membagi tindak lanjut antar sales."
+- Per kandidat: "{leadNumber} — {name} ({company}) · Status:
+  {statusLabel} · Pemilik: {assigneeName} · {jenisCocok} ·
+  Dibuat {tanggal}"
+- Jenis cocok: "Nomor telepon sama" / "Email sama" /
+  "Telepon dan email sama" / "Sudah menjadi pelanggan" (fase 2)
+- Tombol: "Buka lead existing" / "Tetap buat lead baru"
+- Alasan (Model C): label "Alasan tetap membuat lead baru
+  (wajib, tercatat)"; placeholder contoh: "Nomor sentral
+  perusahaan, kontak orang berbeda"
+- Won: "Sudah dikonversi menjadi pelanggan"
+- Lost (bila tampil): "Lead lama berstatus lost — bukan
+  duplikat aktif"
+
+### 8. Acceptance criteria + edge cases
+
+AC-DUP-1: createLead phone `0812-3456-7890` saat existing
+aktif phone `+6281234567890`: peringatan muncul, nol baris
+baru sebelum keputusan user. Cabut normalisasi -> MERAH.
+AC-DUP-2: email `Budi@Mail.com` vs existing `budi@mail.com`:
+kandidat cocok. Bedakan huruf besar/kecil -> MERAH.
+AC-DUP-3: dua lead sama-sama tanpa phone/email (null/kosong),
+name sama: TIDAK ada peringatan (BR-DUP-04). Name-saja memicu
+-> MERAH.
+AC-DUP-4: company sama persis, phone+email beda: TIDAK ada
+peringatan pemicu (BR-DUP-03). Company-saja memblokir ->
+MERAH.
+AC-DUP-5: kandidat existing `deletedAt` terisi: tidak tampil,
+create berjalan normal. Lead terhapus tampil -> MERAH.
+AC-DUP-6: kandidat milik sales lain: kontak termask per §4;
+phone/email penuh bocor di respons server/UI -> MERAH.
+AC-DUP-7 (Model C): "Tetap buat" tanpa alasan ditolak server
+(bukan hanya tombol mati di UI); alasan + ID kandidat tercatat
+di lead baru. Alasan hanya di console/log server -> MERAH.
+AC-DUP-8: dua submit konkuren phone sama: maksimal satu
+peringatan-terlewati tanpa jejak; mekanik Backend §1.6 diuji —
+klaim "nol duplikat konkuren" tanpa mekanik terbukti -> MERAH.
+AC-DUP-9: lead existing kandidat tidak berubah byte status/
+assignedTo/activities sesudah percobaan duplikat (BR-DUP-10).
+Baris LeadActivity baru di existing -> MERAH.
+AC-DUP-10: create tanpa kandidat identik perilaku existing:
+status `new`, leadNumber terbit, redirect, logActivity.
+AC-DUP-11: updateLead mengubah phone ke phone lead aktif lain:
+perilaku sesuai putusan Q-DUP-3 = ya (§11); edit status-saja nomor sama
+dengan dirinya sendiri TIDAK memicu (self-exclusion). Edit
+memperingatkan diri sendiri -> MERAH.
+AC-DUP-12: nomor non-Indonesia / pendek yang gagal normalisasi
+(`normalizeWhatsappPhone` null): tidak cocok, create berjalan,
+bukan error validasi baru. Nomor asing valid diblokir paksa
+aturan 62 -> MERAH atas keputusan BR-DUP-04 terdokumentasi.
+
+Edge: phone berisi spasi/strip/parens; email plus-addressing
+(`budi+sales@mail.com`) TIDAK disetarakan fase 1 (fase 1 =
+lowercase persis; plus-strip = keputusan terpisah, jangan
+diam-diam); satu kandidat cocok phone DAN lead lain cocok
+email -> dua kandidat tampil, dedup per lead ID; kandidat
+`won` tampil berlabel konversi (DIPUTUS Q-DUP-4, §11);
+existing sudah punya customerId tapi status bukan won (data
+warisan) -> label konversi ditentukan customerId, bukan status
+teks; user tanpa view_leads tapi punya create_leads (peran
+sempit): peringatan tampil termask penuh (tidak ada tautan
+buka yang akan 403 diam-diam — tautan disembunyikan).
+
+### 9. Yang TIDAK diusulkan run ini
+
+- Unique constraint DB phone/email Lead (migrasi + kurasi data
+  kotor; BR-DUP-09) — YAGNI sampai bukti peringatan bocor.
+- Auto-merge lead, auto-delete kandidat, deduplikasi massal
+  data existing, impor lead — tidak ada permukaan impor lead
+  terverifikasi run ini; jangan bangun di atas asumsi.
+- Fuzzy/name-similarity matching (Levenshtein dsb.): name
+  Indonesia berulang tinggi; false-positive menggerus percaya
+  ke peringatan. Cocok persis ternormalisasi saja fase 1.
+- Cek duplikat di convertLead (sudah terjaga customerId) dan
+  perubahan quick-add customer senyap (domain customer;
+  temuan terpisah bila Lead mau peringatan di sana juga).
+
+### 10. Backlog implementasi (turunan spec F-2026-10-24-141-S)
+
+Urutan: putusan Lead Q-DUP-1..6 SUDAH terbit (§11) -> Backend inti
+-> Frontend -> QA. ID turunan diberikan saat kartu dibuat (cegah tabrakan
+dengan memeriksa maks ID berjalan saat itu); spec ini tidak
+mengklaim nomor turunan di muka selain induk 141-S.
+
+- DUP-B1 (Backend, P1): helper pencocokan kandidat lead
+  read-only (normalisasi §3/BR-DUP-04, reuse-vs-baru
+  `normalizeWhatsappPhone` diputus tertulis) + query kandidat
+  `deletedAt: null`, dedup per ID, masking lintas-pemilik di
+  server (bukan hanya UI). Tanpa schema/migrasi fase 1 kecuali
+  fisik jejak BR-DUP-06 menuntutnya — laporkan dulu ke Lead.
+- DUP-B2 (Backend, P1): integrasi createLead pra-simpan +
+  re-check transaksi §1.6 + penolakan alasan kosong di server;
+  updateLead termasuk (Q-DUP-3 = ya, §11).
+- DUP-F1 (Frontend, P1, SESUDAH kontrak B1/B2): panel peringatan
+  di form tambah lead, kata §7, daftar kandidat read-only,
+  field alasan; UI nol normalisasi/matching sendiri — tampilkan
+  putusan server apa adanya.
+- DUP-Q1 (QA, P2): falsifikasi AC-DUP-1..12 atas head Backend+
+  Frontend (normalisasi dicabut MERAH, masking bocor MERAH,
+  alasan kosong lolos MERAH, self-match edit MERAH).
+- Fase 2 (DITUNDA Q-DUP-6, §11): kandidat lintas Customer.
+
+### 11. PUTUSAN LEAD 2026-10-24 (Q-DUP-1..6 DIPUTUS — bukan Q terbuka lagi)
+
+Dicabut/digabung 2026-10-24: spec ini = satu-satunya spec
+kanonik F-2026-10-24-141-S (Spec-A pendahulu di PR sama
+dicabut utuh atas putusan Lead; register tunggal
+BR-DUP-01..10 / AC-DUP-1..12 versi spec ini). Putusan Lead
+2026-10-24 (PR #746, komentar triase Lead + kartu
+t_9b62a5fd), berlaku untuk Backend SESUDAH spec kanonik ini
+merged — Backend tidak menunggu putusan ulang:
+
+- Q-DUP-1 = **C**: peringatkan + alasan wajib tercatat
+  (Model C §2; bukan blokir keras, bukan lanjut-tanpa-alasan).
+- Q-DUP-2: override oleh pembuat berizin `create_leads`/
+  `edit_leads` asal (dengan alasan wajib per Q-DUP-1);
+  lihat-penuh kandidat lintas-sales hanya `manage_leads`;
+  kontak kandidat lintas-pemilik default tersamar per §4.
+- Q-DUP-3 = **ya**: cek duplikat juga di `updateLead`,
+  self-excluded, hanya saat phone/email berubah.
+- Q-DUP-4: kandidat `won` disertakan berlabel "Sudah
+  dikonversi"; `lost` tampil terpisah, bukan pemicu utama.
+- Q-DUP-5: tahap 1 hanya panel saat create/update; daftar
+  kandidat di halaman leads = tahap 2, DITUNDA.
+- Q-DUP-6: lintas-Customer DITUNDA sampai tahap 1 terbukti
+  (BR-DUP-08 tetap fase terpisah; bukan kontrak tahap 1).
+
+Pemilik berikutnya: Lead (merge PR docs ini sesudah
+konfirmasi QA head final) -> Backend (DUP-B1/B2) ->
+Frontend (DUP-F1) -> QA (DUP-Q1). Accountant: TIDAK
+dilibatkan — nol uang/pajak/jurnal di spec ini.
