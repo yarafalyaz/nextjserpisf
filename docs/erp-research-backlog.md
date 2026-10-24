@@ -12352,3 +12352,315 @@ Status: PUTUSAN BOT 4. Dokumen saja; TANPA kode/schema/migrasi di kartu ini. Von
 Klaim kepatuhan: perubahan constraint fisik internal ISF untuk konsistensi perlakuan koreksi jurnal (reversal, bukan edit) — selaras prinsip jurnal terposting beku di skill BOT 4 dan pola P1-7 repo. BUKAN klaim kepatuhan pajak/laporan: tidak ada tarif, DPP, atau masa yang berubah; nol dasar DJP diperlukan untuk constraint ini dan tidak ada yang diklaim.
 
 ID vonis ini **F-2026-10-23-127-V** (tertinggi terverifikasi run ini di origin/main 110da8ef: F-121-V merged; F-125-V merged #652; F-126-V di PR terbuka #651; 127 belum terpakai di main maupun judul PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis + lepas tahan inti F-121 -> BOT 3 migrasi+re-post di t_45f34ef5 -> BOT 6 E127-1..9.
+
+---
+
+## VONIS BOT 4 2026-10-24 — F-2026-10-24-130-V: ambang hampir pasti, selisih recovery, penyelesaian piutang, dan pajak retur klaim vendor part cacat garansi (lanjutan F-2026-10-24-095-S §6, induk F-2026-10-21-022)
+
+Kartu t_8c482159. Dokumen saja; TANPA kode aplikasi/schema/migrasi di kartu
+ini. Handoff dari spec BOT Business F-2026-10-24-095-S (PR #693 terbuka,
+head ce7b8a7f) §6 dan §9 butir 5: empat putusan akuntansi-pajak lanjutan
+atas jalur klaim supplier yang SUDAH live. Vonis ini TIDAK membuka jurnal
+baru; vonis ini membekukan perlakuan, menguatkan satu gerbang bukti yang
+terbukti lemah di kode live, dan menolak dua jalur pintas yang dobel-hitung.
+
+Status: PUTUSAN BOT 4. Pemilik berikutnya: BOT 1 terima + merge PR vonis
+ini dan PR #693 (spec), BOT 3 eksekusi penguatan gerbang bukti E130-1
+(kartu terpisah, tanpa migrasi), BOT 6 falsifikasi E130-1..5, BOT 2 tidak
+ada build (pesan tolak backend tampil apa adanya).
+
+### 0. Basis bukti live (origin/main f627b52b, 2026-10-24) — TERVERIFIKASI-KODE
+
+- Induk F-2026-10-21-022 live penuh: tautan + state machine R1–R8
+  (`drafted/sent/accepted/rejected_supplier/returned/closed_recovered/
+  closed_no_recovery`) di `src/lib/services/warranty.service.ts:48-74`;
+  gerbang S0 approved+replace `:450-457`; `transitionSupplierClaim:607-688`
+  bukti server + SoD; panel UI label live. Jangan bangun ulang.
+- Jurnal E3 live: `postWarrantySupplierRecoveryJournal`
+  (`src/lib/services/warranty-journal.service.ts:249-330`): hanya
+  `accepted/closed_recovered` + hitung lampiran > 0 + WO repair tertaut +
+  nominal > 0 dan <= biaya klaim terverifikasi + akun 110508/510104
+  ter-mapping fail-closed + `assertPeriodOpen` + anti-dobel
+  (`WarrantySupplierRecovery`, referenceId=claimId). Jurnal: Dr 110508
+  Piutang Klaim Supplier / Cr 510104 Beban Garansi (pemulihan biaya,
+  BUKAN pendapatan). Biaya terverifikasi = `computeWarrantyRepairCost`
+  (MaterialIssue completed FIFO + ProductionCost WO repair), bukan angka
+  ketik bebas. Mesin murni `decideWarrantyClaimAccounting`
+  (`src/lib/services/warranty-accounting.ts`) membatasi recovery
+  `virtually_certain` <= biaya dan menolak net-off provisi.
+- Akun live di COA (`src/lib/setup/base-data.ts:879,884`): 510104 Beban
+  Garansi [COGS/5101], 210205 Provisi Garansi [OCLY/2102], 110508 Piutang
+  Klaim Supplier — Garansi [OCAS/1105]; 710005 Pendapatan Diluar Usaha
+  Lainnya [OINC/7100] tersedia untuk selisih (Putusan 2). Mapping lewat
+  SystemSetting (`warrantyExpenseAccountId`,
+  `supplierClaimReceivableAccountId`); kosong = fail-closed.
+- Retur beli live F-004: `PurchaseReturn.taxReturnNoteNumber/
+  taxReturnNoteDate/sourceTaxInvoiceId` (schema.prisma model
+  PurchaseReturn) + snapshot baris `returnDpp/returnVat/sourceTaxRate`
+  (model PurchaseReturnItem, `cost` DILARANG jadi DPP); hook
+  `onPurchaseReturnProcessed` snapshot + guard kumulatif <= tagihan asal;
+  jurnal GL retur `onPurchaseReturnProcessed`
+  (`accounting.hook.ts:1405`): Dr Utang Usaha (harga retur) / Cr
+  Persediaan (FIFO keluar) / selisih ke akun varians retur — TANPA kaki
+  PPN; pengurang PPN Masukan hidup di lapisan SPT dari snapshot, masa =
+  tanggal nota retur (tanpa nota = tanggal retur).
+- Penerimaan barang live: GR verified Dr Persediaan / Cr clearing
+  (`goods-receipt.hook.ts`); VendorBill berbasis GR Dr clearing / Cr
+  Utang Usaha + Dr PPN Masukan (`onVendorBillPosted`,
+  `accounting.hook.ts:1675`); pembayaran vendor Dr Utang Usaha / Cr
+  kas-bank (`onVendorPaymentCreated:1911`). Tiga dokumen ini pemilik sah
+  penyelesaian piutang (Putusan 3).
+- KELEMAHAN TERBUKTI (dasar penguatan E130-1): E3 menghitung SEMUA
+  `TransactionAttachment referenceType="WarrantyClaim"` (foto part cacat
+  dari langkah `sent` ikut terhitung) dan transisi `accepted` cukup
+  `refNo ATAU notes` bebas. Foto kerusakan membuktikan part cacat, BUKAN
+  janji bayar vendor. Gerbang "hampir pasti" live karena itu lebih lemah
+  dari PSAK 57 par. 53: lampiran apa pun + catatan bebas bisa membuka
+  piutang. Putusan 1 menutup celah ini tanpa migrasi.
+
+### Putusan 1 — Ambang bukti hampir pasti (virtually certain, PSAK 57 par. 53-54): DITERIMA DENGAN SYARAT DOKUMEN TERTULIS VENDOR
+
+PSAK 57 par. 53 (konvergen IAS 37 par. 53): penggantian diakui sebagai
+aset terpisah HANYA bila hampir pasti diterima bila entitas menyelesaikan
+kewajiban; par. 54: jumlah diakui TIDAK melebihi jumlah provisi/kewajiban
+terkait (di ISF rute provisi mati: tidak melebihi biaya klaim terverifikasi
+yang dibebankan ke 510104). Par. 31-35: sebelum hampir pasti = aset
+kontinjensi, tanpa jurnal, cukup pengungkapan. Sumber: IAI PSAK 57
+https://web.iaiglobal.or.id/PSAK-Umum/39 (akses 2026-10-24); teks IAS 37
+par. 53-54 identik substansi.
+
+Perlakuan yang diputus (mengikat posting E3):
+
+1. Status `accepted` TETAP gerbang status, tetapi TIDAK cukup sendiri.
+   E3 hanya sah bila klaim memuat BUKTI PERSETUJUAN TERTULIS VENDOR yang
+   teridentifikasi: (a) nomor referensi persetujuan vendor
+   (`supplierClaimRefNo` terisi dari respons vendor, BUKAN nomor resi
+   pengiriman), DAN (b) minimal satu lampiran dokumen persetujuan pada
+   klaim (surat/email persetujuan, nota kredit vendor, atau janji
+   penggantian part tertulis) yang diunggah SESUDAH status `sent`
+   (createdAt lampiran > waktu transisi sent tersimpan; foto bukti cacat
+   pra-sent TIDAK dihitung), DAN (c) nominal recovery yang diminta <=
+   biaya klaim terverifikasi (gerbang live dipertahankan).
+2. Bukti yang TIDAK pernah cukup (sendirian): foto part cacat, nomor resi/
+   bukti kirim, catatan internal staf, persetujuan lisan, status `sent`
+   atau `returned` tanpa persetujuan tertulis. Bukti-bukti itu membuktikan
+   pengiriman/kerusakan, bukan hak yang hampir pasti atas penggantian.
+3. Bentuk persetujuan menentukan plafon yang dapat diakui: persetujuan
+   menyebut nominal/kuantitas -> plafon = nilai disebut (<= biaya);
+   persetujuan hanya "part akan diganti" tanpa nilai -> plafon = nilai
+   perolehan part pengganti yang dapat dibuktikan (harga baris tagihan
+   asal/GR pengganti), tetap <= biaya klaim; tidak ada nilai yang dapat
+   dibuktikan -> BELUM hampir pasti terukur, E3 ditolak berisik, klaim
+   tetap aset kontinjensi terungkap (tanpa jurnal).
+4. Closed_recovered sesudah part pengganti diterima (GR ada) adalah bukti
+   terkuat: hak sudah terrealisasi sebagian/penuh; E3 pada titik itu sah
+   sebesar nilai terbukti, dan penyelesaian mengikuti Putusan 3 (piutang
+   tidak boleh dobel dengan persediaan GR — lihat larangan di sana).
+5. Pisahkan empat status: status dokumen klaim (state machine supplier),
+   status posting E3 (sudah/belum jurnal), status penyelesaian piutang
+   (dokumen GR/nota kredit/kas), status pajak retur (F-004). Satu flag
+   tidak mewakili empat hal; `closed_recovered` menutup alur klaim, bukan
+   bukti piutang lunas.
+
+Batas build BOT 3 (penguatan gerbang, TANPA migrasi/schema): di
+`postWarrantySupplierRecoveryJournal`, ganti hitung lampiran mentah
+dengan: tolak bila `supplierClaimRefNo` kosong; hitung hanya lampiran
+klaim yang `createdAt` > waktu transisi ke `sent` (ambil dari jejak
+klaim; bila waktu sent tidak dapat dibuktikan dari data tersimpan,
+fallback sah satu-satunya: wajibkan operator menegaskan nomor referensi
+persetujuan vendor berbeda dari nomor resi sent — simpan pembanding di
+notes/refNo yang sudah ada, JANGAN tambah kolom tanpa kartu migrasi
+terpisah berkoordinasi BOT 4). Pesan tolak menyebut dokumen yang kurang
+("lampiran persetujuan vendor sesudah pengiriman belum ada"), bukan
+"lampiran wajib" generik. Ponytail: tanpa kolom jenis lampiran, waktu
+unggah + refNo adalah proksi terdokumentasi; kolom
+`supplierRecoveryEvidenceType` hanya bila audit membuktikan proksi ini
+dilanggar di lapangan.
+
+Falsifikasi E130-1 (BOT 6, MERAH bila penjaga dicabut): klaim accepted
+hanya bermodal foto cacat pra-sent + notes bebas -> E3 DITOLAK dan nol
+jurnal; tambah lampiran persetujuan pasca-sent + refNo persetujuan ->
+E3 BERHASIL Dr 110508 / Cr 510104 seimbang sen; cabut cek waktu/refNo
+-> kasus pertama HIJAU = penjaga gugur.
+
+### Putusan 2 — Selisih recovery > biaya klaim terverifikasi (BR-SUPP-08): PLAFON E3 DIPERTAHANKAN; KELEBIHAN BUKAN RECOVERY GARANSI
+
+1. E3 tetap dibatasi <= biaya klaim terverifikasi (PSAK 57 par. 54:
+   aset penggantian tidak melebihi kewajiban/biaya terkait). Menaikkan
+   plafon E3 atau mengkredit 510104 melebihi beban yang dibukukan
+   DITOLAK: 510104 akan berbalik kredit (beban negatif) dan menyembunyikan
+   keuntungan sebagai pemulihan biaya.
+2. Kelebihan nilai yang BENAR-BENAR diterima di atas biaya klaim bukan
+   recovery garansi. Kenali sifatnya per bukti, jangan satu akun tebak:
+   (a) Part pengganti bernilai perolehan lebih tinggi dari biaya klaim
+   (upgrade/vendor memberi tipe lebih mahal): persediaan masuk sebesar
+   nilai perolehan yang dibuktikan GR/tagihan (jalur GR existing);
+   selisih nilai di atas piutang E3 yang diakui = pendapatan lain-lain
+   saat part diterima dan hak tidak dapat ditarik kembali: piutang 110508
+   dilunasi oleh GR sebesar piutang diakui, kelebihan Dr Persediaan /
+   Cr 710005 Pendapatan Diluar Usaha Lainnya hanya sebesar selisih yang
+   terbukti dari dokumen GR/tagihan — TANPA dokumen nilai, selisih TIDAK
+   diakui (cukup catat kuantitas/serial part diterima).
+   (b) Kompensasi tunai/nota kredit melebihi biaya klaim: saat diterima,
+   Dr Kas/Utang Usaha (nota kredit mengurangi AP) / Cr 110508 sebesar
+   piutang diakui, kelebihan Cr 710005. Penerimaan sebagian hanya
+   melunasi piutang sebesar diterima; sisa piutang tetap terbuka.
+   (c) Diskon/goodwill dagang tanpa dokumen nilai terpisah: perlakukan
+   sebagai pengurang harga perolehan pembelian berikutnya HANYA bila
+   nota kredit vendor secara eksplisit menautkannya ke tagihan; selain
+   itu 710005. Dilarang mengkredit 510104/COGS untuk kelebihan ini.
+3. Nilai wajar tanpa bukti perolehan (klaim "part pengganti seharga X"
+   dari brosur/katalog): TIDAK diakui sebagai pendapatan maupun
+   persediaan di atas nilai terbukti. Persediaan pengganti tanpa tagihan
+   dicatat pada nilai piutang yang dilunasi (atau nilai perolehan asal
+   part cacat bila itu bukti terbaik tersedia), selisih nol diakui.
+4. Fiskal: kelebihan pada (a)/(b) adalah penghasilan lain-lain kena pajak
+   saat diterima (bukan objek PPN tersendiri; PPN mengikuti dokumen
+   pembelian/nota kredit vendor per Putusan 4). Jangan net-off ke beban
+   garansi di kertas kerja fiskal.
+
+Angka contoh (mengikat tes): biaya klaim terverifikasi 1.000.000; vendor
+menyetujui recovery 1.250.000 tunai. E3: Dr 110508 1.000.000 / Cr 510104
+1.000.000 (plafon). Saat kas diterima: Dr Kas 1.250.000 / Cr 110508
+1.000.000 / Cr 710005 250.000. Jurnal E3 sebesar 1.250.000 = SALAH.
+
+Falsifikasi E130-2: posting E3 1.250.000 pada biaya 1.000.000 tetap
+DITOLAK (plafon live); penyelesaian kas 1.250.000 menghasilkan kredit
+710005 tepat 250.000 dan saldo 110508 klaim itu nol; cabut plafon ->
+kasus pertama lahir = MERAH.
+
+### Putusan 3 — Penyelesaian piutang klaim supplier E3 (BR-SUPP-12): TIGA BENTUK DOKUMEN EXISTING, TANPA STATUS/JURNAL BARU DI KLAIM
+
+Piutang 110508 lahir dari E3. Pelunasannya BUKAN status baru di klaim
+supplier (`paid/lunas` DITOLAK — BR-SUPP-12 disetujui sebagai batas) dan
+BUKAN jurnal manual bebas. Penyelesaian hanya lewat dokumen existing
+yang lawannya mengkredit 110508 sebesar nilai dilunasi:
+
+| Bentuk penyelesaian | Dokumen pemilik | Jurnal penyelesaian (di dokumen itu) | Syarat bukti |
+|---|---|---|---|
+| Part pengganti diterima | GoodsReceipt existing (PO/GR pengganti tertaut klaim) diverifikasi | Mengikuti jurnal GR existing untuk persediaan; porsi yang melunasi klaim: Dr Persediaan (nilai GR) dengan lawan penyelesaian 110508 sebesar min(nilai GR terbukti, saldo piutang klaim) — diwujudkan sebagai jurnal penyelesaian berkait GR, BUKAN mengubah hook GR generik | GR verified memuat item/serial pengganti; nomor GR dicatat di notes penutup `closed_recovered` (gerbang live) |
+| Nota kredit vendor | VendorBill kredit/nota kredit vendor existing (atau pengurang VendorBill terbuka vendor sama) | Dr Utang Usaha (210101 via mapping payable) / Cr 110508 sebesar nilai nota kredit yang dialokasikan ke klaim | Nomor nota kredit vendor tercatat; alokasi ke klaim eksplisit per dokumen, total alokasi <= saldo piutang |
+| Kas/bank dari vendor | Penerimaan kas existing (jurnal umum terverifikasi dokumen penerimaan) | Dr Kas/Bank (mapping cashBank) / Cr 110508 sebesar diterima | Bukti transfer/kas tertaut klaim; penerimaan parsial sah, sisa tetap piutang |
+
+Aturan mengikat penyelesaian:
+
+1. Satu-satunya lawan kredit pelunasan = 110508; total seluruh penyelesaian
+   per klaim <= saldo piutang E3 klaim itu (anti dobel-lunas: GR + nota
+   kredit + kas atas klaim sama dijumlahkan). Kelebihan di atas saldo
+   piutang mengikuti Putusan 2 (710005 / perolehan persediaan), bukan
+   kredit 110508 negatif.
+2. Urutan pengakuan: E3 (hak hampir pasti) -> penyelesaian (realisasi).
+   DILARANG mengakui persediaan GR pengganti DAN mempertahankan piutang
+   penuh atas nilai yang sama (aset dobel). Bila part diterima SEBELUM
+   E3 diposting dan sudah `closed_recovered`, default yang DIPILIH:
+   posting E3 dan jurnal penyelesaian dalam alur berurutan berkait
+   dokumen GR, tanggal masing-masing = tanggal peristiwa (persetujuan
+   vs penerimaan), periode keduanya wajib terbuka (`assertPeriodOpen`
+   dalam tx masing-masing).
+3. Hook GR generik TIDAK diubah untuk menebak tautan klaim (GR tanpa
+   konteks klaim tidak boleh tiba-tiba mengkredit 110508). Penyelesaian
+   diwujudkan service penyelesaian tipis berkait (claimId, dokumen
+   penyelesaian) dengan idempotency key per (klaim, dokumen): replay
+   tidak dobel kredit. Ini batas build BOT 3 bila BOT 1 membuka build
+   penyelesaian; vonis ini sendiri tanpa kode.
+4. Piutang tak tertagih (vendor bangkrut/menolak bayar sesudah accepted):
+   TIDAK dihapus diam-diam dan TIDAK ditutup lewat `closed_no_recovery`
+   administratif. Perlakuan: reversal E3 bila hak terbukti gugur sebelum
+   penyelesaian (jurnal lawan Dr 510104 / Cr 110508 di periode terbuka,
+   alasan wajib), atau penurunan nilai piutang lewat jalur penyisihan
+   existing bila masih ditagih. `closed_no_recovery` dari `accepted`
+   (admin + alasan, gerbang live) WAJIB menolak bila saldo piutang E3
+   masih terbuka — menutup klaim tanpa menyelesaikan piutang = temuan.
+5. Rekonsiliasi wajib tampil (read-model, bukan jurnal): per klaim =
+   E3 terposting, total penyelesaian per bentuk, saldo piutang sisa,
+   umur sejak accepted. Selisih GR/nota/kas vs piutang = temuan
+   ditampilkan, bukan dipilih diam-diam salah satu.
+
+Falsifikasi E130-3: klaim E3 1.000.000 dilunasi GR pengganti 1.000.000 ->
+saldo piutang nol, persediaan bertambah, TIDAK ada kredit 510104 kedua;
+penyelesaian kedua (kas 1.000.000 atas klaim sama) DITOLAK anti-dobel;
+penyelesaian parsial nota kredit 400.000 -> sisa piutang 600.000 tetap
+terbuka dan laporan aging menampilkannya. E130-4: tutup
+`closed_no_recovery` dari accepted dengan saldo piutang terbuka DITOLAK;
+sesudah reversal E3 beralasan, penutupan sah.
+
+### Putusan 4 — Pajak retur/nota kredit klaim vendor: JALUR PurchaseReturn F-004 SATU-SATUNYA; PERLAKUAN KEDUA DI SISI GARANSI DITOLAK
+
+DIKONFIRMASI: nota retur atas part cacat yang dikembalikan ke vendor
+mengikuti jalur PurchaseReturn existing (F-004) secara penuh. Sisi
+garansi (WarrantyClaim/E3) TIDAK membuat perlakuan pajak kedua:
+
+1. PPN Masukan yang dikurangi = snapshot retur beli F-004: DPP retur =
+   qty x harga beku baris tagihan asal (`PurchaseReturnItem.price`),
+   `cost` DILARANG jadi DPP; PPN retur proporsional faktur masukan asal;
+   guard kumulatif <= DPP/PPN tagihan asal; masa pengurang = tanggal
+   nota retur (`taxReturnNoteNumber/taxReturnNoteDate` dicatat apa
+   adanya dari Coretax — sistem tidak menerbitkan nomor pajak), tanpa
+   nota = tanggal retur. Dasar: UU PPN Pasal 9 dan ketentuan nota retur
+   (PMK-65/PMK.03/2010 tata cara nota retur; praktik Coretax DJP
+   https://www.pajak.go.id/coretaxpedia/retur-barang, akses 2026-10-24:
+   retur pajak masukan masuk SPT masa tanggal retur, penjual menyetujui
+   lewat retur pajak keluaran). Klaim kepatuhan terbatas pada rantai itu;
+   tarif mengikuti faktur asal tersnapshot, tidak dihardcode di garansi.
+2. Jurnal GL retur tetap jurnal retur existing (Dr Utang Usaha / Cr
+   Persediaan FIFO / selisih varians) TANPA kaki PPN dan TANPA kaki
+   garansi. E3 tidak mengubah DPP/PPN retur; recovery tunai/part
+   pengganti bukan penyerahan BKP baru oleh ISF ke vendor, sehingga
+   TIDAK ada PPN Keluaran dan TIDAK ada faktur pajak dari sisi garansi.
+3. Nota kredit vendor atas harga (bukan retur fisik): mengikuti dokumen
+   VendorBill/nota kredit existing; penyesuaian PPN Masukan hanya bila
+   nota kredit itu sendiri dokumen pajak yang sah dari vendor (faktur
+   pajak/nota retur Coretax terkait); nota kredit komersial tanpa
+   dokumen pajak TIDAK mengurangi PPN Masukan di SPT — hanya GL
+   (Putusan 3). Jangan kurangi PPN dua kali: retur fisik bernota retur
+   (F-004) dan nota kredit harga atas barang yang sama = satu peristiwa
+   ekonomi; alokasi dokumen wajib membuktikan porsi masing-masing.
+4. Part pengganti diterima: PPN Masukan (bila ada) lahir dari faktur
+   pajak vendor atas penyerahan pengganti lewat VendorBill/GR existing
+   — bukan dari klaim garansi. Bila vendor mengganti tanpa faktur pajak
+   baru (penggantian garansi murni), TIDAK ada PPN Masukan baru yang
+   dikreditkan dari dokumen klaim; mencatat PPN dari klaim = DITOLAK.
+5. Biaya klaim garansi ke pelanggan tetap tanpa PPN Keluaran (klaim
+   covered `invoiceForbidden` live); vonis pajak ini tidak mengubah
+   sisi penjualan sama sekali.
+
+Falsifikasi E130-5: retur part cacat bernota retur mengurangi PPN
+Masukan tepat satu kali pada masa nota retur lewat snapshot F-004 dan
+posting E3 atas klaim yang sama TIDAK menambah pengurang kedua;
+nota kredit komersial tanpa dokumen pajak melunasi 110508 tanpa mengubah
+SPT PPN Masukan; part pengganti tanpa faktur vendor baru -> PPN Masukan
+baru nol dari jalur klaim.
+
+### Posting matrix ringkas (mengikat)
+
+| Event | Debit | Kredit | Syarat posting |
+|---|---|---|---|
+| E3 pengakuan recovery | 110508 Piutang Klaim Supplier (<= biaya terverifikasi) | 510104 Beban Garansi | accepted/closed_recovered + bukti Putusan 1 (refNo persetujuan + lampiran persetujuan pasca-sent) + akun ter-mapping + periode terbuka + anti-dobel (live, diperkuat E130-1) |
+| Penyelesaian via GR pengganti | Persediaan (nilai GR terbukti, via dokumen GR) | 110508 sebesar dilunasi (<= saldo piutang) | GR verified tertaut klaim; idempoten per (klaim, GR); kelebihan nilai -> Putusan 2 |
+| Penyelesaian via nota kredit vendor | Utang Usaha 210101 (via VendorBill kredit) | 110508 sebesar alokasi nota | Nota kredit vendor tercatat; total alokasi per klaim <= saldo piutang |
+| Penyelesaian via kas | Kas/Bank (mapping cashBank) | 110508 sebesar diterima | Bukti penerimaan tertaut klaim; parsial sah |
+| Kelebihan recovery diterima | Kas/Persediaan/Utang Usaha (sesuai bentuk) | 710005 Pendapatan Diluar Usaha Lainnya (kelebihan saja) | Nilai kelebihan terbukti dokumen; tanpa bukti nilai = tidak diakui |
+| Hak gugur sesudah E3 | 510104 Beban Garansi | 110508 Piutang Klaim Supplier | Reversal beralasan di periode terbuka; bukan hapus jurnal E3 |
+
+### Risiko dan batas
+
+- Risiko utama: pengakuan piutang prematur dari bukti lemah (ditutup
+  Putusan 1/E130-1) dan aset dobel piutang+persediaan saat part pengganti
+  datang (ditutup Putusan 3 butir 2). Keduanya risiko audit, bukan risiko
+  tarif: tidak ada tarif/kode pajak baru di vonis ini.
+- BUTUH-VONIS-AKUNTAN lanjutan TIDAK ada di empat soal ini: empatnya
+  diputus tuntas di atas. Yang sengaja tidak diputus: metode estimasi
+  provisi E1/E4 (tetap gerbang data 12 bulan/30 klaim vonis inti F-021)
+  dan keputusan membuka read-model aging BR-SUPP-11 (milik BOT 1 memakai
+  populasi Putusan 3 butir 5).
+- Klaim kepatuhan: PSAK 57 par. 31-35, 53-54 (IAI, URL di Putusan 1) dan
+  rantai nota retur DJP (Putusan 4) dengan cakupan persis tertulis;
+  selain itu vonis ini perlakuan internal ISF, bukan klaim patuh pajak.
+
+ID vonis ini **F-2026-10-24-130-V** (bebas: grep `F-2026-10-24-130` di
+origin/main f627b52b = 0; tertinggi -V terbit 129-V di PR #692 terbuka;
+130 belum terpakai di main maupun judul PR terbuka yang dicek run ini).
+Pemilik berikutnya: BOT 1 terima vonis + merge PR ini dan PR #693 ->
+BOT 3 penguatan gerbang bukti E130-1 + (bila dibuka BOT 1) service
+penyelesaian Putusan 3 -> BOT 6 falsifikasi E130-1..5 + AC-SUPP-1..8
+spec F-095-S -> BOT 2 nihil build.
