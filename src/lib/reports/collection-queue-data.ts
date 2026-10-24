@@ -17,6 +17,7 @@ import {
   buildCollectionQueue,
   type CollectionQueue,
 } from "@/lib/reports/collection-queue"
+import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
 
 export async function getCollectionQueue(
   options: { now?: Date } = {},
@@ -99,6 +100,9 @@ export async function getCollectionQueue(
         }),
   ])
 
+  // F-104-V: sisa antrean kurangi returnCredit POSTED per faktur.
+  const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(invoiceIds)
+
   return buildCollectionQueue(
     invoices.map((invoice) => ({
       invoiceId: invoice.id,
@@ -109,6 +113,7 @@ export async function getCollectionQueue(
       dueDate: invoice.dueDate,
       grandTotal: Number(invoice.grandTotal),
       paidAmount: Number(invoice.paidAmount),
+      returnCredit: returnCreditByInvoiceId.get(invoice.id) ?? 0,
       customerId: invoice.customerId,
       customerName: invoice.customer.name,
       customerPhone: invoice.customer.phone ?? null,
