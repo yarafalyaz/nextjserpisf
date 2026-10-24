@@ -41,6 +41,14 @@ import {
 } from "@/lib/services/approval-workflow.service";
 import { attachPendingTransactionAttachments } from "@/lib/services/transaction-attachment.service";
 import { parseFormData } from "@/lib/validations/parse-form";
+import {
+  L3_MSG,
+  parseL3Tag,
+  resolveL3WorkOrder,
+  assertNoDuplicateL3,
+  writeL3ActivityLog,
+} from "@/lib/services/late-cost-l3.service";
+import { getSystemSettings } from "@/lib/utils/settings";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money";
 import { PurchaseStatus, Status } from "@/lib/constants";
@@ -66,6 +74,72 @@ type GrItemInput = {
   expiryDate?: string | null;
   serialNumbers?: string[] | null;
 };
+
+/**
+ * Baris PO/GR dari JSON FormData `items` (qty/harga/biaya bisa string
+ * berformat Indonesia dari klien non-form: "2.000" = 2000, "150.000" =
+ * 150000) — wajib lewat parser repo; Number() mentah membaca "2.000"
+ * jadi 2 dan "abc" jadi NaN yang lolos filter >0, lalu total/penjaga
+ * over-receive ikut menilai angka rusak dan qty/harga tersimpan menyusut
+ * diam-diam. Baris berkode item dengan angka tak terbaca ditolak
+ * berpesan, bukan dibuang/dinclamp diam-diam. Baris tanpa item
+ * (itemId kosong/0) tetap dibuang (baris kosong form); qty <= 0 pada
+ * baris berkode tetap dibuang (perilaku lama: baris belum diisi).
+ * `parsePurchaseOrderItems` dipakai create+update PO; `parseGrItems`
+ * dipakai create+update GR (satu sumber per dokumen, pola retur).
+ */
+function parsePoGrItemId(raw: unknown): number | null {
+  const itemId = parseLocaleNumber(raw as string | number | null | undefined);
+  return itemId === null || itemId <= 0 ? null : itemId;
+}
+
+function parsePoGrQty(raw: unknown, itemId: number, label: string): number {
+  const qty = parseLocaleNumber(raw as string | number | null | undefined);
+  if (qty === null) {
+    throw new Error(
+      `Kuantitas ${label} item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+    );
+  }
+  return qty;
+}
+
+function parsePoGrMoney(
+  raw: unknown,
+  itemId: number,
+  label: string,
+): number {
+  if (raw == null || raw === "") return 0;
+  const value = parseMoneyAmount(raw as string | number | null | undefined);
+  if (value === null || value < 0) {
+    throw new Error(
+      `${label} item #${itemId} tidak valid — isi angka 0 atau lebih (mis. 150.000).`,
+    );
+  }
+  return value;
+}
+
+function parsePurchaseOrderItems(
+  itemsJson: string | null | undefined,
+): PurchaseOrderLine[] {
+  const rows =
+    safeJsonParse<
+      { itemId?: unknown; qty?: unknown; unitPrice?: unknown; discount?: unknown }[]
+    >(itemsJson ?? null) ?? [];
+  const items: PurchaseOrderLine[] = [];
+  for (const row of rows) {
+    const itemId = parsePoGrItemId(row?.itemId);
+    if (itemId === null) continue;
+    const qty = parsePoGrQty(row.qty, itemId, "pesanan");
+    if (qty <= 0) continue;
+    items.push({
+      itemId,
+      qty,
+      unitPrice: parsePoGrMoney(row.unitPrice, itemId, "Harga beli pesanan"),
+      discount: parsePoGrMoney(row.discount, itemId, "Diskon pesanan"),
+    });
+  }
+  return items;
+}
 
 // expiryDate baris lolos JSON tanpa validasi kalender: "2026-02-30"
 // bergulir ke 2 Mar oleh new Date, string acak jadi Invalid Date.
@@ -93,8 +167,29 @@ function goodsReceiptItemData(i: GrItemInput, orderedQtyByItem: Map<number, numb
   };
 }
 
-function parseGrItems(items: string | null | undefined) {
-  return safeJsonParse<GrItemInput[]>(items ?? null) ?? [];
+function parseGrItems(items: string | null | undefined): GrItemInput[] {
+  const rows =
+    safeJsonParse<
+      (Omit<GrItemInput, "itemId" | "qty" | "unitCost"> & {
+        itemId?: unknown;
+        qty?: unknown;
+        unitCost?: unknown;
+      })[]
+    >(items ?? null) ?? [];
+  const parsed: GrItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parsePoGrItemId(row?.itemId);
+    if (itemId === null) continue;
+    const qty = parsePoGrQty(row.qty, itemId, "penerimaan");
+    if (qty <= 0) continue;
+    parsed.push({
+      ...row,
+      itemId,
+      qty,
+      unitCost: parsePoGrMoney(row.unitCost, itemId, "Biaya satuan penerimaan"),
+    });
+  }
+  return parsed;
 }
 
 /**
@@ -458,12 +553,60 @@ function buildPurchaseOrderTotals(lines: PurchaseOrderLine[], shippingCost: numb
 
 function purchaseOrderItemData(it: PurchaseOrderLine) {
   return {
-    itemId: Number(it.itemId),
-    qty: Number(it.qty),
-    unitPrice: Number(it.unitPrice),
-    discount: Number(it.discount || 0),
+    // itemId/qty/unitPrice/discount sudah angka ter-parse
+    // (parsePurchaseOrderItems): "2.000" tiba sebagai 2000.
+    itemId: it.itemId,
+    qty: it.qty,
+    unitPrice: it.unitPrice,
+    discount: it.discount || 0,
     total: safeSubtract(safeMultiply(it.qty, it.unitPrice, 0), it.discount || 0, 0),
   };
+}
+
+type PurchaseRequestItemInput = {
+  itemId: number;
+  qty: number;
+  notes: string | null;
+};
+
+/**
+ * Baris item Permintaan Pembelian dari JSON `items` via parser repo;
+ * Number() mentah membaca "2.000" jadi 2 dan "abc" jadi NaN yang lolos
+ * filter >0, lalu qty tersimpan menyusut diam-diam. Baris berkode item
+ * dengan qty tak terbaca ditolak berpesan, bukan dibuang diam-diam.
+ * Baris tanpa item (itemId kosong/0) tetap dibuang (baris kosong form);
+ * qty <= 0 pada baris berkode tetap dibuang (perilaku lama: baris belum
+ * diisi). Satu sumber create+update.
+ */
+function parsePurchaseRequestItems(
+  itemsJson: string | null | undefined,
+): PurchaseRequestItemInput[] {
+  const rows =
+    safeJsonParse<
+      { itemId?: unknown; qty?: unknown; notes?: unknown }[]
+    >(itemsJson ?? null) ?? [];
+  const items: PurchaseRequestItemInput[] = [];
+  for (const row of rows) {
+    const itemId = parseLocaleNumber(
+      row?.itemId as string | number | null | undefined,
+    );
+    if (itemId === null || itemId <= 0) continue;
+    const qty = parseLocaleNumber(
+      row.qty as string | number | null | undefined,
+    );
+    if (qty === null) {
+      throw new Error(
+        `Kuantitas permintaan item #${itemId} tidak valid — isi angka lebih dari 0 (mis. 2 atau 2.000).`,
+      );
+    }
+    if (qty <= 0) continue;
+    items.push({
+      itemId,
+      qty,
+      notes: typeof row.notes === "string" && row.notes ? row.notes : null,
+    });
+  }
+  return items;
 }
 
 // ==================== PURCHASE REQUEST ACTIONS ====================
@@ -479,10 +622,7 @@ export async function createPurchaseRequest(formData: FormData) {
     const documentNo = await generateDocumentNumber("PR");
     const slug = await nextSlug("purchaseRequest", documentNo);
     const requestedBy = v.requestedBy || Number(user.id);
-    const items =
-      safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(
-        v.items ?? null,
-      ) ?? [];
+    const items = parsePurchaseRequestItems(v.items);
 
     const requestDateRaw = v.requestDate;
     const description = v.description ?? null;
@@ -501,13 +641,11 @@ export async function createPurchaseRequest(formData: FormData) {
         status: "draft",
         createdBy: Number(user.id),
         items: {
-          create: items
-            .filter((i) => i.itemId > 0)
-            .map((i) => ({
-              itemId: i.itemId,
-              qty: i.qty,
-              notes: i.notes || null,
-            })),
+          create: items.map((i) => ({
+            itemId: i.itemId,
+            qty: i.qty,
+            notes: i.notes,
+          })),
         },
       },
     });
@@ -541,11 +679,7 @@ export async function createPurchaseOrder(formData: FormData) {
     const documentNo = await generateDocumentNumber("PO");
     const slug = await nextSlug("purchaseOrder", documentNo);
 
-    const poItems = (
-      safeJsonParse<
-        { itemId: number; qty: number; unitPrice: number; discount: number }[]
-      >(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const poItems = parsePurchaseOrderItems(v.items);
 
     const shippingCost = v.shippingCost ?? 0;
     const serviceFee = v.serviceFee ?? 0;
@@ -1007,10 +1141,10 @@ export async function verifyGoodsReceipt(grId: number) {
 
 type VendorBillItemInput = {
   itemId?: number | string | null;
-  qty?: number;
-  unitPrice?: number;
-  discountPercent?: number;
-  taxPercent?: number;
+  qty?: number | string;
+  unitPrice?: number | string;
+  discountPercent?: number | string;
+  taxPercent?: number | string;
 };
 
 type ItemMeta = { sku: string; name: string; unitOfMeasure: string | null };
@@ -1059,7 +1193,7 @@ function mapVendorBillItems(
   grLineQueues?: GrLineQueues,
 ) {
   return rows
-    .filter((r) => safeRound(r.qty ?? 0, 2) > 0)
+    .filter((r) => safeRound(parseLocaleNumber(r.qty) ?? 0, 2) > 0)
     .map((r) => {
       const itemId =
         r.itemId != null && r.itemId !== "" ? Number(r.itemId) : null;
@@ -1172,6 +1306,24 @@ export async function createVendorBill(formData: FormData) {
     };
 
     const bill = await prisma.$transaction(async (tx) => {
+      // F-2026-10-24-133-V Putusan 2/4: penanda L3 pada notes menjadikan
+      // tagihan ini biaya telat NON-JOB sesudah WO closed. Wajib tanpa
+      // tautan PO/GR (tautan = jalur L1/L2), WO closed, alasan tertulis,
+      // dan lolos guard duplikat; ActivityLog WO ditulis dalam tx sama.
+      const l3 = await resolveL3WorkOrder(tx, v.notes, "Tagihan vendor");
+      if (l3 && (v.purchaseOrderId || v.goodsReceiptId)) {
+        throw new Error(L3_MSG.vendorBillLinked());
+      }
+      if (l3) {
+        await assertNoDuplicateL3(tx, {
+          workOrderId: l3.workOrder.id,
+          workOrderNo: l3.workOrder.documentNo,
+          vendorKey: `vendor:${v.vendorId}`,
+          amount: billHeader.grandTotal,
+          date: wibDateToUtcMidnight(v.date),
+        });
+      }
+
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
 
@@ -1295,6 +1447,21 @@ export async function createVendorBill(formData: FormData) {
       // Each line also links back to its goods-receipt line when the bill came
       // from a receipt.
       await persistVendorBillItems(tx, created.id, v.items, grLineQueues);
+
+      // Putusan 4(2): jejak L3 pada WO dalam tx yang sama dengan dokumen.
+      if (l3) {
+        await writeL3ActivityLog(tx, {
+          workOrder: l3.workOrder,
+          sourceType: "VendorBill",
+          sourceId: created.id,
+          sourceDocumentNo: created.documentNo,
+          vendorKey: `vendor:${v.vendorId}`,
+          amount: billHeader.grandTotal,
+          date: wibDateToUtcMidnight(v.date),
+          reason: l3.tag.reason,
+          userId: Number(user.id),
+        });
+      }
 
       // Associate uploaded attachments with the new vendor bill
       const attachmentIds = v.attachmentIds;
@@ -1451,6 +1618,32 @@ export async function confirmVendorBill(billId: number) {
       });
       if (fresh.status !== "draft") {
         throw new Error("Tagihan hanya bisa diposting dari status draft");
+      }
+
+      // F-2026-10-24-133-V Putusan 1(a)/4: tagihan L3 wajib (masih) tanpa
+      // tautan PO/GR, WO closed, tidak duplikat, dan akun beban dari
+      // setting existing — fail-closed SEBELUM jurnal lahir (E133-7:
+      // nol jurnal, nol sukses senyap).
+      const l3Post = parseL3Tag(fresh.notes);
+      if (l3Post) {
+        if (fresh.purchaseOrderId || fresh.goodsReceiptId) {
+          throw new Error(L3_MSG.vendorBillLinked());
+        }
+        const l3Resolved = await resolveL3WorkOrder(tx, fresh.notes, "Tagihan vendor");
+        const settings = await getSystemSettings();
+        if (!settings.purchaseExpenseAccountId) {
+          throw new Error(
+            "Akun beban pembelian (purchaseExpenseAccountId) belum dikonfigurasi untuk tagihan jasa/biaya",
+          );
+        }
+        await assertNoDuplicateL3(tx, {
+          workOrderId: l3Resolved!.workOrder.id,
+          workOrderNo: l3Resolved!.workOrder.documentNo,
+          vendorKey: `vendor:${fresh.vendorId}`,
+          amount: Number(fresh.grandTotal),
+          date: fresh.date,
+          excludeSource: { sourceType: "VendorBill", sourceId: billId },
+        });
       }
 
       // 3-way match (PO ↔ GR ↔ Bill) before posting
@@ -1717,6 +1910,8 @@ export async function createPurchaseReturn(formData: FormData) {
           purchaseOrderId: v.purchaseOrderId,
           date: wibDateToUtcMidnight(v.date),
           reason: v.reason ?? null,
+          taxReturnNoteNumber: v.taxReturnNoteNumber ?? null,
+          taxReturnNoteDate: v.taxReturnNoteDate ? wibDateToUtcMidnight(v.taxReturnNoteDate) : null,
           status: "draft",
           createdBy: Number(user.id),
           items: {
@@ -2257,10 +2452,9 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
     const slug = await nextSlug("purchaseRequest", existingPr.documentNo, { excludeId: id });
 
     const requestedBy = v.requestedBy || Number(user.id);
-    const items =
-      safeJsonParse<{ itemId: number; qty: number; notes: string }[]>(
-        v.items ?? null,
-      ) ?? [];
+    // Parse sebelum transaksi: qty tak terbaca ditolak sebelum deleteMany
+    // menghapus baris lama.
+    const items = parsePurchaseRequestItems(v.items);
 
     const pr = await prisma.$transaction(async (tx) => {
       const latestStatus = await tx.purchaseRequest.findUnique({
@@ -2288,13 +2482,11 @@ export async function updatePurchaseRequest(id: number, formData: FormData) {
           description,
           notes: v.notes ?? null,
           items: {
-            create: items
-              .filter((i) => i.itemId > 0)
-              .map((i) => ({
-                itemId: i.itemId,
-                qty: i.qty,
-                notes: i.notes || null,
-              })),
+            create: items.map((i) => ({
+              itemId: i.itemId,
+              qty: i.qty,
+              notes: i.notes,
+            })),
           },
         },
       });
@@ -2334,11 +2526,7 @@ export async function updatePurchaseOrder(id: number, formData: FormData) {
 
     const slug = await nextSlug("purchaseOrder", existingPo.documentNo, { excludeId: id });
 
-    const poItems = (
-      safeJsonParse<
-        { itemId: number; qty: number; unitPrice: number; discount: number }[]
-      >(v.items ?? null) ?? []
-    ).filter((it) => Number(it.itemId) > 0 && Number(it.qty) > 0);
+    const poItems = parsePurchaseOrderItems(v.items);
 
     const shippingCost = v.shippingCost ?? 0;
     const serviceFee = v.serviceFee ?? 0;
@@ -2452,6 +2640,27 @@ export async function updateVendorBill(id: number, formData: FormData) {
       if (latestBill && latestBill.status !== "draft")
         throw new Error("Hanya tagihan draft yang dapat diedit");
 
+      // F-2026-10-24-133-V (temuan QA E133 atas PR #714): edit draft bertanda
+      // L3 mengulang penjaga create/confirm yang sama — WO closed+alasan,
+      // tanpa tautan PO hasil edit maupun GR existing (goodsReceiptId tidak
+      // berubah lewat edit), dan lolos guard duplikat selain dirinya. Tanpa
+      // ini draft non-L3 bisa diedit membawa penanda+tautan inkonsisten dan
+      // jejak L3 pada WO hilang. ActivityLog ditulis sesudah update di bawah.
+      const l3 = await resolveL3WorkOrder(tx, v.notes, "Tagihan vendor");
+      if (l3 && (v.purchaseOrderId || existingBill.goodsReceiptId)) {
+        throw new Error(L3_MSG.vendorBillLinked());
+      }
+      if (l3) {
+        await assertNoDuplicateL3(tx, {
+          workOrderId: l3.workOrder.id,
+          workOrderNo: l3.workOrder.documentNo,
+          vendorKey: `vendor:${v.vendorId}`,
+          amount: billHeader.grandTotal,
+          date: wibDateToUtcMidnight(v.date),
+          excludeSource: { sourceType: "VendorBill", sourceId: id },
+        });
+      }
+
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
       }
@@ -2493,6 +2702,21 @@ export async function updateVendorBill(id: number, formData: FormData) {
           status: "draft",
         },
       });
+
+      // Putusan 4(2): jejak L3 pada WO dalam tx edit yang sama.
+      if (l3) {
+        await writeL3ActivityLog(tx, {
+          workOrder: l3.workOrder,
+          sourceType: "VendorBill",
+          sourceId: updated.id,
+          sourceDocumentNo: updated.documentNo ?? existingBill.documentNo,
+          vendorKey: `vendor:${v.vendorId}`,
+          amount: billHeader.grandTotal,
+          date,
+          reason: l3.tag.reason,
+          userId: Number(user.id),
+        });
+      }
 
       // Replace the item lines with the submitted set so an edit round-trips the
       // goods (delete + recreate keeps the simple "last write wins" semantics).
@@ -2750,6 +2974,8 @@ export async function updatePurchaseReturn(id: number, formData: FormData) {
           purchaseOrderId: v.purchaseOrderId,
           date,
           reason: v.reason ?? null,
+          taxReturnNoteNumber: v.taxReturnNoteNumber ?? null,
+          taxReturnNoteDate: v.taxReturnNoteDate ? wibDateToUtcMidnight(v.taxReturnNoteDate) : null,
           items: {
             create: purchaseReturnItemData(validPrItems, updPrDocumentCostMap, updBillPriceByItem),
           },
