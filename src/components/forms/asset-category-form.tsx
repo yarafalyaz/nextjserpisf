@@ -32,6 +32,9 @@ export interface AssetCategoryFormValue {
   accumulatedDepreciationAccountId?: number | null
   depreciationExpenseAccountId?: number | null
   gainLossAccountId?: number | null
+  revaluationSurplusAccountId?: number | null
+  impairmentLossAccountId?: number | null
+  accumulatedImpairmentAccountId?: number | null
 }
 
 export function AssetCategoryForm({
@@ -159,6 +162,27 @@ export function AssetCategoryForm({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="gainLossAccountId">Akun Laba/Rugi Pelepasan</Label>
             <FormSelect id="gainLossAccountId" name="gainLossAccountId" placeholder="-- Pakai mapping global --" options={accountOptions} defaultValue={category?.gainLossAccountId ? String(category.gainLossAccountId) : ""} />
+          </div>
+        </FormSection>
+
+        <FormSection title="Mapping Akun Peristiwa Perubahan Aset">
+          <p className="text-xs text-muted-foreground">
+            Akun peristiwa revaluasi / penurunan nilai kategori ini (F-111/F-128). Berbeda dari mapping
+            global di atas: kosong = belum terpetakan, dan peristiwa terkait ditolak berisik oleh server
+            (gagal tertutup) — bukan dialihkan ke akun lain. Surplus revaluasi wajib akun ekuitas, beban
+            penurunan nilai wajib akun beban, akumulasi penurunan nilai wajib akun kontra-aset.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="revaluationSurplusAccountId">Akun Surplus Revaluasi</Label>
+            <FormSelect id="revaluationSurplusAccountId" name="revaluationSurplusAccountId" placeholder="-- Belum terpetakan --" options={accountOptions} defaultValue={category?.revaluationSurplusAccountId ? String(category.revaluationSurplusAccountId) : ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="impairmentLossAccountId">Akun Beban Penurunan Nilai</Label>
+            <FormSelect id="impairmentLossAccountId" name="impairmentLossAccountId" placeholder="-- Belum terpetakan --" options={accountOptions} defaultValue={category?.impairmentLossAccountId ? String(category.impairmentLossAccountId) : ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="accumulatedImpairmentAccountId">Akun Akumulasi Penurunan Nilai</Label>
+            <FormSelect id="accumulatedImpairmentAccountId" name="accumulatedImpairmentAccountId" placeholder="-- Belum terpetakan --" options={accountOptions} defaultValue={category?.accumulatedImpairmentAccountId ? String(category.accumulatedImpairmentAccountId) : ""} />
           </div>
         </FormSection>
 

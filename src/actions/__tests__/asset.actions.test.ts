@@ -1382,6 +1382,60 @@ describe("disposeAsset", () => {
     expect(prismaMock.journal.create).toHaveBeenCalled()
   })
 
+  it("penjaga POSTED: gainLoss dari jurnal POSTED, bukan currentValue basi (t_d34601a0)", async () => {
+    // Jurnal: perolehan 1000 (akun 200), akumulasi POSTED 300 (akun 201)
+    // -> nilai buku jurnal 700. Cache basi: purchaseCost=1000, currentValue=900
+    // (jalur legacy akan memberi gainLoss 700-900=-200). proceeds=700 -> 0.
+    process.env.FIXED_ASSET_ACCOUNT_ID = "200"
+    process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID = "201"
+    process.env.ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID = "202"
+    process.env.ASSET_CASH_ACCOUNT_ID = "203"
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
+      id: 100,
+      name: "Laptop",
+      code: "AST-001",
+      status: "active",
+      purchaseCost: 1000,
+      currentValue: 900,
+    })
+    prismaMock.journal.findMany.mockResolvedValue([
+      {
+        referenceType: "ASSET_ACQUISITION",
+        entries: [{ accountId: 200, debit: 1000, credit: 0 }],
+      },
+      {
+        referenceType: "ASSET_DEPRECIATION_202601",
+        entries: [{ accountId: 201, debit: 0, credit: 300 }],
+      },
+    ])
+    prismaMock.journal.findFirst.mockResolvedValue({ id: 1 })
+
+    const res = await disposeAsset(fd({ assetId: "100", proceeds: "700" }))
+
+    expect(res.success).toBe(true)
+    expect(res.gainLoss).toBe(0)
+    // Argumen kueri wajib dijaga: sabotase POSTED->DRAFT harus merah di sini.
+    expect(prismaMock.journal.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          referenceId: 100,
+          status: "POSTED",
+          deletedAt: null,
+        }),
+      }),
+    )
+    const createCall = prismaMock.journal.create.mock.calls.at(-1)?.[0]
+    const entries = createCall.data.entries.create as Array<{
+      accountId: number
+      debit: { toString(): string }
+      credit: { toString(): string }
+    }>
+    const accum = entries.find((e) => e.accountId === 201)
+    const fixed = entries.find((e) => e.accountId === 200)
+    expect(String(accum?.debit)).toBe("300")
+    expect(String(fixed?.credit)).toBe("1000")
+  })
+
   it("handles error on dispose asset", async () => {
     prismaMock.asset.findUniqueOrThrow.mockRejectedValue(new Error("db err"))
     const res = await disposeAsset(fd({ assetId: "100" }))

@@ -61,6 +61,9 @@ export default async function EditPage({
           accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId,
           depreciationExpenseAccountId: data.depreciationExpenseAccountId,
           gainLossAccountId: data.gainLossAccountId,
+          revaluationSurplusAccountId: data.revaluationSurplusAccountId,
+          impairmentLossAccountId: data.impairmentLossAccountId,
+          accumulatedImpairmentAccountId: data.accumulatedImpairmentAccountId,
         }}
       />
     </div>

@@ -87,6 +87,7 @@ export const navigation: NavItem[] = [
     children: [
       { label: "Penawaran", href: "/penjualan/penawaran", icon: FileText, permission: "view_quotations" },
       { label: "Antrean Penawaran", href: "/penjualan/antrean-penawaran", icon: ListTodo, permission: "view_quotations" },
+      { label: "Antrean Penagihan", href: "/penjualan/antrean-penagihan", icon: ListTodo, permissions: ["view_reports", "view_sales_invoices"] },
       { label: "Uang Muka", href: "/penjualan/uang-muka", icon: Wallet, permission: "view_down_payments" },
       { label: "Pesanan Penjualan", href: "/penjualan/pesanan", icon: ShoppingCart, permission: "view_sales_orders" },
       { label: "Surat Jalan", href: "/penjualan/surat-jalan", icon: Truck, permission: "view_delivery_orders" },
@@ -299,6 +300,7 @@ export const navigation: NavItem[] = [
       { label: "Rekap Komisi Penjualan", href: "/laporan/rekap-komisi", icon: Banknote, permission: "view_reports" },
       { label: "Target vs Pencapaian Penjualan", href: "/laporan/target-penjualan", icon: Target, permission: "view_reports" },
       { label: "Hasil Penawaran", href: "/laporan/hasil-penawaran", icon: BarChart3, permission: "view_reports" },
+      { label: "Garansi Segera Berakhir", href: "/laporan/garansi-segera-berakhir", icon: ShieldCheck, permission: "view_reports" },
       { label: "Corong Prospek", href: "/laporan/corong-prospek", icon: BarChart3, permission: "view_reports" },
       { label: "Serapan Overhead", href: "/laporan/serapan-overhead", icon: TrendingUp, permission: "view_reports" },
       { label: "Bahan & Biaya Pekerjaan", href: "/laporan/biaya-pekerjaan", icon: Hammer, permission: "view_reports" },

@@ -76,6 +76,11 @@ export const assetCategorySchema = z.object({
   accumulatedDepreciationAccountId: optionalRefId,
   depreciationExpenseAccountId: optionalRefId,
   gainLossAccountId: optionalRefId,
+  // Mapping peristiwa perubahan aset (F-2026-10-23-111-V/128-V): nullable
+  // fail-closed; kosong = peristiwa terkait ditolak berisik di service.
+  revaluationSurplusAccountId: optionalRefId,
+  impairmentLossAccountId: optionalRefId,
+  accumulatedImpairmentAccountId: optionalRefId,
 }).superRefine((data, ctx) => {
   // Bangunan hanya garis lurus (UU PPh Pasal 11, vonis F-109-V P1/F109-3):
   // saldo menurun pada kelompok bangunan ditolak saat simpan. Kelompok
@@ -90,6 +95,59 @@ export const assetCategorySchema = z.object({
       })
     }
   }
+})
+
+// ==================== Asset Change Event (F-111-V + F-115-V) ====================
+
+const requiredStr200 = (msg: string) =>
+  z.string({ error: msg }).trim().min(1, msg).max(200, msg)
+
+export const assetChangeEventSchema = z.object({
+  assetId: requiredId("Aset"),
+  kind: z.enum([
+    "REVALUATION_UP",
+    "REVALUATION_DOWN",
+    "IMPAIRMENT",
+    "IMPAIRMENT_REVERSAL",
+    "FISCAL_REVALUATION_APPROVED",
+    "COMMERCIAL_METHOD_CHANGE",
+    "FISCAL_METHOD_CHANGE",
+    "ESTIMATE_CHANGE",
+  ]),
+  effectiveDate: dateOnly,
+  sourceDocumentKey: requiredStr200("Kunci dokumen sumber wajib diisi"),
+  fairValue: z.coerce.number().min(0).optional(),
+  appraiserName: optionalStr(200),
+  appraiserReportRef: optionalStr(200),
+  revaluedClassName: optionalStr(200),
+  impairmentIndicator: optionalStr(60),
+  recoverableBasis: optionalStr(40),
+  recoverableAmount: z.coerce.number().min(0).optional(),
+  carryingWithoutImpairment: z.coerce.number().min(0).optional(),
+  isGoodwillOrNonAmortizing: z.boolean().optional(),
+  djpApprovalNumber: optionalStr(100),
+  djpApprovalDate: optionalDate,
+  reasonCode: optionalStr(60),
+  approvedByName: optionalStr(200),
+  newMethod: optionalStr(40),
+  newUsefulLifeMonths: z.coerce.number().int().positive().optional(),
+  newResidualValue: z.coerce.number().min(0).optional(),
+  isBuildingFiscal: z.boolean().optional(),
+})
+
+export const assetReclassificationSchema = z.object({
+  assetId: requiredId("Aset"),
+  toCategoryId: requiredId("Kategori tujuan"),
+  effectiveDate: dateOnly,
+  sourceDocumentKey: requiredStr200("Kunci dokumen sumber wajib diisi"),
+  reasonCode: requiredStr200("Alasan reklasifikasi wajib diisi"),
+  approvedByName: requiredStr200("Penyetuju reklasifikasi wajib bernama"),
+})
+
+export const assetChangeEventReversalSchema = z.object({
+  eventId: requiredId("Peristiwa"),
+  reversalDate: dateOnly,
+  sourceDocumentKey: requiredStr200("Kunci dokumen sumber wajib diisi"),
 })
 
 // ==================== Asset Brand ====================
