@@ -384,7 +384,7 @@ export function evaluatePkwtCumulative(input: {
       : []),
     input.currentStart,
   ]
-  const firstStart = starts.reduce((a, b) => (wibDayNumber(a) <= wibDayNumber(b) ? a : b))
+  const firstStart = starts.reduce((a, b) => (wibDayNumber(a) <= wibDayNumber(b) ? a : b), input.currentStart)
   const limit = addCalendarYearsWib(firstStart, 5)
   if (wibDayNumber(input.proposedEnd) > wibDayNumber(limit)) {
     return deny("Perpanjangan ditolak: total masa PKWT kumulatif akan melebihi 5 tahun")
