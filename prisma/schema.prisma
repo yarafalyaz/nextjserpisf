@@ -4067,6 +4067,12 @@ model AssetCategory {
   taxTypeListed                    Boolean? @map("tax_type_listed")
   /// Ada penetapan DJP (mengalahkan default kelompok 3 jenis tak tercantum).
   taxDjpDetermination              Boolean  @default(false) @map("tax_djp_determination")
+  /// Metode fiskal terpilih (vonis BOT 4 F-2026-10-23-109-V P1):
+  /// `straight_line`|`declining_balance`; NULL = belum dipilih -> fiskal
+  /// belum-dihitung, DILARANG fallback garis lurus. Terpisah dari
+  /// `Asset.depreciationMethod` komersial. Bangunan + saldo menurun
+  /// ditolak saat simpan dan di read-model.
+  fiscalMethod                     String?  @map("fiscal_method") @db.VarChar(30)
   assetAccountId                   Int?     @map("asset_account_id")
   accumulatedDepreciationAccountId Int?     @map("accumulated_depreciation_account_id")
   depreciationExpenseAccountId     Int?     @map("depreciation_expense_account_id")
@@ -4168,6 +4174,7 @@ model Asset {
   histories          AssetHistory[]
   transfers          AssetTransfer[]
   usageRecords       AssetUsageRecord[]
+  fiscalYearRows     AssetFiscalYearRow[]
   changeEvents       AssetChangeEvent[]
   category           AssetCategory?  @relation(fields: [categoryId], references: [id])
   group              AssetGroup?     @relation(fields: [groupId], references: [id])
@@ -4204,6 +4211,34 @@ model AssetUsageRecord {
   @@index([assetId], map: "asset_usage_records_asset_id_fkey")
   @@index([createdAt])
   @@map("asset_usage_records")
+}
+
+/// Baris tahun saldo fiskal terbekukan per aset (vonis BOT 4
+/// F-2026-10-23-109-V P4). Snapshot method/groupCode/ratePercent saat
+/// baris dibuat; edit master kategori tidak mengubah baris terbit.
+/// BUKAN jurnal — tidak memposting GL apa pun. Unik (assetId, taxYear):
+/// generate tahunan idempoten, replay = nol baris baru/nol ubah.
+model AssetFiscalYearRow {
+  id             Int      @id @default(autoincrement())
+  assetId        Int      @map("asset_id")
+  taxYear        Int      @map("tax_year")
+  yearIndex      Int      @map("year_index")
+  openingBalance Decimal  @map("opening_balance") @db.Decimal(15, 2)
+  depreciation   Decimal  @db.Decimal(15, 2)
+  closingBalance Decimal  @map("closing_balance") @db.Decimal(15, 2)
+  method         String   @db.VarChar(30)
+  groupCode      String   @map("group_code") @db.VarChar(30)
+  ratePercent    Decimal  @map("rate_percent") @db.Decimal(5, 2)
+  /// computed | opening | estimasi-tahun-berjalan (snapshot builder).
+  source         String   @db.VarChar(30)
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+  asset          Asset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, taxYear], map: "asset_fiscal_year_rows_asset_year_unique")
+  @@index([assetId], map: "asset_fiscal_year_rows_asset_id_fkey")
+  @@index([createdAt])
+  @@map("asset_fiscal_year_rows")
 }
 
 /// Peristiwa perubahan aset terbekukan — inti gabungan vonis BOT 4
