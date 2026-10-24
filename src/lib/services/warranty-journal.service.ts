@@ -146,12 +146,103 @@ async function loadClaimInTx(tx: TxClient, claimId: number) {
       decisionAt: true,
       repairWorkOrderId: true,
       supplierClaimStatus: true,
+      supplierClaimRefNo: true,
+      supplierClaimNotes: true,
       coverage: { select: { expiresAt: true } },
       reportedAt: true,
     },
   })
   if (!claim) throw new Error("Klaim garansi tidak ditemukan.")
   return claim
+}
+
+/** Deskripsi ActivityLog transisi supplier persis dari action existing. */
+export const SUPPLIER_CLAIM_SENT_LOG_DESCRIPTION = "Status klaim supplier berpindah ke sent"
+
+/**
+ * Penanda nomor resi pengiriman di `supplierClaimNotes` existing (vonis
+ * F-2026-10-24-130-V Putusan 1: pembanding disimpan di notes/refNo yang
+ * sudah ada, TANPA kolom baru). Ditulis transisi `sent`, dibaca gerbang E3.
+ */
+export function parseSentResiFromNotes(notes: string | null | undefined): string | null {
+  if (!notes) return null
+  const match = notes.match(/\[Resi pengiriman klaim supplier:\s*([^\]]+)\]/)
+  const value = match?.[1]?.trim()
+  return value ? value : null
+}
+
+const normalizeRefNo = (value: string): string => value.trim().toLowerCase()
+
+/**
+ * Gerbang bukti E3 (F-2026-10-24-130-V Putusan 1, E130-1) — TANPA migrasi.
+ * Urutan: (1) refNo persetujuan vendor wajib terisi dan tidak boleh sama
+ * dengan nomor resi sent tersimpan; (2) bila waktu transisi sent terbukti
+ * dari ActivityLog, hanya lampiran persetujuan `createdAt > sentAt` yang
+ * dihitung (foto cacat pra-sent tidak pernah cukup); (3) bila waktu sent
+ * tidak terbukti, fallback satu-satunya: lampiran >= 1 dan refNo terbukti
+ * berbeda dari resi sent penanda notes. Semua penolakan menyebut dokumen
+ * yang kurang secara spesifik, bukan "lampiran wajib" generik.
+ */
+async function assertSupplierRecoveryEvidence(
+  tx: TxClient,
+  claim: { id: number; supplierClaimRefNo: string | null; supplierClaimNotes: string | null },
+): Promise<void> {
+  const approvalRefNo = claim.supplierClaimRefNo?.trim() ?? ""
+  if (!approvalRefNo) {
+    throw new Error(
+      "Nomor referensi persetujuan vendor wajib diisi sebelum recovery dijurnal — nomor resi pengiriman tidak dapat dipakai sebagai referensi persetujuan.",
+    )
+  }
+  const sentResi = parseSentResiFromNotes(claim.supplierClaimNotes)
+  if (sentResi && normalizeRefNo(sentResi) === normalizeRefNo(approvalRefNo)) {
+    throw new Error(
+      "Nomor referensi persetujuan vendor masih sama dengan nomor resi pengiriman — isi nomor referensi persetujuan vendor yang berbeda dari nomor resi sebelum recovery dijurnal.",
+    )
+  }
+
+  const sentLog = await tx.activityLog.findFirst({
+    where: {
+      modelType: "WarrantyClaim",
+      modelId: claim.id,
+      action: "update",
+      description: SUPPLIER_CLAIM_SENT_LOG_DESCRIPTION,
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: { createdAt: true },
+  })
+  const sentAt =
+    sentLog?.createdAt && !Number.isNaN(sentLog.createdAt.getTime()) ? sentLog.createdAt : null
+
+  if (sentAt) {
+    const postSentCount = await tx.transactionAttachment.count({
+      where: {
+        referenceType: "WarrantyClaim",
+        referenceId: claim.id,
+        createdAt: { gt: sentAt },
+      },
+    })
+    if (postSentCount === 0) {
+      throw new Error(
+        "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada — unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis sesudah klaim dikirim; foto part cacat sebelum pengiriman tidak cukup.",
+      )
+    }
+    return
+  }
+
+  // Fallback vonis: waktu sent tidak terbukti dari jejak tersimpan.
+  if (!sentResi) {
+    throw new Error(
+      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada yang dapat diverifikasi — waktu pengiriman klaim supplier tidak terbukti dari jejak tersimpan dan nomor resi pengiriman tidak tercatat pada klaim, sehingga nomor referensi persetujuan vendor belum dapat dibuktikan berbeda dari nomor resi.",
+    )
+  }
+  const evidenceCount = await tx.transactionAttachment.count({
+    where: { referenceType: "WarrantyClaim", referenceId: claim.id },
+  })
+  if (evidenceCount === 0) {
+    throw new Error(
+      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada — unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis; foto part cacat tidak cukup.",
+    )
+  }
 }
 
 /**
@@ -241,10 +332,11 @@ export async function postWarrantyClaimCostJournal(
 
 /**
  * E3 — recovery supplier virtually-certain. Syarat: klaim supplier
- * accepted/closed_recovered, bukti persetujuan supplier terlampir
- * (TransactionAttachment referenceType "WarrantyClaim"), nominal > 0 dan
- * tidak melebihi biaya klaim terverifikasi. Status operasional lain
- * (termasuk `possible`) = tanpa jurnal.
+ * accepted/closed_recovered, bukti persetujuan tertulis vendor lolos
+ * gerbang E130-1 (refNo persetujuan + lampiran persetujuan pasca-sent,
+ * lihat assertSupplierRecoveryEvidence), nominal > 0 dan tidak melebihi
+ * biaya klaim terverifikasi. Status operasional lain (termasuk
+ * `possible`) = tanpa jurnal.
  */
 export async function postWarrantySupplierRecoveryJournal(
   input: { claimId: number; amount: number; eventDate: Date; createdBy?: number | null },
@@ -258,12 +350,7 @@ export async function postWarrantySupplierRecoveryJournal(
         "Recovery supplier hanya dijurnal bila klaim supplier sudah diterima (accepted/closed_recovered) — status lain belum hampir pasti, tanpa jurnal.",
       )
     }
-    const evidenceCount = await tx.transactionAttachment.count({
-      where: { referenceType: "WarrantyClaim", referenceId: claim.id },
-    })
-    if (evidenceCount === 0) {
-      throw new Error("Bukti persetujuan supplier wajib dilampirkan pada klaim sebelum recovery dijurnal.")
-    }
+    await assertSupplierRecoveryEvidence(tx, claim)
     if (claim.repairWorkOrderId == null) {
       throw new Error("Klaim belum tertaut ke WO repair — biaya klaim tidak dapat diverifikasi untuk recovery.")
     }
