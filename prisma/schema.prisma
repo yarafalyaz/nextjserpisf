@@ -897,6 +897,11 @@ model Employee {
   employmentStatus    String?           @map("employment_status")
   contractStartDate   DateTime?         @map("contract_start_date")
   contractEndDate     DateTime?         @map("contract_end_date")
+  // F-2026-10-24-099-S Q-PROB-1: tanggal akhir rencana masa percobaan (hanya
+  // PKWTT; tanggal mulai = joinDate sumber tunggal, TANPA kolom mulai kedua).
+  // null = tidak dalam percobaan. Status percobaan = turunan tanggal +
+  // keputusan akhir di baris ProbationReview final (src/lib/reports/probation.ts).
+  probationEndDate    DateTime?         @map("probation_end_date")
   employmentEndedAt   DateTime?         @map("employment_ended_at")
   endReason           String?           @map("end_reason")
   paymentFrequency    String            @default("MONTHLY") @map("payment_frequency")
@@ -916,6 +921,9 @@ model Employee {
   user                User?             @relation(fields: [userId], references: [id])
   leaveRequests       LeaveRequest[]
   overtimeRequests    OvertimeRequest[]
+  probationReviews    ProbationReview[] @relation("ProbationReviewSubject")
+  probationReviewsGiven ProbationReview[] @relation("ProbationReviewReviewer")
+  contractDecisionRequests ContractDecisionRequest[] @relation("ContractDecisionSubject")
   payrolls            Payroll[]
   tasks               Task[]
   timesheets          Timesheet[]
@@ -3303,6 +3311,79 @@ model LeaveRequest {
   @@index([approvedBy])
   @@index([createdAt])
   @@map("leave_requests")
+}
+
+// F-2026-10-24-099-S (§2/§3, putusan Q-PROB-1/3 t_a52e310b): evaluasi masa
+// percobaan, HANYA calon PKWTT. Skor 3 sumbu kategori tertutup
+// {perlu_perhatian, cukup, baik} — tanpa angka/gabungan (BR-PROB-05).
+// milestone: "30"|"60"|"90"|"final" (final = titik akhir bila durasi <90,
+// turunan tanggal di src/lib/reports/probation.ts). Keputusan akhir
+// probation (finalDecision: passed|extended|failed) hidup di baris
+// milestone final sesudah decided — YAGNI tabel keputusan terpisah.
+// Tanpa nominal/kompensasi apa pun (BR-PROB-11).
+model ProbationReview {
+  slug              String?   @unique
+  id                Int       @id @default(autoincrement())
+  employeeId        Int       @map("employee_id")
+  milestone         String
+  dueDate           DateTime  @map("due_date")
+  reviewerEmployeeId Int      @map("reviewer_employee_id")
+  technicalScore    String?   @map("technical_score")
+  disciplineScore   String?   @map("discipline_score")
+  attendanceScore   String?   @map("attendance_score")
+  notes             String?   @db.Text
+  recommendation    String?
+  status            String    @default("draft")
+  finalDecision     String?   @map("final_decision")
+  decidedBy         Int?      @map("decided_by")
+  decidedAt         DateTime? @map("decided_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  employee          Employee  @relation("ProbationReviewSubject", fields: [employeeId], references: [id])
+  reviewer          Employee  @relation("ProbationReviewReviewer", fields: [reviewerEmployeeId], references: [id])
+  contractDecisionRequests ContractDecisionRequest[]
+
+  @@index([employeeId], map: "probation_reviews_employee_id_fkey")
+  @@index([reviewerEmployeeId], map: "probation_reviews_reviewer_employee_id_fkey")
+  @@index([status], map: "idx_probation_reviews_status")
+  @@index([dueDate], map: "idx_probation_reviews_due_date")
+  @@map("probation_reviews")
+}
+
+// F-2026-10-24-099-S (§2, putusan Q-PROB-2/6): pengajuan keputusan kontrak.
+// kind: extend_pkwt|convert_pkwtt|end_contract. Segmen PKWT kumulatif
+// (BR-PROB-08) dihitung dari baris APPLIED model ini (appliedFromStartDate..
+// appliedEndDate = tanggal terapan persis) + segmen berjalan di master —
+// DILARANG rekonstruksi ActivityLog. finalReviewId = rujukan review final
+// probation untuk penjaga SoD penuh Q-PROB-2 (penyetuju != penilai final).
+// Tanpa nominal/kompensasi (BR-PROB-11); berhenti tetap alur F-085-S.
+model ContractDecisionRequest {
+  slug                 String?   @unique
+  id                   Int       @id @default(autoincrement())
+  employeeId           Int       @map("employee_id")
+  kind                 String
+  proposedContractEndDate DateTime? @map("proposed_contract_end_date")
+  reason               String    @db.Text
+  requestedBy          Int       @map("requested_by")
+  status               String    @default("draft")
+  decidedBy            Int?      @map("decided_by")
+  decidedAt            DateTime? @map("decided_at")
+  rejectionReason      String?   @map("rejection_reason") @db.Text
+  appliedAt            DateTime? @map("applied_at")
+  appliedBy            Int?      @map("applied_by")
+  appliedFromStartDate DateTime? @map("applied_from_start_date")
+  appliedEndDate       DateTime? @map("applied_end_date")
+  finalReviewId        Int?      @map("final_review_id")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  employee             Employee  @relation("ContractDecisionSubject", fields: [employeeId], references: [id])
+  finalReview          ProbationReview? @relation(fields: [finalReviewId], references: [id])
+
+  @@index([employeeId], map: "contract_decision_requests_employee_id_fkey")
+  @@index([status], map: "idx_contract_decision_requests_status")
+  @@index([requestedBy], map: "idx_contract_decision_requests_requested_by")
+  @@index([finalReviewId], map: "contract_decision_requests_final_review_id_fkey")
+  @@map("contract_decision_requests")
 }
 
 model OvertimeRequest {
