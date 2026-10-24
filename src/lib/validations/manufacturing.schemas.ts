@@ -99,6 +99,14 @@ const localeQty = () =>
 const bomRevisionLineSchema = z.object({
   itemId: z.coerce.number().int().positive("Material item tidak valid"),
   qty: localeQty(),
+  // F-008: allowance scrap global per baris (%), 0–100; field kosong = null
+  // (belum dikalibrasi). Murni data master — tanpa dampak jurnal saat diisi.
+  scrapPercent: z
+    .preprocess(
+      (v) => (v == null || (typeof v === "string" && v.trim() === "") ? null : typeof v === "string" ? parseLocaleNumber(v) : v),
+      z.coerce.number().min(0, "Persen scrap allowance minimal 0").max(100, "Persen scrap allowance maksimal 100").nullable(),
+    )
+    .default(null),
 })
 
 export const createBomRevisionSchema = z.object({
@@ -117,8 +125,9 @@ export const updateBomRevisionSchema = z.object({
 export function parseRevisionRows(
   itemIds: string[],
   qtys: string[],
-): { success: true; data: { itemId: number; qty: number }[] } | { success: false; error: string } {
-  const merged = new Map<number, number>()
+  scrapPercents: string[] = [],
+): { success: true; data: { itemId: number; qty: number; scrapPercent: number | null }[] } | { success: false; error: string } {
+  const merged = new Map<number, { qty: number; scrapPercent: number | null }>()
   const errors: string[] = []
 
   for (let i = 0; i < itemIds.length; i++) {
@@ -126,18 +135,18 @@ export function parseRevisionRows(
     const rawQty = (qtys[i] ?? "").trim()
     if (rawId === "" || rawQty === "" || rawId === "0" || rawQty === "0") continue
 
-    const r = bomRevisionLineSchema.safeParse({ itemId: rawId, qty: rawQty })
+    const r = bomRevisionLineSchema.safeParse({ itemId: rawId, qty: rawQty, scrapPercent: scrapPercents[i] })
     if (!r.success) {
       errors.push(`Baris #${i + 1}: ${r.error.issues.map((iss) => iss.message).join(", ")}`)
       continue
     }
-    merged.set(r.data.itemId, (merged.get(r.data.itemId) ?? 0) + r.data.qty)
+    merged.set(r.data.itemId, { qty: (merged.get(r.data.itemId)?.qty ?? 0) + r.data.qty, scrapPercent: r.data.scrapPercent })
   }
 
   if (errors.length > 0) {
     return { success: false, error: "Validasi gagal: " + errors.join("; ") }
   }
-  return { success: true, data: Array.from(merged, ([itemId, qty]) => ({ itemId, qty })) }
+  return { success: true, data: Array.from(merged, ([itemId, m]) => ({ itemId, qty: m.qty, scrapPercent: m.scrapPercent })) }
 }
 
 // ==================== PRODUCT MATERIALS (BOM rows) ====================
@@ -160,6 +169,26 @@ export const materialRowSchema = z.object({
 })
 
 export type MaterialRow = z.infer<typeof materialRowSchema>
+
+// ==================== WORK CENTER (F-2026-10-22-090-S) ====================
+// Master stasiun kerja papan beban rencana. capacityHoursPerDay Decimal(15,2)
+// > 0; parallelStations Int >= 1. Keunikan nama aktif ditegakkan aksi server
+// lewat normalizedName (Q-LP-5), bukan zod.
+
+export const workCenterSchema = z.object({
+  name: z.string().trim().min(1, "Nama stasiun wajib diisi").max(150, "Nama stasiun maksimal 150 karakter"),
+  capacityHoursPerDay: z.coerce
+    .number({ error: "Kapasitas jam per hari wajib diisi" })
+    .positive("Kapasitas jam per hari harus lebih dari 0")
+    .max(24, "Kapasitas jam per hari maksimal 24"),
+  parallelStations: z.coerce
+    .number({ error: "Jumlah stasiun paralel wajib diisi" })
+    .int("Jumlah stasiun paralel harus bilangan bulat")
+    .min(1, "Jumlah stasiun paralel minimal 1")
+    .max(100, "Jumlah stasiun paralel maksimal 100"),
+  sortOrder: z.coerce.number().int("Urutan tampil harus bilangan bulat").min(0).optional(),
+  isActive: z.boolean().optional(),
+})
 
 /**
  * Validate + normalise the parallel `materialItemId[]` / `materialQty[]` arrays

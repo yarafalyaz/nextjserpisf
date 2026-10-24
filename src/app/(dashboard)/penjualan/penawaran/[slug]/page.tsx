@@ -19,6 +19,8 @@ import { Button } from "@/components/ui/button";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import { JobBillingCard } from "@/components/reports/job-billing-card";
 import { isQuotationExpired } from "@/lib/utils/quotation-expiry";
+import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold";
+import { QuotationInvoiceThresholdCard } from "@/components/reports/quotation-invoice-threshold-card";
 import { WhatsappButton } from "@/components/reports/whatsapp-button";
 import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note";
 import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data";
@@ -27,6 +29,7 @@ import { DifferenceInvoiceButton } from "@/components/reports/difference-invoice
 import { ProgressInvoiceButton } from "@/components/reports/progress-invoice-button";
 import { RevisionDownCreditButton } from "@/components/reports/revision-down-credit-button";
 import { loadJobBillingSummary } from "@/lib/reports/job-billing-summary-data";
+import { getJobPaymentScheduleForQuotation } from "@/actions/job-payment-schedule.actions";
 import { loadQuotationApprovalGate } from "@/lib/reports/quotation-approval-gate-data";
 import { QuotationApprovalGateCard } from "@/components/reports/quotation-approval-gate-card";
 import { getQuotationRevisionDelta } from "@/lib/reports/quotation-revision-delta-data";
@@ -52,6 +55,7 @@ export default async function QuotationDetailPage({
 }) {
   await requirePermission("view_quotations");
   const canApprove = await hasPermission("approve_quotations");
+  const canManagePaymentSchedule = await hasPermission("edit_quotations");
   const { slug } = await params;
 
   const quotationInclude = {
@@ -85,10 +89,11 @@ export default async function QuotationDetailPage({
   // F-036 tahap 2: jejak klik tautan WA terakhir (label jujur, bukan terkirim).
   const whatsappTrail = await getWhatsappTrail("Quotation", quotation.id);
 
-  const [billingSummary, approvalGate, revisionDelta] = await Promise.all([
+  const [billingSummary, approvalGate, revisionDelta, paymentSchedule] = await Promise.all([
     loadJobBillingSummary(quotation.id),
     loadQuotationApprovalGate(quotation),
     getQuotationRevisionDelta(quotation.id),
+    getJobPaymentScheduleForQuotation(quotation.id),
   ]);
 
   const itemIds = quotation.sections
@@ -328,7 +333,22 @@ export default async function QuotationDetailPage({
                   />
                 </DetailCard>
 
-                {billingSummary ? <JobBillingCard summary={billingSummary} deltaNilaiCents={revisionDelta?.deltaCents ?? null} /> : null}
+                {billingSummary ? (
+                  <JobBillingCard
+                    summary={billingSummary}
+                    deltaNilaiCents={revisionDelta?.deltaCents ?? null}
+                    paymentSchedule={paymentSchedule}
+                    canManagePaymentSchedule={canManagePaymentSchedule}
+                  />
+                ) : null}
+
+                <QuotationInvoiceThresholdCard
+                  info={buildInvoiceThresholdInfo(
+                    quotation.invoiceThresholdPercent == null
+                      ? null
+                      : Number(quotation.invoiceThresholdPercent),
+                  )}
+                />
 
                 <QuotationApprovalGateCard gate={approvalGate} />
 

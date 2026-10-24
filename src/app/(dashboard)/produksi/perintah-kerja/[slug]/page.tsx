@@ -9,7 +9,8 @@ import { StatusChip } from "@/components/ui/status-chip";
 import { DeleteButton } from "@/components/ui/delete-button";
 import { deleteWorkOrder } from "@/actions/manufacturing.actions";
 import { WorkOrderActions } from "./_components/work-order-actions";
-import { WorkOrderOperationActions, InitializeStagesButton } from "./_components/work-order-operation-actions";
+import { WorkOrderOperationActions, InitializeStagesButton, WorkOrderOperationWorkCenterSelect } from "./_components/work-order-operation-actions";
+import { getWorkCenters } from "@/lib/reports/work-center-load-plan-data";
 import { CreateServicePoButton } from "./_components/create-service-po-button";
 import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -22,10 +23,21 @@ import { buildWhatsappMessage } from "@/lib/utils/whatsapp";
 import { WorkOrderMaterialNeedsCard } from "@/components/reports/work-order-material-needs-card";
 import { getWorkOrderMaterialNeeds } from "@/lib/reports/work-order-material-needs-data";
 import { WorkOrderPartStatusCard } from "@/components/reports/work-order-part-status-card";
+import { WorkOrderSubstituteSuggestionsPanel } from "@/components/reports/work-order-substitute-suggestions-panel";
+import { getWorkOrderSubstituteSuggestions } from "@/lib/reports/item-substitute-suggestions-data";
 import { FitmentBadge, FitmentIncompatibleSummary } from "@/components/reports/fitment-badge";
 import { getWorkOrderPartStatus } from "@/lib/reports/work-order-part-status-data";
+import { WorkOrderReservationsCard } from "@/components/reports/work-order-reservations-card";
+import { getWorkOrderReservations } from "@/lib/reports/work-order-reservations-data";
 import { WorkOrderProgressCard } from "@/components/reports/work-order-progress-card";
 import { getWorkOrderProgress } from "@/lib/reports/work-order-progress-data";
+import { getJobChangeOrdersForWorkOrder } from "@/actions/job-change-order.actions";
+import { JobChangeOrderPanel } from "./_components/job-change-order-panel";
+import { listBomRevisionChangeRequests } from "@/actions/bom-revision-change.actions";
+import { BomRevisionChangePanel } from "@/components/reports/bom-revision-change-panel";
+import { BomRevisionImpactCard } from "@/components/reports/bom-revision-impact-card";
+import { loadBomRevisionImpact } from "@/lib/reports/bom-revision-impact-data";
+import { auth } from "@/lib/auth/auth";
 import { DetailCard, DetailField } from "@/components/ui/detail-card";
 import {
   DetailTable,
@@ -53,46 +65,34 @@ export default async function WorkOrderDetailPage({
   await requirePermission("view_work_orders");
   const { slug } = await params;
 
+  const workOrderInclude = {
+    customer: true,
+    quotation: true,
+    customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
+    project: { select: { id: true, name: true, slug: true } },
+    bomRevision: { select: { id: true, revisionNo: true, slug: true } },
+    items: true,
+    purchaseOrders: {
+      where: { status: { notIn: ["cancelled"] } },
+      select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
+    },
+    productionOrders: {
+      select: { id: true, documentNo: true, status: true, qty: true, slug: true, bomRevision: { select: { revisionNo: true } } },
+    },
+  };
+
   const wo = await resolveEntity(
     { segment: slug },
     {
       bySlug: (s) =>
         prisma.workOrder.findFirst({
           where: { slug: s },
-          include: {
-            customer: true,
-            quotation: true,
-            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true, slug: true } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            items: true,
-            purchaseOrders: {
-              where: { status: { notIn: ["cancelled"] } },
-              select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
-            },
-            productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true },
-            },
-          },
+          include: workOrderInclude,
         }),
       byId: (id) =>
         prisma.workOrder.findUnique({
           where: { id },
-          include: {
-            customer: true,
-            quotation: true,
-            customerVehicle: { select: { id: true, slug: true, plateNumber: true, vehicle: { select: { variant: { select: { name: true, model: { select: { name: true, brand: { select: { name: true } } } } } } } } } },
-            project: { select: { id: true, name: true, slug: true } },
-            bomRevision: { select: { id: true, revisionNo: true, slug: true } },
-            items: true,
-            purchaseOrders: {
-              where: { status: { notIn: ["cancelled"] } },
-              select: { id: true, documentNo: true, isService: true, grandTotal: true, status: true, slug: true },
-            },
-            productionOrders: {
-              select: { id: true, documentNo: true, status: true, qty: true, slug: true },
-            },
-          },
+          include: workOrderInclude,
         }),
     },
   );
@@ -186,13 +186,96 @@ export default async function WorkOrderDetailPage({
   // Kartu murni presentasi: tanpa hitung ulang, tanpa tulis WorkOrderItem.status.
   const partStatus = await getWorkOrderPartStatus(wo.id);
 
+  // F-2026-10-22-069-S: saran substitusi read-only dari loader BOT 3 —
+  // tampil verbatim; terapkan digerbang edit_work_orders (server menegakkan).
+  const [substituteSuggestions, canApplySubstitute] = await Promise.all([
+    getWorkOrderSubstituteSuggestions(wo.id),
+    hasPermission("edit_work_orders"),
+  ]);
+
+  // F-057-S §2/§3: tabel reservasi stok — baris StockReservation passthrough
+  // loader (status/sisa builder, jejak rilis apa adanya). Izin view_work_orders
+  // sudah digerbang di atas. Q-RIL-1 saring per gudang belum diputus — loader
+  // tidak menyaring, kartu menampilkan semua baris apa adanya.
+  const reservations = await getWorkOrderReservations(wo.id);
+
   // F-020-B: progres tahap WO dari builder Bara (PR #377) — tampil apa adanya.
   // Aksi tahap hanya dirender bila izin edit_work_orders; server penegak.
   const stageProgress = await getWorkOrderProgress(wo.id);
   const canEditStages = await hasPermission("edit_work_orders");
+  // F-090-S: pilihan stasiun tahap dari master WorkCenter (BOT 3 PR #569).
+  const workCenters = canEditStages ? await getWorkCenters() : [];
 
   // F-036 tahap 2 + F-035: jejak klik WA terakhir + histori geser endDate.
   const whatsappTrail = await getWhatsappTrail("WorkOrder", wo.id);
+
+  // F-066-S UI (t_b1b321cb): panel Change Order — konsumen 7 aksi BOT 3.
+  // Nilai kontrak tunggal dari quotation berjalan (BR-CO-01); daftar item
+  // master hanya opsi baris tambah (harga awal dari master, server snapshot).
+  const [changeOrders, inventoryItemOptions, canCreateCo, canEditCo, canApplyCo] =
+    await Promise.all([
+      getJobChangeOrdersForWorkOrder(wo.id),
+      prisma.item.findMany({
+        where: { isActive: true, deletedAt: null },
+        select: { id: true, name: true, price: true },
+        orderBy: { name: "asc" },
+        take: 200,
+      }),
+      hasPermission("create_work_orders"),
+      hasPermission("edit_work_orders"),
+      hasPermission("complete_work_orders"),
+    ]);
+
+  // F-068-S UI (t_b60d664d): panel ganti revisi BOM — konsumen aksi BOT 3
+  // PR #589. Opsi = revisi released produk pin saat ini (beda dari pin);
+  // daftar pengajuan dari aksi list existing. Nama pengaju/item dari sini.
+  const [bomChangeList, canManageBomChange, bomSession] = await Promise.all([
+    listBomRevisionChangeRequests({ workOrderId: wo.id }),
+    hasPermission("edit_work_orders"),
+    auth(),
+  ]);
+  const bomChangeRequests = bomChangeList.success ? bomChangeList.requests : [];
+  const bomRevisionOptions = wo.bomRevision
+    ? await prisma.bomRevision.findMany({
+        where: {
+          productId: (
+            await prisma.bomRevision.findFirst({
+              where: { id: wo.bomRevision.id },
+              select: { productId: true },
+            })
+          )?.productId,
+          status: "released",
+          id: { not: wo.bomRevision.id },
+        },
+        select: { id: true, revisionNo: true },
+        orderBy: { revisionNo: "asc" },
+      })
+    : [];
+  const bomRevIds = [
+    ...new Set([
+      ...(wo.bomRevision ? [wo.bomRevision.id] : []),
+      ...bomRevisionOptions.map((r) => r.id),
+      ...bomChangeRequests.flatMap((r) => [r.fromRevisionId, r.toRevisionId]),
+    ]),
+  ];
+  const bomRevRows = bomRevIds.length
+    ? await prisma.bomRevision.findMany({
+        where: { id: { in: bomRevIds } },
+        select: { id: true, revisionNo: true, materials: { select: { itemId: true } } },
+      })
+    : [];
+  const bomUserIds = [
+    ...new Set(
+      bomChangeRequests.flatMap((r) => [r.requestedBy, r.decidedBy]).filter((x): x is number => x != null),
+    ),
+  ];
+  const bomUserRows = bomUserIds.length
+    ? await prisma.user.findMany({ where: { id: { in: bomUserIds } }, select: { id: true, name: true } })
+    : [];
+  const bomItemIds = [...new Set(bomRevRows.flatMap((r) => r.materials.map((m) => m.itemId)))];
+  const bomItemRows = bomItemIds.length
+    ? await prisma.item.findMany({ where: { id: { in: bomItemIds } }, select: { id: true, name: true } })
+    : [];
 
   const totalCost = wo.items.reduce(
     (sum, item) => sum + Number(item.qty) * Number(item.cost),
@@ -447,12 +530,18 @@ export default async function WorkOrderDetailPage({
                 ? Object.fromEntries(
                     stageProgress.rows.map((row) => [
                       row.id,
-                      <WorkOrderOperationActions
-                        key={row.id}
-                        workOrderId={wo.id}
-                        workOrderStatus={wo.status}
-                        row={row}
-                      />,
+                      <span key={row.id} className="flex flex-col items-end gap-2">
+                        <WorkOrderOperationActions
+                          workOrderId={wo.id}
+                          workOrderStatus={wo.status}
+                          row={row}
+                        />
+                        <WorkOrderOperationWorkCenterSelect
+                          workOrderId={wo.id}
+                          row={row}
+                          centers={workCenters}
+                        />
+                      </span>,
                     ]),
                   )
                 : undefined
@@ -471,6 +560,66 @@ export default async function WorkOrderDetailPage({
       {partStatus ? (
         <WorkOrderPartStatusCard report={partStatus} nameByItemId={itemNameMap} />
       ) : null}
+
+      {substituteSuggestions ? (
+        <WorkOrderSubstituteSuggestionsPanel
+          workOrderId={wo.id}
+          report={substituteSuggestions}
+          canApply={canApplySubstitute}
+        />
+      ) : null}
+
+      {wo.bomRevision ? (
+        <BomRevisionImpactCard
+          impact={await loadBomRevisionImpact(wo.bomRevision.id)}
+          currentRevisionNo={wo.bomRevision.revisionNo}
+        />
+      ) : null}
+
+      <BomRevisionChangePanel
+        owner={{ workOrderId: wo.id }}
+        documentStatus={wo.status}
+        currentRevision={wo.bomRevision}
+        revisionOptions={bomRevisionOptions}
+        requests={bomChangeRequests}
+        revisionNoById={Object.fromEntries(bomRevRows.map((r) => [r.id, r.revisionNo]))}
+        userNameById={Object.fromEntries(bomUserRows.map((u) => [u.id, u.name]))}
+        itemNameById={Object.fromEntries(bomItemRows.map((i) => [i.id, i.name]))}
+        canManage={canManageBomChange}
+        currentUserId={bomSession?.user?.id ? Number(bomSession.user.id) : null}
+        pairedPins={wo.productionOrders.flatMap((po) =>
+          po.bomRevision
+            ? [{ label: "order produksi", documentNo: po.documentNo, revisionNo: po.bomRevision.revisionNo }]
+            : [],
+        )}
+      />
+
+      <JobChangeOrderPanel
+        workOrderId={wo.id}
+        workOrderStatus={wo.status}
+        hasQuotation={!!wo.quotationId}
+        contractGrandTotal={wo.quotation ? Number(wo.quotation.grandTotal) : null}
+        changeOrders={changeOrders}
+        workOrderItems={wo.items
+          .filter((i) => i.status !== "replaced")
+          .map((i) => ({
+            workOrderItemId: i.id,
+            itemId: i.itemId,
+            label: itemNameMap.get(i.itemId) || `Barang #${i.itemId}`,
+            qty: Number(i.qty),
+            cost: Number(i.cost),
+          }))}
+        inventoryItems={inventoryItemOptions.map((i) => ({
+          id: i.id,
+          label: i.name,
+          price: Number(i.price),
+        }))}
+        itemNameById={Object.fromEntries(itemNameMap)}
+        canCreate={canCreateCo}
+        canEdit={canEditCo}
+        canApply={canApplyCo}
+      />
+      {reservations ? <WorkOrderReservationsCard reservations={reservations} /> : null}
 
       <WhatsappTrailNote trail={whatsappTrail} />
 

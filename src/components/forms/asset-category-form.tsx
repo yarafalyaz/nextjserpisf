@@ -23,10 +23,18 @@ export interface AssetCategoryFormValue {
   usefulLife?: number | null
   taxDepreciationRate?: number | null
   taxUsefulLife?: number | null
+  taxGroupCode?: string | null
+  taxTypeListed?: boolean | null
+  taxDjpDetermination?: boolean | null
+  /** Metode fiskal tersimpan F-109-V; null = belum dipilih (UI tidak memilihkan). */
+  fiscalMethod?: string | null
   assetAccountId?: number | null
   accumulatedDepreciationAccountId?: number | null
   depreciationExpenseAccountId?: number | null
   gainLossAccountId?: number | null
+  revaluationSurplusAccountId?: number | null
+  impairmentLossAccountId?: number | null
+  accumulatedImpairmentAccountId?: number | null
 }
 
 export function AssetCategoryForm({
@@ -87,10 +95,43 @@ export function AssetCategoryForm({
 
         <FormSection title="Penyusutan Fiskal (Pajak)">
           <p className="text-xs text-muted-foreground">
-            Dipakai laporan Perbedaan Penyusutan untuk membandingkan penyusutan akuntansi dengan
-            penyusutan fiskal. Kosongkan bila kategori ini belum dihitung secara fiskal — asetnya
-            tetap tampil di laporan, tetapi tidak ikut dihitung selisihnya.
+            Kelompok fiskal PMK 72/2023 menentukan tarif statutoris laporan Perbedaan Penyusutan.
+            Jenis tercantum tanpa kelompok = fiskal belum dihitung; jenis tidak tercantum tanpa
+            kelompok = Kelompok 3 (default statutoris). Penetapan DJP mengalahkan default.
           </p>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="taxGroupCode">Kelompok Fiskal</Label>
+            <FormSelect id="taxGroupCode" name="taxGroupCode" placeholder="-- Belum ditentukan --" options={[
+              { value: "GROUP_1", label: "Kelompok 1 (4 tahun)" },
+              { value: "GROUP_2", label: "Kelompok 2 (8 tahun)" },
+              { value: "GROUP_3", label: "Kelompok 3 (16 tahun)" },
+              { value: "GROUP_4", label: "Kelompok 4 (20 tahun)" },
+              { value: "BUILDING_PERMANENT", label: "Bangunan permanen (20 tahun)" },
+              { value: "BUILDING_NON_PERMANENT", label: "Bangunan tidak permanen (10 tahun)" },
+            ]} defaultValue={category?.taxGroupCode ?? ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="taxTypeListed">Jenis Harta di Lampiran PMK 72/2023</Label>
+            <FormSelect id="taxTypeListed" name="taxTypeListed" placeholder="-- Belum dinyatakan --" options={[
+              { value: "true", label: "Tercantum" },
+              { value: "false", label: "Tidak tercantum" },
+            ]} defaultValue={category?.taxTypeListed == null ? "" : String(category.taxTypeListed)} />
+          </div>
+          <div className="flex items-center gap-2">
+            <input id="taxDjpDetermination" name="taxDjpDetermination" type="checkbox" value="true" defaultChecked={!!category?.taxDjpDetermination} className="size-4 min-h-11 min-w-11 rounded border-default sm:min-h-4 sm:min-w-4" />
+            <Label htmlFor="taxDjpDetermination">Ada penetapan DJP untuk jenis ini</Label>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fiscalMethod">Metode Fiskal</Label>
+            <FormSelect id="fiscalMethod" name="fiscalMethod" placeholder="-- Belum dipilih --" options={[
+              { value: "straight_line", label: "Garis Lurus" },
+              { value: "declining_balance", label: "Saldo Menurun" },
+            ]} defaultValue={category?.fiscalMethod ?? ""} />
+            <p className="text-xs text-muted-foreground">
+              Belum dipilih = penyusutan fiskal belum dihitung (tidak diganti garis lurus).
+              Bangunan hanya boleh garis lurus — saldo menurun untuk kelompok bangunan ditolak server.
+            </p>
+          </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="taxDepreciationRate">Tarif Fiskal (%)</Label>
             <Input id="taxDepreciationRate" name="taxDepreciationRate" type="number" step="0.01" min="0" placeholder="0" defaultValue={category?.taxDepreciationRate ?? ""} />
@@ -121,6 +162,27 @@ export function AssetCategoryForm({
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="gainLossAccountId">Akun Laba/Rugi Pelepasan</Label>
             <FormSelect id="gainLossAccountId" name="gainLossAccountId" placeholder="-- Pakai mapping global --" options={accountOptions} defaultValue={category?.gainLossAccountId ? String(category.gainLossAccountId) : ""} />
+          </div>
+        </FormSection>
+
+        <FormSection title="Mapping Akun Peristiwa Perubahan Aset">
+          <p className="text-xs text-muted-foreground">
+            Akun peristiwa revaluasi / penurunan nilai kategori ini (F-111/F-128). Berbeda dari mapping
+            global di atas: kosong = belum terpetakan, dan peristiwa terkait ditolak berisik oleh server
+            (gagal tertutup) — bukan dialihkan ke akun lain. Surplus revaluasi wajib akun ekuitas, beban
+            penurunan nilai wajib akun beban, akumulasi penurunan nilai wajib akun kontra-aset.
+          </p>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="revaluationSurplusAccountId">Akun Surplus Revaluasi</Label>
+            <FormSelect id="revaluationSurplusAccountId" name="revaluationSurplusAccountId" placeholder="-- Belum terpetakan --" options={accountOptions} defaultValue={category?.revaluationSurplusAccountId ? String(category.revaluationSurplusAccountId) : ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="impairmentLossAccountId">Akun Beban Penurunan Nilai</Label>
+            <FormSelect id="impairmentLossAccountId" name="impairmentLossAccountId" placeholder="-- Belum terpetakan --" options={accountOptions} defaultValue={category?.impairmentLossAccountId ? String(category.impairmentLossAccountId) : ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="accumulatedImpairmentAccountId">Akun Akumulasi Penurunan Nilai</Label>
+            <FormSelect id="accumulatedImpairmentAccountId" name="accumulatedImpairmentAccountId" placeholder="-- Belum terpetakan --" options={accountOptions} defaultValue={category?.accumulatedImpairmentAccountId ? String(category.accumulatedImpairmentAccountId) : ""} />
           </div>
         </FormSection>
 

@@ -35,6 +35,8 @@ export default async function EditPage({
     purchaseOrderId: data.purchaseOrderId,
     date: data.date.toISOString().split("T")[0],
     reason: data.reason,
+    taxReturnNoteNumber: data.taxReturnNoteNumber,
+    taxReturnNoteDate: data.taxReturnNoteDate ? data.taxReturnNoteDate.toISOString().split("T")[0] : null,
   };
 
   const [purchaseOrders, items] = await Promise.all([
