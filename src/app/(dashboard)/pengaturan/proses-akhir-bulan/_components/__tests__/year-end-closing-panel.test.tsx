@@ -154,3 +154,48 @@ describe("YearEndClosingPanel", () => {
     expect(refreshMock).toHaveBeenCalled()
   })
 })
+
+  it("E121-8: siklus repost sesudah reversal — tombol posting kembali saat alreadyClosed=false, aktif lagi sesudah reversal sukses", async () => {
+    await render(preview({ alreadyClosed: true }))
+    expect(buttons().some((b) => b.textContent?.includes("Posting penutup"))).toBe(false)
+    expect(btn("Reversal penutup 2025").disabled).toBe(false)
+
+    await click(btn("Reversal penutup 2025"))
+    await click(confirmBtn("Reversal penutup"))
+    expect(reverseMock).toHaveBeenCalledTimes(1)
+    expect(successMock).toHaveBeenCalledWith("Di-reversal.")
+    expect(refreshMock).toHaveBeenCalled()
+
+    await render(preview({ alreadyClosed: false }))
+    expect(btn("Posting penutup 2025").disabled).toBe(false)
+  })
+
+  it("E127-2: pesan backend penutup aktif lain tampil apa adanya — bukan P2002 mentah, sukses tidak diklaim", async () => {
+    postMock.mockResolvedValueOnce({
+      success: false,
+      error: "Tahun fiskal 2025 sudah ditutup oleh jurnal penutup aktif lain. Koreksi hanya lewat reversal jurnal penutup.",
+    })
+    await render(preview())
+    await click(btn("Posting penutup 2025"))
+    await click(confirmBtn("Posting penutup"))
+    expect(postMock).toHaveBeenCalledTimes(1)
+    expect(errorMock).toHaveBeenCalledWith(
+      "Tahun fiskal 2025 sudah ditutup oleh jurnal penutup aktif lain. Koreksi hanya lewat reversal jurnal penutup.",
+    )
+    expect(successMock).not.toHaveBeenCalled()
+    expect(errorMock.mock.calls.flat().join(" ")).not.toContain("P2002")
+  })
+
+  it("E127-1: repost gagal anti-dobel baca-lalu-tulis tampil apa adanya — konsumen tidak pernah mengganti jadi sukses", async () => {
+    postMock.mockResolvedValueOnce({
+      success: false,
+      error: "Tahun fiskal 2025 sudah ditutup oleh jurnal JRN-2025-0099. Koreksi hanya lewat reversal jurnal penutup.",
+    })
+    await render(preview())
+    await click(btn("Posting penutup 2025"))
+    await click(confirmBtn("Posting penutup"))
+    expect(errorMock).toHaveBeenCalledWith(
+      "Tahun fiskal 2025 sudah ditutup oleh jurnal JRN-2025-0099. Koreksi hanya lewat reversal jurnal penutup.",
+    )
+    expect(successMock).not.toHaveBeenCalled()
+  })
