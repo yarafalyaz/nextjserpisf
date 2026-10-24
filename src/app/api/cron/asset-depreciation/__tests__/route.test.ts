@@ -81,6 +81,11 @@ function assetRow(overrides: Record<string, unknown> = {}) {
     purchaseCost: D(1000),
     residualValue: D(0),
     depreciationMethod: "straight_line",
+    status: "active",
+    purchaseDate: new Date(2026, 0, 1),
+    totalEstimatedUnits: null,
+    usefulLifeMonths: null,
+    usageRecords: [],
     category: {
       depreciationRate: D(10),
       usefulLife: 0,
@@ -176,6 +181,38 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     expect(mocks.docSeqNextBatch).toHaveBeenCalledWith("JOURNAL", 0)
   })
 
+  it("penjaga POSTED: kedua kueri jurnal menyaring status POSTED + deletedAt null (Putusan 1)", async () => {
+    mocks.assetFindMany.mockResolvedValue([assetRow()])
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    await GET(makeReq())
+
+    // Falsifikasi kartu t_d34601a0: mock tidak memeriksa argumen where,
+    // jadi sabotase POSTED->DRAFT dulu tetap hijau. Assert argumen langsung.
+    expect(mocks.journalFindMany).toHaveBeenCalledTimes(2)
+    const [idempotentWhere, bookWhere] = mocks.journalFindMany.mock.calls.map(
+      (c: unknown[]) => (c[0] as { where: Record<string, unknown> }).where,
+    )
+    expect(idempotentWhere).toMatchObject({
+      status: "POSTED",
+      deletedAt: null,
+      referenceType: expect.stringMatching(/^ASSET_DEPRECIATION_\d{6}$/),
+      referenceId: { in: [1] },
+    })
+    expect(bookWhere).toMatchObject({
+      status: "POSTED",
+      deletedAt: null,
+      referenceId: { in: [1] },
+    })
+    expect(bookWhere.OR).toEqual([
+      { referenceType: "ASSET_ACQUISITION" },
+      { referenceType: "ASSET_DISPOSAL" },
+      { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+    ])
+  })
+
   it("aset legacy tanpa jurnal perolehan = error berisik belum berjurnal, nol jurnal", async () => {
     mocks.assetFindMany.mockResolvedValue([assetRow()])
     mocks.journalFindMany.mockResolvedValue([]) // tidak ada jurnal sama sekali
@@ -200,7 +237,7 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     const json = await res.json()
     expect(json.processed).toBe(0)
     expect(json.rejectedMethods).toBe(1)
-    expect(json.errorDetails[0]).toContain("analitis NON-GL")
+    expect(json.errorDetails[0]).toContain("totalEstimatedUnits")
     expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 
@@ -294,5 +331,102 @@ describe("GET /api/cron/asset-depreciation — vonis F-2026-10-22-062-V", () => 
     const res = await GET(makeReq())
     const json = await res.json()
     expect(json.errorDetails.length).toBe(10)
+  })
+
+  it("F118-V: UOP lengkap (beku+dokumen) posting jurnal Decimal", async () => {
+    mocks.assetFindMany.mockResolvedValue([
+      assetRow({
+        depreciationMethod: "units_of_production",
+        currentValue: D(1000),
+        totalEstimatedUnits: D(100),
+        usageRecords: [{ actualUnits: D(10) }],
+        category: null,
+      }),
+    ])
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      depreciationExpenseAccountId: 700,
+      accumulatedDepreciationAccountId: 701,
+    })
+    process.env.FIXED_ASSET_ACCOUNT_ID = "900"
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(1)
+    expect(json.rejectedMethods).toBe(0)
+    const call = mocks.journalCreate.mock.calls[0]?.[0]
+    expect(call.data.totalDebit).toBeInstanceOf(Prisma.Decimal)
+    expect(String(call.data.totalDebit)).toBe("100")
+    expect(String(mocks.assetUpdate.mock.calls[0][0].data.currentValue)).toBe("900")
+  })
+
+  it("F118-V: SYD setelah akhir masa skip at-residual, nol jurnal", async () => {
+    mocks.assetFindMany.mockResolvedValue([
+      assetRow({
+        depreciationMethod: "sum_of_years_digits",
+        usefulLifeMonths: 1,
+        category: null,
+      }),
+    ])
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      depreciationExpenseAccountId: 700,
+      accumulatedDepreciationAccountId: 701,
+    })
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.analyticalSkipped).toBe(1)
+    expect(json.processed).toBe(0)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("F118-V: UOP tanpa dokumen masa menolak, tidak menebak unit", async () => {
+    mocks.assetFindMany.mockResolvedValue([
+      assetRow({
+        depreciationMethod: "units_of_production",
+        totalEstimatedUnits: D(100),
+        category: null,
+      }),
+    ])
+    mocks.systemSettingFindFirst.mockResolvedValue({
+      depreciationExpenseAccountId: 700,
+      accumulatedDepreciationAccountId: 701,
+    })
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(0)
+    expect(json.rejectedMethods).toBe(1)
+    expect(json.errorDetails[0]).toContain("actualUnits")
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
+  })
+
+  it("F118-V: analyticalWithoutAccounts fail-closed missingAccounts", async () => {
+    mocks.assetFindMany.mockResolvedValue([
+      assetRow({
+        depreciationMethod: "units_of_production",
+        totalEstimatedUnits: D(100),
+        usageRecords: [{ actualUnits: D(10) }],
+        category: null,
+      }),
+    ])
+    process.env.FIXED_ASSET_ACCOUNT_ID = "900"
+    mocks.journalFindMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(acquisitionJournals())
+
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.processed).toBe(0)
+    expect(json.missingAccounts).toBe(1)
+    expect(mocks.journalCreate).not.toHaveBeenCalled()
   })
 })

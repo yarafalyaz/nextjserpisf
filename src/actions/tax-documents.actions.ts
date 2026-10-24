@@ -15,6 +15,7 @@ import {
   revokeWithholdingCertificate,
   settleWithholdingTax,
 } from "@/lib/services/withholding-certificate.service"
+import { loadCoretaxOutputExport } from "@/lib/tax/coretax-xml-export-data"
 
 /**
  * Server action tipis F-001/F-002 (TaxInvoice) + F-003 (bupot/setor):
@@ -175,6 +176,36 @@ export async function settleWithholdingTaxAction(formData: FormData) {
   const parsed = parseFormData(settleSchema, formData)
   if (!parsed.success) return { success: false, error: parsed.error }
   return settleWithholdingTax({ ...parsed.data, userId: Number(user.id) })
+}
+
+/**
+ * Ekspor XML Coretax faktur keluaran (F-2026-10-23-113-V).
+ * Izin sama dengan faktur pajak (`create_tax_invoices`). Mengembalikan
+ * XML + hash + daftar tertolak bernama; TIDAK mengubah status DJP/dokumen
+ * apa pun — status DJP hanya dari bukti Coretax (jalur impor balik).
+ * Label hasil verbatim dari builder: "siap impor Coretax" /
+ * "berkas XML dibentuk" — UI wajib menampilkan apa adanya.
+ */
+const exportCoretaxSchema = z.object({
+  taxInvoiceIds: z
+    .string()
+    .trim()
+    .min(1, "Pilih minimal satu faktur pajak keluaran")
+    .transform((v) =>
+      v
+        .split(",")
+        .map((s) => Number(s.trim()))
+        .filter((n) => Number.isInteger(n) && n > 0),
+    )
+    .refine((ids) => ids.length > 0, "Pilih minimal satu faktur pajak keluaran"),
+})
+
+export async function exportCoretaxOutputXmlAction(formData: FormData) {
+  await requirePermission("create_tax_invoices")
+  const parsed = parseFormData(exportCoretaxSchema, formData)
+  if (!parsed.success) return { success: false as const, error: parsed.error }
+  const result = await loadCoretaxOutputExport(parsed.data.taxInvoiceIds)
+  return { success: true as const, ...result }
 }
 
 export { REVALIDATE_TAX }

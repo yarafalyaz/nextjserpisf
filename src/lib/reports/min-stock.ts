@@ -62,12 +62,16 @@ export interface MinStockResult {
 }
 
 /**
- * F-2026-10-21-013 lapis aman: stok minimum per gudang. Minimum masih
- * global `Item.minStock` (inti ItemWarehouseSetting ditunda) — dibandingkan
- * ke sisa lapisan per gudang supaya gudang bengkel kosong tak tertutup
- * stok gudang pusat. Gudang tanpa lapisan untuk barang itu tidak dinilai
- * (bukan 0): barang memang tidak disimpan di sana.
+ * F-2026-10-21-013 lapis aman + F-2026-10-22-070-S inti: stok minimum per
+ * gudang. Minimum efektif per (barang, gudang) = override
+ * `ItemWarehouseSetting.minStock` bila baris ada (`minStockSource:
+ * "override"`), selain itu warisi global `Item.minStock` (`"global"`).
+ * Dibandingkan ke sisa lapisan per gudang supaya gudang bengkel kosong tak
+ * tertutup stok gudang pusat. Gudang tanpa lapisan untuk barang itu tidak
+ * dinilai (bukan 0): barang memang tidak disimpan di sana (BR-MS-03).
  */
+export type MinStockSource = "override" | "global"
+
 export interface MinStockWarehouseInput {
   itemId: number
   sku: string
@@ -77,6 +81,8 @@ export interface MinStockWarehouseInput {
   qtyAtWarehouse: number
   minStock: number
   cost: number
+  /** Sumber minimum efektif; absen = warisi global (pemanggil lama). */
+  minStockSource?: MinStockSource
 }
 
 export interface MinStockWarehouseLine {
@@ -87,6 +93,7 @@ export interface MinStockWarehouseLine {
   warehouseName: string
   qtyAtWarehouse: number
   minStock: number
+  minStockSource: MinStockSource
   shortage: number
   shortageValue: number
 }
@@ -104,6 +111,7 @@ export function buildMinStockByWarehouse(rows: MinStockWarehouseInput[]): MinSto
         warehouseName: r.warehouseName,
         qtyAtWarehouse: r.qtyAtWarehouse,
         minStock: r.minStock,
+        minStockSource: r.minStockSource ?? "global",
         shortage,
         shortageValue: safeMultiply(shortage, r.cost, 2),
       }

@@ -230,4 +230,33 @@ describe("CurrencyInput uncontrolled mode", () => {
     unmount(root)
     container.remove()
   })
+
+  it("emptyAsNull: kosong dikirim sebagai string kosong, nol eksplisit tetap \"0\", tanpa prop tetap \"0\"", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+    act(() => {
+      root.render(<CurrencyInput name="opsional" emptyAsNull />)
+    })
+    expect(getHidden(container)?.value).toBe("")
+    const input = getInput(container)
+    act(() => { setInputValue(input, "0") })
+    expect(getHidden(container)?.value).toBe("0")
+    act(() => { setInputValue(input, "25000") })
+    expect(getHidden(container)?.value).toBe("25000")
+    act(() => { setInputValue(input, "") })
+    expect(getHidden(container)?.value).toBe("")
+    unmount(root)
+    container.remove()
+
+    const plain = document.createElement("div")
+    document.body.appendChild(plain)
+    const plainMount = mountInto(plain)
+    act(() => {
+      plainMount.root.render(<CurrencyInput name="wajib" />)
+    })
+    expect(getHidden(plain)?.value).toBe("0")
+    unmount(plainMount.root)
+    plain.remove()
+  })
 })

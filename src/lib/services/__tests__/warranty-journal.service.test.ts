@@ -42,6 +42,8 @@ function makeTx(overrides: {
   settings?: Record<string, unknown> | null
   existingJournal?: { id: number; journalNumber: string } | null
   attachmentCount?: number
+  postSentAttachmentCount?: number
+  sentLogAt?: Date | null
   periodLockDate?: Date | null
   invoiceClaim?: { id: number; repairWorkOrderId: number } | null
 }) {
@@ -91,7 +93,20 @@ function makeTx(overrides: {
         return { count: data.length }
       },
     },
-    transactionAttachment: { count: async () => overrides.attachmentCount ?? 0 },
+    transactionAttachment: {
+      count: async ({ where }: { where?: { createdAt?: { gt: Date } } }) =>
+        where?.createdAt
+          ? (overrides.postSentAttachmentCount ?? 0)
+          : (overrides.attachmentCount ?? 0),
+    },
+    activityLog: {
+      findFirst: async () =>
+        overrides.sentLogAt === undefined
+          ? { createdAt: new Date("2026-10-20T00:00:00Z") }
+          : overrides.sentLogAt
+            ? { createdAt: overrides.sentLogAt }
+            : null,
+    },
     workOrder: { findMany: async () => [{ id: 55 }] },
     salesOrder: { findUnique: async () => ({ quotationId: 9 }) },
   }
@@ -105,6 +120,8 @@ const coveredClaim = {
   decisionAt: new Date("2026-10-20T00:00:00Z"),
   repairWorkOrderId: 55,
   supplierClaimStatus: "accepted",
+  supplierClaimRefNo: "PERSETUJUAN-VENDOR-1",
+  supplierClaimNotes: "Catatan staf\n[Resi pengiriman klaim supplier: RESI-1]",
   coverage: { expiresAt: new Date("2027-10-21T00:00:00Z") },
   reportedAt: new Date("2026-10-19T00:00:00Z"),
 }
@@ -219,7 +236,7 @@ describe("E2 WarrantyClaimCost (rute provisi MATI)", () => {
 
 describe("E3 WarrantySupplierRecovery", () => {
   it("AC-G5 virtually-certain 900rb: Dr 110508 / Cr 510104, provisi tidak tersentuh", async () => {
-    const { tx, entries } = makeTx({ claim: coveredClaim, ...costRows, attachmentCount: 1 })
+    const { tx, entries } = makeTx({ claim: coveredClaim, ...costRows, attachmentCount: 1, postSentAttachmentCount: 1 })
     state.tx = tx
     const result = await postWarrantySupplierRecoveryJournal({
       claimId: 5,
@@ -238,7 +255,7 @@ describe("E3 WarrantySupplierRecovery", () => {
     const { tx, entries } = makeTx({
       claim: { ...coveredClaim, supplierClaimStatus: "sent" },
       ...costRows,
-      attachmentCount: 1,
+      attachmentCount: 1, postSentAttachmentCount: 1,
     })
     state.tx = tx
     await expect(
@@ -248,7 +265,7 @@ describe("E3 WarrantySupplierRecovery", () => {
   })
 
   it("AC-G5 recovery melebihi biaya klaim → ditolak", async () => {
-    const { tx, entries } = makeTx({ claim: coveredClaim, ...costRows, attachmentCount: 1 })
+    const { tx, entries } = makeTx({ claim: coveredClaim, ...costRows, attachmentCount: 1, postSentAttachmentCount: 1 })
     state.tx = tx
     await expect(
       postWarrantySupplierRecoveryJournal({ claimId: 5, amount: 99_000_000, eventDate: new Date("2026-10-21T00:00:00Z") }),
@@ -261,7 +278,104 @@ describe("E3 WarrantySupplierRecovery", () => {
     state.tx = tx
     await expect(
       postWarrantySupplierRecoveryJournal({ claimId: 5, amount: 900_000, eventDate: new Date("2026-10-21T00:00:00Z") }),
-    ).rejects.toThrow(/Bukti/)
+    ).rejects.toThrow(/lampiran persetujuan vendor sesudah pengiriman belum ada/)
+    expect(entries).toHaveLength(0)
+  })
+
+  it("E130-1 falsifikasi: accepted hanya foto pra-sent + notes bebas, refNo kosong → DITOLAK nol jurnal", async () => {
+    const { tx, entries } = makeTx({
+      claim: { ...coveredClaim, supplierClaimRefNo: null, supplierClaimNotes: "Supplier sepertinya setuju" },
+      ...costRows,
+      attachmentCount: 1,
+      postSentAttachmentCount: 0,
+    })
+    state.tx = tx
+    await expect(
+      postWarrantySupplierRecoveryJournal({ claimId: 5, amount: 900_000, eventDate: new Date("2026-10-21T00:00:00Z") }),
+    ).rejects.toThrow(/Nomor referensi persetujuan vendor wajib/)
+    expect(entries).toHaveLength(0)
+  })
+
+  it("E130-1 falsifikasi: refNo ada tetapi hanya lampiran pra-sent → DITOLAK pesan spesifik, nol jurnal", async () => {
+    const { tx, entries } = makeTx({
+      claim: coveredClaim,
+      ...costRows,
+      attachmentCount: 1,
+      postSentAttachmentCount: 0,
+    })
+    state.tx = tx
+    await expect(
+      postWarrantySupplierRecoveryJournal({ claimId: 5, amount: 900_000, eventDate: new Date("2026-10-21T00:00:00Z") }),
+    ).rejects.toThrow(/lampiran persetujuan vendor sesudah pengiriman belum ada/)
+    expect(entries).toHaveLength(0)
+  })
+
+  it("E130-1: lampiran persetujuan pasca-sent + refNo persetujuan → BERHASIL Dr 110508/Cr 510104 seimbang", async () => {
+    const { tx, entries } = makeTx({
+      claim: coveredClaim,
+      ...costRows,
+      attachmentCount: 2,
+      postSentAttachmentCount: 1,
+    })
+    state.tx = tx
+    const result = await postWarrantySupplierRecoveryJournal({
+      claimId: 5,
+      amount: 900_000,
+      eventDate: new Date("2026-10-21T00:00:00Z"),
+    })
+    expect(result.amount).toBe(900_000)
+    const debit = entries[0].reduce((s, e) => s + e.debit, 0)
+    const credit = entries[0].reduce((s, e) => s + e.credit, 0)
+    expect(debit).toBe(credit)
+    expect(entries[0]).toEqual([
+      expect.objectContaining({ accountId: RECEIVABLE_ID, debit: 900_000, credit: 0 }),
+      expect.objectContaining({ accountId: EXPENSE_ID, debit: 0, credit: 900_000 }),
+    ])
+  })
+
+  it("E130-1: refNo masih sama dengan resi sent → DITOLAK walau lampiran pasca-sent ada", async () => {
+    const { tx, entries } = makeTx({
+      claim: { ...coveredClaim, supplierClaimRefNo: "resi-1" },
+      ...costRows,
+      attachmentCount: 2,
+      postSentAttachmentCount: 1,
+    })
+    state.tx = tx
+    await expect(
+      postWarrantySupplierRecoveryJournal({ claimId: 5, amount: 900_000, eventDate: new Date("2026-10-21T00:00:00Z") }),
+    ).rejects.toThrow(/masih sama dengan nomor resi/)
+    expect(entries).toHaveLength(0)
+  })
+
+  it("E130-1 fallback: waktu sent tak terbukti, refNo beda resi penanda + lampiran ada → BERHASIL", async () => {
+    const { tx, entries } = makeTx({
+      claim: coveredClaim,
+      ...costRows,
+      attachmentCount: 1,
+      postSentAttachmentCount: 0,
+      sentLogAt: null,
+    })
+    state.tx = tx
+    const result = await postWarrantySupplierRecoveryJournal({
+      claimId: 5,
+      amount: 900_000,
+      eventDate: new Date("2026-10-21T00:00:00Z"),
+    })
+    expect(result.amount).toBe(900_000)
+    expect(entries).toHaveLength(1)
+  })
+
+  it("E130-1 fallback: waktu sent dan penanda resi sama-sama tak terbukti → DITOLAK spesifik, nol jurnal", async () => {
+    const { tx, entries } = makeTx({
+      claim: { ...coveredClaim, supplierClaimNotes: "Catatan bebas tanpa penanda" },
+      ...costRows,
+      attachmentCount: 1,
+      sentLogAt: null,
+    })
+    state.tx = tx
+    await expect(
+      postWarrantySupplierRecoveryJournal({ claimId: 5, amount: 900_000, eventDate: new Date("2026-10-21T00:00:00Z") }),
+    ).rejects.toThrow(/belum dapat dibuktikan berbeda dari nomor resi/)
     expect(entries).toHaveLength(0)
   })
 
@@ -269,7 +383,7 @@ describe("E3 WarrantySupplierRecovery", () => {
     const { tx, entries } = makeTx({
       claim: coveredClaim,
       ...costRows,
-      attachmentCount: 1,
+      attachmentCount: 1, postSentAttachmentCount: 1,
       settings: {
         warrantyExpenseAccountId: EXPENSE_ID,
         supplierClaimReceivableAccountId: null,
@@ -289,7 +403,7 @@ describe("E3 WarrantySupplierRecovery", () => {
     const { tx, entries } = makeTx({
       claim: coveredClaim,
       ...costRows,
-      attachmentCount: 1,
+      attachmentCount: 1, postSentAttachmentCount: 1,
       existingJournal: { id: 9, journalNumber: "JRN-9" },
     })
     state.tx = tx
