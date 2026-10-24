@@ -25726,6 +25726,110 @@ Putusan Lead 2026-10-25 00:37 WIB (kartu t_f7d6f608, spec merged PR #753 e82859f
 
 Pemilik berikutnya: Backend (builder murni + loader massal + fisik Q-AQ-3: sumber waktu terima dari QuotationHistory `accepted` per revisionNumber berjalan, fallback jujur EC-5, loader massal anti-N+1 SO/WO/invoice/DP) -> Frontend (UI di permukaan penawaran existing, verbatim server) -> QA (falsifikasi AC-AQ-B1..B7 + F1..F2). Accountant: TIDAK dilibatkan tahap 1 — nol uang/pajak/jurnal (BR-AQ-11); dipanggil hanya bila Q-AQ-4 dibuka ulang kelak.
 
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-006-S: read-model paparan diskon efektif dokumen penjualan (quotation + SO + faktur, baris + header, per periode/penjual/pelanggan) — advisory baca-saja, tanpa gerbang penahan baru
+
+> **Slot**: F-2026-10-25-006-S. Diperiksa bentrok 2026-10-25 vs `origin/main` (`9285100c`): grep `F-2026-10-25` di backlog origin/main = hanya 001-S (merged, inti #764 OPEN) dan 002-S (merged #753, putusan Lead §12); 003-S PR #755, 004-S PR #758, 005-S PR #762 semua OPEN beda topik. ID 006 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+> **Bukan duplikat F-2026-10-20-100**: F-100 = penanda informatif per-dokumen di detail penawaran saja, hanya diskon HEADER quotation, tidak menahan dokumen (PUTUSAN manager 21:16 — dipertahankan). Spec ini objek berbeda: paparan AGREGAT lintas dokumen terbit (quotation/sales order/faktur) per periode untuk pengawasan supervisor, termasuk diskon BARIS yang menurut komentar F-100 sendiri tidak terlihat lagi dari header. Spec ini TIDAK mengusulkan penahan dokumen, TIDAK mengubah F-100, TIDAK membuat ambang baru.
+
+Diskon adalah tuas margin paling mudah disalahgunakan dan paling sulit diawasi hari ini: sales bisa memberi diskon baris 40% di faktur langsung tanpa quotation, dan tidak ada satu pun permukaan yang menjawab "siapa memberi diskon berapa bulan ini". F-100 menjawab per-satu-penawaran ("penawaran ini melewati ambang?"), bukan per-periode/per-penjual. Spec ini membekukan: (A) definisi diskon efektif tunggal per dokumen = diskon baris + diskon header terhadap nilai bruto sebelum semua diskon, dihitung server dari baris tersimpan, (B) read-model agregat per periode dengan irisan penjual/pelanggan/jenis dokumen + daftar dokumen melebihi ambang acuan, (C) ambang acuan MEMAKAI konfigurasi existing (conditions ApprovalWorkflowStep) bila ada — tanpa angka karangan; tanpa konfigurasi, daftar tampil tanpa label "melebihi ambang".
+
+### 0. Inventarisasi terverifikasi (TERVERIFIKASI-KODE, origin/main 9285100c, 2026-10-25)
+
+- `src/lib/reports/quotation-approval-gate.ts:1-18` (F-2026-10-20-100): subtotal Quotation SUDAH neto diskon baris (`computeQuotationLine` menyimpan `total = qty*unitPrice - diskonBaris`); persen efektif F-100 = diskon header saja terhadap `subtotal + discount`. Diskon baris hilang dari semua angka header — dokumen diskon baris 50% + header 0 tampil 0% di F-100.
+- `quotation-approval-gate-data.ts`: loader hanya untuk satu Quotation dari halaman detail penawaran (`penjualan/penawaran/[slug]/page.tsx:33,94`). Tidak ada loader agregat; grep `discount` di `src/lib/reports/report-registry.ts` = 0; tidak ada laporan diskon di registry PDF.
+- Model diskon tersimpan lengkap per baris: `QuotationItem.discount` (schema :1418), `SalesOrderItem.discount` (:1523), `SalesInvoiceItem.discount` (:1676) — semua `Decimal(15,2)` nominal rupiah per baris; header `discount` di Quotation (:1353), SalesOrder (:1490), SalesInvoice (:1549). Baris juga menyimpan `qty`, `unitPrice`, `total` (neto) — bruto baris dapat diturunkan `qty*unitPrice` tanpa migrasi.
+- SO/faktur bisa lahir tanpa quotation: `SalesOrder.quotationId` nullable (:1485), `SalesInvoice.salesOrderId/quotationId` nullable (:1544-1545); jalur faktur langsung tidak pernah melewati evaluasi F-100 mana pun.
+- Atribusi penjual snapshot: `salesEmployeeId` di Quotation (:1344), SalesOrder (:1481), SalesInvoice (:1538) — nullable, diwariskan SO->Invoice (F-2026-10-21-016). Baris tanpa penjual = ember jujur terpisah, bukan ditebak dari createdBy.
+- Status faktur: enum `SalesInvoiceStatus` draft|sent|posted|partial|paid|cancelled|approved (schema :5433-5441). Status quotation/SO string bebas (default draft).
+- Ambang existing: `ApprovalWorkflowStep.conditions` Json dengan `minDiscountPercent`/`minAmount`, dibaca `parseApprovalThresholds` (gate :80-104), logika DAN; workflow dipilih per modelType prioritas tertinggi (`quotation-approval-gate-data.ts:20-37`). Ambang ini konfigurasi pemilik proses, bukan konstanta kode.
+- Izin katalog nyata: `view_quotations` (:158), `view_sales_orders` (:164), `view_sales_invoices` (:148), `view_reports` (:421) di `src/lib/auth/module-catalog.generated.ts`.
+
+### 1. Workflow specification
+
+Aktor: Supervisor Penjualan / Manajer (peninjau paparan), Sales/Admin Penjualan (subjek baris, tanpa akses paparan agregat tahap 1 — Q-DX-2), Lead (putusan ambang & izin), Backend (builder+loader), Frontend (halaman laporan), QA (falsifikasi).
+Dokumen masuk: Quotation + QuotationItem (lewat QuotationSection), SalesOrder + SalesOrderItem, SalesInvoice + SalesInvoiceItem pada periode; Employee penjual; konfigurasi ApprovalWorkflowStep existing (bila ada).
+Dokumen keluar: read-model paparan (layar + ekspor registry existing). TANPA dokumen baru, TANPA jurnal, TANPA perubahan status/dokumen sumber.
+
+Alur:
+1. Peninjau memilih periode (pola URL laporan repo: `/laporan/<laporan>/<periode>[/kunci/nilai...]`, bukan query string) dan irisan opsional: jenis dokumen, penjual, pelanggan.
+2. Server menghitung per dokumen: bruto = Sigma(qty*unitPrice baris); diskonBaris = Sigma(discount baris); diskonHeader = header discount tertahan [0, subtotal neto] mengikuti semantik simpan existing; diskonEfektif = diskonBaris + diskonHeader; persenEfektif = diskonEfektif / bruto * 100 (bruto 0 -> persen 0, pola F-100). Semua hitung di server; UI menampilkan verbatim.
+3. Server menilai label ambang per dokumen HANYA bila ambang sah terkonfigurasi untuk modelType dokumen itu (reuse `parseApprovalThresholds`, logika DAN persen+nominal terhadap grandTotal): label `MELEBIHI_AMBANG` / `DI_BAWAH_AMBANG` / `TANPA_AMBANG` (tidak ada konfigurasi sah — daftar tetap tampil, tanpa label lolos/gagal).
+4. Paparan agregat: ringkasan per (jenis dokumen x penjual) = jumlah dokumen, Sigma bruto, Sigma diskonEfektif, persen tertimbang (Sigma diskon / Sigma bruto), jumlah dokumen MELEBIHI_AMBANG; plus daftar dokumen teratas menurut persenEfektif dengan tautan detail dokumen existing.
+5. Peninjau menindaklanjuti di luar sistem tahap 1 (teguran, revisi dokumen lewat aksi existing berizin). Paparan tidak memberi tombol ubah diskon, tidak menahan dokumen berikutnya, tidak mengirim notifikasi.
+
+### 2. Status-transition matrix (turunan baca-saja — tanpa kolom status baru)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (dokumen sumber draft) | dokumen mencapai status terbit sesuai jenisnya (Q-DX-3) | masuk populasi periode | builder hanya membaca; status sumber tidak ditulis |
+| DI_BAWAH_AMBANG | ambang konfigurasi diturunkan pemilik proses / dokumen direvisi diskon naik | MELEBIHI_AMBANG | turunan saat loader jalan; bukan peristiwa tersimpan |
+| MELEBIHI_AMBANG | dokumen sumber dibatalkan (cancelled/deletedAt) | keluar populasi | saringan builder |
+| TANPA_AMBANG | konfigurasi ambang sah pertama kali dibuat | DI_BAWAH/MELEBIHI sesuai nilai | turunan; paparan tidak mengarang ambang |
+| tahap apa pun | periode bergeser | keluar populasi periode | saringan tanggal dokumen, pola parseReportPeriod |
+
+### 3. Role/permission matrix (key nyata katalog)
+
+| Aksi | Izin | Catatan |
+|---|---|---|
+| Lihat paparan agregat + daftar dokumen | `view_reports` (:421) (USULAN Q-DX-2) | loader menegakkan server, fail-closed; tanpa izin = ditolak |
+| Lihat baris per penjual lain | turunan izin di atas | data kinerja diskon per penjual = sensitif internal; ekspor mengikuti izin sama |
+| Buka detail dokumen sumber | izin view jenisnya masing-masing existing | tautan tidak memberi izin baru |
+| Ubah diskon dokumen | izin edit jenisnya existing, di luar spec | paparan tidak menyediakan jalur ubah |
+| Ubah ambang | pengelolaan ApprovalWorkflow existing | spec tidak menambah permukaan konfigurasi |
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-DX-01 | Diskon efektif dokumen = Sigma discount baris + discount header, terhadap bruto Sigma(qty*unitPrice); persen dibulatkan 2 desimal pola safe* repo; bruto <= 0 -> persen 0 | USULAN | pola effectiveDiscountPercent gate :95-104 |
+| BR-DX-02 | Diskon baris Quotation dibaca dari QuotationItem lewat section; SO/faktur dari item masing-masing. Item `discount` = nominal rupiah tersimpan, bukan persen (persen hanya input form diturunkan saat simpan, computeQuotationLine) | TERVERIFIKASI-KODE | schema :1418/:1523/:1676; quotation-totals.ts computeQuotationLine |
+| BR-DX-03 | Paparan baca-saja murni: tidak menulis dokumen/status, tidak menahan simpan/kirim/terima/posting, tidak membuat jurnal/notifikasi. Gerbang penahan = keputusan terpisah di luar spec ini | USULAN | pola F-100 informatif (PUTUSAN manager 21:16 dipertahankan) |
+| BR-DX-04 | Label ambang hanya dari konfigurasi existing ApprovalWorkflowStep.conditions per modelType (reuse parseApprovalThresholds, DAN). Tanpa konfigurasi sah = TANPA_AMBANG; server dilarang memakai ambang bawaan karangan | USULAN | gate :80-104; gate-data :20-37 |
+| BR-DX-05 | Populasi = dokumen tidak terhapus (deletedAt null) dan tidak cancelled; status terbit minimum per jenis diputus Q-DX-3 (usul: quotation sent/accepted/approved/converted, SO selain draft/cancelled, faktur posted/partial/paid/approved/sent — final Backend dari kosakata live) | USULAN — Q-DX-3 | enum SalesInvoiceStatus :5433-5441 |
+| BR-DX-06 | Retur penjualan TIDAK mengurangi diskon efektif dokumen asal di paparan (retur = dokumen terpisah existing); paparan diskon bukan laporan margin/laba | USULAN (scope) | model SalesReturn :1824 |
+| BR-DX-07 | Penjual kosong (salesEmployeeId null) masuk ember `Tanpa Penjual Tercatat`; dilarang mengatribusikan ke createdBy atau penjual dokumen tetangga | USULAN | pola ember jujur F-053-S; schema :1344/:1481/:1538 nullable |
+| BR-DX-08 | Satu dokumen satu baris paparan walau tertaut rantai quotation->SO->faktur: rantai TIDAK digabung/dijumlah lintas jenis (diskon bisa berubah antar tahap); irisan jenis dokumen memilih populasinya | USULAN | quotationId/salesOrderId nullable :1485/:1544-1545 |
+| BR-DX-09 | Persen agregat = tertimbang nominal (Sigma diskon / Sigma bruto), BUKAN rata-rata persen dokumen | USULAN | — |
+| BR-DX-10 | Nilai uang tampil sen-persis dari Decimal tersimpan; konversi Number mengikuti pola loader existing; selisih pembulatan tidak boleh mengubah urutan label ambang (bandingkan sebelum bulat tampil) | USULAN | pola gate-data Number(...) |
+| BR-DX-11 | Ekspor (PDF/registry) memakai payload server yang sama dengan layar; UI/ekspor dilarang menghitung ulang persen/label | USULAN | konvensi report-registry.ts:1-16 |
+| BR-DX-12 | Paparan tidak menampilkan HPP/margin per dokumen (itu domain F-2026-10-21-033 margin kendaraan + laporan existing); label MELEBIHI_AMBANG bukan tuduhan pelanggaran — keputusan tindak lanjut manusia | USULAN (scope) | — |
+
+### 5. Feature matrix Accurate / Zahir / ISF (BENCHMARK, akses 2026-10-25)
+
+| Fitur | Accurate | Zahir | ISF sekarang |
+|---|---|---|---|
+| Persetujuan diskon penjualan (ambang % + nilai, logika DAN, menahan transaksi) | ADA — Penyetuju Transaksi untuk Penawaran/Pesanan/Faktur Penjualan: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/faktur-penjualan/persetujuan-diskon-penjualan/ | Tidak ditemukan di halaman resmi yang diperiksa — ditulis tidak ditemukan, bukan diklaim tidak ada | SEBAGIAN: F-100 menilai ambang quotation saja, informatif tidak menahan, header saja |
+| Laporan penjualan per periode (rangkuman/rinci, ekspor) | Ada laporan penjualan (halaman fitur penjualan Accurate) | ADA — laporan penawaran s.d. faktur, ekspor Excel/PDF: https://help.zahironline.com/portal/id/kb/articles/melihat-laporan-penjualan-zahir-online-v2 | Ada laporan penjualan existing; irisan diskon efektif ABSEN |
+| Paparan agregat diskon per penjual/periode | Tidak ditemukan eksplisit di halaman di atas — tidak diklaim | Tidak ditemukan eksplisit di halaman di atas — tidak diklaim | ABSEN (gap spec ini) |
+
+Catatan jujur: gerbang MENAHAN ala Accurate sengaja TIDAK diusulkan tahap ini — F-100 sudah memutuskan informatif di ISF dan belum ada bukti kebutuhan menahan; menahan = spec terpisah + putusan Lead (Q-DX-1).
+
+### 6. Kata & label UI (usul Frontend, verbatim untuk diadopsi/diubah Lead)
+
+Judul: "Paparan Diskon Penjualan". Kolom daftar: Tanggal | No. Dokumen | Jenis | Pelanggan | Penjual | Bruto | Diskon Baris | Diskon Header | Diskon Efektif | % Efektif | Label Ambang.
+Label persis: `Melebihi Ambang`, `Di Bawah Ambang`, `Tanpa Ambang Terkonfigurasi`, ember penjual kosong: `Tanpa Penjual Tercatat`.
+Notice wajib: "Paparan ini baca-saja untuk pengawasan. Label ambang mengikuti konfigurasi persetujuan yang sudah ada; dokumen tidak ditahan oleh laporan ini."
+
+### 7. Acceptance criteria (falsifikasi — QA atas head Backend/Frontend persis)
+
+- AC-DX-B1: dokumen diskon baris 50% + header 0 tampil persenEfektif ~50%. Tampil 0% (mengulang buta F-100) = MERAH.
+- AC-DX-B2: faktur langsung tanpa quotation/SO tetap masuk populasi. Hanya dokumen ber-quotation tampil = MERAH.
+- AC-DX-B3: tanpa konfigurasi ambang sah, semua baris TANPA_AMBANG dan tidak ada label lolos/gagal karangan = lulus; ambang bawaan muncul = MERAH.
+- AC-DX-B4: persen agregat per penjual = Sigma diskon/Sigma bruto (tertimbang). Rata-rata persen sederhana = MERAH.
+- AC-DX-B5: dokumen cancelled/deletedAt keluar populasi; draft keluar sesuai Q-DX-3. Bocor satu pun = MERAH.
+- AC-DX-B6: salesEmployeeId null masuk ember Tanpa Penjual Tercatat; teratribusi ke createdBy = MERAH.
+- AC-DX-B7: loader dua kali berturut = hasil identik, nol mutasi dokumen/jurnal (bandingkan snapshot baris sumber). Berubah = MERAH.
+- AC-DX-F1: layar menampilkan angka verbatim payload server; UI menghitung ulang persen/label sendiri = MERAH.
+- AC-DX-F2: tanpa `view_reports`, halaman tertolak di server (bukan hanya tombol hilang) = lulus; data bocor = MERAH.
+Edge cases: EC-1 bruto 0 (semua baris qty/harga 0) -> persen 0, tetap tampil. EC-2 diskon header > subtotal neto (data lama) -> tertahan semantik simpan existing, tidak negatif. EC-3 rantai Q->SO->faktur diskon berubah tiap tahap -> tiga baris terpisah per jenis, tidak digabung. EC-4 dokumen tanggal periode batas (hari pertama/terakhir WIB) inklusif pola laporan existing. EC-5 ambang hanya minAmount tanpa persen (atau sebaliknya) -> logika DAN atas ambang terkonfigurasi saja, pola parseApprovalThresholds.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-DX-1 (Lead): sahkan tahap 1 baca-saja informatif (tanpa penahan ala Accurate). Menahan dokumen = di luar spec ini.
+- Q-DX-2 (Lead): izin paparan reuse `view_reports` vs key baru khusus supervisor. Usul spec: reuse view_reports tahap 1.
+- Q-DX-3 (Lead/Backend): status terbit minimum per jenis dokumen untuk populasi (BR-DX-05).
+- Q-DX-4 (Lead): permukaan tahap 1 — halaman laporan baru di grup laporan penjualan + entri registry PDF, atau kartu di halaman existing. Fisik rute mengikuti konvensi URL laporan repo.
+- Accountant: TIDAK diminta tahap ini — paparan agregat baca-saja tanpa jurnal/perlakuan uang baru (BR-DX-03/06). Dipanggil hanya bila tindak lanjut diskon hendak berdampak dokumen bernilai.
 ---
 
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-003-S: peringatan duplikat pelanggan saat buat/ubah + daftar kandidat duplikat baca-saja (master pelanggan)
@@ -25857,6 +25961,22 @@ Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci
 - Validasi NPWP online/format pajak, NITKU, status PKP: keluarga identitas pajak existing, perlu vonis Accountant + sumber resmi DJP; bukan kunci banding sederhana spec ini.
 - Duplikat vendor/barang: objek dan penjaga berbeda; tidak dicampur ke spec pelanggan ini.
 ---
+
+### 9. Backlog implementasi (F-2026-10-25-006-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-006-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni diskon efektif + loader agregat anti-N+1 | Backend | Q-DX-1/2/3 diputus Lead | — |
+| (turunan) UI paparan + entri registry ekspor | Frontend | kontrak Backend stabil; kata §6 verbatim | — |
+| (turunan) falsifikasi AC-DX-B1..B7 + F1..F2 | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-006-S)
+- Gerbang menahan dokumen saat diskon melewati ambang (ala Accurate): F-100 informatif dipertahankan; butuh bukti kebutuhan + putusan Lead tersendiri.
+- Ambang persen/nominal bawaan apa pun: tanpa konfigurasi pemilik proses, label = TANPA_AMBANG.
+- Komisi/insentif dari data diskon, margin/HPP per dokumen, notifikasi real-time ke supervisor, ubah dokumen dari paparan.
+
+F-2026-10-25-006-S — Paparan diskon efektif dokumen penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-DX-1..4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap 1.
 
 ---
 
