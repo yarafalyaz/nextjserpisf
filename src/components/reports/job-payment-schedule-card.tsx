@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useTransition } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Percent } from "lucide-react"
 import type { JobPaymentScheduleResult } from "@/lib/reports/job-payment-schedule-data"
@@ -13,6 +13,7 @@ import {
 import { createProgressInvoice } from "@/actions/sales.actions"
 import { formatCurrency, formatDate, formatPercentage } from "@/lib/utils/format"
 import { showError, showSuccess } from "@/lib/utils/toast"
+import { useActionRunner } from "./use-action-runner"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 
@@ -77,7 +78,7 @@ export function JobPaymentScheduleCard({
   canManage: boolean
 }>) {
   const router = useRouter()
-  const [isPending, startTransition] = useTransition()
+  const { isPending, startTransition, run } = useActionRunner("Gagal memproses jadwal termin")
   const [formOpen, setFormOpen] = useState(false)
   const [drafts, setDrafts] = useState<TermDraft[]>([])
   const [reason, setReason] = useState("")
@@ -87,23 +88,6 @@ export function JobPaymentScheduleCard({
   const editing = schedule !== null
   const hasFulfilled = schedule?.terms.some((t) => t.status === "terpenuhi") ?? false
   const nextTerm = schedule?.terms.find((t) => t.id === schedule.nextTermId) ?? null
-
-  function run(fn: () => Promise<{ success: boolean; error?: string }>, okMsg: string, after?: () => void) {
-    startTransition(async () => {
-      try {
-        const res = await fn()
-        if (res?.success) {
-          showSuccess(okMsg)
-          after?.()
-          router.refresh()
-        } else {
-          showError(res?.error || "Gagal memproses jadwal termin")
-        }
-      } catch (e) {
-        showError(e instanceof Error ? e.message : "Gagal memproses jadwal termin")
-      }
-    })
-  }
 
   function openCreate() {
     setDrafts([{ key: nextKey(), name: "", cumulativePercent: "", dueDate: "", milestoneLabel: "" }])
