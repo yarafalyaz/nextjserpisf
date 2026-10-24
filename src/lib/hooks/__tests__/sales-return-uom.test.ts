@@ -61,6 +61,7 @@ function wireTx(overrides: {
     $queryRaw: spies.queryRaw,
     $executeRaw: spies.executeRaw,
     salesReturn: { findUniqueOrThrow: spies.returnFindUniqueOrThrow, update: spies.returnUpdate },
+    salesInvoice: { findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 4, items: overrides.items }) },
     stockMove: { findFirst: spies.moveFindFirst, create: spies.moveCreate },
     warehouse: { findFirst: spies.warehouseFindFirst },
     item: { findMany: spies.itemFindMany },
@@ -191,5 +192,46 @@ describe("sales return UoM", () => {
     })
 
     await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/batch/)
+  })
+})
+
+// E136-1/E136-2 (stock hook): retur atas faktur besi tua murni ditolak
+// sebelum StockMove IN / lapisan FIFO / qtyOnHand berubah. Cost master
+// Rp750.000 sengaja: persediaan fiktif = MERAH.
+describe("sales return scrap guard E136", () => {
+  it("E136-1/E136-2: retur scrap ditolak nol StockMove/FIFO", async () => {
+    const spies = {
+      queryRaw: vi.fn().mockResolvedValue([]),
+      executeRaw: vi.fn().mockResolvedValue(1),
+    }
+    const tx = {
+      $queryRaw: spies.queryRaw,
+      $executeRaw: spies.executeRaw,
+      salesReturn: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({
+          id: 7,
+          salesInvoiceId: 4,
+          date: new Date("2026-10-01"),
+          status: "draft",
+          items: [{ itemId: 60, qty: 2, cost: 750000 }],
+        }),
+        update: vi.fn().mockResolvedValue({}),
+      },
+      salesInvoice: {
+        findUniqueOrThrow: vi.fn().mockResolvedValue({ id: 4, items: [{ itemId: 60, qty: 2 }] }),
+      },
+      item: { findMany: vi.fn().mockResolvedValue([{ id: 60, isScrapSaleItem: true }]) },
+      stockMove: { findFirst: vi.fn().mockResolvedValue(null), create: vi.fn() },
+      warehouse: { findFirst: vi.fn().mockResolvedValue({ id: 5 }) },
+      salesInvoiceItem: { findMany: vi.fn().mockResolvedValue([]) },
+      systemSetting: { findFirst: vi.fn().mockResolvedValue({ periodLockDate: null }) },
+    }
+    mocks.transaction.mockImplementation((fn: (t: typeof tx) => Promise<unknown>) => fn(tx))
+
+    await expect(onSalesReturnCompleted(7, 9)).rejects.toThrow(/Retur penjualan atas faktur besi tua/)
+    expect(tx.stockMove.create).not.toHaveBeenCalled()
+    expect(mocks.createInLayer).not.toHaveBeenCalled()
+    expect(spies.executeRaw).not.toHaveBeenCalled()
+    expect(tx.salesReturn.update).not.toHaveBeenCalled()
   })
 })

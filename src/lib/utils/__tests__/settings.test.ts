@@ -61,6 +61,36 @@ describe("utils/settings", () => {
         }),
       });
     });
+
+  it("throws on schema drift (P2022) instead of silently serving defaults", async () => {
+      const drift = Object.assign(
+        new Error("The column `system_settings.late_fee_income_account_id` does not exist in the current database."),
+        { code: "P2022" },
+      );
+      mocks.findFirst.mockRejectedValue(drift);
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await expect(getSystemSettings()).rejects.toBe(drift);
+    });
+
+  it("throws on schema drift detected by message without a Prisma code", async () => {
+      mocks.findFirst.mockRejectedValue(
+        new Error("The table `system_settings` does not exist in the current database."),
+      );
+      vi.spyOn(console, "error").mockImplementation(() => {});
+
+      await expect(getSystemSettings()).rejects.toThrow(/does not exist in the current database/);
+    });
+
+  it("still falls back to memory defaults on transient DB errors", async () => {
+      mocks.findFirst.mockRejectedValue(Object.assign(new Error("Can't reach database server"), { code: "P1001" }));
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const result = await getSystemSettings();
+
+      expect(result.companyName).toBe("Yara ERP");
+      expect(result.costingMethod).toBe("FIFO");
+    });
   });
 
   describe("getSettingValue", () => {
