@@ -35,6 +35,8 @@ export interface PriceListRow {
   /** F-018: ambang qty INKLUSIF (qty >= minQty). Undefined/null = 1. */
   minQty?: number | null
   effectiveDate: Date | null
+  /** F-2026-10-25-001-S BR-PX-01/02: tanggal berakhir, batas INKLUSIF. null/undefined = tanpa batas. */
+  expiresAt?: Date | null
   isActive: boolean
 }
 
@@ -61,6 +63,14 @@ export interface ResolvedLinePricing {
 
 const rowDate = (row: PriceListRow): number =>
   row.effectiveDate ? row.effectiveDate.getTime() : Number.NEGATIVE_INFINITY
+
+/**
+ * Milis tanggal kalender UTC dari sebuah instan (EC-5): effectiveDate/expiresAt
+ * tersimpan tengah malam UTC (wibDateToUtcMidnight), jadi perbandingan masa
+ * berlaku dilakukan per tanggal kalender UTC, bukan timestamp mentah —
+ * dokumen bertime-of-day apa pun pada tanggal berakhir tetap berlaku.
+ */
+const utcDayMs = (d: Date): number => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
 
 const effectiveMinQty = (row: PriceListRow): number => {
   const mq = Number(row.minQty ?? 1)
@@ -89,6 +99,8 @@ export function pickPriceListRow(
       effectiveMinQty(r) > 0 &&
       qty >= effectiveMinQty(r) &&
       (r.effectiveDate === null || rowDate(r) <= at) &&
+      // BR-PX-02: batas berakhir INKLUSIF per tanggal kalender; null = tanpa batas.
+      (r.expiresAt == null || utcDayMs(input.date) <= utcDayMs(r.expiresAt)) &&
       (r.customerCategoryId === null || r.customerCategoryId === input.customerCategoryId),
   )
   if (candidates.length === 0) return null
@@ -158,6 +170,50 @@ export function resolveLinePricing(input: {
 }
 
 /**
+ * Status masa TURUNAN baca-saja (BR-PX-05): diturunkan dari
+ * (effectiveDate, expiresAt, isActive, tanggal acuan) saat baca; tanpa kolom
+ * status, tanpa cron. Urutan periksa: nonaktif > sudah_berakhir >
+ * belum_berlaku > segera_berakhir > berlaku; tanpa expiresAt = tanpa_batas.
+ */
+export type PriceListExpiryStatus =
+  | "nonaktif"
+  | "sudah_berakhir"
+  | "belum_berlaku"
+  | "segera_berakhir"
+  | "berlaku"
+  | "tanpa_batas"
+
+export function derivePriceListExpiryStatus(
+  row: Pick<PriceListRow, "effectiveDate" | "expiresAt" | "isActive">,
+  input: { referenceDate: Date; expiringWindowDays: number },
+): PriceListExpiryStatus {
+  if (!row.isActive) return "nonaktif"
+  const ref = utcDayMs(input.referenceDate)
+  if (row.expiresAt != null && ref > utcDayMs(row.expiresAt)) return "sudah_berakhir"
+  if (row.effectiveDate !== null && utcDayMs(row.effectiveDate) > ref) return "belum_berlaku"
+  if (row.expiresAt == null) return "tanpa_batas"
+  const windowMs = Math.max(0, input.expiringWindowDays) * 86_400_000
+  return utcDayMs(row.expiresAt) - ref <= windowMs ? "segera_berakhir" : "berlaku"
+}
+
+/**
+ * Antrean segera berakhir (BR-PX-08): hanya baris AKTIF dengan expiresAt
+ * terisi, belum berakhir pada tanggal acuan, dan berakhir dalam jendela
+ * (inklusif). Urutan: expiresAt naik, seri id naik. Baris tanpa batas /
+ * nonaktif / sudah berakhir TIDAK masuk.
+ */
+export function pickExpiringPriceListRows<T extends PriceListRow>(
+  rows: readonly T[],
+  input: { referenceDate: Date; windowDays: number },
+): T[] {
+  const ref = utcDayMs(input.referenceDate)
+  const limit = ref + Math.max(0, input.windowDays) * 86_400_000
+  return rows
+    .filter((r) => r.isActive && r.expiresAt != null && utcDayMs(r.expiresAt) >= ref && utcDayMs(r.expiresAt) <= limit)
+    .sort((a, b) => utcDayMs(a.expiresAt!) - utcDayMs(b.expiresAt!) || (a.id ?? 0) - (b.id ?? 0))
+}
+
+/**
  * Loader: muat baris price-list berlaku untuk pasangan (pelanggan, item).
  * Kategori pelanggan dibaca dari Customer; tanpa kategori hanya baris umum
  * yang berlaku. Satu query per dokumen (bukan per baris).
@@ -184,6 +240,7 @@ export async function loadPriceListRows(
           price: true
           minQty: true
           effectiveDate: true
+          expiresAt: true
           isActive: true
         }
       }) => Promise<
@@ -194,6 +251,7 @@ export async function loadPriceListRows(
           price: unknown
           minQty: unknown
           effectiveDate: Date | null
+          expiresAt: Date | null
           isActive: boolean
         }[]
       >
@@ -216,12 +274,59 @@ export async function loadPriceListRows(
       isActive: true,
       OR: [{ customerCategoryId: null }, ...(customerCategoryId ? [{ customerCategoryId }] : [])],
     },
-    select: { id: true, customerCategoryId: true, itemId: true, price: true, minQty: true, effectiveDate: true, isActive: true },
+    select: { id: true, customerCategoryId: true, itemId: true, price: true, minQty: true, effectiveDate: true, expiresAt: true, isActive: true },
   })
   return {
     customerCategoryId,
     rows: rows.map((r) => ({ ...r, price: Number(r.price), minQty: Number(r.minQty) })),
   }
+}
+
+/**
+ * Loader antrean segera berakhir (BR-PX-08): muat baris aktif bertanggal
+ * berakhir dari DB (saring kasar di query), lalu saring/urutan deterministik
+ * lewat pickExpiringPriceListRows murni. `referenceDate` default kini;
+ * halaman kelola menyuplai tanggal acuan WIB.
+ */
+export async function loadExpiringPriceListRows(
+  client: {
+    customerPriceList: {
+      findMany: (args: {
+        where: { isActive: true; expiresAt: { not: null } }
+        select: {
+          id: true
+          customerCategoryId: true
+          itemId: true
+          price: true
+          minQty: true
+          effectiveDate: true
+          expiresAt: true
+          isActive: true
+        }
+      }) => Promise<
+        {
+          id: number
+          customerCategoryId: number | null
+          itemId: number
+          price: unknown
+          minQty: unknown
+          effectiveDate: Date | null
+          expiresAt: Date | null
+          isActive: boolean
+        }[]
+      >
+    }
+  },
+  input: { referenceDate: Date; windowDays: number },
+): Promise<PriceListRow[]> {
+  const rows = await client.customerPriceList.findMany({
+    where: { isActive: true, expiresAt: { not: null } },
+    select: { id: true, customerCategoryId: true, itemId: true, price: true, minQty: true, effectiveDate: true, expiresAt: true, isActive: true },
+  })
+  return pickExpiringPriceListRows(
+    rows.map((r) => ({ ...r, price: Number(r.price), minQty: Number(r.minQty) })),
+    input,
+  )
 }
 
 /** Terapkan resolver ke seluruh baris dokumen sekaligus. */
