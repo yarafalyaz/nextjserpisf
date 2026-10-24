@@ -73,6 +73,11 @@ function isReferencedElsewhere(action: ExportedAction): boolean {
 
 // Daftar-beku: kunci = "<berkas>::<aksi>", nilai = alasan tertulis.
 const ALLOWED_UNWIRED: Record<string, string> = {
+  // F-2026-10-25-004-V backend dulu (vonis PR #760): terbit FP uang muka
+  // per DP; panel status pajak DP + form terbit menyusul di kartu
+  // frontend t_b83159ba (buang entri ini saat UI memanggilnya).
+  "src/actions/tax-documents.actions.ts::issueDownPaymentTaxInvoiceAction":
+    "F-2026-10-25-004-V backend; UI panel status pajak DP menyusul (frontend t_b83159ba)",
   // Jalur publik yang sengaja diekspor dan sudah terdaftar di daftar-beku penjaga
   // izin (action-guard-coverage.test.ts). UI-nya memakai next-auth langsung.
   "src/actions/auth.actions.ts::loginAction":
