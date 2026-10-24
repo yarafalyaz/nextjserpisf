@@ -79,6 +79,38 @@ export interface PkwtDraftSlipOption {
   period: string
 }
 
+/** Tabel daftar sisa-biaya bersama label unik (belum-dibayar vs slip-disetujui) */
+function PkwtSlipRowsTable({ caption, suffix, rows }: { caption: string; suffix: "paid" | "pending"; rows: PkwtUnpaidRowView[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[640px] text-sm" aria-label={caption}>
+        <thead>
+          <tr className="border-b border-default text-left text-muted-foreground">
+            <th scope="col" className="px-3 py-2 font-medium">Karyawan</th>
+            <th scope="col" className="px-3 py-2 font-medium">Akhir Segmen</th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">Nominal Terbekukan</th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">Terbayar</th>
+            <th scope="col" className="px-3 py-2 text-right font-medium">Sisa</th>
+            <th scope="col" className="px-3 py-2 font-medium">Keterangan</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={`${row.employeeId}-${row.segmentEnd.toISOString()}-${suffix}`} className="border-b border-default last:border-0">
+              <td className="px-3 py-2 font-medium text-foreground">{row.name}</td>
+              <td className="px-3 py-2">{formatDate(row.segmentEnd)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrency(row.frozenAmount)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrency(row.paidAmount)}</td>
+              <td className="px-3 py-2 text-right">{formatCurrency(row.outstandingAmount)}</td>
+              <td className="px-3 py-2">{row.label}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 interface ActionResult {
   success: boolean
   error?: string
@@ -442,32 +474,7 @@ export function PkwtCompensationPanel({
               Tidak ada kompensasi PKWT belum dibayar.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm" aria-label="Daftar kompensasi PKWT belum dibayar">
-                <thead>
-                  <tr className="border-b border-default text-left text-muted-foreground">
-                    <th scope="col" className="px-3 py-2 font-medium">Karyawan</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Akhir Segmen</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Nominal Terbekukan</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Terbayar</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Sisa</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Keterangan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.unpaidList.map((row) => (
-                    <tr key={`${row.employeeId}-${row.segmentEnd.toISOString()}`} className="border-b border-default last:border-0">
-                      <td className="px-3 py-2 font-medium text-foreground">{row.name}</td>
-                      <td className="px-3 py-2">{formatDate(row.segmentEnd)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.frozenAmount)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.paidAmount)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.outstandingAmount)}</td>
-                      <td className="px-3 py-2">{row.label}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+<PkwtSlipRowsTable caption="Daftar kompensasi PKWT belum dibayar" suffix="paid" rows={report.unpaidList} />
           )}
         </div>
 
@@ -480,32 +487,7 @@ export function PkwtCompensationPanel({
               Tidak ada slip disetujui yang mengandung baris kompensasi PKWT.
             </p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[640px] text-sm" aria-label="Daftar slip disetujui mengandung kompensasi PKWT">
-                <thead>
-                  <tr className="border-b border-default text-left text-muted-foreground">
-                    <th scope="col" className="px-3 py-2 font-medium">Karyawan</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Akhir Segmen</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Nominal Terbekukan</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Terbayar</th>
-                    <th scope="col" className="px-3 py-2 text-right font-medium">Sisa</th>
-                    <th scope="col" className="px-3 py-2 font-medium">Keterangan</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.pendingApprovalSlips.map((row) => (
-                    <tr key={`${row.employeeId}-${row.segmentEnd.toISOString()}-pending`} className="border-b border-default last:border-0">
-                      <td className="px-3 py-2 font-medium text-foreground">{row.name}</td>
-                      <td className="px-3 py-2">{formatDate(row.segmentEnd)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.frozenAmount)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.paidAmount)}</td>
-                      <td className="px-3 py-2 text-right">{formatCurrency(row.outstandingAmount)}</td>
-                      <td className="px-3 py-2">{row.label}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+<PkwtSlipRowsTable caption="Daftar slip disetujui mengandung kompensasi PKWT" suffix="pending" rows={report.pendingApprovalSlips} />
           )}
         </div>
       </div>
