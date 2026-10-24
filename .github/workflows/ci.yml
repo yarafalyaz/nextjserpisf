@@ -206,6 +206,25 @@ jobs:
         env:
           DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
           INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+      - name: Run DB integration tests (bulk payroll concurrency, MySQL nyata)
+        # Anti-skip sama seperti bank statement: suite SKIP tanpa
+        # INTEGRATION_DB_URL, hijau semu dilarang. Gap LOW audit #672
+        # (t_31eab0e0 -> t_44b6862a): konkurensi irisan generateBulkPayroll
+        # wajib terbukti di dua transaksi MySQL nyata, bukan mock.
+        run: |
+          set -o pipefail
+          ./node_modules/.bin/vitest run src/actions/__tests__/bulk-payroll-concurrency.integration.test.ts 2>&1 | tee bulk-payroll-concurrency.log
+          if grep -qi 'skipped' bulk-payroll-concurrency.log; then
+            echo "::error::bulk-payroll-concurrency.integration.test.ts SKIPPED — gate tidak boleh lulus tanpa tes jalan."
+            exit 1
+          fi
+          if ! grep -Eq '[0-9]+ passed' bulk-payroll-concurrency.log; then
+            echo "::error::bulk-payroll-concurrency.integration.test.ts tidak melaporkan tes lulus."
+            exit 1
+          fi
+        env:
+          DATABASE_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
+          INTEGRATION_DB_URL: mysql://root@127.0.0.1:3306/yara_erp?allowPublicKeyRetrieval=true
       - name: Run DB integration tests (JobChangeOrder apply atomicity, MySQL nyata)
         # Anti-skip sama seperti bank statement: suite SKIP tanpa
         # INTEGRATION_DB_URL, hijau semu dilarang. Audit #515 gap MEDIUM-3.
