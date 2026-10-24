@@ -13081,6 +13081,8 @@ NCR atas job closed mengikuti L2/reopen, bukan bypass QC).
   sah jalur L3 (biaya telat bukan-biaya-job) + apakah tautan referensi
   ke WO closed cukup catatan ActivityLog/dokumen jurnal existing.
   Sampai terbit: L3 tidak dibangun, hanya L1/L2.
+  **TERJAWAB: vonis F-2026-10-24-133-V di bawah (BOT 4, kartu
+  t_8831021b) — L3 dibuka bersyarat vonis itu; S4 boleh dibangun.**
 - Q-CLOSE-3 (BOT 3, fisik): acuan tanggal "completed sejak" untuk
   umur antrean S2 (updatedAt? jejak ActivityLog complete? kolom
   aditif completedAt?) — fisik milik Backend; builder tidak boleh
@@ -13093,6 +13095,246 @@ F-2026-10-21-009 dinyatakan SELESAI-INTI oleh spec ini; sisa = S1-S3
 (+S4 bersyarat Q-CLOSE-2). Pemilik berikutnya: BOT 1 (Q-CLOSE-1 +
 merge PR docs ini) -> BOT 3 (S1/S2 + Q-CLOSE-3) -> BOT 2 (S3) ->
 BOT 6 (AC-CLOSE-1..8); BOT 4 hanya Q-CLOSE-2.
+
+## VONIS BOT 4 2026-10-24 — F-2026-10-24-133-V: jalur L3 biaya telat non-job sesudah WO closed — akun beban periode berjalan, dokumen sumber sah, dan tautan referensi WO (Q-CLOSE-2 spec F-2026-10-24-097-S §5/§12, induk F-2026-10-21-009-V Keputusan 1f/4c)
+
+Kartu t_8831021b. Dokumen saja; TANPA kode aplikasi/schema/migrasi di
+kartu ini. Menjawab Q-CLOSE-2 spec F-2026-10-24-097-S (PR #698 merged
+b2d55482): (1) akun beban jalur L3, (2) dokumen sumber sahnya,
+(3) apakah tautan referensi ke WO closed cukup catatan
+ActivityLog/dokumen jurnal existing. Vonis ini MEMUTUS perlakuan;
+bentuk fisik S4 (aksi/UI penanda L3) milik BOT Backend/BOT Frontend
+sesudah vonis merged, klaim file di board dulu. L1/L2 TIDAK dibuka
+ulang (vonis 009-V Keputusan 1f/2/4 tetap mengikat utuh).
+
+Status: PUTUSAN BOT 4. Pemilik berikutnya: BOT Lead terima + merge PR
+vonis ini -> BOT Backend inti S4 (Putusan 1-5, tanpa schema baru) ->
+BOT Frontend tampil snapshot/notice backend apa adanya -> BOT QA
+falsifikasi E133-1..7.
+
+### 0. Basis bukti live (origin/main e4d71833, 2026-10-24) — TERVERIFIKASI-KODE
+
+- Inti tutup live: status `closed` terpisah, guard
+  `assertJobCostMutable` (`job-closeout.service.ts`), skip+notice
+  tagihan subkontrak telat (`production-cost.service.ts:95-122`,
+  `purchase.actions.ts` syncServicePoCostFromBills) — persis spec
+  F-097-S §0/§1. Biaya telat non-PO-jasa hari ini hanya: ditolak,
+  reopen (L2), atau jurnal umum manual tanpa tautan job. Celah itu
+  yang diputus di sini.
+- Dokumen biaya existing SUDAH lengkap untuk L3, tanpa model baru:
+  (a) `VendorBill` tanpa goods receipt = tagihan jasa/biaya:
+  `onVendorBillPosted` (`accounting.hook.ts:1675`) posting
+  Dr `purchaseExpenseAccountId` / Cr `purchasePayableAccountId`
+  (neto sesudah potongan PPh lewat `withholdingType.liabilityAccountId`
+  existing), fail-closed bila setting kosong, idempoten
+  (referenceType `VendorBill`), `assertPeriodOpen(bill.date)` dalam tx;
+  PPN masukan terpisah HANYA jalur goods-based
+  (`purchaseTaxAccountId`), jalur non-GR mendebit `grandTotal` penuh.
+  (b) `Expense` approved: `onExpenseApproved` (`accounting.hook.ts:929`)
+  posting Dr `Expense.accountId` (dipilih operator dari COA aktif) /
+  Cr `paidFromAccountId`, fail-closed akun kosong, idempoten
+  (referenceType `Expense`), `assertPeriodOpen` dalam tx.
+  (c) Jurnal umum manual (`JournalService.createJournal`) membolehkan
+  referenceType/ReferenceId bebas — TAPI tanpa dokumen sumber,
+  tanpa utang vendor, tanpa jejak bukti; vonis ini melarangnya
+  sebagai jalur L3 (Putusan 2).
+- Akun beban existing: automap `purchaseExpenseAccountId` ->
+  `600020 Beban Operasional Lainnya` [EXPS/6000]
+  (`account-automap.ts:184`, komentar kode: COA Accurate tidak punya
+  akun khusus beban pembelian). Keluarga COGS `5101` (510102 Beban
+  Material, 510104 Beban Garansi) dan WIP `110404` adalah akun BIAYA
+  JOB — memakainya untuk L3 mengotori HPP/margin job dan WIP.
+  `Expense.accountId` bebas COA aktif; kategori `ExpenseCategory`
+  existing. TIDAK ada setting/akun khusus "biaya telat" dan vonis
+  ini TIDAK membuat akun/setting baru (konsisten larangan 009-V
+  Keputusan 5.1: akun COA baru dilarang).
+- Tautan existing: `Journal.referenceType/referenceId` menunjuk
+  dokumen POSTING-nya (VendorBill/Expense) dan unik jurnal aktif per
+  referensi (F-2026-10-23-127-V) — kolom itu TIDAK bisa sekaligus
+  menunjuk WorkOrder tanpa merusak idempotency/klaim jurnal.
+  `VendorBill`/`Expense` TIDAK punya kolom workOrderId (schema live);
+  `ActivityLog` (modelType/modelId/description/metadata) + kolom
+  notes/description dokumen + memo jurnal adalah permukaan tautan
+  yang sudah ada. `WorkOrder.documentNo` unik terbaca manusia.
+
+### Dasar resmi/standar (akses 2026-10-24, label jujur)
+
+- PSAK 1/PSAK 25 kerangka penyajian + kebijakan akuntansi (label
+  standar komersial, bukan dasar fiskal): beban diakui periode
+  terjadinya; perubahan perlakuan biaya job yang sudah ditutup final
+  = koreksi periode berjalan bila job tidak dibuka kembali, bukan
+  restatement diam-diam angka job. Akuntansi ISF untuk L3 mengikuti
+  garis itu: pengakuan di periode dokumen telat tiba/terverifikasi,
+  BUKAN backdate ke periode pengerjaan job.
+- Accurate Penyelesaian Pesanan ke akun (benchmark produk, akses
+  spec F-097-S): penyelesaian pekerjaan ke akun periode berjalan
+  lewat dokumen baru — pola dokumen-baru-periode-berjalan, bukan
+  edit order selesai. URL di spec F-097-S §Benchmark. Label:
+  BENCHMARK produk, bukan kewajiban hukum.
+- PPh 23 atas jasa + PPN masukan: perlakuan mengikuti jalur
+  VendorBill existing (withholdingType bertanggal efektif di master
+  pajak + faktur pajak masukan vendor); vonis ini TIDAK menetapkan
+  tarif/kode baru dan TIDAK mengklaim kepatuhan per transaksi —
+  tarif hidup di master existing, bukan konstanta L3.
+
+### Putusan 1 — Akun beban L3: akun beban PERIODE dari setting/dokumen existing; dilarang akun biaya job
+
+- Biaya L3 diakui sebagai beban periode berjalan, BUKAN biaya job:
+  jurnal L3 DILARANG mendebit WIP (`110404`/setting `wipAccountId`),
+  keluarga COGS job (`5101`, `510102`, `510104`), akun persediaan,
+  atau akun absorption (`materialExpenseAccountId`/
+  `materialIssueExpenseAccountId`/`cogsAccountId` sebagai kredit
+  serapan WIP). Alasan: debit ke akun-akun itu terbaca sistem sebagai
+  HPP/biaya job dan merusak rekonsiliasi margin job closed yang
+  sudah final (009-V Keputusan 2/4d).
+- Akun debit sah SATU per jalur dokumen (Putusan 2), dari setting
+  existing, fail-closed kosong = tolak berisik:
+  (a) jalur VendorBill: `purchaseExpenseAccountId` (automap seed
+  `600020 Beban Operasional Lainnya` [EXPS]) — akun yang SAMA dengan
+  tagihan jasa non-job existing; jangan buat setting L3 terpisah.
+  (b) jalur Expense: `Expense.accountId` yang dipilih operator WAJIB
+  akun COA aktif bertipe EXPS/OEXP; Backend S4 menolak akun bertipe
+  COGS/INTR/OCAS-WIP untuk dokumen bertanda L3 (penjaga tipe, bukan
+  tebakan nama akun).
+- Bila perusahaan kelak menuntut pisah-laporan "beban biaya telat
+  job tertutup" dari beban operasional lain: itu akun EXPS anak baru
+  lewat prosedur COA existing (usulan BOT Backend -> vonis susulan),
+  BUKAN syarat S4 dan BUKAN diputus di sini. Default S4 = `600020`
+  lewat setting existing di atas.
+
+### Putusan 2 — Dokumen sumber sah: VendorBill (utama) atau Expense (tunai); jurnal umum polos DILARANG
+
+- Jalur utama (jasa pihak ketiga belum dibayar, mis. tagihan bubut
+  tanpa PO jasa tiba sesudah WO closed): **VendorBill tanpa PO jasa
+  tertaut job dan tanpa goods receipt** atas vendor nyata, tanggal =
+  tanggal tagihan/periode berjalan terbuka. Posting existing berlaku
+  apa adanya: Dr beban Putusan 1(a) / Cr utang usaha (neto PPh
+  dipotong bila withholdingType terisi), `assertPeriodOpen`, idempoten
+  per VendorBill. Mirror HPP TIDAK terjadi karena tidak ada PO jasa
+  WO yang disync — dan S4 DILARANG menautkan VendorBill L3 ke
+  PurchaseOrder jasa WO closed (tautan itu memicu jalur L1/notice,
+  bukan L3; campur jalur = temuan).
+- Jalur tunai (sudah dibayar langsung kas/bank, nominal operasional
+  berjalan): **Expense approved** dengan `accountId` lolos Putusan
+  1(b) + `paidFromAccountId` terisi; posting existing apa adanya.
+- **Jurnal umum manual tanpa dokumen sumber DILARANG sebagai L3.**
+  Alasan: tanpa VendorBill/Expense tidak ada bukti vendor, tidak ada
+  utang/piutang terbaca, tidak ada gerbang periode/idempotency per
+  dokumen, dan tautan WO hanya teks bebas — persis celah "jurnal
+  manual tanpa tautan job" yang dikeluhkan spec. Jurnal umum tetap
+  sah untuk koreksi akuntansi lain di luar L3 (bukan diblokir global).
+- Satu biaya telat = SATU dokumen sumber. Biaya yang sama DILARANG
+  dicatat dua kali (VendorBill + Expense, atau L3 + reopen L2);
+  S4 menolak dokumen L3 kedua untuk vendor+nominal+tanggal tagihan
+  yang sama tertaut WO yang sama kecuali dokumen pertama batal/
+  ter-reversal (pola penjaga duplikat repo, fisik milik Backend).
+
+### Putusan 3 — Klasifikasi L3 vs L2: keputusan tercatat beralasan; part/material TIDAK pernah L3
+
+- L3 HANYA untuk biaya jasa/biaya non-material yang diputus BUKAN
+  biaya job, dengan alasan tertulis pada dokumen sumber (kolom
+  notes/description existing) oleh pembuat + tercatat ActivityLog
+  (Putusan 4). Contoh sah: jasa bubut telat untuk pekerjaan yang
+  sudah ditagih final dan perusahaan menanggungnya (contoh spec).
+- WAJIB L2 (reopen), DILARANG L3, bila: biaya adalah biaya job nyata
+  yang salah-tinggal/salah-catat dan harus masuk margin job; ATAU
+  pelanggan masih akan ditagih atas biaya itu; ATAU biaya berbentuk
+  part/material/stok apa pun (BR-CLOSE-05 spec tetap mutlak:
+  MaterialIssue ke WO closed ditolak; mengeluarkan part ke beban
+  umum untuk pekerjaan pelanggan tertutup = biaya job bocor).
+- TIDAK ada ambang rupiah L3. Klasifikasi adalah keputusan
+  perlakuan (biaya job vs beban periode), bukan materialitas —
+  konsisten 009-V Keputusan 2e (tanpa ambang). Nominal besar yang
+  salah masuk L3 tetap salah klasifikasi dan wajib dikoreksi
+  Putusan 5, bukan dilegalkan ambang.
+
+### Putusan 4 — Tautan referensi ke WO closed: CUKUP dokumen sumber + ActivityLog; kolom FK baru DITOLAK
+
+- Tautan L3 ke WO closed bersifat REFERENSI NON-POSTING dan WAJIB
+  tiga lapis dari permukaan existing (tanpa schema baru):
+  (1) teks terstruktur di dokumen sumber: notes/description memuat
+  nomor dokumen WO (`WorkOrder.documentNo`) + frasa penanda biaya
+  telat non-job sesudah tutup (kata persis S4 dibakukan Backend,
+  satu frasa tunggal — bukan teks bebas bervariasi);
+  (2) `ActivityLog` pada WorkOrder itu (modelType WorkOrder,
+  modelId WO) mencatat: nomor dokumen sumber (VendorBill/Expense),
+  vendor, nominal sen persis, alasan Putusan 3, pembuat — ditulis
+  dalam tx yang sama dengan pembuatan dokumen sumber;
+  (3) memo baris jurnal debit menyebut nomor WO (memo jurnal lahir
+  dari dokumen; S4 meneruskan penanda itu, UI tidak mengarang).
+- `Journal.referenceType/referenceId` jurnal L3 TETAP menunjuk
+  dokumen sumbernya (`VendorBill`/`Expense`). DILARANG menggantinya
+  ke WorkOrder: merusak klaim unik jurnal aktif (F-127-V), memutus
+  idempotency posting dokumen, dan membuat jurnal terbaca sebagai
+  jurnal job.
+- Kolom `workOrderId` baru di VendorBill/Expense, tabel tautan baru,
+  dan read-model margin kedua DITOLAK: tautan analitis "biaya telat
+  terkait job X" dibaca dari ActivityLog + dokumen sumber; margin job
+  closed TIDAK berubah dan TIDAK ditambah kolom selisih L3 (009-V
+  Keputusan 4d: dilarang membekukan salinan margin kedua). Laporan
+  biaya L3 per periode = laporan jurnal/dokumen existing tersaring
+  penanda Putusan 4(1); laporan baru khusus L3 bukan syarat S4.
+- ActivityLog GAGAL tulis sesudah dokumen terposting mengikuti pola
+  repo `reportPostCommitAuditFailure` (peringatan terbaca, bukan
+  sukses senyap, bukan rollback uang) — fisik mengikuti pola
+  existing, bukan mekanisme baru.
+
+### Putusan 5 — Periode, pajak dokumen, koreksi, dan larangan
+
+- Periode: tanggal dokumen sumber = periode BERJALAN pertama yang
+  terbuka; `assertPeriodOpen` existing menolak periode terkunci.
+  Backdate ke periode pengerjaan/tutup job DILARANG (itu membuka
+  kembali periode job secara ekonomi walau status tetap closed).
+- Pajak mengikuti dokumennya, bukan aturan L3 baru: VendorBill jasa
+  PKP dengan faktur pajak masukan -> PPN/PPN-masukan dan PPh potong
+  lewat field/withholdingType existing pada VendorBill itu; tanpa
+  faktur pajak masukan tidak ada kredit PPN terpisah (nominal penuh
+  beban mengikuti perilaku jurnal non-GR existing). Tarif/kode dari
+  master pajak bertanggal efektif existing; L3 DILARANG hardcode
+  tarif. Klaim patuh per transaksi = fakta dokumen vendor itu,
+  bukan vonis ini.
+- Koreksi L3 salah klasifikasi/salah nominal: reversal dokumen/
+  jurnal existing di periode terbuka lalu dokumen benar (L3 ulang
+  atau L2 reopen) — jurnal terposting TIDAK diedit diam-diam.
+  Biaya yang telanjur L3 tetapi ternyata biaya job: reverse L3,
+  lalu L2; DILARANG jurnal penyeimbang kedua yang membiarkan kedua
+  sisi hidup.
+- Larangan S4 eksplisit: ProductionCost/MaterialIssue/timesheet-pull
+  ke job closed lewat jalur L3; mengubah totalActualCost/releasedCost/
+  WIP/margin job closed; akun COA/setting baru tanpa vonis susulan;
+  fallback akun diam-diam; hitung pajak/margin di UI; dokumen L3
+  tanpa alasan Putusan 3 atau tanpa ActivityLog Putusan 4.
+
+### Acceptance falsifikasi untuk BOT QA (E133-1..7)
+
+- E133-1: VendorBill jasa tanpa PO/GR atas WO closed + penanda L3 ->
+  terposting Dr `purchaseExpenseAccountId` / Cr utang; WIP, COGS job,
+  totalActualCost/releasedCost job byte-sama; ActivityLog WO memuat
+  dokumen+nominal+alasan. Cabut penanda -> perlakuan L3 tidak lahir.
+- E133-2: VendorBill L3 ditautkan PO jasa WO closed -> ditolak jalur
+  L3 (tetap perilaku L1 skip+notice); Expense L3 berakun COGS/WIP ->
+  ditolak menyebut tipe akun.
+- E133-3: jurnal umum manual bertanda L3 tanpa VendorBill/Expense ->
+  tidak ada jalur UI/aksi L3 yang menerimanya; dokumen L3 tanpa
+  alasan -> ditolak berisik.
+- E133-4: dokumen L3 kedua vendor+nominal+tanggal sama ke WO sama ->
+  ditolak duplikat; sesudah reversal pertama -> boleh dokumen benar.
+- E133-5: part/material diajukan L3 -> ditolak, diarahkan L2/reopen;
+  biaya job nyata salah masuk L3 lalu dikoreksi -> reversal L3 +
+  reopen L2, margin berubah HANYA lewat L2 dan jejak reopen terbaca.
+- E133-6: tanggal dokumen L3 di periode terkunci -> ditolak
+  `assertPeriodOpen`; backdate periode job ditolak sama.
+- E133-7: setting `purchaseExpenseAccountId` kosong -> VendorBill L3
+  gagal berisik, nol jurnal, nol ActivityLog sukses-senyap
+  (kegagalan audit mengikuti pola peringatan repo).
+
+ID vonis ini **F-2026-10-24-133-V** (bebas: tertinggi `-V` di
+origin/main e4d71833 = 130-V merged #709; 131-V PR #702, 132-V PR
+#708, 129-V PR #692 terbuka; 133 belum terpakai di main maupun PR
+terbuka yang dicek run ini). Pemilik berikutnya: BOT 1 merge vonis
+ini -> BOT 3 inti S4 (Putusan 1-5, klaim file board; TANPA schema/
+migrasi) -> BOT 2 tampil snapshot backend -> BOT 6 E133-1..7.
+Q-CLOSE-2 TERTUTUP oleh vonis ini; S4 F-097-S TERBUKA.
 ## VONIS BOT 4 2026-10-23 — F-2026-10-23-123-V: aset dalam penyelesaian / pengerjaan sendiri (akumulasi biaya CIP, kapitalisasi bunga pinjaman, reklasifikasi siap pakai, proyek terbengkalai/dibatalkan) (lanjutan terbuka F-2026-10-23-107-V Kelas B + F-2026-10-22-062-V Putusan 4)
 
 Status: PUTUSAN BOT 4 (kartu t_79d88fb0, siklus standby 12:30). Dokumen saja; TANPA kode/schema/migrasi di kartu ini. F-107-V (PR #611) memutus SAAT MULAI Kelas B (bulan selesai pengerjaan, nol penyusutan selama pengerjaan, tanggal selesai terstruktur) tetapi SENGAJA tidak memutus bagaimana biaya selama pengerjaan diakumulasi, biaya apa saja yang boleh masuk harga perolehan, apa yang terjadi pada bunga pinjaman selama konstruksi, dan nasib proyek yang terbengkalai/dibatalkan sebelum selesai. F-108-V Putusan 4 butir ketiga menegaskan perbaikan atas aset Kelas B belum selesai = bagian harga perolehan pengerjaan, bukan Pasal 7 — tanpa vonis akumulasi ini, jalur itu tidak punya rumah. Vonis ini menutupnya.
