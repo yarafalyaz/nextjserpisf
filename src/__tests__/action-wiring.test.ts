@@ -131,27 +131,10 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-012 inti backend; tombol lepas reservasi menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reserveStockForWorkOrder":
     "F-2026-10-21-012 inti backend; tombol reservasi ulang menyusul (frontend)",
-  // F-2026-10-22-078-S inti (t_7de0eff1): 9 aksi Permintaan Antar Gudang
-  // backend dulu; halaman /inventaris/permintaan-gudang menyusul di kartu
-  // frontend t_7bfec14e (buang entri ini saat UI memanggilnya).
-  "src/actions/material-request.actions.ts::createMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::updateMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::deleteMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::submitMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::approveMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::rejectMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::cancelMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::closeMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::createTransferFromMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  // F-2026-10-22-072-S + F-2026-10-22-078-S: aksi catat-lepas registri
+  // InstalledPart dan 9 aksi Permintaan Antar Gudang kini dirujuk UI
+  // (form catat-lepas + halaman /inventaris/permintaan-gudang) — entri
+  // beku keduanya dibuang.
   // F-2026-10-21-027 backend dulu (PR #360): 10 aksi komponen gaji sudah
   // dirujuk UI PR #374 (entri bekunya dibuang); tersisa getPayrollComponentLines.
   // Buang entri ini saat UI memanggilnya.
@@ -195,15 +178,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // reversal. 4 aksi lain kini dirujuk SalesLateFeePanel (t_c2d2dce1).
   "src/actions/sales-late-fee.actions.ts::updateSalesLateFeeAmount":
     "F-2026-10-22-093-V penjaga tolak-edit nominal posted by design (E93-6); UI sengaja tidak menyediakan edit nominal",
-  // F-2026-10-22-070-S inti backend (PR #694): panel Stok minimum per gudang
-  // di detail barang + label sumber laporan menyusul di kartu frontend
-  // t_0fc24ddc (buang entri ini saat UI memanggilnya).
-  "src/actions/item-warehouse-setting.actions.ts::setItemWarehouseMinStock":
-    "F-2026-10-22-070-S inti backend; panel detail barang menyusul (frontend t_0fc24ddc)",
-  "src/actions/item-warehouse-setting.actions.ts::removeItemWarehouseMinStock":
-    "F-2026-10-22-070-S inti backend; panel detail barang menyusul (frontend t_0fc24ddc)",
-  "src/actions/item-warehouse-setting.actions.ts::listItemWarehouseSettings":
-    "F-2026-10-22-070-S inti backend; panel detail barang menyusul (frontend t_0fc24ddc)",
+  // F-2026-10-22-070-S inti backend (PR #694): 3 aksi stok minimum per
+  // gudang kini dirujuk ItemWarehouseMinStockPanel di detail barang
+  // (t_0fc24ddc) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {

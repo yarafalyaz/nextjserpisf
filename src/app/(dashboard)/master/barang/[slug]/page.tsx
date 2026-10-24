@@ -21,6 +21,8 @@ import { QrCodeDisplay } from "@/components/ui/qr-code-display"
 import { ItemImageLightbox } from "@/components/ui/item-image-lightbox"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/shadcn/alert"
 import { ItemSubstitutesPanel } from "@/components/items/item-substitutes-panel"
+import { ItemWarehouseMinStockPanel } from "@/components/items/item-warehouse-min-stock-panel"
+import { MIN_STOCK_GLOBAL_LABEL, MIN_STOCK_OVERRIDE_LABEL } from "@/lib/reports/min-stock-data"
 
 import type { Metadata } from "next"
 
@@ -108,7 +110,9 @@ export default async function ItemDetailPage({
 
   // F-2026-10-22-069-S: tab Substitusi (Q-SUB69-4) — opsi pengganti dari
   // master existing, kelola digerbang edit_items di page + server.
-  const [canManageSubstitutes, substituteItemOptions] = await Promise.all([
+  // Izin kelola nyata sesi (edit_items): gerbang kontrol substitusi +
+  // panel stok minimum per gudang (F-070-E); server tetap otoritas.
+  const [canEditItems, substituteItemOptions] = await Promise.all([
     hasPermission("edit_items"),
     prisma.item.findMany({
       where: { isActive: true, deletedAt: null, isService: false },
@@ -437,6 +441,22 @@ export default async function ItemDetailPage({
               </DetailSection>
             ),
           },
+          ...(!item.isService
+            ? [
+                {
+                  id: "stok-minimum",
+                  label: "Stok Minimum",
+                  content: (
+                    <ItemWarehouseMinStockPanel
+                      itemId={item.id}
+                      canManage={canEditItems}
+                      overrideLabel={MIN_STOCK_OVERRIDE_LABEL}
+                      globalLabel={MIN_STOCK_GLOBAL_LABEL}
+                    />
+                  ),
+                },
+              ]
+            : []),
           {
             id: "substitusi",
             label: "Substitusi",
@@ -447,7 +467,7 @@ export default async function ItemDetailPage({
                   id: o.id,
                   label: `${o.name} (${o.sku})`,
                 }))}
-                canManage={canManageSubstitutes}
+                canManage={canEditItems}
               />
             ),
           },
