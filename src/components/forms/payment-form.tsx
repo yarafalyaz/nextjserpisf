@@ -257,6 +257,7 @@ export function PaymentForm({
               render={({ field }) => (
                 <CurrencyInput
                   id="amount"
+                  required
                   value={field.value}
                   onChange={field.onChange}
                   onBlur={field.onBlur}
