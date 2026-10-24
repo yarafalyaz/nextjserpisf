@@ -97,11 +97,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
-  // F-2026-10-24-098-S inti backend (t_1ddef452): aksi tinjau scrap abnormal
-  // backend dulu; antrean tinjau + disposisi menyusul di kartu frontend
-  // t_44d50226 (buang entri ini saat UI memanggilnya).
-  "src/actions/inventory.actions.ts::reviewAbnormalScrap":
-    "F-2026-10-24-098-S inti backend; antrean tinjau scrap abnormal menyusul (frontend t_44d50226)",
   // F-2026-10-21-025 backend dulu: kontrak konflik untuk form aturan fitment;
   // UI peringatan menyusul di kartu frontend t_6d28c338 (buang entri ini saat
   // vehicle-fitment-form memanggilnya).
