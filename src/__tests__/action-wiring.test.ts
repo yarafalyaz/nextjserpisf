@@ -152,11 +152,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  // F-2026-10-22-085-S inti (t_7b33102f): read-model daftar perhatian
-  // siklus hidup backend dulu; field master + daftar perhatian menyusul
-  // di kartu frontend t_e80e8541 (buang entri ini saat UI memanggilnya).
-  "src/actions/hrm.actions.ts::getEmployeeLifecycleAttention":
-    "F-2026-10-22-085-S inti backend; daftar perhatian siklus hidup menyusul (frontend t_e80e8541)",
+  // F-2026-10-22-085-S: getEmployeeLifecycleAttention kini dirujuk kartu
+  // daftar perhatian di halaman master karyawan (t_e80e8541) — entri beku dibuang.
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
   // (halaman + panel kelola /laporan/target-penjualan, t_f605e189)
   // — entri beku dibuang.
@@ -166,11 +163,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // antrean belum menampilkan daftar jejak per faktur untuk dipilih.
   "src/actions/invoice-collection.actions.ts::deleteInvoiceCollectionFollowUp":
     "F-2026-10-22-089-S inti backend; tombol hapus tindak lanjut menyusul (frontend t_6f73907a)",
-  // F-2026-10-23-109-V inti backend (t_7931ae08): generate baris tahun
-  // saldo fiskal; tombol Bekukan Tahun Fiskal + pilihan metode fiskal
-  // menyusul di kartu frontend BOT 2 (buang entri ini saat UI memanggilnya).
-  "src/actions/asset.actions.ts::generateAssetFiscalYearRows":
-    "F-2026-10-23-109-V inti backend; UI bekukan tahun fiskal menyusul (frontend BOT 2)",
+  // F-2026-10-23-109-V: aksi generate baris tahun saldo fiskal kini dirujuk
+  // AssetFiscalYearFreezeForm di detail aset (t_3d7bfda0) — entri beku dibuang.
   // F-2026-10-22-068-S: 3 aksi ganti revisi BOM + aksi pratinjau delta
   // kini dirujuk panel BomRevisionChangePanel di detail WO/PO
   // (t_b60d664d) — entri beku dibuang.

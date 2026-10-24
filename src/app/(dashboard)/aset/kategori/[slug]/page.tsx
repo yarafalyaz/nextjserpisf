@@ -92,7 +92,7 @@ export default async function AssetCategoryDetailPage({
         <DetailField label="Nama" value={category.name} />
         <DetailField label="Tingkat Depresiasi" value={category.depreciationRate ? `${Number(category.depreciationRate)}%` : "-"} />
         <DetailField label="Umur Manfaat (tahun)" value={category.usefulLife || "-"} />
-        <DetailField label="Status Penyusutan Fiskal" value={<AssetFiscalStatus taxGroupCode={category.taxGroupCode} taxTypeListed={category.taxTypeListed} taxDjpDetermination={category.taxDjpDetermination} />} />
+        <DetailField label="Status Penyusutan Fiskal" value={<AssetFiscalStatus taxGroupCode={category.taxGroupCode} taxTypeListed={category.taxTypeListed} taxDjpDetermination={category.taxDjpDetermination} fiscalMethod={category.fiscalMethod} />} />
         <DetailField label="Pemetaan Akun Peristiwa" value={<AssetEventMappingStatus mapping={eventMapping} />} colSpan="full" />
         <DetailField label="Dibuat" value={formatDate(category.createdAt)} />
       </DetailCard>

@@ -26,6 +26,8 @@ export interface AssetCategoryFormValue {
   taxGroupCode?: string | null
   taxTypeListed?: boolean | null
   taxDjpDetermination?: boolean | null
+  /** Metode fiskal tersimpan F-109-V; null = belum dipilih (UI tidak memilihkan). */
+  fiscalMethod?: string | null
   assetAccountId?: number | null
   accumulatedDepreciationAccountId?: number | null
   depreciationExpenseAccountId?: number | null
@@ -118,6 +120,17 @@ export function AssetCategoryForm({
           <div className="flex items-center gap-2">
             <input id="taxDjpDetermination" name="taxDjpDetermination" type="checkbox" value="true" defaultChecked={!!category?.taxDjpDetermination} className="size-4 min-h-11 min-w-11 rounded border-default sm:min-h-4 sm:min-w-4" />
             <Label htmlFor="taxDjpDetermination">Ada penetapan DJP untuk jenis ini</Label>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="fiscalMethod">Metode Fiskal</Label>
+            <FormSelect id="fiscalMethod" name="fiscalMethod" placeholder="-- Belum dipilih --" options={[
+              { value: "straight_line", label: "Garis Lurus" },
+              { value: "declining_balance", label: "Saldo Menurun" },
+            ]} defaultValue={category?.fiscalMethod ?? ""} />
+            <p className="text-xs text-muted-foreground">
+              Belum dipilih = penyusutan fiskal belum dihitung (tidak diganti garis lurus).
+              Bangunan hanya boleh garis lurus — saldo menurun untuk kelompok bangunan ditolak server.
+            </p>
           </div>
           <div className="flex flex-col gap-1.5">
             <Label htmlFor="taxDepreciationRate">Tarif Fiskal (%)</Label>
