@@ -24821,3 +24821,145 @@ kartu dibuat.
 Pemilik berikutnya: Lead (merge PR docs ini + putus
 Q-DISC-1..4) → Backend (DISC-B1) → Frontend (DISC-F1) →
 QA (DISC-Q1). Accountant hanya Q-DISC-5 kondisional.
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-002-S: antrean penawaran diterima belum dikonversi (accepted/approved tanpa SO/WO/faktur)
+
+> **Slot**: F-2026-10-25-002-S. Diperiksa bentrok 2026-10-24 23:55 WIB vs `origin/main` (`a482589c`): grep `F-2026-10-25-002` di backlog+board = 0; PR Business terbuka beda topik (#746 F-2026-10-24-141-S duplikat prospek, #747 F-2026-10-25-001-S masa berlaku harga sudah merged a482589c). ID 002 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Gap baru domain (d) penjualan** — bukan F-ID lama. Bukan duplikat F-2026-10-22-091-S (antrean penawaran `sent` belum dijawab, masa berlaku menipis/kedaluwarsa — objek pra-keputusan pelanggan), bukan F-2026-10-20-101 (alasan kalah penawaran), bukan F-2026-10-22-089-S (antrean penagihan piutang — objek faktur terbit), bukan F-2026-10-22-092-S (corong prospek lead). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Pelanggan sudah menyetujui penawaran (status `accepted`/`approved`), tetapi belum ada satu pun permukaan kerja yang menjawab: "penawaran mana yang sudah disetujui pelanggan tetapi belum menjadi pekerjaan/tagihan, dan sudah berapa lama menunggu?" Hari ini staf membuka daftar penawaran dan menebak per baris. Akibat nyata bengkel: persetujuan pelanggan mengendap — kendaraan tidak dijadwalkan, DP tidak diminta, masa berlaku (`validUntil`) terlewat sehingga konversi ditolak penjaga existing dan penawaran harus direvisi dari awal. Spec ini membekukan: (A) builder baca-saja status turunan untuk penawaran accepted/approved tanpa dokumen turunan, (B) antrean kerja di permukaan penawaran existing, (C) kata UI verbatim. Angka ambang umur antrean = `USULAN`, bukan fakta; gerbang inti dibuka Lead.
+
+### 1. Inventarisasi terverifikasi (origin/main a482589c, 2026-10-24)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Status Quotation String bebas (`prisma/schema.prisma` model `Quotation` :1319, `status String @default("draft")`); konstanta `SalesStatus` (`src/lib/constants/status.ts:20-29`): SENT/ACCEPTED/CONFIRMED/CONVERTED/POSTED/PAID/PARTIAL di atas Status dasar.
+- Transisi terima: `acceptQuotation` (`src/actions/sales.actions.ts:329-360`) — izin `confirm_quotations`, hanya dari `sent` (:338-340), `assertQuotationNotExpired` (:342), `assertApproved` opt-in (:344), lalu `decideQuotation` menulis status `accepted` (:345) + `QuotationHistory` + notifikasi admin. Persetujuan pelanggan dicatat sebagai keputusan user internal; timestamp persetujuan pelanggan per revisi tidak ada sebagai kolom terpisah (keluarga F-2026-10-20-103, dicatat apa adanya).
+- Transisi konversi: `convertQuotationToOrder` (`sales.actions.ts:478-565`) — izin `create_sales_orders`, hanya status `accepted`/`approved` (:487-489), `assertQuotationNotExpired` (:491), kunci baris `FOR UPDATE` + tolak bila SO sudah ada (:502-508), SO lahir status `draft`, quotation menjadi `converted` (:546-549). Sesudah titik ini penawaran keluar dari cakupan spec ini.
+- Kendaraan/turunan lain: WorkOrder dan SalesInvoice juga tertaut quotation (`Quotation.workOrders`/`salesInvoices`, schema model Quotation); DP per quotation `DownPayment` (status default `pending`, `confirmDownPayment` sales.actions.ts:873) — DP adalah uang muka, BUKAN bukti pekerjaan dimulai; spec ini tidak menyamakan DP dengan konversi.
+- Antrean tetangga yang sudah live dan TIDAK diduplikasi: builder+loader+ kartu antrean penawaran `sent` (`src/lib/reports/quotation-followup-queue.ts` header F-2026-10-22-091-S — filter loader `status: "sent"` persis di `quotation-followup-queue-data.ts`; tahap KEDALUWARSA/MENIPIS/TERBUKA/TANPA_BATAS dari validUntil); cron `auto-reject-quotations` hanya menolak `sent` (validUntil lewat ATAU tanpa validUntil + updatedAt > 14 hari) — penawaran `accepted` TIDAK disentuh cron ini (terverifikasi route.ts).
+- Revisi hanya dari `sent`: `reviseQuotation` menolak status lain ("Hanya penawaran terkirim yang dapat direvisi") — penawaran accepted yang validUntil-nya lewat TIDAK bisa direvisi lewat jalur ini; jalan keluarnya = putusan Lead Q-AQ-4, jangan ditebak builder.
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:158-163,181-185`): `view/create/edit/delete/approve/confirm_quotations`, `view/create/edit/delete/confirm_down_payments`. Daftar penawaran digerbang `view_quotations` (page.tsx daftar penawaran).
+
+Belum ada / gap (bukti grep run ini):
+- Builder/antrean accepted-belum-konversi: grep `status: "accepted"` di `src/lib/reports/*` hanya menyentuh tes job-estimate/quotation-outcome, bukan builder antrean; loader followup memfilter `sent` persis. Nol permukaan menjawab daftar accepted/approved tanpa SO.
+- Umur sejak diterima: `QuotationHistory` (schema model QuotationHistory: action/description/createdAt) menyimpan peristiwa `accepted`, tetapi tidak ada read-model yang menghitung umur terima -> sekarang untuk antrean; `updatedAt` quotation berubah oleh edit apa pun, bukan penanda terima yang stabil (fisik sumber umur = putusan Backend Q-AQ-3).
+
+Benchmark resmi (akses 2026-10-24):
+- Accurate Online Penawaran Penjualan: status penawaran terlacak "sudah diterima, ditolak, atau masih dalam proses negosiasi"; penawaran yang belum diproses ke tahap berikutnya (pesanan/invoice) tampil berstatus "menunggu diproses" (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/mengenal-fitur-penawaran-penjualan/).
+- Accurate Online Pesanan Penjualan dari Penawaran: penawaran yang sudah disetujui pelanggan diubah menjadi pesanan tanpa input ulang (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pesanan-penjualan/pesanan-penjualan-dari-penawaran-penjualan/).
+- Zahir: belum terverifikasi di help resmi yang diakses run ini untuk antrean penawaran-diterima-belum-dikonversi (ditulis belum terverifikasi, bukan diklaim absen).
+
+### 2. Workflow specification
+
+Aktor: Sales/Admin Penjualan (pemilik tindak lanjut), Admin Master (baca), Lead (putus gerbang + angka ambang).
+
+Dokumen masuk: Quotation berstatus `accepted`/`approved` existing + QuotationHistory peristiwa terima + relasi turunan existing (SalesOrder/WorkOrder/SalesInvoice per quotation). Dokumen keluar: tidak ada dokumen baru tahap 1; antrean baca-saja + tautan ke aksi existing (konversi ke SO, buat DP, buka detail penawaran).
+
+Alur:
+1. Pelanggan menyetujui penawaran -> staf menjalankan `acceptQuotation` existing; penawaran masuk status `accepted` (atau `approved` lewat jalur persetujuan existing).
+2. Selama belum ada SO untuk quotation itu, penawaran tampil di antrean spec ini dengan umur sejak terima + sisa masa berlaku. DP `pending`/`confirmed` tampil sebagai fakta pendamping apa adanya, tidak mengubah tahap antrean.
+3. Tindak lanjut memakai aksi existing: `convertQuotationToOrder` (membuat SO), `createDownPayment` (meminta DP), atau membuka detail. Antrean tidak membuat dokumen apa pun.
+4. Sesudah SO lahir (quotation `converted`) penawaran keluar antrean permanen. Bila validUntil lewat sebelum konversi, baris tertanda masa-berlaku-lewat; jalan keluarnya mengikuti putusan Q-AQ-4 (bukan tebakan antrean).
+
+### 3. Status-transition matrix (status turunan, BUKAN kolom baru)
+
+Status antrean diturunkan dari (status quotation, keberadaan SO tertaut, validUntil, waktu terima, tanggal acuan WIB). Tidak ada transisi yang menulis DB.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| sent | acceptQuotation existing | accepted (masuk antrean: MENUNGGU_TINDAK_LANJUT) | confirm_quotations; assertQuotationNotExpired existing |
+| accepted/approved, tanpa SO | umur terima melewati ambang terpilih (Q-AQ-2) | MENGENDAP (tahap antrean) | ambang tetap terpilih; turunan baca saja |
+| accepted/approved, tanpa SO | tanggal acuan WIB > validUntil | MASA_BERLAKU_LEWAT | semantik assertQuotationNotExpired existing (hari validUntil sendiri masih berlaku) |
+| accepted/approved | convertQuotationToOrder existing berhasil | converted (keluar antrean) | create_sales_orders; SO unik per quotation existing |
+| accepted/approved | reject/cancel lewat jalur existing bila ada | keluar antrean | izin existing; antrean tidak menambah jalur batal |
+| semua tahap | DP dibuat/dikonfirmasi | tahap TIDAK berubah; fakta DP pendamping berubah | create/confirm_down_payments existing |
+
+Catatan jujur: tahap MASA_BERLAKU_LEWAT bukan status dokumen; dokumen tetap `accepted`. Konversi sesudah itu ditolak penjaga existing sampai putusan Q-AQ-4 memberi jalan resmi.
+
+### 4. Role/permission matrix (key nyata katalog :158-163)
+
+| Aksi | Sales/Admin Penjualan | Peran lain |
+|---|---|---|
+| Lihat antrean + umur + sisa masa berlaku | `view_quotations` | ditolak |
+| Buka detail penawaran dari antrean | `view_quotations` | ditolak |
+| Terima penawaran (masuk antrean) | `confirm_quotations` (existing) | ditolak |
+| Konversi ke SO dari antrean | `create_sales_orders` (existing, aksi konversi) | ditolak |
+| Buat DP dari antrean | `create_down_payments` (existing) | ditolak |
+| Setujui angka ambang umur | — (keputusan pemilik proses di luar sistem) | Lead |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-AQ-1 Lead). Kontak pelanggan di antrean hanya untuk pemegang `view_quotations` (pola loader followup 091-S); ekspor tanpa kontak sampai diputus terpisah.
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-AQ-01 | Cakupan antrean tahap 1 = quotation `accepted`/`approved`, `deletedAt` kosong, dan TANPA SalesOrder tertaut. `draft`/`sent` milik antrean 091-S; `converted` keluar permanen. | USULAN | convert guard sales.actions.ts:487-489; followup loader filter `sent` |
+| BR-AQ-02 | Keberadaan SO ditentukan relasi `SalesOrder.quotationId` existing (satu query massal anti-N+1), termasuk SO `cancelled` apa adanya sebagai fakta "pernah dikonversi" — baris dengan SO cancelled TIDAK kembali ke antrean diam-diam; ia tertanda terpisah supaya manusia memutuskan (buat SO baru tidak bisa: penjaga existing menolak SO kedua). | USULAN | convertQuotationToOrder :502-508; komentar void-and-reissue di aksi yang sama |
+| BR-AQ-03 | WorkOrder/SalesInvoice langsung tertaut quotation (tanpa SO) tampil sebagai fakta pendamping "sudah ada pekerjaan/faktur tertaut", BUKAN bukti konversi SO; baris tetap di antrean sampai SO ada atau Lead memutus cakupan Q-AQ-5. Dilarang menebak ekuivalensi WO/invoice = SO. | USULAN | relasi Quotation.workOrders/salesInvoices schema |
+| BR-AQ-04 | Umur antrean = hari kalender WIB sejak peristiwa terima (sumber fisik Q-AQ-3 Backend: baris QuotationHistory `accepted` terakhir per revisi berjalan, fallback jujur tertanda bila tidak ditemukan — BUKAN `updatedAt` yang berubah oleh edit apa pun). | USULAN | model QuotationHistory (action/createdAt); pola WIB quotation-followup-queue.ts |
+| BR-AQ-05 | Sisa masa berlaku memakai semantik penjaga existing: lewat bila hari WIB hari ini > validUntil; hari validUntil sendiri masih berlaku; validUntil kosong = TANPA_BATAS (sisa null, dilarang mengarang). | TERVERIFIKASI-KODE (semantik) + USULAN (tampilan) | assertQuotationNotExpired; BR-QF-02/03 spec 091-S |
+| BR-AQ-06 | Tahap antrean turunan murni: MENUNGGU_TINDAK_LANJUT -> MENGENDAP (umur > ambang Q-AQ-2) dan/atau MASA_BERLAKU_LEWAT (pendamping, bisa bersamaan; urutan tampil paling parah: MASA_BERLAKU_LEWAT dulu, lalu MENGENDAP umur terbesar, lalu MENUNGGU umur terbesar; seri documentNo lalu id). Builder/loader DILARANG menulis status/timestamp/dokumen apa pun. | USULAN | pola builder lead-followups/quotation-followup |
+| BR-AQ-07 | DP bukan konversi: DP `pending` maupun `confirmed` tidak mengeluarkan penawaran dari antrean dan tidak mengubah tahap; nominal/status DP tampil apa adanya dari server sebagai fakta pendamping. Ambang DP% terkonfigurasi existing TIDAK disentuh spec ini. | TERVERIFIKASI-KODE (model DP terpisah) + USULAN | model DownPayment; create/confirmDownPayment existing |
+| BR-AQ-08 | Antrean TIDAK menolak, membatalkan, merevisi, atau memperpanjang penawaran apa pun. Cron auto-reject existing hanya menyentuh `sent` — spec ini tidak memperluasnya ke `accepted`. Jalan keluar accepted yang masa berlakunya lewat = Q-AQ-4 Lead. | TERVERIFIKASI-KODE (cakupan cron) + USULAN (larangan) | auto-reject-quotations/route.ts filter SENT |
+| BR-AQ-09 | UI menampilkan tahap/umur/sisa/fakta DP verbatim server; UI dilarang menghitung umur/sisa hari sendiri, dilarang menyembunyikan baris MASA_BERLAKU_LEWAT, dan dilarang memberi label "sudah dikonversi" dari fakta WO/invoice/DP. | USULAN | pola konsumen read-model repo |
+| BR-AQ-10 | Tidak ada notifikasi/cron pengingat tahap 1; antrean pasif di permukaan penawaran existing. Pengingat aktif = putusan Lead Q-AQ-6. | USULAN | — |
+| BR-AQ-11 | Nol dampak uang/jurnal tahap 1: antrean tidak membuat SO/DP/faktur/jurnal; angka grandTotal tampil apa adanya sebagai nilai penawaran, bukan piutang/pendapatan. | TERVERIFIKASI-KODE (jalur dokumen terpisah) | convert/DP aksi existing |
+| BR-AQ-12 | Penjual tampil dari `salesEmployeeId` quotation existing; kosong tampil `—` (jujur), bukan ditebak dari createdBy. Kontak pelanggan hanya di antrean berizin `view_quotations`; ekspor tahap 1 tanpa kontak. | TERVERIFIKASI-KODE (kolom ada) + USULAN | schema Quotation.salesEmployeeId; pola Q-QF-4 spec 091-S |
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir Online | ISF (Silengkap) |
+|---|---|---|---|
+| Status penawaran diterima terlacak | Ya — diterima/ditolak/negosiasi (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penawaran-penjualan/mengenal-fitur-penawaran-penjualan/) | Belum terverifikasi run ini | Ada status `accepted` (TERVERIFIKASI-KODE sales.actions.ts:345) |
+| Penawaran disetujui -> pesanan tanpa input ulang | Ya (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pesanan-penjualan/pesanan-penjualan-dari-penawaran-penjualan/) | Belum terverifikasi | Ada convertQuotationToOrder (TERVERIFIKASI-KODE :478) |
+| Daftar "menunggu diproses" sesudah disetujui | Ya — status menunggu diproses untuk yang belum ke tahap berikutnya (BENCHMARK URL pertama) | Belum terverifikasi | ABSEN (gap spec ini): followup existing hanya `sent` |
+
+### 7. Acceptance criteria (falsifikasi)
+
+Backend (sesudah gerbang Lead dibuka):
+- AC-AQ-B1: fixture quotation accepted tanpa SO muncul di antrean; sesudah convertQuotationToOrder berhasil, baris hilang. Membalik saringan SO = tes MERAH.
+- AC-AQ-B2: quotation `sent`/`draft`/`converted` bocor ke antrean = MERAH (tetangga 091-S tidak tercampur).
+- AC-AQ-B3: baris dengan SO cancelled TIDAK kembali sebagai MENUNGGU biasa; tertanda pernah-dikonversi (BR-AQ-02). Mengabaikan SO cancelled = MERAH.
+- AC-AQ-B4: umur dihitung dari peristiwa terima (Q-AQ-3), bukan updatedAt: edit penawaran accepted (updatedAt berubah) tidak mengnolkan umur. Memakai updatedAt = MERAH.
+- AC-AQ-B5: validUntil kemarin WIB -> MASA_BERLAKU_LEWAT; validUntil hari ini -> belum lewat; validUntil kosong -> TANPA_BATAS sisa null. Membalik perbandingan = MERAH.
+- AC-AQ-B6: DP pending/confirmed pada baris tidak mengubah tahap/keanggotaan antrean; loader/builder menulis quotation apa pun = MERAH.
+- AC-AQ-B7: WO/invoice tertaut tanpa SO tampil sebagai fakta pendamping, baris tetap di antrean (BR-AQ-03); melabeli terkonversi dari fakta itu = MERAH.
+
+Frontend (konsumen):
+- AC-AQ-F1: tahap/umur/sisa/fakta DP tampil verbatim server; aritmetika tanggal di komponen antrean = MERAH (grep hitung tanggal).
+- AC-AQ-F2: baris MASA_BERLAKU_LEWAT tetap tampil tertanda; tombol aksi hanya memanggil aksi existing (konversi/DP/detail) — UI membuat dokumen sendiri = MERAH. Sebelum commit: grep e2e selector penawaran terdampak, sinkronkan commit yang sama.
+
+QA: AC-AQ-B1..B7 + AC-AQ-F1..F2 atas head Backend/Frontend persis; tambahan: dua panggilan antrean bersamaan tidak mengubah data (baca murni), pemegang tanpa `view_quotations` tertolak.
+
+Edge cases: EC-1 accepted lalu SO dibuat lalu SO cancelled (BR-AQ-02, tertanda, bukan hilang/bukan menunggu biasa). EC-2 accepted tanpa validUntil (TANPA_BATAS; hanya tahap umur yang berlaku). EC-3 accepted dengan DP confirmed penuh tapi tanpa SO (tetap di antrean, BR-AQ-07 — uang masuk bukan pekerjaan). EC-4 validUntil lewat di hari yang sama dengan accept (accept lolos penjaga hari itu; besoknya MASA_BERLAKU_LEWAT). EC-5 riwayat terima tidak ditemukan untuk data lama (umur null tertanda "tidak tercatat", bukan 0 hari). EC-6 quotation accepted milik pelanggan dengan kendaraan kosong (baris tetap tampil; kendaraan `—`). EC-7 revisi: peristiwa terima revisi lama tidak dipakai untuk revisi berjalan (Q-AQ-3 memutus pasangan revisi).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-AQ-1 (Lead): buka inti antrean tahap 1 sekarang dengan izin reuse `view_quotations` (tanpa key baru)?
+- Q-AQ-2 (Lead): ambang MENGENDAP — usul tetap 3 hari kalender sejak terima (sejajar ambang menipis 091-S Q-QF-1), tanpa konfigurasi bebas. Angka USULAN sampai diputus.
+- Q-AQ-3 (Backend): fisik sumber waktu terima (QuotationHistory `accepted` per revisionNumber berjalan vs sumber lain), pasangan revisi, dan bentuk loader massal anti-N+1 (SO/WO/invoice/DP per quotation).
+- Q-AQ-4 (Lead): jalan keluar accepted yang validUntil-nya lewat — perpanjang masa berlaku (aksi baru), revisi dari accepted (ubah penjaga existing), atau biarkan manual di luar sistem? Spec ini tidak memilih; antrean hanya menandai.
+- Q-AQ-5 (Lead): baris ber-WO/invoice tanpa SO (BR-AQ-03) tetap di antrean atau keluar dengan labelnya sendiri? Default spec: tetap, tertanda fakta pendamping.
+- Q-AQ-6 (Lead): pengingat aktif (notifikasi/cron) ditunda tahap 1 — sahkan.
+- Accountant: TIDAK diminta tahap ini — nol jurnal/uang baru (BR-AQ-11). Dipanggil hanya bila Q-AQ-4 memilih jalur yang mengubah dokumen berjalan bernilai.
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-002-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni + loader massal antrean accepted | Backend | Q-AQ-1/2/3 diputus Lead | — |
+| (turunan) UI antrean di permukaan penawaran existing | Frontend | kontrak Backend stabil; kata §3/§5 verbatim | — |
+| (turunan) falsifikasi AC-AQ-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Auto-konversi accepted -> SO/WO/faktur: konversi tetap keputusan manusia lewat aksi existing; antrean tidak membuat dokumen.
+- Memperluas cron auto-reject ke accepted, auto-batal, atau auto-perpanjang validUntil: merusak persetujuan pelanggan yang sudah tercatat; Q-AQ-4 dulu.
+- Notifikasi WA/email ke pelanggan soal persetujuan mengendap: kanal keluar tidak ada; pengingat internal pun ditunda Q-AQ-6.
+- Kolom timestamp persetujuan pelanggan baru: sumber existing (QuotationHistory) dinilai dulu oleh Backend Q-AQ-3; migrasi hanya bila terbukti tidak cukup.
+
+F-2026-10-25-002-S — Antrean penawaran diterima belum dikonversi. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-AQ-1/2/4/5/6 + fisik Backend Q-AQ-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
