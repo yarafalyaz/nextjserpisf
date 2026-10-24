@@ -108,7 +108,7 @@ export function InvoiceExchangeForm({
           />
         </div>
 
-        <AppDatePicker label="Tanggal Penyerahan *" name="date" value={date} onChange={setDate} />
+        <AppDatePicker label="Tanggal Penyerahan *" name="date" value={date} onChange={setDate} required />
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="receiptNumber">Nomor Tanda Terima</Label>

@@ -97,11 +97,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
-  // F-2026-10-21-025 backend dulu: kontrak konflik untuk form aturan fitment;
-  // UI peringatan menyusul di kartu frontend t_6d28c338 (buang entri ini saat
-  // vehicle-fitment-form memanggilnya).
-  "src/actions/vehicle-fitment.actions.ts::checkVehicleFitmentConflicts":
-    "F-2026-10-21-025 backend; peringatan konflik di VehicleFitmentForm menyusul (frontend t_6d28c338)",
   // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":
@@ -109,12 +104,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-21-009-V backend dulu (vonis BOT 4 PR #349): kontrak tutup/reopen
   // job siap; tombol UI menyusul di kartu frontend (buang entri ini saat halaman
   // produksi/perintah kerja memanggilnya).
-  "src/actions/manufacturing.actions.ts::closeProductionOrder":
-    "F-2026-10-21-009-V backend; tombol tutup produksi menyusul (frontend)",
+  // F-2026-10-24-097-S S3: tombol tutup kini dirujuk kartu antrean
+  // workshop-closeout-queue-card (closeWorkOrder + closeProductionOrder);
+  // reopen tetap tanpa UI (antrean hanya memuat job completed belum closed).
   "src/actions/manufacturing.actions.ts::reopenProductionOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali produksi menyusul (frontend)",
-  "src/actions/manufacturing.actions.ts::closeWorkOrder":
-    "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
   // F-2026-10-22-069-S: 4 aksi substitusi kini dirujuk UI (tab Substitusi
