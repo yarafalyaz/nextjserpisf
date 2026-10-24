@@ -81,14 +81,9 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "jalur publik (mengakhiri sesi); keluar memakai signOut next-auth di src/components/layout/nav-user.tsx dan header.tsx",
   // Bacaan yang belum punya pemanggil. Dibiarkan tercatat, bukan disembunyikan:
   // keputusan "hapus atau sambungkan" milik pemilik repo.
-  // F-2026-10-24-096-S: konsumen UI panel foto per tahap kartu Frontend
-  // t_96ef204d (parent t_98976cbe); server tetap penegak izin.
-  "src/actions/attachment-photo.actions.ts::verifyPhotoAttachment":
-    "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
-  "src/actions/attachment-photo.actions.ts::publishPhotoAttachment":
-    "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
   // F-2026-10-24-132-V: konsumen UI peristiwa/akrual/slip PKWT kartu
   // Frontend t_d34fa8de (parent t_5c05e766); backend inti PR #721.
+  // (entri verify/publish foto F-096 di main sudah dirujuk UI #717/#718 — beku gugur)
   "src/actions/hrm.actions.ts::createPkwtEvent":
     "konsumen UI peristiwa kompensasi PKWT kartu Frontend t_d34fa8de; belum dirujuk UI sampai panel itu terbit",
   "src/actions/hrm.actions.ts::approvePkwtEvent":
@@ -107,11 +102,6 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
-  // F-2026-10-24-098-S inti backend (t_1ddef452): aksi tinjau scrap abnormal
-  // backend dulu; antrean tinjau + disposisi menyusul di kartu frontend
-  // t_44d50226 (buang entri ini saat UI memanggilnya).
-  "src/actions/inventory.actions.ts::reviewAbnormalScrap":
-    "F-2026-10-24-098-S inti backend; antrean tinjau scrap abnormal menyusul (frontend t_44d50226)",
   // F-2026-10-21-019 backend dulu: pull labor WO langsung; pemilih konteks WO
   // + tombol pull di UI perintah kerja/lembar waktu menyusul (kartu frontend).
   "src/actions/production-cost.actions.ts::pullLaborCostFromWorkOrderTimesheets":

@@ -58,7 +58,7 @@ describe("AppreciationForm — a11y wiring", () => {
     expect(amount.getAttribute("required")).not.toBeNull()
 
     const stars = form.querySelectorAll('span[aria-hidden="true"].text-destructive')
-    expect(stars.length).toBe(3)
+    expect(stars.length).toBe(4)
     const labels = Array.from(form.querySelectorAll("label")).map((l) => l.textContent)
     expect(labels).toContain("Karyawan *")
     expect(labels).toContain("Tipe *")
