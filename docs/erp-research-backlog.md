@@ -20610,3 +20610,290 @@ Konsekuensi mengikat: "tetap" adalah sifat pembayaran (teratur, tidak tergantung
 Klaim kepatuhan: perlakuan internal ISF berdasar PP 46/2015 Pasal 17, PP 45/2015 Pasal 29, Perpres 64/2020 Pasal 30+32, PP 36/2021 Pasal 7 (sumber resmi peraturan.go.id / JDIH Kemenkeu di atas, akses 2026-10-23). Tarif/ceiling/bracket operasional tetap dari ruleset DB bertanggal efektif. BUKAN klaim iuran entitas nyata sah — kepesertaan, lokasi kerja, dan penangguhan per perusahaan wajib fakta HR/legal.
 
 ID vonis ini **F-2026-10-23-119-V** (tertinggi terverifikasi run ini di origin/main 05e81f40: F-2026-10-23-118-V tertinggi merged di main via #627, 117-V tertinggi di PR terbuka #625; grep `F-2026-10-23-119` di backlog main + PR terbuka = 0 sebelum tulis). Pemilik berikutnya: BOT 1 merge vonis ini -> BOT 3 inti klasifikasi+basis -> BOT 2 -> BOT 6 E119-1..9.
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-083-V: definisi basis upah BPJS (upah pokok + tunjangan tetap terstruktur) — penutup risiko terbuka F-2026-10-22-081-V §5
+
+Pemilik vonis: BOT 4 (@accounting-finance-tax). Kartu: t_04ba9057
+(buffer kondektur sesudah F-2026-10-22-082-V PR #530). Dokumen
+saja — tanpa kode/schema/migrasi, tanpa merge oleh BOT 4.
+Menutup risiko yang F-081-V §5 nyatakan eksplisit belum diputus:
+"bila ISF membayar tunjangan tetap lewat komponen payroll, BOT 3/
+BOT 5 wajib mengangkat fakta itu ke BOT 4 sebelum build (basis
+bisa berubah ke basis-terdefinisi, bukan ditebak di agregator)".
+Fakta itu kini terbukti dari kode (butir 1.3) — vonis ini memutus
+definisi basisnya. Batas bawah UMK Kesehatan DIPUTUS TERPISAH
+di §3 V-U5 sebagai TIDAK ditegakkan mesin (tetap wilayah HR).
+
+### 0. Pemilihan + anti-duplikat (live 2026-10-22, origin/main f0b98632)
+
+Sudah tertutup, TIDAK divonis ulang: Q-TM67-2/4 = F-072-V
+(gabungan PR #522); Q-DP65-2 = F-073-V; Q-BOM68-6 = F-074-V
+PR #517; Q-SUB69-5 = F-075-V PR #518; Q-PF-2/4 = F-077-V PR #521;
+agregator BPJS se-masa = F-081-V PR #529 OPEN (basisnya masih
+"baseSalary master sebulan" — vonis ini MENGGANTI definisi basis
+itu, bukan mengulang alokasinya); akun scrap = F-078-V PR #523;
+Q-SC-4/5 = F-079-V PR #526 + F-080-V PR #527; Q-TP-1 = F-082-V
+PR #530; Q-KOM-1 = F-056-V PR #440 OPEN; Q-033-1/2/4 sudah
+bervonis di backlog main. Q-IP/Q-MR/Q-TP-2..5 milik BOT 1/BOT 3.
+PR #515 merah terbukti BUKAN domain vonis: 2 tes gagal
+action-wiring (aksi JobChangeOrder belum dirujuk UI — milik
+BOT 3/BOT 2) + Build "Server Actions must be async" (kode BOT 3).
+Satu-satunya sisa uang statutori yang dinyatakan terbuka oleh
+vonis BOT 4 sendiri = definisi basis BPJS ini. ID bebas: grep
+"F-2026-10-22-083" backlog+board+`gh pr list --state all` = 0;
+maks -V terpakai 082-V (PR #530 OPEN).
+
+### 1. Bukti repo live (TERVERIFIKASI-KODE, origin/main f0b98632)
+
+1. Basis BPJS berjalan = `baseSalary` SAJA di ketiga jalur tulis:
+   buildPayrollWrite `computeBpjsEmployee(base, ruleset)`
+   (hrm.actions.ts:719), preview estimasi (:1211), generate
+   massal (:1817). `computeBpjsEmployee(baseSalary, params)`
+   murni: Kesehatan = round(min(base, ceilingKes) x tarifKes);
+   employment = round(base x tarifJHT + min(base, ceilingJP) x
+   tarifJP) (payroll-statutory.service.ts:29-38). Tarif/ceiling
+   dari ruleset bertanggal efektif; fallback kode ditolak di
+   gerbang tulis (fromFallback -> throw).
+2. `Employee.baseSalary` Decimal(15,2) = upah pokok sebulan
+   master (schema.prisma:809); `paymentFrequency` WEEKLY/MONTHLY
+   (:808). Slip `Payroll` menyimpan baseSalary + allowances
+   terpisah (schema.prisma:3030 dst) + snapshot statutori.
+3. Tunjangan tetap ADALAH fakta struktural repo, bukan dugaan:
+   `PayrollComponent` (kind earning/deduction, recurrence
+   fixed/variable, isTaxable) + `EmployeePayrollComponent`
+   penugasan per karyawan dengan `defaultAmount` Decimal(15,2)
+   + rentang `effectiveFrom/effectiveTo` bertanggal
+   (schema.prisma:3074-3122). Penugasan hanya sah untuk komponen
+   recurrence=fixed aktif (aksi assign menolak selain fixed);
+   loader efektif menyaring isActive + rentang mencakup endDate
+   + component fixed aktif (hrm.actions.ts loadEffectivePayroll-
+   Assignments). Baris slip `PayrollComponentLine` membekukan
+   snapshot per baris: componentNameSnapshot, kindSnapshot,
+   recurrenceSnapshot, isTaxableSnapshot, amount, assignmentId
+   (schema.prisma:3127 dst) — basis per slip dapat diturunkan
+   dari snapshot beku tanpa membaca master berjalan.
+4. Bruto berjalan sudah memisahkan sumber: gross = base +
+   allowances (semua earning snapshot) + overtime +
+   appreciation (hrm.actions.ts:712) — tetapi BPJS tidak membaca
+   satu pun selain base. Karyawan bergaji pokok 6jt + tunjangan
+   tetap 3jt hari ini terpotong BPJS atas 6jt, padahal upah
+   BPJS-nya 9jt: KURANG POTONG sistematis (risiko perusahaan:
+   selisih iuran + sanksi administrasi BPJS), bukan selisih
+   tampil. Inilah celah yang F-081-V §5 peringatkan.
+5. Agregator F-081-V V-B2 memutus basis = baseSalary master
+   dibaca pada slip penanggung, dengan snapshot peran
+   `bpjsPeriod: { role, period, basis, targetHealth,
+   targetEmployment }`. Vonis ini mengubah SUMBER `basis` di
+   snapshot itu (master pokok + tunjangan tetap efektif), isi
+   snapshot wajib bertambah rincian komponen basis (§3 V-U3).
+
+### 2. Dasar regulasi (sumber resmi, akses 2026-10-22)
+
+1. BPJS Kesehatan PPU: Perpres 82/2018 jo. Perpres 64/2020
+   Pasal 30 ayat (1): iuran 5% dari Gaji atau Upah per bulan
+   (4% pemberi kerja, 1% peserta); Pasal 32 ayat (1): batas
+   atas dasar perhitungan Rp12.000.000/bulan; ayat (2): batas
+   bawah = upah minimum kabupaten/kota. Konsep "Gaji atau Upah"
+   Kesehatan = gaji pokok + tunjangan tetap (definisi Perpres
+   82/2018 Pasal 1 — teks diakses lewat perubahan Perpres
+   64/2020; URL resmi di bawah).
+   - https://www.peraturan.go.id/files/ps64-2020.pdf
+   - https://jdih.kemenkeu.go.id/dok/perpres-64-tahun-2020
+2. Jaminan Pensiun: PP 45/2015 Pasal 29 ayat (1): "Upah setiap
+   bulan yang dijadikan dasar perhitungan Iuran terdiri atas
+   Upah pokok dan tunjangan tetap pada bulan yang
+   bersangkutan"; ayat (3)-(4): batas tertinggi disesuaikan
+   tahunan (1 + pertumbuhan PDB) oleh BPJS Ketenagakerjaan.
+   - https://www.bpjsketenagakerjaan.go.id/assets/uploads/peraturan/15122015_104556_PP%2045%20Tahun%202015.pdf
+3. JHT: PP 46/2015 — iuran (5,7%: 3,7% pemberi kerja, 2%
+   peserta) atas upah sebulan dengan pengertian upah yang sama
+   (upah pokok + tunjangan tetap). Nilai ceiling/tarif berjalan
+   TIDAK diputus vonis ini — tetap ruleset statutori bertanggal
+   efektif existing (prinsip BOT 4: jangan hardcode).
+Klaim terbatas: definisi BASIS iuran karyawan per bulan
+kalender. Bukan klaim kepatuhan setor/perusahaan (jadwal setor,
+upah dilaporkan, pendaftaran peserta = proses HR terpisah).
+
+### 3. VONIS (mengikat; mengganti sumber `basis` V-B2 F-081-V)
+
+V-U1 (definisi basis — DIPUTUS). Basis upah BPJS satu karyawan
+untuk satu masa (bulan kalender) =
+  basis = Employee.baseSalary (upah pokok sebulan master)
+        + Sigma defaultAmount penugasan tunjangan tetap efektif
+di mana "tunjangan tetap efektif" = baris EmployeePayroll-
+Component yang pada endDate slip penanggung memenuhi SEMUA:
+assignment isActive, effectiveFrom <= endDate, (effectiveTo
+null atau >= endDate), component isActive, component.recurrence
+= "fixed", component.kind = "earning". Sigma memakai nominal
+penugasan (defaultAmount), BUKAN baris slip berjalan — basis
+adalah kewajiban sebulan, bukan realisasi slip parsial.
+Komponen variable, komponen deduction, lembur (overtime), dan
+apresiasi/THR TIDAK masuk basis: bukan tunjangan tetap.
+isTaxable TIDAK menyaring basis (basis BPJS bukan objek PPh;
+komponen tetap non-pajak tetap tunjangan tetap).
+
+V-U2 (satu basis untuk tiga program). Basis V-U1 yang sama
+dipakai Kesehatan, JHT, dan JP; ceiling masing-masing tetap
+diterapkan per program di dalam computeBpjsEmployee existing
+(min(basis, ceiling) per program). DILARANG basis berbeda per
+program dan DILARANG menerapkan ceiling pada komponen sebelum
+dijumlah (ceiling atas BASIS total, bukan per komponen).
+
+V-U3 (snapshot wajib). Snapshot slip penanggung (memperluas
+`bpjsPeriod` F-081-V V-B3) wajib membekukan: basis pokok
+(baseSalary terbaca), daftar komponen basis (assignmentId,
+componentId, nama snapshot, amount), basis total, ruleset
+asOf. Koreksi/rekonsiliasi membaca snapshot ini; master atau
+penugasan berubah sesudahnya TIDAK menulis ulang basis masa
+lalu. Slip tanpa rincian basis di snapshot = baris legacy:
+targetnya dibaca apa adanya, tidak dihitung ulang diam-diam.
+
+V-U4 (titik baca + perubahan tengah masa). Basis dibaca SATU
+KALI pada slip penanggung masa itu (pola V-B3 F-081-V: slip
+pertama terbit se-masa selain cancelled). Penugasan tunjangan
+tetap lahir/berubah/berakhir di tengah masa: basis masa
+berjalan TIDAK berubah sampai masa tutup; selisih target masuk
+mekanisme selisih/koreksi F-081-V V-B4/V-B5 (slip berikutnya
+se-masa menanggung selisih; tanpa slip berikutnya lewat slip
+koreksi; penanggung paid mengikuti V-B5(c)). Basis masa
+BERIKUTNYA membaca keadaan penugasan efektif pada endDate
+penanggung masa itu. Kenaikan berlaku surut lintas masa =
+BUTUH-VONIS-AKUNTAN per kasus, di luar vonis ini.
+
+V-U5 (batas bawah UMK Kesehatan — TIDAK ditegakkan mesin).
+Perpres 64/2020 Pasal 32 ayat (2) menetapkan batas bawah dasar
+perhitungan = UMK, tetapi repo tidak punya master UMK per
+kabupaten/kota bertanggal efektif, dan nilai UMK berubah
+tahunan per daerah. Memaksakan lantai dari konstanta/tebakan =
+melanggar prinsip tarif-di-master. DIPUTUS: mesin TIDAK
+menerapkan lantai UMK; basis di bawah UMK setempat tetap
+dipotong atas basis V-U1 apa adanya, dan kekurangan terhadap
+kewajiban lapor BPJS adalah temuan HR di rekonsiliasi (V-U7),
+bukan angka yang dikoreksi diam-diam oleh payroll. Menegakkan
+lantai = fitur terpisah BUTUH master UMK bertanggal efektif +
+vonis BOT 4 lanjutan; jangan dibangun dari vonis ini.
+
+V-U6 (siapa menanggung kenaikan). Agregator F-081-V tidak
+berubah selain sumber basis: penanggung menanggung target atas
+basis V-U1; slip se-masa berikutnya max(0, target - Sigma
+terpotong). Karyawan MONTHLY satu slip: angka = target penuh
+atas basis baru (inilah koreksi yang dimaksud — angka MONTHLY
+berubah HANYA bila karyawan punya tunjangan tetap; tanpa
+tunjangan tetap basis identik baseSalary = regresi nol).
+Karyawan tanpa penugasan tunjangan apa pun: basis = baseSalary
+persis perilaku hari ini.
+
+V-U7 (rekonsiliasi). Read-model BPJS se-masa (perluasan V-B7
+F-081-V) menampilkan per karyawan: basis snapshot (pokok +
+rincian tunjangan tetap), target per program, Sigma terpotong,
+selisih. Karyawan berpenugasan tetap aktif yang basis
+snapshot-nya TIDAK memuat komponen itu = temuan tampil
+(basis tidak lengkap), dilarang dinolkan. Laporan membaca
+snapshot slip, bukan master berjalan.
+
+### 4. Syarat & larangan
+
+S1. Penjaga basis hidup di jalur tulis server (buildPayrollWrite
++ generate massal), fungsi murni turunan basis terpisah dan
+teruji tanpa Prisma; preview per-slip boleh tetap berlabel
+preview (pola F-081-V V-B6) tetapi WAJIB memakai basis V-U1
+yang sama supaya preview tidak mengajari angka salah.
+S2. Tarif/ceiling tetap ruleset bertanggal efektif existing;
+gerbang fromFallback -> tolak dipertahankan persis. Vonis ini
+tidak menambah konstanta tarif/ceiling/UMK apa pun.
+S3. Nominal basis uang Decimal(15,2); penjumlahan komponen via
+safeAdd/safeSum repo, pembulatan tetap di computeBpjsEmployee
+per program (round per komponen existing) — jangan bulatkan
+basis per komponen lebih dulu.
+L1. DILARANG menurunkan basis dari Payroll.allowances slip
+(total earning snapshot memuat variable/lembur turunan) atau
+dari grossSalary: keduanya bukan tunjangan tetap.
+L2. DILARANG membaca nama komponen untuk menebak "tetap"
+(mis. nama mengandung "tetap"/"jabatan"): satu-satunya bukti
+tetap = recurrence=fixed + kind=earning + penugasan efektif.
+L3. DILARANG fallback diam-diam: penugasan rusak (nominal
+negatif/duplikat komponen — sudah ditolak loader existing)
+atau ruleset fallback = tolak berisik, jangan basis pokok saja
+diam-diam seolah tanpa tunjangan.
+L4. Vonis ini TIDAK membuka inti F-076-S: gerbang Q-PF-1 BOT 1
++ agregator F-081-V tetap prasyarat; perubahan basis berlaku
+untuk MONTHLY maupun WEEKLY lewat jalur agregat yang sama,
+bukan cabang frekuensi terpisah.
+
+### 5. Batas build
+
+- BOT 1: merge PR vonis ini + PR #529 (F-081-V) sebagai satu
+  paket basis (basis V-U1 menggantikan sumber basis V-B2);
+  Q-PF-1/5 tetap milikmu.
+- BOT 3 (sesudah gerbang di atas; klaim board dulu): fungsi
+  murni `bpjsWageBase(baseSalary, fixedEarningAssignments)` +
+  pemanggil di jalur tulis; snapshot rincian basis V-U3;
+  rekonsiliasi V-U7. Tanpa migrasi (snapshot Json existing) —
+  bentuk fisik final ajukan di kartu inti, isi wajib setara.
+- BOT 5: jangan putus turunan basis sendiri di spec payroll;
+  angkat ke BOT 4 bila komponen tetap dibayar di luar model
+  penugasan existing (mis. tunjangan tetap dibayar tunai di
+  luar slip) — itu fakta baru, bukan tebakan loader.
+- BOT 2: tampilkan rincian basis dari snapshot backend apa
+  adanya; UI tidak menjumlah komponen sendiri.
+- BOT 6: falsifikasi §6.
+
+### 6. Falsifikasi wajib BOT 6 (atas head BOT 3)
+
+1. AC-U1: pokok 6.000.000 + tunjangan tetap efektif 3.000.000
+   (satu penugasan fixed/earning) -> target Kesehatan/JHT/JP
+   dihitung atas 9.000.000 persis; cabut penjumlahan tunjangan
+   -> target atas 6.000.000 = MERAH terbukti penjaga.
+2. AC-U2: komponen variable earning 2.000.000 + lembur +
+   apresiasi pada slip sama -> basis tetap 9.000.000 (AC-U1);
+   memasukkan satu pun -> MERAH. Komponen fixed ber-kind
+   deduction -> tidak masuk basis.
+3. AC-U3: penugasan berakhir (effectiveTo) sebelum endDate
+   penanggung, atau component dinonaktifkan -> komponen itu
+   keluar basis masa BERIKUTNYA, basis masa berjalan (snapshot
+   penanggung) tidak berubah; restate diam-diam = MERAH.
+4. AC-U4: pokok 20.000.000 + tetap 5.000.000 -> ceiling
+   Kesehatan atas basis total 25.000.000 (target health =
+   1% x 12.000.000 ruleset snapshot), BUKAN ceiling per
+   komponen; JP memakai ceiling JP ruleset atas basis sama.
+5. AC-U5: karyawan tanpa penugasan tunjangan -> basis =
+   baseSalary, angka BPJS identik sebelum/sesudah perubahan
+   (regresi nol); karyawan MONTHLY bertunjangan tetap -> hanya
+   targetnya yang berubah, jalur jurnal onPayrollPaid utuh.
+6. AC-U6: WEEKLY 4 slip se-masa dengan tunjangan tetap: Sigma
+   terpotong = target atas basis V-U1 tepat sekali (warisan
+   AC-B1 F-081-V atas basis baru); basis dibaca dari baris
+   slip parsial/gross -> MERAH.
+7. AC-U7: snapshot penanggung memuat rincian komponen basis;
+   ubah/hapus penugasan master sesudah slip terbit -> target
+   + rekonsiliasi masa itu tidak berubah; rekonsiliasi
+   menampilkan karyawan berpenugasan aktif yang terlewat dari
+   snapshot sebagai temuan, bukan nol diam-diam.
+8. AC-U8: basis di bawah UMK setempat -> potongan tetap atas
+   basis V-U1 (tanpa lantai karangan); muncul lantai/konstanta
+   UMK di kode jalur BPJS -> MERAH (V-U5).
+
+### 7. Klaim kepatuhan
+
+Klaim terbatas: definisi basis iuran = upah pokok + tunjangan
+tetap per bulan kalender, dasar PP 45/2015 Pasal 29 ayat (1) +
+Perpres 64/2020 Pasal 30 ayat (1)/Pasal 32 ayat (1) (akses
+resmi 2026-10-22, URL §2); tarif/ceiling dari ruleset
+bertanggal efektif repo. BUKAN klaim: kepatuhan setor BPJS
+perusahaan, batas bawah UMK (V-U5 — ditegakkan HR di luar
+mesin sampai master UMK ada), upah yang wajib dilaporkan ke
+BPJS (dapat berbeda dari struktur payroll internal — sengketa
+klasifikasi komponen tetap/variable per karyawan =
+BUTUH-VONIS-AKUNTAN/HR per kasus, jangan diputus loader).
+Risiko sisa: komponen yang secara nama "tunjangan" tetapi
+dibayar tidak tetap (kehadiran/transport harian) HARUS
+dimodelkan variable oleh HR — klasifikasi master adalah fakta
+bisnis; mesin hanya membaca recurrence/kind, tidak menilai
+ulang sifat pembayaran.
+
+ID vonis ini **F-2026-10-22-083-V** (penutup risiko §5
+F-2026-10-22-081-V PR #529; keluarga payroll F-2026-10-22-076-S
+PR #519 + F-077-V PR #521). Pemilik berikutnya: BOT 1 (merge
+paket basis + Q-PF-1/5) -> BOT 3 (inti basis V-U1..V-U7 +
+snapshot) -> BOT 2 (tampil rincian basis) -> BOT 6 AC-U1..U8.
+Peminta: BOT 5 (spec F-076-S) + BOT 3 (inti payroll).
