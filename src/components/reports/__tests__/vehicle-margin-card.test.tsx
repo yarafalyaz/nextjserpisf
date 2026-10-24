@@ -10,7 +10,7 @@ afterEach(() => {
   clearRenderedCards()
 })
 
-function reportExample(hasUnlinkedMaterial = false) {
+function reportExample(hasUnlinkedMaterial = false, withMemo = false) {
   const margin = buildVehicleMargin({
     projects: [
       {
@@ -40,6 +40,26 @@ function reportExample(hasUnlinkedMaterial = false) {
         revenue: 1_000_000,
       },
     ],
+    unbilled: withMemo
+      ? [
+          {
+            id: 901,
+            customerVehicleId: 7,
+            vehiclePlate: "B 1234 AA",
+            customerName: "PT A",
+            status: "draft",
+            amount: 40_000_000,
+          },
+          {
+            id: 902,
+            customerVehicleId: 9,
+            vehiclePlate: "B 9999 ZZ",
+            customerName: "PT C",
+            status: "sent",
+            amount: 5_000_000,
+          },
+        ]
+      : [],
   })
   return {
     ...margin,
@@ -47,6 +67,39 @@ function reportExample(hasUnlinkedMaterial = false) {
     periodCaption: "Periode 1–31 Oktober 2026",
   }
 }
+
+describe("VehicleMarginCard memo unbilled E129-4", () => {
+  it("memo 40jt baris tampil berlabel verbatim + status; footer terpisah; angka margin tak berubah", () => {
+    const withMemo = renderCard(<VehicleMarginCard report={reportExample(false, true)} />)
+    const text = withMemo.container.textContent ?? ""
+    expect(text).toContain("belum ditagih (memo)")
+    expect(text).toContain("40.000.000,00")
+    expect(withMemo.container.querySelector('[aria-label*="draft"]')).not.toBeNull()
+    expect(text).toContain("45.000.000,00")
+    // revenue/profit/% baris 7 identik fixture tanpa memo
+    expect(text).toContain("20.000.000,00")
+    expect(text).toContain("15.000.000,00")
+    expect(text).toContain("75.0%")
+    unmountCard(withMemo.root)
+  })
+
+  it("kendaraan memo-saja (revenue 0) tetap tampil", () => {
+    const { container, root } = renderCard(<VehicleMarginCard report={reportExample(false, true)} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("B 9999 ZZ")
+    expect(text).toContain("5.000.000,00")
+    unmountCard(root)
+  })
+
+  it("tanpa memo label tampil sebagai kepala kolom, nilai baris tampil tanda pisah", () => {
+    const { container, root } = renderCard(<VehicleMarginCard report={reportExample()} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("belum ditagih (memo)")
+    expect(text).not.toContain("40.000.000,00")
+    expect(text).not.toContain("Total belum ditagih (memo)")
+    unmountCard(root)
+  })
+})
 
 describe("VehicleMarginCard F-2026-10-22-001", () => {
   it("angka loader tampil persis: kendaraan 7 pendapatan 20jt, produksi 5jt, margin 15jt", () => {
