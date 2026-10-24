@@ -183,6 +183,31 @@ describe("WarrantyJournalPanel — rute provisi MATI E2+E3", () => {
     act(() => root.unmount())
   })
 
+  it("E130-1: penolakan recovery server tampil verbatim lewat toast error", async () => {
+    const verbatim =
+      "Recovery ditolak: lampiran persetujuan vendor sesudah pengiriman belum ada — unggah surat/email persetujuan, nota kredit vendor, atau janji penggantian part tertulis sesudah klaim dikirim; foto part cacat sebelum pengiriman tidak cukup."
+    recoveryMock.mockClear()
+    errorMock.mockClear()
+    successMock.mockClear()
+    recoveryMock.mockResolvedValueOnce({
+      success: false,
+      error: verbatim,
+    } as unknown as Awaited<ReturnType<typeof recoveryMock>>)
+    const { container, root } = mount(<WarrantyJournalPanel facts={facts()} canPost={true} />)
+    const hidden = container.querySelector<HTMLInputElement>("input[name='amount']")
+    expect(hidden).not.toBeNull()
+    const setVal = (el: HTMLInputElement, v: string) => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(el, v)
+      el.dispatchEvent(new Event("input", { bubbles: true }))
+    }
+    if (hidden) act(() => setVal(hidden, "500000"))
+    await submitForm(container, "Formulir posting jurnal recovery supplier")
+    await act(async () => {})
+    expect(errorMock).toHaveBeenCalledWith(verbatim)
+    expect(successMock).not.toHaveBeenCalled()
+    act(() => root.unmount())
+  })
+
   it("status supplier sent: form E3 tidak dirender, catatan kontinjensi tampil", () => {
     const { container, root } = mount(
       <WarrantyJournalPanel facts={facts({ supplierClaimStatus: "sent" })} canPost={true} />,
