@@ -24,6 +24,8 @@ import {
   payableOutstanding,
   receivableOutstanding,
 } from "@/lib/reports/aging-amounts"
+import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
+import { safeAdd } from "@/lib/utils/math"
 import { formatAccounting } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -91,11 +93,19 @@ export async function loadReceivablesAging(): Promise<AgingReportView> {
     include: { customer: { select: { name: true } } },
     orderBy: { dueDate: "asc" },
   })
+  const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(invoices.map((inv) => inv.id))
   const now = new Date()
   const items = invoices
     .map((inv) => {
       if (!inv.dueDate) return null
-      const outstanding = receivableOutstanding(inv.grandTotal, inv.paidAmount)
+      // F-104-V: sisa piutang kurangi returnCredit (jurnal SalesReturn
+      // POSTED); paidAmount kolom tetap murni pembayaran.
+      const settled = safeAdd(
+        Number(inv.paidAmount),
+        returnCreditByInvoiceId.get(inv.id) ?? 0,
+        2,
+      )
+      const outstanding = receivableOutstanding(inv.grandTotal, settled)
       if (outstanding <= 0) return null
       return {
         party: inv.customer.name,

@@ -17,6 +17,9 @@ const mocks = vi.hoisted(() => ({
   findExchangeItems: vi.fn(),
   findFollowUps: vi.fn(),
   findLateFees: vi.fn(),
+  findReturns: vi.fn(),
+  findJournals: vi.fn(),
+  getSystemSettings: vi.fn(),
 }))
 
 vi.mock("@/lib/auth/permissions", () => ({
@@ -34,7 +37,16 @@ vi.mock("@/lib/db/prisma", () => ({
     salesLateFee: {
       findMany: (...a: unknown[]) => mocks.findLateFees(...a),
     },
+    salesReturn: {
+      findMany: (...a: unknown[]) => mocks.findReturns(...a),
+    },
+    journal: {
+      findMany: (...a: unknown[]) => mocks.findJournals(...a),
+    },
   },
+}))
+vi.mock("@/lib/utils/settings", () => ({
+  getSystemSettings: (...a: unknown[]) => mocks.getSystemSettings(...a),
 }))
 
 import { getCollectionQueue } from "../collection-queue-data"
@@ -102,6 +114,16 @@ describe("collection-queue (F-2026-10-22-089-S)", () => {
     expect(COLLECTION_QUEUE_NOTICE_TEXT).toBe(
       "Tahap dan umur dihitung dari faktur, tukar faktur, dan janji bayar terakhir. Mencatat tindak lanjut tidak mencatat pembayaran dan tidak membuat jurnal.",
     )
+  })
+
+  it("F-104-V: returnCredit kurangi sisa antrean; lunas oleh retur keluar antrean", () => {
+    const partial = buildCollectionQueue([invoice({ returnCredit: 400_000 })], [], [], { now: NOW })
+    expect(partial.rows).toHaveLength(1)
+    expect(partial.rows[0].sisa).toBe(600_000)
+    const settled = buildCollectionQueue([invoice({ returnCredit: 1_000_000 })], [], [], { now: NOW })
+    expect(settled.rows).toHaveLength(0)
+    const plain = buildCollectionQueue([invoice()], [], [], { now: NOW })
+    expect(plain.rows[0].sisa).toBe(1_000_000)
   })
 
   it("AC-COL-1: tanpa exchange BELUM_DISERAHKAN; sesudah exchange SUDAH_DISERAHKAN", () => {
@@ -335,6 +357,9 @@ describe("collection-queue-data loader (AC-COL-7)", () => {
     mocks.findExchangeItems.mockResolvedValue([])
     mocks.findFollowUps.mockResolvedValue([])
     mocks.findLateFees.mockResolvedValue([])
+    mocks.findReturns.mockResolvedValue([])
+    mocks.findJournals.mockResolvedValue([])
+    mocks.getSystemSettings.mockResolvedValue({ salesReceivableAccountId: 110 })
   })
 
   it("kedua izin ditegakkan sebelum query", async () => {

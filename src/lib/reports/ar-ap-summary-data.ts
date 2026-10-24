@@ -14,6 +14,7 @@ import {
 } from "@/lib/reports/document-status"
 import { formatAccounting } from "@/lib/utils/format"
 import { buildApByVendor, buildArByCustomer, sumOutstanding } from "@/lib/reports/ar-ap-summary"
+import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
 import { safeSubtract } from "@/lib/utils/math"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -48,8 +49,12 @@ export async function loadArApSummary(): Promise<ArApSummaryReport> {
   const rows: TableRow[] = []
   const money = (value: number) => formatAccounting(value, { zeroDash: false })
 
+  // F-104-V: returnCredit per faktur kurangi Belum Lunas; Sudah Dibayar
+  // tetap paidAmount murni.
+  const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(invoices.map((inv) => inv.id))
   const arByCustomer = buildArByCustomer(invoices.map((inv) => ({
     customerName: inv.customer.name, grandTotal: inv.grandTotal, paidAmount: inv.paidAmount,
+    returnCreditAmount: returnCreditByInvoiceId.get(inv.id) ?? 0,
   })))
   const arRows = [...arByCustomer.entries()].filter(([, r]) => r.outstanding > 0)
 

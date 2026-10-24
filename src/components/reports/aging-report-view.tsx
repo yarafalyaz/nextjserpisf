@@ -16,6 +16,10 @@ export interface AgingRowInput {
   dueDate: Date | null
   grandTotal: unknown
   paidAmount: unknown
+  /** F-104-V opsional (piutang saja): returnCredit jurnal SalesReturn POSTED
+   * faktur ini dari loader — pengurang sisa, BUKAN bagian paidAmount.
+   * Hutang tidak mengisinya (perilaku lama persis). */
+  returnCreditAmount?: unknown
 }
 
 export interface AgingReportTexts {
@@ -41,7 +45,10 @@ export function buildAgingRows(items: AgingRowInput[], now: Date) {
   return items
     .map((item) => {
       if (!item.dueDate) return null
-      const outstanding = Number(item.grandTotal) - Number(item.paidAmount)
+      // F-104-V: sisa = grandTotal − paidAmount − returnCredit (definisi
+      // outstanding tunggal vonis; returnCredit dari loader, default 0 =
+      // perilaku lama persis, mis. permukaan hutang).
+      const outstanding = Number(item.grandTotal) - Number(item.paidAmount) - Number(item.returnCreditAmount ?? 0)
       if (outstanding <= 0) return null
       const dueDate = new Date(item.dueDate)
       const overdue = daysOverdue(dueDate, now)
