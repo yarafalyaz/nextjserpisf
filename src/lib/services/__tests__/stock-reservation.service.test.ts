@@ -25,6 +25,7 @@ function txMock() {
 import {
   consumeReservationsForMaterialIssueTx,
   expireOverdueReservationsTx,
+  releaseActiveReservationsForWorkOrderTx,
   releaseReservationsForReplacedItemsTx,
 } from "../stock-reservation.service"
 
@@ -111,5 +112,47 @@ describe("releaseReservationsForReplacedItemsTx (AC-RES-8)", () => {
     expect(
       await releaseReservationsForReplacedItemsTx(txMock(), { workOrderId: 9, workOrderItemIds: [] }),
     ).toBe(0)
+  })
+})
+
+describe("releaseActiveReservationsForWorkOrderTx (F-057-S rilis per transisi)", () => {
+  it("lepas hanya baris active WO ini + jejak releasedBy/reason; return count", async () => {
+    updateManyMock.mockResolvedValue({ count: 2 })
+    const n = await releaseActiveReservationsForWorkOrderTx(txMock(), {
+      workOrderId: 9,
+      releasedBy: 7,
+      reason: "Perintah kerja selesai",
+    })
+    expect(n).toBe(2)
+    expect(updateManyMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { workOrderId: 9, status: "active" },
+        data: expect.objectContaining({
+          status: "released",
+          releasedBy: 7,
+          releaseReason: "Perintah kerja selesai",
+        }),
+      }),
+    )
+  })
+
+  it("falsifikasi rilis dobel: panggilan kedua menyasar status active yang sudah kosong → count 0 (no-op, tanpa dobel-rilis)", async () => {
+    updateManyMock.mockResolvedValueOnce({ count: 2 }).mockResolvedValueOnce({ count: 0 })
+    const first = await releaseActiveReservationsForWorkOrderTx(txMock(), {
+      workOrderId: 9,
+      releasedBy: 7,
+      reason: "Perintah kerja selesai",
+    })
+    const second = await releaseActiveReservationsForWorkOrderTx(txMock(), {
+      workOrderId: 9,
+      releasedBy: 7,
+      reason: "Perintah kerja ditutup",
+    })
+    expect(first).toBe(2)
+    expect(second).toBe(0)
+    // Penjaga idempoten = filter status active di SETIAP panggilan.
+    for (const call of updateManyMock.mock.calls) {
+      expect(call[0].where.status).toBe("active")
+    }
   })
 })

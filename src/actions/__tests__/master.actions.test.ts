@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => {
       findMany: vi.fn(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id }))),
     },
     barcode: buildModelMock(),
+    activityLog: buildModelMock(),
     taxGroup: buildModelMock(),
     taxGroupTax: buildModelMock(),
     paymentTerm: buildModelMock(),
@@ -173,6 +174,67 @@ describe("Item Actions", () => {
   })
 })
 
+describe("UoM conversion factorToBase parser", () => {
+  const convFd = (rows: unknown) =>
+    fdMap({
+      name: "Item Test",
+      cost: "100",
+      price: "200",
+      uomConversions: JSON.stringify(rows),
+    })
+
+  it("createItem: faktor format Indonesia \"1.000\" terbaca 1000, \"1,5\" terbaca 1.5", async () => {
+    const res = await actions.createItem(
+      convFd([
+        { code: "TON", factorToBase: "1.000" },
+        { code: "KG", factorToBase: "1,5" },
+      ]),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.uomConversion.createMany.mock.calls.at(-1)?.[0]
+    expect(arg.data).toEqual([
+      { itemId: 1, code: "TON", factorToBase: 1000 },
+      { itemId: 1, code: "KG", factorToBase: 1.5 },
+    ])
+  })
+
+  it("updateItem: faktor format Indonesia \"2.000.000\" terbaca 2000000", async () => {
+    const res = await actions.updateItem(
+      1,
+      convFd([{ code: "GRAM", factorToBase: "2.000.000" }]),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.uomConversion.createMany.mock.calls.at(-1)?.[0]
+    expect(arg.data).toEqual([{ itemId: 1, code: "GRAM", factorToBase: 2000000 }])
+  })
+
+  it("createItem: faktor tak terbaca ditolak berpesan, tidak ada createMany", async () => {
+    const res = await actions.createItem(convFd([{ code: "BOX", factorToBase: "abc" }]))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Faktor konversi satuan")
+    expect(mocks.prismaMock.uomConversion.createMany).not.toHaveBeenCalled()
+  })
+
+  it("updateItem: faktor 0 ditolak berpesan, konversi lama tidak dihapus", async () => {
+    const res = await actions.updateItem(1, convFd([{ code: "BOX", factorToBase: 0 }]))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Faktor konversi satuan")
+    expect(mocks.prismaMock.uomConversion.deleteMany).not.toHaveBeenCalled()
+  })
+
+  it("baris tanpa kode tetap dibuang tanpa error", async () => {
+    const res = await actions.createItem(
+      convFd([
+        { code: "", factorToBase: "abc" },
+        { code: "PCS", factorToBase: 12 },
+      ]),
+    )
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.uomConversion.createMany.mock.calls.at(-1)?.[0]
+    expect(arg.data).toEqual([{ itemId: 1, code: "PCS", factorToBase: 12 }])
+  })
+})
+
 describe("Warehouse Actions", () => {
   it("createWarehouse succeeds", async () => {
     const res = await actions.createWarehouse(fdMap({ name: "test", code: "test", type: "test", rate: "10" }))
@@ -226,6 +288,51 @@ describe("Employee Actions", () => {
     const data = mocks.prismaMock.employee.create.mock.calls.at(-1)?.[0]?.data
     expect(data.joinDate.toISOString()).toBe("2026-01-15T00:00:00.000Z")
     expect(data.dateOfBirth.toISOString()).toBe("1990-05-20T00:00:00.000Z")
+  })
+
+  it("F-085-S: createEmployee menyimpan status kepegawaian tervalidasi", async () => {
+    const res = await actions.createEmployee(fdMap({
+      name: "test", joinDate: "2026-01-15",
+      employmentStatus: "PKWT", contractEndDate: "2027-01-14",
+    }))
+    expect(res?.success).toBe(true)
+    const data = mocks.prismaMock.employee.create.mock.calls.at(-1)?.[0]?.data
+    expect(data.employmentStatus).toBe("PKWT")
+    expect(data.contractEndDate.toISOString()).toBe("2027-01-14T00:00:00.000Z")
+  })
+
+  it("F-085-S BR-EMP-02: status teks bebas ditolak sebelum tulis DB", async () => {
+    const res = await actions.createEmployee(fdMap({
+      name: "test", joinDate: "2026-01-15", employmentStatus: "KONTRAK-BEBAS",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Status kepegawaian tidak valid")
+    expect(mocks.prismaMock.employee.create).not.toHaveBeenCalled()
+  })
+
+  it("F-085-S: employmentEndedAt tanpa endReason ditolak berpasangan", async () => {
+    const res = await actions.createEmployee(fdMap({
+      name: "test", joinDate: "2026-01-15", employmentEndedAt: "2026-10-15",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("wajib diisi bersamaan")
+    expect(mocks.prismaMock.employee.create).not.toHaveBeenCalled()
+  })
+
+  it("F-085-S AC-EMP-4: ubah PKWT->PKWTT menulis ActivityLog old/new", async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValue({
+      userId: null, employmentStatus: "PKWT",
+      contractStartDate: null, contractEndDate: new Date("2026-12-31T00:00:00.000Z"),
+      employmentEndedAt: null, endReason: null,
+    })
+    const res = await actions.updateEmployee(1, fdMap({
+      name: "test", joinDate: "2026-06-13", employmentStatus: "PKWTT",
+    }))
+    expect(res?.success).toBe(true)
+    const logArg = mocks.prismaMock.activityLog.create.mock.calls.at(-1)?.[0]
+    expect(logArg.data.action).toBe("employee_lifecycle_changed")
+    expect(logArg.data.oldValues.employmentStatus).toBe("PKWT")
+    expect(logArg.data.newValues.employmentStatus).toBe("PKWTT")
   })
 })
 

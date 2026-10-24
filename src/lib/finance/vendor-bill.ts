@@ -1,4 +1,5 @@
 import { safeAdd, safeMultiply, safeRound, safeSubtract } from "@/lib/utils/math"
+import { parseLocaleNumber, parseMoneyAmount } from "@/lib/utils/parse-money"
 import { safeJsonParse } from "@/lib/utils/safe-parse"
 
 /**
@@ -16,10 +17,10 @@ import { safeJsonParse } from "@/lib/utils/safe-parse"
 
 export type VendorBillLineInput = {
   itemId?: number | string | null
-  qty?: number
-  unitPrice?: number
-  discountPercent?: number
-  taxPercent?: number
+  qty?: number | string
+  unitPrice?: number | string
+  discountPercent?: number | string
+  taxPercent?: number | string
 }
 
 export type VendorBillLineAmounts = {
@@ -34,12 +35,20 @@ export type VendorBillLineAmounts = {
   total: number
 }
 
-/** Nilai per baris tagihan, semua dibulatkan 2 desimal seperti tampilan uang. */
+/**
+ * Nilai per baris tagihan, semua dibulatkan 2 desimal seperti tampilan uang.
+ *
+ * Field di dalam JSON `items` Server Action bisa berbentuk string format
+ * id-ID ("2.000.000", "2.000.000,50"): wajib lewat parser repo lebih dulu —
+ * `Number("2.000.000")` = 2 dan `Number("2.000")` = 2 merusak `qty`,
+ * `unitPrice`, persen diskon/pajak diam-diam (kelas bug PR #464/#466).
+ * String tak terbaca → 0 (perilaku lama `?? 0` untuk input tak sah).
+ */
 export function computeBillLineAmounts(line: VendorBillLineInput): VendorBillLineAmounts {
-  const qty = safeRound(line.qty ?? 0, 2)
-  const unitPrice = safeRound(line.unitPrice ?? 0, 2)
-  const discountPercent = safeRound(line.discountPercent ?? 0, 2)
-  const taxPercent = safeRound(line.taxPercent ?? 0, 2)
+  const qty = safeRound(parseLocaleNumber(line.qty) ?? 0, 2)
+  const unitPrice = safeRound(parseMoneyAmount(line.unitPrice) ?? 0, 2)
+  const discountPercent = safeRound(parseLocaleNumber(line.discountPercent) ?? 0, 2)
+  const taxPercent = safeRound(parseLocaleNumber(line.taxPercent) ?? 0, 2)
   const gross = safeMultiply(qty, unitPrice, 2)
   const discountAmount = safeMultiply(gross, discountPercent / 100, 2)
   const subtotal = safeSubtract(gross, discountAmount, 2)
@@ -77,7 +86,7 @@ export function summarizeBillItems(
 ): VendorBillHeaderTotals | null {
   const rows = safeJsonParse<VendorBillLineInput[]>(itemsJson ?? null) ?? []
   const lines = rows
-    .filter((row) => safeRound(row.qty ?? 0, 2) > 0)
+    .filter((row) => safeRound(parseLocaleNumber(row.qty) ?? 0, 2) > 0)
     .map((row) => computeBillLineAmounts(row))
   if (lines.length === 0) return null
   const subtotal = lines.reduce((sum, line) => safeAdd(sum, line.gross, 2), 0)
@@ -95,7 +104,7 @@ export function summarizeBillItems(
 export function sumBillItemDiscount(itemsJson: string | null | undefined): number {
   const rows = safeJsonParse<VendorBillLineInput[]>(itemsJson ?? null) ?? []
   return rows.reduce((sum, row) => {
-    if (safeRound(row.qty ?? 0, 2) <= 0) return sum
+    if (safeRound(parseLocaleNumber(row.qty) ?? 0, 2) <= 0) return sum
     return safeAdd(sum, computeBillLineAmounts(row).discountAmount, 2)
   }, 0)
 }
