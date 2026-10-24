@@ -3,6 +3,7 @@ import type {
   SalesTargetAchievementRow,
 } from "@/lib/reports/sales-target-achievement"
 import {
+  SALES_TARGET_LEGACY_LABEL,
   SALES_TARGET_MODIFIED_BADGE_PREFIX,
   SALES_TARGET_NO_TARGET_LABEL,
   SALES_TARGET_PARTIAL_PERIOD_LABEL,
@@ -36,6 +37,16 @@ function badge(text: string) {
   )
 }
 
+/** Penanda legacy builder (Putusan 2.4): label verbatim + nominal sesudah plafon, ditempel apa adanya. */
+function legacyNote(hasLegacyReturnLines: boolean, legacyReturnDeductionAmount: number) {
+  if (!hasLegacyReturnLines || legacyReturnDeductionAmount <= 0) return null
+  return (
+    <span className="block text-xs font-normal text-muted-foreground">
+      Retur {SALES_TARGET_LEGACY_LABEL}: {formatCurrency(legacyReturnDeductionAmount)}
+    </span>
+  )
+}
+
 function periodLabel(row: SalesTargetAchievementRow): string {
   if (!row.periodStart || !row.periodEnd) return SALES_TARGET_NO_TARGET_LABEL
   return `${formatDate(row.periodStart, { format: "numeric" })} – ${formatDate(row.periodEnd, { format: "numeric" })}`
@@ -55,6 +66,7 @@ function TargetRow({ row }: Readonly<{ row: SalesTargetAchievementRow }>) {
             )
           : null}
         {row.notes ? <span className="block text-xs font-normal text-muted-foreground">{row.notes}</span> : null}
+        {legacyNote(row.hasLegacyReturnLines, row.legacyReturnDeductionAmount)}
       </DetailTableTd>
       <DetailTableTd>{periodLabel(row)}</DetailTableTd>
       <DetailTableTd align="right">
@@ -114,7 +126,10 @@ export function SalesTargetAchievementCard({
           ))}
           {showUnattributed ? (
             <DetailTableRow>
-              <DetailTableTd className="font-medium">{report.unattributed.label}</DetailTableTd>
+              <DetailTableTd className="font-medium">
+                {report.unattributed.label}
+                {legacyNote(report.unattributed.hasLegacyReturnLines, report.unattributed.legacyReturnDeductionAmount)}
+              </DetailTableTd>
               <DetailTableTd>{SALES_TARGET_NO_TARGET_LABEL}</DetailTableTd>
               <DetailTableTd align="right">{SALES_TARGET_NO_TARGET_LABEL}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrency(report.unattributed.grossPaidAmount)}</DetailTableTd>
@@ -152,6 +167,19 @@ export function SalesTargetAchievementCard({
           </DetailTableFootRow>
         </DetailTableFoot>
       </DetailTable>
+      {report.legacyReturns.length > 0 ? (
+        <div className="mt-4">
+          <h3 className="text-sm font-semibold text-foreground">Retur berbaris legacy</h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {report.legacyReturns.map((legacyReturn) => (
+              <li key={legacyReturn.returnId}>
+                Retur #{legacyReturn.returnId} (Faktur #{legacyReturn.salesInvoiceId}):{" "}
+                {legacyReturn.label} {formatCurrency(legacyReturn.deductionAmount)}.
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {report.invoiceDeductionClampFindings.length > 0 ? (
         <div className="mt-4">
           <h3 className="text-sm font-semibold text-foreground">Temuan plafon pengurang per faktur</h3>

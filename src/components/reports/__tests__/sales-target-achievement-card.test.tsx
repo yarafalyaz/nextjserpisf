@@ -304,6 +304,100 @@ describe("SalesTargetAchievementCard F-2026-10-22-088-S", () => {
   })
 })
 
+describe("SalesTargetAchievementCard legacy F-131-V MEDIUM-1", () => {
+  it("penanda per baris + nominal legacy + rincian legacyReturns; baris snapshot murni absen", () => {
+    const report = buildSalesTargetAchievement({
+      range: RANGE,
+      targets: [
+        {
+          id: 1,
+          salesEmployeeId: 2,
+          salesEmployeeName: "Sari",
+          periodStart: new Date("2026-10-01T00:00:00Z"),
+          periodEnd: new Date("2026-10-31T00:00:00Z"),
+          targetAmount: 1_000_000,
+          notes: null,
+          modifiedAfterPeriodStartAt: null,
+        },
+      ],
+      invoices: [
+        {
+          id: 11,
+          salesEmployeeId: 2,
+          salesEmployeeName: "Sari",
+          date: new Date("2026-10-10T00:00:00Z"),
+          grandTotal: 1_110_000,
+          subtotal: 1_000_000,
+          discount: 0,
+          taxAmount: 110_000,
+        },
+      ],
+      returns: [
+        {
+          id: 61,
+          date: new Date("2026-10-15T00:00:00Z"),
+          salesInvoiceId: 11,
+          // Baris legacy: tanpa snapshot returnDpp/returnVat -> 2 x Rp 50.000 = Rp 100.000 DPP + PPN 11% = Rp 111.000.
+          lines: [{ qty: 2, price: 50_000, returnDpp: null, returnVat: null }],
+        },
+      ],
+    })
+    expect(report.rows[0].hasLegacyReturnLines).toBe(true)
+    expect(report.rows[0].legacyReturnDeductionAmount).toBe(111_000)
+    expect(report.legacyReturns).toEqual([
+      { returnId: 61, salesInvoiceId: 11, salesEmployeeId: 2, label: "legacy", deductionAmount: 111_000 },
+    ])
+    const { container, root } = renderCard(<SalesTargetAchievementCard report={report} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Retur legacy: Rp 111.000")
+    expect(text).toContain("Retur berbaris legacy")
+    expect(text).toContain("Retur #61 (Faktur #11): legacy Rp 111.000.")
+    // Angka neto tetap dari builder, UI tidak hitung ulang.
+    expect(targetRow(container, "Sari")[6]).toBe("Rp 999.000")
+    unmountCard(root)
+
+    const clean = renderCard(<SalesTargetAchievementCard report={reportWithReturns()} />)
+    const cleanText = clean.container.textContent ?? ""
+    expect(cleanText).not.toContain("legacy")
+    expect(cleanText).not.toContain("Retur berbaris legacy")
+    unmountCard(clean.root)
+  })
+
+  it("ember tanpa penjual berlegacy: penanda legacy tampil di baris unattributed", () => {
+    const report = buildSalesTargetAchievement({
+      range: RANGE,
+      targets: [],
+      invoices: [
+        {
+          id: 21,
+          salesEmployeeId: null,
+          salesEmployeeName: null,
+          date: new Date("2026-10-10T00:00:00Z"),
+          grandTotal: 555_000,
+          subtotal: 500_000,
+          discount: 0,
+          taxAmount: 55_000,
+        },
+      ],
+      returns: [
+        {
+          id: 62,
+          date: new Date("2026-10-15T00:00:00Z"),
+          salesInvoiceId: 21,
+          lines: [{ qty: 1, price: 100_000, returnDpp: null, returnVat: null }],
+        },
+      ],
+    })
+    expect(report.unattributed.hasLegacyReturnLines).toBe(true)
+    expect(report.unattributed.legacyReturnDeductionAmount).toBe(111_000)
+    const { container, root } = renderCard(<SalesTargetAchievementCard report={report} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Tanpa penjual (dokumen lama)")
+    expect(text).toContain("Retur legacy: Rp 111.000")
+    unmountCard(root)
+  })
+})
+
 describe("SalesTargetReconciliationCard F-2026-10-24-131-V", () => {
   function reconciliationExample() {
     const report = reportWithReturns()
