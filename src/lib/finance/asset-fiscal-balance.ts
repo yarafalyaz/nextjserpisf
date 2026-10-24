@@ -19,12 +19,10 @@
  *    beralasan terstruktur. DILARANG fallback garis lurus untuk metode
  *    tersimpan saldo menurun.
  *
- * Inti DITUNDA mengikuti Batas build F-109-V §4: migrasi
- * `fiscalMethod` kategori + tabel baris tahun `(assetId, taxYear)`
- * idempoten, loader `depreciation-difference` memakai `fiscalMethod`,
- * validasi simpan bangunan-SM — sesudah vonis merged + koordinasi
- * BOT 4 klaim schema. Fungsi ini kontrak hitung inti itu; baris yang
- * dihasilkan pemanggil bekukan apa adanya (snapshot P4).
+ * Inti (PR inti F-109-V): baris yang dihasilkan fungsi ini dibekukan
+ * pemanggil apa adanya ke `AssetFiscalYearRow` (snapshot P4, unik
+ * `(assetId, taxYear)`, generate idempoten); loader
+ * `depreciation-difference` membaca `fiscalMethod` + baris itu.
  */
 
 import { Prisma } from "@prisma/client"

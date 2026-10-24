@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { assetSchema } from "@/lib/validations/asset.schemas"
+import { Prisma } from "@prisma/client"
+import { assetCategorySchema, assetSchema } from "@/lib/validations/asset.schemas"
 
 const mocks = vi.hoisted(() => {
   const requirePermissionMock = vi.fn()
@@ -56,6 +57,10 @@ const mocks = vi.hoisted(() => {
     // Dokumen unit aktual UOP (F-118-V Putusan 2b).
     assetUsageRecord: {
       upsert: vi.fn().mockResolvedValue({ id: 1 }),
+    },
+    // Baris tahun saldo fiskal (F-109-V P4).
+    assetFiscalYearRow: {
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     assetGroup: {
       create: vi.fn(),
@@ -169,6 +174,7 @@ import {
   deleteAsset,
   disposeAsset,
   upsertAssetUsageRecord,
+  generateAssetFiscalYearRows,
   createAssetGroup,
   updateAssetGroup,
   deleteAssetGroup,
@@ -1510,5 +1516,103 @@ describe("upsertAssetUsageRecord (F-118-V Putusan 2b)", () => {
   it("fails validation without source name", async () => {
     const res = await upsertAssetUsageRecord(usageFd({ sourceName: "" }))
     expect(res?.success).toBe(false)
+  })
+})
+
+describe("generateAssetFiscalYearRows (F-109-V P4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    requirePermissionMock.mockResolvedValue({ id: 7 })
+    prismaMock.assetFiscalYearRow.createMany.mockResolvedValue({ count: 2 })
+  })
+
+  const genFd = (over: Record<string, string> = {}) =>
+    fd({ assetId: "100", throughYear: "2024", ...over })
+
+  function fiscalAsset(over: Record<string, unknown> = {}) {
+    return {
+      id: 100,
+      purchaseCost: new Prisma.Decimal(12_000_000),
+      purchaseDate: new Date(Date.UTC(2023, 0, 15)),
+      category: {
+        fiscalMethod: "declining_balance",
+        taxGroupCode: "GROUP_1",
+        taxTypeListed: true,
+        taxDjpDetermination: false,
+      },
+      fiscalYearRows: [],
+      ...over,
+    }
+  }
+
+  it("F109-6: membekukan baris baru snapshot SM; replay = nol baris baru", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(fiscalAsset())
+    const res = await generateAssetFiscalYearRows(genFd())
+    expect(res).toEqual({ success: true, created: 2, existing: 0 })
+    const arg = prismaMock.assetFiscalYearRow.createMany.mock.calls[0][0]
+    expect(arg.skipDuplicates).toBe(true)
+    expect(arg.data.map((r: { taxYear: number }) => r.taxYear)).toEqual([2023, 2024])
+    expect(arg.data[0].depreciation.toString()).toBe("6000000")
+    expect(arg.data[0].method).toBe("declining_balance")
+
+    // Replay: baris 2023+2024 sudah terbit -> tidak ada createMany.
+    prismaMock.assetFiscalYearRow.createMany.mockClear()
+    prismaMock.asset.findUnique.mockResolvedValue(fiscalAsset({
+      fiscalYearRows: [{ taxYear: 2023 }, { taxYear: 2024 }],
+    }))
+    const replay = await generateAssetFiscalYearRows(genFd())
+    expect(replay).toEqual({ success: true, created: 0, existing: 2 })
+    expect(prismaMock.assetFiscalYearRow.createMany).not.toHaveBeenCalled()
+  })
+
+  it("F109-4: metode fiskal NULL ditolak berisik, nol tulis", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(fiscalAsset({
+      category: { fiscalMethod: null, taxGroupCode: "GROUP_1", taxTypeListed: true, taxDjpDetermination: false },
+    }))
+    const res = await generateAssetFiscalYearRows(genFd())
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("belum dipilih")
+    expect(prismaMock.assetFiscalYearRow.createMany).not.toHaveBeenCalled()
+  })
+
+  it("F109-10: saldo pembuka berlabel opening; tanpa pasangan ditolak validasi", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(fiscalAsset())
+    const res = await generateAssetFiscalYearRows(genFd({ openingBalance: "5000000", openingYear: "2024" }))
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.assetFiscalYearRow.createMany.mock.calls[0][0]
+    expect(arg.data).toHaveLength(1)
+    expect(arg.data[0].source).toBe("opening")
+    expect(arg.data[0].openingBalance.toString()).toBe("5000000")
+
+    const unpaired = await generateAssetFiscalYearRows(genFd({ openingBalance: "5000000" }))
+    expect(unpaired?.success).toBe(false)
+  })
+
+  it("aset tidak ditemukan ditolak", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(null)
+    expect((await generateAssetFiscalYearRows(genFd()))?.success).toBe(false)
+  })
+})
+
+describe("assetCategorySchema fiscalMethod (F-109-V P1)", () => {
+  it("F109-3: bangunan + saldo menurun ditolak saat simpan", () => {
+    const bad = assetCategorySchema.safeParse({
+      name: "Gedung",
+      taxGroupCode: "BUILDING_PERMANENT",
+      fiscalMethod: "declining_balance",
+    })
+    expect(bad.success).toBe(false)
+    const ok = assetCategorySchema.safeParse({
+      name: "Gedung",
+      taxGroupCode: "BUILDING_PERMANENT",
+      fiscalMethod: "straight_line",
+    })
+    expect(ok.success).toBe(true)
+  })
+
+  it("metode di luar daftar sah ditolak; kosong = belum dipilih (sah)", () => {
+    expect(assetCategorySchema.safeParse({ name: "X", fiscalMethod: "units_of_production" }).success).toBe(false)
+    expect(assetCategorySchema.safeParse({ name: "X" }).success).toBe(true)
   })
 })
