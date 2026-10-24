@@ -78,6 +78,10 @@ export const createLeadSchema = z.object({
   source: optionalString(255),
   notes: optionalString(2000),
   assignedTo: optionalId,
+  // F-2026-10-24-141-S Model C: alasan wajib hanya bila server menemukan
+  // kandidat duplikat; divalidasi isi di lead-duplicate.service (bukan
+  // schema) karena kewajiban bersyarat pada hasil query kandidat.
+  duplicateOverrideReason: optionalString(2000),
 });
 
 // Lead status lifecycle (mirrors YaraERP). Only qualified+ may be converted.
