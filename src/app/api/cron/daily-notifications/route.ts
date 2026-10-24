@@ -104,6 +104,7 @@ export async function GET(request: Request) {
     warehouseLow = await loadWarehouseLowStock()
   } catch (loadError) {
     console.error("[daily-notifications] gagal menilai stok per gudang", loadError)
+    results.lowStockWarehouseError = 1
   }
   for (const line of warehouseLow.slice(0, 20)) {
     await notificationService.notifyUsersIfNew(
