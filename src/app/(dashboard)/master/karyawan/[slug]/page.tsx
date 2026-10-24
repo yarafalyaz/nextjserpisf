@@ -175,7 +175,11 @@ export default async function EmployeeDetailPage({
           },
         })
       : Promise.resolve([]),
-    getContractDecisionRequests(employee.id).catch(() => null),
+    getContractDecisionRequests(employee.id).catch((error) => {
+      // null = penanda gagal eksplisit: panel menampilkan decisionsError.
+      console.error("[Karyawan] Gagal memuat pengajuan keputusan kontrak", error)
+      return null
+    }),
     canEditProbation && probationInScope
       ? prisma.employee.findMany({
           where: {
