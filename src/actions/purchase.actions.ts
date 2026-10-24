@@ -1576,8 +1576,8 @@ export async function createVendorPayment(formData: FormData) {
     // Journal is NOT created here — it is posted only on confirmVendorPayment
     // to prevent draft/unconfirmed payments from affecting the GL.
 
-    // Route through approval workflow if one is configured for VendorPayment.
-    void (await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id)));
+    // Ajukan persetujuan bila workflow VendorPayment terkonfigurasi.
+    await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id));
 
     await logActivity(
       "create",
@@ -3088,8 +3088,8 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     // The journal + allocations are created atomically in confirmVendorPayment.
 
     // Edit membuka kembali pengajuan bila approval sebelumnya ditolak
-    // (resubmit); tanpa workflow terkonfigurasi ini no-op.
-    void (await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id)));
+    // (resubmit); tanpa workflow terkonfigurasi panggilan ini no-op.
+    if (payment.id) await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id));
 
     await logActivity(
       "update",
