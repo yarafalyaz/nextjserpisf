@@ -120,6 +120,7 @@ export default async function InvoiceDetailPage({
       price: true,
       unitOfMeasure: true,
       trackSerial: true,
+      isScrapSaleItem: true,
       uomConversions: { select: { code: true, factorToBase: true } },
     },
     orderBy: { name: "asc" },
@@ -270,6 +271,7 @@ export default async function InvoiceDetailPage({
                   price: Number(i.price ?? 0),
                   unitOfMeasure: i.unitOfMeasure,
                   trackSerial: i.trackSerial,
+                  isScrapSaleItem: i.isScrapSaleItem,
                   uomConversions: i.uomConversions.map((c) => ({ code: c.code, factorToBase: Number(c.factorToBase) })),
                 }))}
                 paidAmount={Number(invoice.paidAmount ?? 0)}
