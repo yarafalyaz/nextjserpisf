@@ -10,12 +10,12 @@ import { QuickAddSelect } from "@/components/ui/quick-add-select"
 import { QUICK_ADD } from "@/lib/quick-add/registry"
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { nextItemUid } from "@/lib/utils/item-uid"
-import { ReturnItemsSection, ReturnFormActions, ReturnDateAndReason } from "@/components/forms/return-items-section"
+import { ReturnItemsSection, ReturnFormActions, ReturnDateAndReason, ReturnTaxNoteFields } from "@/components/forms/return-items-section"
 
 interface SalesReturnFormProps {
   invoices: { id: number; documentNo: string
 }[]
-  returnData?: { id: number; customerId?: number; salesInvoiceId: number; date: string; reason?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string; serialNumbers?: string[]; batchNumbers?: string[] }> }
+  returnData?: { id: number; customerId?: number; salesInvoiceId: number; date: string; reason?: string | null; taxReturnNoteNumber?: string | null; taxReturnNoteDate?: string | null; items?: Array<{ itemId: number; qty: number; notes?: string; serialNumbers?: string[]; batchNumbers?: string[] }> }
   customers: { id: number; name: string }[]
   items: { id: number; sku: string; name: string }[]
 }
@@ -34,6 +34,7 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [date, setDate] = useState(returnData?.date ?? toLocalDateOnly(new Date()))
+  const [taxReturnNoteDate, setTaxReturnNoteDate] = useState(returnData?.taxReturnNoteDate ?? "")
   const [salesInvoiceId, setSalesInvoiceId] = useState(returnData?.salesInvoiceId ? String(returnData.salesInvoiceId) : "")
   const [customerId, setCustomerId] = useState(returnData?.customerId ? String(returnData.customerId) : "")
   const [customerOptions, setCustomerOptions] = useState(customers)
@@ -122,6 +123,12 @@ export function SalesReturnForm({ invoices, customers, items, returnData }: Sale
         </div>
 
         <ReturnDateAndReason date={date} setDate={setDate} reasonPlaceholder="Alasan pengembalian barang..." reasonDefault={returnData?.reason ?? ""} />
+
+        <ReturnTaxNoteFields
+          taxReturnNoteNumberDefault={returnData?.taxReturnNoteNumber ?? ""}
+          taxReturnNoteDate={taxReturnNoteDate}
+          setTaxReturnNoteDate={setTaxReturnNoteDate}
+        />
       </div>
 
       <ReturnItemsSection
