@@ -15,6 +15,8 @@ export interface VehicleReceivableInvoice {
   plateLabel: string | null
   grandTotal: unknown
   paidAmount: unknown
+  /** F-104-V opsional: returnCredit jurnal SalesReturn POSTED faktur ini. */
+  returnCreditAmount?: unknown
   dueDate: Date | null
 }
 
@@ -32,7 +34,8 @@ export function groupReceivablesByVehicle(
 ): VehicleReceivableRow[] {
   const groups = new Map<string, VehicleReceivableRow>()
   for (const inv of invoices) {
-    const outstanding = receivableOutstanding(inv.grandTotal as never, inv.paidAmount as never)
+    const settled = Number(inv.paidAmount ?? 0) + Number(inv.returnCreditAmount ?? 0)
+    const outstanding = receivableOutstanding(inv.grandTotal as never, settled as never)
     if (outstanding <= 0) continue
     const label = inv.plateLabel?.trim() ? inv.plateLabel : UNASSIGNED_VEHICLE_LABEL
     const row = groups.get(label) ?? {
