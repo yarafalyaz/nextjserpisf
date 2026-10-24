@@ -937,6 +937,11 @@ model Employee {
   employeePayrollComponents EmployeePayrollComponent[]
   department          Department?       @relation(fields: [departmentId], references: [id])
   position            Position?         @relation(fields: [positionId], references: [id])
+  // Jangkar perhitungan masa kerja untuk hak cuti tahunan. Kosong =
+  // dihitung dari joinDate. Terisi otomatis saat status berubah
+  // INTERN (magang) -> PKWT/PKWTT: masa magang tidak ikut terhitung,
+  // jam 1 tahun mulai dari tanggal mulai kontrak.
+  leaveEligibilityStartDate DateTime?   @map("leave_eligibility_start_date")
   user                User?             @relation(fields: [userId], references: [id])
   leaveRequests       LeaveRequest[]
   overtimeRequests    OvertimeRequest[]
