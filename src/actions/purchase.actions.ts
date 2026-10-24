@@ -2640,6 +2640,27 @@ export async function updateVendorBill(id: number, formData: FormData) {
       if (latestBill && latestBill.status !== "draft")
         throw new Error("Hanya tagihan draft yang dapat diedit");
 
+      // F-2026-10-24-133-V (temuan QA E133 atas PR #714): edit draft bertanda
+      // L3 mengulang penjaga create/confirm yang sama — WO closed+alasan,
+      // tanpa tautan PO hasil edit maupun GR existing (goodsReceiptId tidak
+      // berubah lewat edit), dan lolos guard duplikat selain dirinya. Tanpa
+      // ini draft non-L3 bisa diedit membawa penanda+tautan inkonsisten dan
+      // jejak L3 pada WO hilang. ActivityLog ditulis sesudah update di bawah.
+      const l3 = await resolveL3WorkOrder(tx, v.notes, "Tagihan vendor");
+      if (l3 && (v.purchaseOrderId || existingBill.goodsReceiptId)) {
+        throw new Error(L3_MSG.vendorBillLinked());
+      }
+      if (l3) {
+        await assertNoDuplicateL3(tx, {
+          workOrderId: l3.workOrder.id,
+          workOrderNo: l3.workOrder.documentNo,
+          vendorKey: `vendor:${v.vendorId}`,
+          amount: billHeader.grandTotal,
+          date: wibDateToUtcMidnight(v.date),
+          excludeSource: { sourceType: "VendorBill", sourceId: id },
+        });
+      }
+
       if (v.purchaseOrderId) {
         await tx.$executeRaw`SELECT id FROM purchase_orders WHERE id = ${v.purchaseOrderId} FOR UPDATE`;
       }
@@ -2681,6 +2702,21 @@ export async function updateVendorBill(id: number, formData: FormData) {
           status: "draft",
         },
       });
+
+      // Putusan 4(2): jejak L3 pada WO dalam tx edit yang sama.
+      if (l3) {
+        await writeL3ActivityLog(tx, {
+          workOrder: l3.workOrder,
+          sourceType: "VendorBill",
+          sourceId: updated.id,
+          sourceDocumentNo: updated.documentNo ?? existingBill.documentNo,
+          vendorKey: `vendor:${v.vendorId}`,
+          amount: billHeader.grandTotal,
+          date,
+          reason: l3.tag.reason,
+          userId: Number(user.id),
+        });
+      }
 
       // Replace the item lines with the submitted set so an edit round-trips the
       // goods (delete + recreate keeps the simple "last write wins" semantics).
