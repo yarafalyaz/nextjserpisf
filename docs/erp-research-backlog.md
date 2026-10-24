@@ -12916,3 +12916,330 @@ Status: PUTUSAN BOT 4 (kartu t_4410ee95, siklus standby 13:30). Dokumen saja; TA
 Klaim kepatuhan: perlakuan internal ISF berdasar PSAK 46/16/48 sebagai rujukan standar komersial (bukan dasar fiskal) + UU PPh Pasal 19/17 + PMK 79/PMK.03/2008 dari sumber resmi DJP di atas (akses 2026-10-23). BUKAN klaim laporan keuangan/SPT Tahunan sah, bukan penetapan DJP — pengakuan jurnal tangguhan tetap gerbang kebijakan + `BUTUH-VONIS-AKUNTAN` per kasus (F-112-V/F-124-V).
 
 ID vonis ini **F-2026-10-23-125-V** (tertinggi terverifikasi run ini di origin/main 0ad8f864: F-2026-10-23-121-V merged #637; 122-V PR #640, 123-V PR #643, 124-V PR #646 terbuka; 125 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge + urutan inti F-109 -> F-124 -> F-111 -> BOT 3 sumber tangguhan kedua -> BOT 2 -> BOT 6 E125-1..8.
+
+---
+
+## SPEC BOT 5 2026-10-24 — F-2026-10-24-095-S alur penautan klaim vendor atas part cacat garansi pelanggan (induk F-2026-10-21-022)
+
+Kartu t_b670e9f3. Spec DOKUMEN SAJA, tanpa kode produksi/schema/migrasi.
+Anti-duplikat run ini (basis origin/main 50e3e00b): grep `F-2026-10-24-095`
+di backlog+board main = 0 hasil; `-S` tertinggi terbit di main =
+F-2026-10-22-094-S; `F-2026-10-22-095-V` (vonis BOT 4 Q-TGT-1, PR #571
+terbuka) suffix beda (-V vonis, -S spec) bukan tabrakan. Temuan utama
+run ini: induk F-2026-10-21-022 SUDAH terbangun penuh di main (tautan +
+state machine + panel UI + jurnal recovery tahap 3 bergate) — spec ini
+BUKAN desain kosong; spec ini (a) merekonsiliasi nama status di kartu
+tugas dengan kosakata kode live, (b) membekukan aturan bisnis, gerbang
+bukti, dan batas akuntansi sebagai kontrak resmi, (c) mencatat celah
+sisa yang belum terbukti. Dilarang membangun ulang state machine kedua.
+
+### 0. Rekonsiliasi nama status (kartu tugas vs kode live)
+
+Kartu tugas menyebut: intake -> submitted_to_vendor -> vendor_approved /
+vendor_rejected -> completed / closed. Kosakata SAH di kode live
+BERBEDA dan yang berlaku adalah kode (TERVERIFIKASI-KODE):
+
+| Istilah kartu tugas | Status live yang setara | Bukti |
+|---|---|---|
+| intake (klaim vendor dibuka) | `drafted` (sesudah tautan lahir dari `none`) | warranty.service.ts:48-57,66 |
+| submitted_to_vendor | `sent` | warranty.service.ts:52,67 |
+| vendor_approved | `accepted` | warranty.service.ts:52,68-69 |
+| vendor_rejected | `rejected_supplier` | warranty.service.ts:53,70 |
+| (part fisik sudah kembali) | `returned` (cermin baca-silang PurchaseReturn) | warranty.service.ts:54,69-71 |
+| completed (recovery diterima) | `closed_recovered` (terminal) | warranty.service.ts:55,69,71 |
+| closed (tanpa recovery) | `closed_no_recovery` (terminal) | warranty.service.ts:56,69-70 |
+
+`intake` di kode live adalah status KLAIM PELANGGAN (bukan klaim
+vendor): `WARRANTY_CLAIM_STATUSES = intake, eligibility, approved,
+rejected, in_repair, closed` (warranty.service.ts:30-37). Memakai
+`intake` untuk klaim vendor = tabrakan makna; DILARANG. Bila BOT 1
+hendak mengganti kosakata vendor, itu migrasi data + perubahan service
+terpisah — BUKAN bagian spec ini; default spec: kosakata live dipertahankan.
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main 50e3e00b, 2026-10-24)
+
+Sudah ada (kuat, JANGAN diduplikasi):
+- Schema: `WarrantyClaim.supplierClaimVendorId/purchaseReturnId/
+  supplierClaimStatus` (default `none`) `/supplierClaimRefNo/
+  supplierClaimNotes/supplierClaimBy/supplierClaimAt` + relasi
+  `supplierClaimVendor` (Vendor, onDelete SetNull) dan `purchaseReturn`
+  (PurchaseReturn, onDelete SetNull) + index keduanya
+  (prisma/schema.prisma:4989-5009). Komentar schema sendiri menegaskan:
+  tautan saja tanpa jurnal prematur; status supplier TERPISAH dari
+  status klaim pelanggan (schema.prisma baris komentar F-2026-10-21-022
+  di atas kolom supplier).
+- State machine: `WARRANTY_SUPPLIER_CLAIM_STATUSES` +
+  `WARRANTY_SUPPLIER_CLAIM_TRANSITIONS` (R1–R8) +
+  `assertSupplierClaimTransition` (warranty.service.ts:48-74,402-408).
+  Terminal hanya `closed_recovered`/`closed_no_recovery`.
+- Lahir tautan: `linkSupplierClaim` (dengan PurchaseReturn draft) dan
+  `linkSupplierClaimVendorOnly` (tanpa PO asal) (warranty.service.ts:
+  479-590). Gerbang S0: klaim pelanggan wajib `approved/in_repair/
+  closed` DAN `resolutionType = replace` (:450-457). Guard retur:
+  retur wajib `draft`, vendor PO retur = vendor klaim, retur memuat
+  `coverage.itemId`, serial cocok bila `coverage.serialNumber` terisi,
+  retur belum tertaut klaim lain yang recovery-nya non-terminal
+  (:496-532). Vendor wajib ada + aktif (:459-471).
+- Transisi + bukti server: `transitionSupplierClaim` (warranty.service
+  .ts:607-688) — `sent` wajib refNo/resi + >=1 foto TransactionAttachment
+  referenceType `WarrantyClaim` + penyetuju != pembuat tautan;
+  `accepted` wajib refNo atau catatan bukti respons; `rejected_supplier`
+  wajib alasan; `returned` wajib PurchaseReturn tertaut sudah
+  `returned`; `closed_recovered` wajib retur `returned` ATAU catatan
+  nomor goods receipt pengganti; `closed_no_recovery` dari `accepted`
+  wajib admin + alasan, dari `rejected_supplier` wajib catatan
+  disposisi; lepas tautan ke `none` hanya dari `drafted` + alasan, dan
+  retur draft existing TIDAK ikut terhapus. Fungsi ini TIDAK PERNAH
+  mengubah status klaim pelanggan (:605 komentar + tidak ada tulis
+  `status` klaim di :675-687).
+- Aksi + izin: `linkSupplierClaimAction` gerbang `edit_warranty_claims`;
+  `transitionSupplierClaimAction`: `sent`/`closed_no_recovery` gerbang
+  `approve_warranty_claims`, langkah lain `edit_warranty_claims`;
+  actorIsAdmin dari role admin/super_admin (src/actions/
+  warranty.actions.ts:117-195). Permission nyata katalog:
+  view/create/edit/approve_warranty_claims
+  (src/lib/auth/module-catalog.generated.ts:257-260). TIDAK ada key
+  izin supplier-claim terpisah — dipakai ulang, jangan karang key baru
+  tanpa putusan BOT 1.
+- UI: panel `warranty-supplier-claim-panel.tsx` label + target transisi
+  disalin dari service (komentar ponytail di berkas: perbarui di PR yang
+  sama bila service berubah; tes panel mengunci); tombol `sent`/
+  `closed_no_recovery` hanya tampil ke pemegang approve. Kata label
+  live: Belum ditautkan / Draf klaim supplier / Terkirim ke supplier /
+  Diterima supplier / Ditolak supplier / Part sudah diretur / Tutup —
+  recovery diterima / Tutup — tanpa recovery.
+- PurchaseReturn: model existing (prisma/schema.prisma:1992),
+  `purchaseOrderId` NOT NULL (karena itu retur tanpa PO asal mustahil
+  lahir — jalur vendor-only §6 service adalah jawaban sah, PO/retur
+  dummy DILARANG); proses retur existing `processPurchaseReturn`
+  (src/actions/purchase.actions.ts:1870) menggerakkan stok/jurnal retur
+  dan mengeset status `returned` — klaim supplier hanya MEMBACA status
+  itu (baca-silang), tidak memproses retur dari panel garansi.
+- Jurnal tahap 3 SUDAH ada dan bergate: `postWarrantySupplierRecovery
+  Journal` E3 (src/lib/services/warranty-journal.service.ts:249-330):
+  hanya status `accepted`/`closed_recovered` + bukti lampiran + WO
+  repair tertaut + nominal > 0 dan <= biaya klaim terverifikasi + akun
+  110508/510104 ter-mapping (fail-closed) + periode terbuka +
+  anti-dobel jurnal per klaim. Jurnal: Dr Piutang Klaim Supplier
+  (110508) / Cr Beban Garansi (510104) — pemulihan biaya, BUKAN
+  pendapatan. UI gate `canPostWarrantySupplierRecovery` (accepted/
+  closed_recovered + repairWorkOrderId) di warranty-journal-route-
+  status.ts:99-110. Vonis dasar: warranty-accounting.ts:31-35,58
+  (PSAK 57: aset recovery hanya bila hampir pasti/virtually certain;
+  belum hampir pasti = tanpa jurnal, cukup pengungkapan kontinjensi).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN spec resmi -S untuk alur ini sebelum spec ini (hanya komentar
+  kode "spec F-022-S §3/§6" dirujuk warranty.service.ts:60,593 tanpa
+  dokumen backlog) — celah yang ditutup spec ini.
+- PARSIAL yang belum terverifikasi run ini (jangan klaim selesai):
+  apakah ada daftar/laporan lintas klaim "recovery supplier masih
+  berjalan" (aging klaim vendor terbuka) — grep run ini tidak menelusur
+  read-model laporan supplier-claim; panel per klaim sudah ada.
+  Status: BELUM TERVERIFIKASI, bukan ABSEN terbukti.
+
+### 2. Workflow specification (alur + aktor + dokumen)
+
+Aktor: Staf garansi/purnajual (edit), Pejabat penilai klaim (approve,
+pihak yang memutus klaim pelanggan), Admin (tutup tanpa recovery dari
+accepted), Gudang/pembelian (pemilik PurchaseReturn + proses retur),
+Akuntansi (posting E3, gerbang approve).
+
+Dokumen masuk: WarrantyClaim pelanggan berstatus approved/in_repair/
+closed + resolutionType replace; WarrantyCoverage (itemId +
+serialNumber acuan); Vendor aktif; PurchaseReturn draft existing
+(dibuat terpisah lewat jalur pembelian existing) ATAU tanpa retur
+(vendor-only). Dokumen keluar: SATU baris WarrantyClaim diperbarui
+(kolom supplier*), PurchaseReturn yang sama diproses jalur existing,
+jurnal E3 (bila syarat tahap 3 terpenuhi, aksi akuntansi terpisah).
+
+Alur:
+1. Klaim pelanggan diputus approved + replace (jalur F-021 existing).
+   Tanpa itu tautan vendor DITOLAK server (S0).
+2. Staf menautkan: pilih vendor aktif + (a) PurchaseReturn draft milik
+   vendor itu yang memuat item+serial cakupan, status supplier jadi
+   `drafted`; atau (b) vendor-only + catatan wajib alasan tanpa PO
+   asal, purchaseReturnId tetap NULL.
+3. Pejabat mengirim (`sent`): nomor klaim/resi + foto bukti part cacat
+   wajib; pengirim != pembuat tautan (pemisahan tugas server).
+4. Respons vendor dicatat: `accepted` (bukti respons wajib) atau
+   `rejected_supplier` (alasan wajib).
+5. Bila vendor meminta part fisik kembali: PurchaseReturn diproses
+   jalur pembelian existing sampai `returned`; staf mencatat
+   `returned` (server baca-silang menolak bila retur belum returned).
+   Bila vendor tidak meminta fisik kembali, langkah ini dilewati sah.
+6. Penutup: `closed_recovered` (retur returned ATAU catatan nomor GR
+   pengganti) atau `closed_no_recovery` (dari rejected: catatan
+   disposisi; dari accepted: hanya admin + alasan).
+7. Akuntansi (terpisah, opsional per klaim): sesudah `accepted`,
+   posting E3 memunculkan piutang klaim supplier sebesar nominal
+   hampir pasti (<= biaya klaim). Penagihan/penyelesaian piutang itu
+   di luar state machine ini (dokumen pembayaran existing; jangan
+   menambah status `paid` di klaim supplier tanpa vonis BOT 4).
+
+### 3. Role/permission matrix (TERVERIFIKASI-KODE, katalog live)
+
+| Aksi | view_warranty_claims | edit_warranty_claims | approve_warranty_claims | Admin (role) |
+|---|---|---|---|---|
+| Lihat klaim + panel supplier | Ya | Ya | Ya | Ya |
+| Tautkan vendor (+retur draft / vendor-only) | Tidak | Ya | Ya | Ya |
+| Lepas tautan (drafted -> none, alasan wajib) | Tidak | Ya | Ya | Ya |
+| Kirim ke vendor (sent) | Tidak | Tidak | Ya (+ != pembuat tautan) | Ya bila approve |
+| Catat accepted / rejected_supplier / returned | Tidak | Ya | Ya | Ya |
+| Tutup recovered | Tidak | Ya | Ya | Ya |
+| Tutup tanpa recovery | Tidak | Tidak | Ya | Dari accepted: wajib admin |
+| Posting jurnal E3 recovery | Tidak | Tidak | Ya (aksi jurnal existing) | Ya bila approve |
+
+Tanpa izin di atas: fail-closed (requirePermission melempar). Tidak
+ada izin supplier-claim baru diusulkan tahap ini (USULAN ditolak:
+key baru = migrasi izin + seed peran, YAGNI selama katalog existing
+mengekspresikan pemisahan edit/approve yang dibutuhkan).
+
+### 4. Status-transition matrix (supplier, TERVERIFIKASI-KODE R1–R8)
+
+| Dari | Pemicu | Ke | Penjaga server |
+|---|---|---|---|
+| none | Tautkan (retur draft / vendor-only) | drafted | Klaim approved/in_repair/closed + replace; vendor aktif; guard item/serial/vendor retur; retur belum tertaut klaim aktif lain |
+| drafted | Kirim | sent | approve; refNo/resi + >=1 foto; pengirim != pembuat tautan |
+| drafted | Lepas tautan | none | edit; alasan wajib; purchaseReturnId dikosongkan di klaim, retur draft existing tidak dihapus |
+| sent | Vendor menerima | accepted | Bukti respons (refNo atau catatan) wajib |
+| sent | Vendor menolak | rejected_supplier | Alasan wajib |
+| accepted | Part fisik sudah diretur | returned | PurchaseReturn tertaut berstatus returned (baca-silang) |
+| accepted | Recovery diterima tanpa retur fisik | closed_recovered | Catatan nomor GR pengganti wajib bila retur belum returned |
+| accepted | Tutup tanpa recovery | closed_no_recovery | approve + admin + alasan wajib |
+| rejected_supplier | Disposisi selesai | closed_no_recovery | Catatan disposisi wajib |
+| returned | Recovery diterima | closed_recovered | (retur sudah returned) |
+| closed_recovered / closed_no_recovery | — | (terminal) | Tidak ada transisi keluar |
+
+Matriks klaim pelanggan TIDAK berubah dan berjalan independen:
+intake -> eligibility -> approved/rejected -> in_repair -> closed
+(warranty.service.ts:77-84). Klaim pelanggan BOLEH `closed` sementara
+klaim supplier masih `drafted/sent/accepted/returned` — tidak ada
+penjaga yang menahan penutupan klaim pelanggan demi recovery supplier,
+dan transisi supplier tidak pernah menulis status klaim pelanggan
+(BR-SUPP-02).
+
+### 5. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SUPP-01 | Tautan supplier hanya lahir dari klaim pelanggan approved/in_repair/closed beresolusi replace; repair/reject tidak melahirkan klaim vendor | TERVERIFIKASI-KODE warranty.service.ts:450-457 |
+| BR-SUPP-02 | Status supplier dan status pelanggan dua state machine terpisah; pelanggan boleh closed duluan; supplier tidak pernah mengubah status pelanggan | TERVERIFIKASI-KODE schema komentar F-022 + warranty.service.ts:605-688 |
+| BR-SUPP-03 | PurchaseReturn ditautkan hanya saat masih draft; vendor PO retur = vendor klaim; retur memuat item cakupan; serial cocok bila cakupan berserial; satu retur tidak melayani dua klaim aktif bersamaan | TERVERIFIKASI-KODE warranty.service.ts:496-532 |
+| BR-SUPP-04 | Vendor meminta part fisik kembali -> alur retur existing yang memproses sampai returned; status supplier `returned` adalah cermin baca-silang, bukan input bebas dan bukan proses retur dari panel garansi | TERVERIFIKASI-KODE warranty.service.ts:60-61,644-653; purchase.actions.ts:1870 |
+| BR-SUPP-05 | Tanpa PO asal: jalur vendor-only sah (vendor + ref manual + catatan wajib); PO/retur dummy DILARANG karena PurchaseReturn.purchaseOrderId NOT NULL | TERVERIFIKASI-KODE warranty.service.ts:552-590; schema.prisma:1992 PurchaseReturn |
+| BR-SUPP-06 | Bukti per langkah ditegakkan server (foto+resi+SoD di sent; bukti respons di accepted; alasan di rejected/lepas; GR/disposisi/admin di penutup) — UI menyembunyikan tombol tanpa izin tetapi server penjaga final | TERVERIFIKASI-KODE warranty.service.ts:624-673; warranty.actions.ts:158-181 |
+| BR-SUPP-07 | TIDAK ada jurnal piutang/recovery pada none/drafted/sent/rejected_supplier/returned. Jurnal E3 hanya accepted/closed_recovered + bukti + nominal <= biaya klaim terverifikasi + akun ter-mapping + periode terbuka + anti-dobel. Dr 110508 / Cr 510104 (pemulihan biaya, bukan pendapatan) | TERVERIFIKASI-KODE warranty-journal.service.ts:249-330; vonis dasar warranty-accounting.ts:31-35 PSAK 57 hampir pasti — angka/akun final tetap milik BOT 4, spec ini tidak mengubahnya |
+| BR-SUPP-08 | Recovery melebihi biaya klaim terverifikasi DITOLAK (plafon biaya); nilai part pengganti/gratifikasi vendor di luar biaya klaim bukan recovery garansi — perlakuan selisihnya BUTUH-VONIS BOT 4 sebelum dicatat apa pun | Plafon: TERVERIFIKASI-KODE warranty-journal.service.ts:273-277; selisih: BUTUH-VONIS |
+| BR-SUPP-09 | Lepas tautan hanya dari drafted + alasan; melepaskan klaim tidak menghapus/mengubah PurchaseReturn draft existing (dokumen pembelian berdiri sendiri) | TERVERIFIKASI-KODE warranty.service.ts:671-673,683 |
+| BR-SUPP-10 | Kata tampil memakai label live panel (Terkirim ke supplier, Diterima supplier, dst.); istilah kartu tugas submitted_to_vendor/vendor_approved TIDAK dipakai di UI/dokumen | TERVERIFIKASI-KODE warranty-supplier-claim-panel.tsx label live; rekonsiliasi §0 spec ini |
+| BR-SUPP-11 | Daftar aging "klaim vendor masih terbuka" lintas klaim (untuk tindak lanjut distributor) BELUM terverifikasi ada; bila dibangun: baca-saja, populasi = supplierClaimStatus non-terminal dan bukan none, tanpa jurnal/tanpa mutasi | USULAN (gap belum terbukti ABSEN; verifikasi BOT 3 dulu) |
+| BR-SUPP-12 | Penyelesaian piutang E3 (pelunasan vendor: part pengganti masuk GR / nota kredit / kas) tidak menambah status baru di klaim supplier tanpa vonis BOT 4; closed_recovered menutup alur klaim, penyelesaian piutang hidup di dokumen pembayaran/GR existing | USULAN batas + BUTUH-VONIS untuk bentuk penyelesaian |
+
+### 6. Batas akuntansi (mengikat, PSAK 57)
+
+- Sebelum `accepted`: recovery = aset kontinjensi (PSAK 57 par 31-35
+  via warranty-accounting.ts) — tanpa jurnal, tanpa piutang, tanpa
+  net-off ke provisi/beban garansi. Status operasional selain
+  accepted/closed_recovered TIDAK PERNAH memicu jurnal (E3 menolak
+  berisik, bukan diam).
+- `accepted` = ambang hampir pasti yang dipakai implementasi live.
+  Apakah bukti respons vendor tertentu (email vs surat resmi vs GR
+  pengganti) cukup sebagai "hampir pasti" per kasus = penilaian BOT 4
+  saat audit, BUKAN diubah spec ini. Tahap 3 di kartu tugas ("butuh
+  vonis BOT Accountant") secara kode SUDAH terimplementasi bergate di
+  E3; yang masih terbuka untuk BOT 4: (a) konfirmasi ambang bukti
+  hampir pasti, (b) perlakuan selisih recovery > biaya (BR-SUPP-08),
+  (c) bentuk penyelesaian piutang (BR-SUPP-12), (d) PPN atas nota
+  retur/kredit vendor mengikuti jalur PurchaseReturn existing
+  (taxReturnNoteNumber F-004) — jangan buat perlakuan pajak kedua di
+  klaim supplier.
+
+### 7. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF hari ini (TERVERIFIKASI-KODE) | Spec 095-S |
+|---|---|---|---|---|
+| Klaim pelanggan/garansi | Ada Klaim Pelanggan https://help.accurate.id/product/penjualan/ | Tanpa modul garansi resmi (fasilitas https://help.zahironline.com/portal/id/kb/articles/fasilitas-yang) | Ada F-021 coverage+claim | Tidak diubah |
+| Retur pembelian ke supplier | Ada (retur pembelian penjualan/pembelian umum) | Ada retur umum | Ada PurchaseReturn + proses returned | Dipakai apa adanya, ditautkan |
+| Klaim vendor tertaut klaim pelanggan per serial | Tidak ditemukan sebagai rantai garansi-serial di help resmi yang dirujuk backlog F-021/F-022 | Tidak ada modul setara | ADA: tautan vendor+retur+serial guard F-022 | Dibekukan spec ini |
+| State machine recovery vendor terpisah dari klaim pelanggan | Tidak diteliti sebagai fitur bernama | Tidak ada | ADA R1-R8 | Kontrak §4 |
+| Jurnal recovery hanya saat hampir pasti | Perlakuan akuntansi internal produk, tidak diklaim | Tidak diklaim | ADA E3 bergate PSAK 57 | Batas §6, vonis lanjutan BOT 4 |
+
+Benchmark di atas BENCHMARK terbatas pada URL yang sudah dirujuk
+backlog F-021/F-022 (akses 2026-10-21); run ini tidak mengakses ulang
+help Accurate/Zahir — jangan kutip sebagai verifikasi live 2026-10-24.
+
+### 8. Acceptance criteria AC-SUPP-1..8 (falsifikasi BOT 6)
+
+- AC-SUPP-1: Klaim pelanggan rejected / beresolusi repair / masih
+  intake-eligibility TIDAK bisa ditautkan vendor (server menolak);
+  membuka gerbang S0 = MERAH (BR-SUPP-01).
+- AC-SUPP-2: Retur non-draft, retur vendor lain, retur tanpa item
+  cakupan, serial retur != serial cakupan (bila berserial), retur yang
+  sudah melayani klaim aktif lain: masing-masing ditolak server saat
+  tautan; melonggarkan satu guard = MERAH (BR-SUPP-03).
+- AC-SUPP-3: Sent tanpa refNo/resi, tanpa foto bukti, atau oleh pembuat
+  tautan sendiri: ditolak; accepted tanpa bukti respons, rejected
+  tanpa alasan: ditolak (BR-SUPP-06).
+- AC-SUPP-4: Status supplier `returned` mustahil dicatat saat
+  PurchaseReturn tertaut belum `returned`; memalsukan returned tanpa
+  retur = MERAH (BR-SUPP-04).
+- AC-SUPP-5: Klaim pelanggan ditutup (closed) saat supplier masih
+  sent/accepted BERHASIL dan tidak mengubah status supplier; transisi
+  supplier tidak mengubah status pelanggan (dua arah dibuktikan)
+  (BR-SUPP-02).
+- AC-SUPP-6: Jurnal E3 pada drafted/sent/rejected_supplier/returned
+  DITOLAK dan nol jurnal lahir; pada accepted dengan akun 110508/
+  510104 kosong DITOLAK fail-closed; nominal > biaya klaim DITOLAK;
+  posting kedua untuk klaim sama DITOLAK anti-dobel (BR-SUPP-07/08).
+- AC-SUPP-7: Tanpa edit_warranty_claims tautan/transisi pencatatan
+  ditolak; tanpa approve_warranty_claims sent + closed_no_recovery
+  ditolak; closed_no_recovery dari accepted oleh non-admin ditolak
+  (matriks §3).
+- AC-SUPP-8: Lepas tautan dari drafted mengosongkan purchaseReturnId
+  klaim tetapi PurchaseReturn draft existing tetap ada utuh;
+  closed_recovered/closed_no_recovery terminal (transisi keluar apa
+  pun ditolak); vendor-only tanpa catatan ditolak dan nol PO/retur
+  dummy lahir (BR-SUPP-05/09).
+
+Edge cases tercatat: klaim berserial kosong (guard serial dilewati
+sah, hanya item dicocokkan); vendor dinonaktifkan sesudah tautan
+(tautan existing tidak dicabut otomatis — transisi lanjut memakai
+vendor tersimpan; penggantian vendor = lepas + taut ulang dari
+drafted, di luar drafted tidak ada ganti vendor); retur tertaut
+dibatalkan jalur pembelian (status supplier tidak ikut berubah
+otomatis — staf menutup no_recovery/lepas sesuai bukti, server
+baca-silang saat returned/closed_recovered akan menolak retur yang
+tidak returned); foto bukti dihapus sesudah sent (E3 menghitung ulang
+lampiran saat posting — bukti hilang = E3 menolak).
+
+### 9. Backlog implementasi (turunan spec F-2026-10-24-095-S)
+
+1. BOT 1: terima rekonsiliasi kosakata §0 (live dipertahankan) +
+   putus BR-SUPP-11 (aging klaim vendor dibuka/tidak) bila spec merged.
+2. BOT 3 (@backend-prisma-inventory-workshop): TIDAK ada inti baru
+   untuk state machine/tautan/E3 (sudah live). Satu-satunya verifikasi
+   diminta: telusur read-model laporan klaim supplier terbuka untuk
+   BR-SUPP-11 (ada/belum + file:line), laporkan sebelum UI apa pun.
+3. BOT 2 (@frontend-ui-ux-next-js): TIDAK ada UI baru dari spec ini
+   (panel live). Hanya bila BR-SUPP-11 dibuka BOT 1: tampilkan daftar
+   apa adanya dari read-model BOT 3, label §5/BR-SUPP-10, nol hitung
+   status di UI.
+4. BOT 6: AC-SUPP-1..8 atas implementasi live (falsifikasi guard
+   server, bukan hanya tes panel).
+5. BOT 4 (@accounting-finance-tax): vonis lanjutan §6 (a)-(d) —
+   ambang bukti hampir pasti, selisih > biaya, bentuk penyelesaian
+   piutang E3, konfirmasi jalur pajak retur existing cukup. Spec ini
+   tidak membuka jurnal baru.
+
+### Yang TIDAK diusulkan run ini
+- State machine / kosakata status kedua (submitted_to_vendor dst.):
+  duplikasi makna dengan kode live; rekonsiliasi §0 menutupnya.
+- Izin supplier-claim baru, kolom schema baru, tabel klaim vendor
+  terpisah: model existing mengekspresikan seluruh alur; YAGNI.
+- Auto-buat PurchaseReturn dari panel garansi: retur adalah dokumen
+  pembelian ber-jurnal/stok; lahirnya tetap jalur pembelian existing.
+- Portal/klaim otomatis ke vendor (email/API distributor keluar):
+  kanal keluar tidak ada; pencatatan manual berjejak cukup.
+- Status `paid/lunas` di klaim supplier: penyelesaian piutang =
+  dokumen pembayaran existing + vonis BOT 4 (BR-SUPP-12).
