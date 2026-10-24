@@ -1,5 +1,11 @@
 import { z } from "zod"
 import { dateOnly } from "@/lib/validations/finance.schemas"
+import {
+  fiscalGroupRule,
+  isFiscalGroupCode,
+  isFiscalMethodAllowed,
+} from "@/lib/finance/asset-fiscal-groups"
+import { DEPRECIATION_METHODS } from "@/lib/finance/asset-depreciation"
 
 // ==================== Helpers ====================
 
@@ -45,10 +51,103 @@ export const assetCategorySchema = z.object({
   usefulLife: optionalNum(0),
   taxDepreciationRate: optionalNum(0),
   taxUsefulLife: optionalNum(0),
+  // Kelompok fiskal PMK 72/2023 (vonis F-2026-10-22-062-V Putusan 2): kode di
+  // luar daftar statutoris ditolak; kosong = belum dinyatakan (bukan tebakan).
+  taxGroupCode: z
+    .string()
+    .refine((v) => isFiscalGroupCode(v), "Kelompok fiskal tidak dikenal")
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
+  // parseFormData sudah mengubah "true"/"false" FormData menjadi boolean dan
+  // string kosong menjadi undefined, jadi di sini cukup boolean opsional.
+  taxTypeListed: z.boolean().optional(),
+  taxDjpDetermination: z.boolean().optional(),
+  // Metode fiskal terpilih (vonis F-2026-10-23-109-V P1): kosong = belum
+  // dipilih (fiskal belum-dihitung, bukan fallback garis lurus). Nilai di
+  // luar dua metode sah ditolak; bangunan + saldo menurun ditolak di
+  // `superRefine` bawah (butuh kelompok fiskal).
+  fiscalMethod: z
+    .enum(["straight_line", "declining_balance"], {
+      error: "Metode fiskal tidak dikenal",
+    })
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   assetAccountId: optionalRefId,
   accumulatedDepreciationAccountId: optionalRefId,
   depreciationExpenseAccountId: optionalRefId,
   gainLossAccountId: optionalRefId,
+  // Mapping peristiwa perubahan aset (F-2026-10-23-111-V/128-V): nullable
+  // fail-closed; kosong = peristiwa terkait ditolak berisik di service.
+  revaluationSurplusAccountId: optionalRefId,
+  impairmentLossAccountId: optionalRefId,
+  accumulatedImpairmentAccountId: optionalRefId,
+}).superRefine((data, ctx) => {
+  // Bangunan hanya garis lurus (UU PPh Pasal 11, vonis F-109-V P1/F109-3):
+  // saldo menurun pada kelompok bangunan ditolak saat simpan. Kelompok
+  // kosong/tak dikenal tidak ditebak di sini — read-model menolaknya lagi.
+  if (data.fiscalMethod && data.taxGroupCode) {
+    const rule = fiscalGroupRule(data.taxGroupCode)
+    if (rule && !isFiscalMethodAllowed(data.fiscalMethod, rule)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["fiscalMethod"],
+        message: "Bangunan hanya boleh garis lurus; metode saldo menurun ditolak untuk kelompok bangunan.",
+      })
+    }
+  }
+})
+
+// ==================== Asset Change Event (F-111-V + F-115-V) ====================
+
+const requiredStr200 = (msg: string) =>
+  z.string({ error: msg }).trim().min(1, msg).max(200, msg)
+
+export const assetChangeEventSchema = z.object({
+  assetId: requiredId("Aset"),
+  kind: z.enum([
+    "REVALUATION_UP",
+    "REVALUATION_DOWN",
+    "IMPAIRMENT",
+    "IMPAIRMENT_REVERSAL",
+    "FISCAL_REVALUATION_APPROVED",
+    "COMMERCIAL_METHOD_CHANGE",
+    "FISCAL_METHOD_CHANGE",
+    "ESTIMATE_CHANGE",
+  ]),
+  effectiveDate: dateOnly,
+  sourceDocumentKey: requiredStr200("Kunci dokumen sumber wajib diisi"),
+  fairValue: z.coerce.number().min(0).optional(),
+  appraiserName: optionalStr(200),
+  appraiserReportRef: optionalStr(200),
+  revaluedClassName: optionalStr(200),
+  impairmentIndicator: optionalStr(60),
+  recoverableBasis: optionalStr(40),
+  recoverableAmount: z.coerce.number().min(0).optional(),
+  carryingWithoutImpairment: z.coerce.number().min(0).optional(),
+  isGoodwillOrNonAmortizing: z.boolean().optional(),
+  djpApprovalNumber: optionalStr(100),
+  djpApprovalDate: optionalDate,
+  reasonCode: optionalStr(60),
+  approvedByName: optionalStr(200),
+  newMethod: optionalStr(40),
+  newUsefulLifeMonths: z.coerce.number().int().positive().optional(),
+  newResidualValue: z.coerce.number().min(0).optional(),
+  isBuildingFiscal: z.boolean().optional(),
+})
+
+export const assetReclassificationSchema = z.object({
+  assetId: requiredId("Aset"),
+  toCategoryId: requiredId("Kategori tujuan"),
+  effectiveDate: dateOnly,
+  sourceDocumentKey: requiredStr200("Kunci dokumen sumber wajib diisi"),
+  reasonCode: requiredStr200("Alasan reklasifikasi wajib diisi"),
+  approvedByName: requiredStr200("Penyetuju reklasifikasi wajib bernama"),
+})
+
+export const assetChangeEventReversalSchema = z.object({
+  eventId: requiredId("Peristiwa"),
+  reversalDate: dateOnly,
+  sourceDocumentKey: requiredStr200("Kunci dokumen sumber wajib diisi"),
 })
 
 // ==================== Asset Brand ====================
@@ -125,7 +224,26 @@ export const assetSchema = z.object({
   purchaseDate: optionalDate,
   purchasePrice: optionalNum(0),
   residualValue: optionalNum(0),
-  depreciationMethod: optionalStr(50),
+  // Parameter terbekukan per aset (vonis F-2026-10-23-118-V Putusan 2a):
+  // UOP wajib total estimasi unit + satuan bernama; SYD wajib masa manfaat
+  // bulan integer. Kosong pada metode analitis = mesin menolak berisik
+  // (missing-parameter), bukan ditebak dari kategori fiskal.
+  totalEstimatedUnits: optionalNum(0),
+  productionUnitName: optionalStr(50),
+  usefulLifeMonths: z.coerce
+    .number()
+    .int("Masa manfaat harus bilangan bulat bulan")
+    .positive("Masa manfaat harus lebih dari 0")
+    .optional(),
+  // Metode penyusutan hanya dari daftar terdaftar (vonis F-2026-10-22-062-V
+  // Putusan 2): string bebas di luar daftar ditolak di sini, dan metode
+  // analitis NON-GL ditolak lagi oleh cron saat akan memposting jurnal.
+  depreciationMethod: z
+    .enum(DEPRECIATION_METHODS, {
+      error: "Metode penyusutan tidak dikenal",
+    })
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   location: optionalStr(200),
   status: optionalStr(50),
   description: optionalStr(1000),
@@ -138,4 +256,52 @@ export const assetDisposalSchema = z.object({
   proceeds: optionalNum(0),
   disposalDate: optionalDate,
   reason: optionalStr(500),
+})
+
+// ==================== Asset Usage Record (F-118-V Putusan 2b) ====================
+
+/** Dokumen unit aktual bernama per (aset, masa) untuk metode UOP. */
+export const assetUsageRecordSchema = z.object({
+  assetId: requiredId("Aset"),
+  periodYear: z.coerce
+    .number({ error: "Tahun masa wajib diisi" })
+    .int("Tahun masa harus bilangan bulat")
+    .min(2000, "Tahun masa tidak sah")
+    .max(2100, "Tahun masa tidak sah"),
+  periodMonth: z.coerce
+    .number({ error: "Bulan masa wajib diisi" })
+    .int("Bulan masa harus bilangan bulat")
+    .min(1, "Bulan masa 1-12")
+    .max(12, "Bulan masa 1-12"),
+  actualUnits: z.coerce
+    .number({ error: "Unit aktual wajib diisi" })
+    .min(0, "Unit aktual tidak boleh negatif"),
+  sourceName: requiredStr("Nama dokumen sumber wajib diisi", 200),
+  sourceRef: optionalStr(200),
+})
+
+// ==================== Asset Fiscal Year Generate (F-109-V P4) ====================
+
+const fiscalYearField = (label: string) => z.coerce
+  .number({ error: `${label} wajib diisi` })
+  .int(`${label} harus bilangan bulat`)
+  .min(2000, `${label} tidak sah`)
+  .max(2100, `${label} tidak sah`)
+
+/** Generate baris tahun saldo fiskal satu aset sampai `throughYear` (idempoten). */
+export const assetFiscalYearGenerateSchema = z.object({
+  assetId: requiredId("Aset"),
+  throughYear: fiscalYearField("Tahun sampai"),
+  // Rekonstruksi aset lama (P3): saldo pembuka bertanggal berlabel opening.
+  // Keduanya wajib berpasangan; tanpa pasangan = mulai dari purchaseCost.
+  openingBalance: optionalNum(0),
+  openingYear: fiscalYearField("Tahun pembuka").optional(),
+}).superRefine((data, ctx) => {
+  if ((data.openingBalance == null) !== (data.openingYear == null)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["openingYear"],
+      message: "Saldo pembuka dan tahun pembuka wajib diisi berpasangan.",
+    })
+  }
 })

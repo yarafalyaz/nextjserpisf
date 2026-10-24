@@ -20,6 +20,10 @@ const mocks = vi.hoisted(() => ({
   departmentHolidayFindMany: vi.fn(),
   notifyUsersIfNew: vi.fn(),
   notificationFindFirst: vi.fn(),
+  itemFindMany: vi.fn(),
+  itemWarehouseSettingFindMany: vi.fn(),
+  inventoryLayerFindMany: vi.fn(),
+  warehouseFindMany: vi.fn(),
 }))
 
 vi.mock("@/lib/security/cron", () => ({
@@ -35,6 +39,10 @@ vi.mock("@/lib/services/notification.service", () => ({
 vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     user: { findMany: (...a: unknown[]) => mocks.userFindMany(...a) },
+    item: { findMany: (...a: unknown[]) => mocks.itemFindMany(...a) },
+    itemWarehouseSetting: { findMany: (...a: unknown[]) => mocks.itemWarehouseSettingFindMany(...a) },
+    inventoryLayer: { findMany: (...a: unknown[]) => mocks.inventoryLayerFindMany(...a) },
+    warehouse: { findMany: (...a: unknown[]) => mocks.warehouseFindMany(...a) },
     $queryRaw: (...a: unknown[]) => mocks.queryRaw(...a),
     salesInvoice: {
       findMany: (...a: unknown[]) => mocks.salesInvoiceFindMany(...a),
@@ -92,6 +100,10 @@ describe("GET /api/cron/daily-notifications", () => {
     mocks.workScheduleFindMany.mockResolvedValue([])
     mocks.holidayFindMany.mockResolvedValue([])
     mocks.departmentHolidayFindMany.mockResolvedValue([])
+    mocks.itemFindMany.mockResolvedValue([])
+    mocks.itemWarehouseSettingFindMany.mockResolvedValue([])
+    mocks.inventoryLayerFindMany.mockResolvedValue([])
+    mocks.warehouseFindMany.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -319,6 +331,28 @@ describe("GET /api/cron/daily-notifications", () => {
 
     // And the user table must have been queried exactly once
     expect(mocks.userFindMany).toHaveBeenCalledTimes(1)
+  })
+
+  it("F-070-S: notifikasi pasangan menipis menyebut gudang (AC-MS-4)", async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date("2026-06-12T08:00:00"))
+    mocks.itemFindMany.mockResolvedValue([{ id: 1, name: "Busi", minStock: 5 }])
+    mocks.itemWarehouseSettingFindMany.mockResolvedValue([])
+    mocks.inventoryLayerFindMany.mockResolvedValue([
+      { itemId: 1, warehouseId: 1, remaining: 100 },
+      { itemId: 1, warehouseId: 2, remaining: 3 },
+    ])
+    mocks.warehouseFindMany.mockResolvedValue([
+      { id: 1, name: "Gudang Pusat" },
+      { id: 2, name: "Gudang Bengkel" },
+    ])
+    const res = await GET(makeReq())
+    const json = await res.json()
+    expect(json.results.lowStockWarehouse).toBe(1)
+    const call = mocks.notifyUsersIfNew.mock.calls.find((c) => String(c[1]).includes("Gudang Bengkel"))
+    expect(call).toBeDefined()
+    expect(String(call![1])).toBe("Stok Busi Menipis di Gudang Bengkel")
+    expect(String(call![2])).toContain("Stok di Gudang Bengkel: 3 (Minimum: 5)")
   })
 
   it("re-run same day skips duplicate notifications (idempotent cron)", async () => {

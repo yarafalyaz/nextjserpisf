@@ -5,6 +5,10 @@ import { notificationService } from "@/lib/services/notification.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { stampWorkOrderFitmentSnapshot } from "@/lib/services/vehicle-fitment.service";
 import { Status, WorkOrderStatus, SalesStatus } from "@/lib/constants";
+import {
+  computeInvoiceThresholdSen,
+  resolveInvoiceThresholdPercent,
+} from "@/lib/sales/invoice-threshold";
 
 /**
  * Down Payment Hook - Observer pattern replacement.
@@ -551,11 +555,14 @@ export async function onDownPaymentConfirmed(
     }
 
     // ─── 4. Create Sales Invoice + Items ─────────────────────────────
-    // P0-1: invoice konversi DP dibuat SEKALI, hanya bila total DP
-    // terverifikasi (CONFIRMED, bukan draft/cancelled) mencapai minimal 50%
-    // dari nilai quotation — dihitung Decimal-safe (sen), bukan float.
-    // Invoice lahir sebagai DRAFT: pembuatan ≠ posting; stock-out +
-    // revenue/COGS terjadi saat posting manual lewat postInvoice.
+    // P0-1 + F-2026-10-22-065-S: invoice konversi DP dibuat SEKALI, hanya
+    // bila total DP terverifikasi (CONFIRMED, bukan draft/cancelled)
+    // mencapai ambang persen snapshot quotation (default fail-closed 50%)
+    // — dihitung Decimal-safe (sen), bukan float. Ambang dibaca dari
+    // snapshot Quotation.invoiceThresholdPercent, BUKAN master kategori
+    // berjalan (AC-DP65-1/4). Invoice lahir sebagai DRAFT: pembuatan ≠
+    // posting; stock-out + revenue/COGS terjadi saat posting manual lewat
+    // postInvoice (vonis BOT 4 F-2026-10-22-073-V penjaga 3a).
     const verifiedDPs = await tx.downPayment.findMany({
       where: { quotationId: quotation.id, status: SalesStatus.CONFIRMED },
       select: { amount: true },
@@ -566,8 +573,14 @@ export async function onDownPaymentConfirmed(
       0,
     )
     const grandTotalSen = Math.round(Number(quotation.grandTotal) * 100)
-    // Ambang 50% dibulatkan KE ATAS ke sen: 50% dari Rp1 → Rp0,50.
-    const thresholdSen = Math.ceil(grandTotalSen / 2)
+    // Ambang efektif dari snapshot persen quotation, dibulatkan KE ATAS ke
+    // sen: 50% dari Rp1 → Rp0,50. Snapshot korup fail-closed ke 50 + log
+    // (AC-DP65-5); snapshot kosong diam (quotation lama, BR-DP65-02).
+    const thresholdPercent = resolveInvoiceThresholdPercent(
+      quotation.invoiceThresholdPercent == null ? null : Number(quotation.invoiceThresholdPercent),
+      (raw) => console.error(`[down-payment] persen ambang invoice korup quotation ${quotation.id}: ${String(raw)} — fail-closed 50%`),
+    )
+    const thresholdSen = computeInvoiceThresholdSen(grandTotalSen, thresholdPercent)
 
     let invoice: { id: number; documentNo: string } | null = null
     if (totalVerifiedSen >= thresholdSen && salesOrder) {

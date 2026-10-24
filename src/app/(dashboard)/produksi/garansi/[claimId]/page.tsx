@@ -11,9 +11,17 @@ import { prisma } from "@/lib/db/prisma"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TransactionAttachments } from "@/components/ui/transaction-attachments"
 import { StatusChip } from "@/components/ui/status-chip"
-import { formatDate, formatNumber } from "@/lib/utils/format"
+import { formatCurrency, formatDate, formatNumber } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
 import { WarrantyClaimActions, type WarrantyClaimFacts } from "../_components/warranty-claim-actions"
+import {
+  WarrantyJournalPanel,
+  type WarrantyJournalFacts,
+} from "../_components/warranty-journal-panel"
+import {
+  warrantyJournalRoutes,
+  type WarrantyJournalRow,
+} from "../_components/warranty-journal-route-status"
 import {
   WarrantySupplierClaimPanel,
   type SupplierClaimFacts,
@@ -111,6 +119,63 @@ export default async function WarrantyClaimDetailPage({
   supplierClaim.attachmentCount = await prisma.transactionAttachment.count({
     where: { referenceType: "WarrantyClaim", referenceId: claim.id },
   })
+
+  // Status rute E2/E3 dibaca dari Journal nyata (POSTED non-REVERSED),
+  // BUKAN flag klaim. Jurnal lawan (reversal) referenceType "Journal"
+  // menunjuk id jurnal asli — ikut dibaca supaya riwayat reversal tampil.
+  const journalRowsRaw = await prisma.journal.findMany({
+    where: {
+      deletedAt: null,
+      OR: [
+        { referenceType: "WarrantyClaimCost", referenceId: claim.id },
+        { referenceType: "WarrantySupplierRecovery", referenceId: claim.id },
+      ],
+    },
+    select: {
+      id: true,
+      journalNumber: true,
+      transactionDate: true,
+      status: true,
+      totalDebit: true,
+      referenceType: true,
+      referenceId: true,
+    },
+  })
+  const reversedIds = journalRowsRaw.filter((j) => j.status === "REVERSED").map((j) => j.id)
+  const reversalRowsRaw =
+    reversedIds.length > 0
+      ? await prisma.journal.findMany({
+          where: { referenceType: "Journal", referenceId: { in: reversedIds }, deletedAt: null },
+          select: {
+            id: true,
+            journalNumber: true,
+            transactionDate: true,
+            status: true,
+            totalDebit: true,
+            referenceType: true,
+            referenceId: true,
+          },
+        })
+      : []
+  const journalRows: WarrantyJournalRow[] = [...journalRowsRaw, ...reversalRowsRaw].map((j) => ({
+    id: j.id,
+    journalNumber: j.journalNumber,
+    transactionDate: formatDate(j.transactionDate),
+    status: j.status,
+    totalDebitLabel: formatCurrency(Number(j.totalDebit)),
+    referenceType: j.referenceType,
+    referenceId: j.referenceId,
+  }))
+  const routes = warrantyJournalRoutes(journalRows)
+  const journalFacts: WarrantyJournalFacts = {
+    claimId: claim.id,
+    status: claim.status,
+    supplierClaimStatus: claim.supplierClaimStatus,
+    decisionRecorded: claim.decisionBy !== null && claim.decisionAt !== null,
+    repairWorkOrderId: claim.repairWorkOrderId,
+    claimCost: routes.claimCost,
+    supplierRecovery: routes.supplierRecovery,
+  }
   const vendorOptions =
     claim.supplierClaimStatus === "none" && canTransition
       ? (
@@ -211,6 +276,8 @@ export default async function WarrantyClaimDetailPage({
       </section>
 
       <WarrantyClaimActions claim={facts} canDecide={canDecide} canTransition={canTransition} />
+
+      <WarrantyJournalPanel facts={journalFacts} canPost={canDecide} />
 
       <WarrantySupplierClaimPanel
         facts={supplierClaim}

@@ -30,8 +30,8 @@ vi.mock("@/lib/db/prisma", () => ({
 
 import { onTransferProcessed, onTransferReceived } from "@/lib/hooks/inventory-transfer.hook"
 
-function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number; serialNumbers?: unknown; batchAllocations?: unknown }>, status = "draft") {
-  const normalizedItems = transferItems.map((item, index) => ({ id: item.id ?? index + 1, ...item }))
+function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number; receivedQty?: number; serialNumbers?: unknown; batchAllocations?: unknown }>, status = "draft") {
+  const normalizedItems = transferItems.map((item, index) => ({ receivedQty: 0, ...item, id: item.id ?? index + 1 }))
   const spies = {
     queryRaw: vi.fn().mockResolvedValue([]),
     transferFindUniqueOrThrow: vi.fn().mockResolvedValue({
@@ -52,6 +52,8 @@ function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number;
     batchFindFirst: vi.fn().mockResolvedValue(null),
     batchUpdate: vi.fn().mockResolvedValue({}),
     batchCreate: vi.fn().mockResolvedValue({}),
+    receiptItemFindMany: vi.fn().mockResolvedValue([]),
+    receiptCreate: vi.fn().mockResolvedValue({ id: 700 }),
     executeRaw: vi.fn().mockResolvedValue(1),
   }
   const tx = {
@@ -59,6 +61,8 @@ function wireTx(transferItems: Array<{ id?: number; itemId: number; qty: number;
     $executeRaw: spies.executeRaw,
     inventoryTransfer: { findUniqueOrThrow: spies.transferFindUniqueOrThrow },
     inventoryTransferItem: { update: spies.transferItemUpdate },
+    inventoryTransferReceipt: { create: spies.receiptCreate },
+    inventoryTransferReceiptItem: { findMany: spies.receiptItemFindMany },
     item: { findMany: spies.itemFindMany },
     itemSerial: { updateMany: spies.serialUpdateMany },
     itemBatch: {
@@ -313,6 +317,99 @@ describe("onTransferReceived", () => {
 
     await expect(onTransferReceived(100, 1)).rejects.toThrow(/memerlukan alokasi nomor batch/)
     expect(spies.moveCreate).not.toHaveBeenCalled()
+  })
+})
+
+describe("onTransferReceived partial per-event (F-081-S)", () => {
+  const receipt = (lines: Array<{ transferItemId: number; qty: number; serialNumbers?: string[] }>) => ({
+    receivedDate: new Date(2026, 9, 22),
+    idempotencyKey: "evt-1",
+    lines,
+  })
+
+  it("receives 4/10 -> partially_received, IN qty event-only at carried cost, receivedQty increment per line", async () => {
+    const { spies } = wireTx([{ id: 11, itemId: 7, qty: 10, receivedQty: 0 }], "processed")
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }])
+    spies.moveCreate.mockResolvedValueOnce({ id: 900 })
+
+    const status = await onTransferReceived(100, 1, undefined, receipt([{ transferItemId: 11, qty: 4 }]))
+
+    expect(status).toBe("partially_received")
+    expect(spies.moveCreate).toHaveBeenCalledTimes(1)
+    const created = spies.moveCreate.mock.calls[0]![0] as { data: { qty: number; cost: number; impact: string } }
+    expect(created.data.qty).toBe(4)
+    expect(created.data.cost).toBe(15)
+    expect(created.data.impact).toBe("IN")
+    expect(spies.transferItemUpdate).toHaveBeenCalledWith({
+      where: { id: 11 },
+      data: { receivedQty: { increment: 4 } },
+    })
+    expect(spies.receiptCreate).toHaveBeenCalledTimes(1)
+    const receiptArg = spies.receiptCreate.mock.calls[0]![0] as {
+      data: { idempotencyKey: string; items: { create: Array<{ inventoryTransferItemId: number; qty: number }> } }
+    }
+    expect(receiptArg.data.idempotencyKey).toBe("evt-1")
+    expect(receiptArg.data.items.create).toEqual([{ inventoryTransferItemId: 11, qty: 4 }])
+  })
+
+  it("second event with remaining qty -> received", async () => {
+    const { spies } = wireTx([{ id: 11, itemId: 7, qty: 10, receivedQty: 4 }], "partially_received")
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }])
+    spies.moveCreate.mockResolvedValueOnce({ id: 901 })
+
+    const status = await onTransferReceived(100, 1, undefined, receipt([{ transferItemId: 11, qty: 6 }]))
+
+    expect(status).toBe("received")
+    expect(spies.transferItemUpdate).toHaveBeenCalledWith({
+      where: { id: 11 },
+      data: { receivedQty: { increment: 6 } },
+    })
+  })
+
+  it("rejects qty beyond remaining (over-receive) without creating moves", async () => {
+    const { spies } = wireTx([{ id: 11, itemId: 7, qty: 10, receivedQty: 4 }], "partially_received")
+    await expect(
+      onTransferReceived(100, 1, undefined, receipt([{ transferItemId: 11, qty: 7 }])),
+    ).rejects.toThrow(/melebihi sisa belum diterima/)
+    expect(spies.moveCreate).not.toHaveBeenCalled()
+    expect(spies.receiptCreate).not.toHaveBeenCalled()
+  })
+
+  it("accepts serial subset of shipped serials, rejects serial already received in prior event", async () => {
+    const { spies } = wireTx(
+      [{ id: 11, itemId: 7, qty: 3, receivedQty: 1, serialNumbers: ["SER-1", "SER-2", "SER-3"] }],
+      "partially_received",
+    )
+    spies.receiptItemFindMany.mockResolvedValueOnce([
+      { inventoryTransferItemId: 11, serialNumbers: ["SER-1"] },
+    ])
+    spies.moveFindMany.mockResolvedValueOnce([{ itemId: 7, cost: 15 }])
+    spies.moveCreate.mockResolvedValueOnce({ id: 902 })
+    spies.serialUpdateMany.mockResolvedValueOnce({ count: 1 })
+
+    const status = await onTransferReceived(
+      100, 1, undefined,
+      receipt([{ transferItemId: 11, qty: 1, serialNumbers: ["SER-2"] }]),
+    )
+    expect(status).toBe("partially_received")
+    expect(spies.serialUpdateMany).toHaveBeenCalledWith({
+      where: { itemId: 7, serialNumber: { in: ["SER-2"] }, status: "used" },
+      data: { status: "available", warehouseId: 2 },
+    })
+
+    // SER-2 sudah diterima pada kejadian di atas (mock riwayat diperbarui).
+    const again = wireTx(
+      [{ id: 11, itemId: 7, qty: 3, receivedQty: 2, serialNumbers: ["SER-1", "SER-2", "SER-3"] }],
+      "partially_received",
+    )
+    again.spies.receiptItemFindMany.mockResolvedValueOnce([
+      { inventoryTransferItemId: 11, serialNumbers: ["SER-1"] },
+      { inventoryTransferItemId: 11, serialNumbers: ["SER-2"] },
+    ])
+    await expect(
+      onTransferReceived(100, 1, undefined, receipt([{ transferItemId: 11, qty: 1, serialNumbers: ["SER-2"] }])),
+    ).rejects.toThrow(/bukan serial terkirim yang masih belum diterima/)
+    expect(again.spies.moveCreate).not.toHaveBeenCalled()
   })
 })
 

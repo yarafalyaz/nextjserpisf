@@ -1,5 +1,6 @@
 import { z } from "zod"
 import { dateOnly } from "@/lib/validations/finance.schemas";
+import { parseLocaleNumber } from "@/lib/utils/parse-money";
 
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
@@ -76,6 +77,19 @@ export const updateProductionOrderSchema = z.object({
   notes: optionalString(1000),
 })
 
+/**
+ * Qty BOM/revisi: string berformat Indonesia ("1,5", "1.000", "1.000,5")
+ * dinormalisasi lewat parser repo sebelum koersi zod. z.coerce.number()
+ * mentah membaca "1,5" -> NaN (ditolak pesan zod menyesatkan) dan "1.000"
+ * -> 1 (menyusut diam-diam). String tak terbaca -> null -> gerbang number
+ * menolak. itemId tetap strict (id bukan qty; "1.000" bukan id sah).
+ */
+const localeQty = () =>
+  z.preprocess(
+    (v) => (typeof v === "string" ? parseLocaleNumber(v) : v),
+    z.coerce.number().positive("Qty material harus > 0").max(1_000_000, "Qty terlalu besar"),
+  )
+
 // ==================== BOM REVISION ====================
 // A revision is a frozen snapshot of the product's working BOM
 // (Product.materials). Creating one snapshots the current lines; releasing it
@@ -84,7 +98,15 @@ export const updateProductionOrderSchema = z.object({
 
 const bomRevisionLineSchema = z.object({
   itemId: z.coerce.number().int().positive("Material item tidak valid"),
-  qty: z.coerce.number().positive("Qty material harus > 0").max(1_000_000, "Qty terlalu besar"),
+  qty: localeQty(),
+  // F-008: allowance scrap global per baris (%), 0–100; field kosong = null
+  // (belum dikalibrasi). Murni data master — tanpa dampak jurnal saat diisi.
+  scrapPercent: z
+    .preprocess(
+      (v) => (v == null || (typeof v === "string" && v.trim() === "") ? null : typeof v === "string" ? parseLocaleNumber(v) : v),
+      z.coerce.number().min(0, "Persen scrap allowance minimal 0").max(100, "Persen scrap allowance maksimal 100").nullable(),
+    )
+    .default(null),
 })
 
 export const createBomRevisionSchema = z.object({
@@ -103,8 +125,9 @@ export const updateBomRevisionSchema = z.object({
 export function parseRevisionRows(
   itemIds: string[],
   qtys: string[],
-): { success: true; data: { itemId: number; qty: number }[] } | { success: false; error: string } {
-  const merged = new Map<number, number>()
+  scrapPercents: string[] = [],
+): { success: true; data: { itemId: number; qty: number; scrapPercent: number | null }[] } | { success: false; error: string } {
+  const merged = new Map<number, { qty: number; scrapPercent: number | null }>()
   const errors: string[] = []
 
   for (let i = 0; i < itemIds.length; i++) {
@@ -112,18 +135,18 @@ export function parseRevisionRows(
     const rawQty = (qtys[i] ?? "").trim()
     if (rawId === "" || rawQty === "" || rawId === "0" || rawQty === "0") continue
 
-    const r = bomRevisionLineSchema.safeParse({ itemId: rawId, qty: rawQty })
+    const r = bomRevisionLineSchema.safeParse({ itemId: rawId, qty: rawQty, scrapPercent: scrapPercents[i] })
     if (!r.success) {
       errors.push(`Baris #${i + 1}: ${r.error.issues.map((iss) => iss.message).join(", ")}`)
       continue
     }
-    merged.set(r.data.itemId, (merged.get(r.data.itemId) ?? 0) + r.data.qty)
+    merged.set(r.data.itemId, { qty: (merged.get(r.data.itemId)?.qty ?? 0) + r.data.qty, scrapPercent: r.data.scrapPercent })
   }
 
   if (errors.length > 0) {
     return { success: false, error: "Validasi gagal: " + errors.join("; ") }
   }
-  return { success: true, data: Array.from(merged, ([itemId, qty]) => ({ itemId, qty })) }
+  return { success: true, data: Array.from(merged, ([itemId, m]) => ({ itemId, qty: m.qty, scrapPercent: m.scrapPercent })) }
 }
 
 // ==================== PRODUCT MATERIALS (BOM rows) ====================
@@ -142,10 +165,30 @@ export function parseRevisionRows(
 
 export const materialRowSchema = z.object({
   itemId: z.coerce.number().int().positive("Material item tidak valid"),
-  qty: z.coerce.number().positive("Qty material harus > 0").max(1_000_000, "Qty terlalu besar"),
+  qty: localeQty(),
 })
 
 export type MaterialRow = z.infer<typeof materialRowSchema>
+
+// ==================== WORK CENTER (F-2026-10-22-090-S) ====================
+// Master stasiun kerja papan beban rencana. capacityHoursPerDay Decimal(15,2)
+// > 0; parallelStations Int >= 1. Keunikan nama aktif ditegakkan aksi server
+// lewat normalizedName (Q-LP-5), bukan zod.
+
+export const workCenterSchema = z.object({
+  name: z.string().trim().min(1, "Nama stasiun wajib diisi").max(150, "Nama stasiun maksimal 150 karakter"),
+  capacityHoursPerDay: z.coerce
+    .number({ error: "Kapasitas jam per hari wajib diisi" })
+    .positive("Kapasitas jam per hari harus lebih dari 0")
+    .max(24, "Kapasitas jam per hari maksimal 24"),
+  parallelStations: z.coerce
+    .number({ error: "Jumlah stasiun paralel wajib diisi" })
+    .int("Jumlah stasiun paralel harus bilangan bulat")
+    .min(1, "Jumlah stasiun paralel minimal 1")
+    .max(100, "Jumlah stasiun paralel maksimal 100"),
+  sortOrder: z.coerce.number().int("Urutan tampil harus bilangan bulat").min(0).optional(),
+  isActive: z.boolean().optional(),
+})
 
 /**
  * Validate + normalise the parallel `materialItemId[]` / `materialQty[]` arrays
