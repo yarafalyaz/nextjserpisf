@@ -6,7 +6,50 @@ import { writeFile, mkdir, unlink } from "fs/promises"
 import { randomUUID } from "crypto"
 import path from "path"
 import { apiError } from "@/lib/api-response"
+import { isPhotoCategory } from "@/lib/reports/attachment-photo"
+import { ATTACHMENT_REFERENCE_TYPES, ATTACHMENT_RESPONSE_SELECT } from "@/lib/auth/attachment-route-contract"
 import { assertCSRF } from "@/lib/security/csrf"
+
+/**
+ * Ekstensi tersimpan dari MIME yang sudah divalidasi, bukan nama berkas klien
+ * (pola resolveExt di storage.ts): "laporan.html" + header image/png tanpa ini
+ * tersimpan .html dan menipu konsumen nama/ikon walau served via route
+ * lampiran (sandbox, bukan public dir). Fallback .bin bila MIME tak dikenal.
+ */
+export function resolveAttachmentExt(mimeType: string, filename: string): string {
+  const byMime: Record<string, string> = {
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+    "image/gif": "gif",
+    "application/pdf": "pdf",
+  }
+  const known = byMime[mimeType]
+  if (known) return known
+  const raw = (filename.split(".").pop() || "").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10).toLowerCase()
+  const dangerous = new Set(["html", "htm", "xhtml", "xml", "svg", "js", "mjs", "cjs", "php", "phtml", "phar", "sh"])
+  if (!raw || dangerous.has(raw)) return "bin"
+  return raw
+}
+
+/**
+ * MIME dari signature biner (temuan BOT 6 PR #344: signature harus cocok
+ * dengan MIME terdeklarasi, bukan sekadar satu dari allowlist).
+ * Kembalikan null bila tidak cocok dengan signature yang dikenal.
+ */
+export function detectMimeFromSignature(header: Buffer): string | null {
+  // JPEG: FF D8 FF
+  if (header[0] === 0xff && header[1] === 0xd8 && header[2] === 0xff) return "image/jpeg"
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (header[0] === 0x89 && header[1] === 0x50 && header[2] === 0x4e && header[3] === 0x47) return "image/png"
+  // GIF: "GIF87a" / "GIF89a"
+  if (header[0] === 0x47 && header[1] === 0x49 && header[2] === 0x46) return "image/gif"
+  // WebP: "RIFF"...."WEBP"
+  if (header.toString("ascii", 0, 4) === "RIFF" && header.toString("ascii", 8, 12) === "WEBP") return "image/webp"
+  // PDF: "%PDF-"
+  if (header.toString("ascii", 0, 5) === "%PDF-") return "application/pdf"
+  return null
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,11 +90,15 @@ export async function POST(req: NextRequest) {
     return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
   const referenceIdNum = Number.parseInt(referenceId, 10)
-  const userId = Number.parseInt(String(session.user.id), 10)
+  const userIdRaw = String(session.user.id)
+  if (!/^\d+$/.test(userIdRaw)) {
+    return apiError("BAD_REQUEST", "Pengguna tidak valid")
+  }
+  const userId = Number(userIdRaw)
   if (!Number.isSafeInteger(referenceIdNum) || referenceIdNum < 0) {
     return apiError("BAD_REQUEST", "referenceId tidak valid")
   }
-  if (!Number.isInteger(userId) || userId <= 0) {
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
     return apiError("BAD_REQUEST", "Pengguna tidak valid")
   }
 
@@ -61,18 +108,15 @@ export async function POST(req: NextRequest) {
   // Jangan percaya `file.type` (header Content-Type kiriman klien): periksa
   // signature binernya. Tanpa ini, skrip .php/.svg yang di-header-kan
   // `image/png` lolos sebagai gambar dan tersimpan di server.
-  const signature = buffer.subarray(0, 12)
-  const looksImage =
-    // JPEG: FF D8 FF
-    (signature[0] === 0xff && signature[1] === 0xd8 && signature[2] === 0xff) ||
-    // PNG: 89 50 4E 47 0D 0A 1A 0A
-    (signature[0] === 0x89 && signature[1] === 0x50 && signature[2] === 0x4e && signature[3] === 0x47) ||
-    // GIF: "GIF87a" / "GIF89a"
-    (signature[0] === 0x47 && signature[1] === 0x49 && signature[2] === 0x46) ||
-    // WebP: "RIFF"...."WEBP"
-    (signature.toString("ascii", 0, 4) === "RIFF" && signature.toString("ascii", 8, 12) === "WEBP")
-  const looksPdf = signature.toString("ascii", 0, 5) === "%PDF-"
-  if (!looksImage && !looksPdf) {
+  // Signature juga harus COCOK dengan MIME terdeklarasi (temuan BOT 6 PR #344):
+  // isi JPEG + header application/pdf sebelumnya tersimpan .pdf dengan
+  // mimeType DB application/pdf — ekstensi/mime berbohong terhadap isi.
+  // Pakai MIME hasil deteksi untuk ekstensi + DB, bukan `file.type` klien.
+  const detectedMime = detectMimeFromSignature(buffer.subarray(0, 12))
+  if (!detectedMime) {
+    return apiError("BAD_REQUEST", "Isi berkas tidak sesuai format. Gunakan JPG, PNG, WebP, GIF, atau PDF.")
+  }
+  if (detectedMime !== file.type) {
     return apiError("BAD_REQUEST", "Isi berkas tidak sesuai format. Gunakan JPG, PNG, WebP, GIF, atau PDF.")
   }
 
@@ -82,17 +126,18 @@ export async function POST(req: NextRequest) {
     return apiError("BAD_REQUEST", "referenceType tidak valid")
   }
 
-  // Whitelist allowed reference types (same as GET)
-  const allowedRefTypes = [
-    "sales_invoice", "sales_order", "quotation", "purchase_order",
-    "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
-    "journal", "expense", "material_issue", "work_order", "project",
-    "goods_receipt", "purchase_return", "sales_return", "bank_statement",
-    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash", "WarrantyClaim",
-  ]
+  const allowedRefTypes: readonly string[] = ATTACHMENT_REFERENCE_TYPES
   if (!allowedRefTypes.includes(safeRefType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
   }
+
+  // F-2026-10-24-096-S BR-PHOTO-02: kategori foto tertutup dari klien;
+  // nilai di luar daftar ditolak, kosong = null (dibaca `other`).
+  const photoCategoryRaw = formData.get("photoCategory") as string | null
+  if (photoCategoryRaw != null && photoCategoryRaw !== "" && !isPhotoCategory(photoCategoryRaw)) {
+    return apiError("BAD_REQUEST", "Kategori foto tidak valid")
+  }
+  const photoCategory = photoCategoryRaw ? photoCategoryRaw : null
 
   // Existing records require write access and resource scope. New-form uploads
   // use referenceId=0 and are restricted to types with an explicit create grant.
@@ -104,9 +149,8 @@ export async function POST(req: NextRequest) {
   const uploadDir = path.join(process.cwd(), "private", "uploads", "attachments", safeRefType)
   await mkdir(uploadDir, { recursive: true })
 
-  // Sanitize extension - only allow alphanumeric
-  const rawExt = (file.name.split(".").pop() || "bin").replace(/[^a-zA-Z0-9]/g, "")
-  const ext = rawExt.slice(0, 10) || "bin"
+  // Ekstensi dari MIME hasil deteksi signature, bukan nama klien (resolveAttachmentExt).
+  const ext = resolveAttachmentExt(detectedMime, file.name)
   const filename = `${safeRefType}-${referenceIdNum}-${randomUUID()}.${ext}`
   const filepath = path.join(uploadDir, filename)
 
@@ -131,20 +175,11 @@ export async function POST(req: NextRequest) {
         originalName: file.name,
         fileUrl,
         fileSize: file.size,
-        mimeType: file.type,
+        mimeType: detectedMime,
         uploadedBy: userId,
+        photoCategory,
       },
-      // Kontrak POST sama dengan GET: tanpa select, Prisma create mengembalikan
-      // baris utuh (referenceType/referenceId/uploadedBy internal ikut bocor).
-      select: {
-        id: true,
-        filename: true,
-        originalName: true,
-        fileUrl: true,
-        fileSize: true,
-        mimeType: true,
-        createdAt: true,
-      },
+      select: ATTACHMENT_RESPONSE_SELECT,
     })
   } catch (error) {
     await unlink(filepath).catch(() => undefined)
@@ -175,14 +210,7 @@ export async function GET(req: NextRequest) {
     return apiError("BAD_REQUEST", "referenceType dan referenceId wajib diisi")
   }
 
-  // Whitelist allowed reference types to prevent enumeration of arbitrary tables
-  const allowedRefTypes = [
-    "sales_invoice", "sales_order", "quotation", "purchase_order",
-    "vendor_bill", "vendor_payment", "sales_payment", "down_payment",
-    "journal", "expense", "material_issue", "work_order", "project",
-    "goods_receipt", "purchase_return", "sales_return", "bank_statement",
-    "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash", "WarrantyClaim",
-  ]
+  const allowedRefTypes: readonly string[] = ATTACHMENT_REFERENCE_TYPES
   if (!allowedRefTypes.includes(referenceType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
   }
@@ -211,17 +239,7 @@ export async function GET(req: NextRequest) {
     },
     orderBy: { createdAt: "desc" },
     take: 200,
-    // Kontrak GET hanya field yang dipakai TransactionAttachments; tanpa
-    // select, referenceType/referenceId/uploadedBy ikut bocor ke klien.
-    select: {
-      id: true,
-      filename: true,
-      originalName: true,
-      fileUrl: true,
-      fileSize: true,
-      mimeType: true,
-      createdAt: true,
-    },
+    select: ATTACHMENT_RESPONSE_SELECT,
   })
 
   return NextResponse.json(attachments)

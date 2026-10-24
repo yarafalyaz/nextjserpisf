@@ -10,9 +10,16 @@ import {
   createWarrantyClaimSchema,
   decideWarrantyClaimSchema,
   linkSupplierClaimSchema,
+  postWarrantyClaimCostSchema,
+  postWarrantySupplierRecoverySchema,
+  recordInstalledPartRemovalSchema,
   transitionSupplierClaimSchema,
   transitionWarrantyClaimSchema,
 } from "@/lib/validations/warranty.schemas";
+import {
+  postWarrantyClaimCostJournal,
+  postWarrantySupplierRecoveryJournal,
+} from "@/lib/services/warranty-journal.service";
 import {
   assessWarrantyEligibility,
   createWarrantyClaim,
@@ -22,6 +29,7 @@ import {
   transitionSupplierClaim,
   transitionWarrantyClaim,
 } from "@/lib/services/warranty.service";
+import { recordInstalledPartRemoval } from "@/lib/services/installed-part.service";
 
 // ==================== WARRANTY CLAIM ACTIONS (F-2026-10-21-021 tahap 2) ====================
 // Service warranty.service.ts memegang state machine + keputusan manual;
@@ -210,6 +218,55 @@ export async function getWarrantyClaimDetail(claimId: number) {
   }
 }
 
+// ==================== JURNAL GARANSI TAHAP 3 RUTE MATI (E2/E3) ====================
+// Posting jurnal = aksi finansial: izin menyetujui klaim (pejabat yang sama
+// yang memutus klaim). Syarat jurnal hidup di warranty-journal.service.ts.
+
+async function runWarrantyJournalAction(
+  tag: string,
+  fallback: string,
+  post: () => Promise<{ journalId: number; journalNumber: string; amount: number }>,
+  label: (r: { journalNumber: string }) => string,
+) {
+  try {
+    const result = await post();
+    revalidatePath("/produksi/garansi");
+    await logActivity("create", "Journal", result.journalId, label(result));
+    return { success: true, journalId: result.journalId, journalNumber: result.journalNumber, amount: result.amount };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error(`[${tag}]`, getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, fallback) };
+  }
+}
+
+export async function postWarrantyClaimCostAction(formData: FormData) {
+  const parsed = parseFormData(postWarrantyClaimCostSchema, formData);
+  if (!parsed.success) return { success: false, error: parsed.error };
+  const v = parsed.data;
+  const user = await requirePermission("approve_warranty_claims");
+  return runWarrantyJournalAction(
+    "postWarrantyClaimCostAction",
+    "Gagal memposting jurnal biaya garansi",
+    () => postWarrantyClaimCostJournal({ claimId: v.claimId, eventDate: v.eventDate ?? new Date(), createdBy: Number(user.id) }),
+    (r) => `Posting jurnal biaya klaim garansi #${v.claimId} (${r.journalNumber})`,
+  );
+}
+
+export async function postWarrantySupplierRecoveryAction(formData: FormData) {
+  const parsed = parseFormData(postWarrantySupplierRecoverySchema, formData);
+  if (!parsed.success) return { success: false, error: parsed.error };
+  const v = parsed.data;
+  const user = await requirePermission("approve_warranty_claims");
+  return runWarrantyJournalAction(
+    "postWarrantySupplierRecoveryAction",
+    "Gagal memposting jurnal recovery supplier",
+    () =>
+      postWarrantySupplierRecoveryJournal({ claimId: v.claimId, amount: v.amount, eventDate: v.eventDate ?? new Date(), createdBy: Number(user.id) }),
+    (r) => `Posting jurnal recovery supplier garansi #${v.claimId} (${r.journalNumber})`,
+  );
+}
+
 /** Cakupan aktif satu kendaraan — titik mulai intake klaim dari detail kendaraan. */
 export async function listWarrantyCoveragesByVehicle(customerVehicleId: number) {
   try {
@@ -224,5 +281,44 @@ export async function listWarrantyCoveragesByVehicle(customerVehicleId: number) 
     if (isNextRedirectError(e)) throw e;
     console.error("[listWarrantyCoveragesByVehicle]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Gagal memuat cakupan garansi") };
+  }
+}
+
+// ==================== INSTALLED PART ACTIONS (F-2026-10-22-072-S) ====================
+// Registri part terpasang: lahir otomatis di service (completeWorkOrder /
+// completeMaterialIssue) — di sini HANYA catat lepas. Izin reuse keluarga
+// garansi existing per putusan BOT 1 Q-IP-2 (katalog live tidak punya key
+// view_warranties/manage_warranties; yang ada view_warranty_claims untuk
+// lihat — loader panel — dan edit_warranty_claims untuk kelola klaim).
+// Catat lepas TIDAK membuat StockMove/jurnal/retur (BR-IP-06); tidak ada
+// aksi edit/hapus baris registri (AC-IP-8).
+
+export async function recordInstalledPartRemovalAction(formData: FormData) {
+  try {
+    const user = await requirePermission("edit_warranty_claims");
+    const parsed = parseFormData(recordInstalledPartRemovalSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const v = parsed.data;
+
+    const part = await recordInstalledPartRemoval({
+      installedPartId: v.installedPartId,
+      qtyRemoved: v.qtyRemoved,
+      removalReason: v.removalReason,
+      removedById: Number(user.id),
+      replacedByInstalledPartId: v.replacedByInstalledPartId ?? null,
+    });
+
+    await logActivity(
+      "update",
+      "InstalledPart",
+      part.id,
+      `Mencatat lepas part terpasang #${part.id}: ${v.removalReason}`,
+    );
+    revalidatePath("/master/pelanggan");
+    return { success: true, id: part.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[recordInstalledPartRemovalAction]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Gagal mencatat lepas part terpasang") };
   }
 }

@@ -70,3 +70,31 @@ export const transitionSupplierClaimSchema = z.object({
   supplierClaimRefNo: optionalText(191),
   supplierClaimNotes: optionalText(5000),
 });
+
+// F-2026-10-21-021 tahap 3 rute MATI — pemanggil jurnal E2/E3. Bentuk saja;
+// syarat status/mapping/periode/anti-dobel hidup di warranty-journal.service.
+const eventDate = z.preprocess(
+  (v) => (v === "" || v === undefined || v === null ? undefined : v),
+  z.coerce.date().optional(),
+);
+
+export const postWarrantyClaimCostSchema = z.object({
+  claimId: z.coerce.number().int().positive("Klaim garansi wajib dipilih"),
+  eventDate,
+});
+
+export const postWarrantySupplierRecoverySchema = z.object({
+  claimId: z.coerce.number().int().positive("Klaim garansi wajib dipilih"),
+  amount: z.coerce.number().positive("Nominal recovery harus lebih dari nol"),
+  eventDate,
+});
+
+// F-2026-10-22-072-S — catat lepas part terpasang. Alasan wajib; guard
+// qty/serial/pengganti hidup di installed-part.service.ts. Tidak ada
+// schema edit/hapus baris registri (BR-IP-01/AC-IP-8).
+export const recordInstalledPartRemovalSchema = z.object({
+  installedPartId: z.coerce.number().int().positive("Part terpasang wajib dipilih"),
+  qtyRemoved: z.coerce.number().positive("Jumlah part dilepas wajib lebih dari nol"),
+  removalReason: z.string().trim().min(1, "Alasan pencatatan lepas part wajib diisi").max(5000),
+  replacedByInstalledPartId: optionalInt("Part pengganti"),
+});

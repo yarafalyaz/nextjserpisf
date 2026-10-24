@@ -135,6 +135,10 @@ export const employeeDatesSchema = z.object({
       return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d
     }, "Tanggal masuk tidak valid"),
   dateOfBirth: optionalDateOnly,
+  // F-2026-10-22-085-S: tanggal siklus hidup opsional (kosong = tidak diatur).
+  contractStartDate: optionalDateOnly,
+  contractEndDate: optionalDateOnly,
+  employmentEndedAt: optionalDateOnly,
 })
 
 export const uomServerSchema = z.object({

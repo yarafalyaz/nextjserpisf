@@ -12,7 +12,10 @@
 import { prisma } from "@/lib/db/prisma"
 import { buildLaborRecap, type LaborRecap } from "@/lib/reports/labor-recap"
 
-export async function getLaborRecap(): Promise<LaborRecap> {
+export async function getLaborRecap(period?: {
+  start: Date
+  end: Date
+}): Promise<LaborRecap> {
   const costs = await prisma.productionCost.findMany({
     where: { category: "labor" },
     select: { sourceTimesheetId: true, hours: true, amount: true },
@@ -35,11 +38,15 @@ export async function getLaborRecap(): Promise<LaborRecap> {
           select: {
             id: true,
             employeeId: true,
+            date: true,
             employee: { select: { name: true } },
           },
         })
   const employeeByTimesheet = new Map(
-    timesheets.map((t) => [t.id, { employeeId: t.employeeId, name: t.employee.name }]),
+    timesheets.map((t) => [
+      t.id,
+      { employeeId: t.employeeId, name: t.employee.name, date: t.date },
+    ]),
   )
 
   return buildLaborRecap(
@@ -54,7 +61,10 @@ export async function getLaborRecap(): Promise<LaborRecap> {
         category: "labor",
         hours: cost.hours === null ? null : Number(cost.hours),
         amount: Number(cost.amount),
+        // F-038: tanggal kerja hanya dari Timesheet.date; tanpa itu null.
+        workDate: linked ? new Date(linked.date) : null,
       }
     }),
+    period,
   )
 }

@@ -292,7 +292,11 @@ export function PurchaseOrderForm({
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)}>
+    <form
+      onSubmit={handleSubmit(onSubmit)}
+      aria-busy={isPending}
+      aria-label={order?.id ? "Formulir ubah pesanan pembelian" : "Formulir tambah pesanan pembelian"}
+    >
       <FormCard>
         {(purchaseRequests && purchaseRequests.length > 0) || linkedPR ? (
           <FormSection title="Permintaan Pembelian" columns={1}>
@@ -345,7 +349,7 @@ export function PurchaseOrderForm({
 
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="vendorId">Pemasok *</Label>
+            <Label htmlFor="vendorId">Pemasok <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Controller
               name="vendorId"
               control={control}
@@ -353,6 +357,7 @@ export function PurchaseOrderForm({
               render={({ field }) => (
                 <QuickAddSelect
                   id="vendorId"
+                  required
                   value={field.value ? String(field.value) : null}
                   onChange={(key) => {
                     const vid = key ? Number(key) : undefined;

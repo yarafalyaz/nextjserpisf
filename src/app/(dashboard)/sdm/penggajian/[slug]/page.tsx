@@ -24,6 +24,9 @@ import type { Metadata } from "next";
 
 import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityEditHref } from "@/lib/utils/entity-url";
+import { hasPermission } from "@/lib/auth/permissions";
+import { PayrollComponentLines } from "@/components/payroll/payroll-component-lines";
+import { PayrollBpjsAggregateSnapshot } from "@/components/payroll/payroll-bpjs-aggregate-snapshot";
 
 export const metadata: Metadata = { title: "Penggajian" };
 
@@ -41,13 +44,28 @@ export default async function PayrollDetailPage({
     { segment: slug, fallbackWhere: hrScopeWhere(scope) },
     {
       bySlug: (s, where) =>
-        prisma.payroll.findFirst({ where: { slug: s, ...where }, include: { employee: true } }),
+        prisma.payroll.findFirst({
+          where: { slug: s, ...where },
+          include: { employee: true, componentLines: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+        }),
       byId: (id, where) =>
-        prisma.payroll.findUnique({ where: { id, ...where }, include: { employee: true } }),
+        prisma.payroll.findUnique({
+          where: { id, ...where },
+          include: { employee: true, componentLines: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] } },
+        }),
     },
   );
 
   if (!payroll) notFound();
+
+  const [activeComponents, canEditPayroll] = await Promise.all([
+    prisma.payrollComponent.findMany({
+      where: { isActive: true },
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, kind: true, recurrence: true },
+    }),
+    hasPermission("edit_payroll"),
+  ]);
 
   const fmt = (val: unknown) => Number(val ?? 0).toLocaleString("id-ID");
 
@@ -229,6 +247,27 @@ export default async function PayrollDetailPage({
           </DetailTableBody>
         </DetailTable>
       </div>
+
+      <PayrollBpjsAggregateSnapshot snapshot={payroll.statutorySnapshot} />
+
+      <PayrollComponentLines
+        payrollId={payroll.id}
+        status={payroll.status}
+        lines={payroll.componentLines.map((l) => ({
+          id: l.id,
+          componentId: l.componentId,
+          componentNameSnapshot: l.componentNameSnapshot,
+          kindSnapshot: l.kindSnapshot,
+          recurrenceSnapshot: l.recurrenceSnapshot,
+          isTaxableSnapshot: l.isTaxableSnapshot,
+          source: l.source,
+          amount: Number(l.amount),
+        }))}
+        components={activeComponents}
+        allowances={Number(payroll.allowances)}
+        deductions={Number(payroll.deductions)}
+        canEdit={canEditPayroll}
+      />
     </div>
   );
 }

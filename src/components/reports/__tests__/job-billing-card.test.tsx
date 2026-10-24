@@ -1,7 +1,27 @@
 // @vitest-environment jsdom
-import { describe, it, expect } from "vitest"
+import { describe, it, expect, vi } from "vitest"
 import { createRoot } from "react-dom/client"
 import { act } from "react"
+
+// JobBillingCard kini menyatu kartu jadwal termin (F-067-S) yang memanggil
+// server action; mock supaya tes kartu murni tidak menarik rantai server.
+vi.mock("@/actions/job-payment-schedule.actions", () => ({
+  createJobPaymentSchedule: vi.fn(),
+  updateJobPaymentScheduleTerms: vi.fn(),
+  cancelJobPaymentSchedule: vi.fn(),
+  getJobPaymentScheduleForQuotation: vi.fn(),
+}))
+vi.mock("@/actions/sales.actions", () => ({
+  createProgressInvoice: vi.fn(),
+}))
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+}))
+vi.mock("@/lib/utils/toast", () => ({
+  showError: vi.fn(),
+  showSuccess: vi.fn(),
+}))
+
 import { JobBillingCard } from "../job-billing-card"
 import type { JobBillingSummaryResult } from "@/lib/reports/job-billing-summary-data"
 
@@ -32,6 +52,128 @@ function render(node: React.ReactNode) {
   act(() => root.render(node))
   return { container, root }
 }
+
+describe("JobBillingCard F-2026-10-21-107 delta nilai termin", () => {
+  it("tanpa prop: fallback tak tercatat, daftar termin tidak tampil", () => {
+    const { container, root } = render(<JobBillingCard summary={base} />)
+    const text = container.textContent ?? ""
+    expect(text).toContain("Perubahan nilai sejak snapshot tidak tercatat")
+    expect(container.querySelector('[aria-label="Delta nilai termin"]')).toBeNull()
+    expect(text).not.toMatch(/Termin 1|Termin 2|jadwal kontraktual resmi/i)
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("deltaCents null: fallback tak tercatat, daftar termin tidak tampil", () => {
+    const { container, root } = render(<JobBillingCard summary={base} deltaNilaiCents={null} />)
+    expect(container.textContent).toContain("Perubahan nilai sejak snapshot tidak tercatat")
+    expect(container.querySelector('[aria-label="Delta nilai termin"]')).toBeNull()
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("delta 0: fallback tak tercatat, daftar termin tidak tampil", () => {
+    const { container, root } = render(<JobBillingCard summary={base} deltaNilaiCents={0} />)
+    expect(container.textContent).toContain("Perubahan nilai sejak snapshot tidak tercatat")
+    expect(container.querySelector('[aria-label="Delta nilai termin"]')).toBeNull()
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("naik: +Rp 100.000 (11,1% dari snapshot Rp 900.000), teks sisa tagih bertambah, label kejujuran persis", () => {
+    const { container, root } = render(<JobBillingCard summary={base} deltaNilaiCents={10_000_000} />)
+    const block = container.querySelector('[aria-label="Delta nilai termin"]')
+    expect(block).not.toBeNull()
+    const text = block?.textContent ?? ""
+    expect(text).toContain("Delta turunan dari snapshot, bukan amendemen jadwal")
+    expect(text).toContain("Nilai naik — sisa tagih bertambah")
+    expect(text).toContain("+Rp 100.000 (11,1%)")
+    expect(text).toContain("Sisa belum ditagih kini")
+    act(() => root.unmount()); container.remove()
+  })
+})
+
+describe("JobBillingCard F-2026-10-21-106 progres termin turunan", () => {
+  it("progres tampil persen+nominal benar + label kejujuran persis", () => {
+    const { container, root } = render(<JobBillingCard summary={base} />)
+    const block = container.querySelector('[aria-label="Progres termin turunan"]')
+    expect(block).not.toBeNull()
+    const text = block?.textContent ?? ""
+    expect(text).toContain("Turunan posisi berjalan, bukan jadwal kontraktual")
+    expect(text).toContain("DP terkonfirmasi dari nilai berjalan")
+    expect(text).toContain("50,0%")
+    expect(text).toContain("Rp 500.000")
+    expect(text).toContain("Tertagih dari nilai berjalan")
+    expect(text).toContain("40,0%")
+    expect(text).toContain("Rp 400.000")
+    expect(text).toContain("Sisa belum ditagih dari nilai berjalan")
+    expect(text).toContain("60,0%")
+    expect(text).toContain("Rp 600.000")
+    expect(text).not.toMatch(/Termin 1|Termin 2|pelunasan kontraktual/i)
+    act(() => root.unmount()); container.remove()
+  })
+})
+
+describe("JobBillingCard F-2026-10-21-107 delta nilai termin (turun)", () => {
+  it("turun: −Rp 100.000, teks kredit pelanggan, warna hijau, nominal absolut", () => {
+    const { container, root } = render(<JobBillingCard summary={base} deltaNilaiCents={-10_000_000} />)
+    const block = container.querySelector('[aria-label="Delta nilai termin"]')
+    const text = block?.textContent ?? ""
+    expect(text).toContain("Nilai turun — kelebihan menjadi kredit pelanggan")
+    expect(text).toContain("−Rp 100.000")
+    expect(text).not.toContain("+Rp 100.000")
+    expect(text).toContain("Rp 100.000")
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("snapshot lama 0: persen null, nominal tetap tampil tanpa NaN/Infinity", () => {
+    const { container, root } = render(<JobBillingCard summary={{ ...base, nilaiBerjalan: 0, sudahDitagih: 0, sisaBelumDitagih: 0 }} deltaNilaiCents={10_000_000} />)
+    const block = container.querySelector('[aria-label="Delta nilai termin"]')
+    const text = block?.textContent ?? ""
+    expect(text).toContain("+Rp 100.000")
+    expect(text).not.toContain("NaN")
+    expect(text).not.toContain("Infinity")
+    expect(text).not.toContain("%")
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("sisa negatif: formatCurrency apa adanya, tidak clamp", () => {
+    const { container, root } = render(
+      <JobBillingCard summary={{ ...base, sisaBelumDitagih: -50_000 }} deltaNilaiCents={5_000_000} />,
+    )
+    const block = container.querySelector('[aria-label="Delta nilai termin"]')
+    const text = block?.textContent ?? ""
+    expect(text).toContain("Rp -50.000")
+    expect(text).not.toContain("NaN")
+    act(() => root.unmount()); container.remove()
+  })
+})
+
+describe("JobBillingCard F-2026-10-21-106 progres termin turunan (nol & overbilled)", () => {
+  it("nilaiBerjalan=0: tanpa NaN/Infinity, baris nominal saja", () => {
+    const zero: JobBillingSummaryResult = { ...base, nilaiBerjalan: 0, sudahDitagih: 0, sudahDibayar: 0, sisaBelumDitagih: 0, sisaBelumDibayar: 0, uangMukaDiterima: 0, ambangInvoice: 0, jarakKeAmbangInvoice: 0, ambangInvoiceTercapai: false, sisaEfektif: 0, billedInvoices: [] }
+    const { container, root } = render(<JobBillingCard summary={zero} />)
+    const block = container.querySelector('[aria-label="Progres termin turunan"]')
+    expect(block).not.toBeNull()
+    const text = block?.textContent ?? ""
+    expect(text).not.toContain("NaN")
+    expect(text).not.toContain("Infinity")
+    expect(text).not.toContain("%")
+    expect(text).toContain("Rp 0")
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("overbilled: persen tertagih di-clamp 100, nominal + alert tetap", () => {
+    const over: JobBillingSummaryResult = { ...base, sudahDitagih: 1_200_000, sisaBelumDitagih: -200_000, overbilled: true }
+    const { container, root } = render(<JobBillingCard summary={over} />)
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Overbilled")
+    const block = container.querySelector('[aria-label="Progres termin turunan"]')
+    const text = block?.textContent ?? ""
+    expect(text).toContain("100,0%")
+    expect(text).not.toContain("120,0%")
+    expect(text).toContain("Rp 1.200.000")
+    expect(text).toContain("Rp -200.000")
+    expect(text).not.toContain("-20,0%")
+    act(() => root.unmount()); container.remove()
+  })
+})
 
 describe("JobBillingCard F-2026-10-20-43 kredit terbuka", () => {
   it("kreditTerbuka 0: baris kredit + sisa efektif + daftar kredit tidak tampil, sisa existing utuh", () => {
@@ -82,6 +224,52 @@ describe("JobBillingCard F-2026-10-20-60 jarak ambang invoice", () => {
     const text = container.textContent ?? ""
     expect(text).toContain("Ambang invoice konversi DP tercapai")
     expect(text).not.toContain("Kekurangan DP menuju invoice")
+    act(() => root.unmount()); container.remove()
+  })
+})
+
+describe("JobBillingCard F-2026-10-22-067-S kartu jadwal termin menyatu", () => {
+  const scheduleFixture = {
+    scheduleId: 3,
+    quotationId: 9,
+    contractValue: 1_000_000,
+    billedAmount: 400_000,
+    scheduleLabel: "Jadwal kesepakatan" as const,
+    nextTermId: null,
+    allFulfilled: true,
+    terms: [
+      {
+        id: 11,
+        name: "Pelunasan",
+        cumulativePercent: 100,
+        targetAmount: 1_000_000,
+        termAmount: 1_000_000,
+        fulfilledAmount: 400_000,
+        dueDate: new Date("2026-12-01T00:00:00.000Z"),
+        milestoneLabel: null,
+        sortOrder: 0,
+        status: "terpenuhi_sebagian" as const,
+        statusLabel: "Terpenuhi Sebagian",
+        overdue: false,
+      },
+    ],
+  }
+
+  it("dengan jadwal: seksi Jadwal kesepakatan tampil di kartu sama, label turunan tetap", () => {
+    const { container, root } = render(<JobBillingCard summary={base} paymentSchedule={scheduleFixture} />)
+    const block = container.querySelector('[aria-label="Jadwal termin"]')
+    expect(block).not.toBeNull()
+    expect(block?.textContent).toContain("Jadwal kesepakatan")
+    expect(block?.textContent).toContain("Terpenuhi Sebagian")
+    expect(container.textContent).toContain("Turunan posisi berjalan, bukan jadwal kontraktual")
+    act(() => root.unmount()); container.remove()
+  })
+
+  it("tanpa jadwal (BR-TM67-09): kartu persis perilaku lama, label turunan tetap, tanpa label kesepakatan", () => {
+    const { container, root } = render(<JobBillingCard summary={base} />)
+    expect(container.textContent).toContain("Turunan posisi berjalan, bukan jadwal kontraktual")
+    expect(container.textContent).not.toContain("Jadwal kesepakatan")
+    expect(container.textContent).toContain("Belum ada jadwal termin untuk penawaran ini.")
     act(() => root.unmount()); container.remove()
   })
 })

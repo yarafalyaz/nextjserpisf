@@ -359,14 +359,17 @@ export function GoodsReceiptForm({
     });
   }
 
+  const isEdit = Boolean(receipt?.id);
+
   return (
-    <form onSubmit={onSubmit}>
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={isEdit ? "Formulir ubah penerimaan barang" : "Formulir tambah penerimaan barang"}>
       <FormCard>
         <FormSection title="Informasi Umum">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="purchaseOrderId">Pesanan Pembelian *</Label>
+            <Label htmlFor="purchaseOrderId">Pesanan Pembelian <span className="text-destructive" aria-hidden="true">*</span></Label>
             <Combobox
               id="purchaseOrderId"
+              required
               options={purchaseOrders.map((po) => ({
                 value: String(po.id),
                 label: `${po.documentNo} - ${po.vendor?.name ?? ""}`,
@@ -377,9 +380,10 @@ export function GoodsReceiptForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="warehouseId">Gudang Tujuan (Bawaan) *</Label>
+            <Label htmlFor="warehouseId">Gudang Tujuan (Bawaan) <span className="text-destructive" aria-hidden="true">*</span></Label>
             <QuickAddSelect
               id="warehouseId"
+              required
               options={warehouseOptions.map((w) => ({
                 value: String(w.id),
                 label: w.name,
@@ -809,12 +813,13 @@ export function GoodsReceiptForm({
         )}
 
         <FormActions>
-          <Button type="button" onPress={() => router.back()}>
+          <Button type="button" className="w-full sm:w-auto" onPress={() => router.back()}>
             Batal
           </Button>
           <Button
             type="submit"
             variant="primary"
+            className="w-full sm:w-auto"
             isDisabled={isPending || !poId || !warehouseId}
           >
             {isPending ? "Memproses..." : "Terima Barang"}

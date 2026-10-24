@@ -23,12 +23,25 @@ function toMoney(value: number): Prisma.Decimal {
   return new Prisma.Decimal(value.toFixed(2))
 }
 
+type PriceListForm = ReturnType<typeof customerPriceListSchema.parse>
+
+function priceListData(v: PriceListForm) {
+  return {
+    customerCategoryId: v.customerCategoryId ?? null,
+    itemId: v.itemId,
+    price: toMoney(v.price),
+    minQty: toMoney(v.minQty),
+    effectiveDate: v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null,
+    notes: v.notes ?? null,
+  }
+}
+
 /**
- * F-PRICELIST-01 tahap 1: simpan satu baris daftar harga jual.
+ * F-PRICELIST-01 tahap 1 + F-2026-10-21-018: simpan satu baris daftar harga jual.
  *
- * Kombinasi (kategori, barang, tanggal efektif) unik. MySQL memperlakukan
- * NULL sebagai berbeda di unique index, jadi duplikat baris umum (kategori
- * null) dicegah cek aplikasi ini, bukan constraint DB.
+ * Kombinasi (kategori, barang, minQty, tanggal efektif) unik. MySQL
+ * memperlakukan NULL sebagai berbeda di unique index, jadi duplikat baris
+ * umum (kategori null) dicegah cek aplikasi ini, bukan constraint DB.
  */
 export async function createCustomerPriceList(formData: FormData): Promise<CustomerPriceListActionResult> {
   try {
@@ -36,31 +49,21 @@ export async function createCustomerPriceList(formData: FormData): Promise<Custo
 
     const parsed = parseFormData(customerPriceListSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
-    const v = parsed.data
-
-    const categoryId = v.customerCategoryId ?? null
-    const effectiveDate = v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null
+    const data = priceListData(parsed.data)
 
     const duplicate = await prisma.customerPriceList.findFirst({
-      where: { customerCategoryId: categoryId, itemId: v.itemId, effectiveDate },
+      where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate },
       select: { id: true },
     })
     if (duplicate) {
       return {
         success: false,
-        error: "Harga untuk kategori, barang, dan tanggal efektif itu sudah ada. Ubah baris yang ada.",
+        error: "Harga untuk kategori, barang, minimal qty, dan tanggal efektif itu sudah ada. Ubah baris yang ada.",
       }
     }
 
     const created = await prisma.customerPriceList.create({
-      data: {
-        customerCategoryId: categoryId,
-        itemId: v.itemId,
-        price: toMoney(v.price),
-        effectiveDate,
-        notes: v.notes ?? null,
-        createdBy: Number(user.id),
-      },
+      data: { ...data, createdBy: Number(user.id) },
     })
 
     await logActivity("create", "CustomerPriceList", created.id, "Menambah daftar harga pelanggan")
@@ -82,29 +85,17 @@ export async function updateCustomerPriceList(id: number, formData: FormData): P
 
     const parsed = parseFormData(customerPriceListSchema, formData)
     if (!parsed.success) return { success: false, error: parsed.error }
-    const v = parsed.data
-
-    const categoryId = v.customerCategoryId ?? null
-    const effectiveDate = v.effectiveDate ? wibDateToUtcMidnight(v.effectiveDate) : null
+    const data = priceListData(parsed.data)
 
     const duplicate = await prisma.customerPriceList.findFirst({
-      where: { customerCategoryId: categoryId, itemId: v.itemId, effectiveDate, id: { not: id } },
+      where: { customerCategoryId: data.customerCategoryId, itemId: data.itemId, minQty: data.minQty, effectiveDate: data.effectiveDate, id: { not: id } },
       select: { id: true },
     })
     if (duplicate) {
-      return { success: false, error: "Sudah ada baris lain dengan kategori, barang, dan tanggal efektif yang sama." }
+      return { success: false, error: "Sudah ada baris lain dengan kategori, barang, minimal qty, dan tanggal efektif yang sama." }
     }
 
-    await prisma.customerPriceList.update({
-      where: { id },
-      data: {
-        customerCategoryId: categoryId,
-        itemId: v.itemId,
-        price: toMoney(v.price),
-        effectiveDate,
-        notes: v.notes ?? null,
-      },
-    })
+    await prisma.customerPriceList.update({ where: { id }, data })
 
     await logActivity("update", "CustomerPriceList", id, "Mengubah daftar harga pelanggan")
     revalidatePath(REVALIDATE)

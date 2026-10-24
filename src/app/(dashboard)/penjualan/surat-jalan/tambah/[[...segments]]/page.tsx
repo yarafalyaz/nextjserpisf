@@ -44,10 +44,10 @@ export default async function CreateDeliveryOrderPage({
   }
   const requestedSalesOrderId = seg.pesanan
     ? await resolvePrefillId(prisma.salesOrder, seg.pesanan, orderHref)
-    : NaN
+    : Number.NaN
   const requestedInvoiceId = seg.faktur
     ? await resolvePrefillId(prisma.salesInvoice, seg.faktur, invoiceHref)
-    : NaN
+    : Number.NaN
 
   const salesOrders = await prisma.salesOrder.findMany({
     where: {

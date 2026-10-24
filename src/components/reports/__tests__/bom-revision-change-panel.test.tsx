@@ -1,0 +1,250 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from "vitest"
+import { renderToStaticMarkup } from "react-dom/server"
+import { act } from "react"
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn(), replace: vi.fn() }),
+}))
+
+vi.mock("@/actions/bom-revision-change.actions", () => ({
+  requestBomRevisionChange: vi.fn(async () => ({ success: true, id: 1, status: "menunggu" })),
+  decideBomRevisionChange: vi.fn(async () => ({ success: true, id: 1, status: "disetujui" })),
+  listBomRevisionChangeRequests: vi.fn(async () => ({ success: true, requests: [] })),
+}))
+
+vi.mock("@/actions/bom-revision-change-preview.actions", () => ({
+  previewBomRevisionChangeDelta: vi.fn(async () => ({ success: true, delta: null })),
+}))
+
+vi.mock("@/lib/utils/toast", () => ({ showError: vi.fn(), showSuccess: vi.fn() }))
+
+import {
+  BomRevisionChangePanel,
+  BomRevisionDeltaPreviewTable,
+  isBomRevisionSubmitDisabled,
+  type BomRevisionChangeRequestRow,
+} from "../bom-revision-change-panel"
+import { renderCard, unmountCard, clickButtonByText, setFieldValue } from "./card-test-utils"
+
+afterEach(() => {
+  document.body.replaceChildren()
+})
+
+function req(status: string, extra: Partial<BomRevisionChangeRequestRow> = {}): BomRevisionChangeRequestRow {
+  return {
+    id: 3,
+    fromRevisionId: 10,
+    toRevisionId: 11,
+    reason: "Perbaiki komposisi bahan",
+    status,
+    requestedBy: 7,
+    decidedBy: status === "menunggu" ? null : 8,
+    decidedAt: status === "menunggu" ? null : new Date("2026-10-22T08:00:00"),
+    decisionReason: status === "ditolak" ? "Belum perlu" : null,
+    createdAt: new Date("2026-10-22T07:00:00"),
+    ...extra,
+  }
+}
+
+function render(props: Partial<React.ComponentProps<typeof BomRevisionChangePanel>> = {}) {
+  return renderToStaticMarkup(
+    <BomRevisionChangePanel
+      owner={{ workOrderId: 5 }}
+      documentStatus="in_progress"
+      currentRevision={{ id: 10, revisionNo: 2 }}
+      revisionOptions={[{ id: 11, revisionNo: 3 }]}
+      requests={[]}
+      revisionNoById={{ 10: 2, 11: 3 }}
+      userNameById={{ 7: "Andi", 8: "Budi" }}
+      itemNameById={{ 100: "Kampas Rem" }}
+      canManage
+      currentUserId={8}
+      {...props}
+    />,
+  )
+}
+
+describe("BomRevisionChangePanel F-2026-10-22-068-S", () => {
+  it("tanpa pin revisi: panel senyap (null)", () => {
+    expect(render({ currentRevision: null })).toBe("")
+  })
+
+  it("kosong: judul + revisi terpasang + tombol ajukan + status kosong", () => {
+    const html = render()
+    expect(html).toContain("Ganti Revisi BOM")
+    expect(html).toContain("Rev. 2")
+    expect(html).toContain("+ Ganti Revisi BOM")
+    expect(html).toContain("Belum ada pengajuan ganti revisi BOM")
+  })
+
+  it("menunggu oleh orang lain: label Menunggu + pengaju + Setujui/Tolak tampil", () => {
+    const html = render({ requests: [req("menunggu")] })
+    expect(html).toContain("Menunggu")
+    expect(html).toContain("Rev. 2 → Rev. 3")
+    expect(html).toContain("Perbaiki komposisi bahan")
+    expect(html).toContain("Diajukan oleh Andi")
+    expect(html).toContain("Setujui")
+    expect(html).toContain("Tolak")
+    // pengajuan menunggu menekan tombol ajukan baru
+    expect(html).not.toContain("+ Ganti Revisi BOM")
+    expect(html).toContain("menunggu keputusan")
+  })
+
+  it("menunggu oleh diri sendiri: tanpa Setujui/Tolak + catatan pemisahan tugas (SoD)", () => {
+    const html = render({ requests: [req("menunggu")], currentUserId: 7 })
+    expect(html).not.toContain("Setujui")
+    expect(html).not.toContain("Tolak")
+    expect(html).toContain("tidak dapat Anda putuskan sendiri")
+  })
+
+  it("tanpa izin kelola: tanpa tombol ajukan/putus, daftar tetap terlihat", () => {
+    const html = render({ requests: [req("menunggu")], canManage: false })
+    expect(html).not.toContain("+ Ganti Revisi BOM")
+    expect(html).not.toContain("Setujui")
+    expect(html).toContain("Rev. 2 → Rev. 3")
+  })
+
+  it("diterapkan_langsung/disetujui/ditolak: label status + putusan, tanpa aksi putus", () => {
+    const langsung = render({ requests: [req("diterapkan_langsung")] })
+    expect(langsung).toContain("Diterapkan Langsung")
+    expect(langsung).not.toContain("Setujui")
+    // diterapkan langsung tidak memblokir pengajuan berikut
+    expect(langsung).toContain("+ Ganti Revisi BOM")
+
+    const disetujui = render({ requests: [req("disetujui")] })
+    expect(disetujui).toContain("Disetujui")
+    expect(disetujui).toContain("Diputuskan oleh Budi")
+    expect(disetujui).not.toContain("Setujui")
+
+    const ditolak = render({ requests: [req("ditolak")] })
+    expect(ditolak).toContain("Ditolak")
+    expect(ditolak).toContain("Alasan keputusan: Belum perlu")
+    expect(ditolak).not.toContain("Tolak")
+  })
+
+  it("pin pasangan Q-BOM68-4: kedua pin tampil + ganti dokumen ini tidak mengubah pin pasangan", () => {
+    const html = render({
+      pairedPins: [{ label: "order produksi", documentNo: "PO-001", revisionNo: 4 }],
+    })
+    expect(html).toContain("Pin order produksi PO-001")
+    expect(html).toContain("Rev. 4")
+    expect(html).toContain("tidak mengubah pin order produksi")
+    // tanpa pasangan: tidak ada catatan pin pasangan
+    expect(render()).not.toContain("Pin order produksi")
+    expect(render()).not.toContain("tidak mengubah pin")
+  })
+
+  it("dokumen tutup: tanpa tombol ajukan + catatan tutup", () => {
+    const html = render({ documentStatus: "completed" })
+    expect(html).not.toContain("+ Ganti Revisi BOM")
+    expect(html).toContain("sudah ditutup")
+  })
+
+  it("tanpa revisi released lain: tanpa tombol + catatan belum ada revisi lain", () => {
+    const html = render({ revisionOptions: [] })
+    expect(html).not.toContain("+ Ganti Revisi BOM")
+    expect(html).toContain("Belum ada revisi BOM released lain")
+  })
+
+  it("gerbang pratinjau AC-BOM68-6: dialog terbuka tanpa pratinjau -> Kirim nonaktif + petunjuk pilih revisi", () => {
+    const { container, root } = renderCard(
+      <BomRevisionChangePanel
+        owner={{ workOrderId: 5 }}
+        documentStatus="in_progress"
+        currentRevision={{ id: 10, revisionNo: 2 }}
+        revisionOptions={[{ id: 11, revisionNo: 3 }]}
+        requests={[]}
+        revisionNoById={{ 10: 2, 11: 3 }}
+        userNameById={{ 7: "Andi", 8: "Budi" }}
+        itemNameById={{ 100: "Kampas Rem" }}
+        canManage
+        currentUserId={8}
+      />,
+    )
+    act(() => {
+      clickButtonByText(container, "+ Ganti Revisi BOM")
+    })
+    // alasan terisi, revisi tujuan belum dipilih -> pratinjau belum ada
+    act(() => {
+      setFieldValue(container, "#bom-change-reason", "Perbaiki komposisi bahan")
+    })
+    const text = container.textContent ?? ""
+    expect(text).toContain(
+      "Pilih revisi tujuan untuk melihat pratinjau selisih sebelum mengirim pengajuan.",
+    )
+    const submit = [...container.querySelectorAll("button")].find(
+      (b) => b.textContent === "Kirim Pengajuan",
+    )
+    expect(submit).toBeDefined()
+    expect(submit!.hasAttribute("disabled")).toBe(true)
+    unmountCard(root)
+  })
+
+  it("pratinjau delta: baris issuedQty > 0 berlabel Terkunci verbatim, baris 0 tanpa label", () => {
+    const html = renderToStaticMarkup(
+      <BomRevisionDeltaPreviewTable
+        lines={[
+          {
+            itemId: 100,
+            itemName: "Kampas Rem",
+            oldQtyPerUnit: 2,
+            newQtyPerUnit: 3,
+            newNeededQty: 30,
+            issuedQty: 7,
+            coverage: "kurang",
+          },
+          {
+            itemId: 101,
+            itemName: "Baut Roda",
+            oldQtyPerUnit: 4,
+            newQtyPerUnit: 4,
+            newNeededQty: 40,
+            issuedQty: 0,
+            coverage: "tercakup",
+          },
+        ]}
+      />,
+    )
+    expect(html).toContain("Kampas Rem")
+    // label persis kontrak BOT 3 PR #606; angka issuedQty verbatim (7), bukan turunan newNeededQty (30)
+    expect(html).toContain("Terkunci — sudah keluar 7")
+    expect(html).not.toContain("Terkunci — sudah keluar 30")
+    // baris issuedQty 0 tidak berlabel terkunci
+    expect(html.match(/Terkunci — sudah keluar/g)).toHaveLength(1)
+    expect(html).toContain("Baut Roda")
+    expect(html).toContain("Kurang")
+    expect(html).toContain("Tercakup")
+  })
+})
+
+describe("isBomRevisionSubmitDisabled gerbang pratinjau F-2026-10-22-068-S", () => {
+  const siap = {
+    isPending: false,
+    previewLoading: false,
+    preview: { lines: [], hasGenuinelyNew: false },
+    toRevisionId: "11",
+    reason: "Perbaiki komposisi bahan",
+  }
+
+  it("semua siap -> aktif", () => {
+    expect(isBomRevisionSubmitDisabled(siap)).toBe(false)
+  })
+
+  it("pratinjau belum tampil (null) -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, preview: null })).toBe(true)
+  })
+
+  it("pratinjau dimuat ulang -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, previewLoading: true })).toBe(true)
+  })
+
+  it("pengiriman berjalan -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, isPending: true })).toBe(true)
+  })
+
+  it("tujuan/alasan kosong -> nonaktif", () => {
+    expect(isBomRevisionSubmitDisabled({ ...siap, toRevisionId: "" })).toBe(true)
+    expect(isBomRevisionSubmitDisabled({ ...siap, reason: "  " })).toBe(true)
+})
+})

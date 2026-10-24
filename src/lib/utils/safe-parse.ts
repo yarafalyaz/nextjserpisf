@@ -5,9 +5,20 @@
 
 /**
  * Safely parse a number from form data. Returns null if invalid.
+ *
+ * Hanya notasi desimal murni (opsional tanda +/-, digit, satu titik desimal) —
+ * pola repo (/^[0-9]+$/ di route workflow/print/attachments/notifications dan
+ * parseId invoice-exchange). Number() mentah menerima "0x10"->16, "1e3"->1000,
+ * "0b101"->5, " 5"->5, ""->0: ID/nominal tak terduga lolos ke query.
  */
+const DECIMAL_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/
 export function safeNumber(value: FormDataEntryValue | null | undefined): number | null {
   if (value === null || value === undefined || value === "") return null
+  if (typeof value === "string") {
+    // Tanpa trim: " 5"/"5 " bukan notasi desimal murni — Number() mentah
+    // menerimanya menjadi 5. Konsisten dengan /^[0-9]+$/ di route + parseId.
+    if (!DECIMAL_RE.test(value)) return null
+  }
   const num = Number(value)
   if (!Number.isFinite(num)) return null
   return num
@@ -26,8 +37,12 @@ export function requireNumber(value: FormDataEntryValue | null | undefined, fiel
 
 /**
  * Safely parse a positive integer (for IDs). Returns null if invalid.
+ *
+ * Desimal murni tanpa tanda/titik — "0x10"/"1e3"/"0b101"/" 5"/"+5"/"10.0"
+ * ditolak (sebelumnya lolos Number() menjadi 16/1000/5/5/10/10).
  */
 export function safeId(value: FormDataEntryValue | null | undefined): number | null {
+  if (typeof value === "string" && !/^[0-9]+$/.test(value)) return null
   const num = safeNumber(value)
   if (num === null || num <= 0 || !Number.isInteger(num)) return null
   return num
