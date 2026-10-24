@@ -1,4 +1,5 @@
 import type { VehicleMarginReport } from "@/lib/reports/vehicle-margin-data"
+import { UNBILLED_MEMO_STATUSES } from "@/lib/reports/vehicle-margin"
 import { formatAccounting } from "@/lib/utils/format"
 import {
   DetailTable,
@@ -42,6 +43,7 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
           <DetailTableTh align="right">Biaya Lain</DetailTableTh>
           <DetailTableTh align="right">Total Biaya</DetailTableTh>
           <DetailTableTh align="right">Margin Job Kendaraan</DetailTableTh>
+          <DetailTableTh align="right">{report.unbilledLabel}</DetailTableTh>
         </DetailTableHead>
         <DetailTableBody>
           {rows.map((row) => {
@@ -74,6 +76,28 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
                   {currency(row.profit)}
                   <span className="ml-2 text-xs text-muted-foreground">{row.marginPercent.toFixed(1)}%</span>
                 </DetailTableTd>
+                <DetailTableTd align="right">
+                  {row.unbilledMemo > 0 ? (
+                    <>
+                      {currency(row.unbilledMemo)}
+                      <div className="mt-1 flex flex-wrap justify-end gap-1">
+                        {UNBILLED_MEMO_STATUSES.filter(
+                          (status) => row.unbilledByStatus[status] > 0,
+                        ).map((status) => (
+                          <span
+                            key={status}
+                            aria-label={`${report.unbilledLabel} ${status} ${currency(row.unbilledByStatus[status])}`}
+                            className="rounded bg-warning/15 px-1.5 py-0.5 text-xs font-medium text-warning"
+                          >
+                            {status} {currency(row.unbilledByStatus[status])}
+                          </span>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </DetailTableTd>
               </DetailTableRow>
             )
           })}
@@ -90,9 +114,20 @@ export function VehicleMarginCard({ report }: Readonly<{ report: VehicleMarginRe
               {currency(totals.profit)}
               <span className="ml-2 text-xs text-muted-foreground">{totals.marginPercent.toFixed(1)}%</span>
             </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              {totals.unbilledMemo > 0 ? currency(totals.unbilledMemo) : "—"}
+            </DetailTableTd>
           </DetailTableFootRow>
         </DetailTableFoot>
       </DetailTable>
+
+      {totals.unbilledMemo > 0 ? (
+        <p className="mt-4 text-xs text-muted-foreground">
+          Total {report.unbilledLabel}: {currency(totals.unbilledMemo)} — memo invoice yang belum
+          ditagih; bukan pendapatan, tidak masuk TOTAL di atas dan tidak mempengaruhi margin job
+          kendaraan.
+        </p>
+      ) : null}
 
       <p className="mt-4 text-xs text-muted-foreground">
         Margin job kendaraan adalah ringkasan read-only dari job yang sudah tertagih dan berbiaya; bukan laba
