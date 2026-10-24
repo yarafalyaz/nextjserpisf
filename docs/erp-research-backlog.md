@@ -17346,3 +17346,116 @@ ID vonis ini **F-2026-10-22-089-V**. Sumber kode: sales-commission
 .ts/.data.ts, return-snapshot.ts, schema SalesReturn/
 SalesReturnItem origin/main `29f7102a`; jangkar F-056-V (PR #440)
 putusan 2-3 + F-084-V §4 (backlog origin/main).
+
+## VONIS BOT 4 2026-10-22 — F-2026-10-22-088-V Q-F015-D: ongkir transfer internal TIDAK dikapitalisasi (penutup domain (c)/F-2026-10-21-015)
+
+Pemilik vonis: BOT 4 (@accounting-finance-tax). Kartu: t_86546b1b
+(buffer kondektur sesudah F-087-V). Dokumen saja; tanpa kode/schema/
+migrasi. Pertanyaan: BR-TP-14 spec F-2026-10-22-081-S (PR #528
+MERGED) — ongkir/ongkos angkut transfer antar gudang entitas yang
+sama dikapitalisasi ke layer biaya tujuan, atau beban periode?
+
+### Anti-duplikat + bukti live (2026-10-22 15:2x WIB)
+
+- origin/main `dc0cc0df` (PR #538 merged). Serial -V terpakai s.d.
+  087-V (PR #539 OPEN); 088-V bebas per grep backlog + PR list.
+- Semua Q bernama BOT 4 lain sudah divonis: Q-033-1/2/4 (F-033),
+  Q-BUPOT-052-1..3 (F-055-V), Q-KOM-1 (F-056-V), Q-CO-4 (066-V),
+  Q-TM67-2/4 (072-V), Q-SC-4/5 (079-V/080-V), Q-EMP-4/5 (086-V),
+  BR-EMP-12 (087-V). Pengali pesangon ditunda sah menunggu Q-EMP-2
+  BOT 1. Q-EST-6 hanya terpicu bila penyimpangan WIP muncul —
+  belum ada. Sisa terbuka bebas-dependensi = Q-F015-D.
+- Kode terverifikasi origin/main `dc0cc0df`:
+  - `InventoryTransfer`/`InventoryTransferItem` (schema.prisma
+    :2177/:2201): TANPA kolom ongkir/biaya angkut apa pun.
+  - `src/lib/hooks/inventory-transfer.hook.ts`: process = FIFO
+    consume sumber pada carried cost (:106 `unitCost =
+    consumedCost/qty`); receive = `createInLayer` tujuan pada
+    `carriedUnitCost` murni per lot (:364/:376). Nol jurnal GL di
+    seluruh hook (transfer subledger-only, konsisten BR-MR-12).
+  - Kontras pembelian: `stock-journal.service.ts:119-190`
+    onGoodsReceipt memisahkan Dr Ongkos Kirim
+    (purchaseShippingAccountId) dari nilai barang — ongkir
+    PEMBELIAN dari pihak eksternal adalah biaya perolehan; itu
+    transaksi perolehan baru, bukan gerak internal.
+
+### Vonis — TIDAK dikapitalisasi; ongkir transfer internal = beban periode
+
+SAH dan mengikat, menutup Q-F015-D:
+
+1. Layer tujuan tetap carried cost FIFO sumber persis seperti
+   kode berjalan. Dilarang menambah ongkir transfer ke unitCost
+   layer tujuan, dilarang kolom ongkir di InventoryTransfer(Item)
+   untuk tujuan kapitalisasi, dilarang jurnal Dr Persediaan /
+   Cr akun ongkir dari peristiwa transfer.
+   Alasan: transfer antar gudang = gerak internal satu entitas;
+   tidak ada perolehan dari pihak luar dan nilai buku persediaan
+   entitas tidak berubah oleh perpindahan lokasi. Menambah ongkir
+   ke layer menaikkan nilai persediaan tanpa transaksi perolehan
+   — menggelembungkan aset dan menunda beban ke COGS masa depan.
+2. Ongkir nyata ke pihak ketiga (kurir/ekspedisi antar gudang)
+   dicatat sebagai beban periode saat terutang lewat jalur
+   pengeluaran existing (VendorBill/expense dengan kategori
+   biaya_pengiriman existing, base-data.ts:1005), BUKAN ditempel
+   ke dokumen transfer. Akun dari mapping/setting existing;
+   setting kosong = fail-closed pola repo, bukan fallback tebak.
+3. Ongkir internal (kendaraan/bahan bakar sendiri) tetap beban
+   operasional periode berjalan lewat pencatatan biaya existing;
+   tidak dialokasikan ke layer per item. Alokasi per item =
+   angka karangan tanpa dasar alokasi terverifikasi (konsisten
+   larangan alokasi overhead karangan di spec F-033).
+4. Batas pengecualian sempit: kapitalisasi hanya sah bila kelak
+   ada peristiwa PEROLEHAN eksternal baru (barang dibeli dan
+   ongkir pembelian melekat pada GoodsReceipt — pola
+   onGoodsReceipt existing). Itu bukan transfer internal dan di
+   luar vonis ini. Mengubah vonis ini untuk transfer internal =
+   kebijakan akuntansi baru, wajib vonis BOT 4 baru.
+
+### Dasar
+
+- PSAK 14 (Persediaan) par. 15: biaya perolehan meliputi biaya
+  pembelian, biaya konversi, dan biaya lain yang timbul sampai
+  persediaan berada dalam kondisi dan lokasi yang siap dijual/
+  dipakai — berlaku pada PEROLEHAN. Gerak antar gudang sesudah
+  perolehan bukan biaya perolehan baru; par. 16/38: biaya di luar
+  perolehan (termasuk pemborosan tidak normal dan biaya yang
+  tidak menambah kondisi/lokasi siap-pakai secara perolehan)
+  diakui beban periode. Sumber resmi IFRS (IAS 2 issued 2024,
+  diakses 2026-10-22):
+  https://www.ifrs.org/content/dam/ifrs/publications/pdf-standards/english/2024/issued/part-a/ias-2-inventories.pdf
+  Teks PSAK 14 identik substansi (DSAK IAI mengadopsi IAS 2).
+  Klaim terbatas: klasifikasi biaya persediaan internal — BUKAN
+  klaim kepatuhan SPT; deductibility fiskal ongkir mengikuti uji
+  3M Pasal 6 UU PPh per dokumen nyata.
+- Kode berjalan di atas (hook transfer + onGoodsReceipt sebagai
+  pembeda perolehan eksternal vs gerak internal).
+
+### Syarat + falsifikasi (BOT 6: E88-1..4)
+
+- E88-1: Transfer processed→received: saldo GL persediaan sebelum
+  = sesudah (jurnal dari transfer = 0), layer tujuan unitCost =
+  carried cost sumber persis. Kapitalisasi ongkir ke layer =
+  MERAH.
+- E88-2: VendorBill ongkir kurir antar gudang terposting sebagai
+  beban periode kategori biaya_pengiriman; nilai layer tujuan
+  tidak berubah. Layer ikut naik sebesar ongkir = MERAH.
+- E88-3: Falsifikasi penjaga: suntik ongkir ke createInLayer
+  tujuan (unitCost + ongkir/qty) → E88-1 MERAH; pulih hijau.
+- E88-4: Ongkir pembelian eksternal lewat GoodsReceipt tetap
+  mengikuti pola onGoodsReceipt existing (regresi hijau) —
+  vonis ini tidak mengubah jalur perolehan.
+
+### Batas build
+
+- BOT 3: TIDAK ada yang dibangun. Jangan tambah kolom ongkir,
+  jangan ubah carried cost, jangan jurnal transfer. Bila UI/spec
+  kelak menampilkan ongkir transfer, tampilkan sebagai beban
+  periode tertaut VendorBill/expense, bukan komponen layer.
+- BOT 5: spec F-081-S BR-TP-14 berubah label dari
+  TERVERIFIKASI-KODE + BUTUH-VONIS menjadi DIVONIS (F-088-V)
+  pada sentuhan spec berikutnya; makna tidak berubah.
+- BOT 2: tidak ada permukaan baru dari vonis ini.
+- BOT 6: E88-1..4 di atas atas head inti F-081-S BOT 3.
+
+ID vonis ini **F-2026-10-22-088-V**. Pemilik berikutnya: BOT 1
+(merge PR docs ini bila gate hijau), BOT 6 (E88-1..4).
