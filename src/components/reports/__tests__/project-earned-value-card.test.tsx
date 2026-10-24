@@ -9,86 +9,28 @@ import {
   PROJECT_EARNED_VALUE_SCHEDULE_LABEL,
   PROJECT_EARNED_VALUE_STAGE_NO_BUDGET_LABEL,
   PROJECT_EARNED_VALUE_UNALLOCATED_REALIZED_NOTICE,
-  buildProjectEarnedValue,
-  type ProjectEarnedValueInput,
   type ProjectEarnedValueResult,
 } from "@/lib/reports/project-earned-value"
-import type { ProjectBudgetResult } from "@/lib/reports/project-budget"
-import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
+import { renderCard, unmountCard, renderCardText, clearRenderedCards } from "./card-test-utils"
+import {
+  projectEarnedValueBudgetFixture,
+  projectEarnedValueResultFixture,
+} from "@/lib/reports/__tests__/project-earned-value-test-fixtures"
 
 afterEach(() => {
   clearRenderedCards()
 })
 
-const LOCKED_AT = new Date(2026, 9, 20, 9, 0, 0)
-const AS_OF = new Date(2026, 10, 15, 0, 0, 0)
-
-function budget(over: Partial<ProjectBudgetResult> = {}): ProjectBudgetResult {
-  return {
-    projectId: 1,
-    contractAmount: 120_000_000,
-    contractSource: "quotation",
-    isLocked: true,
-    budgetRevisionNo: 2,
-    perStageBudget: [
-      {
-        projectStageId: 11,
-        stageName: "Tahap A",
-        categories: [{ category: "material", amount: 60_000_000 }],
-        total: 60_000_000,
-      },
-      {
-        projectStageId: 12,
-        stageName: "Tahap B",
-        categories: [{ category: "labor", amount: 40_000_000 }],
-        total: 40_000_000,
-      },
-    ],
-    unallocatedBudget: { categories: [], total: 0 },
-    perStageRealized: [
-      { projectStageId: 11, stageName: "Tahap A", realized: null, hasStageAllocation: false },
-      { projectStageId: 12, stageName: "Tahap B", realized: null, hasStageAllocation: false },
-    ],
-    totalBudget: 100_000_000,
-    realizedTotal: 0,
-    unallocatedRealized: 0,
-    varianceTotal: 100_000_000,
-    marginRencana: 20_000_000,
-    revenue: 0,
-    ...over,
-  }
-}
-
-function earnedValueFixture(over: Partial<ProjectEarnedValueInput> = {}): ProjectEarnedValueResult {
-  return buildProjectEarnedValue({
-    budget: budget({ realizedTotal: 50_000_000 }),
-    budgetLockedAt: LOCKED_AT,
-    stageProgress: [
-      { projectStageId: 11, stageStatus: "in_progress", latestProgressPercent: 50 },
-      { projectStageId: 12, stageStatus: "completed", latestProgressPercent: 100 },
-    ],
-    startDate: new Date(2026, 9, 1, 0, 0, 0),
-    endDate: new Date(2026, 11, 31, 0, 0, 0),
-    asOf: AS_OF,
-    ...over,
-  })
-}
-
 function renderEarnedValueText(earnedValue: ProjectEarnedValueResult | null) {
-  const { container, root } = renderCard(<ProjectEarnedValueCard earnedValue={earnedValue} />)
-  const text = container.textContent ?? ""
-  const found = {
-    card: container.querySelector('[aria-label="Progres Tertimbang Proyek"]') !== null,
-    stages: container.querySelector('[aria-label="Progres tertimbang per tahap"]') !== null,
-  }
-  const hasTable = container.querySelector("table") !== null
-  unmountCard(root)
-  return { text, found, hasTable }
+  return renderCardText(<ProjectEarnedValueCard earnedValue={earnedValue} />, {
+    card: "Progres Tertimbang Proyek",
+    stages: "Progres tertimbang per tahap",
+  })
 }
 
 describe("ProjectEarnedValueCard F-2026-10-21-031", () => {
   it("A1: bobot 60/40 x progres 50/100 tampil progres tertimbang 70,00% + EV persis builder", () => {
-    const { text, found, hasTable } = renderEarnedValueText(earnedValueFixture())
+    const { text, found, hasTable } = renderEarnedValueText(projectEarnedValueResultFixture())
     expect(found.card).toBe(true)
     expect(found.stages).toBe(true)
     expect(hasTable).toBe(true)
@@ -113,7 +55,7 @@ describe("ProjectEarnedValueCard F-2026-10-21-031", () => {
   })
 
   it("label jadwal persis builder 'SPI (basis waktu proyek)', bukan 'SPI' polos; CPI hanya level proyek", () => {
-    const { text } = renderEarnedValueText(earnedValueFixture())
+    const { text } = renderEarnedValueText(projectEarnedValueResultFixture())
     expect(text).toContain(`${PROJECT_EARNED_VALUE_SCHEDULE_LABEL}:`)
     expect(text).toContain("CPI (proyek):")
     expect(text).toContain("Nilai Terencana (basis waktu):")
@@ -121,8 +63,8 @@ describe("ProjectEarnedValueCard F-2026-10-21-031", () => {
   })
 
   it("labels builder tampil apa adanya (overrun + tertinggal dari lintasan waktu)", () => {
-    const result = earnedValueFixture({
-      budget: budget({ realizedTotal: 80_000_000 }),
+    const result = projectEarnedValueResultFixture({
+      budget: projectEarnedValueBudgetFixture({ realizedTotal: 80_000_000 }),
       stageProgress: [
         { projectStageId: 11, stageStatus: "in_progress", latestProgressPercent: 10 },
         { projectStageId: 12, stageStatus: "in_progress", latestProgressPercent: 0 },
@@ -136,9 +78,9 @@ describe("ProjectEarnedValueCard F-2026-10-21-031", () => {
   })
 
   it("RAB belum terkunci -> notice verbatim builder, tanpa angka EV karangan", () => {
-    const result = earnedValueFixture({
+    const result = projectEarnedValueResultFixture({
       budgetLockedAt: null,
-      budget: budget({ isLocked: false, realizedTotal: 50_000_000 }),
+      budget: projectEarnedValueBudgetFixture({ isLocked: false, realizedTotal: 50_000_000 }),
     })
     expect(result.hasEarnedValue).toBe(false)
     const { text, found, hasTable } = renderEarnedValueText(result)
@@ -152,7 +94,7 @@ describe("ProjectEarnedValueCard F-2026-10-21-031", () => {
   })
 
   it("tahap bobot 0 berlabel builder, progresnya tidak masuk kontribusi tertimbang", () => {
-    const result = earnedValueFixture({
+    const result = projectEarnedValueResultFixture({
       stageProgress: [
         { projectStageId: 11, stageStatus: "in_progress", latestProgressPercent: 50 },
         { projectStageId: 12, stageStatus: "completed", latestProgressPercent: 100 },
