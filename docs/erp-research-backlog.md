@@ -23422,3 +23422,683 @@ BOT 1 (merge PR vonis + PR #519/#521, putus Q-PF-1/5) ->
 BOT 3 (kartu turunan agregator V-B1..V-B7, ajukan bentuk
 slip koreksi) -> BOT 2 -> BOT 6 AC-B1..B7. Peminta: BOT 5
 (spec F-076-S) + BOT 3 (kartu turunan yang diminta F-077-V).
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-001-S: masa berlaku daftar harga pelanggan (tanggal berakhir + antrean harga segera berakhir)
+
+> **Slot**: F-2026-10-25-001-S. Diperiksa bentrok 2026-10-25 vs `origin/main` (`8e28a8bb`): grep `F-2026-10-25` di `docs/erp-research-backlog.md` = 0; PR Business terbuka beda topik (#743 F-2026-10-24-135-S SLA tiket, #746 F-2026-10-24-141-S duplikat prospek). ID 001 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Induk**: F-2026-10-21-018 (d) P2 harga bertingkat kuantitas — cabang tingkat sudah terbangun (BR-TIER-01..14, spec 2026-10-22 01:33). Spec ini TIDAK menyentuh aturan tingkat; ia menutup celah ortogonal: **masa berlaku** baris harga. Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Harga promosi/kontrak per kategori pelanggan saat ini tidak bisa berakhir otomatis: sekali `effectiveDate` lewat, baris menang selamanya sampai operator ingat menonaktifkan manual. Celah ini membuat harga promo basi terus terpakai di faktur baru tanpa penanda apa pun. Spec ini membekukan: (A) satu kolom tanggal berakhir opsional di baris daftar harga + syarat resolver menghormatinya, (B) status turunan baca-saja (berlaku / segera berakhir / sudah berakhir / tanpa batas) tanpa menulis status baru, (C) antrean tinjau di halaman kelola existing. Angka jendela antrean = `USULAN`, bukan fakta; gerbang inti dibuka Lead.
+
+### 1. Inventarisasi terverifikasi (origin/main 8e28a8bb, 2026-10-25)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `CustomerPriceList` (`prisma/schema.prisma:574-594`): `customerCategoryId?`, `itemId`, `price`, `minQty` default 1.00, `effectiveDate DateTime?` (:580), `notes`, `isActive` default true (:582). Unique `[customerCategoryId, itemId, minQty, effectiveDate]` (:589). **Tidak ada kolom tanggal akhir/berakhir.**
+- Resolver murni `pickPriceListRow` (`src/lib/services/customer-price-list.service.ts:82-104`): syarat kandidat hanya `isActive` (:88), `qty >= minQty`, kategori cocok, dan `(effectiveDate === null || effectiveDate <= tanggal dokumen)` (:91). Urutan pemenang: kategori spesifik > minQty terbesar > `effectiveDate` terbaru (:95-102). **Tidak ada syarat batas akhir.**
+- Loader `loadPriceListRows` (service yang sama :206-224): memuat baris `isActive: true` per item+kategori, tanpa saringan tanggal; penyaringan tanggal murni di resolver.
+- Konsumen tunggal resolver: `src/actions/sales.actions.ts:41-42,70-75` (`loadPriceListRows` + `pickPriceListRow` saat baris faktur dibuat). Sumber harga terpersist di baris faktur existing (priceSource/priceListId, keluarga BR-TIER-09).
+- Kelola master existing: halaman `src/app/(dashboard)/penjualan/harga-pelanggan/page.tsx:16` gerbang `view_customer_price_lists`, muat maks 500 baris urut kategori/item/minQty/effectiveDate; tabel kolom "Berlaku Sejak" (`_components/customer-price-table.tsx:39-40`); aksi create/edit/delete di `src/actions/customer-price-list.actions.ts` (izin `create/edit/delete_customer_price_lists`, cek duplikat aplikasi :44-53 pola dipertahankan); skema Zod `src/lib/validations/price-list.schemas.ts` (`effectiveDate: optionalDateOnly`, tanpa tanggal akhir).
+- Katalog izin nyata (`src/lib/auth/module-catalog.generated.ts:141-144`): `view/create/edit/delete_customer_price_lists`. Tidak ada izin approve daftar harga (sudah diputus tidak ditambah di spec tingkat, backlog Q9 keluarga F-018).
+
+Belum ada / gap (bukti grep run ini):
+- Kolom berakhir: grep `expiresAt|validTo|endDate` pada model CustomerPriceList = 0. Baris harga tanpa batas akhir berlaku tanpa batas waktu.
+- Resolver batas akhir: syarat `effectiveDate <= docDate` satu-satunya gerbang tanggal (:91); tidak ada padanan `docDate <= tanggalBerakhir`.
+- Antrean/peringatan harga berakhir: grep antrean harga berakhir di `src/lib/reports/` dan halaman harga-pelanggan = 0. Halaman kelola tidak menandai baris yang sudah lewat masa atau segera berakhir; satu-satunya cara memberhentikan harga = edit manual `isActive`/hapus baris.
+
+### 2. Workflow specification
+
+Aktor: Admin Penjualan / Admin Master Data (kelola baris), Sales (konsumen harga di faktur, baca-saja), Lead (putus gerbang inti + angka jendela).
+
+Dokumen masuk: baris `CustomerPriceList` existing (kategori?, item, price, minQty, effectiveDate?). Dokumen keluar: faktur penjualan existing yang sumber harganya terpilih resolver; antrean tinjau baca-saja di halaman kelola.
+
+Alur:
+1. Admin membuat/mengubah baris harga; boleh mengisi tanggal berakhir (opsional). Kosong = tanpa batas (perilaku hari ini, dipertahankan).
+2. Resolver memilih harga per baris faktur: kandidat wajib aktif, sudah efektif, DAN belum berakhir pada tanggal dokumen. Dokumen bertanggal sebelum berakhir tetap memakai harga itu; dokumen sesudah berakhir jatuh ke kandidat berikutnya atau fallback `Item.price` (perilaku fallback existing BR-TIER-14).
+3. Halaman kelola menandai tiap baris dengan status masa turunan + antrean "segera berakhir" dalam jendela terpilih; admin memperpanjang (ubah tanggal berakhir), mengganti (baris baru), atau membiarkan berakhir.
+4. Tidak ada cron/notifikasi tahap 1; tidak ada perubahan harga dokumen yang sudah terbit.
+
+### 3. Status-transition matrix (status turunan, BUKAN kolom baru)
+
+Status di bawah diturunkan dari (effectiveDate, tanggalBerakhir, isActive, tanggal acuan) pada saat baca. Tidak ada transisi yang menulis DB.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (baris dibuat, tanggalBerakhir kosong) | — | tanpa_batas | — |
+| tanpa_batas / belum_berlaku | tanggal acuan mencapai effectiveDate | berlaku | resolver: effectiveDate <= tgl dokumen |
+| berlaku | sisa hari <= jendela antrean | segera_berakhir | jendela tetap terpilih (Q-PX-2) |
+| berlaku / segera_berakhir | tanggal acuan > tanggalBerakhir | sudah_berakhir | resolver menolak kandidat |
+| semua | isActive=false (edit/delete existing) | nonaktif | izin edit/delete existing |
+| sudah_berakhir | admin ubah tanggalBerakhir ke masa depan | berlaku/segera_berakhir (turunan ulang) | izin edit; tanpa "menghidupkan" dokumen lama |
+
+### 4. Role/permission matrix (key nyata katalog :141-144)
+
+| Aksi | Admin Penjualan/Master | Sales | Peran lain |
+|---|---|---|---|
+| Lihat daftar harga + status masa + antrean | `view_customer_price_lists` | `view_customer_price_lists` (bila diberi) | ditolak |
+| Buat baris + tanggal berakhir | `create_customer_price_lists` | ditolak | ditolak |
+| Ubah tanggal berakhir / perpanjang | `edit_customer_price_lists` | ditolak | ditolak |
+| Nonaktifkan/hapus | `edit/delete_customer_price_lists` | ditolak | ditolak |
+| Pakai harga di faktur | resolver server (izin faktur existing) | izin faktur existing | — |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-PX-1 Lead). Tidak ada gerbang approve perubahan harga (konsisten putusan keluarga F-018 Q9).
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-PX-01 | Tanggal berakhir OPSIONAL; kosong = tanpa batas, perilaku resolver hari ini tidak berubah untuk baris tanpa tanggal berakhir. | USULAN | service.ts:91 (hanya batas bawah) |
+| BR-PX-02 | Semantik batas INKLUSIF diusulkan: baris berlaku pada tanggal dokumen `t` bila `effectiveDate <= t` (null effectiveDate = selalu) DAN (`tanggalBerakhir` null ATAU `t <= tanggalBerakhir`). Tanggal dokumen, bukan tanggal hari ini, yang menentukan — faktur backdate memakai harga masa dokumennya. | USULAN (fisik Backend Q-PX-3) | pola BR-TIER-03 tanggal dokumen |
+| BR-PX-03 | Bila kandidat teratas sudah berakhir, resolver turun ke kandidat berikutnya menurut urutan pemenang existing (kategori spesifik > minQty terbesar > effectiveDate terbaru), lalu fallback Item.price. Dilarang "harga terakhir menang selamanya". | USULAN | service.ts:95-102; BR-TIER-14 |
+| BR-PX-04 | Dokumen sudah terbit TIDAK berubah: harga terpilih sudah terpersist sebagai unitPrice + sumber (priceListId) di baris faktur; mengubah/menghapus tanggal berakhir tidak menulis ulang dokumen mana pun. | TERVERIFIKASI-KODE (persist) + USULAN (larangan tulis ulang) | keluarga BR-TIER-09 |
+| BR-PX-05 | Status masa adalah TURUNAN baca-saja (tanpa kolom status, tanpa cron yang menulis isActive=false). Menonaktifkan tetap aksi edit/delete manual existing. | USULAN | schema:582 isActive manual |
+| BR-PX-06 | Validasi simpan: tanggalBerakhir (bila diisi) wajib >= effectiveDate (bila keduanya diisi); ditolak dengan pesan menyebut kedua tanggal. tanggalBerakhir di masa lalu saat simpan DITOLAK (mencegah baris lahir langsung mati tanpa jejak) — perpanjangan baris sudah berakhir hanya lewat edit yang menghasilkan masa depan atau tetap kosong. | USULAN | pola pesan duplikat actions:44-53 |
+| BR-PX-07 | Keunikan existing `[customerCategoryId, itemId, minQty, effectiveDate]` TIDAK diubah tahap 1; dua baris setara penuh dengan tanggal berakhir beda tetap error data existing, bukan pilihan diam-diam. | TERVERIFIKASI-KODE + USULAN | schema:589; BR-TIER-03 butir 8 |
+| BR-PX-08 | Antrean segera berakhir hanya menampilkan baris aktif dengan tanggalBerakhir terisi dalam jendela terpilih; baris tanpa batas dan baris nonaktif tidak masuk antrean. Urutan: tanggal berakhir naik, seri id naik. | USULAN | pola urutan deterministik repo |
+| BR-PX-09 | UI menampilkan tanggal berakhir + label status masa APA ADANYA dari server; UI dilarang menghitung sisa hari/status sendiri dan dilarang menyembunyikan baris sudah berakhir (tampil berlabel, supaya riwayat master terbaca). | USULAN | pola konsumen read-model repo |
+| BR-PX-10 | Tidak ada notifikasi/cron/WA tahap 1; antrean pasif di halaman kelola. Menambah pengingat aktif = putusan Lead Q-PX-4. | USULAN | — |
+| BR-PX-11 | Harga berakhir BUKAN peristiwa akuntansi: nol jurnal, nol ubah HPP/diskon dokumen berjalan. Diskon/pajak baris tetap aturan vonis tahap 1 price-list (sebelum subtotal/pajak). | TERVERIFIKASI-KODE (jalur harga) | service.ts:1-16 header vonis |
+| BR-PX-12 | VendorItemPrice (harga pemasok) TIDAK disentuh spec ini; masa berlaku harga beli = spec terpisah bila dibutuhkan. | USULAN (scope) | schema VendorItemPrice :552-573 tanpa tanggal akhir juga — dicatat, tidak diangkat |
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir Online | ISF (Silengkap) |
+|---|---|---|---|
+| Tanggal mulai berlaku harga | Ada "Mulai Berlaku" pada Penyesuaian Harga/Diskon (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/penyesuaian-harga-diskon/mengenal-fitur-penyesuaian-harga-diskon/) | Belum terverifikasi di help resmi yang diakses run ini (pencarian help.zahironline.com hanya memunculkan penawaran harga/faktur; ditulis belum terverifikasi, bukan diklaim absen) | Ada `effectiveDate` (TERVERIFIKASI-KODE schema:580) |
+| Harga mendatang terlihat sebelum berlaku | Ada kolom Harga Berlaku Saat Ini vs Harga Jual Mendatang (BENCHMARK: https://help.accurate.id/product/accurate-online/accurate-insight/cek-harga-jual-sebelum-berubah/) | Belum terverifikasi | Parsial: baris masa depan tersimpan tapi resolver baru memakainya saat tanggal dokumen tiba; tanpa label mendatang di halaman kelola |
+| Tanggal berakhir harga otomatis | Tidak ditemukan di dua halaman Accurate di atas (hanya mulai berlaku) — ditulis tidak ditemukan, bukan diklaim tidak ada | Belum terverifikasi | ABSEN (gap spec ini) |
+| Antrean harga segera berakhir | Tidak ditemukan di halaman di atas | Belum terverifikasi | ABSEN (gap spec ini) |
+
+### 7. Acceptance criteria (falsifikasi)
+
+Backend (sesudah gerbang Lead dibuka):
+- AC-PX-B1: dokumen bertanggal tepat pada tanggalBerakhir memakai harga baris itu; dokumen +1 hari TIDAK memakainya (turun kandidat/fallback). Membalik perbandingan batas = tes MERAH.
+- AC-PX-B2: baris tanpa tanggalBerakhir berperilaku byte-sama dengan resolver hari ini (regresi BR-TIER existing hijau).
+- AC-PX-B3: kandidat teratas berakhir -> kandidat berikutnya terpilih; mencabut syarat berakhir dari resolver = MERAH.
+- AC-PX-B4: simpan tanggalBerakhir < effectiveDate ditolak; tanggalBerakhir lampau saat buat ditolak.
+- AC-PX-B5: mengubah tanggalBerakhir sesudah faktur terbit tidak mengubah unitPrice/sumber faktur itu (snapshot byte-sama).
+- AC-PX-B6: antrean hanya baris aktif bertanggal berakhir dalam jendela; baris tanpa batas/nonaktif bocor = MERAH.
+
+Frontend (konsumen):
+- AC-PX-F1: kolom "Berlaku Sampai" + label status masa tampil verbatim server; UI menghitung sisa hari sendiri = MERAH (grep hitung tanggal di komponen).
+- AC-PX-F2: baris sudah berakhir tetap tampil berlabel, tidak hilang dari tabel.
+
+QA: AC-PX-B1..B6 + AC-PX-F1..F2 atas head Backend/Frontend persis; tambahan: resolver menerima tanggal dokumen (bukan now) dibuktikan dokumen backdate.
+
+Edge cases: EC-1 effectiveDate null + tanggalBerakhir terisi (berlaku sejak dulu s.d. berakhir). EC-2 tanggalBerakhir = effectiveDate (berlaku satu hari). EC-3 dua kandidat, yang spesifik berakhir dan yang umum belum -> umum menang. EC-4 qty tingkat: baris minQty besar berakhir, baris minQty kecil belum -> tingkat kecil menang (bukan fallback master). EC-5 zona waktu: tanggal dokumen WIB (date-only existing `wibDateToUtcMidnight`), perbandingan date-only bukan timestamp mentah. EC-6 baris berakhir di tengah periode laporan harga — laporan existing tidak berubah (master, bukan laporan).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-PX-1 (Lead): buka inti kolom tanggal berakhir sekarang? Key izin baru vs reuse view/create/edit/delete existing (spec usul reuse, tanpa key baru).
+- Q-PX-2 (Lead): jendela antrean segera berakhir — usul pilihan tetap 7/30/90 hari seperti pola antrean garansi F-2026-10-22-094-S, tanpa konfigurasi bebas. Angka ini USULAN sampai diputus.
+- Q-PX-3 (Backend): fisik kolom (nama/map/index), perbandingan date-only resolver, dan apakah loader perlu menyaring di query atau tetap saring murni di resolver (spec usul resolver murni, loader tidak berubah makna).
+- Q-PX-4 (Lead): pengingat aktif (cron/notifikasi) ditunda tahap 1 — sahkan.
+- Q-PX-5 (Accountant): TIDAK diminta tahap ini — harga berakhir tidak mengubah perlakuan pajak/diskon dokumen terbit (BR-PX-11). Dipanggil lagi hanya bila ada usul harga berlaku surut mengubah dokumen berjalan (spec ini melarangnya).
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-001-S | Spec ini (dokumen) | Business | — |
+| (turunan) inti tanggal berakhir + resolver + antrean loader | Backend | Q-PX-1/2/3 diputus Lead; klaim schema.prisma di board | — |
+| (turunan) UI kolom/label/antrean halaman harga-pelanggan | Frontend | kontrak Backend stabil; kata §7 verbatim | — |
+| (turunan) falsifikasi AC-PX-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Masa berlaku VendorItemPrice (harga beli): celah sama ada, tapi dampaknya rujukan manual (schema VendorItemPrice komentar "murni rujukan, belum mengikat transaksi") — YAGNI sampai harga beli mengikat dokumen.
+- Perpanjangan massal / salin baris harga: belum ada bukti kebutuhan; edit per baris cukup tahap 1.
+- Notifikasi WA/cron harga berakhir: ditunda Q-PX-4, antrean pasif dulu.
+---
+
+## VONIS BOT Accountant 2026-10-24 — F-2026-10-24-135-V: penjualan besi tua hasil scrap — pendapatan lain-lain (bukan pengurang HPP), PPN penyerahan BKP jalur faktur existing, label kelalaian TANPA dampak uang otomatis (BR-SCRAP-06/09 spec F-2026-10-24-098-S)
+
+Status: PUTUSAN BOT Accountant (kartu t_601d9e56). Dokumen saja;
+TANPA kode aplikasi/schema/migrasi di kartu ini. Menjawab HANDOFF
+BUSINESS -> ACCOUNTANT F-2026-10-24-098-S: (1) perlakuan uang
+penjualan besi tua (pengurang HPP vs pendapatan lain-lain),
+(2) PPN atas jual besi tua bila ada, (3) dampak uang label
+disposisi `kelalaian` ke karyawan. Pencatatan kg (D-S98-03)
+TIDAK ditahan vonis ini.
+
+### 0. Basis bukti live (worktree origin/main 0395e9cb, 2026-10-24) — TERVERIFIKASI-KODE
+
+- Scrap murni TIDAK pernah menjadi persediaan tercatat: vonis
+  F-2026-10-22-066-V P3 — scrap normal = biaya job (mengalir
+  WIP -> FG), scrap abnormal = beban periode (Dr Beban Kerugian
+  Produksi / Cr WIP, flag `abnormalScrapPostingEnabled` default
+  MATI), remnant usable = catatan kuantitas di luar stok (nol
+  nilai buku, `Remnant` schema:3449-3480). Nol model penjualan
+  scrap di schema (grep `ScrapSale|besi` = 0, spec §0). Jadi
+  besi tua di penampungan = aset tak tercatat (nilai buku Rp0).
+- COA existing sudah memuat `710003` "Penjualan Persediaan /
+  Perlengkapan" (reportGroup OINC, induk 7100 Pendapatan Diluar
+  Usaha; `src/lib/setup/base-data.ts:857`) dan `710005`
+  "Pendapatan Diluar Usaha Lainnya". TIDAK ada setting
+  SystemSetting untuk pendapatan penjualan scrap (deretan
+  `*AccountId` schema:191-264 tidak memuatnya).
+- Jalur faktur penjualan existing `onSalesInvoicePosted`
+  (accounting.hook.ts:254): Dr Piutang (totalAmount) / Cr
+  Pendapatan (`salesRevenueAccountId`) + Cr PPN Keluaran
+  (`salesTaxAccountId`) + Dr COGS / Cr Persediaan atas cost
+  baris. Akun pendapatan dibaca dari setting, fail-closed.
+- Penjualan besi tua BELUM punya dokumen/jalur apa pun hari ini.
+
+### Putusan 1 — Hasil jual besi tua = PENDAPATAN LAIN-LAIN bruto, DILARANG mengurang HPP/COGS/beban scrap
+
+- Seluruh hasil penjualan besi tua diakui sebagai pendapatan
+  lain-lain sebesar nilai transaksi (DPP, tanpa PPN — komponen
+  PPN dipisah per Putusan 3), pada akun pendapatan lain-lain
+  dari setting (Putusan 4). DILARANG: (a) Cr COGS/HPP,
+  (b) Cr Beban Kerugian Produksi / akun abnormal scrap,
+  (c) Cr WIP atau Cr Persediaan, (d) neto terhadap nilai scrap
+  abnormal yang pernah dibebankan.
+- Alasan: biaya bahan scrap SUDAH diakui penuh satu kali —
+  scrap normal masuk biaya job/WIP/FG, scrap abnormal masuk
+  beban periode (066-V). Besi tua tidak punya nilai buku
+  (Putusan §0). Mengkredit HPP/beban saat menjual = pengurang
+  biaya kedua atas biaya yang sama (double relief) dan
+  mengaburkan beban abnormal yang wajib tampil utuh di laporan
+  scrap (066-V P5). Secara substansi PSAK 72/kerangka
+  pendapatan: hasil pelepasan sisa produksi yang bukan output
+  utama bukan pengurang harga pokok output utama; ia imbalan
+  penyerahan tersendiri. Pola konsisten dengan akun existing
+  710003 yang memang disediakan untuk penjualan
+  persediaan/perlengkapan di luar usaha utama.
+
+### Putusan 2 — Jalur dokumen: faktur penjualan existing; DILARANG dokumen/jurnal penjualan scrap terpisah
+
+- Penjualan besi tua WAJIB lewat dokumen penjualan existing
+  (SalesInvoice -> `onSalesInvoicePosted`) dengan item besi
+  tua (Item non-stok / stok bernilai-buku-nol yang TIDAK
+  melahirkan kaki COGS fiktif: cost baris = 0 karena tak ada
+  nilai buku; BOT Backend tetapkan bentuk itemnya, klaim
+  schema.prisma di board dulu bila perlu kolom baru).
+  DILARANG: modul/dokumen "ScrapSale" kedua, jurnal manual
+  umum untuk hasil jual, penerimaan kas tanpa dokumen.
+- Alasan: satu jalur faktur = satu rantai piutang, PPN
+  Keluaran, nomor dokumen, dan rekonsiliasi SPT. Jalur kedua
+  untuk barang yang sama-sama diserahkan ke pembeli = dua
+  sumber kewajiban PPN dan celah penjualan tanpa faktur.
+- Penerimaan uang mengikuti status pembayaran faktur existing
+  (empat status tetap terpisah: dokumen, pembayaran, pajak,
+  posting). Penjualan tunai ke pengepul tetap faktur +
+  pembayaran existing, bukan jurnal kas langsung.
+
+### Putusan 3 — PPN: penyerahan BKP terutang lewat faktur existing; TIDAK ada tarif/DPP khusus besi tua di sistem
+
+- Besi tua hasil scrap adalah BKP; penyerahannya oleh PKP
+  terutang PPN dan dipungut lewat faktur pajak jalur
+  TaxInvoice existing dengan kode transaksi, DPP, dan tarif
+  dari master pajak bertanggal efektif yang berlaku umum
+  untuk penyerahan BKP (pola PMK-131/2024/PMK-11/2025 untuk
+  BKP non-mewah). DILARANG: (a) hardcode tarif/DPP nilai lain
+  khusus "besi tua/scrap" di kode, (b) memperlakukan jual
+  besi tua non-PPN hanya karena asalnya scrap, (c) memakai
+  DPP nilai lain/besaran tertentu tanpa dasar PMK objek itu.
+- Batas jujur: run ini TIDAK menemukan PMK DPP nilai lain /
+  besaran tertentu yang objeknya penyerahan besi
+  tua/rongsokan oleh pabrikan ke pengepul; rezim khusus
+  (mis. pemungutan oleh pihak tertentu) yang mungkin melekat
+  pada pola pembeli nyata ISF = `BUTUH-VONIS-AKUNTAN` per
+  pola transaksi, jangan ditebak di build. Bila pembeli
+  adalah Pemungut PPN, perlakuan mengikuti status pemungut
+  pembeli lewat konfigurasi pajak existing, bukan cabang
+  kode besi tua.
+- Penjual non-PKP / di bawah ambang: di luar vonis; sistem
+  tidak memungut dari status yang tidak dibuktikan master
+  pajak perusahaan.
+
+### Putusan 4 — Akun: setting baru fail-closed diajukan ke BOT Backend; TANPA akun baru vonis ini tidak boleh dibypass fallback
+
+- Akun pendapatan: usulan setting SystemSetting baru
+  `scrapSaleIncomeAccountId` (nama fisik final milik BOT
+  Backend) menunjuk akun OINC aktif — kandidat seed existing
+  `710003` "Penjualan Persediaan / Perlengkapan". Kosong saat
+  faktur besi tua diposting = posting DITOLAK berisik
+  (fail-closed, pola `onSalesInvoicePosted` untuk akun
+  penjualan). DILARANG fallback ke `salesRevenueAccountId`
+  (400001 Penjualan — mencampur pendapatan usaha utama dengan
+  hasil scrap) atau ke 710005 diam-diam.
+- Karena jalur existing membaca `salesRevenueAccountId`,
+  BOT Backend WAJIB mengajukan bentuk fisik pemetaan per
+  dokumen (mis. penanda item/dokumen besi tua -> akun setting
+  baru) ke BOT Accountant sebelum migrasi; vonis ini memutus
+  perlakuan + syarat fail-closed-nya, bukan bentuk kolomnya.
+- Lawan jurnal mengikuti faktur existing: Dr Piutang/Kas
+  sebesar totalAmount, Cr Pendapatan lain-lain sebesar DPP,
+  Cr PPN Keluaran sebesar taxAmount; kaki COGS atas besi tua
+  = Rp0 (tidak ada nilai buku — mengarang cost = persediaan
+  fiktif).
+
+### Putusan 5 — Label disposisi `kelalaian`: TANPA dampak uang otomatis ke karyawan
+
+- Disposisi tinjau `kelalaian` (F-098-S §2C) adalah label
+  operasional. Ia DILARANG: (a) melahirkan potongan gaji,
+  piutang karyawan, atau beban karyawan otomatis, (b) jadi
+  dasar jurnal apa pun, (c) mengubah klasifikasi/nilai/jurnal
+  scrap 066-V (sudah diputus spec AC-SCRAP-6).
+- Alasan: potongan upah dibatasi hukum ketenagakerjaan
+  (PP 36/2021 Pasal 63 ayat (2): potongan denda/ganti rugi
+  hanya sesuai Perjanjian Kerja/Peraturan Perusahaan/PKB;
+  Pasal 65: jumlah keseluruhan potongan paling banyak 50%
+  tiap pembayaran) dan ganti rugi mensyaratkan kesalahan +
+  kerugian nyata yang dibuktikan, bukan label tinjau sepihak.
+  Menautkan label ke potongan otomatis = pemotongan tanpa
+  dasar perjanjian yang terverifikasi sistem.
+- Jalur sah bila perusahaan hendak menagih ganti rugi nyata:
+  keputusan HR tertulis di luar label ini -> piutang karyawan
+  lewat jalur payroll existing (komponen potongan slip dari
+  peristiwa terverifikasi, gerbang final existing) — butuh
+  kartu + vonis lanjutan BOT Accountant dengan bukti dasar
+  perjanjiannya. Vonis ini TIDAK membukanya.
+
+### Batas build (pemilik berikutnya)
+
+- BOT Lead: merge PR vonis ini; buka kartu penjualan besi
+  tua hanya bila permukaan jualnya diputuskan (item + kg
+  D-S98-03 sesudah tercatat).
+- BOT Backend (SESUDAH vonis merged): ajukan bentuk fisik
+  (item besi tua, penanda dokumen, setting Putusan 4, klaim
+  schema.prisma di board) ke BOT Accountant sebelum migrasi;
+  jurnal hanya lewat `onSalesInvoicePosted`; nol dokumen
+  penjualan kedua.
+- BOT Frontend: tampilkan akun/pendapatan apa adanya dari
+  backend; UI tidak memilih akun, tidak menghitung PPN besi
+  tua, label kelalaian tampil tanpa nominal dampak.
+- BOT Business: spec F-098-S BR-SCRAP-06/09 tertutup oleh
+  vonis ini; jangan bangun dokumen jual sebelum kartu Lead.
+- BOT QA: falsifikasi E135-1..5 di bawah.
+
+### Falsifikasi wajib — E135-1..5 (BOT Backend menulis tes, BOT QA audit; angka sen-persis)
+
+- E135-1 (pendapatan lain-lain, bukan pengurang biaya): besi
+  tua yang biaya bahannya dulu masuk beban abnormal
+  Rp2.000.000 (flag jurnal 066-V) terjual DPP Rp500.000 ->
+  jurnal jual Cr pendapatan lain-lain Rp500.000; saldo Beban
+  Kerugian Produksi tetap Rp2.000.000, COGS/HPP dan WIP tidak
+  berkurang karena penjualan. Kredit ke HPP/beban/WIP =
+  MERAH.
+- E135-2 (fail-closed akun): setting pendapatan scrap kosong
+  -> posting faktur besi tua DITOLAK berisik, nol jurnal,
+  dokumen tidak berstatus posted. Fallback diam-diam ke
+  400001/710005 = MERAH.
+- E135-3 (PPN jalur faktur): penjualan besi tua oleh PKP
+  DPP Rp10.000.000 -> PPN Keluaran sesuai master efektif
+  (contoh hitung tarif efektif 11%: Rp1.100.000), faktur
+  pajak lahir lewat TaxInvoice existing, piutang
+  Rp11.100.000; pendapatan tercatat Rp10.000.000 (bukan
+  Rp11.100.000). Tanpa kaki PPN atau pendapatan bruto
+  termasuk PPN = MERAH.
+- E135-4 (nol COGS fiktif): jurnal jual besi tua tidak
+  memuat Dr COGS/Cr Persediaan bernilai > Rp0 dan tidak
+  mengubah qtyOnHand/nilai persediaan item mana pun. COGS
+  karangan dari cost master item = MERAH.
+- E135-5 (kelalaian tanpa uang): disposisi tinjau diubah ke
+  `kelalaian` dengan catatan lengkap -> nol jurnal baru, nol
+  komponen potongan payroll lahir, saldo piutang karyawan
+  tidak berubah, klasifikasi scrap byte-sama. Potongan/
+  jurnal apa pun lahir dari label = MERAH.
+
+### Register sumber (akses 2026-10-24)
+
+| Klaim | Sumber | Cakupan |
+|---|---|---|
+| Scrap abnormal = beban periode, bukan biaya persediaan; remnant tanpa nilai buku | PSAK 14 par. 16(a)/38 (konvergen IAS 2) — dirujuk vonis F-2026-10-22-066-V; IAS 2: https://www.ifrs.org/content/dam/ifrs/publications/pdf-standards/english/2024/issued/part-a/ias-2-inventories.pdf | Dasar Putusan 1: biaya sudah diakui satu kali |
+| Penyerahan BKP terutang PPN, DPP/tarif per rezim master efektif; BKP non-mewah pola DPP nilai lain umum | UU PPN jo. UU HPP; PMK-131/2024; PMK-11/2025 (siaran pers DJP: https://www.pajak.go.id/id/siaran-pers/pemerintah-terbitkan-aturan-dpp-nilai-lain-dan-besaran-tertentu-ppn) | Dasar Putusan 3; TIDAK ada objek DPP khusus besi tua ditemukan run ini — bukan klaim tidak ada |
+| Potongan upah hanya berdasar perjanjian/peraturan; batas 50% per pembayaran | PP 36/2021 Pasal 63 ayat (2) + Pasal 65 (BPK: https://peraturan.bpk.go.id/Details/161909/pp-no-36-tahun-2021; teks resmi: https://peraturan.go.id/files/pp36-2021bt.pdf) (dirujuk juga vonis F-2026-10-22-077-V) | Dasar Putusan 5 |
+
+Tidak ada klaim "patuh pajak" di vonis ini. Pola pembeli/
+pemungut nyata di luar pola umum Putusan 3 =
+`BUTUH-VONIS-AKUNTAN` per kasus.
+
+ID vonis ini **F-2026-10-24-135-V** (bebas: tertinggi di
+origin/main 0395e9cb = F-2026-10-24-134-V; grep
+`F-2026-10-24-135` di berkas ini = 0 sebelum append run ini).
+Pemilik berikutnya: BOT Lead merge PR vonis ini -> BOT
+Backend ajukan bentuk fisik Putusan 4 -> BOT QA E135-1..5.
+
+---
+
+## SPEC BUSINESS 2026-10-24 — F-2026-10-24-135-S penerbitan ulang spec induk SLA tiket CRM (BR-CRM-01..05); induk yatim sesudah PR #381 closed tanpa merge, konsumen F-2026-10-22-001-U sudah merged tanpa sumber aturan
+
+Kartu: t_f189d0a7. Spec dokumen saja — tanpa kode, tanpa
+schema/migrasi, tanpa izin baru. ID spec ini **F-2026-10-24-135-S**
+(bebas: tertinggi `F-2026-10-24-` di origin/main 0395e9cb =
+134-V; grep `F-2026-10-24-135` di backlog+board = 0 sebelum tulis).
+
+### 0. Mengapa spec ini ada (temuan yatim, terverifikasi run ini)
+
+- Spec induk SLA tiket CRM F-2026-10-22-001 (kartu t_0224ffa0,
+  BR-CRM-01..05) hanya pernah hidup di PR #381 head
+  fd7b51ab427940305b4038050a7e553df2c0040e. PR itu CLOSED
+  2026-10-24T08:07:46Z TANPA merge (mergedAt null; komentar
+  penutup: substansi dikira sudah terwujud lewat PR lain).
+  Verifikasi run ini: isi induk TIDAK ada di main — grep
+  `BR-CRM` di backlog main hanya menemukan rujukan dari spec
+  konsumen, bukan register aturannya.
+- Spec konsumen F-2026-10-22-001-U SUDAH merged (PR #387,
+  f4ea1609) dan menyatakan BR-CRM-01..05 sebagai "sumber
+  kebenaran (rujuk, jangan definisikan ulang)" — sumber itu
+  kini tidak bisa dibuka siapa pun dari main. Konsumen tanpa
+  induk = kontrak menggantung untuk Backend/Frontend/QA.
+- Kode live main 0395e9cb tetap persis seperti asumsi induk:
+  builder/loader/lencana SLA ABSEN (grep `sla` di
+  src/lib/reports + src/app/(dashboard)/crm = 0 relevan);
+  tidak ada implementasi yang diam-diam menggantikan spec ini.
+- Spec ini menerbitkan ulang register induk dari PR #381
+  (diambil verbatim substansinya, nomor baris disesuaikan ke
+  main 0395e9cb) supaya rantai putusan bisa jalan: Lead putus
+  angka -> Backend builder -> Frontend konsumen 001-U -> QA.
+  Nomor F-2026-10-22-001 TIDAK dipakai ulang (ID itu sudah
+  terpakai permukaan margin kendaraan di backlog main); rantai
+  SLA memakai ID spec ini.
+
+### 1. Inventarisasi terverifikasi (2026-10-24, origin/main 0395e9cb)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model CrmTicket (prisma/schema.prisma, model CrmTicket):
+  priority String default "medium", status String default
+  "open", firstResponseAt, resolvedAt, closedAt, assignedTo,
+  deletedAt, createdAt. Holiday prisma/schema.prisma:3223;
+  WorkSchedule :3263 (workDays CSV 0=Minggu..6=Sabtu, kosong =
+  Senin-Jumat — pola sama di
+  src/lib/reports/work-center-load-plan.ts:23,58).
+- firstResponseAt diisi server sekali saat tiket keluar dari
+  "open" (src/actions/crm.actions.ts:125-127, select :100);
+  resolvedAt diisi sekali saat masuk resolved/closed.
+  Komentar tiket TIDAK menyentuh keduanya (catatan jujur
+  existing di aksi yang sama). closedAt tidak pernah ditulis
+  jalur produk tiket.
+- Izin nyata: view_tickets (src/lib/auth/
+  module-catalog.generated.ts:367), create/edit/delete_tickets
+  katalog yang sama; daftar tiket gerbang view_tickets,
+  update gerbang edit_tickets.
+- StatusChip mendukung customLabel/customTone
+  (src/components/ui/status-chip.tsx:58,62,68) — konsumen 001-U
+  memakai ini; komponen lencana baru tidak perlu.
+- Infrastruktur notifikasi internal existing:
+  notification.service.ts notifyAdmins :46, notifyUser :71,
+  notifyUsersIfNew :111 (dedupe per judul per periode untuk
+  pemanggil cron); cron daily-notifications terjadwal
+  vercel.json "0 7 * * *" — acuan BR-CRM-04 bila disetujui.
+- Pola builder antrean existing: lead-followups.ts /
+  stale-leads (builder murni + loader massal) — builder SLA
+  mengikuti pola ini, bukan pola baru.
+
+Belum ada (bukti grep run ini):
+- ABSEN target SLA, builder antrean lewat-SLA, lencana SLA,
+  kartu antrean tiket: grep `sla`/`TicketSla` di src/lib dan
+  halaman crm = 0 relevan.
+- ABSEN putusan angka: Q1/Q2 spec induk PR #381 tidak pernah
+  dijawab di backlog/board main (grep PUTUSAN SLA = 0).
+
+Benchmark resmi (akses 2026-10-22, dirujuk dari spec induk;
+tidak diakses ulang run ini — klaim terbatas pada rujukan):
+- Freshdesk SLA Policies — target first-response + resolution
+  per prioritas, hitung jam kerja vs jam kalender, eskalasi:
+  https://support.freshdesk.com/support/solutions/articles/37626-understanding-sla-policies
+- Accurate Online dan Zahir TIDAK punya modul tiket/helpdesk
+  CRM dengan target SLA per prioritas pada dokumentasi
+  resminya (pencarian 2026-10-22). SLA tiket ISF = kebutuhan
+  ISF sendiri, bukan klaim paritas vendor (BENCHMARK-negatif).
+
+### 2. Register aturan bisnis SLA (diterbitkan ulang; label melekat)
+
+Semua angka target labelnya USULAN — rekomendasi dari benchmark
+Freshdesk dan praktik helpdesk umum, BELUM disetujui pemilik
+proses. Angka tidak mengikat sampai Lead memutus; sesudah
+diputus, angka menjadi konstanta builder (bukan field
+konfigurasi per tiket) pada tahap implementasi.
+
+#### BR-CRM-01 (USULAN, BUTUH-VONIS Lead) — Target per prioritas
+
+Jam kerja acuan USULAN: Senin-Jumat 08:00-17:00 WIB (9 jam
+kerja/hari), di luar tanggal pada model Holiday existing.
+Hitungan SLA = JAM KERJA, bukan jam kalender.
+
+| Priority (nilai existing) | Target respons pertama | Target resolusi |
+|---|---|---|
+| high   | 2 jam kerja   | 1 hari kerja (9 jam kerja)  |
+| medium | 4 jam kerja   | 3 hari kerja (27 jam kerja) |
+| low    | 8 jam kerja (1 hari kerja) | 5 hari kerja (45 jam kerja) |
+
+#### BR-CRM-02 (TERVERIFIKASI-KODE + USULAN) — Cakupan prioritas
+
+- Hanya 3 prioritas existing yang punya target: low, medium,
+  high (form tiket hanya menawarkan ketiganya; kolom String
+  bebas sehingga nilai liar bisa masuk jalur non-form).
+- DILARANG menambah "urgent" pada spec ini. Nilai priority di
+  luar ketiganya: builder memperlakukannya sebagai medium
+  (default kolom) DAN baris ditandai prioritas-tak-dikenal
+  (pencocokan case-sensitive persis low/medium/high) supaya
+  ketidakberesan data terlihat. Tingkat keempat = keputusan
+  terpisah Lead (Q-SLA135-3).
+
+#### BR-CRM-03 (TERVERIFIKASI-KODE) — Definisi terukur
+
+- Awal hitung: CrmTicket.createdAt.
+- Respons pertama tercapai: firstResponseAt terisi. CATATAN
+  JUJUR: hari ini firstResponseAt berarti "tiket pertama kali
+  keluar dari open" (crm.actions.ts:125-127), BUKAN "balasan
+  pertama ke pelanggan" — komentar tidak mengisinya. SLA
+  tahap pertama mengukur perilaku existing apa adanya;
+  mengganti pemicu = Q-SLA135-4.
+- Resolusi tercapai: resolvedAt terisi (masuk resolved ATAU
+  closed). closedAt tidak dipakai (tidak pernah ditulis).
+- Lewat-SLA respons: status = open DAN firstResponseAt kosong
+  DAN jam-kerja(createdAt -> sekarang) > target respons.
+- Lewat-SLA resolusi: status in {open, in_progress} DAN
+  jam-kerja(createdAt -> sekarang) > target resolusi. Tiket
+  resolved/closed tidak pernah lewat-SLA resolusi;
+  keterlambatan historisnya hanya untuk laporan.
+- Mendekati-SLA: sisa target <= 25% DAN belum lewat. Ambang
+  25% = USULAN, satu-satunya ambang peringatan tahap pertama.
+- Tiket deletedAt terisi: selalu dikecualikan.
+- Prioritas berubah di tengah jalan: target dihitung ulang
+  dari priority berjalan terhadap createdAt yang sama — tidak
+  ada jam mulai ulang (EC-4 di bawah).
+
+#### BR-CRM-04 (USULAN) — Eskalasi dan notifikasi internal
+
+- Eskalasi tahap pertama = notifikasi internal saja (pola
+  notification.service existing), TIDAK ke pelanggan (tidak
+  ada kanal keluar tiket; WA manual bukan kanal tiket).
+- Pemicu: tiket BARU masuk lewat-SLA pada lari cron harian
+  existing, bukan real-time. Penerima: assignedTo bila ada,
+  ditambah admin hanya untuk prioritas high. Dedupe per judul
+  per hari supaya cron berulang tidak menghujani notif sama.
+- Eskalasi TIDAK mengubah status/prioritas/assignedTo
+  otomatis. Eskalasi bertingkat otomatis = tidak diusulkan.
+
+#### BR-CRM-05 (USULAN) — Pengecualian
+
+- Tiket dibuat di luar jam kerja: jam SLA mulai berjalan pada
+  jam kerja berikutnya — konsekuensi alami hitungan jam
+  kerja, dinyatakan eksplisit supaya tidak ditafsir bug.
+- Tiket tanpa assignedTo tetap dihitung SLA; notifikasi
+  eskalasinya hanya ke admin.
+- Pengecualian "menunggu pelanggan" (pause SLA): TIDAK ADA
+  tahap pertama — tidak ada status on_hold di enum status
+  tiket; menambah status = perubahan perilaku inti
+  (Q-SLA135-5).
+
+### 3. Matriks status-transisi (SLA turunan, bukan status baru)
+
+SLA tidak menambah status tiket. Keadaan diturunkan murni dari
+(status, priority, createdAt, firstResponseAt, resolvedAt, now):
+
+| Status tiket | firstResponseAt | Keadaan SLA | Acuan |
+|---|---|---|---|
+| open | kosong | DALAM-SLA / MENDEKATI / LEWAT-RESPONS | jam kerja vs target respons BR-CRM-01 |
+| in_progress | terisi | DALAM-SLA / MENDEKATI / LEWAT-RESOLUSI | jam kerja vs target resolusi |
+| open/in_progress | - | LEWAT-RESOLUSI bila jam kerja > target resolusi | respons bisa sudah tercapai |
+| resolved/closed | terisi | SELESAI (tepat / terlambat historis) | keluar antrean aktif |
+| (deletedAt terisi) | - | DIKECUALIKAN | tidak tampil di mana pun |
+
+Penjaga transisi: tidak ada transisi tiket yang diubah spec
+ini. updateTicket existing (edit_tickets) tetap satu-satunya
+penulis firstResponseAt/resolvedAt; builder SLA read-only dan
+DILARANG menulis status/timestamp tiket (falsifikasi QA:
+loader menulis firstResponseAt = MERAH).
+
+### 4. Matriks peran/izin
+
+| Aksi | Izin nyata | Peran tipikal |
+|---|---|---|
+| Lihat daftar tiket + lencana SLA + antrean | view_tickets | staf CRM, admin |
+| Buat tiket (priority awal) | create_tickets | staf CRM |
+| Ubah prioritas/status/assignee | edit_tickets | staf CRM, admin |
+| Terima notifikasi eskalasi | (penerima notifikasi internal) | assignee tiket, admin (high) |
+| Setujui/ubah angka target SLA | - (keputusan pemilik proses, di luar sistem) | Lead |
+
+Tidak ada izin baru tahap pertama; tidak ada data gaji/data
+pribadi pada permukaan ini (nama pelanggan/penanggung jawab =
+yang sudah tampil untuk pemegang view_tickets).
+
+### 5. Konsumen yang sudah siap (jangan definisikan ulang)
+
+Spec konsumen F-2026-10-22-001-U (merged PR #387) tetap
+sumber kebenaran tampilan: teks persis `Lewat SLA` /
+`Mendekati SLA`, satu tiket satu lencana (urutan parah
+lewat-resolusi > lewat-respons > mendekati-resolusi >
+mendekati-respons), kolom SLA di daftar, kartu antrean
+`Tiket Lewat SLA` dari loader global (bukan subset halaman),
+baris Tenggat Respons/Tenggat Resolusi di detail, label jujur
+saat builder gagal. Spec ini TIDAK menulis ulang kata UI itu;
+Frontend mengerjakan 001-U apa adanya sesudah kontrak Backend
+stabil.
+
+### 5b. Matriks fitur (BENCHMARK)
+
+| Fitur | Freshdesk (BENCHMARK) | Accurate/Zahir | ISF tahap ini (USULAN) |
+|---|---|---|---|
+| Target respons/resolusi per prioritas | Ya, SLA Policies | Tidak ada modul tiket helpdesk SLA (BENCHMARK-negatif, pencarian 2026-10-22) | BR-CRM-01, angka USULAN menunggu Lead |
+| Hitung jam kerja vs jam kalender | Pilihan business hours | - | Jam kerja (BR-CRM-01) |
+| Eskalasi pelanggaran | Ya | - | Notifikasi internal saja, cron harian, tanpa ubah status otomatis (BR-CRM-04) |
+| Pause menunggu pelanggan | (di luar rujukan spec induk) | - | Tidak ada tahap pertama (BR-CRM-05, Q-SLA135-5) |
+
+### 6. Acceptance criteria (draf kartu lanjutan, belum dibuat)
+
+#### AC-BE (Backend — builder + loader, sesudah Q-SLA135-1/2 diputus Lead)
+
+1. Builder murni baru (pola lead-followups/stale-leads)
+   menerima baris tiket (id, slug, ticketNumber, subject,
+   priority, status, assignedTo, createdAt, firstResponseAt,
+   resolvedAt, deletedAt) + now + daftar tanggal libur,
+   mengembalikan keadaan SLA + sisa/kelebihan jam kerja per
+   tiket. Tanpa query di dalam builder; loader satu query
+   massal tiket aktif non-deleted.
+2. Konstanta target BR-CRM-01 hasil putusan Lead sebagai satu
+   tabel di file builder (menit jam kerja) — bukan kolom DB,
+   bukan konfigurasi UI. Fisik jam-kerja (WorkSchedule per
+   departemen vs konstanta global) = putusan Q-SLA135-2;
+   builder tidak menebak.
+3. Fungsi jam-kerja murni teruji satuan: tiket Jumat 16:00 +
+   target 2 jam kerja -> tenggat Senin 09:00 (Senin bukan
+   libur); Holiday pada hari kerja memotong hari itu.
+4. Prioritas tak dikenal/kosong/null -> medium + flag
+   prioritas-tak-dikenal (BR-CRM-02), pencocokan
+   case-sensitive.
+5. Urutan antrean: kelebihan jam kerja terbesar dulu; seri
+   ticketNumber lalu id.
+6. Falsifikasi wajib: (a) geser tiket melewati tenggat ->
+   muncul antrean; kembalikan -> hilang; (b) resolved historis
+   terlambat tidak pernah di antrean aktif; (c) soft-deleted
+   tidak pernah tampil; (d) akhir pekan/libur tidak menambah
+   jam terpakai; (e) loader/builder menulis tiket = MERAH.
+7. BUKAN kartu ini: notifikasi cron (kartu terpisah sesudah
+   BR-CRM-04 disetujui), UI, perubahan aksi tiket, schema.
+
+#### AC-FE (Frontend — konsumen 001-U, sesudah kontrak Backend stabil)
+
+Mengikuti butir kartu FRONTEND spec 001-U apa adanya (kolom
+SLA + lencana StatusChip customLabel/customTone, kartu
+antrean global, chip + baris tenggat di detail, kasus tepi
+001-U, tes komponen + falsifikasi keadaan). Ditambah: sebelum
+commit, grep e2e selector tiket terdampak dan sinkronkan pada
+commit yang sama.
+
+#### AC-QA (QA — falsifikasi atas head Backend+Frontend)
+
+1. UI tidak menghitung SLA sendiri: aritmetika tanggal/target
+   di komponen tiket = 0; keadaan dari builder server.
+2. Satu tiket satu lencana + urutan parah pada fixture open
+   lama tanpa respons (dua keadaan sekaligus).
+3. Antrean global: tiket lewat di luar halaman tabel pertama
+   tetap muncul.
+4. Prioritas tak dikenal tertanda, bukan diam-diam cocok.
+5. Pemegang tanpa view_tickets tidak mencapai daftar/detail/
+   antrean; loader tidak menulis dokumen tiket.
+
+### 7. Edge cases
+
+- EC-1: createdAt Sabtu 10:00 -> jam mulai hari kerja
+  berikutnya 08:00 (atau sesudah libur).
+- EC-2: firstResponseAt terisi tapi tiket kembali ke open ->
+  respons dianggap tercapai (cap sekali existing).
+- EC-3: closed langsung dari open -> firstResponseAt dan
+  resolvedAt terisi update yang sama; tidak lewat-SLA.
+- EC-4: prioritas medium->high pada tiket umur 20 jam kerja
+  -> seketika lewat-SLA resolusi high (9 jam). Disengaja
+  (BR-CRM-03); tanpa notifikasi khusus tahap pertama.
+- EC-5: Holiday jatuh Sabtu -> tidak berpengaruh; Holiday
+  Jumat -> hari kerja minggu itu 4 hari.
+- EC-6: tiket tanpa assignedTo lewat-SLA -> antrean tampil,
+  eskalasi hanya ke admin.
+- EC-7: priority liar jalur non-form ("HIGH", "urgent") ->
+  medium + flag tak-dikenal (BR-CRM-02).
+
+### 8. Pertanyaan terbuka (pemilik putusan eksplisit)
+
+- Q-SLA135-1 (BUTUH-VONIS Lead): setujui angka BR-CRM-01 apa
+  adanya atau ubah? Satu-satunya gerbang inti. Sampai diputus,
+  Backend TIDAK membuat kartu builder.
+- Q-SLA135-2 (BUTUH-VONIS Lead): jam kerja acuan — konstanta
+  Senin-Jumat 08:00-17:00, atau WorkSchedule existing per
+  departemen (bengkel Sabtu buka?)? Spec menulis konstanta
+  sebagai USULAN; fisik sumbernya diputus di sini, bukan
+  ditebak builder.
+- Q-SLA135-3 (Lead): tingkat prioritas keempat "urgent" —
+  default spec TIDAK (BR-CRM-02).
+- Q-SLA135-4 (Lead/pemilik proses): pemicu firstResponseAt
+  tahap lanjut tetap "keluar dari open" atau komentar publik
+  pertama? Mengubahnya menyentuh crm.actions.ts + definisi
+  historis; di luar kartu builder.
+- Q-SLA135-5 (Lead): status pause "menunggu pelanggan" perlu?
+  Menambah status = enum + form + transisi baru.
+- Q-SLA135-6 (= UI-Q2 spec 001-U, Lead): tiket resolved/closed
+  historis terlambat — label historis di detail atau cukup
+  laporan? Default spec 001-U: TANPA label sampai dijawab.
+- Eskalasi bertingkat otomatis + kanal ke pelanggan: tidak
+  diusulkan; dibuka lagi hanya bila volume tiket membuktikan
+  perlu.
+
+### 9. Yang TIDAK diusulkan run ini
+
+- Kode apa pun (builder, UI, cron) — spec saja.
+- Field/kolom SLA baru (dueAt dsb.), status tiket baru,
+  prioritas "urgent", konfigurasi target per pelanggan.
+- Notifikasi ke pelanggan, SLA jam kalender 24x7, angka
+  target sebagai fakta sebelum Q-SLA135-1 diputus.
+
+### 10. Backlog implementasi (turunan spec ini; ID spec F-2026-10-24-135-S)
+
+| Urutan | Pemilik | Isi | Gerbang |
+|---|---|---|---|
+| 0 | Lead | Putus Q-SLA135-1 (angka) + Q-SLA135-2 (sumber jam kerja) | - |
+| 1 | Backend | Builder murni + loader massal SLA (AC-BE) | gerbang 0 |
+| 2 | Frontend | Konsumen UI 001-U atas kontrak Backend (AC-FE) | gerbang 1 |
+| 3 | Backend | Notifikasi eskalasi cron BR-CRM-04 (bila disetujui) | gerbang 0 + BR-CRM-04 |
+| 4 | QA | Falsifikasi AC-QA atas head Backend+Frontend | gerbang 1+2 |
+
+F-2026-10-24-135-S — Spec induk SLA tiket CRM (penerbitan
+ulang BR-CRM-01..05). Status: SPEC SELESAI run ini;
+implementasi menunggu putusan Lead Q-SLA135-1/2. Pemilik
+usulan: Business (spec), Lead (putusan angka/jam kerja),
+Backend (builder), Frontend (konsumen 001-U), QA
+(falsifikasi). Butuh putusan accountant: TIDAK (tanpa
+uang/pajak/jurnal).
