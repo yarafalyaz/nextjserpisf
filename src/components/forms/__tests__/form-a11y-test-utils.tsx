@@ -129,3 +129,33 @@ export function assertOrderComboboxA11yAdd(
 export function assertFormEditLabel(container: HTMLElement, editLabel: string) {
   expect(container.querySelector("form")!.getAttribute("aria-label")).toBe(editLabel)
 }
+
+// Add-mode asserts for multi-field money forms (several aria-required
+// comboboxes + one required currency input, decorative stars, optional
+// fields clean). Kept here once: per-form copies trip Sonar duplication.
+export function assertMoneyFormA11yAdd(
+  form: Element,
+  container: HTMLElement,
+  spec: {
+    addLabel: string
+    starCount: number
+    labels: string[]
+    ariaRequiredIds: string[]
+    requiredIds: string[]
+    optionalIds: string[]
+  },
+) {
+  expect(form.getAttribute("aria-label")).toBe(spec.addLabel)
+  expect(form.getAttribute("aria-busy")).toBe("false")
+  expect(decorativeStars(form).length).toBe(spec.starCount)
+  expect(labelTexts(form)).toEqual(expect.arrayContaining(spec.labels))
+  for (const id of spec.ariaRequiredIds) {
+    expect(container.querySelector(`#${id}`)!.getAttribute("aria-required"), id).toBe("true")
+  }
+  for (const id of spec.requiredIds) {
+    expect(container.querySelector(`#${id}`)!.hasAttribute("required"), id).toBe(true)
+  }
+  for (const id of spec.optionalIds) {
+    expect(container.querySelector(`#${id}`)!.hasAttribute("required"), id).toBe(false)
+  }
+}

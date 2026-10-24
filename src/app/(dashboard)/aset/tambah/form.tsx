@@ -29,6 +29,9 @@ interface AssetFormProps {
     purchasePrice?: number | null
     residualValue?: number | null
     depreciationMethod?: string | null
+    totalEstimatedUnits?: number | null
+    productionUnitName?: string | null
+    usefulLifeMonths?: number | null
     location?: string | null
     status?: string | null
     description?: string | null
@@ -48,6 +51,7 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
   const [selectedModelId, setSelectedModelId] = useState<string | null>(
     asset?.assetBrandModelId ? String(asset.assetBrandModelId) : null,
   )
+  const [selectedMethod, setSelectedMethod] = useState<string | null>(asset?.depreciationMethod || "straight_line")
   const modelOptions =
     brands.find((b) => String(b.id) === selectedBrandId)?.models.map((m) => ({
       value: String(m.id),
@@ -147,20 +151,44 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
           <FormSelect
             id="depreciationMethod"
             name="depreciationMethod"
-            defaultValue={asset?.depreciationMethod || "straight_line"}
+            value={selectedMethod}
+            onValueChange={setSelectedMethod}
             placeholder="Garis Lurus"
             options={[
               { value: "straight_line", label: "Garis Lurus" },
               { value: "declining_balance", label: "Saldo Menurun" },
+              { value: "units_of_production", label: "Unit Produksi (analitis, tanpa jurnal)" },
+              { value: "sum_of_years_digits", label: "Jumlah Angka Tahun (analitis, tanpa jurnal)" },
             ]}
           />
         </div>
+        {selectedMethod === "units_of_production" && (<>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="totalEstimatedUnits">Total Estimasi Unit (terbekukan)</Label>
+            <Input id="totalEstimatedUnits" name="totalEstimatedUnits" type="number" step="any" min={0} placeholder="0" defaultValue={asset?.totalEstimatedUnits ?? ""} />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="productionUnitName">Satuan Produksi</Label>
+            <Input id="productionUnitName" name="productionUnitName" placeholder="cth. unit, km, jam" defaultValue={asset?.productionUnitName || ""} />
+          </div>
+        </>)}
+        {selectedMethod === "sum_of_years_digits" && (
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="usefulLifeMonths">Masa Manfaat (bulan, terbekukan)</Label>
+            <Input id="usefulLifeMonths" name="usefulLifeMonths" type="number" step={1} min={1} placeholder="cth. 60" defaultValue={asset?.usefulLifeMonths ?? ""} />
+          </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="location">Lokasi</Label>
           <Input id="location" name="location" placeholder="Lokasi aset" defaultValue={asset?.location || ""} />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="status">Status</Label>
+          <Label htmlFor="status">Status Guna</Label>
+          {/* Hanya status terdaftar F-2026-10-23-117-V. held_for_sale tidak
+              ditawarkan di sini: klasifikasinya butuh 5 fakta terstruktur +
+              peristiwa status (inti BOT 3 ditunda); disposed hanya lewat
+              aksi Pelepasan. Status lama tak terdaftar tetap tampil apa
+              adanya supaya user melihat temuan, bukan label sah palsu. */}
           <FormSelect
             id="status"
             name="status"
@@ -168,9 +196,18 @@ export function AssetForm({ categories, brands, groups = [], asset, generatedCod
             placeholder="Aktif"
             options={[
               { value: "active", label: "Aktif" },
-              { value: "maintenance", label: "Pemeliharaan" },
+              ...(asset?.status && !["active", "disposed"].includes(asset.status)
+                ? [{ value: asset.status, label: `Status tidak terdaftar: ${asset.status}` }]
+                : []),
+              ...(asset?.status === "disposed"
+                ? [{ value: "disposed", label: "Dilepas" }]
+                : []),
             ]}
           />
+          <p className="text-xs text-muted-foreground">
+            Menganggur sementara tetap Aktif. Dimiliki untuk Dijual diatur
+            lewat klasifikasi khusus; Dilepas lewat aksi Pelepasan Aset.
+          </p>
         </div>
         <div className="flex flex-col gap-1.5 col-span-full">
           <Label htmlFor="description">Deskripsi</Label>
