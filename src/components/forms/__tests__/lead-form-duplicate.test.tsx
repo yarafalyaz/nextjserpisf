@@ -8,7 +8,6 @@ import { act } from "react"
 import { LeadForm } from "../lead-form"
 import { showError, showSuccess } from "@/lib/utils/toast"
 import { setFieldValue } from "./form-a11y-test-utils"
-import type { LeadDuplicateWarning } from "@/lib/services/lead-duplicate.service"
 
 const createLeadMock = vi.fn()
 const updateLeadMock = vi.fn()
@@ -22,7 +21,7 @@ vi.mock("@/actions/master.actions", () => ({
 }))
 vi.mock("@/lib/utils/toast", () => ({ showSuccess: vi.fn(), showError: vi.fn() }))
 
-const warning: LeadDuplicateWarning = {
+const warning = {
   title: "Kemungkinan lead duplikat",
   body: "Kontak ini cocok dengan lead yang sudah ada. Periksa dulu — membuat ganda membagi tindak lanjut antar sales.",
   candidates: [

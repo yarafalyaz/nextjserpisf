@@ -8,11 +8,39 @@ import { createLead, updateLead } from "@/actions/master.actions"
 import { showSuccess, showError } from "@/lib/utils/toast"
 import { formatDate } from "@/lib/utils/format"
 import { statusLabel } from "@/lib/utils/status-labels"
-import {
-  DUPLICATE_LOST_LABEL,
-  type LeadDuplicateCandidate,
-  type LeadDuplicateWarning,
-} from "@/lib/services/lead-duplicate.service"
+// Tipe respons createLead/updateLead (kontrak Backend PR #771,
+// lead-duplicate.service.ts) — didefinisikan lokal: modul service
+// menarik Prisma ke bundle klien (node:fs) dan mematahkan build.
+// Kata tampil verbatim §7 spec F-2026-10-24-141-S.
+const DUPLICATE_LOST_LABEL = "Lead lama berstatus lost — bukan duplikat aktif"
+
+interface LeadDuplicateCandidate {
+  id: number
+  leadNumber: string | null
+  slug: string | null
+  name: string
+  company: string | null
+  status: string
+  isConverted: boolean
+  isLost: boolean
+  assignedTo: number | null
+  assignedToName: string | null
+  createdAt: Date | string
+  matchKind: "phone" | "email" | "both"
+  matchLabel: string
+  phone: string | null
+  email: string | null
+  canOpen: boolean
+}
+
+interface LeadDuplicateWarning {
+  title: string
+  body: string
+  candidates: LeadDuplicateCandidate[]
+  lostCandidates: LeadDuplicateCandidate[]
+  requiresReason: boolean
+  minReasonLength: number
+}
 import { Label } from "@/components/ui/shadcn/label"
 import { Input } from "@/components/ui/shadcn/input"
 import { Textarea } from "@/components/ui/shadcn/textarea"
