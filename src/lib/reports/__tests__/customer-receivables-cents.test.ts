@@ -36,3 +36,15 @@ describe("aggregateCustomerReceivables (presisi sen)", () => {
     expect(buckets[0].overdue).toBe(222.22)
   })
 })
+
+describe("aggregateCustomerReceivables returnCredit (F-104-V)", () => {
+  it("returnCredit kurangi outstanding; lunas oleh retur tidak tampil", () => {
+    const buckets = aggregateCustomerReceivables([
+      { customerId: 9, customerName: "CV R", creditLimit: 0, grandTotal: 1000, paidAmount: 200, returnCreditAmount: 300, dueDate: null },
+      { customerId: 9, customerName: "CV R", creditLimit: 0, grandTotal: 500, paidAmount: 0, returnCreditAmount: 500, dueDate: null },
+    ])
+    expect(buckets).toHaveLength(1)
+    expect(buckets[0].outstanding).toBe(500)
+    expect(buckets[0].invoiceCount).toBe(1)
+  })
+})

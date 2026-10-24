@@ -28,6 +28,7 @@ import {
   type CustomerCreditExposureRow,
 } from "@/lib/reports/customer-receivables"
 import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+import { loadReturnCreditByInvoiceId } from "@/lib/reports/return-credit"
 import { safeAdd, safeSubtract } from "@/lib/utils/math"
 import { classifyJournal, foldActivities } from "@/lib/finance/cash-flow"
 import { buildCashFlowTotals } from "@/lib/reports/arus-kas"
@@ -329,6 +330,8 @@ export interface CustomerReceivableInvoice {
   creditLimit: number
   grandTotal: unknown
   paidAmount: unknown
+  /** F-104-V opsional: returnCredit jurnal SalesReturn POSTED faktur ini. */
+  returnCreditAmount?: unknown
   dueDate: Date | null
 }
 
@@ -356,7 +359,8 @@ export function aggregateCustomerReceivables(
 ): CustomerReceivableBucket[] {
   const buckets = new Map<number, CustomerReceivableBucket>()
   for (const inv of invoices) {
-    const outstanding = receivableOutstanding(inv.grandTotal as never, inv.paidAmount as never)
+    const settled = Number(inv.paidAmount ?? 0) + Number(inv.returnCreditAmount ?? 0)
+    const outstanding = receivableOutstanding(inv.grandTotal as never, settled as never)
     if (outstanding <= 0) continue
     const bucket = buckets.get(inv.customerId) ?? {
       customerId: inv.customerId,
@@ -402,6 +406,7 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
     prisma.salesInvoice.findMany({
       where: { status: { in: [...RECOGNISED_AR_STATUSES] }, deletedAt: null, date: { lte: period.end } },
       select: {
+        id: true,
         customerId: true,
         grandTotal: true,
         paidAmount: true,
@@ -418,6 +423,10 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
       },
     }),
   ])
+  // F-104-V: K1 kurangi returnCredit POSTED per faktur (helper bersama).
+  const returnCreditByInvoiceId = await loadReturnCreditByInvoiceId(
+    invoices.map((inv) => inv.id),
+  )
   const now = new Date()
   const bucketList = aggregateCustomerReceivables(
     invoices.map((inv) => ({
@@ -426,6 +435,7 @@ export async function loadCustomerCreditExposure(period: Period): Promise<Custom
       creditLimit: Number(inv.customer.creditLimit ?? 0),
       grandTotal: inv.grandTotal,
       paidAmount: inv.paidAmount,
+      returnCreditAmount: returnCreditByInvoiceId.get(inv.id) ?? 0,
       dueDate: inv.dueDate ? new Date(inv.dueDate) : null,
     })),
     now,
