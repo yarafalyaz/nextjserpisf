@@ -95,6 +95,9 @@ const DEFAULT_SYSTEM_SETTINGS = {
   generalExpenseAccountId: null,
   stockAdjustmentAccountId: null,
   retainedEarningsAccountId: null,
+  // F-2026-10-24-132-V: mapping kompensasi PKWT default kosong (fail-closed).
+  pkwtCompensationExpenseAccountId: null,
+  pkwtCompensationPayableAccountId: null,
 };
 
 /**

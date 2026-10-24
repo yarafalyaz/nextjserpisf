@@ -257,6 +257,11 @@ export async function updateSystemSettings(formData: FormData) {
       // akun pendapatan denda; kosong = terbit dokumen denda ditolak.
       lateFeeIncomeAccountId: intNull("lateFeeIncomeAccountId"),
 
+      // Accounting - Kompensasi PKWT (F-2026-10-24-132-V): mapping beban
+      // 600028 / utang 210207; kosong = jalur PKWT fail-closed.
+      pkwtCompensationExpenseAccountId: intNull("pkwtCompensationExpenseAccountId"),
+      pkwtCompensationPayableAccountId: intNull("pkwtCompensationPayableAccountId"),
+
       // Accounting - Fixed Asset Change Events (F-2026-10-23-111-V P2):
       // akun utang PPh final + tarif master revaluasi fiskal berpersetujuan.
       assetFiscalRevaluationTaxPayableAccountId: intNull("assetFiscalRevaluationTaxPayableAccountId"),

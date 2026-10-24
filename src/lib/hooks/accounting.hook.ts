@@ -2128,6 +2128,42 @@ export async function onPayrollPaid(
 
   await assertPeriodOpen(payroll.paymentDate ?? new Date(), txClient);
 
+  // F-2026-10-24-132-V Putusan 5: baris kompensasi PKWT di slip ini memecah
+  // kaki debit — snapshot baris menentukan akun (210207 terakrual / 600028
+  // belum terakrual), BUKAN tebakan hook. Tanpa baris: debitTotal utuh ke
+  // salaryExpense seperti biasa.
+  const pkwtLines = await db.payrollComponentLine.findMany({
+    where: { payrollId, pkwtEventId: { not: null } },
+    select: { pkwtEventId: true, pkwtSettledViaAccrual: true, amount: true, accountIdSnapshot: true },
+  });
+  const pkwtTotal = pkwtLines.reduce((s, l) => safeAdd(s, Number(l.amount) || 0, 2), 0);
+  if (pkwtTotal > debitTotal) {
+    throw new Error(
+      "Baris kompensasi PKWT melebihi bruto slip — jurnal payroll ditolak (snapshot baris tidak konsisten dengan gross slip).",
+    );
+  }
+  if (pkwtTotal > 0) {
+    const s2 = settings as typeof settings & {
+      pkwtCompensationExpenseAccountId?: number | null;
+      pkwtCompensationPayableAccountId?: number | null;
+    };
+    if (!s2.pkwtCompensationExpenseAccountId || !s2.pkwtCompensationPayableAccountId) {
+      throw new Error(
+        "Mapping akun kompensasi PKWT belum lengkap — isi pkwtCompensationExpenseAccountId (600028) dan pkwtCompensationPayableAccountId (210207) di Pengaturan > Mapping Akun sebelum slip berisi kompensasi PKWT diposting.",
+      );
+    }
+    for (const l of pkwtLines) {
+      const expected = l.pkwtSettledViaAccrual
+        ? s2.pkwtCompensationPayableAccountId
+        : s2.pkwtCompensationExpenseAccountId;
+      if (l.accountIdSnapshot !== expected) {
+        throw new Error(
+          "Snapshot akun baris kompensasi PKWT tidak cocok dengan mapping kompensasi berjalan — jurnal payroll ditolak; buat ulang baris dari peristiwa terbekukan.",
+        );
+      }
+    }
+  }
+
   await executeInTx(txClient, async (tx) => {
     // double-check inside tx: two concurrent calls both pass the early
     // `findFirst` (returns null) and both open their own $transaction;
@@ -2154,10 +2190,10 @@ export async function onPayrollPaid(
       memo: string;
       costCenterId?: number | null;
     }> = [
-      // Dr. Salary Expense (full gross cost)
+      // Dr. Salary Expense (gross dikurangi kaki kompensasi PKWT)
       {
         accountId: settings.salaryExpenseAccountId!,
-        debit: debitTotal,
+        debit: safeAdd(debitTotal, -pkwtTotal, 2),
         credit: 0,
         memo: "Beban Gaji",
         costCenterId: payroll.costCenterId ?? null,
@@ -2170,6 +2206,37 @@ export async function onPayrollPaid(
         memo: "Pembayaran Gaji",
       },
     ];
+
+    // Dr. kaki kompensasi PKWT per snapshot baris (Putusan 5): terakrual ->
+    // Dr 210207 (pelunasan utang, TANPA beban kedua); belum terakrual ->
+    // Dr 600028. Digabung per akun.
+    if (pkwtTotal > 0) {
+      const s2 = settings as typeof settings & {
+        pkwtCompensationExpenseAccountId?: number | null;
+        pkwtCompensationPayableAccountId?: number | null;
+      };
+      const byAccount = new Map<number, number>();
+      for (const l of pkwtLines) {
+        const acct = l.pkwtSettledViaAccrual
+          ? s2.pkwtCompensationPayableAccountId!
+          : s2.pkwtCompensationExpenseAccountId!;
+        byAccount.set(acct, safeAdd(byAccount.get(acct) ?? 0, Number(l.amount) || 0, 2));
+      }
+      for (const [accountId, amt] of byAccount) {
+        if (amt > 0) {
+          entries.push({
+            accountId,
+            debit: amt,
+            credit: 0,
+            memo:
+              accountId === s2.pkwtCompensationPayableAccountId
+                ? "Pelunasan Utang Kompensasi PKWT"
+                : "Beban Kompensasi PKWT",
+            costCenterId: payroll.costCenterId ?? null,
+          });
+        }
+      }
+    }
 
     // Cr. Salaries Payable for statutory (BPJS+PPh).
     if (statutory > 0) {
@@ -2216,8 +2283,10 @@ export async function onPayrollPaid(
       // Self-heal the common case: a stored gross that is slightly larger/smaller
       // than the sum of its parts is really just the parts. Re-drive the debit
       // leg from the credit total so the entry stays balanced and no salary is
-      // lost or invented.
-      entries[0].debit = creditTotal;
+      // lost or invented. Kaki PKWT (entries sesudah index 0) TIDAK disentuh:
+      // entries[0] = kredit − Σ debit lain.
+      const otherDebit = entries.slice(1).reduce((s, e) => safeAdd(s, e.debit, 2), 0);
+      entries[0].debit = safeAdd(creditTotal, -otherDebit, 2);
     }
 
     await tx.journal.create({
