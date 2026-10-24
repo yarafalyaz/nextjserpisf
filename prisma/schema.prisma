@@ -295,6 +295,14 @@ model SystemSetting {
    */
   pkwtCompensationExpenseAccountId Int?    @map("pkwt_compensation_expense_account_id")
   pkwtCompensationPayableAccountId Int?    @map("pkwt_compensation_payable_account_id")
+  /**
+   * F-2026-10-24-135-V Putusan 4 (vonis BOT Accountant PR #742): akun
+   * pendapatan lain-lain penjualan besi tua scrap. Nullable TANPA default
+   * tebak (kandidat seed 710003 tidak di-hardcode); posting faktur yang
+   * semua barisnya item besi tua DITOLAK fail-closed bila kosong —
+   * DILARANG fallback ke salesRevenueAccountId/710005.
+   */
+  scrapSaleIncomeAccountId Int?    @map("scrap_sale_income_account_id")
 
   // Storage / CDN configuration
   storageDriver        String  @default("local") @map("storage_driver")
@@ -684,6 +692,13 @@ model Item {
   // F-2026-10-21-021 tahap 1: masa garansi pasang per item (bulan). Null =
   // item tidak bergaransi pasang; tidak ada coverage lahir saat WO selesai.
   warrantyMonths       Int?                 @map("warranty_months")
+  // F-2026-10-24-135-V (vonis BOT Accountant PR #742, Putusan 2/4): penanda
+  // item besi tua hasil scrap. Item besi tua dijual lewat SalesInvoice
+  // existing; hook memilih akun pendapatan lain-lain (setting di bawah)
+  // hanya bila SEMUA baris faktur item besi tua. Item non-stok
+  // (isProduct=false) tidak melahirkan StockMove/COGS — COGS Rp0 karena
+  // nilai buku scrap Rp0 (066-V); dilarang mengarang cost fiktif.
+  isScrapSaleItem      Boolean              @default(false) @map("is_scrap_sale_item")
   trackBatch           Boolean              @default(false) @map("track_batch")
   trackSerial          Boolean              @default(false) @map("track_serial")
   isActive             Boolean              @default(true) @map("is_active")
