@@ -202,6 +202,9 @@ export const ACCOUNT_MAPPING_RULES: { key: string; groups: string[][] }[] = [
   // F-2026-10-24-132-V: mapping kompensasi PKWT (kode persis didahulukan).
   { key: "pkwtCompensationExpenseAccountId", groups: [["600028"], ["beban", "kompensasi", "pkwt"], ["pkwt", "compensation", "expense"]] },
   { key: "pkwtCompensationPayableAccountId", groups: [["210207"], ["utang", "kompensasi", "pkwt"], ["pkwt", "compensation", "payable"]] },
+  // F-2026-10-24-135-V Putusan 4: kandidat 710003 Penjualan Persediaan /
+  // Perlengkapan (OINC) — automap hanya saran; kosong tetap fail-closed.
+  { key: "scrapSaleIncomeAccountId", groups: [["710003"], ["penjualan", "persediaan"]] },
   // Bank payroll didahulukan ke akun "Bank" (110102), bukan "Kas & Bank".
   { key: "payrollBankAccountId", groups: [["110102"], ["bank", "buku"], ["bank"], ["kas", "bank"], ["kas", "utama"]] },
   { key: "employeeReceivableAccountId", groups: [["piutang", "karyawan"], ["110506"], ["employee", "receivable"]] },

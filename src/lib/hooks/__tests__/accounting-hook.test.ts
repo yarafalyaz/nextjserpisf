@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => ({
     employeeReceivableAccountId: 140 as number | null,
     pkwtCompensationExpenseAccountId: 631 as number | null,
     pkwtCompensationPayableAccountId: 231 as number | null,
+    scrapSaleIncomeAccountId: 711 as number | null,
   },
   assertPeriodOpen: vi.fn(),
   fifoConsume: vi.fn(),
@@ -53,6 +54,7 @@ const mocks = vi.hoisted(() => ({
   invoiceFindUnique: vi.fn(),
   journalFindFirst: vi.fn(),
   accountFindMany: vi.fn(),
+  accountFindFirst: vi.fn().mockResolvedValue({ id: 711, isActive: true, reportGroup: "OINC" }),
   journalCreate: vi.fn(),
   journalEntryCreate: vi.fn(),
   journalEntryCreateMany: vi.fn(),
@@ -87,10 +89,6 @@ vi.mock("@/lib/db/prisma", () => ({
   prisma: {
     $transaction: (fn: any) => mocks.transaction(fn),
     systemSetting: { findFirst: () => mocks.systemSettings },
-    salesInvoice: {
-      findUniqueOrThrow: (...a: unknown[]) =>
-        mocks.invoiceFindUniqueOrThrow(...a),
-    },
     salesPayment: {
       findUniqueOrThrow: (...a: unknown[]) =>
         mocks.paymentFindUniqueOrThrow(...a),
@@ -118,6 +116,13 @@ vi.mock("@/lib/db/prisma", () => ({
     salesReturn: {
       findUniqueOrThrow: (...a: unknown[]) =>
         mocks.salesReturnFindUniqueOrThrow(...a),
+    },
+    salesInvoice: {
+      findUnique: mocks.invoiceFindUnique,
+      findUniqueOrThrow: mocks.invoiceFindUniqueOrThrow,
+    },
+    item: {
+      findMany: mocks.itemFindMany,
     },
     purchaseReturn: {
       findUniqueOrThrow: (...a: unknown[]) =>
@@ -423,6 +428,9 @@ describe("onSalesInvoicePosted", () => {
     // Reset systemSettings to valid mappings (a prior test may have nulled one).
     mocks.systemSettings.salesReceivableAccountId = 110;
     mocks.systemSettings.salesRevenueAccountId = 410;
+    mocks.systemSettings.salesTaxAccountId = 160;
+    mocks.systemSettings.scrapSaleIncomeAccountId = 711;
+    mocks.accountFindFirst.mockResolvedValue({ id: 711, isActive: true, reportGroup: "OINC" });
     mocks.systemSettings.cogsAccountId = 510;
     mocks.systemSettings.inventoryAccountId = 130;
     mocks.transaction.mockImplementation((fn: any) =>
@@ -436,6 +444,7 @@ describe("onSalesInvoicePosted", () => {
         },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -595,6 +604,137 @@ describe("onSalesInvoicePosted", () => {
     );
   });
 
+  // F-2026-10-24-135-V E135-1/E135-3: faktur besi tua -> Cr pendapatan
+  // lain-lain (711) sebesar DPP, Cr PPN existing, Dr Piutang total.
+  // Kredit ke 410 (pendapatan utama) / HPP / WIP = MERAH.
+  it("E135-1/E135-3: faktur besi tua kredit pendapatan lain-lain + PPN, bukan pendapatan utama", async () => {
+    const inner = innerInvoice({ totalAmount: 11100000, taxAmount: 1100000 });
+    seedInvoice(inner, [{ itemId: 60, qty: 100, cost: 0 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 60, cost: 9999, isProduct: false, isScrapSaleItem: true, defaultWarehouseId: null },
+    ]);
+    mocks.journalCreate.mockResolvedValue({ id: 50 });
+
+    await onSalesInvoicePosted(1, 999);
+
+    expectJournalRef("SalesInvoice", 11100000, 11100000);
+    expectEntry({ accountId: 110, debit: 11100000, credit: 0 }, 3);
+    expectEntry({ accountId: 711, debit: 0, credit: 10000000 });
+    expectEntry({ accountId: 160, debit: 0, credit: 1100000 });
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ accountId: 410 }),
+      }),
+    );
+    // E135-4: item besi tua non-stok -> nol StockMove, nol jurnal COGS.
+    expect(mocks.stockMoveCreate).not.toHaveBeenCalled();
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+  });
+
+  // E135-7: isScrapSaleItem=true && isProduct=true -> posting ditolak
+  // sebelum jurnal/stok disentuh. COGS > Rp0 = MERAH.
+  it("E135-7: item besi tua bertanda stok ditolak berisik", async () => {
+    const inner = innerInvoice({ totalAmount: 500000 });
+    seedInvoice(inner, [{ itemId: 60, qty: 10, cost: 12345 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 60, cost: 12345, isProduct: true, isScrapSaleItem: true, defaultWarehouseId: 7 },
+    ]);
+
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/tidak boleh isProduct=true/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.stockMoveCreate).not.toHaveBeenCalled();
+    expect(mocks.fifoConsume).not.toHaveBeenCalled();
+  });
+
+  // E135-2: setting scrap kosong -> posting ditolak berisik, nol jurnal.
+  // Fallback diam-diam ke 410/710005 = MERAH.
+  it("E135-2: faktur besi tua tanpa mapping scrap ditolak fail-closed", async () => {
+    (mocks.systemSettings as any).scrapSaleIncomeAccountId = null;
+    const inner = innerInvoice({ totalAmount: 500000 });
+    seedInvoice(inner, [{ itemId: 60, qty: 10, cost: 0 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 60, cost: 0, isProduct: false, isScrapSaleItem: true, defaultWarehouseId: null },
+    ]);
+
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/besi tua \(scrap\) belum dipetakan/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
+  });
+
+  // E135-4 eksplisit: walau master item besi tua memuat cost karangan,
+  // non-produk tidak pernah melahirkan COGS/StockMove/qty berubah.
+  it("E135-4: cost master item besi tua tidak melahirkan COGS fiktif", async () => {
+    const inner = innerInvoice({ totalAmount: 500000 });
+    seedInvoice(inner, [{ itemId: 60, qty: 10, cost: 12345 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 60, cost: 12345, isProduct: false, isScrapSaleItem: true, defaultWarehouseId: null },
+    ]);
+    mocks.journalCreate.mockResolvedValue({ id: 50 });
+
+    await onSalesInvoicePosted(1);
+
+    expect(mocks.journalCreate).toHaveBeenCalledTimes(1);
+    expect(mocks.stockMoveCreate).not.toHaveBeenCalled();
+    expect(mocks.fifoConsume).not.toHaveBeenCalled();
+    expectEntry({ accountId: 711, debit: 0, credit: 500000 });
+  });
+
+  // E135-6 (3a): campuran besi tua + dagang ditolak berisik, nol jurnal.
+  // Seluruh hasil scrap terkredit ke pendapatan penjualan biasa = MERAH.
+  it("E135-6: faktur campuran besi tua + dagang ditolak berisik nol jurnal", async () => {
+    const inner = innerInvoice({ totalAmount: 1000 });
+    seedInvoice(inner, [
+      { itemId: 60, qty: 1, cost: 0 },
+      { itemId: 50, qty: 1, cost: 0 },
+    ]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 60, cost: 0, isProduct: false, isScrapSaleItem: true, defaultWarehouseId: null },
+      { id: 50, cost: 100, isProduct: false, isScrapSaleItem: false, defaultWarehouseId: null },
+    ]);
+
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/campuran item besi tua/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
+  });
+
+  // E135-2b: akun scrap salah grup (REVE dagang) -> ditolak berisik.
+  it("E135-2b: akun scrap bukan grup OINC ditolak fail-closed", async () => {
+    mocks.accountFindFirst.mockResolvedValue({ id: 711, isActive: true, reportGroup: "REVE" });
+    const inner = innerInvoice({ totalAmount: 500000 });
+    seedInvoice(inner, [{ itemId: 60, qty: 10, cost: 0 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 60, cost: 0, isProduct: false, isScrapSaleItem: true, defaultWarehouseId: null },
+    ]);
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/grup pendapatan lain-lain \(OINC\)/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  // E135-2c: akun scrap nonaktif -> ditolak berisik.
+  it("E135-2c: akun scrap nonaktif ditolak fail-closed", async () => {
+    mocks.accountFindFirst.mockResolvedValue({ id: 711, isActive: false, reportGroup: "OINC" });
+    const inner = innerInvoice({ totalAmount: 500000 });
+    seedInvoice(inner, [{ itemId: 60, qty: 10, cost: 0 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 60, cost: 0, isProduct: false, isScrapSaleItem: true, defaultWarehouseId: null },
+    ]);
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/grup pendapatan lain-lain \(OINC\)/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+  });
+
+  // E135-8: taxAmount > 0 tetapi salesTaxAccountId kosong -> ditolak.
+  // Pendapatan menyerap PPN = MERAH.
+  it("E135-8: faktur besi tua ber-PPN tanpa akun PPN ditolak (pendapatan tidak serap PPN)", async () => {
+    (mocks.systemSettings as any).salesTaxAccountId = null;
+    const inner = innerInvoice({ totalAmount: 11100000, taxAmount: 1100000 });
+    seedInvoice(inner, [{ itemId: 60, qty: 100, cost: 0 }]);
+    mocks.itemFindMany.mockResolvedValue([
+      { id: 60, cost: 0, isProduct: false, isScrapSaleItem: true, defaultWarehouseId: null },
+    ]);
+    await expect(onSalesInvoicePosted(1)).rejects.toThrow(/PPN Keluar belum dipetakan/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
+  });
+
   it("creates Dr. COGS / Cr. Inventory for product items with non-zero COGS", async () => {
     const inner = innerInvoice({ totalAmount: 1000 });
     seedInvoice(inner, [{ itemId: 50, qty: 2, cost: 100 }]);
@@ -705,6 +845,7 @@ describe("onSalesPaymentCreated", () => {
         salesPayment: { findUniqueOrThrow: mocks.paymentFindUniqueOrThrow },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -798,6 +939,7 @@ describe("onPurchaseOrderReceived", () => {
         purchaseOrder: { findUniqueOrThrow: mocks.orderFindUniqueOrThrow },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -899,6 +1041,7 @@ describe("onExpenseApproved", () => {
         expense: { findUniqueOrThrow: mocks.expenseFindUniqueOrThrow },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -1039,6 +1182,7 @@ describe("onPettyCashCreated", () => {
         pettyCash: { findUniqueOrThrow: mocks.pettyCashFindUniqueOrThrow },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -1224,13 +1368,21 @@ describe("onSalesReturnCompleted", () => {
           update: vi.fn().mockResolvedValue({}),
         },
         salesInvoice: {
-          findUniqueOrThrow: vi.fn().mockResolvedValue({ subtotal: 200, discount: 0, taxAmount: 0 }),
+          findUniqueOrThrow: vi.fn(async (args: any) =>
+            args?.include?.items?.select
+              ? { id: 55, items: [{ itemId: 60, qty: 2 }] }
+              : { subtotal: 200, discount: 0, taxAmount: 0 },
+          ),
+        },
+        item: {
+          findMany: vi.fn().mockResolvedValue([{ id: 60, isScrapSaleItem: true }]),
         },
         taxInvoice: { findFirst: vi.fn().mockResolvedValue(null) },
         $queryRaw: mocks.queryRaw,
         $executeRaw: mocks.executeRaw,
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -1239,6 +1391,25 @@ describe("onSalesReturnCompleted", () => {
         journalEntry: journalEntryBranch(),
       }),
     );
+  });
+
+  // E136-1/E136-2: retur atas faktur besi tua murni ditolak berisik;
+  // nol jurnal, nol entri. Persediaan fiktif qty * cost master (750rb) = MERAH.
+  it("E136-1/E136-2: retur atas faktur besi tua murni ditolak fail-closed nol jurnal", async () => {
+    mocks.salesReturnFindUniqueOrThrow.mockResolvedValue({
+      id: 1,
+      documentNo: "SR-SCRAP",
+      salesInvoiceId: 55,
+      status: "draft",
+      items: [{ id: 900, itemId: 60, qty: 2, price: 100000, cost: 750000 }],
+    });
+    mocks.journalFindFirst.mockResolvedValue(null);
+
+    mocks.invoiceFindUnique.mockResolvedValue({ id: 55, items: [{ itemId: 60, qty: 2 }] });
+    mocks.itemFindMany.mockResolvedValue([{ id: 60, isScrapSaleItem: true }, { id: 50, isScrapSaleItem: false }]);
+    await expect(onSalesReturnCompleted(1, 999)).rejects.toThrow(/faktur besi tua/);
+    expect(mocks.journalCreate).not.toHaveBeenCalled();
+    expect(mocks.journalEntryCreate).not.toHaveBeenCalled();
   });
 
   it("rejects if required settings are missing", async () => {
@@ -1375,6 +1546,7 @@ describe("onPurchaseReturnProcessed", () => {
         stockMove: { findMany: mocks.stockMoveFindMany },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -1473,6 +1645,7 @@ describe("onDownPaymentReceived", () => {
         downPayment: { findUniqueOrThrow: mocks.downPaymentFindUniqueOrThrow },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -1552,6 +1725,7 @@ describe("onVendorBillPosted", () => {
         goodsReceipt: { count: mocks.goodsReceiptCount },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -1688,6 +1862,7 @@ describe("onVendorPaymentCreated", () => {
         },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
@@ -1850,6 +2025,7 @@ describe("onPayrollPaid", () => {
         payrollComponentLine: { findMany: (...a: unknown[]) => pkwtLinesMock.findMany(...a) },
         account: {
           findMany: mocks.accountFindMany,
+          findFirst: mocks.accountFindFirst,
         },
         journal: {
           findFirst: mocks.journalFindFirst,
