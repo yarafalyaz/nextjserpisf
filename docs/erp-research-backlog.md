@@ -25857,3 +25857,114 @@ Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci
 - Validasi NPWP online/format pajak, NITKU, status PKP: keluarga identitas pajak existing, perlu vonis Accountant + sumber resmi DJP; bukan kunci banding sederhana spec ini.
 - Duplikat vendor/barang: objek dan penjaga berbeda; tidak dicampur ke spec pelanggan ini.
 ---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-008-S: penanda selesai aktivitas lead terjadwal (completedAt LeadActivity yatim — antrean follow-up F-037 tidak pernah bisa dibersihkan)
+
+> **Slot**: F-2026-10-25-008-S. Diperiksa bentrok 2026-10-25 vs `origin/main` (`4c3d2c8b`): grep `F-2026-10-25-008` di backlog+board = 0; 001-S..005-S merged, 006-S PR #769, 007-S PR #770 beda topik. ID 008 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Bukan duplikat F-2026-10-21-037**: F-037 = builder+loader+kartu antrean follow-up jatuh-tempo (SUDAH live penuh: `lead-followups.ts`, `lead-followups-data.ts`, `LeadFollowupsCard` di `crm/leads/page.tsx:61,96`). Spec ini menutup lubang di hilirnya: antrean hanya mengeluarkan aktivitas bila `completedAt` terisi, tetapi TIDAK ADA satu pun jalur tulis `completedAt` untuk LeadActivity — aktivitas terjadwal yang sudah dikerjakan tetap menghantui antrean selamanya, dan sales terpaksa menghapus/mengabaikan. Spec ini membekukan aksi penanda selesai (+batal-selesai) yang hilang itu.
+
+### 0. Inventarisasi terverifikasi (TERVERIFIKASI-KODE, origin/main 4c3d2c8b, 2026-10-25)
+
+- Model `LeadActivity` (`prisma/schema.prisma`, model LeadActivity): `scheduledAt DateTime?`, `completedAt DateTime?`, `type`, `subject`, `userId`. Kolom selesai SUDAH ada — tanpa migrasi.
+- Builder antrean `src/lib/reports/lead-followups.ts:55-72` (`earliestDueActivity`): kandidat = `scheduledAt` terisi DAN `completedAt` kosong DAN hari kalender WIB <= hari ini; per lead jadwal terawal. Tes `lead-followups.test.ts:78` mengunci "completedAt terisi tidak terhitung walau scheduledAt lewat".
+- Penjadwalan existing: `addLeadActivity` (`src/actions/crm.actions.ts:340`) menerima `scheduledAt` dateOnly -> `wibDateToUtcMidnight`; skema `leadActivitySchema` (`src/lib/validations/crm.schemas.ts:106-117`) type note/call/email/meeting/task.
+- GAP (bukti grep run ini): `git grep completedAt` di `src/actions`, `src/app`, `src/components` untuk LeadActivity = 0 jalur tulis/UI (hit hanya Project/Approval/Production). Tidak ada `completeLeadActivity`, tidak ada tombol selesai di detail lead (`crm/leads/[slug]/page.tsx:166-175` hanya tabel baca aktivitas), tidak ada di `lead-actions.tsx` (hanya Convert + Add form).
+- Ownership existing: `convertLead` (`crm.actions.ts:201`) menjaga pemilik — non-admin hanya lead `assignedTo === user.id`, kecuali `manage_leads`/`super_admin`. `addLeadActivity` hanya `edit_leads` tanpa guard pemilik (asimetri existing, dicatat bukan diubah diam-diam — lihat Q-LC-2).
+- Izin katalog nyata (`src/lib/auth/module-catalog.generated.ts:362-366`): `view_leads`, `create_leads`, `edit_leads`, `delete_leads`, `manage_leads`.
+- Status lead string bebas (default `new`); konversi hanya dari qualified/proposal/negotiation/won. Penanda selesai aktivitas TIDAK mengubah status lead.
+
+### 1. Workflow specification
+
+Aktor: Sales pemilik lead (pelaksana follow-up), Supervisor/Manajer Sales (`manage_leads`), Lead (putusan gerbang), Backend (aksi), Frontend (tombol + label), QA (falsifikasi).
+Dokumen masuk: LeadActivity terjadwal existing (scheduledAt terisi, completedAt kosong). Dokumen keluar: aktivitas yang sama dengan completedAt terisi (server time) + catatan log aktivitas existing; antrean F-037 membacanya keluar pada muat berikutnya. TANPA dokumen/jurnal/status baru.
+
+Alur:
+1. Sales membuka detail lead atau antrean follow-up, memilih aktivitas terjadwal yang sudah dikerjakan, menekan "Tandai Selesai".
+2. Server memeriksa izin + kepemilikan (BR-LC-02), menolak bila aktivitas sudah selesai / lead terhapus (BR-LC-04), lalu menulis completedAt = waktu server dalam transaksi + logActivity existing.
+3. Aktivitas keluar dari antrean F-037 (builder existing, tanpa perubahan), tampil di riwayat detail lead dengan label selesai + tanggal selesai.
+4. Supervisor dapat membatalkan penanda (completedAt -> kosong) bila salah tandai; aktivitas kembali ke antrean bila scheduledAt sudah jatuh tempo. Batal-selesai tercatat di log, bukan hapus riwayat.
+
+### 2. Status-transition matrix (keadaan turunan aktivitas — tanpa kolom status baru)
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| terjadwal-belum-selesai (scheduledAt terisi, completedAt kosong) | Tandai Selesai | selesai (completedAt terisi) | izin + pemilik (BR-LC-01/02); idempoten (BR-LC-04) |
+| selesai | Batalkan Penanda | terjadwal-belum-selesai | izin + pemilik sama; completedAt dikosongkan, baris tidak dihapus |
+| tanpa jadwal (scheduledAt kosong) | Tandai Selesai | DITOLAK tahap 1 (Q-LC-3) | aktivitas catatan biasa bukan follow-up; menolak mencegah riwayat selesai karangan |
+| tahap apa pun | lead di-soft-delete | di luar cakupan | saringan deletedAt existing |
+
+### 3. Role/permission matrix (key nyata katalog :362-366)
+
+| Aksi | Izin | Catatan |
+|---|---|---|
+| Lihat antrean/detail aktivitas | `view_leads` | existing, tidak berubah |
+| Tambah aktivitas terjadwal | `edit_leads` | existing `addLeadActivity` |
+| Tandai Selesai / Batalkan Penanda aktivitas lead sendiri | `edit_leads` + pemilik (USULAN Q-LC-2) | non-pemilik ditolak server, pola convertLead |
+| Tandai Selesai aktivitas lead orang lain | `manage_leads` / super_admin | pengecualian supervisor existing pola convertLead |
+| Hapus aktivitas/lead | `delete_leads` | existing, di luar spec |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-LC-2 Lead).
+
+### 4. Business rules register
+
+| ID | Aturan | Label | Sumber |
+|---|---|---|---|
+| BR-LC-01 | Penanda selesai menulis `completedAt` = waktu server saat aksi; klien tidak mengirim tanggal selesai bebas tahap 1 | USULAN | pola completedAt server di approval.actions.ts:209 |
+| BR-LC-02 | Hanya pemilik lead (assignedTo = user) atau pemegang `manage_leads`/super_admin yang boleh menandai/membatalkan; selain itu ditolak server berpesan | USULAN (BUTUH-VONIS Lead Q-LC-2) | pola convertLead crm.actions.ts:213-222 |
+| BR-LC-03 | Penanda selesai TIDAK mengubah status lead, TIDAK membuat aktivitas baru, TIDAK menyentuh customer/quotation; satu-satunya efek = completedAt + log existing | USULAN | scope |
+| BR-LC-04 | Idempoten: menandai aktivitas yang sudah selesai = ditolak/no-op berpesan "sudah selesai", completedAt pertama tidak ditimpa; membatalkan yang belum selesai = ditolak | USULAN | pola klaim atomik repo |
+| BR-LC-05 | Hanya aktivitas ber-scheduledAt yang bisa ditandai selesai tahap 1; aktivitas tanpa jadwal ditolak (Q-LC-3) | USULAN — Q-LC-3 | builder F-037 hanya membaca berjadwal |
+| BR-LC-06 | Sesudah ditandai, aktivitas keluar antrean F-037 pada muat berikutnya tanpa perubahan builder; sesudah dibatalkan dan scheduledAt sudah lewat, aktivitas kembali ke antrean | TERVERIFIKASI-KODE (konsekuensi builder) | lead-followups.ts:58 |
+| BR-LC-07 | Riwayat menampilkan penanda selesai (tanggal selesai + label) dari completedAt existing; UI tidak menghitung status selesai sendiri | USULAN | konvensi verbatim server |
+| BR-LC-08 | Penanda selesai BUKAN peristiwa akuntansi: nol jurnal, nol dokumen, nol notifikasi keluar tahap 1 | USULAN (scope) | — |
+
+### 5. Feature matrix Accurate / Zahir / ISF (BENCHMARK, akses 2026-10-25)
+
+| Fitur | Accurate | Zahir | ISF sekarang |
+|---|---|---|---|
+| Aktivitas/follow-up pelanggan & prospek tercatat | ADA — fitur Pelanggan/Kontak memantau aktivitas + follow up: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/mengenal-fitur-pelanggan/ dan https://help.accurate.id/product/accurate-online/fitur-aol/perusahaan/kontak/mengenal-fitur-kontak/ | Modul Leave/Approval HR ada di Zahir ERP (https://zahirerp.com/id/all-features-of-zahir-products/); aktivitas follow-up lead tidak ditemukan eksplisit di halaman itu — ditulis tidak ditemukan, bukan diklaim tidak ada | SEBAGIAN: aktivitas + jadwal + antrean jatuh-tempo ADA (F-037); penanda selesai ABSEN (gap spec ini) |
+| Antrean follow-up jatuh tempo | Tidak ditemukan eksplisit di halaman di atas | Tidak ditemukan eksplisit | ADA (F-037 live) |
+| Tandai aktivitas selesai | Tidak ditemukan eksplisit di halaman di atas | Tidak ditemukan eksplisit | ABSEN — completedAt yatim |
+
+### 6. Kata & label UI (usul Frontend, verbatim untuk diadopsi/diubah Lead)
+
+Tombol: "Tandai Selesai"; batal: "Batalkan Penanda Selesai". Label riwayat: `Selesai <tanggal>`; belum: `Terjadwal <tanggal>`. Pesan tolak server tampil apa adanya. Notice antrean tetap milik F-037, tidak diubah spec ini.
+
+### 7. Acceptance criteria (falsifikasi — QA atas head Backend/Frontend persis)
+
+- AC-LC-B1: tandai selesai aktivitas terjadwal -> completedAt terisi waktu server, baris keluar antrean F-037. Tetap di antrean = MERAH.
+- AC-LC-B2: non-pemilik tanpa manage_leads menandai -> ditolak server, completedAt tetap kosong. Lolos = MERAH.
+- AC-LC-B3: tandai dua kali -> completedAt pertama tidak berubah + penolakan/no-op berpesan. Tertimpa = MERAH.
+- AC-LC-B4: aktivitas tanpa scheduledAt ditandai -> ditolak (Q-LC-3). Terisi completedAt = MERAH terhadap spec.
+- AC-LC-B5: batalkan penanda -> completedAt kosong, aktivitas kembali ke antrean bila sudah jatuh tempo; baris/log tidak terhapus. Hilang baris = MERAH.
+- AC-LC-B6: penanda tidak mengubah status lead/customer/dokumen apa pun (snapshot banding). Berubah = MERAH.
+- AC-LC-F1: tombol hanya tampil untuk aktivitas berjadwal belum selesai pada pengguna berhak; UI tidak menentukan kepemilikan sendiri. Tombol tampil ke non-pemilik lalu server menolak tanpa pesan jelas = MERAH parsial (pesan server wajib tampil verbatim).
+- AC-LC-F2: riwayat menampilkan label selesai dari completedAt server; UI menghitung sendiri = MERAH.
+Edge cases: EC-1 aktivitas jadwal masa depan ditandai lebih awal -> boleh (selesai sebelum jatuh tempo), tidak pernah masuk antrean. EC-2 lead sudah won/converted: aktivitas tetap bisa ditandai (riwayat prospek sah). EC-3 dua penanda bersamaan: satu menang, satu idempoten tertolak (klaim atomik pola repo). EC-4 scheduledAt hari ini WIB ditandai hari sama -> overdueDays 0 tidak lagi tampil.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-LC-1 (Lead): sahkan tahap 1 aksi tandai/batal-selesai tunggal (tanpa alasan wajib, tanpa persetujuan supervisor).
+- Q-LC-2 (Lead): gerbang pemilik pola convertLead (usul spec) vs cukup `edit_leads` sejajar addLeadActivity existing. Asimetri existing dicatat; spec tidak memilih diam-diam.
+- Q-LC-3 (Lead/Backend): hanya aktivitas berjadwal (usul spec) vs semua aktivitas boleh ditandai.
+- Q-LC-4 (Backend): fisik klaim atomik (updateMany bersyarat completedAt kosong) + bentuk respons; tanpa migrasi.
+- Accountant: TIDAK diminta — nol uang/pajak/jurnal (BR-LC-08).
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-008-S | Spec ini (dokumen) | Business | — |
+| (turunan) aksi tandai/batal-selesai atomik + tes kepemilikan/idempoten | Backend | Q-LC-1/2/3 diputus Lead | — |
+| (turunan) tombol + label riwayat verbatim server; grep e2e selector lead sebelum commit | Frontend | kontrak Backend stabil; kata §6 | — |
+| (turunan) falsifikasi AC-LC-B1..B6 + F1..F2 | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Pengingat otomatis WA/email untuk follow-up: kanal keluar tidak ada (gap dicatat F-037); bukan penanda selesai.
+- Alasan wajib / persetujuan supervisor untuk menandai selesai: gesekan tanpa bukti kebutuhan; Q-LC-1 dulu.
+- Menghapus aktivitas sebagai jalan keluar antrean: merusak riwayat; penanda selesai adalah jalan sahnya.
+- Perubahan builder F-037 / stale-leads: keduanya benar; yang hilang hanya jalur tulis completedAt.
+
+F-2026-10-25-008-S — Penanda selesai aktivitas lead terjadwal. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-LC-1..3 + fisik Backend Q-LC-4. Pemilik usulan: Business (spec), Lead (putusan), Backend (aksi), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK.
+---
