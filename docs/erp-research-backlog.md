@@ -24765,8 +24765,8 @@ Tidak ada key izin baru tahap 1 (USULAN; Q-TX-2 Lead). Identitas pajak pelanggan
 | BR-TX-03 | Snapshot saat terbit: counterparty dokumen = salinan identitas master pada momen penerbitan (sesudah koreksi petugas). Edit master kemudian TIDAK menulis ulang dokumen terbit; koreksi dokumen = faktur pengganti existing. | USULAN | pola snapshot repo (QuotationHistory, replacesTaxInvoiceId) |
 | BR-TX-04 | Prefill hanya bila dokumen tertaut ke faktur penjualan/tagihan yang pelanggannya jelas. Terbit tanpa tautan = isian manual seperti hari ini (tidak ditebak dari nama). | USULAN | issueSchema salesInvoiceId optional tax-documents.actions.ts:53 |
 | BR-TX-05 | Nama WP boleh beda dari nama dagang `Customer.name`; yang masuk faktur pajak = nama WP. Kosong nama WP → fallback nama pelanggan DITANDAI sebagai fallback di penanda kelengkapan (bukan diam-diam dianggap nama WP). | USULAN | BENCHMARK tab Pajak pelanggan Accurate (URL §6) |
-| BR-TX-06 | Format/validasi NPWP (15/16 digit), bentuk NITKU, dan makna status PKP untuk kode transaksi/perlakuan PPN: TIDAK diputus spec ini. Sampai vonis Accountant, server tidak menolak format apa pun melebihi perilaku existing (string bebas). | BUTUH-VONIS (Accountant Q-TX-1) | backlog ±baris 94 (usul validasi 16 digit belum divonis) |
-| BR-TX-07 | Status PKP tersimpan sebagai fakta master bertanggal-efektif atau nilai kini sederhana = fisik Backend + vonis Accountant; spec hanya mewajibkan nilai yang tertera di dokumen adalah snapshot saat terbit, bukan nilai master terkini. | BUTUH-VONIS (Accountant Q-TX-1) + USULAN | — |
+| BR-TX-06 | Format/validasi NPWP (15/16 digit), bentuk NITKU, dan makna status PKP untuk kode transaksi/perlakuan PPN: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-005-V (NPWP 16 kanonik, 15=legacy tertanda, NITKU 22 digit, PKP tidak menurunkan kode). Sampai fisik Backend live, server tidak menolak format apa pun melebihi perilaku existing (string bebas). | TERJAWAB-Q-TX-1 (F-2026-10-25-005-V) | backlog ±baris 94 (usul validasi 16 digit belum divonis) |
+| BR-TX-07 | Status PKP: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-005-V (nilai kini terstruktur pkpStatus+pkpEffectiveFrom tahap 1, histori penuh bersyarat naik kelas); nilai di dokumen tetap snapshot saat terbit, bukan nilai master terkini. | TERJAWAB-Q-TX-1 (F-2026-10-25-005-V) | — |
 | BR-TX-08 | Penanda kelengkapan = turunan baca-saja (nama WP terisi DAN NPWP terisi = siap; selain itu kurang + daftar kosongnya). Tanpa kolom status, tanpa cron penagih kelengkapan tahap 1. | USULAN | pola turunan F-2026-10-25-001-S |
 | BR-TX-09 | Vendor: `Vendor.npwp` existing adalah padanan sisi beli; spec ini TIDAK mengubah vendor. Penjajaran bentuk field vendor = spec terpisah bila faktur masukan membuktikan perlu. | USULAN (scope) | schema.prisma:485 (Vendor.npwp) |
 
@@ -24798,7 +24798,7 @@ Edge cases: EC-1 nama WP = nama dagang (diisi sama) → siap tanpa penanda fallb
 
 ### 8. Pertanyaan putusan (gerbang)
 
-- Q-TX-1 (Accountant, BUTUH-VONIS — memblokir validasi): (a) validasi format NPWP 16 digit vs terima 15 digit lama; (b) bentuk NITKU yang disimpan; (c) status PKP: nilai kini vs bertanggal efektif, dan apakah status PKP master boleh memengaruhi kode transaksi default faktur (spec usul TIDAK tahap 1); (d) EC-3 snapshot nama dagang tertanda vs tolak terbit.
+- Q-TX-1 (Accountant): TERJAWAB-Q-TX-1 oleh vonis F-2026-10-25-005-V — (a) NPWP 16 kanonik, 15 digit peringatan migrasi tertanda; (b) NITKU 22 digit; (c) PKP nilai kini+ tanggal, TIDAK memengaruhi kode transaksi; (d) EC-3 tolak terbit faktur pajak. Fisik = Backend Q-TX-3 dalam batas vonis §8.
 - Q-TX-2 (Lead): buka inti field master + snapshot sekarang? Izin reuse vs baru (spec usul reuse existing).
 - Q-TX-3 (Backend): fisik kolom (nama/map), titik salin di service penerbitan (server, bukan prefill form saja — form boleh ditutup tanpa simpan), dan perilaku replaceTaxInvoice atas snapshot identitas.
 - Q-TX-4 (Lead): penanda kelengkapan cukup di master (usul spec) vs masuk antrean kerja petugas pajak tahap 1 — spec usul master saja.
@@ -25602,8 +25602,8 @@ Tidak ada key izin baru tahap 1 (USULAN; putusan Q-AQ-1 Lead). Kontak pelanggan 
 | BR-TX-03 | Snapshot saat terbit: counterparty dokumen = salinan identitas master pada momen penerbitan (sesudah koreksi petugas). Edit master kemudian TIDAK menulis ulang dokumen terbit; koreksi dokumen = faktur pengganti existing. | USULAN | pola snapshot repo (QuotationHistory, replacesTaxInvoiceId) |
 | BR-TX-04 | Prefill hanya bila dokumen tertaut ke faktur penjualan/tagihan yang pelanggannya jelas. Terbit tanpa tautan = isian manual seperti hari ini (tidak ditebak dari nama). | USULAN | issueSchema salesInvoiceId optional tax-documents.actions.ts:53 |
 | BR-TX-05 | Nama WP boleh beda dari nama dagang `Customer.name`; yang masuk faktur pajak = nama WP. Kosong nama WP → fallback nama pelanggan DITANDAI sebagai fallback di penanda kelengkapan (bukan diam-diam dianggap nama WP). | USULAN | BENCHMARK tab Pajak pelanggan Accurate (URL §6) |
-| BR-TX-06 | Format/validasi NPWP (15/16 digit), bentuk NITKU, dan makna status PKP untuk kode transaksi/perlakuan PPN: TIDAK diputus spec ini. Sampai vonis Accountant, server tidak menolak format apa pun melebihi perilaku existing (string bebas). | BUTUH-VONIS (Accountant Q-TX-1) | backlog ±baris 94 (usul validasi 16 digit belum divonis) |
-| BR-TX-07 | Status PKP tersimpan sebagai fakta master bertanggal-efektif atau nilai kini sederhana = fisik Backend + vonis Accountant; spec hanya mewajibkan nilai yang tertera di dokumen adalah snapshot saat terbit, bukan nilai master terkini. | BUTUH-VONIS (Accountant Q-TX-1) + USULAN | — |
+| BR-TX-06 | Format/validasi NPWP (15/16 digit), bentuk NITKU, dan makna status PKP untuk kode transaksi/perlakuan PPN: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-005-V (NPWP 16 kanonik, 15=legacy tertanda, NITKU 22 digit, PKP tidak menurunkan kode). Sampai fisik Backend live, server tidak menolak format apa pun melebihi perilaku existing (string bebas). | TERJAWAB-Q-TX-1 (F-2026-10-25-005-V) | backlog ±baris 94 (usul validasi 16 digit belum divonis) |
+| BR-TX-07 | Status PKP: TERJAWAB-Q-TX-1 oleh vonis Accountant F-2026-10-25-005-V (nilai kini terstruktur pkpStatus+pkpEffectiveFrom tahap 1, histori penuh bersyarat naik kelas); nilai di dokumen tetap snapshot saat terbit, bukan nilai master terkini. | TERJAWAB-Q-TX-1 (F-2026-10-25-005-V) | — |
 | BR-TX-08 | Penanda kelengkapan = turunan baca-saja (nama WP terisi DAN NPWP terisi = siap; selain itu kurang + daftar kosongnya). Tanpa kolom status, tanpa cron penagih kelengkapan tahap 1. | USULAN | pola turunan F-2026-10-25-001-S |
 | BR-TX-09 | Vendor: `Vendor.npwp` existing adalah padanan sisi beli; spec ini TIDAK mengubah vendor. Penjajaran bentuk field vendor = spec terpisah bila faktur masukan membuktikan perlu. | USULAN (scope) | schema.prisma:485 (Vendor.npwp) |
 | BR-AQ-01 | Cakupan antrean tahap 1 = quotation `accepted`/`approved`, `deletedAt` kosong, dan TANPA SalesOrder tertaut. `draft`/`sent` milik antrean 091-S; `converted` keluar permanen. | USULAN | convert guard sales.actions.ts:487-489; followup loader filter `sent` |
@@ -25647,7 +25647,7 @@ Edge cases: EC-1 nama WP = nama dagang (diisi sama) → siap tanpa penanda fallb
 
 ### 8. Pertanyaan putusan (gerbang)
 
-- Q-TX-1 (Accountant, BUTUH-VONIS — memblokir validasi): (a) validasi format NPWP 16 digit vs terima 15 digit lama; (b) bentuk NITKU yang disimpan; (c) status PKP: nilai kini vs bertanggal efektif, dan apakah status PKP master boleh memengaruhi kode transaksi default faktur (spec usul TIDAK tahap 1); (d) EC-3 snapshot nama dagang tertanda vs tolak terbit.
+- Q-TX-1 (Accountant): TERJAWAB-Q-TX-1 oleh vonis F-2026-10-25-005-V — (a) NPWP 16 kanonik, 15 digit peringatan migrasi tertanda; (b) NITKU 22 digit; (c) PKP nilai kini+ tanggal, TIDAK memengaruhi kode transaksi; (d) EC-3 tolak terbit faktur pajak. Fisik = Backend Q-TX-3 dalam batas vonis §8.
 - Q-TX-2 (Lead): buka inti field master + snapshot sekarang? Izin reuse vs baru (spec usul reuse existing).
 - Q-TX-3 (Backend): fisik kolom (nama/map), titik salin di service penerbitan (server, bukan prefill form saja — form boleh ditutup tanpa simpan), dan perilaku replaceTaxInvoice atas snapshot identitas.
 - Q-TX-4 (Lead): penanda kelengkapan cukup di master (usul spec) vs masuk antrean kerja petugas pajak tahap 1 — spec usul master saja.
@@ -25962,6 +25962,335 @@ Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci
 - Duplikat vendor/barang: objek dan penjaga berbeda; tidak dicampur ke spec pelanggan ini.
 ---
 
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-005-V: identitas pajak pelanggan — validasi NPWP 16 digit (15 digit = peringatan migrasi, bukan lolos diam), NITKU 22 digit opsional-tervalidasi-bentuk, status PKP nilai-kini + tanggal pengukuhan tanpa histori penuh tahap 1, EC-3 tolak terbit faktur pajak, kode transaksi tidak diturunkan dari status PKP
+
+Status: PUTUSAN BOT Accountant (kartu t_84aadbad), menjawab
+Q-TX-1 spec Business F-2026-10-25-004-S (BR-TX-06/07, EC-3).
+Dokumen saja; TANPA kode aplikasi/schema/migrasi di kartu ini.
+ID bebas terverifikasi live: grep `F-2026-10-25-005-V` di
+`origin/main` (4c3d2c8b) = 0 sebelum tulis; slot `-V` 2026-10-25
+yang terpakai hanya F-2026-10-25-004-V (PPN uang muka). Spec
+004-S ter-append 2x di main (kawasan ±baris 24700 dan ±25600) —
+vonis ini SATU blok; penandaan TERJAWAB-Q-TX-1 diterapkan ke
+kedua salinan agar tidak muncul blok ketiga. Duplikasi spec
+dilaporkan ke Lead/Business di handoff PR, bukan diperbaiki
+diam-diam di PR ini.
+
+### 0. Basis bukti live (worktree origin/main 4c3d2c8b, 2026-10-25 01:21 WIB) — TERVERIFIKASI-KODE
+
+- `Customer.taxId String?` (prisma/schema.prisma kawasan model
+  Customer, :384) satu-satunya identitas pajak pelanggan;
+  validasi `z.string().max(50).optional()`
+  (src/lib/validations/form.schemas.ts:47). Field nama WP /
+  alamat pajak / NITKU / status PKP di master: 0 (grep schema+src).
+- `TaxInvoice` live: `transactionCode` string 2 digit kanonik
+  PER-11/PJ/2025 ("01".."10", default ERP "04" — komentar schema
+  kawasan :1101-1104), `counterpartyTaxId/Name/Nitku String?`
+  (:1126-1128), `taxRate Decimal(5,2)` default 12.00 (:1112).
+  Kode didukung + default di `src/lib/tax/tax-invoice.ts`:
+  `TRANSACTION_CODES` 10 kode, `DEFAULT_TRANSACTION_CODE="04"`,
+  `NOMINAL_VAT_RATE=12` sebagai konstanta logika murni dengan
+  snapshot `taxRate` per dokumen — tarif TIDAK dibaca dari
+  master bertanggal efektif hari ini; vonis ini TIDAK mengubah
+  fakta itu dan TIDAK memerintahkan hardcode baru (lihat §5e).
+- Penerbitan manual tanpa salin master: `issueTaxInvoiceAction`
+  + `issueSchema` (src/actions/tax-documents.actions.ts kawasan
+  :40-100) — counterparty boleh kosong; form
+  tax-invoice-form.tsx kawasan :132-140 kosong tanpa prefill.
+- Snapshot dokumen = pola repo mengikat: dokumen terbit beku,
+  edit master tidak menulis ulang dokumen (skill Accountant;
+  BR-TX-03 spec, USULAN Business — vonis ini MENGUATKAN jadi
+  syarat untuk field identitas di §4-§5).
+
+### 0.1 Register sumber resmi (tax rules register; diakses 2026-10-25)
+
+| Aturan | Sumber resmi | Berlaku | Cakupan vonis ini |
+|---|---|---|---|
+| OP penduduk memakai NIK sebagai NPWP; OP bukan penduduk, badan, instansi pemerintah memakai NPWP format 16 digit; NITKU menggantikan NPWP cabang [1][2] | PMK 112/PMK.03/2022 (diundangkan 8 Jul 2022) diubah PMK 136/2023 (diundangkan 12 Des 2023): https://jdih.kemenkeu.go.id/dok/112-pmk-03-2022/summary ; https://jdih.kemenkeu.go.id/dok/pmk-136-tahun-2023/summary | Implementasi penuh digeser 1 Jan 2024 → 1 Jul 2024 [2] | Format NPWP kanonik yang diterima sistem (§2) |
+| Sejak 1 Jul 2024 WP dan Pihak Lain yang mencantumkan NPWP wajib memakai NIK/NPWP 16 digit + NITKU; NPWP 15 digit masih dapat digunakan BERTAHAP untuk layanan administrasi DJP tertentu dan DJP tetap menerbitkan NPWP 15 digit dalam masa transisi layanan [3][4] | Pengumuman DJP "Petunjuk Penggunaan NPWP dan NITKU" (penyesuaian PENG-4/PJ.09/2024): https://pajak.go.id/id/pengumuman/petunjuk-penggunaan-nomor-pokok-wajib-pajak-dan-nomor-identitas-tempat-kegiatan-usaha ; PER-6/PJ/2024: https://www.pajak.go.id/sites/default/files/lampiran/PER06PJ2024.pdf | 1 Jul 2024; penahapan per daftar layanan DJP [3] | Alasan 15 digit = peringatan migrasi terstruktur, BUKAN penolakan mutlak dan BUKAN lolos diam (§2) |
+| NITKU = 22 digit: 16 digit NPWP pusat/NIK + 6 digit nomor urut TKU; pusat berakhiran 000000, cabang 000001 dst; contoh format di Lampiran PER-6/PJ/2024 [4] | PER-6/PJ/2024 Lampiran (PDF resmi DJP di atas) | 1 Jul 2024 | Bentuk NITKU disimpan + batas validasi sistem (§3) |
+| NITKU diberikan untuk SETIAP tempat kegiatan usaha termasuk tempat tinggal/kedudukan; WP wajib melaporkan TKU paling lama 1 bulan sesudah didirikan; fungsi NITKU termasuk identifikasi alamat penyerahan/penerimaan pada faktur pajak [8][9] | PER-7/PJ/2025 Pasal 1 angka 40 + Pasal 31 (ditetapkan/berlaku 21 Mei 2025) [7]: https://jdih.kemenkeu.go.id/dok/per-7pj2025 ; https://pajak.go.id/id/peraturan/petunjuk-pelaksanaan-administrasi-nomor-pokok-wajib-pajak-pengusaha-kena-pajak-objek | 21 Mei 2025 | Kewajiban isi NITKU per konteks dokumen, bukan per master mutlak (§3) |
+| Faktur pajak wajib memuat identitas pembeli: badan/instansi = nama+alamat+NPWP; OP dalam negeri = nama+alamat+NPWP atau NIK; OP luar negeri = nama+alamat+nomor paspor; SPLN badan = nama+alamat. Identitas wajib diisi sesuai yang sebenarnya; nama/alamat subjek dalam negeri boleh sesuai administrasi DJP. Faktur tidak memenuhi keterangan wajib = faktur pajak TIDAK LENGKAP; PPN-nya tidak dapat dikreditkan pembeli [5] | PER-11/PJ/2025 Pasal 33 huruf b, Pasal 34 ayat (3)-(4), Pasal 57: https://jdih.kemenkeu.go.id/api/download/a94edee5-e585-4eeb-b9e7-a76f616c92fb/PER-11_PJ_2025.pdf | 22 Mei 2025 | Gerbang terbit EC-3 + kelengkapan identitas (§5d, §6) |
+| Kesalahan identitas pembeli TIDAK dapat dibetulkan lewat faktur pajak pengganti (pengecualian Pasal 48 ayat (1) PER-11/PJ/2025 atas Pasal 33 huruf b); jalur koreksinya pembatalan + faktur baru. NITKU/alamat TKU pembeli wajib pada kondisi penyerahan ke TKU berbeda/fasilitas tertentu, opsional di luar itu [5] | PER-11/PJ/2025 Pasal 34 + Pasal 48 ayat (1) | 22 Mei 2025 | Mengapa snapshot identitas salah = mahal: cegah di gerbang terbit, jangan andalkan pengganti (§5d) |
+| Pengukuhan PKP: saat terbit SPPKP TIDAK sama dengan saat mulai kewajiban pungut/setor/lapor; WP menyampaikan pemberitahuan masa mulai (paling lambat masa pertama tahun buku berikut); pencabutan PKP dapat berdasar permohonan/jabatan [6][8] | PMK 164/2023 (diundangkan 29 Des 2023): https://jdih.kemenkeu.go.id/dok/pmk-164-tahun-2023/summary ; PER-7/PJ/2025 [8] | 29 Des 2023 / 21 Mei 2025 | Status PKP wajib bertanggal acuan, bukan boolean abadi (§4) |
+
+Batas jujur: (i) TIDAK ditemukan checksum/resmi digit
+pemeriksa NPWP yang dapat divalidasi lokal — NPWP/NIK/NITKU
+adalah nomor terbit DJP/Dukcapil; sistem dilarang mengarang
+algoritme checksum. Validasi sistem = bentuk + konsistensi
+internal (§2-§3), BUKAN pembuktian nomor terdaftar. (ii) Tidak
+ada sumber resmi yang diakses run ini menyatakan status PKP
+pembeli menentukan kode transaksi penjual — kode transaksi
+ditentukan sifat penyerahan/fasilitas/pemungut per
+PER-11/PJ/2025 + register existing repo (§5e); klaim sebaliknya
+= USULAN tanpa dasar, ditolak. (iii) Ambang peredaran PKP
+Rp4,8 miliar (PMK 164/2023) disebut hanya konteks status; sistem
+TIDAK menurunkan status PKP dari omzet pelanggan.
+
+### Putusan 1 — Prinsip umum identitas (mengikat semua butir)
+
+- Nomor pajak BUKAN buatan sistem: NPWP/NIK/NITKU dicatat apa
+  adanya dari dokumen lawan (kartu NPWP/SPPKP/Coretax lawan).
+  Sistem tidak men-generate, tidak menebak dari nama, tidak
+  melengkapi digit hilang.
+- Pisahkan empat hal: nilai master kini, snapshot dokumen
+  terbit, status kelengkapan turunan, status pajak dokumen.
+  Edit master TIDAK pernah menulis ulang `TaxInvoice`
+  terbit; koreksi identitas faktur terbit = pembatalan +
+  faktur baru (bukan pengganti — Pasal 48 PER-11/PJ/2025 [5]),
+  dijalankan lewat jalur existing Backend putuskan fisiknya.
+- Validasi berlapis: MASTER longgar-tertanda (simpan boleh,
+  cacat bentuk tertanda), DOKUMEN ketat (gerbang terbit faktur
+  pajak menolak identitas cacat untuk kode yang mewajibkan
+  identitas). Alasannya: master menampung prospek/ritel sah
+  tanpa NPWP (BR-TX-01), faktur pajak adalah dokumen DJP yang
+  cacat identitasnya merugikan pembeli (PPN tak terkredit [5]).
+
+### Putusan 2 — (a) NPWP: simpan ternormalisasi 16 digit; 15 digit = peringatan migrasi bernama; bentuk lain = tolak simpan
+
+- Bentuk kanonik disimpan: digit saja (strip spasi/tanda baca
+  tampilan `99.999.999.9-999.999` saat input), panjang 16,
+  digit pertama tidak dipaksa pola apa pun selain digit.
+  Untuk badan warisan DJP, 16 digit = "0" + 15 digit lama [2]
+  — itu fakta pemadanan DJP, BUKAN izin sistem mengarang
+  awalan "0" sendiri: sistem TIDAK pernah mengkonversi 15→16
+  diam-diam; konversi hanya oleh operator sesudah melihat
+  nomor 16 digit lawan, tercatat sebagai edit master biasa.
+- Input 15 digit digit-saja: DITERIMA SIMPAN di master dengan
+  penanda turunan `npwpFormat: "legacy15"` + peringatan
+  eksplisit ke operator ("NPWP 15 digit — minta NPWP 16
+  digit/NIK lawan; sejak 1 Jul 2024 layanan memakai format
+  16 digit [1][2][3]"). DILARANG: lolos diam tanpa penanda,
+  dan DILARANG tolak simpan mutlak — dasarnya [3]: DJP sendiri
+  masih menerima 15 digit bertahap per layanan dan tetap
+  menerbitkannya dalam transisi; menolak mutlak memblokir
+  lawan lama yang sah sebelum pemadanan selesai. Penanda
+  `legacy15` WAJIB tampil di penanda kelengkapan master dan
+  diusung ke layar terbit (bukan hanya master).
+- Input selain 15/16 digit digit-saja (panjang lain, huruf,
+  kosong-setengah): TOLAK SIMPAN di master dengan pesan
+  bentuk. Kosong penuh = sah (opsional, BR-TX-01) tanpa penanda
+  format. NIK OP penduduk = 16 digit juga — diperlakukan sama;
+  sistem TIDAK membedakan "ini NIK vs NPWP badan" dari bentuk
+  saja dan TIDAK memvalidasi NIK ke Dukcapil.
+- Checksum: TIDAK ADA validasi checksum NPWP/NIK (tidak
+  ditemukan dasar resmi; mengarang = cacat). Dilarang label
+  UI "NPWP valid" — label jujur maksimum: "bentuk 16 digit"
+  / "bentuk 15 digit (legacy)". Terdaftar/tidaknya nomor =
+  verifikasi DJP di luar sistem tahap ini (spec §"tidak
+  diusulkan" dipertahankan).
+- Gerbang terbit faktur pajak (dokumen, bukan master): NPWP
+  counterparty 15 digit pada faktur keluaran NON-ritel =
+  PERINGATAN KERAS tercatat (operator mengonfirmasi eksplisit,
+  snapshot menyimpan sebagaimana diisi + penanda legacy pada
+  dokumen/read-model), BUKAN tolak — karena faktur tetap
+  terbit di Coretax dengan identitas sebenarnya [5] dan 15
+  digit masih dikenal transisi DJP [3]; tetapi konfirmasi
+  wajib agar tidak lolos diam (falsifikasi QA §7 butir 1).
+  NPWP bentuk cacat (bukan 15/16) pada gerbang terbit = TOLAK.
+
+### Putusan 3 — (b) NITKU: 22 digit digit-saja, opsional di master, wajib-kondisional di dokumen, tanpa checksum
+
+- Bentuk disimpan: digit saja, panjang tepat 22 = 16 digit
+  NPWP pusat/NIK pemilik + 6 digit nomor urut TKU (pusat
+  `000000`) [4]. Simpan apa adanya; tampilan boleh berkelompok,
+  penyimpanan digit polos agar banding snapshot byte-sama.
+- Konsistensi internal yang BOLEH divalidasi sistem (tanpa
+  checksum): bila NPWP master terisi 16 digit DAN NITKU terisi,
+  16 digit pertama NITKU harus sama dengan NPWP itu; beda =
+  peringatan keras di master + TOLAK di gerbang terbit bila
+  NITKU itu yang disalin (kemungkinan NITKU entitas lain).
+  Bila NPWP master 15 digit/kosong: konsistensi awalan tidak
+  dapat dinilai — jangan tebak (jangan awali "0" sendiri);
+  NITKU tetap boleh simpan 22 digit dengan penanda
+  `nitkuUnlinked` turunan. Akhiran `000000` vs bukan = fakta
+  pusat vs TKU lain; sistem mencatat, tidak menyimpulkan
+  "cabang sah" dari akhiran saja.
+- Kewajiban isi: di MASTER selalu OPSIONAL (pelanggan pusat
+  tanpa TKU terpisah sah; NITKU terbit DJP per TKU [8][9],
+  bukan syarat jadi pelanggan). Di DOKUMEN: snapshot NITKU
+  pembeli WAJIB terisi bila penyerahan ke TKU pembeli yang
+  berbeda dengan kedudukan/pusat atau kondisi fasilitas pada
+  Pasal 34 PER-11/PJ/2025 terpenuhi [5]; di luar kondisi itu
+  opsional. Karena ISF tahap 1 tidak memodelkan TKU pembeli
+  per pengiriman, aturan operasional tahap 1: NITKU kosong di
+  snapshot = boleh terbit dengan penanda `nitkuAbsent` pada
+  dokumen (tampil di read-model/ekspor Coretax), BUKAN tolak;
+  naik jadi tolak hanya bila Backend memodelkan flag
+  penyerahan-ke-TKU-lain/fasilitas — di luar vonis ini,
+  kartu Backend lanjutan. NITKU bentuk bukan 22 digit = tolak
+  simpan master dan tolak terbit (cacat bentuk, bukan absen).
+
+### Putusan 4 — (c) Status PKP: nilai kini + tanggal pengukuhan di master tahap 1; histori bertanggal efektif = syarat naik kelas, bukan tahap 1; snapshot dokumen wajib
+
+- Bentuk master tahap 1 (fisik Backend Q-TX-3 mengikuti batas
+  ini): status kini terstruktur `pkpStatus: non_pkp|pkp|
+  unknown` (default `unknown`, BUKAN `non_pkp` — tidak tahu
+  tidak boleh dibaca bukan-PKP) + `pkpEffectiveFrom` tanggal
+  mulai kewajiban menurut SPPKP/pemberitahuan masa mulai
+  lawan (PMK 164/2023: tanggal terbit SPPKP ≠ tanggal mulai
+  kewajiban [6]) + sumber bebas singkat (mis. nomor SPPKP)
+  bila ada. Boolean telanjang `isPkp` DITOLAK sebagai bentuk
+  final: menghapus `unknown` dan tanggal, dua hal yang
+  menentukan perlakuan masa transisi.
+- Histori status bertanggal efektif penuh (baris riwayat
+  pkp dari-sampai): TIDAK wajib tahap 1. Alasan: kebenaran
+  masa lalu dibuktikan snapshot dokumen terbit (§5), bukan
+  rekonstruksi master; EC-2 spec (PKP→non-PKP tengah tahun)
+  tertangani oleh nilai kini + tanggal + snapshot. Naik kelas
+  WAJIB menjadi histori bila satu saja terpenuhi: (i) ISF
+  mulai menurunkan perlakuan pajak otomatis dari status PKP
+  lawan, (ii) backdating koreksi status ditemukan di audit,
+  (iii) lawan yang sama punya masa PKP dan non-PKP yang
+  dokumennya harus direkonsiliasi massal tanpa snapshot.
+  Sampai itu, edit status menimpa nilai kini — wajib lewat
+  audit trail master existing, dilarang edit diam tanpa jejak.
+- Status PKP pelanggan TIDAK memengaruhi kode transaksi
+  default faktur pajak — usul spec DITERIMA dan diperkeras:
+  dilarang menurunkan `transactionCode` dari `pkpStatus`
+  master dalam bentuk apa pun tahap ini (termasuk "saran
+  diam-diam" terpilih otomatis). Kode transaksi ditentukan
+  sifat penyerahan/pemungut/fasilitas per transaksi [5] lewat
+  register existing `TRANSACTION_CODES` + petunjuk
+  `TransactionCodeHint` (src/lib/tax/tax-invoice.ts); status
+  PKP pembeli bukan salah satu penentunya (tidak ditemukan
+  dasar sebaliknya di PER-11/PJ/2025 [5]; pembeli non-PKP
+  tetap menerima faktur pajak dari PKP penjual). Yang BOLEH:
+  `pkpStatus=unknown/non_pkp` memunculkan pertanyaan operator
+  non-mengubah-nilai ("lawan tercatat bukan/ belum diketahui
+  PKP — kode tetap pilihan operator"), tanpa mengganti default
+  "04" dan tanpa memblokir.
+- Snapshot: faktur terbit menyimpan identitas lawan saat
+  terbit termasuk nilai status PKP yang dipakai operator
+  saat itu bila Backend memodelkan kolom snapshot status;
+  minimal snapshot nama+NPWP+NITKU existing (:1126-1128) beku.
+  Edit `pkpStatus` master sesudahnya nol efek ke dokumen
+  terbit dan nol efek ke SPT masa lalu.
+
+### Putusan 5 — (d) EC-3: NPWP terisi + nama WP kosong → TOLAK TERBIT faktur pajak (bukan snapshot nama dagang tertanda); nama dagang tertanda hanya untuk kelengkapan master & dokumen non-faktur-pajak
+
+- Pilih: TOLAK TERBIT untuk faktur pajak keluaran non-ritel
+  bila nama lawan kosong (dari master maupun isian manual),
+  walau NPWP terisi. Alasan audit: Pasal 33 huruf b + Pasal
+  34 ayat (3) PER-11/PJ/2025 mewajibkan nama sesuai
+  sebenarnya [5]; faktur tanpa nama = faktur tidak lengkap,
+  PPN pembeli tidak dapat dikreditkan (Pasal 57 [5]); dan
+  kesalahan identitas TIDAK bisa dibetulkan faktur pengganti
+  (Pasal 48 [5]) — menerbitkan yang cacat berarti memaksa
+  pembatalan + faktur baru dan merugikan pembeli. Snapshot
+  nama dagang "tertanda" tidak menyembuhkan cacat formal itu;
+  tanda di UI bukan keterangan di faktur. Jadi penanda
+  fallback TIDAK BOLEH dipakai untuk lolos gerbang faktur.
+- Yang tetap berlaku untuk nama dagang tertanda (BR-TX-05
+  dipersempit): penanda kelengkapan master menampilkan
+  "nama WP kosong — akan memakai nama dagang bila diterbitkan
+  manual" sebagai daftar kekurangan; operator boleh mengisi
+  nama WP di form terbit (koreksi sebelum simpan per spec
+  §2 alur 2) — yang tersimpan snapshot = nama terisi itu.
+  Dokumen NON-faktur-pajak (bupot existing yang nama wajib
+  min 1, invoice komersial) mengikuti gerbangnya sendiri;
+  vonis ini tidak melonggarkan/mengeraskan di luar faktur
+  pajak keluaran.
+- Pasangan gerbang terbit faktur pajak keluaran (satu paket,
+  Backend terapkan di service penerbitan, server-side):
+  nama lawan kosong → tolak; NPWP/NIK lawan kosong untuk
+  lawan badan/instansi/OP-dalam-negeri → tolak (identitas
+  Pasal 33 huruf b [5]); NPWP bentuk cacat → tolak (§2);
+  NPWP 15 digit → peringatan keras terkonfirmasi (§2); NITKU
+  bentuk cacat → tolak, NITKU absen → penanda (§3). Pengecualian
+  konsumen akhir/ritel mengikuti rezim faktur PKP pedagang
+  eceran PER-11/PJ/2025 (identitas boleh absen) HANYA bila
+  kode/jalur ritel itu benar-benar dipakai operator — bukan
+  pengecualian umum untuk faktur tertaut pelanggan master.
+  Terbit tanpa tautan faktur penjualan (manual) tunduk gerbang
+  sama atas isian manualnya.
+
+### Putusan 6 — (e) Konsistensi kode transaksi & tarif existing
+
+- `transactionCode` TaxInvoice (PER-11/PJ/2025, 2 digit
+  kanonik, default "04") TIDAK berubah oleh vonis ini; tidak
+  ada kode baru, tidak ada pemetaan status-PKP→kode (§4).
+  Default "04" tetap default penjualan normal (PMK-131/2024,
+  vonis F-2026-10-21-001/002 di header src/lib/tax/tax-invoice.ts).
+- Tarif: snapshot `taxRate` per dokumen dipertahankan; vonis
+  ini TIDAK mengizinkan hardcode tarif/kode baru di logika
+  validasi identitas. Bila Backend kelak memindah tarif ke
+  master bertanggal efektif, itu kartu terpisah dan TIDAK
+  boleh mengubah snapshot dokumen terbit (edit tarif master
+  tidak mengubah dokumen lama — prinsip snapshot mengikat).
+- Empat status tetap terpisah: kelengkapan master ≠ status
+  PKP ≠ status pajak dokumen ≠ djpStatus. Penanda `legacy15`/
+  `nitkuAbsent`/`nitkuUnlinked` adalah penanda turunan
+  baca-saja, DILARANG disimpan sebagai kolom status kelima
+  yang bisa basi (turunkan dari nilai saat baca/saat terbit;
+  untuk dokumen, bekukan penanda bersama snapshot saat terbit).
+
+### 7. Falsifikasi wajib (draf acceptance untuk QA; Backend/Frontend menerapkan)
+
+1. NPWP master 15 digit disimpan → penanda `legacy15` tampil;
+   cabut penanda dari penurun → tes MERAH. NPWP 15 digit lolos
+   ke snapshot faktur TANPA konfirmasi peringatan tercatat →
+   MERAH (butir kartu: "NPWP 15 digit lolos diam-diam").
+2. NPWP 14/17 digit atau berhuruf → tolak simpan master;
+   mutasi penjaga panjang → MERAH. Sistem mengkonversi 15→16
+   dengan awalan "0" otomatis → MERAH.
+3. NITKU 21/23 digit → tolak; NITKU 22 digit awalan beda dari
+   NPWP 16 master yang disalin ke faktur → tolak terbit;
+   NITKU salah bentuk tetap tersimpan/terbit → MERAH.
+4. Edit NPWP/nama WP/NITKU/status PKP master sesudah faktur
+   terbit → snapshot dokumen byte-sama; dokumen ikut berubah
+   → MERAH (butir kartu: "snapshot berubah oleh edit master").
+5. EC-3: nama WP master kosong + NPWP terisi → terbit faktur
+   pajak tertolak walau form menawarkan nama dagang; terbit
+   lolos dengan nama dagang tertanda → MERAH. Nama diisi di
+   form terbit → snapshot = nama isian itu, byte-sama.
+6. `pkpStatus` diubah pkp↔non_pkp/unknown → `transactionCode`
+   usulan/default faktur berikutnya TIDAK berubah; kode
+   berubah mengikuti status → MERAH. Default tetap "04".
+7. Faktur pengganti dipakai membetulkan identitas pembeli →
+   jalur ditolak/diarahkan batal+baru sesuai Pasal 48 [5];
+   pengganti mengubah counterparty snapshot → MERAH.
+
+### 8. Batas build per pemilik (handoff)
+
+- Backend (Q-TX-3, SESUDAH Lead putus Q-TX-2): fisik kolom
+  master mengikuti §2-§4 (taxId tetap, tanpa rename makna);
+  penurun penanda `legacy15/nitkuUnlinked/nitkuAbsent` +
+  kelengkapan; gerbang service penerbitan §5 server-side
+  (bukan hanya prefill form); snapshot + penanda beku saat
+  terbit; klaim prisma/schema.prisma di board sebelum edit.
+  Di luar batas: validasi online DJP, histori PKP penuh,
+  penurunan kode dari status, konversi NPWP otomatis.
+- Lead (Q-TX-2/Q-TX-4 + merge PR ini): vonis ini menutup
+  Q-TX-1 saja; Q-TX-2 (buka inti + izin reuse) dan Q-TX-4
+  (penanda master vs antrean) tetap milik Lead. Duplikasi
+  spec 004-S 2x di backlog main: minta Lead/Business putus
+  salinan mana kanonik di PR terpisah — PR vonis ini hanya
+  menandai TERJAWAB di kedua salinan, tidak menghapus.
+- Frontend: tampilkan penanda + peringatan server verbatim;
+  UI dilarang menormalisasi NPWP/NITKU, menurunkan kode
+  transaksi, atau mengarang label "valid" (§2).
+- QA: falsifikasi §7 atas head Backend/Frontend persis,
+  ditambah AC-TX-B1..B5 + F1..F2 spec.
+
+### Sources
+
+[1] PMK 112/PMK.03/2022 — JDIH Kemenkeu: https://jdih.kemenkeu.go.id/dok/112-pmk-03-2022/summary
+[2] PMK 136/2023 — JDIH Kemenkeu: https://jdih.kemenkeu.go.id/dok/pmk-136-tahun-2023/summary
+[3] Pengumuman DJP Petunjuk Penggunaan NPWP dan NITKU — pajak.go.id: https://pajak.go.id/id/pengumuman/petunjuk-penggunaan-nomor-pokok-wajib-pajak-dan-nomor-identitas-tempat-kegiatan-usaha
+[4] PER-6/PJ/2024 (PDF resmi DJP): https://www.pajak.go.id/sites/default/files/lampiran/PER06PJ2024.pdf
+[5] PER-11/PJ/2025 (JDIH Kemenkeu): https://jdih.kemenkeu.go.id/api/download/a94edee5-e585-4eeb-b9e7-a76f616c92fb/PER-11_PJ_2025.pdf
+[6] PMK 164/2023 — JDIH Kemenkeu: https://jdih.kemenkeu.go.id/dok/pmk-164-tahun-2023/summary
+[7] PER-7/PJ/2025 di basis data DDTC (sekunder; isi pasal dicocokkan ke [8][9] resmi): https://perpajakan.ddtc.co.id/id/sumber-hukum/peraturan-pusat/peraturan-direktur-jenderal-pajak-per-7pj2025
+[8] PER-7/PJ/2025 — JDIH Kemenkeu: https://jdih.kemenkeu.go.id/dok/per-7pj2025
+[9] PER-7/PJ/2025 — pajak.go.id: https://pajak.go.id/id/peraturan/petunjuk-pelaksanaan-administrasi-nomor-pokok-wajib-pajak-pengusaha-kena-pajak-objek
+
+Pemilik berikutnya: Lead (Q-TX-2/Q-TX-4 + merge PR vonis ini)
+-> Backend (fisik Q-TX-3 dalam batas §8) -> Frontend (konsumen
+penanda) -> QA (falsifikasi §7 + AC-TX spec). Accountant:
+vonis Q-TX-1 SELESAI di blok ini; dipanggil lagi hanya bila
+histori PKP naik kelas (§4) atau flag TKU/fasilitas dimodelkan
+(§3) — dua pemicu tertulis, bukan asumsi.
 ### 9. Backlog implementasi (F-2026-10-25-006-S)
 
 | ID | Pekerjaan | Pemilik | Prasyarat |
@@ -25978,7 +26307,7 @@ Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci
 
 F-2026-10-25-006-S — Paparan diskon efektif dokumen penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-DX-1..4. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK tahap 1.
 
----
+
 
 ## 2026-10-25 01:35 WIB — F-2026-10-21-031 earned value TERTUTUP (Lead)
 
