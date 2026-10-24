@@ -39,6 +39,14 @@ const ATTACHMENT_MODEL: Record<string, string> = {
   WarrantyClaim: "warrantyClaim",
 }
 
+// F-2026-10-24-096-S: model induk foto tahap/inspeksi.
+for (const [type, model] of Object.entries({
+  customer_vehicle: "customerVehicle",
+  project_stage: "projectStage",
+  work_order_operation: "workOrderOperation",
+  qc_inspection: "qcInspection",
+})) ATTACHMENT_MODEL[type] = model
+
 // Maps a transaction-attachment referenceType to the view-permission required
 // to access documents of that type. Used to gate attachment upload/list/serve
 // so that being logged in is not sufficient — the caller must also be allowed

@@ -64,13 +64,14 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
   }
 
   return (
-    <form onSubmit={onSubmit} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
+    <form onSubmit={onSubmit} aria-busy={isPending} aria-label={task?.id ? "Formulir ubah tugas" : "Formulir tambah tugas"} className="bg-surface rounded-xl border border-default shadow-sm p-4 sm:p-6">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="task-project">Proyek *</Label>
+          <Label htmlFor="task-project">Proyek <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Combobox
             id="task-project"
             name="projectId"
+            required
             value={projectId}
             onChange={setProjectId}
             placeholder="Cari proyek..."
@@ -78,11 +79,11 @@ export function TaskForm({ projects, employees, task }: TaskFormProps) {
           />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="task-name">Nama Tugas *</Label>
+          <Label htmlFor="task-name">Nama Tugas <span className="text-destructive" aria-hidden="true">*</span></Label>
           <Input id="task-name" name="name" required placeholder="Nama tugas..." defaultValue={task?.name ?? ""} className="w-full" />
         </div>
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="task-status">Status *</Label>
+          <Label htmlFor="task-status">Status</Label>
           <FormSelect
             id="task-status"
             name="status"
