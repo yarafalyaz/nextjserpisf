@@ -57,6 +57,10 @@ export const EMPLOYEE_LIFECYCLE_ATTENTION_LABELS = {
   contractOverdue: "Kontrak lewat, belum dicatat berhenti",
   endedButActive: "Sudah berhenti, masih aktif payroll",
   statusUnset: "Status belum diatur",
+  // F-2026-10-24-099-S Q-PROB-4 (tahap 1 daftar pasif existing saja):
+  probationDue: "Evaluasi percobaan jatuh tempo",
+  probationOverdue: "Percobaan lewat, belum diputus",
+  contractDecisionPending: "Keputusan kontrak menunggu penerapan",
 } as const
 
 export type EmployeeLifecycleAttentionKind = keyof typeof EMPLOYEE_LIFECYCLE_ATTENTION_LABELS
@@ -95,6 +99,15 @@ export interface EmployeeLifecycleInput {
   employmentEndedAt: Date | null
   endReason: string | null
   isActive: boolean
+  // F-2026-10-24-099-S Q-PROB-4 (opsional; absen = perilaku F-085-S murni):
+  joinDate?: Date | null
+  probationEndDate?: Date | null
+  /** Keputusan final probation (baris final decided); null = belum diputus. */
+  probationFinalDecision?: string | null
+  /** Jatuh tempo titik evaluasi berikutnya yang belum submitted (turunan). */
+  probationNextDueDate?: Date | null
+  /** Pengajuan kontrak approved belum applied, atau submitted >7 hari. */
+  contractDecisionPending?: boolean
 }
 
 export interface EmployeeLifecycleAttentionRow {
@@ -145,11 +158,28 @@ export function buildEmployeeLifecycleAttention(
       else if (endDay - todayDay <= 30) push(e, "contractExpiring")
     }
     if (e.employmentStatus == null) push(e, "statusUnset")
+    // F-2026-10-24-099-S Q-PROB-4: maks 1 baris per karyawan+kind di sini
+    // (satu push per kind). probationOverdue MENANG atas probationDue.
+    if (
+      e.employmentStatus === "PKWTT" &&
+      e.employmentEndedAt == null &&
+      e.probationEndDate != null &&
+      e.probationFinalDecision == null
+    ) {
+      if (wibDayNumber(e.probationEndDate) < todayDay) push(e, "probationOverdue")
+      else if (e.probationNextDueDate != null && wibDayNumber(e.probationNextDueDate) <= todayDay) {
+        push(e, "probationDue")
+      }
+    }
+    if (e.contractDecisionPending === true) push(e, "contractDecisionPending")
   }
   const kindOrder: EmployeeLifecycleAttentionKind[] = [
     "endedButActive",
     "contractOverdue",
+    "probationOverdue",
     "contractExpiring",
+    "probationDue",
+    "contractDecisionPending",
     "statusUnset",
   ]
   rows.sort(
