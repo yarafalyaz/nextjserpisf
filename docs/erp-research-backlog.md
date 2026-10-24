@@ -24103,6 +24103,241 @@ Backend (builder), Frontend (konsumen 001-U), QA
 (falsifikasi). Butuh putusan accountant: TIDAK (tanpa
 uang/pajak/jurnal).
 
+## VONIS BOT Accountant 2026-10-24 — F-2026-10-24-136-V: retur penjualan atas faktur besi tua (F-135-V) — kaki harga DITOLAK di `salesReturnAccountId`, persediaan fiktif dari `item.cost` master, nota retur PPN tanpa kaki pendapatan lain-lain (turunan wajib F-2026-10-24-135-V Putusan 1-4; siklus standby 23:52 kartu t_7ef5997a)
+
+Status: PUTUSAN BOT Accountant (kartu t_7ef5997a). Dokumen saja;
+TANPA kode aplikasi/schema/migrasi di kartu ini. F-135-V memutus
+penjualan besi tua (pendapatan lain-lain, faktur existing, COGS
+Rp0, akun `scrapSaleIncomeAccountId` fail-closed) tetapi dengan
+sengaja TIDAK memutus retur atas faktur itu. Vonis ini menutup
+celah itu SEBELUM inti Backend F-135-V (kartu t_7c3ef7bb) merged,
+supaya penjaga retur dibangun bersama inti, bukan sesudah retur
+besi tua pertama lolos dengan jurnal campuran.
+
+### 0. Basis bukti live (origin/main a482589c, 2026-10-24) — TERVERIFIKASI-KODE
+
+- Jurnal retur existing SATU untuk semua faktur:
+  `onSalesReturnCompleted` di `src/lib/hooks/accounting.hook.ts`
+  (direferensikan komentar "8." ~baris 1181): bila tertaut faktur
+  dan `priceTotal > 0`: Dr `salesReturnAccountId` (harga jual) /
+  Cr `salesReceivableAccountId` (harga jual); bila `costTotal > 0`:
+  Dr `inventoryAccountId` (cost) / Cr `salesReturnAccountId` (cost).
+  `priceTotal = Σ qty × price` baris (harga jual beku baris faktur
+  asal / fallback master), `costTotal = Σ qty × cost` baris.
+  Snapshot pajak F-004 + guard kumulatif Σ DPP/PPN retur completed
+  ≤ faktur asal dijalankan dalam tx yang sama; jurnal GL tetap
+  TANPA kaki PPN (lapisan SPT membaca snapshot).
+- `salesReturnAccountId` menunjuk akun kontra-pendapatan dagang
+  (seed `400003` "Retur Penjualan", grup REVE, induk 4000 —
+  `src/lib/setup/base-data.ts:866`), berpasangan dengan akun
+  pendapatan dagang `salesRevenueAccountId`. Ia BUKAN akun
+  pengurang pendapatan lain-lain (grup OINC).
+- Cost baris retur BUKAN cost aktual penyerahan: saat
+  `createSalesReturn`/`updateSalesReturn` (`sales.actions.ts`
+  ~1822/1921 dan ~2820/2950), `cost` baris diisi dari `Item.cost`
+  master SAAT RETUR DIBUAT (dikali faktor UoM faktur), dan
+  `price` = harga baris faktur asal, fallback harga master, lalu
+  cost. Hook stok (`sales-return.hook.ts`) menerima barang
+  kembali: StockMove IN `impact:"IN"` + `qtyOnHand += qty` +
+  lapisan FIFO baru dengan `unitCost = cost` baris itu.
+- Besi tua F-135-V by konstruksi: item non-stok
+  (`isScrapSaleItem=true && isProduct=false`; kombinasi produk
+  ditolak — vonis Accountant kartu t_7c3ef7bb komentar 2026-10-24
+  23:54), nilai buku Rp0, penjualan TANPA kaki COGS/StockMove.
+  Item besi tua tetap `Item` master yang sah dipakai
+  `createSalesReturn` (tidak ada penjaga menolaknya hari ini).
+- Konsekuensi terverifikasi: retur besi tua yang di-complete hari
+  ini (atau sesudah inti F-135-V merged tanpa penjaga ini) akan:
+  (a) Dr 400003 Retur Penjualan sebesar harga jual — mengontra
+  pendapatan dagang, padahal pendapatan asal terkredit ke akun
+  pendapatan lain-lain OINC dari setting F-135-V: pendapatan
+  lain-lain tidak pernah berkurang dan pendapatan dagang
+  terdistorsi negatif oleh transaksi yang bukan miliknya;
+  (b) Dr Persediaan / Cr 400003 sebesar `qty × Item.cost` master
+  besi tua + StockMove IN + lapisan FIFO bernilai — persediaan
+  fiktif atas barang yang sengaja tidak pernah dicatat sebagai
+  persediaan (nilai buku Rp0 per F-135-V §0/Putusan 2), dapat
+  dijual ulang kedua kali lewat jalur stok normal;
+  (c) snapshot DPP/PPN retur F-004 terbekukan dari faktur asal —
+  lapisan SPT mencatat pengurang PPN keluaran pada masa nota
+  retur/tanggal retur, padahal kaki pendapatannya tidak pernah
+  menyentuh akun pendapatan lain-lain.
+  Ini bukan tebak: (a)+(c) mengikuti persis kode jurnal di atas
+  untuk retur tertaut-faktur mana pun; (b) mengikuti pengisian
+  cost master + hook stok di atas.
+
+### Putusan 1 — Retur atas faktur besi tua DITOLAK pada build pertama (fail-closed)
+
+- `completeSalesReturn` atas retur yang tertaut faktur besi tua
+  murni (definisi F-135-V kartu Backend: ≥1 baris, SEMUA baris
+  ber-`itemId` ter-resolve `isScrapSaleItem=true`) WAJIB ditolak
+  berisik sebelum jurnal/stok apa pun lahir: pesan server
+  menyebut retur besi tua belum didukung dan penyelesaian
+  komersial wajib lewat jalur di Putusan 2. Penjaga di lapisan
+  server (aksi/hook dalam tx posting), BUKAN hanya UI.
+- Alasan: tiga kaki jurnal/persediaan existing semuanya salah
+  untuk besi tua (§0 a-c). Membiarkan satu pun lolos = jurnal
+  terposting campuran yang hanya bisa dikoreksi reversal;
+  mencegah di gerbang complete = nol jurnal salah lahir.
+  Larangan ini SEMENTARA-terstruktur, bukan permanen: ia dicabut
+  hanya oleh implementasi Putusan 3 + falsifikasi E136-3, bukan
+  oleh penghapusan penjaga.
+- Retur atas faktur CAMPURAN (besi tua + dagang) sudah tertutup
+  oleh pilihan Backend di vonis kartu t_7c3ef7bb syarat 3 (faktur
+  campuran ditolak saat posting faktur, atau kredit terpecah):
+  faktur campuran yang tidak pernah terposting tidak dapat
+  diretur sebagai faktur besi tua; retur tertautnya mengikuti
+  perlakuan faktur asal yang sah. Bila Backend memilih opsi 3b
+  (kredit terpecah), retur atas faktur itu tetap DITOLAK oleh
+  penjaga Putusan 1 sampai Putusan 3 dibangun untuk kelas
+  terpecah itu — jangan perlakukan sebagai retur dagang biasa.
+
+### Putusan 2 — Jalur penyelesaian komersial yang SAH hari ini (tanpa retur)
+
+- Pengembalian fisik besi tua oleh pembeli (barang ditolak/
+  rusak/cancel timbang) diselesaikan TANPA dokumen SalesReturn:
+  (a) faktur belum dibayar: batalkan/reversal faktur lewat jalur
+  koreksi faktur existing di periode terbuka (reversal jurnal
+  Dr Pendapatan lain-lain / Dr PPN Keluaran / Cr Piutang lewat
+  mekanisme edit/batal faktur yang sudah ada), barang kembali
+  ke penampungan sebagai catatan kg operasional di luar stok
+  (mengikuti D-S98-03 spec F-098-S: besi tua bukan stok);
+  (b) faktur sudah dibayar: pengembalian uang lewat jalur
+  refund/pembayaran existing terhadap faktur yang di-reversal,
+  bukan SalesCreditNote/retur dagang, sampai Putusan 3 tersedia.
+- DILARANG penyelesaian jalan pintas: jurnal umum manual
+  Dr Pendapatan lain-lain / Cr Kas untuk pengembalian besi tua
+  tanpa dokumen faktur yang di-reversal (memutus rekonsiliasi
+  piutang + SPT), dan menerima barang kembali sebagai StockMove
+  IN item dagang lain (menyulap besi tua menjadi stok tercatat).
+
+### Putusan 3 — Bentuk retur besi tua yang SAH bila kelak dibangun (syarat buka)
+
+Bila kebutuhan retur besi tua nyata muncul, implementasi WAJIB
+memenuhi SEMUA ini (kartu terpisah, koordinasi Accountant
+sebelum migrasi):
+
+1. Akun pengurang = akun pendapatan lain-lain yang sama dengan
+   yang dikredit saat penjualan (`scrapSaleIncomeAccountId`
+   setting F-135-V), dipakai sebagai DEBIT pengurang langsung
+   (bukan akun kontra REVE baru, bukan `salesReturnAccountId`).
+   Jurnal retur besi tua tertaut faktur, sen-persis:
+   Dr Akun pendapatan lain-lain (DPP retur) + Dr PPN Keluaran
+   (PPN retur dari snapshot F-004) / Cr Piutang (DPP+PPN retur).
+   Alasan PPN berkaki di sini (beda dari retur dagang existing
+   yang GL-nya tanpa kaki PPN): pendapatan besi tua lahir dari
+   faktur existing yang PPN-nya satu rantai dengan DPP-nya di
+   akun lain-lain; membalik DPP tanpa PPN-nya di dokumen yang
+   sama mengharuskan jurnal koreksi kedua — untuk kelas baru
+   ini, satu jurnal lengkap dipilih sejak awal. Retur dagang
+   existing TIDAK diubah vonis ini.
+2. TANPA kaki persediaan/COGS dalam bentuk apa pun: costTotal
+   untuk baris besi tua dipaksa 0 oleh konstruksi item (bukan
+   oleh angka `Item.cost` master), TANPA StockMove IN, TANPA
+   lapisan FIFO, TANPA perubahan `qtyOnHand`. Barang fisik
+   kembali hanya catatan kg penampungan (jalur D-S98-03).
+3. Snapshot pajak + guard kumulatif F-004 berlaku utuh
+   (DPP/PPN snapshot saat complete, Σ ≤ faktur asal, masa
+   pengurang = masa nota retur/tanggal retur); nota retur
+   diterbitkan lewat jalur TaxInvoice existing.
+4. `assertPeriodOpen(tanggal retur)` + idempotency per
+   (referenceType, referenceId) existing dipertahankan; empat
+   status (dokumen/pembayaran/pajak/posting) tetap terpisah.
+
+### Putusan 4 — Label kelalaian & penjualan ulang barang retur
+
+- Barang besi tua yang kembali secara fisik dan kelak dijual
+  lagi ke pengepul lain = penjualan besi tua BARU lewat faktur
+  existing (Putusan 2 F-135-V), pendapatan lain-lain penuh saat
+  penjualan kedua itu. Ia tidak pernah masuk persediaan di
+  antara dua penjualan; tidak ada COGS pada penjualan kedua.
+- Label disposisi `kelalaian` pada kejadian scrap asal tetap
+  TANPA dampak uang otomatis (F-135-V Putusan 5 utuh): retur
+  dari pembeli tidak mengubah itu menjadi potongan/jurnal
+  karyawan dalam bentuk apa pun.
+
+### Batas build (pemilik berikutnya)
+
+- BOT Backend (@backend-prisma-inventory-workshop), di PR inti
+  F-135-V kartu t_7c3ef7bb yang SAMA (jangan kartu/PR terpisah):
+  tambah penjaga Putusan 1 di jalur complete retur — bila faktur
+  asal adalah faktur besi tua murni, `completeSalesReturn`
+  ditolak berisik sebelum `onSalesReturnCompleted` (kedua hook)
+  dipanggil; kunci dengan E136-1/E136-2. Klaim file tambahan di
+  board pada PR yang sama.
+- BOT Frontend (@frontend-ui-ux-next-js): tampilkan pesan tolak
+  server apa adanya pada form/aksi retur; UI tidak menyembunyikan
+  tombol sebagai satu-satunya penjaga dan tidak menghitung
+  perlakuan retur.
+- BOT QA (@qa-security-reporting-release-auditor): audit
+  E136-1..5 di bawah atas head Backend; E136-3 menjadi syarat
+  pencabutan larangan Putusan 1 kelak.
+- BOT Lead (@lead-architect-erp-research-git-pr): merge PR vonis
+  ini bila gate hijau; inti F-135-V TIDAK dinyatakan selesai
+  tanpa penjaga Putusan 1 + E136-1/2 di PR Backend yang sama.
+
+### Falsifikasi wajib — E136-1..5 (Backend menulis tes, QA audit; angka sen-persis)
+
+- E136-1 (penjaga complete): faktur besi tua DPP Rp10.000.000 +
+  PPN Rp1.100.000 terposting (Dr Piutang 11.100.000 / Cr Pendapatan
+  lain-lain 10.000.000 / Cr PPN 1.100.000). Buat retur tertaut
+  faktur itu qty sebagian, complete -> DITOLAK berisik; jumlah
+  jurnal SalesReturn atas retur itu = 0, jurnal faktur asal
+  byte-sama, StockMove IN = 0. Cabut penjaga -> retur completed
+  = MERAH.
+- E136-2 (persediaan fiktif): `Item.cost` master besi tua diisi
+  Rp750.000 disengaja. Sesudah percobaan E136-1: `qtyOnHand`
+  item, jumlah lapisan FIFO item, dan saldo akun Persediaan
+  tidak berubah (Rp0 delta). Satu pun StockMove IN / lapisan /
+  Dr Persediaan lahir = MERAH.
+- E136-3 (bentuk sah Putusan 3, syarat pencabutan larangan):
+  bila retur besi tua dibangun: retur DPP Rp4.000.000 + snapshot
+  PPN Rp440.000 atas faktur E136-1 -> jurnal persis Dr Pendapatan
+  lain-lain (akun setting yang sama) 4.000.000 + Dr PPN Keluaran
+  440.000 / Cr Piutang 4.440.000; kaki ke 400003/`salesReturnAccountId`
+  = MERAH; kaki persediaan/StockMove = MERAH; pendapatan terdebit
+  ke akun selain akun kredit penjualan asal = MERAH.
+- E136-4 (regresi retur dagang): retur dagang biasa completed
+  sesudah penjaga ini: jurnal existing persis (Dr/Cr
+  `salesReturnAccountId` harga + cost bila cost > 0, snapshot
+  F-004, StockMove IN dagang) byte-sama perilaku dengan sebelum
+  penjaga. Penjaga besi tua yang ikut menolak/mengubah retur
+  dagang = MERAH.
+- E136-5 (penyelesaian tanpa retur, Putusan 2): faktur besi tua
+  belum dibayar dibatalkan lewat jalur koreksi existing ->
+  jurnal asal ter-reversal utuh di periode terbuka (pendapatan
+  lain-lain + PPN kembali nol atas faktur itu), dokumen
+  SalesReturn atas faktur itu tetap 0. Jurnal umum manual
+  Dr Pendapatan lain-lain/Cr Kas tanpa reversal faktur tampil
+  sebagai jalur yang ditolak penjaga/tidak tersedia = MERAH
+  bila sistem menyediakannya sebagai penyelesaian retur besi tua.
+
+### Klaim kepatuhan dan batas vonis
+
+- Dasar: perlakuan mengikuti F-2026-10-24-135-V (pendapatan =
+  harga transaksi penyerahan tersendiri, PSAK 72 prinsip par. 47;
+  besi tua tanpa nilai buku, PSAK 14/IAS 2 dirujuk F-135-V §register)
+  dan F-2026-10-21-004 (snapshot + guard kumulatif retur). Masa
+  pengurang PPN retur = masa nota retur (pola F-004/DJP dirujuk
+  vonis F-004); vonis ini TIDAK menetapkan tarif (tarif hidup di
+  master bertanggal efektif; 11% hanya contoh hitung E136).
+- Bukan klaim patuh pajak final atas pola pembeli nyata:
+  rezim pemungut/pembeli tertentu tetap `BUTUH-VONIS-AKUNTAN`
+  per pola transaksi (batas F-135-V Putusan 3 utuh).
+- Batas: vonis ini tidak memutus (a) dokumen SalesCreditNote
+  besi tua sebagai fitur umum, (b) retur besi tua lintas periode
+  tutup (mengikuti reversal periode terbuka existing), (c) biaya
+  angkut retur/pengepul — ketiganya kartu + vonis sendiri bila
+  kebutuhan nyata muncul.
+
+ID vonis ini **F-2026-10-24-136-V** (bebas: tertinggi `-V` di
+origin/main a482589c = F-2026-10-24-135-V di berkas ini;
+grep `F-2026-10-24-136` di backlog main + PR terbuka = 0 sebelum
+append run ini). Pemilik berikutnya: BOT Lead merge vonis ini ->
+BOT Backend penjaga Putusan 1 + E136-1/2 di PR inti F-135-V yang
+sama -> BOT QA E136-1..5 -> pencabutan larangan hanya lewat
+Putusan 3 + E136-3.
+
 ## SPEC BUSINESS 2026-10-24 — F-2026-10-24-141-S peringatan duplikat lead saat createLead + daftar kandidat duplikat read-only (CRM leads)
 
 Spec dokumen saja, tanpa kode/schema/migrasi/UI. Basis
@@ -24468,13 +24703,9 @@ dilibatkan — nol uang/pajak/jurnal di spec ini.
 > **Slot**: F-2026-10-25-004-S. Diperiksa bentrok 2026-10-25 vs `origin/main` (`7505a7d7`): grep `F-2026-10-25` di `docs/erp-research-backlog.md` origin/main = hanya 001; 002 di PR #753 OPEN, 003 di PR #755 OPEN (beda topik). ID 004 tanggal 2026-10-25 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
 >
 > **Kelanjutan tercatat, bukan duplikat**: adaptasi backlog lama (±baris 84-94) mengusulkan `Customer: nitku, namaWajibPajak, alamatPajak, statusPkp + validasi format NPWP 16 digit` saat faktur pajak BELUM eksis. Kini `TaxInvoice` sudah live (migrasi `20261021110000_tax_invoice_bupot_spt`) — celah berpindah: field master tetap absen sehingga identitas lawan diketik manual per dokumen. Aturan angka/format pajak final = vonis Accountant (Q-TX-1), spec ini tidak memutusnya.
-
 ### 0. Ringkasan putusan yang diminta
-
 Faktur pajak keluaran dan bukti potong hari ini mengandalkan ingatan operator: kolom `counterpartyName/counterpartyTaxId/counterpartyNitku` pada `TaxInvoice` diisi manual dari form kosong setiap terbit, padahal pelanggan yang sama diterbitkan berulang kali. Satu salah ketik NPWP/nama wajib pajak = faktur pajak cacat identitas; master pelanggan berubah (pindah alamat pajak, ganti nama WP) tidak meninggalkan jejak versi mana yang dipakai dokumen lama. Spec ini membekukan: (A) blok identitas pajak terstruktur di master pelanggan (nama wajib pajak, alamat pajak, NITKU, status PKP — semua opsional, tanpa mengubah makna `taxId` existing), (B) saat faktur pajak/bupot diterbitkan dari faktur penjualan/tagihan tertaut, server MENYALIN (snapshot) identitas dari master ke kolom counterparty dokumen — dokumen terbit tidak berubah oleh edit master sesudahnya, (C) penanda kelengkapan identitas di master (lengkap/kurang) baca-saja. Validasi format NPWP/NITKU dan perlakuan status PKP = `BUTUH-VONIS` Accountant; fisik kolom = Backend sesudah vonis.
-
 ### 1. Inventarisasi terverifikasi (origin/main 7505a7d7, 2026-10-25 00:05 WIB)
-
 Sudah ada (TERVERIFIKASI-KODE):
 - `Customer.taxId String?` (`prisma/schema.prisma:376` kawasan model Customer) — satu-satunya identitas pajak pelanggan; validasi `z.string().max(50).optional()` (`src/lib/validations/form.schemas.ts:47`). Tanpa nama wajib pajak, alamat pajak, NITKU, status PKP (grep `namaWajibPajak|statusPkp` di schema+src = hanya `counterpartyNitku` di TaxInvoice).
 - Model `TaxInvoice` live: `counterpartyTaxId String?`, `counterpartyName String?`, `counterpartyNitku String?` (`prisma/schema.prisma` model TaxInvoice, kawasan :1109), `salesInvoiceId?` relasi `SetNull`, `djpStatus draft|approved|rejected|replaced|cancelled`, `transactionCode` PER-11/PJ/2025.
@@ -24483,48 +24714,34 @@ Sudah ada (TERVERIFIKASI-KODE):
 - Bupot: `issueBupotSchema` (`tax-documents.actions.ts:117-118`) — `counterpartyName` WAJIB min 1, `counterpartyTaxId: optionalText`; juga manual per dokumen.
 - Izin nyata katalog (`src/lib/auth/module-catalog.generated.ts:125-128,323`): `view_customers`, `create_customers`, `edit_customers`, `delete_customers`, `create_tax_invoices`. Gerbang UI faktur/bupot sudah dipetakan spec F-2026-10-22-048-S — spec ini tidak mengubah peta itu.
 - `SalesInvoice` tertaut membawa `customerId` (relasi pelanggan existing di jalur penjualan) — jembatan master→dokumen tersedia tanpa relasi baru.
-
 Belum ada / gap (bukti grep run ini):
 - Field identitas pajak terstruktur di Customer: 0. Nama WP ≠ nama dagang tidak bisa disimpan; alamat pajak ≠ alamat kirim tidak bisa dibedakan.
 - Prefill/snapshot dari master saat terbit faktur pajak/bupot: 0 — form terbukti manual kosong; penyalinan server tidak ada di skema penerbitan.
 - Penanda kelengkapan: daftar pelanggan tidak menandai mana yang identitas pajaknya siap terbit faktur pajak; operator baru tahu kurang saat form terbit kosong.
-
 ### 2. Workflow specification
-
 Aktor: Admin Master Data (isi identitas pajak pelanggan), Petugas Pajak/Finance (terbit faktur pajak/bupot), Accountant (vonis format/perlakuan Q-TX-1), Lead (buka inti Q-TX-2).
-
 Dokumen masuk: master `Customer` existing + blok identitas pajak baru (opsional semua); faktur penjualan/tagihan existing sebagai jembatan. Dokumen keluar: `TaxInvoice`/bupot existing yang kolom counterparty-nya terisi snapshot.
-
 Alur:
 1. Admin melengkapi identitas pajak di master pelanggan (nama WP, alamat pajak, NPWP existing `taxId`, NITKU, status PKP). Semua opsional — pelanggan ritel tanpa NPWP tetap sah sebagai master (perilaku hari ini).
 2. Petugas menerbitkan faktur pajak keluaran dari faktur penjualan tertaut: server menyalin identitas pajak pelanggan faktur itu ke `counterpartyName/counterpartyTaxId/counterpartyNitku` sebagai SNAPSHOT saat terbit. Petugas boleh mengoreksi sebelum simpan; yang tersimpan = snapshot final, bukan rujukan live.
 3. Edit master sesudah terbit TIDAK mengubah dokumen terbit mana pun (pengganti faktur pajak = jalur `replaceTaxInvoice` existing bila identitas salah).
 4. Daftar/detail pelanggan menampilkan penanda kelengkapan turunan: `siap` (nama WP + NPWP terisi) / `kurang` (sebutkan yang kosong). Penanda tidak memblokir transaksi penjualan apa pun tahap 1.
-
 ### 3. Status-transition matrix (keadaan kelengkapan, BUKAN kolom status baru)
-
 | Dari | Pemicu | Ke | Penjaga |
 |---|---|---|---|
 | (master tanpa identitas) | admin isi nama WP + NPWP | siap | penurun kelengkapan server |
 | siap | NPWP/nama WP dikosongkan lewat edit | kurang | edit existing; dokumen terbit tidak berubah |
 | kurang | dilengkapi | siap | edit existing |
 | semua | faktur pajak terbit dari faktur tertaut | snapshot terkunci di dokumen | jalur penerbitan existing + salin server |
-
 ### 4. Role/permission matrix (key nyata katalog :125-128, :323)
-
 | Aksi | Admin Master | Petugas Pajak/Finance | Peran lain |
-|---|---|---|---|
 | Lihat identitas pajak + penanda kelengkapan | `view_customers` | `view_customers` (bila diberi) | ditolak |
 | Isi/ubah identitas pajak master | `edit_customers` (`create_customers` saat buat) | ditolak | ditolak |
 | Terbit faktur pajak (snapshot terisi server) | — | `create_tax_invoices` | ditolak |
 | Koreksi identitas di form terbit sebelum simpan | — | `create_tax_invoices` | ditolak |
-
 Tidak ada key izin baru tahap 1 (USULAN; Q-TX-2 Lead). Identitas pajak pelanggan adalah data master bisnis, BUKAN data gaji — tidak memakai hr-scope; tetap hanya tampil ke pemegang `view_customers`.
-
 ### 5. Business rules register
-
 | ID | Aturan | Label | Bukti/sumber |
-|---|---|---|---|
 | BR-TX-01 | Blok identitas pajak master semua OPSIONAL; pelanggan tanpa NPWP tetap sah dan tetap bisa bertransaksi seperti hari ini. Kelengkapan hanya penanda, bukan gerbang penjualan tahap 1. | USULAN | taxId opsional form.schemas.ts:47 |
 | BR-TX-02 | `taxId` existing DIPERTAHANKAN sebagai NPWP pelanggan (tidak diganti namanya, tidak dimigrasi maknanya); field baru hanya nama WP, alamat pajak, NITKU, status PKP. | USULAN (fisik Backend Q-TX-3) | schema.prisma:376 |
 | BR-TX-03 | Snapshot saat terbit: counterparty dokumen = salinan identitas master pada momen penerbitan (sesudah koreksi petugas). Edit master kemudian TIDAK menulis ulang dokumen terbit; koreksi dokumen = faktur pengganti existing. | USULAN | pola snapshot repo (QuotationHistory, replacesTaxInvoiceId) |
@@ -24534,56 +24751,280 @@ Tidak ada key izin baru tahap 1 (USULAN; Q-TX-2 Lead). Identitas pajak pelanggan
 | BR-TX-07 | Status PKP tersimpan sebagai fakta master bertanggal-efektif atau nilai kini sederhana = fisik Backend + vonis Accountant; spec hanya mewajibkan nilai yang tertera di dokumen adalah snapshot saat terbit, bukan nilai master terkini. | BUTUH-VONIS (Accountant Q-TX-1) + USULAN | — |
 | BR-TX-08 | Penanda kelengkapan = turunan baca-saja (nama WP terisi DAN NPWP terisi = siap; selain itu kurang + daftar kosongnya). Tanpa kolom status, tanpa cron penagih kelengkapan tahap 1. | USULAN | pola turunan F-2026-10-25-001-S |
 | BR-TX-09 | Vendor: `Vendor.npwp` existing adalah padanan sisi beli; spec ini TIDAK mengubah vendor. Penjajaran bentuk field vendor = spec terpisah bila faktur masukan membuktikan perlu. | USULAN (scope) | schema.prisma:485 (Vendor.npwp) |
-
 ### 6. Feature matrix
-
 | Kemampuan | Accurate Online | Zahir Online | ISF (Silengkap) |
-|---|---|---|---|
 | Tab Pajak di master pelanggan (NPWP, kode transaksi, data pajak) | Ada tab "Pajak" formulir pelanggan (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/penjualan/pelanggan/mengenal-fitur-pelanggan/) | Belum terverifikasi di help resmi yang diakses run ini — ditulis belum terverifikasi, bukan diklaim absen | ABSEN parsial: hanya `taxId` bebas (TERVERIFIKASI-KODE) |
 | NPWP + NITKU + alamat pajak perusahaan/pelanggan terstruktur | Ada preferensi pajak NPWP/NITKU/alamat terdaftar (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-isi-data-pajak-perusahaan/) | Belum terverifikasi | ABSEN (gap spec ini) |
 | Identitas lawan otomatis ke faktur pajak | Data pajak transaksi tampil otomatis dari preferensi/master (BENCHMARK halaman preferensi di atas) | Belum terverifikasi | ABSEN: counterparty manual per dokumen (tax-invoice-form.tsx:132-140) |
 | Snapshot identitas di dokumen terbit | Tidak ditemukan eksplisit di halaman di atas — ditulis tidak ditemukan | Belum terverifikasi | WAJIB snapshot per BR-TX-03 (USULAN) |
-
 ### 7. Acceptance criteria (falsifikasi)
-
 Backend (sesudah vonis Accountant + gerbang Lead):
 - AC-TX-B1: terbit faktur pajak dari faktur penjualan pelanggan beridentitas lengkap → counterparty dokumen byte-sama identitas master saat terbit. Tanpa salinan server (tetap kosong/manual) = MERAH.
 - AC-TX-B2: edit NPWP/nama WP master sesudah terbit → dokumen terbit byte-sama (snapshot). Master live tertarik ke dokumen = MERAH.
 - AC-TX-B3: terbit tanpa tautan faktur → perilaku manual existing persis, nol tebakan pelanggan dari nama.
 - AC-TX-B4: penanda kelengkapan: nama WP kosong → `kurang` menyebut nama WP; NPWP kosong → menyebut NPWP; keduanya terisi → `siap`. Fallback nama dagang tertanda fallback (BR-TX-05).
 - AC-TX-B5: pelanggan tanpa identitas apa pun tetap bisa dibuat faktur penjualan dan faktur pajak manual seperti hari ini (regresi jalur existing hijau).
-
 Frontend (konsumen):
 - AC-TX-F1: form terbit menampilkan counterparty terisi dari server apa adanya; UI mengosongkan/menghitung ulang identitas sendiri = MERAH.
 - AC-TX-F2: penanda kelengkapan tampil verbatim server di daftar/detail pelanggan; pelanggan kurang tetap bisa dibuka/diedit (tanpa blokir UI karangan).
-
 QA: AC-TX-B1..B5 + AC-TX-F1..F2 atas head Backend/Frontend persis.
-
 Edge cases: EC-1 nama WP = nama dagang (diisi sama) → siap tanpa penanda fallback. EC-2 pelanggan PKP berubah non-PKP di tengah tahun: dokumen lama snapshot lama, dokumen baru snapshot baru (BR-TX-07 menunggu vonis bentuk efektif). EC-3 NPWP terisi tetapi nama WP kosong → kurang; perilaku snapshot final menunggu Q-TX-1, spec melarang diam-diam. EC-4 faktur penjualan pelanggan terhapus-lembut (deletedAt) → tautan SetNull existing berlaku, snapshot dokumen tidak ikut hilang. EC-5 dua pelanggan bernama sama, identitas beda → snapshot mengikuti customerId faktur, bukan nama.
-
 ### 8. Pertanyaan putusan (gerbang)
-
 - Q-TX-1 (Accountant, BUTUH-VONIS — memblokir validasi): (a) validasi format NPWP 16 digit vs terima 15 digit lama; (b) bentuk NITKU yang disimpan; (c) status PKP: nilai kini vs bertanggal efektif, dan apakah status PKP master boleh memengaruhi kode transaksi default faktur (spec usul TIDAK tahap 1); (d) EC-3 snapshot nama dagang tertanda vs tolak terbit.
 - Q-TX-2 (Lead): buka inti field master + snapshot sekarang? Izin reuse vs baru (spec usul reuse existing).
 - Q-TX-3 (Backend): fisik kolom (nama/map), titik salin di service penerbitan (server, bukan prefill form saja — form boleh ditutup tanpa simpan), dan perilaku replaceTaxInvoice atas snapshot identitas.
 - Q-TX-4 (Lead): penanda kelengkapan cukup di master (usul spec) vs masuk antrean kerja petugas pajak tahap 1 — spec usul master saja.
-
 ### 9. Backlog implementasi
-
 | ID | Pekerjaan | Pemilik | Prasyarat |
-|---|---|---|---|
 | F-2026-10-25-004-S | Spec ini (dokumen) | Business | — |
 | (turunan) vonis format NPWP/NITKU/status PKP | Accountant | Q-TX-1 | — |
 | (turunan) field master + snapshot penerbitan + penanda loader | Backend | Q-TX-1 + Q-TX-2/3; klaim schema.prisma di board | — |
 | (turunan) UI blok pajak master + form terbit konsumen | Frontend | kontrak Backend stabil | — |
 | (turunan) falsifikasi AC-TX-* | QA | head Backend/Frontend persis | — |
-
 ### Yang TIDAK diusulkan run ini
-
 - Validasi NPWP online ke DJP / cek PKP otomatis: butuh kontrak/akses DJP; vonis Accountant + keputusan Lead terpisah.
 - Mengubah Vendor.npwp atau menyelaraskan master vendor: scope pelanggan dulu (BR-TX-09).
 - Menjadikan kelengkapan identitas sebagai gerbang penjualan/faktur: pelanggan ritel tanpa NPWP adalah arus sah bengkel; penanda dulu, gerbang hanya lewat vonis.
 - Ekspor XML Coretax dari snapshot: jalur P0-1 existing; snapshot ini menyuplainya, tidak membangun eksportir kedua.
+---
+## VONIS BOT Accountant 2026-10-25 — F-2026-10-25-004-V: PPN uang muka DP/termin — faktur pajak saat penerimaan pembayaran terverifikasi, snapshot DPP/PPN per DP, reklas kewajiban DP anti-PPN-dobel
+Status: PUTUSAN BOT Accountant (kartu t_5d1418ea). Dokumen saja;
+TANPA kode aplikasi/schema/migrasi di kartu ini. ID bebas
+terverifikasi live: grep `F-2026-10-25-004` di `origin/main`
+(7505a7d7) = 0 hasil sebelum tulis.
+### 0. Basis bukti live (worktree origin/main 7505a7d7, 2026-10-25 00:08 WIB) — TERVERIFIKASI-KODE
+- `onDownPaymentReceived` (`src/lib/hooks/accounting.hook.ts:1587`):
+  Dr Kas/bank (`cashBankAccountId`) / Cr Kewajiban Uang Muka
+  Penjualan 210102 (`customerDownPaymentAccountId`) sebesar
+  `dp.amount` PENUH dalam satu jurnal POSTED, idempoten via
+  `referenceType="DownPayment"` + cek dalam-tx. Nol kaki PPN,
+  nol snapshot pajak, nol dokumen pajak.
+- Pemicu = `confirmDownPayment` (`src/actions/sales.actions.ts:873`,
+  izin `confirm_down_payments`): satu tx memanggil
+  `onDownPaymentReceived` lalu `onDownPaymentConfirmed`.
+  DP lahir sebagai draft (`status` default `pending`,
+  schema:1445); kas diakui hanya saat confirm. Create DP
+  TIDAK memposting jurnal.
+- `onDownPaymentConfirmed` (`src/lib/hooks/down-payment.hook.ts:39`):
+  faktur konversi lahir SEKALI sebagai DRAFT hanya bila kumulatif
+  DP CONFIRMED mencapai ambang snapshot quotation
+  (`invoiceThresholdPercent`, fail-closed default 50%); nilai
+  faktur = quotation PENUH (`taxAmount = quotation.tax`).
+  PPN faktur penuh baru terposting saat faktur itu diposting
+  manual (`onSalesInvoicePosted`: Dr Piutang / Cr Pendapatan /
+  Cr PPN Keluaran `salesTaxAccountId` 210201 sebesar taxAmount).
+  Akibat: DP di bawah ambang / belum konversi / faktur konversi
+  masih draft = kas sudah diterima, peristiwa pajak NOL di sistem.
+- Alokasi DP ke faktur existing (down-payment.hook.ts, AUD-FIN-04):
+  Dr 210102 / Cr Piutang sebesar alokasi (dibatasi sisa faktur);
+  kelebihan DP di atas faktur menjadi CustomerCredit
+  (`sourceType="DownPayment"`). Kas tidak dijurnal ulang.
+- Schema `TaxInvoice` (schema:1074): taut hanya `salesInvoiceId`,
+  `vendorBillId`, `vendorId`, `replacesId`. TIDAK ada
+  `downPaymentId` — faktur pajak uang muka tidak dapat dicatat
+  tertaut DP, tidak dapat dibedakan dari faktur pelunasan, dan
+  read-model SPT (`src/lib/tax/spt-read-model.ts`) tidak punya
+  sumber PPN masa penerimaan DP.
+- Pola DPP repo: `computeVatFromSellingPrice`
+  (`src/lib/tax/tax-invoice.ts:126`) — kode transaksi default
+  repo "04": DPP = 11/12 x nilai, PPN = tarif nominal (default
+  parameter 12) x DPP, dibulatkan safeRound sen. Tarif hidup
+  sebagai parameter/master, bukan konstanta di hook jurnal.
+### 0.1 Register sumber resmi (tax rules register)
+| Aturan | Sumber resmi | Berlaku | Cakupan vonis ini |
+| FP wajib dibuat saat penerimaan pembayaran sebelum penyerahan BKP/JKP, dan saat penerimaan pembayaran termin untuk penyerahan bertahap | PER-11/PJ/2025 Pasal 31 ayat (2) huruf b dan c; artikel DJP "Cara Membuat Faktur Pajak Uang Muka dan Pelunasan di Coretax DJP", pajak.go.id (diakses 2026-10-25): https://www.pajak.go.id/id/artikel/cara-membuat-faktur-pajak-uang-muka-dan-pelunasan-di-coretax-djp | PER-11/PJ/2025 berlaku sejak 22 Mei 2025 (JDIH Kemenkeu) | Saat terutang FP uang muka (FP UM) per penerimaan DP/termin oleh PKP penjual |
+| Kolom BKP/JKP pada FP atas uang muka/termin/angsuran ditambah keterangan "uang muka"/"termin"/"angsuran"; FP pelunasan berketerangan "pelunasan"; DPP FP UM diisi total nilai uang muka diterima pada kolom Uang Muka Coretax | Artikel DJP yang sama (pajak.go.id, diakses 2026-10-25) | Sejalan PER-11/PJ/2025 | Isi snapshot FP UM per DP + FP pelunasan menarik data FP UM (fitur centang UM/pelunasan Coretax) |
+| FP dibuat oleh PKP; FP terlambat melewati saat terutang = kategori FP terlambat | PER-11/PJ/2025 Pasal 31 ayat (1)-(2) via artikel DJP yang sama | 22 Mei 2025 | Hanya PKP yang wajib FP UM; keterlambatan adalah temuan kepatuhan, bukan alasan menunda pengakuan PPN |
+Batas jujur: vonis tidak mengutip PER-03/PJ/2022 sebagai dasar
+berlaku — rezim faktur saat ini dibaca dari PER-11/PJ/2025 +
+artikel resmi DJP di atas. Ketentuan masa pengkreditan FP UM
+oleh PEMBELI di luar cakupan (sisi keluaran ISF).
+### Putusan 1 — Saat terutang: per DP CONFIRMED, bukan draft, bukan ambang konversi
+- Peristiwa pajak FP UM lahir pada saat DP berstatus CONFIRMED
+  lewat `confirmDownPayment` (penerimaan pembayaran
+  terverifikasi sebelum penyerahan), per DP satu per satu —
+  termasuk DP pertama di bawah ambang 50% dan setiap DP/termin
+  berikutnya. DILARANG menautkan saat terutang ke: (a) create
+  DP draft, (b) tercapainya ambang konversi faktur, (c) posting
+  faktur konversi/pelunasan.
+- Satu DP confirmed terutang = satu FP UM. DP lanjutan/termin
+  atas quotation yang sama = FP UM berikutnya atas nilai DP itu
+  sendiri, bukan pengganti FP UM sebelumnya dan bukan FP
+  gabungan, kecuali operator menerbitkan FP gabungan sesuai
+  ketentuan DJP di luar sistem (sistem tetap snapshot per DP).
+- Tanggal FP UM = tanggal penerimaan (`paymentDate` DP);
+  masa pajak diturunkan dari tanggal itu
+  (`taxPeriodFromDate`), bukan input bebas. Nomor seri FP =
+  nomor dari DJP/Coretax dicatat apa adanya; sistem dilarang
+  mengarang nomor.
+- Keterlambatan terbit FP UM sesudah confirm tidak menghapus
+  kewajiban: snapshot tetap dihitung dari nilai saat confirm;
+  status pajak DP tampil "terutang-belum-terbit" sebagai temuan
+  sampai FP UM diterbitkan (lihat Putusan 5 soal status).
+### Putusan 2 — DPP/PPN snapshot DP: `amount` = nilai diterima inklusif pola kode 04; tarif dari master efektif
+- DIPUTUS: `DownPayment.amount` adalah nilai kas diterima atas
+  harga penyerahan yang terutang PPN (quotation grandTotal
+  memang dibangun dari subtotal + tax), jadi snapshot FP UM
+  dihitung dengan pola kode 04 repo PERSIS:
+  `snap = computeVatFromSellingPrice(amount, kodeTransaksi, tarifEfektif)`
+  menghasilkan `dppUangMuka = safeRound(11/12 x amount)` dan
+  `ppnUangMuka = safeRound(tarif% x dppUangMuka)`. Untuk kode
+  transaksi non-04, fungsi yang sama memberi DPP penuh —
+  vonis tidak membuat rumus kedua.
+- Tarif WAJIB dibaca dari master/konfigurasi pajak bertanggal
+  efektif yang berlaku pada `paymentDate` DP dan dibekukan ke
+  snapshot. DILARANG: hardcode `11`, `12`, `11/12`, atau tarif
+  efektif apa pun di hook/action DP; faktor DPP nilai lain
+  hanya sah lewat `computeVatFromSellingPrice` untuk kode
+  transaksi yang memang DPP nilai lain.
+- Snapshot yang dibekukan per DP (sumber SPT, tidak hitung
+  ulang saat baca): kode transaksi, tarif nominal, DPP,
+  PPN, tanggal FP, masa, nomor FP (saat terbit), taut DP.
+  Edit master pajak sesudah confirm TIDAK mengubah snapshot.
+- DP atas quotation tanpa PPN (tax quotation = 0), penyerahan
+  tidak terutang, atau fasilitas tanpa pungutan PPN: snapshot
+  PPN = 0 tanpa FP UM (Putusan 4); dilarang memaksakan rumus
+  kode 04 ke transaksi yang master pajaknya menyatakan tidak
+  terutang.
+- Contoh sen-persis (kode 04, tarif nominal 12) untuk QA:
+  (a) amount 12.000.000 -> DPP 11.000.000,00, PPN 1.320.000,00;
+  (b) amount 100.000 -> DPP 91.666,67, PPN 11.000,00
+  (pembulatan sen di DPP dulu, lalu PPN dari DPP terbulatkan).
+### Putusan 3 — Jurnal: DP memecah kewajiban vs PPN Keluaran; pelunasan reklas anti-dobel
+Posting matrix (akun dari setting/COA aktif; kosong = fail-closed
+berisik, pola existing):
+| # | Peristiwa | Debit | Kredit | Syarat |
+|---|---|---|---|---|
+| J-DP1 | DP confirmed, terutang PPN | Kas/bank `cashBankAccountId` = amount A | 210102 `customerDownPaymentAccountId` = A - ppnUangMuka; 210201 PPN Keluaran `salesTaxAccountId` = ppnUangMuka | Satu tx dengan confirm; `assertPeriodOpen(paymentDate)`; idempoten scope DownPayment (J-DP1 menggantikan jurnal DP bruto existing, bukan jurnal kedua) |
+| J-DP2 | DP confirmed, tidak terutang / non-PKP / PPN 0 | Kas/bank = A | 210102 = A penuh | Tanpa FP UM; jurnal existing berlaku apa adanya |
+| J-PL1 | Faktur pelunasan terposting | Piutang = grandTotal; PPN Keluaran 210201 = Sigma ppnUangMuka FP UM tertaut quotation ini | Pendapatan = kredit pendapatan jurnal faktur existing (totalAmount - taxAmount dokumen); PPN Keluaran 210201 = PPN dokumen penuh; Piutang = Sigma ppnUangMuka tertaut | Reklas PPN UM diperhitungkan dalam jurnal posting faktur yang sama (atau jurnal reklas tertaut SalesInvoice dalam tx sama); hasil PPN dokumen < Sigma ppnUangMuka = fail-closed |
+| J-PL2 | Alokasi DP ke faktur terposting | 210102 = A - ppnUangMuka per DP teralokasi | Piutang = A - ppnUangMuka | Menggantikan kaki alokasi bruto AUD-FIN-04 untuk DP bersnapshot; DP pra-snapshot (legacy) tetap bruto berlabel legacy |
+| J-RF1 | DP batal/refund sesudah FP UM | 210102 = A - ppnUangMuka; 210201 = ppnUangMuka | Kas/bank = A | Hanya sesudah FP UM dibatalkan di Coretax (Putusan 4); reversal di periode terbuka |
+- Bukti anti-dobel (wajib lolos sebagai identitas, bukan klaim):
+  neto kredit GL 210201 lintas masa = ppnUangMuka (J-DP1)
+  + PPN dokumen penuh (J-PL1) - ppnUangMuka (reklas J-PL1)
+  = PPN dokumen penuh, tepat satu kali. SPT: FP UM (masa DP)
+  + FP pelunasan bersnapshot SELISIH (Putusan 5) menjumlah ke
+  DPP/PPN dokumen penuh yang sama. Contoh: harga total
+  120.000.000 kode 04 -> DPP total 110.000.000, PPN total
+  13.200.000; DP 12.000.000 -> FP UM DPP 11.000.000 / PPN
+  1.320.000; FP pelunasan DPP 99.000.000 / PPN 11.880.000;
+  jumlah kedua FP = total, nol dobel di SPT maupun GL.
+- Saldo 210102 sesudah J-DP1 = kewajiban penyerahan NETO PPN
+  (A - ppnUangMuka). Ini disengaja: PPN bukan kewajiban
+  penyerahan ke pelanggan, ia kewajiban ke negara di 210201.
+  Selisih DPP FP UM (11/12 x A, rezim DPP nilai lain) terhadap
+  kredit 210102 adalah sifat DPP nilai lain dan WAJIB tampil
+  apa adanya di rekonsiliasi, dilarang "diselaraskan" diam-diam.
+- Pendapatan TIDAK diakui saat DP dalam bentuk apa pun:
+  tidak ada kaki pendapatan/HPP/stok di J-DP1/J-DP2.
+  Pendapatan tetap lahir satu kali di posting faktur pelunasan.
+- Empat status tetap terpisah: status dokumen DP
+  (pending/confirmed), status pajak DP (bukan-subjek /
+  terutang-belum-terbit / fp-um-terbit / fp-um-batal),
+  status posting jurnal DP (belum/POSTED/reversed), status
+  pembayaran faktur (unpaid/partial/paid). Satu status dilarang
+  diturunkan dari status lain; FP UM draft di Coretax tidak
+  mengubah status pajak menjadi terbit.
+### Putusan 4 — Tanpa FP UM: non-PKP, tidak terutang, batal/refund
+- Perusahaan penjual non-PKP (dari master pajak perusahaan,
+  bukan flag per transaksi dari client): tidak ada FP UM, tidak
+  ada kaki PPN (J-DP2). Sistem dilarang memungut dari status
+  yang tidak dibuktikan master.
+- Penyerahan tidak terutang PPN / dibebaskan / fasilitas lain:
+  mengikuti kode transaksi + fasilitas dari master pajak
+  bertanggal efektif per sifat penyerahan; tanpa pungutan =
+  tanpa FP UM terutang (J-DP2). Pilihan fasilitas per transaksi
+  yang belum punya master = `BUTUH-VONIS-AKUNTAN` per pola,
+  jangan ditebak default.
+- DP batal SEBELUM FP UM terbit: reversal jurnal DP di periode
+  terbuka (`assertPeriodOpen` dalam tx sama), status pajak
+  kembali bukan-subjek; dilarang hapus jurnal terposting.
+- DP batal/refund (kas dikembalikan) SESUDAH FP UM terbit:
+  FP UM WAJIB dibatalkan dulu di Coretax (nomor batal tidak
+  dipakai ulang); J-RF1 hanya boleh posting dengan rujukan FP
+  batal itu tercatat. Tanpa bukti batal FP, refund kas atas DP
+  terutang DITOLAK berisik — mengembalikan kas tanpa membatalkan
+  FP menyisakan PPN terutang fiktif di SPT. Kelebihan DP di
+  atas faktur (CustomerCredit existing) yang berasal dari DP
+  bersnapshot mengikuti aturan sama per porsi yang direfund.
+- Koreksi nilai DP confirmed: dilarang edit amount DP
+  terposting diam-diam; jalur sah = reversal + DP koreksi,
+  FP UM mengikuti jalur pengganti/batal DJP (pengganti ikut
+  masa faktur diganti, pola vonis FP existing).
+### Putusan 5 — Batas build (pemilik berikutnya; kartu ini tanpa kode/schema/migrasi)
+- BOT Backend (sesudah merge vonis ini, klaim schema di board
+  dulu): (a) taut TaxInvoice -> DownPayment (kolom nullable;
+  bentuk fisik Backend, satu FP UM aktif per DP ditegakkan
+  unik parsial/setara service), snapshot DPP/PPN/tarif/kode
+  transaksi/tanggal/masa dibekukan di dokumen pajak;
+  (b) FP pelunasan tertaut faktur WAJIB snapshot selisih:
+  DPP/PPN dokumen penuh dikurangi Sigma FP UM approved
+  tertaut pada quotation/faktur yang sama, negatif =
+  fail-closed; read-model SPT memperlakukan FP UM sebagai
+  baris keluaran masa penerimaan dan menekan baris legacy
+  faktur komersial tertaut agar tidak dobel (pola anti-dobel
+  read-model existing); (c) jurnal J-DP1/J-PL1/J-PL2/J-RF1
+  lewat hook existing, idempotency key scope `(DownPayment)`
+  untuk jurnal + pembuatan FP UM (replay confirm = nol jurnal
+  kedua, nol FP kedua); (d) akun dari setting existing
+  (`cashBankAccountId`, `customerDownPaymentAccountId`,
+  `salesTaxAccountId`), kosong = fail-closed; TANPA kolom
+  akun baru dan TANPA setting akun tebakan; (e) status pajak
+  DP adalah turunan read-model dari dokumen pajak tertaut,
+  bukan flag bebas di form.
+- BOT Frontend (sesudah kontrak Backend stabil): tampilkan
+  snapshot DPP/PPN/FP UM/status pajak DP verbatim dari backend;
+  UI dilarang hitung ulang DPP/PPN, dilarang menurunkan status
+  pajak dari status dokumen/pembayaran.
+- BOT QA: falsifikasi E-DP-PPN sen-persis minimum:
+  (1) DP 12.000.000 kode 04 -> jurnal seimbang Dr Kas
+  12.000.000 / Cr 210102 10.680.000 / Cr 210201 1.320.000;
+  mutasi cabut kaki PPN -> MERAH. (2) DP 100.000 -> PPN
+  11.000,00 persis (pembulatan dua tahap). (3) Pelunasan contoh
+  Putusan 3: Sigma FP UM + FP pelunasan = DPP 110.000.000 /
+  PPN 13.200.000 di SPT dan neto GL 210201 = 13.200.000;
+  mutasi posting faktur tanpa reklas J-PL1 -> MERAH (dobel
+  1.320.000 terbaca). (4) Replay confirm DP sama -> jurnal/FP
+  kedua tidak lahir. (5) DP draft -> nol jurnal, nol snapshot.
+  (6) Non-PKP/tidak terutang -> J-DP2 bruto, nol FP.
+  (7) Refund DP ber-FP tanpa bukti batal FP -> ditolak;
+  sesudah batal -> J-RF1 seimbang dan SPT masa koreksi bersih.
+  (8) Edit tarif master sesudah confirm -> snapshot DP lama
+  tidak berubah. (9) DP confirmed periode tertutup -> ditolak
+  `assertPeriodOpen`. (10) Pendapatan saat DP = 0 (tidak ada
+  kaki pendapatan di jurnal DP).
+### Larangan (mengikat semua build turunan)
+1. PPN dobel dalam bentuk apa pun: FP UM + FP pelunasan
+   bersnapshot penuh, atau GL 210201 tanpa reklas J-PL1.
+2. Mengakui pendapatan/HPP/stok saat penerimaan DP.
+3. Hardcode tarif/faktor DPP di luar `computeVatFromSellingPrice`
+   + master bertanggal efektif.
+4. Mengarang nomor seri FP, memakai ulang nomor batal, atau
+   menurunkan masa pajak dari input bebas.
+5. Mengubah jurnal DP/faktur terposting diam-diam; koreksi
+   hanya reversal/dokumen koreksi di periode terbuka.
+6. Menurunkan status pajak dari status dokumen, pembayaran,
+   atau posting.
+### Lampiran hitung kemandirian DPP FP UM vs kewajiban 210102 (sen)
+- DPP FP UM (kolom DPP nilai lain snapshot dokumen pajak) =
+  11/12 x A. Kaki GL sengaja TIDAK menyamakan DPP dengan
+  kredit 210102: PPN = tarif% x DPP, kredit 210102 = A - PPN.
+  Untuk tarif nominal 12, PPN = 11% x A efektif dan
+  210102 = 89% x A, sedangkan DPP = 91,6667% x A. Selisih
+  2,6667% x A antara DPP dan kredit 210102 adalah konsekuensi
+  rezim DPP nilai lain (DPP bukan nilai penyerahan neto kas),
+  tampil di rekonsiliasi sebagai baris penjelasan DPP-nilai-
+  lain, BUKAN selisih temuan. QA WAJIB membedakan baris ini
+  dari selisih jurnal-vs-SPT yang sesungguhnya (PPN GL neto
+  vs PPN SPT tetap harus nol selisih per Putusan 3).
+Pemilik berikutnya: BOT Lead (merge PR vonis ini) -> BOT
+Backend (build Putusan 5, koordinasi schema tertulis dulu) ->
+BOT Frontend -> BOT QA (E-DP-PPN). Risiko terbuka: pola DP
+untuk penyerahan berfasilitas khusus (pemungut, dibebaskan,
+DTP) belum diputus per pola transaksi nyata ISF — muncul saat
+build wajib kembali sebagai `BUTUH-VONIS-AKUNTAN`, bukan
+default kode.
 ---
 
 ## SPEC BUSINESS 2026-10-25 — F-2026-10-25-002-S: antrean penawaran diterima belum dikonversi (accepted/approved tanpa SO/WO/faktur)
