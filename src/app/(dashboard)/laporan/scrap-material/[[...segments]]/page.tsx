@@ -14,13 +14,8 @@ import {
   formatPeriodLabel,
 } from "@/lib/reports/report-period"
 import { hasPermission } from "@/lib/auth/permissions"
-import { SCRAP_REVIEW_STATUS_PENDING } from "@/lib/services/scrap-physical"
-import {
-  SCRAP_REASON_LABELS,
-  isScrapReasonCode,
-} from "@/lib/services/scrap-classification"
-import { ScrapReviewQueue, type ScrapReviewQueueRow } from "@/components/reports/scrap-review-queue"
-import { loadScrapMaterialReport } from "@/lib/reports/scrap-material-data"
+import { ScrapReviewQueue } from "@/components/reports/scrap-review-queue"
+import { loadScrapMaterialReport, loadScrapReviewQueue } from "@/lib/reports/scrap-material-data"
 import {
   buildScrapMaterialTable,
   scrapMaterialSummary,
@@ -48,81 +43,12 @@ export default async function ScrapMaterialPage({
     end: now,
   }))
 
-  const [{ report }, setting, canReview, pendingMi, pendingPo] = await Promise.all([
+  const [{ report }, setting, canReview, reviewRows] = await Promise.all([
     loadScrapMaterialReport(period.start, period.end),
     prisma.systemSetting.findFirst({ select: { abnormalScrapPostingEnabled: true } }),
     hasPermission("complete_work_orders"),
-    prisma.materialIssueItem.findMany({
-      where: {
-        scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING,
-        materialIssue: { date: { gte: period.start, lte: period.end } },
-      },
-      select: {
-        id: true,
-        itemId: true,
-        scrapReasonCode: true,
-        scrapAbnormalQtySnapshot: true,
-        scrapAbnormalValueSnapshot: true,
-        materialIssue: { select: { documentNo: true, date: true } },
-      },
-      orderBy: { id: "asc" },
-    }),
-    prisma.productionOrderMaterial.findMany({
-      where: {
-        scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING,
-        productionOrder: { createdAt: { gte: period.start, lte: period.end } },
-      },
-      select: {
-        id: true,
-        itemId: true,
-        scrapReasonCode: true,
-        scrapAbnormalQtySnapshot: true,
-        scrapAbnormalValueSnapshot: true,
-        productionOrder: { select: { documentNo: true, createdAt: true } },
-      },
-      orderBy: { id: "asc" },
-    }),
+    loadScrapReviewQueue(period.start, period.end),
   ])
-  const pendingItemIds = [...new Set([...pendingMi.map((r) => r.itemId), ...pendingPo.map((r) => r.itemId)])]
-  const pendingItems = pendingItemIds.length
-    ? await prisma.item.findMany({
-        where: { id: { in: pendingItemIds } },
-        select: { id: true, name: true, category: { select: { scrapAllowanceNote: true, materialShape: true } } },
-      })
-    : []
-  const pendingItemById = new Map(pendingItems.map((i) => [i.id, i]))
-  const reviewRows: ScrapReviewQueueRow[] = [
-    ...pendingMi.map((r): ScrapReviewQueueRow => {
-      const item = pendingItemById.get(r.itemId)
-      return {
-        source: "MI",
-        lineId: r.id,
-        documentNo: r.materialIssue.documentNo,
-        date: r.materialIssue.date,
-        itemName: item?.name ?? null,
-        abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
-        abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
-        scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
-        allowanceNote: item?.category?.scrapAllowanceNote ?? null,
-        materialShape: item?.category?.materialShape ?? null,
-      }
-    }),
-    ...pendingPo.map((r): ScrapReviewQueueRow => {
-      const item = pendingItemById.get(r.itemId)
-      return {
-        source: "PO",
-        lineId: r.id,
-        documentNo: r.productionOrder.documentNo,
-        date: r.productionOrder.createdAt,
-        itemName: item?.name ?? null,
-        abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
-        abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
-        scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
-        allowanceNote: item?.category?.scrapAllowanceNote ?? null,
-        materialShape: item?.category?.materialShape ?? null,
-      }
-    }),
-  ].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
   const postingEnabled = setting?.abnormalScrapPostingEnabled ?? false
   const table = buildScrapMaterialTable(report)
 
