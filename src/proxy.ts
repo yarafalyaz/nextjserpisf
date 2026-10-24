@@ -20,6 +20,15 @@ const SESSION_COOKIE_PATTERN = /^(__Secure-)?authjs\.session-token(\.\d+)?$/;
 const STATIC_EXTENSIONS =
   /\.(ico|png|jpg|jpeg|gif|svg|webp|css|js|woff2?|ttf|eot|map)$/i;
 
+// Metadata publik yang dihasilkan Next.js dari app/manifest.ts,
+// app/robots.ts, dan app/sitemap.ts. Path-nya exact agar file .txt/.xml
+// lain atau route aplikasi tidak ikut terbuka tanpa sesi.
+const PUBLIC_METADATA_PATHS = new Set([
+  "/manifest.webmanifest",
+  "/robots.txt",
+  "/sitemap.xml",
+]);
+
 // Rate limit configs per route category
 const RATE_LIMITS = {
   upload: { windowMs: 60_000, max: 20 }, // 20 uploads/min
@@ -104,6 +113,13 @@ export async function proxy(req: NextRequest) {
   req.headers.set("Content-Security-Policy", buildCsp(req, nonce));
   const nextPage = () => NextResponse.next({ request: { headers: req.headers } });
   warnRateLimitRedisMissingOnce();
+
+  // Manifest PWA, robots, dan sitemap harus dapat dibaca browser/crawler
+  // sebelum ada sesi. Bypass ini hanya untuk tiga path exact di atas;
+  // semua halaman dan API lain tetap melewati aturan auth di bawah.
+  if (PUBLIC_METADATA_PATHS.has(pathname)) {
+    return addSecurityHeaders(req, nextPage());
+  }
 
   const ip = getClientIp(req);
 

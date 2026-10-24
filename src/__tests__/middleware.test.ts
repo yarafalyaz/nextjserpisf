@@ -115,3 +115,24 @@ describe("proxy public API allowlist", () => {
     expect(PUBLIC_API_PATHS).toContain("/api/cron")
   })
 })
+
+describe("proxy public metadata allowlist (ISF-011)", () => {
+  const proxySource = () => readFileSync(join(process.cwd(), "src/proxy.ts"), "utf8")
+
+  it("allows the exact Next.js metadata endpoints without a session", () => {
+    const src = proxySource()
+    expect(src).toContain('"/manifest.webmanifest"')
+    expect(src).toContain('"/robots.txt"')
+    expect(src).toContain('"/sitemap.xml"')
+    expect(src).toContain("PUBLIC_METADATA_PATHS.has(pathname)")
+  })
+
+  it("bypasses metadata before the protected-page redirect, without broadening static extensions", () => {
+    const src = proxySource()
+    const bypassIndex = src.indexOf("PUBLIC_METADATA_PATHS.has(pathname)")
+    const redirectIndex = src.indexOf("if (!isPublicPage && !isLoggedIn)")
+    expect(bypassIndex).toBeGreaterThan(-1)
+    expect(redirectIndex).toBeGreaterThan(bypassIndex)
+    expect(src).not.toMatch(/ico\|png\|jpg\|jpeg\|gif\|svg\|webp\|css\|js\|woff2\?\|ttf\|eot\|map\|(?:txt|xml|webmanifest)/)
+  })
+})
