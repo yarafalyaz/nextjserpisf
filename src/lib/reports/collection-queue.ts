@@ -20,6 +20,7 @@
  */
 
 import { receivableOutstanding } from "@/lib/reports/aging-amounts"
+import { buildLateFeeOutstandingByInvoice } from "@/lib/reports/sales-late-fee"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
 import { safeAdd } from "@/lib/utils/math"
 
@@ -106,6 +107,14 @@ export interface CollectionFollowUpInput {
   deletedAt: Date | null
 }
 
+export interface CollectionLateFeeInput {
+  salesInvoiceId: number
+  amount: number
+  paidAmount: number
+  status: string
+  reversesId: number | null
+}
+
 export interface CollectionQueueRow {
   invoiceId: number
   documentNo: string
@@ -128,6 +137,12 @@ export interface CollectionQueueRow {
   lastFollowUpAt: Date | null
   /** Janji terakhir: promisedDate maksimum outcome janji (BR-COL-05). */
   promiseDate: Date | null
+  /**
+   * Saldo dokumen denda yang SUDAH terbit untuk faktur ini
+   * (F-2026-10-22-093-V §3 BOT 4): indikator saja, bukan hitung denda.
+   */
+  lateFeeOutstanding: number
+  hasOutstandingLateFee: boolean
 }
 
 export interface CollectionQueueSummary {
@@ -175,8 +190,10 @@ export function buildCollectionQueue(
   exchanges: readonly CollectionExchangeInput[],
   followUps: readonly CollectionFollowUpInput[],
   options: CollectionQueueOptions = {},
+  lateFees: readonly CollectionLateFeeInput[] = [],
 ): CollectionQueue {
   const today = getWibTodayUtcDate(options.now ?? new Date()).getTime()
+  const lateFeeByInvoice = buildLateFeeOutstandingByInvoice(lateFees)
 
   const exchangesByInvoice = new Map<number, CollectionExchangeInput[]>()
   for (const exchange of exchanges) {
@@ -274,6 +291,9 @@ export function buildCollectionQueue(
       exchangeDocumentNo: exchange?.exchangeDocumentNo ?? null,
       lastFollowUpAt,
       promiseDate,
+      lateFeeOutstanding: lateFeeByInvoice.get(invoice.invoiceId) ?? 0,
+      hasOutstandingLateFee:
+        (lateFeeByInvoice.get(invoice.invoiceId) ?? 0) > 0.005,
     })
   }
 

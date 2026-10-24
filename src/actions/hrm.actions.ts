@@ -17,13 +17,15 @@ import {
   type TerBracket,
 } from "@/lib/services/payroll-statutory.service";
 import { prisma } from "@/lib/db/prisma";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
+import type { Prisma as PrismaTypes } from "@prisma/client";
 import {
   generateDocumentNumber,
   generateDocumentNumberBatch,
 } from "@/lib/utils/document-number";
 import { revalidatePath } from "next/cache";
 import { requireId } from "@/lib/utils/safe-parse";
+import { parseMoneyAmount } from "@/lib/utils/parse-money";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { parseFormData } from "@/lib/validations/parse-form";
 import { dateOnly } from "@/lib/validations/finance.schemas";
@@ -366,7 +368,7 @@ export async function assignEmployeePayrollComponent(formData: FormData) {
     const user = await requirePermission("create_employees"); await requirePayrollComponentAdmin("create_employees");
     const employeeId = Number(formData.get("employeeId"));
     const componentId = Number(formData.get("componentId"));
-    const defaultAmount = Number(formData.get("defaultAmount"));
+    const defaultAmount = parseMoneyAmount(formData.get("defaultAmount")) ?? NaN;
     const effectiveFromRaw = String(formData.get("effectiveFrom") ?? "").trim();
     const effectiveToRaw = String(formData.get("effectiveTo") ?? "").trim();
     if (!Number.isSafeInteger(employeeId) || employeeId <= 0) throw new Error("Karyawan tidak valid");
@@ -425,7 +427,7 @@ export async function updateEmployeePayrollComponent(id: number, formData: FormD
     if (!existing) throw new Error("Penugasan komponen gaji tidak ditemukan");
     const defaultAmount = formData.get("defaultAmount") == null
       ? Number(existing.defaultAmount)
-      : Number(formData.get("defaultAmount"));
+      : (parseMoneyAmount(formData.get("defaultAmount")) ?? NaN);
     if (!Number.isFinite(defaultAmount) || defaultAmount < 0) {
       throw new Error("Nominal penugasan komponen gaji tidak boleh negatif");
     }
@@ -621,7 +623,7 @@ export async function addPayrollComponentLine(payrollId: number, formData: FormD
     if (!Number.isSafeInteger(payrollId) || payrollId <= 0) throw new Error("Slip gaji tidak valid");
     await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(payrollId);
     const componentId = Number(formData.get("componentId"));
-    const amount = Number(formData.get("amount"));
+    const amount = parseMoneyAmount(formData.get("amount")) ?? NaN;
     if (!Number.isSafeInteger(componentId) || componentId <= 0) throw new Error("Komponen gaji tidak valid");
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal baris komponen gaji harus lebih dari nol");
@@ -664,7 +666,7 @@ export async function updatePayrollComponentLineAmount(lineId: number, formData:
     const line = await prisma.payrollComponentLine.findUnique({ where: { id: lineId } });
     if (!line) throw new Error("Baris komponen gaji tidak ditemukan");
     await requirePermission("edit_payroll"); await assertDraftPayrollLineAccess(line.payrollId);
-    const amount = Number(formData.get("amount"));
+    const amount = parseMoneyAmount(formData.get("amount")) ?? NaN;
     if (!Number.isFinite(amount) || amount <= 0) {
       throw new Error("Nominal baris komponen gaji harus lebih dari nol");
     }
@@ -828,7 +830,7 @@ async function buildPayrollWrite(o: {
     bpjsHealthEmployee: bpjsParts.health,
     bpjsEmploymentEmployee: bpjsParts.employment,
     pph21: pph,
-    statutorySnapshot: snapshot as unknown as Prisma.InputJsonValue,
+    statutorySnapshot: snapshot as unknown as PrismaTypes.InputJsonValue,
     netSalary: net,
     totalAmount: net,
     paymentDate: v.paymentDate ? wibDateToUtcMidnight(v.paymentDate) : null,
@@ -2272,7 +2274,7 @@ export async function generateBulkPayroll(
       bpjsHealthEmployee: number;
       bpjsEmploymentEmployee: number;
       pph21: number;
-      statutorySnapshot: Prisma.InputJsonValue;
+      statutorySnapshot: PrismaTypes.InputJsonValue;
       netSalary: number;
       totalAmount: number;
       status: string;
@@ -2354,7 +2356,7 @@ export async function generateBulkPayroll(
         bpjsHealthEmployee: est.bpjsHealthEmployee ?? 0,
         bpjsEmploymentEmployee: est.bpjsEmploymentEmployee ?? 0,
         pph21: est.pph21 ?? 0,
-        statutorySnapshot: (est.statutorySnapshot ?? {}) as Prisma.InputJsonValue,
+        statutorySnapshot: (est.statutorySnapshot ?? {}) as PrismaTypes.InputJsonValue,
         netSalary: netSalary,
         totalAmount: netSalary,
         status: "draft",
@@ -2362,46 +2364,83 @@ export async function generateBulkPayroll(
       });
     }
 
-    const count = rows.length;
-    if (count > 0) {
-      await prisma.payroll.createMany({
-        data: rows,
-        skipDuplicates: true,
-      });
-      // Baris komponen: createMany tidak mengembalikan ID — baca ulang slip
-      // yang BARU dibuat run ini (rentang+status draft persis; slip lama
-      // beririsan sudah disaring penjaga, slip rentang sama persis mustahil
-      // lolos), buat baris hanya untuk slip tanpa baris (generate 2x
-      // tidak menggandakan). Slip yang kalah race skipDuplicates tidak ada
-      // di hasil baca, jadi tidak dibuatkan baris yatim.
-      const withLines = rows.filter((r) => (estimations.get(r.employeeId)?.componentLines.length ?? 0) > 0);
-      if (withLines.length > 0) {
-        const created = await prisma.payroll.findMany({
-          where: {
-            employeeId: { in: withLines.map((r) => r.employeeId) },
-            startDate: rangeStart,
-            endDate: rangeEnd,
-            status: "draft",
-          },
-          select: { id: true, employeeId: true, componentLines: { select: { id: true } } },
-        });
-        for (const slip of created) {
-          if (slip.componentLines.length > 0 || slip.employeeId == null) continue;
-          const lines = estimations.get(slip.employeeId)?.componentLines ?? [];
-          if (lines.length === 0) continue;
-          await prisma.$transaction(async (tx) => {
-            const fresh = await tx.payroll.findUnique({
-              where: { id: slip.id },
-              select: { status: true, componentLines: { select: { id: true } } },
+    // F-076-S audit t_a92d0da1: cek irisan + createMany WAJIB satu transaksi
+    // dengan kunci baris karyawan populasi target (FOR UPDATE, urutan id
+    // menaik anti-deadlock — pola processPayroll/updatePayroll). Tanpa ini
+    // dua run konkuren rentang beririsan tak identik sama-sama lolos baca
+    // luar lalu sama-sama createMany (kunci DB hanya menolak rentang persis
+    // sama); slip yang masuk sesudah baca luar kini terlewat "irisan" lewat
+    // cek ulang di dalam transaksi, karyawan lain tetap terbit. Nomor
+    // dokumen urutan yang terbuang untuk karyawan kalah race diterima
+    // (celah nomor, bukan dobel bayar). Komponen dibaca ulang dari baris
+    // yang benar-benar terbit di transaksi yang sama.
+    const published = rows.length === 0
+      ? { count: 0, created: [] as { id: number; employeeId: number | null }[] }
+      : await prisma.$transaction(async (tx) => {
+          const lockIds = [...new Set(rows.map((r) => r.employeeId))].sort((a, b) => a - b);
+          await tx.$queryRaw`SELECT id FROM employees WHERE id IN (${Prisma.join(lockIds)}) ORDER BY id FOR UPDATE`;
+          const freshByEmployee = new Map<number, typeof existingPayrolls>();
+          if (lockIds.length > 0) {
+            const fresh = await tx.payroll.findMany({
+              where: {
+                employeeId: { in: lockIds },
+                status: { notIn: ["cancelled", "canceled"] },
+                startDate: { lte: rangeEnd },
+                endDate: { gte: new Date(rangeStart.getTime() - 90 * 24 * 60 * 60 * 1000) },
+              },
+              select: { employeeId: true, startDate: true, endDate: true, status: true, documentNo: true },
             });
-            if (!fresh || fresh.status !== "draft" || fresh.componentLines.length > 0) return;
+            for (const slip of fresh) {
+              if (slip.employeeId == null) continue;
+              const arr = freshByEmployee.get(slip.employeeId) ?? [];
+              arr.push(slip);
+              freshByEmployee.set(slip.employeeId, arr);
+            }
+          }
+          const keptRows: typeof rows = [];
+          for (const row of rows) {
+            const conflict = findPayrollRangeConflict(
+              freshByEmployee.get(row.employeeId) ?? [],
+              rangeStart,
+              rangeEnd,
+            );
+            if (conflict) {
+              runSkips.push({
+                employeeId: row.employeeId,
+                reason: "irisan",
+                conflictDocumentNo: conflict.documentNo,
+              });
+            } else {
+              keptRows.push(row);
+            }
+          }
+          if (keptRows.length === 0) return { count: 0, created: [] as { id: number; employeeId: number | null }[] };
+          await tx.payroll.createMany({ data: keptRows, skipDuplicates: true });
+          const withLines = keptRows.filter(
+            (r) => (estimations.get(r.employeeId)?.componentLines.length ?? 0) > 0,
+          );
+          if (withLines.length === 0) return { count: keptRows.length, created: [] as { id: number; employeeId: number | null }[] };
+          const created = await tx.payroll.findMany({
+            where: {
+              employeeId: { in: withLines.map((r) => r.employeeId) },
+              startDate: rangeStart,
+              endDate: rangeEnd,
+              status: "draft",
+            },
+            select: { id: true, employeeId: true, componentLines: { select: { id: true } } },
+          });
+          for (const slip of created) {
+            if (slip.componentLines.length > 0 || slip.employeeId == null) continue;
+            const lines = estimations.get(slip.employeeId)?.componentLines ?? [];
+            if (lines.length === 0) continue;
             await tx.payrollComponentLine.createMany({
               data: lines.map((l) => ({ ...l, payrollId: slip.id })),
             });
-          });
-        }
-      }
-    }
+          }
+          return { count: keptRows.length, created };
+        });
+
+    const count = published.count;
 
     const skippedByReason = countPayrollRunSkips(runSkips);
     const skippedTotal = runSkips.length;

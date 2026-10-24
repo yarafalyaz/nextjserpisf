@@ -27,11 +27,12 @@ function asset(overrides: Partial<DeferredTaxAssetInput> = {}): DeferredTaxAsset
     taxTypeListed: true,
     taxDjpDetermination: false,
     hasPostedBooks: true,
+    frozenClosingBalance: 9_000_000,
     ...overrides,
   }
 }
 
-describe("DeferredTaxCard F-2026-10-23-112", () => {
+describe("DeferredTaxCard F-2026-10-23-112 + F-2026-10-23-124-V", () => {
   it("tampilkan arah, tangguhan, verdict, dan notice verbatim tanpa tombol jurnal", () => {
     const report = buildDeferredTaxTemporaryDifference({
       assets: [
@@ -46,6 +47,7 @@ describe("DeferredTaxCard F-2026-10-23-112", () => {
     const text = container.textContent ?? ""
     expect(container.querySelector('[aria-label="Perbedaan Temporer Pajak Tangguhan"]')).not.toBeNull()
     expect(text).toContain("Kena pajak (liabilitas)")
+    expect(text).toContain("tarif pasokan operator — bukan master")
     expect(text).toContain("Dapat dikurangkan (aset)")
     expect(text).toContain("Belum dapat dihitung")
     expect(text).toContain(DEFERRED_TAX_NOTICE)
@@ -73,6 +75,51 @@ describe("DeferredTaxCard F-2026-10-23-112", () => {
     // kemunculan kedua membuktikan <p> notice kartu sendiri.
     expect(text.split(DEFERRED_TAX_NOTICE).length - 1).toBeGreaterThanOrEqual(2)
     expect(container.querySelector("button")).toBeNull()
+    unmountCard(root)
+  })
+
+  it("F-124-V: aset belum-terbekukan tampil label + alasan verbatim, selisih kosong, ringkasan sebut jumlah + tarif operator", () => {
+    const report = buildDeferredTaxTemporaryDifference({
+      assets: [
+        asset({ code: "A", bookValue: 12_000_000 }),
+        asset({
+          code: "D",
+          name: "Kendaraan",
+          frozenClosingBalance: null,
+          frozenRejectionReason: "metode-belum-dipilih",
+        }),
+      ],
+      taxRatePercent: 22,
+      asOf: AS_OF,
+    })
+    const { container, root } = renderCard(<DeferredTaxCard report={report} />)
+    const text = container.textContent ?? ""
+    expect(report.totals.fiscalNotFrozen).toBe(1)
+    expect(text).toContain("Fiskal belum terbekukan")
+    expect(text).toContain("Fiskal belum terbekukan (metode-belum-dipilih)")
+    expect(text).toContain("1 fiskal belum terbekukan")
+    expect(text).toContain("tarif pasokan operator — bukan master")
+    // String persis berkutip hanya lahir dari ringkasan kartu + verdict builder;
+    // notice tabel memakai format "Tarif 22% adalah ..." (tanpa kurung).
+    expect(text.split("tarif 22% (tarif pasokan operator — bukan master)").length - 1).toBeGreaterThanOrEqual(2)
+    expect(text).toContain(report.verdict)
+    expect(container.querySelector("button")).toBeNull()
+    unmountCard(root)
+  })
+
+  it("F-124-V: tarif master tidak dilabeli pasokan operator", () => {
+    const report = buildDeferredTaxTemporaryDifference({
+      assets: [asset({ code: "A", bookValue: 12_000_000 })],
+      taxRatePercent: 22,
+      rateSource: "master",
+      asOf: AS_OF,
+    })
+    const { container, root } = renderCard(<DeferredTaxCard report={report} />)
+    const text = container.textContent ?? ""
+    expect(report.rateSourceLabel).toBeNull()
+    expect(text).toContain("tarif 22%")
+    expect(text).not.toContain("tarif pasokan operator")
+    expect(text).toContain("0 fiskal belum terbekukan")
     unmountCard(root)
   })
 

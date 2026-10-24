@@ -51,4 +51,26 @@ describe("AssetCategoryForm — a11y wiring", () => {
       unmount(root, container)
     })
   })
+
+  it("field metode fiskal F-109-V: ter-render berlabel, nilai tersimpan tampil apa adanya", () => {
+    withContainer((container) => {
+      const root = mountInto(container, <AssetCategoryForm category={{ id: 3, name: "Kendaraan", fiscalMethod: "declining_balance" }} />)
+      const form = container.querySelector("form")!
+      const field = form.querySelector<HTMLInputElement>("#fiscalMethod, input[name='fiscalMethod'], [name='fiscalMethod']")!
+      expect(field).not.toBeNull()
+      expect(labelTexts(form)).toEqual(expect.arrayContaining(["Metode Fiskal"]))
+      expect(container.textContent).toContain("Belum dipilih = penyusutan fiskal belum dihitung")
+      unmount(root, container)
+    })
+  })
+
+  it("metode fiskal null: tidak ada nilai terpilih yang dikarang UI (hidden kosong)", () => {
+    withContainer((container) => {
+      const root = mountInto(container, <AssetCategoryForm category={{ id: 3, name: "Kendaraan", fiscalMethod: null }} />)
+      const form = container.querySelector("form")!
+      const hidden = form.querySelector<HTMLInputElement>("input[name='fiscalMethod']")!
+      expect(hidden.value).toBe("")
+      unmount(root, container)
+    })
+  })
 })

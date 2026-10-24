@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
-import { assetSchema } from "@/lib/validations/asset.schemas"
+import { Prisma } from "@prisma/client"
+import { assetCategorySchema, assetSchema } from "@/lib/validations/asset.schemas"
 
 const mocks = vi.hoisted(() => {
   const requirePermissionMock = vi.fn()
@@ -52,6 +53,14 @@ const mocks = vi.hoisted(() => {
       findUniqueOrThrow: vi.fn(),
       findFirst: vi.fn().mockResolvedValue(null),
       updateMany: vi.fn(),
+    },
+    // Dokumen unit aktual UOP (F-118-V Putusan 2b).
+    assetUsageRecord: {
+      upsert: vi.fn().mockResolvedValue({ id: 1 }),
+    },
+    // Baris tahun saldo fiskal (F-109-V P4).
+    assetFiscalYearRow: {
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
     assetGroup: {
       create: vi.fn(),
@@ -164,6 +173,8 @@ import {
   updateAsset,
   deleteAsset,
   disposeAsset,
+  upsertAssetUsageRecord,
+  generateAssetFiscalYearRows,
   createAssetGroup,
   updateAssetGroup,
   deleteAssetGroup,
@@ -1371,6 +1382,60 @@ describe("disposeAsset", () => {
     expect(prismaMock.journal.create).toHaveBeenCalled()
   })
 
+  it("penjaga POSTED: gainLoss dari jurnal POSTED, bukan currentValue basi (t_d34601a0)", async () => {
+    // Jurnal: perolehan 1000 (akun 200), akumulasi POSTED 300 (akun 201)
+    // -> nilai buku jurnal 700. Cache basi: purchaseCost=1000, currentValue=900
+    // (jalur legacy akan memberi gainLoss 700-900=-200). proceeds=700 -> 0.
+    process.env.FIXED_ASSET_ACCOUNT_ID = "200"
+    process.env.ACCUMULATED_DEPRECIATION_ACCOUNT_ID = "201"
+    process.env.ASSET_DISPOSAL_GAINLOSS_ACCOUNT_ID = "202"
+    process.env.ASSET_CASH_ACCOUNT_ID = "203"
+    prismaMock.asset.findUniqueOrThrow.mockResolvedValue({
+      id: 100,
+      name: "Laptop",
+      code: "AST-001",
+      status: "active",
+      purchaseCost: 1000,
+      currentValue: 900,
+    })
+    prismaMock.journal.findMany.mockResolvedValue([
+      {
+        referenceType: "ASSET_ACQUISITION",
+        entries: [{ accountId: 200, debit: 1000, credit: 0 }],
+      },
+      {
+        referenceType: "ASSET_DEPRECIATION_202601",
+        entries: [{ accountId: 201, debit: 0, credit: 300 }],
+      },
+    ])
+    prismaMock.journal.findFirst.mockResolvedValue({ id: 1 })
+
+    const res = await disposeAsset(fd({ assetId: "100", proceeds: "700" }))
+
+    expect(res.success).toBe(true)
+    expect(res.gainLoss).toBe(0)
+    // Argumen kueri wajib dijaga: sabotase POSTED->DRAFT harus merah di sini.
+    expect(prismaMock.journal.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          referenceId: 100,
+          status: "POSTED",
+          deletedAt: null,
+        }),
+      }),
+    )
+    const createCall = prismaMock.journal.create.mock.calls.at(-1)?.[0]
+    const entries = createCall.data.entries.create as Array<{
+      accountId: number
+      debit: { toString(): string }
+      credit: { toString(): string }
+    }>
+    const accum = entries.find((e) => e.accountId === 201)
+    const fixed = entries.find((e) => e.accountId === 200)
+    expect(String(accum?.debit)).toBe("300")
+    expect(String(fixed?.credit)).toBe("1000")
+  })
+
   it("handles error on dispose asset", async () => {
     prismaMock.asset.findUniqueOrThrow.mockRejectedValue(new Error("db err"))
     const res = await disposeAsset(fd({ assetId: "100" }))
@@ -1383,5 +1448,171 @@ describe("disposeAsset", () => {
     ;(redirectErr as any).digest = "NEXT_REDIRECT_TEST"
     prismaMock.asset.findUniqueOrThrow.mockRejectedValue(redirectErr)
     await expect(disposeAsset(fd({ assetId: "100" }))).rejects.toThrow(redirectErr)
+  })
+})
+
+describe("upsertAssetUsageRecord (F-118-V Putusan 2b)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    requirePermissionMock.mockResolvedValue({ id: 7 })
+    prismaMock.assetUsageRecord.upsert.mockResolvedValue({ id: 1 })
+    prismaMock.journal.findFirst.mockResolvedValue(null)
+  })
+
+  const usageFd = (over: Record<string, string> = {}) =>
+    fd({
+      assetId: "100",
+      periodYear: "2026",
+      periodMonth: "10",
+      actualUnits: "120",
+      sourceName: "Laporan produksi Oktober",
+      ...over,
+    })
+
+  it("records named document for UOP asset", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100,
+      depreciationMethod: "units_of_production",
+    })
+    const res = await upsertAssetUsageRecord(usageFd())
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.assetUsageRecord.upsert.mock.calls[0][0]
+    expect(arg.where.assetId_periodYear_periodMonth).toEqual({
+      assetId: 100,
+      periodYear: 2026,
+      periodMonth: 10,
+    })
+    expect(arg.create.actualUnits.toString()).toBe("120")
+    expect(arg.create.sourceName).toBe("Laporan produksi Oktober")
+    expect(arg.create.createdBy).toBe(7)
+  })
+
+  it("rejects asset not found and non-UOP asset", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(null)
+    expect((await upsertAssetUsageRecord(usageFd()))?.success).toBe(false)
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100,
+      depreciationMethod: "straight_line",
+    })
+    const res = await upsertAssetUsageRecord(usageFd())
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Unit Produksi")
+    expect(prismaMock.assetUsageRecord.upsert).not.toHaveBeenCalled()
+  })
+
+  it("rejects overwrite after period journal posted", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue({
+      id: 100,
+      depreciationMethod: "units_of_production",
+    })
+    prismaMock.journal.findFirst.mockResolvedValue({ id: 9 })
+    const res = await upsertAssetUsageRecord(usageFd())
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("reversal")
+    expect(prismaMock.assetUsageRecord.upsert).not.toHaveBeenCalled()
+  })
+
+  it("fails validation without source name", async () => {
+    const res = await upsertAssetUsageRecord(usageFd({ sourceName: "" }))
+    expect(res?.success).toBe(false)
+  })
+})
+
+describe("generateAssetFiscalYearRows (F-109-V P4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    requirePermissionMock.mockResolvedValue({ id: 7 })
+    prismaMock.assetFiscalYearRow.createMany.mockResolvedValue({ count: 2 })
+  })
+
+  const genFd = (over: Record<string, string> = {}) =>
+    fd({ assetId: "100", throughYear: "2024", ...over })
+
+  function fiscalAsset(over: Record<string, unknown> = {}) {
+    return {
+      id: 100,
+      purchaseCost: new Prisma.Decimal(12_000_000),
+      purchaseDate: new Date(Date.UTC(2023, 0, 15)),
+      category: {
+        fiscalMethod: "declining_balance",
+        taxGroupCode: "GROUP_1",
+        taxTypeListed: true,
+        taxDjpDetermination: false,
+      },
+      fiscalYearRows: [],
+      ...over,
+    }
+  }
+
+  it("F109-6: membekukan baris baru snapshot SM; replay = nol baris baru", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(fiscalAsset())
+    const res = await generateAssetFiscalYearRows(genFd())
+    expect(res).toEqual({ success: true, created: 2, existing: 0 })
+    const arg = prismaMock.assetFiscalYearRow.createMany.mock.calls[0][0]
+    expect(arg.skipDuplicates).toBe(true)
+    expect(arg.data.map((r: { taxYear: number }) => r.taxYear)).toEqual([2023, 2024])
+    expect(arg.data[0].depreciation.toString()).toBe("6000000")
+    expect(arg.data[0].method).toBe("declining_balance")
+
+    // Replay: baris 2023+2024 sudah terbit -> tidak ada createMany.
+    prismaMock.assetFiscalYearRow.createMany.mockClear()
+    prismaMock.asset.findUnique.mockResolvedValue(fiscalAsset({
+      fiscalYearRows: [{ taxYear: 2023 }, { taxYear: 2024 }],
+    }))
+    const replay = await generateAssetFiscalYearRows(genFd())
+    expect(replay).toEqual({ success: true, created: 0, existing: 2 })
+    expect(prismaMock.assetFiscalYearRow.createMany).not.toHaveBeenCalled()
+  })
+
+  it("F109-4: metode fiskal NULL ditolak berisik, nol tulis", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(fiscalAsset({
+      category: { fiscalMethod: null, taxGroupCode: "GROUP_1", taxTypeListed: true, taxDjpDetermination: false },
+    }))
+    const res = await generateAssetFiscalYearRows(genFd())
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("belum dipilih")
+    expect(prismaMock.assetFiscalYearRow.createMany).not.toHaveBeenCalled()
+  })
+
+  it("F109-10: saldo pembuka berlabel opening; tanpa pasangan ditolak validasi", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(fiscalAsset())
+    const res = await generateAssetFiscalYearRows(genFd({ openingBalance: "5000000", openingYear: "2024" }))
+    expect(res?.success).toBe(true)
+    const arg = prismaMock.assetFiscalYearRow.createMany.mock.calls[0][0]
+    expect(arg.data).toHaveLength(1)
+    expect(arg.data[0].source).toBe("opening")
+    expect(arg.data[0].openingBalance.toString()).toBe("5000000")
+
+    const unpaired = await generateAssetFiscalYearRows(genFd({ openingBalance: "5000000" }))
+    expect(unpaired?.success).toBe(false)
+  })
+
+  it("aset tidak ditemukan ditolak", async () => {
+    prismaMock.asset.findUnique.mockResolvedValue(null)
+    expect((await generateAssetFiscalYearRows(genFd()))?.success).toBe(false)
+  })
+})
+
+describe("assetCategorySchema fiscalMethod (F-109-V P1)", () => {
+  it("F109-3: bangunan + saldo menurun ditolak saat simpan", () => {
+    const bad = assetCategorySchema.safeParse({
+      name: "Gedung",
+      taxGroupCode: "BUILDING_PERMANENT",
+      fiscalMethod: "declining_balance",
+    })
+    expect(bad.success).toBe(false)
+    const ok = assetCategorySchema.safeParse({
+      name: "Gedung",
+      taxGroupCode: "BUILDING_PERMANENT",
+      fiscalMethod: "straight_line",
+    })
+    expect(ok.success).toBe(true)
+  })
+
+  it("metode di luar daftar sah ditolak; kosong = belum dipilih (sah)", () => {
+    expect(assetCategorySchema.safeParse({ name: "X", fiscalMethod: "units_of_production" }).success).toBe(false)
+    expect(assetCategorySchema.safeParse({ name: "X" }).success).toBe(true)
   })
 })

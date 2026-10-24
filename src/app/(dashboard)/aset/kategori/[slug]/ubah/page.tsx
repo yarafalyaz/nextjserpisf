@@ -56,10 +56,14 @@ export default async function EditPage({
           taxGroupCode: data.taxGroupCode,
           taxTypeListed: data.taxTypeListed,
           taxDjpDetermination: data.taxDjpDetermination,
+          fiscalMethod: data.fiscalMethod,
           assetAccountId: data.assetAccountId,
           accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId,
           depreciationExpenseAccountId: data.depreciationExpenseAccountId,
           gainLossAccountId: data.gainLossAccountId,
+          revaluationSurplusAccountId: data.revaluationSurplusAccountId,
+          impairmentLossAccountId: data.impairmentLossAccountId,
+          accumulatedImpairmentAccountId: data.accumulatedImpairmentAccountId,
         }}
       />
     </div>

@@ -66,7 +66,7 @@ describe("WorkOrderQueueCard F-2026-10-20-28(a)", () => {
     const { container, root } = renderCard(<WorkOrderQueueCard queue={queue} />)
     const links = Array.from(container.querySelectorAll("a"))
     const wa = links.find((a) => (a.textContent ?? "").includes("Kirim WA"))
-    expect(wa?.getAttribute("aria-label")).toBe("Kirim WA ke pelanggan")
+    expect(wa?.getAttribute("aria-label")).toBe("Kirim WA")
     const href = wa?.getAttribute("href") ?? ""
     expect(href.startsWith("https://wa.me/6281234567890?text=")).toBe(true)
     const text = decodeURIComponent(href.split("text=")[1] ?? "")

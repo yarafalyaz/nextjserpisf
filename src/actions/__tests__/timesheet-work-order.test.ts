@@ -99,7 +99,7 @@ describe("createTimesheet konteks (F-2026-10-21-019)", () => {
     expect(mocks.prismaMock.timesheet.create).not.toHaveBeenCalled()
   })
 
-  it.each(["completed", "cancelled"])("catat baru ke WO %s ditolak menyebut status", async (status) => {
+  it.each(["completed", "cancelled", "closed"])("catat baru ke WO %s ditolak menyebut status", async (status) => {
     mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 7, status })
 
     const res = await createTimesheet(fd({ ...BASE, workOrderId: "7" }))
@@ -180,6 +180,17 @@ describe("updateTimesheet konteks (F-2026-10-21-019)", () => {
 
     expect(res.success).toBe(false)
     expect(res.error).toContain("sudah ditarik menjadi 1 baris biaya produksi")
+    expect(mocks.prismaMock.timesheet.update).not.toHaveBeenCalled()
+  })
+
+  // AC-CLOSE-1 sisi edit: timesheet dipindah ke WO closed ditolak server.
+  it("edit ke WO closed ditolak menyebut closed, 0 baris tertulis", async () => {
+    mocks.prismaMock.workOrder.findUnique.mockResolvedValue({ id: 7, status: "closed" })
+
+    const res = await updateTimesheet(1, fd({ ...BASE, workOrderId: "7" }))
+
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("closed")
     expect(mocks.prismaMock.timesheet.update).not.toHaveBeenCalled()
   })
 })
