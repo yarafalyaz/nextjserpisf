@@ -25996,3 +25996,144 @@ F-2026-10-25-006-S — Paparan diskon efektif dokumen penjualan. Status: SPEC SE
 - PR #766 MERGED: squash `ec8f31d5c0c1685121f09c30a69ecc7d3c914e36`, head final persis `af022a6af864c204c2f93fe682bc73d0f68a71cf` (25 Okt 2026 01:28 WIB). Isi: kartu progres tertimbang (earned value) read-only di detail proyek — `src/components/reports/project-earned-value-card.tsx`, integrasi `src/app/(dashboard)/proyek/[slug]/page.tsx`, builder/fixtures/tes EV. Nol skema/migrasi/package.
 - Gerbang: QA LOLOS ISI head `22976e71` (komentar 6387789730) + konfirmasi head final LOLOS SIAP MERGE (komentar 6387914787, kartu t_8a29588e) — patch-id efektif identik, diff ternormalisasi 25.381 byte identik, blob 7/7 sama, tes fokus 30/30. CI exact-head af022a6a: Detect/Lint/Unit/DB Integration/Build Next.js/SonarCloud SUCCESS; Docker Image Build SKIPPED sah (gating path #767, PR tidak menyentuh Dockerfile/compose/CI/dependensi).
 - Status G2 F-031: TERTUTUP. Kartu EV live di main; konsumen Frontend diberitahu (kartu lanjut UI bila ada penyesuaian tampilan). Fase read-only sesuai spec 22 Okt 2026 — CPI level proyek + SPIw basis waktu proyek berlabel, bobot tahap dari RAB terkunci, tanpa jurnal EV/penagihan termin. Vonis Accountant tetap wajib bila EV kelak dipakai penagihan.
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-007-S: antrean persetujuan HR tertunda (pengajuan cuti + lembur `pending` bagi approver, scope fail-closed)
+
+> **Slot**: F-2026-10-25-007-S. Diperiksa bentrok 2026-10-25 01:04 WIB vs `origin/main` (`2f314a76`): grep `F-2026-10-25-007` di backlog+board = 0; ID 003/004/005/006 terpakai PR Business terbuka (#755/#758/#762/#769), 007 bebas. Diverifikasi sebelum tulis, bukan slot tetap.
+>
+> **Gap baru domain (h) HR** — bukan F-ID lama. Bukan duplikat F-2026-10-22-085-S (status kepegawaian master), bukan F-2026-10-24-099-S (probation/PKWT), bukan halaman saldo cuti existing (`/sdm/cuti/saldo` — saldo hak, bukan antrean keputusan). Dokumen saja; tanpa kode/schema/migrasi. Penomoran mengikuti konvensi repo: nomor urut backlog, bukan nomor bot/peran.
+
+### 0. Ringkasan putusan yang diminta
+
+Karyawan mengajukan cuti/lembur (status `pending`), tetapi approver tidak punya satu permukaan kerja yang menjawab: "pengajuan mana menunggu keputusan saya, sudah berapa lama, dan mana yang tanggal mulai/lemburnya paling dekat?" Hari ini approver membuka daftar transaksional `/sdm/cuti` / `/sdm/lembur`, menyaring chip `pending` manual, tanpa umur, tanpa tahap kedekatan tanggal. Akibat nyata bengkel: cuti besok baru diputus hari ini, lembur kendaraan pelanggan telat disetujui. Spec ini membekukan: (A) builder baca-saja status turunan untuk LeaveRequest + OvertimeRequest `pending`, (B) antrean kerja approver di permukaan HR existing, (C) kata UI verbatim. Ambang umur = `USULAN`; gerbang inti dibuka Lead.
+
+### 1. Inventarisasi terverifikasi (origin/main 2f314a76, 2026-10-25)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `LeaveRequest` (`prisma/schema.prisma:3309`): employeeId, type, startDate, endDate, reason, status default `pending`, approvedBy, rejectionReason, createdAt/updatedAt. Indeks status ada (`idx_leave_requests_status`).
+- Model `OvertimeRequest` (`prisma/schema.prisma:3404`): employeeId, projectId nullable, date, hours Decimal(5,2), totalHours/mealHours/billableHours nullable, calculatedValue Decimal(15,2) nullable, status default `pending`, approvedBy/approvedAt/supervisorApprovedAt.
+- Buat cuti: `createLeaveRequest` (`src/actions/hrm.actions.ts:849`) — izin `create_leave_requests`, scope `getHrScope` ditegakkan (self hanya diri sendiri, department se-departemen), penjaga overlap + kuota tahunan 12 hari tipe `annual` dalam satu transaksi berkunci baris karyawan, lalu `requestApprovalIfConfigured("LeaveRequest", ...)` menautkan ApprovalWorkflow generik bila terkonfigurasi.
+- Buat lembur: `createOvertimeRequest` (`hrm.actions.ts:992`) — izin `create_overtime_requests` + `assertHrEmployeeAccess`, status `pending`, `requestApprovalIfConfigured("OvertimeRequest", ...)`.
+- Putus lembur: `approveOvertime` (`hrm.actions.ts:1042`) — izin `approve_overtime_requests`; menerima status `pending` maupun `approved` (rantai ApprovalWorkflow bisa sudah memfinalkan status lebih dulu), klaim atomik status in [pending, approved], menulis approvedBy + approvedAt. Antrean TIDAK boleh mengubah semantik dua-jalur ini.
+- Rujukan generik: `src/actions/approval.actions.ts:35-42` mendaftarkan `LeaveRequest` dan `OvertimeRequest` sebagai referenceType ApprovalWorkflow. Keputusan akhir tetap milik rantai itu + aksi domain; antrean bukan approver kedua.
+- Izin nyata (`src/lib/auth/module-catalog.generated.ts:288-292,305-310`): `view/create/edit/delete/approve_leave_requests`; `view_overtime`, `approve_overtime`, `create/edit/delete/approve_overtime_requests`. Halaman cuti digerbang `view_leave_requests` (`src/app/(dashboard)/sdm/cuti/page.tsx:23`), lembur `view_overtime` (`src/app/(dashboard)/sdm/lembur/page.tsx:25`).
+- Scope HR fail-closed: `getHrScope` (`src/lib/auth/hr-scope.ts`) — all (HR/finance/admin/ga), department (kepala_bengkel), team (rantai managerId), self; roles hilang/rusak = self employeeId -1 (tidak cocok apa pun). Halaman cuti/lembur existing sudah memakai `hrScopeWhere(scope)` (page.tsx:26 keduanya). Antrean WAJIB mewarisi scope yang sama, bukan izin halaman saja.
+- Halaman saldo cuti existing `/sdm/cuti/saldo` + `getAllLeaveBalances` (`hrm.actions.ts:3293`): menjawab sisa hak per karyawan, BUKAN antrean keputusan pending. Tidak diduplikasi.
+
+Belum ada / gap (bukti grep run ini):
+- Builder/antrean approver: grep `leave|overtime|lembur|cuti` di nama berkas `src/lib/reports/*` = 0 berkas; nol read-model menghitung umur `pending` atau tahap kedekatan tanggal mulai untuk approver.
+- Daftar existing hanya chip status: `/sdm/cuti/page.tsx:62` chip `["", "pending", "approved", "rejected"]`, urut `createdAt desc` polos — pengajuan cuti mulai besok tenggelam di bawah pengajuan baru yang mulai bulan depan.
+
+Benchmark resmi (akses 2026-10-25):
+- Zahir HR/ERP Approval Management: pengaturan persetujuan cuti, lembur, reimburse, ganti jadwal "satu jenjang atau lebih dari itu" dari karyawan ke level di atasnya (BENCHMARK: https://zahirerp.com/id/all-features-of-zahir-products/); Zahir HR memasarkan "Proses persetujuan cuti dan reimburse multi layer" (BENCHMARK: https://zahir.co.id/hr/).
+- Accurate Online: pengaturan persetujuan terpusat per transaksi ada (BENCHMARK: https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/cara-mengaktifkan-pengaturan-persetujuan/ — isi halaman tidak terambil alat ekstrak run ini; diklaim sebatas keberadaan fitur pengaturan persetujuan, bukan rincian antrean cuti). Antrean approver cuti/lembur per umur di help Accurate = belum terverifikasi run ini.
+
+### 2. Workflow specification
+
+Aktor: Approver HR (pemegang `approve_leave_requests` / `approve_overtime_requests` dalam scope-nya), Karyawan (pengaju, baca status miliknya), Lead (putus gerbang + angka ambang).
+
+Dokumen masuk: LeaveRequest + OvertimeRequest berstatus `pending` existing + rantai ApprovalWorkflow tertaut bila terkonfigurasi. Dokumen keluar: tidak ada dokumen baru tahap 1; antrean baca-saja + tautan ke aksi keputusan existing (approve/reject lewat jalur existing per dokumen).
+
+Alur:
+1. Karyawan membuat pengajuan lewat `createLeaveRequest`/`createOvertimeRequest` existing; dokumen `pending` masuk antrean spec ini dalam scope approver.
+2. Antrean menurunkan tahap dari (jenis, createdAt, startDate/date, tanggal acuan WIB): pengajuan tampil dengan umur menunggu + sisa hari ke tanggal mulai/lembur.
+3. Approver memutuskan lewat aksi existing per dokumen (rantai ApprovalWorkflow dan/atau `approveOvertime`); antrean tidak memutuskan apa pun.
+4. Sesudah status bukan `pending` (approved/rejected/keputusan rantai), baris keluar antrean permanen.
+
+### 3. Status-transition matrix (status turunan, BUKAN kolom baru)
+
+Status antrean diturunkan dari (status dokumen, createdAt, startDate/date, tanggal acuan WIB). Tidak ada transisi yang menulis DB.
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| (belum ada) | createLeaveRequest/createOvertimeRequest existing | pending (masuk antrean: MENUNGGU_KEPUTUSAN) | izin create existing + scope pengaju |
+| pending | umur menunggu melewati ambang terpilih (Q-HP-2) | MENGENDAP (tahap antrean) | ambang tetap terpilih; turunan baca saja |
+| pending cuti | tanggal mulai <= hari acuan WIB + ambang dekat (Q-HP-2) | MENDEKATI_MULAI (pendamping; bisa bersamaan MENGENDAP) | semantik hari WIB existing |
+| pending lembur | tanggal lembur < hari acuan WIB | TANGGAL_LEWAT_BELUM_DIPUTUS (pendamping) | fakta tanggal; keputusan tetap jalur existing |
+| pending | approve/reject existing berhasil (rantai/aksi domain) | approved/rejected (keluar antrean) | izin approve existing + scope; SoD rantai existing |
+| semua tahap | dokumen dihapus lewat aksi existing | keluar antrean | izin delete existing; antrean tidak menambah jalur hapus |
+
+Catatan jujur: tahap turunan bukan status dokumen; dokumen tetap `pending` sampai keputusan existing berjalan. Untuk lembur, status `approved` hasil rantai ApprovalWorkflow sebelum `approveOvertime` final BUKAN anggota antrean — antrean hanya membaca `pending` persis (BR-HP-02).
+
+### 4. Role/permission matrix (key nyata katalog :288-292,305-310)
+
+| Aksi | Approver dalam scope | Di luar scope / tanpa izin |
+|---|---|---|
+| Lihat antrean cuti pending | `view_leave_requests` + `approve_leave_requests` + scope department/team/all | ditolak / baris tidak tampil |
+| Lihat antrean lembur pending | `view_overtime` + `approve_overtime_requests` + scope sama | ditolak / baris tidak tampil |
+| Buka detail pengajuan dari antrean | izin view dokumen terkait | ditolak |
+| Putuskan dari antrean | aksi approve/reject existing per dokumen (bukan aksi antrean) | ditolak oleh penjaga existing |
+| Setujui angka ambang umur/kedekatan | — (keputusan pemilik proses di luar sistem) | Lead |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-HP-1 Lead). Alasan pembatasan ganda (view + approve): antrean adalah permukaan kerja approver, bukan daftar umum; karyawan self-scope tetap melihat pengajuannya di daftar existing, bukan di antrean ini. Data gaji/nominal TIDAK tampil: `calculatedValue` lembur dan data payroll apa pun di luar antrean tahap 1 (BR-HP-08).
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti/sumber |
+|---|---|---|---|
+| BR-HP-01 | Cakupan antrean tahap 1 = LeaveRequest + OvertimeRequest berstatus persis `pending`, dalam `getHrScope` pemanggil. Status lain (approved/rejected) bukan anggota; daftar transaksional existing tetap tempat riwayat. | USULAN | schema :3309/:3404 status default pending; hr-scope.ts fail-closed |
+| BR-HP-02 | Lembur yang rantainya sudah `approved` oleh ApprovalWorkflow (menunggu finalisasi `approveOvertime`) TIDAK masuk antrean pending; menampilkannya sebagai pending = salah label. Antrean membaca status dokumen apa adanya. | TERVERIFIKASI-KODE (semantik) + USULAN | approveOvertime hrm.actions.ts:1042 komentar dua-jalur |
+| BR-HP-03 | Scope diterapkan di loader (server), bukan penyaringan UI: self = hanya pengajuan sendiri pun TIDAK masuk mode approver (tanpa izin approve baris kosong); department/team/all mengikuti `hrScopeWhere` existing. Fail-closed: scope rusak = nol baris. | TERVERIFIKASI-KODE (pola) + USULAN | hr-scope.ts; page.tsx:26 cuti/lembur |
+| BR-HP-04 | Umur menunggu = hari kalender WIB sejak `createdAt` dokumen. `updatedAt` dilarang sebagai sumber umur (berubah oleh edit apa pun). | USULAN | pola WIB antrean repo (quotation-followup) |
+| BR-HP-05 | Tahap turunan murni: MENUNGGU_KEPUTUSAN -> MENGENDAP (umur > ambang Q-HP-2); pendamping MENDEKATI_MULAI (cuti) / TANGGAL_LEWAT_BELUM_DIPUTUS (lembur) bisa bersamaan. Urutan tampil: pendamping tanggal paling parah dulu, lalu MENGENDAP umur terbesar, lalu MENUNGGU umur terbesar; seri createdAt lalu id. Builder/loader DILARANG menulis dokumen/rantai apa pun. | USULAN | pola builder antrean repo |
+| BR-HP-06 | Antrean TIDAK memutus, mengubah langkah, atau melewati ApprovalWorkflow: tombol keputusan memanggil aksi/rantai existing per dokumen; kegagalan penjaga existing (termasuk SoD rantai) tampil apa adanya, bukan ditelan antrean. | TERVERIFIKASI-KODE (rantai) + USULAN | approval.actions.ts:35-42; approval-workflow.service.ts |
+| BR-HP-07 | Cuti menampilkan type, startDate, endDate, alasan ringkas verbatim; kuota/saldo hak TIDAK dihitung ulang antrean (sumber saldo = halaman saldo existing). Lembur menampilkan date, hours verbatim; proyek tertaut tampil sebagai label fakta, bukan bukti beban biaya. | TERVERIFIKASI-KODE (kolom) + USULAN | schema :3309/:3404; getAllLeaveBalances :3293 |
+| BR-HP-08 | Nominal lembur `calculatedValue` dan nominal gaji apa pun TIDAK tampil di antrean tahap 1 (data payroll dilindungi permission payroll + scope; antrean approver operasional bukan permukaan nominal). Menampilkan nominal = di luar spec, butuh putusan terpisah. | USULAN | mandat authorization payroll profil ini |
+| BR-HP-09 | UI menampilkan tahap/umur/sisa hari verbatim server; UI dilarang menghitung umur/tanggal sendiri dan dilarang menyembunyikan baris TANGGAL_LEWAT_BELUM_DIPUTUS. | USULAN | pola konsumen read-model repo |
+| BR-HP-10 | Tidak ada notifikasi/pengingat otomatis dan tidak ada auto-approve/auto-reject tahap 1; antrean pasif di permukaan HR existing. Pengingat aktif = putusan Lead Q-HP-4. | USULAN | — |
+| BR-HP-11 | Nol dampak uang/jurnal tahap 1: antrean tidak membuat slip, jurnal, atau mengubah `calculatedValue`; angka jam tampil apa adanya sebagai jam pengajuan, bukan upah. | TERVERIFIKASI-KODE (jalur payroll terpisah) | model Payroll/PayrollComponent schema |
+| BR-HP-12 | Nama karyawan tampil dari relasi employee existing; departemen tampil bila loader memuatnya tanpa query per baris (massal anti-N+1). Karyawan tanpa departemen tampil `—`, bukan ditebak. | USULAN | relasi Employee schema |
+
+### 6. Feature matrix
+
+| Kemampuan | Accurate Online | Zahir HR/ERP | ISF (Silengkap) |
+|---|---|---|---|
+| Pengajuan cuti/lembur dengan jalur persetujuan berjenjang | Pengaturan persetujuan terpusat ada (BENCHMARK URL §1; rincian antrean belum terverifikasi) | Ya — Approval Management cuti/lembur/reimburse satu/multi jenjang (BENCHMARK: https://zahirerp.com/id/all-features-of-zahir-products/) | Ada — status pending + ApprovalWorkflow generik tertaut (TERVERIFIKASI-KODE approval.actions.ts:35-42) |
+| Antrean kerja approver: pending terurut urgensi/umur | Belum terverifikasi run ini | Belum terverifikasi run ini (fitur persetujuan ada; bentuk antrean tidak diklaim) | ABSEN (gap spec ini): hanya chip status di daftar transaksional |
+| Saldo hak cuti per karyawan | Belum terverifikasi run ini | Kebijakan+pengajuan cuti termonitor (BENCHMARK URL sama) | Ada — /sdm/cuti/saldo + getAllLeaveBalances (TERVERIFIKASI-KODE) |
+
+### 7. Acceptance criteria (falsifikasi)
+
+Backend (sesudah gerbang Lead dibuka):
+- AC-HP-B1: fixture cuti pending dalam scope approver muncul; sesudah keputusan existing (approved/rejected), baris hilang. Membalik saringan status = tes MERAH.
+- AC-HP-B2: pengajuan karyawan di luar scope (departemen/tim lain) bocor ke antrean = MERAH; scope self tanpa izin approve melihat baris orang lain = MERAH; scope rusak menghasilkan baris apa pun = MERAH.
+- AC-HP-B3: lembur berstatus `approved` rantai (belum finalisasi) TIDAK tampil sebagai pending (BR-HP-02). Melabeli pending = MERAH.
+- AC-HP-B4: umur dihitung dari `createdAt`, bukan `updatedAt`: edit pengajuan pending (updatedAt berubah) tidak mengnolkan umur. Memakai updatedAt = MERAH.
+- AC-HP-B5: cuti mulai besok WIB tertanda MENDEKATI_MULAI sesuai ambang terpilih; lembur bertanggal kemarin tertanda TANGGAL_LEWAT_BELUM_DIPUTUS; membalik perbandingan hari = MERAH.
+- AC-HP-B6: loader/builder menulis LeaveRequest/OvertimeRequest/Approval apa pun = MERAH; dua panggilan bersamaan tidak mengubah data.
+- AC-HP-B7: respons antrean tidak memuat `calculatedValue`/nominal gaji apa pun (grep payload). Memuat nominal = MERAH.
+
+Frontend (konsumen):
+- AC-HP-F1: tahap/umur/sisa hari tampil verbatim server; aritmetika tanggal di komponen antrean = MERAH (grep hitung tanggal).
+- AC-HP-F2: tombol keputusan hanya memanggil aksi/rantai existing per dokumen; UI memutus status sendiri = MERAH. Sebelum commit: grep e2e selector cuti/lembur terdampak, sinkronkan commit yang sama.
+
+QA: AC-HP-B1..B7 + AC-HP-F1..F2 atas head Backend/Frontend persis; tambahan: pemegang izin view tanpa approve tidak melihat antrean approver (BR-HP-03/§4).
+
+Edge cases: EC-1 cuti pending yang startDate-nya sudah lewat tanpa keputusan (tetap tampil TANGGAL pendamping paling parah; antrean tidak auto-reject). EC-2 lembur pending untuk tanggal hari ini (belum lewat; tahap umur saja). EC-3 pengajuan oleh karyawan yang kemudian nonaktif (baris tetap tampil apa adanya; keputusan tetap jalur existing — antrean tidak menebak kelayakan). EC-4 dua pengajuan karyawan sama beda jenis bersamaan (dua baris terpisah per dokumen; tidak digabung). EC-5 rantai ApprovalWorkflow tidak terkonfigurasi untuk dokumen lama (pending tetap anggota antrean; keputusan memakai aksi domain existing). EC-6 approver adalah pengaju dokumen yang sama (penjaga SoD existing yang menolak; antrean menampilkan kegagalan apa adanya, BR-HP-06). EC-7 createdAt di batas tengah malam WIB (umur hari kalender WIB, bukan selisih 24 jam UTC).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-HP-1 (Lead): buka inti antrean tahap 1 sekarang dengan gerbang ganda view+approve existing (tanpa key baru)?
+- Q-HP-2 (Lead): ambang MENGENDAP (usul tetap 3 hari kalender sejak createdAt) + ambang MENDEKATI_MULAI cuti (usul tetap mulai <= 3 hari kalender ke depan), konstanta builder bernama, tanpa konfigurasi bebas tahap 1. Angka USULAN sampai diputus.
+- Q-HP-3 (Backend): fisik loader massal gabungan dua jenis dokumen (bentuk baris antrean tunggal vs dua sub-antrean per jenis), pemuatan departemen anti-N+1, dan pasangan scope per jenis.
+- Q-HP-4 (Lead): pengingat aktif (notifikasi approver) ditunda tahap 1 — sahkan.
+- Accountant: TIDAK diminta tahap ini — nol nominal/jurnal tampil (BR-HP-08/11). Dipanggil hanya bila kelak nominal lembur diusulkan tampil.
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-007-S | Spec ini (dokumen) | Business | — |
+| (turunan) builder murni + loader massal antrean pending HR | Backend | Q-HP-1/2 diputus Lead; fisik Q-HP-3 | — |
+| (turunan) UI antrean approver di permukaan HR existing | Frontend | kontrak Backend stabil; kata §3/§5 verbatim | — |
+| (turunan) falsifikasi AC-HP-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Auto-approve/auto-reject pengajuan mengendap: keputusan cuti/lembur tetap manusia lewat rantai existing; umur panjang bukan persetujuan.
+- Menampilkan nominal lembur/gaji di antrean: di luar authorization payroll tahap ini (BR-HP-08).
+- Menggabung antrean ini dengan antrean penawaran/piutang (domain beda, scope beda): permukaan HR sendiri.
+- Kolom/status dokumen baru: status turunan dari kolom existing cukup; migrasi hanya bila Backend Q-HP-3 membuktikan tidak cukup.
+
+F-2026-10-25-007-S — Antrean persetujuan HR tertunda. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-HP-1/2/4 + fisik Backend Q-HP-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
+
