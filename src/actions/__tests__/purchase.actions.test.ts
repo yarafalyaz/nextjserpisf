@@ -846,6 +846,17 @@ describe("Vendor Bill Actions", () => {
     const res = await actions.deleteVendorBill(1)
     expect(res?.success).toBe(true)
   })
+
+  it("deleteVendorBill sweeps vendor_bill attachments in the same tx (R-13)", async () => {
+    mocks.prismaMock.transactionAttachment.findMany.mockResolvedValueOnce([
+      { fileUrl: "/api/attachments/vendor_bill/vendor_bill-1-x.pdf", referenceType: "vendor_bill" },
+    ])
+    const res = await actions.deleteVendorBill(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.transactionAttachment.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "vendor_bill", referenceId: 1 },
+    })
+  })
 })
 
 describe("Vendor Payment Actions", () => {
@@ -957,6 +968,17 @@ describe("Vendor Payment Actions", () => {
   it("deleteVendorPayment succeeds", async () => {
     const res = await actions.deleteVendorPayment(1)
     expect(res?.success).toBe(true)
+  })
+
+  it("deleteVendorPayment sweeps vendor_payment attachments in the same tx (R-13)", async () => {
+    mocks.prismaMock.transactionAttachment.findMany.mockResolvedValueOnce([
+      { fileUrl: "/api/attachments/vendor_payment/vendor_payment-1-x.pdf", referenceType: "vendor_payment" },
+    ])
+    const res = await actions.deleteVendorPayment(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.transactionAttachment.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "vendor_payment", referenceId: 1 },
+    })
   })
 })
 

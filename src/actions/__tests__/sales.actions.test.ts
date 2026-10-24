@@ -1335,6 +1335,17 @@ describe("Sales Payment Actions (legacy happy paths)", () => {
     const res = await actions.deleteSalesPayment(1)
     expect(res?.success).toBe(true)
   })
+  it("deleteSalesPayment sweeps sales_payment attachments in the same tx (R-13)", async () => {
+    mocks.prismaMock.salesPayment.findUniqueOrThrow.mockResolvedValue({ id: 1, salesInvoiceId: 1 })
+    mocks.prismaMock.transactionAttachment.findMany.mockResolvedValueOnce([
+      { fileUrl: "/api/attachments/sales_payment/sales_payment-1-x.pdf", referenceType: "sales_payment" },
+    ])
+    const res = await actions.deleteSalesPayment(1)
+    expect(res?.success).toBe(true)
+    expect(mocks.prismaMock.transactionAttachment.deleteMany).toHaveBeenCalledWith({
+      where: { referenceType: "sales_payment", referenceId: 1 },
+    })
+  })
 })
 
 describe("Sales Return Actions (legacy happy paths)", () => {
