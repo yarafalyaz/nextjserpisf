@@ -98,6 +98,8 @@ const DEFAULT_SYSTEM_SETTINGS = {
   // F-2026-10-24-132-V: mapping kompensasi PKWT default kosong (fail-closed).
   pkwtCompensationExpenseAccountId: null,
   pkwtCompensationPayableAccountId: null,
+  // F-2026-10-24-135-V: pendapatan besi tua default kosong (fail-closed).
+  scrapSaleIncomeAccountId: null,
 };
 
 /**
