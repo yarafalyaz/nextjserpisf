@@ -2,8 +2,14 @@
  * Loader read-model kompensasi PKWT (F-2026-10-24-132-V Putusan 5):
  * rekonsiliasi 3 arah (peristiwa ↔ GL 210207 ↔ slip terbayar) + daftar
  * belum dibayar. Pure builder: pkwt-compensation.ts.
+ *
+ * Data terikat karyawan selalu dibatasi scope HR pemanggil. GL 210207
+ * adalah akun perusahaan tanpa dimensi karyawan, jadi tidak bisa dibagi
+ * per scope; untuk scope terbatas, anomali GL-vs-peristiwa ditahan karena
+ * membandingkan saldo perusahaan dengan subledger sebagian selalu semu.
  */
 import { prisma } from "@/lib/db/prisma"
+import { hrScopeWhere, type HrScope } from "@/lib/auth/hr-scope"
 import {
   buildPkwtCompensationReport,
   type PkwtCompensationReport,
@@ -11,7 +17,10 @@ import {
   PKWT_MSG,
 } from "@/lib/reports/pkwt-compensation"
 
-export async function getPkwtCompensationReport(): Promise<PkwtCompensationReport> {
+export async function getPkwtCompensationReport(
+  scope: HrScope,
+): Promise<PkwtCompensationReport> {
+  const employeeScope = hrScopeWhere(scope)
   const settings = await prisma.systemSetting.findFirst({
     select: {
       pkwtCompensationExpenseAccountId: true,
@@ -24,15 +33,17 @@ export async function getPkwtCompensationReport(): Promise<PkwtCompensationRepor
 
   const [events, accrualAgg, paidLines, glRows, pendingSlips] = await Promise.all([
     prisma.pkwtCompensationEvent.findMany({
+      where: employeeScope,
       orderBy: [{ employeeId: "asc" }, { segmentStart: "asc" }],
       include: { employee: { select: { name: true, employeeNumber: true } } },
     }),
     prisma.pkwtCompensationAccrual.groupBy({
       by: ["employeeId", "segmentStart"],
+      where: employeeScope,
       _sum: { amount: true },
     }),
     prisma.payrollComponentLine.findMany({
-      where: { pkwtEventId: { not: null } },
+      where: { pkwtEventId: { not: null }, payroll: employeeScope },
       select: { pkwtEventId: true, amount: true, payroll: { select: { status: true } } },
     }),
     payableAccountId
@@ -42,7 +53,7 @@ export async function getPkwtCompensationReport(): Promise<PkwtCompensationRepor
         })
       : Promise.resolve([] as { debit: unknown; credit: unknown }[]),
     prisma.payroll.findMany({
-      where: { status: "approved" },
+      where: { status: "approved", ...employeeScope },
       select: {
         id: true,
         componentLines: {
@@ -91,6 +102,9 @@ export async function getPkwtCompensationReport(): Promise<PkwtCompensationRepor
     glPayableBalance: glBalance,
     mappingMissing,
   })
+  if (scope.kind !== "all") {
+    report.anomalies = report.anomalies.filter((a) => a.code !== "GL_VS_EVENT_DIFF")
+  }
   if (mappingMissing) {
     report.anomalies.push({
       code: "MAPPING_MISSING",
