@@ -17,6 +17,13 @@
  * Semua faktur+payment pelanggan dibaca sekali (tanpa batas periode di
  * query): builder membelah saldo awal vs baris periode dari himpunan yang
  * sama, jadi saldo akhir tidak bisa selisih dari agregasi piutang.
+ *
+ * F-2026-10-23-104-V Putusan 2: retur `completed` pelanggan ber-faktur asal
+ * dibaca terpisah; `returnCredit` = Σ kaki Cr akun Piutang
+ * (`salesReceivableAccountId`) jurnal SalesReturn POSTED bukan REVERSED
+ * atas retur itu. Akun belum terkonfigurasi / settings gagal → returnCredit
+ * 0 (pola sales-target-achievement-data), statement tetap jalan. Jurnal
+ * REVERSED tidak dihitung; retur tanpa faktur asal tak pernah diteruskan.
  */
 
 import { prisma } from "@/lib/db/prisma"
@@ -27,7 +34,10 @@ import {
   type CustomerStatement,
   type CustomerStatementInvoiceInput,
   type CustomerStatementPaymentInput,
+  type CustomerStatementReturnInput,
 } from "@/lib/reports/customer-statement"
+import { getSystemSettings } from "@/lib/utils/settings"
+import { safeAdd } from "@/lib/utils/math"
 import { formatAccounting } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -63,7 +73,7 @@ export async function loadCustomerStatement(
   customerId: number,
   period: { start: Date; end: Date },
 ): Promise<CustomerStatementReport> {
-  const [customer, invoices, payments] = await Promise.all([
+  const [customer, invoices, payments, salesReturns] = await Promise.all([
     prisma.customer.findFirst({
       where: { id: customerId, deletedAt: null },
       select: { id: true, name: true },
@@ -92,7 +102,55 @@ export async function loadCustomerStatement(
       },
       orderBy: [{ paymentDate: "asc" }, { id: "asc" }],
     }),
+    prisma.salesReturn.findMany({
+      where: { customerId, status: "completed", salesInvoiceId: { not: null } },
+      select: {
+        id: true,
+        documentNo: true,
+        salesInvoiceId: true,
+        date: true,
+        salesInvoice: { select: { documentNo: true } },
+      },
+      orderBy: [{ date: "asc" }, { id: "asc" }],
+    }),
   ])
+
+  // returnCredit per retur dari kaki Cr Piutang jurnal POSTED (F-104-V).
+  const returnCreditByReturnId = new Map<number, number>()
+  if (salesReturns.length > 0) {
+    let receivableAccountId: number | null = null
+    try {
+      receivableAccountId = (await getSystemSettings())?.salesReceivableAccountId ?? null
+    } catch {
+      receivableAccountId = null
+    }
+    if (receivableAccountId !== null) {
+      const journals = await prisma.journal.findMany({
+        where: {
+          deletedAt: null,
+          status: "POSTED",
+          referenceType: "SalesReturn",
+          referenceId: { in: salesReturns.map((r) => r.id) },
+        },
+        select: {
+          referenceId: true,
+          entries: {
+            where: { accountId: receivableAccountId },
+            select: { credit: true },
+          },
+        },
+      })
+      for (const journal of journals) {
+        if (journal.referenceId === null) continue
+        let credit = 0
+        for (const entry of journal.entries) credit = safeAdd(credit, Number(entry.credit), 2)
+        returnCreditByReturnId.set(
+          journal.referenceId,
+          safeAdd(returnCreditByReturnId.get(journal.referenceId) ?? 0, credit, 2),
+        )
+      }
+    }
+  }
 
   const invoiceInputs: CustomerStatementInvoiceInput[] = invoices.map((inv) => ({
     id: inv.id,
@@ -112,12 +170,24 @@ export async function loadCustomerStatement(
     creditDocumentNo: creditDocumentNoFromNotes(pay.notes),
   }))
 
+  const returnInputs: CustomerStatementReturnInput[] = salesReturns
+    .filter((ret) => ret.salesInvoiceId !== null)
+    .map((ret) => ({
+      id: ret.id,
+      documentNo: ret.documentNo,
+      salesInvoiceId: ret.salesInvoiceId as number,
+      salesInvoiceDocumentNo: ret.salesInvoice?.documentNo ?? "",
+      date: new Date(ret.date),
+      returnCredit: returnCreditByReturnId.get(ret.id) ?? 0,
+    }))
+
   const statement = buildCustomerStatement({
     customerId,
     periodStart: period.start,
     periodEnd: period.end,
     invoices: invoiceInputs,
     payments: paymentInputs,
+    returns: returnInputs,
   })
 
   const rows: TableRow[] = [
