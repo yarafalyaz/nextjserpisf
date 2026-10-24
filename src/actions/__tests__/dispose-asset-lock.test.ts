@@ -17,6 +17,7 @@ const assetFindUniqueOrThrowMock = vi.fn()
 const assetUpdateManyMock = vi.fn()
 const assetHistoryCreateMock = vi.fn()
 const journalFindFirstMock = vi.fn()
+const journalFindManyMock = vi.fn()
 const journalCreateMock = vi.fn()
 const transactionMock = vi.fn()
 
@@ -28,6 +29,7 @@ vi.mock("@/lib/db/prisma", () => ({
     asset: { findUniqueOrThrow: (...a: unknown[]) => assetFindUniqueOrThrowMock(...a) },
     assetCategory: { findUnique: vi.fn().mockResolvedValue(null) },
     systemSetting: { findFirst: vi.fn().mockResolvedValue(null) },
+    journal: { findMany: (...a: unknown[]) => journalFindManyMock(...a) },
     $transaction: (...a: unknown[]) => transactionMock(...a),
   },
 }))
@@ -47,7 +49,7 @@ function wireTransaction() {
   const tx = {
     asset: { updateMany: assetUpdateManyMock },
     assetHistory: { create: assetHistoryCreateMock },
-    journal: { findFirst: journalFindFirstMock, create: journalCreateMock },
+    journal: { findFirst: journalFindFirstMock, findMany: journalFindManyMock, create: journalCreateMock },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }
@@ -56,7 +58,7 @@ beforeEach(() => {
   for (const m of [
     requirePermissionMock, revalidateMock, logActivityMock, parseFormDataMock,
     assetFindUniqueOrThrowMock, assetUpdateManyMock, assetHistoryCreateMock,
-    journalFindFirstMock, journalCreateMock, transactionMock,
+    journalFindFirstMock, journalFindManyMock, journalCreateMock, transactionMock,
   ]) m.mockReset()
   requirePermissionMock.mockResolvedValue({ id: 4 })
   parseFormDataMock.mockReturnValue({
@@ -70,6 +72,7 @@ beforeEach(() => {
   assetUpdateManyMock.mockResolvedValue({ count: 1 })
   assetHistoryCreateMock.mockResolvedValue({})
   journalFindFirstMock.mockResolvedValue(null) // no acquisition journal → GL branch skipped
+  journalFindManyMock.mockResolvedValue([]) // tanpa jurnal POSTED → dasar legacy currentValue
   wireTransaction()
 })
 

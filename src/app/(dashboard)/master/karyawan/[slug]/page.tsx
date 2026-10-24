@@ -19,6 +19,10 @@ import { DetailTable, DetailTableHead, DetailTableTh, DetailTableBody, DetailTab
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityEditHref } from "@/lib/utils/entity-url"
 import { LEAVE_TYPE_LABELS, labelFrom } from "@/lib/utils/status-labels"
+import {
+  employmentStatusLabel,
+  employmentEndReasonLabel,
+} from "@/lib/reports/employee-lifecycle"
 import { hasPermission } from "@/lib/auth/permissions"
 import {
   getEmployeePayrollComponents,
@@ -161,6 +165,11 @@ export default async function EmployeeDetailPage({
                       {employee.isActive ? "Aktif" : "Nonaktif"}
                     </span>
                   } />
+                  <DetailField label="Status Kepegawaian" value={employmentStatusLabel(employee.employmentStatus)} />
+                  <DetailField label="Tanggal Mulai Kontrak" value={employee.contractStartDate ? formatDate(employee.contractStartDate) : "-"} />
+                  <DetailField label="Tanggal Akhir Kontrak" value={employee.contractEndDate ? formatDate(employee.contractEndDate) : "-"} />
+                  <DetailField label="Tanggal Berhenti Bekerja" value={employee.employmentEndedAt ? formatDate(employee.employmentEndedAt) : "-"} />
+                  <DetailField label="Alasan Berhenti" value={employmentEndReasonLabel(employee.endReason) ?? "-"} />
                 </DetailCard>
 
                 {/* Sisa Cuti Tahunan (tahun berjalan) */}

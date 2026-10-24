@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => {
       findMany: vi.fn(async (args: any) => (args?.where?.id?.in ?? []).map((id: number) => ({ id }))),
     },
     barcode: buildModelMock(),
+    activityLog: buildModelMock(),
     taxGroup: buildModelMock(),
     taxGroupTax: buildModelMock(),
     paymentTerm: buildModelMock(),
@@ -287,6 +288,51 @@ describe("Employee Actions", () => {
     const data = mocks.prismaMock.employee.create.mock.calls.at(-1)?.[0]?.data
     expect(data.joinDate.toISOString()).toBe("2026-01-15T00:00:00.000Z")
     expect(data.dateOfBirth.toISOString()).toBe("1990-05-20T00:00:00.000Z")
+  })
+
+  it("F-085-S: createEmployee menyimpan status kepegawaian tervalidasi", async () => {
+    const res = await actions.createEmployee(fdMap({
+      name: "test", joinDate: "2026-01-15",
+      employmentStatus: "PKWT", contractEndDate: "2027-01-14",
+    }))
+    expect(res?.success).toBe(true)
+    const data = mocks.prismaMock.employee.create.mock.calls.at(-1)?.[0]?.data
+    expect(data.employmentStatus).toBe("PKWT")
+    expect(data.contractEndDate.toISOString()).toBe("2027-01-14T00:00:00.000Z")
+  })
+
+  it("F-085-S BR-EMP-02: status teks bebas ditolak sebelum tulis DB", async () => {
+    const res = await actions.createEmployee(fdMap({
+      name: "test", joinDate: "2026-01-15", employmentStatus: "KONTRAK-BEBAS",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("Status kepegawaian tidak valid")
+    expect(mocks.prismaMock.employee.create).not.toHaveBeenCalled()
+  })
+
+  it("F-085-S: employmentEndedAt tanpa endReason ditolak berpasangan", async () => {
+    const res = await actions.createEmployee(fdMap({
+      name: "test", joinDate: "2026-01-15", employmentEndedAt: "2026-10-15",
+    }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("wajib diisi bersamaan")
+    expect(mocks.prismaMock.employee.create).not.toHaveBeenCalled()
+  })
+
+  it("F-085-S AC-EMP-4: ubah PKWT->PKWTT menulis ActivityLog old/new", async () => {
+    mocks.prismaMock.employee.findUnique.mockResolvedValue({
+      userId: null, employmentStatus: "PKWT",
+      contractStartDate: null, contractEndDate: new Date("2026-12-31T00:00:00.000Z"),
+      employmentEndedAt: null, endReason: null,
+    })
+    const res = await actions.updateEmployee(1, fdMap({
+      name: "test", joinDate: "2026-06-13", employmentStatus: "PKWTT",
+    }))
+    expect(res?.success).toBe(true)
+    const logArg = mocks.prismaMock.activityLog.create.mock.calls.at(-1)?.[0]
+    expect(logArg.data.action).toBe("employee_lifecycle_changed")
+    expect(logArg.data.oldValues.employmentStatus).toBe("PKWT")
+    expect(logArg.data.newValues.employmentStatus).toBe("PKWTT")
   })
 })
 

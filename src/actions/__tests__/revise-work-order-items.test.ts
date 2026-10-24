@@ -24,8 +24,10 @@ const tx = {
     createMany: (...a: unknown[]) => woiCreateMany(...a),
   },
   materialIssueItem: { findMany: (...a: unknown[]) => miItemFindMany(...a) },
-  stockReservation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
+  stockReservation: { updateMany: (...a: unknown[]) => srUpdateMany(...a) },
 }
+
+const srUpdateMany = vi.fn().mockResolvedValue({ count: 0 })
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -36,6 +38,7 @@ beforeEach(() => {
   woiUpdateMany.mockResolvedValue({ count: 1 })
   woiCreateMany.mockResolvedValue({ count: 1 })
   miItemFindMany.mockResolvedValue([])
+  srUpdateMany.mockResolvedValue({ count: 0 })
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 })
 
@@ -145,6 +148,19 @@ describe("reviseWorkOrderItems (F-2026-10-20-06)", () => {
     const res = await reviseWorkOrderItems({ workOrderId: 10, replacedItemIds: [1] })
     expect(res.success).toBe(false)
     expect(res.error).toMatch(/sudah dikeluarkan lewat Pengeluaran Material/)
+  })
+
+  it("F-057-S revisi: reservasi baris terdampak terlepas → releaseNotice verbatim; tanpa baris terlepas → null", async () => {
+    srUpdateMany.mockResolvedValue({ count: 1 })
+    const res = await reviseWorkOrderItems({ workOrderId: 10, replacedItemIds: [1] })
+    expect(res.success).toBe(true)
+    expect((res as { releaseNotice?: string | null }).releaseNotice).toBe(
+      "Revisi — 1 reservasi baris terdampak dilepas",
+    )
+    srUpdateMany.mockResolvedValue({ count: 0 })
+    const res2 = await reviseWorkOrderItems({ workOrderId: 10, replacedItemIds: [1] })
+    expect(res2.success).toBe(true)
+    expect((res2 as { releaseNotice?: string | null }).releaseNotice).toBeNull()
   })
 
   it("menolak input tidak valid (qty <= 0)", async () => {
