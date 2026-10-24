@@ -11,16 +11,7 @@ import {
   DetailTableTd,
 } from "@/components/ui/detail-table"
 import { ReportCardShell } from "./report-card-shell"
-
-const STATUS_LABEL: Record<WorkOrderPartStatus, string> = {
-  menunggu: "Menunggu",
-  dipesan: "Dipesan",
-  datang: "Datang",
-  "terpasang-sebagian": "Terpasang sebagian",
-  terpasang: "Terpasang",
-  diganti: "Diganti",
-  "tak-tertaut": "Jasa — tak-tertaut",
-}
+import { PART_STATUS_LABEL as STATUS_LABEL } from "@/lib/reports/work-order-part-status-labels"
 
 const STATUS_ORDER: WorkOrderPartStatus[] = [
   "menunggu",

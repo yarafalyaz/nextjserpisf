@@ -44,4 +44,79 @@ describe("EmployeeLoanForm — a11y wiring", () => {
       unmount(root, container)
     })
   })
+
+  it("weeklyInstallment opsional: tanpa bintang dekoratif, hint terhubung aria-describedby, tidak wajib", () => {
+    withContainer((container) => {
+      const root = mountInto(container, <EmployeeLoanForm employees={employees} />)
+      const form = container.querySelector("form")!
+      expect(labelTexts(form)).toEqual(
+        expect.arrayContaining(["Cicilan Mingguan (Perjanjian Tertulis, Rp)"]),
+      )
+      const input = container.querySelector("#weeklyInstallment")!
+      expect(input.getAttribute("required")).toBeNull()
+      expect(input.getAttribute("aria-describedby")).toBe("weeklyInstallment-hint")
+      const hint = container.querySelector("#weeklyInstallment-hint")!
+      expect(hint.textContent).toContain("WEEKLY")
+      // Tetap 3 bintang: mingguan bukan field wajib.
+      expect(decorativeStars(form).length).toBe(3)
+      // Hidden submit field kosong: skema memetakan "" -> null (HIGH-1).
+      expect(container.querySelector<HTMLInputElement>('input[name="weeklyInstallment"]')!.value).toBe("")
+      unmount(root, container)
+    })
+  })
+
+  it("mode ubah: weeklyInstallment tersimpan tampil apa adanya dari loan", () => {
+    withContainer((container) => {
+      const root = mountInto(
+        container,
+        <EmployeeLoanForm employees={employees} loan={{ ...loan, weeklyInstallment: 25000 }} />,
+      )
+      expect(container.querySelector<HTMLInputElement>("#weeklyInstallment")!.value).toBe("25.000")
+      expect(container.querySelector<HTMLInputElement>('input[name="weeklyInstallment"]')!.value).toBe("25000")
+      unmount(root, container)
+    })
+  })
+
+  it("HIGH-1: FormData form baru mingguan kosong lolos skema sebagai null; 0 eksplisit tetap gagal", async () => {
+    const { employeeLoanSchema } = await import("@/lib/validations/hrm.schemas")
+    const { parseFormData } = await import("@/lib/validations/parse-form")
+    function loanFormData(container: HTMLElement) {
+      const formData = new FormData()
+      formData.set("employeeId", "1")
+      for (const [name, input] of Object.entries({
+        loanDate: container.querySelector<HTMLInputElement>('input[name="loanDate"]')!,
+        totalAmount: container.querySelector<HTMLInputElement>('input[name="totalAmount"]')!,
+        monthlyInstallment: container.querySelector<HTMLInputElement>('input[name="monthlyInstallment"]')!,
+        weeklyInstallment: container.querySelector<HTMLInputElement>('input[name="weeklyInstallment"]')!,
+      })) {
+        formData.set(name, input?.value ?? "")
+      }
+      return formData
+    }
+    await new Promise<void>((resolve) => {
+      withContainer((container) => {
+        const root = mountInto(container, <EmployeeLoanForm employees={employees} />)
+        const filled = loanFormData(container)
+        filled.set("loanDate", "2026-10-01")
+        filled.set("totalAmount", "1000000")
+        filled.set("monthlyInstallment", "100000")
+        expect(filled.get("weeklyInstallment")).toBe("")
+        const empty = parseFormData(employeeLoanSchema, filled)
+        expect(empty.success).toBe(true)
+        if (empty.success) expect(empty.data.weeklyInstallment).toBeNull()
+
+        filled.set("weeklyInstallment", "0")
+        const zero = parseFormData(employeeLoanSchema, filled)
+        expect(zero.success).toBe(false)
+        if (!zero.success) expect(zero.error).toContain("Cicilan mingguan harus lebih dari 0")
+
+        filled.set("weeklyInstallment", "25000")
+        const valued = parseFormData(employeeLoanSchema, filled)
+        expect(valued.success).toBe(true)
+        if (valued.success) expect(valued.data.weeklyInstallment).toBe(25000)
+        unmount(root, container)
+        resolve()
+      })
+    })
+  })
 })

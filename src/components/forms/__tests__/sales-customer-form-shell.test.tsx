@@ -27,6 +27,12 @@ describe("SalesCustomerFormShell — a11y wiring", () => {
       expect(form.getAttribute("aria-label")).toBe("Formulir tambah uang muka")
       expect(form.getAttribute("aria-busy")).toBe("false")
       expect(container.querySelector("#customerId")!.getAttribute("aria-required")).toBe("true")
+      // Label bersih; bintang wajib hanya dekoratif (pola AppDatePicker #458).
+      const label = container.querySelector('label[for="customerId"]')!
+      expect(label.textContent).toBe("Pelanggan *")
+      const star = label.querySelector('span[aria-hidden="true"]')
+      expect(star?.textContent).toBe("*")
+      expect(star?.classList.contains("text-destructive")).toBe(true)
       unmount(root, container)
     })
   })
@@ -61,6 +67,35 @@ describe("SalesCustomerFormShell — a11y wiring", () => {
     withContainer((container) => {
       const root = mountInto(container, <SalesOrderForm customers={[]} order={{ id: 9, customerId: 2, date: "2026-10-21" }} />)
       expect(container.querySelector("form")!.getAttribute("aria-label")).toBe("Formulir ubah pesanan")
+      unmount(root, container)
+    })
+  })
+})
+
+describe("Shell consumers — field required/opsional (verifikasi t_9c46d94b)", () => {
+  it("pesanan: pelanggan + tanggal wajib; pengiriman + catatan opsional bersih", () => {
+    withContainer((container) => {
+      const root = mountInto(container, <SalesOrderForm customers={[]} />)
+      const form = container.querySelector("form")!
+      expect(form.getAttribute("aria-label")).toBe("Formulir tambah pesanan")
+      expect(form.getAttribute("aria-busy")).toBe("false")
+      expect(container.querySelector("#customerId")!.getAttribute("aria-required")).toBe("true")
+      expect(container.querySelector("#date-trigger")!.getAttribute("aria-required")).toBe("true")
+      expect(container.querySelector("#deliveryDate-trigger")!.getAttribute("aria-required")).not.toBe("true")
+      expect(container.querySelector("#notes")!.hasAttribute("required")).toBe(false)
+      unmount(root, container)
+    })
+  })
+
+  it("faktur: pelanggan + tanggal wajib; jatuh tempo opsional bersih", () => {
+    withContainer((container) => {
+      const root = mountInto(container, <SalesInvoiceForm customers={[]} salesOrders={[]} />)
+      const form = container.querySelector("form")!
+      expect(form.getAttribute("aria-label")).toBe("Formulir tambah faktur")
+      expect(form.getAttribute("aria-busy")).toBe("false")
+      expect(container.querySelector("#customerId")!.getAttribute("aria-required")).toBe("true")
+      expect(container.querySelector("#date-trigger")!.getAttribute("aria-required")).toBe("true")
+      expect(container.querySelector("#dueDate-trigger")!.getAttribute("aria-required")).not.toBe("true")
       unmount(root, container)
     })
   })
