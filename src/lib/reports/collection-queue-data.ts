@@ -48,7 +48,7 @@ export async function getCollectionQueue(
 
   const invoiceIds = invoices.map((invoice) => invoice.id)
 
-  const [exchangeItems, followUps] = await Promise.all([
+  const [exchangeItems, followUps, lateFees] = await Promise.all([
     invoiceIds.length === 0
       ? Promise.resolve([])
       : prisma.invoiceExchangeItem.findMany({
@@ -78,6 +78,24 @@ export async function getCollectionQueue(
             deletedAt: true,
           },
           orderBy: [{ followedUpAt: "asc" }, { id: "asc" }],
+        }),
+    // Indikator denda terutang F-093-V: hanya dokumen denda yang SUDAH
+    // terbit (posted/partial) — loader tidak menghitung denda baru.
+    invoiceIds.length === 0
+      ? Promise.resolve([])
+      : prisma.salesLateFee.findMany({
+          where: {
+            salesInvoiceId: { in: invoiceIds },
+            deletedAt: null,
+            status: { in: ["posted", "partial"] },
+          },
+          select: {
+            salesInvoiceId: true,
+            amount: true,
+            paidAmount: true,
+            status: true,
+            reversesId: true,
+          },
         }),
   ])
 
@@ -112,5 +130,12 @@ export async function getCollectionQueue(
       deletedAt: followUp.deletedAt,
     })),
     { now: options.now },
+    lateFees.map((fee) => ({
+      salesInvoiceId: fee.salesInvoiceId,
+      amount: Number(fee.amount),
+      paidAmount: Number(fee.paidAmount),
+      status: fee.status,
+      reversesId: fee.reversesId,
+    })),
   )
 }

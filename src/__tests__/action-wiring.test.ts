@@ -186,19 +186,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-23-111-V + F-2026-10-23-115-V inti (t_17e469e7): 3 aksi
   // peristiwa perubahan aset kini dirujuk AssetChangeEventPanel di detail
   // aset (t_311cfc07) — entri beku dibuang.
-  // F-2026-10-22-093-V inti (t_bdc81ed6): 5 aksi dokumen denda piutang
-  // backend dulu; panel dokumen denda di antrean penagihan menyusul
-  // (frontend BOT 2; buang entri ini saat UI memanggilnya).
-  "src/actions/sales-late-fee.actions.ts::createCustomerLateFeeTerm":
-    "F-2026-10-22-093-V inti backend; form syarat denda menyusul (frontend BOT 2)",
-  "src/actions/sales-late-fee.actions.ts::issueSalesLateFee":
-    "F-2026-10-22-093-V inti backend; tombol terbit dokumen denda menyusul (frontend BOT 2)",
+  // F-2026-10-22-093-V inti (t_bdc81ed6): aksi edit nominal posted sengaja
+  // TIDAK dirujuk UI — selalu menolak by design (E93-6); koreksi hanya
+  // reversal. 4 aksi lain kini dirujuk SalesLateFeePanel (t_c2d2dce1).
   "src/actions/sales-late-fee.actions.ts::updateSalesLateFeeAmount":
-    "F-2026-10-22-093-V inti backend; penjaga tolak-edit nominal posted untuk pemanggil masa depan (frontend BOT 2)",
-  "src/actions/sales-late-fee.actions.ts::paySalesLateFee":
-    "F-2026-10-22-093-V inti backend; form pembayaran denda menyusul (frontend BOT 2)",
-  "src/actions/sales-late-fee.actions.ts::reverseSalesLateFee":
-    "F-2026-10-22-093-V inti backend; tombol pembalikan/waiver denda menyusul (frontend BOT 2)",
+    "F-2026-10-22-093-V penjaga tolak-edit nominal posted by design (E93-6); UI sengaja tidak menyediakan edit nominal",
 }
 
 describe("keterhubungan aksi server", () => {
