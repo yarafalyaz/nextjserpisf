@@ -59,7 +59,7 @@ const TABLE_SOURCES = {
   // inventaris
   rack_rows: "code", stock_moves: "document_no", material_issues: "document_no",
   stock_adjustments: "document_no", racks: "name",
-  inventory_transfers: "document_no", stocktake_sessions: "document_no",
+  inventory_transfers: "document_no", material_requests: "document_no", stocktake_sessions: "document_no",
   // penjualan
   sales_invoices: "document_no", sales_payments: "document_no", quotations: "document_no",
   sales_orders: "document_no", sales_returns: "document_no",

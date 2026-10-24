@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
     salesInvoice: { findMany: vi.fn().mockResolvedValue([]) },
     workOrder: { findMany: vi.fn().mockResolvedValue([]) },
     project: { findMany: vi.fn().mockResolvedValue([]) },
+    installedPart: { findMany: vi.fn().mockResolvedValue([]) },
   },
 }))
 
@@ -42,6 +43,7 @@ beforeEach(() => {
   for (const m of Object.values(mocks.prismaMock)) {
     m.findMany.mockResolvedValue([])
   }
+  mocks.prismaMock.installedPart.findMany.mockResolvedValue([])
 })
 
 describe("getCustomerVehicleHistory", () => {
@@ -118,6 +120,43 @@ describe("getCustomerVehicleHistory", () => {
 
     const h = await getCustomerVehicleHistory(42)
     expect(h.entries.map((e) => e.documentNo)).toEqual(["WO-2", "Q-1"])
+  })
+
+  it("seksi part terpasang dari registri InstalledPart kendaraan ini (AC-IP-9)", async () => {
+    mocks.prismaMock.installedPart.findMany.mockResolvedValue([{
+      id: 5, itemId: 100, serialNumber: "SN-1",
+      qty: 1, qtyRemoved: 0,
+      installedAt: D("2026-01-10"), removedAt: null, removalReason: null,
+      replacedByInstalledPartId: null,
+      item: { name: "Aki 12V", sku: "AKI-12" },
+      warrantyCoverage: { expiresAt: D("2027-01-10") },
+      materialIssueItem: {
+        materialIssue: { status: "completed", workOrderId: 10, projectId: null },
+      },
+    }])
+
+    const h = await getCustomerVehicleHistory(42)
+
+    expect(mocks.prismaMock.installedPart.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { customerVehicleId: 42 } }),
+    )
+    expect(h.installedParts.total).toBe(1)
+    expect(h.installedParts.rows[0]).toMatchObject({
+      id: 5, itemName: "Aki 12V", status: "TERPASANG", sourceWorkOrderId: 10,
+    })
+  })
+
+  it("kendaraan tanpa part registri: seksi kosong, bukan error (AC-IP-9)", async () => {
+    const h = await getCustomerVehicleHistory(42)
+    expect(h.installedParts).toMatchObject({ rows: [], total: 0, activeCount: 0 })
+  })
+
+  it("includeInstalledParts=false: registri tidak ditanyakan ke DB, seksi kosong", async () => {
+    const h = await getCustomerVehicleHistory(42, 20, { includeInstalledParts: false })
+    expect(mocks.prismaMock.installedPart.findMany).not.toHaveBeenCalled()
+    expect(h.installedParts).toEqual({ rows: [], total: 0, activeCount: 0 })
+    // Linimasa lain tetap dimuat.
+    expect(h.entries).toEqual([])
   })
 
   it("limit diklamp 1..100 dan diteruskan sebagai take", async () => {
