@@ -108,12 +108,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-21-009-V backend dulu (vonis BOT 4 PR #349): kontrak tutup/reopen
   // job siap; tombol UI menyusul di kartu frontend (buang entri ini saat halaman
   // produksi/perintah kerja memanggilnya).
-  "src/actions/manufacturing.actions.ts::closeProductionOrder":
-    "F-2026-10-21-009-V backend; tombol tutup produksi menyusul (frontend)",
+  // F-2026-10-24-097-S S3: tombol tutup kini dirujuk kartu antrean
+  // workshop-closeout-queue-card (closeWorkOrder + closeProductionOrder);
+  // reopen tetap tanpa UI (antrean hanya memuat job completed belum closed).
   "src/actions/manufacturing.actions.ts::reopenProductionOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali produksi menyusul (frontend)",
-  "src/actions/manufacturing.actions.ts::closeWorkOrder":
-    "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
   // F-2026-10-22-069-S: 4 aksi substitusi kini dirujuk UI (tab Substitusi

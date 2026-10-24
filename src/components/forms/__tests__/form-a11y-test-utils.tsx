@@ -159,3 +159,10 @@ export function assertMoneyFormA11yAdd(
     expect(container.querySelector(`#${id}`)!.hasAttribute("required"), id).toBe(false)
   }
 }
+
+/** Set input/textarea value via native setter so React/RHF sees the change (jsdom). */
+export function setFieldValue(el: HTMLInputElement | HTMLTextAreaElement, value: string) {
+  const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+  Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(el, value)
+  el.dispatchEvent(new Event("input", { bubbles: true }))
+}
