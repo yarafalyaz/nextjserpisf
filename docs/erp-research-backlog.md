@@ -26137,3 +26137,250 @@ Edge cases: EC-1 cuti pending yang startDate-nya sudah lewat tanpa keputusan (te
 
 F-2026-10-25-007-S — Antrean persetujuan HR tertunda. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-HP-1/2/4 + fisik Backend Q-HP-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
 
+
+---
+
+## 2026-10-25 03:16 WIB — SPEC BUSINESS F-2026-10-25-012-S gerbang persetujuan retur penjualan (dokumen saja, kartu t_73e4982b)
+
+### 0. Basis bukti live (TERVERIFIKASI-KODE, origin/main 40c2ae20, 2026-10-25)
+
+Sudah ada:
+- Model `SalesReturn`/`SalesReturnItem` (prisma/schema.prisma:1828-1893): status string default `draft`; snapshot pajak retur per baris (returnDpp/returnVat/sourceTaxRate) terisi saat complete; tautan opsional `salesInvoiceId` + `sourceTaxInvoiceId`.
+- `createSalesReturn` (src/actions/sales.actions.ts:1807): izin `create_sales_returns`; gerbang faktur `RETURNABLE_INVOICE_STATUSES=["posted","partial","paid"]` (sales.schemas.ts:185); penjaga over-return di dalam transaksi kunci `FOR UPDATE` faktur.
+- `updateSalesReturn` (sales.actions.ts:2793): izin `edit_sales_returns`; hanya status `draft` bisa diedit; penjaga over-return ulang dalam transaksi.
+- `deleteSalesReturn` (sales.actions.ts:3216): izin `delete_sales_returns`; menolak status `completed`.
+- `completeSalesReturn` (sales.actions.ts:1693-1752): izin hanya `edit_sales_returns`; menolak bila sudah `completed`; validasi identitas serial/batch; lalu stok masuk (`sales-return.hook`) + jurnal (`accounting.hook onSalesReturnCompleted` :1264) dalam SATU transaksi. Tidak ada tahap persetujuan, tidak ada `assertApproved`, tidak ada `requestApprovalIfConfigured` untuk SalesReturn (grep SalesReturn di approval-workflow.service.ts/approval.actions.ts = 0).
+- Katalog izin retur penjualan hanya view/create/edit/delete (module-catalog.generated.ts:169-172). Bandingkan retur pembelian: katalog punya `approve_purchase_returns` (:216, juga base-data.ts:365) dan `processPurchaseReturn` (purchase.actions.ts:1941) mensyaratkan izin approve itu sebelum stok+jurnal berjalan.
+- Rantai generik tersedia: `requestApprovalIfConfigured`/`assertApproved` (approval-workflow.service.ts:9-120) sudah dipakai Quotation (sales.actions.ts:316,343,492) dan SalesInvoice (:1048,1254,1330,1576) — pola integrasi retur bisa meniru tanpa mesin baru.
+
+Belum ada / gap (bukti grep run ini):
+- Tidak ada izin `approve_sales_returns` di katalog/seed (grep = 0).
+- Tidak ada status antara `draft` dan `completed` untuk retur penjualan; pembuat retur berizin edit yang sama dapat langsung menyelesaikan retur buatannya sendiri (stok masuk + kredit piutang + jurnal PPN retur) tanpa peninjau kedua. Ini celah SoD: retur fiktif mengurangi piutang dan menambah stok.
+- ActivityLog mencatat create/update/complete/delete, tetapi tidak ada rekod peninjau/persetujuan terpisah selain `createdBy`.
+
+Catatan anti-duplikat: antrean penagihan piutang SUDAH ada (F-2026-10-22-089-S, collection-queue-data.ts + halaman penjualan/antrean-penagihan) dan customer statement SUDAH ada (F-2026-10-21-032, customer-statement-data.ts) — keduanya tidak diusulkan ulang run ini.
+
+### 1. Benchmark resmi (akses 2026-10-25)
+
+- Accurate Online — Cara Mengaktifkan Persetujuan (Approval) Transaksi: Retur Penjualan termasuk jenis transaksi Penjualan yang dapat diwajibkan persetujuan sebelum disimpan/dilanjutkan; diaktifkan per jenis transaksi di Preferensi > Persetujuan. URL: https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/ (BENCHMARK)
+- Zahir — Retur Penjualan (Zahir Accounting 6) dan Cara Input Transaksi Retur Penjualan Zahir Online V2: alur catat retur -> kurangi piutang atau pengeluaran dana; halaman bantuan yang diakses tidak mendokumentasikan gerbang persetujuan retur. URL: https://help.zahironline.com/portal/id/kb/articles/retur-penjualan dan https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-retur-penjualan-zahir-online-v2 — persetujuan retur di Zahir: belum terverifikasi run ini (BENCHMARK terbatas).
+
+### 2. Workflow specification (USULAN tahap 1)
+
+Aktor: Pembuat Retur (create/edit_sales_returns), Peninjau Retur (pemegang izin approve baru — nama key Q-SR-2), Penyelesai (edit_sales_returns existing), Sistem (hook stok+jurnal existing, tidak berubah).
+Dokumen masuk: SalesReturn draft + baris + identitas serial/batch + faktur asal (opsional). Dokumen keluar: retur `completed` (stok+jurnal existing) atau tetap `draft` dengan jejak penolakan.
+
+Alur:
+1. Pembuat membuat/mengedit retur `draft` (perilaku existing, tidak berubah).
+2. Pembuat mengajukan penyelesaian: aksi complete existing kini lebih dulu melewati gerbang persetujuan (bentuk fisik Q-SR-1/Q-SR-3: rantai ApprovalWorkflow generik `requestApprovalIfConfigured("SalesReturn", id)` + `assertApproved` sebelum transaksi stok/jurnal, ATAU izin approve langsung ala retur pembelian). Retur tanpa workflow aktif dan tanpa peninjau: perilaku fail-closed per putusan Q-SR-1 — spec tidak memilih diam-diam.
+3. Peninjau menyetujui atau menolak. Penolakan mengembalikan retur ke `draft` teredit (bukan `cancelled`); pembuat dapat memperbaiki lalu mengajukan lagi. Jejak keputusan = rekod Approval existing bila jalur rantai dipilih; bila jalur izin langsung dipilih, ActivityLog wajib memuat peninjau (BR-SR-06).
+4. Sesudah persetujuan sah, Penyelesai menjalankan complete: validasi serial/batch + stok + jurnal persis existing, satu transaksi. Persetujuan tidak menulis stok/jurnal sendiri.
+5. `cancelled`/delete tetap jalur existing dan tidak bisa dipakai untuk melewati gerbang (retur non-draft tidak bisa dihapus diam-diam untuk menghilangkan jejak penolakan — perilaku delete existing menolak completed; cakupan status lain = Q-SR-3 fisik Backend).
+
+### 3. Role/permission matrix (key katalog nyata; key baru berlabel USULAN)
+
+| Aksi | Key | Pembuat | Peninjau | Penyelesai | Catatan |
+|---|---|---|---|---|---|
+| Lihat retur | view_sales_returns (katalog :169) | ya | ya | ya | existing |
+| Buat retur | create_sales_returns (:170) | ya | - | - | existing |
+| Edit draft | edit_sales_returns (:171) | ya | - | ya | existing; hanya draft |
+| Ajukan/selesaikan (complete) | edit_sales_returns (:171) + gerbang BR-SR-01 | ya (ajukan) | - | ya (sesudah lolos gerbang) | complete existing sales.actions.ts:1695 |
+| Setujui/tolak | approve_sales_returns (USULAN key baru, pola approve_purchase_returns :216) | TIDAK untuk retur sendiri (SoD BR-SR-03) | ya | - | butuh seed parity + permission-seed-parity test |
+| Hapus | delete_sales_returns (:172) | ya (draft) | - | - | existing; menolak completed |
+
+### 4. Status-transition matrix
+
+| Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|
+| (baru) | createSalesReturn | draft | create_sales_returns; gerbang faktur RETURNABLE |
+| draft | edit | draft | edit_sales_returns; hanya draft; over-return guard ulang |
+| draft | ajukan + setujui (gerbang Q-SR-1) | draft (tercatat disetujui; status dokumen tidak dikarang baru tahap 1 bila jalur rantai dipakai) | approve_sales_returns + SoD; rekod Approval approved |
+| draft | ajukan + tolak | draft (jejak penolakan terbaca pembuat) | approve_sales_returns; alasan tolak wajib (BR-SR-05) |
+| draft disetujui | completeSalesReturn | completed | edit_sales_returns + assertApproved lolos; serial/batch sah; stok+jurnal satu transaksi |
+| draft belum disetujui | completeSalesReturn | draft (ditolak, pesan menunggu persetujuan) | gerbang BR-SR-01 — inti spec ini |
+| draft | delete | (hapus) | delete_sales_returns; existing menolak completed |
+| completed | edit/delete/complete ulang | completed (semua ditolak) | penjaga existing |
+
+Status dokumen baru (mis. `pending_approval` sebagai kolom status SalesReturn) TIDAK ditetapkan spec ini: Q-SR-3 Backend memutuskan fisik (status turunan dari rekod Approval vs kolom), dengan syarat matriks di atas teramati pengguna persis.
+
+### 5. Business rules register
+
+| ID | Aturan | Label | Bukti |
+|---|---|---|---|
+| BR-SR-01 | Penyelesaian retur (stok masuk + jurnal) WAJIB lolos gerbang persetujuan dulu; draft belum disetujui tidak dapat di-complete. | USULAN (inti) | gap: completeSalesReturn sales.actions.ts:1693 tanpa assertApproved |
+| BR-SR-02 | Bila tidak ada workflow/peninjau terkonfigurasi, perilaku = fail-closed (complete ditolak dengan pesan konfigurasi) ATAU gerbang nonaktif eksplisit per putusan Lead Q-SR-1; dilarang diam-diam kembali ke perilaku lama tanpa catatan putusan. | BUTUH-VONIS (Lead) | pola requestApprovalIfConfigured mengembalikan false tanpa workflow (service :20) |
+| BR-SR-03 | Peninjau tidak boleh menyetujui retur buatannya sendiri (createdBy = peninjau ditolak), meniru semangat SoD rantai existing. | USULAN | createdBy schema :1845 |
+| BR-SR-04 | Persetujuan tidak mengubah angka retur: qty/harga/snapshot pajak dihitung ulang persis jalur complete existing; persetujuan bukan dokumen bernilai dan tidak membuat jurnal. | TERVERIFIKASI-KODE (jalur nilai) + USULAN | hook sales-return.hook:28; accounting.hook:1264 |
+| BR-SR-05 | Penolakan wajib beralasan teks; retur kembali teredit sebagai draft; pengajuan ulang membuat rekod keputusan baru, tidak menimpa jejak tolak lama. | USULAN | pola resubmit rejected approval-workflow.service.ts:33-48 |
+| BR-SR-06 | Setiap keputusan (setuju/tolak) tercatat dengan peninjau + waktu (rekod Approval bila jalur rantai; ActivityLog beraktor bila jalur izin langsung). | USULAN | logActivity existing sales.actions.ts:1742 |
+| BR-SR-07 | Retur tanpa faktur (salesInvoiceId null) tetap wajib gerbang yang sama; ketiadaan faktur bukan jalan pintas. | USULAN | create mengizinkan tanpa faktur sales.actions.ts:1832 |
+| BR-SR-08 | Over-return guard + validasi serial/batch existing TIDAK dilemahkan; persetujuan tidak menggantikan keduanya, dan edit sesudah persetujuan membatalkan persetujuan (wajib ajukan ulang). | USULAN | guard create :1871-1903; update :2870+ |
+| BR-SR-09 | Izin baru `approve_sales_returns` ditambah lewat katalog + seed (permission-seed-parity wajib hijau); tanpa izin itu tombol/aksi setuju tidak tampil dan server menolak. | USULAN | pola approve_purchase_returns katalog :216 |
+| BR-SR-10 | Completed tetap terminal untuk edit/delete/complete ulang (perilaku existing dipertahankan). | TERVERIFIKASI-KODE | update :2808; delete :3225; complete :1702 |
+| BR-SR-11 | Nilai ambang wajib-persetujuan (semua retur vs di atas nominal/persen tertentu): spec tahap 1 mengusulkan SEMUA retur wajib gerbang (sederhana, tanpa angka karangan); ambang bernilai = Q-SR-4 BUTUH-VONIS Lead/Accountant kelak. | USULAN + BUTUH-VONIS | dilarang mengarang ambang uang |
+| BR-SR-12 | PPN retur/snapshot pajak tidak berubah perlakuan oleh spec ini; vonis pajak retur existing (F-004) tidak dibuka ulang. | TERVERIFIKASI-KODE | schema :1874-1888 snapshot complete |
+
+### 6. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF kini |
+|---|---|---|---|
+| Retur penjualan mengurangi piutang/stok masuk | Ya (BENCHMARK §1) | Ya (BENCHMARK §1) | Ya — complete satu transaksi stok+jurnal (TERVERIFIKASI-KODE) |
+| Persetujuan per jenis transaksi termasuk Retur Penjualan | Ya, per-transaksi dapat diaktifkan (BENCHMARK URL §1) | Belum terverifikasi run ini | ABSEN untuk retur penjualan (gap spec ini); ADA pola untuk retur pembelian (approve_purchase_returns) + rantai generik Quotation/SalesInvoice |
+| Penolakan mengembalikan dokumen teredit | Tidak diklaim (belum terverifikasi rincian) | Belum terverifikasi | Pola resubmit rejected tersedia di service generik (TERVERIFIKASI-KODE :33-48) |
+
+### 7. Acceptance criteria (falsifikasi) + edge cases
+
+Backend (sesudah Q-SR-1..3 diputus):
+- AC-SR-B1: complete retur draft tanpa persetujuan ditolak dan stok/jurnal tidak berubah. Menghapus gerbang = tes MERAH.
+- AC-SR-B2: peninjau = createdBy retur yang sama menyetujui -> ditolak (SoD). Meloloskan = MERAH.
+- AC-SR-B3: pengguna tanpa approve_sales_returns memanggil aksi setuju -> ditolak server. Izin hilang dari seed -> permission-seed-parity MERAH.
+- AC-SR-B4: sesudah ditolak beralasan, retur tetap draft teredit; edit baris lalu ajukan ulang membuat rekod keputusan baru; jejak tolak lama tetap terbaca. Menimpa jejak = MERAH.
+- AC-SR-B5: edit retur sesudah disetujui membatalkan persetujuan (complete sebelum ajuan ulang ditolak). Edit tidak membatalkan = MERAH.
+- AC-SR-B6: complete sesudah persetujuan sah menghasilkan stok+jurnal byte-sama dengan jalur existing (snapshot returnDpp/returnVat sama). Selisih nilai = MERAH.
+- AC-SR-B7: dua pengajuan/penyelesaian bersamaan pada retur sama: tepat satu transisi sah (kunci transaksi existing dipertahankan). Dobel stok/jurnal = MERAH.
+
+Frontend (konsumen, sesudah kontrak Backend):
+- AC-SR-F1: tombol Setujui/Tolak hanya tampil bagi pemegang izin server; status persetujuan tampil verbatim payload server; UI tidak menentukan lolos/tidak sendiri. Grep e2e selector retur sebelum commit, sinkronkan commit sama.
+- AC-SR-F2: penolakan tanpa alasan tidak terkirim (validasi tampil), alasan tampil ke pembuat apa adanya.
+
+QA: falsifikasi AC-SR-B1..B7 + AC-SR-F1..F2 atas head Backend/Frontend persis.
+
+Edge: EC-1 retur legacy completed sebelum gerbang ada (tidak retroaktif; tidak dapat dibuka ulang). EC-2 retur tanpa faktur tetap gerbang (BR-SR-07). EC-3 workflow dinonaktifkan di tengah pengajuan pending (perilaku fail-closed Q-SR-1; antrean tidak menggantung tanpa pesan). EC-4 peninjau menonaktifkan diri/nonaktif sesudah menyetujui sebelum complete (persetujuan tercatat tetap sah; complete oleh penyelesai lain berizin). EC-5 retur berisi item serial tanpa nomor seri: ditolak validasi existing walau sudah disetujui (BR-SR-08). EC-6 faktur asal berubah status sesudah retur dibuat (gerbang faktur create/update existing tidak dihidupkan ulang oleh persetujuan; complete tidak menebak ulang kelayakan faktur di luar jalur existing — laporkan ke Backend bila ditemukan celah).
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-SR-1 (Lead): bentuk gerbang tahap 1 — (a) rantai ApprovalWorkflow generik SalesReturn + izin approve_sales_returns untuk peninjau, atau (b) izin approve langsung ala processPurchaseReturn; dan perilaku tanpa konfigurasi (fail-closed vs nonaktif eksplisit).
+- Q-SR-2 (Lead): sahkan key baru `approve_sales_returns` + SoD BR-SR-03.
+- Q-SR-3 (Backend): fisik status persetujuan (rekod Approval vs kolom), pembatalan persetujuan saat edit, penguncian transisi bersamaan.
+- Q-SR-4 (Lead + Accountant, kelak): ambang nilai wajib gerbang bila "semua retur" (BR-SR-11) dinilai terlalu berat — spec tahap 1 tidak menetapkan angka.
+- Accountant: TIDAK diminta tahap 1 — nol perubahan perlakuan jurnal/PPN (BR-SR-04/12). Dipanggil hanya bila Q-SR-4 membuka ambang bernilai.
+
+### 9. Backlog implementasi
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-012-S | Spec ini (dokumen) | Business | — |
+| (turunan) gerbang persetujuan di completeSalesReturn + izin seed parity | Backend | Q-SR-1/2 Lead; fisik Q-SR-3; klaim file board dulu | — |
+| (turunan) UI status persetujuan + tombol setuju/tolak retur | Frontend | kontrak Backend stabil; kata §2/§3 verbatim | — |
+| (turunan) falsifikasi AC-SR-* | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini
+- Antrean penagihan/customer statement ulang: sudah ada (F-089-S/F-032), anti-duplikat.
+- Status dokumen baru sebagai kolom tanpa putusan fisik Backend (Q-SR-3).
+- Ambang nominal/persen wajib persetujuan: tidak ada angka disetujui (BR-SR-11).
+- Mengubah jurnal/PPN retur atau hook stok: jalur nilai existing terminal (BR-SR-04/12).
+
+F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SR-1/2 + fisik Backend Q-SR-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (inti), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK tahap 1 (Q-SR-4 kelak saja).
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-012-S: gerbang persetujuan retur penjualan (izin approve_sales_returns khusus + SoD, sebelum stok+jurnal)
+
+> **Slot**: F-2026-10-25-012-S. Topik asal kartu (antrean penagihan/dunning) DIBATALKAN run ini: dunning sudah ada F-2026-10-22-089-S (`collection-queue-data.ts`, halaman `penjualan/antrean-penagihan`) — duplikasi dilarang. ID F-2026-10-25-012-S dipakai ulang untuk gap terverifikasi di bawah. Diperiksa 2026-10-25 03:16 WIB vs `origin/main` (`40c2ae20`): grep `F-2026-10-25-012` di backlog+board = 0 sebelum tulis.
+> **Jenis**: spec dokumen saja, tanpa kode. Tanpa kolom/status/migrasi baru tahap usulan inti (status retur existing `draft/completed/cancelled` dipertahankan — lihat Q-SR-3).
+
+### 0. Inventarisasi terverifikasi (2026-10-25, origin/main 40c2ae20)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `SalesReturn` `status String @default("draft")` (`prisma/schema.prisma:1828-1862`, status `:1838`); item snapshot DPP/PPN retur (`:1865-1890`). Model pembanding `PurchaseReturn` sama-sama `status @default("draft")` (`:2061-2068`).
+- `completeSalesReturn(returnId)` `src/actions/sales.actions.ts:1693`: hanya `requirePermission("edit_sales_returns")` (`:1695`), tolak bila sudah `completed` (`:1702`), validasi serial/batch, lalu SATU transaksi: `onSalesReturnStock` + `onSalesReturnCompleted` (`:1744-1747` lebih kurang — stok `sales-return.hook.ts:256` set `Status.COMPLETED`, jurnal tunggal `accounting.hook.ts:1259ff` Dr Retur Penjualan/Cr Piutang). Siapa pun ber-`edit_sales_returns` (termasuk pembuat draft sendiri) bisa langsung memicu stok masuk + jurnal pengurang piutang. Tidak ada `assertApproved("SalesReturn", …)`, tidak ada `requestApprovalIfConfigured("SalesReturn", …)` — grep keduanya di jalur retur = 0 (approval generik hanya dipakai Quotation `:316,343,492` dan SalesInvoice `:1048,1254,1330,1576`).
+- Pembanding persis di repo: `processPurchaseReturn` `src/actions/purchase.actions.ts:1939` memakai `requirePermission("approve_purchase_returns")` (`:1941`) + guard `status !== "draft"` (`:1949-1951`) sebelum stok+jurnal satu transaksi. Katalog: `approve_purchase_returns` ADA (`src/lib/auth/module-catalog.generated.ts:216`), seed `base-data.ts:365` mengelompokkannya "Approval permissions terpisah dari edit_* (Separation of Duties)" bersama `approve_vendor_payments`.
+- Katalog retur penjualan hanya 4 key: `view/create/edit/delete_sales_returns` (`module-catalog.generated.ts:169-172`). `approve_sales_returns` ABSEN (grep repo = 0). Asimetri nyata: retur pembelian punya gerbang approve, retur penjualan tidak.
+- `createSalesReturn` `create_sales_returns` (`sales.actions.ts:1809`), `updateSalesReturn` hanya dari `draft` (`:2809`), `deleteSalesReturn` `delete_sales_returns` tolak `completed` (`:3221ff`). Tidak ada aksi cancel retur penjualan khusus; `cancelled` hanya dibaca sebagai status pengecualian di guard over-return (`:1877,2895`) dan hook (`sales-return.hook.ts:85`).
+- UI: tombol "Selesaikan" memanggil `completeSalesReturn` langsung — tabel `src/app/(dashboard)/penjualan/retur/_components/return-table.tsx:59-63`, detail `retur/[slug]/page.tsx:88-90`. Tes pengaman `src/__tests__/wired-transition-actions.test.ts:9,31-35` mewajibkan pemanggil UI untuk `completeSalesReturn`.
+- Approval generik tersedia: `requestApprovalIfConfigured`/`assertApproved` `src/lib/services/approval-workflow.service.ts:10,68`; `assertApproved` no-op bila tidak ada baris Approval, lempar bila pending/rejected.
+
+Belum ada / gap: izin `approve_sales_returns`; pemisahan pembuat vs penyelesai retur penjualan; gerbang persetujuan apa pun sebelum stok+jurnal retur penjualan. Retur besi tua sudah ditolak fail-closed di kedua hook (F-2026-10-24-136-V) — spec ini tidak menyentuhnya.
+
+### 1. Workflow specification
+
+Aktor: Pembuat Retur (sales/admin penjualan), Penyetuju/Penyelesai (pemegang `approve_sales_returns`, orang berbeda dari pembuat — Q-SR-2), Sistem (hook stok+jurnal existing), Penonton (view).
+
+Alur usulan (USULAN, menunggu Q-SR-1):
+1. Pembuat buat draft retur (`create_sales_returns`, existing) → status `draft`, nol stok/jurnal.
+2. Pembuat boleh ubah draft (`edit_sales_returns`, existing).
+3. Penyelesai memanggil aksi selesaikan yang kini digerbang `approve_sales_returns`: server cek izin khusus + status persis `draft` + SoD (penyelesai ≠ `createdBy`, bila Q-SR-2 disahkan) → dalam SATU transaksi existing: stok masuk + snapshot pajak + jurnal tunggal + status `completed`. Urutan atomik existing tidak diubah.
+4. Draft dibatalkan/dihapus lewat jalur existing (`delete_sales_returns`); spec ini tidak membuat aksi cancel baru.
+Dokumen masuk: SalesReturn draft + baris. Dokumen keluar: SalesReturn `completed`, StockMove IN, jurnal existing. Tidak ada dokumen/jurnal baru.
+
+### 2. Role/permission matrix (key nyata katalog)
+
+| Aksi | Key | Status key |
+|---|---|---|
+| Lihat retur | `view_sales_returns` (:169) | TERVERIFIKASI-KODE existing |
+| Buat draft | `create_sales_returns` (:170) | existing |
+| Ubah draft | `edit_sales_returns` (:171) | existing |
+| Hapus draft | `delete_sales_returns` (:172) | existing |
+| Selesaikan (stok+jurnal) | `approve_sales_returns` (BARU, usul) | ABSEN — pola `approve_purchase_returns` (:216) + seed SoD `base-data.ts:363-365` |
+
+Role konkret yang menerima key baru = keputusan seed/Lead (Q-SR-2); spec hanya mewajibkan key terpisah dari `edit_*`, mengikuti preseden komentar seed SoD.
+
+### 3. Status-transition matrix
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| — | createSalesReturn | `draft` | `create_sales_returns` (existing) |
+| `draft` | updateSalesReturn | `draft` | `edit_sales_returns` + guard draft :2809 (existing) |
+| `draft` | completeSalesReturn (USULAN digerbang) | `completed` | `approve_sales_returns` BARU (ganti peran `edit_` hanya untuk aksi ini) + status persis `draft` + SoD (Q-SR) |
+| `draft` | deleteSalesReturn | (terhapus) | `delete_sales_returns` (existing) |
+| `completed` | completeSalesReturn ulang | tetap, ditolak "sudah completed" :1702 | existing; replay stok/jurnal idempotent di hook |
+
+Tidak ada status baru tahap 1 (USULAN): persetujuan dinyatakan oleh kepemilikan izin + identitas penyelesai di activity log existing, bukan kolom `approved`. Kolom/status `pending_approval` = Q-SR-3, hanya bila Lead menuntut antrean persetujuan terpisah.
+
+### 4. Business rules register (BR-SR-*)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SR-01 | Menyelesaikan retur penjualan wajib izin khusus `approve_sales_returns`; `edit_sales_returns` saja TIDAK cukup. | USULAN (pola TERVERIFIKASI-KODE `approve_purchase_returns` purchase.actions.ts:1941) |
+| BR-SR-02 | Key baru masuk katalog generated + seed parity, dikelompokkan "approval terpisah dari edit (SoD)" seperti base-data.ts:363-365. Generate katalog lewat skrip repo, jangan edit generated manual. | USULAN |
+| BR-SR-03 | Guard status: hanya `draft` boleh selesai; `completed` ditolak; status lain ditolak berpesan. Meniru guard purchase.actions.ts:1949-1951 (lebih ketat dari cek completed-saja :1702). | USULAN |
+| BR-SR-04 | SoD: penyelesai ≠ `createdBy` retur (schema:1851), kecuali bila Lead memutuskan peran tunggal usaha kecil (Q-SR-2). Penolakan berpesan jelas, bukan diam. | BUTUH-VONIS (Lead) |
+| BR-SR-05 | Stok + jurnal + flip status tetap SATU transaksi existing (sales.actions.ts completeSalesReturn); gerbang izin/status/SoD dievaluasi SEBELUM transaksi dibuka. Dilarang jalur selesai yang memisahkan jurnal dari stok. | TERVERIFIKASI-KODE pola existing + USULAN penempatan gerbang |
+| BR-SR-06 | Tanpa ApprovalWorkflow generik untuk SalesReturn tahap 1: `assertApproved("SalesReturn")` TIDAK ditambahkan (workflow generik opt-in per konfigurasi; menambahkannya diam-diam mengubah perilaku tenant tanpa workflow). Dibuka hanya lewat Q-SR-3. | USULAN |
+| BR-SR-07 | UI: tombol "Selesaikan" hanya tampil/aktif bagi pemegang izin menurut payload server; server tetap penjaga akhir (UI bukan gerbang). Kata tombol existing dipertahankan; grep e2e `penjualan/retur` sebelum ubah label/selector. Tes wired-transition wajib tetap hijau (pemanggil UI tidak hilang). | USULAN |
+| BR-SR-08 | Perlakuan jurnal/PPN retur TIDAK berubah oleh spec ini (snapshot DPP/PPN F-004/136-V existing). Retur besi tua tetap ditolak fail-closed. | TERVERIFIKASI-KODE (accounting.hook.ts:1259ff) — Accountant tidak diminta (lihat §8) |
+| BR-SR-09 | Penyelesai tercatat: logActivity "complete" existing menyebut aktor; identitas penyelesai = user izin khusus. Tanpa kolom approvedBy baru tahap 1. | USULAN |
+| BR-SR-10 | Draft lama pra-fitur tetap `draft` dan hanya bisa diselesaikan pemegang izin baru; tidak ada migrasi data/backfill status. Role tanpa key baru kehilangan tombol selesai — perubahan perilaku disengaja, dicatat di catatan rilis implementasi. | USULAN |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Persetujuan transaksi mencakup Retur Penjualan | BENCHMARK: Retur Penjualan termasuk jenis yang bisa diwajibkan approval — https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/ | belum terverifikasi (halaman retur Zahir https://help.zahironline.com/portal/id/kb/articles/retur-penjualan dan https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-retur-penjualan-zahir-online-v2 tidak menyebut gerbang persetujuan pada akses run ini) | ABSEN untuk retur penjualan; ADA untuk retur pembelian (`approve_purchase_returns`) |
+
+### 6. Acceptance criteria + edge cases
+
+AC-SR-B1 (Backend): pemegang `edit_sales_returns` tanpa `approve_sales_returns` memanggil complete → ditolak, nol StockMove, nol jurnal, status tetap `draft`. Penghapusan cek izin = MERAH.
+AC-SR-B2: pemegang approve menyelesaikan draft → tepat satu set StockMove + satu jurnal existing + `completed`; panggilan kedua ditolak/idempotent tanpa dobel.
+AC-SR-B3: SoD (bila Q-SR-2 = wajib): pembuat menyelesaikan retur sendiri → ditolak berpesan; penyelesai lain → lolos.
+AC-SR-B4: katalog generated memuat `approve_sales_returns` tepat satu kali; tes parity seed/katalog existing hijau; key tidak bocor ke role tanpa grant seed.
+AC-SR-B5: retur terikat faktur besi tua tetap ditolak fail-closed sebelum stok/jurnal (regresi F-136-V), gerbang baru tidak melemahkannya.
+AC-SR-F1 (Frontend): tombol Selesaikan mengikuti izin dari server; UI nol menilai status/SoD sendiri; tanpa izin tombol tidak menawarkan aksi (kata server verbatim).
+AC-SR-F2: `wired-transition-actions.test.ts` tetap hijau — pemanggil UI `completeSalesReturn` di `penjualan/retur` tidak hilang.
+Edge: EC-1 draft dibuat sebelum fitur (createdBy valid) diselesaikan penyetuju lain. EC-2 createdBy null (baris legacy) — SoD tidak menebak: perlakukan boleh-diselesaikan-penyetuju (atau tolak berpesan bila Lead putus lain di Q-SR-2). EC-3 dua penyetuju bersamaan pada draft sama → satu transaksi menang (kunci baris hook existing), lainnya ditolak sudah-completed. EC-4 retur tanpa faktur (salesInvoiceId null): gerbang sama berlaku; jurnal parsial existing tidak berubah. EC-5 izin dicabut di antara buka halaman dan klik → server menolak (UI basi bukan bukti izin).
+
+### 7. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-012-S | Spec ini (dokumen) | Business | — |
+| (turunan) key `approve_sales_returns` katalog+seed, gerbang completeSalesReturn (izin+guard draft+SoD), tes AC-SR-B* | Backend | Q-SR-1/2 diputus Lead | Generate katalog via skrip repo; klaim file katalog/seed di board (file bersama) |
+| (turunan) tombol Selesaikan sadar-izin | Frontend | kontrak Backend stabil | grep e2e penjualan/retur dulu |
+| (turunan) falsifikasi AC-SR-* | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-SR → Backend → Frontend → QA. Effort inti S–M. Risiko: role produksi kehilangan akses selesai sampai grant key baru disebar — mitigasi: seed grant mengikuti pola approve_purchase_returns + catatan rilis.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-SR-1 (Lead): buka inti gerbang izin khusus tahap 1 (tanpa status baru, tanpa ApprovalWorkflow generik)?
+- Q-SR-2 (Lead): SoD wajib (penyelesai ≠ pembuat) atau cukup izin khusus (usaha kecil satu admin)? Termasuk perlakuan createdBy null (EC-2) dan role penerima grant seed.
+- Q-SR-3 (Lead): status/antrean persetujuan terpisah (`pending_approval`/approvedBy) ditunda — sahkan; dibuka hanya bila antrean approver retur diminta eksplisit.
+- Accountant: TIDAK diminta tahap ini — jurnal/PPN retur existing tidak berubah (BR-SR-08). Dipanggil hanya bila implementasi menyentuh perlakuan jurnal.
+
+### Yang TIDAK diusulkan run ini
+- Status persetujuan baru / kolom approvedBy / migrasi: izin khusus + log existing cukup tahap 1 (YAGNI tercatat).
+- Menghubungkan SalesReturn ke ApprovalWorkflow generik: konfigurasi opt-in tenant, perubahan perilaku tak terlihat — perlu keputusan eksplisit Q-SR-3.
+- Aksi cancel retur penjualan baru: jalur hapus draft existing cukup; `cancelled` historis tidak diutak-atik.
+- Mengubah gerbang retur pembelian (sudah benar) atau jurnal/PPN retur (wilayah Accountant, tidak berubah).
+
+F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SR-1/2/3. Pemilik usulan: Business (spec), Lead (putusan), Backend (katalog/seed+gerbang), Frontend (tombol sadar-izin), QA (falsifikasi). Butuh putusan accountant: TIDAK (jurnal/PPN tidak berubah).
