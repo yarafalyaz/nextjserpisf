@@ -25857,3 +25857,11 @@ Edge cases: EC-1 telepon kosong dua-duanya + nama sama → bukan kandidat (kunci
 - Validasi NPWP online/format pajak, NITKU, status PKP: keluarga identitas pajak existing, perlu vonis Accountant + sumber resmi DJP; bukan kunci banding sederhana spec ini.
 - Duplikat vendor/barang: objek dan penjaga berbeda; tidak dicampur ke spec pelanggan ini.
 ---
+
+---
+
+## 2026-10-25 01:35 WIB — F-2026-10-21-031 earned value TERTUTUP (Lead)
+
+- PR #766 MERGED: squash `ec8f31d5c0c1685121f09c30a69ecc7d3c914e36`, head final persis `af022a6af864c204c2f93fe682bc73d0f68a71cf` (25 Okt 2026 01:28 WIB). Isi: kartu progres tertimbang (earned value) read-only di detail proyek — `src/components/reports/project-earned-value-card.tsx`, integrasi `src/app/(dashboard)/proyek/[slug]/page.tsx`, builder/fixtures/tes EV. Nol skema/migrasi/package.
+- Gerbang: QA LOLOS ISI head `22976e71` (komentar 6387789730) + konfirmasi head final LOLOS SIAP MERGE (komentar 6387914787, kartu t_8a29588e) — patch-id efektif identik, diff ternormalisasi 25.381 byte identik, blob 7/7 sama, tes fokus 30/30. CI exact-head af022a6a: Detect/Lint/Unit/DB Integration/Build Next.js/SonarCloud SUCCESS; Docker Image Build SKIPPED sah (gating path #767, PR tidak menyentuh Dockerfile/compose/CI/dependensi).
+- Status G2 F-031: TERTUTUP. Kartu EV live di main; konsumen Frontend diberitahu (kartu lanjut UI bila ada penyesuaian tampilan). Fase read-only sesuai spec 22 Okt 2026 — CPI level proyek + SPIw basis waktu proyek berlabel, bobot tahap dari RAB terkunci, tanpa jurnal EV/penagihan termin. Vonis Accountant tetap wajib bila EV kelak dipakai penagihan.
