@@ -95,6 +95,7 @@ describe("penjaga POSTED loader laporan aset (t_d34601a0)", () => {
         name: "Mesin",
         purchaseDate: new Date(2026, 0, 1),
         purchaseCost: dec(1000),
+        fiscalYearRows: [],
         category: {
           name: "Mesin",
           taxGroupCode: null,

@@ -154,6 +154,32 @@ describe("CollectionQueueCard F-2026-10-22-089-S", () => {
     expect(text).not.toContain("Hubungi via WhatsApp")
   })
 
+  it("indikator denda terutang F-093-V: hanya dokumen terbit bersaldo tampil", () => {
+    const queue = buildCollectionQueue(
+      [invoice({}), invoice({ invoiceId: 2, documentNo: "INV-0002" })],
+      [],
+      [],
+      { now: NOW },
+      [
+        { salesInvoiceId: 1, amount: 100_000, paidAmount: 40_000, status: "posted", reversesId: null },
+        { salesInvoiceId: 2, amount: 999_000, paidAmount: 0, status: "paid", reversesId: null },
+      ],
+    )
+    expect(queue.rows[0].hasOutstandingLateFee).toBe(true)
+    expect(queue.rows[0].lateFeeOutstanding).toBe(60_000)
+    expect(queue.rows[1].hasOutstandingLateFee).toBe(false)
+    const container = render(
+      <CollectionQueueCard
+        rows={queue.rows}
+        summary={queue.summary}
+        canCreateExchange={false}
+        canFollowUp={false}
+      />,
+    )
+    expect(container.textContent).toContain("Ada denda terutang")
+    expect(container.textContent).not.toContain("Rp 999")
+  })
+
   it("kosong: empty state tampil", () => {
     const queue = buildCollectionQueue([], [], [], { now: NOW })
     const container = render(

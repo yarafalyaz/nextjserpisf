@@ -166,6 +166,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // antrean belum menampilkan daftar jejak per faktur untuk dipilih.
   "src/actions/invoice-collection.actions.ts::deleteInvoiceCollectionFollowUp":
     "F-2026-10-22-089-S inti backend; tombol hapus tindak lanjut menyusul (frontend t_6f73907a)",
+  // F-2026-10-23-109-V inti backend (t_7931ae08): generate baris tahun
+  // saldo fiskal; tombol Bekukan Tahun Fiskal + pilihan metode fiskal
+  // menyusul di kartu frontend BOT 2 (buang entri ini saat UI memanggilnya).
+  "src/actions/asset.actions.ts::generateAssetFiscalYearRows":
+    "F-2026-10-23-109-V inti backend; UI bekukan tahun fiskal menyusul (frontend BOT 2)",
   // F-2026-10-22-068-S: 3 aksi ganti revisi BOM + aksi pratinjau delta
   // kini dirujuk panel BomRevisionChangePanel di detail WO/PO
   // (t_b60d664d) — entri beku dibuang.
@@ -186,6 +191,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-23-111-V + F-2026-10-23-115-V inti (t_17e469e7): 3 aksi
   // peristiwa perubahan aset kini dirujuk AssetChangeEventPanel di detail
   // aset (t_311cfc07) — entri beku dibuang.
+  // F-2026-10-22-093-V inti (t_bdc81ed6): aksi edit nominal posted sengaja
+  // TIDAK dirujuk UI — selalu menolak by design (E93-6); koreksi hanya
+  // reversal. 4 aksi lain kini dirujuk SalesLateFeePanel (t_c2d2dce1).
+  "src/actions/sales-late-fee.actions.ts::updateSalesLateFeeAmount":
+    "F-2026-10-22-093-V penjaga tolak-edit nominal posted by design (E93-6); UI sengaja tidak menyediakan edit nominal",
 }
 
 describe("keterhubungan aksi server", () => {

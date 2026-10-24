@@ -72,7 +72,10 @@ import {
   createMaterialRequest,
   createTransferFromMaterialRequest,
   rejectMaterialRequest,
+  updateMaterialRequest,
 } from "../material-request.actions"
+import { validateMaterialRequestWarehouses } from "@/lib/services/material-request.service"
+import { materialRequestSchema } from "@/lib/validations/inventory.schemas"
 import {
   assertMaterialRequestVisible,
   refreshMaterialRequestFulfillmentTx,
@@ -120,7 +123,7 @@ beforeEach(() => {
 })
 
 describe("createMaterialRequest (AC-MR-1)", () => {
-  it("sumber = tujuan ditolak", async () => {
+  it("sumber = tujuan ditolak (pesan guard spesifik)", async () => {
     const res = await createMaterialRequest(
       fd({
         requesterWarehouseId: "1",
@@ -129,6 +132,21 @@ describe("createMaterialRequest (AC-MR-1)", () => {
       }),
     )
     expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("tidak boleh sama")
+    expect(mocks.txMock.materialRequest.create).not.toHaveBeenCalled()
+  })
+
+  it("update sumber = tujuan ditolak (pesan guard spesifik)", async () => {
+    const res = await updateMaterialRequest(
+      1,
+      fd({
+        requesterWarehouseId: "1",
+        sourceWarehouseId: "1",
+        items: JSON.stringify([{ itemId: 1, qty: 2 }]),
+      }),
+    )
+    expect(res.success).toBe(false)
+    expect(String((res as { error?: string }).error)).toContain("tidak boleh sama")
     expect(mocks.txMock.materialRequest.create).not.toHaveBeenCalled()
   })
 
@@ -163,6 +181,31 @@ describe("createMaterialRequest (AC-MR-1)", () => {
     expect(data.items.create).toEqual([{ itemId: 1, qty: 2, notes: null }])
     expect(mocks.prismaMock.stockMove).toBeUndefined()
     expect(mocks.prismaMock.journalEntry).toBeUndefined()
+  })
+})
+
+describe("guard gudang-sama dua lapis (BR-MR-07, falsifikasi M-1)", () => {
+  it("service menolak sumber = tujuan dengan pesan spesifik", () => {
+    expect(() => validateMaterialRequestWarehouses(1, 1)).toThrow("tidak boleh sama")
+    expect(() => validateMaterialRequestWarehouses(2, 1)).not.toThrow()
+  })
+
+  it("schema Zod menolak sumber = tujuan dengan pesan spesifik", () => {
+    const bad = materialRequestSchema.safeParse({
+      requesterWarehouseId: 1,
+      sourceWarehouseId: 1,
+      items: JSON.stringify([{ itemId: 1, qty: 2 }]),
+    })
+    expect(bad.success).toBe(false)
+    if (!bad.success) {
+      expect(bad.error.issues.some((i) => i.message.includes("tidak boleh sama"))).toBe(true)
+    }
+    const ok = materialRequestSchema.safeParse({
+      requesterWarehouseId: 2,
+      sourceWarehouseId: 1,
+      items: JSON.stringify([{ itemId: 1, qty: 2 }]),
+    })
+    expect(ok.success).toBe(true)
   })
 })
 
