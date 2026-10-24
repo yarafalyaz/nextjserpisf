@@ -21,9 +21,11 @@ import {
 import { ReportCardShell } from "./report-card-shell"
 
 /**
- * F-2026-10-22-088-S: laporan "Target vs Pencapaian Penjualan".
- * Murni presentasi dari builder server — nol hitung persen/selisih di
- * client. Persen/gap null tampil kosong (bukan 0%). Notice §6 verbatim.
+ * F-2026-10-22-088-S + F-2026-10-24-131-V tahap 2: laporan "Target vs
+ * Pencapaian Penjualan" basis NETO. Murni presentasi dari builder server:
+ * komponen bruto/retur/neto, persen, selisih, dan temuan plafon ditempel
+ * apa adanya — UI tidak menghitung pengurang (negatif tampil negatif).
+ * Notice §6 verbatim dari builder.
  */
 
 function badge(text: string) {
@@ -58,6 +60,9 @@ function TargetRow({ row }: Readonly<{ row: SalesTargetAchievementRow }>) {
       <DetailTableTd align="right">
         {row.targetAmount !== null ? formatCurrency(row.targetAmount) : SALES_TARGET_NO_TARGET_LABEL}
       </DetailTableTd>
+      <DetailTableTd align="right">{formatCurrency(row.grossPaidAmount)}</DetailTableTd>
+      <DetailTableTd align="right">{formatCurrency(row.returnDeductionAmount)}</DetailTableTd>
+      <DetailTableTd align="right">{row.returnCount}</DetailTableTd>
       <DetailTableTd align="right">{formatCurrency(row.achievedAmount)}</DetailTableTd>
       <DetailTableTd align="right">
         {row.achievementPercent !== null ? formatPercentage(row.achievementPercent, 2) : ""}
@@ -73,8 +78,10 @@ function TargetRow({ row }: Readonly<{ row: SalesTargetAchievementRow }>) {
 export function SalesTargetAchievementCard({
   report,
 }: Readonly<{ report: SalesTargetAchievement }>) {
+  const showUnattributed =
+    report.unattributed.invoiceCount > 0 || report.unattributed.returnDeductionAmount !== 0
   const isEmpty =
-    report.rows.length === 0 && report.noTargetRows.length === 0 && report.unattributed.invoiceCount === 0
+    report.rows.length === 0 && report.noTargetRows.length === 0 && !showUnattributed
 
   return (
     <ReportCardShell
@@ -90,7 +97,10 @@ export function SalesTargetAchievementCard({
           <DetailTableTh>Penjual</DetailTableTh>
           <DetailTableTh>Periode Target</DetailTableTh>
           <DetailTableTh align="right">Target (Rp)</DetailTableTh>
-          <DetailTableTh align="right">Pencapaian (Rp)</DetailTableTh>
+          <DetailTableTh align="right">Bruto Lunas (Rp)</DetailTableTh>
+          <DetailTableTh align="right">Retur (Rp)</DetailTableTh>
+          <DetailTableTh align="right">Retur</DetailTableTh>
+          <DetailTableTh align="right">Pencapaian Neto (Rp)</DetailTableTh>
           <DetailTableTh align="right">Pencapaian (%)</DetailTableTh>
           <DetailTableTh align="right">Selisih (Rp)</DetailTableTh>
           <DetailTableTh align="right">Faktur Lunas</DetailTableTh>
@@ -102,11 +112,14 @@ export function SalesTargetAchievementCard({
           {report.noTargetRows.map((row) => (
             <TargetRow key={`nt-${row.salesEmployeeId}`} row={row} />
           ))}
-          {report.unattributed.invoiceCount > 0 ? (
+          {showUnattributed ? (
             <DetailTableRow>
               <DetailTableTd className="font-medium">{report.unattributed.label}</DetailTableTd>
               <DetailTableTd>{SALES_TARGET_NO_TARGET_LABEL}</DetailTableTd>
               <DetailTableTd align="right">{SALES_TARGET_NO_TARGET_LABEL}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrency(report.unattributed.grossPaidAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{formatCurrency(report.unattributed.returnDeductionAmount)}</DetailTableTd>
+              <DetailTableTd align="right">{""}</DetailTableTd>
               <DetailTableTd align="right">{formatCurrency(report.unattributed.achievedAmount)}</DetailTableTd>
               <DetailTableTd align="right">{""}</DetailTableTd>
               <DetailTableTd align="right">{""}</DetailTableTd>
@@ -122,6 +135,13 @@ export function SalesTargetAchievementCard({
               {formatCurrency(report.totalTargetAmount)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
+              {formatCurrency(report.totalGrossPaidAmount)}
+            </DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
+              {formatCurrency(report.totalReturnDeductionAmount)}
+            </DetailTableTd>
+            <DetailTableTd align="right">{""}</DetailTableTd>
+            <DetailTableTd align="right" className="font-bold">
               {formatCurrency(report.totalAchievedAmount)}
             </DetailTableTd>
             <DetailTableTd align="right" className="font-bold">
@@ -132,6 +152,21 @@ export function SalesTargetAchievementCard({
           </DetailTableFootRow>
         </DetailTableFoot>
       </DetailTable>
+      {report.invoiceDeductionClampFindings.length > 0 ? (
+        <div className="mt-4">
+          <h3 className="text-sm font-semibold text-foreground">Temuan plafon pengurang per faktur</h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted-foreground">
+            {report.invoiceDeductionClampFindings.map((finding) => (
+              <li key={finding.salesInvoiceId}>
+                Faktur #{finding.salesInvoiceId}: pengurang mentah{" "}
+                {formatCurrency(finding.rawDeductionAmount)} ditahan pada total faktur{" "}
+                {formatCurrency(finding.grandTotal)} menjadi{" "}
+                {formatCurrency(finding.clampedDeductionAmount)}.
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </ReportCardShell>
   )
 }
