@@ -26465,4 +26465,232 @@ Edge cases: EC-1 cuti pending yang startDate-nya sudah lewat tanpa keputusan (te
 - Kolom/status dokumen baru: status turunan dari kolom existing cukup; migrasi hanya bila Backend Q-HP-3 membuktikan tidak cukup.
 
 F-2026-10-25-007-S — Antrean persetujuan HR tertunda. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-HP-1/2/4 + fisik Backend Q-HP-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
+---
 
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-011-S: inti status tersimpan per baris perintah kerja (lanjutan F-2026-10-20-105; migrasi ditunda vonis)
+
+> **Slot**: F-2026-10-25-011-S. Diperiksa bentrok 2026-10-25 01:56 WIB vs `origin/main` (`11ecb983`): grep `F-2026-10-25-011` di backlog+board = 0; seri 001-S..010-S terpakai (006-S di main, 007-S..010-S PR #770/#772/#774/#777 OPEN). Diverifikasi sebelum tulis, bukan slot tetap.
+> **Induk**: F-2026-10-20-105 (c) P1 — "Status part per baris WO tidak bertransisi (dipesan/datang/terpasang/diganti/dikembalikan)". Entri induk mengusulkan lapis aman read-model dan menunda inti: "inti kolom status terkelola ditunda migrasi". Spec ini HANYA merumuskan inti yang ditunda itu; lapis aman tidak ditulis ulang.
+
+Benchmark resmi (akses 2026-10-25):
+- Accurate — progress SPK dihitung dari aktivitas nyata, komponen Pengeluaran Bahan Baku 30% proporsional dari qty terambil: https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/menghitung-progress-perintah-kerja/ ; histori WO kronologis (pengambilan bahan, tahapan, penyelesaian): https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/histori-perintah-kerja/histori-wo/
+- Zahir — status part per baris perintah kerja: tidak ditemukan di help.zahironline.com pada akses run ini (ditulis apa adanya, bukan ditebak `BENCHMARK`).
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` 11ecb983)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Kolom tersimpan: `WorkOrderItem.status String @default("pending")` (`prisma/schema.prisma:3144`). Nilai tersimpan yang benar-benar ditulis kode produksi: `pending` (lahir), `in_progress` (massal saat start WO — `src/actions/manufacturing.actions.ts:1567-1570`, hanya baris `pending`), `completed` (massal semua baris saat klaim complete WO — `manufacturing.actions.ts:1705-1708`), `replaced` (revisi baris — `src/actions/inventory.actions.ts:1629`; change order — `src/actions/job-change-order.actions.ts:776`). TIDAK ada penanda per-baris untuk dipesan/datang/terpasang di kolom tersimpan.
+- Lapis aman turunan SUDAH terbangun penuh dan terkonsumsi: builder murni `src/lib/reports/work-order-part-status.ts` (7 status turunan: menunggu/dipesan/datang/terpasang-sebagian/terpasang/diganti/tak-tertaut; precedence `diganti > terpasang(-sebagian) > datang > dipesan > menunggu`; issue legacy tanpa `workOrderItemId` diatribusikan per itemId ke baris cocok pertama, anti-overstate), loader `work-order-part-status-data.ts`, konsumen halaman `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx:194,578` + kartu `src/components/reports/work-order-part-status-card.tsx`, tes builder + tes kartu. Builder TIDAK menulis `WorkOrderItem.status` (komentar berkas :7-8) dan jujur soal retur: `PurchaseReturnItem` tak tertaut per baris WO, jadi status "dikembalikan" TIDAK diturunkan (notice :28-33).
+- Penjaga existing membaca status tersimpan: baris `replaced` dikecualikan dari reservasi stok (`stock-reservation.service.ts:47`, `manufacturing.actions.ts:2722`), dari kebutuhan material (`work-order-material-needs-data.ts`), dan dari saran substitusi (`item-substitute.actions.ts:354`). Mengubah kosakata status tersimpan menyentuh semua penjaga ini.
+- Izin katalog nyata: `view_work_orders`, `create_work_orders`, `edit_work_orders`, `delete_work_orders`, `complete_work_orders` (`src/lib/auth/module-catalog.generated.ts:262-266`). Tidak ada izin per-baris WO.
+- Biaya aktual tetap transaksi inventory: `MaterialIssue` completed tertaut `workOrderItemId` (nullable; baris legacy tanpa tautan ada). Spec ini tidak menyentuh jalur biaya sama sekali.
+
+Belum ada / parsial (bukti grep run ini):
+- Status tersimpan per baris tidak pernah bergerak oleh peristiwa part (PO diterima, MaterialIssue completed, retur) — hanya oleh start/complete WO massal dan revisi `replaced`. Jawaban "part ini sudah sampai mana" hari ini hanya dari turunan baca, bukan dari rekod baris.
+- Status "dikembalikan" per baris tidak bisa dibuktikan dari dokumen existing mana pun (retur pembelian tak tertaut baris WO) — inti pun tidak boleh mengarangnya tanpa tautan dokumen baru.
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: Kepala Bengkel / Mandor (penggerak WO), Petugas Gudang (penerbit MaterialIssue), Admin Produksi (revisi baris), Supervisor (peninjau).
+Dokumen masuk: WorkOrder + WorkOrderItem, PurchaseOrder tertaut WO + penerimaan, MaterialIssue completed, revisi baris/change order existing, StockReservation tertaut baris.
+Dokumen keluar: status tersimpan per baris yang bergerak hanya oleh peristiwa dokumen sah (tanpa dokumen/status manual bebas tahap 1) + tampilan detail WO yang membaca status tersimpan dengan turunan sebagai pembanding jujur untuk baris lama.
+
+Alur inti (sesudah vonis Q-WI-1 Lead membuka fisik):
+1. Baris lahir `pending` (existing). Start WO menggerakkan baris `pending → in_progress` massal (existing, dipertahankan).
+2. Peristiwa part per baris (baru, dalam transaksi dokumen pemicunya, bukan aksi terpisah): penerimaan PO tertaut WO memenuhi qty baris → penanda tiba per baris; MaterialIssue completed mencapai qty baris → penanda terpasang per baris; parsial → penanda sebagian. Fisik penanda (kolom status diperluas vs kolom penanda terpisah vs tabel peristiwa) = keputusan Backend di Q-WI-2, dengan syarat BR-WI-02.
+3. Revisi/change order tetap satu-satunya jalur `replaced` (existing). Complete WO tetap menutup baris (existing).
+4. "Dikembalikan" TIDAK punya transisi tahap 1: tanpa tautan retur per baris, status itu dilarang lahir (BR-WI-05).
+
+### 2. Role/permission matrix (key nyata katalog; USULAN pemetaan)
+
+| Aksi | Kepala Bengkel/Mandor | Petugas Gudang | Admin Produksi | Supervisor |
+|---|---|---|---|---|
+| Lihat status per baris di detail WO | `view_work_orders` | `view_work_orders` | `view_work_orders` | `view_work_orders` |
+| Start/complete WO (penggerak massal existing) | `edit_work_orders` / `complete_work_orders` | — | `edit_work_orders` / `complete_work_orders` | lihat |
+| Terbitkan MaterialIssue (pemicu terpasang) | — | izin material-issue existing | — | lihat |
+| Revisi baris → `replaced` (existing) | — | — | `edit_work_orders` | lihat |
+| Ubah status baris manual bebas | TIDAK ADA tahap 1 (BR-WI-03) | TIDAK ADA | TIDAK ADA | TIDAK ADA |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-WI-3 Lead). Status baris bergerak sebagai efek samping transaksi dokumen yang izinnya sudah ada, bukan aksi berizin sendiri.
+
+### 3. Status-transition matrix (kosakata penanda inti = USULAN, fisik Q-WI-2)
+
+| Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|
+| (lahir) | buat WO | `pending` (tersimpan existing) | existing |
+| `pending` | start WO (klaim menang) | `in_progress` (tersimpan existing) | `manufacturing.actions.ts:1567`; hanya dari `pending` |
+| `in_progress` | penerimaan PO tertaut WO: received ≥ sisa kebutuhan baris | penanda TIBA per baris | dalam tx penerimaan; qty bersih per baris, bukan per item WO lain |
+| `in_progress`/TIBA | MaterialIssue completed kumulatif ≥ qty baris | penanda TERPASANG per baris | dalam tx issue; hanya `workOrderItemId` tertaut persis (legacy tanpa tautan TIDAK menggerakkan baris — BR-WI-04) |
+| `in_progress`/TIBA | MaterialIssue completed 0 < kumulatif < qty baris | penanda TERPASANG-SEBAGIAN per baris | idempoten: issue susulan menaikkan, tidak pernah menurunkan |
+| status apa pun non-final | revisi baris / change order existing | `replaced` (tersimpan existing) | jalur existing saja; baris `replaced` terkunci dari reservasi/kebutuhan/substitusi (penjaga existing) |
+| status apa pun | complete WO (klaim menang) | `completed` (tersimpan existing) | `manufacturing.actions.ts:1705` |
+| — | retur pembelian | TIDAK ADA transisi "dikembalikan" tahap 1 | `PurchaseReturnItem` tak tertaut baris (BR-WI-05) |
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-WI-01 | Satu sumber kebenaran per baris: sesudah inti aktif, status tampil detail WO = status tersimpan; turunan builder existing tetap dihitung sebagai pembanding dan selisihnya tampil sebagai penanda rekonsiliasi, bukan ditimpa diam-diam. Baris yang lahir sebelum inti (backfill tak terbukti) tetap membaca turunan dengan label jujur. | USULAN | pola sumber-tunggal repo (job-billing) |
+| BR-WI-02 | Kosakata tersimpan existing (`pending/in_progress/completed/replaced`) TIDAK diubah artinya dan TIDAK ditimpa penanda part; penanda part hidup di fisik terpisah (kolom penanda/tabel peristiwa) supaya penjaga `replaced` existing (reservasi, kebutuhan, substitusi) tidak rusak. Fisik final Backend. | TERVERIFIKASI-KODE (penjaga) + USULAN | `stock-reservation.service.ts:47`; `manufacturing.actions.ts:2722`; `item-substitute.actions.ts:354` |
+| BR-WI-03 | Tidak ada transisi manual bebas: status/penanda baris hanya bergerak sebagai efek samping transaksi dokumen sah (start, penerimaan, issue, revisi, complete) dalam transaksi yang sama. Aksi "set status baris" langsung = di luar spec. | USULAN | pola klaim atomik start/complete existing |
+| BR-WI-04 | Issue legacy tanpa `workOrderItemId` TIDAK menggerakkan penanda baris mana pun (atribusi turunan per itemId hanya untuk tampilan baca, bukan penulisan). Penanda hanya dari tautan persis. | USULAN | builder :19-21 (atribusi baca anti-overstate) |
+| BR-WI-05 | Status "dikembalikan" per baris dilarang lahir tahap 1: tidak ada dokumen retur tertaut baris WO. Menampilkannya dari turunan/tersimpan = mengarang. Tautan retur per baris = spec terpisah sesudah ada kebutuhan. | TERVERIFIKASI-KODE | builder notice :28-33; schema PurchaseReturnItem |
+| BR-WI-06 | Penanda monoton naik per baris: parsial → penuh boleh; penuh → parsial/ Mundur hanya lewat dokumen pembatalan/reversal existing dalam tx-nya, bukan edit status. Pembatalan issue completed mengikuti jalur pembatalan dokumen existing apa adanya. | USULAN | — |
+| BR-WI-07 | Baris jasa/custom (`itemId <= 0`) tidak pernah berpenanda part (`tak-tertaut` tetap label turunan jujur); penanda stok untuk baris tanpa item = dilarang. | TERVERIFIKASI-KODE + USULAN | builder precedence tak-tertaut |
+| BR-WI-08 | Biaya aktual tidak berubah oleh spec ini: penanda bukan biaya; HPP/aktual tetap dari MaterialIssue/ProductionCost existing. Dilarang menurunkan biaya dari penanda/qty penanda. | TERVERIFIKASI-KODE | mandat material project = transaksi inventory |
+| BR-WI-09 | Backfill baris lama: penanda awal diturunkan SATU KALI dari dokumen existing oleh skrip migrasi terverifikasi (bukan ditebak per baris); baris tak terbukti penuh tetap tanpa penanda dan membaca turunan (BR-WI-01). Backfill = bagian fisik Backend + vonis Lead, bukan efek samping deploy diam-diam. | USULAN | — |
+| BR-WI-10 | Detail WO menampilkan penanda + qty bukti (ter-issue/penerimaan per baris) verbatim server; UI dilarang menghitung ulang status dari qty mentah. | USULAN | pola konsumen read-model repo |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Progress WO dari pengeluaran bahan | Ada, berbobot 30% proporsional qty (URL §benchmark) | tidak ditemukan (belum terverifikasi) | Turunan baca ada (builder F-105); persen berbobot ala Accurate tidak diusulkan |
+| Status part per baris tersimpan | tidak terverifikasi dari URL di atas (progress dihitung, bukan status baris tersimpan) | tidak ditemukan | ABSEN — spec ini (inti ditunda vonis) |
+| Histori kronologis per WO | Ada (URL §benchmark) | tidak ditemukan | Parsial: kartu status + dokumen tertaut di detail WO |
+
+### 6. Acceptance criteria + edge cases (draf untuk Backend/Frontend/QA)
+
+- AC-WI-B1: issue completed tertaut persis mencapai qty baris → penanda TERPASANG lahir dalam tx issue yang sama; issue dibatalkan lewat jalur existing → penanda hasil turun hanya lewat jalur itu (BR-WI-06). Penanda lahir tanpa dokumen = MERAH.
+- AC-WI-B2: issue legacy tanpa `workOrderItemId` dalam jumlah besar → penanda semua baris tetap kosong; turunan tetap tampil (BR-WI-04). Satu penanda bergerak = MERAH.
+- AC-WI-B3: baris `replaced` oleh revisi: penanda part baris itu tidak lagi bergerak oleh issue/penerimaan susulan; penjaga reservasi/kebutuhan/substitusi tetap mengecualikannya. Regresi penjaga = MERAH.
+- AC-WI-B4: backfill pada fixture baris lama campuran (terbukti penuh / parsial / tanpa bukti): penanda hanya pada yang terbukti; sisanya membaca turunan berlabel (BR-WI-01/09). Penanda karangan pada baris tanpa bukti = MERAH.
+- AC-WI-B5: tidak ada aksi/UI yang bisa menulis penanda/status baris secara langsung (grep konsumen + tes jalur tulis). Jalur tulis manual ditemukan = MERAH.
+- AC-WI-F1: detail WO menampilkan penanda + qty bukti verbatim server; membalik label di server mengubah tampil tanpa ubah UI. UI menghitung status sendiri = MERAH.
+- Edge: dua baris item sama dalam satu WO — penerimaan/issue baris A tidak menggerakkan baris B (atribusi per baris, bukan per item). Edge: qty baris direvisi turun sesudah terpasang penuh — penanda tidak mundur diam-diam; tampil selisih rekonsiliasi (BR-WI-01). Edge: WO selesai dengan baris belum terpasang — complete existing tetap menutup; penanda tampil apa adanya sebagai belum-terpasang pada baris `completed` (fakta, bukan dibersihkan).
+
+### 7. Pertanyaan putusan
+
+- Q-WI-1 (Lead, BUTUH-VONIS): buka inti ini sekarang, atau turunan baca F-105 dinyatakan cukup permanen dan inti ditutup YAGNI? Spec ini tidak mengasumsikan dibuka.
+- Q-WI-2 (Backend, sesudah Q-WI-1): fisik penanda — kolom penanda terpisah di `WorkOrderItem` vs tabel peristiwa per baris; termasuk rancangan backfill BR-WI-09 dan dampak ke penjaga `replaced`.
+- Q-WI-3 (Lead): sahkan tanpa key izin baru (pergerakan sebagai efek samping dokumen berizin existing, §2).
+- Q-WI-4 (QA): falsifikasi AC-WI-B1..B5 + F1 atas head Backend/Frontend persis.
+
+### 8. Backlog implementasi (ID induk F-2026-10-20-105; spec ini F-2026-10-25-011-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-011-S | Spec ini (dokumen) | Business | — |
+| (turunan) fisik penanda + backfill + penggerak dalam tx dokumen | Backend | Q-WI-1 dibuka Lead + Q-WI-2 | klaim board file schema |
+| (turunan) detail WO membaca penanda + selisih rekonsiliasi | Frontend | kontrak Backend stabil; kata §6 verbatim | — |
+| (turunan) falsifikasi AC-WI-B1..B5 + F1 | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-011-S)
+- Status "dikembalikan" per baris, tautan retur per baris, persen progress berbobot ala Accurate, WorkCenter/bay fisik, status manual bebas per baris, perubahan kosakata `replaced` existing, jalur biaya dari penanda.
+
+F-2026-10-25-011-S — Inti status tersimpan per baris perintah kerja. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-WI-1/3 + fisik Backend Q-WI-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (fisik+builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK (tanpa uang/jurnal; biaya tetap jalur inventory existing).
+
+
+
+---
+
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-012-S: gerbang persetujuan retur penjualan (izin approve_sales_returns khusus + SoD, sebelum stok+jurnal)
+
+> **Slot**: F-2026-10-25-012-S. Topik asal kartu (antrean penagihan/dunning) DIBATALKAN run ini: dunning sudah ada F-2026-10-22-089-S (`collection-queue-data.ts`, halaman `penjualan/antrean-penagihan`) — duplikasi dilarang. ID F-2026-10-25-012-S dipakai ulang untuk gap terverifikasi di bawah. Diperiksa 2026-10-25 03:16 WIB vs `origin/main` (`40c2ae20`): grep `F-2026-10-25-012` di backlog+board = 0 sebelum tulis.
+> **Jenis**: spec dokumen saja, tanpa kode. Tanpa kolom/status/migrasi baru tahap usulan inti (status retur existing `draft/completed/cancelled` dipertahankan — lihat Q-SR-3).
+
+### 0. Inventarisasi terverifikasi (2026-10-25, origin/main 40c2ae20)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Model `SalesReturn` `status String @default("draft")` (`prisma/schema.prisma:1828-1862`, status `:1838`); item snapshot DPP/PPN retur (`:1865-1890`). Model pembanding `PurchaseReturn` sama-sama `status @default("draft")` (`:2061-2068`).
+- `completeSalesReturn(returnId)` `src/actions/sales.actions.ts:1693`: hanya `requirePermission("edit_sales_returns")` (`:1695`), tolak bila sudah `completed` (`:1702`), validasi serial/batch, lalu SATU transaksi: `onSalesReturnStock` + `onSalesReturnCompleted` (`:1744-1747` lebih kurang — stok `sales-return.hook.ts:256` set `Status.COMPLETED`, jurnal tunggal `accounting.hook.ts:1259ff` Dr Retur Penjualan/Cr Piutang). Siapa pun ber-`edit_sales_returns` (termasuk pembuat draft sendiri) bisa langsung memicu stok masuk + jurnal pengurang piutang. Tidak ada `assertApproved("SalesReturn", …)`, tidak ada `requestApprovalIfConfigured("SalesReturn", …)` — grep keduanya di jalur retur = 0 (approval generik hanya dipakai Quotation `:316,343,492` dan SalesInvoice `:1048,1254,1330,1576`).
+- Pembanding persis di repo: `processPurchaseReturn` `src/actions/purchase.actions.ts:1939` memakai `requirePermission("approve_purchase_returns")` (`:1941`) + guard `status !== "draft"` (`:1949-1951`) sebelum stok+jurnal satu transaksi. Katalog: `approve_purchase_returns` ADA (`src/lib/auth/module-catalog.generated.ts:216`), seed `base-data.ts:365` mengelompokkannya "Approval permissions terpisah dari edit_* (Separation of Duties)" bersama `approve_vendor_payments`.
+- Katalog retur penjualan hanya 4 key: `view/create/edit/delete_sales_returns` (`module-catalog.generated.ts:169-172`). `approve_sales_returns` ABSEN (grep repo = 0). Asimetri nyata: retur pembelian punya gerbang approve, retur penjualan tidak.
+- `createSalesReturn` `create_sales_returns` (`sales.actions.ts:1809`), `updateSalesReturn` hanya dari `draft` (`:2809`), `deleteSalesReturn` `delete_sales_returns` tolak `completed` (`:3221ff`). Tidak ada aksi cancel retur penjualan khusus; `cancelled` hanya dibaca sebagai status pengecualian di guard over-return (`:1877,2895`) dan hook (`sales-return.hook.ts:85`).
+- UI: tombol "Selesaikan" memanggil `completeSalesReturn` langsung — tabel `src/app/(dashboard)/penjualan/retur/_components/return-table.tsx:59-63`, detail `retur/[slug]/page.tsx:88-90`. Tes pengaman `src/__tests__/wired-transition-actions.test.ts:9,31-35` mewajibkan pemanggil UI untuk `completeSalesReturn`.
+- Approval generik tersedia: `requestApprovalIfConfigured`/`assertApproved` `src/lib/services/approval-workflow.service.ts:10,68`; `assertApproved` no-op bila tidak ada baris Approval, lempar bila pending/rejected.
+
+Belum ada / gap: izin `approve_sales_returns`; pemisahan pembuat vs penyelesai retur penjualan; gerbang persetujuan apa pun sebelum stok+jurnal retur penjualan. Retur besi tua sudah ditolak fail-closed di kedua hook (F-2026-10-24-136-V) — spec ini tidak menyentuhnya.
+
+### 1. Workflow specification
+
+Aktor: Pembuat Retur (sales/admin penjualan), Penyetuju/Penyelesai (pemegang `approve_sales_returns`, orang berbeda dari pembuat — Q-SR-2), Sistem (hook stok+jurnal existing), Penonton (view).
+
+Alur usulan (USULAN, menunggu Q-SR-1):
+1. Pembuat buat draft retur (`create_sales_returns`, existing) → status `draft`, nol stok/jurnal.
+2. Pembuat boleh ubah draft (`edit_sales_returns`, existing).
+3. Penyelesai memanggil aksi selesaikan yang kini digerbang `approve_sales_returns`: server cek izin khusus + status persis `draft` + SoD (penyelesai ≠ `createdBy`, bila Q-SR-2 disahkan) → dalam SATU transaksi existing: stok masuk + snapshot pajak + jurnal tunggal + status `completed`. Urutan atomik existing tidak diubah.
+4. Draft dibatalkan/dihapus lewat jalur existing (`delete_sales_returns`); spec ini tidak membuat aksi cancel baru.
+Dokumen masuk: SalesReturn draft + baris. Dokumen keluar: SalesReturn `completed`, StockMove IN, jurnal existing. Tidak ada dokumen/jurnal baru.
+
+### 2. Role/permission matrix (key nyata katalog)
+
+| Aksi | Key | Status key |
+|---|---|---|
+| Lihat retur | `view_sales_returns` (:169) | TERVERIFIKASI-KODE existing |
+| Buat draft | `create_sales_returns` (:170) | existing |
+| Ubah draft | `edit_sales_returns` (:171) | existing |
+| Hapus draft | `delete_sales_returns` (:172) | existing |
+| Selesaikan (stok+jurnal) | `approve_sales_returns` (BARU, usul) | ABSEN — pola `approve_purchase_returns` (:216) + seed SoD `base-data.ts:363-365` |
+
+Role konkret yang menerima key baru = keputusan seed/Lead (Q-SR-2); spec hanya mewajibkan key terpisah dari `edit_*`, mengikuti preseden komentar seed SoD.
+
+### 3. Status-transition matrix
+
+| Dari | Pemicu | Ke | Penjaga |
+|---|---|---|---|
+| — | createSalesReturn | `draft` | `create_sales_returns` (existing) |
+| `draft` | updateSalesReturn | `draft` | `edit_sales_returns` + guard draft :2809 (existing) |
+| `draft` | completeSalesReturn (USULAN digerbang) | `completed` | `approve_sales_returns` BARU (ganti peran `edit_` hanya untuk aksi ini) + status persis `draft` + SoD (Q-SR) |
+| `draft` | deleteSalesReturn | (terhapus) | `delete_sales_returns` (existing) |
+| `completed` | completeSalesReturn ulang | tetap, ditolak "sudah completed" :1702 | existing; replay stok/jurnal idempotent di hook |
+
+Tidak ada status baru tahap 1 (USULAN): persetujuan dinyatakan oleh kepemilikan izin + identitas penyelesai di activity log existing, bukan kolom `approved`. Kolom/status `pending_approval` = Q-SR-3, hanya bila Lead menuntut antrean persetujuan terpisah.
+
+### 4. Business rules register (BR-SR-*)
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-SR-01 | Menyelesaikan retur penjualan wajib izin khusus `approve_sales_returns`; `edit_sales_returns` saja TIDAK cukup. | USULAN (pola TERVERIFIKASI-KODE `approve_purchase_returns` purchase.actions.ts:1941) |
+| BR-SR-02 | Key baru masuk katalog generated + seed parity, dikelompokkan "approval terpisah dari edit (SoD)" seperti base-data.ts:363-365. Generate katalog lewat skrip repo, jangan edit generated manual. | USULAN |
+| BR-SR-03 | Guard status: hanya `draft` boleh selesai; `completed` ditolak; status lain ditolak berpesan. Meniru guard purchase.actions.ts:1949-1951 (lebih ketat dari cek completed-saja :1702). | USULAN |
+| BR-SR-04 | SoD: penyelesai ≠ `createdBy` retur (schema:1851), kecuali bila Lead memutuskan peran tunggal usaha kecil (Q-SR-2). Penolakan berpesan jelas, bukan diam. | BUTUH-VONIS (Lead) |
+| BR-SR-05 | Stok + jurnal + flip status tetap SATU transaksi existing (sales.actions.ts completeSalesReturn); gerbang izin/status/SoD dievaluasi SEBELUM transaksi dibuka. Dilarang jalur selesai yang memisahkan jurnal dari stok. | TERVERIFIKASI-KODE pola existing + USULAN penempatan gerbang |
+| BR-SR-06 | Tanpa ApprovalWorkflow generik untuk SalesReturn tahap 1: `assertApproved("SalesReturn")` TIDAK ditambahkan (workflow generik opt-in per konfigurasi; menambahkannya diam-diam mengubah perilaku tenant tanpa workflow). Dibuka hanya lewat Q-SR-3. | USULAN |
+| BR-SR-07 | UI: tombol "Selesaikan" hanya tampil/aktif bagi pemegang izin menurut payload server; server tetap penjaga akhir (UI bukan gerbang). Kata tombol existing dipertahankan; grep e2e `penjualan/retur` sebelum ubah label/selector. Tes wired-transition wajib tetap hijau (pemanggil UI tidak hilang). | USULAN |
+| BR-SR-08 | Perlakuan jurnal/PPN retur TIDAK berubah oleh spec ini (snapshot DPP/PPN F-004/136-V existing). Retur besi tua tetap ditolak fail-closed. | TERVERIFIKASI-KODE (accounting.hook.ts:1259ff) — Accountant tidak diminta (lihat §8) |
+| BR-SR-09 | Penyelesai tercatat: logActivity "complete" existing menyebut aktor; identitas penyelesai = user izin khusus. Tanpa kolom approvedBy baru tahap 1. | USULAN |
+| BR-SR-10 | Draft lama pra-fitur tetap `draft` dan hanya bisa diselesaikan pemegang izin baru; tidak ada migrasi data/backfill status. Role tanpa key baru kehilangan tombol selesai — perubahan perilaku disengaja, dicatat di catatan rilis implementasi. | USULAN |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Fitur | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Persetujuan transaksi mencakup Retur Penjualan | BENCHMARK: Retur Penjualan termasuk jenis yang bisa diwajibkan approval — https://help.accurate.id/product/accurate-online/fitur-aol/pengaturan/preferensi/cara-mengaktifkan-pengaturan-persetujuan/ | belum terverifikasi (halaman retur Zahir https://help.zahironline.com/portal/id/kb/articles/retur-penjualan dan https://help.zahironline.com/portal/id/kb/articles/cara-input-transaksi-retur-penjualan-zahir-online-v2 tidak menyebut gerbang persetujuan pada akses run ini) | ABSEN untuk retur penjualan; ADA untuk retur pembelian (`approve_purchase_returns`) |
+
+### 6. Acceptance criteria + edge cases
+
+AC-SR-B1 (Backend): pemegang `edit_sales_returns` tanpa `approve_sales_returns` memanggil complete → ditolak, nol StockMove, nol jurnal, status tetap `draft`. Penghapusan cek izin = MERAH.
+AC-SR-B2: pemegang approve menyelesaikan draft → tepat satu set StockMove + satu jurnal existing + `completed`; panggilan kedua ditolak/idempotent tanpa dobel.
+AC-SR-B3: SoD (bila Q-SR-2 = wajib): pembuat menyelesaikan retur sendiri → ditolak berpesan; penyelesai lain → lolos.
+AC-SR-B4: katalog generated memuat `approve_sales_returns` tepat satu kali; tes parity seed/katalog existing hijau; key tidak bocor ke role tanpa grant seed.
+AC-SR-B5: retur terikat faktur besi tua tetap ditolak fail-closed sebelum stok/jurnal (regresi F-136-V), gerbang baru tidak melemahkannya.
+AC-SR-F1 (Frontend): tombol Selesaikan mengikuti izin dari server; UI nol menilai status/SoD sendiri; tanpa izin tombol tidak menawarkan aksi (kata server verbatim).
+AC-SR-F2: `wired-transition-actions.test.ts` tetap hijau — pemanggil UI `completeSalesReturn` di `penjualan/retur` tidak hilang.
+Edge: EC-1 draft dibuat sebelum fitur (createdBy valid) diselesaikan penyetuju lain. EC-2 createdBy null (baris legacy) — SoD tidak menebak: perlakukan boleh-diselesaikan-penyetuju (atau tolak berpesan bila Lead putus lain di Q-SR-2). EC-3 dua penyetuju bersamaan pada draft sama → satu transaksi menang (kunci baris hook existing), lainnya ditolak sudah-completed. EC-4 retur tanpa faktur (salesInvoiceId null): gerbang sama berlaku; jurnal parsial existing tidak berubah. EC-5 izin dicabut di antara buka halaman dan klik → server menolak (UI basi bukan bukti izin).
+
+### 7. Backlog implementasi (turunan)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-012-S | Spec ini (dokumen) | Business | — |
+| (turunan) key `approve_sales_returns` katalog+seed, gerbang completeSalesReturn (izin+guard draft+SoD), tes AC-SR-B* | Backend | Q-SR-1/2 diputus Lead | Generate katalog via skrip repo; klaim file katalog/seed di board (file bersama) |
+| (turunan) tombol Selesaikan sadar-izin | Frontend | kontrak Backend stabil | grep e2e penjualan/retur dulu |
+| (turunan) falsifikasi AC-SR-* | QA | head Backend/Frontend persis | — |
+
+Urutan: Lead putus Q-SR → Backend → Frontend → QA. Effort inti S–M. Risiko: role produksi kehilangan akses selesai sampai grant key baru disebar — mitigasi: seed grant mengikuti pola approve_purchase_returns + catatan rilis.
+
+### 8. Pertanyaan putusan (gerbang)
+
+- Q-SR-1 (Lead): buka inti gerbang izin khusus tahap 1 (tanpa status baru, tanpa ApprovalWorkflow generik)?
+- Q-SR-2 (Lead): SoD wajib (penyelesai ≠ pembuat) atau cukup izin khusus (usaha kecil satu admin)? Termasuk perlakuan createdBy null (EC-2) dan role penerima grant seed.
+- Q-SR-3 (Lead): status/antrean persetujuan terpisah (`pending_approval`/approvedBy) ditunda — sahkan; dibuka hanya bila antrean approver retur diminta eksplisit.
+- Accountant: TIDAK diminta tahap ini — jurnal/PPN retur existing tidak berubah (BR-SR-08). Dipanggil hanya bila implementasi menyentuh perlakuan jurnal.
+
+### Yang TIDAK diusulkan run ini
+- Status persetujuan baru / kolom approvedBy / migrasi: izin khusus + log existing cukup tahap 1 (YAGNI tercatat).
+- Menghubungkan SalesReturn ke ApprovalWorkflow generik: konfigurasi opt-in tenant, perubahan perilaku tak terlihat — perlu keputusan eksplisit Q-SR-3.
+- Aksi cancel retur penjualan baru: jalur hapus draft existing cukup; `cancelled` historis tidak diutak-atik.
+- Mengubah gerbang retur pembelian (sudah benar) atau jurnal/PPN retur (wilayah Accountant, tidak berubah).
+
+F-2026-10-25-012-S — Gerbang persetujuan retur penjualan. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-SR-1/2/3. Pemilik usulan: Business (spec), Lead (putusan), Backend (katalog/seed+gerbang), Frontend (tombol sadar-izin), QA (falsifikasi). Butuh putusan accountant: TIDAK (jurnal/PPN tidak berubah).
