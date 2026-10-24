@@ -27,6 +27,10 @@ vi.mock("@/lib/db/prisma", () => ({
         update: vi.fn(),
       },
       employee: { findUnique: async () => ({ paymentFrequency: "MONTHLY" }) },
+      // F-2026-10-24-132-V: markPayrollPaid memindai baris kompensasi PKWT
+      // di slip dalam tx yang sama; tanpa baris -> nol peristiwa dibayar.
+      payrollComponentLine: { findMany: vi.fn().mockResolvedValue([]) },
+      pkwtCompensationEvent: { update: vi.fn() },
     }),
   },
 }))
