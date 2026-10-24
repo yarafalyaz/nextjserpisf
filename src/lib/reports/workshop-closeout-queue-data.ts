@@ -3,7 +3,7 @@
  * (F-2026-10-24-097-S S2). Baca-saja: query massal per sumber (tanpa
  * N+1), tanpa mutasi, tanpa jurnal. Checklist C1-C8 dirakit di builder
  * murni `workshop-closeout-queue.ts` dari fakta yang sama dengan yang
- * ditegakkan `closeWorkOrder`/`closeProductionOrder` di server — loader
+ * ditegakkan aksi tutup WO/PO di server — loader
  * TIDAK menggantikan guard tutup; balapan biaya di antara antrean dan
  * klik tutup tetap ditolak aksi tutup existing.
  *
