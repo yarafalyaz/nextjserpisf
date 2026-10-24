@@ -168,6 +168,20 @@ describe("Item Actions", () => {
     const res = await actions.updateItem(1, fdMap({ name: "Item Test Updated", cost: "100", price: "200" }))
     expect(res?.success).toBe(true)
   })
+  // E135-7 (simpan): isScrapSaleItem=true && isProduct=true ditolak
+  // sebelum tulis; item besi tua tidak boleh masuk jalur stok/COGS.
+  it("createItem menolak item besi tua berstatus produk", async () => {
+    const res = await actions.createItem(fdMap({ name: "Besi Tua", cost: "100", price: "200", isScrapSaleItem: "true", isProduct: "true" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/tidak boleh isProduct=true/)
+    expect(mocks.prismaMock.item.create).not.toHaveBeenCalled()
+  })
+  it("updateItem menolak item besi tua berstatus produk", async () => {
+    const res = await actions.updateItem(1, fdMap({ name: "Besi Tua", cost: "100", price: "200", isScrapSaleItem: "true", isProduct: "true" }))
+    expect(res?.success).toBe(false)
+    expect(String(res?.error)).toMatch(/tidak boleh isProduct=true/)
+    expect(mocks.prismaMock.item.update).not.toHaveBeenCalled()
+  })
   it("deleteItem succeeds", async () => {
     const res = await actions.deleteItem(1)
     expect(res?.success).toBe(true)
