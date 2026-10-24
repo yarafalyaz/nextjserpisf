@@ -25,6 +25,11 @@ import {
 } from "@/lib/reports/employee-lifecycle"
 import { hasPermission } from "@/lib/auth/permissions"
 import {
+  assertHrEmployeeAccess,
+  getHrScope,
+  hrEmployeeScopeWhere,
+} from "@/lib/auth/hr-scope"
+import {
   getEmployeePayrollComponents,
   getPayrollComponents,
 } from "@/actions/hrm.actions"
@@ -62,7 +67,7 @@ export default async function EmployeeDetailPage({
 }: {
   params: Promise<{ slug: string }>
 }) {
-  await requirePermission("view_employees")
+  const sessionUser = await requirePermission("view_employees")
   const { slug } = await params
 
   const employee = await resolveEntity(
@@ -145,26 +150,40 @@ export default async function EmployeeDetailPage({
   // sempit (tanpa nominal) hanya untuk merender nilai tersimpan.
   const canEditProbation = await hasPermission("edit_employees")
   const canApproveContracts = await hasPermission("approve_contracts")
+  // Baca RSC probation tunduk pada scope HR yang sama dengan aksi server
+  // (assertHrEmployeeAccess + hrScopeWhere/hrEmployeeScopeWhere). Di luar
+  // scope: ulasan + opsi penilai dikosongkan, bukan bocor semua karyawan.
+  const hrScope = await getHrScope(sessionUser)
+  const probationInScope = await assertHrEmployeeAccess(hrScope, employee.id)
+    .then(() => true)
+    .catch(() => false)
   const [overviewRows, reviewRows, decisionRows, reviewerRows] = await Promise.all([
     getProbationOverview().catch(() => []),
-    prisma.probationReview.findMany({
-      where: { employeeId: employee.id },
-      select: {
-        id: true,
-        milestone: true,
-        reviewerEmployeeId: true,
-        technicalScore: true,
-        disciplineScore: true,
-        attendanceScore: true,
-        notes: true,
-        recommendation: true,
-        status: true,
-      },
-    }),
+    probationInScope
+      ? prisma.probationReview.findMany({
+          where: { employeeId: employee.id },
+          select: {
+            id: true,
+            milestone: true,
+            reviewerEmployeeId: true,
+            technicalScore: true,
+            disciplineScore: true,
+            attendanceScore: true,
+            notes: true,
+            recommendation: true,
+            status: true,
+          },
+        })
+      : Promise.resolve([]),
     getContractDecisionRequests(employee.id).catch(() => null),
-    canEditProbation
+    canEditProbation && probationInScope
       ? prisma.employee.findMany({
-          where: { deletedAt: null, isActive: true, id: { not: employee.id } },
+          where: {
+            deletedAt: null,
+            isActive: true,
+            id: { not: employee.id },
+            ...hrEmployeeScopeWhere(hrScope),
+          },
           select: { id: true, name: true },
           orderBy: { name: "asc" },
         })
