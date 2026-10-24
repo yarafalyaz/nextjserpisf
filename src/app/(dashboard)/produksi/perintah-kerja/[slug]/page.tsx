@@ -16,6 +16,13 @@ import { PageHeader, BackButton } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { PrintButton } from "@/components/ui/print-button";
 import { TransactionAttachments } from "@/components/ui/transaction-attachments";
+import { getWorkOrderPhotos } from "@/lib/reports/attachment-photo-data";
+import {
+  WorkOrderPhotoPanel,
+  isPublishableCategory,
+} from "@/components/reports/work-order-photo-panel";
+import { PhotoUploadField } from "@/components/reports/photo-upload-field";
+import { PhotoVerifyPublishButtons } from "@/components/reports/photo-verify-publish-button";
 import { WhatsappButton } from "@/components/reports/whatsapp-button";
 import { WhatsappTrailNote } from "@/components/reports/whatsapp-trail-note";
 import { getWhatsappTrail } from "@/lib/reports/whatsapp-trail-data";
@@ -208,6 +215,17 @@ export default async function WorkOrderDetailPage({
 
   // F-036 tahap 2 + F-035: jejak klik WA terakhir + histori geser endDate.
   const whatsappTrail = await getWhatsappTrail("WorkOrder", wo.id);
+
+  // F-2026-10-24-096-S: foto per tahap dari loader backend (grup/kategori/
+  // before-after apa adanya). Tombol aksi hanya pemegang izin; server penegak.
+  const [workOrderPhotos, canVerifyPhoto, canPublishPhoto, canEditWo] =
+    await Promise.all([
+      getWorkOrderPhotos(wo.id),
+      hasPermission("manage_qc_inspections"),
+      hasPermission("complete_work_orders"),
+      hasPermission("edit_work_orders"),
+    ]);
+  const canUploadQcPhoto = canVerifyPhoto;
 
   // F-066-S UI (t_b1b321cb): panel Change Order — konsumen 7 aksi BOT 3.
   // Nilai kontrak tunggal dari quotation berjalan (BR-CO-01); daftar item
@@ -754,6 +772,59 @@ export default async function WorkOrderDetailPage({
       {/* Foto bukti WO: izin work_order sudah terpetakan (view_work_orders
           baca, edit_work_orders tulis) di attachment-permission-maps. */}
       <TransactionAttachments referenceType="work_order" referenceId={wo.id} />
+
+      {/* F-2026-10-24-096-S: foto per tahap berkategori (loader backend).
+          Panel existing di atas tidak dibangun ulang. */}
+      <WorkOrderPhotoPanel
+        photos={workOrderPhotos}
+        actions={Object.fromEntries(
+          workOrderPhotos.groups.flatMap((g) =>
+            g.photos.map((p) => [
+              p.id,
+              <PhotoVerifyPublishButtons
+                key={p.id}
+                attachmentId={p.id}
+                photoName={p.originalName}
+                isVerified={p.isVerified}
+                canVerify={canVerifyPhoto}
+                canPublish={canPublishPhoto}
+                publishable={isPublishableCategory(p.category)}
+              />,
+            ]),
+          ),
+        )}
+        uploads={
+          canEditWo || canUploadQcPhoto ? (
+            <div className="flex flex-col gap-3 border-t border-default pt-4">
+              <h3 className="text-sm font-semibold text-foreground">Upload Foto Tahap</h3>
+              {canEditWo ? (
+                <PhotoUploadField
+                  referenceType="work_order"
+                  referenceId={wo.id}
+                  parentLabel="Perintah kerja"
+                />
+              ) : null}
+              {workOrderPhotos.groups
+                .filter((g) => g.referenceType !== "work_order")
+                .map((g) =>
+                  (g.referenceType === "qc_inspection" ? canUploadQcPhoto : canEditWo) ? (
+                    <PhotoUploadField
+                      key={`${g.referenceType}:${g.referenceId}`}
+                      referenceType={g.referenceType}
+                      referenceId={g.referenceId}
+                      parentLabel={g.parentLabel ?? `${g.referenceType} #${g.referenceId}`}
+                    />
+                  ) : null,
+                )}
+              {wo.customerVehicleId ? (
+                <p className="text-xs text-muted-foreground">
+                  Foto kendaraan umum diunggah dari halaman kendaraan pelanggan.
+                </p>
+              ) : null}
+            </div>
+          ) : undefined
+        }
+      />
     </div>
   );
 }
