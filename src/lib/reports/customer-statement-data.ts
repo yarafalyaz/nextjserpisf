@@ -36,8 +36,7 @@ import {
   type CustomerStatementPaymentInput,
   type CustomerStatementReturnInput,
 } from "@/lib/reports/customer-statement"
-import { getSystemSettings } from "@/lib/utils/settings"
-import { safeAdd } from "@/lib/utils/math"
+import { loadReturnCreditByReturnId } from "@/lib/reports/return-credit"
 import { formatAccounting } from "@/lib/utils/format"
 import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
@@ -115,42 +114,12 @@ export async function loadCustomerStatement(
     }),
   ])
 
-  // returnCredit per retur dari kaki Cr Piutang jurnal POSTED (F-104-V).
-  const returnCreditByReturnId = new Map<number, number>()
-  if (salesReturns.length > 0) {
-    let receivableAccountId: number | null = null
-    try {
-      receivableAccountId = (await getSystemSettings())?.salesReceivableAccountId ?? null
-    } catch {
-      receivableAccountId = null
-    }
-    if (receivableAccountId !== null) {
-      const journals = await prisma.journal.findMany({
-        where: {
-          deletedAt: null,
-          status: "POSTED",
-          referenceType: "SalesReturn",
-          referenceId: { in: salesReturns.map((r) => r.id) },
-        },
-        select: {
-          referenceId: true,
-          entries: {
-            where: { accountId: receivableAccountId },
-            select: { credit: true },
-          },
-        },
-      })
-      for (const journal of journals) {
-        if (journal.referenceId === null) continue
-        let credit = 0
-        for (const entry of journal.entries) credit = safeAdd(credit, Number(entry.credit), 2)
-        returnCreditByReturnId.set(
-          journal.referenceId,
-          safeAdd(returnCreditByReturnId.get(journal.referenceId) ?? 0, credit, 2),
-        )
-      }
-    }
-  }
+  // returnCredit per retur dari kaki Cr Piutang jurnal POSTED (F-104-V),
+  // lewat helper bersama return-credit.ts.
+  const returnCreditByReturnId = await loadReturnCreditByReturnId(
+    salesReturns.map((r) => r.id),
+  )
+  const returnInvoiceIds = new Set(invoices.map((inv) => inv.id))
 
   const invoiceInputs: CustomerStatementInvoiceInput[] = invoices.map((inv) => ({
     id: inv.id,
@@ -171,7 +140,7 @@ export async function loadCustomerStatement(
   }))
 
   const returnInputs: CustomerStatementReturnInput[] = salesReturns
-    .filter((ret) => ret.salesInvoiceId !== null)
+    .filter((ret) => ret.salesInvoiceId !== null && returnInvoiceIds.has(ret.salesInvoiceId as number))
     .map((ret) => ({
       id: ret.id,
       documentNo: ret.documentNo,
