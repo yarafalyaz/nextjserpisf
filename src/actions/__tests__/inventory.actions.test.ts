@@ -1494,6 +1494,23 @@ describe("remnant (P1-5)", () => {
     expect(stale.success).toBe(false);
   });
 
+  it("E135-5: disposisi kelalaian nol jurnal/potongan — hanya 5 kolom tinjau berubah", async () => {
+    mocks.requirePermissionMock.mockResolvedValue({ id: 9, roles: ["admin"] });
+    mocks.prismaMock.materialIssueItem.updateMany.mockResolvedValue({ count: 1 });
+    const res = await actions.reviewAbnormalScrap({ source: "MI", lineId: 5, disposition: "kelalaian", note: "teguran tertulis" });
+    expect(res.success).toBe(true);
+    const call = mocks.prismaMock.materialIssueItem.updateMany.mock.calls[0][0];
+    // Snapshot klasifikasi/nilai 066-V byte-sama: tidak ada kolom uang/qty.
+    expect(Object.keys(call.data).sort()).toEqual([
+      "scrapReviewDisposition", "scrapReviewNote", "scrapReviewStatus", "scrapReviewedAt", "scrapReviewedBy",
+    ]);
+    // Nol jurnal baru, nol gerakan stok, nol baris item lain tersentuh.
+    expect(mocks.prismaMock.journal.create).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.journal.createMany).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.stockMove.create).not.toHaveBeenCalled();
+    expect(mocks.prismaMock.stockMove.createMany).not.toHaveBeenCalled();
+  });
+
   it("consumeRemnant/scrapRemnant menolak gudang di luar scope user", async () => {
     mocks.requirePermissionMock.mockResolvedValue({ id: 7, roles: ["warehouse"] });
     mocks.prismaMock.userWarehouse.findMany.mockResolvedValue([{ warehouseId: 1 }]);

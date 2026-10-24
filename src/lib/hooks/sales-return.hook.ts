@@ -42,6 +42,33 @@ export async function onSalesReturnCompleted(
       include: { items: true },
     });
 
+    // F-2026-10-24-136-V Putusan 1 (build pertama): retur atas faktur besi
+    // tua murni ditolak berisik fail-closed SEBELUM stok/journal dibuat.
+    // Bentuk retur kelak hanya Dr scrapSaleIncomeAccountId + PPN snapshot
+    // / Cr Piutang (E136-3); selama ini dilarang persediaan/StockMove IN.
+    if (salesReturn.salesInvoiceId != null) {
+      const linkedInvoice = await tx.salesInvoice.findUniqueOrThrow({
+        where: { id: salesReturn.salesInvoiceId },
+        include: { items: { select: { itemId: true, qty: true } } },
+      });
+      const returnItemIds = [...new Set(salesReturn.items.map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
+      const linkedInvoiceItemIds = [...new Set(linkedInvoice.items.filter((it) => Number(it.qty) > 0).map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
+      if (returnItemIds.length > 0) {
+        const scrapRows = await tx.item.findMany({
+          where: { id: { in: [...new Set([...returnItemIds, ...linkedInvoiceItemIds])] } },
+          select: { id: true, isScrapSaleItem: true },
+        });
+        const isScrap = new Map(scrapRows.map((r) => [r.id, r.isScrapSaleItem]));
+        const allScrap = (ids: number[]) => ids.length > 0 && ids.every((id) => isScrap.get(id));
+        if (allScrap(linkedInvoiceItemIds) && allScrap(returnItemIds)) {
+          throw new Error(
+            "Retur penjualan atas faktur besi tua (scrap) ditolak berisik: faktur besi tua punya nilai buku Rp0 dan pendapatannya masuk akun lain-lain, bukan faktur penjualan biasa. " +
+              "Gunakan pembalikan faktur (belum dibayar) atau pengembalian pembayaran melalui jalur existing (sudah dibayar).",
+          );
+        }
+      }
+    }
+
     // Idempotency: check if stock moves already exist
     const existingMoves = await tx.stockMove.findFirst({
       where: {
