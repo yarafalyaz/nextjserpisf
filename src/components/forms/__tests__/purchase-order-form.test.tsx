@@ -188,3 +188,63 @@ describe("PurchaseOrderForm — Permintaan Pembelian linkage", () => {
     container.remove()
   })
 })
+
+describe("PurchaseOrderForm — a11y wiring", () => {
+  it("form tambah: aria-label + aria-busy false, hanya kontrol wajib yang required, bintang dekoratif aria-hidden", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(<PurchaseOrderForm vendors={mockVendors} items={mockItems} />)
+    })
+
+    const form = container.querySelector("form")!
+    expect(form.getAttribute("aria-label")).toBe("Formulir tambah pesanan pembelian")
+    expect(form.getAttribute("aria-busy")).toBe("false")
+
+    // purchaseOrderSchema wajib: vendorId + date saja.
+    const vendorCombobox = container.querySelector('[role="combobox"]#vendorId, [role="combobox"][id="vendorId"]')
+      ?? Array.from(container.querySelectorAll('[role="combobox"]')).find((el) => el.getAttribute("aria-required") === "true")
+    expect(vendorCombobox).toBeTruthy()
+    expect(container.querySelectorAll('[role="combobox"][aria-required="true"]').length).toBe(1)
+    expect(container.querySelector("#date-trigger")?.getAttribute("aria-required")).toBe("true")
+
+    // Opsional tidak boleh required: Perkiraan Pengiriman, Termin, Biaya, Catatan.
+    expect(container.querySelector("#expectedDate-trigger")?.getAttribute("aria-required")).not.toBe("true")
+    for (const id of ["paymentTerm", "shippingCost", "serviceFee", "notes"]) {
+      expect(container.querySelector(`#${id}`)?.getAttribute("required")).toBeNull()
+    }
+
+    // Bintang hias disembunyikan dari SR; teks label utuh terbaca.
+    const stars = Array.from(form.querySelectorAll('span[aria-hidden="true"]'))
+    expect(stars.some((el) => el.textContent === "*" && el.classList.contains("text-destructive"))).toBe(true)
+    expect(form.textContent).toContain("Pemasok *")
+
+    unmount(root)
+    container.remove()
+  })
+
+  it("form ubah: aria-label ubah pesanan pembelian", () => {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const { root } = mountInto(container)
+
+    act(() => {
+      root.render(
+        <PurchaseOrderForm
+          vendors={mockVendors}
+          items={mockItems}
+          order={{ id: 9, vendorId: 1, date: "2026-10-21", items: [{ itemId: 100, qty: 2, unitPrice: 1500 }] }}
+        />,
+      )
+    })
+
+    const form = container.querySelector("form")!
+    expect(form.getAttribute("aria-label")).toBe("Formulir ubah pesanan pembelian")
+    expect(form.getAttribute("aria-busy")).toBe("false")
+
+    unmount(root)
+    container.remove()
+  })
+})

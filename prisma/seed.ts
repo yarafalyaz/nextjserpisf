@@ -179,10 +179,10 @@ async function main() {
     // di wizard install). Hanya mengisi bila kode belum ada — edit tenant aman.
     for (const t of WITHHOLDING_TAX_TYPES) {
       await conn.query(
-        `INSERT INTO withholding_tax_types (code, name, rate, article, liability_account_id, receivable_account_id, is_active, created_at, updated_at)
-         SELECT ?, ?, ?, ?, (SELECT id FROM accounts WHERE code = ?), (SELECT id FROM accounts WHERE code = ?), true, NOW(), NOW()
+        `INSERT INTO withholding_tax_types (code, name, rate, article, object_code, liability_account_id, receivable_account_id, is_active, created_at, updated_at)
+         SELECT ?, ?, ?, ?, ?, (SELECT id FROM accounts WHERE code = ?), (SELECT id FROM accounts WHERE code = ?), ?, NOW(), NOW()
          WHERE NOT EXISTS (SELECT 1 FROM withholding_tax_types WHERE code = ?)`,
-        [t.code, t.name, t.rate, t.article ?? null, t.liabilityAccountCode ?? null, t.receivableAccountCode ?? null, t.code],
+        [t.code, t.name, t.rate, t.article ?? null, t.objectCode ?? null, t.liabilityAccountCode ?? null, t.receivableAccountCode ?? null, t.isActive ?? true, t.code],
       );
     }
     console.log(`✅ ${WITHHOLDING_TAX_TYPES.length} withholding tax types seeded/checked`);

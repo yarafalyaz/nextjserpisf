@@ -8,9 +8,10 @@ import { prisma } from "@/lib/db/prisma"
 import { CanCreate } from "@/components/auth/can-create"
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { AppSearchField } from "@/components/ui/search-field"
-import { StatusChip } from "@/components/ui/status-chip"
-import { formatDate, formatNumber } from "@/lib/utils/format"
-import { statusLabel } from "@/lib/utils/status-labels"
+import { WarrantyClaimList } from "./_components/warranty-claim-list"
+import { getWarrantyExpiryQueue } from "@/lib/reports/warranty-expiry-queue-data"
+import { WARRANTY_EXPIRY_WINDOW_CHOICES } from "@/lib/reports/warranty-expiry-queue"
+import { WarrantyExpiryQueueCard } from "@/components/reports/warranty-expiry-queue-card"
 
 export const metadata: Metadata = { title: "Klaim Garansi" }
 
@@ -35,12 +36,26 @@ const STATUS_FILTERS = [
 export default async function WarrantyClaimsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; cari?: string }>
+  searchParams: Promise<{ status?: string; cari?: string; jendelaDepan?: string; jendelaLampau?: string }>
 }) {
   await requirePermission("view_warranty_claims")
   const params = await searchParams
   const status = params.status ?? ""
   const cari = (params.cari ?? "").trim()
+  const windowAheadDays = (WARRANTY_EXPIRY_WINDOW_CHOICES as readonly number[]).includes(
+    Number(params.jendelaDepan),
+  )
+    ? Number(params.jendelaDepan)
+    : undefined
+  const windowPastDays = (WARRANTY_EXPIRY_WINDOW_CHOICES as readonly number[]).includes(
+    Number(params.jendelaLampau),
+  )
+    ? Number(params.jendelaLampau)
+    : undefined
+  const expiryQueue = await getWarrantyExpiryQueue("claims_page", {
+    windowAheadDays,
+    windowPastDays,
+  })
 
   const claims = await prisma.warrantyClaim.findMany({
     where: {
@@ -91,9 +106,10 @@ export default async function WarrantyClaimsPage({
         </CanCreate>
       </div>
 
+      <div className="flex flex-wrap items-end gap-3" role="group" aria-label="Filter klaim garansi">
       <form
         method="get"
-        aria-label="Filter klaim garansi"
+        aria-label="Filter status klaim garansi"
         className="flex flex-wrap items-end gap-3"
       >
         <div className="flex flex-col gap-1.5">
@@ -113,10 +129,7 @@ export default async function WarrantyClaimsPage({
             ))}
           </select>
         </div>
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cari</span>
-          <AppSearchField action="/produksi/garansi" placeholder="Keluhan, plat nomor, atau barang" />
-        </div>
+        <input type="hidden" name="cari" defaultValue={cari} />
         <button
           type="submit"
           className="inline-flex min-h-11 items-center justify-center rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
@@ -124,57 +137,59 @@ export default async function WarrantyClaimsPage({
           Terapkan
         </button>
       </form>
+        <div className="flex flex-col gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Cari</span>
+          <AppSearchField action="/produksi/garansi" placeholder="Keluhan, plat nomor, atau barang" />
+        </div>
+      </div>
+
+      <form
+        method="get"
+        aria-label="Filter jendela garansi segera berakhir"
+        className="flex flex-wrap items-end gap-3"
+      >
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="warranty-window-ahead" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Jendela ke depan (hari)
+          </label>
+          <select
+            id="warranty-window-ahead"
+            name="jendelaDepan"
+            defaultValue={String(expiryQueue.windowAheadDays)}
+            className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
+          >
+            {WARRANTY_EXPIRY_WINDOW_CHOICES.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label htmlFor="warranty-window-past" className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+            Jendela lampau (hari)
+          </label>
+          <select
+            id="warranty-window-past"
+            name="jendelaLampau"
+            defaultValue={String(expiryQueue.windowPastDays)}
+            className="min-h-11 rounded-lg border border-default bg-surface px-3 text-sm text-foreground"
+          >
+            {WARRANTY_EXPIRY_WINDOW_CHOICES.map((d) => (
+              <option key={d} value={d}>{d}</option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="submit"
+          className="inline-flex min-h-11 items-center justify-center rounded-lg border border-default bg-surface px-4 py-2.5 text-sm font-medium text-foreground transition-all hover:-translate-y-px hover:shadow-md"
+        >
+          Terapkan Jendela
+        </button>
+      </form>
+
+      <WarrantyExpiryQueueCard queue={expiryQueue} />
 
       <div className="bg-surface rounded-xl border border-default shadow-sm overflow-hidden">
-        {claims.length === 0 ? (
-          <p className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-            Belum ada klaim garansi
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm" aria-label="Daftar klaim garansi">
-              <thead>
-                <tr className="border-b border-default text-left">
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Tanggal Lapor</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Kendaraan</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Barang Tercakup</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Keluhan</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Odometer</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Status</th>
-                  <th scope="col" className="px-5 py-3 font-medium text-muted-foreground">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-default">
-                {claims.map((claim) => (
-                  <tr key={claim.id}>
-                    <td className="px-5 py-3 text-foreground">{formatDate(claim.reportedAt)}</td>
-                    <td className="px-5 py-3 text-foreground font-mono">{claim.customerVehicle.plateNumber ?? "-"}</td>
-                    <td className="px-5 py-3 text-foreground">{claim.coverage.item.name}</td>
-                    <td className="px-5 py-3 text-foreground">
-                      <span className="line-clamp-2 max-w-72">{claim.complaint}</span>
-                    </td>
-                    <td className="px-5 py-3 text-foreground tabular-nums">
-                      {claim.odometerKm === null ? "-" : `${formatNumber(claim.odometerKm)} km`}
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusChip status={claim.status} />
-                      <span className="sr-only">{statusLabel(claim.status)}</span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <Link
-                        href={`/produksi/garansi/${claim.id}`}
-                        className="text-primary hover:underline"
-                        aria-label={`Lihat detail klaim garansi ${claim.id}`}
-                      >
-                        Detail
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <WarrantyClaimList claims={claims} />
       </div>
 
       <p className="text-sm text-muted-foreground">

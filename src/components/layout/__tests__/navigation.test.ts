@@ -19,10 +19,13 @@ describe("navigation single source of truth", () => {
     expect(group?.children?.length ?? 0).toBeGreaterThan(30)
     expect(
       (group?.children ?? []).every((child) => {
-        if (["/laporan/gaji-karyawan", "/laporan/pph-21", "/laporan/porsi-gaji", "/laporan/bukti-potong-pph"].includes(child.href)) {
+        if (["/laporan/gaji-karyawan", "/laporan/pph-21", "/laporan/porsi-gaji"].includes(child.href)) {
           // Fail-closed: view_reports generik TIDAK boleh membuka laporan gaji.
           return child.permission === "view_payroll_reports" && !(child.permissions ?? []).includes("view_reports")
         }
+        // bukti-potong-pph = laporan pajak pemasok (VendorBill), bukan
+        // payroll — wajib jatuh ke cabang view_reports umum di bawah
+        // (vonis BOT 4 F-2026-10-21-034).
         return child.permission === "view_reports"
       }),
     ).toBe(true)

@@ -7,9 +7,10 @@ import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 
 import type { Metadata } from "next"
 
-import { requirePermission } from "@/lib/auth/permissions"
+import { requirePermission, hasPermission } from "@/lib/auth/permissions"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { loadQuotationFormOptions } from "../../_components/quotation-options"
+import { buildInvoiceThresholdInfo } from "@/lib/sales/invoice-threshold"
 export const metadata: Metadata = { title: "Ubah Penawaran" }
 
 export default async function EditQuotationPage({
@@ -20,6 +21,7 @@ export default async function EditQuotationPage({
   await requirePermission("edit_quotations")
 
   const { slug } = await params
+  const canEditQuotations = await hasPermission("edit_quotations")
 
   const data = await resolveEntity(
     { segment: slug, fallbackWhere: {} },
@@ -81,6 +83,12 @@ export default async function EditQuotationPage({
       </div>
       <QuotationForm
         quotation={quotation}
+        invoiceThreshold={buildInvoiceThresholdInfo(
+          data.invoiceThresholdPercent == null
+            ? null
+            : Number(data.invoiceThresholdPercent),
+        )}
+        canEditQuotations={canEditQuotations}
         customers={customers}
         customerVehicles={customerVehicleOptions}
         items={itemOptions}

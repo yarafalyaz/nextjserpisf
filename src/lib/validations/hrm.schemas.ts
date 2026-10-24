@@ -68,6 +68,13 @@ export const employeeLoanSchema = z.object({
   loanDate: requiredDate("Tanggal pinjaman"),
   totalAmount: requiredNum("Total pinjaman", 1),
   monthlyInstallment: requiredNum("Cicilan bulanan", 1),
+  // F-2026-10-23-105-V: nominal cicilan mingguan dari perjanjian tertulis.
+  // Kosong = null (tanpa jadwal mingguan); terisi wajib > 0 sen. TIDAK
+  // dihitung otomatis dari monthlyInstallment.
+  weeklyInstallment: z.preprocess(
+    (v) => (v === "" || v === undefined ? null : v),
+    z.coerce.number().positive("Cicilan mingguan harus lebih dari 0").nullable(),
+  ),
   notes: optionalStr(500),
 })
 
@@ -75,12 +82,16 @@ export const employeeLoanSchema = z.object({
 
 export const timesheetSchema = z.object({
   employeeId: requiredId("Karyawan"),
-  projectId: requiredId("Proyek"),
+  // F-2026-10-21-019: tepat satu konteks (proyek XOR perintah kerja) —
+  // keduanya opsional di skema; XOR ditegakkan di service (timesheet-context).
+  projectId: optionalId,
+  workOrderId: optionalId,
   taskId: optionalId,
   date: requiredDate("Tanggal"),
   startTime: optionalStr(10),
   endTime: optionalStr(10),
-  hours: requiredNum("Jam", 0.01),
+  // Cap per baris 24 jam (satu baris = satu sesi kerja satu hari kalender).
+  hours: z.coerce.number().min(0.01).max(24),
   description: optionalStr(1000),
 })
 

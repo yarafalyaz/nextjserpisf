@@ -4,6 +4,7 @@ import { isValidCronRequest } from "@/lib/security/cron"
 import { notificationService } from "@/lib/services/notification.service"
 import { apiError } from "@/lib/api-response"
 import { getDailyAttendanceMetrics } from "@/lib/services/daily-attendance.service"
+import { loadWarehouseLowStock } from "@/lib/reports/min-stock-warehouse-alert"
 
 /**
  * Cron: Send daily notifications to admins.
@@ -95,6 +96,27 @@ export async function GET(request: Request) {
     results.lowStock = total
   }
 
+  // 1b. F-2026-10-22-070-S (BR-MS-05): menipis per (barang, gudang) vs
+  // minimum efektif. Dedupe per judul per hari via notifyUsersIfNew.
+  // Kegagalan loader pasangan ini tidak menggagalkan notifikasi lain.
+  let warehouseLow: Awaited<ReturnType<typeof loadWarehouseLowStock>> = []
+  try {
+    warehouseLow = await loadWarehouseLowStock()
+  } catch (loadError) {
+    console.error("[daily-notifications] gagal menilai stok per gudang", loadError)
+    results.lowStockWarehouseError = 1
+  }
+  for (const line of warehouseLow.slice(0, 20)) {
+    await notificationService.notifyUsersIfNew(
+      adminIds,
+      `Stok ${line.itemName} Menipis di ${line.warehouseName}`,
+      `Stok di ${line.warehouseName}: ${line.qtyAtWarehouse} (Minimum: ${line.minStock}). Segera lakukan pembelian atau transfer antar gudang.`,
+      "warning",
+      dayStart
+    )
+  }
+  if (warehouseLow.length > 0) results.lowStockWarehouse = warehouseLow.length
+
   // 2. Overdue invoices
   const overdueWhere = {
     dueDate: { lt: dayStart },
@@ -162,7 +184,9 @@ export async function GET(request: Request) {
     prisma.attendance.count({ where: lateWhere }),
     prisma.attendance.findMany({
       where: lateWhere,
-      include: { employee: { include: { department: true } } },
+      // Hanya employee.name yang dirender di daftar telat di bawah; tanpa
+      // select, baris absensi utuh + departemen utuh ikut termuat per baris.
+      select: { employee: { select: { name: true } } },
       take: 20,
     }),
   ])

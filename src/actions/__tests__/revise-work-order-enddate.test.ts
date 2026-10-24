@@ -40,6 +40,8 @@ const tx = {
     createMany: (...a: unknown[]) => m.woiCreateMany(...a),
   },
   materialIssueItem: { findMany: (...a: unknown[]) => m.miItemFindMany(...a) },
+  // F-2026-10-21-012 inti (AC-RES-8): revisi melepas reservasi baris diganti.
+  stockReservation: { updateMany: vi.fn().mockResolvedValue({ count: 0 }) },
 }
 
 vi.mock("@/lib/auth/permissions", () => ({ requirePermission: m.requirePermissionMock }))

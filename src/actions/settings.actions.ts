@@ -227,6 +227,10 @@ export async function updateSystemSettings(formData: FormData) {
       wipAccountId: intNull("wipAccountId"),
       materialExpenseAccountId: intNull("materialExpenseAccountId"),
       materialIssueExpenseAccountId: intNull("materialIssueExpenseAccountId"),
+      // F-008: penampung beban kerugian produksi (usulan 510105, menunggu
+      // vonis BOT 4) + gerbang jurnal abnormal. Default false = catat-dulu.
+      abnormalScrapPostingEnabled: bool("abnormalScrapPostingEnabled"),
+      abnormalScrapExpenseAccountId: intNull("abnormalScrapExpenseAccountId"),
 
       // Accounting - General
       pettyCashAccountId: intNull("pettyCashAccountId"),
@@ -244,6 +248,19 @@ export async function updateSystemSettings(formData: FormData) {
       // Accounting - Fixed Assets
       depreciationExpenseAccountId: intNull("depreciationExpenseAccountId"),
       accumulatedDepreciationAccountId: intNull("accumulatedDepreciationAccountId"),
+
+      // Accounting - Year-End Closing (F-2026-10-23-121-V Putusan 1):
+      // akun laba ditahan tujuan jurnal penutup; kosong = posting ditolak.
+      retainedEarningsAccountId: intNull("retainedEarningsAccountId"),
+
+      // Accounting - Denda Piutang (F-2026-10-22-093-V P2d):
+      // akun pendapatan denda; kosong = terbit dokumen denda ditolak.
+      lateFeeIncomeAccountId: intNull("lateFeeIncomeAccountId"),
+
+      // Accounting - Fixed Asset Change Events (F-2026-10-23-111-V P2):
+      // akun utang PPh final + tarif master revaluasi fiskal berpersetujuan.
+      assetFiscalRevaluationTaxPayableAccountId: intNull("assetFiscalRevaluationTaxPayableAccountId"),
+      assetFiscalRevaluationFinalTaxRatePercent: decimalNull("assetFiscalRevaluationFinalTaxRatePercent"),
     },
   })
 

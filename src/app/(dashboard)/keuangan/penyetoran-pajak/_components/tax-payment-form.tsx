@@ -76,10 +76,12 @@ export function TaxPaymentForm({
   return (
     <form
       onSubmit={handleSubmit}
+      aria-busy={isPending}
+      aria-label="Formulir tambah penyetoran pajak"
       className="flex flex-col gap-5 rounded-xl border border-default bg-surface p-6 shadow-sm"
     >
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <AppDatePicker label="Tanggal Setor *" name="date" value={date} onChange={setDate} />
+        <AppDatePicker label="Tanggal Setor *" name="date" value={date} onChange={setDate} required />
 
         <div className="flex flex-col gap-1.5">
           <AppMonthPicker label="Masa Pajak" name="period" value={period} onChange={setPeriod} />
@@ -98,14 +100,19 @@ export function TaxPaymentForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="amount">Jumlah Setor *</Label>
+          <Label htmlFor="amount">
+            Jumlah Setor <span className="text-destructive" aria-hidden="true">*</span>
+          </Label>
           <CurrencyInput id="amount" value={amount} onChange={setAmount} placeholder="0" required />
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="taxAccountId">Akun Utang Pajak *</Label>
+          <Label htmlFor="taxAccountId">
+            Akun Utang Pajak <span className="text-destructive" aria-hidden="true">*</span>
+          </Label>
           <Combobox
             id="taxAccountId"
+            required
             options={liabilityAccounts}
             value={taxAccountId || null}
             onChange={(value) => setTaxAccountId(value ?? "")}
@@ -114,9 +121,12 @@ export function TaxPaymentForm({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="paymentAccountId">Dibayar dari Kas/Bank *</Label>
+          <Label htmlFor="paymentAccountId">
+            Dibayar dari Kas/Bank <span className="text-destructive" aria-hidden="true">*</span>
+          </Label>
           <Combobox
             id="paymentAccountId"
+            required
             options={paymentAccounts}
             value={paymentAccountId || null}
             onChange={(value) => setPaymentAccountId(value ?? "")}

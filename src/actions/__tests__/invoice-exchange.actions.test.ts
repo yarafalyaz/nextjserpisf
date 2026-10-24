@@ -162,4 +162,16 @@ describe("createInvoiceExchange eligibility (Salsa run ini)", () => {
     const res = await actions.createInvoiceExchange(fd(base))
     expect(res.success).toBe(true)
   })
+
+  it("menolak ID non-desimal murni (0x10/1e3/0b101/spasi) — bukan ID faktur 10/16/1000", async () => {
+    for (const weird of ["0x10", "1e3", "0b101", " 10", "+10", "10.0"]) {
+      mocks.prismaMock.salesInvoice.findMany.mockResolvedValue([
+        { id: 10, documentNo: "INV-10", customerId: 1, grandTotal: 1000, paidAmount: 0, status: "posted" },
+      ])
+      const res = await actions.createInvoiceExchange(fd(base, [weird]))
+      expect(res.success).toBe(false)
+      expect(res.error).toContain("minimal satu faktur")
+    }
+    expect(mocks.prismaMock.invoiceExchange.create).not.toHaveBeenCalled()
+  })
 })

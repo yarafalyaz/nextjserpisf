@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { parseMoneyAmount } from "@/lib/utils/parse-money"
 
 const optionalString = (max: number) =>
   z.string().max(max).optional().or(z.literal("").transform(() => undefined))
@@ -152,6 +153,11 @@ export const createNonconformanceSchema = z.object({
 export const resolveNonconformanceSchema = z.object({
   status: z.enum(["rework", "rework_done", "rejected", "closed"], { message: "Status tidak valid" }),
   resolution: optionalString(4000),
-  reworkCost: z.coerce.number().min(0).max(1_000_000_000).default(0),
+  // CurrencyInput normally sends plain digits, but a programmatic caller can
+  // still send id-ID text — parse it instead of letting coerce turn it into 2.
+  reworkCost: z.preprocess(
+    (v) => (typeof v === "string" ? parseMoneyAmount(v) : v),
+    z.coerce.number().min(0).max(1_000_000_000).default(0),
+  ),
   reworkHours: z.coerce.number().min(0).max(100_000).default(0),
 })

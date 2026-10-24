@@ -25,6 +25,7 @@ const costDeleteMock = vi.fn()
 const orderFindManyMock = vi.fn()
 const costFindManyMock = vi.fn()
 const poFindUniqueMock = vi.fn()
+const woFindUniqueMock = vi.fn()
 
 const client = {
   $queryRaw: (...a: unknown[]) => executeRawMock(...a),
@@ -32,6 +33,9 @@ const client = {
     findUnique: (...a: unknown[]) => orderFindUniqueMock(...a),
     findMany: (...a: unknown[]) => orderFindManyMock(...a),
     update: (...a: unknown[]) => orderUpdateMock(...a),
+  },
+  workOrder: {
+    findUnique: (...a: unknown[]) => woFindUniqueMock(...a),
   },
   productionCost: {
     findUnique: (...a: unknown[]) => costFindUniqueMock(...a),
@@ -62,6 +66,8 @@ beforeEach(() => {
   orderFindManyMock.mockReset()
   costFindManyMock.mockReset()
   poFindUniqueMock.mockReset()
+  woFindUniqueMock.mockReset()
+  woFindUniqueMock.mockResolvedValue({ status: "in_progress" })
   absorbedMock.mockClear()
 })
 
@@ -206,12 +212,30 @@ describe("syncReworkCostToOrder", () => {
 
   it("is a no-op when a cleared cost has no existing line", async () => {
     costFindUniqueMock.mockResolvedValue(null)
+    orderFindUniqueMock.mockResolvedValue({ status: "in_progress", workOrderId: null, totalActualCost: 0 })
 
     const res = await syncReworkCostToOrder({ ...base, reworkCost: 0 }, client as never)
 
     expect(res).toEqual({ posted: 0, productionOrderId: 55 })
     expect(costDeleteMock).not.toHaveBeenCalled()
     expect(orderUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("F-009-V: PO closed ditolak (guard terpusat melempar)", async () => {
+    orderFindUniqueMock.mockResolvedValue({ status: "closed", workOrderId: null })
+
+    await expect(syncReworkCostToOrder(base, client as never)).rejects.toThrow(/sudah ditutup \(closed\)/)
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(costUpdateMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+  })
+
+  it("F-009-V: WO induk closed ditolak walau PO masih completed", async () => {
+    orderFindUniqueMock.mockResolvedValue({ status: "completed", workOrderId: 9 })
+    woFindUniqueMock.mockResolvedValue({ status: "closed" })
+
+    await expect(syncReworkCostToOrder(base, client as never)).rejects.toThrow(/perintah kerja sudah ditutup/)
+    expect(costCreateMock).not.toHaveBeenCalled()
   })
 })
 
@@ -415,5 +439,30 @@ describe("syncServicePurchaseOrderCost", () => {
     expect(costDeleteMock).not.toHaveBeenCalled()
     expect(orderUpdateMock).not.toHaveBeenCalled()
     expect(absorbedMock).not.toHaveBeenCalled()
+  })
+
+  it("F-009-V: PO closed dilewati seperti completed (skipped, tanpa tulis)", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    orderFindManyMock.mockResolvedValue([{ id: 55, status: "closed" }])
+    costFindManyMock.mockResolvedValue([])
+
+    const res = await syncServicePurchaseOrderCost(input, client as never)
+
+    expect(res).toEqual({ posted: 0, productionOrderIds: [], skippedProductionOrderIds: [55] })
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
+    expect(absorbedMock).not.toHaveBeenCalled()
+  })
+
+  it("F-009-V: WO closed membekukan semua PO anak pada sync jasa", async () => {
+    poFindUniqueMock.mockResolvedValue({ isService: true, workOrderId: 9, vendorId: 3 })
+    woFindUniqueMock.mockResolvedValue({ status: "closed" })
+    orderFindManyMock.mockResolvedValue([{ id: 55, status: "in_progress" }, { id: 56, status: "completed" }])
+
+    const res = await syncServicePurchaseOrderCost(input, client as never)
+
+    expect(res).toEqual({ posted: 0, productionOrderIds: [], skippedProductionOrderIds: [55, 56] })
+    expect(costCreateMock).not.toHaveBeenCalled()
+    expect(orderUpdateMock).not.toHaveBeenCalled()
   })
 })

@@ -436,6 +436,29 @@ describe("resolveNonconformance", () => {
       expect.anything(),
     )
   })
+
+  it("parses an id-ID rework cost instead of truncating it", async () => {
+    nonconformanceFindUniqueMock.mockResolvedValue({
+      id: 1,
+      status: "rework",
+      documentNo: "NCR-0007",
+      referenceType: "ProductionOrder",
+      referenceId: 55,
+    })
+    nonconformanceUpdateMock.mockResolvedValue({})
+    syncReworkCostMock.mockResolvedValue({ posted: 2000000, productionOrderId: 55 })
+
+    const res = await resolveNonconformance(
+      1,
+      fd({ status: "rework_done", reworkCost: "2.000.000" }),
+    )
+
+    expect(res.success).toBe(true)
+    expect(syncReworkCostMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reworkCost: 2000000 }),
+      expect.anything(),
+    )
+  })
 })
 
 describe("completeWorkOrder — QC gate", () => {
