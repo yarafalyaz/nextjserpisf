@@ -74,6 +74,11 @@ describe("paritas registry PDF laporan", () => {
     // tombolnya tetap cetak/CSV, bukan pipeline /api/pdf.
     const TANPA_PDF = [
       "analisis-harga-beli",
+      // F-094-S: ekspor/PDF antrean garansi ditolak tahap 1 (BR-WX-06/Q-WX-3).
+      "garansi-segera-berakhir",
+      // F-095-S BR-SUPP-11: daftar aging klaim supplier baca-saja tahap 1,
+      // tanpa ekspor/PDF (pola garansi-segera-berakhir).
+      "aging-klaim-supplier",
       "corong-prospek",
       "grafik-keuangan",
       "giro-mundur",
@@ -84,6 +89,8 @@ describe("paritas registry PDF laporan", () => {
       "nomor-seri-batch",
       "perbandingan-periode",
       "perbedaan-penyusutan",
+      "pajak-tangguhan",
+      "rekonsiliasi-aset",
       "proyeksi-kas",
       "pusat-laba",
       "rekap-komisi",

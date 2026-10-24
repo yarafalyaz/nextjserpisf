@@ -17,6 +17,7 @@
  * received tertaut (BR-MR-04). Read-only: tanpa mutasi/stok/jurnal.
  */
 
+import { requirePermission } from "@/lib/auth/permissions"
 import { prisma } from "@/lib/db/prisma"
 import { getWarehouseScope, type WarehouseScope } from "@/lib/auth/warehouse-scope"
 import {
@@ -189,5 +190,15 @@ export async function getMaterialRequestByWorkOrder(
   workOrderId: number,
 ): Promise<MaterialRequestQueueRow[]> {
   if (!Number.isSafeInteger(workOrderId) || workOrderId <= 0) return []
-  return loadRows({ workOrderId }, new Date())
+  const user = await requirePermission("view_material_requests")
+  const scope = await getWarehouseScope(user)
+  if (scope.kind === "none") return []
+  const where: Record<string, unknown> = { workOrderId }
+  if (scope.kind !== "all") {
+    where.OR = [
+      { requesterWarehouseId: { in: scope.warehouseIds } },
+      { sourceWarehouseId: { in: scope.warehouseIds } },
+    ]
+  }
+  return loadRows(where, new Date())
 }
