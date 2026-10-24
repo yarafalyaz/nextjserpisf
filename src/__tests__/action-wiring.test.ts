@@ -105,32 +105,26 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // F-2026-10-24-099-S inti backend (t_9037d2d8): aksi probation & keputusan
   // kontrak backend dulu; konsumen UI kartu frontend t_4fcb24a1 (buang entri
   // ini saat UI memanggilnya).
-  "src/actions/probation.actions.ts::openProbation":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::closeProbation":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::saveProbationReviewDraft":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::submitProbationReview":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::decideProbation":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::createContractDecisionRequest":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::submitContractDecisionRequest":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::approveContractDecisionRequest":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::rejectContractDecisionRequest":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::cancelContractDecisionRequest":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::applyContractDecisionRequest":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::getProbationOverview":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
-  "src/actions/probation.actions.ts::getContractDecisionRequests":
-    "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
+  ...Object.fromEntries(
+    [
+      "openProbation",
+      "closeProbation",
+      "saveProbationReviewDraft",
+      "submitProbationReview",
+      "decideProbation",
+      "createContractDecisionRequest",
+      "submitContractDecisionRequest",
+      "approveContractDecisionRequest",
+      "rejectContractDecisionRequest",
+      "cancelContractDecisionRequest",
+      "applyContractDecisionRequest",
+      "getProbationOverview",
+      "getContractDecisionRequests",
+    ].map((name) => [
+      `src/actions/probation.actions.ts::${name}`,
+      "F-2026-10-24-099-S inti backend; UI menyusul (frontend t_4fcb24a1)",
+    ]),
+  ),
   // F-2026-10-21-025 backend dulu: kontrak konflik untuk form aturan fitment;
   // UI peringatan menyusul di kartu frontend t_6d28c338 (buang entri ini saat
   // vehicle-fitment-form memanggilnya).
