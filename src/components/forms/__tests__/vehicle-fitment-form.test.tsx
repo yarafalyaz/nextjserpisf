@@ -14,11 +14,17 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/actions/vehicle-fitment.actions", () => ({
   createVehicleFitment: vi.fn().mockResolvedValue({ success: true, id: 9 }),
   updateVehicleFitment: vi.fn().mockResolvedValue({ success: true, id: 9 }),
+  checkVehicleFitmentConflicts: vi
+    .fn()
+    .mockResolvedValue({ success: true, conflicts: [] }),
 }))
 
 vi.mock("@/lib/utils/toast", () => ({ showSuccess: vi.fn(), showError: vi.fn() }))
 
-import { updateVehicleFitment } from "@/actions/vehicle-fitment.actions"
+import {
+  updateVehicleFitment,
+  checkVehicleFitmentConflicts,
+} from "@/actions/vehicle-fitment.actions"
 
 const rule = {
   id: 9,
@@ -109,6 +115,91 @@ describe("VehicleFitmentForm — a11y wiring", () => {
       )
     })
     expect(container.querySelector("form")!.getAttribute("aria-label")).toBe("Formulir ubah aturan fitment")
+    act(() => root.unmount())
+    container.remove()
+  })
+})
+
+describe("VehicleFitmentForm — peringatan konflik F-2026-10-21-025", () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(checkVehicleFitmentConflicts).mockResolvedValue({
+      success: true,
+      conflicts: [],
+    })
+  })
+
+  function renderEdit() {
+    const container = document.createElement("div")
+    document.body.appendChild(container)
+    const root: Root = createRoot(container)
+    act(() => {
+      root.render(
+        <VehicleFitmentForm
+          items={[{ id: 5, sku: "SKU-1", name: "Barang Satu" }]}
+          brands={[]}
+          models={[]}
+          variants={[]}
+          rule={rule}
+        />,
+      )
+    })
+    return { container, root }
+  }
+
+  it("menampilkan peringatan aturan berlawanan tanpa memblokir simpan", async () => {
+    vi.mocked(checkVehicleFitmentConflicts).mockResolvedValue({
+      success: true,
+      conflicts: [
+        {
+          ruleId: 7,
+          candidateResult: "compatible",
+          conflictResult: "incompatible",
+          specificity: 0,
+          scope: {
+            itemId: 5,
+            bomRevisionId: null,
+            vehicleBrandId: null,
+            vehicleModelId: null,
+            vehicleVariantId: null,
+            yearFrom: null,
+            yearTo: null,
+            drivetrain: null,
+            transmission: null,
+          },
+          source: "katalog pabrikan",
+          notes: null,
+        },
+      ],
+    })
+    const { container, root } = renderEdit()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 210))
+    })
+    const alert = container.querySelector('[role="alert"]')
+    expect(alert?.textContent).toContain("Aturan #7")
+    expect(alert?.textContent).toContain("Tidak Cocok")
+    expect(alert?.textContent).toContain("katalog pabrikan")
+    const checkCall = vi.mocked(checkVehicleFitmentConflicts).mock.calls.at(-1)?.[0] as FormData
+    expect(checkCall.get("itemId")).toBe("5")
+    expect(checkCall.get("result")).toBe("compatible")
+    expect(checkCall.get("excludeRuleId")).toBe("9")
+    // Peringatan saja: submit tetap berjalan.
+    const form = container.querySelector("form")!
+    await act(async () => {
+      form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    })
+    expect(updateVehicleFitment).toHaveBeenCalledTimes(1)
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it("tanpa aturan berlawanan: tidak ada peringatan", async () => {
+    const { container, root } = renderEdit()
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 210))
+    })
+    expect(container.querySelector('[role="alert"]')).toBeNull()
     act(() => root.unmount())
     container.remove()
   })

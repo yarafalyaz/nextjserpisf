@@ -232,6 +232,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
                       <AppDatePicker
                         label="Tanggal Mulai Cut-off *"
                         name="startDate"
+                        required
                         value={startDate}
                         onChange={(d) => setStartDate(d ? d.toString() : "")}
                       />
@@ -241,6 +242,7 @@ export function BulkGeneratePayrollButton({ cutoffDay = 25 }: { cutoffDay?: numb
                       <AppDatePicker
                         label="Tanggal Selesai Cut-off *"
                         name="endDate"
+                        required
                         value={endDate}
                         onChange={(d) => setEndDate(d ? d.toString() : "")}
                       />
