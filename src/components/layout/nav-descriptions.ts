@@ -20,6 +20,7 @@ export const NAV_CARD_DESCRIPTIONS: Record<string, string> = {
   "/inventaris/rak": "Kelola rak gudang",
   "/inventaris/scan": "Pindai barcode barang di gudang",
   "/inventaris/transfer": "Transfer antar gudang",
+  "/inventaris/permintaan-gudang": "Permintaan material antar gudang",
   "/keuangan/jurnal": "Jurnal umum",
   "/keuangan/kas-kecil": "Kas kecil",
   "/keuangan/laporan-bank": "Mutasi bank",
