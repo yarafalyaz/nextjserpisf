@@ -28,12 +28,14 @@ import {
 } from "@/lib/services/qc.service";
 import { recordProductionGenealogy } from "@/lib/services/production-genealogy.service";
 import { createWarrantyCoveragesForWorkOrder } from "@/lib/services/warranty.service";
+import { createInstalledPartsForWorkOrder } from "@/lib/services/installed-part.service";
 import { consumeFifoLayers, createInLayer } from "@/lib/services/inventory-fifo";
 import { resolveMaterialIssueScrapSnapshots } from "@/lib/hooks/material-issue.hook";
 import {
   classifyScrapLine,
   validateScrapInput,
 } from "@/lib/services/scrap-classification";
+import { scrapReviewStatusAfterComplete } from "@/lib/services/scrap-physical";
 import { stockJournalService } from "@/lib/services/stock-journal.service";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import {
@@ -53,6 +55,7 @@ import { assertWarehouseAccess, getWarehouseScope } from "@/lib/auth/warehouse-s
 import {
   evaluateWorkOrderOperationTransition,
   parseWorkOrderStageNames,
+  shouldAutoCompleteWorkOrder,
 } from "@/lib/reports/work-order-progress";
 import { nextSlug } from "@/lib/utils/slug-db";
 import { reservationExpiresAt } from "@/lib/reports/stock-reservation";
@@ -1021,6 +1024,7 @@ export async function issueMaterial(
             scrapAbnormalQtySnapshot: true,
             scrapNormalValueSnapshot: true,
             scrapAbnormalValueSnapshot: true,
+            scrapReviewStatus: true,
           },
         });
         // F-008: klasifikasi scrap kejadian ini dari cost FIFO kejadian
@@ -1050,6 +1054,10 @@ export async function issueMaterial(
                 scrapUnitCostSnapshot: unitCost,
                 scrapNormalValueSnapshot: safeAdd(Number(existing?.scrapNormalValueSnapshot ?? 0), classification.normalValue, 2),
                 scrapAbnormalValueSnapshot: safeAdd(Number(existing?.scrapAbnormalValueSnapshot ?? 0), classification.abnormalValue, 2),
+                // F-098-S: abnormal kumulatif > 0 masuk antrean; tinjau selesai tidak dibuka ulang oleh issue berikut.
+                scrapReviewStatus: existing?.scrapReviewStatus ?? scrapReviewStatusAfterComplete(
+                  safeAdd(Number(existing?.scrapAbnormalQtySnapshot ?? 0), classification.abnormalQty, 2),
+                ),
               }
             : {};
         if (existing) {
@@ -1633,69 +1641,12 @@ export async function completeWorkOrder(workOrderId: number) {
     // so simple/legacy jobs stay completable.
     await assertWorkOrderQcCleared(workOrderId);
 
-    // NOTE: Material consumption (stock-out + Dr Material Expense / Cr Inventory) is
-    // performed exclusively by the mandatory Material Issue above. The Work Order
-    // completion must NOT consume stock or credit inventory again, otherwise the
-    // same materials would leave inventory twice and Inventory would be credited
-    // twice. WO completion here is a status/fulfilment milestone only.
-
-    // ATOMICITY: the WO claim + WO item flip + autoCreateDeliveryOrder +
-    // syncProjectStatus must be a single atomic unit. Previously they were
-    // three sequential non-transactional calls — a mid-sequence failure (e.g.
-    // DO creation error) would leave a "completed" WO with no DeliveryOrder
-    // for downstream shipping, and the project's status flip would be missing
-    // even though the WO says it is done. Both helpers accept an optional
-    // txClient and are called below with this transaction's `tx`, so all
-    // four writes commit or roll back together.
-    const releasedCount = await prisma.$transaction(async (tx) => {
-      // Atomically claim completion: only the request that flips status away from
-      // in_progress/pending wins. Without this, two concurrent "selesai" clicks
-      // could both pass the status guard above and each run autoCreateDeliveryOrder
-      // → duplicate Delivery Orders. The conditional updateMany serializes it.
-      const claim = await tx.workOrder.updateMany({
-        where: { id: workOrderId, status: { in: ["in_progress", "pending"] } },
-        data: {
-          status: "completed",
-          endDate: new Date(),
-        },
-      });
-      if (claim.count === 0) {
-        throw new Error("Perintah Kerja sudah diselesaikan atau sedang diproses.");
-      }
-
-      // Update all WO items to completed
-      await tx.workOrderItem.updateMany({
-        where: { workOrderId },
-        data: { status: "completed" },
-      });
-
-      // F-2026-10-21-012 inti (BR-RES-10): sisa reservasi aktif lepas di
-      // tx penyelesaian yang sama; rollback completion (QC/DO gagal)
-      // ikut menggulung pelepasan ini (AC-RES-4).
-      const released = await releaseActiveReservationsForWorkOrderTx(tx, {
-        workOrderId,
-        releasedBy: Number(user.id),
-        reason: "Perintah kerja selesai",
-      });
-
-      // F-2026-10-21-021 tahap 1: coverage garansi pasang lahir otomatis
-      // dari baris terpasang ber-warrantyMonths (MaterialIssue completed di
-      // atas). Satu transaksi dengan klaim status WO: coverage gagal dibuat
-      // = completion rollback. Tanpa jurnal/provisi (tahap 3 ditahan).
-      await createWarrantyCoveragesForWorkOrder(workOrderId, new Date(), tx);
-
-      // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
-      // the atomic claim above so only the winning request reaches here).
-      // Accepts txClient so the DO header + items commit in the SAME
-      // transaction as the WO completion: a failure mid-way rolls the WO claim
-      // back instead of leaving a "completed" WO with no Delivery Order.
-      await autoCreateDeliveryOrder(workOrderId, Number(user.id), tx);
-
-      // Sync linked Project status (same tx so status never diverges).
-      if (wo.projectId) {
-        await syncProjectStatus(wo.projectId, tx);
-      }
-      return released;
+    // NOTE: konsumsi material (stok keluar + jurnal) hanya oleh Material
+    // Issue wajib di atas — penyelesaian WO milestone status/fulfilment
+    // saja, tanpa konsumsi stok ganda.
+    const releasedCount = await completeWorkOrderTx(prisma, workOrderId, Number(user.id), {
+      claimStatuses: ["in_progress", "pending"],
+      projectId: wo.projectId,
     });
 
     await logActivity(
@@ -1714,6 +1665,84 @@ export async function completeWorkOrder(workOrderId: number) {
     console.error("[completeWorkOrder]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
+}
+
+/**
+ * Inti penyelesaian WO dalam SATU transaksi (dipakai jalur manual
+ * completeWorkOrder dan auto-close tahap F-020 — satu sumber kebenaran,
+ * jangan duplikasi efek turunan di pemanggil lain):
+ * klaim kondisional updateMany (hanya pemenang count===1 yang lanjut;
+ * count===0 melempar supaya pemanggil manual menolak, sedangkan auto-close
+ * menangkapnya sebagai no-op), flip item, lepas reservasi aktif, coverage
+ * garansi, registri part terpasang, DeliveryOrder otomatis, sinkron status
+ * proyek. Semua commit atau
+ * rollback bersama — WO "completed" tanpa DeliveryOrder tidak mungkin lahir.
+ * client boleh prisma global (dibungkus $transaction di sini) atau tx
+ * pemanggil yang sudah memegang kunci baris WO (FOR UPDATE).
+ * NOTE: konsumsi material (stok keluar + jurnal) hanya oleh Material Issue
+ * wajib di pemanggil — penyelesaian WO di sini milestone status/fulfilment
+ * saja, tidak mengonsumsi stok atau mengkredit inventaris kedua kali.
+ */
+async function completeWorkOrderTx(
+  client: TxClient | typeof prisma,
+  workOrderId: number,
+  userId: number,
+  opts: { claimStatuses: string[]; projectId?: number | null },
+): Promise<number> {
+  const run = async (tx: TxClient): Promise<number> => {
+    const claim = await tx.workOrder.updateMany({
+      where: { id: workOrderId, status: { in: opts.claimStatuses } },
+      data: {
+        status: "completed",
+        endDate: new Date(),
+      },
+    });
+    if (claim.count === 0) {
+      throw new Error("Perintah Kerja sudah diselesaikan atau sedang diproses.");
+    }
+
+    // Update all WO items to completed
+    await tx.workOrderItem.updateMany({
+      where: { workOrderId },
+      data: { status: "completed" },
+    });
+
+    // F-2026-10-21-012 inti (BR-RES-10): sisa reservasi aktif lepas di
+    // tx penyelesaian yang sama; rollback completion (QC/DO gagal)
+    // ikut menggulung pelepasan ini (AC-RES-4).
+    const released = await releaseActiveReservationsForWorkOrderTx(tx, {
+      workOrderId,
+      releasedBy: userId,
+      reason: "Perintah kerja selesai",
+    });
+
+    // F-2026-10-21-021 tahap 1: coverage garansi pasang lahir otomatis
+    // dari baris terpasang ber-warrantyMonths (MaterialIssue completed di
+    // atas). Satu transaksi dengan klaim status WO: coverage gagal dibuat
+    // = completion rollback. Tanpa jurnal/provisi (tahap 3 ditahan).
+    await createWarrantyCoveragesForWorkOrder(workOrderId, new Date(), tx);
+
+    // F-2026-10-22-072-S: registri part terpasang lahir di tx yang sama
+    // untuk SEMUA baris issue (bukan hanya bergaransi), menaut coverage
+    // yang baru lahir di atas. Tanpa kendaraan: nol baris (BR-IP-07),
+    // WO tetap completed — hasil skipped tidak menggagalkan klaim ini.
+    await createInstalledPartsForWorkOrder(workOrderId, new Date(), tx);
+
+    // Auto-create DeliveryOrder for parts if applicable (runs once — guarded by
+    // the atomic claim above so only the winning request reaches here).
+    await autoCreateDeliveryOrder(workOrderId, userId, tx);
+
+    // Sync linked Project status (same tx so status never diverges).
+    if (opts.projectId) {
+      await syncProjectStatus(opts.projectId, tx);
+    }
+    return released;
+  };
+
+  if (client === prisma) {
+    return prisma.$transaction(run);
+  }
+  return run(client as TxClient);
 }
 
 /**
@@ -2349,13 +2378,13 @@ export async function updateWorkOrderOperationStatus(
   notes?: string,
 ) {
   try {
-    await requirePermission("edit_work_orders");
+    const user = await requirePermission("edit_work_orders");
 
-    await prisma.$transaction(async (tx) => {
+    const outcome = await prisma.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM work_orders WHERE id = ${workOrderId} FOR UPDATE`;
       const wo = await tx.workOrder.findUniqueOrThrow({
         where: { id: workOrderId },
-        select: { id: true, status: true },
+        select: { id: true, status: true, projectId: true },
       });
       const operation = await tx.workOrderOperation.findUniqueOrThrow({
         where: { id: operationId },
@@ -2393,11 +2422,63 @@ export async function updateWorkOrderOperationStatus(
         where: { id: operationId },
         data: updateData,
       });
+
+      // F-020 lanjutan: auto-close WO saat tahap terakhir tuntas, dalam
+      // transaksi + kunci baris WO yang sama. Vonis guard (butir 2 kartu):
+      // auto-close memakai guard completeWorkOrder PERSIS (items ada,
+      // MaterialIssue completed, QC bersih) — TIDAK melewati guard secara
+      // diam-diam. Guard belum terpenuhi -> WO tetap in_progress dan
+      // transisi tahap tetap sukses; operator menyelesaikan manual lewat
+      // completeWorkOrder sesudah guard beres (pesan guard tampil di sana).
+      const after = operations.map((o) =>
+        o.sortOrder === operation.sortOrder ? { status } : o,
+      );
+      if (!shouldAutoCompleteWorkOrder({ operations: after })) {
+        return { autoCompleted: false };
+      }
+      const items = await tx.workOrderItem.findMany({
+        where: { workOrderId },
+        select: { id: true },
+      });
+      if (items.length === 0) return { autoCompleted: false };
+      const mi = await tx.materialIssue.findFirst({
+        where: { workOrderId, status: "completed" },
+        select: { id: true },
+      });
+      if (!mi) return { autoCompleted: false };
+      await assertWorkOrderQcCleared(workOrderId, tx);
+
+      // Klaim kondisional di completeWorkOrderTx: hanya status in_progress
+      // yang boleh menang; count===0 melempar di sana dan ditangkap di sini
+      // sebagai no-op — WO sudah ditutup proses lain, tanpa error dan tanpa
+      // efek turunan ganda (klaim kalah tidak menyentuh DO/item/reservasi).
+      try {
+        await completeWorkOrderTx(tx, workOrderId, Number(user.id), {
+          claimStatuses: ["in_progress"],
+          projectId: wo.projectId,
+        });
+      } catch (e) {
+        if (e instanceof Error && e.message.includes("sudah diselesaikan")) {
+          return { autoCompleted: false };
+        }
+        throw e;
+      }
+      return { autoCompleted: true };
     });
 
     await logActivity("update", "WorkOrderOperation", operationId, "Memperbarui progres tahapan perintah kerja");
+    if (outcome.autoCompleted) {
+      await logActivity(
+        "complete",
+        "WorkOrder",
+        workOrderId,
+        `Menyelesaikan perintah kerja #${workOrderId} (otomatis: semua tahap tuntas)`,
+      );
+      revalidatePath("/inventaris/mutasi-stok");
+      revalidatePath("/pengiriman");
+    }
     revalidatePath("/produksi/perintah-kerja");
-    return { success: true };
+    return { success: true, autoCompleted: outcome.autoCompleted };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateWorkOrderOperationStatus]", getErrorMessage(e) || e);

@@ -472,6 +472,15 @@ describe("tautan klaim supplier (F-2026-10-21-022): tautan saja, tanpa jurnal", 
     expect(sent.supplierClaimStatus).toBe("sent")
   })
 
+  it("E130-1: transisi sent membekukan penanda resi di notes existing (pembanding E3, tanpa kolom)", async () => {
+    seedLink({ ...baseClaim, supplierClaimStatus: "drafted", supplierClaimRefNo: "RESI-77", supplierClaimNotes: "Kirim via ekspedisi", supplierClaimBy: 7 })
+    p.transactionAttachment.count.mockResolvedValue(1)
+    await transitionSupplierClaim({ claimId: 1, to: "sent", actorUserId: 8 }, prisma as never)
+    const data = p.warrantyClaim.update.mock.calls.at(-1)?.[0]?.data as { supplierClaimNotes?: string }
+    expect(data.supplierClaimNotes).toContain("Kirim via ekspedisi")
+    expect(data.supplierClaimNotes).toContain("[Resi pengiriman klaim supplier: RESI-77]")
+  })
+
   it("alur penuh drafted→sent→accepted→returned→closed_recovered; status klaim pelanggan tidak disentuh", async () => {
     const state: Record<string, unknown> = {
       ...baseClaim,
