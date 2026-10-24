@@ -17,6 +17,17 @@ export function renderCard(node: ReactNode) {
   return { container, root }
 }
 
+export function renderCardText<L extends string>(node: ReactNode, labels: Record<L | "card", string>) {
+  const { container, root } = renderCard(node)
+  const found = Object.fromEntries(
+    Object.entries(labels).map(([key, selector]) => [key, container.querySelector(`[aria-label="${selector}"]`) !== null]),
+  ) as Record<L | "card", boolean>
+  const hasTable = container.querySelector("table") !== null
+  const text = container.textContent ?? ""
+  unmountCard(root)
+  return { text, found, hasTable }
+}
+
 export function unmountCard(root: Root) {
   act(() => root.unmount())
 }
