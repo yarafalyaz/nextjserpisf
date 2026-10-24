@@ -8,6 +8,7 @@ import { consumeFifoLayers } from "@/lib/services/inventory-fifo";
 import { assertPeriodOpen } from "@/lib/services/period-lock.service";
 import { consumeReservationsForMaterialIssueTx } from "@/lib/services/stock-reservation.service";
 import { classifyScrapLine, validateScrapInput } from "@/lib/services/scrap-classification";
+import { scrapReviewStatusAfterComplete } from "@/lib/services/scrap-physical";
 import { safeAdd } from "@/lib/utils/math";
 import { Status } from "@/lib/constants";
 
@@ -219,6 +220,8 @@ export async function onMaterialIssueCompleted(
             scrapUnitCostSnapshot: unitCost,
             scrapNormalValueSnapshot: classification.normalValue,
             scrapAbnormalValueSnapshot: classification.abnormalValue,
+            // F-098-S D-S98-04: abnormal masuk antrean tinjau; complete tidak ditahan.
+            scrapReviewStatus: scrapReviewStatusAfterComplete(classification.abnormalQty),
           },
         });
         runningAbnormalValue = safeAdd(runningAbnormalValue, classification.abnormalValue, 2);

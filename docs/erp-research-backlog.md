@@ -14129,14 +14129,431 @@ bila kelak foto dipakai syarat pelepasan pembayaran termin, itu spec
 terpisah dengan vonis akuntansi. Yang TIDAK diusulkan run ini: portal
 pelanggan penuh, e-sign checklist, pengaburan wajah otomatis, syarat
 minimal jumlah foto sebagai gate, tabel foto baru.
-## SPEC BUSINESS 2026-10-24 — F-2026-10-24-098-S standar allowance & klasifikasi fisik scrap potongan plat & profil baja fabrikasi (delta di atas F-2026-10-22-071-S + vonis F-2026-10-22-066-V; induk tetap F-2026-10-21-008)
 
+---
+
+## VONIS BOT 4 2026-10-24 — F-2026-10-24-132-V: uang kompensasi akhir kontrak PKWT PP 35/2021 — rumus, masa kerja, akun beban/utang, saat pengakuan, dan PPh 21 (Q-EMP-4/Q-EMP-5 induk F-2026-10-22-085-S BR-EMP-07/11)
+
+Kartu t_23864ac1. Dokumen saja; TANPA kode aplikasi/schema/migrasi di
+kartu ini. Menjawab empat pertanyaan kartu + Q-EMP-4 (rumus/basis/akun/
+PPh 21) dan Q-EMP-5 (jalur bayar) spec BOT Business
+F-2026-10-22-085-S §9. Vonis ini MEMUTUS angka dan perlakuan; bentuk
+fisik dokumen/peristiwa bayar milik BOT Backend sesudah vonis merged,
+klaim `prisma/schema.prisma` di board dulu.
+
+Status: PUTUSAN BOT 4. Pemilik berikutnya: BOT Lead terima + merge PR
+vonis ini, BOT Backend inti peristiwa kompensasi + akrual (Putusan
+1-5), BOT Business/BOT Frontend tampil snapshot backend apa adanya,
+BOT QA falsifikasi E132-1..5.
+
+### 0. Basis bukti live (worktree origin/main 6b50c3db, 2026-10-24) — TERVERIFIKASI-KODE
+
+- Master siklus hidup live (F-085-S merged): `Employee.employmentStatus`
+  (`PKWTT|PKWT|DAILY|INTERN`, null = belum diatur), `contractStartDate`,
+  `contractEndDate`, `employmentEndedAt`, `endReason`
+  (`contract_completed|resigned|terminated|retired|deceased|other`)
+  (schema.prisma model Employee). TIDAK ada field masa kerja kontrak,
+  basis upah kompensasi, atau peristiwa kompensasi di schema/src —
+  grep `kompensasi PKWT|pkwtCompensation` produksi = 0. Angka
+  kompensasi hari ini ABSEN, persis BR-EMP-07.
+- Komponen payroll live: `PayrollComponent` (kind/recurrence/isTaxable/
+  accountId master) + `PayrollComponentLine` snapshot per slip
+  (nama/kind/isTaxable/akun dibekukan saat baris dibuat); jurnal payroll
+  tetap AGREGAT lewat `onPayrollPaid` — accountId komponen TIDAK dipakai
+  jurnal (komentar schema model PayrollComponent). Jalur komponen =
+  rumah snapshot slip; jurnal per komponen belum ada dan TIDAK dibuka
+  vonis ini (Putusan 5).
+- Jurnal payroll live `onPayrollPaid` (`accounting.hook.ts:2033`):
+  Dr `salaryExpenseAccountId` (gross penuh) / Cr `payrollBankAccountId`
+  (net) / Cr `salariesPayableAccountId` (BPJS+PPh 21) / Cr
+  `employeeReceivableAccountId` (pinjaman) / Cr `salariesPayableAccountId`
+  (potongan lain); akun kosong = fail-closed berisik; idempoten
+  (referenceType `Payroll`, referenceId); `assertPeriodOpen` dalam tx.
+  COA live: `600004` Beban Gaji, Upah & Honorer [EXPS/6000],
+  `600005` Beban Bonus, Pesangon & Kompensasi [EXPS/6000],
+  `210204` Hutang Gaji [OCLY/2102] (base-data.ts; mapping
+  `salaryExpenseAccountId->600004`, `salariesPayableAccountId->210204`
+  di scripts/migrate-coa-accurate.mjs). TIDAK ada akun beban/utang
+  khusus kompensasi PKWT dan TIDAK ada setting mapping kompensasi di
+  SystemSetting — inilah yang diputus Putusan 2.
+- Mesin PPh 21 live (F-026): `resolveTerPeriod` mengklasifikasi
+  Desember ATAU slip final berhenti (`resignationFinal` terbukti dari
+  `Employee.employmentEndedAt` server, BUKAN flag client — gerbang di
+  hrm.actions.ts) sebagai Masa Pajak Terakhir; selain itu TER bulanan
+  atas bruto se-masa digabung (`computePph21ForPeriod`: slip seperiode
+  dijumlah, selisih potong). Hitung ulang masa terakhir =
+  `computePph21FinalPeriod` (bruto setahun/bagian tahun − biaya jabatan
+  5% plafon Rp500.000/bln − iuran pensiun/JHT+JP karyawan − PTKP,
+  disetahunkan bila bagian tahun, tarif Pasal 17, kurangi potong lalu).
+  Kompensasi yang masuk `grossSalary` slip otomatis ikut kedua jalur
+  ini — vonis Putusan 4 membekukan bahwa memang begitu perlakuannya.
+- `Payroll @@unique([employeeId, startDate, endDate])` + penjaga irisan
+  rentang: satu karyawan satu slip per rentang — kompensasi TIDAK boleh
+  melahirkan slip kedua se-rentang (Putusan 5).
+
+### Dasar resmi (akses 2026-10-24)
+
+- PP 35/2021 Pasal 15-17 (teks resmi JDIH Kemnaker
+  https://jdih.kemnaker.go.id/asset/data_puu/PP352021.pdf ; metadata
+  BPK https://peraturan.bpk.go.id/Details/161904/pp-no-35-tahun-2021,
+  berlaku 2 Feb 2021): Pasal 15(1)-(3) pengusaha WAJIB memberi uang
+  kompensasi PKWT, diberikan saat berakhirnya PKWT, kepada pekerja
+  bermasa kerja paling sedikit 1 bulan terus-menerus; 15(4)
+  perpanjangan: kompensasi diberikan saat selesainya jangka waktu
+  SEBELUM perpanjangan, kompensasi perpanjangan diberikan sesudah
+  perpanjangan berakhir/selesai; 15(5) tidak berlaku bagi TKA PKWT.
+  Pasal 16(1) besaran: 12 bulan terus-menerus = 1 bulan Upah; 1-<12
+  bulan dan >12 bulan = proporsional `masa kerja/12 x 1 bulan Upah`.
+  16(2) Upah dasar = upah pokok + tunjangan tetap; 16(3) tanpa komponen
+  pokok/tetap: upah tanpa tunjangan; 16(4) pokok + tunjangan TIDAK
+  tetap: upah pokok saja; 16(5) PKWT selesai-pekerjaan yang selesai
+  lebih cepat: dihitung sampai saat selesainya pekerjaan; 16(6) usaha
+  mikro/kecil: kesepakatan pengusaha-pekerja. Pasal 17: pengakhiran
+  sebelum jangka waktu berakhir (oleh pihak mana pun): kompensasi
+  dihitung berdasar jangka waktu PKWT yang TELAH dilaksanakan.
+- PMK 168/2023 (JDIH Kemenkeu
+  https://jdih.kemenkeu.go.id/api/download/e60a82e0-b218-40f5-9d18-b924aa1e11ce/2023pmkeuangan168.pdf
+  ; DJP https://www.pajak.go.id/index.php/id/pmk-168-tahun-2023-pph-pasal-21-ter,
+  berlaku 1 Jan 2024): Pasal 2 angka 10 Pegawai Tetap TERMASUK pegawai
+  yang bekerja berdasarkan kontrak jangka waktu tertentu sepanjang
+  bekerja penuh; Pasal 5(1)(a) penghasilan pegawai tetap teratur/
+  tidak teratur = objek PPh 21; Pasal 15(1) selain Masa Pajak Terakhir
+  = TER bulanan x bruto se-masa, Masa Pajak Terakhir = PPh 21 setahun/
+  bagian tahun tarif Pasal 17 dikurangi potong masa sebelumnya; Pasal
+  15(3) kewajiban subjektif mulai/berakhir tengah tahun: neto
+  disetahunkan, pajak proporsional jumlah bulan bagian tahun. PP
+  58/2023 = tabel TER (hidup di `PayrollTerBracket` master bertanggal
+  efektif, BUKAN konstanta — pola F-026 dipertahankan).
+- PSAK 24 Imbalan Kerja + PSAK 57 (label standar komersial, BUKAN
+  dasar hukum ketenagakerjaan/pajak): imbalan yang terutang atas jasa
+  yang sudah diberikan diakui sebagai beban + liabilitas akrual pada
+  periode jasa diberikan; provisi diakui bila ada kewajiban kini dari
+  peristiwa masa lalu + probable arus keluar + estimasi andal.
+  Kompensasi PKWT memenuhi ketiganya selama kontrak berjalan
+  (kewajiban hukum PP 35/2021 tumbuh seiring masa kerja) — dasar
+  Putusan 3. Angka statutori tetap PP 35/2021, bukan aktuaria: TANPA
+  diskonto, TANPA asumsi turnover/kenaikan gaji (Putusan 3).
+
+### Putusan 1 — Rumus dan masa kerja: proporsional bulan kalender terlayani, basis dibekukan per segmen kontrak
+
+- Rumus tunggal semua kasus Pasal 16(1): `kompensasi = masaKerjaBulan
+  / 12 x basisUpahBulanan`, dibulatkan safeRound sen (Decimal(15,2))
+  pada hasil akhir saja. Kasus 12 bulan penuh menghasilkan tepat 1x
+  basis — BUKAN rumus terpisah. Masa kerja < 1 bulan terus-menerus =
+  TIDAK berhak (Pasal 15(3)): nominal 0 dan peristiwa ditolak berisik
+  bila diajukan sebagai peristiwa kompensasi, bukan slip berisi 0.
+- `masaKerjaBulan` dihitung dari tanggal, BUKAN input angka bebas:
+  bulan penuh terlayani dari `contractStartDate` (atau awal segmen,
+  lihat perpanjangan) sampai tanggal akhir segmen inklusif, ditambah
+  sisa hari sesudah bulan penuh terakhir dibagi jumlah hari bulan
+  kalender bulan sisa itu. Contoh beku: 1 Jan-30 Jun = 6,0000 bulan;
+  1 Jan-15 Jun = 5 + 15/30 = 5,5000 bulan. Presisi masa kerja 4 desimal
+  di snapshot; DILARANG membulatkan masa kerja ke bulan penuh (naik
+  maupun turun) — pembulatan hanya pada rupiah akhir. Rumus hari ini
+  pilihan akuntansi ISF terdokumentasi (PP 35/2021 tidak mengatur
+  pecahan bulan); perusahaan dengan kebijakan tertulis berbeda =
+  `BUTUH-VONIS-AKUNTAN` per kasus, bukan input bebas operator.
+- Basis upah per Pasal 16(2)-(4), dibekukan sebagai snapshot komponen
+  pada peristiwa (bukan dibaca ulang dari master saat bayar): upah
+  pokok + tunjangan TETAP. "Tunjangan tetap" = komponen
+  `PayrollComponent` recurrence tetap yang dibayar teratur tanpa
+  bergantung kehadiran/output, terklasifikasi terstruktur di master;
+  tunjangan tidak tetap (kehadiran, lembur, transport per hari,
+  insentif variabel) TIDAK masuk basis. Tanpa struktur pokok/tetap:
+  basis = upah tanpa tunjangan (16(3)); pokok + tidak tetap saja:
+  basis = pokok (16(4)). Basis NOL atau negatif = peristiwa ditolak
+  berisik. Perubahan gaji tengah kontrak: basis = pokok + tunjangan
+  tetap yang berlaku pada bulan terakhir segmen (snapshot saat
+  peristiwa lahir); kenaikan surut yang mengubah segmen sudah
+  terbayar = koreksi Putusan 5, bukan edit snapshot.
+- Segmen kontrak: setiap jangka waktu PKWT awal dan setiap
+  perpanjangan adalah SATU segmen dengan masa kerja dan peristiwa
+  kompensasi sendiri (Pasal 15(4)). Perpanjangan TIDAK mengakumulasi
+  masa segmen sebelumnya ke peristiwa berikutnya dan TIDAK membuat
+  baris karyawan kedua (konsisten BR-EMP-11). Pengakhiran dini
+  (Pasal 17) dan selesai-pekerjaan lebih cepat (16(5)): masa kerja
+  berhenti pada tanggal selesai/berakhir aktual, bukan tanggal akhir
+  kontrak tertulis. Berubah PKWT -> PKWTT (pengangkatan tetap):
+  segmen PKWT terakhir ditutup dengan peristiwa kompensasi pada
+  tanggal perubahan status; masa PKWTT sesudahnya tidak melahirkan
+  kompensasi PKWT. TKA PKWT: tidak berhak (15(5)) — peristiwa ditolak
+  berisik dari fakta kewarganegaraan terstruktur; tanpa fakta itu
+  sistem tidak menebak.
+- Usaha mikro/kecil Pasal 16(6): nominal kesepakatan TIDAK dihitung
+  mesin dari rumus; hanya boleh masuk sebagai peristiwa ber-dokumen
+  kesepakatan tertulis tertaut + nominal dari dokumen itu. Tanpa
+  dokumen kesepakatan, rumus umum berlaku. Klaim status mikro/kecil
+  bebas tanpa dokumen = ditolak.
+
+### Putusan 2 — Akun: kode BARU 600028 beban + 210207 utang kompensasi PKWT; setting fail-closed; 600005/210204 dilarang untuk jalur ini
+
+- Kode akun BARU diputus (bebas terverifikasi di COA live 6b50c3db:
+  600028 dan 210207 belum terpakai):
+  - `600028` "Beban Kompensasi PKWT" [EXPS, induk 6000] — beban akrual
+    bulanan dan beban peristiwa akhir segmen.
+  - `210207` "Utang Kompensasi PKWT" [OCLY, induk 2102] — liabilitas
+    akrual per karyawan sampai dibayar.
+  Usulan kode ini FINAL dari BOT Accountant; BOT Backend seed kedua
+  akun ini (pola F-128-V) bersama setting di bawah. Kode berubah
+  sesudah ada jurnal = dilarang (rename nama boleh, kode tidak).
+- Setting mapping BARU di SystemSetting (nullable, TANPA default
+  tebak, pola lateFeeIncomeAccountId): `pkwtCompensationExpenseAccountId`
+  dan `pkwtCompensationPayableAccountId`. Akrual maupun peristiwa
+  berharga DITOLAK fail-closed berisik bila mapping kosong atau akun
+  nonaktif/terhapus — pesan mengarahkan ke Pengaturan > Mapping Akun.
+  Automap boleh menyarankan 600028/210207 dari kode persis, tidak
+  boleh memasang diam-diam.
+- DILARANG memakai `600005` Beban Bonus, Pesangon & Kompensasi untuk
+  kompensasi PKWT: akun itu rumah pesangon/bonus campuran; mencampur
+  kompensasi PKWT menyembunyikan kewajiban statutori ini dari
+  rekonsiliasi per segmen dan mengaburkan batas vonis ini dengan
+  rezim pesangon PHK (PP 35/2021 Pasal 40 dst, belum divonis — di luar
+  cakupan). DILARANG pula kredit akrual ke `210204` Hutang Gaji:
+  210204 rumah potongan statutori payroll berjalan (BPJS/PPh/potongan)
+  di `onPayrollPaid`; utang kompensasi punya umur dan pemicu bayar
+  sendiri (akhir segmen), wajib terpisah supaya saldo per karyawan
+  dapat direkonsiliasi tanpa tercampur siklus gaji bulanan.
+- Posting matrix (semua dalam tx, `assertPeriodOpen` pada tanggal
+  jurnal, idempoten per peristiwa/slip):
+  - Akrual bulanan (Putusan 3): Dr 600028 (setting) / Cr 210207
+    (setting) sebesar basis/12 per bulan terlayani (akumulasi masa
+    pecahan mengikuti Putusan 1; bulan terakhir segmen menutup ke
+    nominal peristiwa persis, selisih pembulatan akrual masuk bulan
+    terakhir — bukan jurnal penyeimbang terpisah).
+  - Peristiwa akhir segmen TANPA akrual berjalan (akrual dimatikan/
+    segmen lampau): Dr 600028 / Cr 210207 sebesar nominal peristiwa
+    penuh pada tanggal akhir segmen.
+  - Pembayaran lewat slip final (Putusan 5): utang dilunasi DI DALAM
+    jurnal payroll existing, BUKAN jurnal bayar kedua: Dr 210207
+    sebesar nominal kompensasi yang dibayar slip itu; kaki beban
+    slip atas kompensasi TIDAK mendebit 600028 lagi (sudah dibebankan
+    akrual/peristiwa) — lihat penjaga dobel-beban Putusan 5.
+  - Pembayaran kompensasi perpanjangan saat karyawan MASIH aktif
+    (Pasal 15(4), bukan slip final): sama, lewat slip reguler masa
+    pembayaran sebagai pelunasan Dr 210207 tanpa beban kedua.
+  - Koreksi: reversal jurnal akrual/peristiwa di periode terbuka
+    (Putusan 5); jurnal terposting tidak diedit.
+
+### Putusan 3 — Saat pengakuan: AKRUAL bulanan wajib selama segmen berjalan; pengakuan sekaligus di akhir hanya untuk segmen lampau/tanpa data
+
+- Pengakuan = akrual bulanan (provisi per karyawan per segmen), BUKAN
+  tunai dan BUKAN sekaligus saat kontrak berakhir. Alasan: kewajiban
+  hukum lahir dari jasa yang sudah diberikan (Pasal 15 jo. 16
+  proporsional per masa kerja); menunggu akhir kontrak menyembunyikan
+  liabilitas berjalan dari neraca dan menumpuk beban satu bulan —
+  persis risiko "bergantung ingatan admin" di spec induk. PSAK 24/57
+  mendukung: kewajiban kini + probable + terukur andal sejak bulan
+  pertama (sesudah ambang 1 bulan Putusan 1 terlewati; akrual bulan
+  pertama diakui pada akhir bulan pertama, bukan diantisipasi hari
+  pertama).
+- Mekanik akrual: satu jurnal akrual per bulan kalender per karyawan
+  PKWT aktif (boleh diagregasi satu jurnal per bulan dengan baris per
+  akun saja — saldo per karyawan hidup di subledger peristiwa/
+  subledger akrual, BUKAN baris jurnal per karyawan; rekonsiliasi
+  GL-vs-subledger Putusan 5). Jumlah bulan berjalan = kenaikan masa
+  kerja Putusan 1 bulan itu x basis berlaku / 12. Kenaikan basis
+  tengah segmen: akrual bulan berjalan memakai basis baru untuk
+  SELURUH masa segmen (catch-up selisih akrual lampau dibukukan bulan
+  berjalan sebagai bagian akrual bulan itu, terlabel di snapshot) —
+  dilarang membiarkan basis basi sampai akhir segmen.
+- Tanpa diskonto/nilai kini dan tanpa asumsi aktuaria (bukan program
+  imbalan pasti): horizon <= jangka PKWT dan rumus statutori pasti;
+  bila perusahaan wajib PSAK 24 penuh oleh auditornya, itu kebijakan
+  pelaporan perusahaan di luar mesin ini (`BUTUH-VONIS-AKUNTAN` per
+  kasus), bukan alasan mematikan akrual statutori.
+- Pengecualian jujur: (a) segmen yang sudah berjalan/berakhir SEBELUM
+  fitur ini hidup diakui sekaligus pada tanggal akhir segmen (atau
+  tanggal adopsi bila sudah lewat dan belum dibayar, sebagai beban
+  periode adopsi terlabel `legacy` di snapshot — tidak menyusup ke
+  periode tertutup); (b) akrual boleh dimatikan per perusahaan hanya
+  lewat setting eksplisit bertanggal + alasan tercatat (kebijakan
+  produk BOT Lead), dan read-model tetap menampilkan estimasi
+  kewajiban belum diakui berlabel "belum diakrual — kebijakan" —
+  DILARANG mati diam-diam. Default setting: akrual AKTIF.
+- Kontrak berakhir tanpa peristiwa kompensasi terbayar: saldo 210207
+  per karyawan TIDAK boleh berumur diam — masuk daftar perhatian
+  HR/payroll (pola daftar perhatian F-085-S) sebagai "kompensasi
+  PKWT belum dibayar" sampai lunas atau dibatalkan beralasan
+  terstruktur (mis. putusan sengketa bernama; pembatalan = reversal,
+  bukan hapus).
+
+### Putusan 4 — PPh 21: pegawai TETAP untuk pajak; kompensasi = penghasilan tidak teratur digabung bruto masa pembayaran; akhir hubungan kerja = Masa Pajak Terakhir hitung ulang, BUKAN TER pegawai tidak tetap dan BUKAN tarif pesangon final
+
+- Klasifikasi pajak mengikuti PMK 168/2023 Pasal 2 angka 10: pekerja
+  PKWT yang bekerja penuh adalah Pegawai Tetap untuk PPh 21. Karena
+  itu kompensasi PKWT DILARANG diperlakukan: (a) TER harian pegawai
+  tidak tetap, (b) tarif final pesangon/pensiun dibayar sekaligus
+  (PP 68/2009 — kompensasi PP 35/2021 BUKAN pesangon Pasal 40; nama
+  mirip tidak memindahkan rezim), (c) objek PPh 23/26, (d) penghasilan
+  bebas pajak. Empat jalur itu MERAH di falsifikasi.
+- Kompensasi adalah penghasilan tidak teratur pegawai tetap (PMK
+  168/2023 Pasal 5(1)(a)): masuk penghasilan bruto masa pajak saat
+  DIBAYARKAN/diterima (masa slip memuatnya), digabung gaji dan
+  penghasilan lain se-masa. Selain Masa Pajak Terakhir: bruto gabungan
+  se-masa x TER bulanan kategori PTKP karyawan (mesin existing
+  `computePph21ForPeriod` jalur monthly — kompensasi menaikkan bracket
+  bulan itu, itu benar dan bukan alasan memisahnya ke slip kedua).
+- Bila pembayaran jatuh pada Masa Pajak Terakhir (Desember, atau masa
+  berakhirnya hubungan kerja — termasuk kontrak selesai tidak
+  diperpanjang dan pengakhiran dini Pasal 17): kompensasi masuk
+  `grossYear` hitung ulang masa terakhir existing; PPh 21 masa itu =
+  pajak setahun/bagian tahun (neto disetahunkan bila bagian tahun,
+  Pasal 15(3) PMK 168/2023) dikurangi PPh terpotong sebelumnya, dengan
+  plafon/kelebihan mengikuti mesin F-026 existing. Penanda final WAJIB
+  terbukti dari `employmentEndedAt` + `endReason=contract_completed|
+  terminated` server (gerbang existing), BUKAN centang operator.
+- Perpanjangan (hubungan kerja berlanjut): masa pembayaran kompensasi
+  segmen lama BUKAN Masa Pajak Terakhir — TER bulanan gabungan
+  berlaku walau nominal besar; sistem DILARANG menandai final hanya
+  karena ada pembayaran kompensasi. Sebaliknya kontrak berakhir di
+  tengah tahun TANPA slip final bertanda = cacat: gerbang existing
+  (periode sesudah employmentEndedAt ditolak) + kewajiban hitung ulang
+  final berlaku penuh untuk slip terakhir itu.
+- Bukti potong: kompensasi terpotong lewat slip masuk rekap PPh 21
+  masa + bukti potong tahunan pegawai tetap existing (1721-A1 jalur
+  F-028); tidak ada bupot terpisah untuk kompensasi dan tidak ada kode
+  objek baru yang dikarang — kode objek mengikuti pemetaan bupot
+  pegawai tetap existing; bila pemetaan Coretax menuntut rincian
+  terpisah kelak, itu perubahan pemetaan bupot dengan dasar PER DJP,
+  bukan vonis ini.
+- Empat status tetap terpisah: status dokumen peristiwa, status
+  pembayaran slip, status pajak (masa final/bukan), status posting
+  jurnal akrual — satu flag tidak mewakili yang lain.
+
+### Putusan 5 — Jalur bayar dan penjaga (Q-EMP-5): komponen slip khusus dari peristiwa terbekukan; dokumen bayar terpisah DITOLAK; dobel-beban dan dobel-slip mustahil
+
+- Q-EMP-5 DIPUTUS: kompensasi dibayar LEWAT slip gaji (`Payroll`)
+  masa pembayaran sebagai baris `PayrollComponentLine` khusus
+  bersumber peristiwa kompensasi terbekukan (snapshot: segmen,
+  masa kerja, basis, nominal, akun utang 210207 setting). Dokumen
+  bayar terpisah DITOLAK: dokumen kedua akan memisahkan potong PPh 21
+  dari gabungan bruto se-masa (Putusan 4), membuka jurnal bayar
+  kedua, dan melanggar unik rentang slip. Peristiwa kompensasi adalah
+  dokumen SUMBER (dasar hitung + persetujuan), slip adalah dokumen
+  BAYAR — dua dokumen, satu uang keluar.
+- Penjaga dobel-beban: `onPayrollPaid` existing mendebit gross penuh
+  ke `salaryExpenseAccountId`. Bila gross slip memuat kompensasi yang
+  sudah dibebankan akrual/peristiwa ke 600028, jurnal payroll WAJIB
+  memecah kaki debit: bagian kompensasi mendebit 210207 (pelunasan
+  utang), sisanya mendebit salaryExpense seperti biasa; total debit
+  tetap = gross slip, jurnal tetap seimbang sen. Mendebit kompensasi
+  ke 600028/600004 untuk kedua kalinya = MERAH. Bila akrual tidak
+  pernah berjalan untuk segmen itu (Putusan 3 pengecualian), kaki
+  kompensasi mendebit 600028 (bukan 210207) — pilihan kaki ditentukan
+  saldo subledger terbekukan di snapshot baris, BUKAN tebakan hook
+  dari akun kosong.
+- Satu peristiwa kompensasi -> paling banyak satu baris slip terbayar;
+  replay/regenerasi slip tidak menggandakan baris (idempotency key
+  peristiwa pada baris slip). Peristiwa belum disetujui/nominal belum
+  terbekukan tidak boleh ditarik ke slip. Pembayaran parsial
+  kompensasi: DITOLAK tahap ini — nominal slip = nominal peristiwa
+  penuh; kekurangan kas perusahaan tidak mengubah kewajiban statutori
+  (parsial = peristiwa pembayaran terpisah BUTUH-VONIS-AKUNTAN,
+  jangan karang).
+- Koreksi: slip terbayar salah -> jalur koreksi payroll existing
+  (reversal jurnal payroll + slip koreksi), akrual salah -> reversal
+  jurnal akrual di periode terbuka; snapshot peristiwa terkoreksi
+  lahir sebagai peristiwa koreksi tertaut, peristiwa asal tidak
+  diedit. Periode tertutup: koreksi dibukukan periode terbuka
+  berjalan, dilarang membuka periode lampau.
+- Rekonsiliasi tiga arah wajib tampil (read-model): Σ peristiwa
+  terbekukan vs saldo GL 210207 POSTED vs Σ baris kompensasi slip
+  terbayar, per karyawan per segmen; selisih = temuan bernama, tidak
+  dipilih diam-diam salah satu.
+
+### Tax rules register (ringkas)
+
+| Aturan | Sumber resmi | Berlaku | Cakupan vonis |
+|---|---|---|---|
+| Kompensasi PKWT wajib, >= 1 bln, saat berakhir; perpanjangan dibayar per segmen | PP 35/2021 Pasal 15, JDIH Kemnaker (URL di atas) | 2021-02-02 | Putusan 1, 3 |
+| Besaran masa/12 x pokok+tunjangan tetap; varian 16(3)/(4)/(5)/(6); pengakhiran dini | PP 35/2021 Pasal 16-17 | 2021-02-02 | Putusan 1 |
+| PKWT kerja penuh = Pegawai Tetap pajak; TER selain masa terakhir; hitung ulang masa terakhir; bagian tahun disetahunkan | PMK 168/2023 Pasal 2(10), 5(1)(a), 15; PP 58/2023 tabel TER di master | 2024-01-01 | Putusan 4 |
+| Akrual imbalan terutang atas jasa terlayani; provisi kewajiban kini terukur | PSAK 24/57 (standar komersial, bukan dasar pajak) | — | Putusan 3 |
+
+Klaim kepatuhan: perlakuan internal ISF berdasar PP 35/2021 Pasal
+15-17 + PMK 168/2023/PP 58/2023 (sumber resmi Kemnaker/DJP di atas,
+akses 2026-10-24) dan PSAK 24/57 sebagai rujukan komersial. BUKAN
+penetapan Kemnaker/DJP atas kasus nyata: pecahan bulan Putusan 1,
+status mikro/kecil, sengketa pengakhiran, dan kewajiban PSAK 24 penuh
+per perusahaan tetap `BUTUH-VONIS-AKUNTAN`/penasihat hukum per kasus.
+Pesangon/UPMK/penggantian hak PHK (Pasal 40 dst) TIDAK divonis di
+sini dan tidak boleh memakai akun/rumus vonis ini.
+
+### Batas build (pemilik berikutnya)
+
+- BOT Lead: merge PR vonis ini bila gate hijau head persis; buka inti
+  sesudahnya (klaim board). Putus hanya: prioritas inti + apakah
+  setting mati-akrual Putusan 3 perlu permukaan pengaturan tahap
+  pertama (default vonis: TANPA permukaan, akrual selalu aktif).
+- BOT Backend (inti terpisah, klaim `prisma/schema.prisma` + folder
+  migrasi di board dulu, koordinasi BOT Accountant sebelum migrasi):
+  (1) seed akun 600028/210207 + setting mapping Putusan 2 (akun dari
+  setting fail-closed; automap saran kode persis saja); (2) entitas
+  peristiwa kompensasi per segmen terbekukan (masa kerja 4-desimal,
+  snapshot basis komponen, nominal, status persetujuan, idempotency
+  key) + subledger akrual per karyawan-segmen; (3) job/service akrual
+  bulanan agregat per bulan (satu jurnal per bulan, assertPeriodOpen,
+  anti-dobel per bulan-karyawan di subledger); (4) tarik peristiwa ke
+  slip sebagai PayrollComponentLine khusus + pecah kaki debit
+  Putusan 5 di onPayrollPaid (kaki dari snapshot, bukan tebakan);
+  (5) gerbang pajak Putusan 4 memakai gerbang final existing
+  (employmentEndedAt server) — JANGAN bangun klasifikasi pajak kedua;
+  (6) read-model rekonsiliasi tiga arah + daftar "kompensasi belum
+  dibayar". Tanpa migrasi di kartu vonis ini.
+- BOT Business/BOT Frontend: tampilkan masa kerja, basis, nominal,
+  status peristiwa/akrual/pajak dari snapshot backend apa adanya;
+  UI tidak menghitung masa kerja/kompensasi/PPh, tidak menandai final
+  dari centang lokal.
+- BOT QA falsifikasi E132-1..5 (MERAH bila penjaga dicabut):
+  - E132-1 Rumus: basis Rp5.500.000 (pokok 5.000.000 + tetap 500.000),
+    12 bulan -> Rp5.500.000,00; basis Rp5.000.000, 6 bulan ->
+    Rp2.500.000,00; basis Rp6.000.000, 18 bulan -> Rp9.000.000,00;
+    masa 5,5000 bulan (1 Jan-15 Jun) basis Rp5.400.000 ->
+    Rp2.475.000,00; masa < 1 bulan -> peristiwa ditolak; tunjangan
+    tidak tetap masuk basis atau masa dibulatkan ke bulan penuh =
+    MERAH.
+  - E132-2 Segmen & akrual: kontrak 12 bulan basis Rp5.500.000:
+    akrual Rp458.333,33/bln, bulan ke-12 menutup total persis
+    Rp5.500.000,00 (selisih sen di bulan terakhir); perpanjangan 12
+    bulan berikutnya melahirkan peristiwa kedua berbasis masa segmen
+    kedua saja (bukan 24 bulan, bukan dobel bayar segmen pertama);
+    jurnal akrual memakai 600028/210207 dari setting — mapping kosong
+    tetap posting atau jatuh ke 600005/210204 = MERAH.
+  - E132-3 Jurnal & dobel-beban: slip final memuat kompensasi
+    Rp5.500.000 terakrual penuh: jurnal payroll mendebit 210207
+    Rp5.500.000 untuk kaki kompensasi (600028/600004 nol untuk kaki
+    itu), Σdebit = Σkredit sen persis; replay slip/peristiwa tidak
+    melahirkan baris/jurnal kedua; edit snapshot peristiwa terbayar
+    tanpa reversal periode terbuka mengubah jurnal lampau = MERAH.
+  - E132-4 Pajak klasifikasi: karyawan TK/0, gaji Rp6.000.000/bln,
+    bekerja Jan-Jun (6 bulan bagian tahun), kompensasi 6 bulan
+    Rp3.000.000 dibayar di slip final Juni (bruto Juni Rp9.000.000,
+    bruto tahun Rp39.000.000, iuran pensiun karyawan 0): hitung ulang
+    masa terakhir menghasilkan pajak disetahunkan Rp1.005.000
+    (biaya jabatan Rp1.950.000; neto Rp37.050.000; disetahunkan
+    Rp74.100.000; PKP Rp20.100.000; 5% × Rp20.100.000); pajak
+    proporsional masa kerja 6/12 bagian tahun Rp502.500
+    (6/12 × Rp1.005.000) dan PPh masa final = Rp502.500 − terpotong
+    sebelumnya; kompensasi dikeluarkan dari bruto, dikenai TER
+    harian/tarif final pesangon, atau masa perpanjangan ditandai
+    final = MERAH.
+  - E132-5 Gerbang & status: flag final dari client tanpa
+    employmentEndedAt server -> ditolak (regresi gerbang existing);
+    peristiwa TKA/mikro-tanpa-dokumen/nominal parsial diterima =
+    MERAH; kontrak berakhir peristiwa terbayar nol -> saldo 210207
+    tampil di daftar belum-dibayar dan rekonsiliasi tiga arah
+    menamai selisihnya (disembunyikan/dipilih diam-diam = MERAH).
+
+ID vonis ini **F-2026-10-24-132-V** (diberikan kartu; bebas:
+grep `F-2026-10-24-132` di origin/main 6b50c3db = 0 sebelum vonis ini;
+tertinggi -V terbit di main 130-V, 131-V di PR #702 terbuka).
+Pemilik berikutnya: BOT Lead merge -> BOT Backend inti Putusan 1-5 ->
+BOT Business/Frontend konsumen snapshot -> BOT QA E132-1..5.
+## SPEC BUSINESS 2026-10-24 — F-2026-10-24-098-S standar allowance & klasifikasi fisik scrap potongan plat & profil baja fabrikasi (delta di atas F-2026-10-22-071-S + vonis F-2026-10-22-066-V; induk tetap F-2026-10-21-008)
 Spec dokumen saja, TANPA kode produksi/schema/migrasi/UI. ID bebas
 F-2026-10-24-098-S (terverifikasi belum terpakai di origin/main
 c6c4bfb3; serial -S BUSINESS terakhir 097-S PR #698).
-
 ### 0. Anti-duplikat — apa yang SUDAH merged, dilarang dispec ulang
-
 - `TERVERIFIKASI-KODE`: inti scrap F-071-S sudah hidup di main.
   `BomRevisionMaterial.scrapPercent` (prisma/schema.prisma:2682,
   null/0 = belum dikalibrasi); `MaterialIssueItem.scrapQty/
@@ -14161,16 +14578,13 @@ c6c4bfb3; serial -S BUSINESS terakhir 097-S PR #698).
 - `TERVERIFIKASI-KODE`: `Item.categoryId -> ItemCategory` (:603)
   tanpa atribut bentuk bahan (plat/profil). Nol model penjualan
   scrap/besi tua di schema (grep `ScrapSale|besi` = 0).
-
 Delta spec ini HANYA tiga hal yang belum ada di F-071-S:
 (A) standar allowance acuan per kategori bentuk bahan sebagai
 BANTUAN kalibrasi (bukan default sistem), (B) klasifikasi fisik
 sisa potong: remnant usable vs scrap murni besi tua + ambang
 dimensi terukur, (C) approval foreman untuk scrap abnormal
 sebagai gerbang operasional (bukan gerbang jurnal).
-
 ### 1. Benchmark resmi (akses 2026-10-24)
-
 - Zahir Manufacturing: BOM multi-level memuat "Waste allowance"
   eksplisit; formula menyesuaikan yield/waste/shrinkage:
   https://zahirerp.com/en/zahir-manufacturing/
@@ -14189,14 +14603,11 @@ sebagai gerbang operasional (bukan gerbang jurnal).
   (URL apa adanya dari hasil akses; jangan dikutip sebagai
   standar resmi — angka persen di sumber praktik 2-5% cutting
   waste TIDAK diadopsi sebagai angka ISF, lihat BR-SCRAP-02.)
-
 ### 2. Workflow specification
-
 Aktor: staf cutting/operator (catat sisa saat issue), foreman/
 kepala bengkel (kalibrasi allowance, approval abnormal, vonis
 fisik remnant vs besi tua), gudang (terima remnant/besi tua),
 finance (penjualan besi tua — wilayah ACCOUNTANT, di luar spec).
-
 Alur A — kalibrasi allowance per kategori bahan (sebelum job):
 1. Tabel acuan kalibrasi (USULAN, bantuan estimator, BUKAN
    default sistem): plat lembaran (nesting 2D, sisa bentuk tak
@@ -14215,7 +14626,6 @@ Alur A — kalibrasi allowance per kategori bahan (sebelum job):
    menyetujui penanda bentuk di kategori; tanpa itu acuan tampil
    per kategori item apa adanya dan pemetaan plat/profil manual
    oleh estimator (jujur: belum terstruktur).
-
 Alur B — pencatatan fisik saat cutting/issue (titik existing):
 4. Sesudah potong, operator memilah fisik tiap sisa menjadi:
    (a) REMNANT USABLE: dimensi terukur memenuhi ambang minimum
@@ -14233,7 +14643,6 @@ Alur B — pencatatan fisik saat cutting/issue (titik existing):
    Rekonsiliasi per baris issue: qty issue = qty terpasang +
    qty remnant (satuan sama) + qty scrap; selisih tampil temuan
    di laporan scrap existing, bukan nol diam-diam.
-
 Alur C — approval abnormal (gerbang operasional baru):
 6. Saat complete issue menghasilkan `abnormalQty > 0` (snapshot
    merged), baris masuk antrean approval foreman. Approval TIDAK
@@ -14249,7 +14658,6 @@ Alur C — approval abnormal (gerbang operasional baru):
    vonis 066-V apa pun disposisinya — label kelalaian TIDAK
    otomatis memindah beban ke karyawan (potongan gaji =
    wilayah HR/payroll + `BUTUH-VONIS` accountant, di luar spec).
-
 Alur D — besi tua (penampungan -> jual timbang):
 8. Scrap murni terakumulasi di penampungan per gudang (catatan
    kg per kejadian dari langkah 5). Penjualan ke pengepul =
@@ -14258,13 +14666,10 @@ Alur D — besi tua (penampungan -> jual timbang):
    HPP vs pendapatan lain) = `BUTUH-VONIS` ACCOUNTANT. Spec ini hanya
    menetapkan kebutuhan data kg + tautan kejadian (D-S98-03);
    TIDAK mengusulkan dokumen penjualan baru sebelum vonis.
-
 Dokumen masuk: revisi BOM, MaterialIssue/issue PO, Remnant
 existing. Keluar: snapshot klasifikasi (merged) + status tinjau
 foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
-
 ### 3. Role / permission matrix (izin nyata module-catalog.generated.ts:228-278,420)
-
 | Aksi | Staf cutting/operator | Foreman/kepala bengkel | Gudang | Finance |
 |---|---|---|---|---|
 | Isi scrapQty+alasan baris issue (draft) | `edit_material_issues`/`edit_production_orders` (reuse merged) | sama | — | — |
@@ -14275,9 +14680,7 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 | Catat kg penampungan besi tua | `create_material_issues` (reuse) | sama | `create_material_issues` | — |
 | Lihat laporan scrap + status tinjau | `view_reports` | `view_reports` | `view_reports` | `view_reports` |
 | Jual besi tua + jurnal hasil jual | — | — | — | di luar spec — `BUTUH-VONIS` ACCOUNTANT |
-
 ### 4. Status-transition matrix
-
 | Objek | Dari | Pemicu | Ke | Penjaga |
 |---|---|---|---|---|
 | Sisa fisik | belum tercatat | sortir sesudah potong + ukur dimensi | remnant `usable` / scrap baris issue | ambang D-S98-02; satu sisa satu kelas; tautan issue wajib utk remnant |
@@ -14286,9 +14689,7 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 | Baris issue abnormal | terklasifikasi (merged) | complete dgn abnormalQty>0 | menunggu_tinjau | otomatis server dari snapshot; operator tak bisa memilih |
 | Tinjau abnormal | menunggu_tinjau | foreman disposisi + catatan bila kelalaian | ditinjau | izin §3; klasifikasi/nilai/jurnal TIDAK berubah |
 | Allowance kategori | belum ada acuan | kepala bengkel tetapkan acuan (BUTUH-VONIS angka) | acuan_aktif (teks pembanding form) | acuan tidak pernah mengisi scrapPercent otomatis |
-
 ### 5. Business rules register (BR-SCRAP-*; BR-SC-* F-071-S tetap berlaku penuh)
-
 | ID | Aturan | Label |
 |---|---|---|
 | BR-SCRAP-01 | Spec ini delta: dilarang membangun ulang allowance per baris BOM, klasifikasi, snapshot, laporan, atau jurnal scrap — semua sudah merged (F-071-S/066-V) | TERVERIFIKASI-KODE §0 |
@@ -14301,9 +14702,7 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 | BR-SCRAP-08 | Approval foreman atas abnormal = tinjau operasional saja; tidak mengubah klasifikasi, nilai, jurnal (066-V), dan tidak menahan complete | USULAN; menahan complete = BUTUH-VONIS LEAD |
 | BR-SCRAP-09 | Disposisi `kelalaian` wajib catatan + tindak lanjut; TIDAK otomatis jadi potongan gaji/beban karyawan | USULAN; sanksi uang = BUTUH-VONIS accountant+HR |
 | BR-SCRAP-10 | Serbuk/gram/sisa tak berbentuk: selalu scrap murni (tidak pernah remnant), masuk kg penampungan | USULAN |
-
 ### 6. Kebutuhan data (untuk BACKEND — kebutuhan, BUKAN skema final)
-
 - D-S98-01 (opsional, sesudah putusan LEAD): penanda bentuk
   bahan di `ItemCategory` (plat/profil/lain) utk acuan per bentuk.
 - D-S98-02: ambang dimensi minimum usable terkonfigurasi per
@@ -14319,9 +14718,7 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 - Laporan: perluas read-model scrap existing (bukan laporan
   kedua): kolom status tinjau, kg besi tua per periode/gudang,
   temuan rekonsiliasi BR-SCRAP-07.
-
 ### 7. Feature matrix
-
 | Kemampuan | Accurate | Zahir | ISF hari ini | Delta spec ini |
 |---|---|---|---|---|
 | Waste allowance per bahan BOM | Formula Produksi (BENCHMARK §1) | ADA waste allowance (BENCHMARK §1) | ADA per baris revisi (merged) | acuan per kategori sbg pembanding kalibrasi (D-S98-01) |
@@ -14329,9 +14726,7 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 | Remnant usable berdimensi tertaut issue | tidak diklaim | tidak diklaim | PARSIAL (Remnant ada; dimensi bebas, tautan nullable) | ambang usable + tautan wajib (D-S98-02) |
 | Scrap besi tua kg + jual timbang | tidak diklaim | tidak diklaim | ABSEN | catat kg (D-S98-03); jual = BUTUH-VONIS ACCOUNTANT |
 | Approval abnormal operasional | kontrol ambil berlebih per hak akses (BENCHMARK) | tidak diklaim | ABSEN | antrean tinjau foreman §2C |
-
 ### 8. Acceptance criteria (AC-SCRAP-1..8)
-
 - AC-SCRAP-1: remnant dibuat tanpa dimensi/tautan issue ->
   ditolak; dengan keduanya -> usable, nol StockMove, nol jurnal.
 - AC-SCRAP-2: sisa sama dicatat remnant + scrap -> kedua ditolak
@@ -14349,20 +14744,15 @@ foreman + catatan kg besi tua. Tidak ada dokumen transaksi baru.
 - AC-SCRAP-8: acuan kategori tampil di form BOM sebagai teks;
   simpan revisi tanpa scrapPercent eksplisit -> baris tetap
   belum-kalibrasi (acuan tidak mengisi otomatis).
-
 Edge: scrapQty baris dari serbuk (tanpa sisa fisik) sah tanpa
 remnant; remnant profil sebatang diukur panjang, plat diukur
 panjang×lebar (+ketebalan dari item); remnant antar-gudang ikut
 konvensi existing (bukan stok, tanpa movement).
-
 ### 9. Yang TIDAK diusulkan
-
 - Jalur issue/form scrap kedua; laporan scrap kedua; angka
   allowance karangan; dokumen penjualan besi tua sebelum vonis
   ACCOUNTANT; potongan gaji dari label kelalaian; nesting otomatis.
-
 ### 10. Urutan implementasi
-
 LEAD putus: reuse izin vs `approve_scrap_reviews` + apakah
 complete kelak boleh ditahan tinjau (default spec: TIDAK) ->
 kepala bengkel tetapkan angka acuan+ambang (BR-SCRAP-02/05) ->
