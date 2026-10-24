@@ -1,0 +1,110 @@
+name: Antrean Merge
+
+# Merge queue buatan sendiri. Merge queue bawaan GitHub tidak tersedia untuk
+# repo ini (opsi "Require merge queue" tidak tampil di UI branch protection
+# maupun ruleset; pembuatan rule lewat REST ditolak 422 dan skema GraphQL
+# tidak punya field-nya — diverifikasi 25 Okt 2026). Workflow ini menirunya:
+# PR berlabel `antrean-merge` diproses satu per satu (FIFO) — update branch
+# ke main terbaru, picu CI, tunggu 4 check wajib hijau, approve oleh bot,
+# lalu squash merge + hapus branch. Satu antrean, satu merge pada satu waktu,
+# jadi balapan "branch tertinggal dari main" (BEHIND) tidak terjadi.
+#
+# Kenapa approve oleh bot sah di sini: penulis PR adalah akun pemilik,
+# sedangkan peninjau adalah github-actions[bot] — aktor berbeda, dan syarat
+# branch protection (1 approval, dismiss stale) terpenuhi sesudah update
+# terakhir karena approve diberikan paling akhir.
+#
+# Jadwal cron adalah jaring pengaman: trigger `labeled` bisa tertelan batas
+# concurrency (1 running + 1 pending), jadi antrean disapu berkala juga.
+
+on:
+  pull_request:
+    types: [labeled]
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+concurrency:
+  group: antrean-merge-main
+  cancel-in-progress: false
+
+permissions:
+  actions: write
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  proses:
+    name: Proses Antrean Merge
+    if: github.event_name != 'pull_request' || github.event.label.name == 'antrean-merge'
+    runs-on: ubuntu-latest
+    timeout-minutes: 170
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TZ: Asia/Jakarta
+    steps:
+      - name: Proses PR berlabel antrean-merge (FIFO)
+        run: |
+          set -uo pipefail
+
+          wait_checks() {
+            pr=$1
+            tries=0
+            while [ $tries -lt 80 ]; do
+              states=$(gh pr checks "$pr" --json name,bucket --jq '[.[] | select(.name == "Lint" or .name == "Unit Tests" or .name == "Build Next.js" or .name == "DB Integration Tests") | .bucket] | join(",")' 2>/dev/null || echo "")
+              count=$(printf '%s' "$states" | grep -o . | wc -l || true)
+              if printf '%s' "$states" | grep -qE 'fail|cancel'; then
+                return 1
+              fi
+              if [ "$count" -ge 4 ] && ! printf '%s' "$states" | grep -q pending; then
+                return 0
+              fi
+              sleep 30
+              tries=$((tries + 1))
+            done
+            return 1
+          }
+
+          prs=$(gh pr list --label antrean-merge --state open --json number,createdAt,isDraft --jq '[.[] | select(.isDraft | not)] | sort_by(.createdAt) | .[].number')
+          if [ -z "${prs}" ]; then
+            echo "Antrean kosong."
+            exit 0
+          fi
+
+          for pr in $prs; do
+            echo "::group::PR #$pr"
+            state=$(gh pr view "$pr" --json state --jq .state)
+            if [ "$state" != "OPEN" ]; then
+              echo "Dilewati: bukan OPEN."
+              echo "::endgroup::"
+              continue
+            fi
+            branch=$(gh pr view "$pr" --json headRefName --jq .headRefName)
+            before=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
+
+            gh pr update-branch "$pr" || true
+            sleep 5
+            after=$(gh pr view "$pr" --json headRefOid --jq .headRefOid)
+            if [ "$before" != "$after" ]; then
+              echo "Branch diperbarui ke $after; memicu CI manual (push token tidak memicu workflow)."
+              gh workflow run ci.yml --ref "$branch" || true
+              sleep 10
+            fi
+
+            if wait_checks "$pr"; then
+              gh pr review "$pr" --approve --body "Disetujui antrean merge: check wajib hijau di atas main terbaru." || true
+              if gh pr merge "$pr" --squash --delete-branch; then
+                echo "PR #$pr merged lewat antrean."
+              else
+                echo "Merge PR #$pr gagal; label dicabut."
+                gh pr edit "$pr" --remove-label antrean-merge || true
+                gh pr comment "$pr" --body "Antrean merge: merge gagal (kemungkinan syarat protection belum terpenuhi). Label dicabut; periksa lalu beri label \`antrean-merge\` lagi." || true
+              fi
+            else
+              echo "Check PR #$pr gagal/timeout; label dicabut."
+              gh pr edit "$pr" --remove-label antrean-merge || true
+              gh pr comment "$pr" --body "Antrean merge: check wajib gagal atau timeout. Label dicabut; perbaiki lalu beri label \`antrean-merge\` lagi untuk masuk antrean." || true
+            fi
+            echo "::endgroup::"
+          done
