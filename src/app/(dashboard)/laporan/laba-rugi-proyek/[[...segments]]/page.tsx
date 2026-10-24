@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/auth/permissions'
 import { toLocalDateOnly } from "@/lib/utils/date-only"
 import { reportPeriodFromRoute } from "@/lib/reports/report-period"
 import { loadProjectPlReport } from "@/lib/reports/project-pl-data"
+import { buildReportPdfHref } from "@/lib/reports/report-export"
 import { ExportButtons } from "@/components/reports/export-buttons"
 import { ProjectPlCard } from "@/components/reports/project-pl-card"
 import { ReportPageShell } from "@/components/reports/report-page-shell"
@@ -22,16 +23,19 @@ export default async function ProjectPnLPage({
 }) {
   await requirePermission('view_reports')
 
-  const { start: startDate, end: endDate } = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
+  const period = await reportPeriodFromRoute(routeParams, searchParams, (now) => ({
     start: new Date(now.getFullYear(), 0, 1),
     end: now,
   }))
+  const { start: startDate, end: endDate } = period
   endDate.setHours(23, 59, 59, 999)
 
   // F-2026-10-21-029: satu-satunya sumber angka halaman ini adalah builder
   // `buildProjectPl` lewat loader `loadProjectPlReport` — halaman tidak lagi
   // mengagregasi invoice/material/beban sendiri (dulu tanpa ProductionCost
-  // dan tanpa jembatan invoice lewat WO/quotation).
+  // dan tanpa jembatan invoice lewat WO/quotation). Ekspor PDF memakai
+  // loader yang sama lewat registry `laba-rugi-proyek` (bukan scraping DOM);
+  // CSV tetap dari tabel layar yang dirender dari baris builder yang sama.
   const report = await loadProjectPlReport({ start: startDate, end: endDate })
 
   return (
@@ -49,7 +53,12 @@ export default async function ProjectPnLPage({
           defaultEndDate={toLocalDateOnly(endDate)}
         />
       }
-      actions={<ExportButtons title="Laba_Rugi_per_Proyek" />}
+      actions={
+        <ExportButtons
+          title="Laba_Rugi_per_Proyek"
+          pdfHref={buildReportPdfHref("laba-rugi-proyek", period.slug)}
+        />
+      }
     >
       <ProjectPlCard rows={report.rows} />
     </ReportPageShell>
