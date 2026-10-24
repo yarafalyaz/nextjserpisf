@@ -117,12 +117,12 @@ export function assertComboboxNameA11yAdd(
 export function assertOrderComboboxA11yAdd(
   form: Element,
   container: HTMLElement,
-  spec: { addLabel: string; requiredLabel: string },
+  spec: { addLabel: string; requiredLabel: string; decorativeStarCount?: number },
 ) {
   expect(form.getAttribute("aria-label")).toBe(spec.addLabel)
   expect(form.getAttribute("aria-busy")).toBe("false")
   expect(container.querySelectorAll('[role="combobox"][aria-required="true"]').length).toBe(1)
-  expect(decorativeStars(form).length).toBe(1)
+  expect(decorativeStars(form).length).toBe(spec.decorativeStarCount ?? 1)
   expect(labelTexts(form)).toEqual(expect.arrayContaining([spec.requiredLabel]))
 }
 

@@ -24,7 +24,7 @@ describe("AssetTransferForm — a11y wiring", () => {
       expect(form.getAttribute("aria-busy")).toBe("false")
       expect(container.querySelector("[role='combobox']")!.getAttribute("aria-required")).toBe("true")
       expect(container.querySelector("#toLocation")!.getAttribute("required")).not.toBeNull()
-      expect(decorativeStars(form).length).toBe(2)
+      expect(decorativeStars(form).length).toBe(3)
       expect(labelTexts(form)).toEqual(expect.arrayContaining(["Aset *", "Ke Lokasi *"]))
       unmount(root, container)
     })
