@@ -6,6 +6,7 @@ import { writeFile, mkdir, unlink } from "fs/promises"
 import { randomUUID } from "crypto"
 import path from "path"
 import { apiError } from "@/lib/api-response"
+import { isPhotoCategory } from "@/lib/reports/attachment-photo"
 import { assertCSRF } from "@/lib/security/csrf"
 
 /**
@@ -131,10 +132,20 @@ export async function POST(req: NextRequest) {
     "journal", "expense", "material_issue", "work_order", "project",
     "goods_receipt", "purchase_return", "sales_return", "bank_statement",
     "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash", "WarrantyClaim",
+    // F-2026-10-24-096-S: induk foto tahap/inspeksi (BR-PHOTO-01).
+    "customer_vehicle", "project_stage", "work_order_operation", "qc_inspection",
   ]
   if (!allowedRefTypes.includes(safeRefType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
   }
+
+  // F-2026-10-24-096-S BR-PHOTO-02: kategori foto tertutup dari klien;
+  // nilai di luar daftar ditolak, kosong = null (dibaca `other`).
+  const photoCategoryRaw = formData.get("photoCategory") as string | null
+  if (photoCategoryRaw != null && photoCategoryRaw !== "" && !isPhotoCategory(photoCategoryRaw)) {
+    return apiError("BAD_REQUEST", "Kategori foto tidak valid")
+  }
+  const photoCategory = photoCategoryRaw ? photoCategoryRaw : null
 
   // Existing records require write access and resource scope. New-form uploads
   // use referenceId=0 and are restricted to types with an explicit create grant.
@@ -174,6 +185,7 @@ export async function POST(req: NextRequest) {
         fileSize: file.size,
         mimeType: detectedMime,
         uploadedBy: userId,
+        photoCategory,
       },
       // Kontrak POST sama dengan GET: tanpa select, Prisma create mengembalikan
       // baris utuh (referenceType/referenceId/uploadedBy internal ikut bocor).
@@ -184,6 +196,11 @@ export async function POST(req: NextRequest) {
         fileUrl: true,
         fileSize: true,
         mimeType: true,
+        photoCategory: true,
+        verifiedBy: true,
+        verifiedAt: true,
+        publishedBy: true,
+        publishedAt: true,
         createdAt: true,
       },
     })
@@ -223,6 +240,8 @@ export async function GET(req: NextRequest) {
     "journal", "expense", "material_issue", "work_order", "project",
     "goods_receipt", "purchase_return", "sales_return", "bank_statement",
     "delivery_order", "inventory_transfer", "stock_adjustment", "petty_cash", "WarrantyClaim",
+    // F-2026-10-24-096-S: induk foto tahap/inspeksi (BR-PHOTO-01).
+    "customer_vehicle", "project_stage", "work_order_operation", "qc_inspection",
   ]
   if (!allowedRefTypes.includes(referenceType)) {
     return apiError("BAD_REQUEST", "Tipe referensi tidak valid")
@@ -261,6 +280,11 @@ export async function GET(req: NextRequest) {
       fileUrl: true,
       fileSize: true,
       mimeType: true,
+      photoCategory: true,
+      verifiedBy: true,
+      verifiedAt: true,
+      publishedBy: true,
+      publishedAt: true,
       createdAt: true,
     },
   })

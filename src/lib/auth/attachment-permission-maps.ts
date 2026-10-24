@@ -27,6 +27,13 @@ export const ATTACHMENT_PERMISSION: Record<string, PermissionName> = {
   material_issue: "view_material_issues",
   work_order: "view_work_orders",
   project: "view_projects",
+  // F-2026-10-24-096-S: foto tahap/inspeksi. QC digerbang izin QC persis
+  // (§3 spec), bukan izin WO generik; tahap proyek/operasi WO mengikuti
+  // induk proyek/WO-nya; kendaraan mengikuti izin pelanggan.
+  customer_vehicle: "view_customers",
+  project_stage: "view_projects",
+  work_order_operation: "view_work_orders",
+  qc_inspection: "view_qc",
   goods_receipt: "view_goods_receipts",
   purchase_return: "view_purchase_returns",
   sales_return: "view_sales_returns",
@@ -52,6 +59,10 @@ export const ATTACHMENT_WRITE_PERMISSION: Record<string, PermissionName> = {
   material_issue: "edit_material_issues",
   work_order: "edit_work_orders",
   project: "edit_projects",
+  customer_vehicle: "edit_customers",
+  project_stage: "edit_projects",
+  work_order_operation: "edit_work_orders",
+  qc_inspection: "manage_qc_inspections",
   goods_receipt: "edit_goods_receipts",
   purchase_return: "edit_purchase_returns",
   sales_return: "edit_sales_returns",
