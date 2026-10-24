@@ -37,6 +37,7 @@ import {
   GOODS_RECEIPT_SERVICE_JOURNAL_REF_TYPE,
 } from "@/lib/services/stock-journal.service";
 import {
+  assertApproved,
   requestApprovalIfConfigured,
 } from "@/lib/services/approval-workflow.service";
 import { attachPendingTransactionAttachments, deleteTransactionAttachmentsTx, removeAttachmentFiles } from "@/lib/services/transaction-attachment.service";
@@ -1575,6 +1576,9 @@ export async function createVendorPayment(formData: FormData) {
     // Journal is NOT created here — it is posted only on confirmVendorPayment
     // to prevent draft/unconfirmed payments from affecting the GL.
 
+    // Route through approval workflow if one is configured for VendorPayment.
+    await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id));
+
     await logActivity(
       "create",
       "VendorPayment",
@@ -1700,6 +1704,9 @@ export async function confirmVendorPayment(paymentId: number) {
     if (payment.status !== "draft") {
       throw new Error("Pembayaran hanya bisa dikonfirmasi dari status draft");
     }
+
+    // Workflow approval must be complete (no-op if no workflow configured).
+    await assertApproved("VendorPayment", paymentId);
 
     await prisma.$transaction(async (tx) => {
       // Lock payment row to prevent double-confirm
@@ -3079,6 +3086,10 @@ export async function updateVendorPayment(id: number, formData: FormData) {
     // the GL without a vendorPaymentAllocation and without the overpay guard, while
     // the bill's balanceDue stays unchanged → subledger (bills) drifts from GL AP.
     // The journal + allocations are created atomically in confirmVendorPayment.
+
+    // Edit membuka kembali pengajuan bila approval sebelumnya ditolak
+    // (resubmit); tanpa workflow terkonfigurasi ini no-op.
+    await requestApprovalIfConfigured("VendorPayment", payment.id, Number(user.id));
 
     await logActivity(
       "update",

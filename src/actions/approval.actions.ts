@@ -28,6 +28,13 @@ type WorkflowStepInput = {
   approverType?: string | null;
 };
 
+// Tipe yang siklus statusnya dimiliki action dokumennya sendiri
+// (Journal: DRAFT→POSTED huruf besar; VendorPayment: draft→completed).
+// Untuk tipe ini workflow hanya menggerbang transisi posting lewat
+// assertApproved di action dokumen; menulis status "approved"/"rejected"
+// ke dokumen akan merusak kosakata statusnya.
+const GATE_ONLY_REFERENCE_TYPES = new Set(["Journal", "VendorPayment"]);
+
 const APPROVED_BY_MODELS = new Set([
   "PurchaseRequest",
   "PurchaseOrder",
@@ -211,7 +218,7 @@ export async function approveStep(approvalId: number, formData: FormData) {
         });
         const modelKey = approval.referenceType.charAt(0).toLowerCase() + approval.referenceType.slice(1);
         const docModel = (tx as any)[modelKey];
-        if (docModel?.update) {
+        if (docModel?.update && !GATE_ONLY_REFERENCE_TYPES.has(approval.referenceType)) {
           const docStatus = approval.referenceType === "EmployeeLoan" ? "active" : "approved";
           const approvedBy = session?.user?.id ? Number(session.user.id) : null;
           await docModel.update({
@@ -339,7 +346,7 @@ export async function rejectStep(approvalId: number, formData: FormData) {
       // Update source document status to rejected
       const modelKey = approval.referenceType.charAt(0).toLowerCase() + approval.referenceType.slice(1);
       const docModel = (tx as any)[modelKey];
-      if (docModel?.update) {
+      if (docModel?.update && !GATE_ONLY_REFERENCE_TYPES.has(approval.referenceType)) {
         const data: Record<string, unknown> = { status: "rejected" };
         if (REJECTION_REASON_MODELS.has(approval.referenceType)) {
           data.rejectionReason = notes || null;
