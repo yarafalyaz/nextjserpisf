@@ -646,6 +646,18 @@ describe("Sales Invoice Actions", () => {
     const res = await actions.postInvoice(1)
     expect(res?.success).toBe(false)
   })
+  it("E127-8b: postInvoice menolak faktur cancelled (batal permanen) sebelum hook posting", async () => {
+    // F-2026-10-23-127-V Putusan 4: unik jurnal aktif-saja membuka kunci
+    // FISIK re-post, tetapi gerbang status dokumen tetap menolak faktur
+    // batal-permanen. Gerbang ini wajib berjalan sebelum klaim atomik dan
+    // sebelum onSalesInvoicePosted dipanggil.
+    mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "cancelled" })
+    const res = await actions.postInvoice(1)
+    expect(res?.success).toBe(false)
+    expect(res?.error).toContain("draft atau approved")
+    expect(mocks.prismaMock.salesInvoice.updateMany).not.toHaveBeenCalled()
+    expect(mocks.onSalesInvoicePostedMock).not.toHaveBeenCalled()
+  })
   it("postInvoice fails if no items", async () => {
     mocks.prismaMock.salesInvoice.findUniqueOrThrow.mockResolvedValue({ id: 1, status: "draft" })
     mocks.prismaMock.salesInvoiceItem.count.mockResolvedValue(0)
@@ -924,6 +936,88 @@ describe("Sales Return Actions", () => {
     const res = await actions.updateSalesReturn(1, fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
     expect(res?.success).toBe(false)
     expect(res?.error).toContain("tidak ada pada faktur")
+  })
+
+  it("createSalesReturn membaca qty string format Indonesia penuh", async () => {
+    const items = JSON.stringify([{ itemId: 1, qty: "2.000" }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0].qty).toBe(2000)
+  })
+
+  // F-004 §3: nomor + tanggal nota retur pajak ditulis apa adanya (sebelumnya
+  // kolom hanya dibaca read-model SPT, tidak pernah ada jalur tulis produk).
+  it("createSalesReturn menulis nomor + tanggal nota retur pajak", async () => {
+    const items = JSON.stringify([{ itemId: 1, qty: 1 }])
+    const res = await actions.createSalesReturn(fdMap({
+      customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items,
+      taxReturnNoteNumber: "000000.0100000001", taxReturnNoteDate: "2026-07-01",
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.taxReturnNoteNumber).toBe("000000.0100000001")
+    expect(arg.data.taxReturnNoteDate).toEqual(new Date(Date.UTC(2026, 6, 1)))
+  })
+
+  it("createSalesReturn tanpa nota retur pajak menulis null (masa jatuh ke tanggal retur)", async () => {
+    const items = JSON.stringify([{ itemId: 1, qty: 1 }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.taxReturnNoteNumber).toBeNull()
+    expect(arg.data.taxReturnNoteDate).toBeNull()
+  })
+
+  it("updateSalesReturn menulis nomor + tanggal nota retur pajak", async () => {
+    mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ status: "draft" })
+    const items = JSON.stringify([{ itemId: 1, qty: 1 }])
+    const res = await actions.updateSalesReturn(1, fdMap({
+      customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items,
+      taxReturnNoteNumber: "NR-2026-001", taxReturnNoteDate: "2026-08-15",
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.update.mock.calls.at(-1)![0]
+    expect(arg.data.taxReturnNoteNumber).toBe("NR-2026-001")
+    expect(arg.data.taxReturnNoteDate).toEqual(new Date(Date.UTC(2026, 7, 15)))
+  })
+
+  it("createSalesReturn menolak qty tak terbaca tanpa membuat retur", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    const items = JSON.stringify([{ itemId: 1, qty: "abc" }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Kuantitas retur item #1 tidak valid/i)
+    expect(mocks.prismaMock.salesReturn.create).not.toHaveBeenCalled()
+  })
+
+  it("createSalesReturn membuang baris tanpa item / qty nol (baris kosong form)", async () => {
+    const items = JSON.stringify([{ itemId: 0, qty: 5 }, { itemId: 1, qty: 0 }, { itemId: 2, qty: 3 }])
+    const res = await actions.createSalesReturn(fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.items.create).toEqual([expect.objectContaining({ itemId: 2, qty: 3 })])
+  })
+
+  // === updateSalesReturn ===
+  it("updateSalesReturn membaca qty string format Indonesia penuh", async () => {
+    mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ status: "draft" })
+    const items = JSON.stringify([{ itemId: 1, qty: "1,5" }])
+    const res = await actions.updateSalesReturn(1, fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.salesReturn.update.mock.calls.at(-1)![0]
+    expect(arg.data.items.create[0].qty).toBe(1.5)
+  })
+
+  it("updateSalesReturn menolak qty tak terbaca tanpa menghapus baris lama", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {})
+    mocks.prismaMock.salesReturn.findUnique.mockResolvedValue({ status: "draft" })
+    const items = JSON.stringify([{ itemId: 1, qty: "abc" }])
+    const res = await actions.updateSalesReturn(1, fdMap({ customerId: 1, salesInvoiceId: 1, date: "2026-06-12", items }))
+    expect(res?.success).toBe(false)
+    expect(res?.error).toMatch(/Kuantitas retur item #1 tidak valid/i)
+    expect(mocks.prismaMock.salesReturnItem.deleteMany).not.toHaveBeenCalled()
+    expect(mocks.prismaMock.salesReturn.update).not.toHaveBeenCalled()
   })
 
   // === deleteSalesReturn ===

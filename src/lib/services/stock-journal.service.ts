@@ -2,6 +2,7 @@ import { JournalService } from '@/lib/services/journal.service'
 import { safeAdd, safeMultiply } from '@/lib/utils/math'
 import { generateDocumentNumber } from '@/lib/utils/document-number'
 import { getSystemSettings } from '@/lib/utils/settings'
+import { decideAbnormalScrapPosting } from '@/lib/services/scrap-classification'
 import type { Prisma } from '@prisma/client'
 
 /**
@@ -30,6 +31,8 @@ type AccountIds = {
   salesReturn?: number | null
   purchaseShipping?: number | null
   purchaseAdminFee?: number | null
+  abnormalScrapExpense?: number | null
+  abnormalScrapPostingEnabled?: boolean
 }
 
 async function getAccountIds(): Promise<AccountIds> {
@@ -46,6 +49,8 @@ async function getAccountIds(): Promise<AccountIds> {
     salesReturn: s.salesReturnAccountId,
     purchaseShipping: s.purchaseShippingAccountId,
     purchaseAdminFee: s.purchaseAdminFeeAccountId,
+    abnormalScrapExpense: s.abnormalScrapExpenseAccountId,
+    abnormalScrapPostingEnabled: s.abnormalScrapPostingEnabled,
   }
 }
 
@@ -92,6 +97,15 @@ export function productionOrderCompletionJournalRef(stockMoveId: number): string
 export function productionOrderCostVarianceJournalRef(stockMoveId: number): string {
   return `${PRODUCTION_ORDER_COST_VARIANCE_JOURNAL_REF_PREFIX}${stockMoveId}`
 }
+
+/**
+ * `Journal.referenceType` jurnal scrap abnormal P2(b) (F-2026-10-21-008,
+ * vonis BOT 4 F-2026-10-22-066-V). Satu jurnal per KEJADIAN issue PO;
+ * `referenceId` = StockMove.id pertama kejadian itu (unik per kejadian,
+ * pola `ProductionOrderMaterialIssue`). Unique (referenceType,
+ * referenceId) + cek existing di dalam tx = anti-dobel per kejadian.
+ */
+export const PRODUCTION_ORDER_ABNORMAL_SCRAP_JOURNAL_REF_TYPE = "ProductionOrderAbnormalScrap"
 
 // ────────────────────────────────────────────────────────────────────────────
 // Stock Journal Service
@@ -679,6 +693,76 @@ export const stockJournalService = {
             { accountId: accounts.wip, debit: amount, credit: 0, memo: `Penyelesaian selisih WIP ${productionOrderNo}` },
             { accountId: varianceAccount, debit: 0, credit: amount, memo: `Selisih pembulatan biaya ${productionOrderNo}` },
           ],
+    })
+  },
+
+  /**
+   * Scrap ABNORMAL produksi (F-2026-10-21-008, vonis BOT 4
+   * F-2026-10-22-066-V P2(b)) — beban periode keluar dari WIP:
+   *
+   *   Dr Beban Kerugian Produksi (abnormalScrapExpenseAccountId)
+   *   Cr Barang Dalam Proses (wipAccountId)
+   *
+   * Putusan flag Lead MODE CATAT-DULU: flag OFF (default) → fungsi ini
+   * TIDAK posting dan TIDAK melempar (complete lolos; nilai abnormal
+   * tampil sebagai temuan laporan scrap). Flag ON → fail-closed persis
+   * `decideAbnormalScrapPosting` (akun kosong = throw, tx pemanggil
+   * rollback, nol jurnal parsial). Idempotensi: cek jurnal existing
+   * (referenceType, referenceId) di dalam tx sebelum posting.
+   * Pemanggil WAJIB `assertPeriodOpen` lebih dulu (pola issue existing).
+   */
+  async onProductionOrderAbnormalScrap(
+    tx: Prisma.TransactionClient,
+    abnormalValue: number,
+    productionOrderNo: string,
+    referenceStockMoveId: number,
+    userId?: number,
+    transactionDate?: Date,
+  ) {
+    const accounts = await getAccountIds()
+    const decision = decideAbnormalScrapPosting(
+      {
+        abnormalScrapPostingEnabled: accounts.abnormalScrapPostingEnabled ?? false,
+        abnormalScrapExpenseAccountId: accounts.abnormalScrapExpense ?? null,
+        wipAccountId: accounts.wip ?? null,
+      },
+      abnormalValue,
+    )
+    if (decision.mode === "off") return null
+
+    const existing = await tx.journal.findFirst({
+      where: {
+        referenceType: PRODUCTION_ORDER_ABNORMAL_SCRAP_JOURNAL_REF_TYPE,
+        referenceId: referenceStockMoveId,
+      },
+      select: { id: true },
+    })
+    if (existing) return null
+
+    const journalNumber = await generateDocumentNumber('JRN')
+    const journalSvc = new JournalService(tx)
+    return journalSvc.createJournal({
+      journalNumber,
+      transactionDate: transactionDate ?? new Date(),
+      referenceType: PRODUCTION_ORDER_ABNORMAL_SCRAP_JOURNAL_REF_TYPE,
+      referenceId: referenceStockMoveId,
+      type: 'PROD',
+      description: `Scrap abnormal produksi ${productionOrderNo}`,
+      createdBy: userId,
+      entries: [
+        {
+          accountId: decision.expenseAccountId,
+          debit: decision.journalAmount,
+          credit: 0,
+          memo: `Debit Beban Kerugian Produksi (scrap abnormal) - ${productionOrderNo}`,
+        },
+        {
+          accountId: decision.wipAccountId,
+          debit: 0,
+          credit: decision.journalAmount,
+          memo: `Kredit Barang Dalam Proses (scrap abnormal) - ${productionOrderNo}`,
+        },
+      ],
     })
   },
 }

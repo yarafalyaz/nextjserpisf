@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest"
 
 /**
- * P0-1: invoice konversi DP lahir SEKALI sebagai DRAFT, hanya bila total DP
- * terverifikasi (CONFIRMED) mencapai minimal 50% nilai quotation.
+ * P0-1 + F-2026-10-22-065-S: invoice konversi DP lahir SEKALI sebagai
+ * DRAFT, hanya bila total DP terverifikasi (CONFIRMED) mencapai ambang
+ * persen snapshot quotation (default fail-closed 50%).
  * DP di bawah ambang: WO/SO/Project dibuat (kerja boleh mulai) tapi TANPA
  * invoice, TANPA posting, TANPA stock-out.
  */
@@ -51,7 +52,7 @@ function buildTx(dp: ReturnType<typeof buildDp>) {
   })
 }
 
-describe("ambang 50% konversi DP ke invoice", () => {
+describe("ambang snapshot konversi DP ke invoice (F-2026-10-22-065-S)", () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.generateDocumentNumber.mockImplementation((prefix: string) => Promise.resolve(`${prefix}-1`))
@@ -181,5 +182,55 @@ describe("ambang 50% konversi DP ke invoice", () => {
     await onDownPaymentConfirmed(4, 1)
 
     expectPaymentData(mocks, { paymentDate: payDate })
+  })
+
+  it("snapshot 30%: invoice lahir pada kumulatif 30%, bukan 50% (AC-DP65-1/3)", async () => {
+    const dp = buildDp({ id: 5, amount: 300, status: "draft", docNo: "DP-5", invoiceThresholdPercent: 30 })
+    const tx = buildTx(dp)
+    mocks.downPaymentFindMany.mockResolvedValue([{ amount: 300 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(5, 1)
+
+    expect(mocks.salesInvoiceCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "draft" }) })
+    )
+    expect(mocks.onSalesInvoicePosted).not.toHaveBeenCalled()
+  })
+
+  it("snapshot 30%: kumulatif 29% belum melahirkan invoice (AC-DP65-3)", async () => {
+    const dp = buildDp({ id: 6, amount: 290, status: "draft", docNo: "DP-6", invoiceThresholdPercent: 30 })
+    const tx = buildTx(dp)
+    mocks.downPaymentFindMany.mockResolvedValue([{ amount: 290 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(6, 1)
+
+    expect(mocks.salesInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("snapshot 100%: invoice hanya saat lunas penuh (AC-DP65-3)", async () => {
+    const dp = buildDp({ id: 7, amount: 999, status: "draft", docNo: "DP-7", invoiceThresholdPercent: 100 })
+    const tx = buildTx(dp)
+    mocks.downPaymentFindMany.mockResolvedValue([{ amount: 999 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+
+    await onDownPaymentConfirmed(7, 1)
+
+    expect(mocks.salesInvoiceCreate).not.toHaveBeenCalled()
+  })
+
+  it("snapshot korup 150: fail-closed ke 50 + log, invoice tidak lahir pada 30% (AC-DP65-5)", async () => {
+    const dp = buildDp({ id: 8, amount: 300, status: "draft", docNo: "DP-8", invoiceThresholdPercent: 150 })
+    const tx = buildTx(dp)
+    mocks.downPaymentFindMany.mockResolvedValue([{ amount: 300 }])
+    mocks.transaction.mockImplementation(async (fn: any) => fn(tx))
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined)
+
+    await onDownPaymentConfirmed(8, 1)
+
+    expect(mocks.salesInvoiceCreate).not.toHaveBeenCalled()
+    expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("fail-closed 50%"))
+    errorSpy.mockRestore()
   })
 })
