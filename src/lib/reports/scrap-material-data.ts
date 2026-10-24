@@ -15,9 +15,104 @@ import {
   isScrapReasonCode,
 } from "@/lib/services/scrap-classification"
 import { PRODUCTION_ORDER_ABNORMAL_SCRAP_JOURNAL_REF_TYPE } from "@/lib/services/stock-journal.service"
+import { SCRAP_REVIEW_STATUS_PENDING } from "@/lib/services/scrap-physical"
 
 export interface ScrapMaterialReport {
   report: ScrapReportResult
+}
+
+/** Baris antrean tinjau scrap abnormal — bentuk sama dengan yang dikonsumsi komponen antrean. */
+export interface ScrapReviewQueueLine {
+  source: "MI" | "PO"
+  lineId: number
+  documentNo: string
+  date: Date
+  itemName: string | null
+  abnormalQty: number
+  abnormalValue: number
+  scrapReasonLabel: string | null
+  allowanceNote: string | null
+  materialShape: string | null
+}
+
+/**
+ * Antrean tinjau abnormal periode (dipindah dari page laporan agar page
+ * tidak baca Prisma langsung). Angka snapshot beku apa adanya, urut tanggal.
+ */
+export async function loadScrapReviewQueue(start: Date, end: Date): Promise<ScrapReviewQueueLine[]> {
+  const [pendingMi, pendingPo] = await Promise.all([
+    prisma.materialIssueItem.findMany({
+      where: {
+        scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING,
+        materialIssue: { date: { gte: start, lte: end } },
+      },
+      select: {
+        id: true,
+        itemId: true,
+        scrapReasonCode: true,
+        scrapAbnormalQtySnapshot: true,
+        scrapAbnormalValueSnapshot: true,
+        materialIssue: { select: { documentNo: true, date: true } },
+      },
+      orderBy: { id: "asc" },
+    }),
+    prisma.productionOrderMaterial.findMany({
+      where: {
+        scrapReviewStatus: SCRAP_REVIEW_STATUS_PENDING,
+        productionOrder: { createdAt: { gte: start, lte: end } },
+      },
+      select: {
+        id: true,
+        itemId: true,
+        scrapReasonCode: true,
+        scrapAbnormalQtySnapshot: true,
+        scrapAbnormalValueSnapshot: true,
+        productionOrder: { select: { documentNo: true, createdAt: true } },
+      },
+      orderBy: { id: "asc" },
+    }),
+  ])
+  const pendingItemIds = [...new Set([...pendingMi.map((r) => r.itemId), ...pendingPo.map((r) => r.itemId)])]
+  const pendingItems = pendingItemIds.length
+    ? await prisma.item.findMany({
+        where: { id: { in: pendingItemIds } },
+        select: { id: true, name: true, category: { select: { scrapAllowanceNote: true, materialShape: true } } },
+      })
+    : []
+  const pendingItemById = new Map(pendingItems.map((i) => [i.id, i]))
+  const rows: ScrapReviewQueueLine[] = [
+    ...pendingMi.map((r): ScrapReviewQueueLine => {
+      const item = pendingItemById.get(r.itemId)
+      return {
+        source: "MI",
+        lineId: r.id,
+        documentNo: r.materialIssue.documentNo,
+        date: r.materialIssue.date,
+        itemName: item?.name ?? null,
+        abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
+        abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
+        scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
+        allowanceNote: item?.category?.scrapAllowanceNote ?? null,
+        materialShape: item?.category?.materialShape ?? null,
+      }
+    }),
+    ...pendingPo.map((r): ScrapReviewQueueLine => {
+      const item = pendingItemById.get(r.itemId)
+      return {
+        source: "PO",
+        lineId: r.id,
+        documentNo: r.productionOrder.documentNo,
+        date: r.productionOrder.createdAt,
+        itemName: item?.name ?? null,
+        abnormalQty: Number(r.scrapAbnormalQtySnapshot ?? 0),
+        abnormalValue: Number(r.scrapAbnormalValueSnapshot ?? 0),
+        scrapReasonLabel: isScrapReasonCode(r.scrapReasonCode) ? SCRAP_REASON_LABELS[r.scrapReasonCode] : null,
+        allowanceNote: item?.category?.scrapAllowanceNote ?? null,
+        materialShape: item?.category?.materialShape ?? null,
+      }
+    }),
+  ]
+  return rows.sort((a, b) => a.date.getTime() - b.date.getTime())
 }
 
 export async function loadScrapMaterialReport(start: Date, end: Date): Promise<ScrapMaterialReport> {
@@ -112,6 +207,11 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
       reviewStatus: r.scrapReviewStatus ?? null,
       reviewDisposition: r.scrapReviewDisposition ?? null,
       remnantQty: agg.remnantQty,
+      // installedQty sengaja null (keputusan t_4c0eebfc): BR-SCRAP-07 masih
+      // USULAN dan schema tidak punya qty terpasang fabrikasi per baris
+      // (InstalledPart = sparepart kendaraan, domain lain). Rekonsiliasi
+      // tidak dinilai daripada ditebak issue-scrap-remnant; nyalakan hanya
+      // bila sumber terpasang eksplisit per baris issue tersedia.
       installedQty: null,
       scrapWeightKg: agg.scrapWeightKg,
       allowanceNote: allowanceNotes.get(r.itemId) ?? null,
@@ -138,7 +238,7 @@ export async function loadScrapMaterialReport(start: Date, end: Date): Promise<S
       reviewStatus: r.scrapReviewStatus ?? null,
       reviewDisposition: r.scrapReviewDisposition ?? null,
       remnantQty: agg.remnantQty,
-      installedQty: null,
+      installedQty: null, // sengaja null — lihat catatan jalur MI di atas (t_4c0eebfc).
       scrapWeightKg: agg.scrapWeightKg,
       allowanceNote: allowanceNotes.get(r.itemId) ?? null,
       materialShape: materialShapes.get(r.itemId) ?? null,

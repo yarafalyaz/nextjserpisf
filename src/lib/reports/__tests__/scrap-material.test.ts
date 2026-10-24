@@ -47,7 +47,7 @@ describe("buildScrapMaterialTable + scrapMaterialSummary (UI F-008)", () => {
     const t = buildScrapMaterialTable(r)
     const data = t.rows.filter((x) => x.kind === "data")
     expect(data[0].kind === "data" && data[0].cells[0]).toBe("MI MI-1")
-    expect(data[1].kind === "data" && data[1].cells[9]).toBe("-")
+    expect(data[1].kind === "data" && data[1].cells[11]).toBe("-")
     const total = t.rows[t.rows.length - 1]
     expect(total.kind).toBe("total")
     if (total.kind === "total") expect(total.label).toContain("2 baris")
@@ -88,8 +88,8 @@ describe("F-2026-10-24-098-S: tinjau + kg + rekonsiliasi di laporan existing", (
     expect(r.totals.reviewedLines).toBe(1)
     const t = buildScrapMaterialTable(r)
     const data = t.rows.filter((x) => x.kind === "data")
-    expect(data[0].kind === "data" && data[0].cells[11]).toBe("Abnormal belum ditinjau")
-    expect(data[1].kind === "data" && data[1].cells[11]).toContain("kelalaian")
+    expect(data[0].kind === "data" && data[0].cells[14]).toBe("Abnormal belum ditinjau")
+    expect(data[1].kind === "data" && data[1].cells[14]).toContain("kelalaian")
     expect(scrapMaterialSummary(r, false)).toContain("1 abnormal belum ditinjau")
   })
 
@@ -107,8 +107,8 @@ describe("F-2026-10-24-098-S: tinjau + kg + rekonsiliasi di laporan existing", (
     expect(r.totals.scrapWeightKgTotal).toBe(30)
     const t = buildScrapMaterialTable(r)
     const data = t.rows.filter((x) => x.kind === "data")
-    expect(data[0].kind === "data" && data[0].cells[13]).toContain("Selisih")
-    expect(data[1].kind === "data" && data[1].cells[13]).toBe("Sesuai")
+    expect(data[0].kind === "data" && data[0].cells[16]).toContain("Selisih")
+    expect(data[1].kind === "data" && data[1].cells[16]).toBe("Sesuai")
   })
 
   it("acuan kategori diteruskan verbatim (null = belum ditetapkan, bukan diisi)", () => {
@@ -117,5 +117,28 @@ describe("F-2026-10-24-098-S: tinjau + kg + rekonsiliasi di laporan existing", (
     })
     expect(r.lines[0].allowanceNote).toBe("Acuan plat: kalibrasi estimator")
     expect(r.lines[1].allowanceNote).toBeNull()
+  })
+
+  it("kolom tabel/ekspor memuat Bentuk, Remnant, Acuan Allowance (tindak lanjut t_4c0eebfc butir a)", () => {
+    const r = buildScrapMaterialReport({
+      lines: [
+        line({ remnantQty: 2.5, allowanceNote: "Acuan plat: kalibrasi estimator", materialShape: "plat" }),
+        line({ documentNo: "MI-2", remnantQty: 1 }),
+      ],
+    })
+    expect(r.totals.remnantQtyTotal).toBe(3.5)
+    const t = buildScrapMaterialTable(r)
+    const headers = t.columns.map((c) => c.header)
+    expect(headers).toContain("Bentuk")
+    expect(headers).toContain("Remnant")
+    expect(headers).toContain("Acuan Allowance")
+    const data = t.rows.filter((x) => x.kind === "data")
+    expect(data[0].kind === "data" && data[0].cells[3]).toBe("Plat")
+    expect(data[0].kind === "data" && data[0].cells[6]).toBe("2,50")
+    expect(data[0].kind === "data" && data[0].cells[13]).toBe("Acuan plat: kalibrasi estimator")
+    expect(data[1].kind === "data" && data[1].cells[3]).toBe("Belum ditetapkan")
+    expect(data[1].kind === "data" && data[1].cells[13]).toBe("Belum ditetapkan")
+    const total = t.rows[t.rows.length - 1]
+    expect(total.kind === "total" && total.cells[3]).toBe("3,50")
   })
 })
