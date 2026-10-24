@@ -175,3 +175,23 @@ describe("resolveAllAccountMappings", () => {
     expect(mapping.cogsAccountId).toBe("")
   })
 })
+
+describe("scrapSaleIncomeAccountId automap F-135-V", () => {
+  // E135-2 (automap): seed 710003 "Penjualan Persediaan / Perlengkapan"
+  // resolusi pertama = saran operator/install, bukan hardcode basis jurnal.
+  // Grup generik scrap/besitua sengaja tidak ada supaya akun dagang tak
+  // tertarik hanya karena bernama mengandung besi tua/scrap umum.
+  it("E135-2: scrapSaleIncomeAccountId automap hanya ke 710003 persis", () => {
+    const coa = [
+      { id: 803, code: "710003", name: "Penjualan Persediaan / Perlengkapan" },
+      { id: 805, code: "710005", name: "Pendapatan Scrap Umum" },
+    ]
+    expect(resolveAllAccountMappings(coa).scrapSaleIncomeAccountId).toBe("803")
+  })
+
+  it("E135-2: nama generik scrap saja tidak menarik akun (kosong fail-closed)", () => {
+    const coa = [{ id: 805, code: "710005", name: "Pendapatan Scrap Umum" }]
+    expect(resolveAllAccountMappings(coa).scrapSaleIncomeAccountId).toBe("")
+  })
+
+})
