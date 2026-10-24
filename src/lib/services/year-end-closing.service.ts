@@ -1,6 +1,11 @@
 /**
  * Inti posting jurnal penutup tahunan (YearEndClosing) — F-2026-10-23-121-V
- * (vonis BOT 4 PR #637, gerbang inti F-2026-10-20-86).
+ * (vonis BOT 4 PR #637, gerbang inti F-2026-10-20-86) + posting ulang
+ * sesudah reversal (E121-8) dibuka oleh F-2026-10-23-127-V (vonis BOT 4
+ * PR #654): unik fisik `journals_active_reference_unique` atas kolom
+ * generated `active_reference_key` hanya mengikat jurnal AKTIF
+ * (status<>'REVERSED' AND deleted_at IS NULL), jadi jurnal penutup
+ * REVERSED tidak lagi memegang (YearEndClosing, fiscalYear).
  *
  * Putusan yang dieksekusi persis:
  * 1. Akun tujuan = `SystemSetting.retainedEarningsAccountId` nullable
@@ -18,15 +23,15 @@
  * 3. Koreksi HANYA reversal penuh di periode terbuka: jurnal lawan
  *    (debit/kredit ditukar, profitCenterId dipertahankan) + jurnal asli
  *    jadi REVERSED. Edit/hapus/ubah referenceId jurnal penutup dilarang.
+ *    Sesudah reversal, posting ulang tahun sama sah (E121-8/E127-1):
+ *    tahun kembali belum ditutup, jurnal baru nomor baru.
  * 4. Approval existing (`requestApprovalIfConfigured`/`assertApproved`)
  *    tanpa workflow terkonfigurasi = no-op; izin `manage_settings`
  *    ditegakkan di lapisan server action. Tanpa dokumen pajak apa pun.
  *
- * Titik terbuka (menunggu vonis BOT 4 kartu t_f3b69185): posting ulang
- * sesudah reversal saat ini tertahan unik fisik
- * `journals_reference_unique (reference_type, reference_id)` yang juga
- * menghitung baris REVERSED. Posting yang menabraknya diterjemahkan jadi
- * error berisik di sini — BUKAN P2002 mentah, BUKAN sukses palsu.
+ * P2002 dari unik aktif (balapan dua posting bersamaan yang sama-sama
+ * lolos anti-dobel baca-lalu-tulis) diterjemahkan jadi pesan tahun yang
+ * sama — bukan P2002 mentah, bukan sukses palsu.
  */
 
 import { prisma, type TxClient } from "@/lib/db/prisma"
@@ -68,7 +73,7 @@ function isJournalReferenceConflict(error: unknown): boolean {
   const meta = rec.meta as Record<string, unknown> | undefined
   const target = meta ? String(meta.target ?? "") : ""
   const message = error instanceof Error ? error.message : ""
-  return /journals_reference_unique|reference/i.test(target) || /reference/i.test(message)
+  return /journals_(active_)?reference_unique|reference/i.test(target) || /reference/i.test(message)
 }
 
 /**
@@ -204,8 +209,13 @@ export async function postYearEndClosing(fiscalYear: number, userId?: number): P
     })
   } catch (error) {
     if (isJournalReferenceConflict(error)) {
+      // Sabuk terakhir fisik (F-127-V): dua posting bersamaan sama-sama
+      // lolos anti-dobel baca-lalu-tulis; unik aktif menolak yang kedua.
+      // Pesan menyebut tahun (Putusan 3 F-127-V), bukan P2002 mentah.
+      // Posting ulang sesudah reversal TIDAK masuk sini lagi — jurnal
+      // REVERSED tidak memegang kunci aktif (E121-8/E127-1).
       throw new Error(
-        `Jurnal penutup tahun fiskal ${fiscalYear} sudah pernah dibuat (termasuk yang sudah di-reversal). Posting ulang menunggu putusan skema anti-dobel; tidak ada jurnal baru dibuat.`,
+        `Tahun fiskal ${fiscalYear} sudah ditutup oleh jurnal penutup aktif lain. Koreksi hanya lewat reversal jurnal penutup.`,
       )
     }
     throw error
