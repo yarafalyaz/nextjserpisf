@@ -12419,3 +12419,368 @@ Status: PUTUSAN BOT 4 (kartu t_485db861, siklus standby 12:00). Dokumen saja; TA
 Klaim kepatuhan: perlakuan internal ISF berdasar PMK 72/2023 Pasal 7 + UU PPh Pasal 11 sisi fiskal (sumber resmi DJP/JDIH Kemenkeu di atas, akses 2026-10-23) dan PSAK 16 sisi komersial (rujukan standar, bukan dasar fiskal). BUKAN penetapan DJP, bukan penilaian alokasi sah, bukan klaim SPT Tahunan — alokasi komponen dan tambahan masa manfaat per kasus tetap dokumen/penilai nyata; nilai komponen lama tak terukur dan sengketa pindah = `BUTUH-VONIS-AKUNTAN` per kasus.
 
 ID vonis ini **F-2026-10-23-122-V** (tertinggi terverifikasi run ini di origin/main 39df4118: 121-V di PR terbuka #637; 122 belum terpakai di main maupun PR terbuka yang dicek). Pemilik berikutnya: BOT 1 merge vonis ini -> BOT 3 inti komponen+peristiwa aset (sesudah F-108/F-115/F-109) -> BOT 2 -> BOT 6 E122-1..10.
+
+---
+
+## SPEC BOT 5 2026-10-24 — F-2026-10-24-097-S alur tutup job bengkel (WO close-out) & penguncian biaya manufaktur (induk P1-2(b) / F-2026-10-21-009)
+
+Kartu t_630f969e. Spec DOKUMEN SAJA, tanpa kode produksi/schema/migrasi.
+Anti-duplikat run ini (basis origin/main c762f501): grep F-2026-10-24-097 di backlog+board main = 0 hasil; tertinggi -S
+terbit di main = F-2026-10-22-094-S; F-2026-10-24-095-S di PR #693 dan
+F-2026-10-24-096-S di PR #695 terbuka (bukan main). ID 097-S bebas.
+
+Temuan utama run ini: inti P1-2(b) SUDAH live penuh — vonis BOT 4
+F-2026-10-21-009-V (PR #349) + inti Backend PR #363: status `closed`
+terpisah dari `completed`, kolom jejak tutup/reopen, guard biaya
+terpusat, syarat tutup finansial, reopen ber-alasan. Spec ini TIDAK
+menduplikasi inti itu. Yang belum ada = lapisan workflow operasional
+di atasnya: (1) tahap review/rekonsiliasi biaya sebagai alur kerja
+terbaca (siapa memeriksa apa, dalam urutan apa, dengan bukti apa)
+sebelum tombol tutup ditekan, (2) UI tutup/reopen (aksi server ada,
+tombol belum ada — WO `completed` hari ini buntu senyap), (3) jalur
+biaya susulan (late posting) yang terbaca operator sesudah job
+closed tanpa membuka HPP job, (4) antrean pengecualian "selesai
+belum ditutup" + umur completed-belum-closed. Spec ini membekukan
+BR-CLOSE-01..10 + AC-CLOSE-1..8 atas celah itu saja.
+
+Label bukti wajib di tiap aturan: TERVERIFIKASI-KODE / BENCHMARK /
+USULAN / BUTUH-VONIS.
+
+Benchmark resmi (akses 2026-10-24):
+- Accurate Penyelesaian Pesanan — menutup order & menyelesaikan
+  pekerjaan pesanan (ke barang / ke akun), jurnal penyelesaian
+  terbentuk dari penyelesaian, bukan dari edit order selesai:
+  https://help.accurate.id/product/penyelesaian-pesanan/ dan
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pekerjaan-pesanan/penyelesaian-pesanan/penyelesaian-pesanan-ke-akun/
+- Accurate Pekerjaan Pesanan (biaya -> WIP -> penyelesaian -> HPP per
+  order) + selisih pekerjaan pesanan:
+  https://help.accurate.id/product/accurate-online/fitur-aol/persediaan/pekerjaan-pesanan/mencatat-pekerjaan-pesanan/
+- QT9 job-shop job costing & job close (job ditutup sesudah semua
+  biaya masuk, margin per job terkunci):
+  https://qt9software.com/erp/industry/job-shop
+
+### 0. Rekonsiliasi ruang lingkup kartu vs kode live
+
+| Klaim/istilah kartu | Fakta kode live (TERVERIFIKASI-KODE) |
+|---|---|
+| "WorkOrder completed -> review biaya -> closed" | Transisi `completed -> closed` SUDAH live: `closeWorkOrder` (`src/actions/manufacturing.actions.ts`, izin `complete_work_orders`, klaim atomik `updateMany WHERE status='completed'`, alasan wajib `validateCloseReason`). Tahap "review biaya" sebagai status/dokumen tersendiri TIDAK ada — prasyarat tutup diperiksa server seketika di dalam tx tutup (PO anak, MI draft, biaya belum posted, QC, periode). Spec ini menetapkan review sebagai CHECKLIST pra-tutup terbaca (bukan status baru) — lihat BR-CLOSE-02. Status baru di antara completed/closed = DITOLAK (menabrak vonis 009-V Keputusan 1b: transisi sah SAJA completed->closed). |
+| "cegah MaterialIssue/ProductionCost/Timesheet baru pada WO closed" | SUDAH live untuk MaterialIssue + ProductionCost: guard terpusat `assertJobCostMutable` (`src/lib/services/job-closeout.service.ts:37-61`) dipanggil MI create/complete (`inventory.actions.ts:1031,1125`), MI-from-WO + issueMaterial (`manufacturing.actions.ts:916,1873`), ProductionCost create/update/delete + pull timesheet + overhead (`production-cost.actions.ts:88,168,227,319,479`), sync rework (`production-cost.service.ts:247`). Timesheet BARU: guard `closedWorkOrderError` (`timesheet-context.ts:24-31`) hanya menolak status `completed`/`cancelled` — kata `closed` TIDAK ada di daftar itu (grep `"closed"` di timesheet-context.ts = 0). Karena WO `closed` juga bukan `completed`, timesheet baru ke WO closed LOLOS guard konteks hari ini. Satu-satunya yang menahan biaya dari timesheet itu = `assertJobCostMutable` saat PULL ke ProductionCost. Celah nyata, kecil, milik Backend — BR-CLOSE-04. |
+| "disposal selisih / jurnal biaya periode berjalan tanpa mengubah HPP WO closed" | Vonis 009-V Keputusan 2+4 SUDAH memutus: tutup BUKAN event posting (nol jurnal buang-WIP saat close), sisa WIP != 0 = tutup DITOLAK menyebut nominal, koreksi sesudah tutup hanya (a) reopen ber-alasan lalu mutasi normal periode berjalan, atau (b) jurnal koreksi/dokumen biaya periode berjalan TANPA membuka job. Jalur (b) untuk tagihan subkontrak telat SUDAH berperilaku benar sebagian: `syncServicePurchaseOrderCost` melewati PO completed/closed dan melapor `skippedProductionOrderIds` (`production-cost.service.ts:95-122`), tagihan vendor tetap posting ke utang + notice operator (`purchase.actions.ts:358-365`). Yang BELUM ada: (i) perlakuan terbaca untuk biaya telat NON-subkontrak-PO (jasa bubut tanpa PO jasa, part susulan) — hari ini hanya "ditolak, reopen atau jurnal umum manual tanpa tautan job"; (ii) vonis akun beban periode berjalan untuk biaya telat yang TIDAK di-reopen. Keduanya BUTUH-VONIS BOT 4 — BR-CLOSE-06, spec ini tidak menetapkan akun apa pun. |
+| "kepala bengkel / manajer operasional approval close-out; admin verifikasi tagihan" | Izin live (TERVERIFIKASI-KODE, `module-catalog.generated.ts`): tutup/reopen WO = `complete_work_orders` (:266), tutup/reopen PO = `edit_production_orders` (:269) — vonis 009-V Keputusan 4a: pakai izin EXISTING, jangan buat permission baru. Role live `ROLES` (`base-data.ts:382-390`): super_admin/admin/staff/ga/kepala_bengkel/karyawan/purchasing/warehouse/finance — TIDAK ada role "manajer operasional"; jangan karang role itu. Pemisahan "yang memeriksa" vs "yang menutup" TIDAK ditegakkan server hari ini (satu izin menutup langsung). Spec menetapkan pemisahan itu sebagai alur kerja + jejak ActivityLog, BUKAN izin baru — BR-CLOSE-07. Bila pemilik proses menuntut penegakan server dua-orang, itu BUTUH-VONIS BOT 1 (izin/aksi verifikasi baru), bukan keputusan spec ini. |
+| "penguncian biaya manufaktur (P1-2(b))" | Induk F-2026-10-21-009 status di backlog lama "TETAP ABSEN" (verifikasi 2026-10-21) SUDAH usang: inti merged PR #363 (`d6d444b2`), migrasi `prisma/migrations/20261021225033_job_closeout/`. Spec ini menutup induk itu sebagai SELESAI-INTI dan hanya membuka sisa workflow di §7. |
+
+### 1. Inventarisasi TERVERIFIKASI-KODE (origin/main c762f501, 2026-10-24)
+
+Sudah ada (kuat, JANGAN diduplikasi):
+- Skema jejak tutup: `WorkOrder.closedAt/closedBy/closedReason/
+  reopenedAt/reopenedBy/reopenReason` (`prisma/schema.prisma:3014-
+  3019`), sama di `ProductionOrder` (:2712-2717). Kolom reopen TIDAK
+  ditimpa tutup berikutnya; riwayat lengkap tutup->reopen->tutup
+  terbaca dari kolom + ActivityLog (tes manufacturing.actions
+  "tutup->reopen->tutup: jejak log 3 peristiwa berurutan utuh").
+- Aksi server: `closeWorkOrder`/`reopenWorkOrder` (izin
+  `complete_work_orders`), `closeProductionOrder`/
+  `reopenProductionOrder` (izin `edit_production_orders`) di
+  `manufacturing.actions.ts`. Syarat tutup WO ditegakkan server dalam
+  satu tx (lock baris FOR UPDATE): status completed; tidak ada PO
+  anak di luar completed/cancelled/closed; tidak ada MaterialIssue
+  draft/processing; tidak ada ProductionCost `postedAt IS NULL` pada
+  WO/PO anak; QC bersih `assertWorkOrderQcCleared`; periode terbuka
+  `assertPeriodOpen`. Syarat tutup PO: `productionOrderCloseBlocker`
+  (completed + completedQty==qty + totalActualCost tepat 0,00, tanpa
+  ambang — sisa Rp0,01 ditolak menyebut nominal).
+- Guard biaya closed: `assertJobCostMutable` dua arah rantai (WO
+  closed membekukan semua PO anak; PO closed membekukan PO itu) +
+  `mutableOrderError` existing untuk completed/cancelled. Tes:
+  `job-closeout.service.test.ts` (5 tes guard + 4 blocker + alasan),
+  `production-cost.test.ts` (create/update/delete/pull closed
+  ditolak), `manufacturing.actions.test.ts` describe
+  F-2026-10-21-009-V (tutup bersih, tanpa alasan, PO anak, MI draft,
+  WIP 0,01, izin salah, MI-from-WO closed).
+- Biaya telat subkontrak: skip + notice (di atas); jurnal posted lama
+  tidak pernah diubah reopen (reopen hanya flip status ke completed,
+  biaya tambahan lewat jalur normal periode berjalan).
+- Laporan umur WIP berjalan: `wip-aging.ts` + halaman
+  `/laporan/wip-berjalan` — HANYA status draft/pending/in_progress
+  (builder menyaring order selesai keluar). Bukan antrean tutup.
+- Label tampil: `closed: "Tutup"` (`status-labels.ts:65`),
+  `StatusChip` tone default untuk closed (`status-chip.tsx:33`).
+
+Belum ada / parsial (bukti grep run ini):
+- ABSEN UI tutup/reopen: `WorkOrderActions`
+  (`perintah-kerja/[slug]/_components/work-order-actions.tsx`)
+  mengembalikan `null` untuk status completed/closed — tidak ada
+  tombol Tutup Job / Buka Kembali, tidak ada tampil closedAt/
+  closedBy/closedReason di detail WO/PO. Aksi server yatim dari UI:
+  operator tidak bisa menutup job dari layar sama sekali.
+- ABSEN antrean "selesai belum ditutup": grep laporan completed-
+  belum-closed = 0. WO completed menumpuk tanpa umur, tanpa daftar
+  pengecualian; WIP per job completed (WO jasa tanpa PO) tidak
+  tampil di wip-berjalan (statusnya bukan berjalan).
+- PARSIAL timesheet: `closedWorkOrderError` belum mengenal `closed`
+  (di atas). Timesheet susulan ke WO closed bisa tercatat (biayanya
+  tertahan di pull, jamnya menggantung tanpa penanda).
+- ABSEN checklist rekonsiliasi terbaca: prasyarat tutup hanya tampil
+  sebagai pesan error seketika saat tutup gagal (satu per satu, first
+  blocker). Tidak ada pratinjau "siap tutup / belum, karena X, Y, Z"
+  sebelum aksi; staf administrasi tidak punya daftar periksa
+  kelengkapan tagihan vendor/subkontrak per job.
+- ABSEN jalur biaya telat non-PO yang tertaut job: biaya jasa telat
+  tanpa PO jasa sesudah closed hanya bisa (a) reopen (mengubah status
+  job, sah tapi berat untuk tagihan kecil telat), atau (b) jurnal
+  umum manual tanpa tautan WO (margin job final tak terbaca selisihnya).
+  Belum ada vonis akun/perlakuan — BUTUH-VONIS BOT 4 (§9 Q-CLOSE-2).
+
+### 2. Workflow specification (USULAN di atas inti live)
+
+Aktor: Mekanik/Teknisi (pelaksana), Staf Administrasi (verifikasi
+kelengkapan), Kepala Bengkel (penutup job — pemegang
+`complete_work_orders` / `edit_production_orders`), Finance (biaya
+telat & jurnal periode berjalan), Sistem (guard + antrean).
+
+Dokumen masuk: WorkOrder completed (+ PO anak completed), MaterialIssue
+completed, ProductionCost ter-posting, inspeksi QC final/handover,
+tagihan vendor/subkontrak (VendorBill atas PO jasa WO).
+Dokumen keluar: status WO/PO `closed` + jejak closedAt/closedBy/
+closedReason; (bila biaya telat) VendorBill tetap terutang + catatan
+biaya telat tertaut job; (bila reopen) jejak reopen + biaya periode
+berjalan. TIDAK ada dokumen/jurnal baru lahir dari tutup itu sendiri.
+
+Alur (langkah bernomor = urutan kerja manusia; penegakan server di
+kurung adalah perilaku live, bukan usul):
+
+ 1. WO mencapai `completed` lewat jalur existing (fisik selesai,
+    kendaraan diserahkan; serah terima/handover = ranah operasional
+    F-50 existing, BUKAN syarat tutup finansial — vonis 009-V
+    Keputusan 3: invoice lunas/DO terkirim TIDAK menahan tutup).
+ 2. REVIEW BIAYA (rekonsiliasi) — staf administrasi membuka panel
+    "Siap Tutup" (§6): sistem menampilkan checklist §3 apa adanya
+    dari server (bukan hitungan UI). Administrasi memeriksa manual:
+    semua tagihan subkontrak/bubut atas WO sudah diterima ATAU
+    dinyatakan belum ada tagihan menggantung oleh vendor terkait;
+    hasil periksa dicatat sebagai alasan tutup.
+ 3. TUTUP — kepala bengkel menekan Tutup Job, mengisi alasan (wajib,
+    server menolak kosong). Server menegakkan ulang SEMUA prasyarat
+    finansial dalam tx (checklist lolos di layar TIDAK menggantikan
+    guard server; balapan biaya masuk di antara review dan tutup
+    tetap ditolak server). Sukses: status `closed`, biaya beku.
+ 4. SESUDAH TUTUP — biaya baru ke job ditolak server dengan pesan
+    menyebut closed + petunjuk reopen. Tagihan telat masuk lewat §5.
+ 5. REOPEN (pengecualian, bukan alur normal) — hanya untuk koreksi
+    biaya nyata: izin sama dengan tutup + alasan wajib; status
+    kembali `completed` (BUKAN in_progress); biaya tambahan masuk
+    jalur normal bertanggal periode berjalan; tutup ulang sesudahnya.
+    Jejak tutup->reopen->tutup tidak terhapus.
+
+### 3. Checklist rekonsiliasi pra-tutup (isi panel "Siap Tutup")
+
+Baris checklist = prasyarat yang SUDAH ditegakkan server saat tutup
+(ditampilkan lebih awal supaya tidak gagal seketika), ditambah dua
+baris periksa-manual operasional. Status tiap baris dari server.
+
+| # | Baris periksa | Sumber kebenaran | Penegak |
+|---|---|---|---|
+| C1 | Semua PO anak completed/cancelled/closed | status ProductionOrder anak | server (tutup) |
+| C2 | Tidak ada MaterialIssue draft/processing | status MaterialIssue WO | server (tutup) |
+| C3 | Semua ProductionCost ter-posting (postedAt terisi) | ProductionCost WO + PO anak | server (tutup) |
+| C4 | Sisa WIP tiap PO = Rp0,00 & completedQty == qty | ProductionOrder.totalActualCost/qty | server (tutup PO) |
+| C5 | Tidak ada NCR terbuka; inspeksi final terakhir passed | qc.service existing | server (tutup) |
+| C6 | Periode tanggal tutup terbuka | assertPeriodOpen | server (tutup) |
+| C7 | Tagihan subkontrak/vendor atas WO sudah diterima atau dinyatakan nihil | periksa manual administrasi (VendorBill atas PO jasa WO sebagai daftar banding) | manusia (operasional) |
+| C8 | Biaya timesheet sudah ditarik / memang tidak ada yang perlu ditarik | ProductionCost.sourceTimesheetId vs Timesheet WO | manusia (operasional) |
+
+C7/C8 TIDAK boleh menjadi gate server tanpa vonis baru: C7 menahan
+tutup karena dokumen pihak ketiga belum tiba akan mengunci job tanpa
+batas waktu (vendor telat berbulan-bulan); perlakuan yang benar =
+alasan tutup mencatat hasil periksa ("tagihan bubut PT X belum tiba —
+biaya telat lewat §5 bila tiba"), bukan penolakan sistem.
+
+### 4. Matriks status-transisi (TERVERIFIKASI-KODE kecuali ditandai)
+
+| Dari | Pemicu | Ke | Penjaga / izin |
+|---|---|---|---|
+| WO in_progress | completeWorkOrder (existing) | completed | `complete_work_orders`; MI completed + QC bersih (existing) |
+| WO completed | closeWorkOrder + alasan | closed | `complete_work_orders`; C1-C6 server; klaim atomik |
+| WO closed | reopenWorkOrder + alasan | completed | `complete_work_orders`; alasan wajib; jejak utuh |
+| PO in_progress (parsial/final) | completeProductionOrder (existing) | completed | existing; final menolkan totalActualCost |
+| PO completed | closeProductionOrder + alasan | closed | `edit_production_orders`; C4 + QC + periode |
+| PO closed | reopenProductionOrder + alasan | completed | `edit_production_orders`; alasan wajib |
+| WO/PO draft/pending/confirmed/in_progress/cancelled | tutup langsung | — DITOLAK | hanya dari completed (vonis 009-V 1b) |
+
+Tidak ada transisi lain. Status `closed` bukan terminal mutlak
+(reopen sah ber-alasan), tetapi selama `closed` seluruh mutasi biaya
+beku mutlak (BR-CLOSE-03).
+
+### 5. Biaya susulan (late posting) — perlakuan per jenis
+
+Prinsip mengikat (vonis 009-V, TERVERIFIKASI-KODE): biaya telat TIDAK
+pernah mengubah HPP/margin job closed secara diam-diam. Tiga jalur:
+
+ L1. Tagihan atas PO jasa WO (subkontrak terdaftar): VendorBill
+     posting normal ke utang; mirror HPP dilewati server untuk PO
+     completed/closed + notice operator tampil. Job TIDAK dibuka.
+     Perlakuan beban periode berjalannya mengikuti jurnal tagihan
+     existing (akun dari dokumen pembelian jasa itu sendiri) — spec
+     ini tidak menetapkan akun baru. (TERVERIFIKASI-KODE perilaku
+     skip+notice; klasifikasi akun tagihan = jalur purchase existing.)
+ L2. Biaya telat yang memang harus menjadi biaya job (salah catat,
+     biaya job nyata tertinggal): REOPEN ber-alasan -> catat lewat
+     jalur biaya normal (MaterialIssue/ProductionCost/Timesheet-pull)
+     bertanggal periode berjalan -> tutup ulang. Margin terbaca
+     berubah DAN jejak reopen menjelaskan kenapa (vonis 009-V 4d:
+     read-model estimasi-vs-aktual membaca biaya berjalan; perubahan
+     sesudah tutup pertama wajib terbaca sebagai perubahan, bukan
+     angka lama ditimpa).
+ L3. Biaya telat kecil/rutin yang diputus BUKAN biaya job (keputusan
+     operasional, mis. jasa bubut telat untuk pekerjaan yang sudah
+     ditagih final dan perusahaan menanggungnya): beban periode
+     berjalan lewat jurnal/dokumen biaya periode itu, tertaut catatan
+     ke WO closed sebagai referensi teks/dokumen sumber TANPA
+     ProductionCost ke job closed. AKUN beban + dokumen sumber sahnya
+     = BUTUH-VONIS BOT 4 (Q-CLOSE-2) — sampai vonis terbit, jalur L3
+     TIDAK dibangun; pilihan yang tersedia hanya L1/L2.
+
+Part susulan (pemakaian material baru sesudah closed): TIDAK ada
+jalur L3 — MaterialIssue ke WO closed ditolak mutlak; part yang
+benar-benar terpakai untuk job itu hanya sah lewat L2 (reopen).
+Mengeluarkan part ke gudang/beban umum untuk pekerjaan pelanggan
+tertutup tanpa reopen = biaya job bocor ke beban umum; dilarang
+sebagai prosedur (BR-CLOSE-05).
+
+### 6. Kata UI verbatim (untuk BOT Frontend, SESUDAH kontrak §10)
+
+Di detail WO/PO berstatus completed/closed (izin tampil =
+`complete_work_orders` untuk WO / `edit_production_orders` untuk PO;
+tanpa izin: panel tidak tampil, status chip saja):
+
+- Tombol: "Tutup Job" (completed), "Buka Kembali (Reopen)" (closed).
+- Panel pratinjau: judul "Siap Tutup" — baris C1-C8 dengan status
+  server apa adanya; baris gagal menyebut dokumennya (nomor MI/PO/
+  biaya), meniru pesan error server existing.
+- Label status tampil: memakai `statusLabel` existing — `closed` =
+  "Tutup". DILARANG label baru "Ditutup Permanen" (reopen sah).
+- Jejak di detail: "Ditutup oleh <nama> · <tanggal> · <alasan>" dan
+  bila pernah reopen "Dibuka kembali oleh <nama> · <tanggal> ·
+  <alasan>" dari kolom existing; nama dari relasi user backend, UI
+  tidak menebak dari ID mentah tanpa nama.
+- Pesan tolak biaya pada job closed: tampilkan pesan server apa
+  adanya (sudah menyebut closed + petunjuk reopen). UI tidak membuat
+  pesan tandingan.
+- Antrean laporan: judul "Job Selesai Belum Ditutup", kolom umur
+  sejak completed (dari jejak tutup pertama? — tanggal completed
+  tidak tersimpan terpisah; acuan umur = updatedAt status? BUTUH
+  keputusan Backend di Q-CLOSE-3 — UI tidak mengarang tanggal).
+
+### 7. Sisa implementasi yang dibuka spec ini (bukan inti ulang)
+
+ S1. Backend: tambah `closed` ke `closedWorkOrderError`
+     (timesheet-context) + tes — menutup celah timesheet susulan.
+ S2. Backend: builder+loader antrean "Job Selesai Belum Ditutup"
+     (WO completed belum closed + PO completed belum closed, umur,
+     sisa penanda C1-C6 teragregasi per job) — read-only, tanpa
+     mutasi, tanpa jurnal. Fisik umur Q-CLOSE-3 milik Backend.
+ S3. Frontend: tombol/panel §6 di detail WO + PO, konsumen S2 di
+     laporan (gerbang `view_reports` mengikuti katalog laporan
+     existing).
+ S4. (Bersyarat vonis) jalur L3 sesudah Q-CLOSE-2 divonis BOT 4.
+
+### 8. Business rules register
+
+| ID | Aturan | Label |
+|---|---|---|
+| BR-CLOSE-01 | `completed` != `closed`: completed = fisik selesai; closed = kunci akuntansi. Hanya completed->closed dan closed->completed (reopen). | TERVERIFIKASI-KODE (vonis 009-V K1; closeWorkOrder/reopenWorkOrder live) |
+| BR-CLOSE-02 | Review biaya = checklist pra-tutup terbaca (C1-C8), BUKAN status/dokumen baru di antara completed dan closed. | USULAN (di atas inti live; status baru DITOLAK karena menabrak 009-V K1b) |
+| BR-CLOSE-03 | Selama closed: buat/ubah/hapus ProductionCost, MaterialIssue create/complete, MI-from-WO, issueMaterial, pull timesheet, overhead, sync subkon/rework ke job/PO closed DITOLAK server dalam tx. | TERVERIFIKASI-KODE (assertJobCostMutable + mutableOrderError) |
+| BR-CLOSE-04 | Timesheet baru ke WO closed juga ditolak (samakan perlakuan `closed` di guard konteks timesheet). | USULAN perbaikan celah (fakta celah TERVERIFIKASI-KODE: timesheet-context.ts:24-31 tanpa `closed`) |
+| BR-CLOSE-05 | Part susulan untuk job closed hanya lewat reopen (L2); pengeluaran ke beban umum untuk pekerjaan pelanggan tertutup dilarang sebagai prosedur. | USULAN (operasional; penegakan stok = guard existing) |
+| BR-CLOSE-06 | Biaya telat: L1 tagihan PO jasa = utang normal + HPP dilewati + notice; L2 reopen untuk biaya job nyata; L3 beban periode berjalan TANPA menyentuh job — akun/dokumen L3 menunggu vonis. Tidak ada jalur yang mengubah HPP job closed diam-diam. | TERVERIFIKASI-KODE untuk L1/L2 (009-V K2/K4); BUTUH-VONIS untuk L3 (Q-CLOSE-2 ke BOT 4) |
+| BR-CLOSE-07 | Yang memeriksa (administrasi, C7/C8) dan yang menutup (kepala bengkel, izin existing) adalah peran kerja berbeda; server menegakkan izin tutup existing, pemisahan pemeriksa dicatat lewat alasan tutup + ActivityLog. Penegakan dua-orang di server = keputusan BOT 1, bukan spec ini. | USULAN alur kerja; izin TERVERIFIKASI-KODE; penegakan dua-orang BUTUH-VONIS (Q-CLOSE-1 ke BOT 1) |
+| BR-CLOSE-08 | Tutup bukan event posting: nol jurnal lahir dari tutup; sisa WIP PO != Rp0,00 = tutup ditolak menyebut nominal, tanpa ambang materialitas. | TERVERIFIKASI-KODE (009-V K2; productionOrderCloseBlocker) |
+| BR-CLOSE-09 | Reopen: izin sama dengan tutup, alasan wajib, kembali ke `completed`, jurnal posted lama tidak diubah, biaya tambahan bertanggal periode berjalan, jejak tutup->reopen->tutup utuh. | TERVERIFIKASI-KODE (009-V K4; tes jejak 3 peristiwa) |
+| BR-CLOSE-10 | Invoice belum lunas / kendaraan sudah diserahkan / DO belum terkirim TIDAK menahan tutup finansial; penagihan dan posting job adalah status terpisah. | TERVERIFIKASI-KODE (009-V K3 operasional; server tutup tidak membaca invoice) |
+
+### 9. Feature matrix (BENCHMARK, akses 2026-10-24)
+
+| Kemampuan | Accurate | Zahir | ISF (live) |
+|---|---|---|---|
+| Penyelesaian pekerjaan pesanan ke barang/akun + jurnal penyelesaian | Ada (Penyelesaian Pesanan) URL §Benchmark | Ada (job costing/manufaktur) https://zahirerp.com/id/zahir-manufacturing/ | Setara sebagian: complete PO me-rilis WIP->FG/jasa existing; tutup job terpisah dari complete |
+| Kunci biaya sesudah job selesai | Order selesai tidak dapat diubah (pesan error status selesai) | Status order terkunci sesudah selesai (pola dokumen) | Ada: guard closed + completed (BR-CLOSE-03) |
+| Biaya telat sesudah tutup | Penyelesaian ke akun periode berjalan (dokumen baru) | Jurnal penyesuaian periode berjalan | L1/L2 ada; L3 menunggu vonis (BR-CLOSE-06) |
+| Antrean job selesai belum ditutup | Daftar pekerjaan pesanan belum selesai | Daftar job terbuka | Belum ada (S2 spec ini); wip-berjalan hanya status berjalan |
+
+### 10. Acceptance criteria (untuk Backend S1/S2, Frontend S3, QA)
+
+- AC-CLOSE-1: Timesheet dibuat ke WO `closed` -> ditolak server
+  menyebut closed; ke WO completed/cancelled tetap ditolak seperti
+  hari ini; ke in_progress lolos. Falsifikasi: cabut `closed` dari
+  guard -> tes ini MERAH.
+- AC-CLOSE-2: Antrean S2 hanya memuat WO/PO `completed` belum
+  `closed`; WO closed/cancelled/in_progress tidak muncul; builder
+  murni tidak menulis baris apa pun (replay loader = data sama).
+- AC-CLOSE-3: Tombol Tutup Job hanya tampil untuk status completed
+  + pemegang izin tutup; klik tanpa alasan -> ditolak server, status
+  tetap completed; alasan terisi + C1-C6 bersih -> closed dan jejak
+  closedBy/closedAt/closedReason tampil di detail.
+- AC-CLOSE-4: Sesudah closed, dari UI maupun aksi langsung:
+  MaterialIssue baru, ProductionCost baru/ubah/hapus, pull timesheet
+  -> semua ditolak menyebut closed. (Regresi guard existing; cabut
+  satu guard -> jalur itu MERAH.)
+- AC-CLOSE-5: Tagihan PO jasa masuk sesudah WO closed -> VendorBill
+  terposting ke utang, HPP job tidak berubah (totalActualCost/
+  releasedCost byte-sama), notice skipped tampil ke operator.
+- AC-CLOSE-6: Reopen tanpa alasan ditolak; reopen ber-alasan ->
+  completed; biaya periode berjalan dapat dicatat; tutup ulang ->
+  closed; jejak tiga peristiwa terbaca berurutan di detail/log.
+- AC-CLOSE-7: Tutup dengan MI draft / PO anak belum final / biaya
+  belum posted / sisa WIP Rp0,01 -> masing-masing ditolak menyebut
+  dokumen/nominalnya dari panel maupun aksi langsung (pesan server
+  sama, bukan pesan UI karangan).
+- AC-CLOSE-8: WO completed dengan invoice belum lunas tetap dapat
+  ditutup (BR-CLOSE-10); WO closed tetap tidak dapat ditutup ulang
+  (klaim atomik: dua klik bersamaan = satu sukses, satu ditolak).
+
+Edge cases: WO jasa tanpa PO (tutup hanya C1-C3,C5-C6; C4 kosong
+bukan nol karangan); PO tanpa WO induk (tutup PO independen sah);
+job legacy completed lama (tetap completed sampai ditutup operator —
+tanpa backfill status, pola 009-V K5); biaya telat masuk di periode
+sudah dikunci (assertPeriodOpen menolak — reopen pun tidak menolong,
+jalur = periode berjalan pertama yang terbuka); NCR dibuka sesudah
+tutup untuk job closed (sync rework ditolak guard — penyelesaian
+NCR atas job closed mengikuti L2/reopen, bukan bypass QC).
+
+### 11. Yang TIDAK diusulkan run ini
+
+- Status/dokumen "review" baru, workflow approval engine untuk
+  tutup, izin baru — menabrak vonis 009-V (izin existing) tanpa
+  kebutuhan pemisahan tugas terbukti; cukup Q-CLOSE-1 bila pemilik
+  proses menuntut penegakan dua-orang.
+- Jurnal disposisi/buang-WIP saat tutup, ambang materialitas tutup,
+  akun COA baru — DILARANG vonis 009-V K2/K5.
+- Snapshot margin final terbekukan di luar read-model existing —
+  DILARANG vonis 009-V K4d.
+- Tutup massal otomatis job legacy / cron auto-close — job ditutup
+  manusia ber-alasan; antrean S2 hanya menampilkan.
+
+### 12. Pertanyaan terbuka (pemilik vonis/putusan)
+
+- Q-CLOSE-1 (BOT 1, BUTUH-VONIS perilaku inti): penegakan dua-orang
+  di server (verifikasi administrasi sebagai aksi tercatat terpisah
+  sebelum tutup boleh dieksekusi) — dibangun atau cukup alur kerja
+  BR-CLOSE-07? Default spec: cukup alur kerja; inti S1-S3 TIDAK
+  menunggu jawaban ini.
+- Q-CLOSE-2 (BOT 4, BUTUH-VONIS uang): akun beban + dokumen sumber
+  sah jalur L3 (biaya telat bukan-biaya-job) + apakah tautan referensi
+  ke WO closed cukup catatan ActivityLog/dokumen jurnal existing.
+  Sampai terbit: L3 tidak dibangun, hanya L1/L2.
+- Q-CLOSE-3 (BOT 3, fisik): acuan tanggal "completed sejak" untuk
+  umur antrean S2 (updatedAt? jejak ActivityLog complete? kolom
+  aditif completedAt?) — fisik milik Backend; builder tidak boleh
+  menebak dari closedAt/createdAt.
+
+ID spec ini **F-2026-10-24-097-S** (bebas: tertinggi `-S` di main =
+F-2026-10-22-094-S; 095-S/096-S di PR terbuka #693/#695; 097 belum
+terpakai di main maupun PR terbuka yang dicek run ini). Induk
+F-2026-10-21-009 dinyatakan SELESAI-INTI oleh spec ini; sisa = S1-S3
+(+S4 bersyarat Q-CLOSE-2). Pemilik berikutnya: BOT 1 (Q-CLOSE-1 +
+merge PR docs ini) -> BOT 3 (S1/S2 + Q-CLOSE-3) -> BOT 2 (S3) ->
+BOT 6 (AC-CLOSE-1..8); BOT 4 hanya Q-CLOSE-2.
