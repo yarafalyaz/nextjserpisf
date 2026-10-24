@@ -191,7 +191,7 @@ export function ChequeManager({
             <CurrencyInput id="cheque-amount" value={amount} onChange={setAmount} placeholder="0" required />
           </div>
           <div className="flex flex-col gap-1.5">
-            <AppDatePicker label="Jatuh Tempo *" name="dueDate" value={dueDate} onChange={setDueDate} />
+            <AppDatePicker label="Jatuh Tempo *" name="dueDate" value={dueDate} onChange={setDueDate} required />
           </div>
           <div className="flex flex-col gap-1.5 sm:col-span-2 lg:col-span-2">
             <Label htmlFor="cheque-notes">Catatan</Label>

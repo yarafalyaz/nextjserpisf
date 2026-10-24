@@ -36,12 +36,12 @@ function mount() {
 }
 
 describe("tax-payment-form — a11y wiring", () => {
-  it("tambah: aria-label + aria-busy false, 3 bintang dekoratif, wajib aria-required, opsional bersih", () => {
+  it("tambah: aria-label + aria-busy false, 4 bintang dekoratif, wajib aria-required, opsional bersih", () => {
     const { container, root } = mount()
     const form = container.querySelector("form")!
     expect(form.getAttribute("aria-label")).toBe("Formulir tambah penyetoran pajak")
     expect(form.getAttribute("aria-busy")).toBe("false")
-    expect(form.querySelectorAll('span[aria-hidden="true"].text-destructive').length).toBe(3)
+    expect(form.querySelectorAll('span[aria-hidden="true"].text-destructive').length).toBe(4)
     const labels = Array.from(form.querySelectorAll("label")).map((l) => l.textContent)
     expect(labels).toEqual(
       expect.arrayContaining(["Jumlah Setor *", "Akun Utang Pajak *", "Dibayar dari Kas/Bank *", "Jenis Pemotongan", "Nomor SSP / MPN", "Keterangan"]),
