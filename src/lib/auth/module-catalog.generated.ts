@@ -53,7 +53,7 @@ export interface CatalogAction {
   label: string
 }
 
-/** 342 permission dikelompokkan per modul (15 modul). */
+/** 346 permission dikelompokkan per modul (15 modul). */
 export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
   dashboard: [
     { key: "view", resource: "dashboard", permissionKey: "view_dashboard", label: "Dasbor" },
@@ -142,6 +142,9 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "customer_price_lists", permissionKey: "create_customer_price_lists", label: "Daftar Harga Pelanggan" },
     { key: "edit", resource: "customer_price_lists", permissionKey: "edit_customer_price_lists", label: "Daftar Harga Pelanggan" },
     { key: "delete", resource: "customer_price_lists", permissionKey: "delete_customer_price_lists", label: "Daftar Harga Pelanggan" },
+    { key: "view", resource: "sales_late_fees", permissionKey: "view_sales_late_fees", label: "Dokumen Denda Piutang" },
+    { key: "create", resource: "sales_late_fees", permissionKey: "create_sales_late_fees", label: "Dokumen Denda Piutang" },
+    { key: "delete", resource: "sales_late_fees", permissionKey: "delete_sales_late_fees", label: "Dokumen Denda Piutang" },
     { key: "view", resource: "sales_invoices", permissionKey: "view_sales_invoices", label: "Faktur Penjualan" },
     { key: "create", resource: "sales_invoices", permissionKey: "create_sales_invoices", label: "Faktur Penjualan" },
     { key: "edit", resource: "sales_invoices", permissionKey: "edit_sales_invoices", label: "Faktur Penjualan" },
@@ -171,6 +174,7 @@ export const MODULE_ACTIONS: Record<string, CatalogAction[]> = {
     { key: "create", resource: "delivery_orders", permissionKey: "create_delivery_orders", label: "Surat Jalan" },
     { key: "edit", resource: "delivery_orders", permissionKey: "edit_delivery_orders", label: "Surat Jalan" },
     { key: "delete", resource: "delivery_orders", permissionKey: "delete_delivery_orders", label: "Surat Jalan" },
+    { key: "create", resource: "invoice_collection_followups", permissionKey: "create_invoice_collection_followups", label: "Tindak Lanjut Penagihan" },
     { key: "view", resource: "invoice_exchanges", permissionKey: "view_invoice_exchanges", label: "Tukar Faktur" },
     { key: "create", resource: "invoice_exchanges", permissionKey: "create_invoice_exchanges", label: "Tukar Faktur" },
     { key: "delete", resource: "invoice_exchanges", permissionKey: "delete_invoice_exchanges", label: "Tukar Faktur" },

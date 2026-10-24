@@ -974,6 +974,35 @@ describe("Purchase Return Actions", () => {
     expect(res?.success).toBe(true)
   })
 
+  // F-004 §3 simetris: nomor + tanggal nota retur pajak beli ditulis apa adanya.
+  it("createPurchaseReturn menulis nomor + tanggal nota retur pajak", async () => {
+    const res = await actions.createPurchaseReturn(fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      taxReturnNoteNumber: "000000.0100000002",
+      taxReturnNoteDate: "2026-07-02",
+      items: JSON.stringify([{ itemId: 1, qty: 2 }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseReturn.create.mock.calls.at(-1)![0]
+    expect(arg.data.taxReturnNoteNumber).toBe("000000.0100000002")
+    expect(arg.data.taxReturnNoteDate).toEqual(new Date(Date.UTC(2026, 6, 2)))
+  })
+
+  it("updatePurchaseReturn menulis nomor + tanggal nota retur pajak", async () => {
+    const res = await actions.updatePurchaseReturn(1, fdMap({
+      purchaseOrderId: "1",
+      date: "2026-06-12",
+      taxReturnNoteNumber: "NR-B-001",
+      taxReturnNoteDate: "2026-08-20",
+      items: JSON.stringify([{ itemId: 1, qty: 3 }])
+    }))
+    expect(res?.success).toBe(true)
+    const arg = mocks.prismaMock.purchaseReturn.update.mock.calls.at(-1)![0]
+    expect(arg.data.taxReturnNoteNumber).toBe("NR-B-001")
+    expect(arg.data.taxReturnNoteDate).toEqual(new Date(Date.UTC(2026, 7, 20)))
+  })
+
   it("createPurchaseReturn membaca qty/harga string format Indonesia penuh", async () => {
     const res = await actions.createPurchaseReturn(fdMap({
       purchaseOrderId: "1",

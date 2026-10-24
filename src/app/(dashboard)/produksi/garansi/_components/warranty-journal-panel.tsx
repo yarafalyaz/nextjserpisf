@@ -240,7 +240,9 @@ export function WarrantyJournalPanel({
           <h3 className="text-sm font-semibold text-foreground">Posting Jurnal Recovery Supplier (E3)</h3>
           <p className="text-sm text-muted-foreground">
             Nominal recovery tidak melebihi biaya klaim terverifikasi; server menolak bila
-            melebihi, tanpa lampiran bukti, atau mapping akun kosong.
+            melebihi, tanpa lampiran bukti, atau mapping akun kosong. Nomor referensi persetujuan
+            vendor wajib terisi dan bukan nomor resi pengiriman; lampiran persetujuan sesudah
+            pengiriman wajib terunggah.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
             <div className="flex flex-col gap-1.5">

@@ -10,6 +10,7 @@ import { requirePermission, hasPermission } from "@/lib/auth/permissions"
  */
 import { AppBreadcrumbs } from "@/components/ui/breadcrumbs"
 import { TaxInvoiceForm, TaxInvoiceLifecycleActions, type TaxOption } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/tax-invoice-form"
+import { CoretaxExportPanel } from "@/app/(dashboard)/keuangan/dokumen-pajak/_components/coretax-export-panel"
 import { formatCurrency } from "@/lib/utils/format"
 
 export const metadata: Metadata = { title: "Terbitkan Faktur Pajak" }
@@ -81,6 +82,16 @@ export default async function CreateTaxInvoicePage() {
             value: String(inv.id),
             label: `${inv.taxInvoiceNumber} — ${inv.direction === "out" ? "Keluaran" : "Masukan"}${inv.counterpartyName ? ` — ${inv.counterpartyName}` : ""} (${formatCurrency(Number(inv.taxAmount))})`,
           }))}
+        />
+      )}
+      {canLifecycle && (
+        <CoretaxExportPanel
+          invoices={issued
+            .filter((inv) => inv.direction === "out")
+            .map((inv) => ({
+              value: String(inv.id),
+              label: `${inv.taxInvoiceNumber} — Keluaran${inv.counterpartyName ? ` — ${inv.counterpartyName}` : ""} (${formatCurrency(Number(inv.taxAmount))})`,
+            }))}
         />
       )}
     </div>
