@@ -14,6 +14,7 @@ const ENTRY_KIND_LABEL: Record<CustomerStatementEntryKind, string> = {
   invoice: "Faktur penjualan",
   payment: "Pembayaran",
   credit: "Alokasi kredit",
+  return: "Retur penjualan",
 }
 
 /**
@@ -23,7 +24,7 @@ const ENTRY_KIND_LABEL: Record<CustomerStatementEntryKind, string> = {
  * saldo berjalan, total debit/kredit, dan saldo akhir ditampilkan apa
  * adanya — komponen ini TIDAK menghitung ulang mutasi, pelunasan, atau
  * outstanding piutang. Jenis baris dibedakan eksplisit per `kind`
- * (Faktur penjualan / Pembayaran / Alokasi kredit); kredit hanya dari
+ * (Faktur penjualan / Pembayaran / Alokasi kredit / Retur penjualan); kredit hanya dari
  * alokasi CustomerCredit builder (paymentMethod "customer_credit"),
  * bukan dokumen kredit kedua — anti-dobel mengikuti builder, bukan UI.
  */
