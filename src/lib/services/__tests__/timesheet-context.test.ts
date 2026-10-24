@@ -32,6 +32,13 @@ describe("closedWorkOrderError (F-2026-10-21-019)", () => {
     expect(closedWorkOrderError("cancelled", "ditarik")).toContain("cancelled")
   })
 
+  // F-2026-10-24-097-S S1 (AC-CLOSE-1): WO closed menolak timesheet.
+  // Falsifikasi: hapus "closed" dari guard -> tes ini MERAH.
+  it("closed ditolak menyebut closed (S1 F-097-S)", () => {
+    expect(closedWorkOrderError("closed", "dicatat")).toContain("closed")
+    expect(closedWorkOrderError("closed", "ditarik")).toContain("closed")
+  })
+
   it("status aktif sah", () => {
     for (const s of ["draft", "pending", "in_progress"]) {
       expect(closedWorkOrderError(s, "dicatat")).toBeNull()
