@@ -3,7 +3,9 @@ import type { TxClient } from "@/lib/db/prisma"
 import {
   attachPendingTransactionAttachments,
   deleteTransactionAttachmentsTx,
+  publishPhotoAttachmentTx,
   removeAttachmentFiles,
+  verifyPhotoAttachmentTx,
 } from "../transaction-attachment.service"
 
 describe("attachPendingTransactionAttachments", () => {
@@ -126,5 +128,32 @@ describe("deleteTransactionAttachmentsTx", () => {
     } finally {
       errSpy.mockRestore()
     }
+  })
+})
+
+describe("verify/publish foto F-096-S", () => {
+  function photoTx(row: Record<string, unknown> | null) {
+    const update = vi.fn().mockResolvedValue({})
+    const findUnique = vi.fn().mockResolvedValue(row)
+    return { tx: { transactionAttachment: { findUnique, update } }, update }
+  }
+  const base = { id: 5, photoCategory: "progress", uploadedBy: 3, verifiedBy: null, publishedBy: null }
+
+  it("verifikasi menulis verifiedBy/At", async () => {
+    const { tx, update } = photoTx({ ...base })
+    await verifyPhotoAttachmentTx(tx as never, { attachmentId: 5, verifiedBy: 7, now: new Date(0) })
+    expect(update).toHaveBeenCalledWith({ where: { id: 5 }, data: { verifiedBy: 7, verifiedAt: new Date(0) } })
+  })
+
+  it("pengunggah tidak boleh verifikasi foto handover sendiri (BR-PHOTO-06 default)", async () => {
+    const { tx } = photoTx({ ...base, photoCategory: "handover" })
+    await expect(verifyPhotoAttachmentTx(tx as never, { attachmentId: 5, verifiedBy: 3 })).rejects.toThrow(/pengunggahnya sendiri/)
+  })
+
+  it("terbit menolak foto belum terverifikasi dan kategori defect", async () => {
+    const a = photoTx({ ...base })
+    await expect(publishPhotoAttachmentTx(a.tx as never, { attachmentId: 5, publishedBy: 8 })).rejects.toThrow(/terverifikasi/)
+    const b = photoTx({ ...base, photoCategory: "defect", verifiedBy: 7 })
+    await expect(publishPhotoAttachmentTx(b.tx as never, { attachmentId: 5, publishedBy: 8 })).rejects.toThrow(/tidak boleh ditandai terbit/)
   })
 })

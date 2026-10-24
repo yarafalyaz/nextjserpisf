@@ -12,12 +12,20 @@
  * Tanpa dedup, invoice yang tertaut quotation+SO sekaligus tampil dua kali
  * di linimasa.
  *
+ * Seksi part terpasang (F-2026-10-22-072-S §2/AC-IP-9): riwayat ikut
+ * memuat registri InstalledPart kendaraan ini lewat `getInstalledParts`
+ * — sumbernya tabel registri per kendaraan, BUKAN dokumen issue mentah,
+ * jadi part dari issue bebas (tanpa kendaraan teratribusi) mustahil
+ * tampil di kendaraan mana pun.
+ *
  * Read-only: tanpa migrasi, tanpa jurnal, tanpa mutasi. Urutan linimasa
  * ditentukan builder murni (tanggal desc, tie-break deterministik) supaya
  * frontend tidak mengurutkan ulang dengan aturan berbeda.
  */
 
 import { prisma } from "@/lib/db/prisma"
+import { getInstalledParts } from "./installed-parts-data"
+import type { InstalledPartsRegistry } from "./installed-parts"
 
 export type CustomerVehicleHistoryKind =
   | "quotation"
@@ -46,6 +54,8 @@ export interface CustomerVehicleHistory {
   customerVehicleId: number
   entries: CustomerVehicleHistoryEntry[]
   counts: Record<CustomerVehicleHistoryKind, number>
+  /** Seksi part terpasang dari registri InstalledPart (F-072-S §2). */
+  installedParts: InstalledPartsRegistry
 }
 
 const KIND_ORDER: Record<CustomerVehicleHistoryKind, number> = {
@@ -124,9 +134,17 @@ function toInvoiceEntry(inv: InvoiceRow): CustomerVehicleHistoryEntry {
 export async function getCustomerVehicleHistory(
   customerVehicleId: number,
   limitPerKind = 20,
+  opts: { includeInstalledParts?: boolean } = {},
 ): Promise<CustomerVehicleHistory> {
   const take = Math.max(1, Math.min(100, Math.trunc(limitPerKind) || 20))
 
+  // Defense-in-depth: tanpa izin lihat garansi, registri part terpasang
+  // tidak pernah ditanyakan ke DB (panel juga tidak dirender).
+  const includeInstalledParts = opts.includeInstalledParts ?? true
+  const installedPartsPromise: Promise<InstalledPartsRegistry> =
+    includeInstalledParts
+      ? getInstalledParts(customerVehicleId)
+      : Promise.resolve({ rows: [], total: 0, activeCount: 0 })
   const [quotations, salesOrders, workOrders, directProjects, directInvoices] =
     await Promise.all([
       prisma.quotation.findMany({
@@ -246,5 +264,10 @@ export async function getCustomerVehicleHistory(
     })),
   ])
 
-  return { customerVehicleId, entries, counts: countVehicleHistory(entries) }
+  return {
+    customerVehicleId,
+    entries,
+    counts: countVehicleHistory(entries),
+    installedParts: await installedPartsPromise,
+  }
 }

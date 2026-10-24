@@ -52,6 +52,9 @@ function fdData(data: unknown): FormData {
 function wireTransaction() {
   const tx = {
     quotation: { create: quotationCreateMock },
+    // F-2026-10-22-065-S: snapshot persen ambang membaca kategori pelanggan;
+    // tanpa kategori -> null (default 50).
+    customer: { findFirst: vi.fn(async () => null) },
   }
   transactionMock.mockImplementation(async (cb: (t: typeof tx) => unknown) => cb(tx))
 }

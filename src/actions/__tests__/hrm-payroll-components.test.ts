@@ -222,6 +222,26 @@ describe("F-027 penugasan", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("negatif")
   })
+
+  it("nominal format Indonesia tersimpan penuh di penugasan", async () => {
+    prismaMock.employee.findUnique.mockResolvedValue({ id: 7 })
+    prismaMock.payrollComponent.findUnique.mockResolvedValue({ id: 3, isActive: true, recurrence: "fixed" })
+    prismaMock.employeePayrollComponent.findFirst.mockResolvedValue(null)
+    prismaMock.employeePayrollComponent.create.mockResolvedValue({ id: 99 })
+    const res = await actions.assignEmployeePayrollComponent(fd({
+      employeeId: "7", componentId: "3", defaultAmount: "2.000.000", effectiveFrom: "2026-05-01",
+    }))
+    expect(res.success).toBe(true)
+    expect(prismaMock.employeePayrollComponent.create.mock.calls[0][0].data.defaultAmount).toBe(2000000)
+  })
+
+  it("nominal tak terbaca ditolak di penugasan", async () => {
+    const res = await actions.assignEmployeePayrollComponent(fd({
+      employeeId: "7", componentId: "3", defaultAmount: "abc", effectiveFrom: "2026-05-01",
+    }))
+    expect(res.success).toBe(false)
+    expect(res.error).toContain("negatif")
+  })
 })
 
 describe("F-027 tarikan generate", () => {
@@ -333,7 +353,12 @@ describe("F-027 tarikan generate", () => {
     prismaMock.employee.findMany
       .mockResolvedValueOnce([{ id: 7 }])
       .mockResolvedValue([{ id: 7, baseSalary: 5000000, maritalStatus: "single", dependents: 0, departmentId: null, employeeLoans: [] }])
+    // Urutan findMany bulk: (1) baca luar irisan, (2) baca ulang komponen
+    // estimasi, (3) cek ulang irisan DI DALAM transaksi kunci (t_a92d0da1 —
+    // wajib kosong agar tidak bentrok diri), (4) baca ulang slip terbit.
     prismaMock.payroll.findMany
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValue([{ id: 55, employeeId: 7, componentLines: [] }])
     prismaMock.payroll.findUnique.mockResolvedValue({ status: "draft", componentLines: [] })
@@ -386,6 +411,16 @@ describe("F-027 baris draft", () => {
     expect(res.success).toBe(false)
     expect(res.error).toContain("draft")
     expect(prismaMock.payrollComponentLine.create).not.toHaveBeenCalled()
+  })
+
+  it("nominal format Indonesia tersimpan penuh di baris draft", async () => {
+    prismaMock.payrollComponent.findUnique.mockResolvedValue({
+      id: 9, name: "Bonus", kind: "earning", recurrence: "variable", isTaxable: true, isActive: true, accountId: null,
+    })
+    prismaMock.payrollComponentLine.findMany.mockResolvedValue([{ id: 31, payrollId: 55, componentId: 9, componentNameSnapshot: "Bonus", kindSnapshot: "earning", recurrenceSnapshot: "variable", isTaxableSnapshot: true, source: "manual", assignmentId: null, accountIdSnapshot: null, amount: 2000000 }])
+    const res = await actions.addPayrollComponentLine(55, fd({ componentId: "9", amount: "2.000.000" }))
+    expect(res.success).toBe(true)
+    expect(prismaMock.payrollComponentLine.create.mock.calls[0][0].data.amount).toBe(2000000)
   })
 
   it("duplikat komponen dalam satu slip ditolak", async () => {
