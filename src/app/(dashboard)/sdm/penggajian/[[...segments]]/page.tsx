@@ -139,7 +139,7 @@ export default async function PayrollPage({
   // F-2026-10-24-132-V: panel kompensasi PKWT (read-model server murni).
   const [pkwtReport, pkwtEmployees, pkwtDraftSlips, canCreatePkwt, canApprovePkwt, canProcessPkwt, canAttachPkwt] =
     await Promise.all([
-      getPkwtCompensationReport(),
+      getPkwtCompensationReport(scope),
       prisma.employee.findMany({
         where: { employmentStatus: "PKWT", isActive: true },
         orderBy: { name: "asc" },

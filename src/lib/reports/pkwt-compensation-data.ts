@@ -2,8 +2,23 @@
  * Loader read-model kompensasi PKWT (F-2026-10-24-132-V Putusan 5):
  * rekonsiliasi 3 arah (peristiwa ↔ GL 210207 ↔ slip terbayar) + daftar
  * belum dibayar. Pure builder: pkwt-compensation.ts.
+ *
+ * Scope HR (utang pasca-merge #724, vonis QA 6384023131): pemanggil wajib
+ * meneruskan HrScope dari getHrScope(). Semua query yang mengekspos
+ * karyawan (peristiwa, akrual subledger, baris slip terbayar, slip
+ * pending-approval) difilter hrScopeWhere(scope) — scope `self` hanya
+ * melihat peristiwanya sendiri, `department` hanya se-departemennya.
+ *
+ * glPayableBalance TIDAK difilter per karyawan: saldo GL 210207 adalah
+ * agregat satu-buku perusahaan (satu jurnal akrual agregat per bulan,
+ * tanpa dimensi karyawan — lihat runPkwtMonthlyAccrual). Untuk scope
+ * terbatas angka itu tetap saldo perusahaan; builder menerimanya dengan
+ * glIsCompanyWide=true sehingga selisih terhadap total ter-scope TIDAK
+ * diterbitkan sebagai temuan GL_VS_EVENT_DIFF (artefak cakupan, bukan
+ * selisih akuntansi), dan report menandai glComparableToScope=false.
  */
 import { prisma } from "@/lib/db/prisma"
+import { hrScopeWhere, type HrScope } from "@/lib/auth/hr-scope"
 import {
   buildPkwtCompensationReport,
   type PkwtCompensationReport,
@@ -11,7 +26,19 @@ import {
   PKWT_MSG,
 } from "@/lib/reports/pkwt-compensation"
 
-export async function getPkwtCompensationReport(): Promise<PkwtCompensationReport> {
+/**
+ * Laporan kompensasi PKWT ter-scope. `glPayableBalance` tetap saldo GL
+ * satu perusahaan (tidak ter-scope); `glIsCompanyWide` true untuk scope
+ * terbatas menandakan angka itu tidak se-cakupan dengan rows/totals, dan
+ * `glComparableToScope` false menandakan perbandingan GL vs scope tidak
+ * sah diterbitkan sebagai temuan.
+ */
+export type PkwtCompensationScopedReport = PkwtCompensationReport
+
+export async function getPkwtCompensationReport(
+  scope: HrScope,
+): Promise<PkwtCompensationScopedReport> {
+  const scopeWhere = hrScopeWhere(scope)
   const settings = await prisma.systemSetting.findFirst({
     select: {
       pkwtCompensationExpenseAccountId: true,
@@ -22,18 +49,34 @@ export async function getPkwtCompensationReport(): Promise<PkwtCompensationRepor
   const expenseAccountId = settings?.pkwtCompensationExpenseAccountId ?? null
   const mappingMissing = !payableAccountId || !expenseAccountId
 
+  // PayrollComponentLine tidak punya employeeId/employee: scope lewat
+  // relasi payroll (karyawan pemilik slip).
+  const lineScopeWhere =
+    scope.kind === "all"
+      ? {}
+      : {
+          payroll:
+            scope.kind === "self"
+              ? { employeeId: scope.employeeId }
+              : scope.departmentId == null
+                ? { employeeId: scope.employeeId }
+                : { employee: { departmentId: scope.departmentId } },
+        }
+
   const [events, accrualAgg, paidLines, glRows, pendingSlips] = await Promise.all([
     prisma.pkwtCompensationEvent.findMany({
+      where: scopeWhere,
       orderBy: [{ employeeId: "asc" }, { segmentStart: "asc" }],
       include: { employee: { select: { name: true, employeeNumber: true } } },
     }),
     prisma.pkwtCompensationAccrual.groupBy({
       by: ["employeeId", "segmentStart"],
+      where: scopeWhere,
       _sum: { amount: true },
     }),
     prisma.payrollComponentLine.findMany({
-      where: { pkwtEventId: { not: null } },
-      select: { pkwtEventId: true, amount: true, payroll: { select: { status: true } } },
+      where: { pkwtEventId: { not: null }, ...lineScopeWhere },
+      select: { pkwtEventId: true, amount: true, payroll: { select: { status: true, employeeId: true } } },
     }),
     payableAccountId
       ? prisma.journalEntry.findMany({
@@ -42,7 +85,7 @@ export async function getPkwtCompensationReport(): Promise<PkwtCompensationRepor
         })
       : Promise.resolve([] as { debit: unknown; credit: unknown }[]),
     prisma.payroll.findMany({
-      where: { status: "approved" },
+      where: { status: "approved", ...scopeWhere },
       select: {
         id: true,
         componentLines: {
@@ -90,6 +133,7 @@ export async function getPkwtCompensationReport(): Promise<PkwtCompensationRepor
     })),
     glPayableBalance: glBalance,
     mappingMissing,
+    glIsCompanyWide: scope.kind !== "all",
   })
   if (mappingMissing) {
     report.anomalies.push({
