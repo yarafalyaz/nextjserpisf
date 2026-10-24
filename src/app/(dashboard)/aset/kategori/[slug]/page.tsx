@@ -19,6 +19,8 @@ import { requirePermission } from "@/lib/auth/permissions"
 import { CanCreate } from "@/components/auth/can-create"
 import { resolveEntity } from "@/lib/utils/resolve-entity"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { AssetFiscalStatus } from "../../_components/asset-fiscal-status"
+import { AssetEventMappingStatus } from "../../_components/asset-change-event"
 export const metadata: Metadata = { title: "Kategori" }
 
 export default async function AssetCategoryDetailPage({
@@ -48,6 +50,23 @@ export default async function AssetCategoryDetailPage({
 
   if (!category) notFound()
 
+  // Status pemetaan akun peristiwa (F-128-V): id NULL = belum terpetakan dan
+  // peristiwa terkait ditolak fail-closed — tampilkan apa adanya.
+  const eventAccountIds = [
+    category.revaluationSurplusAccountId,
+    category.impairmentLossAccountId,
+    category.accumulatedImpairmentAccountId,
+  ].filter((id): id is number => id != null)
+  const eventAccounts = eventAccountIds.length
+    ? await prisma.account.findMany({ where: { id: { in: eventAccountIds } }, select: { id: true, code: true } })
+    : []
+  const eventAccountById = new Map(eventAccounts.map((a) => [a.id, a]))
+  const eventMapping = {
+    revaluationSurplus: category.revaluationSurplusAccountId != null ? (eventAccountById.get(category.revaluationSurplusAccountId) ?? null) : null,
+    impairmentLoss: category.impairmentLossAccountId != null ? (eventAccountById.get(category.impairmentLossAccountId) ?? null) : null,
+    accumulatedImpairment: category.accumulatedImpairmentAccountId != null ? (eventAccountById.get(category.accumulatedImpairmentAccountId) ?? null) : null,
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <PageHeader
@@ -73,6 +92,8 @@ export default async function AssetCategoryDetailPage({
         <DetailField label="Nama" value={category.name} />
         <DetailField label="Tingkat Depresiasi" value={category.depreciationRate ? `${Number(category.depreciationRate)}%` : "-"} />
         <DetailField label="Umur Manfaat (tahun)" value={category.usefulLife || "-"} />
+        <DetailField label="Status Penyusutan Fiskal" value={<AssetFiscalStatus taxGroupCode={category.taxGroupCode} taxTypeListed={category.taxTypeListed} taxDjpDetermination={category.taxDjpDetermination} fiscalMethod={category.fiscalMethod} />} />
+        <DetailField label="Pemetaan Akun Peristiwa" value={<AssetEventMappingStatus mapping={eventMapping} />} colSpan="full" />
         <DetailField label="Dibuat" value={formatDate(category.createdAt)} />
       </DetailCard>
 

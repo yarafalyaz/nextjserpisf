@@ -26,6 +26,7 @@ import { resolveEntity } from "@/lib/utils/resolve-entity";
 import { entityEditHref } from "@/lib/utils/entity-url";
 import { hasPermission } from "@/lib/auth/permissions";
 import { PayrollComponentLines } from "@/components/payroll/payroll-component-lines";
+import { PayrollBpjsAggregateSnapshot } from "@/components/payroll/payroll-bpjs-aggregate-snapshot";
 
 export const metadata: Metadata = { title: "Penggajian" };
 
@@ -246,6 +247,8 @@ export default async function PayrollDetailPage({
           </DetailTableBody>
         </DetailTable>
       </div>
+
+      <PayrollBpjsAggregateSnapshot snapshot={payroll.statutorySnapshot} />
 
       <PayrollComponentLines
         payrollId={payroll.id}
