@@ -172,6 +172,104 @@ describe("buildVehicleMargin — kriteria terima F-2026-10-21-033", () => {
       projectCount: 0,
       jobCount: 0,
       directInvoiceCount: 0,
+      unbilledMemo: 0,
+      unbilledByStatus: { draft: 0, approved: 0, sent: 0 },
     })
+  })
+})
+
+describe("buildVehicleMargin — memo unbilled E129-4", () => {
+  it("label memo verbatim + status sumber kontrak", async () => {
+    const { VEHICLE_MARGIN_UNBILLED_LABEL, UNBILLED_MEMO_STATUSES } = await import(
+      "@/lib/reports/vehicle-margin"
+    )
+    expect(VEHICLE_MARGIN_UNBILLED_LABEL).toBe("belum ditagih (memo)")
+    expect(UNBILLED_MEMO_STATUSES).toEqual(["draft", "approved", "sent"])
+    expect(buildVehicleMargin(base()).unbilledLabel).toBe("belum ditagih (memo)")
+  })
+
+  it("memo saja: baris revenue 0, profit/marginPercent tak bergerak, memo terisi per status", () => {
+    const r = buildVehicleMargin(
+      base({
+        unbilled: [
+          { id: 1, customerVehicleId: 7, vehiclePlate: "B 7", customerName: "PT A", status: "draft", amount: 40_000_000 },
+          { id: 2, customerVehicleId: 7, vehiclePlate: "B 7", customerName: "PT A", status: "approved", amount: 5_000_000 },
+          { id: 3, customerVehicleId: 7, vehiclePlate: "B 7", customerName: "PT A", status: "sent", amount: 3_000_000 },
+        ],
+      }),
+    )
+    expect(r.rows).toHaveLength(1)
+    expect(r.rows[0].revenue).toBe(0)
+    expect(r.rows[0].profit).toBe(0)
+    expect(r.rows[0].marginPercent).toBe(0)
+    expect(r.rows[0].unbilledMemo).toBe(48_000_000)
+    expect(r.rows[0].unbilledByStatus).toEqual({ draft: 40_000_000, approved: 5_000_000, sent: 3_000_000 })
+    expect(r.totals.unbilledMemo).toBe(48_000_000)
+    expect(r.totals.revenue).toBe(0)
+    expect(r.totals.profit).toBe(0)
+  })
+
+  it("memo di kendaraan berbilled: revenue/profit/marginPercent identik tanpa memo", () => {
+    const withJob = base({
+      jobs: [
+        { workOrderId: 50, customerVehicleId: 7, vehiclePlate: "B 7", customerName: "PT A", billedAmount: 10_000_000, actualCost: 4_000_000, hasUnlinkedMaterial: false },
+      ],
+    })
+    const plain = buildVehicleMargin(withJob)
+    const withMemo = buildVehicleMargin({
+      ...withJob,
+      unbilled: [
+        { id: 9, customerVehicleId: 7, vehiclePlate: "B 7", customerName: "PT A", status: "draft", amount: 40_000_000 },
+      ],
+    })
+    expect(withMemo.rows[0].revenue).toBe(plain.rows[0].revenue)
+    expect(withMemo.rows[0].profit).toBe(plain.rows[0].profit)
+    expect(withMemo.rows[0].marginPercent).toBe(plain.rows[0].marginPercent)
+    expect(withMemo.totals.revenue).toBe(plain.totals.revenue)
+    expect(withMemo.rows[0].unbilledMemo).toBe(40_000_000)
+  })
+
+  it("dedup global per id: invoice sama dua jembatan dihitung sekali (entri pertama)", () => {
+    const r = buildVehicleMargin(
+      base({
+        unbilled: [
+          { id: 42, customerVehicleId: 7, vehiclePlate: "B 7", customerName: "PT A", status: "draft", amount: 40_000_000 },
+          { id: 42, customerVehicleId: 8, vehiclePlate: "B 8", customerName: "PT B", status: "draft", amount: 40_000_000 },
+        ],
+      }),
+    )
+    expect(r.rows).toHaveLength(1)
+    expect(r.rows[0].customerVehicleId).toBe(7)
+    expect(r.totals.unbilledMemo).toBe(40_000_000)
+  })
+
+  it("status di luar draft/approved/sent (cancelled/posted) tidak masuk memo", () => {
+    const r = buildVehicleMargin(
+      base({
+        unbilled: [
+          { id: 1, customerVehicleId: 7, vehiclePlate: "B 7", customerName: "PT A", status: "cancelled", amount: 40_000_000 },
+          { id: 2, customerVehicleId: 7, vehiclePlate: "B 7", customerName: "PT A", status: "posted", amount: 40_000_000 },
+        ],
+      }),
+    )
+    expect(r.rows).toEqual([])
+    expect(r.totals.unbilledMemo).toBe(0)
+  })
+
+  it("memo tanpa kendaraan masuk ember Tanpa kendaraan, tetap terakhir", () => {
+    const r = buildVehicleMargin(
+      base({
+        jobs: [
+          { workOrderId: 1, customerVehicleId: 7, vehiclePlate: "B 7", customerName: "PT A", billedAmount: 1_000_000, actualCost: 0, hasUnlinkedMaterial: false },
+        ],
+        unbilled: [
+          { id: 5, customerVehicleId: null, vehiclePlate: null, customerName: "PT B", status: "sent", amount: 2_000_000 },
+        ],
+      }),
+    )
+    expect(r.rows).toHaveLength(2)
+    expect(r.rows[1].customerVehicleId).toBeNull()
+    expect(r.rows[1].unbilledMemo).toBe(2_000_000)
+    expect(r.rows[1].unbilledByStatus.sent).toBe(2_000_000)
   })
 })

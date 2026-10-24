@@ -39,6 +39,19 @@
  *
  * Pure (tanpa Prisma/DOM). Loader DB ada di `vehicle-margin-data.ts`.
  * Sen-aman lewat helper `src/lib/utils/math`.
+ *
+ * Memo unbilled E129-4 (vonis F-2026-10-24-129-V Putusan 2): invoice
+ * `draft/approved/sent` non-deleted yang terjangkau jembatan yang sama
+ * dengan kelasnya tampil HANYA sebagai memo terpisah berlabel
+ * "belum ditagih (memo)" (`unbilledMemo` + `unbilledByStatus` per baris,
+ * `totals.unbilledMemo`). Memo BUKAN pendapatan: tidak masuk
+ * revenue/profit/marginPercent dan tidak ikut total rekonsiliasi.
+ * `cancelled`/soft-deleted tidak masuk memo sekali pun. Nilai per invoice
+ * = DPP `safeSubtract(subtotal, discount, 2)` dari loader; dedup global
+ * per invoice id di builder ini (invoice yang sama lewat dua jembatan
+ * dihitung sekali, entri pertama menang — loader mengurutkan (a) proyek,
+ * (b) WO non-proyek, (c) langsung). Kendaraan memo-saja tetap
+ * menghasilkan baris revenue 0.
  */
 
 import { safeRound, safeSubtract, safeSum } from "@/lib/utils/math"
@@ -87,10 +100,30 @@ export interface VehicleMarginDirectInvoiceInput {
   revenue: number
 }
 
+/** Status invoice sumber memo unbilled (E129-4). Bukan pendapatan. */
+export const UNBILLED_MEMO_STATUSES = ["draft", "approved", "sent"] as const
+export type UnbilledMemoStatus = (typeof UNBILLED_MEMO_STATUSES)[number]
+/** Label kontrak memo — frontend wajib menempel apa adanya. */
+export const VEHICLE_MARGIN_UNBILLED_LABEL = "belum ditagih (memo)"
+
+export interface VehicleMarginUnbilledInput {
+  /** Id invoice — kunci dedup global lintas jembatan. */
+  id: number
+  customerVehicleId: number | null
+  vehiclePlate: string | null
+  customerName: string
+  /** Status sumber: draft/approved/sent (loader menyaring selain ini). */
+  status: string
+  /** DPP invoice: subtotal − discount (dari loader). */
+  amount: number
+}
+
 export interface VehicleMarginInput {
   projects: VehicleMarginProjectInput[]
   jobs: VehicleMarginJobInput[]
   directInvoices: VehicleMarginDirectInvoiceInput[]
+  /** Opsional: entri memo unbilled (E129-4). Default tanpa memo. */
+  unbilled?: VehicleMarginUnbilledInput[]
 }
 
 export interface VehicleMarginRow {
@@ -116,10 +149,16 @@ export interface VehicleMarginRow {
   hasUnlinkedRevenue: boolean
   /** Punya MI completed langsung ke WO non-proyek (Q-033-2): biaya material langsung belum termasuk di totalCost. */
   hasUnlinkedMaterial: boolean
+  /** Memo unbilled E129-4: Σ DPP invoice draft/approved/sent non-deleted. BUKAN pendapatan. */
+  unbilledMemo: number
+  /** Rincian memo per status sumber. */
+  unbilledByStatus: Record<UnbilledMemoStatus, number>
 }
 
 export interface VehicleMarginResult {
   label: typeof VEHICLE_MARGIN_LABEL
+  /** Label kontrak memo unbilled, verbatim. */
+  unbilledLabel: typeof VEHICLE_MARGIN_UNBILLED_LABEL
   rows: VehicleMarginRow[]
   totals: {
     revenue: number
@@ -129,6 +168,9 @@ export interface VehicleMarginResult {
     projectCount: number
     jobCount: number
     directInvoiceCount: number
+    /** Total memo unbilled semua kendaraan; terpisah dari rekonsiliasi. */
+    unbilledMemo: number
+    unbilledByStatus: Record<UnbilledMemoStatus, number>
   }
 }
 
@@ -144,6 +186,7 @@ interface Bucket {
   jobCount: number
   directInvoiceCount: number
   hasUnlinkedMaterial: boolean
+  unbilledByStatus: Record<UnbilledMemoStatus, number[]>
 }
 
 export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResult {
@@ -167,6 +210,7 @@ export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResu
         jobCount: 0,
         directInvoiceCount: 0,
         hasUnlinkedMaterial: false,
+        unbilledByStatus: { draft: [], approved: [], sent: [] },
       }
       buckets.set(customerVehicleId, bucket)
     }
@@ -204,6 +248,26 @@ export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResu
     bucket.directInvoiceCount += 1
   }
 
+  // (memo) Unbilled E129-4: dedup global per id (entri pertama menang),
+  // status di luar draft/approved/sent dibuang defensif — memo tidak pernah
+  // menyentuh revenues[].
+  const seenUnbilledIds = new Set<number>()
+  for (const entry of input.unbilled ?? []) {
+    if (seenUnbilledIds.has(entry.id)) continue
+    if (!(UNBILLED_MEMO_STATUSES as readonly string[]).includes(entry.status)) continue
+    seenUnbilledIds.add(entry.id)
+    const bucket = bucketOf(entry.customerVehicleId, entry.vehiclePlate, entry.customerName)
+    bucket.unbilledByStatus[entry.status as UnbilledMemoStatus].push(entry.amount)
+  }
+
+  const sumByStatus = (
+    source: Record<UnbilledMemoStatus, number[]>,
+  ): Record<UnbilledMemoStatus, number> => ({
+    draft: safeSum(source.draft, 2),
+    approved: safeSum(source.approved, 2),
+    sent: safeSum(source.sent, 2),
+  })
+
   const finish = (bucket: Bucket): VehicleMarginRow => {
     const revenue = safeSum(bucket.revenues, 2)
     const materialCost = safeSum(bucket.materialCosts, 2)
@@ -211,6 +275,7 @@ export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResu
     const otherCost = safeSum(bucket.otherCosts, 2)
     const totalCost = safeSum([materialCost, productionCost, otherCost], 2)
     const profit = safeSubtract(revenue, totalCost, 2)
+    const unbilledByStatus = sumByStatus(bucket.unbilledByStatus)
     return {
       customerVehicleId: bucket.customerVehicleId,
       vehiclePlate: bucket.vehiclePlate,
@@ -228,6 +293,11 @@ export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResu
       directInvoiceCount: bucket.directInvoiceCount,
       hasUnlinkedRevenue: bucket.directInvoiceCount > 0,
       hasUnlinkedMaterial: bucket.hasUnlinkedMaterial,
+      unbilledMemo: safeSum(
+        [unbilledByStatus.draft, unbilledByStatus.approved, unbilledByStatus.sent],
+        2,
+      ),
+      unbilledByStatus,
     }
   }
 
@@ -243,8 +313,14 @@ export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResu
   const revenue = safeSum(rows.map((r) => r.revenue), 2)
   const totalCost = safeSum(rows.map((r) => r.totalCost), 2)
   const profit = safeSubtract(revenue, totalCost, 2)
+  const unbilledByStatus: Record<UnbilledMemoStatus, number> = {
+    draft: safeSum(rows.map((r) => r.unbilledByStatus.draft), 2),
+    approved: safeSum(rows.map((r) => r.unbilledByStatus.approved), 2),
+    sent: safeSum(rows.map((r) => r.unbilledByStatus.sent), 2),
+  }
   return {
     label: VEHICLE_MARGIN_LABEL,
+    unbilledLabel: VEHICLE_MARGIN_UNBILLED_LABEL,
     rows,
     totals: {
       revenue,
@@ -254,6 +330,11 @@ export function buildVehicleMargin(input: VehicleMarginInput): VehicleMarginResu
       projectCount: rows.reduce((n, r) => n + r.projectCount, 0),
       jobCount: rows.reduce((n, r) => n + r.jobCount, 0),
       directInvoiceCount: rows.reduce((n, r) => n + r.directInvoiceCount, 0),
+      unbilledMemo: safeSum(
+        [unbilledByStatus.draft, unbilledByStatus.approved, unbilledByStatus.sent],
+        2,
+      ),
+      unbilledByStatus,
     },
   }
 }
