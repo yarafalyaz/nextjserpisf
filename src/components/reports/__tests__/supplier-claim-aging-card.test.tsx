@@ -8,6 +8,7 @@ import { SupplierClaimAgingCard } from "../supplier-claim-aging-card"
 import { renderCard, unmountCard, clearRenderedCards } from "./card-test-utils"
 import {
   buildSupplierClaimAging,
+  type SupplierClaimAging,
   type SupplierClaimAgingInput,
 } from "@/lib/reports/supplier-claim-aging"
 import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
@@ -83,6 +84,64 @@ describe("SupplierClaimAgingCard F-2026-10-24-095-S BR-SUPP-11", () => {
       (a) => a.getAttribute("href") === "/produksi/garansi/1",
     )
     expect(detail).not.toBeUndefined()
+  })
+
+  it("passthrough umur buatan: ageDays tampil persis, bukan hitung-ulang dari supplierClaimAt", () => {
+    // Fixture sengaja tidak konsisten dgn tanggalnya: supplierClaimAt hanya
+    // 6 jam sebelum render, jadi hitung-ulang apa pun dari tanggal itu
+    // (floor selisih jam dinding ATAU hari kalender WIB) menghasilkan 0,
+    // sementara builder (sumber kebenaran) menyatakan 99. Sabotase
+    // hitung-ulang di UI karena itu WAJIB merah pada assert "99 hari".
+    const claimAt = new Date(Date.now() - 6 * 3_600_000)
+    const aging: SupplierClaimAging = {
+      rows: [
+        {
+          claimId: 2,
+          claimStatus: "closed",
+          supplierClaimStatus: "sent",
+          supplierClaimStatusLabel: "Terkirim ke supplier",
+          supplierClaimAt: claimAt,
+          ageDays: 99,
+          ageBucket: "over90",
+          ageBucketLabel: ">90 hari",
+          ageDateLabel: null,
+          supplierClaimRefNo: "REF-2",
+          vendorId: 7,
+          vendorName: "Vendor Uji",
+          purchaseReturnId: null,
+          purchaseReturnDocumentNo: null,
+          purchaseReturnStatus: null,
+          coverageId: 11,
+          itemId: 31,
+          itemName: "Item Uji",
+          itemSku: "SKU-1",
+          serialNumber: "SN-1",
+          customerId: 21,
+          customerName: "Pelanggan Uji",
+          customerVehicleId: 41,
+          plateNumber: "B 1234 CD",
+          vehicleName: "Kendaraan Uji",
+          reportedAt: claimAt,
+        },
+      ],
+      summary: {
+        totalOpen: 1,
+        byStatus: [{ status: "sent", label: "Terkirim ke supplier", claimCount: 1 }],
+        buckets: [{ id: "over90", label: ">90 hari", claimCount: 1 }],
+        oldestClaimId: 2,
+        oldestAgeDays: 99,
+      },
+    }
+    const rendered = renderCard(<SupplierClaimAgingCard aging={aging} />)
+    root = rendered.root
+    const text = rendered.container.textContent ?? ""
+    expect(text).toContain("99 hari")
+    expect(text).toContain("tertua 99 hari")
+    expect(text).toContain(">90 hari")
+    // Sel Umur = sel class "num" (align right di DetailTableTd); persis
+    // "99 hari", bukan "0 hari" hasil hitung-ulang dari claimAt 6 jam lalu.
+    const ageCells = [...rendered.container.querySelectorAll("td.num")]
+    expect(ageCells.map((el) => el.textContent)).toEqual(["99 hari"])
   })
 
   it("tanpa tanggal: label verbatim + umur em-dash, tanpa mutasi/telepon/WA", () => {
