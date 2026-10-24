@@ -183,6 +183,18 @@ export type PriceListExpiryStatus =
   | "berlaku"
   | "tanpa_batas"
 
+export const PRICE_LIST_EXPIRY_STATUS_LABELS: Record<PriceListExpiryStatus, string> = {
+  nonaktif: "Nonaktif",
+  sudah_berakhir: "Sudah berakhir",
+  belum_berlaku: "Belum berlaku",
+  segera_berakhir: "Segera berakhir",
+  berlaku: "Berlaku",
+  tanpa_batas: "Tanpa batas",
+}
+
+export const PRICE_LIST_EXPIRING_WINDOW_DAYS = [7, 30, 90] as const
+export const PRICE_LIST_EXPIRING_DEFAULT_WINDOW_DAYS = 30
+
 export function derivePriceListExpiryStatus(
   row: Pick<PriceListRow, "effectiveDate" | "expiresAt" | "isActive">,
   input: { referenceDate: Date; expiringWindowDays: number },
