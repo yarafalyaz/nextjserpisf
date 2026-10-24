@@ -26125,4 +26125,117 @@ Edge cases: EC-1 cuti pending yang startDate-nya sudah lewat tanpa keputusan (te
 - Kolom/status dokumen baru: status turunan dari kolom existing cukup; migrasi hanya bila Backend Q-HP-3 membuktikan tidak cukup.
 
 F-2026-10-25-007-S — Antrean persetujuan HR tertunda. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-HP-1/2/4 + fisik Backend Q-HP-3. Pemilik usulan: Business (spec), Lead (putusan), Backend (builder), Frontend (konsumen), QA (falsifikasi). Butuh putusan accountant: TIDAK (tanpa uang/pajak/jurnal tahap 1).
+---
 
+## SPEC BUSINESS 2026-10-25 — F-2026-10-25-011-S: inti status tersimpan per baris perintah kerja (lanjutan F-2026-10-20-105; migrasi ditunda vonis)
+
+> **Slot**: F-2026-10-25-011-S. Diperiksa bentrok 2026-10-25 01:56 WIB vs `origin/main` (`11ecb983`): grep `F-2026-10-25-011` di backlog+board = 0; seri 001-S..010-S terpakai (006-S di main, 007-S..010-S PR #770/#772/#774/#777 OPEN). Diverifikasi sebelum tulis, bukan slot tetap.
+> **Induk**: F-2026-10-20-105 (c) P1 — "Status part per baris WO tidak bertransisi (dipesan/datang/terpasang/diganti/dikembalikan)". Entri induk mengusulkan lapis aman read-model dan menunda inti: "inti kolom status terkelola ditunda migrasi". Spec ini HANYA merumuskan inti yang ditunda itu; lapis aman tidak ditulis ulang.
+
+Benchmark resmi (akses 2026-10-25):
+- Accurate — progress SPK dihitung dari aktivitas nyata, komponen Pengeluaran Bahan Baku 30% proporsional dari qty terambil: https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/perintah-kerja/menghitung-progress-perintah-kerja/ ; histori WO kronologis (pengambilan bahan, tahapan, penyelesaian): https://help.accurate.id/product/accurate-online/fitur-aol/manufaktur/histori-perintah-kerja/histori-wo/
+- Zahir — status part per baris perintah kerja: tidak ditemukan di help.zahironline.com pada akses run ini (ditulis apa adanya, bukan ditebak `BENCHMARK`).
+
+### 0. Inventarisasi terverifikasi (2026-10-25, basis `origin/main` 11ecb983)
+
+Sudah ada (TERVERIFIKASI-KODE):
+- Kolom tersimpan: `WorkOrderItem.status String @default("pending")` (`prisma/schema.prisma:3144`). Nilai tersimpan yang benar-benar ditulis kode produksi: `pending` (lahir), `in_progress` (massal saat start WO — `src/actions/manufacturing.actions.ts:1567-1570`, hanya baris `pending`), `completed` (massal semua baris saat klaim complete WO — `manufacturing.actions.ts:1705-1708`), `replaced` (revisi baris — `src/actions/inventory.actions.ts:1629`; change order — `src/actions/job-change-order.actions.ts:776`). TIDAK ada penanda per-baris untuk dipesan/datang/terpasang di kolom tersimpan.
+- Lapis aman turunan SUDAH terbangun penuh dan terkonsumsi: builder murni `src/lib/reports/work-order-part-status.ts` (7 status turunan: menunggu/dipesan/datang/terpasang-sebagian/terpasang/diganti/tak-tertaut; precedence `diganti > terpasang(-sebagian) > datang > dipesan > menunggu`; issue legacy tanpa `workOrderItemId` diatribusikan per itemId ke baris cocok pertama, anti-overstate), loader `work-order-part-status-data.ts`, konsumen halaman `src/app/(dashboard)/produksi/perintah-kerja/[slug]/page.tsx:194,578` + kartu `src/components/reports/work-order-part-status-card.tsx`, tes builder + tes kartu. Builder TIDAK menulis `WorkOrderItem.status` (komentar berkas :7-8) dan jujur soal retur: `PurchaseReturnItem` tak tertaut per baris WO, jadi status "dikembalikan" TIDAK diturunkan (notice :28-33).
+- Penjaga existing membaca status tersimpan: baris `replaced` dikecualikan dari reservasi stok (`stock-reservation.service.ts:47`, `manufacturing.actions.ts:2722`), dari kebutuhan material (`work-order-material-needs-data.ts`), dan dari saran substitusi (`item-substitute.actions.ts:354`). Mengubah kosakata status tersimpan menyentuh semua penjaga ini.
+- Izin katalog nyata: `view_work_orders`, `create_work_orders`, `edit_work_orders`, `delete_work_orders`, `complete_work_orders` (`src/lib/auth/module-catalog.generated.ts:262-266`). Tidak ada izin per-baris WO.
+- Biaya aktual tetap transaksi inventory: `MaterialIssue` completed tertaut `workOrderItemId` (nullable; baris legacy tanpa tautan ada). Spec ini tidak menyentuh jalur biaya sama sekali.
+
+Belum ada / parsial (bukti grep run ini):
+- Status tersimpan per baris tidak pernah bergerak oleh peristiwa part (PO diterima, MaterialIssue completed, retur) — hanya oleh start/complete WO massal dan revisi `replaced`. Jawaban "part ini sudah sampai mana" hari ini hanya dari turunan baca, bukan dari rekod baris.
+- Status "dikembalikan" per baris tidak bisa dibuktikan dari dokumen existing mana pun (retur pembelian tak tertaut baris WO) — inti pun tidak boleh mengarangnya tanpa tautan dokumen baru.
+
+### 1. Workflow specification (USULAN kecuali ditandai lain)
+
+Aktor: Kepala Bengkel / Mandor (penggerak WO), Petugas Gudang (penerbit MaterialIssue), Admin Produksi (revisi baris), Supervisor (peninjau).
+Dokumen masuk: WorkOrder + WorkOrderItem, PurchaseOrder tertaut WO + penerimaan, MaterialIssue completed, revisi baris/change order existing, StockReservation tertaut baris.
+Dokumen keluar: status tersimpan per baris yang bergerak hanya oleh peristiwa dokumen sah (tanpa dokumen/status manual bebas tahap 1) + tampilan detail WO yang membaca status tersimpan dengan turunan sebagai pembanding jujur untuk baris lama.
+
+Alur inti (sesudah vonis Q-WI-1 Lead membuka fisik):
+1. Baris lahir `pending` (existing). Start WO menggerakkan baris `pending → in_progress` massal (existing, dipertahankan).
+2. Peristiwa part per baris (baru, dalam transaksi dokumen pemicunya, bukan aksi terpisah): penerimaan PO tertaut WO memenuhi qty baris → penanda tiba per baris; MaterialIssue completed mencapai qty baris → penanda terpasang per baris; parsial → penanda sebagian. Fisik penanda (kolom status diperluas vs kolom penanda terpisah vs tabel peristiwa) = keputusan Backend di Q-WI-2, dengan syarat BR-WI-02.
+3. Revisi/change order tetap satu-satunya jalur `replaced` (existing). Complete WO tetap menutup baris (existing).
+4. "Dikembalikan" TIDAK punya transisi tahap 1: tanpa tautan retur per baris, status itu dilarang lahir (BR-WI-05).
+
+### 2. Role/permission matrix (key nyata katalog; USULAN pemetaan)
+
+| Aksi | Kepala Bengkel/Mandor | Petugas Gudang | Admin Produksi | Supervisor |
+|---|---|---|---|---|
+| Lihat status per baris di detail WO | `view_work_orders` | `view_work_orders` | `view_work_orders` | `view_work_orders` |
+| Start/complete WO (penggerak massal existing) | `edit_work_orders` / `complete_work_orders` | — | `edit_work_orders` / `complete_work_orders` | lihat |
+| Terbitkan MaterialIssue (pemicu terpasang) | — | izin material-issue existing | — | lihat |
+| Revisi baris → `replaced` (existing) | — | — | `edit_work_orders` | lihat |
+| Ubah status baris manual bebas | TIDAK ADA tahap 1 (BR-WI-03) | TIDAK ADA | TIDAK ADA | TIDAK ADA |
+
+Tidak ada key izin baru tahap 1 (USULAN; putusan Q-WI-3 Lead). Status baris bergerak sebagai efek samping transaksi dokumen yang izinnya sudah ada, bukan aksi berizin sendiri.
+
+### 3. Status-transition matrix (kosakata penanda inti = USULAN, fisik Q-WI-2)
+
+| Status awal | Pemicu | Status akhir | Penjaga |
+|---|---|---|---|
+| (lahir) | buat WO | `pending` (tersimpan existing) | existing |
+| `pending` | start WO (klaim menang) | `in_progress` (tersimpan existing) | `manufacturing.actions.ts:1567`; hanya dari `pending` |
+| `in_progress` | penerimaan PO tertaut WO: received ≥ sisa kebutuhan baris | penanda TIBA per baris | dalam tx penerimaan; qty bersih per baris, bukan per item WO lain |
+| `in_progress`/TIBA | MaterialIssue completed kumulatif ≥ qty baris | penanda TERPASANG per baris | dalam tx issue; hanya `workOrderItemId` tertaut persis (legacy tanpa tautan TIDAK menggerakkan baris — BR-WI-04) |
+| `in_progress`/TIBA | MaterialIssue completed 0 < kumulatif < qty baris | penanda TERPASANG-SEBAGIAN per baris | idempoten: issue susulan menaikkan, tidak pernah menurunkan |
+| status apa pun non-final | revisi baris / change order existing | `replaced` (tersimpan existing) | jalur existing saja; baris `replaced` terkunci dari reservasi/kebutuhan/substitusi (penjaga existing) |
+| status apa pun | complete WO (klaim menang) | `completed` (tersimpan existing) | `manufacturing.actions.ts:1705` |
+| — | retur pembelian | TIDAK ADA transisi "dikembalikan" tahap 1 | `PurchaseReturnItem` tak tertaut baris (BR-WI-05) |
+
+### 4. Business rules register
+
+| ID | Aturan | Status | Sumber |
+|---|---|---|---|
+| BR-WI-01 | Satu sumber kebenaran per baris: sesudah inti aktif, status tampil detail WO = status tersimpan; turunan builder existing tetap dihitung sebagai pembanding dan selisihnya tampil sebagai penanda rekonsiliasi, bukan ditimpa diam-diam. Baris yang lahir sebelum inti (backfill tak terbukti) tetap membaca turunan dengan label jujur. | USULAN | pola sumber-tunggal repo (job-billing) |
+| BR-WI-02 | Kosakata tersimpan existing (`pending/in_progress/completed/replaced`) TIDAK diubah artinya dan TIDAK ditimpa penanda part; penanda part hidup di fisik terpisah (kolom penanda/tabel peristiwa) supaya penjaga `replaced` existing (reservasi, kebutuhan, substitusi) tidak rusak. Fisik final Backend. | TERVERIFIKASI-KODE (penjaga) + USULAN | `stock-reservation.service.ts:47`; `manufacturing.actions.ts:2722`; `item-substitute.actions.ts:354` |
+| BR-WI-03 | Tidak ada transisi manual bebas: status/penanda baris hanya bergerak sebagai efek samping transaksi dokumen sah (start, penerimaan, issue, revisi, complete) dalam transaksi yang sama. Aksi "set status baris" langsung = di luar spec. | USULAN | pola klaim atomik start/complete existing |
+| BR-WI-04 | Issue legacy tanpa `workOrderItemId` TIDAK menggerakkan penanda baris mana pun (atribusi turunan per itemId hanya untuk tampilan baca, bukan penulisan). Penanda hanya dari tautan persis. | USULAN | builder :19-21 (atribusi baca anti-overstate) |
+| BR-WI-05 | Status "dikembalikan" per baris dilarang lahir tahap 1: tidak ada dokumen retur tertaut baris WO. Menampilkannya dari turunan/tersimpan = mengarang. Tautan retur per baris = spec terpisah sesudah ada kebutuhan. | TERVERIFIKASI-KODE | builder notice :28-33; schema PurchaseReturnItem |
+| BR-WI-06 | Penanda monoton naik per baris: parsial → penuh boleh; penuh → parsial/ Mundur hanya lewat dokumen pembatalan/reversal existing dalam tx-nya, bukan edit status. Pembatalan issue completed mengikuti jalur pembatalan dokumen existing apa adanya. | USULAN | — |
+| BR-WI-07 | Baris jasa/custom (`itemId <= 0`) tidak pernah berpenanda part (`tak-tertaut` tetap label turunan jujur); penanda stok untuk baris tanpa item = dilarang. | TERVERIFIKASI-KODE + USULAN | builder precedence tak-tertaut |
+| BR-WI-08 | Biaya aktual tidak berubah oleh spec ini: penanda bukan biaya; HPP/aktual tetap dari MaterialIssue/ProductionCost existing. Dilarang menurunkan biaya dari penanda/qty penanda. | TERVERIFIKASI-KODE | mandat material project = transaksi inventory |
+| BR-WI-09 | Backfill baris lama: penanda awal diturunkan SATU KALI dari dokumen existing oleh skrip migrasi terverifikasi (bukan ditebak per baris); baris tak terbukti penuh tetap tanpa penanda dan membaca turunan (BR-WI-01). Backfill = bagian fisik Backend + vonis Lead, bukan efek samping deploy diam-diam. | USULAN | — |
+| BR-WI-10 | Detail WO menampilkan penanda + qty bukti (ter-issue/penerimaan per baris) verbatim server; UI dilarang menghitung ulang status dari qty mentah. | USULAN | pola konsumen read-model repo |
+
+### 5. Feature matrix Accurate/Zahir/ISF
+
+| Kemampuan | Accurate | Zahir | ISF (Silengkap) |
+|---|---|---|---|
+| Progress WO dari pengeluaran bahan | Ada, berbobot 30% proporsional qty (URL §benchmark) | tidak ditemukan (belum terverifikasi) | Turunan baca ada (builder F-105); persen berbobot ala Accurate tidak diusulkan |
+| Status part per baris tersimpan | tidak terverifikasi dari URL di atas (progress dihitung, bukan status baris tersimpan) | tidak ditemukan | ABSEN — spec ini (inti ditunda vonis) |
+| Histori kronologis per WO | Ada (URL §benchmark) | tidak ditemukan | Parsial: kartu status + dokumen tertaut di detail WO |
+
+### 6. Acceptance criteria + edge cases (draf untuk Backend/Frontend/QA)
+
+- AC-WI-B1: issue completed tertaut persis mencapai qty baris → penanda TERPASANG lahir dalam tx issue yang sama; issue dibatalkan lewat jalur existing → penanda hasil turun hanya lewat jalur itu (BR-WI-06). Penanda lahir tanpa dokumen = MERAH.
+- AC-WI-B2: issue legacy tanpa `workOrderItemId` dalam jumlah besar → penanda semua baris tetap kosong; turunan tetap tampil (BR-WI-04). Satu penanda bergerak = MERAH.
+- AC-WI-B3: baris `replaced` oleh revisi: penanda part baris itu tidak lagi bergerak oleh issue/penerimaan susulan; penjaga reservasi/kebutuhan/substitusi tetap mengecualikannya. Regresi penjaga = MERAH.
+- AC-WI-B4: backfill pada fixture baris lama campuran (terbukti penuh / parsial / tanpa bukti): penanda hanya pada yang terbukti; sisanya membaca turunan berlabel (BR-WI-01/09). Penanda karangan pada baris tanpa bukti = MERAH.
+- AC-WI-B5: tidak ada aksi/UI yang bisa menulis penanda/status baris secara langsung (grep konsumen + tes jalur tulis). Jalur tulis manual ditemukan = MERAH.
+- AC-WI-F1: detail WO menampilkan penanda + qty bukti verbatim server; membalik label di server mengubah tampil tanpa ubah UI. UI menghitung status sendiri = MERAH.
+- Edge: dua baris item sama dalam satu WO — penerimaan/issue baris A tidak menggerakkan baris B (atribusi per baris, bukan per item). Edge: qty baris direvisi turun sesudah terpasang penuh — penanda tidak mundur diam-diam; tampil selisih rekonsiliasi (BR-WI-01). Edge: WO selesai dengan baris belum terpasang — complete existing tetap menutup; penanda tampil apa adanya sebagai belum-terpasang pada baris `completed` (fakta, bukan dibersihkan).
+
+### 7. Pertanyaan putusan
+
+- Q-WI-1 (Lead, BUTUH-VONIS): buka inti ini sekarang, atau turunan baca F-105 dinyatakan cukup permanen dan inti ditutup YAGNI? Spec ini tidak mengasumsikan dibuka.
+- Q-WI-2 (Backend, sesudah Q-WI-1): fisik penanda — kolom penanda terpisah di `WorkOrderItem` vs tabel peristiwa per baris; termasuk rancangan backfill BR-WI-09 dan dampak ke penjaga `replaced`.
+- Q-WI-3 (Lead): sahkan tanpa key izin baru (pergerakan sebagai efek samping dokumen berizin existing, §2).
+- Q-WI-4 (QA): falsifikasi AC-WI-B1..B5 + F1 atas head Backend/Frontend persis.
+
+### 8. Backlog implementasi (ID induk F-2026-10-20-105; spec ini F-2026-10-25-011-S)
+
+| ID | Pekerjaan | Pemilik | Prasyarat |
+|---|---|---|---|
+| F-2026-10-25-011-S | Spec ini (dokumen) | Business | — |
+| (turunan) fisik penanda + backfill + penggerak dalam tx dokumen | Backend | Q-WI-1 dibuka Lead + Q-WI-2 | klaim board file schema |
+| (turunan) detail WO membaca penanda + selisih rekonsiliasi | Frontend | kontrak Backend stabil; kata §6 verbatim | — |
+| (turunan) falsifikasi AC-WI-B1..B5 + F1 | QA | head Backend/Frontend persis | — |
+
+### Yang TIDAK diusulkan run ini (F-2026-10-25-011-S)
+- Status "dikembalikan" per baris, tautan retur per baris, persen progress berbobot ala Accurate, WorkCenter/bay fisik, status manual bebas per baris, perubahan kosakata `replaced` existing, jalur biaya dari penanda.
+
+F-2026-10-25-011-S — Inti status tersimpan per baris perintah kerja. Status: SPEC SELESAI run ini; implementasi menunggu putusan Lead Q-WI-1/3 + fisik Backend Q-WI-2. Pemilik usulan: Business (spec), Lead (putusan), Backend (fisik+builder), Frontend (konsumen), QA (falsifikasi). Butuh vonis accountant: TIDAK (tanpa uang/jurnal; biaya tetap jalur inventory existing).
