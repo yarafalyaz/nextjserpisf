@@ -57,6 +57,11 @@ const DELEGATED: Record<string, Delegation> = {
     call: "renderApprovalsPage",
     target: "src/app/(dashboard)/pengaturan/persetujuan/page.tsx",
   },
+  "penjualan/antrean-penagihan/page.tsx": {
+    kind: "loader",
+    call: "getCollectionQueue",
+    target: "src/lib/reports/collection-queue-data.ts",
+  },
   "laporan/pph-21/[[...segments]]/page.tsx": {
     kind: "loader",
     call: "loadPayrollPageContext",

@@ -104,6 +104,8 @@ export default async function PurchaseReturnDetailPage({
         <DetailField label="Tanggal" value={formatDate(purchaseReturn.date)} />
         <DetailField label="Dibuat" value={formatDate(purchaseReturn.createdAt)} />
         <DetailField label="Alasan" value={purchaseReturn.reason || "-"} colSpan="full" />
+        <DetailField label="Nomor Nota Retur Pajak" value={purchaseReturn.taxReturnNoteNumber || "-"} mono />
+        <DetailField label="Tanggal Nota Retur Pajak" value={purchaseReturn.taxReturnNoteDate ? formatDate(purchaseReturn.taxReturnNoteDate) : "-"} />
       </DetailCard>
 
       {/* Items */}
