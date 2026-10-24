@@ -46,6 +46,14 @@ import {
   DUPLICATE_OVERRIDE_SUBJECT,
   type LeadDuplicateWarning,
 } from "@/lib/services/lead-duplicate.service";
+import {
+  findCustomerDuplicateCandidates,
+  buildCustomerDuplicateWarning,
+  loadCustomerDuplicateGroups,
+  CUSTOMER_REUSED_MESSAGE,
+  type CustomerDuplicateWarning,
+  type CustomerDuplicateGroup,
+} from "@/lib/services/customer-duplicate.service";
 import bcrypt from "bcryptjs";
 import { getHrScope } from "@/lib/auth/hr-scope";
 import { nextSlug } from "@/lib/utils/slug-db";
@@ -194,11 +202,13 @@ export async function createCustomer(formData: FormData) {
     const user = await requirePermission("create_customers");
 
     // quick-add upsert: if name + phone matches an active non-deleted customer, reuse it
+    // F-2026-10-25-003-S BR-CD-05: reuse WAJIB terucap — penanda reused +
+    // identitas pelanggan terpakai di respons; id/slug tidak berubah.
     const rawNameCust = (formData.get("name") as string | null)?.trim()
     const rawPhoneCust = (formData.get("phone") as string | null)?.trim() || ""
     if (rawNameCust) {
-      const existing = await prisma.customer.findFirst({ where: { name: rawNameCust, phone: rawPhoneCust || undefined, deletedAt: null, isActive: true }, select: { id: true, slug: true } })
-      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined }
+      const existing = await prisma.customer.findFirst({ where: { name: rawNameCust, phone: rawPhoneCust || undefined, deletedAt: null, isActive: true }, select: { id: true, slug: true, name: true, code: true } })
+      if (existing) return { success: true, id: existing.id, slug: existing.slug ?? undefined, reused: true as const, reusedCustomer: { id: existing.id, name: existing.name, code: existing.code, slug: existing.slug }, message: CUSTOMER_REUSED_MESSAGE }
     }
 
 
@@ -244,7 +254,16 @@ export async function createCustomer(formData: FormData) {
 
     revalidatePath("/master/pelanggan");
     await logActivity("create", "Customer", customer.id, "Membuat pelanggan");
-    return { success: true, id: customer.id, slug: customer.slug };
+    // F-2026-10-25-003-S BR-CD-04: peringatan advisory — simpan tetap
+    // berhasil, kandidat dihitung SESUDAH create karena quick-add reuse
+    // nama+telepon mentah persis di atas tidak menangkap varian format
+    // (BR-CD-02). Kandidat berisi pelanggan LAIN (excludeId = baru).
+    const candidates = await findCustomerDuplicateCandidates(
+      { name: v.name, phone: v.phone, taxId: v.taxId, email: v.email, excludeCustomerId: customer.id },
+    );
+    const duplicateWarning: CustomerDuplicateWarning | null =
+      buildCustomerDuplicateWarning(candidates);
+    return { success: true, id: customer.id, slug: customer.slug, duplicateWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[createCustomer]", getErrorMessage(e) || e);
@@ -295,7 +314,14 @@ export async function updateCustomer(customerId: number, formData: FormData) {
       customerId,
       "Memperbarui pelanggan",
     );
-    return { success: true };
+    // F-2026-10-25-003-S AC-CD-B5: sinyal kandidat sesudah ubah,
+    // excludeId diri (BR-CD-06). Advisory — update tetap berhasil.
+    const candidates = await findCustomerDuplicateCandidates(
+      { name: v.name, phone: v.phone, taxId: v.taxId, email: v.email, excludeCustomerId: customerId },
+    );
+    const duplicateWarning: CustomerDuplicateWarning | null =
+      buildCustomerDuplicateWarning(candidates);
+    return { success: true, duplicateWarning };
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[updateCustomer]", getErrorMessage(e) || e);
@@ -3031,6 +3057,22 @@ export async function listCustomerCategoryOptions(): Promise<{ value: string; la
     orderBy: { name: "asc" },
   });
   return rows.map((row) => ({ value: String(row.id), label: row.name }));
+}
+
+export async function listCustomerDuplicateCandidates(): Promise<{
+  success: boolean;
+  error?: string;
+  groups?: CustomerDuplicateGroup[];
+}> {
+  try {
+    await requirePermission("view_customers");
+    const groups = await loadCustomerDuplicateGroups();
+    return { success: true, groups };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[listCustomerDuplicateCandidates]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
 }
 
 export async function createCustomerCategory(formData: FormData) {
