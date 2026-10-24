@@ -10,6 +10,7 @@ import { getInitials } from "@/lib/utils/format"
 import { Avatar, AvatarFallback } from "@/components/ui/shadcn/avatar"
 import { bulkDelete } from "@/actions/bulk.actions"
 import { entityHref, entityEditHref } from "@/lib/utils/entity-url"
+import { employmentStatusLabel } from "@/lib/reports/employee-lifecycle"
 
 interface Employee {
   id: number
@@ -19,6 +20,7 @@ interface Employee {
   department: { name: string } | null
   position: { name: string } | null
   phone: string | null
+  employmentStatus?: string | null
   isActive: boolean
   user?: {
     roles: { name: string }[]
@@ -63,6 +65,10 @@ const columns = [
   columnHelper.accessor("phone", {
     header: "Telepon",
     cell: (info) => info.getValue() || "-",
+  }),
+  columnHelper.accessor("employmentStatus", {
+    header: "Status Kepegawaian",
+    cell: (info) => employmentStatusLabel(info.getValue()),
   }),
   columnHelper.accessor("isActive", {
     header: "Status",
