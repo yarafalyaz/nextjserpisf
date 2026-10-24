@@ -18,3 +18,16 @@ describe("ar-ap-summary safe-math", () => {
     expect(m.get("V")).toEqual({ count: 1, billed: 10_000_000, paid: 10_000_000, outstanding: 0 })
   })
 })
+
+describe("ar-ap-summary returnCredit (F-104-V)", () => {
+  it("returnCredit kurangi outstanding, kolom paid tetap murni", () => {
+    const m = buildArByCustomer([
+      { customerName: "A", grandTotal: 1_000_000, paidAmount: 200_000, returnCreditAmount: 100_000 },
+    ])
+    expect(m.get("A")).toEqual({ count: 1, billed: 1_000_000, paid: 200_000, outstanding: 700_000 })
+  })
+  it("tanpa returnCreditAmount rumus lama persis", () => {
+    const m = buildArByCustomer([{ customerName: "A", grandTotal: 1_000_000, paidAmount: 200_000 }])
+    expect(m.get("A")?.outstanding).toBe(800_000)
+  })
+})

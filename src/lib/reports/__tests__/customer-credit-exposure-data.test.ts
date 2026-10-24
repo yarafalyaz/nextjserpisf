@@ -17,10 +17,14 @@ const mocks = vi.hoisted(() => ({
     workOrder: { findMany: vi.fn() },
     quotation: { findMany: vi.fn() },
     customer: { findMany: vi.fn() },
+    salesReturn: { findMany: vi.fn() },
+    journal: { findMany: vi.fn() },
   },
+  getSystemSettings: vi.fn(),
 }))
 
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prismaMock }))
+vi.mock("@/lib/utils/settings", () => ({ getSystemSettings: mocks.getSystemSettings }))
 
 import { loadCustomerCreditExposure, loadCustomerReceivables } from "../ledger-cash-data"
 
@@ -34,6 +38,7 @@ const CUSTOMERS: Record<number, { id: number; name: string; creditLimit: number 
 beforeEach(() => {
   vi.clearAllMocks()
   for (const model of Object.values(mocks.prismaMock)) model.findMany.mockResolvedValue([])
+  mocks.getSystemSettings.mockResolvedValue({ salesReceivableAccountId: 110 })
   mocks.prismaMock.customer.findMany.mockImplementation(async (args: { where: { id: { in: number[] } } }) =>
     args.where.id.in.map((id) => CUSTOMERS[id]).filter(Boolean),
   )
@@ -62,7 +67,7 @@ describe("loadCustomerCreditExposure (F5-2)", () => {
   it("baris invoice: sisa kredit dari paparan bersih, bukan K1 saja (F5-5)", async () => {
     mocks.prismaMock.salesInvoice.findMany.mockImplementation(async (args: { where: Record<string, unknown> }) =>
       args.where.date
-        ? [{ customerId: 1, grandTotal: 100, paidAmount: 40, dueDate: null, customer: { name: "PT Invoice", creditLimit: 100 } }]
+        ? [{ id: 11, customerId: 1, grandTotal: 100, paidAmount: 40, dueDate: null, customer: { name: "PT Invoice", creditLimit: 100 } }]
         : [],
     )
     mocks.prismaMock.customerCredit.findMany.mockResolvedValue([
@@ -82,7 +87,7 @@ describe("loadCustomerReceivables ekspor (F5-4)", () => {
   it("kolom ekspor selaras layar: K1-K5, paparan, sisa kredit paparan, status", async () => {
     mocks.prismaMock.salesInvoice.findMany.mockImplementation(async (args: { where: Record<string, unknown> }) =>
       args.where.date
-        ? [{ customerId: 1, grandTotal: 100, paidAmount: 40, dueDate: null, customer: { name: "PT Invoice", creditLimit: 100 } }]
+        ? [{ id: 11, customerId: 1, grandTotal: 100, paidAmount: 40, dueDate: null, customer: { name: "PT Invoice", creditLimit: 100 } }]
         : [],
     )
     mocks.prismaMock.customerCredit.findMany.mockResolvedValue([
