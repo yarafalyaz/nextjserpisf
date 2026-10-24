@@ -18,9 +18,22 @@ import {
   assetTransferSchema,
   assetSchema,
   assetDisposalSchema,
+  assetUsageRecordSchema,
+  assetFiscalYearGenerateSchema,
+  assetChangeEventSchema,
+  assetReclassificationSchema,
+  assetChangeEventReversalSchema,
 } from "@/lib/validations/asset.schemas";
+import {
+  postAssetChangeEvent,
+  postAssetReclassification,
+  reverseAssetChangeEvent,
+} from "@/lib/services/asset-change-event.service";
 import { Prisma } from "@prisma/client";
 import { buildAssetDisposalEntries } from "@/lib/finance/asset-disposal";
+import { buildFiscalYearRows } from "@/lib/finance/asset-fiscal-balance";
+import { resolveFiscalGroup } from "@/lib/finance/asset-fiscal-groups";
+import { journalBookValue } from "@/lib/finance/asset-book-value";
 import { wibDateToUtcMidnight } from "@/lib/utils/attendance-time";
 import { nextSlug } from "@/lib/utils/slug-db";
 
@@ -31,7 +44,9 @@ import { nextSlug } from "@/lib/utils/slug-db";
 // A category account, when set, overrides the global one for that asset class
 // (e.g. vehicles vs machinery may post to different fixed-asset accounts).
 // When a slot is unset everywhere the matching journal is skipped silently, the
-// same convention stock journaling uses.
+// same convention stock journaling uses. Pengecualian fail-closed vonis
+// F-2026-10-22-062-V Putusan 3: perolehan berharga (purchaseCost > 0) TIDAK
+// boleh skip senyap — createAsset menolaknya berisik (lihat createAsset).
 type AssetGlCategory = {
   assetAccountId?: number | null
   accumulatedDepreciationAccountId?: number | null
@@ -89,12 +104,18 @@ async function assetCategoryAccountError(v: {
   accumulatedDepreciationAccountId?: number | null
   depreciationExpenseAccountId?: number | null
   gainLossAccountId?: number | null
+  revaluationSurplusAccountId?: number | null
+  impairmentLossAccountId?: number | null
+  accumulatedImpairmentAccountId?: number | null
 }): Promise<string | null> {
   const slots: Array<[number | null | undefined, string]> = [
     [v.assetAccountId, "Akun Aset Tetap tidak ditemukan"],
     [v.accumulatedDepreciationAccountId, "Akun Akumulasi Penyusutan tidak ditemukan"],
     [v.depreciationExpenseAccountId, "Akun Beban Penyusutan tidak ditemukan"],
     [v.gainLossAccountId, "Akun Laba/Rugi Pelepasan tidak ditemukan"],
+    [v.revaluationSurplusAccountId, "Akun Surplus Revaluasi tidak ditemukan"],
+    [v.impairmentLossAccountId, "Akun Beban Penurunan Nilai tidak ditemukan"],
+    [v.accumulatedImpairmentAccountId, "Akun Akumulasi Penurunan Nilai tidak ditemukan"],
   ]
   for (const [accountId, message] of slots) {
     if (accountId == null) continue
@@ -127,10 +148,17 @@ export async function createAssetCategory(formData: FormData) {
         usefulLife: data.usefulLife ?? null,
         taxDepreciationRate: data.taxDepreciationRate ?? null,
         taxUsefulLife: data.taxUsefulLife ?? null,
+        taxGroupCode: data.taxGroupCode ?? null,
+        taxTypeListed: data.taxTypeListed ?? null,
+        taxDjpDetermination: data.taxDjpDetermination ?? false,
+        fiscalMethod: data.fiscalMethod ?? null,
         assetAccountId: data.assetAccountId ?? null,
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
         gainLossAccountId: data.gainLossAccountId ?? null,
+        revaluationSurplusAccountId: data.revaluationSurplusAccountId ?? null,
+        impairmentLossAccountId: data.impairmentLossAccountId ?? null,
+        accumulatedImpairmentAccountId: data.accumulatedImpairmentAccountId ?? null,
       },
     });
 
@@ -557,10 +585,17 @@ export async function updateAssetCategory(id: number, formData: FormData) {
         usefulLife: data.usefulLife ?? null,
         taxDepreciationRate: data.taxDepreciationRate ?? null,
         taxUsefulLife: data.taxUsefulLife ?? null,
+        taxGroupCode: data.taxGroupCode ?? null,
+        taxTypeListed: data.taxTypeListed ?? null,
+        taxDjpDetermination: data.taxDjpDetermination ?? false,
+        fiscalMethod: data.fiscalMethod ?? null,
         assetAccountId: data.assetAccountId ?? null,
         accumulatedDepreciationAccountId: data.accumulatedDepreciationAccountId ?? null,
         depreciationExpenseAccountId: data.depreciationExpenseAccountId ?? null,
         gainLossAccountId: data.gainLossAccountId ?? null,
+        revaluationSurplusAccountId: data.revaluationSurplusAccountId ?? null,
+        impairmentLossAccountId: data.impairmentLossAccountId ?? null,
+        accumulatedImpairmentAccountId: data.accumulatedImpairmentAccountId ?? null,
       },
     });
 
@@ -724,6 +759,23 @@ export async function createAsset(formData: FormData) {
       : null;
     const gl = await getAssetGlAccounts(category);
 
+    // Fail-closed perolehan berharga (vonis F-2026-10-22-062-V Putusan 3):
+    // purchaseCost > 0 tanpa akun Aset Tetap atau Kas/Bank = pembuatan
+    // DITOLAK berisik sebelum baris Asset lahir. Dulu jalur ini "skipped
+    // silently": aset lahir tanpa jurnal lalu tetap disusutkan cron.
+    // purchaseCost = 0 tetap boleh lahir tanpa jurnal.
+    if (purchaseCost > 0 && (!gl.fixedAsset || !gl.cashBank)) {
+      const missing: string[] = [];
+      if (!gl.fixedAsset) missing.push("akun Aset Tetap");
+      if (!gl.cashBank) missing.push("akun Kas/Bank");
+      return {
+        success: false,
+        error:
+          `Akun perolehan aset belum dipetakan: ${missing.join(", ")}. ` +
+          `Lengkapi pemetaan pada kategori aset / Pengaturan Mapping Akun sebelum membuat aset berharga.`,
+      };
+    }
+
     const asset = await prisma.$transaction(async (tx) => {
       const created = await tx.asset.create({
         data: {
@@ -740,6 +792,13 @@ export async function createAsset(formData: FormData) {
           currentValue: purchaseCost,
           residualValue: data.residualValue ?? 0,
           depreciationMethod: data.depreciationMethod || "straight_line",
+          // Parameter terbekukan F-118-V Putusan 2a (null = belum dibekukan).
+          totalEstimatedUnits:
+            data.totalEstimatedUnits != null
+              ? new Prisma.Decimal(data.totalEstimatedUnits.toFixed(2))
+              : null,
+          productionUnitName: data.productionUnitName || null,
+          usefulLifeMonths: data.usefulLifeMonths ?? null,
           location: data.location || null,
           status: data.status || "active",
           notes: data.description || null,
@@ -888,6 +947,14 @@ export async function updateAsset(id: number, formData: FormData) {
         purchaseCost,
         residualValue: data.residualValue ?? 0,
         depreciationMethod: data.depreciationMethod || "straight_line",
+        // Parameter terbekukan F-118-V Putusan 2a; mengosongkan = mesin
+        // menolak berisik masa berikutnya, jurnal lampau tidak berubah.
+        totalEstimatedUnits:
+          data.totalEstimatedUnits != null
+            ? new Prisma.Decimal(data.totalEstimatedUnits.toFixed(2))
+            : null,
+        productionUnitName: data.productionUnitName || null,
+        usefulLifeMonths: data.usefulLifeMonths ?? null,
         location: data.location || null,
         status: nextStatus,
         notes: data.description || null,
@@ -941,9 +1008,6 @@ export async function disposeAsset(formData: FormData) {
     // If an "Asset" workflow is configured, this document must be approved before disposal.
     await assertApproved("Asset", data.assetId);
 
-    const grossCost = Number(asset.purchaseCost);
-    const bookValue = Number(asset.currentValue);
-    const gainLoss = safeSubtract(proceeds, bookValue, 0); // positive = gain, negative = loss
     // Resolve GL accounts from the asset's category mapping (falls back to the
     // global Mapping Akun, then env vars).
     const category = asset.categoryId
@@ -953,6 +1017,44 @@ export async function disposeAsset(formData: FormData) {
         })
       : null;
     const gl = await getAssetGlAccounts(category);
+
+    // Nilai buku dasar disposal = jurnal POSTED (vonis F-2026-10-22-062-V
+    // Putusan 1), BUKAN cache `currentValue`. Aset berjurnal memakai angka
+    // jurnal; aset legacy tanpa jurnal perolehan tetap jalur subledger
+    // existing (currentValue) supaya bukunya tidak rusak.
+    const postedJournals = await prisma.journal.findMany({
+      where: {
+        referenceId: data.assetId,
+        status: "POSTED",
+        deletedAt: null,
+        OR: [
+          { referenceType: "ASSET_ACQUISITION" },
+          { referenceType: "ASSET_DISPOSAL" },
+          { referenceType: { startsWith: "ASSET_DEPRECIATION_" } },
+        ],
+      },
+      select: {
+        referenceType: true,
+        entries: { select: { accountId: true, debit: true, credit: true } },
+      },
+    });
+    const posted = journalBookValue(
+      postedJournals.map((j) => ({
+        referenceType: j.referenceType ?? "",
+        lines: j.entries.map((e) => ({ accountId: e.accountId, debit: e.debit, credit: e.credit })),
+      })),
+      {
+        fixedAssetAccountId: gl.fixedAsset || null,
+        accumulatedDepreciationAccountId: gl.accumDep || null,
+      },
+    );
+    const grossCost = posted.hasAcquisitionJournal
+      ? posted.grossCostPosted.toNumber()
+      : Number(asset.purchaseCost);
+    const bookValue = posted.hasAcquisitionJournal
+      ? posted.bookValue.toNumber()
+      : Number(asset.currentValue);
+    const gainLoss = safeSubtract(proceeds, bookValue, 0); // positive = gain, negative = loss
 
     await prisma.$transaction(async (tx) => {
       // Atomically claim the disposal: only the request that flips status away
@@ -1063,6 +1165,333 @@ export async function disposeAsset(formData: FormData) {
   } catch (e: unknown) {
     if (isNextRedirectError(e)) throw e;
     console.error("[disposeAsset]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Catat dokumen unit aktual bernama per (aset, masa) — vonis BOT 4
+ * F-2026-10-23-118-V Putusan 2b, sumber `actualUnits` metode UOP.
+ * Satu dokumen per masa (unik assetId+period); memanggil ulang untuk
+ * masa sama menimpa dokumen itu SELAMA jurnal masa itu belum lahir —
+ * sesudah berjurnal, koreksi hanya lewat reversal jurnal.
+ */
+export async function upsertAssetUsageRecord(formData: FormData) {
+  "use server";
+  try {
+    const user = await requirePermission("edit_assets");
+
+    const parsed = parseFormData(assetUsageRecordSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const { data } = parsed;
+
+    const asset = await prisma.asset.findUnique({
+      where: { id: data.assetId },
+      select: { id: true, depreciationMethod: true },
+    });
+    if (!asset) return { success: false, error: "Aset tidak ditemukan." };
+    if (asset.depreciationMethod !== "units_of_production") {
+      return {
+        success: false,
+        error: "Dokumen unit aktual hanya untuk aset metode Unit Produksi.",
+      };
+    }
+
+    const referenceType = `ASSET_DEPRECIATION_${data.periodYear}${String(data.periodMonth).padStart(2, "0")}`;
+    const posted = await prisma.journal.findFirst({
+      where: {
+        referenceType,
+        referenceId: data.assetId,
+        status: "POSTED",
+        deletedAt: null,
+      },
+      select: { id: true },
+    });
+    if (posted) {
+      return {
+        success: false,
+        error:
+          "Penyusutan masa ini sudah berjurnal; koreksi unit hanya lewat reversal jurnal.",
+      };
+    }
+
+    const record = await prisma.assetUsageRecord.upsert({
+      where: {
+        assetId_periodYear_periodMonth: {
+          assetId: data.assetId,
+          periodYear: data.periodYear,
+          periodMonth: data.periodMonth,
+        },
+      },
+      create: {
+        assetId: data.assetId,
+        periodYear: data.periodYear,
+        periodMonth: data.periodMonth,
+        actualUnits: new Prisma.Decimal(data.actualUnits.toFixed(2)),
+        sourceName: data.sourceName,
+        sourceRef: data.sourceRef || null,
+        createdBy: Number(user.id) || null,
+      },
+      update: {
+        actualUnits: new Prisma.Decimal(data.actualUnits.toFixed(2)),
+        sourceName: data.sourceName,
+        sourceRef: data.sourceRef || null,
+      },
+    });
+
+    await logActivity(
+      "update",
+      "AssetUsageRecord",
+      record.id,
+      `Mencatat unit aktual aset ${data.assetId} masa ${data.periodMonth}/${data.periodYear}`,
+    );
+    revalidatePath("/aset");
+    return { success: true, id: record.id };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[upsertAssetUsageRecord]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+/**
+ * Bekukan baris tahun saldo fiskal satu aset sampai `throughYear`
+ * (vonis BOT 4 F-2026-10-23-109-V P4). Idempoten per (assetId, taxYear):
+ * baris yang sudah terbit dipakai apa adanya dan TIDAK ditulis ulang
+ * (snapshot beku — edit master kategori sesudahnya tidak menghitung
+ * ulang baris lama, P6 prospektif); replay generate = nol baris baru.
+ * Baris tahun BUKAN jurnal — tidak ada posting GL di sini. Fiskal
+ * belum-dihitung (metode NULL / bangunan-SM / tanpa tanggal / kelompok
+ * belum ditentukan) ditolak berisik dengan alasan builder apa adanya.
+ */
+export async function generateAssetFiscalYearRows(formData: FormData) {
+  "use server";
+  try {
+    await requirePermission("edit_assets");
+
+    const parsed = parseFormData(assetFiscalYearGenerateSchema, formData);
+    if (!parsed.success) return { success: false, error: parsed.error };
+    const { data } = parsed;
+
+    const asset = await prisma.asset.findUnique({
+      where: { id: data.assetId },
+      select: {
+        id: true,
+        purchaseCost: true,
+        purchaseDate: true,
+        category: {
+          select: {
+            fiscalMethod: true,
+            taxGroupCode: true,
+            taxTypeListed: true,
+            taxDjpDetermination: true,
+          },
+        },
+        fiscalYearRows: { orderBy: { taxYear: "asc" } },
+      },
+    });
+    if (!asset) return { success: false, error: "Aset tidak ditemukan." };
+
+    const resolution = resolveFiscalGroup({
+      taxGroupCode: asset.category?.taxGroupCode,
+      taxTypeListed: asset.category?.taxTypeListed,
+      taxDjpDetermination: asset.category?.taxDjpDetermination,
+    });
+    if (resolution.status !== "resolved") {
+      return {
+        success: false,
+        error: "Kelompok fiskal belum dapat ditentukan pada kategori aset ini.",
+      };
+    }
+
+    const built = buildFiscalYearRows({
+      purchaseCost: asset.purchaseCost,
+      fiscalMethod: asset.category?.fiscalMethod ?? null,
+      fiscalGroup: resolution.group,
+      purchaseDate: asset.purchaseDate,
+      throughYear: data.throughYear,
+      openingBalance: data.openingBalance ?? null,
+      openingYear: data.openingYear ?? null,
+    });
+    if (built.rows === null) {
+      const messages: Record<string, string> = {
+        "metode-belum-dipilih": "Metode fiskal belum dipilih pada kategori aset ini.",
+        "bangunan-saldo-menurun": "Bangunan hanya boleh garis lurus; metode saldo menurun ditolak.",
+        "metode-tidak-sah": "Metode fiskal tidak sah untuk kelompok fiskal kategori ini.",
+        "tanpa-tanggal-perolehan": "Tanggal perolehan aset belum terisi; fiskal belum dapat dihitung.",
+        "saldo-pembuka-tidak-valid": "Saldo pembuka tidak valid (negatif atau tahun pembuka sebelum tahun perolehan).",
+      };
+      return { success: false, error: messages[built.reason] ?? built.reason };
+    }
+
+    const existingYears = new Set(asset.fiscalYearRows.map((row) => row.taxYear));
+    const fresh = built.rows.filter((row) => !existingYears.has(row.taxYear));
+    let created = 0;
+    if (fresh.length > 0) {
+      const batch = await prisma.assetFiscalYearRow.createMany({
+        data: fresh.map((row) => ({
+          assetId: asset.id,
+          taxYear: row.taxYear,
+          yearIndex: row.yearIndex,
+          openingBalance: row.openingBalance,
+          depreciation: row.depreciation,
+          closingBalance: row.closingBalance,
+          method: row.method,
+          groupCode: row.groupCode,
+          ratePercent: row.ratePercent,
+          source: row.source,
+        })),
+        skipDuplicates: true,
+      });
+      created = batch.count;
+    }
+
+    if (created > 0) {
+      await logActivity(
+        "create",
+        "AssetFiscalYearRow",
+        asset.id,
+        `Membekukan ${created} baris tahun fiskal aset ${asset.id} sampai ${data.throughYear}`,
+      );
+    }
+    revalidatePath("/aset");
+    revalidatePath("/laporan/perbedaan-penyusutan");
+    return { success: true, created, existing: built.rows.length - fresh.length };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[generateAssetFiscalYearRows]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+// ==================== PERISTIWA PERUBAHAN ASET (F-111-V + F-115-V) ====================
+
+/**
+ * Posting peristiwa perubahan aset terbekukan (revaluasi, impairment,
+ * pembalikan impairment, revaluasi fiskal berpersetujuan, perubahan metode
+ * komersial/fiskal, perubahan estimasi). Seluruh aturan jurnal ada di
+ * service + builder murni; aksi hanya gerbang izin + validasi bentuk.
+ * Koreksi lewat `reverseAssetChangeEventAction`. Fiskal tidak bergerak
+ * tanpa persetujuan DJP terstruktur; pajak tangguhan tidak dijurnal di
+ * sini (read-model F-125 mengonsumsi peristiwa POSTED).
+ */
+export async function postAssetChangeEventAction(formData: FormData) {
+  try {
+    const user = await requirePermission("manage_assets");
+    const parsed = parseFormData(assetChangeEventSchema, formData);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error };
+    }
+    const data = parsed.data;
+    const result = await postAssetChangeEvent({
+      assetId: data.assetId,
+      createdBy: Number(user.id) || null,
+      request: {
+        kind: data.kind,
+        effectiveDate: wibDateToUtcMidnight(data.effectiveDate),
+        sourceDocumentKey: data.sourceDocumentKey,
+        fairValue: data.fairValue != null ? new Prisma.Decimal(data.fairValue.toFixed(2)) : null,
+        appraiserName: data.appraiserName || null,
+        appraiserReportRef: data.appraiserReportRef || null,
+        revaluedClassName: data.revaluedClassName || null,
+        impairmentIndicator: data.impairmentIndicator || null,
+        recoverableBasis: data.recoverableBasis || null,
+        recoverableAmount:
+          data.recoverableAmount != null ? new Prisma.Decimal(data.recoverableAmount.toFixed(2)) : null,
+        carryingWithoutImpairment:
+          data.carryingWithoutImpairment != null
+            ? new Prisma.Decimal(data.carryingWithoutImpairment.toFixed(2))
+            : null,
+        isGoodwillOrNonAmortizing: data.isGoodwillOrNonAmortizing ?? false,
+        djpApprovalNumber: data.djpApprovalNumber || null,
+        djpApprovalDate: data.djpApprovalDate ? wibDateToUtcMidnight(data.djpApprovalDate) : null,
+        reasonCode: data.reasonCode || null,
+        approvedByName: data.approvedByName || null,
+        newMethod: data.newMethod || null,
+        newUsefulLifeMonths: data.newUsefulLifeMonths ?? null,
+        newResidualValue:
+          data.newResidualValue != null ? new Prisma.Decimal(data.newResidualValue.toFixed(2)) : null,
+        isBuildingFiscal: data.isBuildingFiscal ?? false,
+      },
+    });
+    await logActivity(
+      "create",
+      "AssetChangeEvent",
+      result.eventId,
+      `Peristiwa ${result.kind} aset ${data.assetId} (jurnal ${result.journalNumber ?? "-"})`,
+    );
+    revalidatePath("/aset");
+    revalidatePath("/jurnal");
+    return { success: true, id: result.eventId, journalNumber: result.journalNumber };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[postAssetChangeEventAction]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function postAssetReclassificationAction(formData: FormData) {
+  try {
+    const user = await requirePermission("manage_assets");
+    const parsed = parseFormData(assetReclassificationSchema, formData);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error };
+    }
+    const data = parsed.data;
+    const result = await postAssetReclassification({
+      assetId: data.assetId,
+      toCategoryId: data.toCategoryId,
+      createdBy: Number(user.id) || null,
+      request: {
+        kind: "RECLASSIFICATION",
+        effectiveDate: wibDateToUtcMidnight(data.effectiveDate),
+        sourceDocumentKey: data.sourceDocumentKey,
+        reasonCode: data.reasonCode,
+        approvedByName: data.approvedByName,
+      },
+    });
+    await logActivity(
+      "create",
+      "AssetChangeEvent",
+      result.eventId,
+      `Reklasifikasi aset ${data.assetId} ke kategori ${data.toCategoryId} (jurnal ${result.journalNumber ?? "-"})`,
+    );
+    revalidatePath("/aset");
+    revalidatePath("/jurnal");
+    return { success: true, id: result.eventId, journalNumber: result.journalNumber };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[postAssetReclassificationAction]", getErrorMessage(e) || e);
+    return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
+  }
+}
+
+export async function reverseAssetChangeEventAction(formData: FormData) {
+  try {
+    const user = await requirePermission("manage_assets");
+    const parsed = parseFormData(assetChangeEventReversalSchema, formData);
+    if (!parsed.success) {
+      return { success: false, error: parsed.error };
+    }
+    const data = parsed.data;
+    const result = await reverseAssetChangeEvent({
+      eventId: data.eventId,
+      reversalDate: wibDateToUtcMidnight(data.reversalDate),
+      sourceDocumentKey: data.sourceDocumentKey,
+      createdBy: Number(user.id) || null,
+    });
+    await logActivity(
+      "create",
+      "AssetChangeEvent",
+      result.eventId,
+      `Reversal peristiwa ${data.eventId} (jurnal ${result.journalNumber ?? "-"})`,
+    );
+    revalidatePath("/aset");
+    revalidatePath("/jurnal");
+    return { success: true, id: result.eventId, journalNumber: result.journalNumber };
+  } catch (e: unknown) {
+    if (isNextRedirectError(e)) throw e;
+    console.error("[reverseAssetChangeEventAction]", getErrorMessage(e) || e);
     return { success: false, error: getErrorMessage(e, "Terjadi kesalahan") };
   }
 }

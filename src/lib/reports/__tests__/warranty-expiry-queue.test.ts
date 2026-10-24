@@ -7,43 +7,12 @@ import {
   WARRANTY_EXPIRY_NOTICE_TEXT,
   WARRANTY_EXPIRY_QUEUE_TITLE,
   buildWarrantyExpiryQueue,
-  type WarrantyExpiryCoverageInput,
 } from "../warranty-expiry-queue"
-import { getWibTodayUtcDate } from "@/lib/utils/attendance-time"
-
-// Hari kalender WIB tetap: 2026-10-22 — instan 05:00 WIB.
-const NOW = new Date("2026-10-21T22:00:00.000Z")
-const TODAY = getWibTodayUtcDate(NOW)
-const day = (offset: number) => new Date(TODAY.getTime() + offset * 86_400_000)
-
-function input(
-  overrides: Partial<WarrantyExpiryCoverageInput> = {},
-): WarrantyExpiryCoverageInput {
-  return {
-    coverageId: 1,
-    storedStatus: "active",
-    expiresAt: day(10),
-    installedAt: day(-350),
-    warrantyMonths: 12,
-    serialNumber: "SN-1",
-    mileageLimitKm: null,
-    customerVehicleId: 11,
-    plateNumber: "B 1234 CD",
-    vehicleName: "Kendaraan Uji",
-    vehicleIsActive: true,
-    vehicleDeletedAt: null,
-    lastOdometerKm: null,
-    customerId: 21,
-    customerName: "Pelanggan Uji",
-    customerPhone: "0812000000",
-    itemId: 31,
-    itemName: "Item Uji",
-    itemSku: "SKU-1",
-    workOrderId: 41,
-    claimStatuses: [],
-    ...overrides,
-  }
-}
+import {
+  WARRANTY_EXPIRY_NOW as NOW,
+  warrantyExpiryDay as day,
+  warrantyExpiryInput as input,
+} from "./warranty-expiry-test-fixtures"
 
 describe("warranty-expiry-queue (F-2026-10-22-094-S, PUTUSAN Q-WX-1..5)", () => {
   it("kata tampil + notice verbatim spec §7", () => {
@@ -236,7 +205,7 @@ describe("warranty-expiry-queue (F-2026-10-22-094-S, PUTUSAN Q-WX-1..5)", () => 
     expect(
       buildWarrantyExpiryQueue(inputs, { scope: "claims_page", now: NOW }).rows[0]
         ?.customerPhone,
-    ).toBe("0812000000")
+    ).toBe("081234567890")
     expect(
       buildWarrantyExpiryQueue(inputs, { scope: "report", now: NOW }).rows[0]
         ?.customerPhone,
