@@ -81,6 +81,12 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "jalur publik (mengakhiri sesi); keluar memakai signOut next-auth di src/components/layout/nav-user.tsx dan header.tsx",
   // Bacaan yang belum punya pemanggil. Dibiarkan tercatat, bukan disembunyikan:
   // keputusan "hapus atau sambungkan" milik pemilik repo.
+  // F-2026-10-24-096-S: konsumen UI panel foto per tahap kartu Frontend
+  // t_96ef204d (parent t_98976cbe); server tetap penegak izin.
+  "src/actions/attachment-photo.actions.ts::verifyPhotoAttachment":
+    "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
+  "src/actions/attachment-photo.actions.ts::publishPhotoAttachment":
+    "konsumen panel foto WO kartu Frontend t_96ef204d; belum dirujuk UI sampai panel itu terbit",
   "src/actions/cron.actions.ts::getCronLogs":
     "tanpa pemanggil UI; halaman /pengaturan/cron membaca prisma.cronLog langsung — aksi ini duplikat, kandidat dihapus",
   "src/actions/project.actions.ts::getProjectStageProgress":
@@ -91,6 +97,11 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "tanpa pemanggil UI; detail perintah kerja sudah memuat relasi yang dibutuhkan sendiri — kandidat dihapus",
   "src/actions/hrm.actions.ts::getBulkPayrollEstimations":
     "tanpa pemanggil UI. Sudah diverifikasi: logika intinya (computeBulkPayrollEstimations) DIPAKAI aksi yang tersambung UI — generateBulkPayroll lewat bulk-generate-payroll-button.tsx:67 — dan versi tunggal getPayrollEstimation juga terpakai. Jadi wrapper massal ini memang tidak dibutuhkan UI saat ini: kandidat dihapus, bukan celah fitur yang hilang.",
+  // F-2026-10-24-098-S inti backend (t_1ddef452): aksi tinjau scrap abnormal
+  // backend dulu; antrean tinjau + disposisi menyusul di kartu frontend
+  // t_44d50226 (buang entri ini saat UI memanggilnya).
+  "src/actions/inventory.actions.ts::reviewAbnormalScrap":
+    "F-2026-10-24-098-S inti backend; antrean tinjau scrap abnormal menyusul (frontend t_44d50226)",
   // F-2026-10-21-025 backend dulu: kontrak konflik untuk form aturan fitment;
   // UI peringatan menyusul di kartu frontend t_6d28c338 (buang entri ini saat
   // vehicle-fitment-form memanggilnya).
@@ -111,6 +122,12 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-009-V backend; tombol tutup perintah kerja menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reopenWorkOrder":
     "F-2026-10-21-009-V backend; tombol buka-kembali perintah kerja menyusul (frontend)",
+  // F-2026-10-22-069-S: 4 aksi substitusi kini dirujuk UI (tab Substitusi
+  // master barang + panel saran WO, t_bfaf2287) — entri beku dibuang.
+  // getSubstituteSuggestionsForWorkOrder tetap beku: page detail WO membaca
+  // loader data langsung (pola RSC existing), aksi ini jalur client setara.
+  "src/actions/item-substitute.actions.ts::getSubstituteSuggestionsForWorkOrder":
+    "F-2026-10-22-069-S: detail WO membaca getWorkOrderSubstituteSuggestions-data langsung di RSC; aksi setara untuk pemanggil client",
   // F-2026-10-21-012 inti (t_34bb293d): aksi batal WO + lepas/reservasi ulang
   // stok backend dulu; tombol UI menyusul di kartu frontend sesudah PR inti
   // merge (buang 3 entri ini saat halaman produksi/perintah kerja memanggilnya).
@@ -120,40 +137,56 @@ const ALLOWED_UNWIRED: Record<string, string> = {
     "F-2026-10-21-012 inti backend; tombol lepas reservasi menyusul (frontend)",
   "src/actions/manufacturing.actions.ts::reserveStockForWorkOrder":
     "F-2026-10-21-012 inti backend; tombol reservasi ulang menyusul (frontend)",
-  // F-2026-10-22-078-S inti (t_7de0eff1): 9 aksi Permintaan Antar Gudang
-  // backend dulu; halaman /inventaris/permintaan-gudang menyusul di kartu
-  // frontend t_7bfec14e (buang entri ini saat UI memanggilnya).
-  "src/actions/material-request.actions.ts::createMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::updateMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::deleteMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::submitMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::approveMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::rejectMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::cancelMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::closeMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
-  "src/actions/material-request.actions.ts::createTransferFromMaterialRequest":
-    "F-2026-10-22-078-S inti backend; halaman permintaan antar gudang menyusul (frontend t_7bfec14e)",
+  // F-2026-10-22-072-S + F-2026-10-22-078-S: aksi catat-lepas registri
+  // InstalledPart dan 9 aksi Permintaan Antar Gudang kini dirujuk UI
+  // (form catat-lepas + halaman /inventaris/permintaan-gudang) — entri
+  // beku keduanya dibuang.
   // F-2026-10-21-027 backend dulu (PR #360): 10 aksi komponen gaji sudah
   // dirujuk UI PR #374 (entri bekunya dibuang); tersisa getPayrollComponentLines.
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
+  // F-2026-10-22-085-S: getEmployeeLifecycleAttention kini dirujuk kartu
+  // daftar perhatian di halaman master karyawan (t_e80e8541) — entri beku dibuang.
+  // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
+  // (halaman + panel kelola /laporan/target-penjualan, t_f605e189)
+  // — entri beku dibuang.
+  // F-2026-10-22-089-S tahap 2 inti (t_ccab9c37): createInvoiceCollectionFollowUp
+  // kini dirujuk CollectionFollowUpForm di antrean penagihan (t_6f73907a) —
+  // entri beku dibuang. deleteInvoiceCollectionFollowUp tetap beku: loader
+  // antrean belum menampilkan daftar jejak per faktur untuk dipilih.
+  "src/actions/invoice-collection.actions.ts::deleteInvoiceCollectionFollowUp":
+    "F-2026-10-22-089-S inti backend; tombol hapus tindak lanjut menyusul (frontend t_6f73907a)",
+  // F-2026-10-23-109-V: aksi generate baris tahun saldo fiskal kini dirujuk
+  // AssetFiscalYearFreezeForm di detail aset (t_3d7bfda0) — entri beku dibuang.
+  // F-2026-10-22-068-S: 3 aksi ganti revisi BOM + aksi pratinjau delta
+  // kini dirujuk panel BomRevisionChangePanel di detail WO/PO
+  // (t_b60d664d) — entri beku dibuang.
+  // F-2026-10-22-090-S: 4 aksi stasiun kerja kini dirujuk UI master
+  // Stasiun Kerja + pilihan stasiun tahap WO (t_b9d26fab) — entri beku dibuang.
   // F-2026-10-21-030: ke-9 aksi RAB sudah ter-wire UI ProjectBudgetEditor
   // (tab RAB detail proyek) — entri daftar-beku dibuang.
   // F-2026-10-21-021 tahap 3: pemanggil jurnal E2/E3 kini dirujuk UI
   // WarrantyJournalPanel di detail klaim (t_6f92c0a4) — entri beku dibuang.
+  // F-2026-10-23-121-V inti (PR #655): 3 aksi YearEndClosing kini dirujuk
+  // YearEndClosingPanel di proses akhir bulan (t_8c34abc8) — entri beku dibuang.
   // F-2026-10-22-066-S: 7 aksi JobChangeOrder kini dirujuk panel Change Order
   // di detail Perintah Kerja (t_b1b321cb) — entri beku dibuang.
   // F-2026-10-22-067-S: 4 aksi jadwal termin kini dirujuk kartu jadwal
   // di JobBillingCard (t_ba8fe9ef) — entri beku dibuang.
+  // F-2026-10-23-113-V: aksi ekspor XML Coretax kini dirujuk CoretaxExportPanel
+  // di page faktur tambah (t_4cba1a22) — entri beku dibuang.
+  // F-2026-10-23-111-V + F-2026-10-23-115-V inti (t_17e469e7): 3 aksi
+  // peristiwa perubahan aset kini dirujuk AssetChangeEventPanel di detail
+  // aset (t_311cfc07) — entri beku dibuang.
+  // F-2026-10-22-093-V inti (t_bdc81ed6): aksi edit nominal posted sengaja
+  // TIDAK dirujuk UI — selalu menolak by design (E93-6); koreksi hanya
+  // reversal. 4 aksi lain kini dirujuk SalesLateFeePanel (t_c2d2dce1).
+  "src/actions/sales-late-fee.actions.ts::updateSalesLateFeeAmount":
+    "F-2026-10-22-093-V penjaga tolak-edit nominal posted by design (E93-6); UI sengaja tidak menyediakan edit nominal",
+  // F-2026-10-22-070-S inti backend (PR #694): 3 aksi stok minimum per
+  // gudang kini dirujuk ItemWarehouseMinStockPanel di detail barang
+  // (t_0fc24ddc) — entri beku dibuang.
 }
 
 describe("keterhubungan aksi server", () => {
