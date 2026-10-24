@@ -34,3 +34,14 @@ describe("groupReceivablesByVehicle (F-2026-10-20-22)", () => {
     expect(rows.find((r) => r.plateLabel === UNASSIGNED_VEHICLE_LABEL)?.outstanding).toBe(75)
   })
 })
+
+describe("groupReceivablesByVehicle returnCredit (F-104-V)", () => {
+  it("returnCredit kurangi sisa per kendaraan", () => {
+    const rows = groupReceivablesByVehicle(
+      [{ plateLabel: "B 1 AA", grandTotal: 1000, paidAmount: 200, returnCreditAmount: 300, dueDate: null }],
+      new Date(2026, 9, 20),
+    )
+    expect(rows).toHaveLength(1)
+    expect(rows[0].outstanding).toBe(500)
+  })
+})

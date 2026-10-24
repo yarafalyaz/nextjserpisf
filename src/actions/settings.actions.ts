@@ -262,6 +262,11 @@ export async function updateSystemSettings(formData: FormData) {
       pkwtCompensationExpenseAccountId: intNull("pkwtCompensationExpenseAccountId"),
       pkwtCompensationPayableAccountId: intNull("pkwtCompensationPayableAccountId"),
 
+      // Accounting - Penjualan Besi Tua (F-2026-10-24-135-V Putusan 4):
+      // akun pendapatan lain-lain scrap; kosong = posting faktur besi tua
+      // ditolak fail-closed (dilarang fallback salesRevenueAccountId).
+      scrapSaleIncomeAccountId: intNull("scrapSaleIncomeAccountId"),
+
       // Accounting - Fixed Asset Change Events (F-2026-10-23-111-V P2):
       // akun utang PPh final + tarif master revaluasi fiskal berpersetujuan.
       assetFiscalRevaluationTaxPayableAccountId: intNull("assetFiscalRevaluationTaxPayableAccountId"),

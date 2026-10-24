@@ -332,6 +332,84 @@ export async function onSalesInvoicePosted(
       return;
     }
 
+    // F-2026-10-24-135-V (vonis BOT Accountant PR #742, syarat 1–4) +
+    // F-2026-10-24-136-V Putusan 1: definisi faktur besi tua FINAL —
+    // >=1 baris fisik, SEMUA baris item-bearing ter-resolve
+    // isScrapSaleItem. Baris bebas/tanpa itemId = bukan besi tua; campuran
+    // besi tua + dagang ditolak berisik (3a). Pendapatan wajib akun scrap
+    // aktif grup OINC; kosong/non-aktif/salah grup = fail-closed berisik.
+    const expectedPhysicalLineCount = invoice.items.filter((it) => Number(it.qty) > 0).length;
+    const resolvedLineItemIds = [
+      ...new Set(
+        invoice.items
+          .filter((it) => Number(it.qty) > 0)
+          .map((it) => it.itemId)
+          .filter((id): id is number => typeof id === "number"),
+      ),
+    ];
+    const resolvedItems = resolvedLineItemIds.length
+      ? await tx.item.findMany({
+          where: { id: { in: resolvedLineItemIds } },
+          select: { id: true, isScrapSaleItem: true, isProduct: true },
+        })
+      : [];
+    const resolvedItemById = new Map(resolvedItems.map((r) => [r.id, r]));
+    const isFullyResolvedScrapInvoice =
+      expectedPhysicalLineCount > 0 &&
+      resolvedLineItemIds.length > 0 &&
+      invoice.items.filter((it) => Number(it.qty) > 0).every((it) =>
+        typeof it.itemId === "number" && resolvedItemById.has(it.itemId) && !!resolvedItemById.get(it.itemId)?.isScrapSaleItem,
+      );
+    const physicalLineHasScrapItem = invoice.items.some((it) =>
+      Number(it.qty) > 0 && typeof it.itemId === "number" && !!resolvedItemById.get(it.itemId)?.isScrapSaleItem,
+    );
+    const isScrapSaleInvoice = isFullyResolvedScrapInvoice;
+    if (physicalLineHasScrapItem && !isScrapSaleInvoice) {
+      throw new Error(
+        "Posting faktur ditolak: faktur berisi campuran item besi tua (scrap) dan baris non-besi-tua. " +
+          "Pisahkan faktur besi tua dari faktur penjualan biasa — hasil jual scrap dilarang masuk akun Pendapatan Penjualan utama.",
+      );
+    }
+    if (
+      isScrapSaleInvoice &&
+      invoice.items.some((it) => Number(it.qty) > 0 && typeof it.itemId === "number" && resolvedItemById.get(it.itemId)?.isProduct)
+    ) {
+      throw new Error(
+        "Posting faktur besi tua ditolak: item besi tua tidak boleh isProduct=true (terlarang masuk jalur stok/COGS).",
+      );
+    }
+    if (isScrapSaleInvoice) {
+      if (!settings.scrapSaleIncomeAccountId) {
+        throw new Error(
+          "Akun pendapatan besi tua (scrap) belum dipetakan. " +
+            "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting faktur besi tua — " +
+            "hasil jual scrap dilarang masuk akun Pendapatan Penjualan utama.",
+        );
+      }
+      const scrapAccount = await tx.account.findFirst({
+        where: { id: settings.scrapSaleIncomeAccountId },
+        select: { id: true, isActive: true, reportGroup: true },
+      });
+      if (!scrapAccount || !scrapAccount.isActive || scrapAccount.reportGroup !== "OINC") {
+        throw new Error(
+          "Akun pendapatan besi tua (scrap) tidak valid: wajib akun aktif grup pendapatan lain-lain (OINC). " +
+            "Atur scrapSaleIncomeAccountId di Pengaturan → Akun sebelum memposting faktur besi tua.",
+        );
+      }
+      if (Number(inv.taxAmount ?? 0) > 0 && !settings.salesTaxAccountId) {
+        throw new Error(
+          "Posting faktur besi tua ditolak: PPN Keluar belum dipetakan padahal faktur memuat PPN. " +
+            "Pendapatan besi tua dilarang menyerap PPN.",
+        );
+      }
+    }
+    const revenueAccountId = isScrapSaleInvoice
+      ? settings.scrapSaleIncomeAccountId!
+      : settings.salesRevenueAccountId!;
+    const revenueMemo = isScrapSaleInvoice
+      ? "Pendapatan Lain-lain Penjualan Besi Tua"
+      : "Pendapatan Penjualan";
+
     const journalNumber = await generateJournalNumber(tx, "INV", invoiceId);
 
     const journal = await tx.journal.create({
@@ -372,10 +450,10 @@ export async function onSalesInvoicePosted(
       },
       {
         journalId: journal.id,
-        accountId: settings.salesRevenueAccountId!,
+        accountId: revenueAccountId,
         debit: 0,
         credit: revenueCredit,
-        memo: "Pendapatan Penjualan",
+        memo: revenueMemo,
       },
     ];
     if (hasTaxAccount) {
@@ -1215,6 +1293,33 @@ export async function onSalesReturnCompleted(
     throw new Error(
       "Akun Piutang Usaha belum dikonfigurasi untuk retur penjualan yang terkait faktur",
     );
+  }
+
+  // F-2026-10-24-136-V Putusan 1: retur atas faktur besi tua murni
+  // ditolak berisik (fail-closed) SEBELUM idempotency/journal/stok disentuh.
+  if (salesReturn.salesInvoiceId != null) {
+    const linkedInvoice = await db.salesInvoice.findUnique({
+      where: { id: salesReturn.salesInvoiceId },
+      include: { items: { select: { itemId: true, qty: true } } },
+    });
+    if (linkedInvoice) {
+      const returnItemIds = [...new Set(salesReturn.items.map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
+      const linkedInvoiceItemIds = [...new Set(linkedInvoice.items.filter((it) => Number(it.qty) > 0).map((it) => it.itemId).filter((id): id is number => typeof id === "number"))];
+      if (returnItemIds.length > 0) {
+        const scrapRows = await db.item.findMany({
+          where: { id: { in: [...new Set([...returnItemIds, ...linkedInvoiceItemIds])] } },
+          select: { id: true, isScrapSaleItem: true },
+        });
+        const isScrap = new Map((scrapRows as { id: number; isScrapSaleItem: boolean }[]).map((r) => [r.id, r.isScrapSaleItem]));
+        const allScrap = (ids: number[]) => ids.length > 0 && ids.every((id) => isScrap.get(id));
+        if (allScrap(linkedInvoiceItemIds) && allScrap(returnItemIds)) {
+          throw new Error(
+            "Retur penjualan atas faktur besi tua (scrap) ditolak berisik: faktur besi tua punya nilai buku Rp0 dan pendapatannya masuk akun lain-lain, bukan faktur penjualan biasa. " +
+              "Gunakan pembalikan faktur (belum dibayar) atau pengembalian pembayaran melalui jalur existing (sudah dibayar).",
+          );
+        }
+      }
+    }
   }
 
   // Idempotency check

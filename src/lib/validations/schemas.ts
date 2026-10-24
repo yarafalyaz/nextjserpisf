@@ -78,6 +78,9 @@ export const itemSchema = z.object({
     .optional(),
   isProduct: optionalBoolean,
   isService: optionalBoolean,
+  // F-2026-10-24-135-V: penanda item besi tua (dijual lewat faktur existing,
+  // pendapatan lain-lain fail-closed, COGS Rp0).
+  isScrapSaleItem: optionalBoolean,
   trackBatch: optionalBoolean,
   trackSerial: optionalBoolean,
   image: z.string().optional(),
