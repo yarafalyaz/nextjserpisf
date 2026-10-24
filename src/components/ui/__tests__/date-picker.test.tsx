@@ -1,39 +1,12 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach } from "vitest"
-
-// Silence React 19 act environment warning
-Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-
-import { createRoot, type Root } from "react-dom/client"
-import { act } from "react"
 import { AppDatePicker } from "../date-picker"
+import { mountPicker, unmountPickers, getPickerLabel } from "./picker-test-utils"
 
-const roots: Root[] = []
-
-function mount(ui: React.ReactNode): HTMLElement {
-  const container = document.createElement("div")
-  document.body.appendChild(container)
-  const root: Root = createRoot(container)
-  roots.push(root)
-  act(() => {
-    root.render(ui)
-  })
-  return container
-}
-
-afterEach(() => {
-  for (const root of roots.splice(0)) {
-    act(() => {
-      root.unmount()
-    })
-  }
-  document.body.innerHTML = ""
-})
+afterEach(unmountPickers)
 
 function getLabel(container: HTMLElement): HTMLLabelElement {
-  const label = container.querySelector("label")
-  if (!label) throw new Error("expected label")
-  return label
+  return getPickerLabel(container)
 }
 
 function getTrigger(container: HTMLElement): HTMLButtonElement {
@@ -44,7 +17,7 @@ function getTrigger(container: HTMLElement): HTMLButtonElement {
 
 describe("AppDatePicker label bintang wajib", () => {
   it("label 'Tanggal *' -> bintang dekoratif aria-hidden, teks label bersih", () => {
-    const container = mount(<AppDatePicker label="Tanggal *" name="tgl" required />)
+    const container = mountPicker(<AppDatePicker label="Tanggal *" name="tgl" required />)
     const label = getLabel(container)
     const star = label.querySelector('span[aria-hidden="true"]')
     expect(star).not.toBeNull()
@@ -62,19 +35,19 @@ describe("AppDatePicker label bintang wajib", () => {
   })
 
   it("label tanpa bintang -> tidak ada span bintang dekoratif", () => {
-    const container = mount(<AppDatePicker label="Tanggal" name="tgl" />)
+    const container = mountPicker(<AppDatePicker label="Tanggal" name="tgl" />)
     const label = getLabel(container)
     expect(label.querySelector('span[aria-hidden="true"]')).toBeNull()
     expect(label.textContent?.trim()).toBe("Tanggal")
   })
 
   it("required -> aria-required=true di trigger; makna wajib tetap terwakili saat bintang dekoratif", () => {
-    const container = mount(<AppDatePicker label="Tanggal *" name="tgl" required />)
+    const container = mountPicker(<AppDatePicker label="Tanggal *" name="tgl" required />)
     expect(getTrigger(container).getAttribute("aria-required")).toBe("true")
   })
 
   it("tanpa required -> aria-required tidak true", () => {
-    const container = mount(<AppDatePicker label="Tanggal *" name="tgl" />)
+    const container = mountPicker(<AppDatePicker label="Tanggal *" name="tgl" />)
     expect(getTrigger(container).getAttribute("aria-required")).not.toBe("true")
   })
 })
