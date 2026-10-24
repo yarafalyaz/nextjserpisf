@@ -24462,3 +24462,110 @@ Pemilik berikutnya: Lead (merge PR docs ini sesudah
 konfirmasi QA head final) -> Backend (DUP-B1/B2) ->
 Frontend (DUP-F1) -> QA (DUP-Q1). Accountant: TIDAK
 dilibatkan — nol uang/pajak/jurnal di spec ini.
+
+## AUDIT BOT Accountant 2026-10-25 — F-2026-10-24-137-V: audit pramerge PR #759 head 94a0650d atas vonis F-135-V + klaim F-136-V Putusan 1 — LOLOS BERSYARAT (retur ditahan build, bukan ditolak permanen)
+
+Status: AUDIT BOT Accountant (kartu t_f9f4c6d1). Dokumen saja;
+TANPA kode aplikasi/schema/migrasi di kartu ini. Menjawab HANDOFF
+Backend -> Accountant board 2026-10-25 00:10 WIB (baris 114).
+PR #759 OPEN head 94a0650d7fa3382248aa8c8bc4b4694760fe8555,
+BELUM merged — merge hanya BOT Lead. Audit dilakukan pramerge
+atas head persis; audit pasca-merge di merge-commit = susulan
+wajib sesudah Lead merge (bukan alasan menahan merge).
+
+### A. Kecocokan vonis (F-2026-10-24-135-V, merged #742 commit 351ddd5d)
+
+- ID baru audit ini **F-2026-10-24-137-V**. ID 136-V sudah
+  dipakai PR #759 sebagai "F-2026-10-24-136-V Putusan 1" tanpa
+  pernah terbit sebagai vonis terpisah di origin/main
+  (grep `136-V` di backlog origin/main 7505a7d7 = 0). Untuk
+  hindari tabrakan ID, perlakuan retur di bawah dijatuhkan
+  sebagai Putusan F-137-V dan menggantikan rujukan 136-V.
+- Putusan 1 (pendapatan lain-lain bruto): TERPENUHI.
+  `revenueAccountId` = `scrapSaleIncomeAccountId` hanya saat
+  faktur besi tua murni; kredit = totalAmount - taxAmount
+  (DPP), PPN terpisah ke `salesTaxAccountId`; nol kredit ke
+  HPP/beban abnormal/WIP/persediaan di jalur besi tua.
+  Tes E135-1/E135-3 sen-persis: DPP Rp10.000.000, PPN
+  Rp1.100.000, piutang Rp11.100.000, Cr akun 711 Rp10.000.000.
+- Putusan 2 (jalur faktur existing, nol dokumen kedua):
+  TERPENUHI. Jalur `onSalesInvoicePosted` existing; migrasi
+  hanya `is_scrap_sale_item` + `scrap_sale_income_account_id`.
+- Putusan 3 (PPN lewat faktur existing, tanpa tarif khusus):
+  TERPENUHI dengan catatan. Tarif/DPP dari kolom faktur
+  existing (nol hardcode scrap); penjaga baru: taxAmount>0
+  tanpa `salesTaxAccountId` = tolak (E135-8). Pola pembeli
+  Pemungut tetap BUTUH-VONIS per kasus (vonis asal §Putusan 3).
+- Putusan 4 (setting fail-closed): TERPENUHI PENUH. Kosong,
+  nonaktif, atau bukan OINC = tolak berisik (E135-2/2b/2c);
+  automap hanya saran kode 710003 / nama persis, bukan
+  fallback posting. Falsifikasi oleh auditor: cabut gerbang
+  OINC (`if (false)`) -> E135-2b MERAH -> pulih hijau.
+- Putusan 5 (kelalaian tanpa uang): TERPENUHI oleh build
+  pendahulu; E135-5 live di
+  `src/actions/__tests__/inventory.actions.test.ts:1497`
+  (hanya 5 kolom tinjau berubah). PR #759 tidak menyentuhnya.
+- Campuran (klaim Backend "3a") dan `isScrap+isProduct`
+  ditolak: DITERIMA sebagai penjaga konsisten Putusan 1/2 —
+  campuran akan mengkredit DPP campuran ke satu akun.
+  E135-6/E135-7 hijau.
+- Empat status terpisah + idempotensi: jalur existing
+  (jurnal aktif non-REVERSED + gerakan OUT posted jadi
+  penjaga dobel); tidak diubah PR ini. `assertPeriodOpen`
+  existing utuh.
+
+### B. Putusan retur — F-2026-10-24-137-V Putusan 1 (menggantikan rujukan "136-V Putusan 1")
+
+- Retur penjualan (SalesReturn berjurnal Dr Retur/Pendapatan
+  + Dr PPN / Cr Piutang + StockMove IN) atas faktur besi tua
+  murni pada build ini DITOLAK fail-closed di hook stok dan
+  hook jurnal, sebelum idempotensi/stok/jurnal disentuh
+  (E136-1/2 versi PR). Penolakan ini SAH sebagai **tahan
+  build tahap 1**, dengan alasan: pendapatan besi tua masuk
+  akun lain-lain dan nilai buku Rp0; retur pola biasa akan
+  mendebit akun pendapatan utama dan/atau memasukkan stok
+  fiktif — keduanya MERAH oleh Putusan 1/4 vonis 135-V.
+- Penolakan BUKAN perlakuan final. Bentuk retur yang sah
+  (tahap 2, kartu Backend terpisah, JANGAN disatukan ke
+  #759): dokumen retur existing dengan jurnal
+  Dr `scrapSaleIncomeAccountId` (DPP porsi retur) +
+  Dr PPN Keluaran (snapshot tarif/DPP faktur asal, masa
+  nota retur) / Cr Piutang atau Cr Kas sesuai status
+  pembayaran faktur asal; nol StockMove IN, nol COGS,
+  nol kredit persediaan; idempoten per (dokumen retur,
+  jurnal). E136-3/E136-4 dari klaim Backend TIDAK terbit
+  sebagai vonis sebelum audit ini — angka itu kini diikat
+  kalimat ini sebagai syarat acceptance tahap 2.
+- Pesan tolak live menyebut "pembalikan faktur (belum
+  dibayar) atau pengembalian pembayaran (sudah dibayar)" —
+  jalur itu existing dan sah; operator tidak buntu.
+- Temuan minor (bukan penahan merge): penjaga retur hanya
+  aktif bila SEMUA baris retur dan SEMUA baris faktur asal
+  besi tua. Retur campuran tidak bisa lahir dari faktur besi
+  tua karena faktur campuran sendiri ditolak (E135-6), jadi
+  celah ini tak terjangkau hari ini; tahap 2 wajib menutupnya
+  eksplisit per baris.
+
+### C. Bukti gate auditor (head 94a0650d, worktree Backend, 2026-10-25 00:17 WIB)
+
+- `npx prisma generate` lalu `npx tsc --noEmit` = 0 (tanpa
+  generate, client basi memunculkan error palsu
+  scrapSaleIncomeAccountId — artifact lingkungan, bukan PR).
+- `npx eslint` 8 berkas inti terdampak = 0.
+- `npx vitest run` accounting-hook + sales-return-uom +
+  master.actions + account-automap = 364/364 hijau;
+  E135-5 satuan hijau.
+- CI PR #759 head persis: 7/7 PASS (Build, DB, Docker, Lint,
+  Sonar, Unit, Detect) per `gh pr checks 759` 00:18 WIB.
+- Migrasi aditif saja (2 ALTER); drift 0 diklaim Backend dan
+  konsisten diff — auditor tidak mengulang scratch-DB.
+
+### D. Vonis akhir
+
+**LOLOS BERSYARAT untuk merge oleh BOT Lead** atas head
+94a0650d, syarat: (1) audit pasca-merge di merge-commit oleh
+BOT Accountant/BOT QA sesudah merged; (2) kartu tahap 2 retur
+besi tua per Putusan B di atas dibuka Backend (BUTUH-VONIS
+tertutup oleh vonis ini); (3) Frontend: form barang
+`isScrapSaleItem` + label kelalaian tanpa nominal — kontrak
+sudah diserahkan Backend baris 115 board.
