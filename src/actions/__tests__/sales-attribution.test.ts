@@ -100,6 +100,8 @@ describe("F-016 tahap 1 pewarisan penjual", () => {
     transactionMock.mockImplementation(async (cb: (tx: unknown) => unknown) =>
       cb({
         employee: { findFirst: employeeFindFirstMock },
+        // F-2026-10-22-065-S: snapshot persen ambang membaca kategori pelanggan.
+        customer: { findFirst: vi.fn(async () => null) },
         quotation: { create: quotationCreateMock },
         quotationHistory: { create: vi.fn() },
       }),

@@ -15,6 +15,7 @@ export interface DpFixtureOptions {
   paymentDate?: Date
   quotationStatus?: string
   sectionName?: string
+  invoiceThresholdPercent?: number | null
 }
 
 export function buildDp(opts: DpFixtureOptions) {
@@ -38,6 +39,7 @@ export function buildDp(opts: DpFixtureOptions) {
       customer: { id: 99, name: "Cust" },
       customerVehicle: null,
       projectId: null,
+      invoiceThresholdPercent: opts.invoiceThresholdPercent ?? null,
       sections: [
         {
           id: 1,

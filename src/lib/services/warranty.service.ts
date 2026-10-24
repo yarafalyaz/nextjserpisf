@@ -1,5 +1,13 @@
 import { prisma, TxClient } from "@/lib/db/prisma"
 
+/** Penanda resi sent di notes existing — pasangan parse di warranty-journal.service (E130-1). */
+function withSentResiNote(notes: string | null, resi: string): string {
+  const marker = `[Resi pengiriman klaim supplier: ${resi}]`
+  if (!notes) return marker
+  if (notes.includes(marker)) return notes
+  return `${notes}\n${marker}`
+}
+
 /**
  * F-2026-10-21-021 tahap 1-2 — garansi pasang (coverage + claim).
  *
@@ -679,7 +687,13 @@ export async function transitionSupplierClaim(
       ...(input.supplierClaimRefNo?.trim()
         ? { supplierClaimRefNo: input.supplierClaimRefNo.trim() }
         : {}),
-      ...(notes ? { supplierClaimNotes: notes } : {}),
+      // E130-1: transisi sent membekukan nomor resi di notes existing
+      // sebagai pembanding refNo persetujuan di gerbang E3 (tanpa kolom).
+      ...(input.to === "sent" && refNo
+        ? { supplierClaimNotes: withSentResiNote(notes ?? claim.supplierClaimNotes, refNo) }
+        : notes
+          ? { supplierClaimNotes: notes }
+          : {}),
       ...(input.to === "none" ? { purchaseReturnId: null } : {}),
       supplierClaimBy: input.actorUserId,
       supplierClaimAt: input.at ?? new Date(),

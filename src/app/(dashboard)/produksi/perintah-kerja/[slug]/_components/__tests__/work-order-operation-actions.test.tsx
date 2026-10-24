@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   showSuccess: vi.fn(),
   initializeWorkOrderOperations: vi.fn(),
   updateWorkOrderOperationStatus: vi.fn(),
+  setWorkOrderOperationWorkCenter: vi.fn(),
 }))
 
 vi.mock("next/navigation", () => ({
@@ -23,12 +24,17 @@ vi.mock("@/actions/manufacturing.actions", () => ({
     mocks.updateWorkOrderOperationStatus(...args),
 }))
 
+vi.mock("@/actions/work-center.actions", () => ({
+  setWorkOrderOperationWorkCenter: (...args: unknown[]) =>
+    mocks.setWorkOrderOperationWorkCenter(...args),
+}))
+
 vi.mock("@/lib/utils/toast", () => ({
   showError: (...args: unknown[]) => mocks.showError(...args),
   showSuccess: (...args: unknown[]) => mocks.showSuccess(...args),
 }))
 
-import { WorkOrderOperationActions } from "../work-order-operation-actions"
+import { WorkOrderOperationActions, WorkOrderOperationWorkCenterSelect } from "../work-order-operation-actions"
 import { buildWorkOrderProgress } from "@/lib/reports/work-order-progress"
 
 function rowOf(status: string, sortOrder = 1) {
@@ -41,6 +47,7 @@ function rowOf(status: string, sortOrder = 1) {
         status: "completed",
         assignedEmployeeId: null,
         estimatedHours: null,
+        workCenterId: null,
         notes: null,
       },
       {
@@ -50,6 +57,7 @@ function rowOf(status: string, sortOrder = 1) {
         status,
         assignedEmployeeId: null,
         estimatedHours: null,
+        workCenterId: null,
         notes: null,
       },
     ],
@@ -134,6 +142,35 @@ describe("WorkOrderOperationActions F-2026-10-21-020 Tahap B", () => {
       <WorkOrderOperationActions workOrderId={7} workOrderStatus="draft" row={row} />,
     )
     expect(buttonByLabel(container, "Mulai tahap Pengerjaan")).toBeNull()
+    unmountCard(root)
+  })
+})
+
+describe("WorkOrderOperationWorkCenterSelect F-2026-10-22-090-S", () => {
+  const CENTERS = [
+    { id: 1, name: "Las", isActive: true },
+    { id: 2, name: "Potong", isActive: false },
+  ]
+
+  it("tanpa stasiun tampil label Belum ada stasiun; opsi nonaktif tidak ditawarkan", () => {
+    const row = rowOf("pending", 2)
+    const { container, root } = renderCard(
+      <WorkOrderOperationWorkCenterSelect workOrderId={7} row={row} centers={CENTERS} />,
+    )
+    const text = container.textContent ?? ""
+    expect(text).toContain("Stasiun: Belum ada stasiun")
+    const select = container.querySelector('[aria-label="Stasiun tahap Pengerjaan"]')
+    expect(select).not.toBeNull()
+    unmountCard(root)
+  })
+
+  it("stasiun lama nonaktif tetap tampil sebagai nilai terpilih (BR-LP-06)", () => {
+    const base = rowOf("pending", 2)
+    const row = { ...base, workCenterId: 2 }
+    const { container, root } = renderCard(
+      <WorkOrderOperationWorkCenterSelect workOrderId={7} row={row} centers={CENTERS} />,
+    )
+    expect(container.textContent ?? "").toContain("Stasiun: Potong")
     unmountCard(root)
   })
 })

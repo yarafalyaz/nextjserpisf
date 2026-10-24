@@ -17,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   isValidCronRequest: vi.fn().mockReturnValue(true),
 }))
 
+// F-070-S: loader per gudang membaca model baru; default kosong = aman.
+vi.mock("@/lib/reports/min-stock-warehouse-alert", () => ({
+  loadWarehouseLowStock: vi.fn().mockResolvedValue([]),
+}))
+
 vi.mock("@/lib/db/prisma", () => ({ prisma: mocks.prisma }))
 vi.mock("@/lib/services/notification.service", () => ({ notificationService: mocks.notificationService }))
 vi.mock("@/lib/security/cron", () => ({ isValidCronRequest: mocks.isValidCronRequest }))
