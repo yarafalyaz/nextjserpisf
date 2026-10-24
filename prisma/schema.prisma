@@ -3591,12 +3591,16 @@ model Journal {
   totalCredit     Decimal        @map("total_credit") @db.Decimal(15, 2)
   createdBy       Int?           @map("created_by")
   deletedAt       DateTime?      @map("deleted_at")
+  // F-2026-10-23-127-V: kolom generated di DB — jangan ditulis client.
+  // MySQL hitung dari status/deletedAt/reference; unik di bawah hanya
+  // mengikat jurnal aktif (status <> 'REVERSED' AND deleted_at IS NULL).
+  activeReferenceKey String?    @map("active_reference_key")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt @map("updated_at")
   entries         JournalEntry[]
   creator         User?          @relation(fields: [createdBy], references: [id])
 
-  @@unique([referenceType, referenceId], map: "journals_reference_unique")
+  @@unique([activeReferenceKey], map: "journals_active_reference_unique")
   @@index([createdBy], map: "journals_created_by_fkey")
   @@index([status], map: "idx_journals_status")
   @@index([transactionDate], map: "idx_journals_transaction_date")
