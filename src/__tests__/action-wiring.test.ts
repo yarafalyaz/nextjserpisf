@@ -152,11 +152,8 @@ const ALLOWED_UNWIRED: Record<string, string> = {
   // Buang entri ini saat UI memanggilnya.
   "src/actions/hrm.actions.ts::getPayrollComponentLines":
     "F-2026-10-21-027 backend; UI baris komponen slip menyusul (frontend Fira)",
-  // F-2026-10-22-085-S inti (t_7b33102f): read-model daftar perhatian
-  // siklus hidup backend dulu; field master + daftar perhatian menyusul
-  // di kartu frontend t_e80e8541 (buang entri ini saat UI memanggilnya).
-  "src/actions/hrm.actions.ts::getEmployeeLifecycleAttention":
-    "F-2026-10-22-085-S inti backend; daftar perhatian siklus hidup menyusul (frontend t_e80e8541)",
+  // F-2026-10-22-085-S: getEmployeeLifecycleAttention kini dirujuk kartu
+  // daftar perhatian di halaman master karyawan (t_e80e8541) — entri beku dibuang.
   // F-2026-10-22-088-S: 4 aksi target penjualan kini dirujuk UI
   // (halaman + panel kelola /laporan/target-penjualan, t_f605e189)
   // — entri beku dibuang.
