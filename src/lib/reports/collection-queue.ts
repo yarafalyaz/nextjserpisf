@@ -82,6 +82,9 @@ export interface CollectionInvoiceInput {
   dueDate: Date | null
   grandTotal: number
   paidAmount: number
+  /** F-104-V opsional: returnCredit jurnal SalesReturn POSTED faktur ini;
+   * pengurang sisa antrean, BUKAN bagian paidAmount. Default 0. */
+  returnCredit?: number
   customerId: number
   customerName: string
   /** Kontak — hanya antrean berizin (Q-COL-4); ekspor tanpa kolom ini. */
@@ -222,7 +225,10 @@ export function buildCollectionQueue(
   for (const invoice of invoices) {
     if (invoice.deletedAt != null) continue
     if (invoice.status !== "posted" && invoice.status !== "partial") continue
-    const sisa = receivableOutstanding(invoice.grandTotal, invoice.paidAmount)
+    const sisa = receivableOutstanding(
+      invoice.grandTotal,
+      invoice.paidAmount + (invoice.returnCredit ?? 0),
+    )
     if (sisa <= COLLECTION_SETTLED_EPSILON) continue
 
     const exchange = latestActiveExchange(
