@@ -44,13 +44,52 @@ import type { TableColumn, TableRow } from "@/lib/pdf/engine/types"
 
 /** Lebar kolom (mm) — jumlahnya 262mm, area isi A4 mendatar. */
 const COLUMNS: TableColumn[] = [
-  { header: "Aset", align: "left", width: 84 },
-  { header: "Kategori", align: "left", width: 44 },
-  { header: "Nilai Perolehan", align: "right", width: 38 },
-  { header: "Akuntansi/thn", align: "right", width: 32 },
-  { header: "Fiskal/thn", align: "right", width: 32 },
-  { header: "Selisih", align: "right", width: 32 },
+  { header: "Aset", align: "left", width: 62 },
+  { header: "Kategori", align: "left", width: 32 },
+  { header: "Nilai Perolehan", align: "right", width: 34 },
+  { header: "Akuntansi/thn", align: "right", width: 30 },
+  { header: "Fiskal/thn", align: "right", width: 30 },
+  { header: "Selisih", align: "right", width: 28 },
+  { header: "Metode Fiskal", align: "left", width: 24 },
+  { header: "Status Fiskal", align: "left", width: 22 },
 ]
+
+/** Label tampilan metode fiskal tersimpan (F-109-V: UI tampil apa adanya). */
+export function fiscalMethodLabel(fiscalMethod?: string | null): string {
+  if (fiscalMethod === "straight_line") return "Garis lurus"
+  if (fiscalMethod === "declining_balance") return "Saldo menurun"
+  if (fiscalMethod == null || fiscalMethod.trim() === "") return "Belum dipilih"
+  return fiscalMethod
+}
+
+/** Label tampilan sumber angka fiskal terhitung (vonis P5 verbatim estimasi). */
+export function fiscalSourceLabel(source: FiscalBalanceSource): string {
+  if (source === "estimasi-tahun-berjalan") return "estimasi-tahun-berjalan"
+  if (source === "opening") return "Saldo pembuka"
+  return "Terbekukan"
+}
+
+/** Label tampilan alasan fiskal belum-dihitung (kode backend apa adanya). */
+export function fiscalRejectionLabel(
+  reason: FiscalBalanceRejection | "kelompok-belum-ditentukan",
+): string {
+  switch (reason) {
+    case "metode-belum-dipilih":
+      return "Metode fiskal belum dipilih"
+    case "bangunan-saldo-menurun":
+      return "Bangunan hanya garis lurus"
+    case "metode-tidak-sah":
+      return "Metode fiskal tidak sah"
+    case "tanpa-tanggal-perolehan":
+      return "Tanpa tanggal perolehan"
+    case "tahun-sebelum-mulai":
+      return "Tahun sebelum mulai fiskal"
+    case "saldo-pembuka-tidak-valid":
+      return "Saldo pembuka tidak valid"
+    case "kelompok-belum-ditentukan":
+      return "Kelompok fiskal belum ditentukan"
+  }
+}
 
 export interface DepreciationAssetInput {
   code: string
@@ -262,6 +301,10 @@ export function buildDepreciationDifference(
         amount(accounting),
         fiscal === null ? "–" : amount(fiscal),
         fiscal === null ? "–" : amount(accounting - fiscal),
+        fiscalMethodLabel(asset.fiscalMethod),
+        fiscalDetail
+          ? fiscalSourceLabel(fiscalDetail.source)
+          : fiscalRejectionLabel(fiscalRejectionReason(asset, taxYear) ?? "kelompok-belum-ditentukan"),
       ],
     })
   }
@@ -281,6 +324,8 @@ export function buildDepreciationDifference(
         amount(totals.accountingAnnual),
         amount(totals.fiscalAnnual),
         amount(totals.difference),
+        "",
+        "",
       ],
     })
     if (totals.withoutFiscal > 0) {
